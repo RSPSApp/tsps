@@ -4,10 +4,13 @@ const { api, Animation, CacheDefinitions, ChatType, CountdownTask, DialogueChain
 const Data = require("./Data.Construction");
 const Ids = require("./Ids.Construction");
 const Instance = require("./Instance.Construction");
+const BossLair = require("./BossLair.Construction");
 // Native costume-room enums: set representatives, set members, and alternatives.
 const STORAGE_ENUMS = {
   MAGIC_WARDROBE: [3289], ARMOUR_CASE: [3290], FANCY_DRESS_BOX: [3291],
   CAPE_RACK: [3292], TREASURE_CHEST: [3293, 3294, 3295, 3296, 3297, 3298], TOY_BOX: [3299],
+  // The achievement gallery's boss lair display keeps its jars the same way (its Jars op, rsprox 2909, 3897).
+  BOSS_LAIR_DISPLAY: [3300],
 };
 const TIER_NAMES = ["Beginner", "Easy", "Medium", "Hard", "Elite", "Master"];
 /** A numeric cache enum; the costume room's are all obj -> obj or int -> obj. */
@@ -487,6 +490,7 @@ function clickItems(event) {
   if (!state.owner) return player.sendMessage("Only the owner can withdraw stored items."), true;
   if (withdrawRow(player, state.house, state.furniture, representative)) {
     player.getInventory().refreshItems();
+    if (BossLair.afterWithdraw(player, state.house, state.furniture)) return true;
     sendStored(player, state.furniture);
   }
   return true;

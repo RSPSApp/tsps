@@ -10,6 +10,7 @@ const EstateAgent = require("./EstateAgent.Construction");
 const Servants = require("./Servants.Construction");
 const Estate = require("./Estate.Construction");
 const Storage = require("./Storage.Construction");
+const BossLair = require("./BossLair.Construction");
 const Portals = require("./Portals.Construction");
 const Altars = require("./Altars.Construction");
 const Data = require("./Data.Construction");
@@ -1738,7 +1739,7 @@ function handleFurnitureAction(event) {
     || (["light", "re-light"].includes(action ?? "") && Altars.lightHouseBurner(event))
     || (action === "open" && Storage.openHouseFurniture(event))
     || (action === "close" && Storage.closeHouseFurniture(event))
-    || (["search", "view"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
+    || (["search", "view", "jars"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
 }
 
 // Cache-native ready poses for the seven parlour chairs, in furniture-menu order.
@@ -2092,6 +2093,7 @@ function attach(api) {
   TipJar.attachTipJar(api);
   Bookcase.attachBookcase(api);
   Storage.attachStorage(api);
+  BossLair.attachBossLair(api);
   Scrying.attachScrying(api);
   CapeHanger.attachCapeHanger(api);
   Trophies.attachTrophies(api);

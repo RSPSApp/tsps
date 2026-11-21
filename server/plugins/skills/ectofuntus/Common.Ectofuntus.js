@@ -55,6 +55,9 @@ function worshipFor(bonemealId) {
   return bonemealById.get(bonemealId) ?? null;
 }
 
+/** Every bonemeal pot's gameval, in bones.json's order. */
+const bonemealObjs = () => DATA.bonemeal.map((row) => row.obj);
+
 /** "big bones": how the grinder's messages name a bone. */
 const boneName = (boneId) => core.ItemDefinition.forId(boneId).getName().toLowerCase();
 
@@ -137,7 +140,7 @@ function run(player, step) {
 module.exports = {
   TOKENS_ATTRIBUTE, GRINDER_STATUS_ATTRIBUTE, GRINDER_BONE_ATTRIBUTE,
   GRINDER_EMPTY, GRINDER_HOPPER, GRINDER_BIN,
-  init, gameval, bonemealFor, worshipFor, boneName, tokens, setTokens, grinderStatus, grinderBone,
+  init, gameval, bonemealFor, worshipFor, bonemealObjs, boneName, tokens, setTokens, grinderStatus, grinderBone,
   setGrinder, restore, spam, mesbox, animate, sound, swap, run,
   get api() { return api; },
   get core() { return core; },

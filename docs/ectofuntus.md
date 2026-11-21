@@ -92,6 +92,19 @@ What's in the grinder is saved (`ectofuntus:grinder-status`, `ectofuntus:grinder
 `ahoy_grinder_status` (varbit 210) on login. Not captured: bones on the loader while the hopper is
 full. They are wound, as the handle does.
 
+## Emptying bonemeal
+
+`ectofuntus/Bonemeal.Ectofuntus.js` answers Empty on every bonemeal pot in `bones.json`. Recording
+377 (rev 231, tick 1161) empties Big bonemeal: on the click, synth 2584, the spam line "You empty
+the pot of crushed big bones." and the bonemeal becomes an empty pot. The pot stays in the clicked
+slot.
+
+Only Big bonemeal is recorded. The other pots name their bones from their own cache name ("Dragon
+bonemeal" gives "crushed dragon bones", plain "Bonemeal" gives "crushed bones"), as their Wiki
+examines do ("A pot of crushed dragon bones."). That wording is ours. Strykewyrm bonemeal is left
+out: the Wiki says it can't be obtained, since the grinder makes wyrm bonemeal from strykewyrm
+bones.
+
 ## Worship
 
 Recordings 375-377, 703 (rev 229-231). One worship per click; a bucket of slime or bonemeal used on

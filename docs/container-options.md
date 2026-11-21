@@ -22,6 +22,8 @@ its meta. Op6 on `inventory:items`, spam message, tick 0:
 | `bucket_supercompost` | `bucket_empty` | You empty the bucket of supercompost. | none | 20261111T230428 t175 |
 | `bucket_ultracompost` | `bucket_empty` | You empty the bucket of ultracompost. | none | 20261111T230428 t172 |
 
+Bonemeal pots empty in the Ectofuntus plugin ([ectofuntus.md](ectofuntus.md#emptying-bonemeal)).
+
 Potions and the other vials empty in `Potions.plugin.js` with "You empty the vial." (3005, 4100).
 
 **Pot of cornflour** (`chickenquest_pot_cornflour`) asks first (20261111T230428, ticks 156-164). It opens chatmenu

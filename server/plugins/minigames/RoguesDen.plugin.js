@@ -16,6 +16,7 @@ module.exports = {
     require("./roguesden/Run.RoguesDen").attach(api);
     require("./roguesden/Lobby.RoguesDen").attach(api);
     require("./roguesden/Interactions.RoguesDen").attach(api);
+    require("./roguesden/Puzzles.RoguesDen").attach(api);
     require("./roguesden/Rewards.RoguesDen").attach(api);
   },
 };

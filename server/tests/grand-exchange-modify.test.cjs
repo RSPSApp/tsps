@@ -161,6 +161,38 @@ test('closing the exchange during the wait leaves the stopped offer to collect',
   assert.equal(f.p.getInventory().getAmount(IRON_BAR_NOTE), 0);
 });
 
+test('a Modify from an exchange since closed and reopened leaves the new setup alone', async t => {
+  const f = trader(t, { itemId: IRON_BAR, sell: true, slot: 1, quantity: 3, price: 100 });
+  await modify(f, 1);
+  f.p.getPacketSender().sendInterfaceRemoval();
+  f.p.setInterfaceId(GE);
+  await button(f, 7 + 2, 4);
+  assert.deepEqual({ slot: plugin._test.getOffer(f.p)?.slot, sell: plugin._test.getOffer(f.p)?.sell }, { slot: 2, sell: true });
+  tick();
+  tick();
+  const setup = plugin._test.getOffer(f.p);
+  assert.deepEqual({ slot: setup?.slot, itemId: setup?.itemId }, { slot: 2, itemId: -1 }, 'the new sell setup stays');
+  assert.equal(f.p.getInventory().getAmount(IRON_BAR_NOTE), 0, 'the old offer is not collected');
+  assert.ok(f.offers()[1]?.aborted, 'it waits in its collection slot');
+});
+
+test('leaving the offer for another view during the wait drops the Modify', async t => {
+  const f = trader(t, { itemId: IRON_BAR, sell: true, slot: 2, quantity: 3, price: 100 });
+  f.offers()[5] = { itemId: IRON_BAR, sell: true, slot: 5, quantity: 2, price: 100, total: 200, finished: false, placedAt: Date.now(), completesAt: null };
+  await modify(f, 2);
+  await button(f, 7 + 5, 2);
+  assert.ok(f.closed.mock.calls.some(({ arguments: [target] }) => target === OFFER_CONTENTS), 'the popup goes');
+  tick();
+  tick();
+  assert.equal(plugin._test.getOffer(f.p), undefined, 'no setup opens over the other offer');
+  assert.equal(f.p.getInventory().getAmount(IRON_BAR_NOTE), 0);
+  assert.ok(f.offers()[2]?.aborted, 'the stopped offer waits to collect');
+  await modify(f, 5);
+  tick();
+  tick();
+  assert.equal(plugin._test.getOffer(f.p)?.slot, 5, 'a later Modify still works');
+});
+
 test('Modify on a completed offer changes nothing', async t => {
   const f = trader(t, { itemId: IRON_BAR, sell: true, slot: 4, quantity: 2, price: 100 });
   f.offers()[4].finished = true;

@@ -20,6 +20,8 @@ recordings 1001438 (ticks 10289-16394, 18 modifies of sell offers) and 1001441 (
   the same slot with the offer's item, quantity and price (`ge_newoffer_price` is sent with the
   guide price first, then the offer's own price), ready to change and confirm as a new offer.
 
-Ours (no recording covers them): an exchange closed during the two ticks, or an inventory without
-room for the input, leaves the stopped offer in its collection slot, as Abort does. Modify on an
+Ours (no recording covers them): an exchange closed or reopened during the two ticks, a move to
+another view in it (home, another offer, a new setup), or an inventory without room for the input,
+leaves the stopped offer in its collection slot, as Abort does. The countdown belongs to the view
+that started it, so it never collects or replaces a setup the player has opened since. Modify on an
 offer that has already completed answers with Abort's "That offer has already completed."

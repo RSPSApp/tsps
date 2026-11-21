@@ -178,8 +178,23 @@ const usableSlots = () => (pluginApi.core.WorldDefinition.isMembersWorld() ? 8 :
 const offers = new WeakMap();
 const completionTimers = new WeakMap();
 const viewing = new WeakMap();
-/** Each player's pending Modify countdown; the guard holds only while it runs. */
+/**
+ * Each player's pending Modify countdown. It belongs to the exchange view that started it: anything that
+ * changes that view (home, a new setup, an offer's details, closing the exchange) drops it, so a countdown
+ * from an earlier view can't collect or replace what the player is doing now.
+ */
 const modifying = new WeakMap();
+/**
+ * Drops the pending Modify, if any; the stopped offer stays in its slot's collection, as Abort leaves it.
+ * `popup: false` when the exchange itself is closing (its sub-interfaces go with it).
+ */
+function dropModify(player, popup = true) {
+  const task = modifying.get(player);
+  if (!task) return;
+  modifying.delete(player);
+  task.stop();
+  if (popup && player.getInterfaceId() === GE) player.getPacketSender().closeSubInterface(OFFER_CONTENTS);
+}
 /** The countdown's task key, one object per player, so a player-wide task cancel can't strand the popup. */
 const modifyKeys = new WeakMap();
 const modifyKey = (player) => {
@@ -694,6 +709,7 @@ function examine(itemId) {
 }
 
 function home(player) {
+  dropModify(player);
   closeSearch(player);
   offers.delete(player);
   viewing.delete(player);
@@ -753,6 +769,7 @@ function closeSearch(player) {
 
 function showCompleted(player, slot) {
   if (!Object.hasOwn(completedOffers(player), slot)) return;
+  dropModify(player);
   offers.delete(player);
   viewing.set(player, slot);
   player.getPacketSender()
@@ -787,6 +804,7 @@ function chooseItem(player, offer) {
 }
 
 function start(player, sell, slot = 0, itemId = -1) {
+  dropModify(player);
   if (slot >= usableSlots()) {
     player.sendMessage("You need to be on a members' world to use this slot.");
     return;
@@ -1211,10 +1229,15 @@ function stopOffer(player, slot) {
  * quantity and price, ready to change and confirm again.
  */
 function modify(player, slot = viewing.get(player)) {
-  if (modifying.get(player)?.isRunning()) return;
+  if (modifying.has(player)) return;
   const stopped = stopOffer(player, slot);
   if (!stopped) return;
-  const task = new pluginApi.core.CountdownTask(modifyKey(player), MODIFY_TICKS, () => reopenModified(player, slot, stopped));
+  const task = new pluginApi.core.CountdownTask(modifyKey(player), MODIFY_TICKS, () => {
+    // Dropped (another view, the exchange closed or reopened): the stopped offer waits in its collection.
+    if (modifying.get(player) !== task) return;
+    modifying.delete(player);
+    reopenModified(player, slot, stopped);
+  });
   modifying.set(player, task);
   pluginApi.core.TaskManager.submit(task);
   player.getPacketSender()
@@ -1223,8 +1246,8 @@ function modify(player, slot = viewing.get(player)) {
     .sendClientScript(LOADING_ICON_SCRIPT, loadingUid(6), loadingUid(7), LOADING_ICON_ENUM, 10, 1000, 3000, 512, 1024, 0, 3, LOADING_TEXT);
 }
 
-// Ours: an exchange closed during the wait, or an inventory without room, leaves the stopped offer
-// in its collection slot, as Abort would.
+// Ours: an exchange closed or left during the wait (see dropModify), or an inventory without room,
+// leaves the stopped offer in its collection slot, as Abort would.
 function reopenModified(player, slot, stopped) {
   if (!player.isRegistered() || player.getInterfaceId() !== GE || historyOpen.has(player)) return;
   player.getPacketSender().closeSubInterface(OFFER_CONTENTS);
@@ -1546,6 +1569,7 @@ module.exports = {
     api.onPlayerLogout(({ player }) => {
       searching.delete(player);
       historyOpen.delete(player);
+      dropModify(player, false);
       for (const timer of completionTimers.get(player) ?? []) clearTimeout(timer);
       completionTimers.delete(player);
     });
@@ -1572,6 +1596,7 @@ module.exports = {
     api.onInterfaceActionButton(HISTORY_BUTTONS, handleHistoryButton);
     api.onCustomEvent("interface:closed", ({ player, interfaceId }) => {
       if (interfaceId === GE_HISTORY) historyOpen.delete(player);
+      if (interfaceId === GE) dropModify(player, false);
     });
   },
 };

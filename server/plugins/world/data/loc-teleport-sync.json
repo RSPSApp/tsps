@@ -95,7 +95,7 @@
       {"pattern": "^kalphite_(burrow|chamber)_entrance", "why": "A rope used on it is used up and sets a varbit that shows the roped version; needs that state kept."},
       {"pattern": "^dungeon_tree_closed$", "why": "The Brimhaven Dungeon's entrance takes a fare through a dialogue."},
       {"pattern": "^freedomfighterentrance", "why": "The Myreque hideout's doors: In Search of the Myreque gates them."},
-      {"pattern": "^xmas\\d*_|^easter\\d*_|^halloween\\d*_", "why": "A holiday event."},
+      {"pattern": "^(?!xmas20_goblin_cave_)(xmas\\d*_|easter\\d*_|halloween\\d*_)", "why": "A holiday event. Scrubfoot's cave (xmas20_goblin_cave_*) stayed after the 2020 Christmas event for Sled Racing (Wiki: Cave entrance (Scrubfoot's cave))."},
       {"pattern": "^dagexp_bossroom", "why": "The Dagannoth Kings' ladder picks a boss instance (Standard or Slayer)."},
       {"pattern": "^fossil_underwater_", "why": "Fossil Island's underwater caves need diving gear."}
     ]

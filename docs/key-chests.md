@@ -76,6 +76,9 @@ points it sent aren't ours):
   pre-roll hit too (ours: the Wiki lists them as always and doesn't say otherwise); a 1/5,000
   uncut onyx pre-roll, then a 1/500 helmet of the moon (1/500.1 overall); otherwise one of 16
   rewards out of 107, among them a crystal key and another moon key.
+- **Collection log:** the onyx, the helmet and the main table count; the sunfire splinters and
+  huasca seeds don't (Wiki trivia: from this chest they "will not contribute towards the
+  collection log"), set by the chest's `noLog` list.
 
 **Zombie Pirate's Locker** (recordings 441 and 442, rev 233; 1440, rev 224):
 

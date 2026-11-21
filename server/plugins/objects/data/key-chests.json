@@ -283,6 +283,7 @@
       "animDelay": 10,
       "openTicks": 2,
       "alwaysWithPreRolls": true,
+      "noLog": ["sunfiresplinter", "huasca_seed"],
       "loot": {
         "always": [["sunfiresplinter", 250]],
         "preRolls": [

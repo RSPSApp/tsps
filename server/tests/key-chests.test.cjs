@@ -381,6 +381,28 @@ test("opening the moon key chest: sound 77 and the unlock line, then sound 76, t
   assert.equal(player.attributes.get(Chests.OPENING_ATTRIBUTE), false);
 });
 
+test("the moon key chest's splinters and huasca seeds don't count towards the collection log; its other loot does", () => {
+  const logged = (random) => {
+    const player = createMoonPlayer({ key: 1 });
+    const from = events.length;
+    withRandom(random, () => {
+      Chests.openChest(moon(), player, lockerObject());
+      ticks(1, []);
+    });
+    const obtained = events.slice(from).filter(([name]) => name === "collection-log:obtain").map(([, { itemId }]) => itemId);
+    return { added: player.added.map(([itemId]) => itemId), obtained };
+  };
+  // Huasca seeds are 10 of the 107 after 40 (Wiki trivia: they "will not contribute towards the collection log").
+  const seeds = logged([0.5, 0.5, 40 / 107]);
+  assert.deepEqual(seeds.added, [obj("sunfiresplinter"), obj("huasca_seed")], "both still given");
+  assert.deepEqual(seeds.obtained, []);
+  const helmet = logged([0.5, 0]);
+  assert.deepEqual(helmet.added, [obj("sunfiresplinter"), obj("moon_helmet")]);
+  assert.deepEqual(helmet.obtained, [obj("moon_helmet")]);
+  const stone = logged([0.5, 0.5, 0]);
+  assert.deepEqual(stone.obtained, [obj("dragonstone")]);
+});
+
 test("the moon key chest without a key: the Wiki's locked line, no sound; Open, the key and other chests", () => {
   const player = createMoonPlayer({ key: 0 });
   Chests.openChest(moon(), player, lockerObject());

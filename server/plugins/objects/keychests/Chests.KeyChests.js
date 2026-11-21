@@ -100,7 +100,10 @@ function reward(chest, player) {
   const drops = Loot.roll(chest, player.getSkillManager().getMaxLevel(core.Skill.FISHING), Math.random, rules);
   if (chest.avariceNotes && wearsAvarice(player)) for (const entry of drops) if (!entry.preRoll) entry.noted = true;
   Loot.give(player, drops);
-  for (const { itemId, amount } of drops) api.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
+  // `noLog`: items this chest gives that don't count towards the collection log (moon chest's splinters and huasca seeds).
+  for (const { itemId, amount } of drops) {
+    if (!chest.noLogIds?.has(itemId)) api.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
+  }
   if (chest.count) player.setAttribute(OPENED_ATTRIBUTES[chest.key], opened(chest, player) + 1);
   if (chest.diaryTask) api.emitCustomEvent("diary:task", { player, ...chest.diaryTask });
   // "chests:opened" { player, chest }: a key chest opened, by its name (a league's "Open the Crystal Chest").

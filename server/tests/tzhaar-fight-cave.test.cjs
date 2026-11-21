@@ -177,9 +177,9 @@ test('clearing wave 2 while its monsters are idle spawns wave 3 and continues pa
 
   for (const npc of wave2) {
     npc.getCombat().reset();
-    t.mock.method(npc.getCombat().getLastAttack(), 'hasElapsed', () => true);
     npc.setHitpoints(5);
-    npc.process();
+    // One hitpoint per 100-tick regen clock (NPC.process).
+    for (let i = 0; i < 100; i++) npc.process();
     assert.equal(npc.getHitpoints(), 6, 'living idle NPCs still regenerate');
     npc.setHitpoints(0);
     npc.process(); // NPCs process before the player's wave check in World.process.

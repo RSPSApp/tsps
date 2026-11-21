@@ -1677,7 +1677,8 @@ export class CombatFactory {
                     target.hasFlag?.("combat:no-retaliate") !== true;
             } else if (target.isNpc()) {
                 auto_ret = target.hasFlag?.("combat:no-retaliate") !== true
-                    && target.getAsNpc().getMovementCoordinator().getCoordinateState() == CoordinateState.HOME;
+                    // One walking home (AWAY) still fights back; only a retreat ignores hits.
+                    && target.getAsNpc().getMovementCoordinator().getCoordinateState() != CoordinateState.RETREATING;
             }
 
             if (!auto_ret) {

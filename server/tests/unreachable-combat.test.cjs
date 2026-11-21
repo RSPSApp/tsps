@@ -6,6 +6,9 @@
 // Combat.giveUpUnreachableTarget, such an actor held its target (and so
 // CombatFactory.inCombat, the teleport and busy gates) indefinitely.
 //
+// The deadline is the player's alone. An NPC out of reach keeps trying for as long as its target
+// stands in its aggression range (Combat.shouldRetreat, #6297); the npc cases below pin that.
+//
 // The deadline measures a pursuit that got nowhere: no distance closed and no step taken. A step
 // the mover accepted is the chase still going, so a target walked away at the same speed does not
 // spend the budget - the tests below hold both halves up, and say which one a case is for.
@@ -125,14 +128,12 @@ test("a player that cannot move, chasing a target that never comes, gives up", (
   assert.deepEqual(s.messages, ["I can't reach that!"]);
 });
 
-test("an immobile npc gives up a player that never comes", (t) => {
+test("an immobile npc keeps a player that never comes: npcs have no deadline", (t) => {
+  // #6297: an NPC is let go by its aggression range only (combat:no-retreat opts out of that here).
   const s = scene(t, { playerImmobile: true, npcImmobile: true, noRetreat: true });
   s.npc.getCombat().attack(s.player);
-  s.ticks(GIVE_UP_CYCLES - 1);
-  assert.ok(s.npc.getCombat().getTarget(), "still patient one cycle short of the deadline");
-  s.tick();
-  assert.equal(s.npc.getCombat().getTarget(), null);
-  assert.equal(s.npc.getCombat().hasPendingWork(), false);
+  s.ticks(GIVE_UP_CYCLES * 3);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
 });
 
 test("a fighter still walking toward its target keeps it", (t) => {
@@ -157,24 +158,22 @@ test("an immobile actor keeps a target that is closing on it", (t) => {
   assert.deepEqual(s.messages, []);
 });
 
-test("an npc whose pursuit step another actor rejects gives up", (t) => {
-  // The engagement stuck behind a crowd, which only the deadline can end: a real npc registered
-  // in World stands on the tile the mugger must step onto, so `validatedStep` refuses it and the
-  // checkpoint is retained - postMovementProcess exempts an entity block by design, and the queue
-  // never empties. Nothing is pinned or teleported here: the npc simply never gets a step in.
+test("an npc whose pursuit step another actor rejects keeps trying while the target is in range", (t) => {
+  // The engagement stuck behind a crowd: a real npc registered in World stands on the tile the
+  // mugger must step onto, so `validatedStep` refuses it and the checkpoint is retained. The player
+  // stands 8 tiles from the mugger's spawn, the edge of its aggression range (max range 7 + melee
+  // reach 1), so it keeps the target and keeps trying its step, as live's do (#6297).
   const s = scene(t, { gap: 8 });
   s.blockAgent(FIELD.x, FIELD.y + 7);
   s.npc.getCombat().attack(s.player);
   const stuck = s.npc.getLocation();
   let refused = false;
-  for (let i = 0; i < GIVE_UP_CYCLES - 1; i++) {
+  for (let i = 0; i < GIVE_UP_CYCLES * 3; i++) {
     s.tick();
     refused = refused || s.npc.getMovementQueue().wasBlockedByDynamicOccupancy();
   }
   assert.equal(refused, true, "the mover refused the step as an entity block");
-  assert.ok(s.npc.getCombat().getTarget(), "still patient one cycle short of the deadline");
-  s.tick();
-  assert.equal(s.npc.getCombat().getTarget(), null);
+  assert.equal(s.npc.getCombat().getTarget(), s.player, "no deadline for an npc");
   assert.equal(s.npc.getLocation().equals(stuck), true, "the npc never took a step");
 });
 

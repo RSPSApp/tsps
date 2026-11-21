@@ -585,8 +585,7 @@ module.exports = function registerSongOfTheElves(api) {
       if (state.lastCycle === cycle) return;
       state.lastCycle = cycle;
       // This fight uses normal hit queues but drives its warning specials from
-      // the private-area tick. Refresh engagement so generic NPC regeneration
-      // does not erase ranged hits between player attack cycles.
+      // the private-area tick. Refresh engagement between player attack cycles.
       state.boss.getCombat().getLastAttack().reset();
       if (state.boss.getHitpoints() <= 60) {
         finishArianwynEncounter(this, state);

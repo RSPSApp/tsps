@@ -192,7 +192,9 @@ export class NPC extends Mobile {
     /** Encounter-owned raises to this NPC's base combat levels (a boss's enrage); the definition is untouched. */
     private maxLevelBoosts: Map<Skill, number> | null = null;
     private static readonly STAT_RESTORE_TICKS = 100;
-    /** Ticks per level a drained stat comes back; a boss can restore faster (the Corporeal Beast). */
+    /** NPC turns since the last hitpoint regenerated (process()). */
+    private hitpointRegenClock = 0;
+    /** Ticks per level a drained stat, or a hitpoint, comes back; a boss can restore faster (the Corporeal Beast). */
     private statRestoreTicks = NPC.STAT_RESTORE_TICKS;
 
     constructor(id: number, position: Location) {
@@ -384,23 +386,17 @@ export class NPC extends Mobile {
             }
 
             AreaManager.process(this);
-            // "combat:no-regen": a boss whose fight has phases it can't be hit in (Vet'ion's hounds)
-            // keeps its damage. The damage clock includes untagged hits; lastAttack also
-            // preserves existing boss scripts that explicitly reset that clock to hold healing.
-            // An NPC still fighting someone (it has a combat target) doesn't regenerate just because
-            // nobody hit it for 20 seconds: TzTok-Jad kept healing while players killed his healers.
-            // Walking home after losing its target still restores it.
-            const retreating = this.movementCoordinator.getCoordinateState() == CoordinateState.RETREATING;
-            const stillFighting = this.getCombat().getTarget() != null;
-            if (this.hitpoints > 0 && !this.hitpointsLocked && !this.hasFlag("combat:no-regen") && (retreating
-                || (!stillFighting && this.getCombat().getLastDamage().hasElapsed(20000) && this.getCombat().getLastAttack().hasElapsed(20000)))) {
-                const max = this.getMaxHitpoints();
-                if (max > this.hitpoints) {
-                    // OSRS hitpoints are integers. Floor the 10% step and the stored value so
-                    // regeneration can never leave a fractional HP (the old code produced
-                    // 1.5 from max 5 and a fractional target could no longer be finished).
-                    const regen = Math.max(1, Math.floor(max * 0.1));
-                    this.setHitpoints(Math.min(max, Math.floor(this.hitpoints + regen)));
+            // Hitpoints come back 1 per regen interval on a clock that runs whatever the NPC is
+            // doing - fighting, walking home or idle - so a reset monster keeps its damage. The
+            // interval is the stat one: measured NPC regen rates list the same hitpoint and stat
+            // rate for every NPC that regenerates both, 100 ticks unless listed (Wiki,
+            // User:Orion/Regen; Monster: "All monsters will recover hitpoints fairly slowly").
+            // "combat:no-regen": an NPC that doesn't regenerate hitpoints (Nex, Vet'ion's hounds).
+            if (++this.hitpointRegenClock >= this.statRestoreTicks) {
+                this.hitpointRegenClock = 0;
+                if (this.hitpoints > 0 && !this.hitpointsLocked && !this.hasFlag("combat:no-regen")
+                    && this.hitpoints < this.getMaxHitpoints()) {
+                    this.setHitpoints(Math.floor(this.hitpoints) + 1);
                 }
             }
         }

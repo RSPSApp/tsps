@@ -170,3 +170,45 @@ Arrowheads used on the crate (`vm_crate`, 24534):
 - Several finds at once give one spam line and one thanks; only one find was recorded.
 - The thanks always comes from Tinse Torpe, the recorded speaker.
 - A stackable reward goes onto a stack already carried; otherwise it takes the find's slot.
+
+# Fossil displays
+
+The 36 displays on the museum's lowest floor (around 1606-1654, 4950-4984), filled with cleaned
+Fossil Island fossils. `server/plugins/world/museum/FossilDisplays.Museum.js`, data in
+`server/plugins/world/data/fossil-displays.json`.
+
+## From rsprox captures (local 1000338, local 1000342, 1843; revision 227)
+
+- Each display is a multiloc on its own varbit `fossil_vm_display_<n>_state` (5876-5911), states
+  0-5. Its unfinished states are named Small/Medium/Large/Plant Fossil Display (or Large Fossil
+  Support) with the one option "Add to"; state 5 is the finished creature with no options.
+  Displays 27-30 are clicked on their `b` half; 25 has two halves on one varbit.
+- Add to with the next piece carried: `human_pickuptable` (832) and synth sound 2739 on the
+  click tick, then on the next tick the fossil leaves the pack and the state rises by one
+  (local 1000338 ticks 6623-6632, display 6). Each click adds one piece.
+- The pieces go in a fixed order: state 0 limbs (plant: roots), 1 spine, 2 ribs, 3 pelvis,
+  4 skull, which is the cache's `fossil_<size>_1`-`_5` order. Without the next piece the
+  game message is "You're missing part of the display:  Small fossilised ribs." (two spaces
+  after the colon, on every recording) and nothing changes (local 1000338 tick 4940,
+  display 10 at state 2; 1843 tick 7310, display 3 at state 1).
+- The fifth piece: `vm_kudos` +2, spam "You have earned Kudos with the Museum!", the lamp in the
+  pack, sound 3653, and an objectbox with the lamp and "Congratulations, you have completed this
+  display!" (local 1000338 tick 4916, display 34; tick 6632, display 6). A small display gives
+  `fossil_display_reward_lamp_small`, a plant display (34) the large lamp.
+- The Kudos HUD stays up in the hall and is re-opened at each completion.
+- Rub on a display lamp: xpreward titled "Choose the stat you wish to be advanced!", then
+  "Your wish has been granted! You have been awarded 5,000 Runecraft experience!" (local
+  1000338 tick 4971).
+
+## From the Wiki (Kudos, Antique lamp (fossil display))
+
+- 14 small, 12 medium, 5 large and 5 plant displays, 2 Kudos each.
+- Lamps: small 2,000 XP (level 20), medium 3,500 XP (level 30), large/plant 5,000 XP (level 35),
+  any skill.
+
+## Ours
+
+- The plant order past the roots follows the same `fossil_plant_1`-`_5` numbering; only the
+  roots were recorded as missing.
+- Using a fossil on a display does nothing special; no recording uses one.
+- The busy varbit (12393) set around the completion box is not sent.

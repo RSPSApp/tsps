@@ -126,6 +126,17 @@ function completeAllQuests(api, player) {
         console.error(`[quest command] completing ${quest.name} (${quest.key}) failed:`, error);
       }
     }
+    // `quest:complete-all-miniquests` { player, completed }: miniquests outside the quest registry
+    // finish themselves (rewards still routed) and push their names. After the quests, so a
+    // miniquest needing its parent quest (The Enchanted Key: Making History) sees it complete.
+    const miniquests = { player, completed: [] };
+    try {
+      api.emitCustomEvent("quest:complete-all-miniquests", miniquests);
+    } catch (error) {
+      errors.push("miniquests");
+      console.error("[quest command] completing the miniquests failed:", error);
+    }
+    completed += miniquests.completed.length;
   } finally {
     routing.restore();
   }

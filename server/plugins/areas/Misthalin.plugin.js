@@ -10,6 +10,9 @@
  *  - Manhole at 3237,3458 > Open/Close: swap the closed (881) and open (882) locs.
  *  - Manhole > Climb-down: sewer landing at 3237,9858; the sewer Ladder > Climb-up
  *    returns to the manhole.
+ *  - The West Bank's locked back Door (fai_varrock_bank_locked_door, 3186,3446) > Knock-at: the
+ *    player's "I don't think I'm ever going to be allowed in there." with chatbored1 (rsprox.net
+ *    rec 3213 ticks 4464-5070, five knocks, the same line each time). The door never opens.
  *
  * Wizards' Tower basement (a y+6400 dungeon, so the generic Ladders plugin can't
  * link it): the ground-floor Ladder at 3104,3162 climbs down to the basement
@@ -39,6 +42,9 @@ const EDGEVILLE_DUNGEON_LANDING = { x: 3096, y: 9867, z: 0 };
 // Varrock
 const VARROCK_MANHOLE = { x: 3237, y: 3458, z: 0 };
 const VARROCK_SEWER_LADDER = { x: 3237, y: 9858, z: 0 };
+const VARROCK_BANK_LOCKED_DOOR = "fai_varrock_bank_locked_door";
+const VARROCK_BANK_DOOR_LINE = "I don't think I'm ever going to be allowed in there.";
+const CHATBORED1 = 562;
 
 const INTRO = "There's a large selection of books, the majority of which look fairly<br>old. Some very strange names... You pick one at random :";
 // The Wiki gives different spellings for the ground-floor library and Traiborn's room.
@@ -320,6 +326,15 @@ function swampCaveMarkerRoute(event) {
   else event.approachRange = SWAMP_CAVE_MARKER_RANGE;
 }
 
+// Varrock West Bank: the locked back door only gets the player's line (rec 3213).
+function knockVarrockBankDoor({ player, objectId }) {
+  if (objectId !== CacheDefinitions.getLocId(VARROCK_BANK_LOCKED_DOOR)) return false;
+  const { DialogueChainBuilder, PlayerDialogue } = pluginApi.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new PlayerDialogue(0, VARROCK_BANK_DOOR_LINE, CHATBORED1)));
+  return true;
+}
+
 // Lumbridge Swamp Caves: a cave goblin marker's picture.
 function lookAtSwampCaveMarker(event) {
   const { player, objectId } = event;
@@ -337,7 +352,7 @@ function lookAtSwampCaveMarker(event) {
 
 module.exports = {
   name: "Misthalin",
-  description: "Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers, the Wizards' Tower basement, and the Lumbridge Swamp Caves dark hole and wall markers.",
+  description: "Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers and the West Bank's locked back door, the Wizards' Tower basement, and the Lumbridge Swamp Caves dark hole and wall markers.",
   register(api) {
     initialize(api);
     // Edgeville
@@ -351,6 +366,7 @@ module.exports = {
     });
     api.onObjectInteraction("Ladder", { "Climb-up": varrockClimbUpToManhole });
     api.onObjectInteraction("Bookcase", { Search: searchBooks });
+    api.onObjectInteraction("Door", { "Knock-at": knockVarrockBankDoor });
     // Wizards tower basement
     api.onObjectInteraction("Ladder", {
       "Climb-down": wizardsTowerClimbDown,
@@ -364,5 +380,5 @@ module.exports = {
     api.onObjectRoute(swampCaveMarkerRoute);
     api.onObjectInteraction("Symbol", { "Look-at": lookAtSwampCaveMarker });
   },
-  _test: { swampCavesLanding, lookAtSwampCaveMarker, swampCaveMarkerRoute, SWAMP_CAVE_MARKER_RANGE, SWAMP_CAVE_ROPED_ATTRIBUTE, SWAMP_CAVE_ROPED_VARBIT },
+  _test: { knockVarrockBankDoor, VARROCK_BANK_DOOR_LINE, swampCavesLanding, lookAtSwampCaveMarker, swampCaveMarkerRoute, SWAMP_CAVE_MARKER_RANGE, SWAMP_CAVE_ROPED_ATTRIBUTE, SWAMP_CAVE_ROPED_VARBIT },
 };

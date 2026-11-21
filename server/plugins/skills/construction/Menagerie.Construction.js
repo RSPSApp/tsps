@@ -1,6 +1,6 @@
 "use strict";
 
-const { api, CacheDefinitions, PluginManager, MapObjects, Item, PlayerStatus } = require("./Core.Construction");
+const { api, Animation, CacheDefinitions, ChatType, CountdownTask, HitDamage, HitMask, PluginManager, MapObjects, Item, PlayerStatus, TaskManager, World } = require("./Core.Construction");
 const Ids = require("./Ids.Construction");
 const House = require("./House.Construction");
 const PetForms = require("./PetForms.Construction");
@@ -35,6 +35,18 @@ const FORMS_ATTRIBUTE = "construction:menagerie-forms";
 const MULTIFORM_ENUM_PARAM = 446;
 const MENAGERIE_ROOMS = new Set(["MENAGERIE_INDOORS", "MENAGERIE_OUTDOORS"]);
 const MENAGERIE_FURNITURE = /HOUSE$|HABITAT$|SCRATCHING_POST$|ARENA$|FEEDER$|PET_LIST$/;
+// The desert habitat's cactus (rsprox capture 2792 ticks 768-890; Wiki: Desert habitat): Touch
+// faces it and plays human_pickuptable, and the tick after says "That was unwise." (spam) and
+// hits for 2. A touch takes those two ticks, so held clicks touch every other tick.
+const CACTUS = Ids.loc("poh_menagerie_habitat_feature_3");
+// 2792: every touch sends human_pickuptable with delay 15.
+const TOUCH_ANIMATION = new Animation(Ids.seq("human_pickuptable"), 15);
+const CACTUS_DAMAGE = 2;
+const TOUCH_CYCLES = 2;
+/** Player -> the world cycle their next Touch is accepted on (2792: every other tick). */
+const nextTouch = new WeakMap();
+/** The cactus's own queued hits, capped as they land (`combat:damage-apply`). */
+const stings = new WeakSet();
 const ROAM_RADIUS = 3;
 const MAX_ROAMING = 20;
 
@@ -105,6 +117,38 @@ function view(event) {
   event.player.getPacketSender().sendInterface(MENAGERIE_INTERFACE);
   sendStored(event.player);
   return true;
+}
+
+/**
+ * The cactus's Touch: the pick-up animation, then the sting a tick later. 2792 (ticks 868-871,
+ * 995-998) sends Touch every tick but the server takes one every other tick, so the next touch
+ * waits two cycles from this one, past the sting's own tick.
+ */
+function touchCactus(event) {
+  if (event.objectId !== CACTUS) return false;
+  const player = event.player;
+  const cycle = World.getProcessCycle(), wait = (nextTouch.get(player) ?? cycle) - cycle;
+  if (wait > 0 && wait <= TOUCH_CYCLES) return true;
+  nextTouch.set(player, cycle + TOUCH_CYCLES);
+  player.performAnimation(TOUCH_ANIMATION);
+  TaskManager.submit(new CountdownTask(player, 1, () => {
+    if (!player.isRegistered()) return;
+    player.getPacketSender().sendTypedMessage(ChatType.SPAM, "That was unwise.");
+    const hit = new HitDamage(CACTUS_DAMAGE, HitMask.RED);
+    stings.add(hit);
+    player.getCombat().getHitQueue().addPendingDamage([hit]);
+  }));
+  return true;
+}
+
+/**
+ * It never kills: 2792's touches at 1 hitpoint (ticks 993-998) each hit a blue 0. Capped as it
+ * lands, after any hit queued before it (poison), so the two together can't kill either. Ours:
+ * at 2 hitpoints it takes 1 (no recording at 2).
+ */
+function capSting({ target, hit }) {
+  if (!stings.delete(hit)) return;
+  hit.setDamage(Math.max(0, Math.min(hit.getDamage(), target.getHitpoints() - 1)));
 }
 
 function owns(player, itemId) {
@@ -340,6 +384,8 @@ function attachMenagerie(api) {
     api.onObjectInteraction(name, { View: view });
   }
   api.onObjectInteraction("Pet list", { Read: readPetList });
+  api.onObjectInteraction("Cactus", { Touch: touchCactus });
+  api.onCustomEvent("combat:damage-apply", capSting);
   api.onItemOnObject(storePet, { noted: false });
   api.onInterfaceActionClick(interfaceClick);
   // A plain hook: roaming pets are told apart by the house's roaming map, not by name.

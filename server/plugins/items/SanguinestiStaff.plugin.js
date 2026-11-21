@@ -6,8 +6,9 @@
  * cast. It is charged with blood runes, two runes a charge, up to 20,000, and
  * uncharging returns every rune. A successful hit has a 1/5 chance to deal 8
  * extra damage and heal the caster for half the damage dealt. Uncharged, it
- * cannot cast. Charging, checking and uncharging mirror Tumeken's shadow
- * (plugins/items/TumekensShadow.plugin.js).
+ * cannot cast, nor be wielded: Wield on the uncharged staff refuses with a game message naming the item
+ * (local 1001250 tick 721, op3 on Sanguinesti staff (uncharged), rev 231). Charging, checking and uncharging
+ * mirror Tumeken's shadow (plugins/items/TumekensShadow.plugin.js).
  *
  * The cast (rsprox 1696 ticks 640, 774, 778, 1063, 1073, 1413; 1698 ticks 4177, 4181, 4238, 4265): anim 1167,
  * casting spotanim 1540 (cache sanguinesti_staff_casting) at height 92 and a private shadow_cast (178); the
@@ -245,6 +246,21 @@ function checkCharges({ player, item }) {
 }
 
 /** Wiki: uncharging returns every blood rune spent. */
+/**
+ * Live refuses to wield the uncharged staff (local 1001250 tick 721). Ours: the Holy staff's refusal names its own
+ * item the same way; it is not captured.
+ */
+function refuseUnchargedWield(event) {
+  const I = ids();
+  const name = {
+    [I.SANGUINESTI_STAFF_UNCHARGED_]: "Sanguinesti staff (uncharged)",
+    [I.HOLY_SANGUINESTI_STAFF_UNCHARGED_]: "Holy sanguinesti staff (uncharged)",
+  }[Number(event?.item?.getId?.())];
+  if (!name) return;
+  event.allow = false;
+  event.player.sendMessage(`Your ${name} has no charges! You can use blood runes to power the staff.`);
+}
+
 function uncharge({ player, item }) {
   const { Item } = core;
   const charges = chargesOf(item);
@@ -281,6 +297,7 @@ module.exports = {
     api.onItemAction("Holy sanguinesti staff", { Check: checkCharges, Charge: chargeOption, Uncharge: uncharge });
     api.onItemAction("Holy sanguinesti staff (uncharged)", { Charge: chargeOption });
     api.onItemOnItem(chargeStaff, { noted: false });
+    api.onCanEquip(refuseUnchargedWield);
     api.onCombatHitResolved(onHitResolved);
     api.registerCombatMethodResolver(staff.resolver);
     api.onCustomEvent("item:fill-charges", staff.fillCharges);
@@ -296,6 +313,7 @@ module.exports = {
     pendingCharges,
     checkCharges,
     uncharge,
+    refuseUnchargedWield,
     baseMaxHit,
     MAX_CHARGES,
     BLOOD_RUNES_PER_CHARGE,

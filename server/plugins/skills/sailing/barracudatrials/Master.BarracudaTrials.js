@@ -158,22 +158,11 @@ function clearCrew(player, trial) {
   require("../crew/Registrar.Crew").openCrewManagement(player);
 }
 
-/** Owned anywhere (worn, carried or banked). */
-function owns(player, itemId) {
-  if (player.getInventory().contains(itemId)) return true;
-  if (player.getEquipment?.().contains?.(itemId)) return true;
-  try {
-    const tab = core().Bank.getTabForItem(player, itemId);
-    return tab >= 0 && player.getBank(tab).contains(itemId);
-  } catch {
-    return false;
-  }
-}
-
-/** A rank reward the player earned and no longer has (a used key counts as had: ours). */
+/** A rank reward the player earned and no longer has; a key that opened its chest is had (ours). */
 function lostReward(player, trial, rank) {
   const reward = common.ranksOf(trial)[rank].reward;
-  return common.rankBeaten(player, trial, rank) && reward > 0 && !owns(player, reward);
+  if (rank === 1 && common.keyUsed(player, trial)) return false;
+  return common.rankBeaten(player, trial, rank) && reward > 0 && !common.owns(player, reward);
 }
 
 function whirlpoolDue(player, trial) {

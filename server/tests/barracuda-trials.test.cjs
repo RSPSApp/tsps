@@ -912,3 +912,90 @@ test("Gwenith Glide: with colourful fades off, a portal's fade leaves the minima
     leave(player);
   }
 });
+
+const chests = require("../plugins/skills/sailing/barracudatrials/Chests.BarracudaTrials");
+const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+const { Item } = require("../dist/game/model/Item");
+
+/** A trial's key chest as the map places it, and the Open click on it. */
+function openChest(player, gameval) {
+  const objectId = CacheDefinitions.getLocId(gameval);
+  const object = new GameObject(objectId, new Location(3058, 9370, 0), 10, 0, null);
+  return chests.open({ player, object, objectId, option: "Open" });
+}
+
+const sounds = (player) => player.sent.filter(([key]) => key === "sendSoundEffect").map(([, id, , delay]) => [id, delay]);
+const obj = (name) => CacheDefinitions.getObjId(name);
+const TEMPOR_OUTFIT = ["head", "chest", "legs", "feet"].map((piece) => obj(`tempor_tantrum_cosmetic_${piece}`));
+
+test("trial key chests: without the key, the locked box and sound (rsprox 936)", () => {
+  const player = captain();
+  assert.equal(openChest(player, "locked_chest_anglers_light"), true);
+  assert.deepEqual(sounds(player), [[2402, 0]]);
+  assert.equal(player.getDialogueManager().getCurrent().constructor.name, "StatementDialogue");
+  assert.equal(player.getDialogueManager().getCurrent().getText(), "The chest is securely locked. It looks like it needs a key to open it.");
+  assert.equal(chests.open({ player, objectId: 59231, object: null }), false, "other chests are left alone");
+});
+
+test("trial key chests: the Stormy key opens the Pandemonium chest once, as captured (rsprox 3461) with the Wiki's coins", () => {
+  const player = captain();
+  player.inventory.add(new Item(obj("stormy_key"), 1));
+  assert.equal(openChest(player, "locked_chest_pandemonium"), true);
+  assert.equal(player.inventory.contains(obj("stormy_key")), false, "the key goes on the click");
+  assert.deepEqual(sounds(player), [[2419, 0], [52, 10]]);
+  tick();
+  assert.deepEqual(sounds(player).slice(2), [[51, 45]]);
+  for (const id of TEMPOR_OUTFIT) assert.equal(player.inventory.getAmount(id), 1);
+  assert.equal(player.inventory.getAmount(obj("cert_uncut_sapphire")), 10);
+  assert.equal(player.inventory.getAmount(obj("coins")), 10000, "Wiki: 10,000 coins");
+  assert.equal(player.varbits.get(varbit("sailing_bt_stormy_key_used")), 1);
+  assert.equal(common.keyUsed(player, TEMPOR()), true);
+  const box = player.getDialogueManager().getCurrent();
+  assert.equal(box.constructor.name, "DoubleItemStatementDialogue");
+  assert.deepEqual(box.getItemIds(), TEMPOR_OUTFIT.slice(0, 2));
+  assert.equal(box.getText(), "You unlock the chest with the key you're carrying and<br>find some treasure inside.");
+  tick(2);
+  // Logged in again: the used key's varbit comes back with the trials' progress.
+  player.varbits.clear();
+  common.sendProgress(player);
+  assert.equal(player.varbits.get(varbit("sailing_bt_stormy_key_used")), 1);
+});
+
+test("trial key chests: once used, no key is needed and only missing pieces come out (Wiki)", () => {
+  const player = captain();
+  common.updateProgress(player, TEMPOR(), (saved) => { saved.extra = { keyUsed: true }; });
+  player.inventory.add(new Item(TEMPOR_OUTFIT[0], 1));
+  player.inventory.add(new Item(TEMPOR_OUTFIT[2], 1));
+  openChest(player, "locked_chest_pandemonium");
+  tick();
+  for (const id of TEMPOR_OUTFIT) assert.equal(player.inventory.getAmount(id), 1);
+  assert.equal(player.inventory.getAmount(obj("coins")), 0, "coins and gems only the first time");
+  assert.equal(player.getDialogueManager().getCurrent().constructor.name, "ItemStatementDialogue");
+  assert.equal(player.getDialogueManager().getCurrent().getText(), "You open the chest and find some treasure inside.");
+  tick(2);
+  openChest(player, "locked_chest_pandemonium");
+  tick();
+  assert.equal(player.getDialogueManager().getCurrent().constructor.name, "StatementDialogue");
+  assert.equal(player.getDialogueManager().getCurrent().getText(), "You open the chest, but find nothing of note inside.");
+  tick(2);
+});
+
+test("trial key chests: with no room the key isn't used (Wiki, 26 November 2025)", () => {
+  const player = captain();
+  player.inventory.add(new Item(obj("stormy_key"), 1));
+  for (let i = 0; i < 27; i++) player.inventory.add(new Item(obj("bronze_dagger"), 1));
+  openChest(player, "locked_chest_pandemonium");
+  tick(3);
+  assert.equal(player.inventory.contains(obj("stormy_key")), true);
+  assert.equal(common.keyUsed(player, TEMPOR()), false);
+  assert.deepEqual(player.messages(), ["You don't have enough inventory space."]);
+});
+
+test("Ralph hands back a lost Stormy key only before it opened its chest", () => {
+  const player = captain();
+  const ask = (text) => master.answerCondition({ player, npcId: 15096, text });
+  common.updateProgress(player, TEMPOR(), (saved) => { saved.firsts = [true, false, false]; });
+  assert.equal(ask("If the player lost the stormy key before opening its chest:"), true);
+  common.updateProgress(player, TEMPOR(), (saved) => { saved.extra = { keyUsed: true }; });
+  assert.equal(ask("If the player lost the stormy key before opening its chest:"), false);
+});

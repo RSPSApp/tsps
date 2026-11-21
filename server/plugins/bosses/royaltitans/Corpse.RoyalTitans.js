@@ -32,6 +32,8 @@ const SACRIFICE_PET_RATE = 1500;
 /** Bran's tertiary rate on a Loot or Take-pages claim (npc-drops.json, both titans: 1/3000; Sacrifice doubles it). */
 const CLAIM_PET_RATE = 3000;
 const BOSS_NAME = "Royal Titans";
+/** Each titan's Slayer experience (Wiki infobox: 735), not its 600 hitpoints. */
+const TITAN_SLAYER_XP = 735;
 /** Below 1% share (1-11 damage of 1200) rolls twice but yields 1 of each (Wiki). */
 const MIN_SHARE_PERCENT = 0.01;
 /** Take pages: possible from ~72 damage, guaranteed at 120 (Wiki; estimated mapping). */
@@ -456,11 +458,17 @@ const claimLoot = (event) => claim(event, "Loot");
 const claimSacrifice = (event) => claim(event, "Sacrifice");
 const claimPages = (event) => claim(event, "Take pages");
 
+/** "slayer:task-kill": a titan's Slayer experience is its own. It is a corpse by now, so read the id it died as. */
+function slayerXp(kill) {
+  if (kill?.npcId === Shared.BRANDA_ID || kill?.npcId === Shared.ELDRIC_ID) kill.xp = TITAN_SLAYER_XP;
+}
+
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   for (const id of [Shared.BRANDA_ID, Shared.ELDRIC_ID, Shared.BRANDA_CORPSE_ID, Shared.ELDRIC_CORPSE_ID]) TITAN_OR_CORPSE.add(id);
   pluginApi.onNpcDeath(titanDied);
+  pluginApi.onCustomEvent("slayer:task-kill", slayerXp);
   pluginApi.onCustomEvent("npc-drops:generated", stashGenerated);
   pluginApi.onCustomEvent("pets:hold-for-claim", holdPetForClaim);
   pluginApi.onCustomEvent("ironman:shared-kill-keeps", ironmanKeeps);
@@ -472,5 +480,7 @@ function attach(pluginApi) {
 
 module.exports = {
   attach,
+  slayerXp,
+  TITAN_SLAYER_XP,
   _test: { shareOf, scaleDrops, spawnDrops },
 };

@@ -1438,6 +1438,7 @@ function attach(api) {
     api.onItemOnObject(itemOnObject, { noted: false });
     api.onItemOnItem(itemOnItem);
     api.onNpcInteraction(npcInteraction);
+    api.onCustomEvent("npc-dialogue:action", Tithe.titheDialogueAction);
     api.onItemOnNpc(itemOnNpc);
     api.onItemAction(Services.farmingItemAction);
     api.onItemAction(Guild.rewardItem);

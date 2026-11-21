@@ -10,6 +10,7 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { SkillManager } = require("../dist/game/content/skill/SkillManager");
 const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
+const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
 const ROOT = path.resolve(__dirname, "..");
 let core, spell, Data, Patches;
 let actorIndex = 100;
@@ -72,8 +73,7 @@ function shopper(t, { points = 500, female = false } = {}) {
                 player: p,
                 npc,
                 definition: npc.getDefinition(),
-                option: "Rewards",
-                optionSlot: 3,
+                clickType: 3,
                 handled: false,
             }),
     };
@@ -107,6 +107,54 @@ test("Gricoller opens the native cache-defined reward shop and points", (t) => {
         500,
     );
 });
+// #6474: Talk-to used to open the reward shop too. It plays his dialogue now, and "Have you any
+// rewards?" in it opens the shop. Decoded npc_option and dialogue packets on a world NPC.
+test("Talk-to plays Gricoller's dialogue; his rewards line and the Rewards option open the shop", async (t) => {
+    const f = shopper(t);
+    core.World.getNpcs().add(f.npc);
+    t.after(() => core.World.getNpcs().remove(f.npc));
+    const shop = core.CacheDefinitions.getInterfaceId("omnishop_main");
+    const tick = () => {
+        core.TaskManager.processWalkTo(f.p.getIndex());
+        f.p.getMovementQueue().process();
+        core.TaskManager.process();
+        f.connection.processTurnPackets();
+    };
+    const send = async (packet) => {
+        await f.connection.dispatch([packet]);
+        for (let i = 0; i < 3; i++) tick();
+    };
+    const group = () => f.p.getPacketSender().getChatboxGroupId();
+    async function menu() {
+        for (let i = 0; i < 20; i++) {
+            const current = f.p.getDialogueManager().getCurrent();
+            if (typeof current?.getOptions === "function") return current.getOptions();
+            const pending = MultiChatboxPrompt.getPending(f.p);
+            if (pending) return pending.options;
+            if (!f.p.getDialogueManager().isActive()) return null;
+            await send({ type: "dialogue_continue", widgetId: (group() << 16) | (group() === 229 ? 4 : 5), childIndex: -1 });
+        }
+        return null;
+    }
+    assert.deepEqual(f.npc.getDefinition().getActions().slice(0, 3), ["Talk-to", undefined, "Rewards"]);
+
+    await send({ type: "npc_option", index: f.npc.getIndex(), clickType: 1 });
+    assert.notEqual(f.p.getInterfaceId(), shop, "Talk-to does not open the shop");
+    const options = await menu();
+    assert.ok(options?.includes("Have you any rewards?"), JSON.stringify(options));
+    assert.notEqual(f.p.getInterfaceId(), shop);
+    await send({ type: "dialogue_continue", widgetId: (219 << 16) | 1, childIndex: options.indexOf("Have you any rewards?") + 1 });
+    // The player says the line, then the dialogue's action opens the shop.
+    for (let i = 0; i < 5 && f.p.getInterfaceId() !== shop && f.p.getDialogueManager().isActive(); i++)
+        await send({ type: "dialogue_continue", widgetId: (group() << 16) | (group() === 229 ? 4 : 5), childIndex: -1 });
+    assert.equal(f.p.getInterfaceId(), shop, "his rewards line opens the shop");
+
+    f.p.getPacketSender().sendInterfaceRemoval();
+    f.p.getDialogueManager().interrupt?.();
+    await send({ type: "npc_option", index: f.npc.getIndex(), clickType: 3 });
+    assert.equal(f.p.getInterfaceId(), shop, "the Rewards option opens it directly");
+});
+
 test("native outfit purchases use current body type and deduct exact prices", async (t) => {
     for (const female of [false, true]) {
         const f = shopper(t, { points: 150, female });

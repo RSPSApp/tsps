@@ -324,6 +324,8 @@ function restoreVarbits({ player }) {
   }
   const chests = player.getAttribute(Common.data.attributes.chests);
   if (chests) Common.varbit(player, "hallowed_normal_chest_count", chests);
+  const grandChests = player.getAttribute(Common.data.attributes.grandChests);
+  if (grandChests) Common.varbit(player, "hallowed_final_chest_count", grandChests);
 }
 
 function attachLobby(api) {

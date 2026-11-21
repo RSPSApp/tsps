@@ -83,10 +83,17 @@ function categoryCount(player, category) {
   return categoryCounts(player, category)[0];
 }
 
+/** The log's own fallback tally, before any plugin's kept count (a migration source). */
+function storedCategoryCount(player, category) {
+  return Math.max(0, Number(counts(player)[category.struct]) || 0);
+}
+
 /** Cache script 2735 reads up to three mode counters; clear unused ones on every category. */
 function sendCategoryCounts(player, category) {
   const values = categoryCounts(player, category);
   VARP.CATEGORY_COUNTS.forEach((varp, index) => player.getPacketSender().sendConfig(varp, values[index]));
+  // A page whose script reads its own varbits (Gnome Restaurant's deliveries) sends them here.
+  pluginApi?.emitCustomEvent("collection-log:category-shown", { player, category: category.name, struct: category.struct });
 }
 
 function addCategoryCount(player, category, amount = 1) {
@@ -254,6 +261,6 @@ module.exports = function attachProgress(api) {
 Object.assign(module.exports, {
   VARP, ITEMS_ATTRIBUTE, COUNTS_ATTRIBUTE, RECENT_ATTRIBUTE, NOTIFY_ATTRIBUTE,
   NOTIFY_VARBIT, NOTIFY_VARP, RUNEDAY_VARBIT,
-  today, sendRuneday, items, obtained, uniqueCount, categoryCount, sendCategoryCounts, addCategoryCount, setCategoryCount,
-  obtain, restore, reset,
+  today, sendRuneday, items, obtained, uniqueCount, categoryCount, storedCategoryCount, sendCategoryCounts,
+  addCategoryCount, setCategoryCount, obtain, restore, reset,
 });

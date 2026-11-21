@@ -98,6 +98,7 @@ module.exports = function registerWintertodtDoors(api) {
   api.persistAttribute(Round.ATTR_KILLS);
   api.persistAttribute(Round.ATTR_BEST);
   api.persistAttribute(Round.ATTR_REWARDS);
+  api.persistAttribute(Round.ATTR_REWARDS_CLAIMED, 0);
   api.onServerStartup(Round.start);
   api.onObjectInteraction(Shared.OBJECT.DOORS, { Enter: enter, Peek: peek });
   api.onZoneEnter(Shared.PRISON_ZONE, enteredPrison);
@@ -107,4 +108,5 @@ module.exports = function registerWintertodtDoors(api) {
   api.onPlayerLogin(login);
   api.onPlayerLogout(logout);
   api.onSpellDisabled(refuseAlchemy);
+  api.onCustomEvent("collection-log:category-count", Round.collectionLogCount);
 };

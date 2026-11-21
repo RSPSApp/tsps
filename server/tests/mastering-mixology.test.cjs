@@ -128,6 +128,7 @@ function conveyorHandIn(t, items) {
   t.mock.method(sender, 'sendChatboxInterface', (id) => { boxes.push(id); return sender; });
   const api = { ...previousApi, core,
     onObjectInteraction(name, actions) { hooks.set(name, actions); },
+    onCustomEvent() {},
     emitCustomEvent() {},
     spawnNpc: () => null,
     removeNpc() {},
@@ -423,6 +424,7 @@ function stationWork(t, key = 'alembic') {
   t.mock.method(Shared, 'tick', () => now);
   const api = { ...previousApi, core,
     onObjectInteraction(name, actions) { hooks.set(name, actions); },
+    onCustomEvent() {},
     onItemOnObject(handler) { itemHooks.push(handler); },
     spawnNpc() {
       const bar = { showHeadbar() {} };

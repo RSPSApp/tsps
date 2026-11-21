@@ -29,6 +29,11 @@ const CREDITS_PER_TOKEN = 12;
 const MAX_CREDITS = 120;
 const CREDITS_ATTRIBUTE = "gnome-restaurant:credits";
 const LOCKOUTS_ATTRIBUTE = "gnome-restaurant:lockouts";
+/** Completed deliveries, by tier: the collection log's two Gnome Restaurant lines (cache script 2735). */
+const DELIVERIES_ATTRIBUTE = {
+  [TIER_EASY]: "gnome-restaurant:easy-deliveries",
+  [TIER_HARD]: "gnome-restaurant:hard-deliveries",
+};
 const MS_PER_MINUTE = 60_000;
 
 const ALREADY_LINE = "You already have a delivery on the go. Check your Aluft Aloft box if you've forgotten the details.";
@@ -54,6 +59,9 @@ let api;
 let core;
 let BOX_ID;
 let TOKEN_ID;
+/** Cache script 2735 reads these two varbits for the Gnome Restaurant page, not the generic counts. */
+const HARD_DELIVERIES_VARBIT = 11961; // collection_aluft_hard_deliveries, varp 838 bits 16-31
+const EASY_DELIVERIES_VARBIT = 11960; // collection_aluft_easy_deliveries, varp 838 bits 0-15
 
 /** player -> { tier, itemId, itemName, npcName, deadline } */
 const sessions = new Map();
@@ -326,8 +334,32 @@ function advanceTime(event) {
 // --- Completing an order
 
 /** +150 Cooking XP (the wiki's hard figure, used for both) and the tier's credits. */
+function deliveries(player, tier) {
+  return Math.max(0, Number(player.getAttribute(DELIVERIES_ATTRIBUTE[tier])) || 0);
+}
+
+/** The collection log's Gnome Restaurant page: hard deliveries, then easy deliveries. */
+function collectionLogCount(request) {
+  if (!request?.player || request.category !== "Gnome Restaurant" || request.count != null) return;
+  request.count = deliveries(request.player, TIER_HARD);
+  request.extraCounts = [deliveries(request.player, TIER_EASY)];
+}
+
+/** Cache script 2735's Gnome branch reads its own two varbits instead of the generic counts. */
+function sendDeliveries(player) {
+  const sender = player?.getPacketSender?.();
+  if (!sender) return;
+  sender.sendVarbit(HARD_DELIVERIES_VARBIT, deliveries(player, TIER_HARD));
+  sender.sendVarbit(EASY_DELIVERIES_VARBIT, deliveries(player, TIER_EASY));
+}
+
+function categoryShown(event) {
+  if (event?.category === "Gnome Restaurant") sendDeliveries(event.player);
+}
+
 function completeDelivery(player, session) {
   sessions.delete(player);
+  player.setAttribute(DELIVERIES_ATTRIBUTE[session.tier], deliveries(player, session.tier) + 1);
   // Wiki: after refusing a hard job, "They can wait this out, or take and do an easy job", then come back for a hard one.
   if (session.tier === TIER_EASY && isLocked(player, TIER_HARD)) {
     const { [TIER_HARD]: _ended, ...rest } = lockoutsOf(player);
@@ -366,6 +398,10 @@ function attach(pluginApi) {
   init(pluginApi);
   api.persistAttribute(CREDITS_ATTRIBUTE);
   api.persistAttribute(LOCKOUTS_ATTRIBUTE);
+  api.persistAttribute(DELIVERIES_ATTRIBUTE[TIER_EASY], 0);
+  api.persistAttribute(DELIVERIES_ATTRIBUTE[TIER_HARD], 0);
+  api.onCustomEvent("collection-log:category-count", collectionLogCount);
+  api.onCustomEvent("collection-log:category-shown", categoryShown);
   api.onNpcInteraction(GIANNE_NAME, { "Talk-to": talkTo, "Get job (easy)": getEasyJob, "Get job (hard)": getHardJob });
   api.onItemAction(BOX_NAME, { Check: checkBox });
   api.onItemAction("Reward token", { Check: checkRewardToken });
@@ -385,6 +421,10 @@ Object.assign(module.exports, {
   completeDelivery,
   awardCredits,
   creditsOf,
+  deliveries,
+  collectionLogCount,
+  sendDeliveries,
+  categoryShown,
   waitText,
   _test: {
     init,

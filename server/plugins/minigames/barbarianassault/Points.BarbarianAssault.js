@@ -178,6 +178,12 @@ function queenKillRequest(request) {
   request.handled = true;
 }
 
+/** The collection log's Barbarian Assault page counts high-level gambles (cache script 2735). */
+function collectionLogCount(request) {
+  if (!request?.player || request.category !== "Barbarian Assault" || request.count != null) return;
+  request.count = Math.max(0, count(request.player, HIGH_GAMBLE_COUNT_ATTRIBUTE));
+}
+
 function highGamble(player, random = Math.random, role) {
   if (!player) return { allowed: false, reason: "player", pet: false, awarded: false };
   if (!queenKilled(player)) {
@@ -250,6 +256,7 @@ function attach(pluginApi) {
   pluginApi.onCustomEvent?.("barbarian-assault:honour", addLegacyHonour);
   pluginApi.onCustomEvent?.("barbarian-assault:queen-kill", queenKillRequest);
   pluginApi.onCustomEvent?.("barbarian-assault:gamble-high", highGambleRequest);
+  pluginApi.onCustomEvent?.("collection-log:category-count", collectionLogCount);
   pluginApi.onCustomEvent?.("npc-dialogue:action", highGambleDialogue);
   pluginApi.onNpcInteraction?.("Commander Connad", { Gamble: highGambleOption });
   pluginApi.onNpcDeath?.(queenDied);
@@ -261,6 +268,6 @@ module.exports = {
   honourOf, points, setPoints, addPoints, level, setLevel,
   upgradeCost, upgradeRole, allRoleMinimum, addToAllRoles, removeFromAllRoles,
   queenKills, queenKilled, setQueenKilled, recordQueenKill, award, awardQueen,
-  sync, roleCurrency, highGamble, highGamblePrompt, attach,
+  sync, roleCurrency, highGamble, highGamblePrompt, collectionLogCount, attach,
   _test: { HIGH_GAMBLE_STEPS, addLegacyHonour, queenDied },
 };

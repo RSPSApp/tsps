@@ -54,7 +54,7 @@ Otherwise the player gets the first alternative's refusal.
 | `equipped` | `[{ "slot": "weapon", "name": "crossbow", "message": ... }, { "slot": "ammunition", "ids": [9419], "message": ... }]` |
 | `items` | `[{ "ids": [...], "message": ... }]`, carried |
 | `quest` | `{ "key": "regicide", "stage": "complete" \| "started", "message": ... }`, or a list; asked through `quest:is-complete` / `quest:is-started`. A quest no plugin answers for is no bar |
-| `diary` | `{ "key": "falador", "tier": "medium", "enforce": false, "message": ... }`; checked through `diary:is-complete` only once `enforce` is true, when that tier's tasks can all be done here |
+| `diary` | `{ "key": "falador", "tier": "medium", "message": ... }`, asked through `diary:is-complete`; with `"claimed": true` the tier's reward must have been claimed too (`diary:is-reward-claimed`). A diary no plugin answers for is no bar |
 
 ### Failing
 

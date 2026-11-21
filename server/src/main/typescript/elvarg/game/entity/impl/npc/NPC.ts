@@ -140,6 +140,8 @@ export class NPC extends Mobile {
     /** This tick's glide, sent with the NPC's update and cleared after it. */
     private exactMoveState: NpcExactMove | null = null;
     private telejumped = false;
+    /** This tick's in-view move was a plain teleport (no jump flag), which clients walk over. */
+    private teleportedInView = false;
     /** This tick's headbars besides the hitpoints one, sent with the NPC's update and cleared after it. */
     private headbars: NpcHeadbar[] = [];
     /** This tick's fade, sent with the NPC's update and cleared after it. */
@@ -1006,9 +1008,25 @@ export class NPC extends Mobile {
         return this;
     }
 
-    /** Whether the NPC telejumped this tick (cleared with the tick's update). */
+    /**
+     * Moves the NPC to `destination` at once, staying in view, with the teleport's jump flag clear
+     * (rsprox prints it as `teleport`, a telejump as `telejump`): clients within 8 tiles walk it
+     * there over the tick rather than snapping it. Live moves Motherlode Mine pay-dirt this way.
+     */
+    public teleportInView(destination: Location): NPC {
+        this.telejump(destination);
+        this.teleportedInView = true;
+        return this;
+    }
+
+    /** Whether the NPC telejumped (or teleported in view) this tick (cleared with the tick's update). */
     public isTelejumping(): boolean {
         return this.telejumped;
+    }
+
+    /** Whether this tick's in-view move goes out without the jump flag (teleportInView). */
+    public isTeleportingWithoutJump(): boolean {
+        return this.teleportedInView;
     }
 
     /** The orientation facing along (dx, dy): 0 south, 512 west, 1024 north, 1536 east. */
@@ -1099,6 +1117,7 @@ export class NPC extends Mobile {
         super.resetUpdating();
         this.exactMoveState = null;
         this.telejumped = false;
+        this.teleportedInView = false;
         this.headbars = [];
         this.faceTileState = null;
         this.transparencyState = null;

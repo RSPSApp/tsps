@@ -43,14 +43,6 @@ const LADDER_UP = { to: [3755, 5675], animation: 828 };
 const LADDER_DOWN = { to: [3755, 5672], animation: 827 };
 const LADDER_TICKS = 2;
 
-/** The dark tunnels (OpenRune's routes); the eastern pair needs the medium Falador diary. */
-const SHORTCUTS = new Map([
-  ["3760,5670", [3765, 5671]], ["3764,5671", [3759, 5670]],
-  ["3744,5642", [3745, 5646]], ["3745,5645", [3744, 5641]],
-]);
-const SHORTCUT_AGILITY = 54;
-const SHORTCUT_TICKS = 2;
-
 /** Percy's unlocks, in nuggets (Wiki). */
 const PRICES = { upperLevel: 100, upperHopper: 50, biggerSack: 200 };
 /**
@@ -110,21 +102,6 @@ function climb({ player, objectId }) {
   player.performAnimation(new Animation(ladder.animation));
   later(player, LADDER_TICKS, () => {
     moveTo(player, ladder.to);
-    player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
-  });
-}
-
-function squeezeThrough({ player, location }) {
-  const exit = SHORTCUTS.get(`${location.x},${location.y}`);
-  if (!exit) return false;
-  if (player.getSkillManager().getCurrentLevel(Skill.AGILITY) < SHORTCUT_AGILITY) {
-    player.sendMessage(`You need an Agility level of ${SHORTCUT_AGILITY} to negotiate this tunnel.`);
-    return;
-  }
-  player.performAnimation(new Animation(CRAWL_ANIMATION));
-  player.getPacketSender().sendSoundEffect(CRAWL_SOUND, 2, 4, 10);
-  later(player, SHORTCUT_TICKS, () => {
-    moveTo(player, exit);
     player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
   });
 }
@@ -223,7 +200,7 @@ module.exports = {
   name: "MotherlodeMine",
   description: "Motherlode Mine: mining pay-dirt, washing it in Prospector Percy's machine and collecting ore from the sack, with its HUD.",
   members: true,
-  _test: { tick, start, crawl, climb, squeezeThrough, percyCondition, percyPays, enterMine },
+  _test: { tick, start, crawl, climb, percyCondition, percyPays, enterMine },
   register(api) {
     Machine.init(api);
     Crates.init(api);
@@ -238,7 +215,8 @@ module.exports = {
     api.onObjectInteraction("Cave", { Enter: crawl });
     api.onObjectInteraction("Tunnel", { Exit: crawl });
     api.onObjectInteraction("Ladder", { Climb: climb });
-    api.onObjectInteraction("Dark tunnel", { Enter: squeezeThrough });
+    // The dark tunnels are Agility shortcuts (skills/data/agility-shortcuts.json), with the
+    // eastern one's diary gate.
     api.onObjectInteraction("Ore vein", { Mine: mineVein });
     api.onObjectInteraction("Rockfall", { Mine: mineRockfall });
     api.onObjectInteraction("Hopper", { Deposit: Machine.deposit });

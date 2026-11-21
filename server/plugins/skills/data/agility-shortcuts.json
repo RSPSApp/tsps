@@ -577,7 +577,6 @@
           "diary": {
             "key": "falador",
             "tier": "easy",
-            "enforce": false,
             "message": "You need to complete the easy Falador Diary to use this shortcut."
           }
         }
@@ -601,7 +600,6 @@
           "diary": {
             "key": "falador",
             "tier": "easy",
-            "enforce": false,
             "message": "You need to complete the easy Falador Diary to use this shortcut."
           }
         }
@@ -666,7 +664,6 @@
           "diary": {
             "key": "falador",
             "tier": "hard",
-            "enforce": false,
             "message": "You need to complete the hard Falador Diary to use this shortcut."
           }
         }
@@ -680,22 +677,34 @@
       }
     },
     {
-      "name": "Dark tunnel (Motherlode Mine)",
+      "name": "Dark tunnel (Motherlode Mine, eastern)",
       "object": 10047,
+      "at": [[3760,5670,0],[3764,5671,0]],
       "level": 54,
       "end": "You climb your way through the dark tunnel.",
+      "note": "Wiki (Dark tunnel (Motherlode Mine)): the northern tunnel needs the medium Falador Diary's reward claimed",
+      "unverified": "the diary refusal's wording (no capture, not on the Wiki)",
       "requires": [
         {
           "skills": {"agility":54},
           "diary": {
             "key": "falador",
             "tier": "medium",
-            "enforce": false,
+            "claimed": true,
             "message": "You need to complete the medium Falador Diary to use this shortcut."
           }
         }
       ],
       "between": {"ends":[[3759,5670,0],[3765,5671,0]],"cross":[{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
+    },
+    {
+      "name": "Dark tunnel (Motherlode Mine, southern)",
+      "object": 10047,
+      "at": [[3744,5642,0],[3745,5645,0]],
+      "level": 54,
+      "end": "You climb your way through the dark tunnel.",
+      "note": "Wiki (Dark tunnel (Motherlode Mine)): no diary needed; ends from the loc rotations, as the eastern tunnel's",
+      "between": {"ends":[[3744,5641,0],[3745,5646,0]],"cross":[{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
     },
     {"name":"Stile (Kandarin)","object":993,"level":1,"stile":{}},
     {"name":"Stile (Piscatoris falconry)","object":19222,"level":1,"stile":{}},
@@ -1308,7 +1317,6 @@
           "diary": {
             "key": "desert",
             "tier": "elite",
-            "enforce": false,
             "message": "You need to complete the elite Desert Diary to use this shortcut."
           }
         }
@@ -2618,8 +2626,7 @@
           "diary": {
             "key": "wilderness",
             "tier": "medium",
-            "enforce": false,
-            "message": "You need to complete the medium Wilderness Diary to use this shortcut."
+            "message": "You need to complete the medium tier of the Wilderness achievement diary to use this shortcut"
           }
         }
       ],

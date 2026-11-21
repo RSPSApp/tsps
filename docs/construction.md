@@ -281,7 +281,8 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   ticks later the animation resets and the bush becomes that shape's `poh_topiary_*` loc, saved
   with the house (rec 2884, rev 230, ticks 12577-12725). No message or experience. Each shape
   needs that boss killed once (Wiki: Topiary bush), read from Combat Achievements' kill counts,
-  so Phosani's Nightmare doesn't unlock The Nightmare. Ours: the refusal "You need to have killed
+  so Phosani's Nightmare doesn't unlock The Nightmare. The Wiki asks for the post-quest Vorkath, but
+  those counts also credit the Dragon Slayer II quest Vorkath (npc 8060), so that kill unlocks it here. Ours: the refusal "You need to have killed
   <boss> to clip that shape.", owner-only reshaping, and None giving the plain bush back.
 - **Cape hanger:** cape and hood mount as their `poh_mounted_*` loc; Take, Admire and, for the
   owner, the cape's options through `skillcape:operate` in the SkillCapes plugin. Untrimmed

@@ -19,7 +19,8 @@ const Menu = require("./Menu.Construction");
  *
  * Wiki (Topiary bush): clipped with secateurs or magic secateurs; each shape needs that boss
  * killed at least once (Vorkath the post-quest one; Phosani's Nightmare doesn't count for The
- * Nightmare). Kills are Combat Achievements' counts ("combat-achievements:count").
+ * Nightmare). Kills are Combat Achievements' counts ("combat-achievements:count"). Those count the
+ * Dragon Slayer II quest Vorkath (npc 8060) too, so the quest kill unlocks the Vorkath shape here.
  */
 const NO_SECATEURS = "You'll need some secateurs to clip the topiary bush.";
 const TITLE = "Choose a shape";

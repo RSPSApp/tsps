@@ -71,12 +71,15 @@ function reader(t, { items = [RITE], attributes = {} } = {}) {
   t.mock.method(player, "performAnimation", (animation) => sent.push(["seq", animation.getId()]));
   t.mock.method(player, "performGraphic", (graphic) => sent.push(["spotanim", graphic.getId(), graphic.getDelay()]));
   t.mock.method(player, "getDialogueManager", () => ({ startDialogues: (chain) => chains.push(chain.getDialogues()), reset() {} }));
+  // Slots hold ids (null once emptied); the real container needs the cache's item definitions.
   const inventory = items.slice();
   t.mock.method(player, "getInventory", () => ({
     contains: (id) => inventory.includes(id),
+    forSlot: (slot) => (inventory[slot] == null ? null : { getId: () => inventory[slot] }),
+    deleteAtSlot(slot) { inventory[slot] = null; },
     deleteNumber(id) {
       const index = inventory.indexOf(id);
-      if (index !== -1) inventory.splice(index, 1);
+      if (index !== -1) inventory[index] = null;
     },
   }));
   return { player, varbits, sent, messages, chains, inventory };
@@ -92,7 +95,7 @@ test("the plugin saves the upgrade from a false start", () => {
 
 test("Read asks as recorded, Upgrade consumes the rite and upgrades Death Charge", (t) => {
   const { player, varbits, sent, chains, inventory } = reader(t);
-  assert.equal(itemActions.get("Rite of vile transference").Read({ player, itemId: RITE }), true);
+  assert.equal(itemActions.get("Rite of vile transference").Read({ player, itemId: RITE, slot: 0 }), true);
   const [intro, menu] = dialogues(chains[0]);
   assert.ok(intro instanceof ItemStatementDialogue);
   assert.equal(intro.getItemId(), RITE);
@@ -103,7 +106,7 @@ test("Read asks as recorded, Upgrade consumes the rite and upgrades Death Charge
   assert.deepEqual(menu.getOptions(), ["Upgrade <col=7f0000>Death Charge</col>", "Cancel"]);
 
   menu.execute(1);
-  assert.equal(inventory.length, 0, "the scroll is consumed");
+  assert.deepEqual(inventory, [null], "the scroll is consumed");
   assert.equal(player.getAttribute(UPGRADED), true);
   assert.deepEqual(varbits, [[SCROLL_USED, 1]]);
   assert.deepEqual(sent, [
@@ -119,7 +122,23 @@ test("Read asks as recorded, Upgrade consumes the rite and upgrades Death Charge
   TaskManager.process();
   const [done] = dialogues(chains[1]);
   assert.equal(done.getItemId(), RITE);
-  assert.equal(done.getText(), "You study the scroll and upgrade an Arceuus Spell: <col=7f0000>Death Charge</col>");
+  assert.equal(done.getText(), "You study the scroll and upgrade an Arceuus Spell:<br><col=7f0000>Death Charge</col>");
+});
+
+test("Upgrade empties the clicked rite's slot, as recorded", (t) => {
+  const { player, chains, inventory } = reader(t, { items: [RITE, RITE] });
+  itemActions.get("Rite of vile transference").Read({ player, itemId: RITE, slot: 1 });
+  dialogues(chains[0])[1].execute(1);
+  assert.deepEqual(inventory, [RITE, null]);
+});
+
+test("a plain cast still live when the rite is read ends with the plain graphic", (t) => {
+  const { player, sent } = reader(t, { items: [] });
+  ArceuusSpells.startDeathCharge(player);
+  player.setAttribute(UPGRADED, true);
+  kill(player);
+  assert.equal(ArceuusSpells.hasDeathCharge(player), false, "it was a one-kill cast");
+  assert.deepEqual(sent.filter(([kind]) => kind === "spotanim"), [["spotanim", 1855, 0]]);
 });
 
 test("Cancel keeps the rite and the plain spell", (t) => {

@@ -33,7 +33,8 @@ const READ_INTRO = "You can make out some faded words on the ancient parchment. 
   + "It appears to be a demonic learning on spell efficiency. Would you like to absorb its knowledge?";
 const CONSUME_TITLE = "This will consume the scroll.";
 const UPGRADE_OPTION = `Upgrade ${SPELL}`;
-const UPGRADED = `You study the scroll and upgrade an Arceuus Spell: ${SPELL}`;
+// The objectbox breaks before the name; its mesbox line turns the <br> into a space (recording 3285 tick 6173).
+const UPGRADED = `You study the scroll and upgrade an Arceuus Spell:<br>${SPELL}`;
 // Ours: the Wiki and recordings don't show a second rite read; worded like the prayer scrolls'
 // recorded "nothing more for you to learn" line.
 const ALREADY_UPGRADED = "You can make out some faded words on the ancient parchment. "
@@ -56,7 +57,7 @@ function itemBox(player, itemId, text) {
     .add(new core.ItemStatementDialogue(0, itemId, text)));
 }
 
-function readRite({ player, itemId }) {
+function readRite({ player, itemId, slot }) {
   if (player.busy()) {
     player.sendMessage("You cannot do that right now.");
     return true;
@@ -70,16 +71,19 @@ function readRite({ player, itemId }) {
   chain.add(new core.OptionDialogue(1, {
     executeOption(option) {
       player.getDialogueManager().reset();
-      if (Number(option) === 1) upgrade(player, itemId);
+      if (Number(option) === 1) upgrade(player, itemId, slot);
     },
   }, UPGRADE_OPTION, "Cancel").setTitle(CONSUME_TITLE));
   player.getDialogueManager().startDialogues(chain);
   return true;
 }
 
-function upgrade(player, itemId) {
-  if (isUpgraded(player) || !player.getInventory().contains(itemId)) return;
-  player.getInventory().deleteNumber(itemId, 1);
+/** Live empties the clicked slot (recording 3285); a moved rite falls back to the first one. */
+function upgrade(player, itemId, slot) {
+  const inventory = player.getInventory();
+  if (isUpgraded(player) || !inventory.contains(itemId)) return;
+  if (Number.isInteger(slot) && inventory.forSlot(slot)?.getId() === itemId) inventory.deleteAtSlot(slot, 1);
+  else inventory.deleteNumber(itemId, 1);
   player.setAttribute(core.ArceuusSpells.DEATH_CHARGE_UPGRADED_ATTRIBUTE, true);
   sendScrollUsed(player);
   const seq = core.CacheDefinitions.getSeqId(READ_SEQ);

@@ -185,6 +185,8 @@ export class ArceuusSpells {
     private static readonly DEATH_CHARGE_TOKEN = "arceuus:death-charge-token";
     /** Kills the current cast still restores energy for: 1, or 2 once upgraded. */
     private static readonly DEATH_CHARGE_KILLS = "arceuus:death-charge-kills";
+    /** Whether the current cast was upgraded, so a rite read mid-charge doesn't change its end graphic. */
+    private static readonly DEATH_CHARGE_CAST_UPGRADED = "arceuus:death-charge-cast-upgraded";
     /** The Rite of vile transference was read (saved by the RiteOfVileTransference plugin). */
     public static readonly DEATH_CHARGE_UPGRADED_ATTRIBUTE = "arceuus:death-charge-upgraded";
     public static readonly SHADOW_VEIL_UNTIL = "arceuus:shadow-veil-until";
@@ -374,6 +376,7 @@ export class ArceuusSpells {
             this.WARD_UNTIL,
             this.DEATH_CHARGE_UNTIL,
             this.DEATH_CHARGE_KILLS,
+            this.DEATH_CHARGE_CAST_UPGRADED,
             this.SHADOW_VEIL_UNTIL,
             this.MARK_UNTIL,
             this.DARK_LURE_UNTIL,
@@ -466,7 +469,9 @@ export class ArceuusSpells {
      */
     public static startDeathCharge(player: Player): void {
         player.setAttribute(this.DEATH_CHARGE_UNTIL, World.getProcessCycle() + DEATH_CHARGE_TICKS);
-        player.setAttribute(this.DEATH_CHARGE_KILLS, this.isDeathChargeUpgraded(player) ? DEATH_CHARGE_UPGRADED_KILLS : 1);
+        const upgraded = this.isDeathChargeUpgraded(player);
+        player.setAttribute(this.DEATH_CHARGE_KILLS, upgraded ? DEATH_CHARGE_UPGRADED_KILLS : 1);
+        player.setAttribute(this.DEATH_CHARGE_CAST_UPGRADED, upgraded);
         const token = Number(player.getAttribute(this.DEATH_CHARGE_TOKEN) ?? 0) + 1;
         player.setAttribute(this.DEATH_CHARGE_TOKEN, token);
         this.sendDeathChargeVarbit(player, DEATH_CHARGE_COOLDOWN_VARBIT, 1);
@@ -502,6 +507,7 @@ export class ArceuusSpells {
             return false;
         }
         if (player.getCombat().ticksSinceAttackedByPlayer() <= DEATH_CHARGE_PVP_TICKS) return false;
+        const castUpgraded = player.getAttribute(this.DEATH_CHARGE_CAST_UPGRADED) === true;
         const kills = Number(player.getAttribute(this.DEATH_CHARGE_KILLS) ?? 1) - 1;
         if (kills > 0) {
             player.setAttribute(this.DEATH_CHARGE_KILLS, kills);
@@ -510,7 +516,7 @@ export class ArceuusSpells {
             player.setAttribute(this.DEATH_CHARGE_KILLS, null);
             this.sendDeathChargeVarbit(player, DEATH_CHARGE_ACTIVE_VARBIT, 0);
         }
-        player.performGraphic(new Graphic(this.isDeathChargeUpgraded(player) ? DEATH_CHARGE_UPGRADED_END_GRAPHIC : DEATH_CHARGE_END_GRAPHIC));
+        player.performGraphic(new Graphic(castUpgraded ? DEATH_CHARGE_UPGRADED_END_GRAPHIC : DEATH_CHARGE_END_GRAPHIC));
         this.sendHighlighted(player, DEATH_CHARGE_RESTORED);
         return true;
     }

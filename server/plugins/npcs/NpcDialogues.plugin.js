@@ -939,9 +939,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
 
   /**
    * `via` is how a menu jump reached it ("other" for "shows other options"). A plugin's
-   * npc-dialogue:menu handler can ask the question itself (`handled`), warn first (`warning`), or
+   * npc-dialogue:menu handler can ask the question itself (`handled`), warn first (`warning`),
    * replace `options` with option nodes from this or an earlier menu (`history`), given the option
-   * just chosen (`chosen`): an NPC whose "other options" are not simply this menu again.
+   * just chosen (`chosen`): an NPC whose "other options" are not simply this menu again, or name one
+   * of the options as `select` to play it without drawing the menu.
    */
   function presentMenu(menu, offset = 0, tail = [], via = null) {
     if (cancelled) return;
@@ -1016,6 +1017,10 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         run([...(option.steps || []), ...(own === menu ? rest : own.rest || []), ...tail], recordOption(option));
       }];
     });
+    // `notice.select`: one of the offered options plays at once, as if chosen, and no menu is drawn (live skips a menu
+    // whose other options do not apply to this player: Zavistic's Zogre option before Zogre Flesh Eaters).
+    const selected = notice.select ? visible.indexOf(notice.select) : -1;
+    if (selected >= 0) return pairs[selected * 2 + 1]();
     if (more) pairs.push("More...", () => presentMenu(menu, offset + 4, tail, via));
     if (visible.length === 1) pairs.push("Goodbye.", close);
     // A parsed menu with no options is a wiki-export gap; continue the branch

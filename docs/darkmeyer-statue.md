@@ -24,6 +24,9 @@ of the bank. `Pray-at` recharges Prayer for blood. Handled in
   with sound 518, delay 20. The hit isn't capped, so it can kill. Dead or dying players get nothing.
 - Full Prayer: the game message only.
 - `altars:prayed` is emitted with the restored points, as other altars do.
+- Logging out with a sacrifice still to land: the Logout button is refused ("You can't log out
+  right now.") until the hit has landed, so it can still kill. A dropped connection takes the
+  sacrifice before the save instead (the hit queue drops an unregistered player's damage).
 
 ## Not covered
 
@@ -31,3 +34,6 @@ of the bank. `Pray-at` recharges Prayer for blood. Handled in
   damage, but no recording shows its message, so it is left unhandled.
 - Whether the sacrifice's 1-3 is uniform: the Wiki gives only the range; ours is uniform. The one
   recorded sacrifice was 1.
+- Ours: a sacrifice taken on a dropped connection leaves at least 1 Hitpoint, since a saved player
+  can't die (as the Tar Swamp mushroom's hard landing does). No recording shows a logout in the
+  one-tick window.

@@ -118,3 +118,55 @@ test("another loc named Statue with Pray-at falls through", (t) => {
   const f = actor(t);
   assert.equal(altars._test.prayAtDarkmeyerStatue({ player: f.p, objectId: 1, location: DARKMEYER }), false);
 });
+
+const canLogout = (p) => {
+  const event = { player: p, allow: null };
+  altars._test.holdLogoutForSacrifice(event);
+  return event.allow !== false;
+};
+const hitpoints = (p) => p.getSkillManager().getCurrentLevel(core.Skill.HITPOINTS);
+
+test("the Logout button waits for an accepted sacrifice to land", (t) => {
+  const f = actor(t);
+  assert.equal(canLogout(f.p), true, "nothing owed");
+  pray(f);
+  assert.equal(canLogout(f.p), false, "the click's tick");
+  core.TaskManager.process();
+  assert.equal(canLogout(f.p), false, "queued, the hit queue's turn still to come");
+  core.TaskManager.process();
+  assert.equal(canLogout(f.p), true, "landed");
+});
+
+test("a dropped connection takes the sacrifice before the save, once", (t) => {
+  for (const ticks of [0, 1]) {
+    const f = actor(t);
+    pray(f);
+    for (let i = 0; i < ticks; i++) core.TaskManager.process();
+    altars._test.settleSacrificeOnLogout({ player: f.p });
+    assert.equal(hitpoints(f.p), 47, `after ${ticks} tick(s)`);
+    assert.equal(f.p.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 70);
+    assert.equal(canLogout(f.p), true);
+    altars._test.settleSacrificeOnLogout({ player: f.p });
+    assert.equal(hitpoints(f.p), 47, "not taken twice");
+  }
+});
+
+test("a landed sacrifice isn't taken again on logout", (t) => {
+  const f = actor(t);
+  pray(f);
+  core.TaskManager.process();
+  f.p.setRegistered(true);
+  t.after(() => f.p.setRegistered(false));
+  f.p.getCombat().getHitQueue().process(1);
+  assert.equal(hitpoints(f.p), 47);
+  core.TaskManager.process();
+  altars._test.settleSacrificeOnLogout({ player: f.p });
+  assert.equal(hitpoints(f.p), 47);
+});
+
+test("a dropped connection leaves at least 1 Hitpoint", (t) => {
+  const f = actor(t, { hitpoints: 2 });
+  pray(f);
+  altars._test.settleSacrificeOnLogout({ player: f.p });
+  assert.equal(hitpoints(f.p), 1);
+});

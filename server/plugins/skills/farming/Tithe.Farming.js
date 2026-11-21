@@ -28,7 +28,7 @@ const GAMES = new WeakMap();
 function scoreFor(player) { return Patches.farmFor(player).tithe ??= { points: 0, score: 0 }; }
 function inField(player) {
     const p = player.getLocation();
-    return p.getX() > 1805 && p.getX() <= 1840 && p.getY() >= 3485 && p.getY() <= 3518 && p.getZ() === 0;
+    return p.getX() >= 1805 && p.getX() <= 1840 && p.getY() >= 3485 && p.getY() <= 3518 && p.getZ() === 0;
 }
 function sync(player) {
     const score = scoreFor(player);

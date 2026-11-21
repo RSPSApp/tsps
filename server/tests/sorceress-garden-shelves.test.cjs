@@ -26,12 +26,13 @@ const api = new Proxy({
 });
 plugin.register(api);
 
-function player({ freeSlots = 28 } = {}) {
+function player({ freeSlots = 28, registered = true } = {}) {
   const added = [];
   return {
     added,
     messages: [],
     getIndex: () => 7,
+    isRegistered: () => registered,
     getInventory: () => ({
       getFreeSlots: () => freeSlots,
       add: (item) => added.push([item.getId(), item.getAmount()]),
@@ -87,4 +88,12 @@ test("a full backpack gets no glass", () => {
   runLastTask();
   assert.deepEqual(p.added, []);
   assert.equal(p.messages.at(-1), "You don't have enough inventory space.");
+});
+
+test("logging out during the search gives no glass", () => {
+  const p = player({ registered: false });
+  handlers.get("Shelves").Search({ player: p, objectId: SHELVES });
+  runLastTask();
+  assert.deepEqual(p.added, []);
+  assert.deepEqual(p.messages, ["You search the shelves ..."]);
 });

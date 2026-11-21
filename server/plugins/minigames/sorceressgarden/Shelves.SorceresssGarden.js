@@ -50,6 +50,8 @@ function searchShelves(event) {
     }
     execute() {
       this.stop();
+      // Logout cancels tasks keyed to the Player, not its index: a logged-out searcher gets nothing.
+      if (!player.isRegistered()) return;
       findGlass(player);
     }
   })());

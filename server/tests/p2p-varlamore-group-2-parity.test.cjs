@@ -1488,6 +1488,21 @@ test('DOTI entryway pass-through crosses both entryways, including the stage sid
     'the guest entrance passes through after the quest');
 });
 
+test('DOTI guest entrance refuses before admission too', () => {
+  const { h, p, object } = doti();
+  h.quest.setStage(p, 10); p.moveTo(new core.Location(1425, 2933, 0));
+  const before = [p.getLocation().getX(), p.getLocation().getY()];
+  object(54707, { location: { x: 1426, y: 2933, z: 0 }, sourceLocation: { x: 1425, y: 2933, z: 0 } });
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], before,
+    'the guest entrance stays guarded while the quest is pre-admission');
+  assert.match(p.text, /guest|staff|entrance|invite|party/i, 'the Villa Guard refusal plays');
+
+  const fresh = doti();
+  fresh.object(54707, { location: { x: 1426, y: 2933, z: 0 }, sourceLocation: { x: 1425, y: 2933, z: 0 } });
+  assert.deepEqual([fresh.p.getLocation().getX(), fresh.p.getLocation().getY()], [1427, 2933],
+    'an unstarted quest can still use the guest entrance');
+});
+
 test('DOTI landing tiles are walkable in the cache map and the replaced tiles are not', () => {
   const rm = core.RegionManager; rm.init();
   const blocked = (x, y, z = 0) => rm.blocked(new core.Location(x, y, z), null);

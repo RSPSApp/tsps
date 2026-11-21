@@ -1716,10 +1716,10 @@ module.exports = function registerDeathOnTheIsleQuest(api) {
     const x = tile?.getX() ?? GUEST_ENTRYWAY_TILE.getX();
     const y = tile?.getY() ?? GUEST_ENTRYWAY_TILE.getY();
     const z = tile?.getZ() ?? GUEST_ENTRYWAY_TILE.getZ();
-    // The guest entrance is guarded during the party. The stage-side entryway is a plain
-    // pass-through and must keep working while the quest is in progress.
+    // The guest entrance is guarded from the moment the quest starts (the party uses the
+    // staff entrance); the stage-side entryway is a plain pass-through and must keep working.
     if (x === GUEST_ENTRYWAY_TILE.getX() && y === GUEST_ENTRYWAY_TILE.getY()
-        && stageOf(player) >= STAGE_ENTERED && !quest.isComplete(player)) {
+        && stageOf(player) >= STAGE_STARTED && !quest.isComplete(player)) {
       event.handled = true;
       playVariant(player, VILLA_GUARD, "getting-inside-the-villa-attempting-to-enter-through-the-guest-entrance");
       return;

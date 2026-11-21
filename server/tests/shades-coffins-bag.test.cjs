@@ -128,6 +128,7 @@ function createPlayer(inventoryItems = []) {
     getEquipment: () => ({
       getItems: () => equipment,
       get: (slot) => equipment[slot],
+      setItem: (slot, held) => { equipment[slot] = held; },
       getValidItems: () => equipment.filter((item) => item.getId() > 0),
       refreshItems() {},
     }),
@@ -228,6 +229,35 @@ test("Configure's remove-lock returns the lock, breaks the coffin and loses the 
   assert.equal(p.getInventory().getAmount(BRONZE_LOCKS), 1);
   assert.equal(familyTotal(p, COFFIN), 0);
   assert.ok(p.messages.includes(Coffin.MESSAGE.REMOVED));
+});
+
+test("removing a worn coffin's lock reserves a slot for both outputs", () => {
+  const worn = (p) => {
+    p.getEquipment().getItems()[0] = new Item(BRONZE);
+    Storage.setContents(p, COFFIN, [{ id: LOAR, amount: 2 }]);
+  };
+
+  const full = createPlayer(item(526, 28)); worn(full);
+  Coffin._test.removeLock(full);
+  assert.ok(full.messages.includes(Coffin.MESSAGE.NO_ROOM));
+  assert.equal(full.getEquipment().getItems()[0].getId(), BRONZE);
+  assert.equal(familyTotal(full, COFFIN), 2);
+
+  const oneSlot = createPlayer(item(526, 27)); worn(oneSlot);
+  Coffin._test.removeLock(oneSlot);
+  assert.equal(oneSlot.getEquipment().getItems()[0].getId(), BRONZE);
+  assert.equal(oneSlot.getInventory().getAmount(BRONZE_LOCKS), 0);
+  assert.equal(oneSlot.getInventory().getAmount(BROKEN), 0);
+  assert.equal(familyTotal(oneSlot, COFFIN), 2);
+  assert.ok(oneSlot.messages.includes(Coffin.MESSAGE.NO_ROOM));
+
+  const twoSlots = createPlayer(item(526, 26)); worn(twoSlots);
+  Coffin._test.removeLock(twoSlots);
+  assert.equal(twoSlots.getEquipment().getValidItems().some((held) => held.getId() === BRONZE), false);
+  assert.equal(twoSlots.getInventory().getAmount(BROKEN), 1);
+  assert.equal(twoSlots.getInventory().getAmount(BRONZE_LOCKS), 1);
+  assert.equal(familyTotal(twoSlots, COFFIN), 0);
+  assert.ok(twoSlots.messages.includes(Coffin.MESSAGE.REMOVED));
 });
 
 test("the open coffin is the fill state of the same store", () => {

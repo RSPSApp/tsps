@@ -123,6 +123,24 @@ function toggle({ player, item }) {
   player.sendMessage(Storage.isOpen(family, item) ? MESSAGE.OPENED : MESSAGE.CLOSED);
 }
 
+/**
+ * Whether the inventory can take every output at once. Two nonstackable outputs need two
+ * slots: checking getAddableAmount separately lets each see the same free slot.
+ */
+function roomForOutputs(inventory, items) {
+  let free = inventory.getFreeSlots();
+  for (const item of items) {
+    const id = item.getId();
+    if (Storage.core.ItemDefinition.forId(id).isStackable() && inventory.getAmount(id) > 0) {
+      if (inventory.getAddableAmount(item) < 1) return false;
+      continue;
+    }
+    if (free < 1) return false;
+    free--;
+  }
+  return true;
+}
+
 /** Removes the lock: the coffin becomes broken and its remains are lost (Wiki, Configure). */
 function removeLock(player) {
   const coffin = Storage.carried(player, family)[0];
@@ -133,21 +151,23 @@ function removeLock(player) {
   const equippedSlot = player.getEquipment().getItems().indexOf(coffin);
   const needed = new Storage.core.Item(lockId, 1);
   const broken = new Storage.core.Item(brokenId, 1);
-  if (player.getInventory().getAddableAmount(needed) < 1
-    || (equippedSlot >= 0 && player.getInventory().getAddableAmount(broken) < 1)) {
+  const inventory = player.getInventory();
+  // A worn coffin comes off and both the broken coffin and the lock go to the inventory.
+  const outputs = equippedSlot >= 0 ? [broken, needed] : [needed];
+  if (!roomForOutputs(inventory, outputs)) {
     player.sendMessage(MESSAGE.NO_ROOM);
     return;
   }
-  // A worn coffin comes off first; a broken coffin cannot be worn.
   if (equippedSlot >= 0) {
     player.getEquipment().setItem(equippedSlot, new Storage.core.Item(-1, 0));
-    player.getInventory().add(broken, false);
+    inventory.add(broken, false);
+    inventory.add(needed, false);
   } else {
     coffin.setId(brokenId);
+    inventory.add(needed, false);
   }
   Storage.setContents(player, family, []);
-  player.getInventory().add(needed, false);
-  player.getInventory().refreshItems();
+  inventory.refreshItems();
   player.getEquipment().refreshItems();
   player.sendMessage(MESSAGE.REMOVED);
 }

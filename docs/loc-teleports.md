@@ -76,12 +76,18 @@ yarn sync:loc-teleports --captures loc-teleports.json --report report.json   # e
 - **Decisions:**
   - Sailing and the shipyard;
   - minigame, raid and boss areas (Theatre of Blood, Guardians of the Rift, Tempoross, Giants' Foundry and more);
-  - holiday events;
+  - holiday events, apart from Scrubfoot's cave (below);
   - the Dagannoth Kings' ladder, which picks a boss instance;
   - Fossil Island's underwater caves, which need diving gear;
   - one ladder only seen on a Leagues world.
 
 Nothing is removed, and the plugin's own entries are ignored while probing, so a second run adds nothing.
+
+### Scrubfoot's cave (Goblin Village)
+
+The cave entrance (`xmas20_goblin_cave_entrance`, 40887) west of Goblin Village and the cave's exit (`xmas20_goblin_cave_exit`, 40888) came with the 2020 Christmas event, but the cave stayed when Sled Racing was made permanent on 6 January 2021 ([Wiki: Cave entrance (Scrubfoot's cave)](https://oldschool.runescape.wiki/w/Cave_entrance_(Scrubfoot%27s_cave)), [Sled Racing](https://oldschool.runescape.wiki/w/Sled_Racing)). The holiday rule in `loc-teleport-sync.json` leaves those two names out of it, so the sync takes them. rsprox captures 3243 (rev 233) and local 1001339 (rev 240): Enter crawls (2796) with sound 2454 and the fade two ticks after arriving and moves to (1975, 6220, 3) on tick 4; Exit moves to (2949, 3508, 0) on tick 3, the median of the two recordings: in 3243 (no walk, no sled) the crawl, sound and fade come on the click and the move two ticks later; in local 1001339 (walked, sled worn) the fade comes on tick 2 with no crawl and the move on tick 4. tsps plays the crawl, sound and fade a tick after arriving and the move on tick 3, so it is a tick later than 3243 (recorded difference).
+
+Not covered: Sled Racing itself (the sled, the timed course, the crevice back up). Live's Exit also takes off a worn event sled ("You remove the sled.", local 1001339); tsps has no sled racing, so it isn't played.
 
 ## The first run (2026-10-09)
 

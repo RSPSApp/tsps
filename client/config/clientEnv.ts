@@ -60,7 +60,8 @@ function isIceServer(value: unknown): value is RTCIceServer {
 
 /** The wrapper supplies this before loading the client bundle. */
 export function getDesktopProfile(): Readonly<ConfiguredServer> | undefined {
-    return typeof window === "undefined" ? undefined : window.__RSPS_DESKTOP_PROFILE__;
+    if (typeof window === "undefined" || typeof window.__TAURI__?.core?.invoke !== "function") return;
+    return window.__RSPS_DESKTOP_PROFILE__;
 }
 
 /** Resolve build defaults and the launch profile at the configuration boundary. */

@@ -4474,14 +4474,16 @@ export class OsrsClient {
         }
 
         if (!server) return;
-        try {
-            await this.clientPlugins.beforeWorldConnect(server);
-        } catch (error) {
+        if (this.clientPlugins.has("beforeWorldConnect")) {
+            try {
+                await this.clientPlugins.beforeWorldConnect(server);
+            } catch (error) {
+                if (attempt !== this.worldSwitchAttempt) return;
+                this.addGameMessage(error instanceof Error ? error.message : "Could not connect to this world");
+                return;
+            }
             if (attempt !== this.worldSwitchAttempt) return;
-            this.addGameMessage(error instanceof Error ? error.message : "Could not connect to this world");
-            return;
         }
-        if (attempt !== this.worldSwitchAttempt) return;
         const currentIndex = this.loginRenderer.serverList.indexOf(server);
         if (currentIndex < 0) return;
         this.loginState.serverListOpen = false;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { registerServiceWorker } from "../serviceWorkerRegistration";
-import { getCacheBaseUrl, getCacheListUrl, getDefaultWsUrl } from "../config/clientEnv";
+import { getCacheBaseUrl, getCacheListUrl, getDefaultWsUrl, getDesktopProfile } from "../config/clientEnv";
 import { LoginState } from "../game/login/LoginState";
 import { setServerUrl } from "../network/serverConnection/outgoing/connectionInfo";
 import { state } from "../network/serverConnection/state";
@@ -9,6 +9,8 @@ import { updateClientPreferences } from "../game/preferences/ClientPreferences";
 (globalThis as any).window = { location: { hostname: "localhost", pathname: "/", search: "" } };
 window.__RSPS_DESKTOP_PROFILE__ = { name: "TobiasScape", address: "localhost:43715", secure: false, maxPlayers: 2047 };
 updateClientPreferences({ lastServer: undefined });
+assert.equal(getDesktopProfile(), undefined, "a profile alone cannot enable desktop defaults");
+window.__TAURI__ = { core: { invoke: async () => undefined } };
 delete process.env.REACT_APP_CACHE_BASE_URL;
 process.env.PUBLIC_URL = "/";
 assert.equal(getCacheBaseUrl(), "https://rsps.app/play/caches/");

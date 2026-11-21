@@ -1,3 +1,5 @@
+import { getDesktopProfile } from "../../config/clientEnv";
+import { DesktopPlugin } from "../../game/plugins/desktop/DesktopPlugin";
 import { state as connectionState } from "../../network/serverConnection/state";
 import { subscribePluginMessages } from "../../network/serverConnection/domain/pluginMessages";
 import { PluginMessage } from "@runelite/api/events/PluginMessage";
@@ -146,18 +148,20 @@ export class RuneLite {
             window.addEventListener("blur", () => this.eventBus.post(new FocusChanged(false)));
         }
 
-        connectionState.worldConnectionGuard = world => this.client.clientPlugins.beforeWorldConnect(world);
-
         // Edit mode: no plugins, so nothing for the overlay renderer to lay out either.
         if (!this.loadPlugins) return;
         runLegacyConfigMigrations(LEGACY_CONFIG_MIGRATIONS, this.configManager);
         migrateTimersConfig(this.configManager);
         migrateTileMarkersConfig(this.configManager);
-        this.pluginManager.loadCorePlugins(CORE_PLUGINS);
+        this.pluginManager.loadCorePlugins(getDesktopProfile() ? [...CORE_PLUGINS, DesktopPlugin] : CORE_PLUGINS);
 
         // Engine hooks (shader, camera, gameframe) follow each loaded plugin.
         for (const plugin of this.pluginManager.getPlugins()) {
             this.client.clientPlugins.add(plugin);
+        }
+        const plugins = this.client.clientPlugins;
+        if (plugins.has("beforeWorldConnect")) {
+            connectionState.worldConnectionGuard = world => plugins.beforeWorldConnect(world);
         }
         // Last, so its outlines and snap corners draw over every overlay.
         this.client.clientPlugins.add(this.overlayRenderer);

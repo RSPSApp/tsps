@@ -1,4 +1,3 @@
-import { DesktopPlugin } from "../../../game/plugins/desktop/DesktopPlugin";
 import { PingGrapherPlugin } from "../../../game/plugins/pinggrapher/PingGrapherPlugin";
 import { CharactersPlugin } from "../../../game/plugins/characters/CharactersPlugin";
 import { AnimationSmoothingConfig } from "../../../game/plugins/animationsmoothing/AnimationSmoothingConfig";
@@ -82,7 +81,6 @@ import type { PluginClass } from "./Plugin";
 /** Static core plugin list (RuneLite's `PluginManager.loadCorePlugins`). */
 export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     ConfigPlugin,
-    DesktopPlugin,
     VoiceChatPlugin,
     HdPlugin,
     FirstPersonPlugin,

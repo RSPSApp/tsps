@@ -419,6 +419,10 @@ export class ClientPluginManager {
         this.implementers.clear();
     }
 
+    has(hook: keyof ClientPlugin): boolean {
+        return this.implementing(hook).length > 0;
+    }
+
     async beforeWorldConnect(world: WorldConnection): Promise<void> {
         for (const plugin of this.implementing("beforeWorldConnect")) {
             if ((plugin as { isStarted?(): boolean }).isStarted?.() === false) continue;

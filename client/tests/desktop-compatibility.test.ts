@@ -17,9 +17,10 @@ async function main() {
         assert.equal(url, "https://world.example/api/world-info");
         return Response.json({ clientVersion: required });
     };
-    await desktop.beforeWorldConnect(target);
-    assert.equal(requested.length, 0, "browser logins are unchanged");
     window.__RSPS_DESKTOP_PROFILE__ = { ...target, name: "Example", maxPlayers: 2047 };
+    await desktop.beforeWorldConnect(target);
+    assert.equal(requested.length, 0, "browser logins skip desktop checks even with a profile");
+    window.__TAURI__ = { core: { invoke: async () => undefined } };
     await desktop.beforeWorldConnect(target);
     assert.equal(await desktopClientManifestUrl(target), `https://github.com/RSPSApp/tsps/releases/download/client-${required}/manifest.json`);
 

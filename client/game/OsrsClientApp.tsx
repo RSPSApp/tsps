@@ -383,8 +383,10 @@ function OsrsClientApp() {
             // ========== Initialize cache and finalize OsrsClient ==========
             client.initCache(cache);
             client.init();
-            await client.clientPlugins.clientReady(abortController.signal);
-            if (disposed) return;
+            if (client.clientPlugins.has("clientReady")) {
+                await client.clientPlugins.clientReady(abortController.signal);
+                if (disposed) return;
+            }
 
             // ========== Login Screen Flow ==========
             setAutoSendHandshake(false);

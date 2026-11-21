@@ -137,8 +137,9 @@ test("an npc walking home after its fight fights back when it is attacked", (t) 
   s.npc.setLocation(new core.Location(FIELD.x + 3, FIELD.y + 4, 0));
   s.tick();
   assert.equal(coordinator.getCoordinateState(), 1, "walking home (AWAY)");
+  // The player's hit landing: the real retaliation path decides whether it turns on them.
   s.npc.getCombat().setUnderAttack(s.player);
-  s.npc.getCombat().attack(s.player);
+  core.CombatFactory.handleRetaliation(s.player, s.npc);
   s.ticks(3);
   assert.equal(s.npc.getCombat().getTarget(), s.player, "it did not ignore the attack until home");
 });

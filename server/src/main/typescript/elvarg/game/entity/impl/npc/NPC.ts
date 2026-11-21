@@ -192,10 +192,9 @@ export class NPC extends Mobile {
     /** Encounter-owned raises to this NPC's base combat levels (a boss's enrage); the definition is untouched. */
     private maxLevelBoosts: Map<Skill, number> | null = null;
     private static readonly STAT_RESTORE_TICKS = 100;
-    /** Ticks per hitpoint regenerated (process()). */
-    private static readonly HITPOINT_REGEN_TICKS = 100;
+    /** NPC turns since the last hitpoint regenerated (process()). */
     private hitpointRegenClock = 0;
-    /** Ticks per level a drained stat comes back; a boss can restore faster (the Corporeal Beast). */
+    /** Ticks per level a drained stat, or a hitpoint, comes back; a boss can restore faster (the Corporeal Beast). */
     private statRestoreTicks = NPC.STAT_RESTORE_TICKS;
 
     constructor(id: number, position: Location) {
@@ -387,13 +386,13 @@ export class NPC extends Mobile {
             }
 
             AreaManager.process(this);
-            // Hitpoints come back 1 every 100 ticks on a clock that runs whatever the NPC is
+            // Hitpoints come back 1 per regen interval on a clock that runs whatever the NPC is
             // doing - fighting, walking home or idle - so a reset monster keeps its damage. The
-            // Wiki: "All monsters will recover hitpoints fairly slowly" (Monster); the interval is
-            // the default NPC regen rate of the LostCity engine (RSPS reference, no live source
-            // gives the number), the same 100 ticks drained stats use here. "combat:no-regen": a
-            // boss whose fight has phases it can't be hit in (Vet'ion's hounds) keeps its damage.
-            if (++this.hitpointRegenClock >= NPC.HITPOINT_REGEN_TICKS) {
+            // interval is the stat one: measured NPC regen rates list the same hitpoint and stat
+            // rate for every NPC that regenerates both, 100 ticks unless listed (Wiki,
+            // User:Orion/Regen; Monster: "All monsters will recover hitpoints fairly slowly").
+            // "combat:no-regen": an NPC that doesn't regenerate hitpoints (Nex, Vet'ion's hounds).
+            if (++this.hitpointRegenClock >= this.statRestoreTicks) {
                 this.hitpointRegenClock = 0;
                 if (this.hitpoints > 0 && !this.hitpointsLocked && !this.hasFlag("combat:no-regen")
                     && this.hitpoints < this.getMaxHitpoints()) {

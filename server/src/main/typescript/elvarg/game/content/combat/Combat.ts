@@ -1027,8 +1027,8 @@ export class Combat {
 
     /**
      * Ends a player's combat with a target they have stopped trying to get to (NPCs are bounded by
-     * their aggression range instead, see shouldRetreat). Both give-up paths in
-     * postMovementProcess are skipped by an actor that cannot move (a stun, a placement, a
+     * their aggression range instead, see shouldRetreat). The player's give-up path in
+     * postMovementProcess is skipped by an actor that cannot move (a stun, a placement, a
      * teleport in transit - `setBlockMovement`) and by a route whose step the mover rejects,
      * which keeps its checkpoint (`MovementQueue.process`), so the queue never empties; without
      * this deadline either side stays in combat with an unreachable target indefinitely.

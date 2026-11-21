@@ -51,12 +51,11 @@ At 20 cycles (10 s) the engagement is dropped: a player is told `I can't reach t
 sides `reset()` as any other give-up does. Player bots are not messaged, matching the existing
 release.
 
-The two pre-existing releases are untouched and still fire first, so a normal "attack something
-behind a fence" click is refused on the spot rather than after the deadline. Between them they cover
-what the route finder can see: an NPC whose step the *map* refuses is released by the
-`routeRequested` path in its first cycle, and a player with no route likewise. The deadline is what
-bounds the case that path deliberately exempts - a pursuit blocked by another *entity*, invisible to
-the pathfinder, which keeps its checkpoint so the queue never empties.
+The player's pre-existing release still fires first, so a normal "attack something behind a fence"
+click is refused on the spot rather than after the deadline: a player with no route is released in
+its first cycle. The deadline bounds what that release can't see - a pursuit blocked by another
+*entity*, invisible to the pathfinder, which keeps its checkpoint so the queue never empties. NPCs
+have neither release since #6297 (Safespots, below).
 
 ## Safespots (#1952, #6297)
 
@@ -70,12 +69,12 @@ the NPC; #6297 drops that condition. The 20-cycle deadline is the player's alone
 
 Two things that made the reset costly changed with it:
 
-- **Hitpoints regenerate 1 per 100 ticks** (`NPC.process`), on a clock that runs whatever the
-  NPC is doing. The old rule healed 10% of max hitpoints *every tick* while it walked home, and
-  every tick once 20 s passed without damage, so a reset NPC was back to full in 6 s. The Wiki
-  only says "All monsters will recover hitpoints fairly slowly" (Monster); the 100-tick interval
-  is the LostCity engine's default NPC regen rate (an RSPS reference, not live evidence), and the
-  rate drained stats already use here.
+- **Hitpoints regenerate 1 per regen interval** (`NPC.process`, 100 ticks unless content sets
+  `setStatRestoreTicks`), on a clock that runs whatever the NPC is doing. The old rule healed 10%
+  of max hitpoints *every tick* while it walked home, and every tick once 20 s passed without
+  damage, so a reset NPC was back to full in 6 s. The Wiki's measured rates (User:Orion/Regen,
+  via Monster Examine) give each NPC the same hitpoint and stat rate, 100 ticks unless listed;
+  the Monster page: "All monsters will recover hitpoints fairly slowly".
 - **An NPC walking home after its fight (`AWAY`) fights back** when attacked
   (`CombatFactory` retaliation, `NPCMovementCoordinator.updateCoordinator`); it used to turn that
   into a retreat and ignore hits until it reached its spawn. A real retreat (`RETREATING`, the

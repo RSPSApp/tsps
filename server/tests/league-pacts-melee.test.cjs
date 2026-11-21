@@ -795,7 +795,7 @@ test("Blindbag: the Dramen staff is no Blindbag weapon (Wiki, 6 May 2026)", () =
   assert.deepEqual(Melee._test.heavyWeaponsCarried(holder), [ITEMS.elderMaul]);
 });
 
-test("Thorns alone holds an NPC's regeneration timer through real queued damage and NPC turns", () => {
+test("Thorns alone tags the NPC and refreshes its combat timer through real queued damage and NPC turns", () => {
   const holder = character("pact-thorns-regen", { pacts: { [effect("thorns_damage")]: 1 } });
   holder.setAutoRetaliate(false);
   shield(holder, ITEMS.runeKiteshield);
@@ -884,7 +884,7 @@ function woundedGiant(location) {
 
 const permission = (attacker, target) => core.CanAttackResponse[core.CombatFactory.canAttackPermission(attacker, target, true)];
 
-test("a bystander's reflected hit pauses regeneration but leaves a single-way NPC with the player fighting it", () => {
+test("a bystander's reflected hit lands but leaves a single-way NPC with the player fighting it", () => {
   const { AreaManager } = require("../dist/game/model/areas/AreaManager");
   const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
   const fighter = character("pact-single-fighter");

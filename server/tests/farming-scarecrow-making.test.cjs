@@ -35,8 +35,10 @@ function fixture(t, items) {
         hooks.onItemOnObject(event);
         return event;
     };
-    const combine = (used, usedWith) => {
-        const event = { player, usedItemId: used, usedWithItemId: usedWith };
+    const combine = (used, usedWith, usedItemSlot, usedWithItemSlot) => {
+        const inv = player.getInventory();
+        const event = { player, usedItemId: used, usedWithItemId: usedWith,
+            usedItemSlot: usedItemSlot ?? inv.getSlotForItemId(used), usedWithItemSlot: usedWithItemSlot ?? inv.getSlotForItemId(usedWith) };
         hooks.onItemOnItem(event);
         return event;
     };
@@ -110,4 +112,11 @@ test('Hunter spear tips are not a spear', t => {
     const f = fixture(t, ['Hunter spear tips', core.ItemIdentifiers.HAY_SACK]);
     assert.notEqual(f.combine(id('Hunter spear tips'), core.ItemIdentifiers.HAY_SACK).handled, true);
     assert.deepEqual(f.said, []);
+});
+
+test('the clicked hay sack is the one speared when two are carried', t => {
+    const S = core.ItemIdentifiers.HAY_SACK;
+    const f = fixture(t, ['Coins', S, null, null, null, null, 'Bronze spear', S]);
+    f.combine(id('Bronze spear'), S, 6, 7);
+    assert.deepEqual([f.slot(1), f.slot(6), f.slot(7)], [S, core.ItemIdentifiers.HAY_SACK_2, -1]);
 });

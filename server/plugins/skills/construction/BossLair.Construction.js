@@ -188,11 +188,13 @@ function configureOption(event) {
   if (configure(event)) event.handled = true;
 }
 
-/** Configure on each display loc's own name (the blank one and every lair's differ). */
+/** A post-quest Vorkath (8061) death: the kill the display accepts. */
 function recordPostQuestVorkath({ killer, npc }) {
-  if ((killer?.isPlayer?.() || killer?.getPacketSender) && npc?.getId?.() === POST_QUEST_VORKATH) killer.setAttribute(POST_QUEST_VORKATH_KILLED, true);
+  if (!killer?.isPlayer?.() && !killer?.getPacketSender) return;
+  if (npc?.getId?.() === POST_QUEST_VORKATH) killer.setAttribute(POST_QUEST_VORKATH_KILLED, true);
 }
 
+/** Configure on each display loc's own name (the blank one and every lair's differ). */
 function attachBossLair(api) {
   api.persistAttribute(POST_QUEST_VORKATH_KILLED, false);
   api.onNpcDeath(recordPostQuestVorkath);

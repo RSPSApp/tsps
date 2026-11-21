@@ -104,16 +104,72 @@ function useOnKettle(event, team) {
   return Game.current.addFlowers(player, colour);
 }
 
+/**
+ * The team's water pump (brew_water_pump), from rsprox recording 1849 (Leagues V) ticks 730,
+ * 1041, 1050 and 1362: a bucket fills on the click's tick with human_pickuptable (832), synth
+ * 2609 and "You fill the bucket.", then one more bucket a tick, each with the animation and sound
+ * but no message, until none are left. A bowl is refused. The filled bucket takes the empty one's
+ * slot. Ours: the other team's pump does nothing, as the other stations here.
+ */
+const PUMP = {
+  ANIMATION: 832,
+  SOUND: 2609,
+  FILLED: "You fill the bucket.",
+  BOWL: "That bowl is too small to hold a useful amount of water, try a bucket instead.",
+};
+
 function useOnPump(event, team) {
   const { player, itemId } = event;
-  if (itemId !== ids().bucket) return false;
+  const table = ids();
+  if (itemId !== table.bucket && itemId !== table.bowl) return false;
   if (team !== teamOf(player)) {
     return true;
   }
-  fillBuckets(player);
+  if (itemId === table.bowl) {
+    player.sendMessage(PUMP.BOWL);
+    return true;
+  }
+  startPumping(player);
   return true;
 }
 
+/** Fills one bucket in place; false once the player has none left. */
+function pumpOne(player) {
+  const inventory = player.getInventory();
+  const table = ids();
+  const slot = inventory.getSlotForItemId(table.bucket);
+  if (slot < 0) return false;
+  player.performAnimation(new Common.core.Animation(PUMP.ANIMATION));
+  player.getPacketSender().sendSound(PUMP.SOUND, 1, 0);
+  inventory.setItem(slot, new Common.core.Item(table.water, 1));
+  inventory.refreshItems();
+  return true;
+}
+
+/** The first bucket now, the rest one a tick; walking away (it cancels the player's tasks) stops it. */
+const pumping = new WeakMap();
+
+function startPumping(player) {
+  const { Task, TaskManager } = Common.core;
+  pumping.get(player)?.stop();
+  pumping.delete(player);
+  if (!pumpOne(player)) return;
+  player.sendMessage(PUMP.FILLED);
+  const origin = player.getLocation().clone();
+  const task = new (class extends Task {
+    constructor() { super(1, player.getIndex(), false); }
+    execute() {
+      if (pumping.get(player) === this && player.isRegistered() && inGame(player)
+        && player.getLocation().equals(origin) && pumpOne(player)) return;
+      this.stop();
+      if (pumping.get(player) === this) pumping.delete(player);
+    }
+  })();
+  pumping.set(player, task);
+  TaskManager.submit(task);
+}
+
+/** The watering hole still fills every bucket at once (no recording of it). */
 function fillBuckets(player) {
   const inventory = player.getInventory();
   const table = ids();
@@ -323,7 +379,8 @@ function exitPortal({ player, location }) {
 }
 
 function attachStations(api) {
-  api.onItemOnObject(itemOnObject, { noted: false });
+  // Before the name-matched hooks: Scrambled!'s Bowl on any "Water Pump" would fill a bowl here.
+  api.onItemOnObject(itemOnObject, { noted: false, before: true });
   api.onItemOnItem(knifeOnLogs, { noted: false });
   api.onItemOnItem(dyeMonkey, { noted: false });
   api.onObjectInteraction("Log Store", { "Take-Log": takeLog });

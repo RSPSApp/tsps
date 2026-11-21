@@ -230,6 +230,8 @@ export type NpcView = Tile & ActorUpdateView & {
   tint?: { startCycle: number; endCycle: number; hue: number; saturation: number; lightness: number; weight: number };
   /** Its walk step is sent as a crawl (half walking speed on the client). */
   crawl?: boolean;
+  /** false: a move this tick is re-added without the jump flag, so clients walk it (NPC.teleportInView). */
+  jump?: boolean;
   /** The boat/static ship this NPC stands on (its deck) rather than the main world. */
   worldView?: number;
   rotation: number;
@@ -3791,7 +3793,7 @@ export function encodeNpcSync(
     const worldView = view.worldView;
     writer.writeBits(1, worldView != null ? 1 : 0);
     if (worldView != null) writer.writeBits(32, worldView & 0xffff);
-    writer.writeBits(1, readd.has(view.index) ? 1 : 0);
+    writer.writeBits(1, readd.has(view.index) && view.jump !== false ? 1 : 0);
     writer.writeBits(large ? 8 : 5, signed(view.y - base.y, large ? 8 : 5));
     writer.writeBits(large ? 8 : 5, signed(view.x - base.x, large ? 8 : 5));
     writer.writeBits(3, view.rotation & 7);

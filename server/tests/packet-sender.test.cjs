@@ -347,3 +347,22 @@ test('a spellbook re-mount keeps the quest stages that share the spell unlock va
   assert.equal(sender.getVarp(MM_MAIN), 3, 'a later mount does not mark the quest complete again');
   assert.equal(sender.getVarbit(4070), 0, 'the mount still publishes the spellbook');
 });
+
+// #6420: live moves Motherlode Mine pay-dirt with an in-view NPC teleport whose jump flag is clear
+// (rsprox prints `teleport`, not `telejump`), which clients walk over the tick. NPC.teleportInView
+// sends a moved NPC's re-add with that bit clear; any other move keeps it set.
+test('an NPC moved in view without a jump is re-added with the teleport bit clear', () => {
+  const { createNpcSyncState, encodeNpcSync } = require('../dist/net/protocol/ClientProtocol');
+  const local = { x:3748, y:5675, level:0 };
+  const base = { index:9, typeId:6564, rotation:0, walkDirection:-1, runDirection:-1, x:3748, y:5671, level:0 };
+  const teleportBit = (jump) => {
+    const state = createNpcSyncState();
+    encodeNpcSync(1, local, [base], state);
+    const body = encodeNpcSync(2, local, [{ ...base, y:5670, jump }], state).subarray(3).subarray(11);
+    // count8, the old entry's removal (1 + 2 bits), then the re-add: index16, block1, worldView1, teleport1.
+    const bit = 8 + 3 + 16 + 1 + 1;
+    return (body[bit >> 3] >> (7 - (bit & 7))) & 1;
+  };
+  assert.equal(teleportBit(undefined), 1, 'a telejump or other move snaps');
+  assert.equal(teleportBit(false), 0, 'teleportInView: clients walk it');
+});

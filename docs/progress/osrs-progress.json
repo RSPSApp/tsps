@@ -24744,7 +24744,7 @@
             "Main 281766303 (2 November 2026): #1780 stops the water channel when both wheels jam and displays waiting pay-dirt in the hopper.",
             "Main 3b61a15a8 (6 November 2026): #2489 Credit supported Falador Diary gameplay tasks. Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4057 feat(leagues): expand Demonic Pacts task trigger coverage. #3939 Motherlode Mine: pay-dirt rolls the Rock golem. #3922 Motherlode Mine: ore veins roll the gem table. 5 merged PRs changed recorded implementation files for this entry.",
-            "#6420 (fix/6420-mlm-shortcut-paydirt): the dark tunnels move from MotherlodeMine.plugin.js to the Agility shortcut data; the eastern dark tunnel needs the medium Falador Diary's reward claimed and the southern one crosses between its own ends (Wiki, Dark tunnel (Motherlode Mine)); the floating pay-dirt telejumps down the channel so it stays in view while the water flows (local recording mlm-loop, ticks 556-566)."
+            "#6420 (fix/6420-mlm-shortcut-paydirt): the dark tunnels move from MotherlodeMine.plugin.js to the Agility shortcut data; the eastern dark tunnel needs the medium Falador Diary's reward claimed and the southern one crosses between its own ends (Wiki, Dark tunnel (Motherlode Mine)); the floating pay-dirt moves by an in-view teleport without the jump flag (NPC.teleportInView), so it stays in view and floats while the water flows (local recording mlm-loop, ticks 556-566)."
           ],
           "taskDetails": [
             {

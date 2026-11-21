@@ -38,9 +38,10 @@ MotherlodeMine.register({
   spawnNpc: ({ id, x, y }) => {
     const npc = { id, location: new Location(x, y, 0), removed: false };
     // A plain moveTo drops an NPC from view for the tick it moves (World.staysInViewWhenPlaced), so
-    // the pay-dirt moving every tick was never seen (#6420); it moves by telejump, as live keeps it in view.
-    npc.moveTo = () => { throw new Error("the pay-dirt moves by telejump, not a plain move"); };
-    npc.telejump = (location) => { npc.location = location; npc.path.push([location.getX(), location.getY()]); };
+    // the pay-dirt moving every tick was never seen (#6420); live keeps it in view without the jump flag.
+    npc.moveTo = () => { throw new Error("the pay-dirt moves by teleportInView, not a plain move"); };
+    npc.telejump = () => { throw new Error("live floats the pay-dirt (teleport), it doesn't telejump"); };
+    npc.teleportInView = (location) => { npc.location = location; npc.path.push([location.getX(), location.getY()]); };
     npc.path = [];
     npc.setScriptedMovement = () => {};
     spawned.push(npc);

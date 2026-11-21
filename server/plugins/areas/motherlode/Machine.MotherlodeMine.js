@@ -258,14 +258,15 @@ function spawnFloating() {
 }
 
 /**
- * One tile down the channel. Live sends it as an NPC teleport each tick that keeps it in view
- * (local recording mlm-loop, ticks 556-566), so this is a telejump: a plain moveTo drops the NPC
- * from view for the tick and adds it back, which with a move every tick hid it all the way (#6420).
+ * One tile down the channel. Live sends it as an NPC teleport each tick that keeps it in view,
+ * without the jump flag, so the client floats it along (local recording mlm-loop, ticks 556-566:
+ * `teleport`, never `telejump`). A plain moveTo drops the NPC from view for the tick and adds it
+ * back, which with a move every tick hid it all the way (#6420).
  */
 function advance(batch) {
   batch.tiles++;
   const [x, y] = CHANNEL_START;
-  batch.npc?.telejump(new Location(x, y - batch.tiles, 0));
+  batch.npc?.teleportInView(new Location(x, y - batch.tiles, 0));
   return batch.tiles >= CHANNEL_TILES;
 }
 

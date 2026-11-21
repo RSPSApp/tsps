@@ -14,12 +14,26 @@
  *   "She gives you a look of appreciation." (Wiki: Dog (Myths' Guild)). No capture of this dog's
  *   own Pet exists; the animation and the line are what every recorded dog Pet shows
  *   (226/01663, 227/01723, 231/00365) and what StrayDogs.plugin.js plays for the same dogs.
+ * - **The three portals** on the top floor: Enter on the Portals of Heroes, Champions and Legends
+ *   takes the player to that guild. A live capture (revision 242, 2026-11-21) of each: two ticks
+ *   after the player reaches the portal, "You step through the portal..." (a spam-filtered game
+ *   message), the move and synth sound 200 all land on the same tick, with no animation.
  */
 
 const BASEMENT = { x: 1937, y: 9008, z: 1 };
 const DOG_LINE = "Who's a good doggy!";
 const DOG_ANSWER = "She gives you a look of appreciation.";
 const PET_ANIMATION = "human_pickupfloor";
+
+// Each portal's landing tile, from the capture.
+const PORTALS = {
+  "Portal of Heroes": { x: 2904, y: 3511, z: 0 },
+  "Portal of Champions": { x: 3191, y: 3365, z: 0 },
+  "Portal of Legends": { x: 2728, y: 3367, z: 0 },
+};
+const PORTAL_DELAY_TICKS = 2;
+const PORTAL_MESSAGE = "You step through the portal...";
+const PORTAL_SOUND = 200;
 
 let api = null;
 let core = null;
@@ -42,15 +56,28 @@ function petDog({ player, npc }) {
   return true;
 }
 
+/** A portal's Enter: two ticks on, the message, the move and the sound together. */
+function enterPortal(player, destination) {
+  player.getMovementQueue().reset();
+  core.TaskManager.submit(new core.CountdownTask(player, PORTAL_DELAY_TICKS, () => {
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, PORTAL_MESSAGE);
+    player.moveTo(new core.Location(destination.x, destination.y, destination.z));
+    player.getPacketSender().sendSound(PORTAL_SOUND, 1, 0);
+  }));
+}
+
 module.exports = {
   name: "MythsGuild",
-  description: "The Myths' Guild's statue down to its basement, and the guild dog's Pet.",
+  description: "The Myths' Guild's statue down to its basement, the guild dog's Pet, and the top floor's three guild portals.",
   members: true,
-  _test: { enterBasement, petDog, BASEMENT, DOG_LINE, DOG_ANSWER, PET_ANIMATION },
+  _test: { enterBasement, petDog, BASEMENT, DOG_LINE, DOG_ANSWER, PET_ANIMATION, PORTALS, PORTAL_DELAY_TICKS, PORTAL_MESSAGE, PORTAL_SOUND, enterPortal },
   register(pluginApi) {
     api = pluginApi;
     core = api.core;
     api.onObjectInteraction("Mythic Statue", { Enter: enterBasement });
     api.onNpcInteraction("Dog", { Pet: petDog });
+    for (const [name, destination] of Object.entries(PORTALS)) {
+      api.onObjectInteraction(name, { Enter: ({ player }) => enterPortal(player, destination) });
+    }
   },
 };

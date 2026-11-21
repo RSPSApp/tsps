@@ -18,25 +18,27 @@ const HOTSPOT = "BOSS_LAIR_DISPLAY";
 const JARS_ENUM = 3300;
 const BLANK = Ids.loc("poh_display_blank");
 /**
- * The lairs in enum 3300's order, each with its menu label (rsprox 2909 tick 2172 for the first
- * fourteen), loc and the Combat Achievements monsters whose kills unlock it (Wiki: the boss must
- * have been killed once). Ours: the last two labels are the Wiki's names (Boss lair display); no
- * capture has them in the menu. Ours: Phosani's Nightmare's kills count for The Nightmare (both
- * drop the jar of dreams).
- */
-const LAIRS = [
-  ["Kraken", "poh_display_kraken"], ["Zulrah", "poh_display_zulrah"], ["Kalphite Queen", "poh_display_kq"],
-  ["Cerberus", "poh_display_cerberus"], ["Abyssal Sire", "poh_display_sire"], ["Skotizo", "poh_display_skotizo"],
-  ["Grotesque Guardians", "poh_display_gargoyle"], ["Vorkath", "poh_display_vorkath"], ["Alchemical Hydra", "poh_display_hydra"],
-  ["Sarachnis", "poh_display_sarachnis"], ["The Nightmare", "poh_display_nightmare", ["Nightmare, The", "Phosani's Nightmare"]],
-  ["Corporeal Beast", "poh_display_corp"], ["Thermonuclear Smoke Devil", "poh_display_thermy"], ["Araxxor", "poh_display_araxyte"],
-  ["Shellbane Gryphon", "poh_display_gryphon"], ["Mad Angel", "poh_display_angel", ["Mad Angel, The"]],
-].map(([label, loc, monsters = [label]]) => ({ label, loc: Ids.loc(loc), monsters }));
-/**
  * Dragon Slayer II's Vorkath is the boss's own NPC here, so Combat Achievements counts the quest
  * kill too; the Wiki wants a post-quest kill, so that one is taken off (the quest marks it).
  */
 const QUEST_VORKATH_KILLED = "dragon-slayer-ii:vorkath-defeated";
+/**
+ * The lairs in enum 3300's order, each with its menu label (rsprox 2909 tick 2172 for the first
+ * fourteen), loc and the Combat Achievements monsters whose kills unlock it (Wiki: the boss must
+ * have been killed once). Ours: the last two labels are the Wiki's names (Boss lair display); no
+ * capture has them in the menu. Ours: Phosani's Nightmare's kills count for The Nightmare (both
+ * drop the jar of dreams). `uncountedKill` names a player attribute set by a kill that Combat
+ * Achievements counts but the display doesn't (Vorkath's quest kill).
+ */
+const LAIRS = [
+  ["Kraken", "poh_display_kraken"], ["Zulrah", "poh_display_zulrah"], ["Kalphite Queen", "poh_display_kq"],
+  ["Cerberus", "poh_display_cerberus"], ["Abyssal Sire", "poh_display_sire"], ["Skotizo", "poh_display_skotizo"],
+  ["Grotesque Guardians", "poh_display_gargoyle"], ["Vorkath", "poh_display_vorkath", undefined, QUEST_VORKATH_KILLED],
+  ["Alchemical Hydra", "poh_display_hydra"],
+  ["Sarachnis", "poh_display_sarachnis"], ["The Nightmare", "poh_display_nightmare", ["Nightmare, The", "Phosani's Nightmare"]],
+  ["Corporeal Beast", "poh_display_corp"], ["Thermonuclear Smoke Devil", "poh_display_thermy"], ["Araxxor", "poh_display_araxyte"],
+  ["Shellbane Gryphon", "poh_display_gryphon"], ["Mad Angel", "poh_display_angel", ["Mad Angel, The"]],
+].map(([label, loc, monsters = [label], uncountedKill = null]) => ({ label, loc: Ids.loc(loc), monsters, uncountedKill }));
 const TITLE = "Choose a lair";
 const EMPTY = "Empty";
 const NOT_OWNER = "You can only configure the display in your own house.";
@@ -84,7 +86,7 @@ function kills(player, lair) {
     Core.api.emitCustomEvent("combat-achievements:count", request);
     total += Number.isInteger(request.total) ? Math.max(0, request.total) : 0;
   }
-  if (lair.label === "Vorkath" && player.getAttribute(QUEST_VORKATH_KILLED)) total -= 1;
+  if (lair.uncountedKill && player.getAttribute(lair.uncountedKill)) total -= 1;
   return Math.max(0, total);
 }
 

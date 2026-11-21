@@ -278,7 +278,7 @@ test("the past-experience answer sets its option defaults, saved like a Settings
     assert.equal(fresh.saved[`varbit:${varbit}`], value, `new: varbit ${varbit} saved`);
   }
   assert.equal(fresh.varbits.has(6091), false, "new players keep the alchemy warning");
-  // Experienced (tutisland HCIM capture, tick 99): the new-player safeguards are turned off.
+  // Experienced (a local Tutorial Island HCIM recording, tick 99): the new-player safeguards are turned off.
   const veteran = answer(3);
   for (const [varbit, value] of [[5411, 0], [10971, 0], [11519, 0], [6091, 150000], [624, 1], [2319, 1], [2320, 1], [3939, 1], [4180, 0]]) {
     assert.equal(veteran.varbits.get(varbit), value, `experienced: varbit ${varbit}`);

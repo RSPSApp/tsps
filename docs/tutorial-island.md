@@ -29,7 +29,7 @@ New accounts are at step 1 with `tutorial_player_experience` (929) open, under t
 - **Players from before the screen** count as brand new.
 - **Option defaults (captured):** the answer also sets some Settings rows, saved as a Settings click is (`experienceSettings` in the data file):
   - **Brand new** (rsprox captures local 1001414 tick 18, local 1001416 tick 223): the quest list starts filtered and sorted for a new player: Highlight quest start points (9619) 2, the quest list sort (13772) 11, and hiding quests that lack requirements (13778) or recommendations (13779) on.
-  - **Experienced** (the tutisland HCIM capture, tick 99): the new-player safeguards are turned off: Accept Aid (4180), the drop warning (5411), Make-X for darts and bolts (10971) and the in-world Hiscores lookup (11519) off, the alchemy warning threshold (6091) to 150,000 and the four Plank Make confirmations (624, 2319, 2320, 3939) to 1. Accept Aid goes through its own plugin (`accept-aid:set` { player, on }), which still keeps Ironmen off.
+  - **Experienced** (a local Tutorial Island HCIM recording, the 929 answer at tick 99): the new-player safeguards are turned off: Accept Aid (4180), the drop warning (5411), Make-X for darts and bolts (10971) and the in-world Hiscores lookup (11519) off, the alchemy warning threshold (6091) to 150,000 and the four Plank Make confirmations (624, 2319, 2320, 3939) to 1. Accept Aid goes through its own plugin (`accept-aid:set` { player, on }), which still keeps Ironmen off.
   - **Returning** isn't recorded, so it changes nothing.
 
 ## What each step shows (captured)

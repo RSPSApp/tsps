@@ -15,7 +15,8 @@
  * - "Peek": needs 20 kills of the boss; then says whether anyone is inside. "Check-Fee": the fee,
  *   whether it is paid and the discount.
  * - Exits: the singles lairs come out beside their entrance; the multi lairs at one of the
- *   Escape Caves' three arrival points at random, the same one as the player before if they
+ *   Escape Caves' three arrival points at random, skipping blocked landing tiles, the same one
+ *   as the player before if they
  *   left the same lair within 10 seconds. Logging out in a multi lair does the same.
  * - Each lair is an Area on PvP ground: it runs the Wilderness's own rules first
  *   ("wilderness:rules"), shows the singles-plus icon in the singles lairs, and blocks
@@ -280,8 +281,39 @@ function escapeArrival(lair) {
   return arrival;
 }
 
+/** Pick an open tile in the landing area; if it is fully blocked, use the nearest open safe area. */
+function randomOpenTile(box) {
+  const tiles = [];
+  for (let x = box[0]; x <= box[2]; x++) {
+    for (let y = box[1]; y <= box[3]; y++) {
+      if (Common.open(x, y, box[4])) tiles.push(new core.Location(x, y, box[4]));
+    }
+  }
+  if (tiles.length === 0) {
+    const centerX = (box[0] + box[2]) / 2;
+    const centerY = (box[1] + box[3]) / 2;
+    let nearestDistance = Infinity;
+    for (const alternative of Common.ESCAPE.arrivals) {
+      for (let x = alternative[0]; x <= alternative[2]; x++) {
+        for (let y = alternative[1]; y <= alternative[3]; y++) {
+          if (!Common.open(x, y, alternative[4])) continue;
+          const distance = Math.max(Math.abs(x - centerX), Math.abs(y - centerY));
+          if (distance < nearestDistance) {
+            nearestDistance = distance;
+            tiles.length = 0;
+          }
+          if (distance === nearestDistance) tiles.push(new core.Location(x, y, alternative[4]));
+        }
+      }
+    }
+  }
+  if (tiles.length === 0) throw new Error("No walkable tile found in the Escape Caves");
+  return tiles[Math.floor(Math.random() * tiles.length)];
+}
+
 function exitDestination(lair) {
-  return Common.randomTile(lair.exit.to === "escape" ? escapeArrival(lair) : lair.exit.to);
+  const destination = lair.exit.to === "escape" ? escapeArrival(lair) : lair.exit.to;
+  return lair.exit.to === "escape" ? randomOpenTile(destination) : Common.randomTile(destination);
 }
 
 /** As captured: no animation, out on the next tick. */
@@ -521,5 +553,5 @@ module.exports = {
   addDiscount,
   playersIn,
   feeCost,
-  _test: { feeThen, checkFee, ENTRANCES, EXITS, ESCAPE_ENTRANCES, ESCAPE_EXITS, ENTERED_AT_ATTRIBUTE, escapeArrival, payFee, meetsGate, teleportLocked, playerDied, lastExits, areas },
+  _test: { feeThen, checkFee, ENTRANCES, EXITS, ESCAPE_ENTRANCES, ESCAPE_EXITS, ENTERED_AT_ATTRIBUTE, escapeArrival, exitDestination, randomOpenTile, payFee, meetsGate, teleportLocked, playerDied, lastExits, areas },
 };

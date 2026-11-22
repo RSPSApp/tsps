@@ -382,6 +382,12 @@ export const RENDER_CONSTANTS = {
     MOBILE_PORTRAIT_MIN_LAYOUT_WIDTH: 523,
     /** Shortest portrait mobile gameframe: chat (165) + main modal (334) + bottom HUD (~300). */
     MOBILE_PORTRAIT_MIN_LAYOUT_HEIGHT: 800,
+    /**
+     * Widest useful landscape mobile gameframe: the stock 765px frame plus the right-hand
+     * side-panel and tab-stone column (~51px). Below this the All Settings window (512px)
+     * no longer fits beside the open side panel and overlaps it (iPad at 400%).
+     */
+    MOBILE_LANDSCAPE_MIN_LAYOUT_WIDTH: 816,
     PLAYER_FOOTPRINT_RADIUS: (0.4 * 128) | 0,
     /**
      * Base hitsplat sprite/text scale before UI/render scale multiply: 1:1 on players and NPCs

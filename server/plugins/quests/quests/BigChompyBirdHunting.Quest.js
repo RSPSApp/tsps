@@ -211,7 +211,10 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     player.getInventory().getAddableAmount(new Item(ItemIdentifiers.FEATHER, FYCIE_FEATHER_AMOUNT)) === FYCIE_FEATHER_AMOUNT;
   const hasEquipped = (player, itemId) =>
     (player.getEquipment?.()?.getItems?.() ?? []).some((item) => item?.getId?.() === itemId);
+  /** The quest's own bow: the one Rantz lends and reclaims. The comp ogre bow only exists after the quest. */
   const hasBow = (player) => has(player, OGRE_BOW) || hasEquipped(player, OGRE_BOW);
+  /** Wiki (Rantz, history): the ogre composite bow shows Rantz the kill marks as the standard bow does. */
+  const hasChompyBow = (player) => [...CHOMPY_BOWS].some((id) => has(player, id) || hasEquipped(player, id));
   const chompyKills = (player) => Number(player.getAttribute(CHOMPY_KILLS_ATTRIBUTE)) || 0;
   const hatsClaimed = (player) => Number(player.getAttribute(HATS_CLAIMED_ATTRIBUTE)) || 0;
   const hatClaimed = (player, index) => (hatsClaimed(player) & (1 << index)) !== 0;
@@ -366,8 +369,11 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
         || skills.getMaxLevel(Skill.COOKING) < 30
         || skills.getMaxLevel(Skill.FLETCHING) < 5;
     }
-    if (value.includes("does not have the bow")) return !hasBow(player);
-    if (value.includes("has an ogre bow")) return hasBow(player);
+    if (value.includes("does not have the bow")) {
+      // After the quest this is the hat claim, where either chompy bow counts; before it, the lost-bow page.
+      return !(quest.getStage(player) >= STAGE_COMPLETE ? hasChompyBow(player) : hasBow(player));
+    }
+    if (value.includes("has an ogre bow")) return hasChompyBow(player);
     if (value.includes("already claimed all newly claimable hats")) {
       return chompyKills(player) >= 30 && claimableHat(player) < 0;
     }
@@ -758,7 +764,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   }
 
   function grantHat(player, text) {
-    if (quest.getStage(player) < STAGE_COMPLETE || !hasBow(player) || freeSlots(player) <= 0) return;
+    if (quest.getStage(player) < STAGE_COMPLETE || !hasChompyBow(player) || freeSlots(player) <= 0) return;
     const hat = hatForText(text);
     if (!hat) return;
     const index = CHOMPY_HATS.indexOf(hat);
@@ -909,7 +915,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       play("giving-rantz-a-cooked-chompy", RANTZ_PAGE);
       return;
     }
-    if (event.itemId === OGRE_BOW) {
+    if (event.itemId === OGRE_BOW || (CHOMPY_BOWS.has(event.itemId) && quest.isComplete(player))) {
       if (quest.isComplete(player)) {
         // The capture's bow on Rantz after the quest (tick 1643): straight to "You show Rantz the marks on your bow.".
         const request = { player, npc: event.target, npcId, variant: page(RANTZ_PAGE, "after-big-chompy-bird-hunting"),

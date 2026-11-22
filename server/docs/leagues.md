@@ -1809,7 +1809,7 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   names is open to everyone: instances, Death's Office, the POH, random events, the essence mine,
   Tutorial Island (the Wiki's accommodations). The surface-offset fallback remains an
   approximation of entrance ownership, not an authoritative dungeon map. Known approximations
-  of the remaining grid: Catherby's beach east of x 2816 falls with Asgarnia, the River Salve's east bank at Paterdomus with Misthalin, the Citharede Abbey and the
+  of the remaining grid: map square 44,53 (Catherby's beach and Harry's Fishing Shop) is wholly Kandarin, including White Wolf Mountain's southern slopes and the white wolves there, since the Wiki puts the mountain on the Kandarin/Asgarnia border and gives no tile outline (Asgarnia's rect starts at 44,54), the River Salve's east bank at Paterdomus with Misthalin, the Citharede Abbey and the
   Giants' Plateau east of Al Kharid (the map square holding the abbey's own cabbage field) with the
   desert while the Abandoned Mine in the square below stays Morytania, Tutorial Island's eastern
   tip with the desert. `league:area-at { x, y }` answers for any tile.

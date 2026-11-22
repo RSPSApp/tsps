@@ -127,6 +127,24 @@ Not captured, so ours:
 Charges are saved in `bonecrusher:charges`, up to 2,147,483,647 (the cache's
 `charges_bonecrusher_quantity` holds 31 bits). Deactivating is saved in `bonecrusher:inactive`.
 
+## Ectoplasmator
+
+`server/plugins/items/Ectoplasmator.plugin.js`, from the
+[Ectoplasmator](https://oldschool.runescape.wiki/w/Ectoplasmator) Wiki page (no recording has it
+in use; the rsprox.net index only lists it in a bank):
+
+- Carried in the inventory, killing a monster with the dumped `spectral` attribute gives Prayer XP
+  equal to 20% of its max health, rounded down (Aberrant spectre 90 HP: 18; Phantom Muspah 850 HP:
+  170). It needs no charges and has no options besides Drop.
+- The Corporeal Beast and the Blood, Blue and Eclipse Moons give nothing; the dump leaves the
+  attribute off them, as the Wiki's list does.
+- It stacks with the bonecrusher on kills that drop bones (Ankou), and restores no prayer points
+  in the Catacombs of Kourend.
+- Ours: the XP goes to the player the kill is credited to (`onNpcDeath`'s killer, who gets the
+  loot), when the NPC finishes dying. The Wiki gives no message, sound or timing.
+- Not built: "This item cannot be taken into Soul Wars." The lobby only refuses food, potions,
+  capes and followers, not non-combat items in general.
+
 ## Not built
 
 - The bonecrusher necklace (bonecrusher + dragonbone necklace + hydra tail).

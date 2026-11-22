@@ -168,6 +168,24 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
 - **Watchtower Teleport** (and its tablet) lands on the completed tower's top floor, a separate map area
   (Wiki, Watchtower (building)): the tablet page's "Watchtower centre" (2549,3112,2) in that copy,
   (2933,4712,2). Live landed one tile off, (2934,4713,2) (6337). The Ardougne hard diary task counts it there.
+- **The chiefs' ogres** (`Ogres.Watchtower.js`): the ogre2 (2096) spawns are Og's four, Grew's four, the
+  four on Toban's and Gorad's island and three in Gu'Tanoth. None hunts the player in the whole run; they
+  attack only on Og's and Grew's "Guards!" (1053, 1226). The plain ogres (2095) beside them do hunt (west of
+  Yanille 1266 and 1693, Gu'Tanoth 2487 and 2524). The Wiki's Ogre infobox covers 136, 2095 and 2096 with
+  "Aggressive: Yes (depends on location)", so the monster dump marks all three aggressive; an Area over the
+  camps and Gu'Tanoth stops 2096 hunting there.
+- **The Gu'Tanoth shortcut** (crumbling wall 40355 at (2546,3031), rocks 40356 at (2548,3031); Agility 71):
+  before the quest the guard on that side says "Hey, you can't go climbing all over the city! Use the
+  path!" (City guard 4373 at the wall, 2715; Ogre guard 4369 at the rocks, 3282; chathead seq 615), and on
+  its continue "You will need to complete the Watchtower quest before you can use this shortcut." (2718,
+  3283). After it (6209-6217), from the east: busy a tick after the op, then the walk west to (2546,3031)
+  over three ticks with climbing_loop (2454) x4 and the movement animations swapped and back, then an exact
+  move onto (2545,3031) (cycles 30-100, west) with human_walk_crumbledwall (840, delay 30) and climb_wall
+  (2453, delay 40); free three ticks later, no message or XP.
+- **The Yanille climbing rocks** (23543, (2561,3108)): live moves the player three tiles north to
+  (2561,3111) on the tick after the op as a walk-speed move with no animation, with "You climb over the
+  wall.", sound 2453 and 25 XP (53; rsprox captures 347, 358 agree). The player walking through the wall is
+  live's own look; no animation is added.
 
 ## Recorded differences
 
@@ -195,11 +213,17 @@ Timing choices:
   (live: two ticks later, t6095), so a logout between cannot save one half without the other.
 - The cws_warning_12 screen opens a tick after the guard's line closes (live: the same tick, 3633), so the
   chat's close does not take it with it.
+- The Gu'Tanoth shortcut's busy varbit goes on with the op (live: a tick later, 6210); the steps and the
+  finish are on live's ticks.
 - Live let the first nightshade (3451) and one Yes on the warning (3462) go by while the guards were
   attacking the player; here the warning always follows and Yes always runs past.
 
 ## Not covered
 
+- The Gu'Tanoth shortcut eastward (from the wall's side) is the recorded westward crossing reversed, and
+  the climbing walk's movement animations are ours (human_climbing, as the agility `crawlUp` builder):
+  the capture's appearance updates carry no ids. Which guard speaks follows the loc clicked; both
+  recordings clicked the loc on their own side.
 - The shaman melting locs (qip_watchtower_ogre_shaman_melting_0n, t5714-5717, t5847-5850) and the east
   gate's mirrored leaves when opened from the other leaf (t3270-3274).
 - The Wiki's "Looking at the broken bridge" line on Toban's island (no loc named for it).

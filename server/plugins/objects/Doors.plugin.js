@@ -1466,6 +1466,15 @@ function buildDoorCatalog() {
   for (const [left, right, leftOpen, rightOpen] of ARCEUUS_DOUBLE_DOORS) {
     addCatalogDoubleDoor(left, right, leftOpen, rightOpen);
   }
+  // The map also mixes colours in one doorway (blue left 28459 beside green right 28461 at
+  // 1678,3784-3785, opened as a pair in rsprox 1702 tick 767; turquoise left beside red right at
+  // 1678,3802-3803), so any Arceuus left leaf partners any right leaf in the same state.
+  const arceuusFamily = ARCEUUS_DOUBLE_DOORS.flat();
+  const arceuusSide = (index) => ARCEUUS_DOUBLE_DOORS.map((set) => set[index]);
+  for (const [leaves, partners] of [[0, 1], [1, 0], [2, 3], [3, 2]].map(([a, b]) => [arceuusSide(a), arceuusSide(b)])) {
+    for (const id of leaves) SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID.set(id, partners);
+  }
+  for (const id of arceuusFamily) DOUBLE_DOOR_FAMILY_IDS_BY_ID.set(id, arceuusFamily);
   // Mirrored leaves that each have their own "Close" loc (w_ardougnedoubledoorl 2546 -> 2547,
   // w_ardougnedoubledoorr 2548 -> 2549) are one double door too: paired as two single doors,
   // both leaves turned the same way. Live opens them as a pair (rsprox 1694 tick 8364; also

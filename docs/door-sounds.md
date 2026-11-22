@@ -37,7 +37,9 @@ plain door pair (62/60). The shared door plugin picks them from either closed le
 | Goblin outpost `goblin_outpost_poordoor_double_inner` / `_doubler_inner` (12446 / 12448) | Private recording local 1001339 click 301, swap and synth 302 at (2957-2958, 3509, 0); recording 3243 | local 1001339 click 308, swap and synth 309 | Private synth to the player using the door |
 
 The Arceuus leaves of one colour are four loc IDs apart, so the consecutive-ID pairing
-cannot find them. The plugin lists the four colour pairs. Both leaves turn on their own tiles
+cannot find them. The plugin lists the four colour pairs, and any left leaf partners any right
+leaf: the map mixes colours in two doorways (blue left beside green right at (1678, 3784-3785, 0),
+opened as one pair in recording 1702 tick 767; turquoise left beside red right at (1678, 3802-3803, 0)). Both leaves turn on their own tiles
 into their `_open` locs: the right leaf turns one step clockwise and the left leaf one step
 anticlockwise, as recorded. The red set has no recording. It shares model 30746 and the ID layout of
 the other three, so the plugin treats it the same way.

@@ -120,6 +120,26 @@ test("Arceuus double doors play nicedoor open/close as an area sound on the clic
     assert.deepEqual(sent, [AREA(81, 1642, 3806)]);
   });
 
+  // rsprox 1702 tick 767: a mixed doorway, blue left 28459 beside green right 28461. Open on the
+  // green leaf swings both: right_green_open rotation 1 on 3785, left_blue_open rotation 3 on 3784.
+  await t.test("mixed blue/green", (t) => {
+    RegionManager.loadMapFiles(1678, 3785);
+    const player = addPlayer(t, "arceuusmix", new Location(1677, 3785, 0));
+    const sent = recordSounds(t);
+    t.after(() => cleanUp([[1678, 3784], [1678, 3785]]));
+    operate(player, "archeuus_door_double_right_green", 1678, 3785);
+    assert.deepEqual(leaves([[1678, 3784], [1678, 3785]]), [
+      ["archeuus_door_double_left_blue_open", 1678, 3784, 3],
+      ["archeuus_door_double_right_green_open", 1678, 3785, 1],
+    ]);
+    operate(player, "archeuus_door_double_left_blue_open", 1678, 3784);
+    assert.deepEqual(leaves([[1678, 3784], [1678, 3785]]), [
+      ["archeuus_door_double_left_blue", 1678, 3784, 0],
+      ["archeuus_door_double_right_green", 1678, 3785, 0],
+    ]);
+    assert.deepEqual(sent, [AREA(81, 1678, 3785), AREA(80, 1678, 3784)]);
+  });
+
   // rsprox 2297 ticks 448-457: the Library's turquoise doors, Close plays sound_area 80 range 1 on the clicked leaf.
   await t.test("turquoise", (t) => {
     RegionManager.loadMapFiles(1633, 3817);

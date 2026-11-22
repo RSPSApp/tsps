@@ -461,11 +461,37 @@ test("the crate: too little room; three logs and their box; nothing more once th
   assert.equal(chat(f).text, "The crate contains that water-repellent waxwood Old Man Yarlo described. You take some.");
   assert.equal(inv.getAmount(objId("daddyshome_waxwood_logs")), 3);
   stopTalking(f);
-  quest().setStage(f.player, 6);
-  const from = f.tick;
+  let from = f.tick;
+  await objectOption(f, "crate");
+  until(f, () => since(f, from, "message").length > 0);
+  assert.equal(since(f, from, "message")[0].args[0], "You won't need any more waxwood for Old Man Yarlo's furniture.", "three logs carried");
+  // Status 6 with the planks destroyed and the bed not built: the crate gives logs again (the review found the softlock).
+  inv.resetItems();
+  seed(f, 6, [3, 3, 3, 3, 3, 2, 3]);
+  await objectOption(f, "crate");
+  until(f, () => chat(f).kind === "ItemStatementDialogue");
+  assert.equal(inv.getAmount(objId("daddyshome_waxwood_logs")), 3);
+  stopTalking(f);
+  // Once the bed is built: recording 3218's line.
+  seed(f, 10, [3, 3, 3, 3, 3, 3, 3]);
+  inv.resetItems();
+  from = f.tick;
   await objectOption(f, "crate");
   until(f, () => since(f, from, "message").length > 0);
   assert.equal(since(f, from, "message")[0].args[0], "You won't need any more waxwood for Old Man Yarlo's furniture.");
+});
+
+test("the sawmill offers waxwood again at status 6 when the planks were lost before the bed", async (t) => {
+  const f = actor(t, [SAWMILL[0], SAWMILL[1] - 1, 0]);
+  seed(f, 6, [3, 3, 3, 3, 3, 2, 3]);
+  f.player.getInventory().add(new core.Item(objId("daddyshome_waxwood_logs"), 3), false);
+  const operator = spawn(f, core.NpcIdentifiers.SAWMILL_OPERATOR, SAWMILL);
+  await talkTo(f, operator);
+  await read(f);
+  await pick(f, "I need some waxwood planks for Old Man Yarlo.");
+  await read(f);
+  assert.equal(f.player.getInventory().getAmount(objId("daddyshome_waxwood_plank")), 3);
+  assert.equal(quest().getStage(f.player), 6);
 });
 
 test("the Varrock sawmill: the waxwood line third in its own menu at status 5, planks and status 6, gone after", async (t) => {

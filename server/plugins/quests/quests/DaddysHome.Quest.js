@@ -121,6 +121,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     { key: "carpet", removalDescription: "The rotten carpet", cloth: 3, xp: 45, menu: ["Carpet", "placeholder_beta_elder_maul"] },
   ];
   const BED = 5;
+  const MAX_STACK = 2147483647;
 
   // Base loc id -> piece index. The carpet is twelve placements sharing one transform.
   const PIECE_BY_LOC = new Map([
@@ -552,10 +553,17 @@ module.exports = function registerDaddysHomeQuest(api) {
   // Waxwood crate and the sawmill
   // ==========================================================================
 
+  /** Waxwood is still wanted while the bed isn't built (status 5 to 9); lost planks can be got again. */
+  function needsWaxwood(player) {
+    const current = stage(player);
+    return current >= STAGE_BUILD && current < STAGE_REWARD && stateOf(player)[BED] !== STATE_BUILT;
+  }
+
   /**
    * Capture tick 1890: three waxwood logs and the item box. Rev 227 (1723 tick 11752): too little room, the two-item box.
    * Recording 3218 (status 14): "You won't need any more waxwood for Old Man Yarlo's furniture." Ours: that line also
-   * once the planks are made or three logs or planks are carried, and the line before the briefing.
+   * while three logs or planks are carried, and the line before the briefing. Until the bed is built the crate gives
+   * logs again (ours: no recording loses them), so destroyed logs or planks can't stop the quest.
    */
   function handleCrateSearch(event) {
     if (event.objectId !== CRATE_OBJECT_ID || !inYarlosHouse(event.location)) return false;
@@ -564,8 +572,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     const current = stage(player);
     if (current < STAGE_BUILD) return player.sendMessage("I've no reason to search through their crates."), true;
     const stock = inventory(player);
-    if (current >= STAGE_PLANKS || stateOf(player)[BED] === STATE_BUILT
-      || stock.getAmount(WAXWOOD_LOG) >= 3 || stock.getAmount(WAXWOOD_PLANK) >= 3) {
+    if (!needsWaxwood(player) || stock.getAmount(WAXWOOD_LOG) >= 3 || stock.getAmount(WAXWOOD_PLANK) >= 3) {
       player.sendMessage("You won't need any more waxwood for Old Man Yarlo's furniture.");
       return true;
     }
@@ -582,11 +589,17 @@ module.exports = function registerDaddysHomeQuest(api) {
   const isVarrockSawmill = (npcId) => npcId === SAWMILL_OPERATOR_NPC_ID;
 
   /**
-   * Capture ticks 1971-2012: at status 5 the Varrock operator's own menu has the waxwood line third; from status 6 it
-   * is gone. The rest of the menu stays the operator's (plugins/npcs/Sawmill.plugin.js and its transcript).
+   * Capture ticks 1971-2012: at status 5 the Varrock operator's own menu has the waxwood line third; at status 6, with
+   * the planks carried, it is gone. Ours: it comes back for a player at 6 who has lost the planks (no recording does).
+   * The rest of the menu stays the operator's (plugins/npcs/Sawmill.plugin.js and its transcript).
    */
+  function offersWaxwood(player) {
+    if (!needsWaxwood(player)) return false;
+    return stage(player) === STAGE_BUILD || inventory(player).getAmount(WAXWOOD_PLANK) < 3;
+  }
+
   function sawmillMenu(notice) {
-    if (!isVarrockSawmill(notice.npcId) || !Array.isArray(notice.options) || stage(notice.player) !== STAGE_BUILD) return;
+    if (!isVarrockSawmill(notice.npcId) || !Array.isArray(notice.options) || !offersWaxwood(notice.player)) return;
     if (!notice.options.some((option) => option?.text === "Yes, please make me some planks.")) return;
     if (notice.options.some((option) => option?.text === WAXWOOD_OPTION)) return;
     const options = notice.options.slice();
@@ -598,7 +611,7 @@ module.exports = function registerDaddysHomeQuest(api) {
     if (!isVarrockSawmill(choice.npcId) || choice.option !== WAXWOOD_OPTION) return;
     choice.end = true;
     const { player, npcId } = choice;
-    if (stage(player) !== STAGE_BUILD) return close(player);
+    if (!offersWaxwood(player)) return close(player);
     if (inventory(player).getAmount(WAXWOOD_LOG) < 3) {
       // Ours: not captured; the operator's own line for missing logs.
       return talk(player, npcId, [{ player: WAXWOOD_OPTION }, "You'll need to bring me some more logs."]);
@@ -608,10 +621,10 @@ module.exports = function registerDaddysHomeQuest(api) {
       "That old geezer? Oh, alright. I won't charge for this, since it's for him.",
     ], () => {
       close(player);
-      if (stage(player) !== STAGE_BUILD || inventory(player).getAmount(WAXWOOD_LOG) < 3) return;
+      if (!offersWaxwood(player) || inventory(player).getAmount(WAXWOOD_LOG) < 3) return;
       inventory(player).deleteNumber(WAXWOOD_LOG, 3);
       inventory(player).adds(WAXWOOD_PLANK, 3);
-      quest.setStage(player, STAGE_PLANKS);
+      if (stage(player) < STAGE_PLANKS) quest.setStage(player, STAGE_PLANKS);
     });
   }
 
@@ -1037,11 +1050,14 @@ module.exports = function registerDaddysHomeQuest(api) {
       player.sendMessage("You have already opened Marlo's crate.");
       return true;
     }
-    // Opening the crate frees the slot it occupies. Ours: the refusal is not captured.
+    // Opening the crate frees the slot it occupies. Ours: the refusals are not captured.
     const needed = Math.max(0, crateSlotsNeeded(player) - 1);
     if (inventory(player).getFreeSlots() < needed) {
       return player.sendMessage(`You need ${needed} free inventory slots to open Marlo's crate.`), true;
     }
+    const full = CRATE_CONTENTS.some(([itemId, amount]) => ItemDefinition.forId(itemId).isStackable()
+      && inventory(player).getAmount(itemId) > MAX_STACK - amount);
+    if (full) return player.sendMessage("You don't have enough inventory space."), true;
     if (!inventory(player).deleteAtSlot(slot, 1)) return true;
     if (stage(player) >= STAGE_COMPLETE) quest.setStage(player, STAGE_CRATE_OPENED);
     else player.setAttribute(CRATE_OPENED_ATTRIBUTE, 1);

@@ -137,7 +137,7 @@ module.exports = function createLecture(api, Scenes) {
       case "varp": {
         const id = varpId(args[0]);
         if (id == null) return;
-        if (!run.varps.has(id)) run.varps.set(id, 0);
+        if (!run.varps.has(id)) run.varps.set(id, sender.getVarp?.(id) ?? 0);
         return sender.sendConfig(id, args[1]);
       }
       case "cam-move": case "cam-look": {
@@ -187,6 +187,8 @@ module.exports = function createLecture(api, Scenes) {
       case "step": return npc.getMovementQueue().addFirstStep(tile(run, args[1]));
       case "tele": return npc.moveTo(tile(run, args[1]));
       case "face": return npc.setPositionToFace(tile(run, [...args[1], npc.getLocation().getZ()]));
+      // The capture's "facing type=reset" as a builder sets off on a walk.
+      case "face-reset": return npc.setPositionToFace(null);
       case "transform": {
         const id = CacheDefinitions.getNpcId(args[1]);
         return id == null ? undefined : npc.setNpcTransformationId(id);

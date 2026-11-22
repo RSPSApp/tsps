@@ -418,9 +418,12 @@ test("route 2: the juvinates wander; none starts on the player; one near Ivan go
   const [first, second, third] = juvinates(f);
   placeNear(third, ivan, 5, 0);
   placeNear(first, ivan, 0, 3);
+  const ivanAt = ivan.getLocation().toString();
   ticks(f, 3, { npcs: true });
   assert.deepEqual(onIvan(ivan).map((juvinate) => juvinate.getIndex()), [first.getIndex()], "the one 3 tiles off goes for him (t3890), not the one 5 off");
-  assert.equal(target(ivan)?.getIndex?.(), first.getIndex(), "Ivan fights back (t3893)");
+  assert.equal(ivan.getLocation().toString(), ivanAt, "Ivan holds his tile until hit (t3890-3892)");
+  for (let i = 0; i < 12 && target(ivan) == null; i++) tick(f, { npcs: true });
+  assert.equal(target(ivan)?.getIndex?.(), first.getIndex(), "and answers once hit (t3893)");
   assert.equal(juvinates(f).some((juvinate) => target(juvinate) === f.player), false, "none on the player");
   placeNear(second, ivan, -1, 0);
   ticks(f, 2, { npcs: true });
@@ -451,7 +454,9 @@ test("Ivan flees mid-fight: the juvinates break off, even with a retaliation que
   // closes the player's interfaces), so Ivan left without a word.
   for (const juvinate of juvinates(f)) assert.equal(juvinate.getCombat().getTarget() == null, true, "only wandering");
   assert.equal(f.player.getCombat().getTarget() == null, true, "Ours: the player's fight stops too (live: their foe had just died, t3624)");
+  assert.equal(f.player.hasFlag("combat:no-retaliate"), true, "a retaliation queued by a landed hit is skipped");
   ticks(f, 4, { npcs: true });
+  assert.equal(f.player.hasFlag("combat:no-retaliate"), false, "only for that window");
   assert.ok(shown(f)?.text.startsWith("I'm getting badly beaten up here"), "his line is still up");
 });
 
@@ -664,6 +669,17 @@ test("a teleport between the trapdoor's animation and the climb cancels the clim
   tick(f);
   assert.equal(stage(f), 350, "no 360");
   assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3222, 3218]);
+});
+
+test("dying between the trapdoor's animation and the climb cancels the climb", async (t) => {
+  const f = actor(t, { stage: 350, vars: { [VB.TRAPDOOR]: 1 } });
+  f.player.setLocation(new core.Location(3440, 9899, 0));
+  f.player.getPacketSender().sendVarbit(VB.TRAPDOOR, 1);
+  assert.equal(objectClick(f, 12762, [3441, 9899, 0], "Climb-down"), true);
+  f.player.setHitpoints(0);
+  tick(f);
+  assert.equal(stage(f), 350, "no 360");
+  assert.notDeepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3360, 9904]);
 });
 
 test("wrong stages: Ivan takes nothing before 290; the keyhole refuses the key before 350; no map before 310", async (t) => {

@@ -157,6 +157,7 @@ module.exports = function attachEscort(context) {
   // A wandering juvinate went for Ivan once 3 tiles from him (second attempt: turned to him at
   // t3890 from (2857,4556), Ivan at (2860,4555), struck as it reached him, t3892-3893).
   const IVAN_ENGAGE_RANGE = 3;
+  const NO_RETALIATE = "combat:no-retaliate";
   const SOUTH = 6; // Direction id
 
   const LIBRARY = Object.freeze({ tile: [3360, 9904, 0], climbAnimation: 827 }); // t4286-4287
@@ -421,8 +422,8 @@ module.exports = function attachEscort(context) {
 
   function engage(ambush, juvinate, target) {
     if (!juvinate?.isRegistered?.() || !target?.isRegistered?.()) return;
+    // Ivan holds his tile and answers once hit (t3892 strike, t3893 he turns to it).
     juvinate.getCombat().attack(target);
-    if (target === ambush.ivan) ambush.ivan.getCombat().attack(juvinate);
   }
 
   /** Ivan eats when he is hurt (Wiki); with no food left he gives up (Wiki: "teleports out"). */
@@ -457,6 +458,12 @@ module.exports = function attachEscort(context) {
     // player would close it with its next hit, as every hit does, so their fight stops here too.
     const playerCombat = player.getCombat?.();
     if (ambush.juvinates.includes(playerCombat?.getTarget?.())) playerCombat.reset?.();
+    // A hit that landed on the player this tick has queued their auto-retaliation for the next one;
+    // CombatFactory's task skips a player flagged combat:no-retaliate.
+    if (!player.hasFlag?.(NO_RETALIATE)) {
+      player.setFlag?.(NO_RETALIATE);
+      common.later(player, 2, () => player.removeFlag?.(NO_RETALIATE));
+    }
     for (const juvinate of ambush.juvinates) {
       juvinate.getCombat?.().reset?.();
       api.core.TaskManager.cancelTasks(juvinate); // a retaliation already queued by a landed hit
@@ -627,8 +634,8 @@ module.exports = function attachEscort(context) {
     common.anim(player, LIBRARY.climbAnimation);
     const from = player.getLocation().clone();
     common.later(player, 1, () => {
-      // Moved meanwhile (a teleport between the animation and the climb): no climb.
-      if (!player.getLocation().equals(from)) return;
+      // Moved meanwhile (a teleport between the animation and the climb) or died: no climb.
+      if (!player.getLocation().equals(from) || player.getHitpoints() <= 0 || player.isDyingReturn?.()) return;
       if (stage(player) >= STAGE.LIBRARY_KEY) state.advance(player, STAGE.LIBRARY_OPEN);
       player.moveTo(new Location(...LIBRARY.tile));
     });

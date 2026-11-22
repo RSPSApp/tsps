@@ -78,12 +78,22 @@ function setOpen(chest, object, open) {
   ObjectManager.register(new GameObject(id, object.getLocation().clone(), object.getType(), object.getFace(), object.getPrivateArea?.() ?? null), true);
 }
 
-/** Free slots the items need: stackables already carried take none, and `freed` slots (the key's) count as free. */
-function slotsFor(player, items, freed = 0) {
+/**
+ * Whether the whole loot fits: a stack already carried must take its full amount (no stack past its
+ * cap), every other item needs a free slot, and `freed` slots (the key's) count as free.
+ */
+function fits(player, items, freed = 0) {
   const inventory = player.getInventory();
-  const { ItemDefinition } = common.core();
-  const needed = items.filter(([id]) => !(ItemDefinition.forId(id).isStackable() && inventory.contains(id))).length;
-  return Math.max(0, needed - freed);
+  const { Item, ItemDefinition } = common.core();
+  let needed = 0;
+  for (const [id, amount] of items) {
+    if (ItemDefinition.forId(id).isStackable() && inventory.contains(id)) {
+      if (inventory.getAddableAmount(new Item(id, amount)) < amount) return false;
+    } else {
+      needed++;
+    }
+  }
+  return inventory.getFreeSlots() + freed >= needed;
 }
 
 function give(player, items) {
@@ -113,7 +123,7 @@ function open(event) {
   const items = used
     ? missingPieces(player, chest).map((id) => [id, 1])
     : [...chest.outfitIds.map((id) => [id, 1]), [chest.coinsId, chest.coins], [chest.gemsId, chest.gems[1]]];
-  if (items.length && player.getInventory().getFreeSlots() < slotsFor(player, items, used ? 0 : 1)) {
+  if (items.length && !fits(player, items, used ? 0 : 1)) {
     player.sendMessage(NO_ROOM);
     return true;
   }
@@ -123,6 +133,13 @@ function open(event) {
   for (const [sound, delay] of SOUND_UNLOCK) player.getPacketSender().sendSoundEffect(sound, 1, delay);
   if (!used) player.getInventory().deleteNumber(chest.keyId, 1);
   later(1, () => {
+    // The bag may have changed since the check: nothing is given and the key goes back.
+    if (items.length && !fits(player, items)) {
+      if (!used) player.getInventory().addItem(new (common.core().Item)(chest.keyId, 1));
+      player.sendMessage(NO_ROOM);
+      OPENING.delete(player);
+      return;
+    }
     player.getPacketSender().sendSoundEffect(SOUND_LOOT[0], 1, SOUND_LOOT[1]);
     setOpen(chest, object, true);
     give(player, items);

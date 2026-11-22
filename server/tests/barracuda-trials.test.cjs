@@ -1008,6 +1008,34 @@ test("trial key chests: the key's own slot and stacks already carried count as r
   assert.equal(stacked.inventory.getAmount(obj("coins")), 10005);
 });
 
+test("trial key chests: a stack that can't take the whole reward keeps the key; a bag filled before the loot gets it back (review)", () => {
+  const MAX = 0x7fffffff;
+  for (const stack of ["coins", "cert_uncut_sapphire"]) {
+    const player = captain();
+    player.inventory.add(new Item(obj("stormy_key"), 1));
+    player.inventory.add(new Item(obj(stack), MAX - 1));
+    openChest(player, "locked_chest_pandemonium");
+    tick(3);
+    assert.equal(player.inventory.contains(obj("stormy_key")), true, `${stack}: the key is kept`);
+    assert.equal(player.inventory.getAmount(obj(stack)), MAX - 1, `${stack}: nothing credited`);
+    assert.equal(common.keyUsed(player, TEMPOR()), false);
+    assert.deepEqual(player.messages(), ["You don't have enough inventory space."]);
+  }
+  const player = captain();
+  player.inventory.add(new Item(obj("stormy_key"), 1));
+  openChest(player, "locked_chest_pandemonium");
+  for (let i = 0; i < 26; i++) player.inventory.add(new Item(obj("bronze_dagger"), 1));
+  tick(3);
+  assert.equal(player.inventory.contains(obj("stormy_key")), true, "the key comes back");
+  assert.equal(player.inventory.getAmount(TEMPOR_OUTFIT[0]), 0);
+  assert.equal(common.keyUsed(player, TEMPOR()), false);
+  assert.deepEqual(player.messages(), ["You don't have enough inventory space."]);
+  for (let i = 0; i < 26; i++) player.inventory.deleteNumber(obj("bronze_dagger"), 1);
+  openChest(player, "locked_chest_pandemonium");
+  tick(3);
+  assert.equal(common.keyUsed(player, TEMPOR()), true, "and opens the chest once there's room");
+});
+
 test("Ralph hands back a lost Stormy key only before it opened its chest", () => {
   const player = captain();
   const ask = (text) => master.answerCondition({ player, npcId: 15096, text });

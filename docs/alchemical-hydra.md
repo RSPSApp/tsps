@@ -102,6 +102,9 @@ the rsprox index. Ticks below are counts of events across them.
   a later bind extends one still running, never shortens it. Before issue 6432 it was a movement
   block, released by a wall-clock check that the tick task nearly always failed: the player stayed
   stuck (no walking, teleports or door) until the next bind released it.
+- Ours: being the engine's freeze, the bind shows the "Bound." buff (script 5931) with its
+  countdown. Recordings 1000143, 1000471 and 1000480 run no script 5931 during the Hydra's binds,
+  so live may not show it.
 
 ## Fire (flame)
 
@@ -147,7 +150,8 @@ the rsprox index. Ticks below are counts of events across them.
   and "The order in which players receive the items is: Hydra's eye, Hydra's fang and finally
   Hydra's heart." The export lists each piece as its own 1/181 pre-roll; NpcDrops makes them one
   1/181 roll (`correctAlchemicalHydra`) and `Loot.AlchemicalHydra.js` hands over the next piece in
-  that order, starting again from the eye after the heart.
+  that order. Ours: the order starts again from the eye after the heart (the Wiki gives only the
+  order).
 - The count of pieces received is the persisted `alchemical-hydra:ring-pieces`. Ours: an account
   that has no count yet starts from the pieces its collection log has.
 

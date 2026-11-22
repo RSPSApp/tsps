@@ -11,19 +11,20 @@
  * alchemist's signet fits perfectly into an indent on the chest, causing it to open..." and "You take some
  * loot from inside.." (sic, the Wiki's two full stops).
  *
- * rsprox.net captures (recording 4185, rev 238, Leagues VI; 8 opens), ticks from the first response:
+ * rsprox.net captures (recording 4185, rev 238, Leagues VI; 8 clicks: 3 opens, 5 refusals), ticks from the first response:
  * - 0: human_openchest and sound 52 (both delay 10), the signet line (game message), varbit busy 1.
  * - 1: the loot line (game message), the chest open, the signet gone and the four stacks.
  * - 2: sound 51 (delay 15).
  * - 3: the chest closed, busy 0.
  * - Without a signet: sound 2402 and a message box, "The chest appears tightly locked, but it has a ring shaped
  *   indent on the front of it...". With signets but fewer than four free slots: a message box, "You need at
- *   least four free inventory spaces to take anything from this chest." Both set busy 1.
+ *   least four free inventory spaces to take anything from this chest." Both set busy 1 with the box, and
+ *   busy 0 when it is dismissed (ticks 34/36, 101/105, 1081/1084, 1122/1124).
  * - Recorded difference: the captures' loot line ends with one full stop ("You take some loot from inside.");
  *   we send the Wiki's.
  *
- * Ours: no capture opens it without a signet and with a full pack, so the signet is checked first. The
- * refusals don't set busy (no capture shows when it is cleared). A signet gone by the loot tick (dropped
+ * Ours: no capture opens it without a signet and with a full pack, so the signet is checked first. A
+ * box closed by any other route (walking away) also clears busy. A signet gone by the loot tick (dropped
  * mid-open) ends the open there, with nothing given; so does a loot stack that can't fit (a stack at its
  * limit), with the four-spaces box and the signet kept.
  */
@@ -187,10 +188,22 @@ function steps(player, object, run) {
   ];
 }
 
-/** A refusal's message box (Ours: without the captures' busy 1, which nothing here would clear). */
+/** Players with a refusal box up: its close, by any route, clears busy. */
+const refused = new WeakSet();
+
+/** A refusal's message box, with busy 1 until it is dismissed (rec 4185). */
 function refuse(player, text, sound) {
-  if (sound) player.getPacketSender().sendSoundEffect(sound, 1, 0);
+  const sender = player.getPacketSender();
+  if (sound) sender.sendSoundEffect(sound, 1, 0);
   Shared.statement(player, text);
+  sender.sendVarbit(resolveIds().busy, 1);
+  refused.add(player);
+}
+
+function closed({ player }) {
+  if (!player || !refused.has(player)) return;
+  refused.delete(player);
+  player.getPacketSender().sendVarbit(resolveIds().busy, 0);
 }
 
 function open(event) {
@@ -230,6 +243,7 @@ module.exports = function attachSignetChest(pluginApi) {
   ids = null;
   runnerReady = false;
   pluginApi.onObjectInteraction("Chest", { Open: open });
+  pluginApi.onCustomEvent("interface:closed", closed);
 };
 module.exports._test = {
   rollLoot, opened, MESSAGE, SECONDARIES, USEFUL_HERBS, COMBAT_HERBS,

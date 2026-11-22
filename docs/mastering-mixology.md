@@ -131,7 +131,7 @@ up one alchemist's signet and gives four stacks: a noted aldarium, one roll of t
 (out of 25), one noted grimy herb of the useful herb table and two noted grimy herbs of the combat herb table
 (each out of 16: the Wiki's 1/3.2, 1/4, 1/4, 1/5.3).
 
-rsprox captures (recording 4185, rev 238, Leagues VI; 8 opens), ticks from the first response:
+rsprox captures (recording 4185, rev 238, Leagues VI; 8 clicks: 3 opens, 5 refusals), ticks from the first response:
 
 - 0: `human_openchest` and sound 52 (delay 10), "The alchemist's signet fits perfectly into an indent on the
   chest, causing it to open...", varbit `busy` 1.
@@ -139,8 +139,10 @@ rsprox captures (recording 4185, rev 238, Leagues VI; 8 opens), ticks from the f
 - 2: sound 51 (delay 15). 3: the chest closed, `busy` 0.
 - No signet: sound 2402 and a message box, "The chest appears tightly locked, but it has a ring shaped indent
   on the front of it...". Signets but under four free slots: a message box, "You need at least four free
-  inventory spaces to take anything from this chest."
+  inventory spaces to take anything from this chest." Both set `busy` 1 with the box and `busy` 0 when it is
+  dismissed (ticks 34/36, 101/105, 1081/1084, 1122/1124).
 - Recorded difference: the loot line is captured as "You take some loot from inside." (one full stop); we send
   the Wiki's "You take some loot from inside..".
 
-Ours: the signet is checked before the free slots (no capture has neither); the refusal boxes don't set `busy`.
+Ours: the signet is checked before the free slots (no capture has neither); a refusal box closed by walking
+away also clears `busy`.

@@ -110,6 +110,10 @@ function rolls(t, values) {
 const at = (f, text) => f.messages.find(([, message]) => message === text)?.[0];
 const noted = (id) => core.ItemDefinition.forId(id).getNoteId();
 const boxed = (f, text) => f.boxes.some(([, box]) => box.includes(text));
+async function dismiss(f) {
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: (229 << 16) | 4, childIndex: -1 }]);
+  f.connection.processTurnPackets();
+}
 
 test("an open: signet line at 0, loot line, signet used and four stacks at 1, sound 51 at 2, closed at 3 (captures)", async (t) => {
   const f = actor(t);
@@ -173,6 +177,9 @@ test("without a signet: sound 2402 and the locked box; with three free slots: th
   assert.ok(f.sounds.some(([, id]) => id === 2402));
   assert.equal(at(f, MESSAGE.UNLOCK), undefined);
   assert.deepEqual(shownIds(), [chestId]);
+  assert.deepEqual(f.varbits.map(([, v]) => v), [1], "busy 1 with the box (rec 4185 tick 1122)");
+  await dismiss(f);
+  assert.deepEqual(f.varbits.map(([, v]) => v), [1, 0], "busy 0 when it is dismissed (rec 4185 tick 1124)");
 
   const g = actor(t);
   for (let slot = 0; slot < 25; slot++) g.inv.setItem(slot, new core.Item(I.TINDERBOX, 1));
@@ -184,6 +191,9 @@ test("without a signet: sound 2402 and the locked box; with three free slots: th
   assert.equal(g.inv.getAmount(I.ALCHEMISTS_SIGNET), 1);
   assert.equal(at(g, MESSAGE.UNLOCK), undefined);
   assert.deepEqual(shownIds(), [chestId]);
+  assert.deepEqual(g.varbits.map(([, v]) => v), [1], "busy 1 with the box (rec 4185 tick 34)");
+  await dismiss(g);
+  assert.deepEqual(g.varbits.map(([, v]) => v), [1, 0], "busy 0 when it is dismissed (rec 4185 tick 36)");
 });
 
 test("a second click mid-open does not use a second signet", async (t) => {
@@ -233,7 +243,9 @@ test("a loot stack that can't fit refuses with the four-spaces box and keeps the
   assert.equal(at(f, Chest().MESSAGE.LOOT), undefined);
   assert.ok(boxed(f, Chest().MESSAGE.FULL));
   assert.deepEqual(shownIds(), [chestId]);
-  assert.equal(f.varbits.at(-1)?.[1], 0, "busy cleared");
+  assert.equal(f.varbits.at(-1)?.[1], 1, "busy held while the box is up");
+  await dismiss(f);
+  assert.equal(f.varbits.at(-1)?.[1], 0, "busy cleared with the box");
 });
 
 test("a pack filled after the click (four free to one) refuses on the loot tick: signet kept, nothing lost (Ours)", async (t) => {
@@ -251,5 +263,19 @@ test("a pack filled after the click (four free to one) refuses on the loot tick:
   assert.equal(at(f, Chest().MESSAGE.LOOT), undefined);
   assert.ok(boxed(f, Chest().MESSAGE.FULL));
   assert.deepEqual(shownIds(), [chestId]);
-  assert.equal(f.varbits.at(-1)?.[1], 0, "busy cleared");
+  assert.equal(f.varbits.at(-1)?.[1], 1, "busy held while the box is up");
+  await dismiss(f);
+  assert.equal(f.varbits.at(-1)?.[1], 0, "busy cleared with the box");
+});
+
+test("a refusal box closed by walking away clears busy too (Ours)", async (t) => {
+  const f = actor(t);
+  await openChest(f);
+  ticks(f, 3);
+  assert.ok(boxed(f, Chest().MESSAGE.LOCKED));
+  assert.equal(f.varbits.at(-1)?.[1], 1);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  assert.equal(f.varbits.at(-1)?.[1], 0);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  assert.equal(f.varbits.filter(([, v]) => v === 0).length, 1, "a later close sends nothing");
 });

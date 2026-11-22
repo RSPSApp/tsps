@@ -6,7 +6,9 @@
 // (prisonbarsdoor_locked) and Neitiznot's houses (frisb_abode_door_locked) are an "Open" loc
 // whose id + 1 is a same-model "Close" loc, so the Doors plugin swung them open; Civitas illa
 // Fortis's locked door answered nothing. Live: rsprox 230/00323 ticks 4202-4900 (cells),
-// 227/local 1000321 tick 11928 (Neitiznot), 226/01695 tick 2556 (Civitas).
+// 227/local 1000321 tick 11928 (Neitiznot), 226/01695 tick 2556 (Civitas). The outhouse door
+// (hos_grape_odddoor) has no open leaf at all; live answers the man inside's "Occupied!" in his
+// chathead (rsprox 231/03040 tick 5736, 227/local 1000187 tick 4946).
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, test } = require("node:test");
@@ -21,11 +23,13 @@ const { ObjectManager } = require("../dist/game/entity/impl/object/ObjectManager
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Location } = require("../dist/game/model/Location");
 const { PluginManager } = require("../dist/plugins/PluginManager");
+const { TaskManager } = require("../dist/game/task/TaskManager");
 const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
 const Doors = require("../plugins/objects/Doors.plugin");
 const LockedDoors = require("../plugins/objects/LockedDoors.plugin");
 
 const MESSAGEBOX_TEXT = (229 << 16) | 3;
+const CHAT_LEFT = 231;
 const LOCKED_SOUND = 2402;
 
 const CASES = [
@@ -37,6 +41,12 @@ const CASES = [
     message: "The door is locked.", box: false, sound: null },
   { loc: "fortis_door_l_locked", at: [1500, 3223, 0], from: [1500, 3222, 0],
     message: "The door is locked.", box: true, sound: LOCKED_SOUND },
+  // Fossil Island's Museum Camp: the recorded stop tile, facing north (rsprox 3040 tick 5738).
+  { loc: "hos_grape_odddoor", at: [3722, 3816, 0], from: [3722, 3815, 0],
+    message: "Occupied!", npc: "hosidius_man_on_toilet", expression: 614, sound: LOCKED_SOUND, delay: 1 },
+  // Hosidius vinery, unrecorded: the same loc, with the man spawned inside at 1816,3537.
+  { loc: "hos_grape_odddoor", at: [1817, 3537, 0], from: [1818, 3537, 0],
+    message: "Occupied!", npc: "hosidius_man_on_toilet", expression: 614, sound: LOCKED_SOUND, delay: 1 },
 ];
 
 let core;
@@ -69,7 +79,13 @@ function player(at) {
   actor.messages = [];
   actor.sounds = [];
   actor.texts = [];
+  actor.heads = [];
+  actor.anims = [];
   const sender = actor.getPacketSender();
+  const sendNpcHead = sender.sendNpcHeadOnInterface.bind(sender);
+  sender.sendNpcHeadOnInterface = (npcId, uid) => { actor.heads.push({ npcId, uid }); return sendNpcHead(npcId, uid); };
+  const sendAnim = sender.sendInterfaceAnimation.bind(sender);
+  sender.sendInterfaceAnimation = (uid, anim) => { actor.anims.push({ uid, anim }); return sendAnim(uid, anim); };
   sender.sendMessage = (message) => { actor.messages.push(String(message)); return sender; };
   const sendSound = sender.sendSound.bind(sender);
   sender.sendSound = (id, volume, delay) => { actor.sounds.push(id); return sendSound(id, volume, delay); };
@@ -105,8 +121,22 @@ for (const c of CASES) {
     const before = idsAt(c.at);
 
     open(actor, id, c.at);
+    if (c.delay) {
+      // Live: the player turns to the door, and the man answers the tick after (rsprox 3040
+      // ticks 5738-5739, local 1000187 ticks 4947-4948).
+      assert.deepEqual([actor.texts.length, actor.sounds.length, actor.messages.length], [0, 0, 0],
+        "nothing answers on the tick the door is reached");
+      for (let tick = 0; tick < c.delay; tick++) TaskManager.process();
+    }
 
-    if (c.box) {
+    if (c.npc) {
+      const head = (CHAT_LEFT << 16) | 2;
+      assert.deepEqual(actor.heads, [{ npcId: core.CacheDefinitions.getNpcId(c.npc), uid: head }]);
+      assert.deepEqual(actor.anims, [{ uid: head, anim: c.expression }]);
+      assert.deepEqual(actor.texts.filter((t) => t.uid >> 16 === CHAT_LEFT && [4, 6].includes(t.uid & 0xffff))
+        .map((t) => t.text), ["Man", c.message]);
+      assert.deepEqual(actor.messages, []);
+    } else if (c.box) {
       assert.deepEqual(actor.texts.filter((t) => t.uid === MESSAGEBOX_TEXT).map((t) => t.text), [c.message]);
       assert.deepEqual(actor.messages, []);
     } else {
@@ -180,3 +210,24 @@ for (const r of ROUTES) {
     assert.deepEqual(result, { replied: r.tick, at: r.end, face: r.at.slice(0, 2) });
   });
 }
+
+test("a forced move off the tile before the outhouse's answer drops it", () => {
+  const id = core.CacheDefinitions.getLocId("hos_grape_odddoor");
+  const actor = player([3722, 3815, 0]);
+  open(actor, id, [3722, 3816, 0]);
+  actor.moveTo(new Location(3722, 3814, 0));
+  TaskManager.process();
+  TaskManager.process();
+  assert.deepEqual([actor.texts, actor.sounds, actor.heads], [[], [], []]);
+});
+
+test("clicking the outhouse twice in one tick answers once", () => {
+  const id = core.CacheDefinitions.getLocId("hos_grape_odddoor");
+  const actor = player([3722, 3815, 0]);
+  open(actor, id, [3722, 3816, 0]);
+  open(actor, id, [3722, 3816, 0]);
+  TaskManager.process();
+  TaskManager.process();
+  assert.deepEqual(actor.sounds, [LOCKED_SOUND]);
+  assert.equal(actor.heads.length, 1);
+});

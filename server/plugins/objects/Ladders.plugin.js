@@ -94,10 +94,11 @@ function climbAnimation(event, animation) {
 }
 
 /**
- * Moves the player a cycle after the op (after `animation`, when there is one). `onArrival`, when
- * given, runs right after the move; a refused or cancelled climb never calls it.
+ * Moves the player a cycle after the op (after `animation`, when there is one), with the loc's
+ * `message` on the same tick when it has one. `onArrival`, when given, runs right after the move;
+ * a refused or cancelled climb never calls it.
  */
-function climb({ player, destination, onArrival }, animation) {
+function climb({ player, destination, onArrival, message }, animation) {
   const movement = player.getMovementQueue();
   if (movement.isMovementBlocked()) return false;
   const start = player.getLocation().clone();
@@ -117,6 +118,7 @@ function climb({ player, destination, onArrival }, animation) {
           return;
         }
         player.moveTo(target);
+        if (message) player.sendMessage(message);
         onArrival?.();
       }
       this.stop();
@@ -126,6 +128,12 @@ function climb({ player, destination, onArrival }, animation) {
       super.stop();
     }
   })());
+}
+
+/** The climbed loc's own message (ClimbLinks `messages`), sent as the player lands. */
+function climbMessage(event) {
+  const id = event.object?.getId?.() ?? event.objectId;
+  return Number.isInteger(id) ? ClimbLinks.message(id) : null;
 }
 
 /**
@@ -160,22 +168,24 @@ function climbUp(event, toEnd = false) {
   // then the same object straight above.
   const mapped = event.destination ? null : mapDestination(event, 1, toEnd);
   const animation = climbAnimation(event, CLIMB_UP);
-  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival }, animation);
+  const message = climbMessage(event);
+  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival, message }, animation);
   const destination = resolveDestination(event, 1);
   if (!destination) return false;
   if (!event.destination && !hasObjectAbove(event.location, interactObjectName(event))) return false;
-  return climb({ player: event.player, destination, onArrival: event.onArrival }, animation);
+  return climb({ player: event.player, destination, onArrival: event.onArrival, message }, animation);
 }
 
 function climbDown(event, toEnd = false) {
   // Mirror of climbUp.
   const mapped = event.destination ? null : mapDestination(event, -1, toEnd);
   const animation = climbAnimation(event, CLIMB_DOWN);
-  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival }, animation);
+  const message = climbMessage(event);
+  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival, message }, animation);
   const destination = resolveDestination(event, -1);
   if (!destination) return false;
   if (!event.destination && !hasObjectBelow(event.location, interactObjectName(event))) return false;
-  return climb({ player: event.player, destination, onArrival: event.onArrival }, animation);
+  return climb({ player: event.player, destination, onArrival: event.onArrival, message }, animation);
 }
 
 /**

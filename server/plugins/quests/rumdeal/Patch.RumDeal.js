@@ -13,15 +13,13 @@
  * - Inspect: the patch state as a game message (805, 899, 1043, 1174).
  *
  * The farming ticks run on a five-minute grid from the epoch; live staggers them by a per-account
- * offset (Ours: no offset). The client only resolves the multiloc when it builds the scene, so each
- * stage change also swaps the child loc for this player.
+ * offset (Ours: no offset). Live sends only the varbit, no loc packet (the capture never adds or
+ * removes a loc on the patch's tile): the client redraws the 2x2 multiloc from it. Its children are
+ * 1x1, so adding one by hand drew it on the patch's south-west tile, off the dirt (issue #6499).
  */
 const { STAGES, VARBITS, ATTRIBUTES } = require("./State.RumDeal");
 
 const CHILDREN = [10097, 10098, 10099, 10100, 10101, 10102];
-const TILE = Object.freeze({ x: 2162, y: 5069, z: 0 });
-const SHAPE = 10;
-const ROTATION = 1;
 const WEEDED = 3;
 const GROWING = 4;
 const GROWN = 5;
@@ -43,7 +41,7 @@ const TICK_MS = 600;
 const INSPECT = "This is a blindweed patch. The soil has not been treated.";
 
 module.exports = function rumDealPatch(api, ctx) {
-  const { Animation, ChatType, CountdownTask, GameObject, ItemIdentifiers, Location, Skill, Task, TaskManager } = api.core;
+  const { Animation, ChatType, CountdownTask, ItemIdentifiers, Skill, Task, TaskManager } = api.core;
   const BLINDWEED_SEED = ItemIdentifiers.BLINDWEED_SEED;
   const BLINDWEED = ItemIdentifiers.BLINDWEED;
   const WEEDS = ItemIdentifiers.WEEDS;
@@ -63,14 +61,9 @@ module.exports = function rumDealPatch(api, ctx) {
     return Math.max(0, weeds(player) - farmingTicksSince(weedsAt(player), now));
   }
 
-  /** The varbit, and the child swapped on the client when the patch is in its scene. */
+  /** The patch's look: the varbit its multiloc reads. */
   function show(player, stage) {
-    const sender = player.getPacketSender();
-    sender.sendVarbit(VARBITS.PATCH, stage);
-    if (!player.getSession?.()?.isTileInScene?.(TILE.x, TILE.y, TILE.z)) return;
-    const location = new Location(TILE.x, TILE.y, TILE.z);
-    sender.sendObjectRemoval(new GameObject(CHILDREN[0], location, SHAPE, ROTATION, null));
-    sender.sendObject(new GameObject(CHILDREN[stage], location, SHAPE, ROTATION, null));
+    player.getPacketSender().sendVarbit(VARBITS.PATCH, stage);
   }
 
   /** Brings the weeds count up to date (so later raking starts from what is shown) and shows it. */

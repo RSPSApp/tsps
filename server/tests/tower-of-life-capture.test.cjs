@@ -66,8 +66,11 @@ function setup(options = {}) {
   const tasks = [];
   const questCore = {
     ...core,
-    CountdownTask: class { constructor(_player, _ticks, callback) { this.callback = callback; } },
-    TaskManager: { submit(task) { tasks.push(task); } },
+    CountdownTask: class { constructor(key, ticks, callback) { this.key = key; this.ticks = ticks; this.callback = callback; } },
+    TaskManager: {
+      submit(task) { tasks.push(task); },
+      cancelTasks(key) { for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].key === key) tasks.splice(i, 1); },
+    },
   };
   const custom = new Map();
   const emitted = [];
@@ -145,9 +148,12 @@ function setup(options = {}) {
   const positions = [];
   const subInterfaces = new Map();
   const subInterfaceSends = [];
+  const fades = [];
+  let cameraResets = 0;
   let full = false;
   let interfaceId = -1;
   let location = new core.Location(2649, 3225, 0);
+  let area = null;
 
   const inventory = {
     getAmount: (id) => items.get(id) ?? 0,
@@ -169,6 +175,7 @@ function setup(options = {}) {
     },
     getFreeSlots: () => (full ? 0 : 28),
     isFull: () => full,
+    refreshItems() {},
   };
 
   const sender = new Proxy({
@@ -187,6 +194,12 @@ function setup(options = {}) {
       return sender;
     },
     sendInterfaceDisplayState() { return sender; },
+    // Script 948's args: [0, 255, 0, 0, cycles] fades out, [0, 0, 0, 255, cycles] fades in.
+    mountSubInterface(_uid, group, _type, options) {
+      if (group === 174) fades.push(options.postScripts[0].args[1] === 255 ? 'out' : 'in');
+      return {};
+    },
+    sendCameraReset() { cameraResets++; return sender; },
     sendInterfaceRawModel(uid, model) { rawModels.push([uid, model, interfaceId]); return sender; },
     sendInterfacePosition(uid, x, y) { positions.push([uid, x, y]); return sender; },
     sendString() { return sender; },
@@ -208,7 +221,14 @@ function setup(options = {}) {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory,
-    getEquipment: () => ({ get: (slot) => equipment.get(slot) ?? null }),
+    getEquipment: () => ({ get: (slot) => equipment.get(slot) ?? null, refreshItems() {} }),
+    getMovementQueue() { return { reset() { return this; }, setBlockMovement() { return this; } }; },
+    setUntargetable() {},
+    // An instance scene's area bookkeeping (the creation's copy of the tower).
+    getArea: () => area, setArea: (next) => { area = next; },
+    isPlayer: () => true, isNpc: () => false, getIndex: () => 1, getAsPlayer() { return player; },
+    setPositionToFace() {}, setLocation: (next) => { location = next; },
+    getSpellbook: () => ({ getInterfaceId: () => 218 }),
     getPacketSender: () => sender,
     getInterfaceId: () => interfaceId,
     getDialogueManager: () => dialogueManager,
@@ -249,6 +269,8 @@ function setup(options = {}) {
     return event.handled ? event : null;
   };
   const login = () => PluginManager.emitPlayerLogin({ player });
+  /** The delays of the tasks queued now, in queue order. */
+  const queuedTicks = () => tasks.map((task) => task.ticks);
   const flushTasks = () => {
     while (tasks.length > 0) tasks.shift().callback();
   };
@@ -267,8 +289,9 @@ function setup(options = {}) {
     npcOption: (name, option, event = {}) => { const payload = { player, handled: false, ...event }; npcOptions.get(name)?.[option]?.(payload); return payload; },
     quest, player, statements, animations, attributes, items, equipment, varbits, messages, xp, rawModels, positions, emitted, transcriptCalls, custom, itemOnNpc, conditions,
     persistedAttributes,
-    interfaceButtons, subInterfaces, subInterfaceSends, customInterfaces, action, selectVariant, objectAction, npcInteraction, login, closeInterface, interfaceAction, flushTasks,
+    interfaceButtons, subInterfaces, subInterfaceSends, customInterfaces, action, selectVariant, objectAction, npcInteraction, login, closeInterface, interfaceAction, flushTasks, queuedTicks,
     getInterfaceId: () => interfaceId,
+    fades, cameraResets: () => cameraResets,
     mindBarOpen: () => subInterfaces.has(MIND_BAR_GROUP),
     modelFor: (uid) => rawModels.filter(([target]) => target === uid).at(-1)?.[1],
     positionFor: (uid) => positions.filter(([target]) => target === uid).at(-1)?.slice(1),
@@ -525,6 +548,8 @@ test('the mind puzzle starts at 7, runs the questions round and ends at 0 or 14 
   assert.equal(fixed.handled, true);
   assert.equal(fixed.end, undefined);
   assert.equal(h.mindBarOpen(), false);
+  // The puzzle's camera goes with the overlay (capture tick 3284), not left on the Homunculus (#6485).
+  assert.equal(h.cameraResets(), 1);
   assert.equal(line(h, N.HOMUNCULUS_3, 'I decided to root for magic.').text, 'I decided to root for logic.');
 });
 
@@ -638,4 +663,106 @@ test('a pipe piece turned into its solved rotation on its target locks (review: 
   press(h, 511, [[15, 2]]);
   assert.deepEqual(h.positionFor(ui(511, 9)), [159, 69]);
   assert.equal(h.varbits.get(3343), 0, 'no longer in hand');
+});
+
+test('a slow reader of "Wait! What about-" gets the fade out before the fade in, and tol_prog 10 between (#6485; ticks 2656-2659)', () => {
+  const h = setup();
+  at(h, 8);
+  // The line event comes as the chain is built; the player then reads for as long as they like.
+  const request = line(h, N.EFFIGY, 'Wait! What about-');
+  h.flushTasks();
+  assert.equal(h.quest.getStage(h.player), 8);
+  assert.deepEqual(h.fades, []);
+  request.after();
+  assert.equal(request.pauseTicks, 3);
+  // The fade a tick after the continue, tol_prog 10 and the fade in three after it.
+  assert.deepEqual(h.queuedTicks(), [1, 3]);
+  h.flushTasks();
+  assert.equal(h.quest.getStage(h.player), 10);
+  assert.deepEqual(h.fades, ['out', 'in']);
+});
+
+test('the scare plays its whole talk: the Homunculus with "Boo.", and the end only after the last line (#6485; ticks 3361-3388)', () => {
+  const h = setup();
+  at(h, 16);
+  assert.equal(h.selectVariant(N.EFFIGY), 'finished-work-freeing-the-homunculus-effigy');
+  assert.equal(h.varbits.get(542), 1);
+  // The chain is built at the start: none of its lines' packets may play yet.
+  const boo = line(h, N.HOMUNCULUS, 'Boo.');
+  const last = line(h, N.HOMUNCULUS, 'Me look dungeon, [player name]. Please meet there.');
+  h.flushTasks();
+  assert.equal(h.varbits.get(3359), undefined);
+  assert.equal(h.quest.getStage(h.player), 16);
+  assert.equal(h.varbits.get(542), 1);
+  assert.equal(h.cameraResets(), 0);
+  assert.deepEqual(h.fades, []);
+  boo.before();
+  assert.equal(h.varbits.get(3359), 1);
+  last.after();
+  // The fade on the continue's tick, the end three on (rsprox.net 1002189 ticks 9672, 9675).
+  assert.deepEqual(h.fades, ['out']);
+  assert.equal(last.pauseTicks, 3);
+  assert.deepEqual(h.queuedTicks(), [3]);
+  // An Esc or a world click mid-scene keeps the chat, so the last line's continue still ends it.
+  for (const name of ['interface:close', 'player:world-input']) {
+    const input = { player: h.player, handled: false };
+    PluginManager.emitCustomEvent(name, input);
+    assert.equal(input.handled, true, name);
+  }
+  h.flushTasks();
+  assert.equal(h.quest.getStage(h.player), 17);
+  assert.equal(h.varbits.get(3359), 0);
+  assert.equal(h.varbits.get(542), 0);
+  assert.equal(h.cameraResets(), 1);
+  assert.deepEqual(h.fades, ['out', 'in']);
+  for (const name of ['interface:close', 'player:world-input']) {
+    const input = { player: h.player, handled: false };
+    PluginManager.emitCustomEvent(name, input);
+    assert.equal(input.handled, false, name);
+  }
+});
+
+test('a death mid-scare lets the scene go: input, controls and camera come back, and the scare plays again (review: death)', () => {
+  const h = setup();
+  at(h, 16);
+  assert.equal(h.selectVariant(N.EFFIGY), 'finished-work-freeing-the-homunculus-effigy');
+  line(h, N.HOMUNCULUS, 'Boo.').before();
+  const last = line(h, N.HOMUNCULUS, 'Me look dungeon, [player name]. Please meet there.');
+  PluginManager.emitCustomEvent('player:died', { player: h.player, killer: null, itemsLost: false });
+  assert.equal(h.varbits.get(542), 0);
+  assert.equal(h.varbits.get(3359), 0);
+  assert.equal(h.cameraResets(), 1);
+  const input = { player: h.player, handled: false };
+  PluginManager.emitCustomEvent('player:world-input', input);
+  assert.equal(input.handled, false);
+  // A stale continue can no longer finish the old scene; the stage stays and Effigy starts it over.
+  last.after();
+  h.flushTasks();
+  assert.equal(h.quest.getStage(h.player), 16);
+  assert.deepEqual(h.fades, []);
+  assert.equal(h.selectVariant(N.EFFIGY), 'finished-work-freeing-the-homunculus-effigy');
+});
+
+test('"Flee for your lives!" fades a tick after its continue, leaves the copy at +4 and moves tol_prog to 11 at +6 (rsprox.net 1002189 ticks 9290-9296)', () => {
+  const h = setup();
+  at(h, 10);
+  const climb = { player: h.player, objectId: 17974, object: { getLocation: () => new core.Location(2647, 3221, 2) }, handled: false };
+  PluginManager.emitCustomEvent('ladders:climb', climb);
+  assert.equal(climb.handled, true);
+  h.flushTasks(); // the climb, the copy and the camera pans before the talk
+  assert.equal(h.varbits.get(542), 1);
+  h.fades.length = 0;
+  const flee = line(h, N.EFFIGY_2, 'Flee for your lives!');
+  h.flushTasks();
+  assert.equal(h.quest.getStage(h.player), 10);
+  assert.deepEqual(h.fades, []);
+  flee.after();
+  assert.equal(flee.pauseTicks, 6);
+  assert.deepEqual(h.queuedTicks(), [1, 4, 6]);
+  h.flushTasks();
+  assert.equal(h.quest.getStage(h.player), 11);
+  assert.deepEqual(h.fades, ['out', 'in']);
+  assert.equal(h.varbits.get(542), 0);
+  const at2 = h.player.getLocation();
+  assert.deepEqual([at2.getX(), at2.getY(), at2.getZ()], [2648, 3221, 2]);
 });

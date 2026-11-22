@@ -32,10 +32,12 @@ const NPC = Object.freeze({
   CURRENCY_STILL: 3595, // tol_npc_mage02_still
   HOMUNCULUS: 3589, // tol_homonculus
 });
+/** Where the player and the three alchemists all face on arriving (capture ticks 2721-2722): the cage. */
+const CAGE_TILE = [2649, 3218];
 const STILL_ACTORS = [
-  [NPC.EFFIGY_STILL, [2652, 3217, 3], [2651, 3217]], // facing west
-  [NPC.TRANSMUTE_STILL, [2647, 3215, 3], [2648, 3216]], // north-east
-  [NPC.CURRENCY_STILL, [2650, 3215, 3], [2650, 3216]], // north
+  [NPC.EFFIGY_STILL, [2652, 3217, 3]],
+  [NPC.TRANSMUTE_STILL, [2647, 3215, 3]],
+  [NPC.CURRENCY_STILL, [2650, 3215, 3]],
 ];
 const SUMMON_TILES = [[2649, 3216], [2649, 3220], [2651, 3218], [2651, 3220], [2651, 3216], [2647, 3218], [2647, 3216], [2647, 3220]];
 const BLAST_WAVES = [
@@ -94,15 +96,22 @@ function createScenes(api, ctx) {
 
   // ------------------------------------------------------------------ Effigy sends the alchemists up
 
-  /** "Wait! What about-": the fade, tol_prog 10 two ticks on, then the player's last line. */
+  /**
+   * "Wait! What about-": continued (capture tick 2656), the fade a tick on (2657), and tol_prog 10 and the fade in two
+   * after that (2659), then the player's last line. The line event comes as the chain is built, before the line is
+   * even shown, so every timer starts in `after`: started here, a slow reader got the fade in before the fade out
+   * and was left on a black screen (#6485).
+   */
   function toTheTop(request) {
     const { player } = request;
-    request.after = () => Scenes.fade(player, true, 15);
-    request.pauseTicks = 2;
-    Scenes.later(player, 2, () => {
-      ctx.setStage(player, 10);
-      Scenes.fade(player, false);
-    });
+    request.after = () => {
+      Scenes.later(player, 1, () => Scenes.fade(player, true, 15));
+      Scenes.later(player, 3, () => {
+        ctx.setStage(player, 10);
+        Scenes.fade(player, false);
+      });
+    };
+    request.pauseTicks = 3;
   }
 
   // ------------------------------------------------------------------ the creation
@@ -124,7 +133,8 @@ function createScenes(api, ctx) {
       state.scene = Scenes.open(player, "creation", TOP_FLOOR_BOUNDS, {}, { instance: TOWER, at: TOP_FLOOR_ARRIVAL, exit: TOP_FLOOR_EXIT });
       Scenes.controls(player, true, true);
       Scenes.hideTabs(player);
-      for (const [id, tile, face] of STILL_ACTORS) state.actors[id] = Scenes.actor(state.scene, id, tile, face);
+      Scenes.face(player, CAGE_TILE);
+      for (const [id, tile] of STILL_ACTORS) state.actors[id] = Scenes.actor(state.scene, id, tile, CAGE_TILE);
       Scenes.later(state.scene, 1, () => camera(player, [2632, 3231, 1450], [2651, 3219, 300], 100));
       Scenes.later(state.scene, 6, () => {
         Scenes.fade(player, false);
@@ -161,53 +171,68 @@ function createScenes(api, ctx) {
     for (const [ticks, tiles] of BLAST_WAVES) Scenes.later(state.scene, ticks, () => energy(player, tiles, 80));
   }
 
-  /** "Flee for your lives!": the fade, out of the copy three ticks on, tol_prog 11 and the tabs two after. */
+  /**
+   * "Flee for your lives!": a tick after the continue the fade, out of the copy three ticks on, tol_prog 11 and the tabs
+   * two after (rsprox.net 1002189 ticks 9290-9296). Recorded difference: the user's TowerOfLife.bin fades on the
+   * continue's tick (2867), with the same gaps after the fade.
+   */
   function flee(request, state) {
     const { player } = request;
-    player.getPacketSender().sendSound(SOUND.EXPLOSIONS, 1, 0);
-    request.after = () => Scenes.fade(player, true);
-    request.pauseTicks = 5;
-    Scenes.later(player, 3, () => {
-      Scenes.end(player, false);
-      Scenes.place(player, [...TOP_FLOOR_EXIT]);
-      Scenes.controls(player, true, true);
-    });
-    Scenes.later(player, 5, () => {
+    request.before = () => player.getPacketSender().sendSound(SOUND.EXPLOSIONS, 1, 0);
+    request.after = () => {
       if (playing.get(player) !== state) return;
-      ctx.setStage(player, 11);
-      endPlaying(player);
-      Scenes.fade(player, false);
-    });
+      Scenes.later(player, 1, () => Scenes.fade(player, true));
+      Scenes.later(player, 4, () => {
+        Scenes.end(player, false);
+        Scenes.place(player, [...TOP_FLOOR_EXIT]);
+        Scenes.controls(player, true, true);
+      });
+      Scenes.later(player, 6, () => {
+        if (playing.get(player) !== state) return;
+        ctx.setStage(player, 11);
+        endPlaying(player);
+        Scenes.fade(player, false);
+      });
+    };
+    request.pauseTicks = 6;
   }
 
-  /** The creation's packets, on the lines they come with. */
+  /**
+   * The creation's packets, on the lines they come with. The line event comes as the chain is built (all the lines
+   * up to the next pause at once), so what a line shows with goes in `before`, which runs as the line is shown.
+   */
   function creationLine(request, state) {
     const { player } = request;
     const text = String(request.text ?? "");
+    const sounds = (...ids) => () => { for (const id of ids) player.getPacketSender().sendSound(id, 1, 0); };
     if (text.startsWith("It begins!")) {
       request.after = () => summon(player, state);
       request.pauseTicks = 12;
     } else if (text === "It's alive!") {
-      camera(player, [2649, 3224, 1275], [2649, 3218, 25], 1);
+      request.before = () => camera(player, [2649, 3224, 1275], [2649, 3218, 25], 1);
     } else if (text.startsWith("Nwwooo!") || text.startsWith("Where me?") || text.startsWith("Whyeee cage?")) {
-      player.getPacketSender().sendSound(SOUND.CRY, 1, 0);
+      request.before = sounds(SOUND.CRY);
       if (text.startsWith("Nwwooo!")) request.actors = state.homunculus ? [state.homunculus] : request.actors;
     } else if (text.startsWith("This is terrible")) {
-      cameraMove(player, [2654, 3218, 1275], 1);
+      request.before = () => cameraMove(player, [2654, 3218, 1275], 1);
     } else if (text === "Silence, creature!") {
-      cameraMove(player, [2646, 3213, 1275], 1);
+      request.before = () => cameraMove(player, [2646, 3213, 1275], 1);
     } else if (text.startsWith("Stop this!")) {
-      cameraMove(player, [2645, 3222, 1275], 1);
+      request.before = () => cameraMove(player, [2645, 3222, 1275], 1);
     } else if (text === "Arghhh!") {
-      camera(player, [2653, 3222, 975], [2649, 3218, 150], 1);
+      request.before = () => camera(player, [2653, 3222, 975], [2649, 3218, 150], 1);
     } else if (text === "Oh no...") {
-      blast(player, state);
+      request.before = () => blast(player, state);
     } else if (text.startsWith("Get out of the tower")) {
-      cameraMove(player, [2644, 3222, 975], 1);
-      player.getPacketSender().sendSound(SOUND.EXPLOSIONS, 1, 0);
+      request.before = () => {
+        cameraMove(player, [2644, 3222, 975], 1);
+        sounds(SOUND.EXPLOSIONS)();
+      };
     } else if (text === "Run away!") {
-      ctx.sendVarbit(player, VARBIT_CAGE_STATE, 0);
-      player.getPacketSender().sendSound(SOUND.EXPLOSIONS, 1, 0);
+      request.before = () => {
+        ctx.sendVarbit(player, VARBIT_CAGE_STATE, 0);
+        sounds(SOUND.EXPLOSIONS)();
+      };
     } else if (text === "Flee for your lives!") {
       flee(request, state);
     }
@@ -225,21 +250,31 @@ function createScenes(api, ctx) {
     return true;
   }
 
-  function scareLine(request) {
+  function scareLine(request, state) {
     const { player } = request;
     const text = String(request.text ?? "");
     if (text === "Boo.") {
-      ctx.sendVarbit(player, VARBIT_HOMONC_PRES, 1);
-      player.getPacketSender().sendSound(SOUND.BOO, 1, 0);
+      request.before = () => {
+        ctx.sendVarbit(player, VARBIT_HOMONC_PRES, 1);
+        player.getPacketSender().sendSound(SOUND.BOO, 1, 0);
+      };
     } else if (text.startsWith("Me look dungeon")) {
-      request.after = () => Scenes.fade(player, true);
+      // Continued, the fade on that tick; three ticks on tol_prog 17, the Homunculus gone and the tabs back (rsprox.net
+      // 1002189 ticks 9672, 9675). Recorded difference: the user's TowerOfLife.bin fades a tick after the continue
+      // (3384 -> 3385 -> 3388), with the same three ticks from the fade to the end. Started as the chain was built, this ended the scene mid-talk and left the fade
+      // out on (#6485).
+      request.after = () => {
+        if (playing.get(player) !== state) return;
+        Scenes.fade(player, true);
+        Scenes.later(player, 3, () => {
+          if (playing.get(player) !== state) return;
+          ctx.setStage(player, 17);
+          ctx.sendVarbit(player, VARBIT_HOMONC_PRES, 0);
+          endPlaying(player);
+          Scenes.fade(player, false);
+        });
+      };
       request.pauseTicks = 3;
-      Scenes.later(player, 3, () => {
-        ctx.setStage(player, 17);
-        ctx.sendVarbit(player, VARBIT_HOMONC_PRES, 0);
-        endPlaying(player);
-        Scenes.fade(player, false);
-      });
     }
   }
 
@@ -248,7 +283,7 @@ function createScenes(api, ctx) {
     const state = playing.get(request.player);
     if (!state) return false;
     if (state.name === "creation" && state.scene) creationLine(request, state);
-    else if (state.name === "scare") scareLine(request);
+    else if (state.name === "scare") scareLine(request, state);
     return true;
   }
 
@@ -260,7 +295,21 @@ function createScenes(api, ctx) {
     playing.delete(player);
   }
 
-  return { toTheTop, creation, scare, handleLine, isPlaying, logout, Location };
+  /**
+   * A death mid-scene (a poison pulse queued before the talk, say) drops the chat, so the last line's continue that
+   * ends the scene never comes: the scene goes now, with its timers, and the controls, tabs, camera and screen come
+   * back. The stage stays, so the scene plays again from its start. Ours: no capture shows a death in these scenes.
+   */
+  function died(player) {
+    if (!playing.has(player)) return;
+    Scenes.cancel(player);
+    if (Scenes.get(player)) Scenes.end(player, false);
+    ctx.sendVarbit(player, VARBIT_HOMONC_PRES, 0);
+    endPlaying(player);
+    Scenes.closeFade(player);
+  }
+
+  return { toTheTop, creation, scare, handleLine, isPlaying, logout, died, Location };
 }
 
 module.exports = { createScenes, SCENE_EXIT_ATTRIBUTE, TOP_FLOOR_EXIT };

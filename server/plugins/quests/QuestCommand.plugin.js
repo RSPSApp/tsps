@@ -87,9 +87,12 @@ function routeRewards(api, player) {
     }
     if (SUPERSEDED_REWARDS.has(item.getId())) return null;
     if (api.emitCanBankItem(player, item, { quiet: true }) === false) return item;
-    const before = bankAmount(item.getId());
-    player.getBank(api.core.Bank.getTabForItem(player, item.getId())).add(item.clone(), false);
-    const moved = Math.max(0, bankAmount(item.getId()) - before);
+    // Match normal deposits: bank stacks use the unnoted identity, while any
+    // inventory remainder must keep the form in which the quest awarded it.
+    const bankItem = item.clone().setId(item.getDefinition().unNote());
+    const before = bankAmount(bankItem.getId());
+    player.getBank(api.core.Bank.getTabForItem(player, bankItem.getId())).add(bankItem, false);
+    const moved = Math.max(0, bankAmount(bankItem.getId()) - before);
     tally.banked += moved;
     const left = item.getAmount() - moved;
     return left > 0 ? item.clone().setAmount(left) : null;

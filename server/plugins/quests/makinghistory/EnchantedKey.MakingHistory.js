@@ -153,7 +153,7 @@ function completeForCommand(request) {
   if (!order) return;
   const inventory = player.getInventory();
   for (const key of order.slice(found(player))) {
-    for (const item of rewardItems(sites.find(site => site.key === key))) inventory.add(item, false);
+    for (const item of rewardItems(sites.find(site => site.key === key))) inventory.forceAdd(player, item);
   }
   player.setAttribute(FOUND_ATTRIBUTE, sites.length);
   const KEY = core.ItemIdentifiers.ENCHANTED_KEY;

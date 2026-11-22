@@ -13,7 +13,7 @@
 // at the other two; once the key is used the chest opens without one and gives the outfit pieces
 // the player doesn't own ("You open the chest and find some treasure inside."), or "You open the
 // chest, but find nothing of note inside." when they own them all. Since 26 November 2025 the key
-// isn't used up when the loot doesn't fit.
+// isn't used up when the loot doesn't fit. Ours: the key is taken with the loot (a tick after 3461).
 const common = require("./Common.BarracudaTrials");
 
 const ANIM_DELAY = 10;
@@ -131,15 +131,17 @@ function open(event) {
   OPENING.add(player);
   player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_openchest"), ANIM_DELAY));
   for (const [sound, delay] of SOUND_UNLOCK) player.getPacketSender().sendSoundEffect(sound, 1, delay);
-  if (!used) player.getInventory().deleteNumber(chest.keyId, 1);
   later(1, () => {
-    // The bag may have changed since the check: nothing is given and the key goes back.
-    if (items.length && !fits(player, items)) {
-      if (!used) player.getInventory().addItem(new (common.core().Item)(chest.keyId, 1));
+    // Ours: the key goes with the loot, a tick after 3461's, so a save can't hold one without the
+    // other. A logout in between, a key no longer carried or a bag that filled up: nothing happens.
+    if (player.isRegistered?.() === false) { OPENING.delete(player); return; }
+    if (!used && !player.getInventory().contains(chest.keyId)) { OPENING.delete(player); return; }
+    if (items.length && !fits(player, items, used ? 0 : 1)) {
       player.sendMessage(NO_ROOM);
       OPENING.delete(player);
       return;
     }
+    if (!used) player.getInventory().deleteNumber(chest.keyId, 1);
     player.getPacketSender().sendSoundEffect(SOUND_LOOT[0], 1, SOUND_LOOT[1]);
     setOpen(chest, object, true);
     give(player, items);

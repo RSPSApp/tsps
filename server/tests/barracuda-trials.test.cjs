@@ -17,6 +17,7 @@ const { BoatManager } = require("../dist/game/content/sailing/BoatManager");
 const { Mobile } = require("../dist/game/entity/impl/Mobile");
 const { Location } = require("../dist/game/model/Location");
 const { Inventory } = require("../dist/game/model/container/impl/Inventory");
+const { Bank } = require("../dist/game/model/container/impl/Bank");
 const { emptySailingState } = require("../dist/game/content/sailing/SailingState");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const { World } = require("../dist/game/World");
@@ -98,8 +99,9 @@ function captain({ level = 99 } = {}) {
       getMaxLevel: (skill) => levels.get(skill.getName?.() ?? skill) ?? 1,
       addExperiences: (skill, amount) => xp.push(amount),
     }),
-    getEquipment: () => ({ get: () => undefined, getItems: () => [], contains: () => false }),
-    getBank: () => ({ contains: () => false }),
+    getEquipment: () => ({ get: () => undefined, getItems: () => [], contains: () => false, getAmount: () => 0 }),
+    getBanks: () => player.banks,
+    getBank: (tab) => player.banks[tab],
     getDialogueManager: () => ({
       startDialogues: (chain) => { player.chain = chain; current = [...chain.getDialogues().values()][0]; },
       getCurrent: () => current,
@@ -112,6 +114,7 @@ function captain({ level = 99 } = {}) {
   player.inventory = new Inventory(player);
   player.inventory.resetItems();
   player.getInventory = () => player.inventory;
+  player.banks = Array.from({ length: Bank.TOTAL_BANK_TABS }, () => new Bank(player).resetItems());
   World.getPlayers().get = ((get) => (i) => (i === index ? player : get(i)))(World.getPlayers().get.bind(World.getPlayers()));
   return player;
 }
@@ -941,9 +944,9 @@ test("trial key chests: the Stormy key opens the Pandemonium chest once, as capt
   const player = captain();
   player.inventory.add(new Item(obj("stormy_key"), 1));
   assert.equal(openChest(player, "locked_chest_pandemonium"), true);
-  assert.equal(player.inventory.contains(obj("stormy_key")), false, "the key goes on the click");
   assert.deepEqual(sounds(player), [[2419, 0], [52, 10]]);
   tick();
+  assert.equal(player.inventory.contains(obj("stormy_key")), false, "the key goes with the loot (ours: 3461 takes it a tick earlier)");
   assert.deepEqual(sounds(player).slice(2), [[51, 45]]);
   for (const id of TEMPOR_OUTFIT) assert.equal(player.inventory.getAmount(id), 1);
   assert.equal(player.inventory.getAmount(obj("cert_uncut_sapphire")), 10);
@@ -1034,6 +1037,35 @@ test("trial key chests: a stack that can't take the whole reward keeps the key; 
   openChest(player, "locked_chest_pandemonium");
   tick(3);
   assert.equal(common.keyUsed(player, TEMPOR()), true, "and opens the chest once there's room");
+});
+
+test("trial key chests: a bank placeholder isn't an owned piece, a banked piece is (review)", () => {
+  const player = captain();
+  common.updateProgress(player, TEMPOR(), (saved) => { saved.extra = { keyUsed: true }; });
+  for (const id of TEMPOR_OUTFIT.slice(1)) player.inventory.add(new Item(id, 1));
+  player.banks[0].add(new Item(TEMPOR_OUTFIT[0], 1), false);
+  player.banks[0].getItems().find((item) => item.getId() === TEMPOR_OUTFIT[0]).setAmount(0);
+  openChest(player, "locked_chest_pandemonium");
+  tick(3);
+  assert.equal(player.inventory.getAmount(TEMPOR_OUTFIT[0]), 1, "the hat behind a placeholder comes back");
+  player.inventory.deleteNumber(TEMPOR_OUTFIT[0], 1);
+  player.banks[0].getItems().find((item) => item.getId() === TEMPOR_OUTFIT[0]).setAmount(1);
+  openChest(player, "locked_chest_pandemonium");
+  tick(3);
+  assert.equal(player.inventory.getAmount(TEMPOR_OUTFIT[0]), 0, "a banked hat is owned");
+  assert.equal(player.getDialogueManager().getCurrent().getText(), "You open the chest, but find nothing of note inside.");
+});
+
+test("trial key chests: a logout between the click and the loot keeps the key and the chest unused (review)", () => {
+  const player = captain();
+  player.inventory.add(new Item(obj("stormy_key"), 1));
+  openChest(player, "locked_chest_pandemonium");
+  assert.equal(player.inventory.contains(obj("stormy_key")), true, "a save on the click tick still has the key");
+  player.isRegistered = () => false;
+  tick(3);
+  assert.equal(player.inventory.contains(obj("stormy_key")), true);
+  assert.equal(player.inventory.getAmount(TEMPOR_OUTFIT[0]), 0);
+  assert.equal(common.keyUsed(player, TEMPOR()), false);
 });
 
 test("Ralph hands back a lost Stormy key only before it opened its chest", () => {

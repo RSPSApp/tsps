@@ -150,6 +150,21 @@ function extinguishTorch({ player, item }) {
 }
 
 /**
+ * Extinguish on a lit candle: the unlit one in its slot and "You extinguish the candle." in the filterable chat (rsprox
+ * local enlightened-journey, rev 242, tick 2533), unless it is the last light in the dark, as a torch.
+ */
+function extinguishCandle({ player, item }) {
+  const I = core.ItemIdentifiers;
+  const unlit = item?.getId() === I.LIT_CANDLE ? I.CANDLE : item?.getId() === I.LIT_BLACK_CANDLE ? I.BLACK_CANDLE : null;
+  if (unlit === null) return false;
+  if (!Darkness.canSeeAt(player, player.getLocation(), item)) return true;
+  item.setId(unlit);
+  player.getInventory().refreshItems();
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You extinguish the candle.");
+  return true;
+}
+
+/**
  * Lit item id -> its put-out form, for every flame a fall into water puts out (Wiki: failing a
  * Lumbridge Swamp Caves stepping stone "will extinguish the player's light source"): torches,
  * candles, candle lanterns, oil lamps and lanterns (left filled) and the mining helmet.
@@ -194,7 +209,7 @@ function extinguishAll(player) {
 
 module.exports = {
   name: "LightSources",
-  description: "Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches and mining helmets be put out again.",
+  description: "Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches, candles and mining helmets be put out again.",
   members: true,
   register(api) {
     core = api.core;
@@ -204,7 +219,9 @@ module.exports = {
     api.onItemOnObject(lightOnObject, { noted: false });
     api.onItemAction("Mining helmet", { Extinguish: extinguishHelmet });
     api.onItemAction("Lit torch", { Extinguish: extinguishTorch });
+    api.onItemAction("Lit candle", { Extinguish: extinguishCandle });
+    api.onItemAction("Lit black candle", { Extinguish: extinguishCandle });
   },
   extinguishAll,
-  _test: { build, lightOnObject, putOutForms },
+  _test: { build, lightOnObject, putOutForms, extinguishCandle },
 };

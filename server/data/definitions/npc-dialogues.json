@@ -115447,6 +115447,29 @@
               ]
             },
             {
+              "text": "What motivates you?",
+              "steps": [
+                {
+                  "player": "What motivates you to do all of this?"
+                },
+                {
+                  "npc": "Well..."
+                },
+                {
+                  "npc": "What we leave behind is not as important as how we've lived."
+                },
+                {
+                  "player": "Wise words."
+                },
+                {
+                  "npc": "That's what I think, anyway."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
               "text": "Could you replace some items for me?",
               "condition": "If the bomber jacket or cap has been lost",
               "steps": [
@@ -115628,6 +115651,21 @@
               ]
             },
             {
+              "text": "What motivates you?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "NtjsvI",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-5ad465c5d1bc60e5"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
               "text": "Could you replace some items for me?",
               "condition": "If the bomber jacket or cap has been lost",
               "steps": [
@@ -115684,6 +115722,26 @@
         },
         {
           "npc": "You can release the balloon and watch it float in the air, just use a tinderbox on it."
+        },
+        {
+          "type": "end"
+        }
+      ],
+      "jump-5ad465c5d1bc60e5": [
+        {
+          "player": "What motivates you to do all of this?"
+        },
+        {
+          "npc": "Well..."
+        },
+        {
+          "npc": "What we leave behind is not as important as how we've lived."
+        },
+        {
+          "player": "Wise words."
+        },
+        {
+          "npc": "That's what I think, anyway."
         },
         {
           "type": "end"
@@ -425252,8 +425310,8 @@
                               "steps": [
                                 {
                                   "type": "jump",
-                                  "reference": "previous",
-                                  "id": "SRdjzp"
+                                  "reference": "other",
+                                  "id": "eCOg7h"
                                 }
                               ],
                               "id": "ltShnW"
@@ -425317,8 +425375,8 @@
                               "steps": [
                                 {
                                   "type": "jump",
-                                  "reference": "previous",
-                                  "id": "459_JI"
+                                  "reference": "other",
+                                  "id": "5_VNHF"
                                 }
                               ],
                               "id": "Qt5SsF"
@@ -425382,8 +425440,8 @@
                               "steps": [
                                 {
                                   "type": "jump",
-                                  "reference": "previous",
-                                  "id": "b1E5G2"
+                                  "reference": "other",
+                                  "id": "v1wKE1"
                                 }
                               ],
                               "id": "UZueD-"
@@ -425419,8 +425477,8 @@
                             },
                             {
                               "type": "jump",
-                              "reference": "previous",
-                              "id": "qhFx0z"
+                              "reference": "other",
+                              "id": "TtOJEI"
                             }
                           ],
                           "id": "nP0BFo"
@@ -425453,8 +425511,8 @@
                             },
                             {
                               "type": "jump",
-                              "reference": "previous",
-                              "id": "EPPB9w"
+                              "reference": "other",
+                              "id": "cv-3Pn"
                             }
                           ],
                           "id": "jNUi7l"
@@ -425487,8 +425545,8 @@
                             },
                             {
                               "type": "jump",
-                              "reference": "previous",
-                              "id": "H5895j"
+                              "reference": "other",
+                              "id": "7RiQQ2"
                             }
                           ],
                           "id": "tV-rCx"
@@ -425536,8 +425594,8 @@
                               "steps": [
                                 {
                                   "type": "jump",
-                                  "reference": "previous",
-                                  "id": "MB3gNt"
+                                  "reference": "other",
+                                  "id": "MJ274y"
                                 }
                               ],
                               "id": "ID2g2e"
@@ -425584,8 +425642,8 @@
                             },
                             {
                               "type": "jump",
-                              "reference": "previous",
-                              "id": "UXhS2Q"
+                              "reference": "other",
+                              "id": "fjttSt"
                             }
                           ],
                           "id": "UITbMi"
@@ -425644,8 +425702,8 @@
                               "steps": [
                                 {
                                   "type": "jump",
-                                  "reference": "previous",
-                                  "id": "CaLGrC"
+                                  "reference": "other",
+                                  "id": "N984vL"
                                 }
                               ],
                               "id": "jn7GNV"
@@ -425670,8 +425728,8 @@
                             },
                             {
                               "type": "jump",
-                              "reference": "previous",
-                              "id": "gPnnRF"
+                              "reference": "other",
+                              "id": "ulDVyX"
                             }
                           ],
                           "id": "IjQl8E"
@@ -425751,8 +425809,8 @@
                               "steps": [
                                 {
                                   "type": "jump",
-                                  "reference": "previous",
-                                  "id": "rjV0bb"
+                                  "reference": "other",
+                                  "id": "Z7PQAj"
                                 }
                               ],
                               "id": "tvIsTj"
@@ -425777,8 +425835,8 @@
                             },
                             {
                               "type": "jump",
-                              "reference": "previous",
-                              "id": "b9FzqD"
+                              "reference": "other",
+                              "id": "xKooVQ"
                             }
                           ],
                           "id": "_jqWMv"
@@ -427052,6 +427110,50 @@
                   ]
                 }
               ]
+            },
+            {
+              "text": "What motivates you?",
+              "steps": [
+                {
+                  "player": "What motivates you to do all of this?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Auguste",
+                  "text": "Well...",
+                  "speaker_ids": [
+                    4715,
+                    4716,
+                    4717,
+                    4718
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Auguste",
+                  "text": "What we leave behind is not as important as how we've lived.",
+                  "speaker_ids": [
+                    4715,
+                    4716,
+                    4717,
+                    4718
+                  ]
+                },
+                {
+                  "player": "Wise words."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Auguste",
+                  "text": "That's what I think, anyway.",
+                  "speaker_ids": [
+                    4715,
+                    4716,
+                    4717,
+                    4718
+                  ]
+                }
+              ]
             }
           ]
         }
@@ -427443,8 +427545,8 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "reference": "previous",
-                          "id": "SRdjzp"
+                          "reference": "other",
+                          "id": "eCOg7h"
                         }
                       ],
                       "id": "ltShnW"
@@ -427508,8 +427610,8 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "reference": "previous",
-                          "id": "459_JI"
+                          "reference": "other",
+                          "id": "5_VNHF"
                         }
                       ],
                       "id": "Qt5SsF"
@@ -427573,8 +427675,8 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "reference": "previous",
-                          "id": "b1E5G2"
+                          "reference": "other",
+                          "id": "v1wKE1"
                         }
                       ],
                       "id": "UZueD-"
@@ -427610,8 +427712,8 @@
                     },
                     {
                       "type": "jump",
-                      "reference": "previous",
-                      "id": "qhFx0z"
+                      "reference": "other",
+                      "id": "TtOJEI"
                     }
                   ],
                   "id": "nP0BFo"
@@ -427644,8 +427746,8 @@
                     },
                     {
                       "type": "jump",
-                      "reference": "previous",
-                      "id": "EPPB9w"
+                      "reference": "other",
+                      "id": "cv-3Pn"
                     }
                   ],
                   "id": "jNUi7l"
@@ -427678,8 +427780,8 @@
                     },
                     {
                       "type": "jump",
-                      "reference": "previous",
-                      "id": "H5895j"
+                      "reference": "other",
+                      "id": "7RiQQ2"
                     }
                   ],
                   "id": "tV-rCx"
@@ -427727,8 +427829,8 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "reference": "previous",
-                          "id": "MB3gNt"
+                          "reference": "other",
+                          "id": "MJ274y"
                         }
                       ],
                       "id": "ID2g2e"
@@ -427775,8 +427877,8 @@
                     },
                     {
                       "type": "jump",
-                      "reference": "previous",
-                      "id": "UXhS2Q"
+                      "reference": "other",
+                      "id": "fjttSt"
                     }
                   ],
                   "id": "UITbMi"
@@ -427845,8 +427947,8 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "reference": "previous",
-                          "id": "CaLGrC"
+                          "reference": "other",
+                          "id": "N984vL"
                         }
                       ],
                       "id": "jn7GNV"
@@ -427871,8 +427973,8 @@
                     },
                     {
                       "type": "jump",
-                      "reference": "previous",
-                      "id": "gPnnRF"
+                      "reference": "other",
+                      "id": "ulDVyX"
                     }
                   ],
                   "id": "IjQl8E"
@@ -427962,8 +428064,8 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "reference": "previous",
-                          "id": "rjV0bb"
+                          "reference": "other",
+                          "id": "Z7PQAj"
                         }
                       ],
                       "id": "tvIsTj"
@@ -427988,8 +428090,8 @@
                     },
                     {
                       "type": "jump",
-                      "reference": "previous",
-                      "id": "b9FzqD"
+                      "reference": "other",
+                      "id": "xKooVQ"
                     }
                   ],
                   "id": "_jqWMv"

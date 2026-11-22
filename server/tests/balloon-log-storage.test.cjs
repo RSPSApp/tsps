@@ -174,11 +174,17 @@ test('noted logs fill the crate but do not pay a trip', () => {
   assert.equal(Storage.canPay(player, station('entrana'), 1), false);
 });
 
+/** The first Entrana trip's search: the balloonist's line, then the "You are quickly searched." box, each continued. */
+function searchThrough(player) {
+  player.lastChain.getDialogues().get(1).action.execute();
+  player.lastChain.getDialogues().get(1).action.execute();
+}
+
 test('the choice of logs checks the trip again: walked off, nothing flies', () => {
   const player = fakePlayer({ items: { [id('logs')]: 2 } });
   player.attributes[Storage.STORED_ATTRIBUTE] = { logs: 2 };
   Travel.travel(player, station('taverley'), station('entrana'));
-  player.lastChain.getDialogues().get(1).action.execute();
+  searchThrough(player);
   assert.equal(lastPrompt().title, 'Which logs would you like to use?');
   player.moveTo(loc(3200, 3200));
   choose('Use the logs in storage.');
@@ -204,7 +210,7 @@ test('a trip paid from storage: no log carried, the count told on landing', () =
   const player = fakePlayer();
   player.attributes[Storage.STORED_ATTRIBUTE] = { logs: 5 };
   assert.equal(Travel.travel(player, station('taverley'), station('entrana')), true);
-  player.lastChain.getDialogues().get(1).action.execute();
+  searchThrough(player);
   tick(4);
   assert.deepEqual([player.getLocation().getX(), player.getLocation().getY()], station('entrana').land);
   assert.equal(Storage.stored(player, 'logs'), 4);

@@ -16,7 +16,7 @@ const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxProm
 const STAGE = 'quest.enlightened_journey.stage';
 const STOCK = 'balloon-transport:stored-logs';
 const PREFERENCE = 'balloon-transport:log-preference';
-const READY = 6, LANDED = 7;
+const READY = 90, LANDED = 100;
 let core, Controls, serial = 0, oldSubmit, oldError, oldWarn, oldLog;
 const tasks = new Set(), errors = [];
 before(async () => {

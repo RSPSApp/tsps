@@ -34,8 +34,8 @@
  *
  * Gaps / approximations:
  *  - The ship battle area is static here, not live's instance. Per-player varbits and owned
- *    locs (the open lockers, the swing rope) keep each player's ship apart. The end scene
- *    plays as dialogue and teleports to Mos Le'Harmless (3665,2980) as live does.
+ *    locs (the open lockers, the swing rope) keep each player's ship apart. The end scene is
+ *    live's cutscene in a copy of The Other Inn (cabinfever/Scenes.CabinFever.js).
  *  - Climbing nets (11244/11310) are not in Ladders.plugin.js, so this plugin moves the player
  *    between deck and mast top on their Climb options.
  *  - Ours: a swing falls 1 in 3 at 42+ Agility (the capture's 2 of 6), always below it.
@@ -72,6 +72,8 @@ module.exports = function registerCabinFeverQuest(api) {
   const { openBook, registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
   const BOOK = require("../data/cabin-fever-book");
   const Scenes = require("../QuestScenes").createQuestScenes(api);
+  // The end cutscene in The Other Inn (cabinfever/Scenes.CabinFever.js).
+  const EndScene = require("../cabinfever/Scenes.CabinFever")(api, { onBook: handOverBook, onFinished: finishQuest });
 
   const PAGE = "Cabin Fever";
   const BILL_PAGE = "Bill Teach";
@@ -97,9 +99,9 @@ module.exports = function registerCabinFeverQuest(api) {
     BILL_MOS_INN,
     BILL_MOS_SHIP,
   ]);
-  const MAMA = NpcIdentifiers.MAMA; // 4020, The Other Inn
-  const MAMA_2 = NpcIdentifiers.MAMA_2; // 4021
-  const MAMA_NPC_IDS = new Set([MAMA, MAMA_2]);
+  const MOS_PIRATE_FIRST = NpcIdentifiers.PIRATE_6; // 4023 fever_pirate_island_01; 4033-4042 the militia
+  const WITH_BOOK_VARIANT = "standard-dialogue-with-book-o-piracy";
+  const WITHOUT_BOOK_VARIANT = "standard-dialogue-without-book-o-piracy";
   const CF_PIRATE_BASE = 4043; // 4043-4052 are the battle ship pirates
   const CF_PIRATE_NPC_IDS = new Set(
     Array.from({ length: 10 }, (_, index) => CF_PIRATE_BASE + index)
@@ -382,6 +384,11 @@ module.exports = function registerCabinFeverQuest(api) {
   // 1917) and Bill's next line is the sinking briefing; the Wiki's guide says "When you hit the
   // pirates with the canisters, talk to Bill" and its transcript plays one "You hit them!".
   const CREW_HITS_REQUIRED = 1;
+  // A shot fired this many ticks or more after the fuse always lands: the capture's earliest landed
+  // at 4 (fuse 2088, Fire! 2092); the Wiki's "Count to 3" is about 5.
+  const FUSE_SETTLE_TICKS = 4;
+  // Ours: the Wiki says firing too soon "can cause multiple misses" and gives no rate.
+  const EARLY_SHOT_MISS_CHANCE = 1 / 2;
 
   const ARRIVE_ACTION_ID = "cabin-fever:arrive";
   const PIRATE_AGILITY = 42;
@@ -392,13 +399,19 @@ module.exports = function registerCabinFeverQuest(api) {
   /**
    * The two rope swings, as the capture plays them (ticks 842-876 and 1442-1463 from the
    * Adventurous, 979-1003 and 1621-1639 back). The player ties the rope, drops to the deck
-   * beside the yardarm `gap` ticks before swinging, slides one tile to the rope and swings
-   * across, or falls short and swims the rest.
+   * beside the mast (`drop`), walks round it to `start` (`walk`: [ticks after the drop, x, y]),
+   * slides one tile to the rope `gap` ticks after the drop and swings across, or falls short
+   * and swims the rest.
    */
   const SWINGS = {
     over: {
       varbit: 1740, // fever_swing
       rope: { x: 1817, y: 4830, z: 1, face: 0 },
+      drop: [1816, 4832], // ticks 861, 1449
+      // Ticks 862-869 and 1450-1457: round the west side of the mast, one tile a tick, with
+      // one tick's pause on the way.
+      walk: [[1, 1815, 4832], [2, 1814, 4831], [3, 1814, 4830], [4, 1814, 4829], [5, 1815, 4829],
+        [7, 1816, 4829], [8, 1816, 4830]],
       start: [1816, 4830, 1],
       grab: [1817, 4830],
       grabAngle: 1536,
@@ -413,6 +426,8 @@ module.exports = function registerCabinFeverQuest(api) {
     back: {
       varbit: 1764, // fever_swing_2
       rope: { x: 1819, y: 4835, z: 1, face: 2 },
+      drop: [1823, 4833], // ticks 994, 1628
+      walk: [[1, 1822, 4833], [2, 1822, 4834]], // ticks 995-996, 1629-1630
       start: [1822, 4834, 1],
       grab: [1822, 4835],
       grabAngle: 1024,
@@ -454,6 +469,8 @@ module.exports = function registerCabinFeverQuest(api) {
   /** Transient per-conversation results (never persisted). */
   const plunderOutcome = new WeakMap();
   const fireOutcome = new WeakMap();
+  /** Player -> the tick the fuse went on the armed cannon. */
+  const fusedAt = new WeakMap();
   /** Player -> { varbit: the loot whose refill timer is the live one }. */
   const refills = new WeakMap();
   /** Pirate -> the player whose canister round is about to kill it. */
@@ -710,10 +727,17 @@ module.exports = function registerCabinFeverQuest(api) {
     setVarbitValue(player, VARBIT_HOLES_PROOFED, values.filter((value) => value >= 2).length);
   }
 
-  function rangedHitChance(player) {
-    const level = player.getSkillManager().getMaxLevel(Skill.RANGED);
-    // Jagex: 6% at level 1, 94% at 99 (wiki "Cabin Fever", success chance).
-    return Math.min(0.94, Math.max(0.06, 0.06 + ((level - 1) * (0.94 - 0.06)) / 98));
+  /**
+   * Whether a shot lands. The Wiki ties misses to the fuse, not to a skill: "Try not to fire the
+   * cannon immediately after attaching the fuse. This can cause multiple misses. Count to 3 before
+   * firing." Live's four shots of the capture were fired 5, 5, 4 and 5 ticks after the fuse went on
+   * (fuse 1909/2042/2088/2117, Fire! 1914/2047/2092/2122) and all four hit.
+   */
+  function shotHits(player) {
+    const fused = fusedAt.get(player);
+    fusedAt.delete(player);
+    if (fused === undefined || World.getProcessCycle() - fused >= FUSE_SETTLE_TICKS) return true;
+    return Math.random() >= EARLY_SHOT_MISS_CHANCE;
   }
 
   // ==========================================================================
@@ -780,11 +804,28 @@ module.exports = function registerCabinFeverQuest(api) {
     }
   }
 
+  /**
+   * Mos Le'Harmless's pirates, traders and Mama speak their "with Book o' Piracy" transcript to a
+   * player carrying the book, and pirate-speak without it. The Wiki: "players must be carrying this
+   * book in their inventory to understand what other pirates are saying"; the capture's post-quest
+   * talks (ticks 2475-2700) had it in the inventory, not worn. Each island pirate has its own
+   * line, in id order: 4023 (fever_pirate_island_01) is "pirate 1", 4042 (the tenth militia
+   * pirate) "pirate 20"; the capture's 4023, 4027, 4028 and 4031 spoke lines 1, 5, 6 and 9.
+   */
+  function bookVariant({ player, npcId, pages }) {
+    const page = pages?.find((entry) => entry.variants.includes(WITHOUT_BOOK_VARIANT));
+    if (!page) return null;
+    if (!held(player, BOOK_O_PIRACY)) return { page: page.page, variant: WITHOUT_BOOK_VARIANT };
+    const own = `${WITH_BOOK_VARIANT}-pirate-${npcId - MOS_PIRATE_FIRST + 1}`;
+    const variant = page.variants.includes(WITH_BOOK_VARIANT) ? WITH_BOOK_VARIANT : own;
+    return page.variants.includes(variant) ? { page: page.page, variant } : null;
+  }
+
   function selectVariant(event) {
     const { npcId, player } = event;
     if (!player) return null;
     if (CF_PIRATE_NPC_IDS.has(npcId)) return pirateVariant(npcId, player);
-    if (!BILL_NPC_IDS.has(npcId)) return null;
+    if (!BILL_NPC_IDS.has(npcId)) return bookVariant(event);
     return billVariant(npcId, player);
   }
 
@@ -794,18 +835,6 @@ module.exports = function registerCabinFeverQuest(api) {
     if (!player || !CF_PIRATE_NPC_IDS.has(npcId)) return false;
     const variant = pirateVariant(npcId, player);
     if (!variant || !startTranscript(api, player, npcId, PAGE, variant)) return false;
-    event.handled = true;
-    return true;
-  }
-
-  /** Mama's inn dialogue changes once Bill has given the player the book. */
-  function talkToMama(event) {
-    const { player, npcId } = event;
-    if (!player || !MAMA_NPC_IDS.has(npcId)) return false;
-    const variant = held(player, BOOK_O_PIRACY)
-      ? "standard-dialogue-with-book-o-piracy"
-      : "standard-dialogue-without-book-o-piracy";
-    if (!startTranscript(api, player, npcId, "Mama", variant)) return false;
     event.handled = true;
     return true;
   }
@@ -1143,8 +1172,15 @@ module.exports = function registerCabinFeverQuest(api) {
     if (varbitValue(player, VARBIT_HULL_HOLES) < 3) return false;
     if (!quest.isComplete(player)) quest.complete(player);
     setVarbitValue(player, VARBIT_GIVEN_BOOK, 1);
-    player.moveTo(MOS_LE_HARMLESS);
+    const at = player.getLocation?.();
+    if (!at?.equals?.(MOS_LE_HARMLESS)) player.moveTo(MOS_LE_HARMLESS);
     return true;
+  }
+
+  /** "Here, have this book." in the end cutscene (capture tick 2224). */
+  function handOverBook(player) {
+    giveBookOfPiracy(player);
+    setVarbitValue(player, VARBIT_GIVEN_BOOK, 1);
   }
 
   function claimGold(player) {
@@ -1192,9 +1228,7 @@ module.exports = function registerCabinFeverQuest(api) {
         if (quest.getStage(player) !== STAGE_SINK) return;
         if (varbitValue(player, VARBIT_HULL_HOLES) < 3) return;
         event.handled = true;
-        whenIdle(player, () =>
-          startTranscript(api, player, BILL_SHIP, PAGE, "end-of-quest-cutscene")
-        );
+        whenIdle(player, () => EndScene.playEnd(player));
         return;
       case "8EJUBr": // the screen fades to black; the player returns to Port Phasmatys
         event.handled = true;
@@ -1740,7 +1774,7 @@ module.exports = function registerCabinFeverQuest(api) {
       );
       return true;
     }
-    const hit = Math.random() < rangedHitChance(player);
+    const hit = shotHits(player);
     const canister = ammo === CANNON_AMMO_CANISTER;
     // The shot as live plays it (capture ticks 1915-1918 and 2048-2049): the reach, the cannon's
     // area sound, the muzzle blast and the shot's flight; the load is gone and the barrel needs
@@ -1789,8 +1823,9 @@ module.exports = function registerCabinFeverQuest(api) {
       impact();
       const holes = varbitValue(player, VARBIT_HULL_HOLES) + 1;
       setVarbitValue(player, VARBIT_HULL_HOLES, holes);
+      // The third hole goes straight into Bill's "Ye've done it" and the inn (capture tick 2124).
       if (holes >= 3) {
-        playVariant(player, "sinking-the-enemy-ship-after-the-third-and-final-hit");
+        EndScene.playEnd(player);
         return;
       }
       player.sendMessage(holes === 1 ? "You put a hole in the hull!" : "You put another hole in the hull!");
@@ -1854,6 +1889,7 @@ module.exports = function registerCabinFeverQuest(api) {
       player.getInventory().deleteNumber(FUSE, 1);
       // Live arms the cannon (fever_cannon 3) and leaves fever_cannon_fuse alone (ticks 1910, 2044).
       setVarbitValue(player, VARBIT_CANNON, CANNON_ARMED);
+      fusedAt.set(player, World.getProcessCycle());
       player.sendMessage("You ready the cannon for firing.");
       return true;
     }
@@ -1973,6 +2009,32 @@ module.exports = function registerCabinFeverQuest(api) {
   const swinging = new WeakSet();
 
   /**
+   * One walked tile of a scripted path, as live's [walk] steps are: the held player's queue takes
+   * this step alone (a click queued since is dropped); `holdStill` takes the hold back.
+   */
+  function stepTo(player, x, y) {
+    const at = player.getLocation();
+    const queue = player.getMovementQueue?.();
+    if (!at || !queue) return;
+    queue.reset?.();
+    queue.setBlockMovement?.(false);
+    queue.walkStep?.(x - at.getX(), y - at.getY());
+  }
+
+  function holdStill(player) {
+    player.getMovementQueue?.()?.reset?.()?.setBlockMovement?.(true);
+  }
+
+  /** A path's [tick, action] steps from `walk` ([ticks after `from`, x, y]), held between steps. */
+  function walkSteps(player, from, walk) {
+    const at = new Set(walk.map(([after]) => after));
+    return walk.flatMap(([after, x, y]) => [
+      [from + after, () => stepTo(player, x, y)],
+      ...(at.has(after + 1) ? [] : [[from + after + 1, () => holdStill(player)]]),
+    ]);
+  }
+
+  /**
    * Rope on the hoisted sail from the yardarm. The rope is used, the player ties it and drops to
    * the deck, slides to it and swings across; a fall lands in the sea and swims to the other
    * ship with no run energy left. The Wiki gates the swing on 42 Agility.
@@ -2013,9 +2075,10 @@ module.exports = function registerCabinFeverQuest(api) {
       [4, () => player.sendMessage("You attach a rope to the sails.")],
       [5, () => { animate(player, ANIM.PICKUP_FLOOR); sound(player, SOUND.JUMP_DOWN); }],
       [7, () => {
-        player.moveTo(new Location(startX, startY, z));
+        player.moveTo(new Location(swing.drop[0], swing.drop[1], z));
         showOwnedLoc(player, SWING_ROPE_LOC, rope.x, rope.y, rope.z, rope.face);
       }],
+      ...walkSteps(player, 7, swing.walk),
       [7 + swing.gap, () => slide(player, [startX, startY, z], swing.grab, 1, 60, swing.grabAngle)],
     ];
     if (!falls) {
@@ -2380,6 +2443,12 @@ module.exports = function registerCabinFeverQuest(api) {
         setFlag(player, FLAG_CLEAN_IS_DIRTY);
       }
       swapCanisterDummy(player);
+      // Ours: a logout between the third hole and the completion (the deck lines, or the inn's
+      // last ticks) finishes the quest at the inn, rather than leaving a sunk ship to sink again.
+      if (quest.getStage(player) === STAGE_SINK && varbitValue(player, VARBIT_HULL_HOLES) >= 3
+        && !EndScene.isPlaying(player)) {
+        finishQuest(player);
+      }
       // The quest list's login varps can go out before these varbits are back: re-read the
       // objective-done step (40/60/80/100/120) from the restored state.
       syncQuestVarp(player);
@@ -2504,7 +2573,6 @@ module.exports = function registerCabinFeverQuest(api) {
 
   api.onNpcInteraction("Bill Teach", { "Talk-to": talkToBill, "Return-Home": billReturnHome });
   api.onNpcInteraction("Pirate", { "Talk-to": talkToPirate });
-  api.onNpcInteraction("Mama", { "Talk-to": talkToMama });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleHook);

@@ -238,7 +238,20 @@ function setup(completed = []) {
       for (const handler of custom.get(name) ?? []) handler(event);
     },
   }, { get(target, key) { return key in target ? target[key] : () => {}; } });
-  require('../plugins/quests/quests/CabinFever.Quest')(api);
+  // The end cutscene is its own unit with its own real-Player tests; here it is recorded.
+  const endScene = { played: [] };
+  const sceneFile = require.resolve('../plugins/quests/cabinfever/Scenes.CabinFever');
+  const realScene = require.cache[sceneFile];
+  require.cache[sceneFile] = { id: sceneFile, filename: sceneFile, loaded: true, exports: (_api, hooks) => {
+    Object.assign(endScene, hooks);
+    return { playEnd: (p) => { endScene.played.push(p); return true; }, isPlaying: () => false };
+  } };
+  try {
+    require('../plugins/quests/quests/CabinFever.Quest')(api);
+  } finally {
+    if (realScene) require.cache[sceneFile] = realScene;
+    else delete require.cache[sceneFile];
+  }
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'cabin_fever');
 
   const attributes = new Map();
@@ -386,7 +399,7 @@ function setup(completed = []) {
   const stage = () => quest.getStage(player);
   const lastTranscript = () => transcripts.at(-1);
   return {
-    quest, player, choose, action, condition, variant, object, itemOnObject, pickup, npcTalk,
+    quest, player, choose, action, condition, variant, object, itemOnObject, pickup, npcTalk, endScene,
     namedObject, namedItemOnObject, itemAction, npcDeath, hooks, worldNpcs, advance,
     complete: (key) => completedQuests.add(key),
     bootstrap: () => {
@@ -467,7 +480,7 @@ const GUN_LOCKER_OPEN = 11249;
 
 test('Cabin Fever completes from stage 0 through the real route handlers', () => {
   const originalRandom = Math.random;
-  // Fixture: 0.35 lands every swing (fall chance 1/3) and hits every shot (Ranged 40: 0.41).
+  // Fixture: 0.35 lands every swing (fall chance 1/3); every shot waits for the fuse, so it hits.
   Math.random = () => 0.35;
   try {
     const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
@@ -655,6 +668,7 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
     assert.equal(h.varbit(1744), 2, 'the canister rolls in a tick later');
     h.itemOnObject(I.FUSE, CANNON);
     assert.equal(h.varbit(1741), 3, 'cannon armed');
+    h.advance(5); // live fired 4-5 ticks after the fuse (capture ticks 1909 -> 1914)
     h.object(CANNON, 'Fire!');
     assert.equal(h.messages.at(-1), 'You fire the cannon at the crew!');
     assert.equal(h.varbit(1746), 1, 'the shot leaves the barrel needing the ramrod');
@@ -680,17 +694,18 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
       h.itemOnObject(I.CANNON_BALL_2, CANNON);
       h.advance(1);
       h.itemOnObject(I.FUSE, CANNON);
+      h.advance(4);
       h.object(CANNON, 'Fire!');
       h.advance(1);
       assert.equal(h.varbit(1750), shot);
     }
-    assert.equal(h.lastTranscript().variant, 'sinking-the-enemy-ship-after-the-third-and-final-hit');
-
-    // End cutscene and rewards.
-    h.action('7Zv7QG');
-    h.advance();
-    assert.equal(h.lastTranscript().variant, 'end-of-quest-cutscene');
-    h.action('V-4Bls');
+    // The third hole plays the end cutscene (its own tests: cabin-fever-end-scene.test.cjs),
+    // which hands over the book and then completes the quest.
+    assert.deepEqual(h.endScene.played, [h.player], 'the third hole starts the end cutscene');
+    assert.equal(h.stage(), 8, 'the quest completes when the cutscene ends, not on the hit');
+    h.endScene.onBook(h.player);
+    assert.equal(h.count(I.BOOK_O_PIRACY), 1, '"Here, have this book." hands it over');
+    h.endScene.onFinished(h.player);
     assert.equal(h.stage(), 9);
     assert.equal(h.varp(655), 140, 'canonical Cabin Fever completion varp');
     assert.equal(h.count(I.BOOK_O_PIRACY), 1);
@@ -1054,7 +1069,7 @@ test('Cabin Fever named NPC, object, item and death handlers are wired', () => {
   const N = core.NpcIdentifiers;
   const O = core.ObjectIdentifiers;
 
-  for (const name of ['Bill Teach', 'Pirate', 'Mama']) {
+  for (const name of ['Bill Teach', 'Pirate']) {
     assert.ok(h.hooks.npcActions.has(name), `registered NPC ${name}`);
   }
   for (const name of ['Repair Locker', 'Gun Locker', 'Powder Barrel', 'Barrel', 'Cannon',
@@ -1066,11 +1081,6 @@ test('Cabin Fever named NPC, object, item and death handlers are wired', () => {
   assert.ok(h.hooks.namedItemOnObject.some((entry) => entry.item === 'Rope' && entry.object === 'Hoisted sail'));
   assert.ok(h.hooks.itemActions.has("Book o' Piracy"));
   assert.equal(h.hooks.npcDeath.length, 1);
-
-  // Mama's page is selected by whether the Book o' Piracy is carried.
-  h.npcTalk(N.MAMA, 'Mama');
-  assert.equal(h.lastTranscript().page, 'Mama');
-  assert.equal(h.lastTranscript().variant, 'standard-dialogue-without-book-o-piracy');
 
   // Pirates only speak while the battle chain is live.
   const before = h.lastTranscript();
@@ -1250,6 +1260,7 @@ test('a canister hit credits the crew before the death animation can be interrup
     h.advance(1);
     h.player.getInventory().adds(I.FUSE, 1);
     h.itemOnObject(I.FUSE, CANNON);
+    h.advance(4);
     h.object(CANNON, 'Fire!');
     assert.equal(h.player.getAttribute(CREW_HITS) ?? 0, 0, 'the shot is still in the air');
 
@@ -1340,6 +1351,52 @@ test('a logout in the sea after a fallen swing logs back in on the ship the swin
     assert.equal(h.player.getAttribute('quest.cabin_fever.swing_landing'), null);
     h.relog();
     assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getZ()], [1822, 1], 'only once');
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test('a shot fired straight after the fuse can miss; one fired once the fuse settles always lands', () => {
+  // The Wiki: "Try not to fire the cannon immediately after attaching the fuse. This can cause
+  // multiple misses. Count to 3 before firing." Live's shots, 4-5 ticks after the fuse, all hit.
+  const originalRandom = Math.random;
+  try {
+    const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+    const I = core.ItemIdentifiers;
+    const CANNON = 11213;
+    h.quest.setStage(h.player, 8);
+    h.player.setAttribute('quest.cabin_fever.flags', 2); // live's clean flag
+    const load = () => {
+      h.player.getPacketSender().sendVarbit(1746, 0);
+      for (const id of [I.GUNPOWDER, I.RAMROD, I.CANNON_BALL_2, I.FUSE]) h.player.getInventory().adds(id, 1);
+      h.itemOnObject(I.GUNPOWDER, CANNON);
+      h.itemOnObject(I.RAMROD, CANNON);
+      h.itemOnObject(I.CANNON_BALL_2, CANNON);
+      h.advance(1);
+      h.itemOnObject(I.FUSE, CANNON);
+      assert.equal(h.varbit(1741), 3, 'armed');
+    };
+    Math.random = () => 0; // the worst roll
+    load();
+    h.object(CANNON, 'Fire!');
+    h.advance(1);
+    assert.equal(h.messages.at(-1), 'You fail to damage the hull.', 'fired at once: a miss');
+    assert.equal(h.varbit(1750), 0);
+    load();
+    h.advance(3);
+    h.object(CANNON, 'Fire!');
+    h.advance(1);
+    assert.equal(h.messages.at(-1), 'You fail to damage the hull.', 'three ticks on is still too soon');
+    load();
+    h.advance(4);
+    h.object(CANNON, 'Fire!');
+    h.advance(1);
+    assert.equal(h.messages.at(-1), 'You put a hole in the hull!', 'four ticks on (capture 2088 -> 2092) lands, whatever the roll');
+    Math.random = () => 0.99;
+    load();
+    h.object(CANNON, 'Fire!');
+    h.advance(1);
+    assert.equal(h.messages.at(-1), 'You put another hole in the hull!', 'an instant shot can still land');
   } finally {
     Math.random = originalRandom;
   }

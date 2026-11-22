@@ -1,4 +1,6 @@
 const SCALE_STORAGE_KEY = "osrs.runeliteUiScale";
+/** The mobile client keeps its own interface scale, as live saves it per client. */
+const MOBILE_SCALE_STORAGE_KEY = "osrs.runeliteUiScale.mobile";
 
 export const RUNELITE_DEFAULT_RESIZABLE_SCALING_PERCENT = 50;
 export const RUNELITE_DEFAULT_UI_SCALE = 1;
@@ -8,9 +10,13 @@ export const OSRS_INTERFACE_SCALING_DEFAULT_PERCENT = 100;
 export const OSRS_INTERFACE_SCALING_MIN_DESKTOP_PERCENT = 100;
 export const OSRS_INTERFACE_SCALING_MIN_MOBILE_PERCENT = 175;
 export const OSRS_INTERFACE_SCALING_MAX_PERCENT = 400;
+/** Mobile defaults to the high 400% scale (Easter 2026 update); the slider lowers it to 175%. */
+export const OSRS_INTERFACE_SCALING_DEFAULT_MOBILE_PERCENT = 400;
 
 let manualScaleOverride: number | null = null;
 let overrideLoaded = false;
+let manualMobilePercentOverride: number | null = null;
+let mobileOverrideLoaded = false;
 
 function clamp(value: number, min: number, max: number): number {
     if (!Number.isFinite(value)) return min;
@@ -40,6 +46,67 @@ function ensureOverrideLoaded(): void {
     if (overrideLoaded) return;
     overrideLoaded = true;
     manualScaleOverride = loadOverride();
+}
+
+function normalizeMobileInterfaceScalingPercent(percent: number): number {
+    return Math.round(clamp(
+        percent,
+        OSRS_INTERFACE_SCALING_MIN_MOBILE_PERCENT,
+        OSRS_INTERFACE_SCALING_MAX_PERCENT,
+    ));
+}
+
+function loadMobileOverride(): number | null {
+    try {
+        if (typeof localStorage === "undefined") return null;
+        const raw = localStorage.getItem(MOBILE_SCALE_STORAGE_KEY);
+        if (raw === null) return null;
+        const parsed = Number(raw);
+        if (!Number.isFinite(parsed)) return null;
+        return normalizeMobileInterfaceScalingPercent(parsed);
+    } catch {
+        return null;
+    }
+}
+
+function ensureMobileOverrideLoaded(): void {
+    if (mobileOverrideLoaded) return;
+    mobileOverrideLoaded = true;
+    manualMobilePercentOverride = loadMobileOverride();
+}
+
+/**
+ * The mobile client's interface scaling percent (175..400). Unlike the desktop
+ * scale it is kept separately, so lowering it on a tablet does not enlarge the
+ * desktop interface when the same browser returns to the desktop layout.
+ */
+export function getMobileInterfaceScalingPercent(): number {
+    ensureMobileOverrideLoaded();
+    return manualMobilePercentOverride ?? OSRS_INTERFACE_SCALING_DEFAULT_MOBILE_PERCENT;
+}
+
+export function setMobileInterfaceScalingPercent(percent: number | null): void {
+    mobileOverrideLoaded = true;
+    if (
+        percent === null ||
+        normalizeMobileInterfaceScalingPercent(percent) === OSRS_INTERFACE_SCALING_DEFAULT_MOBILE_PERCENT
+    ) {
+        manualMobilePercentOverride = null;
+        try {
+            if (typeof localStorage !== "undefined") {
+                localStorage.removeItem(MOBILE_SCALE_STORAGE_KEY);
+            }
+        } catch {}
+        return;
+    }
+
+    const clamped = normalizeMobileInterfaceScalingPercent(percent);
+    manualMobilePercentOverride = clamped;
+    try {
+        if (typeof localStorage !== "undefined") {
+            localStorage.setItem(MOBILE_SCALE_STORAGE_KEY, String(clamped));
+        }
+    } catch {}
 }
 
 /**
@@ -82,9 +149,8 @@ export function osrsInterfaceScalingPercentFromScale(scale: number): number {
 }
 
 export function getOsrsInterfaceScalingPercent(mobile = false): number {
-    // Native mobile login replaces values below its minimum with 400%; keep that out of saved preferences.
-    return normalizeOsrsInterfaceScalingPercent(osrsInterfaceScalingPercentFromScale(getUiScale()),
-        mobile ? OSRS_INTERFACE_SCALING_MIN_MOBILE_PERCENT : OSRS_INTERFACE_SCALING_MIN_DESKTOP_PERCENT);
+    if (mobile) return getMobileInterfaceScalingPercent();
+    return normalizeOsrsInterfaceScalingPercent(osrsInterfaceScalingPercentFromScale(getUiScale()));
 }
 
 export function getDefaultUiScale(): number {
@@ -138,7 +204,11 @@ export function setRuneliteInterfaceScalingEnabled(enabled: boolean): void {
     setUiScale(enabled ? getRuneliteDefaultStretchedUiScale() : null);
 }
 
-export function setOsrsInterfaceScalingPercent(percent: number): void {
+export function setOsrsInterfaceScalingPercent(percent: number, mobile = false): void {
+    if (mobile) {
+        setMobileInterfaceScalingPercent(percent);
+        return;
+    }
     const normalized = normalizeOsrsInterfaceScalingPercent(percent);
     if (normalized === OSRS_INTERFACE_SCALING_DEFAULT_PERCENT) {
         setUiScale(null);

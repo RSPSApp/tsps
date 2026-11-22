@@ -93,22 +93,35 @@ sandwich. Once the machines work: "You have no need to search the crates." (3047
   (15 cycles); two ticks later tol_prog 10, the fade in and "Why does nobody listen? ..." (2645-2659).
 - The ladder up at tol_prog 10: seq 828 and a fade out; five ticks later a copy of the tower (rebuild_region zone
   1602,1282) with the player on (2648,3221,3), the tabs closed, and Effigy 3586 (2652,3217), Transmute 3593
-  (2647,3215) and Currency 3595 (2650,3215); camera at +1, fade in and pans at +6/+11/+16, the talk at +21. After
+  (2647,3215) and Currency 3595 (2650,3215), the player and all three facing the cage at (2649,3218) (2721-2722); camera at +1, fade in and pans at +6/+11/+16, the talk at +21. After
   "It begins!": seq 4411 on the three, map_anim 736 at eight tiles with sound 3422 three ticks on, and the
   Homunculus 3589 at (2648,3217) with seq 5833 seven ticks on. "Arghhh!"/"Oh no...": spotanim 1026, seq 5834,
   sounds 3428 and 3418, waves of map_anim 736; tol_cage_state 0 on "Run away!"; the fade on "Flee for your
-  lives!", out of the copy to (2648,3221,2) three ticks on, tol_prog 11 two after (2712-2872).
+  lives!", out of the copy to (2648,3221,2) three ticks on, tol_prog 11 two after (2712-2872; the timing below).
 - The ladder up at tol_prog 11: "I should go and talk to Effigy outside first." (2892).
 - Effigy at tol_prog 16: a cutscene on the ground floor (tabs closed, camera at (2641,3213) looking at
   (2639,3220)); tol_homonc_pres (3359) and sound 3423 with "Boo."; after "Me look dungeon, ..." the fade, and
-  three ticks on tol_prog 17 with the Homunculus gone and the tabs back (3361-3388).
+  three ticks on tol_prog 17 (the timing below) with the Homunculus gone and the tabs back (3361-3388).
+
+Each scene's timers start when its line is continued, not when the line event comes: the event comes as the
+dialogue chain is built, often before the line is shown, so a player who read slowly got the fade in before the
+fade out and a black screen, and the scare ended (tabs and camera back, tol_prog 17) while its talk still played
+(issue #6485). What a line shows with (camera, sounds, tol_homonc_pres) plays as that line is shown. While a scene
+plays, a close (Esc) or a world click keeps the chat, since the scene ends only from its last line's continue. A death
+mid-scene (ours: none captured) lets the scene go, with its timers, and the scene plays again.
+
+The scenes' timers follow rsprox.net recording 1002189, the public one: the hand-off fades a tick after "Wait! What
+about-" is continued and moves tol_prog to 10 two after that (9032-9035); Flee fades a tick after its continue, leaves
+the copy three on and moves tol_prog to 11 two after that (9290-9296); the scare fades on its continue's tick and ends
+three on (9672-9675). The user's TowerOfLife.bin has the same gaps after every fade but differs by a tick on two
+continues (recorded differences): Flee fades on its continue's tick (2867), the scare a tick after it (3384 -> 3385).
 
 ## The Homunculus
 
 - Mind puzzle (tol_prog 12): the message box sets tol_prog 14 and tol_homon_align (3358) to 7, opens overlay 508
   and moves the camera. The fourteen questions run round in a loop, each answer moving the bar +1 (logic), -1
   (magic) or not at all, with the overlay's fifteen arrows hidden and the one at the bar shown, until it reaches 0
-  or 14. Walking off closes the overlay (3143); talking again ("It's me again, Homunculus.") starts over at 7
+  or 14. Walking off closes the overlay with a cam_reset (3143), as the bar reaching an end does (3284); talking again ("It's me again, Homunculus.") starts over at 7
   (3149). At the end, "I decided to root for logic." when logic won (3286).
 - Trapdoor before tol_prog 17: "It seems to be locked." (2628, 3043, 3331). Open: seq 827 and sound 91 (delay
   40), tol_trapdoor_open (3372) a tick later; Climb-down: seq 827, a tick later (3038,4376,0) (3414-3422).

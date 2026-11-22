@@ -1825,30 +1825,7 @@ test('the Shantay pass crosses the desert fence in the right direction', () => {
 });
 
 
-test('Sophanem north gate opens and closes both nameless gate leaves', () => {
-  const h = buildHarness();
-  try {
-    h.place(44036, 3283, 2809, 1);
-    h.place(44038, 3284, 2809, 1);
-    assert.deepEqual(h.click(44036, 3283, 2809, 1), [
-      ['deregister', 44036, 3283, 2809, 1],
-      ['deregister', 44038, 3284, 2809, 1],
-      ['register', 44037, 3283, 2810, 0],
-      ['register', 44039, 3284, 2810, 2],
-    ]);
-
-    h.place(44037, 3283, 2810, 0);
-    h.place(44039, 3284, 2810, 2);
-    assert.deepEqual(h.click(44037, 3283, 2810, 0, 'Close'), [
-      ['deregister', 44037, 3283, 2810, 0],
-      ['deregister', 44039, 3284, 2810, 2],
-      ['register', 44036, 3283, 2809, 1],
-      ['register', 44038, 3284, 2809, 1],
-    ]);
-  } finally {
-    h.restore();
-  }
-});
+// Sophanem's north gate is a pass-through gate now (it never stays open): tests/sophanem-gates.test.cjs.
 
 test('Lassar residential shadow doors use their canonical open and close locs', () => {
   const h = buildHarness();

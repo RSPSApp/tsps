@@ -70,7 +70,8 @@ export class SpellTeleports {
         ["kourend castle teleport", teleport(MagicSpellbook.NORMAL, 48, 58, [rune(563, 2), rune(555), rune(554)], 1641, 3673)],
         ["ardougne teleport", teleport(MagicSpellbook.NORMAL, 51, 61, [rune(563, 2), rune(555, 2)], 2661, 3302)],
         ["civitas illa fortis teleport", teleport(MagicSpellbook.NORMAL, 54, 64, [rune(563, 2), rune(557), rune(554)], 1681, 3133)],
-        ["watchtower teleport", teleport(MagicSpellbook.NORMAL, 58, 68, [rune(563, 2), rune(557, 2)], 2549, 3112, 2)],
+        // The Wiki tablet page's "Watchtower centre" (2549,3112,2), in the completed tower's copy (live landed at 2934,4713,2, t6337).
+        ["watchtower teleport", teleport(MagicSpellbook.NORMAL, 58, 68, [rune(563, 2), rune(557, 2)], 2933, 4712, 2)],
         ["trollheim teleport", teleport(MagicSpellbook.NORMAL, 61, 68, [rune(563, 2), rune(554, 2)], 2890, 3679)],
         ["ape atoll teleport", teleport(MagicSpellbook.NORMAL, 64, 74, [rune(563, 2), rune(555, 2), rune(554, 2), rune(1963)], 2796, 2798)],
         ["paddewwa teleport", teleport(MagicSpellbook.ANCIENT, 54, 64, [rune(563, 2), rune(556), rune(554)], 3097, 9880)],

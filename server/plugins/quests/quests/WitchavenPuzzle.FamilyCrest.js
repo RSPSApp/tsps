@@ -43,7 +43,8 @@ function showLevers({ player }) {
 function pullLever(event) {
   const lever = levers.find((entry) => (entry.down === event.objectId || entry.up === event.objectId)
     && event.location.x === entry.x && event.location.y === entry.y && event.location.z === 0);
-  if (!lever) return;
+  // Not a Witchaven lever: leave it to its owner (an option hook's undefined counts as handled).
+  if (!lever) return false;
   event.handled = true;
   const bits = leverBits(event.player) ^ lever.bit;
   event.player.setAttribute(LEVERS_ATTRIBUTE, bits);

@@ -423,9 +423,10 @@ module.exports = function registerTowerOfLifeQuest(api) {
     sender.sendInterfaceDisplayState((MIND_OVERLAY_GROUP << 16) | MIND_ARROWS[align], false);
   }
 
+  /** The overlay and the puzzle's camera go together: walking off (capture tick 3143) or the bar at an end (3284). */
   function closeMind(player) {
     mindTalk.delete(player);
-    player.getPacketSender().closeSubInterface(OVERLAY_HUD_UID);
+    player.getPacketSender().closeSubInterface(OVERLAY_HUD_UID).sendCameraReset();
   }
 
   /** The overlay goes when the talk does (walking off closes both, capture tick 3143). */
@@ -522,6 +523,14 @@ module.exports = function registerTowerOfLifeQuest(api) {
     else if (HOMUNCULUS_NPC_IDS.has(npcId) && text === "I decided to root for magic." && mindAlign(player) === MIND_LOGIC) {
       request.text = "I decided to root for logic.";
     }
+  }
+
+  /**
+   * A scene ends from its last line's continue: a close (Esc) or a world click that dropped the chat would leave the
+   * player in it (Misthalin Mystery's protectScene does the same).
+   */
+  function protectScene(event) {
+    if (Scenes.isPlaying(event.player)) event.handled = true;
   }
 
   // ---------------------------------------------------------------------------
@@ -1185,6 +1194,9 @@ module.exports = function registerTowerOfLifeQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:line", noFingersAsked);
+  api.onCustomEvent("interface:close", protectScene);
+  api.onCustomEvent("player:world-input", protectScene);
+  api.onCustomEvent("player:died", ({ player }) => Scenes.died(player));
   api.onNpcInteraction("'No fingers'", { Pickpocket: pickpocketNoFingers });
   api.onObjectInteraction("Pressure machine", { Fix: handleMachineFix });
   api.onObjectInteraction("Pipe machine", { Fix: handleMachineFix });

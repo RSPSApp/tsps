@@ -80,6 +80,17 @@ test("the Kualti underground staircase in Civitas illa Fortis lands on one tile 
     }
 });
 
+test("Paterdomus temple's spiral staircases come down on their outer side, not the climber's tile", () => {
+    // rsprox local 1001683: down the north stairs from 3416,3493,1 lands on 3417,3494,0 (tick 11337);
+    // down the south stairs from 3416,3484,1 on 3417,3483,0 (tick 11609, and 1001965 tick 18786).
+    assert.deepEqual(lands(mapObject(3417, 3493, 1, 16673), ClimbLinks.DOWN, new Location(3416, 3493, 1)), [3417, 3494, 0]);
+    assert.deepEqual(lands(mapObject(3417, 3484, 1, 62173), ClimbLinks.DOWN, new Location(3416, 3484, 1)), [3417, 3483, 0]);
+    // Up is still the search's, which lands as captured: 3416,3492,0 -> 3416,3493,1 (1001683 tick
+    // 11144) and 3416,3485,0 -> 3416,3484,1 (1001965).
+    assert.deepEqual(lands(mapObject(3417, 3492, 0, 61189), ClimbLinks.UP, new Location(3416, 3492, 0)), [3416, 3493, 1]);
+    assert.deepEqual(lands(mapObject(3417, 3484, 0, 61190), ClimbLinks.UP, new Location(3416, 3485, 0)), [3416, 3484, 1]);
+});
+
 test("a trapdoor leads underground, 6400 tiles north, and the ladder there back up (Lumbridge castle)", () => {
     assert.deepEqual(lands(mapObject(3209, 3216, 0, 14880), ClimbLinks.DOWN, new Location(3209, 3217, 0)), [3209, 9617, 0]);
     assert.deepEqual(lands(mapObject(3209, 9616, 0, 17385), ClimbLinks.UP, new Location(3208, 9616, 0)), [3210, 3216, 0]);

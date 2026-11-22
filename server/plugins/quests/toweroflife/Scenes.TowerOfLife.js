@@ -245,7 +245,7 @@ function createScenes(api, ctx) {
     return true;
   }
 
-  function scareLine(request) {
+  function scareLine(request, state) {
     const { player } = request;
     const text = String(request.text ?? "");
     if (text === "Boo.") {
@@ -260,6 +260,7 @@ function createScenes(api, ctx) {
       request.after = () => {
         Scenes.later(player, 1, () => Scenes.fade(player, true));
         Scenes.later(player, 4, () => {
+          if (playing.get(player) !== state) return;
           ctx.setStage(player, 17);
           ctx.sendVarbit(player, VARBIT_HOMONC_PRES, 0);
           endPlaying(player);
@@ -275,7 +276,7 @@ function createScenes(api, ctx) {
     const state = playing.get(request.player);
     if (!state) return false;
     if (state.name === "creation" && state.scene) creationLine(request, state);
-    else if (state.name === "scare") scareLine(request);
+    else if (state.name === "scare") scareLine(request, state);
     return true;
   }
 

@@ -66,7 +66,7 @@ function setup(options = {}) {
   const tasks = [];
   const questCore = {
     ...core,
-    CountdownTask: class { constructor(_player, _ticks, callback) { this.callback = callback; } },
+    CountdownTask: class { constructor(_player, ticks, callback) { this.ticks = ticks; this.callback = callback; } },
     TaskManager: { submit(task) { tasks.push(task); } },
   };
   const custom = new Map();
@@ -261,6 +261,8 @@ function setup(options = {}) {
     return event.handled ? event : null;
   };
   const login = () => PluginManager.emitPlayerLogin({ player });
+  /** The delays of the tasks queued now, in queue order. */
+  const queuedTicks = () => tasks.map((task) => task.ticks);
   const flushTasks = () => {
     while (tasks.length > 0) tasks.shift().callback();
   };
@@ -279,7 +281,7 @@ function setup(options = {}) {
     npcOption: (name, option, event = {}) => { const payload = { player, handled: false, ...event }; npcOptions.get(name)?.[option]?.(payload); return payload; },
     quest, player, statements, animations, attributes, items, equipment, varbits, messages, xp, rawModels, positions, emitted, transcriptCalls, custom, itemOnNpc, conditions,
     persistedAttributes,
-    interfaceButtons, subInterfaces, subInterfaceSends, customInterfaces, action, selectVariant, objectAction, npcInteraction, login, closeInterface, interfaceAction, flushTasks,
+    interfaceButtons, subInterfaces, subInterfaceSends, customInterfaces, action, selectVariant, objectAction, npcInteraction, login, closeInterface, interfaceAction, flushTasks, queuedTicks,
     getInterfaceId: () => interfaceId,
     fades, cameraResets: () => cameraResets,
     mindBarOpen: () => subInterfaces.has(MIND_BAR_GROUP),
@@ -665,6 +667,8 @@ test('a slow reader of "Wait! What about-" gets the fade out before the fade in,
   assert.deepEqual(h.fades, []);
   request.after();
   assert.equal(request.pauseTicks, 3);
+  // The fade a tick after the continue, tol_prog 10 and the fade in three after it.
+  assert.deepEqual(h.queuedTicks(), [1, 3]);
   h.flushTasks();
   assert.equal(h.quest.getStage(h.player), 10);
   assert.deepEqual(h.fades, ['out', 'in']);
@@ -688,6 +692,7 @@ test('the scare plays its whole talk: the Homunculus with "Boo.", and the end on
   assert.equal(h.varbits.get(3359), 1);
   last.after();
   assert.equal(last.pauseTicks, 4);
+  assert.deepEqual(h.queuedTicks(), [1, 4]);
   // An Esc or a world click mid-scene keeps the chat, so the last line's continue still ends it.
   for (const name of ['interface:close', 'player:world-input']) {
     const input = { player: h.player, handled: false };

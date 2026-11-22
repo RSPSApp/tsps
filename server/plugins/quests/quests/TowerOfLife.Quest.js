@@ -525,6 +525,14 @@ module.exports = function registerTowerOfLifeQuest(api) {
     }
   }
 
+  /**
+   * A scene ends from its last line's continue: a close (Esc) or a world click that dropped the chat would leave the
+   * player in it (Misthalin Mystery's protectScene does the same).
+   */
+  function protectScene(event) {
+    if (Scenes.isPlaying(event.player)) event.handled = true;
+  }
+
   // ---------------------------------------------------------------------------
   // Variant selection
   // ---------------------------------------------------------------------------
@@ -1186,9 +1194,6 @@ module.exports = function registerTowerOfLifeQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:line", noFingersAsked);
-  // A scene ends from its last line's continue: a close (Esc) or a world click that dropped the chat would leave the
-  // player in it (Misthalin Mystery's protectScene does the same).
-  const protectScene = (event) => { if (Scenes.isPlaying(event.player)) event.handled = true; };
   api.onCustomEvent("interface:close", protectScene);
   api.onCustomEvent("player:world-input", protectScene);
   api.onNpcInteraction("'No fingers'", { Pickpocket: pickpocketNoFingers });

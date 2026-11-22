@@ -211,3 +211,27 @@ test("a signet dropped after the click ends the open on the loot tick: no loot, 
   assert.deepEqual(shownIds(), [chestId]);
   assert.equal(f.varbits.at(-1)?.[1], 0, "busy cleared");
 });
+
+test("the freed signet slot takes the combat herbs, then the useful herb, then the secondary (rec 4185 slots)", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.TINDERBOX, 1));
+  f.inv.setItem(1, new core.Item(I.ALCHEMISTS_SIGNET, 1));
+  rolls(t, [0, 0, 0.999, 0, 0, 0, 0.999, 0]); // ranarr seed, avantoe, lantadyme
+  await openChest(f);
+  ticks(f, 5);
+  const ids = f.inv.getItems().slice(1, 5).map((item) => item?.getId());
+  assert.deepEqual(ids, [noted(I.ALDARIUM), noted(I.GRIMY_LANTADYME), noted(I.GRIMY_AVANTOE), I.RANARR_SEED]);
+});
+
+test("a loot stack that can't fit refuses with the four-spaces box and keeps the signet (Ours)", async (t) => {
+  const f = actor(t);
+  f.inv.add(new core.Item(I.ALCHEMISTS_SIGNET, 1), false);
+  f.inv.setItem(5, new core.Item(noted(I.ALDARIUM), 2147483647));
+  await openChest(f);
+  ticks(f, 5);
+  assert.equal(f.inv.getAmount(I.ALCHEMISTS_SIGNET), 1);
+  assert.equal(at(f, Chest().MESSAGE.LOOT), undefined);
+  assert.ok(boxed(f, Chest().MESSAGE.FULL));
+  assert.deepEqual(shownIds(), [chestId]);
+  assert.equal(f.varbits.at(-1)?.[1], 0, "busy cleared");
+});

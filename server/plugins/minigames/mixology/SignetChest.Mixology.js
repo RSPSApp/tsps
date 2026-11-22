@@ -24,7 +24,8 @@
  *
  * Ours: no capture opens it without a signet and with a full pack, so the signet is checked first. The
  * refusals don't set busy (no capture shows when it is cleared). A signet gone by the loot tick (dropped
- * mid-open) ends the open there, with nothing given.
+ * mid-open) ends the open there, with nothing given; so does a loot stack that can't fit (a stack at its
+ * limit), with the four-spaces box and the signet kept.
  */
 
 const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
@@ -114,12 +115,24 @@ function rollLoot() {
   return [roll([ALDARIUM]), roll(SECONDARIES), roll(USEFUL_HERBS), roll(COMBAT_HERBS)];
 }
 
-function giveLoot(player) {
+/**
+ * Live fills the slots aldarium, combat herbs, useful herb, then the secondary or seed (rec 4185: the freed
+ * signet slot takes the combat herbs).
+ */
+function addOrder([aldarium, secondary, useful, combat]) {
+  return [aldarium, combat, useful, secondary];
+}
+
+/** Ours: every stack must fit (a stack at its limit can't take more), else nothing is used. */
+function fits(player, loot) {
+  const inventory = player.getInventory();
+  return loot.every((item) => inventory.getAddableAmount(item) >= item.getAmount());
+}
+
+function giveLoot(player, loot) {
   const inventory = player.getInventory();
   inventory.delete(resolveIds().signet, 1, false);
-  for (const item of rollLoot()) {
-    if (inventory.getAddableAmount(item) >= item.getAmount()) inventory.add(item, false);
-  }
+  for (const item of addOrder(loot)) inventory.add(item, false);
   inventory.refreshItems();
 }
 
@@ -154,9 +167,13 @@ function steps(player, object, run) {
     { msg: MESSAGE.UNLOCK },
     { varbit: [id.busy, 1] },
     { wait: 1 },
-    { run: () => { if (!player.getInventory().contains(id.signet)) run.task?.stop(); } },
+    { run: () => {
+      if (!player.getInventory().contains(id.signet)) { run.task?.stop(); return; }
+      run.loot = rollLoot();
+      if (!fits(player, run.loot)) { run.task?.stop(); refuse(player, MESSAGE.FULL, 0); }
+    } },
     { msg: MESSAGE.LOOT },
-    { run: () => { giveLoot(player); run.shown = showOpen(object); } },
+    { run: () => { giveLoot(player, run.loot); run.shown = showOpen(object); } },
     { wait: 1 },
     { sound: SOUND.LOOT, delay: 15 },
     { wait: 1 },
@@ -190,7 +207,7 @@ function open(event) {
     runnerReady = true;
   }
   opening.add(player);
-  const run = { task: null, shown: null };
+  const run = { task: null, shown: null, loot: null };
   run.task = ObstacleRunner.run({ player, object }, steps(player, object, run), {
     keepAnimation: true,
     onFinish: (completed) => {

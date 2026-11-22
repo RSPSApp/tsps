@@ -178,6 +178,8 @@ type StretchedWindow = {
     stretchedRawHeight: number;
 };
 const stretchedWindows = new WeakMap<WidgetLike, StretchedWindow>();
+/** Nodes this hook has stretched; a cache script may rewrite their raw values on resize. */
+const stretchedByUs = new WeakSet<WidgetLike>();
 
 /**
  * Windows that reserve the chatbox's height keep doing so after the chat is hidden, leaving
@@ -208,11 +210,17 @@ export function extendWindowIntoHiddenChat(
     }
     const rawY = stretched?.rawY ?? node.rawY ?? 0;
     const rawHeight = stretched?.rawHeight ?? node.rawHeight ?? 0;
-    if (extended <= rawHeight) return;
+    // A cache layout script may already have set this exact height from the canvas (the
+    // Settings window sizes itself to the canvas minus the chat), while still centring it
+    // in its much shorter parent. Take that height over, but correct the raw position.
+    // A window this hook already stretched may shrink again when the scale grows; one that
+    // was naturally taller than the space stays untouched.
+    if (extended < (node.height ?? 0) && !stretchedByUs.has(node)) return;
     const stretchedRawY = HIDDEN_CHAT_WINDOW_TOP - ((parentH - extended) >> 1);
     node.rawHeight = extended;
     node.rawY = stretchedRawY;
     stretchedWindows.set(node, { rawY, rawHeight, stretchedRawY, stretchedRawHeight: extended });
+    stretchedByUs.add(node);
     alignSize(node, parentW, parentH);
     alignPosition(node, parentW, parentH);
 }
@@ -222,6 +230,7 @@ export function restoreWindowFromHiddenChat(node: WidgetLike, parentW: number, p
     const stretched = stretchedWindows.get(node);
     if (!stretched) return;
     stretchedWindows.delete(node);
+    stretchedByUs.delete(node);
     if (node.rawY !== stretched.stretchedRawY || node.rawHeight !== stretched.stretchedRawHeight) return;
     node.rawY = stretched.rawY;
     node.rawHeight = stretched.rawHeight;

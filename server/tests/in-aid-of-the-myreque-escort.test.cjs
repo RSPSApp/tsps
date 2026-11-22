@@ -655,6 +655,17 @@ test("Ivan eats when hurt: 2005 down by one with the Wiki's message; with none l
   assert.equal(stage(f), 310);
 });
 
+test("a teleport between the trapdoor's animation and the climb cancels the climb", async (t) => {
+  const f = actor(t, { stage: 350, vars: { [VB.TRAPDOOR]: 1 } });
+  f.player.setLocation(new core.Location(3440, 9899, 0));
+  f.player.getPacketSender().sendVarbit(VB.TRAPDOOR, 1); // the client's view of 1982
+  assert.equal(objectClick(f, 12762, [3441, 9899, 0], "Climb-down"), true);
+  f.player.moveTo(new core.Location(3222, 3218, 0));
+  tick(f);
+  assert.equal(stage(f), 350, "no 360");
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3222, 3218]);
+});
+
 test("wrong stages: Ivan takes nothing before 290; the keyhole refuses the key before 350; no map before 310", async (t) => {
   const f = actor(t, { stage: 280, items: [[I.STEEL_MED_HELM], [I.TEMPLE_LIBRARY_KEY]] });
   assert.equal(useOnNpc(f, hideoutIvan(f), I.STEEL_MED_HELM), false);

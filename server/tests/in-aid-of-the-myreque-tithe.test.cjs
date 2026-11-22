@@ -306,6 +306,20 @@ test("Veliaf fights once he is in: the juvinates, then Gadderanks (Wiki; t2425-t
   assert.equal(targetOf(veliaf), gadderanks.getIndex(), "and then finally Gadderanks himself");
 });
 
+test("a foe falling while Veliaf walks in leaves him walking; he fights from t2425 (#6482)", (t) => {
+  const { player } = intoFight(t);
+  const gadderanks = byId(player, 4484);
+  byId(player, 4486).setHitpoints(0);
+  tick(6, { npcs: true });
+  const veliaf = byId(player, 989);
+  assert.ok(veliaf, "Veliaf at the door (t2420)");
+  byId(player, 4487).setHitpoints(0); // the second falls mid-entrance
+  tick(2, { npcs: true });
+  assert.equal(targetOf(veliaf), null, "still walking in (t2421-t2424)");
+  tick(3, { npcs: true });
+  assert.equal(targetOf(veliaf), gadderanks.getIndex(), "then Gadderanks, the last one standing");
+});
+
 test("the wounded talk starts from the player's line; passing away: 280, 1981=2, out, the hammer before Aurel's line", (t) => {
   const { player, varbits, chatboxes, items } = intoFight(t);
   byId(player, 4484).setHitpoints(0);

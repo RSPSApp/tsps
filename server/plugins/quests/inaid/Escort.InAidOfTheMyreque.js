@@ -457,12 +457,12 @@ module.exports = function attachEscort(context) {
     // player would close it with its next hit, as every hit does, so their fight stops here too.
     const playerCombat = player.getCombat?.();
     if (ambush.juvinates.includes(playerCombat?.getTarget?.())) playerCombat.reset?.();
-    // The player's own swing in flight would land and set a juvinate back on them.
-    api.core.HitQueue?.dropHitsFrom?.(player);
     for (const juvinate of ambush.juvinates) {
       juvinate.getCombat?.().reset?.();
       api.core.TaskManager.cancelTasks(juvinate); // a retaliation already queued by a landed hit
       api.core.HitQueue?.dropHitsFrom?.(juvinate); // a swing already on its way lands no more
+      // The player's swing on its way to it would land and set it back on them (this ambush's only).
+      juvinate.getCombat?.().getHitQueue?.()?.clearIncoming?.();
     }
     common.play(player, NPC.IVAN_FLEEING, V.FLEE, undefined, PAGE);
   }
@@ -625,7 +625,10 @@ module.exports = function attachEscort(context) {
     if (id !== O.TRAPDOOR_52) return false;
     if (get(player, VARBIT.TEMPLE_TRAPDOOR) !== 1) return false;
     common.anim(player, LIBRARY.climbAnimation);
+    const from = player.getLocation().clone();
     common.later(player, 1, () => {
+      // Moved meanwhile (a teleport between the animation and the climb): no climb.
+      if (!player.getLocation().equals(from)) return;
       if (stage(player) >= STAGE.LIBRARY_KEY) state.advance(player, STAGE.LIBRARY_OPEN);
       player.moveTo(new Location(...LIBRARY.tile));
     });

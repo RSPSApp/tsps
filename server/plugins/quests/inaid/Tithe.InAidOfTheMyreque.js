@@ -490,13 +490,16 @@ module.exports = function attachTithe(context) {
     // is dropped by the combat tick (CombatFactory.validTarget), and he never fought. He
     // closes in from t2426.
     Scenes.later(scene, 5, () => {
-      if (fights.get(player) === fight) veliafRetarget(fight);
+      if (fights.get(player) !== fight) return;
+      fight.veliafIn = true;
+      veliafRetarget(fight);
     });
   }
 
   function veliafRetarget(fight) {
     const veliaf = fight.veliaf;
-    if (!veliaf?.isRegistered?.()) return;
+    // Not while he walks in (a foe falling then waits for t2425); the aftermath's Veliaf never fights.
+    if (!veliaf?.isRegistered?.() || !fight.veliafIn) return;
     // Wiki: Veliaf helps kill "the other vampyre, and then finally Gadderanks himself".
     const standing = (npc) => npc?.isRegistered?.() && !npc.__inAidFallen;
     const target = fight.juvinates.find(standing) ?? (!fight.wounded && standing(fight.gadderanks) ? fight.gadderanks : null);

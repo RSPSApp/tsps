@@ -117,7 +117,7 @@ page holds are literals in the units.
 ### Old Man Ral (3772, multinpc 15774)
 - 50-64: "Someone said you could help me." -> the name menu. Pal, rascal and snitch loop back. "Old Man Ral, the sage of Sanguinesti." (t1026) runs the sage chain. 65 comes four lines later, as "Hmph. Myreque, eh?..." shows (t1158).
 - From 65: his own page's "Hello again!" talk (t1181). From 200: the papyrus top-up (Sketches).
-- The house doors swing shut by themselves about 499 ticks after opening (t841 -> t1340); left to the doors plugin.
+- The house doors are plain doors (Doors plugin): door1 17600 at 3602,3208 rotation 3 opens onto area_sanguine_ghetto_open_door1 18031 at 3602,3207 rotation 0 (t841), door2 17601 at 3606,3206 onto 18032 at 3606,3205 (t845), door_open 62 each. The catalog pairs them by the "open_" gameval form (issue #6545). They swing shut by themselves about 499 ticks after opening (t841 -> t1340).
 
 ### Rooftop route (t1208-2635)
 - Ladders: up = seq 828 then the move a tick on; down = seq 827 then the move. No sound or xp.

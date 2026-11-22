@@ -1460,6 +1460,7 @@ function attach(api) {
     api.onCustomEvent("farming:harvest", Guild.harvestContract);
     api.onCustomEvent("farming:open-seed-vault", Guild.openSeedVault);
     api.onCustomEvent("door:toggle", Guild.guardGuildDoor);
+    api.onPlayerLocationChange(Guild.guardGuildTier);
     api.onCustomEvent("woodcutting:deplete-tree", depleteTree);
     api.onCustomEvent("magic:water-containers", Services.waterContainers);
     api.onCustomEvent("farming:use-water", useWater);

@@ -11,6 +11,10 @@
       "toEnraged": "hydraboss_p3_transition",
       "dead": "hydraboss_finaldeath"
     },
+    "objs": {
+      "_ringPieces": "The brimstone ring's pieces in the order they are received (Wiki, Alchemical_Hydra#Drops).",
+      "ringPieces": ["hydra_eye", "hydra_fang", "hydra_heart"]
+    },
     "locs": {
       "door": ["karuulm_hydra_room_door", "karuulm_hydra_room_door_m"],
       "ventRed": "karuulm_hydra_room_floor_vent_geyser_red",

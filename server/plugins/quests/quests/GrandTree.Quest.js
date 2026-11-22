@@ -462,6 +462,11 @@ module.exports = function registerGrandTreeQuest(api) {
     api.removeNpc(npc);
   }
 
+  /** Glough's arrest is under way (the guard's climb, the escort): a click on him starts nothing. */
+  function holdDuringArrest({ player }) {
+    return scenes.arresting(player);
+  }
+
   function resumeOfficeQuiz({ player, npc, npcId }) {
     if (npc !== officeForemen.get(player) || quest.getStage(player) !== STAGE_RELEASED) return false;
     return startTranscript(api, player, npcId, PAGE, FOREMAN_QUIZ, (steps) => {
@@ -1154,6 +1159,7 @@ module.exports = function registerGrandTreeQuest(api) {
   api.persistAttribute(FEMI_REFUSED_ATTRIBUTE, false);
 
   api.onNpcInteraction("Foreman", { "Talk-to": resumeOfficeQuiz });
+  api.onNpcInteraction("Glough", { "Talk-to": holdDuringArrest });
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:action", handleAction);

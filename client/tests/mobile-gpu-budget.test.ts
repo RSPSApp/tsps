@@ -58,7 +58,7 @@ async function main(): Promise<void> {
             (globalThis as any).window.innerWidth = width;
             const canvasWidth = width - 36;
             const fit = getMobileGameplayUiScale({} as never, canvasWidth, 864, canvasWidth, 864);
-            assert.ok(Math.round(canvasWidth * fit) >= 765, "landscape keeps room for the native safezone and edge padding at " + width);
+            assert.ok(Math.round(canvasWidth * fit) >= 816, "landscape keeps room for the native safezone, the side panel and edge padding at " + width);
         }
         Object.assign((globalThis as any).window, { innerWidth: 667, innerHeight: 375 });
         const phoneScale = getMobileGameplayUiScale({} as never, 631, 375, 631, 375);

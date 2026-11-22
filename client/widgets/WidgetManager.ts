@@ -253,6 +253,8 @@ export class WidgetManager {
     /** Current canvas dimensions for resizing root widgets */
     canvasWidth: number = 0;
     canvasHeight: number = 0;
+    /** Buffer pixels per layout pixel, for mobile layout that needs buffer-space bounds. */
+    renderScaleX: number = 1;
     private pendingRootOnLoad: number = -1;
 
     private notifyInterfacesClosed(includeLoadedGroups = false, retainedGroups: ReadonlySet<number> = new Set()): void {
@@ -720,7 +722,10 @@ export class WidgetManager {
     };
 
     /** Update canvas dimensions used for root widget sizing. */
-    resize(width: number, height: number): void {
+    resize(width: number, height: number, renderScaleX?: number): void {
+        if (renderScaleX !== undefined && Number.isFinite(renderScaleX) && renderScaleX > 0) {
+            this.renderScaleX = renderScaleX;
+        }
         // Portrait Mode plugin: an upright phone rearranges the mobile gameframe (601).
         const mobile = this.rootInterface === 601;
         const portrait = mobile && isPortraitModeEnabled();

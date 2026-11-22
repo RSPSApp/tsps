@@ -774,7 +774,7 @@ function attemptObstacle(player, context, entry) {
             actionStart?.[0] === start[0] && actionStart?.[1] === start[1] && actionStart?.[2] === start[2] &&
             location.getX() === landing[0] && location.getY() === landing[1] && location.getZ() === landing[2]) &&
           actionPrivateArea == null && (player.getPrivateArea?.() ?? null) == null &&
-          player.getHitpoints() > 0 && !logoutObstacleCompletions.has(player)
+          player.getHitpoints() > 0 && !logoutObstacleCompletions.has(player) && !player.isLoggingOut?.()
         ) {
           pluginApi.emitCustomEvent("agility:yanille-grapple", {
             player,

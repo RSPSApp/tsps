@@ -10783,7 +10783,8 @@
             "The 'The Grand Tree' page in npc-dialogues.json carries 58 variants ('the-dying-tree'); source ids/slugs from npc-dialogues.json + npc-dialogue-index.json / osrsreboxed.",
             "The 'treachery-revealed-the-mystery-of-the-twigs' variant is the twig-pillar puzzle; wire it through onItemOnObject.",
             "Main 82657e165: #1528 the landings that blocked the quest route fixed.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4320 Finish the Grand Tree quest scenes and transitions. #4144 Fix the Grand Tree prison, shipyard and cave transitions. #4077 Land the Grand Tree trapdoor beside the cave ladder. 5 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4320 Finish the Grand Tree quest scenes and transitions. #4144 Fix the Grand Tree prison, shipyard and cave transitions. #4077 Land the Grand Tree trapdoor beside the cave ladder. 5 merged PRs changed recorded implementation files for this entry.",
+            "2026-11-22, #6544: clicking Glough during his guard's climb or the escort no longer restarts his talk and calls a second guard, and the Karamja shipyard gate opens with both leaves swung west as in rsprox captures local 1002189 t11325 and local 1001562 t6137. Verified by server/tests/grand-tree-capture.test.cjs and grand-tree-start-native.test.cjs (both fail on the previous code) and an agent MCP run. Statuses unchanged."
           ],
           "taskDetails": [
             {
@@ -45075,9 +45076,11 @@
             "server/tests/object-state-replay.test.cjs",
             "server/docs/quest-helper-728-verification.md",
             "server/plugins/areas/CrombwickManor.plugin.js",
-            "docs/door-sounds.md"
+            "docs/door-sounds.md",
+            "server/tests/double-door-sounds.test.cjs"
           ],
           "devNotes": [
+            "2026-11-22 (parity/locs-nicedoor-sounds): Arceuus's double doors (archeuus_door_double_left/right_* in turquoise, green, red and blue) open as one pair, both leaves turning on their own tiles into their _open locs, with nicedoor_open (81) and nicedoor_close (80) as an area sound of range 1 on the clicked leaf; the goblin outpost's inner double doors send 81/80 as the opener's private synth. Before, an Arceuus click swung only the clicked leaf a tile aside with synth 62, and the goblin outpost doors played 62/60. Recorded in the user's rsprox captures local 1001998 (ticks 1222-1223, 1335-1336), local 1000453 (tick 9681), local 1001339 (ticks 301-309) and public 2297 (ticks 448-457). server/plugins/objects/Doors.plugin.js, server/tests/double-door-sounds.test.cjs, in-game check on the worktree server. The red set is uncaptured and follows its cache family. See docs/door-sounds.md.",
             "2026-11-22 (parity/locs-varrock-fence-gate): the fence gate east of Varrock by the quetzal platform (vm_fencegate_l/_r at 3296,3428-3429) is a pass-through gate, as live: vm_fencing_invisible_wall in the doorway, both leaves swung west, the player walks across the next tick and the gate is back two ticks after opening, with no synth (rsprox 232/3228 ticks 561-568, 642-644, 931-937; 232/3227, 232/3231). Before, Open did nothing: the shared door code found no way to open this pair, so the gate stayed shut and the player could not get through. server/plugins/objects/Doors.plugin.js, server/tests/varrock-fence-gate.test.cjs, docs/varrock-fence-gate.md, in-game check on the worktree server.",
             "2026-11-22 (parity/locs-outhouse-occupied): the outhouse door (hos_grape_odddoor) at the Fossil Island Museum Camp 3722,3816 and the Hosidius vinery 1817,3537 answers Open with the man inside's chathead line \"Occupied!\" (hosidius_man_on_toilet, chatang1) and synth 2402, and stays shut, as live does (rsprox captures 231/3040 tick 5736, 227/local 1000187 tick 4946). Before, the click did nothing. LockedDoors.plugin.js with data/locked-doors.json, tests/locked-doors.test.cjs, docs/locked-doors.md.",
             "Main 4b1eac7f6: #1267 the Hunter Guild stairs fade and land as recorded.",

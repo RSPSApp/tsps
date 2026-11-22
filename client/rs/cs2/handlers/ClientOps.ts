@@ -20,28 +20,51 @@ import { Opcodes } from "../Opcodes";
 import type { HandlerContext, HandlerMap } from "./HandlerTypes";
 import { locHighlightKey, type ModelHighlightManager } from "../../../game/highlights/ModelHighlightManager";
 import { menuOptionDisplayText } from "../../../ui/menu/menuOptionDisplayText";
+import {
+    OSRS_INTERFACE_SCALING_DEFAULT_MOBILE_PERCENT,
+    OSRS_INTERFACE_SCALING_DEFAULT_PERCENT,
+    OSRS_INTERFACE_SCALING_MAX_PERCENT,
+    OSRS_INTERFACE_SCALING_MIN_DESKTOP_PERCENT,
+    OSRS_INTERFACE_SCALING_MIN_MOBILE_PERCENT,
+} from "../../../ui/UiScale";
 
 const DEVICE_OPTION_INTERFACE_SCALING = 27;
 // Fixed layout toplevel (OSRS fixed mode).
 const FIXED_GAMEFRAME_ROOT = 548;
-const UIZOOM_DEFAULT_DESKTOP_PERCENT = 100;
-const UIZOOM_DEFAULT_MOBILE_PERCENT = 175;
-const UIZOOM_MAX_PERCENT = 400;
 const BACKPACK_INVENTORY = 93;
 const EQUIPMENT_INVENTORY = 94;
 const BOOK_OF_THE_DEAD = 25818;
 const SPELL_REQUIREMENT_SCRIPT = 19;
 
-function getUiZoomDefaultPercent(ctx: any): number {
+function isMobileUiZoom(ctx: any): boolean {
     const wm = ctx.widgetManager as any;
-    return isMobileClient(wm?.rootInterface) || ctx.varManager?.getVarbit(6352) === 1
-        ? UIZOOM_DEFAULT_MOBILE_PERCENT
-        : UIZOOM_DEFAULT_DESKTOP_PERCENT;
+    return isMobileClient(wm?.rootInterface) || ctx.varManager?.getVarbit(6352) === 1;
+}
+
+/**
+ * The lowest value the Interface scaling dropdown offers: 100% on desktop and
+ * 175% on mobile (cache script 3333).
+ */
+function getUiZoomMinPercent(ctx: any): number {
+    return isMobileUiZoom(ctx)
+        ? OSRS_INTERFACE_SCALING_MIN_MOBILE_PERCENT
+        : OSRS_INTERFACE_SCALING_MIN_DESKTOP_PERCENT;
+}
+
+/**
+ * The value the reset control restores: 100% on desktop, but 400% on mobile, as
+ * live's mobile client defaults to the high scale (Easter 2026 update). Script 4618
+ * likewise replaces a saved mobile scale below 175% with 400%.
+ */
+function getUiZoomDefaultPercent(ctx: any): number {
+    return isMobileUiZoom(ctx)
+        ? OSRS_INTERFACE_SCALING_DEFAULT_MOBILE_PERCENT
+        : OSRS_INTERFACE_SCALING_DEFAULT_PERCENT;
 }
 
 function normalizeUiZoomPercent(percent: number, minPercent: number): number {
     if (!Number.isFinite(percent)) return minPercent;
-    return Math.round(Math.max(minPercent, Math.min(UIZOOM_MAX_PERCENT, percent)));
+    return Math.round(Math.max(minPercent, Math.min(OSRS_INTERFACE_SCALING_MAX_PERCENT, percent)));
 }
 
 /** Rev 241 translations_set/clear: key -> text. */
@@ -408,13 +431,13 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.UIZOOM_SET, (ctx) => {
-        const minPercent = getUiZoomDefaultPercent(ctx);
+        const minPercent = getUiZoomMinPercent(ctx);
         const percent = normalizeUiZoomPercent(ctx.intStack[--ctx.intStackSize], minPercent);
         ctx.setDeviceOption?.(DEVICE_OPTION_INTERFACE_SCALING, percent);
     });
 
     handlers.set(Opcodes.UIZOOM_GET, (ctx) => {
-        const minPercent = getUiZoomDefaultPercent(ctx);
+        const minPercent = getUiZoomMinPercent(ctx);
         const percent = ctx.getDeviceOption?.(DEVICE_OPTION_INTERFACE_SCALING) ?? minPercent;
         ctx.pushInt(normalizeUiZoomPercent(percent, minPercent));
     });
@@ -1261,8 +1284,8 @@ export function registerClientOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.DEVICEOPTION_GETRANGE, (ctx) => {
         const optionId = ctx.intStack[--ctx.intStackSize];
         if (optionId === DEVICE_OPTION_INTERFACE_SCALING) {
-            ctx.pushInt(getUiZoomDefaultPercent(ctx));
-            ctx.pushInt(UIZOOM_MAX_PERCENT);
+            ctx.pushInt(getUiZoomMinPercent(ctx));
+            ctx.pushInt(OSRS_INTERFACE_SCALING_MAX_PERCENT);
             return;
         }
         ctx.pushInt(0);

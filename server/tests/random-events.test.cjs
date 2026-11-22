@@ -115,6 +115,8 @@ function harness(t, members = true) {
         location: new Location(definition.x, definition.y, definition.z),
         getOwner() { return this.owner; }, getId() { return definition.id; }, isOwnerOnly() { return !!this.ownerOnly; },
         getDefinition() { return { getId: () => definition.id }; }, getLocation() { return this.location; },
+        moveTo(location) { this.location = location; this.moves = (this.moves ?? 0) + 1; this.interaction = null; },
+        getFollowing() { return this.following; },
         setFollowing(p) { this.following = p; }, setMobileInteraction(p) { this.interaction = p; },
         setFace(face) { this.face = face; }, getFace() { return this.face; },
         forceChat(text) { this.chat = text; }, performAnimation(animation) { this.animation = animation.getId(); },
@@ -178,6 +180,7 @@ function harness(t, members = true) {
       getAttribute: key => p.attributes.get(key), setAttribute(key, value) {
         if (value == null) p.attributes.delete(key); else p.attributes.set(key, value);
       }, getNpcTransformationId: () => p.transformation ?? -1,
+      getTeleportSerial: () => p.teleportSerial ?? 0,
       getLocation: () => p.location, getUsername: () => 'Player', getDisplayName: () => 'Player', busy: () => !!p.isBusy,
       getCombat: () => ({ getTarget: () => p.target, getAttacker: () => p.attacker }),
       getCombatFollowing: () => p.combatFollowing,
@@ -734,23 +737,95 @@ test('Sandwich tray validates owner, selection and open interface, with a wrong 
   assert.deepEqual(full.messages, [PLACED(1, 'Meat pie')]);
 });
 
-test('dismissal, expiry, distance, plane, instances, logout, death and shutdown clean owned NPCs', t => {
+test('dismissal, expiry, instances, logout, death and shutdown clean owned NPCs', t => {
   const h = harness(t);
-  for (const reason of ['dismiss', 'expiry', 'distance', 'plane', 'instance', 'PlayerLogout', 'PlayerDisconnect', 'PlayerDeath', 'ServerShutdown']) {
+  for (const reason of ['dismiss', 'expiry', 'instance', 'PlayerLogout', 'PlayerDisconnect', 'PlayerDeath', 'ServerShutdown']) {
     const p = h.player(), npc = h.spawn(p);
     if (reason === 'dismiss') h.hooks.Genie.Dismiss({ player: p, npc });
     else if (reason.startsWith('Player')) h.emit(reason, { player: p });
     else if (reason === 'ServerShutdown') h.emit(reason);
     else {
       if (reason === 'expiry') { h.advance(60_000); h.disable(); }
-      if (reason === 'distance') p.location = new Location(3300, 3300, 0);
-      if (reason === 'plane') p.location = new Location(3222, 3222, 1);
       if (reason === 'instance') p.privateArea = {};
       h.emit('PlayerProcess', { player: p });
       if (reason === 'expiry') { assert.equal(npc.chat, 'Maybe later.'); assert.equal(npc.removed, undefined); h.advance(1_800); h.emit('PlayerProcess', { player: p }); }
     }
     assert.equal(npc.removed, true, reason); assert.deepEqual(p.rewards, []);
   }
+});
+
+test('a follower whose owner ran off or changed plane is teleported beside them on its next beat, and never leaves for the distance', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p);
+  h.advance(5_000); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, undefined, 'a follower beside its owner stays put');
+  p.location = new Location(3300, 3300, 0);
+  h.advance(600); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.removed, undefined, 'running far away does not end the event');
+  assert.equal(npc.moves, undefined, 'it jumps on the 10-tick beat, not the moment the owner leaves');
+  h.advance(6_000); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, 1); assert.equal(npc.location.getDistance(p.location), 1);
+  assert.equal(npc.location.getZ(), 0); assert.equal(npc.removed, undefined);
+  p.location = new Location(3222, 3222, 1);
+  h.advance(6_000); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, 2, 'a different plane also catches up'); assert.equal(npc.location.getZ(), 1);
+  npc.location = new Location(3222, 3222, 1);
+  p.location = new Location(3222, 3225, 1);
+  h.advance(6_000); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, 2, 'closer than the capture-backed distance is left to walk');
+  p.location = new Location(3222, 3227, 1);
+  h.advance(6_000); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, 2, 'exactly 5 tiles away is left to walk (live never jumped there)');
+  p.location = new Location(3222, 3228, 1);
+  h.advance(6_000); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, 3, '6 tiles away jumps'); assert.equal(npc.following, p); assert.equal(npc.interaction, p);
+  p.location = new Location(3222, 3240, 1);
+  h.collision(() => true, () => false);
+  h.advance(6_000); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, 3, 'with no walkable square beside the owner it waits for the next beat');
+  h.collision(() => false, () => true);
+  h.advance(6_000); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, 4);
+  h.advance(60_000); h.disable(); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.chat, 'Maybe later.', 'the timeout still applies');
+  h.advance(1_800); h.emit('PlayerProcess', { player: p }); assert.equal(npc.removed, true);
+});
+
+test('after a jump the follow is restored, and cleared follows are set again once the owner is in reach', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p);
+  p.location = new Location(3300, 3300, 0);
+  npc.following = null; npc.interaction = null; // what MovementQueue.processFollowing does to a far owner
+  h.advance(11_000); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, 1); assert.equal(npc.following, p); assert.equal(npc.interaction, p);
+  npc.following = null; npc.interaction = null;
+  h.advance(600); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.following, p, 'a follow cleared on a later tick is set again'); assert.equal(npc.moves, 1);
+});
+
+test('an owner who teleports has the follower re-placed the tick after arrival, not on the next beat', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p);
+  h.advance(600); h.emit('PlayerProcess', { player: p });
+  p.location = new Location(2900, 3500, 0); p.teleportSerial = 1;
+  h.advance(600); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, undefined, 'not on the arrival tick');
+  h.advance(600); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, 1); assert.equal(npc.location.getDistance(p.location), 1);
+  p.location = new Location(2900, 3560, 0);
+  h.advance(600); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, 1, 'running far away still waits for the beat');
+  h.api.emitCustomEvent('agent:advance-time', { player: p, ms: 6_000, handledBy: [] });
+  h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, 2, 'advance-time moves the catch-up beat with the rest');
+});
+
+test('a follower is not teleported into an instance, and a stationary event is never moved', t => {
+  const h = harness(t), p = h.player(), npc = h.spawn(p);
+  p.location = new Location(3300, 3300, 0); p.privateArea = {};
+  h.advance(11_000); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.removed, true); assert.equal(npc.moves, undefined);
+  const q = h.player(), plant = h.spawn(q, 23);
+  q.location = new Location(3300, 3300, 0);
+  h.advance(11_000); h.emit('PlayerProcess', { player: q });
+  assert.equal(plant.moves, undefined); assert.equal(plant.removed, true);
 });
 
 // No, Wave, Yawn, Angry and Ya boo sucks.

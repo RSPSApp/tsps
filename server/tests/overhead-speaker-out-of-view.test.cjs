@@ -124,49 +124,8 @@ async function play(f, packet, choices = []) {
   }
 }
 
-const SANDY_PROBLEM = /sandy problem/;
-const BELL = { type: "object_option", id: 6847, x: 2598, y: 3085, clickType: 1 };
-
-function atTheBell(t) {
-  const I = core.ItemIdentifiers;
-  const f = actor(t, 2593, 3081);
-  core.RegionManager.loadMapFiles(2598, 3085);
-  quest("hand_in_the_sand").setStage(f.p, 130);
-  f.p.getInventory().setItem(0, new core.Item(I.EARTH_RUNE, 5));
-  f.p.getInventory().setItem(1, new core.Item(I.BUCKET_OF_SAND, 1));
-  return { f, I, bert: spawnAll(f, "Bert").find((npc) => npc.getId() === 5382) };
-}
-
-function assertSandpitDone(f, I) {
-  assert.equal(quest("hand_in_the_sand").getStage(f.p), 140, `the spell finishes: ${f.messages}`);
-  assert.equal(f.p.getInventory().getAmount(I.EARTH_RUNE), 0, "the runes are spent");
-  assert.equal(f.p.getInventory().getAmount(I.BUCKET_OF_SAND), 0, "the bucket is spent");
-  assert.ok(f.messages.includes("Something very strange happens to the Sandpit, it looks like it has filled itself up!"), f.messages.join(" | "));
-}
-
-test("The Hand in the Sand: the bell's sandpit spell finishes though Bert is 48 tiles off", async (t) => {
-  const { f, I, bert } = atTheBell(t);
-  const chats = [];
-  t.mock.method(bert, "forceChat", (text) => { chats.push(text); });
-  await play(f, BELL, [SANDY_PROBLEM]);
-  assert.equal(f.p.getLocalNpcs().includes(bert), false, "the world doesn't show Bert from the bell");
-  assertSandpitDone(f, I);
-  assert.deepEqual(chats, [], "nothing is said over a Bert nobody can see");
-  assert.ok(f.messages.includes("Bert: My sand! My lovely sand!"), `his line reaches the chat, marked as his: ${f.messages}`);
-});
-
-test("control: with Bert local, the same bell has him say it overhead and not in the chat", async (t) => {
-  const { f, I, bert } = atTheBell(t);
-  const chats = [];
-  t.mock.method(bert, "forceChat", (text) => { chats.push(text); });
-  t.mock.method(core.World, "updateLocalNpcs", (player) => {
-    if (!player.getLocalNpcs().includes(bert)) player.getLocalNpcs().push(bert);
-  });
-  await play(f, BELL, [SANDY_PROBLEM]);
-  assertSandpitDone(f, I);
-  assert.deepEqual(chats, ["My sand! My lovely sand!"]);
-  assert.equal(f.messages.includes("Bert: My sand! My lovely sand!"), false);
-});
+// The Hand in the Sand's "My sand! My lovely sand!" is no longer a world Bert's line: the sandpit cutscene places its
+// own Bert, who cries it (tests/hand-in-the-sand-capture.test.cjs).
 
 test("Forgettable Tale: the pub's final cutscene completes the quest though Gunslik and Nolar are out of view", async (t) => {
   const I = core.ItemIdentifiers;

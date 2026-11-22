@@ -204,6 +204,19 @@ test('Modify on a completed offer changes nothing', async t => {
   assert.deepEqual(f.messages, ['That offer has already completed.']);
 });
 
+test("on a free world, Modify on a members' slot leaves the offer trading", async t => {
+  t.mock.method(core.WorldDefinition, 'isMembersWorld', () => false);
+  const f = trader(t, { itemId: IRON_BAR, sell: true, slot: 5, quantity: 3, price: 100 });
+  await modify(f, 5);
+  tick();
+  tick();
+  assert.equal(f.offers()[5].aborted, undefined, 'the offer is not stopped');
+  assert.equal(f.offers()[5].finished, false);
+  assert.equal(f.p.getInventory().getAmount(IRON_BAR_NOTE), 0, 'nothing is collected');
+  assert.equal(f.opened.mock.calls.some(({ arguments: [, group] }) => group === LOADING_POPUP), false);
+  assert.deepEqual(f.messages, ["You need to be on a members' world to use this slot."]);
+});
+
 test('a player-wide task cancel during the wait neither strands the popup nor blocks the next Modify', async t => {
   const f = trader(t, { itemId: IRON_BAR, sell: true, slot: 2, quantity: 3, price: 100 });
   f.offers()[5] = { itemId: IRON_BAR, sell: true, slot: 5, quantity: 2, price: 100, total: 200, finished: false, placedAt: Date.now(), completesAt: null };

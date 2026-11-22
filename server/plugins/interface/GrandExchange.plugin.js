@@ -1230,6 +1230,11 @@ function stopOffer(player, slot) {
  */
 function modify(player, slot = viewing.get(player)) {
   if (modifying.has(player)) return;
+  // A members' slot on a free world: start() would refuse the new setup after the abort.
+  if (slot >= usableSlots()) {
+    player.sendMessage("You need to be on a members' world to use this slot.");
+    return;
+  }
   const stopped = stopOffer(player, slot);
   if (!stopped) return;
   const task = new pluginApi.core.CountdownTask(modifyKey(player), MODIFY_TICKS, () => {

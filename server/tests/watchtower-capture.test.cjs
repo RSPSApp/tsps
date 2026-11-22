@@ -874,7 +874,9 @@ test("#6536: the chiefs' ogres (2096) don't hunt at Og's, Grew's, Toban's or in 
   // The monster dump's "aggressive" (both ids true, from the Wiki's shared infobox); the harness doesn't load it.
   new NpcDefinitionLoader().load();
   assert.equal(h.core.NpcDefinition.forId(CHIEFS_OGRE).isAggressive(), true);
-  for (const [player, ogre] of [[[2506, 3112], [2505, 3111]], [[2512, 3085], [2513, 3087]], [[2573, 3029], [2572, 3031]], [[2525, 3041], [2526, 3039]]]) {
+  for (const [player, ogre] of [[[2506, 3112], [2505, 3111]], [[2512, 3085], [2513, 3087]], [[2573, 3029], [2572, 3031]], [[2525, 3041], [2526, 3039]],
+    // Grew's ogres at the island's edge, in their wander range, with the player just past it.
+    [[2512, 3073], [2512, 3076]], [[2503, 3087], [2505, 3087]]]) {
     const f = actor(t, { at: [...player, 0], stage: S.NAILS });
     assert.equal(hunts(f, CHIEFS_OGRE, [...ogre, 0]), false, `ogre2 at ${ogre}`);
     assert.equal(f.player.getArea()?.getName?.(), "Watchtower ogre camps", JSON.stringify(player));

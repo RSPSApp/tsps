@@ -16,11 +16,11 @@ module.exports = function createWatchtowerOgres(api) {
 
   /** ogre2: the chiefs' ogres (cache name "Ogre", like 2095). */
   const CHIEFS_OGRE = 2096;
-  /** Each camp with room for its ogres' wander and hunt ranges, so a player at the edge is covered too. */
+  /** Each camp with room for its ogres' wander and aggression ranges (wander 5 + aggression range 8 from each spawn), so a player at the edge is covered too. */
   const CAMPS = [
-    new Boundary(2490, 2520, 3100, 3130, 0), // Og's ruins (spawns 2502-2508, 3108-3119)
-    new Boundary(2505, 2522, 3076, 3095, 0), // Grew's island (2509-2514, 3081-3087)
-    new Boundary(2495, 2590, 3005, 3065, 0), // Gu'Tanoth (2510-2526, 3039-3046) and Toban's island (2571-2578, 3024-3031)
+    new Boundary(2489, 2521, 3095, 3132, 0), // Og's ruins (spawns 2502-2508, 3108-3119)
+    new Boundary(2496, 2527, 3068, 3100, 0), // Grew's island (2509-2514, 3081-3087)
+    new Boundary(2495, 2591, 3005, 3065, 0), // Gu'Tanoth (2510-2526, 3039-3046) and Toban's island (2571-2578, 3024-3031)
   ];
 
   class WatchtowerOgreCamps extends Area {

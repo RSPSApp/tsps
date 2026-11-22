@@ -9,7 +9,7 @@
  * and seeds table, one noted grimy herb of the useful herb table and two noted grimy herbs of the combat herb
  * table (tables below; the herb rates 1/3.2, 1/4, 1/4, 1/5.3 are 5, 4, 4, 3 out of 16). Its lines are "The
  * alchemist's signet fits perfectly into an indent on the chest, causing it to open..." and "You take some
- * loot from inside.." (sic, the Wiki's two full stops).
+ * loot from inside." (the captures agree).
  *
  * rsprox.net captures (recording 4185, rev 238, Leagues VI; 8 clicks: 3 opens, 5 refusals), ticks from the first response:
  * - 0: human_openchest and sound 52 (both delay 10), the signet line (game message), varbit busy 1.
@@ -20,8 +20,6 @@
  *   indent on the front of it...". With signets but fewer than four free slots: a message box, "You need at
  *   least four free inventory spaces to take anything from this chest." Both set busy 1 with the box, and
  *   busy 0 when it is dismissed (ticks 34/36, 101/105, 1081/1084, 1122/1124).
- * - Recorded difference: the captures' loot line ends with one full stop ("You take some loot from inside.");
- *   we send the Wiki's.
  *
  * Ours: no capture opens it without a signet and with a full pack, so the signet is checked first. A
  * box closed by any other route (walking away) also clears busy. A signet gone by the loot tick (dropped
@@ -38,7 +36,7 @@ const FREE_SLOTS = 4;
 const SOUND = Object.freeze({ UNLOCK: 52, LOOT: 51, LOCKED: 2402 });
 const MESSAGE = Object.freeze({
   UNLOCK: "The alchemist's signet fits perfectly into an indent on the chest, causing it to open...",
-  LOOT: "You take some loot from inside..",
+  LOOT: "You take some loot from inside.",
   LOCKED: "The chest appears tightly locked, but it has a ring shaped indent on the front of it...",
   FULL: "You need at least four free inventory spaces to take anything from this chest.",
 });
@@ -230,9 +228,9 @@ function open(event) {
     keepAnimation: true,
     onFinish: (completed) => {
       opening.delete(player);
-      if (completed) return;
-      player.getPacketSender().sendVarbit(resolveIds().busy, 0);
+      // Closed whatever the outcome: a fast-forwarded run skips the closing step.
       if (run.shown) showClosed(run.shown);
+      if (!completed) player.getPacketSender().sendVarbit(resolveIds().busy, 0);
     },
   });
   return true;

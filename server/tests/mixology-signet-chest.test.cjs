@@ -129,7 +129,7 @@ test("an open: signet line at 0, loot line, signet used and four stacks at 1, so
   assert.deepEqual(shownIds(), [chestId]);
   tick(f); // 1
   assert.equal(at(f, MESSAGE.LOOT), 1);
-  assert.equal(MESSAGE.LOOT, "You take some loot from inside..", "the Wiki's line");
+  assert.equal(MESSAGE.LOOT, "You take some loot from inside.", "the Wiki's and the captures' line");
   assert.equal(f.inv.getAmount(I.ALCHEMISTS_SIGNET), 1, "one signet used");
   assert.equal(f.inv.getAmount(noted(I.ALDARIUM)), 1);
   assert.equal(f.inv.getAmount(noted(I.MORT_MYRE_FUNGUS)), 8);
@@ -278,4 +278,16 @@ test("a refusal box closed by walking away clears busy too (Ours)", async (t) =>
   assert.equal(f.varbits.at(-1)?.[1], 0);
   f.player.getPacketSender().sendInterfaceRemoval();
   assert.equal(f.varbits.filter(([, v]) => v === 0).length, 1, "a later close sends nothing");
+});
+
+test("a run fast-forwarded after the loot tick still closes the chest (Ours)", async (t) => {
+  const f = actor(t);
+  f.inv.add(new core.Item(I.ALCHEMISTS_SIGNET, 1), false);
+  await openChest(f);
+  ticks(f, 2);
+  assert.deepEqual(shownIds(), [openId], "open after the loot tick");
+  require("../plugins/skills/agility/ObstacleRunner.Agility").completeNow(f.player);
+  ticks(f, 3);
+  assert.deepEqual(shownIds(), [chestId]);
+  assert.equal(Chest().opened.size, 0);
 });

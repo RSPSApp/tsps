@@ -141,8 +141,6 @@ rsprox captures (recording 4185, rev 238, Leagues VI; 8 clicks: 3 opens, 5 refus
   on the front of it...". Signets but under four free slots: a message box, "You need at least four free
   inventory spaces to take anything from this chest." Both set `busy` 1 with the box and `busy` 0 when it is
   dismissed (ticks 34/36, 101/105, 1081/1084, 1122/1124).
-- Recorded difference: the loot line is captured as "You take some loot from inside." (one full stop); we send
-  the Wiki's "You take some loot from inside..".
 
 Ours: the signet is checked before the free slots (no capture has neither); a refusal box closed by walking
 away also clears `busy`.

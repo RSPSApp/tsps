@@ -265,6 +265,18 @@ test("each brewer is the Wiki's numbered brewer the capture heard, before and af
 
 test("raking: a stage, a weed and 4 XP a swing, a swing every four ticks (ours: no misses), then the seed's line 3 ticks after it goes in (ticks 817-845)", async (t) => {
   const f = actor(t, { at: [2162, 5068, 0], stage: S.SEEDS, items: [[I.RAKE], [I.BLINDWEED_SEED]] });
+  // The harness's session replays no scene; a client standing at the patch has it in its scene.
+  f.player.getSession().isTileInScene = () => true;
+  const locPackets = [];
+  const sender = f.player.getPacketSender();
+  for (const name of ["sendObject", "sendObjectRemoval"]) {
+    const send = sender[name].bind(sender);
+    sender[name] = (object, ...rest) => {
+      const l = object?.getLocation?.();
+      if (l?.getX() === 2162 && l.getY() === 5069) locPackets.push(`${name} ${object.getId()}`);
+      return send(object, ...rest);
+    };
+  }
   await clickObject(f, 10096, [2162, 5069], 2);
   assert.deepEqual(messages(f).slice(-1), ["This is a blindweed patch. The soil has not been treated. The patch needs weeding."], "tick 805");
   const xp = f.player.getSkillManager().getExperience(Sk.FARMING);
@@ -287,7 +299,7 @@ test("raking: a stage, a weed and 4 XP a swing, a swing every four ticks (ours: 
   assert.equal(f.player.getSkillManager().getExperience(Sk.FARMING) - xp, 32, "20 XP for planting");
   // Only the varbit: the client redraws the 2x2 multiloc from it. A 1x1 child added by hand sat on the
   // patch's south-west tile, off the dirt (issue #6499); the capture sends no loc packet here.
-  assert.deepEqual(f.calls.filter((c) => /^sendObject/.test(c.name)).map((c) => c.name), [], "no loc added or removed on the patch");
+  assert.deepEqual(locPackets, [], "no loc added or removed on the patch");
   await clickObject(f, 10096, [2162, 5069], 2);
   assert.equal(messages(f).at(-1), "This is a blindweed patch. The soil has not been treated. The patch has something growing in it.");
 });

@@ -416,11 +416,16 @@ test("route 2: the juvinates wander; none starts on the player; one near Ivan go
   ticks(f, 6); // still on their spawn tile, 4 tiles from Ivan
   assert.equal(juvinates(f).every((juvinate) => target(juvinate) == null), true, "nobody engages at once (live: the player struck first, t3491)");
   const [first, second, third] = juvinates(f);
-  placeNear(third, ivan, 5, 0);
   placeNear(first, ivan, 0, 3);
-  const ivanAt = ivan.getLocation().toString();
   ticks(f, 3, { npcs: true });
-  assert.deepEqual(onIvan(ivan).map((juvinate) => juvinate.getIndex()), [first.getIndex()], "the one 3 tiles off goes for him (t3890), not the one 5 off");
+  assert.equal(onIvan(ivan).length, 0, "in range early, it wanders on (live: passes from t3485)");
+  ticks(f, 9, { npcs: true }); // 18 ticks after the arrival
+  placeNear(first, ivan, 0, 1); // in range, wherever it wandered (and wanders next)
+  placeNear(third, ivan, 6, 0);
+  tick(f, { npcs: true });
+  const ivanAt = ivan.getLocation().toString();
+  tick(f, { npcs: true }); // 20 ticks after the arrival (t3483 -> t3503)
+  assert.deepEqual(onIvan(ivan).map((juvinate) => juvinate.getIndex()), [first.getIndex()], "the one in range goes for him (t3503, t3890), not the one 6 off");
   assert.equal(ivan.getLocation().toString(), ivanAt, "Ivan holds his tile until hit (t3890-3892)");
   for (let i = 0; i < 12 && target(ivan) == null; i++) tick(f, { npcs: true });
   assert.equal(target(ivan)?.getIndex?.(), first.getIndex(), "and answers once hit (t3893)");
@@ -680,6 +685,18 @@ test("a teleport between the trapdoor's animation and the climb cancels the clim
   tick(f);
   assert.equal(stage(f), 350, "no 360");
   assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3222, 3218]);
+});
+
+test("a teleport onto the same tile during the climb cancels it too", async (t) => {
+  const f = actor(t, { stage: 350, vars: { [VB.TRAPDOOR]: 1 } });
+  f.player.setLocation(new core.Location(3440, 9899, 0));
+  f.player.getPacketSender().sendVarbit(VB.TRAPDOOR, 1);
+  assert.equal(objectClick(f, 12762, [3441, 9899, 0], "Climb-down"), true);
+  tick(f); // the animation
+  f.player.moveTo(new core.Location(3440, 9899, 0));
+  tick(f);
+  assert.equal(stage(f), 350, "no 360");
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3440, 9899]);
 });
 
 test("dying between the trapdoor's animation and the climb cancels the climb", async (t) => {

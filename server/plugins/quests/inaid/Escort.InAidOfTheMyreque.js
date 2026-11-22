@@ -157,6 +157,9 @@ module.exports = function attachEscort(context) {
   // A wandering juvinate went for Ivan once 3 tiles from him (second attempt: turned to him at
   // t3890 from (2857,4556), Ivan at (2860,4555), struck as it reached him, t3892-3893).
   const IVAN_ENGAGE_RANGE = 3;
+  // None goes for him before this many ticks in: live's juvinates passed within range from t3485
+  // and wandered on; the first attack on Ivan came at t3503, 20 ticks after the arrival (t3483).
+  const IVAN_ENGAGE_AFTER = 20;
   const RETALIATION_WINDOW = 2; // ticks: a retaliation queued by a landed hit runs on the next one
   const SOUTH = 6; // Direction id
 
@@ -378,7 +381,7 @@ module.exports = function attachEscort(context) {
       canTeleport: () => null,
       musicTrack: AMBUSH_MUSIC,
     }, { instance: { sourceChunk: AMBUSH.sourceChunk, size: AMBUSH.size }, at: AMBUSH.at, exit: AMBUSH.exitPath });
-    const ambush = { player, scene, route, number, juvinates: [], ivan: null, done: false, fled: false };
+    const ambush = { player, scene, route, number, juvinates: [], ivan: null, done: false, fled: false, arrived: api.core.World.getProcessCycle() };
     ambushes.set(player, ambush);
     ambush.ivan = Scenes.actor(scene, NPC.IVAN_AMBUSH, AMBUSH.ivan, null, { direction: SOUTH });
     if (ambush.ivan) {
@@ -409,7 +412,7 @@ module.exports = function attachEscort(context) {
   function engageIvan(ambush) {
     const { ivan } = ambush;
     const at = ivan?.getLocation?.();
-    if (!at) return;
+    if (!at || api.core.World.getProcessCycle() - ambush.arrived < IVAN_ENGAGE_AFTER) return;
     const targetOf = (juvinate) => juvinate.getCombat?.().getTarget?.() ?? null;
     if (ambush.juvinates.some((juvinate) => targetOf(juvinate) === ivan)) return;
     const near = (juvinate) => {
@@ -635,8 +638,10 @@ module.exports = function attachEscort(context) {
     if (get(player, VARBIT.TEMPLE_TRAPDOOR) !== 1) return false;
     // Live: at the trapdoor t4284, seq 827 two ticks on (t4286), the library the tick after (t4287).
     const from = player.getLocation().clone();
-    // Moved meanwhile (a teleport during the climb) or died: no climb.
-    const still = () => player.getLocation().equals(from) && player.getHitpoints() > 0 && !player.isDyingReturn?.();
+    const teleports = player.getTeleportSerial?.();
+    // Moved meanwhile (any teleport, even onto the same tile) or died: no climb.
+    const still = () => player.getLocation().equals(from) && player.getTeleportSerial?.() === teleports
+      && player.getHitpoints() > 0 && !player.isDyingReturn?.();
     common.later(player, 1, () => {
       if (!still()) return;
       common.anim(player, LIBRARY.climbAnimation);

@@ -1,0 +1,28 @@
+{
+  "_comment": "Doors that never open, and what live answers to their Open (rsprox captures cited per entry). box: the line comes in a message box (messagebox 229) rather than the chat; sound: the synth played with it. The Doors plugin otherwise opens prisonbarsdoor_locked and frisb_abode_door_locked onto their cache open leaves (closed id + 1, Close).",
+  "doors": [
+    {
+      "locs": ["prisonbarsdoor_locked"],
+      "where": "Port Sarim jail cells (3012,3189 and 3012,3195)",
+      "recordings": "rsprox 230/00323 ticks 4202, 4897, 4900",
+      "message": "The door is securely locked.",
+      "box": false,
+      "sound": 2402
+    },
+    {
+      "locs": ["fortis_door_l_locked", "fortis_door_r_locked"],
+      "where": "Civitas illa Fortis (left leaf 1500,3223)",
+      "recordings": "rsprox 226/01695 tick 2556 (left leaf); ours: the right leaf answers as the left",
+      "message": "The door is locked.",
+      "box": true,
+      "sound": 2402
+    },
+    {
+      "locs": ["frisb_abode_door_locked"],
+      "where": "Neitiznot houses (2347,3801 and 2345,3807)",
+      "recordings": "rsprox 227/local 1000321 tick 11928 (gamemessage, no sound)",
+      "message": "The door is locked.",
+      "box": false
+    }
+  ]
+}

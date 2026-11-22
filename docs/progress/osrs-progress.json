@@ -25662,7 +25662,8 @@
             "Synced with tsps main e811aff0c (15 October 2026): PR #555 implements building, carving, decorating, visits, durability, offerings, rummaging, research points and collection-log rewards.",
             "Remaining: miniquest gate, moving ent routes/trails, research exchange, item bonuses, some drops and visual feedback.",
             "Main 82657e165: #1655 the Vale Totems miniquest (Ranulph and Isadora) gates the minigame: site 1 during the quest, all sites after, carving and decorating taught by its varbits. Ent routes/trails, the research exchange and item bonuses remain.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4072 Vale Totems: the miniquest as recorded, the carve menu, Exchange, notebook, flax bale and arrowtips. #2967 Send Vale Totems visit and collapse leaves in the same tick. #2964 NPC head icons: viewer-specific slots and Vale Totems durability leaves. 4 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4072 Vale Totems: the miniquest as recorded, the carve menu, Exchange, notebook, flax bale and arrowtips. #2967 Send Vale Totems visit and collapse leaves in the same tick. #2964 NPC head icons: viewer-specific slots and Vale Totems durability leaves. 4 merged PRs changed recorded implementation files for this entry.",
+            "2026-11-22: moving ents leave paired trails. Both tiles activate four +15% build/carve XP grants and a one-use double offering on that ent’s next eligible visit. The Valley mechanics and cleanup task remains in progress. See docs/vale-totems.md for source intervals, labelled route and placement estimates, tests, and the remaining scenery interaction."
           ],
           "taskDetails": [
             {

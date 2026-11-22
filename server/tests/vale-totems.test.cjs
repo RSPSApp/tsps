@@ -623,3 +623,15 @@ test("ent trails boost exactly four successful build or carve actions and a fres
   assert.equal(player.xp.fletching, 5 * 14.375 + 12.5);
   ticks(2);
 });
+
+test("ent trail indicators and XP charges do not leak into the saved totem snapshot", () => {
+  const player = createPlayer();
+  const sender = player.getPacketSender();
+  const transmit = CacheDefinitions.getVarpId("ent_totems_transmit_1");
+  const unrelatedBit = 1 << 11;
+  sender.sendConfig(transmit, unrelatedBit);
+  activateTrail(player, { destination: SITE });
+  State.erect(player, SITE, 1);
+  assert.equal(charges(player), 4, "saving keeps the live XP charges");
+  assert.equal(player.getAttribute("vale-totems:varps").ent_totems_transmit_1, unrelatedBit);
+});

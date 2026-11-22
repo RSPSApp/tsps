@@ -75,5 +75,76 @@
         ""
       ]
     }
+  },
+  "Hazelmere's scroll": {
+    "_capture": "Wiki item transcript page Transcript:Hazelmere's scroll (no rsprox capture of this read exists; the long scroll 625 is the generic scroll)",
+    "title": "",
+    "lines": [
+      "Es lemanto meso pro eis prit ta Cinqo mond.",
+      "Mi lovos te lemanto Daconia arpos",
+      "et Daconia arpos eto meriz ta priwl!"
+    ]
+  },
+  "Invasion plans": {
+    "_capture": "Wiki item transcript page Transcript:Invasion plans (no rsprox capture of this read exists; the long scroll 625 is the generic scroll)",
+    "title": "",
+    "lines": [
+      "<col=ff0000>Invasion</col>",
+      "",
+      "<col=ffff00>Troops board three fleets of battleships at Karamja.</col>",
+      "",
+      "<col=00ff00>Fleet 1</col>",
+      "<col=ffff00>Attacks Misthalin from the south.</col>",
+      "",
+      "<col=00ff00>Fleet 2</col>",
+      "<col=ffff00>Groups at Crandor and attacks Asgarnia from the west.</col>",
+      "",
+      "<col=00ff00>Fleet 3</col>",
+      "<col=ffff00>Sails north to attack Kandarin from south, reinforced by gnome foot soldiers leaving gnome stronghold.</col>",
+      "",
+      "<col=ff0000>Take no prisoners!</col>"
+    ]
+  },
+  "Lumber order": {
+    "_capture": "Wiki item transcript page Transcript:Lumber order (no rsprox capture of this read exists; the long scroll 625 is the generic scroll)",
+    "title": "",
+    "lines": [
+      "Karamja shipyard",
+      "",
+      "Order",
+      "Order for 30 Karamja battleships",
+      "Lumber required: 2000",
+      "Troop capacity: 300"
+    ]
+  },
+  "Bert's rota": {
+    "_capture": "Wiki item transcript page Transcript:Bert's rota (no rsprox capture of this read exists; the long scroll 625 is the generic scroll)",
+    "title": "",
+    "lines": [
+      "Sandy Sand's Corp - Brimhaven",
+      "Bert's Rota - Copy",
+      "",
+      "Week 1 - 6am-10pm - 50gps",
+      "Week 2 - 6am-10pm - 50gps",
+      "Week 3 - 6am-10pm - 50gps",
+      "Week 4 - 6am-10pm - 50gps",
+      "Week 5 - 6am-10pm - 50gps",
+      "Week 6 - 6am-10pm - 50gps"
+    ]
+  },
+  "Sandy's rota": {
+    "_capture": "Wiki item transcript page Transcript:Sandy's rota (no rsprox capture of this read exists; the long scroll 625 is the generic scroll)",
+    "title": "",
+    "lines": [
+      "Sandy Sand's Corp - Brimhaven",
+      "Bert's Rota - Original",
+      "",
+      "Week 1 - 9am-6pm - 50gps",
+      "Week 2 - 9am-6pm - 50gps",
+      "Week 3 - 9am-6pm - 50gps",
+      "Week 4 - 9am-6pm - 50gps",
+      "Week 5 - 9am-6pm - 50gps",
+      "Week 6 - 6am-10pm - 50gps"
+    ]
   }
 }

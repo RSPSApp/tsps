@@ -1468,6 +1468,7 @@ function attach(api) {
     api.onCustomEvent("player:world-input", Hespori.hesporiInput);
     api.onCustomEvent("npc-dialogue:action", Hespori.reentryAction);
     api.onCustomEvent("npc-dialogue:action", Services.gardenerProtection);
+    api.onCustomEvent("npc-dialogue:action", Services.gardenerTalkAction);
     api.onCustomEvent("interface:changed", Hespori.warningInterfaceChanged);
     api.onCustomEvent("player:world-input", cancelWork);
     api.onCustomEvent("player:interaction-cleared", cancelWork);

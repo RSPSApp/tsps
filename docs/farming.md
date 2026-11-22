@@ -81,8 +81,26 @@ Pay (and Pay (north) ...) makes the protection offer below straight away. Talk-t
 - **Talk-to** (rsprox captures: Elstan local 1001683 tick 9331 and 1002189 tick 1506, Dantaera, Lyra): "Select an
   option" with "Would you look after my crops for me?", "Can you give me any farming advice?", "Can you sell me
   something?" and "I'll come back another time.". Each answer starts with the player saying it.
-  - Looking after the crops continues into the Pay offer. A tree gardener whose tree has grown asks "Would you chop
-    my tree down for me?" instead (Wiki, Transcript: Fayeth).
+  - "Would you look after my crops for me?":
+    - **More than one patch:** the gardener answers "I might - which one were you thinking of?", then offers the
+      patches named by their Pay directions: "The northern allotment|The southern allotment" (Dantaera, 1000296;
+      Wiki, Marisi: "The northeastern allotment").
+    - **A crop with a price:** "If you like, but I want one basket of tomatoes for that.", then "Okay, it's a
+      deal.|No, that's too much.|Okay, it's a deal and don't ask again.". The deal plays "Okay, it's a deal.", takes
+      the payment as Pay does, and gives "That'll do nicely, sir. ..." (Aub, 1001562). "Don't ask again" also turns
+      the confirmation off.
+    - **Wiki answers** (Transcript:Kragen, Transcript:Fayeth): "No, that's too much." and an empty inventory give
+      "Well, I'm not wasting my time for free.", after "I'm afraid I don't have any (enough) of those at the
+      moment." when the player has none (or not enough). Other states have their own lines:
+      - nothing planted: "You don't have any seeds planted in that patch. ..." (a sapling, for a tree);
+      - already protected: "I don't know what you're talking about - I'm already looking after that patch for
+        you." / "Oh sorry, I forgot.";
+      - fully grown, dead or diseased: their own lines.
+    - A single payment is "one ...": "I want one sack of onions for that." (Elstan, Lyra), and "Pay one basket of
+      tomatoes?" on Pay.
+  - A tree gardener whose tree has grown asks "Would you chop my tree down for me?" (Wiki, Transcript:Fayeth), which
+    leads into Pay's felling offer. A gardener that has both a grown tree and a patch to protect asks both, as
+    Alexandra's Wiki menu does.
   - The advice is a random tip from the gardener's Wiki transcript, then the menu again.
   - Selling: the gardener says "That depends on whether I have it to sell. What is it that you're looking for?" and
     the Continue opens the Farming Supplies shop (Fayeth 1000149 tick 1863, Garth 03030 tick 4108). Since 25

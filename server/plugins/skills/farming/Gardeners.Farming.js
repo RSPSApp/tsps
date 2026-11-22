@@ -22,8 +22,9 @@ const SELL = "Can you sell me something?";
 const LEAVE = "I'll come back another time.";
 const SELL_REPLY = "That depends on whether I have it to sell. What is it that you're looking for?";
 const SHOP = "Farming Supplies";
-/** The protection offer the Pay option makes (Services.gardenerProtection answers it). */
-const PROTECT_ACTION = "farming:gardener-protect";
+/** The two questions' answers, which Services.gardenerTalkAction plays from the patches' state. */
+const LOOK_AFTER_ACTION = "farming:gardener-look-after";
+const CHOP_ACTION = "farming:gardener-chop";
 /**
  * Ours: Elstan, Frizzy Skernip and the other gardeners with no Wiki transcript give the tips Kragen's, Marisi's and
  * Taria's pages share; no recording has a gardener's advice.
@@ -72,17 +73,19 @@ function pageOptions(steps, found = new Set()) {
 }
 
 /**
- * The menu: `chop` swaps the protection question for the felling one. Each answer is the player's line, then what
- * it leads to. A gardener whose Wiki transcript has no advice question (Guppa, Argo) does not offer it.
+ * The menu. `chop` (a tree of the gardener's has grown) asks "Would you chop my tree down for me?"; `lookAfter` (a
+ * patch of theirs is not a grown tree) keeps the protection question, so a gardener with both offers both, as
+ * Alexandra's Wiki menu does. Each answer is the player's line, then what it leads to. A gardener whose Wiki
+ * transcript has no advice question (Guppa, Argo) does not offer it.
  */
-function menu(name, chop) {
-    const ask = chop ? CHOP : LOOK_AFTER;
+function menu(name, { chop = false, lookAfter = true } = {}) {
     const page = pageSteps(name);
     const advises = !page || pageOptions(page).has(ADVICE);
     return [{
         type: "choice",
         options: [
-            { text: ask, steps: [{ player: ask }, { type: "action", action: PROTECT_ACTION }] },
+            ...lookAfter || !chop ? [{ text: LOOK_AFTER, steps: [{ player: LOOK_AFTER }, { type: "action", action: LOOK_AFTER_ACTION }] }] : [],
+            ...chop ? [{ text: CHOP, steps: [{ player: CHOP }, { type: "action", action: CHOP_ACTION }] }] : [],
             ...advises ? [{ text: ADVICE, steps: adviceSteps(name) }] : [],
             { text: SELL, steps: [{ player: SELL }, { npc: SELL_REPLY }, { type: "action", action: "open_shop", target: SHOP }] },
             { text: LEAVE, steps: [{ player: LEAVE }] },
@@ -90,18 +93,24 @@ function menu(name, chop) {
     }];
 }
 
-/** Talk-to on a gardener: the menu through the dialogue runtime, so its hooks (Fairytale I, diaries) still see it. */
-function talk(player, npc, definition, chop) {
-    const name = definition?.getName?.() ?? npc.getDefinition()?.getName?.() ?? "";
+/** Plays `steps` as the gardener's, through the dialogue runtime, so its hooks (Fairytale I, diaries) still see them. */
+function play(player, npc, definition, steps) {
+    definition ??= npc.getDefinition?.();
+    const name = definition?.getName?.() ?? "";
     const npcId = npc.getId();
     const { startDialogue } = require("../../npcs/NpcDialogues.plugin.js");
     const record = QuestRuntime.loadTranscripts(api)?.[name];
     const context = { player, npc, npcId, definition, pages: [{ page: name, variants: ["standard-dialogue"] }] };
-    startDialogue(api, { player, npcId, npc, definition }, menu(name, chop), record?.branches ?? {}, context);
+    startDialogue(api, { player, npcId, npc, definition }, steps, record?.branches ?? {}, context);
+}
+
+/** Talk-to on a gardener: its menu. */
+function talk(player, npc, definition, questions) {
+    play(player, npc, definition, menu(definition?.getName?.() ?? npc.getDefinition()?.getName?.() ?? "", questions));
 }
 
 function attach(pluginApi) {
     api = pluginApi;
 }
 
-module.exports = { attach, talk, menu, LOOK_AFTER, CHOP, ADVICE, SELL, LEAVE, SELL_REPLY, SHOP };
+module.exports = { attach, talk, play, menu, LOOK_AFTER_ACTION, CHOP_ACTION, LOOK_AFTER, CHOP, ADVICE, SELL, LEAVE, SELL_REPLY, SHOP };

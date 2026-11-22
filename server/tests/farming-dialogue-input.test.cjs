@@ -456,7 +456,8 @@ test('gardener protection rechecks the patch at native Yes', async t => {
       assert.ok(clickType > 0, JSON.stringify({npcId:npc.getId(),contentId:npc.getContentId(p),definition:definition.getName(),actions,clickType,selectedAction:actions[clickType-1] ?? null}));
       await send({type:'npc_option',index:npc.getIndex(),clickType}); };
     const quote = () => { const menu = manager.getCurrent(); assert.ok(menu instanceof core.OptionDialogue);
-      assert.equal(menu.getTitle(),'Pay 1 sack of potatoes?'); assert.deepEqual(menu.getOptions(),['Yes.','No.',"Yes and don't ask again."]);
+      // rsprox captures: live says "one" for a single payment ("Pay one basket of tomatoes?", local 1001562).
+      assert.equal(menu.getTitle(),'Pay one sack of potatoes?'); assert.deepEqual(menu.getOptions(),['Yes.','No.',"Yes and don't ask again."]);
       assert.equal(sender.getChatboxGroupId(),219); assert.equal(manager.getOwner(),undefined); assert.equal(p.busy(),false);
       const mount = sender.subInterfaceTargets.get(219); assert.ok(mount); assert.equal(sender.getSubInterfaceAt(mount.targetUid),mount);
       return {menu,mount}; };

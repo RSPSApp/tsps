@@ -148,12 +148,14 @@ the rsprox index. Ticks below are counts of events across them.
 - The Wiki (Alchemical_Hydra#Drops): "a brimstone ring piece rate follows the formula
   1/(180 / ...) = 1/181.07", tried after the dragon thrownaxe, dragon knife, claw, tail and leather,
   and "The order in which players receive the items is: Hydra's eye, Hydra's fang and finally
-  Hydra's heart." The export lists each piece as its own 1/181 pre-roll; NpcDrops makes them one
-  1/181 roll (`correctAlchemicalHydra`) and `Loot.AlchemicalHydra.js` hands over the next piece in
+  Hydra's heart." The export lists each piece as its own 1/181.1 pre-roll (the effective rate);
+  NpcDrops makes them one 1/180 roll (`correctAlchemicalHydra`), which the other uniques' misses
+  bring to the Wiki's 1/181.07 a kill, and `Loot.AlchemicalHydra.js` hands over the next piece in
   that order. Ours: the order starts again from the eye after the heart (the Wiki gives only the
   order).
 - The count of pieces received is the persisted `alchemical-hydra:ring-pieces`. Ours: an account
-  that has no count yet starts from the pieces its collection log has.
+  that has no count yet starts from its collection log, at the first piece in the order it has
+  fewest of (the Brimstone ring page: no duplicate "until obtaining each of the other pieces").
 
 ## The door
 

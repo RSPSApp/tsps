@@ -464,14 +464,18 @@ function correctAmoxliatl(table) {
 
 /** Hydra's eye, fang and heart: the brimstone ring's pieces. */
 const HYDRA_RING_PIECES = new Set([22973, 22971, 22969]);
+/** The piece roll itself, before the other uniques' misses (Wiki formula above). */
+const HYDRA_RING_PIECE_ROLL = 180;
 
 /**
  * Two rolls per kill; the first can hit the unique pre-roll, the second is always on the standard
- * table (Wiki, Drops). The Wiki's note on the uniques: "a brimstone ring piece rate follows the
- * formula 1/(180 / ...) = 1/181.07", tried after the other uniques, and "The order in which players
- * receive the items is: Hydra's eye, Hydra's fang and finally Hydra's heart." The export lists each
- * piece as its own 1/181 pre-roll, which makes any piece 3/181; they are one 1/181 roll, and the
- * Hydra's plugin hands over the piece next in that order ("npc-drops:roll").
+ * table (Wiki, Drops). The Wiki's note on the uniques: they are rolled in succession, the ring
+ * piece last, and "a brimstone ring piece rate follows the formula 1/(180 / (1999/2000 x 1999/2000 x
+ * 999/1000 x 511/512 x 511/512)) = 1/181.07": the piece's own roll is 1/180, the other uniques'
+ * misses make it 1/181.07 a kill. "The order in which players receive the items is: Hydra's eye,
+ * Hydra's fang and finally Hydra's heart." The export lists each piece as its own 1/181.1 pre-roll
+ * (the effective rate), which makes any piece 3/181; they are one 1/180 roll, and the Hydra's
+ * plugin hands over the piece next in that order ("npc-drops:roll").
  */
 function correctAlchemicalHydra(table) {
   if (!table) return;
@@ -482,13 +486,12 @@ function correctAlchemicalHydra(table) {
     entry.once_per_kill = true;
     if (HYDRA_RING_PIECES.has(entry.item_id)) pieces.push(entry);
   }
-  const { weight, out_of: outOf } = pieces[0] ?? {};
-  if (pieces.length !== HYDRA_RING_PIECES.size || !pieces.every((entry) => entry.weight === weight && entry.out_of === outOf)) return;
+  if (pieces.length !== HYDRA_RING_PIECES.size) return;
   for (const entry of pieces) {
     Object.assign(entry, {
       roll_group: "alchemical_hydra_ring_piece",
-      group_access_weight: weight,
-      group_access_out_of: outOf,
+      group_access_weight: 1,
+      group_access_out_of: HYDRA_RING_PIECE_ROLL,
       weight: 1,
       out_of: pieces.length,
     });

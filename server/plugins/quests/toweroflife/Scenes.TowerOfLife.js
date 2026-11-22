@@ -254,18 +254,19 @@ function createScenes(api, ctx) {
         player.getPacketSender().sendSound(SOUND.BOO, 1, 0);
       };
     } else if (text.startsWith("Me look dungeon")) {
-      // Continued, the fade; three ticks on tol_prog 17, the Homunculus gone and the tabs back (capture ticks
-      // 3384-3388). Started as the chain was built, this ended the scene mid-talk and left the fade out on (#6485).
+      // Continued (capture tick 3384), the fade a tick on (3385); three ticks after that tol_prog 17, the Homunculus
+      // gone and the tabs back (3388). Started as the chain was built, this ended the scene mid-talk and left the fade
+      // out on (#6485).
       request.after = () => {
-        Scenes.fade(player, true);
-        Scenes.later(player, 3, () => {
+        Scenes.later(player, 1, () => Scenes.fade(player, true));
+        Scenes.later(player, 4, () => {
           ctx.setStage(player, 17);
           ctx.sendVarbit(player, VARBIT_HOMONC_PRES, 0);
           endPlaying(player);
           Scenes.fade(player, false);
         });
       };
-      request.pauseTicks = 3;
+      request.pauseTicks = 4;
     }
   }
 

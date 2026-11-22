@@ -688,12 +688,18 @@ test('the scare plays its whole talk: the Homunculus with "Boo.", and the end on
   boo.before();
   assert.equal(h.varbits.get(3359), 1);
   last.after();
-  assert.equal(last.pauseTicks, 3);
-  assert.deepEqual(h.fades, ['out']);
+  assert.equal(last.pauseTicks, 4);
+  // An Esc mid-scene keeps the chat, so the last line's continue still ends it.
+  const close = { player: h.player, handled: false };
+  PluginManager.emitCustomEvent('interface:close', close);
+  assert.equal(close.handled, true);
   h.flushTasks();
   assert.equal(h.quest.getStage(h.player), 17);
   assert.equal(h.varbits.get(3359), 0);
   assert.equal(h.varbits.get(542), 0);
   assert.equal(h.cameraResets(), 1);
   assert.deepEqual(h.fades, ['out', 'in']);
+  const after = { player: h.player, handled: false };
+  PluginManager.emitCustomEvent('interface:close', after);
+  assert.equal(after.handled, false);
 });

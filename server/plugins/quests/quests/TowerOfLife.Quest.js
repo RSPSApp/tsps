@@ -1186,6 +1186,8 @@ module.exports = function registerTowerOfLifeQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:line", noFingersAsked);
+  // A scene ends from its last line's continue: a close (Esc) that dropped the chat would leave the player in it.
+  api.onCustomEvent("interface:close", (event) => { if (Scenes.isPlaying(event.player)) event.handled = true; });
   api.onNpcInteraction("'No fingers'", { Pickpocket: pickpocketNoFingers });
   api.onObjectInteraction("Pressure machine", { Fix: handleMachineFix });
   api.onObjectInteraction("Pipe machine", { Fix: handleMachineFix });

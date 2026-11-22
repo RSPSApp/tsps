@@ -25,6 +25,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
   const Shipwreck = require("../ghostsahoy/Shipwreck.GhostsAhoy");
   const Voyage = require("../ghostsahoy/Voyage.GhostsAhoy");
   const Tomb = require("../ghostsahoy/Tomb.GhostsAhoy");
+  const Bedsheet = require("../ghostsahoy/Bedsheet.GhostsAhoy");
 
   const PAGE = "Ghosts Ahoy";
   const NPC = Object.freeze({
@@ -119,8 +120,13 @@ module.exports = function registerGhostsAhoyQuest(api) {
   const RUNEDRAW_WINS_ATTRIBUTE = "ghosts-ahoy:runedraw-wins";
   const RUNEDRAW_FEE = 25;
 
-  /** Ghost villagers each player has asked, by NPC (live: "You only just asked me the same thing!"). */
-  const asked = new WeakMap();
+  /**
+   * The ghost villager each player asked last. Only that one answers "You only just asked me the
+   * same thing!"; asking another in between lets the first answer again (rsprox captures,
+   * 20261112T092603-5ab63b4 ticks 1541-1570; Wiki, Ghosts Ahoy: "As long as the ghost is not
+   * spoken to twice in a row").
+   */
+  const lastAsked = new WeakMap();
 
   let quest;
 
@@ -589,9 +595,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
     const npc = request.npc;
     if (!npc || typeof request.step?.speaker !== "string" || text.startsWith(LINE.ONLY_JUST_ASKED)) return;
     // Every answer counts as having asked that ghost (Transcript: "regardless if they support or deny").
-    let seen = asked.get(player);
-    if (!seen) asked.set(player, (seen = new WeakSet()));
-    seen.add(npc);
+    lastAsked.set(player, npc);
   }
 
   // ==========================================================================
@@ -796,7 +800,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
         // Gravingas's form (tick 1523): counter 1, on the continue after his line.
         if (!held(player, ids.PETITION_FORM)) player.getInventory().adds(ids.PETITION_FORM, 1);
         State.set(player, State.VARBIT.SIGNATURES, State.SIGNATURES_FORM);
-        asked.delete(player);
+        lastAsked.delete(player);
         event.handled = true;
         return;
       case "ELEZLT":
@@ -1057,7 +1061,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
 
   const VILLAGER_VARIANT = "robes-of-necrovarus-talking-to-the-ghost-villagers";
 
-  /** A ghost already asked answers "You only just asked me..." (ticks 1541, 1544, 1570). */
+  /** The ghost asked last answers "You only just asked me..." (ticks 1541, 1544, 1570). */
   function talkToVillager(event) {
     const { player, npc } = event;
     if (selectVariant({ npcId: NPC.GHOST_VILLAGER, player }) !== VILLAGER_VARIANT || !wearingAmulet(player)) return false;
@@ -1067,7 +1071,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
       startTranscript(api, player, NPC.GHOST_VILLAGER, PAGE, VILLAGER_VARIANT, () => findNode(steps, "r1mXym")?.steps ?? [], npc);
       return true;
     }
-    if (!asked.get(player)?.has(npc)) return false;
+    if (lastAsked.get(player) !== npc) return false;
     startTranscript(api, player, NPC.GHOST_VILLAGER, PAGE, VILLAGER_VARIANT,
       () => [{ player: LINE.ASK_SIGNATURE }, ...(findNode(steps, "HQkg-C")?.steps ?? [])], npc);
     return true;
@@ -1303,6 +1307,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
   Shipwreck.attach(api, shared);
   Voyage.attach(api, shared);
   Tomb.attach(api, shared);
+  Bedsheet.attach(api, shared);
   State.persist(api);
 
   api.onNpcDialogueVariant(selectVariant);
@@ -1327,9 +1332,15 @@ module.exports = function registerGhostsAhoyQuest(api) {
   api.onObjectInteraction("Mast", { Search: onlyId(ids.MAST, Shipwreck.searchMast) });
   api.onObjectInteraction("Gangplank", { Cross: onlyIds(ids.GANGPLANKS, Shipwreck.crossGangplank) });
   api.onObjectInteraction("Rock", { "Jump-To": onlyId(ids.ROCK, Shipwreck.jumpToRock) });
+  api.onObjectRoute(Shipwreck.routeToRock);
   api.onObjectInteraction("Coffin", { Open: Tomb.openCoffin, Search: Tomb.searchCoffin, Close: Tomb.closeCoffin });
   api.onZoneEnter(Shipwreck.TOP_DECK, Shipwreck.deckEntered);
   api.onZoneExit(Shipwreck.TOP_DECK, Shipwreck.deckLeft);
+  api.onCustomEvent("equipment:changed", Bedsheet.sync);
+  api.onCustomEvent("player:bootstrap-complete", Bedsheet.sync);
+  api.onCanEquip(Bedsheet.canWear);
+  api.onZoneEnter(Bedsheet.TOWN, Bedsheet.sync);
+  api.onZoneExit(Bedsheet.TOWN, Bedsheet.sync);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 

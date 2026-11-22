@@ -448,6 +448,171 @@ test('villagers: a ghost asked once has had its say, the bribe is the 1-3 it nam
   assert.deepEqual(lines.get(p), ['Would you sign this petition form, please?', "You only just asked me the same thing! Leave me alone - I've had my say!"]);
 });
 
+test('villagers: only the ghost asked last refuses; asking another in between lets it answer again (ticks 1541-1570, issue #6497)', (t) => {
+  const p = actor(t, { x: 3661, y: 3497, stage: 4 });
+  p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(I().BEDSHEET_2));
+  give(p, I().PETITION_FORM);
+  STATE.set(p, STATE.VARBIT.SIGNATURES, STATE.SIGNATURES_FORM + 3);
+  const first = spawn(t, core.NpcIdentifiers.GHOST_VILLAGER, 3662, 3497);
+  const second = spawn(t, core.NpcIdentifiers.GHOST_VILLAGER, 3660, 3497);
+  const ONLY = "You only just asked me the same thing! Leave me alone - I've had my say!";
+  const ask = (npc) => {
+    lines.set(p, []);
+    talk(p, npc);
+    play(p, ['Okay, if you insist.']);
+    return lines.get(p);
+  };
+  assert.ok(!ask(first).includes(ONLY), 'the first ask gets an answer');
+  assert.ok(ask(first).includes(ONLY), 'the same ghost twice in a row refuses (1541)');
+  assert.ok(!ask(second).includes(ONLY), 'another ghost answers');
+  assert.ok(!ask(first).includes(ONLY), 'the first ghost answers again after another was asked (1570)');
+  assert.ok(ask(first).includes(ONLY));
+});
+
+test('villagers: every support answer is one line, then the signature box (ticks 1541-1609)', (t) => {
+  const p = actor(t, { x: 3661, y: 3497, stage: 4 });
+  p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(I().BEDSHEET_2));
+  give(p, I().PETITION_FORM);
+  let forced = 0;
+  const api = PluginManager.createApi(`GhostsSupportPick${serial}`);
+  api.onCustomEvent('npc-dialogue:random', (draw) => {
+    if (draw.player === p && draw.options[0]?.text === 'Support dialogue 1') draw.index = forced;
+  });
+  const answers = ['Most certainly, I will.', "I'll do anything that annoys Necrovarus.",
+    "Yes! It's about time somebody did something about Necrovarus.", 'Yes, of course.'];
+  answers.forEach((answer, index) => {
+    forced = index;
+    STATE.set(p, STATE.VARBIT.SIGNATURES, STATE.SIGNATURES_FORM + index);
+    lines.set(p, []);
+    talk(p, spawn(t, core.NpcIdentifiers.GHOST_VILLAGER, 3662, 3497));
+    const shown = play(p);
+    assert.deepEqual(lines.get(p), ['Would you sign this petition form, please?', answer], `support answer ${index + 1}`);
+    assert.equal(shown.find((s) => s.kind === 'item')?.text,
+      `The ghost signs your petition. You have obtained ${index + 1} signature${index ? 's' : ''} so far.`);
+  });
+});
+
+test('Jump-To: the route steps until the rock is in sight, then the jump walks on to the take-off (ticks 937-1005, issue #6497)', (t) => {
+  Shipwreck._test.setFallRoll(() => false);
+  t.after(() => Shipwreck._test.setFallRoll(() => Math.random() < 0.1));
+  // [where the click was made, the rock, the tile after the click tick, ticks from click to leap, landing]
+  const captured = [
+    [[3605, 3550], [3604, 3550], [3605, 3550], 3, [3602, 3550]], // 937: in sight, walks 938, still 939, leaps 940
+    [[3602, 3550], [3597, 3552], [3601, 3551], 1, [3597, 3552]], // 944: the route step ends on the take-off
+    [[3597, 3552], [3595, 3556], [3595, 3553], 3, [3595, 3556]], // 948: one step into sight
+    [[3595, 3556], [3597, 3561], [3596, 3557], 1, [3597, 3561]], // 954
+    [[3597, 3561], [3601, 3564], [3597, 3563], 1, [3601, 3564]], // 958
+    [[3605, 3564], [3601, 3564], [3605, 3564], 6, [3599, 3564]], // 975: walks four tiles 976-979, still 980
+    [[3599, 3564], [3597, 3559], [3598, 3563], 1, [3597, 3559]], // 986
+    [[3597, 3559], [3595, 3554], [3596, 3558], 1, [3595, 3554]], // 990-991
+    [[3595, 3554], [3599, 3552], [3596, 3552], 3, [3599, 3552]], // 995
+    [[3599, 3552], [3602, 3550], [3600, 3551], 4, [3604, 3550]], // 1001: two walked tiles, still 1004, leaps 1005
+  ];
+  for (const [[x, y], [rx, ry], afterClick, leapTick, landing] of captured) {
+    const p = actor(t, { x, y, stage: 4 });
+    p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 25, false);
+    p.setRunning(true);
+    const rock = core.MapObjects.get(16115, new core.Location(rx, ry, 0), null);
+    assert.ok(rock, `rock at ${rx},${ry}`);
+    let now = 0;
+    let leapt = null;
+    const force = p.setForceMovement.bind(p);
+    t.mock.method(p, 'setForceMovement', (movement) => { if (movement && leapt == null) leapt = now; return force(movement); });
+    const definition = rock.getDefinition?.() ?? core.CacheDefinitions.getLoc?.(16115);
+    p.getMovementQueue().walkToObject(rock, { execute: () => PluginManager.emitObjectInteraction({
+      player: p, object: rock, objectId: 16115, definition, clickType: 1, option: 'Jump-To', location: { x: rx, y: ry, z: 0 }, handled: false,
+    }) });
+    const tiles = [];
+    for (now = 0; now < 10; now++) {
+      tick();
+      tiles.push([p.getLocation().getX(), p.getLocation().getY()]);
+    }
+    const label = `${x},${y} -> rock ${rx},${ry}`;
+    assert.deepEqual(tiles[0], afterClick, `${label}: the click tick`);
+    assert.equal(leapt, leapTick, `${label}: the leap`);
+    assert.deepEqual(tiles.at(-1), landing, `${label}: lands across`);
+  }
+});
+
+test('Jump-To never walks across the water to a take-off past a gap (issue #6497 review)', (t) => {
+  Shipwreck._test.setFallRoll(() => false);
+  t.after(() => Shipwreck._test.setFallRoll(() => Math.random() < 0.1));
+  // Clicks from further back than the next jump: its take-off is across a gap from here.
+  for (const [[x, y], [rx, ry]] of [[[3605, 3564], [3597, 3559]], [[3602, 3550], [3599, 3552]]]) {
+    const p = actor(t, { x, y, stage: 4 });
+    p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 25, false);
+    const xp = p.getSkillManager().getExperience(core.Skill.AGILITY);
+    const rock = core.MapObjects.get(16115, new core.Location(rx, ry, 0), null);
+    const definition = rock.getDefinition?.() ?? core.CacheDefinitions.getLoc?.(16115);
+    p.getMovementQueue().walkToObject(rock, { execute: () => PluginManager.emitObjectInteraction({
+      player: p, object: rock, objectId: 16115, definition, clickType: 1, option: 'Jump-To', location: { x: rx, y: ry, z: 0 }, handled: false,
+    }) });
+    const crossed = [];
+    for (let i = 0; i < 12; i++) {
+      tick();
+      crossed.push(p.getLocation().getX());
+    }
+    const label = `${x},${y} -> rock ${rx},${ry}`;
+    if (x === 3605) assert.ok(crossed.every((tileX) => tileX >= 3601), `${label}: stays on the island (${crossed})`);
+    else assert.ok(!(p.getLocation().getX() === 3597 && p.getLocation().getY() === 3552), `${label}: not walked over to 3597,3552`);
+    assert.equal(p.getSkillManager().getExperience(core.Skill.AGILITY), xp, `${label}: no jump`);
+    assert.ok(messages.get(p).includes("I can't reach that!"), label);
+  }
+});
+
+test('the bedsheet turns the player into the Ghost (?) disguise and makes them walk (Wiki: Bedsheet; tick 1504)', (t) => {
+  const p = actor(t, { x: 3670, y: 3497, stage: 4 });
+  p.setRunning(true);
+  const wear = (id) => {
+    p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(id, id < 0 ? 0 : 1));
+    p.getEquipment().refreshItems();
+  };
+  wear(I().BEDSHEET_2);
+  assert.equal(p.getNpcTransformationId(), 3009, 'ahoy_ghost_disguise_green');
+  assert.equal(p.isRunningReturn(), true, 'the run setting stays on');
+  const start = p.getLocation().getX();
+  p.getMovementQueue().walkToTile(new core.Location(start - 6, 3497, 0), () => {});
+  tick(2);
+  assert.equal(start - p.getLocation().getX(), 2, 'one tile a tick while worn');
+  wear(I().BEDSHEET);
+  assert.equal(p.getNpcTransformationId(), 3008, 'ahoy_ghost_disguise');
+  // Out of the town (a teleport): still worn and walking, but no disguise until back.
+  p.moveTo(new core.Location(3640, 3480, 0));
+  tick();
+  assert.equal(p.getNpcTransformationId(), -1, 'no disguise outside Port Phasmatys');
+  assert.equal(p.isWalkOnly(), true);
+  p.moveTo(new core.Location(3670, 3497, 0));
+  tick();
+  assert.equal(p.getNpcTransformationId(), 3008, 'back in town');
+  wear(-1);
+  assert.equal(p.getNpcTransformationId(), -1, 'back to the player');
+  assert.equal(p.isWalkOnly(), false);
+  const from = p.getLocation().getX();
+  p.getMovementQueue().walkToTile(new core.Location(from - 6, 3497, 0), () => {});
+  tick(2);
+  assert.ok(from - p.getLocation().getX() > 2, 'runs again with it off');
+  // Another transformation is neither replaced nor undone.
+  p.setNpcTransformationId(1469);
+  wear(I().BEDSHEET_2);
+  assert.equal(p.getNpcTransformationId(), 1469);
+  wear(-1);
+  assert.equal(p.getNpcTransformationId(), 1469);
+});
+
+test('the bedsheet is only worn inside Port Phasmatys (Wiki: Bedsheet)', (t) => {
+  for (const [x, y, inside] of [[3670, 3497, true], [3210, 3424, false], [3100, 3530, false], [3660, 3515, false]]) {
+    const p = actor(t, { x, y, stage: 4 });
+    give(p, I().BEDSHEET);
+    const slot = p.getInventory().getSlotForItemId(I().BEDSHEET);
+    core.EquipPacketListener.equip(p, I().BEDSHEET, slot, core.Inventory.INTERFACE_ID);
+    tick();
+    const head = p.getEquipment().getItems()[core.Equipment.HEAD_SLOT]?.getId?.();
+    assert.equal(head === I().BEDSHEET, inside, `${x},${y}`);
+    assert.equal(p.getNpcTransformationId(), inside ? 3008 : -1, `${x},${y}`);
+    assert.equal(messages.get(p).includes("I'll only wear the bedsheet inside Port Phasmatys."), !inside, `${x},${y}`);
+  }
+});
+
 test('the Ghost captain sails with the captured fade, fare and landing (ticks 1110-1167)', (t) => {
   const p = actor(t, { x: 3702, y: 3487, stage: 4 });
   give(p, I().ECTO_TOKEN, 39);

@@ -5,7 +5,8 @@
 // opens them like any door: area_sanguine_ghetto_door1 (17600) at 3602,3208 (rotation 3) goes and
 // area_sanguine_ghetto_open_door1 (18031) stands on 3602,3207 at rotation 0; door2 (17601) at
 // 3606,3206 the same, onto 18032 at 3606,3205; door_open (62) each time. They swing shut on their
-// own about 499 ticks later (t841 -> t1340).
+// own about 499 ticks later (t841 -> t1340). Closing door2 plays small_creaky_door_close 55 (t2667);
+// door1's close sound is unrecorded.
 //
 // Real engine, as sea-slug-doors.test.cjs: every plugin loaded, real Players, every click through
 // ObjectActionPacketListener.executeAction and the ticks running.
@@ -46,6 +47,10 @@ function actor(t, x, y, z) {
   player.setLocation(new core.Location(x, y, z));
   player.needsPlacement = false;
   players.push(player);
+  player.sounds = [];
+  const sender = player.getPacketSender();
+  const sendSoundEffect = sender.sendSoundEffect.bind(sender);
+  sender.sendSoundEffect = (id, ...rest) => { player.sounds.push(id); return sendSoundEffect(id, ...rest); };
   t.after(() => {
     player.getDialogueManager().reset?.();
     player.setRegistered(false);
@@ -81,9 +86,9 @@ const locAt = (id, x, y, z) => {
 };
 const click = (player, id, x, y) => new ObjectActionPacketListener().executeAction(player, id, x, y, 1);
 
-for (const [name, closed, open, door, leaf, from] of [
-  ["the west door (17600)", 17600, 18031, [3602, 3208, 0], [3602, 3207], [3601, 3209]],
-  ["the east door (17601)", 17601, 18032, [3606, 3206, 0], [3606, 3205], [3605, 3204]],
+for (const [name, closed, open, door, leaf, from, closeSound] of [
+  ["the west door (17600)", 17600, 18031, [3602, 3208, 0], [3602, 3207], [3601, 3209], null],
+  ["the east door (17601)", 17601, 18032, [3606, 3206, 0], [3606, 3205], [3605, 3204], 55],
 ]) {
   test(`Old Man Ral's ${name} opens onto its own open leaf and closes again`, (t) => {
     const [x, y, z] = door;
@@ -95,8 +100,10 @@ for (const [name, closed, open, door, leaf, from] of [
     assert.ok(until(() => locAt(open, leaf[0], leaf[1], z) !== null, 8), "the open leaf stands on the next tile south");
     assert.equal(locAt(open, leaf[0], leaf[1], z).getFace(), 0, "rotation 0 (live loc_add_change)");
     assert.equal(locAt(closed, x, y, z), null, "the closed door is gone");
+    assert.deepEqual(player.sounds, [62], "door_open 62");
     click(player, open, leaf[0], leaf[1]);
     assert.ok(until(() => locAt(closed, x, y, z) !== null, 8), "Close puts the closed door back");
     assert.equal(locAt(open, leaf[0], leaf[1], z), null);
+    if (closeSound != null) assert.equal(player.sounds[1], closeSound, "the recorded close sound");
   });
 }

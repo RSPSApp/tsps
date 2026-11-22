@@ -133,6 +133,10 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
     [core.CacheDefinitions.getLocId("fris_palisade_door_r"), palisadeSounds],
     // Jatizso's town wall door opens with synth 71 (rsprox 3027 ticks 3760, 4738); its close is unrecorded.
     [core.CacheDefinitions.getLocId("frisd_town_wall_door"), { open: new Sound(71, 1, 0, 0) }],
+    // Meiyerditch's area_sanguine_ghetto_door2 closes with small_creaky_door_close 55 (Darkness of
+    // Hallowvale capture t2667, 3625,3252); it opens with door_open 62, the default. door1's (17600)
+    // close is unrecorded.
+    [O.DOOR_377, { close: new Sound(55, 1, 0, 0) }],
   ]);
   // Double doors whose leaves open by role rather than as their own id + 1: the clicked leaf as
   // `clicked`, its partner as `partner`. Neitiznot's palisade gate: whichever leaf is clicked opens

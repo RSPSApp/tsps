@@ -536,6 +536,28 @@ test("a logout in the sandpit cutscene saves the player at the bell, the step to
   assert.equal(amount(f, ITEM.BUCKET_OF_SAND), 1);
 });
 
+test("Esc in the sandpit cutscene leaves it as the second box's continue does: back at the bell, the step to play again", async (t) => {
+  const f = at_stage(t, [2598, 3084], 130, [[ITEM.EARTH_RUNE, 5], [ITEM.BUCKET_OF_SAND, 1]]);
+  tick(f);
+  await send(f, ring());
+  for (let i = 0; i < 60 && f.p.getPacketSender().getChatboxGroupId() !== 229; i++) {
+    const group = f.p.getPacketSender().getChatboxGroupId();
+    if (f.p.getDialogueManager().getCurrent() && [231, 217].includes(group)) {
+      await send(f, { type: "dialogue_continue", widgetId: (group << 16) | 5, childIndex: -1 });
+    }
+    tick(f);
+  }
+  assert.equal(f.p.getPacketSender().getChatboxGroupId(), 229, "the first statement box shows");
+  await send(f, { type: "interface_close" });
+  for (let i = 0; i < 50; i++) tick(f);
+  assert.deepEqual(at(f), [2598, 3086, 0], "back beside the bell");
+  assert.equal(f.p.getMovementQueue().isMovementBlocked(), false, "free to move");
+  assert.equal(f.p.getAttribute("hand-in-the-sand:scene-exit") ?? null, null, "no scene left to recover");
+  assert.equal(stage(f), 130, "the step to play again");
+  await play(f, ring());
+  assert.equal(stage(f), 140, "ringing again plays it through");
+});
+
 test("each ringer's Zavistic is theirs alone: another player neither sees him nor loses him", async (t) => {
   const first = at_stage(t, [2598, 3084], 20, [[ITEM.BEER_HAND, 1]]);
   const second = actor(t, 2599, 3084);

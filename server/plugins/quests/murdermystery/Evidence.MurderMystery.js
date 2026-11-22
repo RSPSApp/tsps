@@ -98,7 +98,8 @@ module.exports = function attachMurderMysteryEvidence(api, ctx) {
   function pickUpSceneItem(event) {
     const item = SCENE_ITEMS.get(event.groundItemId);
     const { x, y, z } = event.location ?? {};
-    if (!item || x !== item.at[0] || y !== item.at[1] || z !== item.at[2]) return;
+    // The study's own static spawn only: a copy the player dropped, even on that tile, takes as any item.
+    if (!item || event.groundItem?.isStaticSpawn?.() !== true || x !== item.at[0] || y !== item.at[1] || z !== item.at[2]) return;
     const { player } = event;
     // A full bag takes nothing: the core refuses it as for any other item. The item comes with its box.
     if (!has(player, item.held) && inventory(player).isFull()) return;

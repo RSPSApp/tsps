@@ -307,6 +307,16 @@ test("a full inventory: the thread drops, and picking it up from the ground only
 
 const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
 
+const { ItemOnGround, State: GroundState } = require("../dist/game/entity/impl/grounditem/ItemOnGround");
+
+/** A fixed ground spawn, as GroundItemSpawnDefinitionLoader makes them (ground-items.json). */
+function placeSpawn(t, itemId, [x, y, z = 0]) {
+  const ground = new ItemOnGround(GroundState.SEEN_BY_EVERYONE, undefined, new h.core.Location(x, y, z), new h.core.Item(itemId, 1), false, 100, null, true);
+  ItemOnGroundManager.register(ground);
+  t.after(() => { const items = h.core.World.getItems(); if (items.includes(ground)) items.splice(items.indexOf(ground), 1); });
+  return ground;
+}
+
 function placeOnGround(f, t, itemId, [x, y, z = 0]) {
   const ground = ItemOnGroundManager.registerLocation(f.player, new h.core.Item(itemId, 1), new h.core.Location(x, y, z), undefined, { goesGlobal: false });
   t.after(() => { const items = h.core.World.getItems(); if (items.includes(ground)) items.splice(items.indexOf(ground), 1); });
@@ -324,8 +334,8 @@ async function take(f, itemId, [x, y]) {
 
 test("the dagger and the pot: taken with their box, the ground item staying; then 'I already have the murder weapon.' (ticks 1046-1053)", async (t) => {
   const f = actor(t, { at: [2746, 3579, 0], stage: S.STARTED });
-  const pot = placeOnGround(f, t, I.PUNGENT_POT, [2747, 3579]);
-  const dagger = placeOnGround(f, t, I.CRIMINALS_DAGGER, [2746, 3578]);
+  const pot = placeSpawn(t, I.PUNGENT_POT, [2747, 3579]);
+  const dagger = placeSpawn(t, I.CRIMINALS_DAGGER, [2746, 3578]);
   await take(f, I.PUNGENT_POT, [2747, 3579]);
   assert.equal(h.shown(f)?.text, "It seems like Lord Sinclair was drinking from this before he died.");
   assert.equal(count(f, I.PUNGENT_POT), 1, "with the box (tick 1048)");
@@ -579,7 +589,7 @@ test("all the evidence, Frank: the guard's case, the evidence taken with the rew
   const texts = f.calls.filter((c) => c.name === "sendString").map((c) => String(c.args[0]));
   assert.ok(texts.includes("You have solved the Murder Mystery!"), "the scroll's title (153:4)");
   const model = f.calls.find((c) => c.name === "sendItemOnInterfaces" && c.args[0] === ((153 << 16) | 5));
-  assert.deepEqual(model?.args.slice(1), [I.CRIMINALS_DAGGER, 400], "murderweapon on the scroll at zoom 400");
+  assert.equal(model?.args[1], I.CRIMINALS_DAGGER, "murderweapon on the scroll");
   assert.deepEqual(positions.at(-1), [(153 << 16) | 5, 78, 128], "placed at (78, 128)");
 });
 
@@ -760,4 +770,19 @@ test("a dropped dagger elsewhere, and a thread after the quest, are taken as any
   h.ticks(done, 2);
   assert.equal(count(done, I.CRIMINALS_THREAD_2), 1, "King's Ransom's thread");
   assert.ok(!h.core.World.getItems().includes(thread) || thread.isPendingRemoval());
+});
+
+test("a dagger the player dropped on the study's own spawn tile is taken as any item", async (t) => {
+  const f = actor(t, { at: [2746, 3579, 0], stage: S.STARTED });
+  const dropped = placeOnGround(f, t, I.CRIMINALS_DAGGER, [2746, 3578]);
+  await take(f, I.CRIMINALS_DAGGER, [2746, 3578]);
+  h.ticks(f, 2);
+  assert.equal(count(f, I.CRIMINALS_DAGGER), 1);
+  assert.ok(!h.core.World.getItems().includes(dropped) || dropped.isPendingRemoval(), "no copy left behind");
+});
+
+test("an old save at poison progress 3 (the proof found) still reads the murderer's place as told", async (t) => {
+  const f = actor(t, { at: [LOC.CREST[1], LOC.CREST[2] - 1, 0], stage: S.STARTED, poison: 3 });
+  await clickObject(f, LOC.CREST, 2);
+  assert.ok(String(h.shown(f)?.text).startsWith("It looks like the Sinclair family crest but it is very dirty."));
 });

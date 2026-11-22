@@ -77,7 +77,8 @@ module.exports = function attachMurderMysteryPoison(api, ctx) {
   // ---- Stories ---------------------------------------------------------------------------------
 
   const told = (player, suspect) => (ctx.attr(player, ATTRIBUTES.STORIES) & (1 << suspect.id)) !== 0
-    || (ctx.attr(player, ATTRIBUTES.POISON) === POISON.OLD_STORY && ctx.murderer(player).id === suspect.id);
+    // An old save (no story bits) had the murderer's story told at poison progress 2, and still at 3, the proof.
+    || (ctx.attr(player, ATTRIBUTES.POISON) >= POISON.OLD_STORY && ctx.murderer(player).id === suspect.id);
 
   function handleLine({ player, npcId, text }) {
     if (!player || ctx.stage(player) !== STAGES.STARTED || typeof text !== "string") return;

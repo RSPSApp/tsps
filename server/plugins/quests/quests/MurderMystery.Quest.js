@@ -31,8 +31,9 @@ module.exports = function registerMurderMysteryQuest(api) {
   const MANSION_MULTIS = [NPCS.HOUSE_GUARD, ...SUSPECTS.map((suspect) => suspect.npcs[1])];
   const SERVANTS_WITH_SNUB = new Set([NPCS.DONOVAN, NPCS.PIERRE, NPCS.HOBBES, NPCS.LOUISA, NPCS.STANFORD]);
   const PIERRE_AFTER = { page: "Pierre", variant: "standard-dialogue-after-murder-mystery" };
-  /** quest_scroll's model (t2248: murderweapon, zoom 400) and title. */
+  /** quest_scroll's title and where its model goes (t2248: murderweapon, if_setposition 78, 128). */
   const SCROLL_TITLE = "You have solved the Murder Mystery!";
+  const SCROLL_ITEM_POSITION = Object.freeze([78, 128]);
   const QUEST_COMPLETE_2_JINGLE = 153;
 
   /** Evidence the guard takes at the hand-in (t2247: everything the player still carries). */
@@ -246,6 +247,7 @@ module.exports = function registerMurderMysteryQuest(api) {
     rewardItemLabel: "2,000 Coins",
     scrollItemId: I.CRIMINALS_DAGGER,
     scrollTitle: SCROLL_TITLE,
+    scrollItemPosition: SCROLL_ITEM_POSITION,
     completionJingleId: QUEST_COMPLETE_2_JINGLE,
     buildJournal,
     onReward: grantReward,

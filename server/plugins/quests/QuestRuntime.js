@@ -75,8 +75,6 @@ const COMPLETED_POINTS_CHILD = 6;
 const COMPLETED_FIRST_LINE_CHILD = 8;
 const COMPLETED_LINE_COUNT = 8;
 const COMPLETED_CLOSE_CHILD = 16;
-const SCROLL_MODEL_ZOOM = 400;
-const SCROLL_MODEL_POSITION = Object.freeze([78, 128]);
 
 // Gameframe floater overlay target (ViewportEnumService FLOATER_OVERLAY).
 const FLOATER_OVERLAY_UID = (161 << 16) | 18;
@@ -443,11 +441,10 @@ function openCompletedScroll(player, quest, questPoints) {
     ? quest.scrollItemId(player)
     : quest.scrollItemId ?? quest.rewardItemId;
   if (scrollItemId !== undefined) {
-    // Live sets the model at zoom 400 and places it, at (78, 128) for most quests (49 of the rev 242
-    // recordings; Murder Mystery's murderweapon at t2248); `scrollItemPosition` for one placed otherwise.
-    const [x, y] = quest.scrollItemPosition ?? SCROLL_MODEL_POSITION;
-    packet.sendItemOnInterfaces((COMPLETED_GROUP << 16) | COMPLETED_REWARD_ITEM_CHILD, scrollItemId, SCROLL_MODEL_ZOOM);
-    packet.sendInterfacePosition?.((COMPLETED_GROUP << 16) | COMPLETED_REWARD_ITEM_CHILD, x, y);
+    packet.sendItemOnInterfaces((COMPLETED_GROUP << 16) | COMPLETED_REWARD_ITEM_CHILD, scrollItemId, 1);
+    // `scrollItemPosition`: where live places the model for this quest (if_setposition), when captured.
+    const position = quest.scrollItemPosition;
+    if (position) packet.sendInterfacePosition?.((COMPLETED_GROUP << 16) | COMPLETED_REWARD_ITEM_CHILD, position[0], position[1]);
   }
   setText((COMPLETED_GROUP << 16) | COMPLETED_POINTS_CHILD, `Quest points: ${questPoints}`);
   const lines = rewardLines(quest);

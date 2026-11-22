@@ -63,8 +63,7 @@ paper in the sack." and the print matches (`State.MESSAGE_STEPS`, `MESSAGE_VARIA
   at "You hand over all the evidence."; live takes everything the player carries as that box is
   continued (2247: the dagger, thread, pungent pot, Frank's pot, Frank's print and the killer's
   print), then 3 Quest points, 1,406 Crafting XP and 2,000 coins in one stack (2248). The scroll's
-  title is "You have solved the Murder Mystery!" with the murder weapon at zoom 400 placed at (78, 128)
-  (the shared scroll now does this for every quest, as 49 rev 242 recordings do), and the jingle
+  title is "You have solved the Murder Mystery!" with the murder weapon placed at (78, 128), and the jingle
   "quest complete 2" (153).
 - After the quest the house guard (6194) says "No, your work here is done." (2299); the courtyard
   guard (4218) "Seems awfully quiet up at the house..." / "Nothing right now, we have it all under

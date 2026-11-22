@@ -77,6 +77,7 @@ function character(name, profile = "main") {
   const sender = new Proxy({}, {
     get: (target, key) => {
       if (key === "sendVarbit") return (id, value) => (varbits.set(id, value), sender);
+      if (key === "getVarbit") return (id) => varbits.get(id) ?? 0;
       if (key === "sendConfig") return (id, value) => (varps.set(id, value), sender);
       if (key === "sendInterfaceScript") return (id, args) => (scripts.push([id, args]), sender);
       if (key === "sendSubInterface") return (uid, group) => (subs.push([uid, group]), sender);
@@ -184,6 +185,32 @@ test("the journal's Leagues tab mounts the league side panel and fills its point
 });
 
 
+test("a login with the Leagues tab selected mounts the league panel; other tabs and main characters are unchanged", () => {
+  const sideJournal = new Proxy({ core, log() {}, onCustomEvent: (name, handler) => (custom[name] = (custom[name] ?? []).concat(handler)), emitCustomEvent: (name, payload) => { emitted.push([name, payload]); for (const handler of custom[name] ?? []) handler(payload); } }, { get: (target, key) => (key in target ? target[key] : () => {}) });
+  require("../plugins/interface/SideJournalDefaults.plugin").register(sideJournal);
+  const restore = (player) => custom["player:bootstrap-complete"].forEach((handler) => handler({ player }));
+
+  const league = character("restored", "league");
+  login(league, true);
+  league.varbits.set(8168, 4);
+  restore(league);
+  assert.deepEqual(league.subs.at(-1), [(629 << 16) | 43, 656], "the league panel, as the tab's click mounts it");
+  assert.equal(league.varbits.get(8168), 4);
+  assert.deepEqual(league.scripts.at(-1), [3226, [(656 << 16) | 23, 0]], "the points bar is filled");
+  assert.ok(!league.subs.some(([, group]) => group === 712 || group === 399));
+
+  const quests = character("restoredquests", "league");
+  login(quests, true);
+  quests.varbits.set(8168, 1);
+  restore(quests);
+  assert.deepEqual(quests.subs.at(-1), [(629 << 16) | 43, 399], "the quest list as before");
+
+  const main = character("restoredmain");
+  login(main, true);
+  main.varbits.set(8168, 4);
+  restore(main);
+  assert.equal(main.subs.length, 0, "a main character's stale tab 4 mounts nothing");
+});
 
 test("::league reports a character's league and points", () => {
   const dev = character("dev");

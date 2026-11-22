@@ -228,9 +228,9 @@ test('native gardener Pay -> Yes takes payment and protects the planted tree onc
   const pay = gardener.getCurrentDefinition(f.p).getActions().findIndex(a => a?.toLowerCase() === 'pay') + 1;
   assert.ok(pay > 0);
   await input(f, { type: 'npc_option', index: gardener.getIndex(), clickType: pay });
-  // rsprox captures: the gardener asks "Pay 25 coconuts?" (Yes./No./Yes and don't ask again.).
+  // rsprox captures: the gardener asks "Pay 25 coconuts?" (Yes./No./Yes, and don't ask again.).
   assert.equal(f.p.getDialogueManager().getCurrent().getTitle(), 'Pay 25 coconuts?');
-  assert.deepEqual(options(f), ['Yes.', 'No.', "Yes and don't ask again."]);
+  assert.deepEqual(options(f), ['Yes.', 'No.', "Yes, and don't ask again."]);
   await resume(f, 1);
   assert.equal(state.protected, true);
   assert.equal(f.p.getInventory().getAmount(coconutNote), 0);
@@ -457,7 +457,7 @@ test('gardener protection rechecks the patch at native Yes', async t => {
       await send({type:'npc_option',index:npc.getIndex(),clickType}); };
     const quote = () => { const menu = manager.getCurrent(); assert.ok(menu instanceof core.OptionDialogue);
       // rsprox captures: live says "one" for a single payment ("Pay one basket of tomatoes?", local 1001562).
-      assert.equal(menu.getTitle(),'Pay one sack of potatoes?'); assert.deepEqual(menu.getOptions(),['Yes.','No.',"Yes and don't ask again."]);
+      assert.equal(menu.getTitle(),'Pay one sack of potatoes?'); assert.deepEqual(menu.getOptions(),['Yes.','No.',"Yes, and don't ask again."]);
       assert.equal(sender.getChatboxGroupId(),219); assert.equal(manager.getOwner(),undefined); assert.equal(p.busy(),false);
       const mount = sender.subInterfaceTargets.get(219); assert.ok(mount); assert.equal(sender.getSubInterfaceAt(mount.targetUid),mount);
       return {menu,mount}; };

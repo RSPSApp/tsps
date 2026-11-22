@@ -22,7 +22,7 @@ const SELL_REPLY = "That depends on whether I have it to sell. What is it that y
 
 let N;
 before(async () => {
-  await h.setup([[3193, 3233], [3055, 3305]]);
+  await h.setup([[3193, 3233], [3055, 3305], [1235, 3752]]);
   // The game builder's shops, which the harness does not load: shops.json and the plugins' own.
   new ShopDefinitionLoader().load();
   ShopManager.initialize();
@@ -198,4 +198,40 @@ test("a grown tree and a patch still to protect: both questions, as Alexandra's 
   assert.deepEqual(Gardeners.menu("Elstan", { chop: true, lookAfter: true })[0].options.map((o) => o.text).slice(0, 2),
     ["Would you look after my crops for me?", "Would you chop my tree down for me?"]);
   assert.deepEqual(Gardeners.menu("Fayeth", { chop: true, lookAfter: false })[0].options[0].text, "Would you chop my tree down for me?");
+});
+
+const guildPatch = (x, y) => Data.CACHE.patches.find((p) => p.x === x && p.y === y && p.z === 0);
+
+test("Farming Guild: Taylor keeps to her celastrus; Nikkie's grown apple tree is not hers to chop (Pay (Celastrus tree))", async (t) => {
+  const f = h.actor(t, { at: [1246, 3752, 0], stage: 100, farming: 99 });
+  const apple = guildPatch(1242, 3758);
+  assert.equal(apple?.type, "FRUIT_TREE");
+  Object.assign(Patches.stateFor(f.player, apple), { crop: "APPLE", status: "grown" });
+  const taylor = h.spawn(f, 8629, [1246, 3753, 0]);
+  await h.talk(f, taylor);
+  assert.equal(h.shown(f).text, MENU);
+  const said = await h.converse(f, async () => {}, ["Would you look after my crops for me?"]);
+  assert.deepEqual(said.slice(0, 2), ["PLAYER: Would you look after my crops for me?",
+    "Taylor: You don't have a sapling planted in that patch. Plant one and I might agree to look after it for you."], JSON.stringify(said));
+});
+
+test("Farming Guild: Alexandra looks after her redwood only, so no 'which one' (Pay (Redwood tree))", async (t) => {
+  const f = h.actor(t, { at: [1236, 3752, 0], stage: 100, farming: 99 });
+  const alexandra = h.spawn(f, 8536, [1235, 3752, 0]);
+  const said = await h.converse(f, () => h.talk(f, alexandra), ["Would you look after my crops for me?"]);
+  assert.ok(!said.some((line) => line.includes("which one")), JSON.stringify(said));
+  assert.ok(said.at(-1).startsWith("Alexandra: You don't have a sapling planted"), JSON.stringify(said));
+});
+
+test("a deal whose payment left at the menu: the Wiki's no-payment answer, nothing protected, 'don't ask again' not kept", async (t) => {
+  const f = h.actor(t, { at: BY_FAYETH, stage: 100 });
+  const state = oakFor(f);
+  const fayeth = h.spawn(f, N.FAYETH, FAYETH);
+  await h.converse(f, () => h.talk(f, fayeth), ["Would you look after my crops for me?"]);
+  assert.equal(h.shown(f).text, DEAL_MENU);
+  f.player.getInventory().deleteNumber(OAK().payment[0][0], 1);
+  const said = await h.converse(f, () => h.choose(f, "Okay, it's a deal and don't ask again."));
+  assert.deepEqual(said.slice(-2), ["PLAYER: I'm afraid I don't have any of those at the moment.", "Fayeth: Well, I'm not wasting my time for free."]);
+  assert.equal(state.protected, false);
+  assert.notEqual(f.player.getPacketSender().getVarbit(98), 1);
 });

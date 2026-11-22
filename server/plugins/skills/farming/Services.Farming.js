@@ -690,7 +690,7 @@ function farmingNpc(event) {
     // (Brimhaven entrance) and the Blast Furnace foreman all advertise Pay. A gardener only
     // exists where a patch does, so never claim an NPC with no patch nearby.
     if (!patches.length) return;
-    const relevant = patches.filter(p => {
+    const relevant = gardenedPatches(player, npc, definition).filter(p => {
         const s = Patches.farmFor(player).patches[Data.patchKey(p)];
         const c = s?.crop && Data.CROPS.get(s.crop);
         return c && (c.payment.length || Data.WOOD_TREES.has(c.type) || c.type === "FRUIT_TREE");
@@ -700,7 +700,7 @@ function farmingNpc(event) {
     event.handled = true;
     if (action === "talk-to") {
         // Talk-to is the gardener's menu (Gardeners.Farming); its questions come back to gardenerTalkAction.
-        const mine = gardenedPatches(player, npc);
+        const mine = gardenedPatches(player, npc, definition);
         const grown = mine.filter(p => grownTree(player, p));
         Gardeners.talk(player, npc, definition, { chop: grown.length > 0, lookAfter: grown.length < mine.length });
         return;
@@ -720,18 +720,44 @@ function farmingNpc(event) {
     if (entries.length === 1) entries[0][1]();
     else Patches.choose(player, entries);
 }
-const TREE_PATCHES = ["TREE", "FRUIT_TREE", "HARDWOOD_TREE", "SPIRIT_TREE", "CALQUAT"];
+// Planted as saplings, so an empty one is "You don't have a sapling planted" (Wiki: Fayeth, Alexandra).
+const TREE_PATCHES = ["TREE", "FRUIT_TREE", "HARDWOOD_TREE", "SPIRIT_TREE", "CALQUAT", "REDWOOD", "CELASTRUS"];
 /** The patch types a gardener looks after: those with a protection payment, and the trees they fell. */
 let gardenedTypes = null;
 function isGardened(type) {
     gardenedTypes ??= new Set([...Data.CROPS.values()].filter(c => c.payment.length || Data.WOOD_TREES.has(c.type) || c.type === "FRUIT_TREE").map(c => c.type));
     return gardenedTypes.has(type);
 }
-/** The patches by `npc` that it looks after, in their Pay options' order where those name a direction. */
-function gardenedPatches(player, npc) {
+/** A Pay option that names its patch (Farming Guild: "Pay (Redwood tree)", "Pay (tree patch)") binds it to that type. */
+const PAY_PATCH_TYPES = { "tree patch": "TREE", "fruit tree": "FRUIT_TREE", "redwood tree": "REDWOOD", "celastrus tree": "CELASTRUS", "spirit tree": "SPIRIT_TREE" };
+const actionsOf = (npc, definition) => (definition ?? npc.getDefinition?.())?.getActions?.() ?? [];
+function namedPatchTypes(npc, definition) {
+    return actionsOf(npc, definition)
+        .map(action => PAY_PATCH_TYPES[/^pay \((.+)\)$/i.exec(action ?? "")?.[1]?.toLowerCase()]).filter(Boolean);
+}
+const withinRange = (npc, p) => {
     const pos = npc.getLocation();
-    return Data.CACHE.patches.filter(p => p.z === pos.getZ() && Math.abs(p.x - pos.getX()) <= GARDENER_RANGE
-        && Math.abs(p.y - pos.getY()) <= GARDENER_RANGE && isGardened(p.type));
+    return p.z === pos.getZ() && Math.abs(p.x - pos.getX()) <= GARDENER_RANGE && Math.abs(p.y - pos.getY()) <= GARDENER_RANGE;
+};
+/** Could `npc` look after `p`: a gardener (a Pay option) near it, whose named patch types (if any) include it. */
+function couldGarden(npc, p, definition) {
+    if (!actionsOf(npc, definition).some(isGardenerPayment) || !withinRange(npc, p)) return false;
+    const named = namedPatchTypes(npc, definition);
+    return !named.length || named.includes(p.type);
+}
+const distance = (npc, p) => Math.hypot(p.x - npc.getLocation().getX(), p.y - npc.getLocation().getY());
+/**
+ * The patches `npc` looks after. The Farming Guild and Fossil Island gardeners stand within reach of each other's
+ * patches, so a patch is the gardener's only if its Pay option names that patch type or, with none named, no other
+ * gardener that could look after it stands nearer (Alexandra's redwood, Taylor's celastrus, one squirrel's
+ * hardwood patch).
+ */
+function gardenedPatches(player, npc, definition) {
+    const near = Data.CACHE.patches.filter(p => isGardened(p.type) && couldGarden(npc, p, definition));
+    if (namedPatchTypes(npc, definition).length) return near;
+    const others = [];
+    for (const other of core.World.getNpcs()) if (other && other !== npc && other.getId?.() !== npc.getId() && other.getHitpoints?.() > 0) others.push(other);
+    return near.filter(p => !others.some(other => couldGarden(other, p) && distance(other, p) < distance(npc, p)));
 }
 function grownTree(player, p) {
     const state = Patches.stateFor(player, p);
@@ -745,8 +771,8 @@ const COMPASS = { north: "northern", south: "southern", east: "eastern", west: "
  * northeastern allotment" (Wiki, Marisi): each patch named by the direction its Pay option gives, north the higher
  * one. Ours: a patch other than an allotment is "the <type> patch", and one with no Pay direction is named by type.
  */
-function patchLabels(npc, patches) {
-    const directions = (npc.getDefinition()?.getActions?.() ?? [])
+function patchLabels(npc, patches, definition) {
+    const directions = actionsOf(npc, definition)
         .map(action => /^pay \((.+)\)$/i.exec(action ?? "")?.[1]?.toLowerCase()).filter(Boolean);
     const noun = p => p.type === "ALLOTMENT" ? "allotment" : `${p.type.toLowerCase().replace(/_/g, " ")} patch`;
     if (directions.length !== patches.length || directions.some(d => !COMPASS[d])) return patches.map(p => [`The ${noun(p)}`, p]);
@@ -794,7 +820,7 @@ function lookAfterSteps(player, npc, p) {
     return [ask, { type: "choice", options: [
         { text: "Okay, it's a deal.", steps: deal },
         { text: "No, that's too much.", steps: [{ player: "No, that's too much." }, { npc: NOT_FOR_FREE }] },
-        { text: "Okay, it's a deal and don't ask again.", steps: [{ type: "action", action: DEAL_ACTION, target: `${key}|no-ask` }, ...deal] },
+        { text: "Okay, it's a deal and don't ask again.", steps: [{ player: "Okay, it's a deal." }, { type: "action", action: DEAL_ACTION, target: `${key}|no-ask` }] },
     ] }];
 }
 /** npc-dialogue:action for the Talk-to menu's questions. */
@@ -802,7 +828,7 @@ function gardenerTalkAction(event) {
     const { player, npc } = event;
     if (!npc || ![LOOK_AFTER_ACTION, CHOP_ACTION, DEAL_ACTION].includes(event.action)) return;
     event.handled = true;
-    const mine = gardenedPatches(player, npc);
+    const mine = gardenedPatches(player, npc, event.definition);
     if (event.action === CHOP_ACTION) {
         const tree = mine.find(p => grownTree(player, p));
         if (tree) askGardener(player, npc, tree);
@@ -810,9 +836,17 @@ function gardenerTalkAction(event) {
     }
     if (event.action === DEAL_ACTION) {
         const [key, noAsk] = String(event.target ?? "").split("|");
-        if (noAsk) { setSkipProtectionConfirmation(player); return; }
         const p = mine.find(patch => Data.patchKey(patch) === key);
-        if (p && protect(player, npc, p)) Gardeners.play(player, npc, event.definition, [{ npc: niceLine(player) }]);
+        if (p && protect(player, npc, p)) {
+            // The setting sticks only once the deal is done.
+            if (noAsk) setSkipProtectionConfirmation(player);
+            Gardeners.play(player, npc, event.definition, [{ npc: niceLine(player) }]);
+            return;
+        }
+        // The payment left the inventory while the menu was open: the Wiki's answer to having none.
+        const crop = p && Data.CROPS.get(Patches.stateFor(player, p).crop);
+        if (crop?.payment.length && !canPay(player, crop.payment) && Patches.nearPatch(player, p))
+            Gardeners.play(player, npc, event.definition, [{ player: "I'm afraid I don't have any of those at the moment." }, { npc: NOT_FOR_FREE }]);
         else player.getPacketSender().sendInterfaceRemoval();
         return;
     }
@@ -825,7 +859,7 @@ function gardenerTalkAction(event) {
     if (!ask.length) return;
     if (ask.length === 1) { Gardeners.play(player, npc, event.definition, lookAfterSteps(player, npc, ask[0])); return; }
     Gardeners.play(player, npc, event.definition, [{ npc: "I might - which one were you thinking of?" }, { type: "choice",
-        options: patchLabels(npc, ask).map(([text, p]) => ({ text, steps: [{ type: "action", action: LOOK_AFTER_ACTION, target: Data.patchKey(p) }] })) }]);
+        options: patchLabels(npc, ask, event.definition).map(([text, p]) => ({ text, steps: [{ type: "action", action: LOOK_AFTER_ACTION, target: Data.patchKey(p) }] })) }]);
 }
 function gardenerProtection(event) {
     if (event.action !== "farming:gardener-protect" || !event.npc) return;
@@ -854,7 +888,7 @@ function paymentText(payment) {
 /**
  * Captures (gardeners Fayeth, Treznor, the fruit and farming guild gardeners): a grown tree is chopped
  * for coins after "Pay 200 Coins to have your tree chopped down?"; protection asks "Pay <payment>?"
- * (Yes./No./Yes and don't ask again.), or the gardener says "I want <payment> for that." without it.
+ * (Yes./No./Yes, and don't ask again.), or the gardener says "I want <payment> for that." without it.
  */
 function askGardener(player, npc, p) {
     if (!Patches.nearPatch(player, p)) return;
@@ -879,7 +913,7 @@ function askGardener(player, npc, p) {
         gardenerSays(player, npc, niceLine(player));
     };
     if (skipsProtectionConfirmation(player)) { accept(); return; }
-    Patches.choose(player, [["Yes.", accept], ["No.", () => {}], ["Yes and don't ask again.", () => { setSkipProtectionConfirmation(player); accept(); }]],
+    Patches.choose(player, [["Yes.", accept], ["No.", () => {}], ["Yes, and don't ask again.", () => { setSkipProtectionConfirmation(player); accept(); }]],
         0, `Pay ${paymentText(crop.payment)}?`);
 }
 /** Takes the payment and protects the patch, if it still can be: true when it was. */

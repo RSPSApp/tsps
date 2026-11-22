@@ -144,6 +144,8 @@ export class Player extends Mobile {
     private disconnectSource: string | null = null;
     /** Cycle a removal in combat started waiting, -1 when not waiting. */
     private logoutHoldCycle = -1;
+    /** True from the start of onLogout: a task stopped by a logout sweep can tell it apart from a cancel. */
+    private loggingOut = false;
     // Trading
     private trading = new Trading(this);
     // Owned boats and where they are
@@ -782,7 +784,13 @@ export class Player extends Mobile {
         }
     }
 
+    /** Whether onLogout is running (its hooks and task sweeps), so a stopped task can finish rather than abort. */
+    public isLoggingOut(): boolean {
+        return this.loggingOut;
+    }
+
     onLogout() {
+        this.loggingOut = true;
         // Notify us
         if (!this.isPlayerBot()) {
             console.log("[World] Deregistering player - [username, host] : [" + this.getUsername() + ", " + this.getHostAddress() + "]");

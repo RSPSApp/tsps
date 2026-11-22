@@ -210,16 +210,17 @@ function refusalOf(spec, where) {
 
 /**
  * The message a player below `level` gets instead of the generic one: a game message, `{ spam }`,
- * `{ mesbox }` or `{ itembox: { item, text } }`, or a list of them sent in turn, played by
+ * `{ mesbox }`, `{ itembox: { item, text } }` or `{ npc: { id, text, ... } }`, or a list of them sent in turn, played by
  * ObstacleRunner.sendMessage.
  */
 function levelMessageOf(spec, where) {
   const one = (line) => typeof line === "string"
     || typeof line?.spam === "string"
     || typeof line?.mesbox === "string"
-    || (Number.isInteger(line?.itembox?.item) && typeof line.itembox.text === "string");
+    || (Number.isInteger(line?.itembox?.item) && typeof line.itembox.text === "string")
+    || (Number.isInteger(line?.npc?.id) && typeof line.npc.text === "string");
   const valid = Array.isArray(spec) ? spec.length > 0 && spec.every(one) : one(spec);
-  if (!valid) throw new Error(`agility-shortcuts.json: "${where}" levelMessage needs a message, spam, mesbox or itembox { item, text }, or a list of them`);
+  if (!valid) throw new Error(`agility-shortcuts.json: "${where}" levelMessage needs a message, spam, mesbox, itembox { item, text } or npc { id, text }, or a list of them`);
   return spec;
 }
 

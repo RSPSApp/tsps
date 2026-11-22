@@ -6,7 +6,8 @@
  * capture-sources.json. Where the capture and the Wiki differ the Wiki is kept.
  *
  * Units in plugins/quests/watchtower/: State (stages, the varp 936 varbits, ids, tiles, old saves),
- * Journal (the capture's journal) and Scenes (the enclave scene, the relic, the scared skavid).
+ * Journal (the capture's journal), Scenes (the enclave scene, the relic, the scared skavid) and Ogres (the
+ * chiefs' ogres, which don't hunt).
  * The two Gu'Tanoth gates are pass-through gates in plugins/objects/Doors.plugin.js; this plugin
  * says who may pass (door:toggle).
  *
@@ -166,6 +167,7 @@ module.exports = function registerWatchtowerQuest(api) {
 
   const ctx = { state, variantSteps };
   const scenes = require("../watchtower/Scenes.Watchtower")(api, ctx);
+  const ogres = require("../watchtower/Ogres.Watchtower")(api);
 
   // ------------------------------------------------------------------ the journal
 
@@ -1903,6 +1905,7 @@ module.exports = function registerWatchtowerQuest(api) {
   });
 
   state.register();
+  ogres.register();
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCanTeleport(canCastWatchtowerTeleport);

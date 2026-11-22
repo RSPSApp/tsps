@@ -15,10 +15,15 @@ const PIECES = Object.freeze({
 const COMBINE_MESSAGE = "You don't think you have the skills to reassemble this weapon yourself.";
 const ASSEMBLY_FEE = 500000;
 const ASSEMBLY_STEP_ID = "SANVF-";
+const SHUFFLE_STEP_ID = "mcTZwC";
 const ASSEMBLED_ATTRIBUTE = "wilderness-bosses:madam-sikaro-assembled";
-// On the open west side of the portal room, beside the approach from the stairs.
-const MADAM_SIKARO_SPAWN = Object.freeze({ x: 3168, y: 10027, z: 0 });
+// Recorded by rsprox at (3175, 10040, 0), facing west. The blocked tile is the counter position;
+// the player can reach her from the open tile immediately west at (3174, 10040).
+const MADAM_SIKARO_SPAWN = Object.freeze({ x: 3175, y: 10040, z: 0 });
 const ASSEMBLY_PARTS = Object.freeze(["VOIDWAKER_HILT", "VOIDWAKER_BLADE", "VOIDWAKER_GEM"]);
+const VOIDWAKER_USE_VARIANT = "standard-dialogue-using-the-voidwaker-on-her";
+const OTHER_ITEM_USE_VARIANT = "standard-dialogue-using-any-other-item-on-her";
+const REFUSAL_TEXT = "You need the three unassembled Voidwaker parts and 500,000 coins to make the weapon.";
 
 let core;
 
@@ -62,7 +67,8 @@ function assembleVoidwaker(event) {
   const { player } = event;
   const inventory = player.getInventory();
   if (!hasAllParts(player) || inventory.getAmount(core.ItemIdentifiers.COINS) < ASSEMBLY_FEE) {
-    event.text = "You need the three unassembled Voidwaker parts and 500,000 coins to make the weapon.";
+    // Ours: the Wiki transcript has no refusal line for an offer invalidated after confirmation.
+    event.text = REFUSAL_TEXT;
     event.box = { statement: true };
     return;
   }
@@ -71,6 +77,37 @@ function assembleVoidwaker(event) {
   inventory.deleteNumber(core.ItemIdentifiers.COINS, ASSEMBLY_FEE);
   inventory.add(new core.Item(core.ItemIdentifiers.VOIDWAKER, 1));
   player.setAttribute(ASSEMBLED_ATTRIBUTE, true);
+}
+
+/** The transcript's No response says the contents of the inventory shift slightly. */
+function shuffleInventory(event) {
+  if (event.npcId !== npcId() || event.kind !== "message" || event.stepId !== SHUFFLE_STEP_ID) return;
+  const inventory = event.player.getInventory();
+  const items = inventory.getItems();
+  const before = items.slice();
+  for (let i = items.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [items[i], items[j]] = [items[j], items[i]];
+  }
+  // Even an unlucky random permutation must visibly shift the inventory when it has contents.
+  if (items.filter((item) => item && item.getId() >= 0).length > 1
+    && items.every((item, slot) => item === before[slot])) {
+    [items[0], items[1]] = [items[1], items[0]];
+  }
+  inventory.refreshItems();
+}
+
+function itemOnMadamSikaro(api, event) {
+  if (event.npcId !== npcId() || !event.player) return;
+  const variant = event.itemId === core.ItemIdentifiers.VOIDWAKER
+    ? VOIDWAKER_USE_VARIANT
+    : OTHER_ITEM_USE_VARIANT;
+  const request = {
+    player: event.player, npc: event.target, npcId: event.npcId,
+    variant: { page: "Madam Sikaro", variant }, exact: true, handled: false,
+  };
+  api.emitCustomEvent("npc-dialogue:start", request);
+  event.handled = request.handled === true;
 }
 
 /** Inspect: the piece's line in the chat. */
@@ -93,11 +130,14 @@ function attach(api) {
   api.spawnNpc({
     id: npcId(),
     ...MADAM_SIKARO_SPAWN,
+    face: core.Direction.WEST.getId(),
     wanderRadius: 0,
     unique: "wilderness-bosses:madam-sikaro",
   });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:action", assembleVoidwaker);
+  api.onCustomEvent("npc-dialogue:action", shuffleInventory);
+  api.onItemOnNpc(itemOnMadamSikaro.bind(null, api));
   for (const name of Object.keys(PIECES)) api.onItemAction(name, { Inspect: inspectPiece });
   const names = Object.keys(PIECES);
   for (let i = 0; i < names.length; i++) {
@@ -106,6 +146,7 @@ function attach(api) {
 }
 
 module.exports = { attach, _test: {
-  PIECES, COMBINE_MESSAGE, ASSEMBLY_FEE, ASSEMBLY_STEP_ID, ASSEMBLY_PARTS,
-  MADAM_SIKARO_SPAWN, answerCondition, assembleVoidwaker, inspectPiece, combinePieces,
+  PIECES, COMBINE_MESSAGE, ASSEMBLY_FEE, ASSEMBLY_STEP_ID, SHUFFLE_STEP_ID, ASSEMBLY_PARTS,
+  ASSEMBLED_ATTRIBUTE, MADAM_SIKARO_SPAWN, answerCondition, assembleVoidwaker, shuffleInventory,
+  itemOnMadamSikaro, inspectPiece, combinePieces,
 } };

@@ -2,7 +2,8 @@
 
 /**
  * Doors that never open: their Open answers a locked line and the door stays shut. Lines,
- * sounds and whether they come in a message box: data/locked-doors.json, cited per door
+ * sounds and whether they come in a message box or as an NPC's chathead line (the occupied
+ * outhouses' "Occupied!"): data/locked-doors.json, cited per door
  * (docs/locked-doors.md).
  *
  * Some of these are a cache "Open" loc whose id + 1 is a same-model "Close" loc
@@ -37,14 +38,41 @@ function lockedDoorFor(objectId) {
   return byId.get(objectId) ?? null;
 }
 
+/** @type {WeakMap<object, object>} player -> the token of their one pending delayed answer. */
+const PENDING_ANSWERS = new WeakMap();
+
 function refuseLockedDoor(request) {
   if (request.handled || !request.player) return;
   const door = lockedDoorFor(request.objectId);
   if (!door) return;
   request.handled = true;
   const { player } = request;
+  if (!door.delay) {
+    answerLockedDoor(player, door);
+    return;
+  }
+  // The outhouse's man answers a tick after the player turns to the door. One answer is
+  // pending per player: a second click in that tick replaces the first rather than playing
+  // the line twice. A player who logged out, or was moved off the tile by a forced move
+  // (a teleport, say), gets no line (ours: live recorded neither).
+  const at = player.getLocation().clone();
+  const token = {};
+  PENDING_ANSWERS.set(player, token);
+  core.TaskManager.submit(new core.CountdownTask(player, door.delay, () => {
+    if (PENDING_ANSWERS.get(player) !== token) return;
+    PENDING_ANSWERS.delete(player);
+    if (player.isRegistered() && player.getLocation().equals(at)) answerLockedDoor(player, door);
+  }));
+}
+
+function answerLockedDoor(player, door) {
   if (door.sound) player.getPacketSender().sendSound(door.sound, 1, 0);
-  if (door.box) {
+  if (door.npc) {
+    const { DialogueChainBuilder, NpcDialogue } = core;
+    const npcId = core.CacheDefinitions.getNpcId(door.npc);
+    player.getDialogueManager().startDialogues(
+      new DialogueChainBuilder().add(new NpcDialogue(0, npcId, door.message, undefined, door.expression)));
+  } else if (door.box) {
     const { DialogueChainBuilder, StatementDialogue } = core;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, door.message)));
   } else {
@@ -65,7 +93,7 @@ function registerLockedDoorRoutes() {
 
 module.exports = {
   name: "LockedDoors",
-  description: "Doors that never open (the Port Sarim jail cells, Neitiznot's houses, a Civitas illa Fortis door) answer Open with their recorded locked line.",
+  description: "Doors that never open (the Port Sarim jail cells, Neitiznot's houses, a Civitas illa Fortis door, the occupied outhouses) answer Open with their recorded locked line.",
   register(api) {
     pluginApi = api;
     core = api.core;

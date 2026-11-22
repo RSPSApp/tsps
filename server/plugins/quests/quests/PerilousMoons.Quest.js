@@ -59,19 +59,22 @@
  *  - The Moons themselves are the MoonsOfPeril plugin's (bosses/MoonsOfPeril):
  *    during the fight stages it lets the player through the statues
  *    ("moons-of-peril:can-enter"), each kill ("moons-of-peril:killed")
- *    counts here and plays the defeat transcript, and from the ritual on it
- *    runs the camps ("moons-of-peril:camps-open").
- *  - The talisman "Locate" step only acts within four tiles of the captured
- *    streambound summon point (1483,9692,0); elsewhere it repeats Attala's line.
- *    The live north/south and east/west pull messages are not in the transcript
- *    dump and are not authored.
+ *    counts here and plays the defeat transcript, and from the camp stage on
+ *    it runs the camps ("moons-of-peril:camps-open").
+ *  - The talisman "Locate" step only acts within one tile of the target fitted
+ *    to rec 1693 (1485,9694,0). Away from the spot each talisman pulls toward it ("The talisman pulls you
+ *    north.", earth on the north-south axis and water on the east-west one), as rec
+ *    1693; the transcript dump has no such lines.
  *  - The long-winding tunnels at 51377 (1527,9670) -> (1513,9596) and
  *    (1512,9560) -> (1355,9538) use the captured fade and message; the 1493,9579
  *    gate is a walk-through opening, not a tunnel, and stays unteleported.
- *  - Gathering is single-step: one "Trap" click per rock (two needed), Grubby
- *    sapling, river fishing spot (62193, unnamed in the cache) and the knife
- *    recipes give the ritual items with short system messages the dump does not
- *    contain. The trap varbit 9871 is only sent, not read, for the pair state.
+ *  - Moss lizards are single-step: one "Trap" click per rock (two needed), then a
+ *    "Rustle" gives the lizard, and the knife recipes give the scales and tail, with
+ *    short system messages the dump does not contain. The trap varbit 9871 is only
+ *    sent, not read, for the pair state. The supply crates, grubby saplings and river
+ *    fishing spot (62193, unnamed in the cache) are the MoonsOfPeril plugin's from
+ *    the camps on, as at the Moons (Camps and River.MoonsOfPeril); before the camps
+ *    Jessamine only stops the player.
  *  - "Attempt to speak to any of the three" after locating Eyatlalli always plays
  *    the full after-meeting conversation (no already-appeared sub-variant).
  *  - The finishing route follows Quest Helper: Jessamine and Zuma, then
@@ -169,14 +172,11 @@ module.exports = function registerPerilousMoonsQuest(api) {
   const BUILDING_SUPPLIES_ITEM_ID = ItemIdentifiers.BUILDING_SUPPLIES; // 28968
   const MOSS_LIZARD_TAIL_ITEM_ID = ItemIdentifiers.MOSS_LIZARD_TAIL; // 28969
   const BREAM_SCALES_ITEM_ID = ItemIdentifiers.BREAM_SCALES; // 28970
-  const MOONLIGHT_GRUB_ITEM_ID = ItemIdentifiers.MOONLIGHT_GRUB; // 29078
   const MOONLIGHT_GRUB_PASTE_ITEM_ID = ItemIdentifiers.MOONLIGHT_GRUB_PASTE; // 29079
   const RAW_MOSS_LIZARD_ITEM_ID = ItemIdentifiers.RAW_MOSS_LIZARD; // 29076
   const RAW_BREAM_ITEM_ID = ItemIdentifiers.RAW_BREAM; // 29216
   const KNIFE_ITEM_ID = ItemIdentifiers.KNIFE; // 946
   const ROPE_ITEM_ID = ItemIdentifiers.ROPE; // 954
-  const PESTLE_AND_MORTAR_ITEM_ID = ItemIdentifiers.PESTLE_AND_MORTAR; // 233
-  const BIG_FISHING_NET_ITEM_ID = ItemIdentifiers.BIG_FISHING_NET; // 305
   const HAMMER_ITEM_ID = ItemIdentifiers.HAMMER; // 2347
   const SAW_ITEM_ID = ItemIdentifiers.SAW; // 8794
   const BASE_TALISMAN_ITEM_IDS = new Set([WATER_TALISMAN_ITEM_ID, EARTH_TALISMAN_ITEM_ID]);
@@ -246,10 +246,18 @@ module.exports = function registerPerilousMoonsQuest(api) {
   const NEY_ZUMA_TILE = { x: 1447, y: 9632, z: 1 };
   const EYATLALLI_TILE = { x: 1445, y: 9639, z: 1 };
   const NAGUA_TILE = { x: 1453, y: 3129, z: 0 };
-  // Captured 1693: the talismans pull at the streambound camp and Eyatlalli
-  // appears at 1483,9692; this is not the Lunar Chest shrine tile.
-  const LOCATE_TILE = { x: 1483, y: 9692, z: 0 };
-  const LOCATE_RADIUS = 4;
+  // Rec 1693 (ticks 1840-1921, fitted to every Locate click in it): the talismans' target is a
+  // 3x3 around (1485, 9694) on the ground floor. A click inside it starts Eyatlalli's scene (it
+  // did from 1484,9694 and not from 1484,9692 or 1487,9695); anywhere else the earth talisman
+  // pulls along the north-south axis and the water one along the east-west axis. The row of the
+  // target (9694 or 9695) is not told apart by the capture. Eyatlalli herself stood at 1483,9692.
+  const LOCATE_TILE = { x: 1485, y: 9694, z: 0 };
+  const LOCATE_RADIUS = 1;
+  const LOCATE_PULL_SOUNDS = [4043, 4044, 4045, 4046];
+  // Rec 1693 tick 2095: knife on a raw bream.
+  const SCALE_CUT_ANIMATION = 10937;
+  const SCALE_CUT_SOUND = 2605;
+  const SCALE_CUT_SOUND_DELAYS = [0, 22, 44];
   const SURFACE_LANDING = { x: 1435, y: 3128, z: 0 };
   const CAM_TORUM_LANDING = { x: 1439, y: 9509, z: 1 };
   const CAM_TORUM_EXIT = { x: 1439, y: 9599, z: 1 };
@@ -1393,11 +1401,24 @@ module.exports = function registerPerilousMoonsQuest(api) {
       Math.abs(location.getY() - LOCATE_TILE.y) <= LOCATE_RADIUS &&
       location.getZ() === LOCATE_TILE.z;
     if (!near) {
-      player.sendMessage("The talismans should guide you to the point in this place where these magics of earth and streams resonate most strongly.");
+      locatePull(player, itemId, location);
       return;
     }
     quest.setStage(player, STAGE_LOCATE);
     startTranscript(api, player, EYATLALLI_NPC_ID, PAGE, V_LOCATE);
+  }
+
+  /**
+   * "The talisman pulls you <direction>." (rec 1693): earth along north-south, water along
+   * east-west, toward the target whatever the floor, with one of four pull sounds. A click level
+   * with the target on its axis was not captured; it takes the axis's first direction.
+   */
+  function locatePull(player, itemId, location) {
+    const earth = itemId === INFUSED_EARTH_TALISMAN_ITEM_ID;
+    const delta = earth ? LOCATE_TILE.y - location.getY() : LOCATE_TILE.x - location.getX();
+    const direction = earth ? (delta >= 0 ? "north" : "south") : delta >= 0 ? "east" : "west";
+    player.sendMessage(`The talisman pulls you ${direction}.`);
+    player.getPacketSender().sendSoundEffect(LOCATE_PULL_SOUNDS[Math.floor(Math.random() * LOCATE_PULL_SOUNDS.length)], 1, 0);
   }
 
   function handleItemOnNpc(event) {
@@ -1424,7 +1445,10 @@ module.exports = function registerPerilousMoonsQuest(api) {
       if (!held(player, RAW_BREAM_ITEM_ID)) return;
       player.getInventory().deleteNumber(RAW_BREAM_ITEM_ID, 1);
       player.getInventory().adds(BREAM_SCALES_ITEM_ID, 1);
-      player.sendMessage("You remove the scales from the bream.");
+      // Rec 1693 tick 2095: the cutting animation, three scrapes of sound and this line.
+      player.performAnimation(new Animation(SCALE_CUT_ANIMATION));
+      for (const delay of SCALE_CUT_SOUND_DELAYS) player.getPacketSender().sendSoundEffect(SCALE_CUT_SOUND, 1, delay);
+      player.sendMessage("You cut some scales off the bream.");
       return;
     }
     if (pair.has(KNIFE_ITEM_ID) && pair.has(RAW_MOSS_LIZARD_ITEM_ID)) {
@@ -1520,10 +1544,8 @@ module.exports = function registerPerilousMoonsQuest(api) {
       handleCampSupplies(event);
       return;
     }
-    if (objectId === SUPPLY_CRATES_OBJECT_ID) {
-      handleSupplyCrates(event);
-      return;
-    }
+    // The supply crates, grubby saplings and river spots are the MoonsOfPeril plugin's from the
+    // camps on; the quest only stops them before then (guardGathering).
     if (objectId === GRUBBY_SAPLING_OBJECT_ID) {
       handleGrubbySapling(event);
       return;
@@ -1679,47 +1701,11 @@ module.exports = function registerPerilousMoonsQuest(api) {
     startTranscript(api, player, JESSAMINE_NPC_ID, PAGE, V_TAKE_SUPPLIES);
   }
 
-  function handleSupplyCrates(event) {
-    const { player } = event;
-    const text = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "");
-    if (!text.startsWith("Take-from")) return;
-    // From the Moons on, the MoonsOfPeril plugin hands out the camps' kits.
-    if (stageOf(player) >= STAGE_RITUAL || quest.isComplete(player)) return;
-    event.handled = true;
-    if (stageOf(player) < STAGE_TRIO) return;
-    if (text.includes("Fishing")) {
-      giveToolIfMissing(player, KNIFE_ITEM_ID);
-      giveToolIfMissing(player, BIG_FISHING_NET_ITEM_ID);
-    } else if (text.includes("Hunting")) {
-      giveToolIfMissing(player, KNIFE_ITEM_ID);
-      giveToolIfMissing(player, ROPE_ITEM_ID);
-    } else if (text.includes("Herblore")) {
-      giveToolIfMissing(player, PESTLE_AND_MORTAR_ITEM_ID);
-    } else {
-      giveToolIfMissing(player, KNIFE_ITEM_ID);
-      giveToolIfMissing(player, BIG_FISHING_NET_ITEM_ID);
-      giveToolIfMissing(player, ROPE_ITEM_ID);
-      giveToolIfMissing(player, PESTLE_AND_MORTAR_ITEM_ID);
-    }
-    player.sendMessage("You take some supplies from the crates.");
-  }
-
   function handleGrubbySapling(event) {
     const { player } = event;
     const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "");
     if (option !== "Collect-from") return;
-    if (stageOf(player) >= STAGE_RITUAL) return; // the MoonsOfPeril plugin's from here on
-    event.handled = true;
-    if (guardGathering(player)) return;
-    if (
-      held(player, MOONLIGHT_GRUB_ITEM_ID) ||
-      held(player, MOONLIGHT_GRUB_PASTE_ITEM_ID) ||
-      stageOf(player) >= STAGE_RITUAL
-    ) {
-      return;
-    }
-    player.getInventory().adds(MOONLIGHT_GRUB_ITEM_ID, 1);
-    player.sendMessage("You collect a moonlight grub.");
+    if (guardGathering(player)) event.handled = true;
   }
 
   function handleLizardRock(event) {
@@ -1767,21 +1753,9 @@ module.exports = function registerPerilousMoonsQuest(api) {
   function handleFishingSpot(event, location) {
     // River spot 62193 stands elsewhere too (Vampyrium's leechfin spots); leave those clicks to the river fishing plugin.
     if (!NEYPOTZLI_RIVER_SPOT_TILES.some(([x, y]) => x === location.x && y === location.y)) return;
-    const { player } = event;
     const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "");
     if (option !== "Fish") return;
-    const stage = stageOf(player);
-    if (stage >= STAGE_RITUAL) return; // the MoonsOfPeril plugin's river fishing from here on
-    event.handled = true;
-    if (guardGathering(player)) return;
-    if (stage < STAGE_CAMPS) return;
-    if (held(player, RAW_BREAM_ITEM_ID) || held(player, BREAM_SCALES_ITEM_ID)) return;
-    if (!held(player, BIG_FISHING_NET_ITEM_ID)) {
-      player.sendMessage("You need a big fishing net to catch a bream.");
-      return;
-    }
-    player.getInventory().adds(RAW_BREAM_ITEM_ID, 1);
-    player.sendMessage("You catch a raw bream.");
+    if (guardGathering(event.player)) event.handled = true;
   }
 
   /** The "don't touch anything yet" guard for gathering before the camps. */
@@ -1883,7 +1857,9 @@ module.exports = function registerPerilousMoonsQuest(api) {
 
   /** Neypotzli's camps are the MoonsOfPeril plugin's from the ritual on, Moons done included. */
   function handleCampsOpen(request) {
-    if (request?.player && stageOf(request.player) >= STAGE_RITUAL) request.open = true;
+    // The camps' crates, stoves, saplings and river spots work from the camp stage, not only from
+    // the ritual (rec 1693 took every kit at stage 23); before it guardGathering stops the player.
+    if (request?.player && stageOf(request.player) >= STAGE_CAMPS) request.open = true;
   }
 
   function handleNpcDeath(event) {

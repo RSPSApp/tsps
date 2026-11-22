@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-20",
+  "updated": "2026-11-22",
   "note": "Progress measures functional equivalence with OSRS through implementation tasks: done counts fully, in progress counts halfway, and to do counts zero. Automated test coverage is evidence, not a scoring requirement. Reconciled against tsps main 3e9ee2d67 on 11 November 2026, covering 1,355 merged PRs since the 6 November checkpoint 3b61a15a8. This sync credits the implemented portions of Clan Wars, Burthorpe Games Room, ranked PvP Arena, Trouble Brewing, Intelligence Gathering, Halloween, seasonal rares, Brutus and Maggot King. It also records Hunter Rumours, diary and League task updates, Sailing, bank-funded Grand Exchange offers, Curse of the Empty Lord, quest progression fixes, combat and interface work. Existing inventory, task scope and weights are retained. Only merged main changes are credited.",
   "schema": {
     "item": [
@@ -43888,7 +43888,8 @@
             "Main 3b61a15a8 (6 November 2026): #2330 fix: handle Monster Inspect casts on NPCs; #2450 Restore recorded combat, prayer and area sound behavior; #2477 Credit supported Kandarin Diary gameplay tasks; #2486 Credit supported Varrock Diary gameplay and Plank Make batches; #2490 Credit supported Kourend and Kebos Diary gameplay tasks; #2503 Play Bones to Bananas' sound. (7 merged PRs touch the recorded implementation; highlights shown.) Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4237 Settings: confirmations and messages for clue scrolls, STASH units, Plank Make, gravestone fees, trades and boat teleports. #3835 World config: plugins declare their own options (v0.1). #3846 Bones to Bananas/Peaches: every bone the Wiki lists, and the recorded no-bones line. 10 merged PRs changed recorded implementation files for this entry.",
             "2026-11-16, fix/spellbook-death-cleanup: death and logout clear the Arceuus ward, mark, Death Charge active effect, shadow veil, corruption, dark lure and the ward/shadow/offering cooldowns, and the Lunar Magic Imbue, Heal Group and Spellbook Swap timers; an active swap returns to Lunar first and the thrall is dismissed on logout too. The Vengeance and Death Charge cooldowns keep running, matching the captures; Death Charge resyncs its indicator on login (server/src/main/typescript/elvarg/game/entity/impl/player/Player.ts, magic/ArceuusSpells.ts, magic/LunarSpells.ts; server/tests/spell-status-death-cleanup.test.cjs).",
-            "2026-11-21, parity/prayer-magic-death-charge-rite: the Rite of vile transference's Read follows rsprox recording 3285 ticks 6162-6178 (objectbox, consume menu, varbit death_charge_scroll_used, read seq, spotanim 3288 and synth 5034, upgraded objectbox 6 ticks later); the upgrade makes Death Charge restore 15% from two kills per cast (Wiki), with the cache's red-skull cast/end spotanims 3288/3289, and Yama's Dossier counts a read rite as owned (server/plugins/items/RiteOfVileTransference.plugin.js, magic/ArceuusSpells.ts; server/tests/rite-of-vile-transference.test.cjs). Not recorded: an upgraded cast, so its messages are the plain spell's."
+            "2026-11-21, parity/prayer-magic-death-charge-rite: the Rite of vile transference's Read follows rsprox recording 3285 ticks 6162-6178 (objectbox, consume menu, varbit death_charge_scroll_used, read seq, spotanim 3288 and synth 5034, upgraded objectbox 6 ticks later); the upgrade makes Death Charge restore 15% from two kills per cast (Wiki), with the cache's red-skull cast/end spotanims 3288/3289, and Yama's Dossier counts a read rite as owned (server/plugins/items/RiteOfVileTransference.plugin.js, magic/ArceuusSpells.ts; server/tests/rite-of-vile-transference.test.cjs). Not recorded: an upgraded cast, so its messages are the plain spell's.",
+            "2026-11-22, parity/prayer-magic-potion-share-gim: Stat Restore Pot Share and Boost Potion Share can give doses to members of the caster's Group Ironman group within the existing 5x5 area even with Accept Aid off. The Wiki entries for both spells document this eligibility rule. Server packet tests verify it for both spells with real potion costs and group membership reloaded from disk (server/tests/lunar-potion-share.test.cjs). Resources and restrictions stay in progress pending the broader Lunar cast restriction audit."
           ],
           "taskDetails": [
             {
@@ -43929,7 +43930,7 @@
               "steps": [
                 "Runes (astral 9075, cosmic 564, law 563, blood 565, etc.) are declared per spell and consumed by Spell.canCast; energy transfer additionally needs a full special bar (LunarSpells.ts:252).",
                 "Lunar cannot be autocast (Autocasting.ts:73); Vengeance fails in a duel (EffectSpells.ts:57); heal other refuses non-aid players and Vengeance other refuses a target that already has it (LunarSpells.ts:280).",
-                "Cast potion shares on the potion; dispatch potions:share for eligible players within two tiles, one paid dose each and a free caster dose."
+                "Cast potion shares on an inventory potion. Eligible recipients within two tiles either accept aid or belong to the caster's Group Ironman group. Each recipient costs one dose and the caster receives one free dose."
               ],
               "acceptanceCriteria": [
                 "Rune/energy/special requirements are exact and reversible (energy transfer swaps bars).",
@@ -43937,7 +43938,9 @@
               ],
               "refs": [
                 "server/src/main/typescript/elvarg/game/content/combat/magic/LunarSpells.ts:252",
-                "server/src/main/typescript/elvarg/game/content/combat/magic/Autocasting.ts:73"
+                "server/src/main/typescript/elvarg/game/content/combat/magic/Autocasting.ts:73",
+                "https://oldschool.runescape.wiki/w/Stat_Restore_Pot_Share",
+                "https://oldschool.runescape.wiki/w/Boost_Potion_Share"
               ]
             },
             {

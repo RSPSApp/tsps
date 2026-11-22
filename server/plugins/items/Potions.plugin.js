@@ -2324,7 +2324,7 @@ const SHAREABLE = {
 
 /**
  * "potions:share" `{ player, slot, kind, targets }` from the Lunar share spells: the potion in
- * `slot` gives one dose to each of `targets` while it has doses, and the caster drinks one free.
+ * `slot` gives one dose to each eligible nearby target while it has doses, and the caster drinks one free.
  * Sets `valid` and `apply` (run once the spell is paid for), or `message` when it can't be shared.
  */
 function sharePotion(request) {
@@ -2344,7 +2344,7 @@ function sharePotion(request) {
     return;
   }
   // Only the other players' doses come out of the potion, so the spell needs one of them (Wiki).
-  const eligible = targets.filter((target) => drinkRefusal(target, entry) === null);
+  const eligible = targets.filter((target) => acceptsPotionShare(player, target) && drinkRefusal(target, entry) === null);
   if (eligible.length === 0) {
     request.message = "There is nobody nearby to share your potion with.";
     return;
@@ -2364,6 +2364,14 @@ function sharePotion(request) {
     entry.potion.effect(player);
     player.getInventory().refreshItems();
   };
+}
+
+/** Both Lunar potion shares also work on members of the caster's Group Ironman group. */
+function acceptsPotionShare(player, target) {
+  if (target.getAttribute("accept-aid") !== false) return true;
+  const group = { player, other: target, same: false, ironman: false };
+  pluginApi.emitCustomEvent("grouping:same-group", group);
+  return group.same && group.ironman;
 }
 
 /** Cache enum 5583: every potion, mix and unfinished potion to its dose enum (0 = the empty vial, 1-4 doses). */

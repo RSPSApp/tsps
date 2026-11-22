@@ -155,4 +155,4 @@ From the Wiki only: no rsprox recording has a piece inspected or two pieces used
 - Singles-plus is shown (the icon) but plays as singles.
 - **An abandoned fight starts over:** a lair boss that has had no target and not been hit for 100 ticks gets its hitpoints and first form back, its hounds, spiderlings, traps and webs go, and its damage record clears (our timing; OSRS's isn't known).
 - Scorpia's fight and cave are uncaptured.
-- Madam Sikaro's assembly of the Voidwaker (500,000 coins) isn't wired yet; her dialogue is in npc-dialogues.json under "Madam Sikaro".
+- Madam Sikaro (NPC 11991) stands in the Ferox Enclave Dungeon and assembles the three unnoted Voidwaker parts for 500,000 coins. Her dialogue is in npc-dialogues.json under "Madam Sikaro"; the confirmation step consumes one hilt, blade, gem and the fee, then gives one Voidwaker.

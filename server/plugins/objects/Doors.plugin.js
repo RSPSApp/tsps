@@ -810,6 +810,29 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 46,
     }),
+    // Fight Arena's two plain doors (fightarena_door1 81), the user's rsprox captures local 1001680 ticks
+    // 7032-7036 and 7335-7337, local 1002138 ticks 11377-11380 and 11676-11678 (revisions 241, 242): Open puts
+    // inviswall 38848 on the doorway and inactivepoordoor (1539) on the tile beside it, sound 62, the player
+    // steps onto the doorway tile the same tick and the door is back two ticks later (docs/fight-arena-doors.md).
+    // Both recordings cross from the leaf's side only; the other way is ours, the same swap.
+    Object.freeze({
+      closed: [[O.DOOR_8, 2617, 3171, 0, 1]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2617, 3171, 0, 1], [NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN, 2617, 3172, 0, 2]],
+      crossY: 3172,
+      walkOver: true,
+      operateBeforeMovement: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    Object.freeze({
+      closed: [[O.DOOR_8, 2585, 3141, 0, 0]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2585, 3141, 0, 0], [NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN, 2584, 3141, 0, 1]],
+      crossX: 2585,
+      walkOver: true,
+      operateBeforeMovement: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
     // Wydin's stock-room door in Port Sarim (wydindoor 2069), the user's rev 242 capture PiratesTreasure ticks
     // 935-939 (in) and 973-975 (out): Open puts inviswall 38848 on the doorway and wydindooropen (2070) on the
     // tile west, sound 62, the player steps across and the door is back two ticks later. From the shop only

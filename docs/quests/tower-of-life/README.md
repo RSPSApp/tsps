@@ -97,11 +97,11 @@ sandwich. Once the machines work: "You have no need to search the crates." (3047
   "It begins!": seq 4411 on the three, map_anim 736 at eight tiles with sound 3422 three ticks on, and the
   Homunculus 3589 at (2648,3217) with seq 5833 seven ticks on. "Arghhh!"/"Oh no...": spotanim 1026, seq 5834,
   sounds 3428 and 3418, waves of map_anim 736; tol_cage_state 0 on "Run away!"; the fade on "Flee for your
-  lives!", out of the copy to (2648,3221,2) three ticks on, tol_prog 11 two after (2712-2872).
+  lives!", out of the copy to (2648,3221,2) three ticks on, tol_prog 11 two after (2712-2872; the timing below).
 - The ladder up at tol_prog 11: "I should go and talk to Effigy outside first." (2892).
 - Effigy at tol_prog 16: a cutscene on the ground floor (tabs closed, camera at (2641,3213) looking at
   (2639,3220)); tol_homonc_pres (3359) and sound 3423 with "Boo."; after "Me look dungeon, ..." the fade, and
-  three ticks on tol_prog 17 with the Homunculus gone and the tabs back (3361-3388).
+  three ticks on tol_prog 17 (the timing below) with the Homunculus gone and the tabs back (3361-3388).
 
 Each scene's timers start when its line is continued, not when the line event comes: the event comes as the
 dialogue chain is built, often before the line is shown, so a player who read slowly got the fade in before the
@@ -110,11 +110,11 @@ fade out and a black screen, and the scare ended (tabs and camera back, tol_prog
 plays, a close (Esc) or a world click keeps the chat, since the scene ends only from its last line's continue. A death
 mid-scene (ours: none captured) lets the scene go, with its timers, and the scene plays again.
 
-Every scene fades a tick after its last line is continued. The two Tower of Life recordings agree on the gaps after
-each fade (hand-off fade+2, Flee fade+3 and fade+5, scare fade+3) but not always on the continue's own tick: the
-hand-off fades a tick after it in both (2656 -> 2657 here; 9032 -> 9033 in rsprox.net recording 1002189), Flee on it
-here (2867) and a tick after in 1002189 (9290 -> 9291), the scare a tick after here (3384 -> 3385) and on it in
-1002189 (9672). The tick after is what four of the six show.
+The scenes' timers follow rsprox.net recording 1002189, the public one: the hand-off fades a tick after "Wait! What
+about-" is continued and moves tol_prog to 10 two after that (9032-9035); Flee fades a tick after its continue, leaves
+the copy three on and moves tol_prog to 11 two after that (9290-9296); the scare fades on its continue's tick and ends
+three on (9672-9675). The user's TowerOfLife.bin has the same gaps after every fade but differs by a tick on two
+continues (recorded differences): Flee fades on its continue's tick (2867), the scare a tick after it (3384 -> 3385).
 
 ## The Homunculus
 

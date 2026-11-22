@@ -153,6 +153,7 @@ function setup(options = {}) {
   let full = false;
   let interfaceId = -1;
   let location = new core.Location(2649, 3225, 0);
+  let area = null;
 
   const inventory = {
     getAmount: (id) => items.get(id) ?? 0,
@@ -223,6 +224,10 @@ function setup(options = {}) {
     getEquipment: () => ({ get: (slot) => equipment.get(slot) ?? null, refreshItems() {} }),
     getMovementQueue() { return { reset() { return this; }, setBlockMovement() { return this; } }; },
     setUntargetable() {},
+    // An instance scene's area bookkeeping (the creation's copy of the tower).
+    getArea: () => area, setArea: (next) => { area = next; },
+    isPlayer: () => true, isNpc: () => false, getIndex: () => 1, getAsPlayer() { return player; },
+    setPositionToFace() {}, setLocation: (next) => { location = next; },
     getSpellbook: () => ({ getInterfaceId: () => 218 }),
     getPacketSender: () => sender,
     getInterfaceId: () => interfaceId,
@@ -694,8 +699,10 @@ test('the scare plays its whole talk: the Homunculus with "Boo.", and the end on
   boo.before();
   assert.equal(h.varbits.get(3359), 1);
   last.after();
-  assert.equal(last.pauseTicks, 4);
-  assert.deepEqual(h.queuedTicks(), [1, 4]);
+  // The fade on the continue's tick, the end three on (rsprox.net 1002189 ticks 9672, 9675).
+  assert.deepEqual(h.fades, ['out']);
+  assert.equal(last.pauseTicks, 3);
+  assert.deepEqual(h.queuedTicks(), [3]);
   // An Esc or a world click mid-scene keeps the chat, so the last line's continue still ends it.
   for (const name of ['interface:close', 'player:world-input']) {
     const input = { player: h.player, handled: false };
@@ -734,4 +741,28 @@ test('a death mid-scare lets the scene go: input, controls and camera come back,
   assert.equal(h.quest.getStage(h.player), 16);
   assert.deepEqual(h.fades, []);
   assert.equal(h.selectVariant(N.EFFIGY), 'finished-work-freeing-the-homunculus-effigy');
+});
+
+test('"Flee for your lives!" fades a tick after its continue, leaves the copy at +4 and moves tol_prog to 11 at +6 (rsprox.net 1002189 ticks 9290-9296)', () => {
+  const h = setup();
+  at(h, 10);
+  const climb = { player: h.player, objectId: 17974, object: { getLocation: () => new core.Location(2647, 3221, 2) }, handled: false };
+  PluginManager.emitCustomEvent('ladders:climb', climb);
+  assert.equal(climb.handled, true);
+  h.flushTasks(); // the climb, the copy and the camera pans before the talk
+  assert.equal(h.varbits.get(542), 1);
+  h.fades.length = 0;
+  const flee = line(h, N.EFFIGY_2, 'Flee for your lives!');
+  h.flushTasks();
+  assert.equal(h.quest.getStage(h.player), 10);
+  assert.deepEqual(h.fades, []);
+  flee.after();
+  assert.equal(flee.pauseTicks, 6);
+  assert.deepEqual(h.queuedTicks(), [1, 4, 6]);
+  h.flushTasks();
+  assert.equal(h.quest.getStage(h.player), 11);
+  assert.deepEqual(h.fades, ['out', 'in']);
+  assert.equal(h.varbits.get(542), 0);
+  const at2 = h.player.getLocation();
+  assert.deepEqual([at2.getX(), at2.getY(), at2.getZ()], [2648, 3221, 2]);
 });

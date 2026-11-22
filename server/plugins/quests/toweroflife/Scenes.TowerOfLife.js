@@ -173,9 +173,8 @@ function createScenes(api, ctx) {
 
   /**
    * "Flee for your lives!": a tick after the continue the fade, out of the copy three ticks on, tol_prog 11 and the tabs
-   * two after. The recordings agree on the gaps after the fade (fade+3, fade+5) but not on the continue's tick: the user's
-   * has the fade on it (2867), recording 1002189 a tick later (9290 -> 9291). Every scene here fades a tick after its
-   * continue, as both recordings' hand-offs do (2656 -> 2657, 9032 -> 9033).
+   * two after (rsprox.net 1002189 ticks 9290-9296). Recorded difference: the user's TowerOfLife.bin fades on the
+   * continue's tick (2867), with the same gaps after the fade.
    */
   function flee(request, state) {
     const { player } = request;
@@ -260,14 +259,14 @@ function createScenes(api, ctx) {
         player.getPacketSender().sendSound(SOUND.BOO, 1, 0);
       };
     } else if (text.startsWith("Me look dungeon")) {
-      // Continued (capture tick 3384), the fade a tick on (3385); three ticks after that tol_prog 17, the Homunculus
-      // gone and the tabs back (3388). Recording 1002189 has the same fade+3 gap with the fade on the continue's tick
-      // (9672 -> 9675); the scenes all fade a tick after the continue (see flee). Started as the chain was built, this ended the scene mid-talk and left the fade
+      // Continued, the fade on that tick; three ticks on tol_prog 17, the Homunculus gone and the tabs back (rsprox.net
+      // 1002189 ticks 9672, 9675). Recorded difference: the user's TowerOfLife.bin fades a tick after the continue
+      // (3384 -> 3385 -> 3388), with the same three ticks from the fade to the end. Started as the chain was built, this ended the scene mid-talk and left the fade
       // out on (#6485).
       request.after = () => {
         if (playing.get(player) !== state) return;
-        Scenes.later(player, 1, () => Scenes.fade(player, true));
-        Scenes.later(player, 4, () => {
+        Scenes.fade(player, true);
+        Scenes.later(player, 3, () => {
           if (playing.get(player) !== state) return;
           ctx.setStage(player, 17);
           ctx.sendVarbit(player, VARBIT_HOMONC_PRES, 0);
@@ -275,7 +274,7 @@ function createScenes(api, ctx) {
           Scenes.fade(player, false);
         });
       };
-      request.pauseTicks = 4;
+      request.pauseTicks = 3;
     }
   }
 

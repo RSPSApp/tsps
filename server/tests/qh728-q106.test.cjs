@@ -466,6 +466,19 @@ test('the false wall opens with the box and the passage back lands west of it (i
   assert.deepEqual([h.getLocation().getX(), h.getLocation().getY()], [2700, 9689], 'not the wall\'s own tile 2701,9688');
 });
 
+test('the wall without a CommOrb: the Wiki\'s "doesn\'t have the Commorb v2" condition guards the player\'s line', () => {
+  const steps = DIALOGUES[SLUG_PAGE].variants['the-shrine-pushing-the-wall'];
+  assert.equal(steps[0].id, 'zdFV9t');
+  const guard = steps.find((step) => step.type === 'condition');
+  assert.equal(guard.id, 'bUTtuN');
+  const branch = DIALOGUES[SLUG_PAGE].branches[guard.steps[0].branch];
+  assert.deepEqual(branch, [{ player: "I'd better carry my CommOrb so that Savant can see what's in there." }]);
+  const h = at(3);
+  assert.equal(h.condition('bUTtuN'), true);
+  h.inventory.set(I.COMMORB_V2, 1);
+  assert.equal(h.condition('bUTtuN'), false);
+});
+
 test('the door burns for 5 the tick after its flash (ticks 1862-1864)', () => {
   const h = at(3);
   h.hooks.objects[0]({ player: h.player, objectId: 18413, option: 'open', location: { x: 2348, y: 5093, z: 0 } });
@@ -518,7 +531,7 @@ test('Jorral takes the transcript, stage 5, and Savant calls with stage 6 (ticks
 test('O\'Niall\'s warning, Maledict\'s pages, the fragments and the paste (stages 7, 9, 10)', () => {
   const h = at(6);
   h.inventory.set(I.COMMORB_V2, 1);
-  assert.equal(h.variant(N.COL_ONIALL), 'the-pages-talking-to-col-o-niall-after-learning-abotu-mother-mallum');
+  assert.equal(h.variant(N.COL_ONIALL), 'the-pages-talking-to-col-o-niall-after-learning-about-mother-mallum');
   h.line(N.COL_ONIALL, "Of course! The temple of Saradomin has had a shrine here for centuries. I'll get right on it.");
   assert.equal(h.attrs.get(STAGE_KEY), 7);
   h.quest.setStage(h.player, 8);
@@ -770,7 +783,7 @@ test('the Prince\'s death plays in the capture\'s six parts, each line once (tic
 
 test('the villagers\' stare and the wall line show in the message box, not in chat (ticks 534, 1725)', () => {
   const h = at(1);
-  for (const stepId of ['qu7kOj', 'BlbTdL']) {
+  for (const stepId of ['qu7kOj', 'zdFV9t']) {
     const event = { player: h.player, npcId: 4791, stepId, kind: 'message' };
     h.api.emitCustomEvent('npc-dialogue:action', event);
     assert.deepEqual(event.box, { statement: true });

@@ -173,7 +173,7 @@ module.exports = function registerSlugMenaceQuest(api) {
   const MSG_NOTHING_TO_SCAN = "You have nothing to scan for..."; // ticks 1369, 1480, 2170
   const MSG_DESK_LOCKED = "The desk appears to be locked."; // tick 425
   const MSG_DESK_EMPTY = "The desk is empty."; // tick 2606
-  const MSG_WALL_OPENED_ID = "BlbTdL"; // "The wall creaks open to reveal a hidden entrance!"
+  const MSG_WALL_OPENED_ID = "zdFV9t"; // "The wall creaks open to reveal a hidden entrance!"
 
   // Native stages.
   const STAGE_NOT_STARTED = 0;
@@ -200,12 +200,12 @@ module.exports = function registerSlugMenaceQuest(api) {
   const V_TIFFY_POST = "after-slug-menace";
   const V_COMMORB_CONTACT = "starting-off-contact-with-commorb-v2";
   const V_COMMORB_PLAYBACK = "starting-off-playback-with-commorb-v2";
-  const V_COMMORB_INVESTIGATING = "witchaven-contacting-the-commorb-while-investigating-witchaven";
+  const V_COMMORB_INVESTIGATING = "witchaven-contacting-savant-after-talking-to-col-o-niall";
   const V_HOBB = "witchaven-talking-to-mayor-hobb";
   const V_HOBB_2 = "witchaven-talking-to-mayor-hobb-2";
   const V_HOBB_AGAIN = "witchaven-talking-to-mayor-hobb-again";
   const V_SAVANT_SCAN_MAYOR = "witchaven-savant-asking-to-scan-the-mayor";
-  const V_SCAN_MAYOR = "witchaven-scanning-the-mayor";
+  const V_SCAN_MAYOR = "witchaven-scanning-mayor-hobb";
   const V_MALEDICT = "witchaven-talking-to-brother-maledict";
   const V_MALEDICT_2 = "witchaven-talking-to-brother-maledict-2";
   const V_MALEDICT_AGAIN = "witchaven-talking-to-brother-maledict-again";
@@ -214,7 +214,7 @@ module.exports = function registerSlugMenaceQuest(api) {
   const V_ONIALL_INTRO = "witchaven-talking-to-col-o-niall";
   const V_ONIALL_QUESTIONS = "witchaven-talking-to-col-o-niall-before-getting-all-the-information";
   const V_ONIALL_REPORT = "witchaven-talking-to-col-o-niall-after-talking-to-mayor-hobb";
-  const V_ONIALL_MOTHER = "the-pages-talking-to-col-o-niall-after-learning-abotu-mother-mallum";
+  const V_ONIALL_MOTHER = "the-pages-talking-to-col-o-niall-after-learning-about-mother-mallum";
   const V_ONIALL_AGAIN = "the-pages-talking-to-col-o-niall-again";
   const V_ONIALL_FINAL_PAGE = "the-pages-talking-to-col-o-niall-while-looking-for-the-final-page";
   const V_ONIALL_LOST_ORB = "crafting-the-runes-talking-to-col-o-niall-after-losing-the-commorb";
@@ -227,7 +227,7 @@ module.exports = function registerSlugMenaceQuest(api) {
   const V_BAILEY = "witchaven-talking-to-bailey-at-the-fishing-platform";
   const V_BAILEY_GLUE = "the-pages-talking-to-bailey-after-learning-about-the-glue";
   const V_WALL_BEFORE = "the-shrine-attempting-to-push-the-wall-before-talking-about-the-shrine";
-  const V_WALL_NO_ORB = "the-shrine-pushing-the-wall-without-the-commorb";
+  const V_WALL_NO_ORB = "the-shrine-pushing-the-wall";
   const V_PASSAGE_NO_ORB = "the-shrine-attempting-to-enter-the-open-wall-without-the-commorb";
   const V_COMMORB_BEFORE_SCAN = "the-shrine-contacting-commorb-before-scanning-the-shrine";
   const V_SCAN_WRONG = "the-shrine-scanning-the-commorb-in-the-wrong-place";
@@ -242,7 +242,7 @@ module.exports = function registerSlugMenaceQuest(api) {
   const V_JORRAL = "the-pages-talking-to-jorral";
   const V_SAVANT_AFTER_JORRAL = "the-pages-after-talking-to-jorral";
   const V_COMMORB_MOTHER = "the-pages-contacting-the-commorb-after-learning-about-mother-mallum";
-  const V_DESK = "the-pages-opening-maledict-s-desk";
+  const V_DESK = "the-pages-opening-hobb-s-desk";
   const V_EZEKIAL = "the-pages-talking-to-ezekial-lovecraft-after-brother-maledict-asks-about-the-pages";
   const V_PASTE = "the-pages-using-swamp-paste-on-the-pages";
   const V_SHAPE = "crafting-the-runes-shaping-a-rune";
@@ -256,12 +256,13 @@ module.exports = function registerSlugMenaceQuest(api) {
   // Prose condition step ids.
   const COND_NO_ORB = "QCYHeQ";
   const COND_HAS_ORB = "Z3OYJz";
+  const COND_WALL_NO_ORB = "bUTtuN"; // the wall: "If the player doesn't have the Commorb v2:"
   const COND_NO_SPACE_ORB = "qD7fRj";
   const COND_SPACE_ORB = "M3YJU2";
   const COND_NO_SPACE_SCAN = "NBrQCq";
   const COND_NO_SPACE_TRANSCRIPTION = "vfZW8h";
   const COND_NO_TRANSCRIPTION = "sEmc0h";
-  const COND_NO_SPACE_DESK = "dEd0U2";
+  const COND_NO_SPACE_DESK = "7gs5Ss";
   const COND_NO_SPACE_EZEKIAL = "efYvu4";
   const COND_NO_SPACE_FRAGMENTS = "X95XqV";
   const COND_NO_SLUG = "xSBg2p";
@@ -625,6 +626,7 @@ module.exports = function registerSlugMenaceQuest(api) {
     switch (stepId) {
       case COND_NO_ORB: return !hasAnyCommorb(player);
       case COND_HAS_ORB: return hasAnyCommorb(player);
+      case COND_WALL_NO_ORB: return !hasAnyCommorb(player);
       case COND_NO_SPACE_ORB: return inventory.isFull();
       case COND_SPACE_ORB: return !inventory.isFull();
       case COND_NO_SPACE_SCAN: return inventory.isFull() && !held(player, DOOR_TRANSCRIPTION_ITEM_ID);

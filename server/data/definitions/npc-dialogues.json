@@ -1430411,6 +1430411,7 @@
                             },
                             {
                               "text": "Related Information",
+                              "condition": "After meeting Col. O'Niall",
                               "steps": [
                                 {
                                   "type": "choice",
@@ -1430421,83 +1430422,119 @@
                                       "steps": [
                                         {
                                           "type": "unavailable",
-                                          "id": "wOmUTv"
+                                          "id": "AFZk8H"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "3CEMw2"
+                                          "id": "lB7Olx"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "zSeJFl"
+                                          "id": "ad2VPN"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "lxM5TU"
+                                          "id": "PLoIgA"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "CpPLdG"
+                                          "id": "vfkZif"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "7oix3P"
+                                          "id": "08DhPp"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "wDYZVX"
+                                          "id": "jP3HHr"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "Md4iY5"
+                                          "id": "GRuw7d"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "qqsJt0"
+                                          "id": "mDyJbp"
+                                        },
+                                        {
+                                          "type": "condition",
+                                          "text": "Before Col. O'Niall is possessed",
+                                          "steps": [
+                                            {
+                                              "type": "unavailable",
+                                              "id": "USjV19"
+                                            }
+                                          ],
+                                          "id": "vRv6sg"
+                                        },
+                                        {
+                                          "type": "condition",
+                                          "text": "After Col. O'Niall is possessed",
+                                          "steps": [
+                                            {
+                                              "type": "unavailable",
+                                              "id": "GOmSMN"
+                                            }
+                                          ],
+                                          "id": "rBQQ62"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "4Z82CW"
+                                          "id": "4Pg6ju"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "uBLL8X"
+                                          "id": "SQMfUV"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "ooDB5w"
+                                          "id": "_9ZXWe"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "OoArUq"
+                                          "id": "RSR7U7"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "KJPICV"
+                                          "id": "ZgkfvE"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "GVAGzX"
+                                          "id": "hQ2Ugf"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "HV_F3L"
+                                          "id": "iAuRYb"
+                                        },
+                                        {
+                                          "type": "condition",
+                                          "text": "Before Col. O'Niall is possessed",
+                                          "steps": [
+                                            {
+                                              "type": "unavailable",
+                                              "id": "XKejyZ"
+                                            }
+                                          ],
+                                          "id": "FG81ui"
+                                        },
+                                        {
+                                          "type": "condition",
+                                          "text": "After Col. O'Niall is possessed",
+                                          "steps": [
+                                            {
+                                              "type": "unavailable",
+                                              "id": "Q7TY8K"
+                                            }
+                                          ],
+                                          "id": "ORe0-8"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "xol3VW"
+                                          "id": "BiZuQt"
                                         },
                                         {
                                           "type": "unavailable",
-                                          "id": "tCvLsN"
-                                        },
-                                        {
-                                          "type": "unavailable",
-                                          "id": "drH-fB"
-                                        },
-                                        {
-                                          "type": "unavailable",
-                                          "id": "-YNlJd"
+                                          "id": "pUuvuW"
                                         }
                                       ]
                                     },
@@ -1430507,7 +1430544,8 @@
                                     }
                                   ]
                                 }
-                              ]
+                              ],
+                              "id": "m4ZZa9"
                             },
                             {
                               "text": "Cancel",
@@ -1430532,6 +1430570,242 @@
                   "type": "jump",
                   "reference": "above",
                   "id": "r2Zibs"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "witchaven-talking-to-a-possessed-witchaven-villager": [
+        {
+          "player": "Hello there."
+        },
+        {
+          "type": "message",
+          "text": "Their eyes are staring vacantly into space.",
+          "id": "Uc9ceA"
+        },
+        {
+          "type": "random",
+          "options": [
+            {
+              "text": "Dialogue 1",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Can you see it?"
+                },
+                {
+                  "player": "Which 'it' are you referring to?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "The light, the hot bright light."
+                },
+                {
+                  "player": "What light?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "It is all around us. Scalding, burning, blinding light."
+                },
+                {
+                  "player": "Oh, you mean the sunlight."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Sunlight..."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 2",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "UYjsmo"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 3",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "qCJywt"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "witchaven-talking-to-a-normal-witchaven-villager": [
+        {
+          "type": "random",
+          "options": [
+            {
+              "text": "Dialogue 1",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Huh? Oh, hello."
+                },
+                {
+                  "player": "Are you alright?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Uh? No... I, Uh, don't feel so good."
+                },
+                {
+                  "player": "What happened to you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Hmm? Oh... I, Uh, don't remember."
+                },
+                {
+                  "player": "I think you'd best go and lie down."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "What? Oh. Right. Yes."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 2",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "We're going away to leave you now."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Goodbye, fare thee well, Goodbye, fare thee well,"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "We're going away to leave you now,"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Hoorah, me boys, we're homeward bound."
+                },
+                {
+                  "player": "Wow, nice shanty."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Aye lad, it's not bad."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 3",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Have you seen a group of lads around here?"
+                },
+                {
+                  "player": "Um, not recently."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "That's strange; we are supposed to be helping the Mayor today."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Ah well, never mind. I'm sure I'll find them soon."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 4",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "What is happening to the people in this town?"
+                },
+                {
+                  "player": "Wha..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "I mean, why are people acting so strange?"
+                },
+                {
+                  "player": "Who?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "People I've know for years are acting like they've never met me."
+                },
+                {
+                  "player": "How?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "I think something bad is about to happen."
+                },
+                {
+                  "player": "Excuse..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "I'm sorry, I'm too afraid to speak right now. Goodbye"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 5",
+              "steps": [
+                {
+                  "player": "Hello there."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Hmm? Oh, hello there."
+                },
+                {
+                  "player": "Are you okay? You seem a bit pre-occupied."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "It's nothing stranger. No need to concern yourself."
                 }
               ]
             }
@@ -1430986,6 +1431260,85 @@
           ]
         }
       ],
+      "witchaven-talking-to-col-o-niall-again-before-getting-any-information": [
+        {
+          "type": "line",
+          "speaker": "Col. O'Niall",
+          "text": "Anything new to report?",
+          "speaker_ids": [
+            4781,
+            4782
+          ]
+        },
+        {
+          "player": "Not yet, but I was wondering if I could ask you some more questions?"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "What's the mission?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "6a9TYS",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-5afbb8b1690b99ee"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Tell me about Witchaven.",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "qlJaOZ",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-f0881437cf6454f9"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Who are the important people in Witchaven?",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "2pyaNB",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-e67f9c5bf51d1bd6"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "That's enough for now.",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "yWo4XH",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-1bccbe6e2d208751"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
       "witchaven-talking-to-col-o-niall-before-getting-all-the-information": [
         {
           "player": "Excuse me Col. O'Niall. I need some more information."
@@ -1431062,6 +1431415,49 @@
                 }
               ]
             }
+          ]
+        }
+      ],
+      "witchaven-contacting-savant-after-talking-to-col-o-niall": [
+        {
+          "player": "So, Savant, what do you think?"
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Hmm, sounds like Witchaven has some problems at the moment.",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "player": "Yes, it does look a little unloved. What do you think could be the problem?"
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "I really don't know at this point, [player name].",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "You really need to investigate that area further.",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "player": "Well, that's what Colonel O'Niall suggested. Best get on with it then."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Good luck, [player name].  Savant out.",
+          "speaker_ids": [
+            4931
           ]
         }
       ],
@@ -1432245,8 +1432641,16 @@
                       "text": "Nothing at the moment thanks.",
                       "steps": [
                         {
-                          "type": "call",
-                          "branch": "UnfO4Z"
+                          "player": "Nothing at the moment thanks."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Mayor Hobb",
+                          "text": "Then please feel free to stay in our village a while longer. Farewell.",
+                          "speaker_ids": [
+                            4783,
+                            4784
+                          ]
                         }
                       ]
                     }
@@ -1432258,8 +1432662,26 @@
               "text": "I'm just looking around.",
               "steps": [
                 {
-                  "type": "missing",
-                  "id": "NhT5CP"
+                  "player": "I'm just looking around."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "That's good, yes, that's good.  Witchaven is a nice quiet village - very relaxing, good fishing.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "type": "jump",
+                  "id": "edfNmE",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-cff51d9fa6a70db2"
+                    }
+                  ]
                 }
               ]
             },
@@ -1432279,343 +1432701,12 @@
                   ]
                 },
                 {
-                  "player": "Are you alright? You seem a little, hazy."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Mayor Hobb",
-                  "text": "It's nothing, I'm just a little tired at the moment. So much work, so much to do.",
-                  "speaker_ids": [
-                    4783,
-                    4784
-                  ]
-                },
-                {
-                  "player": "Really, what are you working on?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Mayor Hobb",
-                  "text": "To the West, the shrine needs... work, yes work. Things must be made better.",
-                  "speaker_ids": [
-                    4783,
-                    4784
-                  ]
-                },
-                {
-                  "player": "Well, um. Yes. Indeed. I'm sure Saradomin would be pleased."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Mayor Hobb",
-                  "text": "Saradomin... Why are you really here?",
-                  "speaker_ids": [
-                    4783,
-                    4784
-                  ]
-                },
-                {
-                  "player": "Like I said, I'm here to..."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Mayor Hobb",
-                  "text": "Are you sure that's the only reason you are here, [player name]?",
-                  "speaker_ids": [
-                    4783,
-                    4784
-                  ]
-                },
-                {
-                  "player": "Well, I'm also here to visit a friend, Jake O'Niall."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Mayor Hobb",
-                  "text": "Ahh, then this all makes sense. Yes, this is very good.",
-                  "speaker_ids": [
-                    4783,
-                    4784
-                  ]
-                },
-                {
-                  "player": "Err, how did you know my name?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Mayor Hobb",
-                  "text": "You told me when you came in.",
-                  "speaker_ids": [
-                    4783,
-                    4784
-                  ]
-                },
-                {
-                  "player": "No, no I didn't."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Mayor Hobb",
-                  "text": "It does not matter. One of my... villagers, must have mentioned that you are here.",
-                  "speaker_ids": [
-                    4783,
-                    4784
-                  ]
-                },
-                {
-                  "type": "line",
-                  "speaker": "Mayor Hobb",
-                  "text": "Is there anything else you need to know?",
-                  "speaker_ids": [
-                    4783,
-                    4784
-                  ]
-                },
-                {
-                  "type": "choice",
-                  "options": [
+                  "type": "jump",
+                  "id": "0Tdvux",
+                  "steps": [
                     {
-                      "text": "What can you tell me about Witchaven?",
-                      "steps": [
-                        {
-                          "player": "What can you tell me about Witchaven?"
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "The land has seen much sorrow, much loss.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "player": "Are you talking about the Fishing Platform?"
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "Fishing Platform? Oh yes, that. No.  The platform will do much for this place.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "The platform heralds a new beginning for Witchaven, undreamed of by those who built it.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "player": "I thought it took away all the trade?"
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "This is true, but it has brought us so much more in return, so much more.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "player": "Hmm, and I thought the village hated the Fishing Platform."
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "It was... a necessary step.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "Is there anything else you need to know?",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "type": "jump",
-                          "reference": "initial",
-                          "id": "9pur0c"
-                        }
-                      ]
-                    },
-                    {
-                      "text": "What improvements are you making to the shrine?",
-                      "steps": [
-                        {
-                          "player": "What improvements are you making to the shrine?"
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "Ahh, the shrine - the future, our destiny, our heritage.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "player": "How so?"
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "That which the shrine holds can unlock a new path for all the village of Witchaven. And in time the whole of Gielinor.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "player": "Wow, the whole of Gielinor? I thought it was just some old shrine to Saradomin."
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "The history of that shrine should not be overlooked.  It is ancient beyond your knowledge and much that shaped our history is contained within its walls.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "player": "Sounds like a very interesting place. I may have to take a look."
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "There is much to be done before it is opened.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "player": "So it's not completed yet?"
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "When you are ready, it may be that you will be unable to keep yourself away.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "player": "You know, you really are a strange person."
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "Is there anything else you need to know?",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "type": "jump",
-                          "reference": "initial",
-                          "id": "fvaRIK"
-                        }
-                      ]
-                    },
-                    {
-                      "text": "Do you know you look very ill?",
-                      "steps": [
-                        {
-                          "player": "Do you know you look very ill?"
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "Ill? No, merely tired.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "player": "But you've turned a slightly sickly colour."
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "A touch of food poisoning perhaps.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "This has been known to turn the face and give the impression of severe illness.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "player": "I've seen food poisoning. People normally don't look like... that."
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "Time is all that is needed. Yes, time to... get better.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "player": "Well, I hope you get better soon."
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "Soon, all will be well again. Have no fear.",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Mayor Hobb",
-                          "text": "Is there anything else you need to know?",
-                          "speaker_ids": [
-                            4783,
-                            4784
-                          ]
-                        },
-                        {
-                          "type": "jump",
-                          "reference": "initial",
-                          "id": "LHdyHD"
-                        }
-                      ]
-                    },
-                    {
-                      "text": "Nothing at the moment thanks.",
-                      "steps": [
-                        {
-                          "type": "call",
-                          "branch": "UnfO4Z"
-                        }
-                      ]
+                      "type": "call",
+                      "branch": "jump-8275da5b5320df7d"
                     }
                   ]
                 }
@@ -1432655,7 +1432746,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-8057f01f9684b91d"
+                      "branch": "jump-27d5ca0b6bff1544"
                     }
                   ]
                 }
@@ -1432670,7 +1432761,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-0064cde0e74422ef"
+                      "branch": "jump-aba350b8cec7359d"
                     }
                   ]
                 }
@@ -1432685,7 +1432776,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-7d1ec43dbc0516b4"
+                      "branch": "jump-fe92c3a884ccfbad"
                     }
                   ]
                 }
@@ -1432700,12 +1432791,67 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-c417b1e42097f645"
+                      "branch": "jump-eeadea4977d40dd9"
                     }
                   ]
                 }
               ]
             }
+          ]
+        }
+      ],
+      "witchaven-scanning-when-out-of-range": [
+        {
+          "type": "message",
+          "text": "You need to get closer for the scan to work.",
+          "id": "EXF1Fx"
+        }
+      ],
+      "witchaven-scanning-mayor-hobb": [
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Okay, [player name], I'm looking at the scan results now.",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Hmm, that's odd. He doesn't seem possessed by any spirits and I can detect no residual magic around him.",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "player": "But?"
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "The CommOrb must need calibrating, as I can register two life forms present at his location.",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "player": "Are you sure you're not just reading me?"
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "I could have been but I doubt it. Hmm, I'll continue to analyse the results and see what I can come up with.",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Savant Out.",
+          "speaker_ids": [
+            4931
           ]
         }
       ],
@@ -1432905,97 +1433051,6 @@
           "player": "Sure thing, one moment."
         }
       ],
-      "witchaven-scanning-the-mayor": [
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "Okay, [player name], I'm looking at the scan results now.",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "Hmm, that's odd. He doesn't seem possessed by any spirits and I can detect no residual magic around him.",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "player": "But?"
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "The CommOrb must need calibrating, as I can register two life forms present at his location.",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "player": "Are you sure you're not just reading me?"
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "I could have been but I doubt it. Hmm, I'll continue to analyse the results and see what I can come up with.",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "Savant Out.",
-          "speaker_ids": [
-            4931
-          ]
-        }
-      ],
-      "witchaven-contacting-the-commorb-while-investigating-witchaven": [
-        {
-          "player": "So, Savant, what do you think?"
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "Hmm, sounds like Witchaven has some problems at the moment.",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "player": "Yes, it does look a little unloved. What do you think could be the problem?"
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "I really don't know at this point, [player name].",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "You really need to investigate that area further.",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "player": "Well, that's what Colonel O'Niall suggested. Best get on with it then."
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "Good luck, [player name].  Savant out.",
-          "speaker_ids": [
-            4931
-          ]
-        }
-      ],
       "the-shrine-attempting-to-push-the-wall-before-talking-about-the-shrine": [
         {
           "type": "message",
@@ -1433003,19 +1433058,28 @@
           "id": "i4nECO"
         }
       ],
-      "the-shrine-pushing-the-wall-without-the-commorb": [
+      "the-shrine-pushing-the-wall": [
         {
           "type": "message",
           "text": "The wall creaks open to reveal a hidden entrance!",
-          "id": "BlbTdL"
+          "id": "zdFV9t"
         },
         {
-          "player": "I'd better carry my CommOrb so that Savant can see what's in there."
+          "type": "condition",
+          "text": "If the player doesn't have the Commorb v2:",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "phJbAE"
+            }
+          ],
+          "id": "bUTtuN"
         }
       ],
       "the-shrine-attempting-to-enter-the-open-wall-without-the-commorb": [
         {
-          "player": "I'd better carry my CommOrb so that Savant can see what's in there."
+          "type": "call",
+          "branch": "phJbAE"
         }
       ],
       "the-shrine-contacting-commorb-before-scanning-the-shrine": [
@@ -1433056,6 +1433120,13 @@
           "speaker_ids": [
             4931
           ]
+        }
+      ],
+      "the-shrine-failing-the-agility-shortcut": [
+        {
+          "type": "message",
+          "text": "You slip and fail to climb through the hole.",
+          "id": "juxOQI"
         }
       ],
       "the-shrine-scanning-the-commorb-in-the-wrong-place": [
@@ -1433165,6 +1433236,54 @@
         },
         {
           "player": "Fantastic - I'll get right on it."
+        }
+      ],
+      "the-shrine-picking-up-the-dead-sea-slug": [
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "[player name], come in, this is Savant.",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "I've detected a sea slug on you. Is everything okay?",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "player": "It's okay Savant. It's dead."
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Phew. I was very worried there for a moment.",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Hmm, I'm going to take a quick scan of the slug and perform some analysis.",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Savant",
+          "text": "Don't worry, there's nothing you need to do. I'll get back to you when I have something.",
+          "speaker_ids": [
+            4931
+          ]
+        },
+        {
+          "player": "Righty ho Savant. I look forward to your results."
         }
       ],
       "the-shrine-contacting-the-commorb-after-scanning-the-doors": [
@@ -1433301,54 +1433420,6 @@
               ]
             }
           ]
-        }
-      ],
-      "the-shrine-picking-up-the-dead-sea-slug": [
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "[player name], come in, this is Savant.",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "I've detected a sea slug on you. Is everything okay?",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "player": "It's okay Savant. It's dead."
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "Phew. I was very worried there for a moment.",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "Hmm, I'm going to take a quick scan of the slug and perform some analysis.",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "type": "line",
-          "speaker": "Savant",
-          "text": "Don't worry, there's nothing you need to do. I'll get back to you when I have something.",
-          "speaker_ids": [
-            4931
-          ]
-        },
-        {
-          "player": "Righty ho Savant. I look forward to your results."
         }
       ],
       "the-pages-talking-to-jorral": [
@@ -1433833,7 +1433904,87 @@
           ]
         }
       ],
-      "the-pages-talking-to-col-o-niall-after-learning-abotu-mother-mallum": [
+      "the-pages-talking-to-a-witchaven-villager-after-learning-about-mother-mallum": [
+        {
+          "player": "Hello there."
+        },
+        {
+          "type": "message",
+          "text": "Their eyes are staring vacantly into space.",
+          "id": "rCYEoP"
+        },
+        {
+          "type": "random",
+          "options": [
+            {
+              "text": "Dialogue 1",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "She is close now... so close"
+                },
+                {
+                  "player": "Who is?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "So close I can almost hear her."
+                },
+                {
+                  "player": "Hear who?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": ". . ."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 2",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "The family grows..."
+                },
+                {
+                  "player": "What?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Witchaven villager",
+                  "text": "Soon we will all be together..."
+                },
+                {
+                  "player": "Erm... I'll leave you to it then."
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 3",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "UYjsmo"
+                }
+              ]
+            },
+            {
+              "text": "Dialogue 4",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "qCJywt"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "the-pages-talking-to-col-o-niall-after-learning-about-mother-mallum": [
         {
           "player": "Col. O'Niall, this is worse than we thought."
         },
@@ -1434001,6 +1434152,18 @@
           ]
         }
       ],
+      "the-pages-during-the-cutscene-where-maledict-is-possessed": [
+        {
+          "type": "line",
+          "speaker": "Mayor Hobb",
+          "text": "Welcome to the family Brother Maledict",
+          "presentation": "overhead",
+          "speaker_ids": [
+            4783,
+            4784
+          ]
+        }
+      ],
       "the-pages-talking-to-maledict-after-learning-about-mother-mallum": [
         {
           "player": "So Maledict."
@@ -1434158,11 +1434321,11 @@
           ]
         }
       ],
-      "the-pages-opening-maledict-s-desk": [
+      "the-pages-opening-hobb-s-desk": [
         {
           "type": "message",
           "text": "You open the locked drawer and find a page of Maledict's holy book.",
-          "id": "L65b9G"
+          "id": "8mEFz1"
         },
         {
           "type": "condition",
@@ -1434171,10 +1434334,17 @@
             {
               "type": "message",
               "text": "However, you have no inventory space to store it.",
-              "id": "PjYzr3"
+              "id": "0jIqW7"
             }
           ],
-          "id": "dEd0U2"
+          "id": "7gs5Ss"
+        }
+      ],
+      "the-pages-opening-hobb-s-desk-again": [
+        {
+          "type": "message",
+          "text": "The desk is empty.",
+          "id": "c_Viyr"
         }
       ],
       "the-pages-talking-to-ezekial-lovecraft-after-brother-maledict-asks-about-the-pages": [
@@ -1434576,6 +1434746,12 @@
           ]
         }
       ],
+      "the-pages-using-swamp-paste-on-the-pages-without-the-commorb": [
+        {
+          "type": "unavailable",
+          "id": "98KkU2"
+        }
+      ],
       "the-pages-using-swamp-paste-on-the-pages": [
         {
           "type": "line",
@@ -1434625,6 +1434801,30 @@
         },
         {
           "player": "No problem Savant. I'll snap to it right away."
+        }
+      ],
+      "the-pages-talking-to-bailey-before-learning-about-the-glue": [
+        {
+          "player": "Hello Bailey."
+        },
+        {
+          "type": "line",
+          "speaker": "Bailey",
+          "text": "Well, hello again, [player name]. What brings you back out here?",
+          "speaker_ids": [
+            5066
+          ]
+        },
+        {
+          "player": "Just looking around."
+        },
+        {
+          "type": "line",
+          "speaker": "Bailey",
+          "text": "Well, be very careful out there! Those dratted slugs have been joined by giant lobsters!",
+          "speaker_ids": [
+            5066
+          ]
         }
       ],
       "the-pages-talking-to-bailey-after-learning-about-the-glue": [
@@ -1434792,16 +1434992,10 @@
           ]
         }
       ],
-      "the-pages-mayor-hobb-leaving-the-church": [
+      "the-pages-gluing-the-page-together": [
         {
-          "type": "line",
-          "speaker": "Mayor Hobb",
-          "text": "Welcome to the family, Brother Maledict.",
-          "presentation": "overhead",
-          "speaker_ids": [
-            4783,
-            4784
-          ]
+          "type": "unavailable",
+          "id": "dVh6X4"
         }
       ],
       "crafting-the-runes-shaping-a-rune": [
@@ -1434986,7 +1435180,8 @@
       ],
       "the-imposing-door-opening-the-door-without-the-commorb": [
         {
-          "player": "I'd better carry my CommOrb so that Savant can see what's in there."
+          "type": "call",
+          "branch": "phJbAE"
         }
       ],
       "the-imposing-door-opening-the-door-with-the-runes-and-commorb": [
@@ -1436216,7 +1436411,373 @@
           "type": "end"
         }
       ],
-      "jump-8057f01f9684b91d": [
+      "jump-cff51d9fa6a70db2": [
+        {
+          "player": "Are you alright? You seem a little, hazy."
+        },
+        {
+          "type": "line",
+          "speaker": "Mayor Hobb",
+          "text": "It's nothing, I'm just a little tired at the moment. So much work, so much to do.",
+          "speaker_ids": [
+            4783,
+            4784
+          ]
+        },
+        {
+          "player": "Really, what are you working on?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mayor Hobb",
+          "text": "To the West, the shrine needs... work, yes work. Things must be made better.",
+          "speaker_ids": [
+            4783,
+            4784
+          ]
+        },
+        {
+          "player": "Well, um. Yes. Indeed. I'm sure Saradomin would be pleased."
+        },
+        {
+          "type": "line",
+          "speaker": "Mayor Hobb",
+          "text": "Saradomin... Why are you really here?",
+          "speaker_ids": [
+            4783,
+            4784
+          ]
+        },
+        {
+          "player": "Like I said, I'm here to..."
+        },
+        {
+          "type": "line",
+          "speaker": "Mayor Hobb",
+          "text": "Are you sure that's the only reason you are here, [player name]?",
+          "speaker_ids": [
+            4783,
+            4784
+          ]
+        },
+        {
+          "player": "Well, I'm also here to visit a friend, Jake O'Niall."
+        },
+        {
+          "type": "line",
+          "speaker": "Mayor Hobb",
+          "text": "Ahh, then this all makes sense. Yes, this is very good.",
+          "speaker_ids": [
+            4783,
+            4784
+          ]
+        },
+        {
+          "player": "Err, how did you know my name?"
+        },
+        {
+          "type": "line",
+          "speaker": "Mayor Hobb",
+          "text": "You told me when you came in.",
+          "speaker_ids": [
+            4783,
+            4784
+          ]
+        },
+        {
+          "player": "No, no I didn't."
+        },
+        {
+          "type": "line",
+          "speaker": "Mayor Hobb",
+          "text": "It does not matter. One of my... villagers, must have mentioned that you are here.",
+          "speaker_ids": [
+            4783,
+            4784
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Mayor Hobb",
+          "text": "Is there anything else you need to know?",
+          "speaker_ids": [
+            4783,
+            4784
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "What can you tell me about Witchaven?",
+              "steps": [
+                {
+                  "player": "What can you tell me about Witchaven?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "The land has seen much sorrow, much loss.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "player": "Are you talking about the Fishing Platform?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Fishing Platform? Oh yes, that. No.  The platform will do much for this place.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "The platform heralds a new beginning for Witchaven, undreamed of by those who built it.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "player": "I thought it took away all the trade?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "This is true, but it has brought us so much more in return, so much more.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "player": "Hmm, and I thought the village hated the Fishing Platform."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "It was... a necessary step.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Is there anything else you need to know?",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "kY2QHS"
+                }
+              ]
+            },
+            {
+              "text": "What improvements are you making to the shrine?",
+              "steps": [
+                {
+                  "player": "What improvements are you making to the shrine?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Ahh, the shrine - the future, our destiny, our heritage.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "player": "How so?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "That which the shrine holds can unlock a new path for all the village of Witchaven. And in time the whole of Gielinor.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "player": "Wow, the whole of Gielinor? I thought it was just some old shrine to Saradomin."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "The history of that shrine should not be overlooked.  It is ancient beyond your knowledge and much that shaped our history is contained within its walls.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "player": "Sounds like a very interesting place. I may have to take a look."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "There is much to be done before it is opened.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "player": "So it's not completed yet?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "When you are ready, it may be that you will be unable to keep yourself away.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "player": "You know, you really are a strange person."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Is there anything else you need to know?",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "xdGlvO"
+                }
+              ]
+            },
+            {
+              "text": "Do you know you look very ill?",
+              "steps": [
+                {
+                  "player": "Do you know you look very ill?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Ill? No, merely tired.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "player": "But you've turned a slightly sickly colour."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "A touch of food poisoning perhaps.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "This has been known to turn the face and give the impression of severe illness.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "player": "I've seen food poisoning. People normally don't look like... that."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Time is all that is needed. Yes, time to... get better.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "player": "Well, I hope you get better soon."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Soon, all will be well again. Have no fear.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Is there anything else you need to know?",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "type": "jump",
+                  "reference": "initial",
+                  "id": "oEBKna"
+                }
+              ]
+            },
+            {
+              "text": "Nothing at the moment thanks.",
+              "steps": [
+                {
+                  "player": "Nothing at the moment thanks."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Mayor Hobb",
+                  "text": "Then please feel free to stay in our village a while longer. Farewell.",
+                  "speaker_ids": [
+                    4783,
+                    4784
+                  ]
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "jump-8275da5b5320df7d": [
+        {
+          "type": "jump",
+          "id": "edfNmE",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "jump-cff51d9fa6a70db2"
+            }
+          ]
+        }
+      ],
+      "jump-27d5ca0b6bff1544": [
         {
           "player": "What can you tell me about Witchaven?"
         },
@@ -1436286,10 +1436847,10 @@
         {
           "type": "jump",
           "reference": "initial",
-          "id": "9pur0c"
+          "id": "kY2QHS"
         }
       ],
-      "jump-0064cde0e74422ef": [
+      "jump-aba350b8cec7359d": [
         {
           "player": "What improvements are you making to the shrine?"
         },
@@ -1436365,10 +1436926,10 @@
         {
           "type": "jump",
           "reference": "initial",
-          "id": "fvaRIK"
+          "id": "xdGlvO"
         }
       ],
-      "jump-7d1ec43dbc0516b4": [
+      "jump-fe92c3a884ccfbad": [
         {
           "player": "Do you know you look very ill?"
         },
@@ -1436438,10 +1436999,10 @@
         {
           "type": "jump",
           "reference": "initial",
-          "id": "LHdyHD"
+          "id": "oEBKna"
         }
       ],
-      "jump-c417b1e42097f645": [
+      "jump-eeadea4977d40dd9": [
         {
           "player": "Nothing at the moment thanks."
         },
@@ -1436658,18 +1437219,58 @@
           ]
         }
       ],
-      "UnfO4Z": [
+      "UYjsmo": [
         {
-          "player": "Nothing at the moment thanks."
+          "type": "line",
+          "speaker": "Witchaven villager",
+          "text": "Well, hello there..."
+        },
+        {
+          "player": "Hel..."
         },
         {
           "type": "line",
-          "speaker": "Mayor Hobb",
-          "text": "Then please feel free to stay in our village a while longer. Farewell.",
-          "speaker_ids": [
-            4783,
-            4784
-          ]
+          "speaker": "Witchaven villager",
+          "text": "Welcome to our little village."
+        },
+        {
+          "player": "Than..."
+        },
+        {
+          "type": "line",
+          "speaker": "Witchaven villager",
+          "text": "Pray, stay a while."
+        },
+        {
+          "player": "You know, that seems like less and less of a good idea."
+        }
+      ],
+      "qCJywt": [
+        {
+          "type": "line",
+          "speaker": "Witchaven villager",
+          "text": "Are you with us?"
+        },
+        {
+          "player": "What do you mean?"
+        },
+        {
+          "type": "line",
+          "speaker": "Witchaven villager",
+          "text": "No."
+        },
+        {
+          "player": "No what?"
+        },
+        {
+          "type": "line",
+          "speaker": "Witchaven villager",
+          "text": "You are not with us."
+        }
+      ],
+      "phJbAE": [
+        {
+          "player": "I'd better carry my CommOrb so that Savant can see what's in there."
         }
       ]
     }

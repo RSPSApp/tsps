@@ -46725,9 +46725,10 @@
       "page": "Transcript:The Slug Menace",
       "variants": [
         "witchaven-talking-to-col-o-niall",
+        "witchaven-talking-to-col-o-niall-again-before-getting-any-information",
         "witchaven-talking-to-col-o-niall-before-getting-all-the-information",
         "witchaven-talking-to-col-o-niall-after-talking-to-mayor-hobb",
-        "the-pages-talking-to-col-o-niall-after-learning-abotu-mother-mallum",
+        "the-pages-talking-to-col-o-niall-after-learning-about-mother-mallum",
         "the-pages-talking-to-col-o-niall-again",
         "the-pages-talking-to-col-o-niall-while-looking-for-the-final-page",
         "crafting-the-runes-talking-to-col-o-niall-after-losing-the-commorb"
@@ -46739,9 +46740,10 @@
       "page": "Transcript:The Slug Menace",
       "variants": [
         "witchaven-talking-to-col-o-niall",
+        "witchaven-talking-to-col-o-niall-again-before-getting-any-information",
         "witchaven-talking-to-col-o-niall-before-getting-all-the-information",
         "witchaven-talking-to-col-o-niall-after-talking-to-mayor-hobb",
-        "the-pages-talking-to-col-o-niall-after-learning-abotu-mother-mallum",
+        "the-pages-talking-to-col-o-niall-after-learning-about-mother-mallum",
         "the-pages-talking-to-col-o-niall-again",
         "the-pages-talking-to-col-o-niall-while-looking-for-the-final-page",
         "crafting-the-runes-talking-to-col-o-niall-after-losing-the-commorb"
@@ -46755,7 +46757,7 @@
         "witchaven-talking-to-mayor-hobb",
         "witchaven-talking-to-mayor-hobb-2",
         "witchaven-talking-to-mayor-hobb-again",
-        "the-pages-mayor-hobb-leaving-the-church",
+        "the-pages-during-the-cutscene-where-maledict-is-possessed",
         "the-imposing-door-opening-the-door-with-the-runes-and-commorb",
         "the-imposing-door-reentering-the-fight",
         "the-imposing-door-after-killing-the-slug-prince"
@@ -46769,7 +46771,7 @@
         "witchaven-talking-to-mayor-hobb",
         "witchaven-talking-to-mayor-hobb-2",
         "witchaven-talking-to-mayor-hobb-again",
-        "the-pages-mayor-hobb-leaving-the-church",
+        "the-pages-during-the-cutscene-where-maledict-is-possessed",
         "the-imposing-door-opening-the-door-with-the-runes-and-commorb",
         "the-imposing-door-reentering-the-fight",
         "the-imposing-door-after-killing-the-slug-prince"
@@ -48106,14 +48108,14 @@
       "page": "Transcript:The Slug Menace",
       "variants": [
         "starting-off-contact-with-commorb-v2",
+        "witchaven-contacting-savant-after-talking-to-col-o-niall",
+        "witchaven-scanning-mayor-hobb",
         "witchaven-savant-asking-to-scan-the-mayor",
-        "witchaven-scanning-the-mayor",
-        "witchaven-contacting-the-commorb-while-investigating-witchaven",
         "the-shrine-contacting-commorb-before-scanning-the-shrine",
         "the-shrine-scanning-the-commorb-near-the-door",
         "the-shrine-scanning-commorb-near-the-door",
-        "the-shrine-contacting-the-commorb-after-scanning-the-doors",
         "the-shrine-picking-up-the-dead-sea-slug",
+        "the-shrine-contacting-the-commorb-after-scanning-the-doors",
         "the-pages-talking-to-jorral",
         "the-pages-after-talking-to-jorral",
         "the-pages-contacting-the-commorb-after-learning-about-mother-mallum",
@@ -49420,6 +49422,7 @@
       "page": "Transcript:The Slug Menace",
       "variants": [
         "witchaven-talking-to-bailey-at-the-fishing-platform",
+        "the-pages-talking-to-bailey-before-learning-about-the-glue",
         "the-pages-talking-to-bailey-after-learning-about-the-glue"
       ]
     }

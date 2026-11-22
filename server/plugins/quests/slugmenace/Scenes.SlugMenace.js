@@ -4,7 +4,8 @@
  *
  * - Mayor Hobb leaves the church (ticks 2502-2525): walking by the church at native stage 7 fades
  *   out; three ticks later a copy of Witchaven (slug2_main goes to 8), Hobb (4785) appears at
- *   2720,3283 saying "Welcome to the family, Brother Maledict." overhead with jingle 228 after song
+ *   2720,3283 saying the Wiki's "Welcome to the family Brother Maledict" overhead (live adds a
+ *   comma and a full stop at tick 2507: a recorded difference) with jingle 228 after song
  *   147, the camera at 2711,3275 looking at 2719,3283 (rates 100), then drifting to 2711,3292 (rate
  *   4) as he walks to 2713,3289; a fade out at +12, the real map at +15 and the fade in at +21.
  * - The imposing door opens (ticks 4589-4657): the fifth rune fades out; three ticks later a copy
@@ -50,7 +51,7 @@ const CHURCH = {
   hobbFrom: [2720, 3283, 0],
   hobbPath: [[2717, 3283, 0], [2713, 3287, 0], [2713, 3289, 0]],
   jingle: 228, // slug mayor cutscene
-  variant: "the-pages-mayor-hobb-leaving-the-church",
+  variant: "the-pages-during-the-cutscene-where-maledict-is-possessed",
   // Ticks from the fade out (2502).
   open: 3, show: 5, fadeOut: 12, end: 15, fadeIn: 21,
 };

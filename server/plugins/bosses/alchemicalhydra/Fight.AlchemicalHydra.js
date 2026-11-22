@@ -724,20 +724,18 @@ function stun(player) {
   bind(player, Common.data.fire.stunTicks);
 }
 
-/** Holds the player in place for a few ticks; a later hold extends it. */
+/**
+ * Binds the player for a few ticks: the Wiki's lightning "will bind the player" and its fire stun
+ * leaves them free to attack, with "Teleports will still work". That is the engine's freeze
+ * timer, which runs out on its own tick count (issue 6432: the old movement block was released
+ * by a wall-clock check that a tick task nearly always failed, so it held until the next bind).
+ * A later bind extends one still running, never shortens it.
+ */
 function bind(player, ticks) {
-  const queue = player.getMovementQueue?.();
-  if (!queue) return;
-  const until = (player.__hydraBoundUntil ?? 0) > Date.now() ? player.__hydraBoundUntil : 0;
-  player.__hydraBoundUntil = Math.max(until, Date.now() + ticks * 600);
-  queue.reset?.();
-  queue.setBlockMovement?.(true);
-  Common.later(ticks, () => {
-    if ((player.__hydraBoundUntil ?? 0) > Date.now() + 1) return;
-    if (player.getHitpoints?.() <= 0 || player.isDyingFunction?.()) return;
-    player.__hydraBoundUntil = 0;
-    queue.setBlockMovement?.(false);
-  });
+  const timers = player.getTimers?.();
+  if (!timers) return;
+  timers.extendOrRegister(Common.core.TimerKey.FREEZE, ticks);
+  player.getMovementQueue?.()?.reset?.();
 }
 
 module.exports = { Fight, chebyshev, bind, stun, lifeOf, peakHitpointsSince, logHitpointsChange };

@@ -16,6 +16,7 @@ const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
 const { Player } = require('../dist/game/entity/impl/player/Player');
 const { NPCDeathTask } = require('../dist/game/task/impl/NPCDeathTask');
+const { TimerRepository } = require('../dist/util/timers/TimerRepository');
 const core = PluginManager.getCoreApi();
 
 let Common, Fight, Lair, Kills, tasks, onTaskAnswer;
@@ -88,7 +89,9 @@ function fakeSender(into) {
 function fakePlayer(x = 1363, y = 10260) {
   let tile = loc(x, y);
   const player = {
-    damage: [], poison: [], messages: [], sent: [], blocked: false,
+    damage: [], poison: [], messages: [], sent: [], timers: new TimerRepository(),
+    get bound() { return player.timers.left(core.TimerKey.FREEZE); },
+    getTimers: () => player.timers,
     getLocation: () => tile,
     moveTo: (to) => { tile = to; },
     isRegistered: () => true,
@@ -96,7 +99,7 @@ function fakePlayer(x = 1363, y = 10260) {
     sendMessage: (m) => player.messages.push(m),
     getPacketSender: () => fakeSender(player.sent),
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => player.damage.push(...hits.map((h) => h.getDamage())) }) }),
-    getMovementQueue: () => ({ reset: () => {}, setBlockMovement: (value) => { player.blocked = value; } }),
+    getMovementQueue: () => ({ reset: () => {} }),
   };
   return player;
 }
@@ -427,9 +430,41 @@ test('lightning: a ball on the centre, four currents a quadrant each 3 ticks lat
   assert.ok(player.damage.length >= 1, 'a current reached the player');
   assert.ok(player.damage.every((d) => d <= Common.data.lightning.max));
   assert.equal(player.messages[0], '<col=ff0000>The electricity temporarily paralyzes you!</col>');
-  assert.equal(player.blocked, true);
+  assert.ok(player.bound > 0, 'bound');
   tasks = [];
   fight.stop();
+});
+
+test('issue 6432: a bind runs out on its own tick count, a later one extends it and never shortens it', () => {
+  const { bind, stun } = require('../plugins/bosses/alchemicalhydra/Fight.AlchemicalHydra');
+  const player = fakePlayer();
+  tasks = [];
+  bind(player, Common.data.lightning.bindTicks);
+  assert.equal(tasks.length, 0, 'no release task to go stale');
+  assert.equal(player.bound, 3);
+  for (let i = 0; i < 2; i++) player.timers.process();
+  assert.equal(player.timers.has(core.TimerKey.FREEZE), true, 'still held after 2 ticks');
+  player.timers.process();
+  assert.equal(player.timers.has(core.TimerKey.FREEZE), false, 'free after 3 ticks, with no further hit');
+  stun(player);
+  assert.equal(player.bound, Common.data.fire.stunTicks);
+  bind(player, Common.data.lightning.bindTicks);
+  assert.equal(player.bound, Common.data.fire.stunTicks, 'a shorter bind does not cut the stun short');
+  for (let i = 0; i < Common.data.fire.stunTicks; i++) player.timers.process();
+  assert.equal(player.timers.has(core.TimerKey.FREEZE), false);
+});
+
+test('issue 6432: a bound player is held in place but may still teleport (Wiki: "Teleports will still work")', () => {
+  const { bind } = require('../plugins/bosses/alchemicalhydra/Fight.AlchemicalHydra');
+  const player = new Player(null, loc(1363, 10260));
+  const sender = new Proxy({}, { get: () => () => sender });
+  player.getPacketSender = () => sender;
+  bind(player, Common.data.lightning.bindTicks);
+  const queue = player.getMovementQueue();
+  assert.equal(queue.getMobility().canMove(), false, 'held in place');
+  assert.equal(queue.isMovementBlocked(), false, 'not the teleport/interaction block');
+  for (let i = 0; i < Common.data.lightning.bindTicks; i++) player.getTimers().process();
+  assert.equal(queue.getMobility().canMove(), true);
 });
 
 test('a current lives 12 ticks', () => {
@@ -461,7 +496,7 @@ test('fire: the walk to the centre, solid, the stun, a wall to each side of the 
   const step = () => { fight.tickCount += 1; fight.tickFire([player]); flush(); };
   step();
   assert.equal(player.messages.at(-1), 'The Alchemical Hydra temporarily stuns you.');
-  assert.equal(player.blocked, true);
+  assert.equal(player.bound, Common.data.fire.stunTicks);
   while (fight.tickCount < at + 3) step();
   // North first (clockwise from the north-west), a wall 4 wide (x 1365-1368) out to y 10278.
   let flames = fight.flames.map((f) => `${f.getX()},${f.getY()}`);

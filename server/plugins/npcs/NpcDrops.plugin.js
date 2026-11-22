@@ -462,12 +462,36 @@ function correctAmoxliatl(table) {
   }
 }
 
-/** Two rolls per kill; the first can hit the unique pre-roll, the second is always on the standard table (Wiki, Drops). */
+/** Hydra's eye, fang and heart: the brimstone ring's pieces. */
+const HYDRA_RING_PIECES = new Set([22973, 22971, 22969]);
+
+/**
+ * Two rolls per kill; the first can hit the unique pre-roll, the second is always on the standard
+ * table (Wiki, Drops). The Wiki's note on the uniques: "a brimstone ring piece rate follows the
+ * formula 1/(180 / ...) = 1/181.07", tried after the other uniques, and "The order in which players
+ * receive the items is: Hydra's eye, Hydra's fang and finally Hydra's heart." The export lists each
+ * piece as its own 1/181 pre-roll, which makes any piece 3/181; they are one 1/181 roll, and the
+ * Hydra's plugin hands over the piece next in that order ("npc-drops:roll").
+ */
 function correctAlchemicalHydra(table) {
   if (!table) return;
   table.rolls = 2;
+  const pieces = [];
   for (const entry of table.entries || []) {
-    if (entry.pre_roll) entry.once_per_kill = true;
+    if (!entry.pre_roll) continue;
+    entry.once_per_kill = true;
+    if (HYDRA_RING_PIECES.has(entry.item_id)) pieces.push(entry);
+  }
+  const { weight, out_of: outOf } = pieces[0] ?? {};
+  if (pieces.length !== HYDRA_RING_PIECES.size || !pieces.every((entry) => entry.weight === weight && entry.out_of === outOf)) return;
+  for (const entry of pieces) {
+    Object.assign(entry, {
+      roll_group: "alchemical_hydra_ring_piece",
+      group_access_weight: weight,
+      group_access_out_of: outOf,
+      weight: 1,
+      out_of: pieces.length,
+    });
   }
 }
 

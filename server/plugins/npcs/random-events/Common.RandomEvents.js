@@ -40,7 +40,7 @@ const MAX_DISTANCE = 15;
 // to the owner on its next 10-tick beat, with no graphic or sound, and it never leaves for being far.
 // Over ~320 recordings, beats with the NPC exactly 5 tiles away never jumped and every beat at 6 or more
 // did, so it jumps when more than 5 tiles away. An owner that teleports or changes plane has it re-placed
-// on the next tick instead of the next beat (241/911521 lines 11701-11796, 242/911712 line 230053).
+// the tick after arrival instead of on the next beat (241/911521 lines 11701-11796, 242/911712 line 230053).
 const CATCH_UP_DISTANCE = 6;
 const DEFINITIONS_EVENT = "random-events:definitions";
 const Locations = require("./Locations.RandomEvents");
@@ -334,7 +334,9 @@ function catchUp(active, now) {
   const { npc, player, definition } = active;
   if (definition.stationary) return;
   const serial = player.getTeleportSerial?.();
-  const teleported = serial !== active.ownerSerial;
+  // The teleport finishes before this runs, on the owner's arrival tick; live re-adds the NPC the tick after.
+  const teleported = active.teleportPending === true;
+  active.teleportPending = serial !== active.ownerSerial;
   active.ownerSerial = serial;
   const beat = now >= active.nextCatchUpAt;
   while (active.nextCatchUpAt <= now) active.nextCatchUpAt += NAG_INTERVAL_MS;

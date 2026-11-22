@@ -801,10 +801,12 @@ test('after a jump the follow is restored, and cleared follows are set again onc
   assert.equal(npc.following, p, 'a follow cleared on a later tick is set again'); assert.equal(npc.moves, 1);
 });
 
-test('an owner who teleports has the follower re-placed on the next tick, not the next beat', t => {
+test('an owner who teleports has the follower re-placed the tick after arrival, not on the next beat', t => {
   const h = harness(t), p = h.player(), npc = h.spawn(p);
   h.advance(600); h.emit('PlayerProcess', { player: p });
   p.location = new Location(2900, 3500, 0); p.teleportSerial = 1;
+  h.advance(600); h.emit('PlayerProcess', { player: p });
+  assert.equal(npc.moves, undefined, 'not on the arrival tick');
   h.advance(600); h.emit('PlayerProcess', { player: p });
   assert.equal(npc.moves, 1); assert.equal(npc.location.getDistance(p.location), 1);
   p.location = new Location(2900, 3560, 0);

@@ -316,6 +316,9 @@ module.exports = function registerMurderMysteryQuest(api) {
     const value = String(text).toLowerCase();
     if (value.includes("criminal's thread is red")) return murderer(player).thread === ITEM.CRIMINALS_THREAD;
     if (value.includes("thread isn't red")) return murderer(player).thread !== ITEM.CRIMINALS_THREAD;
+    // Frank's and Elizabeth's thread talks ask about blue (1810) the same way (Transcript:Murder Mystery).
+    if (value.includes("criminal's thread is blue")) return murderer(player).thread === ITEM.CRIMINALS_THREAD_3;
+    if (value.includes("thread isn't blue")) return murderer(player).thread !== ITEM.CRIMINALS_THREAD_3;
     if (value.includes("full inventory")) return player.getInventory().isFull?.() === true;
     // The guard's evidence menu: each option is only shown when that clue is held.
     if (value.startsWith("if the player has the thread evidence")) {

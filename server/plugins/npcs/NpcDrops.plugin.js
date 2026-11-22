@@ -1378,7 +1378,7 @@ module.exports = {
       }
       // A plugin's own table rolled for a boss (the Grotesque Guardians' Dusk) is that boss's
       // loot too, so it takes the boss rare multiplier like the NPC's dumped table.
-      if (table && !table.boss && isBoss(npcId)) table = { ...table, boss: true };
+      if (table && !table.boss && (request.boss === true || isBoss(npcId))) table = { ...table, boss: true };
       if (!table) return;
       const npc = request.npc ?? null;
       const source = request.source ?? sourceName(npc, npcId);

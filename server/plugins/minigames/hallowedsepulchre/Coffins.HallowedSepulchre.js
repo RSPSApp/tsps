@@ -135,16 +135,24 @@ function open(event) {
       give(player, boostMarks(player, drops));
       if (which) Common.varbit(player, which, 1);
       if (grand) Common.varbit(player, "hallowed_final_chest_looted", 1);
-      const count = (player.getAttribute(Common.data.attributes.chests) ?? 0) + 1;
-      player.setAttribute(Common.data.attributes.chests, count);
-      Common.varbit(player, "hallowed_normal_chest_count", count);
+      const attribute = grand ? Common.data.attributes.grandChests : Common.data.attributes.chests;
+      const count = (player.getAttribute(attribute) ?? 0) + 1;
+      player.setAttribute(attribute, count);
+      Common.varbit(player, grand ? "hallowed_final_chest_count" : "hallowed_normal_chest_count", count);
     });
   });
   return true;
 }
 
-function attachCoffins(api) {
-  api.onObjectClick([...Object.keys(Common.data.coffins).map(Number), Common.data.finalChest], 1, open);
+/** The collection log's Hallowed Sepulchre page counts grand coffins opened (cache script 2735). */
+function collectionLogCount(request) {
+  if (!request?.player || request.category !== "Hallowed Sepulchre" || request.count != null) return;
+  request.count = Math.max(0, Number(request.player.getAttribute(Common.data.attributes.grandChests)) || 0);
 }
 
-module.exports = { attachCoffins, coffinLoot, grandLoot, successChance, give };
+function attachCoffins(api) {
+  api.onObjectClick([...Object.keys(Common.data.coffins).map(Number), Common.data.finalChest], 1, open);
+  api.onCustomEvent("collection-log:category-count", collectionLogCount);
+}
+
+module.exports = { attachCoffins, coffinLoot, grandLoot, successChance, give, collectionLogCount };

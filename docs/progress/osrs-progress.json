@@ -32940,7 +32940,7 @@
           "tasks": [
             "done",
             "in-progress",
-            "todo",
+            "done",
             "in-progress"
           ],
           "plugin": {
@@ -32954,12 +32954,16 @@
             "server/plugins/bosses/maggotking/Common.MaggotKing.js",
             "server/plugins/bosses/maggotking/Entrance.MaggotKing.js",
             "server/plugins/bosses/maggotking/Instance.MaggotKing.js",
-            "server/plugins/bosses/maggotking/data/maggot-king.json"
+            "server/plugins/bosses/maggotking/Rewards.MaggotKing.js",
+            "server/plugins/bosses/maggotking/data/maggot-king.json",
+            "server/tests/maggot-king.test.cjs",
+            "docs/maggot-king.md"
           ],
           "devNotes": [
             "It is a level 741 boss with 1,500 hitpoints using all three combat styles, and drops the Maggot marquess, Crimson kisten and Elder venator fang. Read its mechanics and arena from the wiki.",
             "Main 3b61a15a8 (6 November 2026): #2326 Bosses: add access and encounter setup. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026): The quest-gated darkwood entrance now leads into a solo lair that spawns the boss, respawns it after a kill and tears down abandoned sessions. Full combat phases, unique drops and achievement tracking still need implementation."
+            "Main 3e9ee2d67 (11 November 2026): The quest-gated darkwood entrance now leads into a solo lair that spawns the boss, respawns it after a kill and tears down abandoned sessions. Full combat phases, unique drops and achievement tracking still need implementation.",
+            "2026-11-21, feat/maggot-king-corpse-rewards: the kill now leaves the Maggot King Corpse (15741) and the boss waits for it. Open-stomach rolls the generated maggot_king_2 table; Take-eggs rolls maggot_king. Both use the shared npc-drops roller, so the boss rare multiplier, pets, clue capacity, ironman rules and the collection log apply; harvested loot enters the pack and overflow lands on the corpse's tile for three hours. The boss respawns nine ticks after the corpse is used, and leaving/logout/death/shutdown remove a waiting corpse. Verified by server/tests/maggot-king.test.cjs and docs/maggot-king.md. The take-eggs no-loot/supply split and the generated table's assumed rarities are not re-derived here; a natural kill/loot capture is still absent."
           ],
           "taskDetails": [
             {
@@ -46931,7 +46935,8 @@
             "Main 0a219d100 (2026-11-03): #1919 adds bank and selected-item values, GE/HA modes, tag-filtered totals and value searches through the client Bank plugin; prices are optional client information, not new bank transaction rules.",
             "Main 8403b60db (4 November 2026): #2113, #2126, #2170, #2175 — Bank/gateway follow-ups preserve item metadata, placeholders survive charge-state changes, charged/empty tomes share the right placeholder and optional worn actions keep equipment in place.",
             "Main 3b61a15a8 (6 November 2026): #2249 fix: confirm and remove bank incinerator stacks; #2332 fix: reject stale bank inventory drags; #2333 fix(leagues): Leagues VI bugs from #2324; #2522 Refuse preset items in charging, storage and Grand Exchange sales; #2614 Match OSRS beginner combat damage and default new accounts to Punch. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #2731 Per-server character slots: one login, several characters, a picker after login."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #2731 Per-server character slots: one login, several characters, a picker after login.",
+            "2026-11-21: The bank's tutorial button (bankmain:bank_tut) runs the 16-step screen highlight walkthrough of the bank as rsprox recording 3937 (rev 236) shows it: the bank opens again in swap mode with the inventory side unclickable, each Continue moves the box and text, Finish puts the player's own swap/insert mode back and opens the bank again. server/plugins/interface/BankTutorial.plugin.js, server/plugins/interface/data/bank-tutorial.json, server/tests/bank-tutorial.test.cjs (6 real-object checks). The box positions are rev 236's; closing the bank, logging out or a server shutdown mid-walkthrough restores the mode too (ours)."
           ],
           "taskDetails": [
             {
@@ -48894,7 +48899,8 @@
             "Main 8403b60db (4 November 2026): #1990, #2077 — Lost Property unlocks and Theatre vault loot/category counts reach the collection log. Other unconnected reward sources and counters remain partial.",
             "Main 3b61a15a8 (6 November 2026): #2472 Record successful activity rewards in the collection log; #2478 Credit supported Morytania Diary gameplay tasks; #2490 Credit supported Kourend and Kebos Diary gameplay tasks; #2516 Show native CoX and ToA collection-log mode counts; #2576 Make the custom Character Summary explicitly opt in; #2639 Add the Rogue Trader miniquest. (13 merged PRs touch the recorded implementation; highlights shown.) Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4092 Collection log: count a shared item in one tab only.",
-            "2026-11-17, feat/collection-log-counters: category counts now come from the content's own record. Every boss page with a Combat Achievement monster shows that count; a shared page fills each line in cache script 2735's order (Dagannoth Supreme/Prime/Rex, Corrupted/normal Gauntlet, Nightmare/Phosani's Nightmare), and the Wilderness pairs show the singles boss's own count first and the main boss's Combat Achievement count second. data/monsters.json's collectionLog names handle Barrows Chests, The Fight Caves and The Inferno; the raid pages stay with their own plugins, and Last Man Standing shows games played, wins and kills. Castle Wars has no count line in the cache and Soul Wars' only line is spoils of war, so neither is answered. Verified by server/tests/collection-log-category-counts.test.cjs and docs/collection-log.md. Remaining: the other minigames' opened/completed counters and the per-item collection_item_* varbits."
+            "2026-11-17, feat/collection-log-counters: category counts now come from the content's own record. Every boss page with a Combat Achievement monster shows that count; a shared page fills each line in cache script 2735's order (Dagannoth Supreme/Prime/Rex, Corrupted/normal Gauntlet, Nightmare/Phosani's Nightmare), and the Wilderness pairs show the singles boss's own count first and the main boss's Combat Achievement count second. data/monsters.json's collectionLog names handle Barrows Chests, The Fight Caves and The Inferno; the raid pages stay with their own plugins, and Last Man Standing shows games played, wins and kills. Castle Wars has no count line in the cache and Soul Wars' only line is spoils of war, so neither is answered. Verified by server/tests/collection-log-category-counts.test.cjs and docs/collection-log.md. Remaining: the other minigames' opened/completed counters and the per-item collection_item_* varbits.",
+            "2026-11-21, fix/collection-log-counters: the skilling and minigame pages now answer from the content's own saved counters: Wintertodt (kills, rewards claimed), Tempoross (kills, reward permits actually claimed), Barbarian Assault (high-level gambles), Gnome Restaurant (hard and easy deliveries), Hallowed Sepulchre (Grand Hallowed Coffins opened), Mastering Mixology (orders fulfilled) and Soul Wars (Spoils of War opened). Grand Hallowed Coffins now keep their own persisted count and the hallowed_final_chest_count varbit, separate from normal coffins. Wintertodt and Tempoross replace the Combat Achievements fallback on their own pages; Tempoross tracks permits actually spent at the pool and adopts the old log tally (clog.counts[2867]) when the new attribute is absent; Gnome Restaurant sends the page's own hard/easy delivery varbits (11961/11960) through collection-log:category-shown. Verified by server/tests/collection-log-category-counts.test.cjs and docs/collection-log.md; in-game, opening a Spoils of War persisted soul-wars:spoils-opened=1 and the Soul Wars collection-log page read varp 2048=1. The per-item collection_item_* varbits remain."
           ],
           "taskDetails": [
             {

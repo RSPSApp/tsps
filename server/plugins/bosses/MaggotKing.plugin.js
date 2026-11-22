@@ -5,6 +5,7 @@ const Recovery = require("./maggotking/Recovery.MaggotKing");
 const Fight = require("./maggotking/Fight.MaggotKing");
 const Eggs = require("./maggotking/Eggs.MaggotKing");
 const Resupply = require("./maggotking/Resupply.MaggotKing");
+const Rewards = require("./maggotking/Rewards.MaggotKing");
 
 /** The solo Maggot King lair, entered through Vampyrium's darkwood trees after The Blood Moon Rises. */
 module.exports = {
@@ -17,5 +18,6 @@ module.exports = {
     Fight.attach(api);
     Eggs.attach(api);
     Resupply.attach(api);
+    Rewards.attach(api);
   },
 };

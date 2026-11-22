@@ -11,9 +11,11 @@
  *   api.emitCustomEvent("collection-log:obtain", { player, itemId, amount?, category?, ensure?, silent? })
  *   api.emitCustomEvent("collection-log:count", { player, category: "Zulrah", amount? })
  *   answer "collection-log:category-count" { player, category, struct, count, extraCounts? } with kept counts
+ *   hear "collection-log:category-shown" { player, category, struct } when a page is drawn, for its own varbits
  *   ask "collection-log:slots" { player, category? } -> count: the category's slots filled (all, with none)
  *   ask "collection-log:obtained" { player, itemId } -> count: how many of a logged item the player has obtained
  *   ask "collection-log:kill-count" { player, category } -> count: a category's kill count (0 for none)
+ *   ask "collection-log:stored-count" { player, category } -> count: the log's own fallback tally (migration)
  *   hear "collection-log:slot-filled" { player, itemId }: any slot filled, silent and ensured ones too
  *   hear "collection-log:new-item" { player, itemId }: an item newly earned and announced, from any source
  *   api.emitCustomEvent("collection-log:open", { player, category? })  open it, at a category by name
@@ -108,6 +110,13 @@ function onCount(request) {
   for (const category of categoriesNamed(request.category)) Progress.addCategoryCount(request.player, category, Number(request.amount ?? 1));
 }
 
+/** "collection-log:stored-count" { player, category }: the log's own fallback tally, for migrations. */
+function storedCountQuery(request) {
+  if (!request?.player) return;
+  const category = categoriesNamed(request.category)[0];
+  if (category) request.count = Progress.storedCategoryCount(request.player, category);
+}
+
 /** "collection-log:kill-count" { player, category }: the category's count, as the log shows it. */
 function killCountQuery(request) {
   if (!request?.player) return;
@@ -171,6 +180,7 @@ module.exports = {
     api.onCustomEvent("collection-log:is-item", isLoggedItem);
     api.onCustomEvent("collection-log:count", onCount);
     api.onCustomEvent("collection-log:kill-count", killCountQuery);
+    api.onCustomEvent("collection-log:stored-count", storedCountQuery);
     api.onCustomEvent("shop:purchase", onPurchase);
     api.registerCommand("clog", clogCommand, api.core.PlayerRights.ADMINISTRATOR, "Collection log: ::clog <item> [amount] | count <category> <n> | reset");
   },

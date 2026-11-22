@@ -50,6 +50,7 @@ function takeOne(player) {
     Shared.api()?.emitCustomEvent("npc-drops:roll", event);
     if (event.drops.length === 0) {
       Round.setRewardsOwed(player, Round.rewardsOwed(player) - 1);
+      Round.claimReward(player);
       return true;
     }
   }
@@ -60,6 +61,7 @@ function takeOne(player) {
   // As recorded (233/03264 [503]): the reward pool varbit, the loot line, then the inventory update. RuneLite's loot
   // tracker snapshots the inventory on the line and records what the next update adds.
   Round.setRewardsOwed(player, Round.rewardsOwed(player) - 1);
+  Round.claimReward(player);
   Shared.spam(player, `You found some loot: ${lootText(reward)}`);
   player.getInventory().adds(reward.id, reward.amount);
   player.getInventory().refreshItems();

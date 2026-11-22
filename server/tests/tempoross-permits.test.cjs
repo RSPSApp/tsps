@@ -46,3 +46,28 @@ test("permits are asked as minigame:points: unanswered they are as earned, an an
   assert.equal(Records.permits(player), 8);
   assert.equal(Records.totalPermits(player), 8);
 });
+
+test("permits claimed counts only permits actually spent at the pool", () => {
+  const player = new Player(new BotPlayerSession());
+  player.setUsername("tempoross-claimed");
+  Records.addPermits(player, 5);
+  assert.equal(Records.permitsClaimed(player), 0);
+  // The reward-pool path: one reward fits, so one permit leaves the pool and is claimed.
+  Records.setPermits(player, Records.permits(player) - 1);
+  Records.addPermitClaimed(player);
+  assert.equal(Records.permits(player), 4, "four permits stay unclaimed");
+  assert.equal(Records.totalPermits(player), 5, "earning still remembers all five");
+  assert.equal(Records.permitsClaimed(player), 1, "the collection log counts the redeemed permit");
+});
+
+test("an old collection-log tally is carried forward into permits claimed", () => {
+  const player = new Player(new BotPlayerSession());
+  player.setUsername("tempoross-legacy");
+  // Pre-upgrade save: only the log's own Tempoross tally (struct 2867) recorded pool claims.
+  player.setAttribute("clog.counts", { "2867": 4 });
+  assert.equal(player.getAttribute("tempoross:permits-claimed"), undefined);
+  assert.equal(Records.permitsClaimed(player), 4);
+  assert.equal(player.getAttribute("tempoross:permits-claimed"), 4, "the adopted total is saved");
+  Records.addPermitClaimed(player);
+  assert.equal(Records.permitsClaimed(player), 5, "the next claim continues from the old total");
+});

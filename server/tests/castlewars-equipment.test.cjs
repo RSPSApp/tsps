@@ -411,7 +411,7 @@ test('native Castle Wars supplies work with production plugin ordering and the c
   }
   // Registration alone leaves these native event consumers without their startup context.
   for (const hook of PluginManager.serverStartupHooks) {
-    if (['Hunter', 'WarpedSceptre', 'CastleWars'].includes(hook.pluginName)) hook.handler({});
+    if (['Hunter', 'WarpedSceptre', 'CastleWars', 'RingOfElements'].includes(hook.pluginName)) hook.handler({});
   }
   // GameBuilder loads these definitions after registering plugins.
   new (require('../dist/game/definition/loader/impl/NpcInteractionDefinitionLoader').NpcInteractionDefinitionLoader)().load();

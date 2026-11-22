@@ -320,7 +320,7 @@ for (const name of ['Energy Transfer', 'Vengeance Other', 'Vengeance', 'Spellboo
       target.setSpecialPercentage(0);
       target.setRunEnergy(0);
       t.mock.method(core.World, 'getPlayers', () => ({ get: index => index === 1 ? target : p,
-        forEach: fn => [p, target].forEach(fn) }));
+        forEach: fn => [p, target].forEach(fn), *[Symbol.iterator]() { yield p; yield target; } }));
       const connection = new ClientConnection(channel);
       connection.player = p;
       const experience = p.getSkillManager().getExperience(core.Skill.MAGIC);
@@ -351,6 +351,7 @@ for (const name of ['Energy Transfer', 'Vengeance Other', 'Vengeance', 'Spellboo
       }
       if (mode === 'pouch' || mode === 'outside') assert.equal(p.getInventory().getAmount(data.RUNE_POUCH), 1);
       if (mode === 'pouch') assert.equal(p.getSkillManager().getExperience(core.Skill.MAGIC), experience);
+      if (mode === 'paid') assert.ok(p.getSkillManager().getExperience(core.Skill.MAGIC) > experience, 'paid casts award Magic XP');
     });
   }
 }

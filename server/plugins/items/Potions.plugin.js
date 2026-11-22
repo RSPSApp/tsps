@@ -2348,6 +2348,7 @@ function sharePotion(request) {
   // Only the other players' doses come out of the potion, so the spell needs one of them (Wiki).
   const eligible = targets.filter((target) => acceptsPotionShare(player, target) && drinkRefusal(target, entry) === null);
   if (eligible.length === 0) {
+    request.noRecipients = true;
     request.message = "There is nobody nearby to share your potion with.";
     return;
   }

@@ -784,9 +784,11 @@ export class LunarSpells {
         const targets: Player[] = [];
         // Potions applies its own Accept Aid rule to all nearby candidates.
         this.forNearbyPlayers(player, 2, target => targets.push(target), true);
-        const share = { player, slot, kind, targets, valid: false, message: null as string | null, apply: null as null | (() => void) };
+        const share = { player, slot, kind, targets, valid: false, noRecipients: false,
+            message: null as string | null, apply: null as null | (() => void) };
         PluginManager.emitCustomEvent("potions:share", share);
         if (!share.valid || !share.apply) {
+            if (share.noRecipients && spell.refuseIfDisabled(player)) return true;
             player.sendMessage(share.message ?? "You can't share that potion.");
             return true;
         }

@@ -22025,7 +22025,7 @@
             "Main 8403b60db (4 November 2026): #1985, #2058, #2062, #2068 — Practice barricade priority, death supplies and large-door resync are repaired; custom freeze/barricade-priority controls were removed in favor of the existing gameplay flow.",
             "Main 3b61a15a8 (6 November 2026): #2329 feat: open the native Castle Wars ticket exchange; #2342 Complete Castle Wars rewards and combat XP toggle; #2359 Fix Castle Wars flag drops on cleared tunnel rocks; #2379 Fix Castle Wars practice bot patrols and flag runs; #2388 fix: match the four-tick player death window. Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3835 World config: plugins declare their own options (v0.1). #3755 Castle Wars: Lanthus' practice settings apply only to practice matches. #3713 Castle Wars: no bones in the lobby when the game ends mid-death. 6 merged PRs changed recorded implementation files for this entry.",
-            "2026-11-22, PR #6522: Boost Potion Share is refused during a Castle Wars match, as documented at https://oldschool.runescape.wiki/w/Boost_Potion_Share. Inventory-target packet tests cover opposing teams with Accept Aid on and off (server/tests/lunar-potion-share.test.cjs)."
+            "2026-11-22, PR #6522: Boost Potion Share is refused during a Castle Wars match, as documented at https://oldschool.runescape.wiki/w/Boost_Potion_Share. Inventory-target packet tests cover opposing teams with Accept Aid on and off and the same refusal for a caster with no recipient nearby (server/tests/lunar-potion-share.test.cjs)."
           ],
           "taskDetails": [
             {

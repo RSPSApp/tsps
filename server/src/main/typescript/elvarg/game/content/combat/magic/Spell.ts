@@ -191,6 +191,14 @@ export abstract class Spell {
         return missing;
     }
 
+    /** World and area restrictions can supply their own refusal. */
+    public refuseIfDisabled(player: Player): boolean {
+        if (PluginManager.emitSpellDisabled(player, this.getSpellbook(), this.spellId(), this) !== true) return false;
+        player.getCombat().setCastSpell(null);
+        player.getCombat().reset();
+        return true;
+    }
+
     canCast(player: Player, del: boolean): boolean {
         if (player.getSkillManager().getCurrentLevel(Skill.MAGIC) < this.levelRequired()) {
             player.sendMessage(`You need a Magic level of ${this.levelRequired()} to cast this spell.`);
@@ -198,18 +206,7 @@ export abstract class Spell {
             return false;
         }
 
-        if (
-            PluginManager.emitSpellDisabled(
-                player,
-                this.getSpellbook(),
-                this.spellId(),
-                this
-            ) === true
-        ) {
-            player.getCombat().setCastSpell(null);
-            player.getCombat().reset();
-            return false;
-        }
+        if (this.refuseIfDisabled(player)) return false;
 
         if (player.getSpellbook() !== this.getSpellbook()) {
             const { Autocasting } = require("./Autocasting");

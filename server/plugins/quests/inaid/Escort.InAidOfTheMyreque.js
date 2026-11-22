@@ -154,7 +154,9 @@ module.exports = function attachEscort(context) {
   const FOLLOWER_VARP = 447; // follower_npc = (4441 << 16) | index (t3483), -1 when it ends
   const MIST_FADE_TICKS = 9; // mist_disappear 1262 nine ticks after it appears (t3577 -> 3586), gone a tick later
   const MIST_FADE = 1262;
-  const IVAN_ENGAGE_TICKS = 20; // the first unprovoked attack on Ivan, t3483 -> t3503
+  // A wandering juvinate went for Ivan once 3 tiles from him (second attempt: turned to him at
+  // t3890 from (2857,4556), Ivan at (2860,4555), struck as it reached him, t3892-3893).
+  const IVAN_ENGAGE_RANGE = 3;
   const SOUTH = 6; // Direction id
 
   const LIBRARY = Object.freeze({ tile: [3360, 9904, 0], climbAnimation: 827 }); // t4286-4287
@@ -384,8 +386,8 @@ module.exports = function attachEscort(context) {
       player.getPacketSender().sendConfig(FOLLOWER_VARP, (NPC.IVAN_AMBUSH << 16) | ambush.ivan.getIndex());
     }
     for (let i = 0; i < route.count; i++) {
-      // Wiki: the player takes on "the juvinate directly in front of you"; the others wander.
-      const juvinate = Scenes.actor(scene, route.juvinate, AMBUSH.juvinates, null, { direction: SOUTH, wanderRadius: i === 0 ? 0 : 6 });
+      // All of them wander (both live attempts: the first spawn moved, t3842).
+      const juvinate = Scenes.actor(scene, route.juvinate, AMBUSH.juvinates, null, { direction: SOUTH, wanderRadius: 6 });
       if (!juvinate) continue;
       juvinate.setMultiCombat?.(true);
       actorAmbush.set(juvinate, ambush);
@@ -396,21 +398,25 @@ module.exports = function attachEscort(context) {
     Scenes.later(scene, 1, () => {
       common.play(player, route.juvinate, V.TALK_IVAN, (steps) => steps.slice(-1), PAGE);
     });
+    // No juvinate starts on the player: live's player struck first (t3491, t3843). Wiki: the
+    // others "wander around for a while, and then eventually engage Ivan"; watchIvan sends one
+    // that wanders near him.
     Scenes.later(scene, 1, () => watchIvan(ambush));
-    // No juvinate starts on the player: live's player struck first (t3491, the reply at t3494).
-    // Wiki: the others "wander around for a while, and then eventually engage Ivan"; live's went
-    // for him unprovoked at t3503, 20 ticks after the arrival (t3483).
-    Scenes.later(scene, IVAN_ENGAGE_TICKS, () => engageIvan(ambush));
   }
 
-  /** One free juvinate on Ivan, unless one already is (Wiki: the second goes for him when the first falls). */
+  /** A free juvinate near Ivan goes for him, unless one already is on him (checked every tick). */
   function engageIvan(ambush) {
     const { ivan } = ambush;
-    if (ambush.done || ambush.fled || ambushes.get(ambush.player) !== ambush || !ivan?.isRegistered?.()) return;
+    const at = ivan?.getLocation?.();
+    if (!at) return;
     const targetOf = (juvinate) => juvinate.getCombat?.().getTarget?.() ?? null;
     if (ambush.juvinates.some((juvinate) => targetOf(juvinate) === ivan)) return;
-    const free = ambush.juvinates.find((juvinate) => !targetOf(juvinate));
-    engage(ambush, free, ivan);
+    const near = (juvinate) => {
+      const where = juvinate.getLocation();
+      return where.getZ() === at.getZ()
+        && Math.max(Math.abs(where.getX() - at.getX()), Math.abs(where.getY() - at.getY())) <= IVAN_ENGAGE_RANGE;
+    };
+    engage(ambush, ambush.juvinates.find((juvinate) => !targetOf(juvinate) && near(juvinate)), ivan);
   }
 
   function engage(ambush, juvinate, target) {
@@ -435,6 +441,7 @@ module.exports = function attachEscort(context) {
       // Wiki wording ("too"); live sent "to" (t3950).
       player.sendMessage(`Ivan : Urgh, just had too eat some food, I only have ${food - 1} left.`);
     }
+    engageIvan(ambush);
     Scenes.later(ambush.scene, 1, () => watchIvan(ambush));
   }
 
@@ -454,6 +461,7 @@ module.exports = function attachEscort(context) {
     api.core.HitQueue?.dropHitsFrom?.(player);
     for (const juvinate of ambush.juvinates) {
       juvinate.getCombat?.().reset?.();
+      api.core.TaskManager.cancelTasks(juvinate); // a retaliation already queued by a landed hit
       api.core.HitQueue?.dropHitsFrom?.(juvinate); // a swing already on its way lands no more
     }
     common.play(player, NPC.IVAN_FLEEING, V.FLEE, undefined, PAGE);
@@ -486,8 +494,6 @@ module.exports = function attachEscort(context) {
     const deaths = get(player, VARBIT.AMBUSH_DEATHS) + 1;
     state.set(player, VARBIT.AMBUSH_DEATHS, deaths);
     if (deaths >= ambush.route.escapeAt) return escaped(ambush);
-    // Wiki: once the first falls, the second goes for Ivan.
-    engageIvan(ambush);
   }
 
   /** Three deaths on route 2 (t4023): the box, the map's second leg, then outside Paterdomus. */

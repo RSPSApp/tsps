@@ -400,36 +400,50 @@ test("route 2: the ambush copy with Ivan 4441, four juvinates 4443, follower var
   assert.equal(shown(f)?.text, "There's that tasty morsel Ivan! Time for some food...");
 });
 
-test("route 2: no juvinate starts on the player; one goes for Ivan 20 ticks in, the next when it falls (t3483-3503, Wiki, #6482)", async (t) => {
+/** Puts an NPC `dx, dy` tiles from another mobile (instance coordinates). */
+function placeNear(npc, other, dx, dy) {
+  const at = other.getLocation();
+  npc.moveTo(new core.Location(at.getX() + dx, at.getY() + dy, at.getZ()));
+}
+
+test("route 2: the juvinates wander; none starts on the player; one near Ivan goes for him, one at a time (t3491, t3890-3893, Wiki, #6482)", async (t) => {
   const f = actor(t, { stage: 310 });
-  await startRoute2(f, { npcs: true });
+  await startRoute2(f); // NPCs held still until the positions are set
   // Indices and flags: assert's diff of two mobiles never finishes.
   const target = (npc) => npc.getCombat().getTarget();
+  const onIvan = (ivan) => juvinates(f).filter((juvinate) => target(juvinate)?.getIndex?.() === ivan.getIndex());
   const [ivan] = ownedNpcs(f, 4441);
-  ticks(f, 18, { npcs: true });
-  assert.equal(juvinates(f).every((juvinate) => target(juvinate) == null), true, "they wander (live: the player struck first, t3491)");
-  ticks(f, 2, { npcs: true });
-  const onIvan = juvinates(f).filter((juvinate) => target(juvinate)?.getIndex?.() === ivan.getIndex());
-  assert.equal(onIvan.length, 1, "one goes for Ivan (t3503)");
-  assert.equal(target(ivan)?.getIndex?.(), onIvan[0].getIndex(), "Ivan fights back (t3504)");
+  ticks(f, 6); // still on their spawn tile, 4 tiles from Ivan
+  assert.equal(juvinates(f).every((juvinate) => target(juvinate) == null), true, "nobody engages at once (live: the player struck first, t3491)");
+  const [first, second, third] = juvinates(f);
+  placeNear(third, ivan, 5, 0);
+  placeNear(first, ivan, 0, 3);
+  ticks(f, 3, { npcs: true });
+  assert.deepEqual(onIvan(ivan).map((juvinate) => juvinate.getIndex()), [first.getIndex()], "the one 3 tiles off goes for him (t3890), not the one 5 off");
+  assert.equal(target(ivan)?.getIndex?.(), first.getIndex(), "Ivan fights back (t3893)");
   assert.equal(juvinates(f).some((juvinate) => target(juvinate) === f.player), false, "none on the player");
+  placeNear(second, ivan, -1, 0);
   ticks(f, 2, { npcs: true });
-  assert.equal(target(onIvan[0])?.getIndex?.(), ivan.getIndex(), "the attack holds (it was dropped when issued in a placement tick)");
-  kill(onIvan[0]);
-  const next = juvinates(f).filter((juvinate) => target(juvinate)?.getIndex?.() === ivan.getIndex());
-  assert.equal(next.length, 1, "Wiki: the second goes for Ivan");
+  assert.equal(onIvan(ivan).length, 1, "one at a time");
+  placeNear(second, ivan, -1, 0);
+  kill(first);
+  ticks(f, 2, { npcs: true });
+  assert.deepEqual(onIvan(ivan).map((juvinate) => juvinate.getIndex()), [second.getIndex()], "Wiki: the next one goes for him");
 });
 
-test("Ivan flees mid-fight: the juvinates break off and his line stays until continued (t3625-3629, #6482)", async (t) => {
+test("Ivan flees mid-fight: the juvinates break off, even with a retaliation queued, and his line stays (t3625-3629, #6482)", async (t) => {
   const f = actor(t, { stage: 310 });
   await startRoute2(f, { npcs: true });
-  ticks(f, 20, { npcs: true });
+  ticks(f, 2);
   const [ivan] = ownedNpcs(f, 4441);
-  const onPlayer = juvinates(f).find((juvinate) => juvinate.getCombat().getTarget() == null);
+  const [onPlayer] = juvinates(f);
   f.player.getCombat().attack(onPlayer); // the player takes one on
   onPlayer.getCombat().attack(f.player, true); // and it answers
   ticks(f, 2, { npcs: true });
   assert.equal(onPlayer.getCombat().getTarget() === f.player, true, "the player is under attack");
+  // A hit that landed this tick has queued the juvinate's retaliation (CombatFactory's task, keyed on it).
+  const { Task } = require("../dist/game/task/Task");
+  core.TaskManager.submit(new (class extends Task { execute() { onPlayer.getCombat().attack(f.player, true); this.stop(); } })(1, onPlayer, false));
   ivan.setHitpoints(1);
   ticks(f, 2, { npcs: true });
   assert.equal(ownedNpcs(f, 4441).length, 0, "Ivan is gone");

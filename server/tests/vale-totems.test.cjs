@@ -522,3 +522,104 @@ test("claimed offerings are asked as minigame:points: an answer is what is colle
   assert.equal(player.getInventory().getAmount(obj("ent_totems_loot")), 30);
   assert.equal(site(player, "points"), 0);
 });
+
+const TRAIL_XP = "ent_totems_trail_xp_buff_actions";
+const TRAIL_NOTICE = "You feel closer to the ent! It will leave you more offerings during its next totem visit.";
+const stepOnTrail = (player, pair, part) => Ents.stepOnTrail?.(player, pair, part);
+const charges = (player) => player.getPacketSender().getVarbit(varbit(TRAIL_XP));
+
+function activateTrail(player, ent) {
+  const pair = { ent, parts: [true, true] };
+  stepOnTrail(player, pair, 0);
+  stepOnTrail(player, pair, 1);
+  return pair;
+}
+
+function prepareOfferingTotem(player, woodIndex = 1) {
+  setAnimals(player, [1, 3, 4]);
+  carvedTotem(player, woodIndex, [1, 3, 4]);
+  State.set(player, SITE, { decorations: 4 });
+}
+
+test("ent trails activate only after both distinct flowers of the same pair", () => {
+  const player = createPlayer();
+  const ent = { destination: SITE };
+  const first = { ent, parts: [true, false] };
+  const second = { ent: { destination: 4 }, parts: [true, true] };
+  stepOnTrail(player, first, 0);
+  stepOnTrail(player, first, 0);
+  stepOnTrail(player, first, 1);
+  stepOnTrail(player, second, 1);
+  assert.equal(charges(player), 0, "repeated, absent, or other-pair flower gives no charge");
+  first.parts[1] = true;
+  stepOnTrail(player, first, 1);
+  assert.equal(charges(player), 4);
+  stepOnTrail(player, first, 0);
+  stepOnTrail(player, first, 1);
+  assert.equal(player.messages.filter((message) => message.includes(TRAIL_NOTICE)).length, 1);
+});
+
+test("ent trails double offerings once for the associated ent and keep ordinary visit durability", () => {
+  const player = createPlayer();
+  const ent = { destination: SITE };
+  const ordinary = { destination: SITE };
+  prepareOfferingTotem(player, 3);
+  activateTrail(player, ent);
+  Ents.visitAll(player, [ordinary]);
+  assert.deepEqual([site(player, "points"), site(player, "decay")], [10, 3]);
+  Ents.visitAll(player, [ent]);
+  assert.deepEqual([site(player, "points"), site(player, "decay")], [30, 2]);
+  Ents.visitAll(player, [ent]);
+  assert.deepEqual([site(player, "points"), site(player, "decay")], [40, 1]);
+});
+
+test("ent trails expire after three empty sites and skip a carved totem without decorations", () => {
+  const player = createPlayer();
+  const ent = { destination: SITE };
+  carvedTotem(player, 3, [1, 3, 4]);
+  setAnimals(player, [1, 3, 4]);
+  activateTrail(player, ent);
+  Ents.visitAll(player, [ent]);
+  assert.equal(site(player, "points"), 2, "a bare carved totem leaves the buff available");
+  for (const destination of [4, 5]) {
+    ent.destination = destination;
+    Ents.visitAll(player, [ent]);
+  }
+  ent.destination = SITE;
+  prepareOfferingTotem(player, 3);
+  Ents.visitAll(player, [ent]);
+  assert.equal(site(player, "points"), 22, "two empty sites leave the buff available");
+  activateTrail(player, ent);
+  for (const destination of [4, 5, 6]) {
+    ent.destination = destination;
+    Ents.visitAll(player, [ent]);
+  }
+  ent.destination = SITE;
+  Ents.visitAll(player, [ent]);
+  assert.equal(site(player, "points"), 32, "the third empty site expires the buff");
+});
+
+test("ent trails boost exactly four successful build or carve actions and a fresh pair resets charges", () => {
+  const player = createPlayer({ items: [item("oak_logs"), item("oak_logs"), item("knife")] });
+  const ent = { destination: SITE };
+  activateTrail(player, ent);
+  click(player, "Totem site", "Build");
+  ticks(1);
+  assert.equal(charges(player), 3);
+  assert.equal(player.xp.fletching, 14.375);
+  activateTrail(player, { destination: 4 });
+  assert.equal(charges(player), 4);
+  for (const animal of ["a", "c", "d"]) {
+    player.menu().execute(obj(`ent_totems_animal_icon_${animal}`));
+    ticks(2);
+  }
+  assert.equal(charges(player), 1);
+  State.collapse(player, SITE);
+  click(player, "Totem site", "Build");
+  ticks(1);
+  assert.equal(charges(player), 0);
+  assert.equal(player.xp.fletching, 5 * 14.375);
+  player.menu().execute(obj("ent_totems_animal_icon_a"));
+  assert.equal(player.xp.fletching, 5 * 14.375 + 12.5);
+  ticks(2);
+});

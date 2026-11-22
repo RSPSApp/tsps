@@ -38193,7 +38193,8 @@
         "getting-started-talking-to-the-guard-after-starting-the-quest",
         "presenting-the-evidence-talking-to-the-guard-with-some-but-not-all-evidence",
         "presenting-the-evidence-talking-to-the-guard-with-all-evidence",
-        "post-quest-talking-to-the-guard-after-the-quest"
+        "post-quest-talking-to-the-guard-after-the-quest",
+        "post-quest-talking-to-the-guard-outside-the-mansion-after-the-quest"
       ]
     }
   ],
@@ -38356,6 +38357,8 @@
       "variants": [
         "visiting-the-poison-salesman-talking-to-the-poison-salesman",
         "visiting-the-poison-salesman-talking-to-the-poison-salesman-if-the-player-also-has-progress-in-fremennik-trials",
+        "visiting-the-poison-salesman-talking-to-the-poison-salesman-after-learning-who-bought-the-poison",
+        "visiting-the-poison-salesman-talking-to-the-poison-salesman-after-learning-who-bought-the-poison-if-the-player-also-has-progress-in-fremennik-trials",
         "post-quest-talking-to-the-poison-salesman-after-the-quest",
         "post-quest-talking-to-the-poison-salesman-after-the-quest-if-the-player-has-progress-in-fremennik-trials"
       ]

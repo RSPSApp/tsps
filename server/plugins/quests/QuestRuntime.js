@@ -435,12 +435,16 @@ function openCompletedScroll(player, quest, questPoints) {
   packet.sendInterface(COMPLETED_GROUP);
   packet.sendInterfaceFlagsRange((COMPLETED_GROUP << 16) | COMPLETED_CLOSE_CHILD, -1, -1, 1 << 1);
   setText((COMPLETED_GROUP << 16) | COMPLETED_TITLE_CHILD, "Congratulations!");
-  setText((COMPLETED_GROUP << 16) | COMPLETED_NAME_CHILD, `You have completed ${quest.name}!`);
+  // `scrollTitle`: the quest's own words where live has them ("You have solved the Murder Mystery!").
+  setText((COMPLETED_GROUP << 16) | COMPLETED_NAME_CHILD, quest.scrollTitle ?? `You have completed ${quest.name}!`);
   const scrollItemId = typeof quest.scrollItemId === "function"
     ? quest.scrollItemId(player)
     : quest.scrollItemId ?? quest.rewardItemId;
   if (scrollItemId !== undefined) {
     packet.sendItemOnInterfaces((COMPLETED_GROUP << 16) | COMPLETED_REWARD_ITEM_CHILD, scrollItemId, 1);
+    // `scrollItemPosition`: where live places the model for this quest (if_setposition), when captured.
+    const position = quest.scrollItemPosition;
+    if (position) packet.sendInterfacePosition?.((COMPLETED_GROUP << 16) | COMPLETED_REWARD_ITEM_CHILD, position[0], position[1]);
   }
   setText((COMPLETED_GROUP << 16) | COMPLETED_POINTS_CHILD, `Quest points: ${questPoints}`);
   const lines = rewardLines(quest);

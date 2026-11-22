@@ -942,7 +942,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
    * npc-dialogue:menu handler can ask the question itself (`handled`), warn first (`warning`),
    * replace `options` with option nodes from this or an earlier menu (`history`), given the option
    * just chosen (`chosen`): an NPC whose "other options" are not simply this menu again, or name one
-   * of the options as `select` to play it without drawing the menu.
+   * of the options as `select` to play it without drawing the menu. With `direct`, a menu that has one
+   * option left after its conditions takes it without asking.
    */
   function presentMenu(menu, offset = 0, tail = [], via = null) {
     if (cancelled) return;
@@ -1021,6 +1022,9 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
     // whose other options do not apply to this player: Zavistic's Zogre option before Zogre Flesh Eaters).
     const selected = notice.select ? visible.indexOf(notice.select) : -1;
     if (selected >= 0) return pairs[selected * 2 + 1]();
+    // `direct` (set by an npc-dialogue:menu handler): a menu left with one option goes straight into it, as live
+    // does where the Wiki notes so (Murder Mystery's evidence menu with one piece of evidence).
+    if (notice.direct === true && visible.length === 1 && !more) return pairs[1]();
     if (more) pairs.push("More...", () => presentMenu(menu, offset + 4, tail, via));
     if (visible.length === 1) pairs.push("Goodbye.", close);
     // A parsed menu with no options is a wiki-export gap; continue the branch

@@ -217,6 +217,8 @@ module.exports = function registerWatchtowerQuest(api) {
         : "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible-talking-to-the-watchtower-wizard-again";
     }
     if (value === STAGES.MAGIC_POTION) {
+      // A magic potion lost before the last shaman: a new potion is infused again.
+      if (needsNewPotion(player)) return "entering-the-enclave-talking-to-the-watchtower-wizard-after-making-the-potion";
       if (allCrystals(player)) return "reviving-the-watchtower-talking-to-the-watchtower-wizard-with-all-the-crystals";
       if (shamansDead(player) >= MAX_SHAMANS) {
         return "entering-the-enclave-returning-to-the-watchtower-wizard-after-killing-the-shamans-without-mining-the-rock";
@@ -225,6 +227,12 @@ module.exports = function registerWatchtowerQuest(api) {
     }
     if (value === STAGES.ALL_CRYSTALS) return "reviving-the-watchtower-talking-to-the-watchtower-wizard-again";
     return "post-quest-talking-to-the-watchtower-wizard";
+  }
+
+  /** At stage 10 with shamans left, no magic potion anywhere and a new mixed potion in the pack. */
+  function needsNewPotion(player) {
+    return stage(player) === STAGES.MAGIC_POTION && shamansDead(player) < MAX_SHAMANS
+      && !owns(player, ITEMS.MAGIC_POTION) && held(player, ITEMS.POTION);
   }
 
   function otherWizardVariant(value) {
@@ -254,8 +262,12 @@ module.exports = function registerWatchtowerQuest(api) {
 
   function grewVariant(player) {
     const value = stage(player);
+    // His yellow crystal is not used until the pillars: he hands out another until the quest is done (Wiki, 2021:
+    // the crystals can be re-obtained; the wizard sends the player back to whoever gave one).
+    if (state.hasBit(player, BITS.HELPED_GREW) && value >= STAGES.FINGERNAILS && value < STAGES.COMPLETE) {
+      return "ogre-investigations-grew-speaking-to-grew-after-giving-him-gorad-s-tooth";
+    }
     if (value < STAGES.FINGERNAILS || value >= STAGES.RELIC) return null;
-    if (state.hasBit(player, BITS.HELPED_GREW)) return "ogre-investigations-grew-speaking-to-grew-after-giving-him-gorad-s-tooth";
     if (state.hasBit(player, BITS.SPOKEN_GREW)) return "ogre-investigations-grew-speaking-to-grew-again";
     return "ogre-investigations-grew";
   }
@@ -304,7 +316,7 @@ module.exports = function registerWatchtowerQuest(api) {
     if (npcId === NPCS.OG) return ogVariant(player);
     if (npcId === NPCS.GREW) return grewVariant(player);
     if (npcId === NPCS.TOBAN) return tobanVariant(player);
-    if (npcId === NPCS.GORAD) return value >= STAGES.FINGERNAILS && value < STAGES.RELIC ? "ogre-investigations-grew-facing-gorad" : null;
+    if (npcId === NPCS.GORAD) return "ogre-investigations-grew-facing-gorad";
     if (npcId === NPCS.BATTLEMENT_GUARD) return battlementGuardVariant(player);
     if (npcId === NPCS.BRIDGE_GUARD) return "entering-gu-tanoth-talking-to-the-southern-ogre-guard";
     if (npcId === NPCS.CITY_GUARD) return cityGuardVariant(player);
@@ -677,6 +689,8 @@ module.exports = function registerWatchtowerQuest(api) {
   function talkSkavid(event) {
     const { player, npcId, npc } = event;
     const skavid = W.SKAVIDS.get(npcId);
+    // A talk closed before its "???" must not leave the no-words flag behind.
+    skavidUnknown.delete(player);
     if (!skavid || stage(player) < STAGES.MAP) return false;
     const steps = variantSteps(PAGE, skavid.variant);
     if (!steps) return false;
@@ -720,7 +734,10 @@ module.exports = function registerWatchtowerQuest(api) {
     else if (npcId === NPCS.SCARED_SKAVID && text === "Okay, okay, I'm not going to hurt you.") state.setBit(player, BITS.LEARNING_SKAVID);
     else if (npcId === NPCS.TOBAN && text === "I can't find the relic part you gave me.") {
       // Ours: the Wiki has only the "you lie to me" answer; a lost part comes back without a word.
-      if (!owns(player, ITEMS.RELIC_PARTS[2]) && state.hasBit(player, BITS.HELPED_TOBAN)) give(player, ITEMS.RELIC_PARTS[2]);
+      // A tick on, after the Wiki's "if the player has the relic part" branch has been judged (no liar line).
+      if (!owns(player, ITEMS.RELIC_PARTS[2]) && state.hasBit(player, BITS.HELPED_TOBAN) && !state.hasBit(player, BITS.RELIC[2])) {
+        later(player, 1, () => give(player, ITEMS.RELIC_PARTS[2]));
+      }
     }
   }
 
@@ -1670,7 +1687,7 @@ module.exports = function registerWatchtowerQuest(api) {
       if (value === STAGES.FINGERNAILS && ITEMS.RELIC_PARTS.includes(itemId)) {
         if (startRelicTalk(player, npc)) return stop();
       }
-      if (value === STAGES.RECIPE && itemId === ITEMS.POTION) {
+      if ((value === STAGES.RECIPE || needsNewPotion(player)) && itemId === ITEMS.POTION) {
         play(player, NPCS.WIZARD, "entering-the-enclave-talking-to-the-watchtower-wizard-after-making-the-potion", null, PAGE, npc);
         return stop();
       }
@@ -1756,6 +1773,7 @@ module.exports = function registerWatchtowerQuest(api) {
   api.onNpcInteraction("Watchtower Wizard", { "Talk-to": talkWizard });
   api.onNpcInteraction("Skavid", { "Talk-to": talkSkavid });
   api.onNpcInteraction("Ogre guard", { "Talk-to": talkOgreGuard });
+  for (const name of ["Og", "Grew", "Toban", "Mad skavid"]) api.onNpcInteraction(name, { "Talk-to": talkQuestOgre });
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject, { noted: false });
@@ -1766,6 +1784,17 @@ module.exports = function registerWatchtowerQuest(api) {
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(scenes.cancel);
   api.onPlayerDeath(scenes.cancel);
+
+  /**
+   * The quest's NPCs with no Wiki talk at the player's stage (Og, Grew, Toban before or after their part, the mad
+   * skavid before the words): Ours, nothing happens, rather than the page's first variant (the Tower guard's lines).
+   */
+  function talkQuestOgre(event) {
+    const { player, npcId } = event;
+    const variant = npcId === NPCS.OG ? ogVariant(player) : npcId === NPCS.GREW ? grewVariant(player)
+      : npcId === NPCS.TOBAN ? tobanVariant(player) : npcId === NPCS.MAD_SKAVID ? selectVariant(event) : undefined;
+    return variant === null;
+  }
 
   /** The Gu'Tanoth guards by who they are. */
   function talkOgreGuard(event) {

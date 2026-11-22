@@ -604,3 +604,47 @@ test("the gap after the quest: the toll talk and 5 Agility XP every time (Wiki: 
   assert.equal(count(f, I.COINS), 0);
   assert.equal(f.player.getSkillManager().getExperience(Sk.AGILITY) - xp, 5);
 });
+
+test("lost later: Grew's yellow crystal at stage 10, and a new potion infused when the magic one is lost", async (t) => {
+  const f = actor(t, { at: [2512, 3083, 0], stage: S.MAGIC, attributes: { [BITS]: (1 << 2) | (1 << 3) } });
+  const grew = h.spawn(f, N.GREW, [2513, 3084, 0]);
+  const said = await talk(f, grew, ["I've lost the crystal you gave me."]);
+  assert.ok(said.some((line) => line.includes("I suppose you want another?")), said.join("\n"));
+  assert.equal(count(f, I.CRYSTAL), 1);
+
+  const g = actor(t, { at: [2548, 3116, 2], stage: S.MAGIC, items: [[I.POTION_3]], attributes: { "watchtower:varbits": { [V.SHAMANS[0]]: 1 } } });
+  const wizard = h.spawn(g, N.WIZARD, [2549, 3116, 2]);
+  await talk(g, wizard);
+  assert.equal(count(g, I.MAGIC_OGRE_POTION), 1);
+  assert.equal(count(g, I.POTION_3), 0);
+});
+
+test("a skavid talk closed before its '???' still lets the player learn the word later", async (t) => {
+  const f = actor(t, { at: [2499, 9451, 0], stage: S.MAP });
+  const cur = h.spawn(f, N.SKAVID_CUR, [2500, 9450, 0]);
+  await h.talk(f, cur);
+  f.player.getDialogueManager().reset();
+  f.player.getPacketSender().sendInterfaceRemoval();
+  h.ticks(f, 2);
+  setBit(f, 12);
+  f.messages.length = 0;
+  await talk(f, cur, ["Cur."]);
+  assert.ok(bits(f) & (1 << 15), "Cur learned");
+  assert.ok(messages(f).includes("It seems the skavid understood you."));
+});
+
+test("Toban: a lost relic part comes back without the 'you lie to me' line", async (t) => {
+  const f = actor(t, { at: [2576, 3030, 0], stage: S.NAILS, attributes: { [BITS]: (1 << 0) | (1 << 1) } });
+  const toban = h.spawn(f, N.TOBAN, [2576, 3031, 0]);
+  const said = await talk(f, toban, ["I can't find the relic part you gave me."]);
+  assert.ok(!said.some((line) => line.includes("you lie to me")), said.join("\n"));
+  h.ticks(f, 2);
+  assert.equal(count(f, I.RELIC_PART_3), 1);
+});
+
+test("Og after his part is done and before the quest: no other NPC's lines", async (t) => {
+  const f = actor(t, { at: [2506, 3113, 0], stage: 0 });
+  const og = h.spawn(f, N.OG, [2507, 3114, 0]);
+  const said = await talk(f, og);
+  assert.ok(!said.some((line) => line.includes("Tower guard") || line.includes("tower guards")), said.join("\n"));
+});

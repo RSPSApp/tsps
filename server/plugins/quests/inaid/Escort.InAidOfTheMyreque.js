@@ -157,7 +157,7 @@ module.exports = function attachEscort(context) {
   // A wandering juvinate went for Ivan once 3 tiles from him (second attempt: turned to him at
   // t3890 from (2857,4556), Ivan at (2860,4555), struck as it reached him, t3892-3893).
   const IVAN_ENGAGE_RANGE = 3;
-  const NO_RETALIATE = "combat:no-retaliate";
+  const RETALIATION_WINDOW = 2; // ticks: a retaliation queued by a landed hit runs on the next one
   const SOUTH = 6; // Direction id
 
   const LIBRARY = Object.freeze({ tile: [3360, 9904, 0], climbAnimation: 827 }); // t4286-4287
@@ -458,12 +458,14 @@ module.exports = function attachEscort(context) {
     // player would close it with its next hit, as every hit does, so their fight stops here too.
     const playerCombat = player.getCombat?.();
     if (ambush.juvinates.includes(playerCombat?.getTarget?.())) playerCombat.reset?.();
-    // A hit that landed on the player this tick has queued their auto-retaliation for the next one;
-    // CombatFactory's task skips a player flagged combat:no-retaliate.
-    if (!player.hasFlag?.(NO_RETALIATE)) {
-      player.setFlag?.(NO_RETALIATE);
-      common.later(player, 2, () => player.removeFlag?.(NO_RETALIATE));
-    }
+    // A hit that landed on the player this tick has queued their auto-retaliation for the next one.
+    // The juvinates are untargetable meanwhile, so that attack is dropped (CombatFactory.validTarget);
+    // NPC state only, nothing of it reaches the player's save. They can be fought again after.
+    const juvinates = [...ambush.juvinates];
+    for (const juvinate of juvinates) juvinate.setUntargetable?.(true);
+    Scenes.later(scene, RETALIATION_WINDOW, () => {
+      for (const juvinate of juvinates) if (juvinate.isRegistered?.()) juvinate.setUntargetable?.(false);
+    });
     for (const juvinate of ambush.juvinates) {
       juvinate.getCombat?.().reset?.();
       api.core.TaskManager.cancelTasks(juvinate); // a retaliation already queued by a landed hit

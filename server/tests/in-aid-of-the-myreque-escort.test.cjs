@@ -454,9 +454,13 @@ test("Ivan flees mid-fight: the juvinates break off, even with a retaliation que
   // closes the player's interfaces), so Ivan left without a word.
   for (const juvinate of juvinates(f)) assert.equal(juvinate.getCombat().getTarget() == null, true, "only wandering");
   assert.equal(f.player.getCombat().getTarget() == null, true, "Ours: the player's fight stops too (live: their foe had just died, t3624)");
-  assert.equal(f.player.hasFlag("combat:no-retaliate"), true, "a retaliation queued by a landed hit is skipped");
+  // The player's own retaliation, queued by a hit that landed this tick, runs now: it is dropped.
+  f.player.getCombat().attack(onPlayer, true);
+  f.player.getCombat().preMovementProcess();
+  assert.equal(f.player.getCombat().getTarget() == null, true, "a retaliation queued by a landed hit is dropped");
+  assert.equal(f.player.hasFlag("combat:no-retaliate"), false, "nothing on the player (it would be saved)");
   ticks(f, 4, { npcs: true });
-  assert.equal(f.player.hasFlag("combat:no-retaliate"), false, "only for that window");
+  assert.equal(juvinates(f).every((juvinate) => !juvinate.isUntargetable()), true, "they can be fought again");
   assert.ok(shown(f)?.text.startsWith("I'm getting badly beaten up here"), "his line is still up");
 });
 

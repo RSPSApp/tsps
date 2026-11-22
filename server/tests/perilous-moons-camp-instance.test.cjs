@@ -334,11 +334,11 @@ test("the Fishing and Hunting crates give what rec 1693 took (knife and big net;
   assert.equal(amount(f, ITEMS.KNIFE), 1, "the hunting kit has no knife");
 });
 
-test("plain Take-from asks which supplies, and answers with that kit", async (t) => {
+test("plain Take-from asks which supplies instead of handing everything over", async (t) => {
   const f = gatherer(t, 23, CRATE_STAND);
   await click(f, O.CRATE, CRATE_AT, CRATE_STAND, 6, 1);
   assert.equal(amount(f, ITEMS.PESTLE) + amount(f, ITEMS.KNIFE) + amount(f, ITEMS.ROPE), 0, "nothing until a kit is chosen");
-  assert.ok(f.player.getDialogueManager().getDialogue?.() ?? f.player.getInterfaceId?.() !== undefined, "a choice is open");
+  assert.equal(f.player.getDialogueManager().isActive(), true, "the Fishing / Hunting / Herblore choice is open");
 });
 
 test("the grubby sapling keeps giving grubs while some are held, with Hunter xp (rec 1693 tick 2062)", async (t) => {

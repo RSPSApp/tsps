@@ -8,6 +8,8 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { RegionManager } = require('../dist/game/collision/RegionManager');
 const { MapObjects } = require('../dist/game/entity/impl/object/MapObjects');
+const { ObjectManager } = require('../dist/game/entity/impl/object/ObjectManager');
+const { GameObject } = require('../dist/game/entity/impl/object/GameObject');
 const { Location } = require('../dist/game/model/Location');
 const {
   TemplatedInstanceArea, rotateChunkTile, MAX_INSTANCE_CHUNKS,
@@ -309,4 +311,33 @@ test('entity flags preserve normalization, replacement and clearing with lazy st
   assert.deepEqual(entity.getFlags(), []);
   entity.setFlag('again').clearFlags().setFlag('last');
   assert.deepEqual(entity.getFlags(), ['last']);
+});
+
+// #6502: a deregistered template loc (loc_del) leaves the scene's lookups, so putting a copy of
+// it back is sent again (Elemental Workshop II's extractor hat); and the same object registered
+// again (a tree or rock respawning, Woodcutting/Mining/Pickable) is found there once more.
+test('a removed template loc leaves the scene, and comes back when it or a copy is registered', () => {
+  const area = new TemplatedInstanceArea(1, 1);
+  area.setChunk(0, 0, 0, { sourceChunkX: 400, sourceChunkY: 400, sourcePlane: 0, rotation: 0 }); // Lumbridge, 3200,3200
+  try {
+    const template = area.getChunkObjects(0, 0, 0).find((o) => o.getType() === 10);
+    assert.ok(template, 'a shape-10 template loc in the chunk');
+    const at = template.getLocation();
+    const found = () => MapObjects.getObjectsAt(at, area).filter((o) => o.getType() === 10 && o.getId() === template.getId());
+
+    ObjectManager.deregister(template, true);
+    assert.deepEqual(found(), [], 'gone from the scene once removed');
+    area.setChunk(0, 0, 0, { sourceChunkX: 400, sourceChunkY: 400, sourcePlane: 0, rotation: 0 }); // the index rebuilt
+    assert.deepEqual(found(), [], 'and stays out when the index is rebuilt');
+
+    ObjectManager.register(template, true);
+    assert.deepEqual(found(), [template], 'the same object registered again (a respawn) is found');
+    assert.equal(MapObjects.get(template.getId(), at, area) ?? area.resolveObject(template.getId(), at), template);
+
+    ObjectManager.deregister(template, true);
+    const copy = new GameObject(template.getId(), at.clone(), 10, template.getFace(), area);
+    area.add(copy);
+    ObjectManager.register(copy, true);
+    assert.deepEqual(found(), [copy], 'a fresh copy stands in; the template stays out');
+  } finally { area.destroy(); }
 });

@@ -60,7 +60,7 @@ the other `elemental_quest_2_*` varbits on varps 896/897, saved as they are. Sav
 | Cart Take-from, dry bar | stage 7, objectbox "You take the primed bar." (1008) |
 | Mind door 18698 | stage 8 (first), both leaves open (18699/18701), sound 71 (1356) |
 | Primed bar on the gun 18725 | mind_jig 1, stage 9, objectbox "You place the primed bar under the device.", sound 3177 (1364) |
-| Extractor hat Operate | camera, then the slide onto the chair with seq 4884 and sound 3176, spotanim 807 and the hat gone, the gun's anim 4897 and sound 3173 (the hat's loc_del at 1372, the same hat put back with loc_add_change at 1379); four ticks later mind_jig 2, stage 10, Magic -20; the hat back, the slide off, "You feel magically weakened." and the camera reset (1370-1381) |
+| Extractor hat Operate | camera, then the slide onto the chair with seq 4884 and sound 3176, spotanim 807 and the hat gone, the gun's anim 4897 and sound 3173 (the hat's loc_del at 1372, the same hat put back with loc_add_change at 1378); four ticks later mind_jig 2, stage 10, Magic -20; the hat back, the slide off, "You feel magically weakened." and the camera reset (1370-1381) |
 | Gun Take-from | mind_jig 0, objectbox "You take the elemental mind bar." (1386) |
 | Workbench, mind bar + beaten book | the mind helmet four ticks on: completion, the note removed, Kandarin medium task, scroll "1 Quest Point", "7,500 Crafting XP", "7,500 Smithing XP", "Ability to make Mind", "Equipment", model 9733 (1450-1454) |
 | After the quest, mind bar + both books | skillmulti Mind shield / Mind helmet; "Following the instructions in the book, you make a mind shield.", +30 XP (1464-1471) |

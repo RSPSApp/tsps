@@ -94,7 +94,7 @@ export class TemplatedInstanceArea extends PrivateArea {
     private clipGrid: Int32Array | null = null;
     private locIndex = new Map<number, PlacedLoc[]>();
     /** Template locs taken out at runtime (a loc_del), kept out when the index is rebuilt. */
-    private removedLocs = new Set<string>();
+    private removedLocs = new Map<string, PlacedLoc>();
     private sceneVersion = 0;
 
     constructor(widthChunks: number, heightChunks: number) {
@@ -245,17 +245,31 @@ export class TemplatedInstanceArea extends PrivateArea {
 
     /**
      * Takes a template loc out of the scene's lookups once it is deregistered (loc_del), so a
-     * later lookup no longer finds it and putting the same loc back sends it again.
+     * later lookup no longer finds it and putting the same loc back sends it again. Only the
+     * scene's own copy counts: another loc swapped over it leaves the template alone.
      */
     public override removeTemplateObject(object: GameObject): void {
         const location = object.getLocation();
         if (!this.contains(location)) return;
         const list = this.locsAt(location);
-        const index = list.findIndex((loc) => loc.object === object
-            || (loc.id === object.getId() && loc.type === object.getType()));
+        const index = list.findIndex((loc) => loc.object === object);
         if (index < 0) return;
         const [loc] = list.splice(index, 1);
-        this.removedLocs.add(removedKey(loc));
+        this.removedLocs.set(removedKey(loc), loc);
+    }
+
+    /** The same template loc registered again (a tree grown back): found in the scene once more. */
+    public override restoreTemplateObject(object: GameObject): void {
+        for (const [key, loc] of this.removedLocs) {
+            if (loc.object !== object) continue;
+            this.removedLocs.delete(key);
+            this.collision();
+            const index = this.tileIndex(loc.x, loc.y, loc.z);
+            const list = this.locIndex.get(index);
+            if (list) list.push(loc);
+            else this.locIndex.set(index, [loc]);
+            return;
+        }
     }
 
     public override resolveObject(id: number, location: Location, player?: Player): GameObject | null {

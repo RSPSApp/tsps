@@ -128,6 +128,10 @@ export abstract class PrivateArea extends Area {
     public removeTemplateObject(_object: GameObject): void {
     }
 
+    /** Puts a template loc removed with removeTemplateObject back when the same object is registered. */
+    public restoreTemplateObject(_object: GameObject): void {
+    }
+
     /** Allows an instance to validate client-only dynamic locs on demand. */
     public resolveObject(_id: number, _location: Location, _player?: Player): GameObject | null {
         return null;

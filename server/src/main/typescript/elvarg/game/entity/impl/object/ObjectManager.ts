@@ -246,6 +246,8 @@ export class ObjectManager {
 
     public static register(object: GameObject, playerUpdate: boolean) {
         if (object.getSpawnedBy() === null) object.setSpawnedBy(PluginContext.current());
+        // A template-map instance's own loc put back (a respawn) is found in its scene again.
+        object.getPrivateArea()?.restoreTemplateObject(object);
         // Check for matching object on this tile.
         for (const o of [...ObjectManager.objectsAt(object.getLocation())]) {
             if (o.getType() === object.getType() && object.getPrivateArea() == o.getPrivateArea()

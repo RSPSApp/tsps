@@ -465,7 +465,8 @@ function jumpToRock(event) {
   // The walk to the take-off is at walking pace, then one still tick before the leap (ticks
   // 976-980, 1002-1004); from the take-off itself the leap is on the next tick (944-945).
   const path = pathTo(player, jump.from) ?? [];
-  if (path.length) steps.push({ walk: path }, { wait: 1 });
+  // The still tick turns to the rock (ticks 950, 997, 1004).
+  if (path.length) steps.push({ walk: path }, { face: jump.rock }, { wait: 1 });
   steps.push({ run: debitEnergy }, { sound: JUMP_SOUND });
   steps.push({ move: [...jump.to, 0], anim: JUMP_ANIM, delay: 26, speed: [47, 59], ticks: 2 });
   if (falls) {

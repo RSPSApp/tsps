@@ -16,7 +16,7 @@ travel: travel_to
 The quest follows the user's RSProx capture `CabinFever` (revision 242.1, a whole run of the
 quest, SHA-256 `bc530d37…f7c09` of the `.bin`) and the OSRS Wiki. A headless run reached varp
 655 = 140 with live's battle sequence, messages and quest-varp steps. The battle is still a
-static map, not live's instance, and the end scene plays as dialogue.
+static map, not live's instance; the end scene is live's cutscene in a copy of The Other Inn.
 
 ## Live capture facts
 
@@ -43,8 +43,12 @@ Wiki leaves out.
   up the net." and the yardarm. Rope on the hoisted sail: the rope is used, `fever_swing`
   (1740, or 1764 back) = 1, with `fever_rope_tie` (3132) and `cf_tierope` (1439). The message
   "You attach a rope to the sails." comes 4 ticks on, then the jump (827, `cf_jumpdown` 1428).
-  At 7 the player is on the deck and the swing rope (11311) hangs there. They slide to the rope
-  10 ticks later (3 on the way back) and swing across 2 ticks after that (3 on the way back; 3130,
+  At 7 the player is on the deck beside the mast (1816,4832; 1823,4833 on the way back) and the
+  swing rope (11311) hangs there. They walk round the mast to the rope, one tile a tick:
+  1815,4832, 1814,4831, 1814,4830, 1814,4829, 1815,4829, a tick's pause, 1816,4829 and 1816,4830
+  (ticks 862-869, 1450-1457); back, 1822,4833 and 1822,4834 (995-996, 1629-1630). They slide to
+  the rope 10 ticks after the drop (3 on the way back) and swing across 2 ticks after that (3 on
+  the way back; 3130,
   `cf_swingacross_sucess` 1438, the rope loc playing `fever_rope_swing` 3123). After 3 more ticks: "The rope falls off the mast! ...". Two of
   the six swings fell at Agility 73: anim 3131, `cf_swingacross_fail` (1421), run energy 0, a
   swim (772, `watersplash`, `cf_swim`), then out onto the other ship.
@@ -76,15 +80,48 @@ Wiki leaves out.
     `cf_cannonhit`, then the 52 hitsplat on the pirate. One hit is the objective.
   - A cannonball lands a tick on with "You put a hole in the hull!" / "You put another hole in
     the hull!". The third hit goes straight into "Ye've done it lad! They're sunk now!".
+  - Hits roll on Ranged: the Wiki's "Cannon (Cabin Fever)" gives 6% at level 1 to 94% at 99, the
+    same for cannonballs and canisters (JagexAsh, 24 January 2023). Live's four shots at Ranged 67
+    all hit; a run with misses (#6500's five balls) is what the roll expects.
 - **Return-Home** (Bill 4014 op 3, 1050-1087): "No, I need to go back now." fades to black and
   lands the player on the port ship at 3714,3497. The port Bill's "Let's go Cap'n!" fades back
   to 1815,4833, and Bill greets them with the stage's returning line.
-- **Completion** (2302-2312): the player is put at 3665,2980. Varp 140 and the battle's varbits
-  clear (1746, 1749-1752, 1756-1760); `fever_given_book` (1763) stays. Claiming the gold
-  later sets `fever_gold` (1765).
+- **End cutscene** (2124-2307), played by `plugins/quests/cabinfever/Scenes.CabinFever.js`:
+  - 2124 and 2127: Bill's two deck lines, held (no "Click here to continue"); the player is held.
+  - 2130: fade out. 2133: the cutscene (cutscene_status, minimap off, NPC/loc/obj ops hidden,
+    `fov_clamp`, `draw_distance_max_override`, the area-sound overrides, the side tabs closed) in
+    a copy of The Other Inn (`rebuild_region`, 5 x 5 chunks from 3656,2976), the player on
+    3665,2980.
+  - 2136: Bill (4012, `fever_cutscene_teach`) on 3665,2982 and Mama (4021) on 3663,2982 face each
+    other; the camera at 3664,2979 (height 290) looks at 3664,2983 (160), rates 232/232. 2140: fade
+    in.
+  - 2143-2293: the transcript's 23 lines, every one held, each also said overhead in parts three
+    ticks apart. 2182: the camera to 3668,2983 (310; rates 12/1) looking at 3664,2980 (20; 17/1).
+    2186-2189: Mama walks south to 3663,2978 and faces west; 2191: Bill faces the player.
+  - 2224, with "Here, have this book.": the Book o' Piracy and `fever_given_book` (1763) = 1.
+  - 2299: fade out. 2302: the real map at 3665,2980, facing west, the camera reset. 2307: the
+    cutscene ends (tabs back, fade in).
+- **Completion** (2310-2312): varp 140 and the battle's varbits clear (1746, 1749-1752,
+  1756-1760); `fever_given_book` (1763) stays. Claiming the gold later sets `fever_gold` (1765).
+- **After the quest** (2475-2700): the island's pirates speak their "with Book o' Piracy" lines
+  with the book in the inventory, not worn: 4023 (`fever_pirate_island_01`) "What's a landlubber
+  like ye doin' here?" (the Wiki's pirate 1), 4027 pirate 5, 4028 pirate 6, 4031 pirate 9. The
+  Wiki: "players must be carrying this book in their inventory to understand what other pirates
+  are saying." Bill on the Mos Le'Harmless ship (4016, 2528-2600) opens with "I suppose ye'll be
+  wantin' a lift while yer here, right lad?" and offers "Can I have that gold now?" as the first
+  of his three options.
 
 ## Findings
 
+- **fixed** (#6500) The rope swing dropped the player on the rope's tile and waited there; live
+  drops them beside the mast and walks them round it.
+- **fixed** (#6500) The end scene played as click-through dialogue on the ship; it is now live's
+  cutscene in The Other Inn.
+- **fixed** (#6500) Mos Le'Harmless's pirates and traders (all but Mama) spoke pirate-speak with
+  the Book o' Piracy in the inventory.
+- **open** Bill's post-quest claim plays "Can I have that gold now?" straight away; live puts it
+  in his "lift" menu. The transcript has it as its own section, so this needs a dialogue-dump
+  change (osrsreboxed-db).
 - **open** The battle is the static map at 1813-1827,4824-4842, not live's instance, so other
   players can see the ship's NPCs. The per-player varbits and owned locs (open lockers, the swing
   rope) keep each player's ship apart.

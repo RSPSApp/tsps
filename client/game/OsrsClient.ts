@@ -8750,6 +8750,9 @@ export class OsrsClient {
         ) {
             const icons = (this.renderer as any)?.getMinimapIcons?.(mapX, mapY, level) as MinimapIcon[] | undefined;
             if (icons) return icons;
+            // Its minimap picture is loaded, so no icons means the edit has none (the renderer
+            // drops empty icon sets); don't bring back the archive's stale ones.
+            if (this.minimapImageUrls.has(this.getMinimapImageKey(mapX, mapY, level))) return undefined;
         }
         return this.worldMap.getWorldMapIcons(mapX, mapY, level);
     }

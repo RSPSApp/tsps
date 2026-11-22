@@ -72,7 +72,7 @@ test("digging with a full inventory gives no ring", async (t) => {
   for (let i = 1; i < 28; i++) f.p.getInventory().setItem(i, new core.Item(995, 1 + i));
   await dig(f);
   assert.equal(rings(f), 0);
-  assert.ok(f.messages.includes("You need a free inventory space for the lunar ring."));
+  assert.ok(f.messages.includes("There appears to be something in the dirt, but you have no space to hold it."));
 });
 
 test("digging before the staff stage gives no ring", async (t) => {

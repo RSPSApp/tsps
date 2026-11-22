@@ -2191,9 +2191,12 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     if (held(player, LUNAR_RING) || oneiroGiven(player).ring) {
       return reject(player, "You already have the lunar ring.");
     }
-    if (!hasFreeSlots(player)) return reject(player, "You need a free inventory space for the lunar ring.");
-    startTranscript(api, player, SELENE_ID, PAGE, "obtaining-the-lunar-clothing-digging-up-the-lunar-ring");
-    player.getInventory().adds(LUNAR_RING, 1);
+    const hasSpace = hasFreeSlots(player);
+    // The variant holds both outcomes as conditions; play the one matching the inventory. With no space the
+    // Wiki's "something in the dirt, but you have no space to hold it" box shows and no ring is given.
+    const outcome = (steps) => steps.find((step) => step.type === "condition" && /has no inventory space/i.test(step.text) === !hasSpace)?.steps;
+    startTranscript(api, player, SELENE_ID, PAGE, "obtaining-the-lunar-clothing-digging-up-the-lunar-ring", outcome);
+    if (hasSpace) player.getInventory().adds(LUNAR_RING, 1);
   }
 
   /** Wiki (Lunar Diplomacy): dig with a spade on the blue flowers at the south-west of the island. */

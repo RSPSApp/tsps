@@ -49,6 +49,21 @@ const nextTouch = new WeakMap();
 const stings = new WeakSet();
 const ROAM_RADIUS = 3;
 const MAX_ROAMING = 20;
+// Extras (pet rocks, cats, dogs, fishbowls, ...): script 641 draws enum 985's slots, then every
+// obj in inventory poh_menagerie_pets (517) as the next list children, so list child
+// `enum size + inv slot` is that inventory slot. rsprox captures 2779 and 2782 (rev 229): using
+// the pet rock on an oak house takes it that tick with no message (2779 tick 1019, 2782 tick 27)
+// and its poh_rock starts roaming; View sends the inventory in
+// full before opening interface 211; taking it back empties its slot (2779 tick 2090, child 63
+// after the 63 enum slots of that revision). A pet house holds its tier's limit, extras
+// included (2779 tick 1050: supreme, K'ril and the rock filled an oak house, so the chompy
+// chick got "The pet house is full. Only 3 creatures can live in this kind of pet house.");
+// the nature house holds every unique pet and 12 extras (Wiki: Menagerie).
+const EXTRAS = require("./data/menagerie-extras.json");
+const EXTRAS_INVENTORY = CacheDefinitions.getInventoryId("poh_menagerie_pets");
+const EXTRA_NPC_BY_ITEM = new Map(Object.entries(EXTRAS.pets).map(([obj, npc]) => [Ids.obj(obj), Ids.npc(npc)]));
+const KITTENS = new Set(EXTRAS.kittens.map(Ids.obj));
+const EXTRAS_ATTRIBUTE = "construction:menagerie-extras";
 
 let petsBySlot = null;
 /** house -> Map(npc -> slot) */
@@ -80,9 +95,41 @@ function stored(player) {
   return new Set(player.getAttribute(STORED_ATTRIBUTE) ?? []);
 }
 
+/** The first list child after enum 985's slots: where script 641 starts drawing the extras. */
+function extrasBase() {
+  return Math.max(...pets().keys()) + 1;
+}
+
+/** The extras inventory as stored: item ids by slot, null where empty. */
+function extras(player) {
+  const saved = player.getAttribute(EXTRAS_ATTRIBUTE);
+  return Array.from({length: EXTRAS.capacity}, (_, slot) => (Array.isArray(saved) && Number.isInteger(saved[slot]) ? saved[slot] : null));
+}
+
+function extrasCount(player) {
+  return extras(player).filter(id => id !== null).length;
+}
+
+/** Every stored pet by its list child: enum slots for the unique pets, then the extras. */
+function held(player) {
+  const base = extrasBase();
+  return new Set([...stored(player), ...extras(player).flatMap((id, slot) => (id === null ? [] : [base + slot]))]);
+}
+
 function storedPet(player, slot) {
-  const base = pets().get(slot);
-  return base?.forms.get(player.getAttribute(FORMS_ATTRIBUTE)?.[slot]) ?? base;
+  const base = extrasBase();
+  if (slot >= base) {
+    const itemId = extras(player)[slot - base] ?? null;
+    return itemId === null ? undefined : {itemId, npcId: EXTRA_NPC_BY_ITEM.get(itemId) ?? -1};
+  }
+  const pet = pets().get(slot);
+  return pet?.forms.get(player.getAttribute(FORMS_ATTRIBUTE)?.[slot]) ?? pet;
+}
+
+/** Sends the extras inventory, owned by interface 211 so closing it stops the transmit. */
+function sendExtras(player) {
+  player.getPacketSender().sendInventory(EXTRAS_INVENTORY, EXTRAS.capacity,
+    extras(player).map(id => (id === null ? null : {id, amount: 1})), MENAGERIE_INTERFACE);
 }
 
 function sendStored(player) {
@@ -100,8 +147,10 @@ function sendStored(player) {
     player.getPacketSender().sendVarbit(pet.formVarbit, form);
   }
   if (player.getInterfaceId() === MENAGERIE_INTERFACE) {
-    // Script641 creates children by enum slot; script2266's onOp is only cosmetic.
-    player.getPacketSender().sendInterfaceFlagsRange((MENAGERIE_INTERFACE << 16) | LIST, 0, 71, (1 << 1) | (1 << 10));
+    sendExtras(player);
+    // Script641 creates children by enum slot, then one per extras slot; script2266's onOp is
+    // only cosmetic. 2779/2782 (rev 229, 63 enum slots) send OP1 and OP10 on 0-75: enum size + 12.
+    player.getPacketSender().sendInterfaceFlagsRange((MENAGERIE_INTERFACE << 16) | LIST, 0, extrasBase() + EXTRAS.capacity, (1 << 1) | (1 << 10));
   }
 }
 
@@ -114,9 +163,41 @@ function inMenagerie(event) {
 
 function view(event) {
   if (!inMenagerie(event)) return false;
+  // 2779/2782: the extras inventory goes out in full before the interface opens.
+  sendExtras(event.player);
   event.player.getPacketSender().sendInterface(MENAGERIE_INTERFACE);
   sendStored(event.player);
   return true;
+}
+
+/**
+ * How many pets the house's best pet house holds, or null for no limit on unique pets (the
+ * nature house). -1 when no pet house is built.
+ */
+function houseLimit(house) {
+  let best = -1;
+  for (const {furniture, room} of house.furnitureEntries()) {
+    if (!MENAGERIE_ROOMS.has(room.roomKey) || !(furniture.buildableKey in EXTRAS.houseLimits)) continue;
+    const limit = EXTRAS.houseLimits[furniture.buildableKey];
+    if (limit === null) return null;
+    best = Math.max(best, limit);
+  }
+  return best;
+}
+
+/** Why the pet can't move in, or null when there's room. */
+function refusal(player, house, extra) {
+  const limit = houseLimit(house);
+  // Ours: no recording or Wiki line covers a menagerie without a pet house.
+  if (limit === -1) return "You need a pet house to keep pets in your menagerie.";
+  if (limit === null) {
+    // Ours: the Wiki gives the nature house's 12 extras but no message for a 13th.
+    return extra && extrasCount(player) >= EXTRAS.capacity ? `Your menagerie can't hold more than ${EXTRAS.capacity} of those pets.` : null;
+  }
+  if (stored(player).size + extrasCount(player) >= limit) {
+    return `The pet house is full. Only ${limit} creatures can live in this kind of pet house.`;
+  }
+  return null;
 }
 
 /**
@@ -185,13 +266,17 @@ function petListClick(event) {
 
 function storePet(event) {
   const slot = slotOf(event.itemId);
-  const house = slot >= 0 && inMenagerie(event);
+  const extra = slot < 0 && EXTRA_NPC_BY_ITEM.has(event.itemId);
+  const kitten = KITTENS.has(event.itemId);
+  const house = (slot >= 0 || extra || kitten) && inMenagerie(event);
   if (!house) return;
   event.handled = true;
   const player = event.player;
   if (house.owner !== player) return player.sendMessage("You can only keep pets in your own menagerie.");
   if (house.buildingMode) return player.sendMessage("You can't spawn pets unless they're permitted to roam the house, which they can't do in building mode.");
-  const context = {player, house, slot, event, origin: player.getLocation().clone()};
+  // 2779 ticks 911 and 987: a kitten is turned away.
+  if (kitten) return player.sendMessage("Kittens need more personal care and attention than the pet house can provide.");
+  const context = {player, house, slot, extra, event, origin: player.getLocation().clone()};
   pending.set(player, context);
   storeNow(context);
 }
@@ -205,7 +290,7 @@ function safe(context) {
 }
 
 function storeNow(context) {
-  const {player, house, slot, event} = context;
+  const {player, house, slot, extra, event} = context;
   if (pending.get(player) !== context || !safe(context) || player.busy()) return;
   const inventory = player.getInventory();
   if (inventory.getItems()[event.itemSlot] !== event.item || event.item.getId() !== event.itemId ||
@@ -216,7 +301,18 @@ function storeNow(context) {
   if (pin.locked || pending.get(player) !== context || !safe(context)) return;
   pending.delete(player);
   const slots = stored(player);
-  if (slots.has(slot)) return player.sendMessage("You already have that pet in your menagerie.");
+  if (!extra && slots.has(slot)) return player.sendMessage("You already have that pet in your menagerie.");
+  const full = refusal(player, house, extra);
+  if (full) return player.sendMessage(full);
+  if (extra) {
+    const kept = extras(player), free = kept.indexOf(null);
+    inventory.deletedItem(new Item(event.itemId, 1), event.itemSlot, true);
+    kept[free] = event.itemId;
+    player.setAttribute(EXTRAS_ATTRIBUTE, kept);
+    sendStored(player);
+    refreshPets(house);
+    return;
+  }
   inventory.deletedItem(new Item(event.itemId, 1), event.itemSlot, true);
   player.setAttribute(FORMS_ATTRIBUTE, {...player.getAttribute(FORMS_ATTRIBUTE), [slot]: event.itemId});
   slots.add(slot);
@@ -246,7 +342,7 @@ function interfaceClick(event) {
     return;
   }
   const slot = event.slot;
-  const slots = stored(player);
+  const slots = held(player);
   if (event.childId === LIST && slots.has(slot) && (event.opId ?? event.action) === 10) {
     examineItem(player, storedPet(player, slot).itemId, 1);
     return;
@@ -267,8 +363,7 @@ function resumeWithdrawal(context) {
 
 function withdrawNow(context) {
   const {player, house, slot, itemId} = context;
-  const slots = stored(player);
-  if (pending.get(player) !== context || !safe(context) || !slots.has(slot) ||
+  if (pending.get(player) !== context || !safe(context) || !held(player).has(slot) ||
       storedPet(player, slot).itemId !== itemId || player.getInterfaceId() !== MENAGERIE_INTERFACE ||
       !player.getPacketSender().isSubInterfaceOpen(MENAGERIE_INTERFACE)) return;
   const pin = {player, feature: "poh-menagerie", resume: () => resumeWithdrawal(context)};
@@ -284,13 +379,21 @@ function takeBack(player, house, slot, npc = null) {
     player.sendMessage("You don't have enough inventory space.");
     return false;
   }
-  const slots = stored(player);
-  slots.delete(slot);
-  player.setAttribute(STORED_ATTRIBUTE, [...slots]);
   player.getInventory().adds(storedPet(player, slot).itemId, 1);
-  const forms = {...player.getAttribute(FORMS_ATTRIBUTE)};
-  delete forms[slot];
-  player.setAttribute(FORMS_ATTRIBUTE, forms);
+  const base = extrasBase();
+  if (slot >= base) {
+    // 2779 tick 2090: the slot empties; the extras after it keep their slots.
+    const kept = extras(player);
+    kept[slot - base] = null;
+    player.setAttribute(EXTRAS_ATTRIBUTE, kept);
+  } else {
+    const slots = stored(player);
+    slots.delete(slot);
+    player.setAttribute(STORED_ATTRIBUTE, [...slots]);
+    const forms = {...player.getAttribute(FORMS_ATTRIBUTE)};
+    delete forms[slot];
+    player.setAttribute(FORMS_ATTRIBUTE, forms);
+  }
   // Only this pet goes; the rest keep roaming where they are.
   npc ??= [...(roaming.get(house) ?? [])].find(([, roamingSlot]) => roamingSlot === slot)?.[0];
   if (npc) despawn(house, npc);
@@ -327,13 +430,14 @@ function pickUp(event) {
 
 function pickUpNow(context) {
   const {player, house, slot, npc, itemId} = context;
-  if (pending.get(player) !== context || !safe(context) || player.busy() || !stored(player).has(slot) ||
+  if (pending.get(player) !== context || !safe(context) || player.busy() || !held(player).has(slot) ||
       storedPet(player, slot).itemId !== itemId || !npc.isRegistered() || roaming.get(house)?.get(npc) !== slot) return;
   const pin = {player, feature: "poh-menagerie", resume: () => pickUpNow(context)};
   api.emitCustomEvent("bank-pin:guard", pin);
   if (pin.locked || pending.get(player) !== context || !safe(context)) return;
   pending.delete(player);
-  takeBack(player, house, slot, npc);
+  // The Fremennik Diary's pet rock task: picking the roaming rock up off the menagerie floor.
+  if (takeBack(player, house, slot, npc)) api.emitCustomEvent("construction:menagerie-pet-picked-up", {player, house, itemId});
 }
 
 function clearPending({player}) { pending.delete(player); }
@@ -346,7 +450,7 @@ function refreshPets(house) {
   const out = roaming.get(house) ?? new Map();
   roaming.set(house, out);
   const owner = house.owner;
-  const wanted = new Set(owner && !house.buildingMode && !owner.getAttribute(CLOSED_ATTRIBUTE) ? [...stored(owner)].slice(0, MAX_ROAMING) : []);
+  const wanted = new Set(owner && !house.buildingMode && !owner.getAttribute(CLOSED_ATTRIBUTE) ? [...held(owner)].slice(0, MAX_ROAMING) : []);
   for (const [npc, slot] of [...out]) {
     if (npc.isRegistered() && wanted.has(slot) && npc.getId() === storedPet(owner, slot)?.npcId) continue;
     out.delete(npc);
@@ -374,10 +478,12 @@ function refreshPets(house) {
 function heldInMenagerie(request) {
   const slot = slotOf(request.itemId);
   if (slot >= 0 && stored(request.player).has(slot)) request.held = true;
+  if (extras(request.player).includes(request.itemId)) request.held = true;
 }
 
 function attachMenagerie(api) {
   api.persistAttribute(STORED_ATTRIBUTE, []);
+  api.persistAttribute(EXTRAS_ATTRIBUTE, []);
   api.persistAttribute(CLOSED_ATTRIBUTE, false);
   api.persistAttribute(FORMS_ATTRIBUTE, {});
   for (const name of ["Oak house", "Teak house", "Mahogany house", "Consecrated house", "Desecrated house", "Nature house"]) {

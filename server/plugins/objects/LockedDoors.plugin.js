@@ -38,6 +38,9 @@ function lockedDoorFor(objectId) {
   return byId.get(objectId) ?? null;
 }
 
+/** @type {WeakMap<object, object>} player -> the token of their one pending delayed answer. */
+const PENDING_ANSWERS = new WeakMap();
+
 function refuseLockedDoor(request) {
   if (request.handled || !request.player) return;
   const door = lockedDoorFor(request.objectId);
@@ -48,10 +51,16 @@ function refuseLockedDoor(request) {
     answerLockedDoor(player, door);
     return;
   }
-  // The outhouse's man answers a tick after the player turns to the door. Walking off, or
-  // logging out, in that tick drops the line (ours: live recorded neither).
+  // The outhouse's man answers a tick after the player turns to the door. One answer is
+  // pending per player: a second click in that tick replaces the first rather than playing
+  // the line twice. A player who logged out, or was moved off the tile by a forced move
+  // (a teleport, say), gets no line (ours: live recorded neither).
   const at = player.getLocation().clone();
+  const token = {};
+  PENDING_ANSWERS.set(player, token);
   core.TaskManager.submit(new core.CountdownTask(player, door.delay, () => {
+    if (PENDING_ANSWERS.get(player) !== token) return;
+    PENDING_ANSWERS.delete(player);
     if (player.isRegistered() && player.getLocation().equals(at)) answerLockedDoor(player, door);
   }));
 }

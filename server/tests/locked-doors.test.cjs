@@ -211,7 +211,7 @@ for (const r of ROUTES) {
   });
 }
 
-test("walking off in the tick before the outhouse's answer drops it", () => {
+test("a forced move off the tile before the outhouse's answer drops it", () => {
   const id = core.CacheDefinitions.getLocId("hos_grape_odddoor");
   const actor = player([3722, 3815, 0]);
   open(actor, id, [3722, 3816, 0]);
@@ -219,4 +219,15 @@ test("walking off in the tick before the outhouse's answer drops it", () => {
   TaskManager.process();
   TaskManager.process();
   assert.deepEqual([actor.texts, actor.sounds, actor.heads], [[], [], []]);
+});
+
+test("clicking the outhouse twice in one tick answers once", () => {
+  const id = core.CacheDefinitions.getLocId("hos_grape_odddoor");
+  const actor = player([3722, 3815, 0]);
+  open(actor, id, [3722, 3816, 0]);
+  open(actor, id, [3722, 3816, 0]);
+  TaskManager.process();
+  TaskManager.process();
+  assert.deepEqual(actor.sounds, [LOCKED_SOUND]);
+  assert.equal(actor.heads.length, 1);
 });

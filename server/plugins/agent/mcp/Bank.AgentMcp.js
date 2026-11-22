@@ -4,11 +4,11 @@ module.exports = function registerBankTools(ctx) {
     core, tool, z, player, find, send, status, sleepTicks, inventorySlot, carried, clickEach, byName, amountSchema,
   } = ctx;
   const { Bank, ItemDefinition } = core;
-  // `slot` is the display slot bank widget actions use; placeholders keep theirs but are left out.
+  // `slot` is the display slot bank widget actions use; placeholders and empty slots keep theirs but are left out.
   const bankEntries = (p) => {
     if (!Bank.isOpen(p)) throw new Error("The bank is not open; interact with a Bank booth or Banker (option Bank) first");
     return Bank.layout(p).map(({ item }, slot) => ({
-      slot, id: item.getId(), name: ItemDefinition.forId(item.getId()).getName(), amount: item.getAmount(),
+      slot, id: item.getId(), name: item.getId() >= 0 ? ItemDefinition.forId(item.getId()).getName() : "", amount: item.getAmount(),
       itemId: Bank.displayItemId(item),
     })).filter((e) => e.amount > 0);
   };

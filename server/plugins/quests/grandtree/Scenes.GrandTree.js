@@ -76,6 +76,8 @@ module.exports = function createGrandTreeScenes(api, { onPrisonKing, onReleased,
   const kings = new WeakMap();
   const leftovers = new WeakMap();
   const cartFemis = new WeakMap();
+  /** The world tick until which Glough's arrest holds the player (the guard's climb, then the escort). */
+  const arrests = new WeakMap();
 
   const loc = ([x, y, z]) => new Location(x, y, z);
   const later = (player, ticks, callback) => scenes.later(player, ticks, callback);
@@ -160,16 +162,34 @@ module.exports = function createGrandTreeScenes(api, { onPrisonKing, onReleased,
   /** "A gnome guard appears.": he comes up the ladder to the player before "Come with me!". */
   function guardAppears(event) {
     const { player } = event;
-    const guard = api.spawnNpc({ id: ARREST.guard, x: ARREST.guardFrom[0], y: ARREST.guardFrom[1], z: ARREST.guardFrom[2],
-      wanderRadius: 0, owner: player, ownerOnly: true });
-    if (!guard) return;
-    guard.__skipDefaultRespawn = true;
-    leftovers.set(player, [...(leftovers.get(player) ?? []), guard]);
-    guard.getMovementQueue().addCheckpoint(loc(ARREST.guardTo));
+    // A talk restarted while "Come with me!" is open (any NPC's talk restarts on a click) keeps the guard
+    // already standing there rather than calling a second one.
+    let guard = (leftovers.get(player) ?? []).find((npc) => npc?.getId?.() === ARREST.guard && npc.isRegistered?.());
+    if (!guard) {
+      guard = api.spawnNpc({ id: ARREST.guard, x: ARREST.guardFrom[0], y: ARREST.guardFrom[1], z: ARREST.guardFrom[2],
+        wanderRadius: 0, owner: player, ownerOnly: true });
+      if (!guard) return;
+      guard.__skipDefaultRespawn = true;
+      leftovers.set(player, [...(leftovers.get(player) ?? []), guard]);
+      guard.getMovementQueue().addCheckpoint(loc(ARREST.guardTo));
+    }
+    holdForArrest(player, 5);
     event.wait = (resume) => later(player, 5, () => {
       guard.setPositionToFace(player.getLocation());
       resume();
     });
+  }
+
+  /**
+   * Ours: no capture clicks during these waits (the chat is closed); a click on Glough would start his talk
+   * again, so the arrest holds the player until "Come with me!" and again until the cell.
+   */
+  function holdForArrest(player, ticks) {
+    arrests.set(player, api.core.World.getProcessCycle() + ticks);
+  }
+
+  function arresting(player) {
+    return (arrests.get(player) ?? -1) > api.core.World.getProcessCycle();
   }
 
   /** "You are escorted...": the player walks to the ladder, climbs and is in the cell; the King comes. */
@@ -177,9 +197,10 @@ module.exports = function createGrandTreeScenes(api, { onPrisonKing, onReleased,
     const { player } = event;
     event.handled = event.end = true;
     player.getMovementQueue().reset().setBlockMovement(true);
-    later(player, 6, () => walk(player, ARREST.ladder));
+    holdForArrest(player, 13);
+    // Held steps, a tile a tick, so a click on the way can't pull the player off the guard's route.
+    for (let tick = 6; tick < 12; tick++) later(player, tick, () => stepTowards(player, ARREST.ladder));
     later(player, 12, () => {
-      player.getMovementQueue().setBlockMovement(true);
       player.performAnimation(new Animation(REACH_LADDER));
     });
     later(player, 13, () => {
@@ -188,6 +209,12 @@ module.exports = function createGrandTreeScenes(api, { onPrisonKing, onReleased,
       player.getMovementQueue().setBlockMovement(false);
     });
     later(player, 16, () => kingComes(player, () => onPrisonKing?.(player, kings.get(player))));
+  }
+
+  function stepTowards(player, [x, y]) {
+    const here = player.getLocation();
+    const dx = Math.sign(x - here.getX()), dy = Math.sign(y - here.getY());
+    if (dx || dy) player.getMovementQueue().stepWhileHeld(dx, dy);
   }
 
   /** The King appears east of the cell and walks to its door (t11170-11173), then speaks. */
@@ -334,6 +361,7 @@ module.exports = function createGrandTreeScenes(api, { onPrisonKing, onReleased,
   }
 
   function logout(player) {
+    arrests.delete(player);
     scenes.cancel(player);
     clearLeftovers(player);
     removePrisonKing(player);
@@ -341,7 +369,7 @@ module.exports = function createGrandTreeScenes(api, { onPrisonKing, onReleased,
 
   return {
     ARREST, CART, ESCAPE, FOUNDATIONS, OFFICE,
-    foundationsDown, foundationsUp, guardAppears, escort, kingAppears, kingComes, release, prisonKing, removePrisonKing,
+    foundationsDown, foundationsUp, guardAppears, escort, arresting, kingAppears, kingComes, release, prisonKing, removePrisonKing,
     flyToKaramja, followForeman, femiCart, isCartFemi, logout,
   };
 };

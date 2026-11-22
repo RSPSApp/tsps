@@ -712,13 +712,16 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
       closeTicks: 2,
       openSoundId: 69,
     }),
+    // The Karamja shipyard gate swings west as one piece, both leaves in a row along y 3041, from
+    // either side: captures local 1002189 tick 11325 (in, rev 242) and local 1001562 tick 6137 (out,
+    // rev 241). Sound 67 (the default) and the gate is back two ticks later.
     Object.freeze({
       closed: [[O.GATE_55, 2945, 3041, 0, 0], [O.GATE_56, 2945, 3042, 0, 0]],
       opened: [
         [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2945, 3041, 0, 0],
         [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2945, 3042, 0, 0],
-        [NAMELESS_DOOR_LEAF_IDS.SHIPYARD_GATE_LEFT_OPEN, 2946, 3041, 0, 3],
-        [NAMELESS_DOOR_LEAF_IDS.SHIPYARD_GATE_RIGHT_OPEN, 2946, 3042, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.SHIPYARD_GATE_LEFT_OPEN, 2944, 3041, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.SHIPYARD_GATE_RIGHT_OPEN, 2943, 3041, 0, 3],
       ],
       crossX: 2945,
       walkOver: true,

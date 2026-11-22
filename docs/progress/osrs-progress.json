@@ -10780,7 +10780,8 @@
             "The 'The Grand Tree' page in npc-dialogues.json carries 58 variants ('the-dying-tree'); source ids/slugs from npc-dialogues.json + npc-dialogue-index.json / osrsreboxed.",
             "The 'treachery-revealed-the-mystery-of-the-twigs' variant is the twig-pillar puzzle; wire it through onItemOnObject.",
             "Main 82657e165: #1528 the landings that blocked the quest route fixed.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4320 Finish the Grand Tree quest scenes and transitions. #4144 Fix the Grand Tree prison, shipyard and cave transitions. #4077 Land the Grand Tree trapdoor beside the cave ladder. 5 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4320 Finish the Grand Tree quest scenes and transitions. #4144 Fix the Grand Tree prison, shipyard and cave transitions. #4077 Land the Grand Tree trapdoor beside the cave ladder. 5 merged PRs changed recorded implementation files for this entry.",
+            "2026-11-22, #6544: clicking Glough during his guard's climb or the escort no longer restarts his talk and calls a second guard, and the Karamja shipyard gate opens with both leaves swung west as in rsprox captures local 1002189 t11325 and local 1001562 t6137. Verified by server/tests/grand-tree-capture.test.cjs and grand-tree-start-native.test.cjs (both fail on the previous code) and an agent MCP run. Statuses unchanged."
           ],
           "taskDetails": [
             {

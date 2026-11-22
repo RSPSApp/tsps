@@ -67,6 +67,12 @@ transcript's "If the player chose the previous options incorrectly:" options (`Q
   (2464,3496,3) at +13. The King appears at 2467,3495 at +16, walks to the cell door (2465,3496) and speaks at
   +20, without Charlie being talked to. On that line's continue the door opens (loc 1548, sound 1631), the King
   steps to 2465,3495 and the player walks out to 2465,3496; the next line at +3 and the door shuts at +6.
+  Ours: the capture has no clicks in the guard's 5 ticks or the escort's 13, so Glough's Talk-to does nothing
+  then; otherwise a second click started his talk again and called a second guard.
+- *The shipyard gate:* on the password's last line (and from inside, rev 241 capture local 1001562 t6137) the
+  leaves 2438/2439 at 2945,3041-3042 become inviswalls, with the open leaves 1566 at 2944,3041 and 1565 at
+  2943,3041, both rotation 3 (swung west in a row); sound 67, the player steps across and the gate is back two
+  ticks later (t11325-11327).
 - *The glider:* on "Okay, you're the boss!..." the glider map (138) opens with pilot_journey 7 and the glider's
   fade (colour 1512708, 20 cycles); the player is at 2918,3058 a tick later; fade in at +3; all closed and Errdo's
   "Sorry about that." at +4. There is no "You fly on the glider." chat line.
@@ -107,6 +113,8 @@ the Daconia rock's root is drawn once per player from the cave's roots (Wiki: "I
 
 Newest first. One line each, linked to its issue or PR when there is one.
 
+- **fixed** ([#6544](https://github.com/RSPSApp/tsps/issues/6544)) A click on Glough while his guard climbed up
+  restarted his talk and spawned a second guard; the shipyard gate's open leaves stood east of it, split apart.
 - **fixed** The whole quest follows rsprox capture local 1002189 (above): stage timing, kept items, boxes, the
   translation menus, the arrest and release, the crash flight, the office, Femi's cart, the watchtower, Glough's
   pet and the scroll.

@@ -165,6 +165,7 @@ export class Player extends Mobile {
     public interfaceId: number = -1
     /** Counts modal opens (a change to a mounted id), so a held id can be told from the same id mounted again. */
     private interfaceOpens = 0
+    private teleportStarts = 0;
     /** The process cycle of the player's last click or key press (0 before any since login). */
     public lastInputCycle = 0;
     private multiIcon: number;
@@ -1215,6 +1216,15 @@ export class Player extends Mobile {
     /** How many modals have opened so far; a new open, even of the same id after a close, moves it. */
     public getInterfaceOpens(): number {
         return this.interfaceOpens;
+    }
+
+    public getTeleportStarts(): number {
+        return this.teleportStarts;
+    }
+
+    public override setTeleporting(teleporting: boolean): void {
+        if (teleporting && !this.isTeleportingReturn()) this.teleportStarts++;
+        super.setTeleporting(teleporting);
     }
 
     public setInterfaceId(interfaceId: number): this {

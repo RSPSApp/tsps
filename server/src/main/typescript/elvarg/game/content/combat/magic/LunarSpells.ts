@@ -777,15 +777,18 @@ export class LunarSpells {
     }
 
     /**
-     * The potion gives a dose to each player within 2 tiles who accepts aid, as many as it has doses,
-     * and the caster drinks one free (Wiki: Stat Restore Pot Share, Boost Potion Share).
+     * The potion plugin checks who can receive a dose within 2 tiles, including Group Ironman
+     * teammates with Accept Aid off (Wiki: Stat Restore Pot Share, Boost Potion Share).
      */
     private static castPotionShare(player: Player, spell: LunarSpell, slot: number, kind: "restore" | "boost"): boolean {
         const targets: Player[] = [];
-        this.forNearbyPlayers(player, 2, target => targets.push(target));
-        const share = { player, slot, kind, targets, valid: false, message: null as string | null, apply: null as null | (() => void) };
+        // Potions applies its own Accept Aid rule to all nearby candidates.
+        this.forNearbyPlayers(player, 2, target => targets.push(target), true);
+        const share = { player, slot, kind, targets, valid: false, noRecipients: false,
+            message: null as string | null, apply: null as null | (() => void) };
         PluginManager.emitCustomEvent("potions:share", share);
         if (!share.valid || !share.apply) {
+            if (share.noRecipients && spell.refuseIfDisabled(player)) return true;
             player.sendMessage(share.message ?? "You can't share that potion.");
             return true;
         }
@@ -800,10 +803,12 @@ export class LunarSpells {
         return player.getDueling?.()?.inDuel?.() === true;
     }
 
-    /** Players other than the caster within `distance` who accept aid, are alive and aren't in a duel. */
-    private static forNearbyPlayers(player: Player, distance: number, effect: (target: Player) => void): void {
+    /** Living players other than the caster within `distance`, in the same instance and outside duels. */
+    private static forNearbyPlayers(player: Player, distance: number, effect: (target: Player) => void,
+        includeAidDisabled = false): void {
         World.getPlayers().forEach(target => {
-            if (target && target !== player && this.acceptsAid(target) && !this.inDuel(target) && target.getHitpoints() > 0 &&
+            if (target && target !== player && (includeAidDisabled || this.acceptsAid(target)) &&
+                !this.inDuel(target) && target.getHitpoints() > 0 &&
                 this.sameInstance(player, target) &&
                 player.getLocation().isWithinDistance(target.getLocation(), distance)) effect(target);
         });

@@ -2,31 +2,48 @@
 // Stat Restore Pot Share and Boost Potion Share (PR 1942 review): every drinker passes the rules a
 // normal drink does, and the spell needs another player, whose doses are the only ones it uses.
 const assert = require("node:assert/strict");
-const { before, test } = require("node:test");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { before, after, test } = require("node:test");
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
+const { HitDamage } = require("../dist/game/content/combat/hit/HitDamage");
+const { HitMask } = require("../dist/game/content/combat/hit/HitMask");
 const { Skill } = require("../dist/game/model/Skill");
 const { Spell } = require("../dist/game/content/combat/magic/Spell");
 const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
+const { PlayerSession } = require("../dist/net/PlayerSession");
+const { ClientConnection } = require("../dist/net/NetworkBuilder");
+const Grouping = require("../plugins/interface/Grouping.plugin");
 const Potions = require("../plugins/items/Potions.plugin");
+const groups = Grouping._test.Store;
 
 /** Players a duel's No Drinks rule covers, as DuelArena's canDrink hook answers for them. */
 const noDrinks = new Set();
-let share;
-let core;
+const core = PluginManager.getCoreApi();
+const { CacheDefinitions, Item, ItemIdentifiers: items, Location, MagicSpellbook, Misc } = core;
+let groupDir;
+let castleWars;
 before(async () => {
-  await CachePipeline.initialize(process.cwd());
-  core = PluginManager.getCoreApi();
-  const api = {
-    core,
-    emitCanDrink: (player) => (noDrinks.has(player) ? false : undefined),
-    onCustomEvent: (name, handler) => { if (name === "potions:share") share = handler; },
-  };
-  Potions.register(new Proxy(api, { get: (object, key) => object[key] ?? (() => {}) }));
+  groupDir = fs.mkdtempSync(path.join(os.tmpdir(), "lunar-potion-share-"));
+  process.env[groups.FILE_ENV] = path.join(groupDir, "groups.json");
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  require("../plugins/items/ItemDefinitionLoader.plugin").register(PluginManager.createApi("ShareItemDefinitionsTest"));
+  Grouping.register(PluginManager.createApi("GroupingTest"));
+  Potions.register(PluginManager.createApi("PotionsTest"));
+  require("../plugins/interface/PriceChecker.plugin").register(PluginManager.createApi("PriceCheckerTest"));
+  const castleApi = PluginManager.createApi("CastleWarsTest");
+  castleWars = require("../plugins/minigames/castlewars/Game.CastleWars")(castleApi);
+  require("../plugins/minigames/castlewars/Areas.CastleWars")(castleApi, castleWars);
+  PluginManager.createApi("DuelTest").onCanDrink((event) => {
+    if (noDrinks.has(event.player)) event.allow = false;
+  });
 });
+after(() => fs.rmSync(groupDir, { recursive: true, force: true }));
 
 /** A player at 0 of 99 Prayer, holding `potion` in slot 0. */
 function drinker(t, potion = null) {
@@ -42,7 +59,7 @@ function drinker(t, potion = null) {
 
 const request = (caster, targets) => {
   const event = { player: caster.player, slot: 0, kind: "restore", targets: targets.map((target) => target.player), valid: false, message: null, apply: null };
-  share(event);
+  PluginManager.emitCustomEvent("potions:share", event);
   return event;
 };
 const potion = (caster) => caster.player.getInventory().getItems()[0].getId();
@@ -86,7 +103,6 @@ test("the spell isn't paid for when the share is refused", (t) => {
   const caster = drinker(t, core.ItemIdentifiers.PRAYER_POTION_1_);
   let paid = 0;
   t.mock.method(Spell.prototype, "canCast", () => { paid++; return true; });
-  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => { if (name === "potions:share") share(event); });
   t.mock.method(caster.player.getSkillManager(), "addExperiences", () => { throw new Error("no XP for a refused cast"); });
   assert.equal(LunarSpells.handleItemTarget(caster.player, core.ItemIdentifiers.PRAYER_POTION_1_, 0, "Stat Restore Pot Share"), true);
   assert.equal(paid, 0);
@@ -103,7 +119,6 @@ function castShare(t, caster, others) {
   caster.player.getSkillManager().setMaxLevel(Skill.DEFENCE, 99);
   t.mock.method(World, "getPlayers", () => [caster.player, ...others.map((other) => other.player)]);
   t.mock.method(Spell.prototype, "canCast", () => true);
-  t.mock.method(PluginManager, "emitCustomEvent", (name, event) => { if (name === "potions:share") share(event); });
   return LunarSpells.handleItemTarget(caster.player, potion(caster), 0, "Stat Restore Pot Share");
 }
 
@@ -135,4 +150,327 @@ test("a targeted Lunar spell ignores a player in another instance", (t) => {
   stranger.player.setArea(instance("run B"));
   t.mock.method(Spell.prototype, "canCast", () => { throw new Error("must not cast"); });
   assert.equal(LunarSpells.handlePlayerTarget(caster.player, stranger.player, "Heal Other"), false);
+});
+
+function scene(t) {
+  const online = [];
+  t.mock.method(World, "getPlayers", () => online);
+  const channel = {
+    kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {},
+  };
+  return function player(name, x = 3200, y = 3200, acceptsAid = false) {
+    const session = new PlayerSession(channel);
+    const account = new Player(session, new Location(x, y, 0));
+    account.setUsername(name);
+    account.setIndex(online.push(account));
+    account.setRegistered(true);
+    account.setAttribute("accept-aid", acceptsAid);
+    session.setPlayer(account);
+    return account;
+  };
+}
+
+function makeGroup(leader, members, ironman) {
+  const now = Date.now();
+  const id = (player) => Misc.stringToLongBigInt(player.getUsername());
+  const group = groups.create(leader.getProfile(), id(leader), now, ironman);
+  for (const member of members) groups.addMember(group, id(member), now);
+  groups.reset();
+}
+
+function potionCast(player, name, potion, amount = 1) {
+  const spell = CacheDefinitions.getSpellByName(name);
+  const { runes } = CacheDefinitions.getSpellRequirements(name);
+  const inventory = player.getInventory();
+  inventory.setItem(0, new Item(potion, amount));
+  runes.forEach((rune, index) => inventory.setItem(index + 1, new Item(rune.id, rune.amount)));
+  player.setSpellbook(MagicSpellbook.LUNAR);
+  const skills = player.getSkillManager();
+  for (const skill of [Skill.DEFENCE, Skill.MAGIC]) skills.setMaxLevel(skill, 99).setCurrentLevel(skill, 99, false);
+
+  const connection = new ClientConnection(player.getSession().getChannel());
+  connection.player = player;
+  const initialXp = skills.getExperience(Skill.MAGIC);
+  async function queue(slot = 0) {
+    await connection.dispatch([{
+      type: "widget_target", targetWidgetId: 149 << 16, targetSlot: slot, targetItemId: potion,
+      sourceWidgetId: spell.widgetId, sourceSlot: -1, sourceItemId: spell.itemId,
+    }]);
+  }
+  return {
+    runes,
+    queue,
+    send: (packet) => connection.dispatch([packet]),
+    turn: () => connection.processTurnPackets(),
+    async cast() {
+      await queue();
+      connection.processTurnPackets();
+    },
+    assertUnspent() {
+      assert.deepEqual([inventory.getItems()[0].getId(), inventory.getItems()[0].getAmount()], [potion, amount]);
+      for (const rune of runes) assert.equal(inventory.getAmount(rune.id), rune.amount);
+      assert.equal(skills.getExperience(Skill.MAGIC), initialXp);
+    },
+  };
+}
+
+for (const [name, full, remaining, skill, start, result] of [
+  ["Stat Restore Pot Share", items.PRAYER_POTION_4_, items.PRAYER_POTION_2_, Skill.PRAYER, 10, 32],
+  ["Boost Potion Share", items.ATTACK_POTION_4_, items.ATTACK_POTION_2_, Skill.ATTACK, 60, 69],
+]) {
+  test(name + " reaches a teammate with Accept Aid off and a nearby player with it on", async (t) => {
+    const player = scene(t);
+    const caster = player("cast " + name[0]);
+    const outsider = player("outsider " + name[0], 3201, 3200);
+    const teammate = player("mate " + name[0], 3202, 3202);
+    const tooFar = player("far " + name[0], 3203, 3202);
+    const willing = player("willing " + name[0], 3200, 3200, true);
+    makeGroup(caster, [teammate, tooFar], true);
+    for (const account of [caster, teammate, tooFar, outsider, willing]) {
+      account.getSkillManager().setMaxLevel(skill, 60).setCurrentLevel(skill, start, false);
+    }
+    const { cast, runes } = potionCast(caster, name, full);
+    await cast();
+
+    const level = (account) => account.getSkillManager().getCurrentLevel(skill);
+    assert.equal(level(teammate), result, "the teammate is eligible at the corner of the 5x5 area");
+    assert.equal(level(willing), result, "a player who accepts aid still shares the potion");
+    assert.equal(level(caster), result, "the caster receives the free dose");
+    assert.equal(level(outsider), start, "Accept Aid off still excludes outsiders");
+    assert.equal(level(tooFar), start, "shared group membership does not extend the spell range");
+    assert.equal(caster.getInventory().getItems()[0].getId(), remaining, "two recipients cost two doses");
+    for (const { id } of runes) assert.equal(caster.getInventory().getAmount(id), 0);
+  });
+}
+
+test("an ordinary group does not bypass Accept Aid or spend any supplies", async (t) => {
+  const player = scene(t);
+  const caster = player("normal cast");
+  const teammate = player("normal mate");
+  makeGroup(caster, [teammate], false);
+  const potion = items.PRAYER_POTION_4_;
+  const { cast, runes } = potionCast(caster, "Stat Restore Pot Share", potion);
+  await cast();
+  assert.equal(caster.getInventory().getItems()[0].getId(), potion);
+  for (const { id, amount } of runes) assert.equal(caster.getInventory().getAmount(id), amount);
+});
+
+for (const [name, noted, skill, start] of [
+  ["Stat Restore Pot Share", items.PRAYER_POTION_2__2, Skill.PRAYER, 10],
+  ["Boost Potion Share", items.SUPER_COMBAT_POTION_2__2, Skill.ATTACK, 60],
+]) {
+  for (const amount of [1, 5]) {
+    test(`${name} preserves a stack of ${amount} potion banknotes with a teammate in range`, async (t) => {
+      const player = scene(t);
+      const caster = player(`note ${name[0]}${amount}`);
+      const mate = player(`mate ${name[0]}${amount}`);
+      makeGroup(caster, [mate], true);
+      for (const account of [caster, mate]) account.getSkillManager().setMaxLevel(skill, 60).setCurrentLevel(skill, start, false);
+      const action = potionCast(caster, name, noted, amount);
+      assert.equal(new Item(noted, 1).getDefinition().isNoted(), true);
+      await action.cast();
+      action.assertUnspent();
+      for (const account of [caster, mate]) assert.equal(account.getSkillManager().getCurrentLevel(skill), start);
+    });
+  }
+}
+
+test("Stat Restore Pot Share gives the recorded refusal for an incompatible potion", async (t) => {
+  const player = scene(t);
+  const caster = player("wrong pot");
+  player("willing pot", 3200, 3200, true);
+  const messages = [];
+  t.mock.method(caster, "sendMessage", (message) => messages.push(message));
+  // rsprox 4103 ticks 761–762 targets this item ID.
+  const action = potionCast(caster, "Stat Restore Pot Share", items.EXTREME_ENERGY_POTION_4_);
+  await action.cast();
+  action.assertUnspent();
+  assert.deepEqual(messages, ["You cannot use the spell on that object."]);
+});
+
+test("Castle Wars refuses Boost Potion Share by either aid route during the match", async (t) => {
+  const player = scene(t);
+  const caster = player("match cast", 2400, 3100);
+  const mate = player("match mate", 2401, 3100);
+  makeGroup(caster, [mate], true);
+  const sides = [[caster, castleWars.TEAM.SARADOMIN], [mate, castleWars.TEAM.ZAMORAK]];
+  for (const [account, team] of sides) {
+    account.setArea(castleWars.gameArea);
+    castleWars.setTeamId(account, team);
+    account.getSkillManager().setMaxLevel(Skill.ATTACK, 60).setCurrentLevel(Skill.ATTACK, 60, false);
+  }
+  t.mock.method(castleWars, "isPlaying", (account) => account === caster || account === mate);
+  const messages = [];
+  t.mock.method(caster, "sendMessage", (message) => messages.push(message));
+  const action = potionCast(caster, "Boost Potion Share", items.ATTACK_POTION_1_);
+  for (const acceptsAid of [false, true]) {
+    mate.setAttribute("accept-aid", acceptsAid);
+    await action.cast();
+    action.assertUnspent();
+    for (const [account] of sides) assert.equal(account.getSkillManager().getCurrentLevel(Skill.ATTACK), 60);
+  }
+  mate.moveTo(new Location(2405, 3100, 0));
+  await action.cast();
+  action.assertUnspent();
+  assert.deepEqual(messages, Array(3).fill("You don't want to help your enemies"));
+});
+
+test("a full animation stall holds only the latest potion-share click until release", async (t) => {
+  const player = scene(t);
+  const caster = player("stall cast");
+  const mate = player("stall mate", 3200, 3200, true);
+  mate.getSkillManager().setMaxLevel(Skill.PRAYER, 60).setCurrentLevel(Skill.PRAYER, 10, false);
+  const potion = items.PRAYER_POTION_2_;
+  const action = potionCast(caster, "Stat Restore Pot Share", potion);
+  caster.getInventory().setItem(5, new Item(potion, 1));
+  let cycle = 100;
+  t.mock.method(World, "getProcessCycle", () => cycle);
+  caster.getCombat().setAnimationStall(2);
+  await action.queue();
+  await action.queue(5);
+  action.turn();
+  action.assertUnspent();
+  assert.equal(mate.getSkillManager().getCurrentLevel(Skill.PRAYER), 10);
+  cycle += 2;
+  action.turn();
+  assert.equal(caster.getInventory().getItems()[0].getId(), potion);
+  assert.equal(caster.getInventory().getItems()[5].getId(), items.PRAYER_POTION_1_);
+  assert.equal(mate.getSkillManager().getCurrentLevel(Skill.PRAYER), 32);
+});
+
+test("a potion-share click during the death task grants no effect and spends nothing", async (t) => {
+  const player = scene(t);
+  const caster = player("dying cast");
+  const mate = player("dying mate", 3200, 3200, true);
+  mate.getSkillManager().setMaxLevel(Skill.PRAYER, 60).setCurrentLevel(Skill.PRAYER, 10, false);
+  const action = potionCast(caster, "Stat Restore Pot Share", items.PRAYER_POTION_2_);
+  const queue = caster.getCombat().getHitQueue();
+  queue.addPendingDamage([new HitDamage(caster.getHitpoints(), HitMask.RED)]);
+  queue.process(World.getProcessCycle());
+  assert.equal(caster.getHitpoints(), 0);
+  assert.equal(caster.isDyingReturn(), true);
+  t.after(() => core.TaskManager.cancelTasks(caster.getIndex()));
+  await action.cast();
+  action.assertUnspent();
+  assert.equal(mate.getSkillManager().getCurrentLevel(Skill.PRAYER), 10);
+});
+
+for (const freshClick of [false, true]) {
+  test(`a click in the last locked interval replaces the held potion share (fresh click: ${freshClick})`, async (t) => {
+    const player = scene(t);
+    const caster = player("last cast");
+    const mate = player("last mate", 3200, 3200, true);
+    mate.getSkillManager().setMaxLevel(Skill.PRAYER, 60).setCurrentLevel(Skill.PRAYER, 10, false);
+    const potion = items.PRAYER_POTION_2_;
+    const action = potionCast(caster, "Stat Restore Pot Share", potion);
+    const inventory = caster.getInventory();
+    action.runes.forEach(({ id, amount }, index) => inventory.setItem(index + 1, new Item(id, amount * (freshClick ? 1 : 2))));
+    for (const slot of [5, 6]) inventory.setItem(slot, new Item(potion, 1));
+    let cycle = 100;
+    t.mock.method(World, "getProcessCycle", () => cycle);
+    caster.getCombat().setAnimationStall(3);
+    await action.queue();
+    cycle += 2;
+    action.turn();
+    assert.equal(mate.getSkillManager().getCurrentLevel(Skill.PRAYER), 10);
+    await action.queue(5);
+    cycle++;
+    if (freshClick) await action.queue(6);
+    action.turn();
+    assert.equal(inventory.getItems()[0].getId(), potion);
+    assert.equal(inventory.getItems()[5].getId(), items.PRAYER_POTION_1_);
+    assert.equal(inventory.getItems()[6].getId(), potion, "fresh input follows the held cast");
+    assert.equal(mate.getSkillManager().getCurrentLevel(Skill.PRAYER), 32);
+  });
+}
+
+for (const landBeforeRelease of [false, true]) {
+  test(`a teleport supersedes a held potion share (land before release: ${landBeforeRelease})`, async (t) => {
+    const player = scene(t);
+    const caster = player("tele cast");
+    const origin = player("tele origin", 3200, 3200, true);
+    const destination = player("tele dest", 2114, 3915, true);
+    for (const mate of [origin, destination]) {
+      mate.getSkillManager().setMaxLevel(Skill.PRAYER, 60).setCurrentLevel(Skill.PRAYER, 10, false);
+    }
+    const action = potionCast(caster, "Stat Restore Pot Share", items.PRAYER_POTION_2_);
+    let cycle = 100;
+    t.mock.method(World, "getProcessCycle", () => cycle);
+    caster.getCombat().setAnimationStall(landBeforeRelease ? 20 : 2);
+    await action.queue();
+    action.turn();
+    const landing = new Location(2114, 3915, 0);
+    core.TeleportHandler.teleport(caster, landing, core.TeleportType.LUNAR, false);
+    const tick = () => { cycle++; core.TaskManager.process(); };
+    if (landBeforeRelease) {
+      for (let step = 0; step < 15 && caster.isTeleportingReturn(); step++) tick();
+      assert.equal(caster.isTeleportingReturn(), false);
+      assert.ok(caster.getLocation().equals(landing));
+      cycle = 120;
+    } else {
+      cycle = 102;
+      assert.equal(caster.isTeleportingReturn(), true);
+      assert.ok(!caster.getLocation().equals(landing));
+      // A second, fresh inventory target sent during the teleport is discarded too.
+      await action.queue();
+    }
+    action.turn();
+    action.assertUnspent();
+    for (const mate of [origin, destination]) assert.equal(mate.getSkillManager().getCurrentLevel(Skill.PRAYER), 10);
+    for (let step = 0; step < 15 && caster.isTeleportingReturn(); step++) tick();
+    action.turn();
+    action.assertUnspent();
+  });
+}
+
+for (const openOnRelease of [false, true]) {
+  test(`a held potion share preserves a newer Price Checker (processed on release: ${openOnRelease})`, async (t) => {
+    const player = scene(t);
+    const caster = player("price cast");
+    const mate = player("price mate", 3200, 3200, true);
+    mate.getSkillManager().setMaxLevel(Skill.PRAYER, 60).setCurrentLevel(Skill.PRAYER, 10, false);
+    const potion = items.PRAYER_POTION_2_;
+    const action = potionCast(caster, "Stat Restore Pot Share", potion);
+    let cycle = 100;
+    t.mock.method(World, "getProcessCycle", () => cycle);
+    caster.getCombat().setAnimationStall(3);
+    await action.queue();
+    action.turn();
+    await action.send({ type: "widget_action", widgetId: (387 << 16) | 3, groupId: 387, childId: 3, buttonNum: 1 });
+    if (!openOnRelease) action.turn();
+    await action.send({ type: "widget_action", widgetId: 238 << 16, groupId: 238, childId: 0, buttonNum: 1, slot: 0, itemId: potion });
+    if (!openOnRelease) {
+      action.turn();
+      assert.equal(caster.getInventory().getAmount(potion), 0);
+      assert.equal(caster.__priceCheckerContainer.getAmount(potion), 1);
+    }
+    cycle = 103;
+    action.turn();
+    assert.equal(caster.getInterfaceId(), 464);
+    assert.equal(caster.getInventory().getAmount(potion), 0);
+    assert.equal(caster.__priceCheckerContainer.getAmount(potion), 1);
+    assert.equal(mate.getSkillManager().getCurrentLevel(Skill.PRAYER), 10);
+    caster.getPacketSender().sendInterfaceRemoval();
+    action.assertUnspent();
+  });
+}
+
+test("a newer chatbox invalidates a held potion share even after the chatbox closes", async (t) => {
+  const player = scene(t);
+  const caster = player("chat cast");
+  const mate = player("chat mate", 3200, 3200, true);
+  mate.getSkillManager().setMaxLevel(Skill.PRAYER, 60).setCurrentLevel(Skill.PRAYER, 10, false);
+  const action = potionCast(caster, "Stat Restore Pot Share", items.PRAYER_POTION_2_);
+  let cycle = 100;
+  t.mock.method(World, "getProcessCycle", () => cycle);
+  caster.getCombat().setAnimationStall(3);
+  await action.queue();
+  action.turn();
+  caster.getPacketSender().sendChatboxInterface(193);
+  caster.getPacketSender().closeInterface(193);
+  cycle += 3;
+  action.turn();
+  action.assertUnspent();
+  assert.equal(mate.getSkillManager().getCurrentLevel(Skill.PRAYER), 10);
 });

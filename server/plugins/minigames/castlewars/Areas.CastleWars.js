@@ -372,6 +372,15 @@ function describeSafePvp(event) {
   if (game.getTeamData(team) && game.getTeamData(other) && team !== other) event.safe = true;
 }
 
+/** Wiki (Boost Potion Share): this spell is disabled during Castle Wars. */
+function refuseBoostPotionShare(event) {
+  const { player, spellId } = event;
+  if (!game.isPlaying(player) || player.getArea() !== game.gameArea) return;
+  if (spellId !== core.CacheDefinitions.getSpellByName("Boost Potion Share")?.widgetId) return;
+  event.disabled = true;
+  player.sendMessage("You don't want to help your enemies");
+}
+
 module.exports = function attachCastleWarsAreas(api, castleWars) {
   game = castleWars;
   core = api.core;
@@ -384,6 +393,7 @@ module.exports = function attachCastleWarsAreas(api, castleWars) {
   api.onPlayerLogin(restoreLoginInsideCastleWars);
   api.onCanEquip(protectTeamColours);
   api.onCanUnequip(protectTeamColours);
+  api.onSpellDisabled(refuseBoostPotionShare);
   api.onPlayerBeforeDeath(rememberDying);
   api.onPlayerDeath(respawnInStartRoom);
   api.onShouldDropItemsOnDeath(keepItemsOnDeath);

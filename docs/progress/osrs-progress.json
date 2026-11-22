@@ -22035,7 +22035,8 @@
             "Main 0a219d100 (2026-11-03): #1940 fixes bracelet activation/death use, tunnel-rock flags, barricade corner collision and entry refusal. #1970 limits catapult auto-returns to a carrier’s own flag; stolen flags stay dropped and the owning team can return them at its own catapult from an adjacent tile. Exact catapult coordinates/team conditions remain reporter-backed rather than independently verified current OSRS behavior; source limits are recorded.",
             "Main 8403b60db (4 November 2026): #1985, #2058, #2062, #2068 — Practice barricade priority, death supplies and large-door resync are repaired; custom freeze/barricade-priority controls were removed in favor of the existing gameplay flow.",
             "Main 3b61a15a8 (6 November 2026): #2329 feat: open the native Castle Wars ticket exchange; #2342 Complete Castle Wars rewards and combat XP toggle; #2359 Fix Castle Wars flag drops on cleared tunnel rocks; #2379 Fix Castle Wars practice bot patrols and flag runs; #2388 fix: match the four-tick player death window. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3835 World config: plugins declare their own options (v0.1). #3755 Castle Wars: Lanthus' practice settings apply only to practice matches. #3713 Castle Wars: no bones in the lobby when the game ends mid-death. 6 merged PRs changed recorded implementation files for this entry."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3835 World config: plugins declare their own options (v0.1). #3755 Castle Wars: Lanthus' practice settings apply only to practice matches. #3713 Castle Wars: no bones in the lobby when the game ends mid-death. 6 merged PRs changed recorded implementation files for this entry.",
+            "2026-11-22, PR #6522: Boost Potion Share is refused during a Castle Wars match, as documented at https://oldschool.runescape.wiki/w/Boost_Potion_Share. Inventory-target packet tests cover opposing teams with Accept Aid on and off and the same refusal for a caster with no recipient nearby (server/tests/lunar-potion-share.test.cjs)."
           ],
           "taskDetails": [
             {
@@ -43899,7 +43900,8 @@
             "Main 3b61a15a8 (6 November 2026): #2330 fix: handle Monster Inspect casts on NPCs; #2450 Restore recorded combat, prayer and area sound behavior; #2477 Credit supported Kandarin Diary gameplay tasks; #2486 Credit supported Varrock Diary gameplay and Plank Make batches; #2490 Credit supported Kourend and Kebos Diary gameplay tasks; #2503 Play Bones to Bananas' sound. (7 merged PRs touch the recorded implementation; highlights shown.) Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4237 Settings: confirmations and messages for clue scrolls, STASH units, Plank Make, gravestone fees, trades and boat teleports. #3835 World config: plugins declare their own options (v0.1). #3846 Bones to Bananas/Peaches: every bone the Wiki lists, and the recorded no-bones line. 10 merged PRs changed recorded implementation files for this entry.",
             "2026-11-16, fix/spellbook-death-cleanup: death and logout clear the Arceuus ward, mark, Death Charge active effect, shadow veil, corruption, dark lure and the ward/shadow/offering cooldowns, and the Lunar Magic Imbue, Heal Group and Spellbook Swap timers; an active swap returns to Lunar first and the thrall is dismissed on logout too. The Vengeance and Death Charge cooldowns keep running, matching the captures; Death Charge resyncs its indicator on login (server/src/main/typescript/elvarg/game/entity/impl/player/Player.ts, magic/ArceuusSpells.ts, magic/LunarSpells.ts; server/tests/spell-status-death-cleanup.test.cjs).",
-            "2026-11-21, parity/prayer-magic-death-charge-rite: the Rite of vile transference's Read follows rsprox recording 3285 ticks 6162-6178 (objectbox, consume menu, varbit death_charge_scroll_used, read seq, spotanim 3288 and synth 5034, upgraded objectbox 6 ticks later); the upgrade makes Death Charge restore 15% from two kills per cast (Wiki), with the cache's red-skull cast/end spotanims 3288/3289, and Yama's Dossier counts a read rite as owned (server/plugins/items/RiteOfVileTransference.plugin.js, magic/ArceuusSpells.ts; server/tests/rite-of-vile-transference.test.cjs). Not recorded: an upgraded cast, so its messages are the plain spell's."
+            "2026-11-21, parity/prayer-magic-death-charge-rite: the Rite of vile transference's Read follows rsprox recording 3285 ticks 6162-6178 (objectbox, consume menu, varbit death_charge_scroll_used, read seq, spotanim 3288 and synth 5034, upgraded objectbox 6 ticks later); the upgrade makes Death Charge restore 15% from two kills per cast (Wiki), with the cache's red-skull cast/end spotanims 3288/3289, and Yama's Dossier counts a read rite as owned (server/plugins/items/RiteOfVileTransference.plugin.js, magic/ArceuusSpells.ts; server/tests/rite-of-vile-transference.test.cjs). Not recorded: an upgraded cast, so its messages are the plain spell's.",
+            "2026-11-22, PR #6522: Stat Restore Pot Share and Boost Potion Share can give doses to members of the caster's Group Ironman group within the existing 5x5 area even with Accept Aid off. The Wiki entries for both spells document this eligibility rule. Potion shares require a single unnoted potion. Stat Restore Pot Share's incompatible-item refusal follows public rsprox recording 4103, ticks 761–762. Boost Potion Share is refused during an active Castle Wars match. Packet tests verify eligibility, costs and action restrictions (server/tests/lunar-potion-share.test.cjs). Resources and restrictions stay in progress pending the broader Lunar cast restriction audit."
           ],
           "taskDetails": [
             {
@@ -43940,7 +43942,7 @@
               "steps": [
                 "Runes (astral 9075, cosmic 564, law 563, blood 565, etc.) are declared per spell and consumed by Spell.canCast; energy transfer additionally needs a full special bar (LunarSpells.ts:252).",
                 "Lunar cannot be autocast (Autocasting.ts:73); Vengeance fails in a duel (EffectSpells.ts:57); heal other refuses non-aid players and Vengeance other refuses a target that already has it (LunarSpells.ts:280).",
-                "Cast potion shares on the potion; dispatch potions:share for eligible players within two tiles, one paid dose each and a free caster dose."
+                "Cast potion shares on one unnoted inventory potion. Eligible recipients within two tiles either accept aid or belong to the caster's Group Ironman group. Each recipient costs one dose and the caster receives one free dose. Boost Potion Share is disabled during a Castle Wars match."
               ],
               "acceptanceCriteria": [
                 "Rune/energy/special requirements are exact and reversible (energy transfer swaps bars).",
@@ -43948,7 +43950,9 @@
               ],
               "refs": [
                 "server/src/main/typescript/elvarg/game/content/combat/magic/LunarSpells.ts:252",
-                "server/src/main/typescript/elvarg/game/content/combat/magic/Autocasting.ts:73"
+                "server/src/main/typescript/elvarg/game/content/combat/magic/Autocasting.ts:73",
+                "https://oldschool.runescape.wiki/w/Stat_Restore_Pot_Share",
+                "https://oldschool.runescape.wiki/w/Boost_Potion_Share"
               ]
             },
             {

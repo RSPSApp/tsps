@@ -231,6 +231,7 @@ export class PacketSender {
   /** The spell unlock states go out with the session's first spellbook mount only. */
   private spellUnlocksSent = false;
   private subInterfaceTargets = new Map<number, SubInterfaceMount>();
+  private interruptibleInterfaceOpens = 0;
   /** Last interface owning each transmitted client container; never authoritative contents. */
   private inventoryOwners = new Map<number, number>();
   private chatboxGroupId = -1;
@@ -459,10 +460,12 @@ export class PacketSender {
   // opens the numeric "enter amount" prompt (resolved via resume_countdialog), runClientScript(110,
   // title, mode) opens the free-text prompt (resolved via resume_namedialog/resume_stringdialog).
   public sendEnterAmountPrompt(title: string): PacketSender {
+    this.interruptibleInterfaceOpens++;
     return this.sendClientScript(108, title);
   }
 
   public sendEnterInputPrompt(title: string): PacketSender {
+    this.interruptibleInterfaceOpens++;
     return this.sendClientScript(110, title, 0);
   }
 
@@ -985,6 +988,10 @@ export class PacketSender {
   public hasInterruptibleInterface(): boolean {
     return this.chatboxGroupId >= 0 || [...this.subInterfaceTargets.values()]
       .some((entry) => entry.type === 0 || entry.type === 3);
+  }
+
+  public getInterruptibleInterfaceOpens(): number {
+    return this.interruptibleInterfaceOpens;
   }
 
   closeInterruptibleInterfaces(): this {
@@ -1585,6 +1592,7 @@ export class PacketSender {
    * mounted at another is closed there first.
    */
   private rememberSubInterface(targetUid: number, groupId: number, type: number): SubInterfaceMount {
+    if (type === 0 || type === 3) this.interruptibleInterfaceOpens++;
     const existing = this.subInterfaceTargets.get(groupId);
     if (existing && existing.targetUid !== targetUid) {
       this.player.getSession().sendClientPacket(encodeWidgetCloseSub(existing.targetUid));

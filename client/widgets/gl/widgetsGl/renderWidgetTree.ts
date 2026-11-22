@@ -1729,8 +1729,21 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 }
                 osrsClient?.retainWorldMapImageTiles?.(visibleWorldMapTiles);
 
+                const editedRegions: Map<number, unknown> | undefined =
+                    currentArea.id === 0 ? (osrsClient?.renderer as any)?.mapRegionReplacements : undefined;
                 for (const { mapX, mapY, distance, sourceTile } of visibleWorldMapTiles) {
                     const sourceLevel = (sourceTile.level ?? currentArea.origin.plane ?? 0) | 0;
+                    // The world map archive is static cache data. An edited region's minimap
+                    // picture is built from the replaced map files, so draw that instead.
+                    if (editedRegions?.has((sourceTile.mapX << 8) | sourceTile.mapY)) {
+                        const url = osrsClient?.getMinimapImageUrl?.(sourceTile.mapX, sourceTile.mapY, sourceLevel);
+                        const editedTex = url ? tc.getTextureFromUrl(url) : undefined;
+                        if (editedTex) {
+                            const editedTopLeft = projectDisplayToScreen(mapX * 64, mapY * 64 + 64);
+                            glr.drawTexture(editedTex, editedTopLeft.x, editedTopLeft.y, tileDrawWidth, tileDrawHeight, 1, 1);
+                            continue;
+                        }
+                    }
                     const source = osrsClient?.getWorldMapImageSource?.(
                         sourceTile.mapX,
                         sourceTile.mapY,

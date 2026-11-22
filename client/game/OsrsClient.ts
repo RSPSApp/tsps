@@ -8743,6 +8743,14 @@ export class OsrsClient {
     }
 
     getWorldMapIcons(mapX: number, mapY: number, level: number = 0): MinimapIcon[] | undefined {
+        // Edited regions draw their minimap picture on the world map; use its icons too.
+        if (
+            this.worldMap.worldMapState.getCurrentMapAreaId() === 0 &&
+            (this.renderer as any)?.mapRegionReplacements?.has(((mapX & 0xff) << 8) | (mapY & 0xff))
+        ) {
+            const icons = (this.renderer as any)?.getMinimapIcons?.(mapX, mapY, level) as MinimapIcon[] | undefined;
+            if (icons) return icons;
+        }
         return this.worldMap.getWorldMapIcons(mapX, mapY, level);
     }
 

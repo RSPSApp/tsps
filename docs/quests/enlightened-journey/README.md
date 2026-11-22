@@ -52,8 +52,8 @@ owed ("Sandbags.|Silk.|Bowl.|Never mind." at 757 and 765, "Sandbags.|Bowl.|Never
 ## Items
 
 - Papyrus on a ball of wool: "You create the origami balloon structure.", zep_making_balloon 5140 and zep_construct
-  3248 (446). An unlit candle on the structure: the balloon at once, the message, animation and sound a tick later,
-  with 35 Crafting XP (483-484).
+  3248 (446). An unlit candle on the structure: the balloon, the message, animation and sound
+  together, with 35 Crafting XP (484, 2538).
 - A dye on the origami balloon: "You dye the origami balloon blue." and 10 Crafting XP (2541). The Wiki's other
   seven dyes make their own colour (not capture-verified).
 - A tinderbox on a balloon: "You light the origami balloon.", zep_set_off_balloon 5142, the colour's set-off spotanim
@@ -139,6 +139,9 @@ again) in place of the Wiki's "previous".
 - **fixed** The balloon diagram closed with the conversation that opened it (playthrough on 4cb30fdc6).
 - **fixed** After the last hand-in the talk fell into "Here's the silk."; the hand-in menu went back to the top
   menu; the bomber replacement branch played nothing (dialogue fixes in RSPSApp/osrsreboxed-db#138).
+- **fixed** Escape during an experiment dropped the talk whose last line ends the scene, leaving the player held in
+  the copy; the chat now stays while a scene plays (self-review).
+- **fixed** Old saves at compact stage 1 moved to zep_quest 10, below what they had sent (20) (self-review).
 - **fixed** The bail message box left an empty chat open; the quest flight asked the log question every time.
 
 ## Runs

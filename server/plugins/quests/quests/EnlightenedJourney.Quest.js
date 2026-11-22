@@ -408,7 +408,8 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
   // --------------------------------------------------------------------------
 
   /**
-   * Compact stages 1-8 (before this numbering) -> zep_quest: accepted and explained (10), first experiment (40),
+   * Compact stages 1-8 (before this numbering) -> zep_quest: started (20, as the old numbering sent it: a balloon may
+   * already be made from the materials), first experiment (40),
    * second (60), gathering (70, or 80 with everything handed in), basket built or balloon ready (90), landed (100),
    * complete (200).
    */
@@ -416,7 +417,7 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
     if (player.getAttribute(NUMBERING_ATTRIBUTE) === NATIVE_NUMBERING) return;
     const old = stageOf(player);
     if (old > 0 && old <= 8) {
-      const native = [0, STAGE.EXPLAINED, STAGE.FIRST_EXPERIMENT, STAGE.SECOND_EXPERIMENT,
+      const native = [0, STAGE.MATERIALS, STAGE.FIRST_EXPERIMENT, STAGE.SECOND_EXPERIMENT,
         allMaterialsHanded(player) ? STAGE.HANDED_IN : STAGE.GATHERING, STAGE.BALLOON_READY, STAGE.BALLOON_READY,
         STAGE.LANDED, STAGE.COMPLETE][old];
       player.setAttribute(quest.stageKey, native);
@@ -1145,8 +1146,7 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
   }
 
   /**
-   * Papyrus on wool makes the structure; an unlit candle finishes the balloon (35 Crafting XP, a tick later as
-   * recorded); a dye colours it (10 Crafting XP); a tinderbox lets a balloon go (20 Firemaking XP).
+   * Papyrus on wool makes the structure; an unlit candle finishes the balloon (35 Crafting XP); a dye colours it (10 Crafting XP); a tinderbox lets a balloon go (20 Firemaking XP).
    */
   function handleItemOnItem(event) {
     const { player, usedItemId, usedWithItemId } = event;
@@ -1171,11 +1171,9 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
       player.getInventory().deleteNumber(candleId, 1);
       player.getInventory().deleteNumber(BALLOON_STRUCTURE, 1);
       player.getInventory().adds(ORIGAMI_BALLOON, 1);
-      TaskManager.submit(new CountdownTask(player, 1, () => {
-        if (player.isRegistered?.() === false) return;
-        crafted(player, "You create an origami balloon.");
-        player.getSkillManager().addExperience(Skill.CRAFTING, ORIGAMI_CRAFTING_XP);
-      }));
+      // The balloon, its message and the XP come together (capture ticks 484 and 2538).
+      crafted(player, "You create an origami balloon.");
+      player.getSkillManager().addExperience(Skill.CRAFTING, ORIGAMI_CRAFTING_XP);
       return;
     }
     const dyed = DYED_BALLOONS.find(({ dye }) => has(dye));

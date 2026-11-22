@@ -166,7 +166,7 @@ test('with the materials (zep_quest 10) "Good, you have everything!" continued i
   assert.equal(stage(g), 10);
 });
 
-test('the origami balloon: the structure, the balloon a tick later with 35 Crafting XP, each with zep_making_balloon', async (t) => {
+test('the origami balloon: the structure, then the balloon with 35 Crafting XP, each with zep_making_balloon', async (t) => {
   const f = actor(t, { stage: 20, items: [[I.PAPYRUS, 3], [I.BALL_OF_WOOL], [I.CANDLE]] });
   useOn(f, I.BALL_OF_WOOL, I.PAPYRUS);
   assert.equal(f.p.getInventory().getAmount(I.BALLOON_STRUCTURE), 1);
@@ -176,9 +176,7 @@ test('the origami balloon: the structure, the balloon a tick later with 35 Craft
   const xp = f.p.getSkillManager().getExperience(core.Skill.CRAFTING);
   useOn(f, I.CANDLE, I.BALLOON_STRUCTURE);
   assert.equal(f.p.getInventory().getAmount(I.ORIGAMI_BALLOON), 1);
-  assert.equal(f.messages.includes('You create an origami balloon.'), false, 'a tick later');
-  tick();
-  assert.ok(f.messages.includes('You create an origami balloon.'));
+  assert.ok(f.messages.includes('You create an origami balloon.'), 'with the balloon');
   assert.equal(f.p.getSkillManager().getExperience(core.Skill.CRAFTING) - xp, 35);
   // Talking with the structure but short of the raw materials asks first (tick 459).
   const g = actor(t, { stage: 20, items: [[I.BALLOON_STRUCTURE], [I.CANDLE], [I.PAPYRUS, 2], [I.POTATOES_10_]] });
@@ -428,7 +426,7 @@ test('Fly on Auguste before the quest is done: "You should speak to Auguste firs
 });
 
 test('older saves move to zep_quest\'s numbering once, at login', async (t) => {
-  for (const [old, flags, native] of [[1, 0, 10], [2, 0, 40], [3, 0, 60], [4, 0b100000, 70], [4, 0b111111, 80], [5, 0b111111, 90], [6, 0b111111, 90], [7, 0, 100], [8, 0, 200]]) {
+  for (const [old, flags, native] of [[1, 0, 20], [2, 0, 40], [3, 0, 60], [4, 0b100000, 70], [4, 0b111111, 80], [5, 0b111111, 90], [6, 0b111111, 90], [7, 0, 100], [8, 0, 200]]) {
     const f = actor(t, { stage: old, flags });
     f.p.setAttribute(NUMBERING_KEY, 0);
     PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
@@ -556,4 +554,22 @@ test('"What do I do again?" at zep_quest 80: the player asks, then Auguste (tick
   const lines = await continueTo(f);
   assert.equal(lines[0], 'What do I do again?');
   assert.ok(lines[1].startsWith('Use the willow sapling I gave you'), lines.join(' | '));
+});
+
+test('Escape during an experiment keeps its talk: the scene still ends back on the real map (review)', async (t) => {
+  const f = actor(t, { stage: 20, items: [[I.ORIGAMI_BALLOON]] });
+  const start = where(f);
+  talk(f);
+  await continueTo(f, "Wonderful! I'll take that, and we'll conduct our first experiment.");
+  await next1(f);
+  tick(5);
+  await input(f, { type: 'interface_close' });
+  await continueTo(f, "We're doomed.");
+  await input(f, { type: 'interface_close' });
+  assert.equal(text(f), "We're doomed.", 'the last line stays');
+  await next1(f);
+  tick(4);
+  assert.deepEqual(where(f), start);
+  assert.equal(stage(f), 40);
+  assert.equal(f.p.getMovementQueue().isMovementBlocked?.() ?? false, false);
 });

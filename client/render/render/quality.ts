@@ -250,12 +250,13 @@ export function getMobileGameplayUiScale(host: WebGLOsrsRendererHost,
             );
         } else {
             // Cache script 4731 lays the landscape HUD out in a stock 765x503 gameframe: the
-            // safezone alone reserves 680px. Keep the whole stock frame available, in both axes,
-            // or the bottom rows (All Settings, the chat's category list) are squeezed into a
-            // shorter layout.
+            // safezone alone reserves 680px. Keep the whole stock frame plus the right-hand
+            // side-panel/tab column available, in both axes, or the All Settings window
+            // overlaps an open side panel and the bottom rows (All Settings, the chat's
+            // category list) are squeezed into a shorter layout.
             defaultScale = Math.max(
                 baseScale,
-                DEFAULT_SCREEN_WIDTH / Math.max(1, cssW),
+                RENDER_CONSTANTS.MOBILE_LANDSCAPE_MIN_LAYOUT_WIDTH / Math.max(1, cssW),
                 DEFAULT_SCREEN_HEIGHT / Math.max(1, cssH),
             );
         }

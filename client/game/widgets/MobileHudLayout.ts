@@ -11,6 +11,13 @@ import { loadGameframePaneRedirect, STANDARD_GAMEFRAME_ROOT, SIDE_MODAL_CHILD } 
 
 const MOBILE_ROOT = 601;
 const PVP_GROUP = 90;
+/** The mobile main modal (601:27) hosts All Settings (134) and other main modals. */
+const MOBILE_MAIN_MODAL = (MOBILE_ROOT << 16) | 27;
+const ALL_SETTINGS_GROUP = 134;
+/** Right-hand side-panel containers: the mobile side modal (601:114) and the fourteen tab panes. */
+const MOBILE_SIDE_PANES = [114, ...Array.from({ length: 14 }, (_, index) => 116 + index)];
+/** Space kept between the All Settings window and an open right-hand panel. */
+const SIDE_PANEL_GAP = 8;
 const PVP_WIDTH = 64;
 const PVP_HEIGHT = 54;
 export const COMBAT_INFOBOX_SIZE = 28;
@@ -170,6 +177,77 @@ const ALL_SETTINGS_WINDOW = (134 << 16) | 1;
 const HIDDEN_CHAT_WINDOW_TOP = 6;
 const HIDDEN_CHAT_WINDOW_BOTTOM = 15;
 
+type MobileHudManager = {
+    getWidgetByUid(uid: number): WidgetLike | undefined;
+    canvasHeight?: number;
+    isMobileChatDisabled?: (() => boolean) | null;
+    isEffectivelyHidden?(uid: number): boolean;
+    getSubInterface?(uid: number): { group: number } | undefined;
+    renderScaleX?: number;
+};
+
+type PositionedWidget = WidgetLike & { uid?: number; _absX?: number; _absWidth?: number };
+
+/** Layout-space left edge of an open right-hand side panel, or undefined when none is open. */
+export function openRightSidePanelLeft(
+    manager: MobileHudManager,
+    layoutW: number,
+): number | undefined {
+    const scale = manager.renderScaleX && manager.renderScaleX > 0 ? manager.renderScaleX : 1;
+    let left: number | undefined;
+    for (const child of MOBILE_SIDE_PANES) {
+        const uid = (MOBILE_ROOT << 16) | child;
+        const widget = manager.getWidgetByUid(uid) as PositionedWidget | undefined;
+        if (!widget || !(widget._absWidth ?? 0)) continue;
+        if (manager.isEffectivelyHidden?.(uid)) continue;
+        if (!manager.getSubInterface?.(uid)?.group) continue;
+        const x = (widget._absX ?? 0) / scale;
+        // A portrait side panel sits along the bottom; only a right-hand panel constrains x.
+        if (x < layoutW * 0.5) continue;
+        left = left === undefined ? x : Math.min(left, x);
+    }
+    return left;
+}
+
+/** The main modal's own x before this adjuster shifted it, while All Settings is open. */
+const shiftedMainModals = new WeakMap<WidgetLike, number>();
+
+/**
+ * Keep the mobile All Settings window clear of an open right-hand side panel. The cache
+ * centres the main modal without reserving the side panel, so on a tablet at high interface
+ * scaling the window covers the inventory/other side panel. Shift it left just enough to
+ * clear the panel, never past the left edge, and restore it when either closes.
+ */
+function shiftMainModalFromSidePanel(
+    node: WidgetLike,
+    layoutW: number,
+    manager: MobileHudManager,
+): void {
+    const allSettingsOpen = manager.getSubInterface?.(MOBILE_MAIN_MODAL)?.group === ALL_SETTINGS_GROUP;
+    const panelLeft = allSettingsOpen ? openRightSidePanelLeft(manager, layoutW) : undefined;
+    const shiftedFrom = shiftedMainModals.get(node);
+    if (panelLeft === undefined) {
+        if (shiftedFrom !== undefined) {
+            node.rawX = shiftedFrom;
+            node.x = shiftedFrom;
+            shiftedMainModals.delete(node);
+        }
+        return;
+    }
+    const base = shiftedFrom ?? (node.rawX ?? node.x ?? 0);
+    const width = node.width ?? 0;
+    const desired = Math.max(SIDE_PANEL_GAP, panelLeft - SIDE_PANEL_GAP - width);
+    if (desired < base) {
+        if (shiftedFrom === undefined) shiftedMainModals.set(node, base);
+        node.rawX = desired;
+        node.x = desired;
+    } else if (shiftedFrom !== undefined) {
+        node.rawX = base;
+        node.x = base;
+        shiftedMainModals.delete(node);
+    }
+}
+
 /** The raw values a window had before it was stretched, and the ones the stretch wrote. */
 type StretchedWindow = {
     rawY: number;
@@ -243,14 +321,14 @@ export function adjustMobileHudWidget(
     node: WidgetLike,
     parentW: number,
     parentH: number,
-    manager: {
-        getWidgetByUid(uid: number): WidgetLike | undefined;
-        canvasHeight?: number;
-        isMobileChatDisabled?: (() => boolean) | null;
-    },
+    manager: MobileHudManager,
 ): void {
     adjustMobilePortraitWidget(node, parentW, parentH);
     const uid = (node as WidgetLike & { uid?: number }).uid;
+    if (uid === MOBILE_MAIN_MODAL) {
+        shiftMainModalFromSidePanel(node, parentW, manager);
+        return;
+    }
     if (uid === ALL_SETTINGS_WINDOW) {
         if (manager.isMobileChatDisabled?.()) {
             extendWindowIntoHiddenChat(node, parentW, parentH, manager.canvasHeight || parentH);

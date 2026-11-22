@@ -27,8 +27,8 @@
  * shared entry point over to Zogre while Zogre still needs it (the bell for
  * its evidence conversation, Zavistic for its evidence hand-in).
  * Gaps: Bert's post-quest daily 84-bucket sand delivery and the Wizards' Guild
- * shop unlock are not reproduced; the lens must be used on the counter without
- * the doorway/light check.
+ * shop unlock are not reproduced; whether the door must be open for the lens is
+ * not checked (Ours: the lens is always used from the doorway tile).
  */
 module.exports = function registerHandInTheSandQuest(api) {
   const { Animation, Graphic, Location, Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
@@ -157,15 +157,26 @@ module.exports = function registerHandInTheSandQuest(api) {
   };
   const PICKPOCKET_ANIM = 881; // human_pickpocket, every attempt on Sandy (t7675-7683)
   /**
-   * Zavistic's teleport (t8033-8037): human_shrink with teleport_casting two ticks after the continue, there two later.
+   * Zavistic's teleport (t8033-8037): he casts (human_castentangle) on the continue, the player human_shrink (delay 4)
+   * with teleport_casting two ticks later, there two after that with the sequence cleared: human_shrink lasts 20016
+   * client cycles and ends shrunk to nothing, so without the reset the player stays invisible at Betty's.
    * A countdown started from the continue runs in that tick's task pass, so each count is one more than the gap.
    */
+  const ZAVISTIC_CAST_ANIM = 710;
   const TELEPORT_ANIM = 3041;
+  const TELEPORT_ANIM_DELAY = 4;
   const TELEPORT_GFX = 111;
   const TELEPORT_GFX_HEIGHT = 92;
   const TELEPORT_CAST_TICKS = 3;
   const TELEPORT_LAND_TICKS = 5;
   const BETTYS_SHOP = [3014, 3259, 0];
+  /**
+   * The lens is used from Betty's open doorway (Wiki: "stand in the doorway while the door is open and shine your
+   * lens at the counter"): the captures' players walk to (3016,3259) themselves and use it from there, three tiles from
+   * the counter, turning to it (1002235 t8111-8118, 01698 t2803-2811). Ours: a use from elsewhere walks there first;
+   * no recording uses it from another tile.
+   */
+  const BETTYS_DOORWAY = [3016, 3259, 0];
 
   // npc-dialogue:action / message step ids from the transcript.
   const HAND_GIVEN_MESSAGE = "0PC9qk";
@@ -261,12 +272,20 @@ module.exports = function registerHandInTheSandQuest(api) {
     FADE_IN_TICKS: 10,
     FIRST_BOX_TICKS: 13,
     SAND_AFTER_FIRST_BOX: 8,
+    BERT_WALK_AFTER_FIRST_BOX: 1,
+    BERT_FACE_AFTER_FIRST_BOX: 6,
     FADE_OUT_AFTER_SECOND_BOX: 9,
     RETURN_AFTER_SECOND_BOX: 11,
     LINE_AFTER_SECOND_BOX: 14,
   });
   const CUTSCENE_AT = [2536, 3109, 0];
   const CUTSCENE_BERT = [2546, 3099, 0];
+  /**
+   * t8610-8614: Bert walks to the pit's edge from the tick after the first box's continue, north-west, west, west,
+   * north-west, and turns to the pit a tick after he arrives.
+   */
+  const CUTSCENE_BERT_WALK = [[2545, 3100, 0], [2543, 3100, 0], [2542, 3101, 0]];
+  const CUTSCENE_BERT_FACE = [2542, 3102, 0];
   const CUTSCENE_CAMERA = { move: [2536, 3109, 850], look: [2544, 3102, 25], rates: { rate: 100, rate2: 100 } };
   const SANDPIT_LOC = [2542, 3103, 0];
   const SAND_MAGIC_ANIM = 3037; // handsand_sand_magic
@@ -925,6 +944,7 @@ module.exports = function registerHandInTheSandQuest(api) {
     if (stepId === CUTSCENE_FIRST_BOX) {
       // t8605 the box, t8609 continued, t8616 the sand swirls (the overhead line's own before).
       event.box = { ...event.box, delayTicks: CUTSCENE.FIRST_BOX_TICKS, pauseTicks: CUTSCENE.SAND_AFTER_FIRST_BOX };
+      event.after = () => bertToThePit(player);
       return;
     }
     if (stepId === CUTSCENE_SECOND_BOX) {
@@ -1144,14 +1164,30 @@ module.exports = function registerHandInTheSandQuest(api) {
     player.getPacketSender().sendVarbit(VARBIT_TELEPORTED, 1);
     player.getPacketSender().sendInterfaceRemoval();
     player.getMovementQueue().reset().setBlockMovement(true);
+    bell.visitorOf(player)?.performAnimation(new Animation(ZAVISTIC_CAST_ANIM));
     Scenes.later(player, TELEPORT_CAST_TICKS, () => {
-      player.performAnimation(new Animation(TELEPORT_ANIM));
+      player.performAnimation(new Animation(TELEPORT_ANIM, TELEPORT_ANIM_DELAY));
       player.performGraphic(new Graphic(TELEPORT_GFX, TELEPORT_GFX_HEIGHT));
       sound(player, SOUND.TELEPORT);
     });
     Scenes.later(player, TELEPORT_LAND_TICKS, () => {
       player.getMovementQueue().setBlockMovement(false);
       player.moveTo(new Location(...BETTYS_SHOP));
+      player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+    });
+  }
+
+  /** t8610-8614: the cutscene's Bert walks to the pit's edge and turns to it. */
+  function bertToThePit(player) {
+    const state = cutscenes.get(player);
+    const bert = state?.bert;
+    if (!bert?.isRegistered?.()) return;
+    Scenes.later(state.scene, CUTSCENE.BERT_WALK_AFTER_FIRST_BOX, () => {
+      if (cutscenes.get(player) !== state || !bert.isRegistered?.()) return;
+      for (const step of CUTSCENE_BERT_WALK) Scenes.walk(bert, step);
+    });
+    Scenes.later(state.scene, CUTSCENE.BERT_FACE_AFTER_FIRST_BOX, () => {
+      if (cutscenes.get(player) === state && bert.isRegistered?.()) Scenes.face(bert, CUTSCENE_BERT_FACE);
     });
   }
 
@@ -1349,14 +1385,7 @@ module.exports = function registerHandInTheSandQuest(api) {
     }
     if (objectId === BETTYS_COUNTER && itemId === ROSE_TINTED_LENS) {
       event.handled = true;
-      if (
-        quest.getStage(player) !== STAGE_MAKE_SERUM ||
-        serumLevel(player) !== SERUM_LENS ||
-        !held(player, ROSE_TINTED_LENS) ||
-        player.getAttribute(COUNTER_ATTRIBUTE) !== true
-      ) {
-        return;
-      }
+      if (!lensDue(player)) return;
       startTranscript(
         api,
         player,
@@ -1365,6 +1394,24 @@ module.exports = function registerHandInTheSandQuest(api) {
         "talking-to-betty-using-the-lens-on-the-counter"
       );
     }
+  }
+
+  /**
+   * The counter has no ops, so a walk to it is an item use: with the lens due, it goes to the doorway and runs there.
+   * Ours: any item used on the counter at this step takes the same walk (the route doesn't name the item).
+   */
+  function routeToDoorway(event) {
+    const { player } = event;
+    if (!player) return;
+    const objectId = api.core.ObjectDefinition.forPlayer(event.objectId, player)?.id ?? event.objectId;
+    if (objectId !== BETTYS_COUNTER || !lensDue(player)) return;
+    const [x, y, z] = BETTYS_DOORWAY;
+    event.destination = { x, y, z };
+  }
+
+  function lensDue(player) {
+    return quest.getStage(player) === STAGE_MAKE_SERUM && serumLevel(player) === SERUM_LENS
+      && held(player, ROSE_TINTED_LENS) && player.getAttribute(COUNTER_ATTRIBUTE) === true;
   }
 
   function handleItemAction(event) {
@@ -1467,6 +1514,7 @@ module.exports = function registerHandInTheSandQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onObjectRoute(routeToDoorway);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemAction(handleItemAction);
   api.onPlayerLogin(handleLogin);

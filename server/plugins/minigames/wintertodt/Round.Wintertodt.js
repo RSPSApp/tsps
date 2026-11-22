@@ -19,6 +19,7 @@ const CombatAchievements = require("./CombatAchievements.Wintertodt");
 const ATTR_KILLS = "wintertodt:kills";
 const ATTR_BEST = "wintertodt:best-points";
 const ATTR_REWARDS = "wintertodt:rewards-owed";
+const ATTR_REWARDS_CLAIMED = "wintertodt:rewards-claimed";
 
 const round = {
   active: false,
@@ -210,6 +211,24 @@ function rewardsOwed(player) {
   return Math.max(0, Math.trunc(Number(player.getAttribute(ATTR_REWARDS)) || 0));
 }
 
+/** Rewards actually taken from the cart: the collection log's second Wintertodt line (cache script 2735). */
+function rewardsClaimed(player) {
+  return Math.max(0, Math.trunc(Number(player.getAttribute(ATTR_REWARDS_CLAIMED)) || 0));
+}
+
+function claimReward(player) {
+  player.setAttribute(ATTR_REWARDS_CLAIMED, rewardsClaimed(player) + 1);
+}
+
+/** The collection log's Wintertodt page: kills, then rewards claimed. */
+function collectionLogCount(request) {
+  if (!request?.player || request.category !== "Wintertodt") return;
+  // Combat Achievements' generic fallback may have filled the kill line first; the
+  // Wintertodt page's own records still own both of its lines.
+  request.count = killsOf(request.player);
+  request.extraCounts = [rewardsClaimed(request.player)];
+}
+
 function setRewardsOwed(player, owed) {
   player.setAttribute(ATTR_REWARDS, Math.max(0, Math.min(Shared.MAX_REWARDS, owed)));
   syncVars(player);
@@ -285,11 +304,11 @@ function setEnergy(value) {
 }
 
 module.exports = {
-  ATTR_KILLS, ATTR_BEST, ATTR_REWARDS,
+  ATTR_KILLS, ATTR_BEST, ATTR_REWARDS, ATTR_REWARDS_CLAIMED,
   isActive, energy, energyPercent, corner, inPrison, playersInPrison,
   pointsOf, addPoints, forgetPlayer,
   openHud, closeHud, sendHud, broadcast,
-  startRound, endRound, rewardsFor, reward, killsOf, rewardsOwed, setRewardsOwed, syncVars,
+  startRound, endRound, rewardsFor, reward, killsOf, rewardsOwed, setRewardsOwed, rewardsClaimed, claimReward, collectionLogCount, syncVars,
   tick, start, skipBreak, setEnergy,
   _round: round,
 };

@@ -139,6 +139,7 @@ Added with the command above: 84 spawns on the island and in the Wyrmscraig Cave
 The existing Mad Angel matched and wasn't doubled. All of them that fight have drop tables and stats.
 
 - **Standing still:** the fishing spots (as existing ones) and the broken golem (no walk animation).
+- **Sandy looking out of the window (6537):** a revision 242 run of The Hand in the Sand (rsprox local 1002235, tick 8266) adds him on the desk Sandy's own tile, 2788,3176, when `handsand_sandy_multi` turns them; the row stood a tile west.
 - **Mortimer:** live spawns the parent `slayer_master_mortimer` (4462), which transforms on `ffg` into the post-quest version with Assignment and Trade (16175), and wanders one tile around 2590, 8614 (rsprox captures). The client animates an NPC from its parent: 4462 has `mortimer_idle` and a walk animation, while 16175 has none, so spawned as 16175 he stood in the default pose and couldn't walk.
 - **Mountain trolls:** the Wiki lists 936–942 and 16330–16332 under one version, identical in the cache; the script used 936, which existing spawns use.
 - **Not covered by spawns:** dialogue, the two shops, Mortimer's Slayer assignments, goat hunting and golem crafting.

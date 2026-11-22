@@ -1,0 +1,326 @@
+{
+  "_comment": "The bank tutorial's walkthrough (bankmain:bank_tut), as rsprox captures show it: rsprox.net recording 3937 (rev 236; ticks 1653-2665); 3923 (rev 235) opens the same first step. focus = highlight_screen (3409) args after the host: x, y, width, height, x anchor, y anchor, opacity, dim. text = highlight_textbox (3413).",
+  "steps": [
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          0,
+          0,
+          0,
+          0,
+          2,
+          2,
+          100,
+          true
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "This is your bank. No one else can touch it but you.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          0,
+          0,
+          0,
+          0,
+          2,
+          2,
+          100,
+          true
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "The bank is used to <col=ffffff>store</col> your items. You can click on an item in your inventory to <col=ffffff>move it into your bank</col>.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          44,
+          44,
+          40,
+          3,
+          2,
+          2,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "If you want to move <col=ffffff>everything</col> from your <col=ffffff>inventory</col> into the bank, you can use the <col=ffffff>deposit all button</col>.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          44,
+          44,
+          3,
+          3,
+          2,
+          2,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "This is the <col=ffffff>deposit worn button</col> that will move <col=ffffff>all</col> your <col=ffffff>worn</col> items into the bank for you.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          44,
+          44,
+          77,
+          3,
+          2,
+          2,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "This is the <col=ffffff>Empty containers button</col> that will empty <col=ffffff>most containers</col> straight into the bank for you.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          0,
+          0,
+          0,
+          0,
+          2,
+          2,
+          100,
+          true
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "If you want to deposit or withdraw <col=ffffff>more than one item</col>, you can <col=ffffff>right-click</col> on the item and select a <col=ffffff>quantity</col> of the item to withdraw.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          192,
+          44,
+          83,
+          3,
+          0,
+          2,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "You can also <col=ffffff>change the amount</col> of items moved by changing the <col=ffffff>quantity buttons</col>.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          44,
+          44,
+          40,
+          3,
+          0,
+          2,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "You can also withdraw items as <col=ffffff>bank notes</col>. You withdraw an item as a bank note by toggling <col=ffffff>this option</col> so the button appears <col=ffffff>red</col>. Items that <col=ffffff>stack and untradable items can't be withdrawn as bank notes<col=ffffff>.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          44,
+          44,
+          40,
+          3,
+          0,
+          2,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "<col=ffffff>Bank notes</col> are useful when you need to <col=ffffff>transfer a large amount of goods</col> around the game. You are able to sell them using the Grand Exchange, to stores and to other players. <col=ffffff>To turn them back into items, deposit them into the bank and withdraw them as an item</col>.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          44,
+          44,
+          3,
+          3,
+          0,
+          2,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "You can drag items around the bank to move them. There are <col=ffffff>two types of item movement</col>, swap and insert. If you have <col=ffffff>swap</col> selected, when you <col=ffffff>drag an item onto another</col> in the bank then the <col=ffffff>items will swap position</col> with each other.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          44,
+          44,
+          3,
+          3,
+          0,
+          2,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "If you have <col=ffffff>insert</col> selected, when you <col=ffffff>drag an item onto another</col>, the item you are dragging will be <col=ffffff>moved into the position of the other item</col>. Items will then be shifted up or down, based on the initial position of the dragged item.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          409,
+          46,
+          40,
+          32,
+          0,
+          0,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "Here you can <col=ffffff>create or manage your bank tabs</col>. If you have space, there will be a <col=ffffff>tab with a + icon</col> on it. You can <col=ffffff>drag an item onto it to create a bank tab</col>. You can <col=ffffff>right-click on a tab </col>and select <col=ffffff>'Collapse tab'</col> to remove the tab and <col=ffffff>move the items</col> in the tab <col=ffffff>to the main bank tab</col>. You can have a maximum of 9 custom tabs.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          44,
+          44,
+          324,
+          3,
+          0,
+          2,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "If you want to <col=ffffff>stop items moving around your bank</col> when you withdraw an item, you can <col=ffffff>create a placeholder</col> to keep an unusable copy in your bank. Simply<col=ffffff> right-click on an item</col> in the bank and <col=ffffff>click on the placeholder option</col>. Alternatively, you can <col=ffffff>toggle</col> on the <col=ffffff>placeholder button</col> to <col=ffffff>automatically create a placeholder</col> when withdrawing an item.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          0,
+          0,
+          0,
+          0,
+          2,
+          2,
+          100,
+          true
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "You can <col=ffffff>equip items</col> while the <col=ffffff>bank is open</col>. To do this,<col=ffffff> withdraw the armour and weapons</col> you want, then <col=ffffff>right-click the item and click the wear option</col>. You can also <col=ffffff>eat and drink</col> items in your inventory while the <col=ffffff>bank is open</col> too, by <col=ffffff>selecting the eat or drink option</col> instead.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          44,
+          44,
+          3,
+          33,
+          2,
+          0,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "Alternatively, you can access the <col=ffffff>equipment tab</col> here and equip items in your inventory by <col=ffffff>left-clicking instead</col>.",
+        "flag": true
+      }
+    },
+    {
+      "focus": {
+        "script": 3409,
+        "args": [
+          55,
+          29,
+          3,
+          3,
+          0,
+          0,
+          100,
+          false
+        ]
+      },
+      "text": {
+        "script": 3413,
+        "text": "Finally, you can see your available bank space and access <col=ffffff>bank settings</col> here. In the bank settings, you will find <col=ffffff>various options</col> such as one that allows you to fill your bank with <col=ffffff>bank fillers</col>, or one that allows you to <col=ffffff>lock inventory slots</col> you don't want to deposit. One even <col=ffffff>hides the bank tutorial button</col>!",
+        "flag": true,
+        "final": true
+      }
+    }
+  ]
+}

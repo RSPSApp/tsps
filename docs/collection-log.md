@@ -28,14 +28,19 @@ singles boss's own count (Artio, Spindel, Calvar'ion) on the first line and the 
 Achievement count on the second. The raids' pages are answered by their own plugins, which keep
 the per-mode counts. Last Man Standing fills its three lines — games played, wins and kills — from
 its own saved counters; Castle Wars has no count line (script 2735 has no case for
-struct 514), and Soul Wars' only line is "Spoils of war opened", which nothing tracks yet. Content
-that keeps a different count answers first through `collection-log:category-count`, so the plugin's
-own value wins (Barrows, CoX, ToB, ToA, Zulrah, the Kalphite Queen, Guardians of the Rift, clue
-tiers).
+struct 514). The skilling and minigame pages answer from the content's own saved counters too:
+Wintertodt (kills, rewards claimed), Tempoross (kills, reward permits actually claimed), Barbarian
+Assault (high-level gambles), Gnome Restaurant (hard then easy deliveries), Hallowed Sepulchre
+(Grand Hallowed Coffins opened), Mastering Mixology (orders fulfilled) and Soul Wars (Spoils of War
+opened). Gnome Restaurant's page reads its own delivery varbits (11961/11960), so those are sent
+with `collection-log:category-shown` rather than through the generic counts. Tempoross adopts the
+old log tally (`clog.counts` for struct 2867) into `tempoross:permits-claimed` the first time the
+new attribute is absent, so a pre-upgrade save keeps its successful pool claims. Content that keeps a different count answers first through
+`collection-log:category-count`, so the plugin's own value wins (Barrows, CoX, ToB, ToA, Zulrah,
+the Kalphite Queen, Guardians of the Rift, clue tiers and the pages above).
 
 - **The log's own tally** (`clog.counts`) is the fallback for a category nobody answers for.
-- **Still absent:** the other minigames' "opened" and "completed" counters (including Soul Wars'
-  spoils of war), and the per-item `collection_item_*` varbits.
+- **Still absent:** the per-item `collection_item_*` varbits.
 
 From another plugin:
 
@@ -45,6 +50,11 @@ api.emitCustomEvent("collection-log:count", { player, category: "Barrows Chests"
 api.onCustomEvent("collection-log:category-count", (request) => {             // a kept count
   if (request.category === "Zulrah") request.count = kills(request.player);
 });
+api.onCustomEvent("collection-log:category-shown", ({ player, category }) => {
+  if (category === "My page") player.getPacketSender().sendVarbit(MY_COUNT_VARBIT, myCount(player));
+});
+api.emitCustomEvent("collection-log:stored-count", { player, category: "Tempoross", count: null });
+// -> count: the log's own fallback tally, used to adopt a pre-plugin counter (Tempoross claims).
 ```
 
 **Admin command:**

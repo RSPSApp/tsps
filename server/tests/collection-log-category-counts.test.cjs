@@ -11,6 +11,14 @@ const Data = require("../plugins/achievements/combatachievements/Data.CombatAchi
 const Kills = require("../plugins/achievements/combatachievements/Kills.CombatAchievements");
 const Wilderness = require("../plugins/bosses/wildernessbosses/Common.WildernessBosses");
 const LMS = require("../plugins/minigames/lms/Profile.LastManStanding");
+const BarbarianAssault = require("../plugins/minigames/barbarianassault/Points.BarbarianAssault");
+const GnomeRestaurant = require("../plugins/minigames/gnomerestaurant/Orders.GnomeRestaurant");
+const HallowedSepulchre = require("../plugins/minigames/hallowedsepulchre/Coffins.HallowedSepulchre");
+const HallowedCommon = require("../plugins/minigames/hallowedsepulchre/Common.HallowedSepulchre");
+const Mixology = require("../plugins/minigames/mixology/Orders.Mixology");
+const SoulWars = require("../plugins/minigames/soulwars/Rewards.SoulWars");
+const Tempoross = require("../plugins/minigames/tempoross/Records.Tempoross");
+const Wintertodt = require("../plugins/minigames/wintertodt/Round.Wintertodt");
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -110,6 +118,98 @@ test("Last Man Standing counts its games played, wins and kills", () => {
   LMS.collectionLogCount(request);
   assert.equal(request.count, 3);
   assert.deepEqual(request.extraCounts, [2, 5]);
+});
+
+test("Barbarian Assault counts high-level gambles", () => {
+  const p = player({ [BarbarianAssault.HIGH_GAMBLE_COUNT_ATTRIBUTE]: 9 });
+  const request = { player: p, category: "Barbarian Assault", count: null };
+  BarbarianAssault.collectionLogCount(request);
+  assert.equal(request.count, 9);
+});
+
+test("Gnome Restaurant puts hard deliveries first and easy second", () => {
+  const p = player({
+    "gnome-restaurant:hard-deliveries": 4,
+    "gnome-restaurant:easy-deliveries": 7,
+  });
+  const request = { player: p, category: "Gnome Restaurant", count: null };
+  GnomeRestaurant.collectionLogCount(request);
+  assert.equal(request.count, 4, "hard deliveries");
+  assert.deepEqual(request.extraCounts, [7], "easy deliveries");
+});
+
+test("Hallowed Sepulchre counts Grand Hallowed Coffins, not normal ones", () => {
+  HallowedCommon.init({ core: {} });
+  const p = player({
+    [HallowedCommon.data.attributes.grandChests]: 3,
+    [HallowedCommon.data.attributes.chests]: 40,
+  });
+  const request = { player: p, category: "Hallowed Sepulchre", count: null };
+  HallowedSepulchre.collectionLogCount(request);
+  assert.equal(request.count, 3);
+});
+
+test("Mastering Mixology counts orders fulfilled", () => {
+  const p = player({ "mastering-mixology:orders": 21 });
+  const request = { player: p, category: "Mastering Mixology", count: null };
+  Mixology.collectionLogCount(request);
+  assert.equal(request.count, 21);
+});
+
+test("Soul Wars counts Spoils of War opened", () => {
+  const p = player({ [SoulWars.SPOILS_OPENED_ATTRIBUTE]: 5 });
+  const request = { player: p, category: "Soul Wars", count: null };
+  SoulWars.collectionLogCount(request);
+  assert.equal(request.count, 5);
+});
+
+test("Tempoross counts kills then reward permits claimed", () => {
+  const p = player({ "tempoross:kills": 12, "tempoross:permits-claimed": 31 });
+  const request = { player: p, category: "Tempoross", count: null };
+  Tempoross.collectionLogCount(request);
+  assert.equal(request.count, 12, "Tempoross kills");
+  assert.deepEqual(request.extraCounts, [31], "reward permits claimed");
+});
+
+test("Wintertodt and Tempoross replace the combat fallback on their own pages", () => {
+  const p = player({
+    "wintertodt:kills": 4, "wintertodt:rewards-claimed": 9,
+    "tempoross:kills": 6, "tempoross:permits-claimed": 2,
+  });
+  const wintertodt = { player: p, category: "Wintertodt", count: 123, extraCounts: [] };
+  Wintertodt.collectionLogCount(wintertodt);
+  assert.equal(wintertodt.count, 4);
+  assert.deepEqual(wintertodt.extraCounts, [9]);
+  const tempoross = { player: p, category: "Tempoross", count: 123, extraCounts: [] };
+  Tempoross.collectionLogCount(tempoross);
+  assert.equal(tempoross.count, 6);
+  assert.deepEqual(tempoross.extraCounts, [2]);
+});
+
+test("Gnome Restaurant sends its dedicated delivery varbits", () => {
+  const sent = new Map();
+  const p = player({
+    "gnome-restaurant:hard-deliveries": 4,
+    "gnome-restaurant:easy-deliveries": 7,
+  });
+  p.getPacketSender = () => ({ sendVarbit: (id, value) => sent.set(id, value) });
+  GnomeRestaurant._test.init({
+    core: {
+      CacheDefinitions,
+      ItemIdentifiers: { ALUFT_ALOFT_BOX: 0, REWARD_TOKEN_4: 0 },
+    },
+  });
+  GnomeRestaurant.sendDeliveries(p);
+  assert.equal(sent.get(11961), 4, "collection_aluft_hard_deliveries");
+  assert.equal(sent.get(11960), 7, "collection_aluft_easy_deliveries");
+});
+
+test("Wintertodt counts kills then rewards claimed", () => {
+  const p = player({ "wintertodt:kills": 8, "wintertodt:rewards-claimed": 19 });
+  const request = { player: p, category: "Wintertodt", count: null };
+  Wintertodt.collectionLogCount(request);
+  assert.equal(request.count, 8, "Wintertodt kills");
+  assert.deepEqual(request.extraCounts, [19], "rewards claimed");
 });
 
 test("a minigame page another plugin already answered is left alone", () => {

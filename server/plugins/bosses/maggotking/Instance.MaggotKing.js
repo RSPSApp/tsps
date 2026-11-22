@@ -83,6 +83,9 @@ class Session {
     this.fight = null;
     this.ended = false;
     this.campingKills = 0;
+    this.corpse = null;
+    this.corpseClaimed = false;
+    this.corpseRespawn = null;
   }
 
   tile(worldTile) {
@@ -111,8 +114,35 @@ class Session {
     return true;
   }
 
+  /** The Maggot King Corpse the player harvests; the boss waits until it is used. */
+  spawnCorpse(location, respawnTicks) {
+    if (this.ended || this.corpse || !location) return null;
+    this.corpseClaimed = false;
+    this.corpseRespawn = Math.max(1, Math.trunc(respawnTicks ?? 9));
+    const corpse = Common.api().spawnNpc({
+      id: Common.core().NpcIdentifiers.MAGGOT_KING_CORPSE,
+      x: location.getX(), y: location.getY(), z: location.getZ(),
+      owner: this.player, ownerOnly: true, wanderRadius: 0,
+    });
+    if (!corpse) return null;
+    corpse.__maggotKingCorpse = this;
+    this.corpse = corpse;
+    this.area.add(corpse);
+    return corpse;
+  }
+
+  removeCorpse() {
+    const corpse = this.corpse;
+    this.corpse = null;
+    if (!corpse) return;
+    corpse.__maggotKingCorpse = null;
+    this.area.detach(corpse);
+    Common.api().removeNpc(corpse);
+  }
+
   spawnBoss() {
     if (this.ended || this.boss) return null;
+    this.removeCorpse();
     const spawn = this.tile(Common.data.bossSpawn);
     const boss = Common.api().spawnNpc({
       id: Common.core().NpcIdentifiers.MAGGOT_KING,
@@ -161,6 +191,7 @@ class Session {
     this.exit = null;
     this.respawnTask?.stop();
     this.respawnTask = null;
+    this.removeCorpse();
     sessions.delete(this.player);
     this.player.setAttribute(INSTANCE_ATTRIBUTE, null);
     if (this.boss) {
@@ -199,7 +230,9 @@ function onBossDeath({ npc, killer }) {
   npc.__maggotKingSession = null;
   npc.__skipDefaultRespawn = true;
   session.boss = null;
-  session.scheduleRespawn(npc.getDefinition().getRespawn());
+  if (!session.spawnCorpse(npc.getLocation(), npc.getDefinition().getRespawn())) {
+    session.scheduleRespawn(npc.getDefinition().getRespawn());
+  }
   // Achievement notification must not interrupt authoritative retirement/respawn,
   // including accepted boss deaths with a missing or different killer.
   if (ownerKill) Achievements.ownerKilled(session);

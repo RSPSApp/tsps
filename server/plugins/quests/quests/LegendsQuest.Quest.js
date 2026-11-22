@@ -70,6 +70,8 @@ module.exports = function registerLegendsQuest(api) {
     ObjectIdentifiers,
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript } = require("../QuestRuntime");
+  const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+  let obstacleRunnerReady = false;
 
   let quest;
 
@@ -241,10 +243,26 @@ module.exports = function registerLegendsQuest(api) {
   const RECESS_EMPTY = ObjectIdentifiers.RECESS; // 2969
   const RECESS_FULL = ObjectIdentifiers.FILLED_RECESS; // 2970
   const SHIMMERING_FIELD = ObjectIdentifiers.SHIMMERING_FIELD; // 2971
-  const GUILD_DOORS = new Set([
-    ObjectIdentifiers.LEGENDS_GUILD_DOOR, // 2896
-    ObjectIdentifiers.LEGENDS_GUILD_DOOR_2, // 2897
-  ]);
+  // RSProx 20261121T071043 (rev 242, ticks 56-58 gate, 140-143 doors): both leaves are walls on the north
+  // edge of their tile. On the click both become inviswall 38848, the open leaves stand one tile north
+  // (rotations 0 and 2), the player steps one tile across and the leaves are restored two ticks later.
+  const GUILD_ENTRANCES = [
+    // The grounds gate needs only the quest's quest points and prerequisite quests; the building's
+    // doors need Legends' Quest complete.
+    { closed: [2391, 2392], open: [1573, 1574], y: 3349, sound: 71,
+      message: "The guards salute you as you walk past.", shout: "Legends Guild Member Approaching!",
+      allowed: (player) => questStage(player) >= STAGE_COMPLETE || meetsQuestRequirements(player),
+      // shortcut: uncaptured refusal; replace with the guards' real lines when a capture has them.
+      refusal: "You need 107 quest points and to have completed Family Crest, Heroes' Quest, Shilo Village, Underground Pass and Waterfall Quest to enter." },
+    { closed: [ObjectIdentifiers.LEGENDS_GUILD_DOOR, ObjectIdentifiers.LEGENDS_GUILD_DOOR_2], open: [2898, 2899], y: 3373, sound: 46,
+      message: "You push the huge Legends' Guild doors open.",
+      allowed: (player) => questStage(player) >= STAGE_COMPLETE,
+      refusal: "You need to complete the Legends' quest before you can enter the Legends' Guild." },
+  ];
+  const GUILD_ENTRANCE_XS = [2728, 2729];
+  const GUILD_INVISWALL = 38848;
+  const GUILD_TOTEM = 2638;
+  const crossingGuild = new WeakSet();
 
   const START_HOOK = "quest:legends-quest:start";
   const COMPLETE_ACTION_ID = "7BEgA_"; // "Congratulations! Quest complete!"
@@ -379,6 +397,11 @@ module.exports = function registerLegendsQuest(api) {
     for (const [skill, level] of REQUIRED_SKILLS) {
       if (player.getSkillManager().getMaxLevel(skill) < level) return false;
     }
+    return meetsQuestRequirements(player);
+  }
+
+  /** The quest points and prerequisite quests, without the skills: what the guild gate asks for. */
+  function meetsQuestRequirements(player) {
     if ((Number(player.getAttribute("quest.points")) || 0) < REQUIRED_QUEST_POINTS) return false;
     if (!waterfallQuestComplete(player)) return false;
     for (const [attribute, completeAt] of REQUIRED_QUESTS) {
@@ -1060,7 +1083,8 @@ module.exports = function registerLegendsQuest(api) {
     if (!quest || !player) return null;
     const stage = quest.getStage(player);
     if (GUARD_IDS.has(npcId)) {
-      if (stage >= STAGE_COMPLETE) return "when-going-through-the-legends-guild-s-gates-after-the-quest";
+      // Talk-to after the quest (capture tick 87); the gate variant is only the overhead shout.
+      if (stage >= STAGE_COMPLETE) return "standard-dialogue-after-legends-quest";
       if (stage >= STAGE_RETURNED) return "when-going-through-the-legends-guild-s-gates-during-the-quest";
       if (stage >= STAGE_STARTED) return "starting-off-talking-to-a-guard-or-entering-exiting-the-guild-after-starting-the-quest";
       return "starting-off";
@@ -1905,17 +1929,88 @@ module.exports = function registerLegendsQuest(api) {
       player.sendMessage("This totem pole looks corrupted. You don't like to look at it for too long.");
       return;
     }
+    if (GUILD_TOTEM === objectId) {
+      // RSProx 20261121T080414 tick 69-71: the guild's totem (morphs to 31878/31879) opens a statement box.
+      event.handled = true;
+      player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder()
+        .add(new api.core.StatementDialogue(0, "This totem pole is truly awe inspiring. It depicts powerful Karamjan animals. It is very well carved and brings a sense of power and spiritual fulfillment to anyone who looks at it."))
+        .add(new api.core.EndDialogue(1)));
+      return;
+    }
     if (GOOD_TOTEM === objectId) {
       event.handled = true;
       player.sendMessage("This totem pole is truly awe inspiring. It depicts powerful Karamja jungle animals.");
       return;
     }
-    if (GUILD_DOORS.has(objectId)) {
-      if (questStage(player) < STAGE_COMPLETE) {
-        event.handled = true;
-        player.sendMessage("You need to complete the Legends' quest before you can enter the Legends' Guild.");
-      }
+    if (clickGuildEntrance(event)) event.handled = true;
+  }
+
+  /** The guild gate and doors; also claimed from Doors' "door:toggle", which reaches the gate first. */
+  function clickGuildEntrance(event) {
+    const { player, objectId, location } = event;
+    if (!player || event.handled) return false;
+    // 2391/2392 are shared gate ids, so match the guild's own tiles too.
+    const ox = Number(location?.getX?.() ?? location?.x);
+    const oy = Number(location?.getY?.() ?? location?.y);
+    const entrance = GUILD_ENTRANCES.find((e) => e.closed.includes(objectId) && e.y === oy && GUILD_ENTRANCE_XS.includes(ox));
+    if (!entrance) return false;
+    if (!entrance.allowed(player)) {
+      player.sendMessage(entrance.refusal);
+    } else {
+      crossGuildEntrance(player, entrance);
     }
+    event.handled = true;
+    return true;
+  }
+
+  function guildEntranceObjects(entrance, opening) {
+    return GUILD_ENTRANCE_XS.flatMap((x, i) => {
+      const at = new Location(x, entrance.y, 0);
+      if (!opening) return [new GameObject(entrance.closed[i], at, 0, 1, null)];
+      return [
+        new GameObject(GUILD_INVISWALL, at, 0, 1, null),
+        new GameObject(entrance.open[i], new Location(x, entrance.y + 1, 0), 0, i === 0 ? 0 : 2, null),
+      ];
+    });
+  }
+
+  /** Shows the entrance swinging to everyone nearby; the server keeps its clipping shut. */
+  function swingGuildEntrance(entrance, opening) {
+    const from = guildEntranceObjects(entrance, !opening);
+    const to = guildEntranceObjects(entrance, opening);
+    api.core.World.forEachNetworkPlayer((viewer) => {
+      if (!viewer.getSession().isTileInScene(GUILD_ENTRANCE_XS[0], entrance.y, 0)) return;
+      const sender = viewer.getPacketSender();
+      for (const object of from) sender.sendObjectRemoval(object);
+      for (const object of to) sender.sendObject(object);
+    });
+  }
+
+  function crossGuildEntrance(player, entrance) {
+    // Lazy: the runner needs the real core, which unit tests' stub APIs lack at registration.
+    if (!obstacleRunnerReady) {
+      ObstacleRunner.init(api);
+      obstacleRunnerReady = true;
+    }
+    const at = player.getLocation();
+    const x = at.getX();
+    if (crossingGuild.has(player) || ObstacleRunner.isBusy(player) || !GUILD_ENTRANCE_XS.includes(x)) return;
+    const target = at.getY() > entrance.y ? entrance.y : entrance.y + 1;
+    crossingGuild.add(player);
+    player.sendMessage(entrance.message);
+    player.getPacketSender().sendSound(entrance.sound, 1, 0);
+    swingGuildEntrance(entrance, true);
+    // Live sends the step at walk speed (TemporaryMoveSpeed 1) even with run on.
+    ObstacleRunner.run({ player }, [{ walk: [[x, target]], traversalType: 1 }]);
+    // shortcut: only members get a shout; the during-quest "I hope the quest is going well" is not sent.
+    if (entrance.shout && questStage(player) >= STAGE_COMPLETE) {
+      // Either guard (3951 or 3952) announces, evenly.
+      const guards = api.core.World.getNpcsNear(at, 6).filter((npc) => GUARD_IDS.has(npc.getId()));
+      guards[Math.floor(Math.random() * guards.length)]?.forceChat(entrance.shout);
+    }
+    // The swing is shared by nearby viewers and must finish even if its opener logs out.
+    TaskManager.submit(new CountdownTask(entrance, 2, () => swingGuildEntrance(entrance, false)));
+    TaskManager.submit(new CountdownTask(player, 2, () => crossingGuild.delete(player)));
   }
 
   function searchShamanRoom(player, objectId) {
@@ -1988,6 +2083,11 @@ module.exports = function registerLegendsQuest(api) {
   function handleNpcInteraction(event) {
     const { player, npcId, clickType } = event;
     if (!player || clickType !== 1) return;
+    // RSProx 20261121T080414 ticks 32, 46, 222: a member's Talk-to opens with the salute line.
+    if (GUARD_IDS.has(npcId) && questStage(player) >= STAGE_COMPLETE) {
+      player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, "The guards salute you as you walk past.");
+      return;
+    }
     if (!RADIMUS_IDS.has(npcId) || npcId === NpcIdentifiers.RADIMUS_ERKLE) return;
     // The spawned Radimus ids are not in the dialogue index; play his quest page directly.
     const stage = questStage(player);
@@ -2005,7 +2105,10 @@ module.exports = function registerLegendsQuest(api) {
   }
 
   function handleLogout({ player }) {
-    if (player) clearSpawns(player);
+    if (player) {
+      crossingGuild.delete(player);
+      clearSpawns(player);
+    }
   }
 
   // ==========================================================================
@@ -2168,6 +2271,7 @@ module.exports = function registerLegendsQuest(api) {
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onObjectInteraction(handleObjectInteraction);
+  api.onCustomEvent("door:toggle", clickGuildEntrance);
   api.onNpcInteraction(handleNpcInteraction);
   api.onNpcDeath(handleNpcDeath);
   api.onPlayerLogin(handleLogin);

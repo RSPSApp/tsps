@@ -15,15 +15,20 @@ const { World } = require("../dist/game/World");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const { NPCDeathTask } = require("../dist/game/task/impl/NPCDeathTask");
 const { NPCRespawnTask } = require("../dist/game/task/impl/NPCRespawnTask");
+const { MAX_STACK_AMOUNT } = require("../dist/game/model/container/StackType");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const MaggotKing = require("../plugins/bosses/MaggotKing.plugin");
 const Common = require("../plugins/bosses/maggotking/Common.MaggotKing");
 const Instance = require("../plugins/bosses/maggotking/Instance.MaggotKing");
+const Rewards = require("../plugins/bosses/maggotking/Rewards.MaggotKing");
 const Entrance = require("../plugins/bosses/maggotking/Entrance.MaggotKing");
 const Resupply = require("../plugins/bosses/maggotking/Resupply.MaggotKing");
 
 const core = PluginManager.getCoreApi();
 const handlers = new Map();
+const interactions = new Map();
+const ground = [];
+const rollRequests = [];
 const beforeObjectHandlers = [];
 const loginHandlers = [];
 const deathHandlers = [];
@@ -36,6 +41,8 @@ const api = {
   core,
   persistAttribute: (...args) => persisted.push(args),
   onObjectInteraction: (name, actions) => handlers.set(name, actions),
+  onNpcInteraction: (name, actions) => interactions.set(name, actions),
+  getItemOnGroundManager: () => ({ registerLocation: (...args) => ground.push(args) }),
   onBeforeObjectInteraction: handler => beforeObjectHandlers.push(handler),
   onPlayerLogin: handler => loginHandlers.push(handler),
   onNpcDeath: handler => deathHandlers.push(handler),
@@ -46,6 +53,10 @@ const api = {
   emitCustomEvent(name, event) {
     if (name === "quest:is-complete" && event.key === Common.data.questKey) {
       event.complete = event.player.questComplete === true;
+    }
+    if (name === "npc-drops:roll-table") {
+      rollRequests.push(event);
+      if (event.drops.length === 0) event.drops.push({ itemId: core.ItemIdentifiers.MAGGOT_EGG, amount: 1 });
     }
   },
   spawnNpc(definition) {
@@ -90,6 +101,7 @@ function player(index, questComplete = false) {
   const messages = [];
   let location = new core.Location(2677, 7851, 0);
   let area = null;
+  const items = [];
   const instance = {
     index,
     questComplete,
@@ -105,6 +117,21 @@ function player(index, questComplete = false) {
     setAttribute: (key, value) => attributes.set(key, value),
     sendMessage: value => messages.push(value),
     getPrivateArea: () => area,
+    getInventory: () => ({
+      contains: (id) => items.some((item) => item.id === id),
+      getFreeSlots: () => 28 - items.length,
+      getAddableAmount: (item) => {
+        const held = items.filter((entry) => entry.id === item.getId()).reduce((sum, entry) => sum + entry.amount, 0);
+        return Math.max(0, Math.min(item.getAmount(), MAX_STACK_AMOUNT - held));
+      },
+      adds: (id, amount) => {
+        const held = items.find((entry) => entry.id === id);
+        if (held) held.amount += amount;
+        else items.push({ id, amount });
+      },
+      refreshItems() {},
+    }),
+    items,
   };
   return instance;
 }
@@ -198,7 +225,7 @@ test("Blood Moon access opens a private solo lair and cleans it up on escape and
   assert.equal(recovered.getAttribute(Instance._test.INSTANCE_ATTRIBUTE), null);
 });
 
-test("a killed Maggot King respawns in its private lair and closing the session cancels the next respawn", t => {
+test("a killed Maggot King leaves a corpse, respawns after it is used, and closing the session cancels the next respawn", t => {
   const submitted = [];
   const submit = TaskManager.submit.bind(TaskManager);
   t.mock.method(TaskManager, "submit", task => {
@@ -211,11 +238,16 @@ test("a killed Maggot King respawns in its private lair and closing the session 
   const session = Instance.sessionOf(owner);
   const firstBoss = session.boss;
   const area = session.area;
+  const corpseHandler = interactions.get("Maggot King Corpse");
 
   deathHandlers.find(handler => handler === Instance.onBossDeath)({ npc: firstBoss, killer: owner });
   assert.equal(session.boss, null);
   assert.equal(firstBoss.__skipDefaultRespawn, true);
-  assert.equal(session.respawnTask.getDelay(), 3);
+  assert.ok(session.corpse, "the corpse waits for Open-stomach or Take-eggs");
+  assert.equal(session.corpse.getId(), core.NpcIdentifiers.MAGGOT_KING_CORPSE);
+  assert.equal(session.corpse.definition.owner, owner);
+  assert.equal(session.corpse.definition.ownerOnly, true);
+  assert.ok(!session.respawnTask, "the boss does not respawn while the corpse is waiting");
   new NPCDeathTask(firstBoss).remove();
   const removeQueue = World.getRemoveNPCQueue();
   const firstRemoveIndex = removeQueue.indexOf(firstBoss);
@@ -225,10 +257,17 @@ test("a killed Maggot King respawns in its private lair and closing the session 
 
   TaskManager.process();
   TaskManager.process();
-  assert.equal(spawned.length, firstSpawnIndex + 1, "the lair stays empty until the respawn delay expires");
+  assert.equal(session.boss, null, "the lair stays empty until the corpse is used");
+  assert.equal(corpseHandler["Take-eggs"]({ player: owner, npc: session.corpse }), true);
+  assert.equal(session.corpse, null);
+  assert.equal(owner.items.some((item) => item.id === core.ItemIdentifiers.MAGGOT_EGG), true, "take-eggs gives its roll");
+  assert.equal(session.respawnTask.getDelay(), 3);
+
+  TaskManager.process();
+  TaskManager.process();
+  assert.equal(session.boss, null, "the respawn delay is still running");
   TaskManager.process();
   const replacement = session.boss;
-  assert.equal(spawned.length, firstSpawnIndex + 2);
   assert.notEqual(replacement, firstBoss);
   assert.equal(replacement.getArea(), area);
   assert.equal(replacement.getLocation().equals(session.tile(Common.data.bossSpawn)), true);
@@ -244,12 +283,13 @@ test("a killed Maggot King respawns in its private lair and closing the session 
   assert.notEqual(replacementRemoveIndex, -1, "the native death removal queues the replacement");
   removeQueue.splice(replacementRemoveIndex, 1);
   const spawnCountBeforeClose = spawned.length;
-  const pendingRespawn = session.respawnTask;
-  assert.equal(pendingRespawn.isRunning(), true);
+  assert.ok(session.corpse, "the replacement leaves its own corpse");
+  const waitingCorpse = session.corpse;
+  assert.ok(!session.respawnTask);
 
   area.leave(owner, false);
   assert.equal(session.ended, true);
-  assert.equal(pendingRespawn.isRunning(), false);
+  assert.equal(removed.includes(waitingCorpse), true, "leaving removes the waiting corpse");
   for (let tick = 0; tick < 4; tick++) TaskManager.process();
   assert.equal(spawned.length, spawnCountBeforeClose, "a closed instance does not receive a queued boss");
   assert.equal(area.isDestroyed(), true);
@@ -280,14 +320,73 @@ test("Camping callback negatives preserve death cleanup for wrong and missing ki
       assert.equal(session.boss, null);
       assert.equal(boss.__maggotKingSession, null);
       assert.equal(boss.__skipDefaultRespawn, true);
-      assert.equal(session.respawnTask.isRunning(), true);
-      assert.equal(session.respawnTask.getDelay(), 3);
+      assert.ok(session.corpse, "the corpse is left waiting");
+      assert.ok(!session.respawnTask, "no respawn is scheduled before the corpse is used");
       assert.equal(session.campingKills, 11, `${mode} killer does not count`);
       Instance.onBossDeath({ npc: boss, killer: owner });
       assert.equal(session.campingKills, 11, "consumed callback cannot count later");
       assert.deepEqual(awards, []);
     } finally { session.area.leave(owner, false); }
   }
+});
+
+test("the corpse chooses one table once and then starts the respawn", () => {
+  const owner = player(11, true);
+  assert.equal(Instance.enter(owner), true);
+  const session = Instance.sessionOf(owner);
+  const boss = session.boss;
+  const corpseHandler = interactions.get("Maggot King Corpse");
+  Instance.onBossDeath({ npc: boss, killer: owner });
+  const corpse = session.corpse;
+  assert.ok(corpse);
+  const before = rollRequests.length;
+  assert.equal(corpseHandler["Open-stomach"]({ player: owner, npc: corpse }), true);
+  assert.equal(rollRequests[before].npcId, core.NpcIdentifiers.MAGGOT_KING_CORPSE, "Open-stomach rolls the corpse's open-stomach table");
+  assert.equal(rollRequests[before].boss, true, "the corpse's uniques take the boss multiplier");
+  assert.equal(session.corpse, null);
+  assert.equal(corpseHandler["Take-eggs"]({ player: owner, npc: corpse }), false, "the same corpse cannot be used twice");
+  assert.equal(session.respawnTask.getDelay(), 3);
+  session.area.leave(owner, false);
+});
+
+test("Take-eggs rolls the take-eggs table and an empty roll says the eggs pop", () => {
+  const owner = player(12, true);
+  assert.equal(Instance.enter(owner), true);
+  const session = Instance.sessionOf(owner);
+  Instance.onBossDeath({ npc: session.boss, killer: owner });
+  const corpse = session.corpse;
+  const corpseHandler = interactions.get("Maggot King Corpse");
+  const before = rollRequests.length;
+  const emit = api.emitCustomEvent;
+  api.emitCustomEvent = (name, event) => {
+    if (name === "npc-drops:roll-table") {
+      rollRequests.push(event);
+      return; // the empty take-eggs outcome
+    }
+    return emit(name, event);
+  };
+  try {
+    assert.equal(corpseHandler["Take-eggs"]({ player: owner, npc: corpse }), true);
+    assert.equal(rollRequests[before].npcId, core.NpcIdentifiers.MAGGOT_KING, "Take-eggs rolls the boss's take-eggs table");
+    assert.equal(owner.messages.at(-1), "The eggs pop as you try to take them.");
+  } finally {
+    api.emitCustomEvent = emit;
+    session.area.leave(owner, false);
+  }
+});
+
+test("a full stack receives only the room left and sends the excess to the floor", () => {
+  const owner = player(14, true);
+  const noteId = core.ItemDefinition.forId(core.ItemIdentifiers.UNCUT_RUBY).getNoteId();
+  assert.ok(noteId > 0, "uncut ruby has a noted form");
+  owner.items.push({ id: noteId, amount: MAX_STACK_AMOUNT - 2 });
+  const before = ground.length;
+  Rewards._test.give(owner, [{ itemId: core.ItemIdentifiers.UNCUT_RUBY, amount: 11, noted: true }],
+    new core.Location(2677, 7851, 0));
+  assert.equal(owner.items.find((item) => item.id === noteId).amount, MAX_STACK_AMOUNT, "the stack stops at the cap");
+  const [, placed] = ground[before];
+  assert.equal(placed.getId(), noteId);
+  assert.equal(placed.getAmount(), 9, "the nine that did not fit reach the corpse tile");
 });
 
 test("Camping completion failure occurs after authoritative death retirement and scheduled respawn", t => {
@@ -308,8 +407,8 @@ test("Camping completion failure occurs after authoritative death retirement and
     assert.equal(session.boss, null);
     assert.equal(boss.__maggotKingSession, null);
     assert.equal(boss.__skipDefaultRespawn, true);
-    assert.equal(session.respawnTask.isRunning(), true);
-    assert.equal(session.respawnTask.getDelay(), 3);
+    assert.ok(session.corpse, "the corpse is left waiting");
+    assert.ok(!session.respawnTask, "no respawn is scheduled before the corpse is used");
     assert.equal(session.campingKills, 12, "accepted kill is committed before optional notification");
     Instance.onBossDeath({ npc: boss, killer: owner });
     assert.equal(session.campingKills, 12, "duplicate callback cannot replay failed notification");

@@ -19,6 +19,7 @@ module.exports = {
     require("./barracudatrials/Gwenith.BarracudaTrials")(api);
     require("./barracudatrials/Resonance.BarracudaTrials")(api);
     require("./barracudatrials/Scoreboard.BarracudaTrials")(api);
+    require("./barracudatrials/Chests.BarracudaTrials")(api);
     require("./barracudatrials/Dev.BarracudaTrials")(api);
   },
 };

@@ -1133,6 +1133,10 @@ test('Count Check gives his lamp to a player with a Bank PIN and fails one witho
   h.hooks['Count Check']['Talk-to']({ player: p, npc, handled: false });
   assert.deepEqual(p.rewards, [I.LAMP]); assert.deepEqual(p.messages, [REWARD(1, 'Lamp')]);
   assert.match(npcLines(p)[0], /so you pass my checks! Enjoy your prize\.$/);
+  assert.match(npcLines(p)[0], /You have set a Bank PIN/,
+    'the pass line names the check that really passed');
+  assert.doesNotMatch(npcLines(p)[0], /Jagex Account/,
+    'the server must not claim a Jagex Account upgrade the player never made');
   assert.equal(npc.animation, 858, 'he bows as he leaves');
   h.hooks['Count Check']['Talk-to']({ player: p, npc, handled: false });
   assert.deepEqual(npcLines(p), ['I must be leaving now.']); assert.deepEqual(p.rewards, [I.LAMP]);
@@ -1141,7 +1145,15 @@ test('Count Check gives his lamp to a player with a Bank PIN and fails one witho
   const q = h.player(), failed = h.spawn(q, 7);
   h.hooks['Count Check']['Talk-to']({ player: q, npc: failed, handled: false });
   assert.deepEqual(q.rewards, []); assert.match(npcLines(q)[0], /You do not have a Bank PIN, so you fail my checks!/);
+  assert.doesNotMatch(npcLines(q)[0], /Jagex Account/);
   leaves(h, q); assert.equal(failed.removed, true);
+  // An Ultimate Ironman passes without a PIN; his line names the real reason too.
+  h.api.onCustomEvent('ironman:mode', query => { query.mode = 'ultimate'; });
+  const uim = h.player(), uimNpc = h.spawn(uim, 7);
+  h.hooks['Count Check']['Talk-to']({ player: uim, npc: uimNpc, handled: false });
+  assert.deepEqual(uim.rewards, [I.LAMP]);
+  assert.match(npcLines(uim)[0], /You do not use banks, so you pass my checks!/);
+  assert.doesNotMatch(npcLines(uim)[0], /Jagex Account/);
 });
 
 test('gift events follow the captured overhead timeline, smoke and refusal lines', t => {

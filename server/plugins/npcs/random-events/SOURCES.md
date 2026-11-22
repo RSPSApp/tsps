@@ -336,7 +336,10 @@ reading varp 531.
 
 Rewards follow each wiki page and capture: Coins use the genuine item and bulk rewards use
 noted ids. Lamps and the Book of Knowledge share the xpreward interface (10 x and 15 x
-level). Count Check assumes every account is a Jagex account; his Bank PIN check is real.
+level). This server has no Jagex Account upgrade, so Count Check checks the real
+Bank PIN state (waived for Ultimate Ironmen) and his pass line does not claim a
+Jagex Account the player may not have. The Wiki transcript also has separate
+"no Jagex Account" fail lines; those are unreachable here by design.
 
 Outfit pieces count as owned in the inventory, equipment, bank or the house's costume room
 (`Teleports.owns`, through `construction:costume-retrieve` in inspect mode), so a piece kept in

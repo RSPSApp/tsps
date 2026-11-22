@@ -2040,11 +2040,12 @@ export class MovementQueue {
                 this.reset(); // the task's own check ends the interaction after this cycle
                 return;
             }
+            if (operateBeforeMovement && approachDelayRemaining > 0 && this.reachesObject(object, routeSpec)) {
+                approachDelayRemaining--;
+                this.player.forcePositionToFace(new Location(objectX, objectY, this.player.getLocation().getZ()));
+                return;
+            }
             if (operateBeforeMovement && this.points.length === 0 && this.reachesObject(object, routeSpec)) {
-                if (approachDelayRemaining > 0) {
-                    approachDelayRemaining--;
-                    return;
-                }
                 operateReachedObject(task);
             }
         };

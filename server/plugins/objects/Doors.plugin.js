@@ -514,6 +514,7 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
       walkOver: true,
       operateBeforeMovement: true,
       operateBeforeMovementApproachDelay: 1,
+      faceTowardDoorOnCross: true,
       closeTicks: 2,
       openSoundId: 62,
     }),
@@ -2417,7 +2418,11 @@ function settleWalkOver({ player }) {
  * one step ignores clipping and the flag ends once they are across (at most WALK_OVER_MAX_TICKS),
  * so the blocker stops everyone else and no forced movement is sent.
  */
-function walkOverGate(player, destination) {
+function walkOverGate(player, destination, doorLocation = null) {
+  const queue = player.getMovementQueue();
+  const here = player.getLocation();
+  if (!queue.getMobility?.().canMove() || here.getZ() !== destination.getZ() ||
+    Math.abs(here.getX() - destination.getX()) + Math.abs(here.getY() - destination.getY()) !== 1) return false;
   endWalkOver(player);
   const token = {};
   const previous = player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true;
@@ -2426,9 +2431,21 @@ function walkOverGate(player, destination) {
   // An autosave during the borrowed step must be recoverable without clearing unrelated flags.
   player.setAttribute(WALK_OVER_ATTRIBUTE, previous);
   player.setFlag?.(IGNORE_CLIPPING_FLAG, true);
-  const queue = player.getMovementQueue();
   queue.reset();
   queue.addSteps(destination);
+  if ((queue.size?.() ?? 0) !== 1) {
+    endWalkOver(player, token);
+    return false;
+  }
+  // Face the doorway while crossing westward; on an eastward crossing the doorway is the
+  // destination tile, so retaining it as a face target would resolve to angle 0 on arrival.
+  if (doorLocation) {
+    if (destination.getX() === doorLocation.getX() && destination.getY() === doorLocation.getY()) {
+      player.setPositionToFace(null);
+    } else {
+      player.setPositionToFace(doorLocation.clone());
+    }
+  }
   let ticks = WALK_OVER_MAX_TICKS;
   task.execute = () => {
     if (WALKING_OVER.get(player)?.token !== token) { task.stop(); return; }
@@ -2440,6 +2457,7 @@ function walkOverGate(player, destination) {
     }
   };
   core.TaskManager.submit(task);
+  return true;
 }
 
 /**
@@ -2471,26 +2489,26 @@ function standAtDiagonal(player, gate, z) {
 function stepThroughGate(player, gate, x, y, z) {
   if (gate.crossDiagonal) {
     carryAcrossDiagonal(player, gate, z);
-    return;
+    return true;
   }
   if (gate.crossBetween) {
     carryAcrossGate(player, gate, y, z);
-    return;
+    return true;
   }
   if (gate.carry) {
     carryOneTile(player, gate, x, y, z);
-    return;
+    return true;
   }
   const destination = gate.crossX != null
     ? cloneLocation(player.getLocation().getX() < gate.crossX ? gate.crossX : gate.crossX - 1, y, z)
     : cloneLocation(x, player.getLocation().getY() < gate.crossY ? gate.crossY : gate.crossY - 1, z);
   if (gate.walkOver) {
-    walkOverGate(player, destination);
-    return;
+    return walkOverGate(player, destination, gate.faceTowardDoorOnCross ? cloneLocation(x, y, z) : null);
   }
   const queue = player.getMovementQueue();
   queue.reset();
   queue.addSteps(destination);
+  return true;
 }
 
 /** Opens a pass-through gate, steps the player across it and shuts it again (see PASS_THROUGH_GATES). */
@@ -2509,14 +2527,17 @@ function handlePassThroughGate(player, objectId, location, object = null) {
   }
   if (PENDING_PASS_THROUGH_GATES.has(anchorKey)) return true;
 
-  // Captured: the opening sound only; the gate shuts silently (1636, 1663, 3220).
-  if (!gate.silent)
-    core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
+  // Delayed gates play their captured sound before the hold; ordinary walk-over gates wait until
+  // their crossing step is accepted, so a newly frozen or held opener cannot open the gate in place.
   if (gate.crossDelay) {
+    if (!gate.silent)
+      core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
     holdForPassThroughGate(player, gate, z, anchorKey, () => openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey));
     return true;
   }
-  openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey);
+  const opened = openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey);
+  if (opened && !gate.silent)
+    core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
   return true;
 }
 
@@ -2543,9 +2564,10 @@ function holdForPassThroughGate(player, gate, z, anchorKey, open) {
 
 /** Swaps the gate open, steps the player across and shuts it `closeTicks` later. */
 function openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey) {
+  if (gate.walkOver && !stepThroughGate(player, gate, x, y, z)) return false;
   swapLocs(gate.closed, gate.opened, privateArea);
   OPEN_PASS_THROUGH_GATES.add(anchorKey);
-  stepThroughGate(player, gate, x, y, z);
+  if (!gate.walkOver) stepThroughGate(player, gate, x, y, z);
 
   const task = new core.Task(gate.closeTicks, anchorKey);
   task.execute = () => {
@@ -2554,6 +2576,7 @@ function openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey) {
     swapLocs(gate.opened, gate.closed, privateArea);
   };
   core.TaskManager.submit(task);
+  return true;
 }
 
 function toggleDoor({ player, object, objectId, definition, location, clickType }) {

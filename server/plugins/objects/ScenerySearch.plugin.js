@@ -75,9 +75,39 @@ function searchCrate(event) {
   if (!crate) return searchedNothing(event);
   const { player } = event;
   player.sendMessage(`There are a lot of ${crate.many} in the crate.`);
-  // Keyed to the player's index, so walking off or another click drops the question, as a re-click does live.
-  core.TaskManager.submit(new core.CountdownTask(player.getIndex(), PRODUCE_PROMPT_TICKS, () => askToTake(player, crate)));
+  core.TaskManager.submit(new ProduceSearch(player, crate));
 }
+
+/**
+ * The four ticks before the question hold the player still: a walk click is ignored (rsprox
+ * 233/00465: move_gameclick on tick 7318, the question on 7319 with the player still on 3011,3204).
+ * Keyed to the player's index, so another click on the crate restarts it (tick 7333). Stopping it
+ * any way gives back the hold, unless another system took or released one since.
+ * Built in register, once core (and its Task) is known.
+ */
+const produceSearchClass = (Task) => class ProduceSearch extends Task {
+  constructor(player, crate) {
+    super(PRODUCE_PROMPT_TICKS, player.getIndex(), false);
+    this.player = player;
+    this.crate = crate;
+    const queue = player.getMovementQueue();
+    queue.reset().setBlockMovement(true);
+    this.hold = queue.getBlockMovementGeneration();
+  }
+
+  execute() {
+    this.stop();
+    askToTake(this.player, this.crate);
+  }
+
+  stop() {
+    super.stop();
+    const queue = this.player.getMovementQueue();
+    if (this.hold !== null && queue.getBlockMovementGeneration() === this.hold) queue.setBlockMovement(false);
+    this.hold = null;
+  }
+};
+let ProduceSearch;
 
 function askToTake(player, crate) {
   if (!player.isRegistered()) return;
@@ -160,6 +190,7 @@ module.exports = {
   register(api) {
     core = api.core;
     pluginApi = api;
+    ProduceSearch = produceSearchClass(core.Task);
     api.onObjectInteraction("Haystack", { Search: searchHay });
     api.onObjectInteraction("Hay bale", { Search: searchHay });
     api.onObjectInteraction("Hay bales", { Search: searchHay });

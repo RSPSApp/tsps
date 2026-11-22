@@ -24,6 +24,12 @@ const sounds = [];
 const dialogues = [];
 let freeSlots = 1;
 let held = [];
+const movement = {
+    blocked: false, generation: 0,
+    reset() { return this; },
+    setBlockMovement(on) { this.blocked = on; this.generation++; return this; },
+    getBlockMovementGeneration() { return this.generation; },
+};
 
 ScenerySearch.register({
     core: {
@@ -35,7 +41,7 @@ ScenerySearch.register({
             getObjId: (name) => OBJS[name] ?? null,
         },
         TaskManager: { submit: (task) => tasks.push(task) },
-        CountdownTask: class { constructor(key, ticks, onComplete) { Object.assign(this, { key, ticks, onComplete }); } },
+        Task: class { constructor(delay, key) { Object.assign(this, { delay, key }); } stop() { this.stopped = true; } },
         Sound: { PICK_UP_ITEM: { id: PICK_UP_ITEM } },
         Sounds: { sendSound: (_player, sound) => sounds.push(sound.id) },
         DialogueChainBuilder: class { constructor() { this.entries = []; } add(entry) { this.entries.push(entry); return this; } },
@@ -56,6 +62,7 @@ const player = {
     getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => damage.push(...hits) }) }),
     sendMessage: (m) => messages.push(m),
     getIndex: () => 7,
+    getMovementQueue: () => movement,
     isRegistered: () => true,
 };
 
@@ -109,7 +116,7 @@ test('plain crates and boxes search and find nothing', () => {
 /** Runs the queued take question and answers it with `option` ("Yes." or "No."). */
 function answer(option) {
     assert.equal(tasks.length, 1);
-    tasks[0].onComplete();
+    tasks[0].execute();
     assert.equal(prompts.length, 1);
     const { options } = prompts[0];
     options[options.indexOf(option) + 1]();
@@ -118,9 +125,11 @@ function answer(option) {
 test("Wydin's potato crate asks four ticks on and Yes gives a potato (rsprox 233/00465 ticks 7315-7321)", () => {
     search('Crate', 0.99, LOCS.potato_crate);
     assert.deepEqual(messages, ['There are a lot of potatoes in the crate.']);
-    assert.equal(tasks[0].ticks, 4);
+    assert.equal(tasks[0].delay, 4);
     assert.equal(tasks[0].key, 7);
+    assert.equal(movement.blocked, true, 'held still until the question');
     answer('Yes.');
+    assert.equal(movement.blocked, false);
     assert.equal(prompts[0].title, 'Do you want to take a potato?');
     assert.deepEqual(prompts[0].options.filter((o) => typeof o === 'string'), ['Yes.', 'No.']);
     assert.deepEqual(added, [[OBJS.potato, 1]]);

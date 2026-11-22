@@ -139,14 +139,44 @@ test("Wydin's potato and cabbage crates ask on the fourth tick and Yes takes one
   }
 });
 
-// MovementQueue cancels the player's index-keyed tasks on a new walk or click.
-test("walking off before the fourth tick drops the crate's question", (t) => {
+// rsprox 233/00465: Search on tick 7315, a walk click on 7318, the question on 7319 with the
+// player still on (3011,3204).
+test("a walk click during the four ticks is ignored and the question still comes", (t) => {
   const f = fixture();
   f.player.setIndex(4321);
+  f.player.setLocation(new core.Location(3011, 3204, 0));
   const prompts = [];
   t.mock.method(api, "sendMultiChatboxPrompt", (...args) => { prompts.push(args); return true; });
   search(f, "potato_crate");
+  const queue = f.player.getMovementQueue();
+  assert.equal(queue.isMovementBlocked(), true);
+  tick(2);
+  queue.requestWalk(new core.Location(3011, 3206, 0));
+  assert.equal(queue.isMovementBlocked(), true, "the walk click neither moves nor cancels");
+  tick();
+  assert.equal(prompts.length, 0);
+  tick();
+  assert.equal(prompts.length, 1, "the question on the fourth tick");
+  assert.equal(queue.isMovementBlocked(), false, "free again with the question open");
+  assert.ok(f.player.getLocation().equals(new core.Location(3011, 3204, 0)));
+});
+
+test("a new click (cancelling the player's tasks) gives the hold back; another system's hold is kept", (t) => {
+  const f = fixture();
+  f.player.setIndex(4322);
+  const prompts = [];
+  t.mock.method(api, "sendMultiChatboxPrompt", (...args) => { prompts.push(args); return true; });
+  const queue = f.player.getMovementQueue();
+  search(f, "potato_crate");
   TaskManager.cancelTasks(f.player.getIndex());
+  assert.equal(queue.isMovementBlocked(), false);
   tick(5);
   assert.deepEqual(prompts, []);
+
+  search(f, "potato_crate");
+  queue.setBlockMovement(true); // a cutscene or another plugin's hold
+  tick(4);
+  assert.equal(prompts.length, 1);
+  assert.equal(queue.isMovementBlocked(), true, "not ours to release");
+  queue.setBlockMovement(false);
 });

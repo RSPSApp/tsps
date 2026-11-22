@@ -448,6 +448,116 @@ test('villagers: a ghost asked once has had its say, the bribe is the 1-3 it nam
   assert.deepEqual(lines.get(p), ['Would you sign this petition form, please?', "You only just asked me the same thing! Leave me alone - I've had my say!"]);
 });
 
+test('villagers: only the ghost asked last refuses; asking another in between lets it answer again (ticks 1541-1570, issue #6497)', (t) => {
+  const p = actor(t, { x: 3661, y: 3497, stage: 4 });
+  p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(I().BEDSHEET_2));
+  give(p, I().PETITION_FORM);
+  STATE.set(p, STATE.VARBIT.SIGNATURES, STATE.SIGNATURES_FORM + 3);
+  const first = spawn(t, core.NpcIdentifiers.GHOST_VILLAGER, 3662, 3497);
+  const second = spawn(t, core.NpcIdentifiers.GHOST_VILLAGER, 3660, 3497);
+  const ONLY = "You only just asked me the same thing! Leave me alone - I've had my say!";
+  const ask = (npc) => {
+    lines.set(p, []);
+    talk(p, npc);
+    play(p, ['Okay, if you insist.']);
+    return lines.get(p);
+  };
+  assert.ok(!ask(first).includes(ONLY), 'the first ask gets an answer');
+  assert.ok(ask(first).includes(ONLY), 'the same ghost twice in a row refuses (1541)');
+  assert.ok(!ask(second).includes(ONLY), 'another ghost answers');
+  assert.ok(!ask(first).includes(ONLY), 'the first ghost answers again after another was asked (1570)');
+  assert.ok(ask(first).includes(ONLY));
+});
+
+test('villagers: every support answer is one line, then the signature box (ticks 1541-1609)', (t) => {
+  const p = actor(t, { x: 3661, y: 3497, stage: 4 });
+  p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(I().BEDSHEET_2));
+  give(p, I().PETITION_FORM);
+  let forced = 0;
+  const api = PluginManager.createApi(`GhostsSupportPick${serial}`);
+  api.onCustomEvent('npc-dialogue:random', (draw) => {
+    if (draw.player === p && draw.options[0]?.text === 'Support dialogue 1') draw.index = forced;
+  });
+  const answers = ['Most certainly, I will.', "I'll do anything that annoys Necrovarus.",
+    "Yes! It's about time somebody did something about Necrovarus.", 'Yes, of course.'];
+  answers.forEach((answer, index) => {
+    forced = index;
+    STATE.set(p, STATE.VARBIT.SIGNATURES, STATE.SIGNATURES_FORM + index);
+    lines.set(p, []);
+    talk(p, spawn(t, core.NpcIdentifiers.GHOST_VILLAGER, 3662, 3497));
+    const shown = play(p);
+    assert.deepEqual(lines.get(p), ['Would you sign this petition form, please?', answer], `support answer ${index + 1}`);
+    assert.equal(shown.find((s) => s.kind === 'item')?.text,
+      `The ghost signs your petition. You have obtained ${index + 1} signature${index ? 's' : ''} so far.`);
+  });
+});
+
+test('Jump-To walks to the take-off, not into the gap, then lands across (ticks 944-945, issue #6497)', (t) => {
+  Shipwreck._test.setFallRoll(() => false);
+  t.after(() => Shipwreck._test.setFallRoll(() => Math.random() < 0.1));
+  // Each rock clicked from the landing of the jump before it, along the captured route.
+  const route = [
+    [[3602, 3550], [3597, 3552], [3601, 3551]],
+    [[3597, 3552], [3595, 3556], [3595, 3554]],
+    [[3595, 3556], [3597, 3561], [3596, 3557]],
+    [[3597, 3561], [3601, 3564], [3597, 3563]],
+    // And back from the island (ticks 975-1005).
+    [[3605, 3564], [3601, 3564], [3601, 3564]],
+    [[3599, 3564], [3597, 3559], [3598, 3563]],
+    [[3597, 3559], [3595, 3554], [3596, 3558]],
+    [[3595, 3554], [3599, 3552], [3597, 3552]],
+    [[3599, 3552], [3602, 3550], [3602, 3550]],
+  ];
+  for (const [[x, y], [rx, ry], takeOff] of route) {
+    const p = actor(t, { x, y, stage: 4 });
+    p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 25, false);
+    const rock = core.MapObjects.get(16115, new core.Location(rx, ry, 0), null);
+    assert.ok(rock, `rock at ${rx},${ry}`);
+    const routeEvent = { player: p, object: rock, objectId: 16115, clickType: 1, sourceLocation: { x, y, z: 0 }, destination: null };
+    PluginManager.emitObjectRoute(routeEvent);
+    assert.deepEqual(routeEvent.destination, { x: takeOff[0], y: takeOff[1], z: 0 }, `take-off for ${rx},${ry}`);
+    const jump = Shipwreck.JUMPS.find((j) => j.rock[0] === rx && j.rock[1] === ry && j.from[0] === takeOff[0] && j.from[1] === takeOff[1]);
+    let operated = false;
+    p.getMovementQueue().walkToObject(rock, { execute: () => {
+      operated = true;
+      Shipwreck.jumpToRock({ player: p, object: rock, location: { x: rx, y: ry, z: 0 } });
+    } });
+    tick(12);
+    assert.ok(operated, `the op runs for ${rx},${ry}`);
+    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], jump.to, `lands across from ${x},${y}`);
+  }
+});
+
+test('the bedsheet turns the player into the Ghost (?) disguise and makes them walk (Wiki: Bedsheet; tick 1504)', (t) => {
+  const p = actor(t, { x: 3670, y: 3497, stage: 4 });
+  p.setRunning(true);
+  p.setRunEnergy?.(100);
+  const wear = (id) => {
+    p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(id, id < 0 ? 0 : 1));
+    p.getEquipment().refreshItems();
+  };
+  wear(I().BEDSHEET_2);
+  assert.equal(p.getNpcTransformationId(), 3009, 'ahoy_ghost_disguise_green');
+  assert.equal(p.isRunningReturn(), true, 'the run setting stays on');
+  const start = p.getLocation().getX();
+  p.getMovementQueue().walkToTile(new core.Location(start - 6, 3497, 0), () => {});
+  tick(2);
+  assert.equal(start - p.getLocation().getX(), 2, 'one tile a tick while worn');
+  wear(I().BEDSHEET);
+  assert.equal(p.getNpcTransformationId(), 3008, 'ahoy_ghost_disguise');
+  wear(-1);
+  assert.equal(p.getNpcTransformationId(), -1, 'back to the player');
+  assert.equal(p.isWalkOnly(), false);
+  const from = p.getLocation().getX();
+  p.getMovementQueue().walkToTile(new core.Location(from - 6, 3497, 0), () => {});
+  tick(2);
+  assert.ok(from - p.getLocation().getX() > 2, 'runs again with it off');
+  // A transformation from something else is left alone.
+  p.setNpcTransformationId(1469);
+  PluginManager.emitCustomEvent('equipment:changed', { player: p });
+  assert.equal(p.getNpcTransformationId(), 1469);
+});
+
 test('the Ghost captain sails with the captured fade, fare and landing (ticks 1110-1167)', (t) => {
   const p = actor(t, { x: 3702, y: 3487, stage: 4 });
   give(p, I().ECTO_TOKEN, 39);

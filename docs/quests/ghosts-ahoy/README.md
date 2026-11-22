@@ -73,12 +73,22 @@ to pay up then? You owe me 25/50/75 gold coins!". At 100 the threat and the item
 the oak longbow for you." (1410-1415). Talking to him after a loss replays the loss lines (1274).
 
 **Ghost villagers.** "Would you sign this petition form, please?" then a random answer; asked
-again, the same ghost says "You only just asked me the same thing!..." (1541). Bribes name 1-3 ecto-tokens
+again straight away, the same ghost says "You only just asked me the same thing!..." (1541, 1544).
+Only the ghost asked last refuses: after another one is asked it answers again, and the capture
+fills the petition alternating two ghosts (NPC indexes 31221/31222, 1541-1609; Wiki: "As long as
+the ghost is not spoken to twice in a row"). A support answer is one line, then the box (the
+transcript's answers 2-4 are "same as above" back to the first one's box). Bribes name 1-3 ecto-tokens
 (Transcript: "Oh, it'll cost you [1-3] ecto-tokens.") and take what they name; the capture's three
 asks were all 2 (1528-1533). Each signature is an item box "The ghost
 signs your petition. You have obtained N signature(s) so far." The tenth is "You have succeeded in
 obtaining 10 signatures on the petition form!" (1609). "My answer is no." is one of the refusals
 (1538).
+
+**The bedsheet.** It has no worn model: worn, the player becomes the cache's "Ghost (?)" NPC
+(Wiki, Bedsheet), `ahoy_ghost_disguise` 3008 for the plain sheet and `ahoy_ghost_disguise_green`
+3009 for the slimy one, chathead included. The player runs up to the Wear and walks from that tick
+on, with `option_run` (varp 173) left on (1503-1504; Wiki: "Players cannot run while wearing a
+bedsheet.").
 
 **Necrovarus's petition and tomb.** "The petition form turns to ashes in your hand." and "In his
 rage, Necrovarus drops a key on the floor." are message boxes (1642-1643); the key lies on the
@@ -106,7 +116,9 @@ half of the flag is coloured orange." etc.) when low. Repairing the boat ("You r
 boat's missing flag.") and each dye ("You dye the top of the flag orange.") are item boxes.
 
 **The rocky island.** The gangplanks: spam "You cross the gangplank." and the move a tick after
-arriving (934, 1014). Each rock jump is a forced walk to the take-off, then anim 1604 (delay 26),
+arriving (934, 1014). Jump-To walks to the take-off tile for the rock clicked (the rock across
+the gap can't be reached on foot; 944: one step to 3601,3551 for the rock at 3597,3552). Each rock
+jump is then anim 1604 (delay 26),
 sound 2461 and the move. A fall plays anim 767, sound 2455 and hits 3 two ticks later, with no XP
 (981-985). The island chest gives scrap 3 (968). The three scraps make the map in an item box
 (1025).
@@ -128,8 +140,9 @@ Haricanto." three ticks after the dig; the map is kept (1138-1141).
 - Not captured: Robin's lines after a loss while he owes coins (the transcript's are used), the
   Gravingas line for 2-3 signatures (Ours: his one-signature line; the transcript has none) and
   the treasure map's Read (Ours: "This map is for use elsewhere.").
-- The bedsheet's look and any change to the villagers' answers without it (the capture always
-  wore it).
+- Any change to the villagers' answers without the bedsheet (the capture always wore it).
+- Not built: the Wiki's "I'll only wear the bedsheet inside Port Phasmatys." refusal elsewhere and
+  the Trader Crewmembers refusing passage while it is carried (no capture of either).
 
 ## Runs
 

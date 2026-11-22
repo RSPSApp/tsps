@@ -826,19 +826,24 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       return mine.length > 0 && signature(candidate) === mine;
     };
     // A random alternative ending "same as above" repeats the previous alternative's
-    // continuation, not an unrelated menu elsewhere on the page.
+    // continuation, not an unrelated menu elsewhere on the page. When that one is itself only a
+    // line and "same as above", the chain goes on up to the first with more: the Ghost
+    // villagers' four support answers each end "same as above" back to the first one's
+    // signature box (rsprox captures, 20261112T092603-5ab63b4: one answer line, then the box).
     if (/^above/i.test(reference) && current?.randomOptions) {
-      let continuation = realBody(current.randomOptions[current.randomIndex - 1]?.steps);
-      while (
-        continuation?.length &&
-        (typeof continuation[0]?.player === "string" ||
-          typeof continuation[0]?.npc === "string" ||
-          continuation[0]?.type === "line")
-      ) {
-        continuation = continuation.slice(1);
+      for (let index = current.randomIndex - 1; index >= 0; index--) {
+        let continuation = realBody(current.randomOptions[index]?.steps);
+        while (
+          continuation?.length &&
+          (typeof continuation[0]?.player === "string" ||
+            typeof continuation[0]?.npc === "string" ||
+            continuation[0]?.type === "line")
+        ) {
+          continuation = continuation.slice(1);
+        }
+        continuation = realBody(continuation);
+        if (continuation?.length) return continuation;
       }
-      continuation = realBody(continuation);
-      if (continuation?.length) return continuation;
     }
     const key = current ? normText(current.text) : "";
     // A jump never leads back into the branch it is in: that replays the branch forever.

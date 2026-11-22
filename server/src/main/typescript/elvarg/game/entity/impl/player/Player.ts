@@ -1243,6 +1243,24 @@ export class Player extends Mobile {
         return this;
     }
 
+    /** Content that makes the player walk, by its own key (not saved: content sets it again on login). */
+    private readonly walkOnlySources = new Set<string>();
+
+    /**
+     * Walk only while any source holds it: every step is a walk, but the run setting (the orb,
+     * varp 173) stays as the player left it, as live does with the bedsheet worn (rsprox
+     * captures, 20261112T092603-5ab63b4 ticks 1503-1504).
+     */
+    public setWalkOnly(source: string, walkOnly: boolean): this {
+        if (walkOnly) this.walkOnlySources.add(source);
+        else this.walkOnlySources.delete(source);
+        return this;
+    }
+
+    public isWalkOnly(): boolean {
+        return this.walkOnlySources.size > 0;
+    }
+
     /** A transformed appearance carries no items, so the equipment tab gets the worn inventory. */
     public setNpcTransformationId(npcTransformationId: number): this {
         super.setNpcTransformationId(npcTransformationId);

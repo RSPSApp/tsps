@@ -9,7 +9,7 @@
  *   the office (905-923) and the chest on the rocky island (962-974).
  * - The mast and the wind (632-764): the ahoy_windspeed overlay while on the top deck, and the
  *   flag's colours shown one part at a time while the wind is low.
- * - The gangplanks and the rock jumps to the island (930-1014).
+ * - The gangplanks and the rock jumps to the island (930-1014), walking to each take-off tile.
  * - Piecing the map scraps together (1025).
  */
 
@@ -375,6 +375,20 @@ function jumpFor(player, location) {
 let fallRoll = () => Math.random() < FALL_CHANCE;
 
 /**
+ * Jump-To walks to the take-off tile, not to the rock: the rock across the gap can't be reached
+ * on foot, so a plain route ended on the nearest dry tile (often the landing of the jump just
+ * made) and the op never ran (issue #6497). Live, the player walks straight to the take-off and
+ * leaps from it (ticks 944-945: 3602,3550 -> 3601,3551, then the jump to 3597,3552).
+ */
+function routeToRock(event) {
+  if (event.objectId !== ids.ROCK) return;
+  const rock = event.object?.getLocation?.();
+  if (!rock || rock.getZ() !== 0) return;
+  const jump = jumpFor(event.player, { x: rock.getX(), y: rock.getY() });
+  if (jump) event.destination = { x: jump.from[0], y: jump.from[1], z: 0 };
+}
+
+/**
  * Jump-To: a forced walk to the take-off, then the leap (anim 1604 delay 26, sound 2461, the
  * exact move over cycles 47-59) and 10 Agility two ticks later (ticks 937-940); a fall plays
  * anim 767 and sound 2455 on landing and hits 1-3 two ticks after (981-985), with no XP.
@@ -530,6 +544,7 @@ module.exports = {
   deckEntered,
   deckLeft,
   crossGangplank,
+  routeToRock,
   jumpToRock,
   repairToyBoat,
   inspectToyBoat,

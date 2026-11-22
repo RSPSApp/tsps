@@ -1181,6 +1181,7 @@ export class MovementQueue {
     }
 
     public isRunToggled(): boolean {
+        if (this.character.isPlayer() && (this.character as Player).isWalkOnly?.()) return false;
         return this.character.isPlayer()
             ? this.runOverride ?? this.clickRunOverride ?? (this.character as Player).isRunningReturn()
             : this.character.getAsNpc().getMovementSteps() > 1;

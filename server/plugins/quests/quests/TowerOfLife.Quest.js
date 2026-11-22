@@ -423,9 +423,10 @@ module.exports = function registerTowerOfLifeQuest(api) {
     sender.sendInterfaceDisplayState((MIND_OVERLAY_GROUP << 16) | MIND_ARROWS[align], false);
   }
 
+  /** The overlay and the puzzle's camera go together: walking off (capture tick 3143) or the bar at an end (3284). */
   function closeMind(player) {
     mindTalk.delete(player);
-    player.getPacketSender().closeSubInterface(OVERLAY_HUD_UID);
+    player.getPacketSender().closeSubInterface(OVERLAY_HUD_UID).sendCameraReset();
   }
 
   /** The overlay goes when the talk does (walking off closes both, capture tick 3143). */

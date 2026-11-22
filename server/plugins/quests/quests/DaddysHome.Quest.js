@@ -482,8 +482,15 @@ module.exports = function registerDaddysHomeQuest(api) {
       if (nails % 2 === 0) this.player.getPacketSender().sendSound(BUILD_SOUND, 0, 0);
     }
 
+    /**
+     * The materials go, and the save already holds the piece built: a save (and a crash) before the next tick can't
+     * keep the one without the other. The client hears of it (varbit, XP) the tick after, as captured.
+     */
     take() {
       consumeMaterials(this.player, PIECES[this.index]);
+      const state = stateOf(this.player);
+      state[this.index] = STATE_BUILT;
+      this.player.setAttribute(FURNITURE_ATTRIBUTE, state);
       this.taken = true;
     }
 
@@ -536,10 +543,11 @@ module.exports = function registerDaddysHomeQuest(api) {
     complete() {
       const player = this.player;
       const piece = PIECES[this.index];
+      if (this.completed) return;
       this.completed = true;
       this.stop();
       if (player.getSkill() === this) player.setSkill(null);
-      if (stateOf(player)[this.index] !== STATE_HOTSPOT) return;
+      if (!this.taken) return;
       setPieceState(player, this.index, STATE_BUILT);
       player.getSkillManager().addExperiences(Skill.CONSTRUCTION, piece.xp);
     }
@@ -690,9 +698,13 @@ module.exports = function registerDaddysHomeQuest(api) {
     ]));
   }
 
-  /** The lecture (Lecture.DaddysHome.js), then the briefing; interrupted, the quest stays at status 3 (Wiki: rewatch). */
+  /**
+   * The lecture (Lecture.DaddysHome.js), then the briefing; interrupted, the quest stays at status 3 (Wiki: rewatch).
+   * After the lecture the briefing's lines carry the builder's head, daddyshome_cutscene_builder_plain (capture ticks
+   * 1767-1774); after Skip the head isn't recorded and stays Yarlo's.
+   */
   function listen(player, npcId) {
-    if (!Lecture.play(player, () => briefing(player, npcId))) close(player);
+    if (!Lecture.play(player, () => briefing(player, NpcIdentifiers.OLD_MAN_YARLO_2))) close(player);
   }
 
   /** Capture ticks 1767-1774: status 4 with the first line, 5 with the sawmill line; the item boxes as captured. */

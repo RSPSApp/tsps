@@ -671,3 +671,19 @@ test("a click on something else between the last nail and the build still builds
   assert.equal(furniture(f, "table2"), 3);
   assert.equal(xp(f) - before, 86);
 });
+
+test("a save taken between the last nail and the build holds the piece built with its materials gone", async (t) => {
+  const f = actor(t, [3240, 3395, 0]);
+  seed(f, 5, [2, 2, 2, 2, 2, 2, 2]);
+  const inv = f.player.getInventory();
+  for (const [id, amount] of [[I.HAMMER, 1], [I.SAW, 1], [I.PLANK, 3], [I.DRAGON_NAILS, 10]]) inv.add(new core.Item(id, amount), false);
+  t.mock.method(Math, "random", () => 0.99); // no nail bends
+  await objectOption(f, "table2");
+  until(f, () => f.player.getInterfaceId() === 458);
+  await pickBuild(f);
+  ticks(f, 4); // four nails: the planks go with the last
+  assert.equal(inv.getAmount(I.PLANK), 0);
+  assert.equal(furniture(f, "table2"), 2, "the client still sees the hotspot on this tick, as captured");
+  const g = reload(t, f); // a save on this tick, then a restart
+  assert.equal(g.player.getAttribute("daddys-home:furniture")[PIECE.table2], 3, "the piece the planks went into is saved built");
+});

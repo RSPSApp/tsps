@@ -24,6 +24,8 @@ const sounds = [];
 const dialogues = [];
 let freeSlots = 1;
 let held = [];
+let at = { x: 3011, y: 3204, z: 0 };
+let dying = false;
 const movement = {
     blocked: false, generation: 0,
     reset() { return this; },
@@ -63,6 +65,8 @@ const player = {
     sendMessage: (m) => messages.push(m),
     getIndex: () => 7,
     getMovementQueue: () => movement,
+    getLocation: () => ({ getX: () => at.x, getY: () => at.y, getZ: () => at.z }),
+    isDyingReturn: () => dying,
     isRegistered: () => true,
 };
 
@@ -78,7 +82,7 @@ function search(name, roll, objectId) {
     const original = Math.random;
     Math.random = () => roll;
     try {
-        hooks[name].Search({ player, objectId, definition: { getName: () => name } });
+        hooks[name].Search({ player, objectId, location: { x: 3011, y: 3203, z: 0 }, definition: { getName: () => name } });
     } finally {
         Math.random = original;
     }
@@ -158,6 +162,26 @@ test('a full inventory gets the free-space line and no potato (rsprox 233/00465 
     assert.deepEqual(animations, []);
     assert.deepEqual(messages, ['There are a lot of potatoes in the crate.', 'You do not have enough free space to take a potato.']);
     freeSlots = 1;
+});
+
+test('dying or being moved off during the four ticks asks nothing; moving off before Yes takes nothing', (t) => {
+    t.after(() => { at = { x: 3011, y: 3204, z: 0 }; dying = false; });
+    search('Crate', 0.99, LOCS.potato_crate);
+    dying = true;
+    tasks[0].execute();
+    assert.equal(prompts.length, 0, 'no question while dying');
+    dying = false;
+    search('Crate', 0.99, LOCS.potato_crate);
+    at = { x: 3089, y: 3524, z: 0 }; // the respawn
+    tasks[0].execute();
+    assert.equal(prompts.length, 0, 'no question away from the crate');
+    at = { x: 3011, y: 3204, z: 0 };
+    search('Crate', 0.99, LOCS.potato_crate);
+    tasks[0].execute();
+    at = { x: 3089, y: 3524, z: 0 };
+    prompts[0].options[1]();
+    assert.deepEqual(added, []);
+    at = { x: 3011, y: 3204, z: 0 };
 });
 
 test('the mud mound needs a spade, as live says in a mesbox (rsprox 231/00392 tick 7883)', () => {

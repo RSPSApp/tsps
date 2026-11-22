@@ -75,21 +75,30 @@ function searchCrate(event) {
   if (!crate) return searchedNothing(event);
   const { player } = event;
   player.sendMessage(`There are a lot of ${crate.many} in the crate.`);
-  core.TaskManager.submit(new ProduceSearch(player, crate));
+  core.TaskManager.submit(new ProduceSearch(player, crate, event.location));
+}
+
+/** Still beside the crate and alive: a death in the four ticks (poison) moves them to the respawn. */
+function besideCrate(player, tile) {
+  const at = player.getLocation();
+  return !player.isDyingReturn() && at.getZ() === tile.z
+    && Math.abs(at.getX() - tile.x) <= 1 && Math.abs(at.getY() - tile.y) <= 1;
 }
 
 /**
  * The four ticks before the question hold the player still: a walk click is ignored (rsprox
  * 233/00465: move_gameclick on tick 7318, the question on 7319 with the player still on 3011,3204).
- * Keyed to the player's index, so another click on the crate restarts it (tick 7333). Stopping it
- * any way gives back the hold, unless another system took or released one since.
+ * A click on the crate with the question open closes it and starts again (tick 7333); one during
+ * the four ticks is ignored, like the walk click (unrecorded). Keyed to the player's index; stopping
+ * it any way gives back the hold, unless another system took or released one since.
  * Built in register, once core (and its Task) is known.
  */
 const produceSearchClass = (Task) => class ProduceSearch extends Task {
-  constructor(player, crate) {
+  constructor(player, crate, tile) {
     super(PRODUCE_PROMPT_TICKS, player.getIndex(), false);
     this.player = player;
     this.crate = crate;
+    this.tile = tile;
     const queue = player.getMovementQueue();
     queue.reset().setBlockMovement(true);
     this.hold = queue.getBlockMovementGeneration();
@@ -97,7 +106,7 @@ const produceSearchClass = (Task) => class ProduceSearch extends Task {
 
   execute() {
     this.stop();
-    askToTake(this.player, this.crate);
+    askToTake(this.player, this.crate, this.tile);
   }
 
   stop() {
@@ -109,12 +118,13 @@ const produceSearchClass = (Task) => class ProduceSearch extends Task {
 };
 let ProduceSearch;
 
-function askToTake(player, crate) {
-  if (!player.isRegistered()) return;
-  pluginApi.sendMultiChatboxPrompt(player, `Do you want to take a ${crate.one}?`, "Yes.", () => takeProduce(player, crate), "No.", () => {});
+function askToTake(player, crate, tile) {
+  if (!player.isRegistered() || !besideCrate(player, tile)) return;
+  pluginApi.sendMultiChatboxPrompt(player, `Do you want to take a ${crate.one}?`, "Yes.", () => takeProduce(player, crate, tile), "No.", () => {});
 }
 
-function takeProduce(player, crate) {
+function takeProduce(player, crate, tile) {
+  if (!besideCrate(player, tile)) return;
   const inventory = player.getInventory();
   if (inventory.getFreeSlots() < 1) return void player.sendMessage(`You do not have enough free space to take a ${crate.one}.`);
   inventory.adds(core.CacheDefinitions.getObjId(crate.item), 1);

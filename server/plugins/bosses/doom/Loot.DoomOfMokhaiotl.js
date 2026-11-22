@@ -8,6 +8,8 @@
  * - Uniques from delve 2, each from the delve that unlocks it, at the delve's overall rate and
  *   equally likely among those unlocked. Dom from delve 6 on its own rate.
  * - An elite clue: 1/75 at delves 1-2, 1/50 after.
+ * - A league's boosted drops ("drops:chance" with source "Doom of Mokhaiotl") make the unique
+ *   roll that many times as likely; Dom, the clue and the regular table are not boosted.
  * Guesses: a unique comes on top of the regular roll; the moon key half is 30105.
  */
 
@@ -92,11 +94,40 @@ function tears(level) {
   return level < 3 ? 0 : Math.min(100, 50 + 10 * (level - 3));
 }
 
-function rollUnique(level, random) {
+/**
+ * The delve's unique, or null. `boost(id)` (dropBoost's) makes an unlocked unique that many
+ * times as likely: the roll's chance grows by the unlocked uniques' mean boost and the unique is
+ * picked by its boost.
+ */
+function rollUnique(level, random, boost = null) {
   const rate = level > 8 ? DEEP_UNIQUE_RATE : UNIQUE_RATE[level];
-  if (!rate || !oneIn(random, rate)) return null;
+  if (!rate) return null;
   const unlocked = UNIQUES.filter(([, from]) => level >= from);
-  return unlocked[Math.floor(random() * unlocked.length)][0];
+  const weights = unlocked.map(([id]) => Math.max(1, boost ? boost(id) : 1));
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  if (total === unlocked.length) {
+    if (!oneIn(random, rate)) return null;
+    return unlocked[Math.floor(random() * unlocked.length)][0];
+  }
+  if (random() * rate * unlocked.length >= total) return null;
+  let pick = random() * total;
+  for (let i = 0; i < unlocked.length; i++) if ((pick -= weights[i]) < 0) return unlocked[i][0];
+  return unlocked[unlocked.length - 1][0];
+}
+
+/** The source a delve's unique roll names on "drops:chance". */
+const CHANCE_SOURCE = "Doom of Mokhaiotl";
+
+/** "drops:chance" for a delve (a league's boosted drops): an item id's multiplier, or null when nothing is boosted. */
+function dropBoost(player) {
+  const Shared = require("./Shared.DoomOfMokhaiotl");
+  const rules = [];
+  Shared.api()?.emitCustomEvent?.("drops:chance", { player, source: CHANCE_SOURCE, rules });
+  if (rules.length === 0) return null;
+  return (id) => {
+    const name = Shared.core().ItemDefinition.forId(id)?.getName?.() ?? "";
+    return rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+  };
 }
 
 function rollDom(level, random) {
@@ -104,10 +135,10 @@ function rollDom(level, random) {
   return rate && oneIn(random, rate);
 }
 
-/** One delve's loot: [{ id, amount }], and whether anything unique came. */
-function roll(level, random = Math.random) {
+/** One delve's loot: [{ id, amount }], and whether anything unique came; `boost` is dropBoost's. */
+function roll(level, random = Math.random, boost = null) {
   const items = [rollTable(level, random)];
-  const unique = rollUnique(level, random);
+  const unique = rollUnique(level, random, boost);
   if (unique) items.push({ id: unique, amount: 1 });
   const dom = rollDom(level, random);
   if (dom) items.push({ id: ITEM.DOM, amount: 1 });
@@ -132,4 +163,4 @@ function valueOf(items, ItemDefinition) {
   return total;
 }
 
-module.exports = { roll, rollTable, rollUnique, rollDom, tears, scaled, merge, valueOf, multiplier, TABLE, TABLE_WEIGHT, ITEM, UNIQUES };
+module.exports = { CHANCE_SOURCE, roll, rollTable, rollUnique, rollDom, dropBoost, tears, scaled, merge, valueOf, multiplier, TABLE, TABLE_WEIGHT, ITEM, UNIQUES };

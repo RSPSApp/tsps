@@ -542,7 +542,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `TormentedDemons` | TormentedDemons | bosses | yes | Tormented Demons in the Ancient Guthixian Temple: three styles, shield and defenceless phases, fire bombs, 1-3 demon rooms, kill count and Combat Achievements. (members only) |
 | `Vardorvis` | Vardorvis | bosses | yes | Vardorvis at the Stranglewood ritual site: a private instance, tendril barrier, slashes, axes, head gaze, spikes, strangle and the kill. (members only) |
 | `Vorkath` | Vorkath | bosses | yes | Vorkath after Dragon Slayer II: wake her on Ungael, fight her fireballs and acid, rapid-fire and freeze specials, with Torfinn returning items on death. (members only) |
-| `WildernessBosses` | WildernessBosses | bosses | yes | The Wilderness bosses: Callisto, Vet'ion, Venenatis, their Artio, Calvar'ion and Spindel variants, shared entry fee, Escape Caves, Scorpia and the Voidwaker pieces' Inspect lines. (members only) |
+| `WildernessBosses` | WildernessBosses | bosses | yes | The Wilderness bosses: Callisto, Vet'ion, Venenatis, their Artio, Calvar'ion and Spindel variants, shared entry fee, Escape Caves, Scorpia, and Madam Sikaro's Voidwaker assembly. (members only) |
 | `Yama` | Yama | bosses | yes | Yama at the bottom of the Chasm of Fire: the Voice of Yama, a solo instance, the three-phase fight with the Judge of Yama, and the loot. (members only) |
 | `Zalcano` | Zalcano | bosses | yes | Zalcano under Prifddinas: the platforms and barrier, the shared fight, mining, refining, imbuing and throwing tephra, and contribution rewards. (members only) |
 | `Zulrah` | Zulrah | bosses | yes | Zulrah: the sacrificial boat from Zul-Andra, the fight at its shrine and what it leaves behind. (members only) |

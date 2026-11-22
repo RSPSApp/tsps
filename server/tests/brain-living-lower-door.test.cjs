@@ -1,98 +1,142 @@
 // Run after `yarn build`: node --test tests/brain-living-lower-door.test.cjs
-// rsprox 3032 (rev 231), ticks 4905-4910: Open on brain_living_lower_door at
-// 3817,2841 adds inviswall on the doorway and brain_living_lower_door_secureopen
-// one tile west with sound 62; the original door returns two ticks later.
+// rsprox 3032 (rev 231), ticks 4905-4910 and 5074-5076: east-west crossing, sound 62,
+// immediate in-reach Open, approach Open two ticks after arrival, and restore two ticks later.
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { test, before } = require("node:test");
-
-const { Server } = require("../dist/Server");
-Server.installProductionPathResolver();
-const { PluginManager } = require("../dist/plugins/PluginManager");
+const { before, after, test, mock } = require("node:test");
+process.env.DISABLE_PLAYER_BOTS = "1";
+require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
-const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
-const { BotPlayerSession } = require("../dist/net/BotPlayerSession");
+const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
+const { PlayerSession } = require("../dist/net/PlayerSession");
+const { ClientConnection } = require("../dist/net/NetworkBuilder");
 
-const core = PluginManager.getCoreApi();
-const DOOR = { x: 3817, y: 2841, z: 0 };
-const noop = () => {};
+const DOOR = { id: 22007, x: 3817, y: 2841, z: 0 };
+const OPEN = 21953;
+const INVISWALL = 38848;
+let core;
+let next = 6100;
+const hookErrors = [];
+const originalError = console.error;
+console.error = (...args) => { hookErrors.push(args.map(String)); originalError(...args); };
 
 before(async () => {
-  await CachePipeline.initialize(path.resolve(__dirname, ".."));
-  core.RegionManager.init();
-  core.RegionManager.loadMapFiles(DOOR.x, DOOR.y);
+  const worldConfig = require("../dist/game/definition/WorldDefinition");
+  const readConfig = worldConfig.readWorldConfig;
+  const config = mock.method(worldConfig, "readWorldConfig", (...args) => {
+    const actual = readConfig(...args);
+    return { ...actual, plugins: { ...actual.plugins, WorldAdmin: false } };
+  });
+  try {
+    await CachePipeline.initialize(path.resolve(__dirname, ".."));
+    PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+    core = PluginManager.getCoreApi();
+    core.ObjectDefinition.init();
+    core.RegionManager.init();
+    core.RegionManager.loadMapFiles(DOOR.x, DOOR.y);
+    PluginManager.emitServerStartup({});
+  } finally { config.mock.restore(); }
 });
 
-function visitor(x, y) {
-  const interactions = new Map(), tasks = [], sounds = [];
-  let route;
-  const doorCore = { ...core, TaskManager: { submit: (task) => { task.setRunning(true); tasks.push(task); }, cancelTasks: noop } };
-  const api = new Proxy({
-    core: doorCore,
-    getTaskManager: () => doorCore.TaskManager,
-    onCustomEvent: noop,
-    emitCustomEvent: noop,
-    onObjectInteraction: (name, handlers) => interactions.set(name, handlers),
-    onObjectRoute: (handler) => { route = handler; },
-    onServerStartup: (handler) => handler(),
-  }, { get: (target, key) => target[key] ?? noop });
-  require("../plugins/objects/Doors.plugin").register(api);
+after(() => {
+  try { PluginManager.emitServerShutdown({}); }
+  finally { console.error = originalError; assert.deepEqual(hookErrors, [], "no runtime hook errors"); }
+});
 
-  const player = new Player(new BotPlayerSession());
-  player.setUsername("livinglowerdoor");
-  player.setRegistered(true);
-  player.setLocation(new core.Location(x, y, DOOR.z));
-  player.isUnwatchedBot = () => false;
-  player.getPacketSender = () => new Proxy({ sendSoundEffect: (id) => sounds.push(id) }, { get: (target, key) => target[key] ?? noop });
+const at = (player) => [player.getLocation().getX(), player.getLocation().getY()];
+const locAt = (id, x, y) => {
+  for (const list of core.MapObjects.mapObjects.values()) {
+    for (const object of list) {
+      const where = object.getLocation();
+      if (object.getId() === id && where.getX() === x && where.getY() === y && where.getZ() === DOOR.z) return object;
+    }
+  }
+  return null;
+};
+const isOpen = () => locAt(INVISWALL, DOOR.x, DOOR.y) != null && locAt(OPEN, DOOR.x - 1, DOOR.y) != null
+  && locAt(DOOR.id, DOOR.x, DOOR.y) == null;
+const isShut = () => locAt(DOOR.id, DOOR.x, DOOR.y) != null && locAt(INVISWALL, DOOR.x, DOOR.y) == null
+  && locAt(OPEN, DOOR.x - 1, DOOR.y) == null;
 
-  function click(object) {
-    const at = object.getLocation(), definition = object.getDefinition();
-    return interactions.get(definition.getName()).Open({
-      player, object, objectId: object.getId(), definition,
-      location: { x: at.getX(), y: at.getY(), z: at.getZ() }, clickType: 1,
-    });
-  }
-  function tick() {
-    player.getMovementQueue().process();
-    for (const task of [...tasks]) if (task.isRunning()) task.tick();
-  }
-  function routeOpen(object) {
-    const event = { player, object, objectId: object.getId(), definition: object.getDefinition(), clickType: 1,
-      sourceLocation: { x: player.getLocation().getX(), y: player.getLocation().getY(), z: DOOR.z } };
-    route(event);
-    return event;
-  }
-  return { player, click, tick, routeOpen, sounds };
+function nativeActor(t, from, running = false) {
+  const channel = {
+    kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true,
+    close() {}, onData() {}, onError() {}, onClose() {},
+  };
+  const session = new PlayerSession(channel);
+  const player = new Player(session, new core.Location(...from, DOOR.z));
+  const name = "livingdoor" + next++;
+  player.setUsername(name);
+  player.setLongUsername(core.Misc.stringToLongBigInt(name));
+  player.setAttribute("bot-skip-persistence", true);
+  assert.equal(core.World.getPlayers().add(player), true);
+  const connection = new ClientConnection(channel);
+  connection.player = player;
+  session.setPlayer(player);
+  session.setTurnPacketProcessor(() => connection.processTurnPackets());
+  player.setRunning(running);
+  for (let turns = 0; turns < 3; turns++) core.World.process();
+  player.setRunEnergyUnits(9000);
+  const sounds = [];
+  const sender = player.getPacketSender();
+  const sendSound = sender.sendSoundEffect.bind(sender);
+  t.mock.method(sender, "sendSoundEffect", (...args) => {
+    sounds.push([core.World.getProcessCycle(), ...args]);
+    return sendSound(...args);
+  });
+  t.after(() => {
+    try {
+      player.closeInterruptibleInterfaces();
+      PluginManager.emitPlayerLogout({ player, username: player.getUsername() });
+    } finally {
+      core.TaskManager.cancelTasks(player.getIndex());
+      core.TaskManager.cancelTasks(player);
+      if (player.isRegistered()) core.World.getPlayers().remove(player);
+    }
+  });
+  return { player, connection, sounds };
 }
 
-const locsAt = (x, y) => MapObjects.getObjectsAt(new core.Location(x, y, DOOR.z), null);
-const idsAt = (x, y) => locsAt(x, y).map((object) => object.getId());
+const settle = () => { for (let i = 0; i < 12; i++) core.World.process(); };
 
-test("Living lower door: Open adds the captured blocker and west leaf, then restores after two ticks", () => {
-  const doorId = core.CacheDefinitions.getLocId("brain_living_lower_door");
-  const openId = core.CacheDefinitions.getLocId("brain_living_lower_door_secureopen");
-  const inviswallId = core.CacheDefinitions.getLocId("inviswall");
-  const door = locsAt(DOOR.x, DOOR.y).find((object) => object.getId() === doorId);
-  assert.ok(door, "the closed door is placed on the live map");
-  assert.equal(door.getFace(), 0);
+async function openAndCross(t, { from, to, running = false, approached = false }) {
+  settle();
+  assert.ok(isShut(), "door starts shut");
+  const f = nativeActor(t, from, running);
+  const inputCycle = core.World.getProcessCycle();
+  await f.connection.dispatch([{ type: "object_option", id: DOOR.id, x: DOOR.x, y: DOOR.y, clickType: 1 }]);
+  let arrivalCycle = approached ? undefined : inputCycle;
+  let openCycle, crossCycle, closeCycle;
+  for (let turns = 0; turns < 20 && closeCycle == null; turns++) {
+    core.World.process();
+    const cycle = core.World.getProcessCycle();
+    const position = at(f.player);
+    if (arrivalCycle == null && position[0] === DOOR.x - 1 && position[1] === DOOR.y) arrivalCycle = cycle;
+    if (isOpen() && openCycle == null) openCycle = cycle;
+    if (position[0] === to[0] && position[1] === to[1] && crossCycle == null) crossCycle = cycle;
+    if (openCycle != null && isShut()) closeCycle = cycle;
+  }
+  assert.ok(Number.isInteger(openCycle), "Open swaps the door locs");
+  assert.equal(crossCycle, openCycle, "the player crosses on the opening tick");
+  assert.equal(openCycle, arrivalCycle + (approached ? 2 : 1), approached
+    ? "a walked approach opens two ticks after arrival" : "an in-reach click opens on its input tick");
+  assert.equal(closeCycle, openCycle + 2, "the closed loc returns two ticks after opening");
+  assert.deepEqual(f.sounds.filter(([, id]) => id === 62).map(([cycle]) => cycle), [openCycle],
+    "one door_open (62) on the opening tick");
+  settle();
+  assert.deepEqual(at(f.player), to, "the player remains on the opposite side");
+  assert.ok(isShut());
+}
 
-  const visitorState = visitor(DOOR.x, DOOR.y + 1);
-  assert.equal(visitorState.routeOpen(door).operateBeforeMovement, true,
-    "Open is processed before movement across the door");
-  assert.equal(visitorState.click(door), true, "the door takes Open");
-  assert.deepEqual(visitorState.sounds, [62], "door_open plays on the click");
-  assert.ok(idsAt(DOOR.x, DOOR.y).includes(inviswallId), "the doorway stays blocked while open");
-  assert.ok(idsAt(DOOR.x - 1, DOOR.y).includes(openId), "the secure open leaf swings one tile west");
-  assert.ok(!idsAt(DOOR.x, DOOR.y).includes(doorId), "the closed door is replaced");
+test("Living lower door: west-side Open crosses east through the west edge", async (t) => {
+  await openAndCross(t, { from: [DOOR.x - 1, DOOR.y], to: [DOOR.x, DOOR.y] });
+});
 
-  visitorState.tick();
-  assert.ok(idsAt(DOOR.x, DOOR.y).includes(inviswallId), "still open after one tick");
-  visitorState.tick();
-  assert.deepEqual([visitorState.player.getLocation().getX(), visitorState.player.getLocation().getY()], [DOOR.x, DOOR.y - 1],
-    "the opener crosses to the south side");
-  assert.ok(idsAt(DOOR.x, DOOR.y).includes(doorId), "the original door returns after two ticks");
-  assert.ok(!idsAt(DOOR.x, DOOR.y).includes(inviswallId));
-  assert.ok(!idsAt(DOOR.x - 1, DOOR.y).includes(openId));
-  assert.deepEqual(visitorState.sounds, [62], "the timed close is silent");
+test("Living lower door: east-side in-reach Open crosses west on the input tick", async (t) => {
+  await openAndCross(t, { from: [DOOR.x, DOOR.y], to: [DOOR.x - 1, DOOR.y] });
+});
+
+test("Living lower door: running approach opens two ticks after arrival", async (t) => {
+  await openAndCross(t, { from: [DOOR.x - 1, DOOR.y + 3], to: [DOOR.x, DOOR.y], running: true, approached: true });
 });

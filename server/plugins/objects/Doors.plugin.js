@@ -471,18 +471,18 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
   PASS_THROUGH_GATES = Object.freeze([
     // Zombie-pirate hideout's living lower door: rsprox 3032 (rev 231), t4905-4910 and the
     // second Open at t5074-5076. Live swaps in inviswall on the doorway and the secure-open leaf
-    // one tile west, plays door_open (62), and restores the closed loc two ticks later. Ours:
-    // those interactions don't expose the opener's crossing, so use the ordinary north/south
-    // pass-through step across this doorway.
+    // one tile west, plays door_open (62), crosses the west edge and restores the closed loc two
+    // ticks later. Approached Open resolves one extra pre-movement pass after arrival.
     Object.freeze({
       closed: [[core.CacheDefinitions.getLocId("brain_living_lower_door"), 3817, 2841, 0, 0]],
       opened: [
         [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3817, 2841, 0, 0],
         [core.CacheDefinitions.getLocId("brain_living_lower_door_secureopen"), 3816, 2841, 0, 1],
       ],
-      crossY: 2841,
+      crossX: 3817,
       walkOver: true,
       operateBeforeMovement: true,
+      operateBeforeMovementApproachDelay: 1,
       closeTicks: 2,
       openSoundId: 62,
     }),
@@ -2580,7 +2580,10 @@ function routeWallDoor(event) {
   event.blockAccessFlags = (event.blockAccessFlags ?? 0) | 0x5;
   const at = event.object.getLocation();
   const gate = passThroughGateAt(event.objectId, at.getX(), at.getY(), at.getZ());
-  if (event.clickType === 1 && gate?.operateBeforeMovement === true) event.operateBeforeMovement = true;
+  if (event.clickType === 1 && gate?.operateBeforeMovement === true) {
+    event.operateBeforeMovement = true;
+    event.operateBeforeMovementApproachDelay = gate.operateBeforeMovementApproachDelay;
+  }
 }
 
 function isPassThroughOpenLeaf(object) {

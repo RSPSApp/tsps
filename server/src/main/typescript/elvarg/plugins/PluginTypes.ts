@@ -177,6 +177,8 @@ export interface PluginObjectRouteEvent {
    * remain post-movement; explicit destinations and approach-range operations keep precedence.
    */
   operateBeforeMovement?: boolean;
+  /** Extra pre-movement passes to wait after an approach reaches the object; in-reach clicks stay immediate. */
+  operateBeforeMovementApproachDelay?: number;
 }
 
 export interface PluginWalkRouteEvent {

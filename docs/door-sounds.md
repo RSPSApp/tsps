@@ -25,3 +25,19 @@ swap at tick 7574 has no door sound for the nearby recorder. The server still
 sends positioned sound 60 on that timed close. Audio for the upper-tier
 `darkm_rich_door` family and unattended lower-tier closes still needs captures.
 [rsprox capture database](https://rsprox.net/database).
+
+## Nicedoor double doors
+
+Some double doors use `nicedoor_open` (81) and `nicedoor_close` (80) instead of the
+plain door pair (62/60). The shared door plugin picks them from either closed leaf's ID.
+
+| Cache door family | Open | Close | How it is sent |
+| --- | --- | --- | --- |
+| Arceuus `archeuus_door_double_left/right_*` (turquoise 28456/28460, green 28457/28461, red 28458/28462, blue 28459/28463) | Private recordings local 1001998 ticks 1222-1223 and 1335-1336 (blue, (1718, 3727-3728, 0)), local 1000453 ticks 9679-9681 (green, (1642, 3805-3806, 0)) | Recording 2297 ticks 448-457 (turquoise, (1632-1633, 3817, 0)) | Area sound, range 1, on the clicked leaf's tile |
+| Goblin outpost `goblin_outpost_poordoor_double_inner` / `_doubler_inner` (12446 / 12448) | Private recording local 1001339 click 301, swap and synth 302 at (2957-2958, 3509, 0); recording 3243 | local 1001339 click 308, swap and synth 309 | Private synth to the player using the door |
+
+The Arceuus leaves of one colour are four loc IDs apart, so the consecutive-ID pairing
+cannot find them. The plugin lists the four colour pairs. Both leaves turn on their own tiles
+into their `_open` locs: the right leaf turns one step clockwise and the left leaf one step
+anticlockwise, as recorded. The red set has no recording. It shares model 30746 and the ID layout of
+the other three, so the plugin treats it the same way.

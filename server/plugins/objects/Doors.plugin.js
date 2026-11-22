@@ -114,8 +114,8 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
 let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID, DORGESH_CITY_DOOR_IDS;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
-let PASS_THROUGH_GATES, PASS_THROUGH_FAMILIES;
-let SINGLE_DOOR_CLICK_SOUNDS;
+let PASS_THROUGH_GATES, PASS_THROUGH_FAMILIES, ARCEUUS_DOUBLE_DOORS;
+let SINGLE_DOOR_CLICK_SOUNDS, DOUBLE_DOOR_CLICK_SOUNDS;
 
 function defineDoorData({ ObjectIdentifiers: O, Sound }) {
   // rsprox 3050 ticks 381/383 and 3053 ticks 481/483: these map-door families use
@@ -124,6 +124,26 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
   SINGLE_DOOR_CLICK_SOUNDS = new Map([
     [O.DOOR_612, darkmeyerSounds], // darkm_poor_door_closed
     [O.DOOR_614, darkmeyerSounds], // darkm_middle_door_closed
+  ]);
+
+  // Double doors that live swings with nicedoor_open (81) / nicedoor_close (80) instead of
+  // the plain door pair, keyed by either closed leaf (docs/door-sounds.md). Kourend's Arceuus
+  // doors play it as an area sound of range 1 on the clicked leaf's tile (local 1001998 ticks
+  // 1223/1336, local 1000453 tick 9681, rsprox 2297 ticks 451-455); the goblin outpost's inner
+  // doors send it as the opener's private synth (local 1001339 ticks 302/309, rsprox 3243).
+  const arceuusSounds = { open: new Sound(81, 1, 0, 0), close: new Sound(80, 1, 0, 0), areaRadius: 1 };
+  const goblinOutpostSounds = { open: new Sound(81, 1, 0, 0), close: new Sound(80, 1, 0, 0) };
+  DOUBLE_DOOR_CLICK_SOUNDS = new Map([
+    [O.DOOR_529, arceuusSounds], // archeuus_door_double_left_turquoise
+    [O.DOOR_533, arceuusSounds], // archeuus_door_double_right_turquoise
+    [O.DOOR_530, arceuusSounds], // archeuus_door_double_left_green
+    [O.DOOR_534, arceuusSounds], // archeuus_door_double_right_green
+    [O.DOOR_532, arceuusSounds], // archeuus_door_double_left_blue
+    [O.DOOR_536, arceuusSounds], // archeuus_door_double_right_blue
+    [O.DOOR_531, arceuusSounds], // archeuus_door_double_left_red (same family, uncaptured)
+    [O.DOOR_535, arceuusSounds], // archeuus_door_double_right_red
+    [O.LARGE_DOOR_43, goblinOutpostSounds], // goblin_outpost_poordoor_double_inner
+    [O.LARGE_DOOR_45, goblinOutpostSounds], // goblin_outpost_poordoor_doubler_inner
   ]);
 
   // Doors with no open variant in the cache: OSRS opens them by rotating the same loc
@@ -248,6 +268,20 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
   // Yanille's south entrance door has blocked floor immediately west of the doorway, so its
   // map-backed open pose turns on the closed tile instead of swinging into that wall.
   OWN_TILE_DOOR_IDS = new Set([O.GATE_155, O.GATE_157, O.DOOR_287, O.DOOR_129, O.DOOR_130, O.DOOR_271, O.DOOR_272]);
+  // Arceuus's double doors: [left, right, left open, right open] per colour. The two leaves of a
+  // colour are four ids apart, so the consecutive-id pairing never finds them. Both leaves turn on
+  // their own tiles into their _open locs (local 1001998 ticks 1223/1336 blue, local 1000453 tick
+  // 9681 green, rsprox 2297 tick 451 turquoise); the red set is the same cache family, uncaptured.
+  ARCEUUS_DOUBLE_DOORS = Object.freeze([
+    [O.DOOR_529, O.DOOR_533, O.DOOR_537, O.DOOR_541], // archeuus_door_double_*_turquoise
+    [O.DOOR_530, O.DOOR_534, O.DOOR_538, O.DOOR_542], // archeuus_door_double_*_green
+    [O.DOOR_531, O.DOOR_535, O.DOOR_539, O.DOOR_543], // archeuus_door_double_*_red
+    [O.DOOR_532, O.DOOR_536, O.DOOR_540, O.DOOR_544], // archeuus_door_double_*_blue
+  ]);
+  for (const [left, right] of ARCEUUS_DOUBLE_DOORS) {
+    OWN_TILE_DOOR_IDS.add(left);
+    OWN_TILE_DOOR_IDS.add(right);
+  }
 
   // Tree Gnome Stronghold main gate: one 5x2 loc (190, face 2) opens into two
   // nameless 2x2 leaves (191/192), leaving the centre tile clear.
@@ -1429,6 +1463,9 @@ function buildDoorCatalog() {
   for (const left of sameModelPairs) {
     if (!SINGLE_DOOR_OPEN_IDS.has(left) && !SINGLE_DOOR_OPEN_IDS.has(left + 1)) addSameModelDoubleDoor(left, left + 1);
   }
+  for (const [left, right, leftOpen, rightOpen] of ARCEUUS_DOUBLE_DOORS) {
+    addCatalogDoubleDoor(left, right, leftOpen, rightOpen);
+  }
   // Mirrored leaves that each have their own "Close" loc (w_ardougnedoubledoorl 2546 -> 2547,
   // w_ardougnedoubledoorr 2548 -> 2549) are one double door too: paired as two single doors,
   // both leaves turned the same way. Live opens them as a pair (rsprox 1694 tick 8364; also
@@ -2196,10 +2233,18 @@ function handleDoubleDoor(player, object, objectId, location) {
     if (privateArea) forgetDoubleDoorRecords(pair);
   }
 
-  core.Sounds.sendSound(
-    player,
-    doorSound(pair[0].originalId, pair.some(isDoubleDoorOpen))
-  );
+  const opened = pair.some(isDoubleDoorOpen);
+  const clickSounds = DOUBLE_DOOR_CLICK_SOUNDS.get(pair[0].originalId) ?? DOUBLE_DOOR_CLICK_SOUNDS.get(pair[1].originalId);
+  const sound = clickSounds ? (opened ? clickSounds.open : clickSounds.close) : doorSound(pair[0].originalId, opened);
+  if (clickSounds?.areaRadius != null) {
+    // On the clicked leaf's tile, heard by the players around it (the opener's private area only).
+    core.Sounds.playAreaSound({
+      soundId: sound.getId(), x, y, level: z, loops: 1, delay: sound.getDelay(),
+      radius: clickSounds.areaRadius, source: player,
+    });
+  } else {
+    core.Sounds.sendSound(player, sound);
+  }
 
   return true;
 }

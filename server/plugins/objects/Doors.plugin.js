@@ -150,6 +150,10 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
     [O.DOOR_535, arceuusSounds], // archeuus_door_double_right_red
     [O.LARGE_DOOR_43, goblinOutpostSounds], // goblin_outpost_poordoor_double_inner
     [O.LARGE_DOOR_45, goblinOutpostSounds], // goblin_outpost_poordoor_doubler_inner
+    // Meiyerditch's area_sanguine_ghetto_door2 closes with small_creaky_door_close 55 (Darkness of
+    // Hallowvale capture t2667, 3625,3252); it opens with door_open 62, the default. door1's (17600)
+    // close is unrecorded.
+    [O.DOOR_377, { close: new Sound(55, 1, 0, 0) }],
   ]);
   // Double doors whose leaves open by role rather than as their own id + 1: the clicked leaf as
   // `clicked`, its partner as `partner`. Neitiznot's palisade gate: whichever leaf is clicked opens
@@ -1569,7 +1573,11 @@ function namedOpenLeaf(closedId) {
   const name = core.CacheDefinitions.getLocNames().get(closedId);
   if (!name) return null;
   const models = JSON.stringify(core.CacheDefinitions.getObject(closedId)?.models);
-  for (const candidate of [`${name}_open`, name.replace("closed", "open")]) {
+  // The cache spells it three ways: <name>_open, closed -> open, and "open_" before the last word
+  // (Meiyerditch's area_sanguine_ghetto_door1 17600 -> area_sanguine_ghetto_open_door1 18031, the
+  // Darkness of Hallowvale capture t841; only door1/door2 in the cache use that form).
+  const openWord = name.replace(/_((?:door|gate)\d*)$/, "_open_$1");
+  for (const candidate of [`${name}_open`, name.replace("closed", "open"), openWord]) {
     const id = candidate === name ? null : core.CacheDefinitions.getLocId(candidate);
     if (id != null && JSON.stringify(core.CacheDefinitions.getObject(id)?.models) === models) return id;
   }

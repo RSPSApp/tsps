@@ -19,6 +19,7 @@ const State = require("./State.ValeTotems");
 const Totems = require("./Totems.ValeTotems");
 const Spirits = require("./Spirits.ValeTotems");
 const Icons = require("./Icons.ValeTotems");
+const Trails = require("./Trails.ValeTotems");
 
 const { DATA } = Shared;
 const POINTS_MAX = (1 << 14) - 1;
@@ -33,15 +34,16 @@ function offeringsFor(player, site, totem) {
   return wrong ? Math.round(full * Math.max(0, 1 - DATA.wrongAnimalOfferingsPenalty * wrong)) : full;
 }
 
-function visit(player, site) {
+function visit(player, site, ent) {
   if (Totems.questHolds(player, site)) return;
   const totem = State.totem(player, site);
+  const multiplier = Trails.offeringMultiplier(player, ent, totem);
   if (totem.wood === 0) {
     State.rollAnimals(player, site);
     return;
   }
   if (!totem.carved) return;
-  State.set(player, site, { points: Math.min(POINTS_MAX, totem.points + offeringsFor(player, site, totem)) });
+  State.set(player, site, { points: Math.min(POINTS_MAX, totem.points + multiplier * offeringsFor(player, site, totem)) });
   if (totem.decay > 1) {
     State.set(player, site, { decay: totem.decay - 1 });
   } else {
@@ -52,8 +54,13 @@ function visit(player, site) {
 }
 
 /** One ent visit at every site, for one player. */
-function visitAll(player) {
-  for (const site of State.SITES) visit(player, site);
+function visitAll(player, ents) {
+  if (ents) {
+    for (const ent of ents) visit(player, ent.destination, ent);
+    Trails.updateEntIndicators(player);
+  } else {
+    for (const site of State.SITES) visit(player, site);
+  }
 }
 
 function cycle() {
@@ -87,4 +94,4 @@ function attach(api) {
   api.onServerStartup(start);
 }
 
-module.exports = { attach, visitAll };
+module.exports = { attach, visitAll, stepOnTrail: Trails.step };

@@ -36,6 +36,10 @@ const CHECK_INTERVAL_MS = 5 * 60_000;
 const MAX_INTERVAL_MS = 120 * 60_000;
 const NEXT_EVENT_ATTRIBUTE = "random-events:next-at";
 const MAX_DISTANCE = 15;
+// Live (rsprox 242, e.g. 911896 ticks 14010 and 14020): an event NPC whose owner ran off is teleported
+// to the owner on its next 10-tick beat, with no graphic or sound, and it never leaves for being far.
+// The captured jumps start at 5 tiles or more, so a follower closer than this is left to walk.
+const CATCH_UP_DISTANCE = 5;
 const DEFINITIONS_EVENT = "random-events:definitions";
 const Locations = require("./Locations.RandomEvents");
 const Gift = require("./GiftRewards.RandomEvents");
@@ -173,17 +177,23 @@ function eligible(player, forCommand = false) {
     !(player.getNpcTransformationId?.() >= 0);
 }
 
-function spawn(player, state, now, definition = null) {
+/**
+ * LostCity uses a line-of-walk square beside the player; the local collision
+ * manager's traversal check rejects walls as well as blocked destination tiles.
+ * Any of the eight squares around a standing player, diagonals too (live spawn offsets).
+ */
+function tilesBeside(player) {
   const origin = player.getLocation();
   const { Location } = api.core;
-  // LostCity uses a line-of-walk square beside the player; the local collision
-  // manager's traversal check rejects walls as well as blocked destination tiles.
-  // Any of the eight squares around a standing player, diagonals too (live spawn offsets).
   const candidates = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
   const region = api.getRegionManager();
-  const tiles = candidates.map(([dx, dy]) => new Location(origin.getX() + dx, origin.getY() + dy, origin.getZ()))
+  return candidates.map(([dx, dy]) => new Location(origin.getX() + dx, origin.getY() + dy, origin.getZ()))
     .filter((location) => !region.blocked(location, player.getPrivateArea?.()) &&
       region.canMovestart(origin, location, 1, 1, player.getPrivateArea?.()));
+}
+
+function spawn(player, state, now, definition = null) {
+  const tiles = tilesBeside(player);
   if (!tiles.length) return false;
   definition ??= events[Math.floor(Math.random() * events.length)];
   const underwater = Locations.underwater(player);
@@ -200,7 +210,7 @@ function spawn(player, state, now, definition = null) {
   if (!npc) return false;
   const active = {
     player, npc, definition, startedAt: now, expiresAt: now + (definition.lifetimeMs ?? EVENT_LIFETIME_MS),
-    nextNagAt: now + NAG_INTERVAL_MS, greeted: !definition.greet,
+    nextNagAt: now + NAG_INTERVAL_MS, nextCatchUpAt: now + NAG_INTERVAL_MS, greeted: !definition.greet,
     foodIndex,
     trayOpen: false,
   };
@@ -296,13 +306,33 @@ function startEvent(request) {
   request.result = start(request.player, request.index, request.forCommand !== false);
 }
 
-function valid(active, player, now = Date.now()) {
+/**
+ * `following`: the per-tick check of an event that follows its owner, which stays through any distance
+ * or plane (catchUp brings it back) and ends only for the other reasons. Talking and serving need it near.
+ */
+function valid(active, player, now = Date.now(), following = false) {
   if (!active || active.player !== player || active.npc.getOwner() !== player ||
       players.get(player)?.active !== active || now >= active.expiresAt ||
       !player.isRegistered() || player.getHitpoints() <= 0) return false;
   const a = player.getLocation(), b = active.npc.getLocation();
-  return player.getPrivateArea?.() == null && a.getZ() === b.getZ() && a.getDistance(b) <= MAX_DISTANCE &&
+  const near = (following && !active.definition.stationary) || (a.getZ() === b.getZ() && a.getDistance(b) <= MAX_DISTANCE);
+  return player.getPrivateArea?.() == null && near &&
     !disallowedLocation(player) && Locations.available(api, active.definition, player, true);
+}
+
+/**
+ * On each 10-tick beat a follower that is on another plane or CATCH_UP_DISTANCE or more tiles from its
+ * owner (ran off, or can't walk there) is teleported onto a walkable square beside them; with none free
+ * it tries again on the next beat.
+ */
+function catchUp(active, now) {
+  const { npc, player, definition } = active;
+  if (definition.stationary || now < active.nextCatchUpAt) return;
+  while (active.nextCatchUpAt <= now) active.nextCatchUpAt += NAG_INTERVAL_MS;
+  const a = player.getLocation(), b = npc.getLocation();
+  if (a.getZ() === b.getZ() && a.getDistance(b) < CATCH_UP_DISTANCE) return;
+  const tiles = tilesBeside(player);
+  if (tiles.length) npc.moveTo(tiles[Math.floor(Math.random() * tiles.length)]);
 }
 
 function closeInterface(active) {
@@ -382,7 +412,8 @@ function processPlayer({ player }) {
       expire(active, now);
       return;
     }
-    if (!valid(active, player, now)) { finish(active); return; }
+    if (!valid(active, player, now, true)) { finish(active); return; }
+    catchUp(active, now);
     const username = player.getDisplayName();
     if (!active.greeted) {
       if (now - active.startedAt >= TICK_MS / 2) {

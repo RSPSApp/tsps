@@ -38,8 +38,10 @@ const NEXT_EVENT_ATTRIBUTE = "random-events:next-at";
 const MAX_DISTANCE = 15;
 // Live (rsprox 242, e.g. 911896 ticks 14010 and 14020): an event NPC whose owner ran off is teleported
 // to the owner on its next 10-tick beat, with no graphic or sound, and it never leaves for being far.
-// The captured jumps start at 5 tiles or more, so a follower closer than this is left to walk.
-const CATCH_UP_DISTANCE = 5;
+// Over ~320 recordings, beats with the NPC exactly 5 tiles away never jumped and every beat at 6 or more
+// did, so it jumps when more than 5 tiles away. An owner that teleports or changes plane has it re-placed
+// on the next tick instead of the next beat (241/911521 lines 11701-11796, 242/911712 line 230053).
+const CATCH_UP_DISTANCE = 6;
 const DEFINITIONS_EVENT = "random-events:definitions";
 const Locations = require("./Locations.RandomEvents");
 const Gift = require("./GiftRewards.RandomEvents");
@@ -210,7 +212,8 @@ function spawn(player, state, now, definition = null) {
   if (!npc) return false;
   const active = {
     player, npc, definition, startedAt: now, expiresAt: now + (definition.lifetimeMs ?? EVENT_LIFETIME_MS),
-    nextNagAt: now + NAG_INTERVAL_MS, nextCatchUpAt: now + NAG_INTERVAL_MS, greeted: !definition.greet,
+    nextNagAt: now + NAG_INTERVAL_MS, nextCatchUpAt: now + NAG_INTERVAL_MS,
+    ownerSerial: player.getTeleportSerial?.(), greeted: !definition.greet,
     foodIndex,
     trayOpen: false,
   };
@@ -321,18 +324,36 @@ function valid(active, player, now = Date.now(), following = false) {
 }
 
 /**
- * On each 10-tick beat a follower that is on another plane or CATCH_UP_DISTANCE or more tiles from its
- * owner (ran off, or can't walk there) is teleported onto a walkable square beside them; with none free
- * it tries again on the next beat.
+ * On each 10-tick beat, or the tick after its owner teleports, a follower on another plane or
+ * CATCH_UP_DISTANCE or more tiles from its owner (ran off, or can't walk there) is teleported onto a
+ * walkable square beside them; with none free it tries again on the next beat. A jump clears the follow
+ * (moveTo drops the interaction, and the queue drops a follower whose owner was far or teleporting), so
+ * it is set again here, and on any later tick it was cleared while the owner is within reach.
  */
 function catchUp(active, now) {
   const { npc, player, definition } = active;
-  if (definition.stationary || now < active.nextCatchUpAt) return;
+  if (definition.stationary) return;
+  const serial = player.getTeleportSerial?.();
+  const teleported = serial !== active.ownerSerial;
+  active.ownerSerial = serial;
+  const beat = now >= active.nextCatchUpAt;
   while (active.nextCatchUpAt <= now) active.nextCatchUpAt += NAG_INTERVAL_MS;
   const a = player.getLocation(), b = npc.getLocation();
-  if (a.getZ() === b.getZ() && a.getDistance(b) < CATCH_UP_DISTANCE) return;
-  const tiles = tilesBeside(player);
-  if (tiles.length) npc.moveTo(tiles[Math.floor(Math.random() * tiles.length)]);
+  const sameLevel = a.getZ() === b.getZ();
+  if ((beat || teleported) && (!sameLevel || a.getDistance(b) >= CATCH_UP_DISTANCE)) {
+    const tiles = tilesBeside(player);
+    if (tiles.length) {
+      npc.moveTo(tiles[Math.floor(Math.random() * tiles.length)]);
+      npc.setFollowing(null); // so the follow takes the owner's new teleport serial
+      npc.setFollowing(player);
+      npc.setMobileInteraction(player);
+      return;
+    }
+  }
+  if (sameLevel && a.getDistance(b) <= MAX_DISTANCE && npc.getFollowing?.() !== player) {
+    npc.setFollowing(player);
+    npc.setMobileInteraction(player);
+  }
 }
 
 function closeInterface(active) {
@@ -628,6 +649,7 @@ function advanceTime({ player, ms, handledBy }) {
     state.active.startedAt -= ms;
     state.active.expiresAt -= ms;
     state.active.nextNagAt -= ms;
+    state.active.nextCatchUpAt -= ms;
   }
   for (const active of state.leaving ?? []) active.removeAt -= ms;
   handledBy.push("RandomEvents");

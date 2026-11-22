@@ -374,18 +374,24 @@ function jumpFor(player, location) {
 
 let fallRoll = () => Math.random() < FALL_CHANCE;
 
+/** Ours: how far the Jump-To op reaches in sight; the capture's fired at up to four tiles (975). */
+const JUMP_APPROACH_RANGE = 10;
+
 /**
- * Jump-To walks to the take-off tile, not to the rock: the rock across the gap can't be reached
- * on foot, so a plain route ended on the nearest dry tile (often the landing of the jump just
- * made) and the op never ran (issue #6497). Live, the player walks straight to the take-off and
- * leaps from it (ticks 944-945: 3602,3550 -> 3601,3551, then the jump to 3597,3552).
+ * Jump-To routes to the take-off tile, not to the rock: the rock across the gap can't be reached
+ * on foot, so a plain route ended on the nearest dry tile (often the last landing) and the op
+ * never ran (issue #6497). The op also runs as soon as the rock is in sight (an approach op), and
+ * the jump then walks the player the rest of the way (rsprox captures: from where they stand at
+ * 937 and 975, after one route step at 948, 995 and 1001, on the take-off at 944).
  */
 function routeToRock(event) {
   if (event.objectId !== ids.ROCK) return;
   const rock = event.object?.getLocation?.();
   if (!rock || rock.getZ() !== 0) return;
   const jump = jumpFor(event.player, { x: rock.getX(), y: rock.getY() });
-  if (jump) event.destination = { x: jump.from[0], y: jump.from[1], z: 0 };
+  if (!jump) return;
+  event.destination = { x: jump.from[0], y: jump.from[1], z: 0 };
+  event.approachRange = JUMP_APPROACH_RANGE;
 }
 
 /**
@@ -412,7 +418,9 @@ function jumpToRock(event) {
   };
   const steps = [];
   const here = player.getLocation();
-  if (here.getX() !== jump.from[0] || here.getY() !== jump.from[1]) steps.push({ walk: [jump.from] });
+  // The walk to the take-off is at walking pace, then one still tick before the leap (ticks
+  // 976-980, 1002-1004); from the take-off itself the leap is on the next tick (944-945).
+  if (here.getX() !== jump.from[0] || here.getY() !== jump.from[1]) steps.push({ walk: [jump.from] }, { wait: 1 });
   steps.push({ run: debitEnergy }, { sound: JUMP_SOUND });
   steps.push({ move: [...jump.to, 0], anim: JUMP_ANIM, delay: 26, speed: [47, 59], ticks: 2 });
   if (falls) {

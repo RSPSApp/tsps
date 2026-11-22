@@ -1304,7 +1304,7 @@ export class MovementQueue {
         pos: Location,
         action: () => void,
         reached: (entity: Mobile, destination: Location) => boolean = PathFinder.reachedTile,
-        options: { failWhenUnreachable?: boolean } = {}
+        options: { failWhenUnreachable?: boolean; approach?: () => boolean } = {}
     ) {
         // Call time, not tick time: only an exact tile match may skip the walk.
         // Anything looser would let an adjacent click resolve without stepping.
@@ -1329,7 +1329,9 @@ export class MovementQueue {
 
         this.walkToReset();
 
-        PathFinder.calculateGroundItemRoute(this.player, pos);
+        // Already in approach range: no step, the action runs as it would on arrival.
+        const inRange = options.approach?.() === true;
+        if (!inRange) PathFinder.calculateGroundItemRoute(this.player, pos);
         let lastRouteCycle = World.getProcessCycle();
         let reachedDestination = false;
 
@@ -1345,6 +1347,12 @@ export class MovementQueue {
 
             if (reached(this.player, pos)) {
                 // The interaction resolves on the cycle after arrival.
+                reachedDestination = true;
+                return;
+            }
+            if (options.approach?.() === true) {
+                // In range: the walk stops here, and the action follows as on arrival.
+                this.player.getMovementQueue().reset();
                 reachedDestination = true;
                 return;
             }
@@ -1820,14 +1828,19 @@ export class MovementQueue {
         };
         // All object users share route overrides and reach restrictions, including items and bots.
         PluginManager.emitObjectRoute(routeEvent);
+        const approachRange = Math.max(0, routeEvent.approachRange ?? 0);
         if (routeEvent.destination) {
             const { x, y, z } = routeEvent.destination;
-            this.walkToTile(new Location(x, y, z), () => action.execute());
+            // With an approach range too, the op also runs once the loc is within it and in sight,
+            // checked at the click and after each step, short of the destination (the Ghosts Ahoy
+            // rocks: rsprox captures 20261112T092603-5ab63b4 ticks 937-1005).
+            const spec = approachRange > 0 ? this.buildObjectRouteSpec(object, routeEvent.blockAccessFlags) : null;
+            const approach = spec ? () => this.withinApproachRange(spec, approachRange) : undefined;
+            this.walkToTile(new Location(x, y, z), () => action.execute(), PathFinder.reachedTile, { approach });
             return;
         }
 
         const routeSpec = this.buildObjectRouteSpec(object, routeEvent.blockAccessFlags);
-        const approachRange = Math.max(0, routeEvent.approachRange ?? 0);
         const operateBeforeMovement = routeEvent.operateBeforeMovement === true && approachRange === 0;
         // A frozen player still operates what they reach from where they stand (a ladder, a
         // cave entrance: Wiki, Freeze); anything further is "I can't reach that!" as live.

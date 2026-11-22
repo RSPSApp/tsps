@@ -86,7 +86,9 @@ obtaining 10 signatures on the petition form!" (1609). "My answer is no." is one
 
 **The bedsheet.** It has no worn model: worn, the player becomes the cache's "Ghost (?)" NPC
 (Wiki, Bedsheet), `ahoy_ghost_disguise` 3008 for the plain sheet and `ahoy_ghost_disguise_green`
-3009 for the slimy one, chathead included. The player runs up to the Wear and walks from that tick
+3009 for the slimy one, chathead included. It is only worn inside Port Phasmatys (Wiki: "I'll
+only wear the bedsheet inside Port Phasmatys."; Ours: the town is bounded by the two barriers'
+lines, and a sheet already worn out of town keeps the walk but drops the disguise). The player runs up to the Wear and walks from that tick
 on, with `option_run` (varp 173) left on (1503-1504; Wiki: "Players cannot run while wearing a
 bedsheet.").
 
@@ -116,9 +118,12 @@ half of the flag is coloured orange." etc.) when low. Repairing the boat ("You r
 boat's missing flag.") and each dye ("You dye the top of the flag orange.") are item boxes.
 
 **The rocky island.** The gangplanks: spam "You cross the gangplank." and the move a tick after
-arriving (934, 1014). Jump-To walks to the take-off tile for the rock clicked (the rock across
-the gap can't be reached on foot; 944: one step to 3601,3551 for the rock at 3597,3552). Each rock
-jump is then anim 1604 (delay 26),
+arriving (934, 1014). Jump-To routes to the take-off tile for the rock clicked (the rock across
+the gap can't be reached on foot), and is also an approach op: it runs as soon as the rock is in
+sight, with no step when it already is (937, 975) or after one route step (948, 995, 1001), and on
+arriving at the take-off otherwise (944, 954, 958, 986, 991). The jump then walks the player the
+rest of the way one tile a tick, stands one tick and leaps (976-981, 1002-1005); from the take-off
+the leap is the next tick (945). Each leap is anim 1604 (delay 26),
 sound 2461 and the move. A fall plays anim 767, sound 2455 and hits 3 two ticks later, with no XP
 (981-985). The island chest gives scrap 3 (968). The three scraps make the map in an item box
 (1025).
@@ -141,8 +146,9 @@ Haricanto." three ticks after the dig; the map is kept (1138-1141).
   Gravingas line for 2-3 signatures (Ours: his one-signature line; the transcript has none) and
   the treasure map's Read (Ours: "This map is for use elsewhere.").
 - Any change to the villagers' answers without the bedsheet (the capture always wore it).
-- Not built: the Wiki's "I'll only wear the bedsheet inside Port Phasmatys." refusal elsewhere and
-  the Trader Crewmembers refusing passage while it is carried (no capture of either).
+- Not built: the Trader Crewmembers refusing passage while the bedsheet is carried (Wiki; no
+  capture).
+- Ours: the Jump-To approach range (10 tiles in sight; the capture fired at up to 4).
 
 ## Runs
 

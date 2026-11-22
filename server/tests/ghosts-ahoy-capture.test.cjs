@@ -492,46 +492,51 @@ test('villagers: every support answer is one line, then the signature box (ticks
   });
 });
 
-test('Jump-To walks to the take-off, not into the gap, then lands across (ticks 944-945, issue #6497)', (t) => {
+test('Jump-To: the route steps until the rock is in sight, then the jump walks on to the take-off (ticks 937-1005, issue #6497)', (t) => {
   Shipwreck._test.setFallRoll(() => false);
   t.after(() => Shipwreck._test.setFallRoll(() => Math.random() < 0.1));
-  // Each rock clicked from the landing of the jump before it, along the captured route.
-  const route = [
-    [[3602, 3550], [3597, 3552], [3601, 3551]],
-    [[3597, 3552], [3595, 3556], [3595, 3554]],
-    [[3595, 3556], [3597, 3561], [3596, 3557]],
-    [[3597, 3561], [3601, 3564], [3597, 3563]],
-    // And back from the island (ticks 975-1005).
-    [[3605, 3564], [3601, 3564], [3601, 3564]],
-    [[3599, 3564], [3597, 3559], [3598, 3563]],
-    [[3597, 3559], [3595, 3554], [3596, 3558]],
-    [[3595, 3554], [3599, 3552], [3597, 3552]],
-    [[3599, 3552], [3602, 3550], [3602, 3550]],
+  // [where the click was made, the rock, the tile after the click tick, ticks from click to leap, landing]
+  const captured = [
+    [[3605, 3550], [3604, 3550], [3605, 3550], 3, [3602, 3550]], // 937: in sight, walks 938, still 939, leaps 940
+    [[3602, 3550], [3597, 3552], [3601, 3551], 1, [3597, 3552]], // 944: the route step ends on the take-off
+    [[3597, 3552], [3595, 3556], [3595, 3553], 3, [3595, 3556]], // 948: one step into sight
+    [[3595, 3556], [3597, 3561], [3596, 3557], 1, [3597, 3561]], // 954
+    [[3597, 3561], [3601, 3564], [3597, 3563], 1, [3601, 3564]], // 958
+    [[3605, 3564], [3601, 3564], [3605, 3564], 6, [3599, 3564]], // 975: walks four tiles 976-979, still 980
+    [[3599, 3564], [3597, 3559], [3598, 3563], 1, [3597, 3559]], // 986
+    [[3597, 3559], [3595, 3554], [3596, 3558], 1, [3595, 3554]], // 990-991
+    [[3595, 3554], [3599, 3552], [3596, 3552], 3, [3599, 3552]], // 995
+    [[3599, 3552], [3602, 3550], [3600, 3551], 4, [3604, 3550]], // 1001: two walked tiles, still 1004, leaps 1005
   ];
-  for (const [[x, y], [rx, ry], takeOff] of route) {
+  for (const [[x, y], [rx, ry], afterClick, leapTick, landing] of captured) {
     const p = actor(t, { x, y, stage: 4 });
     p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 25, false);
+    p.setRunning(true);
     const rock = core.MapObjects.get(16115, new core.Location(rx, ry, 0), null);
     assert.ok(rock, `rock at ${rx},${ry}`);
-    const routeEvent = { player: p, object: rock, objectId: 16115, clickType: 1, sourceLocation: { x, y, z: 0 }, destination: null };
-    PluginManager.emitObjectRoute(routeEvent);
-    assert.deepEqual(routeEvent.destination, { x: takeOff[0], y: takeOff[1], z: 0 }, `take-off for ${rx},${ry}`);
-    const jump = Shipwreck.JUMPS.find((j) => j.rock[0] === rx && j.rock[1] === ry && j.from[0] === takeOff[0] && j.from[1] === takeOff[1]);
-    let operated = false;
-    p.getMovementQueue().walkToObject(rock, { execute: () => {
-      operated = true;
-      Shipwreck.jumpToRock({ player: p, object: rock, location: { x: rx, y: ry, z: 0 } });
-    } });
-    tick(12);
-    assert.ok(operated, `the op runs for ${rx},${ry}`);
-    assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], jump.to, `lands across from ${x},${y}`);
+    let now = 0;
+    let leapt = null;
+    const force = p.setForceMovement.bind(p);
+    t.mock.method(p, 'setForceMovement', (movement) => { if (movement && leapt == null) leapt = now; return force(movement); });
+    const definition = rock.getDefinition?.() ?? core.CacheDefinitions.getLoc?.(16115);
+    p.getMovementQueue().walkToObject(rock, { execute: () => PluginManager.emitObjectInteraction({
+      player: p, object: rock, objectId: 16115, definition, clickType: 1, option: 'Jump-To', location: { x: rx, y: ry, z: 0 }, handled: false,
+    }) });
+    const tiles = [];
+    for (now = 0; now < 10; now++) {
+      tick();
+      tiles.push([p.getLocation().getX(), p.getLocation().getY()]);
+    }
+    const label = `${x},${y} -> rock ${rx},${ry}`;
+    assert.deepEqual(tiles[0], afterClick, `${label}: the click tick`);
+    assert.equal(leapt, leapTick, `${label}: the leap`);
+    assert.deepEqual(tiles.at(-1), landing, `${label}: lands across`);
   }
 });
 
 test('the bedsheet turns the player into the Ghost (?) disguise and makes them walk (Wiki: Bedsheet; tick 1504)', (t) => {
   const p = actor(t, { x: 3670, y: 3497, stage: 4 });
   p.setRunning(true);
-  p.setRunEnergy?.(100);
   const wear = (id) => {
     p.getEquipment().setItem(core.Equipment.HEAD_SLOT, new core.Item(id, id < 0 ? 0 : 1));
     p.getEquipment().refreshItems();
@@ -545,6 +550,14 @@ test('the bedsheet turns the player into the Ghost (?) disguise and makes them w
   assert.equal(start - p.getLocation().getX(), 2, 'one tile a tick while worn');
   wear(I().BEDSHEET);
   assert.equal(p.getNpcTransformationId(), 3008, 'ahoy_ghost_disguise');
+  // Out of the town (a teleport): still worn and walking, but no disguise until back.
+  p.moveTo(new core.Location(3640, 3480, 0));
+  tick();
+  assert.equal(p.getNpcTransformationId(), -1, 'no disguise outside Port Phasmatys');
+  assert.equal(p.isWalkOnly(), true);
+  p.moveTo(new core.Location(3670, 3497, 0));
+  tick();
+  assert.equal(p.getNpcTransformationId(), 3008, 'back in town');
   wear(-1);
   assert.equal(p.getNpcTransformationId(), -1, 'back to the player');
   assert.equal(p.isWalkOnly(), false);
@@ -552,10 +565,26 @@ test('the bedsheet turns the player into the Ghost (?) disguise and makes them w
   p.getMovementQueue().walkToTile(new core.Location(from - 6, 3497, 0), () => {});
   tick(2);
   assert.ok(from - p.getLocation().getX() > 2, 'runs again with it off');
-  // A transformation from something else is left alone.
+  // Another transformation is neither replaced nor undone.
   p.setNpcTransformationId(1469);
-  PluginManager.emitCustomEvent('equipment:changed', { player: p });
+  wear(I().BEDSHEET_2);
   assert.equal(p.getNpcTransformationId(), 1469);
+  wear(-1);
+  assert.equal(p.getNpcTransformationId(), 1469);
+});
+
+test('the bedsheet is only worn inside Port Phasmatys (Wiki: Bedsheet)', (t) => {
+  for (const [x, y, inside] of [[3670, 3497, true], [3210, 3424, false], [3100, 3530, false], [3660, 3515, false]]) {
+    const p = actor(t, { x, y, stage: 4 });
+    give(p, I().BEDSHEET);
+    const slot = p.getInventory().getSlotForItemId(I().BEDSHEET);
+    core.EquipPacketListener.equip(p, I().BEDSHEET, slot, core.Inventory.INTERFACE_ID);
+    tick();
+    const head = p.getEquipment().getItems()[core.Equipment.HEAD_SLOT]?.getId?.();
+    assert.equal(head === I().BEDSHEET, inside, `${x},${y}`);
+    assert.equal(p.getNpcTransformationId(), inside ? 3008 : -1, `${x},${y}`);
+    assert.equal(messages.get(p).includes("I'll only wear the bedsheet inside Port Phasmatys."), !inside, `${x},${y}`);
+  }
 });
 
 test('the Ghost captain sails with the captured fade, fare and landing (ticks 1110-1167)', (t) => {

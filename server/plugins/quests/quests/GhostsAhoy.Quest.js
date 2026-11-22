@@ -1338,6 +1338,9 @@ module.exports = function registerGhostsAhoyQuest(api) {
   api.onZoneExit(Shipwreck.TOP_DECK, Shipwreck.deckLeft);
   api.onCustomEvent("equipment:changed", Bedsheet.sync);
   api.onCustomEvent("player:bootstrap-complete", Bedsheet.sync);
+  api.onCanEquip(Bedsheet.canWear);
+  api.onZoneEnter(Bedsheet.TOWN, Bedsheet.sync);
+  api.onZoneExit(Bedsheet.TOWN, Bedsheet.sync);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 

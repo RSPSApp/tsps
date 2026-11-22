@@ -518,6 +518,7 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
       walkOver: true,
       operateBeforeMovement: true,
       operateBeforeMovementApproachDelay: 1,
+      deferInitialFaceUntilApproachDelay: true,
       faceTowardDoorOnCross: true,
       closeTicks: 2,
       openSoundId: 62,
@@ -2445,13 +2446,21 @@ function walkOverGate(player, destination, doorLocation = null) {
     endWalkOver(player, token);
     return false;
   }
-  // Face the doorway while crossing westward; on an eastward crossing the doorway is the
-  // destination tile, so retaining it as a face target would resolve to angle 0 on arrival.
+  // The capture has no face mask on the crossing itself. On a westward crossing, turn back toward
+  // the doorway on the following tick only if the player is still on the crossed-to tile.
   if (doorLocation) {
-    if (destination.getX() === doorLocation.getX() && destination.getY() === doorLocation.getY()) {
-      player.setPositionToFace(null);
-    } else {
-      player.setPositionToFace(doorLocation.clone());
+    player.setPositionToFace(null);
+    if (destination.getX() !== doorLocation.getX() || destination.getY() !== doorLocation.getY()) {
+      const face = new core.Task(1, false);
+      face.execute = () => {
+        face.stop();
+        const current = player.getLocation();
+        if (player.isRegistered?.() !== false && current.getX() === destination.getX() &&
+          current.getY() === destination.getY() && current.getZ() === destination.getZ()) {
+          player.forcePositionToFace(doorLocation.clone());
+        }
+      };
+      core.TaskManager.submit(face);
     }
   }
   let ticks = WALK_OVER_MAX_TICKS;
@@ -2520,7 +2529,7 @@ function stepThroughGate(player, gate, x, y, z) {
 }
 
 /** Opens a pass-through gate, steps the player across it and shuts it again (see PASS_THROUGH_GATES). */
-function handlePassThroughGate(player, objectId, location, object = null) {
+function handlePassThroughGate(player, objectId, location, object = null, outcome = null) {
   const x = location?.getX?.() ?? location?.x;
   const y = location?.getY?.() ?? location?.y;
   const z = location?.getZ?.() ?? location?.z ?? 0;
@@ -2530,10 +2539,13 @@ function handlePassThroughGate(player, objectId, location, object = null) {
   const anchorKey = doorStateKey(`pass-through:${gate.closed[0].slice(1).join(",")}`, privateArea);
   // Someone else's opening: step through it while it stands open.
   if (OPEN_PASS_THROUGH_GATES.has(anchorKey)) {
-    stepThroughGate(player, gate, x, y, z);
+    if (outcome) outcome.crossingAccepted = stepThroughGate(player, gate, x, y, z);
     return true;
   }
-  if (PENDING_PASS_THROUGH_GATES.has(anchorKey)) return true;
+  if (PENDING_PASS_THROUGH_GATES.has(anchorKey)) {
+    if (outcome) outcome.crossingAccepted = false;
+    return true;
+  }
 
   // Delayed gates play their captured sound before the hold; ordinary walk-over gates wait until
   // their crossing step is accepted, so a newly frozen or held opener cannot open the gate in place.
@@ -2541,9 +2553,11 @@ function handlePassThroughGate(player, objectId, location, object = null) {
     if (!gate.silent)
       core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
     holdForPassThroughGate(player, gate, z, anchorKey, () => openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey));
+    if (outcome) outcome.crossingAccepted = false;
     return true;
   }
   const opened = openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey);
+  if (outcome) outcome.crossingAccepted = opened;
   if (opened && !gate.silent)
     core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
   return true;
@@ -2581,6 +2595,7 @@ function openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey) {
   task.execute = () => {
     task.stop();
     OPEN_PASS_THROUGH_GATES.delete(anchorKey);
+    if (privateArea?.isDestroyed?.()) return;
     swapLocs(gate.opened, gate.closed, privateArea);
   };
   core.TaskManager.submit(task);
@@ -2607,8 +2622,10 @@ function requestDoorOpen(event) {
   const location = event.object.getLocation();
   const definition = core.ObjectDefinition.forPlayer(objectId, event.player) ?? event.object.getDefinition();
   // A pass-through gate may have no "Open" of its own (the troll prison door is "Unlock").
-  if (handlePassThroughGate(event.player, objectId, location, event.object)) {
+  const gateOutcome = {};
+  if (handlePassThroughGate(event.player, objectId, location, event.object, gateOutcome)) {
     event.handled = true;
+    event.crossingAccepted = gateOutcome.crossingAccepted;
     return;
   }
   const area = event.player.getPrivateArea?.() ?? null;
@@ -2666,6 +2683,7 @@ function routeWallDoor(event) {
   if (event.clickType === 1 && gate?.operateBeforeMovement === true) {
     event.operateBeforeMovement = true;
     event.operateBeforeMovementApproachDelay = gate.operateBeforeMovementApproachDelay;
+    event.deferInitialFaceUntilApproachDelay = gate.deferInitialFaceUntilApproachDelay === true;
   }
 }
 

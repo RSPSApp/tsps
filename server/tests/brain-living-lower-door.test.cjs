@@ -154,17 +154,119 @@ test("Living lower door: west-side Open crosses east through the west edge", asy
 
 test("Living lower door: east-side in-reach Open crosses west on the input tick", async (t) => {
   const { f, openCycle } = await openAndCross(t, { from: [DOOR.x, DOOR.y], to: [DOOR.x - 1, DOOR.y] });
-  assert.equal(f.syncRows.find((row) => row.tick === openCycle)?.faceDirection, 1536,
-    "the local player sync faces west toward the doorway after crossing");
+  assert.equal(f.syncRows.find((row) => row.tick === openCycle)?.faceDirection, undefined,
+    "the crossing turn has no local face mask");
+  assert.equal(f.syncRows.find((row) => row.tick === openCycle + 1)?.faceDirection, 1536,
+    "the next turn faces east toward the doorway");
 });
 
 test("Living lower door: running approach opens two ticks after arrival", async (t) => {
-  const { f } = await openAndCross(t, { from: [DOOR.x - 1, DOOR.y + 3], to: [DOOR.x, DOOR.y], running: true, approached: true });
-  const crossingIndex = f.syncRows.findIndex((row) => row.x === DOOR.x && row.y === DOOR.y);
-  const waiting = f.syncRows[crossingIndex - 1];
-  const crossing = f.syncRows[crossingIndex];
-  assert.equal(waiting?.faceDirection, 1536, "the approach faces east on its waiting tick as captured");
-  assert.ok(crossing && crossing.faceDirection !== 0, "the face target is cleared before crossing reaches its own tile");
+  const { f, arrivalCycle, openCycle } = await openAndCross(t, {
+    from: [DOOR.x - 1, DOOR.y + 3], to: [DOOR.x, DOOR.y], running: true, approached: true,
+  });
+  const firstRunStep = f.syncRows.find((row) => row.tick === arrivalCycle - 1);
+  const waiting = f.syncRows.find((row) => row.faceDirection === 1536 && row.x === DOOR.x - 1 && row.y === DOOR.y);
+  const crossing = f.syncRows.find((row) => row.tick === openCycle);
+  assert.equal(firstRunStep?.faceDirection, undefined, "the input and first run step have no local face mask");
+  assert.equal(waiting?.tick, arrivalCycle + 1, "the face update is deferred to the recorded wait turn");
+  assert.equal(waiting?.faceDirection, 1536, "the approach faces east toward the doorway");
+  assert.equal(crossing?.faceDirection, undefined, "the eastward crossing has no local face mask");
+});
+
+test("Equipment Stats interrupts a delayed door Open even when Escape closes it in the same turn", async (t) => {
+  settle();
+  assert.ok(isShut());
+  const f = nativeActor(t, [DOOR.x - 1, DOOR.y + 3], true);
+  f.player.getPacketSender().sendChatboxInterface(231);
+  const sender = f.player.getPacketSender();
+  let statsModalOpens = 0;
+  const sendSubInterface = sender.sendSubInterface.bind(sender);
+  t.mock.method(sender, "sendSubInterface", (...args) => {
+    if (args[1] === 84) statsModalOpens++;
+    return sendSubInterface(...args);
+  });
+
+  await f.connection.dispatch([{ type: "object_option", id: DOOR.id, x: DOOR.x, y: DOOR.y, clickType: 1 }]);
+  let arrivalCycle;
+  for (let turns = 0; turns < 12 && arrivalCycle == null; turns++) {
+    core.World.process();
+    if (at(f.player)[0] === DOOR.x - 1 && at(f.player)[1] === DOOR.y) arrivalCycle = core.World.getProcessCycle();
+  }
+  assert.ok(Number.isInteger(arrivalCycle), "the approached player reaches the doorway");
+  core.World.process(); // Captured waiting/facing turn; the delayed Open is still pending.
+  assert.ok(isShut());
+
+  await f.connection.dispatch([
+    { type: "widget_action", widgetId: (387 << 16) | 1, groupId: 387, childId: 1, buttonNum: 1, simple: true },
+    { type: "interface_close" },
+  ]);
+  core.World.process();
+  assert.equal(statsModalOpens, 1, "View equipment stats opened modal 84 before Escape");
+  assert.equal(f.player.getInterfaceId(), -1, "Escape closed the modal in the same input batch");
+
+  assert.deepEqual(at(f.player), [DOOR.x - 1, DOOR.y], "the interrupted interaction does not revive");
+  assert.ok(isShut(), "the door remains closed after the replacement modal closes");
+  assert.deepEqual(f.sounds.filter(([, id]) => id === 62), [], "the canceled Open sends no sound");
+});
+
+test("Zanaris Market charges only after its frozen opener's crossing is accepted", async (t) => {
+  const market = { id: core.ObjectIdentifiers.MAGIC_DOOR_2, x: 2469, y: 4438, z: 0 };
+  core.RegionManager.loadMapFiles(market.x, market.y);
+  const f = nativeActor(t, [market.x, market.y]);
+  const diamond = core.ItemIdentifiers.DIAMOND;
+  f.player.getInventory().add(new core.Item(diamond, 1));
+  f.player.getTimers().registers(core.TimerKey.FREEZE, 10);
+  const door = core.MapObjects.getPrivateArea(f.player, market.id, new core.Location(market.x, market.y, market.z));
+  const openAndPay = async () => {
+    await f.connection.dispatch([{ type: "object_option", id: market.id, x: market.x, y: market.y, clickType: 1 }]);
+    core.World.process();
+    const pay = { player: f.player, npcId: core.NpcIdentifiers.GATEKEEPER, stepId: "8FWu8-", handled: false };
+    PluginManager.emitCustomEvent("npc-dialogue:action", pay);
+    return pay;
+  };
+
+  const refused = await openAndPay();
+  assert.equal(refused.handled, true, "the toll dialogue consumes its final action");
+  assert.equal(f.player.getInventory().getAmount(diamond), 1, "a refused crossing keeps the diamond");
+  assert.equal(core.MapObjects.getPrivateArea(f.player, market.id, new core.Location(market.x, market.y, market.z)), door,
+    "the closed market door remains in place while frozen");
+  assert.deepEqual(at(f.player), [market.x, market.y]);
+
+  f.player.getTimers().cancel(core.TimerKey.FREEZE);
+  f.player.getDialogueManager().reset();
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.setInterfaceId(-1);
+  const accepted = await openAndPay();
+  assert.equal(accepted.handled, true);
+  assert.equal(f.player.getInventory().getAmount(diamond), 0, "the retry charges one diamond");
+  core.World.process();
+  assert.deepEqual(at(f.player), [market.x + 1, market.y], "the accepted crossing enters the market");
+});
+
+test("a pass-through close timer does not repopulate a destroyed private area", async (t) => {
+  const { PrivateArea } = require("../dist/game/model/areas/impl/PrivateArea");
+  const { Boundary } = require("../dist/game/model/Boundary");
+  const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+  const f = nativeActor(t, [DOOR.x, DOOR.y]);
+  const area = new PrivateArea([new Boundary(3800, 3830, 2820, 2860, DOOR.z)]);
+  area.enter(f.player);
+  t.after(() => { if (!area.isDestroyed()) area.destroy(); });
+  const door = new GameObject(DOOR.id, new core.Location(DOOR.x, DOOR.y, DOOR.z), 0, 0, area);
+  core.ObjectManager.register(door, true);
+
+  const open = { player: f.player, object: door, handled: false };
+  PluginManager.emitCustomEvent("door:open", open);
+  assert.equal(open.handled, true);
+  core.World.process();
+  assert.ok(area.getObjects().length > 0, "the private open state was registered in the instance");
+  area.leave(f.player, true); // Last player logout tears down the private area during the two-tick hold.
+  assert.equal(area.getObjects().length, 0);
+  core.World.process();
+  core.World.process();
+  assert.equal(area.isDestroyed(), true);
+  assert.equal(area.getObjects().length, 0, "the close callback does not register the loc into a destroyed area");
+  assert.equal(core.World.getObjects().some((object) => object.getPrivateArea?.() === area && object.getId() === DOOR.id), false,
+    "the close task does not restore the closed loc into the destroyed world index");
 });
 
 test("Living lower door: Bind landing on the delayed commit cancels Open without sound or loc swap", async (t) => {

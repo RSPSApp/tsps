@@ -234,6 +234,9 @@ function update(player) {
 }
 
 function open(player) {
+  // Worn-items' View button is a hard interruption of a movement or object action. Clear the
+  // pending route now; an Escape in the same input batch may remove this modal before the next tick.
+  player.clearPendingAction?.();
   if (player.busy?.()) {
     player.getPacketSender().sendInterfaceRemoval();
   }

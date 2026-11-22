@@ -179,6 +179,8 @@ export interface PluginObjectRouteEvent {
   operateBeforeMovement?: boolean;
   /** Extra pre-movement passes to wait after an approach reaches the object; in-reach clicks stay immediate. */
   operateBeforeMovementApproachDelay?: number;
+  /** Keep local facing unchanged until an opted-in delayed approach reaches its captured wait turn. */
+  deferInitialFaceUntilApproachDelay?: boolean;
 }
 
 export interface PluginWalkRouteEvent {

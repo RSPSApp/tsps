@@ -14,8 +14,8 @@ const PVP_GROUP = 90;
 /** The mobile main modal (601:27) hosts All Settings (134) and other main modals. */
 const MOBILE_MAIN_MODAL = (MOBILE_ROOT << 16) | 27;
 const ALL_SETTINGS_GROUP = 134;
-/** Right-hand side-panel containers: the side modal (74), the popout panel (134) and the tab panes. */
-const MOBILE_SIDE_PANES = [74, 134, ...Array.from({ length: 14 }, (_, index) => 116 + index)];
+/** Right-hand side-panel containers: the mobile side modal (601:114) and the fourteen tab panes. */
+const MOBILE_SIDE_PANES = [114, ...Array.from({ length: 14 }, (_, index) => 116 + index)];
 /** Space kept between the All Settings window and an open right-hand panel. */
 const SIDE_PANEL_GAP = 8;
 const PVP_WIDTH = 64;

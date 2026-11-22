@@ -100,9 +100,9 @@ test("other windows are untouched when the chat is hidden", () => {
 type PositionedNode = Node & { _absX?: number; _absWidth?: number };
 
 /** A manager with All Settings in the main modal and one open right-hand side panel. */
-function sidePanelManager(panelLeft: number, settingsOpen: boolean, renderScaleX = 2) {
+function sidePanelManager(panelLeft: number, settingsOpen: boolean, renderScaleX = 2, paneChild = 114) {
     const pane: PositionedNode = {
-        uid: uid(601, 119), x: 0, y: 0, width: 190, height: 261,
+        uid: uid(601, paneChild), x: 0, y: 0, width: 190, height: 261,
         _absX: panelLeft * renderScaleX, _absWidth: 190 * renderScaleX,
     };
     return {
@@ -129,6 +129,20 @@ test("All Settings shifts left to clear an open right-hand side panel", () => {
     adjustMobileHudWidget(modal, 816, 548, sidePanelManager(700, false));
     assert.equal(modal.x, 300);
     assert.equal(modal.rawX, 300);
+});
+
+test("the side modal and every right-hand tab pane constrain All Settings", () => {
+    for (const child of [114, 116, 119, 129]) {
+        const modal: Node = { uid: uid(601, 27), x: 300, y: 140, width: 512, height: 334, rawX: 300 };
+        adjustMobileHudWidget(modal, 816, 548, sidePanelManager(700, true, 2, child));
+        assert.equal(modal.x, 180, `601:${child} clears the window`);
+    }
+});
+
+test("a tab-stone graphic is not treated as an open side panel", () => {
+    const modal: Node = { uid: uid(601, 27), x: 300, y: 140, width: 512, height: 334, rawX: 300 };
+    adjustMobileHudWidget(modal, 816, 548, sidePanelManager(700, true, 2, 74));
+    assert.equal(modal.x, 300, "601:74 is stone7, not a panel");
 });
 
 test("the All Settings shift never pushes the modal off the left edge", () => {

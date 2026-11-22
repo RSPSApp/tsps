@@ -182,3 +182,53 @@ test("a new click (cancelling the player's tasks) gives the hold back; another s
   assert.equal(queue.isMovementBlocked(), true, "not ours to release");
   queue.setBlockMovement(false);
 });
+
+// Plain crates and boxes (rsprox captures, revisions 227-242: e.g. 3181, 3219, local 1001331 for
+// crates; 469, 3177, local 1001339 for boxes; 3237 Falador; 3202 Wizards' Tower).
+test("plain crates and boxes give the captured line for their cache name, on arrival", () => {
+  for (const [gameval, line] of [
+    ["qip_cook_crate_stacked", "You search the crate but find nothing."],
+    ["sarim_crate3", "You search the crate but find nothing."], // "Crates"
+    ["dk_boxes", "There is nothing interesting in these boxes."],
+    ["fai_falador_boxes", "You search the crates but find nothing."],
+    ["fai_varrock_small_crates", "You search the crate, but find nothing of note."],
+  ]) {
+    const f = fixture();
+    assert.equal(search(f, gameval), true, gameval);
+    assert.deepEqual(f.sent, [["message", line]], gameval);
+  }
+});
+
+test("every crate-search override is a real Crate, Crates or Boxes loc", () => {
+  const data = require("../plugins/objects/data/crate-search.json");
+  for (const loc of Object.keys(data.byLoc)) {
+    const id = C.getLocId(loc);
+    assert.equal(typeof id, "number", loc);
+    assert.ok(Object.hasOwn(data.byName, C.getObject(id).name), `${loc} is ${C.getObject(id).name}`);
+  }
+});
+
+// Unhandled quest-area crates keep their captured empty line, in a message box (rsprox 4288, 3229;
+// godwars_crate local 1000491).
+test("crates whose empty search is a message box open it instead of a game message", () => {
+  for (const [gameval, text] of [
+    ["castle_drakan_tinderbox_crate", "You search the crate, but find nothing of interest."],
+    ["dt2_digsite_pickaxe_crate", "You search the crate, but find nothing of interest."],
+    ["godwars_crate", "There is nothing in the crate."],
+  ]) {
+    const f = fixture();
+    const boxes = [];
+    f.player.getDialogueManager = () => ({ startDialogues: (chain) => boxes.push(...[...chain.getDialogues().values()].map((d) => d.text)) });
+    assert.equal(search(f, gameval), true, gameval);
+    assert.deepEqual(f.sent, [], gameval);
+    assert.deepEqual(boxes, [text], gameval);
+  }
+});
+
+test("pog_crate and the locked Shayzien crate give their own captured line (local 1001457, 1049)", () => {
+  for (const [gameval, line] of [["pog_crate", "You search the crate, but find nothing of note."], ["shayzien_crate_01_dark_op", "This crate is locked."]]) {
+    const f = fixture();
+    assert.equal(search(f, gameval), true, gameval);
+    assert.deepEqual(f.sent, [["message", line]], gameval);
+  }
+});

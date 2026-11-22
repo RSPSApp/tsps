@@ -10,7 +10,7 @@ const ANCIENT_ARMOUR = 24688;
 const HUMAN_DIG = 830;
 const HUMAN_PICKUPTABLE = 832;
 const PICK_UP_ITEM = 2582;
-const LOCS = { potato_crate: 15030, cabbage_crate: 15031 };
+const LOCS = { potato_crate: 15030, cabbage_crate: 15031, fai_falador_boxes: 24087, fai_varrock_small_crates: 5110, fai_wiztower_crate2: 12547 };
 const OBJS = { potato: 1942, cabbage: 1965 };
 const SEQS = { human_dig: HUMAN_DIG, human_pickuptable: HUMAN_PICKUPTABLE };
 const tasks = [];
@@ -110,11 +110,41 @@ test('a full inventory keeps the needle out', () => {
     freeSlots = 1;
 });
 
-test('plain crates and boxes search and find nothing', () => {
-    search('Crate', 0.99);
-    assert.deepEqual(messages, ['You search the crate, but find nothing of interest.']);
-    search('Boxes', 0.99);
-    assert.deepEqual(messages, ['You search the boxes, but find nothing of interest.']);
+test('plain crates and boxes give the captured line for their name (rsprox 3219, 3181, 3177, 469)', () => {
+    search('Crate', 0.99, 1);
+    assert.deepEqual(messages, ['You search the crate but find nothing.']);
+    search('Crates', 0.99, 2);
+    assert.deepEqual(messages, ['You search the crate but find nothing.']);
+    search('Boxes', 0.99, 3);
+    assert.deepEqual(messages, ['There is nothing interesting in these boxes.']);
+    assert.deepEqual(dialogues, []);
+});
+
+test('a crate or box with its own captured line uses it (rsprox 3237, local 1001682)', () => {
+    search('Boxes', 0.99, LOCS.fai_falador_boxes);
+    assert.deepEqual(messages, ['You search the crates but find nothing.']);
+    search('Crate', 0.99, LOCS.fai_varrock_small_crates);
+    assert.deepEqual(messages, ['You search the crate, but find nothing of note.']);
+});
+
+test("the Wizards' Tower crates answer in a message box (rsprox 3202)", () => {
+    search('Crate', 0.99, LOCS.fai_wiztower_crate2);
+    assert.deepEqual(messages, []);
+    assert.deepEqual(dialogues, [{ text: 'Nothing of interest in there - just some old books.' }]);
+});
+
+test('every crate-search entry names a cache name or a real loc gameval', () => {
+    const data = require('../plugins/objects/data/crate-search.json');
+    assert.deepEqual(Object.keys(data.byName).sort(), ['Boxes', 'Crate', 'Crates']);
+    for (const [loc, entry] of Object.entries(data.byLoc)) {
+        assert.match(loc, /^[a-z0-9_]+$/, loc);
+        assert.equal(typeof entry.text, 'string', loc);
+    }
+});
+
+test('a single Box keeps the generic line (no capture)', () => {
+    search('Box', 0.99, 4);
+    assert.deepEqual(messages, ['You search the box, but find nothing of interest.']);
 });
 
 /** Runs the queued take question and answers it with `option` ("Yes." or "No."). */

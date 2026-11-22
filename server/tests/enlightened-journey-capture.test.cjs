@@ -132,7 +132,8 @@ test('the start: zep_quest 5 with the start message, then "Let me show you!" con
   await next1(f);
   assert.equal(stage(f), 6);
   assert.ok(f.seen.some(([kind, id]) => kind === 'interface' && id === BLUEPRINT), 'zep_if_balloon_blueprint opened');
-  assert.equal(f.p.getDialogueManager().isActive(), false, 'the chat closed behind it');
+  assert.equal(f.p.getPacketSender().getChatboxGroupId?.() ?? -1, -1, 'the chat closed behind it');
+  assert.equal(f.p.getInterfaceId(), BLUEPRINT, 'and the diagram stays open (the playthrough saw it close)');
 });
 
 test('his explanation (zep_quest 6): either answer leads on, and its last line continued is zep_quest 10', async (t) => {

@@ -44,7 +44,7 @@ after(() => {
 });
 
 function tick(n = 1) { for (let i = 0; i < n; i++) core.World.process(); }
-function actor(t, { logs = 0, stored = 12, tinderbox = true, preference = 'storage', stage = READY } = {}) {
+function actor(t, { logs = 0, stored = 12, tinderbox = true, preference = null, stage = READY } = {}) {
   const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true,
     close() {}, onData() {}, onError() {}, onClose() {} };
   const session = new PlayerSession(channel), p = new Player(session), c = new ClientConnection(channel);
@@ -120,7 +120,7 @@ function assertFlying(f, inv, stock) {
 }
 
 test('inventory-only positive reaches the real source menu and pays ten at the next task phase', async t => {
-  const f = actor(t, { logs: 10, stored: 0, preference: 'ask' });
+  const f = actor(t, { logs: 10, stored: 0 });
   await selectFuel(f, 'Take logs from my inventory first.'); assertPending(f, 10, 0); assertFlying(f, 0, 0);
 });
 
@@ -206,7 +206,7 @@ test('fuel queries are read-only and reject invalid counts and unknown stations'
     const request = { player: f.p, station, logs: count, canPay: null };
     PM.emitCustomEvent('balloon-transport:can-pay', request); assert.equal(request.canPay, false);
   }
-  assert.equal(logs(f), 9); assert.equal(stored(f), 9); assert.equal(f.p.getAttribute(PREFERENCE), 'storage');
+  assert.equal(logs(f), 9); assert.equal(stored(f), 9); assert.equal(f.p.getAttribute(PREFERENCE), null, 'no preference set by a query');
   assert.equal(prompt(f), null); assert.equal(Controls.inFlight(f.p), false);
 });
 
@@ -241,4 +241,29 @@ test('stage change or movement after selection cannot launch a stale quest fligh
     else f.p.moveTo(new core.Location(2809, 3354, 0));
     tick(); assert.equal(Controls.inFlight(f.p), false); assert.equal(stored(f), 12);
   }
+});
+
+test('the first flight\'s choice is saved; with one set the flight asks no box (rev 242 ticks 1638-1640, 1996-1997)', async t => {
+  const f = actor(t, { logs: 10 });
+  await selectFuel(f, 'Take logs from my inventory first.');
+  assert.equal(f.p.getAttribute(PREFERENCE), 'inventory', 'the answer is the preference from then on');
+  Controls.logout({ player: f.p });
+
+  // "ask", both sources: no box, and a tick after "Okay." the recorded two choices.
+  const g = actor(t, { logs: 10, preference: 'ask' });
+  await offer(g);
+  assert.equal(g.seen.some((line) => line.startsWith('When you travel with logs')), false, 'no preference box');
+  tick();
+  assert.equal(prompt(g)?.title, 'Select an option');
+  assert.deepEqual(prompt(g)?.options, ['Use logs from inventory', 'Use logs from storage']);
+  await choose(g, 'Use logs from inventory');
+  assertFlying(g, 0, 12);
+  Controls.logout({ player: g.p });
+
+  // "ask", stored logs only: straight off from storage (tick 1640).
+  const h = actor(t, { preference: 'ask' });
+  await offer(h);
+  tick();
+  assert.equal(prompt(h), null);
+  assertFlying(h, 0, 2);
 });

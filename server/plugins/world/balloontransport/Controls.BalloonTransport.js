@@ -380,7 +380,12 @@ function messageBox(player, text, then) {
   const { ActionDialogue, DialogueChainBuilder, StatementDialogue } = Common.core;
   const chain = new DialogueChainBuilder();
   chain.add(new StatementDialogue(0, text));
-  chain.add(new ActionDialogue(1, { execute: then }));
+  chain.add(new ActionDialogue(1, { execute: () => {
+    // Nothing follows the box: the chat closes with it.
+    player.getDialogueManager().reset?.();
+    player.getPacketSender().sendInterfaceRemoval?.();
+    then();
+  } }));
   player.getDialogueManager().startDialogues(chain);
 }
 

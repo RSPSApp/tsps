@@ -130,7 +130,7 @@ test('noted rune scimitar remains allowed by the shared policy', async t => {
 test('contraband added after search but before source choice refuses and conserves both fares', async t => {
   const f = actor(t, { ask: true }); await begin(f); await continueSearch(f);
   const pending = core.MultiChatboxPrompt.getPending(f.p); assert.ok(pending);
-  assert.match(pending.title, /which logs/i); assert.equal(f.p.getPacketSender().isChatboxInterface(219), true);
+  assert.equal(pending.title, 'Select an option'); assert.equal(f.p.getPacketSender().isChatboxInterface(219), true);
   f.p.getInventory().add(new core.Item(core.ItemIdentifiers.RUNE_SCIMITAR, 1), false);
   assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.RUNE_SCIMITAR), 1);
   const denied = { player: f.p, allowed: false, reason: null, handled: false };

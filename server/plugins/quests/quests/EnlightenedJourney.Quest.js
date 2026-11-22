@@ -710,20 +710,20 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
       // The Auguste page's replacements (Wiki: the cap "if lost on death, a replacement can be claimed from Auguste").
       case "bOybQz": // the cap not lost
         return capOwned(player);
-      case "koHBWr": // lost, no room
+      case "y_diUp": // lost, no room
         return !capOwned(player) && inventory.getFreeSlots() < 1;
-      case "zKyhXv": // lost: here it is
+      case "oNjpBD": // lost: here it is
         return !capOwned(player) && inventory.getFreeSlots() >= 1;
-      case "uNyPv7": // the jacket not lost
+      case "h866A5": // the jacket not lost
         return jacketOwned(player);
-      case "I4shfV":
+      case "Fio1A8":
         return !jacketOwned(player) && inventory.getFreeSlots() < 1;
-      case "zr4M2d":
+      case "w_NjLo":
         return !jacketOwned(player) && inventory.getFreeSlots() >= 1;
       // Combining the cap and gnome goggles (Wiki: Bomber cap).
-      case "NgGEtY":
+      case "B0DDku":
         return wearing(player, BOMBER_CAP) || wearing(player, GNOME_GOGGLES);
-      case "6RmZ_h":
+      case "JXgB5W":
         return false; // the two become one, so there is always room
       default:
         break;
@@ -911,6 +911,17 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
     return refusal === null;
   }
 
+  /** The log storage's saved preference (BalloonTransport), or null while none is set. */
+  function logPreference(player) {
+    const request = { player, preference: null };
+    api.emitCustomEvent("balloon-transport:preference", request);
+    return request.preference;
+  }
+
+  function setLogPreference(player, preference) {
+    api.emitCustomEvent("balloon-transport:set-preference", { player, preference });
+  }
+
   /** The ten logs onto Auguste's fire, from `source`: the balloon controls fly to Taverley. */
   function startFlight(player, source) {
     if (!canStartFlight(player)) return;
@@ -978,9 +989,22 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
     switch (stepId) {
       case "0rJowj": // open the balloon construction diagram
       case "2FO9r5": // the same on the Auguste page
+        // The chat closes and the diagram stays open: an ended conversation would close it too.
+        event.handled = true;
+        event.wait = () => showDiagram(player);
+        return;
+      case "BBeDtT": // the first flight's log question: asked only while no preference is set
+        if (!logPreference(player)) return;
         event.handled = true;
         event.end = true;
-        showDiagram(player);
+        // The source by the preference (or "Use logs from inventory / storage" when both can pay), a tick on as
+        // live asks it (capture ticks 1996-1997, 1638-1640).
+        TaskManager.submit(new CountdownTask(player, 1, () => {
+          if (player.isRegistered?.() === false) return;
+          api.emitCustomEvent("balloon-transport:choose-source", {
+            player, station: FLIGHT_STATION, logs: FLIGHT_LOGS, go: (source) => startFlight(player, source),
+          });
+        }));
         return;
       case "JiMggG": // the first experiment's scene (Scenes.firstExperiment)
       case "_ZdYV3": // end of cutscene
@@ -991,16 +1015,18 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
         event.handled = true;
         event.end = true;
         return;
-      case "_G1qps":
-      case "XJPKij": // open_interface "Balloon transport flying", logs from the inventory
+      case "_G1qps": // "Take logs from my inventory first.": saved, then the flight
+      case "XJPKij": // "Ask me..." then "Use logs from inventory"
         event.handled = true;
         event.end = true;
+        setLogPreference(player, stepId === "_G1qps" ? "inventory" : "ask");
         startFlight(player, "inventory");
         return;
-      case "UrzuZs":
-      case "RS5ufp": // the same, logs from storage
+      case "UrzuZs": // "Take logs from storage first."
+      case "RS5ufp": // "Ask me..." then "Use logs from storage"
         event.handled = true;
         event.end = true;
+        setLogPreference(player, stepId === "UrzuZs" ? "storage" : "ask");
         startFlight(player, "storage");
         return;
       case "vxF1CK":
@@ -1045,10 +1071,10 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
     if (!AUGUSTE_NPC_IDS.has(npcId)) return;
     const inventory = player.getInventory();
     switch (stepId) {
-      case "zKyhXv":
+      case "oNjpBD":
         if (!capOwned(player) && inventory.getFreeSlots() >= 1) inventory.adds(BOMBER_CAP, 1);
         return;
-      case "zr4M2d":
+      case "w_NjLo":
         if (!jacketOwned(player) && inventory.getFreeSlots() >= 1) inventory.adds(BOMBER_JACKET, 1);
         return;
       default:

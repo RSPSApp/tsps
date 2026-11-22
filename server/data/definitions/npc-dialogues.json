@@ -115414,9 +115414,6 @@
               "steps": [
                 {
                   "player": "No."
-                },
-                {
-                  "type": "end"
                 }
               ]
             },
@@ -115440,9 +115437,6 @@
                 },
                 {
                   "npc": "You can release the balloon and watch it float in the air, just use a tinderbox on it."
-                },
-                {
-                  "type": "end"
                 }
               ]
             },
@@ -115463,9 +115457,6 @@
                 },
                 {
                   "npc": "That's what I think, anyway."
-                },
-                {
-                  "type": "end"
                 }
               ]
             },
@@ -115476,99 +115467,94 @@
                 {
                   "type": "condition",
                   "text": "If the bomber cap has not been lost:",
+                  "steps": [
+                    {
+                      "npc": "You still seem to have your cap."
+                    },
+                    {
+                      "type": "jump",
+                      "reference": "continues",
+                      "id": "jiRRO4"
+                    }
+                  ],
                   "id": "bOybQz"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the bomber cap has been lost but there is no free inventory space:",
+                  "steps": [
+                    {
+                      "npc": "You don't have enough free space for your cap."
+                    },
+                    {
+                      "type": "jump",
+                      "reference": "continues",
+                      "id": "8FZHs5"
+                    }
+                  ],
+                  "id": "y_diUp"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the bomber cap has been lost:",
+                  "steps": [
+                    {
+                      "npc": "Here's your cap. Try to keep better track of it."
+                    },
+                    {
+                      "type": "jump",
+                      "reference": "continues",
+                      "id": "TS34ie"
+                    }
+                  ],
+                  "id": "oNjpBD"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the bomber jacket has not been lost:",
+                  "steps": [
+                    {
+                      "npc": "You don't need a new jacket; you still have your original one."
+                    },
+                    {
+                      "type": "jump",
+                      "reference": "continues",
+                      "id": "HTU8ss"
+                    }
+                  ],
+                  "id": "h866A5"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the bomber jacket has been lost but there is no free inventory space:",
+                  "steps": [
+                    {
+                      "npc": "You don't have enough free space for your jacket."
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "Fio1A8"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the bomber jacket has been lost:",
+                  "steps": [
+                    {
+                      "npc": "Here's your jacket, to keep you warm during flight."
+                    },
+                    {
+                      "type": "jump",
+                      "reference": "continues",
+                      "id": "X6tMSJ"
+                    }
+                  ],
+                  "id": "w_NjLo"
                 }
               ],
               "id": "eIaWb1"
-            }
-          ]
-        },
-        {
-          "npc": "You still seem to have your cap.",
-          "steps": [
-            {
-              "type": "jump",
-              "reference": "continues",
-              "id": "llLbH4"
             },
-            {
-              "type": "condition",
-              "text": "If the bomber cap has been lost but there is no free inventory space:",
-              "steps": [
-                {
-                  "npc": "You don't have enough free space for your cap."
-                },
-                {
-                  "type": "jump",
-                  "reference": "continues",
-                  "id": "M8FxkF"
-                }
-              ],
-              "id": "koHBWr"
-            },
-            {
-              "type": "condition",
-              "text": "If the bomber cap has been lost:",
-              "steps": [
-                {
-                  "npc": "Here's your cap. Try to keep better track of it."
-                },
-                {
-                  "type": "jump",
-                  "reference": "continues",
-                  "id": "uXpS3w"
-                }
-              ],
-              "id": "zKyhXv"
-            },
-            {
-              "type": "condition",
-              "text": "If the bomber jacket has not been lost:",
-              "steps": [
-                {
-                  "npc": "You don't need a new jacket; you still have your original one."
-                },
-                {
-                  "type": "jump",
-                  "reference": "continues",
-                  "id": "qs8Rgr"
-                }
-              ],
-              "id": "uNyPv7"
-            },
-            {
-              "type": "condition",
-              "text": "If the bomber jacket has been lost but there is no free inventory space:",
-              "steps": [
-                {
-                  "npc": "You don't have enough free space for your jacket."
-                },
-                {
-                  "type": "end"
-                }
-              ],
-              "id": "I4shfV"
-            },
-            {
-              "type": "condition",
-              "text": "If the bomber jacket has been lost:",
-              "steps": [
-                {
-                  "npc": "Here's your jacket, to keep you warm during flight."
-                },
-                {
-                  "type": "jump",
-                  "reference": "continues",
-                  "id": "6IUB_G"
-                }
-              ],
-              "id": "zr4M2d"
-            }
-          ]
-        },
-        {
-          "type": "choice",
-          "options": [
             {
               "text": "Could you combine my cap and goggles?",
               "condition": "If the player has a bomber cap and gnome goggles",
@@ -115590,7 +115576,7 @@
                       "type": "end"
                     }
                   ],
-                  "id": "NgGEtY"
+                  "id": "B0DDku"
                 },
                 {
                   "type": "condition",
@@ -115600,10 +115586,10 @@
                       "npc": "You don't have enough free space for the cap and goggles."
                     }
                   ],
-                  "id": "6RmZ_h"
+                  "id": "JXgB5W"
                 }
               ],
-              "id": "3dQ2RQ"
+              "id": "ubPALB"
             }
           ]
         }
@@ -115675,7 +115661,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-de81f2b63d6f27b7"
+                      "branch": "jump-409181e0271b6c3a"
                     }
                   ]
                 }
@@ -115692,7 +115678,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-dd0c67abcce28dc8"
+                      "branch": "jump-7df45cc11cad1e4d"
                     }
                   ]
                 }
@@ -115747,14 +115733,97 @@
           "type": "end"
         }
       ],
-      "jump-de81f2b63d6f27b7": [
+      "jump-409181e0271b6c3a": [
         {
           "type": "condition",
           "text": "If the bomber cap has not been lost:",
+          "steps": [
+            {
+              "npc": "You still seem to have your cap."
+            },
+            {
+              "type": "jump",
+              "reference": "continues",
+              "id": "jiRRO4"
+            }
+          ],
           "id": "bOybQz"
+        },
+        {
+          "type": "condition",
+          "text": "If the bomber cap has been lost but there is no free inventory space:",
+          "steps": [
+            {
+              "npc": "You don't have enough free space for your cap."
+            },
+            {
+              "type": "jump",
+              "reference": "continues",
+              "id": "8FZHs5"
+            }
+          ],
+          "id": "y_diUp"
+        },
+        {
+          "type": "condition",
+          "text": "If the bomber cap has been lost:",
+          "steps": [
+            {
+              "npc": "Here's your cap. Try to keep better track of it."
+            },
+            {
+              "type": "jump",
+              "reference": "continues",
+              "id": "TS34ie"
+            }
+          ],
+          "id": "oNjpBD"
+        },
+        {
+          "type": "condition",
+          "text": "If the bomber jacket has not been lost:",
+          "steps": [
+            {
+              "npc": "You don't need a new jacket; you still have your original one."
+            },
+            {
+              "type": "jump",
+              "reference": "continues",
+              "id": "HTU8ss"
+            }
+          ],
+          "id": "h866A5"
+        },
+        {
+          "type": "condition",
+          "text": "If the bomber jacket has been lost but there is no free inventory space:",
+          "steps": [
+            {
+              "npc": "You don't have enough free space for your jacket."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "Fio1A8"
+        },
+        {
+          "type": "condition",
+          "text": "If the bomber jacket has been lost:",
+          "steps": [
+            {
+              "npc": "Here's your jacket, to keep you warm during flight."
+            },
+            {
+              "type": "jump",
+              "reference": "continues",
+              "id": "X6tMSJ"
+            }
+          ],
+          "id": "w_NjLo"
         }
       ],
-      "jump-dd0c67abcce28dc8": [
+      "jump-7df45cc11cad1e4d": [
         {
           "npc": "There you go! You look like a true airship pilot now."
         },
@@ -115772,7 +115841,7 @@
               "type": "end"
             }
           ],
-          "id": "NgGEtY"
+          "id": "B0DDku"
         },
         {
           "type": "condition",
@@ -115785,7 +115854,7 @@
               "type": "end"
             }
           ],
-          "id": "6RmZ_h"
+          "id": "JXgB5W"
         }
       ]
     }
@@ -425362,9 +425431,25 @@
                               "text": "If all the materials are finally handed in:",
                               "steps": [
                                 {
+                                  "type": "line",
+                                  "speaker": "Auguste",
+                                  "text": "That's the last of it!",
+                                  "speaker_ids": [
+                                    4715,
+                                    4716,
+                                    4717,
+                                    4718
+                                  ]
+                                },
+                                {
                                   "type": "jump",
-                                  "reference": "above",
-                                  "id": "-PAJNV"
+                                  "id": "-PAJNV",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-0513964be5b92670"
+                                    }
+                                  ]
                                 }
                               ],
                               "id": "z-fS6X"
@@ -425427,9 +425512,25 @@
                               "text": "If all the materials are finally handed in:",
                               "steps": [
                                 {
+                                  "type": "line",
+                                  "speaker": "Auguste",
+                                  "text": "That's the last of it!",
+                                  "speaker_ids": [
+                                    4715,
+                                    4716,
+                                    4717,
+                                    4718
+                                  ]
+                                },
+                                {
                                   "type": "jump",
-                                  "reference": "above",
-                                  "id": "I7Vu-j"
+                                  "id": "I7Vu-j",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-7ad3f965eb343737"
+                                    }
+                                  ]
                                 }
                               ],
                               "id": "xtOk6w"
@@ -425581,9 +425682,25 @@
                               "text": "If all the materials are finally handed in:",
                               "steps": [
                                 {
+                                  "type": "line",
+                                  "speaker": "Auguste",
+                                  "text": "That's the last of it!",
+                                  "speaker_ids": [
+                                    4715,
+                                    4716,
+                                    4717,
+                                    4718
+                                  ]
+                                },
+                                {
                                   "type": "jump",
-                                  "reference": "above",
-                                  "id": "JpL2Y0"
+                                  "id": "JpL2Y0",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-2ddbc3683b01913b"
+                                    }
+                                  ]
                                 }
                               ],
                               "id": "ty-ocK"
@@ -425689,9 +425806,25 @@
                               "text": "If all the materials are finally handed in:",
                               "steps": [
                                 {
+                                  "type": "line",
+                                  "speaker": "Auguste",
+                                  "text": "That's the last of it!",
+                                  "speaker_ids": [
+                                    4715,
+                                    4716,
+                                    4717,
+                                    4718
+                                  ]
+                                },
+                                {
                                   "type": "jump",
-                                  "reference": "above",
-                                  "id": "gDAA-k"
+                                  "id": "gDAA-k",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-fc9041e9caf25e71"
+                                    }
+                                  ]
                                 }
                               ],
                               "id": "mkBxOa"
@@ -425796,9 +425929,25 @@
                               "text": "If all the materials are finally handed in:",
                               "steps": [
                                 {
+                                  "type": "line",
+                                  "speaker": "Auguste",
+                                  "text": "That's the last of it!",
+                                  "speaker_ids": [
+                                    4715,
+                                    4716,
+                                    4717,
+                                    4718
+                                  ]
+                                },
+                                {
                                   "type": "jump",
-                                  "reference": "above",
-                                  "id": "l-JmZE"
+                                  "id": "l-JmZE",
+                                  "steps": [
+                                    {
+                                      "type": "call",
+                                      "branch": "jump-2a27080c76a16b49"
+                                    }
+                                  ]
                                 }
                               ],
                               "id": "ILKLjD"
@@ -426107,6 +426256,17 @@
       ],
       "preparing-for-the-expedition-talking-to-him-before-planting-his-sapling-but-after-delivering-all-the-required-materials": [
         {
+          "type": "line",
+          "speaker": "Auguste",
+          "text": "You just need to build the basket and I can finish the balloon! How are you getting on with the willow?",
+          "speaker_ids": [
+            4715,
+            4716,
+            4717,
+            4718
+          ]
+        },
+        {
           "type": "choice",
           "options": [
             {
@@ -426114,8 +426274,13 @@
               "steps": [
                 {
                   "type": "jump",
-                  "reference": "above",
-                  "id": "W3SWvE"
+                  "id": "W3SWvE",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-0a487ed37253a9bc"
+                    }
+                  ]
                 }
               ]
             },
@@ -426124,8 +426289,13 @@
               "steps": [
                 {
                   "type": "jump",
-                  "reference": "above",
-                  "id": "--f7tH"
+                  "id": "--f7tH",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-d032ec7fe59dd93f"
+                    }
+                  ]
                 }
               ]
             },
@@ -427418,6 +427588,135 @@
           ]
         }
       ],
+      "jump-0513964be5b92670": [
+        {
+          "type": "line",
+          "speaker": "Auguste",
+          "text": "You just need to build the basket and I can finish the balloon! How are you getting on with the willow?",
+          "speaker_ids": [
+            4715,
+            4716,
+            4717,
+            4718
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "I have lost my willow sapling. Can I buy a replacement?",
+              "condition": "If Auguste's sapping hasn't been planted yet",
+              "steps": [
+                {
+                  "type": "jump",
+                  "id": "CmfohW",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-0a487ed37253a9bc"
+                    }
+                  ]
+                }
+              ],
+              "id": "QW2mhm"
+            },
+            {
+              "text": "What do I do again?",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Auguste",
+                  "text": "Use the willow sapling I gave you to grow a willow tree. Cut twelve branches from it using secateurs. Use the branches on the platform here.",
+                  "speaker_ids": [
+                    4715,
+                    4716,
+                    4717,
+                    4718
+                  ]
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Fine thanks.",
+              "steps": [
+                {
+                  "player": "Fine thanks."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "jump-7ad3f965eb343737": [
+        {
+          "type": "jump",
+          "id": "-PAJNV",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "jump-0513964be5b92670"
+            }
+          ]
+        }
+      ],
+      "jump-2ddbc3683b01913b": [
+        {
+          "type": "jump",
+          "id": "I7Vu-j",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "jump-7ad3f965eb343737"
+            }
+          ]
+        }
+      ],
+      "jump-fc9041e9caf25e71": [
+        {
+          "type": "jump",
+          "id": "JpL2Y0",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "jump-2ddbc3683b01913b"
+            }
+          ]
+        }
+      ],
+      "jump-2a27080c76a16b49": [
+        {
+          "type": "jump",
+          "id": "gDAA-k",
+          "steps": [
+            {
+              "type": "call",
+              "branch": "jump-fc9041e9caf25e71"
+            }
+          ]
+        }
+      ],
+      "jump-d032ec7fe59dd93f": [
+        {
+          "type": "line",
+          "speaker": "Auguste",
+          "text": "Use the willow sapling I gave you to grow a willow tree. Cut twelve branches from it using secateurs. Use the branches on the platform here.",
+          "speaker_ids": [
+            4715,
+            4716,
+            4717,
+            4718
+          ]
+        },
+        {
+          "type": "end"
+        }
+      ],
       "jump-23beafe8d8a1c36f": [
         {
           "player": "Yes, I want to give you some items."
@@ -427597,9 +427896,25 @@
                       "text": "If all the materials are finally handed in:",
                       "steps": [
                         {
+                          "type": "line",
+                          "speaker": "Auguste",
+                          "text": "That's the last of it!",
+                          "speaker_ids": [
+                            4715,
+                            4716,
+                            4717,
+                            4718
+                          ]
+                        },
+                        {
                           "type": "jump",
-                          "reference": "above",
-                          "id": "-PAJNV"
+                          "id": "-PAJNV",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-0513964be5b92670"
+                            }
+                          ]
                         }
                       ],
                       "id": "z-fS6X"
@@ -427662,9 +427977,25 @@
                       "text": "If all the materials are finally handed in:",
                       "steps": [
                         {
+                          "type": "line",
+                          "speaker": "Auguste",
+                          "text": "That's the last of it!",
+                          "speaker_ids": [
+                            4715,
+                            4716,
+                            4717,
+                            4718
+                          ]
+                        },
+                        {
                           "type": "jump",
-                          "reference": "above",
-                          "id": "I7Vu-j"
+                          "id": "I7Vu-j",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-7ad3f965eb343737"
+                            }
+                          ]
                         }
                       ],
                       "id": "xtOk6w"
@@ -427816,9 +428147,25 @@
                       "text": "If all the materials are finally handed in:",
                       "steps": [
                         {
+                          "type": "line",
+                          "speaker": "Auguste",
+                          "text": "That's the last of it!",
+                          "speaker_ids": [
+                            4715,
+                            4716,
+                            4717,
+                            4718
+                          ]
+                        },
+                        {
                           "type": "jump",
-                          "reference": "above",
-                          "id": "JpL2Y0"
+                          "id": "JpL2Y0",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-2ddbc3683b01913b"
+                            }
+                          ]
                         }
                       ],
                       "id": "ty-ocK"
@@ -427934,9 +428281,25 @@
                       "text": "If all the materials are finally handed in:",
                       "steps": [
                         {
+                          "type": "line",
+                          "speaker": "Auguste",
+                          "text": "That's the last of it!",
+                          "speaker_ids": [
+                            4715,
+                            4716,
+                            4717,
+                            4718
+                          ]
+                        },
+                        {
                           "type": "jump",
-                          "reference": "above",
-                          "id": "gDAA-k"
+                          "id": "gDAA-k",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-fc9041e9caf25e71"
+                            }
+                          ]
                         }
                       ],
                       "id": "mkBxOa"
@@ -428051,9 +428414,25 @@
                       "text": "If all the materials are finally handed in:",
                       "steps": [
                         {
+                          "type": "line",
+                          "speaker": "Auguste",
+                          "text": "That's the last of it!",
+                          "speaker_ids": [
+                            4715,
+                            4716,
+                            4717,
+                            4718
+                          ]
+                        },
+                        {
                           "type": "jump",
-                          "reference": "above",
-                          "id": "l-JmZE"
+                          "id": "l-JmZE",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-2a27080c76a16b49"
+                            }
+                          ]
                         }
                       ],
                       "id": "ILKLjD"
@@ -428230,22 +428609,6 @@
               ]
             }
           ]
-        }
-      ],
-      "jump-d032ec7fe59dd93f": [
-        {
-          "type": "line",
-          "speaker": "Auguste",
-          "text": "Use the willow sapling I gave you to grow a willow tree. Cut twelve branches from it using secateurs. Use the branches on the platform here.",
-          "speaker_ids": [
-            4715,
-            4716,
-            4717,
-            4718
-          ]
-        },
-        {
-          "type": "end"
         }
       ],
       "jump-d681f89b85abe397": [

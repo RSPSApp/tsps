@@ -185,9 +185,9 @@ test('the choice of logs checks the trip again: walked off, nothing flies', () =
   player.attributes[Storage.STORED_ATTRIBUTE] = { logs: 2 };
   Travel.travel(player, station('taverley'), station('entrana'));
   searchThrough(player);
-  assert.equal(lastPrompt().title, 'Which logs would you like to use?');
+  assert.equal(lastPrompt().title, 'Select an option');
   player.moveTo(loc(3200, 3200));
-  choose('Use the logs in storage.');
+  choose('Use logs from storage');
   tick(4);
   assert.equal(Storage.stored(player, 'logs'), 2, 'not paid');
   assert.notDeepEqual([player.getLocation().getX(), player.getLocation().getY()], station('entrana').land);
@@ -202,8 +202,23 @@ test('Check gives the five counts; Preferences sets which logs a trip takes', ()
   assert.match(player.boxes.at(-1), /^When you travel with logs in storage as well as your inventory/);
   player.lastChain.getDialogues().get(1).action.execute();
   assert.equal(lastPrompt().title, 'Which logs would you like to use up first?');
+  // All three while none is set (rev 242 tick 1580), then the three less the one set (1595-1610).
+  assert.deepEqual(lastPrompt().options.map((o) => o.text ?? o), ['Take logs from my inventory first.', 'Take logs from storage first.', 'Ask me what logs to use every time.']);
   choose('Take logs from storage first.');
   assert.equal(player.attributes[Storage.PREFERENCE_ATTRIBUTE], 'storage');
+  Storage.preferences({ player });
+  player.lastChain.getDialogues().get(1).action.execute();
+  assert.deepEqual(lastPrompt().options.map((o) => o.text ?? o), ['Take logs from my inventory first.', 'Ask me what logs to use every time.']);
+  choose('Take logs from my inventory first.');
+  assert.equal(player.attributes[Storage.PREFERENCE_ATTRIBUTE], 'inventory');
+  const both = fakePlayer({ items: { [id('logs')]: 2 } });
+  both.attributes[Storage.STORED_ATTRIBUTE] = { logs: 2 };
+  both.attributes[Storage.PREFERENCE_ATTRIBUTE] = 'inventory';
+  let flown = null;
+  const before = prompts.length;
+  Storage.chooseSource(both, station('taverley'), 1, (source) => { flown = source; });
+  assert.equal(prompts.length, before, 'the inventory preferred: no question');
+  assert.equal(flown, Storage.INVENTORY);
 });
 
 test('a trip paid from storage: no log carried, the count told on landing', () => {
@@ -222,8 +237,8 @@ test('"ask" with logs in both offers the choice; preferring storage does not ask
   asks.attributes[Storage.STORED_ATTRIBUTE] = { logs: 2 };
   let flown = null;
   Storage.chooseSource(asks, station('taverley'), 1, (source) => { flown = source; });
-  assert.equal(lastPrompt().title, 'Which logs would you like to use?');
-  choose('Use the logs in my inventory.');
+  assert.equal(lastPrompt().title, 'Select an option');
+  choose('Use logs from inventory');
   assert.equal(flown, Storage.INVENTORY);
   const prefers = fakePlayer({ items: { [id('logs')]: 2 } });
   prefers.attributes[Storage.STORED_ATTRIBUTE] = { logs: 2 };

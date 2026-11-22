@@ -59,17 +59,31 @@ function adviceSteps(name) {
     return [{ player: ADVICE }];
 }
 
+/** Every option text a page's menus offer, at any depth. */
+function pageOptions(steps, found = new Set()) {
+    for (const step of steps ?? []) {
+        for (const option of step?.options ?? []) {
+            if (option?.text) found.add(option.text);
+            pageOptions(option?.steps, found);
+        }
+        if (Array.isArray(step?.steps)) pageOptions(step.steps, found);
+    }
+    return found;
+}
+
 /**
  * The menu: `chop` swaps the protection question for the felling one. Each answer is the player's line, then what
- * it leads to.
+ * it leads to. A gardener whose Wiki transcript has no advice question (Guppa, Argo) does not offer it.
  */
 function menu(name, chop) {
     const ask = chop ? CHOP : LOOK_AFTER;
+    const page = pageSteps(name);
+    const advises = !page || pageOptions(page).has(ADVICE);
     return [{
         type: "choice",
         options: [
             { text: ask, steps: [{ player: ask }, { type: "action", action: PROTECT_ACTION }] },
-            { text: ADVICE, steps: adviceSteps(name) },
+            ...advises ? [{ text: ADVICE, steps: adviceSteps(name) }] : [],
             { text: SELL, steps: [{ player: SELL }, { npc: SELL_REPLY }, { type: "action", action: "open_shop", target: SHOP }] },
             { text: LEAVE, steps: [{ player: LEAVE }] },
         ],

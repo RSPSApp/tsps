@@ -122,3 +122,13 @@ test("a grown tree: 'Would you chop my tree down for me?' in place of the protec
   assert.equal(offer?.constructor.name, "OptionDialogue", JSON.stringify(f.said));
   assert.equal(offer.getTitle(), "Pay 200 Coins to have your tree chopped down?");
 });
+
+test("Guppa and Argo, whose Wiki menus have no advice question, leave it out (Transcript:Guppa)", () => {
+  const Gardeners = require("../plugins/skills/farming/Gardeners.Farming");
+  for (const name of ["Guppa", "Argo"]) {
+    assert.deepEqual(Gardeners.menu(name, false)[0].options.map((o) => o.text),
+      ["Would you look after my crops for me?", "Can you sell me something?", "I'll come back another time."], name);
+  }
+  assert.equal(Gardeners.menu("Elstan", false)[0].options.length, 4, "no page: the captured menu");
+  assert.equal(Gardeners.menu("Fayeth", false)[0].options.length, 4);
+});

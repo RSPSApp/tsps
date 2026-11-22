@@ -97,21 +97,21 @@ function createScenes(api, ctx) {
   // ------------------------------------------------------------------ Effigy sends the alchemists up
 
   /**
-   * "Wait! What about-": once it is continued, the fade, and tol_prog 10 and the fade in two ticks on, then the
-   * player's last line (capture ticks 2656-2659). The line event comes as the chain is built, before the line is
+   * "Wait! What about-": continued (capture tick 2656), the fade a tick on (2657), and tol_prog 10 and the fade in two
+   * after that (2659), then the player's last line. The line event comes as the chain is built, before the line is
    * even shown, so every timer starts in `after`: started here, a slow reader got the fade in before the fade out
    * and was left on a black screen (#6485).
    */
   function toTheTop(request) {
     const { player } = request;
     request.after = () => {
-      Scenes.fade(player, true, 15);
-      Scenes.later(player, 2, () => {
+      Scenes.later(player, 1, () => Scenes.fade(player, true, 15));
+      Scenes.later(player, 3, () => {
         ctx.setStage(player, 10);
         Scenes.fade(player, false);
       });
     };
-    request.pauseTicks = 2;
+    request.pauseTicks = 3;
   }
 
   // ------------------------------------------------------------------ the creation

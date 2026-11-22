@@ -664,8 +664,7 @@ test('a slow reader of "Wait! What about-" gets the fade out before the fade in,
   assert.equal(h.quest.getStage(h.player), 8);
   assert.deepEqual(h.fades, []);
   request.after();
-  assert.deepEqual(h.fades, ['out']);
-  assert.equal(request.pauseTicks, 2);
+  assert.equal(request.pauseTicks, 3);
   h.flushTasks();
   assert.equal(h.quest.getStage(h.player), 10);
   assert.deepEqual(h.fades, ['out', 'in']);
@@ -689,17 +688,21 @@ test('the scare plays its whole talk: the Homunculus with "Boo.", and the end on
   assert.equal(h.varbits.get(3359), 1);
   last.after();
   assert.equal(last.pauseTicks, 4);
-  // An Esc mid-scene keeps the chat, so the last line's continue still ends it.
-  const close = { player: h.player, handled: false };
-  PluginManager.emitCustomEvent('interface:close', close);
-  assert.equal(close.handled, true);
+  // An Esc or a world click mid-scene keeps the chat, so the last line's continue still ends it.
+  for (const name of ['interface:close', 'player:world-input']) {
+    const input = { player: h.player, handled: false };
+    PluginManager.emitCustomEvent(name, input);
+    assert.equal(input.handled, true, name);
+  }
   h.flushTasks();
   assert.equal(h.quest.getStage(h.player), 17);
   assert.equal(h.varbits.get(3359), 0);
   assert.equal(h.varbits.get(542), 0);
   assert.equal(h.cameraResets(), 1);
   assert.deepEqual(h.fades, ['out', 'in']);
-  const after = { player: h.player, handled: false };
-  PluginManager.emitCustomEvent('interface:close', after);
-  assert.equal(after.handled, false);
+  for (const name of ['interface:close', 'player:world-input']) {
+    const input = { player: h.player, handled: false };
+    PluginManager.emitCustomEvent(name, input);
+    assert.equal(input.handled, false, name);
+  }
 });

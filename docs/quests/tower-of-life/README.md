@@ -110,6 +110,12 @@ fade out and a black screen, and the scare ended (tabs and camera back, tol_prog
 plays, a close (Esc) or a world click keeps the chat, since the scene ends only from its last line's continue. A death
 mid-scene (ours: none captured) lets the scene go, with its timers, and the scene plays again.
 
+Every scene fades a tick after its last line is continued. The two Tower of Life recordings agree on the gaps after
+each fade (hand-off fade+2, Flee fade+3 and fade+5, scare fade+3) but not always on the continue's own tick: the
+hand-off fades a tick after it in both (2656 -> 2657 here; 9032 -> 9033 in rsprox.net recording 1002189), Flee on it
+here (2867) and a tick after in 1002189 (9290 -> 9291), the scare a tick after here (3384 -> 3385) and on it in
+1002189 (9672). The tick after is what four of the six show.
+
 ## The Homunculus
 
 - Mind puzzle (tol_prog 12): the message box sets tol_prog 14 and tol_homon_align (3358) to 7, opens overlay 508

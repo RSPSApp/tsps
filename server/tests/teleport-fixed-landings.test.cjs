@@ -53,7 +53,7 @@ const at = (tile) => tile && [tile.getX(), tile.getY(), tile.getZ()];
 
 test('Watchtower and Ape Atoll Teleport land on their own tile, every cast', () => {
   for (let i = 0; i < 300; i++) {
-    assert.deepEqual(at(cast('Watchtower Teleport')), [2934, 4713, 2], 'the completed tower\'s top floor (Watchtower capture t6337)');
+    assert.deepEqual(at(cast('Watchtower Teleport')), [2933, 4712, 2], 'the Wiki tablet page\'s tower centre, in the completed copy');
     assert.deepEqual(at(cast('Ape Atoll Teleport')), [2796, 2798, 0]);
   }
 });
@@ -68,7 +68,7 @@ test("the Watchtower tablet's Break lands on the same tile", () => {
   for (let i = 0; i < 100; i++) {
     teleports.length = 0;
     useTablet({ player: player(), itemId: id, option: 'break', handled: false });
-    assert.deepEqual(at(teleports[0]), [2934, 4713, 2]);
+    assert.deepEqual(at(teleports[0]), [2933, 4712, 2]);
   }
 });
 

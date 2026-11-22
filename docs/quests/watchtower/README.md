@@ -165,9 +165,9 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
   box; two ticks later "You can now cast..." in a box (the scroll goes with the stage here; live: with this
   box); a tick later "The scroll
   crumbles to dust."
-- **Watchtower Teleport** lands at (2934,4713,2) (recorded difference: the Wiki's location line gives the
-  world-map tower, 2546,3114), the completed tower's top floor (6337); the Ardougne
-  hard diary task counts it there.
+- **Watchtower Teleport** (and its tablet) lands on the completed tower's top floor, a separate map area
+  (Wiki, Watchtower (building)): the tablet page's "Watchtower centre" (2549,3112,2) in that copy,
+  (2933,4712,2). Live landed one tile off, (2934,4713,2) (6337). The Ardougne hard diary task counts it there.
 
 ## Recorded differences
 
@@ -183,8 +183,11 @@ lines. Where it and the capture disagree, the Wiki is kept:
   ogre_chieftan_caves (4363, t2995).
 - The mad skavid greets with one of the Wiki's four phrases; the capture's was "Bidith ig..." / Cur
   (t3310-3313), one of them.
-- Watchtower Teleport lands on live's (2934,4713,2) (t6337); the Wiki's location line gives the world-map
-  tower (2546,3114). The tablet is taken to land with the spell (no tablet recording).
+- Watchtower Teleport and the tablet land on the Wiki tablet page's tower centre (2549,3112,2), in the
+  completed copy: (2933,4712,2); live's spell landed at (2934,4713,2) (t6337). The spell page's location
+  line (2546,3114, no plane) points at the building on the world map.
+- The north-west guard with the relic: only the Wiki's "carrying the relic" branch; live also played the
+  "Stop, creature!" lines first (t2308-2314).
 
 Timing choices:
 
@@ -203,7 +206,9 @@ Timing choices:
 - Ours: the trellis's Agility 18 refusal words, a cave with a tinderbox but no light, the Magic 14 /
   Herblore 14 / Mining 40 / Thieving 15 / gap Agility 25 refusal words, the potion steps before the recipe,
   the vial of water + jangerberries and + guam leaf orders, nightshade before stage 7, a second scroll read,
-  the rock cake stall's 6.4 XP, the vial of water and ground bones both used up: no capture or Wiki line.
+  the vial of water and ground bones both used up: no capture or Wiki line.
+- Ours: after the quest the rock's Mine gives the "already have this crystal" line and the robe the "already
+  have the shamans' crystal" message (the Wiki says only that no crystal is given).
 - Ours: Toban gives a lost relic part back with no line; the other skavids' "already talked" lines (only
   Skavid 1's "Cur tanath!" is known; the others give the message alone); Og, Grew, Toban and the mad skavid
   say nothing where the Wiki has no talk for the stage.

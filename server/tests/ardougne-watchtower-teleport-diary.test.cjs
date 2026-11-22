@@ -91,7 +91,7 @@ test("a Watchtower quest completion lets the real spell land and advances the ha
   assert.equal(quest.getStage(player), 14);
   assert.equal(player.getLocation().getZ(), 2);
   // The completed tower's top floor (Watchtower capture Watchtower.bin, rev 242, t6337).
-  assert.ok(Math.abs(player.getLocation().getX() - 2934) <= 2);
+  assert.ok(Math.abs(player.getLocation().getX() - 2933) <= 2);
   assert.ok(Math.abs(player.getLocation().getY() - 4713) <= 2);
   assert.equal(player.getInventory().getAmount(563), 0);
   assert.equal(player.getInventory().getAmount(557), 0);
@@ -146,7 +146,7 @@ test("a cancelled real teleport does not advance the diary", (t) => {
 test("dead and non-Watchtower arrivals do not advance the diary", (t) => {
   const player = fixture(t, { hitpoints: 0 });
   const arrival = { player, name: "other teleport" };
-  player.setLocation(new core.Location(2934, 4713, 2));
+  player.setLocation(new core.Location(2933, 4712, 2));
   dispatch("spell:teleport-arrival", arrival);
   arrival.name = "watchtower teleport";
   dispatch("spell:teleport-arrival", arrival);

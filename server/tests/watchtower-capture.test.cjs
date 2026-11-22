@@ -231,15 +231,13 @@ test("the relic: each part with the wizard's line, the assembly and the relic th
   for (const part of [I.RELIC_PART_1, I.RELIC_PART_2, I.RELIC_PART_3]) assert.equal(count(f, part), 0);
 });
 
-test("the north-west guard: stopped first even with the relic, then 'proof of friendship', stage 4 (t2308-2314)", async (t) => {
+test("the north-west guard with the relic: the Wiki's 'carrying the relic' branch only (live also stopped first, t2308-2314), stage 4", async (t) => {
   const f = actor(t, { at: [2510, 3060, 0], stage: S.RELIC, items: [[I.OGRE_RELIC]] });
   f.player.getPacketSender().sendVarbit(V.NORTH_WEST, 0);
   f.player.setAttribute("watchtower:varbits", { [V.TOOTH]: 1, [V.GUARD]: 1 });
   const guard = h.spawn(f, N.NW_GUARD, [2509, 3061, 0]);
   const said = await talk(f, guard);
-  assert.deepEqual(said.slice(0, 6).map((line) => line.replace(/^[^:]+: /, "")), [
-    "Stop, creature! Only ogres and their friends allowed in this city. Show me a sign of companionship, like a lost relic or somefing, and you may pass.",
-    "Until then, back to whence you came!",
+  assert.deepEqual(said.slice(0, 4).map((line) => line.replace(/^[^:]+: /, "")), [
     "I've got a proof of friendship right here!",
     "Well, what proof of friendship did you bring?",
     "I have a relic!",
@@ -803,4 +801,28 @@ test("the Wiki's newer lines: the battlement guards after the cake, Gorad after 
   h.ticks(k, 2);
   assert.ok(messages(k).includes("A magic blast comes from the shaman. You are badly injured by the blast."), JSON.stringify(messages(k)));
   assert.ok(blast.includes(20), JSON.stringify(blast));
+});
+
+test("review round 8: trellis XP, swing-back XP, no crystals after the quest, Attack refusals through the attack option", async (t) => {
+  const f = actor(t, { at: [2548, 3120, 0], stage: S.STARTED });
+  const xp = () => f.player.getSkillManager().getExperience(Sk.AGILITY);
+  const before = xp();
+  await click(f, 20056, [2548, 3119]);
+  for (let i = 0; i < 6 && at(f)[2] === 0; i++) h.tick(f);
+  assert.equal(xp() - before, 31);
+
+  const g = actor(t, { at: [2589, 9448, 0], stage: S.COMPLETE });
+  const mined = await play(g, () => click(g, 2816, [2590, 9449], 2));
+  assert.ok(mined.some((line) => line.includes("I already have this crystal")), mined.join("\n"));
+  assert.equal(count(g, I.CRYSTAL_4), 0);
+  await play(g, () => click(g, 2816, [2590, 9449], 1));
+  h.ticks(g, 6);
+  assert.ok(messages(g).includes("The rock has a gap in which a crystal used to sit."), JSON.stringify(messages(g)));
+
+  const k = actor(t, { at: [2577, 3022, 0], stage: S.RELIC });
+  const gorad = h.spawn(k, 4367, [2577, 3021, 0]);
+  const event = { player: k.player, npc: gorad, npcId: 4367, clickType: 2, handled: false };
+  assert.equal(h.PM.emitNpcAttackOption(event), true);
+  h.ticks(k, 2);
+  assert.ok(messages(k).includes("You don't need to fight him now."), JSON.stringify(messages(k)));
 });

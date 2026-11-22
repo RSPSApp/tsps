@@ -321,7 +321,7 @@ module.exports = function registerWatchtowerQuest(api) {
     if (npcId === NPCS.GREW) return grewVariant(player);
     if (npcId === NPCS.TOBAN) return tobanVariant(player);
     if (npcId === NPCS.GORAD) {
-      return state.get(player, VARBITS.TOOTH_GOT) === 1 || state.hasBit(player, BITS.HELPED_GREW)
+      return toothDone(player)
         ? "ogre-investigations-grew-talking-to-gorad-after-getting-his-tooth" : "ogre-investigations-grew-facing-gorad";
     }
     if (npcId === NPCS.BATTLEMENT_GUARD) return battlementGuardVariant(player);
@@ -371,8 +371,6 @@ module.exports = function registerWatchtowerQuest(api) {
     if (value.includes("with dragon bones")) return has(ITEMS.DRAGON_BONES);
     if (value.includes("with toban's key")) return has(ITEMS.KEY);
     if (value.includes("without toban's key")) return !has(ITEMS.KEY);
-    if (value.includes("if the player does have the gold")) return has(ITEMS.GOLD);
-    if (value.includes("if the player doesn't have the gold")) return !has(ITEMS.GOLD);
     if (value.includes("if the player no longer has the key")) return !owns(player, ITEMS.KEY);
     if (value.includes("if the player has the key on them")) return has(ITEMS.KEY);
     if (value.includes("if the player has the key stored somewhere")) return bank(ITEMS.KEY);
@@ -402,13 +400,7 @@ module.exports = function registerWatchtowerQuest(api) {
     if (value.includes("if the player stored the relic somewhere")) return bank(ITEMS.RELIC);
     if (value.includes("if the player is not carrying the relic")) return !has(ITEMS.RELIC);
     if (value.includes("if the player is carrying the relic")) return has(ITEMS.RELIC);
-    if (value.includes("after showing the relic")) return stage(player) >= STAGES.GUTANOTH;
 
-    if (value.includes("first conversation")) return state.get(player, VARBITS.GATE_CHAT_EAST) === 0;
-    if (value.includes("after giving the gold bar")) return eastGateOpen(player);
-    if (value.includes("future conversations")) return state.get(player, VARBITS.GATE_CHAT_EAST) === 1 && !eastGateOpen(player);
-    if (value.includes("if the player is not carrying a gold bar")) return !has(ITEMS.GOLD_BAR);
-    if (value.includes("if the player is carrying a gold bar")) return has(ITEMS.GOLD_BAR);
 
     if (value.includes("without an ogre rockcake")) return !has(ITEMS.ROCK_CAKE);
     if (value.includes("with an ogre rockcake")) return has(ITEMS.ROCK_CAKE);
@@ -423,8 +415,9 @@ module.exports = function registerWatchtowerQuest(api) {
     if (value.includes("if the player has the crystal on them")) return has(CRYSTAL_YELLOW);
     if (value.includes("if the player doesn't have the crystal")) return !owns(player, CRYSTAL_YELLOW);
     if (value.includes("if the crystal is stored somewhere")) return stepId === "Sm4F0t" ? bank(CRYSTAL_MAGENTA) : bank(CRYSTAL_YELLOW);
-    if (value.includes("if the player lost the crystal")) return !owns(player, CRYSTAL_MAGENTA);
-    if (value.includes("if the player has the crystal")) return has(CRYSTAL_MAGENTA);
+    // Wiki (Crystal (Watchtower)): re-obtainable "right up until the quest has been completed"; after it, "I haves no more".
+    if (value.includes("if the player lost the crystal")) return !complete(player) && !owns(player, CRYSTAL_MAGENTA);
+    if (value.includes("if the player has the crystal")) return complete(player) || has(CRYSTAL_MAGENTA);
 
     const kills = shamansDead(player);
     if (value.includes("after killing one shaman")) return kills === 1;
@@ -433,8 +426,9 @@ module.exports = function registerWatchtowerQuest(api) {
     if (value.includes("after killing four shamans")) return kills === 4;
     if (value.includes("after killing five shamans")) return kills === 5;
     if (value.includes("after killing the last shaman")) return kills >= MAX_SHAMANS && !owns(player, CRYSTAL_CYAN);
-    if (value.includes("searching the shaman robe while already having the crystal")) return owns(player, CRYSTAL_CYAN);
-    if (value.includes("searching the shaman robe while not having the crystal")) return !owns(player, CRYSTAL_CYAN);
+    // After the quest no crystal (Wiki); Ours: the "already have" message stands for it.
+    if (value.includes("searching the shaman robe while already having the crystal")) return complete(player) || owns(player, CRYSTAL_CYAN);
+    if (value.includes("searching the shaman robe while not having the crystal")) return !complete(player) && !owns(player, CRYSTAL_CYAN);
 
     if (value.includes("if the player has read the spell scroll")) return hasReadSpellScroll(player);
     if (value.includes("if the player has not read the spell scroll")) return !hasReadSpellScroll(player);
@@ -472,13 +466,10 @@ module.exports = function registerWatchtowerQuest(api) {
     if (value.includes("without the skavid map")) return !has(ITEMS.MAP);
     if (value.includes("without a light source or a tinderbox")) return !Darkness.hasLightSource(player) && !has(ITEMS.TINDERBOX);
     if (value.includes("before the scared skavid has taught")) return !state.hasBit(player, BITS.LEARNING_SKAVID);
-    if (value === "prospecting:") return rockOption.get(player) === "prospect";
-    if (value === "mining:") return rockOption.get(player) === "mine";
     if (value.includes("searching the shaman robe before killing all the shamans")) return shamansDead(player) < MAX_SHAMANS;
     return null;
   }
   /** Which option the Rock of Dalgroth was clicked with, for its conditions. */
-  const rockOption = new WeakMap();
 
   // ------------------------------------------------------------------ lines: what live does as each shows
 
@@ -604,6 +595,7 @@ module.exports = function registerWatchtowerQuest(api) {
       request.before = () => {
         if (!held(player, ITEMS.RELIC)) return;
         take(player, ITEMS.RELIC);
+        state.set(player, VARBITS.GATE_CHAT_NORTH_WEST, 1);
         state.advance(player, STAGES.GUTANOTH);
       };
       request.after = () => walkThroughGate(player, NORTH_WEST_GATE);
@@ -899,7 +891,7 @@ module.exports = function registerWatchtowerQuest(api) {
       }
       return;
     }
-    if (["dd7KHH", "v-vEZl", "ATVVrG", "wq3K7d", "tTts4h", "ZnvGMC"].includes(stepId)) event.handled = true;
+    if (["dd7KHH", "v-vEZl", "ATVVrG", "wq3K7d", "tTts4h"].includes(stepId)) event.handled = true;
   }
 
   // ------------------------------------------------------------------ the Watchtower
@@ -962,7 +954,7 @@ module.exports = function registerWatchtowerQuest(api) {
     }
   }
 
-  /** The trellis: the two messages and the climb, then the first floor two ticks later (t330-332). */
+  /** The trellis: the two messages and the climb, then the first floor and 31 Agility XP two ticks later (t330-332; Wiki). */
   function climbTrellis({ player }) {
     if (level(player, Skill.AGILITY) < 18) {
       // Ours: the requirement is the Wiki's; no capture shows the refusal.
@@ -972,7 +964,7 @@ module.exports = function registerWatchtowerQuest(api) {
     if (ObstacleRunner.isBusy(player)) return true;
     ObstacleRunner.run({ player }, [
       { msg: "You climb up the wall..." }, { msg: "...and squeeze in through the window." }, { anim: SEQ.CLIMB },
-      { wait: 2 }, { tele: [...TILES.TRELLIS_TOP] },
+      { wait: 2 }, { tele: [...TILES.TRELLIS_TOP] }, { run: () => player.getSkillManager().addExperiences(Skill.AGILITY, 31) },
     ]);
     return true;
   }
@@ -1008,6 +1000,8 @@ module.exports = function registerWatchtowerQuest(api) {
       steps.push(...partLines[index], ...(++count === 1 ? first : more));
     });
     if (count === ITEMS.RELIC_PARTS.length) steps.push(...done);
+    // Wiki: "If any are still missing, the conversation then carries on as above ("How's it going?")".
+    else if (steps.length) steps.push(...(variantSteps(PAGE, "ogre-investigations-talking-to-the-watchtower-wizard") ?? []));
     return { steps, queue };
   }
 
@@ -1062,6 +1056,8 @@ module.exports = function registerWatchtowerQuest(api) {
       { objAnim: SEQ.ROPE_SWING_LOC },
       { move: end, anim: SEQ.ROPE_SWING, delay: 20, speed: [45, 70], dir: entering ? "east" : "north", ticks: 0 },
       { wait: 1 }, { msg: "You skillfully swing across." }, { sound: SOUND.ROPE_SWING },
+      // The swing back gives 3 Agility XP with its message (t1262, t1784); the swing over gives none (t1197).
+      ...(entering ? [] : [{ run: () => player.getSkillManager().addExperiences(Skill.AGILITY, 3) }]),
       { wait: 2 }, { tele: end }
     );
     task = ObstacleRunner.run({ player, object: entering ? roped : object }, steps, {
@@ -1200,11 +1196,7 @@ module.exports = function registerWatchtowerQuest(api) {
     const variant = "entering-gu-tanoth-city-guard";
     const carrying = held(player, ITEMS.RELIC);
     const first = state.get(player, VARBITS.GATE_CHAT_NORTH_WEST) === 0;
-    if (carrying && first) {
-      const stop = conditionSteps(PAGE, variant, "flM0eA").filter((step) => step.type === "line");
-      play(player, NPCS.NORTH_WEST_GUARD, variant, () => [...stop, ...conditionSteps(PAGE, variant, "7ZK2kb")], PAGE, npc);
-      return true;
-    }
+    // With the relic, only the Wiki's "carrying the relic" branch (live also played the stop lines first, t2308-2314).
     if (carrying || first) {
       play(player, NPCS.NORTH_WEST_GUARD, variant, null, PAGE, npc);
       return true;
@@ -1460,7 +1452,11 @@ module.exports = function registerWatchtowerQuest(api) {
       return true;
     }
     if (ObstacleRunner.isBusy(player)) return true;
-    ObstacleRunner.run({ player }, [{ anim: SEQ.POUR_POTION }, { wait: 8 }, { run: () => { if (held(player, ITEMS.MAGIC_POTION)) shamanDestroyed(player, shaman); } }]);
+    // The pour lands only on a player still where it began, alive, with the potion (a teleport or death cancels it).
+    const from = player.getLocation().clone();
+    const stillThere = () => !player.isDying?.() && player.getHitpoints() > 0 && held(player, ITEMS.MAGIC_POTION)
+      && player.getLocation().getZ() === from.getZ() && player.getLocation().getDistance(from) <= 1;
+    ObstacleRunner.run({ player }, [{ anim: SEQ.POUR_POTION }, { wait: 8 }, { run: () => { if (stillThere()) shamanDestroyed(player, shaman); } }]);
     return true;
   }
 
@@ -1494,7 +1490,8 @@ module.exports = function registerWatchtowerQuest(api) {
   /** Prospect: the two messages four ticks apart (t3714-3718). */
   function prospectRock({ player }) {
     if (ObstacleRunner.isBusy(player)) return true;
-    if (state.get(player, VARBITS.ROCK_MINED) === 1 && owns(player, CRYSTAL_GREY)) {
+    // Wiki (Rock of Dalgroth): after mining, and after the quest, "The rock has a gap in which a crystal used to sit."
+    if (complete(player) || (state.get(player, VARBITS.ROCK_MINED) === 1 && owns(player, CRYSTAL_GREY))) {
       const steps = variantSteps(PAGE, "entering-the-enclave-prospecting-the-rock-of-dalgroth-after-mining-it") ?? [];
       ObstacleRunner.run({ player }, [{ msg: steps[0]?.text }, { wait: 4 }, { msg: steps[1]?.text }]);
       return true;
@@ -1505,6 +1502,11 @@ module.exports = function registerWatchtowerQuest(api) {
 
   /** Mine: once the shamans are gone, the swing and four ticks later the crystal in a box (t5881-5885). */
   function mineRock({ player }) {
+    // After the quest "the rock no longer serves any purpose" (Wiki): Ours, the "again" line stands for it.
+    if (complete(player)) {
+      play(player, NPCS.WIZARD, "entering-the-enclave-attempting-to-mine-the-rock-of-dalgroth-again");
+      return true;
+    }
     if (stage(player) < STAGES.MAGIC_POTION || shamansDead(player) < MAX_SHAMANS) {
       // The Wiki's "The Rock of Dalgroth before killing the shamans", Mining: the player's line.
       play(player, NPCS.WIZARD, "entering-the-enclave-inside-the-enclave-the-rock-of-dalgroth-before-killing-the-shamans",
@@ -1892,7 +1894,7 @@ module.exports = function registerWatchtowerQuest(api) {
   api.onNpcInteraction("Skavid", { "Talk-to": talkSkavid });
   api.onNpcInteraction("Ogre guard", { "Talk-to": talkOgreGuard });
   for (const name of ["Og", "Grew", "Toban", "Mad skavid"]) api.onNpcInteraction(name, { "Talk-to": talkQuestOgre });
-  for (const name of ["Ogre shaman", "Gorad"]) api.onNpcInteraction(name, { Attack: attackQuestNpc });
+  api.onNpcAttackOption(attackOption);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject, { noted: false });
@@ -1943,6 +1945,9 @@ module.exports = function registerWatchtowerQuest(api) {
     return variant === null;
   }
 
+  /** Gorad's tooth is out and kept, or given: a lost tooth means killing him again (Wiki). */
+  const toothDone = (player) => owns(player, ITEMS.TOOTH) || state.hasBit(player, BITS.HELPED_GREW) || stage(player) >= STAGES.RELIC;
+
   /** Attacking a shaman: the blast (Wiki); attacking Gorad once his tooth is out: "You don't need to fight him now." */
   function attackQuestNpc(event) {
     const { player, npcId, npc } = event;
@@ -1951,11 +1956,16 @@ module.exports = function registerWatchtowerQuest(api) {
       play(player, npcId, "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman", null, PAGE, npc);
       return true;
     }
-    if (npcId === NPCS.GORAD && (state.get(player, VARBITS.TOOTH_GOT) === 1 || state.hasBit(player, BITS.HELPED_GREW))) {
+    if (npcId === NPCS.GORAD && toothDone(player)) {
       play(player, NPCS.GORAD, "ogre-investigations-grew-attacking-gorad-after-getting-his-tooth", null, PAGE, npc);
       return true;
     }
     return false;
+  }
+  /** Attack goes through the attack-option hook (NPCOptionPacketListener), not onNpcInteraction. */
+  function attackOption(event) {
+    if (!event.player || !event.npc) return;
+    if (attackQuestNpc(event)) event.handled = true;
   }
 
   /** The Gu'Tanoth guards by who they are. */

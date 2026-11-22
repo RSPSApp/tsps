@@ -90,6 +90,16 @@ function actor(t, x, y, z = 0) {
   });
   t.mock.method(p, "performAnimation", (animation) => record(["anim", animation?.getId?.() ?? animation?.id]));
   t.mock.method(p, "performGraphic", (graphic) => record(["gfx", graphic?.getId?.() ?? graphic?.id]));
+  const npcAnimation = core.NPC.prototype.performAnimation;
+  t.mock.method(core.NPC.prototype, "performAnimation", function (animation) {
+    record(["npcanim", this.getId(), animation?.getId?.() ?? animation?.id]);
+    return npcAnimation.call(this, animation);
+  });
+  const npcFace = core.NPC.prototype.setPositionToFace;
+  t.mock.method(core.NPC.prototype, "setPositionToFace", function (tile) {
+    if (tile) record(["npcface", this.getId(), tile.getX(), tile.getY()]);
+    return npcFace.call(this, tile);
+  });
   const forceChat = core.NPC.prototype.forceChat;
   t.mock.method(core.NPC.prototype, "forceChat", function (text) {
     record(["say", this.getId(), text, f.plugin.includes(this)]);
@@ -143,6 +153,11 @@ function tick(f, count = 1) {
     core.World.updateLocalNpcs(f.p, [...f.npcs, ...f.plugin.filter((npc) => npc.isRegistered())]);
     core.TaskManager.processWalkTo(f.p.getIndex());
     f.p.getMovementQueue().process();
+    // The plugins' own NPCs walk too (the cutscene's Bert); where each stands after the tick, for the capture's steps.
+    for (const npc of f.plugin.filter((npc) => npc.isRegistered())) {
+      npc.getMovementQueue().process();
+      f.record(["npcat", npc.getId(), npc.getLocation().getX(), npc.getLocation().getY()]);
+    }
     core.TaskManager.process();
     f.p.resetUpdating();
     f.now++;
@@ -330,6 +345,14 @@ test("The Hand in the Sand plays as the revision 242 run, stage 0 to 160", async
   assert.ok(rows.slice(cast).some(([kind, id]) => kind === "gfx" && id === 111));
   assert.ok(rows.slice(cast).some(([kind, id]) => kind === "sound" && id === 200));
   assert.deepEqual(at(f), [3014, 3259, 0]);
+  const teleported = indexOf(rows, isVarbit(1531, 1));
+  const zavisticCast = indexOf(rows, ([kind, id, anim]) => kind === "npcanim" && id === 881 && anim === 710);
+  assert.ok(zavisticCast >= 0, "Zavistic casts (human_castentangle, t8033)");
+  assert.equal(rows.when[zavisticCast], rows.when[teleported], "on the continue, with 1531");
+  // t8037: human_shrink ends shrunk to nothing and lasts ~668 ticks; the landing clears it, else the player is invisible.
+  const reset = indexOf(rows, ([kind, id]) => kind === "anim" && id === 65535);
+  assert.ok(reset > cast, "the shrink is cleared on landing");
+  assert.equal(rows.when[reset] - rows.when[cast], 2, "two ticks after the cast, with the teleport (t8035-8037)");
 
   // t8045-8063: Betty's bottle for the second vial on the continue of "I have one here!".
   rows = await play(f, npcOption(nearest(f, "Betty")), [/about the Hand in the Sand/]);
@@ -354,6 +377,7 @@ test("The Hand in the Sand plays as the revision 242 run, stage 0 to 160", async
   assert.ok(rows.some(([kind, id]) => kind === "sound" && id === 2739));
   assert.ok(rows.some(([kind, id]) => kind === "item" && id === ITEM.VIAL));
   rows = await play(f, useOn(f, ITEM.ROSE_LENS, { kind: "loc", id: 10812, x: 3013, y: 3258 }));
+  assert.deepEqual(at(f), [3016, 3259, 0], "the lens is used from Betty's doorway (t8111-8118)");
   assert.equal(varbit(f, 1532), 5);
   assert.equal(varbit(f, 1537), 0);
   assert.ok(rows.some(([kind, id]) => kind === "sound" && id === 1587));
@@ -424,6 +448,24 @@ test("The Hand in the Sand plays as the revision 242 run, stage 0 to 160", async
   assert.equal(rows.when[firstBox] - rows.when[continued(learn)], 12, "the first box 12 ticks into the scene (t8593-8605)");
   assert.equal(rows.when[swirl] - rows.when[continued(firstBox)], 7, "the swirl 7 ticks after it is continued (t8609-8616)");
   assert.equal(rows.when[secondBox] - rows.when[swirl], 2, "the second box 2 ticks later (t8618)");
+  // t8610-8614: from the tick after the first box's continue Bert walks NW, W, W, NW to the pit's edge, then faces it.
+  const bertSteps = [];
+  rows.forEach(([kind, id, x, y], i) => {
+    if (kind !== "npcat" || id !== 5382 || i < learn || i > swirl) return;
+    if (i < continued(firstBox)) {
+      bertSteps[0] = [x, y, 0]; // where he stands before the continue
+      return;
+    }
+    const last = bertSteps[bertSteps.length - 1];
+    if (!last || last[0] !== x || last[1] !== y) bertSteps.push([x, y, rows.when[i] - rows.when[continued(firstBox)]]);
+  });
+  const sceneTiles = bertSteps.map(([x, y, when]) => [x - bertSteps[0][0], y - bertSteps[0][1], when]);
+  assert.deepEqual(sceneTiles, [[0, 0, 0], [-1, 1, 1], [-2, 1, 2], [-3, 1, 3], [-4, 2, 4]],
+    "Bert's four steps from (2546,3099) to (2542,3101), one a tick from t8610");
+  const bertFaces = indexOf(rows, ([kind, id], i) => kind === "npcface" && id === 5382 && i > continued(firstBox));
+  assert.ok(bertFaces >= 0, "Bert turns to the pit");
+  assert.deepEqual([rows[bertFaces][2] - bertSteps[0][0], rows[bertFaces][3] - bertSteps[0][1]], [-4, 3], "towards (2542,3102)");
+  assert.equal(rows.when[bertFaces] - rows.when[continued(firstBox)], 5, "a tick after he arrives (t8614)");
   assert.equal(rows.when[spent] - rows.when[continued(secondBox)], 13, "140 13 ticks after it is continued (t8625-8638)");
   // The 120 ring's Zavistic has walked off by now, so this ring's own comes first: find the one after the cutscene.
   const after = continued(secondBox);

@@ -207,3 +207,28 @@ test("every crate-search override is a real Crate, Crates or Boxes loc", () => {
     assert.ok(Object.hasOwn(data.byName, C.getObject(id).name), `${loc} is ${C.getObject(id).name}`);
   }
 });
+
+// Unhandled quest-area crates keep their captured empty line, in a message box (rsprox 4288, 3229;
+// godwars_crate local 1000491).
+test("crates whose empty search is a message box open it instead of a game message", () => {
+  for (const [gameval, text] of [
+    ["castle_drakan_tinderbox_crate", "You search the crate, but find nothing of interest."],
+    ["dt2_digsite_pickaxe_crate", "You search the crate, but find nothing of interest."],
+    ["godwars_crate", "There is nothing in the crate."],
+  ]) {
+    const f = fixture();
+    const boxes = [];
+    f.player.getDialogueManager = () => ({ startDialogues: (chain) => boxes.push(...[...chain.getDialogues().values()].map((d) => d.text)) });
+    assert.equal(search(f, gameval), true, gameval);
+    assert.deepEqual(f.sent, [], gameval);
+    assert.deepEqual(boxes, [text], gameval);
+  }
+});
+
+test("pog_crate and the locked Shayzien crate give their own captured line (local 1001457, 1049)", () => {
+  for (const [gameval, line] of [["pog_crate", "You search the crate, but find nothing of note."], ["shayzien_crate_01_dark_op", "This crate is locked."]]) {
+    const f = fixture();
+    assert.equal(search(f, gameval), true, gameval);
+    assert.deepEqual(f.sent, [["message", line]], gameval);
+  }
+});

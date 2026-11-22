@@ -29,9 +29,10 @@
  *
  * Plain crates and boxes (rsprox captures, 46 locs in about 50 recordings, revisions 227-242; the
  * Wiki quotes no line for them): "Crate" and "Crates" locs answer "You search the crate but find
- * nothing.", "Boxes" locs "There is nothing interesting in these boxes.", on arrival. The locs whose
+ * nothing.", "Boxes" locs "There is nothing interesting in these boxes.", on the handler tick
+ * (most recordings: one tick after the last step). The locs whose
  * recordings say something else (Falador, Varrock, the elid_ crates, the Wizards' Tower message
- * boxes) are named in data/crate-search.json; docs/scenery-search.md lists the recording ids.
+ * boxes, and the empty case of a few unhandled quest-area crates) are named in data/crate-search.json; docs/scenery-search.md lists the recording ids.
  * Ours: a "Box" loc, or a haystack's empty search, keeps "You search the <name>, but find nothing
  * of interest." (no capture of either).
  *

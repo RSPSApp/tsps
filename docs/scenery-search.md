@@ -56,6 +56,13 @@ where a message box is noted. The lines are in `server/plugins/objects/data/crat
   - The Wizards' Tower, in a message box: `fai_wiztower_crate2` "Nothing of interest in there -
     just some old books."; `fai_wiztower_crate3` and `fai_wiztower_boxes` "Nothing of interest
     in there - just some moth-eaten, dusty robes." (3202).
+  - `pog_crate`: "You search the crate, but find nothing of note." (local 1001457).
+  - `shayzien_crate_01_dark_op`: "This crate is locked." (1049).
+  - Unhandled quest-area crates, their empty case only, in a message box:
+    `castle_drakan_tinderbox_crate`, `castle_drakan_searchable_crate` (4288) and
+    `dt2_digsite_pickaxe_crate` (3229) "You search the crate, but find nothing of interest.";
+    `godwars_crate` "There is nothing in the crate." (local 1000491). What they give when not
+    empty is not done here.
 - Ours: a single "Box" loc keeps "You search the box, but find nothing of interest." (no
   capture).
 - Left to other handlers: quest crates (Goblin Village, Myreque, Waterfall Quest, ...), the

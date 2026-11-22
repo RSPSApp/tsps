@@ -45049,6 +45049,8 @@
           "wiki": "https://oldschool.runescape.wiki/w/Door",
           "implementedIn": [
             "server/plugins/objects/Doors.plugin.js",
+            "server/plugins/objects/LockedDoors.plugin.js",
+            "docs/locked-doors.md",
             "server/plugins/objects/Ladders.plugin.js",
             "server/src/main/typescript/elvarg/game/model/movement/MovementQueue.ts",
             "server/src/main/typescript/elvarg/game/model/movement/path/RsmodRouteFinding.ts",
@@ -45068,6 +45070,7 @@
             "server/plugins/areas/CrombwickManor.plugin.js"
           ],
           "devNotes": [
+            "2026-11-22 (parity/locs-outhouse-occupied): the outhouse door (hos_grape_odddoor) at the Fossil Island Museum Camp 3722,3816 and the Hosidius vinery 1817,3537 answers Open with the man inside's chathead line \"Occupied!\" (hosidius_man_on_toilet, chatang1) and synth 2402, and stays shut, as live does (rsprox captures 231/3040 tick 5736, 227/local 1000187 tick 4946). Before, the click did nothing. LockedDoors.plugin.js with data/locked-doors.json, tests/locked-doors.test.cjs, docs/locked-doors.md.",
             "Main 4b1eac7f6: #1267 the Hunter Guild stairs fade and land as recorded.",
             "Main 21a2a1daa: #1045/#1051 repair shared/private open-door records, timed closing, region replay and instance cleanup without duplicate leaves or mismatched collision. The existing cache-derived climb links and captured loc transports remain implemented.",
             "#1088 adds cache-named/interleaved door pair support; #1198 registers the Druidic Ritual Prison door name. Both actual gate leaves, exact movement into/out of the cauldron room, manual/automatic closing and unrelated prison ownership are covered. A focused native gate/meat/relog checkpoint passed.",

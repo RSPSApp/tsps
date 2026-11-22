@@ -445,7 +445,8 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
   // is a diagonal door crossed corner to corner (eastwardFrom says which side is outside). crossBetween [low, high] with
   // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
   // across, from the low side to the high side or back, along their own row. crossDelay holds the
-  // opener that many ticks after the opening sound before the gate opens and they cross.
+  // opener that many ticks after the opening sound before the gate opens and they cross. silent sends
+  // no opening sound (a gate live opens without a synth).
   PASS_THROUGH_GATES = Object.freeze([
     // Museum cleaning gate: captures 1702 (rev226) and 1704 (rev227) show this shared
     // swap and three-tick restore; MuseumEntrance owns the admission check.
@@ -458,6 +459,26 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
       crossY: 3447,
       walkOver: true,
       closeTicks: 3,
+    }),
+    // The fence gate east of Varrock by the quetzal platform (rsprox 232/3228 ticks 561-568, 642-644,
+    // 931-937; 232/3227 tick 4504; 232/3231 tick 288): vm_fencing_invisible_wall in the doorway, both
+    // leaves swung west, the player walks across the next tick and the gate is back two ticks after
+    // it opened. No synth is sent for it.
+    Object.freeze({
+      closed: [
+        [core.CacheDefinitions.getLocId("vm_fencegate_l"), 3296, 3428, 0, 0],
+        [core.CacheDefinitions.getLocId("vm_fencegate_r"), 3296, 3429, 0, 0],
+      ],
+      opened: [
+        [core.CacheDefinitions.getLocId("vm_fencing_invisible_wall"), 3296, 3429, 0, 0],
+        [core.CacheDefinitions.getLocId("vm_fencing_invisible_wall"), 3296, 3428, 0, 0],
+        [core.CacheDefinitions.getLocId("vm_fencegate_r"), 3295, 3429, 0, 1],
+        [core.CacheDefinitions.getLocId("vm_fencegate_l"), 3294, 3429, 0, 1],
+      ],
+      crossX: 3296,
+      walkOver: true,
+      closeTicks: 2,
+      silent: true,
     }),
     // Witchaven's puzzle doors keep their clipped threshold while each permitted
     // player crosses. Explicit placements also identify a temporarily open leaf.
@@ -2393,7 +2414,8 @@ function handlePassThroughGate(player, objectId, location, object = null) {
   if (PENDING_PASS_THROUGH_GATES.has(anchorKey)) return true;
 
   // Captured: the opening sound only; the gate shuts silently (1636, 1663, 3220).
-  core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
+  if (!gate.silent)
+    core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
   if (gate.crossDelay) {
     holdForPassThroughGate(player, gate, z, anchorKey, () => openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey));
     return true;

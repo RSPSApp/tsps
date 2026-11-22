@@ -26,7 +26,7 @@ before(async () => {
     getRegionManager: () => core.RegionManager,
     getTaskManager: () => ({ submit() {}, cancelTasks() {} }),
     getWorld: () => core.World,
-    getPluginConfig: (key, fallback) => fallback,
+    getPluginConfig: (key, fallback) => key === Lobby._test.LEGACY_BOT_PROMPT_CONFIG_KEY ? true : fallback,
     onPlayerLogout: (handler) => { hooks.logout = handler; },
     onCanEquip: (handler) => { (hooks.equip ??= []).push(handler); },
     onCanUnequip: (handler) => { (hooks.unequip ??= []).push(handler); },

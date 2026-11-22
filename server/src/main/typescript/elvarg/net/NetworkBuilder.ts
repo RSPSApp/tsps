@@ -688,7 +688,10 @@ export class ClientConnection {
       }
       if (this.player) LunarSpells.expireSpellbookSwap(this.player);
       if (this.player && !NON_INPUT_PACKETS.has(packet.type)) this.player.lastInputCycle = World.getProcessCycle();
-      if (this.player && WORLD_INTERACTIONS.has(packet.type)) {
+      // A spell selected on the inventory uses the same action and interface rules as an inventory click.
+      const inventoryTarget = packet.type === "widget_target" && (packet.targetWidgetId >>> 16) === MAIN_INVENTORY_GROUP_ID;
+      if (this.player && (WORLD_INTERACTIONS.has(packet.type) || inventoryTarget)) {
+        if (inventoryTarget && (this.player.isDyingReturn() || this.player.getHitpoints() <= 0)) continue;
         if (this.player.getCombat().isAnimationStalled()) {
           // Wiki: Animation stall. A full stall does not let the player perform actions, so the
           // click is held rather than dropped and runs on the tick the animation ends. The last
@@ -1188,16 +1191,9 @@ export class ClientConnection {
           if (this.player && packet.action === "close") this.player.getPacketSender().closeInterface(packet.groupId);
           continue;
         case "widget_target": {
-          // A spell cast on an inventory item (High Alchemy, Plank Make) is an inventory interaction: it closes the
-          // dialogue and any amount prompt, as an inventory click does. With the dialogue left open, an item a
-          // dialogue had just checked could be alched before its action ran, and the action still paid.
           // The spell-on-item routes below act on the inventory's slot, whatever the target names, so they only run
           // for a target in the inventory: another group (a bank or dialogue widget) can't alch past an open dialogue.
-          const onInventory = (packet.targetWidgetId >>> 16) === MAIN_INVENTORY_GROUP_ID;
-          if (this.player && onInventory) {
-            this.player.closeInterruptibleInterfaces();
-          }
-          if (this.player && !(onInventory && (LunarSpells.handleItemTarget(
+          if (this.player && !(inventoryTarget && (LunarSpells.handleItemTarget(
             this.player,
             packet.targetItemId,
             packet.targetSlot,

@@ -2330,10 +2330,12 @@ const SHAREABLE = {
 function sharePotion(request) {
   const { player, slot, kind, targets } = request;
   const item = player.getInventory().getItems()[slot];
-  const entry = item ? POTION_BY_ITEM_ID.get(item.getId()) : null;
+  // The replacement below owns one drinkable vial in this slot. Some dose chains also list notes.
+  const entry = item?.getAmount() === 1 && !item.getDefinition().isNoted()
+    ? POTION_BY_ITEM_ID.get(item.getId()) : null;
   if (!entry || !entry.potion.shareable || !SHAREABLE[kind]?.has(entry.potion.name)) {
     request.message = kind === "restore"
-      ? "This spell can only be cast on restore-type potions."
+      ? "You cannot use the spell on that object." // rsprox 4103, tick 762.
       : "This spell can only be cast on stat-boosting potions.";
     return;
   }

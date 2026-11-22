@@ -261,7 +261,7 @@ test("leaving a waiting room restores stats (Wiki) but keeps the player's own sk
   Areas({
     core,
     registerArea: (area) => registered.push(area),
-    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
+    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {}, onSpellDisabled: () => {},
     onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
   const waitingRoom = registered.find((area) => area.getName().includes('waiting room'));
@@ -299,7 +299,7 @@ test("leaving the game restores stats as the waiting room does, up to a skill's 
   Areas({
     core,
     registerArea: (area) => registered.push(area),
-    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
+    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {}, onSpellDisabled: () => {},
     onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
   const gameArea = registered.find((area) => area.getName() === 'Castle Wars');
@@ -353,7 +353,7 @@ test('both waiting rooms release seeded bots on leave and honour the transition 
   Areas({
     core,
     registerArea: (area) => registered.push(area),
-    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
+    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {}, onSpellDisabled: () => {},
     onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
 
@@ -761,7 +761,7 @@ test('a carrier who logs out drops the flag before the banner is stripped, as a 
   Areas({
     core,
     registerArea: (area) => registered.push(area),
-    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
+    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {}, onSpellDisabled: () => {},
     onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
   const { Player } = require('../dist/game/entity/impl/player/Player');
@@ -813,7 +813,7 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
     resetIdleTicks: () => {},
   };
   Areas({
-    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent: deathApi.onCustomEvent,
+    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onSpellDisabled() {}, onCustomEvent: deathApi.onCustomEvent,
     onShouldDropItemsOnDeath: (handler) => { deathPolicy = handler; },
     onPlayerBeforeDeath: (handler) => { beforeDeath = handler; },
     onPlayerDeath: (handler) => { respawn = handler; },
@@ -926,7 +926,7 @@ test('a mark whose death never reached the death hook does not keep a later deat
   const deathApi = PluginManager.createApi('Castle Wars stale death mark');
   const island = { ...game };
   Areas({
-    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent: deathApi.onCustomEvent,
+    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onSpellDisabled() {}, onCustomEvent: deathApi.onCustomEvent,
     onShouldDropItemsOnDeath: (handler) => { deathPolicy = handler; },
     onPlayerBeforeDeath: (handler) => { beforeDeath = handler; },
     onPlayerDeath() {},
@@ -953,7 +953,7 @@ test('the arena is multi-combat: several enemies may hit one player, the lobby a
   const registered = [];
   Areas({
     core, registerArea: (area) => registered.push(area), onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {},
-    onCanUnequip() {}, onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerBeforeDeath() {}, onPlayerDeath() {},
+    onCanUnequip() {}, onSpellDisabled() {}, onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerBeforeDeath() {}, onPlayerDeath() {},
   }, island);
   AreaManager.areas.push(...registered);
   t.after(() => {

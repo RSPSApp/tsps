@@ -11,6 +11,8 @@ Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
+const { HitDamage } = require("../dist/game/content/combat/hit/HitDamage");
+const { HitMask } = require("../dist/game/content/combat/hit/HitMask");
 const { Skill } = require("../dist/game/model/Skill");
 const { Spell } = require("../dist/game/content/combat/magic/Spell");
 const { LunarSpells } = require("../dist/game/content/combat/magic/LunarSpells");
@@ -25,12 +27,16 @@ const noDrinks = new Set();
 const core = PluginManager.getCoreApi();
 const { CacheDefinitions, Item, ItemIdentifiers: items, Location, MagicSpellbook, Misc } = core;
 let groupDir;
+let castleWars;
 before(async () => {
   groupDir = fs.mkdtempSync(path.join(os.tmpdir(), "lunar-potion-share-"));
   process.env[groups.FILE_ENV] = path.join(groupDir, "groups.json");
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   Grouping.register(PluginManager.createApi("GroupingTest"));
   Potions.register(PluginManager.createApi("PotionsTest"));
+  const castleApi = PluginManager.createApi("CastleWarsTest");
+  castleWars = require("../plugins/minigames/castlewars/Game.CastleWars")(castleApi);
+  require("../plugins/minigames/castlewars/Areas.CastleWars")(castleApi, castleWars);
   PluginManager.createApi("DuelTest").onCanDrink((event) => {
     if (noDrinks.has(event.player)) event.allow = false;
   });
@@ -171,26 +177,37 @@ function makeGroup(leader, members, ironman) {
   groups.reset();
 }
 
-function potionCast(player, name, potion) {
+function potionCast(player, name, potion, amount = 1) {
   const spell = CacheDefinitions.getSpellByName(name);
   const { runes } = CacheDefinitions.getSpellRequirements(name);
   const inventory = player.getInventory();
-  inventory.setItem(0, new Item(potion, 1));
-  runes.forEach(({ id, amount }, index) => inventory.setItem(index + 1, new Item(id, amount)));
+  inventory.setItem(0, new Item(potion, amount));
+  runes.forEach((rune, index) => inventory.setItem(index + 1, new Item(rune.id, rune.amount)));
   player.setSpellbook(MagicSpellbook.LUNAR);
   const skills = player.getSkillManager();
   for (const skill of [Skill.DEFENCE, Skill.MAGIC]) skills.setMaxLevel(skill, 99).setCurrentLevel(skill, 99, false);
 
   const connection = new ClientConnection(player.getSession().getChannel());
   connection.player = player;
+  const initialXp = skills.getExperience(Skill.MAGIC);
+  async function queue(slot = 0) {
+    await connection.dispatch([{
+      type: "widget_target", targetWidgetId: 149 << 16, targetSlot: slot, targetItemId: potion,
+      sourceWidgetId: spell.widgetId, sourceSlot: -1, sourceItemId: spell.itemId,
+    }]);
+  }
   return {
     runes,
+    queue,
+    turn: () => connection.processTurnPackets(),
     async cast() {
-      await connection.dispatch([{
-        type: "widget_target", targetWidgetId: 149 << 16, targetSlot: 0, targetItemId: potion,
-        sourceWidgetId: spell.widgetId, sourceSlot: -1, sourceItemId: spell.itemId,
-      }]);
+      await queue();
       connection.processTurnPackets();
+    },
+    assertUnspent() {
+      assert.deepEqual([inventory.getItems()[0].getId(), inventory.getItems()[0].getAmount()], [potion, amount]);
+      for (const rune of runes) assert.equal(inventory.getAmount(rune.id), rune.amount);
+      assert.equal(skills.getExperience(Skill.MAGIC), initialXp);
     },
   };
 }
@@ -234,4 +251,101 @@ test("an ordinary group does not bypass Accept Aid or spend any supplies", async
   await cast();
   assert.equal(caster.getInventory().getItems()[0].getId(), potion);
   for (const { id, amount } of runes) assert.equal(caster.getInventory().getAmount(id), amount);
+});
+
+for (const [name, noted, skill, start] of [
+  ["Stat Restore Pot Share", items.PRAYER_POTION_2__2, Skill.PRAYER, 10],
+  ["Boost Potion Share", items.SUPER_COMBAT_POTION_2__2, Skill.ATTACK, 60],
+]) {
+  for (const amount of [1, 5]) {
+    test(`${name} preserves a stack of ${amount} potion banknotes with a teammate in range`, async (t) => {
+      const player = scene(t);
+      const caster = player(`note ${name[0]}${amount}`);
+      const mate = player(`mate ${name[0]}${amount}`);
+      makeGroup(caster, [mate], true);
+      for (const account of [caster, mate]) account.getSkillManager().setMaxLevel(skill, 60).setCurrentLevel(skill, start, false);
+      const action = potionCast(caster, name, noted, amount);
+      assert.equal(new Item(noted, 1).getDefinition().isNoted(), true);
+      await action.cast();
+      action.assertUnspent();
+      for (const account of [caster, mate]) assert.equal(account.getSkillManager().getCurrentLevel(skill), start);
+    });
+  }
+}
+
+test("Stat Restore Pot Share gives the recorded refusal for an incompatible potion", async (t) => {
+  const player = scene(t);
+  const caster = player("wrong pot");
+  player("willing pot", 3200, 3200, true);
+  const messages = [];
+  t.mock.method(caster, "sendMessage", (message) => messages.push(message));
+  // rsprox 4103 ticks 761–762 targets this item ID.
+  const action = potionCast(caster, "Stat Restore Pot Share", items.EXTREME_ENERGY_POTION_4_);
+  await action.cast();
+  action.assertUnspent();
+  assert.deepEqual(messages, ["You cannot use the spell on that object."]);
+});
+
+test("Castle Wars refuses Boost Potion Share by either aid route during the match", async (t) => {
+  const player = scene(t);
+  const caster = player("match cast", 2400, 3100);
+  const mate = player("match mate", 2401, 3100);
+  makeGroup(caster, [mate], true);
+  const sides = [[caster, castleWars.TEAM.SARADOMIN], [mate, castleWars.TEAM.ZAMORAK]];
+  for (const [account, team] of sides) {
+    account.setArea(castleWars.gameArea);
+    castleWars.setTeamId(account, team);
+    account.getSkillManager().setMaxLevel(Skill.ATTACK, 60).setCurrentLevel(Skill.ATTACK, 60, false);
+  }
+  t.mock.method(castleWars, "isPlaying", (account) => account === caster || account === mate);
+  const messages = [];
+  t.mock.method(caster, "sendMessage", (message) => messages.push(message));
+  const action = potionCast(caster, "Boost Potion Share", items.ATTACK_POTION_1_);
+  for (const acceptsAid of [false, true]) {
+    mate.setAttribute("accept-aid", acceptsAid);
+    await action.cast();
+    action.assertUnspent();
+    for (const [account] of sides) assert.equal(account.getSkillManager().getCurrentLevel(Skill.ATTACK), 60);
+  }
+  assert.deepEqual(messages, Array(2).fill("You don't want to help your enemies"));
+});
+
+test("a full animation stall holds only the latest potion-share click until release", async (t) => {
+  const player = scene(t);
+  const caster = player("stall cast");
+  const mate = player("stall mate", 3200, 3200, true);
+  mate.getSkillManager().setMaxLevel(Skill.PRAYER, 60).setCurrentLevel(Skill.PRAYER, 10, false);
+  const potion = items.PRAYER_POTION_2_;
+  const action = potionCast(caster, "Stat Restore Pot Share", potion);
+  caster.getInventory().setItem(5, new Item(potion, 1));
+  let cycle = 100;
+  t.mock.method(World, "getProcessCycle", () => cycle);
+  caster.getCombat().setAnimationStall(2);
+  await action.queue();
+  await action.queue(5);
+  action.turn();
+  action.assertUnspent();
+  assert.equal(mate.getSkillManager().getCurrentLevel(Skill.PRAYER), 10);
+  cycle += 2;
+  action.turn();
+  assert.equal(caster.getInventory().getItems()[0].getId(), potion);
+  assert.equal(caster.getInventory().getItems()[5].getId(), items.PRAYER_POTION_1_);
+  assert.equal(mate.getSkillManager().getCurrentLevel(Skill.PRAYER), 32);
+});
+
+test("a potion-share click during the death task grants no effect and spends nothing", async (t) => {
+  const player = scene(t);
+  const caster = player("dying cast");
+  const mate = player("dying mate", 3200, 3200, true);
+  mate.getSkillManager().setMaxLevel(Skill.PRAYER, 60).setCurrentLevel(Skill.PRAYER, 10, false);
+  const action = potionCast(caster, "Stat Restore Pot Share", items.PRAYER_POTION_2_);
+  const queue = caster.getCombat().getHitQueue();
+  queue.addPendingDamage([new HitDamage(caster.getHitpoints(), HitMask.RED)]);
+  queue.process(World.getProcessCycle());
+  assert.equal(caster.getHitpoints(), 0);
+  assert.equal(caster.isDyingReturn(), true);
+  t.after(() => core.TaskManager.cancelTasks(caster.getIndex()));
+  await action.cast();
+  action.assertUnspent();
+  assert.equal(mate.getSkillManager().getCurrentLevel(Skill.PRAYER), 10);
 });

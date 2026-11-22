@@ -55,6 +55,51 @@ function isPrimed(ingredients, first, second) {
   return ingredients.includes(first) && ingredients.includes(second) && first !== second;
 }
 
+function primeFromInventory(core, player, altar, first, second) {
+  const ingredients = ingredientIds(core, altar);
+  const stored = new Set([first, second].filter(Boolean));
+  const inventory = player.getInventory();
+  const additions = ingredients
+    .filter((itemId) => !stored.has(itemId))
+    .map((itemId) => ({ itemId, slot: inventory.getItems().findIndex((item) => item?.getId?.() === itemId) }))
+    .filter(({ slot }) => slot >= 0);
+  if (!additions.length) return { first, second };
+
+  const key = attribute(altar);
+  const secondKey = secondAttribute(altar);
+  const consumed = [];
+  for (const { itemId, slot } of [...additions].sort((a, b) => b.slot - a.slot)) {
+    const before = inventory.getAmount(itemId);
+    if (inventory.getItems()[slot]?.getId?.() !== itemId) continue;
+    inventory.deleteAtSlot(slot, 1);
+    if (inventory.getAmount(itemId) !== before - 1) {
+      for (const id of consumed) inventory.adds(id, 1);
+      return { first, second };
+    }
+    consumed.push(itemId);
+  }
+
+  const next = [first, second];
+  for (const itemId of consumed) {
+    const emptySlot = next.findIndex((value) => !value);
+    if (emptySlot >= 0) next[emptySlot] = itemId;
+  }
+  try {
+    if (next[0] !== first) player.setAttribute(key, next[0]);
+    if (next[1] !== second) player.setAttribute(secondKey, next[1]);
+  } catch (error) {
+    player.setAttribute(key, first);
+    player.setAttribute(secondKey, second);
+    for (const id of consumed) inventory.adds(id, 1);
+    throw error;
+  }
+
+  for (const itemId of consumed) {
+    message(core, player, `You place the ${core.ItemDefinition.forId(itemId).getName().toLowerCase()} on the altar.`);
+  }
+  return { first: next[0], second: next[1] };
+}
+
 function inDungeon(location) {
   return location && location.getZ() === DUNGEON.z
     && location.getX() >= DUNGEON.minX && location.getX() <= DUNGEON.maxX
@@ -134,10 +179,6 @@ function activate(api, core, { player, objectId, location }) {
   const first = Number(player.getAttribute(key)) || 0;
   const second = Number(player.getAttribute(secondAttribute(altar))) || 0;
   const ingredients = ingredientIds(core, altar);
-  if (!isPrimed(ingredients, first, second)) {
-    message(core, player, "The altar needs two different ingredients before it can be activated.");
-    return true;
-  }
   if (busyPlayers.has(player)) return true;
   const existing = activeByAltar.get(player)?.get(altar.key);
   if (existing && !existing.isRegistered() && !core.World.getAddNPCQueue().includes(existing)) {
@@ -145,6 +186,14 @@ function activate(api, core, { player, objectId, location }) {
   }
   if (activeByAltar.get(player)?.has(altar.key)) {
     message(core, player, "The creature at this altar must be defeated before another can be created here.");
+    return true;
+  }
+
+  const primed = isPrimed(ingredients, first, second)
+    ? { first, second }
+    : primeFromInventory(core, player, altar, first, second);
+  if (!isPrimed(ingredients, primed.first, primed.second)) {
+    message(core, player, "The altar needs two different ingredients before it can be activated.");
     return true;
   }
 
@@ -177,8 +226,8 @@ function activate(api, core, { player, objectId, location }) {
       forgetNpc({ npc });
       api.removeNpc(npc);
     }
-    player.setAttribute(key, first);
-    player.setAttribute(secondAttribute(altar), second);
+    player.setAttribute(key, primed.first);
+    player.setAttribute(secondAttribute(altar), primed.second);
     if (error.message !== "Creature Creation spawn returned no NPC") throw error;
   } finally {
     busyPlayers.delete(player);

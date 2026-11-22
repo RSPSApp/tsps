@@ -2,11 +2,14 @@
 
 // Count Check (random event): talking reports his account check and hands out a lamp when the
 // player passes. Lines and order from the Wiki's Count Check transcript and recordings 4053,
-// 1148 (fail line, then "I must be leaving now." when talked to again). OSRS requires a Jagex
-// Account and a Bank PIN (waived for Ultimate Ironmen); every account here counts as a Jagex
-// account, and the Bank PIN / Ironman plugins answer their own state. See SOURCES.md.
+// 1148 (fail line, then "I must be leaving now." when talked to again). OSRS also requires a
+// Jagex Account, which this server does not model; claiming one would tell a player they had
+// upgraded when they had not, so the pass line names only what is really checked (the Bank PIN,
+// waived for Ultimate Ironmen) and the Bank PIN / Ironman plugins answer their own state.
+// See SOURCES.md.
 const Flow = require("./DialogueFlow.RandomEvents");
-const PASSED = "Ahahahaha! I, Count Check, have checked your account.<br>You have a Jagex Account, and you have set a Bank PIN,<br>so you pass my checks! Enjoy your prize.";
+const PASSED_PIN = "Ahahahaha! I, Count Check, have checked your account.<br>You have set a Bank PIN, so you pass my checks! Enjoy your prize.";
+const PASSED_NO_BANK = "Ahahahaha! I, Count Check, have checked your account.<br>You do not use banks, so you pass my checks! Enjoy your prize.";
 const FAILED = "Ahahahaha! I, Count Check, have checked your account.<br>You do not have a Bank PIN, so you fail my checks!<br>Talk to a banker to set a PIN before we meet again.";
 const EXPRESSION = 612; // 4053 tick 2014.
 const WAVE = 863, BOW = 858;
@@ -37,7 +40,7 @@ function definition(api) {
       api.emitCustomEvent("ironman:mode", account);
       const passed = pin || account.mode === "ultimate";
       if (passed ? !serve(active, [api.core.ItemIdentifiers.LAMP]) : !leave(active)) return;
-      const passLine = pin ? PASSED : PASSED.replace(", and you have set a Bank PIN", "");
+      const passLine = pin ? PASSED_PIN : PASSED_NO_BANK;
       Flow.chat(api, { player, npcId, lines: [{ text: passed ? passLine : FAILED, expression: EXPRESSION }] });
     },
   };

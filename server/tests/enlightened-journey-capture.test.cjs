@@ -527,3 +527,33 @@ test('before the quest the origami crafts do nothing; at zep_quest 70 the branch
   useOn(f, I.BALL_OF_WOOL, I.PAPYRUS);
   assert.equal(f.p.getInventory().getAmount(I.BALLOON_STRUCTURE), 0);
 });
+
+test('the sapling replacement: "already have one", too poor, or 30,000 coins for a new one (ticks 659, 980)', async (t) => {
+  for (const [items, reply, sapling] of [
+    [[[I.AUGUSTES_SAPLING]], "You already have one! Don't be greedy.", 1],
+    [[], "You don't have enough money for it. You should have been more careful.", 0],
+    [[[I.COINS, 30000]], 'Here you go. Now be very careful not to lose it again!', 1],
+  ]) {
+    const f = actor(t, { stage: 70, flags: 1 << 5, items });
+    talk(f);
+    await continueTo(f);
+    await choose(f, 'I have lost my willow sapling. Can I buy a replacement?');
+    await continueTo(f);
+    await choose(f, 'Yes.');
+    const lines = await continueTo(f);
+    assert.ok(lines.includes(reply), lines.join(' | '));
+    assert.equal(f.p.getInventory().getAmount(I.AUGUSTES_SAPLING), sapling, reply);
+    if (items[0]?.[0] === I.COINS) assert.equal(f.p.getInventory().getAmount(I.COINS), 0, '30,000 taken');
+  }
+});
+
+test('"What do I do again?" at zep_quest 80: the player asks, then Auguste (ticks 882, 1443)', async (t) => {
+  const f = actor(t, { stage: 80, flags: 0b111111 });
+  talk(f);
+  const opening = await continueTo(f);
+  assert.deepEqual(opening, ['You just need to build the basket and I can finish the balloon! How are you getting on with the willow?']);
+  await choose(f, 'What do I do again?');
+  const lines = await continueTo(f);
+  assert.equal(lines[0], 'What do I do again?');
+  assert.ok(lines[1].startsWith('Use the willow sapling I gave you'), lines.join(' | '));
+});

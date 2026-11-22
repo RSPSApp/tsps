@@ -425342,6 +425342,9 @@
                                       "text": "What do I do again?",
                                       "steps": [
                                         {
+                                          "player": "What do I do again?"
+                                        },
+                                        {
                                           "type": "line",
                                           "speaker": "Auguste",
                                           "text": "Use the willow sapling I gave you to grow a willow tree. Cut twelve branches from it using secateurs. Use the branches on the platform here.",
@@ -426293,7 +426296,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-d032ec7fe59dd93f"
+                      "branch": "jump-8a3ac1cc1f05661b"
                     }
                   ]
                 }
@@ -426396,7 +426399,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-d032ec7fe59dd93f"
+                      "branch": "jump-8a3ac1cc1f05661b"
                     }
                   ]
                 }
@@ -427624,6 +427627,9 @@
               "text": "What do I do again?",
               "steps": [
                 {
+                  "player": "What do I do again?"
+                },
+                {
                   "type": "line",
                   "speaker": "Auguste",
                   "text": "Use the willow sapling I gave you to grow a willow tree. Cut twelve branches from it using secateurs. Use the branches on the platform here.",
@@ -427701,7 +427707,10 @@
           ]
         }
       ],
-      "jump-d032ec7fe59dd93f": [
+      "jump-8a3ac1cc1f05661b": [
+        {
+          "player": "What do I do again?"
+        },
         {
           "type": "line",
           "speaker": "Auguste",
@@ -427806,6 +427815,9 @@
                             {
                               "text": "What do I do again?",
                               "steps": [
+                                {
+                                  "player": "What do I do again?"
+                                },
                                 {
                                   "type": "line",
                                   "speaker": "Auguste",

@@ -1,14 +1,14 @@
 ---
 quest: Enlightened Journey
 key: enlightened_journey
-status: untested
-tested:
-tester:
-model:
-commit:
-cache:
-start:
-travel:
+status: passed-with-issues
+tested: 2026-11-23
+tester: agent
+model: claude-opus-5-5
+commit: 4cb30fdc6
+cache: osrs-242
+start: fresh
+travel: manual
 ---
 
 # Enlightened Journey
@@ -95,6 +95,10 @@ the Grand Tree's waterfalls (zep_waterfall 5157) were wrong.
 - Over Entrana a bail, or a crash (the red rope at take-off, 1653; a cloud on the seventh move, 3025): the controls
   close on black, a tick later the player is on (2809,3355) with the tabs back, the fade in and the message box "You
   bail, but land safely on Entrana.", whose continue clears the overlay.
+- Log storage's Preferences offers the three choices less the one set (all three while none is; 1577-1612). The
+  quest's first flight asks it itself (the transcript's box and menu) only while none is set, and saves the answer;
+  with one set, "Okay." flies by it, asking "Use logs from inventory | Use logs from storage" a tick later only when
+  "ask" is set and both can pay (1638-1640, 1996-1997). The storage count is told even when the inventory paid (2001).
 - Take-off and landing toggle cutscene_status, gravestone_tli_hide and cutscene_force_sidepanel with the minimap.
 - Arrivals: "You arrive safely in Taverley." (2102), "at the Gnome Stronghold." (3149), "at the Crafting Guild."
   (3453), "at Castle Wars." (3640), "in Varrock." (3799).
@@ -130,6 +134,25 @@ again) in place of the Wiki's "previous".
 - The third completion line, "For all your hard work...", is sent with zep_piccard's head (4715) where the two before
   it use zep_multi_piccard (4728); ours uses the NPC talked to.
 
+## Findings
+
+- **fixed** The balloon diagram closed with the conversation that opened it (playthrough on 4cb30fdc6).
+- **fixed** After the last hand-in the talk fell into "Here's the silk."; the hand-in menu went back to the top
+  menu; the bomber replacement branch played nothing (dialogue fixes in RSPSApp/osrsreboxed-db#138).
+- **fixed** The bail message box left an empty chat open; the quest flight asked the log question every time.
+
 ## Runs
 
-None yet.
+### 2026-11-23 · agent · claude-opus-5-5
+
+- **Start:** fresh account; 20 QP from five unrelated quests, Firemaking 20, Farming 30, Crafting 36 set, ordinary
+  items supplied (papyrus, wool, potatoes, candle, dyes, silk, bowl, sacks, 12 willow branches, logs, tinderbox),
+  one `::tele` to Auguste.
+- **Route:** every stage by its real interactions: 5, 6, 10, 20, 40, 60, 70, 80 (sandbags one per use), 90 (the
+  basket), two bails over Entrana, the recorded 57-move flight to Taverley (100), the reward (200).
+- **Result:** 1 QP, 2,000 Crafting, 3,000 Farming, 1,500 Woodcutting and 4,000 Firemaking XP, the bomber cap and
+  jacket, once; repeat talk gave nothing; relog and the offline save kept stage 200 and 21 QP. Post-quest: Taverley's
+  four options, the balloon map, the trip to Entrana with the search; Entrana's first and second talk.
+- **Clips:** second experiment, basket, take-off and bail, Entrana trip: no black screen, camera back on the player.
+  The first experiment ran headless (the vision login closed the talk); its end screenshot was clean.
+- **Not checked:** the sapling's planting and growth, the replacement purchase, the Quest Helper overlay.

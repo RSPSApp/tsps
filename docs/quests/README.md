@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-198 quests · ✅ passed: 25 · ⚠️ passed with issues: 21 · 🔄 in progress: 12 · ❌ failed: 0 · 🔁 needs recheck: 47 · untested: 93
+198 quests · ✅ passed: 25 · ⚠️ passed with issues: 20 · 🔄 in progress: 13 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 91
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -30,7 +30,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Biohazard](biohazard/README.md) | 🔄 in progress |  | agent |  | 2 |
 | [Black Knights' Fortress](black-knights-fortress/README.md) | 🔁 needs recheck | 2026-11-01 | agent | claude-opus-5-5 | 9 |
 | [Bone Voyage](bone-voyage/README.md) | ✅ passed |  | agent |  |  |
-| [Cabin Fever](cabin-fever/README.md) | ⚠️ passed with issues | 2026-11-20 | agent | claude-opus-5-5 | 2 |
+| [Cabin Fever](cabin-fever/README.md) | ⚠️ passed with issues | 2026-11-20 | agent | claude-opus-5-5 | 3 |
 | [Children of the Sun](children-of-the-sun/README.md) | 🔁 needs recheck | 2026-10-30 | agent | grok-4.7 | 6 |
 | [Client of Kourend](client-of-kourend/README.md) | ✅ passed | 2026-10-23 | agent |  | 1 |
 | [Clock Tower](clock-tower/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
@@ -41,7 +41,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Creature of Fenkenstrain | untested |  |  |  |  |
 | [Current Affairs](current-affairs/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | Curse of the Empty Lord | untested |  |  |  |  |
-| [Daddy's Home](daddys-home/README.md) | ⚠️ passed with issues | 2026-11-22 | agent | claude-opus-5-5 | 1 |
+| [Daddy's Home](daddys-home/README.md) | 🔁 needs recheck | 2026-11-22 | agent | claude-opus-5-5 | 1 |
 | [Darkness of Hallowvale](darkness-of-hallowvale/README.md) | untested |  |  |  |  |
 | [Death on the Isle](death-on-the-isle/README.md) | 🔁 needs recheck | 2026-11-03 | agent | DeepSeek V4.1 Flash |  |
 | [Death Plateau](death-plateau/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
@@ -62,7 +62,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Elemental Workshop I](elemental-workshop-i/README.md) | ✅ passed | 2026-11-19 | agent | claude-opus-5-5 |  |
 | [Elemental Workshop II](elemental-workshop-ii/README.md) | 🔄 in progress | 2026-11-19 | agent | claude-opus-5-5 |  |
 | [Enakhra's Lament](enakhras-lament/README.md) | untested |  |  |  |  |
-| Enlightened Journey | untested |  |  |  |  |
+| [Enlightened Journey](enlightened-journey/README.md) | 🔁 needs recheck | 2026-11-23 | agent | claude-opus-5-5 |  |
 | Enter the Abyss | untested |  |  |  |  |
 | [Ernest the Chicken](ernest-the-chicken/README.md) | ⚠️ passed with issues | 2026-11-02 | agent | DeepSeek V4.1 Flash | 1 |
 | [Ethically Acquired Antiquities](ethically-acquired-antiquities/README.md) | untested |  |  |  |  |

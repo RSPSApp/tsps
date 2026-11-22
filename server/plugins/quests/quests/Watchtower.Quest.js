@@ -800,8 +800,8 @@ module.exports = function registerWatchtowerQuest(api) {
     }],
     ["F_ChuY", (player) => { give(player, ITEMS.MAP); return [ITEMS.MAP]; }], // "The guard gives you another map."
     ["-ZqDtE", () => [CRYSTAL_MAGENTA]], // the mad skavid (the crystal went with his line)
-    ["KXRXHc", (player) => { // the last shaman's crystal
-      give(player, CRYSTAL_CYAN);
+    ["KXRXHc", (player) => { // the last shaman's crystal (to the floor with a full pack, as Grew's)
+      giveReward(player, CRYSTAL_CYAN, 1);
       return [CRYSTAL_CYAN];
     }],
     ["LGWwUr", () => [ITEMS.SHAMAN_ROBE, CRYSTAL_CYAN]], // the robe, already holding the crystal
@@ -1232,7 +1232,7 @@ module.exports = function registerWatchtowerQuest(api) {
     }
     player.getClickDelay().reset();
     player.getInventory().adds(ITEMS.ROCK_CAKE, 1);
-    player.getSkillManager().addExperiences(Skill.THIEVING, 6.4);
+    player.getSkillManager().addExperiences(Skill.THIEVING, 6.4); // Wiki, Counter (Gu'Tanoth); Rock cake says 6.5
     player.sendMessage("You cautiously grab a cake from the stall.");
     if (object) {
       const empty = new core.GameObject(LOCS.CAKE_COUNTER_EMPTY, object.getLocation().clone(), object.getType(), object.getFace(), player.getPrivateArea());
@@ -1554,6 +1554,8 @@ module.exports = function registerWatchtowerQuest(api) {
     ObstacleRunner.run({ player }, [
       { anim: animation?.getId?.() ?? animation }, { wait: 4 },
       { run: () => {
+        // A pack filled during the swing: no crystal and no box (the rock can be mined again).
+        if (player.getInventory().isFull()) { player.getInventory().full(); return; }
         give(player, CRYSTAL_GREY);
         state.set(player, VARBITS.ROCK_MINED, 1);
         play(player, NPCS.WIZARD, "entering-the-enclave-mining-the-rock-of-dalgroth");
@@ -1599,7 +1601,8 @@ module.exports = function registerWatchtowerQuest(api) {
     const evaporates = both(ITEMS.VIAL_OF_WATER, ITEMS.GROUND_BAT_BONES);
     if (!step && !explodes && !evaporates) return;
     event.handled = true;
-    if (stage(player) < STAGES.RECIPE) {
+    // Wiki walkthrough: "Don't combine the powdered bones and unfinished guam potion or it will explode." at any stage.
+    if (step && stage(player) < STAGES.RECIPE) {
       player.sendMessage("Hmm, perhaps I shouldn't mix these together. It might have unpredictable results."); // Ours
       return;
     }

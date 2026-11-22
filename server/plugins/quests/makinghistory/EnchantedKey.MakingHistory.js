@@ -142,6 +142,29 @@ function dig({ player }) {
 }
 function resetComparison({ player }) { LAST_DISTANCE.delete(player); }
 
+/**
+ * ::quest all (`quest:complete-all-miniquests`): every treasure not yet dug is given (the command
+ * routes it to the bank), the miniquest completes, and the key goes, as it dissolves live.
+ */
+function completeForCommand(request) {
+  const { player } = request;
+  if (!player || !quest.isComplete(player) || complete(player)) return;
+  const order = route(player);
+  if (!order) return;
+  const inventory = player.getInventory();
+  for (const key of order.slice(found(player))) {
+    for (const item of rewardItems(sites.find(site => site.key === key))) inventory.forceAdd(player, item);
+  }
+  player.setAttribute(FOUND_ATTRIBUTE, sites.length);
+  const KEY = core.ItemIdentifiers.ENCHANTED_KEY;
+  for (const container of [inventory, ...player.getBanks()]) {
+    const held = container?.getAmount(KEY) ?? 0;
+    if (held > 0) container.deleted(KEY, held, false);
+  }
+  sync({ player });
+  request.completed.push("The Enchanted Key");
+}
+
 module.exports = function attach(pluginApi, makingHistory) {
   api = pluginApi;
   core = api.core;
@@ -152,6 +175,7 @@ module.exports = function attach(pluginApi, makingHistory) {
   api.onItemAction("Spade", { Dig: dig });
   api.onCustomEvent("enchanted-key:is-complete", queryComplete);
   api.onCustomEvent("enchanted-key:sync", sync);
+  api.onCustomEvent("quest:complete-all-miniquests", completeForCommand);
   api.onPlayerLogin(resetComparison);
   api.onPlayerLogout(resetComparison);
 };

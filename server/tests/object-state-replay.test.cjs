@@ -15,13 +15,17 @@ const { RegionManager } = require("../dist/game/collision/RegionManager");
 const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { ObjectManager } = require("../dist/game/entity/impl/object/ObjectManager");
 const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Location } = require("../dist/game/model/Location");
 const { World } = require("../dist/game/World");
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { Task } = require("../dist/game/task/Task");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { PluginContext } = require("../dist/plugins/PluginContext");
+const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
+const { encodeSound } = require("../dist/net/protocol/ClientProtocol");
 
 // Lumbridge's staircase (56230) is a solid map object; 3200,3226 is open ground nearby.
 const STAIRS = 56230;
@@ -210,7 +214,6 @@ test("two registrations of one shared object on a tile leave one", () => {
 
 
 test("generic chest Open, Search and Shut use shared object state", () => {
-  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
   const closedId = CacheDefinitions.getLocId("chestclosed");
   const openId = CacheDefinitions.getLocId("chestopen");
   const at = new Location(3200, 3226, 0);
@@ -236,6 +239,71 @@ test("generic chest Open, Search and Shut use shared object state", () => {
     assert.ok(MapObjects.get(closedId, at.clone(), null));
   } finally {
     for (const object of [...ObjectManager.objectsAt(at)]) ObjectManager.deregister(object, true);
+  }
+});
+
+test("mapped doors send the opening and closing synths for their closed loc family", async (t) => {
+  require("../plugins/objects/Doors.plugin").register(PluginManager.createApi("Doors"));
+  const cases = [
+    // rsprox 3050 ticks 381 and 383, rsprox 3053 ticks 481 and 483.
+    { closed: "darkm_middle_door_closed", open: "darkm_middle_door_open", x: 3605, y: 3358, dy: 1, sounds: [36, 35] },
+    { closed: "darkm_poor_door_closed", open: "darkm_poor_door_open", x: 3599, y: 3323, dy: -1, sounds: [36, 35] },
+    { closed: "hundred_lumbridge_door", open: 1544, x: 3207, y: 3217, dy: 1, sounds: [62, 60] },
+  ];
+  const listener = new ObjectActionPacketListener();
+  for (const { closed, open, x, y, dy, sounds } of cases) {
+    await t.test(closed, (t) => {
+      RegionManager.loadMapFiles(x, y);
+      const closedId = CacheDefinitions.getLocId(closed);
+      const openId = typeof open === "string" ? CacheDefinitions.getLocId(open) : open;
+      const channel = { kind: "test", binaryTransport: true, isOpen: () => true, send: () => true };
+      const session = new PlayerSession(channel);
+      const player = new Player(session);
+      session.setPlayer(player);
+      player.setIndex(1900);
+      player.setUsername("doorsound");
+      player.setRegistered(true);
+      player.needsPlacement = false;
+      player.setLocation(new Location(x, y, 0));
+      t.after(() => {
+        TaskManager.cancelTasks(player.getIndex());
+        player.setRegistered(false);
+      });
+
+      const frames = [];
+      const soundOpcode = encodeSound(0)[0];
+      const sendClientPacket = session.sendClientPacket.bind(session);
+      t.mock.method(session, "sendClientPacket", (frame) => {
+        if (frame[0] === soundOpcode) frames.push(frame);
+        return sendClientPacket(frame);
+      });
+      const click = (id, tileY) => {
+        listener.executeAction(player, id, x, tileY, 1);
+        for (let tick = 0; tick < 5; tick++) {
+          player.getMovementQueue().process();
+          TaskManager.processWalkTo(player.getIndex());
+          TaskManager.process();
+          player.resetUpdating();
+        }
+      };
+      const at = (id, tileY) => MapObjects.get(id, new Location(x, tileY, 0), null);
+      const original = at(closedId, y);
+      assert.ok(original?.isMapOriginal(), "use the cache's map door");
+      const face = original.getFace();
+
+      click(closedId, y);
+      assert.ok(at(openId, y + dy));
+      assert.equal(at(closedId, y), null);
+      click(closedId, y); // A stale Open click cannot play the sound again.
+
+      player.setLocation(new Location(x, y + dy, 0));
+      click(openId, y + dy);
+      assert.equal(at(closedId, y)?.getFace(), face);
+      assert.equal(at(openId, y + dy), null);
+      click(openId, y + dy);
+
+      assert.deepEqual(frames, sounds.map((id) => encodeSound(id)));
+    });
   }
 });
 

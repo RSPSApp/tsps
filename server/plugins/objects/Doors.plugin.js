@@ -115,8 +115,17 @@ let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPE
 let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID, DORGESH_CITY_DOOR_IDS;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
 let PASS_THROUGH_GATES, PASS_THROUGH_FAMILIES;
+let SINGLE_DOOR_CLICK_SOUNDS;
 
-function defineDoorData({ ObjectIdentifiers: O }) {
+function defineDoorData({ ObjectIdentifiers: O, Sound }) {
+  // rsprox 3050 ticks 381/383 and 3053 ticks 481/483: these map-door families use
+  // A_DOOR_OPEN/A_DOOR_CLOSE as private synths when operated.
+  const darkmeyerSounds = { open: new Sound(36, 1, 0, 0), close: new Sound(35, 1, 0, 0) };
+  SINGLE_DOOR_CLICK_SOUNDS = new Map([
+    [O.DOOR_612, darkmeyerSounds], // darkm_poor_door_closed
+    [O.DOOR_614, darkmeyerSounds], // darkm_middle_door_closed
+  ]);
+
   // Doors with no open variant in the cache: OSRS opens them by rotating the same loc
   // (open id === closed id). Their consecutive ids are unrelated doors with the same
   // model, so the same-model pairing below must not pair them. Tutorial Island:
@@ -1925,7 +1934,8 @@ function handleMappedDoor(player, object, objectId, location) {
     rememberOpenObjects(anchorKey, [previousObject], [nextObject], closedId);
   }
 
-  core.Sounds.sendSound(player, doorSound(closedId, !open));
+  const clickSounds = SINGLE_DOOR_CLICK_SOUNDS.get(closedId);
+  core.Sounds.sendSound(player, (open ? clickSounds?.close : clickSounds?.open) ?? doorSound(closedId, !open));
 
   return true;
 }

@@ -1167,6 +1167,7 @@ module.exports = function registerHandInTheSandQuest(api) {
       if (cutscenes.get(player) !== state) return;
       state.scene = Scenes.open(player, "sandpit", SANDPIT_BOUNDS, {}, { instance: SANDPIT, at: CUTSCENE_AT, exit: BELL_RETURN });
       Scenes.controls(player, true, true);
+      if (state.leaveOnOpen) return leaveSandpit(player);
       player.getPacketSender().sendJingle(CUTSCENE_JINGLE, 0);
       Scenes.later(state.scene, CUTSCENE.BERT_TICKS - CUTSCENE.ENTER_TICKS, () => {
         state.bert = Scenes.actor(state.scene, BERT_SANDPIT_NPC_ID, CUTSCENE_BERT, null, { direction: api.core.Direction.SOUTH.id });
@@ -1179,7 +1180,13 @@ module.exports = function registerHandInTheSandQuest(api) {
   /** From the second box's continue (t8625): the fade at 8633, back at the bell with Zavistic beside it at 8635. */
   function leaveSandpit(player) {
     const state = cutscenes.get(player);
-    if (!state) return;
+    if (!state || state.leaving) return;
+    if (!state.scene) {
+      // Still fading in: leave as soon as the copy of the sandpit is open.
+      state.leaveOnOpen = true;
+      return;
+    }
+    state.leaving = true;
     Scenes.later(player, CUTSCENE.FADE_OUT_AFTER_SECOND_BOX, () => Scenes.fade(player, true));
     Scenes.later(player, CUTSCENE.RETURN_AFTER_SECOND_BOX, () => {
       if (cutscenes.get(player) !== state) return;
@@ -1189,6 +1196,14 @@ module.exports = function registerHandInTheSandQuest(api) {
       Scenes.restoreTabs(player);
       Scenes.fade(player, false);
     });
+  }
+
+  /**
+   * Ours: a chat closed (Esc) during the sandpit cutscene would never reach the second box's continue, so the
+   * scene leaves as that continue does: the fade, back at the bell, the step to play again by ringing it.
+   */
+  function closeInSandpit({ player }) {
+    if (player && cutscenes.has(player)) leaveSandpit(player);
   }
 
   function sceneEnded(player, scene, logout) {
@@ -1455,6 +1470,7 @@ module.exports = function registerHandInTheSandQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemAction(handleItemAction);
   api.onPlayerLogin(handleLogin);
+  api.onCustomEvent("interface:close", closeInSandpit);
   api.onPlayerLogout(handleLogout);
   api.onCustomEvent("player:bootstrap-complete", syncAuxiliaries);
 };

@@ -9,6 +9,8 @@
 // - Build: the spot goes on the click tick, the camp's locs come two ticks on, the tea, varbit,
 //   supplies and run energy on the sixth; the last camp sets stage 12 on that tick.
 // - From stage 15 the real map; a logout in a copy comes back to it at login.
+// - Gathering (#6552): the crates' kits, the grubby sapling and the infused talismans' Locate pulls
+//   work through the MoonsOfPeril plugin and the quest from the camps on (rec 1693 ticks 1840-2113).
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -27,6 +29,8 @@ const SUPPLIES = 28968; // pmoon_camp_supplies (item)
 const RAW_BREAM = 29216; // bream_fish_raw: a Neypotzli resource that fizzles outside it
 const CAMPS_ATTRIBUTE = "perilous-moons:camps";
 const O = { TELEBOX: 51375, TELEBOX_3X3: 51377, DIAGONAL: 51376, CAMP_SPOT: 50858, RANGE_NOT_BUILT: 53007, RANGE: 51362, STOOL: 42092, CRATE: 51371, BARREL: 52425, BARRIER: 51364 };
+const ITEMS = { KNIFE: 946, ROPE: 954, BIG_NET: 305, BUTTERFLY_NET: 10010, PESTLE: 233, VIAL: 227, GRUB: 29078, INFUSED_WATER: 28966, INFUSED_EARTH: 28967 };
+const SAPLING = 51365;
 const TEA = "You drink some tea from the newly built camp and find yourself feeling energised!";
 let core;
 let next = 5196;
@@ -96,14 +100,14 @@ const source = (f) => xyz(copyOf(f) ? copyOf(f).toSource(f.player.getLocation())
 const objectAt = (area, id, [x, y, z]) => area.getObjects().find((o) => o.getId() === id && o.getLocation().equals(area.sourceTile(x, y, z))) ?? null;
 
 /** Stands the player on `stand` (source tiles) and clicks loc `id` at `at` (source tiles). */
-async function click(f, id, at, stand, settle = 6) {
+async function click(f, id, at, stand, settle = 6, clickType = 1) {
   const area = copyOf(f);
   const tile = (x, y, z) => (area ? area.sourceTile(x, y, z) : new core.Location(x, y, z));
   f.player.moveTo(tile(...stand));
   ticks(f, 2);
   const target = tile(...at);
   f.clickTick = f.tick;
-  await f.connection.dispatch([{ type: "object_option", id, x: target.getX(), y: target.getY(), clickType: 1 }]);
+  await f.connection.dispatch([{ type: "object_option", id, x: target.getX(), y: target.getY(), clickType }]);
   ticks(f, settle);
 }
 
@@ -296,4 +300,81 @@ test("the Earthbound copy has its moths and cockatrices but none of the map's wy
   const ids = [...core.World.getNpcs()].filter((n) => n && n.getPrivateArea?.() === area).map((n) => n.getId());
   assert.equal(ids.includes(13031), false, "rec 1693's Earthbound copy had no wyrmlings");
   assert.ok(ids.includes(13030) && ids.includes(12771), "moonlight cockatrices and moths");
+});
+
+/** A real-map player at `stage` standing at `start`, with the Fishing and Hunter levels the gathering needs. */
+function gatherer(t, stage, start) {
+  const f = actor(t, start);
+  ticks(f, 2);
+  quest().setStage(f.player, stage);
+  f.player.getSkillManager().setMaxLevels(core.Skill.HUNTER, 99, false);
+  f.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, 99, false);
+  return f;
+}
+const CRATE_AT = [1511, 9695, 0];
+const CRATE_STAND = [1511, 9693, 0];
+const amount = (f, id) => f.player.getInventory().getAmount(id);
+
+test("the Herblore crate gives a pestle and mortar and two vials of water, every time (rec 1693 tick 2050)", async (t) => {
+  const f = gatherer(t, 23, CRATE_STAND);
+  await click(f, O.CRATE, CRATE_AT, CRATE_STAND, 6, 4);
+  assert.equal(amount(f, ITEMS.PESTLE), 1);
+  assert.equal(amount(f, ITEMS.VIAL), 2);
+  await click(f, O.CRATE, CRATE_AT, CRATE_STAND, 6, 4);
+  assert.equal(amount(f, ITEMS.PESTLE), 1, "the tool only once");
+  assert.equal(amount(f, ITEMS.VIAL), 4, "two vials every time");
+});
+
+test("the Fishing and Hunting crates give what rec 1693 took (knife and big net; rope and butterfly net)", async (t) => {
+  const f = gatherer(t, 23, CRATE_STAND);
+  await click(f, O.CRATE, CRATE_AT, CRATE_STAND, 6, 2);
+  assert.deepEqual([amount(f, ITEMS.KNIFE), amount(f, ITEMS.BIG_NET)], [1, 1]);
+  await click(f, O.CRATE, CRATE_AT, CRATE_STAND, 6, 3);
+  assert.deepEqual([amount(f, ITEMS.ROPE), amount(f, ITEMS.BUTTERFLY_NET)], [1, 1]);
+  assert.equal(amount(f, ITEMS.KNIFE), 1, "the hunting kit has no knife");
+});
+
+test("plain Take-from asks which supplies, and answers with that kit", async (t) => {
+  const f = gatherer(t, 23, CRATE_STAND);
+  await click(f, O.CRATE, CRATE_AT, CRATE_STAND, 6, 1);
+  assert.equal(amount(f, ITEMS.PESTLE) + amount(f, ITEMS.KNIFE) + amount(f, ITEMS.ROPE), 0, "nothing until a kit is chosen");
+  assert.ok(f.player.getDialogueManager().getDialogue?.() ?? f.player.getInterfaceId?.() !== undefined, "a choice is open");
+});
+
+test("the grubby sapling keeps giving grubs while some are held, with Hunter xp (rec 1693 tick 2062)", async (t) => {
+  const f = gatherer(t, 23, [1517, 9689, 0]);
+  const xp = () => f.player.getSkillManager().getExperience(core.Skill.HUNTER);
+  const before = xp();
+  await click(f, SAPLING, [1517, 9690, 0], [1517, 9689, 0], 6);
+  const first = amount(f, ITEMS.GRUB);
+  assert.ok(first >= 1, "a grub");
+  assert.ok(xp() - before >= first * 0.05 * 99 - 1, "0.05 xp per Hunter level for each grub (stored in whole xp)");
+  await click(f, SAPLING, [1517, 9690, 0], [1517, 9689, 0], 6);
+  assert.ok(amount(f, ITEMS.GRUB) > first, "a second visit adds to the grubs already held");
+});
+
+test("before the camps the sapling only brings Jessamine's warning", async (t) => {
+  const f = gatherer(t, 9, [1517, 9689, 0]);
+  await click(f, SAPLING, [1517, 9690, 0], [1517, 9689, 0], 6);
+  assert.equal(amount(f, ITEMS.GRUB), 0);
+});
+
+test("Locate pulls toward the target along the talisman's axis, and starts Eyatlalli's scene next to it (rec 1693)", async (t) => {
+  const locate = (f, itemId) => {
+    f.messages.length = 0;
+    PM.emitItemAction({ player: f.player, item: new core.Item(itemId, 1), itemId, option: "Locate", slot: 0, clickType: 2, handled: false });
+    return f.messages.map((m) => m.text);
+  };
+  const f = gatherer(t, 17, [1443, 9628, 1]);
+  assert.deepEqual(locate(f, ITEMS.INFUSED_EARTH), ["The talisman pulls you north."]);
+  assert.deepEqual(locate(f, ITEMS.INFUSED_WATER), ["The talisman pulls you east."]);
+  f.player.moveTo(new core.Location(1494, 9698, 0));
+  assert.deepEqual(locate(f, ITEMS.INFUSED_EARTH), ["The talisman pulls you south."]);
+  assert.deepEqual(locate(f, ITEMS.INFUSED_WATER), ["The talisman pulls you west."]);
+  assert.equal(quest().getStage(f.player), 17, "away from the spot nothing starts");
+  f.player.moveTo(new core.Location(1484, 9692, 0));
+  assert.deepEqual(locate(f, ITEMS.INFUSED_WATER), ["The talisman pulls you east."], "1484,9692 was a pull in the capture");
+  f.player.moveTo(new core.Location(1484, 9694, 0));
+  locate(f, ITEMS.INFUSED_WATER);
+  assert.equal(quest().getStage(f.player), 18, "1484,9694 found Eyatlalli in the capture");
 });

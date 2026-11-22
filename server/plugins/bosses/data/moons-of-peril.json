@@ -94,8 +94,8 @@
     "cuppa": { "anim": 829, "sound": 2401, "message": "You drink the tea and find yourself feeling energised!" },
     "sapling": 51365,
     "$sapling": "pmoon_grub_sapling, Grubby sapling: Collect-from",
-    "grub": { "delay": 2, "sound": 7925, "extra": [0.1, 0.6], "extraMessage": "Your hunting knowledge allows you to find an extra grub.", "fullMessage": "Your inventory is too full to hold any more grubs." },
-    "$grub": "capture: one grub 2 ticks after arriving, sometimes two; extra chance by Hunter level: estimate",
+    "grub": { "delay": 2, "anim": 10792, "xpPerLevel": 0.05, "sound": 7925, "extra": [0.1, 0.6], "extraMessage": "Your hunting knowledge allows you to find an extra grub.", "fullMessage": "Your inventory is too full to hold any more grubs." },
+    "$grub": "capture 1693 tick 2062: the collecting animation, one grub 2 ticks after arriving (sometimes two, a sound each) and Hunter xp; wiki: 0.05 x Hunter level per grub; extra chance by Hunter level: estimate",
     "crush": { "anim": 11095, "sound": [2608, 25], "extra": [0.1, 0.6], "extraMessage": "Your herblore knowledge allows you to crush an extra grub." },
     "potion": {
       "anim": 363,

@@ -16,6 +16,12 @@ IDs and their placement in the interaction come from the rsprox captures.
 [rsprox capture database](https://rsprox.net/database).
 
 The shared door plugin chooses the click sound from the closed loc ID for both
-operations. The regression test checks the outgoing synth frames, both map
-swaps and stale clicks for each family. The upper-tier `darkm_rich_door` family
-and unattended auto-close audio need separate capture evidence.
+operations. The regression test checks that each map swap and the actor's synth
+reach their recipients on the same tick, and that stale clicks are silent.
+
+Recording 3052 shows an unattended middle-tier close. At (3619, 3381, 0), the
+Open click at tick 7073 produces the loc swap and synth at tick 7075. The reverse
+swap at tick 7574 has no door sound for the nearby recorder. The server still
+sends positioned sound 60 on that timed close. Audio for the upper-tier
+`darkm_rich_door` family and unattended lower-tier closes still needs captures.
+[rsprox capture database](https://rsprox.net/database).

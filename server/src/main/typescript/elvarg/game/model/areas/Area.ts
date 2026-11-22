@@ -87,6 +87,17 @@ export abstract class Area {
         return null;
     }
 
+    /**
+     * The player counterpart of canNpcStep, for a barrier the clipping map cannot hold because it
+     * depends on the player (a level gate). Asked of the area the player stands in, with the tile
+     * they step from and onto. Only false vetoes the resolved queued step: the walk keeps its
+     * checkpoint and the player stays put. null/true cannot bypass clipping. Does not govern
+     * teleports or direct placement.
+     */
+    canPlayerStep(player: Player, source: Location, destination: Location): boolean | null {
+        return null;
+    }
+
     /** Asked only of the target's area before a new freeze. Only false vetoes; neutral/true keep canonical checks. */
     canFreeze(target: Mobile, source: Mobile | null): boolean | null {
         return null;

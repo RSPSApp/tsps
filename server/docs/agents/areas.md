@@ -48,6 +48,11 @@ register(api) {
 - Entering another area directly (`area.enter(player)`, as instances do) leaves the previous
   one first, so `postLeave` always fires. Judge the exit by having left, not by the tile: an
   instance can claim a player before moving them.
+- `canNpcStep` / `canPlayerStep(actor, source, destination)` veto a queued walking step: a barrier
+  the clipping map cannot hold because it depends on who walks (a level gate). Only `false`
+  vetoes; the walk keeps its checkpoint and the actor stays put. Membership is checked once a
+  tick, so the area must cover the tiles the actor approaches from (a run covers two). See
+  `plugins/skills/farming/TierGates.Farming.js`.
 - Rules still read the actor's live state (tile, combat level); membership only decides who
   is asked, and can trail a teleport by a tick.
 

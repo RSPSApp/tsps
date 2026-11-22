@@ -655,6 +655,17 @@ export class MovementQueue {
                     this.stepBlockedByEntity = false;
                     break;
                 }
+            } else if (this.character.isPlayer()) {
+                // The same veto for a barrier that depends on the player (a level gate).
+                const area = this.character.getArea();
+                if (typeof area?.canPlayerStep === "function"
+                    && require("../../../plugins/PluginManager").PluginManager.callArea(
+                        area, "canPlayerStep", this.character.getAsPlayer(), current, next
+                    ) === false) {
+                    this.stepBlocked = true;
+                    this.stepBlockedByEntity = false;
+                    break;
+                }
             }
 
             const direction = Direction.fromDeltas(

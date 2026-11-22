@@ -2,7 +2,8 @@
 
 The loader entry is `Farming.plugin.js`; the parts are in `farming/`, one file each:
 `Patches` (every hook, patch actions), `Data` (crop and patch tables), `Model` (growth),
-`Services`, `Spells`, `Tithe`, `Guild` and `Hespori`, all `*.Farming.js`. They read
+`Services`, `Spells`, `Tithe`, `Guild`, `TierGates` and `Hespori`, all `*.Farming.js`
+(`TierGates` holds the Farming Guild's 65 and 85 Farming wing gates). They read
 `api.core` through `Core.Farming.js`, which the plugin fills before loading them.
 
 Implemented: player-owned patches, saved offline growth, raking, planting,

@@ -13,6 +13,7 @@ const Hespori = require("./Hespori.Farming");
 const Redwood = require("./Redwood.Farming");
 const Tools = require("./Tools.Farming");
 const Gardeners = require("./Gardeners.Farming");
+const TierGates = require("./TierGates.Farming");
 const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 const FARM_ATTRIBUTE = "farming:state";
@@ -1460,6 +1461,7 @@ function attach(api) {
     api.onCustomEvent("farming:harvest", Guild.harvestContract);
     api.onCustomEvent("farming:open-seed-vault", Guild.openSeedVault);
     api.onCustomEvent("door:toggle", Guild.guardGuildDoor);
+    api.registerArea(TierGates.area());
     api.onCustomEvent("woodcutting:deplete-tree", depleteTree);
     api.onCustomEvent("magic:water-containers", Services.waterContainers);
     api.onCustomEvent("farming:use-water", useWater);

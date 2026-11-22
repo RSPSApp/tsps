@@ -7,7 +7,8 @@ shuts behind them. It never stays open.
 From rsprox captures 232/3228 (ticks 561-568, 642-644 and 931-937), 232/3227
 (tick 4504) and 232/3231 (tick 288):
 
-- The gate opens on the tick the player stands at the doorway, from either side.
+- The gate opens the tick after the player reaches the doorway, from either side (on the click
+  tick if they are already standing there).
 - Opening adds `vm_fencing_invisible_wall` (24562) on both gate tiles, rotation 0, and
   swings the leaves west: 24561 at 3295,3429 and 24560 at 3294,3429, rotation 1.
 - The player walks across on the next tick, to 3295 going west or 3296 going east.

@@ -103,7 +103,7 @@ test("the map places the closed gate the tests rely on", () => {
 });
 
 for (const [label, from, leaf, to] of [
-  // Each opener starts a tile away, so the gate opens on the tick they arrive, as in the captures.
+  // Each opener starts a tile away, so the gate opens the tick after they reach the doorway, as in the captures.
   ["east to west, left leaf", [3298, 3428], "left", [3295, 3428]],
   ["west to east, left leaf", [3294, 3428], "left", [3296, 3428]],
   ["east to west, right leaf", [3298, 3429], "right", [3295, 3429]],

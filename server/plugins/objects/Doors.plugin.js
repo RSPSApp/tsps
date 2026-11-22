@@ -337,8 +337,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // the nameless cache locs 3491/3492; all four use model 3544.
     Object.freeze([O.LARGE_DOOR_21, O.LARGE_DOOR_22,
       NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_LEFT_OPEN, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_RIGHT_OPEN]),
-    // Sophanem's north entrance: closed leaves 44036/44038, nameless open leaves 44037/44039.
-    Object.freeze([O.GATE_232, O.GATE_233, 44037, 44039]),
     // Lassar residential shadow gate: 48278/48279 open into the paired
     // Close-action leaves 48282/48283 (48280/48281 are unused cache locs).
     Object.freeze([O.DOORS_21, O.DOORS_22, O.DOORS_25, O.DOORS_26]),
@@ -365,19 +363,16 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.GATE_92, O.GATE_93],
     [O.GATE_94, O.GATE_95],
     [O.GATE_8, O.GATE_9],
-    [O.GATE_232, O.GATE_233],
     [O.DOORS_21, O.DOORS_22],
     [O.DOORS_25, O.DOORS_26],
     [O.DOORS_29, O.DOORS_30],
     [O.DOORS_31, O.DOORS_32],
-    [44037, 44039],
     [O.LARGE_DOOR_24, O.LARGE_DOOR_25],
     [O.LARGE_DOOR_26, O.LARGE_DOOR_27],
     [O.LARGE_DOOR_29, O.LARGE_DOOR_28],
     [O.LARGE_DOOR_31, O.LARGE_DOOR_30],
     [O.LARGE_DOOR_98, O.LARGE_DOOR_99],
     [O.LARGE_DOOR_21, O.LARGE_DOOR_22],
-    [O.GATE_232, O.GATE_233],
     [O.LARGE_DOOR_16, O.LARGE_DOOR_18],
     [O.LARGE_DOOR_7, O.LARGE_DOOR_9],
     [O.LARGE_DOOR_8, O.LARGE_DOOR_10],
@@ -423,8 +418,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_98, O.LARGE_DOOR_16],
     [O.LARGE_DOOR_21, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_LEFT_OPEN],
     [O.LARGE_DOOR_22, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_RIGHT_OPEN],
-    [O.GATE_232, 44037],
-    [O.GATE_233, 44039],
     [O.DOORS_21, O.DOORS_25],
     [O.DOORS_22, O.DOORS_26],
     [O.DOORS_29, O.DOORS_31],
@@ -720,6 +713,41 @@ function defineDoorData({ ObjectIdentifiers: O }) {
         [NAMELESS_DOOR_LEAF_IDS.CAMELOT_GATE_RIGHT_OPEN, 2758, 3483, 0, 2],
       ],
       crossY: 3483,
+      walkOver: true,
+      operateBeforeMovement: true,
+      closeTicks: 2,
+      openSoundId: 69,
+    }),
+    // Sophanem's north gate (sophanem_gate_left/right 44036/44038), crossed inward in the user's rsprox capture
+    // (local 1002026 ticks 2150-2154; rev 242) and rsprox.net 331 (rev 230, ticks 1367-1372, 1680, 1744): Open puts
+    // inviswall 38848 on both gate tiles and the nameless sophanem_gate_left/right_inactive leaves on the tiles
+    // north, sound 69 (grate_open), the player steps across in the same tick and the gate is back two ticks later.
+    // It never stays open.
+    Object.freeze({
+      closed: [[O.GATE_232, 3283, 2809, 0, 1], [O.GATE_233, 3284, 2809, 0, 1]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3283, 2809, 0, 1],
+        [core.CacheDefinitions.getLocId("sophanem_gate_left_inactive"), 3283, 2810, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3284, 2809, 0, 1],
+        [core.CacheDefinitions.getLocId("sophanem_gate_right_inactive"), 3284, 2810, 0, 2],
+      ],
+      crossY: 2810,
+      walkOver: true,
+      operateBeforeMovement: true,
+      closeTicks: 2,
+      openSoundId: 69,
+    }),
+    // Sophanem's small east gate (sophanem_gate_small 44040 at 3322,2761, face 2), rsprox.net 331 (rev 230, ticks
+    // 13597-13603, 14086-14089, 16874), 2660 and 2666 (rev 229): Open puts inviswall on the gate and
+    // sophanem_gate_small_inactive (44041) on the tile east, rotation 3, sound 69 (grate_open); the player steps
+    // across on the tick after reaching the gate and it is back two ticks later.
+    Object.freeze({
+      closed: [[O.GATE_234, 3322, 2761, 0, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3322, 2761, 0, 2],
+        [core.CacheDefinitions.getLocId("sophanem_gate_small_inactive"), 3323, 2761, 0, 3],
+      ],
+      crossX: 3323,
       walkOver: true,
       operateBeforeMovement: true,
       closeTicks: 2,

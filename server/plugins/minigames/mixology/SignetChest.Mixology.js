@@ -123,9 +123,14 @@ function addOrder([aldarium, secondary, useful, combat]) {
   return [aldarium, combat, useful, secondary];
 }
 
-/** Ours: every stack must fit (a stack at its limit can't take more), else nothing is used. */
+/**
+ * Ours: on the loot tick the click's rule is checked again (four free slots: the pack may have filled since,
+ * from unequipping mid-open), and every stack must fit (a stack at its limit can't take more), else nothing
+ * is used.
+ */
 function fits(player, loot) {
   const inventory = player.getInventory();
+  if (inventory.getFreeSlots() < FREE_SLOTS) return false;
   return loot.every((item) => inventory.getAddableAmount(item) >= item.getAmount());
 }
 

@@ -235,3 +235,21 @@ test("a loot stack that can't fit refuses with the four-spaces box and keeps the
   assert.deepEqual(shownIds(), [chestId]);
   assert.equal(f.varbits.at(-1)?.[1], 0, "busy cleared");
 });
+
+test("a pack filled after the click (four free to one) refuses on the loot tick: signet kept, nothing lost (Ours)", async (t) => {
+  const f = actor(t);
+  f.inv.setItem(0, new core.Item(I.ALCHEMISTS_SIGNET, 1));
+  for (let slot = 1; slot < 24; slot++) f.inv.setItem(slot, new core.Item(I.TINDERBOX, 1));
+  assert.equal(f.inv.getFreeSlots(), 4);
+  await openChest(f);
+  tick(f); // 0: the signet line
+  for (let slot = 24; slot < 27; slot++) f.inv.setItem(slot, new core.Item(I.BRONZE_FULL_HELM, 1));
+  assert.equal(f.inv.getFreeSlots(), 1);
+  ticks(f, 5);
+  assert.equal(f.inv.getAmount(I.ALCHEMISTS_SIGNET), 1);
+  assert.equal(f.inv.getAmount(noted(I.ALDARIUM)), 0);
+  assert.equal(at(f, Chest().MESSAGE.LOOT), undefined);
+  assert.ok(boxed(f, Chest().MESSAGE.FULL));
+  assert.deepEqual(shownIds(), [chestId]);
+  assert.equal(f.varbits.at(-1)?.[1], 0, "busy cleared");
+});

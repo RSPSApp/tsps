@@ -2,6 +2,7 @@
 // leaves as inviswall 38848 with the open leaves one tile north, plays the sound, sends the message, steps
 // the player one tile across and restores the leaves two ticks later. Without Legends' Quest, neither opens.
 process.env.DISABLE_PLAYER_BOTS = "1";
+process.env.BROWSER_HOST = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");
@@ -87,6 +88,60 @@ async function click(f, id, x, y) {
 const where = (f) => [f.p.getLocation().getX(), f.p.getLocation().getY()];
 const ENTRANCE_IDS = new Set([38848, 1573, 1574, 2391, 2392, 2896, 2897, 2898, 2899]);
 const shown = (f) => f.log.filter((e) => e.kind === "show" && ENTRANCE_IDS.has(e.id)).map((e) => e.id);
+
+// Real world membership and session scene ownership are essential here: a private
+// test viewer or a direct logout hook would miss Player.onLogout's task cancellation.
+function networkActor(t, x, y) {
+  const channel = { kind: "websocket", remoteAddress: "127.0.0.1", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setUsername("lgnet" + next++);
+  p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
+  p.setAttribute("bot-skip-persistence", true);
+  p.setLocation(new core.Location(x, y, 0));
+  assert.equal(core.World.getPlayers().add(p), true);
+  p.setNeedsPlacement(false);
+  quest.setStage(p, 70);
+  p.getSession().setPlayer(p);
+  p.getSession().flush(0);
+  const c = new ClientConnection(channel);
+  c.player = p;
+  const f = { p, c, log: [], n: 0 };
+  const sender = p.getPacketSender();
+  const sendObject = sender.sendObject.bind(sender);
+  t.mock.method(sender, "sendObject", (o) => {
+    f.log.push({ kind: "show", id: o.getId() });
+    return sendObject(o);
+  });
+  t.after(() => {
+    if (p.isRegistered()) core.World.getPlayers().removes(p);
+    tick(f, 6);
+  });
+  return f;
+}
+
+for (const [label, y, closed, open] of [
+  ["gate", 3349, [2391, 2392], [1573, 1574]],
+  ["building doors", 3373, [2896, 2897], [2898, 2899]],
+]) {
+  test(`${label} restore for an in-scene observer after the opener logs out`, async (t) => {
+    const watcher = networkActor(t, 2728, y - 1);
+    const opener = networkActor(t, 2728, y);
+    assert.equal(watcher.p.getSession().isTileInScene(2728, y, 0), true);
+    assert.equal(core.MapObjects.get(closed[0], new core.Location(2728, y, 0), null)?.getId(), closed[0]);
+    await opener.c.dispatch([{ type: "object_option", id: closed[0], x: 2728, y, clickType: 1 }]);
+    for (let i = 0; i < 5 && !shown(watcher).includes(open[0]); i++) tick(opener, 1);
+    assert.deepEqual(shown(watcher), [38848, open[0], 38848, open[1]]);
+    core.World.getPlayers().removes(opener.p);
+    assert.equal(opener.p.isRegistered(), false);
+    tick(watcher, 6);
+    assert.deepEqual(shown(watcher), [38848, open[0], 38848, open[1], ...closed], "shared restoration survives normal logout and runs once");
+    assert.equal(core.TaskManager.hasActiveTask(opener.p), false, "no player task retained after logout");
+    assert.equal(core.MapObjects.get(closed[0], new core.Location(2728, y, 0), null)?.getId(), closed[0]);
+    watcher.p.getMovementQueue().addSteps(new core.Location(2728, y + 1, 0));
+    tick(watcher, 3);
+    assert.ok(watcher.p.getLocation().getY() <= y, "the restored entrance remains closed to ordinary walking");
+  });
+}
 
 test("the doors open for a Legends' Quest player and step them into the guild", async (t) => {
   const f = actor(t, [2728, 3373], true);

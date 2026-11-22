@@ -2008,10 +2008,9 @@ module.exports = function registerLegendsQuest(api) {
       const guards = api.core.World.getNpcsNear(at, 6).filter((npc) => GUARD_IDS.has(npc.getId()));
       guards[Math.floor(Math.random() * guards.length)]?.forceChat(entrance.shout);
     }
-    TaskManager.submit(new CountdownTask(player, 2, () => {
-      swingGuildEntrance(entrance, false);
-      crossingGuild.delete(player);
-    }));
+    // The swing is shared by nearby viewers and must finish even if its opener logs out.
+    TaskManager.submit(new CountdownTask(entrance, 2, () => swingGuildEntrance(entrance, false)));
+    TaskManager.submit(new CountdownTask(player, 2, () => crossingGuild.delete(player)));
   }
 
   function searchShamanRoom(player, objectId) {
@@ -2106,7 +2105,10 @@ module.exports = function registerLegendsQuest(api) {
   }
 
   function handleLogout({ player }) {
-    if (player) clearSpawns(player);
+    if (player) {
+      crossingGuild.delete(player);
+      clearSpawns(player);
+    }
   }
 
   // ==========================================================================

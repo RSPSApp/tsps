@@ -164,7 +164,8 @@ test('a full inventory gets the free-space line and no potato (rsprox 233/00465 
     freeSlots = 1;
 });
 
-test('dying or being moved off during the four ticks asks nothing; moving off before Yes takes nothing', () => {
+test('dying or being moved off during the four ticks asks nothing; moving off before Yes takes nothing', (t) => {
+    t.after(() => { at = { x: 3011, y: 3204, z: 0 }; dying = false; });
     search('Crate', 0.99, LOCS.potato_crate);
     dying = true;
     tasks[0].execute();

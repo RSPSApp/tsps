@@ -591,6 +591,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `AntiDragDelay` | AntiDragDelay | interface | yes | Settings option for the Anti Drag delay, asked as a number of milliseconds. |
 | `BankPin` | BankPin | interface | yes | The Bank PIN: the Banker settings, the keypad, the bank lock, and the guard on other PIN-protected actions. |
 | `BankSpace` | BankSpace | interface | yes | Bank capacity: 900 slots for members, bonuses from a PIN, and extra slots bought from a Banker with coins. |
+| `BankTutorial` | BankTutorial | interface | yes | The bank's tutorial button: the 16-step screen highlight walkthrough of the bank. |
 | `BossHud` | BossHud | interface | yes | The boss health bar overlay, driven by custom events from boss plugins for health, colours, fade and hide, and the normal health overlay for any other NPC a player attacks. |
 | `BossKillCount` | BossKillCount | interface | yes | Sends boss kill-count lines as filterable spam when the player's All Settings row asks for it. |
 | `BuffBarStart` | Buff Bar Start | interface | yes | Starts the buff bar's freeze, Staff of the dead, poison and Abyssal Sire stun timers. |
@@ -959,7 +960,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Doors` | Doors | objects | yes | Opens and closes doors, gates and double doors, swapping between closed and open locs, with route handling and reapplied state on region load. |
 | `FarmingShed` | FarmingShed | objects | yes | Borrow a rake and spade from the Lumbridge Swamp shed. |
 | `KeyChests` | KeyChests | objects | yes | Key-opened chests: Taverley crystal chest, Mount Karuulm brimstone chest, Larran's Wilderness chests, Prifddinas' Elven chest, Forthos' Grubby Chest, the Zombie Pirate's Locker and the Ruins of Tapoyauik moon key chest, plus crystal and moon key crafting. (members only) |
-| `Ladders` | Ladders | objects | yes | Climbing for ladders, staircases, trapdoors, ropes and similar scenery, moving the player a level up or down with the climb animation. |
+| `Ladders` | Ladders | objects | yes | Climbing for ladders, staircases, trapdoors, ropes and similar scenery, moving the player a level up or down: ladders with the climb animation, staircases walked with none. |
 | `LeafyPalmTree` | LeafyPalmTree | objects | yes | Lets players shake Kharazi Jungle's Leafy Palm Trees for a palm leaf on the ground, with a 35-second cooldown per tree. (members only) |
 | `Levers` | Levers | objects | yes | The Wilderness teleport levers (Edgeville, East Ardougne, the Deserted Keep and Mage Arena bank), with the Wilderness warning and a shared lever teleport event that can also pull another plugin's lever. |
 | `MessageScrolls` | MessageScrolls | objects | yes | Reading the Falador bank notice boards (from a few tiles away) and Varrock's Combat Scroll, which open the plain message scroll with their recorded lines. |

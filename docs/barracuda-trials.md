@@ -112,11 +112,12 @@ varbits and interface packets. In short:
 - Key chests: a reopen's box (the first piece given, in an objectbox), and the full-inventory line
   "You don't have enough inventory space." (the Wiki says only that the key isn't used up then).
   "Room" means the whole loot fits: a carried stack that can't take its full amount counts as no
-  room, and if the bag filled up between the click and the loot the key is handed back.
+  room; the check runs again on the loot tick, and if the bag filled up nothing happens.
   The anim and sounds of a reopen are the first open's. Timing: the unlock plays on the
   interaction's tick and the loot a tick later, as the other key chests do; 3461 has them 2 and 3
-  ticks after the last step. The ownership check counts worn, carried
-  and banked pieces.
+  ticks after the last step. The key is taken with the loot, a tick after 3461 takes it, so a save
+  or logout in between never holds one without the other. The ownership check counts worn,
+  carried and banked pieces; a bank placeholder isn't owned.
 
 - Level, Regicide and skiff refusals, and the boat-part requirements: Tempor needs storm resistance
   (sails) and an oak helm's rapid resistance, Jubbly a mahogany helm's, Gwenith the keel's

@@ -2435,6 +2435,9 @@ export class OsrsClient {
             setDeviceOption: (optionId: number, value: number) => {
                 const storedValue = value;
                 self.deviceOptions.set(optionId, storedValue);
+                // The mobile client saves its interface scale separately from the desktop one.
+                const mobileClient = isMobileClient(self.widgetManager?.rootInterface) ||
+                    self.varManager?.getVarbit(6352) === 1;
                 // Handle specific device options
                 switch (optionId) {
                     case 19: // Master volume (enhanced client, 0-100 from enum_981)
@@ -2445,7 +2448,7 @@ export class OsrsClient {
                         self.audioVarp.applyMasterVolume();
                         break;
                     case DEVICE_OPTION_INTERFACE_SCALING:
-                        self.audioVarp.applyInterfaceScalingPercentDeviceOption(storedValue);
+                        self.audioVarp.applyInterfaceScalingPercentDeviceOption(storedValue, mobileClient);
                         break;
                     case DEVICE_OPTION_SCREEN_BRIGHTNESS:
                         self.applyScreenBrightness(storedValue);
@@ -8743,6 +8746,17 @@ export class OsrsClient {
     }
 
     getWorldMapIcons(mapX: number, mapY: number, level: number = 0): MinimapIcon[] | undefined {
+        // Edited regions draw their minimap picture on the world map; use its icons too.
+        if (
+            this.worldMap.worldMapState.getCurrentMapAreaId() === 0 &&
+            (this.renderer as any)?.mapRegionReplacements?.has(((mapX & 0xff) << 8) | (mapY & 0xff))
+        ) {
+            const icons = (this.renderer as any)?.getMinimapIcons?.(mapX, mapY, level) as MinimapIcon[] | undefined;
+            if (icons) return icons;
+            // Its minimap picture is loaded, so no icons means the edit has none (the renderer
+            // drops empty icon sets); don't bring back the archive's stale ones.
+            if (this.minimapImageUrls.has(this.getMinimapImageKey(mapX, mapY, level))) return undefined;
+        }
         return this.worldMap.getWorldMapIcons(mapX, mapY, level);
     }
 

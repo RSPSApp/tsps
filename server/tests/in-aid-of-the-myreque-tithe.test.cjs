@@ -80,14 +80,22 @@ function actor(t, stage, x, y, extra = {}) {
   return { player, varbits, sounds, chatboxes, items, messages, anims, spawn };
 }
 
-function tick(count = 1) {
+/**
+ * World ticks. With `npcs`, the players' own NPCs also run their real process() (combat included)
+ * before the update resets placement, as World does: that is where an attack on a just-moved
+ * mobile is dropped.
+ */
+function tick(count = 1, { npcs = false } = {}) {
   for (let i = 0; i < count; i++) {
     for (const player of players) {
       player.getMovementQueue().process();
       core.TaskManager.processWalkTo(player.getIndex());
     }
     core.TaskManager.process();
+    const own = npcs ? Array.from(core.World.getNpcs()).filter((npc) => npc?.isRegistered?.() && players.includes(npc.getOwner?.())) : [];
+    for (const npc of own) npc.process();
     for (const player of players) player.resetUpdating();
+    for (const npc of own) npc.resetUpdating();
   }
 }
 
@@ -274,6 +282,42 @@ test("Gadderanks is wounded, not killed; Veliaf comes five ticks on; any juvinat
   assert.equal(head(player), 989);
   tick(10);
   assert.equal(byId(player, 4435), undefined, "the mists fade");
+});
+
+/** The index of whom an NPC fights (an index: assert's diff of two mobiles never finishes). */
+const targetOf = (npc) => npc.getCombat().getTarget()?.getIndex?.() ?? null;
+
+test("Veliaf fights once he is in: the juvinates, then Gadderanks (Wiki; t2425-t2437, #6482)", (t) => {
+  const { player } = intoFight(t);
+  const gadderanks = byId(player, 4484);
+  byId(player, 4486).setHitpoints(0); // the first foe down brings Veliaf
+  tick(1, { npcs: true });
+  tick(5, { npcs: true });
+  const veliaf = byId(player, 989);
+  assert.ok(veliaf, "Veliaf at the door (t2420)");
+  tick(4, { npcs: true });
+  assert.equal(targetOf(veliaf), null, "walking in (t2421-t2424)");
+  tick(1, { npcs: true });
+  // Before: he was told to attack in the tick of his last step in (a moveTo), and the combat tick
+  // dropped it (CombatFactory.validTarget refuses a mobile still being placed): he only shouted.
+  assert.equal(targetOf(veliaf), byId(player, 4487).getIndex(), "the other vampyre");
+  byId(player, 4487).setHitpoints(0);
+  tick(2, { npcs: true });
+  assert.equal(targetOf(veliaf), gadderanks.getIndex(), "and then finally Gadderanks himself");
+});
+
+test("a foe falling while Veliaf walks in leaves him walking; he fights from t2425 (#6482)", (t) => {
+  const { player } = intoFight(t);
+  const gadderanks = byId(player, 4484);
+  byId(player, 4486).setHitpoints(0);
+  tick(6, { npcs: true });
+  const veliaf = byId(player, 989);
+  assert.ok(veliaf, "Veliaf at the door (t2420)");
+  byId(player, 4487).setHitpoints(0); // the second falls mid-entrance
+  tick(2, { npcs: true });
+  assert.equal(targetOf(veliaf), null, "still walking in (t2421-t2424)");
+  tick(3, { npcs: true });
+  assert.equal(targetOf(veliaf), gadderanks.getIndex(), "then Gadderanks, the last one standing");
 });
 
 test("the wounded talk starts from the player's line; passing away: 280, 1981=2, out, the hammer before Aurel's line", (t) => {

@@ -63,6 +63,34 @@ test("a window already taller than the hidden-chat space is never shrunk", () =>
     assert.deepEqual([node.y, node.height], [0, 440]);
 });
 
+test("a previously stretched window follows the mobile scale in both directions", () => {
+    const node = settingsWindow();
+    adjustMobileHudWidget(node, 512, 334, manager(true));
+    assert.deepEqual([node.y, node.height], [6, 429]);
+    // The Settings script rewrites the raw height for the 1150-high layout.
+    Object.assign(node, { rawY: -397, rawHeight: 1129, y: -795, height: 1129 });
+    adjustMobileHudWidget(node, 512, 334, manager(true, 1150));
+    assert.deepEqual([node.y, node.height], [6, 1129]);
+    // Going back to the short layout shrinks the stretched window again.
+    Object.assign(node, { rawY: -397, rawHeight: 1129, y: -795, height: 1129 });
+    adjustMobileHudWidget(node, 512, 334, manager(true));
+    assert.deepEqual([node.y, node.height], [6, 429]);
+});
+
+test("a canvas-sized window is re-centred when the mobile scale changes under it", () => {
+    // After Interface scaling 400% -> 175%, the Settings script has already set the
+    // window to the new canvas height (1150 - 21) but still centres it in the 512x334
+    // main modal, leaving y=-795 and an empty screen. The stretch must correct the
+    // raw position even when the height already matches the hidden-chat space.
+    const node: Node = {
+        uid: uid(134, 1), x: 0, y: -795, width: 512, height: 1129,
+        rawY: -397, rawHeight: 1129, heightMode: 0, yPositionMode: 1,
+    };
+    adjustMobileHudWidget(node, 512, 334, manager(true, 1150));
+    assert.deepEqual([node.y, node.height], [6, 1129]);
+    assert.equal(node.rawY, 404, "the centring offset follows the shorter parent");
+});
+
 test("other windows are untouched when the chat is hidden", () => {
     const node: Node = { uid: uid(601, 27), x: 15, y: 100, width: 512, height: 334 };
     adjustMobileHudWidget(node, 905, CANVAS_HEIGHT, manager(true));

@@ -589,10 +589,22 @@ function madePotion({ player, itemId } = {}) {
     .add(new core.StatementDialogue(0, LEARNED)).add(new core.EndDialogue(1)));
 }
 
+/** ::quest all (`quest:complete-all-miniquests`): every section told to Otto. No item rewards. */
+function completeForCommand(request) {
+  const { player } = request;
+  if (!player) return;
+  const current = state(player);
+  const open = Object.keys(VARBITS).filter((section) => current[section] !== TOLD);
+  if (!open.length) return;
+  for (const section of open) setStage(player, section, TOLD);
+  request.completed.push("Barbarian Training");
+}
+
 function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
   api.persistAttribute(STATE_ATTRIBUTE, {});
+  api.onCustomEvent("quest:complete-all-miniquests", completeForCommand);
   api.onPlayerLogin(loggedIn);
   api.onBeforeNpcInteraction(talkToOtto);
   api.onCustomEvent("firemaking:success", madeBowFire);

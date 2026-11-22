@@ -66,3 +66,29 @@ Not in the captures, so these follow the Wiki transcript or are guesses:
   holds only the other two options.
 - The capture also raises `tracking_coins_lost` (varp 4513) by the price. This server doesn't
   track that, so it isn't sent.
+
+## Bank tutorial (rsprox captures)
+
+The "?" by the bank's title (`bankmain:bank_tut`; hidden by the bank setting `bank_hidebanktut`)
+runs a 16-step screen highlight walkthrough, `plugins/interface/BankTutorial.plugin.js` on top of
+`ScreenHighlight`. As rsprox.net recording 3937 (rev 236, ticks 1653-2665) shows it, and 3923
+(rev 236) for the first step and a Close:
+
+- The click switches to swap mode (`bank_insertmode` 0) and `hnt_hint_max_step` 16, closes the bank
+  (`meslayer_close` 11, `highlight_noclick_clear` on `bankside:bankside_highlight`) and opens it
+  again, then makes the inventory side unclickable (`highlight_noclick`, same component).
+- The walkthrough mounts in `bankmain:bank_highlight` (12:108 in rev 242, 12:101 in rev 236):
+  no `hnt_selected_hint`, text colour -1 and `highlight_textbox`'s fourth argument true. The
+  boxes and texts are in `plugins/interface/data/bank-tutorial.json`.
+- Finish (the last step's Continue) leaves `hnt_hint_step` on 15, closes the walkthrough and opens
+  the bank again, with the player's own mode back (`bank_insertmode` 0 -> 1 for an insert player). Clicking the button again
+  starts from step 0.
+- Close (the walkthrough's X, `highlight_close_op` resuming `screenhighlight:pausebutton`) before
+  the last step does the same as Finish (recording 3923, tick 42: Close on the first step,
+  `hnt_hint_step` left as it was, `bank_insertmode` back, the bank opened again). `ScreenHighlight`
+  ends a walkthrough on that resume only when it was shown with `closable: true` and emits
+  `screen-highlight:cancelled`; the league ones keep ignoring it before Finish.
+
+Ours: closing the bank, logging out or a server shutdown mid-walkthrough puts the player's own mode
+back too, so none of those saves swap; no recording shows any. An autosave mid-walkthrough followed
+by a crash still could (a window one walkthrough long).

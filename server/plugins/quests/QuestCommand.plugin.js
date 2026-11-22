@@ -2,7 +2,8 @@
  * ::quest - an admin command to look at or set a player's quest progress, for testing
  * quest-gated content without playing the quest.
  *
- *   ::quest all [complete]     complete every registered quest without opening every completion scroll
+ *   ::quest all [complete]     complete every registered quest without opening every completion scroll;
+ *                              item rewards go to the bank (unbankable ones to the inventory), XP lamps and tomes are skipped
  *   ::quest <name>             show the quest's stage
  *   ::quest <name> complete    complete it as the quest itself does (rewards, points, scroll)
  *   ::quest <name> reset       back to not started
@@ -48,27 +49,111 @@ function describe(player, quest) {
   return `${quest.name}: stage ${quest.getStage(player)} (${state}; completes at ${quest.completionValue ?? 2}).`;
 }
 
-function completeAllQuests(player) {
+/**
+ * Reward items that only grant experience: ::quest all skips them; the quests' own XP still applies.
+ * Lamps are the rubbed (or prayed-over) ones: Antique, Combat, Dreamy, Blessed, Magic lamp (skill)..., not light sources.
+ */
+function isExperienceItem(api, item) {
+  const cached = api.core.CacheDefinitions?.getItem?.(item.getId());
+  const name = cached?.name ?? item.getDefinition?.()?.getName?.() ?? "";
+  if (/^(tome of experience|book of knowledge)$/i.test(name)) return true;
+  const ops = cached?.inventoryActions ?? [];
+  return /\blamp\b/i.test(name) && ops.some((op) => /^(rub|pray-over)$/i.test(op ?? ""));
+}
+
+/**
+ * Rewards ::quest all also hands out in an upgraded form, so they are not given: Kharedst's memoirs
+ * and its four pages are all in the Book of the Dead.
+ */
+const SUPERSEDED_REWARDS = new Set([21760, 21762, 21764, 21766, 21770]);
+
+/**
+ * While ::quest all runs, rewards that would flood the inventory go elsewhere: experience items are
+ * not given, bankable items go to the bank, anything else (or what the bank refuses) to the
+ * inventory as the quest gave it. Returns the restore function and the tallies.
+ */
+function routeRewards(api, player) {
+  const inventory = player.getInventory();
+  const { add, forceAdd } = inventory;
+  const tally = { banked: 0, skipped: 0 };
+  const bankAmount = (id) => player.getBanks().reduce((sum, bank, tab) =>
+    bank && tab !== api.core.Bank.BANK_SEARCH_TAB_INDEX ? sum + bank.getAmount(id) : sum, 0);
+  /** What still has to go to the inventory: null when skipped or banked whole. */
+  const route = (item) => {
+    if (!item || item.getId() < 0) return item;
+    if (isExperienceItem(api, item)) {
+      tally.skipped += item.getAmount();
+      return null;
+    }
+    if (SUPERSEDED_REWARDS.has(item.getId())) return null;
+    if (api.emitCanBankItem(player, item, { quiet: true }) === false) return item;
+    // Match normal deposits: bank stacks use the unnoted identity, while any
+    // inventory remainder must keep the form in which the quest awarded it.
+    const bankItem = item.clone().setId(item.getDefinition().unNote());
+    const before = bankAmount(bankItem.getId());
+    player.getBank(api.core.Bank.getTabForItem(player, bankItem.getId())).add(bankItem, false);
+    const moved = Math.max(0, bankAmount(bankItem.getId()) - before);
+    tally.banked += moved;
+    const left = item.getAmount() - moved;
+    return left > 0 ? item.clone().setAmount(left) : null;
+  };
+  inventory.add = function routedAdd(item, refresh = true) {
+    const rest = route(item);
+    return rest ? add.call(this, rest, refresh) : this;
+  };
+  inventory.forceAdd = function routedForceAdd(owner, item) {
+    const rest = route(item);
+    if (rest) forceAdd.call(this, owner, rest);
+  };
+  const restore = () => {
+    inventory.add = add;
+    inventory.forceAdd = forceAdd;
+  };
+  return { restore, tally };
+}
+
+function completeAllQuests(api, player) {
   let completed = 0;
   let alreadyComplete = 0;
   const errors = [];
+  const routing = routeRewards(api, player);
 
-  for (const quest of QuestRuntime.getRegisteredQuests()) {
-    try {
-      if (quest.complete(player, { scroll: false, announce: false })) completed++;
-      else alreadyComplete++;
-    } catch (error) {
-      errors.push(quest.name);
-      console.error(`[quest command] completing ${quest.name} (${quest.key}) failed:`, error);
+  try {
+    for (const quest of QuestRuntime.getRegisteredQuests()) {
+      try {
+        // prompts: false: no reward choice pop-ups (The Fremennik Isles' combat XP).
+        if (quest.complete(player, { scroll: false, announce: false, prompts: false })) completed++;
+        else alreadyComplete++;
+      } catch (error) {
+        errors.push(quest.name);
+        console.error(`[quest command] completing ${quest.name} (${quest.key}) failed:`, error);
+      }
     }
+    // `quest:complete-all-miniquests` { player, completed }: miniquests outside the quest registry
+    // finish themselves (rewards still routed) and push their names. After the quests, so a
+    // miniquest needing its parent quest (The Enchanted Key: Making History) sees it complete.
+    const miniquests = { player, completed: [] };
+    try {
+      api.emitCustomEvent("quest:complete-all-miniquests", miniquests);
+    } catch (error) {
+      errors.push("miniquests");
+      console.error("[quest command] completing the miniquests failed:", error);
+    }
+    completed += miniquests.completed.length;
+  } finally {
+    routing.restore();
   }
+  player.getInventory().refreshItems();
 
   player.sendMessage(`Quest completion: ${completed} completed, ${alreadyComplete} already complete, ${errors.length} errors.`);
+  player.sendMessage(`Rewards: ${routing.tally.banked} items sent to your bank, ${routing.tally.skipped} experience items not given.`);
   if (errors.length) {
     const names = errors.slice(0, 5).join(", ");
     player.sendMessage(`Completion errors: ${names}${errors.length > 5 ? `, and ${errors.length - 5} more` : ""}.`);
   }
 }
+
+let api;
 
 function questCommand({ player, parts }) {
   const args = parts.slice(1);
@@ -80,7 +165,7 @@ function questCommand({ player, parts }) {
     return true;
   }
   if (normalise(name) === "all" && (action === null || action === "complete")) {
-    completeAllQuests(player);
+    completeAllQuests(api, player);
     return true;
   }
   const matches = findQuests(name);
@@ -105,8 +190,9 @@ function questCommand({ player, parts }) {
 module.exports = {
   name: "QuestCommand",
   description: "Adds the admin ::quest command to show, set, complete or reset a player's quest stage, for testing quest-gated content.",
-  register(api) {
+  register(registry) {
+    api = registry;
     api.registerCommand("quest", questCommand, PlayerRights.ADMINISTRATOR, "Complete all quests or show, set, complete or reset one quest: ::quest all");
   },
-  _test: { questCommand, findQuests },
+  _test: { questCommand, findQuests, routeRewards },
 };

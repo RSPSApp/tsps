@@ -1961,7 +1961,8 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     skills.addExperiences(Skill.CRAFTING, 5000);
     skills.addExperiences(Skill.WOODCUTTING, 10000);
     // A completion without experience (a league's quest pack) offers no combat XP either.
-    if (options.experience === false) return;
+    // `prompts: false` (::quest all): no choice pop-ups, so no combat XP either.
+    if (options.experience === false || options.prompts === false) return;
     // NpcDialogues sends sendInterfaceRemoval right after the final action, which
     // would wipe a prompt opened now: open it on the next tick instead.
     const { CountdownTask, TaskManager } = api.core;

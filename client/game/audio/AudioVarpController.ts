@@ -4,7 +4,7 @@ import {
     VARP_MUSIC_VOLUME,
     VARP_SOUND_EFFECTS_VOLUME,
 } from "../../common/vars";
-import { setOsrsInterfaceScalingPercent } from "../../ui/UiScale";
+import { getOsrsInterfaceScalingPercent, setOsrsInterfaceScalingPercent } from "../../ui/UiScale";
 import type { GameRenderer } from "../GameRenderer";
 import type { MusicSystem } from "../audio/MusicSystem";
 import type { SoundEffectSystem } from "../audio/SoundEffectSystem";
@@ -28,6 +28,8 @@ export type AudioVarpControllerDeps = {
  * Applies audio varp/device-option changes and UI scaling refresh.
  */
 export class AudioVarpController {
+    private refreshingUiScaling = false;
+
     constructor(private readonly deps: AudioVarpControllerDeps) {}
 
     applyMasterVolume(): void {
@@ -44,6 +46,10 @@ export class AudioVarpController {
     }
 
     refreshUiScalingLayout(): void {
+        // A cache Settings script runs this inside its own CS2 execution. Resizing the
+        // renderer there can run resize scripts that set the option again; never re-enter.
+        if (this.refreshingUiScaling) return;
+        this.refreshingUiScaling = true;
         try {
             const renderer = this.deps.getRenderer();
             const canvas = renderer?.canvas;
@@ -54,12 +60,20 @@ export class AudioVarpController {
             renderer.onResize(width, height);
         } catch (error) {
             console.log("[OsrsClient] Failed to refresh UI scaling layout", { error });
+        } finally {
+            this.refreshingUiScaling = false;
         }
     }
 
     applyInterfaceScalingPercentDeviceOption(value: number, mobile = false): void {
+        const previous = getOsrsInterfaceScalingPercent(mobile);
         setOsrsInterfaceScalingPercent(value | 0, mobile);
-        this.refreshUiScalingLayout();
+        // Settings lists re-apply their selected entry on layout passes. Only a real
+        // change needs a renderer resize; repeating it churns WidgetManager layout and
+        // GPU framebuffers for nothing.
+        if (getOsrsInterfaceScalingPercent(mobile) !== previous) {
+            this.refreshUiScalingLayout();
+        }
     }
 
     applyAudioVarpChange(varpId: number, value: number): void {

@@ -97,6 +97,53 @@ test("other windows are untouched when the chat is hidden", () => {
     assert.deepEqual([node.y, node.height], [100, 334]);
 });
 
+type PositionedNode = Node & { _absX?: number; _absWidth?: number };
+
+/** A manager with All Settings in the main modal and one open right-hand side panel. */
+function sidePanelManager(panelLeft: number, settingsOpen: boolean, renderScaleX = 2) {
+    const pane: PositionedNode = {
+        uid: uid(601, 119), x: 0, y: 0, width: 190, height: 261,
+        _absX: panelLeft * renderScaleX, _absWidth: 190 * renderScaleX,
+    };
+    return {
+        canvasHeight: 548,
+        renderScaleX,
+        getWidgetByUid: (id: number) => (id === pane.uid ? pane : undefined),
+        getSubInterface: (id: number) => {
+            if (id === uid(601, 27)) return settingsOpen ? { group: 134 } : { group: 149 };
+            if (id === pane.uid) return { group: 149 };
+            return undefined;
+        },
+        isEffectivelyHidden: () => false,
+        isMobileChatDisabled: () => false,
+    };
+}
+
+test("All Settings shifts left to clear an open right-hand side panel", () => {
+    const modal: Node = { uid: uid(601, 27), x: 300, y: 140, width: 512, height: 334, rawX: 300 };
+    adjustMobileHudWidget(modal, 816, 548, sidePanelManager(700, true));
+    assert.equal(modal.x, 180, "ends 8px before the panel");
+    assert.equal(modal.rawX, 180, "the shift survives a position-only layout pass");
+
+    // The panel closes: the cache's own position comes back.
+    adjustMobileHudWidget(modal, 816, 548, sidePanelManager(700, false));
+    assert.equal(modal.x, 300);
+    assert.equal(modal.rawX, 300);
+});
+
+test("the All Settings shift never pushes the modal off the left edge", () => {
+    const modal: Node = { uid: uid(601, 27), x: 81, y: 140, width: 512, height: 334, rawX: 81 };
+    adjustMobileHudWidget(modal, 816, 548, sidePanelManager(472, true));
+    assert.equal(modal.x, 8, "clamped to the left gap when there is no room to clear");
+    assert.equal(modal.rawX, 8);
+});
+
+test("the shift only applies while All Settings is in the main modal", () => {
+    const modal: Node = { uid: uid(601, 27), x: 300, y: 140, width: 512, height: 334, rawX: 300 };
+    adjustMobileHudWidget(modal, 816, 548, sidePanelManager(700, false));
+    assert.equal(modal.x, 300, "a bank or shop is not moved");
+});
+
 test("a position-only layout pass keeps the stretched window in place", () => {
     const node = settingsWindow();
     adjustMobileHudWidget(node, 905, CANVAS_HEIGHT, manager(true));

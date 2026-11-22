@@ -244,6 +244,13 @@ test("the arrest holds: clicking Glough while the guard comes or during the esco
   for (let i = 0; i < 6 && !h.shown(f); i++) h.tick(f);
   assert.equal(h.shown(f)?.text, "Come with me!", "the guard's line, not Glough's talk again");
   assert.equal(npcsNear(f, 1433).length, 1, "one guard");
+  // A click while "Come with me!" is open restarts Glough's talk, as any open talk does; still one guard.
+  await click();
+  await until(f, "Guards! Guards!");
+  await h.continueLine(f);
+  for (let i = 0; i < 8 && !h.shown(f); i++) h.tick(f);
+  assert.equal(h.shown(f)?.text, "Come with me!");
+  assert.equal(npcsNear(f, 1433).length, 1, "the guard already there, not a second one");
   await h.continueLine(f);
   h.ticks(f, 3);
   await click();

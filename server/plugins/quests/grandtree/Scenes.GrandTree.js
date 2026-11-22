@@ -162,12 +162,17 @@ module.exports = function createGrandTreeScenes(api, { onPrisonKing, onReleased,
   /** "A gnome guard appears.": he comes up the ladder to the player before "Come with me!". */
   function guardAppears(event) {
     const { player } = event;
-    const guard = api.spawnNpc({ id: ARREST.guard, x: ARREST.guardFrom[0], y: ARREST.guardFrom[1], z: ARREST.guardFrom[2],
-      wanderRadius: 0, owner: player, ownerOnly: true });
-    if (!guard) return;
-    guard.__skipDefaultRespawn = true;
-    leftovers.set(player, [...(leftovers.get(player) ?? []), guard]);
-    guard.getMovementQueue().addCheckpoint(loc(ARREST.guardTo));
+    // A talk restarted while "Come with me!" is open (any NPC's talk restarts on a click) keeps the guard
+    // already standing there rather than calling a second one.
+    let guard = (leftovers.get(player) ?? []).find((npc) => npc?.getId?.() === ARREST.guard && npc.isRegistered?.());
+    if (!guard) {
+      guard = api.spawnNpc({ id: ARREST.guard, x: ARREST.guardFrom[0], y: ARREST.guardFrom[1], z: ARREST.guardFrom[2],
+        wanderRadius: 0, owner: player, ownerOnly: true });
+      if (!guard) return;
+      guard.__skipDefaultRespawn = true;
+      leftovers.set(player, [...(leftovers.get(player) ?? []), guard]);
+      guard.getMovementQueue().addCheckpoint(loc(ARREST.guardTo));
+    }
     holdForArrest(player, 5);
     event.wait = (resume) => later(player, 5, () => {
       guard.setPositionToFace(player.getLocation());
@@ -176,8 +181,8 @@ module.exports = function createGrandTreeScenes(api, { onPrisonKing, onReleased,
   }
 
   /**
-   * Ours: no capture clicks during these waits; a click on Glough would start his talk again and call a
-   * second guard, so the arrest holds the player until "Come with me!" and again until the cell.
+   * Ours: no capture clicks during these waits (the chat is closed); a click on Glough would start his talk
+   * again, so the arrest holds the player until "Come with me!" and again until the cell.
    */
   function holdForArrest(player, ticks) {
     arrests.set(player, api.core.World.getProcessCycle() + ticks);

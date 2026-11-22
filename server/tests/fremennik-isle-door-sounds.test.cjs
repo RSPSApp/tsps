@@ -96,22 +96,27 @@ const PALISADE_CLICKS = [
 ];
 
 test("Open on Neitiznot's palisade gate swings the clicked leaf open as open_r, with synth 36", () => {
+  // Each open order, closed from each open leaf: the swapped ids must still find their pair.
   for (const { clicked, at, north, south } of PALISADE_CLICKS) {
-    assert.deepEqual([locsAt(2328, 3805), locsAt(2328, 3804)],
-      [[[loc("fris_palisade_door_l"), 2]], [[loc("fris_palisade_door_r"), 2]]], `${clicked}: the gate starts closed`);
-    const actor = player([2327, at[1]]);
-    click(actor, loc(clicked), at, "Open");
-    assert.deepEqual([locsAt(2328, 3805), locsAt(2328, 3804), locsAt(2329, 3805), locsAt(2329, 3804)],
-      [[], [], [[loc(north), 1]], [[loc(south), 3]]], `${clicked}: the open leaves`);
-    assert.deepEqual(actor.sounds, [36], `${clicked}: the open synth`);
-    TaskManager.cancelTasks(actor.getIndex());
-    // Either open leaf closes the gate back to door_l north, door_r south (rsprox 3027 tick 8871
-    // clicked open_r at 2329,3805; 227/00090 tick 9134 open_l at 2329,3804).
-    const closer = player([2327, 3805]);
-    click(closer, loc(north), [2329, 3805], "Close");
-    assert.deepEqual([locsAt(2328, 3805), locsAt(2328, 3804), locsAt(2329, 3805), locsAt(2329, 3804)],
-      [[[loc("fris_palisade_door_l"), 2]], [[loc("fris_palisade_door_r"), 2]], [], []], `${clicked}: closed again`);
-    TaskManager.cancelTasks(closer.getIndex());
+    for (const closeFrom of ["north", "south"]) {
+      const label = `${clicked}, closed from the ${closeFrom} leaf`;
+      assert.deepEqual([locsAt(2328, 3805), locsAt(2328, 3804)],
+        [[[loc("fris_palisade_door_l"), 2]], [[loc("fris_palisade_door_r"), 2]]], `${label}: the gate starts closed`);
+      const actor = player([2327, at[1]]);
+      click(actor, loc(clicked), at, "Open");
+      assert.deepEqual([locsAt(2328, 3805), locsAt(2328, 3804), locsAt(2329, 3805), locsAt(2329, 3804)],
+        [[], [], [[loc(north), 1]], [[loc(south), 3]]], `${label}: the open leaves`);
+      assert.deepEqual(actor.sounds, [36], `${label}: the open synth`);
+      TaskManager.cancelTasks(actor.getIndex());
+      // Either open leaf closes the gate back to door_l north, door_r south (rsprox 3027 tick 8871
+      // clicked open_r at 2329,3805; 227/00090 tick 9134 open_l at 2329,3804).
+      const [closeId, closeY] = closeFrom === "north" ? [loc(north), 3805] : [loc(south), 3804];
+      const closer = player([2327, closeY]);
+      click(closer, closeId, [2329, closeY], "Close");
+      assert.deepEqual([locsAt(2328, 3805), locsAt(2328, 3804), locsAt(2329, 3805), locsAt(2329, 3804)],
+        [[[loc("fris_palisade_door_l"), 2]], [[loc("fris_palisade_door_r"), 2]], [], []], `${label}: closed again`);
+      TaskManager.cancelTasks(closer.getIndex());
+    }
   }
 });
 

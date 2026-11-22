@@ -27,6 +27,19 @@
       "downLanding": { "x": 1800, "y": 9968, "z": 0 }
     },
     {
+      "name": "Kebos Lowlands spiral staircase (rsprox 1692 ticks 1007 and 1352: up from 1239,3684,0 lands on 3 tiles north, 1240,3687,1, where the search picks the climber's own column; down lands on 1240,3684,0 as the search does)",
+      "up": { "id": 34502, "x": 1239, "y": 3685, "z": 0 },
+      "down": { "id": 34503, "x": 1239, "y": 3685, "z": 1 },
+      "landing": { "x": 1240, "y": 3687, "z": 1 }
+    },
+    {
+      "name": "Civitas illa Fortis, Kualti underground staircase (rsprox 1098, a Leagues VI world: down from 1641,3164,0 and 1640,3164,0 both land on 1640,9567,0, ticks 27782 and 27932; up from 1641,9567,0 and 1640,9567,0 both on 1640,3164,0, ticks 27921 and 27991)",
+      "up": { "id": 52642, "x": 1640, "y": 9564, "z": 0 },
+      "down": { "id": 52641, "x": 1640, "y": 3165, "z": 0 },
+      "landing": { "x": 1640, "y": 3164, "z": 0 },
+      "downLanding": { "x": 1640, "y": 9567, "z": 0 }
+    },
+    {
       "name": "Grand Tree base staircase (Anita's floor)",
       "up": { "id": 16675, "x": 2389, "y": 3512, "z": 0 },
       "down": { "id": 16677, "x": 2389, "y": 3513, "z": 1 },

@@ -11,7 +11,7 @@
 //   scene sent has an undo (the quest's own stage and journal varbits, sent in bulk, are progress and not counted);
 // - no sub-interface the player did not have before the scene is still mounted (the fade overlay, interface 174 on 161:1);
 // - the map is rebuilt for the way out, a Varrock teleport tablet works and a door click sends what it sent before the scene.
-// Daddy’s Home additionally checks its isolated parlour, translated demo, bystander map and exit/recovery paths.
+// Daddy’s Home additionally checks its recorded rooms (three copies), bystander map and exit/recovery paths.
 // A fade in that closes its overlay must not close something else mounted on 161:1 in the meantime (LocTeleports, ferries,
 // minecarts and many more share it): the last test mounts another interface there right after the scene's fade in.
 const assert = require("node:assert/strict");
@@ -737,43 +737,65 @@ test("shared quest fade-in closes only its own mount after the animation", (t) =
 });
 
 
-// #4491: checkpoint seed is after removal; Talk-to and Listen are real packets, with real tasks/map/session.
+// #4491: Yarlo's lecture in the rooms the rsprox capture DaddysHome (rev 242.1, ticks 1583-1766) records. Checkpoint seed after
+// the removal; Talk-to, Listen and every continue are real packets, with real tasks, map and session.
 const YARLO_SCENE = { start: [3240, 3395, 0] };
+const LECTURE = require("../plugins/quests/data/daddys-home-lecture.json");
+const LECTURE_LINES = LECTURE.steps.filter(step => step.text !== null).map(step => step.text);
+const DADDY_FURNITURE = [10563, 10564, 10565, 10566, 10567, 10568, 10569];
 async function listenToYarlo(f) {
   const q = quest("daddys_home");
   assert.ok(q, "Daddy's Home is registered");
   q.setStage(f.player, 3);
   f.player.setAttribute("daddys-home:furniture", Array(7).fill(2));
-  const npc = core.NPC.create(core.NpcIdentifiers.OLD_MAN_YARLO, new core.Location(3240, 3395, 0));
+  for (const varbit of DADDY_FURNITURE) f.player.getPacketSender().sendVarbit(varbit, 2);
+  const npc = core.NPC.create(core.NpcIdentifiers.OLD_MAN_YARLO, new core.Location(3240, 3396, 0));
   assert.equal(core.World.getNpcs().add(npc), true);
   f.t.after(() => core.World.getNpcs().remove(npc));
+  ticks(f, 2);
   await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
   ticks(f, 4);
   await clickThrough(f, () => f.player.getDialogueManager().getCurrent() instanceof core.OptionDialogue, 40);
   const menu = f.player.getDialogueManager().getCurrent();
   assert.ok(menu instanceof core.OptionDialogue, "ordinary Yarlo dialogue reaches the choice");
   assert.equal(menu.getOptions()[0], "Listen to Yarlo.");
-  assert.equal(q.getStage(f.player), 3, "choice alone cannot advance the quest");
   await f.connection.dispatch([{ type: "dialogue_continue", widgetId: core.OptionDialogue.OPTIONS_WIDGET_ID, childIndex: 1 }]);
+  f.listenTick = f.tick;
   ticks(f, 4);
   return f.player.getArea();
 }
 
-test("Yarlo: current-cache parlour geometry is available for an isolated demonstration", () => {
+/** Continues each lecture line as it gains its continue, until the player has the controls back. */
+async function watchLecture(f, limit = 900) {
+  const seen = [];
+  const areas = new Set();
+  for (let i = 0; i < limit && (seen.length < LECTURE_LINES.length || f.player.getMovementQueue().isMovementBlocked()); i++) {
+    const area = f.player.getArea();
+    if (area) areas.add(area);
+    const current = f.player.getDialogueManager().getCurrent();
+    if (current instanceof core.StatementDialogue && current.getText() === LECTURE_LINES[seen.length]) {
+      seen.push(current.getText());
+      await f.connection.dispatch([{ type: "dialogue_continue", widgetId: (229 << 16) | 4, childIndex: -1 }]);
+    }
+    tick(f);
+  }
+  return { seen, areas };
+}
+
+test("Yarlo: the recorded rooms' source chunks are in the current cache", () => {
   const { getTemplateRegion, templateChunkKey } = require("../dist/game/collision/TemplateRegionData");
-  const room = require("../plugins/skills/construction/data/rooms.json").find(room => room.key === "PARLOUR");
-  const region = getTemplateRegion(((room.sourceChunkX >> 3) << 8) | (room.sourceChunkY >> 3));
-  assert.ok(region, "current cache contains the construction template region");
-  const locs = region.chunks[templateChunkKey(0, room.sourceChunkX, room.sourceChunkY)];
-  assert.ok(locs.length > 0, "candidate chunk contains real cache locs");
-  assert.ok(locs.some(loc => loc.id === 4517 && loc.localX === 4 && loc.localY === 59 && loc.type === 10 && loc.face === 2),
-    "current parlour has the chair hotspot used by the demonstration");
+  for (const instance of LECTURE.instances) {
+    for (const [, , , chunkX, chunkY, plane] of [[0, 0, 0, ...instance.filler], ...instance.chunks]) {
+      const region = getTemplateRegion(((chunkX >> 3) << 8) | (chunkY >> 3));
+      assert.ok(region, `the cache has the region of chunk ${chunkX},${chunkY}`);
+      assert.ok((region.chunks[templateChunkKey(plane, chunkX, chunkY)] ?? []).length > 0, `chunk ${chunkX},${chunkY},${plane} has locs`);
+    }
+  }
 });
 
-test("Yarlo: Listen replaces the Varrock house map with an isolated room and returns safely", async (t) => {
+test("Yarlo: Listen plays the recorded rooms in private copies and returns to the tile the player stood on", async (t) => {
   const f = actor(t, YARLO_SCENE);
   ticks(f, 3);
-  t.after(() => { const area = f.player.getArea(); if (area) area.leave(f.player, true); });
   const bystander = actor(t, YARLO_SCENE);
   ticks(bystander, 3);
   const realObjects = () => {
@@ -788,67 +810,60 @@ test("Yarlo: Listen replaces the Varrock house map with an isolated room and ret
   f.player.getInventory().add(new core.Item(I.PLANK, 2), false);
   const inventoryBefore = f.player.getInventory().getItems().map(i => [i.getId(), i.getAmount()]);
   const xpBefore = f.player.getSkillManager().getExperience(core.Skill.CONSTRUCTION);
+  const start = [...YARLO_SCENE.start];
   recordSender(f);
   const area = await listenToYarlo(f);
-  assert.ok(area, "Listen starts the lecture's private scene");
+  assert.ok(area instanceof core.TemplatedInstanceArea, "the first rebuild (two ticks after Listen) is a copy");
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), true, "cinematic blocks movement");
   assert.equal(f.player.isUntargetable(), true, "cinematic protects its owner");
-  assert.ok(area instanceof core.TemplatedInstanceArea,
-    "Listen must rebuild a template map instead of drawing demonstration furniture over Yarlo's real Varrock house");
-  assert.ok(f.player.getLocation().getX() >= 8192, "owner is moved to the allocated copy");
+  assert.deepEqual([f.player.getLocation().getX() - area.getBaseX(), f.player.getLocation().getY() - area.getBaseY()], [30, 32],
+    "the player stands where the capture puts them (instance tile 13406,2976 of 13376,2944)");
+  const room = LECTURE.instances[0];
+  for (let x = 0; x < room.size[0]; x++) for (let y = 0; y < room.size[1]; y++) {
+    const placed = room.chunks.find(([cx, cy, plane]) => cx === x && cy === y && plane === 0);
+    const expected = placed ? placed.slice(3) : room.filler;
+    assert.deepEqual(area.getChunk(0, x, y), { sourceChunkX: expected[0], sourceChunkY: expected[1], sourcePlane: expected[2], rotation: 0 });
+  }
+  assert.deepEqual(area.getChunk(1, 5, 5), { sourceChunkX: 225, sourceChunkY: 713, sourcePlane: 1, rotation: 0 }, "the room's upper floor");
   const palette = area.buildScenePalette(f.player.getLocation().getX() >> 3, f.player.getLocation().getY() >> 3).palette.flat(2).filter(n => n !== -1);
-  assert.ok(palette.length > 0, "client receives actual map chunks");
+  const rebuild = f.packets.find(p => p.op === OP.REBUILD_REGION)?.frame;
+  assert.ok(rebuild, "session sends an actual encoded instance rebuild");
+  assert.deepEqual(decodeTemplateChunks(rebuild).sort((a, b) => a - b), palette.slice().sort((a, b) => a - b));
   for (const packed of palette) {
     const x = (packed >>> 14) & 1023, y = (packed >>> 3) & 2047;
     assert.ok(!(x >= 398 && x <= 410 && y >= 418 && y <= 430), "palette excludes the Varrock house and surrounding chunks");
   }
-  const rebuild = f.packets.find(p => p.op === OP.REBUILD_REGION)?.frame;
-  assert.ok(rebuild, "session sends an actual encoded instance rebuild");
-  assert.deepEqual(decodeTemplateChunks(rebuild).sort((a, b) => a - b), palette.slice().sort((a, b) => a - b));
-  assert.equal(palette.length, 4, "only the one-room chunk on each plane is copied");
-  for (let z = 0; z < 4; z++) assert.deepEqual(area.getChunk(z, 0, 0), {
-    sourceChunkX: 232, sourceChunkY: 887, sourcePlane: z, rotation: 0,
-  });
-  const template = area.getChunkObjects(0, 0, 0);
-  for (const [id, x, y, type, face] of [[4517, 4, 3, 10, 2], [4521, 0, 1, 10, 0], [4523, 3, 7, 10, 1]]) {
-    assert.ok(template.some(o => o.getId() === id && o.getLocation().getX() === area.getBaseX() + x &&
-      o.getLocation().getY() === area.getBaseY() + y && o.getType() === type && o.getFace() === face), "cache hotspot geometry " + id);
-  }
-  const demo = area.getObjects();
-  for (const [id, x, y, face] of [[6752, 4, 3, 2], [6768, 0, 1, 0], [6780, 3, 7, 1]]) {
-    assert.ok(demo.some(o => o.getId() === id && o.getLocation().getX() === area.getBaseX() + x &&
-      o.getLocation().getY() === area.getBaseY() + y && o.getType() === 10 && o.getFace() === face), "demonstration at matching hotspot " + id);
-  }
+  tick(f); // the builder and the camera come four ticks into the first step (capture tick 1587)
   const builder = area.entities.find(n => n.isNpc?.() && n.getId() === core.NpcIdentifiers.OLD_MAN_YARLO_2);
-  assert.ok(builder, "builder belongs to the private copy");
-  assert.deepEqual([builder.getLocation().getX(), builder.getLocation().getY()], [area.getBaseX() + 5, area.getBaseY() + 5]);
-  assert.deepEqual([builder.getPositionToFace().getX(), builder.getPositionToFace().getY()], [area.getBaseX() + 4, area.getBaseY() + 3]);
+  assert.ok(builder, "the plain builder belongs to the copy (capture tick 1587)");
+  assert.deepEqual([builder.getLocation().getX() - area.getBaseX(), builder.getLocation().getY() - area.getBaseY()], [45, 37]);
   const camera = f.ledger.calls.find(c => c.name === "sendCameraMoveTo");
-  assert.deepEqual(camera?.args.slice(0, 2), [area.getBaseX() + 3, area.getBaseY() + 7], "camera follows translated room tiles");
+  assert.deepEqual(camera?.args.slice(0, 3), [area.getBaseX() + 36, area.getBaseY() + 32, 1000], "the capture's first camera, in the copy");
   tick(bystander);
   assert.deepEqual(realObjects(), houseBefore, "owner's demonstration leaves the real house unchanged");
   assert.equal(bystander.player.getPrivateArea(), null);
   assert.ok(!bystander.packets.some(p => p.op === OP.REBUILD_REGION), "bystander stays on normal map");
-  assert.equal(f.player.getInventory().getAmount(I.MARLOS_CRATE ?? 24940), 0, "lecture cannot award the quest reward");
-  // Closing the held messagebox does not strand the cinematic; its timed completion still runs.
+  // A chatbox something else closes comes back with its line, so the player can always carry on.
+  ticks(f, 12);
   f.player.getPacketSender().sendInterfaceRemoval();
-  const beforeReturnFrames = f.packets.length;
-  ticks(f, 160);
-  await clickThrough(f, () => !f.player.getDialogueManager().isActive(), 80);
-  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()], [3240, 3395, 0]);
+  ticks(f, 2);
+  assert.equal(f.player.getDialogueManager().getCurrent()?.getText?.(), LECTURE_LINES[0], "the line is back");
+  const { seen, areas } = await watchLecture(f);
+  assert.deepEqual(seen, LECTURE_LINES);
+  assert.equal(areas.size, 3, "three rebuilds, three copies");
+  for (const copy of areas) assert.equal(copy.isDestroyed(), true);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()], start);
   assert.equal(f.player.getArea(), null);
-  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
   assert.equal(f.player.isUntargetable(), false);
-  assert.equal(quest("daddys_home").getStage(f.player), 5);
+  assert.equal(quest("daddys_home").getStage(f.player), 3, "the lecture itself leaves status 3");
+  ticks(f, 2);
+  assert.equal(quest("daddys_home").getStage(f.player), 4, "the briefing's first line follows it");
   assert.deepEqual(f.player.getAttribute("daddys-home:furniture"), Array(7).fill(2));
-  assert.equal(f.player.getPacketSender().getVarbit(542), 0);
-  assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
-  assert.ok(f.packets.slice(beforeReturnFrames).some(p => p.op === OP.REBUILD_NORMAL), "normal map is rebuilt on return");
+  for (const varbit of [542, 6719, 4606, 18141, 17775]) assert.equal(f.player.getPacketSender().getVarbit(varbit), 0, `varbit ${varbit} undone`);
+  assert.ok(f.packets.some(p => p.op === OP.REBUILD_NORMAL), "normal map is rebuilt on return");
   assert.equal(f.player.getAttribute("daddys-home:lecture-exit"), null);
   assert.deepEqual(f.player.getInventory().getItems().map(i => [i.getId(), i.getAmount()]), inventoryBefore, "lecture consumes no building supplies");
   assert.equal(f.player.getSkillManager().getExperience(core.Skill.CONSTRUCTION), xpBefore, "lecture awards no building XP");
-  assert.equal(area.isDestroyed(), true);
-  assert.equal(f.player.getPacketSender().getSubInterfaceAt(OVERLAY_UID), undefined, "fade is closed");
 });
 
 
@@ -867,7 +882,7 @@ function decodeTemplateChunks(frame) {
 }
 
 for (const how of ["walkout", "logout"]) {
-  test(`Yarlo: ${how} destroys the copy, cancels lecture tasks and returns to a real exit`, async (t) => {
+  test(`Yarlo: ${how} destroys the copy, cancels the lecture and leaves status 3 to watch again`, async (t) => {
     const f = actor(t, YARLO_SCENE);
     ticks(f, 3);
     const area = await listenToYarlo(f);
@@ -876,11 +891,11 @@ for (const how of ["walkout", "logout"]) {
     assert.deepEqual(f.player.getAttribute("daddys-home:lecture-exit"), [3240, 3395, 0]);
     if (how === "logout") f.player.onLogout(); // actual production logout callback, with persistence disabled for fixture
     else {
-      // Movement is normally blocked: forced boundary crossing exercises the area's ordinary leave caller.
-      f.player.moveTo(area.tile(8, 3, 0));
+      // Movement is normally blocked: a forced move out of the copy exercises the area's ordinary leave caller.
+      f.player.moveTo(new core.Location(3222, 3218, 0));
       ticks(f, 2);
     }
-    ticks(f, 160);
+    ticks(f, 200);
     assert.equal(area.isDestroyed(), true);
     assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()], [3240, 3395, 0]);
     assert.equal(f.player.getAttribute("daddys-home:lecture-exit"), null);
@@ -889,7 +904,7 @@ for (const how of ["walkout", "logout"]) {
     assert.equal(f.player.getPacketSender().getVarbit(542), 0);
     assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
     assert.equal(f.player.getPacketSender().getSubInterfaceAt(OVERLAY_UID), undefined);
-    assert.equal(quest("daddys_home").getStage(f.player), 5);
+    assert.equal(quest("daddys_home").getStage(f.player), 3, "Wiki: an interrupted cutscene has to be watched again");
     assert.deepEqual(f.player.getAttribute("daddys-home:furniture"), Array(7).fill(2));
   });
 }
@@ -914,6 +929,7 @@ test("Yarlo: a saved in-copy checkpoint recovers on login after the old scene is
   assert.equal(restored.player.getAttribute("daddys-home:lecture-exit"), null);
   assert.deepEqual(restored.player.getAttribute("daddys-home:furniture"), Array(7).fill(2));
   assert.equal(restored.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(quest("daddys_home").getStage(restored.player), 3);
 });
 
 
@@ -939,9 +955,9 @@ test("Yarlo: a forced death uses the real grave exit and cannot leave lecture ta
   assert.equal(f.player.getAttribute("daddys-home:lecture-exit"), null);
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
   assert.equal(f.player.isUntargetable(), false);
-  assert.equal(quest("daddys_home").getStage(f.player), 5);
+  assert.equal(quest("daddys_home").getStage(f.player), 3);
   const returned = f.player.getLocation().clone();
-  ticks(f, 160);
+  ticks(f, 200);
   assert.ok(f.player.getLocation().equals(returned), "cancelled lecture cannot teleport the player later");
 });
 

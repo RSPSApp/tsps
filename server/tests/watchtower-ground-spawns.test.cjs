@@ -107,7 +107,7 @@ test('Watchtower rope crossing consumes one rope, returns without one, and resto
   const player = new (require('../dist/game/entity/impl/player/Player').Player)(null, new core.Location(2501, 3087, 0));
   player.setUsername('watchtower_rope_test');
   player.setRegistered(true);
-  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true }));
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
   const messages = [], scenery = [];
   t.mock.method(player, 'sendMessage', message => messages.push(message));
   t.mock.method(player.getPacketSender(), 'sendObject', object => scenery.push(object.getId()));

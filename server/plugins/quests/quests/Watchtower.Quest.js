@@ -57,7 +57,7 @@ module.exports = function registerWatchtowerQuest(api) {
     ROPE_TREE: 23638, ROPE_SWING_BACK: 23570, ROPE_SWING_ROPED: 23571,
     TOBAN_CAVE: 2811, TOBAN_LADDER: 2812, TOBAN_CHEST: 2790,
     EAST_GATE: Object.freeze([2786, 2787]), NORTH_WEST_GATE: Object.freeze([2788, 2789]),
-    CAKE_COUNTER: 2793, BATTLEMENT: 2832, GAP_NORTH: 2830, GAP_SOUTH: 2831,
+    CAKE_COUNTER: 2793, CAKE_COUNTER_EMPTY: 2792, BATTLEMENT: 2832, GAP_NORTH: 2830, GAP_SOUTH: 2831,
     ENCLAVE_ENTRANCE: 2804, ENCLAVE_EXIT: 2813, ENCLAVE_GATE: 2815, ROCK: 2816, LEVER: 2794,
     YANILLE_HOLE: 2823,
   });
@@ -415,7 +415,7 @@ module.exports = function registerWatchtowerQuest(api) {
     if (value.includes("if the player has the crystal on them")) return has(CRYSTAL_YELLOW);
     if (value.includes("if the player doesn't have the crystal")) return !owns(player, CRYSTAL_YELLOW);
     if (value.includes("if the crystal is stored somewhere")) return stepId === "Sm4F0t" ? bank(CRYSTAL_MAGENTA) : bank(CRYSTAL_YELLOW);
-    // Wiki (Crystal (Watchtower)): re-obtainable "right up until the quest has been completed"; after it, "I haves no more".
+    // Wiki (Watchtower, Changes, 19 May 2021): re-obtainable "right up until the quest has been completed"; after it, "I haves no more".
     if (value.includes("if the player lost the crystal")) return !complete(player) && !owns(player, CRYSTAL_MAGENTA);
     if (value.includes("if the player has the crystal")) return complete(player) || has(CRYSTAL_MAGENTA);
 
@@ -1212,7 +1212,15 @@ module.exports = function registerWatchtowerQuest(api) {
   }
 
   /** The rock cake stall: one cake a click (t2355, t2372). */
-  function stealRockCake({ player }) {
+  /** Players whose counter is empty: empty_rock_cake_counter (2792) for 12 ticks (Wiki: 7.2 seconds; live 11, t2356-2367). */
+  const emptyCounter = new WeakSet();
+  function stealRockCake({ player, object }) {
+    // Wiki (Rock cake): "Rock cakes cannot be gained until the relevant part of the Watchtower quest." Ours: no message.
+    if (stage(player) < STAGES.GUTANOTH && !complete(player)) return true;
+    if (emptyCounter.has(player)) {
+      player.sendMessage("Nothing interesting happens."); // the empty counter's answer (t2359)
+      return true;
+    }
     if (level(player, Skill.THIEVING) < 15) {
       player.sendMessage("You need a Thieving level of at least 15 to steal a rock cake."); // Ours: Wiki requirement
       return true;
@@ -1226,6 +1234,15 @@ module.exports = function registerWatchtowerQuest(api) {
     player.getInventory().adds(ITEMS.ROCK_CAKE, 1);
     player.getSkillManager().addExperiences(Skill.THIEVING, 6.4);
     player.sendMessage("You cautiously grab a cake from the stall.");
+    if (object) {
+      const empty = new core.GameObject(LOCS.CAKE_COUNTER_EMPTY, object.getLocation().clone(), object.getType(), object.getFace(), player.getPrivateArea());
+      emptyCounter.add(player);
+      player.getPacketSender().sendObject(empty);
+      later(player, 12, () => {
+        emptyCounter.delete(player);
+        player.getPacketSender().sendObject(object);
+      });
+    }
     return true;
   }
 
@@ -1240,7 +1257,8 @@ module.exports = function registerWatchtowerQuest(api) {
     if (ObstacleRunner.isBusy(player)) return true;
     const from = player.getLocation();
     const fromWest = from.getX() < 2507;
-    if (fromWest && !state.hasBit(player, BITS.MARKET_GIVEN)) {
+    // After the quest "a rock cake and a death rune are no longer necessary" (Wiki, Skavid map).
+    if (fromWest && !complete(player) && !state.hasBit(player, BITS.MARKET_GIVEN)) {
       const guard = nearestNpc(player, (npc) => npc.getId() === NPCS.BATTLEMENT_GUARD, 8);
       return talkBattlementGuard({ player, npc: guard });
     }
@@ -1572,11 +1590,12 @@ module.exports = function registerWatchtowerQuest(api) {
       [ITEMS.GUAM_POTION, ITEMS.JANGERBERRIES, ITEMS.GUAM_JANGER_VIAL, ["You mix the jangerberries into your potion."]],
       [ITEMS.GUAM_JANGER_VIAL, ITEMS.GROUND_BAT_BONES, ITEMS.POTION, ["You mix the ground bones into the liquid.", "You produce a strong potion."]],
       [ITEMS.VIAL_OF_WATER, ITEMS.JANGERBERRIES, ITEMS.JANGER_VIAL, ["You mix the jangerberries into the water."]], // Ours
-      [ITEMS.JANGER_VIAL, ITEMS.GUAM_LEAF, ITEMS.GUAM_JANGER_VIAL, ["You mix the guam leaf into your potion."]], // Ours
     ];
     const step = steps.find(([a, b]) => both(a, b));
     // The wrong order: ground bones into the guam potion explodes (t5087).
-    const explodes = both(ITEMS.GUAM_POTION, ITEMS.GROUND_BAT_BONES);
+    // Wiki (Vial (jangerberries)): "Adding a guam leaf will cause the potion to explode, dealing 5 damage".
+    const leafExplodes = both(ITEMS.JANGER_VIAL, ITEMS.GUAM_LEAF);
+    const explodes = leafExplodes || both(ITEMS.GUAM_POTION, ITEMS.GROUND_BAT_BONES);
     const evaporates = both(ITEMS.VIAL_OF_WATER, ITEMS.GROUND_BAT_BONES);
     if (!step && !explodes && !evaporates) return;
     event.handled = true;
@@ -1599,10 +1618,10 @@ module.exports = function registerWatchtowerQuest(api) {
       return;
     }
     if (explodes) {
-      take(player, ITEMS.GUAM_POTION);
-      take(player, ITEMS.GROUND_BAT_BONES);
+      take(player, leafExplodes ? ITEMS.JANGER_VIAL : ITEMS.GUAM_POTION);
+      take(player, leafExplodes ? ITEMS.GUAM_LEAF : ITEMS.GROUND_BAT_BONES);
       player.getInventory().adds(ITEMS.VIAL, 1);
-      player.sendMessage("You mix the ground bones into the liquid.");
+      if (!leafExplodes) player.sendMessage("You mix the ground bones into the liquid.");
       player.sendMessage("You mixed the ingredients incorrectly and the mixture exploded.");
       player.performAnimation(new Animation(SEQ.EXPLODE));
       player.performGraphic(Graphic.atHeight(SPOTANIM_EXPLODE, 92));

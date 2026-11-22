@@ -205,7 +205,7 @@ Timing choices:
 - The Wiki's "Looking at the broken bridge" line on Toban's island (no loc named for it).
 - Ours: the trellis's Agility 18 refusal words, a cave with a tinderbox but no light, the Magic 14 /
   Herblore 14 / Mining 40 / Thieving 15 / gap Agility 25 refusal words, the potion steps before the recipe,
-  the vial of water + jangerberries and + guam leaf orders, nightshade before stage 7, a second scroll read,
+  the vial of water + jangerberries order (the Wiki's 10 XP; guam leaf into it explodes, Wiki), nightshade before stage 7, a second scroll read,
   the vial of water and ground bones both used up: no capture or Wiki line.
 - Ours: after the quest the rock's Mine gives the "already have this crystal" line and the robe the "already
   have the shamans' crystal" message (the Wiki says only that no crystal is given).
@@ -214,6 +214,8 @@ Timing choices:
   say nothing where the Wiki has no talk for the stage.
 - The guards' push "back down the hill": the Wiki's message and 3 damage, no push or stun (no capture
   says where).
+- Ours: using a potion on the wizard after the quest does nothing (the Wiki says he takes it, with no words).
+- The other skavids' "already talked" lines: the Wiki gives only "[Cur tanath!/Gor nod!/...]".
 - The battlement guards' "Okay, okay, I'm going." lava push (the Wiki's prose) is not played.
 - The journal's uncaptured pages (see Journal.Watchtower.js).
 - The city guards' "Hey, you can't go climbing all over the city! Use the path!" before the shortcut's

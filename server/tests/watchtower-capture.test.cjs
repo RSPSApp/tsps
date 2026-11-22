@@ -826,3 +826,33 @@ test("review round 8: trellis XP, swing-back XP, no crystals after the quest, At
   h.ticks(k, 2);
   assert.ok(messages(k).includes("You don't need to fight him now."), JSON.stringify(messages(k)));
 });
+
+test("review round 9: the counter's cakes only from the quest's part on, empty for 12 ticks; the battlement after the quest; guam leaf into jangerberries explodes", async (t) => {
+  const f = actor(t, { at: [2513, 3035, 0], stage: 0 });
+  await click(f, 2793, [2513, 3036]);
+  assert.equal(count(f, I.ROCK_CAKE), 0);
+
+  const g = actor(t, { at: [2513, 3035, 0], stage: S.GUTANOTH });
+  await click(g, 2793, [2513, 3036]);
+  assert.equal(count(g, I.ROCK_CAKE), 1);
+  h.ticks(g, 2);
+  await click(g, 2793, [2513, 3036]);
+  assert.equal(count(g, I.ROCK_CAKE), 1);
+  assert.ok(messages(g).includes("Nothing interesting happens."));
+  h.ticks(g, 12);
+  await click(g, 2793, [2513, 3036]);
+  assert.equal(count(g, I.ROCK_CAKE), 2);
+
+  const k = actor(t, { at: [2505, 3011, 0], stage: S.COMPLETE });
+  await click(k, 2832, [2507, 3011]);
+  for (let i = 0; i < 8 && at(k)[0] < 2508; i++) h.tick(k);
+  assert.equal(at(k)[0], 2508, JSON.stringify(at(k)));
+
+  const m = actor(t, { at: [2548, 3116, 2], stage: S.RECIPE, items: [[I.VIAL_3], [I.GUAM_LEAF]] });
+  await useItems(m, I.VIAL_3, I.GUAM_LEAF);
+  h.tick(m);
+  assert.equal(count(m, I.VIAL_3), 0);
+  assert.equal(count(m, I.GUAM_LEAF), 0);
+  assert.equal(count(m, I.VIAL_4), 0);
+  assert.ok(messages(m).includes("You mixed the ingredients incorrectly and the mixture exploded."));
+});

@@ -5,6 +5,7 @@
  *
  *   api.emitCustomEvent("screen-highlight:show", { player, key, host, hint, colour, steps })
  *   "screen-highlight:finished" { player, key }   after the last step's Continue
+ *   "screen-highlight:cancelled" { player, key }  its Close before the last step (`closable` only)
  *   api.emitCustomEvent("screen-highlight:close", { player })
  *
  * `host` is the interface's `tutorial_highlight` layer the walkthrough mounts in (a uid), `hint` the
@@ -23,7 +24,11 @@
  * button 664:9 takes PAUSEBUTTON (-1 to -1) too, as captured: on the last step ("Finish") the
  * button's script (3420) resumes it, and this client then sends only that resume, no Continue
  * click (live sent both), so the resume counts as the Continue. It ends the walkthrough, so a
- * Continue click following it finds nothing left to step.
+ * Continue click following it finds nothing left to step. Before the last step the same resume is
+ * the Close (cache script 3418, highlight_close_op): with `closable: true` it ends the walkthrough
+ * without finishing it, as the bank tutorial's does (rsprox.net recording 3923, rev 236, tick 42:
+ * Close on the first step, hnt_hint_step left as it was). Without it the resume is ignored, as before
+ * (the league recordings only resume on Finish).
  */
 const { FLAG_OP1 } = require("./widgetGroup");
 
@@ -80,7 +85,7 @@ function show(request) {
   if (!player || !Array.isArray(request.steps) || !request.steps.length) return;
   if (active.has(player)) close({ player });
   const host = argument(request.host);
-  const state = { key: request.key, host, colour: request.colour | 0, steps: request.steps, step: 0, finishStep: request.finishStep !== false };
+  const state = { key: request.key, host, colour: request.colour | 0, steps: request.steps, step: 0, finishStep: request.finishStep !== false, closable: request.closable === true };
   active.set(player, state);
   const sender = player.getPacketSender();
   sender.sendSubInterface(host, HIGHLIGHT_GROUP, OVERLAY);
@@ -107,11 +112,15 @@ function next({ player, slot }) {
   return true;
 }
 
-/** The pause button's resume (the last step's Finish): the Continue. */
+/** The pause button's resume: the last step's Finish (the Continue), or Close before it. */
 function resumed(event) {
   const state = active.get(event.player);
-  if (!state || state.step + 1 < state.steps.length) return false;
-  return next({ player: event.player, slot: BUTTON_SLOT });
+  if (!state) return false;
+  if (state.step + 1 >= state.steps.length) return next({ player: event.player, slot: BUTTON_SLOT });
+  if (!state.closable) return false;
+  close({ player: event.player });
+  pluginApi.emitCustomEvent("screen-highlight:cancelled", { player: event.player, key: state.key });
+  return true;
 }
 
 function previous({ player, slot }) {

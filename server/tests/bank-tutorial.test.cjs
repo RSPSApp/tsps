@@ -163,3 +163,33 @@ test("a server shutdown mid-walkthrough puts the player's own mode back before t
   PM.emitServerShutdown({});
   assert.equal(p.insertModeReturn(), true);
 });
+
+test("Close before the last step ends the walkthrough like Finish, as recording 3923 shows", (t) => {
+  const { p, log } = banker(t);
+  const host = componentId("bankmain:bank_highlight");
+  clickTutorial(p);
+  button(p, CONTINUE);
+  log.length = 0;
+  assert.equal(button(p, PAUSE_BUTTON, -1), true, "Close (the pause button's resume) on step 2");
+  assert.deepEqual(varbits(log, varbitId("hnt_hint_step")), [], "hnt_hint_step left as it was");
+  assert.ok(log.some(([kind, target]) => kind === "close" && target === host), "the walkthrough closes");
+  assert.deepEqual(scripts(log, 3412), [[host]], "highlight_screen_hide_layer");
+  assert.ok(log.some(([kind, target, group]) => kind === "open" && target === uid(161, 16) && group === 12), "the bank opens again");
+  assert.equal(p.insertModeReturn(), true, "the player's own insert mode is back");
+  assert.equal(Bank.isOpen(p), true);
+  assert.equal(button(p, CONTINUE), false, "nothing left to step");
+  assert.equal(clickTutorial(p), true, "the button starts it again");
+  assert.equal(p.insertModeReturn(), false);
+});
+
+test("a walkthrough without closable (the league ones) still ignores the resume before the last step", (t) => {
+  const { p, log } = banker(t);
+  const step = { focus: { script: 3409, args: [0, 0, 0, 0, 2, 2, 100, true] }, text: { script: 3413, text: "x", final: false } };
+  PM.emitCustomEvent("screen-highlight:show", { player: p, key: "plain", host: componentId("bankmain:bank_highlight"), colour: 0, steps: [step, step] });
+  t.after(() => PM.emitCustomEvent("screen-highlight:close", { player: p }));
+  log.length = 0;
+  assert.equal(button(p, PAUSE_BUTTON, -1), false, "ignored on the first step");
+  assert.deepEqual(log.filter(([kind]) => kind === "close"), []);
+  assert.equal(button(p, CONTINUE), true, "still on the walkthrough");
+  assert.equal(button(p, PAUSE_BUTTON, -1), true, "Finish on the last step");
+});

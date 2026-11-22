@@ -2,7 +2,7 @@
  * The bank's tutorial button (bankmain:bank_tut, the "?" by the bank's title; hidden by the bank
  * setting bank_hidebanktut): a 16-step screen highlight walkthrough of the bank
  * (https://oldschool.runescape.wiki/w/Bank), run by ScreenHighlight. As rsprox captures show it
- * (rsprox.net recording 3937, rev 236, ticks 1653-2665; 3923, rev 235, the first step):
+ * (rsprox.net recording 3937, rev 236, ticks 1653-2665; 3923, rev 236, the first step and a Close):
  * - The click switches to swap mode (bank_insertmode 0), closes the bank and opens it again, makes the
  *   inventory side unclickable (highlight_noclick on bankside:bankside_highlight), then mounts the
  *   walkthrough in bankmain:bank_highlight: no hnt_selected_hint, text colour -1, the text
@@ -10,6 +10,8 @@
  * - Finish (the last step's Continue) leaves hnt_hint_step on the last step, closes the
  *   walkthrough, puts the player's own swap/insert mode back (3959 0 -> 1 when it was insert) and
  *   opens the bank again.
+ * - Close (the walkthrough's X) before the last step does the same as Finish (rsprox.net recording
+ *   3923, rev 236, tick 42: Close on the first step, insert mode back, the bank opened again).
  * - Clicking the button again starts over from the first step.
  * Ours: closing the bank, logging out or a server shutdown mid-walkthrough puts the player's
  * mode back too (no recording shows any), so none of those saves swap. An autosave mid-walkthrough
@@ -72,7 +74,7 @@ function startTutorial(event) {
   const sender = player.getPacketSender();
   sender.sendInterfaceScript(HIGHLIGHT_NOCLICK_SCRIPT, [lookup().noclick]);
   api.emitCustomEvent("screen-highlight:show", {
-    player, key: KEY, host: lookup().host, colour: -1, finishStep: false, steps: TUTORIAL.steps,
+    player, key: KEY, host: lookup().host, colour: -1, finishStep: false, closable: true, steps: TUTORIAL.steps,
   });
 }
 
@@ -83,7 +85,8 @@ function restoreInsertMode(player) {
   savedInsertMode.delete(player);
 }
 
-function tutorialFinished({ player, key }) {
+/** Finish, or Close before it: the same, as captured. */
+function tutorialEnded({ player, key }) {
   if (key !== KEY) return;
   restoreInsertMode(player);
   if (api.core.Bank.isOpen(player)) reopenBank(player);
@@ -109,7 +112,8 @@ module.exports = {
   register(pluginApi) {
     bind(pluginApi);
     pluginApi.onCustomEvent("player:widget-action", startTutorial);
-    pluginApi.onCustomEvent("screen-highlight:finished", tutorialFinished);
+    pluginApi.onCustomEvent("screen-highlight:finished", tutorialEnded);
+    pluginApi.onCustomEvent("screen-highlight:cancelled", tutorialEnded);
     pluginApi.onCustomEvent("interface:closed", bankClosed);
     pluginApi.onPlayerLogout(loggedOut);
     pluginApi.onServerShutdown(serverShutdown);

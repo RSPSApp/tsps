@@ -1,5 +1,5 @@
 {
-  "$comment": "The Wilderness boss caves (docs/wilderness-bosses.md). Boxes are the map squares cache script 384 gives a Wilderness level (all four planes); `stand` is where the player stands to use an entrance, `arrive` tiles are where rsprox captures put the player (a random tile of the box), `exit` either a fixed arrival box or \"escape\" for one of the Escape Caves' three arrival points. `monster` is the Combat Achievements monster a kill counts for (the variants count for their main boss, as the Wiki says), which also keeps the main three's kill counts; `killVarp` is a singles boss's own count (total_artio_kills...).",
+  "$comment": "The Wilderness boss caves (docs/wilderness-bosses.md). Boxes are the map squares cache script 384 gives a Wilderness level (all four planes); `stand` is where the player stands to use an entrance, `arrive` tiles are where rsprox captures put the player (a random tile of the box), `exit` either a fixed arrival box or \"escape\" for one of the Escape Caves' Escape Caves arrival boxes. `monster` is the Combat Achievements monster a kill counts for (the variants count for their main boss, as the Wiki says), which also keeps the main three's kill counts; `killVarp` is a singles boss's own count (total_artio_kills...).",
   "fee": 50000,
   "discountPerKill": 10000,
   "maxDiscount": 50000,
@@ -93,7 +93,6 @@
     "plane": 0,
     "arrivals": [
       [3341, 10254, 3342, 10255, 0],
-      [3360, 10296, 3362, 10297, 0],
       [3376, 10256, 3377, 10257, 0]
     ],
     "followTicks": 17,

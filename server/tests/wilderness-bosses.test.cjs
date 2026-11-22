@@ -58,7 +58,26 @@ test('a player leaving a multi lair within 10 seconds of another comes out where
     cycle += Common.ESCAPE.followTicks + 1;
     seen.add(Caves._test.escapeArrival(callisto));
   }
-  assert.equal(seen.size, 3);
+  assert.equal(seen.size, 2);
+  assert.ok(!Common.ESCAPE.arrivals.some((arrival) => arrival[0] === 3360 && arrival[1] === 10296));
+});
+
+test('a multi lair exit never picks a blocked tile in its Escape Caves arrival area', (t) => {
+  const vetion = Common.LAIR_BY_KEY.get('vetion');
+  Caves._test.lastExits.clear();
+  t.mock.method(Math, 'random', () => 0.75); // the south-east arrival
+  t.mock.method(Common, 'open', (x, y) => x === 3377 && y === 10257);
+  const destination = Caves._test.exitDestination(vetion);
+  assert.deepEqual([destination.getX(), destination.getY(), destination.getZ()], [3377, 10257, 0]);
+});
+
+test('a multi lair exit falls back to the nearest open tile if its captured landing area is blocked', (t) => {
+  const vetion = Common.LAIR_BY_KEY.get('vetion');
+  Caves._test.lastExits.clear();
+  t.mock.method(Math, 'random', () => 0.75); // the south-east arrival
+  t.mock.method(Common, 'open', (x, y) => x === 3342 && y === 10255);
+  const destination = Caves._test.exitDestination(vetion);
+  assert.deepEqual([destination.getX(), destination.getY(), destination.getZ()], [3342, 10255, 0]);
 });
 
 test('the loot goes to the top ten by damage, each with at least a quarter of the solo amount', () => {

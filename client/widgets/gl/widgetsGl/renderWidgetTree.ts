@@ -3600,9 +3600,12 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         }
 
         // Side-panel anchors draw first, then the host's widget overlays (status bars), then
-        // this widget's children and every later widget - so tooltips stay on top.
+        // this widget's children and every later widget - so tooltips stay on top. The bars sit
+        // beside the panel, outside the anchor's container (left of it in the modern layout),
+        // so they draw under the pass's root clip, not the container's.
         if (widgetUid !== 0 && opts.widgetOverlayAnchors?.has(widgetUid)) {
-            opts.widgetOverlayAnchorDrawn?.(widgetUid);
+            const onAnchorDrawn = opts.widgetOverlayAnchorDrawn;
+            if (onAnchorDrawn) sc.withBaseClip(() => onAnchorDrawn(widgetUid));
         }
 
         if (!isContainer && hasChildren) {

@@ -230,7 +230,7 @@ test("the map squares follow the Wiki's areas; instances and the places open to 
     ["Brimhaven", 2777, 3173, KARAMJA], ["Crandor", 2840, 3260, KARAMJA], ["Mor Ul Rek", 2480, 5100, KARAMJA],
     ["Falador", 2965, 3380, ASGARNIA], ["Entrana", 2830, 3350, ASGARNIA], ["Port Sarim", 3025, 3215, ASGARNIA],
     ["Taverley Dungeon", 2900, 9800, ASGARNIA], ["Burthorpe", 2900, 3540, ASGARNIA], ["the Monastery", 3052, 3490, ASGARNIA],
-    ["Ardougne", 2662, 3305, KANDARIN], ["Catherby", 2810, 3440, KANDARIN], ["Ape Atoll", 2760, 2760, KANDARIN],
+    ["Ardougne", 2662, 3305, KANDARIN], ["Catherby", 2810, 3440, KANDARIN], ["Harry's Fishing Shop in Catherby (#5386)", 2834, 3445, KANDARIN], ["White Wolf Mountain (#5386)", 2845, 3483, ASGARNIA], ["Taverley (#5386)", 2900, 3430, ASGARNIA], ["Ape Atoll", 2760, 2760, KANDARIN],
     ["Castle Wars", 2440, 3090, KANDARIN], ["Piscatoris", 2340, 3690, KANDARIN], ["Yanille", 2600, 3090, KANDARIN],
     ["Canifis", 3495, 3491, MORYTANIA], ["Mos Le'Harmless", 3680, 2970, MORYTANIA], ["Burgh de Rott", 3500, 3180, MORYTANIA],
     ["Al Kharid", 3290, 3180, DESERT], ["Nardah", 3430, 2900, DESERT], ["the Duel Arena", 3360, 3230, DESERT],

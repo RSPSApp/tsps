@@ -150,7 +150,7 @@
       }
     }
   },
-  "regionRules": "A map square belongs to the lowest-numbered area that names it in `squares` or `rects`, then a league's `overrides` reassign squares. Tile polygons refine only their named mixed squares (lowest area id first), after coarse ownership and before league overrides. Their vertices are tile grid lines; classify tile centres (x + 0.5, y + 0.5) with the crossing rule. An explicitly named underground square wins over the legacy y - 100 surface fallback; that fallback is an approximation, not proof of an entrance location. A square named by no area is open to everyone: instances, Death's Office, the POH, random events, the essence mine, Tutorial Island, the sea. An area the league does not offer (Varlamore on a Trailblazer Reloaded world) is locked for good. Known approximations of the 64-tile grid: the Catherby beach east of x 2816 falls with Asgarnia; the River Salve's east bank at Paterdomus with Misthalin; the Citharede Abbey and the Giants' Plateau east of Al Kharid (map square 53,49, whose Cabbage field the abbey's task wants) with the desert while the Abandoned Mine below it stays Morytania; Tutorial Island's easternmost tiles with the desert.",
+  "regionRules": "A map square belongs to the lowest-numbered area that names it in `squares` or `rects`, then a league's `overrides` reassign squares. Tile polygons refine only their named mixed squares (lowest area id first), after coarse ownership and before league overrides. Their vertices are tile grid lines; classify tile centres (x + 0.5, y + 0.5) with the crossing rule. An explicitly named underground square wins over the legacy y - 100 surface fallback; that fallback is an approximation, not proof of an entrance location. A square named by no area is open to everyone: instances, Death's Office, the POH, random events, the essence mine, Tutorial Island, the sea. An area the league does not offer (Varlamore on a Trailblazer Reloaded world) is locked for good. Known approximations of the 64-tile grid: map square 44,53 (Catherby's beach and Harry's Fishing Shop, x 2816-2879, y 3392-3455) is wholly Kandarin, because the Wiki gives no tile outline for the Kandarin/Asgarnia border and White Wolf Mountain, the Asgarnia side, lies in the squares north of it (44,54 and up); the River Salve's east bank at Paterdomus with Misthalin; the Citharede Abbey and the Giants' Plateau east of Al Kharid (map square 53,49, whose Cabbage field the abbey's task wants) with the desert while the Abandoned Mine below it stays Morytania; Tutorial Island's easternmost tiles with the desert.",
   "open": {
     "_comment": "Open from everywhere (Wiki); listed for the record and the tests, since squares named by no area are open anyway.",
     "deathsOffice": [49, 89],
@@ -178,13 +178,13 @@
     "3": {
       "key": "asgarnia",
       "_comment": "The Kingdom of Asgarnia (Rimmington, Port Sarim, Mudskipper Point, Melzar's Maze, the Crafting Guild, Falador, Taverley with its dungeon, Burthorpe, Goblin Village, Ice Mountain, the Monastery, White Wolf Mountain), Entrana, Troll Country (Death Plateau, the Troll Stronghold, Trollheim) with the God Wars Dungeon, the Void Knights' Outpost and the Ruins of Camdozaal.",
-      "rects": [[45, 50, 47, 54], [44, 53, 44, 57], [45, 55, 45, 58], [46, 48, 46, 48], [47, 49, 47, 49], [43, 52, 44, 52], [40, 40, 41, 41], [44, 81, 46, 84], [45, 89, 47, 90]]
+      "rects": [[45, 50, 47, 54], [44, 54, 44, 57], [45, 55, 45, 58], [46, 48, 46, 48], [47, 49, 47, 49], [43, 52, 44, 52], [40, 40, 41, 41], [44, 81, 46, 84], [45, 89, 47, 90]]
     },
     "4": {
       "key": "kandarin",
       "_comment": "The Kingdom of Kandarin (Yanille, Gu'Tanoth, Port Khazard, the Tree Gnome Village, Ardougne, Witchaven, the Legends' Guild, Hemenster, Seers' Village, Catherby, the Sinclair Mansion, the Barbarian Outpost, the Tree Gnome Stronghold, Eagles' Peak), Castle Wars, the Piscatoris Fishing Colony, the Feldip Hills with Corsair Cove and the Myths' Guild, Ape Atoll and Crash Island, the Ancient Cavern (map squares 25-27,83; Wiki: its whirlpool entrance is south of the Barbarian Outpost); not Taverley Dungeon nor the Underground Pass (Wiki).",
       "rects": [[38, 47, 41, 50], [38, 51, 43, 55], [37, 52, 37, 55], [36, 52, 36, 54], [35, 56, 37, 58], [38, 44, 41, 46], [42, 42, 43, 43], [25, 83, 27, 83]],
-      "squares": [[37, 48], [45, 42]]
+      "squares": [[37, 48], [45, 42], [44, 53]]
     },
     "5": {
       "key": "morytania",

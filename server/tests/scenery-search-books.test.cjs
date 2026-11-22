@@ -41,6 +41,7 @@ beforeEach(() => { ownClaims.length = 0; });
 
 function fixture() {
   const player = new Player(null);
+  player.setLocation(new core.Location(3011, 3204, 0));
   const sent = [];
   const sender = new Proxy({}, { get: (_target, key) => {
     if (key === "sendTypedMessage") return (type, text) => { sent.push([type === core.ChatType.SPAM ? "spam" : "typed", text]); return sender; };
@@ -55,8 +56,9 @@ function fixture() {
 
 function search(f, gameval, roll = 0) {
   const objectId = C.getLocId(gameval);
-  const location = new core.Location(3236, 3409, 0);
-  const object = new GameObject(objectId, location, 10, 0, null);
+  const at = new core.Location(3011, 3203, 0); // Wydin's potato crate; the player stands south of it
+  const object = new GameObject(objectId, at, 10, 0, null);
+  const location = { x: at.getX(), y: at.getY(), z: at.getZ() }; // as ObjectActionPacketListener sends it
   const original = Math.random;
   Math.random = () => roll;
   try {

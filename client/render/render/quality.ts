@@ -52,7 +52,12 @@ import { getMapIndexFromTile, getMapPlaneId, getMapSquareId } from "../../rs/map
 import { Model } from "../../rs/model/Model";
 import { ModelData } from "../../rs/model/ModelData";
 import { Scene } from "../../rs/scene/Scene";
-import { getUiScale } from "../../ui/UiScale";
+import {
+    getOsrsInterfaceScalingPercent,
+    getUiScale,
+    OSRS_INTERFACE_SCALING_DEFAULT_MOBILE_PERCENT,
+    OSRS_INTERFACE_SCALING_MIN_MOBILE_PERCENT,
+} from "../../ui/UiScale";
 import { ClickCrossOverlay } from "../../ui/devoverlay/ClickCrossOverlay";
 import { GroundItemOverlay } from "../../ui/devoverlay/GroundItemOverlay";
 import { HealthBarOverlay } from "../../ui/devoverlay/HealthBarOverlay";
@@ -231,21 +236,36 @@ export function getMobileGameplayUiScale(host: WebGLOsrsRendererHost,
         // the gameframe grows with the screen instead of staying phone-sized on a tablet.
         const shortestCssEdge = Math.max(1, Math.min(cssW, cssH));
         const phoneEdge = RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_PHONE_EDGE;
-        const scale =
+        const baseScale =
             (RENDER_CONSTANTS.MOBILE_GAMEPLAY_UI_SCALE * phoneEdge) / Math.max(phoneEdge, shortestCssEdge);
         // Portrait Mode: the gameframe must still be as wide as the main modal (512) and the
         // chatbox (519), or banks and shops are cut off at the sides, and tall enough for the
         // chat, a modal and the bottom HUD stacked, or a squarer tablet overlaps them.
+        let defaultScale: number;
         if (isPortraitModeEnabled() && isPortraitViewport(cssW, cssH)) {
-            return Math.max(
-                scale,
+            defaultScale = Math.max(
+                baseScale,
                 RENDER_CONSTANTS.MOBILE_PORTRAIT_MIN_LAYOUT_WIDTH / Math.max(1, cssW),
                 RENDER_CONSTANTS.MOBILE_PORTRAIT_MIN_LAYOUT_HEIGHT / Math.max(1, cssH),
             );
+        } else {
+            // Cache script 4731 lays the landscape HUD out in a stock 765x503 gameframe: the
+            // safezone alone reserves 680px. Keep the whole stock frame available, in both axes,
+            // or the bottom rows (All Settings, the chat's category list) are squeezed into a
+            // shorter layout.
+            defaultScale = Math.max(
+                baseScale,
+                DEFAULT_SCREEN_WIDTH / Math.max(1, cssW),
+                DEFAULT_SCREEN_HEIGHT / Math.max(1, cssH),
+            );
         }
-        // Cache script 4731 reserves at least 680px for the landscape safezone, plus edge padding.
-        // Keep the stock client width available when a nearly square window cannot fit that HUD.
-        return Math.max(scale, DEFAULT_SCREEN_WIDTH / Math.max(1, cssW));
+        // The cache's mobile UI zoom (device option 27) defaults to 400% on mobile and can be
+        // lowered to 175% (Easter 2026 update). The layout above is the 400% baseline, so a
+        // smaller percentage spreads the same interface over more layout pixels.
+        const scalingPercent = getOsrsInterfaceScalingPercent(true);
+        return defaultScale *
+            (OSRS_INTERFACE_SCALING_DEFAULT_MOBILE_PERCENT /
+                Math.max(OSRS_INTERFACE_SCALING_MIN_MOBILE_PERCENT, scalingPercent));
     
 }
 

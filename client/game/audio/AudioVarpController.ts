@@ -57,8 +57,8 @@ export class AudioVarpController {
         }
     }
 
-    applyInterfaceScalingPercentDeviceOption(value: number): void {
-        setOsrsInterfaceScalingPercent(value | 0);
+    applyInterfaceScalingPercentDeviceOption(value: number, mobile = false): void {
+        setOsrsInterfaceScalingPercent(value | 0, mobile);
         this.refreshUiScalingLayout();
     }
 

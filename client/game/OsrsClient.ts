@@ -2435,6 +2435,9 @@ export class OsrsClient {
             setDeviceOption: (optionId: number, value: number) => {
                 const storedValue = value;
                 self.deviceOptions.set(optionId, storedValue);
+                // The mobile client saves its interface scale separately from the desktop one.
+                const mobileClient = isMobileClient(self.widgetManager?.rootInterface) ||
+                    self.varManager?.getVarbit(6352) === 1;
                 // Handle specific device options
                 switch (optionId) {
                     case 19: // Master volume (enhanced client, 0-100 from enum_981)
@@ -2445,7 +2448,7 @@ export class OsrsClient {
                         self.audioVarp.applyMasterVolume();
                         break;
                     case DEVICE_OPTION_INTERFACE_SCALING:
-                        self.audioVarp.applyInterfaceScalingPercentDeviceOption(storedValue);
+                        self.audioVarp.applyInterfaceScalingPercentDeviceOption(storedValue, mobileClient);
                         break;
                     case DEVICE_OPTION_SCREEN_BRIGHTNESS:
                         self.applyScreenBrightness(storedValue);

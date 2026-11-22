@@ -156,32 +156,42 @@ function tierActor(t, farming, x, y, boost = 0) {
   });
   return { ...made, lines };
 }
-const lineOf = (chain) => chain.getDialogues().get(0).getText();
-const WEST = (level) => `Hey! You need a Farming level of at least ${level} to enter that area of the Farming Guild.`;
 
-for (const [name, level, from, to, back] of [
-  ["west wing", 65, [1246, 3730], [1237, 3730], [1246, 3730]],
-  ["north wing", 85, [1248, 3741], [1248, 3750], [1248, 3741]],
-]) {
-  test(`${name}: under ${level} Farming is walked back out with Jane's line`, (t) => {
+// Recorded runs (rsprox 242/911689.txt, ticks 18430-31, 18454-55, 18467-68 (18473-74 is the same north run)): [name, level, start, run to, tile the run ends on].
+// Each is walked two tiles back out from that end tile, i.e. to the start tile, with Jane angry (chatang2, 615).
+const RECORDED_RUNS = [
+  ["west wing, run 1246 to 1244", 65, [1246, 3730], [1237, 3730], [1244, 3730]],
+  ["west wing, run 1245 to 1243", 65, [1245, 3729], [1236, 3729], [1243, 3729]],
+  ["north wing, run 1248,3743 to 3745", 85, [1248, 3743], [1248, 3750], [1248, 3745]],
+];
+const run = (player, to) => {
+  player.setRunning(true);
+  player.getMovementQueue().addSteps(new core.Location(to[0], to[1], 0));
+};
+
+for (const [name, level, start, to, end] of RECORDED_RUNS) {
+  test(`${name}: under ${level} Farming ends the run on ${end} and is walked back to ${start} with Jane's angry line`, (t) => {
     settle();
-    const { player, lines } = tierActor(t, level - 1, ...from);
-    player.getMovementQueue().addSteps(new core.Location(to[0], to[1], 0));
+    const { player, lines } = tierActor(t, level - 1, ...start);
+    run(player, to);
+    tick();
+    assert.deepEqual(at(player), end);
     tick(8);
+    assert.deepEqual(at(player), start);
     assert.equal(lines.length, 1);
-    assert.equal(lineOf(lines[0]), WEST(level));
-    const [x, y] = at(player);
-    assert.ok(name === "west wing" ? x >= 1245 : y <= 3743, `stopped outside the gate: ${[x, y]}`);
+    const dialogue = lines[0].getDialogues().get(0);
+    assert.equal(dialogue.getText(), `Hey! You need a Farming level of at least ${level} to enter that area of the Farming Guild.`);
+    assert.equal(dialogue.expression, 615);
   });
 
-  test(`${name}: a boost to ${level} Farming walks straight through`, (t) => {
+  test(`${name}: a boost to ${level} Farming runs straight through`, (t) => {
     settle();
-    const { player, lines } = tierActor(t, level - 5, ...from, 5);
-    player.getMovementQueue().addSteps(new core.Location(to[0], to[1], 0));
+    const { player, lines } = tierActor(t, level - 5, ...start, 5);
+    run(player, to);
     tick(12);
     assert.equal(lines.length, 0);
     const [x, y] = at(player);
-    assert.ok(name === "west wing" ? x < 1243 : y > 3745, `through the gate: ${[x, y]}`);
+    assert.ok(start[0] === 1248 ? y > 3745 : x < 1243, `through the gate: ${[x, y]}`);
   });
 }
 

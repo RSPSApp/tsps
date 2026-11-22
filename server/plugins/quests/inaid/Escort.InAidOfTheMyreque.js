@@ -476,6 +476,14 @@ module.exports = function attachEscort(context) {
     common.play(player, NPC.IVAN_FLEEING, V.FLEE, undefined, PAGE);
   }
 
+  /** Live t3906: hit by the player, the juvinate on Ivan turns to them (Wiki: "Alternate your attacks between them so they stay focused on you"). */
+  function hitOnJuvinate({ attacker, target }) {
+    const ambush = target ? actorAmbush.get(target) : null;
+    if (!ambush || ambush.done || ambush.fled || attacker !== ambush.player || !ambush.ivan) return;
+    if (!ambush.juvinates.includes(target) || target.getCombat?.().getTarget?.() !== ambush.ivan) return;
+    target.getCombat().attack(ambush.player, true);
+  }
+
   /** A juvinate at 0 hitpoints goes at once as a mist (t3577); any killer counts. Ivan at 0 gives up. */
   function ambushDeath(event) {
     const npc = event?.npc;
@@ -633,13 +641,18 @@ module.exports = function attachEscort(context) {
     const id = event.definition?.id ?? ObjectDefinition.forPlayer(event.objectId, player)?.id ?? event.objectId;
     if (id !== O.TRAPDOOR_52) return false;
     if (get(player, VARBIT.TEMPLE_TRAPDOOR) !== 1) return false;
-    common.anim(player, LIBRARY.climbAnimation);
+    // Live: at the trapdoor t4284, seq 827 two ticks on (t4286), the library the tick after (t4287).
     const from = player.getLocation().clone();
+    // Moved meanwhile (a teleport during the climb) or died: no climb.
+    const still = () => player.getLocation().equals(from) && player.getHitpoints() > 0 && !player.isDyingReturn?.();
     common.later(player, 1, () => {
-      // Moved meanwhile (a teleport between the animation and the climb) or died: no climb.
-      if (!player.getLocation().equals(from) || player.getHitpoints() <= 0 || player.isDyingReturn?.()) return;
-      if (stage(player) >= STAGE.LIBRARY_KEY) state.advance(player, STAGE.LIBRARY_OPEN);
-      player.moveTo(new Location(...LIBRARY.tile));
+      if (!still()) return;
+      common.anim(player, LIBRARY.climbAnimation);
+      common.later(player, 1, () => {
+        if (!still()) return;
+        if (stage(player) >= STAGE.LIBRARY_KEY) state.advance(player, STAGE.LIBRARY_OPEN);
+        player.moveTo(new Location(...LIBRARY.tile));
+      });
     });
     return true;
   }
@@ -840,6 +853,7 @@ module.exports = function attachEscort(context) {
   api.onInterfaceActionButton([uid(MAP.ROUTE_1), uid(MAP.ROUTE_2), uid(MAP.CLICKOUT)], selectRoute);
   api.onInterfaceActionButton([uid(MAP.TRAVEL_1), uid(MAP.TRAVEL_2)], travel);
   api.onNpcBeforeDeath(ambushDeath);
+  api.onCombatHitResolved(hitOnJuvinate);
   api.onObjectInteraction("Exit path", { Escape: escapeSwamp });
   api.onObjectInteraction("Keyhole", { Inspect: inspectKeyhole });
   api.onObjectInteraction("Trapdoor", { "Climb-down": climbLibraryTrapdoor });

@@ -434,6 +434,22 @@ test("route 2: the juvinates wander; none starts on the player; one near Ivan go
   assert.deepEqual(onIvan(ivan).map((juvinate) => juvinate.getIndex()), [second.getIndex()], "Wiki: the next one goes for him");
 });
 
+test("a player's hit on the juvinate fighting Ivan turns it to the player (t3906, Wiki tip)", async (t) => {
+  const f = actor(t, { stage: 310 });
+  await startRoute2(f);
+  const [ivan] = ownedNpcs(f, 4441);
+  const [first] = juvinates(f);
+  placeNear(first, ivan, 0, 2);
+  ticks(f, 2, { npcs: true });
+  assert.equal(first.getCombat().getTarget()?.getIndex?.(), ivan.getIndex(), "on Ivan");
+  PM.emitCombatHitResolved({ attacker: f.player, target: first, hit: { getTotalDamage: () => 7 } }); // what CombatFactory emits as a hit lands
+  assert.equal(first.getCombat().getTarget() === f.player, true, "it turns to the player");
+  const [, other] = juvinates(f);
+  placeNear(other, ivan, 2, 0);
+  ticks(f, 2, { npcs: true });
+  assert.equal(other.getCombat().getTarget()?.getIndex?.(), ivan.getIndex(), "and the next near one takes Ivan");
+});
+
 test("Ivan flees mid-fight: the juvinates break off, even with a retaliation queued, and his line stays (t3625-3629, #6482)", async (t) => {
   const f = actor(t, { stage: 310 });
   await startRoute2(f, { npcs: true });
@@ -642,10 +658,16 @@ test("keyhole: Inspect is a mesbox; the key sets 1982 with its mesbox, stage and
   assert.equal(f.player.getInventory().getAmount(I.TEMPLE_LIBRARY_KEY), 1, "the key is kept");
   f.player.getDialogueManager().reset?.();
   assert.equal(core.ObjectDefinition.forPlayer(12762, f.player)?.getName?.(), "Trapdoor", "the multiloc opens for this player");
+  const anims = [];
+  const perform = f.player.performAnimation.bind(f.player);
+  f.player.performAnimation = (animation) => { anims.push(animation.getId()); return perform(animation); };
   assert.equal(objectClick(f, 12762, [3441, 9899, 0], "Climb-down"), true, "the client sends the multiloc base id");
+  assert.deepEqual(anims, [], "at the trapdoor (t4284), no animation yet");
+  tick(f);
+  assert.deepEqual(anims, [827], "seq 827 (t4286)");
   assert.equal(stage(f), 350);
   tick(f);
-  assert.equal(stage(f), 360);
+  assert.equal(stage(f), 360, "360 and the library the tick after (t4287)");
   assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY()], [3360, 9904]);
   assert.deepEqual(f.messages.filter((m) => m.text.includes("climb")), [], "no message");
 });
@@ -669,6 +691,7 @@ test("a teleport between the trapdoor's animation and the climb cancels the clim
   f.player.setLocation(new core.Location(3440, 9899, 0));
   f.player.getPacketSender().sendVarbit(VB.TRAPDOOR, 1); // the client's view of 1982
   assert.equal(objectClick(f, 12762, [3441, 9899, 0], "Climb-down"), true);
+  tick(f); // the animation
   f.player.moveTo(new core.Location(3222, 3218, 0));
   tick(f);
   assert.equal(stage(f), 350, "no 360");
@@ -680,6 +703,7 @@ test("dying between the trapdoor's animation and the climb cancels the climb", a
   f.player.setLocation(new core.Location(3440, 9899, 0));
   f.player.getPacketSender().sendVarbit(VB.TRAPDOOR, 1);
   assert.equal(objectClick(f, 12762, [3441, 9899, 0], "Climb-down"), true);
+  tick(f); // the animation
   f.player.setHitpoints(0);
   tick(f);
   assert.equal(stage(f), 350, "no 360");

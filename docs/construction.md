@@ -368,9 +368,10 @@ rock emits `construction:menagerie-pet-picked-up`, which completes the Fremennik
 your Pet Rock from your POH Menagerie" (Wiki: "use your pet rock on a pet house, then retrieve it
 off the ground").
 
-Ours: "You need a pet house to keep pets in your menagerie." when no pet house is built, and
-"Your menagerie can't hold more than 12 of those pets." for a 13th extra in a nature house. No
-recording or Wiki line covers either.
+With no pet house built, a pet used on other menagerie furniture gets "There does not appear to
+be a pet house to store pets in this house." (2777 ticks 3172-3173). Ours: "Your menagerie can't
+hold more than 12 of those pets." for a 13th extra in a nature house; no recording or Wiki line
+covers it.
 
 The Pet list's Read opens `poh_petlist` (210) as rsprox captures 2581, 2777, 2782, 2793 and
 3121 send it: script 2524 (-1, -1), the modal, Examine (op10) on list slots 0 to the last slot

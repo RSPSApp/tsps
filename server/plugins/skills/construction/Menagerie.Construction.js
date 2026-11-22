@@ -103,7 +103,7 @@ function extrasBase() {
 /** The extras inventory as stored: item ids by slot, null where empty. */
 function extras(player) {
   const saved = player.getAttribute(EXTRAS_ATTRIBUTE);
-  return Array.from({length: EXTRAS.capacity}, (_, slot) => (Array.isArray(saved) && Number.isInteger(saved[slot]) ? saved[slot] : null));
+  return Array.from({length: EXTRAS.capacity}, (_, slot) => (Array.isArray(saved) && EXTRA_NPC_BY_ITEM.has(saved[slot]) ? saved[slot] : null));
 }
 
 function extrasCount(player) {
@@ -188,8 +188,8 @@ function houseLimit(house) {
 /** Why the pet can't move in, or null when there's room. */
 function refusal(player, house, extra) {
   const limit = houseLimit(house);
-  // Ours: no recording or Wiki line covers a menagerie without a pet house.
-  if (limit === -1) return "You need a pet house to keep pets in your menagerie.";
+  // rsprox capture 2777 (rev 229) ticks 3172-3173: a pet used on the arena with no pet house built.
+  if (limit === -1) return "There does not appear to be a pet house to store pets in this house.";
   if (limit === null) {
     // Ours: the Wiki gives the nature house's 12 extras but no message for a 13th.
     return extra && extrasCount(player) >= EXTRAS.capacity ? `Your menagerie can't hold more than ${EXTRAS.capacity} of those pets.` : null;

@@ -200,3 +200,36 @@ test('every extra in the data names a cache obj and house NPC, and the house NPC
   }
   for (const kitten of data.kittens) assert.ok(obj(kitten) != null, kitten);
 });
+
+test('with no pet house built, a pet used on the arena gets the recorded refusal', async t => {
+  const f = actor(t);
+  MaxHouse.maxHouse({player: f.p});
+  for (const room of f.p.getAttribute(Data.HOUSE_ATTRIBUTE).rooms.flat(2)) {
+    for (const [key, furniture] of Object.entries(room?.furnitureByLocation ?? {})) {
+      if (/_HOUSE$/.test(furniture.buildableKey)) delete room.furnitureByLocation[key];
+    }
+  }
+  House.enterHouse(f.p, false);
+  const h = House.houseFor(f.p);
+  const e = h.furnitureEntries().find(e => e.room.roomKey === 'MENAGERIE_INDOORS' && /ARENA$/.test(e.furniture.buildableKey));
+  assert.ok(e, 'an arena stands');
+  const object = h.furnitureObjects.find(o => o.getLocation().equals(e.location) && Data.BUILDABLE_BY_KEY.get(e.furniture.buildableKey).objectIds.includes(o.getId()));
+  assert.ok(object);
+  f.p.setLocation(e.location.clone().add(-1, 0)); f.p.needsPlacement = false;
+  f.messages.length = 0;
+  const g = {...f, h, object};
+  const pet = await use(g, 'zamorakpet');
+  assert.equal(f.p.getInventory().getAmount(pet), 1);
+  // rsprox capture 2777 (rev 229) ticks 3172-3173.
+  assert.deepEqual(f.messages, ['There does not appear to be a pet house to store pets in this house.']);
+});
+
+test('saved extras that are not extras are dropped', async t => {
+  const f = menagerie(t);
+  const cat = obj('growncatobject_black');
+  f.p.setAttribute(EXTRAS_ATTRIBUTE, [-5, cat, 99999999, obj('coins')]);
+  f.log.length = 0;
+  await view(f);
+  const [, , , items] = f.log.find(([kind, id]) => kind === 'inventory' && id === core.CacheDefinitions.getInventoryId('poh_menagerie_pets'));
+  assert.deepEqual(items.slice(0, 4), [null, {id: cat, amount: 1}, null, null]);
+});

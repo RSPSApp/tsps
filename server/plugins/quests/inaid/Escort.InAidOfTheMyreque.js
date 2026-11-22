@@ -476,14 +476,6 @@ module.exports = function attachEscort(context) {
     common.play(player, NPC.IVAN_FLEEING, V.FLEE, undefined, PAGE);
   }
 
-  /** Live t3906: hit by the player, the juvinate on Ivan turns to them (Wiki: "Alternate your attacks between them so they stay focused on you"). */
-  function hitOnJuvinate({ attacker, target }) {
-    const ambush = target ? actorAmbush.get(target) : null;
-    if (!ambush || ambush.done || ambush.fled || attacker !== ambush.player || !ambush.ivan) return;
-    if (!ambush.juvinates.includes(target) || target.getCombat?.().getTarget?.() !== ambush.ivan) return;
-    target.getCombat().attack(ambush.player, true);
-  }
-
   /** A juvinate at 0 hitpoints goes at once as a mist (t3577); any killer counts. Ivan at 0 gives up. */
   function ambushDeath(event) {
     const npc = event?.npc;
@@ -853,7 +845,6 @@ module.exports = function attachEscort(context) {
   api.onInterfaceActionButton([uid(MAP.ROUTE_1), uid(MAP.ROUTE_2), uid(MAP.CLICKOUT)], selectRoute);
   api.onInterfaceActionButton([uid(MAP.TRAVEL_1), uid(MAP.TRAVEL_2)], travel);
   api.onNpcBeforeDeath(ambushDeath);
-  api.onCombatHitResolved(hitOnJuvinate);
   api.onObjectInteraction("Exit path", { Escape: escapeSwamp });
   api.onObjectInteraction("Keyhole", { Inspect: inspectKeyhole });
   api.onObjectInteraction("Trapdoor", { "Climb-down": climbLibraryTrapdoor });

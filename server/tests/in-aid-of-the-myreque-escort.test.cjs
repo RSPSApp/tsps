@@ -434,22 +434,6 @@ test("route 2: the juvinates wander; none starts on the player; one near Ivan go
   assert.deepEqual(onIvan(ivan).map((juvinate) => juvinate.getIndex()), [second.getIndex()], "Wiki: the next one goes for him");
 });
 
-test("a player's hit on the juvinate fighting Ivan turns it to the player (t3906, Wiki tip)", async (t) => {
-  const f = actor(t, { stage: 310 });
-  await startRoute2(f);
-  const [ivan] = ownedNpcs(f, 4441);
-  const [first] = juvinates(f);
-  placeNear(first, ivan, 0, 2);
-  ticks(f, 2, { npcs: true });
-  assert.equal(first.getCombat().getTarget()?.getIndex?.(), ivan.getIndex(), "on Ivan");
-  PM.emitCombatHitResolved({ attacker: f.player, target: first, hit: { getTotalDamage: () => 7 } }); // what CombatFactory emits as a hit lands
-  assert.equal(first.getCombat().getTarget() === f.player, true, "it turns to the player");
-  const [, other] = juvinates(f);
-  placeNear(other, ivan, 2, 0);
-  ticks(f, 2, { npcs: true });
-  assert.equal(other.getCombat().getTarget()?.getIndex?.(), ivan.getIndex(), "and the next near one takes Ivan");
-});
-
 test("Ivan flees mid-fight: the juvinates break off, even with a retaliation queued, and his line stays (t3625-3629, #6482)", async (t) => {
   const f = actor(t, { stage: 310 });
   await startRoute2(f, { npcs: true });

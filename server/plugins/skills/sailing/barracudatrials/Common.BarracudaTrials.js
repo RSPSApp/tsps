@@ -108,16 +108,9 @@ function updateProgress(player, trial, change) {
   return next;
 }
 
-/** Owned anywhere (worn, carried or banked). */
+/** Owned anywhere (worn, carried or banked); a bank placeholder owns nothing. */
 function owns(player, itemId) {
-  if (player.getInventory().contains(itemId)) return true;
-  if (player.getEquipment?.().contains?.(itemId)) return true;
-  try {
-    const tab = core.Bank.getTabForItem(player, itemId);
-    return tab >= 0 && player.getBank(tab).contains(itemId);
-  } catch {
-    return false;
-  }
+  return core.Bank.owns(player, itemId);
 }
 
 /** Each trial's Swordfish key's "used" varbit (sailing_bt_<key>_key_used), set once it opened its chest. */

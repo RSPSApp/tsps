@@ -534,6 +534,32 @@ test('Jump-To: the route steps until the rock is in sight, then the jump walks o
   }
 });
 
+test('Jump-To never walks across the water to a take-off past a gap (issue #6497 review)', (t) => {
+  Shipwreck._test.setFallRoll(() => false);
+  t.after(() => Shipwreck._test.setFallRoll(() => Math.random() < 0.1));
+  // Clicks from further back than the next jump: its take-off is across a gap from here.
+  for (const [[x, y], [rx, ry]] of [[[3605, 3564], [3597, 3559]], [[3602, 3550], [3599, 3552]]]) {
+    const p = actor(t, { x, y, stage: 4 });
+    p.getSkillManager().setCurrentLevel(core.Skill.AGILITY, 25, false);
+    const xp = p.getSkillManager().getExperience(core.Skill.AGILITY);
+    const rock = core.MapObjects.get(16115, new core.Location(rx, ry, 0), null);
+    const definition = rock.getDefinition?.() ?? core.CacheDefinitions.getLoc?.(16115);
+    p.getMovementQueue().walkToObject(rock, { execute: () => PluginManager.emitObjectInteraction({
+      player: p, object: rock, objectId: 16115, definition, clickType: 1, option: 'Jump-To', location: { x: rx, y: ry, z: 0 }, handled: false,
+    }) });
+    const crossed = [];
+    for (let i = 0; i < 12; i++) {
+      tick();
+      crossed.push(p.getLocation().getX());
+    }
+    const label = `${x},${y} -> rock ${rx},${ry}`;
+    if (x === 3605) assert.ok(crossed.every((tileX) => tileX >= 3601), `${label}: stays on the island (${crossed})`);
+    else assert.ok(!(p.getLocation().getX() === 3597 && p.getLocation().getY() === 3552), `${label}: not walked over to 3597,3552`);
+    assert.equal(p.getSkillManager().getExperience(core.Skill.AGILITY), xp, `${label}: no jump`);
+    assert.ok(messages.get(p).includes("I can't reach that!"), label);
+  }
+});
+
 test('the bedsheet turns the player into the Ghost (?) disguise and makes them walk (Wiki: Bedsheet; tick 1504)', (t) => {
   const p = actor(t, { x: 3670, y: 3497, stage: 4 });
   p.setRunning(true);

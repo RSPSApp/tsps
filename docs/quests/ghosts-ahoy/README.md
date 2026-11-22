@@ -122,7 +122,8 @@ arriving (934, 1014). Jump-To routes to the take-off tile for the rock clicked (
 the gap can't be reached on foot), and is also an approach op: it runs as soon as the rock is in
 sight, with no step when it already is (937, 975) or after one route step (948, 995, 1001), and on
 arriving at the take-off otherwise (944, 954, 958, 986, 991). The jump then walks the player the
-rest of the way one tile a tick, stands one tick and leaps (976-981, 1002-1005); from the take-off
+rest of the way one tile a tick along a walkable path (Ours: a take-off with no path on foot, past
+a gap, gets "I can't reach that!"), stands one tick and leaps (976-981, 1002-1005); from the take-off
 the leap is the next tick (945). Each leap is anim 1604 (delay 26),
 sound 2461 and the move. A fall plays anim 767, sound 2455 and hits 3 two ticks later, with no XP
 (981-985). The island chest gives scrap 3 (968). The three scraps make the map in an item box

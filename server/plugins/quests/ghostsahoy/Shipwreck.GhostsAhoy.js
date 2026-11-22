@@ -87,6 +87,7 @@ const MESSAGE = Object.freeze({
   MAST: "You can see a tattered flag blowing in the wind.",
   WINDY: "The wind is blowing too hard to make out any details.",
   // Ours: neither the Wiki nor a capture records the refusal; worded like the other Agility checks.
+  CANT_REACH: "I can't reach that!",
   JUMP_LEVEL: `You need an Agility level of ${JUMP_AGILITY} to jump to this rock.`,
 });
 
@@ -365,10 +366,49 @@ function crossGangplank(event) {
   return true;
 }
 
-function jumpFor(player, location) {
+/** How far a jump's walk to its take-off may search: the capture's longest is four tiles (976-979). */
+const TAKE_OFF_SEARCH = 8;
+const STEPS = Object.freeze([[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]);
+
+/**
+ * The tiles a player walks from where they stand to a take-off, on foot (clipped steps), or null.
+ * The jump's walk ignores clipping, so it is given this path: a take-off on the far side of a gap
+ * has none, and walking there would cross the water and skip a jump (review of issue #6497).
+ */
+function pathTo(player, [x, y]) {
+  const here = player.getLocation();
+  const z = here.getZ();
+  const area = player.getPrivateArea?.() ?? null;
+  const key = (tx, ty) => `${tx},${ty}`;
+  const start = [here.getX(), here.getY()];
+  if (start[0] === x && start[1] === y) return [];
+  const came = new Map([[key(...start), null]]);
+  const queue = [start];
+  while (queue.length) {
+    const [cx, cy] = queue.shift();
+    for (const [dx, dy] of STEPS) {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (came.has(key(nx, ny))) continue;
+      if (Math.abs(nx - start[0]) > TAKE_OFF_SEARCH || Math.abs(ny - start[1]) > TAKE_OFF_SEARCH) continue;
+      if (!core.RegionManager.canMove(cx, cy, nx, ny, z, 1, 1, area)) continue;
+      came.set(key(nx, ny), [cx, cy]);
+      if (nx === x && ny === y) {
+        const path = [];
+        for (let tile = [nx, ny]; tile && key(...tile) !== key(...start); tile = came.get(key(...tile))) path.unshift(tile);
+        return path;
+      }
+      queue.push([nx, ny]);
+    }
+  }
+  return null;
+}
+
+/** The jump for the rock clicked: the take-off nearest the player (that they can walk to, when asked). */
+function jumpFor(player, location, { walkable = false } = {}) {
   const here = player.getLocation();
   const distance = ([x, y]) => Math.max(Math.abs(x - here.getX()), Math.abs(y - here.getY()));
-  return JUMPS.filter(({ rock: [x, y] }) => x === location.x && y === location.y)
+  return JUMPS.filter(({ rock: [x, y], from }) => x === location.x && y === location.y && (!walkable || pathTo(player, from) != null))
     .sort((a, b) => distance(a.from) - distance(b.from))[0] ?? null;
 }
 
@@ -402,8 +442,13 @@ function routeToRock(event) {
 function jumpToRock(event) {
   const { player, location } = event;
   if (ObstacleRunner.isBusy(player)) return true;
-  const jump = jumpFor(player, location);
-  if (!jump) return false;
+  if (!jumpFor(player, location)) return false;
+  // Ours: a take-off across the water from here (a click from further back) can't be walked to.
+  const jump = jumpFor(player, location, { walkable: true });
+  if (!jump) {
+    player.sendMessage(MESSAGE.CANT_REACH);
+    return true;
+  }
   if (player.getSkillManager().getCurrentLevel(core.Skill.AGILITY) < JUMP_AGILITY) {
     player.sendMessage(MESSAGE.JUMP_LEVEL);
     return true;
@@ -417,10 +462,10 @@ function jumpToRock(event) {
     player.getPacketSender().sendRunEnergy();
   };
   const steps = [];
-  const here = player.getLocation();
   // The walk to the take-off is at walking pace, then one still tick before the leap (ticks
   // 976-980, 1002-1004); from the take-off itself the leap is on the next tick (944-945).
-  if (here.getX() !== jump.from[0] || here.getY() !== jump.from[1]) steps.push({ walk: [jump.from] }, { wait: 1 });
+  const path = pathTo(player, jump.from) ?? [];
+  if (path.length) steps.push({ walk: path }, { wait: 1 });
   steps.push({ run: debitEnergy }, { sound: JUMP_SOUND });
   steps.push({ move: [...jump.to, 0], anim: JUMP_ANIM, delay: 26, speed: [47, 59], ticks: 2 });
   if (falls) {

@@ -133,7 +133,7 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
   with its reply; wrong, "???" and "It seems that was the wrong reply." and round again; again, "You have
   already talked to this skavid." Words: 4376 "Cur bidith" Ig, 4377 "Gor cur" Ar, 4378 "Bidith tanath"
   Cur, 4379 "Tanath gor" Nod.
-- **The scared skavid** (2995-3001): after "You will have to learn skavid..." the chat closes, an ogre
+- **The scared skavid** (2990-3001): "Thank you, kind one." (as the Wiki); after "You will have to learn skavid..." the chat closes, an ogre
   shaman is beside it (Wiki; live sends ogre 4363) in a puff of smoke; two ticks later it strikes (seq 359) and shouts while the skavid is hit (seq 5356)
   and cries "Tanath cur, tanath cur!"; four ticks later it is gone and the talk goes on.
 - **The mad skavid** (3310-3320): the crystal and stage 7 with his second line, then its box.
@@ -171,39 +171,45 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
 
 ## Recorded differences
 
-- The scared skavid says "Thank you, kind one." on live (2990); the Wiki's "Thank you, kind [sir/madam]."
-  is kept.
-- The mad skavid opened with "Bidith ig..." and took "Cur." (3310-3313); the Wiki transcript's "Gor nod..."
-  and "Tanath." are kept (the Wiki's guide lists eight phrases).
+The words are Transcript:Watchtower revision 15399934 (2026-11-11), which already has most of this capture's
+lines. Where it and the capture disagree, the Wiki is kept:
+
+- The battlement guards after the cake: the Wiki's "It's that creature again. This time we will let it go.";
+  live played their first talk again (t6252).
+- A skavid cave without the map: the Wiki's "There's no way I can find my way through without a map of some
+  kind." and another cave; live's cave6 faded with no message (t2255-2260), and cave2 only gave the message
+  (t2263).
 - The scared skavid's attacker is the Wiki's ogre shaman (the scene's shaman, 4384); live sends
   ogre_chieftan_caves (4363, t2995).
-- Skavid 3's and Skavid 4's wrong-word loop is captured (3195-3211, 3083-3096); the same lines fill the
-  other skavids' wrong words in capture-sources.
-- The lever's rewards go with stage 13 here (live: four ticks later, t6054), so a logout between cannot
-  save a completion without them.
-- The cws_warning_12 screen opens a tick after the guard's line closes here (live: the same tick, 3633),
-  so the chat's close does not take it with it.
+- The mad skavid greets with one of the Wiki's four phrases; the capture's was "Bidith ig..." / Cur
+  (t3310-3313), one of them.
+- Watchtower Teleport lands on live's (2934,4713,2) (t6337); the Wiki's location line gives the world-map
+  tower (2546,3114). The tablet is taken to land with the spell (no tablet recording).
+
+Timing choices:
+
+- The lever's rewards go with stage 13 (live: four ticks later, t6054), and the spell scroll with stage 14
+  (live: two ticks later, t6095), so a logout between cannot save one half without the other.
+- The cws_warning_12 screen opens a tick after the guard's line closes (live: the same tick, 3633), so the
+  chat's close does not take it with it.
 - Live let the first nightshade (3451) and one Yes on the warning (3462) go by while the guards were
   attacking the player; here the warning always follows and Yes always runs past.
-- skavid_cave2 without the map only said "There's no way I can find my way through without a map of some
-  kind." on live (2263); the Wiki's circuit is kept for it.
 
 ## Not covered
 
 - The shaman melting locs (qip_watchtower_ogre_shaman_melting_0n, t5714-5717, t5847-5850) and the east
   gate's mirrored leaves when opened from the other leaf (t3270-3274).
-- Talking to an ogre shaman: the Wiki's 20 damage and "A magic blast comes from the shaman..." are not in
-  the dump yet (osrsreboxed-db).
-
-- Ours: the trellis's Agility 18 refusal, the bushes before the quest, the light-source refusal in the
-  caves, the Magic 14 / Herblore 14 / Mining 40 / Thieving 15 refusals, "I can't touch it..." on the rock
-  before the shamans, the relic parts used together, the potion steps before the recipe, the vial of
-  water + jangerberries and + guam leaf orders, nightshade before stage 7, a second scroll read, the
-  rock cake stall's 6.4 XP: no capture shows them.
-- Ours: Toban gives a lost relic part back with no line (the Wiki has only the "you lie to me" answer).
-- The guards' push "back down the hill": 3 damage (Wiki), no push or stun (no capture says where).
+- The Wiki's "Looking at the broken bridge" line on Toban's island (no loc named for it).
+- Ours: the trellis's Agility 18 refusal words, a cave with a tinderbox but no light, the Magic 14 /
+  Herblore 14 / Mining 40 / Thieving 15 / gap Agility 25 refusal words, the potion steps before the recipe,
+  the vial of water + jangerberries and + guam leaf orders, nightshade before stage 7, a second scroll read,
+  the rock cake stall's 6.4 XP, the vial of water and ground bones both used up: no capture or Wiki line.
+- Ours: Toban gives a lost relic part back with no line; the other skavids' "already talked" lines (only
+  Skavid 1's "Cur tanath!" is known; the others give the message alone); Og, Grew, Toban and the mad skavid
+  say nothing where the Wiki has no talk for the stage.
+- The guards' push "back down the hill": the Wiki's message and 3 damage, no push or stun (no capture
+  says where).
 - The battlement guards' "Okay, okay, I'm going." lava push (the Wiki's prose) is not played.
 - The journal's uncaptured pages (see Journal.Watchtower.js).
 - The city guards' "Hey, you can't go climbing all over the city! Use the path!" before the shortcut's
   refusal (2715, 3282); the shortcut's own message is the capture's.
-- The mad skavid's "you have the crystal" line is missing from the Wiki.

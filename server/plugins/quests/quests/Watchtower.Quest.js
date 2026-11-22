@@ -1,9 +1,9 @@
 /**
  * Watchtower (members), aligned with a whole run of the quest on live: the user's RSProx capture
  * Watchtower.bin (revision 242.1; docs/quests/watchtower/README.md, with every capture fact the
- * plugin relies on and the recording's ticks). The words are the Wiki's: the "Watchtower" and "Ogre
- * guard" transcripts, with the lines they lack added from the capture in osrsreboxed-db's
- * capture-sources.json. Where the capture words a line differently the Wiki's wording is kept.
+ * plugin relies on and the recording's ticks). The words are the Wiki's: the "Watchtower" transcript
+ * (revision 15399934), with the lines it still lacks added from the capture in osrsreboxed-db's
+ * capture-sources.json. Where the capture and the Wiki differ the Wiki is kept.
  *
  * Units in plugins/quests/watchtower/: State (stages, the varp 936 varbits, ids, tiles, old saves),
  * Journal (the capture's journal) and Scenes (the enclave scene, the relic, the scared skavid).
@@ -223,7 +223,7 @@ module.exports = function registerWatchtowerQuest(api) {
       if (shamansDead(player) >= MAX_SHAMANS) {
         return "entering-the-enclave-returning-to-the-watchtower-wizard-after-killing-the-shamans-without-mining-the-rock";
       }
-      return "entering-the-enclave-talking-to-the-watchtower-wizard-before-destroying-the-shamans";
+      return "entering-the-enclave-talking-to-the-watchtower-wizard-before-killing-the-shamans";
     }
     if (value === STAGES.ALL_CRYSTALS) return "reviving-the-watchtower-talking-to-the-watchtower-wizard-again";
     return "post-quest-talking-to-the-watchtower-wizard";
@@ -287,15 +287,19 @@ module.exports = function registerWatchtowerQuest(api) {
     // With the death rune the guard takes it at once (t2661: "I worked it out!").
     if (value === STAGES.RIDDLE) {
       return held(player, ITEMS.DEATH_RUNE)
-        ? "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard"
+        ? "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard-or-talking-to-him-with-it"
         : "entering-gu-tanoth-seeking-passage-talking-to-the-city-guard-again";
     }
     return "entering-gu-tanoth-seeking-passage-talking-to-him-after-having-given-him-the-rune";
   }
 
-  /** The battlement guards: the gift talk once they have asked for one, their first talk otherwise (t2444, t6252). */
+  /**
+   * The battlement guards: their first talk until they ask for a gift (t2444), then the gift talk, whose Wiki
+   * "After giving him the rock cake" line plays once they have it (recorded difference: live played the first talk
+   * again after the cake, t6252).
+   */
   function battlementGuardVariant(player) {
-    return state.get(player, VARBITS.GATE_CHAT_BATTLEMENT) === 1 && !state.hasBit(player, BITS.MARKET_GIVEN)
+    return state.get(player, VARBITS.GATE_CHAT_BATTLEMENT) === 1
       ? "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again"
       : "entering-gu-tanoth-ogre-guard";
   }
@@ -316,7 +320,10 @@ module.exports = function registerWatchtowerQuest(api) {
     if (npcId === NPCS.OG) return ogVariant(player);
     if (npcId === NPCS.GREW) return grewVariant(player);
     if (npcId === NPCS.TOBAN) return tobanVariant(player);
-    if (npcId === NPCS.GORAD) return "ogre-investigations-grew-facing-gorad";
+    if (npcId === NPCS.GORAD) {
+      return state.get(player, VARBITS.TOOTH_GOT) === 1 || state.hasBit(player, BITS.HELPED_GREW)
+        ? "ogre-investigations-grew-talking-to-gorad-after-getting-his-tooth" : "ogre-investigations-grew-facing-gorad";
+    }
     if (npcId === NPCS.BATTLEMENT_GUARD) return battlementGuardVariant(player);
     if (npcId === NPCS.BRIDGE_GUARD) return "entering-gu-tanoth-talking-to-the-southern-ogre-guard";
     if (npcId === NPCS.CITY_GUARD) return cityGuardVariant(player);
@@ -326,7 +333,11 @@ module.exports = function registerWatchtowerQuest(api) {
       if (value >= STAGES.SKAVID_CRYSTAL) return "skavid-search-the-mad-skavid-talking-to-the-mad-skavid-again";
       return value === STAGES.MAP && learnedWords(player) >= W.SKAVIDS.size ? "skavid-search-the-mad-skavid" : null;
     }
-    if (npcId === NPCS.ENCLAVE_GUARD) return "entering-the-enclave-talking-to-an-enclave-guard";
+    if (npcId === NPCS.ENCLAVE_GUARD) {
+      return value < STAGES.SKAVID_CRYSTAL
+        ? "entering-the-enclave-talking-to-an-enclave-guard-before-getting-the-mad-skavid-s-crystal"
+        : "entering-the-enclave-talking-to-an-enclave-guard";
+    }
     if (npcId === NPCS.OGRE_CHIEFTAIN && inBox(player, 2560, 2623, 9408, 9471)) {
       return "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-chieftain";
     }
@@ -339,6 +350,8 @@ module.exports = function registerWatchtowerQuest(api) {
   function answerCondition(event) {
     if (!event.pages?.some((entry) => entry.page === PAGE || entry.page === GUARD_PAGE)) return null;
     const { player, text, stepId } = event;
+    const answer = newConditions(event);
+    if (answer !== null) return answer;
     if (!player || text === undefined) return null;
     const value = String(text).toLowerCase();
     const has = (itemId) => held(player, itemId);
@@ -430,12 +443,48 @@ module.exports = function registerWatchtowerQuest(api) {
     return null;
   }
 
+  /** The conditions of Transcript:Watchtower revision 15399934 that are not in the older wording below. */
+  function newConditions({ player, text, npcId }) {
+    const value = String(text ?? "").toLowerCase();
+    const has = (itemId) => held(player, itemId);
+    const bush = searchingBush.get(player);
+    if (value.includes("before starting the quest, the bush with the fingernails")) return stage(player) <= 0 && bush === ITEMS.FINGERNAILS;
+    if (value.includes("before starting the quest")) return stage(player) <= 0 && (bush === undefined || bush !== ITEMS.FINGERNAILS);
+    if (value.includes("the first time after starting the quest")) return stage(player) >= STAGES.STARTED;
+    if (value.includes("looking at the broken bridge")) return false;
+    if (value.includes("entering the tunnel")) return true;
+    if (npcId === NPCS.OG && value.includes("if the player has the gold")) return has(ITEMS.GOLD);
+    if (npcId === NPCS.OG && value === "otherwise:") return !has(ITEMS.GOLD);
+    if (value.includes("the first part he takes")) return relicPartsHeld(player) === 1;
+    if (value.includes("each later part")) return relicPartsHeld(player) >= 2;
+    if (value === "the first time:") return state.get(player, VARBITS.GATE_CHAT_EAST) === 0 && !eastGateOpen(player);
+    if (value.includes("afterwards, without a gold bar")) return state.get(player, VARBITS.GATE_CHAT_EAST) === 1 && !eastGateOpen(player) && !has(ITEMS.GOLD_BAR);
+    if (value.includes("afterwards, with a gold bar")) return state.get(player, VARBITS.GATE_CHAT_EAST) === 1 && !eastGateOpen(player) && has(ITEMS.GOLD_BAR);
+    if (value.includes("after giving him the gold")) return eastGateOpen(player);
+    if (value.includes("with a relic part")) return ITEMS.RELIC_PARTS.some(has);
+    if (value.includes("with nothing")) return !ITEMS.RELIC_PARTS.some(has);
+    if (value.includes("after giving him the rock cake")) return state.hasBit(player, BITS.MARKET_GIVEN);
+    if (value.includes("without an ogre rockcake")) return !has(ITEMS.ROCK_CAKE) && !state.hasBit(player, BITS.MARKET_GIVEN);
+    if (value.includes("with an ogre rockcake")) return has(ITEMS.ROCK_CAKE) && !state.hasBit(player, BITS.MARKET_GIVEN);
+    if (value.includes("with no space for the map")) {
+      return player.getInventory().isFull() && player.getInventory().getAmount(ITEMS.DEATH_RUNE) !== 1;
+    }
+    if (value.includes("without the skavid map")) return !has(ITEMS.MAP);
+    if (value.includes("without a light source or a tinderbox")) return !Darkness.hasLightSource(player) && !has(ITEMS.TINDERBOX);
+    if (value.includes("before the scared skavid has taught")) return !state.hasBit(player, BITS.LEARNING_SKAVID);
+    if (value === "prospecting:") return rockOption.get(player) === "prospect";
+    if (value === "mining:") return rockOption.get(player) === "mine";
+    if (value.includes("searching the shaman robe before killing all the shamans")) return shamansDead(player) < MAX_SHAMANS;
+    return null;
+  }
+  /** Which option the Rock of Dalgroth was clicked with, for its conditions. */
+  const rockOption = new WeakMap();
+
   // ------------------------------------------------------------------ lines: what live does as each shows
 
   /** The relic parts still to go to the wizard in this talk, in hand-in order. */
   const relicQueue = new WeakMap();
   /** A skavid word the player has just said right (the reply line confirms it). */
-  const skavidAnswers = new WeakMap();
 
   const LINE = Object.freeze({
     START_SEARCH: "Try searching the surrounding area.",
@@ -569,6 +618,11 @@ module.exports = function registerWatchtowerQuest(api) {
       return;
     }
     if (request.text === LINE.EAST_TAKES || request.text === LINE.EAST_PASS) {
+      if (request.text === LINE.EAST_TAKES) request.before = () => {
+        if (!held(player, ITEMS.GOLD_BAR)) return;
+        take(player, ITEMS.GOLD_BAR);
+        state.setBit(player, BITS.EAST_GATE_PAID);
+      };
       request.after = () => walkThroughGate(player, EAST_GATE);
       return;
     }
@@ -657,78 +711,55 @@ module.exports = function registerWatchtowerQuest(api) {
   // ------------------------------------------------------------------ the skavids
 
   /** The teaching skavids' lines: the game messages live sends around them (t3047-3211). */
+  /**
+   * The teaching skavids. The Wiki (with the capture's lines in capture-sources) carries their messages; the plugin
+   * marks the word learned as the right reply shows, and gives the shared sections the skavid's own phrase.
+   */
   function skavidLine(request) {
     const { player } = request;
     const skavid = W.SKAVIDS.get(request.npcId);
     if (!skavid) return;
-    const text = String(request.text ?? "");
     const steps = variantSteps(PAGE, skavid.variant) ?? [];
-    const opening = steps[0]?.text;
-    if (skavidUnknown.has(player)) return;
-    if (text === opening) {
-      request.after = () => player.sendMessage("The skavid is trying to communicate...");
+    // "Before the scared skavid has taught the player any words" is written for Skavid 1 ("Bidith tanath...").
+    if (!state.hasBit(player, BITS.LEARNING_SKAVID) && request.step?.type === "line" && request.text === "Bidith tanath...") {
+      request.text = steps[0]?.text ?? request.text;
       return;
     }
-    if (text === "???" && request.step?.type === "line") {
-      request.after = () => player.sendMessage("It seems that was the wrong reply.");
-      return;
-    }
-    const answer = steps[1]?.options?.find((option) => option.text === skavid.word)?.steps ?? [];
-    const [reply, again] = answer.filter((step) => step.type === "line").map((step) => step.text);
-    if (text === reply) {
-      request.before = () => {
-        player.sendMessage("It seems the skavid understood you.");
-        state.setBit(player, skavid.bit);
-      };
-      return;
-    }
-    // Skavid 1's second line is its "already talked" line (t3052); the first reply has only the first.
-    if (again && text === again && skavidAnswers.get(player) === request.npcId) request.skip = true;
+    const answer = steps.find((step) => step.type === "choice")?.options?.find((option) => option.text === skavid.word)?.steps ?? [];
+    const reply = answer.find((step) => step.type === "line")?.text;
+    if (reply && request.text === reply) request.before = () => state.setBit(player, skavid.bit);
   }
+
+  /** The "already talked" line: Skavid 1's "Cur tanath!" (t3052); Ours: the others say nothing but the message. */
+  const SKAVID_AGAIN_LINE = new Map([[4378, "Cur tanath!"]]);
 
   function talkSkavid(event) {
     const { player, npcId, npc } = event;
     const skavid = W.SKAVIDS.get(npcId);
-    // A talk closed before its "???" must not leave the no-words flag behind.
-    skavidUnknown.delete(player);
     if (!skavid || stage(player) < STAGES.MAP) return false;
-    const steps = variantSteps(PAGE, skavid.variant);
-    if (!steps) return false;
     if (!state.hasBit(player, BITS.LEARNING_SKAVID)) {
-      // Before the scared skavid has taught any words: its line and the player's "???" (t2912-2914).
-      const blank = (variantSteps(PAGE, "skavid-search-scared-skavid") ?? []).find((step) => step.player === "???");
-      skavidUnknown.add(player);
-      play(player, npcId, skavid.variant, () => [steps[0], ...(blank ? [blank] : [])], PAGE, npc);
+      play(player, npcId, "skavid-search-learning-skavid", null, PAGE, npc);
       return true;
     }
     if (state.hasBit(player, skavid.bit)) {
-      // Talked to already: its own "already" line where the Wiki has one, and the message (t3052-3056).
-      const answer = steps[1]?.options?.find((option) => option.text === skavid.word)?.steps ?? [];
-      const again = answer.filter((step) => step.type === "line")[1];
-      skavidAnswers.delete(player);
-      if (again) play(player, npcId, skavid.variant, () => [again], PAGE, npc);
-      player.sendMessage("You have already talked to this skavid.");
+      const again = SKAVID_AGAIN_LINE.get(npcId);
+      play(player, npcId, "skavid-search-learning-skavid-talking-to-a-skavid-again",
+        (steps) => again ? steps : steps.filter((step) => step.type !== "line"), PAGE, npc);
       return true;
     }
-    skavidAnswers.set(player, npcId);
     return false;
   }
-  /** Players who have just heard a skavid without knowing any words: the two messages follow the "???" line. */
-  const skavidUnknown = new WeakSet();
-  function skavidUnknownLine(request) {
-    if (request.text !== "???" || request.step?.player !== "???" || !skavidUnknown.has(request.player)) return;
-    if (!W.SKAVIDS.has(request.npcId)) return;
-    request.after = () => {
-      skavidUnknown.delete(request.player);
-      request.player.sendMessage("The skavid is trying to communicate...");
-      request.player.sendMessage("You don't know any skavid words yet!");
-    };
+  const SKAVID_AGAIN_PLACEHOLDER = "[Cur tanath!/Gor nod!/...]";
+  function skavidAgainLine(request) {
+    const again = SKAVID_AGAIN_LINE.get(request.npcId);
+    if (again && request.text === SKAVID_AGAIN_PLACEHOLDER) request.text = again;
   }
 
   function handleChoice(event) {
     const { player, npcId, option } = event;
     if (!player) return;
     const text = String(option ?? "");
+    caveChoice(event);
     if (npcId === NPCS.TOBAN && text === "I could do something for you...") state.setBit(player, BITS.SPOKEN_TOBAN);
     else if (npcId === NPCS.GREW && text === "Don't eat me; I can help you.") state.setBit(player, BITS.SPOKEN_GREW);
     else if (npcId === NPCS.SCARED_SKAVID && text === "Okay, okay, I'm not going to hurt you.") state.setBit(player, BITS.LEARNING_SKAVID);
@@ -752,7 +783,7 @@ module.exports = function registerWatchtowerQuest(api) {
       return [ITEMS.RELIC_PARTS[2]];
     }],
     ["qdm4Oz", () => null], // Toban's chest: the chest opens it (openTobanChest)
-    ["ezI70R", () => [ITEMS.RELIC_PARTS[0]]], // Og: the part went with his line
+    ["EGhmsB", () => [ITEMS.RELIC_PARTS[0]]], // Og: the part went with his line
     ["g2LcFM", (player) => { // Grew: the part and the yellow crystal
       take(player, ITEMS.TOOTH);
       give(player, ITEMS.RELIC_PARTS[1]);
@@ -769,7 +800,7 @@ module.exports = function registerWatchtowerQuest(api) {
     }],
     ["KRA6Uf", (player) => { give(player, ITEMS.RELIC); return [ITEMS.RELIC]; }], // "The wizard gives you another statue."
     ["WGTZbp", () => [ITEMS.ROCK_CAKE]], // "You offer the guard a rock cake." (the cake goes with his next line)
-    ["SYijHA", (player) => { // the death rune for the map
+    ["WySYmL", (player) => { // the death rune for the map
       take(player, ITEMS.DEATH_RUNE);
       give(player, ITEMS.MAP);
       state.advance(player, STAGES.MAP);
@@ -796,6 +827,10 @@ module.exports = function registerWatchtowerQuest(api) {
       if (items) event.box = { items };
       return;
     }
+    if (SHAMAN_BLASTS.has(stepId)) {
+      damage(player, SHAMAN_BLASTS.get(stepId));
+      return;
+    }
     if (stepId === "a11a16") { // City guard: "You are under attack!"
       attack(event.npc, player);
       return;
@@ -806,12 +841,18 @@ module.exports = function registerWatchtowerQuest(api) {
     }
   }
 
+  /** Wiki: talking to a shaman costs 20 Hitpoints, attacking one 30 ("A magic blast comes from the shaman..."). */
+  const SHAMAN_BLASTS = new Map([["kRiiBJ", 20], ["MPH1Oe", 30]]);
   const ATTACKS = new Set(["7Todw2", "fPxWjU", "0AF8qI", "n72ZBl", "qS75F0", "LvlTzx", "WdYOsW"]);
-  const PUSHBACKS = new Set(["ECbzBh", "QRQKCo", "YF057i"]);
+  const PUSHBACKS = new Set(["ECbzBh", "yOnYb4"]);
 
   function handleAction(event) {
     const { player, stepId } = event;
     if (!player || !stepId || !event.pages?.some((entry) => entry.page === PAGE || entry.page === GUARD_PAGE)) return;
+    if (caveAnswer(event)) {
+      event.handled = true;
+      return;
+    }
     if (event.kind === "message") {
       handleMessage(event);
       return;
@@ -836,12 +877,14 @@ module.exports = function registerWatchtowerQuest(api) {
       payToll(player);
       return;
     }
-    if (["Cy5w9B"].includes(stepId)) { // the gold bar to the east guard (t2222)
+    if (stepId === "DdGVML") { // "(The gate opens and the player walks through)": the line's `after` walks (t2222-2230)
       event.handled = true;
-      if (held(player, ITEMS.GOLD_BAR)) {
-        take(player, ITEMS.GOLD_BAR);
-        state.setBit(player, BITS.EAST_GATE_PAID);
-      }
+      return;
+    }
+    if (stepId === "ZA8RuD") { // "Gorad hits the player for 12 damage."
+      event.handled = true;
+      event.npc?.performAnimation?.(new Animation(359));
+      damage(player, 12);
       return;
     }
     if (stepId === "-QBFep" || stepId === "IAWRsb" || stepId === "dQ-zw3" || stepId === "C8UbfC" || stepId === "Xje1jx"
@@ -866,13 +909,14 @@ module.exports = function registerWatchtowerQuest(api) {
     const { player, object } = event;
     if (event.objectId !== LOCS.TOWER_LADDER || object?.getLocation?.().getX() !== 2544 || object.getLocation().getY() !== 3111) return;
     event.handled = true;
+    // The Wiki's "Attempting to climb the ladder": refused before the quest; waved up the first time after it.
     if (stage(player) <= 0) {
       play(player, NPCS.TOWER_GUARD, "getting-started-attempting-to-climb-the-ladder");
       return;
     }
     if (state.get(player, VARBITS.GUARD) === 0) {
       state.set(player, VARBITS.GUARD, 1);
-      play(player, NPCS.TOWER_GUARD, "getting-started-climbing-the-ladder-after-starting-the-quest");
+      play(player, NPCS.TOWER_GUARD, "getting-started-attempting-to-climb-the-ladder");
       climbAfterChat(player, TILES.TOWER_FIRST_FLOOR);
       return;
     }
@@ -938,10 +982,7 @@ module.exports = function registerWatchtowerQuest(api) {
   function searchBush(event) {
     const { player, objectId } = event;
     if (!LOCS.BUSHES.has(objectId)) return false;
-    if (stage(player) < STAGES.STARTED) {
-      player.sendMessage("I am not sure why I am searching this bush."); // Ours: no capture before the quest.
-      return true;
-    }
+    // Before the quest the Wiki's "Before starting the quest" lines play (the fingernails' bush says it overhead).
     player.performAnimation(new Animation(SEQ.SEARCH_BUSH));
     searchingBush.set(player, LOCS.BUSHES.get(objectId));
     play(player, NPCS.TOWER_GUARD, "searching-for-evidence-searching-the-bushes");
@@ -955,8 +996,8 @@ module.exports = function registerWatchtowerQuest(api) {
   function relicSteps(player) {
     const variant = "ogre-investigations-assembling-the-relic";
     const partLines = ["c6SUn4", "XLwHKL", "Dp7Zpc"].map((id) => conditionSteps(PAGE, variant, id));
-    const first = conditionSteps(PAGE, variant, "aMqVIt");
-    const more = conditionSteps(PAGE, variant, "NFcmGI");
+    const first = conditionSteps(PAGE, variant, "SjAiJr");
+    const more = conditionSteps(PAGE, variant, "uNxIgi");
     const done = conditionSteps(PAGE, variant, "HQGBKU");
     const queue = [];
     const steps = [];
@@ -1037,9 +1078,9 @@ module.exports = function registerWatchtowerQuest(api) {
 
   /** Toban's tunnel: "You enter the cave.", the island and the player's line, together (t1359). */
   function enterTobanCave({ player }) {
-    player.sendMessage("You enter the cave.");
     player.moveTo(new Location(...TILES.TOBAN_ISLAND));
-    play(player, NPCS.TOBAN, "ogre-investigations-entering-the-tunnel-to-toban-s-island");
+    play(player, NPCS.TOBAN, "ogre-investigations-toban-toban-s-island",
+      () => conditionSteps(PAGE, "ogre-investigations-toban-toban-s-island", "6oNe9n"));
     return true;
   }
 
@@ -1136,14 +1177,14 @@ module.exports = function registerWatchtowerQuest(api) {
     // Transcript:Watchtower, "Entering Gu'Tanoth": "A nearby guard calls you over."
     player.sendMessage("A nearby guard calls you over.");
     const guard = nearestNpc(player, (npc) => npc.getId() === (east ? NPCS.EAST_GUARD : NPCS.NORTH_WEST_GUARD), 8);
-    if (east) play(player, NPCS.EAST_GUARD, "watchtower-standard-dialogue-east-guards", null, GUARD_PAGE, guard);
+    if (east) talkEastGuard({ player, npc: guard });
     else talkNorthWestGuard({ player, npc: guard, npcId: NPCS.NORTH_WEST_GUARD });
     return true;
   }
 
-  /** The east guards' page, Ogre guard's "East guards". */
+  /** The east guards: the Watchtower page's "East gate guard". */
   function talkEastGuard({ player, npc }) {
-    play(player, NPCS.EAST_GUARD, "watchtower-standard-dialogue-east-guards", null, GUARD_PAGE, npc);
+    play(player, NPCS.EAST_GUARD, "entering-gu-tanoth-east-gate-guard", null, PAGE, npc);
     return true;
   }
 
@@ -1153,18 +1194,22 @@ module.exports = function registerWatchtowerQuest(api) {
    */
   function talkNorthWestGuard({ player, npc }) {
     if (stage(player) >= STAGES.GUTANOTH || complete(player)) {
-      play(player, NPCS.NORTH_WEST_GUARD, "watchtower-standard-dialogue-north-west-guards",
-        () => conditionSteps(GUARD_PAGE, "watchtower-standard-dialogue-north-west-guards", "fAaZ7A"), GUARD_PAGE, npc);
+      play(player, NPCS.NORTH_WEST_GUARD, "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic", null, PAGE, npc);
       return true;
     }
     const variant = "entering-gu-tanoth-city-guard";
     const carrying = held(player, ITEMS.RELIC);
-    if (carrying && state.get(player, VARBITS.GATE_CHAT_NORTH_WEST) === 0) {
+    const first = state.get(player, VARBITS.GATE_CHAT_NORTH_WEST) === 0;
+    if (carrying && first) {
       const stop = conditionSteps(PAGE, variant, "flM0eA").filter((step) => step.type === "line");
       play(player, NPCS.NORTH_WEST_GUARD, variant, () => [...stop, ...conditionSteps(PAGE, variant, "7ZK2kb")], PAGE, npc);
       return true;
     }
-    play(player, NPCS.NORTH_WEST_GUARD, variant, null, PAGE, npc);
+    if (carrying || first) {
+      play(player, NPCS.NORTH_WEST_GUARD, variant, null, PAGE, npc);
+      return true;
+    }
+    play(player, NPCS.NORTH_WEST_GUARD, "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again", null, PAGE, npc);
     return true;
   }
 
@@ -1273,41 +1318,65 @@ module.exports = function registerWatchtowerQuest(api) {
   // ------------------------------------------------------------------ the skavid caves
 
   /** A skavid cave: with the map, "You enter the cave..." and the inside on arrival (t2903, t2947). */
+  /** The cave a player is about to go into (its prompt's answer), and where. */
+  const pendingCave = new WeakMap();
+  const CAVE_VARIANT = "skavid-search-entering-the-caves";
+
+  /**
+   * A skavid cave, as the Wiki's "Entering the caves": without the map, the message and another cave (the circuit;
+   * the capture's cave6 fade, t2255-2260); without a light or a tinderbox, the dark prompt; with a light but no
+   * tinderbox, the tinderbox prompt; otherwise "You enter the cave..." and the inside on arrival (t2903, t2947).
+   */
   function enterSkavidCave(event) {
     const { player, objectId } = event;
     const inside = W.CAVES.get(objectId);
     if (!inside) return false;
+    pendingCave.set(player, { objectId, inside });
+    const light = Darkness.hasLightSource(player), tinderbox = held(player, ITEMS.TINDERBOX);
     if (!held(player, ITEMS.MAP)) {
-      const route = W.MAPLESS_CAVE_ROUTES.get(objectId);
-      if (!route) {
-        player.sendMessage("There's no way I can find my way through without a map of some kind.");
-        return true;
-      }
-      // Mapless: the fade, the circuit's next cave three ticks later, the fade back (t2255-2260).
-      ObstacleRunner.run({ player }, [{ fade: "out" }, { wait: 3 }, { tele: [route[0], route[1], 0] }, { wait: 2 }, { fade: "in" }, { wait: 3 }]);
+      play(player, NPCS.SCARED_SKAVID, CAVE_VARIANT, () => conditionSteps(PAGE, CAVE_VARIANT, "1FNZaU"));
       return true;
     }
-    if (!Darkness.hasLightSource(player)) {
-      player.sendMessage("It is far too dark in there. I will need a light source."); // Ours: not captured
+    if (!light && !tinderbox) {
+      play(player, NPCS.SCARED_SKAVID, CAVE_VARIANT, () => conditionSteps(PAGE, CAVE_VARIANT, "nyQebD"));
       return true;
     }
-    if (!held(player, ITEMS.TINDERBOX)) {
-      const steps = variantSteps(PAGE, "skavid-search-entering-the-caves") ?? [];
-      const text = messageText("skavid-search-entering-the-caves", "31Cmer");
-      const options = steps[0]?.steps?.find((step) => step.type === "choice")?.options ?? [];
-      if (text && options.length === 2) {
-        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new core.StatementDialogue(0, text)).add(
-          new core.ActionDialogue(1, { execute: () => api.sendMultiChatboxPrompt(player, "Select an Option",
-            options[0].text, () => intoCave(player, inside), options[1].text, () => {}) })));
-        return true;
-      }
+    if (!light) {
+      player.sendMessage("It is far too dark in there. I will need a light source."); // Ours: the Wiki has no such case
+      return true;
+    }
+    if (!tinderbox) {
+      play(player, NPCS.SCARED_SKAVID, CAVE_VARIANT, () => conditionSteps(PAGE, CAVE_VARIANT, "bQJSWe"));
+      return true;
     }
     intoCave(player, inside);
     return true;
   }
-  function intoCave(player, [x, y]) {
-    player.sendMessage("You enter the cave...");
+  function intoCave(player, [x, y], message = true) {
+    pendingCave.delete(player);
+    if (message) player.sendMessage("You enter the cave...");
     player.moveTo(new Location(x, y, 0));
+  }
+  /** The mapless circuit: the fade, the next cave three ticks later, the fade back. */
+  function maplessCircuit(player) {
+    const cave = pendingCave.get(player);
+    pendingCave.delete(player);
+    const route = cave && W.MAPLESS_CAVE_ROUTES.get(cave.objectId);
+    if (!route) return;
+    ObstacleRunner.run({ player }, [{ fade: "out" }, { wait: 3 }, { tele: [route[0], route[1], 0] }, { wait: 2 }, { fade: "in" }, { wait: 3 }]);
+  }
+  /** The caves' prompts: in on "I'm not scared of the dark!" (its own message) or "I'll be fine without a tinderbox.". */
+  function caveAnswer(event) {
+    const { player, stepId, kind } = event;
+    const cave = pendingCave.get(player);
+    if (!cave) return false;
+    if (stepId === "porSMW") { maplessCircuit(player); return true; }
+    if (kind === "message" && stepId === "-9KBp5") { intoCave(player, cave.inside, false); return false; }
+    return false;
+  }
+  function caveChoice(event) {
+    const cave = pendingCave.get(event.player);
+    if (cave && event.option === "I'll be fine without a tinderbox.") intoCave(event.player, cave.inside);
   }
 
   function leaveSkavidCave(event) {
@@ -1412,9 +1481,13 @@ module.exports = function registerWatchtowerQuest(api) {
   }
 
   function searchShamanRobe({ player }) {
-    if (stage(player) < STAGES.MAGIC_POTION || shamansDead(player) < MAX_SHAMANS) return true;
+    if (shamansDead(player) < MAX_SHAMANS) {
+      play(player, NPCS.WIZARD, "entering-the-enclave-killing-the-ogre-shamans",
+        () => conditionSteps(PAGE, "entering-the-enclave-killing-the-ogre-shamans", "D7pWK9"));
+      return true;
+    }
     play(player, NPCS.WIZARD, "entering-the-enclave-killing-the-ogre-shamans", (steps) => steps.filter((step) =>
-      /shaman robe/i.test(step.text ?? "")));
+      /shaman robe while/i.test(step.text ?? "")));
     return true;
   }
 
@@ -1433,7 +1506,9 @@ module.exports = function registerWatchtowerQuest(api) {
   /** Mine: once the shamans are gone, the swing and four ticks later the crystal in a box (t5881-5885). */
   function mineRock({ player }) {
     if (stage(player) < STAGES.MAGIC_POTION || shamansDead(player) < MAX_SHAMANS) {
-      player.sendMessage("I can't touch it... Perhaps it is linked with the shamans in some strange way?"); // Ours
+      // The Wiki's "The Rock of Dalgroth before killing the shamans", Mining: the player's line.
+      play(player, NPCS.WIZARD, "entering-the-enclave-inside-the-enclave-the-rock-of-dalgroth-before-killing-the-shamans",
+        () => conditionSteps(PAGE, "entering-the-enclave-inside-the-enclave-the-rock-of-dalgroth-before-killing-the-shamans", "w1gpgY"));
       return true;
     }
     if (owns(player, CRYSTAL_GREY)) {
@@ -1476,9 +1551,9 @@ module.exports = function registerWatchtowerQuest(api) {
     const both = (a, b) => ids.includes(a) && ids.includes(b);
 
     if (ITEMS.RELIC_PARTS.includes(ids[0]) && ITEMS.RELIC_PARTS.includes(ids[1])) {
-      player.sendMessage("I think these fit together, but I can't seem to make them fit."); // Ours: no capture
-      player.sendMessage("I am going to need someone with experience to help me with this.");
       event.handled = true;
+      const [step] = variantSteps(PAGE, "ogre-investigations-using-the-relic-parts-on-each-other") ?? [];
+      if (step?.text) player.sendMessage(step.text);
       return;
     }
     // The bat bones ground with the pestle: seq 364 and sound 2608 (t5084, t5277).
@@ -1500,7 +1575,8 @@ module.exports = function registerWatchtowerQuest(api) {
     const step = steps.find(([a, b]) => both(a, b));
     // The wrong order: ground bones into the guam potion explodes (t5087).
     const explodes = both(ITEMS.GUAM_POTION, ITEMS.GROUND_BAT_BONES);
-    if (!step && !explodes) return;
+    const evaporates = both(ITEMS.VIAL_OF_WATER, ITEMS.GROUND_BAT_BONES);
+    if (!step && !explodes && !evaporates) return;
     event.handled = true;
     if (stage(player) < STAGES.RECIPE) {
       player.sendMessage("Hmm, perhaps I shouldn't mix these together. It might have unpredictable results."); // Ours
@@ -1508,6 +1584,16 @@ module.exports = function registerWatchtowerQuest(api) {
     }
     if (level(player, Skill.HERBLORE) < 14) {
       player.sendMessage("You need a Herblore level of 14 or above to make this potion."); // Ours: Wiki requirement
+      return;
+    }
+    if (evaporates) {
+      // The Wiki's "Ground bat bones into a vial of water": its message and the player's line. Ours: both are used up.
+      take(player, ITEMS.VIAL_OF_WATER);
+      take(player, ITEMS.GROUND_BAT_BONES);
+      player.getInventory().adds(ITEMS.VIAL, 1);
+      const mixing = "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible-mixing-the-potion";
+      const branch = (variantSteps(PAGE, mixing) ?? []).find((s) => /vial of water/i.test(s.text ?? ""));
+      if (branch) play(player, NPCS.WIZARD, mixing, () => branch.steps ?? []);
       return;
     }
     if (explodes) {
@@ -1701,8 +1787,11 @@ module.exports = function registerWatchtowerQuest(api) {
       const value = stage(player);
       if (value === STAGES.STARTED && DECOYS.some(([id]) => id === itemId)) {
         // A decoy shown to the wizard: "Let me see..." and the rest of his answer (t652-666).
-        const decoy = conditionSteps(PAGE, "searching-for-evidence-talking-to-the-watchtower-wizard", "BoocKJ");
-        play(player, NPCS.WIZARD, "searching-for-evidence-talking-to-the-watchtower-wizard", () => decoy.filter((step) => !step.player), PAGE, npc);
+        play(player, NPCS.WIZARD, "searching-for-evidence-using-evidence-other-than-the-fingernails-on-the-watchtower-wizard", null, PAGE, npc);
+        return stop();
+      }
+      if (ITEMS.CRYSTALS.includes(itemId) && value >= STAGES.FINGERNAILS && value < STAGES.ALL_CRYSTALS) {
+        play(player, NPCS.WIZARD, "ogre-investigations-using-a-crystal-on-the-watchtower-wizard", null, PAGE, npc);
         return stop();
       }
       if (value === STAGES.STARTED && itemId === ITEMS.FINGERNAILS) {
@@ -1740,6 +1829,10 @@ module.exports = function registerWatchtowerQuest(api) {
       player.sendMessage("The ogre has not asked you for anything."); // Wiki: Watchtower guide
       return stop();
     }
+    if (npcId === NPCS.NORTH_WEST_GUARD) {
+      play(player, NPCS.NORTH_WEST_GUARD, "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard", null, PAGE, npc);
+      return stop();
+    }
     if (npcId === NPCS.BATTLEMENT_GUARD && itemId === ITEMS.ROCK_CAKE && state.get(player, VARBITS.GATE_CHAT_BATTLEMENT) === 1
       && !state.hasBit(player, BITS.MARKET_GIVEN)) {
       play(player, NPCS.BATTLEMENT_GUARD, "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again", null, PAGE, npc);
@@ -1747,7 +1840,7 @@ module.exports = function registerWatchtowerQuest(api) {
     }
     if (npcId === NPCS.CITY_GUARD && stage(player) === STAGES.RIDDLE) {
       play(player, NPCS.CITY_GUARD, itemId === ITEMS.DEATH_RUNE
-        ? "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard"
+        ? "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard-or-talking-to-him-with-it"
         : "entering-gu-tanoth-seeking-passage-using-the-wrong-item-on-the-guard", null, PAGE, npc);
       return stop();
     }
@@ -1766,7 +1859,7 @@ module.exports = function registerWatchtowerQuest(api) {
 
   function lines(request) {
     onLine(request);
-    skavidUnknownLine(request);
+    skavidAgainLine(request);
     nightshadeLine(request);
   }
 
@@ -1799,6 +1892,7 @@ module.exports = function registerWatchtowerQuest(api) {
   api.onNpcInteraction("Skavid", { "Talk-to": talkSkavid });
   api.onNpcInteraction("Ogre guard", { "Talk-to": talkOgreGuard });
   for (const name of ["Og", "Grew", "Toban", "Mad skavid"]) api.onNpcInteraction(name, { "Talk-to": talkQuestOgre });
+  for (const name of ["Ogre shaman", "Gorad"]) api.onNpcInteraction(name, { Attack: attackQuestNpc });
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject, { noted: false });
@@ -1814,11 +1908,54 @@ module.exports = function registerWatchtowerQuest(api) {
    * The quest's NPCs with no Wiki talk at the player's stage (Og, Grew, Toban before or after their part, the mad
    * skavid before the words): Ours, nothing happens, rather than the page's first variant (the Tower guard's lines).
    */
+  /**
+   * The mad skavid's greeting (Wiki: "one of four phrases, each with its own answer: 'Ar cur...' (Gor), 'Bidith ig...'
+   * (Cur), 'Cur tanath...' (Bidith) or 'Gor nod...' (Tanath). A wrong answer gives 'The response was wrong.' and
+   * Mad skavid: ???"). The capture's was "Bidith ig..." / Cur (t3310-3313). The reward is the transcript's own.
+   */
+  const MAD_SKAVID_PHRASES = [["Ar cur...", "Gor."], ["Bidith ig...", "Cur."], ["Cur tanath...", "Bidith."], ["Gor nod...", "Tanath."]];
+  function madSkavidSteps() {
+    const steps = variantSteps(PAGE, "skavid-search-the-mad-skavid") ?? [];
+    const greeting = steps.find((step) => step.type === "line");
+    const choice = steps.find((step) => step.type === "choice");
+    const reward = choice?.options?.find((option) => option.text === "Tanath.")?.steps?.filter((step) => step.player === undefined) ?? [];
+    if (!greeting || !choice || !reward.length) return null;
+    const [phrase, answer] = MAD_SKAVID_PHRASES[Math.floor(Math.random() * MAD_SKAVID_PHRASES.length)];
+    return [{ ...greeting, text: phrase }, { ...choice, options: choice.options.map((option) => ({
+      ...option,
+      steps: option.text === answer
+        ? [{ player: answer }, ...reward]
+        : [{ player: option.text }, { type: "message", text: "The response was wrong." }, { ...greeting, text: "???" }],
+    })) }];
+  }
+
   function talkQuestOgre(event) {
     const { player, npcId } = event;
+    if (npcId === NPCS.MAD_SKAVID && selectVariant(event) === "skavid-search-the-mad-skavid") {
+      const steps = madSkavidSteps();
+      if (steps) {
+        play(player, npcId, "skavid-search-the-mad-skavid", () => steps, PAGE, event.npc);
+        return true;
+      }
+    }
     const variant = npcId === NPCS.OG ? ogVariant(player) : npcId === NPCS.GREW ? grewVariant(player)
       : npcId === NPCS.TOBAN ? tobanVariant(player) : npcId === NPCS.MAD_SKAVID ? selectVariant(event) : undefined;
     return variant === null;
+  }
+
+  /** Attacking a shaman: the blast (Wiki); attacking Gorad once his tooth is out: "You don't need to fight him now." */
+  function attackQuestNpc(event) {
+    const { player, npcId, npc } = event;
+    if (W.SHAMANS.some((shaman) => shaman.ids.includes(npcId))) {
+      if (shamansDead(player) >= MAX_SHAMANS) return false;
+      play(player, npcId, "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman", null, PAGE, npc);
+      return true;
+    }
+    if (npcId === NPCS.GORAD && (state.get(player, VARBITS.TOOTH_GOT) === 1 || state.hasBit(player, BITS.HELPED_GREW))) {
+      play(player, NPCS.GORAD, "ogre-investigations-grew-attacking-gorad-after-getting-his-tooth", null, PAGE, npc);
+      return true;
+    }
+    return false;
   }
 
   /** The Gu'Tanoth guards by who they are. */

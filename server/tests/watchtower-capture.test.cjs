@@ -321,6 +321,7 @@ test("the mad skavid: the crystal and stage 7 with his line, then its box (t3310
   const f = actor(t, { at: [2522, 9412, 0], stage: S.MAP });
   for (const bit of [12, 13, 14, 15, 16]) setBit(f, bit);
   const mad = h.spawn(f, N.MAD, [2523, 9411, 0]);
+  t.mock.method(Math, "random", () => 0.99); // "Gor nod..." / Tanath, the transcript's own
   const said = await talk(f, mad, ["Tanath."]);
   assert.ok(said.includes("ItemStatementDialogue: The skavid gives you a large crystal."), said.join("\n"));
   assert.equal(stage(f), S.SKAVID);
@@ -743,4 +744,63 @@ test("a paid east gate opens on a click from inside the city and lets the player
   await click(f, 2786, [2550, 3028]);
   h.ticks(f, 4);
   assert.equal(at(f)[1], 3027, JSON.stringify(at(f)));
+});
+
+test("the mad skavid's phrases (Wiki): the capture's 'Bidith ig...' takes Cur; a wrong word is 'The response was wrong.' and ???", async (t) => {
+  const f = actor(t, { at: [2522, 9412, 0], stage: S.MAP });
+  for (const bit of [12, 13, 14, 15, 16]) setBit(f, bit);
+  const mad = h.spawn(f, N.MAD, [2523, 9411, 0]);
+  t.mock.method(Math, "random", () => 0.3); // "Bidith ig..."
+  const wrong = await talk(f, mad, ["Gor."]);
+  assert.equal(wrong[0], "Mad skavid: Bidith ig...", wrong.join("\n"));
+  assert.ok(wrong.includes("Mad skavid: ???"));
+  assert.ok(messages(f).includes("The response was wrong."));
+  assert.equal(stage(f), S.MAP);
+  await talk(f, mad, ["Cur."]);
+  assert.equal(stage(f), S.SKAVID);
+  assert.equal(count(f, I.CRYSTAL_2), 1);
+});
+
+test("the Wiki's newer lines: a dark cave without a light or tinderbox asks first; the rock and robe before the shamans", async (t) => {
+  const f = actor(t, { at: [2552, 3053, 0], stage: S.MAP, items: [[I.SKAVID_MAP]] });
+  const said = await play(f, () => click(f, 2808, [2552, 3052]), ["I'm not scared of the dark!"]);
+  assert.ok(messages(f).includes("The cave is very dark and you don't have a light source or a tinderbox. Are you sure you want to go down?")
+    || said.some((line) => line.includes("The cave is very dark")), JSON.stringify({ said, m: messages(f) }));
+  h.ticks(f, 2);
+  assert.deepEqual(at(f), [2498, 9451, 0]);
+
+  const g = actor(t, { at: [2589, 9448, 0], stage: S.MAGIC, items: [[I.SHAMAN_ROBE]] });
+  const mine = await play(g, () => click(g, 2816, [2590, 9449], 2));
+  assert.ok(mine.includes("PLAYER: I can't touch it... Perhaps it is linked with the shamans in some strange way?"), mine.join("\n"));
+  const slot = g.player.getInventory().getItems().findIndex((item) => item?.getId() === I.SHAMAN_ROBE);
+  await g.connection.dispatch([{ type: "inventory_action", slot, itemId: I.SHAMAN_ROBE, widgetId: 3214, option: "Search" }]);
+  h.ticks(g, 3);
+  assert.ok(messages(g).some((m) => m.includes("Maybe you need to defeat the shamans first.")), JSON.stringify(messages(g)));
+});
+
+test("the Wiki's newer lines: the battlement guards after the cake, Gorad after his tooth, a shaman's blast", async (t) => {
+  const f = actor(t, { at: [2500, 3013, 0], stage: S.RIDDLE });
+  setBit(f, 11);
+  const guard = h.spawn(f, N.BATTLEMENT_GUARD, [2502, 3014, 0]);
+  const said = await talk(f, guard);
+  assert.ok(said.some((line) => line.endsWith("It's that creature again. This time we will let it go.")), said.join("\n"));
+
+  const g = actor(t, { at: [2577, 3022, 0], stage: S.RELIC });
+  const gorad = h.spawn(g, 4367, [2577, 3021, 0]);
+  const hits = (p) => { const q = p.getCombat().getHitQueue(); const out = []; const add = q.addPendingDamage.bind(q);
+    q.addPendingDamage = (list) => { out.push(...list.map((hit) => hit.getDamage?.() ?? hit.damage)); return add(list); }; return out; };
+  const goradHits = hits(g.player);
+  const answer = await talk(g, gorad, ["A big, ugly creature."]);
+  assert.ok(answer.includes("Gorad: I hit you!"), answer.join("\n"));
+  h.ticks(g, 2);
+  assert.ok(messages(g).includes("You don't need to fight him now."));
+  assert.ok(goradHits.includes(12), JSON.stringify(goradHits));
+
+  const k = actor(t, { at: [2596, 9433, 0], stage: S.NIGHTSHADE });
+  const shaman = h.spawn(k, 6208, [2597, 9433, 0]);
+  const blast = hits(k.player);
+  await talk(k, shaman);
+  h.ticks(k, 2);
+  assert.ok(messages(k).includes("A magic blast comes from the shaman. You are badly injured by the blast."), JSON.stringify(messages(k)));
+  assert.ok(blast.includes(20), JSON.stringify(blast));
 });

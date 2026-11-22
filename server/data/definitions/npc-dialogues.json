@@ -899979,22 +899979,9 @@
               "type": "action",
               "text": "(The ogre guard pushes you back down the hill, stunning you and dealing 3 damage)",
               "id": "QRQKCo"
-            },
-            {
-              "type": "end"
             }
           ],
           "id": "df_SVa"
-        },
-        {
-          "type": "condition",
-          "text": "After showing the relic:",
-          "steps": [
-            {
-              "npc": "It's the small creature; you may pass."
-            }
-          ],
-          "id": "fAaZ7A"
         }
       ],
       "watchtower-standard-dialogue-east-guards": [
@@ -900016,19 +900003,6 @@
             }
           ],
           "id": "UQYS4Q"
-        },
-        {
-          "type": "condition",
-          "text": "After giving the gold bar:",
-          "steps": [
-            {
-              "npc": "I know you, creature; you may pass."
-            },
-            {
-              "type": "end"
-            }
-          ],
-          "id": "j6hp8k"
         },
         {
           "type": "condition",
@@ -1534040,7 +1534014,7 @@
         {
           "type": "line",
           "speaker": "Tower guard",
-          "text": "We are the tower guards – our business is our own!",
+          "text": "We are the tower guards - our business is our own!",
           "speaker_ids": [
             4405
           ]
@@ -1534048,22 +1534022,37 @@
       ],
       "getting-started-attempting-to-climb-the-ladder": [
         {
-          "type": "line",
-          "speaker": "Tower guard",
-          "text": "You can't go up there. That's private, that is.",
-          "speaker_ids": [
-            4405
-          ]
-        }
-      ],
-      "getting-started-climbing-the-ladder-after-starting-the-quest": [
+          "type": "condition",
+          "text": "Before starting the quest:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Tower guard",
+              "text": "You can't go up there. That's private, that is.",
+              "speaker_ids": [
+                4405
+              ]
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "EvQyO6"
+        },
         {
-          "type": "line",
-          "speaker": "Tower guard",
-          "text": "It is the wizards' helping hand - let 'em up.",
-          "speaker_ids": [
-            4405
-          ]
+          "type": "condition",
+          "text": "The first time after starting the quest:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Tower guard",
+              "text": "It is the wizards' helping hand - let 'em up.",
+              "speaker_ids": [
+                4405
+              ]
+            }
+          ],
+          "id": "OaxJlG"
         }
       ],
       "getting-started-speaking-to-a-wizard": [
@@ -1534670,7 +1534659,52 @@
           "id": "Q3Ag5X"
         }
       ],
+      "searching-for-evidence-using-evidence-other-than-the-fingernails-on-the-watchtower-wizard": [
+        {
+          "type": "line",
+          "speaker": "Watchtower Wizard",
+          "text": "Let me see...",
+          "speaker_ids": [
+            4397
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Watchtower Wizard",
+          "text": "No, sorry, this is not evidence. You need to keep searching, I'm afraid.",
+          "speaker_ids": [
+            4397
+          ]
+        }
+      ],
       "searching-for-evidence-searching-the-bushes": [
+        {
+          "type": "condition",
+          "text": "Before starting the quest:",
+          "steps": [
+            {
+              "player": "I am not sure why I am searching this bush."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "xXyGQF"
+        },
+        {
+          "type": "condition",
+          "text": "Before starting the quest, the bush with the fingernails:",
+          "steps": [
+            {
+              "player": "I am not sure why I am searching this bush.",
+              "presentation": "overhead"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "99ehMx"
+        },
         {
           "type": "condition",
           "text": "Old robe:",
@@ -1534865,11 +1534899,6 @@
               ]
             }
           ]
-        }
-      ],
-      "ogre-investigations-entering-the-tunnel-to-toban-s-island": [
-        {
-          "player": "Wow! That tunnel went a long way."
         }
       ],
       "ogre-investigations-toban": [
@@ -1535082,6 +1535111,36 @@
           ]
         }
       ],
+      "ogre-investigations-toban-toban-s-island": [
+        {
+          "type": "condition",
+          "text": "Looking at the broken bridge:",
+          "steps": [
+            {
+              "player": "What's this? The bridge is out - I'll need to find another way in. I can see a ladder up there coming out of a hole; there must be a tunnel that leads here..."
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "pgV1WM"
+        },
+        {
+          "type": "condition",
+          "text": "Entering the tunnel:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You enter the cave.",
+              "id": "d5cE9E"
+            },
+            {
+              "player": "Wow! That tunnel went a long way."
+            }
+          ],
+          "id": "6oNe9n"
+        }
+      ],
       "ogre-investigations-toban-looting-toban-s-chest": [
         {
           "type": "condition",
@@ -1535102,6 +1535161,11 @@
           "type": "condition",
           "text": "Without Toban's key:",
           "steps": [
+            {
+              "type": "message",
+              "text": "The chest is locked.",
+              "id": "F8UcKx"
+            },
             {
               "player": "I think I need a key of some sort."
             }
@@ -1535198,51 +1535262,52 @@
           ]
         },
         {
+          "type": "condition",
+          "text": "If the player has the gold:",
+          "steps": [
+            {
+              "player": "I have your gold."
+            },
+            {
+              "type": "line",
+              "speaker": "Og",
+              "text": "Well, well, the little t'ing has got it! Take dis to show little t'ing is a friend to da ogres. Hahahahaha!",
+              "speaker_ids": [
+                4364
+              ]
+            },
+            {
+              "type": "message",
+              "text": "The ogre gives you part of a horrible statue.",
+              "id": "EGhmsB"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "VD6tNw"
+        },
+        {
+          "type": "condition",
+          "text": "Otherwise:",
+          "id": "fEioMa"
+        },
+        {
           "type": "choice",
           "options": [
             {
               "text": "I have your gold.",
               "steps": [
                 {
-                  "type": "condition",
-                  "text": "If the player does have the gold:",
-                  "steps": [
-                    {
-                      "type": "line",
-                      "speaker": "Og",
-                      "text": "Well, well, the little t'ing has got it! Take dis to show little t'ing is a friend to da ogres. Hahahahaha!",
-                      "speaker_ids": [
-                        4364
-                      ]
-                    },
-                    {
-                      "type": "message",
-                      "text": "The ogre gives you part of a horrible statue.",
-                      "id": "ezI70R"
-                    },
-                    {
-                      "type": "end"
-                    }
-                  ],
-                  "id": "xftT_u"
+                  "player": "I have your gold."
                 },
                 {
-                  "type": "condition",
-                  "text": "If the player doesn't have the gold:",
-                  "steps": [
-                    {
-                      "player": "I have your gold."
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Og",
-                      "text": "No you don't! If you want to impress me, get da gold I asked for!",
-                      "speaker_ids": [
-                        4364
-                      ]
-                    }
-                  ],
-                  "id": "_mOAE8"
+                  "type": "line",
+                  "speaker": "Og",
+                  "text": "No you don't! If you want to impress me, get da gold I asked for!",
+                  "speaker_ids": [
+                    4364
+                  ]
                 }
               ]
             },
@@ -1535598,6 +1535663,73 @@
           "id": "Q47TiK"
         }
       ],
+      "ogre-investigations-grew-talking-to-gorad-after-getting-his-tooth": [
+        {
+          "player": "Hello!"
+        },
+        {
+          "type": "line",
+          "speaker": "Gorad",
+          "text": "You know who I is?",
+          "speaker_ids": [
+            4367
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "A big, ugly creature.",
+              "steps": [
+                {
+                  "player": "A big, ugly creature."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Gorad",
+                  "text": "I hit you!",
+                  "speaker_ids": [
+                    4367
+                  ]
+                },
+                {
+                  "type": "action",
+                  "text": "Gorad hits the player for 12 damage.",
+                  "id": "ZA8RuD"
+                },
+                {
+                  "type": "message",
+                  "text": "You don't need to fight him now.",
+                  "id": "NzpKSi"
+                }
+              ]
+            },
+            {
+              "text": "I don't know who you are.",
+              "steps": [
+                {
+                  "player": "I don't know who you are."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Gorad",
+                  "text": "I am Gorad, and you are tiny. Go now and I won't chase you!",
+                  "speaker_ids": [
+                    4367
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "ogre-investigations-grew-attacking-gorad-after-getting-his-tooth": [
+        {
+          "type": "message",
+          "text": "You don't need to fight him now.",
+          "id": "WlcHjr"
+        }
+      ],
       "ogre-investigations-grew-speaking-to-grew-after-giving-him-gorad-s-tooth": [
         {
           "type": "line",
@@ -1535761,6 +1535893,10 @@
       ],
       "ogre-investigations-assembling-the-relic": [
         {
+          "type": "unavailable",
+          "id": "9PPakM"
+        },
+        {
           "type": "condition",
           "text": "Handing in relic part 1:",
           "steps": [
@@ -1535792,7 +1535928,7 @@
         },
         {
           "type": "condition",
-          "text": "After handing in one relic part:",
+          "text": "The first part he takes:",
           "steps": [
             {
               "type": "line",
@@ -1535803,11 +1535939,11 @@
               ]
             }
           ],
-          "id": "aMqVIt"
+          "id": "SjAiJr"
         },
         {
           "type": "condition",
-          "text": "After handing in two relic parts:",
+          "text": "Each later part, the last one included:",
           "steps": [
             {
               "type": "line",
@@ -1535818,7 +1535954,7 @@
               ]
             }
           ],
-          "id": "NFcmGI"
+          "id": "uNxIgi"
         },
         {
           "type": "condition",
@@ -1535847,6 +1535983,34 @@
             }
           ],
           "id": "HQGBKU"
+        }
+      ],
+      "ogre-investigations-using-the-relic-parts-on-each-other": [
+        {
+          "type": "message",
+          "text": "The pieces look like they would fit together, but you can't work out how to do it. Maybe someone with more experience of ogres could help.",
+          "id": "ERLqjD"
+        }
+      ],
+      "ogre-investigations-using-a-crystal-on-the-watchtower-wizard": [
+        {
+          "player": "Wizard, look what I have found."
+        },
+        {
+          "type": "line",
+          "speaker": "Watchtower Wizard",
+          "text": "Well done, well done! You are clever; hold onto it until you have all four.",
+          "speaker_ids": [
+            4397
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Watchtower Wizard",
+          "text": "Keep searching for the others. If you've dropped any, then you will need to go back to where you got it from.",
+          "speaker_ids": [
+            4397
+          ]
         }
       ],
       "ogre-investigations-talking-to-a-wizard-2": [
@@ -1535987,6 +1536151,162 @@
           ]
         }
       ],
+      "entering-gu-tanoth": [
+        {
+          "type": "unavailable",
+          "id": "sAHMGy"
+        }
+      ],
+      "entering-gu-tanoth-east-gate-guard": [
+        {
+          "type": "condition",
+          "text": "The first time:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Ogre guard",
+              "text": "Halt! You cannot pass here.",
+              "speaker_ids": [
+                4368,
+                4369,
+                4370,
+                4371,
+                4372
+              ]
+            },
+            {
+              "player": "I am a friend to ogres."
+            },
+            {
+              "type": "line",
+              "speaker": "Ogre guard",
+              "text": "You will be my friend only with gold. Bring me a bar of pure gold and I will let you pass.",
+              "speaker_ids": [
+                4368,
+                4369,
+                4370,
+                4371,
+                4372
+              ]
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "z8vjwn"
+        },
+        {
+          "type": "condition",
+          "text": "Afterwards, without a gold bar:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Ogre guard",
+              "text": "Creature, did you bring me the gold?",
+              "speaker_ids": [
+                4368,
+                4369,
+                4370,
+                4371,
+                4372
+              ]
+            },
+            {
+              "player": "No, I don't have it."
+            },
+            {
+              "type": "line",
+              "speaker": "Ogre guard",
+              "text": "No gold, no passage. Get out of this city!",
+              "speaker_ids": [
+                4368,
+                4369,
+                4370,
+                4371,
+                4372
+              ]
+            },
+            {
+              "type": "message",
+              "text": "The guard pushes you back down the hill.",
+              "id": "Ls2tuc"
+            },
+            {
+              "type": "action",
+              "text": "(The ogre guard pushes you back down the hill, stunning you and dealing 3 damage)",
+              "id": "yOnYb4"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "cWF7XA"
+        },
+        {
+          "type": "condition",
+          "text": "Afterwards, with a gold bar:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Ogre guard",
+              "text": "Creature, did you bring me the gold?",
+              "speaker_ids": [
+                4368,
+                4369,
+                4370,
+                4371,
+                4372
+              ]
+            },
+            {
+              "player": "Here it is!"
+            },
+            {
+              "type": "line",
+              "speaker": "Ogre guard",
+              "text": "It's brought it! On your way.",
+              "speaker_ids": [
+                4368,
+                4369,
+                4370,
+                4371,
+                4372
+              ]
+            },
+            {
+              "type": "action",
+              "text": "(The gate opens and the player walks through)",
+              "action": "open_interface",
+              "action_source": "text",
+              "target": "The gate",
+              "id": "DdGVML"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "AJ6Alr"
+        },
+        {
+          "type": "condition",
+          "text": "After giving him the gold:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Ogre guard",
+              "text": "I know you, creature; you may pass.",
+              "speaker_ids": [
+                4368,
+                4369,
+                4370,
+                4371,
+                4372
+              ]
+            }
+          ],
+          "id": "7SO_F5"
+        }
+      ],
       "entering-gu-tanoth-city-guard": [
         {
           "type": "condition",
@@ -1536015,6 +1536335,11 @@
                 4371,
                 4372
               ]
+            },
+            {
+              "type": "message",
+              "text": "The guard pushes you back down the hill.",
+              "id": "kLIUeG"
             },
             {
               "type": "action",
@@ -1536063,6 +1536388,105 @@
             }
           ],
           "id": "7ZK2kb"
+        }
+      ],
+      "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again": [
+        {
+          "type": "line",
+          "speaker": "Ogre guard",
+          "text": "Well, what proof of friendship did you bring?",
+          "speaker_ids": [
+            4368,
+            4369,
+            4370,
+            4371,
+            4372
+          ]
+        },
+        {
+          "type": "condition",
+          "text": "With a relic part:",
+          "steps": [
+            {
+              "player": "I've got this odd piece of a relic."
+            },
+            {
+              "type": "line",
+              "speaker": "Ogre guard",
+              "text": "What's this thing? It looks a bit like our Dalgroth... but it's broken. Go away!",
+              "speaker_ids": [
+                4368,
+                4369,
+                4370,
+                4371,
+                4372
+              ]
+            },
+            {
+              "type": "message",
+              "text": "The guard pushes you back down the hill.",
+              "id": "7Ecvsl"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "IkKEGf"
+        },
+        {
+          "type": "condition",
+          "text": "With nothing:",
+          "steps": [
+            {
+              "player": "I don't have anything."
+            },
+            {
+              "type": "line",
+              "speaker": "Ogre guard",
+              "text": "Why have you returned with no proof of companionship? Back to whence you came!",
+              "speaker_ids": [
+                4368,
+                4369,
+                4370,
+                4371,
+                4372
+              ]
+            },
+            {
+              "type": "message",
+              "text": "The guard pushes you back down the hill.",
+              "id": "Hr5K8t"
+            }
+          ],
+          "id": "FTK7m5"
+        }
+      ],
+      "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard": [
+        {
+          "type": "line",
+          "speaker": "Ogre guard",
+          "text": "That is of no use to me, creature!",
+          "speaker_ids": [
+            4368,
+            4369,
+            4370,
+            4371,
+            4372
+          ]
+        }
+      ],
+      "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic": [
+        {
+          "type": "line",
+          "speaker": "Ogre guard",
+          "text": "It's the small creature; you may pass.",
+          "speaker_ids": [
+            4368,
+            4369,
+            4370,
+            4371,
+            4372
+          ]
         }
       ],
       "entering-gu-tanoth-talking-to-the-wizards-after-gaining-access-to-the-city": [
@@ -1536305,9 +1536729,31 @@
                 4371,
                 4372
               ]
+            },
+            {
+              "type": "end"
             }
           ],
           "id": "11iRGF"
+        },
+        {
+          "type": "condition",
+          "text": "After giving him the rock cake:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Ogre guard",
+              "text": "It's that creature again. This time we will let it go.",
+              "speaker_ids": [
+                4368,
+                4369,
+                4370,
+                4371,
+                4372
+              ]
+            }
+          ],
+          "id": "O5-yRl"
         }
       ],
       "entering-gu-tanoth-talking-to-the-southern-ogre-guard": [
@@ -1536634,9 +1537080,35 @@
           ]
         }
       ],
-      "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard": [
+      "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard-or-talking-to-him-with-it": [
         {
           "player": "I worked it out!"
+        },
+        {
+          "type": "condition",
+          "text": "With no space for the map:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "City guard",
+              "text": "Hur, hur, hur. Well done imp, but you haven't got anywhere for me to put the reward, have you?",
+              "speaker_ids": [
+                4373
+              ]
+            },
+            {
+              "type": "line",
+              "speaker": "City guard",
+              "text": "Come back again when you have and I might reward you.",
+              "speaker_ids": [
+                4373
+              ]
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "yZLro1"
         },
         {
           "type": "line",
@@ -1536649,7 +1537121,7 @@
         {
           "type": "message",
           "text": "The guard takes your death rune and gives you a map.",
-          "id": "SYijHA"
+          "id": "WySYmL"
         }
       ],
       "entering-gu-tanoth-seeking-passage-talking-to-him-after-having-given-him-the-rune": [
@@ -1536981,6 +1537453,60 @@
       "skavid-search-entering-the-caves": [
         {
           "type": "condition",
+          "text": "Without the skavid map:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "There's no way I can find my way through without a map of some kind.",
+              "id": "0c_g7w"
+            },
+            {
+              "type": "action",
+              "text": "(The player comes out of a different cave)",
+              "id": "porSMW"
+            }
+          ],
+          "id": "1FNZaU"
+        },
+        {
+          "type": "condition",
+          "text": "Without a light source or a tinderbox:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "The cave is very dark and you don't have a light source or a tinderbox. Are you sure you want to go down?",
+              "id": "AGK7rj"
+            },
+            {
+              "type": "choice",
+              "options": [
+                {
+                  "text": "I'm not scared of the dark!",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "You enter the cave...",
+                      "id": "-9KBp5"
+                    }
+                  ]
+                },
+                {
+                  "text": "I am scared of the dark.",
+                  "steps": [
+                    {
+                      "type": "message",
+                      "text": "You should find a light source and a tinderbox before going down there.",
+                      "id": "7f9fpu"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "id": "nyQebD"
+        },
+        {
+          "type": "condition",
           "text": "With a light source but no tinderbox:",
           "steps": [
             {
@@ -1537087,7 +1537613,7 @@
                 {
                   "type": "line",
                   "speaker": "Scared skavid",
-                  "text": "Thank you, kind [sir/madam].",
+                  "text": "Thank you, kind one.",
                   "speaker_ids": [
                     4374
                   ]
@@ -1537167,6 +1537693,40 @@
           "player": "I am studying the speech of your kind..."
         }
       ],
+      "skavid-search-learning-skavid": [
+        {
+          "type": "condition",
+          "text": "Before the scared skavid has taught the player any words:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Skavid",
+              "text": "Bidith tanath...",
+              "speaker_ids": [
+                4376,
+                4377,
+                4378,
+                4379,
+                4380
+              ]
+            },
+            {
+              "player": "???"
+            },
+            {
+              "type": "message",
+              "text": "The skavid is trying to communicate...",
+              "id": "0JAV-u"
+            },
+            {
+              "type": "message",
+              "text": "You don't know any skavid words yet!",
+              "id": "xRoKkG"
+            }
+          ],
+          "id": "P7rzHv"
+        }
+      ],
       "skavid-search-learning-skavid-skavid-1": [
         {
           "type": "line",
@@ -1537181,6 +1537741,11 @@
           ]
         },
         {
+          "type": "message",
+          "text": "The skavid is trying to communicate...",
+          "id": "UrtI45"
+        },
+        {
           "type": "choice",
           "options": [
             {
@@ -1537190,21 +1537755,14 @@
                   "player": "Cur."
                 },
                 {
-                  "type": "line",
-                  "speaker": "Skavid",
-                  "text": "Cur, cur tanath!",
-                  "speaker_ids": [
-                    4376,
-                    4377,
-                    4378,
-                    4379,
-                    4380
-                  ]
+                  "type": "message",
+                  "text": "It seems the skavid understood you.",
+                  "id": "mDzmy4"
                 },
                 {
                   "type": "line",
                   "speaker": "Skavid",
-                  "text": "Cur tanath!",
+                  "text": "Cur, cur tanath!",
                   "speaker_ids": [
                     4376,
                     4377,
@@ -1537234,6 +1537792,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "s1W9ds"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Bidith tanath...",
@@ -1537244,6 +1537807,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "UfUfRv"
                 },
                 {
                   "type": "choice",
@@ -1537275,6 +1537843,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "AbZ752"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Bidith tanath...",
@@ -1537285,6 +1537858,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "tVM3eM"
                 },
                 {
                   "type": "choice",
@@ -1537316,6 +1537894,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "Uu4T4o"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Bidith tanath...",
@@ -1537326,6 +1537909,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "PnBBWm"
                 },
                 {
                   "type": "choice",
@@ -1537357,6 +1537945,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "CjMQAO"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Bidith tanath...",
@@ -1537367,6 +1537960,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "MD3c0Y"
                 },
                 {
                   "type": "choice",
@@ -1537396,6 +1537994,11 @@
           ]
         },
         {
+          "type": "message",
+          "text": "The skavid is trying to communicate...",
+          "id": "auj7Wz"
+        },
+        {
           "type": "choice",
           "options": [
             {
@@ -1537417,6 +1538020,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "gRvwx_"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Cur bidith...",
@@ -1537427,6 +1538035,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "g0Dw2A"
                 },
                 {
                   "type": "choice",
@@ -1537458,6 +1538071,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "5Bu1KJ"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Cur bidith...",
@@ -1537468,6 +1538086,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "zPYHyK"
                 },
                 {
                   "type": "choice",
@@ -1537485,6 +1538108,11 @@
               "steps": [
                 {
                   "player": "Ig."
+                },
+                {
+                  "type": "message",
+                  "text": "It seems the skavid understood you.",
+                  "id": "fCC5xQ"
                 },
                 {
                   "type": "line",
@@ -1537519,6 +1538147,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "23YtAj"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Cur bidith...",
@@ -1537529,6 +1538162,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "jraItl"
                 },
                 {
                   "type": "choice",
@@ -1537560,6 +1538198,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "Vwiv2f"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Cur bidith...",
@@ -1537570,6 +1538213,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "JC722o"
                 },
                 {
                   "type": "choice",
@@ -1537585,6 +1538233,25 @@
           ]
         }
       ],
+      "skavid-search-learning-skavid-talking-to-a-skavid-again": [
+        {
+          "type": "line",
+          "speaker": "Skavid",
+          "text": "[Cur tanath!/Gor nod!/...]",
+          "speaker_ids": [
+            4376,
+            4377,
+            4378,
+            4379,
+            4380
+          ]
+        },
+        {
+          "type": "message",
+          "text": "You have already talked to this skavid.",
+          "id": "64Dzq-"
+        }
+      ],
       "skavid-search-learning-skavid-skavid-3": [
         {
           "type": "line",
@@ -1537597,6 +1538264,11 @@
             4379,
             4380
           ]
+        },
+        {
+          "type": "message",
+          "text": "The skavid is trying to communicate...",
+          "id": "VQLCb8"
         },
         {
           "type": "choice",
@@ -1537620,6 +1538292,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "OtDRAA"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Tanath gor...",
@@ -1537630,6 +1538307,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "dIC_A1"
                 },
                 {
                   "type": "choice",
@@ -1537661,6 +1538343,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "ehuYGQ"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Tanath gor...",
@@ -1537671,6 +1538358,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "g7NMRp"
                 },
                 {
                   "type": "choice",
@@ -1537702,6 +1538394,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "dWqA-E"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Tanath gor...",
@@ -1537712,6 +1538409,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "CdJIxT"
                 },
                 {
                   "type": "choice",
@@ -1537729,6 +1538431,11 @@
               "steps": [
                 {
                   "player": "Nod."
+                },
+                {
+                  "type": "message",
+                  "text": "It seems the skavid understood you.",
+                  "id": "nAdPZm"
                 },
                 {
                   "type": "line",
@@ -1537763,6 +1538470,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "NJLBPu"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Tanath gor...",
@@ -1537773,6 +1538485,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "WzIQQn"
                 },
                 {
                   "type": "choice",
@@ -1537802,6 +1538519,11 @@
           ]
         },
         {
+          "type": "message",
+          "text": "The skavid is trying to communicate...",
+          "id": "0U7PMC"
+        },
+        {
           "type": "choice",
           "options": [
             {
@@ -1537823,6 +1538545,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "_mX7XE"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Gor cur...",
@@ -1537833,6 +1538560,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "j37Tv0"
                 },
                 {
                   "type": "choice",
@@ -1537850,6 +1538582,11 @@
               "steps": [
                 {
                   "player": "Ar."
+                },
+                {
+                  "type": "message",
+                  "text": "It seems the skavid understood you.",
+                  "id": "MANBY5"
                 },
                 {
                   "type": "line",
@@ -1537884,6 +1538621,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "bd9DEf"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Gor cur...",
@@ -1537894,6 +1538636,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "jF5PIz"
                 },
                 {
                   "type": "choice",
@@ -1537925,6 +1538672,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "XZ8Afl"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Gor cur...",
@@ -1537935,6 +1538687,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "OoKj5t"
                 },
                 {
                   "type": "choice",
@@ -1537966,6 +1538723,11 @@
                   ]
                 },
                 {
+                  "type": "message",
+                  "text": "It seems that was the wrong reply.",
+                  "id": "6ra3rA"
+                },
+                {
                   "type": "line",
                   "speaker": "Skavid",
                   "text": "Gor cur...",
@@ -1537976,6 +1538738,11 @@
                     4379,
                     4380
                   ]
+                },
+                {
+                  "type": "message",
+                  "text": "The skavid is trying to communicate...",
+                  "id": "Zrb3B_"
                 },
                 {
                   "type": "choice",
@@ -1538002,6 +1538769,10 @@
         }
       ],
       "skavid-search-the-mad-skavid": [
+        {
+          "type": "unavailable",
+          "id": "YZ9IiF"
+        },
         {
           "type": "line",
           "speaker": "Mad skavid",
@@ -1538098,8 +1538869,18 @@
                   "text": "If the player has the crystal:",
                   "steps": [
                     {
-                      "type": "missing",
-                      "id": "ZnvGMC"
+                      "player": "But I've lost it!"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Mad skavid",
+                      "text": "I haves no more for you.",
+                      "speaker_ids": [
+                        4375
+                      ]
+                    },
+                    {
+                      "type": "end"
                     }
                   ],
                   "id": "-SfaYg"
@@ -1538286,6 +1539067,16 @@
           ]
         }
       ],
+      "entering-the-enclave-talking-to-an-enclave-guard-before-getting-the-mad-skavid-s-crystal": [
+        {
+          "type": "line",
+          "speaker": "Enclave guard",
+          "text": "Stop bothering me, minion!",
+          "speaker_ids": [
+            4381
+          ]
+        }
+      ],
       "entering-the-enclave-attempting-to-enter-the-ogre-enclave-before-distracting-the-guards": [
         {
           "type": "line",
@@ -1538459,6 +1539250,11 @@
       ],
       "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman": [
         {
+          "type": "message",
+          "text": "A magic blast comes from the shaman. You are badly injured by the blast.",
+          "id": "kRiiBJ"
+        },
+        {
           "type": "line",
           "speaker": "Ogre shaman",
           "text": "Grr! How dare you talk to us. We will destroy you!",
@@ -1538470,6 +1539266,56 @@
             4393,
             4395
           ]
+        }
+      ],
+      "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman": [
+        {
+          "type": "message",
+          "text": "A magic blast comes from the shaman. You are badly injured by the blast.",
+          "id": "MPH1Oe"
+        },
+        {
+          "type": "line",
+          "speaker": "Ogre shaman",
+          "text": "You fool! Your primitive weapons are no match for our superior magics!",
+          "presentation": "overhead",
+          "speaker_ids": [
+            4383,
+            4387,
+            4389,
+            4391,
+            4393,
+            4395
+          ]
+        }
+      ],
+      "entering-the-enclave-inside-the-enclave-the-rock-of-dalgroth-before-killing-the-shamans": [
+        {
+          "type": "condition",
+          "text": "Prospecting:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You examine the rock for ores...",
+              "id": "hbOGem"
+            },
+            {
+              "type": "message",
+              "text": "The rock contains a crystal!",
+              "id": "_pBwij"
+            }
+          ],
+          "id": "lfNtqt"
+        },
+        {
+          "type": "condition",
+          "text": "Mining:",
+          "steps": [
+            {
+              "player": "I can't touch it... Perhaps it is linked with the shamans in some strange way?"
+            }
+          ],
+          "id": "w1gpgY"
         }
       ],
       "entering-the-enclave-talking-to-the-wizards-after-discovering-the-shamans-are-invincible": [
@@ -1538631,6 +1539477,69 @@
           ]
         }
       ],
+      "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible-mixing-the-potion": [
+        {
+          "type": "condition",
+          "text": "Jangerberries into a guam potion (unf):",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You mix the jangerberries into your potion.",
+              "id": "kYYbyN"
+            }
+          ],
+          "id": "S_1ctn"
+        },
+        {
+          "type": "condition",
+          "text": "Ground bat bones into the guam and jangerberry potion:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You mix the ground bones into the liquid.",
+              "id": "gka6sL"
+            },
+            {
+              "type": "message",
+              "text": "You produce a strong potion.",
+              "id": "c80at6"
+            }
+          ],
+          "id": "TmIGn6"
+        },
+        {
+          "type": "condition",
+          "text": "Ground bat bones into a guam potion (unf):",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You mix the ground bones into the liquid.",
+              "id": "1rfuWZ"
+            },
+            {
+              "type": "message",
+              "text": "You mixed the ingredients incorrectly and the mixture exploded.",
+              "id": "nKBWLw"
+            }
+          ],
+          "id": "CQSL_F"
+        },
+        {
+          "type": "condition",
+          "text": "Ground bat bones into a vial of water:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You mix the ground bones into the water.",
+              "id": "SB0z4e"
+            },
+            {
+              "player": "Oh dear, the mixture has evaporated."
+            }
+          ],
+          "id": "g9PUBd"
+        }
+      ],
       "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible-talking-to-the-wizards-after-learning-the-potion-recipe": [
         {
           "player": "Any chance of advice about this potion?"
@@ -1538681,27 +1539590,6 @@
           "type": "line",
           "speaker": "Watchtower Wizard",
           "text": "Well, if you can cast Bones to Bananas, or any spells beyond that, you should be alright.",
-          "speaker_ids": [
-            4397
-          ]
-        }
-      ],
-      "entering-the-enclave-talking-to-the-watchtower-wizard-before-destroying-the-shamans": [
-        {
-          "type": "line",
-          "speaker": "Watchtower Wizard",
-          "text": "Hello again. Did the potion work?",
-          "speaker_ids": [
-            4397
-          ]
-        },
-        {
-          "player": "I am still working to rid us of the shamans..."
-        },
-        {
-          "type": "line",
-          "speaker": "Watchtower Wizard",
-          "text": "May you have success in your task.",
           "speaker_ids": [
             4397
           ]
@@ -1538772,6 +1539660,18 @@
         },
         {
           "type": "condition",
+          "text": "Searching the shaman robe before killing all the shamans:",
+          "steps": [
+            {
+              "type": "message",
+              "text": "You search the robe, but find nothing. Maybe you need to defeat the shamans first.",
+              "id": "rv_O4e"
+            }
+          ],
+          "id": "D7pWK9"
+        },
+        {
+          "type": "condition",
           "text": "Searching the shaman robe while already having the crystal:",
           "steps": [
             {
@@ -1538817,6 +1539717,27 @@
       "entering-the-enclave-attempting-to-mine-the-rock-of-dalgroth-again": [
         {
           "player": "I already have this crystal. There is no benefit to getting another."
+        }
+      ],
+      "entering-the-enclave-talking-to-the-watchtower-wizard-before-killing-the-shamans": [
+        {
+          "type": "line",
+          "speaker": "Watchtower Wizard",
+          "text": "Hello again. Did the potion work?",
+          "speaker_ids": [
+            4397
+          ]
+        },
+        {
+          "player": "I am still working to rid us of the shamans..."
+        },
+        {
+          "type": "line",
+          "speaker": "Watchtower Wizard",
+          "text": "May you have success in your task.",
+          "speaker_ids": [
+            4397
+          ]
         }
       ],
       "entering-the-enclave-returning-to-the-watchtower-wizard-after-killing-the-shamans-without-mining-the-rock": [

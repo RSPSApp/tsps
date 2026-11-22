@@ -200,8 +200,8 @@ test("Watchtower: four mapless entries follow different surface caves without li
     const [object] = watchtowerLocs(id);
     assert.ok(object, `current map places fixed-route cave ${id}`);
     await operateWatchtowerLoc(f, object, null);
-    // Live fades the screen and moves the player on, with no message (Watchtower capture t2255-2260).
-    assert.ok(!messages.some(m => m.includes("without a map")), "a circuit cave says nothing");
+    // The Wiki's "Without the skavid map": its message, then another cave (the capture's cave6 fade, t2255-2260).
+    assert.ok(messages.some(m => m.includes("without a map")), "the Wiki's message");
     assert.deepEqual(xyz(f.player), destination, "the delivered mapless operation follows the fixed circuit");
   }
   assert.deepEqual(items(f.player), inventory);

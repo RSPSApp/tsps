@@ -89,7 +89,17 @@ module.exports = function registerMurderMysteryQuest(api) {
     return journal(player, stage(player), STAGES);
   }
 
+  /** Every completion takes the evidence, the guard's hand-in and a quest command alike. */
   function grantReward(player) {
+    // The bank's copies go too: the Wiki's silver necklace "will disappear if a player has it in their bank
+    // or inventory upon finishing the quest" (Ours: every evidence item alike).
+    const containers = [player.getInventory(), ...Array.from({ length: Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab))];
+    for (const container of containers) {
+      for (const itemId of EVIDENCE_ITEM_IDS) {
+        const amount = container.getAmount(itemId);
+        if (amount > 0) container.deleteNumber(itemId, amount);
+      }
+    }
     player.getSkillManager().addExperiences(Skill.CRAFTING, 1406);
     giveReward(player, I.COINS, 2000);
   }
@@ -194,15 +204,6 @@ module.exports = function registerMurderMysteryQuest(api) {
    */
   function complete(player) {
     if (!proven(player)) return;
-    // The bank's copies go too: the Wiki's silver necklace "will disappear if a player has it in their bank
-    // or inventory upon finishing the quest" (Ours: every evidence item alike).
-    const containers = [player.getInventory(), ...Array.from({ length: Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab))];
-    for (const container of containers) {
-      for (const itemId of EVIDENCE_ITEM_IDS) {
-        const amount = container.getAmount(itemId);
-        if (amount > 0) container.deleteNumber(itemId, amount);
-      }
-    }
     setAttr(player, ATTRIBUTES.MURDERER, 0);
     setAttr(player, ATTRIBUTES.POISON, POISON.NONE);
     setAttr(player, ATTRIBUTES.EVIDENCE, 0);

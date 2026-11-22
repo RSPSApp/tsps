@@ -13,7 +13,7 @@ const BEST_TICKS_ATTRIBUTE = "alchemical-hydra:best-ticks";
 let api = null;
 let core = null;
 let data = null;
-/** Cache ids by role: { npcs, locs, seqs, spotanims }. */
+/** Cache ids by role: { npcs, objs, locs, seqs, spotanims }. */
 let ids = null;
 
 function resolve(names, lookup, kind) {
@@ -39,6 +39,7 @@ function init(pluginApi) {
   const cache = core.CacheDefinitions;
   ids = {
     npcs: resolve(data.names.npcs, (name) => cache.getNpcId(name), "npc"),
+    objs: resolve(data.names.objs, (name) => cache.getObjId(name), "obj"),
     locs: resolve(data.names.locs, (name) => cache.getLocId(name), "loc"),
     seqs: resolve(data.names.seqs, (name) => cache.getSeqId(name), "seq"),
     spotanims: resolve(data.names.spotanims, (name) => cache.getSpotanimId(name), "spotanim"),

@@ -759,6 +759,7 @@ export class SceneRaycaster {
                     worldZ,
                     groundY,
                     heightTiles,
+                    size,
                 );
             } else {
                 const triangles = this.npcTrianglesProvider?.(ecsId, serverId);
@@ -793,10 +794,10 @@ export class SceneRaycaster {
     }
 
     /**
-     * Fishing spot models animate within a one-tile spawn footprint. Using the posed model's
-     * bounds makes the NPC hitbox move with those animations, which can toggle its menu action
-     * against "Walk here" under a stationary pointer. Keep the interaction bounds fixed to the
-     * NPC's tile for the whole animation instead.
+     * Fishing spot models animate within their spawn footprint. Using the posed model's bounds
+     * makes the NPC hitbox move with those animations, which can toggle its menu action against
+     * "Walk here" under a stationary pointer. Keep a size-based interaction area centered on
+     * the NPC for the whole animation instead.
      */
     private intersectFishingSpot(
         ray: Ray,
@@ -805,14 +806,16 @@ export class SceneRaycaster {
         worldZ: number,
         groundY: number,
         heightTiles: number,
+        size: number,
     ): number | undefined {
-        const centerX = Math.floor(worldX) + 0.5;
-        const centerZ = Math.floor(worldZ) + 0.5;
+        const centerX = worldX;
+        const centerZ = worldZ;
+        const halfSize = Math.max(0.5, size * 0.5);
         const height = Math.max(0.5, heightTiles);
         const hit = rayIntersectsBox(
             ray,
-            [centerX - 0.5, groundY - height, centerZ - 0.5],
-            [centerX + 0.5, groundY + 0.05, centerZ + 0.5],
+            [centerX - halfSize, groundY - height, centerZ - halfSize],
+            [centerX + halfSize, groundY + 0.05, centerZ + halfSize],
         );
         if (!hit) return undefined;
         const tHit = Math.max(hit.tMin, 0);

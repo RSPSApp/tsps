@@ -3,6 +3,7 @@ const Data = require("./Data.Farming");
 const Model = require("./Model.Farming");
 const Patches = require("./Patches.Farming");
 const Tools = require("./Tools.Farming");
+const Gardeners = require("./Gardeners.Farming");
 
 // Every gardener stands within 7 tiles of its patch; Ceto (drift nets, 20 tiles from the
 // underwater seaweed) and Cap'n Izzy No-Beard (agility arena, 12) also advertise Pay.
@@ -697,6 +698,16 @@ function farmingNpc(event) {
     // Gardener NPCs advertise Pay; never hijack unrelated NPC conversations near a patch.
     if (!definition?.getActions()?.some(isGardenerPayment)) return;
     event.handled = true;
+    if (action === "talk-to") {
+        // Talk-to is the gardener's menu; only its first question leads here again, as Pay.
+        const grownTree = relevant.some(p => {
+            const state = Patches.stateFor(player, p);
+            const crop = Data.CROPS.get(state.crop);
+            return state.status === "grown" && (Data.WOOD_TREES.has(crop.type) || crop.type === "FRUIT_TREE");
+        });
+        Gardeners.talk(player, npc, definition, grownTree);
+        return;
+    }
     if (!relevant.length) {
         // Captured from the tree gardeners; the others keep the server's own line.
         if (patches.some(p => ["TREE", "FRUIT_TREE", "HARDWOOD_TREE", "SPIRIT_TREE", "CALQUAT"].includes(p.type)))

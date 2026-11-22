@@ -75,6 +75,22 @@ When the inventory fills: spam "You have run out of inventory space.", on the ti
 
 ## Gardeners
 
+Pay (and Pay (north) ...) makes the protection offer below straight away. Talk-to opens the gardener's menu
+(`Gardeners.Farming.js`), and Trade opens the Farming Supplies shop.
+
+- **Talk-to** (rsprox captures: Elstan local 1001683 tick 9331 and 1002189 tick 1506, Dantaera, Lyra): "Select an
+  option" with "Would you look after my crops for me?", "Can you give me any farming advice?", "Can you sell me
+  something?" and "I'll come back another time.". Each answer starts with the player saying it.
+  - Looking after the crops continues into the Pay offer. A tree gardener whose tree has grown asks "Would you chop
+    my tree down for me?" instead (Wiki, Transcript: Fayeth).
+  - The advice is a random tip from the gardener's Wiki transcript, then the menu again.
+  - Selling: the gardener says "That depends on whether I have it to sell. What is it that you're looking for?" and
+    the Continue opens the Farming Supplies shop (Fayeth 1000149 tick 1863, Garth 03030 tick 4108). Since 25
+    September 2024 every farmer who protects crops sells through that shop (Wiki, Elstan's changes).
+  - During Fairytale I the quest plays its own menu, with "Are you a member of the Group of Advanced Gardeners?"
+    first (1001455 tick 779).
+- **Recorded difference:** live's Farming Supplies holds 500 of each item, listed dibber, rake, trowel, watering
+  can, plant pot, compost, plant cure (1000149, 03030). `shops.json` has a 2,000,000,000 stock in another order.
 - **A grown tree:** "Pay 200 Coins to have your tree chopped down?" (Yes./No.).
 - **Protection:** "Pay 25 coconuts?" (Yes./No./Yes and don't ask again.), then spam "You pay the gardener 25 coconuts to protect the patch." and the gardener's "That'll do nicely, sir. Leave it with me - I'll make sure that patch grows for you." Without the payment the gardener says "I want 25 coconuts for that."
 - **Other answers:** "That patch is already fully grown! I don't know what you want me to do with it!" and, with no sapling in a tree patch, "You don't have a sapling planted in that patch. Plant one and I might agree to look after it for you."

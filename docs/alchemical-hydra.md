@@ -94,6 +94,18 @@ the rsprox index. Ticks below are counts of events across them.
   the current is gone. A player who clicked on the hit tick first moved 3 ticks later, every time.
 - **Recorded difference:** hits are 8-17; the Wiki's 22 is used.
 
+## The bind (lightning and fire)
+
+- Both the lightning's paralysis (3 ticks) and the fire's stun (7 ticks) are a bind: the Wiki's
+  currents "will bind the player", the stunned player "can still attack it", and in the chamber
+  "Teleports will still work". It is the engine's freeze timer, so it runs out on its own count;
+  a later bind extends one still running, never shortens it. Before issue 6432 it was a movement
+  block, released by a wall-clock check that the tick task nearly always failed: the player stayed
+  stuck (no walking, teleports or door) until the next bind released it.
+- Ours: being the engine's freeze, the bind shows the "Bound." buff (script 5931) with its
+  countdown. Recordings 1000143, 1000471 and 1000480 run no script 5931 during the Hydra's binds,
+  so live may not show it.
+
 ## Fire (flame)
 
 - The Hydra walks to its spawn tile (1364, 10265), diagonal steps first. A player in the way doesn't
@@ -130,6 +142,20 @@ the rsprox index. Ticks below are counts of events across them.
   Alchemical Hydra kill count is: N." (155 of 204 in that order).
 - **Recorded difference:** the next Hydra appears 12 ticks after the removal (22 after the death
   sequence starts) in 150 of 155 kills. The Wiki infobox's 43 ticks is used.
+
+## Brimstone ring pieces
+
+- The Wiki (Alchemical_Hydra#Drops): "a brimstone ring piece rate follows the formula
+  1/(180 / ...) = 1/181.07", tried after the dragon thrownaxe, dragon knife, claw, tail and leather,
+  and "The order in which players receive the items is: Hydra's eye, Hydra's fang and finally
+  Hydra's heart." The export lists each piece as its own 1/181.1 pre-roll (the effective rate);
+  NpcDrops makes them one 1/180 roll (`correctAlchemicalHydra`), which the other uniques' misses
+  bring to the Wiki's 1/181.07 a kill, and `Loot.AlchemicalHydra.js` hands over the next piece in
+  that order. Ours: the order starts again from the eye after the heart (the Wiki gives only the
+  order).
+- The count of pieces received is the persisted `alchemical-hydra:ring-pieces`. Ours: an account
+  that has no count yet starts from its collection log, at the first piece in the order it has
+  fewest of (the Brimstone ring page: no duplicate "until obtaining each of the other pieces").
 
 ## The door
 

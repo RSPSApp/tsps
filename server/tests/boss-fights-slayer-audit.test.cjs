@@ -82,7 +82,7 @@ function fakeCacheDefinitions() {
     if (!ids.has(name)) ids.set(name, 1000 + ids.size);
     return ids.get(name);
   };
-  return { getNpcId: id, getLocId: id, getSeqId: id, getSpotanimId: id };
+  return { getNpcId: id, getObjId: id, getLocId: id, getSeqId: id, getSpotanimId: id };
 }
 
 class Location {

@@ -8,15 +8,17 @@ const Common = require("./alchemicalhydra/Common.AlchemicalHydra");
 const Lair = require("./alchemicalhydra/Lair.AlchemicalHydra");
 const Combat = require("./alchemicalhydra/Combat.AlchemicalHydra");
 const Kills = require("./alchemicalhydra/Kills.AlchemicalHydra");
+const Loot = require("./alchemicalhydra/Loot.AlchemicalHydra");
 
 module.exports = {
   name: "AlchemicalHydra",
-  description: "The Alchemical Hydra in Karuulm Slayer Dungeon: its private chamber, four-phase fight with vents, poison, lightning and fire, and the kill.",
+  description: "The Alchemical Hydra in Karuulm Slayer Dungeon: its private chamber, four-phase fight with vents, poison, lightning and fire, the kill, and its brimstone ring pieces in order.",
   members: true,
   register(api) {
     Common.init(api);
     Lair.attach(api);
     Combat.attach(api);
     Kills.attach(api);
+    Loot.attach(api);
   },
 };

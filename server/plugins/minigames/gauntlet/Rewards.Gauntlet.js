@@ -7,7 +7,9 @@
  *   three rolls on the corrupted table;
  * - otherwise, by the run's points: 50+ the incomplete table, 1-49 the junk table, 0 nothing.
  *   Leaving by the teleport platform gives nothing; escaping at the barrier is a normal loss.
- * - the tertiary items are rolled each on their own.
+ * - the tertiary items are rolled each on their own. A league's boosted drops ("drops:chance"
+ *   with source "The Gauntlet" or "The Corrupted Gauntlet", the Wiki's Boosted drops rows) make
+ *   the crystal seeds' own 1-in-n rolls that many times as likely; the clue and Youngllef are not.
  *
  * Points: a demi-boss or an attuned-to-perfected upgrade 10; a strong monster or a basic-to-
  * attuned upgrade 5; a weak monster or a basic item 2; cooking a paddlefish or adding crystals
@@ -92,15 +94,31 @@ function rewardFor(run, reason) {
   return points > 0 ? "junk" : null;
 }
 
-/** The items a waiting reward gives, as { id, amount, noted }. */
-function rollReward(reward, ownsCape, random = Math.random) {
+/** The source a completed run's tertiary rolls name on "drops:chance". */
+const CHANCE_SOURCE = Object.freeze({ regular: "The Gauntlet", corrupted: "The Corrupted Gauntlet" });
+
+/** "drops:chance" for a completed run: an item id's multiplier, or null when nothing is boosted. */
+function dropBoost(player, mode) {
+  const rules = [];
+  Shared.api()?.emitCustomEvent?.("drops:chance", { player, source: CHANCE_SOURCE[mode], rules });
+  if (rules.length === 0) return null;
+  return (id) => {
+    const name = Shared.core().ItemDefinition.forId(id)?.getName?.() ?? "";
+    return rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+  };
+}
+
+/** The items a waiting reward gives, as { id, amount, noted }; `boost(id)` is dropBoost's. */
+function rollReward(reward, ownsCape, random = Math.random, boost = null) {
   const items = [];
   if (reward.kind === "completed") {
     items.push({ id: ID.CRYSTAL_SHARD, amount: randomInt(random, ...SHARDS[reward.mode]) });
     if (reward.mode === "corrupted" && !ownsCape) items.push({ id: ID.GAUNTLET_CAPE, amount: 1 });
     for (let i = 0; i < ROLLS[reward.mode]; i++) items.push(rollWeighted(MAIN[reward.mode], random));
     for (const [id, chance] of TERTIARY[reward.mode]) {
-      if (Math.floor(random() * chance) === 0) items.push({ id, amount: 1 });
+      const multiplier = boost ? boost(id) : 1;
+      const hit = multiplier > 1 ? random() * chance < multiplier : Math.floor(random() * chance) === 0;
+      if (hit) items.push({ id, amount: 1 });
     }
   } else if (reward.kind === "incomplete") {
     items.push(entry(INCOMPLETE[Math.floor(random() * INCOMPLETE.length)], random));
@@ -143,7 +161,8 @@ function openChest(player, random = Math.random) {
     return;
   }
   const { Item, ItemDefinition } = Shared.core();
-  const items = rollReward(reward, ownsItem(player, ID.GAUNTLET_CAPE), random);
+  const boost = reward.kind === "completed" ? dropBoost(player, reward.mode) : null;
+  const items = rollReward(reward, ownsItem(player, ID.GAUNTLET_CAPE), random, boost);
   if (reward.echo && Array.isArray(reward.echoDrops)) items.push(...reward.echoDrops.map(drop => ({ ...drop, id: drop.id ?? drop.itemId })));
   setReward(player, null, null);
   player.sendMessage("You open the chest.");
@@ -167,5 +186,5 @@ function openChest(player, random = Math.random) {
 
 module.exports = {
   ATTR_REWARD, POINTS, INCOMPLETE_POINTS, ID, MAIN, TERTIARY, INCOMPLETE, JUNK, SHARDS, ROLLS,
-  rewardFor, rollReward, waitingReward, setReward, sendChest, openChest,
+  CHANCE_SOURCE, rewardFor, rollReward, dropBoost, waitingReward, setReward, sendChest, openChest,
 };

@@ -55,7 +55,7 @@ As captured (recording 829), with the fee unpaid:
 
 - **Ways in** (each a "Cave" 47175 on the surface, a long crawl, `human_longcrawl`, and a tick later in): (3260, 3832) to (3337, 10286); (3282, 3774) to (3358-3360, 10246); (3284, 3807) to (3360, 10273); (3320, 3830) to (3381-3382, 10286-10287). They take the fee too.
 - **Ways out:** Cave 47147 (3358, 10244) to (3282-3284, 3773); Cave 47148 (3336, 10287) to (3260-3262, 3831) and (3382, 10287) to (3320-3322, 3829), crawling; Exit 47149 (3361, 10273) to (3284-3286, 3806), climbing (`human_climbing_loop`).
-- **From a multi lair** the player arrives at one of three points at random: (3341-3342, 10254-10255), (3360-3362, 10296-10297), (3376-3377, 10256-10257). Leaving the same lair within 10 seconds of the player before lands at the same point (Wiki).
+- **From a multi lair** the player arrives at one of the three Escape Caves points at random: (3360-3362, 10296-10297), (3341-3342, 10254-10255) or (3376-3377, 10256-10257). Blocked tiles are skipped when choosing the landing tile. Leaving the same lair within 10 seconds of the player before lands in the same area (Wiki).
 - **The air** (varbit 14692 `wbr_decay_state`), only for players who came in from the surface: every 10 ticks in the caves the state goes up one; from 6 each step drains 1 Prayer point and 2% run energy, and the visit's first drain says "<col=ef1020>You feel a chill down your spine as the air in the cave weakens you, the air seems to be getting thicker over time." The state carries between visits, and through a logout in the caves. Leaving a lair into the caves resets it to 0; so does coming in from the surface 10 minutes or more after the last visit (captured: 10 minutes reset it, 1 minute did not; the exact threshold isn't known).
 
 ### The health bar
@@ -155,4 +155,5 @@ From the Wiki only: no rsprox recording has a piece inspected or two pieces used
 - Singles-plus is shown (the icon) but plays as singles.
 - **An abandoned fight starts over:** a lair boss that has had no target and not been hit for 100 ticks gets its hitpoints and first form back, its hounds, spiderlings, traps and webs go, and its damage record clears (our timing; OSRS's isn't known).
 - Scorpia's fight and cave are uncaptured.
-- Madam Sikaro's assembly of the Voidwaker (500,000 coins) isn't wired yet; her dialogue is in npc-dialogues.json under "Madam Sikaro".
+- Madam Sikaro (NPC 11991) stands in the Ferox Enclave Dungeon and assembles the three unnoted Voidwaker parts for 500,000 coins. Her dialogue is in npc-dialogues.json under "Madam Sikaro"; the confirmation step consumes one hilt, blade, gem and the fee, then gives one Voidwaker.
+  Her spawn at (3175, 10040, 0), facing west, follows rsprox captures; the adjacent west tile is reachable. Using a Voidwaker or another item on her starts the corresponding transcript variant. Choosing No shuffles the inventory, as her transcript says. The invalidated-confirmation refusal is ours because the transcript has no line for losing the parts or fee after the prompt.

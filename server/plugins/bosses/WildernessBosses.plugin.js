@@ -20,7 +20,7 @@ const VoidwakerPieces = require("./wildernessbosses/VoidwakerPieces.WildernessBo
 
 module.exports = {
   name: "WildernessBosses",
-  description: "The Wilderness bosses: Callisto, Vet'ion, Venenatis, their Artio, Calvar'ion and Spindel variants, shared entry fee, Escape Caves, Scorpia and the Voidwaker pieces' Inspect lines.",
+  description: "The Wilderness bosses: Callisto, Vet'ion, Venenatis, their Artio, Calvar'ion and Spindel variants, shared entry fee, Escape Caves, Scorpia, and Madam Sikaro's Voidwaker assembly.",
   config: {
     "WildernessBosses:entryFee": {
       type: "number", label: "Wilderness boss cave entry fee", defaultText: "50,000, as on the Wiki (wilderness-bosses.json)", min: 0, max: 2147483647, integer: true,

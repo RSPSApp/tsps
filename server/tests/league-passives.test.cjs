@@ -534,6 +534,106 @@ test("boosted drops: Wintertodt's cart, Tempoross's reward pool and the Rewards 
   }
 });
 
+test("boosted drops: the Gauntlet, Moons of Peril, Fortis Colosseum, Doom of Mokhaiotl and vyre/elf pickpockets", () => {
+  const leagueApi = { core, emitCustomEvent: (name, payload) => ask(name, payload) };
+  const I = core.ItemIdentifiers;
+  const PACTS = 6;
+  const main = character("bdmain", "main");
+  const dp4 = character("bd4", "league", 4, PACTS);
+
+  // The Gauntlet: a draw of 0.02 is 2.4 in 120 on each crystal seed, a hit only at 5x.
+  require("../plugins/minigames/gauntlet/Shared.Gauntlet").bind(leagueApi);
+  const Gauntlet = require("../plugins/minigames/gauntlet/Rewards.Gauntlet");
+  const seeds = (boost, mode = "regular") => Gauntlet.rollReward({ kind: "completed", mode }, true, () => 0.02, boost)
+    .map((item) => item.id).filter((id) => [Gauntlet.ID.WEAPON_SEED, Gauntlet.ID.ARMOUR_SEED, Gauntlet.ID.ENHANCED_SEED].includes(id));
+  assert.equal(Gauntlet.dropBoost(main, "regular"), null, "a main character: nothing boosted");
+  assert.deepEqual(seeds(null), [], "unboosted: no seed");
+  const gauntlet = Gauntlet.dropBoost(dp4, "regular");
+  assert.deepEqual(seeds(gauntlet), [Gauntlet.ID.WEAPON_SEED, Gauntlet.ID.ARMOUR_SEED], "boosted 5x: both seeds");
+  assert.equal(gauntlet(Gauntlet.ID.YOUNGLLEF), 1, "the pet is not on the page");
+  assert.equal(gauntlet(Gauntlet.ID.CLUE_ELITE), 1, "nor the clue");
+  assert.equal(Gauntlet.dropBoost(dp4, "corrupted")(Gauntlet.ID.ENHANCED_SEED), 5, "The Corrupted Gauntlet's own row");
+
+  // Moons of Peril: a draw of 0.05 is 2.8 in 56 on the Moon's unique roll, a piece only at 5x.
+  const Moons = require("../plugins/bosses/moonsofperil/Common.MoonsOfPeril");
+  Moons.init(leagueApi);
+  const Chest = require("../plugins/bosses/moonsofperil/Chest.MoonsOfPeril");
+  const bloodSet = Moons.data.chest.sets.blood.map((key) => I[key]);
+  const moonPieces = (player) => {
+    Math.random = () => 0.05;
+    try {
+      return Chest.roll(player, ["blood"]).filter((entry) => bloodSet.includes(entry.id)).length;
+    } finally {
+      Math.random = realRandom;
+    }
+  };
+  assert.equal(moonPieces(main), 0, "unboosted: the standard table");
+  assert.equal(moonPieces(dp4), 1, "boosted 5x: a blood moon piece");
+  assert.equal(moonPieces(character("bd4e", "league", 4, ECHOES)), 1, "a Raging Echoes row too");
+  assert.equal(moonPieces(character("bd4t", "league", 8)), 0, "not on Trailblazer Reloaded's page");
+
+  // Fortis Colosseum wave 12: echo crystals, fanatic pieces and Tonalztics are 400 of 4,800; at 5x 2,000.
+  require("../plugins/minigames/colosseum/Shared.Colosseum").bind(leagueApi);
+  const Colosseum = require("../plugins/minigames/colosseum/Loot.Colosseum");
+  const colosseum = Colosseum.dropBoost(dp4);
+  assert.equal(Colosseum.dropBoost(main), null);
+  assert.equal(colosseum(28942), 5, "the echo crystal (the page's echo boots row)");
+  assert.equal(colosseum(Colosseum.FANATIC), 5, "any sunfire fanatic piece");
+  assert.equal(colosseum(28919), 5, "Tonalztics of ralos (uncharged)");
+  assert.equal(colosseum(I.UNCUT_ONYX), 1, "the common rows are not boosted");
+  const rares = new Set([28942, 28919, ...Colosseum.FANATIC_PIECES]);
+  const wave12 = (player) => {
+    let count = 0;
+    for (let k = 0; k < 4800; k++) {
+      const draw = (k + 0.5) / 4800;
+      if (rares.has(Colosseum.roll(12, player, () => draw)[0].id)) count++;
+    }
+    return count;
+  };
+  assert.equal(wave12(main), 400, "unboosted: 1 in 12");
+  assert.equal(wave12(dp4), 2000, "boosted 5x: 5 in 12");
+
+  // Doom of Mokhaiotl, a deep delve: 1/180 for a unique; a draw of 0.01 is one only at 5x.
+  require("../plugins/bosses/doom/Shared.DoomOfMokhaiotl").bind(leagueApi);
+  const Doom = require("../plugins/bosses/doom/Loot.DoomOfMokhaiotl");
+  const doom = Doom.dropBoost(dp4);
+  assert.equal(Doom.dropBoost(main), null);
+  for (const id of [Doom.ITEM.MOKHAIOTL_CLOTH, Doom.ITEM.EYE_OF_AYAK, Doom.ITEM.AVERNIC_TREADS]) assert.equal(doom(id), 5, `unique ${id}`);
+  assert.equal(doom(Doom.ITEM.DOM), 1, "the pet is not on the page");
+  assert.equal(Doom.rollUnique(9, () => 0.01, null), null, "unboosted: no unique");
+  assert.ok(Doom.UNIQUES.some(([id]) => id === Doom.rollUnique(9, () => 0.01, doom)), "boosted 5x: a unique");
+  assert.equal(Doom.rollUnique(9, () => 0.0054, null), Doom.ITEM.MOKHAIOTL_CLOTH, "unboosted rolls as before");
+  assert.equal(Doom.dropBoost(character("bd4e2", "league", 4, ECHOES)), null, "a Demonic Pacts row only");
+
+  // Pickpocketing: a vyre's blood shard is 1/5000, a Prifddinas elf's teleport seed 1/1024.
+  const Pickpocket = require("../plugins/skills/thieving/Pickpocket.Thieving");
+  Pickpocket.register(new Proxy({ core, emitCustomEvent: (name, payload) => ask(name, payload) }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  const vyre = Pickpocket.TARGETS.find((target) => target.key === "vyre");
+  const elf = Pickpocket.TARGETS.find((target) => target.key === "elf_prifddinas");
+  const has = (loot, id) => loot.some((entry) => entry.id === id);
+  assert.equal(has(Pickpocket._test.rollLoot(main, vyre, () => 0.0005), 24777), false, "unboosted: no blood shard");
+  assert.equal(has(Pickpocket._test.rollLoot(dp4, vyre, () => 0.0005), 24777), true, "boosted 5x: the blood shard");
+  const elfDraws = () => { const sequence = [0.5, 0.002]; let n = 0; return () => sequence[n++] ?? 0.5; };
+  assert.equal(has(Pickpocket._test.rollLoot(main, elf, elfDraws()), 23959), false, "unboosted: no teleport seed");
+  assert.equal(has(Pickpocket._test.rollLoot(dp4, elf, elfDraws()), 23959), true, "boosted 5x: the teleport seed");
+  assert.equal(Pickpocket._test.dropBoost(dp4, elf)("Crystal shard"), 1, "the crystal shard is not on the page");
+  const man = Pickpocket.TARGETS.find((target) => target.key === "man");
+  assert.equal(Pickpocket._test.dropBoost(dp4, man), null, "a target without a row asks nothing");
+
+  // A world without the league mode: nobody answers "drops:chance", so every roll is as before.
+  const plainApi = { core, emitCustomEvent() {} };
+  require("../plugins/minigames/gauntlet/Shared.Gauntlet").bind(plainApi);
+  Moons.init(plainApi);
+  require("../plugins/minigames/colosseum/Shared.Colosseum").bind(plainApi);
+  require("../plugins/bosses/doom/Shared.DoomOfMokhaiotl").bind(plainApi);
+  Pickpocket.register(new Proxy(plainApi, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  assert.equal(Gauntlet.dropBoost(dp4, "regular"), null);
+  assert.equal(moonPieces(dp4), 0);
+  assert.equal(wave12(dp4), 400);
+  assert.equal(Doom.dropBoost(dp4), null);
+  assert.equal(has(Pickpocket._test.rollLoot(dp4, vyre, () => 0.0005), 24777), false);
+});
+
 test("boosted drops: the minigames' own rare finds (minigame:chance), by their Boosted drops rows", () => {
   const chance = (player, minigame, kind, multiplier = 1) => ask("minigame:chance", { player, minigame, kind, multiplier }).multiplier;
   const tr8 = character("mc8", "league", 8);

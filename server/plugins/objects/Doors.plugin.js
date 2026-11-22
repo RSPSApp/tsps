@@ -115,25 +115,31 @@ let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPE
 let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID, DORGESH_CITY_DOOR_IDS;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
 let PASS_THROUGH_GATES, PASS_THROUGH_FAMILIES, ARCEUUS_DOUBLE_DOORS;
-let SINGLE_DOOR_CLICK_SOUNDS, DOUBLE_DOOR_CLICK_SOUNDS;
+let DOOR_CLICK_SOUNDS, DOUBLE_DOOR_CLICKED_LEAF_OPEN_IDS;
 
 function defineDoorData({ ObjectIdentifiers: O, Sound }) {
-  // rsprox 3050 ticks 381/383 and 3053 ticks 481/483: these map-door families use
-  // A_DOOR_OPEN/A_DOOR_CLOSE as private synths when operated.
-  const darkmeyerSounds = { open: new Sound(36, 1, 0, 0), close: new Sound(35, 1, 0, 0) };
-  SINGLE_DOOR_CLICK_SOUNDS = new Map([
-    [O.DOOR_612, darkmeyerSounds], // darkm_poor_door_closed
-    [O.DOOR_614, darkmeyerSounds], // darkm_middle_door_closed
-  ]);
-
+  // Doors whose own open/close synths differ from the generic door/gate ones, keyed by closed
+  // loc id (a double door: either closed leaf). An unlisted side keeps the generic sound.
   // Double doors that live swings with nicedoor_open (81) / nicedoor_close (80) instead of
-  // the plain door pair, keyed by either closed leaf (docs/door-sounds.md). Kourend's Arceuus
+  // the plain door pair, in DOOR_CLICK_SOUNDS (docs/door-sounds.md). Kourend's Arceuus
   // doors play it as an area sound of range 1 on the clicked leaf's tile (local 1001998 ticks
   // 1223/1336, local 1000453 tick 9681, rsprox 2297 ticks 451-455); the goblin outpost's inner
   // doors send it as the opener's private synth (local 1001339 ticks 302/309, rsprox 3243).
   const arceuusSounds = { open: new Sound(81, 1, 0, 0), close: new Sound(80, 1, 0, 0), areaRadius: 1 };
   const goblinOutpostSounds = { open: new Sound(81, 1, 0, 0), close: new Sound(80, 1, 0, 0) };
-  DOUBLE_DOOR_CLICK_SOUNDS = new Map([
+  // rsprox 3050 ticks 381/383 and 3053 ticks 481/483: these map-door families use
+  // A_DOOR_OPEN/A_DOOR_CLOSE as private synths when operated.
+  const darkmeyerSounds = { open: new Sound(36, 1, 0, 0), close: new Sound(35, 1, 0, 0) };
+  // Neitiznot's palisade gate opens with synth 36 (rsprox 2722 tick 75; 3027 ticks 6880, 7466,
+  // 8896, 10387); no recorded close was the player's own (docs/door-sounds.md).
+  const palisadeSounds = { open: new Sound(36, 1, 0, 0) };
+  DOOR_CLICK_SOUNDS = new Map([
+    [O.DOOR_612, darkmeyerSounds], // darkm_poor_door_closed
+    [O.DOOR_614, darkmeyerSounds], // darkm_middle_door_closed
+    [core.CacheDefinitions.getLocId("fris_palisade_door_l"), palisadeSounds],
+    [core.CacheDefinitions.getLocId("fris_palisade_door_r"), palisadeSounds],
+    // Jatizso's town wall door opens with synth 71 (rsprox 3027 ticks 3760, 4738); its close is unrecorded.
+    [core.CacheDefinitions.getLocId("frisd_town_wall_door"), { open: new Sound(71, 1, 0, 0) }],
     [O.DOOR_529, arceuusSounds], // archeuus_door_double_left_turquoise
     [O.DOOR_533, arceuusSounds], // archeuus_door_double_right_turquoise
     [O.DOOR_530, arceuusSounds], // archeuus_door_double_left_green
@@ -144,6 +150,18 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
     [O.DOOR_535, arceuusSounds], // archeuus_door_double_right_red
     [O.LARGE_DOOR_43, goblinOutpostSounds], // goblin_outpost_poordoor_double_inner
     [O.LARGE_DOOR_45, goblinOutpostSounds], // goblin_outpost_poordoor_doubler_inner
+  ]);
+  // Double doors whose leaves open by role rather than as their own id + 1: the clicked leaf as
+  // `clicked`, its partner as `partner`. Neitiznot's palisade gate: whichever leaf is clicked opens
+  // as fris_palisade_door_open_r and the other as _open_l (rsprox 2722 tick 75 and 3027 tick 8896
+  // from door_l; 3027 ticks 6880, 7466, 10387 from door_r). Closing restores door_l and door_r.
+  const palisadeOpenIds = Object.freeze({
+    clicked: core.CacheDefinitions.getLocId("fris_palisade_door_open_r"),
+    partner: core.CacheDefinitions.getLocId("fris_palisade_door_open_l"),
+  });
+  DOUBLE_DOOR_CLICKED_LEAF_OPEN_IDS = new Map([
+    [core.CacheDefinitions.getLocId("fris_palisade_door_l"), palisadeOpenIds],
+    [core.CacheDefinitions.getLocId("fris_palisade_door_r"), palisadeOpenIds],
   ]);
 
   // Doors with no open variant in the cache: OSRS opens them by rotating the same loc
@@ -2024,7 +2042,7 @@ function handleMappedDoor(player, object, objectId, location) {
     rememberOpenObjects(anchorKey, [previousObject], [nextObject], closedId);
   }
 
-  const clickSounds = SINGLE_DOOR_CLICK_SOUNDS.get(closedId);
+  const clickSounds = DOOR_CLICK_SOUNDS.get(closedId);
   core.Sounds.sendSound(player, (open ? clickSounds?.close : clickSounds?.open) ?? doorSound(closedId, !open));
 
   return true;
@@ -2157,7 +2175,7 @@ function resolveOpenedDoubleDoorId(record) {
 
 // Swings one leaf of a double door: opening steps it a tile along its closed face (or keeps it on
 // its tile, see OWN_TILE_DOOR_IDS) and turns it to openFaces[closed face], closing puts it back.
-function toggleDoubleDoorLeaf(record, openFaces) {
+function toggleDoubleDoorLeaf(record, openFaces, openId = resolveOpenedDoubleDoorId(record)) {
   const closedPose = record.currentFace === record.originalFace;
   const [dx, dy] = closedPose && !OWN_TILE_DOOR_IDS.has(record.originalId) ? COORD_OFFSETS[record.originalFace] : [0, 0];
   if (record.x === record.originalX && record.y === record.originalY) {
@@ -2167,7 +2185,7 @@ function toggleDoubleDoorLeaf(record, openFaces) {
     record.x = record.originalX;
     record.y = record.originalY;
   }
-  record.currentId = record.currentId === record.originalId ? resolveOpenedDoubleDoorId(record) : record.originalId;
+  record.currentId = record.currentId === record.originalId ? openId : record.originalId;
   record.currentFace = closedPose ? openFaces[record.originalFace] : record.originalFace;
 }
 
@@ -2222,8 +2240,12 @@ function handleDoubleDoor(player, object, objectId, location) {
 
   const previousObjects = pair.map((record) => doubleDoorRecordToObject(record));
 
-  toggleDoubleDoorLeaf(pair[0], LEFT_LEAF_OPEN_FACES);
-  toggleDoubleDoorLeaf(pair[1], RIGHT_LEAF_OPEN_FACES);
+  const roleOpenIds = DOUBLE_DOOR_CLICKED_LEAF_OPEN_IDS.get(clickedDoor.originalId);
+  const openIdOf = (record) => roleOpenIds
+    ? (record === clickedDoor ? roleOpenIds.clicked : roleOpenIds.partner)
+    : resolveOpenedDoubleDoorId(record);
+  toggleDoubleDoorLeaf(pair[0], LEFT_LEAF_OPEN_FACES, openIdOf(pair[0]));
+  toggleDoubleDoorLeaf(pair[1], RIGHT_LEAF_OPEN_FACES, openIdOf(pair[1]));
 
   const currentObjects = pair.map((record) => doubleDoorRecordToObject(record));
   for (const previousObject of previousObjects) {
@@ -2243,8 +2265,8 @@ function handleDoubleDoor(player, object, objectId, location) {
   }
 
   const opened = pair.some(isDoubleDoorOpen);
-  const clickSounds = DOUBLE_DOOR_CLICK_SOUNDS.get(pair[0].originalId) ?? DOUBLE_DOOR_CLICK_SOUNDS.get(pair[1].originalId);
-  const sound = clickSounds ? (opened ? clickSounds.open : clickSounds.close) : doorSound(pair[0].originalId, opened);
+  const clickSounds = DOOR_CLICK_SOUNDS.get(pair[0].originalId) ?? DOOR_CLICK_SOUNDS.get(pair[1].originalId);
+  const sound = (opened ? clickSounds?.open : clickSounds?.close) ?? doorSound(pair[0].originalId, opened);
   if (clickSounds?.areaRadius != null) {
     // On the clicked leaf's tile, heard by the players around it (the opener's private area only).
     core.Sounds.playAreaSound({

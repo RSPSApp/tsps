@@ -1,4 +1,6 @@
-# Darkmeyer door sounds
+# Door sounds
+
+## Darkmeyer
 
 Opening the lower- and middle-tier map doors in Darkmeyer plays `A_DOOR_OPEN` (36).
 Closing them plays `A_DOOR_CLOSE` (35). Both are private synths sent to the player
@@ -26,10 +28,30 @@ sends positioned sound 60 on that timed close. Audio for the upper-tier
 `darkm_rich_door` family and unattended lower-tier closes still needs captures.
 [rsprox capture database](https://rsprox.net/database).
 
+## Fremennik Isles doors
+
+`Doors.plugin.js` keys these sounds by closed loc in the same click-sound table
+(`DOOR_CLICK_SOUNDS`), used by single and double doors. A side with no recording keeps
+the generic door sound. From rsprox captures:
+
+| Door | Where | Live | Recordings |
+| --- | --- | --- | --- |
+| `fris_palisade_door_l` / `_r` (21507 / 21505) | Neitiznot palisade gate, 2328,3805 / 2328,3804 (face 2) | Open: both closed leaves go, synth 36. The clicked leaf opens as `fris_palisade_door_open_r` and its partner as `fris_palisade_door_open_l`, whichever leaf was clicked; 2329,3805 always gets rotation 1 and 2329,3804 rotation 3 | `door_l`: rec 2722 (rev 229) tick 75, rec 3027 (rev 231) tick 8896; `door_r`: rec 3027 ticks 6880, 7466, 10387 |
+| `frisd_town_wall_door` (21399) | Jatizso town wall, 2407,3806 | Open: `frisd_town_wall_door_open` on the tile north, synth 71 | rec 3027 ticks 3760, 4738 |
+
+The `_l` leaves are mirrored in the cache (`isRotated`) and the `_r` ones are not. Before this
+change, every leaf opened as its own id + 1, so a click on `door_l` showed the leaves that live
+shows for a `door_r` click. Both doors also played the generic 62.
+
+Not covered: neither door has a recorded Close made by the player. The palisade Close windows
+(rec 3027 tick 8871, rec 90 tick 9134) were cut off by the next click, and the gate shut with
+no synth to the recorder. So both still play the generic close sound (60). Ours.
+
 ## Nicedoor double doors
 
 Some double doors use `nicedoor_open` (81) and `nicedoor_close` (80) instead of the
-plain door pair (62/60). The shared door plugin picks them from either closed leaf's ID.
+plain door pair (62/60). The shared door plugin lists them in `DOOR_CLICK_SOUNDS` and picks
+them from either closed leaf's ID.
 
 | Cache door family | Open | Close | How it is sent |
 | --- | --- | --- | --- |

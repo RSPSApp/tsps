@@ -350,7 +350,7 @@ class DoomRun {
     this.completed.push({ level: this.level, ticks });
     this.announce(ticks);
     CombatAchievements.defeated(this, ticks);
-    const { items, unique } = Loot.roll(this.level, this.random);
+    const { items, unique } = Loot.roll(this.level, this.random, Loot.dropBoost(this.player));
     // Pets turns a rolled Dom into a follower/backpack item and removes it from the pile.
     Shared.api().emitCustomEvent("npc-drops:roll", { player: this.player, drops: items });
     Loot.merge(this.loot, items);

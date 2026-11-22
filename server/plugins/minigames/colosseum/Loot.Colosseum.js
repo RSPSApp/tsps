@@ -9,6 +9,8 @@
  * Heredit pet at 1/200. Each wave's loot is rolled before the wave and shown on the
  * intermission screen (the capture's preview of wave 1 was the 80 splinters).
  * Not included: the Varlamore token on wave 3 (its rate "varies").
+ * A league's boosted drops ("drops:chance" with source "Fortis Colosseum") make the echo
+ * crystal, sunfire fanatic and Tonalztics rows that many times as likely; the pet is not boosted.
  */
 
 const FANATIC = -1;
@@ -207,16 +209,49 @@ function received(player, items) {
   player.setAttribute(ATTR_FANATIC, had);
 }
 
-function pickWeighted(table, random) {
+/**
+ * One weighted pick. `boost(id)` (dropBoost's) makes a row that many times as likely: its share
+ * of the table is multiplied and the unboosted rows share what is left, so a boosted 1-in-n row
+ * is m-in-n, as the Wiki's Boosted drops columns count it.
+ */
+function pickWeighted(table, random, boost = null) {
   const total = table.reduce((sum, [, , weight]) => sum + weight, 0);
-  let roll = random() * total;
-  return table.find(([, , weight]) => (roll -= weight) < 0) ?? table[table.length - 1];
+  let weights = table.map(([, , weight]) => weight);
+  if (boost) {
+    const multipliers = table.map(([id]) => boost(id));
+    const boosted = weights.reduce((sum, weight, i) => sum + (multipliers[i] > 1 ? weight * multipliers[i] : 0), 0);
+    if (boosted > 0) {
+      const plain = weights.reduce((sum, weight, i) => sum + (multipliers[i] > 1 ? 0 : weight), 0);
+      const scale = boosted >= total || plain === 0 ? 0 : (total - boosted) / plain;
+      weights = weights.map((weight, i) => (multipliers[i] > 1 ? weight * multipliers[i] : weight * scale));
+    }
+  }
+  const sum = weights.reduce((value, weight) => value + weight, 0);
+  let roll = random() * sum;
+  return table.find((_, i) => (roll -= weights[i]) < 0) ?? table[table.length - 1];
+}
+
+/** The source a wave's roll names on "drops:chance". */
+const CHANCE_SOURCE = "Fortis Colosseum";
+/** A row's name for its boost: the fanatic row stands for any sunfire fanatic piece. */
+const FANATIC_NAME = "Sunfire fanatic helm";
+
+/** "drops:chance" for a wave (a league's boosted drops): a row id's multiplier, or null when nothing is boosted. */
+function dropBoost(player) {
+  const Shared = require("./Shared.Colosseum");
+  const rules = [];
+  Shared.api()?.emitCustomEvent?.("drops:chance", { player, source: CHANCE_SOURCE, rules });
+  if (rules.length === 0) return null;
+  return (id) => {
+    const name = id === FANATIC ? FANATIC_NAME : Shared.core().ItemDefinition.forId(id)?.getName?.() ?? "";
+    return rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+  };
 }
 
 /** The items a wave adds, as [{ id, amount }]. */
 function roll(wave, player, random = Math.random) {
   if (wave <= 1) return [{ id: SUNFIRE_SPLINTERS, amount: 80 }];
-  const [id, quantity] = pickWeighted(TABLES[Math.min(wave, 12)], random);
+  const [id, quantity] = pickWeighted(TABLES[Math.min(wave, 12)], random, player ? dropBoost(player) : null);
   const [min, max] = Array.isArray(quantity) ? quantity : [quantity, quantity];
   const amount = min + Math.floor(random() * (max - min + 1));
   const items = [{ id: id === FANATIC ? fanaticPiece(player, random) : id, amount }];
@@ -229,4 +264,4 @@ function rollsPet(random = Math.random) {
   return Math.floor(random() * PET_CHANCE) === 0;
 }
 
-module.exports = { TABLES, FANATIC, FANATIC_PIECES, SUNFIRE_SPLINTERS, DIZANAS_QUIVER, SMOL_HEREDIT, ATTR_FANATIC, roll, received, rollsPet };
+module.exports = { TABLES, FANATIC, FANATIC_PIECES, SUNFIRE_SPLINTERS, DIZANAS_QUIVER, SMOL_HEREDIT, ATTR_FANATIC, CHANCE_SOURCE, roll, received, rollsPet, dropBoost, pickWeighted };

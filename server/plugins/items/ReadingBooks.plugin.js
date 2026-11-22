@@ -7,7 +7,9 @@
  * 8280: one spread, both page buttons hidden) and the three Slepe Sisterhood books (rsprox 391);
  * on the scrolls that open in the long scroll (625): the Castle Drakan poem scroll and the Elixir
  * of Everlasting (rsprox 392 tick 523); and on the Crombwick deed, which opens the handwritten
- * scroll (rsprox 391 tick 4736). Reading changes nothing in the inventory.
+ * scroll (rsprox 391 tick 4736). The Grand Tree's Translation book and Glough's journal (books) and
+ * Hazelmere's scroll, Invasion plans and Lumber order, and The Hand in the Sand's Bert's and Sandy's
+ * rotas (long scroll) use the Wiki transcript text; no capture of those reads exists. Reading changes nothing in the inventory.
  */
 const { openBook, openLongScroll, bookPagesFromSpreads, registerQuestWidgets } = require("../quests/QuestRuntime");
 const books = require("./data/reading-books.json");

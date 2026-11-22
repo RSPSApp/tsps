@@ -220,7 +220,7 @@ async function main() {
         const calls: number[] = [];
         const deps: any = {
             getCs2Vm: () => ({ inputDialogType: 0, invokeEventHandler: (w: { uid: number }) => calls.push(w.uid) }),
-            getVarManager: () => ({ getVarbit: () => 0 }),
+            getVarManager: () => ({ getVarbit: () => 0, getVarcInt: () => -1 }),
             getPendingInputDialogAction: () => null, getPendingTradeQuantityAction: () => null,
             getCustomInterfaces: () => ({ handleSearchKeyEvents: () => false }),
         };
@@ -297,6 +297,39 @@ async function main() {
         widgets.hidden.add(settings(19));
         toggle.sync();
         assert.equal(rows.children.length, 1, "closing All Settings takes it out");
+    }
+
+    // The mobile client's rows have no hover handlers (script 3849 sets only onVarTransmit on them).
+    // The row is still added, copied from one of them, and the cache's names and descriptions stay
+    // visible (#6533: they were all hidden, leaving only toggles and dropdowns).
+    {
+        const settings = (child: number) => (134 << 16) | child;
+        const varTransmit = { scriptId: 3849, intArgs: [8781843, 4, 1, 312, 200, 4490, 1], objectArgs: [] };
+        const nativeRow = (top: number) => [
+            { uid: 1 + top, type: 3, rawX: 0, rawY: top, rawWidth: 10, rawHeight: 40, xPositionMode: 1, widthMode: 1, color: 0, filled: true,
+                transparency: 200, eventHandlers: { onVarTransmit: varTransmit } },
+            { uid: 2 + top, type: 4, rawX: 10, rawY: top + 6, rawWidth: 45, rawHeight: 14, widthMode: 1, fontId: 496, textColor: 0xff981f, text: "Player Trade options" },
+            { uid: 3 + top, type: 5, rawX: 10, rawY: top + 11, rawWidth: 18, rawHeight: 18, xPositionMode: 2, spriteId: TOGGLE_ON_SPRITE },
+            { uid: 4 + top, type: 4, rawX: 10, rawY: top + 20, rawWidth: 45, rawHeight: 14, widthMode: 1, fontId: 495, textColor: 0x9f9f9f, text: "Select whether Trade options are shown." },
+        ];
+        const rows: any = { uid: settings(19), children: [...nativeRow(29), ...nativeRow(89)] };
+        const clicks: any = { uid: settings(20), children: [{ uid: 9, rawY: 29 }, { uid: 10, rawY: 89 }] };
+        const scroll: any = { uid: settings(14), scrollHeight: 150, scrollY: 0 };
+        const widgets = fakeWidgets([rows, clicks, scroll, { uid: settings(21) }]);
+        const pane = {
+            widgetManager: widgets, executeScriptListener: () => {},
+            varManager: { getVarbit: (id: number) => (id === 9656 ? CONTROLS_CATEGORY : 0), getVarcString: () => "" },
+        };
+        const preference = { enabled: false, isEnabled() { return this.enabled; }, setEnabled(on: boolean) { this.enabled = on; } };
+        new AllSettingsToggle(pane, preference).sync();
+        const cache = rows.children.slice(0, 8);
+        assert.deepEqual(cache.filter((child: any) => child.type === 4).map((child: any) => !!child.hidden), [false, false, false, false],
+            "the cache's names and descriptions stay shown");
+        const [background, name, sprite, description] = rows.children.slice(8);
+        assert.deepEqual([rows.children.length, background.rawY, name.text, name.fontId, description.fontId, sprite.spriteId],
+            [12, 129, "WASD Camera", 496, 495, TOGGLE_OFF_SPRITE], "its row is added after the last one, copied from theirs");
+        assert.equal(background.eventHandlers, undefined, "it has no hover handlers, as theirs have none");
+        assert.equal(clicks.children.length, 3);
     }
 
     // The switch is kept in the client preferences, off in a new browser.

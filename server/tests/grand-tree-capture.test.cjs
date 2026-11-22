@@ -233,6 +233,27 @@ test("the arrest: the guard climbs up, the player is taken to the cell and the K
   await finish(f);
 });
 
+test("the arrest holds: clicking Glough while the guard comes or during the escort starts nothing (#6544)", async (t) => {
+  const f = actor(t, { stage: 70, items: [[I.GLOUGHS_JOURNAL, 1]], tile: [2480, 3463, 1] });
+  const glough = await talk(f, 2061, [2481, 3463, 1]);
+  await until(f, "Guards! Guards!");
+  const click = () => f.connection.dispatch([{ type: "npc_option", index: glough.getIndex(), clickType: 1 }]);
+  await h.continueLine(f);
+  h.ticks(f, 1);
+  await click();
+  for (let i = 0; i < 6 && !h.shown(f); i++) h.tick(f);
+  assert.equal(h.shown(f)?.text, "Come with me!", "the guard's line, not Glough's talk again");
+  assert.equal(npcsNear(f, 1433).length, 1, "one guard");
+  await h.continueLine(f);
+  h.ticks(f, 3);
+  await click();
+  h.ticks(f, 2);
+  assert.equal(h.shown(f), null, "Glough's talk did not start during the escort");
+  await until(f, "Traveller please accept my apologies!");
+  assert.deepEqual(at(f), [2464, 3496, 3], "in the cell");
+  await finish(f);
+});
+
 test("the glider out: the map draws the crash flight, the player lands at 2918,3058 and Errdo apologises (t11252-11256)", async (t) => {
   const f = actor(t, { stage: 80, tile: [2465, 3500, 3] });
   await talk(f, 6091, [2465, 3501, 3]);

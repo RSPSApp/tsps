@@ -469,6 +469,23 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
   // opener that many ticks after the opening sound before the gate opens and they cross. silent sends
   // no opening sound (a gate live opens without a synth).
   PASS_THROUGH_GATES = Object.freeze([
+    // Zombie-pirate hideout's living lower door: rsprox 3032 (rev 231), t4905-4910 and the
+    // second Open at t5074-5076. Live swaps in inviswall on the doorway and the secure-open leaf
+    // one tile west, plays door_open (62), and restores the closed loc two ticks later. Ours:
+    // those interactions don't expose the opener's crossing, so use the ordinary north/south
+    // pass-through step across this doorway.
+    Object.freeze({
+      closed: [[core.CacheDefinitions.getLocId("brain_living_lower_door"), 3817, 2841, 0, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3817, 2841, 0, 0],
+        [core.CacheDefinitions.getLocId("brain_living_lower_door_secureopen"), 3816, 2841, 0, 1],
+      ],
+      crossY: 2841,
+      walkOver: true,
+      operateBeforeMovement: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
     // Museum cleaning gate: captures 1702 (rev226) and 1704 (rev227) show this shared
     // swap and three-tick restore; MuseumEntrance owns the admission check.
     Object.freeze({

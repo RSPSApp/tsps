@@ -12,6 +12,7 @@ const SeedBox = require("./SeedBox.Farming");
 const Hespori = require("./Hespori.Farming");
 const Redwood = require("./Redwood.Farming");
 const Tools = require("./Tools.Farming");
+const Gardeners = require("./Gardeners.Farming");
 const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 const FARM_ATTRIBUTE = "farming:state";
@@ -1467,11 +1468,13 @@ function attach(api) {
     api.onCustomEvent("player:world-input", Hespori.hesporiInput);
     api.onCustomEvent("npc-dialogue:action", Hespori.reentryAction);
     api.onCustomEvent("npc-dialogue:action", Services.gardenerProtection);
+    api.onCustomEvent("npc-dialogue:action", Services.gardenerTalkAction);
     api.onCustomEvent("interface:changed", Hespori.warningInterfaceChanged);
     api.onCustomEvent("player:world-input", cancelWork);
     api.onCustomEvent("player:interaction-cleared", cancelWork);
     api.onCustomEvent("npc-drops:generated", Hespori.hesporiLoot);
     Hespori.attachEcho(api);
+    Gardeners.attach(api);
     api.onCustomEvent("hespori:quest-challenge", Hespori.challengeHespori);
     api.onCustomEvent("item-retrieval:items", retrievalItems);
     api.onCustomEvent("group-ironman:wipe-tradeables", Hespori.wipeForGroupIronman);

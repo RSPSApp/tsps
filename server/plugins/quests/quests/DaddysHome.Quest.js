@@ -71,6 +71,9 @@ module.exports = function registerDaddysHomeQuest(api) {
   // Before rev 242's status 14, the opened crate was this flag; a save that has it moves to 14 at login.
   const CRATE_OPENED_ATTRIBUTE = "daddys-home:crate-opened";
   const LECTURE_EXIT_ATTRIBUTE = "daddys-home:lecture-exit";
+  // A built piece's Construction XP, saved with the piece the tick its materials go and paid the tick after (as
+  // captured); a save in between keeps it owed, and login pays it.
+  const PENDING_XP_ATTRIBUTE = "daddys-home:pending-xp";
 
   const STAGE_STARTED = 1;
   const STAGE_REMOVE = 2;
@@ -239,6 +242,8 @@ module.exports = function registerDaddysHomeQuest(api) {
       quest.setStage(player, STAGE_CRATE_OPENED);
     }
     sendFurniture(player);
+    // A save taken between a piece's materials and its build (a restart then): the XP it still owes.
+    payPendingXp(player);
     creditQuestPoint(player);
   }
 
@@ -483,14 +488,16 @@ module.exports = function registerDaddysHomeQuest(api) {
     }
 
     /**
-     * The materials go, and the save already holds the piece built: a save (and a crash) before the next tick can't
-     * keep the one without the other. The client hears of it (varbit, XP) the tick after, as captured.
+     * The materials go, and the save already holds the piece built and its XP owed: a save (and a crash) before the
+     * next tick can't keep one without the others. The client hears of it (varbit, XP) the tick after, as captured.
      */
     take() {
-      consumeMaterials(this.player, PIECES[this.index]);
-      const state = stateOf(this.player);
+      const player = this.player;
+      consumeMaterials(player, PIECES[this.index]);
+      const state = stateOf(player);
       state[this.index] = STATE_BUILT;
-      this.player.setAttribute(FURNITURE_ATTRIBUTE, state);
+      player.setAttribute(FURNITURE_ATTRIBUTE, state);
+      player.setAttribute(PENDING_XP_ATTRIBUTE, (Number(player.getAttribute(PENDING_XP_ATTRIBUTE)) || 0) + PIECES[this.index].xp);
       this.taken = true;
     }
 
@@ -549,8 +556,17 @@ module.exports = function registerDaddysHomeQuest(api) {
       if (player.getSkill() === this) player.setSkill(null);
       if (!this.taken) return;
       setPieceState(player, this.index, STATE_BUILT);
-      player.getSkillManager().addExperiences(Skill.CONSTRUCTION, piece.xp);
+      payPendingXp(player, piece.xp);
     }
+  }
+
+  /** Pays up to `amount` of the owed build XP (all of it without `amount`), taking it off what is owed first. */
+  function payPendingXp(player, amount) {
+    const owed = Number(player.getAttribute(PENDING_XP_ATTRIBUTE)) || 0;
+    const paid = Math.min(owed, amount ?? owed);
+    if (paid <= 0) return;
+    player.setAttribute(PENDING_XP_ATTRIBUTE, owed - paid);
+    player.getSkillManager().addExperiences(Skill.CONSTRUCTION, paid);
   }
 
   function cancelBuild({ player }) {
@@ -1169,6 +1185,7 @@ module.exports = function registerDaddysHomeQuest(api) {
   api.persistAttribute(FURNITURE_ATTRIBUTE, [0, 0, 0, 0, 0, 0, 0]);
   api.persistAttribute(CRATE_OPENED_ATTRIBUTE, 0);
   api.persistAttribute(QP_CREDITED_ATTRIBUTE, false);
+  api.persistAttribute(PENDING_XP_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
     key: "daddys_home",

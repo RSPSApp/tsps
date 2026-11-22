@@ -126,6 +126,9 @@ The capture is followed here, by the user's decision for this quest:
 - **Lost waxwood**: until the bed is built, the crate gives logs again and the Varrock operator offers the waxwood line
   again to a player at status 6 without the planks. No recording loses them; without this, destroyed planks
   (their only option is Destroy) left the quest impossible to finish.
+- **A save between the materials and the build**: the tick the last nail takes the materials, the save already holds the
+  piece built and its XP owed (`daddys-home:pending-xp`). The tick after pays it with the varbit, as captured; a login
+  pays what a restart left owed, once.
 - **An interrupted build**: once the last nail (or a nail-less piece's pick) has taken the materials, the piece is built
   and its XP given even if a click, a walk or a logout interrupts the tick before. Without this, the materials were
   lost, which the in-game check found. What live does in that tick isn't recorded.

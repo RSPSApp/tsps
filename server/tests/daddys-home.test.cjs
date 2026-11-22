@@ -57,6 +57,8 @@ before(async () => {
     getSkillManager: () => require("../dist/game/content/skill/SkillManager").SkillManager,
     setPlayerPersistence: (backend) => { codec = backend; }, log() {},
   });
+  // A browser-host environment (BROWSER_HOST*) skips the plugin's own backend; the codec is the same class.
+  codec ??= new JsonPersistence.JsonPlayerPersistence();
 });
 after(() => PM.emitServerShutdown({}));
 
@@ -684,6 +686,16 @@ test("a save taken between the last nail and the build holds the piece built wit
   ticks(f, 4); // four nails: the planks go with the last
   assert.equal(inv.getAmount(I.PLANK), 0);
   assert.equal(furniture(f, "table2"), 2, "the client still sees the hotspot on this tick, as captured");
+  const saved = xp(f);
   const g = reload(t, f); // a save on this tick, then a restart
   assert.equal(g.player.getAttribute("daddys-home:furniture")[PIECE.table2], 3, "the piece the planks went into is saved built");
+  assert.equal(xp(g) - saved, 86, "and its XP, owed in the save, is paid at login (review: UnhealthyKraken)");
+  assert.equal(g.player.getAttribute("daddys-home:pending-xp"), 0);
+  PM.emitPlayerLogin({ player: g.player, username: g.player.getUsername(), isNewAccount: false });
+  assert.equal(xp(g) - saved, 86, "never twice");
+  // The session that saved carries on: its build lands a tick later with the XP once.
+  tick(f);
+  assert.equal(furniture(f, "table2"), 3);
+  assert.equal(xp(f) - saved, 86);
+  assert.equal(f.player.getAttribute("daddys-home:pending-xp"), 0);
 });

@@ -797,7 +797,8 @@ module.exports = function registerElementalWorkshopIIQuest(api) {
         sound(player, SOUND.cartLoop);
       }
       const [x, y] = CART_PATH[(start + n) % CART_PATH.length];
-      if (fl.cart?.isRegistered?.()) fl.cart.moveTo(tile(player, [x, y, 2]));
+      // Live moves it with a plain teleport (jump flag clear), which clients walk the cart over.
+      if (fl.cart?.isRegistered?.()) fl.cart.teleportInView(tile(player, [x, y, 2]));
       fl.cartStepsLeft = end - (start + n);
       if (start + n < end) return true;
       fl.cartMoving = false;

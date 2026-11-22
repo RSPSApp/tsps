@@ -256,6 +256,11 @@ test("the arrest holds: clicking Glough while the guard comes or during the esco
   await click();
   h.ticks(f, 2);
   assert.equal(h.shown(f), null, "Glough's talk did not start during the escort");
+  h.ticks(f, 4);
+  assert.deepEqual(at(f), [2477, 3463, 1], "at the ladder");
+  await click();
+  h.ticks(f, 1);
+  assert.deepEqual(at(f), [2477, 3463, 1], "a click doesn't pull the player off the ladder");
   await until(f, "Traveller please accept my apologies!");
   assert.deepEqual(at(f), [2464, 3496, 3], "in the cell");
   await finish(f);

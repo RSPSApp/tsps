@@ -198,9 +198,9 @@ module.exports = function createGrandTreeScenes(api, { onPrisonKing, onReleased,
     event.handled = event.end = true;
     player.getMovementQueue().reset().setBlockMovement(true);
     holdForArrest(player, 13);
-    later(player, 6, () => walk(player, ARREST.ladder));
+    // Held steps, a tile a tick, so a click on the way can't pull the player off the guard's route.
+    for (let tick = 6; tick < 12; tick++) later(player, tick, () => stepTowards(player, ARREST.ladder));
     later(player, 12, () => {
-      player.getMovementQueue().setBlockMovement(true);
       player.performAnimation(new Animation(REACH_LADDER));
     });
     later(player, 13, () => {
@@ -209,6 +209,12 @@ module.exports = function createGrandTreeScenes(api, { onPrisonKing, onReleased,
       player.getMovementQueue().setBlockMovement(false);
     });
     later(player, 16, () => kingComes(player, () => onPrisonKing?.(player, kings.get(player))));
+  }
+
+  function stepTowards(player, [x, y]) {
+    const here = player.getLocation();
+    const dx = Math.sign(x - here.getX()), dy = Math.sign(y - here.getY());
+    if (dx || dy) player.getMovementQueue().stepWhileHeld(dx, dy);
   }
 
   /** The King appears east of the cell and walks to its door (t11170-11173), then speaks. */

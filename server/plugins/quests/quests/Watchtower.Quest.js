@@ -1090,8 +1090,8 @@ module.exports = function registerWatchtowerQuest(api) {
 
   const EAST_GATE = { leaf: [LOCS.EAST_GATE[1], 2549, 3028], inside: [2549, 3028] };
   const NORTH_WEST_GATE = { leaf: [LOCS.NORTH_WEST_GATE[0], 2504, 3062], inside: [2504, 3062] };
-  /** The east guards let the player by once paid, or once the relic got them into the city (Wiki). */
-  const eastGateOpen = (player) => state.hasBit(player, BITS.EAST_GATE_PAID) || stage(player) >= STAGES.GUTANOTH;
+  /** The east guards let the player by once paid (Wiki: the gold bar is needed; "use the gold bar on one of the guards"). */
+  const eastGateOpen = (player) => state.hasBit(player, BITS.EAST_GATE_PAID);
 
   /** After the guard's line the player walks to the gate, which opens and shuts behind them (t2222-2230, t2314-2321). */
   function walkThroughGate(player, gate) {
@@ -1112,17 +1112,33 @@ module.exports = function registerWatchtowerQuest(api) {
     api.getTaskManager().submit(task);
   }
 
-  /** door:toggle on the city gates: who may pass; the others hear the guards (t2207, t3257-3285). */
+  /**
+   * Open on a city gate (Doors has no "City gate" name: the cache uses it elsewhere): the guards' say decides, then the
+   * pass-through opening through door:open (t3257-3285); refused, the guards talk (t2207).
+   */
+  function openCityGate(event) {
+    const { player, objectId, object } = event;
+    const east = LOCS.EAST_GATE.includes(objectId);
+    if (!east && !LOCS.NORTH_WEST_GATE.includes(objectId)) return false;
+    if (cityGate({ player, objectId }) || !object) return true;
+    api.emitCustomEvent("door:open", { player, object, handled: false });
+    return true;
+  }
+
+  /** Who may pass a city gate; the others hear the guards (t2207, t3257-3285). Returns whether it refused. */
   function cityGate(request) {
     const { player, objectId } = request;
     const east = LOCS.EAST_GATE.includes(objectId);
-    if (!east && !LOCS.NORTH_WEST_GATE.includes(objectId)) return;
+    if (!east && !LOCS.NORTH_WEST_GATE.includes(objectId)) return false;
     const allowed = complete(player) || (east ? eastGateOpen(player) : stage(player) >= STAGES.GUTANOTH);
-    if (allowed) return;
+    if (allowed) return false;
     request.handled = true;
+    // Transcript:Watchtower, "Entering Gu'Tanoth": "A nearby guard calls you over."
+    player.sendMessage("A nearby guard calls you over.");
     const guard = nearestNpc(player, (npc) => npc.getId() === (east ? NPCS.EAST_GUARD : NPCS.NORTH_WEST_GUARD), 8);
     if (east) play(player, NPCS.EAST_GUARD, "watchtower-standard-dialogue-east-guards", null, GUARD_PAGE, guard);
     else talkNorthWestGuard({ player, npc: guard, npcId: NPCS.NORTH_WEST_GUARD });
+    return true;
   }
 
   /** The east guards' page, Ogre guard's "East guards". */
@@ -1207,6 +1223,8 @@ module.exports = function registerWatchtowerQuest(api) {
     const { player, objectId } = event;
     if (ObstacleRunner.isBusy(player)) return true;
     if (objectId === LOCS.GAP_SOUTH) {
+      // Wiki (Gap (Gu'Tanoth), Mod Ash): jumping back resets the toll; teleporting out keeps it paid.
+      state.setBit(player, BITS.TOLL_PAID, false);
       jumpAcross(player, false);
       play(player, NPCS.BRIDGE_GUARD, "entering-gu-tanoth-crossing-back-across-the-bridge");
       return true;
@@ -1218,6 +1236,10 @@ module.exports = function registerWatchtowerQuest(api) {
     // Wiki (Gap (Gu'Tanoth)): "Level 25 Agility is required". Ours: the refusal's words; no capture has one.
     if (level(player, Skill.AGILITY) < 25) {
       player.sendMessage("You need an Agility level of 25 to jump this gap.");
+      return true;
+    }
+    if (state.hasBit(player, BITS.TOLL_PAID)) {
+      jumpAcross(player, true);
       return true;
     }
     const guard = nearestNpc(player, (npc) => npc.getId() === NPCS.BRIDGE_GUARD, 12);
@@ -1232,6 +1254,7 @@ module.exports = function registerWatchtowerQuest(api) {
     if (here.getZ() !== 0 || here.getY() > 3026 || !near(player, [2530, 3026], 1)) return;
     if (player.getInventory().getAmount(ITEMS.COINS) < 20) return;
     player.getInventory().deleteNumber(ITEMS.COINS, 20);
+    state.setBit(player, BITS.TOLL_PAID);
     player.sendMessage("You daringly jump across the chasm.");
     jumpAcross(player, true);
   }
@@ -1368,7 +1391,7 @@ module.exports = function registerWatchtowerQuest(api) {
       return true;
     }
     if (ObstacleRunner.isBusy(player)) return true;
-    ObstacleRunner.run({ player }, [{ anim: SEQ.POUR_POTION }, { wait: 8 }, { run: () => shamanDestroyed(player, shaman) }]);
+    ObstacleRunner.run({ player }, [{ anim: SEQ.POUR_POTION }, { wait: 8 }, { run: () => { if (held(player, ITEMS.MAGIC_POTION)) shamanDestroyed(player, shaman); } }]);
     return true;
   }
 
@@ -1638,6 +1661,7 @@ module.exports = function registerWatchtowerQuest(api) {
       return done(true);
     }
     if (objectId === LOCS.CAKE_COUNTER) return done(stealRockCake(event));
+    if (LOCS.EAST_GATE.includes(objectId) || LOCS.NORTH_WEST_GATE.includes(objectId)) return done(openCityGate(event));
     if (objectId === LOCS.LEVER) return done(pullLever(event));
     if (objectId === LOCS.ROCK) {
       const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();

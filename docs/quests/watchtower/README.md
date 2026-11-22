@@ -102,7 +102,9 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
   gold..." (3118); then "Creature, did you bring me the gold?" / "Here it is!", the bar taken, "It's
   brought it! On your way."; the player walks to (2549,3028) and the gate opens (inviswalls 38848 in the
   doorway, 37393/37394 the leaves swung south, sound 46) and is back two ticks later. After paying, "I know
-  you, creature; you may pass." (3271) and the gate opens again.
+  you, creature; you may pass." (3271) and the gate opens again. The bar is needed even after the relic got
+  the player in (Wiki). Clicking a gate the guards keep shut: "A nearby guard calls you over."
+  (Transcript:Watchtower) and their talk.
 - **The north-west gate** (2308-2321): the guard stops the player first even with the relic ("Stop,
   creature!..." / "Until then..."), then "I've got a proof of friendship right here!", the Wiki's carrying
   branch and stage 4; the walk west through the gate (leaves 37393/37394 swung west). After, "It's the
@@ -116,7 +118,8 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
 - **The gap** (2507-2543): the bridge guard's (4372) talk; paid, "You daringly jump across the chasm.", 20
   coins, 5 Agility XP, seq 5355 and sound 2461 with a 45-cycle move to (2530,3029), then "Phew! I just
   made it."; back to (2531,3026) free with "I'm glad that was easier on the way back!". After the quest the
-  toll and the 5 XP stay (Wiki, Gap (Gu'Tanoth): "Each jump from the south costs 20 coins"); Agility 25 (Wiki).
+  toll and the 5 XP stay (Wiki, Gap (Gu'Tanoth)); once paid, the toll holds until the player jumps back
+  south (teleporting out keeps it, Mod Ash via the Wiki); Agility 25 (Wiki).
 - **The city guard** (2636-2710): with the death rune the riddle talk is "I worked it out!" at once; the
   rune and map in a box. The riddles and a lost map as the Wiki.
 - **The skavid caves**: with the map "You enter the cave..." and the inside on arrival (2903, 2947);
@@ -162,7 +165,8 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
   box; two ticks later "You can now cast..." in a box (the scroll goes with the stage here; live: with this
   box); a tick later "The scroll
   crumbles to dust."
-- **Watchtower Teleport** lands at (2934,4713,2), the completed tower's top floor (6337); the Ardougne
+- **Watchtower Teleport** lands at (2934,4713,2) (recorded difference: the Wiki's location line gives the
+  world-map tower, 2546,3114), the completed tower's top floor (6337); the Ardougne
   hard diary task counts it there.
 
 ## Recorded differences
@@ -185,6 +189,11 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
   kind." on live (2263); the Wiki's circuit is kept for it.
 
 ## Not covered
+
+- The shaman melting locs (qip_watchtower_ogre_shaman_melting_0n, t5714-5717, t5847-5850) and the east
+  gate's mirrored leaves when opened from the other leaf (t3270-3274).
+- Talking to an ogre shaman: the Wiki's 20 damage and "A magic blast comes from the shaman..." are not in
+  the dump yet (osrsreboxed-db).
 
 - Ours: the trellis's Agility 18 refusal, the bushes before the quest, the light-source refusal in the
   caves, the Magic 14 / Herblore 14 / Mining 40 / Thieving 15 refusals, "I can't touch it..." on the rock

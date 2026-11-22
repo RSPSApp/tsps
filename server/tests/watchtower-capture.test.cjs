@@ -669,3 +669,78 @@ test("the enclave scene: played through, the player stands at the entrance with 
   assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
   assert.equal(f.player.getAttribute("watchtower:scene-exit") ?? null, null);
 });
+
+test("the east guards want the gold bar even after the relic got the player in (Wiki); the gate says a guard calls you over", async (t) => {
+  const f = actor(t, { at: [2551, 3033, 0], stage: S.GUTANOTH });
+  f.player.setAttribute("watchtower:varbits", { ...(f.player.getAttribute("watchtower:varbits") ?? {}), [V.EAST]: 1 });
+  const guard = h.spawn(f, N.EAST_GUARD, [2551, 3032, 0]);
+  const said = await talk(f, guard);
+  assert.ok(said.some((line) => line.endsWith("Creature, did you bring me the gold?")), said.join("\n"));
+  assert.ok(!said.some((line) => line.includes("I know you")));
+  f.player.moveTo(new h.core.Location(2550, 3029, 0));
+  h.ticks(f, 2);
+  f.messages.length = 0;
+  await play(f, () => click(f, 2786, [2550, 3028]));
+  for (let i = 0; i < 6 && !messages(f).length; i++) h.tick(f);
+  assert.ok(messages(f).includes("A nearby guard calls you over."), JSON.stringify({ m: messages(f), at: at(f) }));
+  assert.equal(at(f)[1] >= 3028, true, "still inside the city");
+});
+
+test("the gap's toll: paid once until the player jumps back south (Wiki: Gap (Gu'Tanoth))", async (t) => {
+  const f = actor(t, { at: [2530, 3025, 0], stage: S.GUTANOTH, items: [[I.COINS, 40]] });
+  h.spawn(f, 4372, [2529, 3023, 0]);
+  await play(f, () => click(f, 2830, [2530, 3026]), ["Okay, I'll pay it."]);
+  h.ticks(f, 3);
+  assert.deepEqual(at(f), [2530, 3029, 0]);
+  f.player.moveTo(new h.core.Location(2530, 3025, 0)); // teleported out and back: still paid
+  h.ticks(f, 2);
+  const free = await play(f, () => click(f, 2830, [2530, 3026]));
+  h.ticks(f, 3);
+  assert.ok(!free.some((line) => line.includes("20 gold pieces")), free.join("\n"));
+  assert.deepEqual(at(f), [2530, 3029, 0]);
+  assert.equal(count(f, I.COINS), 20);
+  await click(f, 2831, [2531, 3029]);
+  h.ticks(f, 4);
+  for (let i = 0; i < 5 && h.shown(f); i++) await h.continueLine(f);
+  f.player.moveTo(new h.core.Location(2530, 3025, 0));
+  h.ticks(f, 2);
+  const again = await play(f, () => click(f, 2830, [2530, 3026]));
+  assert.ok(again.some((line) => line.includes("20 gold pieces")), again.join("\n"));
+});
+
+test("the enclave scene: a teleport during its fade calls it off and gives the controls back", async (t) => {
+  const f = actor(t, { at: [2507, 3041, 0], stage: S.NIGHTSHADE, items: [[I.CAVE_NIGHTSHADE]] });
+  const guard = h.spawn(f, N.ENCLAVE_GUARD, [2507, 3040, 0]);
+  await useOnNpc(f, guard, I.CAVE_NIGHTSHADE);
+  await h.continueLine(f);
+  h.ticks(f, 2);
+  h.PM.emitInterfaceActionClick({ player: f.player, buttonId: (573 << 16) | 17, action: 0, opId: 1, groupId: 573, childId: 17, handled: false });
+  for (let i = 0; i < 8 && at(f)[1] < 9000; i++) h.tick(f);
+  assert.ok(at(f)[1] > 9000, "in the fade at the entrance");
+  f.player.moveTo(new h.core.Location(3222, 3218, 0));
+  h.ticks(f, 8);
+  assert.deepEqual(at(f), [3222, 3218, 0]);
+  assert.equal(f.player.getArea() instanceof h.core.TemplatedInstanceArea, false);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(varbit(f, V.SCENE), 0);
+});
+
+test("the shamans: a potion dropped during the pour destroys nothing", async (t) => {
+  const f = actor(t, { at: [2596, 9433, 0], stage: S.MAGIC, items: [[I.MAGIC_OGRE_POTION]] });
+  const shaman = h.spawn(f, 6208, [2597, 9433, 0]);
+  for (let i = 0; i < 10 && f.player.busy(); i++) h.tick(f);
+  const slot = f.player.getInventory().getItems().findIndex((item) => item?.getId() === I.MAGIC_OGRE_POTION);
+  await f.connection.dispatch([{ type: "item_on_npc", targetIndex: shaman.getIndex(), itemId: I.MAGIC_OGRE_POTION, slot, widgetId: 149 << 16 }]);
+  for (let i = 0; i < 15 && !f.animations.some((a) => a.id === 5361); i++) h.tick(f);
+  assert.ok(f.animations.some((a) => a.id === 5361), "the pour started");
+  f.player.getInventory().deleteNumber(I.MAGIC_OGRE_POTION, 1);
+  h.ticks(f, 10);
+  assert.equal(varbit(f, V.SHAMANS[0]), 0);
+});
+
+test("a paid east gate opens on a click from inside the city and lets the player through (t3257-3270)", async (t) => {
+  const f = actor(t, { at: [2550, 3029, 0], stage: S.GUTANOTH, attributes: { [BITS]: 1 << 25 } });
+  await click(f, 2786, [2550, 3028]);
+  h.ticks(f, 4);
+  assert.equal(at(f)[1], 3027, JSON.stringify(at(f)));
+});

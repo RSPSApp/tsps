@@ -81,6 +81,7 @@ const BITS = Object.freeze({
   LEARNED_NOD: 16,
   MARKET_GIVEN: 11, // the battlement guards have their rock cake
   EAST_GATE_PAID: 25,
+  TOLL_PAID: 26, // the gap's 20 coins, until the player jumps back south (Wiki: Gap (Gu'Tanoth))
 });
 /** Bits older saves set that the varbits now hold (migrated once at login). */
 const LEGACY_BITS = Object.freeze({ MARKET_WANTS: 10, GORAD_DEAD: 17, KILLS_SHIFT: 18, PLACED: Object.freeze([21, 22, 23, 24]) });

@@ -64,15 +64,35 @@ module.exports = function createWatchtowerScenes(api, ctx) {
     const { message, said } = sceneLines();
     const later = (ticks, fn) => api.getTaskManager().submit(new api.core.CountdownTask(player, ticks, fn));
     // +3: the cutscene starts with the player at the real entrance, fading out.
+    const token = {};
+    starting.set(player, token);
     later(3, () => {
       // Gone from the entrance in the meantime (a teleport): no scene.
-      if (!player.isRegistered?.() || !stillThere()) return;
+      if (starting.get(player) !== token || !player.isRegistered?.() || !stillThere()) {
+        if (starting.get(player) === token) starting.delete(player);
+        return;
+      }
       player.moveTo(new Location(...W.TILES.ENCLAVE_INSIDE));
       Scenes.controls(player, true, true);
       Scenes.fade(player, true);
-      later(3, () => startCopy(player, message, said));
+      later(3, () => {
+        const ours = starting.get(player) === token;
+        starting.delete(player);
+        const here = player.getLocation();
+        const [x, y, z] = W.TILES.ENCLAVE_INSIDE;
+        // Teleported away or dead in the fade: no scene; the controls and the screen come back.
+        if (!ours || !player.isRegistered?.() || player.getHitpoints?.() <= 0
+          || here.getX() !== x || here.getY() !== y || here.getZ() !== z) {
+          Scenes.controls(player, false, true);
+          Scenes.fade(player, false);
+          return;
+        }
+        startCopy(player, message, said);
+      });
     });
   }
+  /** A scene about to open (the 6 ticks before its copy), so a logout or death can call it off. */
+  const starting = new WeakMap();
 
   function startCopy(player, message, said) {
     if (!player.isRegistered?.()) return;
@@ -147,12 +167,11 @@ module.exports = function createWatchtowerScenes(api, ctx) {
   }
 
   /**
-   * The scared skavid silenced (t2995-3001): as the chat closes an ogre (ogre_chieftan_caves, 4363) is
-   * there a tile south of the skavid, for the player alone; two ticks on it strikes (seq 359) and
-   * shouts while the skavid is hit (seq 5356) and cries out; four ticks after that it is gone and the
-   * skavid's next line shows (the line's pauseTicks).
+   * The scared skavid silenced (t2995-3001): as the chat closes the ogre shaman (NPCS_OGRE) is there a tile
+   * south of the skavid, for the player alone; two ticks on it strikes (seq 359) and shouts while the skavid is
+   * hit (seq 5356) and cries out; four ticks after that it is gone and the skavid's next line shows (the line's
+   * pauseTicks). `silencers` holds each player's, so a logout or death removes it (its timer goes with the player).
    */
-  /** The silencing ogre each player has out, so a logout or death removes it (its timer goes with the player). */
   const silencers = new Map();
   function removeSilencer(player) {
     const ogre = silencers.get(player);
@@ -191,6 +210,11 @@ module.exports = function createWatchtowerScenes(api, ctx) {
 
   function cancel({ player }) {
     if (!player) return;
+    if (starting.has(player)) {
+      starting.delete(player);
+      Scenes.controls(player, false, true);
+      Scenes.closeFade(player);
+    }
     if (silencers.has(player)) removeSilencer(player);
     if (Scenes.get(player)) Scenes.end(player, true);
   }

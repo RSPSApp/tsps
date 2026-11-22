@@ -2,8 +2,11 @@
  * Rum Deal's scenes as the revision 242 capture plays them (RumDeal.bin; docs/quests/rum-deal/README.md
  * "Scenes"). Ticks below count from the moment that starts each scene.
  *
- * - The knock-out (from "What diversion?", tick 268): the player's "Ow!" with spotanim 245 (delay 20,
- *   height 124), seq 401 and sound 1842 (delay 15) as the chat closes; the fade out at +2; at +6 a copy of
+ * - The blow (ticks 268, 3085, 3116): the player turned away from Pete as their last line shows (tick
+ *   267: facing the tile on the far side from him), then, as the chat closes, Pete's seq 401
+ *   (human_blunt_pound, in npc_info: he swings, the player has no seq), the player's spotanim 245 (delay
+ *   20, height 124) and sound 1842 (delay 15).
+ * - The knock-out (from "What diversion?", tick 268): the blow with the player's "Ow!"; the fade out at +2; at +6 a copy of
  *   the brewery's top floor with the player at (2142,5105,1), Braindeath (2142,5111) facing north and the
  *   side tabs closed; the camera at +9 and the fade in at +13. Braindeath's and Pete's lines are held
  *   chatheads (no continue) with their words overhead in the capture's pieces, three ticks a piece; Pete
@@ -67,12 +70,24 @@ module.exports = function rumDealScenes(api, ctx) {
     if (logout) restoreControls(player, false);
   }
 
-  const knock = (player) => {
-    player.forceChat("Ow!");
+  /** Pete's swing on the player: his seq, the player's stunned spotanim and the cudgel sound. */
+  function blow(player, pete) {
+    pete?.performAnimation?.(new Animation(KNOCK_ANIMATION));
     player.performGraphic(new Graphic(KNOCK_SPOTANIM, 20, 124));
-    player.performAnimation(new Animation(KNOCK_ANIMATION));
     player.getPacketSender().sendSound(KNOCK_SOUND, 1, 15);
-  };
+  }
+
+  /** The player's back to Pete before his blow: facing the tile on the far side of them from him. */
+  function turnAway(player, pete) {
+    const from = pete?.getLocation?.();
+    if (!from) return;
+    const here = player.getLocation();
+    const dx = Math.sign(here.getX() - from.getX());
+    const dy = Math.sign(here.getY() - from.getY());
+    if (dx === 0 && dy === 0) return;
+    player.setMobileInteraction(null);
+    player.forcePositionToFace(here.clone().add(dx, dy));
+  }
 
   /** The chat closed, the player held still (a scene's own hold, not a cutscene). */
   function closeChat(player) {
@@ -100,13 +115,14 @@ module.exports = function rumDealScenes(api, ctx) {
    * Pete's blow, cutscene 1 and the meeting: `lines` are the transcript's cutscene lines, in order, which
    * the capture's pieces must spell out (else the whole line goes overhead).
    */
-  function knockOut(player, lines, startMeeting) {
+  function knockOut(player, pete, lines, startMeeting) {
     if (playing.has(player)) return;
     const state = { scene: null };
     playing.set(player, state);
     closeChat(player);
     Scenes.controls(player, true);
-    knock(player);
+    player.forceChat("Ow!");
+    blow(player, pete);
     Scenes.later(player, 2, () => Scenes.fade(player, true));
     Scenes.later(player, 6, () => {
       if (playing.get(player) !== state) return;
@@ -219,13 +235,10 @@ module.exports = function rumDealScenes(api, ctx) {
 
   // ------------------------------------------------------------------ Pete's lifts
 
-  /** "Pirate Pete hits the player on the head." */
-  function hit(player) {
+  /** "Pirate Pete hits the player on the head." (the transcript's own overhead "OW!" follows). */
+  function hit(player, pete) {
     Scenes.controls(player, true);
-    const graphic = new Graphic(KNOCK_SPOTANIM, 20, 124);
-    player.performGraphic(graphic);
-    player.performAnimation(new Animation(KNOCK_ANIMATION));
-    player.getPacketSender().sendSound(KNOCK_SOUND, 1, 15);
+    blow(player, pete);
   }
 
   /** "Fades to black, player appears on ...": to the other end of the lift, then the talk on. */
@@ -248,5 +261,5 @@ module.exports = function rumDealScenes(api, ctx) {
 
   const inScene = (player) => playing.has(player);
 
-  return { knockOut, windowScene, blessing, brew, hit, lift, stop, inScene, KNOCK_OUT_LINES };
+  return { knockOut, windowScene, blessing, brew, hit, turnAway, lift, stop, inScene, KNOCK_OUT_LINES };
 };

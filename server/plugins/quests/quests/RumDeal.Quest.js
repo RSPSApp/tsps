@@ -286,6 +286,9 @@ module.exports = function registerRumDealQuest(api) {
     startTranscript(api, player, NPCS.BRAINDEATH, PAGE, "setting-out-meeting-captain-braindeath", undefined, braindeath);
   }
 
+  /** The player's last line in each of the Pirate Pete page's lift talks, before "Pirate Pete hits the player on the head." */
+  const BEFORE_THE_BLOW = new Set(["One...", "Where?", "What friend?", "Thanks!", "What? Where?"]);
+
   /** Stage changes and hand-outs on the lines that carry them, as the capture sets them. */
   function handleLine(request) {
     const { player, npcId } = request;
@@ -296,7 +299,15 @@ module.exports = function registerRumDealQuest(api) {
     if (npcId === NPCS.PETE && isPlayer && text === "What diversion?") {
       // The blow, cutscene 1 and the meeting (tick 268 on). The transcript's own knock-out steps follow
       // this line; the scene takes the chat over, so they don't play.
-      if (stage === STAGES.AGREED && !knockedOut(player)) request.after = () => scenes.knockOut(player, cutsceneLines(), startMeeting);
+      if (stage === STAGES.AGREED && !knockedOut(player)) {
+        request.before = () => scenes.turnAway(player, request.npc);
+        request.after = () => scenes.knockOut(player, request.npc, cutsceneLines(), startMeeting);
+      }
+      return;
+    }
+    if ((npcId === NPCS.PETE || npcId === NPCS.ISLAND_PETE) && isPlayer && BEFORE_THE_BLOW.has(text)) {
+      // The player's back to Pete as their last line before his blow shows (ticks 3084, 3114).
+      request.before = () => scenes.turnAway(player, request.npc);
       return;
     }
     if (npcId === NPCS.BRAINDEATH) return braindeathLine(request, player, text, stage, isPlayer);
@@ -435,7 +446,7 @@ module.exports = function registerRumDealQuest(api) {
     if (npcId !== NPCS.PETE && npcId !== NPCS.ISLAND_PETE) return;
     if (text === "Pirate Pete hits the player on the head.") {
       event.handled = true;
-      scenes.hit(player);
+      scenes.hit(player, event.npc);
     } else if (text.startsWith("Fades to black, player appears on")) {
       const to = onIsland(player) ? TILES.PORT_PHASMATYS : TILES.ISLAND_DOCK;
       event.wait = (resume) => scenes.lift(player, to, resume);

@@ -72,8 +72,11 @@ meaning isn't known.
 - **The start** (153-264): the start prompt "Start the Rum Deal quest?" with "Yes.|No."; Pete's "Yes,
   the mighty, fearsome..." and "Wanna give it a shot?" before the demon menu. After asking for the
   cash, Pete's "Hello again!" talk (the Pirate Pete page) leads to the knock-out.
-- **The knock-out** (268-366): the chat closes on "What diversion?" with the player's "Ow!", seq 401,
-  spotanim 245 (delay 20, height 124) and sound 1842 (delay 15); the fade out 2 ticks later; at +6 a copy
+- **The blow** (268, 3085, 3116): as the player's last line shows ("What diversion?", "What friend?",
+  "Thanks!"; ticks 267, 3084, 3114) the player turns to face the tile on the far side from Pete; as the
+  chat closes Pete plays seq 401 (human_blunt_pound, in npc_info: the player has no seq), with the
+  player's spotanim 245 (delay 20, height 124) and sound 1842 (delay 15).
+- **The knock-out** (268-366): the chat closes on "What diversion?" with the blow and the player's "Ow!"; the fade out 2 ticks later; at +6 a copy
   of the brewery's top floor (rebuild of zones 2136-2175, 5096-5119, plane 1) with the player at
   (2142,5105,1), Braindeath at (2142,5111) facing north and the side tabs closed; the camera at +9 and
   the fade in at +13. Braindeath's and Pete's lines are held chatheads (no continue) with their words
@@ -86,7 +89,8 @@ meaning isn't known.
   overlay (295) at +7; down with the fade out at +24, the player back at +26, "Are they..." at +27.
 - **The brewers** are numbered as the Wiki's transcripts by NPC id: 627 is Brewer 2, 628 is 3, 629 is 8,
   630 is 7, 631 is 5, 632 is 6, 633 is 4, 634 is 1, before the quest (510-574) and after it (2883-2946).
-- **The blindweed patch** (805-1174): Inspect is a game message; a rake on the patch swings every 4
+- **The blindweed patch** (805-1174): only varbit 1366 changes; no loc packet is sent for the patch
+  (the client redraws the 2x2 multiloc 10096 from it; its children are 1x1). Inspect is a game message; a rake on the patch swings every 4
   ticks (seq 2273, sound 2442) and a swing raises 1366 by one with a weed and 4 Farming XP (821, 829,
   833; the swing at 825 took nothing); the seed goes at once with seq 2291
   and sound 2432, and 3 ticks later "You plant a seed in the blindweed patch." (spam), 1366 = 4 and 20
@@ -109,6 +113,13 @@ meaning isn't known.
   barrel." with one, then "There are N loads of Sluglings and M Karamthulhu in this barrel."
   (1966-2002); empty, "This barrel is empty and smells nasty." (recording 3031). The lever: its message
   with sound 1763, the varbits to 0, stage 12 two ticks later.
+- **Davey** stands at (2132,5100,1) facing south and never moves (the capture adds him 18 times and never sends a step).
+- **The brewery's Wooden Stairs** (10136 up, 10137 down): "You climb up the stairs." / "You climb down
+  the stairs." with the move a tick after the click. Up lands in front of the stairs' head (2149,5088:
+  2149,5089,1, ticks 1194, 1606, 1870, 2777, 2863; 2151,5109: 2153,5108,1, 2998); down at their foot
+  (2152,5088,0, 711 and four more; 2166,5088,0 from 2163,5088, 3148) or, for the north stairs, on their own
+  west tile (2151,5109,0, 2986; declared in `server/plugins/objects/data/climb-links.json`). Each head
+  has a walled one-tile pocket beside it, which the generic landing search now skips.
 - **The wrench**: lost, Braindeath gives another with "Arr! I'd get more work out of a minty flavoured
   brick!" (2088). Davey blesses every wrench brought to him (2141, 2278); with the holy wrench, "You mean
   more help?..." (2211). The blessing: Davey cheers (862) and the wrench is blessed as the chat closes, the
@@ -154,6 +165,9 @@ meaning isn't known.
   completed page were not captured.
 
 ## Not covered
+
+- The stairs at (2129,5094) and (2137,5088) and climbing up the ones at (2163,5088) were not captured; they
+  land where the generic search puts them (in front of the head, as the captured ones do).
 
 - Zombie swabs keep attacking after Intimidate (the Wiki says they stop).
 - The protesters' and pirates' overhead chants, and the drunk pirates after stage 18.

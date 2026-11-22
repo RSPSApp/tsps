@@ -27,6 +27,15 @@
  * human_pickuptable and synth 2582, or with a full inventory only "You do not have enough free
  * space to take a potato." They never run out. The banana crate beside them is Pirate's Treasure's.
  *
+ * Plain crates and boxes (rsprox captures, 46 locs in about 50 recordings, revisions 227-242; the
+ * Wiki quotes no line for them): "Crate" and "Crates" locs answer "You search the crate but find
+ * nothing.", "Boxes" locs "There is nothing interesting in these boxes.", on the handler tick
+ * (most recordings: one tick after the last step). The locs whose
+ * recordings say something else (Falador, Varrock, the elid_ crates, the Wizards' Tower message
+ * boxes, and the empty case of a few unhandled quest-area crates) are named in data/crate-search.json; docs/scenery-search.md lists the recording ids.
+ * Ours: a "Box" loc, or a haystack's empty search, keeps "You search the <name>, but find nothing
+ * of interest." (no capture of either).
+ *
  * Books and sacks are fallbacks, so a quest's, area's or minigame's own bookcase still answers
  * first. Loaded after Quests so a quest's own crate or box search claims its objects first.
  */
@@ -48,6 +57,7 @@ const BOOKS_DELAY = 1;
 /** "Shelf" is also a kitchen or shop shelf: only these two hold books. */
 const BOOK_SHELVES = ["fai_varrock_shelf_books", "fai_varrock_shelves_books"];
 const SACKS_NOTHING = "There's nothing interesting in these sacks.";
+const CRATE_SEARCH = require("./data/crate-search.json");
 
 /** Ticks from the "lot of" line to the take question (rsprox 233/00465 ticks 7315-7319, 7398-7404). */
 const PRODUCE_PROMPT_TICKS = 4;
@@ -66,13 +76,23 @@ function searchedNothing(event) {
   event.player.sendMessage(`You search the ${name}, but find nothing of interest.`);
 }
 
+/** The captured "find nothing" line for this crate or box: its own, else its name's. */
+function searchedEmpty(event) {
+  const name = String(event.definition?.getName?.() ?? "");
+  const own = Object.entries(CRATE_SEARCH.byLoc).find(([loc]) => locId(loc) === event.objectId)?.[1];
+  const text = own?.text ?? CRATE_SEARCH.byName[name];
+  if (!text) return searchedNothing(event);
+  if (own?.mesbox) return mesbox(event.player, text);
+  event.player.sendMessage(text);
+}
+
 function produceCrateFor(objectId) {
   return PRODUCE_CRATES.find((crate) => locId(crate.loc) === objectId);
 }
 
 function searchCrate(event) {
   const crate = produceCrateFor(event.objectId);
-  if (!crate) return searchedNothing(event);
+  if (!crate) return searchedEmpty(event);
   const { player } = event;
   player.sendMessage(`There are a lot of ${crate.many} in the crate.`);
   core.TaskManager.submit(new ProduceSearch(player, crate, event.location));
@@ -205,9 +225,9 @@ module.exports = {
     api.onObjectInteraction("Hay bale", { Search: searchHay });
     api.onObjectInteraction("Hay bales", { Search: searchHay });
     api.onObjectInteraction("Crate", { Search: searchCrate });
-    api.onObjectInteraction("Crates", { Search: searchedNothing });
+    api.onObjectInteraction("Crates", { Search: searchedEmpty });
     api.onObjectInteraction("Box", { Search: searchedNothing });
-    api.onObjectInteraction("Boxes", { Search: searchedNothing });
+    api.onObjectInteraction("Boxes", { Search: searchedEmpty });
     api.onObjectInteraction("Mud mound", { Search: searchMudMound });
     const fallback = { fallback: true };
     api.onObjectInteraction("Bookcase", { Search: searchBooks }, fallback);

@@ -223,9 +223,12 @@ function releaseHouse(player, restoreLocation) {
   if (restoreLocation && Instance.PlayerHouseInstance.isAllocationLocation(player.getLocation())) player.moveTo(Estate.houseExit(houseStateFor(player)));
 }
 
-/** "construction:owns-house" { player, owns }: whether the player has bought a house. */
+/** "construction:owns-house" { player, owns, location }: whether the player has bought a house, and its town's name. */
 function ownsHouse(request) {
-  if (request?.player) request.owns = houseStateFor(request.player).owned !== false;
+  if (!request?.player) return;
+  const house = houseStateFor(request.player);
+  request.owns = house.owned !== false;
+  if (request.owns) request.location = Estate.houseLocation(house).name;
 }
 
 /**

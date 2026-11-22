@@ -405,7 +405,7 @@ function openJournal(player, quest, row = questMetadata(quest, coreApi?.CacheDef
 /** The scroll's reward groups after the quest points, in live's usual order unless a quest sets its own. */
 const DEFAULT_REWARD_ORDER = ["xp", "item", "other"];
 
-function rewardLines(quest) {
+function rewardLines(quest, player) {
   const lines = ["You are awarded:"];
   // A quest whose scroll live words its own way (The Fremennik Trials: "2,800 XP each in ...").
   if (Array.isArray(quest.rewardText)) return [...lines, ...quest.rewardText].slice(0, COMPLETED_LINE_COUNT);
@@ -414,7 +414,8 @@ function rewardLines(quest) {
   const groups = {
     xp: (quest.xpRewards ?? []).map((reward) => `${reward.amount.toLocaleString("en-US")} ${reward.label} XP`),
     item: quest.rewardItemLabel ? [quest.rewardItemLabel] : [],
-    other: quest.otherRewards ?? [],
+    // A function of the player for a scroll that names what this player got (Daddy's Home: a house, or 1,000 coins).
+    other: (typeof quest.otherRewards === "function" ? quest.otherRewards(player) : quest.otherRewards) ?? [],
   };
   for (const group of quest.rewardOrder ?? DEFAULT_REWARD_ORDER) lines.push(...(groups[group] ?? []));
   return lines.slice(0, COMPLETED_LINE_COUNT);
@@ -435,15 +436,19 @@ function openCompletedScroll(player, quest, questPoints) {
   packet.sendInterface(COMPLETED_GROUP);
   packet.sendInterfaceFlagsRange((COMPLETED_GROUP << 16) | COMPLETED_CLOSE_CHILD, -1, -1, 1 << 1);
   setText((COMPLETED_GROUP << 16) | COMPLETED_TITLE_CHILD, "Congratulations!");
-  setText((COMPLETED_GROUP << 16) | COMPLETED_NAME_CHILD, `You have completed ${quest.name}!`);
+  // `scrollTitle`: the quest's own words where live has them ("You have solved the Murder Mystery!").
+  setText((COMPLETED_GROUP << 16) | COMPLETED_NAME_CHILD, quest.scrollTitle ?? `You have completed ${quest.name}!`);
   const scrollItemId = typeof quest.scrollItemId === "function"
     ? quest.scrollItemId(player)
     : quest.scrollItemId ?? quest.rewardItemId;
   if (scrollItemId !== undefined) {
     packet.sendItemOnInterfaces((COMPLETED_GROUP << 16) | COMPLETED_REWARD_ITEM_CHILD, scrollItemId, 1);
+    // `scrollItemPosition`: where live places the model for this quest (if_setposition), when captured.
+    const position = quest.scrollItemPosition;
+    if (position) packet.sendInterfacePosition?.((COMPLETED_GROUP << 16) | COMPLETED_REWARD_ITEM_CHILD, position[0], position[1]);
   }
   setText((COMPLETED_GROUP << 16) | COMPLETED_POINTS_CHILD, `Quest points: ${questPoints}`);
-  const lines = rewardLines(quest);
+  const lines = rewardLines(quest, player);
   for (let i = 0; i < COMPLETED_LINE_COUNT; i++) {
     setText((COMPLETED_GROUP << 16) | (COMPLETED_FIRST_LINE_CHILD + i), lines[i] ?? "");
   }
@@ -814,7 +819,7 @@ function sendQuestVarps({ player }) {
  *
  * @param api  the plugin api
  * @param def  { key, name, varpId, varbitId, varbitValue, startedValue, completionValue, questPoints,
- *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?, rewardText? (the scroll's lines after
+ *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards? (lines, or a function of player), rewardText? (the scroll's lines after
  *               "You are awarded:", in place of the generated ones),
  *               rewardOrder? (the scroll's groups after the points: "xp", "item", "other"),
  *               scrollItemId? (item id or function of player),

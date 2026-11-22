@@ -218,6 +218,20 @@ test("medium producers credit only in their area, with their quest gate", () => 
   fire("ground-items:taken", { player: started(player(), "fremennik_trials"), itemId: 1555, amount: 1, source: "pickup", groundItem: { getPrivateArea: () => ({}) } });
   assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 1);
 
+  // Pick-up on the pet rock roaming the owner's menagerie (Wiki: "use your pet rock on a pet
+  // house, then retrieve it off the ground").
+  const roamOwner = started(player(), "fremennik_trials");
+  const roamHouse = { owner: roamOwner };
+  roamOwner.getPrivateArea = () => roamHouse;
+  fire("construction:menagerie-pet-picked-up", { player: roamOwner, house: roamHouse, itemId: 1555 });
+  assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 1);
+  fire("construction:menagerie-pet-picked-up", { player: roamOwner, house: roamHouse, itemId: 3695 });
+  assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 2);
+  const notStarted = player();
+  notStarted.getPrivateArea = () => roamHouse;
+  fire("construction:menagerie-pet-picked-up", { player: notStarted, house: { owner: notStarted }, itemId: 3695 });
+  assert.equal(fired("pick-up-your-pet-rock-from-your-poh-menagerie"), 2);
+
   fire("mining:success", { player: player(2400, 4950), itemId: Item.GOLD_ORE });
   assert.equal(fired("mine-some-gold-at-the-arzinian-mine"), 1);
   fire("mining:success", { player: player(3000, 3000), itemId: Item.GOLD_ORE });

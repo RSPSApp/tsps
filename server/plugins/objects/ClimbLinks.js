@@ -46,6 +46,15 @@ function loadDeclaredLinks() {
 
 const DECLARED_LINKS = loadDeclaredLinks();
 
+/** The game message a climb sends, by loc id (`messages` in data/climb-links.json), else null. */
+const CLIMB_MESSAGES = new Map(Object.entries(require("./data/climb-links.json").messages ?? {})
+  .filter(([id]) => /^\d+$/.test(id))
+  .map(([id, text]) => [Number(id), text]));
+
+function message(id) {
+  return CLIMB_MESSAGES.get(id) ?? null;
+}
+
 function options(id) {
   return (ObjectDefinition.forId(id)?.getInteractions?.() ?? []).filter(Boolean).map((option) => option.toLowerCase());
 }
@@ -165,7 +174,18 @@ function otherEnd(object, direction) {
   return sameColumn();
 }
 
-/** Walkable tiles next to `object` from which it can be used, nearest to `hint` first. */
+/** Whether a player on `tile` can take a step off it (some neighbour is walkable and not walled off). */
+function canStepOff(tile, privateArea) {
+  return !RegionManager.blockedNorth(tile, privateArea) || !RegionManager.blockedEast(tile, privateArea)
+    || !RegionManager.blockedSouth(tile, privateArea) || !RegionManager.blockedWest(tile, privateArea);
+}
+
+/**
+ * Walkable tiles next to `object` from which it can be used, nearest to `hint` first. A tile the
+ * player could not step off is used only when there is no other: the head of a walled staircase
+ * (Braindeath Island's brewery, issue #6499) has a one-tile pocket beside it that the climber would
+ * be stuck in.
+ */
 function landingTile(object, hint, privateArea) {
   const def = ObjectDefinition.forId(object.getId());
   const area = footprint(object);
@@ -183,8 +203,10 @@ function landingTile(object, hint, privateArea) {
     }
   }
   const away = (tile) => Math.abs(tile.getX() - hint.x) + Math.abs(tile.getY() - hint.y);
-  candidates.sort((a, b) => away(a) - away(b));
-  return candidates[0] ?? null;
+  const open = candidates.filter((tile) => canStepOff(tile, privateArea));
+  const usable = open.length ? open : candidates;
+  usable.sort((a, b) => away(a) - away(b));
+  return usable[0] ?? null;
 }
 
 /**
@@ -233,4 +255,4 @@ function crossDestination(object, privateArea = null) {
   return landingTile(end, hint, privateArea);
 }
 
-module.exports = { destination, crossDestination, otherEnd, landingTile, climbs, UP, DOWN };
+module.exports = { destination, crossDestination, otherEnd, landingTile, climbs, message, UP, DOWN };

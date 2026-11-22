@@ -14117,7 +14117,7 @@
   {"level":0,"name":"Fishing spot","wanderRadius":0,"x":2162,"y":5061,"id":635},
   {"level":0,"name":"Zombie pirate","x":2162,"y":5079,"id":617},
   {"level":0,"name":"Fishing spot","wanderRadius":0,"x":2173,"y":5074,"id":635},
-  {"level":1,"name":"Davey","x":2132,"y":5100,"id":605},
+  {"level":1,"name":"Davey","x":2132,"y":5100,"id":605,"direction":1,"wanderRadius":0},
   {"level":1,"name":"Captain Braindeath","x":2144,"y":5109,"id":603,"direction":2,"wanderRadius":0},
   {"level":1,"name":"Brewer","x":2148,"y":5096,"id":634},
   {"level":1,"name":"Brewer","x":2149,"y":5093,"id":627},

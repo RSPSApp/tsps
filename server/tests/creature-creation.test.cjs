@@ -160,6 +160,34 @@ test("item-on-Symbol-of-life accepts either unnoted recipe item once and activat
   assert.equal(p.getAttribute("creature-creation:newtroost-second"), 0);
 });
 
+test("Activate takes each altar's missing ingredients from inventory and spawns its creature", () => {
+  const h = harness();
+  for (const altar of h.plugin._test.ALTARS) {
+    const [x, y] = altar.tile.split(",").map(Number);
+    const items = altar.ingredients.map((name) => [itemIds[name], 1]);
+    const p = h.player({ items, x, y });
+    assert.equal(h.hooks.activate(h.altarEvent(p, objectIds.SYMBOL_OF_LIFE, { x, y, z: 0 })), true, altar.creature);
+    assert.equal(p.inventory.items.length, 0, `${altar.creature} consumes its inventory ingredients`);
+    assert.equal(h.spawned.at(-1).definition.id, npcIds[altar.npc], `${altar.creature} spawns from Activate`);
+    assert.equal(p.getAttribute(`creature-creation:${altar.key}`), 0);
+    assert.equal(p.getAttribute(`creature-creation:${altar.key}-second`), 0);
+    h.hooks.npcDeath({ npc: h.spawned.at(-1) });
+  }
+  assert.equal(h.spawned.length, h.plugin._test.ALTARS.length);
+});
+
+test("Activate adds only missing ingredients to an already primed altar", () => {
+  const h = harness();
+  const p = h.player({ items: [[itemIds.COWHIDE, 1], [itemIds.UNICORN_HORN, 1]] });
+  p.setAttribute("creature-creation:unicow", itemIds.COWHIDE);
+
+  h.hooks.activate(h.altarEvent(p, objectIds.SYMBOL_OF_LIFE, { x: 3018, y: 4410, z: 0 }));
+
+  assert.equal(p.inventory.getAmount(itemIds.COWHIDE), 1, "the ingredient already on the altar is not consumed again");
+  assert.equal(p.inventory.getAmount(itemIds.UNICORN_HORN), 0);
+  assert.equal(h.spawned[0].definition.id, npcIds.UNICOW);
+});
+
 test("wrong and non-recipe items, and an uncompleted quest, do not consume ingredients", () => {
   const wrong = harness();
   const p1 = wrong.player({ items: [[itemIds.RAW_LOBSTER, 1]] });

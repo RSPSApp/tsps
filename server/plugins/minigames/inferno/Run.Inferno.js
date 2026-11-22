@@ -492,8 +492,8 @@ function addJad(session, jad, firstAttackTicks, healerCount, healerSpots = null)
   return entry;
 }
 
-// Yt-HurKot come when a Jad drops to half health and heal it until drawn off. If they bring
-// it back to full, a fresh set comes the next time it drops.
+// Yt-HurKot come once, when a Jad first drops to half health, and heal it until drawn off. Unlike
+// the Fight Caves, Inferno healers do not respawn when Jad heals to full (Wiki: Yt-HurKot).
 function tendJads(session) {
   const { Animation, Graphic, NpcIdentifiers: Npcs, PathFinder } = core;
   const now = cycle();
@@ -506,7 +506,6 @@ function tendJads(session) {
       continue;
     }
     const max = jad.getDefinition().getHitpoints();
-    if (jad.getHitpoints() >= max) entry.called = false;
     if (!entry.called && jad.getHitpoints() <= max / 2) {
       entry.called = true;
       const healerId = jad.getId() === Npcs.JALTOK_JAD_2 ? Npcs.YT_HURKOT_3 : Npcs.YT_HURKOT_2;

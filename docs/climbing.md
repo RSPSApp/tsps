@@ -20,6 +20,12 @@ If the map has nothing at the other end, the click does nothing.
 
 These come from a survey of every placed object in the cache with a climb option.
 
+## Animation and timing
+
+- **Ladders, trapdoors, ropes:** the climb animation (828 up, 827 down) starts a tick after the op, and the player moves on the next tick.
+- **Staircases** (any name with "stair" in it: Staircase, Stairs, Spiral staircase, Cellar stairs ...): no animation. The player moves on the tick a ladder would start climbing. In the [rsprox captures](https://rsprox.net/database) no staircase without its own entry in the loc teleport data sends an animation: Varrock castle's (11798, local 1001607 and 960), Falador's spiral staircases (local 1002048, 1002089), Varrock's (local 1001527, 1001994), and the Civitas, Keldagrim, Paterdomus, Dark Wizards' Tower and Warriors' Guild staircases. Live moves the player 2 ticks after arrival, as here.
+- A caller can still choose with `animate: false` or `animate: true` on `ladders:climbUp` / `ladders:climbDown`. The staircases that do animate in live (`myq3_lab_stairs_down`, 827, and the Lunar galleon's) come with their captured animation in the loc teleport data.
+
 ## Captured destinations first
 
 Where the [rsprox capture database](https://rsprox.net/database) shows where a ladder or staircase goes, that wins: the LocTeleports plugin answers `ladders:climb` for it, with the captured destination, animation and timing. This fixes ladders the map gets wrong (a cellar ladder that went up a floor underground instead of to the surface) or can't pair, and a "Climb" that goes one way in the game where Ladders would ask. The same data covers caves, holes and tunnels. See [loc-teleports.md](loc-teleports.md).

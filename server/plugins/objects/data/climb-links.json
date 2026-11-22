@@ -51,6 +51,18 @@
       "down": { "id": 10137, "x": 2153, "y": 5109, "z": 1 },
       "landing": { "x": 2153, "y": 5108, "z": 1 },
       "downLanding": { "x": 2151, "y": 5109, "z": 0 }
+    },
+    {
+      "name": "Paterdomus temple, north spiral staircase (rsprox local 1001683: down from 3416,3493,1 lands on 3417,3494,0 at tick 11337, the stairs' north side, where the search picks the climber's own tile; up is left to the search, which lands as captured)",
+      "up": { "id": 61189, "x": 3417, "y": 3492, "z": 0 },
+      "down": { "id": 16673, "x": 3417, "y": 3493, "z": 1 },
+      "downLanding": { "x": 3417, "y": 3494, "z": 0 }
+    },
+    {
+      "name": "Paterdomus temple, south spiral staircase (rsprox local 1001683 tick 11609 and 1001965 tick 18786: down from 3416,3484,1 lands on 3417,3483,0, the stairs' south side, where the search picks the climber's own tile; up is left to the search, which lands as captured)",
+      "up": { "id": 61190, "x": 3417, "y": 3484, "z": 0 },
+      "down": { "id": 62173, "x": 3417, "y": 3484, "z": 1 },
+      "downLanding": { "x": 3417, "y": 3483, "z": 0 }
     }
   ],
   "messages": {

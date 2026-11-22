@@ -145,3 +145,51 @@ test("a low-level player can't walk in through someone else's opening", (t) => {
   assert.ok(at(opener)[1] >= DOOR_Y, "the opener is inside");
   assert.deepEqual(messages, []);
 });
+
+// The west (65) and north (85) wings: gates stay open in the map, so they are gated by stepping onto them
+// (rsprox 242/911689.txt: walked two tiles back, Guildmaster Jane's line). Boosts count; leaving is free.
+function tierActor(t, farming, x, y, boost = 0) {
+  const made = actor(t, farming, x, y, boost);
+  const lines = [];
+  t.mock.method(made.player.getDialogueManager(), "startDialogues", (chain) => {
+    lines.push(chain);
+  });
+  return { ...made, lines };
+}
+const lineOf = (chain) => chain.getDialogues().get(0).getText();
+const WEST = (level) => `Hey! You need a Farming level of at least ${level} to enter that area of the Farming Guild.`;
+
+for (const [name, level, from, to, back] of [
+  ["west wing", 65, [1246, 3730], [1237, 3730], [1246, 3730]],
+  ["north wing", 85, [1248, 3741], [1248, 3750], [1248, 3741]],
+]) {
+  test(`${name}: under ${level} Farming is walked back out with Jane's line`, (t) => {
+    settle();
+    const { player, lines } = tierActor(t, level - 1, ...from);
+    player.getMovementQueue().addSteps(new core.Location(to[0], to[1], 0));
+    tick(8);
+    assert.equal(lines.length, 1);
+    assert.equal(lineOf(lines[0]), WEST(level));
+    const [x, y] = at(player);
+    assert.ok(name === "west wing" ? x >= 1245 : y <= 3743, `stopped outside the gate: ${[x, y]}`);
+  });
+
+  test(`${name}: a boost to ${level} Farming walks straight through`, (t) => {
+    settle();
+    const { player, lines } = tierActor(t, level - 5, ...from, 5);
+    player.getMovementQueue().addSteps(new core.Location(to[0], to[1], 0));
+    tick(12);
+    assert.equal(lines.length, 0);
+    const [x, y] = at(player);
+    assert.ok(name === "west wing" ? x < 1243 : y > 3745, `through the gate: ${[x, y]}`);
+  });
+}
+
+test("leaving a wing below its level is never stopped", (t) => {
+  settle();
+  const { player, lines } = tierActor(t, 50, 1241, 3730);
+  player.getMovementQueue().addSteps(new core.Location(1247, 3730, 0));
+  tick(10);
+  assert.equal(lines.length, 0);
+  assert.ok(at(player)[0] >= 1246, `walked out: ${at(player)}`);
+});

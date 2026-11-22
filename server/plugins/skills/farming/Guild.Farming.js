@@ -501,6 +501,34 @@ function guardGuildDoor(event) {
     event.handled = true;
     player.sendMessage(`You need a Farming level of ${GUILD_ENTRY_LEVEL} to enter the Farming Guild.`);
 }
+/**
+ * Wiki (Farming Guild): the west wing needs 65 Farming and the north wing 85 ("boosts may be used for all tiers";
+ * dropping below once inside never expels). Since 17 January 2019 their gates stay open (kebos_farming_guild_gate_t2/t3,
+ * the cache map places the open leaves) and the guild gates them by position, not a click. rsprox 242/911689.txt: a
+ * player under level who runs onto the west gate tiles (x 1243-1244, y 3729-3730) or the north ones (y 3744-3745,
+ * x 1248-1249) is walked two tiles back out and Guildmaster Jane says the line below; going out is never stopped.
+ */
+const GUILD_TIERS = [
+    { level: 65, x: [1243, 1244], y: [3729, 3730], dx: 1, dy: 0 },
+    { level: 85, x: [1248, 1249], y: [3744, 3745], dx: 0, dy: -1 },
+];
+const inRange = (value, [low, high]) => value >= low && value <= high;
+function guardGuildTier(event) {
+    const { player, previous, location } = event;
+    if (!previous || previous.getZ() !== 0 || location.getZ() !== 0) return;
+    for (const { level, x, y, dx, dy } of GUILD_TIERS) {
+        // One tile inward from outside the wing: a teleport or a spirit tree arrival is not a step.
+        if (!inRange(location.getX(), x) || !inRange(location.getY(), y)
+            || previous.getX() !== location.getX() + dx || previous.getY() !== location.getY() + dy) continue;
+        if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) >= level) return;
+        const queue = player.getMovementQueue();
+        queue.reset();
+        queue.addSteps(location.transform(2 * dx, 2 * dy));
+        player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.NpcDialogue(0, core.NpcIdentifiers.GUILDMASTER_JANE,
+            `Hey! You need a Farming level of at least ${level} to enter that area of the Farming Guild.`)));
+        return;
+    }
+}
 function guildObject(event) {
     if (event.definition?.getName()?.toLowerCase() !== "seed vault") return;
     event.handled = true;
@@ -513,4 +541,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { deathContainers, seedBoxGather, herbSackGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });
+Object.assign(module.exports, { deathContainers, seedBoxGather, herbSackGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, guardGuildTier, openSeedVault });

@@ -59,10 +59,12 @@ function login(t, [x, y, z], stage) {
     core.TaskManager.cancelTasks(p);
     core.World.unregisterPlayerPosition(p);
   });
-  const tick = (count = 1) => {
+  /** `click`: a walk click read this tick, after the tasks and before movement, as World.process reads packets. */
+  const tick = (count = 1, click = null) => {
     for (let i = 0; i < count; i++) {
       core.World.processCycle++;
       core.TaskManager.process();
+      if (click) p.getMovementQueue().requestWalk(new core.Location(...click));
       p.getMovementQueue().process();
       // The player update after movement places a teleported player (World.process order).
       p.setNeedsPlacement(false);
@@ -106,18 +108,22 @@ test('the swing drops beside the mast and walks round it before the grab, as liv
   assert.equal(p.getMovementQueue().isMovementBlocked(), false, 'released with "The rope falls off the mast!"');
 });
 
-test('a click during the walk round the mast does not take the player off the path', (t) => {
+for (const at of [9, 12, 15]) test(`a walk click read on step tick ${at} round the mast changes nothing`, (t) => {
+  // Live's own run has a move_gameclick mid-walk (tick 869) that changes nothing.
   const { p, tick } = login(t, [1816, 4830, 2], 3);
   p.getInventory().adds(core.ItemIdentifiers.ROPE, 1);
   t.mock.method(Math, 'random', () => 0.99);
   PM.emitItemOnObject({ player: p, itemId: core.ItemIdentifiers.ROPE, objectId: 11292,
     object: new core.GameObject(11292, p.getLocation().clone(), 10, 0, null), handled: false });
-  tick(9);
-  assert.deepEqual(xyz(p), [1814, 4831, 1]);
-  // Live's own run has a move_gameclick mid-walk (tick 869) that changes nothing.
-  p.getMovementQueue().addSteps(new core.Location(1812, 4831, 1));
-  tick(6);
-  assert.deepEqual(xyz(p), [1816, 4830, 1], 'the path is finished, the click dropped');
+  const path = [[1815, 4832], [1814, 4831], [1814, 4830], [1814, 4829], [1815, 4829], [1815, 4829], [1816, 4829], [1816, 4830]];
+  const tiles = [];
+  for (let after = 1; after <= 15; after++) {
+    tick(1, after === at ? [1812, 4833, 1] : null);
+    if (after >= 8) tiles.push(xyz(p).slice(0, 2));
+  }
+  assert.deepEqual(tiles, path, "one tile a tick on live's path");
+  tick(4);
+  assert.deepEqual(xyz(p), [1822, 4830, 1], 'swung across as usual');
 });
 
 /** Starts the end cutscene the way the dialogue runtime's action does, from stage 8 and three holes. */
@@ -172,6 +178,24 @@ test('the end cutscene plays in a copy of The Other Inn on the capture timeline,
   assert.equal(quest.isComplete(p), true, '2310: complete');
   assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BOOK_O_PIRACY), 1, 'one book, not two');
   assert.equal(p.getPacketSender().getVarbit(1750), 0, 'the battle varbits are cleared');
+});
+
+test('with a full inventory the book waits for the real map, and only one is given', (t) => {
+  const { p, tick } = sinkShip(t);
+  const inventory = p.getInventory();
+  while (inventory.getFreeSlots() > 0) inventory.adds(core.ItemIdentifiers.SHARK, 1);
+  tick(100);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.BOOK_O_PIRACY), 0, 'no room in the inn: not handed over there');
+  const groundBooks = () => core.World.getItems()
+    .filter((item) => item.getItem().getId() === core.ItemIdentifiers.BOOK_O_PIRACY);
+  assert.equal(groundBooks().length, 0, 'nothing dropped in the copy');
+  tick(90);
+  assert.equal(quest.isComplete(p), true);
+  assert.equal(groundBooks().length + inventory.getAmount(core.ItemIdentifiers.BOOK_O_PIRACY), 1, 'one book in all');
+  for (const item of groundBooks()) {
+    const at = item.getPosition?.() ?? item.getLocation?.();
+    assert.deepEqual([at.getX(), at.getY(), at.getZ()], [3665, 2980, 0], 'on the real inn floor');
+  }
 });
 
 test('a logout inside the inn completes the quest and saves the player at the inn', (t) => {

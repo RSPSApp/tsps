@@ -150,8 +150,8 @@ module.exports = function createCabinFeverScenes(api, { onBook, onFinished } = {
   /** Plays the scene from the third hull hole; false while it already plays. */
   function playEnd(player) {
     if (playing.has(player)) return false;
-    playing.add(player);
     const all = lines();
+    playing.add(player);
     // Held on the deck (busy from the shot, 2123); the minimap and the cutscene wait for the inn.
     player.getMovementQueue().reset().setBlockMovement(true);
     showLine(player, all[0], 0);

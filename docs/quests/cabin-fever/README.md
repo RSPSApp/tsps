@@ -80,11 +80,9 @@ Wiki leaves out.
     `cf_cannonhit`, then the 52 hitsplat on the pirate. One hit is the objective.
   - A cannonball lands a tick on with "You put a hole in the hull!" / "You put another hole in
     the hull!". The third hit goes straight into "Ye've done it lad! They're sunk now!".
-  - Live's four shots were fired 5, 5, 4 and 5 ticks after the fuse went on (fuse 1909, 2042,
-    2088, 2117; Fire! 1914, 2047, 2092, 2122) and all four hit. The Wiki ties misses to the
-    timing, not to a skill: "Try not to fire the cannon immediately after attaching the fuse.
-    This can cause multiple misses. Count to 3 before firing." A shot fired 4 ticks or more after
-    the fuse always lands; an earlier one misses half the time (ours: no rate is published).
+  - Hits roll on Ranged: the Wiki's "Cannon (Cabin Fever)" gives 6% at level 1 to 94% at 99, the
+    same for cannonballs and canisters (JagexAsh, 24 January 2023). Live's four shots at Ranged 67
+    all hit; a run with misses (#6500's five balls) is what the roll expects.
 - **Return-Home** (Bill 4014 op 3, 1050-1087): "No, I need to go back now." fades to black and
   lands the player on the port ship at 3714,3497. The port Bill's "Let's go Cap'n!" fades back
   to 1815,4833, and Bill greets them with the stage's returning line.
@@ -117,8 +115,6 @@ Wiki leaves out.
 
 - **fixed** (#6500) The rope swing dropped the player on the rope's tile and waited there; live
   drops them beside the mast and walks them round it.
-- **fixed** (#6500) Shots rolled a Ranged-based hit chance (6% at level 1) no source gives; misses
-  now come only from firing too soon after the fuse, as the Wiki says.
 - **fixed** (#6500) The end scene played as click-through dialogue on the ship; it is now live's
   cutscene in The Other Inn.
 - **fixed** (#6500) Mos Le'Harmless's pirates and traders (all but Mama) spoke pirate-speak with

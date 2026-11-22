@@ -384,11 +384,6 @@ module.exports = function registerCabinFeverQuest(api) {
   // 1917) and Bill's next line is the sinking briefing; the Wiki's guide says "When you hit the
   // pirates with the canisters, talk to Bill" and its transcript plays one "You hit them!".
   const CREW_HITS_REQUIRED = 1;
-  // A shot fired this many ticks or more after the fuse always lands: the capture's earliest landed
-  // at 4 (fuse 2088, Fire! 2092); the Wiki's "Count to 3" is about 5.
-  const FUSE_SETTLE_TICKS = 4;
-  // Ours: the Wiki says firing too soon "can cause multiple misses" and gives no rate.
-  const EARLY_SHOT_MISS_CHANCE = 1 / 2;
 
   const ARRIVE_ACTION_ID = "cabin-fever:arrive";
   const PIRATE_AGILITY = 42;
@@ -469,8 +464,6 @@ module.exports = function registerCabinFeverQuest(api) {
   /** Transient per-conversation results (never persisted). */
   const plunderOutcome = new WeakMap();
   const fireOutcome = new WeakMap();
-  /** Player -> the tick the fuse went on the armed cannon. */
-  const fusedAt = new WeakMap();
   /** Player -> { varbit: the loot whose refill timer is the live one }. */
   const refills = new WeakMap();
   /** Pirate -> the player whose canister round is about to kill it. */
@@ -727,17 +720,11 @@ module.exports = function registerCabinFeverQuest(api) {
     setVarbitValue(player, VARBIT_HOLES_PROOFED, values.filter((value) => value >= 2).length);
   }
 
-  /**
-   * Whether a shot lands. The Wiki ties misses to the fuse, not to a skill: "Try not to fire the
-   * cannon immediately after attaching the fuse. This can cause multiple misses. Count to 3 before
-   * firing." Live's four shots of the capture were fired 5, 5, 4 and 5 ticks after the fuse went on
-   * (fuse 1909/2042/2088/2117, Fire! 1914/2047/2092/2122) and all four hit.
-   */
-  function shotHits(player) {
-    const fused = fusedAt.get(player);
-    fusedAt.delete(player);
-    if (fused === undefined || World.getProcessCycle() - fused >= FUSE_SETTLE_TICKS) return true;
-    return Math.random() >= EARLY_SHOT_MISS_CHANCE;
+  function rangedHitChance(player) {
+    const level = player.getSkillManager().getMaxLevel(Skill.RANGED);
+    // Wiki "Cannon (Cabin Fever)", Success chance (JagexAsh, 24 January 2023): 6% at level 1 and
+    // 94% at 99, the same for cannonballs and canisters.
+    return Math.min(0.94, Math.max(0.06, 0.06 + ((level - 1) * (0.94 - 0.06)) / 98));
   }
 
   // ==========================================================================
@@ -1177,8 +1164,13 @@ module.exports = function registerCabinFeverQuest(api) {
     return true;
   }
 
-  /** "Here, have this book." in the end cutscene (capture tick 2224). */
+  /**
+   * "Here, have this book." in the end cutscene (capture tick 2224). With no free slot it is left
+   * to the completion on the real map, so it never drops inside the inn's copy.
+   */
   function handOverBook(player) {
+    const inventory = player.getInventory();
+    if (inventory.getFreeSlots?.() === 0 && inventory.getAmount(BOOK_O_PIRACY) === 0) return;
     giveBookOfPiracy(player);
     setVarbitValue(player, VARBIT_GIVEN_BOOK, 1);
   }
@@ -1774,7 +1766,7 @@ module.exports = function registerCabinFeverQuest(api) {
       );
       return true;
     }
-    const hit = shotHits(player);
+    const hit = Math.random() < rangedHitChance(player);
     const canister = ammo === CANNON_AMMO_CANISTER;
     // The shot as live plays it (capture ticks 1915-1918 and 2048-2049): the reach, the cannon's
     // area sound, the muzzle blast and the shot's flight; the load is gone and the barrel needs
@@ -1889,7 +1881,6 @@ module.exports = function registerCabinFeverQuest(api) {
       player.getInventory().deleteNumber(FUSE, 1);
       // Live arms the cannon (fever_cannon 3) and leaves fever_cannon_fuse alone (ticks 1910, 2044).
       setVarbitValue(player, VARBIT_CANNON, CANNON_ARMED);
-      fusedAt.set(player, World.getProcessCycle());
       player.sendMessage("You ready the cannon for firing.");
       return true;
     }
@@ -2008,21 +1999,41 @@ module.exports = function registerCabinFeverQuest(api) {
   /** Players mid-swing, so a second rope cannot start another. */
   const swinging = new WeakSet();
 
+  /** Player -> the tile of the scripted step they are taking this tick. */
+  const scriptedSteps = new WeakMap();
+
   /**
    * One walked tile of a scripted path, as live's [walk] steps are: the held player's queue takes
-   * this step alone (a click queued since is dropped); `holdStill` takes the hold back.
+   * this step alone; `holdStill` takes the hold back.
    */
   function stepTo(player, x, y) {
-    const at = player.getLocation();
     const queue = player.getMovementQueue?.();
-    if (!at || !queue) return;
+    if (!player.getLocation() || !queue) return;
     queue.reset?.();
     queue.setBlockMovement?.(false);
-    queue.walkStep?.(x - at.getX(), y - at.getY());
+    scriptedSteps.set(player, { x, y });
+    queueStep(player, x, y);
+  }
+
+  function queueStep(player, x, y) {
+    const at = player.getLocation();
+    player.getMovementQueue?.()?.walkStep?.(x - at.getX(), y - at.getY());
   }
 
   function holdStill(player) {
+    scriptedSteps.delete(player);
     player.getMovementQueue?.()?.reset?.()?.setBlockMovement?.(true);
+  }
+
+  /**
+   * A walk click on a step's tick (packets are read after the tasks, while the step lifts the hold)
+   * would replace the step: keep it instead. Live ignores the click (capture tick 869).
+   */
+  function keepScriptedStep(event) {
+    const step = scriptedSteps.get(event.player);
+    if (!step) return;
+    event.handled = true;
+    queueStep(event.player, step.x, step.y);
   }
 
   /** A path's [tick, action] steps from `walk` ([ticks after `from`, x, y]), held between steps. */
@@ -2580,6 +2591,7 @@ module.exports = function registerCabinFeverQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);
   api.onCustomEvent("ladders:climb", handleGangplankClaim);
+  api.onWalkRoute(keepScriptedStep);
   api.onItemAction("Book o' Piracy", { Read: readBookOfPiracy });
   // Named item uses run first; the id-based handler below stays the fallback
   // for transformed objects and the nameless hull holes.

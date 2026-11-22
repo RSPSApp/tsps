@@ -480,7 +480,7 @@ const GUN_LOCKER_OPEN = 11249;
 
 test('Cabin Fever completes from stage 0 through the real route handlers', () => {
   const originalRandom = Math.random;
-  // Fixture: 0.35 lands every swing (fall chance 1/3); every shot waits for the fuse, so it hits.
+  // Fixture: 0.35 lands every swing (fall chance 1/3) and hits every shot (Ranged 40: 0.41).
   Math.random = () => 0.35;
   try {
     const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
@@ -699,7 +699,7 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
       h.advance(1);
       assert.equal(h.varbit(1750), shot);
     }
-    // The third hole plays the end cutscene (its own tests: cabin-fever-end-scene.test.cjs),
+    // The third hole plays the end cutscene (its own tests: cabin-fever-scenes.test.cjs),
     // which hands over the book and then completes the quest.
     assert.deepEqual(h.endScene.played, [h.player], 'the third hole starts the end cutscene');
     assert.equal(h.stage(), 8, 'the quest completes when the cutscene ends, not on the hit');
@@ -1356,9 +1356,9 @@ test('a logout in the sea after a fallen swing logs back in on the ship the swin
   }
 });
 
-test('a shot fired straight after the fuse can miss; one fired once the fuse settles always lands', () => {
-  // The Wiki: "Try not to fire the cannon immediately after attaching the fuse. This can cause
-  // multiple misses. Count to 3 before firing." Live's shots, 4-5 ticks after the fuse, all hit.
+test('a shot lands on the Ranged roll: 6% at level 1 to 94% at 99, the same for balls and canisters', () => {
+  // Wiki "Cannon (Cabin Fever)", Success chance (JagexAsh, 24 January 2023). The fixture's Ranged
+  // is 40: 0.06 + 39 * 0.88 / 98 = 0.41.
   const originalRandom = Math.random;
   try {
     const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
@@ -1366,7 +1366,7 @@ test('a shot fired straight after the fuse can miss; one fired once the fuse set
     const CANNON = 11213;
     h.quest.setStage(h.player, 8);
     h.player.setAttribute('quest.cabin_fever.flags', 2); // live's clean flag
-    const load = () => {
+    const shoot = (roll) => {
       h.player.getPacketSender().sendVarbit(1746, 0);
       for (const id of [I.GUNPOWDER, I.RAMROD, I.CANNON_BALL_2, I.FUSE]) h.player.getInventory().adds(id, 1);
       h.itemOnObject(I.GUNPOWDER, CANNON);
@@ -1374,29 +1374,14 @@ test('a shot fired straight after the fuse can miss; one fired once the fuse set
       h.itemOnObject(I.CANNON_BALL_2, CANNON);
       h.advance(1);
       h.itemOnObject(I.FUSE, CANNON);
-      assert.equal(h.varbit(1741), 3, 'armed');
+      Math.random = () => roll;
+      h.object(CANNON, 'Fire!');
+      h.advance(1);
+      return h.messages.at(-1);
     };
-    Math.random = () => 0; // the worst roll
-    load();
-    h.object(CANNON, 'Fire!');
-    h.advance(1);
-    assert.equal(h.messages.at(-1), 'You fail to damage the hull.', 'fired at once: a miss');
+    assert.equal(shoot(0.42), 'You fail to damage the hull.', 'above 0.41: a miss');
     assert.equal(h.varbit(1750), 0);
-    load();
-    h.advance(3);
-    h.object(CANNON, 'Fire!');
-    h.advance(1);
-    assert.equal(h.messages.at(-1), 'You fail to damage the hull.', 'three ticks on is still too soon');
-    load();
-    h.advance(4);
-    h.object(CANNON, 'Fire!');
-    h.advance(1);
-    assert.equal(h.messages.at(-1), 'You put a hole in the hull!', 'four ticks on (capture 2088 -> 2092) lands, whatever the roll');
-    Math.random = () => 0.99;
-    load();
-    h.object(CANNON, 'Fire!');
-    h.advance(1);
-    assert.equal(h.messages.at(-1), 'You put another hole in the hull!', 'an instant shot can still land');
+    assert.equal(shoot(0.40), 'You put a hole in the hull!', 'below 0.41: a hole');
   } finally {
     Math.random = originalRandom;
   }

@@ -432,6 +432,8 @@ module.exports = function registerWatchtowerQuest(api) {
     OG_KEY: "Here is a key to the chest it's in.",
     OG_GOLD: "Well, well, the little t'ing has got it!",
     OG_PART_AGAIN: "Grrr, why do I bother?",
+    OG_KEY_AGAIN: "Stoopid! Take another and don't lose it!",
+    MAD_SKAVID_CRYSTAL_AGAIN: "Alright, take this one then...",
     GREW_CRYSTAL_AGAIN: "I suppose you want another?",
     GREW_PART_AGAIN: "Stupid morsel, I have another.",
     GORAD: "You shut your face! I smack you till you dead and sorry!",
@@ -496,6 +498,14 @@ module.exports = function registerWatchtowerQuest(api) {
         give(player, ITEMS.RELIC_PARTS[0]);
         state.setBit(player, BITS.HELPED_OG);
       };
+      return;
+    }
+    if (starts(request, LINE.OG_KEY_AGAIN)) {
+      request.before = () => give(player, ITEMS.KEY);
+      return;
+    }
+    if (starts(request, LINE.MAD_SKAVID_CRYSTAL_AGAIN)) {
+      request.before = () => give(player, CRYSTAL_MAGENTA);
       return;
     }
     if (starts(request, LINE.OG_PART_AGAIN)) {
@@ -1184,10 +1194,6 @@ module.exports = function registerWatchtowerQuest(api) {
       play(player, NPCS.BRIDGE_GUARD, "entering-gu-tanoth-crossing-back-across-the-bridge");
       return true;
     }
-    if (complete(player)) {
-      jumpAcross(player, true);
-      return true;
-    }
     if (stage(player) < STAGES.GUTANOTH) {
       player.sendMessage("Nothing interesting happens.");
       return true;
@@ -1216,7 +1222,8 @@ module.exports = function registerWatchtowerQuest(api) {
   /** The jump: seq 5355 and sound 2461 with a 45-cycle move from where the player stands (t2521, t2525). */
   function jumpAcross(player, northward) {
     const end = northward ? TILES.GAP_NORTH : TILES.GAP_SOUTH;
-    if (northward && !complete(player)) player.getSkillManager().addExperiences(Skill.AGILITY, 5);
+    // Wiki (Gap (Gu'Tanoth)): 5 Agility XP a jump from the south, and 20 coins each time, after the quest too.
+    if (northward) player.getSkillManager().addExperiences(Skill.AGILITY, 5);
     ObstacleRunner.run({ player }, [
       { move: [end[0], end[1]], anim: SEQ.GAP_JUMP, speed: [0, 45], dir: northward ? "north" : "south" },
       { sound: SOUND.JUMP },
@@ -1577,12 +1584,13 @@ module.exports = function registerWatchtowerQuest(api) {
     }
     const steps = variantSteps(PAGE, "post-quest-reading-the-spell-scroll") ?? [];
     const [memorise, cast, dust] = steps.map((step) => step.text);
+    // The scroll goes with the stage (live: two ticks later, t6095), so a logout between keeps neither half alone.
+    take(player, ITEMS.SCROLL);
     state.setStage(player, STAGES.READ_SCROLL);
     player.performAnimation(new Animation(SEQ.READ_SCROLL));
     const box = (text) => new core.StatementDialogue(0, text);
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(box(memorise)));
     later(player, 2, () => {
-      take(player, ITEMS.SCROLL);
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(box(cast)));
       later(player, 1, () => player.sendMessage(dust));
     });

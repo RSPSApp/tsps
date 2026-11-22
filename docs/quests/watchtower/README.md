@@ -115,7 +115,8 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
   sound 2453; back the same way for free (6241-6248).
 - **The gap** (2507-2543): the bridge guard's (4372) talk; paid, "You daringly jump across the chasm.", 20
   coins, 5 Agility XP, seq 5355 and sound 2461 with a 45-cycle move to (2530,3029), then "Phew! I just
-  made it."; back to (2531,3026) free with "I'm glad that was easier on the way back!".
+  made it."; back to (2531,3026) free with "I'm glad that was easier on the way back!". After the quest the
+  toll and the 5 XP stay (Wiki, Gap (Gu'Tanoth): "Each jump from the south costs 20 coins"); Agility 25 (Wiki).
 - **The city guard** (2636-2710): with the death rune the riddle talk is "I worked it out!" at once; the
   rune and map in a box. The riddles and a lost map as the Wiki.
 - **The skavid caves**: with the map "You enter the cave..." and the inside on arrival (2903, 2947);
@@ -158,7 +159,8 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
   tower at (2928,4715,2), sound 2400 and jingle 234; four ticks on the coins, the scroll and the Magic XP
   with the wizard's two lines, the completion message and scroll after them.
 - **The scroll** (6093-6096): stage 14, seq 5354 and "You memorise what is written on the scroll." in a
-  box; two ticks later the scroll gone and "You can now cast..." in a box; a tick later "The scroll
+  box; two ticks later "You can now cast..." in a box (the scroll goes with the stage here; live: with this
+  box); a tick later "The scroll
   crumbles to dust."
 - **Watchtower Teleport** lands at (2934,4713,2), the completed tower's top floor (6337); the Ardougne
   hard diary task counts it there.

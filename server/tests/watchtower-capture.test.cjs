@@ -577,3 +577,30 @@ test("the run past: a player gone from the entrance in its three ticks is not pu
   h.ticks(f, 5);
   assert.deepEqual(at(f), [3222, 3218, 0]);
 });
+
+test("lost items: Og's spare key and the mad skavid's spare crystal come with their lines", async (t) => {
+  const f = actor(t, { at: [2506, 3113, 0], stage: S.NAILS, attributes: { [BITS]: 1 << 4 } });
+  const og = h.spawn(f, N.OG, [2507, 3114, 0]);
+  const said = await talk(f, og, ["I have lost the key!"]);
+  assert.ok(said.some((line) => line.includes("Stoopid! Take another")), said.join("\n"));
+  assert.equal(count(f, I.TOBANS_KEY), 1);
+
+  const g = actor(t, { at: [2522, 9412, 0], stage: S.SKAVID });
+  const mad = h.spawn(g, N.MAD, [2523, 9411, 0]);
+  const again = await talk(g, mad, ["But I've lost it!"]);
+  assert.ok(again.some((line) => line.includes("Alright, take this one then")), again.join("\n"));
+  assert.equal(count(g, I.CRYSTAL_2), 1);
+});
+
+test("the gap after the quest: the toll talk and 5 Agility XP every time (Wiki: Gap (Gu'Tanoth))", async (t) => {
+  const f = actor(t, { at: [2530, 3025, 0], stage: S.READ, items: [[I.COINS, 20]] });
+  const guard = h.spawn(f, 4372, [2529, 3023, 0]);
+  void guard;
+  const xp = f.player.getSkillManager().getExperience(Sk.AGILITY);
+  const said = await play(f, () => click(f, 2830, [2530, 3026]), ["Okay, I'll pay it."]);
+  assert.ok(said.some((line) => line.includes("If you want to cross here, you must pay me 20 gold pieces first!")), said.join("\n"));
+  h.ticks(f, 3);
+  assert.deepEqual(at(f), [2530, 3029, 0]);
+  assert.equal(count(f, I.COINS), 0);
+  assert.equal(f.player.getSkillManager().getExperience(Sk.AGILITY) - xp, 5);
+});

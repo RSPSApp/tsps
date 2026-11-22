@@ -59,13 +59,14 @@ function login(t, [x, y, z], stage) {
     core.TaskManager.cancelTasks(p);
     core.World.unregisterPlayerPosition(p);
   });
-  /** `click`: a walk click read this tick, after the tasks and before movement, as World.process reads packets. */
+  /** `click(p)`: a click read this tick, after the tasks and before movement, as World.process reads packets. */
   const tick = (count = 1, click = null) => {
     for (let i = 0; i < count; i++) {
       core.World.processCycle++;
       core.TaskManager.process();
-      if (click) p.getMovementQueue().requestWalk(new core.Location(...click));
-      p.getMovementQueue().process();
+      if (click) click(p);
+      // As Player.process gates it.
+      if (p.getMovementQueue().hasPendingWork()) p.getMovementQueue().process();
       // The player update after movement places a teleported player (World.process order).
       p.setNeedsPlacement(false);
       p.resetUpdating?.();
@@ -108,7 +109,11 @@ test('the swing drops beside the mast and walks round it before the grab, as liv
   assert.equal(p.getMovementQueue().isMovementBlocked(), false, 'released with "The rope falls off the mast!"');
 });
 
-for (const at of [9, 12, 15]) test(`a walk click read on step tick ${at} round the mast changes nothing`, (t) => {
+const CLICKS = {
+  walk: (p) => p.getMovementQueue().requestWalk(new core.Location(1812, 4833, 1)),
+  'ground item': (p) => p.getMovementQueue().walkToGroundItem(new core.Location(1812, 4833, 1), () => {}),
+};
+for (const [kind, click] of Object.entries(CLICKS)) for (const at of [9, 12, 15]) test(`a ${kind} click read on step tick ${at} round the mast changes nothing`, (t) => {
   // Live's own run has a move_gameclick mid-walk (tick 869) that changes nothing.
   const { p, tick } = login(t, [1816, 4830, 2], 3);
   p.getInventory().adds(core.ItemIdentifiers.ROPE, 1);
@@ -118,7 +123,7 @@ for (const at of [9, 12, 15]) test(`a walk click read on step tick ${at} round t
   const path = [[1815, 4832], [1814, 4831], [1814, 4830], [1814, 4829], [1815, 4829], [1815, 4829], [1816, 4829], [1816, 4830]];
   const tiles = [];
   for (let after = 1; after <= 15; after++) {
-    tick(1, after === at ? [1812, 4833, 1] : null);
+    tick(1, after === at ? click : null);
     if (after >= 8) tiles.push(xyz(p).slice(0, 2));
   }
   assert.deepEqual(tiles, path, "one tile a tick on live's path");

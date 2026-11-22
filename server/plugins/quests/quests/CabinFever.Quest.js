@@ -1999,50 +1999,18 @@ module.exports = function registerCabinFeverQuest(api) {
   /** Players mid-swing, so a second rope cannot start another. */
   const swinging = new WeakSet();
 
-  /** Player -> the tile of the scripted step they are taking this tick. */
-  const scriptedSteps = new WeakMap();
-
   /**
-   * One walked tile of a scripted path, as live's [walk] steps are: the held player's queue takes
-   * this step alone; `holdStill` takes the hold back.
+   * One walked tile of a scripted path, as live's [walk] steps are. The player stays held, so a
+   * click of any kind (a walk, an item, an NPC) changes nothing; live ignores one at tick 869.
    */
   function stepTo(player, x, y) {
-    const queue = player.getMovementQueue?.();
-    if (!player.getLocation() || !queue) return;
-    queue.reset?.();
-    queue.setBlockMovement?.(false);
-    scriptedSteps.set(player, { x, y });
-    queueStep(player, x, y);
-  }
-
-  function queueStep(player, x, y) {
     const at = player.getLocation();
-    player.getMovementQueue?.()?.walkStep?.(x - at.getX(), y - at.getY());
+    player.getMovementQueue?.()?.stepWhileHeld?.(x - at.getX(), y - at.getY());
   }
 
-  function holdStill(player) {
-    scriptedSteps.delete(player);
-    player.getMovementQueue?.()?.reset?.()?.setBlockMovement?.(true);
-  }
-
-  /**
-   * A walk click on a step's tick (packets are read after the tasks, while the step lifts the hold)
-   * would replace the step: keep it instead. Live ignores the click (capture tick 869).
-   */
-  function keepScriptedStep(event) {
-    const step = scriptedSteps.get(event.player);
-    if (!step) return;
-    event.handled = true;
-    queueStep(event.player, step.x, step.y);
-  }
-
-  /** A path's [tick, action] steps from `walk` ([ticks after `from`, x, y]), held between steps. */
+  /** A path's [tick, action] steps from `walk` ([ticks after `from`, x, y]). */
   function walkSteps(player, from, walk) {
-    const at = new Set(walk.map(([after]) => after));
-    return walk.flatMap(([after, x, y]) => [
-      [from + after, () => stepTo(player, x, y)],
-      ...(at.has(after + 1) ? [] : [[from + after + 1, () => holdStill(player)]]),
-    ]);
+    return walk.map(([after, x, y]) => [from + after, () => stepTo(player, x, y)]);
   }
 
   /**
@@ -2591,7 +2559,6 @@ module.exports = function registerCabinFeverQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleConditionChosen);
   api.onCustomEvent("ladders:climb", handleGangplankClaim);
-  api.onWalkRoute(keepScriptedStep);
   api.onItemAction("Book o' Piracy", { Read: readBookOfPiracy });
   // Named item uses run first; the id-based handler below stays the fallback
   // for transformed objects and the nameless hull holes.

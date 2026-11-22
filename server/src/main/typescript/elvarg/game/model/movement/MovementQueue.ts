@@ -113,6 +113,8 @@ export class MovementQueue {
     private alternativeRoute = false;
     /** The next queued step may ignore a spell freeze, but no other movement lock. */
     private forceOneStepThroughFreeze = false;
+    /** A scripted step taken while held (stepWhileHeld); a reset does not drop it. */
+    private heldStep: Location | null = null;
     /** Pre-step check of the current walk-to (re-pathing to an NPC, re-validating a loc). */
     private entityPursuit: (() => void) | null = null;
     /**
@@ -252,6 +254,18 @@ export class MovementQueue {
         this.reset();
         this.forceOneStepThroughFreeze = true;
         this.points.push(new Point(destination, Direction.fromDeltas(x, y)));
+        return true;
+    }
+
+    /**
+     * One walked tile a script takes for a player it holds still (a quest's walk round a mast): the
+     * next movement pass takes this tile alone, as a walk, whatever blocks ordinary movement, and
+     * drops whatever a click queued in the meantime. The hold stays on, so no click moves the
+     * player between steps. Collision still applies.
+     */
+    public stepWhileHeld(x: number, y: number): boolean {
+        if (Math.max(Math.abs(x), Math.abs(y)) !== 1) return false;
+        this.heldStep = this.character.getLocation().transform(x, y);
         return true;
     }
 
@@ -545,7 +559,7 @@ export class MovementQueue {
 
     public hasPendingWork(): boolean {
         if (this.externalMovementUntil > Date.now()) return true;
-        if (this.points.length > 0 || this.isMoving) {
+        if (this.heldStep || this.points.length > 0 || this.isMoving) {
             return true;
         }
         if (this.character.getFollowing() != null) {
@@ -556,6 +570,13 @@ export class MovementQueue {
 
     public process() {
         this.movedThisCycle = false;
+        const heldStep = this.heldStep;
+        this.heldStep = null;
+        if (heldStep) {
+            const at = this.character.getLocation();
+            this.points.clear();
+            this.points.push(new Point(heldStep, Direction.fromDeltas(heldStep.getX() - at.getX(), heldStep.getY() - at.getY())));
+        }
         if (this.externalMovementUntil > Date.now()) {
             this.isMoving = this.getMobility().canMove();
             this.movedThisCycle = this.isMoving;
@@ -564,6 +585,7 @@ export class MovementQueue {
         }
         const ownerLabel = this.ownerLabel();
         if (
+            !heldStep &&
             this.points.length === 0 &&
             !this.isMoving &&
             this.character.getFollowing() == null
@@ -573,14 +595,14 @@ export class MovementQueue {
 
         const forceOneStepThroughFreeze = this.forceOneStepThroughFreeze;
         this.forceOneStepThroughFreeze = false;
-        if (!(forceOneStepThroughFreeze
+        if (!heldStep && !(forceOneStepThroughFreeze
             ? this.getMobilityIgnoringFreeze()
             : this.getMobility()).canMove()) {
             this.isMoving = false;
             return;
         }
 
-        if (this.character.getFollowing() != null) {
+        if (!heldStep && this.character.getFollowing() != null) {
             ServerPerf.measurePhase(
                 "movement.process.follow",
                 () => this.processFollowing()
@@ -594,7 +616,7 @@ export class MovementQueue {
         const start = this.character.getLocation();
         let current = start;
         let previous = start;
-        let steps = forceOneStepThroughFreeze ? 1 : this.isRunToggled() ? 2 : 1;
+        let steps = heldStep || forceOneStepThroughFreeze ? 1 : this.isRunToggled() ? 2 : 1;
         let moved = false;
         let stepsMoved = 0;
         this.stepBlocked = false;

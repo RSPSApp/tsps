@@ -6,13 +6,15 @@ const { SceneRaycaster } = require("../game/scene/SceneRaycaster");
 
 const npcType = { id: 1300, name: "Fishing spot", modelIds: [1] };
 let npcSize = 1;
+let npcWorldX = 10.5;
+let npcWorldZ = 10.5;
 const npcEcs = {
     queryByMap: () => [1],
     isActive: () => true,
     isLinked: () => true,
     getMapId: () => 7,
-    getWorldX: () => 10.5 * 128,
-    getWorldY: () => 10.5 * 128,
+    getWorldX: () => npcWorldX * 128,
+    getWorldY: () => npcWorldZ * 128,
     getSize: () => npcSize,
     getNpcTypeId: () => 1300,
     getLevel: () => 0,
@@ -49,7 +51,9 @@ assert.equal(posedModelRequests, 0, "spot picking does not depend on animated mo
 assert.equal(pick(11.01).length, 0, "the stable hitbox ends at the spot's tile boundary");
 
 npcSize = 5;
-assert.equal(pick(12.3)[0]?.interactId, 1300, "a large spot remains selectable across its footprint");
-assert.equal(pick(13.01).length, 0, "a large spot's hitbox ends at its footprint boundary");
+npcWorldX = 12.5;
+npcWorldZ = 12.5;
+assert.equal(pick(14.3)[0]?.interactId, 1300, "a large spot remains selectable across its footprint");
+assert.equal(pick(15.01).length, 0, "a large spot's hitbox ends at its footprint boundary");
 
 console.log("Fishing spot hitboxes remain stable across animation frames and NPC sizes");

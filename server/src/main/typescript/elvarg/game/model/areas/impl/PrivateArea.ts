@@ -124,6 +124,10 @@ export abstract class PrivateArea extends Area {
         return [];
     }
 
+    /** A deregistered template loc leaves the scene's lookups; ordinary private areas have none. */
+    public removeTemplateObject(_object: GameObject): void {
+    }
+
     /** Allows an instance to validate client-only dynamic locs on demand. */
     public resolveObject(_id: number, _location: Location, _player?: Player): GameObject | null {
         return null;

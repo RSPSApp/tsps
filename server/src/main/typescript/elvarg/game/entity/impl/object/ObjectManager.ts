@@ -331,6 +331,8 @@ export class ObjectManager {
             }
         }
         object.getPrivateArea()?.detach(object);
+        // A template-map instance's own loc (the scene's copy) must not be found there any more.
+        object.getPrivateArea()?.removeTemplateObject(object);
 
         if (playerUpdate) {
             ObjectManager.perform(object, OperationType.DESPAWN);

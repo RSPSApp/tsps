@@ -93,6 +93,8 @@ export class TemplatedInstanceArea extends PrivateArea {
     private readonly chunks: (TemplateChunk | null)[];
     private clipGrid: Int32Array | null = null;
     private locIndex = new Map<number, PlacedLoc[]>();
+    /** Template locs taken out at runtime (a loc_del), kept out when the index is rebuilt. */
+    private removedLocs = new Set<string>();
     private sceneVersion = 0;
 
     constructor(widthChunks: number, heightChunks: number) {
@@ -241,6 +243,21 @@ export class TemplatedInstanceArea extends PrivateArea {
         return this.locsAt(location).map((loc) => this.objectFor(loc));
     }
 
+    /**
+     * Takes a template loc out of the scene's lookups once it is deregistered (loc_del), so a
+     * later lookup no longer finds it and putting the same loc back sends it again.
+     */
+    public override removeTemplateObject(object: GameObject): void {
+        const location = object.getLocation();
+        if (!this.contains(location)) return;
+        const list = this.locsAt(location);
+        const index = list.findIndex((loc) => loc.object === object
+            || (loc.id === object.getId() && loc.type === object.getType()));
+        if (index < 0) return;
+        const [loc] = list.splice(index, 1);
+        this.removedLocs.add(removedKey(loc));
+    }
+
     public override resolveObject(id: number, location: Location, player?: Player): GameObject | null {
         const loc = this.locsAt(location).find((entry) => entry.id === id
             || (player && ObjectDefinition.forPlayer(entry.id, player)?.id === id));
@@ -266,6 +283,7 @@ export class TemplatedInstanceArea extends PrivateArea {
         usedSlots[this.slot] = false;
         this.clipGrid = null;
         this.locIndex.clear();
+        this.removedLocs.clear();
         super.destroy();
     }
 
@@ -386,12 +404,17 @@ export class TemplatedInstanceArea extends PrivateArea {
             const z = this.contains(new Location(x, y, 1)) && bridge(x, y) ? plane - 1 : plane;
             if (z < 0 || !this.contains(new Location(x, y, z))) continue;
             const placed: PlacedLoc = { id: loc.id, x, y, z, type: loc.type, face: (loc.face + chunk.rotation) & 3 };
+            if (this.removedLocs.has(removedKey(placed))) continue;
             const index = this.tileIndex(x, y, z);
             const list = this.locIndex.get(index);
             if (list) list.push(placed);
             else this.locIndex.set(index, [placed]);
         }
     }
+}
+
+function removedKey(loc: PlacedLoc): string {
+    return `${loc.x},${loc.y},${loc.z},${loc.type},${loc.id}`;
 }
 
 function regionOf(chunk: TemplateChunk): number {

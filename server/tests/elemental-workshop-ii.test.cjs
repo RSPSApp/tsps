@@ -311,11 +311,19 @@ test('the cart rides to the press a tile a tick, and the press flattens the hot 
   const p = onFloor(t);
   const bits = (5 << 16) | (13 << 20) | (6 << 24) | (2 << 9) | (1 << 12) | (1 << 6);
   p.setAttribute('quest.elemental_workshop_ii.varp896', bits >>> 0);
+  // Live moves the cart with a plain teleport each tick (jump flag clear, ticks 801-815), which
+  // clients walk it over; a telejump or moveTo makes it vanish for the tick (#6502).
+  const steps = [];
+  const c = cart(p);
+  const teleportInView = c.teleportInView.bind(c);
+  c.teleportInView = (to) => { steps.push(String(to)); return teleportInView(to); };
   pull(p, 18620, 1953, 5151, 1);
   ticks(1);
   assert.equal(varbit(p, V.JIG_POS), 1, 'jig_pos a tick after the pull (tick 801)');
   ticks(14);
   assert.ok(cart(p).getLocation().equals(at(p, 1946, 5155, 2)), 'at the press after 15 steps');
+  assert.equal(steps.length, 15, 'every step a teleport in view');
+  assert.equal(steps.at(-1), String(at(p, 1946, 5155, 2)));
   pull(p, 18640, 1950, 5153, 2);
   assert.equal(varbit(p, V.JIG_STATE), 3);
   assert.equal(text(p), 'You pull the lever and the press responds. The hardy comes down, hitting the elemental bar. The bar has been flattened.');
@@ -421,8 +429,20 @@ test('the extractor charges the primed bar and drains 20 Magic; the mind helmet 
   close(p);
   placeAt(p, 1961, 5150, 0);
   const magic = p.getSkillManager().getCurrentLevel(core.Skill.MAGIC);
-  op(p, 18690, at(p, 1962, 5150, 0), 'Operate');
-  ticks(8);
+  const hat = at(p, 1962, 5150, 0);
+  const sent = [];
+  const ps = p.getPacketSender();
+  const sendObject = ps.sendObject.bind(ps);
+  const sendObjectRemoval = ps.sendObjectRemoval.bind(ps);
+  ps.sendObject = (o) => { if (o.getLocation().equals(hat)) sent.push(`add ${o.getId()}`); return sendObject(o); };
+  ps.sendObjectRemoval = (o) => { if (o.getLocation().equals(hat)) sent.push(`del ${o.getId()}`); return sendObjectRemoval(o); };
+  op(p, 18690, hat, 'Operate');
+  ticks(2);
+  assert.deepEqual(sent, ['del 18690'], 'the hat goes as the player sits (tick 1372)');
+  assert.ok(!idsAt(p, hat).includes(18690), 'and is gone from the scene');
+  ticks(6);
+  assert.deepEqual(sent, ['del 18690', 'add 18690'], 'the hat is put back (loc_add_change, tick 1379; #6502)');
+  assert.ok(idsAt(p, hat).includes(18690));
   assert.equal(varbit(p, V.MIND_JIG), 2);
   assert.equal(stage(p), 10);
   assert.equal(p.getSkillManager().getCurrentLevel(core.Skill.MAGIC), magic - 20);

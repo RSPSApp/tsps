@@ -172,8 +172,9 @@ module.exports = function registerHandInTheSandQuest(api) {
   const BETTYS_SHOP = [3014, 3259, 0];
   /**
    * The lens is used from Betty's open doorway (Wiki: "stand in the doorway while the door is open and shine your
-   * lens at the counter"): the capture's player stands on (3016,3259) and the use runs there, three tiles from the
-   * counter, the player turning to it (t8111-8118).
+   * lens at the counter"): the captures' players walk to (3016,3259) themselves and use it from there, three tiles from
+   * the counter, turning to it (1002235 t8111-8118, 01698 t2803-2811). Ours: a use from elsewhere walks there first;
+   * no recording uses it from another tile.
    */
   const BETTYS_DOORWAY = [3016, 3259, 0];
 

@@ -66,8 +66,11 @@ function setup(options = {}) {
   const tasks = [];
   const questCore = {
     ...core,
-    CountdownTask: class { constructor(_player, ticks, callback) { this.ticks = ticks; this.callback = callback; } },
-    TaskManager: { submit(task) { tasks.push(task); } },
+    CountdownTask: class { constructor(key, ticks, callback) { this.key = key; this.ticks = ticks; this.callback = callback; } },
+    TaskManager: {
+      submit(task) { tasks.push(task); },
+      cancelTasks(key) { for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].key === key) tasks.splice(i, 1); },
+    },
   };
   const custom = new Map();
   const emitted = [];
@@ -710,4 +713,25 @@ test('the scare plays its whole talk: the Homunculus with "Boo.", and the end on
     PluginManager.emitCustomEvent(name, input);
     assert.equal(input.handled, false, name);
   }
+});
+
+test('a death mid-scare lets the scene go: input, controls and camera come back, and the scare plays again (review: death)', () => {
+  const h = setup();
+  at(h, 16);
+  assert.equal(h.selectVariant(N.EFFIGY), 'finished-work-freeing-the-homunculus-effigy');
+  line(h, N.HOMUNCULUS, 'Boo.').before();
+  const last = line(h, N.HOMUNCULUS, 'Me look dungeon, [player name]. Please meet there.');
+  PluginManager.emitCustomEvent('player:died', { player: h.player, killer: null, itemsLost: false });
+  assert.equal(h.varbits.get(542), 0);
+  assert.equal(h.varbits.get(3359), 0);
+  assert.equal(h.cameraResets(), 1);
+  const input = { player: h.player, handled: false };
+  PluginManager.emitCustomEvent('player:world-input', input);
+  assert.equal(input.handled, false);
+  // A stale continue can no longer finish the old scene; the stage stays and Effigy starts it over.
+  last.after();
+  h.flushTasks();
+  assert.equal(h.quest.getStage(h.player), 16);
+  assert.deepEqual(h.fades, []);
+  assert.equal(h.selectVariant(N.EFFIGY), 'finished-work-freeing-the-homunculus-effigy');
 });

@@ -176,6 +176,7 @@ function createScenes(api, ctx) {
     const { player } = request;
     request.before = () => player.getPacketSender().sendSound(SOUND.EXPLOSIONS, 1, 0);
     request.after = () => {
+      if (playing.get(player) !== state) return;
       Scenes.fade(player, true);
       Scenes.later(player, 3, () => {
         Scenes.end(player, false);
@@ -258,6 +259,7 @@ function createScenes(api, ctx) {
       // gone and the tabs back (3388). Started as the chain was built, this ended the scene mid-talk and left the fade
       // out on (#6485).
       request.after = () => {
+        if (playing.get(player) !== state) return;
         Scenes.later(player, 1, () => Scenes.fade(player, true));
         Scenes.later(player, 4, () => {
           if (playing.get(player) !== state) return;
@@ -288,7 +290,21 @@ function createScenes(api, ctx) {
     playing.delete(player);
   }
 
-  return { toTheTop, creation, scare, handleLine, isPlaying, logout, Location };
+  /**
+   * A death mid-scene (a poison pulse queued before the talk, say) drops the chat, so the last line's continue that
+   * ends the scene never comes: the scene goes now, with its timers, and the controls, tabs, camera and screen come
+   * back. The stage stays, so the scene plays again from its start. Ours: no capture shows a death in these scenes.
+   */
+  function died(player) {
+    if (!playing.has(player)) return;
+    Scenes.cancel(player);
+    if (Scenes.get(player)) Scenes.end(player, false);
+    ctx.sendVarbit(player, VARBIT_HOMONC_PRES, 0);
+    endPlaying(player);
+    Scenes.closeFade(player);
+  }
+
+  return { toTheTop, creation, scare, handleLine, isPlaying, logout, died, Location };
 }
 
 module.exports = { createScenes, SCENE_EXIT_ATTRIBUTE, TOP_FLOOR_EXIT };

@@ -107,7 +107,8 @@ Each scene's timers start when its line is continued, not when the line event co
 dialogue chain is built, often before the line is shown, so a player who read slowly got the fade in before the
 fade out and a black screen, and the scare ended (tabs and camera back, tol_prog 17) while its talk still played
 (issue #6485). What a line shows with (camera, sounds, tol_homonc_pres) plays as that line is shown. While a scene
-plays, a close (Esc) or a world click keeps the chat, since the scene ends only from its last line's continue.
+plays, a close (Esc) or a world click keeps the chat, since the scene ends only from its last line's continue. A death
+mid-scene (ours: none captured) lets the scene go, with its timers, and the scene plays again.
 
 ## The Homunculus
 

@@ -1196,6 +1196,7 @@ module.exports = function registerTowerOfLifeQuest(api) {
   api.onCustomEvent("npc-dialogue:line", noFingersAsked);
   api.onCustomEvent("interface:close", protectScene);
   api.onCustomEvent("player:world-input", protectScene);
+  api.onCustomEvent("player:died", ({ player }) => Scenes.died(player));
   api.onNpcInteraction("'No fingers'", { Pickpocket: pickpocketNoFingers });
   api.onObjectInteraction("Pressure machine", { Fix: handleMachineFix });
   api.onObjectInteraction("Pipe machine", { Fix: handleMachineFix });

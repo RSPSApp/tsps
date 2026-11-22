@@ -522,8 +522,8 @@ function guardGuildTier(event) {
     const { player, previous, location } = event;
     if (!previous || previous.getZ() !== 0 || location.getZ() !== 0 || turningBack.has(player)) return;
     const tier = tierAt(location);
-    // One tile inward from outside the wing: a teleport or a spirit tree arrival is not a step.
-    if (!tier || previous.getX() !== location.getX() + tier.dx || previous.getY() !== location.getY() + tier.dy
+    // One tile inward along the lane's own axis, straight or diagonal: a teleport or a spirit tree arrival is not a step.
+    if (!tier || (tier.dx ? previous.getX() !== location.getX() + tier.dx : previous.getY() !== location.getY() + tier.dy)
         || player.getSkillManager().getCurrentLevel(core.Skill.FARMING) >= tier.level) return;
     // The rest of this tick's run goes on; the turn back is from wherever it ended.
     turningBack.add(player);
@@ -537,8 +537,16 @@ function guardGuildTier(event) {
             const queue = player.getMovementQueue();
             queue.reset();
             queue.addSteps(end.transform(2 * at.dx, 2 * at.dy));
-            player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.NpcDialogue(0, core.NpcIdentifiers.GUILDMASTER_JANE,
-                `Hey! You need a Farming level of at least ${at.level} to enter that area of the Farming Guild.`, undefined, JANE_ANGRY)));
+            // Jane speaks a tick after the walk-back (rsprox 242/911689.txt ticks 18431 then 18432: the chat line and the
+            // dialogue interface arrive together).
+            core.TaskManager.submit(new (class extends core.Task {
+                constructor() { super(1, player, false); }
+                execute() {
+                    this.stop();
+                    player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.NpcDialogue(0, core.NpcIdentifiers.GUILDMASTER_JANE,
+                        `Hey! You need a Farming level of at least ${at.level} to enter that area of the Farming Guild.`, undefined, JANE_ANGRY)));
+                }
+            })());
         }
     })());
 }

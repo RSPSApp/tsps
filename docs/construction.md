@@ -344,6 +344,35 @@ Using a pet on menagerie furniture stores it; the pet house's View lists the sto
 2013) lets them roam the menagerie outside building mode. Stored pets count as owned
 (`pets:held-elsewhere`).
 
+**Extras** (pet rocks, cats, dogs, fishbowls, toy cats, broavs, spooky chairs, Humphrey Dumphrey,
+the Mayor of Catherby and Archibald; `data/menagerie-extras.json` maps each item to the `poh_*`
+NPC that roams for it) live in inventory `poh_menagerie_pets` (517), which script 641 draws after
+enum 985's slots, so list child `enum size + inv slot` is that slot. From rsprox captures 2779
+and 2782 (rev 229):
+
+- Using the pet rock on an oak house takes it on the tick with no message and its `poh_rock` starts
+  roaming (2779 tick 1019, 2782 tick 27).
+- View sends the inventory in full before it opens interface 211, which opens list children 0
+  to `enum size + 12` (0-75 with that revision's 63 slots). Taking an extra back empties only its
+  slot (2779 tick 2090, child 63).
+- A kitten is turned away: "Kittens need more personal care and attention than the pet house can
+  provide." (2779 ticks 911, 987).
+- Extras count toward a pet house's limit. In 2779 (tick 1050) a supreme, a K'ril and the rock
+  filled an oak house, so the chompy chick got "The pet house is full. Only 3 creatures can live in
+  this kind of pet house."
+
+The limits are oak 3, teak 5, mahogany 7, consecrated 9 and desecrated 12, taken from the best pet
+house in the house; the nature house takes every unique pet plus 12 extras (Wiki: Menagerie).
+Puppies aren't extras (Wiki: Dog), so nothing happens when one is used. Pick-up on the roaming
+rock emits `construction:menagerie-pet-picked-up`, which completes the Fremennik Diary's "Pick up
+your Pet Rock from your POH Menagerie" (Wiki: "use your pet rock on a pet house, then retrieve it
+off the ground").
+
+With no pet house built, a pet used on other menagerie furniture gets "There does not appear to
+be a pet house to store pets in this house." (2777 ticks 3172-3173). Ours: "Your menagerie can't
+hold more than 12 of those pets." for a 13th extra in a nature house; no recording or Wiki line
+covers it.
+
 The Pet list's Read opens `poh_petlist` (210) as rsprox captures 2581, 2777, 2782, 2793 and
 3121 send it: script 2524 (-1, -1), the modal, Examine (op10) on list slots 0 to the last slot
 of enum 985, and script 647 with one green "Owned" or red "Not owned" cell per slot, each

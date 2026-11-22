@@ -689,9 +689,12 @@ test("a save taken between the last nail and the build holds the piece built wit
   const saved = xp(f);
   const g = reload(t, f); // a save on this tick, then a restart
   assert.equal(g.player.getAttribute("daddys-home:furniture")[PIECE.table2], 3, "the piece the planks went into is saved built");
+  assert.equal(xp(g) - saved, 0, "not during the login itself");
+  tick(g);
   assert.equal(xp(g) - saved, 86, "and its XP, owed in the save, is paid at login (review: UnhealthyKraken)");
   assert.equal(g.player.getAttribute("daddys-home:pending-xp"), 0);
   PM.emitPlayerLogin({ player: g.player, username: g.player.getUsername(), isNewAccount: false });
+  tick(g);
   assert.equal(xp(g) - saved, 86, "never twice");
   // The session that saved carries on: its build lands a tick later with the XP once.
   tick(f);

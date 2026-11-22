@@ -242,8 +242,11 @@ module.exports = function registerDaddysHomeQuest(api) {
       quest.setStage(player, STAGE_CRATE_OPENED);
     }
     sendFurniture(player);
-    // A save taken between a piece's materials and its build (a restart then): the XP it still owes.
-    payPendingXp(player);
+    // A save taken between a piece's materials and its build (a restart then): the XP it still owes, on the first tick
+    // after login, once the client is set up (a level-up's pop-up can come with it). It stays saved until then.
+    if ((Number(player.getAttribute(PENDING_XP_ATTRIBUTE)) || 0) > 0) {
+      TaskManager.submit(new CountdownTask({}, 1, () => { if (player.isRegistered?.() !== false) payPendingXp(player); }));
+    }
     creditQuestPoint(player);
   }
 

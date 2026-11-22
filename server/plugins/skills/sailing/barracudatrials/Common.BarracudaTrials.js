@@ -108,6 +108,26 @@ function updateProgress(player, trial, change) {
   return next;
 }
 
+/** Owned anywhere (worn, carried or banked). */
+function owns(player, itemId) {
+  if (player.getInventory().contains(itemId)) return true;
+  if (player.getEquipment?.().contains?.(itemId)) return true;
+  try {
+    const tab = core.Bank.getTabForItem(player, itemId);
+    return tab >= 0 && player.getBank(tab).contains(itemId);
+  } catch {
+    return false;
+  }
+}
+
+/** Each trial's Swordfish key's "used" varbit (sailing_bt_<key>_key_used), set once it opened its chest. */
+const KEY_USED_VARBITS = Object.freeze({ tempor_tantrum: "sailing_bt_stormy_key_used", jubbly_jive: "sailing_bt_fetid_key_used", gwenith_glide: "sailing_bt_serrated_key_used" });
+
+/** Whether the trial's key has opened its chest (Chests.BarracudaTrials; saved with the progress). */
+function keyUsed(player, trial) {
+  return trialProgress(player, trial).extra?.keyUsed === true;
+}
+
 /** Whether the player has beaten a rank (1 Swordfish to 3 Marlin); unranked is always open. */
 function rankBeaten(player, trial, rank) {
   return rank <= 0 || trialProgress(player, trial).firsts[rank - 1] === true;
@@ -148,6 +168,7 @@ function sendProgress(player) {
       sender.sendVarbit(trialVarbit(trial, `pb_${key}`), saved.pbs[i]);
     });
     sender.sendConfig(varp(`sailing_bt_trial_${trial.key}_completed`), saved.count);
+    if (KEY_USED_VARBITS[trial.key] && keyUsed(player, trial)) sender.sendVarbit(varbit(KEY_USED_VARBITS[trial.key]), 1);
   }
   sender.sendVarbit(varbit("sailing_bt_barracuda_intro"), intro ? 1 : 0);
   migrateEffectsOff(player);
@@ -262,6 +283,9 @@ module.exports = {
   trialProgress,
   updateProgress,
   rankBeaten,
+  owns,
+  keyUsed,
+  KEY_USED_VARBITS,
   masterState,
   sendProgress,
   COLOURFUL_FADE_SETTING,

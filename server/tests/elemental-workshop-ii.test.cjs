@@ -316,13 +316,14 @@ test('the cart rides to the press a tile a tick, and the press flattens the hot 
   const steps = [];
   const c = cart(p);
   const teleportInView = c.teleportInView.bind(c);
-  c.teleportInView = (to) => { steps.push(String(to)); return teleportInView(to); };
+  c.teleportInView = (to) => { const r = teleportInView(to); steps.push(c.isTeleportingWithoutJump() ? String(to) : 'jump'); return r; };
   pull(p, 18620, 1953, 5151, 1);
   ticks(1);
   assert.equal(varbit(p, V.JIG_POS), 1, 'jig_pos a tick after the pull (tick 801)');
   ticks(14);
   assert.ok(cart(p).getLocation().equals(at(p, 1946, 5155, 2)), 'at the press after 15 steps');
   assert.equal(steps.length, 15, 'every step a teleport in view');
+  assert.ok(!steps.includes('jump'), 'sent with the jump flag clear');
   assert.equal(steps.at(-1), String(at(p, 1946, 5155, 2)));
   pull(p, 18640, 1950, 5153, 2);
   assert.equal(varbit(p, V.JIG_STATE), 3);

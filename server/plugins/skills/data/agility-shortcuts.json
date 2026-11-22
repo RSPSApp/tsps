@@ -3541,22 +3541,82 @@
     },
     {
       "name": "Crumbling wall (Gu'Tanoth)",
-      "object": [40355,40356],
-      "at": [[2546,3031,0],[2548,3031,0]],
+      "object": 40355,
+      "at": [2546,3031,0],
       "level": 71,
-      "unverified": "the movement and both ends (ends from the map); the quest refusal is the Watchtower capture's (Watchtower.bin t2718, t3283)",
+      "busy": true,
+      "keepAnimation": true,
+      "unverified": "this side's crossing (east, onto the rocks): the capture crosses west only, so it is the recorded crossing reversed; the climbing walk's render (the capture's appearance updates carry no ids; ours is human_climbing, as crawlUp's)",
+      "note": "Watchtower capture: before the quest the City guard's line, then on its continue the game message (t2713-2718); the crossing as Rocks (Gu'Tanoth)",
       "requires": [
         {
           "skills": {"agility":71},
-          "quest": {"key":"watchtower","message":"You will need to complete the Watchtower quest before you can use this shortcut."}
+          "quest": {"key":"watchtower","message":{"npc":{"id":4373,"name":"City guard","text":"Hey, you can't go climbing all over the city! Use the path!","expression":615,"then":"You will need to complete the Watchtower quest before you can use this shortcut."}}}
         }
       ],
       "between": {
         "ends": [[2545,3031,0],[2549,3031,0]],
-        "cross": [
-          {"move":"to","anim":"CLIMB_ROCKS","speed":[0,120],"ticks":4},
-          {"anim":-1}
-        ]
+        "cross": {
+          "forward": [
+            {"wait":2},
+            {"sound":2453,"delay":40},
+            {"move":[2546,3031,0],"anim":"CRUMBLED_WALL","delay":30,"speed":[30,100],"dir":"east","ticks":3},
+            {"sound":2454,"loops":4},
+            {"render":"CRAWL_UP_ROCKS"},
+            {"walk":[[2547,3031],[2548,3031],[2549,3031]],"arrive":true},
+            {"render":null}
+          ],
+          "back": [
+            {"wait":2},
+            {"sound":2454,"loops":4},
+            {"render":"CRAWL_UP_ROCKS"},
+            {"walk":[[2548,3031],[2547,3031],[2546,3031]],"arrive":true},
+            {"render":null},
+            {"wait":1},
+            {"sound":2453,"delay":40},
+            {"move":[2545,3031,0],"anim":"CRUMBLED_WALL","delay":30,"speed":[30,100],"dir":"west","ticks":3}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Rocks (Gu'Tanoth)",
+      "object": 40356,
+      "at": [2548,3031,0],
+      "level": 71,
+      "busy": true,
+      "keepAnimation": true,
+      "unverified": "the climbing walk's render (the capture's appearance updates carry no ids; ours is human_climbing, as crawlUp's); the eastward crossing (Crumbling wall (Gu'Tanoth)) is this one reversed",
+      "note": "Watchtower capture: before the quest the Ogre guard's line, then on its continue the game message (t3280-3283); after it (t6209-6217) busy a tick after arrival, then a walk west over the rocks to 2546,3031 with climbing_loop x4 and the movement render changed and back, an exact move onto 2545,3031 (cycles 30-100, west) with human_walk_crumbledwall (delay 30) and climb_wall (delay 40), free 3 ticks later; no message, no XP (Wiki: 0)",
+      "requires": [
+        {
+          "skills": {"agility":71},
+          "quest": {"key":"watchtower","message":{"npc":{"id":4369,"name":"Ogre guard","text":"Hey, you can't go climbing all over the city! Use the path!","expression":615,"then":"You will need to complete the Watchtower quest before you can use this shortcut."}}}
+        }
+      ],
+      "between": {
+        "ends": [[2545,3031,0],[2549,3031,0]],
+        "cross": {
+          "forward": [
+            {"wait":2},
+            {"sound":2453,"delay":40},
+            {"move":[2546,3031,0],"anim":"CRUMBLED_WALL","delay":30,"speed":[30,100],"dir":"east","ticks":3},
+            {"sound":2454,"loops":4},
+            {"render":"CRAWL_UP_ROCKS"},
+            {"walk":[[2547,3031],[2548,3031],[2549,3031]],"arrive":true},
+            {"render":null}
+          ],
+          "back": [
+            {"wait":2},
+            {"sound":2454,"loops":4},
+            {"render":"CRAWL_UP_ROCKS"},
+            {"walk":[[2548,3031],[2547,3031],[2546,3031]],"arrive":true},
+            {"render":null},
+            {"wait":1},
+            {"sound":2453,"delay":40},
+            {"move":[2545,3031,0],"anim":"CRUMBLED_WALL","delay":30,"speed":[30,100],"dir":"west","ticks":3}
+          ]
+        }
       }
     },
     {

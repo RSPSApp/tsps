@@ -78,6 +78,8 @@ let ChatType;
 let Sounds;
 let StatementDialogue;
 let ItemStatementDialogue;
+let NpcDialogue;
+let ActionDialogue;
 let DialogueChainBuilder;
 let Location;
 let Animation;
@@ -93,7 +95,7 @@ let ObstacleTask = null;
 function init(api) {
   TaskManager = api.getTaskManager();
   ({ Location, Animation, Graphic, Direction, Flag, ForceMovement, HitDamage, HitMask } = api.core);
-  ({ ChatType, Sounds, StatementDialogue, ItemStatementDialogue, DialogueChainBuilder } = api.core);
+  ({ ChatType, Sounds, StatementDialogue, ItemStatementDialogue, NpcDialogue, ActionDialogue, DialogueChainBuilder } = api.core);
   ObstacleTask = createObstacleTask(api.core.Task);
 }
 
@@ -129,8 +131,10 @@ function animate(player, id, delay = 0) {
 /**
  * An obstacle's message: a string is a game message, `{ spam: text }` goes to the filterable spam
  * channel, `{ mesbox: text }` is a message box (live sends most obstacle lines as spam), and
- * `{ itembox: { item, text } }` is a message box showing an item, its text logged as live does.
- * A list sends each in turn (a spam line, then a game message).
+ * `{ itembox: { item, text } }` is a message box showing an item, its text logged as live does, and
+ * `{ npc: { id, name?, text, expression?, then? } }` is a line said by that NPC's chathead, with `then`
+ * (any of these) sent once the player continues it. A list sends each in turn (a spam line, then a
+ * game message).
  */
 function sendMessage(player, message) {
   if (Array.isArray(message)) {
@@ -144,6 +148,15 @@ function sendMessage(player, message) {
   } else if (message?.itembox) {
     const { item, text } = message.itembox;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, item, text)));
+  } else if (message?.npc) {
+    const { id, name, text, expression, then } = message.npc;
+    const chain = new DialogueChainBuilder().add(new NpcDialogue(0, id, text, name, expression));
+    // On the continue the line closes and `then` follows on the same tick (Gu'Tanoth's guards, Watchtower capture t2718).
+    if (then != null) chain.add(new ActionDialogue(1, { execute: () => {
+      player.getPacketSender().sendInterfaceRemoval();
+      sendMessage(player, then);
+    } }));
+    player.getDialogueManager().startDialogues(chain);
   }
 }
 

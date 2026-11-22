@@ -856,3 +856,78 @@ test("review round 9: the counter's cakes only from the quest's part on, empty f
   assert.equal(count(m, I.VIAL_4), 0);
   assert.ok(messages(m).includes("You mixed the ingredients incorrectly and the mixture exploded."));
 });
+
+const { NpcAggression } = require("../dist/game/entity/impl/npc/NpcAggression");
+const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+const OGRE = 2095;
+const CHIEFS_OGRE = 2096;
+/** An ogre spawned beside the player, its aggression run as the player's tick does. */
+function hunts(f, id, tile) {
+  const ogre = h.spawn(f, id, tile);
+  f.player.getLocalNpcs = () => [ogre];
+  h.tick(f);
+  NpcAggression.process(f.player);
+  return ogre.getCombat().getTarget() === f.player;
+}
+
+test("#6536: the chiefs' ogres (2096) don't hunt at Og's, Grew's, Toban's or in Gu'Tanoth; the plain ogres (2095) do (t1053-1266, t2487)", async (t) => {
+  // The monster dump's "aggressive" (both ids true, from the Wiki's shared infobox); the harness doesn't load it.
+  new NpcDefinitionLoader().load();
+  assert.equal(h.core.NpcDefinition.forId(CHIEFS_OGRE).isAggressive(), true);
+  for (const [player, ogre] of [[[2506, 3112], [2505, 3111]], [[2512, 3085], [2513, 3087]], [[2573, 3029], [2572, 3031]], [[2525, 3041], [2526, 3039]]]) {
+    const f = actor(t, { at: [...player, 0], stage: S.NAILS });
+    assert.equal(hunts(f, CHIEFS_OGRE, [...ogre, 0]), false, `ogre2 at ${ogre}`);
+    assert.equal(f.player.getArea()?.getName?.(), "Watchtower ogre camps", JSON.stringify(player));
+  }
+  for (const [player, ogre] of [[[2502, 3094], [2503, 3095]], [[2514, 3024], [2513, 3026]]]) {
+    const f = actor(t, { at: [...player, 0], stage: S.NAILS });
+    assert.equal(hunts(f, OGRE, [...ogre, 0]), true, `ogre at ${ogre}`);
+  }
+});
+
+test("#6536: Og's \"Guards!\" still sends one of his ogres (t1053)", async (t) => {
+  const f = actor(t, { at: [2506, 3113, 0], stage: S.NAILS });
+  const og = h.spawn(f, N.OG, [2507, 3114, 0]);
+  const ogre = h.spawn(f, CHIEFS_OGRE, [2504, 3114, 0]);
+  const said = await talk(f, og, ["I have come to kill you."]);
+  assert.ok(said.some((line) => line.endsWith("Guards!")), said.join("\n"));
+  h.tick(f);
+  assert.equal(ogre.getCombat().getTarget(), f.player);
+});
+
+const wall = { WALL: 40355, ROCKS: 40356, WEST: [2545, 3031, 0], EAST: [2549, 3031, 0] };
+const REFUSAL = "You will need to complete the Watchtower quest before you can use this shortcut.";
+
+test("#6536: before the quest the Gu'Tanoth shortcut's guard speaks first, the message on its continue (t2713-2718, t3280-3283)", async (t) => {
+  for (const [from, id, tile, speaker, npc] of [[wall.WEST, wall.WALL, [2546, 3031], "City guard", N.CITY_GUARD], [wall.EAST, wall.ROCKS, [2548, 3031], "Ogre guard", N.EAST_GUARD]]) {
+    const f = actor(t, { at: from, stage: S.MAP, levels: 75 });
+    await h.clickObject(f, id, tile);
+    const line = h.shown(f);
+    assert.deepEqual([line?.who, line?.text, line?.npcId], [speaker, "Hey, you can't go climbing all over the city! Use the path!", npc]);
+    const head = f.calls.find((c) => c.name === "sendNpcHeadOnInterface");
+    assert.equal(head?.args[0], npc);
+    assert.ok(!messages(f).includes(REFUSAL), "the message waits for the continue");
+    await h.continueLine(f);
+    assert.ok(messages(f).includes(REFUSAL), JSON.stringify(messages(f)));
+    assert.equal(f.player.getPacketSender().getChatboxGroupId(), -1, "the chat closes with the message");
+    assert.deepEqual(at(f), from);
+  }
+});
+
+test("#6536: after the quest the rocks: a climbing walk west with climbing_loop, then the crumbled wall's exact move (t6209-6217)", async (t) => {
+  const f = actor(t, { at: wall.EAST, stage: S.COMPLETE, levels: 75 });
+  await click(f, wall.ROCKS, [2548, 3031]);
+  const path = [];
+  for (let i = 0; i < 12; i++) { path.push(at(f)[0]); h.tick(f); }
+  const sounds = f.calls.filter((c) => c.name === "sendSoundEffect").map((c) => [c.args[0], c.args[1], c.args[2]]);
+  assert.deepEqual(sounds.filter(([id]) => id === 2454 || id === 2453), [[2454, 4, 0], [2453, 1, 40]]);
+  assert.ok(f.animations.some((a) => a.id === 840), JSON.stringify(f.animations));
+  assert.deepEqual(at(f), wall.WEST);
+  assert.ok(path.includes(2548) && path.includes(2547) && path.includes(2546), JSON.stringify(path));
+  assert.equal(f.player.getSkillAnimation(), -1, "the climbing render is restored");
+
+  const g = actor(t, { at: wall.WEST, stage: S.COMPLETE, levels: 75 });
+  await click(g, wall.WALL, [2546, 3031]);
+  h.ticks(g, 12);
+  assert.deepEqual(at(g), wall.EAST);
+});

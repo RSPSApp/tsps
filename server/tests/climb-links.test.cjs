@@ -52,6 +52,18 @@ test("a staircase leads to the top of the stairs, not straight up (Juliet's hous
     assert.ok(downY === 3435 || downY === 3436);
 });
 
+test("Braindeath Island's brewery stairs land on the floor, not the walled pocket at their head (issue #6499; Rum Deal capture)", () => {
+    // Each stair head has a one-tile pocket beside it that a player cannot step off; the nearest
+    // usable tile to the climber used to be that pocket. RumDeal.bin: up from 2152,5088,0 lands on
+    // 2149,5089,1 (tick 1194), up from 2150,5109,0 on 2153,5108,1 (2998).
+    assert.deepEqual(lands(mapObject(2149, 5088, 0, 10136), ClimbLinks.UP, new Location(2152, 5088, 0)), [2149, 5089, 1]);
+    assert.deepEqual(lands(mapObject(2151, 5109, 0, 10136), ClimbLinks.UP, new Location(2150, 5109, 0)), [2153, 5108, 1]);
+    // Down: 2152,5088,0 (tick 711), 2166,5088,0 (3148), and the north stairs' own west tile (2986).
+    assert.deepEqual(lands(mapObject(2149, 5088, 1, 10137), ClimbLinks.DOWN, new Location(2149, 5089, 1)), [2152, 5088, 0]);
+    assert.deepEqual(lands(mapObject(2163, 5088, 1, 10137), ClimbLinks.DOWN, new Location(2163, 5089, 1)), [2166, 5088, 0]);
+    assert.deepEqual(lands(mapObject(2153, 5109, 1, 10137), ClimbLinks.DOWN, new Location(2153, 5108, 1)), [2151, 5109, 0]);
+});
+
 test("a trapdoor leads underground, 6400 tiles north, and the ladder there back up (Lumbridge castle)", () => {
     assert.deepEqual(lands(mapObject(3209, 3216, 0, 14880), ClimbLinks.DOWN, new Location(3209, 3217, 0)), [3209, 9617, 0]);
     assert.deepEqual(lands(mapObject(3209, 9616, 0, 17385), ClimbLinks.UP, new Location(3208, 9616, 0)), [3210, 3216, 0]);

@@ -44,6 +44,18 @@
       "down": { "id": 15648, "x": 2571, "y": 3295, "z": 1 },
       "landing": { "x": 2571, "y": 3294, "z": 1 },
       "downLanding": { "x": 2571, "y": 3298, "z": 0 }
+    },
+    {
+      "name": "Braindeath Island brewery, north stairs (Rum Deal capture RumDeal.bin: down lands on 2151,5109,0 at tick 2986, the stairs' own west tile, where the search picks 2150,5109; up from 2150,5109,0 lands on 2153,5108,1 at 2998)",
+      "up": { "id": 10136, "x": 2151, "y": 5109, "z": 0 },
+      "down": { "id": 10137, "x": 2153, "y": 5109, "z": 1 },
+      "landing": { "x": 2153, "y": 5108, "z": 1 },
+      "downLanding": { "x": 2151, "y": 5109, "z": 0 }
     }
-  ]
+  ],
+  "messages": {
+    "$comment": "Game messages a climb sends as the player lands, by loc id (Rum Deal capture RumDeal.bin: every climb of the brewery's Wooden Stairs).",
+    "10136": "You climb up the stairs.",
+    "10137": "You climb down the stairs."
+  }
 }

@@ -2183,22 +2183,36 @@ module.exports = function registerLunarDiplomacyQuest(api) {
     return true;
   }
 
+  /** Shared by the spade-on-flowers click and the spade's Dig option at the ring spot. */
+  function digUpRing(player) {
+    if (!stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING)) {
+      return reject(player, "You have no reason to dig up the Moon Clan's flowers.");
+    }
+    if (held(player, LUNAR_RING) || oneiroGiven(player).ring) {
+      return reject(player, "You already have the lunar ring.");
+    }
+    if (!hasFreeSlots(player)) return reject(player, "You need a free inventory space for the lunar ring.");
+    startTranscript(api, player, SELENE_ID, PAGE, "obtaining-the-lunar-clothing-digging-up-the-lunar-ring");
+    player.getInventory().adds(LUNAR_RING, 1);
+  }
+
+  /** Wiki (Lunar Diplomacy): dig with a spade on the blue flowers at the south-west of the island. */
+  function digForRing(event) {
+    const { player } = event;
+    if (event.itemId !== SPADE) return false;
+    if (String(event.option ?? "").toLowerCase() !== "dig") return false;
+    if (!nearTile(event.location ?? player.getLocation(), RING_TILE, 2)) return false;
+    event.handled = true;
+    return digUpRing(player);
+  }
+
   function handleItemOnObject(event) {
     const { player, itemId } = event;
     const objectId = resolvedObjectId(event);
 
     if (itemId === SPADE && objectId === RING_FLOWERS && nearTile(event.location, RING_TILE, 2)) {
       event.handled = true;
-      if (!stageBetween(player, STAGE_STAFF_GIVEN, STAGE_KINDLING)) {
-        return reject(player, "You have no reason to dig up the Moon Clan's flowers.");
-      }
-      if (held(player, LUNAR_RING) || oneiroGiven(player).ring) {
-        return reject(player, "You already have the lunar ring.");
-      }
-      if (!hasFreeSlots(player)) return reject(player, "You need a free inventory space for the lunar ring.");
-      startTranscript(api, player, SELENE_ID, PAGE, "obtaining-the-lunar-clothing-digging-up-the-lunar-ring");
-      player.getInventory().adds(LUNAR_RING, 1);
-      return;
+      return digUpRing(player);
     }
 
     if (itemId === LUNAR_VIAL_EMPTY && (objectId === WATER_SOURCE || SINK_IDS.has(objectId))) {
@@ -2690,6 +2704,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   api.onObjectRoute(routeShipStairs);
   api.onItemOnItem(handleItemOnItem, { noted: false });
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onItemAction("Spade", { Dig: digForRing });
   api.onObjectInteraction("Stalagmite", { Mine: mineStalagmite });
   api.onObjectInteraction("Stalagmites", { Mine: mineStalagmite });
   api.onObjectInteraction("My life", { Read: readMyLife });

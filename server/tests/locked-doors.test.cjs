@@ -49,9 +49,10 @@ before(async () => {
   for (const { at } of CASES) RegionManager.loadMapFiles(at[0], at[1]);
   const api = PluginManager.createApi("LockedDoorsTest");
   const startup = [];
+  // Load order as on the server: Doors, then LockedDoors, then their startup hooks in that order.
   Doors.register({ ...api, onServerStartup: (handler) => startup.push(handler) });
+  LockedDoors.register({ ...api, onServerStartup: (handler) => startup.push(handler) });
   startup.forEach((handler) => handler());
-  LockedDoors.register(api);
   packet = new ObjectActionPacketListener();
 });
 
@@ -129,8 +130,53 @@ test("every listed loc resolves to a cache loc whose Open reaches the door plugi
   }
 });
 
-test("the unlocked cell door beside them still opens", () => {
-  const request = { player: player([3013, 3189, 0]), objectId: core.CacheDefinitions.getLocId("prisonbarsdoor"), handled: false };
-  LockedDoors._test.refuseLockedDoor(request);
-  assert.equal(request.handled, false);
+test("an unlocked Neitiznot house door (frisb_abode_door, 2339,3801) still opens", () => {
+  const id = core.CacheDefinitions.getLocId("frisb_abode_door");
+  const at = [2339, 3801, 0];
+  assert.ok(MapObjects.get(id, new Location(...at), null), "the map has frisb_abode_door at 2339,3801");
+  const actor = player([2339, 3800, 0]);
+  open(actor, id, at);
+  assert.deepEqual(actor.messages, []);
+  assert.ok(idsAt(at).includes(core.CacheDefinitions.getLocId("frisb_abode_door_open")), "its open leaf spawns");
 });
+
+/**
+ * Real routing: the click, then the player's processing each cycle. The first cycle is the click
+ * tick's own (packets are read before players are processed), so the reply's tick is cycle - 1.
+ */
+function clickAndRun(actor, id, at, ticks = 8) {
+  actor.setNeedsPlacement(false);
+  packet.executeAction(actor, id, at[0], at[1], undefined, "Open");
+  let replied = null;
+  let face = null;
+  for (let cycle = 1; cycle <= ticks && replied == null; cycle++) {
+    actor.setNeedsPlacement(false);
+    actor.getMovementQueue().process();
+    core.TaskManager.process();
+    core.TaskManager.processWalkTo(actor.getIndex());
+    if (actor.messages.length || actor.texts.some((t) => t.uid === MESSAGEBOX_TEXT)) {
+      replied = cycle - 1;
+      face = actor.getPositionToFace?.();
+    }
+  }
+  core.TaskManager.cancelTasks(actor.getIndex());
+  return { replied, at: [actor.getLocation().getX(), actor.getLocation().getY()], face: face ? [face.getX(), face.getY()] : null };
+}
+
+// Recorded start tiles. rsprox 323 tick 4897: idle at 3012,3196, the reply on the click tick;
+// tick 4202: one step 3012,3187 -> 3188, the reply the next tick. local 1000321 tick 11928:
+// 2349,3801 -> 2348,3801, then the reply. rec 1695 tick 2556: walks to 1500,3222.
+const ROUTES = [
+  { loc: "prisonbarsdoor_locked", at: [3012, 3195, 0], from: [3012, 3196, 0], end: [3012, 3196], tick: 0 },
+  { loc: "prisonbarsdoor_locked", at: [3012, 3189, 0], from: [3012, 3187, 0], end: [3012, 3188], tick: 1 },
+  { loc: "frisb_abode_door_locked", at: [2347, 3801, 0], from: [2349, 3801, 0], end: [2348, 3801], tick: 1 },
+  { loc: "fortis_door_l_locked", at: [1500, 3223, 0], from: [1500, 3221, 0], end: [1500, 3222], tick: 1 },
+];
+
+for (const r of ROUTES) {
+  test(`from ${r.from.slice(0, 2)} the ${r.loc} at ${r.at.slice(0, 2)} answers from ${r.end} on tick ${r.tick}, facing it`, () => {
+    const actor = player(r.from);
+    const result = clickAndRun(actor, core.CacheDefinitions.getLocId(r.loc), r.at);
+    assert.deepEqual(result, { replied: r.tick, at: r.end, face: r.at.slice(0, 2) });
+  });
+}

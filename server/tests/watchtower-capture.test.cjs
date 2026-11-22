@@ -931,3 +931,13 @@ test("#6536: after the quest the rocks: a climbing walk west with climbing_loop,
   h.ticks(g, 12);
   assert.deepEqual(at(g), wall.EAST);
 });
+
+test("#6536: a logout mid-crossing saves the player on an end tile, not on the rocks, whatever cancels the crossing first", async (t) => {
+  const f = actor(t, { at: wall.EAST, stage: S.COMPLETE, levels: 75 });
+  await click(f, wall.ROCKS, [2548, 3031]);
+  h.ticks(f, 4);
+  assert.ok([2546, 2547, 2548].includes(at(f)[0]), `on the rocks before logout: ${at(f)}`);
+  f.player.onLogout();
+  assert.deepEqual(at(f), wall.WEST);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked?.() ?? false, false);
+});

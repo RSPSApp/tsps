@@ -416,10 +416,16 @@ function createObstacleTask(Task) {
       this.complete(completed);
     }
 
-    /** Anything that cancels this task (teleports, logout sweeps) must still unlock the player. */
+    /**
+     * Anything that cancels this task (teleports, logout sweeps) must still unlock the player. A sweep
+     * during logout (another plugin's hook or the core's cancel, which can run before Agility's own
+     * logout hook) lands the player as the logout hook would, so they are never saved mid-obstacle on
+     * a tile they can't walk off (Gu'Tanoth's rocks).
+     */
     stop() {
       if (!this.finished) {
-        this.finish(false);
+        if (this.player.isLoggingOut?.()) this.fastForward();
+        else this.finish(false);
         return;
       }
       super.stop();

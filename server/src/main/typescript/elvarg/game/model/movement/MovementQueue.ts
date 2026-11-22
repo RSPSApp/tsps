@@ -113,8 +113,8 @@ export class MovementQueue {
     private alternativeRoute = false;
     /** The next queued step may ignore a spell freeze, but no other movement lock. */
     private forceOneStepThroughFreeze = false;
-    /** A scripted step taken while held (stepWhileHeld); a reset does not drop it. */
-    private heldStep: Location | null = null;
+    /** A scripted step taken while held (stepWhileHeld), from wherever the player then stands; a reset does not drop it. */
+    private heldStep: { dx: number; dy: number } | null = null;
     /** Pre-step check of the current walk-to (re-pathing to an NPC, re-validating a loc). */
     private entityPursuit: (() => void) | null = null;
     /**
@@ -265,7 +265,7 @@ export class MovementQueue {
      */
     public stepWhileHeld(x: number, y: number): boolean {
         if (Math.max(Math.abs(x), Math.abs(y)) !== 1) return false;
-        this.heldStep = this.character.getLocation().transform(x, y);
+        this.heldStep = { dx: x, dy: y };
         return true;
     }
 
@@ -573,9 +573,9 @@ export class MovementQueue {
         const heldStep = this.heldStep;
         this.heldStep = null;
         if (heldStep) {
-            const at = this.character.getLocation();
             this.points.clear();
-            this.points.push(new Point(heldStep, Direction.fromDeltas(heldStep.getX() - at.getX(), heldStep.getY() - at.getY())));
+            this.points.push(new Point(this.character.getLocation().transform(heldStep.dx, heldStep.dy),
+                Direction.fromDeltas(heldStep.dx, heldStep.dy)));
         }
         if (this.externalMovementUntil > Date.now()) {
             this.isMoving = this.getMobility().canMove();

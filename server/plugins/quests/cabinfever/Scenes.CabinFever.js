@@ -97,6 +97,8 @@ module.exports = function createCabinFeverScenes(api, { onBook, onFinished } = {
   const Scenes = createQuestScenes(api, { onEnd: sceneEnded, recoveryAttribute: EXIT_ATTRIBUTE });
   /** Players between the third hole and the quest's completion. */
   const playing = new WeakSet();
+  /** Players the scene itself is putting back on the real map (tick 178). */
+  const leaving = new WeakSet();
 
   function lines() {
     const steps = loadTranscripts(api)?.[PAGE]?.variants?.[VARIANT];
@@ -197,7 +199,9 @@ module.exports = function createCabinFeverScenes(api, { onBook, onFinished } = {
 
   function leaveInn(player) {
     player.getPacketSender().sendInterfaceRemoval();
+    leaving.add(player);
     Scenes.end(player, false);
+    leaving.delete(player);
     Scenes.face(player, [INN.at[0] - 1, INN.at[1]]);
     // Live keeps the player in the cutscene five more ticks behind the fade (2302-2307).
     player.getMovementQueue().reset().setBlockMovement(true);
@@ -215,10 +219,17 @@ module.exports = function createCabinFeverScenes(api, { onBook, onFinished } = {
     onFinished?.(player);
   }
 
-  /** A logout in the inn finishes the quest: the player comes back at the inn (the scene's exit). */
+  /**
+   * A logout in the inn finishes the quest: the player comes back at the inn (the scene's exit).
+   * Ours: so does any other early end (a death), with the scene's settings and tabs put back.
+   */
   function sceneEnded(player, scene, logout) {
-    if (scene?.name !== SCENE || !logout) return;
+    if (scene?.name !== SCENE || leaving.has(player)) return;
     sendSceneVars(player, false);
+    if (!logout) {
+      Scenes.restoreTabs(player);
+      Scenes.closeFade(player);
+    }
     finish(player);
   }
 

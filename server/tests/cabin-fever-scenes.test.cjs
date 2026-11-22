@@ -203,6 +203,24 @@ test('with a full inventory the book waits for the real map, and only one is giv
   }
 });
 
+test('a death inside the inn (ours) still completes the quest and puts the scene settings back', (t) => {
+  const { p, tick } = sinkShip(t);
+  tick(40);
+  assert.ok(p.getArea() instanceof core.TemplatedInstanceArea);
+  const { PlayerDeathTask } = require('../dist/game/task/impl/PlayerDeath');
+  p.setHitpoints(0);
+  core.TaskManager.submit(new PlayerDeathTask(p));
+  for (let i = 0; i < 15; i++) core.World.process();
+  const sender = p.getPacketSender();
+  assert.equal(quest.isComplete(p), true, 'not left at a sunk ship');
+  assert.equal(sender.getVarbit(core.CacheDefinitions.getVarbitId('fov_clamp')), 0);
+  assert.equal(sender.getVarp(core.CacheDefinitions.getVarpId('areasounds_override')), 0);
+  assert.equal(sender.getVarbit(542), 0, 'cutscene_status');
+  assert.equal(p.getInventory().getAmount(core.ItemIdentifiers.BOOK_O_PIRACY)
+    + core.World.getItems().filter((item) => item.getItem().getId() === core.ItemIdentifiers.BOOK_O_PIRACY
+      && item.getOwner() === p.getUsername()).length, 1, 'one book');
+});
+
 test('a logout inside the inn completes the quest and saves the player at the inn', (t) => {
   const { p, tick } = sinkShip(t);
   tick(40);

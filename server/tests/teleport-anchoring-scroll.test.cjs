@@ -1,6 +1,8 @@
 // Run after `yarn build`: node --test tests/teleport-anchoring-scroll.test.cjs
 // Native captures 4099, 4093 and 1143 (rev 237): an accurate player hit (including zero) first
-// rolls an Abyssal demon self-teleport at 1/6, then the player teleport at 1/3. Item dialogue,
+// rolls an Abyssal demon self-teleport at 1/6, then the player teleport at 1/3. Landing (#6496,
+// rsprox captures 96, 97, 1885, 4099, local 1000230 and others): the teleported party lands next to
+// the other, on any of the eight sides, never more than the Wiki's 20 tiles away. Item dialogue,
 // quantity and relog are exercised through the live server's agent MCP for this change.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
@@ -20,8 +22,8 @@ before(async () => {
   core.RegionManager.loadMapFiles(3222, 3218);
 });
 
-function mobile(id, player = false) {
-  let location = new core.Location(3222, 3218, 0);
+function mobile(id, player = false, at = [3222, 3218, 0]) {
+  let location = new core.Location(...at);
   const graphics = [], animations = [];
   let resets = 0;
   const value = {
@@ -57,7 +59,7 @@ test("an accurate hit rolls the demon self-teleport before the player teleport",
   assert.equal(player.graphics[0], 409);
   assert.equal(demon.animations.at(-1), 2309);
   assert.equal(player.resets(), 1, "the displaced player's combat ends");
-  assert.ok(new core.Location(...player.position()).getDistance(new core.Location(3222, 3218, 0)) <= 20);
+  assert.equal(chebyshev(player.position(), demon.position()), 1, "the player lands next to the demon");
   assert.equal(player.position()[2], 0, "the landing stays on the same plane");
 });
 
@@ -65,13 +67,15 @@ test("a successful demon roll teleports it and suppresses the later player roll"
   const player = mobile(0, true), demon = mobile(415);
   const rolls = [0, 0];
   const bounds = [];
+  t.mock.method(core.RegionManager, "canMove", () => true);
   t.mock.method(core.Misc, "getRandom", (max) => { bounds.push(max); return rolls.shift(); });
 
   anchoring._test.onHitResolved({ attacker: player, target: demon, hit: { isAccurate: () => true } });
 
-  assert.deepEqual(bounds, [5, 41], "only the demon roll and its landing choice are drawn");
+  assert.deepEqual(bounds, [5, 7], "only the demon roll and its choice of the eight tiles are drawn");
   assert.equal(demon.graphics[0], 409);
   assert.equal(demon.animations[0], 2309);
+  assert.equal(chebyshev(demon.position(), player.position()), 1, "the demon lands next to the player");
   assert.deepEqual(player.position(), [3222, 3218, 0]);
 });
 
@@ -100,16 +104,59 @@ test("inaccurate hits and non-player attackers do not trigger a teleport", (t) =
   assert.deepEqual(demon.animations, []);
 });
 
-test("player displacement can reach twenty tiles", (t) => {
-  const player = mobile(0, true), demon = mobile(415);
-  const origin = new core.Location(...player.position());
-  t.mock.method(core.RegionManager, "canMove", () => true);
-  t.mock.method(core.Misc, "getRandom", (max) => max === 5 ? 1 : max === 2 ? 0 : max);
+function chebyshev(a, b) {
+  return Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]));
+}
 
+function teleportPlayer(t, player, demon, pick = () => 0) {
+  t.mock.method(core.Misc, "getRandom", (max) => max === 5 ? 1 : max === 2 ? 0 : pick(max));
   anchoring._test.onHitResolved({ attacker: player, target: demon, hit: { isAccurate: () => true } });
+}
 
-  assert.equal(origin.getDistance(new core.Location(...player.position())), 20);
-  assert.deepEqual(demon.position(), [3222, 3218, 0]);
+test("a player attacking from range is pulled next to the demon, not up to twenty tiles away", (t) => {
+  t.mock.method(core.RegionManager, "canMove", () => true);
+  for (let pick = 0; pick < 8; pick++) {
+    const player = mobile(0, true, [3222, 3218, 0]), demon = mobile(415, false, [3227, 3221, 0]);
+    teleportPlayer(t, player, demon, () => pick);
+    assert.equal(chebyshev(player.position(), demon.position()), 1, `choice ${pick} touches the demon`);
+    assert.equal(player.resets(), 1);
+  }
+});
+
+test("all eight sides are offered, except the tile the player already stands on", (t) => {
+  t.mock.method(core.RegionManager, "canMove", () => true);
+  const demon = mobile(415, false, [3227, 3221, 0]);
+  const around = (at) => anchoring._test.landingTiles(mobile(0, true, at), demon).map((l) => [l.getX() - 3227, l.getY() - 3221]);
+
+  assert.equal(new Set(around([3222, 3218, 0]).map(String)).size, 8);
+  assert.deepEqual(around([3226, 3221, 0]).some(([x, y]) => x === -1 && y === 0), false, "the current tile is not a landing");
+  assert.equal(around([3226, 3221, 0]).length, 7);
+});
+
+test("a demon more than twenty tiles away cannot pull the player, and a wall between keeps that side out", (t) => {
+  const steps = [];
+  t.mock.method(core.RegionManager, "canMove", (fromX, fromY, toX, toY) => {
+    steps.push([fromX, fromY, toX, toY]);
+    return toX !== 3226; // a wall along the demon's west side
+  });
+  const far = mobile(0, true, [3200, 3221, 0]), demon = mobile(415, false, [3227, 3221, 0]);
+  assert.deepEqual(anchoring._test.landingTiles(far, demon), [], "every side is over 20 tiles from the player");
+
+  teleportPlayer(t, far, demon);
+  assert.deepEqual(far.position(), [3200, 3221, 0]);
+  assert.equal(far.resets(), 0, "nothing moved, so combat carries on");
+
+  const near = mobile(0, true, [3222, 3218, 0]);
+  const tiles = anchoring._test.landingTiles(near, demon).map((l) => [l.getX(), l.getY()]);
+  assert.equal(tiles.length, 5);
+  assert.ok(tiles.every(([x]) => x !== 3226));
+  assert.ok(steps.every(([fx, fy, tx, ty]) => chebyshev([fx, fy], [3227, 3221]) === 0 && chebyshev([tx, ty], [3227, 3221]) === 1),
+    "each side is checked as a step out from the demon");
+});
+
+test("a different plane offers no landing", () => {
+  const player = mobile(0, true, [3222, 3218, 1]), demon = mobile(415, false, [3227, 3221, 0]);
+  assert.deepEqual(anchoring._test.landingTiles(player, demon), []);
 });
 
 test("the saved unlock vetoes only the two Elder Chaos druid pull variants", () => {

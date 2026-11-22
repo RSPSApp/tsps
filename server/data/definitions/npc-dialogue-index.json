@@ -41400,7 +41400,8 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
-        "ogre-investigations-grew-facing-gorad"
+        "ogre-investigations-grew-facing-gorad",
+        "ogre-investigations-grew-talking-to-gorad-after-getting-his-tooth"
       ]
     }
   ],
@@ -41415,7 +41416,11 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-gu-tanoth-east-gate-guard",
         "entering-gu-tanoth-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again",
+        "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic",
         "entering-gu-tanoth-ogre-guard",
         "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again",
         "entering-gu-tanoth-talking-to-the-southern-ogre-guard",
@@ -41434,7 +41439,11 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-gu-tanoth-east-gate-guard",
         "entering-gu-tanoth-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again",
+        "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic",
         "entering-gu-tanoth-ogre-guard",
         "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again",
         "entering-gu-tanoth-talking-to-the-southern-ogre-guard",
@@ -41453,7 +41462,11 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-gu-tanoth-east-gate-guard",
         "entering-gu-tanoth-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again",
+        "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic",
         "entering-gu-tanoth-ogre-guard",
         "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again",
         "entering-gu-tanoth-talking-to-the-southern-ogre-guard",
@@ -41472,7 +41485,11 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-gu-tanoth-east-gate-guard",
         "entering-gu-tanoth-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again",
+        "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic",
         "entering-gu-tanoth-ogre-guard",
         "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again",
         "entering-gu-tanoth-talking-to-the-southern-ogre-guard",
@@ -41491,7 +41508,11 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-gu-tanoth-east-gate-guard",
         "entering-gu-tanoth-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again",
+        "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic",
         "entering-gu-tanoth-ogre-guard",
         "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again",
         "entering-gu-tanoth-talking-to-the-southern-ogre-guard",
@@ -41514,7 +41535,7 @@
         "entering-gu-tanoth-seeking-passage",
         "entering-gu-tanoth-seeking-passage-talking-to-the-city-guard-again",
         "entering-gu-tanoth-seeking-passage-using-the-wrong-item-on-the-guard",
-        "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard",
+        "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard-or-talking-to-him-with-it",
         "entering-gu-tanoth-seeking-passage-talking-to-him-after-having-given-him-the-rune"
       ]
     }
@@ -41548,9 +41569,12 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "skavid-search-learning-skavid",
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-talking-to-a-skavid-again",
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41558,9 +41582,12 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "skavid-search-learning-skavid",
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-talking-to-a-skavid-again",
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41568,9 +41595,12 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "skavid-search-learning-skavid",
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-talking-to-a-skavid-again",
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41578,9 +41608,12 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "skavid-search-learning-skavid",
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-talking-to-a-skavid-again",
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41588,9 +41621,12 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "skavid-search-learning-skavid",
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-talking-to-a-skavid-again",
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41604,6 +41640,7 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-the-enclave-talking-to-an-enclave-guard-before-getting-the-mad-skavid-s-crystal",
         "entering-the-enclave-attempting-to-enter-the-ogre-enclave-before-distracting-the-guards",
         "entering-the-enclave-talking-to-an-enclave-guard",
         "entering-the-enclave-using-cave-nightshade-on-an-enclave-guard"
@@ -41616,7 +41653,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41626,7 +41664,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41636,7 +41675,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41646,7 +41686,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41656,7 +41697,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41666,7 +41708,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41686,8 +41729,10 @@
       "variants": [
         "getting-started-speaking-to-the-watchtower-wizard",
         "searching-for-evidence-talking-to-the-watchtower-wizard",
+        "searching-for-evidence-using-evidence-other-than-the-fingernails-on-the-watchtower-wizard",
         "ogre-investigations-talking-to-the-watchtower-wizard",
         "ogre-investigations-assembling-the-relic",
+        "ogre-investigations-using-a-crystal-on-the-watchtower-wizard",
         "ogre-investigations-talking-to-the-watchtower-wizard-again",
         "entering-gu-tanoth-talking-to-the-watchtower-wizard-after-gaining-access-to-the-city",
         "skavid-search-talking-to-the-watchtower-wizard-after-getting-the-skavid-map",
@@ -41695,6 +41740,7 @@
         "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible",
         "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible-talking-to-the-watchtower-wizard-again",
         "entering-the-enclave-talking-to-the-watchtower-wizard-after-making-the-potion",
+        "entering-the-enclave-talking-to-the-watchtower-wizard-before-killing-the-shamans",
         "entering-the-enclave-returning-to-the-watchtower-wizard-after-killing-the-shamans-without-mining-the-rock",
         "reviving-the-watchtower-talking-to-the-watchtower-wizard-with-all-the-crystals",
         "reviving-the-watchtower-talking-to-the-watchtower-wizard-again",

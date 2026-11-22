@@ -441,7 +441,7 @@ test('the extractor charges the primed bar and drains 20 Magic; the mind helmet 
   assert.deepEqual(sent, ['del 18690'], 'the hat goes as the player sits (tick 1372)');
   assert.ok(!idsAt(p, hat).includes(18690), 'and is gone from the scene');
   ticks(6);
-  assert.deepEqual(sent, ['del 18690', 'add 18690'], 'the hat is put back (loc_add_change, tick 1379; #6502)');
+  assert.deepEqual(sent, ['del 18690', 'add 18690'], 'the hat is put back (loc_add_change, tick 1378; #6502)');
   assert.ok(idsAt(p, hat).includes(18690));
   assert.equal(varbit(p, V.MIND_JIG), 2);
   assert.equal(stage(p), 10);

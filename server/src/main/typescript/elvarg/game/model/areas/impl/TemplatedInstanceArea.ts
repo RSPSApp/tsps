@@ -155,7 +155,11 @@ export class TemplatedInstanceArea extends PrivateArea {
         if (!this.inGrid(plane, chunkX, chunkY)) {
             throw new Error(`Chunk ${chunkX},${chunkY},${plane} is outside the ${this.widthChunks}x${this.heightChunks} instance.`);
         }
-        this.chunks[this.chunkIndex(plane, chunkX, chunkY)] = chunk ? { ...chunk, rotation: chunk.rotation & 3 } : null;
+        const index = this.chunkIndex(plane, chunkX, chunkY);
+        const next = chunk ? { ...chunk, rotation: chunk.rotation & 3 } : null;
+        // A different template copied over the chunk brings its own locs: earlier removals there lapse.
+        if (!sameChunk(this.chunks[index], next)) this.forgetRemovedLocs(plane, chunkX, chunkY);
+        this.chunks[index] = next;
         this.invalidate();
     }
 
@@ -260,10 +264,11 @@ export class TemplatedInstanceArea extends PrivateArea {
 
     /** The same template loc registered again (a tree grown back): found in the scene once more. */
     public override restoreTemplateObject(object: GameObject): void {
+        // Rebuild a stale index first, while the removal still keeps the loc out of it.
+        this.collision();
         for (const [key, loc] of this.removedLocs) {
             if (loc.object !== object) continue;
             this.removedLocs.delete(key);
-            this.collision();
             const index = this.tileIndex(loc.x, loc.y, loc.z);
             const list = this.locIndex.get(index);
             if (list) list.push(loc);
@@ -321,6 +326,17 @@ export class TemplatedInstanceArea extends PrivateArea {
             this.detach(loc.object);
         }
         return loc.object;
+    }
+
+    private forgetRemovedLocs(plane: number, chunkX: number, chunkY: number): void {
+        const minX = this.getBaseX() + chunkX * 8;
+        const minY = this.getBaseY() + chunkY * 8;
+        for (const [key, loc] of this.removedLocs) {
+            // A loc over a bridge sits a plane below the chunk it was copied from.
+            if ((loc.z === plane || loc.z === plane - 1) && loc.x >= minX && loc.x < minX + 8 && loc.y >= minY && loc.y < minY + 8) {
+                this.removedLocs.delete(key);
+            }
+        }
     }
 
     private inGrid(plane: number, chunkX: number, chunkY: number): boolean {
@@ -425,6 +441,12 @@ export class TemplatedInstanceArea extends PrivateArea {
             else this.locIndex.set(index, [placed]);
         }
     }
+}
+
+function sameChunk(a: TemplateChunk | null, b: TemplateChunk | null): boolean {
+    if (!a || !b) return a === b;
+    return a.sourceChunkX === b.sourceChunkX && a.sourceChunkY === b.sourceChunkY
+        && a.sourcePlane === b.sourcePlane && a.rotation === b.rotation;
 }
 
 function removedKey(loc: PlacedLoc): string {

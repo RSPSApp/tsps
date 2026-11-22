@@ -341,3 +341,24 @@ test('a removed template loc leaves the scene, and comes back when it or a copy 
     assert.deepEqual(found(), [copy], 'a fresh copy stands in; the template stays out');
   } finally { area.destroy(); }
 });
+
+test('a template loc respawned straight after a chunk change is there once; a new template brings its own', () => {
+  const area = new TemplatedInstanceArea(1, 1);
+  const lumbridge = { sourceChunkX: 400, sourceChunkY: 400, sourcePlane: 0, rotation: 0 };
+  area.setChunk(0, 0, 0, lumbridge);
+  try {
+    const template = area.getChunkObjects(0, 0, 0).find((o) => o.getType() === 10);
+    const at = template.getLocation();
+    const found = () => MapObjects.getObjectsAt(at, area).filter((o) => o.getType() === 10 && o.getId() === template.getId());
+    ObjectManager.deregister(template, true);
+    area.setChunk(0, 0, 0, lumbridge); // the index goes stale, with no lookup before the respawn
+    ObjectManager.register(template, true);
+    assert.deepEqual(found(), [template], 'one copy, the respawned object');
+
+    ObjectManager.deregister(template, true);
+    area.setChunk(0, 0, 0, null);
+    area.setChunk(0, 0, 0, lumbridge); // the chunk cleared and copied again: a fresh scene piece
+    assert.equal(found().length, 1, 'the newly copied template stands there');
+    assert.notEqual(found()[0], template);
+  } finally { area.destroy(); }
+});

@@ -131,7 +131,7 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
   already talked to this skavid." Words: 4376 "Cur bidith" Ig, 4377 "Gor cur" Ar, 4378 "Bidith tanath"
   Cur, 4379 "Tanath gor" Nod.
 - **The scared skavid** (2995-3001): after "You will have to learn skavid..." the chat closes, an ogre
-  (4363) is beside it; two ticks later it strikes (seq 359) and shouts while the skavid is hit (seq 5356)
+  shaman is beside it (Wiki; live sends ogre 4363) in a puff of smoke; two ticks later it strikes (seq 359) and shouts while the skavid is hit (seq 5356)
   and cries "Tanath cur, tanath cur!"; four ticks later it is gone and the talk goes on.
 - **The mad skavid** (3310-3320): the crystal and stage 7 with his second line, then its box.
 - **The enclave** (3421-3670): the guards' talk ends in an attack; the entrance alone, "No you don't!"
@@ -171,8 +171,8 @@ the skavid words and the paid gate are server-side, as live keeps them (no varbi
   is kept.
 - The mad skavid opened with "Bidith ig..." and took "Cur." (3310-3313); the Wiki transcript's "Gor nod..."
   and "Tanath." are kept (the Wiki's guide lists eight phrases).
-- The Wiki calls the scared skavid's attacker an ogre shaman; live sends ogre_chieftan_caves (4363), which
-  the plugin uses.
+- The scared skavid's attacker is the Wiki's ogre shaman (the scene's shaman, 4384); live sends
+  ogre_chieftan_caves (4363, t2995).
 - Skavid 3's and Skavid 4's wrong-word loop is captured (3195-3211, 3083-3096); the same lines fill the
   other skavids' wrong words in capture-sources.
 - The lever's rewards go with stage 13 here (live: four ticks later, t6054), so a logout between cannot

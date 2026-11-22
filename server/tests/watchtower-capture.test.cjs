@@ -510,11 +510,11 @@ test("the scared skavid's ogre: in and out in a puff of smoke, and gone on a log
     if (line) await h.continueLine(g); else h.tick(g);
   }
   h.ticks(g, 1);
-  const before = [...h.core.World.getNpcs()].filter((npc) => npc?.getId?.() === 4363 && npc.isRegistered?.()).length;
+  const before = [...h.core.World.getNpcs()].filter((npc) => npc?.getId?.() === 4384 && npc.isRegistered?.()).length;
   assert.ok(before >= 1, "the ogre is out");
   h.PM.emitPlayerLogout({ player: g.player, username: g.player.getUsername() });
   h.ticks(g, 2);
-  assert.equal([...h.core.World.getNpcs()].filter((npc) => npc?.getId?.() === 4363 && npc.isRegistered?.()).length, before - 1);
+  assert.equal([...h.core.World.getNpcs()].filter((npc) => npc?.getId?.() === 4384 && npc.isRegistered?.()).length, before - 1);
 });
 
 test("the tower ladder: walking off during the guard's line does not climb", async (t) => {
@@ -647,4 +647,25 @@ test("Og after his part is done and before the quest: no other NPC's lines", asy
   const og = h.spawn(f, N.OG, [2507, 3114, 0]);
   const said = await talk(f, og);
   assert.ok(!said.some((line) => line.includes("Tower guard") || line.includes("tower guards")), said.join("\n"));
+});
+
+test("the enclave scene: played through, the player stands at the entrance with controls, cutscene state and the exit save restored", async (t) => {
+  const f = actor(t, { at: [2507, 3041, 0], stage: S.NIGHTSHADE, items: [[I.CAVE_NIGHTSHADE]] });
+  const guard = h.spawn(f, N.ENCLAVE_GUARD, [2507, 3040, 0]);
+  await useOnNpc(f, guard, I.CAVE_NIGHTSHADE);
+  await h.continueLine(f);
+  h.ticks(f, 2);
+  h.PM.emitInterfaceActionClick({ player: f.player, buttonId: (573 << 16) | 17, action: 0, opId: 1, groupId: 573, childId: 17, handled: false });
+  for (let i = 0; i < 60 && varbit(f, V.SCENE) === 0; i++) {
+    if (h.shown(f)) await h.continueLine(f); else h.tick(f);
+  }
+  h.ticks(f, 4);
+  assert.equal(varbit(f, V.SCENE), 1);
+  assert.deepEqual(at(f), [2588, 9410, 0]);
+  assert.equal(f.player.getArea() instanceof h.core.TemplatedInstanceArea, false);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(f.player.isUntargetable(), false);
+  assert.equal(f.player.getPacketSender().getVarbit(542), 0);
+  assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
+  assert.equal(f.player.getAttribute("watchtower:scene-exit") ?? null, null);
 });

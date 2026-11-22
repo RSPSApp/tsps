@@ -13,7 +13,7 @@
  *   +35 the cutscene ends with the fade in.
  * - The relic (t2037-2040): the wizard's seq 5352 and spotanim 969 (height 50) with sound 3267, the
  *   relic three ticks later.
- * - The scared skavid (t2995-3001): an ogre (4363; the Wiki calls it an ogre shaman) appears beside
+ * - The scared skavid (t2995-3001): an ogre shaman (the Wiki's; live sends ogre 4363) appears beside
  *   it in a puff of smoke (spotanim 86 at height 12, sound 1930), strikes it (sound 448) and shouts "You
  *   shut your mouth! Don't tell them anything!" as it cries out, and goes in another puff.
  */
@@ -29,8 +29,11 @@ module.exports = function createWatchtowerScenes(api, ctx) {
   const SHAMAN_AT = [2592, 9434, 0];
   const DRAGON_AT = [2594, 9432, 0];
   const SEQ = { FIREBREATH: 81, SHAMAN_CAST: 5357, DRAGON_DEATH: 92, WIZARD_RELIC: 5352, SKAVID_STRUCK: 5356, OGRE_STRIKE: 359 };
-  /** ogre_chieftan_caves: the ogre that silences the scared skavid (t2995). */
-  const NPCS_OGRE = 4363;
+  /**
+   * The ogre shaman that silences the scared skavid: the Wiki's ("An ogre shaman appears."), as the scene's shaman
+   * without options (watchtower_cutscene_ogre_shaman). Recorded difference: live sends ogre_chieftan_caves (4363, t2995).
+   */
+  const NPCS_OGRE = 4384;
   const SPOTANIM = { FIREBREATH: 1, SPELL_IMPACT: 971, RELIC: 969, SMOKE: 86 };
   const PROJECTILE_SPELL = 970;
   const SOUND = { DRAGON_ATTACK: 3266, DRAGON_HIT: 410, SPELL_CAST: 3270, SPELL_HIT: 3271, DRAGON_DEATH: 409, RELIC: 3267,

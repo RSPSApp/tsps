@@ -1581,8 +1581,9 @@ module.exports = function registerWatchtowerQuest(api) {
     let ticks = 0;
     const task = new core.Task(1, false);
     task.execute = () => {
-      if (!player.isRegistered?.() || ++ticks > 200) { task.stop(); return; }
-      if (player.getDialogueManager().isActive?.()) return;
+      if (!player.isRegistered?.()) { task.stop(); return; }
+      // Announced once the thanks close, or after 200 ticks whatever the chat (the scroll waits for it).
+      if (player.getDialogueManager().isActive?.() && ++ticks <= 200) return;
       task.stop();
       later(player, 2, () => quest.announceCompletion(player));
     };

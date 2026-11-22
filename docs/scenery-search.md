@@ -29,3 +29,37 @@ From rsprox captures (38 searches in 21 recordings, revisions 227-242) and the W
 The plain sacks (loc `sacks`; recordings local 1000075, 1001339) send "There's nothing
 interesting in these sacks." on arrival. Other "Sacks" locs (the Digsite's sample sacks, for
 example) are left to their own handlers.
+
+## Crates and boxes
+
+From rsprox captures (rsprox.net index, revisions 227-242). The Wiki's Crate page quotes no
+line for an empty crate ("searching crates does not have a purpose"), so the recordings decide.
+Each line is a game message on arrival (most recordings: one tick after the last step), except
+where a message box is noted. The lines are in `server/plugins/objects/data/crate-search.json`.
+
+- "Crate" and "Crates" locs: "You search the crate but find nothing." The plural "Crates" locs
+  say "crate" too (`sarim_crate3`, `fai_barbarian_small_crates`, `fairy_crate_2`,
+  `aide_small_crates`). Recordings: 333, 381, 391, 424, 465, 480, 482, 672, 1047, 1858, 3032,
+  3174, 3181, 3202, 3211, 3219, 3792, local 1000329, 1000410, 1001331, 1001457.
+- "Boxes" locs: "There is nothing interesting in these boxes." Recordings: 86, 331, 333, 370,
+  469, 2972, 3169, 3177, 3219, local 1000344, 1001339, 1001800, 1002175.
+- Locs with their own line:
+  - `fai_falador_boxes`, `fai_falador_small_crates`: "You search the crates but find nothing."
+    (3237).
+  - `fai_varrock_large_crate`, `fai_varrock_small_crates`: "You search the crate, but find
+    nothing of note." (local 1002185, 1001682, revisions 241-242). The small crates said the
+    default line in revision 232 (3219); the newer wording is used.
+  - `fai_varrock_large_crates`: "You search the crates but find nothing of value." (3218).
+  - `elid_crate`: "You search the crate but find nothing of note."; `elid_crates`,
+    `elid_crates_2`, `elid_small_crates`: "You search the crates but find nothing of note.";
+    `elid_boxes`: "You search the boxes but find nothing of note." (333, 3168).
+  - The Wizards' Tower, in a message box: `fai_wiztower_crate2` "Nothing of interest in there -
+    just some old books."; `fai_wiztower_crate3` and `fai_wiztower_boxes` "Nothing of interest
+    in there - just some moth-eaten, dusty robes." (3202).
+- Ours: a single "Box" loc keeps "You search the box, but find nothing of interest." (no
+  capture).
+- Left to other handlers: quest crates (Goblin Village, Myreque, Waterfall Quest, ...), the
+  Motherlode Mine crates and clue-step crates.
+- `grim_basement_crate_many` ("Boxes"): "You search the boxes but find nothing." (3246, 36
+  searches). Not done: in the same recording some searches find leather gloves, a cabbage,
+  thread or a needle instead; nothing gives the odds.

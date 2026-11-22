@@ -1,0 +1,24 @@
+{
+  "_comment": "Plain crate and box Search lines, from rsprox captures (rsprox.net index, revisions 227-242). byName is the line for every loc of that cache name; byLoc overrides it for the locs whose recordings say something else. mesbox: true opens it as a message box instead of a game message. Recording ids per entry are in docs/scenery-search.md.",
+  "byName": {
+    "Crate": "You search the crate but find nothing.",
+    "Crates": "You search the crate but find nothing.",
+    "Boxes": "There is nothing interesting in these boxes."
+  },
+  "byLoc": {
+    "fai_falador_boxes": { "text": "You search the crates but find nothing." },
+    "fai_falador_small_crates": { "text": "You search the crates but find nothing." },
+    "fai_varrock_large_crate": { "text": "You search the crate, but find nothing of note." },
+    "fai_varrock_small_crates": { "text": "You search the crate, but find nothing of note." },
+    "fai_varrock_large_crates": { "text": "You search the crates but find nothing of value." },
+    "elid_crate": { "text": "You search the crate but find nothing of note." },
+    "elid_crates": { "text": "You search the crates but find nothing of note." },
+    "elid_crates_2": { "text": "You search the crates but find nothing of note." },
+    "elid_small_crates": { "text": "You search the crates but find nothing of note." },
+    "elid_boxes": { "text": "You search the boxes but find nothing of note." },
+    "grim_basement_crate_many": { "text": "You search the boxes but find nothing." },
+    "fai_wiztower_crate2": { "text": "Nothing of interest in there - just some old books.", "mesbox": true },
+    "fai_wiztower_crate3": { "text": "Nothing of interest in there - just some moth-eaten, dusty robes.", "mesbox": true },
+    "fai_wiztower_boxes": { "text": "Nothing of interest in there - just some moth-eaten, dusty robes.", "mesbox": true }
+  }
+}

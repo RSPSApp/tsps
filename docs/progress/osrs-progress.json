@@ -45068,6 +45068,7 @@
             "server/plugins/areas/CrombwickManor.plugin.js"
           ],
           "devNotes": [
+            "2026-11-22 (parity/locs-varrock-fence-gate): the fence gate east of Varrock by the quetzal platform (vm_fencegate_l/_r at 3296,3428-3429) is a pass-through gate, as live: vm_fencing_invisible_wall in the doorway, both leaves swung west, the player walks across the next tick and the gate is back two ticks after opening, with no synth (rsprox 232/3228 ticks 561-568, 642-644, 931-937; 232/3227, 232/3231). Before, Open did nothing: the shared door code found no way to open this pair, so the gate stayed shut and the player could not get through. server/plugins/objects/Doors.plugin.js, server/tests/varrock-fence-gate.test.cjs, docs/varrock-fence-gate.md, in-game check on the worktree server.",
             "Main 4b1eac7f6: #1267 the Hunter Guild stairs fade and land as recorded.",
             "Main 21a2a1daa: #1045/#1051 repair shared/private open-door records, timed closing, region replay and instance cleanup without duplicate leaves or mismatched collision. The existing cache-derived climb links and captured loc transports remain implemented.",
             "#1088 adds cache-named/interleaved door pair support; #1198 registers the Druidic Ritual Prison door name. Both actual gate leaves, exact movement into/out of the cauldron room, manual/automatic closing and unrelated prison ownership are covered. A focused native gate/meat/relog checkpoint passed.",

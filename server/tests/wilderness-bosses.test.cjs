@@ -1,6 +1,10 @@
 const assert = require('node:assert/strict');
-const { test } = require('node:test');
+const path = require('node:path');
+const { before, test } = require('node:test');
 
+const { Server } = require('../dist/Server');
+Server.installProductionPathResolver();
+const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager } = require('../dist/plugins/PluginManager');
 const { Wilderness } = require('../dist/game/content/wilderness/Wilderness');
 const { World } = require('../dist/game/World');
@@ -20,6 +24,12 @@ Common.attach(api);
 Caves.attach(api);
 Loot.attach(api, { addDiscount: () => {}, playersIn: () => [] });
 Vetion.attach(api);
+
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  core.RegionManager.init();
+  core.RegionManager.loadMapFiles(3361, 10296);
+});
 
 test('the boss caves have the Wilderness levels cache script 384 gives them', () => {
   assert.equal(Wilderness.levelAt(3358, 10335), 40); // Callisto's Den
@@ -47,7 +57,13 @@ test('every lair has its entrance, its exit and a box its arrival lies in', () =
 
 test('a player leaving a multi lair within 10 seconds of another comes out where they did', (t) => {
   let cycle = 1000;
+  let arrivalRoll = 0;
   t.mock.method(World, 'getProcessCycle', () => cycle);
+  t.mock.method(Math, 'random', () => {
+    const roll = arrivalRoll;
+    arrivalRoll = (arrivalRoll + 1 / 3) % 1;
+    return roll;
+  });
   const callisto = Common.LAIR_BY_KEY.get('callisto');
   Caves._test.lastExits.clear();
   const first = Caves._test.escapeArrival(callisto);
@@ -58,8 +74,33 @@ test('a player leaving a multi lair within 10 seconds of another comes out where
     cycle += Common.ESCAPE.followTicks + 1;
     seen.add(Caves._test.escapeArrival(callisto));
   }
-  assert.equal(seen.size, 2);
-  assert.ok(!Common.ESCAPE.arrivals.some((arrival) => arrival[0] === 3360 && arrival[1] === 10296));
+  assert.equal(seen.size, 3);
+  assert.ok(Common.ESCAPE.arrivals.some((arrival) => arrival[0] === 3360 && arrival[1] === 10296));
+});
+
+test('Escape Caves exits choose only open tiles from each real arrival area', (t) => {
+  let roll = 0;
+  t.mock.method(Math, 'random', () => roll);
+  const blockedNorthTile = [3361, 10297, 0];
+  assert.equal(Common.open(...blockedNorthTile), false, 'the captured north arrival contains the wall tile');
+
+  for (const box of Common.ESCAPE.arrivals) {
+    const openTiles = [];
+    for (let x = box[0]; x <= box[2]; x++) {
+      for (let y = box[1]; y <= box[3]; y++) {
+        if (Common.open(x, y, box[4])) openTiles.push([x, y, box[4]]);
+      }
+    }
+    assert.ok(openTiles.length > 0, `arrival area ${box.join(',')} has a walkable tile`);
+    for (let index = 0; index < openTiles.length; index++) {
+      roll = (index + 0.5) / openTiles.length;
+      const destination = Caves._test.randomOpenTile(box);
+      const actual = [destination.getX(), destination.getY(), destination.getZ()];
+      assert.deepEqual(actual, openTiles[index]);
+      assert.ok(Common.open(...actual), `destination ${actual.join(',')} is open`);
+      assert.notDeepEqual(actual, blockedNorthTile);
+    }
+  }
 });
 
 test('a multi lair exit never picks a blocked tile in its Escape Caves arrival area', (t) => {

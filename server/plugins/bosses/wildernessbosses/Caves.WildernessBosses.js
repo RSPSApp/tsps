@@ -15,8 +15,8 @@
  * - "Peek": needs 20 kills of the boss; then says whether anyone is inside. "Check-Fee": the fee,
  *   whether it is paid and the discount.
  * - Exits: the singles lairs come out beside their entrance; the multi lairs at one of the
- *   Escape Caves' two connected arrival points at random (the captured north point is isolated
- *   by collision), the same one as the player before if they
+ *   Escape Caves' three arrival points at random, skipping blocked landing tiles, the same one
+ *   as the player before if they
  *   left the same lair within 10 seconds. Logging out in a multi lair does the same.
  * - Each lair is an Area on PvP ground: it runs the Wilderness's own rules first
  *   ("wilderness:rules"), shows the singles-plus icon in the singles lairs, and blocks
@@ -270,7 +270,7 @@ function checkLairFee(event) {
 
 // ------------------------------------------------------------------ exits
 
-/** One of the Escape Caves' connected arrival points; the last one if the lair was left < 10 s ago. */
+/** One of the Escape Caves' three arrival points; the last one if the lair was left < 10 s ago. */
 function escapeArrival(lair) {
   const now = core.World.getProcessCycle();
   const last = lastExits.get(lair.key);

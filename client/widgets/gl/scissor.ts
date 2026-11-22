@@ -346,12 +346,12 @@ export class ScissorStack {
             return;
         }
         const base = this.stack[0];
+        const [x, y, w, h] = this.stack[this.stackTop - 1];
         this.applyScissor(base[0], base[1], base[2], base[3]);
         try {
             draw();
         } finally {
-            const top = this.stack[this.stackTop - 1];
-            this.applyScissor(top[0], top[1], top[2], top[3]);
+            this.applyScissor(x, y, w, h);
         }
     }
 

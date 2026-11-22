@@ -1505,7 +1505,11 @@ function namedOpenLeaf(closedId) {
   const name = core.CacheDefinitions.getLocNames().get(closedId);
   if (!name) return null;
   const models = JSON.stringify(core.CacheDefinitions.getObject(closedId)?.models);
-  for (const candidate of [`${name}_open`, name.replace("closed", "open")]) {
+  // The cache spells it three ways: <name>_open, closed -> open, and "open_" before the last word
+  // (Meiyerditch's area_sanguine_ghetto_door1 17600 -> area_sanguine_ghetto_open_door1 18031, the
+  // Darkness of Hallowvale capture t841; only door1/door2 in the cache use that form).
+  const openWord = name.replace(/_((?:door|gate)\d*)$/, "_open_$1");
+  for (const candidate of [`${name}_open`, name.replace("closed", "open"), openWord]) {
     const id = candidate === name ? null : core.CacheDefinitions.getLocId(candidate);
     if (id != null && JSON.stringify(core.CacheDefinitions.getObject(id)?.models) === models) return id;
   }

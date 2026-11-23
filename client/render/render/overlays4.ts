@@ -245,7 +245,7 @@ export function registerHitsplat(host: WebGLOsrsRendererHost, event: HitsplatEve
         const delayCycles =
             typeof event.delayCycles === "number" ? Math.max(0, event.delayCycles | 0) : 0;
 
-        // Preserve raw value parity (`-1` is meaningful for sentinel no-type hitsplats).
+        // A hit with no style gets type -1, which takes no slot (r241 Actor.addHitsplat).
         const damage = event.damage | 0;
         const type = typeof event.style === "number" ? event.style | 0 : -1;
         const type2 = typeof event.type2 === "number" ? event.type2 | 0 : -1;

@@ -20008,6 +20008,18 @@ test('RFD Amik shrine requires the Wise Old Man clue, enters the mapped lair and
 
   death({ killer: player, npc: chicken, npcId: api.core.NpcIdentifiers.EVIL_CHICKEN });
   assert.equal(inventory.get(api.core.ItemIdentifiers.EVIL_CHICKENS_EGG), 1);
+
+  // Wiki: the lair stays open after Sir Amik is freed; the shrine takes the chicken but spawns no boss.
+  attributes.set('recipe-for-disaster:rescues', 64);
+  spawned = null;
+  moves.length = 0;
+  inventory.set(api.core.ItemIdentifiers.RAW_CHICKEN, 1);
+  const after = { ...event, handled: false };
+  shrine(after);
+  assert.equal(after.handled, true, 'the shrine still opens the lair once the rescue is done');
+  assert.equal(inventory.get(api.core.ItemIdentifiers.RAW_CHICKEN), 0);
+  assert.equal(spawned, null, 'no Evil Chicken is spawned after the rescue');
+  assert.deepEqual(moves, [[2455, 4398, 0]]);
 });
 
 

@@ -936,8 +936,12 @@ test("Barrows: a brother takes the player from the crypt monster attacking them"
   rat.setOwner(subject);
   state.npcs.add(rat);
   let reset = 0;
-  rat.getCombat().getTarget = () => subject;
-  rat.getCombat().reset = () => { reset++; };
+  let target = subject;
+  const attacks = [];
+  rat.isRegistered = () => true;
+  rat.getCombat().getTarget = () => target;
+  rat.getCombat().reset = () => { reset++; target = null; };
+  rat.getCombat().attack = (whom) => { attacks.push(whom); target = whom; };
   subject.getCombat().setUnderAttack(rat);
   assert.equal(subject.getCombat().getAttacker(), rat);
   const queue = core.World.getAddNPCQueue();
@@ -952,6 +956,14 @@ test("Barrows: a brother takes the player from the crypt monster attacking them"
     try { npc.onAdd(); } catch { /* the fixture world's combat wiring; the takeover comes first */ }
     assert.equal(reset, 1, "the rat stops");
     assert.equal(subject.getCombat().getAttacker(), null, "and no longer holds the player in single-way combat");
+    npc.getCombat().attack = () => {};
+    npc.isRegistered = () => true;
+    Barrows._test.processPlayer({ player: subject });
+    assert.deepEqual(attacks, [], "not while the brother fights");
+    // He dies: the rat is back on the player (227/01885 ticks 12118-12119).
+    npc.isDyingFunction = () => true;
+    Barrows._test.processPlayer({ player: subject });
+    assert.deepEqual(attacks, [subject]);
   } finally {
     queue.length = before;
   }

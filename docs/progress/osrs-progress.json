@@ -4284,7 +4284,8 @@
           "devNotes": [
             "Main 21a2a1daa includes #1113 alignment and #1198 prison-door registration. The old accepted completion went through ordinary Door 1549 after both prison leaves failed; that did not verify the intended gate step. The corrected ledger records the alternate entrance honestly.",
             "The #1198 focused native checkpoint earned stage 2 through real NPC dialogue, opened either actual prison leaf, crossed to the cauldron, enchanted all four meats and checked exit/re-entry/relog. It used declared test positioning/supplies and is not a new full natural-route proof. Implementation status stays complete; no additional percentage or accepted-quest count is inferred.",
-            "Main 3b61a15a8 (6 November 2026): #2304 Let players cross the West Ardougne wall gate; #2414 Walk through Dragon Slayer's Crandor shortcut wall; #2506 Keep Troll Stronghold's prison door and arena exit shut to locked players; #2534 Implement Ardougne Hard and Elite diary gameplay tasks. Existing completion credit and documented limitations are retained unless explicitly updated below."
+            "Main 3b61a15a8 (6 November 2026): #2304 Let players cross the West Ardougne wall gate; #2414 Walk through Dragon Slayer's Crandor shortcut wall; #2506 Keep Troll Stronghold's prison door and arena exit shut to locked players; #2534 Implement Ardougne Hard and Elite diary gameplay tasks. Existing completion credit and documented limitations are retained unless explicitly updated below.",
+          "2026-11-23, branch fix/4407-barrows-alignment (issue #4407): tunnel doors cross in one click with the recorded leaf swap and sounds and raise their monster on the crossing tick; door brothers have no overhead line; brothers chase through the tunnels and leave 8+ tiles from where they rose; a brother takes the player from the crypt monster attacking them, which resumes after he dies; \"We'll finish this later...\" on an unfinished fight; looting no longer re-randomises the doors or deals collapse damage; the elite clue follows Treasure Trails (scroll box, capacity); \"Can't Touch Me\" fails on a melee brother's melee swing and the three run tasks send their failure lines. Verified by server/tests/barrows-run.test.cjs and an in-game agent MCP run. Limitations: the crossing monster becomes visible one tick after the step (world add queue); the leash line's rule in the tunnels and the two skeleton types' odds are Ours (docs/barrows-tunnels.md)."
           ],
           "taskDetails": [
             {
@@ -21860,8 +21861,8 @@
             {
               "name": "Arena mechanics, maze and cleanup",
               "steps": [
-                "Door routing (onObjectRoute) and ForceMovement crossing implement the maze, with randomiseLayout opening all eight outer rooms and exactly one inner puzzle door (Barrows.plugin.js:155, :339).",
-                "Wrong puzzle answers re-randomise the layout; correct ones set puzzleSolved and cross the door (Barrows.plugin.js:507). Brothers drain Prayer every 30 ticks unless a god hilt is worn; looted tunnels deal collapse damage (Barrows.plugin.js:621).",
+                "Door routing (onObjectRoute) and a one-step walk through the doorway implement the maze, with randomiseLayout opening all eight outer rooms and exactly one inner puzzle door. A crossing swaps the leaves for an invisible wall and the open leaf for two ticks, with sounds 62 and 41, and raises its monster on the same tick (docs/barrows-tunnels.md).",
+                "Wrong puzzle answers re-randomise the layout; a correct one sets puzzleSolved and unlocks the door, which the next click crosses. Brothers drain Prayer every 30 ticks unless a god hilt is worn; looting shakes the tunnels once and leaves the doors as they were, with no collapse damage (37 captured loots).",
                 "removeNpc/cleanupNpcs and processPlayer prune NPCs on plane change, distance, exit and death without leaking queued spawns."
               ],
               "acceptanceCriteria": [

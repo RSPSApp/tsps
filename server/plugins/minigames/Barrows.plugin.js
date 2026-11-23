@@ -394,6 +394,7 @@ function takeOver(player, brother) {
     if (npc === brother || npc.getCombat().getTarget() !== player) continue;
     npc.getCombat().reset();
     player.getCombat().clearAttackerIf(npc);
+    npc.__barrowsResume = true;
   }
 }
 
@@ -1156,6 +1157,11 @@ function processPlayer({ player }) {
       if (npc === liveBrother(state) && (phase === "crypt" || phase === "tunnels")) queueFarewell(state, FAREWELL_MOVE_TICKS);
       removeNpc(player, npc);
     } else if (npc === state.brother) leashBrother(player, state, npc, phase);
+    else if (npc.__barrowsResume && !liveBrother(state) && npc.isRegistered()) {
+      // The monster a brother took the player from attacks again once he is gone (227/01885 tick 12119).
+      npc.__barrowsResume = false;
+      if (npc.getCombat().getTarget() == null) npc.getCombat().attack(player);
+    }
   }
   if (run) checkFaithless(player, state, run);
   if (state.farewell > 0 && --state.farewell === 0 && phase !== "outside" && phase !== "surface") player.sendMessage(BROTHER_FAREWELL);

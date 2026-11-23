@@ -10,7 +10,7 @@
 //   Draynor underwall tunnel (arrival): rsprox_transcripts/241/911384.txt tick 173
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { before, after, test } = require("node:test");
+const { before, after, test, mock } = require("node:test");
 process.env.DISABLE_PLAYER_BOTS = "1";
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
@@ -27,7 +27,15 @@ let core;
 let index = 13300;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  // Native interaction tests need the plugins, but never an HTTP listener.
+  const config = require("../dist/game/definition/WorldDefinition");
+  const readConfig = config.readWorldConfig;
+  const noAdmin = mock.method(config, "readWorldConfig", (...args) => {
+    const actual = readConfig(...args);
+    return { ...actual, plugins: { ...actual.plugins, WorldAdmin: false } };
+  });
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
+  noAdmin.mock.restore();
   core = PM.getCoreApi();
   RegionManager.init();
   for (const [x, y] of [[2774, 10003], [2863, 2974], [2879, 9813], [3069, 3257]]) RegionManager.loadMapFiles(x, y);
@@ -132,4 +140,93 @@ test("the Draynor underwall tunnel still refuses on arrival, as captured (241/91
   assert.deepEqual(f.messages, ["You need an agility level of 42 to negotiate this tunnel."]);
   assert.ok(trace.length > 2, "walked first");
   assert.deepEqual(tile(f.p), [3070, 3257], "refused at the tunnel");
+});
+
+test("Stalker Den's southern cave rebuilds on both crossings without an inter-map forced move (#6548)", async (t) => {
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find(q => q.key === "shadows_of_custodia");
+  assert.ok(quest);
+  for (const [id, object, from, to] of [
+    [57279, [1324, 3364], [1324, 3363], [1323, 9766]],
+    [57278, [1324, 9766], [1323, 9766], [1324, 3363]],
+  ]) await t.test(`cave ${id}`, () => {
+    const f = actor(t, ...from, 59), p = f.p, session = p.getSession();
+    p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername()));
+    session.setPlayer(p);
+    p.setRegistered(false);
+    assert.equal(core.World.getPlayers().add(p), true);
+    t.after(() => core.World.getPlayers().remove(p));
+    quest.setStage(p, 24); // Supplied completed-quest checkpoint, not a quest playthrough.
+    for (let tick = 0; tick < 4 && p.isNeedsPlacement(); tick++) core.World.process();
+    assert.equal(p.isNeedsPlacement(), false, "normal World updates finish login placement");
+    assert.equal(p.busy(), false);
+    for (const point of [from, to]) {
+      RegionManager.loadMapFiles(...point);
+      assert.equal(RegionManager.blocked(new Location(...point, 0), null), false, "cache-derived standing/landing tile");
+    }
+    const loc = MapObjects.get(id, new Location(...object, 0), null);
+    assert.ok(loc, "the real cache cave exists");
+    assert.equal(loc.getDefinition().getInteractions()[0], "Squeeze-through");
+    const forces = [], frames = [];
+    const setForce = p.setForceMovement.bind(p);
+    t.mock.method(p, "setForceMovement", force => {
+      if (force) forces.push([force.getEnd().getX(), force.getEnd().getY()]);
+      return setForce(force);
+    });
+    const send = session.sendClientPacket.bind(session);
+    t.mock.method(session, "sendClientPacket", frame => { frames.push(frame); return send(frame); });
+    session.flushClient(0);
+    frames.length = 0;
+    click(f, id, ...object, () => p.getAttribute("agility.obstacle") != null);
+    assert.ok(p.getAttribute("agility.obstacle"), "the ordinary click starts the crossing");
+    for (let tick = 1; p.getAttribute("agility.obstacle") != null; tick++) {
+      assert.ok(tick < 15, "the crossing finishes");
+      TaskManager.process();
+      session.flushClient(tick);
+    }
+    assert.deepEqual(forces, [], "the inter-map cave never sends a forced movement");
+    assert.deepEqual(tile(p), to);
+    const rebuild = frames.find(frame => frame[0] === 141); // REBUILD_NORMAL
+    assert.ok(rebuild, "arrival sends the destination scene rebuild");
+    assert.deepEqual([rebuild.readUInt16BE(3), rebuild.readUInt16BE(5)], [to[0] >> 3, to[1] >> 3]);
+    assert.equal(p.getForceMovement(), null);
+    assert.equal(p.getSkillAnimation(), -1);
+    assert.equal(p.getAnimation().getId(), 65535, "hidden/emerge animation is reset");
+    assert.equal(p.getMovementQueue().isMovementBlocked(), false);
+    assert.equal(p.getCombat().isAnimationStalled(), false);
+  });
+});
+
+test("Stalker Den's southern cave keeps its quest and Agility gates", (t) => {
+  const quest = require("../plugins/quests/QuestRuntime").getRegisteredQuests().find(q => q.key === "shadows_of_custodia");
+  for (const [level, stage, refusal] of [
+    [58, 24, /Agility level of at least 59/],
+    [59, 0, /complete Shadows of Custodia/],
+  ]) {
+    const f = actor(t, 1324, 3363, level);
+    quest.setStage(f.p, stage);
+    click(f, 57279, 1324, 3364, () => f.messages.length > 0);
+    assert.ok(f.messages.some(message => refusal.test(message)), f.messages.join("; "));
+    assert.deepEqual(tile(f.p), [1324, 3363]);
+    assert.equal(f.p.getAttribute("agility.obstacle") == null, true);
+    assert.equal(f.p.getForceMovement() == null, true);
+    assert.equal(f.p.getMovementQueue().isMovementBlocked(), false);
+  }
+});
+
+test("Stalker Den cave logout while hidden leaves a safe tile and clears the animation and movement lock", (t) => {
+  const f = actor(t, 1324, 3363, 59), p = f.p;
+  require("../plugins/quests/QuestRuntime").getRegisteredQuests().find(q => q.key === "shadows_of_custodia").setStage(p, 24);
+  click(f, 57279, 1324, 3364, () => p.getAttribute("agility.obstacle") != null);
+  assert.ok(p.getAttribute("agility.obstacle"));
+  TaskManager.process(); // The existing duck animation gives way to the hidden pose.
+  assert.equal(p.getAnimation().getId(), 2590);
+  TaskManager.process(); // Disconnect during the hidden wait, between animation starts.
+  PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+  assert.deepEqual(tile(p), [1324, 3363], "the normal logout task cancellation keeps the safe entry tile");
+  assert.equal(p.getAttribute("agility.obstacle"), null);
+  assert.equal(p.getForceMovement(), null);
+  assert.equal(p.getAnimation().getId(), 65535);
+  assert.equal(p.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(p.getCombat().isAnimationStalled(), false);
 });

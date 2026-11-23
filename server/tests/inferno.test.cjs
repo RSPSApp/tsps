@@ -611,6 +611,15 @@ test('TzKal-Zuk: the glyph shields, summons arrive on cue and his death wins the
   world.random = 100;
   tick(player, 15 + 2);
   assert.equal(player.getHitpoints(), before, 'shielded behind the glyph');
+  // Wiki: the glyph sustains Zuk's own attacks indefinitely; 8 more blocked hits of 100 would
+  // be well past its 600 hitpoints.
+  for (let i = 0; i < 8 * 10; i++) {
+    glyph.moveTo(new Location(2270, 5361, 0));
+    player.moveTo(new Location(2271, 5357, 0));
+    tick(player);
+  }
+  assert.equal(player.getHitpoints(), before, 'still shielded after 900 damage of blocked hits');
+  assert.equal(glyph.getHitpoints(), 600, "Zuk's own hits do not wear the glyph down");
   player.moveTo(new Location(2280, 5350, 0));
   tick(player, 10 + 2);
   assert.ok(player.getHitpoints() < before, 'struck when out in the open');

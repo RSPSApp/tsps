@@ -941,3 +941,18 @@ test('left idle on the roof: warned at 1 minute and 30 seconds left, closed afte
   assert.equal(busy.messages.length, 1);
   other.destroy();
 });
+
+test('the roof is silent until the Guardians first come down; Tempest then plays on after the kill', () => {
+  const { Music } = require('../dist/game/Music');
+  const player = fakePlayer();
+  const roof = new Roof.Roof(player);
+  const [x, , y] = Common.data.roof.bounds;
+  assert.deepEqual(Music.tracksAt(x + 15, y + 15, 0, false), [518], "the roof's own tiles: Tempest from arrival");
+  assert.equal(roof.area.getMusicTrack(player), Music.SILENCE_TRACK);
+  roof.start();
+  assert.equal(roof.area.getMusicTrack(player), 518, 'Tempest from the fight');
+  roof.reset();
+  assert.equal(roof.area.getMusicTrack(player), 518, 'still Tempest with the statues back');
+  roof.destroy();
+  tasks = [];
+});

@@ -185,6 +185,11 @@ function defineAreaClass() {
       return "Grotesque Guardians";
     }
 
+    /** The roof is silent until the Guardians first come down; Tempest then plays until the player leaves. */
+    getMusicTrack() {
+      return this.roof.startedAt >= 0 ? Common.data.music.fight : Common.core.Music.SILENCE_TRACK;
+    }
+
     destroy() {
       if (this.isDestroyed?.() === true) return;
       const addQueue = Common.core.World.getAddNPCQueue();

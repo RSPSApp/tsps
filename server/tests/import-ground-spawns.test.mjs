@@ -22,10 +22,18 @@ test("deduplicates exact source rows, not neighboring tiles",()=>{
  assert.equal(result.definitions.length,2);
  assert.equal(result.report.counts["duplicate-source-exact"],1);
 });
-test("exact legacy discrepancy is reported and not overwritten or multiplied",()=>{
- const old={id:554,location:{x:3304,y:3311,z:0},amt:1,respawn:20};
- const result=importSpawns(source([row()]),[old]);
- assert.deepEqual(result.definitions,[old]);assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
+test("a single legacy entry on the exact tile takes the source amount, timer and membership, never a second stack",()=>{
+ const old={id:554,location:{x:3304,y:3311,z:0},amt:1,respawn:0,description:"UNDIFINED",extra:"kept"};
+ const result=importSpawns(source([row({members:true})]),[old]);
+ assert.deepEqual(result.definitions,[{id:554,location:{x:3304,y:3311,z:0},amt:3,respawn:100,members:true,description:"UNDIFINED",extra:"kept"}]);
+ assert.equal(result.report.counts["existing-source-state-reconciled"],1);
+ assert.deepEqual(result.report.rows[0].previousState,{amt:1,respawn:0,members:undefined});
+ assert.deepEqual(importSpawns(source([row({members:true})]),result.definitions).definitions,result.definitions);
+ const f2p=importSpawns(source([row()]),[{...old,amt:3,respawn:100,members:true}]);
+ assert.equal(Object.hasOwn(f2p.definitions[0],"members"),false,"an F2P source row drops a stale members flag");
+ const two=[old,{...old,respawn:5}];
+ const held=importSpawns(source([row()]),two);
+ assert.deepEqual(held.definitions,two);assert.equal(held.report.counts["existing-exact-state-discrepancy"],1);
 });
 test("conflicting source amounts and possible replaced IDs need review",()=>{
  assert.equal(importSpawns(source([row(),row({quantity:5})]),[]).definitions.length,0);
@@ -100,8 +108,8 @@ test("audited member tools report conflicting world policy instead of silently g
  assert.equal(conflicting.report.counts["conflicting-source-alias-state"],2);
  const old={id:1735,location:{x:3304,y:3311,z:0},amt:1,respawn:100};
  const result=importSpawns(source([member]),[old]);
- assert.deepEqual(result.definitions,[old]);
- assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
+ assert.deepEqual(result.definitions,[{...old,members:true}]);
+ assert.equal(result.report.counts["existing-source-state-reconciled"],1);
 });
 
 const easternShellTiles=[[3258,2481],[3257,2477],[3259,2469],[3261,2458],[3260,2451],
@@ -242,7 +250,9 @@ test("quest stock aliases never create a second stack and conflicting alias stat
 test("quest stock audit refuses untyped timers, other tiles and unaudited legacy discrepancies",()=>{
  const legacy={id:84,location:{x:2638,y:9906,z:0},amt:1,respawn:20};
  const result=importSpawns(source([staffRow()]),[legacy]);
- assert.deepEqual(result.definitions,[legacy]);assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
+ // Any single legacy entry on the tile now takes the source state, not only the audited one.
+ assert.deepEqual(result.definitions,[{...legacy,respawn:100,members:true}]);
+ assert.equal(result.report.counts["existing-source-state-reconciled"],1);
  const duplicate=importSpawns(source([staffRow()]),[legacy,{...legacy,respawn:0}]);
  assert.equal(duplicate.definitions.length,2);assert.deepEqual(duplicate.definitions,[legacy,{...legacy,respawn:0}]);
  const differentTile=importSpawns(source([staffRow({x:2639})]),[]);
@@ -282,4 +292,13 @@ test("audited legacy reconciliation rejects unknown field representations and ac
   assert.equal(result.definitions[0].respawn,100);assert.equal(result.definitions[0].amt,1);
   assert.equal(result.definitions[0].members,true);
  }
+});
+
+test("a capture-confirmed second spawn beside a same-item legacy spawn is added; others stay held",()=>{
+ const legacy={id:1511,location:{x:2958,y:3205,z:0},amt:1,respawn:100};
+ const logs=row({page:"Logs",id:1511,x:2959,y:3205});
+ const result=importSpawns(source([logs]),[legacy]);
+ assert.equal(result.report.counts.added,1);assert.deepEqual(result.definitions[1].location,{x:2959,y:3205,z:0});
+ const other=importSpawns(source([row({page:"Logs",id:1511,x:2959,y:3206})]),[legacy]);
+ assert.equal(other.report.counts["near-legacy-placement-review"],1);
 });

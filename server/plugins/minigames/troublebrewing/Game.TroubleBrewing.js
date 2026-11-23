@@ -1,9 +1,3 @@
-/**
- * One Trouble Brewing game: two teams in the real Mos Le'Harmless arena, ingredient hoppers on
- * the top floor, three boilers per base, coloured water from the enemy's flowers, rum bottles
- * rolling onto the conveyor and a 20 minute round (Wiki). Only one game runs per world, as the
- * arena is a real map; the lobby starts the next one.
- */
 const Common = require("./Common.TroubleBrewing");
 
 let current = null;
@@ -29,6 +23,23 @@ function gameItems() {
   return ALL_ITEMS;
 }
 
+function newState() {
+  return {
+    hoppers: Object.fromEntries(Object.keys(Common.BREW_REQUIRED).map((k) => [k, 0])),
+    boilers: [
+      { logs: 0, lit: false, burnTicks: 0 },
+      { logs: 0, lit: false, burnTicks: 0 },
+      { logs: 0, lit: false, burnTicks: 0 }
+    ],
+    kettle: 0,
+    brewing: 0,
+    cooldown: 0,
+    bottle: null,
+    bottleAge: 0,
+    score: 0,
+  };
+}
+
 class Game {
   constructor(players) {
     this.members = { red: new Set(players.red ?? []), blue: new Set(players.blue ?? []) };
@@ -49,6 +60,97 @@ class Game {
     for (const player of this.teams.keys()) this.enter(player);
     for (const tile of Common.MONKEY_SPAWNS) this.spawnMonkey(tile);
     Common.every(() => this.tick());
+  }
+
+  tick() {
+    if (this.over) return;
+    this.elapsed++;
+
+    if (this.elapsed >= Common.GAME_DURATION) {
+      this.end();
+      return;
+    }
+
+    for (const team of Common.TEAMS) {
+      const state = this.stateOf(team);
+
+      for (const boiler of state.boilers) {
+        if (boiler.lit) {
+          boiler.burnTicks++;
+          if (boiler.burnTicks >= Common.BOILER_BURN_TICKS) {
+            boiler.logs = Math.max(0, boiler.logs - 1);
+            boiler.burnTicks = 0;
+            if (boiler.logs <= 0) {
+              boiler.lit = false;
+            }
+          }
+        }
+      }
+
+      if (state.brewing > 0) {
+        state.brewing--;
+        if (state.brewing <= 0) {
+          this.completeBrew(team);
+          state.cooldown = Common.BREW_COOLDOWN;
+        }
+      } else if (state.cooldown > 0) {
+        state.cooldown--;
+      } else if (!state.bottle && this.canBrew(team)) {
+        this.consumeForBrew(team);
+        state.brewing = Common.BREW_TIME_TICKS;
+      }
+
+      if (state.bottle) {
+        state.bottleAge++;
+        if (state.bottleAge >= Common.BOTTLE_LIFETIME) {
+          try { Common.core.ItemOnGroundManager.deregister(state.bottle); } catch { /* ignore */ }
+          this.ground.delete(state.bottle);
+          state.bottle = null;
+          state.bottleAge = 0;
+        }
+      }
+    }
+
+    for (const [key, entry] of this.monkeys.entries()) {
+      if (!entry.npc && this.elapsed >= entry.respawnAt) {
+        const tile = Common.MONKEY_SPAWNS.find(t => t.join(",") === key) || Common.MONKEY_SPAWNS[0];
+        this.spawnMonkey(tile);
+      }
+    }
+  }
+
+  end() {
+    this.over = true;
+    current = null;
+    for (const groundItem of this.ground) {
+      try { Common.core.ItemOnGroundManager.deregister(groundItem); } catch { /* ignore */ }
+    }
+    this.ground.clear();
+    for (const npc of this.npcs) {
+      Common.core.World.getRemoveNPCQueue().push(npc);
+    }
+    this.npcs.clear();
+
+    const redScore = this.states.red.score;
+    const blueScore = this.states.blue.score;
+
+    for (const player of this.teams.keys()) {
+      const team = this.teamOf(player);
+      const won = (team === "red" && redScore > blueScore) || (team === "blue" && blueScore > redScore);
+      const reward = won ? 4 : (redScore === blueScore ? 2 : 1);
+      
+      const [x, y, z] = Common.LOBBY_SPAWN;
+      player.moveTo(new Common.core.Location(x, y, z));
+      
+      if (typeof player.getPacketSender?.()?.sendMessage === "function") {
+        player.getPacketSender().sendMessage(`The game has ended! Red: ${redScore}, Blue: ${blueScore}. You earned ${reward} Pieces of Eight.`);
+      }
+      
+      const inv = player.getInventory();
+      if (inv) {
+        inv.addItem(new Common.core.Item(Common.PIECES_OF_EIGHT, reward));
+      }
+    }
   }
 
   enter(player) {
@@ -79,7 +181,6 @@ class Game {
     this.contribution.set(player, this.contributed(player) + amount);
   }
 
-  /** One item into the team's matching hopper. */
   deposit(player, kind, amount = 1) {
     const team = this.teamOf(player);
     if (!team || !(kind in Common.BREW_REQUIRED)) return false;
@@ -89,7 +190,6 @@ class Game {
     return true;
   }
 
-  /** One log into one of the team's three boilers. */
   addLog(player, index, amount = 1) {
     const team = this.teamOf(player);
     if (!team) return false;
@@ -106,10 +206,7 @@ class Game {
     if (!team) return false;
     const boiler = this.stateOf(team).boilers[index];
     if (!boiler) return false;
-    if (boiler.logs <= 0) {
-      return true;
-    }
-    if (boiler.lit) {
+    if (boiler.logs <= 0 || boiler.lit) {
       return true;
     }
     boiler.burnTicks = 0;
@@ -118,11 +215,9 @@ class Game {
     return true;
   }
 
-  /** The kettle takes the player's own colour of flowers, up to ten. */
   addFlowers(player, colour, amount = 1) {
     const team = this.teamOf(player);
-    if (!team) return false;
-    if (colour !== team) {
+    if (!team || colour !== team) {
       return true;
     }
     const state = this.stateOf(team);
@@ -178,7 +273,6 @@ class Game {
     state.bottleAge = 0;
   }
 
-  /** A player picks the bottle up and packs it: one point for the team. */
   collect(player) {
     const team = this.teamOf(player);
     if (!team) return false;
@@ -196,7 +290,7 @@ class Game {
   }
 
   spawnMonkey(tile) {
-    const npc = Common.core.NPC.create(Common.core.NpcIdentifiers?.MONKEY_3 ?? 1817, Common.toLocation(tile));
+    const npc = Common.core.NPC.create(Common.core.NpcIdentifiers?.MONKEY_3 || 1817, Common.toLocation(tile));
     npc.__skipDefaultRespawn = true;
     npc.__troubleBrewing = this;
     Common.core.World.getAddNPCQueue().push(npc);
@@ -221,181 +315,9 @@ class Game {
     entry.npc = null;
     entry.respawnAt = this.elapsed + 10;
     inventory.addItem(new Common.core.Item(itemIds().monkey, 1));
-    player.getSkillManager().addExperiences(Common.core.Skill.AGILITY, 15);
-    player.getSkillManager().addExperiences(Common.core.Skill.HUNTER, 15);
+    this.addContribution(player, 1);
     return true;
   }
-
-  /** Move the round forward (the agent MCP's advance_time); every tick still runs normally. */
-  elapse(ticks) {
-    for (let i = 0; i < ticks && !this.over; i++) this.tick();
-  }
-
-  tick() {
-    if (this.over) return false;
-    this.elapsed++;
-    const left = Common.GAME_TICKS - this.elapsed;
-
-    for (const team of Common.TEAMS) {
-      const state = this.stateOf(team);
-      for (const boiler of state.boilers) {
-        if (!boiler.lit || boiler.logs <= 0) continue;
-        boiler.burnTicks++;
-        if (boiler.burnTicks < Common.BOILER_BURN_TICKS) continue;
-        boiler.burnTicks = 0;
-        boiler.logs--;
-        if (boiler.logs === 0) boiler.lit = false;
-      }
-      if (state.bottle) {
-        state.bottleAge++;
-        if (state.bottleAge > Common.BOTTLE_LIFETIME) {
-          if (state.bottle) {
-            try { Common.core.ItemOnGroundManager.deregister(state.bottle); } catch { /* gone */ }
-            this.ground.delete(state.bottle);
-          }
-          state.bottle = null;
-          state.bottleAge = 0;
-          state.cooldown = 0;
-        }
-      }
-      if (state.brewing > 0) {
-        state.brewing--;
-        if (state.brewing === 0) {
-          this.completeBrew(team);
-          state.cooldown = 57;
-        }
-      } else if (state.cooldown > 0) {
-        state.cooldown--;
-      } else if (this.canBrew(team)) {
-        this.consumeForBrew(team);
-        state.brewing = Common.BREW_TICKS;
-      }
-    }
-
-    for (const entry of this.monkeys.values()) {
-      if (entry.npc === null && this.elapsed >= entry.respawnAt) {
-        const npc = Common.core.NPC.create(Common.core.NpcIdentifiers?.MONKEY_3 ?? 1817, Common.toLocation(entry.tile));
-        npc.__skipDefaultRespawn = true;
-        npc.__troubleBrewing = this;
-        Common.core.World.getAddNPCQueue().push(npc);
-        this.npcs.add(npc);
-        entry.npc = npc;
-      }
-    }
-
-    if (left <= 0) this.finish();
-    return true;
-  }
-
-  finish() {
-    if (this.over) return;
-    this.over = true;
-    if (current === this) current = null;
-    const scores = { red: this.stateOf("red").score, blue: this.stateOf("blue").score };
-    const winner = scores.red === scores.blue ? null : scores.red > scores.blue ? "red" : "blue";
-
-    for (const player of [...this.teams.keys()]) {
-      const team = this.teamOf(player);
-      if (typeof player.isRegistered === "function" && !player.isRegistered()) {
-        this.teams.delete(player);
-        this.members[team].delete(player);
-        continue;
-      }
-      const pieces = scores[team] * 10 + Math.min(100, this.contributed(player));
-      const total = (Number(player.getAttribute(Common.PIECES_ATTRIBUTE)) || 0) + pieces;
-      player.setAttribute(Common.PIECES_ATTRIBUTE, total);
-      Common.api.emitCustomEvent("trouble-brewing:completed", {
-        player, team, winner, score: scores[team], otherScore: scores[Common.other(team)], pieces,
-      });
-      clearItems(player);
-      player.moveTo(Common.toLocation(Common.LOBBY_RETURN));
-      this.teams.delete(player);
-      this.members[team].delete(player);
-    }
-
-    for (const ground of [...this.ground]) {
-      try { Common.core.ItemOnGroundManager.deregister(ground); } catch { /* gone */ }
-    }
-    this.ground.clear();
-    for (const npc of [...this.npcs]) {
-      Common.core.World.getRemoveNPCQueue().push(npc);
-    }
-    this.npcs.clear();
-    this.monkeys.clear();
-  }
-
-  /** Logged out or removed mid-game: no reward, but the same cleanup. */
-  left(player) {
-    if (!this.teams.has(player) || this.over) return;
-    const team = this.teamOf(player);
-    this.teams.delete(player);
-    this.members[team].delete(player);
-    this.contribution.delete(player);
-    clearItems(player);
-  }
 }
 
-function newState() {
-  return {
-    score: 0,
-    storeLogs: Common.STORE_LOGS,
-    hoppers: { bitternut: 0, sweetgrub: 0, water: 0, colour: 0, bark: 0 },
-    boilers: [0, 1, 2].map(() => ({ logs: 0, lit: false, burnTicks: 0 })),
-    kettle: 0,
-    brewing: 0,
-    cooldown: 0,
-    bottle: null,
-    bottleAge: 0,
-  };
-}
-
-function clearItems(player) {
-  const inventory = player.getInventory();
-  for (const id of gameItems()) {
-    const amount = inventory.getAmount(id);
-    if (amount > 0) inventory.deleteNumber(id, amount);
-  }
-  inventory.refreshItems?.();
-}
-
-/** Every game item, for the station units. */
-function items() {
-  return itemIds();
-}
-
-/** The agent MCP's advance_time asks timed content to move its deadlines. */
-function advanceTime({ ms, handledBy }) {
-  if (!current || current.over) return;
-  current.elapse(Math.max(0, Math.floor((ms ?? 0) / 600)));
-  handledBy?.push("TroubleBrewing");
-}
-
-/** A bottle picked up: only its own team, and only a player who contributed, may pack it. */
-function pickupRum(event) {
-  if (!current) return false;
-  for (const team of Common.TEAMS) {
-    if (current.stateOf(team).bottle !== event.groundItem) continue;
-    event.handled = true;
-    if (current.teamOf(event.player) !== team) {
-      return true;
-    }
-    current.collect(event.player);
-    return true;
-  }
-  return false;
-}
-
-module.exports = {
-  Game,
-  items,
-  clearItems,
-  pickupRum,
-  advanceTime,
-  get current() { return current; },
-  gameOf(player) { return current?.teams.has(player) ? current : null; },
-  startNew(players) {
-    const game = new Game(players);
-    game.start();
-    return game;
-  },
-};
+module.exports = { Game, gameItems, itemIds, getCurrent: () => current };

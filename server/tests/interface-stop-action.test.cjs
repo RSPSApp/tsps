@@ -208,3 +208,22 @@ test("an NPC's hit closes the open screen", async (t) => {
   }
   assert.ok(closedAt >= 0, "the goblin's hit closes the stats screen");
 });
+
+const PRICES_BUTTON = { type: "widget_action", widgetId: (387 << 16) | 3, groupId: 387, childId: 3, buttonNum: 1, simple: true };
+const PRICES_REFUSAL = "You cannot open the price checker screen while in combat.";
+
+test("Guide prices is refused while fighting and opens once the fight is over", async (t) => {
+  // Live 240/1001355 t1964 refused mid-fight with a goblin, t1969 opened.
+  const f = actor(t);
+  const npc = goblin(t, HOME.x + 1, HOME.y);
+  f.p.getCombat().attack(npc);
+  ticks(1);
+  await send(f, PRICES_BUTTON);
+  assert.deepEqual(f.messages.filter((m) => m === PRICES_REFUSAL), [PRICES_REFUSAL]);
+  assert.equal(f.p.getInterfaceId(), -1, "the price checker does not open");
+  assert.ok(f.p.getCombat().getTarget() === npc, "the attack keeps its target");
+  npc.setHitpoints(0);
+  await send(f, PRICES_BUTTON);
+  assert.equal(f.messages.filter((m) => m === PRICES_REFUSAL).length, 1, "no second refusal");
+  assert.equal(f.p.getInterfaceId(), 464, "it opens once the goblin is dead");
+});

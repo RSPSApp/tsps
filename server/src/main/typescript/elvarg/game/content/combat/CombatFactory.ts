@@ -1339,6 +1339,18 @@ export class CombatFactory {
         return CombatFactory.isAttacking(character) || CombatFactory.isBeingAttacked(character);
     }
 
+    /**
+     * In combat with something still alive: the character's target or its attacker (an attacker
+     * lasts the PJ window after its last hit) is registered with hitpoints left. Live's worn-items
+     * screens refuse on this and open on the next click after the opponent dies (rsprox
+     * 227/01885 t20819-20821, 240/1001355 t1964-1969). docs/interface-interruption.md.
+     */
+    public static inLiveCombat(character: Mobile): boolean {
+        const combat = character.getCombat();
+        return [combat.getTarget(), combat.getAttacker()].some((other) =>
+            other != null && other.getHitpoints() > 0 && (typeof other.isRegistered !== "function" || other.isRegistered()));
+    }
+
     public static poisonEntity(entity: Mobile, poisonSeverity: number, poisonOrbType: number = 1) {
         if (poisonSeverity <= 0) {
             return;

@@ -215,6 +215,9 @@ async function main(): Promise<void> {
         assert.deepEqual(widgets.get(commandUid(component)).actions, ["Search"]);
         assert.ok(widgets.get(commandUid(component)).flags & (1 << 1), "search widgets accept a native menu click");
     }
+    const commandUids = commandsDefinition.widgets.map((w: any) => w.uid);
+    assert.equal(new Set(commandUids).size, commandUids.length,
+        "every widget has its own uid: the client keeps one widget per uid, so a shared id drops one");
     // The list fills the modal it opens in, however tall (#6584): a taller parent grows the list
     // and the scrollbar, and the recycled row pool still covers it.
     const commandWidget = (component: number) => commandsDefinition.widgets.find((w: any) => w.uid === commandUid(component));

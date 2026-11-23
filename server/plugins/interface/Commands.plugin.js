@@ -2,11 +2,14 @@ const { FLAG_OP1, TYPE_RECTANGLE, TYPE_TEXT, createWidgetGroup } = require("./wi
 
 const GROUP_ID = 30004;
 const MAIN_MODAL_UID = (161 << 16) | 16;
-const COMPONENT = { ROOT: 0, FRAME: 1, LIST_VIEW: 2, LIST_SCROLLBAR: 3, SEARCH_BOX: 4, SEARCH_INPUT: 5,
-  STATUS: 6, DATA: 7, ROW_START: 10, ROW_BACKGROUND_START: 30 };
 // Rows are a recycled pool, so it has to cover the tallest list the modal can give (portrait
 // mode stretches it well past the classic 316px): 96 rows is 1536px.
 const ROW_COUNT = 96;
+const ROW_START = 10;
+// Text rows take ROW_START..ROW_START + ROW_COUNT - 1; the backgrounds start after them, or the
+// two pools share component ids and the client keeps only one widget per id.
+const COMPONENT = { ROOT: 0, FRAME: 1, LIST_VIEW: 2, LIST_SCROLLBAR: 3, SEARCH_BOX: 4, SEARCH_INPUT: 5,
+  STATUS: 6, DATA: 7, ROW_START, ROW_BACKGROUND_START: ROW_START + ROW_COUNT };
 const ROW_HEIGHT = 16;
 // The modal's design size, and how the list's parts follow it. A mode-1 width or height is the
 // parent's minus the raw value, so the list grows and shrinks with the modal instead of keeping

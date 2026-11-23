@@ -41,10 +41,12 @@ function fakeApiBase() {
       hooks.customHandlers[name] = [...(hooks.customHandlers[name] ?? []), handler];
     },
     persistAttribute() {},
-    onObjectInteraction() {},
+    onObjectInteraction: (handler) => {
+      if (typeof handler === 'function') (hooks.objects ??= []).push(handler);
+    },
     onInterfaceActionButton: (uid, handler) => { (hooks.buttons ??= {})[uid] = handler; },
     onZoneEnter() {},
-    onZoneExit() {},
+    onZoneExit: (area, handler) => (hooks.zoneExits ??= []).push(handler),
     onPlayerLogout: (handler) => (hooks.logout ??= []).push(handler),
     onPlayerLogin() {},
     onShouldDropItemsOnDeath() {},
@@ -285,6 +287,168 @@ test('the entrance: no party offers the list; the leader is warned once and aske
   assert.match(hooks.prompts.at(-1).title, /Only escape crystals/);
   party.dispose();
 });
+
+const NOTICE_BOARD_FLAG = 6573;
+const MESSAGE_BOX = 229;
+const MESSAGE_BOX_CONTINUE = (MESSAGE_BOX << 16) | 4;
+const OPTIONS_WIDGET = (219 << 16) | 1;
+const BOARD_INTRO = [
+  'From this notice board, you can form or join a Theatre of Blood',
+  'raiding party. The raid has three difficulty modes to select from. If',
+  "you're forming your own party, you can pick what mode you want.",
+  "If you have limited raiding experience, you'll likely want to start with",
+  'Entry Mode. Otherwise, you might prefer Normal Mode.',
+].join('<br>');
+const EXPERIENCE_OPTIONS = [
+  "Not very experienced. I'll start with Entry Mode.",
+  "Quite experienced. I'll start with Normal Mode.",
+];
+
+test('the active cache names the notice board flag', () => {
+  const { Gamevals, GamevalKind } = require('../dist/game/cache/Gamevals');
+  assert.equal(new Gamevals().namesOf(GamevalKind.VARBIT).get(NOTICE_BOARD_FLAG), 'tobquest_used_notice_board');
+});
+
+function readBoard(player) {
+  const event = {
+    player, objectId: 32655, clickType: 1, handled: false,
+    definition: { getInteractions: () => ['Read'] },
+  };
+  for (const hook of hooks.objects) hook(event);
+  assert.equal(event.handled, true);
+}
+
+function continueBox(player) {
+  assert.equal(player.getDialogueManager().handleResume(MESSAGE_BOX_CONTINUE, -1), true);
+}
+
+function assertExperience(player) {
+  continueBox(player);
+  const question = player.getDialogueManager().getCurrent();
+  assert.equal(question.getTitle(), 'How experienced are you with raids?');
+  assert.deepEqual(question.getOptions(), EXPERIENCE_OPTIONS);
+  assert.equal(player.getPacketSender().isChatboxInterface(219), true);
+}
+
+test('first Read calls the Stranger first, then repeats the introduction after closing it', (t) => {
+  const player = realReader(t, 'BoardNew');
+  const sender = player.getPacketSender();
+  const chatLines = t.mock.method(sender, 'sendTypedMessage');
+  readBoard(player);
+  assert.equal(player.getDialogueManager().getCurrent().getText(), 'Hey. Over here.');
+  assert.equal(sender.getVarbit(NOTICE_BOARD_FLAG), 0);
+  player.setAttribute(Lobby.ATTR.MET_STRANGER, true);
+
+  readBoard(player);
+  assert.equal(player.sent.texts.get((MESSAGE_BOX << 16) | 3), BOARD_INTRO);
+  assert.deepEqual(chatLines.mock.calls.at(-1).arguments, [115, BOARD_INTRO.replaceAll('<br>', ' ').slice(0, 200)]);
+  assert.equal(sender.isChatboxInterface(MESSAGE_BOX), true);
+  assert.deepEqual(player.sent.interfaces, []);
+  sender.closeInterruptibleInterfaces();
+  assert.equal(player.getDialogueManager().isActive(), false);
+  assert.equal(sender.getVarbit(NOTICE_BOARD_FLAG), 0);
+  readBoard(player);
+  assert.equal(player.getDialogueManager().getCurrent().getText(), BOARD_INTRO);
+  assertExperience(player);
+  assert.equal(sender.getVarbit(NOTICE_BOARD_FLAG), 0);
+});
+
+for (const [choice, mode, label] of [[1, 'entry', 'Entry'], [2, 'normal', 'Normal']]) {
+  test(`the board remembers the ${label} choice and makes the first party in that mode`, (t) => {
+    const player = realReader(t, 'BoardLeader');
+    t.after(() => Parties.partyOf(player)?.dispose());
+    player.setAttribute(Lobby.ATTR.MET_STRANGER, true);
+    const sender = player.getPacketSender();
+    const packets = [];
+    for (const method of ['sendTypedMessage', 'sendVarbit']) {
+      const send = sender[method];
+      t.mock.method(sender, method, function (...args) {
+        packets.push([method, ...args]);
+        return send.apply(this, args);
+      });
+    }
+    readBoard(player);
+    assertExperience(player);
+    const confirmation = `When you form a raiding party, it will be set to ${label} Mode. If you wish to pick a different difficulty mode, you can do so at any time from this notice board.`;
+    assert.equal(player.getDialogueManager().handleResume(OPTIONS_WIDGET, choice), true);
+    assert.equal(sender.getVarbit(NOTICE_BOARD_FLAG), 1);
+    assert.equal(player.getDialogueManager().getCurrent().getText(),
+      confirmation.replace('If you wish', 'If<br>you wish').replace('any time', 'any<br>time'));
+    assert.deepEqual(packets.filter(([method, id]) => method === 'sendTypedMessage' || id === NOTICE_BOARD_FLAG).slice(-2), [['sendVarbit', NOTICE_BOARD_FLAG, 1], ['sendTypedMessage', 115, confirmation]]);
+    assert.deepEqual(player.sent.interfaces, []);
+    continueBox(player);
+    assert.equal(sender.isChatboxInterface(MESSAGE_BOX), false);
+    assert.deepEqual(player.sent.interfaces, [364]);
+
+    Lobby.resumeButton({ player, buttonId: (364 << 16) | 3, action: 1 });
+    assert.equal(Parties.partyOf(player).mode, mode);
+    Parties.partyOf(player).dispose();
+    sender.closeInterruptibleInterfaces();
+    readBoard(player);
+    assert.equal(player.getInterfaceId(), 364);
+    assert.equal(sender.isChatboxInterface(MESSAGE_BOX), false);
+  });
+}
+
+test('accepting an application tells its applicant before the party HUD update; declining still tells them', (t) => {
+  const leader = fakePlayer('Leader Display');
+  const accepted = fakePlayer('Accepted');
+  const declined = fakePlayer('Declined');
+  const sendMessage = accepted.sendMessage;
+  t.mock.method(accepted, 'sendMessage', (text) => {
+    assert.equal(accepted.varbits.get(6440) ?? 0, 0, 'the game message comes before the HUD update');
+    sendMessage(text);
+  });
+  const party = Parties.create(leader);
+  t.after(() => party.dispose());
+  for (const applicant of [accepted, declined]) party.apply(applicant);
+  Lobby.openInformation(leader, party);
+  Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 12 });
+  assert.deepEqual(accepted.messages, ['Your application to the party of Leader Display has been accepted.']);
+  assert.equal(party.has(accepted), true);
+  assert.equal(accepted.varbits.get(6440), 1);
+  Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 22 });
+  assert.deepEqual(declined.messages, ['Your application to the party of Leader Display has been declined.']);
+});
+
+test('leaving the lobby tells members once and withdraws applicants quietly', (t) => {
+  const leader = fakePlayer('Leader');
+  const member = fakePlayer('Member');
+  const applicant = fakePlayer('Applicant');
+  const party = Parties.create(leader);
+  t.after(() => party.dispose());
+  party.apply(member);
+  party.accept(member);
+  party.apply(applicant);
+  for (const player of [member, applicant, member]) hooks.zoneExits[0]({ player });
+  assert.deepEqual(member.messages, ['You have left the lobby, so you have been removed from your party.']);
+  assert.equal(party.has(member), false);
+  assert.deepEqual(applicant.messages, []);
+  assert.equal(Parties.applicationOf(applicant), null);
+
+  const { raid, players: [raider] } = startRaid(['Entering']);
+  t.after(() => raid.dispose());
+  hooks.zoneExits[0]({ player: raider });
+  assert.equal(raider.messages.includes('You have left the lobby, so you have been removed from your party.'), false);
+});
+
+for (const status of ['disbanded', 'inside the Theatre']) {
+  test(`refreshing a party ${status} closes its details and offers the list after the message`, (t) => {
+    const viewer = realReader(t, 'Viewer');
+    const party = Parties.create(fakePlayer('Leader'));
+    t.after(() => party.dispose());
+    Lobby.openInformation(viewer, party);
+    if (status === 'disbanded') party.dispose();
+    else party.raid = {};
+    Lobby.resumeButton({ player: viewer, buttonId: 50 << 16, action: 1 });
+    assert.equal(viewer.getInterfaceId(), -1);
+    assert.equal(viewer.sent.texts.get((MESSAGE_BOX << 16) | 3), 'That party is no longer recruiting.');
+    assert.deepEqual(viewer.sent.interfaces, [50]);
+    continueBox(viewer);
+    assert.equal(viewer.getPacketSender().isChatboxInterface(MESSAGE_BOX), false);
+    assert.deepEqual(viewer.sent.interfaces, [50, 364]);
+  });
+}
 
 // ------------------------------------------------------------------ the raid
 

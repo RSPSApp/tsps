@@ -23,6 +23,15 @@ export enum NpcDrawPriority {
     DRAW_PRIORITY_LAST = 2,
 }
 
+/**
+ * Whether the type has a model to draw. A model id of -1 (the server's body customisation, e.g.
+ * the Hueycoatl's sunk tail) loads nothing, so the whole NPC is drawn as nothing and can't be clicked.
+ */
+export function npcTypeHasModel<T extends { modelIds?: number[] }>(type: T | undefined): type is T {
+    const ids = type?.modelIds;
+    return !!ids && ids.length > 0 && ids.every((id) => id >= 0);
+}
+
 export class NpcType extends Type {
     name: string;
     desc?: string;

@@ -330,6 +330,7 @@ export function getNpcDefaultHeight(host: WebGLOsrsRendererHost, npcTypeId: numb
                 // Load and merge model data
                 const models: ModelData[] = [];
                 for (const modelId of npcType.modelIds) {
+                    if (modelId < 0) continue;
                     const modelData = host.osrsClient.modelLoader.getModel(modelId);
                     if (modelData) {
                         models.push(modelData);

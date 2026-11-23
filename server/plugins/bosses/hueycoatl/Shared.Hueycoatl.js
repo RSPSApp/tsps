@@ -154,6 +154,13 @@ const SCENERY_SHAPE = 10;
 const TAIL_EAST = DATA.shockwaves.east.tail;
 const TAIL_WEST = DATA.shockwaves.west.tail;
 const SHOCKWAVES = Object.freeze({ east: DATA.shockwaves.east.tiles, west: DATA.shockwaves.west.tiles });
+/**
+ * The tail never turns (turn speed 0), so it is held at its side's angle: facing west out of the
+ * east cave, east out of the west one (npc face_angle, instant, recordings 4052 and 4054).
+ */
+const TAIL_FACE = Object.freeze({ east: 512, west: 1536 });
+/** Sunk, the tail is drawn as nothing: every model of its form replaced by -1 (recording 4052). */
+const TAIL_HIDDEN_MODELS = Object.freeze({ [NPC.TAIL]: [-1], [NPC.TAIL_BROKEN]: [-1, -1, -1] });
 
 const SYMBOLS = DATA.symbols;
 const LOBBY_SPAWNS = DATA.lobby.spawns;
@@ -275,7 +282,7 @@ module.exports = {
   RAIN_FIRE_MAX, RAIN_FIRE_PRAYED_MAX, LIGHTNING_MAX, SHOCKWAVE_MIN, SHOCKWAVE_MAX,
   TAIL_CAP, TAIL_CAP_CRUSH, BRAZIER_BONUS,
   HEAD_TILE, SEER_TILE, SEER_BODY_POST, SEER_GATE_POST, SEER_PILLAR_POST, SEGMENTS, BARRIER_TILE, SCENERY_SHAPE,
-  TAIL_EAST, TAIL_WEST, SHOCKWAVES, SYMBOLS, LOBBY_SPAWNS,
+  TAIL_EAST, TAIL_WEST, TAIL_FACE, TAIL_HIDDEN_MODELS, SHOCKWAVES, SYMBOLS, LOBBY_SPAWNS,
   ARENA_ENTRY, SLOPE_TOP, CAMP_LANDING, PRIVATE_LANDING, KNOCKBACK_TILE, LOOT_TILES,
   ARENA_BOUNDS, SUMMIT_BOUNDS, MOUNTAINSIDE_BOUNDS, INSTANCE_SOURCE_CHUNK, INSTANCE_CHUNKS,
   SESSION_ATTRIBUTE, KILLS_ATTRIBUTE, BEST_TICKS_ATTRIBUTE, DEATHS_ATTRIBUTE, STREAK_ATTRIBUTE,

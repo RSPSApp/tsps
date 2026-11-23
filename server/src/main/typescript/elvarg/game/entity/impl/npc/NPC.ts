@@ -151,6 +151,12 @@ export class NPC extends Mobile {
     /** A tile to turn to this tick (OSRS npc face coord), sent with the NPC's update and cleared after it. */
     private faceTileState: { x: number; y: number } | null = null;
     /**
+     * A held facing (OSRS npc face angle), sent with every update while set so a viewer who
+     * comes into range gets it too. The only way to turn an NPC whose turn speed is 0: the client
+     * draws one at angle 0 when it is added.
+     */
+    private faceAngleState: { angle: number; instant: boolean } | null = null;
+    /**
      * Body-model overrides (OSRS npc model customisation): slot -> replacement model id. Sent
      * with every update while set, so late viewers see it too; an empty list is a reset and
      * keeps being sent for a few ticks before the field clears.
@@ -1112,6 +1118,19 @@ export class NPC extends Mobile {
 
     public getFaceTile(): { x: number; y: number } | null {
         return this.faceTileState;
+    }
+
+    /**
+     * Holds the NPC at an angle (0 south, 512 west, 1024 north, 1536 east) on every viewer's
+     * client (OSRS npc face angle); instant snaps to it instead of turning. Null stops sending it.
+     */
+    public setFaceAngle(angle: number | null, instant = true): NPC {
+        this.faceAngleState = angle === null ? null : { angle: angle & 2047, instant };
+        return this;
+    }
+
+    public getFaceAngle(): { angle: number; instant: boolean } | null {
+        return this.faceAngleState;
     }
 
     public resetUpdating() {

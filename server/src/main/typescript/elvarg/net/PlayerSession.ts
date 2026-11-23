@@ -590,6 +590,7 @@ export class PlayerSession {
           faceTile: npc.getFaceTile?.() ?? (positionToFace
             ? { x: positionToFace.getX(), y: positionToFace.getY() }
             : undefined),
+          faceAngle: npc.getFaceAngle?.() ?? undefined,
           crawl: npc.isCrawling?.() || undefined,
           jump: npc.isTeleportingWithoutJump?.() ? false : undefined,
           modelCustomisation: npc.getModelCustomisationForUpdate?.() ?? undefined,

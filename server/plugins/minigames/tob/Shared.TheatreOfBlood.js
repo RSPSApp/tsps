@@ -87,6 +87,8 @@ const VARP = {
 };
 
 const VARBIT = {
+  /** Whether the player has answered the notice board's first-use question. */
+  USED_NOTICE_BOARD: 6573,
   /** 0 no party, 1 in a lobby party, 2 in the theatre. */
   PARTY_STATE: 6440,
   /** The viewer's own slot, 1-5. */

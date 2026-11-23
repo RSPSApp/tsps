@@ -5,10 +5,8 @@
  * (28) while there, and the theatre's entrance.
  *
  * Captured: the interfaces (364 the list, 50 the party, 28 the HUD) and the scripts that fill
- * them (2340 a list row, 2317/2321 member and applicant lines, 2323 the footer), "Your
- * leader, <name>, must go first.". Estimates: the interfaces' buttons, the rest of the
- * entrance's warnings and questions, and leaving Ver Sinhaza taking a player out of their
- * party or application.
+ * them (2340 a list row, 2317/2321 member and applicant lines, 2323 the footer), the board's
+ * introduction and the messages for accepted applicants, lobby departures and stale parties.
  * The cache confirms each script's arguments. Wiki: escape crystals are the only way out of
  * the theatre and the Mysterious Stranger sells them, so the entrance offers his shop.
  *
@@ -24,6 +22,8 @@ const Stats = require("./Stats.TheatreOfBlood");
 
 const { INTERFACE, SCRIPT, VARP, VARBIT } = Shared;
 const { RIGHTS } = Parties;
+const MESSAGE_BOX = 229;
+const USED_NOTICE_BOARD_ATTRIBUTE = "tob:used-notice-board";
 
 const uid = (group, component) => (group << 16) | component;
 /**
@@ -60,12 +60,14 @@ const ESCAPE_CRYSTALS = [Shared.ITEM.ESCAPE_CRYSTAL];
 const HARD_LOCKED = "Everyone in your party must have completed the Theatre of Blood in Normal Mode to attempt Hard Mode.";
 /** The name the Grouping plugin knows the theatre by. */
 const GROUPING_ACTIVITY = "Theatre of Blood";
+const pendingApplicantHud = new WeakMap();
 
 // ---------------------------------------------------------------- the HUD in Ver Sinhaza
 
 /** The HUD lists the party's names (component 12) and varbit 6440 (tob_client_partystatus) says 1. */
 function refreshHud(player) {
   const party = Parties.partyOf(player);
+  if (party && pendingApplicantHud.get(player) === party) return;
   const sender = player.getPacketSender();
   sender.sendSubInterface(Shared.OVERLAY_HUD_UID, INTERFACE.PARTY_HUD, 1);
   sender.sendVarbit(VARBIT.PARTY_STATE, party ? 1 : 0);
@@ -94,9 +96,9 @@ function enterVerSinhaza({ player }) {
 /** Leaving Ver Sinhaza (other than into the theatre) leaves a party or withdraws an application. */
 function leaveVerSinhaza({ player }) {
   if (Raid.raidOf(player)) return;
+  leaveParty(player, { leftLobby: true });
   player.getPacketSender().closeSubInterface(Shared.OVERLAY_HUD_UID);
   player.getPacketSender().sendVarbit(VARBIT.PARTY_STATE, 0);
-  leaveParty(player);
   const applied = Parties.applicationOf(player);
   if (applied) {
     applied.withdraw(player);
@@ -104,12 +106,15 @@ function leaveVerSinhaza({ player }) {
   }
 }
 
-function leaveParty(player) {
+function leaveParty(player, { leftLobby = false } = {}) {
   const party = Parties.partyOf(player);
   if (!party || party.raid) return;
   party.remove(player);
+  pendingApplicantHud.delete(player);
+  // 227/01779 tick 13028 and 234/03299 tick 10627.
+  if (leftLobby) player.sendMessage("You have left the lobby, so you have been removed from your party.");
   refreshParty(party);
-  refreshHud(player);
+  if (!leftLobby) refreshHud(player);
 }
 
 // ---------------------------------------------------------------- 364: the party list
@@ -209,10 +214,12 @@ function openInformation(player, party) {
  */
 function chooseMode(player, party) {
   const set = (mode) => {
+    if (!party.isLeader(player) || party.raid) return;
     if (mode === "hard" && !party.members.every(Stats.canPlayHard)) {
       player.sendMessage(HARD_LOCKED);
     } else {
       party.mode = mode;
+      player.setAttribute(Parties.DEFAULT_MODE_ATTRIBUTE, mode);
     }
     refreshParty(party);
     openInformation(player, party);
@@ -298,11 +305,11 @@ function enlist(party, player) {
 }
 
 /** The leader's Accept for one of the party's applicants. */
-function acceptAsLeader(party, applicant) {
-  answerApplicant(party.leader, party, party.applicants.indexOf(applicant), true);
+function acceptAsLeader(party, applicant, notifyApplicant = true) {
+  answerApplicant(party.leader, party, party.applicants.indexOf(applicant), true, { notifyApplicant, deferHud: false });
 }
 
-function answerApplicant(player, party, index, accept) {
+function answerApplicant(player, party, index, accept, { notifyApplicant = true, deferHud = true } = {}) {
   const applicant = party.applicants[index];
   if (!applicant) {
     openInformation(player, party);
@@ -320,7 +327,21 @@ function answerApplicant(player, party, index, accept) {
       Shared.statement(player, `${Shared.displayName(applicant)} appears to have joined another party.`);
       return;
     }
-    party.accept(applicant);
+    if (party.accept(applicant)) {
+      if (notifyApplicant) {
+        const leaderName = Shared.displayName(party.leader).replaceAll(" ", "\u00a0");
+        applicant.sendMessage(`Your application to the party of ${leaderName} has been accepted.`);
+      }
+      if (deferHud) {
+        // 227/00553 ticks 11915–11916: the message arrives one tick before party status 6440.
+        pendingApplicantHud.set(applicant, party);
+        Shared.later(applicant, 1, () => {
+          if (pendingApplicantHud.get(applicant) !== party) return;
+          pendingApplicantHud.delete(applicant);
+          if (party.has(applicant) && !party.raid) refreshHud(applicant);
+        });
+      }
+    }
   } else {
     party.decline(applicant);
     applicant.sendMessage(`Your application to the party of ${Shared.displayName(party.leader)} has been declined.`);
@@ -333,6 +354,15 @@ function clickInformation(event) {
   const { player } = event;
   const slot = slotOf(event);
   const party = viewedParty(player);
+  if (slot === INFO_BUTTON.REFRESH && (!party || party.raid)) {
+    if (player.getInterfaceId() === INTERFACE.PARTY_INFORMATION) {
+      // 227/01833 ticks 3480–3482. Retire the details modal while keeping the new chatbox.
+      statementThenOverview(player, "That party is no longer recruiting.");
+      player.setInterfaceId(-1);
+      player.getPacketSender().closeInterface(INTERFACE.PARTY_INFORMATION);
+    }
+    return;
+  }
   if (slot === INFO_BUTTON.BACK || !party) {
     openOverview(player);
     return;
@@ -436,7 +466,8 @@ function bringGroup(leader, party) {
     if (member === leader) continue;
     if (canBring(party, member)) {
       enlist(party, member);
-      acceptAsLeader(party, member);
+      // Grouping creates this application on the member's behalf.
+      acceptAsLeader(party, member, false);
     } else {
       member.sendMessage(`${Shared.displayName(leader)} has made a Theatre of Blood party for your group. Apply at the notice board and you'll be let straight in.`);
     }
@@ -460,12 +491,59 @@ function callOver(player) {
   Shared.npcSay(player, Shared.NPC.MYSTERIOUS_STRANGER, "Hey. Over here.");
 }
 
+/** Open the list behind the message box, then close the chatbox without removing the list. */
+function statementThenOverview(player, text) {
+  const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = Shared.core();
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new StatementDialogue(0, text),
+    new ActionDialogue(1, { execute: () => {
+      openOverview(player);
+      player.getPacketSender().closeInterface(MESSAGE_BOX);
+    } }),
+  ));
+}
+
+function syncNoticeBoardFlag({ player }) {
+  if (player.getAttribute(USED_NOTICE_BOARD_ATTRIBUTE)) {
+    player.getPacketSender().sendVarbit(VARBIT.USED_NOTICE_BOARD, 1);
+  }
+}
+
+/** Captured in 227/00101 ticks 25574–25608, 234/03285 ticks 23940–23950 and 237/01162 ticks 12855–12866. */
+function introduceNoticeBoard(player) {
+  const { DialogueChainBuilder, StatementDialogue, OptionDialogue } = Shared.core();
+  const introduction = [
+    "From this notice board, you can form or join a Theatre of Blood",
+    "raiding party. The raid has three difficulty modes to select from. If",
+    "you're forming your own party, you can pick what mode you want.",
+    "If you have limited raiding experience, you'll likely want to start with",
+    "Entry Mode. Otherwise, you might prefer Normal Mode.",
+  ].join("<br>");
+  const experience = new OptionDialogue(1, { executeOption: (option) => {
+    const mode = option === 1 ? "entry" : "normal";
+    player.setAttribute(Parties.DEFAULT_MODE_ATTRIBUTE, mode);
+    player.setAttribute(USED_NOTICE_BOARD_ATTRIBUTE, true);
+    syncNoticeBoardFlag({ player });
+    statementThenOverview(player,
+      `When you form a raiding party, it will be set to ${Shared.MODES[mode].name} Mode. If<br>`
+      + "you wish to pick a different difficulty mode, you can do so at any<br>"
+      + "time from this notice board.");
+  } }, "Not very experienced. I'll start with Entry Mode.", "Quite experienced. I'll start with Normal Mode.")
+    .setTitle("How experienced are you with raids?");
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new StatementDialogue(0, introduction),
+    experience,
+  ));
+}
+
 function readNoticeBoard({ player }) {
   if (!hasMetStranger(player)) {
     callOver(player);
-    return true;
+  } else if (player.getAttribute(USED_NOTICE_BOARD_ATTRIBUTE)) {
+    openOverview(player);
+  } else {
+    introduceNoticeBoard(player);
   }
-  openOverview(player);
   return true;
 }
 
@@ -575,10 +653,13 @@ module.exports = function registerTheatreLobby(api) {
   api.persistAttribute(ATTR.WARNED);
   api.persistAttribute(ATTR.NO_CRYSTAL_PROMPT);
   api.persistAttribute(ATTR.MET_STRANGER);
+  api.persistAttribute(USED_NOTICE_BOARD_ATTRIBUTE, false);
+  api.persistAttribute(Parties.DEFAULT_MODE_ATTRIBUTE, "normal");
   api.onNpcInteraction("Mysterious Stranger", { "Talk-to": talkToStranger });
   api.onZoneEnter(Shared.VER_SINHAZA, enterVerSinhaza);
   api.onZoneExit(Shared.VER_SINHAZA, leaveVerSinhaza);
   api.onPlayerLogout(logoutFromLobby);
+  api.onPlayerLogin(syncNoticeBoardFlag);
   api.onServerStartup(announceActivity);
   Shared.onObject(api, Shared.OBJECT.NOTICE_BOARD, readNoticeBoard);
   Shared.onObject(api, Shared.OBJECT.ENTRANCE, useEntrance);

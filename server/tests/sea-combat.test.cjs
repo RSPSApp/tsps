@@ -750,6 +750,85 @@ test("a dead creature lies as its corpse; Harvest beside the hull puts its loot 
   }
 });
 
+test("a killed creature respawns 49 ticks after its corpse appears, harvested or not (rsprox)", () => {
+  const player = captain();
+  const { boat, owned, loc, hotspot } = aboardWithCannon(player);
+  const harvested = seaNpc(TERN, outboard(boat, owned, hotspot.id, loc, 1));
+  const left = seaNpc(TERN, outboard(boat, owned, hotspot.id, loc, 3));
+  const tileOf = (npc) => `${npc.getSpawnPosition().getX()},${npc.getSpawnPosition().getY()}`;
+  const spawns = [tileOf(harvested), tileOf(left)];
+  assert.notEqual(spawns[0], spawns[1]);
+  const respawned = new Map();
+  /** The game loop's add and remove phases, for these two terns and their respawns. */
+  const world = () => {
+    const removing = World.getRemoveNPCQueue();
+    for (const npc of [harvested, left]) {
+      if (removing.includes(npc)) {
+        removing.splice(removing.indexOf(npc), 1);
+        World.getNpcs().remove(npc);
+      }
+    }
+    const adding = World.getAddNPCQueue();
+    for (let i = adding.length - 1; i >= 0; i--) {
+      if (adding[i].getId() !== TERN || !spawns.includes(tileOf(adding[i]))) continue;
+      const tile = tileOf(adding.splice(i, 1)[0]);
+      respawned.set(tile, [...(respawned.get(tile) ?? []), World.processCycle]);
+    }
+  };
+  try {
+    for (const tern of [harvested, left]) {
+      tern.getCombat().addDamage(player, tern.getMaxHitpoints());
+      tern.setHitpoints(0);
+    }
+    let corpseAt = null;
+    for (let i = 0; i < 6; i++) {
+      tick(); world();
+      if (corpseAt === null && harvested.getId() === 15229) corpseAt = World.processCycle;
+    }
+    assert.ok(corpseAt !== null, "the tern's corpse");
+    assert.equal(left.getId(), 15229);
+    Loot.harvest({ player, npc: harvested, clickType: 1, handled: false });
+    for (let i = 0; i < 4; i++) { tick(); world(); }
+    assert.equal(harvested.isRegistered(), false, "a harvested corpse leaves the water");
+    while (World.processCycle < corpseAt + Loot.RESPAWN_TICKS) { tick(); world(); }
+    assert.deepEqual(respawned.get(spawns[0]), [corpseAt + 49], "the harvested tern, 49 ticks after its corpse");
+    assert.deepEqual(respawned.get(spawns[1]), [corpseAt + 49], "the unharvested one on the same tick");
+    assert.equal(left.isRegistered(), true, "while its corpse still lies there");
+    assert.equal(left.getId(), 15229);
+    for (let i = 0; i < 260; i++) { tick(); world(); }
+    assert.equal(left.isRegistered(), false, "the corpse goes after its two minutes");
+    assert.equal(respawned.get(spawns[1]).length, 1, "and doesn't bring a second tern");
+    assert.equal(respawned.get(spawns[0]).length, 1);
+  } finally {
+    for (const npc of [harvested, left]) if (npc.isRegistered()) World.getNpcs().remove(npc);
+    leave(player);
+  }
+});
+
+test("a harvested creature its plugin spawned for a player doesn't respawn", () => {
+  const player = captain();
+  const { boat, owned, loc, hotspot } = aboardWithCannon(player);
+  const at = outboard(boat, owned, hotspot.id, loc, 1);
+  const tern = api.spawnNpc({ id: TERN, x: at.getX(), y: at.getY(), z: 0, owner: player, wanderRadius: 0 });
+  tern.setNeedsPlacement(false);
+  const queued = () => World.getAddNPCQueue().filter((npc) => npc.getId() === TERN && npc.getOwner?.() === player).length;
+  try {
+    tern.getCombat().addDamage(player, tern.getMaxHitpoints());
+    tern.setHitpoints(0);
+    tick(4);
+    Loot.harvest({ player, npc: tern, clickType: 1, handled: false });
+    tick(4);
+    assert.ok(World.getRemoveNPCQueue().includes(tern), "harvested");
+    World.getRemoveNPCQueue().splice(World.getRemoveNPCQueue().indexOf(tern), 1);
+    World.getNpcs().remove(tern);
+    tick(260);
+    assert.equal(queued(), 0, "no clone of a player's own spawn");
+  } finally {
+    if (tern.isRegistered()) World.getNpcs().remove(tern);
+    leave(player);
+  }
+});
+
 test("bounty tasks: accepting sets the counter, harvesting rolls the part, a port master takes them in", () => {
   const player = captain();
   const task = portCommon.DATA.tasks.find((candidate) => candidate.id === 449);

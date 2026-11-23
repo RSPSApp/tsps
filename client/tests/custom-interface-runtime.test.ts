@@ -5,6 +5,7 @@ import {
     loadFromPayload,
     setCustomInterface,
 } from "../common/gamemode/GamemodeContentStore";
+import { alignPosition, alignSize } from "../widgets/layout/WidgetLayout";
 import { CustomInterfaceRuntime, filterRows, spanHeaders } from "../widgets/custom/CustomInterfaceRuntime";
 
 // A server-declared interface: one search box, a 2x2 grid of result slots, status text.
@@ -213,6 +214,26 @@ async function main(): Promise<void> {
     for (const component of [COMPONENT.SEARCH_BOX, COMPONENT.SEARCH_INPUT]) {
         assert.deepEqual(widgets.get(commandUid(component)).actions, ["Search"]);
         assert.ok(widgets.get(commandUid(component)).flags & (1 << 1), "search widgets accept a native menu click");
+    }
+    // The list fills the modal it opens in, however tall (#6584): a taller parent grows the list
+    // and the scrollbar, and the recycled row pool still covers it.
+    const commandWidget = (component: number) => commandsDefinition.widgets.find((w: any) => w.uid === commandUid(component));
+    for (const [modalWidth, modalHeight] of [[494, 316], [603, 815]]) {
+        const sized = (component: number) => {
+            const widget = { ...commandWidget(component) };
+            alignSize(widget, modalWidth, modalHeight);
+            alignPosition(widget, modalWidth, modalHeight);
+            return widget;
+        };
+        const view = sized(COMPONENT.LIST_VIEW);
+        const bar = sized(COMPONENT.LIST_SCROLLBAR);
+        assert.equal(view.height, modalHeight - 94, "the list ends where the classic one did, relative to the modal's bottom");
+        assert.equal(bar.height, view.height, "the scrollbar is as tall as the list");
+        assert.equal(view.width, modalWidth - 52);
+        assert.equal(bar.x + bar.width, modalWidth - 14, "the scrollbar stays against the right edge");
+        assert.ok(view.x + view.width <= bar.x, "the list does not run under the scrollbar");
+        assert.ok(commandsDefinition.list.slotCount * commandsDefinition.list.rowHeight >= view.height + commandsDefinition.list.rowHeight,
+            "enough recycled rows to fill the list");
     }
     requestedUrl = "";
     runtime.onInterfaceOpened(commandsDefinition.groupId);

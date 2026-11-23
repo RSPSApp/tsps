@@ -275,20 +275,6 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
         host.lastInteractionMenuOptionCount = 0;
         let raycastHitCount = 0;
 
-        // If the click is inside the bottom-right UI tabs region, consume it (don't interact with world).
-        if (leftClicked) {
-            const contW = 241;
-            const contH = 37 + 261 + 37; // strip + panel + strip
-            const contX = host.app.width - 8 - contW; // right margin 8
-            const contY = host.app.height - 8 - contH; // bottom margin 8
-            const mx = inputManager.leftClickX;
-            const my = inputManager.leftClickY;
-            if (mx >= contX && mx <= contX + contW && my >= contY && my <= contY + contH) {
-                host.clearInteractHighlightHoverTarget();
-                return;
-            }
-        }
-
         const menuCooldown = isTouchDevice ? 50 : 10;
 
         if (

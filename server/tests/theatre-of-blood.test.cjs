@@ -404,7 +404,7 @@ test('accepting an application tells its applicant and updates the party HUD on 
   for (const applicant of [accepted, declined]) party.apply(applicant);
   Lobby.openInformation(leader, party);
   Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 12 });
-  assert.deepEqual(accepted.messages, ['Your application to the party of Leader Display has been accepted.']);
+  assert.deepEqual(accepted.messages, ['Your application to the party of Leader\u00a0Display has been accepted.']);
   assert.equal(party.has(accepted), true);
   assert.equal(accepted.varbits.get(6440) ?? 0, 0, 'the acceptance tick sends no party status update');
   ticks(1);
@@ -412,9 +412,14 @@ test('accepting an application tells its applicant and updates the party HUD on 
   Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 22 });
   assert.deepEqual(declined.messages, ['Your application to the party of Leader Display has been declined.']);
 
+  const singleNameLeader = fakePlayer('Captain');
+  const otherParty = Parties.create(singleNameLeader);
+  t.after(() => otherParty.dispose());
   const departing = fakePlayer('Departing');
-  party.apply(departing);
-  Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 12 });
+  otherParty.apply(departing);
+  Lobby.openInformation(singleNameLeader, otherParty);
+  Lobby.resumeButton({ player: singleNameLeader, buttonId: 50 << 16, action: 12 });
+  assert.deepEqual(departing.messages, ['Your application to the party of Captain has been accepted.']);
   hooks.zoneExits[0]({ player: departing });
   ticks(1);
   assert.equal(departing.varbits.get(6440), 0, 'departing cancels a pending positive status update');

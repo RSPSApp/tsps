@@ -140,3 +140,13 @@ test("charges are saved on the item and survive a copy (bank, equip)", () => {
   const copy = amuletIn(inventory).clone();
   assert.equal(chargesOf(copy), 10);
 });
+
+test("Check on the worn amulet gives the charges too", () => {
+  const { player, sent } = fixture();
+  const worn = new core.Item(I.SAILORS_AMULET, 1);
+  worn.setMetaValue(SailorsAmulet.CHARGES_META_KEY, 40);
+  player.getEquipment().setItem(core.Equipment.AMULET_SLOT, worn);
+  // The worn menu's Check is the item's sixth equipment option (cache param 456), sent as op 7.
+  PluginManager.emitItemAction({ player, interfaceId: core.Equipment.INVENTORY_INTERFACE_ID, item: worn, itemId: I.SAILORS_AMULET, slot: core.Equipment.AMULET_SLOT, clickType: 7, handled: false });
+  assert.deepEqual(sent.messages, ["The amulet has 40 charges."]);
+});

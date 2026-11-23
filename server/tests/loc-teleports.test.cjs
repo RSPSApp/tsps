@@ -1956,9 +1956,35 @@ test("the Waterbirth cave entrance shows warning screen 1 first, and Yes goes in
   bold.player.setAttribute("warning-screens:warning-1", 7);
   enter(bold);
   assert.deepEqual(bold.opened, [], "no screen once it is off");
-  runTicks(bold, 1);
   assert.deepEqual(where(bold), [2523, 3739, 0]);
+  // Tick 2 from arriving is a tick after the click, which is handled the tick after arriving.
   runTicks(bold, 1);
   assert.deepEqual(where(bold), [2442, 10146, 0], "in on the captured tick");
   assert.equal(data.locs.filter((loc) => loc.warningScreen !== undefined).every((loc) => Number.isInteger(loc.warningScreen)), true);
+});
+
+test("the Wizards' Guild Sorcerer's Tower Portal says both spam lines and teleports on the tick after arriving (local 1001616)", () => {
+  // Captured (rev 241, ticks 362-364): the player arrives beside the west portal on the top floor, and on
+  // the next tick gets "You enter the magic portal..." and "You teleport to the Sorcerer's Tower." (spam)
+  // and lands at (2703, 3406, 0), with no animation, sound or fade. The click is handled on that tick.
+  assert.equal(CacheDefinitions.getObject(2158).actions[0], "Enter");
+  const portal = locAt(2158, 2585, 3087, 2);
+  const visit = explorer([2586, 3087, 2]);
+  const lines = [];
+  const sender = visit.player.getPacketSender();
+  const watched = new Proxy(sender, {
+    get: (target, key) => (key === "sendTypedMessage" ? (type, text) => (lines.push([type, text, visit.ticks.length - 1]), watched) : target[key]),
+  });
+  visit.player.getPacketSender = () => watched;
+  const event = { player: visit.player, object: portal, objectId: 2158, clickType: 1, handled: false };
+  hooks.object(event);
+  assert.equal(event.handled, true);
+  runTicks(visit, 2);
+  assert.deepEqual(visit.ticks, [["move 2703,3406,0"], [], []], "on the click's own tick, nothing played first");
+  assert.deepEqual(lines, [
+    [core.ChatType.SPAM, "You enter the magic portal...", 0],
+    [core.ChatType.SPAM, "You teleport to the Sorcerer's Tower.", 0],
+  ]);
+  const at = visit.player.getLocation();
+  assert.equal(core.RegionManager.getClipping(at.getX(), at.getY(), at.getZ(), null) & 0x1200100, 0, "the landing is walkable");
 });

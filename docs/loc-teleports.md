@@ -345,6 +345,10 @@ The click is handled the tick after the player arrives, so each captured tick co
 3. **The captured tick:** the move, after the entry's `message` when it has one: the game message live OSRS sends on a successful crossing (`messageType: "spam"` for one the chat filter hides). The Cam Torum squeeze doors say "You manage to squeeze through the tiny door." as spam on the teleport's tick (226/1693; 237/1098, 1102, 1105, 1135). The capture export keeps success messages without their type or tick, so the sync doesn't write them; it keeps one on an entry already in the data.
 4. **After the move:** the fade back in a tick later, and the overlay closed two ticks after that.
 
+An entry that plays nothing before the move (no animation, sound, fade or message box) has no animation tick to wait for, so the move is on the captured tick itself. Before, it still came a tick after the (empty) animation's tick, one tick later than captured: tick 1 moved two ticks after arriving, tick 2 three. 205 entries are like this, among them the Waterbirth cave with its warning off (in on tick 2, now two ticks after arriving) and the Kalphite Lair tunnels (two ticks after arriving, as described above). A captured tick 0 moves on the click, the earliest the handler can.
+
+`message` may be a list, sent in order on the move's tick: the Sorcerer's Tower Portal sends two lines.
+
 Two optional fields, set by hand (the capture export has neither): `soundDelay`, the sound's client delay as captured (`synth_sound delay`), and `fadeInTicks`, the ticks from the move to the fade back in when it is not one. The Crypt of Tonali lifts (`vmq4_crypt_lift`, `vmq4_crypt_lift_surface`) play their sound with delay 48 and fade back in two ticks after the move (233/03234.txt ticks 248-254 and 299-305, 232/03128.txt ticks 4024-4028). With `fadeInTicks`, movement is free again a tick after the fade back in, before the overlay closes: the up ride's first run step is on tick 304, between the fade in (303) and the close (305).
 
 Movement is blocked meanwhile. The sequence stops if the player is moved, dies or logs out.
@@ -436,6 +440,13 @@ conversation is the one branch the captures show (the player has "killed a few o
 
 Not part of this: the cave's darkness and insects without a light source, and the Witchwood
 icon's protection.
+
+## Wizards' Guild portals
+
+The Wizards' Guild's top floor has three one-way portals, Enter only, with no return portal at the other end ([Wiki: Wizards' Guild](https://oldschool.runescape.wiki/w/Wizards%27_Guild)). Getting in needs 66 Magic, so the portals check nothing more.
+
+- **Sorcerer's Tower Portal** (`thormacportal`, 2158, west wall, 2585,3087,2): user's rsprox recording local 1001616 (rev 241), ticks 362-364. On the tick after arriving: "You enter the magic portal..." and "You teleport to the Sorcerer's Tower." (spam), then the teleport to 2703,3406,0, with no animation, sound or fade.
+- **Wizards' Tower Portal** (`wiztowerportal`, 2156) and **Dark Wizards' Tower Portal** (`darkwizportal`, 2157): not captured, so they still do nothing. Their messages and landing tiles are unknown.
 
 ## Waterbirth Island cave warning
 

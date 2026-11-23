@@ -2955,6 +2955,34 @@ test("the portal back to Port Sarim never leaves the player in Shipwright Sam's 
   }
 });
 
+test("the portal back to Catherby lands on any of the five tiles live uses beside Sophie, one past a blocked corner", () => {
+  // From (2805, 3429) the tile north is solid, so (2804, 3430) is no single step away, but it
+  // is open by way of (2804, 3429) and live lands there as often as on the others.
+  const regions = new Map(RegionManager.regions);
+  RegionManager.init();
+  try {
+    RegionManager.loadMapFiles(2805, 3429);
+    const talkSpot = new Location(2805, 3429, 0);
+    const h = shipyardHarness({ getRegionManager: () => RegionManager });
+    const shipyard = require("../plugins/skills/sailing/Shipyard.Sailing");
+    const landed = new Set();
+    for (let pick = 0; pick < 9; pick++) {
+      Sailing.activeBoat(h.player).location = { kind: "docked", dock: "catherby" };
+      h.player.moveTo(talkSpot); // ends the previous visit
+      shipyard.beginVisit(h.player, Sailing.getDock("catherby"), 0, talkSpot);
+      h.shipyard.objects["Shipyard Portal"].Exit({ player: h.player });
+      withRandom((pick + 0.5) / 9, () => { for (let tick = 0; tick < 3; tick++) TaskManager.process(); });
+      const back = h.player.getLocation();
+      landed.add(`${back.getX()},${back.getY()}`);
+    }
+    assert.deepEqual([...landed].sort(), ["2804,3428", "2804,3429", "2804,3430", "2805,3428", "2805,3429"]);
+  } finally {
+    RegionManager.regions.clear();
+    for (const [id, region] of regions) RegionManager.regions.set(id, region);
+    clearTasks();
+  }
+});
+
 test("logging out in the shipyard saves the player at the dock the visit started from", () => {
   const h = shipyardHarness();
   h.player.moveTo(new Location(2805, 3429, 0)); // ends the harness's visit

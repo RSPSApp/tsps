@@ -153,19 +153,24 @@ function dockNear(player, range) {
 }
 
 /**
- * A random unblocked tile within one of `origin` that a step from `origin` reaches, so never one
- * behind a wall or counter (`withOrigin` lets it be `origin` itself), or `origin` when there is
- * none. `regions` is the plugin api's region manager.
+ * A random unblocked tile within one of `origin` that is open to it, so never one behind a wall
+ * or counter (`withOrigin` lets it be `origin` itself), or `origin` when there is none. A
+ * diagonal tile past a blocked corner still counts when two straight steps reach it. `regions`
+ * is the plugin api's region manager.
  */
 function tileBeside(regions, origin, privateArea, withOrigin) {
   const tiles = [];
   const [x, y, z] = [origin.getX(), origin.getY(), origin.getZ()];
+  const step = (fromX, fromY, toX, toY) => regions.canMove(fromX, fromY, toX, toY, z, 1, 1, privateArea);
+  const open = (dx, dy) => step(x, y, x + dx, y + dy)
+    || (dx !== 0 && dy !== 0
+      && ((step(x, y, x + dx, y) && step(x + dx, y, x + dx, y + dy))
+        || (step(x, y, x, y + dy) && step(x, y + dy, x + dx, y + dy))));
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
       if (dx === 0 && dy === 0 && !withOrigin) continue;
       const tile = new Location(x + dx, y + dy, z);
-      if (regions?.blocked(tile, privateArea)) continue;
-      if (regions && !regions.canMove(x, y, x + dx, y + dy, z, 1, 1, privateArea)) continue;
+      if (regions && (regions.blocked(tile, privateArea) || !open(dx, dy))) continue;
       tiles.push(tile);
     }
   }

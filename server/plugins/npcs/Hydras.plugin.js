@@ -19,10 +19,11 @@ let DATA = null;
 let MethodClass = null;
 /** Hydra -> { count, style, run }: its attacks so far, its current style and the attacks made in it. */
 const counts = new WeakMap();
-/** Pools on the ground: { tile, area, landed, until }, hurting on the tick counter `poolTick`. */
+/** Pools on the ground: { tile, owner, landed, until }, in world cycles. */
 const pools = [];
-let poolTick = 0;
 let poolTask = null;
+/** The players a splat hurt this cycle: overlapping splats landing together hurt once. */
+const splatHits = { cycle: -1, players: new Set() };
 
 function core() {
   return api.core;
@@ -37,6 +38,10 @@ const randomInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1)
 
 function chebyshev(a, b) {
   return Math.max(Math.abs(a.getX() - b.getX()), Math.abs(a.getY() - b.getY()));
+}
+
+function worldCycle() {
+  return Number(core().World.getProcessCycle());
 }
 
 function isHydra(mobile) {
@@ -165,18 +170,18 @@ function playersNear(npcLike, tile, reach) {
 
 /** The pools' clock: every other tick from its landing a pool hurts whoever stands on it (Wiki). */
 function tickPools() {
-  poolTick++;
+  const now = worldCycle();
   const { hurtEvery } = data().special;
   const hurt = new Set();
   for (const pool of pools) {
-    if (poolTick <= pool.landed || (poolTick - pool.landed) % hurtEvery !== 0) continue;
+    if (now <= pool.landed || (now - pool.landed) % hurtEvery !== 0) continue;
     for (const player of playersNear(pool.owner, pool.tile, 0)) {
       if (hurt.has(player)) continue; // overlapping pools hurt once
       hurt.add(player);
       poisonDamage(player);
     }
   }
-  for (let i = pools.length - 1; i >= 0; i--) if (poolTick >= pools[i].until) pools.splice(i, 1);
+  for (let i = pools.length - 1; i >= 0; i--) if (now >= pools[i].until) pools.splice(i, 1);
   if (pools.length === 0 && poolTask) {
     poolTask.stop();
     poolTask = null;
@@ -203,8 +208,18 @@ function land(npc, tile) {
   const angle = randomInt(0, special.landing.length - 1);
   tileGraphic(npc, special.landing[angle], tile);
   // Ours: the Wiki gives the splat's area (3x3) but no damage; it deals the pool's.
-  for (const player of playersNear(npc, tile, 1)) poisonDamage(player);
-  pools.push({ tile, owner: npc, landed: poolTick, until: poolTick + special.poolTicks });
+  const now = worldCycle();
+  if (splatHits.cycle !== now) {
+    splatHits.cycle = now;
+    splatHits.players.clear();
+  }
+  for (const player of playersNear(npc, tile, 1)) {
+    if (splatHits.players.has(player)) continue;
+    splatHits.players.add(player);
+    poisonDamage(player);
+  }
+  // Timed by the world's cycle, not by the pool task: a blob landing before the task runs this tick keeps its schedule.
+  pools.push({ tile, owner: npc, landed: now, until: now + special.poolTicks });
   startPoolClock();
   later(1, () => tileGraphic(npc, special.landed[angle], tile));
 }
@@ -270,6 +285,8 @@ function method() {
 /** Clears every pool and its clock (tests). */
 function reset() {
   pools.length = 0;
+  splatHits.cycle = -1;
+  splatHits.players.clear();
   poolTask?.stop();
   poolTask = null;
 }

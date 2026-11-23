@@ -58,13 +58,14 @@ class FakeTask {
 
 const real = PluginManager.getCoreApi();
 const players = [];
+let cycle = 0;
 const core = {
   ...real,
   PendingHit: FakeHit,
   Projectile: FakeProjectile,
   Task: FakeTask,
   TaskManager: { submit: (task) => tasks.push(task) },
-  World: { getPlayers: () => players },
+  World: { getPlayers: () => players, getProcessCycle: () => cycle },
   Sounds: { playAreaSound: (options) => sounds.push([options.soundId, options.x, options.y, options.delay, options.radius]) },
 };
 const providers = [];
@@ -93,6 +94,7 @@ afterEach(() => {
 /** Runs the submitted tasks for `ticks` ticks, as the TaskManager would. */
 function runTicks(ticks) {
   for (let t = 0; t < ticks; t++) {
+    cycle++;
     for (const task of [...tasks]) {
       if (task.stopped) continue;
       if (--task.left > 0) continue;
@@ -297,4 +299,41 @@ test("poison immunity cuts the pool to 1 to 2 (Wiki)", () => {
   land(npc, new Location(1320, 10237, 0));
   runTicks(2);
   assert.deepEqual(immune.taken.map(([damage]) => damage), [2, 2]);
+});
+
+test("a blob landing after the pool clock started keeps its own schedule: splat, then the pool 2 ticks on (review r1)", () => {
+  const npc = hydra(1315, 10233); // centre 1316,10234
+  const target = player(1320, 10237); // 4 tiles: lands 3 ticks on
+  Math.random = () => 0.1;
+  for (let i = 0; i < 11; i++) new providers[0].ctor().start(npc, target);
+  tasks.length = 0;
+  sent.length = 0;
+  // Tiles: the player's, then (-3,-3) -> 1317,10234 (1 tile, lands 2 on), then (+3,+3) -> 1323,10240 (7 tiles, 4 on).
+  const rolls = [0, 0, 0.99, 0.99];
+  let roll = 0;
+  Math.random = () => (roll < rolls.length ? rolls[roll++] : 0);
+  new providers[0].ctor().start(npc, target);
+  assert.deepEqual(sent.map((blob) => [blob.end.getX(), blob.end.getY(), blob.speed]),
+    [[1320, 10237, 100], [1317, 10234, 70], [1323, 10240, 130]]);
+  const taken = [];
+  for (let t = 1; t <= 16; t++) {
+    const before = target.taken.length;
+    runTicks(1);
+    if (target.taken.length > before) taken.push(t);
+  }
+  // The first blob (2 on) starts the pool task after the others' landing tasks were queued.
+  assert.deepEqual(taken, [3, 5, 7, 9, 11, 13, 15]);
+});
+
+test("two splats covering the player on the same tick hurt once (review r1)", () => {
+  const { land } = Hydras._test;
+  Math.random = () => 0;
+  const npc = hydra(1315, 10233);
+  const target = player(1320, 10237);
+  land(npc, new Location(1320, 10237, 0));
+  land(npc, new Location(1321, 10238, 0));
+  assert.equal(target.taken.length, 1);
+  runTicks(1);
+  land(npc, new Location(1319, 10236, 0));
+  assert.equal(target.taken.length, 2, "a later splat hurts again");
 });

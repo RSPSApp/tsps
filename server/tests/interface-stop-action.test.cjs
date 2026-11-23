@@ -140,8 +140,10 @@ test("a repeating skill stops and the animation resets", async (t) => {
   assert.ok(animations.some((id) => id > 0 && id !== 65535), "the mining swing plays");
   const mined = f.p.getInventory().getAmount(I.COPPER_ORE);
   animations.length = 0;
+  f.p.performGraphic(new core.Graphic(111));
   await send(f, STATS_BUTTON);
   assert.deepEqual(animations, [65535], "the animation resets on the open");
+  assert.equal(f.p.getGraphic?.()?.getId?.() ?? f.p.graphic?.getId?.(), -1, "and the spotanim (live 227/01885 t20821)");
   ticks(4);
   await send(f, { type: "interface_close" });
   ticks(10);

@@ -23,6 +23,7 @@ import { NPC } from "../npc/NPC";
 import { NpcAggression } from "../npc/NpcAggression";
 import { AggressionTolerance } from "../npc/AggressionTolerance";
 import { Animation } from "../../../model/Animation";
+import { Graphic } from "../../../model/Graphic";
 import { Appearance } from "../../../model/Appearance";
 import { EnteredAmountAction } from "../../../model/EnteredAmountAction";
 import { EnteredSyntaxAction } from "../../../model/EnteredSyntaxAction";
@@ -962,6 +963,8 @@ export class Player extends Mobile {
         this.getMovementQueue().resetFollow();
         this.getSkillManager().stopSkillable();
         this.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+        // Live clears the spotanim with the sequence (rsprox 227/01885 t20821: spotanim -1).
+        this.performGraphic(new Graphic(-1));
         this.interactionCleared("interface");
     }
 

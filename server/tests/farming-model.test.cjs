@@ -237,11 +237,11 @@ try {
     // Compare the indexed selection to the original full scan, including reused varbits.
     for (const base of Data.CACHE.patches) for (const delta of [-65, -64, -1, 0, 64, 65]) {
         const visitor = testPlayer(), nearest = new Map();
-        const x = Math.floor((base.x + base.maxX) / 2) + delta;
-        const y = Math.floor((base.y + base.maxY) / 2) + delta;
+        const x = Math.floor((Data.patchMinX(base) + base.maxX) / 2) + delta;
+        const y = Math.floor((Data.patchMinY(base) + base.maxY) / 2) + delta;
         visitor.location = new core.Location(x, y, base.z);
         for (const patch of Data.CACHE.patches) {
-            const distance = Math.max(Math.abs((patch.x + patch.maxX) / 2 - x), Math.abs((patch.y + patch.maxY) / 2 - y));
+            const distance = Math.max(Math.abs((Data.patchMinX(patch) + patch.maxX) / 2 - x), Math.abs((Data.patchMinY(patch) + patch.maxY) / 2 - y));
             if (patch.z === base.z && distance <= 64 && (!nearest.has(patch.varbit) || nearest.get(patch.varbit).distance > distance)) {
                 nearest.set(patch.varbit, { patch, distance });
             }
@@ -250,6 +250,15 @@ try {
         assert.deepEqual(Object.keys(Patches.farmFor(visitor).patches).sort(),
             [...nearest.values()].map(({ patch }) => Data.patchKey(patch)).sort(), `nearby patches at ${x},${y},${base.z}`);
     }
+
+    // Issue 6602: Hosidius's north allotment is L-shaped, with locs down to y 3554 below its first loc
+    // (1733,3558). A click on the east arm has to find the patch, and the patch keeps its saved key.
+    const hosidiusNorth = Data.CACHE.patches.find(p => p.id === 27113);
+    assert.equal(Data.patchKey(hosidiusNorth), "27113:1733:3558:0", "saved farms keep finding the patch");
+    for (const [x, y] of [[1733, 3558], [1739, 3559], [1738, 3554], [1739, 3555], [1739, 3557]]) {
+        assert.equal(Patches.findPatch(27113, { x, y, z: 0 }), hosidiusNorth, `loc ${x},${y} belongs to the north allotment`);
+    }
+    assert.equal(Data.patchMinY(herb), herb.y, "a patch without minY keeps y as its corner");
 
     const crop = { wateredSeedling: core.ItemIdentifiers.OAK_SEEDLING_W_, sapling: core.ItemIdentifiers.OAK_SAPLING };
     Data.WATERED_SEEDLINGS.set(crop.wateredSeedling, crop);

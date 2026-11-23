@@ -21,14 +21,17 @@ OSRS Wiki, [Extreme heat](https://oldschool.runescape.wiki/w/Extreme_heat),
 
 ## Where it burns
 
-The area is every level (0-2) of x 1230-1355, y 10130-10290. The heat is skipped only in the
+The area is every level (0-2) of x 1230-1355, y 10130-10290, and on level 1 up to x 1360, where
+the cave floor (the drakes at 1356,10239) runs on past the Hydra chamber's west edge. The heat is skipped only in the
 entrance chamber: level 0, x 1303-1320, y 10185-10214. That is the cache map's walkable room
 around the elevator landing (1311,10188, `karuulm_elevator_down` in
-`server/plugins/world/data/loc-teleports.json`), found by flood fill over the collision map. It
-is closed off by the three `karuulm_safe_stepover` "Rocks" (loc 34544) at 1321,10205 (east),
+`server/plugins/world/data/loc-teleports.json`), found by flood fill over the collision map. Its
+exits are the three `karuulm_safe_stepover` "Rocks" (loc 34544) at 1321,10205 (east),
 1302,10205 (west) and 1311,10215 (north), crossed as Agility shortcuts
-(`server/plugins/skills/data/agility-shortcuts.json`). rsprox captures 3013, 3014 and local
-1000143 show players climbing the east and north rocks to 1322,10205 and 1312,10216.
+(`server/plugins/skills/data/agility-shortcuts.json`), and the Mysterious pipe at 1316,10214,
+which comes out at 1346,10232 (`server/plugins/skills/agility/shortcuts/KaruulmPipe.Agility.js`).
+rsprox captures 3013 and 3014 show the east rock crossed to 1322,10205; the west and north rocks
+were not recorded.
 
 The Alchemical Hydra's chamber (east of x 1355) is a private area of its own
 (`plugins/bosses/alchemicalhydra/Lair.AlchemicalHydra.js`), so it does not burn.
@@ -36,5 +39,5 @@ The Alchemical Hydra's chamber (east of x 1355) is a private area of its own
 ## Not covered
 
 - The Wiki says players are warned when they try to leave the chamber without protective boots.
-  Neither the Wiki nor any recording we have gives the wording (the recordings' players all wore
-  boots), so no warning is sent.
+  Neither the Wiki nor any recording we have gives the wording (no recording shows an
+  unprotected player: the recorded players wore boots of stone or had the elite reward claimed), so no warning is sent.

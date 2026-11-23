@@ -62,16 +62,19 @@ test("the area covers every level of the dungeon around the chamber", () => {
     [1312, 10216, 0], // past the north stepover, the hydras' level
     [1260, 10170, 0], // the wyrms
     [1334, 10205, 1], // the sulphur lizards' level
+    [1356, 10239, 1], // level 1's drakes, east of x 1355
+    [1360, 10241, 1], // the east end of level 1's cave floor
     [1318, 10189, 2], // the fire giants' and hellhounds' level
   ]) {
     assert.equal(covers(x, y, z), true, `${x},${y},${z}`);
   }
   assert.equal(covers(1364, 10265, 0), false, "the Alchemical Hydra's chamber is its own area");
+  assert.equal(covers(1356, 10265, 0), false, "the Hydra's chamber starts at x 1356 on level 0");
   assert.equal(covers(1311, 3807, 0), false, "Mount Karuulm's summit");
 });
 
 test("barefoot beyond the entrance chamber, the floor burns 4 a tick", () => {
-  for (const [x, y, z] of [[1322, 10205, 0], [1301, 10205, 0], [1312, 10216, 0], [1334, 10205, 1], [1318, 10189, 2]]) {
+  for (const [x, y, z] of [[1322, 10205, 0], [1301, 10205, 0], [1312, 10216, 0], [1334, 10205, 1], [1356, 10239, 1], [1318, 10189, 2]]) {
     const p = player(x, y, z);
     assert.equal(heatAfterTicks(p, 1), 4, `${x},${y},${z}`);
     assert.equal(heatAfterTicks(p, 2), 12, `${x},${y},${z} after three ticks`);

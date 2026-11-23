@@ -9,15 +9,23 @@
  * Kebos Diary, with any footwear or none.
  *
  * The entrance chamber is the cache map's walkable room around the elevator landing
- * (1311,10188): 1303-1320, 10188-10214 on level 0, closed off by the three "Rocks" stepovers at
- * 1321,10205, 1302,10205 and 1311,10215. The Alchemical Hydra's chamber is its own private area.
+ * (1311,10188): 1303-1320, 10185-10214 on level 0. Its exits are the three "Rocks" stepovers at
+ * 1321,10205, 1302,10205 and 1311,10215 and the Mysterious pipe at 1316,10214 (to 1346,10232).
+ * The Alchemical Hydra's chamber is its own private area.
  *
  * Ours: the warning the Wiki says players get on leaving the chamber without boots is not
  * written down anywhere we have (no Wiki text, no recording), so no warning is sent.
  */
 const DAMAGE_PER_TICK = 4;
-/** Every level of the dungeon, west of the Alchemical Hydra's chamber. */
-const DUNGEON = { minX: 1230, maxX: 1355, minY: 10130, maxY: 10290, levels: [0, 1, 2] };
+/**
+ * Every level of the dungeon, west of the Alchemical Hydra's chamber (level 0, x 1356+). Level 1's
+ * cave floor runs on to x 1360 (the drakes at 1356,10239; collision map flood fill).
+ */
+const DUNGEON = [
+  { minX: 1230, maxX: 1355, minY: 10130, maxY: 10290, z: 0 },
+  { minX: 1230, maxX: 1360, minY: 10130, maxY: 10290, z: 1 },
+  { minX: 1230, maxX: 1355, minY: 10130, maxY: 10290, z: 2 },
+];
 /** The Tasakaal's chamber the elevator lands in, the one cool room. */
 const ENTRANCE_CHAMBER = { minX: 1303, maxX: 1320, minY: 10185, maxY: 10214, z: 0 };
 
@@ -75,8 +83,8 @@ function karuulmSlayerDungeon() {
       burn(player);
     }
   }
-  return new KaruulmSlayerDungeon(DUNGEON.levels.map(
-    (level) => new core.Boundary(DUNGEON.minX, DUNGEON.maxX, DUNGEON.minY, DUNGEON.maxY, level),
+  return new KaruulmSlayerDungeon(DUNGEON.map(
+    (box) => new core.Boundary(box.minX, box.maxX, box.minY, box.maxY, box.z),
   ));
 }
 

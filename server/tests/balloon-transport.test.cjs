@@ -648,3 +648,22 @@ test("every route draws the balloon controls' own models, and each animated one 
     }
   }
 });
+
+test('Escape and world clicks do nothing at the controls; Escape on the bail box clears its fade (review)', () => {
+  const player = fakePlayer({ items: { oak: 10 } });
+  takeOff(player, 'craft');
+  const close = { player, handled: false };
+  Controls.holdControls(close);
+  assert.equal(close.handled, true, 'the controls stay');
+  const click = { player, handled: false };
+  Controls.holdControls(click);
+  assert.equal(click.handled, true);
+  press(player, 'zep_btn_close');
+  tick(1);
+  assert.equal(lastLine(player), BAILED);
+  const escape = { player, handled: false };
+  const before = player.fades.length;
+  Controls.holdControls(escape);
+  assert.equal(escape.handled, false, 'the box closes as normal');
+  assert.equal(player.fades[before], 'closed', 'and the fade with it');
+});

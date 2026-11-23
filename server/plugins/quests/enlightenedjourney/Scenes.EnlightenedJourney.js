@@ -269,13 +269,15 @@ function createScenes(api, ctx) {
   }
 
   /**
-   * Escape (or any close) while a scene plays keeps its conversation: the scene's way back hangs on its last line, so a
-   * dropped chat would leave the player held in the copy. Ours: no recording presses Escape in these scenes.
+   * Escape, or a click on the world, while a scene plays keeps its conversation: the scene's way back hangs on its last
+   * line, so a dropped chat would leave the player held in the copy (Tower of Life's protectScene does the same). Ours:
+   * no recording presses Escape or clicks the world in these scenes.
    */
   function keepChat(event) {
     if (playing.has(event.player)) event.handled = true;
   }
   api.onCustomEvent("interface:close", keepChat);
+  api.onCustomEvent("player:world-input", keepChat);
 
   /** A logout while the basket scene plays on the real map: its stage was already saved, the controls come back. */
   function logout(player) {

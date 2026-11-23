@@ -573,3 +573,22 @@ test('Escape during an experiment keeps its talk: the scene still ends back on t
   assert.equal(stage(f), 40);
   assert.equal(f.p.getMovementQueue().isMovementBlocked?.() ?? false, false);
 });
+
+test('a world click during an experiment keeps its talk too, and a balloon dropped meanwhile is no experiment (review)', async (t) => {
+  const f = actor(t, { stage: 20, items: [[I.ORIGAMI_BALLOON]] });
+  const start = where(f);
+  talk(f);
+  await continueTo(f, "Wonderful! I'll take that, and we'll conduct our first experiment.");
+  await next1(f);
+  tick(6);
+  await input(f, { type: 'object_option', id: 19133, x: start[0] - 3, y: start[1] + 1, clickType: 1 });
+  tick(10);
+  await continueTo(f, "We're doomed.");
+  assert.equal(text(f), "We're doomed.", 'the talk survived the click');
+  f.p.getInventory().deleteNumber(I.ORIGAMI_BALLOON, 1);
+  await next1(f);
+  tick(4);
+  assert.deepEqual(where(f), start);
+  assert.equal(stage(f), 20, 'no balloon given, no experiment');
+  assert.equal(f.p.getMovementQueue().isMovementBlocked(), false);
+});

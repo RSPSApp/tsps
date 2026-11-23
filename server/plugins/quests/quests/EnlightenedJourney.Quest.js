@@ -1526,8 +1526,8 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
   const Scenes = createScenes(api, {
     onFirstDone(player) {
       // Capture tick 528: zep_quest 40 and the balloon gone as the copy closes.
-      if (stageOf(player) !== STAGE.MATERIALS) return;
-      take(player, ORIGAMI_BALLOON);
+      // A balloon dropped meanwhile: no experiment, it plays again at 20.
+      if (stageOf(player) !== STAGE.MATERIALS || !take(player, ORIGAMI_BALLOON)) return;
       setStage(player, STAGE.FIRST_EXPERIMENT);
     },
     onSecondDone(player) {

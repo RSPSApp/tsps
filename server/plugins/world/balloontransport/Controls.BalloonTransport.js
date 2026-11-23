@@ -84,6 +84,8 @@ const FADE_IN = [0, 0, 0, 255, 50];
 let routes = null;
 /** Players at the controls -> their flight. */
 const flights = new Map();
+/** Players with the Entrana bail box up: its continue, or an Escape, clears the fade overlay. */
+const bailBoxes = new WeakSet();
 /** Delayed quest launches are invalidated by logout, even if the same player reconnects. */
 const pendingQuestFlights = new WeakMap();
 
@@ -370,7 +372,11 @@ function landOnEntrana(player, flight) {
     if (owns(player, flight)) {
       flight.arrive();
       Common.fade(player, FADE_IN);
-      messageBox(player, BAILED, () => Common.closeFade(player));
+      bailBoxes.add(player);
+      messageBox(player, BAILED, () => {
+        bailBoxes.delete(player);
+        Common.closeFade(player);
+      });
     }
     finish(player, flight);
   });
@@ -455,10 +461,29 @@ function questFlight({ player, station: key, logs, source, canStart }) {
   });
 }
 
+/**
+ * At the controls Escape and world clicks do nothing: closing zep_interface would leave the player held with the flight
+ * still on. Ours: no recording closes them mid-flight. A bail box's Escape still clears the fade it left mounted.
+ */
+function holdControls(event) {
+  const { player } = event;
+  const flight = flights.get(player);
+  if (flight && !flight.done) {
+    event.handled = true;
+    return;
+  }
+  if (bailBoxes.has(player)) {
+    bailBoxes.delete(player);
+    Common.closeFade(player);
+  }
+}
+
 function attach(api) {
+  api.onCustomEvent("interface:close", holdControls);
+  api.onCustomEvent("player:world-input", holdControls);
   api.onInterfaceActionClick(controlClick);
   api.onPlayerLogout(logout);
   api.onCustomEvent("balloon-transport:quest-flight", questFlight);
 }
 
-module.exports = { attach, takeOff, controlClick, logout, questFlight, inFlight, hasRoute, data, CONTROLS, ROWS, COLUMNS };
+module.exports = { attach, takeOff, controlClick, holdControls, logout, questFlight, inFlight, hasRoute, data, CONTROLS, ROWS, COLUMNS };

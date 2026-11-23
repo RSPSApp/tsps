@@ -195,6 +195,7 @@ class EntityMirror(
             }
         }
         block.movementType?.let(info::setMoveSpeed)
+        block.temporaryMoveSpeed?.let(info::setTempMoveSpeed)
         if (block.resetPath) info.setTempMoveSpeed(TELEPORT_MOVE_SPEED)
         // Relative to the end tile the player was just placed on (see applyPlayers).
         block.exactMove?.let { info.setExactMove(it.startX - it.endX, it.startZ - it.endZ, it.startCycle, 0, 0, it.endCycle, it.direction) }

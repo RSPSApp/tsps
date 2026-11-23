@@ -2,6 +2,7 @@ package gateway.it
 
 import net.rsprox.protocol.game.outgoing.model.info.playerinfo.PlayerInfo
 import net.rsprox.protocol.game.outgoing.model.info.playerinfo.PlayerUpdateType
+import net.rsprox.protocol.game.outgoing.model.info.playerinfo.extendedinfo.TemporaryMoveSpeedExtendedInfo
 import net.rsprox.protocol.game.outgoing.model.info.shared.extendedinfo.ExactMoveExtendedInfo
 import net.rsprox.protocol.game.outgoing.model.map.RebuildLoginV2
 import net.rsprox.protocol.game.outgoing.model.misc.client.ServerTickEnd
@@ -45,6 +46,35 @@ class AgilityTest {
         }
     }
 
+    @Test
+    fun `Darkness of Hallowvale's washing line is walked, two tiles a step, not teleported`() {
+        val developer = LiveGateway.developerName
+        assumeTrue(developer != null, "DEV_USERNAME isn't set; the test sets quest stages and teleports")
+        LiveGateway.login(developer!!).use { game ->
+            game.expect<RebuildLoginV2>()
+            game.command("quest in aid of the myreque complete")
+            game.command("quest darkness of hallowvale $DOH_ROOFTOPS")
+            game.command("tele $LINE_START_X $LINE_Z $LINE_LEVEL")
+            game.ticks(SETTLE_TICKS)
+            game.opLoc1(WASHING_LINE, LINE_START_X + 1, LINE_Z)
+            // tsps sends each two-tile step with a temporary walk (live, rsprox: walk 3616 -> 3618 ->
+            // 3620 -> 3622, t2515-2521). The gateway used to forward every value as 127, a
+            // teleport, so RuneLite snapped the player along the line (issue 6639).
+            val speeds = ArrayList<Int>()
+            var ticks = 0
+            while (ticks < LINE_TICKS) {
+                when (val message = game.next() ?: error("stream ended")) {
+                    is ServerTickEnd -> ticks++
+                    is PlayerInfo -> {
+                        val update = message.updates[game.index] as? PlayerUpdateType.HighResolutionMovement ?: continue
+                        update.extendedInfo.filterIsInstance<TemporaryMoveSpeedExtendedInfo>().forEach { speeds += it.speed }
+                    }
+                }
+            }
+            assertEquals(listOf(WALK, WALK, WALK), speeds)
+        }
+    }
+
     private fun gateway.headless.HeadlessClient.Game.ticks(count: Int, each: (Any) -> Unit = {}) {
         var seen = 0
         while (seen < count) {
@@ -64,5 +94,12 @@ class AgilityTest {
         const val COURSE_TICKS = 12
         const val AGILITY = 16
         const val VARROCK_ROOFTOP_LEVEL = 30
+        const val DOH_ROOFTOPS = 65 // Darkness of Hallowvale: Ral has pointed the way
+        const val WASHING_LINE = 18099 // myq3_agil_22_tightrope_west
+        const val LINE_START_X = 3616
+        const val LINE_Z = 3202
+        const val LINE_LEVEL = 2
+        const val LINE_TICKS = 14
+        const val WALK = 1
     }
 }

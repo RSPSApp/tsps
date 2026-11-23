@@ -31,7 +31,7 @@
 module.exports = function attachLab(context) {
   const { api, state, common, STAGE, VARBIT, PAGE } = context;
   const { ItemIdentifiers: I, Location, Item, HitDamage, HitMask } = api.core;
-  const { loadTranscripts, giveReward } = require("../QuestRuntime");
+  const { loadTranscripts, giveReward, openLongScroll } = require("../QuestRuntime");
 
   // --- Ids (cache gamevals)
 
@@ -50,6 +50,45 @@ module.exports = function attachLab(context) {
   const SICKLES = [I.SILVER_SICKLE, I.SILVER_SICKLE_B_]; // 2961, 2963
   const SKETCHES = [9646, 9647, 9648]; // myq3_castle_sketch_1..3 ("Castle sketch 1-3")
   const SARIUS_MESSAGE = 9649; // myq3_sarius_message ("Message")
+  /** Its Read (Wiki: Transcript:Message (fireplace), as revised by the 4 June 2020 Darkmeyer update). */
+  const SARIUS_LETTER = Object.freeze([
+    "To the hopeful reader:",
+    "",
+    "I am compelled to commit my experience to paper, perhaps to ease my conscience at the crimes I have"
+      + " committed against my fellow man. Perhaps I also hope that in some way these details may help in the"
+      + " struggle against the vyres.",
+    "",
+    "My unbearable duty, upon the value of my family's lives, was to assist in an underground laboratory. Each"
+      + " day I aided the stinking vyres with their diabolical experiments. They claim that the research will aid"
+      + " us, but I am aware of the true and darker purpose.",
+    "",
+    "Against our will, we tinkered and toiled with compounds. We experimented, researched and recorded. But to"
+      + " what aim? It became clear to me that it was not to our aid, but to our efficiency in producing more"
+      + " blood! The tithes do not come fast enough for them and they're always hungry for more. Ever more mouths"
+      + " to feed as countless more vyres are created means the need for more human blood is never-ending.",
+    "",
+    "As the farmer feeds livestock to fatten our food so too the vyres seek to fatten our blood. However, this"
+      + " was not to be the end of the laboratory and its purpose. There was a second part for the place to play"
+      + " and whatever it was, it did not go well. Just today, the whole laboratory was closed down. All outward"
+      + " manner of its appearance has been disguised to hide its former purpose, and all my fellows associated"
+      + " with it have now disappeared.",
+    "",
+    "With such haste and secrecy did this come about that I dare to think some rare and dangerous thing has been"
+      + " discovered there. Something that may put fear into the hearts of the vyres, if indeed a heart should beat"
+      + " for them at all.",
+    "",
+    "I know they search for me, so I have hidden away. They will not rest until I am caught though. What they"
+      + " don't know is that I have the means to access that place again, hidden in depictions of statuesque evil."
+      + " If I get chance I shall return, and learn what I can to pass on to my brothers in arms.",
+    "",
+    "However, if my eyes are not the last to read this message, then I beg you, dear reader, to do what you can"
+      + " to discover the secrets of that laboratory. If you can, use them to incite the destruction of the vyres.",
+    "",
+    "The laboratory lies in the northeast of Meiyerditch. You'll find it south of the mines, north of Trakerel's"
+      + " Fish Shop and east of the Skull in a Chest Inn. Myreque prevail!",
+    "",
+    "-Mauritys Guile",
+  ]);
   const ORNATE_KEY = 9651; // myq3_lab_ornate_key ("Large ornate key")
   const HAEMALCHEMY = 9652; // myq3_haemalchemy_vol_1
   const SEALED_MESSAGE = 9653; // "Sealed message"
@@ -652,11 +691,14 @@ module.exports = function attachLab(context) {
     return true;
   }
 
-  /** Sarius' message's Read (not captured; Ours: its examine, as before the alignment). */
+  /**
+   * Sarius' message's Read: Mauritys Guile's letter, the Wiki's "Transcript:Message (fireplace)".
+   * Not captured; Ours: the long scroll 625 with no title, as live shows In Aid of the Myreque's
+   * dusty scroll (Burgh.InAidOfTheMyreque.js).
+   */
   function readSariusMessage({ player, itemId }) {
     if (itemId !== SARIUS_MESSAGE) return false;
-    const examine = api.core.CacheDefinitions?.getItem?.(itemId)?.examine;
-    if (examine) common.message(player, examine);
+    openLongScroll(player, "", SARIUS_LETTER);
     return true;
   }
 

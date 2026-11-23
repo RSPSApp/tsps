@@ -15,6 +15,13 @@
  *
  * Until tick 21 the cast is interrupted by most actions (Wiki): walking or combat ends it,
  * and no cooldown starts. The cast never starts from a moving player in the first place.
+ *
+ * Casting again mid-cast starts the cast over: rsprox recording 1001238 (rev 231) clicks the
+ * spell at tick 10286 and again at 10288, which resets the animation on the second click's tick,
+ * draws the chalk circle (sound 193) a tick later, and lands once, 24 ticks after the second
+ * click; nothing of the first cast plays after it. So one cast runs per player (issue 6630: two
+ * ran side by side, each playing its sounds). Once the cast has locked (tick 21) a new one
+ * is refused and the teleport goes ahead.
  */
 
 const BUSY_VARBIT = 12393;
@@ -68,6 +75,9 @@ function interrupted(core, player, start) {
 
 /** The standard cast; a league's own animation set (LeagueAreaUnlocks) passes another. */
 const DEFAULT_CAST = { steps: STEPS, lockTick: LOCK_TICK, landTick: LAND_TICK };
+
+/** The cast each player has running: a new cast replaces it (see the top of this file). */
+const running = new WeakMap();
 
 /** Enabled home teleport animations, a bitmask in the picker's bit order (varp 4560); bit 0 is the default. */
 const TOGGLES_ATTRIBUTE = "home-teleport:animation-toggles";
@@ -128,6 +138,11 @@ function startHomeTeleport(core, player, destination, onArrival, cast = chosenCa
     player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
     return null;
   }
+  const previous = running.get(player);
+  if (previous?.isRunning()) {
+    if (previous.committed) return null;
+    previous.stop();
+  }
   const start = player.getLocation().clone();
   reset(core, player);
   player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
@@ -138,6 +153,11 @@ function startHomeTeleport(core, player, destination, onArrival, cast = chosenCa
     constructor() {
       // Not immediate: the first run is this tick's task pass, tick 0.
       super(1, player, false);
+    }
+
+    /** Locked and not yet landed; after landing only the last animation reset is left. */
+    get committed() {
+      return locked && tick < LAND_TICK;
     }
 
     execute() {
@@ -179,6 +199,7 @@ function startHomeTeleport(core, player, destination, onArrival, cast = chosenCa
 
     stop() {
       super.stop();
+      if (running.get(player) === this) running.delete(player);
       if (locked && tick < LAND_TICK) {
         player.setTeleporting(false);
         player.getMovementQueue().setBlockMovement(false);
@@ -186,6 +207,7 @@ function startHomeTeleport(core, player, destination, onArrival, cast = chosenCa
       }
     }
   })();
+  running.set(player, task);
   core.TaskManager.submit(task);
   return task;
 }

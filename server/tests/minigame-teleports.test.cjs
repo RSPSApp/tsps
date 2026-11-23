@@ -156,6 +156,44 @@ test('once the teleporting animation starts, walking no longer interrupts it', (
     assert.ok(ticks.flat().includes('arrived'));
 });
 
+test('casting again mid-cast starts the cast over: one set of sounds, one landing (#6630)', (t) => {
+    const soundsTo = stubWorld(t);
+    const { player, ticks, log, nextTick } = recordingPlayer();
+    soundsTo(log);
+    Sequence.startHomeTeleport(core, player, new Location(2609, 3121, 0), () => log('arrived'));
+    run(ticks, nextTick, 2);
+    // rsprox 1001238: the second click 2 ticks in resets on its tick, and the cast runs from there.
+    Sequence.startHomeTeleport(core, player, new Location(2609, 3121, 0), () => log('arrived'));
+    run(ticks, nextTick, 30);
+    const byTick = Object.fromEntries(ticks.map((sent, tick) => [tick, sent]).filter(([, sent]) => sent.length));
+    assert.deepEqual(byTick, {
+        0: ['anim 65535', 'gfx -1', 'varbit 12393=0'],
+        1: ['gfx 800', 'anim 4847', 'sound 193 r4'],
+        2: ['anim 65535', 'gfx -1', 'varbit 12393=0'],
+        3: ['gfx 800', 'anim 4847', 'sound 193 r4'],
+        9: ['anim 4850', 'sound 196 r4'],
+        15: ['gfx 802', 'anim 4853', 'sound 194 r4'],
+        19: ['gfx 803 h-10', 'anim 4855', 'sound 195 r4'],
+        23: ['gfx 804', 'anim 4857', 'varbit 12393=1', 'locked'],
+        26: ['varbit 12393=0', 'free', 'teleport 2609,3121', 'anim 65535', 'gfx -1', 'arrived'],
+        27: ['anim 65535'],
+    });
+});
+
+test('once the cast has locked, casting again is refused and the first teleport lands', (t) => {
+    stubWorld(t)(() => {});
+    const { player, ticks, log, nextTick } = recordingPlayer();
+    Sequence.startHomeTeleport(core, player, new Location(2609, 3121, 0), () => log('arrived'));
+    run(ticks, nextTick, 22);
+    assert.equal(Sequence.startHomeTeleport(core, player, new Location(3222, 3218, 0), () => log('second')), null);
+    run(ticks, nextTick, 30);
+    const all = ticks.flat();
+    assert.deepEqual(all.filter((e) => e === 'arrived' || e === 'second' || e.startsWith('teleport')),
+        ['teleport 2609,3121', 'arrived']);
+    // Right after landing a new cast may start again (its own cooldown is the spell's business).
+    assert.notEqual(Sequence.startHomeTeleport(core, player, new Location(3222, 3218, 0)), null);
+});
+
 test('interface 951 maps its components to the cache minigames, and every one has a destination', async () => {
     await CachePipeline.initialize(path.resolve(__dirname, '..'));
   attachPlugins([]);

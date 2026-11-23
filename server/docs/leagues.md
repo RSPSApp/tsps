@@ -1332,10 +1332,14 @@ Tier 1 counts once the character chose its first relic.
   Hunter's own rares ask with their rows' names (`dropMultiplier` in `Context.Hunter.js`): the
   loot sacks' four 1/50 rares (`Hunter rumours`), the adult tecu salamander's 1/1,000 (`Hunting`)
   and the crystal impling's 1/128 elven signet (`Crystal impling`).
-  Sources rolled by their own plugins are in the data but inert until that plugin asks
-  `drops:chance` with the source's name: Vale offerings, the Shrine, the seed pack, the Fountain of Rune, chewed bones, the Volcanic Mine ore
-  pack and Shades of Mort'ton; the Warriors' Guild cyclopes roll their defenders apart from
-  their table.
+  The other own rolls ask with their rows' names too: the Warriors' Guild cyclopes' defender
+  (`Cyclops`; 1/50 upstairs, 1/100 for the dragon defender), Vale offerings' unique pre-roll
+  (`Vale offerings`; 1/100 times the uniques' boosts averaged by their weights, so each keeps its
+  share), each high-tier seed pack roll's Hespori seed (`Seed pack`; its own chance that many
+  times, the other seeds sharing the rest), a silver chest's runescroll roll (`Shades of
+  Mort'ton`) and a glory's 1/25,000 at the Fountain of Rune (`Fountain of Rune`).
+  Sources in the data that nothing asks for yet: the Shrine, chewed bones (no dragon full helm
+  from them here) and the Volcanic Mine ore pack.
 - **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic
   Pacts 4x/8x from tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
   the league multiplies `points` (floored) when the passive's `minigames` (leagues.json) lists it. Other

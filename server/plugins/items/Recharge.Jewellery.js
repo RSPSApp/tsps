@@ -67,6 +67,20 @@ function rechargeableEntry(core, table, item, site) {
   return { ...entry, noted };
 }
 
+/** The amulet of eternal glory's row on a league's Boosted drops page. */
+const ETERNAL_SOURCE = "Fountain of Rune";
+
+/**
+ * How many times likelier content makes a glory turn eternal: "drops:chance" { player, source,
+ * rules } (a league's boosted drops) answers rules on the amulet of eternal glory's name.
+ */
+function eternalBoost(api, player) {
+  const rules = [];
+  api.emitCustomEvent("drops:chance", { player, source: ETERNAL_SOURCE, rules });
+  const name = String(api.core.ItemDefinition.forId(api.core.ItemIdentifiers.AMULET_OF_ETERNAL_GLORY)?.getName?.() ?? "");
+  return rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+}
+
 function rechargeAtFountain(api, event) {
   const { core } = api;
   const site = chargingSite(core, event);
@@ -106,7 +120,7 @@ function rechargeAtFountain(api, event) {
       const target = entry.piece.recharge.wealth ? WEALTH_CHARGES : site === "rune" ? RUNE_CHARGES : GUILD_CHARGES;
       if (entry.charges >= target) continue;
       const chance = site === "rune" ? entry.piece.recharge.eternalChance : 0;
-      if (chance && Math.random() < 1 / chance) {
+      if (chance && Math.random() * chance < eternalBoost(api, player)) {
         item.setId(core.ItemIdentifiers.AMULET_OF_ETERNAL_GLORY);
         eternal = true;
       } else {

@@ -29,13 +29,20 @@ const core = PluginManager.getCoreApi();
 const objectHooks = new Map();
 const npcHooks = new Map();
 const events = [];
+const customHooks = new Map();
 const prompts = [];
 const api = new Proxy({
   core,
   onObjectInteraction: (name, actions) => objectHooks.set(name, { ...(objectHooks.get(name) ?? {}), ...actions }),
   onNpcInteraction: (name, actions) => npcHooks.set(name, { ...(npcHooks.get(name) ?? {}), ...actions }),
+  onCustomEvent(name, handler) {
+    customHooks.set(name, [...(customHooks.get(name) ?? []), handler]);
+  },
   emitCustomEvent: (name, payload) => {
     events.push({ name, payload });
+    if (name.startsWith("rat-bone-weapons:") || name.startsWith("npc-dialogue:")) {
+      for (const handler of customHooks.get(name) ?? []) handler(payload);
+    }
     if (name === "combat-achievements:kill") payload.announce?.(7);
   },
   sendMultiChatboxPrompt: (player, title, ...pairs) => {
@@ -53,6 +60,7 @@ before(async () => {
   new NpcDefinitionLoader().load();
   gamevals = new Gamevals();
   Scurrius.register(api);
+  require("../plugins/items/RatBoneWeapons.plugin").register(api);
 });
 
 function createPlayer({ x = 3295, y = 9867, hp = 50, maxHp = 99, items = {} } = {}) {
@@ -99,7 +107,10 @@ function createPlayer({ x = 3295, y = 9867, hp = 50, maxHp = 99, items = {} } = 
       setCurrentLevel: (_skill, level) => { current = level; },
     }),
     getInventory: () => ({
+      contains: (id) => (inventory.get(id) ?? 0) > 0,
       getAmount: (id) => inventory.get(id) ?? 0,
+      delete: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
+      addItem: (item) => inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()),
       deleteNumber: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) - amount),
       adds: (id, amount) => inventory.set(id, (inventory.get(id) ?? 0) + amount),
     }),
@@ -398,6 +409,25 @@ test("Aldo swaps every spine for an antique lamp", () => {
   prompts.length = 0;
   npcHooks.get("Historian Aldo").Trade({ player: single, npc: { getId: () => Common.ALDO_ID } });
   assert.equal(prompts[0].title, "Trade Scurrius' spine for a combat lamp?");
+
+  prompts.length = 0;
+  const lines = [];
+  single.getDialogueManager = () => ({
+    startDialogues(chain) { lines.push(...chain.getDialogues().values()); },
+  });
+  const use = {
+    player: single, itemId: ItemIdentifiers.SCURRIUS_SPINE,
+    target: { getId: () => Common.ALDO_ID }, definition: { getName: () => "Historian Aldo" },
+  };
+  Aldo._test.useSpine(use);
+  assert.equal(use.handled, true);
+  assert.equal(lines[0].getText(), "Ah, a Scurrius spine! A captivating subject indeed. I'll eagerly take them off your hands, and rest assured, you will be well rewarded.");
+  lines[1].send(single);
+  assert.equal(prompts[0].title, "Trade Scurrius' spine for a combat lamp?");
+  prompts[0].pairs[1]();
+  assert.equal(single.inventory.get(ItemIdentifiers.SCURRIUS_SPINE), 0);
+  assert.equal(single.inventory.get(ItemIdentifiers.ANTIQUE_LAMP_35), 1);
+  assert.equal(lines[2].getText(), "Aldo gives you an Antique lamp for Scurrius' spine.");
 });
 
 test("the lamp offers its seven skills over two pages", () => {
@@ -855,4 +885,133 @@ test("the rats bite 0-1 through Protect from Melee, and their full roll without 
   const event = { player, hit: bite(4) };
   ratHitLands(event);
   assert.equal(event.hit.getTotalDamage(), 4, "no prayer: the full roll");
+});
+
+function tradeForBow(coins = 50000) {
+  const I = core.ItemIdentifiers;
+  const player = createPlayer({ items: { [I.SCURRIUS_SPINE]: 1, [I.YEW_SHORTBOW]: 1, [I.COINS]: coins } });
+  const npc = { getId: () => Common.ALDO_ID };
+  prompts.length = 0;
+  npcHooks.get("Historian Aldo").Trade({ player, npc });
+  return player;
+}
+
+test("Aldo's Trade offers a weapon or a lamp when he can make the weapon", () => {
+  tradeForBow();
+  assert.equal(prompts[0].title, "Trade your Scurrius spines for a bone weapon or combat lamp?");
+  assert.deepEqual(prompts[0].options, ["Weapon.", "Combat lamp."]);
+});
+
+test("Combat lamp branches to the lamp confirmation and leaves the bow and money", () => {
+  const I = core.ItemIdentifiers;
+  const player = tradeForBow();
+  assert.equal(prompts[0].options[1], "Combat lamp.");
+  prompts[0].pairs[3]();
+  assert.equal(prompts[1].title, "Trade Scurrius' spine for a combat lamp?");
+  assert.deepEqual(prompts[1].options, ["Yes.", "No."]);
+  prompts[1].pairs[1]();
+  assert.equal(player.inventory.get(I.ANTIQUE_LAMP_35), 1);
+  assert.equal(player.inventory.get(I.SCURRIUS_SPINE), 0);
+  assert.equal(player.inventory.get(I.YEW_SHORTBOW), 1);
+  assert.equal(player.inventory.get(I.COINS), 50000);
+});
+
+test("Weapon reaches the captured line and item box for the only makeable weapon", () => {
+  const I = core.ItemIdentifiers;
+  const player = tradeForBow();
+  assert.equal(prompts[0].options[0], "Weapon.");
+  const displayed = [];
+  const manager = {
+    reset() {},
+    startDialogues(chain) {
+      for (const entry of chain.getDialogues().values()) {
+        if (entry instanceof core.ActionDialogue) entry.send(player);
+        else displayed.push(entry);
+      }
+    },
+  };
+  player.getDialogueManager = () => manager;
+  // Resolve the existing named variant as the production plugin does, then use its real renderer.
+  const steps = require("../data/definitions/npc-dialogues.json")["Historian Aldo"].variants["standard-dialogue"];
+  const definition = { getId: () => 7615, getName: () => "Historian Aldo" };
+  const start = request => {
+    assert.equal(request.variant, "standard-dialogue");
+    const { startDialogue } = require("../plugins/npcs/NpcDialogues.plugin");
+    startDialogue(api, { player, npc: request.npc, npcId: request.npcId, definition }, request.select(steps));
+    request.handled = true;
+  };
+  api.onCustomEvent("npc-dialogue:start", start);
+  try { prompts[0].pairs[1](); }
+  finally { customHooks.get("npc-dialogue:start").pop(); }
+  assert.equal(prompts.length, 1, "the weapon selection was skipped");
+  assert.deepEqual(displayed.map(dialogue => dialogue.getText()), [
+    "Okay, I'll make you the Bone shortbow.", "Aldo handed the Bone shortbow to you.",
+  ]);
+  assert.equal(displayed[1].getItemId(), I.BONE_SHORTBOW);
+  for (const id of [I.SCURRIUS_SPINE, I.YEW_SHORTBOW, I.COINS]) assert.equal(player.inventory.get(id), 0);
+  assert.equal(player.inventory.get(I.BONE_SHORTBOW), 1);
+});
+
+test("Aldo still offers only a lamp when one coin short of the fee", () => {
+  tradeForBow(49999);
+  assert.equal(prompts[0].title, "Trade Scurrius' spine for a combat lamp?");
+  assert.deepEqual(prompts[0].options, ["Yes.", "No."]);
+});
+
+test("the gamevals identify the Scurrius patrol controller and actor", () => {
+  const names = gamevals.namesOf(GamevalKind.NPC);
+  assert.equal(names.get(7224), "rat_boss_giant_rat_patrol_control");
+  assert.equal(names.get(7225), "rat_boss_giant_rat_patrol");
+});
+
+test("the patrol route has 49 adjacent tiles from the sewer to the bars", () => {
+  const { ROUTE } = require("../plugins/bosses/scurrius/Patrol.Scurrius")._test;
+  assert.equal(ROUTE.length, 49);
+  assert.deepEqual(ROUTE[0], [3234, 9864]);
+  assert.deepEqual(ROUTE.at(-1), [3281, 9868]);
+  for (let step = 1; step < ROUTE.length; step++) {
+    const [x, y] = ROUTE[step], [oldX, oldY] = ROUTE[step - 1];
+    assert.equal(Math.max(Math.abs(x - oldX), Math.abs(y - oldY)), 1);
+  }
+});
+
+test("the controller stays put and patrol rats take 48 steps, linger for three ticks and spawn 50 ticks apart", () => {
+  const Patrol = require("../plugins/bosses/scurrius/Patrol.Scurrius");
+  const spawned = [], active = new Set();
+  let start, task;
+  Patrol.attach({
+    core: {
+      ...core, TaskManager: { submit(value) { task = value; } },
+    },
+    onServerStartup(handler) { start = handler; },
+    onServerShutdown() {},
+    spawnNpc({ id, x, y, z, face }) {
+      let at = new Location(x, y, z);
+      const npc = {
+        id, face, getLocation: () => at, isRegistered: () => active.has(npc),
+        setScriptedMovement() {}, setMovementSteps() {}, setUntargetable() {}, setFlag() {}, setNeedsPlacement() {},
+        getMovementQueue: () => ({ addCheckpoint(location) { at = location; } }),
+      };
+      spawned.push(npc);
+      active.add(npc);
+      return npc;
+    },
+    removeNpc(npc) { active.delete(npc); },
+  });
+  start();
+  assert.equal(spawned[0].id, 7224);
+  assert.deepEqual(spawned[0].getLocation(), new Location(3267, 9869, 0));
+  assert.equal(spawned[0].face, core.Direction.SOUTH.getId());
+  const rats = () => [...active].filter(npc => npc.id === 7225);
+  const { ROUTE } = Patrol._test;
+  for (let tick = 0; tick <= 51; tick++) {
+    task.execute();
+    const tiles = tick <= 48 ? [ROUTE[tick]]
+      : tick === 49 ? [ROUTE.at(-1)]
+        : tick === 50 ? [ROUTE.at(-1), ROUTE[0]]
+          : [ROUTE[1]];
+    assert.deepEqual(rats().map(npc => npc.getLocation()), tiles.map(tile => new Location(...tile, 0)), "tick " + tick);
+  }
+  assert.equal(spawned.filter(npc => npc.id === 7225).length, 2);
+  assert.deepEqual(spawned[0].getLocation(), new Location(3267, 9869, 0));
 });

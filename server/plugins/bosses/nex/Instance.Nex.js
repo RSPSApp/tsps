@@ -156,6 +156,7 @@ class Instance {
   arena() {
     return {
       area: this.area,
+      private: true,
       tile: (tile) => this.tile(tile),
       real: (location) => this.real(location),
       inChamber: (location) => this.inChamber(location),

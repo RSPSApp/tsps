@@ -13,7 +13,9 @@
  * a kill reported both ways counts once and several kills in one tick all count. A kill with an
  * `area` counts only on the areas plugin's map there (`league:area-at`; the death's tile, or the
  * player's for a credited kill); one marked `credited` (a minigame's completion) only the credited
- * event, not a death of the same name.
+ * event, not a death of the same name. A `credited` kill that is also `solo` ("Defeat the Royal
+ * Titans solo") counts only an event whose `solo` is true: the encounter says whether the player had
+ * it to themselves, which a death's damagers cannot (a partner may join, or leave before the kill).
  *
  * A kill may also carry conditions, kept in a separate list and read off the killing blow when the
  * NPC dies (`onCombatHitResolved` records the last hit each player landed, keyed by the NPC, and
@@ -291,7 +293,7 @@ function articleSwapped(key) {
 function conditionalKill(trigger) {
   return trigger.weapon !== undefined || trigger.weapons !== undefined || trigger.spell !== undefined || trigger.spells !== undefined
     || trigger.style !== undefined || trigger.worn !== undefined || trigger.oneHit === true || trigger.noDamage === true
-    || trigger.solo === true || trigger.window !== undefined;
+    || (trigger.solo === true && trigger.credited !== true) || trigger.window !== undefined;
 }
 
 /** NPC -> Map(player -> the last hit the player landed on it; its killing blow at death). */
@@ -456,10 +458,10 @@ function creditAnyOne(player, type, name, at) {
 /**
  * `amount` kills of the NPC `name` from `source` ("deaths" or "events") for the character's open
  * kill tasks that accept it: each task's progress takes the window's larger count, then any task
- * that reached its count completes.
+ * that reached its count completes. `solo` is the credited event's own word that the player fought
+ * the encounter alone.
  */
-
-function credit(player, type, name, source, amount, tile = null) {
+function credit(player, type, name, source, amount, tile = null, solo = false) {
   const kills = indexOf(type).kills;
   const keys = Array.isArray(name) ? name : [name];
   const tasks = keys.flatMap((each) => {
@@ -471,7 +473,7 @@ function credit(player, type, name, source, amount, tile = null) {
   // A `credited` task (a minigame's completion: "Complete the TzHaar Fight Cave") counts only the
   // credited event: the same NPC can die elsewhere (TzTok-Jad in TzHaar-Ket-Rak's Challenges).
   const open = tasks.filter((task) => !done.has(task.id) && inArea(task, type, tile ?? tileOf(player))
-    && !(task.trigger.credited && source !== "events"));
+    && !(task.trigger.credited && source !== "events") && !(task.trigger.solo === true && solo !== true));
   if (!open.length) return;
   const tick = Common.core.World.getProcessCycle?.() ?? 0;
   let perTask = tickCredit.get(player);
@@ -601,12 +603,15 @@ function npcDeath(event) {
   creditEach(player, type, name, at ?? tileOf(player));
 }
 
-/** `combat-achievements:kill` { player, monster, amount? }: a credited kill, from a death or a scripted ending. */
+/**
+ * `combat-achievements:kill` { player, monster, amount?, solo? }: a credited kill, from a death or a
+ * scripted ending; `solo` when the encounter had no other player in it.
+ */
 function creditedKill(request) {
   const player = request?.player;
   if (!player) return;
   const type = Common.leagueOf(player);
-  if (type !== null) credit(player, type, request.monster, "events", Number(request.amount ?? 1));
+  if (type !== null) credit(player, type, request.monster, "events", Number(request.amount ?? 1), null, request.solo === true);
 }
 
 function questCompleted({ player, quest }) {

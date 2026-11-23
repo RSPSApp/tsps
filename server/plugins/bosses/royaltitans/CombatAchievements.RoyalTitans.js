@@ -8,7 +8,9 @@
  * Company), rows spawned vs spell-cleared (I need room), elementals felled by titan damage
  * (Let them fight), blast charge windows (It takes too long), prayer points (No time to
  * pray). Titan Killer streaks count kills in one instance: joining resets to 0, anyone
- * leaving fails the stayers too (Wiki).
+ * leaving fails the stayers too (Wiki). A fight is solo (the league task "Defeat the Royal
+ * Titans solo": "without any other player joining") when the player spawned it alone and
+ * nobody joined before the kill; the kill report carries it as `solo`.
  */
 const Shared = require("./Shared.RoyalTitans");
 
@@ -62,6 +64,7 @@ function spawned(player, session) {
     avoidable: 0,
     prayerStart: prayerPoints(player),
     prayed: false,
+    solo: session?.players?.length === 1,
   };
 }
 
@@ -158,11 +161,15 @@ function blastResolved(session, id) {
   }
 }
 
-/** A partner joined mid-fight: their streak resets to 0 (Wiki). */
-function joined(player) {
+/** A partner joined mid-fight: their streak resets to 0 (Wiki), and the fight is no one's solo. */
+function joined(player, session) {
   player.setAttribute(Shared.STREAK_ATTRIBUTE, 0);
   player.setAttribute(Shared.STREAK_FAILED_ATTRIBUTE, null);
   spawned(player, null);
+  for (const member of session?.players ?? []) {
+    const fight = member === player ? null : fightOf(member);
+    if (fight) fight.solo = false;
+  }
 }
 
 /** Someone left (or died): leaver fails, stayers lose their streaks (Wiki). */
@@ -197,6 +204,7 @@ function killed(player, session, ownKills, announce) {
     player,
     monster: MONSTER,
     count: ownKills,
+    solo: fightOf(player)?.solo === true && session?.players?.length === 1,
     announce: (kills) => {
       announced = true;
       announce?.(kills);

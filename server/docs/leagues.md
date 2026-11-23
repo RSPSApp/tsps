@@ -2205,8 +2205,12 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
     Surge spells) and "Hit 150 damage or more with the Keris Partisan" (25979, as "Defeat a Kalphite
     with the Keris Partisan" names it).
   - `ca-boss { monsters }`: the Wiki task rows' groups of Combat Achievement monsters (below).
-  Not yet: the solo kills ("Royal Titans without any other player joining", "Nex in a private
-  instance"), the timed runs (Prifddinas lap 1:10, Corrupted Gauntlet 4:30, Sepulchre 6:30) and "Vorkath
+  - Solo encounters: a `credited` kill that is also `solo` counts only a `combat-achievements:kill`
+    whose `solo` is true, the encounter's own word (overlay). "Defeat the Royal Titans solo" ("without
+    any other player joining"): the player spawned the fight alone and nobody joined before the kill.
+    "Defeat Nex Solo" ("in a private instance without help from any other player"): a private
+    chamber, the player alone at the start and at the kill, and no other player's damage.
+  Not yet: the timed runs (Prifddinas lap 1:10, Corrupted Gauntlet 4:30, Sepulchre 6:30) and "Vorkath
   15 times without leaving". Each needs its encounter's own event first.
 - **Places from location lines** (`generate-league-tasks.ts`, `PLACE_DEFS` with `locLines`): a task
   whose place is where its subject stands takes the subject pages' own location lines for bounds. The
@@ -2509,7 +2513,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   Mithril Spear"), a spell (`spells`, "with an earth spell"), a combat style (`style`, "with
   melee"), equipment worn at the death (`worn`, "while dressed like it"), a single blow of at
   least the target's hitpoints (`oneHit`, "in one hit"), a target that never hurt a player
-  (`noDamage`, "without taking any damage from it"), or no other player's damage (`solo`); a count
+  (`noDamage`, "without taking any damage from it"), or no other player's damage (`solo`; on a
+  `credited` kill it is the encounter's report instead, above); a count
   within a time window (`window { count, ticks }`, "3 chickens in 6 seconds", "8 penguins within 5
   seconds") keeps the ticks of its kills for the session (not persisted). `kill-any-with { items,
   count }` is any attackable NPC killed with one of the items as the final blow ("5 creatures with a
@@ -2544,9 +2549,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `combat-achievements:completed` and at login. "Within the areas you have unlocked" is not
   checked.
 - **Not mapped yet:** deeds with a condition (a streak), boss kills whose wording is about the
-  encounter rather than the fight ("Defeat Nex Solo" and "Defeat the Royal Titans solo" want a
-  private fight with no one else ever joining, not the `solo` fight condition; "Defeat Vorkath 15
-  Times Without Leaving" wants a 15th no-leave signal the encounter does not keep), the Echo bosses
+  encounter rather than the fight ("Defeat Vorkath 15 Times Without Leaving" wants a 15th no-leave
+  signal the encounter does not keep), the Echo bosses
   and the awakened variants no plugin completes (no content), a kill that is really a Slayer task's
   own condition, and kills whose NPC is never attackable (the Port Sarim prisoner); places with no
   sourced bounds (open towns, regions), open groups ("any Dragon weapon"), transport without an

@@ -1203,7 +1203,11 @@ test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording
   const rival = victim("rival", new Location(here.getX(), here.getY() - 2, 0), true);
   const bystander = victim("bystander", new Location(here.getX(), here.getY() + 1, 0), true);
   wilderness.add(rival);
-  const immune = ["Blood Moon", "Blue Moon", "Eclipse Moon", "Fragment of Seren"].map((name) => victim(name, new Location(here.getX() + 1, here.getY() + 1, 0)));
+  const immune = ["Blood Moon", "Blue Moon", "Eclipse Moon", "Enraged Blood Moon", "Fragment of Seren"].map((name) => {
+    const npc = victim("null", new Location(here.getX() + 1, here.getY() + 1, 0));
+    npc.getCurrentDefinition = () => ({ isAttackable: () => true, getName: () => name });
+    return npc;
+  });
   who.relic.getLocalNpcs = () => [goblin, far, yama, ...immune];
   who.relic.getLocalPlayers = () => [who.relic, rival, bystander];
   const graphics = [];
@@ -1218,7 +1222,7 @@ test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording
   for (const task of explosions) task.execute();
   assert.deepEqual([goblin.pending, rival.pending], [[59, 59, 59], [29, 29, 29]]);
   assert.deepEqual([far.pending, yama.pending, bystander.pending], [[], [], []], "out of reach, spared, not in PvP");
-  assert.deepEqual(immune.map((npc) => npc.pending), [[], [], [], []], "the Moons of Peril and the Fragment of Seren are spared too");
+  assert.deepEqual(immune.map((npc) => npc.pending), [[], [], [], [], []], "the Moons of Peril and the Fragment of Seren are spared too");
   const impact = core.CacheDefinitions.getSpotanimId("leagues_6_sigil_of_life_impact");
   assert.equal(graphics.length, 72, "8 lines of 3, three times");
   const first = graphics.slice(0, 24);
@@ -1293,6 +1297,34 @@ test("Flask of Fervour: a large NPC is hit when any tile of it is within three t
   for (const task of tasks.filter((task) => task.getDelay() < 10)) task.execute();
   assert.deepEqual(big.pending, [59, 59, 59]);
   assert.deepEqual([farBig.pending, small.pending], [[], []], "5x5 with its edge 4 away, and a 1x1 6 away");
+});
+
+test("Flask of Fervour: a real Moon of Peril (nameless parent id 13016, named only by its variant) is spared; a Goblin is not", (t) => {
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const who = cases(FLASK_OF_FERVOUR);
+  const tasks = [];
+  t.mock.method(core.TaskManager, "submit", (task) => tasks.push(task));
+  t.mock.method(core.CombatFactory, "validTarget", () => true);
+  t.mock.method(core.CombatFactory, "canAttackByPolicy", () => core.CanAttackResponse.CAN_ATTACK);
+  const here = who.relic.getLocation();
+  const at = new Location(here.getX() + 1, here.getY(), here.getZ());
+  const moon = new NPC(13016, at);
+  const goblin = new NPC(core.NpcIdentifiers.GOBLIN, at);
+  assert.notEqual(moon.getDefinition().getName(), "Blood Moon", "the parent itself carries no Moon name");
+  for (const npc of [moon, goblin]) {
+    npc.setHitpoints(50);
+    npc.getCombat().getHitQueue().addPendingDamage = (hits) => (npc.taken = (npc.taken ?? []).concat(hits.map((hit) => hit.getDamage())));
+  }
+  who.relic.getLocalNpcs = () => [moon, goblin];
+  who.relic.getSkillManager().setMaxLevels(Skill.PRAYER, 99, false);
+  itemActions.get("Flask of fervour").Activate({ player: who.relic, handled: false });
+  const sender = who.relic.getPacketSender();
+  // The transform reads the player's varbits through the packet sender: a fresh player has them all at 0.
+  who.relic.getPacketSender = () => new Proxy(sender, { get: (target, key) => (key === "getVarbit" || key === "getVarp" ? () => 0 : target[key]) });
+  for (const task of tasks.filter((task) => task.getDelay() < 10)) task.execute();
+  who.relic.getPacketSender = () => sender;
+  assert.equal(moon.taken, undefined);
+  assert.ok(goblin.taken?.length > 0, "an ordinary NPC is struck");
 });
 
 /** The Agility plugin, attached to a test api: its ground-item taken hook and the marks it lays kept for the test. */

@@ -86,10 +86,16 @@ function near(player, other) {
   return Math.max(dx, dy) <= effect.radius;
 }
 
+/** Spared by name: the Moons of Peril are nameless multi-NPC parents, so the variant the player sees counts as well. */
+function isSpared(player, npc) {
+  return effect.spared.includes(npc.getDefinition?.()?.getName?.())
+    || effect.spared.includes(npc.getCurrentDefinition?.(player)?.getName?.());
+}
+
 function enemiesAround(player) {
   const { CombatFactory, CanAttackResponse, TimerKey } = core;
   return player.getLocalNpcs().filter((npc) => npc.getHitpoints() > 0 && near(player, npc)
-    && !effect.spared.includes(npc.getDefinition?.()?.getName?.())
+    && !isSpared(player, npc)
     && CombatFactory.validTarget(player, npc)
     && npc.getCurrentDefinition().isAttackable()
     && !npc.getTimers().has(TimerKey.ATTACK_IMMUNITY)

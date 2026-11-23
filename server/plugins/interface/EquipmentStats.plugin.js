@@ -278,7 +278,7 @@ function open(player) {
   player.setAttribute(EquipPacketListener.PRESERVE_INTERFACE_ON_EQUIP_ATTRIBUTE, EQUIPMENT_STATS_INTERFACE_ID);
   player
     .getPacketSender()
-    .sendVarbit(12393, 1)
+    .setBusyModal(true)
     .sendSubInterface(MAIN_MODAL_TARGET_UID, EQUIPMENT_STATS_INTERFACE_ID, 0);
   player.getPacketSender().sendClientScript(SIDE_BUTTON_SWITCH_SCRIPT, INVENTORY_TAB);
   update(player);

@@ -18,7 +18,7 @@ const Shrine = require("./woodcutting/Shrine.Woodcutting");
 const SplitLogs = require("./woodcutting/SplitLogs.Woodcutting");
 const KandarinHeadgear = require("./woodcutting/KandarinHeadgear.Woodcutting");
 const FarmedRedwood = require("./farming/Redwood.Farming");
-const { pauseForLevelUp, actionInterval } = require("./SkillActions");
+const { pauseForLevelUp, modalPause, actionInterval } = require("./SkillActions");
 
 const DEFAULT_TREE_STUMP_ID = ObjectIds.TREE_STUMP_2;
 // Older trees share models but not stumps, and some sit next to an unrelated stump id; key their
@@ -825,8 +825,8 @@ function groupBonus(player, state, sessions = activeSessionsRef) {
     if (session.requested || session.objectId !== state.objectId || session.privateArea !== state.privateArea) continue;
     if (!session.location?.equals?.(state.location)) continue;
     if (other.isRegistered?.() === false) continue;
-    // A level-up dialogue holds the session without chopping (SkillActions.pauseForLevelUp): not a chopper meanwhile.
-    if (session.levelUpPaused && other !== player) continue;
+    // A level-up dialogue or a busy modal holds the session without chopping: not a chopper meanwhile.
+    if ((session.levelUpPaused || other.inBusyModal?.() === true) && other !== player) continue;
     chopping++;
   }
   return Math.min(GROUP_BONUS_MAX, chopping);
@@ -1384,7 +1384,8 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       stopWoodcutting(activeSessions, player);
       continue;
     }
-    if (state.levelUpPaused) continue;
+    const pause = modalPause(state, player);
+    if (pause === "paused") continue;
 
     const activeTree = treeAt(
       state.objectId,
@@ -1437,6 +1438,17 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       // Live keeps the last chop animation running.
       sendInventoryFull(player, state.tree.logId);
       stopWoodcutting(activeSessions, player, false);
+      continue;
+    }
+
+    if (pause === "restart") {
+      // After a busy modal, with the tree still standing, in reach and an axe held: start over as
+      // a click on the tree does (startWoodcutting): the swing message and animation, then the
+      // first roll (SkillActions.modalPause).
+      state.nextActionTick = currentTick + FIRST_ROLL_DELAY_TICKS;
+      state.nextAnimationTick = currentTick + FIRST_ROLL_DELAY_TICKS;
+      sendSpam(player, SWING_MESSAGE);
+      player.performAnimation(new Animation(state.axe.animationId));
       continue;
     }
 

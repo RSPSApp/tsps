@@ -235,6 +235,9 @@ export class PacketSender {
   /** Last interface owning each transmitted client container; never authoritative contents. */
   private inventoryOwners = new Map<number, number>();
   private chatboxGroupId = -1;
+  /** A main modal that live marks busy (varbit 12393) is open; cleared with the interface. */
+  private busyModal = false;
+  private busyModalHeld = false;
   private chatboxUnclamped = false;
   private chatboxOwner: object | undefined;
   private presentingChatboxOwner: object | undefined;
@@ -889,12 +892,42 @@ export class PacketSender {
     return this;
   }
 
+  /**
+   * Opens or ends a busy main modal: varbit 12393 ("busy"), which live sets while the diary
+   * journal, the CA overview or the equipment screen is open, and the server state it stands
+   * for: a repeating gathering action waits while it is open and starts over after it closes
+   * (rsprox 227/00555 t24898-24920, 227/00562 t153-182; SkillActions.modalPause;
+   * docs/busy-modals.md). Every close route ends it (resetInterfaceState).
+   * Cutscenes and teleports send 12393 themselves and do not pause anything.
+   */
+  setBusyModal(open: boolean): this {
+    if (this.busyModal === open || (!open && this.busyModalHeld)) return this;
+    this.busyModal = open;
+    return this.sendVarbit(12393, open ? 1 : 0);
+  }
+
+  isBusyModal(): boolean {
+    return this.busyModal;
+  }
+
+  /**
+   * Runs `swap` (closing one busy modal to open the next, as the CA screens do) without ending
+   * busy in between: live keeps 12393 at 1 across them (rsprox 237/1001305 t5413-5434).
+   */
+  holdBusyModal(swap: () => void): this {
+    const held = this.busyModalHeld;
+    this.busyModalHeld = true;
+    try { swap(); } finally { this.busyModalHeld = held; }
+    return this;
+  }
+
   private resetInterfaceState(): number {
     const interfaceId = this.player.getInterfaceId?.() ?? -1;
     this.releaseInterfaceInventories(interfaceId);
     if (interfaceId === 12) {
       this.sendConfig(548, 0).sendVarbit(12393, 0);
     }
+    this.setBusyModal(false);
     getShopManager().close(this.player);
     // Keep client/server interface state aligned with Java behavior.
     // A no-op here can leave stale inventory context active client-side, which

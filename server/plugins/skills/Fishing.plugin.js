@@ -17,7 +17,7 @@ const SpiritFlakes = require("./fishing/SpiritFlakes.Fishing");
 const KarambwanVessel = require("./fishing/Karambwan.Fishing");
 const ClueBottles = require("./fishing/ClueBottles.Fishing");
 const Relocation = require("./fishing/Relocation.Fishing");
-const { pauseForLevelUp } = require("./SkillActions");
+const { pauseForLevelUp, modalPause } = require("./SkillActions");
 
 // Ticks per resource roll (Wiki: Game tick/Action lengths): rods 5, net, cage and harpoon
 // spots 6, karambwan vessels 4. Spots the table leaves out keep the rods' 5.
@@ -979,7 +979,10 @@ class FishingTask extends Task {
     this.cycle++;
     fishingTick = this.cycle;
 
+    // A session restarted this tick is re-added to the map, which the loop would visit again.
+    const restarted = new Set();
     for (const [player, session] of this.activeSessions) {
+      if (restarted.has(player)) continue;
       if (!player || !player.isRegistered() || player.getHitpoints() <= 0) {
         this.activeSessions.delete(player);
         continue;
@@ -992,7 +995,8 @@ class FishingTask extends Task {
         stopFishing(this.activeSessions, player);
         continue;
       }
-      if (session.levelUpPaused) continue;
+      const pause = modalPause(session, player);
+      if (pause === "paused") continue;
 
       const npc = World.getNpcs().get(session.npcIndex);
       if (!npc || npc.getId() !== session.npcId) {
@@ -1034,6 +1038,14 @@ class FishingTask extends Task {
       if (inventoryBlocks(player, session.tool)) {
         stopFishing(this.activeSessions, player, false);
         inventoryFull(player);
+        continue;
+      }
+
+      if (pause === "restart") {
+        // After a busy modal, with the spot still there, in reach and the tools held: start over
+        // as a click on the spot does (SkillActions.modalPause).
+        restarted.add(player);
+        startFishing(player, npc, session.tool, this.activeSessions);
         continue;
       }
 

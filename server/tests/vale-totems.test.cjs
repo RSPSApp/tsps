@@ -61,6 +61,7 @@ function createPlayer({ fletching = 99, items = [] } = {}) {
   const messages = [];
   // Filterable (spam) lines, kept apart from game messages.
   const spam = [];
+  const actionEvents = [];
   const animations = [];
   const attributes = new Map();
   let menu = null;
@@ -89,12 +90,14 @@ function createPlayer({ fletching = 99, items = [] } = {}) {
     sendSound: () => sender,
     sendRunEnergy: () => sender,
     sendTypedMessage: (type, text) => {
-      (type === PluginManager.getCoreApi().ChatType.SPAM ? spam : messages).push(text);
+      const filterable = type === PluginManager.getCoreApi().ChatType.SPAM;
+      (filterable ? spam : messages).push(text);
+      actionEvents.push([filterable ? "spam" : "game", text]);
       return sender;
     },
   };
   const player = {
-    inventory, xp, said, dialogueChains, messages, spam, animations, attributes,
+    inventory, xp, said, dialogueChains, messages, spam, actionEvents, animations, attributes,
     menu: () => menu,
     clearMenu: () => { menu = null; },
     // As MovementQueue: `isMoving` is a field, `isMovings()` the query.
@@ -107,7 +110,10 @@ function createPlayer({ fletching = 99, items = [] } = {}) {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getPacketSender: () => sender,
-    sendMessage: (text) => messages.push(text),
+    sendMessage: (text) => {
+      messages.push(text);
+      actionEvents.push(["game", text]);
+    },
     performAnimation: (animation) => animations.push(animation.getId()),
     setPositionToFace() {},
     getRunEnergy: () => energy,
@@ -124,6 +130,7 @@ function createPlayer({ fletching = 99, items = [] } = {}) {
       addExperiences: (skill, amount) => {
         const name = (skill.getName?.() ?? String(skill)).toLowerCase();
         xp[name] = (xp[name] ?? 0) + amount;
+        actionEvents.push(["xp", name, amount]);
       },
     }),
     getInventory: () => ({
@@ -622,6 +629,19 @@ test("ent trails boost exactly four successful build or carve actions and a fres
   player.menu().execute(obj("ent_totems_animal_icon_a"));
   assert.equal(player.xp.fletching, 5 * 14.375 + 12.5);
   ticks(2);
+
+  const inspired = ["spam", "Your connection to the ents inspires your carving."];
+  const faded = ["spam", "Your connection to the ents fades."];
+  const boostedXp = ["xp", "fletching", 14.375];
+  const events = player.actionEvents.filter(([type, text]) => type !== "game" || !text.includes(TRAIL_NOTICE));
+  assert.deepEqual(events, [
+    inspired, boostedXp, ["game", "You erect an oak totem."],
+    inspired, boostedXp, ["spam", "You carve a buffalo into the totem."],
+    inspired, boostedXp, ["spam", "You carve an eagle into the totem."],
+    inspired, boostedXp, ["game", "You finish carving the totem."],
+    inspired, faded, boostedXp, ["game", "You erect an oak totem."],
+    ["xp", "fletching", 12.5], ["spam", "You carve a buffalo into the totem."],
+  ]);
 });
 
 test("ent trail indicators and XP charges do not leak into the saved totem snapshot", () => {

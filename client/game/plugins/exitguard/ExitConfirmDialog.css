@@ -1,0 +1,85 @@
+/* Exit Guard's confirmation: above every game panel, and on the body so hiding the game's UI
+   or iOS turning the canvas cannot hide the way out. */
+.exit-guard {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px))
+        calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
+    background: rgba(0, 0, 0, 0.62);
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    cursor: default;
+}
+
+.exit-guard[hidden] {
+    display: none;
+}
+
+/* The game's own panel look: dark fill, light rule, hard text shadow. */
+.exit-guard-panel {
+    box-sizing: border-box;
+    width: min(360px, 100%);
+    padding: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    border-radius: 6px;
+    background: rgba(18, 20, 24, 0.97);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.42);
+    text-align: center;
+}
+
+.exit-guard-title {
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 18px;
+    line-height: 1.2;
+    color: #ffea00;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.exit-guard-message {
+    margin-top: 10px;
+    font-family: "OSRS Small", sans-serif;
+    font-size: 15px;
+    line-height: 1.35;
+    color: #eef4ff;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.exit-guard-actions {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
+
+.exit-guard-button {
+    flex: 1 1 0;
+    min-width: 96px;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.5);
+    color: #fff;
+    font-family: "OSRS Bold", sans-serif;
+    font-size: 15px;
+    text-shadow: 1px 1px 0 #000;
+    cursor: pointer;
+}
+
+.exit-guard-button:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.exit-guard-button:focus-visible {
+    outline: 2px solid #ffea00;
+    outline-offset: 1px;
+}
+
+/* Leaving is the destructive answer, so it does not look like the one under the cursor. */
+.exit-guard-leave {
+    color: #ff8888;
+}

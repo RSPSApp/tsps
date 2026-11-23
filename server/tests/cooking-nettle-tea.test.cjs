@@ -167,7 +167,9 @@ for (const [poured, into, emptied, made] of [
 ]) {
   test(`${poured} into ${into}: ${made} in its slot, ${emptied} in the other, sound 2401, no line`, (t) => {
     const { p, sent, inv } = setup(t, [null, into, null, poured]);
-    for (const [first, second] of [[poured, into]]) assert.equal(useOn(p, first, second), true);
+    assert.equal(useOn(p, poured, into), true);
+    assert.equal(at(inv, 1), obj(into), 'nothing on the use tick (capture: input 373, response 374)');
+    ticks(1);
     assert.equal(at(inv, 1), obj(made));
     assert.equal(at(inv, 3), obj(emptied));
     assert.deepEqual(sent.sounds, [2401]);
@@ -179,6 +181,7 @@ for (const [poured, into, emptied, made] of [
 test('either way round: the empty cup used on the tea pours the same', (t) => {
   const { p, inv } = setup(t, ['cup_empty', 'bowl_nettletea']);
   assert.equal(useOn(p, 'cup_empty', 'bowl_nettletea'), true);
+  ticks(1);
   assert.equal(at(inv, 0), obj('cup_of_nettletea'));
   assert.equal(at(inv, 1), obj('bowl_empty'));
 });

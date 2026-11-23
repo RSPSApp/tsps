@@ -200,11 +200,12 @@ the Wiki ([Nettle tea](https://oldschool.runescape.wiki/w/Nettle_tea),
   The Wiki's prose says it stops at 54; the chart's values give 53. Ours: the line "The water
   boils over." (no capture or Wiki text for a boil-over).
 - The tea (plain or milky) into an empty cup or a porcelain cup, and a bucket of milk into the tea
-  in a bowl or either cup: no line, sound 2401, the brew in the cup's slot (the tea's, for milk)
-  and the emptied bowl or bucket in the other slot (Ghosts Ahoy capture, ticks 373-383; the Wiki:
-  the porcelain cup "works like a normal teacup"). Ours: no XP or level for a pour. The Wiki's Cup
-  of tea (nettle) recipe box lists 20 Cooking and 52 XP, the boiling's values, and the Ghosts Ahoy
-  port of the captured porcelain pour gives none.
+  in a bowl or either cup: a tick after the use, no line, no XP, sound 2401, the brew in the cup's
+  slot (the tea's, for milk) and the emptied bowl or bucket in the other slot (Ghosts Ahoy capture
+  20261112T092603: tea into the porcelain cup at 373, response 374; milk at 382, response 383; no
+  Cooking stat update). The Wiki: the porcelain cup "works like a normal teacup", so the plain
+  cup pours the same. The Wiki's Cup of tea (nettle) recipe box lists 20 Cooking and 52 XP, the
+  boiling's values; the recording shows neither for a pour (recorded difference).
 
 ## From the Wiki only
 

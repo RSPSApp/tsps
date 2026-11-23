@@ -37,8 +37,9 @@ An NPC's hit closes the open screen server-side on the hit tick, and auto-retali
 same tick (227/1000296 t5358). `CombatFactory.executeHit` already closes a `busy()` player's
 interface on a hit.
 
-Mid-teleport (a passageway, 228/02229 t236), during a forced move such as a ditch jump, or while dying (227/1000370 t25076-25080), the click
-is dropped. On one tick during the passageway, a mix of worn-items clicks got "Please finish
+Mid-teleport (a passageway, 228/02229 t236), or while dying (227/1000370 t25076-25080), the click
+is dropped. Ours: tsps drops it during a forced move such as a ditch jump too, which is not
+recorded. On one tick during the passageway, a mix of worn-items clicks got "Please finish
 what you're doing before opening this menu." (228/02229 t238). That capture can't tell which
 button sent it, so tsps sends nothing.
 

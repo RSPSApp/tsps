@@ -7,6 +7,13 @@
     "available": 11695
   },
   "maxUnlocked": 5,
+  "echoBoss": {
+    "_comment": "The Echo boss tab's Locate (512:82 echo_boss_map_button; script 7645 gives it the op). Each leagues_echo_bosses row's `region` is the area id (3 Asgarnia, 4 Kandarin, 5 Morytania, 6 Desert, 7 Tirannwn, 8 Fremennik, 11 Wilderness, 20 Kourend, 21 Varlamore: script 7638's switch); its ca_data struct's param 1317 is the boss's packed coord, the one the Combat Achievements panel's Locate reads. The click is in no rsprox recording (rev 227 predates the button, 241/242 hold none): the reply is the Combat Achievements one.",
+    "table": "leagues_echo_bosses",
+    "regionColumn": "region",
+    "structColumn": "ca_data",
+    "coordParam": 1317
+  },
   "thresholds": {
     "_comment": "Script 3682 reads the unlock slots from enum 5677 -> structs 5971-5975, param 1010 = tasks needed; the cache holds a later league's numbers, so a league's own go to the client as structOverrides (GamemodeContentStore) through LeagueMode's `league:send-content`.",
     "structs": [5971, 5972, 5973, 5974, 5975],
@@ -18,7 +25,7 @@
     "columns": { "id": "region_id", "name": "name", "shield": "shield_component", "nameComponent": "name_component", "teleport": "area_teleport_coord" }
   },
   "interface": {
-    "_comment": "trailblazer_areas (512) and the league side panel's View Areas (656:40), as captured: opened as the main modal with if_setevents on league_menu_frame 512:7 slots 10-18 OP1. A shield, a name or the name header (512:44) sets league_area_last_viewed and runs 3668 (the area id, ten components, the state, twelve components; the rev 241 script also takes a string, empty here): state 1 unlocked ('Teleport to'), 2 unlockable ('Unlock'); script 3676 gives the other states: 0 more tasks needed, 3 a server message, 4 no slot left. The details' button (512:82, gameval echo_boss_map_button) teleports when unlocked; confirm_frame (512:60) unlocks: trailblazer_league_area_unlock_emote 8792 (420 cycles = 14 ticks) with the league's spotanim for the area, the modal closed, four sounds; 14 ticks later the selection varbit, the chat message, the interface reopened and the 'Area Unlocked!' popup.",
+    "_comment": "trailblazer_areas (512) and the league side panel's View Areas (656:40), as captured: opened as the main modal with if_setevents on league_menu_frame 512:7 slots 10-18 OP1. A shield, a name or the name header (512:44) sets league_area_last_viewed and runs 3668 (the area id, ten components, the state, twelve components; the rev 241 script also takes a string, empty here): state 1 unlocked ('Teleport to'), 2 unlockable ('Unlock'); script 3676 gives the other states: 0 more tasks needed, 3 a server message, 4 no slot left. The details' button (select_button 512:84, rev 227's 512:82 in older recordings) teleports when unlocked, and 512:82 (echo_boss_map_button) is the Echo boss tab's Locate (see echoBoss); confirm_frame (512:60) unlocks: trailblazer_league_area_unlock_emote 8792 (420 cycles = 14 ticks) with the league's spotanim for the area, the modal closed, four sounds; 14 ticks later the selection varbit, the chat message, the interface reopened and the 'Area Unlocked!' popup.",
     "group": 512,
     "openButton": [656, 40],
     "menuFrame": 7,
@@ -27,6 +34,7 @@
     "modalSize": [2524, [-1, -3]],
     "nameHeader": 44,
     "teleportButton": 84,
+    "echoBossButton": 82,
     "confirm": 62,
     "viewScript": 3668,
     "viewScriptComponentsBefore": [14, 39, 38, 42, 43, 44, 80, 84, 85, 91],

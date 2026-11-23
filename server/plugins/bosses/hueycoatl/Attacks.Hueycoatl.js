@@ -1,7 +1,9 @@
 /**
  * The Hueycoatl's attacks, as captured (docs/hueycoatl.md):
  *
- * - Rain Fire: every attack the head rears (huey_attack_<style>, its charge spotanim) and 4
+ * - Rain Fire: every attack the head rears: huey_attack_melee for everyone, and for each target
+ *   its own npc_anim_specific huey_attack_<style> (huey_shield_attack_<style> while shielded)
+ *   and npc_spotanim_specific charge spotanim in slot 0 (recordings 4052, 4054, 3399). 4
  *   ticks later a feather falls on every player in the arena, from just above them (start
  *   height 900, end 200, angle 80), landing 150 cycles later on the summit and 210 on the
  *   mountainside. The colour tells the style (Wiki): the matching protection prayer holds it to
@@ -52,8 +54,13 @@ function rainFire(session, players, shielded) {
   const { head } = session.fight;
   if (!head?.isRegistered()) return;
   const style = Shared.pick(STYLES);
-  head.performAnimation(new core.Animation((shielded ? Shared.SEQ.HEAD_SHIELD_ATTACK : Shared.SEQ.HEAD_ATTACK)[style]));
-  head.performGraphic(graphic(Shared.GFX.CHARGE[style]));
+  // Everyone sees huey_attack_melee; each target also gets the style's own rear and charge.
+  head.performAnimation(new core.Animation(Shared.SEQ.HEAD_ATTACK.melee));
+  const own = new core.Animation((shielded ? Shared.SEQ.HEAD_SHIELD_ATTACK : Shared.SEQ.HEAD_ATTACK)[style]);
+  for (const player of players) {
+    if (!player.isRegistered()) continue;
+    player.getPacketSender().sendNpcAnimationSpecific(head, own).sendNpcSpotAnimationSpecific(head, graphic(Shared.GFX.CHARGE[style]), 0);
+  }
   const generation = session.fight.generation;
   session.schedule(FEATHER_DELAY_TICKS, () => {
     for (const player of players) launchFeather(session, player, style, generation);

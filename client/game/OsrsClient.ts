@@ -8325,6 +8325,11 @@ export class OsrsClient {
             if (block.faceTile) {
                 applyNpcFaceTile(this.npcEcs, ecsId, block.faceTile);
             }
+            if (block.faceAngle) {
+                // Instant sets the drawn angle too: the only way to turn an NPC whose turn speed is 0.
+                this.npcEcs.setTargetRot(ecsId, block.faceAngle.angle);
+                if (block.faceAngle.instant) this.npcEcs.setRotation(ecsId, block.faceAngle.angle);
+            }
             if (typeof block.faceEntity === "number") {
                 this.npcEcs.setInteractionIndex(ecsId, block.faceEntity | 0);
             }

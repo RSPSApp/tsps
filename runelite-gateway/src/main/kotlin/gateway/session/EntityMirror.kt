@@ -213,6 +213,7 @@ class EntityMirror(
         block.forcedChat?.let(info::setSay)
         block.faceEntity?.let(info::setFacePathingEntity)
         block.faceTile?.let { (x, z) -> info.setFaceCoordGrid(x, z, instant = false, walkMode = 0) }
+        block.faceAngle?.let { (angle, instant) -> info.setFaceAngle(angle, instant) }
         block.animation?.let { (id, delay) -> info.setSequence(id, delay) }
         for (hit in block.hits) info.addHitMark(-1, hit.type, hit.type, hit.damage, hit.delay)
         for (bar in block.headbars) {

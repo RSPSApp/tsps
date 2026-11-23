@@ -32,6 +32,23 @@ class ActorBlocksTest {
     }
 
     @Test
+    fun `an npc face angle after a type customisation is read and leaves the stream aligned`() {
+        // tsps writeNpcUpdateBlock for the Hueycoatl's hidden tail: mask 0x40000 | 0x80000 (three
+        // mask bytes), the type customisation (models flag, one model 0xffff), then the face angle
+        // (u16 512, instant 1). A trailing byte stands for the next NPC's block.
+        val bytes = listOf(0x80, 0x40, 0x0C, 0x01, 1, 0xFF, 0xFF, 512 shr 8, 512 and 0xFF, 1, 0x7A)
+            .map { it.toByte() }.toByteArray()
+        val reader = BlockReader(bytes)
+        val block = ActorBlocks.npc(reader)
+        assertEquals(listOf(0xFFFF), block.typeCustomisation?.models)
+        assertEquals(512 to true, block.faceAngle)
+        assertEquals(0x7A, reader.u8(), "the next block starts right after the face angle")
+
+        val turning = ActorBlocks.npc(BlockReader(listOf(0x80, 0x40, 0x08, 1536 shr 8, 1536 and 0xFF, 0).map { it.toByte() }.toByteArray()))
+        assertEquals(1536 to false, turning.faceAngle)
+    }
+
+    @Test
     fun `a chat style reads its pattern colours`() {
         val style = ChatStyle.read(gateway.tsps.TspsReader(byteArrayOf(14, 2, 3, 4)))!!
         assertEquals(14 to 2, style.colour to style.effect)

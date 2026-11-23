@@ -28,6 +28,9 @@ class ActorBlock {
     var transparency: Transparency? = null
     var typeCustomisation: TypeCustomisation? = null
 
+    /** A held NPC facing (OSRS npc face angle): the angle, and whether to snap to it. */
+    var faceAngle: Pair<Int, Boolean>? = null
+
     class Hit(val type: Int, val damage: Int, val delay: Int)
 
     class Headbar(val id: Int, val remove: Boolean, val duration: Int, val delay: Int, val fill: Int, val endFill: Int)
@@ -99,6 +102,7 @@ object ActorBlocks {
     private const val NPC_TRANSPARENCY = 0x8000
     private const val NPC_SPOT_ANIM = 0x20000
     private const val NPC_TYPE_CUSTOMISATION = 0x40000
+    private const val NPC_FACE_ANGLE = 0x80000
 
     /** NPC_TYPE_CUSTOMISATION's leading flags: which fields follow. */
     private const val TYPE_MODELS = 0x1
@@ -179,6 +183,8 @@ object ActorBlocks {
             block.transparency = ActorBlock.Transparency(reader.u16(), reader.u16(), reader.u16().noneAsMinusOne(), reader.u8())
         }
         if (mask and NPC_TYPE_CUSTOMISATION != 0) block.typeCustomisation = typeCustomisation(reader)
+        // A short angle, then whether the client snaps to it (written after the type customisation).
+        if (mask and NPC_FACE_ANGLE != 0) block.faceAngle = reader.u16() to (reader.u8() != 0)
         return block
     }
 

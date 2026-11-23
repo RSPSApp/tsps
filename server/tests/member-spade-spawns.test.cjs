@@ -8,7 +8,9 @@ before(()=>CachePipeline.initialize(require('node:path').resolve(__dirname,'..')
 test('exact two Spade rows use native identity and explicit member world policy',()=>{
  const item=CacheDefinitions.getItem(952);assert.equal(item.name,'Spade');assert.equal(item.isMembers,false);
  for(const[x,y]of points){const found=definitions.filter(d=>d.id===952&&d.location.x===x&&d.location.y===y&&d.location.z===0);assert.equal(found.length,1);assert.equal(found[0].members,true);assert.equal(found[0].amt,1);assert.equal(found[0].respawn,100);}
- for(const[x,y]of [[1728,3102],[3355,2758],[3338,2751],[3334,2719],[3333,2702],[2592,2291]])assert.ok(!definitions.some(d=>d.id===952&&d.location.x===x&&d.location.y===y),'unselected/scenery Spade tile '+x+','+y);
+ // Necropolis and Wyrmscraig are listed under the Wiki's Item spawns heading, so they are ordinary members spawns too.
+ for(const[x,y]of [[3355,2758],[3338,2751],[3334,2719],[3333,2702],[2592,2291]])assert.equal(definitions.filter(d=>d.id===952&&d.location.x===x&&d.location.y===y&&d.members===true).length,1,'Item spawns Spade tile '+x+','+y);
+ assert.ok(!definitions.some(d=>d.id===952&&d.location.x===1728&&d.location.y===3102),'no Wiki row: never added');
 });
 for(const members of [true,false])test('actual member Spade loader boundary: '+members,t=>{
  const items=World.getItems(),old=items.splice(0);t.after(()=>items.splice(0,items.length,...old));t.mock.method(W,'isMembersWorld',()=>members);assert.equal(new GroundItemSpawnDefinitionLoader().load(),true);

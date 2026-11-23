@@ -432,3 +432,24 @@ test("the Leagues Tutor has nothing to claim with no tier unclaimed, and needs t
   assert.equal(full.p.getInventory().getAmount(tier.hilt), 0);
   assert.equal(Progress.claimedTiers(full.p).has(1), false);
 });
+
+test("the Leagues Tutor works through every unclaimed tier in one conversation", async (t) => {
+  const f = actor(t),
+    [easy, medium] = Data.tiers();
+  earned(f, 1);
+  f.p.setAttribute("combat-achievements:claimed", Data.tiers().slice(2).map((row) => row.tier));
+  const { lines, menu } = await askTutor(f, npc(t, f, "Leagues Tutor"));
+  assert.deepEqual(
+    lines.filter((line) => line.startsWith("I can see that.")),
+    [
+      "I can see that. Nice job. You'll be expecting your easy rewards?",
+      "I can see that. Nice job. You'll be expecting your medium rewards?",
+    ],
+  );
+  for (const tier of [easy, medium]) {
+    assert.equal(Progress.tierStatus(f.p, tier), 2, tier.name);
+    assert.equal(f.p.getInventory().getAmount(tier.lamp), 1, tier.name);
+    assert.equal(f.p.getInventory().getAmount(tier.hilt), 1, tier.name);
+  }
+  assert.ok(menu?.options.includes("What changes have been made for this League?"));
+});

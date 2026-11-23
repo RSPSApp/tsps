@@ -1227,6 +1227,72 @@ test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording
   who.relic.getPacketSender = () => sender;
 });
 
+test("Flask of Fervour: a level boosted above its maximum is kept, not lowered", () => {
+  const who = cases(FLASK_OF_FERVOUR);
+  const skills = who.relic.getSkillManager();
+  skills.setMaxLevels(Skill.HITPOINTS, 99, false);
+  skills.setMaxLevels(Skill.PRAYER, 70, false);
+  who.relic.setHitpoints(188);
+  skills.setCurrentLevel(Skill.PRAYER, 80, false);
+  itemActions.get("Flask of fervour").Activate({ player: who.relic, handled: false });
+  assert.equal(who.relic.getHitpoints(), 188);
+  assert.equal(skills.getCurrentLevel(Skill.PRAYER), 80);
+  const low = cases(FLASK_OF_FERVOUR).relic;
+  low.getSkillManager().setMaxLevels(Skill.HITPOINTS, 99, false);
+  low.getSkillManager().setMaxLevels(Skill.PRAYER, 70, false);
+  low.setHitpoints(5);
+  low.getSkillManager().setCurrentLevel(Skill.PRAYER, 1, false);
+  itemActions.get("Flask of fervour").Activate({ player: low, handled: false });
+  assert.equal(low.getHitpoints(), 99);
+  assert.equal(low.getSkillManager().getCurrentLevel(Skill.PRAYER), 70);
+});
+
+test("Flask of Fervour: the shield lasts exactly four game ticks, whatever the wall clock says", (t) => {
+  const who = cases(FLASK_OF_FERVOUR);
+  let cycle = 1000;
+  t.mock.method(core.World, "getProcessCycle", () => cycle);
+  t.mock.method(core.TaskManager, "submit", () => {});
+  itemActions.get("Flask of fervour").Activate({ player: who.relic, handled: false });
+  const zeroed = (at) => {
+    cycle = at;
+    const hit = new core.HitDamage(25, core.HitMask.RED);
+    emit("combat:damage-apply", { target: who.relic, hit });
+    return hit.getDamage() === 0;
+  };
+  assert.deepEqual([1000, 1001, 1002, 1003].map(zeroed), [true, true, true, true]);
+  assert.equal(zeroed(1004), false, "over after four ticks");
+});
+
+test("Flask of Fervour: a large NPC is hit when any tile of it is within three tiles", (t) => {
+  const who = cases(FLASK_OF_FERVOUR);
+  const flask = itemActions.get("Flask of fervour");
+  const tasks = [];
+  t.mock.method(core.TaskManager, "submit", (task) => tasks.push(task));
+  t.mock.method(core.CombatFactory, "validTarget", () => true);
+  t.mock.method(core.CombatFactory, "canAttackByPolicy", () => core.CanAttackResponse.CAN_ATTACK);
+  const here = who.relic.getLocation();
+  const giant = (size, dx) => {
+    const pending = [];
+    return {
+      pending, isPlayer: () => false, getHitpoints: () => 50, getSize: () => size,
+      getLocation: () => new Location(here.getX() - dx, here.getY(), 0),
+      getDefinition: () => ({ getName: () => "Araxxor" }), getCurrentDefinition: () => ({ isAttackable: () => true }),
+      getTimers: () => ({ has: () => false }),
+      getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => pending.push(...hits.map((hit) => hit.getDamage())) }) }),
+    };
+  };
+  // A 5x5 NPC whose south-west tile is 6 west spans 6..2 tiles west of the player: its far edge is 2 away.
+  const big = giant(5, 6);
+  const farBig = giant(5, 8);
+  const small = giant(1, 6);
+  who.relic.getLocalNpcs = () => [big, farBig, small];
+  who.relic.getSkillManager().setMaxLevels(Skill.PRAYER, 99, false);
+  flask.Activate({ player: who.relic, handled: false });
+  for (const task of tasks.filter((task) => task.getDelay() < 10)) task.execute();
+  assert.deepEqual(big.pending, [59, 59, 59]);
+  assert.deepEqual([farBig.pending, small.pending], [[], []], "5x5 with its edge 4 away, and a 1x1 6 away");
+});
+
 /** The Agility plugin, attached to a test api: its ground-item taken hook and the marks it lays kept for the test. */
 function agility() {
   const taken = [];

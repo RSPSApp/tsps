@@ -26,7 +26,7 @@ let api;
 let core;
 let effect;
 
-/** Players untouchable until (ms since the epoch). */
+/** Players untouchable until (the game tick the shield ends on). */
 const shielded = new WeakMap();
 /** The pending "ready" task, per player, so a shortened cooldown restarts it. */
 const readyTasks = new WeakMap();
@@ -75,9 +75,15 @@ function scheduleReady(player) {
   core.TaskManager.submit(task);
 }
 
+/** Within the radius of the nearest tile of the other's footprint (a large NPC counts from its far edge, not its south-west tile). */
 function near(player, other) {
   const here = player.getLocation();
-  return other.getLocation().getZ() === here.getZ() && other.getLocation().isWithinDistance(here, effect.radius);
+  const base = other.getLocation();
+  if (base.getZ() !== here.getZ()) return false;
+  const size = Math.max(1, other.getSize?.() ?? 1);
+  const dx = here.getX() < base.getX() ? base.getX() - here.getX() : Math.max(0, here.getX() - (base.getX() + size - 1));
+  const dy = here.getY() < base.getY() ? base.getY() - here.getY() : Math.max(0, here.getY() - (base.getY() + size - 1));
+  return Math.max(dx, dy) <= effect.radius;
 }
 
 function enemiesAround(player) {
@@ -133,8 +139,9 @@ function activate(event) {
   if (coolingDown(player)) return true;
   const { Skill, Animation, Graphic } = core;
   const skills = player.getSkillManager();
-  player.setHitpoints(skills.getMaxLevel(Skill.HITPOINTS));
-  skills.setCurrentLevel(Skill.PRAYER, skills.getMaxLevel(Skill.PRAYER), true);
+  // Restored to the base maximum, never lowered: a level boosted above it is kept (Wiki).
+  player.setHitpoints(Math.max(player.getHitpoints(), skills.getMaxLevel(Skill.HITPOINTS)));
+  skills.setCurrentLevel(Skill.PRAYER, Math.max(skills.getCurrentLevel(Skill.PRAYER), skills.getMaxLevel(Skill.PRAYER)), true);
   Common.restoreSpecial(player, 100);
   player.setPoisonDamage?.(0);
   player.performAnimation(new Animation(core.CacheDefinitions.getSeqId(effect.animation)));
@@ -142,7 +149,7 @@ function activate(event) {
   player.getPacketSender().sendSound(effect.sound, 1, 0);
   player.sendMessage(text("used"));
   const now = Date.now();
-  shielded.set(player, now + effect.immuneTicks * TICK_MS);
+  shielded.set(player, core.World.getProcessCycle() + effect.immuneTicks);
   for (const delay of effect.explosionTicks) {
     if (delay === 0) explode(player);
     else core.TaskManager.submit(new core.CountdownTask(player, delay, () => explode(player)));
@@ -166,7 +173,7 @@ function check(event) {
 function damageApply({ target, hit }) {
   const until = target?.isPlayer?.() ? shielded.get(target) : undefined;
   if (until === undefined) return;
-  if (Date.now() >= until) {
+  if (core.World.getProcessCycle() >= until) {
     shielded.delete(target);
     return;
   }

@@ -21,8 +21,9 @@
  *
  * The lit mining helmet can be put out again (Wiki: "You can extinguish it if you want it unlit"): the
  * old click that turned it unlit was the only way back, so a helmet lit outside the Lumbridge basement
- * could never be lit there for the diary. A lit torch can also be extinguished except when it is
- * the player's only light in the currently modelled dark area (Wiki: Light sources).
+ * could never be lit there for the diary. A lit torch, candle or candle lantern can also be extinguished except when
+ * it is the player's only light in the currently modelled dark area (Wiki: Light sources); the candle and candle
+ * lantern say why, as captured (Darkness.refuseLastLight).
  *
  * The torch used on a fire or range lights it (Wiki: "may be used with a tinderbox or dry sticks, or
  * used on a fire or range"). It needs a handler of its own because Cooking registers a `fallback`
@@ -143,7 +144,8 @@ function extinguishHelmet({ player, item }) {
 /** Extinguish only the clicked torch, unless it is the last light in the dark. */
 function extinguishTorch({ player, item }) {
   if (item?.getId() !== core.ItemIdentifiers.LIT_TORCH) return false;
-  if (!Darkness.canSeeAt(player, player.getLocation(), item)) return true;
+  // The torch's refusal line was not captured, so it stays silent (Ours).
+  if (Darkness.wouldLeaveInDark(player, item)) return true;
   item.setId(core.ItemIdentifiers.UNLIT_TORCH);
   player.getInventory().refreshItems();
   return true;
@@ -151,16 +153,34 @@ function extinguishTorch({ player, item }) {
 
 /**
  * Extinguish on a lit candle: the unlit one in its slot and "You extinguish the candle." in the filterable chat (rsprox
- * local enlightened-journey, rev 242, tick 2533), unless it is the last light in the dark, as a torch.
+ * local enlightened-journey, rev 242, tick 2533). The last light in the dark stays lit, with the captured refusal
+ * (local 1000134 tick 370).
  */
 function extinguishCandle({ player, item }) {
   const I = core.ItemIdentifiers;
   const unlit = item?.getId() === I.LIT_CANDLE ? I.CANDLE : item?.getId() === I.LIT_BLACK_CANDLE ? I.BLACK_CANDLE : null;
   if (unlit === null) return false;
-  if (!Darkness.canSeeAt(player, player.getLocation(), item)) return true;
+  if (Darkness.refuseLastLight(player, item, "Extinguishing the candle would leave you without a light source.")) return true;
   item.setId(unlit);
   player.getInventory().refreshItems();
   player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You extinguish the candle.");
+  return true;
+}
+
+/**
+ * Extinguish on a lit candle lantern (white 4531, black 4534): the unlit lantern in its slot and "You extinguish the
+ * lantern." in the filterable chat (rsprox captures, local 1000134 ticks 365 and 575, 1000135, 1000140; the black one
+ * was not captured and is put out the same way). The last light in the dark stays lit, with the captured refusal
+ * (local 1000134 ticks 341, 347, 354).
+ */
+function extinguishCandleLantern({ player, item }) {
+  const I = core.ItemIdentifiers;
+  const unlit = item?.getId() === I.CANDLE_LANTERN_3 ? I.CANDLE_LANTERN : item?.getId() === I.CANDLE_LANTERN_6 ? I.CANDLE_LANTERN_4 : null;
+  if (unlit === null) return false;
+  if (Darkness.refuseLastLight(player, item, "Extinguishing the lantern would leave you without a light source.")) return true;
+  item.setId(unlit);
+  player.getInventory().refreshItems();
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You extinguish the lantern.");
   return true;
 }
 
@@ -209,7 +229,7 @@ function extinguishAll(player) {
 
 module.exports = {
   name: "LightSources",
-  description: "Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches, candles and mining helmets be put out again.",
+  description: "Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches, candles, candle lanterns and mining helmets be put out again (not your last light in the dark).",
   members: true,
   register(api) {
     core = api.core;
@@ -221,7 +241,8 @@ module.exports = {
     api.onItemAction("Lit torch", { Extinguish: extinguishTorch });
     api.onItemAction("Lit candle", { Extinguish: extinguishCandle });
     api.onItemAction("Lit black candle", { Extinguish: extinguishCandle });
+    api.onItemAction("Candle lantern", { Extinguish: extinguishCandleLantern });
   },
   extinguishAll,
-  _test: { build, lightOnObject, putOutForms, extinguishCandle },
+  _test: { build, lightOnObject, putOutForms, extinguishCandle, extinguishCandleLantern },
 };

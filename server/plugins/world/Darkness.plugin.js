@@ -132,6 +132,36 @@ function canSeeAt(player, location, excludedInventoryItem) {
   return area == null || canSee(player, area, excludedInventoryItem);
 }
 
+/**
+ * Whether giving up `item` (putting it out or dropping it) would leave the player unable to see where they stand:
+ * they can see now, and could not without it.
+ */
+function wouldLeaveInDark(player, item) {
+  const location = player?.getLocation?.();
+  return canSeeAt(player, location) && !canSeeAt(player, location, item);
+}
+
+/**
+ * Refuses giving up the last light in a dark area with `message`, as a game message (rsprox captures, local 1000134
+ * ticks 341 and 370 in Lumbridge Swamp Caves: "Extinguishing the lantern/candle would leave you without a light
+ * source."). Returns whether it refused.
+ */
+function refuseLastLight(player, item, message) {
+  if (!wouldLeaveInDark(player, item)) return false;
+  player.sendMessage(message);
+  return true;
+}
+
+// rsprox captures, local 1000134 tick 372: Drop on the only lit candle in Lumbridge Swamp Caves keeps it, with this game
+// message and no drop sound.
+const LAST_LIGHT_DROP_MESSAGE = "Dropping that would leave you without a light source.";
+
+/** Drop policy: the last carried light in a dark area stays in the inventory. */
+function dropLastLight(event) {
+  if (!CARRIED_LIGHT_SOURCE_IDS.has(event.itemId)) return;
+  if (refuseLastLight(event.player, event.item, LAST_LIGHT_DROP_MESSAGE)) event.handled = true;
+}
+
 function darknessTickMessage(ticks) {
   if (ticks === DARKNESS_WARNING_TICKS) {
     return DARKNESS_WARNING_MESSAGE;
@@ -229,11 +259,14 @@ function createDarkArea(api, dark) {
 
 module.exports = {
   name: "Darkness",
-  description: "Makes Lumbridge Swamp Caves and the Mole Hole dark: without a lit light source you are warned, then bitten by insects every tick, and cannot attack.",
+  description: "Makes Lumbridge Swamp Caves and the Mole Hole dark: without a lit light source you are warned, then bitten by insects every tick, and cannot attack; your last light cannot be dropped there.",
   hasLightSource,
   darkAreaAt,
   canSee,
   canSeeAt,
+  wouldLeaveInDark,
+  refuseLastLight,
+  LAST_LIGHT_DROP_MESSAGE,
   processDarknessAt,
   canAttackInDarknessAt,
   clearDarknessTimer,
@@ -246,6 +279,7 @@ module.exports = {
   register(api) {
     pluginApi = api;
     for (const dark of DARK_AREAS) api.registerArea(createDarkArea(api, dark));
+    api.onItemDropPolicy(dropLastLight);
     api.log("registered", {
       carriedLightSources: CARRIED_LIGHT_SOURCE_IDS.size,
       equippedLightSources: EQUIPPED_LIGHT_SOURCE_IDS.size,

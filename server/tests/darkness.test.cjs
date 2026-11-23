@@ -21,6 +21,7 @@ test("light sources and the darkness timer follow the OSRS Wiki", () => {
   const firemakingCapes = [I.FIREMAKING_CAPE, I.FIREMAKING_CAPE_T_];
   Darkness.register({
     registerArea: () => {},
+    onItemDropPolicy: () => {},
     log: () => {},
     core: { Area: class {} },
     emitCustomEvent(name, request) {
@@ -80,6 +81,7 @@ test("the caves warn, swarm and damage an unlit player until a light is lit", as
   Darkness.register({
     core,
     registerArea: (registered) => { areas.push(registered); },
+    onItemDropPolicy: () => {},
     log: () => {},
     emitCustomEvent: () => {},
   });
@@ -187,7 +189,7 @@ test("the Mole Hole is dark until its Fire of Eternal Light is built", async () 
   const Darkness = require("../plugins/world/Darkness.plugin");
   const core = PluginManager.getCoreApi();
   const areas = [];
-  Darkness.register({ core, registerArea: (registered) => areas.push(registered), log: () => {}, emitCustomEvent: () => {} });
+  Darkness.register({ core, registerArea: (registered) => areas.push(registered), onItemDropPolicy: () => {}, log: () => {}, emitCustomEvent: () => {} });
   const moleHole = areas.find((registered) => registered.getName() === "Mole Hole");
   assert.ok(moleHole, "Mole Hole registered");
   const entrance = new core.Location(1752, 5236, 0);

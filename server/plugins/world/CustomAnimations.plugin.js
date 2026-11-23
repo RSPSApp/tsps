@@ -17,11 +17,7 @@ const { fail, readSeq, frameList, readSpotanim, checkFrame, encodeOps, framePayl
 const { DATASET, PACKET_LIMIT } = Files;
 /** server/: the cache editor's document and assets are under data/. */
 const ROOT = path.resolve(__dirname, "../..");
-/**
- * Frame groups above the cache's (index 0 has about 13,000): one per custom animation. A frame id
- * is group << 16 | file in a signed 32-bit int (client and server), so groups stay below 32768.
- */
-const FIRST_FRAME_GROUP = 30000;
+const { FIRST_FRAME_GROUP } = Files;
 const LAST_FRAME_GROUP = 32767;
 
 let content = { rows: [], animations: [], graphics: [], packets: [] };

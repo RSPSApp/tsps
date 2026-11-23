@@ -203,6 +203,12 @@ function animationRow(checked, id, name, group) {
 /** The players' dataset of custom animations and graphics, and the most one content packet holds. */
 const DATASET = "customAnimations";
 const PACKET_LIMIT = 0xffff;
+/**
+ * Frame groups above the cache's (index 0 has about 13,000): one per custom animation, by its
+ * position by id. A frame id is group << 16 | file in a signed 32-bit int (client and server), so
+ * groups stay below 32768.
+ */
+const FIRST_FRAME_GROUP = 30000;
 
 /** Whether one row fits a content packet on its own (the encoder throws past a packet's length field). */
 function fitsPacket(encodeContentData, row) {
@@ -231,4 +237,5 @@ function animationKeeps(files, checked) {
 module.exports = {
   NAME, fail, readSeq, frameList, framePayload, encodeOps, checkFrame, readSpotanim, setOp, u16, u32,
   readFolder, checkFrameMap, animationFiles, animationKeeps, animationRow, fitsPacket, DATASET, PACKET_LIMIT,
+    FIRST_FRAME_GROUP,
 };

@@ -118,6 +118,56 @@ test("an animation too big for one content packet is refused before it is stored
   assert.equal(fs.existsSync(path.join(root, "data", "assets")), false, "no files either");
 });
 
+test("an animation's packet size is checked with its real id, name and frame group", () => {
+  const source = Files.readFolder(path.join(MODELS, "zamorak-godsword-special/player-anim"));
+  const ops = Files.readSeq(new Uint8Array(source.get("seq.dat")), "seq.dat").filter(({ op }) => op !== 12 && op !== 13);
+  ops.find(({ op }) => op === 1).payload = Files.framePayload([1], [12146 * 65536 + 1]);
+  const seq = Files.encodeOps(ops);
+  // One frame with no slots (which the client accepts with any bytes after it), padded with random
+  // bytes that don't compress, so the padding sets the row's size.
+  const noise = Buffer.alloc(100000);
+  let seed = 12345;
+  for (let i = 0; i < noise.length; i++) noise[i] = (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) >>> 24;
+  const filesOf = (padding) => new Map([
+    ["seq.dat", seq],
+    ["framemap-0.dat", source.get("framemap-0.dat")],
+    ["frames/12146-1.dat", Buffer.concat([Buffer.from([0, 0, 0]), noise.subarray(0, padding)])],
+  ]);
+  const fits = (padding, id, name, group) => Files.fitsPacket(encodeContentData,
+    Files.animationRow(Files.animationFiles(filesOf(padding), "fixture", CacheDefinitions), id, name, group));
+  const largest = (id, name, group) => {
+    let low = 0;
+    let high = noise.length;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if (fits(mid, id, name, group)) low = mid;
+      else high = mid - 1;
+    }
+    return low;
+  };
+  const name = "q7z9a3f5h8k2m4p6r1t0v3x5b7d9g2j4n6s8w1y0c3e5i7o9u2l4q6z8a1f3h5k7";
+  assert.equal(name.length, 64, "the longest name an animation keeps");
+  const upload = (padding) => ({ kind: "animation", name, files: Object.fromEntries([...filesOf(padding)].map(([file, bytes]) => [file, bytes.toString("base64")])) });
+
+  // The largest upload whose row fits with a placeholder id and name is too big as id 50000 with
+  // this name: the row the server builds at startup is the one that has to fit.
+  const placeholder = largest(0, "animation", 0x7fff);
+  assert.equal(fits(placeholder, 50000, name, CustomAnimations._test.FIRST_FRAME_GROUP), false, "the real row is bigger");
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "cache-editor-assets-"));
+  assert.throws(() => Assets.addAsset(root, upload(placeholder), core), (failure) => failure.status === 413 && /one content packet/.test(failure.message));
+  assert.equal(Assets.assetsOf(root).length, 0, "nothing was stored");
+  assert.equal(fs.existsSync(path.join(root, "data", "assets")), false, "no files either");
+
+  // The largest one that fits as itself is accepted, takes the id the refused one didn't, and loads.
+  const fitting = largest(50000, name, CustomAnimations._test.FIRST_FRAME_GROUP);
+  assert.ok(fitting < placeholder);
+  const added = Assets.addAsset(root, upload(fitting), core);
+  assert.equal(added.asset.id, 50000, "the refused upload used no id");
+  assert.equal(added.asset.name, name);
+  const loaded = CustomAnimations._test.loadCustomAnimations({ CacheDefinitions, encodeContentData }, root);
+  assert.deepEqual(loaded.rows.map((row) => row.id), [50000]);
+});
+
 test("a graphic's animation link is checked, and a refused graphic leaves no parts behind", () => {
   const root = rootWith({ "zamorak-godsword-special/graphic": "zgs-trail" });
   assert.throws(() => Assets.addAsset(root, { kind: "graphic", library: "zgs-trail", animation: 70000 }, core), /0 to 65534/);

@@ -63,7 +63,9 @@ function npc(t, f, name = "Ghommal") {
   const id =
       name === "Ghommal"
         ? core.NpcIdentifiers.GHOMMAL_3
-        : core.NpcIdentifiers.LAIDEE_GNONOCK,
+        : name === "Leagues Tutor"
+          ? core.NpcIdentifiers.LEAGUES_TUTOR_3
+          : core.NpcIdentifiers.LAIDEE_GNONOCK,
     npc = core.NPC.create(id, new core.Location(2860, 3543, 0));
   core.World.getNpcs().add(npc);
   t.after(() => core.World.getNpcs().remove(npc));
@@ -106,6 +108,7 @@ async function confirmation(f) {
       const index = menu.options.findIndex(
         (x) =>
           x.startsWith("I'm here to talk about Combat Achievements") ||
+          x.startsWith("Can I claim some Combat rewards?") ||
           x.startsWith("I think I've completed a combat tier"),
       );
       assert.ok(index >= 0, "missing reward choice " + JSON.stringify(menu));
@@ -355,4 +358,77 @@ test("logout invalidates pending native tier and lamp confirmations", async (t) 
     before,
   );
   assert.equal(g.p.getInventory().forSlot(item.slot).getAmount(), 1);
+});
+
+/** The chatbox lines up to the next menu or the end of the conversation. */
+async function linesUntilMenu(f) {
+  const lines = [];
+  for (let i = 0; i < 30; i++) {
+    if (core.MultiChatboxPrompt.getPending(f.p)) return { lines, menu: core.MultiChatboxPrompt.getPending(f.p) };
+    const d = f.p.getDialogueManager().getCurrent();
+    if (!d) return { lines, menu: null };
+    const raw = d.getText?.();
+    lines.push((Array.isArray(raw) ? raw.join(" ") : String(raw ?? "")).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim());
+    await resume(f);
+  }
+  throw Error("conversation did not settle: " + JSON.stringify(lines));
+}
+const TUTOR_OPTION = "Can I claim some Combat rewards?";
+async function askTutor(f, tutor) {
+  talk(f, tutor);
+  let { menu } = await linesUntilMenu(f);
+  // The menu runs over two pages; "More..." turns to the next.
+  while (!menu.options.includes(TUTOR_OPTION)) {
+    const more = menu.options.indexOf("More...");
+    assert.ok(more >= 0, JSON.stringify(menu.options));
+    await resume(f, more + 1);
+    ({ menu } = await linesUntilMenu(f));
+  }
+  await resume(f, menu.options.indexOf(TUTOR_OPTION) + 1);
+  return linesUntilMenu(f);
+}
+
+test("the Leagues Tutor hands out each available tier as Ghommal does, then shows its menu again", async (t) => {
+  for (const tier of Data.tiers()) {
+    const f = actor(t);
+    earned(f, tier.tier);
+    // Only this tier is unclaimed: every other one counts as claimed.
+    f.p.setAttribute("combat-achievements:claimed", Data.tiers().filter((row) => row !== tier).map((row) => row.tier));
+    const { lines, menu } = await askTutor(f, npc(t, f, "Leagues Tutor"));
+    assert.equal(lines[0], "Can I claim some combat achievement rewards?");
+    assert.equal(lines[1], "Oh, how have you been getting on?", tier.name);
+    assert.equal(lines.at(-1), "Thank you so much!", JSON.stringify(lines));
+    const claims = ["Yes please!", "You have come very far. You have earned these rewards."];
+    assert.equal(lines.filter((line) => claims.includes(line)).length, 1, JSON.stringify(lines));
+    assert.ok(lines.some((line) => line.startsWith("There you go.")), JSON.stringify(lines));
+    assert.equal(Progress.tierStatus(f.p, tier), 2, tier.name);
+    assert.equal(f.p.getInventory().getAmount(tier.lamp), 1);
+    assert.equal(f.p.getInventory().getAmount(tier.hilt), 1);
+    assert.ok(menu?.options.includes("What changes have been made for this League?"), "back to the Tutor's menu");
+  }
+});
+
+test("the Leagues Tutor has nothing to claim with no tier unclaimed, and needs two free slots", async (t) => {
+  const none = actor(t);
+  earned(none, 2);
+  none.p.setAttribute("combat-achievements:completed", Data.TASK_VARPS.map(() => 0));
+  none.p.setAttribute("combat-achievements:claimed", []);
+  const empty = await askTutor(none, npc(t, none, "Leagues Tutor"));
+  assert.deepEqual(empty.lines, [
+    "Can I claim some combat achievement rewards?",
+    "You do not appear to have any combat achievement rewards available to claim.",
+  ]);
+  assert.ok(empty.menu?.options.includes("What changes have been made for this League?"), JSON.stringify(empty.menu?.options));
+
+  const full = actor(t),
+    tier = Data.tiers()[0];
+  earned(full, 1);
+  full.p.setAttribute("combat-achievements:claimed", Data.tiers().slice(1).map((row) => row.tier));
+  while (full.p.getInventory().getFreeSlots() > 1)
+    full.p.getInventory().add(new core.Item(core.ItemIdentifiers.SPADE), false);
+  const refused = await askTutor(full, npc(t, full, "Leagues Tutor"));
+  assert.equal(refused.lines.at(-1), "You need at least 2 inventory spaces. Make some space and come back.");
+  assert.equal(refused.menu, null);
+  assert.equal(full.p.getInventory().getAmount(tier.hilt), 0);
+  assert.equal(Progress.claimedTiers(full.p).has(1), false);
 });

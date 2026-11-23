@@ -9,6 +9,10 @@
  * inventory as the next line ("There you go...") opens. Normal-world NPC roles and lines
  * are from the Wiki, not established by that recording.
  *
+ * The Leagues Tutor hands out the same rewards. Its "Can I claim some Combat rewards?" says there
+ * is nothing to claim, or plays Ghommal's claim word for word from "Oh, how have you been getting
+ * on?" (the Wiki transcript leaves that branch blank), then shows the Tutor's options again.
+ *
  * The lamps, as captured: rubbing opens xpreward with the lamp's level (varp 261), and the
  * chosen skill's experience comes with "<col=0000ff>Your wish has been granted!</col><br>You have
  * been awarded 5,000 Runecraft experience!". Experience and level per tier from the Wiki.
@@ -16,7 +20,14 @@
 const Data = require("./Data.CombatAchievements");
 const Progress = require("./Progress.CombatAchievements");
 
-const REWARD_NPCS = new Set(["Ghommal", "Laidee Gnonock"]);
+const REWARD_NPCS = new Set(["Ghommal", "Laidee Gnonock", "Leagues Tutor"]);
+/** The NPCs whose Talk-to plays Ghommal's rewards variant. */
+const VARIANT_NPCS = new Set(["Ghommal", "Laidee Gnonock"]);
+const TUTOR_PAGE = "Leagues Tutor (Demonic Pacts League)";
+const TUTOR_NONE = "No claimable rewards:";
+const TUTOR_SOME = "Has unclaimed rewards:";
+const CLAIM_PAGE = "Ghommal";
+const CLAIM_OPTION = "I think I've completed a combat tier!";
 const rewardSessions = new WeakMap();
 const CLAIM_DISTANCE = 5;
 const REWARDS_VARIANT = "combat-achievement-rewards";
@@ -42,6 +53,9 @@ const LAMPS = [
 ];
 
 const pendingClaim = new WeakMap();
+/** Players whose Tutor conversation took its unclaimed-rewards branch. */
+const tutorClaims = new WeakSet();
+let claimSteps;
 const pendingRub = new WeakMap();
 let pluginApi;
 
@@ -77,6 +91,7 @@ function rememberInteraction(event) {
   const { player, npc, definition } = event;
   pendingClaim.delete(player);
   rewardSessions.delete(player);
+  tutorClaims.delete(player);
   if (
     !isRewardNpc(definition) ||
     definition.getActions()?.[(event.clickType ?? 1) - 1]?.toLowerCase() !==
@@ -92,6 +107,7 @@ function logout({ player }) {
   pendingClaim.delete(player);
   pendingRub.delete(player);
   rewardSessions.delete(player);
+  tutorClaims.delete(player);
 }
 
 function rewardItems(tier) {
@@ -102,12 +118,17 @@ function rewardItems(tier) {
 }
 
 function dialogueVariant({ player, definition }) {
-  if (!isRewardNpc(definition)) return null;
+  if (!VARIANT_NPCS.has(definition?.getName?.())) return null;
   return Progress.claimableTiers(player).length ? REWARDS_VARIANT : null;
 }
 
-function dialogueCondition({ player, definition, text }) {
+function dialogueCondition({ player, definition, text, playing }) {
   if (!isRewardNpc(definition)) return null;
+  if (playing?.page === TUTOR_PAGE && (text === TUTOR_NONE || text === TUTOR_SOME)) {
+    const some = Progress.claimableTiers(player).length > 0;
+    if (text === TUTOR_SOME && some) tutorClaims.add(player);
+    return text === TUTOR_SOME ? some : !some;
+  }
   const tierMatch = TIER_CONDITION.exec(String(text).trim());
   if (tierMatch) {
     const next = Progress.claimableTiers(player)[0];
@@ -188,6 +209,52 @@ function dialogueLine(request) {
   request.after = () => claim(player, pending.tier, pending);
 }
 
+/** Ghommal's claim after the player's opening line, with its called branches inlined. */
+function tutorClaimSteps() {
+  if (claimSteps) return claimSteps;
+  const record = require("../../../data/definitions/npc-dialogues.json")[CLAIM_PAGE];
+  const branches = record?.branches ?? {};
+  const find = (steps) => {
+    for (const step of steps ?? []) {
+      for (const option of step.options ?? []) {
+        if (option.text === CLAIM_OPTION) return option.steps;
+        const found = find(option.steps);
+        if (found) return found;
+      }
+      const found = find(step.steps);
+      if (found) return found;
+    }
+    return null;
+  };
+  const inline = (steps) =>
+    steps.flatMap((step) =>
+      step.type === "call" && Array.isArray(branches[step.branch])
+        ? inline(branches[step.branch])
+        : [Array.isArray(step.steps) ? { ...step, steps: inline(step.steps) } : step],
+    );
+  claimSteps = inline(
+    (find(record?.variants?.["combat-achievement-rewards"]) ?? []).slice(1),
+  );
+  return claimSteps;
+}
+
+/** The Tutor's unclaimed-rewards branch (no Wiki text) plays Ghommal's claim. */
+function tutorClaim(action) {
+  const { player, step, definition, playing } = action;
+  if (
+    step?.type !== "missing" ||
+    playing?.page !== TUTOR_PAGE ||
+    !isRewardNpc(definition) ||
+    !tutorClaims.has(player)
+  )
+    return;
+  tutorClaims.delete(player);
+  const steps = tutorClaimSteps();
+  if (!steps.length) return;
+  action.handled = true;
+  action.steps = steps;
+}
+
 /** Wiki: the full thrall-duration extension requires claiming Master rewards. */
 function thrallDuration(event) {
   if (Progress.claimedTiers(event.player).has(MASTER_TIER)) event.ticks *= 2;
@@ -254,6 +321,7 @@ module.exports = function attachRewards(api) {
   api.onNpcDialogueVariant(dialogueVariant);
   api.onNpcDialogueCondition(dialogueCondition);
   api.onCustomEvent("npc-dialogue:line", dialogueLine);
+  api.onCustomEvent("npc-dialogue:action", tutorClaim);
   api.onCustomEvent("magic:thrall-duration", thrallDuration);
   api.onItemAction("Antique lamp", { Rub: rubLamp });
 };

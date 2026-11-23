@@ -58,7 +58,9 @@ const BOT_CONFIG = Object.freeze({
   wildernessActiveRegionBotsByRegion: PVP_BOT_SETTINGS.activeRegionBotsByRegion,
   wildernessActiveRegionInset: PVP_BOT_SETTINGS.activeRegionInset,
   botWalkRadius: 10,
-  objectIndexCachePath: path.join(__dirname, "data", "object-index.json"),
+  // Tracked seed, read only; a rebuild is written to the untracked runtime file under data/saves.
+  objectIndexSeedPath: path.join(__dirname, "data", "object-index.json"),
+  objectIndexCachePath: path.join(__dirname, "..", "..", "data", "saves", "bot-object-index.json"),
   // Run the scheduler every game tick; near-player throttling is handled by
   // LOD/budget logic so PvP bots do not move in visible waves.
   botDecisionTicks: 1,

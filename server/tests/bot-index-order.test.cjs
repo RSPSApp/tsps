@@ -1,6 +1,6 @@
 // Run after `yarn build`: node --test tests/bot-index-order.test.cjs
 //
-// The bots' object index is a tracked file that any bots-on run rewrites. Two scans of the same world
+// The bots' object index is rebuilt into data/saves and copied over the tracked seed. Two scans of the same world
 // must write the same bytes, however the map was read, or every run churns the file in Git.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");

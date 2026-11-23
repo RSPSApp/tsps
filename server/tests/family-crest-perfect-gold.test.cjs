@@ -6,7 +6,7 @@
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { before, after, test } = require("node:test");
+const { before, after, test, mock } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
@@ -17,12 +17,18 @@ const { ObjectDefinition } = require("../dist/game/definition/ObjectDefinition")
 let core, next = 9900;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  const worldConfig = require("../dist/game/definition/WorldDefinition"), readConfig = worldConfig.readWorldConfig;
+  const config = mock.method(worldConfig, "readWorldConfig", (...args) => {
+    const actual = readConfig(...args);
+    return { ...actual, plugins: { ...actual.plugins, WorldAdmin: false } };
+  });
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
   // As tests/leechfin-fishing.test.cjs: the region manager first, or loadMapFiles loads nothing.
   core.RegionManager.init();
   ObjectDefinition.init();
   PM.emitServerStartup({});
+  config.mock.restore();
 });
 after(() => PM.emitServerShutdown({}));
 
@@ -256,4 +262,96 @@ test("Witchaven levers are personal and the six-pull solution permanently unlock
   assert.ok(gate(second.p).handled, "another player must solve the puzzle independently");
   pull(O.LEVER_16, 2722, 9718);
   assert.equal(gate(first.p).handled, false, "later lever changes preserve the permanent unlock");
+});
+
+
+/** Seed a cured checkpoint and landed Blast hits; the real death task rolls and places loot. */
+function killChronozon(t, f) {
+  const npc = PM.spawnNpc({ id: core.NpcIdentifiers.CHRONOZON, x: 3086, y: 9933, z: 0, wanderRadius: 0 });
+  assert.ok(npc);
+  t.after(() => { if (npc.isRegistered()) PM.removeNpc(npc); });
+  npc.getCombat().addDamage(f.p, 10);
+  for (const spell of [core.CombatSpells.WIND_BLAST, core.CombatSpells.WATER_BLAST,
+    core.CombatSpells.EARTH_BLAST, core.CombatSpells.FIRE_BLAST]) {
+    PM.emitNpcHitModify(npc, { getAttacker: () => f.p, getCombatType: () => core.CombatType.MAGIC,
+      isAccurate: () => true, getTotalDamage: () => 5, getSpell: () => spell });
+  }
+  assert.equal(PM.emitNpcBeforeDeath({ npc, preventDeath: false }), false);
+  const { NPCDeathTask } = require("../dist/game/task/impl/NPCDeathTask");
+  const task = new NPCDeathTask(npc);
+  task.execute();
+  task.execute();
+  npc.getCombat().addDamage(f.p, 10);
+  assert.equal(PM.emitNpcBeforeDeath({ npc, preventDeath: false }), true,
+    "a subsequent life needs all four Blast spells again, including when no fragment was needed");
+  const floor = core.World.getItems().filter(item => item.getOwner() === f.p.getUsername());
+  t.after(() => { for (const item of floor) {
+    const index = core.World.getItems().indexOf(item);
+    if (index !== -1) core.World.getItems().splice(index, 1);
+  } });
+  return floor.filter(item => item.getItem().getId() === core.ItemIdentifiers.CREST_PART_3);
+}
+
+test("Chronozon's real death/drop path supplies one last crest piece, and assembly consumes all three", t => {
+  const f = actor(t, { stage: 10, pickaxe: null, at: [3086, 9933] });
+  const I = core.ItemIdentifiers;
+  f.p.getInventory().adds(I.CREST_PART, 1).adds(I.CREST_PART_2, 1);
+  const ground = killChronozon(t, f);
+  assert.equal(count(f, I.CREST_PART_3) + ground.reduce((n, item) => n + item.getItem().getAmount(), 0), 1,
+    "one Chronozon kill must not award a second Johnathon crest piece");
+  assert.equal(count(f, I.CREST_PART_3), 0, "the last fragment is a monster drop, not a second inventory reward");
+  assert.equal(ground.length, 1);
+  const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
+  assert.ok(ItemOnGroundManager.canOperate(f.p, ground[0], ItemOnGroundManager.takeOperation(I.CREST_PART_3)), "Take is enabled on the canonical drop");
+  ItemOnGroundManager.pickup(f.p, ground[0]);
+  assert.equal(count(f, I.CREST_PART_3), 1, "normal ground pickup acquires the fragment");
+  const inventory = f.p.getInventory(), usedItemSlot = inventory.getSlotForItemId(I.CREST_PART), usedWithItemSlot = inventory.getSlotForItemId(I.CREST_PART_3);
+  PM.emitItemOnItem({ player: f.p, usedItem: inventory.getItems()[usedItemSlot], usedItemId: I.CREST_PART, usedItemSlot,
+    usedWithItem: inventory.getItems()[usedWithItemSlot], usedWithItemId: I.CREST_PART_3, usedWithItemSlot, handled: false });
+  assert.equal(count(f, I.FAMILY_CREST), 1);
+  for (const id of [I.CREST_PART, I.CREST_PART_2, I.CREST_PART_3]) assert.equal(count(f, id), 0);
+});
+
+
+for (const [label, stage, itemName, banked] of [
+  ["before Johnathon is cured", 9], ["after the quest is complete", 11],
+  ["with Johnathon's piece carried", 10, "CREST_PART_3", false],
+  ["with the assembled crest carried", 10, "FAMILY_CREST", false],
+  ["with Johnathon's piece banked", 10, "CREST_PART_3", true],
+  ["with the assembled crest banked", 10, "FAMILY_CREST", true],
+]) {
+  test(`Chronozon gives no extra crest fragment ${label}`, t => {
+    const f = actor(t, { stage, pickaxe: null, at: [3086, 9933] });
+    if (itemName) (banked ? f.p.getBank(0) : f.p.getInventory()).add(new core.Item(core.ItemIdentifiers[itemName], 1), false);
+    const before = count(f, core.ItemIdentifiers.CREST_PART_3);
+    assert.deepEqual(killChronozon(t, f), []);
+    assert.equal(count(f, core.ItemIdentifiers.CREST_PART_3), before, "no hidden inventory award");
+  });
+}
+
+test("a full inventory leaves the one quest fragment available for normal ground pickup", t => {
+  const f = actor(t, { stage: 10, pickaxe: null, at: [3086, 9933] });
+  const inventory = f.p.getInventory(), I = core.ItemIdentifiers;
+  inventory.setItems(Array.from({ length: 28 }, () => new core.Item(I.BRONZE_DAGGER, 1)));
+  const ground = killChronozon(t, f);
+  assert.equal(ground.length, 1);
+  const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
+  ItemOnGroundManager.pickup(f.p, ground[0]);
+  assert.equal(count(f, I.CREST_PART_3), 0);
+  assert.ok(core.World.getItems().includes(ground[0]), "failed pickup does not lose the fragment");
+  inventory.deleteAtSlot(0);
+  ItemOnGroundManager.pickup(f.p, ground[0]);
+  assert.equal(count(f, I.CREST_PART_3), 1);
+  assert.equal(ground[0].isPendingRemoval(), true);
+});
+
+test("a lost or dropped fragment can be obtained again without duplicating an inventory award", t => {
+  const f = actor(t, { stage: 10, pickaxe: null, at: [3086, 9933] });
+  const I = core.ItemIdentifiers;
+  f.p.getBank(0).add(new core.Item(I.CREST_PART_3, 1), false);
+  assert.equal(killChronozon(t, f).length, 0, "banked piece is retained instead of replaced");
+  f.p.getBank(0).deleteNumber(I.CREST_PART_3, 1);
+  assert.equal(killChronozon(t, f).length, 1, "a lost piece is recoverable");
+  assert.equal(killChronozon(t, f).length, 2, "a fragment left on the ground does not add an unsourced global uniqueness rule");
+  assert.equal(count(f, I.CREST_PART_3), 0);
 });

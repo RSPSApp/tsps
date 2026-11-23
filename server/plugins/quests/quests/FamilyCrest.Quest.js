@@ -367,16 +367,18 @@ module.exports = function registerFamilyCrestQuest(api) {
     request.extraOreId = ItemIdentifiers.GOLD_ORE;
   }
 
-  /** Chronozon drops Johnathon's crest piece once cured. */
+  /** The canonical monster-drop table supplies Johnathon's piece, only when it is still needed. */
+  function filterChronozonDrops({ player, npcId, drops }) {
+    if (npcId !== NpcIdentifiers.CHRONOZON || !player) return;
+    const owned = (id) => has(player, id) || player.getBanks().some((bank) => (bank?.getAmount(id) ?? 0) > 0);
+    if (quest.getStage(player) === STAGE_CURED_JOHNATHON && !owned(JOHNATHON_CREST) && !owned(FAMILY_CREST)) return;
+    for (let index = drops.length - 1; index >= 0; index--) {
+      if (drops[index].itemId === JOHNATHON_CREST) drops.splice(index, 1);
+    }
+  }
+
   function handleNpcDeath({ killer, npcId }) {
-    if (!killer || npcId !== NpcIdentifiers.CHRONOZON) return;
-    const weakened = weakenedByPlayer.get(killer);
-    weakenedByPlayer.delete(killer);
-    if (weakened?.size !== BLAST_SPELL_ELEMENTS.size) return;
-    if (quest.getStage(killer) !== STAGE_CURED_JOHNATHON) return;
-    if (has(killer, JOHNATHON_CREST) || has(killer, FAMILY_CREST)) return;
-    killer.getInventory().adds(JOHNATHON_CREST, 1);
-    killer.sendMessage("You tear Johnathon's crest piece from the demon's claws.");
+    if (killer && npcId === NpcIdentifiers.CHRONOZON) weakenedByPlayer.delete(killer);
   }
 
   /**
@@ -519,6 +521,7 @@ module.exports = function registerFamilyCrestQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleGauntletImbue);
   api.onNpcBeforeDeath(keepChronozonUp);
   api.onNpcDeath(handleNpcDeath);
+  api.onCustomEvent("npc-drops:roll", filterChronozonDrops);
   api.onPlayerLogin(handleLogin);
   require("./WitchavenPuzzle.FamilyCrest").attach(api);
 };

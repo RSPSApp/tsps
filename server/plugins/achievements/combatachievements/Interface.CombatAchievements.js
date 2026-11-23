@@ -134,11 +134,15 @@ function currentScreen(player) {
 function show(player, screen, { from = null } = {}) {
   const sender = player.getPacketSender();
   setView(player, VARBIT.LAST_OPENED, screen);
+  // Busy while open, sent before the main modal's open script (rsprox 236/03915 t405); every
+  // close ends it (PacketSender.setBusyModal).
+  sender.setBusyModal(true);
   if (from === null) {
     pluginApi?.emitCustomEvent("collection-log:close", { player });
     sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   } else if (!(from === SCREEN.BOSSES && screen === SCREEN.BOSS)) {
-    sender.closeInterface(SCREEN_GROUP[from]);
+    // Moving between its own screens keeps busy (rsprox 237/1001305 t5413-5434).
+    sender.holdBusyModal(() => sender.closeInterface(SCREEN_GROUP[from]));
   }
   player.setInterfaceId(SCREEN_GROUP[screen]);
   sender.sendSubInterface(MAIN_MODAL, SCREEN_GROUP[screen], MODAL);

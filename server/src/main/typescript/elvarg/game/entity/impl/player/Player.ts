@@ -902,6 +902,11 @@ export class Player extends Mobile {
         return this.isTeleportingReturn() || this.getAttribute("agility.obstacle") != null;
     }
 
+    /** A busy main modal is open (PacketSender.setBusyModal): repeating gathering actions wait. */
+    inBusyModal(): boolean {
+        return this.packetSender.isBusyModal();
+    }
+
     busy(): boolean {
         if (this.interfaceId > 0) {
             return true;

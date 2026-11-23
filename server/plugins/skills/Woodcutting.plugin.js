@@ -18,7 +18,7 @@ const Shrine = require("./woodcutting/Shrine.Woodcutting");
 const SplitLogs = require("./woodcutting/SplitLogs.Woodcutting");
 const KandarinHeadgear = require("./woodcutting/KandarinHeadgear.Woodcutting");
 const FarmedRedwood = require("./farming/Redwood.Farming");
-const { pauseForLevelUp, actionInterval } = require("./SkillActions");
+const { pauseForLevelUp, isPaused, actionInterval } = require("./SkillActions");
 
 const DEFAULT_TREE_STUMP_ID = ObjectIds.TREE_STUMP_2;
 // Older trees share models but not stumps, and some sit next to an unrelated stump id; key their
@@ -1384,7 +1384,7 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       stopWoodcutting(activeSessions, player);
       continue;
     }
-    if (state.levelUpPaused) continue;
+    if (isPaused(state, player)) continue;
 
     const activeTree = treeAt(
       state.objectId,

@@ -16,7 +16,6 @@ const FIRST_LINE = 4;
 const CLOSE = 205;
 const MAIN_MODAL = (161 << 16) | 16;
 const PAGEPOS_VARP = 334;
-const BUSY_VARBIT = 12393;
 const SCRIPT_JOURNAL_RESET = 6844;
 const SCRIPT_MAINMODAL_OPEN = 2524;
 const SCRIPT_JOURNAL_SHOW = 6845;
@@ -69,7 +68,8 @@ function open(player, diary) {
   const lines = journalLines(player, diary);
   const sender = player.getPacketSender();
   sender.sendConfig(PAGEPOS_VARP, lines.length);
-  sender.sendVarbit(BUSY_VARBIT, 1);
+  // Busy while open (rsprox 237/01102 t16149); every close clears it (PacketSender.setBusyModal).
+  sender.setBusyModal(true);
   sender.sendInterfaceScript(SCRIPT_JOURNAL_RESET);
   sender.sendString(`<col=800000>Achievement Diary - ${diary.name}`, (JOURNAL_SCROLL << 16) | TITLE);
   lines.forEach((line, index) => sender.sendString(line, (JOURNAL_SCROLL << 16) | (FIRST_LINE + index)));
@@ -94,13 +94,8 @@ function click(event) {
   if (diary) open(player, diary);
 }
 
-function closed({ player, interfaceId }) {
-  if (interfaceId === JOURNAL_SCROLL) player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
-}
-
 module.exports = function attachJournal(api) {
   api.onInterfaceActionClick(click);
-  api.onCustomEvent("interface:closed", closed);
 };
 
-Object.assign(module.exports, { journalLines, open, click, closed, wrap });
+Object.assign(module.exports, { journalLines, open, click, wrap });

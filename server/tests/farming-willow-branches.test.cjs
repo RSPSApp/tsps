@@ -107,6 +107,7 @@ test('a cut prunes at once and gives the branch with its line three ticks later'
     assert.equal(f.branches(), 0);
     ticks(1);
     assert.equal(f.branches(), 1);
+    assert.deepEqual(f.anims, [2277, -1], 'the sequence reset with the branch');
     assert.deepEqual(f.said, [['spam', 'You cut a branch from the willow tree.']]);
     assert.deepEqual([f.state.branches, f.value()], [5, 193]);
     // The cut starts the next regrowth: five minutes on it is full again.
@@ -167,4 +168,32 @@ test('the agent time skip grows the branches too', t => {
     Patches.advanceTime({ player: f.player, ms: 10 * MINUTE, handledBy });
     assert.deepEqual(handledBy, ['Farming']);
     assert.deepEqual([f.state.branches, f.value()], [2, 196]);
+});
+
+test('a full inventory refuses the cut before the secateurs move', t => {
+    const f = grownWillow(t);
+    f.click('Check-health');
+    f.wait(30 * MINUTE);
+    const inventory = f.player.getInventory();
+    while (inventory.getFreeSlots() > 0) inventory.add(new core.Item(Data.itemId('Logs'), 1), false);
+    f.use('Secateurs');
+    assert.deepEqual([f.anims, f.sounds], [[], []]);
+    ticks(3);
+    assert.equal(f.branches(), 0);
+    assert.equal(f.state.branches, 6);
+});
+
+test("a seed-saving rule never keeps Auguste's sapling: it is given once", t => {
+    const f = fixture(t, ['Spade', "Auguste's sapling"]);
+    const keep = (rules) => { rules.keepSeed = true; };
+    const emit = core.PluginManager.emitCustomEvent;
+    t.mock.method(core.PluginManager, 'emitCustomEvent', (name, event) => {
+        if (name === 'farming:plant-rules') keep(event);
+        return emit.call(core.PluginManager, name, event);
+    });
+    f.use("Auguste's sapling");
+    ticks(1);
+    assert.equal(f.state.crop, 'WILLOW');
+    assert.equal(f.player.getInventory().getAmount(Data.itemId("Auguste's sapling")), 0);
+    assert.equal(f.player.getInventory().getAmount(Data.itemId('Plant pot')), 1);
 });

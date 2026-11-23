@@ -497,7 +497,8 @@ function plant(player, patch, id, seeds = inventorySeeds(player, id)) {
     // after it.
     const rules = { player, crop: crop.key, seedId: id, patch, keepSeed: false, grown: false, diseaseFree: false, undying: false, line: null, message: null };
     core.PluginManager.emitCustomEvent("farming:plant-rules", rules);
-    const keepSeed = rules.keepSeed === true;
+    // A quest's one-off sapling (Data.ONE_OFF_SAPLINGS) is always used up, whatever a relic says.
+    const keepSeed = rules.keepSeed === true && !Data.ONE_OFF_SAPLINGS.has(id);
     let seedCount = crop.seedCount;
     if (!keepSeed && patch.type === "ALLOTMENT" && player.getEquipment().contains(Data.itemId("Amulet of bounty")) && Math.random() < Data.FORMULAS.amuletOfBountySaveChance) {
         seedCount = 1;
@@ -715,12 +716,15 @@ function cure(player, patch, useItem = true, usedId) {
         if (!hasTool(player, "Secateurs") && !requireTool(player, "Magic secateurs")) return false;
         // Ours: no recording uses secateurs on a willow with none grown.
         if (!Model.willowBranches(state, Date.now())) { player.sendMessage("There are no branches ready to cut yet."); return false; }
-        // rsprox local 1000402 ticks 31153 and 31162: pruning_high and sound 2440 as the secateurs are used, the
-        // branch, the spam line and the patch value three ticks later.
+        // A full inventory refuses before the secateurs move (ours: no recording cuts with one).
+        if (player.getInventory().getFreeSlots() < 1) { player.getInventory().full(); return false; }
+        // rsprox local 1000402 ticks 31153 and 31162: pruning_high and sound 2440 as the secateurs are used; three
+        // ticks later the branch, the spam line, the patch value and the sequence reset (-1).
         animate(player, ANIM.PRUNE_BRANCH);
         sound(player, SOUND.PRUNE_BRANCH);
         after(player, 3, () => {
             if (!Model.willowBranches(state, Date.now()) || !give(player, Data.itemId("Willow branch"))) return;
+            animate(player, -1);
             state.branches--;
             spam(player, "You cut a branch from the willow tree.");
             syncPatch(player, patch);

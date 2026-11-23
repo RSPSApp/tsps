@@ -771,6 +771,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `RockCake` | RockCake | items | yes | Adds the Dwarven rock cake, which is never used up: Eat costs 1 Hitpoint and Guzzle costs 10% of current Hitpoints plus 1. (members only) |
 | `RottenPotato` | RottenPotato | items | yes | The Rotten potato, the moderators' testing item: stats, inventory, house, teleports, random events, rares and transmogrification, for owners and developers. |
 | `RunePouch` | RunePouch | items | yes | Adds the rune pouch and divine rune pouch: storing up to 16,000 of three or four rune types, the interface, bank deposits, loadouts and the Rune-picking setting. (members only) |
+| `SailorsAmulet` | SailorsAmulet | items | yes | Charges the sailors' amulet with law and water runes, ten charges for one law and ten water runes, up to 10,000, and Check shows its charges. (members only) |
 | `Salamanders` | Salamanders | items | yes | Adds the salamander weapons, whose Scorch, Flare and Blaze styles burn one tar per attack and give Blaze a magic maximum hit by creature. (members only) |
 | `SanguinestiStaff` | SanguinestiStaff | items | yes | Adds the Sanguinesti staff: its built-in spell with its projectile and graphics, blood rune charging, uncharging and the chance to heal the caster. (members only) |
 | `ScalyBlueDragonhide` | ScalyBlueDragonhide | items | yes | Scaly blue dragonhide: a knife on it in a bank scrapes 50 noted blue dragon scales. (members only) |

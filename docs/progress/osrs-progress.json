@@ -2609,7 +2609,8 @@
             "Main sync e811aff0c: PR #501 adds the cache-driven assignment/reward system and later fixes quest requirements. Task storage and several monster mechanics remain documented follow-ups.",
             "PR #731 (d25ef3e6): Mortimer offers a two/three-task choice with task modifiers (points, quantity, clue, superior unique, Slayer XP), his own streak, and superior unique drops via npc-drops:tertiary-chance.",
             "Main 3b61a15a8 (6 November 2026): #2312 Add the Morytania Diary's Slayer XP bonus in the Slayer Tower. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3965 Culling Spree: choose the Slayer task from three and set its kill count (5-200). #3280 fix: the expeditious bracelet credits a second Slayer kill. #3426 fix: cave horrors scream, and their attacks are magical melee."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3965 Culling Spree: choose the Slayer task from three and set its kill count (5-200). #3280 fix: the expeditious bracelet credits a second Slayer kill. #3426 fix: cave horrors scream, and their attacks are magical melee.",
+            "2026-11-23 (branch parity/combat-karuulm-heat): the Karuulm Slayer Dungeon's extreme heat burns players for 4 damage every tick beyond the Tasakaal's entrance chamber unless they wear boots of stone, Boots of Brimstone or granite boots, or have claimed the elite Kourend & Kebos Diary reward (Wiki: Extreme heat). server/plugins/areas/KaruulmSlayerDungeon.plugin.js, docs/karuulm-slayer-dungeon.md, server/tests/karuulm-extreme-heat.test.cjs. Limitation: the warning live gives on leaving the chamber without boots is not sourced and not sent; the Alchemical Hydra's private chamber does not burn."
           ],
           "taskDetails": [
             {

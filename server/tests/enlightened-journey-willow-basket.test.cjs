@@ -45,7 +45,7 @@ function actor(t, { branches = 12, flags = ALL_HANDED, planted = false, stage = 
   p.setAttribute(STAGE_KEY, stage);
   p.setAttribute('quest.enlightened_journey.numbering', 2);
   p.setAttribute(FLAGS_KEY, flags);
-  if (planted) p.setAttribute(SAPLING_KEY, { x: 2810, y: 3340, z: 0, plantedAt: 0, branchesAt: 0, nextBranchesAt: 0 });
+  if (planted) p.setAttribute(SAPLING_KEY, { x: 3193, y: 3231, z: 0, plantedAt: 0 });
   const messages = [];
   const send = p.sendMessage.bind(p);
   p.sendMessage = (message, ...rest) => { messages.push(String(message)); return send(message, ...rest); };

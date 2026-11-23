@@ -152,6 +152,9 @@ function initializeFarmingData() {
         } else SEEDS.set(crop.seed, crop);
         CROPS.set(key, crop);
     }
+    // Wiki (Auguste's sapling): Enlightened Journey's sapling goes in a tree patch and grows into a willow tree, with
+    // the willow's level, payment, times and experience; the quest words its planting ("farming:plant-rules").
+    SEEDS.set(itemId("Auguste's sapling"), CROPS.get("WILLOW"));
 }
 
 const patchKey = (patch) => `${patch.id}:${patch.x}:${patch.y}:${patch.z}`;

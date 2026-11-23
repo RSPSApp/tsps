@@ -91,7 +91,7 @@ function fakePlayer({ at = [2938, 3421], items = {} } = {}) {
       sendEnterAmountPrompt: (title) => { player.amountPrompt = title; },
       getVarbit: (varbit) => player.varbits[varbit] ?? 0,
       getVarp: () => 0,
-      sendInterfaceRemoval() {}, sendInterface() {}, sendVarbit() {}, sendSubInterface() {}, closeSubInterface() {},
+      sendInterfaceRemoval() {}, sendInterface() {}, sendInterfaceScript() {}, sendVarbit() {}, sendSubInterface() {}, closeSubInterface() {},
       sendJingle: (id) => { (player.jingles ??= []).push(id); },
       sendSong: (id) => { (player.songs ??= []).push(id); },
       sendTypedMessage: (type, line) => player.messages.push(line),

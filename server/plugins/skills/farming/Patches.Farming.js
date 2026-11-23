@@ -77,7 +77,7 @@ const LLETYA_FRUIT_PATCH = Data.CACHE.patches.find(p => p.type === "FRUIT_TREE" 
 const PATCHES_BY_REGION = new Map();
 const HARMONY_HERB_PATCH = Data.CACHE.patches.find(p => p.type === "HERB" && p.x === 3789 && p.y === 2837 && p.z === 0);
 for (const patch of Data.CACHE.patches) {
-    const rx = Math.floor((patch.x + patch.maxX) / 128), ry = Math.floor((patch.y + patch.maxY) / 128);
+    const rx = Math.floor((Data.patchMinX(patch) + patch.maxX) / 128), ry = Math.floor((Data.patchMinY(patch) + patch.maxY) / 128);
     for (let x = rx - 1; x <= rx + 1; x++) {
         for (let y = ry - 1; y <= ry + 1; y++) {
             for (const z of patch.type === "REDWOOD" ? [patch.z, patch.z + 1, patch.z + 2] : [patch.z]) {
@@ -233,8 +233,8 @@ function syncPatch(player, patch) {
     if (patch.type === "REDWOOD") Redwood.refresh(player, patch);
     // The client rebuilds loc geometry on object updates, not varbit updates.
     // Use the actual map locs so multi-tile patches retain every shape/rotation.
-    for (let x = patch.x; x <= patch.maxX; x++) {
-        for (let y = patch.y; y <= patch.maxY; y++) {
+    for (let x = Data.patchMinX(patch); x <= patch.maxX; x++) {
+        for (let y = Data.patchMinY(patch); y <= patch.maxY; y++) {
             const object = core.MapObjects.get(patch.id, new core.Location(x, y, patch.z), player.getPrivateArea());
             if (!object) continue;
             sender.sendObjectRemoval(object);
@@ -244,7 +244,7 @@ function syncPatch(player, patch) {
     rendered.set(Data.patchKey(patch), value);
 }
 function findPatch(id, location) {
-    return Data.CACHE.patches.find(p => p.id === id && p.z === location.z && location.x >= p.x && location.x <= p.maxX && location.y >= p.y && location.y <= p.maxY)
+    return Data.CACHE.patches.find(p => p.id === id && p.z === location.z && location.x >= Data.patchMinX(p) && location.x <= p.maxX && location.y >= Data.patchMinY(p) && location.y <= p.maxY)
         ?? Data.CACHE.patches.find(p => p.type === "REDWOOD" && core.CacheDefinitions.getObject(id).transformVarbit === p.varbit
             && Math.abs(p.x - location.x) < 12 && Math.abs(p.y - location.y) < 12);
 }
@@ -268,7 +268,7 @@ function gate(player) {
 }
 function nearPatch(player, patch) {
     const loc = player.getLocation();
-    return loc.getZ() === patch.z && loc.getX() >= patch.x - 16 && loc.getX() <= patch.maxX + 16 && loc.getY() >= patch.y - 16 && loc.getY() <= patch.maxY + 16;
+    return loc.getZ() === patch.z && loc.getX() >= Data.patchMinX(patch) - 16 && loc.getX() <= patch.maxX + 16 && loc.getY() >= Data.patchMinY(patch) - 16 && loc.getY() <= patch.maxY + 16;
 }
 // Captures: the rake swings two ticks after the click and every four after, each swing after the
 // first pulling a weed. A harvest swings at once and every three ticks, the produce a few ticks later.
@@ -1271,7 +1271,7 @@ function syncNearby(player) {
     const pos = player.getLocation();
     const nearest = new Map();
     for (const patch of PATCHES_BY_REGION.get(squareKey(pos)) ?? []) {
-        const distance = Math.max(Math.abs((patch.x + patch.maxX) / 2 - pos.getX()), Math.abs((patch.y + patch.maxY) / 2 - pos.getY()));
+        const distance = Math.max(Math.abs((Data.patchMinX(patch) + patch.maxX) / 2 - pos.getX()), Math.abs((Data.patchMinY(patch) + patch.maxY) / 2 - pos.getY()));
         if (distance <= 64 && (!nearest.has(patch.varbit) || nearest.get(patch.varbit).distance > distance)) nearest.set(patch.varbit, { patch, distance });
     }
     for (const { patch } of nearest.values()) syncPatch(player, patch);
@@ -1492,5 +1492,5 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { article, addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, SCARECROW_SOUND, farmFor, readGrowthMultiplier, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
+Object.assign(module.exports, { findPatch, article, addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, SCARECROW_SOUND, farmFor, readGrowthMultiplier, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
     startClear, after, spam, sound, awardPendingPlantExperience });

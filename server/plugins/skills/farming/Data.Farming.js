@@ -155,6 +155,11 @@ function initializeFarmingData() {
 }
 
 const patchKey = (patch) => `${patch.id}:${patch.x}:${patch.y}:${patch.z}`;
+// A patch's x/y is its first loc and the key its saved state lives under, so they never move. An
+// L-shaped patch (Hosidius's north allotment) can have locs below or left of that one: the data
+// then carries `minX`/`minY`, the real corner. Every bounds check goes through these two.
+const patchMinX = (patch) => patch.minX ?? patch.x;
+const patchMinY = (patch) => patch.minY ?? patch.y;
 const WATERABLE = new Set(["ALLOTMENT", "FLOWER", "HOPS"]);
 const COMPOSTABLE_YIELD = new Set(["ALLOTMENT", "HOPS", "HERB", "SEAWEED", "CELASTRUS"]);
 const WOOD_TREES = new Set(["TREE", "HARDWOOD_TREE", "REDWOOD"]);
@@ -234,4 +239,4 @@ const PET_RATES = {
 };
 const petRate = (crop) => PET_RATES[crop.key] ?? PET_RATES[crop.type];
 
-Object.assign(module.exports, { CACHE, CROPS, SEEDS, WATERED_SEEDLINGS, BELLADONNA_HANDWEAR, itemId, initializeFarmingData, patchKey, WATERABLE, COMPOSTABLE_YIELD, WOOD_TREES, petRate, FORMULAS, diseaseNumerator, stageMinutes, diseasedMinutes });
+Object.assign(module.exports, { CACHE, CROPS, SEEDS, WATERED_SEEDLINGS, BELLADONNA_HANDWEAR, itemId, initializeFarmingData, patchKey, patchMinX, patchMinY, WATERABLE, COMPOSTABLE_YIELD, WOOD_TREES, petRate, FORMULAS, diseaseNumerator, stageMinutes, diseasedMinutes });

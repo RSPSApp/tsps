@@ -145,8 +145,17 @@ async function main() {
     const grouped: any[] = [];
     for (const patch of patches) {
         const existing = grouped.find(p => p.id === patch.id && p.z === patch.z && Math.abs(p.x - patch.x) < 32 && Math.abs(p.y - patch.y) < 32);
-        if (!existing) grouped.push({ ...patch, maxX: patch.x, maxY: patch.y });
-        else { existing.maxX = Math.max(existing.maxX, patch.x); existing.maxY = Math.max(existing.maxY, patch.y); }
+        if (!existing) grouped.push({ ...patch, maxX: patch.x, maxY: patch.y, minX: patch.x, minY: patch.y });
+        else {
+            existing.maxX = Math.max(existing.maxX, patch.x); existing.maxY = Math.max(existing.maxY, patch.y);
+            existing.minX = Math.min(existing.minX, patch.x); existing.minY = Math.min(existing.minY, patch.y);
+        }
+    }
+    // x/y is the first loc seen and part of a farm's saved key, so it stays put. An L-shaped patch
+    // (Hosidius's north allotment) has locs below or left of it: minX/minY are written only then.
+    for (const patch of grouped) {
+        if (patch.minX === patch.x) delete patch.minX;
+        if (patch.minY === patch.y) delete patch.minY;
     }
     const data = { revision: CachePipeline.getActive().revision, source: SOURCE, timing, states, patches: grouped, scenery };
     fs.writeFileSync(path.join(directory, "farming-data.json"), oneEntryPerLine(data));

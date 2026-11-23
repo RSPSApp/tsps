@@ -4,7 +4,7 @@
 // reset; it sinks at 117 and shows east at 119 (face_angle 512, reset); broken, it sinks at 159 and 189 and is
 // hidden (three -1 models) at 161 and 191. Each Rain Fire is huey_attack_melee in the shared NPC update and, to the
 // player, npc_anim_specific huey_attack_<style> (huey_shield_attack_<style> shielded) and npc_spotanim_specific
-// vfx_huey_attack_<style>_spotanim_01 in slot 0 (ticks 61, 79, 96; also 4054 and 3399).
+// vfx_huey_attack_<style>_spotanim_01 in slot 0 (ticks 51, 73, 88; also 4054 and 3399).
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
 

@@ -25,16 +25,19 @@ On the open tick, live:
 It is **refused** with "You cannot open the equip screen while in combat!" while the player is
 fighting a living NPC, or being hit by one. The refusal interrupts nothing: the next swing lands
 on its normal tick (227/1000539 t1780 refused, t1781 swing; 227/1000194 t4761;
-227/00080 t243-244; 238/01225 t235-238 and 238/01227 t480-481 in recent revisions). The player is still refused while walking away from an NPC that keeps
-hitting them (227/1000539 t1775). The screen opens on the next click after the NPC dies
-(227/01885 refused t20819, the NPC dies that tick, opened t20821; 227/1000296 t5356, on the
-tick after a kill).
+227/00080 t243-244; 238/01225 t235-238 and 238/01227 t480-481 in recent revisions). The player is still refused while walking away from an NPC that keeps hitting them
+(227/1000539 t1775). After a kill, the refusal lasts through the NPC's death animation, and the
+screen opens on the tick the NPC is removed. In 227/01885 the killing hit lands at t20818, a
+click at t20819 is refused while `abyssal_death` plays, and the screen opens at t20821 as the
+NPC goes. Opening on the tick after a kill (227/1000296 t5356) is the same case, with a shorter
+death animation. tsps keeps the killed NPC as the player's dying opponent until its death ends
+(`Combat.noteDyingOpponent`, `CombatFactory.inLiveCombat`).
 
 An NPC's hit closes the open screen server-side on the hit tick, and auto-retaliate swings that
 same tick (227/1000296 t5358). `CombatFactory.executeHit` already closes a `busy()` player's
 interface on a hit.
 
-Mid-teleport (a passageway, 228/02229 t236) or while dying (227/1000370 t25076-25080), the click
+Mid-teleport (a passageway, 228/02229 t236), during a forced move such as a ditch jump, or while dying (227/1000370 t25076-25080), the click
 is dropped. On one tick during the passageway, a mix of worn-items clicks got "Please finish
 what you're doing before opening this menu." (228/02229 t238). That capture can't tell which
 button sent it, so tsps sends nothing.
@@ -92,7 +95,8 @@ The following still need deliberate captures:
 
 1. View equipment stats while woodcutting, fishing, during a Make-All and while following:
    does the action resume after close?
-2. The in-combat window after walking out of an NPC's reach.
+2. The in-combat window after walking out of an NPC's reach, and a click during an Attack's
+   approach before any hit (tsps refuses then, because the target is set).
 3. Guide prices and Items kept on death in each state: walking, a route, attacking, being hit,
    skilling, following.
 4. Call follower with a follower out.

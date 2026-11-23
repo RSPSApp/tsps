@@ -1340,15 +1340,20 @@ export class CombatFactory {
     }
 
     /**
-     * In combat with something still alive: the character's target or its attacker (an attacker
-     * lasts the PJ window after its last hit) is registered with hitpoints left. Live's worn-items
-     * screens refuse on this and open on the next click after the opponent dies (rsprox
-     * 227/01885 t20819-20821, 240/1001355 t1964-1969). docs/interface-interruption.md.
+     * In combat: the character's target or its attacker (an attacker lasts the PJ window after its
+     * last hit) is registered with hitpoints left, or an NPC it was fighting is still dying. Live's
+     * worn-items screens refuse on this through the opponent's death animation and open on the
+     * tick it is removed (rsprox 227/01885 t20818-20821, 240/1001355 t1962-1969).
+     * docs/interface-interruption.md.
      */
     public static inLiveCombat(character: Mobile): boolean {
         const combat = character.getCombat();
+        const registered = (other: Mobile) => typeof other.isRegistered !== "function" || other.isRegistered();
+        // A killed NPC still counts until its death ends and it is removed (or respawns).
+        const dying = combat.getDyingOpponent();
+        if (dying?.isNpc() && dying.getAsNpc().isDyingFunction() && registered(dying)) return true;
         return [combat.getTarget(), combat.getAttacker()].some((other) =>
-            other != null && other.getHitpoints() > 0 && (typeof other.isRegistered !== "function" || other.isRegistered()));
+            other != null && other.getHitpoints() > 0 && registered(other));
     }
 
     public static poisonEntity(entity: Mobile, poisonSeverity: number, poisonOrbType: number = 1) {

@@ -233,9 +233,13 @@ function update(player) {
   render(player);
 }
 
-/** Mid-teleport, mid-obstacle or dying: live drops the click (rsprox 228/02229 t236, 227/1000370 t25076). */
+/**
+ * Mid-teleport, mid-obstacle, mid forced move (a ditch jump) or dying: live drops the click
+ * (rsprox 228/02229 t236, 227/1000370 t25076).
+ */
 function inDelayedAction(player) {
-  return player.getHitpoints() <= 0 || player.isLocked?.() || player.isNeedsPlacement?.();
+  return player.getHitpoints() <= 0 || player.isLocked?.() || player.isNeedsPlacement?.()
+    || player.getForceMovement?.() != null;
 }
 
 function openFromWornItems({ player }) {

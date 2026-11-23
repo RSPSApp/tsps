@@ -171,17 +171,51 @@ test("refused while only being hit by a living NPC", async (t) => {
   assert.equal(f.p.getInterfaceId(), -1);
 });
 
-test("opens once the target is dead", async (t) => {
-  // Live 227/01885 t20819 refused while the demon lived, t20821 opened after it died.
+test("refused through the opponent's death animation; opens the tick it is removed", async (t) => {
+  // Live 227/01885: killed t20818, refused t20819 while abyssal_death plays, opened t20821 as it is
+  // removed. 240/1001355: goblin killed t1962, price checker refused t1964, opened t1969 on removal.
   const f = actor(t);
+  f.p.getSkillManager().setCurrentLevel(core.Skill.ATTACK, 99, true);
+  f.p.getSkillManager().setCurrentLevel(core.Skill.STRENGTH, 99, true);
   const npc = goblin(t, HOME.x + 1, HOME.y);
+  npc.setHitpoints(1);
+  Math.random = () => 0.99;
+  t.after(() => { Math.random = random; });
   f.p.getCombat().attack(npc);
-  f.p.getCombat().setUnderAttack(npc);
+  for (let i = 0; i < 10 && npc.getHitpoints() > 0; i++) ticks(1);
+  assert.equal(npc.getHitpoints(), 0, "the goblin is killed by a real hit");
+  let refused = 0, opened = -1;
+  for (let i = 0; i < 12 && opened < 0; i++) {
+    const registered = npc.isRegistered() && npc.isDyingFunction();
+    await send(f, STATS_BUTTON);
+    if (f.p.getInterfaceId() === STATS_INTERFACE) {
+      opened = i;
+      assert.equal(registered, false, "it opens only once the dying goblin is gone");
+    } else {
+      assert.equal(registered, true, "refused only while the goblin is still dying");
+      refused++;
+    }
+    ticks(1);
+  }
+  assert.ok(refused >= 1, "refused at least once during the death animation");
+  assert.ok(opened >= 0, "opens after the goblin is removed");
+});
+
+test("dropped without a message during a forced move (a ditch jump)", async (t) => {
+  const f = actor(t);
+  const { ForceMovement, ForceMovementTask, Location, TaskManager } = core;
+  // As WildernessDitch: a 3-tick ForceMovementTask with the jump animation (844).
+  const jump = new ForceMovement(f.p.getLocation().clone(), new Location(0, 2), 0, 70, 0, new core.Animation(844));
+  TaskManager.submit(new ForceMovementTask(f.p, 3, jump));
   ticks(1);
-  npc.setHitpoints(0);
+  assert.notEqual(f.p.getForceMovement(), null, "mid-jump");
+  const animations = [];
+  const perform = f.p.performAnimation.bind(f.p);
+  t.mock.method(f.p, "performAnimation", (animation) => { animations.push(animation?.getId?.()); return perform(animation); });
   await send(f, STATS_BUTTON);
+  assert.deepEqual(animations, [], "the jump's animation is not cut");
+  assert.equal(f.p.getInterfaceId(), -1);
   assert.deepEqual(f.messages.filter((m) => m === REFUSAL), []);
-  assert.equal(f.p.getInterfaceId(), STATS_INTERFACE);
 });
 
 test("dropped without a message mid-teleport", async (t) => {
@@ -223,7 +257,10 @@ test("Guide prices is refused while fighting and opens once the fight is over", 
   assert.equal(f.p.getInterfaceId(), -1, "the price checker does not open");
   assert.ok(f.p.getCombat().getTarget() === npc, "the attack keeps its target");
   npc.setHitpoints(0);
+  npc.appendDeath();
+  for (let i = 0; i < 12 && npc.isRegistered() && npc.isDyingFunction(); i++) ticks(1);
+  assert.equal(npc.isRegistered() && npc.isDyingFunction(), false, "the goblin's death has ended");
   await send(f, PRICES_BUTTON);
   assert.equal(f.messages.filter((m) => m === PRICES_REFUSAL).length, 1, "no second refusal");
-  assert.equal(f.p.getInterfaceId(), 464, "it opens once the goblin is dead");
+  assert.equal(f.p.getInterfaceId(), 464, "it opens once the goblin is gone");
 });

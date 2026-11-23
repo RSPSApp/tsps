@@ -832,6 +832,7 @@ export class Combat {
         if (this.autoRetaliating || this.target === this.attacker) this.reset();
     }
     public getHitQueue(): HitQueue { return this.hitQueue; }
+    private dyingOpponent: Mobile | null = null;
     public getAttacker(): Mobile | null { return this.attacker; }
     public setUnderAttack(attacker: Mobile | null): void {
         this.lastAttackedCycle = attacker ? World.getProcessCycle() : -1;
@@ -866,6 +867,14 @@ export class Combat {
      * monster can engage on the kill tick. The 16-tick logout timer is separate and keeps
      * running from `lastAttackedCycle`.
      */
+    /**
+     * An opponent (target or attacker) that has started dying: live still counts the fight until
+     * it is removed (rsprox 227/01885 t20818-20821, 240/1001355 t1962-1969). NPC.appendDeath notes it.
+     */
+    public noteDyingOpponent(opponent: Mobile): void {
+        if (this.target === opponent || this.attacker === opponent) this.dyingOpponent = opponent;
+    }
+    public getDyingOpponent(): Mobile | null { return this.dyingOpponent; }
     public clearAttackerIf(attacker: Mobile): void {
         if (this.attacker === attacker) this.applyAttacker(null);
     }

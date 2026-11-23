@@ -432,6 +432,7 @@ export class NPC extends Mobile {
             // Wiki (PJ timer): the 8-tick protection a monster holds on the player ends the
             // moment it dies, so another aggressive NPC can engage on the same tick.
             for (const player of World.getPlayers()) {
+                player.getCombat().noteDyingOpponent(this);
                 player.getCombat().clearAttackerIf(this);
             }
             TaskManager.submit(new NPCDeathTask(this));

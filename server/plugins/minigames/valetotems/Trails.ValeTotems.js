@@ -71,8 +71,14 @@ function grantFletchingXp(player, xp) {
   const sender = player.getPacketSender();
   const id = varbit(XP_ACTIONS);
   const charges = sender.getVarbit(id);
-  Shared.addXp(player, "FLETCHING", charges > 0 ? xp * XP_PERCENT / 100 : xp);
-  if (charges > 0) sender.sendVarbit(id, charges - 1);
+  if (charges > 0) {
+    Shared.spam(player, "Your connection to the ents inspires your carving.");
+    if (charges === 1) Shared.spam(player, "Your connection to the ents fades.");
+    Shared.addXp(player, "FLETCHING", xp * XP_PERCENT / 100);
+    sender.sendVarbit(id, charges - 1);
+  } else {
+    Shared.addXp(player, "FLETCHING", xp);
+  }
 }
 
 function tileKey(location) {

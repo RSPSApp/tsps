@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "about": "Hydras of the Karuulm Slayer Dungeon in combat (docs/hydras.md). Wiki (Hydra): Magic and Ranged, max hit 22, attack speed 6; a random style at the start, switching after three attacks whether they hit or not; every twelfth attack spits poison at three random tiles (one on the player), which does not count towards the three; the splat is 3x3, and standing on a pool deals 4 poison damage every two ticks (1 to 2 with poison immunity); the count is not reset by leaving combat. The rest is from rsprox captures 1000480 and 1000143 (rev 227): the animations, projectiles, sounds and flight times.",
+    "ids": "hydra 8609 (its death animation is hydra_lesser_death 8264). The Alchemical Hydra has its own plugin (bosses/AlchemicalHydra.plugin.js)."
+  },
+  "ids": [8609],
+  "attackDistance": 10,
+  "stylesBeforeSwitch": 3,
+  "specialEvery": 12,
+  "styles": {
+    "magic": {
+      "anim": 8262,
+      "projectile": {"id": 1662, "start": 30, "startHeight": 30, "endHeight": 16, "angle": 0, "progress": 64},
+      "sound": {"id": 4083, "range": 1}
+    },
+    "ranged": {
+      "anim": 8261,
+      "projectile": {"id": 1663, "start": 30, "startHeight": 30, "endHeight": 31, "angle": 0, "progress": 64},
+      "sound": {"id": 4120, "range": 1}
+    }
+  },
+  "flight": {"endBase": 40, "endPerTile": 5, "_source": "rsprox 1000480: every basic flight ends at 40 + 5 a tile from the hydra's south-west tile (9 of 9: 45 at 1, 55 at 3, 60 at 4, 65 at 5, 95 at 11, 100 at 12), launched from its centre; the hit lands 2 ticks on for a 60-cycle flight (tick 2357)"},
+  "special": {
+    "anim": 8263,
+    "blobs": 3,
+    "spread": 3,
+    "projectile": {"id": 1644, "start": 30, "endBase": 60, "endPerTile": 10, "startHeight": 30, "endHeight": 16, "angle": 0, "progress": 64},
+    "splash": 1645,
+    "sound": {"id": 4135, "range": 5},
+    "landing": [1646, 1647, 1648, 1649, 1650, 1651, 1652, 1653],
+    "landed": [1654, 1655, 1656, 1657, 1658, 1659, 1660, 1661],
+    "damage": 4,
+    "immuneDamage": [1, 2],
+    "hurtEvery": 2,
+    "poolTicks": 13,
+    "_source": "rsprox 1000143 tick 215: three blobs from the hydra's centre, ending at 60 + 10 a tile from there (80 at 2, 100 at 4), with the splash graphic and sound 4135 on each tile at the flight's end; each lands (hydraboss_pools_landing_*) floor(end / 30) ticks on and settles (hydraboss_pools_landed_*) a tick later. The two other blobs fell within 3 tiles of the first. The landing graphics' angle variants are the Alchemical Hydra's (bosses/data/alchemical-hydra.json).",
+    "_ours": "No source gives the pool's lifetime or the splat's own damage: the pool hurts for 13 ticks, as the Alchemical Hydra's same pools were recorded to (its landed graphic plays 16), and the 3x3 splat deals the Wiki's pool damage once as it lands."
+  }
+}

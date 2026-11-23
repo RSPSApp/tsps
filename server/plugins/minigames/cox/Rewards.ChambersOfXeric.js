@@ -278,8 +278,13 @@ function generate(raid, inTime) {
     // Wiki: a raider who left keeps the chance, but the item is discarded.
     if (!named.has(receiver)) continue;
     uniques.add(receiver);
-    give(raid, receiver, item.id);
-    special.push([receiver, item.id]);
+    // "drops:rolled" { player, source, drops }: content may change the unique before it is kept (a league's finished items).
+    const drops = [{ id: item.id, amount: 1 }];
+    Shared.api()?.emitCustomEvent?.("drops:rolled", { player: named.get(receiver), source: CHANCE_SOURCE, drops });
+    for (const drop of drops) {
+      give(raid, receiver, drop.id, drop.amount);
+      special.push([receiver, drop.id]);
+    }
     if (Shared.random(1, 53) === 1) {
       give(raid, receiver, ITEM.OLMLET);
       special.push([receiver, ITEM.OLMLET]);

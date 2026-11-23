@@ -177,7 +177,10 @@ function rollRaid(raid, random = Math.random) {
     const pick = weightedPick(players, (player) => shareOf(player) * boosts.get(player), random);
     if (pick) {
       uniqueWinner = pick;
-      uniqueId = weightedPick(uniqueTable(I, table.hilt), ([, weight]) => weight, random)[0];
+      // "drops:rolled" { player, source, drops }: content may change the unique before it is kept (a league's finished items).
+      const drops = [{ id: weightedPick(uniqueTable(I, table.hilt), ([, weight]) => weight, random)[0], amount: 1 }];
+      Shared.api()?.emitCustomEvent?.("drops:rolled", { player: pick, source: CHANCE_SOURCE, drops });
+      uniqueId = drops[0]?.id ?? -1;
     }
   }
   const commons = commonTable(I);

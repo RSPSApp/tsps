@@ -1,0 +1,23 @@
+{
+  "$comment": "The leagues' combo boss drops (Wiki: Demonic_Pacts_League#Combo_boss_drops, read 2026-11-23): 'Items that dropped as components that required multiple regions to create a usable item instead dropped as the finished item'. Applied by plugins/modes/league/ComboDrops.LeagueMode.js to a league character of a league in `leagues` (6 Demonic Pacts) on the rollers' loot ('npc-drops:roll' and 'drops:rolled'). Each part comes from its source alone, so a part is replaced wherever it drops; `part` and `finished` are cache gamevals. A finished item drops as one, whatever the part's stack (ours: the Colosseum's 2-3 echo crystals give one pair of echo boots). The page's 'All of The Forgotten Four dropped all pieces of the soul reaper axe' is not a swap and is not here.",
+  "leagues": [6],
+  "items": [
+    { "source": "Grotesque Guardians", "part": "tourmaline_core", "finished": "guardian_boots" },
+    { "source": "Araxxor", "part": "araxyte_fang", "finished": "amulet_of_rancour" },
+    { "source": "Alchemical Hydra", "part": "hydra_claw", "finished": "dragonhunter_lance" },
+    { "source": "Alchemical Hydra", "part": "hydra_leather", "finished": "ferocious_gloves" },
+    { "source": "Alchemical Hydra", "part": "hydra_tail", "finished": "bonecrusher_necklace" },
+    { "source": "Cerberus", "part": "eternal_crystal", "finished": "eternal_boots" },
+    { "source": "Phantom Muspah", "part": "ancient_icon", "finished": "ancient_sceptre" },
+    { "source": "Zulrah", "part": "magic_fang", "finished": "toxic_tots_uncharged" },
+    { "source": "The Leviathan", "part": "venator_vestige", "finished": "venator_ring" },
+    { "source": "The Whisperer", "part": "bellator_vestige", "finished": "bellator_ring" },
+    { "source": "Vardorvis", "part": "ultor_vestige", "finished": "ultor_ring" },
+    { "source": "Duke Sucellus", "part": "magus_vestige", "finished": "magus_ring" },
+    { "source": "Fortis Colosseum", "part": "echo_crystal", "finished": "echo_boots" },
+    { "source": "Theatre of Blood", "part": "infernal_defender_hilt", "finished": "infernal_defender" },
+    { "source": "Chambers of Xeric", "part": "kodai_insignia", "finished": "kodai_wand" },
+    { "source": "Doom of Mokhaiotl", "part": "mokhaiotl_cloth", "finished": "confliction_gauntlets" },
+    { "source": "Brimstone chest", "part": "broken_dragon_hasta", "finished": "brut_dragon_spear" }
+  ]
+}

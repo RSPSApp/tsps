@@ -581,7 +581,8 @@ test("boosted drops: the Gauntlet, Moons of Peril, Fortis Colosseum, Doom of Mok
   assert.equal(colosseum(Colosseum.FANATIC), 5, "any sunfire fanatic piece");
   assert.equal(colosseum(28919), 5, "Tonalztics of ralos (uncharged)");
   assert.equal(colosseum(I.UNCUT_ONYX), 1, "the common rows are not boosted");
-  const rares = new Set([28942, 28919, ...Colosseum.FANATIC_PIECES]);
+  // Demonic Pacts drops the echo crystal as echo boots (its combo boss drops), so either counts.
+  const rares = new Set([28942, core.CacheDefinitions.getObjId("echo_boots"), 28919, ...Colosseum.FANATIC_PIECES]);
   const wave12 = (player) => {
     let count = 0;
     for (let k = 0; k < 4800; k++) {
@@ -757,4 +758,89 @@ test("boosted drops: Hunter's own rares (the loot sacks' rares, the tecu salaman
   } finally {
     Object.assign(C.H, previous);
   }
+});
+
+test("combo boss drops: Demonic Pacts drops each part as its finished item, for its characters only", () => {
+  const DATA = require("../plugins/modes/data/league-combo-drops.json");
+  const id = (gameval) => core.CacheDefinitions.getObjId(gameval);
+  const dp = character("combo6", "league", 0, 6); // no relic yet: the swap is the league's, not a tier's
+  const echoes = character("combo5", "league", 8, ECHOES);
+  const main = character("combomain", "main");
+  assert.equal(DATA.items.length, 17);
+  for (const { source, part, finished } of DATA.items) {
+    assert.ok(id(part) > 0 && id(finished) > 0, `${source}: ${part} and ${finished} are in the cache`);
+    const roll = (player, key = "itemId") => ask("npc-drops:roll", { player, drops: [{ [key]: id(part), amount: 3, noted: true }] }).drops[0];
+    assert.deepEqual(roll(dp), { itemId: id(finished), amount: 1, noted: false }, `${source}: ${part} drops as ${finished}`);
+    assert.deepEqual(ask("drops:rolled", { player: dp, source, drops: [{ id: id(part), amount: 1 }] }).drops[0], { id: id(finished), amount: 1 }, `${source} on "drops:rolled"`);
+    assert.equal(roll(main).itemId, id(part), `${source}: a main character keeps the part`);
+    assert.equal(roll(echoes).itemId, id(part), `${source}: Raging Echoes keeps the part`);
+  }
+  assert.deepEqual(ask("npc-drops:roll", { player: dp, drops: [{ itemId: core.ItemIdentifiers.COINS, amount: 500 }] }).drops[0], { itemId: core.ItemIdentifiers.COINS, amount: 500 }, "other loot is untouched");
+});
+
+test("combo boss drops through the rollers: the Theatre of Blood's avernic defender, the Colosseum's echo boots, the Chambers' kodai wand", () => {
+  const leagueApi = { core, emitCustomEvent: (name, payload) => ask(name, payload) };
+  const I = core.ItemIdentifiers;
+  const dp = () => character(`roller${Math.floor(realRandom() * 1e6)}`, "league", 0, 6);
+  const main = () => character(`rollermain${Math.floor(realRandom() * 1e6)}`, "main");
+
+  // The Theatre of Blood: a draw of 0 is a unique, the first of the table (the avernic defender hilt).
+  const TobShared = require("../plugins/minigames/tob/Shared.TheatreOfBlood");
+  const Tob = require("../plugins/minigames/tob/Rewards.TheatreOfBlood");
+  TobShared.bind(leagueApi);
+  const tobRaid = (player) => ({ players: [player], mode: "normal", size: 1, overallTicks: 1e9, member: () => ({ deaths: 0, rooms: { MAIDEN: { damage: 500 } } }) });
+  const tob = (player) => {
+    const { loot, uniqueId } = Tob.rollRaid(tobRaid(player), () => 0);
+    return [uniqueId, loot.get(player)[0].id];
+  };
+  assert.deepEqual(tob(main()), [I.AVERNIC_DEFENDER_HILT, I.AVERNIC_DEFENDER_HILT]);
+  assert.deepEqual(tob(dp()), [I.AVERNIC_DEFENDER, I.AVERNIC_DEFENDER], "the avernic defender, in the loot and the announcement");
+
+  // Fortis Colosseum wave 12: the first draw that lands on an echo crystal for a main character lands on it
+  // for an unboosted league character too (no relic: the same weights), and is the echo boots there.
+  require("../plugins/minigames/colosseum/Shared.Colosseum").bind(leagueApi);
+  const Colosseum = require("../plugins/minigames/colosseum/Loot.Colosseum");
+  const ECHO_CRYSTAL = core.CacheDefinitions.getObjId("echo_crystal");
+  const ECHO_BOOTS = core.CacheDefinitions.getObjId("echo_boots");
+  const plain = main();
+  let draw = null;
+  for (let k = 0; k < 4800 && draw === null; k++) {
+    const at = (k + 0.5) / 4800;
+    const [first] = Colosseum.roll(12, plain, () => at);
+    if (first.id === ECHO_CRYSTAL && first.amount > 1) draw = at;
+  }
+  assert.ok(draw !== null, "wave 12 drops a stack of echo crystals somewhere");
+  assert.deepEqual(Colosseum.roll(12, dp(), () => draw)[0], { id: ECHO_BOOTS, amount: 1 }, "one pair of echo boots for the stack");
+
+  // The Chambers of Xeric: a raid whose points make one unique roll; a draw of 0 gives the first unique, then
+  // the kodai insignia is forced by its weight's place.
+  const CoxShared = require("../plugins/minigames/cox/Shared.ChambersOfXeric");
+  const Cox = require("../plugins/minigames/cox/Rewards.ChambersOfXeric");
+  CoxShared.bind(leagueApi);
+  const kodaiAt = (() => {
+    const total = Cox.UNIQUES.reduce((sum, entry) => sum + entry.weight[0], 0);
+    let before = 0;
+    for (const entry of Cox.UNIQUES) {
+      if (entry.id === I.KODAI_INSIGNIA) return (before + entry.weight[0] / 2) / total;
+      before += entry.weight[0];
+    }
+    return null;
+  })();
+  assert.ok(kodaiAt !== null);
+  const cox = (player) => {
+    const name = player.getUsername();
+    const raid = { players: [player], original: [name], challenge: false, points: new Map([[name, 8676]]), totalPoints: 8676, pointsOf: () => 8676 };
+    // uniqueRolls' draw, the receiver's, then the item's; 0.99 for everything after.
+    const draws = [0, 0, kodaiAt];
+    Math.random = () => (draws.length ? draws.shift() : 0.99);
+    try {
+      Cox.generate(raid, false);
+    } finally {
+      Math.random = realRandom;
+    }
+    return raid.rewards.get(name).map((entry) => entry.id);
+  };
+  assert.ok(cox(main()).includes(I.KODAI_INSIGNIA), "a main character: the insignia");
+  const wand = cox(dp());
+  assert.ok(wand.includes(I.KODAI_WAND) && !wand.includes(I.KODAI_INSIGNIA), "Demonic Pacts: the kodai wand");
 });

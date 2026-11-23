@@ -1370,6 +1370,18 @@ this cache (struct 6436's tier enum, param 1020). Its boosted drops rest on the 
 server has: the Wiki's "every Desert Treasure II boss drops every Soulreaper axe piece" is a boost
 on the pieces each boss already drops here, not a new drop.
 
+Its combo boss drops ([Wiki](https://oldschool.runescape.wiki/w/Demonic_Pacts_League#Combo_boss_drops)):
+a part that needs other regions to become usable drops as the finished item, for every Demonic
+Pacts character (relics or not). `league/ComboDrops.LeagueMode.js` swaps them by
+`data/league-combo-drops.json` (cache gamevals) on the rollers' loot before it is kept: NPC kills
+and the bosses rolling through NpcDrops (`npc-drops:roll`: the Grotesque Guardians' core, Araxxor's
+fang, the Alchemical Hydra's claw, leather and tail, Cerberus's eternal crystal, Phantom Muspah's
+icon, Zulrah's magic fang, the four Desert Treasure II vestiges) and Doom of Mokhaiotl's cloth, and
+the rollers that emit `drops:rolled { player, source, drops }` (the Theatre of Blood's avernic hilt,
+the Chambers of Xeric's kodai insignia, the Colosseum's echo crystal, the brimstone chest's broken
+hasta). A finished item is one, unnoted, whatever the part's stack (ours: the Colosseum's 2-3 echo
+crystals give one pair of echo boots). Boosted drops still match the parts' names, as they roll.
+
 Left out, with why: Raging Echoes' and Demonic Pacts' clue-step progress saved between clues (the trail runtime has
 no per-step save to carry across scrolls); their one-minute farming ticks (Farming's
 growth model has no tick-length seam, and Farming is under active work elsewhere); the

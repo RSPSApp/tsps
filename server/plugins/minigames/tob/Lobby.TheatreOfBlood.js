@@ -5,10 +5,8 @@
  * (28) while there, and the theatre's entrance.
  *
  * Captured: the interfaces (364 the list, 50 the party, 28 the HUD) and the scripts that fill
- * them (2340 a list row, 2317/2321 member and applicant lines, 2323 the footer), "Your
- * leader, <name>, must go first.". Estimates: the interfaces' buttons, the rest of the
- * entrance's warnings and questions, and leaving Ver Sinhaza taking a player out of their
- * party or application.
+ * them (2340 a list row, 2317/2321 member and applicant lines, 2323 the footer), the board's
+ * introduction and the messages for accepted applicants, lobby departures and stale parties.
  * The cache confirms each script's arguments. Wiki: escape crystals are the only way out of
  * the theatre and the Mysterious Stranger sells them, so the entrance offers his shop.
  *
@@ -96,9 +94,9 @@ function enterVerSinhaza({ player }) {
 /** Leaving Ver Sinhaza (other than into the theatre) leaves a party or withdraws an application. */
 function leaveVerSinhaza({ player }) {
   if (Raid.raidOf(player)) return;
+  leaveParty(player, { leftLobby: true });
   player.getPacketSender().closeSubInterface(Shared.OVERLAY_HUD_UID);
   player.getPacketSender().sendVarbit(VARBIT.PARTY_STATE, 0);
-  leaveParty(player);
   const applied = Parties.applicationOf(player);
   if (applied) {
     applied.withdraw(player);
@@ -106,12 +104,14 @@ function leaveVerSinhaza({ player }) {
   }
 }
 
-function leaveParty(player) {
+function leaveParty(player, { leftLobby = false } = {}) {
   const party = Parties.partyOf(player);
   if (!party || party.raid) return;
   party.remove(player);
+  // 227/01779 tick 13028 and 234/03299 tick 10627.
+  if (leftLobby) player.sendMessage("You have left the lobby, so you have been removed from your party.");
   refreshParty(party);
-  refreshHud(player);
+  if (!leftLobby) refreshHud(player);
 }
 
 // ---------------------------------------------------------------- 364: the party list
@@ -302,11 +302,11 @@ function enlist(party, player) {
 }
 
 /** The leader's Accept for one of the party's applicants. */
-function acceptAsLeader(party, applicant) {
-  answerApplicant(party.leader, party, party.applicants.indexOf(applicant), true);
+function acceptAsLeader(party, applicant, notifyApplicant = true) {
+  answerApplicant(party.leader, party, party.applicants.indexOf(applicant), true, notifyApplicant);
 }
 
-function answerApplicant(player, party, index, accept) {
+function answerApplicant(player, party, index, accept, notifyApplicant = true) {
   const applicant = party.applicants[index];
   if (!applicant) {
     openInformation(player, party);
@@ -324,7 +324,10 @@ function answerApplicant(player, party, index, accept) {
       Shared.statement(player, `${Shared.displayName(applicant)} appears to have joined another party.`);
       return;
     }
-    party.accept(applicant);
+    if (party.accept(applicant) && notifyApplicant) {
+      // 227/00553 ticks 11915–11916 and 237/01162 tick 12874, before the party status update.
+      applicant.sendMessage(`Your application to the party of ${Shared.displayName(party.leader)} has been accepted.`);
+    }
   } else {
     party.decline(applicant);
     applicant.sendMessage(`Your application to the party of ${Shared.displayName(party.leader)} has been declined.`);
@@ -337,6 +340,15 @@ function clickInformation(event) {
   const { player } = event;
   const slot = slotOf(event);
   const party = viewedParty(player);
+  if (slot === INFO_BUTTON.REFRESH && (!party || party.raid)) {
+    if (player.getInterfaceId() === INTERFACE.PARTY_INFORMATION) {
+      // 227/01833 ticks 3480–3482. Retire the details modal while keeping the new chatbox.
+      statementThenOverview(player, "That party is no longer recruiting.");
+      player.setInterfaceId(-1);
+      player.getPacketSender().closeInterface(INTERFACE.PARTY_INFORMATION);
+    }
+    return;
+  }
   if (slot === INFO_BUTTON.BACK || !party) {
     openOverview(player);
     return;
@@ -440,7 +452,8 @@ function bringGroup(leader, party) {
     if (member === leader) continue;
     if (canBring(party, member)) {
       enlist(party, member);
-      acceptAsLeader(party, member);
+      // Grouping creates this application on the member's behalf.
+      acceptAsLeader(party, member, false);
     } else {
       member.sendMessage(`${Shared.displayName(leader)} has made a Theatre of Blood party for your group. Apply at the notice board and you'll be let straight in.`);
     }

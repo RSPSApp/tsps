@@ -1,10 +1,69 @@
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { dirname, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+
+// Directories that are never source: dependencies, build output and generated interface files.
+// A download without .git cannot ask git which files are ignored, so these stand in for .gitignore.
+const SKIPPED_DIRECTORIES = new Set([".git", "node_modules", "build"]);
+const SKIPPED_PATHS = new Set(["client/public/browser-host/interfaces"]);
+
+// The release workflow lists plain files, "dir/", "dir/**" and "name*.ext" patterns.
+function pathPattern(spec) {
+    const source = spec
+        .replace(/\/+$/, "")
+        .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+        .replace(/\*\*/g, "\0")
+        .replace(/\*/g, "[^/]*")
+        .replace(/\0/g, ".*");
+    // A bare directory ("client/") selects everything below it, like a git pathspec.
+    const directory = spec.endsWith("/") || spec.endsWith("/**");
+    return new RegExp(directory ? "^" + source.replace(/\/\.\*$/, "") + "(?:/.*)?$" : "^" + source + "$");
+}
+
+// The same selection as `git ls-files` for a source download (zip) that has no .git directory.
+function listFilesWithoutGit(repositoryRoot, paths) {
+    const patterns = paths.map(pathPattern);
+    const found = new Set();
+    const walk = relative => {
+        let entries;
+        try { entries = readdirSync(resolve(repositoryRoot, relative), { withFileTypes: true }); } catch { return; }
+        for (const entry of entries) {
+            const child = relative ? posix.join(relative, entry.name) : entry.name;
+            if (entry.isDirectory()) {
+                if (!SKIPPED_DIRECTORIES.has(entry.name) && !SKIPPED_PATHS.has(child)) walk(child);
+            } else if (entry.isFile() && patterns.some(pattern => pattern.test(child))) {
+                found.add(child);
+            }
+        }
+    };
+    // Only descend into the fixed directory prefix of each path, not the whole checkout.
+    const starts = new Set(paths.map(spec => {
+        const fixed = spec.split("*")[0];
+        if (fixed.endsWith("/")) return fixed.replace(/\/+$/, "");
+        const parent = posix.dirname(fixed);
+        return parent === "." ? "" : parent;
+    }));
+    for (const start of starts) walk(start);
+    return [...found];
+}
+
+function listFilesWithGit(repositoryRoot, paths) {
+    try {
+        const files = execFileSync("git", [
+            "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ...paths,
+        ], { cwd: repositoryRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+        const listed = files.split("\0").filter(Boolean);
+        // Nothing listed: not this project's repository (a zip unpacked inside another checkout).
+        return listed.length ? listed : undefined;
+    } catch {
+        // git is not installed, or this is a zip download rather than a clone.
+        return undefined;
+    }
+}
 
 export function clientVersion(repositoryRoot = root) {
     // The release workflow is the single list of inputs that can change the client.
@@ -14,10 +73,8 @@ export function clientVersion(repositoryRoot = root) {
     if (!push) throw new Error("Missing client release inputs");
     const paths = [...push.matchAll(/^            - '([^']+)'$/gm)].map(match => match[1]);
     if (!paths.length) throw new Error("Missing client release paths");
-    const files = execFileSync("git", [
-        "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ...paths,
-    ], { cwd: repositoryRoot, encoding: "utf8" });
-    const sortedPaths = [...new Set(files.split("\0").filter(Boolean))].sort();
+    const files = listFilesWithGit(repositoryRoot, paths) ?? listFilesWithoutGit(repositoryRoot, paths);
+    const sortedPaths = [...new Set(files)].sort();
     const hash = createHash("sha256");
     for (const path of sortedPaths) {
         let bytes = readFileSync(resolve(repositoryRoot, path));

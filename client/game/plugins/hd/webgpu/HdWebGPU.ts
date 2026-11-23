@@ -27,7 +27,9 @@ import type { WebGPURenderer } from "../../../../render/webgpu/WebGPURenderer";
 import { environmentAt } from "../../../../render/render/environment";
 import { HdLights } from "../HdLights";
 import { HD_GROUND_MATERIALS, HD_MATERIALS, HD_DETAIL_TEXTURES, type HdMaterial } from "../HdMaterialData";
-import { HD_LOOKUP_WIDTH, HD_TEXTURE_FILES, HD_TEXTURE_SIZE, HD_DETAIL_TEXTURE_SIZE } from "../HdMaterials";
+import {
+    createHdReadbackContext, HD_LOOKUP_WIDTH, HD_TEXTURE_FILES, HD_TEXTURE_SIZE, HD_DETAIL_TEXTURE_SIZE,
+} from "../HdMaterials";
 import { HdClutterLayer } from "./hd-clutter";
 import { HD_SCENE_SHADERS } from "./hdSceneShaders";
 import type { HdOptions } from "../HdConfig";
@@ -74,7 +76,7 @@ const OFF_MIST = 192;
 const OFF_QUALITY = 196;
 
 /** Port of HdMaterials: the 2-row RGBA32F lookup plus the HD texture array. */
-class HdMaterialsGpu {
+export class HdMaterialsGpu {
     readonly lookup: GPUTexture;
     readonly textures: GPUTexture;
     readonly detailTextures: GPUTexture;
@@ -126,10 +128,9 @@ class HdMaterialsGpu {
                 const image = new Image();
                 image.onload = () => {
                     if (this.disposed) return;
-                    const canvas = document.createElement("canvas");
-                    canvas.width = canvas.height = HD_TEXTURE_SIZE;
-                    const context = canvas.getContext("2d");
+                    const context = createHdReadbackContext(HD_TEXTURE_SIZE);
                     if (!context) return;
+                    const canvas = context.canvas;
                     try {
                         const upload = (texture: GPUTexture, layer: number) => {
                             for (let mipLevel = 0; mipLevel < texture.mipLevelCount; mipLevel++) {

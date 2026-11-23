@@ -8,6 +8,18 @@ export const HD_TEXTURE_FILES = [...new Set([...HD_MATERIALS, ...HD_GROUND_MATER
 // Detail textures use their own small 512px array in both backends.
 const files = HD_TEXTURE_FILES.filter(file => !HD_DETAIL_TEXTURES.includes(file));
 
+/**
+ * A 2D context to resample an HD texture image in and read its pixels back from. It is CPU-backed
+ * (`willReadFrequently`), as the client's other readback canvases are: a GPU-backed canvas per
+ * image left the game's HUD canvases slow to composite after the next resize of the game view,
+ * for the rest of the browser session.
+ */
+export function createHdReadbackContext(size: number): CanvasRenderingContext2D | null {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = size;
+    return canvas.getContext("2d", { willReadFrequently: true });
+}
+
 export class HdMaterials {
     readonly lookup: Texture;
     readonly textures: Texture;
@@ -52,9 +64,7 @@ export class HdMaterials {
                 const image = new Image();
                 image.onload = () => {
                     if (this.disposed) return;
-                    const canvas = document.createElement("canvas");
-                    canvas.width = canvas.height = size;
-                    const context = canvas.getContext("2d");
+                    const context = createHdReadbackContext(size);
                     if (!context) return;
                     try {
                         context.drawImage(image, 0, 0, size, size);

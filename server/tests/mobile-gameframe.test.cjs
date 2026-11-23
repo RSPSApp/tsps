@@ -4,6 +4,7 @@ const { test } = require('node:test');
 // Accounts writes its file to this path; keep it off the real data/saves, before `dist` is required.
 process.env.TSPS_ACCOUNTS_FILE = require('node:path').join(require('node:fs').mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'accounts-')), 'accounts.json');
 const { Server } = require('../dist/Server');
+const WIDGET_OPEN_SUB = 103; // ServerPacket.WIDGET_OPEN_SUB (a const enum: no runtime object)
 Server.installProductionPathResolver();
 const {
   decodeClientPackets,
@@ -12,6 +13,7 @@ const {
   MOBILE_CLIENT_ATTRIBUTE,
   MOBILE_GAMEFRAME_ROOT,
   orbsGroupFor,
+  POPOUT_GROUP_ID,
   resolveGameframeRoot,
   dataOrbsHidden,
 } = require('../dist/net/protocol/ClientProtocol');
@@ -38,6 +40,16 @@ test('mobile clients are locked to the mobile gameframe', () => {
 test('the mobile gameframe mounts its own orbs (orbs_osm), as live does', () => {
   assert.equal(orbsGroupFor(MOBILE_GAMEFRAME_ROOT), 897);
   for (const root of [161, 164, 548]) assert.equal(orbsGroupFor(root), 160);
+});
+
+test('the mobile gameframe opens the popout panel (728 at 161:35, toplevel_osm:popout), desktop does not', () => {
+  const popout = (root) => encodeGameframeBootstrap('Headless', root)
+    .filter((packet) => packet[0] === WIDGET_OPEN_SUB && packet.readUInt16BE(7) === POPOUT_GROUP_ID);
+  assert.equal(POPOUT_GROUP_ID, 728);
+  const mobile = popout(MOBILE_GAMEFRAME_ROOT);
+  assert.equal(mobile.length, 1, 'Popout panel (mobile) needs its interface to show');
+  assert.equal(mobile[0].readInt32BE(3), (161 << 16) | 35, 'addressed by the standard pane, as every capture does');
+  for (const root of [161, 164, 548]) assert.equal(popout(root).length, 0, `web sidebar replaces it on ${root}`);
 });
 
 test('handshake decodes the mobile client type byte', () => {

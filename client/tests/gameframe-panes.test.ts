@@ -52,6 +52,12 @@ assert.equal(mobile.get(9), 15, "mobile username");
 assert.equal(mobile.get(33), 37, "mobile minimap orbs");
 assert.equal(mobile.get(16), 27, "mobile main modal");
 assert.equal(mobile.get(76), 116, "mobile combat tab");
+assert.equal(mobile.get(35), 131, "mobile popout panel (the server's 728 mount at 161:35)");
+
+const popoutMount = encodeGameframeBootstrap("Headless", 601).find(packet =>
+    packet[0] === ServerPacket.WIDGET_OPEN_SUB && packet.readUInt16BE(7) === 728);
+assert.ok(popoutMount, "the mobile boot opens the popout panel");
+assert.equal(mobile.get(popoutMount.readInt32BE(3) & 0xffff), 131, "and the mount lands on a real mobile pane");
 
 // Server mounts must address panes present in the cache's layout redirects.
 for (const root of [161, 164, 548, 601]) {

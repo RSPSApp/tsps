@@ -17,16 +17,17 @@ function resizableHost(root: number, width: number, height: number): any {
     };
 }
 
+// Points the drawn layout leaves open, beyond the edges of the panel and stones.
 const cases: Array<{ name: string; root: number; width: number; height: number; x: number; y: number }> = [
-    // Modern layout, tabs in one row under the panel: the strip left of the panel and the strip
-    // above it.
-    { name: "left of the side panel (wide)", root: 161, width: 1874, height: 950, x: 1874 - 215, y: 800 },
-    { name: "above the side panel (wide)", root: 161, width: 1874, height: 950, x: 1874 - 100, y: 950 - 37 - 270 },
-    // Classic layout, tab stones stacked: the world left of the bottom row of stones.
-    { name: "left of the bottom tab row (wide)", root: 164, width: 1274, height: 560, x: 1274 - 300, y: 560 - 12 },
-    // Narrow screens put the old box further left and higher.
-    { name: "left of the side panel (narrow)", root: 161, width: 874, height: 620, x: 874 - 221, y: 400 },
-    { name: "left of the tab rows (narrow)", root: 164, width: 874, height: 620, x: 874 - 235, y: 620 - 40 },
+    // Modern layout (164), stones in one row under the panel: the strip left of the panel.
+    { name: "left of the side panel (modern)", root: 164, width: 1274, height: 560, x: 1274 - 215, y: 400 },
+    // Classic layout (161), stones in two rows: the world left of the bottom row, and above the
+    // top row on a narrow screen.
+    { name: "left of the bottom stone row (classic)", root: 161, width: 1274, height: 560, x: 1274 - 300, y: 560 - 12 },
+    { name: "above the top stone row (classic, narrow)", root: 161, width: 998, height: 768, x: 998 - 100, y: 425 },
+    // Narrow modern screen: left of the panel and of the stones.
+    { name: "left of the side panel (modern, narrow)", root: 164, width: 874, height: 620, x: 874 - 221, y: 400 },
+    { name: "left of the stone rows (modern, narrow)", root: 164, width: 874, height: 620, x: 874 - 235, y: 620 - 40 },
 ];
 
 for (const c of cases) {

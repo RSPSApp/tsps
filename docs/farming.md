@@ -42,6 +42,22 @@ Each swing repeats every 3 ticks; the produce comes `delay` ticks after its swin
 
 When the inventory fills: spam "You have run out of inventory space.", on the tick the last slot fills.
 
+## Watering cans on a water source (rsprox 1108, 127, 1855, 3267, 3275)
+
+A can used on the source fills **that one can**, on the click's own tick (after the walk): `human_pickuptable`
+(832), sound 2609, spam line, and the can becomes Watering can(8) (5340), from empty or part-filled alike.
+Nothing fills the other cans: capture 3275 clicks nine in a row in no particular slot order, each answered
+once, and the rest stay as they were. A second click two ticks later (27481, 27483, 27485) is answered at once.
+
+| Source (loc) | Line |
+| --- | --- |
+| Fountain (879, 7143) | spam "You fill the watering can from the fountain." |
+| Water barrel (8702) | spam "You fill the watering can from the water barrel." |
+| Water pump (52646) | spam "You fill the watering can." |
+| Well (46805) | message box "If I drop my watering can down there I don't think I'm likely to get it back."; the can stays empty |
+
+Other sources (sink, gold sink, pump and drain, pump and tub) are not captured: they use the pump's plain line.
+
 ## Compost bins (recording 1858)
 
 - **Fill:** `human_pickuptable` (832) + 2441 two ticks after the click, the item a tick later, every two ticks.

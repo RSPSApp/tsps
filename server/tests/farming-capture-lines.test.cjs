@@ -355,3 +355,51 @@ test('compost on the hespori patch is refused and the bucket kept', t => {
     assert.equal(f.player.getInventory().getAmount(Data.itemId('Ultracompost')), 1);
     assert.equal(f.state.compost ?? 0, 0);
 });
+
+/** A player holding `cans` watering cans next to a water source called `source` (no patch within reach). */
+function waterSource(t, source, cans = ['Watering can'], objectId = 879) {
+    const player = new Player(null), said = [], sounds = [], anims = [], boxes = [];
+    const sender = new Proxy({}, { get: (_, name) => name === 'sendTypedMessage' ? (_type, text) => { said.push(['spam', text]); return sender; }
+        : name === 'sendSound' ? id => { sounds.push(id); return sender; } : () => sender });
+    player.getPacketSender = () => sender; player.sendMessage = text => said.push(['game', text]);
+    player.performAnimation = animation => anims.push(animation.getId());
+    player.busy = () => false; player.getClickDelay().elapsedTime = () => true;
+    player.getDialogueManager().startDialogues = chain => boxes.push(chain);
+    t.mock.method(core.ObjectDefinition, 'forPlayer', () => ({ getName: () => source }));
+    player.moveTo(new core.Location(3221, 3225, 0));
+    for (const name of cans) player.getInventory().add(new core.Item(Data.itemId(name)), false);
+    const object = { getId: () => objectId };
+    const use = slot => hooks.onItemOnObject({ player, object, location: { x: 3221, y: 3226, z: 0 },
+        itemId: player.getInventory().forSlot(slot).getId(), itemSlot: slot });
+    const names = () => cans.map((_, slot) => core.CacheDefinitions.getItem(player.getInventory().forSlot(slot).getId()).name);
+    return { player, said, sounds, anims, boxes, use, names };
+}
+// Issue 6474 item 3. rsprox 1108 (Water pump), 127 and 1855 (Fountain), 3267 (Water barrel), 3275 (nine cans in a row).
+test('a can on a fountain or water barrel fills only that can, with the captured swing, sound and line', t => {
+    for (const [source, line] of [['fountain', 'You fill the watering can from the fountain.'], ['water barrel', 'You fill the watering can from the water barrel.']]) {
+        const f = waterSource(t, source, ['Watering can', 'Watering can', 'Watering can(3)']);
+        f.use(1);
+        assert.deepEqual(f.names(), ['Watering can', 'Watering can(8)', 'Watering can(3)'], 'the others are left for their own clicks');
+        assert.deepEqual([f.anims, f.sounds, f.said], [[832], [2609], [['spam', line]]], source);
+        f.use(2);
+        assert.deepEqual(f.names(), ['Watering can', 'Watering can(8)', 'Watering can(8)'], 'a part-filled can fills too');
+        assert.deepEqual([f.anims, f.sounds, f.said.length], [[832, 832], [2609, 2609], 2], source);
+    }
+});
+test('the Water pump gives the plain line, and a full can or a damaged pump changes nothing', t => {
+    const pump = waterSource(t, 'water pump', ['Watering can'], 52646);
+    pump.use(0);
+    assert.deepEqual([pump.names(), pump.said], [['Watering can(8)'], [['spam', 'You fill the watering can.']]]);
+    const full = waterSource(t, 'fountain', ['Watering can(8)']);
+    full.use(0);
+    assert.deepEqual([full.anims, full.sounds, full.said], [[], [], []]);
+    const damaged = waterSource(t, 'water pump', ['Watering can'], core.ObjectIdentifiers.WATER_PUMP_2);
+    damaged.use(0);
+    assert.deepEqual([damaged.names(), damaged.said], [['Watering can'], [['game', 'This water pump is damaged.']]]);
+});
+test('a can dropped on a well is refused with its message box and stays empty', t => {
+    const f = waterSource(t, 'well', ['Watering can'], 46805);
+    f.use(0);
+    assert.equal(f.boxes.length, 1, 'the refusal is a message box');
+    assert.deepEqual([f.names(), f.anims, f.sounds, f.said], [['Watering can'], [], [], []]);
+});

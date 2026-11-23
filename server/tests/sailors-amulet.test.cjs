@@ -97,7 +97,7 @@ test("both rune types are needed: one kind alone charges nothing (Wiki)", () => 
     use(player, 1 + (runes.laws ? 0 : 1), 0);
     assert.deepEqual(sent.prompts, []);
     assert.equal(amuletIn(inventory).getId(), I.SAILORS_AMULET_INERT_);
-    assert.equal(sent.messages.length, 1);
+    assert.deepEqual(sent.messages, ["You need at least 1 law rune and 10 water runes to charge the amulet."]);
   }
 });
 
@@ -115,6 +115,7 @@ test("a full amulet asks nothing", () => {
   const { player, sent, inventory } = fixture({ charges: 10000, laws: 5, waters: 50 });
   use(player, 1, 0);
   assert.deepEqual(sent.prompts, []);
+  assert.deepEqual(sent.messages, ["Your amulet can't hold any more charges."]);
   assert.equal(inventory.getAmount(I.LAW_RUNE), 5);
 });
 

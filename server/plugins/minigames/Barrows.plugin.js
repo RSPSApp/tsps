@@ -26,6 +26,8 @@ const DOOR_INACTIVE = { l: "barrows_door_inactive_l", r: "barrows_door_inactive_
 /** The chest-room door's puzzle (236/03929 ticks 415 and 417): a solve opens it, another click crosses. */
 const PUZZLE_LOCKED = "The door is locked with a strange puzzle.";
 const PUZZLE_SOLVED = "You hear the doors' locking mechanism grind open.";
+/** ... with this sound (all six recorded solves: 236/03929 tick 417, 227/01885 tick 12722, 234/03276 ...). */
+const PUZZLE_SOLVED_SOUND = 37;
 /**
  * A brother gives up once the player is more than this many tiles (either axis) from where he rose:
  * his face resets, then he goes the tick after (227/00086 ticks 12498-12500 and 12507-12509,
@@ -673,6 +675,9 @@ function crossDoor(player, door) {
   const index = doorwaySide(leaves, from);
   if (index === -1) return;
   const to = doorSides(door)[1 - index];
+  // Clicked again before the step through it: one crossing, one monster.
+  const pending = state.crossing;
+  if (pending && pending.from.equals(from) && pending.leaves.includes(door)) return;
   endCrossing(player, state);
   const sender = player.getPacketSender();
   const inviswall = CacheDefinitions.getLocId(DOOR_INVISWALL);
@@ -888,6 +893,7 @@ function answerPuzzle(event) {
   // Solved, the door is unlocked: the next click on it crosses (236/03929 ticks 417-418).
   pending.run.puzzleSolved = true;
   player.sendMessage(PUZZLE_SOLVED);
+  player.getPacketSender().sendSoundEffect(PUZZLE_SOLVED_SOUND, 1, 0);
 }
 
 function searchChest(player, clickType) {

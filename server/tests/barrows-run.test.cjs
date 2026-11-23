@@ -746,6 +746,7 @@ test("Barrows: a door crossing swaps the leaves, sounds and raises its monster o
   const before = queue.length;
   try {
     useDoor(subject, door);
+    useDoor(subject, door); // clicked again before the step: still one crossing
     const leaves = doorLeaves(door);
     const inviswall = core.CacheDefinitions.getLocId("inviswall");
     const names = core.CacheDefinitions.getLocNames();
@@ -820,8 +821,10 @@ test("Barrows: the chest room's door says it is puzzle-locked; a solve unlocks i
   const queue = core.World.getAddNPCQueue();
   const before = queue.length;
   try {
+    subject.sent.calls.length = 0;
     answerPuzzle({ player: subject, buttonId: (25 << 16) | [12, 14, 16][slot] });
     assert.ok(subject.sent.messages.includes("You hear the doors' locking mechanism grind open."), subject.sent.messages.join(" | "));
+    assert.deepEqual(subject.sent.calls.filter(([key]) => key === "sendSoundEffect").map(([, id]) => id), [37], "with sound 37");
     assert.equal(session(subject).crossing, null, "solving it does not cross");
     assert.ok(subject.getLocation().equals(outside));
     useDoor(subject, door);

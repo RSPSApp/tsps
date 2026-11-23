@@ -16,8 +16,16 @@
  * The drain lands even if the nagua dies on that tick, and shows as prayer-drain hitsplat 59 with
  * no health bar (237/01137.txt tick 45: special at tick 42, [hit] id=59 value=5, prayer 71 to 66,
  * the nagua's death the same tick).
+ *
+ * Flat armour (Wiki: Flat armour, Sulphur Nagua): it has -4, so every successful melee or ranged hit
+ * does 4 more, each hitsplat of a multi-hit weapon on its own; a miss stays 0. A player's landed hit
+ * is always at least 1 (combat rolls turn a successful 0 into 1), so a splat above 0 is a landed one.
+ * Magic from players ignores flat armour (Wiki), as do thralls, recoil and poison (queued past the
+ * hit-modify hooks).
  */
 const SULPHUR_NAGUA = 13033;
+const SULPHUR_NAGUA_IDS = new Set([12879, SULPHUR_NAGUA]);
+const FLAT_ARMOUR = -4;
 const ATTACKS_BEFORE_SPECIAL = 5;
 const DRAIN_AFTER_TICKS = 3;
 const PRAYER_DRAIN = 5;
@@ -25,6 +33,8 @@ const NEXT_ATTACK_AFTER_SPECIAL = 6;
 const SPECIAL_GRAPHIC = { delay: 75, height: 150 };
 /** The recorded prayer-drain hitsplat ([hit] id=59); the recording shows only the target's own view. */
 const DRAIN_SPLAT = { mine: 59, others: 59 };
+
+let core = null;
 
 /** npc -> ordinary attacks since its last special, this life. */
 const attacks = new WeakMap();
@@ -40,11 +50,23 @@ function inMeleeRange(npc, target) {
   return Math.max(dx, dy) === 1;
 }
 
+/** onNpcHitModify: negative flat armour adds to every landed melee or ranged hitsplat. */
+function applyFlatArmour({ npc, hit }) {
+  if (!SULPHUR_NAGUA_IDS.has(npc.getId())) return;
+  const { CombatType } = core;
+  if (hit.getCombatType() !== CombatType.MELEE && hit.getCombatType() !== CombatType.RANGED) return;
+  for (const splat of hit.getHits()) {
+    if (splat.getDamage() > 0) splat.setDamage(splat.getDamage() - FLAT_ARMOUR);
+  }
+  hit.updateTotalDamage();
+}
+
 module.exports = {
   name: "SulphurNagua",
   description: "Sulphur Nagua melee: each attack lands as two hitsplats on the same tick that share one damage roll; every sixth attack raises its weapon to drain 5 prayer from a player still beside it 3 ticks later.",
   members: true,
   register(api) {
+    core = api.core;
     const { MeleeCombatMethod, PendingHit, Animation, Graphic, Skill, Task, TaskManager, CacheDefinitions } = api.core;
     const specialSeq = CacheDefinitions.getSeqId("npc_djinn_01_magic");
     const specialSpotanim = CacheDefinitions.getSpotanimId("lizardshaman_spawn_explode");
@@ -91,6 +113,7 @@ module.exports = {
     api.onNpcDeath(({ npc }) => {
       if (npc?.getId?.() === SULPHUR_NAGUA) attacks.delete(npc);
     });
+    api.onNpcHitModify(applyFlatArmour);
   },
-  _test: { inMeleeRange, attacks, ATTACKS_BEFORE_SPECIAL, PRAYER_DRAIN, NEXT_ATTACK_AFTER_SPECIAL, DRAIN_SPLAT },
+  _test: { applyFlatArmour, inMeleeRange, attacks, ATTACKS_BEFORE_SPECIAL, PRAYER_DRAIN, NEXT_ATTACK_AFTER_SPECIAL, DRAIN_SPLAT },
 };

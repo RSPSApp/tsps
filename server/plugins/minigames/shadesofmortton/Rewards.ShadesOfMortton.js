@@ -50,6 +50,22 @@ function mainRows(colour, wealth, clueAllowed) {
   });
 }
 
+/** The runescrolls' row on a league's Boosted drops page. */
+const DROP_SOURCE = "Shades of Mort'ton";
+
+/**
+ * How many times likelier content makes each book's runescroll roll, in BOOKS' order: "drops:chance"
+ * { player, source, rules } (a league's boosted drops) answers rules on the runescrolls' names.
+ */
+function scrollBoosts(player) {
+  const rules = [];
+  Common.api?.emitCustomEvent?.("drops:chance", { player, source: DROP_SOURCE, rules });
+  return BOOKS.map((book) => {
+    const name = String(Common.core.ItemDefinition.forId(Common.objId(book.scroll))?.getName?.() ?? "");
+    return rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+  });
+}
+
 function rollSilver(player, colour, random = Math.random) {
   const quality = COLOURS.indexOf(colour);
   if (quality < 0) throw new Error("Unknown silver chest colour: " + colour);
@@ -57,8 +73,9 @@ function rollSilver(player, colour, random = Math.random) {
   if (random() < 1 / (63 - quality - (wealth ? 2 : 0))) {
     return { id: Common.objId("shades_lock_silver"), amount: 1 };
   }
-  if (random() < 1 / (76 - quality - (wealth ? 2 : 0))) {
-    const book = BOOKS[random() < 0.5 ? 0 : 1];
+  const boosts = scrollBoosts(player);
+  if (random() < (boosts[0] + boosts[1]) / 2 / (76 - quality - (wealth ? 2 : 0))) {
+    const book = BOOKS[random() * (boosts[0] + boosts[1]) < boosts[0] ? 0 : 1];
     // Receiving, not merely rolling, the first book commits this attribute in chest().
     return (player.getAttribute(book.received) === true || owns(player, Common.objId(book.book)))
       ? { id: Common.objId(book.scroll), amount: 1 }

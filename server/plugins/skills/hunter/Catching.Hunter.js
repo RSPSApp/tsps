@@ -348,6 +348,10 @@ function registerMixes() {
   }
 }
 
+/** The crystal impling's elven signet: its row on a league's Boosted drops page, and its 1-in-n. */
+const SIGNET_SOURCE = "Crystal impling";
+const SIGNET_CHANCE = 128;
+
 function rewards(player, def) {
   const I = H.core.ItemIdentifiers;
   let result;
@@ -363,7 +367,8 @@ function rewards(player, def) {
     const base = I[row[0]], id = row[4] ? H.core.ItemDefinition.forId(base).getNoteId() : base;
     result = row[0] === null ? [] : [[id, roll(row[2], row[3])]];
     if (def.key === "GOURMET" && roll(1, 500) === 1) result.push([I.GRUBBY_KEY, 1]);
-    if (def.key === "CRYSTAL" && roll(1, 128) === 1) result.push([I.ELVEN_SIGNET, 1]);
+    // The elven signet is 1 in 128 (a league's boosted drops: "drops:chance", source "Crystal impling").
+    if (def.key === "CRYSTAL" && roll(1, SIGNET_CHANCE) <= C.dropMultiplier(player, SIGNET_SOURCE, I.ELVEN_SIGNET)) result.push([I.ELVEN_SIGNET, 1]);
   }
   // Content may change the jar's loot before its clue rolls ("hunter:impling-loot", a league relic's doubled notes).
   const request = { player, impling: def.key, rewards: result };

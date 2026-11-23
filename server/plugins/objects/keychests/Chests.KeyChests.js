@@ -98,6 +98,8 @@ function reward(chest, player) {
   // "drops:chance" { player, source, rules }: a league's boosted drops for this chest's pre-rolls.
   if (chest.loot.preRolls.length) api.emitCustomEvent("drops:chance", { player, source: chest.name, rules });
   const drops = Loot.roll(chest, player.getSkillManager().getMaxLevel(core.Skill.FISHING), Math.random, rules);
+  // "drops:rolled" { player, source, drops }: content may change the loot before it is given (a league's finished items).
+  api.emitCustomEvent("drops:rolled", { player, source: chest.name, drops });
   if (chest.avariceNotes && wearsAvarice(player)) for (const entry of drops) if (!entry.preRoll) entry.noted = true;
   Loot.give(player, drops);
   // `noLog`: items this chest gives that don't count towards the collection log (moon chest's splinters and huasca seeds).

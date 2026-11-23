@@ -111,6 +111,9 @@ function weighted(entries) {
   return entries[entries.length - 1];
 }
 
+/** The source the cache's reward names on "drops:rolled". */
+const CACHE_SOURCE = "Phantom Muspah";
+
 /** One of the cache's rewards: [itemId, amount]. */
 function rollCache() {
   const { frozenCache } = Common.data;
@@ -138,6 +141,11 @@ function openCache({ player, itemId }) {
   if (!inventory.contains(ItemIdentifiers.FROZEN_CACHE)) return true;
   inventory.delete(ItemIdentifiers.FROZEN_CACHE, 1);
   const reward = rollCache();
+  // "drops:rolled" { player, source, drops }: content may change the reward before it is given (a
+  // league drops the ancient icon as the ancient sceptre).
+  const drops = [reward];
+  Common.api.emitCustomEvent("drops:rolled", { player, source: CACHE_SOURCE, drops });
+  Object.assign(reward, drops[0] ?? {});
   let rewardId = reward.itemId;
   if (reward.noted) {
     const noteId = ItemDefinition.forId(rewardId).getNoteId();
@@ -175,4 +183,4 @@ function attachLoot(api) {
   api.onItemAction("Frozen cache", { Open: openCache });
 }
 
-module.exports = { attachLoot, formatTicks, rollCache };
+module.exports = { attachLoot, formatTicks, rollCache, openCache };

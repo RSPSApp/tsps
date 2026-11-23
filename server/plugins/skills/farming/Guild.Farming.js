@@ -78,16 +78,46 @@ function roll(table) {
     const row = table.find(r => (chance -= r[3]) < 0);
     return { id: Data.itemId(row[0]), count: row[1] + Math.floor(Math.random() * (row[2] - row[1] + 1)) };
 }
-function contents(tier, tithe) {
+/** The seed pack's row on a league's Boosted drops page (the Hespori seed). */
+const DROP_SOURCE = "Seed pack";
+/**
+ * What content makes each seed likelier: "drops:chance" { player, source, rules } (a league's
+ * boosted drops) answers rules on the seeds' names; a table without a boosted row is null.
+ */
+function boosts(player, table) {
+    const rules = [];
+    if (player) core.PluginManager.emitCustomEvent("drops:chance", { player, source: DROP_SOURCE, rules });
+    if (!rules.length) return null;
+    const multipliers = table.map(r => rules.reduce((value, rule) => (rule.pattern.test(r[0]) ? value * rule.multiplier : value), 1));
+    return multipliers.some(m => m !== 1) ? multipliers : null;
+}
+/**
+ * One roll on `table`, each boosted row's chance that many times its own (at most certain) and
+ * the other rows sharing what is left in their proportions.
+ */
+function boostedRoll(table, multipliers) {
+    if (!multipliers) return roll(table);
+    const total = table.reduce((sum, r) => sum + r[3], 0);
+    const boosted = table.map((r, i) => multipliers[i] !== 1 ? r[3] / total * multipliers[i] : 0);
+    const boostedSum = boosted.reduce((a, b) => a + b, 0);
+    const restSum = table.reduce((sum, r, i) => multipliers[i] !== 1 ? sum : sum + r[3] / total, 0);
+    const rest = boostedSum >= 1 || restSum === 0 ? 0 : (1 - boostedSum) / restSum;
+    const chances = table.map((r, i) => multipliers[i] !== 1 ? boosted[i] : r[3] / total * rest);
+    let chance = Math.random() * chances.reduce((a, b) => a + b, 0);
+    const row = table.find((r, i) => (chance -= chances[i]) < 0) ?? table[table.length - 1];
+    return { id: Data.itemId(row[0]), count: row[1] + Math.floor(Math.random() * (row[2] - row[1] + 1)) };
+}
+function contents(tier, tithe, player = null) {
+    const high = boosts(player, HIGH);
     const medium = tier === 1 ? 1 + Math.floor(Math.random() * 3) : tier === 2 ? 2 + Math.floor(Math.random() * 2) : tier - 1 + Math.floor(Math.random() * 3);
-    const high = tier === 1 ? 0 : tier === 2 ? (Math.random() < 1 / 11 ? 1 : 0) : tier === 3 ? Math.floor(Math.random() * 2) : 1 + Math.floor(Math.random() * (tier - 2));
-    return Array.from({ length: tier + 5 }, (_, i) => i < high ? roll(HIGH) : i < high + medium
+    const highRolls = tier === 1 ? 0 : tier === 2 ? (Math.random() < 1 / 11 ? 1 : 0) : tier === 3 ? Math.floor(Math.random() * 2) : 1 + Math.floor(Math.random() * (tier - 2));
+    return Array.from({ length: tier + 5 }, (_, i) => i < highRolls ? boostedRoll(HIGH, high) : i < highRolls + medium
         ? tithe && Math.random() < 1 / 90 ? { id: Data.itemId("White lily seed"), count: 1 } : roll(MEDIUM) : roll(LOW));
 }
 function giveSeedPack(player, tier = 3, tithe = false) {
     if (player.getInventory().isFull()) { player.getInventory().full(); return false; }
     const pack = new core.Item(Data.itemId("Seed pack"));
-    pack.setMetaValue("farming:rewards", contents(tier, tithe));
+    pack.setMetaValue("farming:rewards", contents(tier, tithe, player));
     player.getInventory().addItem(pack);
     return true;
 }
@@ -108,7 +138,7 @@ function rewardItem(event) {
     if (!["take", "take-all", "take-one", "bank-all", "check"].includes(action)) return;
     event.handled = true;
     let rewards = item.getMetaValue("farming:rewards");
-    if (!rewards) { rewards = name === "Seed pack" ? contents(3, false) : Array.from({ length: 7 }, () => roll(HERBS)); item.setMetaValue("farming:rewards", rewards); }
+    if (!rewards) { rewards = name === "Seed pack" ? contents(3, false, event.player) : Array.from({ length: 7 }, () => roll(HERBS)); item.setMetaValue("farming:rewards", rewards); }
     if (action === "check") { event.player.sendMessage(`There are ${rewards.length} rewards remaining.`); return; }
     const initialCount = rewards.length;
     do {
@@ -562,4 +592,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { deathContainers, seedBoxGather, herbSackGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, guardGuildTier, openSeedVault });
+Object.assign(module.exports, { seedPackContents: contents, deathContainers, seedBoxGather, herbSackGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, guardGuildTier, openSeedVault });

@@ -1294,7 +1294,10 @@ Tier 1 counts once the character chose its first relic.
   casket's Open and the Mimic's reward share `Rolls.uniqueMultiplier`). Kills whose
   table NpcDrops rolls are covered as they are, Araxxor's and Zalcano's included (their plugins
   roll through NpcDrops with the NPC named); the giant lairs' chests pass `source` (Obor,
-  Bryophyta). Revenant kills (the revenant's name; the Revenant maledictus's two rolls too) ask
+  Bryophyta). The Desert Treasure II bosses' uniques and Awakener's orb are stages of an ordered reward
+  chain ([docs/npc-drops-ordered.md](npc-drops-ordered.md)): the rule scales the stage by its rows, so
+  each boosted row that many times as likely (at 5x the Whisperer's 1/512 bellator vestige is 1/102; the
+  chromium ingot in the same stage is Trailblazer Reloaded's row alone, so in Demonic Pacts it keeps its rate). Revenant kills (the revenant's name; the Revenant maledictus's two rolls too) ask
   `drops:chance` for their own table's unique and ancient artefact rolls, and the Barrows chest
   asks with `Barrows` for its equipment roll: a boosted row's weight grows and its table's
   chance with it, as NpcDrops does. The raids' unique rolls ask per raider with `Chambers of
@@ -1319,11 +1322,25 @@ Tier 1 counts once the character chose its first relic.
   the pet); a Doom of Mokhaiotl delve (`Doom of Mokhaiotl`, Demonic Pacts) its unique roll (not
   Dom); and a pickpocket target's `dropSource` (pickpocketing.json) its `first` rolls: vyres'
   blood shard (`Vyre`) and Prifddinas elves' teleport seed (`Elf (Thieving)`).
-  Sources rolled by their own plugins are in the data but inert until that plugin asks
-  `drops:chance` with the source's name: the Grotesque Guardians, Corporeal Beast's sigils (not
-  on its table here), Hunter rumours, the Shrine, the seed pack, the Fountain of Rune, Larran's
-  and the brimstone chest, the Zombie Pirate's Locker, chewed bones, the Volcanic Mine ore pack
-  and Shades of Mort'ton.
+  The key chests ask `drops:chance` with the chest's name for their pre-rolls: Larran's big
+  chest, the brimstone chest, the Zombie Pirate's Locker and the Elven Crystal Chest (the page's
+  Enhanced crystal chest; the dragonstone armour, not the onyx). The Grotesque Guardians roll
+  their own table through NpcDrops with Dusk named, and Corporeal Beast's sigils are a pre-roll
+  group of its table. Item names are matched whole, as the tables name them: Hueycoatl's
+  `Tooth half of key (moon key)` and the frost nagua's `Pendant of Ates (inert)` take a
+  `/^.../` pattern, and Araxxor's row names the `Araxyte fang` its table drops for the amulet of
+  rancour (`tests/league-boosted-drops-data.test.cjs` checks every NPC row against its tables).
+  Hunter's own rares ask with their rows' names (`dropMultiplier` in `Context.Hunter.js`): the
+  loot sacks' four 1/50 rares (`Hunter rumours`), the adult tecu salamander's 1/1,000 (`Hunting`)
+  and the crystal impling's 1/128 elven signet (`Crystal impling`).
+  The other own rolls ask with their rows' names too: the Warriors' Guild cyclopes' defender
+  (`Cyclops`; 1/50 upstairs, 1/100 for the dragon defender), Vale offerings' unique pre-roll
+  (`Vale offerings`; 1/100 times the uniques' boosts averaged by their weights, so each keeps its
+  share), each high-tier seed pack roll's Hespori seed (`Seed pack`; its own chance that many
+  times, the other seeds sharing the rest), a silver chest's runescroll roll (`Shades of
+  Mort'ton`) and a glory's 1/25,000 at the Fountain of Rune (`Fountain of Rune`).
+  Sources in the data that nothing asks for yet: the Shrine, chewed bones (no dragon full helm
+  from them here) and the Volcanic Mine ore pack.
 - **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic
   Pacts 4x/8x from tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
   the league multiplies `points` (floored) when the passive's `minigames` (leagues.json) lists it. Other
@@ -1353,6 +1370,22 @@ Demonic Pacts' passives are Raging Echoes' but for the combat XP, from the tier 
 this cache (struct 6436's tier enum, param 1020). Its boosted drops rest on the drop tables this
 server has: the Wiki's "every Desert Treasure II boss drops every Soulreaper axe piece" is a boost
 on the pieces each boss already drops here, not a new drop.
+
+Its combo boss drops, as Raging Echoes' ([Wiki](https://oldschool.runescape.wiki/w/Demonic_Pacts_League#Combo_boss_drops),
+[Raging Echoes](https://oldschool.runescape.wiki/w/Raging_Echoes_League#Combo_boss_drops)): a part that
+needs other regions to become usable drops as the finished item, for every character of either league
+(relics or not); Doom's cloth is Demonic Pacts' only, the adamant and rune dragons' slice and lump
+(as the dragon kiteshield and platebody) Raging Echoes' only, and the hydra tail is finished from the
+Alchemical Hydra only (ordinary hydras drop it too). `league/ComboDrops.LeagueMode.js` swaps them by
+`data/league-combo-drops.json` (cache gamevals) on the rollers' loot before it is kept: NPC kills
+and the bosses rolling through NpcDrops (`npc-drops:roll`: the Grotesque Guardians' core, Araxxor's
+fang, the Alchemical Hydra's claw, leather and tail, Cerberus's eternal crystal, Phantom Muspah's
+icon, Zulrah's magic fang, the four Desert Treasure II vestiges) and Doom of Mokhaiotl's cloth (its
+descent then asks nothing: the warning is for the delve's own uniques), and
+the rollers that emit `drops:rolled { player, source, drops }` (the Theatre of Blood's avernic hilt,
+the Chambers of Xeric's kodai insignia, the Colosseum's echo crystal, the brimstone chest's broken
+hasta, a Frozen Cache's ancient icon). A finished item is one, unnoted, whatever the part's stack (ours: the Colosseum's 2-3 echo
+crystals give one pair of echo boots). Boosted drops still match the parts' names, as they roll.
 
 Left out, with why: Raging Echoes' and Demonic Pacts' clue-step progress saved between clues (the trail runtime has
 no per-step save to carry across scrolls); their one-minute farming ticks (Farming's

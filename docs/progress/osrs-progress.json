@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-22",
+  "updated": "2026-11-23",
   "note": "Progress measures functional equivalence with OSRS through implementation tasks: done counts fully, in progress counts halfway, and to do counts zero. Automated test coverage is evidence, not a scoring requirement. Reconciled against tsps main 3e9ee2d67 on 11 November 2026, covering 1,355 merged PRs since the 6 November checkpoint 3b61a15a8. This sync credits the implemented portions of Clan Wars, Burthorpe Games Room, ranked PvP Arena, Trouble Brewing, Intelligence Gathering, Halloween, seasonal rares, Brutus and Maggot King. It also records Hunter Rumours, diary and League task updates, Sailing, bank-funded Grand Exchange offers, Curse of the Empty Lord, quest progression fixes, combat and interface work. Existing inventory, task scope and weights are retained. Only merged main changes are credited.",
   "schema": {
     "item": [
@@ -16766,6 +16766,7 @@
           ],
           "devNotes": [
             "Ported in server/plugins/quests/quests/FamilyCrest.Quest.js (transcript-driven variant selection, conditions and hand-ins); see the file header for documented gaps.",
+            "2026-11-23, #6631: Chronozon now supplies Johnathon's fragment once through the canonical ground-drop table, instead of also granting a second inventory copy. The quest filters that drop before Johnathon is cured, after completion, or while the fragment/assembled crest is carried or banked. A full inventory leaves the fragment on the ground, lost fragments remain recoverable, and all three fragments are consumed by assembly. Sources: https://oldschool.runescape.wiki/w/Chronozon and https://oldschool.runescape.wiki/w/Family_Crest; implementation server/plugins/quests/quests/FamilyCrest.Quest.js; native regression server/tests/family-crest-perfect-gold.test.cjs exercises the production NPC death task, drop roller, ground pickup and assembly, alongside existing Blast-gate checks in server/tests/quest-plugins.test.cjs. Existing task statuses are retained; this narrow fix does not newly audit the whole quest. No rendered client or full quest playthrough was run.",
             "The 'Family Crest' page in npc-dialogues.json carries 35 variants ('starting-off-dimintheis'); source ids/slugs from npc-dialogue-index.json.",
             "Chronozon must be hit once with each of Wind/Water/Earth/Fire Blast or his weakness wears off; the gauntlet choice is permanent until 25,000 coins.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4014 Family Crest: Chronozon needs all four Blasts; the brothers imbue gauntlets. #3279 fix: quest rocks and rubble take any pickaxe Mining would use."

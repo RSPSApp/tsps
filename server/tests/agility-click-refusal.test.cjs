@@ -58,7 +58,11 @@ function actor(t, x, y, agility) {
   const boxes = [];
   const dialogues = p.getDialogueManager();
   t.mock.method(dialogues, "startDialogues", (chain) => { boxes.push(...chain.getDialogues().values()); });
-  t.after(() => { p.setRegistered(false); TaskManager.cancelTasks(p.getIndex()); });
+  t.after(() => {
+    if (core.World.getPlayers().get(p.getIndex()) === p) core.World.getPlayers().remove(p);
+    else p.setRegistered(false);
+    TaskManager.cancelTasks(p.getIndex());
+  });
   return { p, messages, boxes };
 }
 
@@ -155,7 +159,6 @@ test("Stalker Den's southern cave rebuilds on both crossings without an inter-ma
     session.setPlayer(p);
     p.setRegistered(false);
     assert.equal(core.World.getPlayers().add(p), true);
-    t.after(() => core.World.getPlayers().remove(p));
     quest.setStage(p, 24); // Supplied completed-quest checkpoint, not a quest playthrough.
     for (let tick = 0; tick < 4 && p.isNeedsPlacement(); tick++) core.World.process();
     assert.equal(p.isNeedsPlacement(), false, "normal World updates finish login placement");

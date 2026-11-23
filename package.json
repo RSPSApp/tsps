@@ -12,6 +12,7 @@
     "server": "yarn --cwd server dev",
     "client": "yarn --cwd client start",
     "bridge": "node scripts/run-with-env.mjs - scripts/quest-helper-bridge.mjs",
+    "bridge:setup": "node scripts/run-with-env.mjs - scripts/quest-helper-bridge-setup.mjs",
     "gateway": "runelite-gateway/gradlew -p runelite-gateway run --console=plain",
     "gateway:test": "runelite-gateway/gradlew -p runelite-gateway test --console=plain",
     "docs:quests": "node scripts/quest-docs.mjs"

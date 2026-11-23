@@ -88,9 +88,26 @@ test("warm complete square builds preserve every geometry byte and scene metadat
         extraLocs: [{ id: 4444, x: 2411, y: 3080, level: 0, shape: 4, rotation: 0 }] };
     const castle = await loader.load(state, castleInput, immediate);
     const ropeReload = await loader.load(state, { ...castleInput, locOnly: true }, immediate);
-    assert.ok(Buffer.from(ropeReload.data!.loc.vertices).equals(Buffer.from(castle.data!.loc.vertices)),
+    // A loc-only reload packs the scenery chunk by chunk, so its vertices are numbered and
+    // ordered differently from a whole build's: compare the lit triangles they draw.
+    const litTriangles = (loc: { vertices: Uint8Array; indices: Int32Array }) => {
+        const words = new Int32Array(loc.vertices.buffer, loc.vertices.byteOffset, loc.vertices.byteLength >> 2);
+        const out: string[] = [];
+        for (let i = 0; i < loc.indices.length; i += 3) {
+            out.push([0, 1, 2].map((corner) => {
+                const at = loc.indices[i + corner] * 3;
+                return `${words[at]},${words[at + 1]},${words[at + 2]}`;
+            }).join("|"));
+        }
+        return out.sort();
+    };
+    const castleTriangles = litTriangles(castle.data!.loc);
+    assert.ok(castleTriangles.length > 1000, "the castle square draws scenery");
+    assert.deepEqual(litTriangles(ropeReload.data!.loc), castleTriangles,
         "a rope's loc-only reload keeps the castle's merged wall lighting");
-    assert.ok(Buffer.from(ropeReload.data!.loc.indices.buffer).equals(Buffer.from(castle.data!.loc.indices.buffer)));
+    // Reloading again reuses the chunks the first reload packed, and draws the same.
+    const secondReload = await loader.load(state, { ...castleInput, locOnly: true }, immediate);
+    assert.deepEqual(litTriangles(secondReload.data!.loc), castleTriangles, "reused chunks draw what packed ones did");
 });
 
 test("pool skips cancelled queued jobs and forwards cancellation to a running worker", async () => {
@@ -116,4 +133,53 @@ test("pool skips cancelled queued jobs and forwards cancellation to a running wo
     active.abort();
     await assert.rejects(pending, { name: "AbortError" });
     assert.equal(cancelId, requestId, "only the dispatched job is cancelled");
+});
+
+test("loc-only rebuilds of the world all run on the first worker, one at a time and after its builds", async () => {
+    const { RenderDataWorkerPool } = await import("../game/worker/RenderDataWorkerPool");
+    let queued = 0, scheduled = 0;
+    const pool = { queue: () => { queued++; return {}; }, scheduleWork: () => { scheduled++; } };
+    const log: string[] = [];
+    const worker = (name: string) => {
+        const thread = { load: async (_loader: unknown, input: { tag: string }) => { log.push(`${name} ${input.tag}`); return input.tag; }, cancelLoad: async () => {} };
+        return { init: Promise.resolve(thread), runningTasks: [] as Promise<unknown>[] };
+    };
+    const first = worker("first"), second = worker("second");
+    const workers = [first, second] as any;
+    const pooled = new RenderDataWorkerPool(pool as any, workers, 2);
+
+    // A build already running on the first worker: the loc-only one waits for it.
+    let finishRunning!: () => void;
+    const running = new Promise<void>((resolve) => { finishRunning = resolve; });
+    // The pool takes a build off its worker's running tasks when it ends; so does this.
+    void running.then(() => { first.runningTasks = first.runningTasks.filter((task) => task !== running); });
+    first.runningTasks.push(running);
+    const a = pooled.queueLoad({} as any, { locOnly: true, tag: "a" } as any) as unknown as Promise<string>;
+    const b = pooled.queueLoad({} as any, { locOnly: true, tag: "b" } as any) as unknown as Promise<string>;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(log, [], "nothing starts while the worker is busy");
+    assert.equal(first.runningTasks.length, 3, "the reservations keep the pool from handing the worker anything else");
+    finishRunning();
+    assert.deepEqual(await Promise.all([a, b]), ["a", "b"]);
+    assert.deepEqual(log, ["first a", "first b"], "both ran on the first worker, in order");
+    assert.equal(first.runningTasks.length, 0, "reservations are released");
+    assert.ok(scheduled >= 2, "the pool is told the worker is free again");
+    assert.equal(queued, 0, "loc-only rebuilds do not go through the pool's own queue");
+
+    // Anything else keeps going through the pool: whole squares, instances, and boat decks.
+    pooled.queueLoad({} as any, { tag: "full" } as any);
+    pooled.queueLoad({} as any, { locOnly: true, instance: { templateChunks: [] }, tag: "instance" } as any);
+    pooled.queueLoad({} as any, { locOnly: true, overrideRenderPos: { x: 0, y: 0 }, tag: "deck" } as any);
+    assert.equal(queued, 3);
+
+    // A single worker is the pool already.
+    const single = new RenderDataWorkerPool(pool as any, [first] as any, 1);
+    single.queueLoad({} as any, { locOnly: true, tag: "single" } as any);
+    assert.equal(queued, 4);
+
+    // A failed or cancelled build still releases its reservation.
+    const cancelled = new AbortController();
+    cancelled.abort();
+    await assert.rejects(pooled.queueLoad({} as any, { locOnly: true, tag: "x" } as any, cancelled.signal) as unknown as Promise<unknown>, { name: "AbortError" });
+    assert.equal(first.runningTasks.length, 0);
 });

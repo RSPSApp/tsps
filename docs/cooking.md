@@ -178,6 +178,35 @@ Leagues worlds:
   the empty bucket a free one. The XP was 486, which is the Wiki's 40.5 under the Leagues
   multiplier.
 
+### Nettle tea
+
+rsprox capture 1001702 (rev 242, the user's own recording, Edgeville house stove
+`100_dave_stove`), the Ghosts Ahoy capture 20261112T092603 (ticks 373-383, the porcelain cup) and
+the Wiki ([Nettle tea](https://oldschool.runescape.wiki/w/Nettle_tea),
+[Nettle-water](https://oldschool.runescape.wiki/w/Nettle-water),
+[Cup of tea (nettle)](https://oldschool.runescape.wiki/w/Cup_of_tea_(nettle)),
+[Porcelain cup](https://oldschool.runescape.wiki/w/Porcelain_cup)):
+
+- A bowl of water used on nettles (or the other way round): a tick later "You place the nettles
+  into the bowl of water." (spam), the nettles' slot empties and the bowl's slot holds the
+  nettle-water (1001702, ticks 15606-15607). No XP; 20 Cooking (Wiki); it is a `cooking.json`
+  recipe (`productSlot` keeps the bowl's slot), so more than one opens the make menu.
+- Nettle-water on the stove: `human_cooking`, `synth_sound fry` (2577), "You boil the water and make
+  nettle tea." (spam), the tea in the first free slot, 52 Cooking XP and `cooking_success_count` up one,
+  two ticks after the player arrived (1001702, ticks 15648-15651). It is a `cooking.json` cookable,
+  so fires, ranges and the cook menu all take it.
+- The water can boil over, leaving the empty bowl, on the Wiki's "Nettle tea cooking chance"
+  chart (fire or range 78/412, the Hosidius Kitchen's +12 as for other food): certain from 53.
+  The Wiki's prose says it stops at 54; the chart's values give 53. Ours: the line "The water
+  boils over." (no capture or Wiki text for a boil-over).
+- The tea (plain or milky) into an empty cup or a porcelain cup, and a bucket of milk into the tea
+  in a bowl or either cup: a tick after the use, no line, no XP, sound 2401, the brew in the cup's
+  slot (the tea's, for milk) and the emptied bowl or bucket in the other slot (Ghosts Ahoy capture
+  20261112T092603: tea into the porcelain cup at 373, response 374; milk at 382, response 383; no
+  Cooking stat update). The Wiki: the porcelain cup "works like a normal teacup", so the plain
+  cup pours the same. The Wiki's Cup of tea (nettle) recipe box lists 20 Cooking and 52 XP, the
+  boiling's values; the recording shows neither for a pour (recorded difference).
+
 ## From the Wiki only
 
 - Ordinary wine production stops at 60,000 unfermented jugs across the inventory and real
@@ -271,7 +300,6 @@ Leagues worlds:
   chilli, egg, mushroom and tuna potatoes are made without a line. The egg and mushroom bowls
   come back like the chilli and tuna ones (ours: their Wiki recipes list no bowl). The toppings'
   2-tick first item follows the captured butter.
-- Nettle tea: Ghosts Ahoy makes nettle-water and boils it, without a burn chance.
 - Roast rabbit and the skewered chompy (iron spit); the Ogre spit-roast for jubbly and chompy,
   which cook on a fire here.
 - Gnome cuisine beyond the tutorial products (worm hole, veg ball, tangled toad's legs, the other

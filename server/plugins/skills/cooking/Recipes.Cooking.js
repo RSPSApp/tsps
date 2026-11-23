@@ -76,7 +76,7 @@ function canMake(player, recipe) {
 }
 
 /** One item: the ingredients go, the product (and any emptied containers) come, with any XP. */
-function makeOne(player, recipe) {
+function makeOne(player, recipe, preferredSlot = -1) {
   const { Item, Skill } = Common.core;
   const inventory = player.getInventory();
   if (!availableOnWorld(recipe) || !hasIngredients(inventory, recipe)) return false;
@@ -84,8 +84,22 @@ function makeOne(player, recipe) {
     inventory.full();
     return false;
   }
-  for (const { id, count } of recipe.ingredients) inventory.deleteNumber(id, count);
-  inventory.addItem(new Item(recipe.productId, 1));
+  // A row's productSlot names the ingredient whose slot the product takes (nettle-water, rsprox
+  // capture 1001702 tick 15607: the nettles' slot empties, the bowl's holds the nettle-water):
+  // the clicked one for the first item, when it is still there, else the first carried.
+  let productSlot = -1;
+  if (recipe.productSlotId !== undefined) {
+    const clicked = preferredSlot >= 0 && inventory.getItems()[preferredSlot]?.getId() === recipe.productSlotId;
+    productSlot = clicked ? preferredSlot : inventory.getSlotForItemId(recipe.productSlotId);
+  }
+  for (const { id, count } of recipe.ingredients) {
+    if (productSlot >= 0 && id === recipe.productSlotId) {
+      inventory.deleteAtSlot(productSlot, 1);
+      if (count > 1) inventory.deleteNumber(id, count - 1);
+    } else inventory.deleteNumber(id, count);
+  }
+  if (productSlot >= 0 && !inventory.getItems()[productSlot]?.isValid?.()) inventory.setItem(productSlot, new Item(recipe.productId, 1)).refreshItems();
+  else inventory.addItem(new Item(recipe.productId, 1));
   for (const { id, count } of recipe.returns) inventory.addItem(new Item(id, count));
   if (recipe.message) Common.spam(player, recipe.message);
   Common.addXp(player, recipe.xp);
@@ -97,7 +111,8 @@ function makeOne(player, recipe) {
  * Makes `amount` on the recipe's timing. `hooks.cycle(remaining)` runs as each item is started
  * (the choice, then each item that has another after it), `hooks.canMake()` before spending
  * each item's ingredients, `hooks.made()` after each item and
- * `hooks.done()` after the last one made.
+ * `hooks.done()` after the last one made. `hooks.productSlot` is the clicked slot of a
+ * productSlot ingredient, used for the first item.
  */
 function start(player, recipe, amount, hooks = {}) {
   Common.core.TaskManager.cancelTasks(player.getIndex());
@@ -110,7 +125,7 @@ function start(player, recipe, amount, hooks = {}) {
     if (--wait > 0) return true;
     const actions = Common.actionsPerCycle(player, "make");
     for (let done = 0; done < actions && remaining > 0; done++) {
-      if (hooks.canMake?.() === false || !makeOne(player, recipe)) {
+      if (hooks.canMake?.() === false || !makeOne(player, recipe, made === 0 ? hooks.productSlot ?? -1 : -1)) {
         if (made > 0) hooks.done?.();
         return false;
       }
@@ -213,7 +228,9 @@ function useItemOnItem(event) {
   const recipe = Common.recipeWith(usedItemId, usedWithItemId);
   if (!recipe) return;
   event.handled = true;
-  offer(player, recipe);
+  const productSlot = recipe.productSlotId === usedItemId ? event.usedItemSlot
+    : recipe.productSlotId === usedWithItemId ? event.usedWithItemSlot : undefined;
+  offer(player, recipe, Number.isInteger(productSlot) ? { productSlot } : undefined);
 }
 
 /** A half baked gnomebowl's Prepare option opens the same chocolate-bomb recipe its bars make. */

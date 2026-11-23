@@ -20,10 +20,15 @@ const objects = new Map();
 const itemOnItem = [];
 const itemOnObject = [];
 const events = [];
+/** Handlers a test adds for an event the chests emit ("drops:rolled"); the rest are only recorded. */
+const handlers = new Map();
 KeyChests.register({
   core,
   persistAttribute() {},
-  emitCustomEvent: (name, payload) => events.push([name, payload]),
+  emitCustomEvent: (name, payload) => {
+    events.push([name, payload]);
+    for (const handler of handlers.get(name) ?? []) handler(payload);
+  },
   onObjectInteraction: (name, options) => objects.set(name, { ...objects.get(name), ...options }),
   onItemOnObject: (item, object) => itemOnObject.push([item, object]),
   onItemOnItem: (a, b, fn) => itemOnItem.push([a, b, fn]),
@@ -423,4 +428,27 @@ test("the moon key halves join into a moon key; a crystal half and a moon half d
   assert.equal(player.inventory.get(obj("varlamore_key")), 1);
   assert.equal(player.inventory.get(obj("crystal_key")), undefined);
   assert.deepEqual([player.messages, sounds], [["You join the two halves of the key together."], []]);
+});
+
+test("a chest's loot passes through \"drops:rolled\" with the chest's name, and the chest gives what it holds after", () => {
+  const player = createMoonPlayer({ key: 1 });
+  const seen = [];
+  // A content change in place (a league's finished items): the helmet becomes an uncut onyx.
+  handlers.set("drops:rolled", [(event) => {
+    seen.push(event.source);
+    for (const drop of event.drops) if (drop.itemId === obj("moon_helmet")) drop.itemId = obj("uncut_onyx");
+  }]);
+  const from = events.length;
+  try {
+    withRandom([0.5, 0], () => {
+      Chests.openChest(moon(), player, lockerObject());
+      ticks(1, []);
+    });
+  } finally {
+    handlers.delete("drops:rolled");
+  }
+  assert.deepEqual(seen, ["Chest"]);
+  assert.deepEqual(player.added.map(([itemId]) => itemId), [obj("sunfiresplinter"), obj("uncut_onyx")]);
+  const obtained = events.slice(from).filter(([name]) => name === "collection-log:obtain").map(([, { itemId }]) => itemId);
+  assert.ok(obtained.includes(obj("uncut_onyx")), "the collection log gets the item given");
 });

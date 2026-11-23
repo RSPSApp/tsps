@@ -67,21 +67,26 @@ function applyCurse(event) {
   const skills = player?.getSkillManager();
   const current = npc ? npc.getCurrentLevel(curse.skill) : skills.getCurrentLevel(curse.skill);
   const maximum = npc ? npc.getMaxLevel(curse.skill) : skills.getMaxLevel(curse.skill);
-  if (current < maximum) {
+  // A caster's own curse rule ("magic:curse-rule"): an NPC's curse may stack on a lowered stat, lower it
+  // by its own amount and show its own line (the Catablepon's Weaken). Unchanged, the spell pages' rule.
+  const rule = { attacker, target, spell: event.spell, skill: curse.skill, current, maximum, stacks: false, decrease: null, message: null };
+  api.emitCustomEvent('magic:curse-rule', rule);
+  if (current < maximum && rule.stacks !== true) {
     if (attacker?.isPlayer?.()) attacker.getAsPlayer().sendMessage(weakenedMessage(curse, !!npc));
     return;
   }
   const strength = { attacker, target, spell: event.spell, context: event.context, percent: curse.percent };
   api.emitCustomEvent('combat:stat-drain-modify', strength);
   const percent = Number.isFinite(strength.percent) && strength.percent >= 0 && strength.percent <= 100 ? strength.percent : curse.percent;
-  const decrease = Math.floor(current * percent / 100);
+  const decrease = Number.isInteger(rule.decrease) && rule.decrease >= 0 ? rule.decrease : Math.floor(current * percent / 100);
+  const lowered = Math.max(0, current - decrease);
   if (npc) {
     // The NPC API owns encounter immunity and per-instance restoration state.
-    npc.setCurrentLevels(curse.skill, current - decrease);
+    npc.setCurrentLevels(curse.skill, lowered);
   } else {
-    skills.setCurrentLevelCombat(curse.skill, current - decrease);
+    skills.setCurrentLevelCombat(curse.skill, lowered);
     skills.updateSkill(curse.skill);
-    player.sendMessage('You feel slightly weakened.');
+    player.sendMessage(typeof rule.message === 'string' ? rule.message : 'You feel slightly weakened.');
   }
 }
 

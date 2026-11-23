@@ -25,6 +25,17 @@ Ticks count from the player's arrival at the patch.
 | Dig up | confirm "Are you sure you want to dig up this patch?" / "Yes, I want to clear it for new crops." / "No, I want to leave it as it is." | `human_dig` + 1470 at 0 and +3, cleared at +5 | spam "You start digging the farming patch..." then "You have successfully cleared this patch for new crops."; stumps: "You start digging up the (fruit) tree stump." / "You dig up the (fruit) tree stump."; a stump that regrows mid-dig ends the dig at +5 with the animation reset and gamemessage "You are too late - the tree has already regrown.", the tree kept (rsprox.net local 1000118 tick 358; fruit trees ours); no spade: "You need a spade to clear a farming patch." |
 | Wrong-state items (rsprox.net local 1000104, 1000253, 1000278, 1000296, 1000340, 1000454, 819) | | | all game, nothing used: a seed on weeds "This patch needs weeding first."; plant cure on an empty patch "This farming patch is empty.", on a growing crop "This patch doesn't need curing." (a weedy patch and a grown crop take the same, ours); an unpotted tree seed on its patch "You can only plant calquat tree seeds in a plantpot.", "willow tree seeds" (local 1000296), "Magic Tree seeds" (local 1000296, 1000253), "a crystal acorns" (other trees: "<crop> tree seeds", ours); a rake with no weeds "This bush patch doesn't need weeding right now." (the patch's name); compost on the hespori patch "This patch won't benefit from that kind of treatment." (Fertile Soil refuses with it before its runes go, ours) |
 | Chop without an axe | | | tree patches: "You need an axe to chop down this tree.<br>You do not have an axe which you have the woodcutting level to use."; fruit and crystal trees: "...that you have the Woodcutting level to use." |
+| Cut a willow branch (local 1000402 ticks 31153-31165) | secateurs on the checked willow: `pruning_high` (2277), sound 2440 | +3: the branch, the patch value, line | spam "You cut a branch from the willow tree."; none grown: game "There are no branches ready to cut yet." (ours) |
+
+## Willow branches
+
+Wiki (Willow branch, Willow tree (Farming)): a farmed willow has no branches until its health is checked, then grows
+one every 5 minutes (at the world's growth rate) up to 6; chopped to a stump it has none, and they start again from
+none when it grows back. Auguste's sapling (Enlightened Journey) is planted as a willow (Wiki: Auguste's sapling).
+rsprox local 1000402 shows the count in the patch value: 22 after Check-health (tick 883), 197 down to 192 as the
+1st to 6th branch grows (970-1470), a step back up for each cut (31156, 31165). Recorded difference: that recording
+grew a branch about every 100 ticks (one minute), not the Wiki's five; ours follows the Wiki. A full tree starts the
+next regrowth at a cut (ours). A checked willow saved before the count existed keeps all six.
 
 ## Harvests
 

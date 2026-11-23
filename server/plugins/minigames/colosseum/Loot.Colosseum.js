@@ -256,6 +256,8 @@ function roll(wave, player, random = Math.random) {
   const amount = min + Math.floor(random() * (max - min + 1));
   const items = [{ id: id === FANATIC ? fanaticPiece(player, random) : id, amount }];
   if (wave >= 12) items.push({ id: DIZANAS_QUIVER, amount: 1 });
+  // "drops:rolled" { player, source, drops }: content may change the wave's loot before it is kept (a league's finished items).
+  if (player) require("./Shared.Colosseum").api()?.emitCustomEvent?.("drops:rolled", { player, source: CHANCE_SOURCE, drops: items });
   return items;
 }
 

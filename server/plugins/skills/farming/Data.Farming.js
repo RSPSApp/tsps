@@ -94,6 +94,8 @@ const ROWS = [
 const CROPS = new Map();
 const SEEDS = new Map();
 const WATERED_SEEDLINGS = new Map();
+/** Quest saplings given once (Auguste's sapling): planting always uses them up. */
+const ONE_OFF_SAPLINGS = new Set();
 const ITEMS = new Map();
 // Published protective families, not a name/armour-stat heuristic. Matching cache variants
 // (for example Graceful recolours) are resolved below; decorative gloves are not implied safe.
@@ -152,6 +154,11 @@ function initializeFarmingData() {
         } else SEEDS.set(crop.seed, crop);
         CROPS.set(key, crop);
     }
+    // Wiki (Auguste's sapling): Enlightened Journey's sapling goes in a tree patch and grows into a willow tree, with
+    // the willow's level, payment, times and experience; the quest words its planting ("farming:plant-rules").
+    // It is given once and can't be had again (Wiki), so a seed-saving relic never keeps it (Patches.plant).
+    SEEDS.set(itemId("Auguste's sapling"), CROPS.get("WILLOW"));
+    ONE_OFF_SAPLINGS.add(itemId("Auguste's sapling"));
 }
 
 const patchKey = (patch) => `${patch.id}:${patch.x}:${patch.y}:${patch.z}`;
@@ -239,4 +246,4 @@ const PET_RATES = {
 };
 const petRate = (crop) => PET_RATES[crop.key] ?? PET_RATES[crop.type];
 
-Object.assign(module.exports, { CACHE, CROPS, SEEDS, WATERED_SEEDLINGS, BELLADONNA_HANDWEAR, itemId, initializeFarmingData, patchKey, patchMinX, patchMinY, WATERABLE, COMPOSTABLE_YIELD, WOOD_TREES, petRate, FORMULAS, diseaseNumerator, stageMinutes, diseasedMinutes });
+Object.assign(module.exports, { CACHE, CROPS, SEEDS, ONE_OFF_SAPLINGS, WATERED_SEEDLINGS, BELLADONNA_HANDWEAR, itemId, initializeFarmingData, patchKey, patchMinX, patchMinY, WATERABLE, COMPOSTABLE_YIELD, WOOD_TREES, petRate, FORMULAS, diseaseNumerator, stageMinutes, diseasedMinutes });

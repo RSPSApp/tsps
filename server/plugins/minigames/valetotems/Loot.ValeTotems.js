@@ -30,10 +30,32 @@ function seedTier(level) {
   return LOOT.seedTiers.find((tier) => level >= tier.level) ?? LOOT.seedTiers[LOOT.seedTiers.length - 1];
 }
 
-/** { id, amount, nests } for this player's next rummage. */
+/** The uniques' row on a league's Boosted drops page. */
+const DROP_SOURCE = "Vale offerings";
+
+/**
+ * The uniques with their weights times what content makes each likelier: "drops:chance"
+ * { player, source, rules } (a league's boosted drops) answers rules on the items' names.
+ */
+function boostedUniques(player) {
+  const rules = [];
+  Shared.api()?.emitCustomEvent?.("drops:chance", { player, source: DROP_SOURCE, rules });
+  return LOOT.uniques.map((entry) => {
+    const name = String(Shared.itemName(Shared.obj(entry.item)));
+    const multiplier = rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+    return { ...entry, weight: entry.weight * multiplier, base: entry.weight };
+  });
+}
+
+/**
+ * { id, amount, nests } for this player's next rummage. The unique pre-roll grows with the
+ * uniques' boosts averaged over their weights, so each unique is as many times likelier as its own boost.
+ */
 function roll(player) {
-  if (Math.floor(Math.random() * LOOT.uniqueChance) === 0) {
-    return { id: Shared.obj(pick(LOOT.uniques).item), amount: 1 };
+  const uniques = boostedUniques(player);
+  const boost = uniques.reduce((sum, entry) => sum + entry.weight, 0) / uniques.reduce((sum, entry) => sum + entry.base, 0);
+  if (Math.random() * LOOT.uniqueChance < boost) {
+    return { id: Shared.obj(pick(uniques).item), amount: 1 };
   }
   let entry = pick(LOOT.table);
   const level = Shared.level(player, "FLETCHING");

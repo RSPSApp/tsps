@@ -32,6 +32,13 @@ const ENTRANA_BOUNDS = [[2760, 2823, 3328, 3391, 0]];
 const LAUNCH = [2808, 3355, 0];
 const CUTSCENE_AUGUSTE = [2809, 3355, 0];
 const SOUTH_WEST_OF_AUGUSTE = [2808, 3354];
+/**
+ * The tile the player faces as they set a balloon off: south, the way it floats and burns (capture ticks 499 and 575,
+ * the facing sent with zep_set_off_balloon). The teleport into the copy resets the facing; without this the player
+ * kept the way they faced before, and the set-off spotanim, drawn in their orientation, floated off away from the
+ * burning balloon's projectile (issue 6636).
+ */
+const SET_OFF_FACING = [2808, 3354];
 /** The basket scene's spot on the real platform. */
 const BASKET_SPOT = [2808, 3354, 0];
 
@@ -66,6 +73,8 @@ const OPEN_AFTER = 3;
 const BACK_AFTER = 3;
 const FIRST_FADE_IN_AFTER = 9;
 const SECOND_FADE_IN_AFTER = 7;
+/** The first test's talk carries on facing the cutscene Auguste, east (capture tick 509: 11 ticks after the copy opens). */
+const FIRST_FACE_AUGUSTE_AFTER = FIRST_PAUSE - OPEN_AFTER;
 
 /** `ctx`: { setStage(player, stage), stages, onFirstDone(player), onSecondDone(player), onBasketBuilt(player) }. */
 function createScenes(api, ctx) {
@@ -115,6 +124,7 @@ function createScenes(api, ctx) {
 
   /** The balloon goes up: the throw, its spotanim five cycles on, the camera, the fade in and the test jingle. */
   function setOff(player, graphic) {
+    Scenes.face(player, SET_OFF_FACING);
     player.performAnimation(new Animation(ANIM.SET_OFF));
     player.performGraphic(Graphic.delayed(graphic, 5, 0));
     const sender = player.getPacketSender();
@@ -161,6 +171,7 @@ function createScenes(api, ctx) {
           camera(player, [2815, 3350, 525], [2795, 3355, 350], 5, 10);
           player.getPacketSender().sendSoundEffect(SOUND.BURNS, 1, 245, 0);
         });
+        Scenes.later(state.scene, FIRST_FACE_AUGUSTE_AFTER, () => Scenes.face(player, CUTSCENE_AUGUSTE));
       });
     };
   }

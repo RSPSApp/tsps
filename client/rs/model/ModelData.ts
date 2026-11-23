@@ -158,25 +158,40 @@ export class ModelData extends Entity {
 
         let mergedCount = 0;
 
-        // OPTIMIZATION: Build spatial hash map for model1 vertices
-        // This turns O(n*m) nested loop into O(n+m) hash lookup
-        const vertexMap = new Map<string, number[]>();
-        for (let v1 = 0; v1 < model1.usedVertexCount; v1++) {
-            const normal1 = model1.normals[v1];
-            if (normal1.magnitude === 0) {
-                continue;
-            }
-            // Cache-authored wall models can differ vertically by one or two units while
-            // still sharing the same geometric boundary. Hash X/Z exactly, then apply
-            // a narrow Y tolerance when comparing candidates.
-            const key = `${model1.verticesX[v1]},${model1.verticesZ[v1]}`;
-            let indices = vertexMap.get(key);
-            if (!indices) {
-                indices = [];
-                vertexMap.set(key, indices);
-            }
-            indices.push(v1);
+        // Most neighbours (a tile or two over) never touch: when no vertex of model0 can land
+        // inside model1's ranges below, nothing merges and model1's vertices needn't be indexed.
+        if (
+            model0.maxX - offsetX < model1.minX ||
+            model0.minX - offsetX > model1.maxX ||
+            model0.maxZ - offsetZ < model1.minZ ||
+            model0.minZ - offsetZ > model1.maxZ ||
+            model0.minY - offsetY > model1.minHeight + ModelData.MERGE_NORMAL_Y_TOLERANCE
+        ) {
+            return;
         }
+
+        // Spatial hash of model1's vertices (O(n+m) instead of O(n*m)), built when the first
+        // vertex of model0 gets that far.
+        let vertexMap: Map<number, number[]> | undefined;
+        const buildVertexMap = (): Map<number, number[]> => {
+            const map = new Map<number, number[]>();
+            for (let v1 = 0; v1 < model1.usedVertexCount; v1++) {
+                if (model1.normals![v1].magnitude === 0) {
+                    continue;
+                }
+                // Cache-authored wall models can differ vertically by one or two units while
+                // still sharing the same geometric boundary. Hash X/Z exactly, then apply
+                // a narrow Y tolerance when comparing candidates.
+                const key = model1.verticesX[v1] * 0x80000000 + model1.verticesZ[v1];
+                let indices = map.get(key);
+                if (!indices) {
+                    indices = [];
+                    map.set(key, indices);
+                }
+                indices.push(v1);
+            }
+            return map;
+        };
 
         for (let v0 = 0; v0 < model0.usedVertexCount; v0++) {
             const normal0 = model0.normals[v0];
@@ -198,8 +213,8 @@ export class ModelData extends Entity {
 
             // OPTIMIZATION: Hash lookup instead of nested loop. Y is checked separately
             // so tiny cache-authored vertical offsets do not break seam merging.
-            const key = `${x},${z}`;
-            const matchingIndices = vertexMap.get(key);
+            vertexMap ??= buildVertexMap();
+            const matchingIndices = vertexMap.get(x * 0x80000000 + z);
             if (!matchingIndices) {
                 continue;
             }

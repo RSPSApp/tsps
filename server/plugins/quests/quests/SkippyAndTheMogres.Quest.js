@@ -25,8 +25,8 @@
  * The reward (Wiki: "The ability to slay mogres at 32 Slayer") is the Slayer task:
  * `slayer-masters.json` gated the Mogres task on this key once it existed.
  *
- * Nettle tea and the hangover cure are made by GhostsAhoy.Quest.js and
- * PlagueCity.Quest.js, which own those recipes.
+ * Nettle tea is made by the Cooking skill (skills/cooking/NettleTea.Cooking.js and cooking.json),
+ * the hangover cure by PlagueCity.Quest.js, which owns that recipe.
  *
  * Gaps:
  * - The transcript only documents Sober-Up before the quest (without a bucket)

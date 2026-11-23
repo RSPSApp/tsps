@@ -282,6 +282,20 @@ test("Herb sack base level and existing open seed boxes are checked", async (t) 
     assert.equal(f.score().points, 500);
 });
 
+test("a banked seed box placeholder (amount 0) does not block buying one (issue 6601)", async (t) => {
+    const f = shopper(t);
+    f.open();
+    f.p.getBank(0).setItem(0, new core.Item(Data.itemId("Seed box"), 0));
+    assert.equal(f.p.getBank(0).getValidItems().length, 1, "the bank keeps the placeholder as a valid item");
+    await purchase(f, 10);
+    assert.notEqual(f.score().points, 500, "the purchase went through");
+    assert.equal(f.p.getInventory().getAmount(Data.itemId("Seed box")), 1);
+    f.p.getBank(0).setItem(0, new core.Item(Data.itemId("Seed box"), 1));
+    const points = f.score().points;
+    await purchase(f, 10);
+    assert.equal(f.score().points, points, "a real banked seed box still blocks a second");
+});
+
 test("both body types can return every purchased outfit piece through the native refund dialogue", async (t) => {
     for (const female of [false, true])
         for (const [index, price] of [

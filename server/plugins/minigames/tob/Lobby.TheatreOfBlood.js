@@ -329,7 +329,8 @@ function answerApplicant(player, party, index, accept, { notifyApplicant = true,
     }
     if (party.accept(applicant)) {
       if (notifyApplicant) {
-        applicant.sendMessage(`Your application to the party of ${Shared.displayName(party.leader)} has been accepted.`);
+        const leaderName = Shared.displayName(party.leader).replaceAll(" ", "\u00a0");
+        applicant.sendMessage(`Your application to the party of ${leaderName} has been accepted.`);
       }
       if (deferHud) {
         // 227/00553 ticks 11915–11916: the message arrives one tick before party status 6440.

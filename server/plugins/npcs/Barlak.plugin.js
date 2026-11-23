@@ -212,7 +212,13 @@ function payShells(player, kind) {
   const shell = kind ? lookup().shells[kind] : null;
   const held = kind ? shellCounts(player, kind) : { plain: 0, perfect: 0 };
   const count = held.plain + held.perfect;
-  if (!count || !coinsFit(player, count * SHELL_PRICE, 1)) return stopTalking(player);
+  if (!count) return stopTalking(player);
+  if (!coinsFit(player, count * SHELL_PRICE, 1)) {
+    // Ours: a coin stack that can't take the price; nothing is sold.
+    stopTalking(player);
+    player.sendMessage(NO_ROOM);
+    return;
+  }
   const inventory = player.getInventory();
   if (held.plain) inventory.delete(shell.plain, held.plain);
   if (held.perfect) inventory.delete(shell.perfect, held.perfect);

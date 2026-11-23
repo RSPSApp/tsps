@@ -315,6 +315,21 @@ test("no room for the coins (full inventory, bones banked): nothing sold, and a 
   assert.ok(messages.includes("You don't have enough inventory space."), messages.join(" | "));
 });
 
+test("a coin stack that can't take a shell's price: nothing sold, and a message says why (review r2)", (t) => {
+  const player = actor(t);
+  put(player, 0, ids.coins, 2147483547);
+  put(player, 1, ids.tortoise);
+  const messages = [];
+  t.mock.method(player, "sendMessage", (text) => { messages.push(String(text)); });
+  talk(player);
+  spoken(player);
+  choose(player, 1);
+  spoken(player);
+  assert.equal(player.getInventory().getAmount(ids.tortoise), 1);
+  assert.equal(coins(player), 2147483547);
+  assert.ok(messages.includes("You don't have enough inventory space."), messages.join(" | "));
+});
+
 test("nothing to sell: his usual conversation", (t) => {
   const player = actor(t);
   talk(player);

@@ -44,7 +44,8 @@ transcript's shell conditions, fills its `[X] gp` and pays.
 ## Ours
 
 - A full inventory with every bone banked (no room for the coins): nothing is sold, the chat
-  closes and "You don't have enough inventory space." is sent.
+  closes and "You don't have enough inventory space." is sent. The same line is sent when the
+  coin stack can't take the price (bones or shells), though the cause is the stack, not space.
 - The items gone before his "Thanks" line: nothing is paid and the chat closes.
 - The transcript's "same as above" after "It's a giant snail shell!" (his tortoise variant, every
   branch) goes on as his snail shell variant; the perfect-shell branches reach it through a called

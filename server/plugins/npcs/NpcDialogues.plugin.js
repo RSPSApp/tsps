@@ -954,6 +954,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
    * option left after its conditions takes it without asking.
    */
   function presentMenu(menu, offset = 0, tail = [], via = null) {
+    // A menu breaks the line-then-call link the called-branch jump rule relies on.
+    context.lastSpoken = undefined;
     if (cancelled) return;
     const { step, rest, record } = menu;
     context.currentMenu = menu;

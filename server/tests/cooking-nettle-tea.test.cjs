@@ -94,6 +94,28 @@ test('nettles on a bowl of water: nettle-water a tick later in the bowl\'s slot 
   assert.equal(p.getSkillManager().getExperience(core.Skill.COOKING), xp, 'no XP (Wiki Nettle-water)');
 });
 
+test('with two bowls, the clicked bowl takes the nettle-water', (t) => {
+  const { p, inv } = setup(t, ['bowl_water', null, 'nettles_picked', 'bowl_water']);
+  const items = inv.getItems();
+  assert.equal(PM.emitItemOnItem({ player: p, usedItem: items[3], usedItemId: obj('bowl_water'), usedItemSlot: 3,
+    usedWithItem: items[2], usedWithItemId: obj('nettles_picked'), usedWithItemSlot: 2, handled: false }), true);
+  ticks(1);
+  assert.equal(at(inv, 3), obj('bowl_nettlewater'));
+  assert.equal(at(inv, 0), obj('bowl_water'));
+  assert.equal(at(inv, 2), -1);
+});
+
+test('boiling needs 20 Cooking: at 19 a message box, the nettle-water kept, no XP', (t) => {
+  const { p, object, sent, inv } = setup(t, ['bowl_nettlewater'], 19);
+  const xp = p.getSkillManager().getExperience(core.Skill.COOKING);
+  cookOn(p, object, 'bowl_nettlewater');
+  ticks(4);
+  assert.equal(inv.getAmount(obj('bowl_nettlewater')), 1);
+  assert.equal(inv.getAmount(obj('bowl_nettletea')), 0);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.COOKING), xp);
+  assert.equal(sent.statements.length, 1);
+});
+
 test('nettle-water needs 20 Cooking (Wiki Nettle-water)', (t) => {
   const { sent, inv, p } = setup(t, ['nettles_picked', 'bowl_water'], 19);
   useOn(p, 'nettles_picked', 'bowl_water');

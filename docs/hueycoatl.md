@@ -105,7 +105,7 @@ Champion, Adept and Veteran finish from the kill count. The fight decides the re
 - The glowing symbol's circle (loc 55209, model 54454, animation 11730) lies at ground level (model y 0 to +3). The OSRS client paints scenery over the terrain without a depth test; our GPU client depth-tests it, so on sloped ground the circle sinks under the terrain and only its rising parts show. A client fix, not this plugin's.
 
 - Where the chain's climb back lands and the private fight's fee messages remain estimated; running Peek lines now use the Wiki Strategies source.
-- Issue #3558's missing/misplaced skeletal body cave models remain unresolved. The tail's angles are from April 2026 recordings; the 30 September 2026 update "Fixed Hueycoatl's tail spawning in the wrong orientation" postdates every recording.
+- Issue #3558's report of missing or misplaced body cave models was checked side by side with live (2026-11-23): the five caves look the same, so nothing changed there. The tail's angles are from April 2026 recordings; the 30 September 2026 update "Fixed Hueycoatl's tail spawning in the wrong orientation" postdates every recording.
 - Live turns off the tail's menu ops while it sinks and is hidden (npc `enabled_ops` 0, Attack only while shown); tsps has no NPC ops packet, so the hidden tail is protected by the fight's own checks only.
 - The seer's body- and tail-phase lines play on segment deaths and tail swaps; live's exact cadence was not worked out.
 - Tome of Earth, the dragon hunter wand and the hide armour are items of their own; this covers only dropping them.

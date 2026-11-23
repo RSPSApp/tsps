@@ -24,6 +24,8 @@ const Stats = require("./Stats.TheatreOfBlood");
 
 const { INTERFACE, SCRIPT, VARP, VARBIT } = Shared;
 const { RIGHTS } = Parties;
+const MESSAGE_BOX = 229;
+const USED_NOTICE_BOARD_ATTRIBUTE = "tob:used-notice-board";
 
 const uid = (group, component) => (group << 16) | component;
 /**
@@ -209,10 +211,12 @@ function openInformation(player, party) {
  */
 function chooseMode(player, party) {
   const set = (mode) => {
+    if (!party.isLeader(player) || party.raid) return;
     if (mode === "hard" && !party.members.every(Stats.canPlayHard)) {
       player.sendMessage(HARD_LOCKED);
     } else {
       party.mode = mode;
+      player.setAttribute(Parties.DEFAULT_MODE_ATTRIBUTE, mode);
     }
     refreshParty(party);
     openInformation(player, party);
@@ -460,12 +464,59 @@ function callOver(player) {
   Shared.npcSay(player, Shared.NPC.MYSTERIOUS_STRANGER, "Hey. Over here.");
 }
 
+/** Open the list behind the message box, then close the chatbox without removing the list. */
+function statementThenOverview(player, text) {
+  const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = Shared.core();
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new StatementDialogue(0, text),
+    new ActionDialogue(1, { execute: () => {
+      openOverview(player);
+      player.getPacketSender().closeInterface(MESSAGE_BOX);
+    } }),
+  ));
+}
+
+function syncNoticeBoardFlag({ player }) {
+  if (player.getAttribute(USED_NOTICE_BOARD_ATTRIBUTE)) {
+    player.getPacketSender().sendVarbit(VARBIT.USED_NOTICE_BOARD, 1);
+  }
+}
+
+/** Captured in 227/00101 ticks 25574–25608, 234/03285 ticks 23940–23950 and 237/01162 ticks 12855–12866. */
+function introduceNoticeBoard(player) {
+  const { DialogueChainBuilder, StatementDialogue, OptionDialogue } = Shared.core();
+  const introduction = [
+    "From this notice board, you can form or join a Theatre of Blood",
+    "raiding party. The raid has three difficulty modes to select from. If",
+    "you're forming your own party, you can pick what mode you want.",
+    "If you have limited raiding experience, you'll likely want to start with",
+    "Entry Mode. Otherwise, you might prefer Normal Mode.",
+  ].join("<br>");
+  const experience = new OptionDialogue(1, { executeOption: (option) => {
+    const mode = option === 1 ? "entry" : "normal";
+    player.setAttribute(Parties.DEFAULT_MODE_ATTRIBUTE, mode);
+    player.setAttribute(USED_NOTICE_BOARD_ATTRIBUTE, true);
+    syncNoticeBoardFlag({ player });
+    statementThenOverview(player,
+      `When you form a raiding party, it will be set to ${Shared.MODES[mode].name} Mode. If<br>`
+      + "you wish to pick a different difficulty mode, you can do so at any<br>"
+      + "time from this notice board.");
+  } }, "Not very experienced. I'll start with Entry Mode.", "Quite experienced. I'll start with Normal Mode.")
+    .setTitle("How experienced are you with raids?");
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new StatementDialogue(0, introduction),
+    experience,
+  ));
+}
+
 function readNoticeBoard({ player }) {
   if (!hasMetStranger(player)) {
     callOver(player);
-    return true;
+  } else if (player.getAttribute(USED_NOTICE_BOARD_ATTRIBUTE)) {
+    openOverview(player);
+  } else {
+    introduceNoticeBoard(player);
   }
-  openOverview(player);
   return true;
 }
 
@@ -575,10 +626,13 @@ module.exports = function registerTheatreLobby(api) {
   api.persistAttribute(ATTR.WARNED);
   api.persistAttribute(ATTR.NO_CRYSTAL_PROMPT);
   api.persistAttribute(ATTR.MET_STRANGER);
+  api.persistAttribute(USED_NOTICE_BOARD_ATTRIBUTE, false);
+  api.persistAttribute(Parties.DEFAULT_MODE_ATTRIBUTE, "normal");
   api.onNpcInteraction("Mysterious Stranger", { "Talk-to": talkToStranger });
   api.onZoneEnter(Shared.VER_SINHAZA, enterVerSinhaza);
   api.onZoneExit(Shared.VER_SINHAZA, leaveVerSinhaza);
   api.onPlayerLogout(logoutFromLobby);
+  api.onPlayerLogin(syncNoticeBoardFlag);
   api.onServerStartup(announceActivity);
   Shared.onObject(api, Shared.OBJECT.NOTICE_BOARD, readNoticeBoard);
   Shared.onObject(api, Shared.OBJECT.ENTRANCE, useEntrance);

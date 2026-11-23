@@ -264,3 +264,26 @@ test("Guide prices is refused while fighting and opens once the fight is over", 
   assert.equal(f.messages.filter((m) => m === PRICES_REFUSAL).length, 1, "no second refusal");
   assert.equal(f.p.getInterfaceId(), 464, "it opens once the goblin is gone");
 });
+
+test("a make-X loop (fletching Make-All) ends on the open, as a walk click ends it", async (t) => {
+  // Live leaves a make-X under this screen unrecorded; tsps stops it as a walk click does.
+  const { ItemIdentifiers: I } = core;
+  const f = actor(t);
+  f.p.getSkillManager().setMaxLevels(core.Skill.FLETCHING, 99, false).setCurrentLevels(core.Skill.FLETCHING, 99, false);
+  const inv = f.p.getInventory();
+  inv.setItem(0, new core.Item(I.KNIFE));
+  for (let slot = 1; slot <= 10; slot++) inv.setItem(slot, new core.Item(I.LOGS));
+  await send(f, { type: "inventory_use_on", slot: 0, itemId: I.KNIFE, target: { kind: "inventory", slot: 1, itemId: I.LOGS } });
+  const menu = f.p.getCreationMenu();
+  assert.ok(menu, "the knife on logs offers the make menu");
+  const index = menu.getItems().indexOf(I.ARROW_SHAFT);
+  assert.ok(index >= 0);
+  await send(f, { type: "dialogue_continue", widgetId: (270 << 16) | (15 + index), childIndex: 10 });
+  ticks(4);
+  const logs = inv.getAmount(I.LOGS);
+  assert.ok(logs < 10, "the Make-All has started");
+  await send(f, STATS_BUTTON);
+  assert.equal(f.p.getInterfaceId(), STATS_INTERFACE);
+  ticks(20);
+  assert.equal(inv.getAmount(I.LOGS), logs, "no more logs are cut behind the screen");
+});

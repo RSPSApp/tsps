@@ -77,6 +77,7 @@ export class Combat {
     private target: Mobile | null = null;
     private autoRetaliating = false;
     private attacker: Mobile | null = null;
+    private dyingOpponent: Mobile | null = null;
     /** Cycle of the last hit an attacker landed on this character, -1 when combat was cleared. */
     private lastAttackedCycle = -1;
     /** Cycle of the last hit a player landed on this character (any damage, splashes included), -1 when never. */
@@ -832,7 +833,6 @@ export class Combat {
         if (this.autoRetaliating || this.target === this.attacker) this.reset();
     }
     public getHitQueue(): HitQueue { return this.hitQueue; }
-    private dyingOpponent: Mobile | null = null;
     public getAttacker(): Mobile | null { return this.attacker; }
     public setUnderAttack(attacker: Mobile | null): void {
         this.lastAttackedCycle = attacker ? World.getProcessCycle() : -1;
@@ -863,11 +863,6 @@ export class Combat {
     }
 
     /**
-     * A monster's death ends the PJ timer it held on this character, so the next aggressive
-     * monster can engage on the kill tick. The 16-tick logout timer is separate and keeps
-     * running from `lastAttackedCycle`.
-     */
-    /**
      * An opponent (target or attacker) that has started dying: live still counts the fight until
      * it is removed (rsprox 227/01885 t20818-20821, 240/1001355 t1962-1969). NPC.appendDeath notes it.
      */
@@ -875,6 +870,11 @@ export class Combat {
         if (this.target === opponent || this.attacker === opponent) this.dyingOpponent = opponent;
     }
     public getDyingOpponent(): Mobile | null { return this.dyingOpponent; }
+    /**
+     * A monster's death ends the PJ timer it held on this character, so the next aggressive
+     * monster can engage on the kill tick. The 16-tick logout timer is separate and keeps
+     * running from `lastAttackedCycle`.
+     */
     public clearAttackerIf(attacker: Mobile): void {
         if (this.attacker === attacker) this.applyAttacker(null);
     }

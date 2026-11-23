@@ -43,7 +43,9 @@ recorded. On one tick during the passageway, a mix of worn-items clicks got "Ple
 what you're doing before opening this menu." (228/02229 t238). That capture can't tell which
 button sent it, so tsps sends nothing.
 
-In tsps this is `Player.stopAction()`, called by `EquipmentStats.plugin.js`
+In tsps this is `Player.stopAction()`, which also ends every task keyed to the player, as a walk
+click does, so a make-X loop (a fletching Make-All) stops too. Live's make-X case is not recorded.
+It is called by `EquipmentStats.plugin.js`
 (`openFromWornItems`). Ours: "being hit" uses the combat attacker window (8 ticks after an NPC's
 hit, `Combat.ts`). Live's window after walking out of reach is not recorded.
 

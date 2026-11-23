@@ -111,3 +111,17 @@ test("the heat lands as real damage through the hit queue", () => {
   p.getCombat().getHitQueue().process(core.World.getProcessCycle());
   assert.equal(p.getHitpoints(), 95);
 });
+
+test("the real diary plugin's claimed elite Kourend & Kebos reward protects; a hard one doesn't", () => {
+  const Diaries = require("../plugins/achievements/AchievementDiaries.plugin");
+  const api = PluginManager.createApi("KaruulmExtremeHeatTest");
+  Diaries.register(api);
+  Karuulm.register({ ...api, core, registerArea() {}, emitCustomEvent: api.emitCustomEvent.bind(api) });
+  const { isProtected } = Karuulm._test;
+  const elite = player(1312, 10216, 0);
+  elite.setAttribute("achievement-diaries:rewards", { kourend: ["easy", "medium", "hard", "elite"] });
+  assert.equal(isProtected(elite), true);
+  const hard = player(1312, 10216, 0);
+  hard.setAttribute("achievement-diaries:rewards", { kourend: ["easy", "medium", "hard"] });
+  assert.equal(isProtected(hard), false);
+});

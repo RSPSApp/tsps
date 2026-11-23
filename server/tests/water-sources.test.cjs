@@ -73,6 +73,9 @@ test('Neypotzli entrance fountainhead fills each empty bucket, one per tick', ()
   assert.equal(p.count(I.BUCKET), 0);
   assert.equal(p.count(I.BUCKET_OF_WATER), 2);
   assert.deepEqual(p.spam, ['You fill the bucket.'], 'only the first fill sends the line');
+  h.tick();
+  assert.equal(h.tasks[0].isRunning(), false, 'the repeat stops with no empty bucket left');
+  assert.deepEqual(p.animations, [832, 832]);
 });
 
 test('Blue Moon chamber fountainhead refills a waterskin', () => {

@@ -254,12 +254,7 @@ function addAnimation(root, { name, files, library, replace, id: requested }, co
     const checked = wrap(() => Files.animationFiles(all, `animation ${label}`, core.CacheDefinitions));
     const keep = Files.animationKeeps(all, checked);
     if (totalSize(keep) > ASSET_KINDS.animation.maxBytes) throw error(`The animation is ${totalSize(keep)} bytes; the cap is ${ASSET_KINDS.animation.maxBytes}`);
-    // Players get each animation in one content packet: check the row they would get, as the server
-    // builds it at startup (any frame group: the row is the same size), before storing anything.
     if (typeof core.encodeContentData !== "function") throw error("The animation's packet size can't be checked here", 500);
-    if (!Files.fitsPacket(core.encodeContentData, Files.animationRow(checked, 0, "animation", 0x7fff))) {
-        throw error("The animation is too big for one content packet; use fewer or smaller frames", 413);
-    }
     const hash = folderHash(keep);
     const document = Document.read(root);
     // An id asked for is a new row, even for files already stored under another.
@@ -270,6 +265,15 @@ function addAnimation(root, { name, files, library, replace, id: requested }, co
     const id = replace === undefined ? nextId(document, "animation", root, requested) : Number(replace);
     const rowName = replace === undefined ? folderName("animation", name, library ? library.split("/").filter(Boolean).join("_") : `animation_${id}`) : undefined;
     if (rowName) checkName(document, "animation", rowName, id, core);
+    // Players get each animation in one content packet: check the row they would get, as the server
+    // builds it at startup (its id, name and frame group, which all change the compressed size),
+    // before storing anything.
+    const animations = (document.assets ?? []).filter((row) => row.kind === "animation");
+    const finalName = rowName ?? animations.find((row) => row.id === id)?.name ?? "";
+    const group = Files.FIRST_FRAME_GROUP + animations.filter((row) => row.id < id).length;
+    if (!Files.fitsPacket(core.encodeContentData, Files.animationRow(checked, id, finalName, group))) {
+        throw error("The animation is too big for one content packet; use fewer or smaller frames", 413);
+    }
     storeFolder(root, "animation", hash, keep);
     return commit(root, document, {
         kind: "animation", id, name: rowName, file: `animation/${hash}`, hash, size: totalSize(keep),

@@ -82,6 +82,15 @@ function player({ weapon = DRAMEN_STAFF, inventory = [], at = new Location(3129,
   let dyingReturn = false;
   let open = -1;
   const item = (id) => ({ getId: () => id });
+  let blocked = false;
+  let generation = 0;
+  const queue = {
+    reset() { return queue; },
+    handleRegionChange() {},
+    isMovementBlocked: () => blocked,
+    setBlockMovement(value) { blocked = value; generation++; return queue; },
+    getBlockMovementGeneration: () => generation,
+  };
   const sender = {
     getVarbit: (id) => varbits.get(id) ?? 0,
     sendVarbit: (id, value) => (varbits.set(id, value), log(`varbit ${id}=${value}`), sender),
@@ -112,7 +121,7 @@ function player({ weapon = DRAMEN_STAFF, inventory = [], at = new Location(3129,
     getHitpoints: () => hitpoints,
     isDyingReturn: () => dyingReturn,
     getInterfaceId: () => open,
-    getMovementQueue: () => ({ reset() {}, handleRegionChange() {} }),
+    getMovementQueue: () => queue,
     setLocation: (to) => { location = to; log(`step ${to.getX()},${to.getY()}`); },
     setWalkingDirection: (direction) => log(`walk ${direction === Direction.SOUTH ? "SOUTH" : "other"}`),
     moveTo: (to) => { teleportSerial++; location = to; log(`teleport ${to.getX()},${to.getY()}`); },
@@ -224,6 +233,45 @@ test("Confirm: the last destination, a step onto the ring, then the fairy telepo
   assert.equal(rec.p.getAttribute(T.USED_CODES_ATTRIBUTE), "AJR", "now in the travel log");
 });
 
+test("the fairy teleport holds the player from Confirm until the tick after busy clears", () => {
+  const rec = player({ at: new Location(RING.x, RING.y + 1, 0) });
+  const queue = rec.p.getMovementQueue();
+  T.openDial({ player: rec.p, location: RING });
+  T.setDials(rec.p, "AJR");
+  click(rec.p, 398, 26);
+  assert.equal(queue.isMovementBlocked(), true, "held from the click");
+  const held = [];
+  const busy = [];
+  for (let i = 0; i < 7; i++) {
+    runTicks(rec, 1);
+    held.push(queue.isMovementBlocked());
+    busy.push(rec.varbits.get(12393) ?? 0);
+  }
+  // The flowers, the vanish, the arrival, then busy clears; the hold goes at the start of the next tick.
+  assert.deepEqual(busy, [0, 1, 1, 1, 1, 0, 0]);
+  assert.deepEqual(held, [true, true, true, true, true, true, false]);
+  assert.equal(rec.varbits.get(12393), 0);
+});
+
+test("the fairy teleport never takes or gives back a hold it doesn't own", () => {
+  const rec = player();
+  const queue = rec.p.getMovementQueue();
+  queue.setBlockMovement(true);
+  T.setDials(rec.p, "AJR");
+  T.confirmDial(rec.p);
+  runTicks(rec, 7);
+  assert.equal(queue.isMovementBlocked(), true, "another system's hold stays");
+
+  const other = player();
+  const otherQueue = other.p.getMovementQueue();
+  T.setDials(other.p, "AJR");
+  T.confirmDial(other.p);
+  assert.equal(otherQueue.isMovementBlocked(), true);
+  otherQueue.setBlockMovement(true); // taken over by something else mid-teleport
+  runTicks(other, 7);
+  assert.equal(otherQueue.isMovementBlocked(), true, "a hold taken since stays");
+});
+
 test("pending AIR and BIS fairy travel stops after teleport, movement, private-area change, or death", () => {
   const originalEmit = core.PluginManager.emitCustomEvent;
   const arrivals = [];
@@ -264,6 +312,7 @@ test("pending AIR and BIS fairy travel stops after teleport, movement, private-a
         }
         assert.equal(rec.p.getAttribute(T.USED_CODES_ATTRIBUTE), undefined, `${code} was not recorded after ${interruption}`);
         assert.equal(rec.varbits.get(12393), 0, "the cancelled travel releases the busy state");
+        assert.equal(rec.p.getMovementQueue().isMovementBlocked(), false, `${code} gives back its hold after ${interruption}`);
       }
     }
   } finally {
@@ -844,6 +893,38 @@ test('Fairytale II: permission and the four-code hideout route through real ring
     assert.equal(p.getInterfaceId(), 398);
     p.getEquipment().set(core.Equipment.WEAPON_SLOT, new core.Item(-1));
     button(p, 26); ticks(p); assert.deepEqual(at(p), [RING.x, RING.y, 0]);
+  });
+  await t.test('walk clicks during the fairy teleport do nothing; one the tick after busy clears walks', async t => {
+    const { p } = actor(t);
+    const connection = new ClientConnection(p.getSession().getChannel());
+    connection.player = p;
+    const air = T.rings().get('AIR').destination;
+    // Each tick as the world runs it: tasks, then the player's input, then their movement.
+    const tick = async (click) => {
+      core.TaskManager.process();
+      if (click) {
+        await connection.dispatch([{ type: 'move', worldX: click.getX(), worldY: click.getY(), modifierFlags: 0 }]);
+        connection.processTurnPackets();
+      }
+      p.getMovementQueue().process();
+      p.setNeedsPlacement(false);
+    };
+    dial(p, 'AIR');
+    const ring = new Location(RING.x, RING.y, 0);
+    const beside = new Location(RING.x, RING.y + 2, 0);
+    const trail = [];
+    // The flowers came with the click: three ticks of the vanish, the arrival, busy clearing, a click on each.
+    for (let n = 0; n < 5; n++) {
+      await tick(n < 3 ? beside : new Location(air.getX(), air.getY() + 2, air.getZ()));
+      trail.push(at(p));
+    }
+    assert.deepEqual(trail.slice(0, 3), [at({ getLocation: () => ring }), at({ getLocation: () => ring }), at({ getLocation: () => ring })],
+      'still on the ring until the teleport');
+    assert.deepEqual(trail.slice(3), [[air.getX(), air.getY(), air.getZ()], [air.getX(), air.getY(), air.getZ()]],
+      'the clicks on the arrival and busy-clear ticks do nothing');
+    assert.equal(p.getPacketSender().getVarbit(12393), 0);
+    await tick(new Location(air.getX(), air.getY() + 2, air.getZ()));
+    assert.notDeepEqual(at(p), [air.getX(), air.getY(), air.getZ()], 'a click on the next tick walks that tick');
   });
   await t.test('sequence state belongs to each player and logout clears an incomplete route', t => {
     const a = actor(t).p, b = actor(t).p;

@@ -61,20 +61,27 @@ owed ("Sandbags.|Silk.|Bowl.|Never mind." at 757 and 765, "Sandbags.|Bowl.|Never
   projectile from two tiles south to eight (2583-2586).
 - An empty sack on the sand pit: one sandbag a use, "You fill the bag with sand." (spam), zep_fill_sandbag 5155 and
   sand_bucket 2584 (799-825).
-- The capture bought its 12 willow branches and destroyed the sapling; planting and cutting follow the Wiki.
+- The capture bought its 12 willow branches and destroyed the sapling; planting and cutting follow the Wiki. Auguste's
+  sapling goes in any tree patch and the Farming plugin grows it as a willow tree (Wiki: Auguste's sapling): the
+  willow's level, payment, growth and XP, its pot left over, the transcript's "You have now planted Auguste's sapling.
+  He will not give you any more." and "You plant the special willow sapling in the tree patch." in place of Farming's
+  own line. Its branches are any willow's (docs/farming.md, "Willow branches"). Before issue 6636 it went into a
+  private record and nothing grew on the patch; such a record gives the sapling back at login while the basket still
+  needs branches (ours).
 
 ## Scenes
 
 - **First experiment** (zep_quest 20, holding the plain origami balloon; 492-540): "Wonderful! I'll take that..."
   continued fades out; three ticks later a copy of Entrana (chunks from 345,416) with the player on (2808,3355), the
   cutscene Auguste (zep_piccard_cutscene 4716) beside them facing south-west, the side tabs closed; a tick later the
-  throw and spotanim 880, the camera (2810,3358,400) looking at (2809,3355,300), the fade in and jingle 116; three
+  throw and spotanim 880 with the player facing south (2808,3354), the way the balloon floats (the copy's teleport
+  resets the facing; issue 6636), the camera (2810,3358,400) looking at (2809,3355,300), the fade in and jingle 116; three
   ticks after that the burning projectile 882 and a slow pan. The talk carries on fourteen ticks after the continue,
-  with the cutscene Auguste's head. "We're doomed." continued fades out; three ticks later the copy is gone, the
+  with the cutscene Auguste's head, the player turned east to him (509). "We're doomed." continued fades out; three ticks later the copy is gone, the
   player back where they stood, zep_quest 40 and the balloon taken; the fade in six ticks after that.
 - **Second experiment** (zep_quest 40; 566-606): "Commendable..." continued fades out; three ticks later the copy,
   with zep_peasant_1-4 (4724-4727) south-east facing south. They walk west under the balloon tile by tile as
-  recorded; peasant 1 shouts "Burn, stab, burn!", "Destroy the floating thing!" and "We are peasants against science!"
+  recorded; the set-off with the player facing south (575); peasant 1 shouts "Burn, stab, burn!", "Destroy the floating thing!" and "We are peasants against science!"
   overhead (578, 586, 590); the projectile 878, the on-fire spotanim 879 on (2808,3349). At 592 zep_quest 60, the
   materials taken, the player shrugs (2113) and says "Well, that went down like a lead balloon."; its continue ends
   the scene as the first, the fade in seven ticks later.
@@ -100,6 +107,9 @@ the Grand Tree's waterfalls (zep_waterfall 5157) were wrong.
   with one set, "Okay." flies by it, asking "Use logs from inventory | Use logs from storage" a tick later only when
   "ask" is set and both can pay (1638-1640, 1996-1997). The storage count is told even when the inventory paid (2001).
 - Take-off and landing toggle cutscene_status, gravestone_tli_hide and cutscene_force_sidepanel with the minimap.
+- Every take-off runs toplevel_mainmodal_background (917) with (0, 0) just before zep_interface opens (1640, 2001,
+  2995, 3045, 3355, 3519, 3696): the backdrop behind the controls is solid black, so the world doesn't show round
+  them (issue 6636).
 - Arrivals: "You arrive safely in Taverley." (2102), "at the Gnome Stronghold." (3149), "at the Crafting Guild."
   (3453), "at Castle Wars." (3640), "in Varrock." (3799).
 
@@ -143,6 +153,9 @@ again) in place of the Wiki's "previous".
   the copy; the chat now stays while a scene plays (self-review).
 - **fixed** Old saves at compact stage 1 moved to zep_quest 10, below what they had sent (20) (self-review).
 - **fixed** The bail message box left an empty chat open; the quest flight asked the log question every time.
+- **fixed** (issue 6636) In both experiments the player kept the way they faced before the copy, so the set-off balloon
+  floated away from where it burns; the sapling planted into nothing; willow branches were all six at once from
+  Check-health; the flight showed the world round its controls.
 
 ## Runs
 
@@ -158,4 +171,5 @@ again) in place of the Wiki's "previous".
   four options, the balloon map, the trip to Entrana with the search; Entrana's first and second talk.
 - **Clips:** second experiment, basket, take-off and bail, Entrana trip: no black screen, camera back on the player.
   The first experiment ran headless (the vision login closed the talk); its end screenshot was clean.
-- **Not checked:** the sapling's planting and growth, the replacement purchase, the Quest Helper overlay.
+- **Not checked:** the sapling's planting and growth, the replacement purchase, the Quest Helper overlay (the
+  planting and the branches are checked by tests since issue 6636).

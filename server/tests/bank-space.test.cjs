@@ -525,3 +525,21 @@ test("once the bank is closed, a gap no longer holds its slot of the space", () 
   assert.equal(Bank.freeSlots(player), 1);
   assert.equal(player.getBank(1).getFreeSlots(), 1);
 });
+
+test("a closed full bank takes nothing new into a gap left behind, and reports no room", () => {
+  capacity(3);
+  const player = createPlayer();
+  // Tab 0 is [2000, gap, 2002] and tab 1 [2003]: 3 items in a space of 3, and the bank is closed.
+  player.getBank(0).setItem(0, new Item(2000, 1));
+  player.getBank(0).setItem(2, new Item(2002, 1));
+  player.getBank(1).setItem(0, new Item(2003, 1));
+  assert.equal(Bank.isOpen(player), false);
+  assert.equal(Bank.usedSlots(player), 3);
+  assert.equal(player.getBank(0).getFreeSlots(), 0);
+
+  player.inventory.add(new Item(3000, 1), false);
+  player.inventory.switchItem(player.getBank(0), new Item(3000, 1), false, 0, false);
+  assert.ok(player.messages.includes("Not enough space in bank."));
+  assert.equal(player.inventory.getAmount(3000), 1, "the refused item stays in the inventory");
+  assert.equal(Bank.usedSlots(player), 3);
+});

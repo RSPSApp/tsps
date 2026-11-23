@@ -285,8 +285,13 @@ export class Bank extends ItemContainer {
         return Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft() + this.gaps().length);
     }
 
-    /** The empty slots this tab still shows. */
+    /**
+     * The empty slots this tab still shows. Only the open bank has them: once it is closed a gap holds no
+     * space (see usedSlots), so it is no extra room either.
+     */
     private gaps(): number[] {
+        const player = this.getPlayer();
+        if (player == null || !Bank.isOpen(player)) return [];
         const gaps: number[] = [];
         const shown = this.shownSlots();
         for (let slot = 0; slot < shown; slot++) if ((this.items[slot]?.getId() ?? -1) < 0) gaps.push(slot);

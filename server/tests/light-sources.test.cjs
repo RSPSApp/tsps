@@ -627,16 +627,17 @@ const LANTERN_REFUSAL = "Extinguishing the lantern would leave you without a lig
 const CANDLE_REFUSAL = "Extinguishing the candle would leave you without a light source.";
 const DROP_REFUSAL = "Dropping that would leave you without a light source.";
 
-for (const [label, lit, unlit] of [
-  ["white", I.CANDLE_LANTERN_3, I.CANDLE_LANTERN],
-  ["black", I.CANDLE_LANTERN_6, I.CANDLE_LANTERN_4],
+for (const [label, lit, unlit, name] of [
+  ["white candle", I.CANDLE_LANTERN_3, I.CANDLE_LANTERN, "Candle lantern"],
+  ["black candle", I.CANDLE_LANTERN_6, I.CANDLE_LANTERN_4, "Candle lantern"],
+  ["emerald", I.EMERALD_LANTERN_2, I.EMERALD_LANTERN, "Emerald lantern"],
 ]) {
-  test(`${label} candle lantern: Extinguish makes the unlit lantern in its slot, 'You extinguish the lantern.' as spam`, async (t) => {
+  test(`${label} lantern: Extinguish makes the unlit lantern in its slot, 'You extinguish the lantern.' as spam`, async (t) => {
     const f = actor(t);
     const seen = watchLanternPackets(t, f);
     const selected = item(lit).setMetaValue(core.Item.PRESET_META, true);
     f.inv.setItem(0, item(I.TINDERBOX)); f.inv.setItem(1, selected);
-    assert.equal(core.CacheDefinitions.getItem(lit).name, "Candle lantern");
+    assert.equal(core.CacheDefinitions.getItem(lit).name, name);
     await extinguish(f, 1);
     assert.deepEqual(carried(f), [I.TINDERBOX, unlit]);
     assert.equal(f.inv.getItems()[1], selected, "the same instance, so its marks stay");
@@ -683,6 +684,7 @@ for (const [label, lit] of [["lit candle", I.LIT_CANDLE], ["lit black candle", I
 }
 
 for (const [label, lit, filled] of [
+  ["emerald lantern", I.EMERALD_LANTERN_2, I.EMERALD_LANTERN],
   ["oil lantern", I.OIL_LANTERN_3, I.OIL_LANTERN],
   ["bullseye lantern", I.BULLSEYE_LANTERN_3, I.BULLSEYE_LANTERN],
   ["sapphire lantern", I.SAPPHIRE_LANTERN_3, I.SAPPHIRE_LANTERN_2],

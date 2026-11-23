@@ -171,11 +171,13 @@ function extinguishCandle({ player, item }) {
  * Extinguish on a lit candle lantern (white 4531, black 4534): the unlit lantern in its slot and "You extinguish the
  * lantern." in the filterable chat (rsprox captures, local 1000134 ticks 365 and 575, 1000135, 1000140; the black one
  * was not captured and is put out the same way). The last light in the dark stays lit, with the captured refusal
- * (local 1000134 ticks 341, 347, 354).
+ * (local 1000134 ticks 341, 347, 354). The lit emerald lantern (9065 -> 9064) is put out here too, with the same
+ * lines: its own were not captured (Ours).
  */
 function extinguishCandleLantern({ player, item }) {
   const I = core.ItemIdentifiers;
-  const unlit = item?.getId() === I.CANDLE_LANTERN_3 ? I.CANDLE_LANTERN : item?.getId() === I.CANDLE_LANTERN_6 ? I.CANDLE_LANTERN_4 : null;
+  const unlit = item?.getId() === I.CANDLE_LANTERN_3 ? I.CANDLE_LANTERN : item?.getId() === I.CANDLE_LANTERN_6 ? I.CANDLE_LANTERN_4
+    : item?.getId() === I.EMERALD_LANTERN_2 ? I.EMERALD_LANTERN : null;
   if (unlit === null) return false;
   if (Darkness.refuseLastLight(player, item, "Extinguishing the lantern would leave you without a light source.")) return true;
   item.setId(unlit);
@@ -229,7 +231,7 @@ function extinguishAll(player) {
 
 module.exports = {
   name: "LightSources",
-  description: "Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches, candles, candle lanterns and mining helmets be put out again (not your last light in the dark).",
+  description: "Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches, candles, candle and emerald lanterns and mining helmets be put out again (not your last light in the dark).",
   members: true,
   register(api) {
     core = api.core;
@@ -242,6 +244,7 @@ module.exports = {
     api.onItemAction("Lit candle", { Extinguish: extinguishCandle });
     api.onItemAction("Lit black candle", { Extinguish: extinguishCandle });
     api.onItemAction("Candle lantern", { Extinguish: extinguishCandleLantern });
+    api.onItemAction("Emerald lantern", { Extinguish: extinguishCandleLantern });
   },
   extinguishAll,
   _test: { build, lightOnObject, putOutForms, extinguishCandle, extinguishCandleLantern },

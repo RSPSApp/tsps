@@ -23,6 +23,8 @@ Tests: `server/tests/light-sources.test.cjs`.
 
 ## Ours
 
+- The lit emerald lantern (9065 -> 9064) is put out with the candle lantern's lines ("You
+  extinguish the lantern." spam, and its refusal as the last light): its own were not captured.
 - The oil, bullseye and sapphire lanterns use the candle lantern's refusal line; they share its
   "You extinguish the lantern." line, but their refusal was not captured.
 - The lit torch and the oil lamp refuse putting out the last light silently: their lines were not

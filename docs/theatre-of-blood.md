@@ -126,16 +126,6 @@ The recordings are from Leagues or Grid Master. With TSPS Grouping, a player's o
 auto-accepted application gets the message and the existing immediate party status update. Group members brought in
 automatically when their leader creates a party keep the existing silent join.
 
-### Notice board estimates
-
-- Later parties start in the last mode the player chose, including a successful change on the
-  party screen. The captures show the first choice and party, with no second formation after
-  a mode change.
-- A pending applicant who leaves the lobby has their application quietly withdrawn. The
-  departure messages in the captures are for members.
-- Refreshing a party that has entered the Theatre uses the same message as a disbanded party.
-  The recorded stale refresh was after the viewer lost party membership.
-
 **The entrance:**
 1. Without a party: "You are not in a party..." with "Form or join a party", "Observe a specific party", "Observe recent party" and "Cancel" (captured).
 2. Only the leader may go in first: "Your leader, X, must go first."
@@ -157,6 +147,16 @@ rsprox captures: the citizens' Theatre lines (local 1000270-1000318, rev 227), t
 Before this the citizens said "That conversation isn't available right now." (Meiyerditch's
 variant is an unavailable marker). Ours: "disguised" is a scented vyre noble piece in each of the
 body, legs and feet slots (the Wiki names no pieces); the clothing line beats the after-quest one.
+
+### Notice board estimates
+
+- Later parties start in the last mode the player chose, including a successful change on the
+  party screen. The captures show the first choice and party, with no second formation after
+  a mode change.
+- A pending applicant who leaves the lobby has their application quietly withdrawn. The
+  departure messages in the captures are for members.
+- Refreshing a party that has entered the Theatre uses the same message as a disbanded party.
+  The recorded stale refresh was after the viewer lost party membership.
 
 ## The raid
 

@@ -29,6 +29,9 @@ Recordings 339 (ticks 1172-1236), 1844 (8064, 8095), 75 (11422, 11434), 1000217,
   a player that far.
 - The glare's damage is rolled with the catablepon's own attack (stab accuracy, max hit 5/6/7);
   no recording shows which accuracy live uses. Protect from Magic applies to it.
+- The drain ignores Protect from Magic (only the glare's damage is reduced). The Wiki strategy line
+  ("you can also use the Protect from Magic prayer") is ambiguous and no recording has the prayer on
+  during a glare.
 - The projectile keeps the Weaken spell's timing; live sends the catablepon's with start 44 and
   end 56 cycles.
 - `magic:curse-rule` (StandardCurses) is the hook that lets a caster's curse stack, set its own

@@ -236,8 +236,8 @@ function update(player) {
 /**
  * Fighting, or being fought by, something still alive. Live refuses the screen while a living
  * NPC is the player's target or is hitting them, and opens it on the next click after that NPC
- * dies (rsprox 227/01885 t20819 refused, t20821 opened; 227/1000296 t5356 opened on the kill tick's
- * follow-up). Ours: "being hit" lasts the combat attacker window (8 ticks after an NPC's hit,
+ * dies (rsprox 227/01885 t20819 refused, t20821 opened; 227/1000296 t5356 opened the tick after
+ * a kill). Ours: "being hit" lasts the combat attacker window (8 ticks after an NPC's hit,
  * Combat.ts); live's window after walking away is unrecorded.
  */
 function inCombat(player) {

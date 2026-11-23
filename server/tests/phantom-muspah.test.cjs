@@ -464,3 +464,189 @@ test("the lair plays Secrets of the North, and More Than Meets the Eye only whil
   session.fight = null;
   assert.equal(area.getMusicTrack(player), arrival, "Secrets of the North again after the kill");
 });
+
+function entryFixture(t, { complete = true, saved = {} } = {}) {
+  const Lair = require("../plugins/bosses/phantommuspah/Lair.PhantomMuspah");
+  const listeners = new Map();
+  const persisted = new Map();
+  const dialogue = [], prompts = [], wire = [], spawns = [], trips = [];
+  let startup, login, entry, talk;
+  const api = {
+    core: {
+      ...nativeCore,
+      TemplatedInstanceArea: class {
+        setChunk() {}
+        isDestroyed() { return true; }
+      },
+    },
+    persistAttribute(key, fallback) { persisted.set(key, fallback); },
+    onPlayerLogin(handler) { login = handler; },
+    onServerStartup(handler) { startup = handler; },
+    spawnNpc(options) { spawns.push(options); return null; },
+    onObjectInteraction(_name, actions) { entry = actions.Enter; },
+    onNpcInteraction(_name, actions) { talk = actions["Talk-to"]; },
+    onPlayerDefeated() {},
+    onPlayerDeath() {},
+    onCustomEvent(name, handler) { listeners.set(name, handler); },
+    emitCustomEvent(name, request) {
+      if (name === "quest:is-complete") request.complete = complete;
+      if (name === "npc-dialogue:start") {
+        dialogue.push([request.npcId, request.variant]);
+        request.handled = true;
+      }
+      listeners.get(name)?.(request);
+    },
+    sendMultiChatboxPrompt(_player, title, ...options) { prompts.push({ title, options }); },
+  };
+  const attributes = new Map(Object.entries(saved));
+  const player = {
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getPacketSender: () => ({
+      sendVarbit: (id, value) => wire.push([id, value]),
+      sendInterfaceRemoval() {},
+      closeSubInterface() {},
+      sendCameraReset() {},
+    }),
+    getMovementQueue: () => ({ reset() {} }),
+    getLocation: () => new nativeCore.Location(2909, 10316, 0),
+    setPositionToFace() {},
+  };
+  Common.init(api);
+  t.mock.method(Common, "travel", (_player, message) => trips.push(message));
+  Lair.attachLair(api);
+  t.after(() => {
+    Lair.sessionOf(player)?.end();
+    Common.init(fakeApi);
+  });
+  return {
+    dialogue, prompts, wire, trips, spawns,
+    start: () => startup?.(),
+    login: () => login?.({ player }),
+    enter: () => entry({ player, objectId: 46597 }),
+    hasSession: () => !!Lair.sessionOf(player),
+    talk: () => talk?.({ player, npc: { getId: () => 11970 } }),
+    line(text) {
+      const request = { player, npcId: 12071, text, playing: { page: "Sergeant Raymond", variant: "standard-dialogue" } };
+      api.emitCustomEvent("npc-dialogue:line", request);
+      return request;
+    },
+    save: () => Object.fromEntries([...attributes].filter(([key]) => persisted.has(key))),
+  };
+}
+
+test("the completed quest lets Raymond warn on Enter without opening an instance", t => {
+  const f = entryFixture(t);
+  assert.equal(f.enter(), true);
+  assert.deepEqual(f.dialogue, [[12071, "standard-dialogue"]]);
+  assert.equal(f.hasSession(), false);
+  assert.deepEqual(f.trips, []);
+});
+
+test("the final warning line marks the introduction, which returns on login", t => {
+  const f = entryFixture(t);
+  assert.equal(f.enter(), true);
+  f.line("I won't stop you, but if it all goes wrong, don't expect me to come and save you either.").before?.();
+  assert.deepEqual(f.wire, [], "closing before the final page leaves it unset");
+  const final = f.line("I'll keep that in mind. Thanks for the information.");
+  assert.deepEqual(f.wire, [], "building the chain alone does not mark the introduction");
+  final.before?.();
+  assert.deepEqual(f.wire, [[14748, 1]]);
+  const saved = f.save();
+  assert.equal(Object.values(saved).filter(value => value === true).length, 1);
+  const relog = entryFixture(t, { saved });
+  relog.login();
+  assert.deepEqual(relog.wire.filter(([id]) => id === 14748), [[14748, 1]]);
+});
+
+test("later Enters offer all three captured choices in their captured order", t => {
+  const f = entryFixture(t);
+  f.line("I'll keep that in mind. Thanks for the information.").before?.();
+  assert.equal(f.enter(), true);
+  assert.equal(f.hasSession(), false);
+  assert.equal(f.prompts[0]?.title, "Are you sure you wish to enter?");
+  assert.deepEqual(f.prompts[0].options.filter((_, index) => index % 2 === 0),
+    ["Yes.", "Yes, and don't ask again.", "No."]);
+});
+
+test("only the second choice opts out, and No leaves the player outside", t => {
+  const f = entryFixture(t);
+  f.line("I'll keep that in mind. Thanks for the information.").before?.();
+  f.enter();
+  assert.ok(f.prompts[0]);
+  f.prompts[0].options[5]();
+  assert.equal(f.hasSession(), false);
+  assert.deepEqual(f.trips, []);
+  f.enter();
+  f.prompts[1].options[3]();
+  assert.deepEqual(f.wire.slice(-1), [[14751, 1]]);
+  assert.deepEqual(f.trips, ["You enter the icy cavern."]);
+  const relog = entryFixture(t, { saved: f.save() });
+  relog.login();
+  assert.deepEqual(relog.wire.filter(([id]) => id === 14751), [[14751, 1]]);
+  assert.equal(relog.enter(), true);
+  assert.deepEqual(relog.prompts, []);
+  assert.deepEqual(relog.dialogue, []);
+  assert.deepEqual(relog.trips, ["You enter the icy cavern."]);
+});
+
+test("Yes enters without opting out of future confirmations", t => {
+  const f = entryFixture(t);
+  f.line("I'll keep that in mind. Thanks for the information.").before?.();
+  f.enter();
+  assert.ok(f.prompts[0]);
+  f.prompts[0].options[1]();
+  assert.equal(f.hasSession(), true);
+  assert.deepEqual(f.wire, [[14748, 1]]);
+  assert.deepEqual(f.trips, ["You enter the icy cavern."]);
+});
+
+test("the quest retains control of the crevice before completion", t => {
+  const f = entryFixture(t, { complete: false });
+  assert.equal(f.enter(), false);
+  assert.deepEqual([...f.dialogue, ...f.prompts, ...f.trips], []);
+});
+
+test("the north-facing Raymond spawn offers the first and subsequent transcripts", t => {
+  const f = entryFixture(t);
+  f.start();
+  assert.deepEqual(f.spawns.map(({ id, x, y, z, face }) => [id, x, y, z, face]), [[11970, 2910, 10315, 0, nativeCore.Direction.NORTH.getId()]]);
+  f.talk();
+  f.line("I'll keep that in mind. Thanks for the information.").before?.();
+  f.talk();
+  assert.deepEqual(f.dialogue, [[12071, "standard-dialogue"], [12071, "standard-dialogue-subsequent-dialogue"]]);
+});
+
+test("the live cache pins the Muspah access bits and Raymond's forms", () => {
+  const { CacheDefinitions: cache } = require("../dist/game/cache/CacheDefinitions");
+  for (const [id, bit] of [[14748, 2], [14751, 5]]) {
+    const { baseVar, startBit, endBit } = cache.getVarbit(id);
+    assert.deepEqual([baseVar, startBit, endBit], [3743, bit, bit]);
+  }
+  assert.ok(cache.getNpc(11970).transforms.includes(12071));
+  assert.equal(cache.getNpc(12071).name, "Sergeant Raymond");
+});
+
+test("a landed Clear Mind drains the prayer shield, including its last points, in that form only", t => {
+  const { fight, npc, player } = nativeFight(t);
+  const bolts = require("../plugins/combat/EnchantedBolts.plugin")._test;
+  bolts.attach(nativeApi);
+  t.mock.method(npc, "showHitsplat", () => {});
+  player.getSkillManager().setMaxLevel(nativeCore.Skill.PRAYER, 99);
+  const proc = () => bolts.EFFECTS["clear-mind"].land({ player, target: npc, pvp: false }, 0);
+  fight.shield = 75;
+  for (const form of ["ranged", "melee", "final"]) {
+    fight.setForm(form);
+    proc();
+    assert.equal(fight.shield, 75, form);
+  }
+  fight.setForm("shielded");
+  proc();
+  assert.equal(fight.shield, 42);
+  fight.shield = 30;
+  proc();
+  assert.equal(fight.shield, 0);
+  const nextTick = fight.events.filter(entry => entry.tick === fight.tick + 1);
+  for (const entry of nextTick) entry.action();
+  assert.equal(fight.form, "final");
+});

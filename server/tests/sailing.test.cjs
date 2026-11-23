@@ -2639,10 +2639,10 @@ function clearTasks() {
   TaskManager.activeTasks.length = 0;
 }
 
-function shipyardHarness() {
+function shipyardHarness(api = {}) {
   clearTasks();
   const { Skill } = require("../dist/game/model/Skill");
-  const shipyard = registerPlugin("Shipyard.Sailing");
+  const shipyard = registerPlugin("Shipyard.Sailing", api);
   registerPlugin("Panel.Sailing"); // the part-built spec resolver
   const player = sailor();
   const levels = new Map([[Skill.SAILING, 1], [Skill.CONSTRUCTION, 1]]);
@@ -2918,6 +2918,41 @@ test("Customise-boat at Catherby opens the selection for that dock, and the port
   assert.ok(Math.max(Math.abs(back.getX() - 2805), Math.abs(back.getY() - 3429)) <= 1 && back.getZ() === 0,
     `back at Catherby within a tile of where they stood, not at the Pandemonium (${back.getX()}, ${back.getY()})`);
   clearTasks();
+});
+
+test("the portal back to Port Sarim never leaves the player in Shipwright Sam's walled-in booth", () => {
+  // Sam stands in a booth at (3024, 3204), walled to the north; the player speaks to him over
+  // that wall from (3024, 3205). The booth's tile is open, so it is beside them but not a step away.
+  const regions = new Map(RegionManager.regions);
+  RegionManager.init();
+  try {
+    RegionManager.loadMapFiles(3024, 3204);
+    const booth = new Location(3024, 3204, 0);
+    const talkSpot = new Location(3024, 3205, 0);
+    assert.equal(RegionManager.blocked(booth, null), false, "Sam's tile itself is open");
+    assert.equal(RegionManager.canMove(3024, 3205, 3024, 3204, 0, 1, 1, null), false, "but walled off from the talk spot");
+
+    const h = shipyardHarness({ getRegionManager: () => RegionManager });
+    const shipyard = require("../plugins/skills/sailing/Shipyard.Sailing");
+    const landed = new Set();
+    for (let pick = 0; pick < 9; pick++) {
+      Sailing.activeBoat(h.player).location = { kind: "docked", dock: "port_sarim" };
+      h.player.moveTo(talkSpot); // ends the previous visit
+      shipyard.beginVisit(h.player, Sailing.getDock("port_sarim"), 0, talkSpot);
+      h.shipyard.objects["Shipyard Portal"].Exit({ player: h.player });
+      withRandom((pick + 0.5) / 9, () => { for (let tick = 0; tick < 3; tick++) TaskManager.process(); });
+      const back = h.player.getLocation();
+      landed.add(`${back.getX()},${back.getY()}`);
+      assert.ok(RegionManager.canMove(3024, 3205, back.getX(), back.getY(), 0, 1, 1, null),
+        `a step from where they stood with Sam (${back.getX()}, ${back.getY()})`);
+    }
+    assert.equal(landed.has("3024,3204"), false, "never in the booth");
+    assert.ok(landed.has("3025,3205"), "the tile live put the player on is one of them");
+  } finally {
+    RegionManager.regions.clear();
+    for (const [id, region] of regions) RegionManager.regions.set(id, region);
+    clearTasks();
+  }
 });
 
 test("logging out in the shipyard saves the player at the dock the visit started from", () => {

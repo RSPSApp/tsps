@@ -1,7 +1,8 @@
 // Dead sea creatures and their loot (rsprox: the user's captures; Wiki: Boat combat).
 // - A creature dies as any NPC does (its death animation and sound, npc-combat-defs.json: rsprox),
 //   then 2 ticks later lies on the water as its corpse (the `_dead` id, op1 Harvest) for two
-//   minutes (Wiki), and respawns its usual time after that.
+//   minutes (Wiki). The creature respawns 49 ticks after its corpse appears, whether or not the
+//   corpse has been harvested or is still there (rsprox), so a corpse can lie beside its respawn.
 //   Its drops don't land on the water: they are rolled when it is harvested.
 // - Harvest, by the player who killed it: beside the hull they pick it up (human_pickupfloor);
 //   further out they throw a net (sailing_human_loot_net_cast_01, its spotanims and projectile)
@@ -17,6 +18,8 @@ const { playSound } = require("../SailingContent.Sailing");
 
 /** Wiki: corpses despawn after two minutes. */
 const CORPSE_TICKS = 200;
+/** The creature's respawn, counted from when its corpse appears (rsprox). */
+const RESPAWN_TICKS = 49;
 /** A corpse beside the hull is picked up rather than netted (ours). */
 const PICK_UP_DISTANCE = 1;
 /** How far a net is thrown (ours). */
@@ -38,7 +41,7 @@ const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 const SOUND_LOOT = 2581;
 const SCRIPT_LOOT_FLY = 7192;
 
-/** corpse npc -> `{ owner, creature, harvesting, expiresAt }`. */
+/** corpse npc -> `{ owner, creature, harvesting }`. */
 const corpses = new Map();
 /** Combat clears its damage record during death; keep applied damage, not rolled cannon XP. */
 const damageAtDeath = new WeakMap();
@@ -87,12 +90,22 @@ function later(entity, ticks, action) {
   })());
 }
 
+/** The creature comes back while its corpse may still lie there. */
+function respawn(npc) {
+  // A spawn its plugin brings back itself (an owner's) never respawns, as with any NPC's death.
+  if (npc.__skipDefaultRespawn === true) return;
+  const { NPCRespawnTask, TaskManager } = common.core();
+  TaskManager.submit(new NPCRespawnTask(npc, RESPAWN_TICKS));
+}
+
 /** The corpse takes the creature's place for two minutes. */
 function onDeath(event) {
   const creature = common.DATA.creatures.find((candidate) => candidate.npc === event.npcId);
   if (!creature) return;
   const { npc, killer } = event;
-  event.remains = { ticks: CORPSE_TICKS };
+  // The corpse's own removal (expired or harvested) never respawns it: the creature does, below.
+  event.remains = { ticks: CORPSE_TICKS, respawnTicks: 0 };
+  respawn(npc);
   npc.getCombat().reset();
   npc.setNpcTransformationId(creature.dead);
   npc.setHitpoints(1);
@@ -105,8 +118,7 @@ function onDeath(event) {
   landedDamage.delete(npc);
   // Synthetic/admin deaths without a combat snapshot retain the usual solo reward.
   const damageShare = damage ? Math.max(0, Math.min(1, applied / Math.max(1, damage.hitpoints))) : 1;
-  const expiresAt = common.core().World.getProcessCycle() + CORPSE_TICKS;
-  corpses.set(npc, { owner: killer, creature, damageShare, damagers: event.damagers ?? [killer], harvesting: false, expiresAt });
+  corpses.set(npc, { owner: killer, creature, damageShare, damagers: event.damagers ?? [killer], harvesting: false });
   later(npc, CORPSE_TICKS, () => corpses.delete(npc));
 }
 
@@ -190,7 +202,7 @@ function loot(player, npc, corpse) {
     if (!generated.handled && all.some((drop) => drop.itemId === claim.itemId && drop.amount > 0)) claim.commit();
   }
   corpses.delete(npc);
-  removeCorpse(npc, corpse);
+  removeCorpse(npc);
   if (generated.handled) return;
   const kept = all.filter((drop) => Number.isInteger(drop.itemId) && drop.amount > 0);
   // Wiki (Seed box, Herb sack, Rune pouch), 6 May 2026: they "now work with looting Sailing creatures"; the
@@ -230,21 +242,11 @@ function loot(player, npc, corpse) {
   inventory.refreshItems();
 }
 
-/** The corpse goes once harvested; the creature still respawns on the unharvested corpse's time. */
-function removeCorpse(npc, corpse) {
+/** The corpse goes once harvested (its creature's respawn is already on its way). */
+function removeCorpse(npc) {
   npc.setScriptedMovement?.(false);
   npc.setFlag?.(IGNORE_CLIPPING_FLAG, false);
-  if (!npc.isRegistered?.()) return;
-  const { NPCRespawnTask, TaskManager, World } = common.core();
-  World.getRemoveNPCQueue().push(npc);
-  // Its respawn is the living creature, not the corpse.
-  npc.setNpcTransformationId(-1);
-  // The death task's own respawn waits on the corpse's time, and skips a corpse already gone.
-  // A spawn its plugin brings back itself (an owner's) never respawns, as the death task's removal.
-  const respawn = npc.getDefinition().getRespawn();
-  if (respawn <= 0 || npc.__skipDefaultRespawn === true) return;
-  const corpseLeft = Math.max(0, corpse.expiresAt - World.getProcessCycle());
-  TaskManager.submit(new NPCRespawnTask(npc, corpseLeft + respawn));
+  if (npc.isRegistered?.()) common.core().World.getRemoveNPCQueue().push(npc);
 }
 
 function attach(api) {
@@ -263,3 +265,4 @@ module.exports.corpses = corpses;
 module.exports.harvest = harvest;
 module.exports.loot = loot;
 module.exports.CORPSE_TICKS = CORPSE_TICKS;
+module.exports.RESPAWN_TICKS = RESPAWN_TICKS;

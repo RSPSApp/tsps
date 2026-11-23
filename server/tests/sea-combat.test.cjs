@@ -750,7 +750,7 @@ test("a dead creature lies as its corpse; Harvest beside the hull puts its loot 
   }
 });
 
-test("a killed creature respawns its usual time after its corpse's two minutes, harvested or not", () => {
+test("a killed creature respawns 49 ticks after its corpse appears, harvested or not (rsprox)", () => {
   const player = captain();
   const { boat, owned, loc, hotspot } = aboardWithCannon(player);
   const harvested = seaNpc(TERN, outboard(boat, owned, hotspot.id, loc, 1));
@@ -776,26 +776,29 @@ test("a killed creature respawns its usual time after its corpse's two minutes, 
     }
   };
   try {
-    const killedAt = World.processCycle;
     for (const tern of [harvested, left]) {
       tern.getCombat().addDamage(player, tern.getMaxHitpoints());
       tern.setHitpoints(0);
     }
-    for (let i = 0; i < 4; i++) { tick(); world(); }
-    assert.equal(harvested.getId(), 15229, "the tern's corpse");
+    let corpseAt = null;
+    for (let i = 0; i < 6; i++) {
+      tick(); world();
+      if (corpseAt === null && harvested.getId() === 15229) corpseAt = World.processCycle;
+    }
+    assert.ok(corpseAt !== null, "the tern's corpse");
+    assert.equal(left.getId(), 15229);
     Loot.harvest({ player, npc: harvested, clickType: 1, handled: false });
     for (let i = 0; i < 4; i++) { tick(); world(); }
     assert.equal(harvested.isRegistered(), false, "a harvested corpse leaves the water");
-    assert.equal(left.isRegistered(), true, "an unharvested one stays its two minutes");
+    while (World.processCycle < corpseAt + Loot.RESPAWN_TICKS) { tick(); world(); }
+    assert.deepEqual(respawned.get(spawns[0]), [corpseAt + 49], "the harvested tern, 49 ticks after its corpse");
+    assert.deepEqual(respawned.get(spawns[1]), [corpseAt + 49], "the unharvested one on the same tick");
+    assert.equal(left.isRegistered(), true, "while its corpse still lies there");
+    assert.equal(left.getId(), 15229);
     for (let i = 0; i < 260; i++) { tick(); world(); }
-    assert.equal(left.isRegistered(), false);
-    const unharvested = respawned.get(spawns[1]);
-    const afterHarvest = respawned.get(spawns[0]);
-    assert.equal(unharvested?.length, 1, "the unharvested tern respawns once");
-    assert.equal(afterHarvest?.length, 1, "the harvested tern respawns once");
-    assert.equal(afterHarvest[0], unharvested[0], "on the unharvested corpse's time");
-    const respawn = harvested.getDefinition().getRespawn();
-    assert.ok(unharvested[0] - killedAt >= Loot.CORPSE_TICKS + respawn, "two minutes, then its respawn time");
+    assert.equal(left.isRegistered(), false, "the corpse goes after its two minutes");
+    assert.equal(respawned.get(spawns[1]).length, 1, "and doesn't bring a second tern");
+    assert.equal(respawned.get(spawns[0]).length, 1);
   } finally {
     for (const npc of [harvested, left]) if (npc.isRegistered()) World.getNpcs().remove(npc);
     leave(player);

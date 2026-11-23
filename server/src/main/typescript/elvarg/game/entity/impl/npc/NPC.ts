@@ -1160,7 +1160,8 @@ export class NPC extends Mobile {
     }
 
     public clone(): NPC {
-        const npc = NPC.create(this.getId(), this.getSpawnPosition());
+        // Its own form, not a transformation it wears now (a corpse still lying where it died).
+        const npc = NPC.create(this.id, this.getSpawnPosition());
         npc.setFace(this.getFace());
         npc.getMovementCoordinator().setRadius(this.getMovementCoordinator().getRadius());
         // A respawn clone must keep its scope, or it leaks to every player.

@@ -30,7 +30,8 @@ import { RenderDataLoader, RenderDataResult } from "../../game/worker/RenderData
 import { WorkerState } from "../../game/worker/RenderDataWorker";
 import { AnimationFrames } from "../AnimationFrames";
 import { DrawRange, NULL_DRAW_RANGE, newDrawRange } from "../DrawRange";
-import { ModelHashBuffer, getModelHash } from "../buffer/ModelHashBuffer";
+import { ModelHashBuffer, getModelHash, getModelSignature } from "../buffer/ModelHashBuffer";
+import { SceneChunkCache } from "./SceneChunkCache";
 import { buildActorNormals } from "../buffer/ActorNormals";
 import { HD_OBJECT_LIGHTS_BY_ID } from "../../game/plugins/hd/hdObjectLightData";
 import { EXCLUDED_SEQUENCES } from "../../game/plugins/animationsmoothing/exclusions";
@@ -40,6 +41,7 @@ import {
     ModelFace,
     ModelMergeGroup,
     SceneBuffer,
+    SceneFragment,
     SceneModel,
     createModelInfoTextureData,
     getModelFaces,
@@ -654,7 +656,7 @@ function onlySingleCopyGroups(models: SceneModel[]): boolean {
     return true;
 }
 
-function* addSceneModels(
+export function* addSceneModels(
     modelHashBuf: ModelHashBuffer,
     textureLoader: TextureLoader,
     sceneBuf: SceneBuffer,
@@ -855,6 +857,70 @@ function* addSceneModels(
         yield* addSceneModels(modelHashBuf, textureLoader, farBuffer, farModels, true, true);
         sceneBuf.appendFarScenery(farBuffer);
     }
+}
+
+/** Scenery chunks packed by loc-only builds, per worker state (a new cache gets an empty one). */
+const sceneChunkCaches = new WeakMap<object, SceneChunkCache>();
+
+/**
+ * addSceneModels for a loc-only rebuild, chunk by chunk (the 8x8 tiles its models are already
+ * grouped by): a chunk whose models and positions match the last build of this square reuses
+ * its packed fragment, so felling one tree packs one chunk and not the whole square.
+ */
+export function* addSceneModelsByChunk(
+    modelHashBuf: ModelHashBuffer,
+    textureLoader: TextureLoader,
+    sceneBuf: SceneBuffer,
+    sceneModels: SceneModel[],
+    minimizeDrawCalls: boolean,
+    cache: SceneChunkCache,
+    squareId: number,
+): Generator<void> {
+    // Chunk output also depends on the texture slots the buffer packs into.
+    let textureSlots = sceneBuf.textureIdIndexMap.size;
+    for (const [id, index] of sceneBuf.textureIdIndexMap) textureSlots = (Math.imul(textureSlots, 31) + id * 4099 + index) | 0;
+    const context = `${minimizeDrawCalls ? 1 : 0}:${textureSlots}`;
+
+    const byChunk = new Map<number, SceneModel[]>();
+    for (const sceneModel of sceneModels) {
+        const key = (Math.floor(sceneModel.sceneX / 1024) + 16) * 64 + Math.floor(sceneModel.sceneZ / 1024) + 16;
+        const models = byChunk.get(key);
+        if (models) models.push(sceneModel);
+        else byChunk.set(key, [sceneModel]);
+    }
+
+    const modelSignatures = new Map<Model, number>();
+    const previous = cache.chunksOf(squareId);
+    const next = new Map<number, { signature: string; fragment: SceneFragment }>();
+    for (const [key, models] of byChunk) {
+        yield;
+        const parts: string[] = [context];
+        for (const sm of models) {
+            const model = sm.model;
+            let hash = modelSignatures.get(model);
+            if (hash === undefined) {
+                hash = getModelSignature(modelHashBuf, model);
+                modelSignatures.set(model, hash);
+            }
+            parts.push(
+                `${hash},${model.faceCount},${model.verticesCount},${sm.interactId},${sm.interactType},${sm.level},` +
+                `${sm.planeCullLevel ?? sm.level},${sm.priority},${sm.sceneX},${sm.sceneZ},${sm.sceneHeight},` +
+                `${sm.heightOffset},${sm.doubleSided ? 1 : 0},${sm.lowDetail ? 1 : 0},${sm.forceMerge ? 1 : 0},` +
+                `${sm.groundConforming ? 1 : 0},${sm.contourGround}`,
+            );
+        }
+        const signature = parts.join(";");
+        const stored = previous?.get(key);
+        let fragment = stored?.signature === signature ? stored.fragment : undefined;
+        if (!fragment) {
+            const chunkBuf = new SceneBuffer(textureLoader, sceneBuf.textureIdIndexMap, 1024);
+            yield* addSceneModels(modelHashBuf, textureLoader, chunkBuf, models, minimizeDrawCalls);
+            fragment = chunkBuf.toFragment();
+        }
+        next.set(key, { signature, fragment });
+        sceneBuf.appendFragment(fragment);
+    }
+    cache.store(squareId, next);
 }
 
 export function buildLocGeometryData(sceneBuf: SceneBuffer): LocGeometryData {
@@ -1824,13 +1890,26 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         }
 
         if (!shouldLoadDoorOnly) {
-            await build.run(addSceneModels(
-                this.modelHashBuf!,
-                textureLoader,
-                locSceneBuf,
-                sceneModels,
-                minimizeDrawCalls,
-            ));
+            // A loc-only rebuild keeps the chunks it packed, for the next change in this square.
+            let chunkCache = sceneChunkCaches.get(state);
+            if (!chunkCache) sceneChunkCaches.set(state, chunkCache = new SceneChunkCache());
+            await build.run(shouldLoadLocOnly && !isInstance
+                ? addSceneModelsByChunk(
+                    this.modelHashBuf!,
+                    textureLoader,
+                    locSceneBuf,
+                    sceneModels,
+                    minimizeDrawCalls,
+                    chunkCache,
+                    getMapSquareId(mapX, mapY),
+                )
+                : addSceneModels(
+                    this.modelHashBuf!,
+                    textureLoader,
+                    locSceneBuf,
+                    sceneModels,
+                    minimizeDrawCalls,
+                ));
         }
         if (!shouldLoadLocOnly) {
             await build.run(addSceneModels(

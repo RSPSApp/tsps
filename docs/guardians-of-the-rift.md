@@ -478,6 +478,17 @@ Tele Block and the level 20 Wilderness limit apply. No rsprox recording touches 
 landing tile (the lobby tile, as for the Minigame Teleport) and the teleport graphic of the dyed
 amulets are not confirmed by a capture.
 
+### The tarnished locket's Inspect
+
+Wiki ([Transcript:Tarnished locket](https://oldschool.runescape.wiki/w/Transcript:Tarnished_locket))
+and the second rev 241 recording (rsprox captures, 20261020T153228, ticks 4968-4970 and 5040-5044)
+agree: Inspect shows the locket in an item box (objectbox 193, zoom 400) with "The locket opens,
+revealing a note inside.", then "Would you like to read it?" with Read it. / Leave it alone.
+Read it. sets `gotr_locket_opened` (13811) and opens `note` (291) with the letter on line1-line12
+(lines 3, 5-8 and 10 carry text). That varbit is what the Lumbridge Guide checks before taking the
+locket for the amulet, so only Read it. counts as inspecting it. Leave it alone. isn't in the
+recording (the first menu there was closed by opening the bank); the Wiki ends the dialogue.
+
 ### Rewards
 
 - **End of game:** see the Power-up section above for the captured lines. The points and the XP

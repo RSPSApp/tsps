@@ -77,10 +77,28 @@ function interactObjectName(event) {
 }
 
 /**
- * Moves the player a cycle after the op (after `animation`, when there is one). `onArrival`, when
- * given, runs right after the move; a refused or cancelled climb never calls it.
+ * Staircases are walked, not climbed: live sends no animation for any of them, only the
+ * teleport, on the tick a ladder would start its climb animation (rsprox captures: Varrock,
+ * Falador, Civitas, Keldagrim, Paterdomus and Dark Wizards' Tower staircases, e.g. local
+ * 1001607, 1001580, 1002048, 1002089). Ladders, trapdoors and ropes keep the climb.
  */
-function climb({ player, destination, onArrival }, animation) {
+function isStaircase(name) {
+  return typeof name === "string" && /stair/i.test(name);
+}
+
+/** The climb animation for this op: none when the caller says so or the object is a staircase. */
+function climbAnimation(event, animation) {
+  if (event.animate === false) return null;
+  if (event.animate === true) return animation;
+  return isStaircase(interactObjectName(event)) ? null : animation;
+}
+
+/**
+ * Moves the player a cycle after the op (after `animation`, when there is one), with the loc's
+ * `message` on the same tick when it has one. `onArrival`, when given, runs right after the move;
+ * a refused or cancelled climb never calls it.
+ */
+function climb({ player, destination, onArrival, message }, animation) {
   const movement = player.getMovementQueue();
   if (movement.isMovementBlocked()) return false;
   const start = player.getLocation().clone();
@@ -100,6 +118,7 @@ function climb({ player, destination, onArrival }, animation) {
           return;
         }
         player.moveTo(target);
+        if (message) player.sendMessage(message);
         onArrival?.();
       }
       this.stop();
@@ -111,10 +130,16 @@ function climb({ player, destination, onArrival }, animation) {
   })());
 }
 
+/** The climbed loc's own message (ClimbLinks `messages`), sent as the player lands. */
+function climbMessage(event) {
+  const id = event.object?.getId?.() ?? event.objectId;
+  return Number.isInteger(id) ? ClimbLinks.message(id) : null;
+}
+
 /**
  * Callers may pass an explicit `destination` (ladders:climbUp custom event), an `onArrival`
- * callback, run once the climb has landed, and `animate: false` for stairs that are walked
- * rather than climbed, or
+ * callback, run once the climb has landed, and `animate: false` (or `true`) to override the
+ * default animation (none for staircases, the climb for everything else), or
  * an object interaction event carrying the ladder's `location` and the tile the
  * player operated from (`sourceLocation`).
  *
@@ -142,23 +167,25 @@ function climbUp(event, toEnd = false) {
   // Explicit destinations (ladders:climbUp custom event) are trusted; then the map's other end;
   // then the same object straight above.
   const mapped = event.destination ? null : mapDestination(event, 1, toEnd);
-  const animation = event.animate === false ? null : CLIMB_UP;
-  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival }, animation);
+  const animation = climbAnimation(event, CLIMB_UP);
+  const message = climbMessage(event);
+  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival, message }, animation);
   const destination = resolveDestination(event, 1);
   if (!destination) return false;
   if (!event.destination && !hasObjectAbove(event.location, interactObjectName(event))) return false;
-  return climb({ player: event.player, destination, onArrival: event.onArrival }, animation);
+  return climb({ player: event.player, destination, onArrival: event.onArrival, message }, animation);
 }
 
 function climbDown(event, toEnd = false) {
   // Mirror of climbUp.
   const mapped = event.destination ? null : mapDestination(event, -1, toEnd);
-  const animation = event.animate === false ? null : CLIMB_DOWN;
-  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival }, animation);
+  const animation = climbAnimation(event, CLIMB_DOWN);
+  const message = climbMessage(event);
+  if (mapped) return climb({ player: event.player, destination: mapped, onArrival: event.onArrival, message }, animation);
   const destination = resolveDestination(event, -1);
   if (!destination) return false;
   if (!event.destination && !hasObjectBelow(event.location, interactObjectName(event))) return false;
-  return climb({ player: event.player, destination, onArrival: event.onArrival }, animation);
+  return climb({ player: event.player, destination, onArrival: event.onArrival, message }, animation);
 }
 
 /**
@@ -224,7 +251,7 @@ function bottomFloorOption(event) {
 
 module.exports = {
   name: "Ladders",
-  description: "Climbing for ladders, staircases, trapdoors, ropes and similar scenery, moving the player a level up or down with the climb animation.",
+  description: "Climbing for ladders, staircases, trapdoors, ropes and similar scenery, moving the player a level up or down: ladders with the climb animation, staircases walked with none.",
   register(api) {
     pluginApi = api;
     TaskManager = api.getTaskManager();

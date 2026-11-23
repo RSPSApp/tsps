@@ -1046,5 +1046,188 @@
         []
       ]
     ]
+  },
+  "Translation book": {
+    "title": "Gnome-English Translation",
+    "spreads": [
+      [
+        [
+          "Gnome-English Translation",
+          "",
+          "written by Anita",
+          "",
+          "This text contains the ancient",
+          "Gnome words I have managed to",
+          "translate thus far.",
+          "",
+          "-A-",
+          "arpos: rocks",
+          "ando: gate",
+          "andra: city",
+          "ataris: cow",
+          "",
+          "-C-"
+        ],
+        [
+          "cef: threat",
+          "cheray: lazy",
+          "Cinqo: King",
+          "cretor: bucket",
+          "",
+          "-E-",
+          "eis: me",
+          "es: a",
+          "et: and",
+          "eto: will",
+          "",
+          "-G-",
+          "gandius: jungle",
+          "Gal: All",
+          "gentis: leaf"
+        ]
+      ],
+      [
+        [
+          "gutus: banana",
+          "gomondo: branch",
+          "",
+          "-H-",
+          "har: old",
+          "harij: harpoon",
+          "hewo: grass",
+          "",
+          "-I-",
+          "ip: you",
+          "imindus: quest",
+          "irno: translate",
+          "",
+          "-K-",
+          "kar: no"
+        ],
+        [
+          "kai: boat",
+          "ko: sail",
+          "",
+          "-L-",
+          "lauf: eye",
+          "laquinay: common sense",
+          "lemanto: man",
+          "lemantolly: stupid man",
+          "lovos: gave",
+          "",
+          "-M-",
+          "meso: came",
+          "meriz: kill",
+          "mina: time(s)",
+          "mos: coin"
+        ]
+      ],
+      [
+        [
+          "mi: I",
+          "mond: seal",
+          "",
+          "-P-",
+          "por: long",
+          "prit: with",
+          "priw: tree",
+          "pro: to",
+          "",
+          "-Q-",
+          "Qui: guard",
+          "Quir: guardian",
+          "",
+          "-R-",
+          "rentos: agility"
+        ],
+        [
+          "",
+          "-S-",
+          "sarko: Begone",
+          "sind: big",
+          "",
+          "-T-",
+          "ta: the",
+          "tuzo: open",
+          "",
+          "-U-",
+          "Undri: lands",
+          "Umesco: Soul"
+        ]
+      ]
+    ]
+  },
+  "Glough's journal": {
+    "title": "Glough's Journal",
+    "spreads": [
+      [
+        [
+          "<col=ff0000>The migration failed!</col>",
+          "",
+          "After spending half a century",
+          "hiding underground you would",
+          "think that the great migration",
+          "would have improved life on",
+          "Gielinor for tree gnomes.",
+          "However, rather than the great",
+          "liberation promised to us by",
+          "King Healthorg at the end of",
+          "the last age, we have been",
+          "forced to live in hiding, up",
+          "trees or in the gnome maze,",
+          "laughed at and mocked by man.",
+          "Living in constant fear of"
+        ],
+        [
+          "human aggression, we are in a",
+          "no better situation now than",
+          "when we lived in the caves!",
+          "Change must come soon!",
+          "",
+          "<col=ff0000>They must be stopped!</col>",
+          "",
+          "Today I heard of three more",
+          "gnomes slain by Khazard's",
+          "human troops for fun, I can't",
+          "control my anger! Humanity",
+          "seems to have acquired a level",
+          "of arrogance comparable to",
+          "that of Zamorak, killing and",
+          "pillaging at will! We are"
+        ]
+      ],
+      [
+        [
+          "small and at heart not",
+          "warriors but something must be",
+          "done! We will pick up arms and",
+          "go forth into the human world!",
+          "We will defend ourselves and",
+          "we will pursue justice for all",
+          "gnomes who fell at the hands",
+          "of humans!",
+          "",
+          "<col=ff0000>Gaining support.</col>",
+          "",
+          "Some of the local gnomes seem",
+          "strangely deluded about",
+          "humans, many actually believe",
+          "that humans are not all"
+        ],
+        [
+          "naturally evil but instead",
+          "vary from person to person.",
+          "This sort of talk could be the",
+          "end for the tree gnomes and I",
+          "must continue to convince my",
+          "fellow gnome folk the cold",
+          "truth about these human",
+          "creatures! How they will not",
+          "stop until all gnome life is",
+          "destroyed! Unless we can",
+          "destroy them first!"
+        ]
+      ]
+    ]
   }
 }

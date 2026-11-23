@@ -90,8 +90,9 @@ test("a Watchtower quest completion lets the real spell land and advances the ha
 
   assert.equal(quest.getStage(player), 14);
   assert.equal(player.getLocation().getZ(), 2);
-  assert.ok(Math.abs(player.getLocation().getX() - 2549) <= 2);
-  assert.ok(Math.abs(player.getLocation().getY() - 3112) <= 2);
+  // The completed tower's top floor (Watchtower capture Watchtower.bin, rev 242, t6337).
+  assert.ok(Math.abs(player.getLocation().getX() - 2933) <= 2);
+  assert.ok(Math.abs(player.getLocation().getY() - 4713) <= 2);
   assert.equal(player.getInventory().getAmount(563), 0);
   assert.equal(player.getInventory().getAmount(557), 0);
   assert.ok(Progress.doneTasks(player, diary).has(TASK));
@@ -101,7 +102,7 @@ test("a Watchtower quest completion lets the real spell land and advances the ha
 test("the quest gate does not depend on the diary plugin", (t) => {
   const diaryPlugin = require("../plugins/achievements/diaries/ArdougneWatchtowerDiary.AchievementDiaries");
   assert.equal(diaryPlugin._test.beforeCast, undefined);
-  const player = fixture(t, { stage: 12 });
+  const player = fixture(t, { stage: 13 });
   assert.equal(PluginManager.emitCanTeleport(player, 20, null, "watchtower teleport"), false);
   assert.equal(player.getInventory().getAmount(563), 2);
   assert.equal(player.getInventory().getAmount(557), 2);
@@ -111,14 +112,15 @@ test("the quest gate does not depend on the diary plugin", (t) => {
 });
 
 test("only reading the spell scroll unlocks both cast paths, before rune consumption", (t) => {
-  for (const stage of [11, 12]) {
+  // Live's stages: 13 is complete with the scroll unread (t6050), 14 read (t6093).
+  for (const stage of [11, 13]) {
     for (const cast of [
       (player) => spellCast({ player, spellName: "watchtower teleport", handled: false }),
       (player) => interfaceAction({ player, buttonId: core.CacheDefinitions.getSpellByName("Watchtower teleport").widgetId, itemId: -1, handled: false }),
     ]) {
       const player = fixture(t, { stage });
       cast(player);
-      assert.equal(quest.isComplete(player), stage === 12);
+      assert.equal(quest.isComplete(player), stage === 13);
       assert.equal(player.getInventory().getAmount(563), 2);
       assert.equal(player.getInventory().getAmount(557), 2);
       tickTeleport();
@@ -144,7 +146,7 @@ test("a cancelled real teleport does not advance the diary", (t) => {
 test("dead and non-Watchtower arrivals do not advance the diary", (t) => {
   const player = fixture(t, { hitpoints: 0 });
   const arrival = { player, name: "other teleport" };
-  player.setLocation(new core.Location(2549, 3112, 2));
+  player.setLocation(new core.Location(2933, 4712, 2));
   dispatch("spell:teleport-arrival", arrival);
   arrival.name = "watchtower teleport";
   dispatch("spell:teleport-arrival", arrival);

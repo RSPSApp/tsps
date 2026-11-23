@@ -1097,6 +1097,11 @@
   "2": "returning",
   "3": "experienced"
  },
+ "experienceSettings": {
+  "$comment": "Settings rows (Settings.plugin.js, by setting id) that a past-experience answer sets, as captured. new (rsprox captures local 1001414 tick 18, local 1001416 tick 223): Highlight quest start points (9619) 2, quest list sort (13772) 11, hide quests lacking requirements (13778) and recommendations (13779) 1. experienced (a local Tutorial Island HCIM recording, the 929 answer at tick 99): the drop warning (5411), Make-X for darts and bolts (10971) and the in-world Hiscores lookup (11519) off, the alchemy warning threshold (6091) 150,000, the four Plank Make confirmations (624, 2319, 2320, 3939) 1, and Accept Aid (4180) off. returning isn't recorded.",
+  "new": { "367": 2, "214": 11, "215": 1, "216": 1 },
+  "experienced": { "42": 0, "316": 0, "417": 0, "66": 150000, "420": 1, "421": 1, "422": 1, "423": 1, "acceptAid": false }
+ },
  "appearanceText": [
   "Setting your appearance",
   "Before you get started, you'll need to set the appearance of your character. Please use the open interface to set your appearance."

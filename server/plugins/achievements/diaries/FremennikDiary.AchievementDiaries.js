@@ -292,6 +292,18 @@ function onPetRockTaken({ player, itemId, amount, source, groundItem }) {
   }
 }
 
+/**
+ * `construction:menagerie-pet-picked-up`: Pick-up on the pet rock roaming the owner's menagerie
+ * (Wiki: Fremennik Diary, "use your pet rock on a pet house, then retrieve it off the ground").
+ * The menagerie only lets the owner pick up outside building mode.
+ */
+function onMenageriePetPickedUp({ player, house, itemId }) {
+  if (!PET_ROCK_IDS.has(itemId) || !house || house.owner !== player || !active(player, house)) return;
+  if (questStarted(player, FREMENNIK_TRIALS)) {
+    complete(player, "pick-up-your-pet-rock-from-your-poh-menagerie");
+  }
+}
+
 function onApprovalChanged({ player, value, max }) {
   if (!player || !Number.isFinite(value) || !Number.isFinite(max)) return;
   if (value >= max) complete(player, "obtain-100-support-from-your-kingdom-subjects");
@@ -370,6 +382,7 @@ module.exports = {
     api.onCustomEvent("hunter:success", onHunterSuccess);
     api.onNpcDeath(onNpcDeath);
     api.onCustomEvent("ground-items:taken", onGroundItemsTaken);
+    api.onCustomEvent("construction:menagerie-pet-picked-up", onMenageriePetPickedUp);
     api.onCustomEvent("mining:success", onMiningSuccess);
     api.onCustomEvent("smelting:success", onSmeltingSuccess);
     api.onCustomEvent("crafting:made", onCraftingMade);
@@ -397,7 +410,7 @@ module.exports = {
     inBox, questComplete, questStarted, onShopOpened, onHunterSuccess, onNpcDeath, onGroundItemsTaken,
     onMiningSuccess, onSmeltingSuccess, onCraftingMade, onWoodcuttingSuccess, onFiremakingSuccess,
     onHerbloreMade, onThievingSuccess, onTrollStrongholdEnter, onEagleArrived, onFairyRingLanded, onSpellArrival,
-    onWaterSourceFilled, onPetRockTaken, onApprovalChanged, onLoginApproval, onDialogueLine, onShieldMade,
+    onWaterSourceFilled, onPetRockTaken, onMenageriePetPickedUp, onApprovalChanged, onLoginApproval, onDialogueLine, onShieldMade,
     onRunecraftingSuccess, onGodWarsKill, onDiaryTask,
     RELLEKKA, RELLEKKA_FURNACE, RELLEKKA_WELL, FREMENNIK_PROVINCE, WATERBIRTH, KELDAGRIM,
     JATIZSO_MINE, ARZINIAN_MINE, NEITIZNOT_CLAY_FORGE,

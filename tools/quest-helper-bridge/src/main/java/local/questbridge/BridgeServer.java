@@ -86,6 +86,26 @@ public final class BridgeServer {
                 }));
     server.start();
     System.out.println("QUEST_HELPER_READY http://127.0.0.1:" + port);
+    if ("1".equals(System.getenv("QUEST_HELPER_EXIT_WITH_PARENT"))) exitWithParent();
+  }
+
+  /**
+   * The game server starts this bridge with stdin as a pipe it never writes to. The pipe closes
+   * when the server process ends, however it ends, so the bridge exits with it.
+   */
+  static void exitWithParent() {
+    Thread watcher =
+        new Thread(
+            () -> {
+              try {
+                while (System.in.read() != -1) {}
+              } catch (IOException ignored) {
+              }
+              System.exit(0);
+            },
+            "quest-helper-parent-watch");
+    watcher.setDaemon(true);
+    watcher.start();
   }
 
   static void respond(HttpExchange e, int status, String json) throws IOException {

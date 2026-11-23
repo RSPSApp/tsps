@@ -16,6 +16,10 @@ function areaClass() {
     getName() {
       return "Duke Sucellus asylum";
     }
+    /** The asylum plays Eye See You from arrival; the copied map has no track of its own. */
+    getMusicTrack() {
+      return Common.data.music.asylum;
+    }
     allowSummonPet() {
       return false;
     }

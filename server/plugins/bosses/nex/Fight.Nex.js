@@ -151,7 +151,7 @@ class Fight {
     this.boss.faceTile(this.tile(chamber.entry));
     this.boss.__nexFight = this;
     this.boss.setFlag("combat:no-retaliate");
-    // Her attacks are the fight's, so the engine would think her idle and regenerate her.
+    // Nex doesn't regenerate hitpoints (Wiki, User:Orion/Regen: HP "N/A").
     this.boss.setFlag("combat:no-regen");
     // She faces her target at any range (her spells reach 10 tiles; the engine lets go sooner).
     this.boss.setFlag("interaction:keep");
@@ -610,7 +610,7 @@ class Fight {
     const own = Common.count(player, Common.KILLS_ATTRIBUTE) + 1;
     player.setAttribute(Common.KILLS_ATTRIBUTE, own);
     player.getPacketSender().sendConfig(varps.kills, own);
-    require("./CombatAchievements.Nex").killed(player, own, (kills) => sendBossKillCount(player, kill.count.replace("[n]", kills)));
+    require("./CombatAchievements.Nex").killed(player, own, (kills) => sendBossKillCount(player, kill.count.replace("[n]", kills)), this.soloFor(player, team));
     const best = Common.count(player, Common.BEST_ATTRIBUTE);
     const duration = kill.duration.replace("[time]", Common.formatTicks(ticks));
     if (!best || ticks < best) {
@@ -621,6 +621,16 @@ class Fight {
       player.sendMessage(duration + kill.personalBest.replace("[time]", Common.formatTicks(best)));
     }
     Common.api.emitCustomEvent("collection-log:count", { player, category: "Nex" });
+  }
+
+  /**
+   * The league task "Defeat Nex Solo": "in a private instance without help from any other player".
+   * A private chamber, the player alone at the start and at the kill, and no one else's damage.
+   */
+  soloFor(player, team) {
+    if (this.arena.private !== true || this.startPlayers !== 1 || team !== 1) return false;
+    for (const [other, amount] of this.contribution) if (other !== player && amount > 0) return false;
+    return true;
   }
 
   killReavers(healHer) {

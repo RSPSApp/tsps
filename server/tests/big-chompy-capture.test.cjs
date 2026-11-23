@@ -537,3 +537,37 @@ for (const loggingOut of [false, true]) {
     else assert.equal(onGround(), 1, "on the player's tile");
   });
 }
+
+// Wiki (Rantz, history): the ogre composite bow shows Rantz the kill marks as the standard bow does.
+const OGRE_BOWMAN_HAT = 2978;
+for (const where of ["carried", "wielded"]) {
+  test(`a player with only a comp ogre bow ${where} claims a chompy hat from Rantz (#6551)`, async (t) => {
+    const f = actor(t, { stage: 65, attributes: { "big-chompy-bird-hunting:chompy-kills": 30 } });
+    if (where === "carried") f.player.getInventory().add(new core.Item(I.COMP_OGRE_BOW, 1), false);
+    else f.player.getEquipment().set(3, new core.Item(I.COMP_OGRE_BOW, 1));
+    const npc = h.spawn(f, RANTZ_PARENT, RANTZ_AT);
+    await h.talk(f, npc);
+    for (let i = 0; i < 6 && h.shown(f)?.who !== "menu"; i++) await h.continueLine(f);
+    await h.choose(f, "Can I have a hat please?");
+    for (let i = 0; i < 12 && amount(f, OGRE_BOWMAN_HAT) === 0; i++) await h.continueLine(f);
+    assert.equal(amount(f, OGRE_BOWMAN_HAT), 1);
+  });
+}
+
+test("showing the comp ogre bow to Rantz after the quest starts the hat dialogue (#6551)", async (t) => {
+  const f = actor(t, { stage: 65, items: [[I.COMP_OGRE_BOW, 1]], attributes: { "big-chompy-bird-hunting:chompy-kills": 30 } });
+  const npc = h.spawn(f, RANTZ_PARENT, RANTZ_AT);
+  await itemOnNpc(f, I.COMP_OGRE_BOW, npc);
+  for (let i = 0; i < 12 && amount(f, OGRE_BOWMAN_HAT) === 0; i++) await h.continueLine(f);
+  assert.equal(amount(f, OGRE_BOWMAN_HAT), 1);
+});
+
+// The comp ogre bow only exists after the quest, so the quest's own lost-bow reclaim stays keyed to the ogre bow.
+test("a comp ogre bow does not stand in for a lost ogre bow mid-quest: Rantz still sells the ogre bow (#6551)", async (t) => {
+  const f = actor(t, { stage: 45, items: [[I.COMP_OGRE_BOW, 1], [I.COINS, 600]] });
+  assert.equal(amount(f, I.OGRE_BOW), 0);
+  const lines = await talk(f, RANTZ_PARENT, RANTZ_AT, ["Yes, I'll buy the bow."]);
+  assert.ok(lines.some((line) => line.includes("I've lost the 'stabbie chucker'")), "the lost-bow page plays");
+  assert.equal(amount(f, I.OGRE_BOW), 1);
+  assert.ok(amount(f, I.COINS) < 600);
+});

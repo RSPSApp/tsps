@@ -47,7 +47,7 @@ the other `elemental_quest_2_*` varbits on varps 896/897, saved as they are. Sav
 | Raise/lower lever 18622 | seq 4909 + the lever's 4904 + sound 2400; a tick later fire_pos and the crane's loc anim (4887/4888/4889/4890) and sound 3169; the new crane loc three ticks after that (498-502). Raising off the track lifts the cart's cold bar or leaves the hot one, the new load shown at once and the anim a tick later (737-744, 789-794); resting in the lava heats it (761) |
 | Rotate lever 18621 | anim 4892, sound 3170, over the lava <-> over the track (750-754, 772-776) |
 | Claw on the lowered crane | fire_state 1, objectbox "You replace the broken claw.", sound 3179 (505) |
-| Cart lever 18620 | a tick after the pull jig_pos + sound 3167, the cart a tile a tick: crane 1954,5147 -> press 1946,5155 (15 steps) -> tank 1953,5162 (13) -> wind tunnel 1961,5155 (14) -> crane (14) (801-1004) |
+| Cart lever 18620 | a tick after the pull jig_pos + sound 3167, the cart a tile a tick as an NPC `teleport` (jump flag clear, so clients glide it; its multinpc keeps the load): crane 1954,5147 -> press 1946,5155 (15 steps) -> tank 1953,5162 (13) -> wind tunnel 1961,5155 (14) -> crane (14) (801-1004) |
 | Press lever 18640, hot bar | a tick after the pull the hammer loc 18644 at 1946,5155, then earth_fixed 1, jig_state 3, the box, anim 4908, sound 3180; the hammer gone two ticks later (822-826). Again: "... but the bar has already been flattened." (1101) |
 | Junction box (18641) | interface 262, if2 = pipes left; click an inlet (if1), then its other end: the pair index (order a,b,c,1,2,3) in the next pipe varbit, the `_l` connection shown, sound 3179. The run fitted a-3, 1-2, b-c (5, 13, 6), the box closed with the player's "I hope I got that right." (523-536) |
 | Piping (3414) with the pipe | water_state 1, objectbox "You replace the section of broken pipe.", sound 3179 (660) |
@@ -60,7 +60,7 @@ the other `elemental_quest_2_*` varbits on varps 896/897, saved as they are. Sav
 | Cart Take-from, dry bar | stage 7, objectbox "You take the primed bar." (1008) |
 | Mind door 18698 | stage 8 (first), both leaves open (18699/18701), sound 71 (1356) |
 | Primed bar on the gun 18725 | mind_jig 1, stage 9, objectbox "You place the primed bar under the device.", sound 3177 (1364) |
-| Extractor hat Operate | camera, then the slide onto the chair with seq 4884 and sound 3176, spotanim 807 and the hat gone, the gun's anim 4897 and sound 3173; four ticks later mind_jig 2, stage 10, Magic -20; the hat back, the slide off, "You feel magically weakened." and the camera reset (1370-1381) |
+| Extractor hat Operate | camera, then the slide onto the chair with seq 4884 and sound 3176, spotanim 807 and the hat gone, the gun's anim 4897 and sound 3173 (the hat's loc_del at 1372, the same hat put back with loc_add_change at 1378); four ticks later mind_jig 2, stage 10, Magic -20; the hat back, the slide off, "You feel magically weakened." and the camera reset (1370-1381) |
 | Gun Take-from | mind_jig 0, objectbox "You take the elemental mind bar." (1386) |
 | Workbench, mind bar + beaten book | the mind helmet four ticks on: completion, the note removed, Kandarin medium task, scroll "1 Quest Point", "7,500 Crafting XP", "7,500 Smithing XP", "Ability to make Mind", "Equipment", model 9733 (1450-1454) |
 | After the quest, mind bar + both books | skillmulti Mind shield / Mind helmet; "Following the instructions in the book, you make a mind shield.", +30 XP (1464-1471) |
@@ -95,3 +95,13 @@ the code. The journal is captured at stages 3 and 7 only.
   cart rode a tile a tick; Magic -20 at the hat; Kandarin medium task and the completion scroll.
 - **Not checked:** a natural route from the Dig Site, Quest Helper, relog mid-quest, a second
   primed bar and the mind shield in game (covered by the tests), the vision client.
+
+### 2026-11-22 · agent · claude-opus-5-5 (#6502)
+
+- **Start:** fresh account, `::master`, Elemental Workshop I complete and this quest at stage 6 with
+  `::quest`, the key on the hatch, two bars; then stage 7 and a primed bar for the extractor.
+- **Route:** a bar on the cart and the cart lever; the stairwell, the mind door, the primed bar on the
+  gun, the extractor hat.
+- **Result:** the cart rode a tile a tick from 1954,5147 as `elem2_cart_npc_bar` (5222) throughout;
+  the hat left the chair's tile as the player sat and was back six ticks later, Magic 99 -> 79.
+- **Not checked:** the client's drawing of either (the user's report, #6502).

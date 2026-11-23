@@ -25,6 +25,7 @@ module.exports = {
     api.persistAttribute(attributes.completions);
     api.persistAttribute(attributes.pbs);
     api.persistAttribute(attributes.chests, 0);
+    api.persistAttribute(attributes.grandChests, 0);
     api.persistAttribute(attributes.return);
     require("./hallowedsepulchre/Run.HallowedSepulchre").attachRun(api);
     require("./hallowedsepulchre/Lobby.HallowedSepulchre").attachLobby(api);

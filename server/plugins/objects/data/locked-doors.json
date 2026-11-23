@@ -1,0 +1,38 @@
+{
+  "_comment": "Doors that never open, and what live answers to their Open (rsprox captures cited per entry). box: the line comes in a message box (messagebox 229) rather than the chat; npc: the line is that NPC's chathead line (chat_left 231) with head animation expression; delay: ticks after the click is answered before the line comes (the player has turned to the door by then); sound: the synth played with it. The Doors plugin otherwise opens prisonbarsdoor_locked and frisb_abode_door_locked onto their cache open leaves (closed id + 1, Close).",
+  "doors": [
+    {
+      "locs": ["prisonbarsdoor_locked"],
+      "where": "Port Sarim jail cells 3012,3189 / 3012,3192 / 3012,3195; also placed at 2573,9705 / 9708 / 9711",
+      "recordings": "rsprox 230/00323 ticks 4202, 4897, 4900",
+      "message": "The door is securely locked.",
+      "box": false,
+      "sound": 2402
+    },
+    {
+      "locs": ["fortis_door_l_locked"],
+      "where": "Civitas illa Fortis 1500,3223; also placed at 1375,2927 and 1397,2972",
+      "recordings": "rsprox 226/01695 tick 2556",
+      "message": "The door is locked.",
+      "box": true,
+      "sound": 2402
+    },
+    {
+      "locs": ["frisb_abode_door_locked"],
+      "where": "Neitiznot houses 2345,3807 / 2347,3801 / 2352,3801",
+      "recordings": "rsprox 227/local 1000321 tick 11928 (gamemessage, no sound)",
+      "message": "The door is locked.",
+      "box": false
+    },
+    {
+      "locs": ["hos_grape_odddoor"],
+      "where": "Outhouses at the Hosidius vinery 1817,3537 (the man inside, hosidius_man_on_toilet, stands at 1816,3537) and the Fossil Island Museum Camp 3722,3816",
+      "recordings": "rsprox 231/03040 tick 5736; 227/local 1000187 tick 4946 (both Fossil Island)",
+      "npc": "hosidius_man_on_toilet",
+      "expression": 614,
+      "message": "Occupied!",
+      "sound": 2402,
+      "delay": 1
+    }
+  ]
+}

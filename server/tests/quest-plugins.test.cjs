@@ -20008,6 +20008,18 @@ test('RFD Amik shrine requires the Wise Old Man clue, enters the mapped lair and
 
   death({ killer: player, npc: chicken, npcId: api.core.NpcIdentifiers.EVIL_CHICKEN });
   assert.equal(inventory.get(api.core.ItemIdentifiers.EVIL_CHICKENS_EGG), 1);
+
+  // Wiki: the lair stays open after Sir Amik is freed; the shrine takes the chicken but spawns no boss.
+  attributes.set('recipe-for-disaster:rescues', 64);
+  spawned = null;
+  moves.length = 0;
+  inventory.set(api.core.ItemIdentifiers.RAW_CHICKEN, 1);
+  const after = { ...event, handled: false };
+  shrine(after);
+  assert.equal(after.handled, true, 'the shrine still opens the lair once the rescue is done');
+  assert.equal(inventory.get(api.core.ItemIdentifiers.RAW_CHICKEN), 0);
+  assert.equal(spawned, null, 'no Evil Chicken is spawned after the rescue');
+  assert.deepEqual(moves, [[2455, 4398, 0]]);
 });
 
 
@@ -20388,18 +20400,19 @@ test('RFD Awowogei enters the mapped hot-coal chamber and cooks only on the long
   const cook = itemObjectHandlers.findLast((handler) => handler.name === 'handleAwowogeiObjects');
   const rescue = itemNpcHandlers.findLast((handler) => handler.name === 'rescueByItem');
   const route = routes.findLast((handler) => handler.name === 'routeRedBananaTree');
-  assert.ok(dungeon && cook && rescue && route);
+  const exitRoute = routes.findLast((handler) => handler.name === 'routeAwowogeiDungeonExit');
+  assert.ok(dungeon && cook && rescue && route && exitRoute);
 
   const attributes = new Map([['recipe-for-disaster:awowogei-state', 63]]);
   const inventory = new Map([[core.ItemIdentifiers.RAW_STUFFED_SNAKE, 1]]);
-  let loc = [2808, 9200, 0];
+  let loc = [2808, 9200, 0], weapon = base.core.ItemIdentifiers.ZOMBIE_MONKEY_GREEGREE;
   const player = {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => ({ getX: () => loc[0], getY: () => loc[1], getZ: () => loc[2] }),
     moveTo: (location) => { loc = [location.getX(), location.getY(), location.getZ()]; moves.push(loc); },
     getEquipment: () => ({ get: (slot) => slot === base.core.Equipment.WEAPON_SLOT
-      ? { getId: () => base.core.ItemIdentifiers.ZOMBIE_MONKEY_GREEGREE }
+      ? { getId: () => weapon }
       : slot === base.core.Equipment.AMULET_SLOT ? { getId: () => base.core.ItemIdentifiers.MSPEAK_AMULET } : null }),
     getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences() {} }),
     getInventory: () => ({
@@ -20454,12 +20467,132 @@ test('RFD Awowogei enters the mapped hot-coal chamber and cooks only on the long
   assert.equal(attributes.get('recipe-for-disaster:rescues') & 128, 128);
 
   const returnCrack = { player, objectId: 16100, clickType: 1,
+    object: new core.GameObject(16100, new core.Location(3069,5485,0),0,0),
     definition: { getActions: () => ['Enter'] }, handled: false };
+  const routeReturn = (extra = {}) => {
+    const request = { ...returnCrack, sourceLocation: { x: loc[0], y: loc[1], z: loc[2] }, ...extra };
+    exitRoute(request);
+    return request.destination;
+  };
+  assert.deepEqual(routeReturn(), { x:3062,y:5485,z:0 }, 'walk to the actual coal edge');
+  weapon = -1; // The form can change after the route was queued.
+  assert.equal(routeReturn(), undefined);
+  dungeon(returnCrack);
+  assert.deepEqual(loc, [3055,5484,0], 'operation rechecks the currently wielded zombie greegree');
+  weapon = base.core.ItemIdentifiers.ZOMBIE_MONKEY_GREEGREE;
+  const state = attributes.get('recipe-for-disaster:awowogei-state');
+  attributes.set('recipe-for-disaster:awowogei-state', state & ~1024);
+  assert.equal(routeReturn(), undefined);dungeon(returnCrack);assert.deepEqual(loc,[3055,5484,0]);
+  attributes.set('recipe-for-disaster:awowogei-state', state);
+  loc = [3222,3218,0];assert.equal(routeReturn(), undefined);dungeon(returnCrack);assert.deepEqual(loc,[3222,3218,0]);
+  loc = [3055,5484,0];
+  const wrongExit = { object: new core.GameObject(16100, new core.Location(3068,5485,0),0,0) };
+  assert.equal(routeReturn(wrongExit), undefined);dungeon({ ...returnCrack, ...wrongExit });assert.deepEqual(loc,[3055,5484,0]);
+  returnCrack.handled = false;
   dungeon(returnCrack);
   assert.equal(returnCrack.handled, true);
   assert.deepEqual(loc, [2808, 9200, 0]);
 });
 
+
+test('RFD Awowogei additional snake deaths preserve an owned partial filling', async t => {
+  const core = PluginManager.getCoreApi();
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const { UseItemPacketListener } = require('../dist/net/packet/impl/UseItemPacketListener');
+  require('../plugins/quests/quests/RecipeForDisaster.Quest')(PluginManager.createApi('RfdStuffingRegression'));
+  const quest = require('../plugins/quests/QuestRuntime').getRegisteredQuests()
+    .find(({ key }) => key === 'recipe_for_disaster');
+  const I = core.ItemIdentifiers, key = 'recipe-for-disaster:awowogei-stuffing';
+  const actors = [];
+  function actor() {
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+      send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+    const p = new Player(new PlayerSession(channel));
+    p.setUsername(`rfdstuffqa${actors.length}`);
+    p.setIndex(18000 + actors.length);
+    p.setRegistered(true);
+    p.setLocation(new core.Location(2790, 3000, 0));
+    quest.setStage(p, 4);
+    p.setAttribute('recipe-for-disaster:awowogei-state', 63);
+    actors.push(p);
+    return p;
+  }
+  const amount = (p, id) => p.getInventory().getAmount(id);
+  const use = (p, first, second) => UseItemPacketListener.itemOnItem(p,
+    p.getInventory().getItems().findIndex(item => item?.getId() === first),
+    p.getInventory().getItems().findIndex(item => item?.getId() === second));
+  const kill = p => PluginManager.emitNpcDeath({
+    npc: new core.NPC(core.NpcIdentifiers.BIG_SNAKE, p.getLocation().clone()),
+    npcId: core.NpcIdentifiers.BIG_SNAKE, killer: p,
+  });
+  t.after(() => {
+    for (const p of actors) {
+      for (const item of [...core.World.getItems()]) {
+        if (item.getOwner() === p.getUsername()) core.ItemOnGroundManager.deregister(item);
+      }
+      core.TaskManager.cancelTasks(p);
+      core.TaskManager.cancelTasks(p.getIndex());
+      core.World.unregisterPlayerPosition(p);
+      p.setRegistered(false);
+    }
+    core.TaskManager.process();
+  });
+  for (const first of [I.SLICED_RED_BANANA, I.TCHIKI_NUT_PASTE]) {
+    const second = first === I.SLICED_RED_BANANA ? I.TCHIKI_NUT_PASTE : I.SLICED_RED_BANANA;
+    const bit = first === I.SLICED_RED_BANANA ? 1 : 2;
+    for (const retained of [true, false]) for (const full of [false, true]) {
+      await t.test(`first=${first} retained=${retained} full=${full}`, () => {
+        let p = actor();
+        for (const id of [I.SNAKE_CORPSE, first, second]) p.getInventory().adds(id, 1);
+        use(p, first, I.SNAKE_CORPSE);
+        assert.equal(p.getAttribute(key), bit, 'actual first filling is persisted');
+        assert.equal(amount(p, first), 0);
+        if (!retained) p.getInventory().deleteNumber(I.SNAKE_CORPSE, 1);
+        const saved = PlayerSave.fromPlayer(p);
+        p = actor();
+        saved.applyToPlayer(p);
+        assert.equal(p.getAttribute(key), bit, 'actual snapshot/apply retains partial preparation');
+        if (full) {
+          p.getInventory().adds(I.BRONZE_DAGGER, p.getInventory().getFreeSlots());
+          assert.equal(p.getInventory().getFreeSlots(), 0);
+        }
+        const before = new Set(core.World.getItems());
+        kill(p);
+        const drop = core.World.getItems().find(item => !before.has(item) && item.getItem().getId() === I.SNAKE_CORPSE);
+        assert.equal(Boolean(drop), full, 'full inventory awards the spare on the ground');
+        assert.equal(amount(p, I.SNAKE_CORPSE), retained ? (full ? 1 : 2) : (full ? 0 : 1));
+        assert.equal(p.getAttribute(key), retained ? bit : 0,
+          'an additional corpse preserves the filling; replacement of a lost corpse clears it');
+        if (drop) {
+          p.getInventory().deleteNumber(I.BRONZE_DAGGER, 1);
+          assert.equal(core.ItemOnGroundManager.transferToInventory(p, drop), 1);
+        }
+        use(p, I.SNAKE_CORPSE, second);
+        assert.equal(amount(p, second), 0);
+        assert.equal(amount(p, I.RAW_STUFFED_SNAKE), retained ? 1 : 0);
+        if (!retained) {
+          p.getInventory().adds(first, 1);
+          use(p, first, I.SNAKE_CORPSE);
+          assert.equal(amount(p, I.RAW_STUFFED_SNAKE), 1, 'replacement still needs both fillings');
+        }
+        assert.equal(p.getAttribute(key), 0);
+      });
+    }
+  }
+  await t.test('a real bank tab retains the prepared corpse; another player stays isolated', () => {
+    const p = actor(), other = actor();
+    p.getInventory().adds(I.SNAKE_CORPSE, 1);
+    p.getInventory().adds(I.SLICED_RED_BANANA, 1);
+    use(p, I.SLICED_RED_BANANA, I.SNAKE_CORPSE);
+    p.getInventory().deleteNumber(I.SNAKE_CORPSE, 1);
+    p.getBank(0).adds(I.SNAKE_CORPSE, 1);
+    kill(p);
+    assert.equal(p.getAttribute(key), 1, 'bank-owned prepared corpse is still owned');
+    assert.equal(other.getAttribute(key) ?? 0, 0);
+  });
+});
 
 test('RFD Awowogei stuffing the snake needs both the sliced red banana and tchiki nut paste', () => {
   const { api: base } = mockApi();
@@ -21460,6 +21593,7 @@ test('Dragon Slayer II crypt uses canonical template locs and reachable native-v
     onRegionLoaded: () => {},
     onServerStartup: () => {},
     onPlayerProcess: () => {},
+    persistAttribute() {}, onPlayerLogout() {}, onPlayerDeath() {}, onPlayerLogin() {},
   };
   const doorPluginPath = require.resolve('../plugins/objects/Doors.plugin');
   delete require.cache[doorPluginPath];

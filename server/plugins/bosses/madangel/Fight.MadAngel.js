@@ -175,8 +175,8 @@ class Fight {
       this.updateHud();
       return;
     }
-    // Its specials aren't combat-engine attacks, which would count it out of combat and
-    // regenerate it (a tenth of its hitpoints a tick).
+    // Its specials aren't combat-engine attacks: refresh the combat stopwatch so it counts as
+    // fighting.
     this.npc.getCombat().getLastAttack().reset();
     const due = this.events.filter((event) => event.tick <= this.tick);
     this.events = this.events.filter((event) => event.tick > this.tick);

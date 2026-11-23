@@ -325,6 +325,122 @@ test('the hidden wall: stage 95, the open wall for two ticks and one walk step n
   assert.deepEqual(at(p), [3480, 9837, 0], 'the wall blocks again');
 });
 
+const WALL_PASS_ATTRIBUTE = 'in-search-of-the-myreque:wall-pass-prior-clipping';
+const IGNORE_CLIPPING = 'movement:ignore-clipping';
+
+function wallPersistence(t) {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const { GameConstants } = require('../dist/game/GameConstants');
+  const { JsonPlayerPersistence } = require('../plugins/persistence/JsonPlayerPersistence.plugin');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tsps-myreque-wall-'));
+  const priorDirectory = JsonPlayerPersistence.SAVE_DIRECTORY;
+  const priorPersistence = GameConstants.PLAYER_PERSISTENCE;
+  JsonPlayerPersistence.SAVE_DIRECTORY = directory;
+  const persistence = new JsonPlayerPersistence();
+  GameConstants.setPlayerPersistence(persistence);
+  t.after(async () => {
+    await persistence.flush();
+    GameConstants.setPlayerPersistence(priorPersistence);
+    JsonPlayerPersistence.SAVE_DIRECTORY = priorDirectory;
+    assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
+    assert.ok(path.basename(directory).startsWith('tsps-myreque-wall-'));
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  return persistence;
+}
+
+for (const priorFlag of [false, true]) {
+  test(`wall pass logout saves only prior clipping ownership (${priorFlag})`, async (t) => {
+    const persistence = wallPersistence(t);
+    const p = actor(t, 90, 3480, 9836);
+    p.setAttribute('bot-skip-persistence', false);
+    p.setFlag(IGNORE_CLIPPING, priorFlag);
+    click(p, placed(3480, 9837, [5052]), 'Search');
+    assert.equal(p.hasFlag(IGNORE_CLIPPING), true);
+    assert.equal(p.logoutRefusal(), null);
+    p.onLogout();
+    p.setRegistered(false);
+    tick(p, 4);
+    await persistence.flush();
+    assert.ok(require('node:fs').existsSync(persistence.resolveFilePath(p.getUsername(), p.getProfile())));
+    const saved = persistence.load(p.getUsername(), p.getProfile());
+    assert.equal(saved.getFlags().includes(IGNORE_CLIPPING), priorFlag);
+    assert.equal(saved.attributes[WALL_PASS_ATTRIBUTE] ?? null, null);
+    const q = actor(t, 95, 3480, 9836);
+    saved.applyToPlayer(q); login(q);
+    assert.equal(q.hasFlag(IGNORE_CLIPPING), priorFlag);
+    if (!priorFlag) {
+      q.setNeedsPlacement(false); q.setResetMovementQueue(false);
+      q.getMovementQueue().walkStep(0, 1); tick(q);
+      assert.deepEqual(at(q), [3480, 9836, 0], 'the restored player cannot walk through the closed wall');
+    }
+  });
+}
+
+test('wall pass completion retains a pre-existing clipping flag', (t) => {
+  const p = actor(t, 95, 3480, 9836);
+  p.setFlag(IGNORE_CLIPPING);
+  click(p, placed(3480, 9837, [5052]), 'Search');
+  tick(p, 3);
+  assert.equal(p.hasFlag(IGNORE_CLIPPING), true);
+  assert.equal(p.getAttribute(WALL_PASS_ATTRIBUTE) ?? null, null);
+});
+
+test('replacing a wall pass cannot let the old timer clear the new pass', (t) => {
+  const p = actor(t, 95, 3480, 9836);
+  const wall = placed(3480, 9837, [5052]);
+  click(p, wall, 'Search'); tick(p);
+  click(p, wall, 'Search'); tick(p);
+  assert.equal(p.hasFlag(IGNORE_CLIPPING), true, 'new pass still has one tick left');
+  tick(p);
+  assert.equal(p.hasFlag(IGNORE_CLIPPING), false);
+  assert.equal(p.getAttribute(WALL_PASS_ATTRIBUTE) ?? null, null);
+});
+
+test('wall pass cleanup still runs when the player unregisters before its timer', (t) => {
+  const p = actor(t, 95, 3480, 9836);
+  click(p, placed(3480, 9837, [5052]), 'Search');
+  const packetsBefore = p.objects.length;
+  p.setRegistered(false); tick(p, 3);
+  assert.equal(p.hasFlag(IGNORE_CLIPPING), false);
+  assert.equal(p.objects.length, packetsBefore, 'cleanup does not send map objects to an offline player');
+});
+
+test('wall pass death cleanup restores its flag without changing other players', (t) => {
+  const p = actor(t, 95, 3480, 9836);
+  const other = actor(t, 95, 3480, 9836);
+  const wall = placed(3480, 9837, [5052]);
+  click(p, wall, 'Search'); click(other, wall, 'Search');
+  PM.emitPlayerDeath({ player: p, killer: null });
+  assert.equal(p.hasFlag(IGNORE_CLIPPING), false);
+  assert.equal(other.hasFlag(IGNORE_CLIPPING), true);
+  tick(other, 3);
+  assert.equal(other.hasFlag(IGNORE_CLIPPING), false);
+});
+
+for (const priorFlag of [false, true]) {
+  test(`wall pass pending snapshot recovers only marked ownership (${priorFlag})`, async (t) => {
+    const persistence = wallPersistence(t);
+    const p = actor(t, 95, 3480, 9836);
+    p.setAttribute('bot-skip-persistence', false);
+    p.setFlag(IGNORE_CLIPPING, priorFlag);
+    click(p, placed(3480, 9837, [5052]), 'Search');
+    persistence.save(p, 'test-pending-wall-pass');
+    await persistence.flush();
+    const saved = persistence.load(p.getUsername(), p.getProfile());
+    assert.equal(saved.attributes[WALL_PASS_ATTRIBUTE], priorFlag, 'snapshot records the flag ownership before the pass');
+    const q = actor(t, 95, 3480, 9836);
+    saved.applyToPlayer(q); login(q);
+    assert.equal(q.hasFlag(IGNORE_CLIPPING), priorFlag);
+    assert.equal(q.getAttribute(WALL_PASS_ATTRIBUTE) ?? null, null);
+    tick(p, 3);
+    q.setFlag(IGNORE_CLIPPING);
+    login(q);
+    assert.equal(q.hasFlag(IGNORE_CLIPPING), true, 'unmarked legitimate flags are not cleared on login');
+  });
+}
+
 test('the basement ladder: human_reachforladder, then (3495,3465) and stage 97 the next tick', (t) => {
   const p = actor(t, 95, 3477, 9845);
   const ladder = placed(3477, 9846, [5054]);

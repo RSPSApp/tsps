@@ -1,7 +1,10 @@
 /** Wiki oil lamps and sapphire lanterns: assemble, distil fuel, light and extinguish. */
+const Darkness=require('../world/Darkness.plugin');
 const OIL_ATTRIBUTE='oil-lights:distilled-oil';
 const RIMMINGTON_STILL_LOCATION='2937,3210,0',RIMMINGTON_OIL_VARBIT=281;
 // Separate still contents; retaining existing oil is a conservative server policy (retail collision not captured).
+// Synth sound 3226, played when a lantern is lit (rsprox captures, all lantern lightings).
+const LIGHT_SOUND=3226;
 const REPELLENT_STATE=RIMMINGTON_STILL_LOCATION+':repellent';
 let api;
 let core;
@@ -13,10 +16,25 @@ function light(e){
  if(!f){p.sendMessage('You need to fill the lantern with lamp oil first.');return;}
  if(p.getSkillManager().getCurrentLevel(core.Skill.FIREMAKING)<f.level){p.sendMessage('You need '+f.level+' Firemaking to light this.');return;}
  const item=[e.usedItem,e.usedWithItem].find(i=>i?.getId()===id);if(!item||!p.getInventory().contains(I.TINDERBOX))return;
- item.setId(f.lit);refresh(p);p.performAnimation(new core.Animation(733));
+ item.setId(f.lit);refresh(p);
+ // Lanterns (rsprox captures: local 1000195 t17050/t17056 bullseye and oil, 1698/3015/3016 sapphire): the spam
+ // line and synth 3226 in the click tick, no player sequence. The oil lamp's lighting was not captured, so it keeps
+ // the firemaking sequence and gets no message or sound (Ours).
+ if(f.lantern){p.getPacketSender().sendTypedMessage(core.ChatType.SPAM,'You light the lantern.');p.getPacketSender().sendSound(LIGHT_SOUND,100,0);}
+ else p.performAnimation(new core.Animation(733));
  api.emitCustomEvent('oil-lights:lit',{player:p,itemId:f.lit});
 }
-function extinguish({player,item}){const f=lit.get(item.getId());if(!f)return false;item.setId(f.filled);refresh(player);return true;}
+function extinguish({player,item}){
+ const f=lit.get(item.getId());if(!f)return false;
+ // The last light in the dark stays lit. The candle lantern's captured refusal (rsprox local 1000134 t341) is used for
+ // every lantern, whose Extinguish line it shares; the oil lamp's was not captured, so it refuses silently (Ours).
+ if(f.lantern?Darkness.refuseLastLight(player,item,'Extinguishing the lantern would leave you without a light source.'):Darkness.wouldLeaveInDark(player,item))return true;
+ item.setId(f.filled);refresh(player);
+ // rsprox captures: bullseye as a game message (95, 1754, local 1000448 t17210), oil and sapphire as spam (local
+ // 1000195 t17060, local 1000448 t17214). The oil lamp's line was not captured.
+ if(f.lantern)player.getPacketSender().sendTypedMessage(f.extinguishType,'You extinguish the lantern.');
+ return true;
+}
 function syncOil({player}){player.getPacketSender().sendVarbit(RIMMINGTON_OIL_VARBIT,player.getAttribute(OIL_ATTRIBUTE)===RIMMINGTON_STILL_LOCATION?1:0);}
 function fuel(e){
  const p=e.player,I=core.ItemIdentifiers,name=core.ObjectDefinition.forPlayer(e.objectId??e.object.getId(),p)?.getName();if(!['Lamp oil still','Lamp still'].includes(name))return;
@@ -54,7 +72,8 @@ function lens(e){
 }
 function attach(pluginApi){
  api=pluginApi;core=api.core;const I=core.ItemIdentifiers;
- families=[{empty:I.EMPTY_OIL_LAMP,filled:I.OIL_LAMP,lit:I.OIL_LAMP_3,level:12},{empty:I.EMPTY_OIL_LANTERN,filled:I.OIL_LANTERN,lit:I.OIL_LANTERN_3,level:26},{empty:I.BULLSEYE_LANTERN_EMPTY_,filled:I.BULLSEYE_LANTERN,lit:I.BULLSEYE_LANTERN_3,level:49},{empty:I.SAPPHIRE_LANTERN,filled:I.SAPPHIRE_LANTERN_2,lit:I.SAPPHIRE_LANTERN_3,level:49}];
+ const C=core.ChatType;
+ families=[{empty:I.EMPTY_OIL_LAMP,filled:I.OIL_LAMP,lit:I.OIL_LAMP_3,level:12},{empty:I.EMPTY_OIL_LANTERN,filled:I.OIL_LANTERN,lit:I.OIL_LANTERN_3,level:26,lantern:true,extinguishType:C.SPAM},{empty:I.BULLSEYE_LANTERN_EMPTY_,filled:I.BULLSEYE_LANTERN,lit:I.BULLSEYE_LANTERN_3,level:49,lantern:true,extinguishType:C.GAME},{empty:I.SAPPHIRE_LANTERN,filled:I.SAPPHIRE_LANTERN_2,lit:I.SAPPHIRE_LANTERN_3,level:49,lantern:true,extinguishType:C.SPAM}];
  empty=new Map(families.map(f=>[f.empty,f]));filled=new Map(families.map(f=>[f.filled,f]));lit=new Map(families.map(f=>[f.lit,f]));
  api.persistAttribute(OIL_ATTRIBUTE);api.onPlayerLogin(syncOil);
  api.onItemOnItem(light,{noted:false});api.onItemOnItem(lens,{noted:false});api.onItemOnObject(fuel,{noted:false});

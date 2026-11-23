@@ -1,7 +1,7 @@
 /**
  * Historian Aldo outside the lair (Wiki: Historian Aldo, Scurrius' spine), as captured
  * (docs/scurrius.md). Talk-to plays his Wiki transcript (NpcDialogues); this is the rest:
- * - Trade, or a spine used on him, swaps Scurrius' spines for his antique lamps: one asks
+ * - Trade offers a bone weapon or combat lamp when Aldo can make a weapon. The lamp trade asks
  *   "Trade Scurrius' spine for a combat lamp?", several "Trade ALL your Scurrius spines for combat
  *   lamps?", and the lamps come with an item box;
  * - the lamp gives 5,000 experience in Attack, Strength, Defence, Ranged, Magic or Hitpoints, or
@@ -9,7 +9,7 @@
  * - he is spawned as rat_boss_biologist (12606), which the cache shows by varbit 9586: Talk-to
  *   only (7226) until he has told the player about the lamps, then Talk-to and Trade (7615).
  *
- * Not here: Aldo making rat bone weapons, which needs the bone weapons themselves first.
+ * RatBoneWeapons owns the weapon materials, fee and handover.
  */
 const LAMP_XP = 5000;
 const PRAYER_LAMP_XP = 3500;
@@ -71,6 +71,14 @@ function offerTrade(player, npc) {
 }
 
 function trade({ player, npc }) {
+  const request = { player, npc, makeWeapon: null };
+  api.emitCustomEvent("rat-bone-weapons:aldo-trade", request);
+  if (request.makeWeapon) {
+    api.sendMultiChatboxPrompt(player, "Trade your Scurrius spines for a bone weapon or combat lamp?",
+      "Weapon.", request.makeWeapon,
+      "Combat lamp.", () => offerTrade(player, npc));
+    return true;
+  }
   offerTrade(player, npc);
   return true;
 }

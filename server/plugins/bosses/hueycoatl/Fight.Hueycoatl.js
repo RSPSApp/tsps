@@ -10,7 +10,9 @@
  * - Head: at half health she shields herself (huey_shield_activation, huey_head_invulnerable)
  *   and the tail rises from the western cave (it spawns east, shows west a tick later).
  * - Tail: it slams 2 ticks after showing, stays 36 ticks, sinks for 2 and shows on the other
- *   side. Broken (huey_tail_break), the head screeches; a tick later "The Hueycoatl's shield
+ *   side. It is held at its side's angle (it never turns), and drawn as nothing from its spawn
+ *   until it first shows and from 2 ticks after each sink until it shows again, so a player who
+ *   comes into view meanwhile sees no tail. Broken (huey_tail_break), the head screeches; a tick later "The Hueycoatl's shield
  *   falls!", 3 ticks later she is attackable again.
  * - Final: the broken tail slams on alternate sides every 24 ticks (from 18 ticks after it
  *   broke), the head attacks faster.
@@ -41,6 +43,8 @@ const TAIL_SHOW_TICKS = 1;
 const TAIL_SLAM_TICKS = 2;
 const TAIL_STAY_TICKS = 36;
 const TAIL_SWAP_TICKS = 2;
+/** A sunk tail that hasn't shown again is hidden this many ticks after it starts sinking. */
+const TAIL_HIDE_TICKS = 2;
 const UNSHIELD_MESSAGE_TICKS = 1;
 const UNSHIELD_TICKS = 3;
 const BROKEN_SINK_TICKS = 4;
@@ -139,7 +143,7 @@ function spawnSet(session) {
 function newFight(session) {
   session.fight = {
     generation: 0, events: [], phase: "body", head: null, tail: null, segments: [], seer: null,
-    tailSide: "west", tailUp: false, spawnedAt: 0, started: false, attackStep: 0, nextAttack: 0,
+    tailSide: "west", tailUp: false, tailShows: 0, spawnedAt: 0, started: false, attackStep: 0, nextAttack: 0,
     nextSymbols: 0, damage: new Map(), joinedAt: new Map(), killedAt: 0, bodyDoneAt: 0,
     pendingCameraResets: new Set(),
   };
@@ -238,6 +242,8 @@ function shield(session) {
   fight.tail = bossPart(session.spawnNpc(Shared.NPC.TAIL, Shared.TAIL_EAST));
   fight.tailSide = "east";
   fight.tailUp = false;
+  fight.tail.setFaceAngle(Shared.TAIL_FACE.east);
+  hideTail(fight.tail);
   schedule(session, TAIL_SHOW_TICKS, () => showTail(session, "west", TAIL_STAY_TICKS), "tail");
 }
 
@@ -247,7 +253,10 @@ function showTail(session, side, stay) {
   const { tail } = fight;
   if (!tail?.isRegistered()) return;
   fight.tailSide = side;
+  fight.tailShows += 1;
   tail.moveTo(session.tile(side === "west" ? Shared.TAIL_WEST : Shared.TAIL_EAST));
+  tail.setFaceAngle(Shared.TAIL_FACE[side]);
+  tail.setTypeCustomisation(null);
   tail.performAnimation(new core.Animation(Shared.SEQ.TAIL_APPEAR));
   fight.tailUp = fight.phase === "tail";
   schedule(session, TAIL_SLAM_TICKS, () => Attacks.slam(session, side), "tail");
@@ -259,7 +268,7 @@ function sinkTail(session, side) {
   const { tail } = fight;
   if (!tail?.isRegistered()) return;
   fight.tailUp = false;
-  tail.performAnimation(new core.Animation(Shared.SEQ.TAIL_DISAPPEAR));
+  sink(session, tail);
   const other = side === "west" ? "east" : "west";
   if (fight.phase === "tail") {
     Seer.tailLine(session);
@@ -267,6 +276,24 @@ function sinkTail(session, side) {
   } else if (fight.phase === "final") {
     schedule(session, BROKEN_PERIOD_TICKS - BROKEN_STAY_TICKS, () => showTail(session, other, BROKEN_STAY_TICKS), "tail");
   }
+}
+
+/**
+ * The tail sinks into its cave and, unless it shows again first (the whole tail's swap shows it
+ * on the tick this fires), is hidden once the sinking has played.
+ */
+function sink(session, tail) {
+  const fight = session.fight;
+  const shows = fight.tailShows;
+  tail.performAnimation(new core.Animation(Shared.SEQ.TAIL_DISAPPEAR));
+  schedule(session, TAIL_HIDE_TICKS, () => {
+    if (fight.tailShows === shows && tail.isRegistered()) hideTail(tail);
+  });
+}
+
+/** Draws the tail as nothing for every viewer, late ones too: each model of its form is -1. */
+function hideTail(tail) {
+  tail.setTypeCustomisation({ models: Shared.TAIL_HIDDEN_MODELS[tail.getId()] });
 }
 
 /** The tail breaks: the shield falls and the final phase starts. */
@@ -294,7 +321,7 @@ function breakTail(session) {
     Hud.retarget(session, head);
     setPhase(session, "final");
   });
-  schedule(session, BROKEN_SINK_TICKS, () => tail.performAnimation(new core.Animation(Shared.SEQ.TAIL_DISAPPEAR)));
+  schedule(session, BROKEN_SINK_TICKS, () => sink(session, tail));
   schedule(session, BROKEN_FIRST_TICKS, () => showTail(session, side === "west" ? "east" : "west", BROKEN_STAY_TICKS), "tail");
 }
 
@@ -311,7 +338,7 @@ function defeat(session) {
   head.getCombat().reset();
   head.performAnimation(new core.Animation(Shared.SEQ.KNOCKOUT));
   head.setNpcTransformationId(Shared.NPC.HEAD_DEFEATED);
-  if (tail?.isRegistered()) tail.performAnimation(new core.Animation(Shared.SEQ.TAIL_DISAPPEAR));
+  if (tail?.isRegistered()) sink(session, tail);
   Pillars.stop(session);
   Seer.defeated(session);
   Kills.killed(session);

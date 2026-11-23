@@ -164,7 +164,7 @@ function ConfigField({
         const argb = Number(value) >>> 0;
         const alpha = item.alpha ? (argb >>> 24) || 255 : 255;
         const withAlpha = (rgb: number, a: number) =>
-            item.alpha ? ((a & 0xff) << 24 | (rgb & 0xffffff)) >>> 0 : rgb & 0xffffff;
+            item.alpha ? (((a & 0xff) << 24) | (rgb & 0xffffff)) >>> 0 : rgb & 0xffffff;
         return (
             <div className="rl-sidebar-row rl-sidebar-value-row">
                 <label className="rl-sidebar-field">{label}</label>

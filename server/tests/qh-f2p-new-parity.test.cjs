@@ -383,7 +383,7 @@ test('Longhall door leaves use the cache open locs and unseal Atlas through real
   require('../plugins/objects/Doors.plugin.js').register({
     core: doorCore,
     onObjectInteraction: (name, handlers) => { if (name === 'Longhall door') Object.assign(actions, handlers); },
-    onRegionLoaded() {}, onServerStartup() {}, onObjectRoute() {}, onCustomEvent() {}, emitCustomEvent() {},
+    onRegionLoaded() {}, onServerStartup() {}, onObjectRoute() {}, onCustomEvent() {}, emitCustomEvent() {}, persistAttribute() {}, onPlayerLogout() {}, onPlayerDeath() {}, onPlayerLogin() {},
   });
   assert.equal(typeof actions.Open, 'function', 'Longhall door must reach the Doors dispatch');
   assert.equal(typeof actions.Close, 'function');
@@ -460,7 +460,7 @@ test('Below completion keeps the extra 1,999 coins in a full, stacked or one-slo
     const player = {
       getAttribute: (key) => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
       getInventory: () => inventory, getPacketSender: () => packet,
-      getSkillManager: () => ({ getCurrentLevel: () => 99 }), getPrivateArea: () => null,
+      getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences() {} }), getPrivateArea: () => null,
       getLocation: () => new core.Location(2950, 5769, 0),
       getUsername: () => username, getDisplayName: () => username, getIndex: () => sequence, isPlayer: () => true, sendMessage() {},
     };

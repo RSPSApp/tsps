@@ -19,7 +19,7 @@ test('cache item zero is valid inventory content and can be handed in', async ()
 
   const player = {
     getUsername: () => 'item-zero-regression',
-    getPacketSender: () => ({ sendItemContainer() {} }),
+    getPacketSender: () => ({ sendItemContainer() {}, sendRunEnergy() {} }),
     sendMessage() {},
   };
   const inventory = new Inventory(player);
@@ -54,7 +54,7 @@ test('MCP inventory option and item-use accept a real item-0 slot', async () => 
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   const inventory = new Inventory({
     getUsername: () => 'item-zero-mcp',
-    getPacketSender: () => ({ sendMessage() {}, sendTypedMessage() {}, sendItemContainer() {} }),
+    getPacketSender: () => ({ sendMessage() {}, sendTypedMessage() {}, sendItemContainer() {}, sendRunEnergy() {} }),
     sendMessage() {},
   });
   inventory.addItem(new Item(0, 1));
@@ -99,7 +99,7 @@ test('a dropped item zero can return to its owner without losing the source', as
   const location = new Location(3222, 3218, 0);
   const player = {
     getUsername: () => 'item-zero-ground',
-    getPacketSender: () => ({ sendItemContainer() {} }),
+    getPacketSender: () => ({ sendItemContainer() {}, sendRunEnergy() {} }),
     getInventory: () => inventory,
     getPrivateArea: () => null,
     getLocation: () => location,

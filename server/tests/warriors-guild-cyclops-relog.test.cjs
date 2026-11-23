@@ -259,3 +259,21 @@ test("corrupt saved room state is treated as no state", (t) => {
     assert.equal(f.p.getLocation().getX(), TOP_DOOR_TILE.x - 1, JSON.stringify(state));
   }
 });
+
+test("a league character's boosted drops make the defender likelier (the Boosted drops page's Cyclops row)", (t) => {
+  const h = cyclopesHandlers();
+  // A roll of 3 in 50 is a defender only at 5x (Demonic Pacts from tier 4), never at the 1/50 base.
+  const rollAt3 = (f) => {
+    t.mock.method(Guild, "random", () => 3);
+    const drops = [];
+    h.drops({ player: f.p, npc: { getLocation: () => f.p.getLocation() }, npcId: core.NpcIdentifiers.CYCLOPS_10, drops });
+    return drops.map((drop) => drop.itemId);
+  };
+  const main = enterTopRoom(t, h, { tokens: 200, defender: I.BRONZE_DEFENDER });
+  assert.deepEqual(rollAt3(main), [], "a main character: 1/50");
+  const league = enterTopRoom(t, h, { tokens: 200, defender: I.BRONZE_DEFENDER });
+  league.p.setProfile("league");
+  league.p.setAttribute("league:type", 6);
+  league.p.setAttribute("league:relics", { 0: 1, 1: 1, 2: 1, 3: 1 });
+  assert.deepEqual(rollAt3(league), [I.IRON_DEFENDER], "Demonic Pacts tier 4: 5/50, the next defender");
+});

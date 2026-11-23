@@ -164,22 +164,36 @@ test("agreeing to fight Barrelor is stage 2; asking for the cash leaves Pete's '
   assert.equal(h.shown(f)?.text, "Hello again!", "tick 260");
 });
 
+/** Records the NPC's own seqs (f.animations holds the player's). */
+function npcAnimations(f, npc) {
+  const seqs = [];
+  const perform = npc.performAnimation.bind(npc);
+  npc.performAnimation = (animation) => { seqs.push({ tick: f.tick, id: animation.getId() }); return perform(animation); };
+  return seqs;
+}
+
+const facing = (f) => { const l = f.player.getPositionToFace(); return l && [l.getX(), l.getY()]; };
+
 test("the knock-out: Ow!, the blow, cutscene 1 in a copy of the brewery and the meeting on waking (ticks 264-366)", async (t) => {
-  const f = actor(t, { at: [3679, 3537, 0], stage: S.AGREED });
+  const f = actor(t, { at: [3680, 3536, 0], stage: S.AGREED });
   const pete = h.spawn(f, N.PETE, [3680, 3537, 0]);
+  const peteSeqs = npcAnimations(f, pete);
   h.spawn(f, N.BRAINDEATH, BRAINDEATH_TILE);
   await h.talk(f, pete);
   await until(f, "I've decided to help you for free.");
   await h.choose(f, "I've decided to help you for free.");
   const diversion = await until(f, "What diversion?");
+  assert.deepEqual(facing(f), [3680, 3535], "the player's back to Pete as the line shows (tick 267)");
+  assert.equal(f.player.getInteractingMobile(), null, "no longer facing Pete himself");
   await h.continueLine(f);
   const blow = f.tick;
   assert.ok(f.overheads.some((o) => o.text === "Ow!" && o.tick === blow), "the player's Ow! (tick 268)");
-  assert.ok(f.animations.some((a) => a.id === 401 && a.tick === blow), "human_blunt_pound 401");
+  assert.ok(peteSeqs.some((a) => a.id === 401 && a.tick === blow), "Pete's human_blunt_pound 401 (npc_info, tick 268)");
+  assert.ok(!f.animations.some((a) => a.id === 401), "the player has no seq of their own");
   assert.ok(f.graphics.some((g) => g.id === 245 && g.tick === blow), "stunned_thieving 245");
   assert.equal(group(f), -1, "the chat closes with the blow");
   for (let i = 0; i < 8; i++) h.tick(f);
-  assert.notDeepEqual(at(f).slice(0, 2), [3679, 3537], "in the brewery's copy six ticks on (tick 274)");
+  assert.notDeepEqual(at(f).slice(0, 2), [3680, 3536], "in the brewery's copy six ticks on (tick 274)");
   assert.equal(stage(f), S.AGREED, "the knock-out leaves stage 2");
   const said = chat(f, blow);
   for (const words of ["Arrr... 'Tis lookin' bleak...", "Good news Cap'n!", "We may make it through this yet..."]) {
@@ -251,6 +265,18 @@ test("each brewer is the Wiki's numbered brewer the capture heard, before and af
 
 test("raking: a stage, a weed and 4 XP a swing, a swing every four ticks (ours: no misses), then the seed's line 3 ticks after it goes in (ticks 817-845)", async (t) => {
   const f = actor(t, { at: [2162, 5068, 0], stage: S.SEEDS, items: [[I.RAKE], [I.BLINDWEED_SEED]] });
+  // The harness's session replays no scene; a client standing at the patch has it in its scene.
+  f.player.getSession().isTileInScene = () => true;
+  const locPackets = [];
+  const sender = f.player.getPacketSender();
+  for (const name of ["sendObject", "sendObjectRemoval"]) {
+    const send = sender[name].bind(sender);
+    sender[name] = (object, ...rest) => {
+      const l = object?.getLocation?.();
+      if (l?.getX() === 2162 && l.getY() === 5069) locPackets.push(`${name} ${object.getId()}`);
+      return send(object, ...rest);
+    };
+  }
   await clickObject(f, 10096, [2162, 5069], 2);
   assert.deepEqual(messages(f).slice(-1), ["This is a blindweed patch. The soil has not been treated. The patch needs weeding."], "tick 805");
   const xp = f.player.getSkillManager().getExperience(Sk.FARMING);
@@ -271,6 +297,9 @@ test("raking: a stage, a weed and 4 XP a swing, a swing every four ticks (ours: 
   assert.equal(f.messages.find((m) => m.text === "You plant a seed in the blindweed patch.").type, h.core.ChatType.SPAM);
   assert.equal(varbitAt(f, V.PATCH, 4) - planted, 3);
   assert.equal(f.player.getSkillManager().getExperience(Sk.FARMING) - xp, 32, "20 XP for planting");
+  // Only the varbit: the client redraws the 2x2 multiloc from it. A 1x1 child added by hand sat on the
+  // patch's south-west tile, off the dirt (issue #6499); the capture sends no loc packet here.
+  assert.deepEqual(locPackets, [], "no loc added or removed on the patch");
   await clickObject(f, 10096, [2162, 5069], 2);
   assert.equal(messages(f).at(-1), "This is a blindweed patch. The soil has not been treated. The patch has something growing in it.");
 });
@@ -483,6 +512,98 @@ test("the barrel counts what goes in and the lever pressurises five, stage 12 tw
 
 // ------------------------------------------------------------------ The Evil Spirit
 
+test("pressurising five creatures survives durable saves at delay 0, 1 and 2 without early live progression", async (t) => {
+  const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
+  const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "tsps-rum-deal-barrel-"));
+  const storage = new JsonPlayerPersistence();
+  storage.resolveFilePath = (name) => path.join(directory, name + ".json");
+  t.after(async () => {
+    await storage.flush();
+    for (const name of fs.readdirSync(directory)) fs.unlinkSync(path.join(directory, name));
+    fs.rmdirSync(directory);
+  });
+  for (const logout of [false, true]) for (const delay of [0, 1, 2]) {
+    await t.test(`delay=${delay} logout=${logout}`, async (t) => {
+      const f = actor(t, { at: [2140, 5102, 2], stage: S.CATCH,
+        attributes: { "quest.rum_deal.slugs": 4, "quest.rum_deal.karam": 1 } });
+      const object = h.core.MapObjects.getObjectsAt(new h.core.Location(2141, 5103, 2), null)
+        .find((value) => value.getId() === 10164);
+      assert.ok(object, "actual placed pressure lever");
+      h.PM.emitObjectInteraction({ player: f.player, object, objectId: 10164, clickType: 1, handled: false });
+      h.ticks(f, delay);
+      assert.equal(stage(f), delay < 2 ? S.CATCH : S.PRESSURISED, "live stage keeps the captured two-tick delay");
+      if (logout) {
+        h.PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+        h.core.TaskManager.cancelTasks(f.player);
+        h.core.TaskManager.cancelTasks(f.player.getIndex());
+        h.core.World.getPlayers().remove(f.player);
+      }
+      f.player.setAttribute("bot-skip-persistence", false);
+      storage.save(f.player);
+      await storage.flush();
+      f.player.setAttribute("bot-skip-persistence", true); // only the isolated JSON adapter owns this fixture save
+      assert.equal(stage(f), delay < 2 ? S.CATCH : S.PRESSURISED, "snapshot does not advance the live owner");
+      const loaded = storage.load(f.player.getUsername());
+      const restored = actor(t, { at: [2140, 5102, 2] });
+      loaded.applyToPlayer(restored.player);
+      h.PM.emitPlayerLogin({ player: restored.player, username: restored.player.getUsername() });
+      assert.equal(stage(restored), S.PRESSURISED, "durable debit always restores completed pressurisation");
+      assert.equal(restored.player.getAttribute("quest.rum_deal.slugs"), 0);
+      assert.equal(restored.player.getAttribute("quest.rum_deal.karam"), 0);
+      h.ticks(restored, 3);
+      assert.equal(stage(restored), S.PRESSURISED, "old callbacks cannot debit or regress restored progression");
+    });
+  }
+});
+
+test("the actual Fever Spider drop table requires the finished stage15 instruction while incomplete", (t) => {
+  const drops = require("../plugins/npcs/NpcDrops.plugin").__internals;
+  drops.loadDrops();
+  const npc = h.core.NPC.create(N.SPIDER, new h.core.Location(2140, 5094, 0));
+  const table = drops.tableForNpc(N.SPIDER);
+  assert.ok(table);
+  for (const value of [0, 1, 11, 14, 15, 18, 19]) {
+    const f = actor(t, { at: [2140, 5094, 0], stage: value });
+    const output = drops.rollTable(table, f.player, npc);
+    assert.equal(output.some((item) => (item.id ?? item.itemId ?? item.item_id) === I.FEVER_SPIDER_BODY),
+      value >= S.SPIDER && value < S.COMPLETE, `actual quest-item table at stage${value}`);
+  }
+  const unrelated = { player: actor(t, { at: WAKE, stage: S.BANISHED }).player,
+    npcId: N.SPIDER, itemId: I.COINS, allowed: undefined };
+  h.PM.emitCustomEvent("npc-drops:quest-item", unrelated);
+  assert.equal(unrelated.allowed, undefined, "ordinary drops remain owned by their table");
+});
+
+test("barrel recovery does not grant unearned progress or regress a later quest stage", (t) => {
+  for (const [value, pending] of [[S.WATER_ADDED, 1], [S.CATCH, 0], [S.DONNIE, 1]]) {
+    const f = actor(t, { at: WAKE, stage: value, attributes: { "rum-deal:pressurising": pending } });
+    h.PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
+    h.PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
+    assert.equal(stage(f), value, "only an in-flight paid barrel at stage11 may advance");
+  }
+});
+
+test("the brewery stairs: up onto the floor in front of the stairs' head and back, with their messages (ticks 711, 1194; issue #6499)", async (t) => {
+  const f = actor(t, { at: [2152, 5088, 0], stage: S.SEEDS });
+  await clickObject(f, 10136, [2149, 5088], 1, () => at(f)[2] === 1);
+  assert.deepEqual(at(f), [2149, 5089, 1], "tick 1194");
+  assert.equal(messages(f).at(-1), "You climb up the stairs.");
+  f.player.getMovementQueue().reset();
+  await f.connection.dispatch([{ type: "move", worldX: 2149, worldY: 5091, modifierFlags: 0, run: false }]);
+  h.ticks(f, 3);
+  assert.notDeepEqual(at(f), [2149, 5089, 1], "and can walk away from it");
+  await clickObject(f, 10137, [2149, 5088], 1, () => at(f)[2] === 0);
+  assert.deepEqual(at(f), [2152, 5088, 0], "tick 711");
+  assert.equal(messages(f).at(-1), "You climb down the stairs.");
+});
+
+test("Davey stays in his hut facing south, as the capture adds him all 18 times (issue #6499)", () => {
+  const spawns = require("../data/definitions/npc-spawns.json").filter((spawn) => spawn.id === N.DAVEY);
+  assert.deepEqual(spawns.map(({ x, y, level, direction, wanderRadius }) => ({ x, y, level, direction, wanderRadius })),
+    [{ x: 2132, y: 5100, level: 1, direction: 1, wanderRadius: 0 }]);
+});
+
 test("the wrench with stage 13, a lost one replaced, Davey's blessing and his second (ticks 2030-2300)", async (t) => {
   const f = actor(t, { at: WAKE, stage: S.PRESSURISED });
   const braindeath = h.spawn(f, N.BRAINDEATH, BRAINDEATH_TILE);
@@ -620,12 +741,20 @@ test("after the quest: Braindeath, Davey and Donnie's own pages (ticks 2874, 296
 test("Pete's lifts: the blow, the fade, the far dock and his excuse, each way (ticks 3077-3129)", async (t) => {
   const f = actor(t, { at: [2162, 5114, 1], stage: S.COMPLETE });
   const island = h.spawn(f, N.ISLAND_PETE, [2162, 5115, 1]);
+  const islandSeqs = npcAnimations(f, island);
+  const faced = [];
+  const face = f.player.forcePositionToFace.bind(f.player);
+  f.player.forcePositionToFace = (tile) => { faced.push({ tick: f.tick, at: [tile.getX(), tile.getY()] }); return face(tile); };
   const lines = await play(f, () => h.talk(f, island), ["Okay!"]);
   assert.deepEqual(lines.slice(0, 3), ["PLAYER: Do I know you?", "Pirate Pete: Yes, you owe me some money.", "Pirate Pete: Want a lift to Port Phasmatys?"]);
   assert.deepEqual(at(f), [3680, 3536, 0]);
   assert.ok(lines.includes("PLAYER: Ooooh... my head..."));
   assert.equal(lines.at(-1), "PLAYER: Wow... I'm lucky I wasn't seriously hurt!");
-  assert.ok(f.animations.some((a) => a.id === 401));
+  const blow = islandSeqs.find((a) => a.id === 401);
+  assert.ok(blow, "Pete swings (seq 401 in npc_info, tick 3085)");
+  assert.ok(!f.animations.some((a) => a.id === 401), "the player has no seq of their own");
+  // The last line of whichever of the five talks played turns the player's back to Pete (tick 3084).
+  assert.ok(faced.some((turn) => turn.tick <= blow.tick && turn.at[0] === 2162 && turn.at[1] === 5113), "facing away from Pete before the blow");
   const pete = h.spawn(f, N.PETE, [3680, 3537, 0]);
   const back = await play(f, () => h.talk(f, pete), ["Okay!"]);
   // The Wiki's dock branch (the capture goes straight to the menu, tick 3104: a recorded difference).

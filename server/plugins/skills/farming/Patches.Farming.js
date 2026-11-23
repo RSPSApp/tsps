@@ -12,14 +12,16 @@ const SeedBox = require("./SeedBox.Farming");
 const Hespori = require("./Hespori.Farming");
 const Redwood = require("./Redwood.Farming");
 const Tools = require("./Tools.Farming");
+const Gardeners = require("./Gardeners.Farming");
 const { pauseForLevelUp, actionInterval } = require("../SkillActions");
 
 const FARM_ATTRIBUTE = "farming:state";
 const GROWTH_MULTIPLIER_CONFIG = "Farming:growthMultiplier";
 /** Making and placing a scarecrow (Wiki, Scarecrow). */
 const SCARECROW_LEVEL = 23;
-/** A grown willow tree regrows one of its six branches this often (Wiki: Willow branch). */
-const WILLOW_BRANCH_MINUTES = 5;
+const PICKUP_TABLE_ANIMATION = 832; // human_pickuptable
+const SCARECROW_SOUND = 2584; // hay sack fill and spear step (rsprox captures)
+const HAY_SACK_SOUND_DELAY = 10;
 const TROLL_HERB_PATCH = Data.CACHE.patches.find(p => p.type === "HERB" && p.x === 2826 && p.y === 3694 && p.z === 0);
 const FALADOR_FARM_PATCHES = new Set(Data.CACHE.patches.filter(p => p.z === 0
     && ["ALLOTMENT", "FLOWER", "HERB"].includes(p.type)
@@ -30,8 +32,8 @@ const FALADOR_FARM_PATCHES = new Set(Data.CACHE.patches.filter(p => p.z === 0
 /** Gricoller's can's doses of water (item meta, as Rewards.Farming saves it). */
 const GRICOLLER_WATER_META = "farming:water";
 const ANIM = { RAKE: 2273, PLANT: 2291, PLANT_BARE_HANDED: 10721, SAPLING: 830, FILL_POT: 11121, WATER: 2293, DIG: 830,
-    PICK_LOW: 2282, PICK_HIGH: 2280, PICK_MUSHROOM: 2292, COMPOST: 2283, CURE: 2288, PRUNE: 2275 };
-const SOUND = { RAKE: 2442, PLANT: 2432, DIG: 1470, PICK: 2437, COMPOST: 2427, CRYSTAL_SHATTER: 2541 };
+    PICK_LOW: 2282, PICK_HIGH: 2280, PICK_MUSHROOM: 2292, COMPOST: 2283, CURE: 2288, PRUNE: 2275, PRUNE_BRANCH: 2277 };
+const SOUND = { PRUNE_BRANCH: 2440, RAKE: 2442, PLANT: 2432, DIG: 1470, PICK: 2437, COMPOST: 2427, CRYSTAL_SHATTER: 2541 };
 // Rev 241 gameval human_pickuptable; rsprox recording 1858 pairs it with sound 2441.
 const FILL_BIN_ANIMATION = 832;
 const FILL_BIN_SOUND = 2441;
@@ -73,7 +75,7 @@ const LLETYA_FRUIT_PATCH = Data.CACHE.patches.find(p => p.type === "FRUIT_TREE" 
 const PATCHES_BY_REGION = new Map();
 const HARMONY_HERB_PATCH = Data.CACHE.patches.find(p => p.type === "HERB" && p.x === 3789 && p.y === 2837 && p.z === 0);
 for (const patch of Data.CACHE.patches) {
-    const rx = Math.floor((patch.x + patch.maxX) / 128), ry = Math.floor((patch.y + patch.maxY) / 128);
+    const rx = Math.floor((Data.patchMinX(patch) + patch.maxX) / 128), ry = Math.floor((Data.patchMinY(patch) + patch.maxY) / 128);
     for (let x = rx - 1; x <= rx + 1; x++) {
         for (let y = ry - 1; y <= ry + 1; y++) {
             for (const z of patch.type === "REDWOOD" ? [patch.z, patch.z + 1, patch.z + 2] : [patch.z]) {
@@ -229,8 +231,8 @@ function syncPatch(player, patch) {
     if (patch.type === "REDWOOD") Redwood.refresh(player, patch);
     // The client rebuilds loc geometry on object updates, not varbit updates.
     // Use the actual map locs so multi-tile patches retain every shape/rotation.
-    for (let x = patch.x; x <= patch.maxX; x++) {
-        for (let y = patch.y; y <= patch.maxY; y++) {
+    for (let x = Data.patchMinX(patch); x <= patch.maxX; x++) {
+        for (let y = Data.patchMinY(patch); y <= patch.maxY; y++) {
             const object = core.MapObjects.get(patch.id, new core.Location(x, y, patch.z), player.getPrivateArea());
             if (!object) continue;
             sender.sendObjectRemoval(object);
@@ -240,7 +242,7 @@ function syncPatch(player, patch) {
     rendered.set(Data.patchKey(patch), value);
 }
 function findPatch(id, location) {
-    return Data.CACHE.patches.find(p => p.id === id && p.z === location.z && location.x >= p.x && location.x <= p.maxX && location.y >= p.y && location.y <= p.maxY)
+    return Data.CACHE.patches.find(p => p.id === id && p.z === location.z && location.x >= Data.patchMinX(p) && location.x <= p.maxX && location.y >= Data.patchMinY(p) && location.y <= p.maxY)
         ?? Data.CACHE.patches.find(p => p.type === "REDWOOD" && core.CacheDefinitions.getObject(id).transformVarbit === p.varbit
             && Math.abs(p.x - location.x) < 12 && Math.abs(p.y - location.y) < 12);
 }
@@ -264,7 +266,7 @@ function gate(player) {
 }
 function nearPatch(player, patch) {
     const loc = player.getLocation();
-    return loc.getZ() === patch.z && loc.getX() >= patch.x - 16 && loc.getX() <= patch.maxX + 16 && loc.getY() >= patch.y - 16 && loc.getY() <= patch.maxY + 16;
+    return loc.getZ() === patch.z && loc.getX() >= Data.patchMinX(patch) - 16 && loc.getX() <= patch.maxX + 16 && loc.getY() >= Data.patchMinY(patch) - 16 && loc.getY() <= patch.maxY + 16;
 }
 // Captures: the rake swings two ticks after the click and every four after, each swing after the
 // first pulling a weed. A harvest swings at once and every three ticks, the produce a few ticks later.
@@ -299,9 +301,45 @@ function clearStep(player, work) {
     work.finish();
     return false;
 }
+/** The cycle each player last clicked (or used an item on) a compost bin, from its route event. */
+const BIN_CLICK_CYCLE = new WeakMap();
+/** The last bin loop each player started, kept so a click on the same loop can pick it back up. */
+const LAST_BIN_WORK = new WeakMap();
+let binIds = null;
+function noteBinClick({ player, objectId }) {
+    binIds ??= new Set(Data.CACHE.patches.filter(p => p.type.includes("COMPOST")).map(p => p.id));
+    if (binIds.has(objectId)) BIN_CLICK_CYCLE.set(player, core.World.getProcessCycle());
+}
+/**
+ * Captures (local 1000103, 1000105, 1000324, 1000343, 1000444, 1000448, 1000451; recording 1858):
+ * a player who walks to the bin starts two ticks after arriving. One already standing at it
+ * starts at once: an ingredient goes in with the animation on the click's tick and lands a tick
+ * later (weeds two), compost is scooped a tick after the click. Every click cancels the loop
+ * running before it; one on that same loop (same bin, action and item) whose next step is still
+ * to come picks it back up where it was, and one with another item starts at that step
+ * (Ours: no capture clicks a bin mid-loop).
+ */
 function startBinWork(player, patch, input, action = "fill-bin") {
-    WORK.set(player, { patch, action, input, nextTick: workTick + 2,
-        position: player.getLocation().clone(), depositing: false });
+    const position = player.getLocation().clone();
+    const last = LAST_BIN_WORK.get(player);
+    // A loop paused by a level-up pop-up is never picked up: its pause would never clear.
+    const running = last && last.patch === patch && last.input.bin === input.bin && last.nextTick > workTick
+        && last.position.equals(position) && !last.levelUpPaused;
+    if (running && last.action === action && last.input.id === input.id) {
+        WORK.set(player, last);
+        return;
+    }
+    const stood = BIN_CLICK_CYCLE.get(player) === core.World.getProcessCycle();
+    BIN_CLICK_CYCLE.delete(player);
+    const work = { patch, action, input, nextTick: workTick + 2, position, depositing: false };
+    LAST_BIN_WORK.set(player, work);
+    WORK.set(player, work);
+    if (!stood) return;
+    // Another item on a bin whose loop was still running starts at that loop's next step, so
+    // switching items never beats the captured pace (Ours).
+    if (running) { work.nextTick = last.nextTick; return; }
+    if (action === "take-bin") work.nextTick = workTick + 1;
+    else if (!fillBinStep(player, work)) WORK.delete(player);
 }
 function fillBinStep(player, work) {
     const { patch, input } = work;
@@ -309,20 +347,26 @@ function fillBinStep(player, work) {
     const bin = stateFor(player, patch).bin;
     const capacity = patch.type === "BIG_COMPOST" ? 30 : 15;
     if (bin !== input.bin || bin.closedAt || bin.open || bin.count >= capacity || !inventory.contains(input.id)) return false;
-    // Captures: animate at +2, deposit at +3, then repeat both phases every two ticks.
+    // Captures: animate, deposit a tick later, then repeat both phases every two ticks. Weeds
+    // all go in at once, two ticks after the animation (local 1000103 t712-716, 1000324 t2035-2042,
+    // t6786-6788; Wiki, Weeds: "it will put all 15 weeds at once").
+    const weeds = input.id === Data.itemId("Weeds");
     if (!work.depositing) {
         animate(player, FILL_BIN_ANIMATION);
         player.getPacketSender().sendSound(FILL_BIN_SOUND, 1, 0);
-    } else {
-        inventory.deleteNumber(input.id, 1);
-        bin.count++;
-        if (input.superItem) bin.super++;
-        if (input.tomato) bin.tomatoes++;
-        bin.tier = bin.super === bin.count ? 2 : bin.tomatoes === bin.count ? 4 : 1;
-        syncPatch(player, patch);
-        if (bin.count >= capacity || !inventory.contains(input.id)) return false;
+        work.depositing = true;
+        work.nextTick = workTick + (weeds ? 2 : 1);
+        return true;
     }
-    work.depositing = !work.depositing;
+    const amount = weeds ? Math.min(inventory.getAmount(input.id), capacity - bin.count) : 1;
+    inventory.deleteNumber(input.id, amount);
+    bin.count += amount;
+    if (input.superItem) bin.super += amount;
+    if (input.tomato) bin.tomatoes += amount;
+    bin.tier = bin.super === bin.count ? 2 : bin.tomatoes === bin.count ? 4 : 1;
+    syncPatch(player, patch);
+    if (weeds || bin.count >= capacity || !inventory.contains(input.id)) return false;
+    work.depositing = false;
     work.nextTick = workTick + 1;
     return true;
 }
@@ -449,10 +493,12 @@ function plant(player, patch, id, seeds = inventorySeeds(player, id)) {
         player.sendMessage("You crush the seeds while trying to plant them bare-handed."); return;
     }
     // Content may keep the seed, grow the crop at once or keep it from disease and death ("farming:plant-rules", a league relic);
-    // `message` is said after the planting's own.
-    const rules = { player, crop: crop.key, seedId: id, patch, keepSeed: false, grown: false, diseaseFree: false, undying: false, message: null };
+    // `line` (a string; empty for none) words the planting's own spam line in place of plantLine's, `message` is said
+    // after it.
+    const rules = { player, crop: crop.key, seedId: id, patch, keepSeed: false, grown: false, diseaseFree: false, undying: false, line: null, message: null };
     core.PluginManager.emitCustomEvent("farming:plant-rules", rules);
-    const keepSeed = rules.keepSeed === true;
+    // A quest's one-off sapling (Data.ONE_OFF_SAPLINGS) is always used up, whatever a relic says.
+    const keepSeed = rules.keepSeed === true && !Data.ONE_OFF_SAPLINGS.has(id);
     let seedCount = crop.seedCount;
     if (!keepSeed && patch.type === "ALLOTMENT" && player.getEquipment().contains(Data.itemId("Amulet of bounty")) && Math.random() < Data.FORMULAS.amuletOfBountySaveChance) {
         seedCount = 1;
@@ -493,7 +539,8 @@ function plant(player, patch, id, seeds = inventorySeeds(player, id)) {
             Object.assign(state, { stage: crop.stages, status: "grown", lives: Model.startingLives(crop, state.compost) });
             if (crop.regrow) state.nextAt = Model.nextGrowth(Date.now(), crop.regrow, farmFor(player).offset);
         }
-        spam(player, plantLine(crop, patch, crop.seedCount));
+        const line = typeof rules.line === "string" ? rules.line : plantLine(crop, patch, crop.seedCount);
+        if (line) spam(player, line);
         if (typeof rules.message === "string") player.sendMessage(rules.message);
         syncPatch(player, patch);
         core.PluginManager.emitCustomEvent("farming:planted", { player, crop: crop.key, seedId: id, patch });
@@ -667,15 +714,23 @@ function cure(player, patch, useItem = true, usedId) {
     const state = stateFor(player, patch);
     if (useItem && usedId !== Data.itemId("Plant cure") && state.crop === "WILLOW" && state.status === "grown" && state.checked && !state.stump) {
         if (!hasTool(player, "Secateurs") && !requireTool(player, "Magic secateurs")) return false;
-        const now = Date.now();
-        // One branch grows back every 5 minutes, at the world's growth rate as the crops are.
-        const regrow = Model.growthDuration(WILLOW_BRANCH_MINUTES);
-        const elapsed = Math.floor((now - (state.branchAt ?? now)) / regrow);
-        state.branches = Math.min(6, (state.branches ?? 6) + elapsed);
-        state.branchAt = (state.branchAt ?? now) + elapsed * regrow;
-        if (!state.branches) { player.sendMessage("There are no branches ready to cut yet."); return false; }
-        if (!give(player, Data.itemId("Willow branch"))) return false;
-        state.branches--; animate(player, ANIM.PRUNE); return true;
+        // Ours: no recording uses secateurs on a willow with none grown.
+        if (!Model.willowBranches(state, Date.now())) { player.sendMessage("There are no branches ready to cut yet."); return false; }
+        // A full inventory refuses before the secateurs move (ours: no recording cuts with one).
+        if (player.getInventory().getFreeSlots() < 1) { player.getInventory().full(); return false; }
+        // rsprox local 1000402 ticks 31153 and 31162: pruning_high and sound 2440 as the secateurs are used; three
+        // ticks later the branch, the spam line, the patch value and the sequence reset (-1).
+        animate(player, ANIM.PRUNE_BRANCH);
+        sound(player, SOUND.PRUNE_BRANCH);
+        after(player, 3, () => {
+            if (!Model.willowBranches(state, Date.now()) || !give(player, Data.itemId("Willow branch"))) return;
+            animate(player, -1);
+            state.branches--;
+            spam(player, "You cut a branch from the willow tree.");
+            syncPatch(player, patch);
+            schedule(player);
+        });
+        return true;
     }
     if (state.status !== "diseased") {
         // rsprox.net local 1000104 ticks 3456/3468: plant cure on a weeded empty allotment, then
@@ -712,6 +767,7 @@ function healthCheck(player, patch) {
     const crop = Data.CROPS.get(state.crop);
     if (!crop || state.status !== "grown" || state.checked) return;
     state.checked = true;
+    if (crop.key === "WILLOW") Model.resetWillowBranches(state, Date.now());
     award(player, crop.check, patch);
     awardPendingPlantExperience(player, patch, state);
     // Captured nouns: "the tree" (tree, fruit, hardwood and crystal patches), "the Spirit Tree",
@@ -959,6 +1015,19 @@ function objectInteraction(event) {
     else inspect(player, patch);
     syncPatch(player, patch);
 }
+// Hay bales, Hay Bales and Haystacks: "most hay bales or any haystack" (Wiki, Hay sack). Exact
+// names, so Shayzien locs are not taken for hay.
+const HAY_LOC_NAME = /^(?:hay ?bales?|haystack)$/;
+/** Empty sack on hay: rsprox captures (local 1000341 t12816-12826; rev 227 Leagues). */
+function fillHaySack(player, slot) {
+    const sack = player.getInventory().forSlot(slot);
+    if (sack?.getId() !== Data.itemId("Empty sack")) return;
+    sack.setId(core.ItemIdentifiers.HAY_SACK);
+    player.getInventory().refreshItems();
+    animate(player, PICKUP_TABLE_ANIMATION);
+    player.getPacketSender().sendSound(SCARECROW_SOUND, 1, HAY_SACK_SOUND_DELAY);
+    spam(player, "You fill the sack with straw.");
+}
 function itemOnObject(event) {
     const { player, itemId: id, object, location } = event;
     WORK.delete(player);
@@ -967,10 +1036,9 @@ function itemOnObject(event) {
     const patch = findPatch(object.getId(), location);
     if (!patch) {
         const name = core.ObjectDefinition.forPlayer(object.getId(), player)?.getName()?.toLowerCase() ?? "";
-        if (/hay(?: bale|stack)?/.test(name) && id === Data.itemId("Empty sack")) {
+        if (HAY_LOC_NAME.test(name) && id === Data.itemId("Empty sack")) {
             event.handled = true;
-            player.getInventory().deleteAtSlot(event.itemSlot);
-            player.getInventory().addItem(new core.Item(Data.itemId("Hay sack"))); return;
+            fillHaySack(player, event.itemSlot); return;
         }
         if (["fountain", "sink", "gold sink", "waterpump", "water pump", "pump and drain", "pump and tub", "water barrel", "well"].includes(name) && /^(?:Watering can(?:\([1-8]\))?|Gricoller's can)$/.test(core.CacheDefinitions.getItem(id).name)) {
             event.handled = true;
@@ -1095,6 +1163,8 @@ function depleteTree(event) {
         return;
     }
     state.stump = true;
+    // Wiki (Willow tree (Farming)): chopped to a stump, a willow loses its branches.
+    if (state.crop === "WILLOW") state.branches = 0;
     state.nextAt = Date.now() + event.respawnTicks * 600;
     syncPatch(event.player, patch);
 }
@@ -1255,7 +1325,7 @@ function syncNearby(player) {
     const pos = player.getLocation();
     const nearest = new Map();
     for (const patch of PATCHES_BY_REGION.get(squareKey(pos)) ?? []) {
-        const distance = Math.max(Math.abs((patch.x + patch.maxX) / 2 - pos.getX()), Math.abs((patch.y + patch.maxY) / 2 - pos.getY()));
+        const distance = Math.max(Math.abs((Data.patchMinX(patch) + patch.maxX) / 2 - pos.getX()), Math.abs((Data.patchMinY(patch) + patch.maxY) / 2 - pos.getY()));
         if (distance <= 64 && (!nearest.has(patch.varbit) || nearest.get(patch.varbit).distance > distance)) nearest.set(patch.varbit, { patch, distance });
     }
     for (const { patch } of nearest.values()) syncPatch(player, patch);
@@ -1332,6 +1402,7 @@ function advanceTime(event) {
     for (const state of Object.values(farmFor(player).patches)) {
         if (Number.isFinite(state.nextAt)) state.nextAt -= ms;
         if (Number.isFinite(state.plantedAt)) state.plantedAt -= ms;
+        if (Number.isFinite(state.branchAt)) state.branchAt -= ms;
         if (state.redwoodBranches) state.redwoodBranches = state.redwoodBranches.map(at => at > 0 ? at - ms : 0);
     }
     for (const container of [player.getInventory(), ...player.getBanks()]) {
@@ -1418,11 +1489,13 @@ function attach(api) {
     api.onCustomEvent("omnishop:can-buy", Rewards.canBuy);
     api.onCustomEvent("omnishop:purchase", Rewards.purchase);
     api.onCustomEvent("level-up:popup-opened", pauseWork);
+    api.onObjectRoute(noteBinClick);
     api.onObjectInteraction(objectInteraction);
     api.onInterfaceActionClick(farmingOptionClick);
     api.onItemOnObject(itemOnObject, { noted: false });
     api.onItemOnItem(itemOnItem);
     api.onNpcInteraction(npcInteraction);
+    api.onCustomEvent("npc-dialogue:action", Tithe.titheDialogueAction);
     api.onItemOnNpc(itemOnNpc);
     api.onItemAction(Services.farmingItemAction);
     api.onItemAction(Guild.rewardItem);
@@ -1443,6 +1516,7 @@ function attach(api) {
     api.onCustomEvent("farming:harvest", Guild.harvestContract);
     api.onCustomEvent("farming:open-seed-vault", Guild.openSeedVault);
     api.onCustomEvent("door:toggle", Guild.guardGuildDoor);
+    api.onPlayerLocationChange(Guild.guardGuildTier);
     api.onCustomEvent("woodcutting:deplete-tree", depleteTree);
     api.onCustomEvent("magic:water-containers", Services.waterContainers);
     api.onCustomEvent("farming:use-water", useWater);
@@ -1451,11 +1525,13 @@ function attach(api) {
     api.onCustomEvent("player:world-input", Hespori.hesporiInput);
     api.onCustomEvent("npc-dialogue:action", Hespori.reentryAction);
     api.onCustomEvent("npc-dialogue:action", Services.gardenerProtection);
+    api.onCustomEvent("npc-dialogue:action", Services.gardenerTalkAction);
     api.onCustomEvent("interface:changed", Hespori.warningInterfaceChanged);
     api.onCustomEvent("player:world-input", cancelWork);
     api.onCustomEvent("player:interaction-cleared", cancelWork);
     api.onCustomEvent("npc-drops:generated", Hespori.hesporiLoot);
     Hespori.attachEcho(api);
+    Gardeners.attach(api);
     api.onCustomEvent("hespori:quest-challenge", Hespori.challengeHespori);
     api.onCustomEvent("item-retrieval:items", retrievalItems);
     api.onCustomEvent("group-ironman:wipe-tradeables", Hespori.wipeForGroupIronman);
@@ -1472,5 +1548,5 @@ function attach(api) {
     api.registerNpcCombatMethodProvider(core.NpcIdentifiers.HESPORI_2, Hespori.HesporiCombat, { singleton: false });
 }
 
-Object.assign(module.exports, { article, addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, farmFor, readGrowthMultiplier, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
+Object.assign(module.exports, { findPatch, article, addFarmerSetText, FARM_ATTRIBUTE, SCARECROW_LEVEL, SCARECROW_SOUND, farmFor, readGrowthMultiplier, hasLevel, stateFor, hasTool, requireTool, award, give, choose, clearPatch, syncPatch, nearPatch, water, fertilize, pourCompost, cure, harvest, noteSeedling, advanceTime, advanceFarm, cancelAuto, autoBusy, attach, tick: farmingTick, retrievalItems, startBinWork,
     startClear, after, spam, sound, awardPendingPlantExperience });

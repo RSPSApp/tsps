@@ -21,7 +21,8 @@ const Combat = require("../plugins/items/ratboneweapons/Combat.RatBoneWeapons");
 
 const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers;
-const api = new Proxy({ core }, { get: (target, key) => target[key] ?? (() => {}) });
+const events = new Map();
+const api = new Proxy({ core, onCustomEvent: (name, handler) => events.set(name, handler) }, { get: (target, key) => target[key] ?? (() => {}) });
 let gamevals = null;
 
 before(async () => {
@@ -201,4 +202,41 @@ test("the bone shortbow is a ranged weapon: shortbow speed and range, arrows up 
   assert.ok(!ammo.includes(Ammunition.DRAGON_ARROW), "no dragon arrows");
   const player = { getEquipment: () => ({ getItems: () => ({ 3: { getId: () => I.BONE_SHORTBOW } }) }) };
   assert.equal(RangedWeapon.getFor(player), bow, "wielding it picks ranged combat, not melee");
+});
+
+test("Aldo's Talk-to weapon menu skips one eligible weapon and lists only makeable choices when there are several", () => {
+  const allSteps = require("../data/definitions/npc-dialogues.json")["Historian Aldo"].variants["standard-dialogue"];
+  const talk = allSteps.find(step => step.type === "choice").options
+    .find(option => option.text === "Can you make a bone weapon for me please?");
+  const menu = talk.steps.find(step => step.text === "If the player does have the materials in their inventory:").steps;
+
+  function open(extra = {}) {
+    const player = createPlayer({ items: { [I.SCURRIUS_SPINE]: 1, [I.YEW_SHORTBOW]: 1, [I.COINS]: 50000, ...extra } });
+    const prompts = [], shown = [];
+    player.getDialogueManager = () => ({
+      reset() {},
+      startDialogues(chain) {
+        for (const entry of chain.getDialogues().values()) {
+          if (entry instanceof core.ActionDialogue) entry.send(player);
+          else if (entry instanceof core.NpcDialogue) shown.push(entry.getText());
+        }
+      },
+    });
+    const { startDialogue } = require("../plugins/npcs/NpcDialogues.plugin");
+    const definition = { getName: () => "Historian Aldo", getId: () => 7615 };
+    startDialogue({
+      core,
+      sendMultiChatboxPrompt(_player, title, ...pairs) {
+        prompts.push([title, pairs.filter(value => typeof value === "string")]);
+        return true;
+      },
+      emitCustomEvent(name, payload) { events.get(name)?.(payload); },
+    }, { player, npcId: 7615, definition }, menu);
+    return { prompts, shown };
+  }
+
+  assert.deepEqual(open(), { prompts: [], shown: ["Okay, I'll make you the Bone shortbow."] });
+  assert.deepEqual(open({ [I.RUNE_MACE]: 1 }), {
+    prompts: [["Which bone weapon do you want?", ["Bone mace.", "Bone shortbow."]]], shown: [],
+  });
 });

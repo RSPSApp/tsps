@@ -335,6 +335,27 @@ export class ScissorStack {
     }
 
     /**
+     * Runs `draw` under the bottom clip of the stack (the pass's root clip: the whole canvas, or
+     * the dirty rect of a partial redraw) instead of the current container's, then puts the
+     * current clip back. For things drawn from inside the tree that hang outside the widget's
+     * container, such as the status bars beside the side panel.
+     */
+    withBaseClip(draw: () => void): void {
+        if (this.stackTop <= 1) {
+            draw();
+            return;
+        }
+        const base = this.stack[0];
+        const [x, y, w, h] = this.stack[this.stackTop - 1];
+        this.applyScissor(base[0], base[1], base[2], base[3]);
+        try {
+            draw();
+        } finally {
+            this.applyScissor(x, y, w, h);
+        }
+    }
+
+    /**
      * Expand (tighten) the current clip bounds.
      *
      * In OSRS, expandClip modifies clip globals in-place and setClip is used to restore.

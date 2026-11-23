@@ -3,7 +3,12 @@
  * one private copy per player, following the engine's PrivateArea pattern (as Vorkath's crater):
  * - the Alchemical door from the observation room takes the player into their own chamber, with
  *   their own Hydra; the world's spawn of it there stays out;
- * - the doors are jammed while the Hydra lives; teleporting out still works;
+ * - the doors are jammed while the Hydra lives ("The door is jammed."); teleporting out still works;
+ * - its three vents erupt together every 8 ticks of the world's clock while the player is in the
+ *   chamber, between Hydras too, and go off 5 ticks later (rsprox); Fight.eruptVents judges them
+ *   2 ticks after each eruption;
+ * - an attack on it while it changes form is refused; a player's hit on its shield shows
+ *   "The Alchemical Hydra's defences partially absorb your attack!" with the swing (rsprox);
  * - the logout button is refused in the chamber (Wiki: "Players cannot log themselves out of the
  *   test chamber either"); in combat the usual 10-second combat refusal shows, otherwise the
  *   engine's own "You can't log out right now.";
@@ -16,6 +21,8 @@ const Common = require("./Common.AlchemicalHydra");
 const { Fight, logHitpointsChange } = require("./Fight.AlchemicalHydra");
 
 const LAIR_ATTRIBUTE = "alchemical-hydra:lair";
+/** The engine's Combat.CLOSE_IN_DISTANCE_ATTRIBUTE: how near an NPC walks in while attacking from range. */
+const CLOSE_IN_DISTANCE_ATTRIBUTE = "combat:close-in-distance";
 
 let LairClass = null;
 
@@ -63,11 +70,34 @@ class Lair {
     hydra.__hydraLair = this;
     hydra.setFlag?.("combat:no-regen");
     hydra.getMovementCoordinator?.().setRadius?.(0);
+    // It attacks from range while it walks in to 4 tiles of the player (rsprox, issue 6284).
+    hydra.setAttribute?.(CLOSE_IN_DISTANCE_ATTRIBUTE, Common.data.combat.closeInDistance);
     this.area.add(hydra);
     World.getAddNPCQueue().push(hydra);
     this.hydra = hydra;
     this.fight = new Fight(this, hydra);
     return hydra;
+  }
+
+  /** The chamber's tick, on the player's turn (after the Hydra has moved): the vents, then the fight. */
+  tick() {
+    const players = this.players();
+    if (players.length === 0) return;
+    const { every, offAfter, checkAfter } = Common.data.vents;
+    const phase = ((Common.worldTick() % every) + every) % every;
+    if (phase === 0) this.animateVents(players, Common.ids.seqs.geyser, true);
+    else if (phase === offAfter) this.animateVents(players, Common.ids.seqs.geyserOff, false);
+    else if (phase === checkAfter && this.fight && this.hydraAlive()) this.fight.eruptVents(players);
+    this.fight?.tick(players);
+  }
+
+  animateVents(players, seq, erupting) {
+    const { locs } = Common.ids;
+    for (const [colour, key] of [["blue", "ventBlue"], ["red", "ventRed"], ["green", "ventGreen"]]) {
+      const tile = Common.toLocation(Common.data.vents[colour]);
+      Common.animateLoc(players, locs[key], tile, seq);
+      if (erupting) Common.areaSound(players, "geyser", tile);
+    }
   }
 
   /** After a kill, another Hydra comes back in this chamber (Wiki infobox: 43 ticks). */
@@ -115,13 +145,16 @@ function defineAreaClass() {
     }
 
     process(mobile) {
+      if (mobile === this.lair.player) {
+        this.lair.tick();
+        return;
+      }
       if (mobile !== this.lair.hydra) return;
       const fight = this.lair.fight;
       const players = this.lair.players();
-      if (fight && players.length > 0 && mobile.getCombat().getTarget() !== players[0] && !fight.transitioning()) {
+      if (fight && !fight.stopped && players.length > 0 && mobile.getCombat().getTarget() !== players[0] && !fight.transitioning() && !fight.busy()) {
         mobile.getCombat().attack(players[0]);
       }
-      fight?.tick(players);
     }
 
     postLeave(mobile, logout) {
@@ -142,6 +175,10 @@ function defineAreaClass() {
         attacker.sendMessage(Common.message("noTask"));
         return false;
       }
+      if (this.lair.fight?.transitioning()) {
+        attacker.sendMessage(Common.message("changingForm"));
+        return false;
+      }
       return null;
     }
   };
@@ -158,11 +195,11 @@ function leaveLair(player) {
   if (lair instanceof Lair) lair.destroy();
 }
 
-function enterLair(player) {
+function enterLair(player, entry = Common.toLocation(Common.data.room.entry)) {
   leaveLair(player);
   const lair = new Lair(player);
   player.setAttribute(LAIR_ATTRIBUTE, lair);
-  player.moveTo(Common.toLocation(Common.data.room.entry));
+  player.moveTo(entry);
   const current = player.getArea?.();
   if (current && current !== lair.area) current.leave(player, false);
   lair.area.enter(player);
@@ -170,14 +207,35 @@ function enterLair(player) {
   return lair;
 }
 
-/** The Alchemical door: in from the observation room, out (once the Hydra is dead) from inside. */
+/** The door's row (y) the player is on, of the two door tiles; the lower one otherwise. */
+function doorRow(player) {
+  const rows = Common.data.room.doorTiles.map(([, y]) => y);
+  const y = player.getLocation().getY();
+  return rows.includes(y) ? y : rows[rows.length - 1];
+}
+
+/** The door's sounds as it lets the player through (rsprox: 4129, then 4102 two ticks in). */
+function doorSounds(player, y) {
+  const [x] = Common.data.room.doorTiles[0];
+  const tile = new Common.core.Location(x, y, 0);
+  Common.areaSound([player], "door", tile);
+  Common.areaSound([player], "doorClose", tile);
+}
+
+/**
+ * The Alchemical door: through it a tile into the chamber from the observation room, or a tile out
+ * once the Hydra is dead (rsprox: the player steps across the door's own row).
+ */
 function openDoor({ player, objectId }) {
   if (!Common.ids.locs.door.includes(objectId)) return false;
   const [minX, maxX, minY, maxY] = Common.data.room.bounds;
   const at = player.getLocation();
   const inside = at.getX() >= minX && at.getX() <= maxX && at.getY() >= minY && at.getY() <= maxY;
+  const y = doorRow(player);
+  const [doorX] = Common.data.room.doorTiles[0];
   if (!inside) {
-    enterLair(player);
+    enterLair(player, new Common.core.Location(doorX + 1, y, 0));
+    doorSounds(player, y);
     return true;
   }
   const lair = lairOf(player);
@@ -185,9 +243,19 @@ function openDoor({ player, objectId }) {
     player.sendMessage(Common.message("doorLocked"));
     return true;
   }
-  player.moveTo(Common.toLocation(Common.data.room.outside));
+  player.moveTo(new Common.core.Location(doorX, y, 0));
+  doorSounds(player, y);
   leaveLair(player);
   return true;
+}
+
+/** "combat:hit-queued": the swing's hit on its shield shows the absorb line at once (rsprox). */
+function absorbedHit({ player, target, hit }) {
+  if (!player || !Common.isHydra(target)) return;
+  const fight = target.__hydraFight;
+  if (!fight || !fight.shielded || fight.enraged || fight.transitioning()) return;
+  if ((hit?.getTotalDamage?.() ?? 0) <= 0) return;
+  Common.spam(player, Common.message("absorbed"));
 }
 
 /** The world's own Hydra in the chamber stays out: each player gets theirs. */
@@ -256,10 +324,11 @@ function attach(api) {
   api.onCanSpawnNpc(blockWorldSpawn);
   api.onNpcHitModify(hydraHit);
   api.onCustomEvent("combat:damage-apply", directHydraHit);
+  api.onCustomEvent("combat:hit-queued", absorbedHit);
   api.onCustomEvent("skills:current-level-changed", logHitpointsChange);
   api.onCanLogout(holdLogout);
   api.onPlayerLogout(leaveWorld);
   api.onPlayerDisconnect(leaveWorld);
 }
 
-module.exports = { attach, Lair, lairOf, enterLair, leaveLair, openDoor, blockWorldSpawn, hydraHit, holdLogout, LAIR_ATTRIBUTE };
+module.exports = { attach, Lair, lairOf, enterLair, leaveLair, openDoor, blockWorldSpawn, hydraHit, absorbedHit, holdLogout, LAIR_ATTRIBUTE };

@@ -182,6 +182,12 @@ test('the correct shipyard password opens both leaves and walks the player acros
   bystander.setLocation(new core.Location(2944, 3041, 0));
   assert.equal(bystander.getMovementQueue().canWalkTo(gate), false, 'the opened gate still stops other players');
   assert.equal(core.MapObjects.get(core.ObjectIdentifiers.GATE_56, other, null), null);
+  // Both leaves swing west in a row, rotation 3 (captures local 1002189 t11325, local 1001562 t6137).
+  for (const [id, x] of [[1566, 2944], [1565, 2943]]) {
+    const leaf = core.MapObjects.get(id, new core.Location(x, 3041, 0), null);
+    assert.ok(leaf, `open leaf ${id} at ${x},3041`);
+    assert.equal(leaf.getFace(), 3, `leaf ${id} faces south`);
+  }
   for (let i = 0; i < 4; i++) tick(player);
   assert.ok(player.getLocation().equals(gate));
   assert.ok(core.MapObjects.get(core.ObjectIdentifiers.GATE_55, gate, null));

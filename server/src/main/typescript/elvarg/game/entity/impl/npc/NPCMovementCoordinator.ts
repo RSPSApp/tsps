@@ -83,13 +83,15 @@ export class NPCMovementCoordinator {
             return;
         }
         this.nextRetreatRepathCycle = cycle + NPCMovementCoordinator.RETREAT_REPATH_COOLDOWN_TICKS;
-        PathFinder.calculateWalkRoute(this.npc, spawn.getX(), spawn.getY());
+        PathFinder.calculateWalkRoute(this.npc, spawn.getX(), spawn.getY(), true);
     }
 
     public updateCoordinator() {
         if (CombatFactory.inCombat(this.npc)) {
+            // Walking home after a fight ended is not a retreat: one attacked on the way fights
+            // back (#6297). A retreat (shouldRetreat) is still walked out to the spawn.
             if (this.coordinateState == CoordinateState.AWAY) {
-                this.coordinateState = CoordinateState.RETREATING;
+                this.coordinateState = CoordinateState.HOME;
             }
             if (this.coordinateState == CoordinateState.RETREATING) {
                 if (this.npc.getLocation().equals(this.npc.getSpawnPosition())) {

@@ -279,3 +279,28 @@ test('actual kill respawns a fresh normal fight in the same instance and logout 
   assert.equal(h.p.getLocation().getX(), 2063);
   assert.equal(h.p.getAttribute(h.Common.INSIDE_ATTRIBUTE), false);
 });
+test('the island plays Scar Tissue, Colossus of the Deep from the fight until the kill is counted, then Scar Tissue', t => {
+  const h = H.harness(t), Site = require('../plugins/bosses/leviathan/Site.Leviathan');
+  Site.attach(h.api);
+  require('../plugins/bosses/leviathan/Rewards.Leviathan').attach(h.api);
+  h.api.onCustomEvent('quest:is-complete', request => { request.complete = true; });
+  t.mock.method(Math, 'random', () => 0);
+  Site.travel({ player: h.p, objectId: 49212 });
+  const session = Site.sessionOf(h.p);
+  t.after(() => session.end());
+  const [x, y, z] = h.Common.data.site.islandArrival;
+  assert.deepEqual(h.core.Music.tracksAt(x, y, z, false), [750], "the copied map's own track, which the island would play");
+  assert.equal(session.area.getMusicTrack(h.p), 745, 'Scar Tissue on arrival');
+  Site.climb({ player: h.p, objectId: 47593 });
+  assert.ok(session.fight?.alive());
+  assert.equal(session.area.getMusicTrack(h.p), 750, 'Colossus of the Deep during the fight');
+  const fight = session.fight;
+  fight.boss.getCombat().addDamage(h.p, 1); fight.boss.setHitpoints(0);
+  for (let tick = 0; tick < 8 && !fight.over; tick++) h.step();
+  assert.equal(fight.over, true, 'the death animation has started');
+  assert.equal(fight.rewarded, false, 'the kill is counted after the death animation');
+  assert.equal(session.area.getMusicTrack(h.p), 750, 'still Colossus of the Deep until the kill is counted');
+  for (let tick = 0; tick < 8 && !fight.rewarded; tick++) h.step();
+  assert.equal(fight.rewarded, true);
+  assert.equal(session.area.getMusicTrack(h.p), 745, 'Scar Tissue with the kill count');
+});

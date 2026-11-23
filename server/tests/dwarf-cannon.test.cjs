@@ -433,6 +433,43 @@ test("logging out mid-setup leaves the parts so far; the cannon stays up for its
   assert.ok(p.ticks[p.ticks.length - 1].includes("varp 2=1"), "its vars again on login");
 });
 
+test("a part used on an unfinished cannon carries the setup on, as captured (local 1001565 ticks 8747-8756)", () => {
+  Setup(PluginManager.createApi("DwarfCannonResumeTest"));
+  const use = (player, itemId, cannon) => PluginManager.emitItemOnObject({
+    player, object: cannon.object, objectId: cannon.object.getId(), item: new core.Item(itemId, 1), itemId,
+    itemSlot: 0, interfaceType: 0, location: { x: cannon.sw.getX(), y: cannon.sw.getY(), z: 0 }, handled: false,
+  });
+  const p = gunner();
+  Setup.setUp({ player: p, itemId: Items.CANNON_BASE });
+  runTicks(p, 2);
+  const cannon = Cannon.cannonOf(p);
+  const beside = p.getLocation().clone();
+  p.setLocation(CENTRE.transform(8, 0));
+  runTicks(p, 8);
+  assert.equal(cannon.stage, 1, "walked off: the setup stopped at the base");
+  p.setLocation(beside);
+
+  const stranger = gunner({ at: CENTRE.transform(3, 0), parts: [Items.CANNON_STAND] });
+  assert.equal(use(stranger, Items.CANNON_STAND, cannon), true);
+  assert.deepEqual(stranger.ticks[0], [Ammo.MESSAGE.NOT_YOURS]);
+  assert.equal(use(p, Items.CANNON_STAND_OR_, cannon), false, "another kind's part falls through");
+
+  const from = p.ticks.length;
+  assert.equal(use(p, Items.CANNON_STAND, cannon), true);
+  runTicks(p, 3);
+  assert.equal(use(p, Items.CANNON_STAND, cannon), true, "a second use while a part is on its way");
+  runTicks(p, 6);
+  const at = (tick) => p.ticks[from - 1 + tick];
+  assert.ok(at(2).includes("spam You add the stand.") && at(2).includes("varp 2=2") && at(2).includes("anim 827"), "the stand 2 ticks after the use");
+  assert.ok(at(5).includes("spam You add the barrels.") && at(5).includes("varp 2=3"), "the barrels 3 ticks later");
+  assert.ok(at(8).includes("spam You add the furnace.") && at(8).includes("varp 2=4"), "the furnace 3 ticks later");
+  assert.ok(at(9).includes("You load the cannon with 30 cannonballs."), "loaded the tick after");
+  assert.equal(p.ticks.slice(from).flat().filter((line) => line.startsWith("spam You add")).length, 3, "each part once");
+  assert.equal(cannon.stage, 4);
+  assert.ok(locAt(cannon.sw).includes(core.ObjectIdentifiers.DWARF_MULTICANNON));
+  assert.equal(use(p, Items.CANNON_BASE, cannon), false, "a whole cannon takes no parts");
+});
+
 test("a cannon saved on a player but not in the world (a restart) is lost to Nulodion on login", () => {
   const p = gunner();
   p.setAttribute(Cannon.STATE_ATTRIBUTE, { kind: "ornament", x: 3259, y: 3259, z: 0, stage: 2, steel: 0, granite: 0 });

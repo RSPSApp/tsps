@@ -537,10 +537,15 @@ function lureInterval(trap) {
   return Math.max(1, request.ticks | 0);
 }
 
+/** The adult tecu salamander's row on a league's Boosted drops page, and its 1-in-n. */
+const TECU_SOURCE = "Hunting";
+const TECU_CHANCE = 1000;
+
 function catchRewards(trap) {
   const I = H.core.ItemIdentifiers, N = H.core.NpcIdentifiers;
   const items = rewardItems(trap.creature.loot);
-  if (trap.kind === "tecu" && roll(1, 1000) === 1) items[0][0] = I.TECU_SALAMANDER;
+  // A tecu salamander is 1 in 1,000 (a league's boosted drops: "drops:chance", source "Hunting").
+  if (trap.kind === "tecu" && roll(1, TECU_CHANCE) <= C.dropMultiplier(trap.player, TECU_SOURCE, I.TECU_SALAMANDER)) items[0][0] = I.TECU_SALAMANDER;
   if (trap.kind === "monkey" && roll(1, 5000) === 1) items[0][0] = I.MONKEY_TAIL;
   const furs = { [N.SPINED_LARUPIA]: [I.LARUPIA_FUR, I.TATTY_LARUPIA_FUR, I.RAW_LARUPIA],
     [N.HORNED_GRAAHK]: [I.GRAAHK_FUR, I.TATTY_GRAAHK_FUR, I.RAW_GRAAHK],
@@ -563,4 +568,4 @@ function cleanup({ player }) {
 }
 
 module.exports = { activate, groundActivate, build, check, dismantle, reset, investigate, bait, process, cleanup,
-  find, owned, limit, materials, remove, lay, setState, setPitState, returnedItems };
+  find, owned, limit, materials, remove, lay, setState, setPitState, returnedItems, catchRewards };

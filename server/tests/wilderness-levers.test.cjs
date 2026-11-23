@@ -33,7 +33,8 @@ function harness({ diaryComplete = false, teleportSpy = () => {} } = {}) {
   const tasks = [];
   const persisted = [];
   const api = {
-    core: { ...core, TeleportHandler: { ...core.TeleportHandler, checkReqs: () => true, teleport: teleportSpy } },
+    // Static methods do not spread: inherit the real ones (onTeleporting), stubbing the checks and the plain teleport.
+    core: { ...core, TeleportHandler: Object.assign(Object.create(core.TeleportHandler), { checkReqs: () => true, teleport: teleportSpy }) },
     // As TaskManager.submit: an immediate task runs once on the tick it is submitted.
     getTaskManager: () => ({ submit: (task) => { task.setRunning(true); if (task.isImmediate()) task.execute(); tasks.push(task); } }),
     persistAttribute: (key, value) => persisted.push([key, value]),
@@ -73,7 +74,19 @@ function player(varbits = {}) {
     getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; } }),
     getForceMovement: () => null,
     setForceMovement() {},
+    getSkillAnimation: () => -1,
     setSkillAnimation() {},
+    // The teleport's hold (TeleportHandler.onTeleporting, untargetable, teleporting).
+    area: null,
+    getPrivateArea: () => self.area,
+    untargetable: false,
+    teleporting: false,
+    combatResets: 0,
+    setUntargetable: (value) => { self.untargetable = value; },
+    isUntargetable: () => self.untargetable,
+    setTeleporting: (value) => { self.teleporting = value; },
+    getSkillManager: () => ({ stopSkillable() {} }),
+    getCombat: () => ({ reset: () => { self.combatResets++; } }),
     getUpdateFlag: () => ({ flag() {} }),
     performAnimation: (animation) => log.push([tick, "anim", animation.getId()]),
     performGraphic: (graphic) => log.push([tick, "gfx", graphic.getId()]),
@@ -85,6 +98,7 @@ function player(varbits = {}) {
       getVarp: () => 0,
       sendVarbit: (id, value) => { sent.set(id, value); log.push([tick, "varbit", id, value]); },
       sendSoundEffect: (id) => log.push([tick, "sound", id]),
+      sendTypedMessage: (type, text) => log.push([tick, type === core.ChatType.SPAM ? "spam" : `chat${type}`, text]),
       sendInterfaceRemoval() {},
     }),
   };
@@ -236,10 +250,63 @@ test("a pull cut short by death clears busy", () => {
   runTicks(h, who, 1);
   const busy = varbit("busy");
   assert.equal(who.sent.get(busy), 1);
+  assert.equal(who.untargetable, true, "held from the pull");
   who.hitpoints = 0;
   runTicks(h, who, 8);
   assert.equal(who.sent.get(busy), 0, "buff timers would stay paused");
   assert.equal(who.log.find((entry) => entry[1] === "tele"), undefined);
+  assert.deepEqual([who.untargetable, who.teleporting], [false, false], "and let go");
+});
+
+test("a pull holds the player as a teleport does, from the pull until the landing", () => {
+  const h = harness();
+  const who = player();
+  who.setAttribute("levers:skip-wilderness-warning", true);
+  use(h, who, "edgeville_wildy_lever", "Pull", 3090, 3475);
+  const held = [];
+  runTicks(h, who, 8, (tick) => held.push([tick, who.untargetable, who.teleporting]));
+  const pullTick = who.log.find((entry) => entry[1] === "anim")[0];
+  const landTick = who.log.find((entry) => entry[1] === "tele")[0];
+  for (const [tick, untargetable, teleporting] of held) {
+    const holding = tick >= pullTick && tick < landTick;
+    assert.deepEqual([untargetable, teleporting], [holding, holding], `tick ${tick}: ${holding ? "held" : "free"}`);
+  }
+  assert.equal(who.combatResets, 1, "the fight stops at the pull (no auto-retaliate)");
+});
+
+test("a main-world lever pulled from inside a private area flips there and leaves the world's lever up", () => {
+  const { PrivateArea } = require("../dist/game/model/areas/impl/PrivateArea");
+  const [x, y] = [2271, 4680];
+  const id = loc("dragonkingoutlever");
+  const downId = loc("ikov_leverdown");
+  const lever = mapLever(id, x, y);
+  const shape = lever.getType();
+  const here = (o) => o.getType() === shape && o.getLocation().getX() === x && o.getLocation().getY() === y;
+  const inArea = (area) => (area
+    ? area.getObjects()
+    : (MapObjects.mapObjects.get(MapObjects.getHash(x, y, 0)) ?? []).filter((o) => !o.getPrivateArea()))
+    .filter(here).map((o) => o.getId());
+  for (const leaveEarly of [false, true]) {
+    const area = new (class extends PrivateArea {})();
+    const h = harness();
+    const who = player();
+    who.area = area;
+    who.setLocation(new core.Location(x, y, 0));
+    h.hooks["lever:teleport"]({ player: who, object: lever, destination: new core.Location(3067, 10254, 0) });
+    const seen = [];
+    runTicks(h, who, 8, (tick) => {
+      seen.push([inArea(area), inArea(null)]);
+      if (leaveEarly && tick === 3) area.destroy();
+    });
+    assert.ok(seen.every(([, world]) => world.length === 1 && world[0] === id), "the main world's lever never moves");
+    assert.deepEqual(seen[1][0], [downId], "the area sees it down");
+    if (leaveEarly) {
+      assert.deepEqual(area.getObjects(), [], "an area gone before it comes back up keeps nothing");
+    } else {
+      assert.deepEqual(seen.at(-1)[0], [id], "and back up, there");
+      area.destroy();
+    }
+  }
 });
 
 test("the Edgeville lever warns as live, lands beside the Keep lever and skips the warning once told to", () => {
@@ -328,6 +395,52 @@ test("lever:teleport hands its onArrival callback to the teleport, to run on lan
   assert.equal(calls.length, 1);
   assert.equal(calls[0][4], onArrival, "TeleportHandler.teleport's arrival callback");
 });
+
+// The King Black Dragon's levers (docs/king-black-dragon.md): rsprox_transcripts/242/900155.txt ticks
+// 1103-1114 record the entrance lever's pull, down loc, cast and landing, with spam "You pull the
+// lever..." on the pull (1109) and "... and teleport into the Dragon's lair." on landing (1114).
+// The lines are the caller's: the KBD plugin passes them; none is sent unless given.
+const KBD_PULL = { spam: "You pull the lever..." };
+const KBD_INTO_LAIR = { spam: "... and teleport into the Dragon's lair." };
+for (const [name, x, y, to, message, landedLine] of [
+  ["dragonkinginlever", 3067, 10253, [2271, 4680, 0], KBD_PULL, KBD_INTO_LAIR],
+  ["dragonkingoutlever", 2271, 4680, [3067, 10254, 0], KBD_PULL, null],
+  ["dragonkinginlever", 3067, 10253, [2271, 4680, 0], null, null],
+]) {
+  const lines = [message && "pull line", landedLine && "landing line"].filter(Boolean).join(" and ") || "no lines";
+  test(`lever:teleport given ${name} plays the captured pull, its down loc, and lands, with ${lines}`, () => {
+    const calls = [];
+    const h = harness({ teleportSpy: (...args) => calls.push(args) });
+    const who = player();
+    who.setLocation(new core.Location(x, y, 0));
+    const lever = mapLever(loc(name), x, y);
+    assert.ok(lever, `the map has ${name} at ${x},${y}`);
+    const shape = lever.getType();
+    let landed = 0;
+    h.hooks["lever:teleport"]({ player: who, object: lever, message, landed: landedLine, destination: new core.Location(...to), onArrival: () => landed++ });
+    const seen = [];
+    runTicks(h, who, 8, () => seen.push(locsAt(x, y, shape)));
+    assert.equal(calls.length, 0, "the pull, not the plain teleport");
+    const at = (kind, value) => who.log.find((entry) => entry[1] === kind && (value === undefined || entry[2] === value))?.[0];
+    const pullTick = at("anim", CacheDefinitions.getSeqId("macro_lever_switch_down"));
+    assert.equal(pullTick, 1);
+    assert.equal(at("sound", 2400), 2, "the lever clicks a tick later");
+    assert.equal(at("anim", CacheDefinitions.getSeqId("human_castteleport")), 3);
+    assert.equal(at("gfx", CacheDefinitions.getSpotanimId("teleport_casting")), 3);
+    assert.deepEqual(who.log.find((entry) => entry[1] === "tele"), [6, "tele", to[0], to[1]]);
+    assert.equal(who.getLocation().getZ(), to[2]);
+    assert.deepEqual(who.log.filter((entry) => entry[1] === "msg"), [], "no plain game messages");
+    assert.deepEqual(who.log.filter((entry) => entry[1] === "spam"), [
+      ...(message ? [[1, "spam", message.spam]] : []),
+      ...(landedLine ? [[6, "spam", landedLine.spam]] : []),
+    ], "the given lines, as spam, on the pull and on landing (the capture's ticks 1109 and 1114, five apart)");
+    const downId = loc("ikov_leverdown");
+    assert.deepEqual(seen.map((ids, i) => ids.includes(downId) ? i + 1 : null).filter((t) => t !== null), [2, 3, 4, 5],
+      "the lever shows ikov_leverdown (the same up and down models as the Wilderness levers) until the landing");
+    assert.deepEqual(seen.at(-1), [loc(name)], "and is back up");
+    assert.equal(landed, 1, "onArrival runs once, on landing");
+  });
+}
 
 test("All Settings' Deep Wilderness lever default option puts the Keep lever's Edgeville first", () => {
   for (const [first, look] of [[0, 1], [1, 2]]) {

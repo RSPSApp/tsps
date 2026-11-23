@@ -85,7 +85,7 @@ class Fight {
   }
 
   start() {
-    const { boss, npcs, lair, overlay } = Common.data;
+    const { boss, npcs, overlay } = Common.data;
     const at = this.session.tile(boss.tile);
     const muspah = Common.api.spawnNpc({ id: npcs[this.form], x: at.getX(), y: at.getY(), z: at.getZ(), owner: this.player, wanderRadius: 0 });
     if (!muspah) return;
@@ -102,7 +102,6 @@ class Fight {
     Common.animate(muspah, boss.spawnAnim);
     Common.sound(this.player, boss.spawnSound);
     Common.overlay(this.player, overlay.spawn);
-    Common.playMusic(this.player, lair.music.fight);
     this.spikes.spawnWave();
     this.at(1, () => this.showHitpoints());
     this.at(boss.attackableTicks, () => {
@@ -434,6 +433,13 @@ function onMuspahHit({ npc, hit }) {
   npc?.__muspahFight?.hitMuspah(hit);
 }
 
+function onClearMind({ npc }) {
+  const fight = npc?.__muspahFight;
+  if (fight?.form !== "shielded" || fight.stopped || fight.over) return;
+  // Wiki: Clear Mind drains a tenth of the target's current Ranged level, rounded down.
+  Shield.drain(fight, Math.floor(npc.getCurrentLevel(Common.core.Skill.RANGED) / 10));
+}
+
 /** It never dies before the shield is dealt with; otherwise its fall stops the fight. */
 function beforeDeath(event) {
   const fight = event.npc?.__muspahFight;
@@ -454,6 +460,7 @@ function attachFight(api) {
   }
   api.onNpcHitModify(onMuspahHit);
   api.onNpcBeforeDeath(beforeDeath);
+  api.onCustomEvent("combat:clear-mind", onClearMind);
   api.onCustomEvent("combat:freeze-duration", freezeDuration);
 }
 

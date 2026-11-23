@@ -33,6 +33,9 @@ const PLACEMENTS = [...LockedDoors.DOORS].map(([key, row]) => {
   const [id, x, y, z] = key.split(",").map(Number);
   return { key, id, x, y, z, ...row };
 });
+/** The hinged doors stay open once unlocked; the Ardougne Sewers gate lets the opener through and shuts (below). */
+const HINGED = PLACEMENTS.filter(({ door }) => door !== LockedDoors.SEWER_GATE);
+const SEWER_GATE = PLACEMENTS.filter(({ door }) => door === LockedDoors.SEWER_GATE);
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -68,7 +71,8 @@ function actor(tile, { thieving = 99, lockpick = true, hitpoints = 10 } = {}) {
   player.setUsername("locked-door-test");
   player.setRegistered(true);
   player.setNeedsPlacement(false);
-  player.getPacketSender = () => new Proxy({}, { get: () => () => {} });
+  player.packets = [];
+  player.getPacketSender = () => new Proxy({}, { get: (_, name) => (...args) => { player.packets.push([name, ...args]); } });
   const skills = player.getSkillManager();
   skills.setMaxLevels(core.Skill.THIEVING, thieving, false);
   skills.setCurrentLevel(core.Skill.THIEVING, thieving, false);
@@ -126,7 +130,7 @@ describe("the lock-picking doors", { concurrency: false }, () => {
   });
 
   test("a good roll unlocks it: the Wiki's XP, the door open for travel, no second XP from the inside", () => {
-    for (const door of PLACEMENTS) {
+    for (const door of HINGED) {
       LockedDoors.setRandom(() => 0);
       const player = actor(door.outside);
       click(player, door, "Pick-lock");
@@ -153,7 +157,7 @@ describe("the lock-picking doors", { concurrency: false }, () => {
   });
 
   test("from the inside the door just opens, with the Wiki's already-unlocked line and no XP", () => {
-    for (const door of PLACEMENTS) {
+    for (const door of HINGED) {
       LockedDoors.setRandom(() => 0.9999);
       const player = actor(door.inside);
       click(player, door, "Pick-lock");
@@ -184,7 +188,7 @@ describe("the lock-picking doors", { concurrency: false }, () => {
   });
 
   test("the hut and the hideout need a lockpick; the Ardougne house and the Chaos Druid Tower do not (Wiki)", () => {
-    for (const door of PLACEMENTS) {
+    for (const door of HINGED) {
       LockedDoors.setRandom(() => 0);
       const player = actor(door.outside, { lockpick: false });
       click(player, door, "Pick-lock");
@@ -206,6 +210,7 @@ describe("the lock-picking doors", { concurrency: false }, () => {
       [LockedDoors.HIDEOUT, 1, 5.08], [LockedDoors.HIDEOUT, 39, 16.41], [LockedDoors.HIDEOUT, 99, 34.38],
       [LockedDoors.ARDOUGNE_SOUTH, 16, 25.8], [LockedDoors.ARDOUGNE_SOUTH, 99, 98],
       [LockedDoors.DRUID_TOWER, 1, 3.5], [LockedDoors.DRUID_TOWER, 46, 15.6], [LockedDoors.DRUID_TOWER, 99, 29.7],
+      [LockedDoors.SEWER_GATE, 31, 16.3], [LockedDoors.SEWER_GATE, 99, 39.1],
     ];
     for (const [door, level, expected] of wiki) {
       assert.ok(Math.abs(pct(door, level) - expected) < 0.25, `level ${level}: ${pct(door, level)} against the Wiki's ${expected}`);
@@ -232,5 +237,82 @@ describe("the lock-picking doors", { concurrency: false }, () => {
     LockedDoors.setRandom(null);
     assert.equal(careful.damagePackets.length, 0, "a disarmed trap deals nothing");
     settle();
+  });
+});
+
+describe("the Ardougne Sewers gate (Wiki: Gate (Ardougne Sewers); rsprox capture 1625)", { concurrency: false }, () => {
+  const spam = (player) => player.packets.filter(([name]) => name === "sendTypedMessage").map(([, , text]) => text);
+  const sounds = (player) => player.packets.filter(([name]) => name === "sendSoundEffect").map(([, id]) => id);
+  const at = (player) => [player.getLocation().getX(), player.getLocation().getY()];
+
+  test("both leaves are the cache's Gate with Open and Pick-lock, locked from the west", () => {
+    assert.deepEqual(SEWER_GATE.map(({ id }) => id).sort(), [11721, 11722]);
+    for (const door of SEWER_GATE) {
+      assert.equal(core.ObjectDefinition.forId(door.id).getName(), "Gate");
+      const player = actor(door.outside);
+      click(player, door, "Open");
+      assert.deepEqual(player.messages, ["The door is locked."], door.key);
+      assert.ok(sounds(player).includes(2402), `${door.key}: the captured lock sound`);
+      assert.deepEqual(at(player), door.outside, `${door.key}: nobody walks through a locked gate`);
+      assert.equal(passable(door), false, door.key);
+      settle();
+    }
+  });
+
+  test("a good pick: the captured lines, 25 XP, no animation, carried east and the gate shut behind", () => {
+    for (const door of SEWER_GATE) {
+      LockedDoors.setRandom(() => 0);
+      const player = actor(door.outside, { thieving: 31 });
+      let animated = false;
+      player.performAnimation = () => { animated = true; };
+      click(player, door, "Pick-lock");
+      LockedDoors.setRandom(null);
+      assert.deepEqual(player.xp, [[core.Skill.THIEVING, 25]], door.key);
+      assert.deepEqual(spam(player), ["You attempt to pick the lock."], door.key);
+      assert.deepEqual(player.messages, ["You manage to pick the lock."], door.key);
+      assert.deepEqual(sounds(player).slice(0, 2), [2402, 71], `${door.key}: the lock sound, then the gate's`);
+      assert.equal(animated, false, `${door.key}: capture 1625 plays no animation`);
+      assert.deepEqual(at(player), door.inside, `${door.key}: the opener ends east of the gate`);
+      assert.equal(passable(door), false, `${door.key}: the gate is back two ticks later`);
+      settle();
+    }
+  });
+
+  test("below 31 Thieving the gate stays locked", () => {
+    for (const door of SEWER_GATE) {
+      LockedDoors.setRandom(() => 0);
+      const player = actor(door.outside, { thieving: 30 });
+      click(player, door, "Pick-lock");
+      LockedDoors.setRandom(null);
+      assert.ok(player.messages.includes("You need a Thieving level of 31 to pick this lock."), door.key);
+      assert.deepEqual(at(player), door.outside, door.key);
+      settle();
+    }
+  });
+
+  test("from the east Open goes through with the captured line, no lock and no XP", () => {
+    for (const door of SEWER_GATE) {
+      const player = actor(door.inside, { thieving: 1 });
+      click(player, door, "Open");
+      assert.deepEqual(spam(player), ["You go through the door."], door.key);
+      assert.deepEqual(player.messages, [], door.key);
+      assert.equal(player.xp, undefined, door.key);
+      assert.ok(sounds(player).includes(71), door.key);
+      assert.deepEqual(at(player), door.outside, `${door.key}: the player ends west of the gate`);
+      assert.equal(passable(door), false, door.key);
+      settle();
+    }
+  });
+
+  test("Pick-lock from the east needs no pick: the doors' already-unlocked line, no XP, through to the west", () => {
+    for (const door of SEWER_GATE) {
+      const player = actor(door.inside, { thieving: 1 });
+      click(player, door, "Pick-lock");
+      assert.deepEqual(player.messages, ["The door is already unlocked."], door.key);
+      assert.equal(player.xp, undefined, door.key);
+      assert.deepEqual(at(player), door.outside, door.key);
+      settle();
+      assert.equal(passable(door), false, door.key);
+    }
   });
 });

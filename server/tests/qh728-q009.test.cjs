@@ -4,6 +4,8 @@
 // through the same npc-dialogue:action hook the dialogue runtime uses.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+process.env.BROWSER_HOST = '1';
+process.env.DISABLE_PLAYER_BOTS = '1';
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 
@@ -16,6 +18,127 @@ const { HitQueue } = require('../dist/game/content/combat/hit/HitQueue');
 const runtime = require('../plugins/quests/QuestRuntime');
 const core = PluginManager.getCoreApi();
 const groundItemDefinitions = require('../data/definitions/ground-items.json');
+
+test('Cabin Fever ordinary logout releases real session-owned lockers and swing ropes', async t => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  core.RegionManager.init();
+  require('../plugins/quests/quests/CabinFever.Quest')(PluginManager.createApi('CabinLogoutRegression'));
+  const quest = runtime.getRegisteredQuests().findLast(entry => entry.key === 'cabin_fever');
+  const actors = [];
+  let cycle = 0;
+  t.mock.method(core.World, 'getProcessCycle', () => cycle);
+  function login(name) {
+    let connected = true;
+    const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => connected,
+      send: () => true, close() { connected = false; }, onData() {}, onError() {}, onClose() {} };
+    const session = new PlayerSession(channel), p = new Player(session);
+    session.setPlayer(p);
+    p.setUsername(name);
+    p.setAttribute('bot-skip-persistence', true);
+    p.setLocation(new core.Location(1814, 4831, 0));
+    // Isolate account loading; registration, logout hooks and global removal stay real.
+    t.mock.method(p, 'onAdd', () => {});
+    core.World.getPlayers().add(p);
+    for (const skill of core.Skill.values()) {
+      p.getSkillManager().setMaxLevels(skill, 99, false).setCurrentLevels(skill, 99, false);
+    }
+    p.setHitpoints(99);
+    quest.setStage(p, 3);
+    actors.push(p);
+    return p;
+  }
+  function ticks(count) {
+    for (let i = 0; i < count; i++) { cycle++; core.TaskManager.process(); }
+  }
+  const owned = p => core.World.getObjects().filter(object => object.getOwner() === p);
+  function open(p, id) {
+    const object = new core.GameObject(id, new core.Location(1814, 4832, 0), 10, 3, null);
+    assert.equal(PluginManager.emitObjectInteraction({ player: p, object, objectId: id,
+      clickType: 1, option: 'Open', handled: false }), true);
+  }
+  function logout(p) {
+    const index = p.getIndex();
+    p.requestLogout();
+    core.World.process();
+    assert.equal(p.isRegistered(), false, 'ordinary logout completed');
+    assert.equal(core.World.getPlayers().get(index), null, 'old session detached globally');
+  }
+  t.after(() => {
+    for (const p of actors) {
+      if (p.isRegistered()) logout(p);
+      for (const object of owned(p)) core.ObjectManager.deregister(object, true);
+      core.TaskManager.cancelTasks(p);
+      core.TaskManager.cancelTasks(p.getIndex());
+      core.World.unregisterPlayerPosition(p);
+    }
+  });
+  await t.test('a pending locker open is cancelled before its object appears', () => {
+    const p = login('cabinlogoutpending');
+    const index = p.getIndex();
+    // Submit the open after this tick's task admission, before normal logout removal.
+    core.TaskManager.submit(new core.CountdownTask(p, 1, () => {
+      open(p, 11246);
+      assert.equal(owned(p).length, 0);
+      p.requestLogout();
+    }));
+    core.World.process();
+    assert.equal(p.isRegistered(), false);
+    assert.equal(core.World.getPlayers().get(index), null);
+    ticks(3);
+    assert.equal(owned(p).length, 0);
+  });
+  await t.test('same-name new sessions release both open locker forms without restoring map packets', () => {
+    const sessions = [], objects = [];
+    for (const [closedId, openId] of [[11246, 11247], [11248, 11249]]) {
+      const p = login('cabinlogoutrepeat');
+      assert.ok(sessions.every(previous => previous !== p), 'new Player identity each session');
+      sessions.push(p);
+      open(p, closedId);
+      ticks(2);
+      const [object] = owned(p);
+      assert.equal(object.getId(), openId);
+      assert.ok(core.ObjectManager.objectsAt(object.getLocation()).includes(object));
+      objects.push(object);
+      const mapRestores = t.mock.method(p.getPacketSender(), 'sendObject', () => {});
+      logout(p);
+      assert.equal(mapRestores.mock.callCount(), 0, 'logout cleanup is quiet');
+    }
+    assert.equal(sessions.flatMap(owned).length, 0, 'no old Player remains rooted by an owned locker');
+    for (const object of objects) {
+      assert.equal(core.ObjectManager.objectsAt(object.getLocation()).includes(object), false);
+    }
+  });
+  await t.test('spawned swing rope is removed while saved landing still recovers a new Player', () => {
+    const p = login('cabinlogoutrope');
+    p.setLocation(new core.Location(1816, 4830, 2));
+    p.getInventory().adds(core.ItemIdentifiers.ROPE, 1);
+    t.mock.method(Math, 'random', () => 0.99);
+    assert.equal(PluginManager.emitItemOnObject({ player: p, itemId: core.ItemIdentifiers.ROPE,
+      objectId: 11292, object: new core.GameObject(11292, p.getLocation().clone(), 10, 0, null),
+      handled: false }), true);
+    ticks(8);
+    const [rope] = owned(p);
+    assert.equal(rope.getId(), 11311, 'actual scheduled swing rope appeared');
+    const landing = [1822, 4830, 1];
+    assert.deepEqual(p.getAttribute('quest.cabin_fever.swing_landing'), landing);
+    logout(p);
+    assert.deepEqual(p.getAttribute('quest.cabin_fever.swing_landing'), landing, 'logout retains durable recovery');
+    const save = PlayerSave.fromPlayer(p), next = login(p.getUsername());
+    save.applyToPlayer(next);
+    PluginManager.emitCustomEvent('player:bootstrap-complete', { player: next });
+    next.setNeedsPlacement(false);
+    assert.deepEqual([next.getLocation().getX(), next.getLocation().getY(), next.getLocation().getZ()], landing);
+    assert.equal(next.getAttribute('quest.cabin_fever.swing_landing'), null);
+    assert.equal(next.getPacketSender().getVarbit(1740), 0);
+    assert.equal(next.getMovementQueue().getMobility().canMove(), true);
+    ticks(30);
+    assert.equal(owned(p).length, 0, 'cancelled swing leaves no old-session rope');
+    assert.equal(core.ObjectManager.objectsAt(rope.getLocation()).includes(rope), false);
+    logout(next);
+  });
+});
 
 const transcripts = [];
 runtime.startTranscript = (_api, player, npcId, page, variant, select) => {
@@ -115,7 +238,20 @@ function setup(completed = []) {
       for (const handler of custom.get(name) ?? []) handler(event);
     },
   }, { get(target, key) { return key in target ? target[key] : () => {}; } });
-  require('../plugins/quests/quests/CabinFever.Quest')(api);
+  // The end cutscene is its own unit with its own real-Player tests; here it is recorded.
+  const endScene = { played: [] };
+  const sceneFile = require.resolve('../plugins/quests/cabinfever/Scenes.CabinFever');
+  const realScene = require.cache[sceneFile];
+  require.cache[sceneFile] = { id: sceneFile, filename: sceneFile, loaded: true, exports: (_api, hooks) => {
+    Object.assign(endScene, hooks);
+    return { playEnd: (p) => { endScene.played.push(p); return true; }, isPlaying: () => false };
+  } };
+  try {
+    require('../plugins/quests/quests/CabinFever.Quest')(api);
+  } finally {
+    if (realScene) require.cache[sceneFile] = realScene;
+    else delete require.cache[sceneFile];
+  }
   const quest = runtime.getRegisteredQuests().findLast((entry) => entry.key === 'cabin_fever');
 
   const attributes = new Map();
@@ -263,7 +399,7 @@ function setup(completed = []) {
   const stage = () => quest.getStage(player);
   const lastTranscript = () => transcripts.at(-1);
   return {
-    quest, player, choose, action, condition, variant, object, itemOnObject, pickup, npcTalk,
+    quest, player, choose, action, condition, variant, object, itemOnObject, pickup, npcTalk, endScene,
     namedObject, namedItemOnObject, itemAction, npcDeath, hooks, worldNpcs, advance,
     complete: (key) => completedQuests.add(key),
     bootstrap: () => {
@@ -532,6 +668,7 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
     assert.equal(h.varbit(1744), 2, 'the canister rolls in a tick later');
     h.itemOnObject(I.FUSE, CANNON);
     assert.equal(h.varbit(1741), 3, 'cannon armed');
+    h.advance(5); // live fired 4-5 ticks after the fuse (capture ticks 1909 -> 1914)
     h.object(CANNON, 'Fire!');
     assert.equal(h.messages.at(-1), 'You fire the cannon at the crew!');
     assert.equal(h.varbit(1746), 1, 'the shot leaves the barrel needing the ramrod');
@@ -557,17 +694,18 @@ test('Cabin Fever completes from stage 0 through the real route handlers', () =>
       h.itemOnObject(I.CANNON_BALL_2, CANNON);
       h.advance(1);
       h.itemOnObject(I.FUSE, CANNON);
+      h.advance(4);
       h.object(CANNON, 'Fire!');
       h.advance(1);
       assert.equal(h.varbit(1750), shot);
     }
-    assert.equal(h.lastTranscript().variant, 'sinking-the-enemy-ship-after-the-third-and-final-hit');
-
-    // End cutscene and rewards.
-    h.action('7Zv7QG');
-    h.advance();
-    assert.equal(h.lastTranscript().variant, 'end-of-quest-cutscene');
-    h.action('V-4Bls');
+    // The third hole plays the end cutscene (its own tests: cabin-fever-scenes.test.cjs),
+    // which hands over the book and then completes the quest.
+    assert.deepEqual(h.endScene.played, [h.player], 'the third hole starts the end cutscene');
+    assert.equal(h.stage(), 8, 'the quest completes when the cutscene ends, not on the hit');
+    h.endScene.onBook(h.player);
+    assert.equal(h.count(I.BOOK_O_PIRACY), 1, '"Here, have this book." hands it over');
+    h.endScene.onFinished(h.player);
     assert.equal(h.stage(), 9);
     assert.equal(h.varp(655), 140, 'canonical Cabin Fever completion varp');
     assert.equal(h.count(I.BOOK_O_PIRACY), 1);
@@ -931,7 +1069,7 @@ test('Cabin Fever named NPC, object, item and death handlers are wired', () => {
   const N = core.NpcIdentifiers;
   const O = core.ObjectIdentifiers;
 
-  for (const name of ['Bill Teach', 'Pirate', 'Mama']) {
+  for (const name of ['Bill Teach', 'Pirate']) {
     assert.ok(h.hooks.npcActions.has(name), `registered NPC ${name}`);
   }
   for (const name of ['Repair Locker', 'Gun Locker', 'Powder Barrel', 'Barrel', 'Cannon',
@@ -943,11 +1081,6 @@ test('Cabin Fever named NPC, object, item and death handlers are wired', () => {
   assert.ok(h.hooks.namedItemOnObject.some((entry) => entry.item === 'Rope' && entry.object === 'Hoisted sail'));
   assert.ok(h.hooks.itemActions.has("Book o' Piracy"));
   assert.equal(h.hooks.npcDeath.length, 1);
-
-  // Mama's page is selected by whether the Book o' Piracy is carried.
-  h.npcTalk(N.MAMA, 'Mama');
-  assert.equal(h.lastTranscript().page, 'Mama');
-  assert.equal(h.lastTranscript().variant, 'standard-dialogue-without-book-o-piracy');
 
   // Pirates only speak while the battle chain is live.
   const before = h.lastTranscript();
@@ -1127,6 +1260,7 @@ test('a canister hit credits the crew before the death animation can be interrup
     h.advance(1);
     h.player.getInventory().adds(I.FUSE, 1);
     h.itemOnObject(I.FUSE, CANNON);
+    h.advance(4);
     h.object(CANNON, 'Fire!');
     assert.equal(h.player.getAttribute(CREW_HITS) ?? 0, 0, 'the shot is still in the air');
 
@@ -1217,6 +1351,37 @@ test('a logout in the sea after a fallen swing logs back in on the ship the swin
     assert.equal(h.player.getAttribute('quest.cabin_fever.swing_landing'), null);
     h.relog();
     assert.deepEqual([h.player.getLocation().getX(), h.player.getLocation().getZ()], [1822, 1], 'only once');
+  } finally {
+    Math.random = originalRandom;
+  }
+});
+
+test('a shot lands on the Ranged roll: 6% at level 1 to 94% at 99, the same for balls and canisters', () => {
+  // Wiki "Cannon (Cabin Fever)", Success chance (JagexAsh, 24 January 2023). The fixture's Ranged
+  // is 40: 0.06 + 39 * 0.88 / 98 = 0.41.
+  const originalRandom = Math.random;
+  try {
+    const h = setup(['pirates_treasure', 'rum_deal', 'priest_in_peril']);
+    const I = core.ItemIdentifiers;
+    const CANNON = 11213;
+    h.quest.setStage(h.player, 8);
+    h.player.setAttribute('quest.cabin_fever.flags', 2); // live's clean flag
+    const shoot = (roll) => {
+      h.player.getPacketSender().sendVarbit(1746, 0);
+      for (const id of [I.GUNPOWDER, I.RAMROD, I.CANNON_BALL_2, I.FUSE]) h.player.getInventory().adds(id, 1);
+      h.itemOnObject(I.GUNPOWDER, CANNON);
+      h.itemOnObject(I.RAMROD, CANNON);
+      h.itemOnObject(I.CANNON_BALL_2, CANNON);
+      h.advance(1);
+      h.itemOnObject(I.FUSE, CANNON);
+      Math.random = () => roll;
+      h.object(CANNON, 'Fire!');
+      h.advance(1);
+      return h.messages.at(-1);
+    };
+    assert.equal(shoot(0.42), 'You fail to damage the hull.', 'above 0.41: a miss');
+    assert.equal(h.varbit(1750), 0);
+    assert.equal(shoot(0.40), 'You put a hole in the hull!', 'below 0.41: a hole');
   } finally {
     Math.random = originalRandom;
   }

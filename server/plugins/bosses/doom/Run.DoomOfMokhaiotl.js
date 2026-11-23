@@ -350,11 +350,13 @@ class DoomRun {
     this.completed.push({ level: this.level, ticks });
     this.announce(ticks);
     CombatAchievements.defeated(this, ticks);
-    const { items, unique } = Loot.roll(this.level, this.random);
-    // Pets turns a rolled Dom into a follower/backpack item and removes it from the pile.
+    const { items } = Loot.roll(this.level, this.random, Loot.dropBoost(this.player));
+    const dom = items.some((item) => item.id === Loot.ITEM.DOM);
+    // Pets turns a rolled Dom into a follower/backpack item and removes it from the pile; a league may
+    // drop the cloth as the confliction gauntlets, which the descent does not warn about (Wiki, Demonic Pacts).
     Shared.api().emitCustomEvent("npc-drops:roll", { player: this.player, drops: items });
     Loot.merge(this.loot, items);
-    this.uniqueWaiting = unique;
+    this.uniqueWaiting = dom || items.some((item) => Loot.UNIQUES.some(([id]) => id === item.id));
     this.hideHud();
     const tile = Shared.tileOf(boss);
     Shared.later(this, HOLE_DELAY, () => this.openHole(tile));

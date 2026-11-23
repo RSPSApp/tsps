@@ -91,7 +91,7 @@ page holds are literals in the units.
 ### Push (t468-496)
 - 12944 is now 17954 Push. t473: fade out (174, script 948), an empty messagebox with no continue, busy. t475: cutscene varbits (542, 4606, 6719 = 2, 12139, 18141, varps 5588/5589), ops hidden, side tabs closed.
 - t476: an instance copy of the boathouse (x 3512-3543, y 3152-3191), the player on the copy of 3524,3180, the boat loc deleted and NPC 3833 `sang_boat` on its tile facing south.
-- t477 camera (3533,3165 h850 / 3524,3174 h175); t478 fade in; t480 seq 810 `human_push`, sound 3000 delay 30; t481-490 the boat teleports one tile south a tick, ten tiles; t482 a slow pan (rate 1/1); t489 fade out.
+- t477 camera (3533,3165 h850 / 3524,3174 h175); t478 fade in; t480 seq 810 `human_push`, sound 3000 delay 30; t481-490 the boat teleports one tile south a tick, ten tiles, with the jump flag clear (`NPC.teleportInView`), so clients slide it down the ramp (issue #6639: a plain move made it blink); t482 a slow pan (rate 1/1); t489 fade out.
 - t491: 2585 1 -> 2 and 2587 0 -> 1. The stage stays 30. Back on 3524,3180 facing 3524,3170, cam_reset, tabs back. t494 control back (23 ticks from the click).
 
 ### Ride and the dock (t498-535)
@@ -117,7 +117,7 @@ page holds are literals in the units.
 ### Old Man Ral (3772, multinpc 15774)
 - 50-64: "Someone said you could help me." -> the name menu. Pal, rascal and snitch loop back. "Old Man Ral, the sage of Sanguinesti." (t1026) runs the sage chain. 65 comes four lines later, as "Hmph. Myreque, eh?..." shows (t1158).
 - From 65: his own page's "Hello again!" talk (t1181). From 200: the papyrus top-up (Sketches).
-- The house doors swing shut by themselves about 499 ticks after opening (t841 -> t1340); left to the doors plugin.
+- The house doors are plain doors (Doors plugin): door1 17600 at 3602,3208 rotation 3 opens onto area_sanguine_ghetto_open_door1 18031 at 3602,3207 rotation 0 (t841), door2 17601 at 3606,3206 onto 18032 at 3606,3205 (t845), door_open 62 each. The catalog pairs them by the "open_" gameval form (issue #6545). They swing shut by themselves about 499 ticks after opening (t841 -> t1340).
 
 ### Rooftop route (t1208-2635)
 - Ladders: up = seq 828 then the move a tick on; down = seq 827 then the move. No sound or xp.
@@ -126,7 +126,7 @@ page holds are literals in the units.
 - Shelves up (18086/18095/18105): seq 4722 delay 5 + sound 2997, the move 8 ticks on. "You climb up the shelves." only on 18095 and 18105 (not 18086). Down (18087/18107): seq 827 + 2995, the move at +2; "You climb down the shelves." only on 18107.
 - Push walls 18128/18131/18134 (the client clicks the multiloc): seq 810 + sound 1719 at +1; the varbit (2599/2600/2601) = 1 with loc_anim 4744 (4745 for the flat wall 18131) at +2; = 2 at +3. No xp. Their floors (18129, 18132, 18135) are a forced two-step walk.
 - Table 18083 (2597): Search -> seq 832, +2 "You search the table and find there is a trapdoor underneath." (1). Open -> seq 827, +2 "You open the trapdoor." + sound 91 (2). Climb-into -> three exactmoves 2589/2590/2591 (d0/50, d0/100, d15/33) with climb_under 2452 (t1303-1314).
-- Washing line 18099: "You carefully cross the washing line.", tightrope 2495 loops 5, a forced walk 3616 -> 3622,3202,2 over 9 ticks with a balance stance (t2515-2524).
+- Washing line 18099: "You carefully cross the washing line.", tightrope 2495 loops 5, a forced walk 3616 -> 3622,3202,2 over 9 ticks with a balance stance (t2515-2524). Each two-tile step is a walk (temporary move speed 1); the RuneLite gateway used to forward every temporary speed as 127, a teleport, so RuneLite snapped the player along the line (issue #6639).
 - Agility xp: update_stat on every jump, crawl, shelf, the tunnel and the line at the end tick; none on ladders, stairs, push walls, floors, doors or the rubble. rsprox prints 5; used as 5.
 - Pots 18065: seq 827 + sound 1720 + "You search the pots." at +3; key 9654 and objectbox "You find a key." at +5 (t2426-2431).
 - Locked door 18091 with the key (t2433-2439): "The door seems to be locked.", 2578 = 1, the key gone, sounds 2402 + 2419, objectbox 9654 "...The key seems to be stuck in the lock."; on its continue "You swing the door open.", inviswall 38848 + 18092 for two ticks, door_open 62 and the step through. One click, no item-on-loc.
@@ -144,7 +144,7 @@ page holds are literals in the units.
 ## Errands: Vertida, Veliaf, Drezel, the bush scene, Roald, Aeonisig (80-180)
 
 - The NPCs are the world spawns live used: Vertida 3773 (multinpc 8220), Veliaf 8277, Drezel 9805 (multinpc 9636), King Roald 5215, Aeonisig 3774. No owner-only copies.
-- Vertida (t2775-2974): 90 with message 9633 into the inventory and objectbox 193 "Vertida gives you a message." on the same tick (t2939).
+- Vertida (t2775-2974): 90 with message 9633 into the inventory and objectbox 193 "Vertida gives you a message." on the same tick (t2939). Its Inspect (not captured) is the Wiki's objectbox: "It's a short message from Vertida to Veliaf..." (Transcript:Message (Vertida)).
 - Papyrus crates 17987 (t2980-2995): each Search seq 832, one papyrus 970, "You find some papyrus."; no cap seen, searches on consecutive ticks.
 - Veliaf (t3173-3196): 100 with 9633 removed and objectbox "You hand over the message to Veliaf." (t3181); 110 on the continue past "What do you want me to do?" (t3190); the talk then closes with no menu.
 - Drezel, first talk (t3416-3524): the player speaks first. 120 and 2591 = 1 before "Ivan mentioned that he heard some strange noises..." whatever is picked after it (t3460); the live player left through "Okay, thanks." in a sub-menu. Re-asked menus drop only the topic just asked.
@@ -155,7 +155,7 @@ page holds are literals in the units.
   - t3591: cutscene varbits, ops hidden, a 4x4-zone copy of x 3376-3407, y 3464-3495; the player on 3390,3479 facing 3390,3484; loc 17988 (bush without leg) on the bush tile; tabs closed.
   - t3592 camera (3387,3476 h300 / 3390,3479 h300). t3593 fade in, werewolves 3825 at 3390,3477 and 3826 at 3389,3477.
   - t3595 both step north, 3825 seq 6536, sound 909; t3596 sound 910; t3597 player spotanim 245 (h124); t3598 seq 836 + sound 2727; t3599 3825 -> 3827, sound 512; t3601 overlay 453 `myq3_blackout`.
-  - Five "Shadowy figure" lines (heads 3827 anim 6550 / 3826 anim 6553); the camera moves at the third (3385,3484 h475). 2591 = 0 on the continue of "Of course!" (t3618).
+  - Five "Shadowy figure" lines (heads 3827 anim 6550 / 3826 anim 6553); the camera moves at the third (3385,3484 h475). The third says "take him" to a male character (live, t3608) and the Wiki's "take her" to a female one, by the player's pronoun setting as the dialogue runtime's gendered text does (Ours: "them" for they/them). 2591 = 0 on the continue of "Of course!" (t3618).
   - t3621: teardown, stage 130, back on 3390,3479 (the wolves vanish with the copy). t3622 seq -1, fade in, "Ouch! My poor head!" (chatsad1). Control back on its continue (t3625).
 - Drezel after the scene (t3686-3726): 140 with +1 law, +1 fire, +3 air (one Varrock Teleport) and objectbox_double 11 (law 563 / air 556) "Drezel gives you some runes." (t3717).
 - King Roald at 140 (t3758-4121): the after-the-werewolves talk at once; 150 on the continue of the mercenary-protocol line (t4020). At 150 (t4124): "I'd like to ask a few questions if I might?|Not really." with no teleport option; "What should I do now?" leads to the offer, and 160 on its continue, before Yes/No (t4167).
@@ -202,6 +202,7 @@ page holds are literals in the units.
 
 ## The laboratory and completion (250-320)
 
+- Message 9649's Read (not captured): Mauritys Guile's letter from the Wiki's Transcript:Message (fireplace) on the long scroll 625, as live shows In Aid of the Myreque's dusty scroll.
 - Fireplace tile 18039, knife (t7070): seq 827, sound 2581, message 9649 and objectbox "You carefully use your knife on the loose tile and find<br>a message hidden behind it.", 250 -> 260 on that tick, before the sketches are given.
 - Portrait 18126, knife (t7078-7079): seq 3747 + sound 1721 on the click; a tick on 2595 0 -> 1 -> 2, key 9651 and objectbox "You slash the painting and find a large ornate key<br>hidden inside.".
 - Safalaan 6160 at the hideout (t7172-7258), the all-sketches talk: the player says "Guile", and "You give the sketches to Safalaan." is objectbox_double 11 (9646 + 9647) with all three sketches gone and 2575 = 1; the stage stays 260 (t7239). Holding the message, the talk runs on into "Ah yes. I have it here." and objectbox 9649 "You show the message to Safalaan." with 2576 = 1 and 270 (t7252); the message is kept.
@@ -260,7 +261,7 @@ Fix these in the dumper or its source overrides, then regenerate; none are patch
 - Citizens: 58zgZf (the whisper's continue) jumps to "- More questions -"; live goes to the after-quietly menu (t603). Hi8J8E "I'm lost": live "Lost? Well I can tell you you're in sector one, if that helps." and the "Do you live here then?" chain (t608). KdbT2u: live "I'm really sorry, but I just cannot talk to you about that. I'm sorry.". 8AWZGY continues into the after-insisting menu. Sw2Gji is `unavailable`; live "Can you introduce me to Old Man Ral?" (t773). fWtmhR and iIsRzC are `unavailable`; their `{{main}}` targets are not followed.
 - Chathead expressions are absent from the dump.
 - Vertida: a stray leading "&gt;" on "Well, it seems like you've done that!...".
-- Bush scene: mrC25x, fK9jzp, hhXCba, hLtroU, 9N0d9j are `unavailable`; live has five "Shadowy figure" lines (t3601-3614; "him"/"her" by gender).
+- Bush scene: fixed in RSPSApp/osrsreboxed-db (the Wiki writes the speakers `'''Shadowy figure: (#1)'''`; the parser now reads them). The transcript's "take her" is "him" for a male character live (t3608), chosen in code.
 - Drezel after the werewolves: dump "They have found a way to get across the Salve!", live "The vampyres must be using them to cross the Salve on their behalf!" (t3717 talk). His first line has a trailing space live.
 - Roald: missing "Yes, citizen. Do you need something?"; the menu is live "I must speak with you on a matter of grave importance.|Not really." (t3758), not "Talk to the king about Morytania.|..."; at 150 "...if I might?" (dump "may"), nested (t4124).
 - Vyrewatch: the quest page's 0lYCTf and 6sUdhp are `unavailable` (the Vyrewatch page is used); the noticed options are exported as conditions alkZUD, Dr5U5z, sUgQwM after an empty choice; the pre-hideout prompt ends "answer." (live "answer!") and the tithe option lacks the full stop after "bite".

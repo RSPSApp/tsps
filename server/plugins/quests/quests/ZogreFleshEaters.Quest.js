@@ -23,6 +23,8 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
   const { VARBITS, STAGES, ATTRIBUTES } = require("../zogreflesheaters/State.ZogreFleshEaters");
+  const { createWizardsGuildBell } = require("../WizardsGuildBell");
+  const bell = createWizardsGuildBell(api);
 
   const PAGE = "Zogre Flesh Eaters";
 
@@ -1182,7 +1184,9 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     if (objectId === OUTDOOR_BELL_ID) {
       if (op !== "ring") return;
       event.handled = true;
-      startTranscript(api, player, ZAVISTIC_RARVE_NPC_ID, PAGE, "investigating-b-vahn-ringing-the-bell-outside-the-wizards-guild");
+      // The bell swings and Zavistic comes out to it before he speaks (WizardsGuildBell).
+      bell.ring(player, event.object, (zavistic) =>
+        startTranscript(api, player, ZAVISTIC_RARVE_NPC_ID, PAGE, "investigating-b-vahn-ringing-the-bell-outside-the-wizards-guild", undefined, zavistic));
       return;
     }
 

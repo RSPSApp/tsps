@@ -28,7 +28,12 @@ function validateState(state, stages) {
         }
     }
 }
-function select(table, player, api, random = Math.random, multiplier = () => 1) {
+/**
+ * The first stage that hits, and one of its rows. `multiplier(rate, stage)` scales a stage's
+ * chance; `rowWeight(row, stage)` scales a row's share of its stage (a boosted row is picked more
+ * often, the stage's chance growing with it through `multiplier`).
+ */
+function select(table, player, api, random = Math.random, multiplier = () => 1, rowWeight = () => 1) {
     const chain = table.reward_chain;
     if (!chain)
         return { entry: null };
@@ -70,8 +75,9 @@ function select(table, player, api, random = Math.random, multiplier = () => 1) 
         }
         if (random() * rate.out_of >= Math.min(rate.out_of, rate.weight * multiplier(rate, stage)))
             continue;
-        let slot = Math.floor(random() * stage.main_max_roll);
-        const selected = stage.entries.find(row => (slot -= row.weight) < 0);
+        const weights = stage.entries.map(row => row.weight * rowWeight(row, stage));
+        let slot = random() * weights.reduce((sum, weight) => sum + weight, 0);
+        const selected = stage.entries.find((row, index) => (slot -= weights[index]) < 0) ?? stage.entries.at(-1);
         let entry = selected;
         if (selected.progression) {
             const p = selected.progression, progress = (state[p.state_key] ?? 0) + 1;

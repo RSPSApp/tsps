@@ -233,6 +233,42 @@ function update(player) {
   render(player);
 }
 
+/**
+ * Mid-teleport, mid-obstacle, held by a loc's delay (a ladder climb), mid forced move (a ditch
+ * jump) or dying: live drops the click (rsprox 228/02229 t236-238, 227/1000370 t25076).
+ */
+function inDelayedAction(player) {
+  const movement = player.getMovementQueue();
+  return player.getHitpoints() <= 0 || player.isLocked?.() || player.isNeedsPlacement?.()
+    || player.getForceMovement?.() != null || movement.isMovementBlocked?.() === true;
+}
+
+/**
+ * An object or NPC clicked from in reach this tick, so it runs this cycle: live runs it and the
+ * screen does not open (rsprox 228/02229 t236, a passageway clicked on the same tick). A route
+ * with steps left is cancelled instead (227/1000561 t12352).
+ */
+function interactionDueNow(player) {
+  const movement = player.getMovementQueue();
+  return pluginApi.getTaskManager().hasWalkToTask(player.getIndex())
+    && movement.size() === 0 && !movement.isMovings?.();
+}
+
+function openFromWornItems({ player }) {
+  if (inDelayedAction(player) || interactionDueNow(player)) return true;
+  // Ours: "being hit" lasts the combat attacker window (8 ticks after an NPC's hit); live's window
+  // after walking out of reach is unrecorded.
+  if (pluginApi.getCombatFactory().inLiveCombat(player)) {
+    // Refused with nothing interrupted: the attack keeps its timing (rsprox 227/1000539 t1780-1781,
+    // 227/1000194 t4761, 227/00080 t243-244).
+    player.getPacketSender().sendMessage("You cannot open the equip screen while in combat!");
+    return true;
+  }
+  // Live stops everything on the open tick: walk, route, face, animation, skilling (Player.stopAction).
+  player.stopAction();
+  return open(player);
+}
+
 function open(player) {
   if (player.busy?.()) {
     player.getPacketSender().sendInterfaceRemoval();
@@ -242,7 +278,7 @@ function open(player) {
   player.setAttribute(EquipPacketListener.PRESERVE_INTERFACE_ON_EQUIP_ATTRIBUTE, EQUIPMENT_STATS_INTERFACE_ID);
   player
     .getPacketSender()
-    .sendVarbit(12393, 1)
+    .setBusyModal(true)
     .sendSubInterface(MAIN_MODAL_TARGET_UID, EQUIPMENT_STATS_INTERFACE_ID, 0);
   player.getPacketSender().sendClientScript(SIDE_BUTTON_SWITCH_SCRIPT, INVENTORY_TAB);
   update(player);
@@ -271,7 +307,7 @@ module.exports = {
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();
-    api.onInterfaceActionButton(OPEN_EQUIPMENT_STATS_BUTTON, ({ player }) => open(player));
+    api.onInterfaceActionButton(OPEN_EQUIPMENT_STATS_BUTTON, openFromWornItems);
     api.onInterfaceActionButton([...EQUIPMENT_SLOT_BY_COMPONENT.keys()], handleItemAction);
     api.onPlayerProcess(({ player }) => {
       if (player.getInterfaceId?.() === EQUIPMENT_STATS_INTERFACE_ID) {

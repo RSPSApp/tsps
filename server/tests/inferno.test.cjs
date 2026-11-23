@@ -479,6 +479,28 @@ test('Inferno Yt-HurKot heal JalTok-Jad 15-24 every 4 ticks (Wiki)', () => {
   run.leave(player);
 });
 
+test('Inferno Yt-HurKot do not respawn when JalTok-Jad heals to full and drops again (Wiki)', () => {
+  const { player, session } = startAt(67);
+  tick(player, 10);
+  const jad = [...session.npcs].find((npc) => npc.id === Npcs.JALTOK_JAD);
+  const earlier = new Set(world.npcs);
+  jad.setHitpoints(170);
+  tick(player);
+  const fresh = () => world.npcs.filter((npc) => npc.id === Npcs.YT_HURKOT_2 && !earlier.has(npc));
+  const mine = fresh();
+  assert.equal(mine.length, 5);
+  mine.slice(0, 2).forEach(kill);
+  tick(player);
+  const alive = () => fresh().filter((npc) => npc.registered && npc.hitpoints > 0).length;
+  assert.equal(alive(), 3);
+  jad.setHitpoints(jad.getDefinition().getHitpoints());
+  tick(player);
+  jad.setHitpoints(170);
+  tick(player, 2);
+  assert.equal(alive(), 3, 'the dead healers stay dead');
+  run.leave(player);
+});
+
 test('JalTok-Jad melees up close and attacks again 4 ticks later; its ranged and magic keep the 8', () => {
   const player = new FakePlayer();
   player.delayedGraphic = () => {};
@@ -589,6 +611,15 @@ test('TzKal-Zuk: the glyph shields, summons arrive on cue and his death wins the
   world.random = 100;
   tick(player, 15 + 2);
   assert.equal(player.getHitpoints(), before, 'shielded behind the glyph');
+  // Wiki: the glyph sustains Zuk's own attacks indefinitely; 8 more blocked hits of 100 would
+  // be well past its 600 hitpoints.
+  for (let i = 0; i < 8 * 10; i++) {
+    glyph.moveTo(new Location(2270, 5361, 0));
+    player.moveTo(new Location(2271, 5357, 0));
+    tick(player);
+  }
+  assert.equal(player.getHitpoints(), before, 'still shielded after 900 damage of blocked hits');
+  assert.equal(glyph.getHitpoints(), 600, "Zuk's own hits do not wear the glyph down");
   player.moveTo(new Location(2280, 5350, 0));
   tick(player, 10 + 2);
   assert.ok(player.getHitpoints() < before, 'struck when out in the open');

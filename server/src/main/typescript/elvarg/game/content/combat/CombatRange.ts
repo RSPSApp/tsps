@@ -191,6 +191,13 @@ export class CombatRange {
         return !this.overlaps(first, second) && this.distance(first, second) <= 1;
     }
 
+    /** Off each other's footprints and no more than `distance` tiles apart (1 is beside). */
+    static within(a: Mobile, b: Mobile, distance: number): boolean {
+        const first = this.bounds(a);
+        const second = this.bounds(b);
+        return !this.overlaps(first, second) && this.distance(first, second) <= distance;
+    }
+
     static overlapsEntities(a: Mobile, b: Mobile): boolean {
         return !!a && !!b && a.getLocation().getZ() === b.getLocation().getZ() &&
             this.overlaps(this.bounds(a), this.bounds(b));

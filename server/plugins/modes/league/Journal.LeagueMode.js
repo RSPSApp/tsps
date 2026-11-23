@@ -46,6 +46,11 @@ function openLeagueTab({ player }) {
   return true;
 }
 
+/** A login or gameframe rebuild with the Leagues tab selected (SideJournalDefaults restores the saved tab): the click's mount. */
+function restoreTab({ player, tabIndex }) {
+  if (tabIndex === Common.data.journal.tabIndex) openLeagueTab({ player });
+}
+
 /** Another journal tab (SideJournalDefaults' `journal:tab-mounted`) replaces the panel; later fills would address a missing component. */
 function tabMounted({ player, groupId }) {
   if (groupId !== Common.data.journal.sidePanel) panelOpen.delete(player);
@@ -66,6 +71,7 @@ function panelMounted({ player, groupId }) {
 module.exports = function attach(api) {
   const { journal } = Common.data;
   api.onInterfaceActionButton(uid(journal.group, journal.leagueTab), openLeagueTab);
+  api.onCustomEvent("side-journal:restore-tab", restoreTab);
   api.onCustomEvent("journal:tab-mounted", tabMounted);
   api.onCustomEvent("interface:opened", panelMounted);
   api.onCustomEvent("league:points-changed", pointsChanged);

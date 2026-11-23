@@ -237,18 +237,24 @@ async function runeStacks(t, plainFirst) {
 
 const runesHeld = (f) => f.inv.getAmount(I.BLOOD_RUNE);
 
+/** Blood runes on the staff ask how many charges first (rsprox local 1001250); type more than it offers. */
+async function chargeSang(f, from, to) {
+  await useOn(f, from, to);
+  f.p.getEnteredAmountAction()?.execute(1_000_000);
+}
+
 test("charging Sanguinesti from a preset and a plain stack conserves runes, in either slot order", async (t) => {
   const control = actor(t);
   put(control, item(I.BLOOD_RUNE, 200), 0);
   const staffC = put(control, item(I.SANGUINESTI_STAFF_UNCHARGED_), 1);
-  await useOn(control, 0, 1);
+  await chargeSang(control, 0, 1);
   assert.equal(Sang._test.chargesOf(staffC), 100, "control: the staff is charged");
   assert.equal(control.inv.getAmount(I.BLOOD_RUNE), 0, "control: the runes went");
 
   for (const plainFirst of [true, false]) {
     const { f, plain, preset } = await runeStacks(t, plainFirst);
     const staff = put(f, item(I.SANGUINESTI_STAFF_UNCHARGED_), 20);
-    await useOn(f, plain, 20);
+    await chargeSang(f, plain, 20);
     assert.equal(Sang._test.chargesOf(staff), 100, `plain first ${plainFirst}: charged from the plain stack alone`);
     assert.deepEqual(stacksOf(f, I.BLOOD_RUNE), [300], `plain first ${plainFirst}: the preset stack stays`);
     assert.equal(f.inv.getItems()[preset].isPresetItem(), true, `plain first ${plainFirst}: and is still preset`);
@@ -256,7 +262,7 @@ test("charging Sanguinesti from a preset and a plain stack conserves runes, in e
 
     const refused = await runeStacks(t, plainFirst);
     const idle = put(refused.f, item(I.SANGUINESTI_STAFF_UNCHARGED_), 20);
-    await useOn(refused.f, refused.preset, 20);
+    await chargeSang(refused.f, refused.preset, 20);
     assert.equal(Sang._test.chargesOf(idle), 0, `plain first ${plainFirst}: the preset stack charges nothing`);
     assert.equal(runesHeld(refused.f), RUNES_HELD, `plain first ${plainFirst}: and no rune goes`);
     assert.ok(refused.messages.includes(PRESET_REFUSAL), `plain first ${plainFirst}: the player is told`);

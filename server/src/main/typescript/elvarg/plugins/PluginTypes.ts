@@ -177,6 +177,10 @@ export interface PluginObjectRouteEvent {
    * remain post-movement; explicit destinations and approach-range operations keep precedence.
    */
   operateBeforeMovement?: boolean;
+  /** Extra pre-movement passes to wait after an approach reaches the object; in-reach clicks stay immediate. */
+  operateBeforeMovementApproachDelay?: number;
+  /** Keep local facing unchanged until an opted-in delayed approach reaches its captured wait turn. */
+  deferInitialFaceUntilApproachDelay?: boolean;
 }
 
 export interface PluginWalkRouteEvent {
@@ -747,6 +751,19 @@ export interface PluginItemUseFilter {
    * object's own refusal in place of "Nothing interesting happens." ("You can't cook that.").
    */
   fallback?: boolean;
+  /**
+   * Item on object only: run before every other handler. For an object that takes any use first
+   * (a fee before the furnace does anything); leave unclaimed uses untouched.
+   */
+  before?: boolean;
+}
+
+export interface PluginObjectInteractionOptions {
+  /**
+   * Run after every other object handler, and only when none took the click: a family's plain
+   * answer when no content claimed that object (a bookcase with nothing to find).
+   */
+  fallback?: boolean;
 }
 
 export interface PluginItemActionOptions {
@@ -1106,7 +1123,8 @@ export interface PluginApi {
   /** Exact, case-sensitive object name and option matching. Return false to fall through. */
   onObjectInteraction(
     objectName: string,
-    actions: Record<string, (event: PluginObjectInteractionEvent) => void | boolean>
+    actions: Record<string, (event: PluginObjectInteractionEvent) => void | boolean>,
+    options?: PluginObjectInteractionOptions
   ): void;
   /** Conditional interaction ownership before normal object handlers. Leave unclaimed events untouched. */
   onBeforeObjectInteraction(handler: (event: PluginObjectInteractionEvent) => void): void;
@@ -1157,7 +1175,11 @@ export interface PluginApi {
   ): void;
   onNpcDeath(handler: (event: PluginNpcDeathEvent) => void): void;
   onNpcBeforeDeath(handler: (event: PluginNpcBeforeDeathEvent) => void): void;
-  onNpcHitModify(handler: (event: PluginNpcHitModifyEvent) => void): void;
+  /**
+   * Last-second changes to a hit landing on an NPC. `stage: "base"` handlers (target stats such
+   * as flat armour) run before all others, so content that reads or spends the damage sees it.
+   */
+  onNpcHitModify(handler: (event: PluginNpcHitModifyEvent) => void, options?: { stage?: "base" }): void;
   onPlayerHitModify(handler: (event: PluginPlayerHitModifyEvent) => void): void;
   onCanAttack(handler: (event: PluginCanAttackEvent) => void): void;
   onCanTeleport(handler: (event: PluginCanTeleportEvent) => void): void;

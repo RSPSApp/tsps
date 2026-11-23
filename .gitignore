@@ -110,3 +110,6 @@ server/data/definitions/bot-activities.local.json.tmp
 # Shared web client release build outputs
 .github/scripts/client-release/node_modules/
 .github/scripts/client-release/releases/
+
+# Shared client compatibility identifier, generated before server builds
+server/src/main/typescript/elvarg/ClientVersion.generated.ts

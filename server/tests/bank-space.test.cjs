@@ -494,3 +494,52 @@ test("a banker menu without the bank-slots choice gets it after collecting; full
     assert.deepEqual(notice.options.map((o) => o.text), texts);
   }
 });
+
+test("a withdrawal's gap keeps its slot of the space: a full bank refills it, and takes nothing new past it", () => {
+  capacity(3);
+  const player = createPlayer();
+  player.interfaceId = Bank.MAIN_INTERFACE_ID;
+  for (const id of [2000, 2001, 2002]) player.getBank(0).add(new Item(id, 1), false);
+  player.getBank(0).getItems()[1].setId(-1);
+  player.getBank(0).getItems()[1].setAmount(0);
+  assert.equal(Bank.usedSlots(player), 3, "the gap still counts");
+
+  player.inventory.add(new Item(3000, 1), false);
+  player.inventory.switchItem(player.getBank(1), new Item(3000, 1), false, 0, false);
+  assert.ok(player.messages.includes("Not enough space in bank."), "no new slot past the gap");
+  assert.equal(player.inventory.getAmount(3000), 1);
+
+  player.inventory.switchItem(player.getBank(0), new Item(3000, 1), false, 0, false);
+  assert.equal(player.getBank(0).getItems()[1].getId(), 3000, "the deposit fills the gap");
+  assert.equal(Bank.usedSlots(player), 3);
+});
+
+test("once the bank is closed, a gap no longer holds its slot of the space", () => {
+  capacity(3);
+  const player = createPlayer();
+  for (const id of [2000, 2001, 2002]) player.getBank(0).add(new Item(id, 1), false);
+  player.getBank(0).getItems()[0].setId(-1);
+  player.getBank(0).getItems()[0].setAmount(0);
+  assert.equal(Bank.isOpen(player), false);
+  assert.equal(Bank.usedSlots(player), 2);
+  assert.equal(Bank.freeSlots(player), 1);
+  assert.equal(player.getBank(1).getFreeSlots(), 1);
+});
+
+test("a closed full bank takes nothing new into a gap left behind, and reports no room", () => {
+  capacity(3);
+  const player = createPlayer();
+  // Tab 0 is [2000, gap, 2002] and tab 1 [2003]: 3 items in a space of 3, and the bank is closed.
+  player.getBank(0).setItem(0, new Item(2000, 1));
+  player.getBank(0).setItem(2, new Item(2002, 1));
+  player.getBank(1).setItem(0, new Item(2003, 1));
+  assert.equal(Bank.isOpen(player), false);
+  assert.equal(Bank.usedSlots(player), 3);
+  assert.equal(player.getBank(0).getFreeSlots(), 0);
+
+  player.inventory.add(new Item(3000, 1), false);
+  player.inventory.switchItem(player.getBank(0), new Item(3000, 1), false, 0, false);
+  assert.ok(player.messages.includes("Not enough space in bank."));
+  assert.equal(player.inventory.getAmount(3000), 1, "the refused item stays in the inventory");
+  assert.equal(Bank.usedSlots(player), 3);
+});

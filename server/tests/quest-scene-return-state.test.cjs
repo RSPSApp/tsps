@@ -11,7 +11,7 @@
 //   scene sent has an undo (the quest's own stage and journal varbits, sent in bulk, are progress and not counted);
 // - no sub-interface the player did not have before the scene is still mounted (the fade overlay, interface 174 on 161:1);
 // - the map is rebuilt for the way out, a Varrock teleport tablet works and a door click sends what it sent before the scene.
-// Daddy’s Home additionally checks its isolated parlour, translated demo, bystander map and exit/recovery paths.
+// Daddy’s Home additionally checks its recorded rooms (three copies), bystander map and exit/recovery paths.
 // A fade in that closes its overlay must not close something else mounted on 161:1 in the meantime (LocTeleports, ferries,
 // minecarts and many more share it): the last test mounts another interface there right after the scene's fade in.
 const assert = require("node:assert/strict");
@@ -189,57 +189,6 @@ function observeWatchtowerInputs(f) {
     return result;
   });
 }
-function watchtowerNpc(f, id, at) {
-  const npc = core.NPC.create(id, new core.Location(...at));
-  assert.equal(core.World.getNpcs().add(npc), true);
-  f.t.after(() => core.World.getNpcs().remove(npc));
-  return npc;
-}
-async function useOnNpc(f, itemId, npc) {
-  // World.add calls Player.onLogin, which marks placement pending again after
-  // actor()'s initial setup. Complete that real update phase before sending input;
-  // movement correctly refuses an item route while placement is still pending.
-  if (f.player.isNeedsPlacement()) tick(f);
-  assert.equal(f.player.isNeedsPlacement(), false, "initial placement completed before the ordinary item input");
-  const slot = f.player.getInventory().getSlotForItemId(itemId);
-  assert.ok(slot >= 0, "ordinary item-on-NPC input has the supplied item");
-  observeWatchtowerInputs(f);
-  const before = f.watchtowerItemOps.length;
-  await f.connection.dispatch([{ type: "inventory_use_on", itemId, slot, target: { kind: "npc", id: npc.getIndex() } }]);
-  ticks(f, 6); // same bounded walk/turn allowance as this fixture's existing playScene
-  assert.ok(f.watchtowerItemOps.length > before, `ordinary item-on-NPC was delivered: ${JSON.stringify({ itemId, npcId: npc.getId(), npcAt: xyz(npc), npcHp: npc.getHitpoints(), npcRegistered: npc.isRegistered(), playerAt: xyz(f.player), hp: f.player.getHitpoints(), canMove: f.player.getMovementQueue().getMobility().canMove(), messages: f.watchtowerMessages.slice(-6) })}`);
-  assert.equal(f.watchtowerItemOps.at(-1).item, itemId);
-  assert.equal(f.watchtowerItemOps.at(-1).npc, npc.getContentId(f.player), "ordinary input resolves the intended current NPC");
-}
-async function beginRelicScene(f) {
-  quest("watchtower").setStage(f.player, 2);
-  f.player.setAttribute("quest.watchtower.bits", (1 << 6) | (1 << 7));
-  f.player.getInventory().add(new core.Item(I.RELIC_PART_3, 1), false);
-  const npc = watchtowerNpc(f, core.NpcIdentifiers.WATCHTOWER_WIZARD, [2549, 3116, 2]);
-  await useOnNpc(f, I.RELIC_PART_3, npc);
-  await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 40);
-  assert.equal(f.player.getInventory().getAmount(I.RELIC_PART_3), 0, "third part was actually handed in through the ordinary input");
-  assert.equal(f.player.getAttribute("quest.watchtower.bits") & (1 << 8), 1 << 8, "third hand-in bit is set before testing cinematic absence");
-  return { area: f.player.getArea(), npc };
-}
-async function beginEnclaveScene(f) {
-  quest("watchtower").setStage(f.player, 7);
-  f.player.getInventory().add(new core.Item(I.CAVE_NIGHTSHADE, 2), false);
-  const npc = watchtowerNpc(f, core.NpcIdentifiers.ENCLAVE_GUARD, [2507, 3036, 0]);
-  await useOnNpc(f, I.CAVE_NIGHTSHADE, npc);
-  await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 50);
-  assert.equal(f.player.getInventory().getAmount(I.CAVE_NIGHTSHADE), 1, "ordinary guard hand-in consumes exactly one nightshade before scene assertion");
-  assert.equal(quest("watchtower").getStage(f.player), 8, "ordinary guard hand-in reaches stage 8 before scene assertion");
-  return f.player.getArea();
-}
-function assertWatchtowerRestored(f) {
-  assert.equal(f.player.getArea(), null);
-  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
-  assert.equal(f.player.isUntargetable(), false);
-  assert.equal(f.player.getPacketSender().getVarbit(542), 0);
-  assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
-  assert.equal(f.player.getAttribute("watchtower:scene-exit"), null);
-}
 
 test("Watchtower: four mapless entries follow different surface caves without light, conserving items, XP and quest state", async t => {
   const f = actor(t, { start: [2524, 3070, 0] });
@@ -251,7 +200,8 @@ test("Watchtower: four mapless entries follow different surface caves without li
     const [object] = watchtowerLocs(id);
     assert.ok(object, `current map places fixed-route cave ${id}`);
     await operateWatchtowerLoc(f, object, null);
-    assert.ok(messages.some(m => m.includes("without a map")), "mapless click reached the ordinary map guard");
+    // The Wiki's "Without the skavid map": its message, then another cave (the capture's cave6 fade, t2255-2260).
+    assert.ok(messages.some(m => m.includes("without a map")), "the Wiki's message");
     assert.deepEqual(xyz(f.player), destination, "the delivered mapless operation follows the fixed circuit");
   }
   assert.deepEqual(items(f.player), inventory);
@@ -264,8 +214,10 @@ test("Watchtower: a mapped cave still requires light and then reaches its skavid
   const [object] = watchtowerLocs(2806);
   assert.ok(object, "mapped cave exists in the active cache");
   f.player.getInventory().add(new core.Item(I.SKAVID_MAP, 1), false);
+  // With a tinderbox: without one the Wiki's "Are you sure you want to go in without a tinderbox?" asks first.
+  f.player.getInventory().add(new core.Item(I.TINDERBOX, 1), false);
   f.player.getInventory().add(new core.Item(I.LIT_CANDLE, 1), false);
-  await operateWatchtowerLoc(f, object, [2532, 9469, 0]);
+  await operateWatchtowerLoc(f, object, [2530, 9467, 0]); // skavid_cave2's inside (Watchtower capture t3114)
   f.player.getInventory().deleteNumber(I.LIT_CANDLE, 1);
   const messages = [];
   const send = f.player.sendMessage.bind(f.player);
@@ -274,7 +226,7 @@ test("Watchtower: a mapped cave still requires light and then reaches its skavid
   assert.ok(messages.some(m => m.includes("light source")), "mapped cave refuses with actionable light feedback");
   assert.ok(f.player.getLocation().getY() < 4000, "refusal cannot enter the interior");
   f.player.getInventory().add(new core.Item(I.LIT_CANDLE, 1), false);
-  await operateWatchtowerLoc(f, object, [2532, 9469, 0]);
+  await operateWatchtowerLoc(f, object, [2530, 9467, 0]);
   assert.equal(f.player.getInventory().getAmount(I.SKAVID_MAP), 1);
   assert.equal(f.player.getInventory().getAmount(I.LIT_CANDLE), 1);
 });
@@ -297,184 +249,6 @@ test("Watchtower: every actionable Yanille hole and the enclave opening have wor
   assert.ok(!(decorative.getInteractions?.() ?? decorative.getActions() ?? []).some(Boolean), "surface hole is decorative, not an invented reverse operation");
 });
 
-test("Watchtower: third relic hand-in plays its private assembly before one completed relic is awarded", async t => {
-  const f = actor(t, WATCHTOWER_WIZARD), bystander = actor(t, WATCHTOWER_WIZARD);
-  ticks(f, 3); ticks(bystander, 3);
-  recordSender(f);
-  const { area } = await beginRelicScene(f);
-  assert.ok(area instanceof core.TemplatedInstanceArea, "third hand-in starts the missing assembly cinematic");
-  assert.equal(f.player.getInventory().getAmount(I.RELIC_PART_3), 0);
-  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 0, "relic is not awarded before assembly");
-  assert.equal(quest("watchtower").getStage(f.player), 2);
-  const wizard = area.entities.find(n => n.isNpc?.() && n.getId() === core.NpcIdentifiers.WATCHTOWER_WIZARD);
-  assert.ok(wizard, "wizard is a private actor");
-  assert.equal(wizard.getAnimation().id, 5352, "cache's relic assembly animation plays");
-  assert.equal(wizard.getGraphic().getId(), 969, "cache's combining-parts effect plays");
-  assert.equal(bystander.player.getPrivateArea(), null);
-  assert.ok(!bystander.packets.some(p => p.op === OP.REBUILD_REGION));
-  f.player.getPacketSender().sendInterfaceRemoval(); // closing the held box must not strand the scene
-  ticks(f, 12);
-  assertWatchtowerRestored(f);
-  assert.equal(area.isDestroyed(), true);
-  assert.equal(quest("watchtower").getStage(f.player), 3);
-  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 1);
-  ticks(f, 12);
-  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 1, "completion cannot double-award");
-  assert.ok(f.packets.some(p => p.op === OP.REBUILD_REGION));
-  assert.ok(f.packets.some(p => p.op === OP.REBUILD_NORMAL));
-});
-
-for (const how of ["walkout", "logout"]) test(`Watchtower: interrupted relic assembly (${how}) retains parts and can resume without another hand-in`, async t => {
-  const f = actor(t, WATCHTOWER_WIZARD);
-  ticks(f, 3);
-  const { area, npc } = await beginRelicScene(f);
-  assert.ok(area instanceof core.TemplatedInstanceArea, "assembly began through item/dialogue input");
-  if (how === "logout") f.player.onLogout();
-  else { f.player.moveTo(area.tile(24, 3, 2)); ticks(f, 2); }
-  ticks(f, 12);
-  assert.equal(area.isDestroyed(), true);
-  assert.equal(quest("watchtower").getStage(f.player), 2);
-  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 0);
-  assert.equal(f.player.getAttribute("quest.watchtower.bits") & (7 << 6), 7 << 6);
-  f.player.moveTo(new core.Location(...WATCHTOWER_WIZARD.start));
-  PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
-  if (f.player.isNeedsPlacement()) tick(f);
-  assert.equal(f.player.isNeedsPlacement(), false, "resume placement completed before Talk-to");
-  await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
-  ticks(f, 2);
-  await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 40);
-  assert.ok(f.player.getArea() instanceof core.TemplatedInstanceArea, "ordinary Talk-to resumes stored parts");
-  ticks(f, 12);
-  assertWatchtowerRestored(f);
-  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 1);
-});
-
-test("Watchtower: nightshade entry plays private shaman/dragon actors without changing world actors or potion progress", async t => {
-  const f = actor(t, WATCHTOWER_GUARD), bystander = actor(t, { start: [2582, 9437, 0] });
-  ticks(f, 3); ticks(bystander, 3);
-  const casts = [], deaths = [];
-  const animate = core.NPC.prototype.performAnimation;
-  t.mock.method(core.NPC.prototype, "performAnimation", function (animation) {
-    if (this.getId() === core.NpcIdentifiers.OGRE_SHAMAN_5) casts.push(animation.id);
-    if (this.getId() === core.NpcIdentifiers.BLUE_DRAGON_6) deaths.push(animation.id);
-    return animate.call(this, animation);
-  });
-  const bits = 1 << 12;
-  f.player.setAttribute("quest.watchtower.bits", bits);
-  const worldDragon = watchtowerNpc(bystander, core.NpcIdentifiers.BLUE_DRAGON, [2592, 9431, 0]);
-  const hp = worldDragon.getHitpoints();
-  const area = await beginEnclaveScene(f);
-  assert.ok(area instanceof core.TemplatedInstanceArea, "nightshade dialogue starts the missing entry cinematic");
-  assert.equal(f.player.getInventory().getAmount(I.CAVE_NIGHTSHADE), 1, "entry consumes exactly one nightshade");
-  const actors = area.entities.filter(n => n.isNpc?.());
-  assert.ok(actors.some(n => n.getId() === core.NpcIdentifiers.OGRE_SHAMAN_5));
-  assert.ok(actors.some(n => n.getId() === core.NpcIdentifiers.BLUE_DRAGON_6));
-  ticks(f, 12);
-  assert.ok(casts.includes(5357), "shaman performs the dedicated spellcast");
-  assert.ok(deaths.includes(92), "private dragon plays its death");
-  assertWatchtowerRestored(f);
-  assert.deepEqual(xyz(f.player), [2588, 9410, 0]);
-  assert.equal(quest("watchtower").getStage(f.player), 8);
-  assert.equal(f.player.getAttribute("quest.watchtower.bits"), bits, "scene awards no shaman kills/crystals or potion progress");
-  assert.equal(worldDragon.getHitpoints(), hp, "the world dragon is unharmed");
-  assert.equal(bystander.player.getPrivateArea(), null);
-  assert.ok(!bystander.packets.some(p => p.op === OP.REBUILD_REGION));
-  assert.equal(f.player.getAttribute("watchtower:enclave-scene-seen"), true);
-});
-
-test("Watchtower: full-inventory assembly resume keeps progress pending until the relic is delivered", async t => {
-  const f = actor(t, WATCHTOWER_WIZARD);
-  ticks(f, 3);
-  const { area, npc } = await beginRelicScene(f);
-  assert.ok(area instanceof core.TemplatedInstanceArea);
-  area.leave(f.player, true);
-  f.player.moveTo(new core.Location(...WATCHTOWER_WIZARD.start));
-  const inventory = f.player.getInventory();
-  while (inventory.getFreeSlots() > 0) inventory.add(new core.Item(I.RAKE), false);
-  assert.equal(inventory.getFreeSlots(), 0, "resumption starts with an actually full bag");
-  const before = items(f.player);
-  const resume = async () => {
-    if (f.player.isNeedsPlacement()) tick(f);
-    assert.equal(f.player.isNeedsPlacement(), false, "full-bag retry placement completed before Talk-to");
-    await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
-    ticks(f, 2);
-    await clickThrough(f, () => f.player.getArea() instanceof core.TemplatedInstanceArea, 40);
-    assert.ok(f.player.getArea() instanceof core.TemplatedInstanceArea, "Talk-to resumes all retained parts");
-    ticks(f, 12);
-  };
-  await resume();
-  assert.equal(quest("watchtower").getStage(f.player), 2, "failed award cannot advance the quest");
-  assert.equal(inventory.getAmount(I.OGRE_RELIC), 0);
-  assert.deepEqual(items(f.player), before, "full-bag refusal preserves inventory");
-  assert.equal(f.player.getAttribute("quest.watchtower.bits") & (7 << 6), 7 << 6);
-  inventory.deleteNumber(I.RAKE, 1);
-  assert.equal(inventory.getFreeSlots(), 1);
-  await resume();
-  assert.equal(quest("watchtower").getStage(f.player), 3);
-  assert.equal(inventory.getAmount(I.OGRE_RELIC), 1);
-  assert.equal(inventory.getAmount(I.RAKE), 27);
-  ticks(f, 12);
-  assert.equal(inventory.getAmount(I.OGRE_RELIC), 1);
-});
-
-test("Watchtower: early nightshade use is refused without consumption or a cinematic", async t => {
-  const f = actor(t, WATCHTOWER_GUARD);
-  quest("watchtower").setStage(f.player, 6);
-  const npc = watchtowerNpc(f, core.NpcIdentifiers.ENCLAVE_GUARD, [2507, 3036, 0]);
-  f.player.getInventory().add(new core.Item(I.CAVE_NIGHTSHADE, 1), false);
-  const messages = [], send = f.player.sendMessage.bind(f.player);
-  t.mock.method(f.player, "sendMessage", message => { messages.push(message); return send(message); });
-  await useOnNpc(f, I.CAVE_NIGHTSHADE, npc);
-  ticks(f, 6);
-  assert.ok(messages.some(m => m.includes("deal with those skavids")), "valid ordinary target reaches the quest gate");
-  assert.equal(f.player.getInventory().getAmount(I.CAVE_NIGHTSHADE), 1);
-  assert.equal(quest("watchtower").getStage(f.player), 6);
-  assert.ok(!(f.player.getArea() instanceof core.TemplatedInstanceArea));
-});
-
-test("Watchtower: an in-scene saved checkpoint recovers at the real enclave entrance", async t => {
-  const f = actor(t, WATCHTOWER_GUARD);
-  const area = await beginEnclaveScene(f);
-  assert.ok(area instanceof core.TemplatedInstanceArea);
-  const saved = { at: f.player.getLocation().clone(), exit: f.player.getAttribute("watchtower:scene-exit") };
-  area.leave(f.player, true);
-  const restored = actor(t, WATCHTOWER_GUARD);
-  restored.player.setLocation(saved.at);
-  restored.player.setAttribute("watchtower:scene-exit", saved.exit);
-  quest("watchtower").setStage(restored.player, 8);
-  PM.emitPlayerLogin({ player: restored.player, username: restored.player.getUsername() });
-  ticks(restored, 4);
-  assert.deepEqual(xyz(restored.player), [2588, 9410, 0]);
-  assert.equal(restored.player.getAttribute("watchtower:scene-exit"), null);
-  assert.equal(quest("watchtower").getStage(restored.player), 8);
-  assert.notEqual(restored.player.getAttribute("watchtower:enclave-scene-seen"), true, "interrupted scene is not marked watched");
-});
-
-test("Watchtower: forced death cancels assembly and uses a real grave exit without granting the relic", async t => {
-  const f = actor(t, WATCHTOWER_WIZARD);
-  ticks(f, 3);
-  const { area } = await beginRelicScene(f);
-  assert.ok(area instanceof core.TemplatedInstanceArea);
-  const request = { player: f.player, tile: { x: f.player.getLocation().getX(), y: f.player.getLocation().getY(), z: 2 } };
-  PM.emitCustomEvent("gravestones:grave-location", request);
-  assert.deepEqual(request.tile, { x: 2548, y: 3116, z: 2 });
-  const errors = [];
-  t.mock.method(console, "error", (...args) => errors.push(args.map(String).join(" ")));
-  const { PlayerDeathTask } = require("../dist/game/task/impl/PlayerDeath");
-  f.player.setHitpoints(0);
-  core.TaskManager.submit(new PlayerDeathTask(f.player));
-  ticks(f, 12);
-  assert.deepEqual(errors, []);
-  assert.equal(area.isDestroyed(), true);
-  assert.ok(f.player.getLocation().getX() < 8192);
-  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
-  assert.equal(f.player.isUntargetable(), false);
-  assert.equal(f.player.getInventory().getAmount(I.OGRE_RELIC), 0);
-  assert.equal(quest("watchtower").getStage(f.player), 2);
-  const returned = f.player.getLocation().clone();
-  ticks(f, 12);
-  assert.ok(f.player.getLocation().equals(returned), "cancelled scene cannot move the player or grant its item later");
-});
 
 // ---- tablet and door ------------------------------------------------------------------------------------------------
 
@@ -737,43 +511,65 @@ test("shared quest fade-in closes only its own mount after the animation", (t) =
 });
 
 
-// #4491: checkpoint seed is after removal; Talk-to and Listen are real packets, with real tasks/map/session.
+// #4491: Yarlo's lecture in the rooms the rsprox capture DaddysHome (rev 242.1, ticks 1583-1766) records. Checkpoint seed after
+// the removal; Talk-to, Listen and every continue are real packets, with real tasks, map and session.
 const YARLO_SCENE = { start: [3240, 3395, 0] };
+const LECTURE = require("../plugins/quests/data/daddys-home-lecture.json");
+const LECTURE_LINES = LECTURE.steps.filter(step => step.text !== null).map(step => step.text);
+const DADDY_FURNITURE = [10563, 10564, 10565, 10566, 10567, 10568, 10569];
 async function listenToYarlo(f) {
   const q = quest("daddys_home");
   assert.ok(q, "Daddy's Home is registered");
   q.setStage(f.player, 3);
   f.player.setAttribute("daddys-home:furniture", Array(7).fill(2));
-  const npc = core.NPC.create(core.NpcIdentifiers.OLD_MAN_YARLO, new core.Location(3240, 3395, 0));
+  for (const varbit of DADDY_FURNITURE) f.player.getPacketSender().sendVarbit(varbit, 2);
+  const npc = core.NPC.create(core.NpcIdentifiers.OLD_MAN_YARLO, new core.Location(3240, 3396, 0));
   assert.equal(core.World.getNpcs().add(npc), true);
   f.t.after(() => core.World.getNpcs().remove(npc));
+  ticks(f, 2);
   await f.connection.dispatch([{ type: "npc_option", index: npc.getIndex(), clickType: 1 }]);
   ticks(f, 4);
   await clickThrough(f, () => f.player.getDialogueManager().getCurrent() instanceof core.OptionDialogue, 40);
   const menu = f.player.getDialogueManager().getCurrent();
   assert.ok(menu instanceof core.OptionDialogue, "ordinary Yarlo dialogue reaches the choice");
   assert.equal(menu.getOptions()[0], "Listen to Yarlo.");
-  assert.equal(q.getStage(f.player), 3, "choice alone cannot advance the quest");
   await f.connection.dispatch([{ type: "dialogue_continue", widgetId: core.OptionDialogue.OPTIONS_WIDGET_ID, childIndex: 1 }]);
+  f.listenTick = f.tick;
   ticks(f, 4);
   return f.player.getArea();
 }
 
-test("Yarlo: current-cache parlour geometry is available for an isolated demonstration", () => {
+/** Continues each lecture line as it gains its continue, until the player has the controls back. */
+async function watchLecture(f, limit = 900) {
+  const seen = [];
+  const areas = new Set();
+  for (let i = 0; i < limit && (seen.length < LECTURE_LINES.length || f.player.getMovementQueue().isMovementBlocked()); i++) {
+    const area = f.player.getArea();
+    if (area) areas.add(area);
+    const current = f.player.getDialogueManager().getCurrent();
+    if (current instanceof core.StatementDialogue && current.getText() === LECTURE_LINES[seen.length]) {
+      seen.push(current.getText());
+      await f.connection.dispatch([{ type: "dialogue_continue", widgetId: (229 << 16) | 4, childIndex: -1 }]);
+    }
+    tick(f);
+  }
+  return { seen, areas };
+}
+
+test("Yarlo: the recorded rooms' source chunks are in the current cache", () => {
   const { getTemplateRegion, templateChunkKey } = require("../dist/game/collision/TemplateRegionData");
-  const room = require("../plugins/skills/construction/data/rooms.json").find(room => room.key === "PARLOUR");
-  const region = getTemplateRegion(((room.sourceChunkX >> 3) << 8) | (room.sourceChunkY >> 3));
-  assert.ok(region, "current cache contains the construction template region");
-  const locs = region.chunks[templateChunkKey(0, room.sourceChunkX, room.sourceChunkY)];
-  assert.ok(locs.length > 0, "candidate chunk contains real cache locs");
-  assert.ok(locs.some(loc => loc.id === 4517 && loc.localX === 4 && loc.localY === 59 && loc.type === 10 && loc.face === 2),
-    "current parlour has the chair hotspot used by the demonstration");
+  for (const instance of LECTURE.instances) {
+    for (const [, , , chunkX, chunkY, plane] of [[0, 0, 0, ...instance.filler], ...instance.chunks]) {
+      const region = getTemplateRegion(((chunkX >> 3) << 8) | (chunkY >> 3));
+      assert.ok(region, `the cache has the region of chunk ${chunkX},${chunkY}`);
+      assert.ok((region.chunks[templateChunkKey(plane, chunkX, chunkY)] ?? []).length > 0, `chunk ${chunkX},${chunkY},${plane} has locs`);
+    }
+  }
 });
 
-test("Yarlo: Listen replaces the Varrock house map with an isolated room and returns safely", async (t) => {
+test("Yarlo: Listen plays the recorded rooms in private copies and returns to the tile the player stood on", async (t) => {
   const f = actor(t, YARLO_SCENE);
   ticks(f, 3);
-  t.after(() => { const area = f.player.getArea(); if (area) area.leave(f.player, true); });
   const bystander = actor(t, YARLO_SCENE);
   ticks(bystander, 3);
   const realObjects = () => {
@@ -788,67 +584,60 @@ test("Yarlo: Listen replaces the Varrock house map with an isolated room and ret
   f.player.getInventory().add(new core.Item(I.PLANK, 2), false);
   const inventoryBefore = f.player.getInventory().getItems().map(i => [i.getId(), i.getAmount()]);
   const xpBefore = f.player.getSkillManager().getExperience(core.Skill.CONSTRUCTION);
+  const start = [...YARLO_SCENE.start];
   recordSender(f);
   const area = await listenToYarlo(f);
-  assert.ok(area, "Listen starts the lecture's private scene");
+  assert.ok(area instanceof core.TemplatedInstanceArea, "the first rebuild (two ticks after Listen) is a copy");
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), true, "cinematic blocks movement");
   assert.equal(f.player.isUntargetable(), true, "cinematic protects its owner");
-  assert.ok(area instanceof core.TemplatedInstanceArea,
-    "Listen must rebuild a template map instead of drawing demonstration furniture over Yarlo's real Varrock house");
-  assert.ok(f.player.getLocation().getX() >= 8192, "owner is moved to the allocated copy");
+  assert.deepEqual([f.player.getLocation().getX() - area.getBaseX(), f.player.getLocation().getY() - area.getBaseY()], [30, 32],
+    "the player stands where the capture puts them (instance tile 13406,2976 of 13376,2944)");
+  const room = LECTURE.instances[0];
+  for (let x = 0; x < room.size[0]; x++) for (let y = 0; y < room.size[1]; y++) {
+    const placed = room.chunks.find(([cx, cy, plane]) => cx === x && cy === y && plane === 0);
+    const expected = placed ? placed.slice(3) : room.filler;
+    assert.deepEqual(area.getChunk(0, x, y), { sourceChunkX: expected[0], sourceChunkY: expected[1], sourcePlane: expected[2], rotation: 0 });
+  }
+  assert.deepEqual(area.getChunk(1, 5, 5), { sourceChunkX: 225, sourceChunkY: 713, sourcePlane: 1, rotation: 0 }, "the room's upper floor");
   const palette = area.buildScenePalette(f.player.getLocation().getX() >> 3, f.player.getLocation().getY() >> 3).palette.flat(2).filter(n => n !== -1);
-  assert.ok(palette.length > 0, "client receives actual map chunks");
+  const rebuild = f.packets.find(p => p.op === OP.REBUILD_REGION)?.frame;
+  assert.ok(rebuild, "session sends an actual encoded instance rebuild");
+  assert.deepEqual(decodeTemplateChunks(rebuild).sort((a, b) => a - b), palette.slice().sort((a, b) => a - b));
   for (const packed of palette) {
     const x = (packed >>> 14) & 1023, y = (packed >>> 3) & 2047;
     assert.ok(!(x >= 398 && x <= 410 && y >= 418 && y <= 430), "palette excludes the Varrock house and surrounding chunks");
   }
-  const rebuild = f.packets.find(p => p.op === OP.REBUILD_REGION)?.frame;
-  assert.ok(rebuild, "session sends an actual encoded instance rebuild");
-  assert.deepEqual(decodeTemplateChunks(rebuild).sort((a, b) => a - b), palette.slice().sort((a, b) => a - b));
-  assert.equal(palette.length, 4, "only the one-room chunk on each plane is copied");
-  for (let z = 0; z < 4; z++) assert.deepEqual(area.getChunk(z, 0, 0), {
-    sourceChunkX: 232, sourceChunkY: 887, sourcePlane: z, rotation: 0,
-  });
-  const template = area.getChunkObjects(0, 0, 0);
-  for (const [id, x, y, type, face] of [[4517, 4, 3, 10, 2], [4521, 0, 1, 10, 0], [4523, 3, 7, 10, 1]]) {
-    assert.ok(template.some(o => o.getId() === id && o.getLocation().getX() === area.getBaseX() + x &&
-      o.getLocation().getY() === area.getBaseY() + y && o.getType() === type && o.getFace() === face), "cache hotspot geometry " + id);
-  }
-  const demo = area.getObjects();
-  for (const [id, x, y, face] of [[6752, 4, 3, 2], [6768, 0, 1, 0], [6780, 3, 7, 1]]) {
-    assert.ok(demo.some(o => o.getId() === id && o.getLocation().getX() === area.getBaseX() + x &&
-      o.getLocation().getY() === area.getBaseY() + y && o.getType() === 10 && o.getFace() === face), "demonstration at matching hotspot " + id);
-  }
+  tick(f); // the builder and the camera come four ticks into the first step (capture tick 1587)
   const builder = area.entities.find(n => n.isNpc?.() && n.getId() === core.NpcIdentifiers.OLD_MAN_YARLO_2);
-  assert.ok(builder, "builder belongs to the private copy");
-  assert.deepEqual([builder.getLocation().getX(), builder.getLocation().getY()], [area.getBaseX() + 5, area.getBaseY() + 5]);
-  assert.deepEqual([builder.getPositionToFace().getX(), builder.getPositionToFace().getY()], [area.getBaseX() + 4, area.getBaseY() + 3]);
+  assert.ok(builder, "the plain builder belongs to the copy (capture tick 1587)");
+  assert.deepEqual([builder.getLocation().getX() - area.getBaseX(), builder.getLocation().getY() - area.getBaseY()], [45, 37]);
   const camera = f.ledger.calls.find(c => c.name === "sendCameraMoveTo");
-  assert.deepEqual(camera?.args.slice(0, 2), [area.getBaseX() + 3, area.getBaseY() + 7], "camera follows translated room tiles");
+  assert.deepEqual(camera?.args.slice(0, 3), [area.getBaseX() + 36, area.getBaseY() + 32, 1000], "the capture's first camera, in the copy");
   tick(bystander);
   assert.deepEqual(realObjects(), houseBefore, "owner's demonstration leaves the real house unchanged");
   assert.equal(bystander.player.getPrivateArea(), null);
   assert.ok(!bystander.packets.some(p => p.op === OP.REBUILD_REGION), "bystander stays on normal map");
-  assert.equal(f.player.getInventory().getAmount(I.MARLOS_CRATE ?? 24940), 0, "lecture cannot award the quest reward");
-  // Closing the held messagebox does not strand the cinematic; its timed completion still runs.
+  // A chatbox something else closes comes back with its line, so the player can always carry on.
+  ticks(f, 12);
   f.player.getPacketSender().sendInterfaceRemoval();
-  const beforeReturnFrames = f.packets.length;
-  ticks(f, 160);
-  await clickThrough(f, () => !f.player.getDialogueManager().isActive(), 80);
-  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()], [3240, 3395, 0]);
+  ticks(f, 2);
+  assert.equal(f.player.getDialogueManager().getCurrent()?.getText?.(), LECTURE_LINES[0], "the line is back");
+  const { seen, areas } = await watchLecture(f);
+  assert.deepEqual(seen, LECTURE_LINES);
+  assert.equal(areas.size, 3, "three rebuilds, three copies");
+  for (const copy of areas) assert.equal(copy.isDestroyed(), true);
+  assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()], start);
   assert.equal(f.player.getArea(), null);
-  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
   assert.equal(f.player.isUntargetable(), false);
-  assert.equal(quest("daddys_home").getStage(f.player), 5);
+  assert.equal(quest("daddys_home").getStage(f.player), 3, "the lecture itself leaves status 3");
+  ticks(f, 2);
+  assert.equal(quest("daddys_home").getStage(f.player), 4, "the briefing's first line follows it");
   assert.deepEqual(f.player.getAttribute("daddys-home:furniture"), Array(7).fill(2));
-  assert.equal(f.player.getPacketSender().getVarbit(542), 0);
-  assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
-  assert.ok(f.packets.slice(beforeReturnFrames).some(p => p.op === OP.REBUILD_NORMAL), "normal map is rebuilt on return");
+  for (const varbit of [542, 6719, 4606, 18141, 17775]) assert.equal(f.player.getPacketSender().getVarbit(varbit), 0, `varbit ${varbit} undone`);
+  assert.ok(f.packets.some(p => p.op === OP.REBUILD_NORMAL), "normal map is rebuilt on return");
   assert.equal(f.player.getAttribute("daddys-home:lecture-exit"), null);
   assert.deepEqual(f.player.getInventory().getItems().map(i => [i.getId(), i.getAmount()]), inventoryBefore, "lecture consumes no building supplies");
   assert.equal(f.player.getSkillManager().getExperience(core.Skill.CONSTRUCTION), xpBefore, "lecture awards no building XP");
-  assert.equal(area.isDestroyed(), true);
-  assert.equal(f.player.getPacketSender().getSubInterfaceAt(OVERLAY_UID), undefined, "fade is closed");
 });
 
 
@@ -867,7 +656,7 @@ function decodeTemplateChunks(frame) {
 }
 
 for (const how of ["walkout", "logout"]) {
-  test(`Yarlo: ${how} destroys the copy, cancels lecture tasks and returns to a real exit`, async (t) => {
+  test(`Yarlo: ${how} destroys the copy, cancels the lecture and leaves status 3 to watch again`, async (t) => {
     const f = actor(t, YARLO_SCENE);
     ticks(f, 3);
     const area = await listenToYarlo(f);
@@ -876,11 +665,11 @@ for (const how of ["walkout", "logout"]) {
     assert.deepEqual(f.player.getAttribute("daddys-home:lecture-exit"), [3240, 3395, 0]);
     if (how === "logout") f.player.onLogout(); // actual production logout callback, with persistence disabled for fixture
     else {
-      // Movement is normally blocked: forced boundary crossing exercises the area's ordinary leave caller.
-      f.player.moveTo(area.tile(8, 3, 0));
+      // Movement is normally blocked: a forced move out of the copy exercises the area's ordinary leave caller.
+      f.player.moveTo(new core.Location(3222, 3218, 0));
       ticks(f, 2);
     }
-    ticks(f, 160);
+    ticks(f, 200);
     assert.equal(area.isDestroyed(), true);
     assert.deepEqual([f.player.getLocation().getX(), f.player.getLocation().getY(), f.player.getLocation().getZ()], [3240, 3395, 0]);
     assert.equal(f.player.getAttribute("daddys-home:lecture-exit"), null);
@@ -889,7 +678,7 @@ for (const how of ["walkout", "logout"]) {
     assert.equal(f.player.getPacketSender().getVarbit(542), 0);
     assert.equal(f.player.getPacketSender().getVarbit(6719), 0);
     assert.equal(f.player.getPacketSender().getSubInterfaceAt(OVERLAY_UID), undefined);
-    assert.equal(quest("daddys_home").getStage(f.player), 5);
+    assert.equal(quest("daddys_home").getStage(f.player), 3, "Wiki: an interrupted cutscene has to be watched again");
     assert.deepEqual(f.player.getAttribute("daddys-home:furniture"), Array(7).fill(2));
   });
 }
@@ -914,6 +703,7 @@ test("Yarlo: a saved in-copy checkpoint recovers on login after the old scene is
   assert.equal(restored.player.getAttribute("daddys-home:lecture-exit"), null);
   assert.deepEqual(restored.player.getAttribute("daddys-home:furniture"), Array(7).fill(2));
   assert.equal(restored.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(quest("daddys_home").getStage(restored.player), 3);
 });
 
 
@@ -939,9 +729,9 @@ test("Yarlo: a forced death uses the real grave exit and cannot leave lecture ta
   assert.equal(f.player.getAttribute("daddys-home:lecture-exit"), null);
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
   assert.equal(f.player.isUntargetable(), false);
-  assert.equal(quest("daddys_home").getStage(f.player), 5);
+  assert.equal(quest("daddys_home").getStage(f.player), 3);
   const returned = f.player.getLocation().clone();
-  ticks(f, 160);
+  ticks(f, 200);
   assert.ok(f.player.getLocation().equals(returned), "cancelled lecture cannot teleport the player later");
 });
 

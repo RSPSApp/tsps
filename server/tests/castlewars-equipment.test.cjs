@@ -26,7 +26,7 @@ before(async () => {
     getRegionManager: () => core.RegionManager,
     getTaskManager: () => ({ submit() {}, cancelTasks() {} }),
     getWorld: () => core.World,
-    getPluginConfig: (key, fallback) => fallback,
+    getPluginConfig: (key, fallback) => key === Lobby._test.LEGACY_BOT_PROMPT_CONFIG_KEY ? true : fallback,
     onPlayerLogout: (handler) => { hooks.logout = handler; },
     onCanEquip: (handler) => { (hooks.equip ??= []).push(handler); },
     onCanUnequip: (handler) => { (hooks.unequip ??= []).push(handler); },
@@ -411,7 +411,7 @@ test('native Castle Wars supplies work with production plugin ordering and the c
   }
   // Registration alone leaves these native event consumers without their startup context.
   for (const hook of PluginManager.serverStartupHooks) {
-    if (['Hunter', 'WarpedSceptre', 'CastleWars'].includes(hook.pluginName)) hook.handler({});
+    if (['Hunter', 'WarpedSceptre', 'CastleWars', 'RingOfElements'].includes(hook.pluginName)) hook.handler({});
   }
   // GameBuilder loads these definitions after registering plugins.
   new (require('../dist/game/definition/loader/impl/NpcInteractionDefinitionLoader').NpcInteractionDefinitionLoader)().load();

@@ -18,6 +18,7 @@ const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const { decodeClientPackets, MAIN_INVENTORY_WIDGET_UID } = require('../dist/net/protocol/ClientProtocol');
 const { ClientPacketId } = require('../dist/net/protocol/NativeClientPackets');
 let core, Common, Instance, Fight;
+const Rewards = require("../plugins/bosses/maggotking/Rewards.MaggotKing");
 const rolledDamage = new WeakMap();
 const finalDamage = [];
 const beforeDefence = new WeakMap();
@@ -131,6 +132,14 @@ function player(t, complete = true) {
     assert.deepEqual(errors, []);
   });
   return p;
+}
+
+/** Use the waiting corpse so the next boss can spawn (the kill no longer respawns on a timer). */
+function claimCorpse(p, session) {
+  const corpse = session.corpse;
+  assert.ok(corpse, "the kill left a corpse");
+  assert.equal(Rewards.takeEggs({ player: p, npc: corpse }), true);
+  assert.ok(session.respawnTask?.isRunning(), "using the corpse schedules the respawn");
 }
 
 function enter(p) {
@@ -322,7 +331,7 @@ test('one genuine owned Maggot death advances both counts once after local-ahead
   assert.equal(row.messages.filter(text => text.includes('Your Maggot King kill count is:')).length, 1);
   assert.equal(row.messages.filter(text => text.startsWith(`CA_ID:${tasks[1].id}|`)).length, 1);
   assert.equal(boss.isRegistered(), false, 'real authoritative retirement removes the old boss');
-  assert.ok(session.respawnTask?.isRunning(), 'ordinary respawn remains scheduled');
+  claimCorpse(p, session);
   Kills.restore(p); // actual shared restore only, not a new login into the still-owned scene
   Kills.restore(p);
   assert.equal(Kills.killCount(p, monster), 25);
@@ -838,6 +847,7 @@ test('whole1500HP encounter traverses rotations and thresholds through real rang
   assert.equal(fight.head, null);
   const kills = p.getAttribute('maggot-king:kills');
   assert.equal(kills, 1, 'native killer receives one kill credit');
+  claimCorpse(p, session);
   until(() => session.boss && session.boss !== boss, 150, 'same room allows a clean retry');
   assert.equal(session.boss.getHitpoints(), 1500);
   assert.equal(session.fight.phase, 'ranged');
@@ -1211,6 +1221,7 @@ test('native encounter death claims deferred generic loot after session markers 
     assert.equal(generated.some(event => event.npc === boss), false, 'generic roller/generated path was not entered');
     assert.equal(core.World.getItems().some(item => item.getPrivateArea() === session.area), false,
       'the deferred reward slice creates no inaccessible or reachable ground loot');
+    claimCorpse(p, session);
     until(() => session.boss && session.boss !== boss, 150, 'ordinary same-room combat retry remains available');
     assert.equal(session.boss.getHitpoints(), 1500);
 
@@ -2047,6 +2058,22 @@ test('a decoded plus drink ignored by a longer legacy-unknown dose does not fabr
   bileContact(f, false);
 });
 
+test("the corpse's open-stomach choice rolls the imported open-stomach table", t => {
+  const owner = player(t), session = enter(owner);
+  invulnerable(owner);
+  core.CombatFactory.addPendingHit(new core.PendingHit(owner, session.boss, core.CombatFactory.RANGED_COMBAT,
+    { damage: 1500, delay: 0, rollAccuracy: false, experience: false }));
+  until(() => session.corpse, 25, 'the native death leaves the corpse');
+  const loot = [];
+  const observer = PM.createApi('MaggotCorpseLoot');
+  observer.onCustomEvent('npc-drops:roll', event => { if (event.player === owner) loot.push(...event.drops); });
+  try {
+    assert.equal(Rewards.openStomach({ player: owner, npc: session.corpse }), true);
+    assert.ok(loot.length > 0, 'the generated open-stomach table resolves through NpcDrops');
+    assert.equal(session.corpse, null);
+  } finally { session.area.leave(owner, false); }
+});
+
 test('another session walking its own floor cannot consume an owner pool or inherit owner protection', async t => {
   const owner = bileFixture(t); await chargedHelm(owner); await drinkBilePotion(owner);
   const other = bileFixture(t), local = [2912, 8036, 0];
@@ -2090,7 +2117,7 @@ test('Camping the King completes once on the twelfth native owner death in one s
     until(() => deaths.includes(boss), 25, `native owner death ${kill} reaches all observers`);
     assert.equal(boss.__maggotKingSession, null);
     assert.equal(session.boss, null);
-    assert.equal(session.respawnTask.isRunning(), true);
+    assert.ok(session.corpse, 'the kill leaves a corpse');
     assert.equal(done(), kill >= 12, 'only the twelfth valid kill unlocks Camping');
     assert.equal(awards.length, kill >= 12 ? 1 : 0, 'one shared completion event, no thirteenth-kill duplicate');
     // Keep the award assertion first so an actual base comparison diagnoses the missing task at12.
@@ -2099,6 +2126,7 @@ test('Camping the King completes once on the twelfth native owner death in one s
     Instance.onBossDeath({ npc: boss, killer: p }); // explicit callback-only consumed-event negative
     if (kill >= 12) assert.equal(session.campingKills, kill);
     if (kill < 13) {
+      claimCorpse(p, session);
       until(() => session.boss && session.boss !== boss, 150, 'ordinary in-room respawn keeps the same run');
       ticks(1); // finish native boss placement before the next supplied lethal hit
       assert.equal(Instance.sessionOf(p), session);

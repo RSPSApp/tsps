@@ -141,16 +141,23 @@ module.exports = function rumDealBrewery(api, ctx) {
     }
     player.setAttribute(ATTRIBUTES.SLUGLINGS, 0);
     player.setAttribute(ATTRIBUTES.KARAMTHULHU, 0);
+    // Keep the debit recoverable if a save/disconnect interrupts the presentation delay.
+    player.setAttribute(ATTRIBUTES.PRESSURISING, 1);
     showBarrel(player);
     // The Wiki's words; the capture sends "assorted" (recorded difference).
     player.sendMessage("You pressurise the asserted sea creatures.");
     player.getPacketSender().sendSound(PRESSURISE_SOUND, 1, 0);
     ctx.hold(player, 2);
-    later(player, 2, () => {
-      if (stage(player) !== STAGES.CATCH_CREATURES) return;
-      quest().setStage(player, STAGES.PRESSURISED);
-      ctx.syncVarbits(player);
-    });
+    later(player, 2, () => finishPressurising(player));
+  }
+
+  /** A saved in-flight debit settles at login; connected players keep the captured two-tick delay. */
+  function finishPressurising(player) {
+    if (Number(player.getAttribute(ATTRIBUTES.PRESSURISING)) !== 1) return;
+    player.setAttribute(ATTRIBUTES.PRESSURISING, 0);
+    if (stage(player) !== STAGES.CATCH_CREATURES) return;
+    quest().setStage(player, STAGES.PRESSURISED);
+    ctx.syncVarbits(player);
   }
 
   // ------------------------------------------------------------------ the brewing controls and the Evil Spirit
@@ -311,6 +318,6 @@ module.exports = function rumDealBrewery(api, ctx) {
   return {
     HOPPER, BARREL, LEVER_IDS, CONTROL_IDS, STAGNANT_LAKE, OUTPUT_TAP,
     hopper, stuffBarrel, countBarrel, pullLever, smiteControls, spiritDied, turnTap, scoopLake, fish,
-    showBarrel, stop,
+    showBarrel, finishPressurising, stop,
   };
 };

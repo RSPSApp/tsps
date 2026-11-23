@@ -1059,7 +1059,7 @@ module.exports = function registerTroubledTortugansQuest(api) {
         const moved = spawnShellbane(player, false);
         if (moved) {
           moved.setHitpoints(hitpoints);
-          // A new NPC would otherwise regenerate the carried damage immediately.
+          // The carried damage counts as just taken.
           moved.getCombat().getLastDamage().reset();
         }
         scheduleShellbaneSpecials(player);

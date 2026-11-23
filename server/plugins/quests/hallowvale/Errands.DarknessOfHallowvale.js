@@ -141,6 +141,9 @@ module.exports = function attachErrands(context) {
   });
   const TELEPORT_OPTION = "Does your offer of a teleport still stand?";
   const SHADOWY_FIGURE = "Shadowy figure";
+  /** Vertida's message's Inspect (Wiki: Transcript:Message (Vertida)). */
+  const MESSAGE_INSPECT = "It's a short message from Vertida to Veliaf. It confirms that the Sanguinesti order of the"
+    + " Myreque is operational, but in need of support.";
 
   // ---------------------------------------------------------------------------
   // The werewolf scene (t3574-3625)
@@ -458,7 +461,15 @@ module.exports = function attachErrands(context) {
     event.speakerId = second ? NPC.WEREWOLF_2 : NPC.WEREWOLF_3;
     event.speakerName = SHADOWY_FIGURE;
     event.expression = second ? EXPRESSION.WOLF_QUIZZICAL : EXPRESSION.WEREWOLF_ANGRY;
-    if (startsWith(event, LINE.TAKE_HIM)) event.before = () => werewolvesLookBack(player);
+    if (startsWith(event, LINE.TAKE_HIM)) {
+      event.before = () => werewolvesLookBack(player);
+      // The Wiki's transcript says "her"; live said "him" to a male character (t3608). It follows the
+      // player's pronouns as the dialogue runtime's gendered text does; Ours: "them" for they/them.
+      const appearance = player.getAppearance?.();
+      const pronouns = appearance?.getPronouns?.() ?? (appearance?.isMale?.() === false ? 1 : 0);
+      const word = ["him", "her", "them"][pronouns] ?? "him";
+      event.text = String(event.text ?? step.text).replace(/\bher\b/, word);
+    }
   }
 
   function werewolvesLookBack(player) {
@@ -467,6 +478,15 @@ module.exports = function attachErrands(context) {
     const [move, look] = BUSH_SCENE.lineCamera;
     Scenes.camera(player, move, look, { rate: 100, rate2: 100 });
     for (const wolf of run.wolves) if (wolf) Scenes.face(wolf, BUSH_SCENE.wolvesFace);
+  }
+
+  /**
+   * The werewolves' lines are the scene's only way on (their last continue tears it down), so a chat
+   * close (Esc) or a world click (which closes the chat) while the scene plays is taken; otherwise the
+   * player stayed in the copy.
+   */
+  function keepWerewolfChat(event) {
+    if (event?.player && wolfScenes.has(event.player)) event.handled = true;
   }
 
   /** t3618: 2591 = 0 and the fade on the last line's continue; the teardown and 130 three ticks on. */
@@ -693,6 +713,16 @@ module.exports = function attachErrands(context) {
     return null;
   }
 
+  /**
+   * Inspect on Vertida's message (Wiki: Transcript:Message (Vertida), a tbox with the message's
+   * picture; "Read" was renamed "Inspect" on 25 June 2020). Not captured; nothing else changes.
+   */
+  function inspectMessage({ player, itemId }) {
+    if (itemId !== ITEM.MESSAGE) return false;
+    common.itemBox(player, ITEM.MESSAGE, MESSAGE_INSPECT);
+    return true;
+  }
+
   function handleLogout({ player }) {
     if (!player) return;
     searching.delete(player);
@@ -714,5 +744,8 @@ module.exports = function attachErrands(context) {
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:menu", handleMenu);
+  api.onItemAction("Message", { Inspect: inspectMessage });
+  api.onCustomEvent("interface:close", keepWerewolfChat);
+  api.onCustomEvent("player:world-input", keepWerewolfChat);
   api.onPlayerLogout(handleLogout);
 };

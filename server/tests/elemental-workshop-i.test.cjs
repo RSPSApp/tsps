@@ -4,6 +4,7 @@
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, after, test } = require('node:test');
+process.env.BROWSER_HOST = '1';
 process.env.DISABLE_PLAYER_BOTS = '1';
 require('../dist/Server').Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
@@ -50,6 +51,7 @@ function actor(t, { stage: initial = 0, items = [] } = {}) {
   player.setAttribute('bot-skip-persistence', true);
   assert.equal(core.World.getPlayers().add(player), true);
   t.after(() => {
+    player.setAttribute('bot-skip-persistence', true);
     core.TaskManager.cancelTasks(player);
     if (player.isRegistered()) core.World.getPlayers().remove(player);
   });
@@ -115,6 +117,144 @@ function read(player, itemId) {
 
 const wireVarp = (player) => player.getPacketSender().getVarp(299);
 const amount = (player, id) => player.getInventory().getAmount(id);
+
+const DOOR_PASS_ATTRIBUTE = 'doors:walk-over-prior-clipping';
+const IGNORE_CLIPPING = 'movement:ignore-clipping';
+
+function doorPersistence(t) {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const { GameConstants } = require('../dist/game/GameConstants');
+  const { JsonPlayerPersistence } = require('../plugins/persistence/JsonPlayerPersistence.plugin');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'tsps-door-pass-'));
+  const previousDirectory = JsonPlayerPersistence.SAVE_DIRECTORY;
+  const previousPersistence = GameConstants.PLAYER_PERSISTENCE;
+  JsonPlayerPersistence.SAVE_DIRECTORY = directory;
+  const persistence = new JsonPlayerPersistence();
+  GameConstants.setPlayerPersistence(persistence);
+  t.after(async () => {
+    await persistence.flush();
+    GameConstants.setPlayerPersistence(previousPersistence);
+    JsonPlayerPersistence.SAVE_DIRECTORY = previousDirectory;
+    assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
+    assert.ok(path.basename(directory).startsWith('tsps-door-pass-'));
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  return persistence;
+}
+
+function beginOddWallPass(t, previous = false) {
+  ticks(5);
+  const p = actor(t, { stage: BIT.book | BIT.key, items: [[I.BATTERED_KEY]] });
+  place(p, 2709, 3494);
+  p.setResetMovementQueue(false);
+  p.setFlag(IGNORE_CLIPPING, previous);
+  const { ObjectActionPacketListener } = require('../dist/net/packet/impl/ObjectActionPacketListener');
+  new ObjectActionPacketListener().executeAction(p, 26115, 2709, 3495, 1);
+  for (let i = 0; i < 8 && locIdsAt(p, 2709, 3495).includes(26115); i++) ticks(1);
+  assert.equal(locIdsAt(p, 2709, 3495).includes(26115), false, 'the real closed wall was opened');
+  assert.equal(p.hasFlag(IGNORE_CLIPPING), true, 'real placed odd-wall input starts the crossing');
+  return p;
+}
+
+for (const previous of [false, true]) {
+  test(`odd-wall ordinary logout durably restores only prior clipping (${previous})`, async (t) => {
+    const persistence = doorPersistence(t);
+    const p = beginOddWallPass(t, previous);
+    p.setAttribute('bot-skip-persistence', false);
+    assert.equal(p.logoutRefusal(), null);
+    p.requestLogout(); ticks(1);
+    assert.equal(p.isRegistered(), false, 'ordinary queued logout removes the actor');
+    await persistence.flush();
+    assert.ok(require('node:fs').existsSync(persistence.resolveFilePath(p.getUsername(), p.getProfile())));
+    const saved = persistence.load(p.getUsername(), p.getProfile());
+    assert.equal(saved.getFlags().includes(IGNORE_CLIPPING), previous);
+    assert.equal(saved.attributes[DOOR_PASS_ATTRIBUTE] ?? null, null);
+    ticks(5);
+    const q = actor(t);
+    saved.applyToPlayer(q);
+    PM.emitPlayerLogin({ player: q, username: q.getUsername() });
+    assert.equal(q.hasFlag(IGNORE_CLIPPING), previous);
+    const control = actor(t);
+    for (const a of [q, control]) {
+      place(a, 2709, 3495); a.setResetMovementQueue(false);
+      a.getMovementQueue().walkStep(0, 1);
+    }
+    ticks(1);
+    assert.equal(control.getLocation().getY(), 3495, 'closed edge blocks an unflagged control');
+    assert.equal(q.getLocation().getY(), previous ? 3496 : 3495, 'only the prior owner may ignore the closed edge');
+  });
+}
+
+for (const previous of [false, true]) {
+  test(`odd-wall in-flight autosave recovers its marked prior flag (${previous})`, async (t) => {
+    const persistence = doorPersistence(t);
+    const p = beginOddWallPass(t, previous);
+    p.setAttribute('bot-skip-persistence', false);
+    persistence.save(p, 'test-in-flight-door');
+    await persistence.flush();
+    const saved = persistence.load(p.getUsername(), p.getProfile());
+    assert.equal(saved.attributes[DOOR_PASS_ATTRIBUTE], previous);
+    const q = actor(t);
+    saved.applyToPlayer(q);
+    PM.emitPlayerLogin({ player: q, username: q.getUsername() });
+    assert.equal(q.hasFlag(IGNORE_CLIPPING), previous);
+    assert.equal(q.getAttribute(DOOR_PASS_ATTRIBUTE) ?? null, null);
+    ticks(5);
+    assert.equal(q.hasFlag(IGNORE_CLIPPING), previous, 'late old-actor cleanup cannot touch the restored actor');
+    q.setFlag(IGNORE_CLIPPING, true);
+    PM.emitPlayerLogin({ player: q, username: q.getUsername() });
+    assert.equal(q.hasFlag(IGNORE_CLIPPING), true, 'recovery is one-shot; unmarked flags survive');
+  });
+
+  test(`odd-wall completion, cancellation and death preserve prior clipping (${previous})`, (t) => {
+    for (const ending of ['complete', 'cancel', 'unregister', 'death']) {
+      const p = beginOddWallPass(t, previous);
+      if (ending === 'cancel') p.getMovementQueue().reset();
+      if (ending === 'unregister') core.World.getPlayers().remove(p);
+      if (ending === 'death') {
+        PM.emitPlayerDeath({ player: p, killer: null });
+        assert.equal(p.hasFlag(IGNORE_CLIPPING), previous, 'death settles immediately');
+      }
+      ticks(5);
+      assert.equal(p.hasFlag(IGNORE_CLIPPING), previous, ending);
+      assert.equal(p.getAttribute(DOOR_PASS_ATTRIBUTE) ?? null, null, ending);
+    }
+  });
+}
+
+test('door lifecycle hooks preserve unmarked and separately marked quest flags', (t) => {
+  const p = actor(t);
+  p.setFlag(IGNORE_CLIPPING, true);
+  PM.emitPlayerLogin({ player: p, username: p.getUsername() });
+  PM.emitPlayerDeath({ player: p, killer: null });
+  PM.emitPlayerLogout({ player: p, username: p.getUsername() });
+  assert.equal(p.hasFlag(IGNORE_CLIPPING), true, 'unmarked ownership is unchanged');
+  const q = actor(t);
+  q.setAttribute('in-search-of-the-myreque:wall-pass-prior-clipping', true);
+  q.setFlag(IGNORE_CLIPPING, true);
+  PM.emitPlayerLogin({ player: q, username: q.getUsername() });
+  assert.equal(q.hasFlag(IGNORE_CLIPPING), true, 'separate quest prior ownership is preserved');
+  const active = beginOddWallPass(t);
+  PM.emitPlayerDeath({ player: p, killer: null });
+  assert.equal(active.hasFlag(IGNORE_CLIPPING), true, 'another actor is unaffected');
+  ticks(5);
+});
+
+test('replacing a door crossing cannot let its old timer settle the new owner', (t) => {
+  const p = beginOddWallPass(t);
+  core.TaskManager.process(); // First pass has one tick left; deliberately do not process movement.
+  const event = { player: p, object: new core.GameObject(26115, new core.Location(2709, 3495, 0), 0, 1), handled: false };
+  PM.emitCustomEvent('door:open', event);
+  assert.equal(event.handled, true);
+  core.TaskManager.process();
+  assert.equal(p.hasFlag(IGNORE_CLIPPING), true, 'replacement still owns its second tick');
+  assert.equal(p.getAttribute(DOOR_PASS_ATTRIBUTE), false, 'replacement did not inherit its own borrowed flag');
+  core.TaskManager.process();
+  assert.equal(p.hasFlag(IGNORE_CLIPPING), false);
+  assert.equal(p.getAttribute(DOOR_PASS_ATTRIBUTE) ?? null, null);
+  ticks(5);
+});
 
 test('bookcase gives the battered book once, then the slashed book and key back', (t) => {
   const p = actor(t);

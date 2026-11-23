@@ -6,6 +6,13 @@ const GUILD_CHARGES = 4;
 const WEALTH_CHARGES = 5;
 const ARDOUGNE_HARD_TASK = "recharge-some-jewellery-at-the-totem-in-the-lege";
 const rechargeTables = new WeakMap();
+const TOTEM_DELAY_TICKS = 2;
+const TOTEM_ANIMATION = 827;
+const TOTEM_NOTHING_SOUND = 2238;
+const TOTEM_TEXT = {
+  combat: "You feel a power emanating from the totem pole as it recharges your bracelet. You can now rub the bracelet to teleport and wear it to get information while on a Slayer assignment.",
+  skills: "You feel a power emanating from the totem pole as it recharges your necklace. You can now rub the necklace to teleport and wear it to get more caskets while big net Fishing.",
+};
 
 function rechargeTable(core) {
   if (rechargeTables.has(core)) return rechargeTables.get(core);
@@ -60,6 +67,20 @@ function rechargeableEntry(core, table, item, site) {
   return { ...entry, noted };
 }
 
+/** The amulet of eternal glory's row on a league's Boosted drops page. */
+const ETERNAL_SOURCE = "Fountain of Rune";
+
+/**
+ * How many times likelier content makes a glory turn eternal: "drops:chance" { player, source,
+ * rules } (a league's boosted drops) answers rules on the amulet of eternal glory's name.
+ */
+function eternalBoost(api, player) {
+  const rules = [];
+  api.emitCustomEvent("drops:chance", { player, source: ETERNAL_SOURCE, rules });
+  const name = String(api.core.ItemDefinition.forId(api.core.ItemIdentifiers.AMULET_OF_ETERNAL_GLORY)?.getName?.() ?? "");
+  return rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+}
+
 function rechargeAtFountain(api, event) {
   const { core } = api;
   const site = chargingSite(core, event);
@@ -67,6 +88,13 @@ function rechargeAtFountain(api, event) {
   const { player } = event;
   const table = rechargeTable(core);
   const used = rechargeableEntry(core, table, event.item, site);
+  if (!used && site === "totem") {
+    // RSProx 20261121T080414 tick 402: any other item; the sound comes two ticks later.
+    event.handled = true;
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You touch the item against the totem pole... but nothing interesting happens.");
+    core.TaskManager.submit(new core.CountdownTask(player, TOTEM_DELAY_TICKS, () => player.getPacketSender().sendSound(TOTEM_NOTHING_SOUND, 1, 0)));
+    return;
+  }
   if (!used) return;
   const fits = (piece) => {
     if (piece.recharge.wealth) return site === "rune";
@@ -83,6 +111,7 @@ function rechargeAtFountain(api, event) {
   let eternal = false;
   let changed = false;
   let recharged = false;
+  let last = null;
   const pieces = new Set();
   for (const container of [player.getInventory(), player.getEquipment()]) {
     for (const item of container.getItems()) {
@@ -91,12 +120,13 @@ function rechargeAtFountain(api, event) {
       const target = entry.piece.recharge.wealth ? WEALTH_CHARGES : site === "rune" ? RUNE_CHARGES : GUILD_CHARGES;
       if (entry.charges >= target) continue;
       const chance = site === "rune" ? entry.piece.recharge.eternalChance : 0;
-      if (chance && Math.random() < 1 / chance) {
+      if (chance && Math.random() * chance < eternalBoost(api, player)) {
         item.setId(core.ItemIdentifiers.AMULET_OF_ETERNAL_GLORY);
         eternal = true;
       } else {
         const chargedId = entry.piece.charged.find(([, charges]) => charges === target)[0];
         item.setId(entry.noted ? core.ItemDefinition.forId(chargedId).getNoteId() : chargedId);
+        last = { key: entry.piece.key, id: chargedId };
       }
       changed = true;
       pieces.add(entry.piece.key);
@@ -105,7 +135,7 @@ function rechargeAtFountain(api, event) {
     container.refreshItems();
   }
   if (!changed) {
-    player.sendMessage("Nothing interesting happens.");
+    player.sendMessage(site === "totem" ? "You don't have any jewellery that the totem can recharge." : "Nothing interesting happens.");
     return;
   }
   api.getBonusManager().update(player);
@@ -114,11 +144,28 @@ function rechargeAtFountain(api, event) {
   // `jewellery:recharged` { player, site, piece }: once per kind of piece charged ("Charge an Amulet of Glory at
   // the Fountain of Heroes"); site is "heroes", "totem" or "rune", piece the jewellery table's key ("glory").
   for (const piece of pieces) api.emitCustomEvent("jewellery:recharged", { player, site, piece });
+  if (site === "totem") {
+    totemBox(core, player, last);
+    return;
+  }
   player.sendMessage(eternal
     ? "The power of the fountain is transferred into an amulet of eternal glory. It will now have unlimited charges."
-    : site === "totem"
-      ? "The totem pole recharges your jewellery."
-      : "You feel a power emanating from the fountain as it recharges your jewellery.");
+    : "You feel a power emanating from the fountain as it recharges your jewellery.");
+}
+
+/**
+ * RSProx 20261121T080414 ticks 250-254 and 373-377: on arrival the touch line and anim 827 (the
+ * jewellery is charged that tick); two ticks later an item box shows the last piece charged.
+ */
+function totemBox(core, player, last) {
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You touch the jewellery against the totem pole...");
+  player.performAnimation(new core.Animation(TOTEM_ANIMATION));
+  const text = TOTEM_TEXT[last?.key];
+  if (!text) return;
+  core.TaskManager.submit(new core.CountdownTask(player, TOTEM_DELAY_TICKS, () => {
+    player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
+      .add(new core.ItemStatementDialogue(0, last.id, text)).add(new core.EndDialogue(1)));
+  }));
 }
 
 module.exports = function registerRecharge(api) {

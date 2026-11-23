@@ -77,6 +77,7 @@ export class Combat {
     private target: Mobile | null = null;
     private autoRetaliating = false;
     private attacker: Mobile | null = null;
+    private dyingOpponent: Mobile | null = null;
     /** Cycle of the last hit an attacker landed on this character, -1 when combat was cleared. */
     private lastAttackedCycle = -1;
     /** Cycle of the last hit a player landed on this character (any damage, splashes included), -1 when never. */
@@ -486,9 +487,11 @@ export class Combat {
         if (reachable) {
             this.trace("inRange", target);
             // An NPC flagged combat:close-in (ToA's Akkha) keeps walking in while it attacks
-            // from range, until it stands beside its target.
-            const closesIn = this.character.isNpc() && this.character.hasFlag?.("combat:close-in") === true
-                && !CombatRange.beside(this.character, target);
+            // from range, until it stands beside its target; one with a numeric
+            // "combat:close-in-distance" attribute (the Alchemical Hydra's 4) until it is that
+            // many tiles from it, footprint to footprint.
+            const closeIn = this.character.isNpc() ? Combat.closeInDistance(this.character) : null;
+            const closesIn = closeIn !== null && !CombatRange.within(this.character, target, closeIn);
             if (!closesIn) {
                 this.character.getMovementQueue().reset();
                 return;
@@ -601,11 +604,9 @@ export class Combat {
             if (targetMoved || state.mobilityBlocked || movement.didMoveThisCycle()) {
                 return;
             }
-            if (this.character.isNpc() && state.routeRequested &&
-                !movement.wasBlockedByDynamicOccupancy()) {
-                if (!this.isSafespotted(target)) this.cancelIfCurrent(target, generation);
-                return;
-            }
+            // An NPC whose step the map refuses keeps its target and tries again next cycle, as
+            // live's do behind a safespot: only the aggression range (shouldRetreat) lets go.
+            if (this.character.isNpc()) return;
             if (movement.size() > 0) return;
             if (this.character.isPlayer() && (state.routeRequested || movement.wasRouteEvaluated())) {
                 if (this.character.getAsPlayer().isPlayerBot?.() !== true) {
@@ -862,6 +863,14 @@ export class Combat {
     }
 
     /**
+     * An opponent (target or attacker) that has started dying: live still counts the fight until
+     * it is removed (rsprox 227/01885 t20818-20821, 240/1001355 t1962-1969). NPC.appendDeath notes it.
+     */
+    public noteDyingOpponent(opponent: Mobile): void {
+        if (this.target === opponent || this.attacker === opponent) this.dyingOpponent = opponent;
+    }
+    public getDyingOpponent(): Mobile | null { return this.dyingOpponent; }
+    /**
      * A monster's death ends the PJ timer it held on this character, so the next aggressive
      * monster can engage on the kill tick. The 16-tick logout timer is separate and keeps
      * running from `lastAttackedCycle`.
@@ -927,17 +936,22 @@ export class Combat {
         }
 
         const target = this.target;
-        if (target == null || this.isSafespotted(target)) return false;
+        if (target == null) return false;
+        // "combat:keep-target": content whose monsters never give up on their target (the Fight
+        // Cave's waves).
+        if (npc.hasFlag("combat:keep-target")) return false;
         // Instanced content owns its arena and its reset rules (Zulrah's phase moves, the raid
         // rooms): the open-world aggression range must not cut a scripted fight short.
         if (npc.getPrivateArea() != null) return false;
 
-        // Outside its aggression range an NPC cannot attack the target at all, so it loses
-        // interest and walks home: the Wiki draws the aggression range from the static spawn
-        // (max range + attack range, measured from the spawn footprint), and osrs-docs has an
-        // NPC dragged outside its max range lose its target. A target still fighting it (a
-        // safespot or a normal engagement) keeps it, so this bounds hunting, not the fight the
-        // player started. The footprint already extends `size - 1` north and east.
+        // The leash is where the target stands, nothing else. The Wiki's aggression range (max
+        // range + attack range, from the static spawn) "defines the outer limit of where the
+        // player can stand and still be attacked by the NPC", the NPC itself may stand outside
+        // it while the player is inside, and "Retreat mode is initiated by attacking an NPC from
+        // outside the aggression range" (Aggressiveness, Retreat). Whether the target is still
+        // fighting it, or can be reached at all (a safespot), does not matter: a safespotted NPC
+        // keeps its target for as long as the target stands in range (#6297). The footprint
+        // already extends `size - 1` north and east.
         const aggressionRange = definition.getAggressionRange(method.attackDistance(npc));
         const crossFloorRangedFight = method.type() !== CombatType.MELEE &&
             CrossFloor.canCross(npc.getLocation(), target.getLocation());
@@ -947,12 +961,21 @@ export class Combat {
             target.getLocation(),
             crossFloorRangedFight,
         );
-        if (spawnDistance > definition.getCombatFollowDistance()
-            || targetDistance > aggressionRange) {
+        if (targetDistance > aggressionRange) {
             coordinator.setCoordinateState(CoordinateState.RETREATING);
             return true;
         }
         return false;
+    }
+
+    /** Attribute naming how close (footprint to footprint) an NPC walks in while attacking from range. */
+    public static readonly CLOSE_IN_DISTANCE_ATTRIBUTE = "combat:close-in-distance";
+
+    /** How near an NPC keeps walking in while it attacks from range, or null when it stands its ground. */
+    private static closeInDistance(npc: Mobile): number | null {
+        const distance = Number(npc.getAttribute?.(Combat.CLOSE_IN_DISTANCE_ATTRIBUTE));
+        if (Number.isInteger(distance) && distance >= 1) return distance;
+        return npc.hasFlag?.("combat:close-in") === true ? 1 : null;
     }
 
     private processNpcUnderTarget(state: CombatCycleState): void {
@@ -1012,8 +1035,9 @@ export class Combat {
     }
 
     /**
-     * Ends combat with a target the actor has stopped trying to get to. Both give-up paths in
-     * postMovementProcess are skipped by an actor that cannot move (a stun, a placement, a
+     * Ends a player's combat with a target they have stopped trying to get to (NPCs are bounded by
+     * their aggression range instead, see shouldRetreat). The player's give-up path in
+     * postMovementProcess is skipped by an actor that cannot move (a stun, a placement, a
      * teleport in transit - `setBlockMovement`) and by a route whose step the mover rejects,
      * which keeps its checkpoint (`MovementQueue.process`), so the queue never empties; without
      * this deadline either side stays in combat with an unreachable target indefinitely.
@@ -1028,7 +1052,9 @@ export class Combat {
      * @return true when the interaction was dropped, so this cycle does nothing else.
      */
     private giveUpUnreachableTarget(target: Mobile, generation: number): boolean {
-        if (this.isSafespotted(target)) {
+        // NPCs have no deadline: one out of reach keeps trying for as long as its target stands in
+        // its aggression range (shouldRetreat), however long it is stuck (#6297).
+        if (this.character.isNpc()) {
             this.resetUnreachableTracking();
             return false;
         }
@@ -1050,19 +1076,6 @@ export class Combat {
         this.resetUnreachableTracking();
         this.cancelIfCurrent(target, generation);
         return true;
-    }
-
-    /**
-     * An NPC whose target is fighting it from where it cannot be reached (a safespot) keeps it,
-     * facing it and trying its step every cycle, as live does; it does not reset and walk home
-     * between the target's hits. Fighting it means attacking it, or having hit it within the
-     * attacker window. A target that stops fighting is let go by the usual releases, unless content
-     * says it never lets go ("combat:keep-target", the Fight Cave's monsters).
-     */
-    private isSafespotted(target: Mobile): boolean {
-        return this.character.isNpc() &&
-            (this.character.hasFlag("combat:keep-target")
-                || target.getCombat().getTarget() === this.character || this.attacker === target);
     }
 
     /** Every new engagement, and every actor with no engagement, starts with full patience. */

@@ -103,18 +103,48 @@ try {
 
 console.log("Stretched mode and welcome screen scaling tests passed");
 
+// A UI-scale change keeps the same canvas buffer: relayout widgets, but do not delete and
+// rebuild the scene texture (that GPU work used to run inside the Settings CS2 script).
+const { onResize } = require("../render/render/settings");
+let textureRebuilds = 0;
+const resizeHost: any = {
+    app: {
+        width: 800,
+        height: 600,
+        resize(w: number, h: number) { this.width = w; this.height = h; },
+    },
+    canvas: {},
+    osrsClient: { widgetManager: { resize: () => {} } },
+    computeUiRenderMetrics: () => ({ layoutW: 1042, layoutH: 503, renderScaleX: 1.5 }),
+    initTextureFramebuffer: () => {
+        textureRebuilds++;
+        resizeHost.textureFramebuffer = {};
+    },
+    textureFramebuffer: undefined,
+};
+onResize(resizeHost, 800, 600);
+assert.equal(textureRebuilds, 1, "the first resize allocates the scene texture");
+onResize(resizeHost, 800, 600);
+assert.equal(textureRebuilds, 1, "a same-buffer UI scale change keeps the scene texture");
+onResize(resizeHost, 900, 600);
+assert.equal(textureRebuilds, 2, "a real buffer resize recreates it");
+
 // Native mobile login (4618, called by toplevel_init) replaces a scale below 175% with 400%.
 const { createCacheVm } = require("../scripts/cache/cs2-sweep");
-const { getOsrsInterfaceScalingPercent, setOsrsInterfaceScalingPercent } = require("../ui/UiScale");
+const {
+    getOsrsInterfaceScalingPercent, setOsrsInterfaceScalingPercent, setMobileInterfaceScalingPercent,
+} = require("../ui/UiScale");
 const native = createCacheVm();
 const writes: number[] = [];
 native.vm.context.widgetManager.rootInterface = 601;
+const nativeMobileScale = () => native.vm.context.widgetManager.rootInterface === 601 ||
+    native.vm.context.varManager.getVarbit(6352) === 1;
 native.vm.context.getDeviceOption = (id: number) => id === 27
-    ? getOsrsInterfaceScalingPercent(native.vm.context.widgetManager.rootInterface === 601 || native.vm.context.varManager.getVarbit(6352) === 1) : 0;
+    ? getOsrsInterfaceScalingPercent(nativeMobileScale()) : 0;
 native.vm.context.setDeviceOption = (id: number, value: number) => {
     if (id !== 27) return;
     writes.push(value);
-    setOsrsInterfaceScalingPercent(value);
+    setOsrsInterfaceScalingPercent(value, nativeMobileScale());
 };
 try {
     for (const saved of [100, 125, 150, 175, 200, 400]) {
@@ -123,8 +153,14 @@ try {
         native.vm.execute(native.scripts.load(4618));
         assert.deepEqual(writes, [], "mobile startup must not overwrite the saved desktop preference");
         assert.equal(getOsrsInterfaceScalingPercent(), saved);
-        assert.equal(getOsrsInterfaceScalingPercent(true), Math.max(175, saved));
+        assert.equal(getOsrsInterfaceScalingPercent(true), 400,
+            "the mobile client starts at its own 400% default, leaving the desktop choice alone");
     }
+    setMobileInterfaceScalingPercent(175);
+    assert.equal(getOsrsInterfaceScalingPercent(true), 175, "the mobile slider can be lowered to 175%");
+    assert.equal(getOsrsInterfaceScalingPercent(), 400, "a mobile scale does not change the desktop one");
+    setMobileInterfaceScalingPercent(400);
+    assert.equal(getOsrsInterfaceScalingPercent(true), 400, "400% is the mobile default");
     setOsrsInterfaceScalingPercent(400);
     native.vm.context.widgetManager.rootInterface = 161;
     native.vm.execute(native.scripts.load(3054), [0, 0]); // Settings: select the 100% dropdown entry.
@@ -134,6 +170,22 @@ try {
         native.vm.execute(native.scripts.load(4618));
         assert.equal(getOsrsInterfaceScalingPercent(), 100, "the Settings choice survives desktop/mobile login initialization");
     }
+
+    // Reset interface scaling (script 3334) restores the mobile default, 400%, not the
+    // dropdown's lowest entry. Live's mobile client defaults to the high scale, and its
+    // own login script (4618) turns anything below 175% back into 400%.
+    setMobileInterfaceScalingPercent(175);
+    writes.length = 0;
+    native.vm.context.widgetManager.rootInterface = 601;
+    native.vm.execute(native.scripts.load(3334));
+    assert.deepEqual(writes, [400], "mobile reset restores the 400% default");
+    assert.equal(getOsrsInterfaceScalingPercent(true), 400);
+    assert.equal(getOsrsInterfaceScalingPercent(), 100, "mobile reset leaves the desktop scale alone");
+
+    writes.length = 0;
+    native.vm.context.widgetManager.rootInterface = 161;
+    native.vm.execute(native.scripts.load(3334));
+    assert.deepEqual(writes, [100], "desktop reset still restores 100%");
 } finally {
     setUiScale(null);
 }

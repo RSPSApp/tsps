@@ -44,12 +44,15 @@ Two optional local services are Java; neither is needed to run the server.
 
 | Command | What it enables | Setup |
 | --- | --- | --- |
-| `yarn bridge` | the in-game Quest Helper panel, from the upstream Java helper | **Java 21**, then the one-time build in [`tools/quest-helper-bridge`](tools/quest-helper-bridge/README.md) |
+| `yarn bridge:setup` | the in-game Quest Helper panel, from the upstream Java helper | **Java 21** and git; one-time build, see [`tools/quest-helper-bridge`](tools/quest-helper-bridge/README.md) |
 | `yarn gateway` | the official OSRS client through RSProx, playing on this server | [`runelite-gateway/README.md`](runelite-gateway/README.md) |
 
-The bridge and server need the same `QUEST_HELPER_TOKEN` (at least 24 characters) in `.env`.
-Without it, the panel reports that the server token is missing. Tutorial Island and Recipe for
-Disaster still work because the server answers those itself. `QUEST_HELPER_URL` can point the
+Once the bridge is built, the server starts it itself with a token of its own, so `yarn start` is
+enough. Without a built bridge, players see that Quest Helper isn't enabled on this world and the
+server log says how to set it up. Tutorial Island and Recipe for Disaster still work, because the
+server answers those itself. To run one shared bridge instead (`yarn bridge`, several worktrees),
+put the same `QUEST_HELPER_TOKEN` (at least 24 characters) in `.env`; the server then leaves the
+bridge to you. `QUEST_HELPER_AUTOSTART=0` turns the auto-start off. `QUEST_HELPER_URL` can point the
 server at a bridge outside loopback, such as `http://quest-helper:16471`; it must be an HTTP(S)
 URL without credentials, query parameters or a fragment. The default is
 `http://127.0.0.1:${QUEST_HELPER_PORT:-16471}`.

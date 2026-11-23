@@ -6,6 +6,7 @@ import {
 } from "../../common/authentication";
 import {
     getBrowserHostWorldConfig,
+    getClientConfig,
     getConfiguredDefaultServer,
     getConfiguredServers,
     getDefaultServerAddress,
@@ -87,6 +88,15 @@ export class LoginState {
     /** Load settings that should persist between sessions */
     private loadPersistedSettings(): void {
         this.titleMusicDisabled = getClientPreference("titleMusicDisabled");
+        const config = getClientConfig();
+        if (!config.restoreLastServer) {
+            const server = config.defaultServer;
+            this.serverTransport = server.transport ?? "websocket";
+            this.serverSignalUrl = server.signalUrl;
+            this.serverWorldId = server.worldId;
+            this.serverIceServers = server.iceServers ?? [];
+            return;
+        }
         const browserHostWorld = getBrowserHostWorldConfig();
         if (browserHostWorld) {
             this.serverName = "Browser World";
@@ -173,6 +183,8 @@ export class LoginState {
             const metadata = await response.json();
             const flags = transport === "webrtc" ? 0 : Number(metadata?.flags);
             const name = transport === "webrtc" ? metadata?.worlds?.find((world: any) => world.worldId === worldId)?.name : metadata?.name;
+            // Control characters are rejected on purpose.
+            // eslint-disable-next-line no-control-regex
             if (typeof name !== "string" || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f<>]/.test(name)) return;
             // A slow response must not rename a different world selected in the meantime.
             if (this.serverAddress !== address || this.serverSecure !== secure || this.serverTransport !== transport

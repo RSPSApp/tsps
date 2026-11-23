@@ -980,7 +980,7 @@ test("the halberd seed counts pieces in a looting bag and in group storage", asy
   Math.random = () => 0; // the first of those still missing
   try {
     // The point in a looting bag in the pack, the blade in the bank: the pommel comes next.
-    const bagged = new Player(null);
+    const bagged = new Player(new Proxy({}, { get: (_t, key) => (key === "then" ? undefined : () => true) }));
     bagged.setUsername("araxxor-bag");
     const bag = new core.Item(core.ItemIdentifiers.LOOTING_BAG, 1);
     bag.setMetaValue("lootingBag", [{ id: POINT, amount: 1 }]);
@@ -989,12 +989,12 @@ test("the halberd seed counts pieces in a looting bag and in group storage", asy
     assert.equal(Corpse.nextHalberdPiece(bagged), POMMEL, "the bagged point and banked blade count");
 
     // The point and blade in the group's storage: the pommel again; outside a group, the point.
-    const grouped = new Player(null);
+    const grouped = new Player(new Proxy({}, { get: (_t, key) => (key === "then" ? undefined : () => true) }));
     grouped.setUsername("araxxor-group");
     Store.commit(7, [{ id: POINT, amount: 1 }, null, { id: BLADE, amount: 1 }]);
     groupOf = (player) => (player === grouped ? { id: 7, ironman: true } : null);
     assert.equal(Corpse.nextHalberdPiece(grouped), POMMEL, "group storage counts");
-    const loner = new Player(null);
+    const loner = new Player(new Proxy({}, { get: (_t, key) => (key === "then" ? undefined : () => true) }));
     loner.setUsername("araxxor-loner");
     assert.equal(Corpse.nextHalberdPiece(loner), POINT, "nothing held anywhere: the first piece");
   } finally {

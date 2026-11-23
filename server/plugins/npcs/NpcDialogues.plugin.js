@@ -564,7 +564,7 @@ function flatten(steps, opts = {}) {
       // Some wiki exports inline the target body on a "continue" jump instead
       // of storing it in the page-level jump table. Prefer that body so nested
       // quest branches do not stop at the jump marker.
-      const target = Array.isArray(step.steps) ? step.steps : resolveJump(step, steps[position - 1], steps[position + 1]);
+      const target = Array.isArray(step.steps) ? step.steps : resolveJump(step, steps[position - 1] ?? step.previousLine, steps[position + 1]);
       // "end": a jump we cannot replay. Stop rather than leak into the next step.
       if (target === "end") {
         out.push({ type: "end" });
@@ -725,7 +725,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
 
   const resolveCondition = (step) =>
     PluginManager.emitNpcDialogueCondition({
-      player, npc: event.npc, npcId, definition, pages: context.pages,
+      player, npc: event.npc, npcId, definition, pages: context.pages, playing: context.playing,
       text: step.text, stepId: step.id,
     }) ?? combatLevelCondition(player, step.text) ?? skillLevelCondition(player, step.text);
 
@@ -794,9 +794,12 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       if (asked && !ownOption) return realBody(repeatsLine ? asked.slice(1) : asked) ?? asked;
     }
     // After an NPC line, "same as above" carries on as that line does where the page first has
-    // it (Bryn's first-time "What is this place?" continues as his full explanation).
+    // it (Bryn's first-time "What is this place?" continues as his full explanation). So does a
+    // player line that is no question of the page's (Barlak's "It's a giant snail shell!" after the
+    // tortoise shells goes on as his snail shell variant does).
     // A speaker "line" counts here only before a condition run (the Old Crone's line is one).
     const npcLine = typeof previous?.npc === "string" ? previous.npc
+      : typeof previous?.player === "string" && !context.pageOptions?.has(normText(previous.player)) ? previous.player
       : viaCondition && previous?.type === "line" && typeof previous.text === "string" ? previous.text : undefined;
     if (/^(above|below)/i.test(reference) && npcLine !== undefined) {
       const after = context.pageLines?.get(normText(npcLine))?.slice(1);
@@ -826,19 +829,24 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       return mine.length > 0 && signature(candidate) === mine;
     };
     // A random alternative ending "same as above" repeats the previous alternative's
-    // continuation, not an unrelated menu elsewhere on the page.
+    // continuation, not an unrelated menu elsewhere on the page. When that one is itself only a
+    // line and "same as above", the chain goes on up to the first with more: the Ghost
+    // villagers' four support answers each end "same as above" back to the first one's
+    // signature box (rsprox captures, 20261112T092603-5ab63b4: one answer line, then the box).
     if (/^above/i.test(reference) && current?.randomOptions) {
-      let continuation = realBody(current.randomOptions[current.randomIndex - 1]?.steps);
-      while (
-        continuation?.length &&
-        (typeof continuation[0]?.player === "string" ||
-          typeof continuation[0]?.npc === "string" ||
-          continuation[0]?.type === "line")
-      ) {
-        continuation = continuation.slice(1);
+      for (let index = current.randomIndex - 1; index >= 0; index--) {
+        let continuation = realBody(current.randomOptions[index]?.steps);
+        while (
+          continuation?.length &&
+          (typeof continuation[0]?.player === "string" ||
+            typeof continuation[0]?.npc === "string" ||
+            continuation[0]?.type === "line")
+        ) {
+          continuation = continuation.slice(1);
+        }
+        continuation = realBody(continuation);
+        if (continuation?.length) return continuation;
       }
-      continuation = realBody(continuation);
-      if (continuation?.length) return continuation;
     }
     const key = current ? normText(current.text) : "";
     // A jump never leads back into the branch it is in: that replays the branch forever.
@@ -939,11 +947,15 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
 
   /**
    * `via` is how a menu jump reached it ("other" for "shows other options"). A plugin's
-   * npc-dialogue:menu handler can ask the question itself (`handled`), warn first (`warning`), or
+   * npc-dialogue:menu handler can ask the question itself (`handled`), warn first (`warning`),
    * replace `options` with option nodes from this or an earlier menu (`history`), given the option
-   * just chosen (`chosen`): an NPC whose "other options" are not simply this menu again.
+   * just chosen (`chosen`): an NPC whose "other options" are not simply this menu again, or name one
+   * of the options as `select` to play it without drawing the menu. With `direct`, a menu that has one
+   * option left after its conditions takes it without asking.
    */
   function presentMenu(menu, offset = 0, tail = [], via = null) {
+    // A menu breaks the line-then-call link the called-branch jump rule relies on.
+    context.lastSpoken = undefined;
     if (cancelled) return;
     const { step, rest, record } = menu;
     context.currentMenu = menu;
@@ -1000,7 +1012,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           // The native option prompt is already closed; preserve any replacement UI.
           if (hook.end) return;
         }
-        const choice = { player, npc: event.npc, npcId, definition, option: option.text, prompt: step.prompt, stepId: option.id, pages: context.pages };
+        const choice = { player, npc: event.npc, npcId, definition, option: option.text, prompt: step.prompt, stepId: option.id, pages: context.pages, playing: context.playing };
         api.emitCustomEvent("npc-dialogue:choice", choice);
         if (choice.end) return;
         const own = ownMenu(option);
@@ -1016,6 +1028,13 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         run([...(option.steps || []), ...(own === menu ? rest : own.rest || []), ...tail], recordOption(option));
       }];
     });
+    // `notice.select`: one of the offered options plays at once, as if chosen, and no menu is drawn (live skips a menu
+    // whose other options do not apply to this player: Zavistic's Zogre option before Zogre Flesh Eaters).
+    const selected = notice.select ? visible.indexOf(notice.select) : -1;
+    if (selected >= 0) return pairs[selected * 2 + 1]();
+    // `direct` (set by an npc-dialogue:menu handler): a menu left with one option goes straight into it, as live
+    // does where the Wiki notes so (Murder Mystery's evidence menu with one piece of evidence).
+    if (notice.direct === true && visible.length === 1 && !more) return pairs[1]();
     if (more) pairs.push("More...", () => presentMenu(menu, offset + 4, tail, via));
     if (visible.length === 1) pairs.push("Goodbye.", close);
     // A parsed menu with no options is a wiki-export gap; continue the branch
@@ -1148,7 +1167,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         const speech = typeof step.player === "string" ? step.player : typedLine ? step.text : step.npc;
         // Let a plugin skip a line through the mutable payload (as slayer:assignment),
         // e.g. a hand-over line for an item the player is no longer carrying.
-        const request = { player, npc: event.npc, npcId, definition, step, text: speech, pages: context.pages, skip: false };
+        const request = { player, npc: event.npc, npcId, definition, step, text: speech, pages: context.pages, playing: context.playing, skip: false };
         api.emitCustomEvent("npc-dialogue:line", request);
         if (request.skip) {
           if (step.steps?.length) {
@@ -1157,6 +1176,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           }
           continue;
         }
+        // The line last shown, for a called branch that opens with a same-as jump (below).
+        context.lastSpoken = step;
         // `text` is mutable too, so a plugin can fill in the wiki's "[number]"-style blanks.
         const formatted = formatPlayerText(request.text, player);
         if (step.presentation === "overhead") {
@@ -1253,6 +1274,21 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           } }, true)
           : undefined;
         if (hold) chain.add(hold);
+        // A line the NPC also says overhead (the transcript writes it twice): live shows both on one
+        // tick, the chatbox without "Click here to continue", and moves on with the overhead's own
+        // timing (RSProx 20261121T071043 ticks 88-92, Legends' guards).
+        const next = rest[0];
+        if (!isPlayer && !hold && !step.steps?.length && pages.length === 1 && typeof request.after !== "function"
+          && !(Number.isInteger(request.pauseTicks) && request.pauseTicks > 0)
+          && next?.presentation === "overhead" && (next.npc ?? next.text) === speech) {
+          // Not in the chain (the action below sends it), so it takes no chain index.
+          const line = new NpcDialogue(-1, speakerId, pages[0], speakerName, expression, (request.side ?? step.side) === "right" ? 217 : 231);
+          chain.add(new ActionDialogue(index++, { execute: () => {
+            presentOwned(() => line.sendHeld(player));
+            manager.advance();
+          } }, true));
+          continue;
+        }
         let held;
         for (const text of pages) {
           const dialogue = isPlayer
@@ -1307,7 +1343,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         if (step.type === "message") {
           // Item hand-outs are also `message` steps; let quests hook their id.
           const message = {
-            player, npc: event.npc, npcId, definition, step, pages: context.pages,
+            player, npc: event.npc, npcId, definition, step, pages: context.pages, playing: context.playing,
             text: step.text, target: step.target, stepId: step.id, kind: "message", handled: false,
           };
           const previous = manager.getCurrent?.();
@@ -1392,7 +1428,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           return run(rest, currentRecord);
         }
         const action = {
-          player, npc: event.npc, npcId, definition, step, pages: context.pages,
+          player, npc: event.npc, npcId, definition, step, pages: context.pages, playing: context.playing,
           text: step.text, action: step.action, target: step.target, stepId: step.id, handled: false,
         };
         const current = manager.getCurrent?.();
@@ -1425,7 +1461,13 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         // Wiki markers for content this server does not implement.
         if (step.type === "unavailable" || step.type === "reference") return unavailable();
         if (step.type === "call" && Object.hasOwn(branches, step.branch) && Array.isArray(branches[step.branch])) {
-          return run([...branches[step.branch], ...rest], currentRecord);
+          // A branch that is only a lost-target "same as above" (Barlak's perfect-tortoise-shell "Okay." calls one after
+          // "It's a giant snail shell!") resolves against the line shown before the call, as it would inline.
+          const body = branches[step.branch];
+          // Only after a player line: after an NPC line the branch's own fallback already holds (Timfraku's menu).
+          const lead = body[0]?.type === "jump" && !Array.isArray(body[0].steps) && typeof context.lastSpoken?.player === "string"
+            ? [{ ...body[0], previousLine: context.lastSpoken }, ...body.slice(1)] : body;
+          return run([...lead, ...rest], currentRecord);
         }
         if (step.type === "choice") return presentMenu({ step, rest, record: currentRecord });
         if (step.type === "counted_draw") {
@@ -1606,6 +1648,9 @@ module.exports = {
       const withOptions = (page, result) => {
         if (page && data[page]) {
           result.page = page;
+          // The transcript being played, for hooks: `pages` lists every page that reaches the NPC
+          // (Vanstrom's five quests), not the one this conversation came from.
+          result.context.playing = Object.freeze({ page, variant: result.variant });
           const pageOptions = collectPageOptions(data[page]);
           result.context.pageOptions = pageOptions.byText;
           result.context.pageOptionList = pageOptions.list;
@@ -1680,6 +1725,7 @@ module.exports = {
       const context = {
         player: request.player, pages: [{ page, variants: Object.keys(record.variants ?? { "standard-dialogue": steps }) }],
         speakerIdByName, pageOptions: pageOptions.byText, pageOptionList: pageOptions.list,
+        playing: Object.freeze({ page, variant }),
         pageLines: collectPageLines(record), pageMenuBefore: collectMenuBefore(record, variant),
         pagePreviousVariant: collectPreviousVariant(record, variant),
         pageInitialMenu: collectMenuBefore(record, variant, { initial: true }),

@@ -10,6 +10,7 @@ Scurrius, the Rat King, in the Varrock Sewers, built from the OSRS Wiki ([Scurri
 | `FoodPile.Scurrius.js` | Eating from a food pile. |
 | `Kills.Scurrius.js` | Kill count and loot (MVP and non-MVP). |
 | `Aldo.Scurrius.js` | Historian Aldo's spine trade and the antique lamp. |
+| `Patrol.Scurrius.js` | The sewer patrol outside the boss room. |
 
 Ticks count from the action named; captured gamevals are in brackets.
 
@@ -66,7 +67,9 @@ Ticks count from the action named; captured gamevals are in brackets.
 ## Historian Aldo
 
 - Talk-to plays his Wiki transcript (`npc-dialogues.json`).
-- Trade, or a spine used on him (after "Ah, a Scurrius spine! A captivating subject indeed..."): with no spine, "Ah, I'll need one of Scurrius' spines to do that. Perhaps you could fetch me one?"; with one, "Trade Scurrius' spine for a combat lamp?"; with several, "Trade ALL your Scurrius spines for combat lamps?". Yes swaps every spine for an Antique lamp (28800) with "Aldo gives you an Antique lamp for Scurrius' spine." (or "some Antique lamps for Scurrius' spines.") in an item box.
+- Trade asks “Trade your Scurrius spines for a bone weapon or combat lamp?” with “Weapon.” and “Combat lamp.” when the player has a spine and can pay for a weapon he can make. The lamp option opens the same confirmation as a lamp-only trade. The two-option menu is captured at tick 20909. [RSProx 227/83](https://rsprox.net/download/83)
+- The lamp trade, or a spine used on him (after "Ah, a Scurrius spine! A captivating subject indeed..."): with no spine, "Ah, I'll need one of Scurrius' spines to do that. Perhaps you could fetch me one?"; with one, "Trade Scurrius' spine for a combat lamp?"; with several, "Trade ALL your Scurrius spines for combat lamps?". Yes swaps every spine for an Antique lamp (28800) with "Aldo gives you an Antique lamp for Scurrius' spine." (or "some Antique lamps for Scurrius' spines.") in an item box.
+- The weapon option uses the crafting branch of his Talk-to transcript. Both routes skip the weapon menu when exactly one weapon is makeable. In ticks 20921–20930 Aldo explains the fee, says “Okay, I'll make you the Bone shortbow.” (chat type 114, head 12606, expression 567) and takes the fee and materials when the item box appears (interface 193, chat type 115, item 28794). Using a spine and accepting a lamp is captured at ticks 21882–21890. [RSProx 227/83](https://rsprox.net/download/83) · [Historian Aldo dialogue, rev 15255757](https://oldschool.runescape.wiki/w/Special:PermanentLink/15255757)
 - The lamp (Rub): "Choose the skill you wish to gain XP in." with "Attack.", "Strength.", "Defence.", "Prayer.", "More options...", then "Ranged.", "Magic.", "Hitpoints.", "Previous options...". 5,000 experience, or 3,500 in Prayer, with sound 2655 and "<col=0000ff>Your wish has been granted!</col><br>You have been awarded 5,000 Defence XP!".
 
 ## Rat bone weapons
@@ -92,8 +95,45 @@ Ticks count from the action named; captured gamevals are in brackets.
   - Captured cast: animation 393, graphic 2645, area sound 7617, and projectile 2647 (cycles 46 to 46 + 10 a tile, height 45 to 23, angle 10, progress 64). The impact is 2646 at height 124. Every cast also sends "Your weapon has N charges remaining.". That was captured on a Leagues world that never used up charges (always 20,000), so how often live sends it is unconfirmed.
   - "Your Bone staff has no charges left." for an empty staff was not captured.
 
+## Sewer rat patrol
+
+The stationary controller (7224) faces south at (3267, 9869, 0). Its model is 6318.
+The moving rat (7225, model 50153) is size 1 and has zero combat level and no actions.
+It walks the 49-tile route from (3234, 9864, 0) to (3281, 9868, 0), one step per
+tick. All 48 edges are walkable in the rev 242 cache. The rat stays at the last
+tile until the removal three ticks after arrival. A new rat starts every 50 ticks,
+so the rats overlap for one tick at opposite ends.
+
+The first tile and north-facing spawn are visible at tick 14874 in Leagues V and
+25800 in Grid Master. The route is covered at ticks 14874–14875 and 20885–20922
+in the first recording and 21602–21612 and 25800–25833 in the second. Ten clear
+removals are three ticks after arrival across ticks 15472–15625, 20922–21125 and
+21922–21925. These are scenery actors outside the lair.
+[RSProx 227/83](https://rsprox.net/download/83) · [RSProx 234/3275](https://rsprox.net/download/3275)
+
+## Verification
+
+In the agent MCP, Talk-to unlocked Trade. The weapon option produced a Bone shortbow
+and consumed the spine, bow and fee. The lamp option kept the yew shortbow and
+50,000 coins, and spine-only Trade showed the lamp confirmation. At the east end
+the rats arrived on server ticks 99 and 149 and disappeared on 102 and 152. A
+new rat appeared at the first tile on tick 201. The focused tests check each
+patrol tile and the dialogue and inventory controls.
+
+## Estimates
+
+- Trade's weapon eligibility uses Aldo's existing fee and material checks. The
+  recording shows the player had a shortbow, spine and enough coins without
+  isolating which items the menu checked.
+- “Weapon.” begins at the transcript's weapon selection or direct confirmation.
+  The Wiki says “Same as above” and the recording closes that menu without choosing.
+- With several makeable weapons, the menu offers only those weapons in transcript
+  order. The recording shows a single eligible shortbow. The mace and staff
+  confirmation lines use the transcript's default head expression.
+- The patrol starts from the first observed tile facing north and repeats relative
+  to server startup. The recordings show that tile and angle but do not establish
+  a phase for a fresh server or a location farther west.
+
 ## Not built
 
-- Aldo's Trade offering a bone weapon or a lamp when the player has the materials for one ("Trade your Scurrius spines for a bone weapon or combat lamp?"); his Trade only swaps spines for lamps.
 - His options hidden on death: live sends `enabled_ops` 0 on his death animation's tick, so "Attack" leaves his menu. Needs NPC enabled-ops support in the engine first.
-- The patrol rats in the sewers outside (7224, 7225), which are scenery.

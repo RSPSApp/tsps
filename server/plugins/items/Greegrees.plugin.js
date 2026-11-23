@@ -81,6 +81,8 @@ const APE_ATOLL = { minX: 2688, maxX: 2815, minY: 2688, maxY: 2815 };
 const APE_ATOLL_DUNGEONS = { minX: 2688, maxX: 2815, minY: 9088, maxY: 9215 };
 // The Ape Atoll course hole leads to this separately mapped Recipe for Disaster room.
 const TCHIKI_NUT_CAVE = { minX: 3018, maxX: 3027, minY: 5454, maxY: 5460, planes: [0] };
+// Cache rev242: the RFD hot-rock room's floor and its coal corridor to exit 16100.
+const HOT_COAL_ROOM = { minX: 3054, maxX: 3069, minY: 5478, maxY: 5491, planes: [0] };
 const ARDOUGNE_ZOO = { minX: 2594, maxX: 2612, minY: 3272, maxY: 3286, planes: [0] };
 const PLANES = [0, 1, 2, 3];
 
@@ -131,7 +133,7 @@ function within(location, zone) {
 /** Where Zooknock's magic reaches. */
 function canTransformAt(location) {
   return within(location, APE_ATOLL) || within(location, APE_ATOLL_DUNGEONS)
-    || within(location, TCHIKI_NUT_CAVE) || within(location, ARDOUGNE_ZOO);
+    || within(location, TCHIKI_NUT_CAVE) || within(location, HOT_COAL_ROOM) || within(location, ARDOUGNE_ZOO);
 }
 
 function boundaries() {
@@ -141,6 +143,7 @@ function boundaries() {
     ...PLANES.map((z) => zone(APE_ATOLL, z)),
     ...PLANES.map((z) => zone(APE_ATOLL_DUNGEONS, z)),
     ...TCHIKI_NUT_CAVE.planes.map((z) => zone(TCHIKI_NUT_CAVE, z)),
+    ...HOT_COAL_ROOM.planes.map((z) => zone(HOT_COAL_ROOM, z)),
     ...ARDOUGNE_ZOO.planes.map((z) => zone(ARDOUGNE_ZOO, z)),
   ];
 }

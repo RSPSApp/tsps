@@ -76,12 +76,18 @@ yarn sync:loc-teleports --captures loc-teleports.json --report report.json   # e
 - **Decisions:**
   - Sailing and the shipyard;
   - minigame, raid and boss areas (Theatre of Blood, Guardians of the Rift, Tempoross, Giants' Foundry and more);
-  - holiday events;
+  - holiday events, apart from Scrubfoot's cave (below);
   - the Dagannoth Kings' ladder, which picks a boss instance;
   - Fossil Island's underwater caves, which need diving gear;
   - one ladder only seen on a Leagues world.
 
 Nothing is removed, and the plugin's own entries are ignored while probing, so a second run adds nothing.
+
+### Scrubfoot's cave (Goblin Village)
+
+The cave entrance (`xmas20_goblin_cave_entrance`, 40887) west of Goblin Village and the cave's exit (`xmas20_goblin_cave_exit`, 40888) came with the 2020 Christmas event, but the cave stayed when Sled Racing was made permanent on 6 January 2021 ([Wiki: Cave entrance (Scrubfoot's cave)](https://oldschool.runescape.wiki/w/Cave_entrance_(Scrubfoot%27s_cave)), [Sled Racing](https://oldschool.runescape.wiki/w/Sled_Racing)). The holiday rule in `loc-teleport-sync.json` leaves those two names out of it, so the sync takes them. rsprox captures 3243 (rev 233) and local 1001339 (rev 240): Enter crawls (2796) with sound 2454 and the fade two ticks after arriving and moves to (1975, 6220, 3) on tick 4; Exit moves to (2949, 3508, 0) on tick 3, the median of the two recordings: in 3243 (no walk, no sled) the crawl, sound and fade come on the click and the move two ticks later; in local 1001339 (walked, sled worn) the fade comes on tick 2 with no crawl and the move on tick 4. tsps plays the crawl, sound and fade a tick after arriving and the move on tick 3, so it is a tick later than 3243 (recorded difference).
+
+Not covered: Sled Racing itself (the sled, the timed course, the crevice back up). Live's Exit also takes off a worn event sled ("You remove the sled.", local 1001339); tsps has no sled racing, so it isn't played.
 
 ## The first run (2026-10-09)
 
@@ -118,6 +124,9 @@ Locs live OSRS turned some players away from need their requirement before they 
 | Mos Le'Harmless underwater stairs (3788, 9254) | A fishbowl helmet and diving apparatus worn, or the Medallion of the Deep | "You cannot go diving without your diving helmet and diving apparatus!" |
 | The Elid crevice (all three tiles) | A rope used on it once | A message box: "That looks too steep to safely climb down with just your bare hands." |
 | Araxxor's lair web tunnel (3655, 9814) | 92 Slayer, Priest in Peril, an araxyte or spider task | Not captured: the lair's own lines ("You need a Slayer level of at least 92 to enter Araxxor's lair.") |
+| Kalphite Lair tunnel (3515, 9520, 2) | Death to the Dorgeshuun ([Wiki](https://oldschool.runescape.wiki/w/Tunnel_(Kalphite_Lair))) | "It looks like the tunnel is blocked at the other end." (rsprox local 1001685, tick 8528) |
+
+**Kalphite Lair and the Dorgesh-Kaan South Dungeon:** the Lair's Tunnel (23596) and the dungeon's two Blocked tunnel tiles (22656, 22657 at 2710, 5206-5207) lead to each other ([Wiki](https://oldschool.runescape.wiki/w/Blocked_tunnel)). Only the refusal is captured: live sent the message two ticks after the player arrived (local 1001685, ticks 8526 and 8528); the plugin refuses on the handler's tick, one after arriving. The crossing itself isn't captured, so the landings are the walkable tiles in front of the other end (west of the Lair tunnel, where the recording's player stood to use it; east of the blocked tunnel, each Lair tile to the tile opposite; the agent's Shortest Path transports land both Lair tiles at 2711, 5206, equally uncaptured) and the move comes two ticks after arriving, with no animation or sound (ours). The dungeon's darkness is not part of these entries.
 
 The skill total's number is scrubbed in the captures (`#`), so 500 comes from the Wiki. Using a rope on the crevice ties it and goes down ("You climb down the rope."), as do later climbs; the rope isn't used up, as captured.
 
@@ -280,6 +289,12 @@ same reason: only the way down is captured, and its exit ladder (4188) has no ha
 (`enterPrison`); its one capture is the quest's prison-entry scene. The Taverley Dungeon cave into Cerberus's lair is skipped (`skip.names`): the lair is
 a boss area tsps has no plugin for, and the one capture is a Leagues world's.
 
+**Isle of Souls Dungeon exit:** the dungeon's Opening (40737 at 2168,9307, Exit) is taken by name
+(`include`): it was captured but left out as "not a ladder, stair, cave or hole", so the way in worked
+and the way out did nothing. Its one capture (local 1000195, Leagues V, rev 227) clicks it from
+2167,9308, where the way in lands: the crawl (2796) and sound 2454 with the fade two ticks after
+arriving, the move to 2310,2919 on tick 4, the tile the entrance cave (40736) is used from.
+
 **Isle of Souls tower basement (#5838):** the Crumbling Tower's ladder down (40745 at 2131,2994) is
 taken from its one capture (local 1000195, Leagues V, rev 227): clicked from 2132,2994, the climb
 (827) two ticks after arriving and the move to 1940,9451 on tick 3. No capture climbs the exit
@@ -329,6 +344,10 @@ The click is handled the tick after the player arrives, so each captured tick co
 2. **A tick later:** the minimap goes off.
 3. **The captured tick:** the move, after the entry's `message` when it has one: the game message live OSRS sends on a successful crossing (`messageType: "spam"` for one the chat filter hides). The Cam Torum squeeze doors say "You manage to squeeze through the tiny door." as spam on the teleport's tick (226/1693; 237/1098, 1102, 1105, 1135). The capture export keeps success messages without their type or tick, so the sync doesn't write them; it keeps one on an entry already in the data.
 4. **After the move:** the fade back in a tick later, and the overlay closed two ticks after that.
+
+An entry that plays nothing before the move (no animation, sound, fade or message box) has no animation tick to wait for, so the move is on the captured tick itself. Before, it still came a tick after the (empty) animation's tick, one tick later than captured: tick 1 moved two ticks after arriving, tick 2 three. 205 entries are like this, among them the Waterbirth cave with its warning off (in on tick 2, now two ticks after arriving) and the Kalphite Lair tunnels (two ticks after arriving, as described above). A captured tick 0 moves on the click, the earliest the handler can.
+
+`message` may be a list, sent in order on the move's tick: the Sorcerer's Tower Portal sends two lines.
 
 Two optional fields, set by hand (the capture export has neither): `soundDelay`, the sound's client delay as captured (`synth_sound delay`), and `fadeInTicks`, the ticks from the move to the fade back in when it is not one. The Crypt of Tonali lifts (`vmq4_crypt_lift`, `vmq4_crypt_lift_surface`) play their sound with delay 48 and fade back in two ticks after the move (233/03234.txt ticks 248-254 and 299-305, 232/03128.txt ticks 4024-4028). With `fadeInTicks`, movement is free again a tick after the fade back in, before the overlay closes: the up ride's first run step is on tick 304, between the fade in (303) and the close (305).
 
@@ -421,6 +440,13 @@ conversation is the one branch the captures show (the player has "killed a few o
 
 Not part of this: the cave's darkness and insects without a light source, and the Witchwood
 icon's protection.
+
+## Wizards' Guild portals
+
+The Wizards' Guild's top floor has three one-way portals, Enter only, with no return portal at the other end ([Wiki: Wizards' Guild](https://oldschool.runescape.wiki/w/Wizards%27_Guild)). Getting in needs 66 Magic, so the portals check nothing more.
+
+- **Sorcerer's Tower Portal** (`thormacportal`, 2158, west wall, 2585,3087,2): user's rsprox recording local 1001616 (rev 241), ticks 362-364. On the tick after arriving: "You enter the magic portal..." and "You teleport to the Sorcerer's Tower." (spam), then the teleport to 2703,3406,0, with no animation, sound or fade.
+- **Wizards' Tower Portal** (`wiztowerportal`, 2156) and **Dark Wizards' Tower Portal** (`darkwizportal`, 2157): not captured, so they still do nothing. Their messages and landing tiles are unknown.
 
 ## Waterbirth Island cave warning
 

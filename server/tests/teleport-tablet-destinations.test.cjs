@@ -271,7 +271,7 @@ test('the spell alternate option needs the diary; Cast still goes to the town', 
     assertLanding(cast('Varrock Teleport', 2).cast.tile, [3163, 3478, 0]);
     assertLanding(cast('Camelot Teleport', 2).cast.tile, [2726, 3484, 0]);
     assertLanding(cast('Watchtower Teleport', 2).cast.tile, [2584, 3098, 0]);
-    assertLanding(cast('Watchtower Teleport', 3).cast.tile, [2549, 3112, 2]);
+    assertLanding(cast('Watchtower Teleport', 3).cast.tile, [2933, 4712, 2]);
 });
 
 test('Configure asks as in the capture, and the choice is shared with the tablets', () => {

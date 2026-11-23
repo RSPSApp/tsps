@@ -565,7 +565,6 @@
   });
   var playersPanel;
   var botsPanel;
-  var openBotEditor = new URLSearchParams(location.search).get("edit") === "1";
   var serverOnline = false;
   function selectTab(tab) {
     if (tab !== state.tab) document.querySelector("main").scrollTop = 0;
@@ -588,7 +587,7 @@
       playersPanel.refresh();
     }
     if (tab === "bots") {
-      botsPanel ||= window.LocalPanelComponents.botsPanel(document.getElementById("panel-bots"), api, flash, openBotEditor);
+      botsPanel ||= window.LocalPanelComponents.botsPanel(document.getElementById("panel-bots"), api, flash);
     }
     botsPanel?.(tab === "bots", serverOnline);
     if (tab === "plugins" && document.getElementById("plugins-installed")) pluginPanel.selectPluginView(state.pluginView);

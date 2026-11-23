@@ -21,7 +21,7 @@ function init(pluginApi) {
 
 function gameval(kind, name) {
   const { CacheDefinitions } = core;
-  const lookup = { obj: CacheDefinitions.getObjId, seq: CacheDefinitions.getSeqId, spotanim: CacheDefinitions.getSpotanimId }[kind];
+  const lookup = { obj: CacheDefinitions.getObjId, seq: CacheDefinitions.getSeqId, spotanim: CacheDefinitions.getSpotanimId, loc: CacheDefinitions.getLocId }[kind];
   const id = lookup.call(CacheDefinitions, name);
   if (!Number.isInteger(id)) throw new Error(`[Cooking] unknown ${kind} gameval ${name}`);
   return id;
@@ -50,6 +50,7 @@ function index() {
       productId: obj(row.product),
       ingredients: row.ingredients.map(ingredient),
       returns: (row.returns ?? []).map(ingredient),
+      productSlotId: row.productSlot === undefined ? undefined : obj(row.productSlot),
       xp: row.xp ?? 0,
       timing: row.timing ?? [1, 2],
     };

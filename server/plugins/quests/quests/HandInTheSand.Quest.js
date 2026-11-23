@@ -6,29 +6,35 @@
  * Sandy, Betty and Mazion, the prose-condition answers, the start hook, the
  * item hand-ins (sandy hand, beer, beer soaked hand, rotas, scroll, orb, head)
  * and the item-on-object/NPC actions (desk search, pickpocket, truth serum,
- * rose-tinted lens on the counter, orb activation).
+ * rose-tinted lens on the counter, orb activation), the Wizards' Guild bell and
+ * the sandpit cutscene.
  *
- * Stages (varbit 1527 handsand_quest in varp 635 bits 0-8; Void
- * hand_in_the_sand.varbits.toml):
+ * Aligned with a whole revision 242 run (rsprox capture local 1002235; ticks in
+ * docs/quests/hand-in-the-sand/README.md): stage values and the moment each is set,
+ * the item and statement boxes, sounds, the question varbits 1528-1530, Sandy's
+ * window varbit 1535 and the coffee mug's 1536, Zavistic's teleport to Betty and
+ * the sandpit cutscene. The Wiki's words stay where the capture words a line
+ * differently (the dump keeps them).
+ *
+ * Stages (varbit 1527 handsand_quest in varp 635 bits 0-8):
  * 10 investigate hand, 20 ask wizards, 30 Bert's hours, 40 visit Sandy, 50
  * confront Bert, 60 deliver scroll, 70 make serum, 80 distract Sandy, 90 drugged
  * coffee, 100 activate orb, 110 interrogate Sandy, 120 return orb, 130 gather
  * runes, 140 search Entrana, 150 return head, 160 complete.
  *
- * Source: https://github.com/GregHib/void/blob/2b8e267836a8469757c73694ea4d57f2f1c28458/game/src/main/kotlin/content/quest/member/hand_in_the_sand/HandInTheSand.kt
  * Shared: Zogre Flesh Eaters owns the same Wizards' Guild bell and Zavistic.
  * This quest claims the bell only on its Quest Helper bell steps and hands the
  * shared entry point over to Zogre while Zogre still needs it (the bell for
  * its evidence conversation, Zavistic for its evidence hand-in).
- * Gaps: the sandpit cutscene/camera/sand animation, Bert's post-quest daily
- * 84-bucket sand delivery and the Wizards' Guild shop unlock are not reproduced;
- * Bert's requirement check (17 Thieving/49 Crafting) only closes the transcript
- * branch at its wiki "unavailable" marker; pickpocket and distraction always
- * succeed; the lens must be used on the counter without the doorway/light check.
+ * Gaps: Bert's post-quest daily 84-bucket sand delivery and the Wizards' Guild
+ * shop unlock are not reproduced; whether the door must be open for the lens is
+ * not checked (Ours: the lens is always used from the doorway tile).
  */
 module.exports = function registerHandInTheSandQuest(api) {
-  const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Animation, Graphic, Location, Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, startTranscript, refreshQuestList } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
+  const { createWizardsGuildBell } = require("../WizardsGuildBell");
 
   const PAGE = "The Hand in the Sand";
 
@@ -38,21 +44,21 @@ module.exports = function registerHandInTheSandQuest(api) {
   const MAZION_NPC_ID = NpcIdentifiers.MAZION;
   const BERT_NPC_IDS = new Set([NpcIdentifiers.BERT, NpcIdentifiers.BERT_2]);
   const BETTY_NPC_ID = NpcIdentifiers.BETTY;
-
-  /** NPCs whose transcripts this plugin owns; dialogue conditions from anyone else are not ours. */
-  const DIALOGUE_NPC_IDS = new Set([
-    ...BERT_NPC_IDS,
-    GUARD_CAPTAIN_NPC_ID,
-    ...SANDY_NPC_IDS,
-    ZAVISTIC_NPC_ID,
-    BETTY_NPC_ID,
-    MAZION_NPC_ID,
-  ]);
+  const BERT_SANDPIT_NPC_ID = 5382; // handsand_bert, the multinpc the capture's cutscene places
 
   const VARBIT_HAND_IN_THE_SAND = 1527; // handsand_quest: varp 635 bits 0-8
+  /** handsand_question1-3: 1 from the start, 0 once that question has been asked (t7273, t8307, t8318, t8337). */
+  const VARBIT_QUESTIONS = [1528, 1529, 1530];
   const VARBIT_TELEPORTED = 1531; // handsand_tele: varp 635 bit 12
   const VARBIT_SERUM = 1532; // handsand_serum: varp 635 bits 13-15
+  /** handsand_sandy_multi: Sandy at his desk (0), looking out of the window (1, t8266), gone after the quest (2, t9032). */
+  const VARBIT_SANDY = 1535;
+  /** handsand_coffee_multi: Sandy's mug (0) or the bare table once he is arrested (1, t9032). */
+  const VARBIT_COFFEE = 1536;
   const VARBIT_COUNTER = 1537; // handsand_counter_multi: varp 636 bits 9-10
+  const SANDY_AT_DESK = 0;
+  const SANDY_AT_WINDOW = 1;
+  const SANDY_GONE = 2;
   const WGS_SEED_COUNTER_FROM = 250; // Fellowship.WhileGuthixSleeps owns 1537 here.
   const WGS_SEED_COUNTER_UNTIL = 280;
   const STAGE_INVESTIGATE_HAND = 10;
@@ -90,13 +96,17 @@ module.exports = function registerHandInTheSandQuest(api) {
   // bell and its evidence hand-in only through Zavistic, so Hand hands over the
   // shared entry point that Zogre still needs (Zogre's handlers are registered
   // after Hand's, so an unhandled event falls through to them).
+  const ZOGRE_KEY = "zogre_flesh_eaters";
   const ZOGRE_STAGE_ATTRIBUTE = "quest.zogre_flesh_eaters.stage";
   const ZOGRE_SEARCH_ATTRIBUTE = "quest.zogre_flesh_eaters.search";
   const ZOGRE_STARTED_STAGE = 2;
   const ZOGRE_EVIDENCE_STAGE = 4;
   const ZOGRE_EVIDENCE_PROGRESS = 4;
+  /** Zavistic's Zogre option, which only a player who has started Zogre Flesh Eaters is offered (t7925, t7989). */
+  const ZOGRE_OPTION = "I'm here about the sicks...err Zogres";
+  const SANDY_PROBLEM_OPTION = "I have a rather sandy problem that I'd like to palm off on you.";
 
-  const START_HOOK = "quest:hand-in-the-sand:start";
+  const START_HOOK = "quest:the-hand-in-the-sand:start";
 
   const SANDY_HAND = ItemIdentifiers.SANDY_HAND;
   const BEER_SOAKED_HAND = ItemIdentifiers.BEER_SOAKED_HAND;
@@ -133,15 +143,50 @@ module.exports = function registerHandInTheSandQuest(api) {
   const SERUM_MADE = 5;
   const SERUM_FINISHED = 6;
 
+  /** The capture's sounds (synth ids). */
+  const SOUND = {
+    VIAL_SHATTER: 1587, // handsand_vialshatter, the lens on the counter (t8118)
+    DROP_HAND: 1588, // handsand_drop_hand, the hand in the Captain's beer (t7332)
+    GULP: 1589, // handsand_gulp, the Captain's gulp of beer (t7316)
+    ORB: 1590, // handsand_orb, rubbing the orb (t8280)
+    SANDSWIRL: 1591, // handsand_sandswirl, the sandpit filling (t8616)
+    SERUM: 1592, // handsand_serum, the serum in Sandy's coffee (t8276)
+    DRIP_LIQUID: 2392, // drip_liquid, the dye on the lens (t8078)
+    PUT_DOWN: 2739, // put_down, Betty's vial on her counter (t8104)
+    TELEPORT: 200, // teleport_all, Zavistic sending the player to Betty (t8035)
+  };
+  const PICKPOCKET_ANIM = 881; // human_pickpocket, every attempt on Sandy (t7675-7683)
+  /**
+   * Zavistic's teleport (t8033-8037): he casts (human_castentangle) on the continue, the player human_shrink (delay 4)
+   * with teleport_casting two ticks later, there two after that with the sequence cleared: human_shrink lasts 20016
+   * client cycles and ends shrunk to nothing, so without the reset the player stays invisible at Betty's.
+   * A countdown started from the continue runs in that tick's task pass, so each count is one more than the gap.
+   */
+  const ZAVISTIC_CAST_ANIM = 710;
+  const TELEPORT_ANIM = 3041;
+  const TELEPORT_ANIM_DELAY = 4;
+  const TELEPORT_GFX = 111;
+  const TELEPORT_GFX_HEIGHT = 92;
+  const TELEPORT_CAST_TICKS = 3;
+  const TELEPORT_LAND_TICKS = 5;
+  const BETTYS_SHOP = [3014, 3259, 0];
+  /**
+   * The lens is used from Betty's open doorway (Wiki: "stand in the doorway while the door is open and shine your
+   * lens at the counter"): the captures' players walk to (3016,3259) themselves and use it from there, three tiles from
+   * the counter, turning to it (1002235 t8111-8118, 01698 t2803-2811). Ours: a use from elsewhere walks there first;
+   * no recording uses it from another tile.
+   */
+  const BETTYS_DOORWAY = [3016, 3259, 0];
+
   // npc-dialogue:action / message step ids from the transcript.
-  const INTRO_REQUIREMENTS_ID = "Jw8a7L"; // wiki "unavailable" marker before Bert's accept choice
-  const HAND_GIVEN_MESSAGE = "qRJX_b";
+  const HAND_GIVEN_MESSAGE = "0PC9qk";
   const BEER_GIVEN_MESSAGE = "cuuImx";
   const HAND_DELIVERED_MESSAGE = "xmk0Dj";
-  const HAND_HANDED_OVER_MESSAGE = "6h4uAt";
+  const HAND_WAVED_MESSAGE = "2uHFMU";
+  const HAND_HANDED_OVER_MESSAGE = "r5kpiT";
   const BERT_LOST_HAND_ACTION = "VVhA4L";
   const CAPTAIN_RECLAIM_ACTION = "ZSl2q4";
-  const PICKPOCKET_SAND_MESSAGE = "som7PD";
+  const PICKPOCKET_RUMMAGE_MESSAGE = "miiMuf";
   const DESK_ROTA_MESSAGE = "BqwMgQ";
   const BERT_ROTA_ACTION = "PCAoQQ";
   const SCROLL_ACTION = "de44Zn";
@@ -152,16 +197,111 @@ module.exports = function registerHandInTheSandQuest(api) {
   const SERUM_SAND_MESSAGE = "UUCsu7";
   const NEW_SERUM_MESSAGE = "zSmspN";
   const POUR_SERUM_MESSAGE = "WGVaaL";
+  const JUICE_MESSAGE = "wXRNb8";
+  const LENS_MADE_MESSAGE = "qPeefO";
   const ORB_ACTIVATED_MESSAGE = "s5YSQy";
   const ORB_FULL_MESSAGE = "OU4xhJ";
   const ORB_HANDED_MESSAGE = "qH5Grc";
+  const CUTSCENE_START_ACTION = "m0RGEw";
+  const CUTSCENE_FIRST_BOX = "ythkfh";
+  const CUTSCENE_SECOND_BOX = "LYif21";
   const CUTSCENE_END_ACTION = "Fpv9k6"; // cutscene end; spends the 5 earth runes and the bucket of sand
   const MAZION_HEAD_MESSAGES = new Set(["cP49nl", "znrG1s"]);
   const SHOW_HEAD_MESSAGE = "98WmUL";
   const COMPLETE_ACTION_ID = "q_UjQ0";
   const LOST_ROTA_CONDITION_ID = "SAfkA5";
   const LOST_ORB_RETURN_CONDITION_ID = "4j2GjS";
-  const DISTRACTION_SUCCESS_IDS = new Set(["PnEgz7", "6Km3cy", "mPtYUe"]);
+
+  /**
+   * How each of the page's boxes shows: the Wiki's tbox with a picture is an item box with that item, one without it
+   * a statement box, as the capture sends them (objectbox 193 / messagebox 229). Steps not listed stay chat messages
+   * (the Wiki's {{Mes}}).
+   */
+  const ITEM_BOXES = new Map([
+    [HAND_GIVEN_MESSAGE, SANDY_HAND],
+    [BEER_GIVEN_MESSAGE, BEER],
+    [HAND_DELIVERED_MESSAGE, BEER_SOAKED_HAND],
+    [HAND_WAVED_MESSAGE, BEER_SOAKED_HAND],
+    [HAND_HANDED_OVER_MESSAGE, BEER_SOAKED_HAND],
+    [SCROLL_EXCHANGE_MESSAGE, MAGICAL_ORB],
+    [LENS_MADE_MESSAGE, ROSE_TINTED_LENS],
+    [BETTY_VIAL_MESSAGE, VIAL],
+    [LENS_COUNTER_MESSAGE, TRUTH_SERUM],
+    [SERUM_SAND_MESSAGE, SAND],
+    [NEW_SERUM_MESSAGE, TRUTH_SERUM],
+    [ORB_ACTIVATED_MESSAGE, MAGICAL_ORB],
+    [ORB_FULL_MESSAGE, MAGICAL_ORB_ACTIVE],
+    ["cP49nl", WIZARDS_HEAD],
+    ["znrG1s", WIZARDS_HEAD],
+    [SHOW_HEAD_MESSAGE, WIZARDS_HEAD],
+  ]);
+  const STATEMENT_BOXES = new Set([
+    "HHCuF1", // Maybe you should have the hand with you...
+    "CkawR8", // Sand seems very keen to get you out of the office...
+    "Rq6Z7E", "te5RH8", // I'd better make room in my inventory first!
+    "SarqV0", PICKPOCKET_RUMMAGE_MESSAGE, "som7PD", // the pickpocket
+    DESK_ROTA_MESSAGE, "GzkKaP", "wV3HcB", // the desk and the rota
+    "DXb6tV", // Perhaps you should let Betty do that...
+    "vx3z33", "yrfYrF", POUR_SERUM_MESSAGE, // the coffee mug
+    "poy78n", "Xfq4oa", // Sandy without the orb / before every question
+    ORB_HANDED_MESSAGE,
+    CUTSCENE_FIRST_BOX, CUTSCENE_SECOND_BOX,
+  ]);
+  /** Sounds a box plays as it opens. */
+  const BOX_SOUNDS = new Map([
+    [HAND_DELIVERED_MESSAGE, SOUND.DROP_HAND],
+    [LENS_MADE_MESSAGE, SOUND.DRIP_LIQUID],
+    [BETTY_VIAL_MESSAGE, SOUND.PUT_DOWN],
+    [LENS_COUNTER_MESSAGE, SOUND.VIAL_SHATTER],
+    [POUR_SERUM_MESSAGE, SOUND.SERUM],
+    [ORB_ACTIVATED_MESSAGE, SOUND.ORB],
+  ]);
+
+  /**
+   * The sandpit cutscene (t8593-8638): the screen fades from the "Watch and learn..." continue, the player stands in a
+   * copy of the sandpit three ticks later with Bert and the camera on the pit, the first box at 12; seven ticks after
+   * it is continued the sand swirls and Bert cries; the second box two ticks on; eight ticks after that continue it fades
+   * back to the bell, and three later the runes and bucket are spent and Zavistic speaks.
+   */
+  const SANDPIT = Object.freeze({ sourceChunk: [316, 386], size: 4 });
+  const SANDPIT_BOUNDS = [[2528, 2559, 3088, 3119, 0]];
+  // Each count starts on a continue, whose countdown runs in that tick's task pass: one more than the capture's gap.
+  const CUTSCENE = Object.freeze({
+    ENTER_TICKS: 4,
+    BERT_TICKS: 6,
+    FADE_IN_TICKS: 10,
+    FIRST_BOX_TICKS: 13,
+    SAND_AFTER_FIRST_BOX: 8,
+    BERT_WALK_AFTER_FIRST_BOX: 1,
+    BERT_FACE_AFTER_FIRST_BOX: 6,
+    FADE_OUT_AFTER_SECOND_BOX: 9,
+    RETURN_AFTER_SECOND_BOX: 11,
+    LINE_AFTER_SECOND_BOX: 14,
+  });
+  const CUTSCENE_AT = [2536, 3109, 0];
+  const CUTSCENE_BERT = [2546, 3099, 0];
+  /**
+   * t8610-8614: Bert walks to the pit's edge from the tick after the first box's continue, north-west, west, west,
+   * north-west, and turns to the pit a tick after he arrives.
+   */
+  const CUTSCENE_BERT_WALK = [[2545, 3100, 0], [2543, 3100, 0], [2542, 3101, 0]];
+  const CUTSCENE_BERT_FACE = [2542, 3102, 0];
+  const CUTSCENE_CAMERA = { move: [2536, 3109, 850], look: [2544, 3102, 25], rates: { rate: 100, rate2: 100 } };
+  const SANDPIT_LOC = [2542, 3103, 0];
+  const SAND_MAGIC_ANIM = 3037; // handsand_sand_magic
+  const BERT_CRYING_ANIM = 2702; // prisoner_ready_crying
+  const CUTSCENE_JINGLE = 114; // "handsand cutscene"
+  const BELL_RETURN = [2598, 3086, 0];
+  const ZAVISTIC_AFTER_CUTSCENE = [2597, 3086, 0];
+  const SCENE_EXIT_ATTRIBUTE = "hand-in-the-sand:scene-exit";
+  const COMPLETION_JINGLE = 152; // "quest complete 1" (t9032)
+
+  /**
+   * Ours: neither the Wiki nor the capture gives a rate for a pickpocket on Sandy (the Wiki: "may take multiple
+   * attempts"; the capture: two misses in four) or for the distraction (the Wiki: "no guaranteed one").
+   */
+  const PICKPOCKET_SUCCESS_CHANCE = 0.5;
+  const DISTRACTION_SUCCESS_CHANCE = 0.5;
 
   const SERUM_ATTRIBUTE = "quest.hand_in_the_sand.serum";
   const COUNTER_ATTRIBUTE = "quest.hand_in_the_sand.counter";
@@ -178,6 +318,15 @@ module.exports = function registerHandInTheSandQuest(api) {
   ]);
 
   let quest;
+  const bell = createWizardsGuildBell(api);
+  const Scenes = createQuestScenes(api, { recoveryAttribute: SCENE_EXIT_ATTRIBUTE, onEnd: sceneEnded });
+  /** The players whose Zavistic conversation came from the bell, for the page's bell and guild conditions. */
+  const atTheBell = new WeakSet();
+  /** This attempt's pickpocket and distraction rolls, answered by both of the page's outcome conditions. */
+  const pickpocketRolls = new WeakMap();
+  const distractionRolls = new WeakMap();
+  /** The sandpit scene each player is in, with its Bert. */
+  const cutscenes = new Map();
 
   const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
 
@@ -188,6 +337,10 @@ module.exports = function registerHandInTheSandQuest(api) {
       : inventory.isFull()
         ? 0
         : 28;
+  }
+
+  function sound(player, id) {
+    player.getPacketSender().sendSound(id, 1, 0);
   }
 
   function serumLevel(player) {
@@ -213,19 +366,42 @@ module.exports = function registerHandInTheSandQuest(api) {
     syncCounter(player);
   }
 
+  /** Sandy and his mug follow the stage: at the window while the serum goes in, gone with the mug once he is arrested. */
+  function sandyState(stage) {
+    if (stage >= STAGE_COMPLETE) return SANDY_GONE;
+    return stage === STAGE_DRUG_COFFEE ? SANDY_AT_WINDOW : SANDY_AT_DESK;
+  }
+
+  function syncSandy(player, stage = quest.getStage(player)) {
+    const sender = player.getPacketSender();
+    sender.sendVarbit(VARBIT_SANDY, sandyState(stage));
+    sender.sendVarbit(VARBIT_COFFEE, stage >= STAGE_COMPLETE ? 1 : 0);
+  }
+
+  function syncQuestions(player) {
+    const sender = player.getPacketSender();
+    QUESTION_ATTRIBUTES.forEach((attribute, index) => {
+      sender.sendVarbit(VARBIT_QUESTIONS[index], player.getAttribute(attribute) === true ? 1 : 0);
+    });
+  }
+
   function syncAuxiliaries({ player }) {
     const sender = player.getPacketSender();
     sender.sendVarbit(VARBIT_SERUM, serumLevel(player));
     sender.sendVarbit(VARBIT_TELEPORTED, Number(player.getAttribute(TELEPORTED_ATTRIBUTE)) === 1 ? 1 : 0);
     syncCounter(player);
+    syncQuestions(player);
+    syncSandy(player);
   }
 
   function allQuestionsAsked(player) {
     return QUESTION_ATTRIBUTES.every((attribute) => player.getAttribute(attribute) === false);
   }
 
-  function setQuestion(player, index, asked) {
-    player.setAttribute(QUESTION_ATTRIBUTES[index], asked);
+  /** `open`: the question is still to ask (true from the start, false once asked), with its varbit. */
+  function setQuestion(player, index, open) {
+    player.setAttribute(QUESTION_ATTRIBUTES[index], open);
+    player.getPacketSender().sendVarbit(VARBIT_QUESTIONS[index], open ? 1 : 0);
   }
 
   /** Zogre's own quest state, read the way Zogre reads this quest's stage. */
@@ -237,16 +413,25 @@ module.exports = function registerHandInTheSandQuest(api) {
     };
   }
 
+  function zogre(player, question) {
+    const request = { player, key: ZOGRE_KEY };
+    api.emitCustomEvent(question, request);
+    return request;
+  }
+
+  const zogreStarted = (player) => zogre(player, "quest:is-started").started === true;
+  const zogreComplete = (player) => zogre(player, "quest:is-complete").complete === true;
+
   /** Zogre still has to show its evidence to Zavistic: only the bell does that. */
   function zogreNeedsTheBell(player) {
-    const zogre = zogreQuestState(player);
-    return zogre.started && zogre.progress < ZOGRE_EVIDENCE_PROGRESS;
+    const state = zogreQuestState(player);
+    return state.started && state.progress < ZOGRE_EVIDENCE_PROGRESS;
   }
 
   /** Zogre has the evidence and still owes Zavistic the hand-in: only the guild talk does that. */
   function zogreNeedsZavistic(player) {
-    const zogre = zogreQuestState(player);
-    return zogre.started && zogre.progress >= ZOGRE_EVIDENCE_PROGRESS;
+    const state = zogreQuestState(player);
+    return state.started && state.progress >= ZOGRE_EVIDENCE_PROGRESS;
   }
 
   function buildJournal(player, questHandle) {
@@ -465,7 +650,9 @@ module.exports = function registerHandInTheSandQuest(api) {
   /** Zavistic inside the guild; Zogre keeps the wizard while it owes him the evidence. */
   function zavisticVariant(player) {
     if (zogreNeedsZavistic(player)) return null;
-    return handZavisticVariant(player);
+    const variant = handZavisticVariant(player);
+    if (variant) atTheBell.delete(player);
+    return variant;
   }
 
   function bettyVariant(player) {
@@ -535,20 +722,21 @@ module.exports = function registerHandInTheSandQuest(api) {
     ) {
       return null;
     }
-    const value = String(text).toLowerCase().replace(/[\u2018\u2019]/g, "'");
+    const value = String(text).toLowerCase().replace(/[‘’]/g, "'");
     const has = (itemId) => held(player, itemId);
     if (value.includes("inventory space")) return freeSlots(player) < 1;
-    if (value.includes("speaking to zavistic rarve via the bell")) return false;
-    if (value.includes("completed zogre flesh eaters")) return false;
-    if (value.includes("speaking to zavistic rarve inside the guild")) return true;
+    if (value.includes("speaking to zavistic rarve via the bell")) return atTheBell.has(player);
+    if (value.includes("speaking to zavistic rarve inside the guild")) return !atTheBell.has(player);
+    if (value.includes("has not completed zogre flesh eaters")) return !zogreComplete(player);
+    if (value.includes("completed zogre flesh eaters")) return zogreComplete(player);
     if (value.includes("does not have the beer soaked hand")) return !has(BEER_SOAKED_HAND);
     if (value.includes("has the beer soaked hand")) return has(BEER_SOAKED_HAND);
     if (value.includes("lost the sandy hand")) return !has(BEER_SOAKED_HAND);
     if (value.includes("lost the rota")) return !has(BERTS_ROTA);
     if (value.includes("does not have sandy's rota")) return !has(SANDYS_ROTA);
     if (value.includes("already has sandy's rota")) return has(SANDYS_ROTA);
-    if (value.includes("pickpocket attempt fails")) return false;
-    if (value.includes("pickpocket attempt succeeds")) return true;
+    if (value.includes("pickpocket attempt fails")) return !pickpocketSucceeds(player);
+    if (value.includes("pickpocket attempt succeeds")) return pickpocketSucceeds(player);
     if (value.includes("has lost the magical orb")) {
       return !has(MAGICAL_ORB) && !has(MAGICAL_ORB_ACTIVE);
     }
@@ -564,8 +752,8 @@ module.exports = function registerHandInTheSandQuest(api) {
     if (value.includes("sandy has been distracted")) {
       return quest.getStage(player) >= STAGE_DRUG_COFFEE;
     }
-    if (value.includes("distracting sandy succeeds")) return true;
-    if (value.includes("distracting sandy fails")) return false;
+    if (value.includes("distracting sandy succeeds")) return distractionSucceeds(player);
+    if (value.includes("distracting sandy fails")) return !distractionSucceeds(player);
     if (value.includes("magical orb is not activated")) return !has(MAGICAL_ORB_ACTIVE);
     if (value.includes("magical orb is activated")) return has(MAGICAL_ORB_ACTIVE);
     if (value.includes("all the available questions have not been asked")) {
@@ -586,24 +774,191 @@ module.exports = function registerHandInTheSandQuest(api) {
     return null;
   }
 
+  /** One roll per pickpocket attempt, read by both of the page's outcome conditions. */
+  function pickpocketSucceeds(player) {
+    if (!pickpocketRolls.has(player)) pickpocketRolls.set(player, Math.random() < PICKPOCKET_SUCCESS_CHANCE);
+    return pickpocketRolls.get(player);
+  }
+
+  /** One roll per tall tale, read by both of its outcome conditions. */
+  function distractionSucceeds(player) {
+    if (!distractionRolls.has(player)) distractionRolls.set(player, Math.random() < DISTRACTION_SUCCESS_CHANCE);
+    return distractionRolls.get(player);
+  }
+
   // ==========================================================================
   // Dialogue hooks / actions
   // ==========================================================================
 
-  function handleStartHook({ player, npcId, hook }) {
-    if (!BERT_NPC_IDS.has(npcId) || hook !== START_HOOK) return;
-    if (quest.getStage(player) < STAGE_INVESTIGATE_HAND) {
-      quest.setStage(player, STAGE_INVESTIGATE_HAND);
-    }
-  }
-
-  /** 17 Thieving and 49 Crafting, checked at Bert's intro requirements marker. */
+  /** 17 Thieving and 49 Crafting, checked on Bert's "Yes."; the stage itself comes with the hand. */
   function meetsRequirements(player) {
     const skills = player.getSkillManager();
     return (
       skills.getCurrentLevel(Skill.THIEVING) >= 17 &&
       skills.getCurrentLevel(Skill.CRAFTING) >= 49
     );
+  }
+
+  function handleStartHook(hook) {
+    const { player, npcId } = hook;
+    if (!BERT_NPC_IDS.has(npcId) || hook.hook !== START_HOOK) return;
+    if (meetsRequirements(player)) return;
+    // Ours: the capture met the requirements; no source words a refusal.
+    player.sendMessage("You do not meet all of the requirements to start The Hand in the Sand quest.");
+    player.getPacketSender().sendInterfaceRemoval();
+    hook.end = true;
+  }
+
+  /** The box a message step shows as, with the sound it opens with. */
+  function presentBox(event) {
+    const { player, stepId } = event;
+    const item = ITEM_BOXES.get(stepId);
+    if (item !== undefined) event.box = { ...(event.box ?? {}), items: [item] };
+    else if (STATEMENT_BOXES.has(stepId)) event.box = { ...(event.box ?? {}), statement: true };
+    const id = BOX_SOUNDS.get(stepId);
+    if (id !== undefined) sound(player, id);
+  }
+
+  /** Message steps: each one's box, and the hand-ins, stages and items that come with it. */
+  function handleMessage(event) {
+    const { player, stepId } = event;
+    presentBox(event);
+    if (stepId === HAND_GIVEN_MESSAGE) {
+      // t7273: the stage, the three question varbits and the hand on the continue of Bert's "Nae".
+      if (quest.getStage(player) < STAGE_INVESTIGATE_HAND) {
+        quest.setStage(player, STAGE_INVESTIGATE_HAND);
+        for (let index = 0; index < QUESTION_ATTRIBUTES.length; index++) setQuestion(player, index, true);
+      }
+      if (!held(player, SANDY_HAND) && !held(player, BEER_SOAKED_HAND)) {
+        player.getInventory().adds(SANDY_HAND, 1);
+      }
+      return;
+    }
+    if (stepId === BEER_GIVEN_MESSAGE) {
+      // t7316: the beer goes, and he gulps, once the box is continued.
+      event.after = () => {
+        if (held(player, BEER)) player.getInventory().deleteNumber(BEER, 1);
+        sound(player, SOUND.GULP);
+      };
+      return;
+    }
+    if (stepId === HAND_DELIVERED_MESSAGE) {
+      if (quest.getStage(player) < STAGE_ASK_WIZARDS) {
+        if (held(player, SANDY_HAND)) player.getInventory().deleteNumber(SANDY_HAND, 1);
+        if (!held(player, BEER_SOAKED_HAND)) player.getInventory().adds(BEER_SOAKED_HAND, 1);
+        quest.setStage(player, STAGE_ASK_WIZARDS);
+      }
+      return;
+    }
+    if (stepId === HAND_HANDED_OVER_MESSAGE) {
+      if (quest.getStage(player) < STAGE_BERT_HOURS) {
+        if (held(player, BEER_SOAKED_HAND)) {
+          player.getInventory().deleteNumber(BEER_SOAKED_HAND, 1);
+        }
+        quest.setStage(player, STAGE_BERT_HOURS);
+      }
+      return;
+    }
+    if (stepId === PICKPOCKET_RUMMAGE_MESSAGE) {
+      // t7681, t7683: every success hands over sand with the rummaging box, one more each time.
+      pickpocketRolls.delete(player);
+      if (quest.getStage(player) >= STAGE_INVESTIGATE_HAND) player.getInventory().adds(SAND, 1);
+      return;
+    }
+    if (stepId === DESK_ROTA_MESSAGE) {
+      if (!held(player, SANDYS_ROTA)) player.getInventory().adds(SANDYS_ROTA, 1);
+      if (quest.getStage(player) < STAGE_CONFRONT_BERT) {
+        quest.setStage(player, STAGE_CONFRONT_BERT);
+      }
+      return;
+    }
+    if (stepId === SCROLL_EXCHANGE_MESSAGE) {
+      // Bert hands out a replacement scroll, so only exchange when carrying one.
+      if (!held(player, MAGIC_SCROLL)) {
+        event.handled = true;
+        event.box = undefined;
+        return;
+      }
+      player.getInventory().deleteNumber(MAGIC_SCROLL, 1);
+      if (!held(player, MAGICAL_ORB)) player.getInventory().adds(MAGICAL_ORB, 1);
+      if (quest.getStage(player) < STAGE_MAKE_SERUM) quest.setStage(player, STAGE_MAKE_SERUM);
+      return;
+    }
+    if (stepId === BETTY_VIAL_MESSAGE) {
+      setCounter(player, true);
+      return;
+    }
+    if (stepId === LENS_COUNTER_MESSAGE) {
+      if (held(player, ROSE_TINTED_LENS) && serumLevel(player) === SERUM_LENS) {
+        player.getInventory().deleteNumber(ROSE_TINTED_LENS, 1);
+        if (!held(player, TRUTH_SERUM)) player.getInventory().adds(TRUTH_SERUM, 1);
+        setSerum(player, SERUM_MADE);
+        setCounter(player, false);
+      }
+      return;
+    }
+    if (stepId === SERUM_SAND_MESSAGE) {
+      if (held(player, SAND)) player.getInventory().deleteNumber(SAND, 1);
+      setSerum(player, SERUM_FINISHED);
+      if (quest.getStage(player) < STAGE_DISTRACT_SANDY) {
+        quest.setStage(player, STAGE_DISTRACT_SANDY);
+      }
+      return;
+    }
+    if (stepId === NEW_SERUM_MESSAGE) {
+      if (!held(player, TRUTH_SERUM)) player.getInventory().adds(TRUTH_SERUM, 1);
+      return;
+    }
+    if (stepId === POUR_SERUM_MESSAGE) {
+      // t8276: the stage, Sandy back at his desk and the serum gone as the box opens.
+      if (held(player, TRUTH_SERUM)) player.getInventory().deleteNumber(TRUTH_SERUM, 1);
+      if (quest.getStage(player) < STAGE_ACTIVATE_ORB) {
+        quest.setStage(player, STAGE_ACTIVATE_ORB);
+      }
+      syncSandy(player);
+      return;
+    }
+    if (stepId === ORB_ACTIVATED_MESSAGE) {
+      if (held(player, MAGICAL_ORB)) player.getInventory().deleteNumber(MAGICAL_ORB, 1);
+      if (!held(player, MAGICAL_ORB_ACTIVE)) {
+        player.getInventory().adds(MAGICAL_ORB_ACTIVE, 1);
+      }
+      if (quest.getStage(player) < STAGE_INTERROGATE_SANDY) {
+        quest.setStage(player, STAGE_INTERROGATE_SANDY);
+      }
+      return;
+    }
+    if (stepId === ORB_FULL_MESSAGE) {
+      if (quest.getStage(player) < STAGE_RETURN_ORB) quest.setStage(player, STAGE_RETURN_ORB);
+      return;
+    }
+    if (stepId === ORB_HANDED_MESSAGE) {
+      if (held(player, MAGICAL_ORB_ACTIVE)) {
+        player.getInventory().deleteNumber(MAGICAL_ORB_ACTIVE, 1);
+      }
+      if (quest.getStage(player) < STAGE_GATHER_RUNES) {
+        quest.setStage(player, STAGE_GATHER_RUNES);
+      }
+      return;
+    }
+    if (stepId === CUTSCENE_FIRST_BOX) {
+      // t8605 the box, t8609 continued, t8616 the sand swirls (the overhead line's own before).
+      event.box = { ...event.box, delayTicks: CUTSCENE.FIRST_BOX_TICKS, pauseTicks: CUTSCENE.SAND_AFTER_FIRST_BOX };
+      event.after = () => bertToThePit(player);
+      return;
+    }
+    if (stepId === CUTSCENE_SECOND_BOX) {
+      // t8618 the box; continued at t8625, faded at 8633, back at the bell at 8635, Zavistic at 8638.
+      event.box = { ...event.box, pauseTicks: CUTSCENE.LINE_AFTER_SECOND_BOX };
+      event.after = () => leaveSandpit(player);
+      return;
+    }
+    if (MAZION_HEAD_MESSAGES.has(stepId)) {
+      if (!held(player, WIZARDS_HEAD)) player.getInventory().adds(WIZARDS_HEAD, 1);
+      if (quest.getStage(player) < STAGE_RETURN_HEAD) {
+        quest.setStage(player, STAGE_RETURN_HEAD);
+      }
+    }
   }
 
   /** Message and action steps that hand items over, consume them or advance the quest. */
@@ -613,139 +968,7 @@ module.exports = function registerHandInTheSandQuest(api) {
 
     // `message` steps fire twice: once as an action, once with kind "message".
     if (event.kind === "message") {
-      if (stepId === HAND_GIVEN_MESSAGE) {
-        if (quest.getStage(player) < STAGE_INVESTIGATE_HAND) {
-          quest.setStage(player, STAGE_INVESTIGATE_HAND);
-          for (let index = 0; index < QUESTION_ATTRIBUTES.length; index++) {
-            setQuestion(player, index, true);
-          }
-        }
-        if (!held(player, SANDY_HAND) && !held(player, BEER_SOAKED_HAND)) {
-          player.getInventory().adds(SANDY_HAND, 1);
-        }
-        return;
-      }
-      if (stepId === BEER_GIVEN_MESSAGE) {
-        if (held(player, BEER)) player.getInventory().deleteNumber(BEER, 1);
-        return;
-      }
-      if (stepId === HAND_DELIVERED_MESSAGE) {
-        if (quest.getStage(player) < STAGE_ASK_WIZARDS) {
-          if (held(player, SANDY_HAND)) player.getInventory().deleteNumber(SANDY_HAND, 1);
-          if (!held(player, BEER_SOAKED_HAND)) player.getInventory().adds(BEER_SOAKED_HAND, 1);
-          quest.setStage(player, STAGE_ASK_WIZARDS);
-        }
-        return;
-      }
-      if (stepId === HAND_HANDED_OVER_MESSAGE) {
-        if (quest.getStage(player) < STAGE_BERT_HOURS) {
-          if (held(player, BEER_SOAKED_HAND)) {
-            player.getInventory().deleteNumber(BEER_SOAKED_HAND, 1);
-          }
-          quest.setStage(player, STAGE_BERT_HOURS);
-        }
-        return;
-      }
-      if (stepId === PICKPOCKET_SAND_MESSAGE) {
-        if (quest.getStage(player) >= STAGE_INVESTIGATE_HAND && !held(player, SAND)) {
-          player.getInventory().adds(SAND, 1);
-        }
-        return;
-      }
-      if (stepId === DESK_ROTA_MESSAGE) {
-        if (!held(player, SANDYS_ROTA)) player.getInventory().adds(SANDYS_ROTA, 1);
-        if (quest.getStage(player) < STAGE_CONFRONT_BERT) {
-          quest.setStage(player, STAGE_CONFRONT_BERT);
-        }
-        return;
-      }
-      if (stepId === SCROLL_EXCHANGE_MESSAGE) {
-        // Bert hands out a replacement scroll, so only exchange when carrying one.
-        if (!held(player, MAGIC_SCROLL)) {
-          event.handled = true;
-          return;
-        }
-        player.getInventory().deleteNumber(MAGIC_SCROLL, 1);
-        if (!held(player, MAGICAL_ORB)) player.getInventory().adds(MAGICAL_ORB, 1);
-        if (quest.getStage(player) < STAGE_MAKE_SERUM) quest.setStage(player, STAGE_MAKE_SERUM);
-        return;
-      }
-      if (stepId === BETTY_VIAL_MESSAGE) {
-        setCounter(player, true);
-        return;
-      }
-      if (stepId === LENS_COUNTER_MESSAGE) {
-        if (held(player, ROSE_TINTED_LENS) && serumLevel(player) === SERUM_LENS) {
-          player.getInventory().deleteNumber(ROSE_TINTED_LENS, 1);
-          if (!held(player, TRUTH_SERUM)) player.getInventory().adds(TRUTH_SERUM, 1);
-          setSerum(player, SERUM_MADE);
-          setCounter(player, false);
-        }
-        return;
-      }
-      if (stepId === SERUM_SAND_MESSAGE) {
-        if (held(player, SAND)) player.getInventory().deleteNumber(SAND, 1);
-        setSerum(player, SERUM_FINISHED);
-        if (quest.getStage(player) < STAGE_DISTRACT_SANDY) {
-          quest.setStage(player, STAGE_DISTRACT_SANDY);
-        }
-        return;
-      }
-      if (stepId === NEW_SERUM_MESSAGE) {
-        if (!held(player, TRUTH_SERUM)) player.getInventory().adds(TRUTH_SERUM, 1);
-        return;
-      }
-      if (stepId === POUR_SERUM_MESSAGE) {
-        if (held(player, TRUTH_SERUM)) player.getInventory().deleteNumber(TRUTH_SERUM, 1);
-        if (quest.getStage(player) < STAGE_ACTIVATE_ORB) {
-          quest.setStage(player, STAGE_ACTIVATE_ORB);
-        }
-        return;
-      }
-      if (stepId === ORB_ACTIVATED_MESSAGE) {
-        if (held(player, MAGICAL_ORB)) player.getInventory().deleteNumber(MAGICAL_ORB, 1);
-        if (!held(player, MAGICAL_ORB_ACTIVE)) {
-          player.getInventory().adds(MAGICAL_ORB_ACTIVE, 1);
-        }
-        if (quest.getStage(player) < STAGE_INTERROGATE_SANDY) {
-          quest.setStage(player, STAGE_INTERROGATE_SANDY);
-        }
-        return;
-      }
-      if (stepId === ORB_FULL_MESSAGE) {
-        if (quest.getStage(player) < STAGE_RETURN_ORB) quest.setStage(player, STAGE_RETURN_ORB);
-        return;
-      }
-      if (stepId === ORB_HANDED_MESSAGE) {
-        if (held(player, MAGICAL_ORB_ACTIVE)) {
-          player.getInventory().deleteNumber(MAGICAL_ORB_ACTIVE, 1);
-        }
-        if (quest.getStage(player) < STAGE_GATHER_RUNES) {
-          quest.setStage(player, STAGE_GATHER_RUNES);
-        }
-        return;
-      }
-      if (MAZION_HEAD_MESSAGES.has(stepId)) {
-        if (!held(player, WIZARDS_HEAD)) player.getInventory().adds(WIZARDS_HEAD, 1);
-        if (quest.getStage(player) < STAGE_RETURN_HEAD) {
-          quest.setStage(player, STAGE_RETURN_HEAD);
-        }
-        return;
-      }
-      if (stepId === SHOW_HEAD_MESSAGE) {
-        if (held(player, WIZARDS_HEAD)) player.getInventory().deleteNumber(WIZARDS_HEAD, 1);
-        return;
-      }
-      return;
-    }
-
-    if (stepId === INTRO_REQUIREMENTS_ID) {
-      if (meetsRequirements(player)) {
-        // Let the accept choice after the wiki marker still play.
-        event.handled = true;
-        return;
-      }
-      player.sendMessage("You do not meet all of the requirements to start The Hand in the Sand quest.");
+      handleMessage(event);
       return;
     }
 
@@ -779,11 +1002,13 @@ module.exports = function registerHandInTheSandQuest(api) {
     }
 
     if (event.action === "teleport" && stepId === BETTY_TELEPORT_ACTION) {
-      if (held(player, VIAL)) player.getInventory().deleteNumber(VIAL, 1);
-      player.moveTo(new api.core.Location(3014, 3259, 0));
-      player.setAttribute(TELEPORTED_ATTRIBUTE, 1);
-      player.getPacketSender().sendVarbit(VARBIT_TELEPORTED, 1);
       event.handled = true;
+      teleportToBetty(player);
+      return;
+    }
+
+    if (stepId === CUTSCENE_START_ACTION) {
+      enterSandpit(player);
       return;
     }
 
@@ -800,7 +1025,12 @@ module.exports = function registerHandInTheSandQuest(api) {
     }
 
     if (stepId === COMPLETE_ACTION_ID) {
-      if (!quest.isComplete(player)) quest.complete(player);
+      // t9032: Sandy and his mug go, the head goes, then the completion.
+      if (!quest.isComplete(player)) {
+        player.getPacketSender().sendVarbit(VARBIT_SANDY, SANDY_GONE).sendVarbit(VARBIT_COFFEE, 1);
+        quest.complete(player);
+        if (held(player, WIZARDS_HEAD)) player.getInventory().deleteNumber(WIZARDS_HEAD, 1);
+      }
       event.handled = true;
       event.end = true;
     }
@@ -822,12 +1052,6 @@ module.exports = function registerHandInTheSandQuest(api) {
     }
     if (stepId === LOST_ORB_RETURN_CONDITION_ID) {
       if (quest.getStage(player) === STAGE_RETURN_ORB) quest.setStage(player, STAGE_GATHER_RUNES);
-      return;
-    }
-    if (DISTRACTION_SUCCESS_IDS.has(stepId)) {
-      if (quest.getStage(player) === STAGE_DISTRACT_SANDY) {
-        quest.setStage(player, STAGE_DRUG_COFFEE);
-      }
     }
   }
 
@@ -842,21 +1066,47 @@ module.exports = function registerHandInTheSandQuest(api) {
       if (!held(player, orb)) player.getInventory().adds(orb, 1);
       return;
     }
-    if (SANDY_NPC_IDS.has(npcId) && quest.getStage(player) === STAGE_INTERROGATE_SANDY) {
-      const index = QUESTION_OPTIONS.get(text);
-      if (index !== undefined) setQuestion(player, index, false);
+    if (SANDY_NPC_IDS.has(npcId) && quest.getStage(player) === STAGE_DISTRACT_SANDY) {
+      // A fresh roll for each tall tale.
+      distractionRolls.delete(player);
     }
   }
 
-  /** Blanks and one-off hand-overs that live in transcript speech lines. */
+  /**
+   * Zavistic's Zogre option is offered only to a player who has started Zogre Flesh Eaters; without it live asks no
+   * question and goes on with this quest (t7925-7932, t7989-7999, t8539-8549, t8578-8584, t9004-9015). Sandy's
+   * interrogation offers only the questions still to ask (t8300, t8310, t8331).
+   */
+  function handleMenu(notice) {
+    const { player, npcId } = notice;
+    if (!player || !Array.isArray(notice.options)) return;
+    const texts = notice.options.map((option) => option?.text);
+    if (npcId === ZAVISTIC_NPC_ID && texts.includes(ZOGRE_OPTION) && !zogreStarted(player)) {
+      const sandy = notice.options.find((option) => option?.text === SANDY_PROBLEM_OPTION);
+      if (sandy) notice.select = sandy;
+      return;
+    }
+    if (SANDY_NPC_IDS.has(npcId) && quest.getStage(player) === STAGE_INTERROGATE_SANDY) {
+      notice.options = notice.options.filter((option) => {
+        const index = QUESTION_OPTIONS.get(option?.text);
+        return index === undefined || player.getAttribute(QUESTION_ATTRIBUTES[index]) !== false;
+      });
+    }
+  }
+
+  /** Blanks, one-off hand-overs and timed effects that live in transcript speech lines. */
   function handleDialogueLine(event) {
     const { player, npcId, text } = event;
     if (!player) return;
     if (npcId === BETTY_NPC_ID && text === "I have one here!") {
+      // t8059-8060: the vial for the bottle on the continue of "I have one here!".
       if (quest.getStage(player) === STAGE_MAKE_SERUM && serumLevel(player) === SERUM_UNSTARTED) {
-        if (held(player, VIAL)) player.getInventory().deleteNumber(VIAL, 1);
-        setSerum(player, SERUM_BOTTLE);
-        if (!held(player, BOTTLED_WATER)) player.getInventory().adds(BOTTLED_WATER, 1);
+        event.after = () => {
+          if (serumLevel(player) !== SERUM_UNSTARTED) return;
+          if (held(player, VIAL)) player.getInventory().deleteNumber(VIAL, 1);
+          setSerum(player, SERUM_BOTTLE);
+          if (!held(player, BOTTLED_WATER)) player.getInventory().adds(BOTTLED_WATER, 1);
+        };
       }
       return;
     }
@@ -866,7 +1116,142 @@ module.exports = function registerHandInTheSandQuest(api) {
         return;
       }
       if (freeSlots(player) > 0) player.getInventory().adds(MAGIC_SCROLL, 1);
+      return;
     }
+    if (SANDY_NPC_IDS.has(npcId) && quest.getStage(player) === STAGE_INTERROGATE_SANDY) {
+      // t8307, t8318, t8337: a question's varbit clears on the continue of the player asking it.
+      const index = QUESTION_OPTIONS.get(String(text));
+      if (index !== undefined && event.step?.player !== undefined) event.after = () => setQuestion(player, index, false);
+      return;
+    }
+    if (SANDY_NPC_IDS.has(npcId) && text === "Wow! I must see this!" && quest.getStage(player) === STAGE_DISTRACT_SANDY) {
+      // t8266: on its continue Sandy turns to the window (1535) with the stage and the hint.
+      event.after = () => {
+        distractionRolls.delete(player);
+        if (quest.getStage(player) !== STAGE_DISTRACT_SANDY) return;
+        quest.setStage(player, STAGE_DRUG_COFFEE);
+        syncSandy(player);
+        player.sendMessage("Sandy turns to look out of the window, now is your chance!");
+      };
+      return;
+    }
+    if (text === "My sand! My lovely sand!") {
+      const scene = cutscenes.get(player);
+      if (!scene) return;
+      // t8616-8617: the pit swirls with its sound as Bert cries, and he says it.
+      event.actors = scene.bert ? [scene.bert] : undefined;
+      event.before = () => {
+        const sender = player.getPacketSender();
+        const pit = Scenes.tileFor(player, SANDPIT_LOC);
+        sender.sendObjectAnimation(
+          { getLocation: () => pit, getId: () => ObjectIdentifiers.SANDPIT ?? -1, getType: () => 10, getFace: () => 0 },
+          new Animation(SAND_MAGIC_ANIM)
+        );
+        sound(player, SOUND.SANDSWIRL);
+        scene.bert?.performAnimation(new Animation(BERT_CRYING_ANIM));
+      };
+    }
+  }
+
+  // ==========================================================================
+  // Zavistic's teleport and the sandpit cutscene
+  // ==========================================================================
+
+  /** t8033-8037: the vial and 1531 on the continue, the cast two ticks on, Betty's shop two after that. */
+  function teleportToBetty(player) {
+    if (held(player, VIAL)) player.getInventory().deleteNumber(VIAL, 1);
+    player.setAttribute(TELEPORTED_ATTRIBUTE, 1);
+    player.getPacketSender().sendVarbit(VARBIT_TELEPORTED, 1);
+    player.getPacketSender().sendInterfaceRemoval();
+    player.getMovementQueue().reset().setBlockMovement(true);
+    bell.visitorOf(player)?.performAnimation(new Animation(ZAVISTIC_CAST_ANIM));
+    Scenes.later(player, TELEPORT_CAST_TICKS, () => {
+      player.performAnimation(new Animation(TELEPORT_ANIM, TELEPORT_ANIM_DELAY));
+      player.performGraphic(new Graphic(TELEPORT_GFX, TELEPORT_GFX_HEIGHT));
+      sound(player, SOUND.TELEPORT);
+    });
+    Scenes.later(player, TELEPORT_LAND_TICKS, () => {
+      player.getMovementQueue().setBlockMovement(false);
+      player.moveTo(new Location(...BETTYS_SHOP));
+      player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+    });
+  }
+
+  /** t8610-8614: the cutscene's Bert walks to the pit's edge and turns to it. */
+  function bertToThePit(player) {
+    const state = cutscenes.get(player);
+    const bert = state?.bert;
+    if (!bert?.isRegistered?.()) return;
+    Scenes.later(state.scene, CUTSCENE.BERT_WALK_AFTER_FIRST_BOX, () => {
+      if (cutscenes.get(player) !== state || !bert.isRegistered?.()) return;
+      for (const step of CUTSCENE_BERT_WALK) Scenes.walk(bert, step);
+    });
+    Scenes.later(state.scene, CUTSCENE.BERT_FACE_AFTER_FIRST_BOX, () => {
+      if (cutscenes.get(player) === state && bert.isRegistered?.()) Scenes.face(bert, CUTSCENE_BERT_FACE);
+    });
+  }
+
+  /** t8593-8602: the fade, the copy of the sandpit with Bert and the camera, then the fade back in. */
+  function enterSandpit(player) {
+    if (cutscenes.has(player)) return;
+    const state = { scene: null, bert: null };
+    cutscenes.set(player, state);
+    Scenes.controls(player, true, true);
+    Scenes.hideTabs(player);
+    Scenes.fade(player, true);
+    Scenes.later(player, CUTSCENE.ENTER_TICKS, () => {
+      if (cutscenes.get(player) !== state) return;
+      state.scene = Scenes.open(player, "sandpit", SANDPIT_BOUNDS, {}, { instance: SANDPIT, at: CUTSCENE_AT, exit: BELL_RETURN });
+      Scenes.controls(player, true, true);
+      if (state.leaveOnOpen) return leaveSandpit(player);
+      player.getPacketSender().sendJingle(CUTSCENE_JINGLE, 0);
+      Scenes.later(state.scene, CUTSCENE.BERT_TICKS - CUTSCENE.ENTER_TICKS, () => {
+        state.bert = Scenes.actor(state.scene, BERT_SANDPIT_NPC_ID, CUTSCENE_BERT, null, { direction: api.core.Direction.SOUTH.id });
+        Scenes.camera(player, CUTSCENE_CAMERA.move, CUTSCENE_CAMERA.look, CUTSCENE_CAMERA.rates);
+      });
+      Scenes.later(state.scene, CUTSCENE.FADE_IN_TICKS - CUTSCENE.ENTER_TICKS, () => Scenes.fade(player, false));
+    });
+  }
+
+  /** From the second box's continue (t8625): the fade at 8633, back at the bell with Zavistic beside it at 8635. */
+  function leaveSandpit(player) {
+    const state = cutscenes.get(player);
+    if (!state || state.leaving) return;
+    if (!state.scene) {
+      // Still fading in: leave as soon as the copy of the sandpit is open.
+      state.leaveOnOpen = true;
+      return;
+    }
+    state.leaving = true;
+    Scenes.later(player, CUTSCENE.FADE_OUT_AFTER_SECOND_BOX, () => Scenes.fade(player, true));
+    Scenes.later(player, CUTSCENE.RETURN_AFTER_SECOND_BOX, () => {
+      if (cutscenes.get(player) !== state) return;
+      Scenes.end(player, false);
+      Scenes.place(player, BELL_RETURN);
+      bell.summon(player, ZAVISTIC_AFTER_CUTSCENE, api.core.Direction.SOUTH_WEST.id);
+      Scenes.restoreTabs(player);
+      Scenes.fade(player, false);
+    });
+  }
+
+  /**
+   * Ours: a chat closed (Esc) during the sandpit cutscene would never reach the second box's continue, so the
+   * scene leaves as that continue does: the fade, back at the bell, the step to play again by ringing it.
+   */
+  function closeInSandpit({ player }) {
+    if (player && cutscenes.has(player)) leaveSandpit(player);
+  }
+
+  function sceneEnded(player, scene, logout) {
+    const state = cutscenes.get(player);
+    if (!state || (state.scene && state.scene !== scene)) return;
+    cutscenes.delete(player);
+    if (logout) Scenes.restoreTabs(player);
+  }
+
+  function handleLogout({ player }) {
+    const state = cutscenes.get(player);
+    if (state && !state.scene) cutscenes.delete(player);
   }
 
   // ==========================================================================
@@ -888,6 +1273,7 @@ module.exports = function registerHandInTheSandQuest(api) {
     );
   }
 
+  /** t7675-7683: the pickpocket animation every attempt; a miss or the sand, by the page. */
   function pickpocketSandy(event) {
     const { player } = event;
     event.handled = true;
@@ -895,6 +1281,8 @@ module.exports = function registerHandInTheSandQuest(api) {
       player.sendMessage("Nothing interesting happens.");
       return;
     }
+    pickpocketRolls.delete(player);
+    player.performAnimation(new Animation(PICKPOCKET_ANIM));
     startTranscript(api, player, event.npcId, PAGE, "getting-sandy-s-rota-pickpocketing-sandy");
   }
 
@@ -923,8 +1311,15 @@ module.exports = function registerHandInTheSandQuest(api) {
       quest.getStage(player) === STAGE_ASK_WIZARDS
     ) {
       event.handled = true;
+      atTheBell.delete(player);
       startTranscript(api, player, ZAVISTIC_NPC_ID, PAGE, "talking-to-zavistic-rarve");
     }
+  }
+
+  /** One message of the page's "Making the rose-tinted lens" section. */
+  function lensStep(player, stepId) {
+    startTranscript(api, player, BETTY_NPC_ID, PAGE, "talking-to-betty-making-the-rose-tinted-lens",
+      (steps) => steps.filter((step) => step?.id === stepId));
   }
 
   function handleItemOnItem(event) {
@@ -938,7 +1333,7 @@ module.exports = function registerHandInTheSandQuest(api) {
       player.getInventory().deleteNumber(REDBERRIES, 1);
       player.getInventory().adds(REDBERRY_JUICE, 1);
       setSerum(player, SERUM_JUICE);
-      player.sendMessage("Now you just need to add the white berries to make the pink dye.");
+      lensStep(player, JUICE_MESSAGE);
       return;
     }
     if (pair(REDBERRY_JUICE, WHITE_BERRIES)) {
@@ -959,12 +1354,12 @@ module.exports = function registerHandInTheSandQuest(api) {
       player.getInventory().deleteNumber(LANTERN_LENS, 1);
       player.getInventory().adds(ROSE_TINTED_LENS, 1);
       setSerum(player, SERUM_LENS);
-      player.sendMessage("You have successfully made the rose tinted lens!");
+      lensStep(player, LENS_MADE_MESSAGE);
       return;
     }
     if (pair(SAND, TRUTH_SERUM)) {
       event.handled = true;
-      player.sendMessage("Perhaps you should let Betty do that, it looks tricky.");
+      startTranscript(api, player, BETTY_NPC_ID, PAGE, "talking-to-betty-trying-to-put-the-sand-in-the-truth-serum-yourself");
     }
   }
 
@@ -990,14 +1385,7 @@ module.exports = function registerHandInTheSandQuest(api) {
     }
     if (objectId === BETTYS_COUNTER && itemId === ROSE_TINTED_LENS) {
       event.handled = true;
-      if (
-        quest.getStage(player) !== STAGE_MAKE_SERUM ||
-        serumLevel(player) !== SERUM_LENS ||
-        !held(player, ROSE_TINTED_LENS) ||
-        player.getAttribute(COUNTER_ATTRIBUTE) !== true
-      ) {
-        return;
-      }
+      if (!lensDue(player)) return;
       startTranscript(
         api,
         player,
@@ -1006,6 +1394,24 @@ module.exports = function registerHandInTheSandQuest(api) {
         "talking-to-betty-using-the-lens-on-the-counter"
       );
     }
+  }
+
+  /**
+   * The counter has no ops, so a walk to it is an item use: with the lens due, it goes to the doorway and runs there.
+   * Ours: any item used on the counter at this step takes the same walk (the route doesn't name the item).
+   */
+  function routeToDoorway(event) {
+    const { player } = event;
+    if (!player) return;
+    const objectId = api.core.ObjectDefinition.forPlayer(event.objectId, player)?.id ?? event.objectId;
+    if (objectId !== BETTYS_COUNTER || !lensDue(player)) return;
+    const [x, y, z] = BETTYS_DOORWAY;
+    event.destination = { x, y, z };
+  }
+
+  function lensDue(player) {
+    return quest.getStage(player) === STAGE_MAKE_SERUM && serumLevel(player) === SERUM_LENS
+      && held(player, ROSE_TINTED_LENS) && player.getAttribute(COUNTER_ATTRIBUTE) === true;
   }
 
   function handleItemAction(event) {
@@ -1036,7 +1442,12 @@ module.exports = function registerHandInTheSandQuest(api) {
     const variant = handZavisticVariant(player);
     if (!variant) return;
     event.handled = true;
-    startTranscript(api, player, ZAVISTIC_NPC_ID, PAGE, variant);
+    bell.ring(player, event.object, (zavistic) => {
+      const now = handZavisticVariant(player);
+      if (!now) return;
+      atTheBell.add(player);
+      startTranscript(api, player, ZAVISTIC_NPC_ID, PAGE, now, undefined, zavistic);
+    });
   }
 
   function handleObjectInteraction(event) {
@@ -1056,6 +1467,11 @@ module.exports = function registerHandInTheSandQuest(api) {
     refreshQuestList(player);
   }
 
+  /** A stage set from outside (::quest) brings Sandy and his mug along. */
+  function handleStageChanged({ player, key, stage }) {
+    if (key === "hand_in_the_sand" && player) syncSandy(player, stage);
+  }
+
   api.persistAttribute(SERUM_ATTRIBUTE);
   api.persistAttribute(COUNTER_ATTRIBUTE);
   api.persistAttribute(TELEPORTED_ATTRIBUTE, 0);
@@ -1073,10 +1489,13 @@ module.exports = function registerHandInTheSandQuest(api) {
       { skillId: Skill.THIEVING.getIndex(), amount: 1000, label: "Thieving" },
     ],
     scrollItemId: ItemIdentifiers.SANDY_HAND,
+    // t9032: the scroll's lines after the experience, as live words them.
     otherRewards: [
-      "Access to the Wizards' Guild Rune Store",
+      "Wizards' Guild Rune",
+      "Store Access",
       "A secret reward from Bert",
     ],
+    completionJingleId: COMPLETION_JINGLE,
     buildJournal,
     onReward: grantReward,
   });
@@ -1088,13 +1507,18 @@ module.exports = function registerHandInTheSandQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
+  api.onCustomEvent("npc-dialogue:menu", handleMenu);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
+  api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onNpcInteraction("Sandy", { Pickpocket: pickpocketSandy });
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onObjectRoute(routeToDoorway);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemAction(handleItemAction);
   api.onPlayerLogin(handleLogin);
+  api.onCustomEvent("interface:close", closeInSandpit);
+  api.onPlayerLogout(handleLogout);
   api.onCustomEvent("player:bootstrap-complete", syncAuxiliaries);
 };

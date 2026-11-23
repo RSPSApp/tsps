@@ -58,6 +58,7 @@
       "sphereImpact": "gargboss_healing_sphere_small_impact"
     }
   },
+  "music": { "fight": 518 },
   "roof": {
     "bounds": [1680, 1710, 4560, 4590],
     "_floor": "the walkable roof (the plinths are in its walls): where the Guardians land and the hazards fall",

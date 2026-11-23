@@ -1,8 +1,9 @@
 # Creature Creation
 
 Creature Creation is the solo activity unlocked by completing Tower of Life. Use two different,
-unnoted ingredients on an altar's Symbol of life, then choose Activate. Ingredients stay primed
-on the player's save until activation. Each activation creates the corresponding owner-only NPC;
+unnoted ingredients on an altar's Symbol of life, or left-click Activate while carrying the
+required ingredients to have the altar take them from the inventory. Ingredients stay primed on
+the player's save until activation. Each activation creates the corresponding owner-only NPC;
 the NPC uses its canonical combat definition and normal drop table. At each altar, one live
 creature per player is allowed. The Wiki describes one creation per activation but does not state
 whether a player may keep multiple creatures from the same altar alive; there are no matching
@@ -30,6 +31,7 @@ Activation also forgets a creature removed without dying, freeing that altar; cr
 queued for registration retain their guard until registered or their queued spawn is cancelled.
 
 Sources: [OSRS Wiki: Creature Creation](https://oldschool.runescape.wiki/w/Creature_Creation),
+[Symbol of life](https://oldschool.runescape.wiki/w/Symbol_of_life),
 [Tower of Life](https://oldschool.runescape.wiki/w/Tower_of_Life), and the checked revision 241
 cache loc placements for `Symbol of life` (21893), verified with `yarn dump:loc`:
 

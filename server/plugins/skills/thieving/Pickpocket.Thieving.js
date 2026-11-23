@@ -230,11 +230,25 @@ function ownsAny(player, ids) {
     Array.from({ length: core.Bank.TOTAL_BANK_TABS }, (_, tab) => player.getBank(tab)).some(holds);
 }
 
-/** The loot of one successful pickpocket: [{ id, amount, clue? }]. */
+/**
+ * "drops:chance" for a target with a `dropSource` (a league's boosted drops: vyres' blood shard,
+ * Prifddinas elves' teleport seed): an item name's multiplier, or null when nothing is boosted.
+ */
+function dropBoost(player, target) {
+  if (!target.dropSource) return null;
+  const rules = [];
+  pluginApi?.emitCustomEvent?.("drops:chance", { player, source: target.dropSource, rules });
+  if (rules.length === 0) return null;
+  return (name) => rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+}
+
+/** The loot of one successful pickpocket: [{ id, amount, clue? }]; a `first` roll takes dropBoost's multiplier. */
 function rollLoot(player, target, random = Math.random) {
   const loot = (target.always ?? []).map((entry) => rolled(entry, roll(entry.amount, random)));
+  const boost = dropBoost(player, target);
   for (const entry of target.first ?? []) {
-    if (random() >= rateOf(entry.rate)) continue;
+    const multiplier = boost && entry.name ? boost(entry.name) : 1;
+    if (random() >= rateOf(entry.rate) * multiplier) continue;
     if (entry.clue) {
       // Wiki: rolling a clue while already holding one of that tier gives nothing.
       if (ownsClue(player, entry.clue)) return loot;
@@ -624,5 +638,5 @@ module.exports = {
   POUCH_COINS,
   TARGETS,
   targetFor,
-  _test: { addRogueSetText, stunHits, stunDeathSkipsRetribution, pickpocket, successChance, rollLoot, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, checkGloves, checkDodgyNecklace, rateOf },
+  _test: { addRogueSetText, stunHits, stunDeathSkipsRetribution, pickpocket, successChance, rollLoot, dropBoost, giveLoot, lootLine, targetFor, messageName, dodgyNecklaceProtects, wearOutGloves, checkGloves, checkDodgyNecklace, rateOf },
 };

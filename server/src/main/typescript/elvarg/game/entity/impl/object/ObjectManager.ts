@@ -246,6 +246,8 @@ export class ObjectManager {
 
     public static register(object: GameObject, playerUpdate: boolean) {
         if (object.getSpawnedBy() === null) object.setSpawnedBy(PluginContext.current());
+        // A template-map instance's own loc put back (a respawn) is found in its scene again.
+        object.getPrivateArea()?.restoreTemplateObject(object);
         // Check for matching object on this tile.
         for (const o of [...ObjectManager.objectsAt(object.getLocation())]) {
             if (o.getType() === object.getType() && object.getPrivateArea() == o.getPrivateArea()
@@ -293,7 +295,8 @@ export class ObjectManager {
      * Swaps one loc for another in the same tile and shape slot (a lever pulled down and back up),
      * as live sends it: one loc_add_change to the players who see the tile, no removal first. The
      * outgoing loc leaves MapObjects (its clipping and later lookups) as a despawn would, and a
-     * player it was shown to who is away now gets it put right when they come back.
+     * player it was shown to who is away now (out of the scene, or inside a private area, which is
+     * sent nothing of the main world) gets it put right when they come back.
      */
     public static replaceInPlace(outgoing: GameObject, incoming: GameObject): void {
         ObjectManager.deregister(outgoing, false);
@@ -302,8 +305,8 @@ export class ObjectManager {
             const location = outgoing.getLocation();
             World.forEachNetworkPlayer((player) => {
                 if (outgoing.getOwner() && outgoing.getOwner() !== player) return;
-                if (this.viewedArea(player) != null) return;
-                if (!player.getSession().isTileInScene(location.getX(), location.getY(), location.getZ())) {
+                if (this.viewedArea(player) != null
+                    || !player.getSession().isTileInScene(location.getX(), location.getY(), location.getZ())) {
                     this.recordMissedRemoval(player, outgoing);
                 }
             });
@@ -330,6 +333,8 @@ export class ObjectManager {
             }
         }
         object.getPrivateArea()?.detach(object);
+        // A template-map instance's own loc (the scene's copy) must not be found there any more.
+        object.getPrivateArea()?.removeTemplateObject(object);
 
         if (playerUpdate) {
             ObjectManager.perform(object, OperationType.DESPAWN);
@@ -383,6 +388,8 @@ export class ObjectManager {
                 World.forEachNetworkPlayer((player) => {
                     if (object.getOwner() && object.getOwner() !== player) return;
                     if (this.viewedArea(player) != object.getPrivateArea()) {
+                        // Inside a private area when a main-world loc it was shown goes: put right on return.
+                        if (type == OperationType.DESPAWN && !object.getPrivateArea()) this.recordMissedRemoval(player, object);
                         return;
                     }
                     const location = object.getLocation();

@@ -58,7 +58,7 @@ function useOnTable({ area, items }) {
     getPrivateArea: () => area,
     setPositionToFace: () => {},
     sendMessage: (message) => messages.push(message),
-    getPacketSender: () => ({ getInterfaceId: () => -1, sendItemContainer: () => {} }),
+    getPacketSender: () => ({ getInterfaceId: () => -1, sendItemContainer: () => {}, sendRunEnergy: () => {} }),
   };
   const inventory = new Inventory(player);
   items.forEach((item, slot) => inventory.setItem(slot, item));

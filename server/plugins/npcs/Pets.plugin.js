@@ -73,8 +73,8 @@ const CAT_TASK_KEY = new WeakMap();
 const PETS = [
   { enumName: "WISP", petId: NpcIdentifiers.WISP_2, houseNpcId: NpcIdentifiers.WISP, morphId: 0, itemId: 28246, dialogue: -1,
     // Whisperer: melee, bind (summon leeches), special (screech, pet form) and death (pet form).
-    // The awakened-kill death gate has no whisperer attribute to read, so the death emote stays in the cycle.
-    emote: [10234, 10254, 10253, 10262] },
+    // No awakened completion is recorded yet; keep the earned death step locked until one is available.
+    emote: [10234, 10254, 10253, { anim: 10262, unlock: { attribute: "whisperer:awakened-kills", min: 1 } }] },
   { enumName: "BUTCH", petId: NpcIdentifiers.BUTCH_2, houseNpcId: NpcIdentifiers.BUTCH, morphId: 0, itemId: 28248, dialogue: -1,
     // Vardorvis: melee, spawn, entangle (start then end; the loop between is skipped), dash, then
     // the death emote after an awakened kill.

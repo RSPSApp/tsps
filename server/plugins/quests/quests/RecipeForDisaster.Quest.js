@@ -101,6 +101,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const EVIL_CHICKEN_LAIR_BOSS = { x: 2455, y: 4399, z: 0 };
   const EVIL_CHICKEN_LAIR_ZONE = { minX: 2430, maxX: 2492, minY: 4355, maxY: 4407, z: 0 };
   const AWOWOGEI_SNAKE_HOLE = { minX: 3019, maxX: 3028, minY: 5484, maxY: 5492, z: 0 };
+  const AWOWOGEI_HOT_COAL_ROOM = { minX: 3054, maxX: 3069, minY: 5478, maxY: 5491, z: 0 };
   const ACTIVE_FINAL_NPC_BY_PLAYER = new WeakMap();
   const JUBBLY_BY_PLAYER = new WeakMap();
   const LAMP_PENDING = new WeakMap();
@@ -2003,8 +2004,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         if (!mobile?.isPlayer?.() || mobile.getAsPlayer?.() !== this.owner) return;
         const npc = ACTIVE_FINAL_NPC_BY_PLAYER.get(this.owner);
         if (!npc || npc.getArea?.() !== this) return;
-        // Keep the core's idle-NPC regeneration timer fresh only for the owner
-        // in this encounter. Incoming hits stay on the ordinary combat path.
+        // Keep the NPC's combat stopwatch fresh only for the owner in this
+        // encounter. Incoming hits stay on the ordinary combat path.
         npc.getCombat?.()?.getLastAttack?.()?.reset?.();
         const mother = MOTHER_PHASES.get(npc);
         if (mother) {
@@ -2741,8 +2742,16 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function handleEvilChickenShrine(event) {
     const { player, objectId, itemId } = event;
     if (objectId !== api.core.ObjectIdentifiers.CHICKEN_SHRINE || itemId !== ItemIdentifiers.RAW_CHICKEN
-      || stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 64)
-      || Number(player.getAttribute(AMIK_STATE_ATTRIBUTE)) !== 1) return;
+      || stage(player) < STAGE_OPENING_COMPLETE) return;
+    // Wiki (Evil Chicken's Lair): the lair is open during and after Freeing Sir Amik Varze. Once he is
+    // freed the Evil Chicken's egg is no longer needed, so the shrine only lets the player in.
+    if (hasFlag(player, 64)) {
+      event.handled = true;
+      player.getInventory().deleteNumber(ItemIdentifiers.RAW_CHICKEN, 1);
+      moveTo(player, EVIL_CHICKEN_LAIR_ENTRY.x, EVIL_CHICKEN_LAIR_ENTRY.y, EVIL_CHICKEN_LAIR_ENTRY.z);
+      return;
+    }
+    if (Number(player.getAttribute(AMIK_STATE_ATTRIBUTE)) !== 1) return;
     event.handled = true;
     let npc = EVIL_CHICKEN_BY_PLAYER.get(player);
     if (npc?.isRegistered?.() === false) {
@@ -3483,11 +3492,31 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.sendMessage("You squeeze through the crack and cross the hot coals as a zombie monkey.");
       return;
     }
-    if (objectId === 16100 && option === "Enter" && (awowogeiState(player) & 1024)) {
+    if (objectId === ObjectIdentifiers.EXIT_15 && option === "Enter" && (awowogeiState(player) & 1024)) {
       event.handled = true;
+      if (!isAwowogeiDungeonExit(event) || !inZone(player, AWOWOGEI_HOT_COAL_ROOM)) return;
+      if (!equippedMonkey(player, ZOMBIE_GREEGREE_IDS)) {
+        require("../QuestRuntime").startTranscript(api, player, NpcIdentifiers.AWOWOGEI,
+          "Recipe for Disaster/Freeing King Awowogei",
+          "ape-atoll-entering-exiting-the-cave-to-cook-the-snake-standing-on-the-rockets-without-being-a-zombie-monkey");
+        return;
+      }
       moveTo(player, 2808, 9200, 0);
       player.sendMessage("You squeeze back through the crack into the temple dungeon.");
     }
+  }
+
+  function isAwowogeiDungeonExit(event) {
+    const at = event.object?.getLocation();
+    return event.objectId === ObjectIdentifiers.EXIT_15 && at?.getX() === 3069 && at.getY() === 5485 && at.getZ() === 0;
+  }
+
+  function routeAwowogeiDungeonExit(event) {
+    const from = event.sourceLocation;
+    if (!isAwowogeiDungeonExit(event) || !from || from.x > 3062 || !inZone(event.player, AWOWOGEI_HOT_COAL_ROOM)
+      || !(awowogeiState(event.player) & 1024) || !equippedMonkey(event.player, ZOMBIE_GREEGREE_IDS)) return;
+    // Cache inviswalls at x3063 block the coals; walk to their edge, then use the existing scripted exit.
+    event.destination = { x: 3062, y: 5485, z: 0 };
   }
 
   function handleAwowogeiSnakePit(event) {
@@ -3531,8 +3560,9 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (!player || event.npcId !== NpcIdentifiers.BIG_SNAKE || stage(player) < STAGE_OPENING_COMPLETE
       || hasFlag(player, 128)) return;
     player.setAttribute(AWOWOGEI_STATE_ATTRIBUTE, awowogeiState(player) | AWOWOGEI_SNAKE_FOUND);
-    // A fresh corpse starts unstuffed even if an earlier one was partly filled.
-    player.setAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, 0);
+    // A spare corpse must not erase filling already consumed by an owned corpse.
+    // Only replacement of a lost corpse starts preparation again.
+    if (!owns(player, ItemIdentifiers.SNAKE_CORPSE)) player.setAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, 0);
     syncAwowogeiQuestVarbits(player);
     if (hasSpace(player)) player.getInventory().adds(ItemIdentifiers.SNAKE_CORPSE, 1);
     else {
@@ -3931,6 +3961,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onObjectInteraction(handleAwowogeiSnakePit);
   api.onCustomEvent("ladders:climb", claimSnakePitRope);
   api.onObjectRoute(routeRedBananaTree);
+  api.onObjectRoute(routeAwowogeiDungeonExit);
   api.onObjectRoute(routeCulinaromancerChest);
   api.onCustomEvent("door:toggle", handleDiningDoors);
   api.onObjectInteraction("Barrier", { "Pass-through": passDiningBarrier });

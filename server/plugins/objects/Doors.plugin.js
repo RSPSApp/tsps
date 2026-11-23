@@ -9,6 +9,7 @@ let core;
 const DOOR_AUTO_CLOSE_TICKS = 500;
 /** MovementQueue.IGNORE_CLIPPING_FLAG: the flagged mobile's steps go on whatever the map blocks. */
 const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
+const WALK_OVER_ATTRIBUTE = "doors:walk-over-prior-clipping";
 /** A walkOver opener keeps the flag until they are across, and no longer than this. */
 const WALK_OVER_MAX_TICKS = 2;
 
@@ -80,6 +81,8 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   PIP_CELL_GATE_OPEN: 3464,
   CRANDOR_SECRET_DOOR_OPEN: 25039, // dragonsecretdoor_open; capture 2951
   INVISWALL: 38848, // actionless collision blocker; captures 2951 and 740
+  OGRE_GUARD_GATE_LEFT_OPEN: 37393, // ogreguardgatel_open: Gu'Tanoth's city gates open (Watchtower capture t2228, t2319)
+  OGRE_GUARD_GATE_RIGHT_OPEN: 37394, // ogreguardgater_open
   RUM_DEAL_GATE_OPEN: 10173, // deal_gate_open: the open leaf of O.GATE_96 (Rum Deal capture tick 1467)
   HAROLD_DOOR_OPEN: 1542, // inactiveposhdoor: Harold's door (3747) open, 233/03247.txt:4726; Temple of Ikov's trap-lever door (92), 242/912156.txt:26149
   CASTLE_DOOR_OPEN: 3744, // castledoor_inactive: the Death Plateau equipment room door (3743) open, 233/03252.txt:36063
@@ -103,14 +106,68 @@ const NAMELESS_DOOR_LEAF_IDS = Object.freeze({
   // (local 1001994 ticks 16539, 17417, 17541); nameless in the cache, so ObjectIdentifiers has none.
   CAMELOT_GATE_LEFT_OPEN: 26083,
   CAMELOT_GATE_RIGHT_OPEN: 26084,
+  // wydindooropen: Wydin's stock-room door (2069) while it lets the player through (the user's rev 242
+  // capture PiratesTreasure ticks 937, 973); nameless in the cache, so ObjectIdentifiers has none.
+  WYDIN_DOOR_OPEN: 2070,
 });
 
 let SELF_OPENING_DOOR_IDS, IN_PLACE_DOOR_IDS, OWN_TILE_DOOR_IDS, SINGLE_DOOR_OPEN_IDS, COMPOSITE_DOOR_OPENINGS, WOODEN_GATES, WOODEN_GATE_BY_ID;
 let DOUBLE_DOOR_ID_FAMILIES, DOUBLE_DOOR_FAMILY_IDS_BY_ID, DORGESH_CITY_DOOR_IDS;
 let SPECIAL_DOUBLE_DOOR_PAIRS, SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID, SPECIAL_DOUBLE_DOOR_OPEN_IDS_BY_CLOSED_ID;
-let PASS_THROUGH_GATES, PASS_THROUGH_FAMILIES;
+let PASS_THROUGH_GATES, PASS_THROUGH_FAMILIES, ARCEUUS_DOUBLE_DOORS;
+let DOOR_CLICK_SOUNDS, DOUBLE_DOOR_CLICKED_LEAF_OPEN_IDS;
 
-function defineDoorData({ ObjectIdentifiers: O }) {
+function defineDoorData({ ObjectIdentifiers: O, Sound }) {
+  // Doors whose own open/close synths differ from the generic door/gate ones, keyed by closed
+  // loc id (a double door: either closed leaf). An unlisted side keeps the generic sound.
+  // Double doors that live swings with nicedoor_open (81) / nicedoor_close (80) instead of
+  // the plain door pair, in DOOR_CLICK_SOUNDS (docs/door-sounds.md). Kourend's Arceuus
+  // doors play it as an area sound of range 1 on the clicked leaf's tile (local 1001998 ticks
+  // 1223/1336, local 1000453 tick 9681, rsprox 2297 ticks 451-455); the goblin outpost's inner
+  // doors send it as the opener's private synth (local 1001339 ticks 302/309, rsprox 3243).
+  const arceuusSounds = { open: new Sound(81, 1, 0, 0), close: new Sound(80, 1, 0, 0), areaRadius: 1 };
+  const goblinOutpostSounds = { open: new Sound(81, 1, 0, 0), close: new Sound(80, 1, 0, 0) };
+  // rsprox 3050 ticks 381/383 and 3053 ticks 481/483: these map-door families use
+  // A_DOOR_OPEN/A_DOOR_CLOSE as private synths when operated.
+  const darkmeyerSounds = { open: new Sound(36, 1, 0, 0), close: new Sound(35, 1, 0, 0) };
+  // Neitiznot's palisade gate opens with synth 36 (rsprox 2722 tick 75; 3027 ticks 6880, 7466,
+  // 8896, 10387); no recorded close was the player's own (docs/door-sounds.md).
+  const palisadeSounds = { open: new Sound(36, 1, 0, 0) };
+  DOOR_CLICK_SOUNDS = new Map([
+    [O.DOOR_612, darkmeyerSounds], // darkm_poor_door_closed
+    [O.DOOR_614, darkmeyerSounds], // darkm_middle_door_closed
+    [core.CacheDefinitions.getLocId("fris_palisade_door_l"), palisadeSounds],
+    [core.CacheDefinitions.getLocId("fris_palisade_door_r"), palisadeSounds],
+    // Jatizso's town wall door opens with synth 71 (rsprox 3027 ticks 3760, 4738); its close is unrecorded.
+    [core.CacheDefinitions.getLocId("frisd_town_wall_door"), { open: new Sound(71, 1, 0, 0) }],
+    [O.DOOR_529, arceuusSounds], // archeuus_door_double_left_turquoise
+    [O.DOOR_533, arceuusSounds], // archeuus_door_double_right_turquoise
+    [O.DOOR_530, arceuusSounds], // archeuus_door_double_left_green
+    [O.DOOR_534, arceuusSounds], // archeuus_door_double_right_green
+    [O.DOOR_532, arceuusSounds], // archeuus_door_double_left_blue
+    [O.DOOR_536, arceuusSounds], // archeuus_door_double_right_blue
+    [O.DOOR_531, arceuusSounds], // archeuus_door_double_left_red (same family, uncaptured)
+    [O.DOOR_535, arceuusSounds], // archeuus_door_double_right_red
+    [O.LARGE_DOOR_43, goblinOutpostSounds], // goblin_outpost_poordoor_double_inner
+    [O.LARGE_DOOR_45, goblinOutpostSounds], // goblin_outpost_poordoor_doubler_inner
+    // Meiyerditch's area_sanguine_ghetto_door2 closes with small_creaky_door_close 55 (Darkness of
+    // Hallowvale capture t2667, 3625,3252); it opens with door_open 62, the default. door1's (17600)
+    // close is unrecorded.
+    [O.DOOR_377, { close: new Sound(55, 1, 0, 0) }],
+  ]);
+  // Double doors whose leaves open by role rather than as their own id + 1: the clicked leaf as
+  // `clicked`, its partner as `partner`. Neitiznot's palisade gate: whichever leaf is clicked opens
+  // as fris_palisade_door_open_r and the other as _open_l (rsprox 2722 tick 75 and 3027 tick 8896
+  // from door_l; 3027 ticks 6880, 7466, 10387 from door_r). Closing restores door_l and door_r.
+  const palisadeOpenIds = Object.freeze({
+    clicked: core.CacheDefinitions.getLocId("fris_palisade_door_open_r"),
+    partner: core.CacheDefinitions.getLocId("fris_palisade_door_open_l"),
+  });
+  DOUBLE_DOOR_CLICKED_LEAF_OPEN_IDS = new Map([
+    [core.CacheDefinitions.getLocId("fris_palisade_door_l"), palisadeOpenIds],
+    [core.CacheDefinitions.getLocId("fris_palisade_door_r"), palisadeOpenIds],
+  ]);
+
   // Doors with no open variant in the cache: OSRS opens them by rotating the same loc
   // (open id === closed id). Their consecutive ids are unrelated doors with the same
   // model, so the same-model pairing below must not pair them. Tutorial Island:
@@ -233,6 +290,20 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // Yanille's south entrance door has blocked floor immediately west of the doorway, so its
   // map-backed open pose turns on the closed tile instead of swinging into that wall.
   OWN_TILE_DOOR_IDS = new Set([O.GATE_155, O.GATE_157, O.DOOR_287, O.DOOR_129, O.DOOR_130, O.DOOR_271, O.DOOR_272]);
+  // Arceuus's double doors: [left, right, left open, right open] per colour. The two leaves of a
+  // colour are four ids apart, so the consecutive-id pairing never finds them. Both leaves turn on
+  // their own tiles into their _open locs (local 1001998 ticks 1223/1336 blue, local 1000453 tick
+  // 9681 green, rsprox 2297 tick 451 turquoise); the red set is the same cache family, uncaptured.
+  ARCEUUS_DOUBLE_DOORS = Object.freeze([
+    [O.DOOR_529, O.DOOR_533, O.DOOR_537, O.DOOR_541], // archeuus_door_double_*_turquoise
+    [O.DOOR_530, O.DOOR_534, O.DOOR_538, O.DOOR_542], // archeuus_door_double_*_green
+    [O.DOOR_531, O.DOOR_535, O.DOOR_539, O.DOOR_543], // archeuus_door_double_*_red
+    [O.DOOR_532, O.DOOR_536, O.DOOR_540, O.DOOR_544], // archeuus_door_double_*_blue
+  ]);
+  for (const [left, right] of ARCEUUS_DOUBLE_DOORS) {
+    OWN_TILE_DOOR_IDS.add(left);
+    OWN_TILE_DOOR_IDS.add(right);
+  }
 
   // Tree Gnome Stronghold main gate: one 5x2 loc (190, face 2) opens into two
   // nameless 2x2 leaves (191/192), leaving the centre tile clear.
@@ -333,8 +404,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     // the nameless cache locs 3491/3492; all four use model 3544.
     Object.freeze([O.LARGE_DOOR_21, O.LARGE_DOOR_22,
       NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_LEFT_OPEN, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_RIGHT_OPEN]),
-    // Sophanem's north entrance: closed leaves 44036/44038, nameless open leaves 44037/44039.
-    Object.freeze([O.GATE_232, O.GATE_233, 44037, 44039]),
     // Lassar residential shadow gate: 48278/48279 open into the paired
     // Close-action leaves 48282/48283 (48280/48281 are unused cache locs).
     Object.freeze([O.DOORS_21, O.DOORS_22, O.DOORS_25, O.DOORS_26]),
@@ -361,19 +430,16 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.GATE_92, O.GATE_93],
     [O.GATE_94, O.GATE_95],
     [O.GATE_8, O.GATE_9],
-    [O.GATE_232, O.GATE_233],
     [O.DOORS_21, O.DOORS_22],
     [O.DOORS_25, O.DOORS_26],
     [O.DOORS_29, O.DOORS_30],
     [O.DOORS_31, O.DOORS_32],
-    [44037, 44039],
     [O.LARGE_DOOR_24, O.LARGE_DOOR_25],
     [O.LARGE_DOOR_26, O.LARGE_DOOR_27],
     [O.LARGE_DOOR_29, O.LARGE_DOOR_28],
     [O.LARGE_DOOR_31, O.LARGE_DOOR_30],
     [O.LARGE_DOOR_98, O.LARGE_DOOR_99],
     [O.LARGE_DOOR_21, O.LARGE_DOOR_22],
-    [O.GATE_232, O.GATE_233],
     [O.LARGE_DOOR_16, O.LARGE_DOOR_18],
     [O.LARGE_DOOR_7, O.LARGE_DOOR_9],
     [O.LARGE_DOOR_8, O.LARGE_DOOR_10],
@@ -419,8 +485,6 @@ function defineDoorData({ ObjectIdentifiers: O }) {
     [O.LARGE_DOOR_98, O.LARGE_DOOR_16],
     [O.LARGE_DOOR_21, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_LEFT_OPEN],
     [O.LARGE_DOOR_22, NAMELESS_DOOR_LEAF_IDS.PIP_TEMPLE_DOOR_RIGHT_OPEN],
-    [O.GATE_232, 44037],
-    [O.GATE_233, 44039],
     [O.DOORS_21, O.DOORS_25],
     [O.DOORS_22, O.DOORS_26],
     [O.DOORS_29, O.DOORS_31],
@@ -437,8 +501,31 @@ function defineDoorData({ ObjectIdentifiers: O }) {
   // is a diagonal door crossed corner to corner (eastwardFrom says which side is outside). crossBetween [low, high] with
   // crossRows is a gate more than one tile thick whose tiles the map blocks: the player is carried
   // across, from the low side to the high side or back, along their own row. crossDelay holds the
-  // opener that many ticks after the opening sound before the gate opens and they cross.
+  // opener that many ticks after the opening sound before the gate opens and they cross. silent sends
+  // no opening sound (a gate live opens without a synth). strictCrossing (walkOver gates) opens the
+  // gate, with its sound, only once the opener's one-tile crossing step is accepted: a frozen opener
+  // leaves it shut.
   PASS_THROUGH_GATES = Object.freeze([
+    // Zombie-pirate hideout's living lower door: rsprox 3032 (rev 231), t4905-4910 and the
+    // second Open at t5074-5076. Live swaps in inviswall on the doorway and the secure-open leaf
+    // one tile west, plays door_open (62), crosses the west edge and restores the closed loc two
+    // ticks later. Approached Open resolves one extra pre-movement pass after arrival.
+    Object.freeze({
+      closed: [[core.CacheDefinitions.getLocId("brain_living_lower_door"), 3817, 2841, 0, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3817, 2841, 0, 0],
+        [core.CacheDefinitions.getLocId("brain_living_lower_door_secureopen"), 3816, 2841, 0, 1],
+      ],
+      crossX: 3817,
+      walkOver: true,
+      strictCrossing: true,
+      operateBeforeMovement: true,
+      operateBeforeMovementApproachDelay: 1,
+      deferInitialFaceUntilApproachDelay: true,
+      faceTowardDoorOnCross: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
     // Museum cleaning gate: captures 1702 (rev226) and 1704 (rev227) show this shared
     // swap and three-tick restore; MuseumEntrance owns the admission check.
     Object.freeze({
@@ -450,6 +537,26 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       crossY: 3447,
       walkOver: true,
       closeTicks: 3,
+    }),
+    // The fence gate east of Varrock by the quetzal platform (rsprox 232/3228 ticks 561-568, 642-644,
+    // 931-937; 232/3227 tick 4504; 232/3231 tick 288): vm_fencing_invisible_wall in the doorway, both
+    // leaves swung west, the player walks across the next tick and the gate is back two ticks after
+    // it opened. No synth is sent for it.
+    Object.freeze({
+      closed: [
+        [core.CacheDefinitions.getLocId("vm_fencegate_l"), 3296, 3428, 0, 0],
+        [core.CacheDefinitions.getLocId("vm_fencegate_r"), 3296, 3429, 0, 0],
+      ],
+      opened: [
+        [core.CacheDefinitions.getLocId("vm_fencing_invisible_wall"), 3296, 3429, 0, 0],
+        [core.CacheDefinitions.getLocId("vm_fencing_invisible_wall"), 3296, 3428, 0, 0],
+        [core.CacheDefinitions.getLocId("vm_fencegate_r"), 3295, 3429, 0, 1],
+        [core.CacheDefinitions.getLocId("vm_fencegate_l"), 3294, 3429, 0, 1],
+      ],
+      crossX: 3296,
+      walkOver: true,
+      closeTicks: 2,
+      silent: true,
     }),
     // Witchaven's puzzle doors keep their clipped threshold while each permitted
     // player crosses. Explicit placements also identify a temporarily open leaf.
@@ -473,7 +580,8 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       });
     }),
     // Zanaris market's eastbound and southbound entrances. Keep the wall clipped
-    // while the opener crosses so a second player cannot follow through unpaid.
+    // while the opener crosses so a second player cannot follow through unpaid. strictCrossing:
+    // the door opens only once the crossing step is accepted, so a frozen opener keeps the toll.
     Object.freeze({
       closed: [[O.MAGIC_DOOR_2, 2469, 4438, 0, 2], [O.MAGIC_DOOR_4, 2469, 4437, 0, 2]],
       opened: [
@@ -484,6 +592,7 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       ],
       crossX: 2470,
       walkOver: true,
+      strictCrossing: true,
       closeTicks: 2,
       openSoundId: 62,
     }),
@@ -497,8 +606,39 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       ],
       crossY: 4434,
       walkOver: true,
+      strictCrossing: true,
       closeTicks: 2,
       openSoundId: 62,
+    }),
+    // Gu'Tanoth's city gates (Watchtower capture Watchtower.bin, rev 242): the east gate opens with
+    // two invisible walls in the doorway and its leaves swung south (t2228), the north-west gate with
+    // its leaves swung west (t2319); sound 46 and back two ticks later. Who may pass is Watchtower's
+    // (door:toggle).
+    Object.freeze({
+      closed: [[O.CITY_GATE_4, 2549, 3028, 0, 3], [O.CITY_GATE_3, 2550, 3028, 0, 3]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2549, 3028, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2550, 3028, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.OGRE_GUARD_GATE_LEFT_OPEN, 2549, 3027, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.OGRE_GUARD_GATE_RIGHT_OPEN, 2550, 3027, 0, 2],
+      ],
+      crossY: 3028,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 46,
+    }),
+    Object.freeze({
+      closed: [[O.CITY_GATE_5, 2504, 3062, 0, 0], [O.CITY_GATE_6, 2504, 3063, 0, 0]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.OGRE_GUARD_GATE_LEFT_OPEN, 2503, 3062, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.OGRE_GUARD_GATE_RIGHT_OPEN, 2503, 3063, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2504, 3062, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2504, 3063, 0, 0],
+      ],
+      crossX: 2504,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 46,
     }),
     // Lucien's house: the maintainer's review5926064464 cites 242/912207 ticks13005–13007
     // and 232/03233 ticks944–946: a blocker stays at the entrance while the opener walks
@@ -601,13 +741,16 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 69,
     }),
+    // The Karamja shipyard gate swings west as one piece, both leaves in a row along y 3041, from
+    // either side: captures local 1002189 tick 11325 (in, rev 242) and local 1001562 tick 6137 (out,
+    // rev 241). Sound 67 (the default) and the gate is back two ticks later.
     Object.freeze({
       closed: [[O.GATE_55, 2945, 3041, 0, 0], [O.GATE_56, 2945, 3042, 0, 0]],
       opened: [
         [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2945, 3041, 0, 0],
         [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2945, 3042, 0, 0],
-        [NAMELESS_DOOR_LEAF_IDS.SHIPYARD_GATE_LEFT_OPEN, 2946, 3041, 0, 3],
-        [NAMELESS_DOOR_LEAF_IDS.SHIPYARD_GATE_RIGHT_OPEN, 2946, 3042, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.SHIPYARD_GATE_LEFT_OPEN, 2944, 3041, 0, 3],
+        [NAMELESS_DOOR_LEAF_IDS.SHIPYARD_GATE_RIGHT_OPEN, 2943, 3041, 0, 3],
       ],
       crossX: 2945,
       walkOver: true,
@@ -685,6 +828,22 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       closeTicks: 2,
       openSoundId: 71,
     }),
+    // Ardougne Sewers gate (picklock3_l/_r), rsprox capture 1625 (rev 226) ticks 2003-2005 and 2512-2515: the
+    // clicked leaf alone swaps for inviswall 38848 and its open leaf (inacmetalgateopenr) the tile east, sound 71,
+    // the player walks across and the leaf is back two ticks later. Only the south leaf (9714) was captured; the
+    // north leaf takes inacmetalgateopenl turned the other way, as the kitchen gate's pair does (Ours). The lock
+    // from the west is skills/thieving/LockedDoors.Thieving.js (door:toggle), which opens it through door:open.
+    ...[
+      [O.GATE_100, 9714, NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_LEFT_OPEN, 3],
+      [O.GATE_99, 9715, NAMELESS_DOOR_LEAF_IDS.MORT_MYRE_GATE_RIGHT_OPEN, 1],
+    ].map(([id, y, openId, openFace]) => Object.freeze({
+      closed: [[id, 2655, y, 0, 2]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2655, y, 0, 2], [openId, 2656, y, 0, openFace]],
+      crossX: 2656,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 71,
+    })),
     // Camelot castle's grounds gate (kr_camelot_metalgateclosedl/r), crossed both ways in the user's rsprox captures
     // (local 1001994 ticks 16536-16541, 17415-17419 and 17539-17543, local 1001800 ticks 23184 and 23277; rev 242):
     // Open puts inviswall 38848 on both gate tiles and the nameless open leaves on the tiles north, sound 69
@@ -700,6 +859,41 @@ function defineDoorData({ ObjectIdentifiers: O }) {
         [NAMELESS_DOOR_LEAF_IDS.CAMELOT_GATE_RIGHT_OPEN, 2758, 3483, 0, 2],
       ],
       crossY: 3483,
+      walkOver: true,
+      operateBeforeMovement: true,
+      closeTicks: 2,
+      openSoundId: 69,
+    }),
+    // Sophanem's north gate (sophanem_gate_left/right 44036/44038), crossed inward in the user's rsprox capture
+    // (local 1002026 ticks 2150-2154; rev 242) and rsprox.net 331 (rev 230, ticks 1367-1372, 1680, 1744): Open puts
+    // inviswall 38848 on both gate tiles and the nameless sophanem_gate_left/right_inactive leaves on the tiles
+    // north, sound 69 (grate_open), the player steps across in the same tick and the gate is back two ticks later.
+    // It never stays open.
+    Object.freeze({
+      closed: [[O.GATE_232, 3283, 2809, 0, 1], [O.GATE_233, 3284, 2809, 0, 1]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3283, 2809, 0, 1],
+        [core.CacheDefinitions.getLocId("sophanem_gate_left_inactive"), 3283, 2810, 0, 0],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3284, 2809, 0, 1],
+        [core.CacheDefinitions.getLocId("sophanem_gate_right_inactive"), 3284, 2810, 0, 2],
+      ],
+      crossY: 2810,
+      walkOver: true,
+      operateBeforeMovement: true,
+      closeTicks: 2,
+      openSoundId: 69,
+    }),
+    // Sophanem's small east gate (sophanem_gate_small 44040 at 3322,2761, face 2), rsprox.net 331 (rev 230, ticks
+    // 13597-13603, 14086-14089, 16874), 2660 and 2666 (rev 229): Open puts inviswall on the gate and
+    // sophanem_gate_small_inactive (44041) on the tile east, rotation 3, sound 69 (grate_open); the player steps
+    // across on the tick after reaching the gate and it is back two ticks later.
+    Object.freeze({
+      closed: [[O.GATE_234, 3322, 2761, 0, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3322, 2761, 0, 2],
+        [core.CacheDefinitions.getLocId("sophanem_gate_small_inactive"), 3323, 2761, 0, 3],
+      ],
+      crossX: 3323,
       walkOver: true,
       operateBeforeMovement: true,
       closeTicks: 2,
@@ -729,6 +923,41 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       walkOver: true,
       closeTicks: 2,
       openSoundId: 46,
+    }),
+    // Fight Arena's two plain doors (fightarena_door1 81), the user's rsprox captures local 1001680 ticks
+    // 7032-7036 and 7335-7337, local 1002138 ticks 11377-11380 and 11676-11678 (revisions 241, 242): Open puts
+    // inviswall 38848 on the doorway and inactivepoordoor (1539) on the tile beside it, sound 62, the player
+    // steps onto the doorway tile the same tick and the door is back two ticks later (docs/fight-arena-doors.md).
+    // Both recordings cross from the leaf's side only; the other way is ours, the same swap.
+    Object.freeze({
+      closed: [[O.DOOR_8, 2617, 3171, 0, 1]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2617, 3171, 0, 1], [NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN, 2617, 3172, 0, 2]],
+      crossY: 3172,
+      walkOver: true,
+      operateBeforeMovement: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    Object.freeze({
+      closed: [[O.DOOR_8, 2585, 3141, 0, 0]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2585, 3141, 0, 0], [NAMELESS_DOOR_LEAF_IDS.MELZAR_DOOR_OPEN, 2584, 3141, 0, 1]],
+      crossX: 2585,
+      walkOver: true,
+      operateBeforeMovement: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    // Wydin's stock-room door in Port Sarim (wydindoor 2069), the user's rev 242 capture PiratesTreasure ticks
+    // 935-939 (in) and 973-975 (out): Open puts inviswall 38848 on the doorway and wydindooropen (2070) on the
+    // tile west, sound 62, the player steps across and the door is back two ticks later. From the shop only
+    // Wydin's employee in the white apron goes in: PiratesTreasure's door:toggle.
+    Object.freeze({
+      closed: [[O.DOOR_56, 3012, 3204, 0, 0]],
+      opened: [[NAMELESS_DOOR_LEAF_IDS.INVISWALL, 3012, 3204, 0, 0], [NAMELESS_DOOR_LEAF_IDS.WYDIN_DOOR_OPEN, 3011, 3204, 0, 1]],
+      crossX: 3012,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
     }),
     // Temple of Ikov's trap-lever door (ikov_trapleverdoor 92), rsprox_transcripts/242/912156.txt ticks 1764-1768,
     // 1885-1893 and 2014-2019: Open puts inviswall 38848 on the doorway and inactiveposhdoor (1542) on the tile
@@ -844,6 +1073,22 @@ function defineDoorData({ ObjectIdentifiers: O }) {
       ],
       crossX: 2848,
       carry: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
+    // Forthos Dungeon's east Temple Door (hosdun_east_door at 1825,9973, face 0; rsprox capture 3926
+    // ticks 613-616): inviswall on the doorway and hosdun_grubby_door_open on the tile west, sound
+    // 62, the opener's plain walk step east (no exactmove in player_info, tick 614) over the
+    // clipped doorway, and the door back two ticks later. Only eastward, and only through
+    // door:open: areas/ForthosDungeon.plugin.js owns the one-way rule.
+    Object.freeze({
+      closed: [[core.CacheDefinitions.getLocId("hosdun_east_door"), 1825, 9973, 0, 0]],
+      opened: [
+        [core.CacheDefinitions.getLocId("hosdun_grubby_door_open"), 1824, 9973, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 1825, 9973, 0, 0],
+      ],
+      crossX: 1825,
+      walkOver: true,
       closeTicks: 2,
       openSoundId: 62,
     }),
@@ -1268,6 +1513,18 @@ function buildDoorCatalog() {
   for (const left of sameModelPairs) {
     if (!SINGLE_DOOR_OPEN_IDS.has(left) && !SINGLE_DOOR_OPEN_IDS.has(left + 1)) addSameModelDoubleDoor(left, left + 1);
   }
+  for (const [left, right, leftOpen, rightOpen] of ARCEUUS_DOUBLE_DOORS) {
+    addCatalogDoubleDoor(left, right, leftOpen, rightOpen);
+  }
+  // The map also mixes colours in one doorway (blue left 28459 beside green right 28461 at
+  // 1678,3784-3785, opened as a pair in rsprox 1702 tick 767; turquoise left beside red right at
+  // 1678,3802-3803), so any Arceuus left leaf partners any right leaf in the same state.
+  const arceuusFamily = ARCEUUS_DOUBLE_DOORS.flat();
+  const arceuusSide = (index) => ARCEUUS_DOUBLE_DOORS.map((set) => set[index]);
+  for (const [leaves, partners] of [[0, 1], [1, 0], [2, 3], [3, 2]].map(([a, b]) => [arceuusSide(a), arceuusSide(b)])) {
+    for (const id of leaves) SPECIAL_DOUBLE_DOOR_PARTNER_IDS_BY_ID.set(id, partners);
+  }
+  for (const id of arceuusFamily) DOUBLE_DOOR_FAMILY_IDS_BY_ID.set(id, arceuusFamily);
   // Mirrored leaves that each have their own "Close" loc (w_ardougnedoubledoorl 2546 -> 2547,
   // w_ardougnedoubledoorr 2548 -> 2549) are one double door too: paired as two single doors,
   // both leaves turned the same way. Live opens them as a pair (rsprox 1694 tick 8364; also
@@ -1323,7 +1580,11 @@ function namedOpenLeaf(closedId) {
   const name = core.CacheDefinitions.getLocNames().get(closedId);
   if (!name) return null;
   const models = JSON.stringify(core.CacheDefinitions.getObject(closedId)?.models);
-  for (const candidate of [`${name}_open`, name.replace("closed", "open")]) {
+  // The cache spells it three ways: <name>_open, closed -> open, and "open_" before the last word
+  // (Meiyerditch's area_sanguine_ghetto_door1 17600 -> area_sanguine_ghetto_open_door1 18031, the
+  // Darkness of Hallowvale capture t841; only door1/door2 in the cache use that form).
+  const openWord = name.replace(/_((?:door|gate)\d*)$/, "_open_$1");
+  for (const candidate of [`${name}_open`, name.replace("closed", "open"), openWord]) {
     const id = candidate === name ? null : core.CacheDefinitions.getLocId(candidate);
     if (id != null && JSON.stringify(core.CacheDefinitions.getObject(id)?.models) === models) return id;
   }
@@ -1817,7 +2078,8 @@ function handleMappedDoor(player, object, objectId, location) {
     rememberOpenObjects(anchorKey, [previousObject], [nextObject], closedId);
   }
 
-  core.Sounds.sendSound(player, doorSound(closedId, !open));
+  const clickSounds = DOOR_CLICK_SOUNDS.get(closedId);
+  core.Sounds.sendSound(player, (open ? clickSounds?.close : clickSounds?.open) ?? doorSound(closedId, !open));
 
   return true;
 }
@@ -1949,7 +2211,7 @@ function resolveOpenedDoubleDoorId(record) {
 
 // Swings one leaf of a double door: opening steps it a tile along its closed face (or keeps it on
 // its tile, see OWN_TILE_DOOR_IDS) and turns it to openFaces[closed face], closing puts it back.
-function toggleDoubleDoorLeaf(record, openFaces) {
+function toggleDoubleDoorLeaf(record, openFaces, openId = resolveOpenedDoubleDoorId(record)) {
   const closedPose = record.currentFace === record.originalFace;
   const [dx, dy] = closedPose && !OWN_TILE_DOOR_IDS.has(record.originalId) ? COORD_OFFSETS[record.originalFace] : [0, 0];
   if (record.x === record.originalX && record.y === record.originalY) {
@@ -1959,7 +2221,7 @@ function toggleDoubleDoorLeaf(record, openFaces) {
     record.x = record.originalX;
     record.y = record.originalY;
   }
-  record.currentId = record.currentId === record.originalId ? resolveOpenedDoubleDoorId(record) : record.originalId;
+  record.currentId = record.currentId === record.originalId ? openId : record.originalId;
   record.currentFace = closedPose ? openFaces[record.originalFace] : record.originalFace;
 }
 
@@ -2014,8 +2276,12 @@ function handleDoubleDoor(player, object, objectId, location) {
 
   const previousObjects = pair.map((record) => doubleDoorRecordToObject(record));
 
-  toggleDoubleDoorLeaf(pair[0], LEFT_LEAF_OPEN_FACES);
-  toggleDoubleDoorLeaf(pair[1], RIGHT_LEAF_OPEN_FACES);
+  const roleOpenIds = DOUBLE_DOOR_CLICKED_LEAF_OPEN_IDS.get(clickedDoor.originalId);
+  const openIdOf = (record) => roleOpenIds
+    ? (record === clickedDoor ? roleOpenIds.clicked : roleOpenIds.partner)
+    : resolveOpenedDoubleDoorId(record);
+  toggleDoubleDoorLeaf(pair[0], LEFT_LEAF_OPEN_FACES, openIdOf(pair[0]));
+  toggleDoubleDoorLeaf(pair[1], RIGHT_LEAF_OPEN_FACES, openIdOf(pair[1]));
 
   const currentObjects = pair.map((record) => doubleDoorRecordToObject(record));
   for (const previousObject of previousObjects) {
@@ -2034,10 +2300,18 @@ function handleDoubleDoor(player, object, objectId, location) {
     if (privateArea) forgetDoubleDoorRecords(pair);
   }
 
-  core.Sounds.sendSound(
-    player,
-    doorSound(pair[0].originalId, pair.some(isDoubleDoorOpen))
-  );
+  const opened = pair.some(isDoubleDoorOpen);
+  const clickSounds = DOOR_CLICK_SOUNDS.get(pair[0].originalId) ?? DOOR_CLICK_SOUNDS.get(pair[1].originalId);
+  const sound = (opened ? clickSounds?.open : clickSounds?.close) ?? doorSound(pair[0].originalId, opened);
+  if (clickSounds?.areaRadius != null) {
+    // On the clicked leaf's tile, heard by the players around it (the opener's private area only).
+    core.Sounds.playAreaSound({
+      soundId: sound.getId(), x, y, level: z, loops: 1, delay: sound.getDelay(),
+      radius: clickSounds.areaRadius, source: player,
+    });
+  } else {
+    core.Sounds.sendSound(player, sound);
+  }
 
   return true;
 }
@@ -2141,9 +2415,17 @@ const WALKING_OVER = new WeakMap();
 
 function endWalkOver(player, token) {
   const state = WALKING_OVER.get(player);
-  if (!state || (token && state.token !== token)) return;
+  if (token && state?.token !== token) return;
+  const previous = state ? state.previous : player.getAttribute(WALK_OVER_ATTRIBUTE);
+  if (!state && typeof previous !== "boolean") return;
   WALKING_OVER.delete(player);
-  if (!state.previous) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
+  state?.task.stop();
+  player.setAttribute(WALK_OVER_ATTRIBUTE, null);
+  if (previous === false) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
+}
+
+function settleWalkOver({ player }) {
+  endWalkOver(player);
 }
 
 /**
@@ -2151,25 +2433,56 @@ function endWalkOver(player, token) {
  * one step ignores clipping and the flag ends once they are across (at most WALK_OVER_MAX_TICKS),
  * so the blocker stops everyone else and no forced movement is sent.
  */
-function walkOverGate(player, destination) {
+function walkOverGate(player, destination, doorLocation = null, strict = false) {
+  const queue = player.getMovementQueue();
+  const here = player.getLocation();
+  // A strictCrossing gate takes only a one-tile step the opener can make now; other walk-over
+  // gates keep their own reach and mobility rules (a cage gate crossed from two tiles off).
+  if (strict && (!queue.getMobility?.().canMove() || here.getZ() !== destination.getZ() ||
+    Math.abs(here.getX() - destination.getX()) + Math.abs(here.getY() - destination.getY()) !== 1)) return false;
   endWalkOver(player);
   const token = {};
-  WALKING_OVER.set(player, { token, previous: player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true });
+  const previous = player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true;
+  const task = new core.Task(1, false);
+  WALKING_OVER.set(player, { token, previous, task });
+  // An autosave during the borrowed step must be recoverable without clearing unrelated flags.
+  player.setAttribute(WALK_OVER_ATTRIBUTE, previous);
   player.setFlag?.(IGNORE_CLIPPING_FLAG, true);
-  const queue = player.getMovementQueue();
   queue.reset();
   queue.addSteps(destination);
+  if (strict && (queue.size?.() ?? 0) !== 1) {
+    endWalkOver(player, token);
+    return false;
+  }
+  // The capture has no face mask on the crossing itself. On a westward crossing, turn back toward
+  // the doorway on the following tick only if the player is still on the crossed-to tile.
+  if (doorLocation) {
+    player.setPositionToFace(null);
+    if (destination.getX() !== doorLocation.getX() || destination.getY() !== doorLocation.getY()) {
+      const face = new core.Task(1, false);
+      face.execute = () => {
+        face.stop();
+        const current = player.getLocation();
+        if (player.isRegistered?.() !== false && current.getX() === destination.getX() &&
+          current.getY() === destination.getY() && current.getZ() === destination.getZ()) {
+          player.forcePositionToFace(doorLocation.clone());
+        }
+      };
+      core.TaskManager.submit(face);
+    }
+  }
   let ticks = WALK_OVER_MAX_TICKS;
-  const task = new core.Task(1, false);
   task.execute = () => {
+    if (WALKING_OVER.get(player)?.token !== token) { task.stop(); return; }
     const here = player.getLocation();
     const across = here.getX() === destination.getX() && here.getY() === destination.getY();
-    if (across || --ticks <= 0 || (queue.size?.() ?? 0) === 0) {
-      task.stop();
+    if (!player.isRegistered() || player.getHitpoints() <= 0
+      || across || --ticks <= 0 || (queue.size?.() ?? 0) === 0) {
       endWalkOver(player, token);
     }
   };
   core.TaskManager.submit(task);
+  return true;
 }
 
 /**
@@ -2201,30 +2514,31 @@ function standAtDiagonal(player, gate, z) {
 function stepThroughGate(player, gate, x, y, z) {
   if (gate.crossDiagonal) {
     carryAcrossDiagonal(player, gate, z);
-    return;
+    return true;
   }
   if (gate.crossBetween) {
     carryAcrossGate(player, gate, y, z);
-    return;
+    return true;
   }
   if (gate.carry) {
     carryOneTile(player, gate, x, y, z);
-    return;
+    return true;
   }
   const destination = gate.crossX != null
     ? cloneLocation(player.getLocation().getX() < gate.crossX ? gate.crossX : gate.crossX - 1, y, z)
     : cloneLocation(x, player.getLocation().getY() < gate.crossY ? gate.crossY : gate.crossY - 1, z);
   if (gate.walkOver) {
-    walkOverGate(player, destination);
-    return;
+    return walkOverGate(player, destination, gate.faceTowardDoorOnCross ? cloneLocation(x, y, z) : null,
+      gate.strictCrossing === true);
   }
   const queue = player.getMovementQueue();
   queue.reset();
   queue.addSteps(destination);
+  return true;
 }
 
 /** Opens a pass-through gate, steps the player across it and shuts it again (see PASS_THROUGH_GATES). */
-function handlePassThroughGate(player, objectId, location, object = null) {
+function handlePassThroughGate(player, objectId, location, object = null, outcome = null) {
   const x = location?.getX?.() ?? location?.x;
   const y = location?.getY?.() ?? location?.y;
   const z = location?.getZ?.() ?? location?.z ?? 0;
@@ -2234,18 +2548,30 @@ function handlePassThroughGate(player, objectId, location, object = null) {
   const anchorKey = doorStateKey(`pass-through:${gate.closed[0].slice(1).join(",")}`, privateArea);
   // Someone else's opening: step through it while it stands open.
   if (OPEN_PASS_THROUGH_GATES.has(anchorKey)) {
-    stepThroughGate(player, gate, x, y, z);
+    const accepted = stepThroughGate(player, gate, x, y, z);
+    if (outcome) outcome.crossingAccepted = accepted;
     return true;
   }
-  if (PENDING_PASS_THROUGH_GATES.has(anchorKey)) return true;
+  if (PENDING_PASS_THROUGH_GATES.has(anchorKey)) {
+    if (outcome) outcome.crossingAccepted = false;
+    return true;
+  }
 
-  // Captured: the opening sound only; the gate shuts silently (1636, 1663, 3220).
-  core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
+  // Captured: the opening sound only; the gate shuts silently (1636, 1663, 3220). A strictCrossing
+  // gate waits until its crossing step is accepted, so a frozen or held opener opens nothing.
+  const sendOpenSound = () => {
+    if (!gate.silent)
+      core.Sounds.sendSound(player, gate.openSoundId == null ? core.Sound.GATE_OPEN : new core.Sound(gate.openSoundId, 1, 0, 0));
+  };
+  if (!gate.strictCrossing || gate.crossDelay) sendOpenSound();
   if (gate.crossDelay) {
     holdForPassThroughGate(player, gate, z, anchorKey, () => openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey));
+    if (outcome) outcome.crossingAccepted = false;
     return true;
   }
-  openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey);
+  const opened = openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey);
+  if (outcome) outcome.crossingAccepted = opened;
+  if (opened && gate.strictCrossing) sendOpenSound();
   return true;
 }
 
@@ -2272,17 +2598,21 @@ function holdForPassThroughGate(player, gate, z, anchorKey, open) {
 
 /** Swaps the gate open, steps the player across and shuts it `closeTicks` later. */
 function openPassThroughGate(player, gate, x, y, z, privateArea, anchorKey) {
+  // A strictCrossing gate opens only once its crossing step is accepted.
+  if (gate.strictCrossing && !stepThroughGate(player, gate, x, y, z)) return false;
   swapLocs(gate.closed, gate.opened, privateArea);
   OPEN_PASS_THROUGH_GATES.add(anchorKey);
-  stepThroughGate(player, gate, x, y, z);
+  if (!gate.strictCrossing) stepThroughGate(player, gate, x, y, z);
 
   const task = new core.Task(gate.closeTicks, anchorKey);
   task.execute = () => {
     task.stop();
     OPEN_PASS_THROUGH_GATES.delete(anchorKey);
+    if (privateArea?.isDestroyed?.()) return;
     swapLocs(gate.opened, gate.closed, privateArea);
   };
   core.TaskManager.submit(task);
+  return true;
 }
 
 function toggleDoor({ player, object, objectId, definition, location, clickType }) {
@@ -2305,8 +2635,10 @@ function requestDoorOpen(event) {
   const location = event.object.getLocation();
   const definition = core.ObjectDefinition.forPlayer(objectId, event.player) ?? event.object.getDefinition();
   // A pass-through gate may have no "Open" of its own (the troll prison door is "Unlock").
-  if (handlePassThroughGate(event.player, objectId, location, event.object)) {
+  const gateOutcome = {};
+  if (handlePassThroughGate(event.player, objectId, location, event.object, gateOutcome)) {
     event.handled = true;
+    event.crossingAccepted = gateOutcome.crossingAccepted;
     return;
   }
   const area = event.player.getPrivateArea?.() ?? null;
@@ -2361,7 +2693,11 @@ function routeWallDoor(event) {
   event.blockAccessFlags = (event.blockAccessFlags ?? 0) | 0x5;
   const at = event.object.getLocation();
   const gate = passThroughGateAt(event.objectId, at.getX(), at.getY(), at.getZ());
-  if (event.clickType === 1 && gate?.operateBeforeMovement === true) event.operateBeforeMovement = true;
+  if (event.clickType === 1 && gate?.operateBeforeMovement === true) {
+    event.operateBeforeMovement = true;
+    event.operateBeforeMovementApproachDelay = gate.operateBeforeMovementApproachDelay;
+    event.deferInitialFaceUntilApproachDelay = gate.deferInitialFaceUntilApproachDelay === true;
+  }
 }
 
 function isPassThroughOpenLeaf(object) {
@@ -2399,6 +2735,10 @@ module.exports = {
     api.onServerStartup(registerWallDoorRoutes);
     api.onCustomEvent("door:open", requestDoorOpen);
     api.onCustomEvent("door:state", readDoorState);
+    api.persistAttribute(WALK_OVER_ATTRIBUTE, null);
+    api.onPlayerLogout(settleWalkOver);
+    api.onPlayerDeath(settleWalkOver);
+    api.onPlayerLogin(settleWalkOver);
   },
   __internals: { OPEN_OBJECT_STATES, RUNTIME_DOUBLE_DOOR_RECORDS },
 };

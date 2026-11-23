@@ -60,6 +60,7 @@ and its units in `server/plugins/quests/inaid/`.
   - t384: `cam_reset` and the chatbox closes (11 ticks after t373).
 - Stage 40 -> 60 happens on "Well, there's the inn. You could look there..." (t431), after "Ah, right, I know what you mean. Hmm, let's think now...".
 - Florin at stage 40 (t389-391): the opening line, then the citizens' menu "How come you have no food?|What is this place?|What do you do here?|Are there any 'out of the way' places here?|I'd best be off.".
+- The citizens' shared lines (the transcript labels them "Citizen") show the clicked NPC's own name and head: Razvan at t1166 (`if_setnpchead` 4468, name "Razvan"), Vasile at t9227 and Elisabeta at t10290 on "How do you mean, 'out of the way'?" (issue 6415).
 
 ### Inn
 - Broken wall 12737 Climb-over (t794; again at t1155 and t4924):
@@ -109,8 +110,13 @@ and its units in `server/plugins/quests/inaid/`.
   - On Yes (t1255): every 7626 turns into 1925 in its own slot, seq 2283, "You empty your rubble onto the pile.".
   - With room and no buckets (t1266): plaster then scroll objectboxes (xw81NT / NMW9RQ), each item added as its box shows.
 
+- Read on the plaster fragment 7628 (op 2, t2757-2775): six objectboxes 193 with its model (zoom 400), the Wiki's text; nothing else changes.
+- Read on the dusty scroll 7629 (op 2, t2778): `toplevel_mainmodal_open`, the long scroll 625 and `longscroll_setup` (418) with an empty title and Sialathin's letter to Lantania (the Wiki's text). Closed with its close button (t2788).
+- A find that goes into the inventory is on the client with its objectbox (the inventory is sent on the same tick). `ItemContainer.add` without a refresh flag used to change the inventory without sending it (issue 6415).
+
 ## The store, crate, bank and furnace (110-210)
 
+- Store ladder 12780 at 3513,3238,0, Climb-up (t1309-1316): seq 828 two ticks after arriving, and a tick later the roof at 3513,3239 on plane **2** (not 1). Ladder 12781 at 3513,3238,2, Climb-down (t1327-1331): seq 827 two ticks after arriving, then 3513,3237,0. Both are rows in `server/plugins/world/data/loc-teleports.json` (issue 6415: Ladders looked for a ladder on plane 1, found none and did nothing).
 - Aurel at 110 (t1293-1308): the "after the inn" greeting (UXJgpJ), then the menu "What do you do here? | What do you think of your town? | I'd like to help fix up the town. | I'd best be off." 1990 goes 110 -> 140 at t1305, on Aurel's "Please can you fix the roof, then the walls..." line, after "What needs fixing?". Razvan's same option (t1174) does not change 1990. Implemented as a `before` on that line (Aurel, 110-139).
 - Roof 12751 (3515,3240,2) Inspect t1318: mesbox PrBgdV, then the menu "Fix the roof?" with "Yes." / "No.". On Yes (t1323): seq 3931 pest_repair, and synth 2101 hammer_wood at delays 0, 20 and 40. Two ticks later (t1325): 1974=1, 1990=150, seq -1, 3 planks + 12 nails gone, synth 1710 m2_build, objectbox_double 11 (960, 1539) "You use some wooden planks and nails to patch up the hole in the roof.", Crafting +100.
 - Store wall 12752 (t1333-1341): the same steps. Full inspect text FshL1-, "Fix the wall?", 1975=1, 1990=160, double box (960, 1539) with 2TCJ1Y.
@@ -158,6 +164,7 @@ and its units in `server/plugins/quests/inaid/`.
 - t2415: Gadderanks at 0 hp: anim 837, transformation 4485, level_change 0, synth 512; 1999 0->1.
 - t2420 (+5): 1990 240->250; Veliaf 989 at (3514,3237) facing N. t2421: overhead "Fear not my friend! I will come to your aid!" (transcript 3SyWCq); loc 38848 at (3514,3238) rot 1, 12856 at (3514,3239) rot 0; door_open 62 (report). t2422 Veliaf to (3514,3239); t2424 to (3514,3240), loc_del (3514,3239), 12761 back at (3514,3238), door_close 60.
 - Veliaf: attack 390 human_sword_slash, block 388 human_sword_def. Shouts at t2445 "Let us slay these dogs!", t2449/2453 "Fight on!", t2481 "Let's kill these fiends!", t2485 "You made a big mistake coming here!", t2509 "Take that!" (all on his 4-tick cycle from t2421).
+- Veliaf fights from t2425, the tick after his last step in: idle at (3514,3240) t2425, closing in from t2426, first slash 390 at t2437. Wiki: he helps kill "the other vampyre, and then finally Gadderanks himself". Only the juvinates attack the player at the start (t2357, a tick after the challenge closes); Gadderanks fought back after the player's first hit (t2358-2361), and the Wiki has him "order the two juvinates to attack you".
 - Juvinate death: removed a tick after the killing hit (t2499 hit -> t2500 del), no death anim; mist 4435 spawned one tile SW of it, anim 1262 nine ticks later (t2509), removed t2510. 1999 1->2 at t2500, 2->3 at t2517, with 1990 250->260 the same tick.
 - t2517: the dialogue opens by itself: "*cough*" (head 4485, chatsad1), t2521 Veliaf (head 989, chatang3) "Huh, it looks like Gadderanks is still alive...".
 
@@ -176,17 +183,20 @@ and its units in `server/plugins/quests/inaid/`.
 - Hollows talk (stage 280, after the store Veliaf set 1981=3 at t2634): `at-the-myreque-hideout` from t3235; 290 on Continue past "I'll see what I can dig up." (t3278); after "Sure." live opens Veliaf's 5-option menu at once (t3282), without "Hello again".
 - 300 as the player's "Hey. Veliaf says..." line shows to the first of Radigad/Polmafi (t3347); the other then says "Don't worry, I'm just getting my stuff together..." (t3353).
 - Ivan at 300: three lines; 310 on Continue past "That's right. We should get going soon." (t3362); after "Very well. I'm ready, lead the way." the chat closes and interface 53 burgh_map opens (t3364) with clientscript 1281 burgh_set_hover. Again at 310 (t3426-3432, t3800-3811); 2000 resets 2->0 as the map reopens (t3811).
+- burgh_map is opened on toplevel_pre_eoc:mainmodal (164:16) in the capture (fixed mode); its root 53:0 is a 512x334 rectangle with absolute size (no stretch mode), so in resizable mode it is a centred box, as any fixed-size modal is.
 - burgh_map (cache gamevals): 21 clickout -> cs2 1467 burgh_revert_highlight; 23 route1_layer -> cs2 1469 (shows 38); 28 route2_layer -> cs2 1470 burgh_highlight_2; 37 text_travel_layer2, 38 text_travel_layer1; 18/19 player/npc icon models. Route seqs 3559/3560 (route 1 pt1/pt2), 3561/3562 (route 2).
 - Travel route 2 (t3477): game message "You decide to take route 2.", if_setanim 3561 on 53:18/19; 6 ticks later (t3483) 2001=1, follower_npc 447 = (4441<<16)|index, instance copy of source chunks 356-358 x 569-571 plane 0 (2848-2871 x 4552-4575), player to (2859,4554), Ivan 4441 at (2860,4553) and four juvinates 4443 at (2860,4557), all facing south, map closed, music 504; t3484 juvinate line "There's that tasty morsel Ivan!..." (chathead 4443, chathap1 567). multiway_indicator 0 (single-way, "I'm already under attack.").
 - Juvinate at 0 HP: removed the same tick with no death animation, 2000 +1, mist 4435 spawned on its tile (it wanders), seq 1262 mist_disappear 9 ticks later, removed the tick after (t3577/3586/3587). Hits by Ivan count too (any killer).
 - Ivan eats: 2005 -1 with game message "Ivan : Urgh, just had to eat some food, I only have N left." (t3950, 3970, 4010).
 - Failure (first try, no food): at 2000=2 (t3624) Ivan is removed (t3625) and says "I'm getting badly beaten up here..." with head 4440, chatang2 615. Stage stays 310. Exit path 12820 at (2859,4552) "Escape" -> (3429,3401) Mort Myre (t3632-3633).
+- After Ivan leaves (t3625-3629) nobody fights: the player's foe had just died (t3624), the two juvinates left walk about, and his line stays up until continued (t3629).
+- Engagement: all four juvinates wander. First attempt: the player attacked first (t3491); a juvinate went for Ivan unprovoked at t3503 and Ivan answered (t3504-3506). Second attempt: the player attacked at t3843; a juvinate turned to Ivan from 3 tiles away (t3890) and struck as it reached him (t3892-3893).
 - Success (second try, with food): 2000=3 (t4023): Ivan and the rest removed, 447 -> -1, mesbox "You manage to escape from the rest..." (closes by itself at t4025), map reopened at t4027 with seq 3562 on both icons, t4033 player to (3432,3484), t4034 Ivan 4441 at (3432,3485) facing south, his "Many thanks..." lines; 315 + 10367=1 on Continue past the player's "Not a problem..." (t4040); Ivan removed 4 ticks later (t4044). The player then uses the ordinary trapdoor 3432 themselves (t4044-4055): no teleport into the basement.
 - Supplies (t3384-3411): armour piece removed and varbit set as Ivan's thanks shows: helm 1986, legs 1987, body 1988, and control mask 1989 (helm 1, legs 2, body 4: 1 -> 5 -> 7). Texts "Thanks for the helmet!...wear it", "...chainbody!...wear it", "...steel legs!...wear them". Sickle: objectbox 193 with sickle 2961 "You offer the sickle to Ivan.", player line, then on Continue 2003=1 and the sickle taken (t3411).
 - Food (t3780-3789): objectbox with the food "Would you like to offer Ivan all of this food type...", menu "Yes, I'll offer all...|Nope, I'll just given him one.", objectbox "You hand over some food to Ivan...", 2005=8 on its Continue, "...I could carry another 7 bits of food." (cap 15).
 - Drezel: world NPC 9805 (multinpc 9636 via varp 302) at (3441,9894). Live starts at "Well done for bringing Ivan to the temple, ..." (t4060): the transcript's first line is skipped. 320 on Continue past "Yes, it seems to be..." (t4068), 330 past "But you don't even know what he said about Ivandis." (t4089), 340 past "So you have no further information..." (t4182), 350 with the key 7632 added and objectbox "Drezel gives you a key." (t4264).
 - Keyhole 12765 Inspect: mesbox "You inspect the panel. It looks like there's some sort of keyhole in it." (t4269). Key on keyhole: 1982=1 and mesbox "You use the library key in the keyhole and you hear a click to the left of you."; stage stays 350, key kept.
-- Trapdoor multiloc 12762 (1982=1 -> 12763 "Trapdoor" Climb-down): seq 827 human_pickupfloor (t4286), next tick 360 and teleport (3360,9904), no message (t4287).
+- Trapdoor multiloc 12762 (1982=1 -> 12763 "Trapdoor" Climb-down): seq 827 human_pickupfloor (t4286), next tick 360 and teleport (3360,9904), no message (t4287). The click carries the multiloc's own id (oploc1 12762 at (3441,9899), t4282); the player walked to (3440,9899).
 
 ## The library, the tomb and the Rod of Ivandis (360-430)
 
@@ -255,7 +265,7 @@ and its units in `server/plugins/quests/inaid/`.
 ### Escort
 
 - Ivan's eating message: Wiki "just had too eat", live "just had to eat" (t3950). Implemented the Wiki's.
-- Ivan's flee: Wiki says he leaves when his health is too low or he runs out of food; live left at the second juvinate death with no food (t3624-3625). Implemented both: below half HP with no food (Wiki), and the capture's route-2 rule (2 deaths, 2005=0).
+- Ivan's flee: the Wiki permits either route without supplying him if he is protected. The capture's first attempt ended at the second juvinate death with no food (t3624-3625), but his hitpoints were not recorded; this is not a kill-count rule. Failure follows the health watcher (below half HP with no food) or his defeat, so a healthy Ivan can continue without supplies. The exact health threshold remains an implementation approximation below.
 - The legs' thanks: the transcript's template has "wear it"; live says "wear them" for the legs (t3399). Implemented live's (placeholder filling).
 
 ### Rod
@@ -305,7 +315,7 @@ and its units in `server/plugins/quests/inaid/`.
 
 - Ours: stage 220 with no castle scene playing (a logout before it opened, or a save taken during it) resolves as a scene cut short: 230, varbit 1981 = 1 and 15488 = 1, at logout or the next login.
 - Ours: Veliaf's shout chance (1 in 4 per 4-tick cycle; the capture shows 6 in ~24 cycles), picked at random from the five captured lines.
-- Ours: Veliaf's hitpoints are locked (he takes hits, never falls); he targets the first living juvinate.
+- Ours: Veliaf's hitpoints are locked (he takes hits, never falls); he targets the first living juvinate, then the unwounded Gadderanks (Wiki order).
 - Ours: leaving the copy resets 1999 to 0 and a 250 back to 240; talking to Gadderanks (4483) at 240-259 replays the challenge into a new copy; at 260-279 it reopens the copy with the wounded Gadderanks and Veliaf (no fades).
 - Ours: exit/logout tile of the fight copy (3514,3237), outside the store door. Castle scene cut short by a logout still sets 230, 1981=1 and 15488=1.
 - Ours: Gadderanks' level_change 0 and the headbar removal at t2415 are not sent (no core API).
@@ -319,7 +329,8 @@ and its units in `server/plugins/quests/inaid/`.
 - Ours: a won ambush cut short by a logout before Ivan's arrival is saved outside Paterdomus (3432,3484) and counts as Ivan delivered (315), his thanks unplayed.
 - Route 1 (Canifis) is not captured: Ours: its message follows route 2's ("You decide to take route 1."), 2001=2, the same swamp copy with two level 75 juvinates 4442 (Wiki: two level 75), escape at 2 deaths, seqs 3559/3560.
 - Ivan's hitpoints/heal: the capture shows none. Ours: eats below half his max HP, each bite heals a quarter of max; at 0 HP he leaves like the no-food case. (Ivan 4441 currently gets the engine's default 40 HP.)
-- Which juvinates engage: Ours: one on the player, one on Ivan, the others wander and take a fallen one's place.
+- Which juvinates engage: all four wander and none starts on the player (live: the player struck first, t3491 and t3843). Wiki: the others "wander around for a while, and then eventually engage Ivan", and the next goes for him once one falls. Ours: from 20 ticks after the arrival (live t3483 -> t3503; juvinates passed within range from t3485 without attacking), a free juvinate within 3 tiles of Ivan goes for him, one at a time (live, second attempt: one turned to him from 3 tiles at t3890 and struck at t3892-3893; first attempt t3503).
+- Ours: when Ivan flees, the juvinates and the player's attack on one stop (both sides' swings in flight and the juvinates' queued retaliations dropped), so his line is not closed by a hit; the juvinates can still be fought.
 - Teleports out of the copy are allowed (rule null); logout/death inside comes back at the exit path tile (3429,3401).
 - Stages 20-279 Veliaf: the job offer's "If speaking again" lines (not captured). Radigad/Polmafi/Ivan at 280-289: their job-offer lines (not captured).
 - Drezel at 320-349 talked again: same variant from its second line (not captured). Drezel 350-429 without the key: the Drezel page's lost-key lines (P91CrU) alone. With the key: the "afterwards" variant.

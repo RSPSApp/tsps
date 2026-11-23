@@ -2,7 +2,7 @@
   "name": "rsps-client-release",
   "private": true,
   "scripts": {
-    "test": "node --test release-web.test.mjs release-version.test.mjs",
+    "test": "node --test release-web.test.mjs release-version.test.mjs release-workflow.test.mjs client-version.test.mjs",
     "build:web": "node build-web.mjs",
     "release:web": "node release-web.mjs"
   },

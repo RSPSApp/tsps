@@ -9,6 +9,8 @@
  * - The loot (Wiki): each Moon subdued is its own 1/56 roll for a piece of its set, never one the
  *   player has until they have the whole set; only when none hits, 1, 3 or 6 rolls on the
  *   standard table for one, two or three Moons. Loot left in the chest waits for the next Claim.
+ *   A league's boosted drops ("drops:chance" with source "Moons of Peril") make each Moon's
+ *   unique roll that many times as likely; the standard table and Eyatlalli are not boosted.
  * Eyatlalli (Wiki): an undamaged Moon armour piece used on her is sacrificed for a 1/50 chance at
  * any of the twelve pieces (no duplicate protection); sulphurous essence gives 50 Runecraft xp each.
  */
@@ -63,6 +65,21 @@ function piece(player, moon) {
   return name;
 }
 
+/** The source the chest's unique rolls name on "drops:chance". */
+const CHANCE_SOURCE = "Moons of Peril";
+
+/**
+ * "drops:chance" for one Claim (a league's boosted drops, the Wiki's "Any unique reward" row):
+ * a Moon's multiplier on its 1/56 unique roll, the largest its set's pieces get; 1 unboosted.
+ */
+function uniqueBoost(player) {
+  const rules = [];
+  Common.api?.emitCustomEvent?.("drops:chance", { player, source: CHANCE_SOURCE, rules });
+  if (rules.length === 0) return () => 1;
+  const boostOf = (name) => rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+  return (moon) => Math.max(1, ...chest().sets[moon].map((key) => boostOf(Common.core.ItemDefinition.forId(itemId(key))?.getName?.() ?? "")));
+}
+
 function roll(player, moons) {
   const spec = chest();
   const { ItemDefinition } = Common.core;
@@ -72,8 +89,11 @@ function roll(player, moons) {
     if (same) same.amount += amount;
     else loot.push({ id, amount });
   };
+  const boost = uniqueBoost(player);
   for (const moon of moons) {
-    if (Common.randomInt(1, spec.uniqueChance) === 1) add(itemId(piece(player, moon)), 1);
+    const multiplier = boost(moon);
+    const hit = multiplier > 1 ? Math.random() * spec.uniqueChance < multiplier : Common.randomInt(1, spec.uniqueChance) === 1;
+    if (hit) add(itemId(piece(player, moon)), 1);
   }
   if (loot.length > 0) return loot;
   for (let i = 0; i < spec.rolls[moons.length]; i++) {
@@ -352,4 +372,4 @@ module.exports = function attachChest(api) {
   api.onCustomEvent("combat-achievements:kill-count", answerKillCount);
 };
 
-Object.assign(module.exports, { roll, piece, contents });
+Object.assign(module.exports, { roll, piece, contents, uniqueBoost });

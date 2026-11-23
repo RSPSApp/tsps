@@ -462,12 +462,39 @@ function correctAmoxliatl(table) {
   }
 }
 
-/** Two rolls per kill; the first can hit the unique pre-roll, the second is always on the standard table (Wiki, Drops). */
+/** Hydra's eye, fang and heart: the brimstone ring's pieces. */
+const HYDRA_RING_PIECES = new Set([22973, 22971, 22969]);
+/** The piece roll itself, before the other uniques' misses (Wiki formula above). */
+const HYDRA_RING_PIECE_ROLL = 180;
+
+/**
+ * Two rolls per kill; the first can hit the unique pre-roll, the second is always on the standard
+ * table (Wiki, Drops). The Wiki's note on the uniques: they are rolled in succession, the ring
+ * piece last, and "a brimstone ring piece rate follows the formula 1/(180 / (1999/2000 x 1999/2000 x
+ * 999/1000 x 511/512 x 511/512)) = 1/181.07": the piece's own roll is 1/180, the other uniques'
+ * misses make it 1/181.07 a kill. "The order in which players receive the items is: Hydra's eye,
+ * Hydra's fang and finally Hydra's heart." The export lists each piece as its own 1/181.1 pre-roll
+ * (the effective rate), which makes any piece 3/181; they are one 1/180 roll, and the Hydra's
+ * plugin hands over the piece next in that order ("npc-drops:roll").
+ */
 function correctAlchemicalHydra(table) {
   if (!table) return;
   table.rolls = 2;
+  const pieces = [];
   for (const entry of table.entries || []) {
-    if (entry.pre_roll) entry.once_per_kill = true;
+    if (!entry.pre_roll) continue;
+    entry.once_per_kill = true;
+    if (HYDRA_RING_PIECES.has(entry.item_id)) pieces.push(entry);
+  }
+  if (pieces.length !== HYDRA_RING_PIECES.size) return;
+  for (const entry of pieces) {
+    Object.assign(entry, {
+      roll_group: "alchemical_hydra_ring_piece",
+      group_access_weight: 1,
+      group_access_out_of: HYDRA_RING_PIECE_ROLL,
+      weight: 1,
+      out_of: pieces.length,
+    });
   }
 }
 
@@ -751,6 +778,20 @@ function chanceRules(player, npc, source) {
   if (!player || !pluginApi) return rules;
   pluginApi.emitCustomEvent("npc-drops:chance", { player, npc, npcId: npc?.getId?.() ?? null, source, rules });
   return rules;
+}
+
+/**
+ * How many times likelier an ordered reward stage is for rules that match its rows by name (a
+ * league's boosted drops on a Desert Treasure II boss's uniques): the rows' boosts averaged by
+ * their weights, so a stage whose rows are all boosted is that many times as likely, and one
+ * boosted row of several raises the stage by its own share only. Rules naming the stage's key
+ * (an awakened boss's unique table) are counted on the stage itself.
+ */
+function stageRowsMultiplier(stage, rules) {
+  if (!rules.length) return 1;
+  const total = stage.entries.reduce((sum, row) => sum + row.weight, 0);
+  const boosted = stage.entries.reduce((sum, row) => sum + row.weight * rulesMultiplier(row, rules), 0);
+  return total > 0 ? boosted / total : 1;
 }
 
 /** How many times likelier `entry` is on this kill: the world's boss rare multiplier times the matching chance rules. */
@@ -1074,7 +1115,8 @@ function rollTable(table, player, npc, context = killContext(player, npc), sourc
   const chance = chanceRules(player, npc, source);
   const questVerdicts = questItemVerdicts(player, npc, table);
   const selected = OrderedRewards.select(table, player, pluginApi, Math.random,
-    (rate, stage) => entryMultiplier(table, { ...stage, ...rate }, chance));
+    (rate, stage) => entryMultiplier(table, { ...stage, ...rate }, chance) * stageRowsMultiplier(stage, chance),
+    (row) => rulesMultiplier(row, chance));
   const drops = [];
   const entries = Array.isArray(table.entries) ? table.entries : [];
   for (const entry of entries) {
@@ -1378,7 +1420,7 @@ module.exports = {
       }
       // A plugin's own table rolled for a boss (the Grotesque Guardians' Dusk) is that boss's
       // loot too, so it takes the boss rare multiplier like the NPC's dumped table.
-      if (table && !table.boss && isBoss(npcId)) table = { ...table, boss: true };
+      if (table && !table.boss && (request.boss === true || isBoss(npcId))) table = { ...table, boss: true };
       if (!table) return;
       const npc = request.npc ?? null;
       const source = request.source ?? sourceName(npc, npcId);

@@ -2748,7 +2748,7 @@ function resetRouteState(state) {
 }
 
 function processBot(player) {
-  if (player.getAttribute(game.BOT_KEY) !== true) {
+  if (player.getAttribute(game.BOT_KEY) !== true || game.hasRosterRoutine?.(player)) {
     return;
   }
   const teamId = game.getTeamId(player);
@@ -2830,7 +2830,7 @@ function prepareWaitingRoomBots(nowMs) {
   const areas = [game.lobbyArea, ...Object.values(game.waitingAreas ?? {})].filter(Boolean);
   for (const area of areas) {
     for (const player of [...area.getPlayers()]) {
-      if (player.isPlayerBot?.() !== true || player.getAttribute(game.BOT_KEY) !== true) {
+      if (player.isPlayerBot?.() !== true || player.getAttribute(game.BOT_KEY) !== true || game.hasRosterRoutine?.(player)) {
         continue;
       }
       const teamId = game.getTeamId(player);

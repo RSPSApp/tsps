@@ -6,9 +6,15 @@
  * The scroll's Read dialogue and persistent varbit are transcribed from rsprox recording 444
  * (rev 233). Abyssal demon hit order and effects are transcribed from recordings 4099, 4093 and
  * 1143 (rev 237): an accurate player hit, including a zero, first rolls the demon's self-teleport
- * at 1/6; only if that fails does it roll the player's teleport at 1/3. The captures show local
- * moves (up to three tiles), graphic 409 and demon animation 2309. We choose a reachable local
- * landing tile; the retail landing distribution has not been established.
+ * at 1/6; only if that fails does it roll the player's teleport at 1/3, with graphic 409 and demon
+ * animation 2309.
+ *
+ * Landing (issue #6496, rsprox captures 96, 97, 1152, 1885, 3314, 3329, 4099, local 1000230,
+ * 1000241, 1000456, 1001305 and 1001309, rev 227-237): whoever is teleported lands on one of the
+ * free tiles around the other. 1,019 of 1,086 player teleports landed next to the demon the player
+ * was attacking, including attacks from 4-10 tiles away, on all eight sides; 96% of them moved the
+ * player 1-2 tiles and none more than 8. All 182 demon self-teleports landed next to the player.
+ * The Wiki's 20-tile maximum (Mod Ash) stays as the cap on how far the move may go.
  *
  * Elder Chaos druid pulls honor the same unlock through the druid plugin's pre-move event.
  */
@@ -22,14 +28,12 @@ const CONFIRM_TITLE = "This will consume the scroll.";
 const CONFIRM_YES = "Become immune to the Abyssal demon and <br>Elder Chaos druid teleportation attacks.";
 const CONFIRM_NO = "Cancel";
 const ABYSSAL_IDS = new Set([415, 416, 7241, 11239, 14174, 14175, 12581]);
-const DEMON_TELEPORT_RADIUS = 3;
-const PLAYER_TELEPORT_RADIUS = 20; // Mod Ash, as cited by the OSRS Wiki.
+const MAX_TELEPORT_DISTANCE = 20; // Mod Ash, as cited by the OSRS Wiki.
 const CONFIRM_CHATBOX = 219;
 const READ_ANIMATION = 7403;
 const READ_SOUND = 2655;
 const DEMON_ANIMATION = 2309;
 const TELEPORT_GRAPHIC = 409;
-const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
 let api;
 let core;
@@ -80,30 +84,44 @@ function read({ player, item }) {
   player.getDialogueManager().startDialogues(chain);
 }
 
-/** Reachable destinations within the supplied radius, respecting collision and plane. */
-function reachableTiles(mobile, radius) {
-  const origin = mobile.getLocation();
-  const x = origin.getX(), y = origin.getY(), z = origin.getZ();
-  const size = Math.max(1, Number(mobile.getSize?.()) || 1);
-  const area = mobile.getPrivateArea?.() ?? null;
-  const reached = new Map([[`${x},${y}`, origin.clone()]]);
-  const queue = [[x, y]];
-  for (let i = 0; i < queue.length; i++) {
-    const [fromX, fromY] = queue[i];
-    for (const [dx, dy] of STEPS) {
-      const toX = fromX + dx, toY = fromY + dy;
-      const key = `${toX},${toY}`;
-      if (Math.abs(toX - x) > radius || Math.abs(toY - y) > radius || reached.has(key)) continue;
-      if (!core.RegionManager.canMove(fromX, fromY, toX, toY, z, size, size, area)) continue;
-      reached.set(key, new core.Location(toX, toY, z));
-      queue.push([toX, toY]);
-    }
-  }
-  return [...reached.values()].slice(1);
+function sizeOf(mobile) {
+  return Math.max(1, Number(mobile.getSize?.()) || 1);
 }
 
-function teleport(mobile, radius) {
-  const tiles = reachableTiles(mobile, radius);
+/** -1, 0 or 1: the step from a footprint starting at `at` (`size` wide) towards one at `from`. */
+function towards(at, size, from, fromSize) {
+  if (at + size - 1 < from) return 1;
+  if (at > from + fromSize - 1) return -1;
+  return 0;
+}
+
+/**
+ * Landing tiles for `mover` touching `anchor`'s footprint on any side, diagonals included. Each
+ * must be free for the mover's size with no wall between it and the anchor, on the anchor's plane,
+ * within the 20-tile maximum of the mover's start, and not the tile the mover already stands on.
+ */
+function landingTiles(mover, anchor) {
+  const start = mover.getLocation(), base = anchor.getLocation();
+  if (start.getZ() !== base.getZ()) return [];
+  const size = sizeOf(mover), anchorSize = sizeOf(anchor);
+  const ax = base.getX(), ay = base.getY(), z = base.getZ();
+  const area = mover.getPrivateArea?.() ?? null;
+  const tiles = [];
+  for (let x = ax - size; x <= ax + anchorSize; x++) {
+    for (let y = ay - size; y <= ay + anchorSize; y++) {
+      const dx = towards(x, size, ax, anchorSize), dy = towards(y, size, ay, anchorSize);
+      if (dx === 0 && dy === 0) continue; // overlaps the anchor
+      if (x === start.getX() && y === start.getY()) continue;
+      if (Math.max(Math.abs(x - start.getX()), Math.abs(y - start.getY())) > MAX_TELEPORT_DISTANCE) continue;
+      if (!core.RegionManager.canMove(x + dx, y + dy, x, y, z, size, size, area)) continue;
+      tiles.push(new core.Location(x, y, z));
+    }
+  }
+  return tiles;
+}
+
+function teleport(mobile, anchor) {
+  const tiles = landingTiles(mobile, anchor);
   if (!tiles.length) return false;
   const destination = tiles[core.Misc.getRandom(tiles.length - 1)];
   mobile.performGraphic(new core.Graphic(TELEPORT_GRAPHIC));
@@ -119,12 +137,12 @@ function onHitResolved({ attacker, target, hit }) {
   // Only roll the player's teleport when the demon's preceding self-teleport roll fails.
   if (core.Misc.getRandom(5) === 0) {
     demon.performAnimation(new core.Animation(DEMON_ANIMATION));
-    teleport(demon, DEMON_TELEPORT_RADIUS);
+    teleport(demon, attacker);
     return;
   }
   if (core.Misc.getRandom(2) !== 0 || unlocked(attacker)) return;
   demon.performAnimation(new core.Animation(DEMON_ANIMATION));
-  if (teleport(attacker, PLAYER_TELEPORT_RADIUS)) attacker.getCombat()?.reset?.();
+  if (teleport(attacker, demon)) attacker.getCombat()?.reset?.();
 }
 
 function blockDruidPull(event) {
@@ -144,7 +162,7 @@ module.exports = {
   name: "TeleportAnchoringScroll",
   description: "Read the teleport anchoring scroll to unlock protection from Abyssal demon and Elder Chaos druid player teleports.",
   members: true,
-  _test: { read, login, onHitResolved, reachableTiles, unlocked, constants: { UNLOCKED_ATTRIBUTE, UNLOCKED_VARBIT, ITEM_ID, INTRO, REPEAT, COMPLETE, CONFIRM_TITLE, CONFIRM_YES, CONFIRM_NO } },
+  _test: { read, login, onHitResolved, landingTiles, unlocked, constants: { UNLOCKED_ATTRIBUTE, UNLOCKED_VARBIT, ITEM_ID, INTRO, REPEAT, COMPLETE, CONFIRM_TITLE, CONFIRM_YES, CONFIRM_NO } },
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;

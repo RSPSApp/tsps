@@ -9,13 +9,16 @@
  * - Supply crates: each kit hands over the tools the player lacks (and two vials of water every
  *   time), named in an object box.
  * - Grubby sapling: a moonlight grub two ticks after arriving, sometimes two ("Your hunting
- *   knowledge allows you to find an extra grub.").
+ *   knowledge allows you to find an extra grub."), with the collecting animation and 0.05 Hunter
+ *   xp per level for each grub (Wiki). As many as there are free slots: nothing stops a player who
+ *   already holds grubs or paste.
  * - Pestle and mortar on a grub: paste, sometimes from two grubs ("Your herblore knowledge allows
  *   you to crush an extra grub."). Paste on a vial of water: a moonlight potion of 2-4 doses by
  *   Herblore (38 needed), with the captured lines for the extra doses.
  * - Leaving Neypotzli: its foods, grubs and paste fizzle away and its potions turn back into vials
  *   of water - "The resources from Neypotzli fizzle to dust as they are severed from its magic."
- * The quest keeps all of this for its own steps until the Moons are reached.
+ * The quest opens all of this (moons-of-peril:camps-open) from its camp stage on: the crates hold the
+ * tools the quest asks for, and nothing here is kept back for the Moons.
  */
 const Common = require("./Common.MoonsOfPeril");
 
@@ -201,9 +204,12 @@ function collectGrub({ player, objectId }) {
       player.sendMessage(grub.fullMessage);
       return;
     }
-    Common.sound(player, grub.sound);
-    const two = inventory.getFreeSlots() >= 2 && Math.random() < chance(level(player, Skill.HUNTER), 1, grub.extra);
+    Common.animate(player, grub.anim);
+    const hunter = level(player, Skill.HUNTER);
+    const two = inventory.getFreeSlots() >= 2 && Math.random() < chance(hunter, 1, grub.extra);
+    for (let i = 0; i < (two ? 2 : 1); i++) Common.sound(player, grub.sound);
     inventory.add(new Item(itemId("MOONLIGHT_GRUB"), two ? 2 : 1), true);
+    xp(player, Skill.HUNTER, grub.xpPerLevel * hunter * (two ? 2 : 1));
     if (two) player.sendMessage(grub.extraMessage);
   });
   return true;

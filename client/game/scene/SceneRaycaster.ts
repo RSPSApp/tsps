@@ -2,7 +2,7 @@ import { mat4, vec3 } from "gl-matrix";
 
 import { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
-import type { NpcType } from "../../rs/config/npctype/NpcType";
+import { type NpcType, npcTypeHasModel } from "../../rs/config/npctype/NpcType";
 import type { LocType } from "../../rs/config/loctype/LocType";
 import type { Model } from "../../rs/model/Model";
 import { Scene } from "../../rs/scene/Scene";
@@ -723,13 +723,15 @@ export class SceneRaycaster {
             if (interactId < 0) continue;
             const npcPlane = npcEcs.getLevel(ecsId) | 0;
             let heightTiles = 0;
+            let isFishingSpot = false;
             try {
                 let npcType: NpcType | undefined = this.osrsClient.npcTypeLoader.load(interactId);
                 while (npcType?.transforms) {
                     npcType = npcType.transform(this.osrsClient.varManager, this.osrsClient.npcTypeLoader);
                 }
                 // Model-less NPC spawns must not intercept objects behind their bounding box.
-                if (!npcType?.modelIds?.length) continue;
+                if (!npcTypeHasModel(npcType)) continue;
+                isFishingSpot = String(npcType.name ?? "").toLowerCase().includes("fishing spot");
                 // The scaled model's height; size is already the scaled footprint in tiles.
                 heightTiles = (this.npcHeightProvider?.(npcType.id) ?? 200) / 128;
             } catch {
@@ -748,20 +750,32 @@ export class SceneRaycaster {
             if (!coarse || coarse.tMin > maxDistance) continue;
 
             const serverId = npcEcs.getServerId(ecsId) | 0;
-            const triangles = this.npcTrianglesProvider?.(ecsId, serverId);
             let tHit: number | undefined;
-            if (triangles && triangles.length >= 3) {
-                tHit = this.intersectNpcModel(ray, maxDistance, triangles, size === 1);
-            } else {
-                // Model still streaming: its footprint up to its height.
-                const half = Math.max(0.32, size * 0.42);
-                const height = Math.max(0.5, heightTiles);
-                const boxHit = rayIntersectsBox(
+            if (isFishingSpot) {
+                tHit = this.intersectFishingSpot(
                     ray,
-                    [worldX - half, groundY - height, worldZ - half],
-                    [worldX + half, groundY - 0.05, worldZ + half],
+                    maxDistance,
+                    worldX,
+                    worldZ,
+                    groundY,
+                    heightTiles,
+                    size,
                 );
-                if (boxHit && boxHit.tMin <= maxDistance) tHit = Math.max(boxHit.tMin, 0);
+            } else {
+                const triangles = this.npcTrianglesProvider?.(ecsId, serverId);
+                if (triangles && triangles.length >= 3) {
+                    tHit = this.intersectNpcModel(ray, maxDistance, triangles, size === 1);
+                } else {
+                    // Model still streaming: its footprint up to its height.
+                    const half = Math.max(0.32, size * 0.42);
+                    const height = Math.max(0.5, heightTiles);
+                    const boxHit = rayIntersectsBox(
+                        ray,
+                        [worldX - half, groundY - height, worldZ - half],
+                        [worldX + half, groundY - 0.05, worldZ + half],
+                    );
+                    if (boxHit && boxHit.tMin <= maxDistance) tHit = Math.max(boxHit.tMin, 0);
+                }
             }
             if (tHit === undefined) continue;
 
@@ -777,6 +791,35 @@ export class SceneRaycaster {
                 npcEcsId: ecsId,
             });
         }
+    }
+
+    /**
+     * Fishing spot models animate within their spawn footprint. Using the posed model's bounds
+     * makes the NPC hitbox move with those animations, which can toggle its menu action against
+     * "Walk here" under a stationary pointer. Keep a size-based interaction area centered on
+     * the NPC for the whole animation instead.
+     */
+    private intersectFishingSpot(
+        ray: Ray,
+        maxDistance: number,
+        worldX: number,
+        worldZ: number,
+        groundY: number,
+        heightTiles: number,
+        size: number,
+    ): number | undefined {
+        const centerX = worldX;
+        const centerZ = worldZ;
+        const halfSize = Math.max(0.5, size * 0.5);
+        const height = Math.max(0.5, heightTiles);
+        const hit = rayIntersectsBox(
+            ray,
+            [centerX - halfSize, groundY - height, centerZ - halfSize],
+            [centerX + halfSize, groundY + 0.05, centerZ + halfSize],
+        );
+        if (!hit) return undefined;
+        const tHit = Math.max(hit.tMin, 0);
+        return tHit <= maxDistance ? tHit : undefined;
     }
 
     /**
@@ -806,7 +849,7 @@ export class SceneRaycaster {
                 while (npcType?.transforms) {
                     npcType = npcType.transform(this.osrsClient.varManager, this.osrsClient.npcTypeLoader);
                 }
-                if (!npcType?.modelIds?.length) return;
+                if (!npcTypeHasModel(npcType)) return;
                 heightTiles = (this.npcHeightProvider?.(npcType.id) ?? 200) / 128;
             } catch {
                 return;

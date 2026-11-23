@@ -17,7 +17,10 @@
  * - saved: "Well done, you've saved the sapling and allowed it to flourish! It appears to have a
  *   gift for you...", the thriving sapling, then bark, leaves and bonus XP the next tick; the tree
  *   comes back 14 ticks later;
- * - not saved in 400 ticks: "The sapling withers due to lack of nutrients."
+ * - not saved in 400 ticks: "The sapling withers due to lack of nutrients.";
+ * - Inspect, on the struggling or the thriving sapling: the wooden plaque with the sapling's
+ *   nutrition and the player's best and last mulch, the right slots in green (forestry.json
+ *   `_plaque`).
  * Wiki: 900 HP a player (at most 9,000), bark 1-12 a feed, the bonus bark by average nutrition,
  * 15-20 leaves. Inferred: the nutrition is 10 + 30 for each right slot + 10 for each right
  * ingredient in the wrong slot (it gives every value recorded: 10, 20, 40, 50, 60, 70, 100), and the
@@ -29,6 +32,8 @@ const Spawns = require("./Spawns.Forestry");
 const S = () => Common.data.sapling;
 /** Saplings now on the map. */
 const saplings = new Set();
+/** Saplings that are over (saved or withered), until their tree comes back: Inspect still reads them. */
+const ended = new Set();
 /** Ingredient indexes put in each player's mulch, in order. */
 const MULCH_ATTRIBUTE = "forestry:mulch";
 
@@ -102,9 +107,9 @@ function tick(event) {
   return true;
 }
 
-function eventAt(object) {
+function eventAt(object, events = saplings) {
   const at = object.getLocation();
-  for (const event of saplings) {
+  for (const event of events) {
     if (event.loc.getLocation().equals(at) || event.piles.some((pile) => pile.object.getLocation().equals(at))) return event;
   }
   return null;
@@ -199,10 +204,13 @@ function addMulch({ player, object }) {
   return true;
 }
 
-/** Per player: the slots already hinted, whether the last feed was loved, and whether they've had the perfect box. */
+/**
+ * Per player: the slots already hinted, whether the last feed was loved, whether they've had the
+ * perfect box, and their best and last mulch ({ mulch, percent }) for Inspect.
+ */
 function feedback(event, player) {
   event.feedback ??= new Map();
-  if (!event.feedback.has(player)) event.feedback.set(player, { hinted: new Set(), loved: false, perfect: false });
+  if (!event.feedback.has(player)) event.feedback.set(player, { hinted: new Set(), loved: false, perfect: false, best: null, last: null });
   return event.feedback.get(player);
 }
 
@@ -217,6 +225,9 @@ function feed(event, player, mulch, percent) {
   if (percent >= 100 && seen.loved) Common.spam(player, line);
   else player.sendMessage(line);
   seen.loved = percent >= 100;
+  // A tie keeps the earlier best (01723: best and last both 20%, different mulches).
+  seen.last = { mulch: [...mulch], percent };
+  if (!seen.best || percent > seen.best.percent) seen.best = seen.last;
   mulch.forEach((index, slot) => {
     if (event.recipe[slot] !== index || seen.hinted.has(slot)) return;
     seen.hinted.add(slot);
@@ -280,12 +291,58 @@ function finish(event, saved) {
   } else {
     for (const player of new Set([...event.site.participants, ...nearby])) player.sendMessage(Common.message("withered"));
   }
+  ended.add(event);
   Spawns.ended(event);
   Common.later(sapling.treeBackTicks, () => {
+    ended.delete(event);
     Common.removeLoc(event.loc);
     Common.core.ObjectManager.register(event.site.tree, true);
     Spawns.releaseTree(location);
   });
+}
+
+/** The sapling's nutrition: its progress toward its target, as a whole percent. */
+function nutritionShown(event) {
+  // Ours: rounded down, so 100% only once saved (recorded: 1% early on in 01723, 100% when thriving).
+  return Math.floor((100 * event.progress) / event.target);
+}
+
+/** One mulch for the plaque: its ingredients in order, the ones in the right slot in green. */
+function combination(event, mulch) {
+  const { ingredients, plaque } = S();
+  return mulch
+    .map((index, slot) => (event.recipe[slot] === index ? `<col=${plaque.right}>${ingredients[index].name}</col>` : ingredients[index].name))
+    .join(", ");
+}
+
+/** The plaque's 11 lines, as recorded. */
+function plaqueLines(event, player) {
+  const seen = event.feedback?.get(player);
+  const block = (title, fed) => fed
+    ? [Common.message(title), Common.message("plaqueValue", { percent: fed.percent }), combination(event, fed.mulch)]
+    // Ours: no recording inspects before the player's first feed; the block stays blank.
+    : ["", "", ""];
+  return [
+    "",
+    Common.message("plaqueNutrition", { percent: nutritionShown(event) }),
+    "",
+    ...block("plaqueBest", seen?.best),
+    "",
+    ...block("plaqueLast", seen?.last),
+    "",
+  ];
+}
+
+function inspect({ player, object }) {
+  const event = eventAt(object) ?? eventAt(object, ended);
+  if (!event || !event.loc.getLocation().equals(object.getLocation())) return false;
+  const { interface: group, firstLine } = S().plaque;
+  const sender = player.getPacketSender();
+  // Live sets the lines just before the open; mounting clears our text cache for the group, so
+  // they go right after it, in the same tick.
+  sender.sendInterface(group);
+  plaqueLines(event, player).forEach((line, i) => sender.sendString(line, (group << 16) | (firstLine + i)));
+  return true;
 }
 
 /** Inferred: what's left of the mulch goes with the sapling (or, logged out meanwhile, at login). */
@@ -331,7 +388,8 @@ function attachSapling(api) {
   for (const ingredient of ["Rotting leaves", "Green leaves", "Droppings", "Wild mushrooms", "Splintered bark"]) {
     api.onObjectInteraction(ingredient, { Collect: collect });
   }
-  api.onObjectInteraction("Struggling sapling", { "Add-mulch": addMulch });
+  api.onObjectInteraction("Struggling sapling", { "Add-mulch": addMulch, Inspect: inspect });
+  api.onObjectInteraction("Thriving sapling", { Inspect: inspect });
 }
 
-module.exports = { attachSapling, start, collect, addMulch, nutrition, finish, saplings, MULCH_ATTRIBUTE };
+module.exports = { attachSapling, start, collect, addMulch, nutrition, finish, saplings, ended, MULCH_ATTRIBUTE };

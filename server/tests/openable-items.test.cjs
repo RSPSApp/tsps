@@ -37,8 +37,8 @@ const CRATE_TABLE = [
   { item: "CASTLE_WARS_TICKET", amount: [2, 2] },
 ];
 
-before(() => {
-  CachePipeline.initialize(path.resolve(__dirname, ".."));
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
   require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
   require("../plugins/items/OpenableItems.plugin").register(PluginManager.createApi("OpenableItems"));
   const yamaApi = PluginManager.createApi("Yama");
@@ -48,7 +48,7 @@ before(() => {
 
 function playerWith(id, { fill = false, amount = 1 } = {}) {
   const player = {
-    getPacketSender: () => ({ sendItemContainer() {}, sendInterfaceRemoval: () => { player.closes++; }, sendSound: (id) => player.sounds.push(id), sendTypedMessage: (type, text) => { player.messages.push(text); player.chatTypes.push(type); } }),
+    getPacketSender: () => ({ sendItemContainer() {}, sendRunEnergy() {}, sendInterfaceRemoval: () => { player.closes++; }, sendSound: (id) => player.sounds.push(id), sendTypedMessage: (type, text) => { player.messages.push(text); player.chatTypes.push(type); } }),
     // The first box shows, logging its own chat line as the real one does.
     getDialogueManager: () => ({ startDialogues: (builder) => { player.dialogues.push(builder); Dialogue.sendBoxChatLine(player, builder.getDialogues().get(0).getText()); } }),
     sendMessage: (text) => { player.messages.push(text); player.chatTypes.push("game"); },
@@ -609,6 +609,21 @@ test("a player who already received the rite gets no guarantee, and a rolled rit
   openDossier(ordinary, FIRST_ROLL);
   assert.equal(ordinary.getInventory().getAmount(RITE), 0);
   assert.equal(ordinary.getInventory().getAmount(CONTRACT), 3);
+});
+
+test("a player who read the rite counts as having it: no guarantee, and a rolled rite becomes scrolls", () => {
+  const upgraded = "arceuus:death-charge-upgraded";
+  const guaranteed = dossierPlayer(100, false);
+  guaranteed.setAttribute(upgraded, true);
+  openDossier(guaranteed, FIRST_ROLL);
+  assert.equal(guaranteed.getInventory().getAmount(RITE), 0);
+  assert.equal(guaranteed.getInventory().getAmount(CONTRACT), 3);
+
+  const rolled = dossierPlayer(5, false);
+  rolled.setAttribute(upgraded, true);
+  openDossier(rolled, RITE_ROLL);
+  assert.equal(rolled.getInventory().getAmount(RITE), 0);
+  assert.ok(rolled.getInventory().getAmount(SCROLLS) >= 15);
 });
 
 test("a rite rolled before 100 victories counts as received", () => {

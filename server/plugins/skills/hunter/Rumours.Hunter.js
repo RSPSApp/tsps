@@ -212,6 +212,8 @@ function cascade(player, skill, rows) {
   for(const[id,low,high,required=1]of rows)if(l>=required&&Math.random()<C.probability(low,high,l))return id;
   return rows.at(-1)[0];
 }
+/** The loot sacks' rare rolls: their row on a league's Boosted drops page, and their 1-in-n. */
+const RARES_SOURCE="Hunter rumours",RARE_CHANCE=50;
 function sackRewards(player,tier) {
   const I=H.core.ItemIdentifiers,s=state(player),rows=loot[tier],rewards=[];
   // Content may change the sack's loot rolls ("hunter:sack-rolls" { player, tier, rolls }, a league relic's double); not its rare rolls.
@@ -226,10 +228,13 @@ function sackRewards(player,tier) {
     rewards.push([id,amount]);
   }
   if(tier!=='basic') {
-    if(!s.enhanced&&C.roll(1,50)===1)rewards.push([I.ENHANCED_QUETZAL_WHISTLE_BLUEPRINT,1]);
-    if(s.enhanced&&['expert','master'].includes(tier)&&!s.perfected&&C.roll(1,50)===1)rewards.push([I.PERFECTED_QUETZAL_WHISTLE_BLUEPRINT,1]);
-    if(!owns(player,I.HUNTSMANS_KIT)&&C.roll(1,50)===1)rewards.push([I.HUNTSMANS_KIT,1]);
-    if(C.roll(1,50)===1)rewards.push([[I.GUILD_HUNTER_HEADWEAR,I.GUILD_HUNTER_TOP,I.GUILD_HUNTER_LEGS,I.GUILD_HUNTER_BOOTS][s.outfit%4],1]);
+    // The rares are each 1 in 50; a league's boosted drops ("drops:chance", source "Hunter rumours") make them likelier.
+    const boost=id=>C.dropMultiplier(player,RARES_SOURCE,id);
+    if(!s.enhanced&&C.roll(1,RARE_CHANCE)<=boost(I.ENHANCED_QUETZAL_WHISTLE_BLUEPRINT))rewards.push([I.ENHANCED_QUETZAL_WHISTLE_BLUEPRINT,1]);
+    if(s.enhanced&&['expert','master'].includes(tier)&&!s.perfected&&C.roll(1,RARE_CHANCE)<=boost(I.PERFECTED_QUETZAL_WHISTLE_BLUEPRINT))rewards.push([I.PERFECTED_QUETZAL_WHISTLE_BLUEPRINT,1]);
+    if(!owns(player,I.HUNTSMANS_KIT)&&C.roll(1,RARE_CHANCE)<=boost(I.HUNTSMANS_KIT))rewards.push([I.HUNTSMANS_KIT,1]);
+    const piece=[I.GUILD_HUNTER_HEADWEAR,I.GUILD_HUNTER_TOP,I.GUILD_HUNTER_LEGS,I.GUILD_HUNTER_BOOTS][s.outfit%4];
+    if(C.roll(1,RARE_CHANCE)<=boost(piece))rewards.push([piece,1]);
   }
   // Wiki (Hunters' Rumours): the torn enhanced blueprint at 100 rumours comes "from any hunters' loot sack", the torn
   // perfected one at 250 "from any expert or master hunters' loot sack".

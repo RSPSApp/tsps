@@ -112,14 +112,17 @@ function hasOpen(player, family) {
   return carried(player, family).some((item) => isOpen(family, item));
 }
 
-/** Whether the player owns one anywhere: carried, worn or banked. */
+/**
+ * Whether the player owns one anywhere: carried, worn or banked. A bank placeholder (the item at
+ * amount 0, which a bank's getValidItems keeps) owns nothing.
+ */
 function owns(player, family) {
   if (carried(player, family).length) return true;
   if (player.getEquipment().getValidItems().some((item) => family.names.includes(nameOf(item)))) return true;
   const { Bank } = core;
   for (let tab = 0; tab < Bank.TOTAL_BANK_TABS; tab++) {
     if (tab === Bank.BANK_SEARCH_TAB_INDEX) continue;
-    if (player.getBank(tab).getValidItems().some((item) => family.names.includes(nameOf(item)))) return true;
+    if (player.getBank(tab).getValidItems().some((item) => item.getAmount() > 0 && family.names.includes(nameOf(item)))) return true;
   }
   return false;
 }

@@ -9,6 +9,10 @@ const Restrictions = require("./Restrictions.DwarfCannon");
 const Ammo = require("./Ammo.DwarfCannon");
 const Firing = require("./Firing.DwarfCannon");
 
+/** The parts' item names, and the unfinished cannon's loc names a part can be used on. */
+const PART_NAMES = ["Cannon base", "Cannon stand", "Cannon barrels", "Cannon furnace"];
+const UNFINISHED_LOC_NAMES = ["Cannon base", "Cannon stand", "Cannon barrels"];
+
 /** Spam lines (rsprox captures). */
 const PART_MESSAGES = [
   "You place the cannon base on the ground.",
@@ -111,7 +115,17 @@ function placeBase(player, kind, centre) {
   addPart(cannon);
   runOff(player, sw);
   Firing.start(cannon);
-  Cannon.later(Data.SETUP_TICKS[1], () => nextPart(cannon));
+  scheduleNextPart(cannon);
+}
+
+/** The next part SETUP_TICKS[stage] ticks from now, unless one is already on its way. */
+function scheduleNextPart(cannon) {
+  if (cannon.partPending) return;
+  cannon.partPending = true;
+  Cannon.later(Data.SETUP_TICKS[cannon.stage], () => {
+    cannon.partPending = false;
+    nextPart(cannon);
+  });
 }
 
 /** Adds the next part from the owner's inventory (captured: message, anim, sound, loc, vars). */
@@ -138,7 +152,7 @@ function nextPart(cannon) {
   if (!player.getInventory().contains(Cannon.KINDS[cannon.kind].parts[cannon.stage])) return;
   addPart(cannon);
   if (cannon.stage < 4) {
-    Cannon.later(Data.SETUP_TICKS[cannon.stage], () => nextPart(cannon));
+    scheduleNextPart(cannon);
     return;
   }
   // "dwarf-cannon:set-up" { player }: the last part on, the cannon standing whole.
@@ -146,9 +160,34 @@ function nextPart(cannon) {
   Cannon.later(1, () => Ammo.loadFromInventory(cannon, Cannon.capacity(cannon.player)));
 }
 
+/**
+ * A part used on the owner's unfinished cannon (base, stand or barrels standing after the setup
+ * stopped) carries the setup on (rsprox capture local 1001565 ticks 8747-8756): the next part
+ * comes SETUP_TICKS[stage] ticks after the use (the stand 2 ticks later), then the rest 3 ticks
+ * apart and the balls the tick after the furnace, as in a whole setup. Any part of that cannon's
+ * kind does: the capture used the stand on the base twice, the second time after the stand was
+ * on, and got the barrels. Uses while a part is already on its way change nothing (captured).
+ * Ours: a part of the other kind (plain on ornament) falls through to "Nothing interesting
+ * happens.", and with the next part missing nothing is added, as when a setup runs out of parts.
+ */
+function resume({ player, itemId, object }) {
+  const cannon = Ammo.ownCannon(player, object);
+  if (cannon === null) return false;
+  if (!cannon) return true;
+  if (cannon.stage >= 4 || Cannon.kindOfPart(itemId) !== cannon.kind) return false;
+  scheduleNextPart(cannon);
+  return true;
+}
+
 module.exports = function attachSetup(api) {
   api.onItemAction("Cannon base", { "Set-up": setUp });
   api.onItemAction("Cannon base (or)", { "Set-up": setUp });
+  for (const part of PART_NAMES) {
+    for (const loc of UNFINISHED_LOC_NAMES) {
+      api.onItemOnObject(part, loc, resume);
+      api.onItemOnObject(`${part} (or)`, loc, resume);
+    }
+  }
 };
 
-Object.assign(module.exports, { setUp, refusal, placeBase, nextPart, footprint, MESSAGE });
+Object.assign(module.exports, { setUp, refusal, placeBase, nextPart, resume, footprint, MESSAGE });

@@ -72,6 +72,14 @@
     "overrides": [
       {
         "files": [
+          "**/*.{ts,tsx}"
+        ],
+        "rules": {
+          "@typescript-eslint/no-redeclare": "off"
+        }
+      },
+      {
+        "files": [
           "rs/**/*.{ts,js}"
         ],
         "rules": {

@@ -6,12 +6,13 @@
  * - Store (or logs used on it): "Which of your logs would you like to store?" offers each carried
  *   type; with more than one, "How many logs would you like to store?"; then "You put the [type]
  *   in the crate. You now have [amount] stored.";
- * - Preferences: whether a trip takes stored logs first, or asks each time;
+ * - Preferences: whether a trip takes the inventory's logs first, the stored ones, or asks each time - the
+ *   box, then the three choices less the one already set (rsprox local enlightened-journey, rev 242, ticks
+ *   1577-1612; all three while none is set);
  * - Check: the five counts.
- * A trip pays its logs from one place: storage when it's preferred (or the inventory can't pay),
- * otherwise the inventory; with "ask" and both able to, the player chooses. The choice's wording
- * and the count told after a trip from storage are calibrated (balloon-transport.json notes
- * which).
+ * A trip pays its logs from one place: the only one that can, else the preferred one; with "ask" (or none set) and
+ * both able to, "Use logs from inventory" or "Use logs from storage" (rev 242 tick 1997). Enlightened Journey's flight
+ * asks the preference itself the first time (its transcript), through `balloon-transport:set-preference`.
  */
 const Common = require("./Common.BalloonTransport");
 
@@ -40,9 +41,21 @@ function setStored(player, key, amount) {
   player.setAttribute(STORED_ATTRIBUTE, { ...storedAll(player), [key]: Math.max(0, amount) });
 }
 
-function preference(player) {
+const ASK = "ask";
+const PREFERENCES = [INVENTORY, STORAGE, ASK];
+
+/** The saved preference, or null while none is set. */
+function savedPreference(player) {
   const saved = player.getAttribute?.(PREFERENCE_ATTRIBUTE);
-  return saved === STORAGE || saved === "ask" ? saved : settings().defaultPreference;
+  return PREFERENCES.includes(saved) ? saved : null;
+}
+
+function preference(player) {
+  return savedPreference(player) ?? settings().defaultPreference;
+}
+
+function setPreference(player, value) {
+  if (PREFERENCES.includes(value)) player.setAttribute(PREFERENCE_ATTRIBUTE, value);
 }
 
 /** The log's unnoted and noted ids. */
@@ -149,9 +162,11 @@ function preferences({ player }) {
     .add(new ActionDialogue(1, {
       execute: () => {
         player.getDialogueManager().reset?.();
-        Common.api.sendMultiChatboxPrompt(player, text("preferenceTitle"),
-          text("preferStorage"), () => player.setAttribute(PREFERENCE_ATTRIBUTE, STORAGE),
-          text("preferAsk"), () => player.setAttribute(PREFERENCE_ATTRIBUTE, "ask"));
+        const labels = { [INVENTORY]: "preferInventory", [STORAGE]: "preferStorage", [ASK]: "preferAsk" };
+        const current = savedPreference(player);
+        const pairs = PREFERENCES.filter((value) => value !== current)
+          .flatMap((value) => [text(labels[value]), () => setPreference(player, value)]);
+        Common.api.sendMultiChatboxPrompt(player, text("preferenceTitle"), ...pairs);
       },
     }));
   player.getDialogueManager().startDialogues(chain);
@@ -184,10 +199,12 @@ function chooseSource(player, station, count, go) {
   const fromInventory = carriedForTrip(player, station.log) >= count;
   if (!fromStorage && !fromInventory) return false;
   if (!fromStorage) return go(INVENTORY);
-  if (!fromInventory || preference(player) === STORAGE) return go(STORAGE);
+  if (!fromInventory) return go(STORAGE);
+  const preferred = preference(player);
+  if (preferred === STORAGE || preferred === INVENTORY) return go(preferred);
   Common.api.sendMultiChatboxPrompt(player, text("sourceTitle"),
-    text("useStorage"), () => go(STORAGE),
-    text("useInventory"), () => go(INVENTORY));
+    text("useInventory"), () => go(INVENTORY),
+    text("useStorage"), () => go(STORAGE));
   return true;
 }
 
@@ -223,14 +240,23 @@ function tellPaid(player, station, source) {
   const type = settings().names[station.log];
   const left = source === STORAGE ? stored(player, station.log) : carriedForTrip(player, station.log);
   const spam = (line) => player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, line);
-  if (left <= 0) return spam(fill(messages.usedLast, { type }));
-  if (source !== STORAGE) return;
-  spam(left === 1 ? fill(messages.storageOne, { type }) : fill(messages.storageLeft, { amount: left, type }));
+  if (left <= 0) spam(fill(messages.usedLast, { type }));
+  // Paid from the inventory, the crate's count is still told when it holds some (rev 242 tick 2001).
+  const inStorage = stored(player, station.log);
+  if (inStorage <= 0 || (source === STORAGE && left <= 0)) return;
+  spam(inStorage === 1 ? fill(messages.storageOne, { type }) : fill(messages.storageLeft, { amount: inStorage, type }));
 }
 
 function attach(api) {
   api.persistAttribute(STORED_ATTRIBUTE, {});
-  api.persistAttribute(PREFERENCE_ATTRIBUTE, settings().defaultPreference);
+  api.persistAttribute(PREFERENCE_ATTRIBUTE, null);
+  // Enlightened Journey's flight: whether a preference is set, setting one, and paying by it.
+  api.onCustomEvent("balloon-transport:preference", (event) => { event.preference = savedPreference(event.player); });
+  api.onCustomEvent("balloon-transport:set-preference", ({ player, preference: value }) => setPreference(player, value));
+  api.onCustomEvent("balloon-transport:choose-source", ({ player, station: key, logs, go }) => {
+    const station = Common.data.stations.find((entry) => entry.key === key);
+    if (station) chooseSource(player, station, logs, go);
+  });
   api.onObjectInteraction(settings().loc, { Store: store, Preferences: preferences, Check: check });
   api.onItemOnObject(useOnStorage);
   api.onCustomEvent("balloon-transport:can-pay", queryFuel);
@@ -238,5 +264,5 @@ function attach(api) {
 
 module.exports = {
   attach, store, storeType, useOnStorage, preferences, check, stored, carried, canPay, chooseSource, pay, refund, tellPaid,
-  STORED_ATTRIBUTE, PREFERENCE_ATTRIBUTE, STORAGE, INVENTORY,
+  STORED_ATTRIBUTE, PREFERENCE_ATTRIBUTE, STORAGE, INVENTORY, ASK, savedPreference, setPreference,
 };

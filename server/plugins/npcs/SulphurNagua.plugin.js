@@ -16,6 +16,8 @@
  * The drain lands even if the nagua dies on that tick, and shows as prayer-drain hitsplat 59 with
  * no health bar (237/01137.txt tick 45: special at tick 42, [hit] id=59 value=5, prayer 71 to 66,
  * the nagua's death the same tick).
+ *
+ * Its -4 flat armour (Wiki) is applied with every other monster's by combat/FlatArmour.plugin.js.
  */
 const SULPHUR_NAGUA = 13033;
 const ATTACKS_BEFORE_SPECIAL = 5;

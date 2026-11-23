@@ -48,13 +48,21 @@ function createPlayer({ freeSlots = 28 } = {}) {
   const attributes = new Map();
   const varbits = new Map();
   const added = [];
+  let busyModal = false;
+  let busyHeld = false;
   const sender = {
+    // As PacketSender: varbit 12393 on a change; a close ends it unless held for a screen swap.
+    setBusyModal: (open) => {
+      if (busyModal === open || (!open && busyHeld)) return sender;
+      busyModal = open; varbits.set(12393, open ? 1 : 0); log.push(`varbit 12393=${open ? 1 : 0}`); return sender;
+    },
+    holdBusyModal: (swap) => { busyHeld = true; try { swap(); } finally { busyHeld = false; } return sender; },
     sendConfig: (id, value) => { log.push(`varp ${id}=${value}`); return sender; },
     sendVarbit: (id, value) => { varbits.set(id, value); log.push(`varbit ${id}=${value}`); return sender; },
     getVarbit: (id) => varbits.get(id) ?? 0,
     sendSubInterface: (target, group, type) => { log.push(`open ${target >>> 16}:${target & 0xffff} ${group} ${type}`); return sender; },
     closeSubInterface: (target) => { log.push(`close ${target >>> 16}:${target & 0xffff}`); return sender; },
-    closeInterface: (group) => { log.push(`close ${group}`); return sender; },
+    closeInterface: (group) => { sender.setBusyModal(false); log.push(`close ${group}`); return sender; },
     sendInterfaceScript: (id, args = []) => { log.push(`script ${id} [${args}]`); return sender; },
     sendInterfaceFlagsRange: (uid, from, to, flags) => { log.push(`events ${uid >>> 16}:${uid & 0xffff} ${from}-${to} ${flags}`); return sender; },
     sendJingle: (id, length) => { log.push(`jingle ${id} ${length}`); return sender; },
@@ -247,6 +255,7 @@ test("as captured: the account summary row reopens the last screen; the burger m
   Interface.open(player);
   assert.deepEqual(player.log, [
     "varbit 17940=0",
+    "varbit 12393=1",
     "script 2524 [-1,-1]",
     "open 161:16 717 0",
     "events 717:17 12-16 2",

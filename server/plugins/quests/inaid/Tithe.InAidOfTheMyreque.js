@@ -179,8 +179,16 @@ module.exports = function attachTithe(context) {
     return request.complete === true;
   }
 
-  /** The variant a dialogue line or action belongs to, when it is this page's. */
+  /**
+   * The variant a dialogue line or action belongs to, when it is this page's. `pages` lists every page that reaches
+   * the NPC, so the transcript being played (`playing`) decides first: Vanstrom's In Search of the Myreque talk is not
+   * this page's castle scene (#6412).
+   */
   function variantOf(event, page = PAGE) {
+    if (event?.playing?.page) {
+      if (event.playing.page !== page) return null;
+      if (event.playing.variant) return event.playing.variant;
+    }
     const entry = Array.isArray(event?.pages) ? event.pages.find((candidate) => candidate?.page === page) : null;
     return entry?.variants?.[0] ?? null;
   }
@@ -476,15 +484,25 @@ module.exports = function attachTithe(context) {
       fight.door = Scenes.loc(scene, { id: LOC.DOOR, ...FIGHT.door });
       common.sound(player, SOUND_DOOR_CLOSE);
       veliaf.setScriptedMovement?.(false);
-      veliafRetarget(fight);
       shoutLater(fight);
+    });
+    // t2425, once the last step's placement is sent: an attack issued in the moveTo's own tick
+    // is dropped by the combat tick (CombatFactory.validTarget), and he never fought. He
+    // closes in from t2426.
+    Scenes.later(scene, 5, () => {
+      if (fights.get(player) !== fight) return;
+      fight.veliafIn = true;
+      veliafRetarget(fight);
     });
   }
 
   function veliafRetarget(fight) {
     const veliaf = fight.veliaf;
-    if (!veliaf?.isRegistered?.()) return;
-    const target = fight.juvinates.find((juvinate) => juvinate.isRegistered?.() && !juvinate.__inAidFallen);
+    // Not while he walks in (a foe falling then waits for t2425); the aftermath's Veliaf never fights.
+    if (!veliaf?.isRegistered?.() || !fight.veliafIn) return;
+    // Wiki: Veliaf helps kill "the other vampyre, and then finally Gadderanks himself".
+    const standing = (npc) => npc?.isRegistered?.() && !npc.__inAidFallen;
+    const target = fight.juvinates.find(standing) ?? (!fight.wounded && standing(fight.gadderanks) ? fight.gadderanks : null);
     if (target) veliaf.getCombat().attack(target);
     else veliaf.getCombat().reset?.();
   }

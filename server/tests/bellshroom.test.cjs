@@ -15,12 +15,13 @@ const { ItemDefinition } = require("../dist/game/definition/ItemDefinition");
 const Bellshroom = require("../plugins/world/Bellshroom.plugin");
 
 const tasks = [];
-const hooks = { objects: {}, itemOnObject: [] };
+const hooks = { objects: {}, itemOnObject: [], npcs: {} };
 const core = { ...PluginManager.getCoreApi(), TaskManager: { submit: (task) => tasks.push(task) } };
 Bellshroom.register({
   core,
   onObjectInteraction: (name, actions) => { hooks.objects[name] = actions; },
   onItemOnObject: (itemName, objectName, handler) => hooks.itemOnObject.push({ itemName, objectName, handler }),
+  onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
 });
 
 let ENTRANCE = null;
@@ -210,4 +211,57 @@ test("movement already held by something else: breadcrumbs do nothing, the lock 
   assert.equal(tasks.length, count);
   assert.equal(player.getMovementQueue().isMovementBlocked(), true);
   assert.equal(player.breadcrumbs, 1);
+});
+
+// Search on Charles Charlington (rsprox.net rec 710 ticks 1651 and 1655).
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { Item } = require("../dist/game/model/Item");
+
+function searcher() {
+  const player = new Player(null);
+  player.getSession = () => ({ sendClientPacket: () => true, write: () => true });
+  player.setUsername("charlessearch");
+  const messages = [];
+  const statements = [];
+  player.sendMessage = (text) => messages.push(text);
+  player.getDialogueManager = () => ({ startDialogues: (chain) => statements.push(chainText(chain)) });
+  return { player, messages, statements };
+}
+
+function diaryCount(player) {
+  return player.getInventory().getAmount(CacheDefinitions.getObjId("fossil_swamp_diary"));
+}
+
+test("Charles Charlington's Search is hooked on his name", () => {
+  assert.equal(typeof hooks.npcs["Charles Charlington"]?.Search, "function");
+  assert.equal(CacheDefinitions.getObjId("fossil_swamp_diary"), 21629);
+});
+
+test("searching Charles without a diary gives one with the captured message", () => {
+  const { player, messages, statements } = searcher();
+  hooks.npcs["Charles Charlington"].Search({ player });
+  assert.equal(diaryCount(player), 1);
+  assert.deepEqual(messages, ["You take the Archaeologist's diary."]);
+  assert.equal(statements.length, 0);
+});
+
+test("searching Charles with a diary in the pack or bank opens the message box and gives none", () => {
+  const DIARY = CacheDefinitions.getObjId("fossil_swamp_diary");
+  for (const where of ["pack", "bank"]) {
+    const { player, messages, statements } = searcher();
+    if (where === "pack") player.getInventory().add(new Item(DIARY, 1));
+    else player.getBank(0).add(new Item(DIARY, 1));
+    hooks.npcs["Charles Charlington"].Search({ player });
+    assert.equal(diaryCount(player), where === "pack" ? 1 : 0, where);
+    assert.deepEqual(messages, [], where);
+    assert.deepEqual(statements, ["Doesn't look like he knows I'm here."], where);
+  }
+});
+
+test("searching Charles with a full pack gives no diary", () => {
+  const { player, messages } = searcher();
+  for (let slot = 0; slot < player.getInventory().capacity(); slot++) player.getInventory().setItem(slot, new Item(995, 1));
+  hooks.npcs["Charles Charlington"].Search({ player });
+  assert.equal(diaryCount(player), 0);
+  assert.deepEqual(messages, ["You don't have enough inventory space."]);
 });

@@ -78,6 +78,10 @@ function stubPersistence(overrides = {}) {
   };
 }
 
+function idleCombat() {
+  return { isAnimationStalled: () => false, isHeldStall: () => false, reset() {} };
+}
+
 test('interaction stop cancels queued walking without routing back to an old tile', async () => {
   const connection = new net.ClientConnection(stubChannel());
   const stopped = [];
@@ -87,7 +91,7 @@ test('interaction stop cancels queued walking without routing back to an old til
       reset: () => stopped.push('route'),
       walkToReset: () => stopped.push('walk-task'),
     }),
-    getCombat: () => ({ reset() {} }),
+    getCombat: idleCombat,
     setFollowing() {},
     setMobileInteraction() {},
     setPositionToFace() {},
@@ -915,7 +919,7 @@ test('Casting a utility spell cannot immediately select its newly opened choice 
  const original=LunarSpells.handleSelf,teleport=SpellTeleports.handleSelf;let active=false,selected=0;
  const connection=new net.ClientConnection(stubChannel());
  connection.resolveSpellName=()=> 'Astral Contact';
- connection.player={getAttribute(){},getInterfaceId:()=>-1,getStatus:()=>PlayerStatus.NONE,
+ connection.player={getAttribute(){},getInterfaceId:()=>-1,getStatus:()=>PlayerStatus.NONE,getCombat:idleCombat,
   getQuickPrayers:()=>({handleWidgetAction:()=>false}),getDialogueManager:()=>({isActive:()=>active,getCurrent:()=>active?{}:null,handleOption:()=>selected++})};
  try {
   SpellTeleports.handleSelf=()=>false;LunarSpells.handleSelf=()=>{active=true;return true;};
@@ -1039,7 +1043,7 @@ test('a logged-in player\'s input waits for their turn; upkeep and plugin traffi
     getAttribute: () => undefined,
     getSession: () => ({ sendClientPacket: (frame) => pluginReplies.push(frame) }),
     getMovementQueue: () => ({ reset: () => stopped.push('route'), walkToReset() {} }),
-    getCombat: () => ({ reset() {} }),
+    getCombat: idleCombat,
     setFollowing() {},
     setMobileInteraction() {},
     setPositionToFace() {},
@@ -1065,7 +1069,12 @@ test('a logged-in player\'s input waits for their turn; upkeep and plugin traffi
 test('a client flooding one turn with input is disconnected', async () => {
   const channel = stubChannel();
   const connection = new net.ClientConnection(channel);
-  connection.player = { getAttribute: () => undefined, setDisconnectSource() {}, getTrading: () => ({ closeTrade() {} }) };
+  connection.player = {
+    getAttribute: () => undefined,
+    getCombat: idleCombat,
+    setDisconnectSource() {},
+    getTrading: () => ({ closeTrade() {} }),
+  };
   const originalSave = GameConstants.PLAYER_PERSISTENCE?.requestSave;
   if (GameConstants.PLAYER_PERSISTENCE) GameConstants.PLAYER_PERSISTENCE.requestSave = () => {};
   const removeQueue = World.getRemovePlayerQueue();

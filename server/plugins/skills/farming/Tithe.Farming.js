@@ -28,7 +28,7 @@ const GAMES = new WeakMap();
 function scoreFor(player) { return Patches.farmFor(player).tithe ??= { points: 0, score: 0 }; }
 function inField(player) {
     const p = player.getLocation();
-    return p.getX() > 1805 && p.getX() <= 1840 && p.getY() >= 3485 && p.getY() <= 3518 && p.getZ() === 0;
+    return p.getX() >= 1805 && p.getX() <= 1840 && p.getY() >= 3485 && p.getY() <= 3518 && p.getZ() === 0;
 }
 function sync(player) {
     const score = scoreFor(player);
@@ -236,9 +236,17 @@ function titheNpc(event) {
         }]]);
         return;
     }
-    if (event.definition?.getName() !== "Farmer Gricoller") return;
+    // Talk-to is his transcript dialogue (NpcDialogues); only the Rewards option opens the shop here.
+    if (event.definition?.getName() !== "Farmer Gricoller"
+        || event.definition.getActions()?.[event.clickType - 1]?.toLowerCase() !== "rewards") return;
     event.handled = true;
     Rewards.open(event);
 }
+/** "Have you any rewards?" in his dialogue: the chatbox closes and the same shop as Rewards takes over. */
+function titheDialogueAction(event) {
+    if (event.definition?.getName() !== "Farmer Gricoller" || event.action !== "open_interface" || !event.npc) return;
+    event.handled = true;
+    event.wait = () => Rewards.open(event);
+}
 
-Object.assign(module.exports, { scoreFor, titheLogin, titheLogout, titheProcess, titheObject, titheItem, titheItemOnNpc, titheNpc });
+Object.assign(module.exports, { scoreFor, titheLogin, titheLogout, titheProcess, titheObject, titheItem, titheItemOnNpc, titheNpc, titheDialogueAction });

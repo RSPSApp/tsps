@@ -70,8 +70,7 @@ function shopper(t, { points = 500, female = false } = {}) {
                 player: p,
                 npc,
                 definition: npc.getDefinition(),
-                option: "Rewards",
-                optionSlot: 3,
+                clickType: 3,
                 handled: false,
             }),
     };

@@ -469,6 +469,13 @@ const DEFAULT_LOD_DISTANCE = deriveLodDistanceFromRenderDistance(DEFAULT_RENDER_
 const VARBIT_ACCOUNT_TYPE = 1777;
 const VARBIT_POPOUT_OPEN = 13090;
 const VARBIT_POPOUT_PANEL_DESKTOP_DISABLED = 13982;
+/** The varp holding popout_panel_mobile_enabled (13981) and popout_panel_desktop_disabled (13982). */
+const VARP_POPOUT_PANEL_SETTINGS = 3417;
+/** Cache script 3938 lays the popout panel out for the mobile toplevel (via 909 and 5355). */
+const SCRIPT_MOBILE_POPOUT_LAYOUT = 3938;
+/** The popout interface (728) root, mounted at toplevel_osm:popout (601:131). */
+const POPOUT_ROOT_UID = (728 << 16) | 0;
+const MOBILE_ROOT_INTERFACE_ID = 601;
 const VARC_CHATBOX_SELECTED_TAB = 41;
 /** VarClientID.OSM_CHATBOX_DISABLED: the mobile chatbox is toggled off. */
 const VARC_OSM_CHATBOX_DISABLED = 1220;const ACCOUNT_TYPE_MAIN = 0;
@@ -2435,6 +2442,9 @@ export class OsrsClient {
             setDeviceOption: (optionId: number, value: number) => {
                 const storedValue = value;
                 self.deviceOptions.set(optionId, storedValue);
+                // The mobile client saves its interface scale separately from the desktop one.
+                const mobileClient = isMobileClient(self.widgetManager?.rootInterface) ||
+                    self.varManager?.getVarbit(6352) === 1;
                 // Handle specific device options
                 switch (optionId) {
                     case 19: // Master volume (enhanced client, 0-100 from enum_981)
@@ -2445,7 +2455,7 @@ export class OsrsClient {
                         self.audioVarp.applyMasterVolume();
                         break;
                     case DEVICE_OPTION_INTERFACE_SCALING:
-                        self.audioVarp.applyInterfaceScalingPercentDeviceOption(storedValue);
+                        self.audioVarp.applyInterfaceScalingPercentDeviceOption(storedValue, mobileClient);
                         break;
                     case DEVICE_OPTION_SCREEN_BRIGHTNESS:
                         self.applyScreenBrightness(storedValue);
@@ -3113,7 +3123,7 @@ export class OsrsClient {
                 // IF_SETROTATESPEED: yaw speed in the high short, x speed in the low, per cycle.
                 const w = this.widgetManager?.getWidgetByUid(Number(payload.uid) | 0);
                 if (w) {
-                    w.modelRotationSpeed = ((Number(payload.speedY) | 0) & 0xffff) << 16 | ((Number(payload.speedX) | 0) & 0xffff);
+                    w.modelRotationSpeed = (((Number(payload.speedY) | 0) & 0xffff) << 16) | ((Number(payload.speedX) | 0) & 0xffff);
                     this.widgetManager.invalidateWidgetRender(w, "server-set-rotate-speed");
                 }
             } else if (payload?.action === "set_colour") {
@@ -4472,6 +4482,26 @@ export class OsrsClient {
 
         this.loginState.serverListOpen = false;
         this.performLogout(() => this.processLoginAction({ type: "select_server", index }));
+    }
+
+    private mobilePopoutLayoutQueued = false;
+
+    /**
+     * The cache lays the mobile popout panel out only at login and on layout passes; its own
+     * listener watches varp 1021 (which popout is open), not the Popout panel (mobile) setting
+     * (3417), so toggling the setting showed or hid nothing until a relog. Re-run the cache's
+     * layout script once, after whatever script changed the varbit has finished.
+     */
+    private scheduleMobilePopoutLayout(): void {
+        if (this.mobilePopoutLayoutQueued) return;
+        this.mobilePopoutLayoutQueued = true;
+        setTimeout(() => {
+            this.mobilePopoutLayoutQueued = false;
+            const widgets = this.widgetManager;
+            if (!widgets || widgets.rootInterface !== MOBILE_ROOT_INTERFACE_ID) return;
+            if (!widgets.getWidgetByUid(POPOUT_ROOT_UID)) return;
+            this.runClientScriptWithInts(SCRIPT_MOBILE_POPOUT_LAYOUT, []);
+        }, 0);
     }
 
     runClientScriptWithInts(scriptId: number, args: number[]): void {
@@ -7111,6 +7141,7 @@ export class OsrsClient {
                     markVarTransmit(varpId);
                 }
                 this.applyAudioVarpChange(varpId, newValue);
+                if (varpId === VARP_POPOUT_PANEL_SETTINGS) this.scheduleMobilePopoutLayout();
                 this.renderer?.onVarpChange(varpId);
                 if (!this._serverVarpSync && TRANSMIT_VARPS.has(varpId) && isServerConnected()) {
                     try {
@@ -7205,8 +7236,9 @@ export class OsrsClient {
             // Phase 9: Preparing interface
             await showPhase(90, "Preparing interface...");
             this.widgetManager = new WidgetManager(this.cacheSystem);
+            // The cache scripts test this varc for exactly 1; it reads -1 until the toggle is first used.
             this.widgetManager.isMobileChatDisabled = () =>
-                (this.varManager.getVarcInt(VARC_OSM_CHATBOX_DISABLED) ?? 0) !== 0;
+                this.varManager.getVarcInt(VARC_OSM_CHATBOX_DISABLED) === 1;
             try {
                 const initialMinimapState = this.varManager.getVarbit(MINIMAP_STATE);
                 if (initialMinimapState !== undefined) {
@@ -8293,6 +8325,11 @@ export class OsrsClient {
             if (block.faceTile) {
                 applyNpcFaceTile(this.npcEcs, ecsId, block.faceTile);
             }
+            if (block.faceAngle) {
+                // Instant sets the drawn angle too: the only way to turn an NPC whose turn speed is 0.
+                this.npcEcs.setTargetRot(ecsId, block.faceAngle.angle);
+                if (block.faceAngle.instant) this.npcEcs.setRotation(ecsId, block.faceAngle.angle);
+            }
             if (typeof block.faceEntity === "number") {
                 this.npcEcs.setInteractionIndex(ecsId, block.faceEntity | 0);
             }
@@ -8743,6 +8780,17 @@ export class OsrsClient {
     }
 
     getWorldMapIcons(mapX: number, mapY: number, level: number = 0): MinimapIcon[] | undefined {
+        // Edited regions draw their minimap picture on the world map; use its icons too.
+        if (
+            this.worldMap.worldMapState.getCurrentMapAreaId() === 0 &&
+            (this.renderer as any)?.mapRegionReplacements?.has(((mapX & 0xff) << 8) | (mapY & 0xff))
+        ) {
+            const icons = (this.renderer as any)?.getMinimapIcons?.(mapX, mapY, level) as MinimapIcon[] | undefined;
+            if (icons) return icons;
+            // Its minimap picture is loaded, so no icons means the edit has none (the renderer
+            // drops empty icon sets); don't bring back the archive's stale ones.
+            if (this.minimapImageUrls.has(this.getMinimapImageKey(mapX, mapY, level))) return undefined;
+        }
         return this.worldMap.getWorldMapIcons(mapX, mapY, level);
     }
 

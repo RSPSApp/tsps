@@ -21,7 +21,11 @@
  * `at`. Everything stays in source coordinates: tiles given as `[x, y, z]` arrays to `actor`,
  * `loc`, `face`, `camera`, `place` and `walk` are translated into the copy, while a `Location`
  * (a mobile's own position) is used as it is. Walking out of `bounds` ends the scene on the
- * matching real tile. A logout, a death or a server stop inside it all come back to `exit`: a
+ * matching real tile. `{ instance: { layout: { size: [w, h], filler: [chunkX, chunkY, plane], chunks } } }` builds the copy
+ * as live's rebuild_region lays it out (Daddy's Home's lecture rooms): every ground chunk a copy of `filler`, then each
+ * `[x, y, plane, sourceChunkX, sourceChunkY, sourcePlane]` of `chunks` at its slot. A layout has no one source, so its tiles
+ * are offsets from the copy's south-west corner, as the capture's raw coordinates are from the instance's. `swap` replaces a
+ * scene's copy with a new one, as a second rebuild_region does, without ending the scene. A logout, a death or a server stop inside it all come back to `exit`: a
  * factory given `recoveryAttribute` saves the exit while the scene plays and restores it at login.
  */
 const FADE_UID = (161 << 16) | 1;
@@ -101,12 +105,25 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   let QuestInstanceScene = null;
   // Built on first use, so a factory whose core has no instances (a test's stub) still works.
   const instanceScene = () => QuestInstanceScene ??= class extends sceneRules(TemplatedInstanceArea) {
-    constructor(owner, bounds, { sourceChunk: [chunkX, chunkY], size, fill = false }) {
-      super(size, size);
+    constructor(owner, bounds, { sourceChunk: [chunkX, chunkY] = [0, 0], size, fill = false, layout = null }) {
+      super(...(layout ? layout.size : [size, size]));
       this.owner = owner;
       this.bounds = bounds;
       this.sourceX = chunkX * 8;
       this.sourceY = chunkY * 8;
+      this.layout = layout;
+      if (layout) {
+        // `layout`: live's rebuild_region grid, every ground chunk a filler copy and the rooms at their slots.
+        const [width, height] = layout.size;
+        const [fillX, fillY, fillPlane] = layout.filler;
+        for (let x = 0; x < width; x++) for (let y = 0; y < height; y++) {
+          this.setChunk(0, x, y, { sourceChunkX: fillX, sourceChunkY: fillY, sourcePlane: fillPlane, rotation: 0 });
+        }
+        for (const [x, y, plane, sourceChunkX, sourceChunkY, sourcePlane] of layout.chunks) {
+          this.setChunk(plane, x, y, { sourceChunkX, sourceChunkY, sourcePlane, rotation: 0 });
+        }
+        return;
+      }
       if (fill) {
         // `fill`: every chunk of the ground plane is a copy of the one source chunk, as live tiles open
         // sea around a view (The Corsair Curse's telescope). Tiles still count on from the source chunk.
@@ -284,13 +301,39 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     end(player, false);
     const scene = { name, owner: player, actors: [], locs: [], rules, exit: exit ?? null, area: null };
     scene.area = instance
-      ? new (instanceScene())(player, bounds, { sourceChunk: instance.sourceChunk, size: instance.size ?? INSTANCE_CHUNKS, fill: instance.fill === true })
+      ? newCopy(player, bounds, instance)
       : new QuestScene(player, bounds);
     scenes.set(player, scene);
     scene.area.enter(player);
     if (instance && recoveryAttribute && scene.exit) player.setAttribute(recoveryAttribute, scene.exit);
     if (at) place(player, at);
     return scene;
+  }
+
+  function newCopy(player, bounds, instance) {
+    return new (instanceScene())(player, bounds, {
+      sourceChunk: instance.sourceChunk, size: instance.size ?? INSTANCE_CHUNKS, fill: instance.fill === true, layout: instance.layout ?? null,
+    });
+  }
+
+  /**
+   * A second rebuild_region inside one scene: the owner moves to `at` in a new copy and the old copy goes with its actors
+   * and locs (live drops them with the rebuild); the scene plays on with its tasks, rules and exit.
+   */
+  function swap(scene, instance, at) {
+    const player = scene.owner;
+    const old = instanceOf(scene);
+    if (!old || scenes.get(player) !== scene) return null;
+    for (const npc of scene.actors.splice(0)) if (npc?.isRegistered?.()) api.removeNpc(npc);
+    scene.locs.length = 0;
+    const copy = newCopy(player, old.bounds, instance);
+    // Set first, so leaving the old copy is not the scene's end (postLeave checks scene.area).
+    scene.area = copy;
+    if (player.getArea?.() === old) old.leave(player, false);
+    copy.enter(player);
+    place(player, at);
+    old.destroy();
+    return copy;
   }
 
   function get(player) {
@@ -329,14 +372,19 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     return object;
   }
 
-  function end(player, logout) {
+  /**
+   * `release: false` keeps the controls and camera as the scene left them, for a way out whose caller hands them back
+   * later (Daddy's Home's lecture: the real map two ticks after the last continue, the controls three ticks after that).
+   */
+  function end(player, logout, { release = true } = {}) {
     const scene = scenes.get(player);
     if (!scene) return;
     scene.rules?.beforeEnd?.(player, scene);
     const copy = instanceOf(scene);
     // Out of a copy before it goes: a logout is saved at the exit, otherwise the player stands on
     // the real tile their copy's tile stands for (a caller's own move comes after this).
-    const from = copy?.contains(player.getLocation()) ? copy.toSource(player.getLocation()) : null;
+    // A layout's offsets stand for no real tile; its caller moves the player out.
+    const from = copy?.contains(player.getLocation()) && !copy.layout ? copy.toSource(player.getLocation()) : null;
     if (copy && logout && scene.exit) player.setLocation(new Location(...scene.exit));
     if (copy && recoveryAttribute) player.setAttribute(recoveryAttribute, null);
     scenes.delete(player);
@@ -351,8 +399,10 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
       copy.destroy();
       if (!logout && from && copy.contains(player.getLocation())) player.moveTo(from);
     }
-    controls(player, false);
-    player.getPacketSender().sendCameraReset();
+    if (release || logout) {
+      controls(player, false);
+      player.getPacketSender().sendCameraReset();
+    }
     onEnd?.(player, scene, logout);
   }
 
@@ -384,7 +434,7 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   }
 
   return {
-    CAMERA_RATES, later, cancel, fade, closeFade, controls, hold, face, camera, open, get, actor, removeActor, loc, end,
+    CAMERA_RATES, later, cancel, fade, closeFade, controls, hold, face, camera, open, swap, get, actor, removeActor, loc, end,
     chatOpen, place, walk, toSource, tileFor, hideTabs, restoreTabs,
   };
 }

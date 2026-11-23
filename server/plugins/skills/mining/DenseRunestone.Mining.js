@@ -22,7 +22,7 @@
  * in the mine (1669 tick 3, 1670 tick 0, 1672 tick 4) and as they come back into its map square (1672 tick
  * 576, crossing x 1728): the varbits only, no timer or sound, and the pillar back 25-31 ticks later.
  */
-const { pauseForLevelUp } = require("../SkillActions");
+const { pauseForLevelUp, modalPause } = require("../SkillActions");
 
 const CHIP_TICKS = 9;
 const CHISEL_AFTER_SWING = 3;
@@ -262,7 +262,11 @@ function tickSession(player, session, random = Math.random) {
     if (sessions.get(player) === session) stop(player);
     return false;
   }
-  if (session.levelUpPaused) return true;
+  // A level-up or a busy modal holds the chipping; after the modal it starts over from the swing,
+  // as a Chip click does (SkillActions.modalPause).
+  const pause = modalPause(session, player);
+  if (pause === "paused") return true;
+  if (pause === "restart") session.tick = 0;
   const tick = ++session.tick;
   const phase = (tick - 1) % CHIP_TICKS;
   if (phase === 0) {

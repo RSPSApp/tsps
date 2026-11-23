@@ -84,6 +84,18 @@ highest). Every charted food stops burning by 150 on every cooker.
   `human_firecooking`; every other range and oven (`range`, `cooksquestrange`, `fortis_stove`
   "Oven") plays `human_cooking`. Each food plays `synth_sound 2577`. Pies and pizzas bake the
   same way, on a range only.
+- **Fireplaces.** A lit fireplace cooks as a fire (Wiki: Fireplace: "carries the same burn rate
+  as a regular fire", and no range food). rsprox capture 1001621 (rev 241) uses raw shrimps on
+  the Draynor Village fireplace (`fireplace` 24969, 3100,3256) at tick 627: the how-many menu,
+  then `human_firecooking`, sound 2577 and the usual shrimp lines and burn. The ids are the
+  Wiki infobox's lit ones (4618, 4650, 5165, 7185, 8712, 10058, 10824, 17640-17643, 21795,
+  24969, 24970, 26179, 30138); Misthalin Mystery's riddle fireplace (30136/30137) is not one.
+  Other locs named "Fireplace" (unlit, quest props, house fireplaces) are not cookers. The
+  op-less "Cooking pot" over the Lumbridge farmhouse fireplace (`fireplacecookingpot` 26180,
+  3225,3290) is a fire too: rsprox captures 911358 (tick 1197-1201) and local 1001342 (rev 240,
+  tick 1197-1231) show the menu, `human_firecooking`, "You cook some chicken.", and one raw beef
+  cooking at once with no Sinew choice. The other op-less pots (12969, 7483) are not captured and
+  are not cookers.
 - **Lines** (spam channel). "You successfully cook a shark." / "an anglerfish" / "some shrimps"
   for most fish; "You cook a bass.", "You manage to cook a tuna.", "You cook the rabbit.", "You
   cook a piece of meat.", "You cook the thin snail.", "You successfully bake some bread.", and for
@@ -165,6 +177,35 @@ Leagues worlds:
 - Each butter: "You churn your milk to make butter." (spam). The butter takes the milk's slot and
   the empty bucket a free one. The XP was 486, which is the Wiki's 40.5 under the Leagues
   multiplier.
+
+### Nettle tea
+
+rsprox capture 1001702 (rev 242, the user's own recording, Edgeville house stove
+`100_dave_stove`), the Ghosts Ahoy capture 20261112T092603 (ticks 373-383, the porcelain cup) and
+the Wiki ([Nettle tea](https://oldschool.runescape.wiki/w/Nettle_tea),
+[Nettle-water](https://oldschool.runescape.wiki/w/Nettle-water),
+[Cup of tea (nettle)](https://oldschool.runescape.wiki/w/Cup_of_tea_(nettle)),
+[Porcelain cup](https://oldschool.runescape.wiki/w/Porcelain_cup)):
+
+- A bowl of water used on nettles (or the other way round): a tick later "You place the nettles
+  into the bowl of water." (spam), the nettles' slot empties and the bowl's slot holds the
+  nettle-water (1001702, ticks 15606-15607). No XP; 20 Cooking (Wiki); it is a `cooking.json`
+  recipe (`productSlot` keeps the bowl's slot), so more than one opens the make menu.
+- Nettle-water on the stove: `human_cooking`, `synth_sound fry` (2577), "You boil the water and make
+  nettle tea." (spam), the tea in the first free slot, 52 Cooking XP and `cooking_success_count` up one,
+  two ticks after the player arrived (1001702, ticks 15648-15651). It is a `cooking.json` cookable,
+  so fires, ranges and the cook menu all take it.
+- The water can boil over, leaving the empty bowl, on the Wiki's "Nettle tea cooking chance"
+  chart (fire or range 78/412, the Hosidius Kitchen's +12 as for other food): certain from 53.
+  The Wiki's prose says it stops at 54; the chart's values give 53. Ours: the line "The water
+  boils over." (no capture or Wiki text for a boil-over).
+- The tea (plain or milky) into an empty cup or a porcelain cup, and a bucket of milk into the tea
+  in a bowl or either cup: a tick after the use, no line, no XP, sound 2401, the brew in the cup's
+  slot (the tea's, for milk) and the emptied bowl or bucket in the other slot (Ghosts Ahoy capture
+  20261112T092603: tea into the porcelain cup at 373, response 374; milk at 382, response 383; no
+  Cooking stat update). The Wiki: the porcelain cup "works like a normal teacup", so the plain
+  cup pours the same. The Wiki's Cup of tea (nettle) recipe box lists 20 Cooking and 52 XP, the
+  boiling's values; the recording shows neither for a pour (recorded difference).
 
 ## From the Wiki only
 
@@ -259,7 +300,6 @@ Leagues worlds:
   chilli, egg, mushroom and tuna potatoes are made without a line. The egg and mushroom bowls
   come back like the chilli and tuna ones (ours: their Wiki recipes list no bowl). The toppings'
   2-tick first item follows the captured butter.
-- Nettle tea: Ghosts Ahoy makes nettle-water and boils it, without a burn chance.
 - Roast rabbit and the skewered chompy (iron spit); the Ogre spit-roast for jubbly and chompy,
   which cook on a fire here.
 - Gnome cuisine beyond the tutorial products (worm hole, veg ball, tangled toad's legs, the other

@@ -89,9 +89,9 @@ test('NPC regeneration stays integer and a legacy fractional HP dies to a normal
   npc.setHitpoints(1);
   assert.equal(World.getNpcs().add(npc, true), true, 'real NPC registered');
   try {
-    // A fresh NPC's last attack is elapsed, so process() takes the regeneration path.
-    npc.process();
-    assert.equal(npc.getHitpoints(), 2, '10% of max 5 regenerates as one whole hitpoint');
+    // One hitpoint per 100-tick regen clock.
+    for (let tick = 0; tick < 100; tick++) npc.process();
+    assert.equal(npc.getHitpoints(), 2, 'regenerates one whole hitpoint');
     assert.equal(Number.isInteger(npc.getHitpoints()), true, 'regeneration never stores a fraction');
 
     // Legacy saves/runtime could still hold 0.5 HP. A normal integer hit must kill it and

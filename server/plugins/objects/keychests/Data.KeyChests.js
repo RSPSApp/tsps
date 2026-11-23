@@ -67,6 +67,7 @@ function get() {
     openLocId: chest.openLoc ? core.CacheDefinitions.getLocId(chest.openLoc) : null,
     varbitId: chest.varbit ? core.CacheDefinitions.getVarbitId(chest.varbit) : null,
     loot: loot(chest.loot),
+    noLogIds: new Set((chest.noLog ?? []).map(objId)),
   }));
   const recipe = DATA.enhancedKey;
   resolved = {

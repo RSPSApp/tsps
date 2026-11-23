@@ -114,13 +114,40 @@ export class RenderDataWorkerPool {
         signal?: AbortSignal,
     ): QueuedTask<RenderDataWorkerThread, D> {
         const id = ++this.nextMapBuildId;
-        return this.pool.queue(async (worker) => {
+        const run = async (worker: RenderDataWorkerThread) => {
             signal?.throwIfAborted();
             const cancel = () => { void worker.cancelLoad(id).catch(() => {}); };
             signal?.addEventListener("abort", cancel, { once: true });
             try { return await worker.load(loader, input, id) as D; }
             finally { signal?.removeEventListener("abort", cancel); }
-        });
+        };
+        // A loc-only rebuild is a square already built, changed in a few places. One worker keeps
+        // the scenery it packed for the last one (SceneChunkCache), so they all go to that worker
+        // and not to whichever is free; a rebuild landing elsewhere would pack the whole square.
+        const sd = input as Partial<SdMapLoaderInput>;
+        if (sd.locOnly && !sd.instance && !sd.overrideRenderPos && this.workers.length > 1) {
+            return Object.assign(this.runPinned(run), { cancel() {} }) as unknown as QueuedTask<RenderDataWorkerThread, D>;
+        }
+        return this.pool.queue(run);
+    }
+
+    /**
+     * Runs a task on the first worker, as the pool would: alone. A reservation in its running
+     * tasks keeps the pool from handing it another build, and the task starts once the builds
+     * already there are done (a worker's scene builder holds one build's state at a time).
+     */
+    private runPinned<T>(task: (worker: RenderDataWorkerThread) => Promise<T>): Promise<T> {
+        const worker = this.workers[0];
+        let finish!: () => void;
+        const reservation = new Promise<void>((resolve) => { finish = resolve; });
+        const ahead = (worker.runningTasks ?? []).slice();
+        (worker.runningTasks ??= []).push(reservation);
+        const release = () => {
+            worker.runningTasks = worker.runningTasks.filter((running) => running !== reservation);
+            finish();
+            if (!this.disposed) (this.pool as any).scheduleWork?.();
+        };
+        return Promise.allSettled(ahead).then(() => worker.init).then(task).finally(release);
     }
 
     queueNpcGeometry(

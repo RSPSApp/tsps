@@ -63,10 +63,11 @@ test("Beef vs Beef allows bare kills and manual casts, but rejects gear, food or
   assert.equal(rules["Beef vs Beef"]({ player: equippedDuringFight }), false);
 });
 
-test("Smarter than a Cow fails on a Brutus attack attempt even when no hit lands", () => {
+test("Smarter than a Cow fails after a successful Brutus hit, not an attack attempt", () => {
   const p = player(), fight = { player: p };
   emit("ides-of-milk:brutus-spawn", { player: p });
-  emit("ides-of-milk:brutus-attack", { player: p });
+  assert.equal(rules["Smarter than a Cow"](fight), true, "an attack attempt alone does not fail the task");
+  emit("ides-of-milk:brutus-hit", { player: p });
   assert.equal(rules["Smarter than a Cow"](fight), false);
 
   emit("ides-of-milk:brutus-spawn", { player: p });

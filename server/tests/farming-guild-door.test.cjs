@@ -57,8 +57,10 @@ function actor(t, farming, x, y, boost = 0) {
   return { player, messages };
 }
 
+let ticks = 0;
 function tick(count = 1) {
   for (let i = 0; i < count; i++) {
+    ticks++;
     for (const player of players) {
       player.getMovementQueue().process();
       core.TaskManager.processWalkTo(player.getIndex());
@@ -145,3 +147,82 @@ test("a low-level player can't walk in through someone else's opening", (t) => {
   assert.ok(at(opener)[1] >= DOOR_Y, "the opener is inside");
   assert.deepEqual(messages, []);
 });
+
+// The west (65) and north (85) wings: gates stay open in the map, so they are gated by stepping onto them
+// (rsprox 242/911689.txt: walked two tiles back, Guildmaster Jane's line). Boosts count; leaving is free.
+function tierActor(t, farming, x, y, boost = 0) {
+  const made = actor(t, farming, x, y, boost);
+  const lines = [], spoke = [];
+  t.mock.method(made.player.getDialogueManager(), "startDialogues", (chain) => {
+    lines.push(chain);
+    spoke.push({ tick: ticks, at: at(made.player) });
+  });
+  return { ...made, lines, spoke };
+}
+
+// Recorded runs (rsprox 242/911689.txt, ticks 18430-31, 18454-55, 18467-68 (18473-74 is the same north run)): [name, level, start, run to, tile the run ends on].
+// Each is walked two tiles back out from that end tile, i.e. to the start tile, with Jane angry (chatang2, 615).
+const RECORDED_RUNS = [
+  ["west wing, run 1246 to 1244", 65, [1246, 3730], [1237, 3730], [1244, 3730]],
+  ["west wing, run 1245 to 1243", 65, [1245, 3729], [1236, 3729], [1243, 3729]],
+  ["north wing, run 1248,3743 to 3745", 85, [1248, 3743], [1248, 3750], [1248, 3745]],
+];
+const run = (player, to) => {
+  player.setRunning(true);
+  player.getMovementQueue().addSteps(new core.Location(to[0], to[1], 0));
+};
+
+for (const [name, level, start, to, end] of RECORDED_RUNS) {
+  test(`${name}: under ${level} Farming ends the run on ${end} and is walked back to ${start} with Jane's angry line`, (t) => {
+    settle();
+    const { player, lines, spoke } = tierActor(t, level - 1, ...start);
+    run(player, to);
+    const first = ticks + 1;
+    tick();
+    assert.deepEqual(at(player), end);
+    assert.equal(lines.length, 0, "Jane is silent on the tick the run ends");
+    tick(8);
+    assert.deepEqual(at(player), start);
+    assert.equal(lines.length, 1);
+    const dialogue = lines[0].getDialogues().get(0);
+    assert.equal(dialogue.getText(), `Hey! You need a Farming level of at least ${level} to enter that area of the Farming Guild.`);
+    assert.equal(dialogue.expression, 615);
+    // Recorded order (ticks 18430 run, 18431 walk back, 18432 Jane): she speaks after the walk-back, from the start tile.
+    assert.deepEqual(spoke[0].at, start, "the walk-back came first");
+    assert.ok(spoke[0].tick > first, `Jane speaks on a later tick: ${spoke[0].tick} vs ${first}`);
+  });
+
+  test(`${name}: a boost to ${level} Farming runs straight through`, (t) => {
+    settle();
+    const { player, lines } = tierActor(t, level - 5, ...start, 5);
+    run(player, to);
+    tick(12);
+    assert.equal(lines.length, 0);
+    const [x, y] = at(player);
+    assert.ok(start[0] === 1248 ? y > 3745 : x < 1243, `through the gate: ${[x, y]}`);
+  });
+}
+
+test("leaving a wing below its level is never stopped", (t) => {
+  settle();
+  const { player, lines } = tierActor(t, 50, 1241, 3730);
+  player.getMovementQueue().addSteps(new core.Location(1247, 3730, 0));
+  tick(10);
+  assert.equal(lines.length, 0);
+  assert.ok(at(player)[0] >= 1246, `walked out: ${at(player)}`);
+});
+
+// Diagonal entry onto a lane (the guard follows the lane's own axis only), under level and running.
+for (const [name, level, start, to, clear] of [
+  ["west wing", 65, [1248, 3726], [1236, 3730], (x) => x >= 1245],
+  ["north wing", 85, [1245, 3740], [1249, 3752], (_, y) => y <= 3743],
+]) {
+  test(`${name}: a diagonal run from ${start} is bounced like a straight one`, (t) => {
+    settle();
+    const { player, lines } = tierActor(t, level - 1, ...start);
+    run(player, to);
+    tick(12);
+    assert.equal(lines.length, 1);
+    assert.ok(clear(...at(player)), `bounced out: ${at(player)}`);
+  });
+}

@@ -20,10 +20,15 @@ const objects = new Map();
 const itemOnItem = [];
 const itemOnObject = [];
 const events = [];
+/** Handlers a test adds for an event the chests emit ("drops:rolled"); the rest are only recorded. */
+const handlers = new Map();
 KeyChests.register({
   core,
   persistAttribute() {},
-  emitCustomEvent: (name, payload) => events.push([name, payload]),
+  emitCustomEvent: (name, payload) => {
+    events.push([name, payload]);
+    for (const handler of handlers.get(name) ?? []) handler(payload);
+  },
   onObjectInteraction: (name, options) => objects.set(name, { ...objects.get(name), ...options }),
   onItemOnObject: (item, object) => itemOnObject.push([item, object]),
   onItemOnItem: (a, b, fn) => itemOnItem.push([a, b, fn]),
@@ -329,4 +334,121 @@ test("the amulet of avarice notes the locker's loot, but not the scroll", () => 
     ticks(3);
   });
   assert.deepEqual(scroll.added, [[obj("wilderness_blip_blocking_scroll"), 1]]);
+});
+
+// The moon key chest in the Ruins of Tapoyauik (Wiki: Chest (moon key); rsprox local 1001308).
+const moon = () => chest("moon");
+
+function createMoonPlayer({ key = 1 } = {}) {
+  const player = createLockerPlayer({ key: 0 });
+  if (key) player.inventory.set(obj("varlamore_key"), key);
+  player.performAnimation = (animation) => player.animations.push([animation.getId(), animation.getDelay?.() ?? animation.delay]);
+  player.getPacketSender = () => ({ sendSound: (id, _loops, delay) => player.sounds.push([id, delay]), sendVarbit() {} });
+  return player;
+}
+
+test("the moon key chest: the Wiki's 107-part table, 1/5,000 onyx then 1/500 helmet, splinters every time", () => {
+  assert.equal(moon().locId, CacheDefinitions.getLocId("varlamore_moon_chestclosed"));
+  assert.equal(moon().loot.main.reduce((sum, row) => sum + row.weight, 0), 107);
+  const onyx = Loot.roll(moon(), 1, randoms(0));
+  assert.deepEqual(onyx.map((drop) => [drop.itemId, drop.amount]), [[obj("sunfiresplinter"), 250], [obj("uncut_onyx"), 1]]);
+  const helmet = Loot.roll(moon(), 1, randoms(0.5, 0));
+  assert.deepEqual(helmet.map((drop) => drop.itemId), [obj("sunfiresplinter"), obj("moon_helmet")]);
+  const main = Loot.roll(moon(), 1, randoms(0.5, 0.5, 0));
+  assert.deepEqual(main.map((drop) => [drop.itemId, drop.amount]), [[obj("sunfiresplinter"), 250], [obj("dragonstone"), 1]]);
+  const legs = Loot.roll(moon(), 1, randoms(0.5, 0.5, 20 / 107));
+  assert.deepEqual(legs.slice(1).map((drop) => [drop.itemId, drop.amount, drop.noted]), [[obj("dragon_platelegs"), 2, true]]);
+  const last = Loot.roll(moon(), 1, randoms(0.5, 0.5, 106 / 107));
+  assert.deepEqual(last.slice(1).map((drop) => drop.itemId), [obj("spinach_roll")]);
+  assert.equal(Loot.roll(chest("elven"), 1, randoms(0)).length, 1, "other chests' pre-rolls stay the whole reward");
+});
+
+test("opening the moon key chest: sound 77 and the unlock line, then sound 76, the key, the loot, and the chest open for two ticks", () => {
+  const player = createMoonPlayer({ key: 2 });
+  const registered = [];
+  const openchest = CacheDefinitions.getSeqId("human_openchest");
+  const closed = CacheDefinitions.getLocId("varlamore_moon_chestclosed");
+  const openLoc = CacheDefinitions.getLocId("varlamore_moon_chestopen");
+  withRandom([0.5, 0.5, 0], () => {
+    Chests.openChest(moon(), player, lockerObject());
+    assert.deepEqual([player.animations, player.sounds, player.messages], [[[openchest, 10]], [[77, 10]], ["You unlock the chest with your key."]]);
+    ticks(1, registered);
+  });
+  assert.equal(player.inventory.get(obj("varlamore_key")), 1, "one key goes");
+  assert.deepEqual(player.sounds, [[77, 10], [76, 45]]);
+  assert.deepEqual(player.added, [[obj("sunfiresplinter"), 250], [obj("dragonstone"), 1]]);
+  assert.deepEqual(player.messages.slice(1), ["You find some treasure in the chest!"]);
+  assert.deepEqual(registered, [openLoc]);
+  ticks(1, registered);
+  assert.deepEqual(registered, [openLoc], "still open a tick later");
+  ticks(1, registered);
+  assert.deepEqual(registered, [openLoc, closed]);
+  assert.equal(player.attributes.get(Chests.OPENING_ATTRIBUTE), false);
+});
+
+test("the moon key chest's splinters and huasca seeds don't count towards the collection log; its other loot does", () => {
+  const logged = (random) => {
+    const player = createMoonPlayer({ key: 1 });
+    const from = events.length;
+    withRandom(random, () => {
+      Chests.openChest(moon(), player, lockerObject());
+      ticks(1, []);
+    });
+    const obtained = events.slice(from).filter(([name]) => name === "collection-log:obtain").map(([, { itemId }]) => itemId);
+    return { added: player.added.map(([itemId]) => itemId), obtained };
+  };
+  // Huasca seeds are 10 of the 107 after 40 (Wiki trivia: they "will not contribute towards the collection log").
+  const seeds = logged([0.5, 0.5, 40 / 107]);
+  assert.deepEqual(seeds.added, [obj("sunfiresplinter"), obj("huasca_seed")], "both still given");
+  assert.deepEqual(seeds.obtained, []);
+  const helmet = logged([0.5, 0]);
+  assert.deepEqual(helmet.added, [obj("sunfiresplinter"), obj("moon_helmet")]);
+  assert.deepEqual(helmet.obtained, [obj("moon_helmet")]);
+  const stone = logged([0.5, 0.5, 0]);
+  assert.deepEqual(stone.obtained, [obj("dragonstone")]);
+});
+
+test("the moon key chest without a key: the Wiki's locked line, no sound; Open, the key and other chests", () => {
+  const player = createMoonPlayer({ key: 0 });
+  Chests.openChest(moon(), player, lockerObject());
+  assert.deepEqual([player.messages, player.sounds, player.animations], [["The chest is securely locked."], [], []]);
+  assert.ok(objects.get("Chest")?.Open, "Chest Open is hooked");
+  assert.ok(itemOnObject.some(([item, object]) => item === "Moon key" && object === "Chest"));
+  const other = CacheDefinitions.getLocId("chestclosed");
+  assert.equal(objects.get("Chest").Open({ player, objectId: other, object: lockerObject() }), false, "other chests fall through");
+  assert.equal(objects.get("Chest").Check({ player, objectId: moon().locId, object: lockerObject() }), false, "no count to check");
+});
+
+test("the moon key halves join into a moon key; a crystal half and a moon half don't", () => {
+  const player = createPlayer();
+  const sounds = [];
+  player.getPacketSender = () => ({ sendSound: (id) => sounds.push(id) });
+  assert.equal(CrystalKey.joinHalves({ player, usedItemId: obj("keyhalf1"), usedWithItemId: obj("varlamore_key_half_2") }), false);
+  CrystalKey.joinHalves({ player, usedItemId: obj("varlamore_key_half_2"), usedWithItemId: obj("varlamore_key_half_1"), usedItemSlot: 3, usedWithItemSlot: 1 });
+  assert.equal(player.inventory.get(obj("varlamore_key")), 1);
+  assert.equal(player.inventory.get(obj("crystal_key")), undefined);
+  assert.deepEqual([player.messages, sounds], [["You join the two halves of the key together."], []]);
+});
+
+test("a chest's loot passes through \"drops:rolled\" with the chest's name, and the chest gives what it holds after", () => {
+  const player = createMoonPlayer({ key: 1 });
+  const seen = [];
+  // A content change in place (a league's finished items): the helmet becomes an uncut onyx.
+  handlers.set("drops:rolled", [(event) => {
+    seen.push(event.source);
+    for (const drop of event.drops) if (drop.itemId === obj("moon_helmet")) drop.itemId = obj("uncut_onyx");
+  }]);
+  const from = events.length;
+  try {
+    withRandom([0.5, 0], () => {
+      Chests.openChest(moon(), player, lockerObject());
+      ticks(1, []);
+    });
+  } finally {
+    handlers.delete("drops:rolled");
+  }
+  assert.deepEqual(seen, ["Chest"]);
+  assert.deepEqual(player.added.map(([itemId]) => itemId), [obj("sunfiresplinter"), obj("uncut_onyx")]);
+  const obtained = events.slice(from).filter(([name]) => name === "collection-log:obtain").map(([, { itemId }]) => itemId);
+  assert.ok(obtained.includes(obj("uncut_onyx")), "the collection log gets the item given");
 });

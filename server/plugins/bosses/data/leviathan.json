@@ -2,6 +2,7 @@
   "source": "OSRS Wiki The Leviathan, Strategies, Perfect Leviathan; IDs resolved from revision241 gamevals. Per-field capture evidence and provisional limits are recorded in docs/leviathan-normal-evidence.md.",
   "quest": "desert_treasure_ii",
   "npcViewDistance": 40,
+  "music": { "island": 745, "fight": 750 },
   "scoreboard": { "components": { "kills": 9, "deaths": 11, "best": 13, "worldKills": 15, "worldDeaths": 17, "worldBest": 19 } },
   "instance": { "sourceChunkX": 256, "sourceChunkY": 792, "width": 8, "height": 8, "planes": [0, 1] },
   "site": { "campBoat": [2065, 6435, 0], "campReturn": [2063, 6435, 0], "islandBoat": [2065, 6371, 0], "islandArrival": [2070, 6371, 0], "handholds": [2070, 6368, 0], "arenaArrival": [2072, 6370, 0], "guardianArrival": [2021, 6433, 0] },

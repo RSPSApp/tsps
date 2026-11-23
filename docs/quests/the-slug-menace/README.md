@@ -17,7 +17,15 @@ Aligned with the user's whole-quest capture `TheSlugMenace.bin` (RSProx, revisio
 account; transcribed with a fresh RSProx clone). Ticks below are that recording's. The words are
 the "The Slug Menace", "Witchaven villager" and "Sir Tiffy Cashien" records in
 `npc-dialogues.json`, corrected from the same capture in osrsreboxed-db
-([#95](https://github.com/RSPSApp/osrsreboxed-db/pull/95)).
+([#95](https://github.com/RSPSApp/osrsreboxed-db/pull/95)). Since issue #6503 the quest record is
+parsed from Transcript:The Slug Menace revision 15395854, with the capture's lines moved onto it.
+
+- Mayor Hobb's "what brings you to Witchaven?" menu: all three answers ("I'm here to relax.",
+  "I'm just looking around.", "I'm here to fish.") get his "That's good, yes, that's good." reply
+  and continue into the same questions (Wiki). The capture has no run of "I'm just looking
+  around.": it walks off the menu at tick 1062 and picks "I'm here to fish." the second time.
+- Recorded difference: Hobb's overhead in the church scene is the Wiki's "Welcome to the family
+  Brother Maledict"; live says "Welcome to the family, Brother Maledict." (tick 2507).
 
 The alignment was checked in-game over the agent MCP (commit d82351a88). No start-to-finish test
 run is recorded here yet, so the status stays untested.

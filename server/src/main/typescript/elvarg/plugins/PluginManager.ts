@@ -48,6 +48,7 @@ import {
   PluginItemOnItemEvent,
   PluginItemUseFilter,
   PluginItemActionOptions,
+  PluginObjectInteractionOptions,
   PluginItemOnNpcEvent,
   PluginItemOnPlayerEvent,
   PluginItemOnObjectEvent,
@@ -309,6 +310,8 @@ export class PluginManager {
   private static objectHooksById = new Map<string, ObjectInteractionHook[]>();
   private static objectHooksByName = new Map<string, ObjectInteractionHook[]>();
   private static nextObjectHookOrder = 0;
+  /** Added to a named object fallback's order, so it runs after every other object hook. */
+  private static readonly OBJECT_FALLBACK_ORDER = 1_000_000_000;
   private static npcInteractionHooks: PluginHook<PluginNpcInteractionEvent>[] = [];
   private static beforeNpcInteractionHooks: PluginHook<PluginNpcInteractionEvent>[] = [];
   private static beforeObjectInteractionHooks: PluginHook<PluginObjectInteractionEvent>[] = [];
@@ -336,6 +339,8 @@ export class PluginManager {
   private static npcBeforeDeathHooks: PluginHook<PluginNpcBeforeDeathEvent>[] = [];
   private static playerBeforeDeathHooks: PluginHook<PluginPlayerBeforeDeathEvent>[] = [];
   private static npcHitModifyHooks: PluginHook<PluginNpcHitModifyEvent>[] = [];
+  /** How many of npcHitModifyHooks (at its front) were registered with stage "base". */
+  private static npcHitModifyBaseCount = 0;
   private static playerHitModifyHooks: PluginHook<PluginPlayerHitModifyEvent>[] = [];
   private static zoneHooks: Array<{
     pluginName: string;
@@ -386,6 +391,8 @@ export class PluginManager {
   private static npcAggressionToleranceHooks: PluginHook<PluginNpcAggressionToleranceEvent>[] = [];
   private static playerDefeatedHooks: PluginHook<PluginPlayerDefeatedEvent>[] = [];
   private static itemOnObjectHooks: PluginHook<PluginItemOnObjectEvent>[] = [];
+  /** Item-on-object handlers registered with `before`: run ahead of every other handler. */
+  private static itemOnObjectBeforeHooks: PluginHook<PluginItemOnObjectEvent>[] = [];
   /** Item-on-object handlers registered with `fallback`: run when no other handler took the use. */
   private static itemOnObjectFallbackHooks: PluginHook<PluginItemOnObjectEvent>[] = [];
   private static itemOnItemHooks: PluginHook<PluginItemOnItemEvent>[] = [];
@@ -1949,6 +1956,9 @@ export class PluginManager {
   }
 
   public static emitItemOnObject(event: PluginItemOnObjectEvent): boolean {
+    for (const hook of PluginManager.itemOnObjectBeforeHooks) {
+      PluginManager.executeHook(hook, event, "item_on_object", "item_on_object");
+    }
     for (const hook of PluginManager.itemOnObjectHooks) {
       PluginManager.executeHook(hook, event, "item_on_object", "item_on_object");
     }
@@ -3505,12 +3515,15 @@ export class PluginManager {
       },
       onObjectInteraction: (
         handler: string | ((event: PluginObjectInteractionEvent) => void),
-        actions?: Record<string, (event: PluginObjectInteractionEvent) => void | boolean>
+        actions?: Record<string, (event: PluginObjectInteractionEvent) => void | boolean>,
+        options?: PluginObjectInteractionOptions
       ) => {
         if (typeof handler !== "function" && (typeof handler !== "string" || !actions)) {
           return;
         }
-        const order = PluginManager.nextObjectHookOrder++;
+        // A named fallback sorts after every hook registered without one, whatever the load order.
+        const order = PluginManager.nextObjectHookOrder++ +
+          (typeof handler === "string" && options?.fallback ? PluginManager.OBJECT_FALLBACK_ORDER : 0);
         if (typeof handler === "function") {
           PluginManager.objectInteractionHooks.push({ ...hookProfile(handler), order, handler });
           return;
@@ -3635,18 +3648,25 @@ export class PluginManager {
           },
         });
       },
-      onNpcHitModify: (handler) => {
+      onNpcHitModify: (handler, options) => {
         if (typeof handler !== "function") {
           return;
         }
-        PluginManager.npcHitModifyHooks.push({
+        const hook: PluginHook<PluginNpcHitModifyEvent> = {
           ...hookProfile(handler),
           handler: (event) => {
             if (event?.npc && event?.hit) {
               handler(event);
             }
           },
-        });
+        };
+        // Base handlers (stats such as flat armour) run before every ordinary handler, in
+        // registration order, so content hooks read the damage the target really takes.
+        if (options?.stage === "base") {
+          PluginManager.npcHitModifyHooks.splice(PluginManager.npcHitModifyBaseCount++, 0, hook);
+        } else {
+          PluginManager.npcHitModifyHooks.push(hook);
+        }
       },
       onPlayerHitModify: (handler) => {
         if (typeof handler !== "function") {
@@ -4170,7 +4190,9 @@ export class PluginManager {
         if (typeof handler !== "function") {
           return;
         }
-        (filter?.fallback ? PluginManager.itemOnObjectFallbackHooks : PluginManager.itemOnObjectHooks).push({
+        const hooks = filter?.fallback ? PluginManager.itemOnObjectFallbackHooks
+          : filter?.before ? PluginManager.itemOnObjectBeforeHooks : PluginManager.itemOnObjectHooks;
+        hooks.push({
           ...hookProfile(handler),
           handler: (event) => {
             if (!event || event.handled || !event.player || !event.object) {

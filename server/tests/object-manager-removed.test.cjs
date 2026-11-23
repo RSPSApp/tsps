@@ -230,6 +230,51 @@ test('an in-place swap (a lever down and up) sends one add each way and is put r
     }
 });
 
+test('a lever that goes back up while its puller is inside a private area is put right when they come out', () => {
+    // The King Black Dragon's spider room lever (shape 4): its Echo teleport lands in a private lair
+    // on the tick the lever goes back up, and that area is sent nothing of the main world.
+    const packets = [];
+    const watcher = {
+        area: null,
+        getPrivateArea() { return this.area; },
+        getSession: () => ({ isTileInScene: () => true }),
+        getPacketSender: () => ({
+            sendObject: (object) => packets.push(['add', object.getId()]),
+            sendObjectRemoval: (object) => packets.push(['del', object.getId()]),
+        }),
+    };
+    const originalForEach = World.forEachNetworkPlayer;
+    World.forEachNetworkPlayer = (consumer) => [watcher].forEach(consumer);
+    const area = new (class extends PrivateArea {})();
+    try {
+        const at = new Location(3067, 10253, 0);
+        RegionManager.loadMapFiles(3067, 10253, true);
+        const lever = MapObjects.get(1816, at, null);
+        assert.ok(lever, 'the map lever');
+        const down = new GameObject(88, at.clone(), lever.getType(), lever.getFace(), null);
+        ObjectManager.replaceInPlace(lever, down);
+        assert.deepEqual(packets, [['add', 88]], 'seen going down');
+
+        watcher.area = area;
+        packets.length = 0;
+        ObjectManager.replaceInPlace(down, lever);
+        assert.deepEqual(packets, [], 'nothing of the main world reaches the private area');
+        ObjectManager.onRegionChange(watcher, 2271 - 52, 4680 - 52);
+        assert.deepEqual(packets.filter(([, id]) => id === 1816 || id === 88), [], 'nor is it replayed inside');
+
+        watcher.area = null;
+        packets.length = 0;
+        ObjectManager.onRegionChange(watcher, 3067 - 52, 10253 - 52);
+        assert.deepEqual(packets, [['add', 1816]], 'the lever is sent back up on the way out');
+        packets.length = 0;
+        ObjectManager.onRegionChange(watcher, 3067 - 52, 10253 - 52);
+        assert.deepEqual(packets, [], 'once');
+    } finally {
+        World.forEachNetworkPlayer = originalForEach;
+        area.destroy();
+    }
+});
+
 test('owner objects resolve through normal loc lookup and only enter their owner scene', () => {
     const ownerPackets = [], otherPackets = [];
     const player = (packets) => ({

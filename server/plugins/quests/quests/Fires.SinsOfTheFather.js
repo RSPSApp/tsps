@@ -37,7 +37,7 @@ module.exports = function createDamienFires(api) {
   const CAST_INTERVAL_TICKS = 30;
   const FIRE_DELAY_TICKS = 2;
   const STAMP_DELAY_TICKS = 1;
-  const REDUCTION_PER_FIRE = 0.2;
+  const DAMAGE_FIFTHS = 5;
   /** Ours: further than this from Damien (or off his floor) the player has left the fight. */
   const FIGHT_RANGE = 15;
   const REDUCED_MESSAGE = "Your attacks seem to have reduced effect on Damien.";
@@ -189,14 +189,14 @@ module.exports = function createDamienFires(api) {
     return true;
   }
 
-  /** Each burning fire takes REDUCTION_PER_FIRE off the player's hits on Damien. */
+  /** Each burning fire removes one fifth of the player's damage on Damien. */
   function reduceDamage(event) {
     const { attacker, target, damage } = event;
     if (!attacker?.isPlayer?.() || !target?.isNpc?.() || !damage) return;
     const fight = fights.get(attacker);
     if (!fight || fight.npc !== target || fight.fires.size === 0) return;
-    const factor = Math.max(0, 1 - REDUCTION_PER_FIRE * fight.fires.size);
-    damage.setDamage(Math.floor(damage.getDamage() * factor));
+    const remainingFifths = Math.max(0, DAMAGE_FIFTHS - fight.fires.size);
+    damage.setDamage(Math.floor(damage.getDamage() * remainingFifths / DAMAGE_FIFTHS));
     if (fight.warn) {
       fight.warn = false;
       attacker.sendMessage(REDUCED_MESSAGE);

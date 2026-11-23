@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const { fork } = require("node:child_process");
 const { resolveAccess, originAllowed } = require("../plugins/tools/worldadmin/Access.WorldAdmin");
 const { createRequestHandler, HttpError, send } = require("../plugins/tools/worldadmin/Http.WorldAdmin");
-const { botEditorRoutes } = require("../plugins/tools/worldadmin/BotEditor.WorldAdmin");
+const { planFiles } = require("../plugins/tools/worldadmin/PlanFiles.WorldAdmin");
 const { playerRoutes } = require("../plugins/tools/worldadmin/Players.WorldAdmin");
 const { readPluginZip, downloadPluginRelease, savePluginZip, deletePluginZip } = require("../plugins/tools/worldadmin/PluginZip.WorldAdmin");
 const { createPageServer, watchCertificate } = require("../plugins/tools/worldadmin/Tls.WorldAdmin");
@@ -174,12 +174,20 @@ if (process.argv[2] === "--runner") {
   }
 
   async function dispatch(request, response, url) {
-    if (url.pathname === "/bot-editor" || url.pathname === "/bot-graph") {
-      if (request.method !== "GET") throw new HttpError(405, "Method not allowed");
-      send(response, 302, "", { Location: "/?view=bots&edit=1" });
-      return true;
+    if (url.pathname === "/api/bots/plans" && request.method === "GET") {
+      // The running plugin registry can add code routines and presets. The
+      // offline panel never loads or executes gameplay plugins just to list plans.
+      try {
+        const live = await backend(url.pathname);
+        if (live.statusCode === 200) {
+          response.writeHead(live.statusCode, live.headers);
+          live.pipe(response);
+          return true;
+        }
+        live.resume();
+      } catch { /* Use saved plans while the game is unavailable. */ }
     }
-    if (await botEditorRoutes(request, response, url)) return true;
+    if (await planFiles(request, response, url)) return true;
     if (url.pathname === "/api/catalog") return false;
     if (offline() && offlineRoutes.has(url.pathname)) return false;
     if (!url.pathname.startsWith("/api/")) return false;

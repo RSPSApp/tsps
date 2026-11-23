@@ -159,6 +159,8 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const WALL_OPEN_SOUND = 62; // door_open
   const WALL_OPEN_TICKS = 2;
   const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
+  const WALL_PASS_ATTRIBUTE = "in-search-of-the-myreque:wall-pass-prior-clipping";
+  const wallPasses = new WeakMap();
   const TAVERN_LADDER_ID = ObjectIdentifiers.LADDER_54; // 5054
   /** Climb-up: human_reachforladder (828), the move to (3495,3465) the next tick (capture ticks 1581-1582). */
   const LADDER_ANIMATION = 828;
@@ -986,6 +988,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
    * through. Ours: the pass from the north side mirrors the captured one; the walk ignores clipping for the step.
    */
   function passThroughWall(player) {
+    finishWallPass(player);
     const { GameObject, Location } = api.core;
     const here = player.getLocation();
     const goingNorth = here.getY() <= WALL_SOUTH_SIDE.y;
@@ -998,13 +1001,34 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     sender.sendObject(leaf);
     sender.sendSound(WALL_OPEN_SOUND, 1, 0);
     player.getMovementQueue().reset();
+    const pass = { wall, leaf };
+    wallPasses.set(player, pass);
+    // An autosave in these two ticks can be restored without mistaking an unrelated flag for ours.
+    player.setAttribute(WALL_PASS_ATTRIBUTE, player.hasFlag(IGNORE_CLIPPING_FLAG));
     player.setFlag(IGNORE_CLIPPING_FLAG, true);
     player.getMovementQueue().walkStep(0, goingNorth ? 1 : -1);
-    Scenes.later(player, WALL_OPEN_TICKS, () => {
-      player.removeFlag(IGNORE_CLIPPING_FLAG);
-      sender.sendObject(wall);
-      sender.sendObjectRemoval(leaf);
+    // Cleanup must also run for an unregistered player, unlike an ordinary player-keyed scene callback.
+    Scenes.later(pass, WALL_OPEN_TICKS, () => {
+      if (wallPasses.get(player) === pass) finishWallPass(player);
     });
+  }
+
+  function finishWallPass(player) {
+    if (!player) return;
+    const pass = wallPasses.get(player);
+    const priorClipping = player.getAttribute(WALL_PASS_ATTRIBUTE);
+    if (!pass && typeof priorClipping !== "boolean") return;
+    wallPasses.delete(player);
+    if (pass) api.core.TaskManager.cancelTasks(pass);
+    player.setAttribute(WALL_PASS_ATTRIBUTE, null);
+    if (priorClipping === false) player.removeFlag(IGNORE_CLIPPING_FLAG);
+    if (pass && player.isRegistered()) {
+      player.getPacketSender().sendObject(pass.wall).sendObjectRemoval(pass.leaf);
+    }
+  }
+
+  function handleWallPassDeath({ player }) {
+    finishWallPass(player);
   }
 
   /** Climb-up on the basement ladder (see LADDER_TOP). Ours: no message, as live sends none. */
@@ -1186,6 +1210,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   function handleLogin({ player }) {
+    finishWallPass(player);
     metThisConversation.delete(player);
     sendStrangerSwap(player);
     sendSpokenMembers(player);
@@ -1195,7 +1220,10 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   function handleLogout({ player }) {
-    if (player) removeHellhound(player);
+    if (player) {
+      finishWallPass(player);
+      removeHellhound(player);
+    }
   }
 
   /** Completing the quest repairs the whole bridge for good (capture tick 1617). */
@@ -1209,6 +1237,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   api.persistAttribute(BRIDGE_ATTRIBUTE);
   api.persistAttribute(QUIZ_CORRECT_ATTRIBUTE);
+  api.persistAttribute(WALL_PASS_ATTRIBUTE, null);
   for (const flag of ["met_sani", "met_harold", "met_radigad", "met_polmafi", "met_ivan", "veliaf_after"]) {
     api.persistAttribute(`quest.in_search_of_the_myreque.${flag}`);
   }
@@ -1251,4 +1280,5 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  api.onPlayerDeath(handleWallPassDeath);
 };

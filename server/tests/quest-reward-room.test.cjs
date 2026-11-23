@@ -629,7 +629,8 @@ test("Luthas pays for a completed crate without losing earned wages", async (t) 
       await fill(bananas);
       assert.equal(inv.getAmount(BANANA), 0, "the crate consumed the actual carried bananas");
       assert.equal(sender.getChatboxGroupId(), 229, "the crate showed its native message box");
-      assert.equal(shownStrings.at(-1), bananas === 10 ? "You fill the crate with bananas." : "You pack all your bananas into the crate.");
+      // Every carried banana goes in, ten or nine: "pack all" (rev 242 capture PiratesTreasure, ticks 569, 790).
+      assert.equal(shownStrings.at(-1), "You pack all your bananas into the crate.");
       const crateMessage = sender.subInterfaceTargets.get(229);
       assert.ok(crateMessage);
       assert.equal(sender.getSubInterfaceAt(crateMessage.targetUid), crateMessage);

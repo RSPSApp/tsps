@@ -4,7 +4,7 @@
 // Wooden gates are two locs (hinge 12986 + extension 12987) that must swing together around
 // the hinge post; opening replaces both with 12988/12989 on the perpendicular tile line.
 const assert = require('node:assert/strict');
-const { test } = require('node:test');
+const { test, before } = require('node:test');
 
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
@@ -22,11 +22,15 @@ const { RsmodRouteFinding } = require('../dist/game/model/movement/path/RsmodRou
 const { crossingFor: shantayCrossingFor } = require('../plugins/areas/shantaypass/Gate.ShantayPass');
 
 const tileKey = (id, x, y, z) => `${id}@${x},${y},${z}`;
+// Doors.plugin looks its loc ids up by name at register time, so every harness needs the cache.
+let cachePipelineReady;
+const initializeCachePipelineOnce = () => (cachePipelineReady ??= require('../dist/game/cache/CachePipeline').CachePipeline.initialize(process.cwd()));
+before(initializeCachePipelineOnce);
 let mapCollisionInitialized = false;
 
 async function initializeMapCollisionOnce() {
   if (mapCollisionInitialized) return;
-  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(process.cwd());
+  await initializeCachePipelineOnce();
   RegionManager.init();
   mapCollisionInitialized = true;
 }
@@ -97,6 +101,7 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
     onObjectRoute: (handler) => routes.push(handler),
     onServerStartup: (handler) => startup.push(handler),
     onPlayerProcess: () => {},
+    persistAttribute() {}, onPlayerLogout() {}, onPlayerDeath() {}, onPlayerLogin() {},
   };
   delete require.cache[require.resolve('../plugins/objects/Doors.plugin')];
   const plugin = require('../plugins/objects/Doors.plugin');
@@ -127,6 +132,7 @@ function buildHarness({ cacheObjects, objectManager: suppliedObjectManager, real
       moveTo: (to) => { relocations.push([to.getX(), to.getY(), to.getZ()]); location.setX(to.getX()); location.setY(to.getY()); },
       getCombat: () => ({ reset: () => {} }),
       getForceMovement: () => forced.at(-1) ?? null,
+      getSkillAnimation: () => null, setSkillAnimation: () => {}, getUpdateFlag: () => ({ flag: () => {} }),
       setForceMovement: (movement) => { if (movement) forced.push(movement); },
     };
     lastPlayer = player;
@@ -1316,6 +1322,7 @@ function alKharidPlayer(coins, x, y) {
     }),
     getMovementQueue: () => ({ reset: () => {}, setBlockMovement: () => {}, handleRegionChange: () => {} }),
     getForceMovement: () => null,
+    getSkillAnimation: () => null,
     setSkillAnimation: () => {},
     performAnimation: () => {},
     getUpdateFlag: () => ({ flag: () => {} }),
@@ -1825,30 +1832,7 @@ test('the Shantay pass crosses the desert fence in the right direction', () => {
 });
 
 
-test('Sophanem north gate opens and closes both nameless gate leaves', () => {
-  const h = buildHarness();
-  try {
-    h.place(44036, 3283, 2809, 1);
-    h.place(44038, 3284, 2809, 1);
-    assert.deepEqual(h.click(44036, 3283, 2809, 1), [
-      ['deregister', 44036, 3283, 2809, 1],
-      ['deregister', 44038, 3284, 2809, 1],
-      ['register', 44037, 3283, 2810, 0],
-      ['register', 44039, 3284, 2810, 2],
-    ]);
-
-    h.place(44037, 3283, 2810, 0);
-    h.place(44039, 3284, 2810, 2);
-    assert.deepEqual(h.click(44037, 3283, 2810, 0, 'Close'), [
-      ['deregister', 44037, 3283, 2810, 0],
-      ['deregister', 44039, 3284, 2810, 2],
-      ['register', 44036, 3283, 2809, 1],
-      ['register', 44038, 3284, 2809, 1],
-    ]);
-  } finally {
-    h.restore();
-  }
-});
+// Sophanem's north gate is a pass-through gate now (it never stays open): tests/sophanem-gates.test.cjs.
 
 test('Lassar residential shadow doors use their canonical open and close locs', () => {
   const h = buildHarness();
@@ -2043,6 +2027,7 @@ test('Mort Myre gate swings through its captured leaves and closes after passage
       const player = {
         getPrivateArea: () => null,
         getLocation: () => new Location(x, fromNorth ? 3458 : 3457, 0),
+        getAttribute: () => undefined, setAttribute() {},
         getMovementQueue: () => ({ reset() {}, addSteps: tile => steps.push([tile.getX(), tile.getY()]) }),
       };
       assert.equal(h.handlers.get('Gate').Open({ player, object, objectId: id,
@@ -2137,6 +2122,7 @@ test('the Priest in Peril mausoleum gates swing in the captured leaf, let the pl
     const flags = new Set();
     let queued = 0;
     return { flags, getPrivateArea: () => null, getLocation: () => new Location(px, py, 0),
+      getAttribute: () => undefined, setAttribute() {}, isRegistered: () => true, getHitpoints: () => 10,
       hasFlag: (f) => flags.has(f), setFlag: (f, on = true) => { if (on) flags.add(f); else flags.delete(f); },
       removeFlag: (f) => flags.delete(f),
       getMovementQueue: () => ({ reset() { queued = 0; }, size: () => queued,

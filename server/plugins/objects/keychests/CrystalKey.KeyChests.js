@@ -1,10 +1,11 @@
 "use strict";
 
 /**
- * The crystal key and the enhanced crystal key:
+ * The crystal key, the moon key and the enhanced crystal key:
  *
  * - The loop and tooth halves used on each other make a crystal key (rsprox captures: sound
- *   2127 and "You join the two halves of the key together.").
+ *   2127 and "You join the two halves of the key together."); the moon key's halves make a moon
+ *   key with the same line (Wiki: Moon key).
  * - The Prifddinas singing bowl (CrystalSinging.plugin.js owns its menu, with this recipe) offers the enhanced crystal key: a crystal key
  *   and 10 crystal shards, 80 Smithing and Crafting (boostable), 500 XP in each (Wiki). The
  *   menu, the messages, the animation and sound 8 are the captured singing bowl's.
@@ -22,15 +23,29 @@ function init(api) {
   core = api.core;
 }
 
-/** The noted halves share the names, so only the halves themselves join. */
+/**
+ * The key-half pairs, by cache gameval: both share the names "Loop half of key" and "Tooth half
+ * of key". The crystal key's join sound is captured; the moon key's join isn't, so it plays none
+ * (its line is the Wiki's).
+ */
+const KEY_HALVES = Object.freeze([
+  { halves: ["keyhalf1", "keyhalf2"], key: "crystal_key", sound: JOIN_SOUND },
+  { halves: ["varlamore_key_half_1", "varlamore_key_half_2"], key: "varlamore_key", sound: null },
+]);
+
+/** The noted halves share the names, so only the halves themselves join, each with its own pair. */
 function joinHalves({ player, usedItemId, usedWithItemId, usedItemSlot, usedWithItemSlot }) {
-  const halves = [core.CacheDefinitions.getObjId("keyhalf1"), core.CacheDefinitions.getObjId("keyhalf2")];
-  if (!halves.includes(usedItemId) || !halves.includes(usedWithItemId)) return false;
+  const objId = (name) => core.CacheDefinitions.getObjId(name);
+  const pair = KEY_HALVES.find(({ halves }) => {
+    const ids = halves.map(objId);
+    return usedItemId !== usedWithItemId && ids.includes(usedItemId) && ids.includes(usedWithItemId);
+  });
+  if (!pair) return false;
   const inventory = player.getInventory();
   inventory.deleteAtSlot(Math.max(usedItemSlot, usedWithItemSlot), 1, false);
   inventory.deleteAtSlot(Math.min(usedItemSlot, usedWithItemSlot), 1, false);
-  inventory.adds(core.CacheDefinitions.getObjId("crystal_key"), 1);
-  player.getPacketSender().sendSound(JOIN_SOUND, 1, 0);
+  inventory.adds(objId(pair.key), 1);
+  if (pair.sound != null) player.getPacketSender().sendSound(pair.sound, 1, 0);
   player.sendMessage("You join the two halves of the key together.");
 }
 

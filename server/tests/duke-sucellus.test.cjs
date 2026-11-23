@@ -160,3 +160,11 @@ test('source speed achievements use lethal time and are excluded on a Slayer tas
   h.api.onCustomEvent('slayer:on-task',e=>{e.onTask=true;});s.fight.fell();s.fight.won(h.p);
   assert.equal(awards().length,before);
 });
+test('the asylum plays Eye See You from arrival; its copied map has no track of its own',t=>{
+  const h=H.harness(t),s=h.enter();
+  const {Music}=require('../dist/game/Music');
+  const at=h.p.getLocation(),source=Music.instanceSourceTile(s.area,at.getX(),at.getY(),at.getZ());
+  assert.deepEqual(Music.tracksAt(source.x,source.y,source.plane,false),[],'nothing to play from the tiles: the previous track would carry on');
+  assert.equal(s.area.getMusicTrack(h.p),763);
+  h.Site.leave(h.p);
+});

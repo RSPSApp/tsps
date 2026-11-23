@@ -82,6 +82,11 @@ function enterPortal(player, portalId) {
   objectHandler({ player, object: lobbyObject(portalId), clickType: 1, handled: false });
 }
 
+function enterLegacyPortal(player, portalId) {
+  PluginManager.pluginConfigCache[Lobby._test.LEGACY_BOT_PROMPT_CONFIG_KEY] = true;
+  enterPortal(player, portalId);
+}
+
 function mapObject(id) {
   for (const list of MapObjects.mapObjects.values()) {
     for (const object of list) if (object.getId() === id) return object;
@@ -180,8 +185,7 @@ test('capes block entry before the teleport', () => {
 test('modern Castle Wars allows helmets when entering a portal', () => {
   const player = fakePlayer({ head: core.ItemIdentifiers.RUNE_FULL_HELM });
   enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
-  assert.ok(prompt);
-  prompt.options[3].pick();
+  assert.equal(prompt, null, 'default portal entry needs no bot choice');
   assert.notEqual(game.getTeamId(player), null);
   assert.equal(player.moves.length, 1);
 });
@@ -207,9 +211,8 @@ test('recorded non-combat tools, a cannon part and noted ones block entry; potio
   }
   const player = fakePlayer({ inventory: [I.SUPER_RESTORE_4_, I.DEATH_RUNE, I.RUNE_SCIMITAR, I.TINDERBOX] });
   enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
-  assert.deepEqual(player.messages, [], 'nothing refused');
-  assert.ok(prompt);
-  prompt.options[3].pick();
+  assert.match(player.messages[0], /You have been added to/);
+  assert.equal(prompt, null);
   assert.notEqual(game.getTeamId(player), null);
 });
 
@@ -258,7 +261,7 @@ test("leaving a waiting room restores stats (Wiki) but keeps the player's own sk
   Areas({
     core,
     registerArea: (area) => registered.push(area),
-    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
+    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {}, onSpellDisabled: () => {},
     onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
   const waitingRoom = registered.find((area) => area.getName().includes('waiting room'));
@@ -296,7 +299,7 @@ test("leaving the game restores stats as the waiting room does, up to a skill's 
   Areas({
     core,
     registerArea: (area) => registered.push(area),
-    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
+    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {}, onSpellDisabled: () => {},
     onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
   const gameArea = registered.find((area) => area.getName() === 'Castle Wars');
@@ -350,7 +353,7 @@ test('both waiting rooms release seeded bots on leave and honour the transition 
   Areas({
     core,
     registerArea: (area) => registered.push(area),
-    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
+    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {}, onSpellDisabled: () => {},
     onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
 
@@ -384,9 +387,18 @@ test('both waiting rooms release seeded bots on leave and honour the transition 
   }
 });
 
-test('a real player joining an empty lobby is prompted to pick a bot tier', () => {
+test('normal portals join an empty lobby directly and spawn no bots', () => {
   const player = fakePlayer();
-  enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
+  enterPortal(player, core.ObjectIdentifiers.SARADOMIN_PORTAL);
+  assert.equal(prompt, null);
+  assert.equal(player.moves.length, 1);
+  assert.equal(game.getTeamId(player), TEAM.SARADOMIN);
+  assert.equal(World.getAddPlayerQueue().length, 0);
+});
+
+test('legacy opt-in worlds can still prompt for a bot tier', () => {
+  const player = fakePlayer();
+  enterLegacyPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
   assert.ok(prompt, 'the empty-lobby prompt was shown');
   assert.equal(prompt.title, 'The Castle Wars lobby is empty. Which bots should populate the game?');
   assert.deepEqual(prompt.options.map((option) => option.text), ['Novice', 'Intermediate', 'Veteran', 'None', 'Practice settings (Lanthus)']);
@@ -403,8 +415,8 @@ test('picking a tier populates both teams with the 12/6/5 mix plus the specialis
   assert.equal(game.BOT_ROLE_KEY, 'castlewars:bot-role');
   assert.equal(game.BOT_TIER_KEY, 'castlewars:bot-tier');
   const player = fakePlayer();
-  enterPortal(player, core.ObjectIdentifiers.SARADOMIN_PORTAL);
-  assert.ok(prompt, 'the empty-lobby prompt was shown');
+  enterLegacyPortal(player, core.ObjectIdentifiers.SARADOMIN_PORTAL);
+  assert.ok(prompt, 'the opt-in empty-lobby prompt was shown');
   prompt.options[2].pick();
 
   assert.equal(player.moves.length, 1, 'the player joins the team they asked for');
@@ -469,7 +481,7 @@ test("a practice match's settings stay with it: the next public game has no team
   const counts = t.mock.method(game, 'queueCounts', () => ({ [TEAM.SARADOMIN]: 0, [TEAM.ZAMORAK]: 0 }));
   World.getAddPlayerQueue().splice(0);
   const first = fakePlayer();
-  enterPortal(first, core.ObjectIdentifiers.SARADOMIN_PORTAL);
+  enterLegacyPortal(first, core.ObjectIdentifiers.SARADOMIN_PORTAL);
   prompt.options[2].pick();
   assert.equal(game.practice, false, 'a join that is not "Join practice" starts a public match');
   counts.mock.restore();
@@ -499,8 +511,8 @@ test("an abandoned practice's bots still logging out don't count: the next human
     assert.deepEqual(game.queueCounts(), { [TEAM.SARADOMIN]: 0, [TEAM.ZAMORAK]: 0 }, 'departing bots are not queued');
     const next = fakePlayer();
     enterPortal(next, core.ObjectIdentifiers.SARADOMIN_PORTAL);
-    assert.ok(prompt, 'the empty-lobby prompt is shown');
-    prompt.options[3].pick();
+    assert.equal(prompt, null);
+    assert.equal(next.moves.length, 1);
     assert.equal(game.practice, false, 'the abandoned practice flag does not stick');
   } finally {
     for (const bot of departing) World.getRemovePlayerQueue().splice(World.getRemovePlayerQueue().indexOf(bot), 1);
@@ -544,7 +556,7 @@ test('practice menus join from every portal through the real prompt dispatcher w
     t.mock.method(player, 'smartMove', (location) => moves.push(location));
     assert.equal(player.getDialogueManager().startStaticDialogue(DialogueIdentifiers.TEST), true);
     assert.equal(player.getDialogueManager().isActive(), true);
-    enterPortal(player, portalId);
+    enterLegacyPortal(player, portalId);
     pick(player, 'Practice settings (Lanthus)');
     pick(player, 'Teams:');
     pick(player, '1 vs 1');
@@ -591,7 +603,7 @@ test('Lanthus maxed practice fills both sides with complementary selected roles'
 
 test('a Guthix tier choice rechecks team balance if another player joined while the prompt was open', () => {
   const player = fakePlayer();
-  enterPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
+  enterLegacyPortal(player, core.ObjectIdentifiers.GUTHIX_PORTAL);
   const join = prompt.options.find((option) => option.text === 'None').pick;
   game.waitingAreas[TEAM.ZAMORAK].players.push(fakePlayer());
   join();
@@ -707,7 +719,7 @@ test('a team bot logging out in the lobby is not moved into the start room at th
 
 test('a stale bot tier prompt cannot populate a game that has already started', (t) => {
   const player = fakePlayer();
-  enterPortal(player, core.ObjectIdentifiers.SARADOMIN_PORTAL);
+  enterLegacyPortal(player, core.ObjectIdentifiers.SARADOMIN_PORTAL);
   const chooseVeteran = prompt.options[2].pick;
   t.mock.method(game, 'getPhase', () => game.PHASE.ACTIVE);
   chooseVeteran();
@@ -717,7 +729,7 @@ test('a stale bot tier prompt cannot populate a game that has already started', 
 
 test('a carrier whose banner was stripped before the drop hook still drops the flag', () => {
   const player = fakePlayer();
-  enterPortal(player, core.ObjectIdentifiers.SARADOMIN_PORTAL);
+  enterLegacyPortal(player, core.ObjectIdentifiers.SARADOMIN_PORTAL);
   prompt.options[0].pick();
   const carrier = World.getAddPlayerQueue().find((bot) => game.getTeamId(bot) === TEAM.ZAMORAK);
   assert.ok(carrier, 'a Zamorak bot was spawned');
@@ -749,7 +761,7 @@ test('a carrier who logs out drops the flag before the banner is stripped, as a 
   Areas({
     core,
     registerArea: (area) => registered.push(area),
-    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {},
+    onServerStartup: () => {}, onPlayerLogin: () => {}, onCanEquip: () => {}, onCanUnequip: () => {}, onSpellDisabled: () => {},
     onPlayerDeath: () => {}, onShouldDropItemsOnDeath: () => {}, onPlayerBeforeDeath: () => {}, onCustomEvent: () => {},
   }, island);
   const { Player } = require('../dist/game/entity/impl/player/Player');
@@ -801,7 +813,7 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
     resetIdleTicks: () => {},
   };
   Areas({
-    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent: deathApi.onCustomEvent,
+    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onSpellDisabled() {}, onCustomEvent: deathApi.onCustomEvent,
     onShouldDropItemsOnDeath: (handler) => { deathPolicy = handler; },
     onPlayerBeforeDeath: (handler) => { beforeDeath = handler; },
     onPlayerDeath: (handler) => { respawn = handler; },
@@ -827,6 +839,8 @@ test('Castle Wars deaths keep gear and supplies, drop flags but no bones; other 
       getLocation: () => new core.Location(2420, 3075),
       getCombat: () => ({ getRecentDamagerEntries: () => [], getKiller: () => null }),
       getInventory: () => ({ getItems: () => [gear] }),
+      // The death pipeline dismisses owned thralls and asks persistence to save.
+      getAttribute: (key) => key === 'bot-skip-persistence' ? true : null,
       resetAttributes() {},
       moveTo() {},
       smartMoves: (bounds) => { assert.equal(bounds, data.TEAM_DATA[TEAM.SARADOMIN].respawnBounds); },
@@ -912,7 +926,7 @@ test('a mark whose death never reached the death hook does not keep a later deat
   const deathApi = PluginManager.createApi('Castle Wars stale death mark');
   const island = { ...game };
   Areas({
-    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onCustomEvent: deathApi.onCustomEvent,
+    core, registerArea() {}, onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {}, onSpellDisabled() {}, onCustomEvent: deathApi.onCustomEvent,
     onShouldDropItemsOnDeath: (handler) => { deathPolicy = handler; },
     onPlayerBeforeDeath: (handler) => { beforeDeath = handler; },
     onPlayerDeath() {},
@@ -939,7 +953,7 @@ test('the arena is multi-combat: several enemies may hit one player, the lobby a
   const registered = [];
   Areas({
     core, registerArea: (area) => registered.push(area), onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {},
-    onCanUnequip() {}, onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerBeforeDeath() {}, onPlayerDeath() {},
+    onCanUnequip() {}, onSpellDisabled() {}, onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerBeforeDeath() {}, onPlayerDeath() {},
   }, island);
   AreaManager.areas.push(...registered);
   t.after(() => {

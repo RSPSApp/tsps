@@ -363,3 +363,23 @@ test("the roll happens on logging in in the mine and on walking into its map squ
   DenseRunestone._test.mapSquareChanged({ player: leaving.player, previous: new Location(1728, 3839, 0), location: new Location(1728, 3840, 1) });
   assert.equal(out(leaving.player), 0, "leaving, or another plane, does not");
 });
+
+test("a busy modal holds chipping; after it closes the swing starts again", (t) => {
+  // As the level-up hold, but released by the modal's close (docs/busy-modals.md).
+  t.mock.method(Math, "random", () => 0);
+  const { player } = miner();
+  let busy = false;
+  player.inBusyModal = () => busy;
+  click(player, pillar(SOUTH, "arceuus_runestone_base_2"), "Chip");
+  ticks(10);
+  assert.equal(player.getInventory().getAmount(BLOCK), 1);
+  busy = true;
+  ticks(27);
+  assert.equal(player.getInventory().getAmount(BLOCK), 1, "no blocks while the modal is open");
+  busy = false;
+  ticks(9);
+  assert.equal(player.getInventory().getAmount(BLOCK), 1, "the swing restarts: the next block is on the 10th tick");
+  ticks(1);
+  assert.equal(player.getInventory().getAmount(BLOCK), 2);
+  DenseRunestone._test.sessions.delete(player);
+});

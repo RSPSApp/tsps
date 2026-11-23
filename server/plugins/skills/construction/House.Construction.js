@@ -10,6 +10,7 @@ const EstateAgent = require("./EstateAgent.Construction");
 const Servants = require("./Servants.Construction");
 const Estate = require("./Estate.Construction");
 const Storage = require("./Storage.Construction");
+const BossLair = require("./BossLair.Construction");
 const Portals = require("./Portals.Construction");
 const Altars = require("./Altars.Construction");
 const Data = require("./Data.Construction");
@@ -34,6 +35,7 @@ const Decorations = require("./Decorations.Construction");
 const GamesRoom = require("./GamesRoom.Construction");
 const CombatRings = require("./CombatRings.Construction");
 const Tea = require("./Tea.Construction");
+const Topiary = require("./Topiary.Construction");
 const TipJar = require("./TipJar.Construction");
 const Bookcase = require("./Bookcase.Construction");
 const Scrying = require("./Scrying.Construction");
@@ -221,9 +223,12 @@ function releaseHouse(player, restoreLocation) {
   if (restoreLocation && Instance.PlayerHouseInstance.isAllocationLocation(player.getLocation())) player.moveTo(Estate.houseExit(houseStateFor(player)));
 }
 
-/** "construction:owns-house" { player, owns }: whether the player has bought a house. */
+/** "construction:owns-house" { player, owns, location }: whether the player has bought a house, and its town's name. */
 function ownsHouse(request) {
-  if (request?.player) request.owns = houseStateFor(request.player).owned !== false;
+  if (!request?.player) return;
+  const house = houseStateFor(request.player);
+  request.owns = house.owned !== false;
+  if (request.owns) request.location = Estate.houseLocation(house).name;
 }
 
 /**
@@ -1597,8 +1602,11 @@ function materialName(material) {
 }
 
 function furnitureCreationText(buildable) {
-  // The build menu shows the cache's own name ("Crude wooden chair|Plank: 2<br>Nails: 2<br><br>").
-  const name = buildable.name ?? formatBuildable(buildable);
+  // The build menu shows the cache's own name ("Crude wooden chair|Plank: 2<br>Nails: 2<br><br>"),
+  // sentence-cased: rows "Spice Rack", "Oak Telescope" and "S.T.A.S.H chart" are sent as "Spice rack",
+  // "Oak telescope" and "S.t.a.s.h chart" (rsprox.net recs 271 and 2804, rev 229).
+  const full = buildable.name ?? formatBuildable(buildable);
+  const name = full.charAt(0).toUpperCase() + full.slice(1).toLowerCase();
   const materials = buildable.materials.slice(0, 4).map((material) => `${materialName(material)}: ${material.amount.toLocaleString()}`);
   // Four lines whatever the count: "Oak chair|Oak plank: 2<br><br><br>" (rsprox captures, rev 229).
   return `${name}|${[...materials, "", "", "", ""].slice(0, 4).join("<br>")}`;
@@ -1675,7 +1683,12 @@ function tryRemoveFurniture(event) {
   const house = houseFor(player);
   const type = event.object?.getType?.() ?? 10;
   if (!house || !isBuildingMode(player) || !house.getFurnitureAt(event.location, event.objectId, type)) return false;
-  const problem = house.canRemoveFurniture(event.location, event.objectId, type);
+  return removeFurniturePrompt(player, house, event.location, event.objectId, type);
+}
+
+/** "Really remove it?" for the building-mode owner, then the piece at `location` comes out. */
+function removeFurniturePrompt(player, house, location, objectId, type) {
+  const problem = house.canRemoveFurniture(location, objectId, type);
   if (problem) {
     Menu.refuse(player, problem);
     return true;
@@ -1683,16 +1696,16 @@ function tryRemoveFurniture(event) {
   // rsprox captures ("Remove" on poh_chair1, rev 229): "Really remove it?", and the Yes is silent.
   const confirm = () => api.sendMultiChatboxPrompt(player, "Really remove it?", "Yes", () => {
     if (houseFor(player) !== house || !isBuildingMode(player)) return;
-    const currentProblem = house.canRemoveFurniture(event.location, event.objectId, type);
+    const currentProblem = house.canRemoveFurniture(location, objectId, type);
     if (currentProblem) return Menu.refuse(player, currentProblem);
-    const furniture = house.removeFurniture(event.location, event.objectId, type);
+    const furniture = house.removeFurniture(location, objectId, type);
     if (!furniture) return;
     player.performAnimation(new Animation(REMOVE_ANIMATION));
     rebuildHouse(player, house);
     api.emitCustomEvent("construction:furniture-removed", { player, house, furniture });
   }, "No", () => {});
   // A piece whose removal costs the player something warns first (rsprox captures: the portal nexus).
-  const removal = { player, house, furniture: house.getFurnitureAt(event.location, event.objectId, type), warning: null };
+  const removal = { player, house, furniture: house.getFurnitureAt(location, objectId, type), warning: null };
   api.emitCustomEvent("construction:furniture-removing", removal);
   if (removal.warning) Menu.warn(player, removal.warning, confirm);
   else confirm();
@@ -1729,7 +1742,7 @@ function handleFurnitureAction(event) {
     || (["light", "re-light"].includes(action ?? "") && Altars.lightHouseBurner(event))
     || (action === "open" && Storage.openHouseFurniture(event))
     || (action === "close" && Storage.closeHouseFurniture(event))
-    || (["search", "view"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
+    || (["search", "view", "jars"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
 }
 
 // Cache-native ready poses for the seven parlour chairs, in furniture-menu order.
@@ -2079,9 +2092,11 @@ function attach(api) {
   GamesRoom.attachGamesRoom(api);
   CombatRings.attachCombatRings(api);
   Tea.attachTea(api);
+  Topiary.attachTopiary(api);
   TipJar.attachTipJar(api);
   Bookcase.attachBookcase(api);
   Storage.attachStorage(api);
+  BossLair.attachBossLair(api);
   Scrying.attachScrying(api);
   CapeHanger.attachCapeHanger(api);
   Trophies.attachTrophies(api);
@@ -2139,4 +2154,4 @@ function attach(api) {
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, furnitureLevel, hasHammer, hasSaw, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, furnitureLevel, hasHammer, hasSaw, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, chooseFurniture, removeFurniturePrompt, furnitureCreationText, processOccupant, leftHouse, attach });

@@ -5,6 +5,35 @@ on:
         branches: [main]
         paths:
             - 'client/**'
+            # Shared client modules and the real interface exporter's inputs.
+            # release-workflow.test.mjs checks coverage when an importer adds a dependency.
+            - 'server/plugins/world/ContinuousMotion.FreeMovement.js'
+            - 'server/plugins/items/BlightedItems.js'
+            - 'server/plugins/items/data/food.json'
+            - 'server/scripts/browser-host-interface-definitions.ts'
+            - 'server/plugins/modes/pvp/PresetsWidget.PvpMode.js'
+            - 'server/plugins/interface/Commands.plugin.js'
+            - 'server/plugins/interface/DestroyItem.plugin.js'
+            - 'server/plugins/interface/MaxHitsInterface.plugin.js'
+            - 'server/plugins/interface/SideJournalDefaults.plugin.js'
+            - 'server/plugins/interface/TeleportInterface.plugin.js'
+            - 'server/plugins/interface/widgetGroup.js'
+            - 'server/plugins/interface/data/destroy-notes.json'
+            - 'server/plugins/interface/data/teleports.json'
+            - 'server/plugins/interface/sidejournaldefaults/Layout.SideJournalDefaults.js'
+            - 'server/plugins/interface/sidejournaldefaults/Summary.SideJournalDefaults.js'
+            - 'server/plugins/interface/teleportinterface/Destinations.TeleportInterface.js'
+            - 'server/plugins/interface/teleportinterface/Layout.TeleportInterface.js'
+            - 'server/src/main/typescript/elvarg/game/content/combat/CombatType.ts'
+            - 'server/scripts/ensure-cache.ts'
+            - 'server/target.txt'
+            - 'server/tsconfig*.json'
+            - 'server/package.json'
+            - 'server/yarn.lock'
+            - 'server/.yarnrc.yml'
+            - 'server/.yarn/**'
+            - 'scripts/run-with-env.mjs'
+            - 'scripts/client-version.mjs'
             - '.github/scripts/client-release/build-web.mjs'
             - '.github/scripts/client-release/release*.mjs'
             - '.github/scripts/client-release/package*.json'
@@ -13,6 +42,33 @@ on:
         branches: [main]
         paths:
             - 'client/**'
+            - 'server/plugins/world/ContinuousMotion.FreeMovement.js'
+            - 'server/plugins/items/BlightedItems.js'
+            - 'server/plugins/items/data/food.json'
+            - 'server/scripts/browser-host-interface-definitions.ts'
+            - 'server/plugins/modes/pvp/PresetsWidget.PvpMode.js'
+            - 'server/plugins/interface/Commands.plugin.js'
+            - 'server/plugins/interface/DestroyItem.plugin.js'
+            - 'server/plugins/interface/MaxHitsInterface.plugin.js'
+            - 'server/plugins/interface/SideJournalDefaults.plugin.js'
+            - 'server/plugins/interface/TeleportInterface.plugin.js'
+            - 'server/plugins/interface/widgetGroup.js'
+            - 'server/plugins/interface/data/destroy-notes.json'
+            - 'server/plugins/interface/data/teleports.json'
+            - 'server/plugins/interface/sidejournaldefaults/Layout.SideJournalDefaults.js'
+            - 'server/plugins/interface/sidejournaldefaults/Summary.SideJournalDefaults.js'
+            - 'server/plugins/interface/teleportinterface/Destinations.TeleportInterface.js'
+            - 'server/plugins/interface/teleportinterface/Layout.TeleportInterface.js'
+            - 'server/src/main/typescript/elvarg/game/content/combat/CombatType.ts'
+            - 'server/scripts/ensure-cache.ts'
+            - 'server/target.txt'
+            - 'server/tsconfig*.json'
+            - 'server/package.json'
+            - 'server/yarn.lock'
+            - 'server/.yarnrc.yml'
+            - 'server/.yarn/**'
+            - 'scripts/run-with-env.mjs'
+            - 'scripts/client-version.mjs'
             - '.github/scripts/client-release/build-web.mjs'
             - '.github/scripts/client-release/release*.mjs'
             - '.github/scripts/client-release/package*.json'
@@ -55,6 +111,7 @@ jobs:
                   npm ci --prefix .github/scripts/client-release
             - name: Check and build the shared client
               run: |
+                  node scripts/client-version.mjs
                   yarn --cwd client typecheck
                   npm --prefix .github/scripts/client-release test
                   npm --prefix .github/scripts/client-release run build:web
@@ -98,21 +155,43 @@ jobs:
                   GH_REPO: ${{ github.repository }}
                   REQUESTED_VERSION: ${{ inputs.version }}
               run: |
-                  gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[].tag_name' > "$RUNNER_TEMP/client-release-tags"
+                  gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[] | .tag_name, .name' > "$RUNNER_TEMP/client-release-tags"
                   version=$(node .github/scripts/client-release/release-version.mjs < "$RUNNER_TEMP/client-release-tags")
                   echo "CLIENT_VERSION=$version" >> "$GITHUB_ENV"
+            - name: Read client compatibility identifier
+              run: |
+                  client_build=$(node -p 'require("./client/build/client-release.json").clientVersion')
+                  echo "CLIENT_BUILD=$client_build" >> "$GITHUB_ENV"
+                  if draft=$(gh release view "client-$client_build" --json isDraft --jq .isDraft 2>/dev/null); then
+                      if [ "$draft" = false ]; then
+                          echo "CLIENT_ALREADY_PUBLISHED=true" >> "$GITHUB_ENV"
+                      else
+                          name=$(gh release view "client-$client_build" --json name --jq .name)
+                          reserved=${name#Web client }
+                          REQUESTED_VERSION="$reserved" node .github/scripts/client-release/release-version.mjs </dev/null
+                          echo "CLIENT_VERSION=$reserved" >> "$GITHUB_ENV"
+                          echo "CLIENT_DRAFT_EXISTS=true" >> "$GITHUB_ENV"
+                      fi
+                  fi
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
             - name: Sign web client release
+              if: env.CLIENT_ALREADY_PUBLISHED != 'true'
               env:
                   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.CLIENT_UPDATE_SIGNING_KEY }}
                   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.CLIENT_UPDATE_SIGNING_KEY_PASSWORD }}
-              run: npm --prefix .github/scripts/client-release run release:web -- "$CLIENT_VERSION" "https://github.com/$GITHUB_REPOSITORY/releases/download/client-v$CLIENT_VERSION/"
+              run: npm --prefix .github/scripts/client-release run release:web -- "$CLIENT_VERSION" "https://github.com/$GITHUB_REPOSITORY/releases/download/client-$CLIENT_BUILD/"
             - name: Publish complete release
+              if: env.CLIENT_ALREADY_PUBLISHED != 'true'
               env:
                   GH_TOKEN: ${{ github.token }}
                   GH_REPO: ${{ github.repository }}
                   CLIENT_COMMIT: ${{ github.sha }}
               run: |
-                  tag="client-v$CLIENT_VERSION"
-                  gh release create "$tag" --draft --target "$CLIENT_COMMIT" --title "Web client $CLIENT_VERSION" --notes "Signed web client bundle from $CLIENT_COMMIT. Shared web client assets; native installers are distributed separately."
-                  gh release upload "$tag" ".github/scripts/client-release/releases/client/client-$CLIENT_VERSION.tar.gz" .github/scripts/client-release/releases/client/manifest.json .github/scripts/client-release/releases/client/manifest.json.minisig
+                  tag="client-$CLIENT_BUILD"
+                  if [ "${CLIENT_DRAFT_EXISTS:-false}" != true ]; then
+                      gh release create "$tag" --draft --target "$CLIENT_COMMIT" --title "Web client $CLIENT_VERSION" --notes "Signed web client bundle from $CLIENT_COMMIT. Shared web client assets; native installers are distributed separately."
+                  fi
+                  gh release upload "$tag" --clobber ".github/scripts/client-release/releases/client/client-$CLIENT_VERSION.tar.gz" .github/scripts/client-release/releases/client/manifest.json .github/scripts/client-release/releases/client/manifest.json.minisig
                   gh release edit "$tag" --draft=false --latest

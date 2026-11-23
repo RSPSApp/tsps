@@ -18,6 +18,7 @@
  */
 const Shared = require("./Shared.ValeTotems");
 const Spirits = require("./Spirits.ValeTotems");
+const Trails = require("./Trails.ValeTotems");
 const pendingSpirits = new WeakMap();
 // RSProx 232/03127 ticks 253/255 and 237/01108 ticks 6608/6610.
 const SPIRIT_TRANSITION_TICKS = 2;
@@ -184,7 +185,7 @@ function save(player) {
   const sender = player.getPacketSender();
   const snapshot = {};
   for (const name of PERSISTED_VARPS) {
-    const value = sender.getVarp(varpId(name));
+    const value = Trails.persistentValue(name, sender.getVarp(varpId(name)));
     if (value !== 0) snapshot[name] = value;
   }
   for (const [site, transition] of pendingSpirits.get(player) ?? []) {
@@ -225,7 +226,7 @@ function restore({ player }) {
   const sender = player.getPacketSender();
   for (const [name, value] of Object.entries(snapshot && typeof snapshot === "object" ? snapshot : {})) {
     const id = Shared.core().CacheDefinitions.getVarpId(name);
-    if (id != null && Number.isInteger(value)) sender.sendConfig(id, value);
+    if (id != null && Number.isInteger(value)) sender.sendConfig(id, Trails.persistentValue(name, value));
   }
   if (snapshot || inValley(player.getLocation())) join(player);
 }

@@ -82,7 +82,7 @@ const STEP = Object.freeze({
 module.exports = function attachEscort(context) {
   const { api, state, common, STAGE, VARBIT, PAGE } = context;
   const quest = context.quest;
-  const { NpcIdentifiers: N, ItemIdentifiers: I, ObjectIdentifiers: O, Location, Animation, CacheDefinitions } = api.core;
+  const { NpcIdentifiers: N, ItemIdentifiers: I, ObjectIdentifiers: O, Location, Animation, CacheDefinitions, ObjectDefinition } = api.core;
 
   const NPC = Object.freeze({
     VELIAF: N.VELIAF_HURTZ_2, // 5048 (multinpc 9620)
@@ -154,6 +154,13 @@ module.exports = function attachEscort(context) {
   const FOLLOWER_VARP = 447; // follower_npc = (4441 << 16) | index (t3483), -1 when it ends
   const MIST_FADE_TICKS = 9; // mist_disappear 1262 nine ticks after it appears (t3577 -> 3586), gone a tick later
   const MIST_FADE = 1262;
+  // A wandering juvinate went for Ivan once 3 tiles from him (second attempt: turned to him at
+  // t3890 from (2857,4556), Ivan at (2860,4555), struck as it reached him, t3892-3893).
+  const IVAN_ENGAGE_RANGE = 3;
+  // None goes for him before this many ticks in: live's juvinates passed within range from t3485
+  // and wandered on; the first attack on Ivan came at t3503, 20 ticks after the arrival (t3483).
+  const IVAN_ENGAGE_AFTER = 20;
+  const RETALIATION_WINDOW = 2; // ticks: a retaliation queued by a landed hit runs on the next one
   const SOUTH = 6; // Direction id
 
   const LIBRARY = Object.freeze({ tile: [3360, 9904, 0], climbAnimation: 827 }); // t4286-4287
@@ -374,7 +381,7 @@ module.exports = function attachEscort(context) {
       canTeleport: () => null,
       musicTrack: AMBUSH_MUSIC,
     }, { instance: { sourceChunk: AMBUSH.sourceChunk, size: AMBUSH.size }, at: AMBUSH.at, exit: AMBUSH.exitPath });
-    const ambush = { player, scene, route, number, juvinates: [], ivan: null, done: false, fled: false };
+    const ambush = { player, scene, route, number, juvinates: [], ivan: null, done: false, fled: false, arrived: api.core.World.getProcessCycle() };
     ambushes.set(player, ambush);
     ambush.ivan = Scenes.actor(scene, NPC.IVAN_AMBUSH, AMBUSH.ivan, null, { direction: SOUTH });
     if (ambush.ivan) {
@@ -383,8 +390,8 @@ module.exports = function attachEscort(context) {
       player.getPacketSender().sendConfig(FOLLOWER_VARP, (NPC.IVAN_AMBUSH << 16) | ambush.ivan.getIndex());
     }
     for (let i = 0; i < route.count; i++) {
-      // Ours: two engage (one on the player, one on Ivan) and the rest wander until one falls.
-      const juvinate = Scenes.actor(scene, route.juvinate, AMBUSH.juvinates, null, { direction: SOUTH, wanderRadius: i < 2 ? 0 : 6 });
+      // All of them wander (both live attempts: the first spawn moved, t3842).
+      const juvinate = Scenes.actor(scene, route.juvinate, AMBUSH.juvinates, null, { direction: SOUTH, wanderRadius: 6 });
       if (!juvinate) continue;
       juvinate.setMultiCombat?.(true);
       actorAmbush.set(juvinate, ambush);
@@ -392,18 +399,34 @@ module.exports = function attachEscort(context) {
     }
     player.getPacketSender().sendSong?.(AMBUSH_MUSIC);
     player.getPacketSender().sendInterfaceRemoval();
-    engage(ambush, ambush.juvinates[0], player);
-    engage(ambush, ambush.juvinates[1], ambush.ivan);
     Scenes.later(scene, 1, () => {
       common.play(player, route.juvinate, V.TALK_IVAN, (steps) => steps.slice(-1), PAGE);
     });
+    // No juvinate starts on the player: live's player struck first (t3491, t3843). Wiki: the
+    // others "wander around for a while, and then eventually engage Ivan"; watchIvan sends one
+    // that wanders near him.
     Scenes.later(scene, 1, () => watchIvan(ambush));
+  }
+
+  /** A free juvinate near Ivan goes for him, unless one already is on him (checked every tick). */
+  function engageIvan(ambush) {
+    const { ivan } = ambush;
+    const at = ivan?.getLocation?.();
+    if (!at || api.core.World.getProcessCycle() - ambush.arrived < IVAN_ENGAGE_AFTER) return;
+    const targetOf = (juvinate) => juvinate.getCombat?.().getTarget?.() ?? null;
+    if (ambush.juvinates.some((juvinate) => targetOf(juvinate) === ivan)) return;
+    const near = (juvinate) => {
+      const where = juvinate.getLocation();
+      return where.getZ() === at.getZ()
+        && Math.max(Math.abs(where.getX() - at.getX()), Math.abs(where.getY() - at.getY())) <= IVAN_ENGAGE_RANGE;
+    };
+    engage(ambush, ambush.juvinates.find((juvinate) => !targetOf(juvinate) && near(juvinate)), ivan);
   }
 
   function engage(ambush, juvinate, target) {
     if (!juvinate?.isRegistered?.() || !target?.isRegistered?.()) return;
+    // Ivan holds his tile and answers once hit (t3892 strike, t3893 he turns to it).
     juvinate.getCombat().attack(target);
-    if (target === ambush.ivan) ambush.ivan.getCombat().attack(juvinate);
   }
 
   /** Ivan eats when he is hurt (Wiki); with no food left he gives up (Wiki: "teleports out"). */
@@ -422,6 +445,7 @@ module.exports = function attachEscort(context) {
       // Wiki wording ("too"); live sent "to" (t3950).
       player.sendMessage(`Ivan : Urgh, just had too eat some food, I only have ${food - 1} left.`);
     }
+    engageIvan(ambush);
     Scenes.later(ambush.scene, 1, () => watchIvan(ambush));
   }
 
@@ -432,6 +456,26 @@ module.exports = function attachEscort(context) {
     if (ivan) Scenes.removeActor(scene, ivan);
     ambush.ivan = null;
     clearFollower(player);
+    // Live (t3625-3629): with Ivan gone nobody fights (the player's foe had just died, t3624), the
+    // juvinates left only wander, and his line stays up until continued. A juvinate still on the
+    // player would close it with its next hit, as every hit does, so their fight stops here too.
+    const playerCombat = player.getCombat?.();
+    if (ambush.juvinates.includes(playerCombat?.getTarget?.())) playerCombat.reset?.();
+    // A hit that landed on the player this tick has queued their auto-retaliation for the next one.
+    // The juvinates are untargetable meanwhile, so that attack is dropped (CombatFactory.validTarget);
+    // NPC state only, nothing of it reaches the player's save. They can be fought again after.
+    const juvinates = [...ambush.juvinates];
+    for (const juvinate of juvinates) juvinate.setUntargetable?.(true);
+    Scenes.later(scene, RETALIATION_WINDOW, () => {
+      for (const juvinate of juvinates) if (juvinate.isRegistered?.()) juvinate.setUntargetable?.(false);
+    });
+    for (const juvinate of ambush.juvinates) {
+      juvinate.getCombat?.().reset?.();
+      api.core.TaskManager.cancelTasks(juvinate); // a retaliation already queued by a landed hit
+      api.core.HitQueue?.dropHitsFrom?.(juvinate); // a swing already on its way lands no more
+      // The player's swing on its way to it would land and set it back on them (this ambush's only).
+      juvinate.getCombat?.().getHitQueue?.()?.clearIncoming?.();
+    }
     common.play(player, NPC.IVAN_FLEEING, V.FLEE, undefined, PAGE);
   }
 
@@ -451,7 +495,6 @@ module.exports = function attachEscort(context) {
     if (!ambush.juvinates.includes(npc)) return;
     const { player, scene } = ambush;
     const tile = Scenes.toSource(npc, npc.getLocation());
-    const target = npc.getCombat?.().getTarget?.() ?? null;
     Scenes.removeActor(scene, npc);
     ambush.juvinates = ambush.juvinates.filter((juvinate) => juvinate !== npc);
     const mist = Scenes.actor(scene, NPC.MIST, [tile.getX(), tile.getY(), tile.getZ()], null, { wanderRadius: 4 });
@@ -459,21 +502,10 @@ module.exports = function attachEscort(context) {
       Scenes.later(scene, MIST_FADE_TICKS, () => mist.isRegistered?.() && common.anim(mist, MIST_FADE));
       Scenes.later(scene, MIST_FADE_TICKS + 1, () => Scenes.removeActor(scene, mist));
     }
-    if (ambush.done || ambush.fled || ambush.fleeing) return;
+    if (ambush.done || ambush.fled) return;
     const deaths = get(player, VARBIT.AMBUSH_DEATHS) + 1;
     state.set(player, VARBIT.AMBUSH_DEATHS, deaths);
     if (deaths >= ambush.route.escapeAt) return escaped(ambush);
-    // The capture's first try: at two deaths, with no food left, Ivan gives up: 2000 = 2 at t3624,
-    // Ivan gone with his line the tick after (t3625).
-    if (ambush.number === 2 && deaths === 2 && get(player, VARBIT.IVAN_FOOD) === 0) {
-      ambush.fleeing = true;
-      Scenes.later(scene, 1, () => ivanFlees(ambush));
-      return;
-    }
-    // Ours: the next juvinate takes the fallen one's place.
-    const next = ambush.juvinates.find((juvinate) => !juvinate.getCombat?.().getTarget?.());
-    const victim = target === ambush.ivan && ambush.ivan ? ambush.ivan : player;
-    engage(ambush, next, victim);
   }
 
   /** Three deaths on route 2 (t4023): the box, the map's second leg, then outside Paterdomus. */
@@ -599,12 +631,25 @@ module.exports = function attachEscort(context) {
   /** The opened multiloc (12762 -> 12763 "Trapdoor"): 360 and the library, no message (t4286-4287). */
   function climbLibraryTrapdoor(event) {
     const { player } = event;
-    if (event.definition?.getId?.() !== O.TRAPDOOR_52 && event.objectId !== O.TRAPDOOR_52) return false;
+    // The client sends the multiloc's base id (oploc1 12762, t4282); the event's definition is the
+    // one 1982 picks for this player. ObjectDefinition has an `id` field, not a getId().
+    const id = event.definition?.id ?? ObjectDefinition.forPlayer(event.objectId, player)?.id ?? event.objectId;
+    if (id !== O.TRAPDOOR_52) return false;
     if (get(player, VARBIT.TEMPLE_TRAPDOOR) !== 1) return false;
-    common.anim(player, LIBRARY.climbAnimation);
+    // Live: at the trapdoor t4284, seq 827 two ticks on (t4286), the library the tick after (t4287).
+    const from = player.getLocation().clone();
+    const teleports = player.getTeleportSerial?.();
+    // Moved meanwhile (any teleport, even onto the same tile) or died: no climb.
+    const still = () => player.getLocation().equals(from) && player.getTeleportSerial?.() === teleports
+      && player.getHitpoints() > 0 && !player.isDyingReturn?.();
     common.later(player, 1, () => {
-      if (stage(player) >= STAGE.LIBRARY_KEY) state.advance(player, STAGE.LIBRARY_OPEN);
-      player.moveTo(new Location(...LIBRARY.tile));
+      if (!still()) return;
+      common.anim(player, LIBRARY.climbAnimation);
+      common.later(player, 1, () => {
+        if (!still()) return;
+        if (stage(player) >= STAGE.LIBRARY_KEY) state.advance(player, STAGE.LIBRARY_OPEN);
+        player.moveTo(new Location(...LIBRARY.tile));
+      });
     });
     return true;
   }

@@ -1299,12 +1299,72 @@ test("the Al Kharid broken wall and the Stalker Den cave need their quests", () 
   }
 });
 
-test("diary gates are recorded but not enforced until the diary's tasks can be done", () => {
-  hooks.events.length = 0;
-  const player = createPlayer(2898, 9902, 0);
-  operate(player, ObjectIds.CREVICE_7, [2898, 9901, 0]);
-  assert.ok(!hooks.events.some((event) => event.name === "diary:is-complete"));
-  assert.ok(!player.state.messages.some((message) => message.includes("Diary")));
+/** Runs `body` with the given diary tiers done and (separately) claimed, as "key:tier". */
+function withDiaries({ complete = [], claimed = [] }, body) {
+  hooks.answers["diary:is-complete"] = (request) => { request.complete = complete.includes(`${request.diary}:${request.tier}`); };
+  hooks.answers["diary:is-reward-claimed"] = (request) => { request.claimed = claimed.includes(`${request.diary}:${request.tier}`); };
+  try {
+    body();
+  } finally {
+    delete hooks.answers["diary:is-complete"];
+    delete hooks.answers["diary:is-reward-claimed"];
+  }
+}
+
+// Wiki (Shortcuts; Crevice (Heroes' Guild)): the hard Falador Diary unlocks the crevice (#6420).
+test("a diary shortcut refuses a player without the tier and lets one with it through", () => {
+  withDiaries({}, () => {
+    const player = createPlayer(2898, 9902, 0);
+    operate(player, ObjectIds.CREVICE_7, [2898, 9901, 0]);
+    assert.ok(player.state.messages.includes("You need to complete the hard Falador Diary to use this shortcut."), player.state.messages.join(" | "));
+    assert.equal(player.state.xp, 0, "not crossed");
+  });
+  withDiaries({ complete: ["falador:hard"] }, () => {
+    const player = createPlayer(2898, 9902, 0);
+    operate(player, ObjectIds.CREVICE_7, [2898, 9901, 0]);
+    assert.ok(!player.state.messages.some((message) => message.includes("Diary")), player.state.messages.join(" | "));
+  });
+});
+
+// Wiki (Narrow crevice (Deep Wilderness Dungeon)): "You need to complete the medium tier of the
+// Wilderness achievement diary to use this shortcut" (sic, no period).
+test("the Deep Wilderness Dungeon crevice gives the Wiki's diary refusal", () => {
+  withDiaries({}, () => {
+    const player = createPlayer(3046, 10326, 0);
+    operate(player, 19043, [3046, 10327, 0]);
+    assert.ok(player.state.messages.includes("You need to complete the medium tier of the Wilderness achievement diary to use this shortcut"), player.state.messages.join(" | "));
+    assert.deepEqual(tileOf(player), [3046, 10326, 0]);
+  });
+});
+
+// Wiki (Dark tunnel (Motherlode Mine)): the northern tunnel by the bank needs the medium Falador
+// Diary, and "the reward for the medium diary must be accepted"; the southern one needs no diary.
+test("the Motherlode Mine's eastern dark tunnel needs the medium Falador Diary claimed (#6420)", () => {
+  const refusal = "You need to complete the medium Falador Diary to use this shortcut.";
+  withDiaries({ complete: ["falador:easy", "falador:medium"] }, () => {
+    const player = createPlayer(3759, 5670, 0);
+    operate(player, 10047, [3760, 5670, 0]);
+    assert.ok(player.state.messages.includes(refusal), "done but not claimed: " + player.state.messages.join(" | "));
+    assert.deepEqual(tileOf(player), [3759, 5670, 0]);
+  });
+  withDiaries({ complete: ["falador:easy", "falador:medium"], claimed: ["falador:easy", "falador:medium"] }, () => {
+    const player = createPlayer(3759, 5670, 0);
+    operate(player, 10047, [3760, 5670, 0]);
+    assert.ok(!player.state.messages.includes(refusal), player.state.messages.join(" | "));
+    assert.deepEqual(tileOf(player), [3765, 5671, 0], "through to the bank side");
+  });
+});
+
+test("the Motherlode Mine's southern dark tunnel needs no diary and crosses between its own ends", () => {
+  withDiaries({}, () => {
+    const north = createPlayer(3745, 5646, 0);
+    operate(north, 10047, [3745, 5645, 0]);
+    assert.deepEqual(tileOf(north), [3744, 5641, 0], north.state.messages.join(" | "));
+    const south = createPlayer(3744, 5641, 0);
+    operate(south, 10047, [3744, 5642, 0]);
+    assert.deepEqual(tileOf(south), [3745, 5646, 0], south.state.messages.join(" | "));
+    assert.ok(!south.state.messages.some((message) => message.includes("Diary")));
+  });
 });
 
 test("failures roll the OSRS low/high success chance the Wiki charts", () => {
@@ -2820,6 +2880,34 @@ test("Agility Pyramid: jump gaps and low walls go straight over, never along (rs
       tick();
     }
     assert.deepEqual(tileOf(player), to, `${object} at ${x},${y} from ${from}`);
+  }
+});
+
+test("the ice troll caves' rope bridge: a step onto the end, then a three-tile gap jump, both ways, with no level, XP or message (rsprox 3026 tick 2917)", () => {
+  for (const [objectId, objectTile, from, to] of [
+    [21317, [2385, 10260, 1], [2384, 10259, 1], [2385, 10263]],
+    [21316, [2385, 10263, 1], [2385, 10266, 1], [2385, 10260]],
+  ]) {
+    const player = createPlayer(...from, 1);
+    const moves = [];
+    const setForceMovement = player.setForceMovement;
+    player.setForceMovement = (value) => {
+      if (value) {
+        const end = value.getEnd();
+        moves.push({ to: [player.getLocation().getX() + end.getX(), player.getLocation().getY() + end.getY()], cycles: [value.getSpeed(), value.getReverseSpeed()] });
+      }
+      return setForceMovement(value);
+    };
+    const ticks = timeline(player, objectId, objectTile);
+    assert.deepEqual(moves.map((move) => move.to), [to], `${objectId}: one exact move across the gap`);
+    assert.deepEqual(moves[0].cycles, [53, 85], "exactmove delay1 53, delay2 85");
+    assert.deepEqual(tileOf(player).slice(0, 2), to, `${objectId}: lands on the far end`);
+    const jumps = ticksWith(ticks, (entry) => entry.animations.includes(3067));
+    assert.deepEqual(jumps, [1], `${objectId}: agility_pyramid_gap_jump the tick after stepping onto the bridge end`);
+    assert.deepEqual(ticks[1].sounds, [2465], "synth 2465 with the jump");
+    assert.deepEqual(tileOf(player), to.concat(1));
+    assert.equal(player.state.xp, 0);
+    assert.deepEqual(player.state.messages, []);
   }
 });
 

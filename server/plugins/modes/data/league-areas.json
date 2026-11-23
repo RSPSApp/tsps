@@ -7,6 +7,13 @@
     "available": 11695
   },
   "maxUnlocked": 5,
+  "echoBoss": {
+    "_comment": "The Echo boss tab's Locate (512:82 echo_boss_map_button; script 7645 gives it the op). Each leagues_echo_bosses row's `region` is the area id (3 Asgarnia, 4 Kandarin, 5 Morytania, 6 Desert, 7 Tirannwn, 8 Fremennik, 11 Wilderness, 20 Kourend, 21 Varlamore: script 7638's switch); its ca_data struct's param 1317 is the boss's packed coord, the one the Combat Achievements panel's Locate reads. The click is in no rsprox recording (rev 227 predates the button, 241/242 hold none): the reply is the Combat Achievements one.",
+    "table": "leagues_echo_bosses",
+    "regionColumn": "region",
+    "structColumn": "ca_data",
+    "coordParam": 1317
+  },
   "thresholds": {
     "_comment": "Script 3682 reads the unlock slots from enum 5677 -> structs 5971-5975, param 1010 = tasks needed; the cache holds a later league's numbers, so a league's own go to the client as structOverrides (GamemodeContentStore) through LeagueMode's `league:send-content`.",
     "structs": [5971, 5972, 5973, 5974, 5975],
@@ -27,6 +34,7 @@
     "modalSize": [2524, [-1, -3]],
     "nameHeader": 44,
     "teleportButton": 84,
+    "echoBossButton": 82,
     "confirm": 62,
     "viewScript": 3668,
     "viewScriptComponentsBefore": [14, 39, 38, 42, 43, 44, 80, 84, 85, 91],

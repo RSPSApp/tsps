@@ -232,7 +232,10 @@ module.exports = function registerEaglesPeakQuest(api) {
   const SURFACE_LANDING_TILE = { x: 2328, y: 3496, z: 0 };
   const CAMP_NICKOLAUS_TILE = { x: 2318, y: 3503, z: 0 };
   const DUNGEON_LANDING_TILE = { x: 1994, y: 4984, z: 3 };
-  const NEST_TILE = { x: 2016, y: 4947, z: 3 };
+  // The cave spawn (parent 2023) resolves to Shout-to 1484 at native phase 16.
+  const NEST_TILE = { x: 2006, y: 4959, z: 3 };
+  // Eight tiles across from the walkable entrance ledge (1998, 4955).
+  const NICKOLAUS_SHOUT_RANGE = 8;
   const EAGLE_TILE = { x: 2006, y: 4951, z: 3 };
   const KEBBIT_TILE = { x: 1971, y: 4885, z: 2 };
   const BRONZE_PEDESTAL_TILE = { x: 1974, y: 4914, z: 2 };
@@ -928,6 +931,19 @@ module.exports = function registerEaglesPeakQuest(api) {
   // NPC interactions
   // ==========================================================================
 
+  /** Shouting crosses the chasm; other Nickolaus options keep ordinary walking reach. */
+  function routeShoutToNickolaus(request) {
+    if (request.npcId !== NICKOLAUS_CHASM_NPC_ID
+      || request.definition?.getActions?.()[request.clickType - 1] !== "Shout-to") return;
+    const at = request.npc.getLocation();
+    const stage = quest.getStage(request.player);
+    if (stage < STAGE_ENTERED || stage >= STAGE_RESCUED
+      || at.getX() !== NEST_TILE.x || at.getY() !== NEST_TILE.y || at.getZ() !== NEST_TILE.z
+      || request.player.getLocation().getZ() !== NEST_TILE.z) return;
+    request.range = NICKOLAUS_SHOUT_RANGE;
+    request.ignoreProjectileClip = true;
+  }
+
   function shoutToNickolaus(event) {
     if (event.npcId !== NICKOLAUS_CHASM_NPC_ID) return false;
     const { player } = event;
@@ -1262,6 +1278,7 @@ module.exports = function registerEaglesPeakQuest(api) {
   api.onItemAction(handleItemAction);
   api.onObjectInteraction(handleObjectInteraction);
   api.onItemOnObject(handleItemOnObject, { noted: false });
+  api.onNpcRoute(routeShoutToNickolaus);
   api.onNpcInteraction("Nickolaus", { "Shout-to": shoutToNickolaus });
   api.onNpcInteraction("Eagle", { "Walk-past": walkPastEagle });
   api.onNpcInteraction("Kebbit", { Threaten: threatenKebbit });

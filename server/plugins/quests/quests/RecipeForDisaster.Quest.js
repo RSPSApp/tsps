@@ -2742,8 +2742,16 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function handleEvilChickenShrine(event) {
     const { player, objectId, itemId } = event;
     if (objectId !== api.core.ObjectIdentifiers.CHICKEN_SHRINE || itemId !== ItemIdentifiers.RAW_CHICKEN
-      || stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 64)
-      || Number(player.getAttribute(AMIK_STATE_ATTRIBUTE)) !== 1) return;
+      || stage(player) < STAGE_OPENING_COMPLETE) return;
+    // Wiki (Evil Chicken's Lair): the lair is open during and after Freeing Sir Amik Varze. Once he is
+    // freed the Evil Chicken's egg is no longer needed, so the shrine only lets the player in.
+    if (hasFlag(player, 64)) {
+      event.handled = true;
+      player.getInventory().deleteNumber(ItemIdentifiers.RAW_CHICKEN, 1);
+      moveTo(player, EVIL_CHICKEN_LAIR_ENTRY.x, EVIL_CHICKEN_LAIR_ENTRY.y, EVIL_CHICKEN_LAIR_ENTRY.z);
+      return;
+    }
+    if (Number(player.getAttribute(AMIK_STATE_ATTRIBUTE)) !== 1) return;
     event.handled = true;
     let npc = EVIL_CHICKEN_BY_PLAYER.get(player);
     if (npc?.isRegistered?.() === false) {

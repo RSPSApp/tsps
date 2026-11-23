@@ -113,6 +113,9 @@ module.exports = function registerPiratesTreasureQuest(api) {
   /** Seaman Morris's "Where would you like to go?" answers; the trip starts once the player has said it. */
   const MORRIS_PORT_SARIM_LINE = "I'd like to go to Port Sarim.";
   const MORRIS_MUSA_POINT_LINE = "I'd like to go to Musa Point.";
+  /** His greeting's "If the player is (not) wearing Karamja gloves:" conditions. */
+  const MORRIS_NO_GLOVES_CONDITION_ID = "k5BpOy";
+  const MORRIS_GLOVES_CONDITION_ID = "8t7bY7";
   /** "30 coins" actions on the two Luthas payment pages. */
   const PAYMENT_STEP_IDS = new Set(["76-Dox", "1YHx0E"]);
   const PAYMENT_MESSAGE_ID = "A0JWWz";
@@ -362,6 +365,11 @@ module.exports = function registerPiratesTreasureQuest(api) {
         return !wearsKaramjaGloves(player) && coins >= FARE;
       }
       if (value.includes("ring of charos")) return wearsRingOfCharos(player);
+    }
+
+    if (npcId === SEAMAN_MORRIS_NPC_ID) {
+      if (stepId === MORRIS_NO_GLOVES_CONDITION_ID) return !wearsKaramjaGloves(player);
+      if (stepId === MORRIS_GLOVES_CONDITION_ID) return wearsKaramjaGloves(player);
     }
 
     if (SAIL_FARE_CONDITION_IDS.has(stepId)) {

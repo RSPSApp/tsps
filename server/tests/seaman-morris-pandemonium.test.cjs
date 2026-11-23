@@ -20,6 +20,8 @@ const core = PluginManager.getCoreApi();
 const COINS = 995;
 const PORT_SARIM_LANDING = [3029, 3217, 0], MUSA_POINT_LANDING = [2956, 3146, 0];
 let morris, nextIndex = 2400;
+/** Seaman Morris's spoken lines, per player, as the dialogue plays them. */
+const spoken = new Map();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -28,6 +30,9 @@ before(async () => {
   for (const [x, y] of [[3064, 3003], PORT_SARIM_LANDING, MUSA_POINT_LANDING]) core.RegionManager.loadMapFiles(x, y);
   require("../plugins/quests/quests/PiratesTreasure.Quest")(PluginManager.createApi("SeamanMorrisTest"));
   require("../plugins/npcs/NpcDialogues.plugin.js").register(PluginManager.createApi("NpcDialoguesSeamanMorrisTest"));
+  PluginManager.createApi("SeamanMorrisLines").onCustomEvent("npc-dialogue:line", ({ player, step, text }) => {
+    if (typeof step?.npc === "string") spoken.set(player, [...(spoken.get(player) ?? []), text]);
+  });
   const rows = require("../data/definitions/npc-spawns.json").filter((row) => row.id === core.NpcIdentifiers.SEAMAN_MORRIS);
   assert.equal(rows.length, 1, "one Seaman Morris");
   const [row] = rows;
@@ -86,7 +91,7 @@ function harness(t, { coins = 100, gloves = false } = {}) {
   }
   const where = () => [player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()];
   const coinsLeft = () => player.getInventory().getAmount(COINS);
-  return { player, tick, option, talk, where, coinsLeft, messages };
+  return { player, tick, option, talk, where, coinsLeft, messages, said: () => spoken.get(player) ?? [] };
 }
 
 test("Seaman Morris stands on the Pandemonium's northern dock with Port Sarim and Musa Point options", () => {
@@ -111,6 +116,21 @@ test("Talk-to: asking for Port Sarim sails there for 30 coins", async (t) => {
   assert.ok(h.messages.includes("You board the ship and sail to Port Sarim."), JSON.stringify(h.messages));
 });
 
+test("Morris quotes the fares the player will pay: 30 coins, or 15 to Musa Point in Karamja gloves", async (t) => {
+  const plain = harness(t);
+  await plain.talk("No thank you.");
+  assert.deepEqual(plain.said(), [
+    "Hello there. Looking to travel somewhere? We can take you to Port Sarim or Musa Point. It only costs 30 coins.",
+    "Fair enough.",
+  ]);
+  const gloved = harness(t, { gloves: true });
+  await gloved.talk("No thank you.");
+  assert.deepEqual(gloved.said(), [
+    "Hello there. Do you want to travel somewhere? We can take you to Musa Point for 15 coins, or if you prefer, for 30 coins we can drop you off in Port Sarim.",
+    "Fair enough.",
+  ]);
+});
+
 test("Talk-to in Karamja gloves: 15 coins to Musa Point, still 30 to Port Sarim", async (t) => {
   const musa = harness(t, { gloves: true });
   await musa.talk("Yes please.", "I'd like to go to Musa Point.");
@@ -130,6 +150,7 @@ test("Talk-to: declining, or not naming a port, sails nowhere and costs nothing"
   for (const h of [declined, undecided]) {
     assert.ok(h.where()[1] < 3010, `still on the Pandemonium: ${h.where()}`);
     assert.equal(h.coinsLeft(), 100);
+    assert.ok(!h.messages.some((line) => line.startsWith("You board the ship")), JSON.stringify(h.messages));
   }
 });
 
@@ -138,6 +159,7 @@ test("Talk-to without the fare stays on the Pandemonium", async (t) => {
   await h.talk("Yes please.", "I'd like to go to Musa Point.");
   assert.ok(h.where()[1] < 3010, `still on the Pandemonium: ${h.where()}`);
   assert.equal(h.coinsLeft(), 29);
+  assert.ok(!h.messages.some((line) => line.startsWith("You board the ship")), JSON.stringify(h.messages));
   assert.ok(h.messages.includes("You don't have enough coins to pay for passage."), JSON.stringify(h.messages));
 });
 

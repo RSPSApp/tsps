@@ -1941,7 +1941,8 @@
             "PR #283 (f4131ce7): a shape-22 floor decoration only refuses a fire tile when its definition is a clipped decoration (blocksFireTile), so Tutorial Island's walkable grass no longer blocks lighting; scenery and existing fires still block. server/tests/firemaking.test.cjs covers.",
             "Main 8403b60db (4 November 2026): #2029 — The player steps off the log on the lighting-roll tick, before the fire appears; timing follows the recorded sequence.",
             "Main 3b61a15a8 (6 November 2026): #2544 Finish sixteen remaining Kandarin Diary gameplay tasks; #2601 Treasure Trails: Audit clue steps and fix supported gaps; #2682 Cut leaping fish with a knife for roe, caviar and offcuts. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #2816 Handle extinguishing carried torches."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #2816 Handle extinguishing carried torches.",
+            "Last light in the dark (rsprox captures, local 1000134-1000140, Lumbridge Swamp Caves): the lit candle lantern now has Extinguish ('You extinguish the lantern.' spam); Extinguish on the only lit candle or lantern keeps it with 'Extinguishing the candle/lantern would leave you without a light source.', and Drop on the only carried light keeps it with 'Dropping that would leave you without a light source.' (Darkness drop policy). Tasks unchanged. Remaining: the torch and oil lamp refuse silently (their lines were not captured), and the darkness_level overlay (varbit 278) per light strength is not sent in the caves."
           ],
           "taskDetails": [
             {

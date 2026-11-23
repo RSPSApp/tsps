@@ -725,7 +725,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Jewellery` | Jewellery | items | yes | Runs charged and eternal jewellery such as dueling rings, games necklaces and glories: Rub and worn-option teleports, charge counts and Check messages. (members only) |
 | `Keris` | Keris | items | yes | Gives the keris family extra damage against Kalphites and Scabarites, with a rare triple-damage hit, and Amascut's partisan its own boost, and the sun partisan's Tombs of Amascut accuracy and kill heal. (members only) |
 | `KourendTravelItems` | KourendTravelItems | items | yes | Adds Kharedst's memoirs, the Book of the Dead and Xeric's talisman teleports to Kourend, with charges and Wilderness limits. (members only) |
-| `LightSources` | LightSources | items | yes | Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches, candles and mining helmets be put out again. (members only) |
+| `LightSources` | LightSources | items | yes | Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches, candles, candle and emerald lanterns and mining helmets be put out again (not your last light in the dark). (members only) |
 | `Lightbearer` | Lightbearer | items | yes | Makes a worn Lightbearer ring restore special attack energy every 25 ticks instead of every 50. (members only) |
 | `LithicSceptre` | LithicSceptre | items | yes | The Lithic sceptre: its built-in spell, rune charges, Shatter stacks for Explosive Shatter. (members only) |
 | `LithkrenVaultNotes` | LithkrenVaultNotes | items | yes | Lithkren Vault notes: Inspect the vault's machinery, incubators and stone crate for the seven old notes, Read them, and combine all seven into the Lithkren vault notes book. (members only) |
@@ -1037,7 +1037,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `CommemorativePlaques` | CommemorativePlaques | world | yes | Reading the Clan Cup Trophy on the Giants' Plateau or the Crack the Clue III noticeboard in Falador opens the cba_plaque winners list with live's text. |
 | `CrossFloor` | CrossFloor | world | no | See nearby players, NPCs, ground items and temporary objects on lower floors. |
 | `CustomSprites` | CustomSprites | world | yes | Serves the world's own sprites (data/sprites) to the browser client over the content API. |
-| `Darkness` | Darkness | world | yes | Makes Lumbridge Swamp Caves and the Mole Hole dark: without a lit light source you are warned, then bitten by insects every tick, and cannot attack. |
+| `Darkness` | Darkness | world | yes | Makes Lumbridge Swamp Caves and the Mole Hole dark: without a lit light source you are warned, then bitten by insects every tick, and cannot attack; your last light cannot be dropped there. |
 | `DateMinutes` | DateMinutes | world | yes | Sends the client the current minute since 1970 on login and each new minute, so home and minigame teleport cooldown timers can display. |
 | `DefinitionArchives` | DefinitionArchives | world | yes | Installs bundled item, NPC and object definition changes at runtime and sends them to every client on login and when they change. |
 | `DesertTreasureScoreboards` | DesertTreasureScoreboards | world | yes | Unlocks the Desert Treasure II post-quest scoreboards for players who completed the quest, setting the shared scoreboard varbit on login and completion. (members only) |

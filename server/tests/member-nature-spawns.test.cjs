@@ -9,7 +9,8 @@ before(()=>CachePipeline.initialize(path.resolve(__dirname,"..")));
 test("two island Nature rune definitions use the exact native item/source world flags and200tick timer",()=>{
  assert.equal(CacheDefinitions.getItem(561).name,"Nature rune");assert.equal(CacheDefinitions.getItem(561).isMembers,false);
  for(const[x,y]of points){const r=spawns.filter(r=>r.id===561&&r.location.x===x&&r.location.y===y&&r.location.z===0);assert.equal(r.length,1);assert.deepEqual([r[0].amt,r[0].respawn,r[0].members],[2,200,true]);assert.match(r[0].description,/telekinetic grab/i);}
- assert.equal(spawns.some(r=>r.id===556&&r.location.x===1399&&r.location.y===3158),false,"uncertain Air row remains absent");
+ // The Wiki row carries a hidden "currently unobtainable for some reason?" note, but live sends the rune on this tile.
+ assert.equal(spawns.filter(r=>r.id===556&&r.location.x===1399&&r.location.y===3158&&r.members===true).length,1,"Air row west of Ralos' Rise is a members spawn");
 });
 for(const members of[true,false])test("actual island Nature definitions honor member world="+members,t=>{
  const items=World.getItems(),old=items.splice(0);t.after(()=>items.splice(0,items.length,...old));t.mock.method(WorldDefinition,"isMembersWorld",()=>members);

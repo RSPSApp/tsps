@@ -564,7 +564,7 @@ function flatten(steps, opts = {}) {
       // Some wiki exports inline the target body on a "continue" jump instead
       // of storing it in the page-level jump table. Prefer that body so nested
       // quest branches do not stop at the jump marker.
-      const target = Array.isArray(step.steps) ? step.steps : resolveJump(step, steps[position - 1], steps[position + 1]);
+      const target = Array.isArray(step.steps) ? step.steps : resolveJump(step, steps[position - 1] ?? step.previousLine, steps[position + 1]);
       // "end": a jump we cannot replay. Stop rather than leak into the next step.
       if (target === "end") {
         out.push({ type: "end" });
@@ -1174,6 +1174,8 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
           }
           continue;
         }
+        // The line last shown, for a called branch that opens with a same-as jump (below).
+        context.lastSpoken = step;
         // `text` is mutable too, so a plugin can fill in the wiki's "[number]"-style blanks.
         const formatted = formatPlayerText(request.text, player);
         if (step.presentation === "overhead") {
@@ -1457,7 +1459,13 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         // Wiki markers for content this server does not implement.
         if (step.type === "unavailable" || step.type === "reference") return unavailable();
         if (step.type === "call" && Object.hasOwn(branches, step.branch) && Array.isArray(branches[step.branch])) {
-          return run([...branches[step.branch], ...rest], currentRecord);
+          // A branch that is only a lost-target "same as above" (Barlak's perfect-tortoise-shell "Okay." calls one after
+          // "It's a giant snail shell!") resolves against the line shown before the call, as it would inline.
+          const body = branches[step.branch];
+          // Only after a player line: after an NPC line the branch's own fallback already holds (Timfraku's menu).
+          const lead = body[0]?.type === "jump" && !Array.isArray(body[0].steps) && typeof context.lastSpoken?.player === "string"
+            ? [{ ...body[0], previousLine: context.lastSpoken }, ...body.slice(1)] : body;
+          return run([...lead, ...rest], currentRecord);
         }
         if (step.type === "choice") return presentMenu({ step, rest, record: currentRecord });
         if (step.type === "counted_draw") {

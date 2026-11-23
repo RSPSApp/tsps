@@ -36,6 +36,8 @@ const SHELLS = {
 };
 const CONSTRUCTION_XP_LEVEL = 30;
 const MAX_STACK = 0x7fffffff;
+/** Ours: the core's own full-inventory line. */
+const NO_ROOM = "You don't have enough inventory space.";
 
 const PRICE_BLANK = /\[X\] ?gp/;
 const SHELL_NAMED = new Map([["It's a giant snail shell!", "snail"], ["It's a giant battle tortoise shell!", "tortoise"]]);
@@ -186,8 +188,13 @@ function payBones(player) {
   const coins = bones.reduce((sum, bone) => sum + bone.count * bone.coins, 0);
   const inventory = player.getInventory();
   const freed = bones.filter((bone) => inventory.getAmount(bone.id) > 0).length;
-  // Ours: no room for the coins (a full inventory with every bone banked), so nothing is sold.
-  if (!coins || !coinsFit(player, coins, freed)) return stopTalking(player);
+  if (!coins) return stopTalking(player);
+  if (!coinsFit(player, coins, freed)) {
+    // Ours: no room for the coins (a full inventory with every bone banked), so nothing is sold.
+    stopTalking(player);
+    player.sendMessage(NO_ROOM);
+    return;
+  }
   for (const bone of bones) inventory.delete(bone.id, inventory.getAmount(bone.id));
   for (const bank of bankTabs(player)) {
     for (const bone of bones) {

@@ -43,9 +43,12 @@ transcript's shell conditions, fills its `[X] gp` and pays.
 
 ## Ours
 
-- A full inventory with every bone banked (no room for the coins): nothing is sold and the chat
-  closes.
+- A full inventory with every bone banked (no room for the coins): nothing is sold, the chat
+  closes and "You don't have enough inventory space." is sent.
 - The items gone before his "Thanks" line: nothing is paid and the chat closes.
+- The transcript's "same as above" after "It's a giant snail shell!" (his tortoise variant, every
+  branch) goes on as his snail shell variant; the perfect-shell branches reach it through a called
+  branch, which the dialogue runtime resolves against the player line shown before the call.
 - The Wiki's "You need to have a house and a Construction level of at least 30 before I can teach
   you anything." (Transcript:Barlak, marked incomplete) has no known place in the conversation, so
   it is not said.

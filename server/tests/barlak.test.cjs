@@ -9,7 +9,7 @@
 // Real engine: every plugin loaded, a real Player, the real transcript runner.
 const assert = require("node:assert/strict");
 const path = require("node:path");
-const { before, test } = require("node:test");
+const { after, before, test } = require("node:test");
 require("../dist/Server").Server.installProductionPathResolver();
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
@@ -31,6 +31,7 @@ before(async () => {
   PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PluginManager.getCoreApi();
   core.ObjectDefinition.init();
+  PluginManager.emitServerStartup({});
   const obj = (name) => core.CacheDefinitions.getObjId(name);
   ids = {
     barlak: core.CacheDefinitions.getNpcId("dorgesh_male_bone_seller"),
@@ -43,6 +44,8 @@ before(async () => {
     perfectSnail: obj("dorgesh_snail_shell"),
   };
 });
+
+after(() => PluginManager.emitServerShutdown({}));
 
 function actor(t, { construction = 99, house = true } = {}) {
   const channel = {
@@ -272,6 +275,44 @@ test("tortoise and snail shells: after the tortoise ones he asks about the other
   spoken(player);
   assert.equal(player.getInventory().getAmount(ids.snail), 0);
   assert.equal(coins(player), 1200);
+});
+
+for (const [name, perfect, snails] of [
+  ["a perfect tortoise shell and two snail shells", 1, [["snail", 2]]],
+  ["two perfect tortoise shells and a perfect snail shell", 2, [["perfectSnail", 1]]],
+]) {
+  test(`${name}: after the tortoise sale he asks about the snail shells too (review r1)`, (t) => {
+    const player = actor(t);
+    for (let i = 0; i < perfect; i++) put(player, 1 + i, ids.perfectShell);
+    let slot = 5;
+    for (const [kind, count] of snails) for (let i = 0; i < count; i++) put(player, slot++, ids[kind]);
+    talk(player);
+    spoken(player);
+    choose(player, 1);
+    const lines = spoken(player);
+    assert.ok(lines.includes("It's a giant snail shell!"), lines.join(" | "));
+    assert.match(lines.at(-1), /^I'll give you \d+gp for the snail shell/, lines.join(" | "));
+    assert.equal(coins(player), perfect * 600);
+    choose(player, 1);
+    spoken(player);
+    assert.equal(player.getInventory().getAmount(ids.snail) + player.getInventory().getAmount(ids.perfectSnail), 0);
+    assert.equal(coins(player), perfect * 600 + 600 * snails.reduce((n, [, c]) => n + c, 0));
+  });
+}
+
+test("no room for the coins (full inventory, bones banked): nothing sold, and a message says why", (t) => {
+  const player = actor(t);
+  for (let slot = 0; slot < 28; slot++) put(player, slot, ids.tortoise);
+  player.getBank(0).add(new core.Item(ids.longBone, 1));
+  const messages = [];
+  t.mock.method(player, "sendMessage", (text) => { messages.push(String(text)); });
+  talk(player);
+  spoken(player);
+  choose(player, 1);
+  spoken(player);
+  assert.equal(player.getBank(0).getAmount(ids.longBone), 1);
+  assert.equal(coins(player), 0);
+  assert.ok(messages.includes("You don't have enough inventory space."), messages.join(" | "));
 });
 
 test("nothing to sell: his usual conversation", (t) => {

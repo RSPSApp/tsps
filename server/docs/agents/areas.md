@@ -50,6 +50,9 @@ register(api) {
   instance can claim a player before moving them.
 - Rules still read the actor's live state (tile, combat level); membership only decides who
   is asked, and can trail a teleport by a tick.
+- Music in an area or instance comes from the area's `getMusicTrack(player)`, not `sendSong`.
+  The session replaces a song sent on entry with the tile's music area (an instance's copied
+  tiles), so follow [music.md](../music.md#music-areas).
 
 The PvP preset plugin also asks an area's optional `canLoadPreset(player)` policy. `true`
 permits re-gearing despite that area's teleport refusal, `false` refuses it, and `null` or

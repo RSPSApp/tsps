@@ -85,8 +85,19 @@ test('Blue Moon chamber fountainhead refills a waterskin', () => {
   assert.equal(p.count(I.WATERSKIN_4_), 1);
 });
 
-test('Blood and Eclipse Moon chamber fountainheads are not water sources', () => {
-  for (const objectId of [O.ANCIENT_FOUNTAINHEAD_6, O.ANCIENT_FOUNTAINHEAD_8]) {
+test('the other Regular and Blue Moon fountainheads (Fortis crypt, Kualti headquarters) fill a vial', () => {
+  for (const objectId of [O.ANCIENT_FOUNTAINHEAD_2, O.ANCIENT_FOUNTAINHEAD_9, O.ANCIENT_FOUNTAINHEAD_3]) {
+    const h = harness();
+    const p = player([I.VIAL]);
+    assert.equal(use(h, p, I.VIAL, objectId).handled, true, `fountainhead ${objectId}`);
+    assert.equal(p.count(I.VIAL_OF_WATER), 1);
+    assert.deepEqual(p.spam, ['You fill the vial.']);
+  }
+});
+
+test('Blood Moon, Eclipse Moon and Mokhaiotl fountainheads are not water sources', () => {
+  for (const objectId of [O.ANCIENT_FOUNTAINHEAD_5, O.ANCIENT_FOUNTAINHEAD_6, O.ANCIENT_FOUNTAINHEAD_7,
+    O.ANCIENT_FOUNTAINHEAD_8, O.ANCIENT_FOUNTAINHEAD_10, O.ANCIENT_FOUNTAINHEAD_11]) {
     const h = harness();
     const p = player([I.VIAL]);
     assert.equal(use(h, p, I.VIAL, objectId).handled, undefined);

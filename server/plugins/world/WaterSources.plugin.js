@@ -8,9 +8,10 @@
  * fountain.", or just "You fill the jug." at a pump. No capture has a waterskin: it is filled
  * the same way.
  *
- * Neypotzli's ancient fountainheads are water sources in the entrance and the Blue Moon's
- * chamber only (https://oldschool.runescape.wiki/w/Ancient_fountainhead); those by the Blood and
- * Eclipse Moons share the name and fill nothing. Ours: the fill line is the bare
+ * Ancient fountainheads are water sources in their Regular (Neypotzli's entrance, Fortis temple
+ * crypt) and Blue Moon (the Blue Moon's chamber, Kualti headquarters) versions
+ * (https://oldschool.runescape.wiki/w/Ancient_fountainhead); the Blood Moon, Eclipse Moon and
+ * Ruins of Mokhaiotl versions share the name and fill nothing. Ours: the fill line is the bare
  * "You fill the jug.", as at a pump.
  *
  * It lives in plugins/world so it loads after the quest and minigame plugins: their own
@@ -61,8 +62,13 @@ function defineContainers({ ItemIdentifiers: Items }) {
 // Water sources by id, where other locs with the same name are not.
 function defineSourceLocs({ ObjectIdentifiers: Objects }) {
   SOURCE_LOCS = new Set([
-    Objects.ANCIENT_FOUNTAINHEAD, // Neypotzli's entrance
-    Objects.ANCIENT_FOUNTAINHEAD_4, // the Blue Moon's chamber
+    // Regular
+    Objects.ANCIENT_FOUNTAINHEAD,
+    Objects.ANCIENT_FOUNTAINHEAD_2,
+    Objects.ANCIENT_FOUNTAINHEAD_9,
+    // Blue Moon
+    Objects.ANCIENT_FOUNTAINHEAD_3,
+    Objects.ANCIENT_FOUNTAINHEAD_4,
   ]);
 }
 

@@ -34,7 +34,7 @@
  *
  * Each plays its captured animation, sound and fade, and moves the player (or swaps the loc) on
  * the captured tick. An entry's `message` (with `messageType` "spam" for the filterable channel)
- * is the game message live OSRS sends on a successful crossing, on the move's tick, before it. Ticks in the data count from the player arriving at the loc; the click is
+ * (or a list of them, sent in order) is the game message live OSRS sends on a successful crossing, on the move's tick, before it. Ticks in the data count from the player arriving at the loc; the click is
  * handled on the tick after that, as Ladders' climbs are.
  *
  * Not members-only: free-to-play ladders are in the data too. On a free-to-play world,
@@ -175,14 +175,21 @@ function schedule() {
 
 /** The game message of a successful crossing: a plain game message, or spam the chat filter hides. */
 function sayCrossed(player, { message, messageType }) {
-  if (messageType === "spam") player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, message);
-  else player.sendMessage(message);
+  for (const line of [].concat(message)) {
+    if (messageType === "spam") player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, line);
+    else player.sendMessage(line);
+  }
 }
 
 /** `soundDelay`: the sound's client delay as captured (synth_sound delay), 0 when not given. */
 function animateAndSound(player, { anim, sound, soundDelay = 0 }) {
   if (anim !== undefined) player.performAnimation(new core.Animation(anim));
   if (sound !== undefined) player.getPacketSender().sendSound(sound, 1, soundDelay);
+}
+
+/** No animation, sound, fade or message box before the move, so the move needn't wait a tick for them. */
+function playsNothingFirst({ anim, sound, fade, mesbox }) {
+  return anim === undefined && sound === undefined && !fade && !mesbox;
 }
 
 /**
@@ -195,7 +202,10 @@ function travel(player, entry, destination, answer = null) {
   // After a question, the captured ticks count from the answer, which is handled on its own tick.
   const animTick = answer ? answer.animTick : fromClick(entry.animTick ?? entry.tick);
   // An answer's move can share its tick (a warning screen's Yes: the move on the click, captures 91, 1000243).
-  const moveTick = answer ? Math.max(animTick, answer.tick) : Math.max(animTick + 1, fromClick(entry.tick));
+  // So does an entry that plays nothing before the move (no animation, sound, fade or message box): the
+  // move is on its captured tick (the Sorcerer's Tower Portal on the tick after arriving, local 1001616).
+  const sharesTick = answer ? true : playsNothingFirst(entry);
+  const moveTick = Math.max(sharesTick ? animTick : animTick + 1, answer ? answer.tick : fromClick(entry.tick));
   at(animTick, () => {
     animateAndSound(player, entry);
     if (entry.fade) fade(player, true);

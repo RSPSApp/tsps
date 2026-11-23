@@ -18,6 +18,7 @@ before(async () => {
   Patches = require('../plugins/skills/farming/Patches.Farming');
   Services = require('../plugins/skills/farming/Services.Farming');
   PM.emitServerStartup({});
+  core.World.getProcessCycle = () => cycle;
   core.RegionManager.loadMapFiles(3056,3312); core.RegionManager.loadMapFiles(1272,3729);
 });
 function fixture(t, type = 'COMPOST', count = 3, tier = 4) {
@@ -47,14 +48,16 @@ async function take(f) {
   assert.equal(definition.getInteractions()[0],'Take','active-cache collection option');
   await input(f,{type:'object_option',id:f.patch.id,x:f.patch.x,y:f.patch.y,action:'Take'});
 }
-function ticks(n) { while(n--) Patches.tick(); }
+// Each tick is a new world cycle, as World.process runs farming before client input.
+let cycle = 0;
+function ticks(n) { while (n--) { cycle++; Patches.tick(); } }
 function amount(f,name) { return f.inv.getAmount(Data.itemId(name)); }
 function stock(f,name,n) { for(let i=0;i<n;i++) f.inv.add(new core.Item(Data.itemId(name)),false); }
 
 
 function bottomless(f,charges=0,tier=0){const item=new core.Item(charges?core.ItemIdentifiers.BOTTOMLESS_COMPOST_BUCKET_4:Data.itemId('Bottomless compost bucket')).setMetaValue('farming:charges',charges).setMetaValue('farming:tier',tier).setMetaValue('test:owner',f.p.getUsername());f.inv.add(item,false);return f.inv.getValidItems().find(i=>i.getMetaValue('test:owner')===f.p.getUsername()&&i.getMetaValue('farming:charges')===charges);}
 test('both bin sizes and all compost tiers collect into a carried bottomless bucket with existing cadence and XP',async t=>{
- for(const type of ['COMPOST','BIG_COMPOST'])for(const tier of [1,2,3]){const f=fixture(t,type,3,tier);bottomless(f);await take(f);ticks(2);assert.equal(f.bin.count,3);ticks(1);assert.equal(f.bin.count,2);ticks(8);assert.equal(f.state.bin.count,0);const b=f.inv.getValidItems()[0];assert.equal(b.getMetaValue('farming:charges'),6);assert.equal(b.getMetaValue('farming:tier'),tier);assert.equal(b.getMetaValue('test:owner'),f.p.getUsername());assert.equal(f.p.getSkillManager().getSkills().experience[core.Skill.FARMING.getIndex()]-f.xp,[0,4.5,8.5,10][tier]*3*GameConstants.EXPERIENCE_MULTIPLIER);}
+ for(const type of ['COMPOST','BIG_COMPOST'])for(const tier of [1,2,3]){const f=fixture(t,type,3,tier);bottomless(f);await take(f);ticks(1);assert.equal(f.bin.count,3);ticks(1);assert.equal(f.bin.count,2);ticks(8);assert.equal(f.state.bin.count,0);const b=f.inv.getValidItems()[0];assert.equal(b.getMetaValue('farming:charges'),6);assert.equal(b.getMetaValue('farming:tier'),tier);assert.equal(b.getMetaValue('test:owner'),f.p.getUsername());assert.equal(f.p.getSkillManager().getSkills().experience[core.Skill.FARMING.getIndex()]-f.xp,[0,4.5,8.5,10][tier]*3*GameConstants.EXPERIENCE_MULTIPLIER);}
 });
 test('ordinary buckets take priority and collection continues into the carried bottomless bucket',async t=>{
  const f=fixture(t,'COMPOST',3,1);stock(f,'Bucket',1);bottomless(f);await take(f);ticks(3);assert.equal(amount(f,'Compost'),1);assert.equal(f.inv.getValidItems().find(i=>i.getMetaValue('test:owner')).getMetaValue('farming:charges'),0);ticks(8);assert.equal(f.state.bin.count,0);assert.equal(f.inv.getValidItems().find(i=>i.getMetaValue('test:owner')).getMetaValue('farming:charges'),4);
@@ -65,7 +68,7 @@ test('full/mismatched/noted buckets refuse, skip to eligible ones, and cap exhau
 });
 test('full inventory still collects charges; native walking prevents output; tomatoes never charge a bucket',async t=>{
  const f=fixture(t,'COMPOST',3,2);bottomless(f);stock(f,'Rake',27);await take(f);ticks(11);assert.equal(f.state.bin.count,0);assert.equal(f.inv.getFreeSlots(),0);assert.equal(f.inv.getValidItems()[0].getMetaValue('farming:charges'),6);
- const g=fixture(t,'COMPOST',3,1);bottomless(g);await take(g);ticks(2);await input(g,{type:'move',worldX:g.patch.x-1,worldY:g.patch.y+1,modifierFlags:0});assert.equal(g.p.getLocation().getY(),g.patch.y+1);ticks(10);assert.equal(g.bin.count,3);assert.equal(g.inv.getValidItems()[0].getMetaValue('farming:charges'),0);
+ const g=fixture(t,'COMPOST',3,1);bottomless(g);await take(g);ticks(1);await input(g,{type:'move',worldX:g.patch.x-1,worldY:g.patch.y+1,modifierFlags:0});assert.equal(g.p.getLocation().getY(),g.patch.y+1);ticks(10);assert.equal(g.bin.count,3);assert.equal(g.inv.getValidItems()[0].getMetaValue('farming:charges'),0);
  const h=fixture(t,'COMPOST',3,4);bottomless(h);await take(h);ticks(11);assert.equal(amount(h,'Rotten tomato'),3);assert.equal(h.inv.getValidItems()[0].getMetaValue('farming:charges'),0);
 });
 

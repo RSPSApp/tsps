@@ -18,6 +18,7 @@ before(async () => {
   Patches = require('../plugins/skills/farming/Patches.Farming');
   Services = require('../plugins/skills/farming/Services.Farming');
   PM.emitServerStartup({});
+  core.World.getProcessCycle = () => cycle;
   core.RegionManager.loadMapFiles(3056,3312); core.RegionManager.loadMapFiles(1272,3729);
 });
 function fixture(t, type = 'COMPOST', count = 3, tier = 4) {
@@ -47,13 +48,16 @@ async function take(f) {
   assert.equal(definition.getInteractions()[0],'Take','active-cache collection option');
   await input(f,{type:'object_option',id:f.patch.id,x:f.patch.x,y:f.patch.y,action:'Take'});
 }
-function ticks(n) { while(n--) Patches.tick(); }
+// Each tick is a new world cycle, as World.process runs farming before client input.
+let cycle = 0;
+function ticks(n) { while (n--) { cycle++; Patches.tick(); } }
 function amount(f,name) { return f.inv.getAmount(Data.itemId(name)); }
 function stock(f,name,n) { for(let i=0;i<n;i++) f.inv.add(new core.Item(Data.itemId(name)),false); }
 
 test('both bin sizes collect tomatoes without buckets, every four ticks, with XP and final reset',async t=>{
   for(const type of ['COMPOST','BIG_COMPOST']) {
-    const f=fixture(t,type); await take(f); ticks(2); assert.equal(amount(f,'Rotten tomato'),0);
+    const f=fixture(t,type); await take(f); ticks(1); assert.equal(amount(f,'Rotten tomato'),0);
+    // Standing at the bin: scooped a tick after the click (#6539).
     ticks(1); assert.equal(amount(f,'Rotten tomato'),1); assert.equal(f.bin.count,2);
     ticks(3); assert.equal(amount(f,'Rotten tomato'),1);
     ticks(1); assert.equal(amount(f,'Rotten tomato'),2);
@@ -72,12 +76,12 @@ test('carried buckets are preserved and do not create capacity for a tomato',asy
 test('last slot stops collection without loss, and capacity is rechecked after animation',async t=>{
   const f=fixture(t);stock(f,'Rake',27);await take(f);ticks(12);
   assert.equal(amount(f,'Rotten tomato'),1);assert.equal(f.bin.count,2);
-  const g=fixture(t);await take(g);ticks(2);stock(g,'Rake',28);ticks(1);
+  const g=fixture(t);await take(g);ticks(1);stock(g,'Rake',28);ticks(1);
   assert.equal(amount(g,'Rotten tomato'),0);assert.equal(g.bin.count,3);
   assert.equal(g.p.getSkillManager().getExperience(core.Skill.FARMING),g.xp);
 });
 test('native walking cancels collection before output and repeated Take never duplicates it',async t=>{
-  const f=fixture(t);await take(f);ticks(2);
+  const f=fixture(t);await take(f);ticks(1);
   await input(f,{type:'move',x:f.patch.x-2,y:f.patch.y,run:false});ticks(10);
   assert.equal(amount(f,'Rotten tomato'),0);assert.equal(f.bin.count,3);
   const g=fixture(t);await take(g);await take(g);ticks(15);

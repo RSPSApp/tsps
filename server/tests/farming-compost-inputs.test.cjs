@@ -19,6 +19,7 @@ before(async () => {
         if (name === 'onItemOnObject') hooks.use = args[0];
         if (name === 'onObjectRoute') hooks.route = args[0];
         if (name === 'onCustomEvent' && args[0] === 'player:world-input') hooks.cancel = args[1];
+        if (name === 'onCustomEvent' && args[0] === 'level-up:popup-opened') hooks.levelUp = args[1];
         if (name === 'onPlayerLogout') hooks.logout ??= args[0];
         if (name === 'onInterfaceActionClick' && args[0].name === 'farmingOptionClick') hooks.choose = args[0];
     } }));
@@ -331,10 +332,34 @@ test('a click on the same bin after its loop ended or with another item starts a
     assert.equal(f.animations.length, 2);
     f.tick();
     assert.equal(f.bin().count, 2);
+    // Another item while the apples' loop still has a step due: it starts at that step.
     hooks.cancel({ player: f.player });
     f.useHere(f.stock('Orange', 1));
+    assert.equal(f.animations.length, 2);
+    f.tick();
     assert.equal(f.animations.length, 3);
     f.tick();
     assert.equal(f.bin().count, 3);
     assert.equal(f.inventory.getAmount(apple), 2);
+});
+test('switching items on a running fill every tick never beats the two-tick pace', t => {
+    const f = prepare(t), orange = f.stock('Orange', 6), apple = f.stock('Cooking apple', 6);
+    f.useHere(orange);
+    for (let i = 0; i < 6; i++) { f.tick(); hooks.cancel({ player: f.player }); f.useHere(i % 2 ? orange : apple); }
+    assert.ok(f.bin().count <= 3, `${f.bin().count} items in 6 ticks`);
+    assert.equal(f.inventory.getAmount(orange) + f.inventory.getAmount(apple), 12 - f.bin().count);
+});
+test('a click after a level-up pop-up paused the take starts a fresh loop', t => {
+    const f = prepare(t);
+    f.stock('Bucket', 3);
+    openBin(f, 15);
+    f.takeHere();
+    f.tick(2);
+    assert.equal(f.inventory.getAmount(Data.itemId('Compost')), 1);
+    hooks.levelUp({ player: f.player, pause: () => {} });
+    hooks.cancel({ player: f.player });
+    f.takeHere();
+    f.tick(2);
+    assert.equal(f.animations.length, 2);
+    assert.equal(f.inventory.getAmount(Data.itemId('Compost')), 2);
 });

@@ -318,13 +318,16 @@ function noteBinClick({ player, objectId }) {
  * starts at once: an ingredient goes in with the animation on the click's tick and lands a tick
  * later (weeds two), compost is scooped a tick after the click. Every click cancels the loop
  * running before it; one on that same loop (same bin, action and item) whose next step is still
- * to come picks it back up where it was (Ours: no capture clicks a bin mid-loop).
+ * to come picks it back up where it was, and one with another item starts at that step
+ * (Ours: no capture clicks a bin mid-loop).
  */
 function startBinWork(player, patch, input, action = "fill-bin") {
     const position = player.getLocation().clone();
     const last = LAST_BIN_WORK.get(player);
-    if (last && last.patch === patch && last.action === action && last.input.bin === input.bin
-        && last.input.id === input.id && last.nextTick > workTick && last.position.equals(position)) {
+    // A loop paused by a level-up pop-up is never picked up: its pause would never clear.
+    const running = last && last.patch === patch && last.input.bin === input.bin && last.nextTick > workTick
+        && last.position.equals(position) && !last.levelUpPaused;
+    if (running && last.action === action && last.input.id === input.id) {
         WORK.set(player, last);
         return;
     }
@@ -334,6 +337,9 @@ function startBinWork(player, patch, input, action = "fill-bin") {
     LAST_BIN_WORK.set(player, work);
     WORK.set(player, work);
     if (!stood) return;
+    // Another item on a bin whose loop was still running starts at that loop's next step, so
+    // switching items never beats the captured pace (Ours).
+    if (running) { work.nextTick = last.nextTick; return; }
     if (action === "take-bin") work.nextTick = workTick + 1;
     else if (!fillBinStep(player, work)) WORK.delete(player);
 }

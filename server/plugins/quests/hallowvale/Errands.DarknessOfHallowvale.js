@@ -463,8 +463,12 @@ module.exports = function attachErrands(context) {
     event.expression = second ? EXPRESSION.WOLF_QUIZZICAL : EXPRESSION.WEREWOLF_ANGRY;
     if (startsWith(event, LINE.TAKE_HIM)) {
       event.before = () => werewolvesLookBack(player);
-      // The Wiki's transcript says "her"; live said "him" to a male character (t3608).
-      if (player.getAppearance?.()?.isMale?.()) event.text = String(event.text ?? step.text).replace(/\bher\b/, "him");
+      // The Wiki's transcript says "her"; live said "him" to a male character (t3608). It follows the
+      // player's pronouns as the dialogue runtime's gendered text does; Ours: "them" for they/them.
+      const appearance = player.getAppearance?.();
+      const pronouns = appearance?.getPronouns?.() ?? (appearance?.isMale?.() === false ? 1 : 0);
+      const word = ["him", "her", "them"][pronouns] ?? "him";
+      event.text = String(event.text ?? step.text).replace(/\bher\b/, word);
     }
   }
 

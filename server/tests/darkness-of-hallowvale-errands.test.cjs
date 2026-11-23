@@ -327,6 +327,18 @@ test("the bush: a female character hears the Wiki's \"take her\" (live said \"hi
   assert.equal(werewolfLines(f.player)[2][1], "Nah, we can't take her. It'll look suspicious.");
 });
 
+test("the bush: the third line follows the pronoun setting, not the body (they/them: \"them\", ours)", (t) => {
+  for (const [pronouns, word] of [[1, "her"], [2, "them"], [0, "him"]]) {
+    const f = actor(t, STAGE.DREZEL_TALKED, 3391, 3480, 0, { [VARBIT.BUSH]: 1 });
+    f.player.getAppearance().setPronouns(pronouns);
+    assert.equal(click(f.player, 18121, "Search", [3390, 3480, 0]), true);
+    tick(19);
+    assert.equal(werewolfLines(f.player)[2][1], `Nah, we can't take ${word}. It'll look suspicious.`);
+    f.player.getDialogueManager().reset?.();
+    PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  }
+});
+
 test("the bush: a chat close or a world click on a werewolf line keeps it; the scene still ends with 130 back on the map", (t) => {
   const f = actor(t, STAGE.DREZEL_TALKED, 3391, 3480, 0, { [VARBIT.BUSH]: 1 });
   assert.equal(click(f.player, 18121, "Search", [3390, 3480, 0]), true);

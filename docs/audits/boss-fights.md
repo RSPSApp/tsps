@@ -125,7 +125,7 @@ recording was opened before being relied on.
 | King Black Dragon | dragonfire table, breath mix, ice/poison/shock effects | yes |
 | Hespori | protection prayers quartered instead of capping | yes |
 | TzTok-Jad | melee speed 8 instead of 4; magic max 97 instead of 95 | yes |
-| TzKal-Zuk | projectile rolled 0-251 instead of 0-148; shield took no damage from Zuk | yes |
+| TzKal-Zuk | projectile rolled 0-251 instead of 0-148 | yes |
 | Alchemical Hydra | a wrong vent sent a message but did not empower (35 → 52) | yes |
 | Kraken | a ranged 1-6 roll was floored to 0 instead of 1 | yes |
 | Chaos Fanatic | special weights, 12-attack explosion cooldown, disarm projectile, explosion max 31 | yes |
@@ -189,7 +189,7 @@ branch now sets a 4-tick delay and the magic impact clamps to 95. The style read
 range, the 3-tick impact, the protection-prayer-at-impact rule and the healer waves already
 matched.
 
-### TzKal-Zuk — projectile max hit and shield damage
+### TzKal-Zuk — projectile max hit
 
 Source: [TzKal-Zuk](https://oldschool.runescape.wiki/w/TzKal-Zuk). rsprox submission 1754 has 40
 Zuk lines.
@@ -197,9 +197,11 @@ Zuk lines.
 The Wiki gives Zuk's projectile a single roll between 0 and **148**, the average of his 128
 magic and 169 ranged maxima; 251 is his melee maximum and is never used. The Inferno plugin
 rolled 0..251 for the projectile, which let an unshielded hit exceed the real maximum by 103.
-It also played the shield's block animation but never reduced the shield's 600 hitpoints when
-Zuk's own attack struck it. Both are fixed: the projectile rolls 0..148, and a shielded hit
-takes the same roll off the glyph. Attack speeds (10, 7 enraged), the 480/240 summon thresholds,
+This is fixed: the projectile rolls 0..148. A shielded hit only plays the glyph's block
+animation: the [Ancestral Glyph](https://oldschool.runescape.wiki/w/Ancestral_Glyph) "can
+sustain TzKal-Zuk's attacks indefinitely", and only the Jal-Xil, Jal-Zek and JalTok-Jad he
+summons wear down its 600 hitpoints. (This audit first took Zuk's own hits off the glyph too,
+which broke it after about eight attacks; #6594.) Attack speeds (10, 7 enraged), the 480/240 summon thresholds,
 the 600-hitpoint shield, the 15-24 healer ticks and the 5-10 healer blasts already matched.
 
 ## Quest bosses

@@ -1376,10 +1376,11 @@ Pacts character (relics or not). `league/ComboDrops.LeagueMode.js` swaps them by
 `data/league-combo-drops.json` (cache gamevals) on the rollers' loot before it is kept: NPC kills
 and the bosses rolling through NpcDrops (`npc-drops:roll`: the Grotesque Guardians' core, Araxxor's
 fang, the Alchemical Hydra's claw, leather and tail, Cerberus's eternal crystal, Phantom Muspah's
-icon, Zulrah's magic fang, the four Desert Treasure II vestiges) and Doom of Mokhaiotl's cloth, and
+icon, Zulrah's magic fang, the four Desert Treasure II vestiges) and Doom of Mokhaiotl's cloth (its
+descent then asks nothing: the warning is for the delve's own uniques), and
 the rollers that emit `drops:rolled { player, source, drops }` (the Theatre of Blood's avernic hilt,
 the Chambers of Xeric's kodai insignia, the Colosseum's echo crystal, the brimstone chest's broken
-hasta). A finished item is one, unnoted, whatever the part's stack (ours: the Colosseum's 2-3 echo
+hasta, a Frozen Cache's ancient icon). A finished item is one, unnoted, whatever the part's stack (ours: the Colosseum's 2-3 echo
 crystals give one pair of echo boots). Boosted drops still match the parts' names, as they roll.
 
 Left out, with why: Raging Echoes' and Demonic Pacts' clue-step progress saved between clues (the trail runtime has

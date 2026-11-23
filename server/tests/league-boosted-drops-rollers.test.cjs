@@ -118,3 +118,20 @@ test("Fountain of Rune: an amulet of glory turns eternal five times as often", (
   assert.equal(charge(character(t)), false, "unboosted: recharged, not eternal");
   assert.equal(charge(character(t, 4)), true, "boosted 5x: eternal");
 });
+
+test("a Frozen Cache's ancient icon is an ancient sceptre for a Demonic Pacts character (combo boss drops)", (t) => {
+  const Loot = require("../plugins/bosses/phantommuspah/Loot.PhantomMuspah");
+  const open = (player) => {
+    player.getInventory().resetItems();
+    player.getInventory().add(new core.Item(I.FROZEN_CACHE, 1));
+    // The cache's pre-roll out of 500: the frozen cache is 0-6, the ancient icon 7-8.
+    randoms([8 / 500]);
+    Loot.openCache({ player, itemId: I.FROZEN_CACHE });
+    return player.getInventory().getItems().filter((item) => item && item.getAmount() > 0).map((item) => item.getId());
+  };
+  assert.deepEqual(open(character(t)), [I.ANCIENT_ICON], "a main character: the icon");
+  const league = character(t);
+  league.setProfile("league");
+  league.setAttribute("league:type", 6);
+  assert.deepEqual(open(league), [I.ANCIENT_SCEPTRE], "Demonic Pacts, no relic yet: the sceptre");
+});

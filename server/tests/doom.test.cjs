@@ -1557,3 +1557,29 @@ test('the earthen shield crawls (slides) at delves 1-2, where it steps every 2 t
     run.end('exit');
   }
 });
+
+test('a unique waiting asks before descending, but not once content has swapped it for a finished item (a league\'s confliction gauntlets)', () => {
+  const Loot = require('../plugins/bosses/doom/Loot.DoomOfMokhaiotl');
+  const GAUNTLETS = require('../dist/util/ItemIdentifiers').ItemIdentifiers.CONFLICTION_GAUNTLETS;
+  // A draw of 0 on a level 2 delve rolls the cloth, the first unique it unlocks.
+  const plain = surfacedRun({ random: () => 0 });
+  plain.run.level = 2;
+  plain.run.defeated();
+  assert.ok(plain.run.loot.some((item) => item.id === Loot.ITEM.MOKHAIOTL_CLOTH));
+  assert.equal(plain.run.uniqueWaiting, true, 'the cloth: the descent asks first');
+  plain.run.end('exit');
+
+  const swap = (event) => { for (const drop of event.drops) if (drop.id === Loot.ITEM.MOKHAIOTL_CLOTH) drop.id = GAUNTLETS; };
+  const previous = customEvents.get('npc-drops:roll') ?? [];
+  customEvents.set('npc-drops:roll', [...previous, swap]);
+  try {
+    const league = surfacedRun({ random: () => 0 });
+    league.run.level = 2;
+    league.run.defeated();
+    assert.ok(league.run.loot.some((item) => item.id === GAUNTLETS));
+    assert.equal(league.run.uniqueWaiting, false, 'the gauntlets: no warning (Wiki, Demonic Pacts)');
+    league.run.end('exit');
+  } finally {
+    customEvents.set('npc-drops:roll', previous);
+  }
+});

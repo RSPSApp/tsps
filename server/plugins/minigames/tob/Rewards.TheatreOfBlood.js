@@ -181,6 +181,7 @@ function rollRaid(raid, random = Math.random) {
       const drops = [{ id: weightedPick(uniqueTable(I, table.hilt), ([, weight]) => weight, random)[0], amount: 1 }];
       Shared.api()?.emitCustomEvent?.("drops:rolled", { player: pick, source: CHANCE_SOURCE, drops });
       uniqueId = drops[0]?.id ?? -1;
+      if (uniqueId < 0) uniqueWinner = null;
     }
   }
   const commons = commonTable(I);

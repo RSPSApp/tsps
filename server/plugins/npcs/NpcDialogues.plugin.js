@@ -794,9 +794,12 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
       if (asked && !ownOption) return realBody(repeatsLine ? asked.slice(1) : asked) ?? asked;
     }
     // After an NPC line, "same as above" carries on as that line does where the page first has
-    // it (Bryn's first-time "What is this place?" continues as his full explanation).
+    // it (Bryn's first-time "What is this place?" continues as his full explanation). So does a
+    // player line that is no question of the page's (Barlak's "It's a giant snail shell!" after the
+    // tortoise shells goes on as his snail shell variant does).
     // A speaker "line" counts here only before a condition run (the Old Crone's line is one).
     const npcLine = typeof previous?.npc === "string" ? previous.npc
+      : typeof previous?.player === "string" && !context.pageOptions?.has(normText(previous.player)) ? previous.player
       : viaCondition && previous?.type === "line" && typeof previous.text === "string" ? previous.text : undefined;
     if (/^(above|below)/i.test(reference) && npcLine !== undefined) {
       const after = context.pageLines?.get(normText(npcLine))?.slice(1);

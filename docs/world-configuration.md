@@ -997,7 +997,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BoltEnchanting` | BoltEnchanting | skills | yes | The Enchant Crossbow Bolt spell, which enchants gem bolts ten at a time from the spellbook. (members only) |
 | `BoneAltars` | BoneAltars | skills | yes | Offering bones on altars, including the Chaos Temple altar's boosted Prayer XP and house altars, repeating while bones last. (members only) |
 | `Construction` | Construction | skills | yes | Construction: player-owned houses, rooms, furniture and the house's facilities. (members only) |
-| `Cooking` | Cooking | skills | yes | Cooking on fires, ranges and ovens, plus doughs, pies, pizzas, wine, sacred eels, leaping fish, gnome cooking and dairy churns. |
+| `Cooking` | Cooking | skills | yes | Cooking on fires, ranges and ovens, plus doughs, pies, pizzas, wine, nettle tea, sacred eels, leaping fish, gnome cooking and dairy churns. |
 | `Crafting` | Crafting | skills | yes | Crafting: leather, gems, jewellery, glassblowing, pottery, spinning, weaving, battlestaves, snelms, limestone bricks and light orbs. |
 | `CraftingSpells` | CraftingSpells | skills | yes | Spells that make crafting materials: Lunar Spin Flax, Tan Leather and Superglass Make, and Charge Orb on the obelisks. (members only) |
 | `Ectofuntus` | Ectofuntus | skills | yes | The Ectofuntus in Port Phasmatys: slime, bonemeal (grinding and emptying the pots), worship, ghost disciple tokens, the ectophial teleport and bonecrusher. (members only) |

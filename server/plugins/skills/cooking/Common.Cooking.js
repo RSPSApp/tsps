@@ -50,6 +50,7 @@ function index() {
       productId: obj(row.product),
       ingredients: row.ingredients.map(ingredient),
       returns: (row.returns ?? []).map(ingredient),
+      productSlotId: row.productSlot === undefined ? undefined : obj(row.productSlot),
       xp: row.xp ?? 0,
       timing: row.timing ?? [1, 2],
     };

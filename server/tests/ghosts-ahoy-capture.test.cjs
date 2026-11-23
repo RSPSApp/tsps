@@ -202,10 +202,12 @@ test('the Old crone hands over her cup and drinks the milky tea in one talk each
   // Ticks 373-383: the tea into her cup, then the milk; the brew stays in the cup's slot (374).
   const cupSlot = p.getInventory().getSlotForItemId(I().PORCELAIN_CUP);
   assert.equal(useItemOnItem(p, I().NETTLE_TEA, I().PORCELAIN_CUP), true);
+  tick();
   assert.equal(p.getInventory().getSlotForItemId(I().CUP_OF_TEA_6), cupSlot);
   assert.ok(has(p, I().CUP_OF_TEA_6) && has(p, I().BOWL) && !has(p, I().PORCELAIN_CUP));
   give(p, I().BUCKET_OF_MILK);
   assert.equal(useItemOnItem(p, I().CUP_OF_TEA_6, I().BUCKET_OF_MILK), true);
+  tick();
   assert.ok(has(p, I().CUP_OF_TEA_7) && has(p, I().BUCKET));
 
   lines.set(p, []);

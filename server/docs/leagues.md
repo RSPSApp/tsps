@@ -1329,9 +1329,11 @@ Tier 1 counts once the character chose its first relic.
   `Tooth half of key (moon key)` and the frost nagua's `Pendant of Ates (inert)` take a
   `/^.../` pattern, and Araxxor's row names the `Araxyte fang` its table drops for the amulet of
   rancour (`tests/league-boosted-drops-data.test.cjs` checks every NPC row against its tables).
+  Hunter's own rares ask with their rows' names (`dropMultiplier` in `Context.Hunter.js`): the
+  loot sacks' four 1/50 rares (`Hunter rumours`), the adult tecu salamander's 1/1,000 (`Hunting`)
+  and the crystal impling's 1/128 elven signet (`Crystal impling`).
   Sources rolled by their own plugins are in the data but inert until that plugin asks
-  `drops:chance` with the source's name: Hunter rumours, Hunting, the crystal impling, Vale
-  offerings, the Shrine, the seed pack, the Fountain of Rune, chewed bones, the Volcanic Mine ore
+  `drops:chance` with the source's name: Vale offerings, the Shrine, the seed pack, the Fountain of Rune, chewed bones, the Volcanic Mine ore
   pack and Shades of Mort'ton; the Warriors' Guild cyclopes roll their defenders apart from
   their table.
 - **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic

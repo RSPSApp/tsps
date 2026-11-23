@@ -721,3 +721,40 @@ test("an ordered reward stage with only some rows boosted grows by their share, 
   assert.deepEqual(dropsAt(table, main, 0.009), [4151], "unboosted: 1/100, the rows half and half");
   assert.deepEqual(dropsAt(table, main, 0.011), []);
 });
+
+test("boosted drops: Hunter's own rares (the loot sacks' rares, the tecu salamander, the crystal impling's elven signet)", () => {
+  const C = require("../plugins/skills/hunter/Context.Hunter");
+  const previous = { api: C.H.api, core: C.H.core };
+  C.H.api = { core, emitCustomEvent: (name, payload) => ask(name, payload) };
+  C.H.core = core;
+  const I = core.ItemIdentifiers;
+  const main = character("hmain", "main");
+  const dp4 = character("hdp4", "league", 4, 6); // 5x
+  const at = (value, body) => {
+    Math.random = () => value;
+    try { return body(); } finally { Math.random = realRandom; }
+  };
+  try {
+    // A loot sack's rare rolls are each 1/50: a draw of 0.05 is 2.5 in 50, inside 5 in 50 only.
+    const Rumours = require("../plugins/skills/hunter/Rumours.Hunter");
+    const rares = [I.ENHANCED_QUETZAL_WHISTLE_BLUEPRINT, I.HUNTSMANS_KIT, I.GUILD_HUNTER_HEADWEAR];
+    const sackRares = (player) => at(0.05, () => Rumours.sackRewards(player, "adept")).map(([id]) => id).filter((id) => rares.includes(id));
+    assert.deepEqual(sackRares(main), [], "unboosted: no rare at 2.5 in 50");
+    assert.deepEqual(sackRares(dp4), rares, "boosted 5x: the blueprint, the kit and the outfit piece");
+
+    // The tecu salamander: 1/1,000; a draw of 0.0025 is 2.5 in 1,000.
+    const Traps = require("../plugins/skills/hunter/Traps.Hunter");
+    const tecu = (player) => at(0.0025, () => Traps.catchRewards({ kind: "tecu", player, creature: { loot: [[I.IMMATURE_TECU_SALAMANDER, 1]], npc: -1 } }))[0][0];
+    assert.equal(tecu(main), I.IMMATURE_TECU_SALAMANDER, "unboosted: the immature one");
+    assert.equal(tecu(dp4), I.TECU_SALAMANDER, "boosted 5x: an adult tecu salamander");
+
+    // The elven signet: 1/128; a draw of 0.02 is 2.56 in 128.
+    const Catching = require("../plugins/skills/hunter/Catching.Hunter");
+    const signet = (player) => at(0.02, () => Catching.rewards(player, { key: "CRYSTAL" })).some(([id]) => id === I.ELVEN_SIGNET);
+    assert.equal(signet(main), false, "unboosted: no signet at 2.56 in 128");
+    assert.equal(signet(dp4), true, "boosted 5x: the elven signet");
+    assert.equal(signet(character("hre4", "league", 4, ECHOES)), true, "Raging Echoes' page lists it too");
+  } finally {
+    Object.assign(C.H, previous);
+  }
+});

@@ -233,6 +233,37 @@ function update(player) {
   render(player);
 }
 
+/**
+ * Fighting, or being fought by, something still alive. Live refuses the screen while a living
+ * NPC is the player's target or is hitting them, and opens it on the next click after that NPC
+ * dies (rsprox 227/01885 t20819 refused, t20821 opened; 227/1000296 t5356 opened on the kill tick's
+ * follow-up). Ours: "being hit" lasts the combat attacker window (8 ticks after an NPC's hit,
+ * Combat.ts); live's window after walking away is unrecorded.
+ */
+function inCombat(player) {
+  const combat = player.getCombat();
+  return [combat.getTarget(), combat.getAttacker()].some((other) =>
+    other != null && other.getHitpoints() > 0 && other.isRegistered?.() !== false);
+}
+
+/** Mid-teleport, mid-obstacle or dying: live drops the click (rsprox 228/02229 t236, 227/1000370 t25076). */
+function inDelayedAction(player) {
+  return player.getHitpoints() <= 0 || player.isLocked?.() || player.isNeedsPlacement?.();
+}
+
+function openFromWornItems({ player }) {
+  if (inDelayedAction(player)) return true;
+  if (inCombat(player)) {
+    // Refused with nothing interrupted: the attack keeps its timing (rsprox 227/1000539 t1780-1781,
+    // 227/1000194 t4761, 227/00080 t243-244).
+    player.getPacketSender().sendMessage("You cannot open the equip screen while in combat!");
+    return true;
+  }
+  // Live stops everything on the open tick: walk, route, face, animation, skilling (Player.stopAction).
+  player.stopAction();
+  return open(player);
+}
+
 function open(player) {
   if (player.busy?.()) {
     player.getPacketSender().sendInterfaceRemoval();
@@ -271,7 +302,7 @@ module.exports = {
   register(api) {
     pluginApi = api;
     BonusManager = api.getBonusManager();
-    api.onInterfaceActionButton(OPEN_EQUIPMENT_STATS_BUTTON, ({ player }) => open(player));
+    api.onInterfaceActionButton(OPEN_EQUIPMENT_STATS_BUTTON, openFromWornItems);
     api.onInterfaceActionButton([...EQUIPMENT_SLOT_BY_COMPONENT.keys()], handleItemAction);
     api.onPlayerProcess(({ player }) => {
       if (player.getInterfaceId?.() === EQUIPMENT_STATS_INTERFACE_ID) {

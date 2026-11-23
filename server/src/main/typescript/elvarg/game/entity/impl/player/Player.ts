@@ -945,12 +945,31 @@ export class Player extends Mobile {
     }
 
     /**
+     * A full stop, as an interface button that halts the player does on live (View equipment
+     * stats): on the click's tick the walk is cleared (it does not resume when the interface
+     * closes), a pending object/NPC route and the combat interaction end, the face target and the
+     * animation reset, and a repeating skilling action stops. rsprox captures 227/1000433 t11626,
+     * 227/01751 t3614-3620 (walk), 227/1000561 t12352 (route), 227/1000296 t5356 (face cleared),
+     * 227/1000507 t226 (mining animation reset). docs/interface-interruption.md.
+     */
+    stopAction(): void {
+        this.getCombat().clearInteraction();
+        TaskManager.cancelWalkToTasks(this.getIndex());
+        this.getMovementQueue().reset();
+        this.getMovementQueue().resetFollow();
+        this.getSkillManager().stopSkillable();
+        this.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+        this.interactionCleared("interface");
+    }
+
+    /**
      * `player:interaction-cleared` { player, reason }: the player's interaction was replaced, so a
      * repeating action held outside the task keys (a chop, a fire, a smelt) ends. `reason` is "item"
-     * (an inventory or equipment action) or "attack" (an Attack click, a spell on a target, or
-     * auto-retaliate). osrs-docs: Entity Interactions - Interruptions.
+     * (an inventory or equipment action), "attack" (an Attack click, a spell on a target, or
+     * auto-retaliate) or "interface" (a full stop from an interface button, `stopAction`).
+     * osrs-docs: Entity Interactions - Interruptions.
      */
-    interactionCleared(reason: "item" | "attack"): void {
+    interactionCleared(reason: "item" | "attack" | "interface"): void {
         PluginManager.emitCustomEvent("player:interaction-cleared", { player: this, reason });
     }
 

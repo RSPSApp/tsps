@@ -139,15 +139,30 @@ function press(player, button) {
 
 const MOVES = { S: 'zep_btn_sandbags', L: 'zep_btn_logs', R: 'zep_btn_relax', N: 'zep_btn_tug', E: 'zep_btn_tug_emerg' };
 
-/** Flies a Wiki/captured solution ("R3 L2 ...", screens split by |), one move per two ticks. */
-function flySolution(player, solution) {
+/** Flies a Wiki/captured solution ("R3 L2 ...", screens split by |), one move every `gap` ticks. */
+function flySolution(player, solution, gap = 2) {
   for (const step of solution.replace(/\|/g, ' ').split(/\s+/).filter(Boolean)) {
     for (let i = 0; i < Number(step.slice(1)); i++) {
       press(player, MOVES[step[0]]);
-      tick(2);
+      tick(gap);
     }
   }
 }
+
+/**
+ * The moves of every flight in the rsprox local enlightened-journey recording (rev 242), in order: the Taverley flight
+ * (ticks 2001-2099), the Grand Tree (3045-3146), the Crafting Guild's second try (3355-3449), Castle Wars (3519-3636) and
+ * Varrock (3696-3795); and the Crafting Guild's first try, which hit a cloud on its seventh move over Entrana (3014-3025).
+ */
+const RECORDED = {
+  taverley: 'S1 L1 R9 E1 R2 N1 R5 L1 R1 L1 R10 L1 R12 E1 N1 R3 L1 R4 N1',
+  gnome: 'R7 N1 R12 L1 N1 L1 N1 L1 R2 L1 N1 R2 S1 R2 E1 R1 N1 R2 L3 R2 N1 L1 R5 E1 R1 E1 N1 R2',
+  craft: 'R3 L2 R2 E1 R4 L1 E1 R2 N1 R1 L1 R2 N1 R1 L1 R4 N1 R3 L1 R8 S1 R6 E1 R3 N1 R3 N1',
+  castle: 'S2 L1 R5 E1 L1 R3 E1 R1 L2 R3 L1 R1 E1 N1 R8 S1 R2 E1 L1 N1 R1 L1 R1 N1 R4 L1 E1 R4 S1 E1 R2 N1',
+  varrock: 'L4 R2 N3 R2 N1 L1 R2 N1 L2 R8 L2 R1 E2 R3 S1 R7 S1 R1 N2 S1 R1 N2 S1 R1 E1 R2 E1 N1',
+  craftCrash: 'R3 L2 R2',
+};
+const BAILED = 'You bail, but land safely on Entrana.';
 
 /** The captured Crafting Guild flight (rsprox 226/01702), as the Wiki's route gives it. */
 const CRAFTING = 'R3 L2 R2 E1 R4 L1 E1 R2 N1 R1 L1 R1 | R1 N1 R1 L1 R4 N1 R3 L1 R6 | R2 S1 R6 E1 R3 N1 R3 N1';
@@ -262,22 +277,47 @@ test("a trip needs its log and its Firemaking level; the same station refuses", 
   assert.equal(Travel.travel(player, station('taverley'), station('taverley')), false);
 });
 
+const SEARCHED_VARBIT = core.CacheDefinitions.getVarbitId('zep_already_searched');
+
+/** The first Entrana trip's search: the balloonist's line, then the "You are quickly searched." box. */
+function firstSearch(player) {
+  assert.equal(lastLine(player), 'Weapons are not allowed on Entrana. I must search you first.');
+  continueChain(player);
+  assert.equal(lastLine(player), 'You are quickly searched.');
+  continueChain(player);
+}
+
 test('to Entrana the player is searched using the shared carried and worn policy', () => {
   const armed = fakePlayer({ at: [2938, 3421], items: { logs: 1 }, worn: { WEAPON_SLOT: core.ItemIdentifiers.ABYSSAL_WHIP } });
   Travel.travel(armed, station('taverley'), station('entrana'));
-  assert.equal(lastLine(armed), 'Weapons are not allowed on Entrana. I must search you first.');
-  continueChain(armed);
-  assert.deepEqual(armed.messages, ['You are quickly searched.']);
+  firstSearch(armed);
   assert.equal(lastLine(armed), "I'm sorry, no weapons or armour may be worn to Entrana. Come back when you have laid them down.");
   assert.equal(Travel.flying(armed), false);
   assert.equal(armed.inventory.get(1511), 1, 'the log kept');
 
   const clean = fakePlayer({ at: [2938, 3421], items: { logs: 1 } });
   Travel.travel(clean, station('taverley'), station('entrana'));
-  continueChain(clean);
+  firstSearch(clean);
+  assert.equal(clean.varbits[SEARCHED_VARBIT], 1, 'zep_already_searched as the box is continued (rev 242 tick 2246)');
   assert.equal(Travel.flying(clean), true);
   tick(4);
   assert.deepEqual(xy(clean.getLocation()), [2808, 3354]);
+});
+
+test('after the first search an Entrana trip is only "You are quickly searched." in chat (rev 242 tick 2967)', () => {
+  const player = fakePlayer({ at: [2938, 3421], items: { logs: 2 } });
+  Travel.travel(player, station('taverley'), station('entrana'));
+  firstSearch(player);
+  tick(8);
+  player.moveTo(loc(2938, 3421));
+  player.said.length = 0;
+  player.messages.length = 0;
+  Travel.travel(player, station('taverley'), station('entrana'));
+  assert.equal(player.said.length, 0, 'no line or box the second time');
+  assert.ok(player.messages.includes('You are quickly searched.'));
+  assert.equal(Travel.flying(player), true);
+  Travel.login({ player });
+  assert.equal(player.varbits[SEARCHED_VARBIT], 1, 'sent again at login');
 });
 
 test('opening a route from Entrana: its 10 logs (3 magic), the controls flown, 2,000 Firemaking XP, saved and shown', () => {
@@ -303,7 +343,7 @@ test('opening a route from Entrana: its 10 logs (3 magic), the controls flown, 2
   assert.equal(gnome.inventory.get(1513), 0, '3 magic logs');
   flySolution(gnome, SOLUTIONS.gnome);
   tick(4);
-  assert.equal(gnome.messages.at(-1), 'You arrive safely at the Grand Tree.');
+  assert.equal(gnome.messages.at(-1), 'You arrive safely at the Gnome Stronghold.');
   assert.deepEqual([gnome.varbits[2870], gnome.varbits[5032]], [1, 1], 'the Grand Tree basket and Le Smith');
 
   const short = fakePlayer({ items: { yew: 9 } });
@@ -314,7 +354,9 @@ test('opening a route from Entrana: its 10 logs (3 magic), the controls flown, 2
 test('a route not yet opened is refused away from Entrana', () => {
   const player = fakePlayer({ at: [2938, 3421], items: { willow: 20 } });
   Travel.travel(player, station('taverley'), station('varrock'));
-  assert.equal(lastLine(player), 'You need to fly from Entrana to open that route first.');
+  // A message box, not the balloonist's line (rev 242 tick 2223).
+  assert.equal(lastLine(player), 'You can only open new locations from Entrana.');
+  assert.equal(player.lastChain.getDialogues().get(0).constructor.name, 'StatementDialogue');
   assert.equal(player.inventory.get(1519), 20);
 });
 
@@ -367,13 +409,13 @@ test("the trip is checked again after the Entrana search; armour put on mid-flig
   const dropped = fakePlayer({ at: [2938, 3421], items: { logs: 1 } });
   Travel.travel(dropped, station('taverley'), station('entrana'));
   dropped.inventory.set(1511, 0);
-  continueChain(dropped);
+  firstSearch(dropped);
   assert.equal(Travel.flying(dropped), false);
   assert.equal(lastLine(dropped), 'You need 1 normal logs to make this trip.');
 
   const armed = fakePlayer({ at: [2938, 3421], items: { logs: 1 } });
   Travel.travel(armed, station('taverley'), station('entrana'));
-  continueChain(armed);
+  firstSearch(armed);
   assert.equal(Travel.flying(armed), true);
   armed.getEquipment().getItems()[core.Equipment.WEAPON_SLOT] = new core.Item(core.ItemIdentifiers.ABYSSAL_WHIP, 1);
   tick(4);
@@ -433,10 +475,10 @@ test("an obstacle in the balloon's two cells crashes it: no route, no XP, the lo
   takeOff(player, 'craft');
   // Map 4 has a cloud at row 7, columns 4-6: four relaxes at height 8 fly the basket into it.
   flySolution(player, 'R4');
-  assert.equal(Controls.inFlight(player), true, "still the player's flight until it has set them down");
-  assert.ok(player.messages.includes('The balloon crashes.'));
-  tick(2);
-  assert.deepEqual(xy(player.getLocation()), [2808, 3354], 'down on Entrana from the first screen');
+  // Over Entrana a crash is the safe landing (rev 242 tick 3025): beside the basket, the message box, the fade in.
+  assert.deepEqual(xy(player.getLocation()), [2809, 3355], 'down on Entrana from the first screen');
+  assert.equal(lastLine(player), BAILED);
+  assert.equal(player.messages.includes('The balloon crashes.'), false);
   tick(6);
   assert.equal(Controls.inFlight(player), false);
   assert.equal(Common.opened(player, station('craft')), false);
@@ -477,9 +519,17 @@ test('bailing over Entrana lands safely there; a logout at the controls loses th
   takeOff(bailer, 'craft');
   flySolution(bailer, 'R2');
   press(bailer, 'zep_btn_close');
-  assert.ok(bailer.messages.includes('You bail, but land safely on Entrana.'));
-  tick(8);
+  assert.equal(bailer.interface, -1, 'the controls close at once');
+  tick(1);
+  // A tick later: the tile beside the basket, the fade in and the message box (rev 242 ticks 1653-1654).
+  assert.deepEqual(xy(bailer.getLocation()), [2809, 3355]);
+  assert.equal(lastLine(bailer), BAILED);
+  assert.ok(bailer.fades.includes('fade:255'));
+  assert.equal(bailer.blocked, false);
   assert.equal(Controls.inFlight(bailer), false);
+  const closed = bailer.fades.length;
+  continueChain(bailer);
+  assert.equal(bailer.fades[closed], 'closed', "the box's continue clears the overlay");
 
   const leaver = fakePlayer({ items: { oak: 10 } });
   takeOff(leaver, 'craft');
@@ -488,6 +538,38 @@ test('bailing over Entrana lands safely there; a logout at the controls loses th
   assert.equal(Controls.inFlight(leaver), false);
   assert.equal(leaver.inventory.get(1521), 0, 'the logs are gone');
   assert.equal(Common.opened(leaver, station('craft')), false);
+});
+
+test('every recorded flight lands as recorded, one move a tick; the recorded crash over Entrana comes down safely', () => {
+  const logs = { craft: 'oak', varrock: 'willow', castle: 'yew', gnome: 'magic' };
+  for (const key of Object.keys(logs)) {
+    const player = fakePlayer({ items: { [logs[key]]: 10 } });
+    takeOff(player, key);
+    flySolution(player, RECORDED[key], 1);
+    tick(4);
+    assert.equal(Common.opened(player, station(key)), true, key);
+    assert.deepEqual(xy(player.getLocation()), station(key).land, key);
+    assert.ok(player.messages.includes(Controls.data().routes[key].arrive), key);
+  }
+  const crashed = fakePlayer({ items: { oak: 10 } });
+  takeOff(crashed, 'craft');
+  flySolution(crashed, RECORDED.craftCrash, 1);
+  assert.equal(Controls.inFlight(crashed), true, 'six moves fly');
+  press(crashed, 'zep_btn_relax');
+  tick(1);
+  assert.equal(lastLine(crashed), BAILED, 'the seventh hits the cloud over Entrana');
+  assert.equal(Common.opened(crashed, station('craft')), false);
+});
+
+test('two clicks in one tick move twice, a tick apart (rev 242 ticks 2092-2093)', () => {
+  const player = fakePlayer({ items: { oak: 10 } });
+  takeOff(player, 'craft');
+  const dist = core.CacheDefinitions.getVarbitId('zep_if_screen_dist');
+  press(player, 'zep_btn_relax');
+  press(player, 'zep_btn_relax');
+  assert.equal(player.varbits[dist], 1);
+  tick(1);
+  assert.equal(player.varbits[dist], 2);
 });
 
 test('every route with screens lands its Wiki solution without touching an obstacle', () => {
@@ -552,14 +634,36 @@ test('a screen change clears the 220 cells row by row, puts every angle back, th
   assert.deepEqual(player.grid.filter(([, at]) => at === cell(3, 19)).slice(-3), [['model', cell(3, 19), 19717], ['angle', cell(3, 19), 99, 333, 2576], ['anim', cell(3, 19), 5154]]);
 });
 
+// The Grand Tree's waterfalls (zep_waterfall) animate with the cache's angle: live sends them none.
+const WATERFALL = 5157;
+
 test("every route draws the balloon controls' own models, and each animated one has its captured angle", () => {
   const { routes, angles } = Controls.data();
   for (const [key, route] of Object.entries(routes)) {
     for (const [index, cells] of route.screens.entries()) {
-      for (const [row, col, model, anim] of cells) {
+      for (const [row, col, model, anim, own] of cells) {
         assert.ok(model >= 19519 && model <= 19781, `${key} screen ${index + 1} (${row}, ${col}): ${model}`);
-        if (anim >= 0) assert.ok(angles[model], `${key} screen ${index + 1} (${row}, ${col}): ${model} animates without an angle`);
+        if (anim >= 0 && anim !== WATERFALL) assert.ok(own ?? angles[model], `${key} screen ${index + 1} (${row}, ${col}): ${model} animates without an angle`);
       }
     }
   }
+});
+
+test('Escape and world clicks do nothing at the controls; Escape on the bail box clears its fade (review)', () => {
+  const player = fakePlayer({ items: { oak: 10 } });
+  takeOff(player, 'craft');
+  const close = { player, handled: false };
+  Controls.holdControls(close);
+  assert.equal(close.handled, true, 'the controls stay');
+  const click = { player, handled: false };
+  Controls.holdControls(click);
+  assert.equal(click.handled, true);
+  press(player, 'zep_btn_close');
+  tick(1);
+  assert.equal(lastLine(player), BAILED);
+  const escape = { player, handled: false };
+  const before = player.fades.length;
+  Controls.holdControls(escape);
+  assert.equal(escape.handled, false, 'the box closes as normal');
+  assert.equal(player.fades[before], 'closed', 'and the fade with it');
 });

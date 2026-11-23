@@ -8,8 +8,9 @@
  *   tabs closed, zep_interface in the main modal and zep_interface_side beside it.
  * - Every control moves the balloon one column right: sandbags +2 (one sandbag), logs +1 (one
  *   log), relax 0, the rope -1, the red rope -2 - the counters, the height and the column, the
- *   control's sound, the balloon's two parts placed and the whoosh (3246). One move per two
- *   ticks; clicks wait their turn.
+ *   control's sound, the balloon's two parts placed and the whoosh (3246). One move a tick at
+ *   most: a second click in the same tick waits for the next (rsprox local enlightened-journey,
+ *   rev 242: 111 moves a tick apart over its six flights, two clicks in one tick moved twice).
  * - The balloon fills two cells (its envelope's row and the basket's below); an obstacle in either
  *   crashes it. From column 19 of screens 1 and 2 the next move draws the next screen, at column
  *   1, after clearing every cell's model and angle. It lands from screen 3's column 19 at height
@@ -17,17 +18,22 @@
  * - Landing: the interfaces close as the screen goes black; a tick later the tabs come back, the
  *   route opens and 2,000 Firemaking XP; three ticks after that "You arrive safely at <place>."
  *   and the landing; the fade back in a tick later.
- * - Bail over Entrana (screen 1) lands safely there; anything else is a crash (Wiki): the logs
- *   are gone, no XP, the route still shut. A logout mid-flight loses the logs too.
+ * - Over Entrana (screen 1) a bail, or a crash, lands safely there: the controls close on black, a
+ *   tick later the player is beside the basket with the tabs back, the fade in and the message box
+ *   "You bail, but land safely on Entrana.", whose continue clears the overlay (rev 242 recording
+ *   ticks 1653 and 3025, the red rope and a crash). Past Entrana it's a crash (Wiki): the logs are
+ *   gone, no XP, the route still shut. A logout mid-flight loses the logs too.
+ * - The flight is a cutscene to the client as live runs it: cutscene_status, gravestone_tli_hide
+ *   and cutscene_force_sidepanel on at take-off, off as the controls hand back (ticks 1640, 2099).
  * - Enlightened Journey's own flight to Taverley ("balloon-transport:quest-flight") flies the same
  *   controls without opening a route or giving XP; a landing is told to the quest
  *   ("balloon-transport:flight-landed") once the player is moved, a crash
  *   ("balloon-transport:flight-crashed") as the screen fades back in, and a route's crashSites can
  *   name where each screen's crash comes down.
  *
- * The routes' screens are plugins/world/data/balloon-routes.json: the Crafting Guild's captured,
- * Varrock's, Castle Wars', the Grand Tree's and Taverley's transcribed from the Wiki's Balloon
- * path images, their scenery's models matched against the client's renders of the cache's.
+ * The routes' screens are plugins/world/data/balloon-routes.json, every one captured: the Crafting
+ * Guild's in rsprox 226/01702, Taverley's, the Grand Tree's, Castle Wars' and Varrock's in the
+ * rsprox local enlightened-journey recording (rev 242).
  */
 const fs = require("fs");
 const path = require("path");
@@ -61,12 +67,14 @@ const PAD_HEIGHT = 5;
 /** Calibrated: the cloud ceiling covers rows 11-12; nothing flies lower than the ground strip. */
 const MAX_HEIGHT = 10;
 const MIN_HEIGHT = 2;
-const MOVE_TICKS = 2;
+const MOVE_TICKS = 1;
 const EMPTY_MODEL = 65535;
 /** The grid cells' angle x, angle y and zoom in the cache, which a screen change puts back. */
 const DEFAULT_ANGLE = [0, 0, 2576];
 const MINIMAP_STATE = "minimap_state";
 const MINIMAP_OFF = 2;
+/** Set with the minimap at take-off and cleared with it (rev 242 recording ticks 1640, 1654, 2099). */
+const CUTSCENE_VARBITS = ["cutscene_status", "gravestone_tli_hide", "cutscene_force_sidepanel"];
 /** The side tabs the flight closes (combat to magic, settings, emotes); friends, account and music stay. */
 const CLOSED_TABS = [[76, 0, 593], [77, 77, 320], [78, 78, 629], [79, 79, 149], [80, 80, 387], [81, 5, 541], [82, 6, -1], [87, 87, 116], [88, 88, 216]];
 const SUCCESS = { closeAt: 0, routeAt: 1, landAt: 4, fadeInAt: 5, overlayAt: 8 };
@@ -76,6 +84,8 @@ const FADE_IN = [0, 0, 0, 255, 50];
 let routes = null;
 /** Players at the controls -> their flight. */
 const flights = new Map();
+/** Players with the Entrana bail box up: its continue, or an Escape, clears the fade overlay. */
+const bailBoxes = new WeakSet();
 /** Delayed quest launches are invalidated by logout, even if the same player reconnects. */
 const pendingQuestFlights = new WeakMap();
 
@@ -113,14 +123,18 @@ function place(player, flight) {
   sender.sendInterfacePosition(component(BASKET), x, y + 24);
 }
 
-/** A screen's cells: each model, the animated ones' camera angle (IF_SETANGLE), then their animation. */
+/**
+ * A screen's cells: each model, the animated ones' camera angle (IF_SETANGLE), then their animation. A cell's own
+ * angle (its fifth entry) replaces its model's: the Grand Tree's second screen turns one bat (rsprox local
+ * enlightened-journey tick 3075).
+ */
 function drawScreen(player, cells) {
   const sender = player.getPacketSender();
   const angles = data().angles;
-  for (const [row, col, model, anim] of cells) {
+  for (const [row, col, model, anim, own] of cells) {
     const uid = component(GRID(row, col));
     sender.sendInterfaceRawModel(uid, model);
-    const angle = angles[model];
+    const angle = own ?? angles[model];
     if (angle) sender.sendInterfaceAngle(uid, ...angle);
     if (anim != null && anim >= 0) sender.sendInterfaceAnimation(uid, anim);
   }
@@ -175,6 +189,7 @@ function takeOff(player, station, logs, source, { opensRoute = true } = {}) {
   place(player, flight);
   sender.sendSound(MOVE_SOUND, 1, 0);
   setVarbit(player, MINIMAP_STATE, MINIMAP_OFF);
+  for (const name of CUTSCENE_VARBITS) setVarbit(player, name, 1);
   const movement = player.getMovementQueue();
   movement.reset();
   movement.setBlockMovement(true);
@@ -182,7 +197,7 @@ function takeOff(player, station, logs, source, { opensRoute = true } = {}) {
   return true;
 }
 
-/** One move per two ticks, clicks queued (the recording's cadence). */
+/** One move a tick at most, clicks queued (the recordings' cadence). */
 function tickLoop(player, flight) {
   const { Task, TaskManager } = Common.core;
   TaskManager.submit(new (class extends Task {
@@ -277,6 +292,7 @@ function finish(player, flight) {
 function release(player) {
   player.getMovementQueue().setBlockMovement(false);
   setVarbit(player, MINIMAP_STATE, 0);
+  for (const name of CUTSCENE_VARBITS) setVarbit(player, name, 0);
 }
 
 /** The captured landing: black, the route at T+1, the arrival at T+4, the fade back at T+5. */
@@ -337,15 +353,58 @@ function comeDown(player, flight, message, site, crashed) {
   });
 }
 
+/**
+ * Over Entrana (the first screen) a bail or a crash sets the player down beside the basket as recorded: black at once,
+ * a tick later the tile, the tabs, the fade in and the message box, its continue clearing the overlay.
+ */
+function landOnEntrana(player, flight) {
+  end(player, flight);
+  closeControls(player);
+  Common.fade(player, BLACK_OUT);
+  flight.arrive = () => {
+    if (flight.arrived) return;
+    flight.arrived = true;
+    sideTabs(player, true);
+    release(player);
+    player.moveTo(Common.tile(data().crashSites.entrana));
+  };
+  Common.later(1, () => {
+    if (owns(player, flight)) {
+      flight.arrive();
+      Common.fade(player, FADE_IN);
+      bailBoxes.add(player);
+      messageBox(player, BAILED, () => {
+        bailBoxes.delete(player);
+        Common.closeFade(player);
+      });
+    }
+    finish(player, flight);
+  });
+}
+
+function messageBox(player, text, then) {
+  const { ActionDialogue, DialogueChainBuilder, StatementDialogue } = Common.core;
+  const chain = new DialogueChainBuilder();
+  chain.add(new StatementDialogue(0, text));
+  chain.add(new ActionDialogue(1, { execute: () => {
+    // Nothing follows the box: the chat closes with it.
+    player.getDialogueManager().reset?.();
+    player.getPacketSender().sendInterfaceRemoval?.();
+    then();
+  } }));
+  player.getDialogueManager().startDialogues(chain);
+}
+
 /** Down on Entrana from the first screen, else the route's crash site (per screen where given). */
 function crash(player, flight) {
   const { route, screen } = flight;
-  comeDown(player, flight, CRASHED, route.crashSites?.[screen] ?? (screen === 0 ? "entrana" : route.crashSite), true);
+  if (screen === 0) return landOnEntrana(player, flight);
+  comeDown(player, flight, CRASHED, route.crashSites?.[screen] ?? route.crashSite, true);
 }
 
 /** Bail: over Entrana it lands safely; past it the balloon crashes. */
 function bail(player, flight) {
-  if (flight.screen === 0) comeDown(player, flight, BAILED, "entrana");
+  if (flight.screen === 0) landOnEntrana(player, flight);
   else crash(player, flight);
 }
 
@@ -402,10 +461,29 @@ function questFlight({ player, station: key, logs, source, canStart }) {
   });
 }
 
+/**
+ * At the controls Escape and world clicks do nothing: closing zep_interface would leave the player held with the flight
+ * still on. Ours: no recording closes them mid-flight. A bail box's Escape still clears the fade it left mounted.
+ */
+function holdControls(event) {
+  const { player } = event;
+  const flight = flights.get(player);
+  if (flight && !flight.done) {
+    event.handled = true;
+    return;
+  }
+  if (bailBoxes.has(player)) {
+    bailBoxes.delete(player);
+    Common.closeFade(player);
+  }
+}
+
 function attach(api) {
+  api.onCustomEvent("interface:close", holdControls);
+  api.onCustomEvent("player:world-input", holdControls);
   api.onInterfaceActionClick(controlClick);
   api.onPlayerLogout(logout);
   api.onCustomEvent("balloon-transport:quest-flight", questFlight);
 }
 
-module.exports = { attach, takeOff, controlClick, logout, questFlight, inFlight, hasRoute, data, CONTROLS, ROWS, COLUMNS };
+module.exports = { attach, takeOff, controlClick, holdControls, logout, questFlight, inFlight, hasRoute, data, CONTROLS, ROWS, COLUMNS };

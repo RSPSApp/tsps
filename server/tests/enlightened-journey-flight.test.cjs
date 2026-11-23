@@ -1,9 +1,9 @@
 // From server/: node --test tests/enlightened-journey-flight.test.cjs (after yarn build).
 //
 // Enlightened Journey's first flight, Entrana to Taverley, at the balloon controls (the
-// "taverley" route, transcribed from the Wiki's Balloon path images): the Wiki's solution lands
-// on Taverley's target and moves the quest on, with no route opened or XP; a bail over Entrana
-// lands there; a crash loses the logs and keeps the balloon, coming down where the quest's
+// "taverley" route, as the rev 242 recording draws it): the recorded flight and the Wiki's solution
+// land on Taverley's target and move the quest on (zep_quest 90 -> 100), with no route opened or
+// XP; a bail over Entrana lands there; a crash loses the logs and keeps the balloon, coming down where the quest's
 // transcript says (Entrana, the sea, the woods), with Auguste's words and the plank and dirt
 // ways out; a logout at the controls loses the logs.
 const assert = require('node:assert/strict');
@@ -17,8 +17,8 @@ const core = PluginManager.getCoreApi();
 const I = core.ItemIdentifiers;
 
 const STAGE_KEY = 'quest.enlightened_journey.stage';
-const BALLOON_READY = 6;
-const LANDED = 7;
+const BALLOON_READY = 90;
+const LANDED = 100;
 const PICCARD_VARBIT = 2868;
 const AUGUSTE = core.NpcIdentifiers.AUGUSTE;
 
@@ -145,23 +145,38 @@ function press(player, button) {
 
 const MOVES = { S: 'zep_btn_sandbags', L: 'zep_btn_logs', R: 'zep_btn_relax', N: 'zep_btn_tug', E: 'zep_btn_tug_emerg' };
 
-/** Flies "R3 L2 ..." one move per two ticks; stops the moment the balloon is down (no ticks after). */
-function flySolution(player, solution) {
+/** Flies "R3 L2 ..." one move every `gap` ticks; stops the moment the balloon is down (no ticks after). */
+function flySolution(player, solution, gap = 2) {
   for (const step of solution.replace(/\|/g, ' ').split(/\s+/).filter(Boolean)) {
     for (let i = 0; i < Number(step.slice(1)); i++) {
       press(player, MOVES[step[0]]);
       if (!atControls(player)) return;
-      tick(2);
+      tick(gap);
     }
   }
 }
+
+/** The rev 242 recording's own flight, ticks 2001-2099: one move a tick where it clicked that fast. */
+const RECORDED = 'S1 L1 R9 E1 R2 N1 R5 L1 R1 L1 R10 L1 R12 E1 N1 R3 L1 R4 N1';
 
 /** The Wiki's Enlightened Journey solution, screen by screen. */
 const [FIRST, SECOND, THIRD] = ['S1 L1 R9 E1 R2 N1 R5', 'L1 R1 L1 R10 L1 R5', 'R7 E1 N1 R3 L1 R4 N1'];
 /** Straight down: the emergency rope until the balloon hits the ground. */
 const DIVE = 'E5';
 
-test("the Wiki's solution lands on Taverley's target: stage 7, Auguste there, no route or XP", () => {
+test('the recorded flight lands on Taverley: zep_quest 100 and Auguste there, as live (tick 2099)', () => {
+  const player = fakePlayer();
+  fly(player);
+  flySolution(player, RECORDED, 1);
+  assert.equal(atControls(player), false);
+  tick(5);
+  assert.ok(player.messages.includes('You arrive safely in Taverley.'));
+  assert.deepEqual(xy(player.getLocation()), [2941, 3420], 'the recorded landing tile');
+  assert.equal(player.attributes[STAGE_KEY], LANDED);
+  assert.equal(player.varbits[PICCARD_VARBIT], 1);
+});
+
+test("the Wiki's solution lands on Taverley's target: zep_quest 100, Auguste there, no route or XP", () => {
   const player = fakePlayer();
   const event = fly(player);
   assert.equal(event.handled, true);
@@ -198,7 +213,7 @@ test('the logs come from storage when chosen, from the inventory if storage has 
 });
 
 test('no flight before the balloon is ready, after landing, or without the logs', () => {
-  for (const player of [fakePlayer({ stage: 5 }), fakePlayer({ stage: LANDED }), fakePlayer({ logs: 9 })]) {
+  for (const player of [fakePlayer({ stage: 80 }), fakePlayer({ stage: LANDED }), fakePlayer({ logs: 9 })]) {
     fly(player);
     assert.equal(atControls(player), false);
   }
@@ -209,12 +224,12 @@ test('bailing over Entrana lands safely there; the logs are gone and the balloon
   fly(player);
   flySolution(player, 'S1 L1 R2');
   press(player, 'zep_btn_close');
-  assert.ok(player.messages.includes('You bail, but land safely on Entrana.'));
-  tick(2);
+  tick(1);
   assert.deepEqual(xy(player.getLocation()), crashSite('entrana'));
+  assert.deepEqual(crashSite('entrana'), [2809, 3355], 'beside the basket, as recorded (ticks 1654, 3026)');
+  assert.deepEqual(playThrough(player), ['You bail, but land safely on Entrana.'], 'the message box, no crash talk');
   assert.equal(player.attributes[STAGE_KEY], BALLOON_READY);
   assert.equal(player.inventory.get(I.LOGS), 0);
-  assert.equal(player.chains.length, 0, 'no crash talk');
 });
 
 test('a crash on the second screen comes down at sea with Auguste; the plank swims back to Entrana', () => {

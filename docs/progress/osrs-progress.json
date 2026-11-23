@@ -30764,6 +30764,7 @@
             "docs/phantom-muspah.md"
           ],
           "devNotes": [
+            "2026-11-23: Sergeant Raymond warns players on the first Enter after Secrets of the North. Later Enters offer a confirmation with a persistent opt-out. Clear Mind from enchanted sapphire bolts drains 33 shield points at the normal Ranged level. Sources and focused tests: docs/phantom-muspah.md. Attacks remain in progress because corruption spells and documented damage estimates remain.",
             "Main fdf193b28: #1303 the scoreboard by the crevice. Attack gaps keep task 2 partial.",
             "Main sync 9949ef068: PR #619 implements the solo Phantom Muspah after Secrets of the North: the lair, ranged/magic/melee forms, shield phase, spikes and homing spikes, smoke clouds, corruption, kill credit and loot (docs/phantom-muspah.md).",
             "Attacks stay in progress: enchanted sapphire bolts/corruption spells draining the shield, the defence drain floor and the 33% freeze resistance are missing; the scoreboard and Sergeant Raymond's warning are absent; several damage values are estimates.",

@@ -119,9 +119,9 @@ function hitShield(fight, hit) {
   }
 }
 
-/** Drains the shield (its own attacks, Smite), breaking it at 0. */
+/** Drains the shield (its own attacks, Smite or Clear Mind), breaking it at 0. */
 function drain(fight, amount) {
-  if (fight.form !== "shielded" || amount <= 0) return;
+  if (fight.form !== "shielded" || fight.shield <= 0 || amount <= 0) return;
   const { shield } = Common.data;
   const drained = Math.min(fight.shield, amount);
   fight.shield -= drained;

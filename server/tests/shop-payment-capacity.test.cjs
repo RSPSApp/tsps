@@ -1,5 +1,5 @@
-// Plugins load with the player bots off: a booted bot plugin rescans and rewrites the tracked
-// server/plugins/bots/data/object-index.json whenever the tracked object ids moved.
+// Plugins load with the player bots off: a booted bot plugin may rescan the map and write
+// server/data/saves/bot-object-index.json, which a test has no need for.
 process.env.DISABLE_PLAYER_BOTS = "1";
 const assert = require('node:assert/strict');
 const path = require('node:path');

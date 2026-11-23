@@ -327,7 +327,7 @@ test("the bush: a female character hears the Wiki's \"take her\" (live said \"hi
   assert.equal(werewolfLines(f.player)[2][1], "Nah, we can't take her. It'll look suspicious.");
 });
 
-test("the bush: closing the chat on a werewolf line keeps it; the scene still ends with 130 back on the map", (t) => {
+test("the bush: a chat close or a world click on a werewolf line keeps it; the scene still ends with 130 back on the map", (t) => {
   const f = actor(t, STAGE.DREZEL_TALKED, 3391, 3480, 0, { [VARBIT.BUSH]: 1 });
   assert.equal(click(f.player, 18121, "Search", [3390, 3480, 0]), true);
   tick(19);
@@ -337,6 +337,9 @@ test("the bush: closing the chat on a werewolf line keeps it; the scene still en
   const close = { player: f.player, handled: false };
   PM.emitCustomEvent("interface:close", close);
   assert.equal(close.handled, true, "the close is taken (interface_close)");
+  const worldClick = { player: f.player, packet: { type: "object_option" }, handled: false };
+  PM.emitCustomEvent("player:world-input", worldClick);
+  assert.equal(worldClick.handled, true, "a world click (which would close the chat) is taken too");
   tick(5);
   assert.equal(text(f.player), "Not to worry! Now we've got more!", "the line stays open");
   for (let i = 0; i < 8 && !(text(f.player) ?? "").startsWith("Ouch"); i++) { cont(f.player); tick(1); }

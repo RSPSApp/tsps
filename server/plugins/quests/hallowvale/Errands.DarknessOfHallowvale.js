@@ -478,7 +478,8 @@ module.exports = function attachErrands(context) {
 
   /**
    * The werewolves' lines are the scene's only way on (their last continue tears it down), so a chat
-   * close (Esc) while the scene plays keeps them open; otherwise the player stayed in the copy.
+   * close (Esc) or a world click (which closes the chat) while the scene plays is taken; otherwise the
+   * player stayed in the copy.
    */
   function keepWerewolfChat(event) {
     if (event?.player && wolfScenes.has(event.player)) event.handled = true;
@@ -741,5 +742,6 @@ module.exports = function attachErrands(context) {
   api.onCustomEvent("npc-dialogue:menu", handleMenu);
   api.onItemAction("Message", { Inspect: inspectMessage });
   api.onCustomEvent("interface:close", keepWerewolfChat);
+  api.onCustomEvent("player:world-input", keepWerewolfChat);
   api.onPlayerLogout(handleLogout);
 };

@@ -226,16 +226,16 @@ export class Bank extends ItemContainer {
 
     /**
      * Slots in use across the tabs (not the search results): placeholders take a slot as items do, and
-     * so do the gaps the open bank still shows (see shownSlots). Opening the bank closes them.
+     * so do the gaps the open bank shows (see shownSlots). Gaps only exist in the open bank: the next
+     * opening closes any left once it is closed, so until then they hold no space.
      */
     public static usedSlots(player: Player): number {
-        const gapsHold = Bank.isOpen(player);
+        const open = Bank.isOpen(player);
         let used = 0;
         for (let tab = 0; tab < Bank.TOTAL_BANK_TABS; tab++) {
             if (tab === Bank.BANK_SEARCH_TAB_INDEX) continue;
             const bank = player.getBank(tab);
-            if (gapsHold) used += bank.shownSlots();
-            else for (const item of bank.getItems()) if (item != null && item.getId() >= 0) used++;
+            used += open ? bank.shownSlots() : bank.getValidItems().length;
         }
         return used;
     }
@@ -278,25 +278,18 @@ export class Bank extends ItemContainer {
 
     /** A gap in this tab, or a new slot while the player's space allows one. */
     public getEmptySlot(): number {
-        return this.roomLeft() > 0 ? this.freeSlot() : this.firstGap();
+        return this.roomLeft() > 0 ? this.freeSlot() : this.gaps()[0] ?? -1;
     }
 
     public getFreeSlots(): number {
-        return Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft() + this.gaps());
-    }
-
-    /** The first empty slot this tab still shows, or -1. */
-    private firstGap(): number {
-        const shown = this.shownSlots();
-        for (let slot = 0; slot < shown; slot++) if ((this.items[slot]?.getId() ?? -1) < 0) return slot;
-        return -1;
+        return Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft() + this.gaps().length);
     }
 
     /** The empty slots this tab still shows. */
-    private gaps(): number {
-        let gaps = 0;
+    private gaps(): number[] {
+        const gaps: number[] = [];
         const shown = this.shownSlots();
-        for (let slot = 0; slot < shown; slot++) if ((this.items[slot]?.getId() ?? -1) < 0) gaps++;
+        for (let slot = 0; slot < shown; slot++) if ((this.items[slot]?.getId() ?? -1) < 0) gaps.push(slot);
         return gaps;
     }
 
@@ -345,8 +338,8 @@ export class Bank extends ItemContainer {
     }
 
     public static isOpen(player: Player): boolean {
-        return player.getStatus?.() === PlayerStatus.BANKING &&
-            player.getInterfaceId?.() === Bank.MAIN_INTERFACE_ID;
+        return player.getStatus() === PlayerStatus.BANKING &&
+            player.getInterfaceId() === Bank.MAIN_INTERFACE_ID;
     }
 
     public static withdraw(player: Player, item: number, slot: number, amount: number, fromBankTab: number) {
@@ -811,7 +804,7 @@ export class Bank extends ItemContainer {
     /** Moves the bank item at `clientSlot` to the end of `tab`, creating the tab if it's new. */
     private static moveToTab(player: Player, clientSlot: number, itemId: number, tab: number) {
         const entry = Bank.resolveDisplaySlot(player, clientSlot);
-        if (!entry || entry.item.getId() < 0 || Bank.displayItemId(entry.item) !== itemId) return;
+        if (!entry || Bank.displayItemId(entry.item) !== itemId) return;
         tab = Bank.dropTab(player, tab);
         if (tab === entry.tab) return;
         const target = player.getBank(tab);
@@ -833,9 +826,8 @@ export class Bank extends ItemContainer {
      */
     private static moveItem(player: Player, fromClientSlot: number, itemId: number, toClientSlot: number) {
         const from = Bank.resolveDisplaySlot(player, fromClientSlot);
-        const to = Bank.resolveDisplaySlot(player, toClientSlot);
-        if (!from || !to || from.item.getId() < 0 || Bank.displayItemId(from.item) !== itemId
-            || fromClientSlot === toClientSlot) return;
+        const to = Bank.resolveDropSlot(player, toClientSlot);
+        if (!from || !to || Bank.displayItemId(from.item) !== itemId || fromClientSlot === toClientSlot) return;
         const bank = player.getBank(to.tab);
         if (from.tab !== to.tab && !player.insertModeReturn()) {
             player.getBank(from.tab).setItem(from.slot, to.item);
@@ -859,7 +851,14 @@ export class Bank extends ItemContainer {
         }
     }
 
+    /** The bank item at a display slot; an empty slot (a gap) resolves to nothing. */
     public static resolveDisplaySlot(player: Player, clientSlot: number): { tab: number; slot: number; item: Item } | null {
+        const entry = Bank.resolveDropSlot(player, clientSlot);
+        return entry != null && entry.item.getId() >= 0 ? entry : null;
+    }
+
+    /** The bank slot at a display slot, a gap included: where a dragged item can land. */
+    public static resolveDropSlot(player: Player, clientSlot: number): { tab: number; slot: number; item: Item } | null {
         if (!Number.isInteger(clientSlot) || clientSlot < 0) return null;
         return Bank.layout(player)[clientSlot] ?? null;
     }
@@ -980,8 +979,7 @@ export class Bank extends ItemContainer {
 
         if (packet.groupId === Bank.MAIN_INTERFACE_ID && packet.childId === Bank.ITEMS_CHILD && packet.slot != null) {
             const entry = Bank.resolveDisplaySlot(player, packet.slot);
-            if (!entry || entry.item.getId() < 0
-                || (packet.itemId != null && packet.itemId !== Bank.displayItemId(entry.item))) return true;
+            if (!entry || (packet.itemId != null && packet.itemId !== Bank.displayItemId(entry.item))) return true;
             if (packet.buttonNum === Bank.EXAMINE_OP) {
                 examineItem(player, entry.item.getId(), entry.item.getAmount());
                 return true;

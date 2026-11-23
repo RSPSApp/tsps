@@ -1582,3 +1582,16 @@ test("moving an item to another tab closes only its own slot; a withdrawal's gap
   assert.deepEqual(Bank.layout(player).map(({ tab, item }) => [tab, item.getId()]),
     [[1, FAMILY_CHARGED], [1, MYSTIC_LAVA_STAFF], [0, -1], [0, TRIDENT], [0, UNRELATED]]);
 });
+
+test("an item dragged onto a gap moves into it; a drag from a gap moves nothing", () => {
+  const player = createPlayer();
+  bankOf(player, [A, B, C]);
+  Bank.withdraw(player, B, 1, 1, 0);
+
+  drag(player, BANK_ITEMS, 1, -1, BANK_ITEMS, 2);
+  assert.deepEqual(Bank.layout(player).map(({ item }) => item.getId()), [A, -1, C]);
+
+  drag(player, BANK_ITEMS, 2, C, BANK_ITEMS, 1);
+  assert.deepEqual(Bank.layout(player).map(({ item }) => item.getId()), [A, C]);
+  assert.equal(Bank.resolveDisplaySlot(player, 1).item.getId(), C);
+});

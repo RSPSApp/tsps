@@ -324,9 +324,12 @@ function bankRefusal(player) {
   // later charge/meta variants must find another slot, and matching stacks must have quantity room.
   // The real character and its stack identities remain untouched if any deposit would fail.
   const maximumSlots = Bank.usedSlots(player) + Bank.freeSlots(player);
+  // It counts its bank space as the player's own bank does, open or closed.
   const plannedPlayer = {
     getBank: (tab) => plannedBanks[tab],
     getCurrentBankTab: () => player.getCurrentBankTab(),
+    getStatus: () => player.getStatus(),
+    getInterfaceId: () => player.getInterfaceId(),
   };
   const plannedBanks = player.getBanks().map((bank) => {
     const copy = new Bank(plannedPlayer);

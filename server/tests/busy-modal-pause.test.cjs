@@ -246,3 +246,42 @@ test("woodcutting waits under the diary journal and starts over after it closes"
   ticks(10);
   assert.ok(attempts.length > before, "rolls resume without a re-click");
 });
+
+test("a spot that moves while the journal is open ends the fishing instead of restarting it", async (t) => {
+  const f = fishingScene(t);
+  ticks(4);
+  await send(f, DIARY_PACKET);
+  const spot = core.World.getNpcs().toArray?.().find?.((n) => n && n.getId() === core.NpcIdentifiers.ROD_FISHING_SPOT_10 && n.getLocation().getX() === SPOT_TILE.x)
+    ?? [...core.World.getNpcs()].find((n) => n && n.getId() === core.NpcIdentifiers.ROD_FISHING_SPOT_10 && n.getLocation().getX() === SPOT_TILE.x);
+  assert.ok(spot, "the spot is found");
+  spot.moveTo(new core.Location(SPOT_TILE.x, SPOT_TILE.y + 1, 0));
+  ticks(2);
+  const caught = f.caught();
+  await send(f, CLOSE_PACKET);
+  ticks(12);
+  assert.equal(Fishing.isFishingActive(f.p), false, "the moved spot ends the session");
+  assert.equal(f.caught(), caught, "no catch from the moved spot");
+});
+
+test("a tree felled while the journal is open ends the chop without a fresh swing", async (t) => {
+  const f = actor(t, { x: 3222, y: 3218 }, core.Skill.WOODCUTTING);
+  f.p.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_AXE), true);
+  const tree = new core.GameObject(core.ObjectIdentifiers.TREE, new core.Location(3223, 3218, 0), 10, 0, null);
+  core.ObjectManager.register(tree, true);
+  let registered = true;
+  t.after(() => { if (registered) core.ObjectManager.deregister(tree, true); });
+  const fail = Math.random;
+  Math.random = () => (new Error().stack.includes("rollLog") ? 0.999999 : fail());
+  await send(f, { type: "object_option", id: tree.getId(), x: 3223, y: 3218, action: "Chop down" });
+  ticks(4);
+  await send(f, DIARY_PACKET);
+  core.ObjectManager.deregister(tree, true);
+  registered = false;
+  ticks(2);
+  await send(f, CLOSE_PACKET);
+  const animations = [];
+  const perform = f.p.performAnimation.bind(f.p);
+  t.mock.method(f.p, "performAnimation", (animation) => { animations.push(animation?.getId?.()); return perform(animation); });
+  ticks(3);
+  assert.equal(animations.some((id) => id > 0 && id !== 65535), false, "no swing at a felled tree");
+});

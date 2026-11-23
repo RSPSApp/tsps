@@ -997,15 +997,6 @@ class FishingTask extends Task {
       }
       const pause = modalPause(session, player);
       if (pause === "paused") continue;
-      if (pause === "restart") {
-        // After a busy modal: start over as a click on the spot does (SkillActions.modalPause).
-        const spot = World.getNpcs().get(session.npcIndex);
-        if (spot && spot.getId() === session.npcId) {
-          restarted.add(player);
-          startFishing(player, spot, session.tool, this.activeSessions);
-        } else stopFishing(this.activeSessions, player);
-        continue;
-      }
 
       const npc = World.getNpcs().get(session.npcIndex);
       if (!npc || npc.getId() !== session.npcId) {
@@ -1047,6 +1038,14 @@ class FishingTask extends Task {
       if (inventoryBlocks(player, session.tool)) {
         stopFishing(this.activeSessions, player, false);
         inventoryFull(player);
+        continue;
+      }
+
+      if (pause === "restart") {
+        // After a busy modal, with the spot still there, in reach and the tools held: start over
+        // as a click on the spot does (SkillActions.modalPause).
+        restarted.add(player);
+        startFishing(player, npc, session.tool, this.activeSessions);
         continue;
       }
 

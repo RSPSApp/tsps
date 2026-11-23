@@ -1386,15 +1386,6 @@ function processWoodcuttingTick(activeSessions, currentTick) {
     }
     const pause = modalPause(state, player);
     if (pause === "paused") continue;
-    if (pause === "restart") {
-      // After a busy modal: start over as a click on the tree does (startWoodcutting): the swing
-      // message and animation, then the first roll (SkillActions.modalPause).
-      state.nextActionTick = currentTick + FIRST_ROLL_DELAY_TICKS;
-      state.nextAnimationTick = currentTick + FIRST_ROLL_DELAY_TICKS;
-      sendSpam(player, SWING_MESSAGE);
-      player.performAnimation(new Animation(state.axe.animationId));
-      continue;
-    }
 
     const activeTree = treeAt(
       state.objectId,
@@ -1447,6 +1438,17 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       // Live keeps the last chop animation running.
       sendInventoryFull(player, state.tree.logId);
       stopWoodcutting(activeSessions, player, false);
+      continue;
+    }
+
+    if (pause === "restart") {
+      // After a busy modal, with the tree still standing, in reach and an axe held: start over as
+      // a click on the tree does (startWoodcutting): the swing message and animation, then the
+      // first roll (SkillActions.modalPause).
+      state.nextActionTick = currentTick + FIRST_ROLL_DELAY_TICKS;
+      state.nextAnimationTick = currentTick + FIRST_ROLL_DELAY_TICKS;
+      sendSpam(player, SWING_MESSAGE);
+      player.performAnimation(new Animation(state.axe.animationId));
       continue;
     }
 

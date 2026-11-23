@@ -12,6 +12,9 @@ import type { TextureLoader } from "../../rs/texture/TextureLoader";
 import { HSL_RGB_MAP } from "../../rs/util/ColorUtil";
 
 export type Model2DParams = {
+    /** Fixed projection centre for model previews with a fitted camera. */
+    centerX?: number;
+    centerY?: number;
     xan2d?: number;
     yan2d?: number;
     zan2d?: number;
@@ -199,7 +202,7 @@ export class Model2DRenderer {
             sw,
             sh,
             !!params.orthographic,
-            undefined,
+            { centerX: params.centerX, centerY: params.centerY },
             params.depthTest === true,
         );
 

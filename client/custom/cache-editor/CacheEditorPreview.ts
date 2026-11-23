@@ -172,22 +172,11 @@ const SHAPE_LABELS: Partial<Record<LocModelType, string>> = {
 
 export const shapeLabel = (type: LocModelType): string => SHAPE_LABELS[type] ?? `shape ${type}`;
 
-/**
- * Crops a rendered model to its non-empty pixels and scales it to fill `size`, centred. Keeps the
- * aspect ratio, leaves a small margin, and supersamples by the device pixel ratio so edges are not
- * soft on a retina display.
- */
-function fitToCanvas(source: HTMLCanvasElement, size: number, zoom = 1): { canvas: HTMLCanvasElement; width: number; height: number } | null {
-    if (typeof document === "undefined") return null;
-    const sourceContext = source.getContext("2d");
-    if (!sourceContext || !source.width || !source.height) return null;
-    let pixels: ImageData;
-    try {
-        pixels = sourceContext.getImageData(0, 0, source.width, source.height);
-    } catch {
-        // A tainted canvas cannot be read; draw it untrimmed rather than fail.
-        return { canvas: source, width: source.width, height: source.height };
-    }
+/** The visible bounds are measured once per view, never refitted during playback. */
+function visibleBounds(source: HTMLCanvasElement) {
+    const context = source.getContext("2d");
+    if (!context) return null;
+    const pixels = context.getImageData(0, 0, source.width, source.height);
     let minX = source.width;
     let minY = source.height;
     let maxX = -1;
@@ -195,35 +184,17 @@ function fitToCanvas(source: HTMLCanvasElement, size: number, zoom = 1): { canva
     for (let y = 0; y < source.height; y++) {
         for (let x = 0; x < source.width; x++) {
             if (pixels.data[(y * source.width + x) * 4 + 3] < 8) continue;
-            if (x < minX) minX = x;
-            if (x > maxX) maxX = x;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
         }
     }
-    if (maxX < minX || maxY < minY) return null;
-    const width = maxX - minX + 1;
-    const height = maxY - minY + 1;
-    const ratio = Math.min(2, Math.max(1, typeof window === "undefined" ? 1 : window.devicePixelRatio || 1));
-    const padding = Math.max(4, Math.round(size * 0.06));
-    const available = size - padding * 2;
-    const scale = Math.min(available / width, available / height) * Math.max(0.25, Math.min(8, zoom));
-    const canvas = document.createElement("canvas");
-    const target = Math.max(1, Math.round(size * ratio));
-    canvas.width = target;
-    canvas.height = target;
-    const context = canvas.getContext("2d");
-    if (!context) return null;
-    context.imageSmoothingEnabled = true;
-    context.drawImage(
-        source,
-        minX, minY, width, height,
-        Math.round(((size - width * scale) / 2) * ratio),
-        Math.round(((size - height * scale) / 2) * ratio),
-        Math.round(width * scale * ratio),
-        Math.round(height * scale * ratio),
-    );
-    return { canvas, width: target, height: target };
+    return maxX < minX ? null : {
+        x: (minX + maxX + 1) / 2 - source.width / 2,
+        y: (minY + maxY + 1) / 2 - source.height / 2,
+        extent: Math.max(maxX - minX + 1, maxY - minY + 1),
+    };
 }
 
 export type PreviewRenderer = {
@@ -280,6 +251,8 @@ export function createPreviewRenderer(client: OsrsClient): PreviewRenderer {
         }
     }
 
+    let framing: { key: string; x: number; y: number; extent: number } | null = null;
+
     return {
         locShapes(id) {
             const type = locTypeOf(id);
@@ -298,9 +271,8 @@ export function createPreviewRenderer(client: OsrsClient): PreviewRenderer {
             const turn = 2048 / 360;
             const orbitYaw = Math.round(yaw * turn) & 2047;
             const orbitPitch = Math.round(pitch * turn) & 2047;
-            // Render at 2x and let the fit shrink it: a floor decoration is a few pixels tall, and
-            // scaling that straight up is what made the trapdoor blocky.
             const renderSize = Math.min(1024, size * 2);
+            const framingKey = JSON.stringify({ kind, id, spec: { ...spec, sequenceFrame: undefined }, shape, rotation, yaw, pitch, size });
             // Each kind has its own builder in the client, and each differs: a loc's geometry depends
             // on the shape it is placed as, an npc's on its stance animations and transforms, an item's
             // on its model plus recolours, and a graphic's on its model plus a sequence frame.
@@ -322,9 +294,14 @@ export function createPreviewRenderer(client: OsrsClient): PreviewRenderer {
                     return `Could not build npc ${id}: ${String((error as Error).message ?? error)}`;
                 }
             } else if (kind === "spotanim") {
-                // A graphic is one model plus a sequence; the renderer applies the frame below.
-                model = merge(spec.modelIds);
-                if (!model) return `Graphic ${id} has no model`;
+                // A graphic is one model plus a sequence; the renderer applies the frame below. The model
+                // loader gives model data, which only animates once lit, so light it as the game lights
+                // a graphic (its ambient + 64, contrast + 850).
+                const data = merge(spec.modelIds) as unknown as { light?: (...args: unknown[]) => Model } | null;
+                if (!data) return `Graphic ${id} has no model`;
+                model = typeof data.light === "function"
+                    ? data.light(client.textureLoader, (spec.ambient ?? 0) + 64, (spec.contrast ?? 0) + 850, -30, -50, -30)
+                    : data as unknown as Model;
             } else if (kind === "item") {
                 try {
                     const objModels = new ObjModelLoader(client.objTypeLoader, client.modelLoader, client.textureLoader);
@@ -344,33 +321,39 @@ export function createPreviewRenderer(client: OsrsClient): PreviewRenderer {
                 }
             }
             model ??= merge(spec.modelIds);
-            if (!model) return `Model ${spec.modelIds[0]} is not in the cache's model archive`;
+            if (!model) return spec.modelIds.length ? `Model ${spec.modelIds[0]} is not in the cache's model archive` : `${kind} ${id} has no model to draw`;
             try {
-                const drawn = renderer.renderModelInstanceToCanvasWidget(
-                    model,
-                    {
-                        xan2d: (spec.xan2d ?? 0) + orbitPitch,
-                        yan2d: (spec.yan2d ?? 0) + orbitYaw,
-                        zan2d: spec.zan2d,
-                        zoom2d: spec.zoom2d ?? 1800,
-                        offsetX2d: spec.offsetX2d, offsetY2d: spec.offsetY2d,
-                        ambient: spec.ambient, contrast: spec.contrast,
-                        sequenceId: animatedByBuilder ? undefined : spec.sequenceId, sequenceFrame: animatedByBuilder ? undefined : spec.sequenceFrame,
-                    },
-                    renderSize,
-                    renderSize,
-                );
-                if (!drawn?.canvas) return "The model renderer returned nothing";
-                // A definition's own zoom is tuned for the inventory icon or the world, so a monkey or
-                // a wall would sit in a corner of the canvas. Crop to the drawn pixels and scale that
-                // to fill the panel instead of trusting any per-kind default.
-                const fitted = fitToCanvas(drawn.canvas, size, zoom);
-                if (!fitted) return "The model drew nothing";
-                context.canvas.width = fitted.width;
-                context.canvas.height = fitted.height;
-                context.canvas.style.width = `${size}px`;
-                context.canvas.style.height = `${size}px`;
-                context.drawImage(fitted.canvas, 0, 0);
+                const params = {
+                    xan2d: (spec.xan2d ?? 0) + orbitPitch,
+                    yan2d: (spec.yan2d ?? 0) + orbitYaw,
+                    zan2d: spec.zan2d,
+                    zoom2d: spec.zoom2d ?? 1800,
+                    offsetX2d: spec.offsetX2d, offsetY2d: spec.offsetY2d,
+                    ambient: spec.ambient, contrast: spec.contrast,
+                    sequenceId: animatedByBuilder ? undefined : spec.sequenceId,
+                    sequenceFrame: animatedByBuilder ? undefined : spec.sequenceFrame,
+                };
+                if (framing?.key !== framingKey) {
+                    const reference = renderer.renderModelInstanceToCanvasWidget(model, params, renderSize, renderSize);
+                    if (!reference) return "The model renderer returned nothing";
+                    const bounds = visibleBounds(reference.canvas);
+                    if (!bounds) return "The model drew nothing";
+                    framing = { key: framingKey, ...bounds };
+                }
+                const scale = renderSize * 0.8 / framing.extent * zoom;
+                // Increase projection resolution before rasterising, rather than enlarging pixels afterwards.
+                const drawn = renderer.renderModelInstanceToCanvasWidget(model, {
+                    ...params,
+                    zoom3d: 512 * scale,
+                    centerX: renderSize / 2 - framing.x * scale,
+                    centerY: renderSize / 2 - framing.y * scale,
+                }, renderSize, renderSize);
+                if (!drawn) return "The model renderer returned nothing";
+                canvas.width = renderSize;
+                canvas.height = renderSize;
+                canvas.style.width = `${size}px`;
+                canvas.style.height = `${size}px`;
+                context.drawImage(drawn.canvas, 0, 0);
                 return null;
             } catch (error) {
                 return `Could not draw model ${spec.modelIds[0]}: ${String((error as Error).message ?? error)}`;

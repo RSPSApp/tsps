@@ -1,0 +1,37 @@
+{
+  "seq": 7638,
+  "name": "zgs_special_player",
+  "frames": 25,
+  "frameLengths": [
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    3,
+    3,
+    3,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+  ],
+  "framemaps": [
+    0
+  ],
+  "handItems": "removed: the animation keeps the player's own weapon and shield (the cache's sequence 7638 shows item 11808 in the right hand and empties the left)",
+  "interleave": "added slots 1, 2, 9, 11, 13, 15, 17, 19, 37, 39, 41, 43 and 45 (the older player skeleton's whole body, legs and cape, as the Ancient godsword special 9171 lists them) to the cache's list, so walk and run animations on that skeleton, such as 819/824 and 14252/14254, move the legs while it plays"
+}

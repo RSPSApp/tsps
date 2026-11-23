@@ -496,7 +496,10 @@ function entryFixture(t, { complete = true, saved = {} } = {}) {
       }
       listeners.get(name)?.(request);
     },
-    sendMultiChatboxPrompt(_player, title, ...options) { prompts.push({ title, options }); },
+    sendMultiChatboxPrompt(_player, title, ...options) {
+      prompts.push({ title, options });
+      return true;
+    },
   };
   const attributes = new Map(Object.entries(saved));
   const player = {

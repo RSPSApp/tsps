@@ -662,7 +662,7 @@ test('every event delivers real inventory items and refreshes the container exac
     [23, 'Strange plant', [[I.STRANGE_FRUIT, 1]]]]) {
     const p = h.player(), inventory = new Inventory(p), sender = p.getPacketSender();
     let refreshes = 0;
-    sender.sendItemContainer = container => { assert.equal(container, inventory); refreshes++; };
+    sender.sendItemContainer = container => { assert.equal(container, inventory); refreshes++; }; sender.sendRunEnergy = () => {};
     p.getPacketSender = () => sender;
     p.getInventory = () => inventory;
     const npc = h.spawn(p, index, 0);
@@ -683,7 +683,7 @@ test('every event delivers real inventory items and refreshes the container exac
   // reuse the exact consumed herb slot for a full-inventory exchange.
   for (const index of [3, 6]) {
     const p = h.player(), inventory = new Inventory(p), sender = p.getPacketSender();
-    sender.sendItemContainer = () => {};
+    sender.sendItemContainer = () => {}; sender.sendRunEnergy = () => {};
     p.getPacketSender = () => sender; p.getInventory = () => inventory;
     for (let slot = 0; slot < 28; slot++) inventory.getItems()[slot] = new Item(I.SHARK, 1);
     inventory.getItems()[5] = new Item(index === 3 ? I.COINS : I.TORSTOL, index === 3 ? 10 : 1);

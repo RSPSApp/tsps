@@ -49,6 +49,7 @@ test('Munty door opens into its matching cache model and clears the blocked appr
     onObjectInteraction: (name, handlers) => actions.set(name, handlers),
     onRegionLoaded() {},
     onServerStartup() {},
+    persistAttribute() {}, onPlayerLogout() {}, onPlayerDeath() {}, onPlayerLogin() {},
   });
   const player = { getPrivateArea: () => null, getPacketSender: () => ({ getVarbit: () => 0, getVarp: () => 0 }) };
   try {

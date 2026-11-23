@@ -84,7 +84,7 @@ function routePlayerAt(location) {
     isPlayer: () => true, isNpc: () => false, isPlayerBot: () => false,
     getAsPlayer() { return this; }, getIndex: () => 4242,
     getUsername: () => 'q003-footprint', getSize: () => 1, getRights: () => -1,
-    getLocation: () => location, getPrivateArea: () => null,
+    getLocation: () => location, getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null,
     getPacketSender: () => ({
       getVarbit: (id) => STAGE8_VARBITS.has(id) ? 8 : 0,
       getVarp: () => 0,

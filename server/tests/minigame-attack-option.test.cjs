@@ -23,6 +23,7 @@ test("the Fight Pit offers Attack on player option slot 1 in the arena, and take
     closeSubInterface: () => sender,
   };
   const player = { getPacketSender: () => sender, getLocation: () => new Location(2399, 5160, 0) };
+  FightPits.register(new Proxy({ core: require("../dist/plugins/PluginManager").PluginManager.getCoreApi() }, { get: (target, key) => target[key] ?? (() => {}) }));
   FightPits._test.enterArena({ player });
   FightPits._test.leaveArena({ player });
   assert.deepEqual(sent, [[1, "Attack", true], [1, "", false]]);

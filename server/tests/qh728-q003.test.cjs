@@ -509,6 +509,7 @@ test('Ascent of Arceuus: real Karuulm elevator dispatch reaches the Tasakaal and
   LocTeleports.register({
     core: h.core,
     persistAttribute() {},
+    onPlayerLogin() {},
     onObjectInteraction(fn) { locHooks.object = fn; },
     onObjectRoute(fn) { locHooks.route = fn; },
     onItemOnObject() {},

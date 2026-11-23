@@ -62,7 +62,7 @@ function player(level = 99) {
   p.inventory = new Inventory(p);
   p.messages = [];
   p.getPacketSender = () => ({ sendSound: () => {}, sendSoundEffect: () => {}, sendClientScript: () => {},
-    sendTypedMessage: (_type, text) => p.messages.push(`spam: ${text}`), sendItemContainer: () => {}, sendMessage: () => {} });
+    sendTypedMessage: (_type, text) => p.messages.push(`spam: ${text}`), sendItemContainer: () => {}, sendRunEnergy: () => {}, sendMessage: () => {} });
   p.sendMessage = (text) => p.messages.push(text);
   p.getSkillManager = () => ({ getCurrentLevel: () => level, addExperiences: () => {} });
   p.getMovementQueue = () => ({ size: () => 0 });

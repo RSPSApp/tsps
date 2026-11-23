@@ -57,8 +57,8 @@ test("botname registers as developer-only and validates live renames", () => {
     getDisplayName() { return this.name; }, setDisplayName(name) { this.name = name; },
   };
   registerBotCommands({
-    api: { core: { World: { getPlayers: () => [bot] } }, onPlayerProcess() {},
-      registerCommand: (name, handler, rank) => commands.set(name, { handler, rank }) },
+    api: new Proxy({ core: { World: { getPlayers: () => [bot] }, PlayerRights },
+      registerCommand: (name, handler, rank) => commands.set(name, { handler, rank }) }, { get: (target, key) => target[key] ?? (() => {}) }),
     runtime: { botNameTaken: (_, name) => name === "Taken" },
     brainRegistry: { activities: [] },
   });

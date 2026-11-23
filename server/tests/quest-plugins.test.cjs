@@ -21593,6 +21593,7 @@ test('Dragon Slayer II crypt uses canonical template locs and reachable native-v
     onRegionLoaded: () => {},
     onServerStartup: () => {},
     onPlayerProcess: () => {},
+    persistAttribute() {}, onPlayerLogout() {}, onPlayerDeath() {}, onPlayerLogin() {},
   };
   const doorPluginPath = require.resolve('../plugins/objects/Doors.plugin');
   delete require.cache[doorPluginPath];

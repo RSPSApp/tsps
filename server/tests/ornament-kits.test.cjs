@@ -273,6 +273,7 @@ test("the makeover interface previews styles and colours, keeps them on Confirm 
       Task: class { constructor() {} stop() { this.stopped = true; } }, TaskManager: { submit: (task) => tasks.push(task) } },
     onNpcInteraction() {},
     onNpcDialogueCondition() {},
+    emitCustomEvent() {},
     onInterfaceActionButton: (uid, handler) => buttons.set(uid, handler),
     onCustomEvent: (name, handler) => { if (name === "interface:closed") closed = handler; },
   });

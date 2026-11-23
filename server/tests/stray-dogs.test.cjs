@@ -22,7 +22,7 @@ function scene(id = 2902) {
     getPrivateArea: () => null, getHitpoints: () => 10, isRegistered: () => registered,
     forceChat: text => chats.push(text), sendMessage: text => messages.push(text),
     performAnimation: animation => animations.push(animation.getId()),
-    getPacketSender: () => ({ sendSoundEffect() {}, sendItemContainer() {} }),
+    getPacketSender: () => ({ sendSoundEffect() {}, sendItemContainer() {}, sendRunEnergy() {} }),
     getEquipment: () => ({ get: () => new core.Item(head, 1) }),
   };
   const inventory = new Inventory(player);
@@ -203,7 +203,7 @@ test("Varlamore dogs eat as captured: crouch and Woof woof!, then one tick later
   ]) {
     const s = scene(ids.getNpcId("varlamore_dog_chiribaya_2"));
     const sounds = [];
-    s.player.getPacketSender = () => ({ sendSoundEffect: (id) => sounds.push(id), sendItemContainer() {} });
+    s.player.getPacketSender = () => ({ sendSoundEffect: (id) => sounds.push(id), sendItemContainer() {}, sendRunEnergy() {} });
     assert.equal(s.feed(itemId).handled, true);
     // RSProx 237/1098 tick 10200: arrival tick.
     assert.deepEqual(s.animations, [ids.getSeqId("human_pickupfloor")]);

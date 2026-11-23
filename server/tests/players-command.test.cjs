@@ -17,6 +17,7 @@ function register(players = [], overrides = {}) {
     getPlayerPunishment: () => ({}),
     registerCommand: (name, handler, rank) => { handlers.set(name, handler); rights.set(name, rank); },
     onInterfaceActionButton: (id, handler) => buttons.set(id, handler),
+    persistAttribute: () => {},
   });
   return { handlers, buttons, rights };
 }
@@ -45,7 +46,7 @@ test("::home uses the current configured spawn and refuses ordinary teleport res
     getWildernessLevel: () => level,
     getRights: () => core.PlayerRights.NONE,
     isPlayerBot: () => false,
-    getCombat: () => ({ getTeleblockTimer: () => ({ finished: () => !teleblocked }) }),
+    getCombat: () => ({ getTeleblockTimer: () => ({ finished: () => !teleblocked, secondsRemaining: () => 60 }) }),
     getMovementQueue: () => ({ isMovementBlocked: () => blocked }),
     getArea: () => null,
     sendMessage: (text) => messages.push(text),
@@ -65,7 +66,7 @@ test("::home uses the current configured spawn and refuses ordinary teleport res
   teleblocked = true; run();
   assert.equal(teleports.length, 2, "none of the blocked attempts teleports");
   assert.ok(messages.some((text) => text.includes("Wilderness")));
-  assert.ok(messages.some((text) => text.includes("magical spell")));
+  assert.ok(messages.some((text) => text.includes("teleport block has been cast on you")));
 });
 
 test("::staff shows connected human staff with every rank, refreshes on reopen, and closes", () => {

@@ -632,7 +632,8 @@ test('guide-in requires the normal cached Loose Railing shortcut before walking 
   p.setLocation(2515,3160,0);
   let force=null;const tasks=[];let click;
   Object.assign(p,{ getHitpoints:()=>99, getForceMovement:()=>force,setForceMovement:value=>{force=value;},
-    setSkillAnimation:noop,getUpdateFlag:()=>({flag:noop}),performAnimation:noop,
+    getSkillAnimation:()=>null,setSkillAnimation:noop,getUpdateFlag:()=>({flag:noop}),performAnimation:noop,
+    getCombat:()=>({holdFullStall:noop,releaseFullStall:noop}),
     getMovementQueue:()=>({reset:noop,setBlockMovement:noop}),
     getSkillManager:()=>({getCurrentLevel:()=>99,getMaxLevel:()=>99,addExperiences:noop}) });
   require('../plugins/skills/Agility.plugin').register(new Proxy({core,
@@ -959,14 +960,14 @@ test('the stronghold door lets the player out as live: inviswall, the open leaf 
   h.quest.setStage(p,6);
   const steps=[];
   const movement={reset(){steps.length=0;return movement;},setBlockMovement(){return movement;},addSteps(at){steps.push(at);},size:()=>steps.length};
-  p.getMovementQueue=()=>movement;
+  p.getMovementQueue=()=>movement;p.getHitpoints=()=>99;
   require('../plugins/objects/Doors.plugin').register({
     core:{...core,ObjectManager,MapObjects,Sounds:{sendSound(player,id){sounds.push(id);}},TaskManager:{
       submit(task){task.setRunning(true);tasks.push(task);},
       cancelTasks(key){for(const task of tasks)if(task.key===key)task.stop();},
     }},
     onObjectInteraction:(name,handlers)=>names.set(name,handlers),
-    onRegionLoaded(){},onServerStartup(){},onObjectRoute(){},
+    onRegionLoaded(){},onServerStartup(){},onObjectRoute(){},persistAttribute(){},onPlayerLogout(){},onPlayerDeath(){},onPlayerLogin(){},
     onCustomEvent:h.api.onCustomEvent,emitCustomEvent:h.api.emitCustomEvent,
   });
   const click=object=>names.get('Door').Open({player:p,object,objectId:object.getId(),

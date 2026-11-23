@@ -927,6 +927,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `RogueTrader` | RogueTrader | npcs | yes | Ali Morrisane's Rogue Trader errands after The Feud (runes, blackjacks, clothes) that unlock his stock and cheaper magic carpets. (members only) |
 | `RuniteGolem` | RuniteGolem | npcs | yes | Runite Golems in the Resource Area: a killed golem leaves a runite rock mineable for a minute, then respawns after five minutes. (members only) |
 | `Sawmill` | Sawmill | npcs | yes | Sawmill operators: Buy-plank turns logs and coins into planks, with the amount menu and the Wiki's refusal messages. (members only) |
+| `ShadowSpiders` | ShadowSpiders | npcs | yes | Shadow spiders drain half the player's Prayer (rounded up, never the last point) with their first attack of a fight, halved by a spectral spirit shield. (members only) |
 | `Shopkeepers` | Shopkeepers | npcs | yes | Opens shops from NPC Trade options using the shop data, with default and custom NPC-to-shop bindings. |
 | `SilkMerchant` | SilkMerchant | npcs | yes | Silk merchant in Ardougne: haggling dialogue buys every un-noted silk in the inventory at the agreed price. (members only) |
 | `SirRenitee` | SirRenitee | npcs | yes | Sir Renitee, Falador's herald: reports a player's family crest and repaints it for a fee. (members only) |

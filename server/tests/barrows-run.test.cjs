@@ -715,3 +715,359 @@ test("Barrows: a plugin can refuse a mound's Spade dig before it starts; off the
   assert.equal(eastfloor.refused, false);
   assert.equal(asked, 1, "asked only for a brother's mound");
 });
+
+// ------------------------------------------------------------------ Issue #4407: live alignment
+// rsprox captures 234/03276, 227/1000436 (ticks 10236-10245), 236/03929 (ticks 378-380 and 411-418),
+// 227/00086, 227/1000433, 227/00550, 227/1000565 and 227/1000265.
+
+/** An open hallway's door this run (not the chest room's) and the tiles either side of it. */
+function openDoor(subject) {
+  const { getTunnelMap, getRun, doorSides, doorLeaves } = Barrows._test;
+  arrive(subject, CHEST_ROOM);
+  const run = getRun(subject);
+  const door = getTunnelMap().doors.find((entry) => run.openDoors.includes(entry.varbit) && entry.varbit !== run.puzzleDoor);
+  const [near, far] = doorSides(door);
+  const other = doorLeaves(door).find((leaf) => leaf !== door);
+  return { run, door, near, far, other };
+}
+
+const objectCalls = (subject, key) => subject.sent.calls.filter(([name]) => name === key)
+  .map(([, object]) => [object.getId(), object.getLocation().getX(), object.getLocation().getY(), object.getType(), object.getFace()]);
+const queuedSince = (before) => core.World.getAddNPCQueue().slice(before);
+
+test("Barrows: a door crossing swaps the leaves, sounds and raises its monster on its own tick; the leaves are back two ticks later", () => {
+  const subject = player();
+  const { door, near, far } = openDoor(subject);
+  const { useDoor, processPlayer, doorLeaves, IGNORE_CLIPPING_FLAG } = Barrows._test;
+  subject.setLocation(near.clone());
+  processPlayer({ player: subject });
+  subject.sent.calls.length = 0;
+  const queue = core.World.getAddNPCQueue();
+  const before = queue.length;
+  try {
+    useDoor(subject, door);
+    useDoor(subject, door); // clicked again before the step: still one crossing
+    const leaves = doorLeaves(door);
+    const inviswall = core.CacheDefinitions.getLocId("inviswall");
+    const names = core.CacheDefinitions.getLocNames();
+    const added = objectCalls(subject, "sendObject");
+    assert.equal(added.length, 4, "an invisible wall and an open leaf for each of the two leaves");
+    for (const leaf of leaves) {
+      assert.ok(added.some(([id, x, y, , face]) => id === inviswall && x === leaf.x && y === leaf.y && face === leaf.orientation),
+        `inviswall on ${leaf.x},${leaf.y}`);
+    }
+    const inactive = added.filter(([id]) => id !== inviswall).map(([id]) => names.get(id)).sort();
+    assert.deepEqual(inactive, ["barrows_door_inactive_l", "barrows_door_inactive_r"]);
+    const sounds = subject.sent.calls.filter(([key]) => key === "sendSoundEffect").map(([, id]) => id);
+    assert.deepEqual(sounds, [62, 41]);
+    assert.equal(objectCalls(subject, "sendObjectRemoval").length, 0, "the leaves are swapped, not removed");
+    assert.equal(queue.length, before + 1, "the monster rises with the crossing");
+    const monster = queue.at(-1);
+    assert.ok(monster.getLocation().getDistance(far) <= 1, `beside the far tile (${monster.getLocation()})`);
+    assert.ok([1678, 1679, 1685, 1687].includes(monster.getId()) || Barrows._test.BROTHERS.some((b) => b.npcId === monster.getId()), String(monster.getId()));
+
+    // The step, then a click away on the next tick: the player is not held and nothing more spawns.
+    subject.getMovementQueue().process();
+    assert.ok(subject.getLocation().equals(far), `crossed (${subject.getLocation()})`);
+    processPlayer({ player: subject });
+    assert.equal(subject.hasFlag(IGNORE_CLIPPING_FLAG), false, "the doorway's clipping only for its step");
+    subject.sent.calls.length = 0;
+    processPlayer({ player: subject });
+    const restored = objectCalls(subject, "sendObject");
+    assert.deepEqual(restored.map(([id]) => id).sort(), leaves.map((leaf) => leaf.id).sort(), "the leaves are back on the second tick");
+    assert.equal(objectCalls(subject, "sendObjectRemoval").length, 2, "and the open leaves are gone");
+    assert.equal(queue.length, before + 1, "one monster per crossing");
+  } finally {
+    queue.length = before;
+  }
+});
+
+test("Barrows: a doorway is crossed in one click from beside the other leaf, diagonally (1000436 tick 10239)", () => {
+  const subject = player();
+  const { door, other } = openDoor(subject);
+  const { useDoor, processPlayer, doorSides } = Barrows._test;
+  const queue = core.World.getAddNPCQueue();
+  const before = queue.length;
+  try {
+    const [otherNear] = doorSides(other);
+    const [, far] = doorSides(door);
+    subject.setLocation(otherNear.clone());
+    processPlayer({ player: subject });
+    useDoor(subject, door);
+    subject.getMovementQueue().process();
+    assert.ok(subject.getLocation().equals(far), `beyond the clicked leaf (${subject.getLocation()} vs ${far})`);
+  } finally {
+    queue.length = before;
+  }
+});
+
+test("Barrows: the chest room's door says it is puzzle-locked; a solve unlocks it, and the next click crosses", () => {
+  const subject = player();
+  const { getTunnelMap, getRun, doorSides, useDoor, answerPuzzle, processPlayer, session } = Barrows._test;
+  arrive(subject, CHEST_ROOM);
+  const run = getRun(subject);
+  // A leaf of the chest room's hallway, from a side outside the chest room (room 4, the centre): there
+  // the door is puzzle-locked. Room bounds overlap the corridors, so it is the room, not a distance.
+  const { roomAt } = Barrows._test;
+  const [door, outside] = getTunnelMap().doors.filter((entry) => entry.varbit === run.puzzleDoor)
+    .flatMap((entry) => doorSides(entry).map((side) => [entry, side]))
+    .find(([, side]) => roomAt(side) !== 4);
+  assert.ok(door, "a puzzle door side outside the chest room");
+  subject.setLocation(outside.clone());
+  processPlayer({ player: subject });
+  useDoor(subject, door);
+  assert.ok(subject.sent.spam.includes("The door is locked with a strange puzzle."), subject.sent.spam.join(" | "));
+  const pending = session(subject).puzzle;
+  assert.ok(pending, "the puzzle is open");
+  const slot = pending.options.indexOf(0);
+  const queue = core.World.getAddNPCQueue();
+  const before = queue.length;
+  try {
+    subject.sent.calls.length = 0;
+    answerPuzzle({ player: subject, buttonId: (25 << 16) | [12, 14, 16][slot] });
+    assert.ok(subject.sent.messages.includes("You hear the doors' locking mechanism grind open."), subject.sent.messages.join(" | "));
+    assert.deepEqual(subject.sent.calls.filter(([key]) => key === "sendSoundEffect").map(([, id]) => id), [37], "with sound 37");
+    assert.equal(session(subject).crossing, null, "solving it does not cross");
+    assert.ok(subject.getLocation().equals(outside));
+    useDoor(subject, door);
+    assert.ok(session(subject).crossing, "the next click crosses");
+  } finally {
+    queue.length = before;
+  }
+});
+
+test("Barrows: a brother met at a tunnel door says nothing; one woken in his crypt or at the chest has his line", () => {
+  const subject = player();
+  const { door, near } = openDoor(subject);
+  const { useDoor, processPlayer } = Barrows._test;
+  subject.setLocation(near.clone());
+  processPlayer({ player: subject });
+  const queue = core.World.getAddNPCQueue();
+  const before = queue.length;
+  const random = Math.random;
+  Math.random = () => 0; // the encounter roll is a brother
+  try {
+    useDoor(subject, door);
+  } finally {
+    Math.random = random;
+  }
+  try {
+    const brother = queue.at(-1);
+    assert.ok(Barrows._test.BROTHERS.some((b) => b.npcId === brother.getId()), "a brother rose at the door");
+    const said = [];
+    brother.forceChat = (text) => { said.push(text); return brother; };
+    try { brother.onAdd(); } catch { /* the fixture world's combat wiring */ }
+    assert.deepEqual(said, []);
+  } finally {
+    queue.length = before;
+  }
+});
+
+/** A brother of the player's in the tunnels, registered, his rise tile `rose`. */
+function tunnelBrother(subject, rose) {
+  const state = Barrows._test.session(subject);
+  const npc = new core.NPC(Barrows._test.BROTHERS[1].npcId, rose.clone());
+  npc.setOwner(subject);
+  npc.__barrowsRose = rose.clone();
+  npc.isRegistered = () => true;
+  state.npcs.add(npc);
+  state.brother = npc;
+  return npc;
+}
+
+test("Barrows: a brother left more than 8 tiles from where he rose turns away, then goes the tick after", () => {
+  const subject = player();
+  arrive(subject, new Location(3552, 9687, 0));
+  const { processPlayer, session } = Barrows._test;
+  const npc = tunnelBrother(subject, new Location(3552, 9687, 0));
+  const removed = core.World.getRemoveNPCQueue();
+  const before = removed.length;
+  try {
+    npc.getCombat().attack = () => {};
+    subject.setLocation(new Location(3552 - 8, 9687 - 8, 0));
+    processPlayer({ player: subject });
+    assert.equal(session(subject).brother, npc, "still after the player at 8 tiles");
+    subject.setLocation(new Location(3552 - 9, 9687 - 6, 0));
+    processPlayer({ player: subject });
+    assert.equal(session(subject).brother, npc, "turns away first");
+    processPlayer({ player: subject });
+    assert.equal(session(subject).brother, null, "then goes");
+    assert.ok(removed.includes(npc));
+    processPlayer({ player: subject });
+    assert.ok(!subject.sent.messages.includes("We'll finish this later..."), "no line in the tunnels (227/00086)");
+  } finally {
+    removed.length = before;
+  }
+});
+
+test("Barrows: an unfinished crypt fight ends with 'We'll finish this later...' three ticks into the tunnels, and on a death", () => {
+  const subject = player();
+  arrive(subject, AHRIM_MOUND);
+  Barrows._test.dig({ player: subject });
+  for (let i = 0; i < 5 && subject.getLocation().getZ() === 0; i++) Barrows._test.processPlayer({ player: subject });
+  const run = subject.getAttribute("barrows");
+  const crypt = Barrows._test.BROTHERS[run.tunnel];
+  subject.setLocation(crypt.crypt.clone());
+  const npc = tunnelBrother(subject, crypt.spawn);
+  npc.setLocation(crypt.spawn.clone());
+  const removed = core.World.getRemoveNPCQueue();
+  const before = removed.length;
+  try {
+    Barrows._test.enterTunnel(subject, run, crypt);
+    assert.equal(subject.getLocation().getZ(), 0, "in the tunnels");
+    const lines = () => subject.sent.messages.filter((m) => m === "We'll finish this later...").length;
+    for (let i = 0; i < 2; i++) Barrows._test.processPlayer({ player: subject });
+    assert.equal(lines(), 0, "not yet");
+    Barrows._test.processPlayer({ player: subject });
+    assert.equal(lines(), 1, "on the third tick");
+    Barrows._test.processPlayer({ player: subject });
+    assert.equal(lines(), 1, "once");
+
+    const dying = player();
+    arrive(dying, CHEST_ROOM);
+    tunnelBrother(dying, CHEST_ROOM);
+    Barrows._test.playerDeath({ player: dying });
+    assert.ok(dying.sent.messages.includes("We'll finish this later..."));
+  } finally {
+    removed.length = before;
+  }
+});
+
+test("Barrows: a brother takes the player from the crypt monster attacking them", () => {
+  const subject = player();
+  arrive(subject, CHEST_ROOM);
+  const state = Barrows._test.session(subject);
+  const rat = new core.NPC(core.NpcIdentifiers.CRYPT_RAT, CHEST_ROOM.clone());
+  rat.setOwner(subject);
+  state.npcs.add(rat);
+  let reset = 0;
+  let target = subject;
+  const attacks = [];
+  rat.isRegistered = () => true;
+  rat.getCombat().getTarget = () => target;
+  rat.getCombat().reset = () => { reset++; target = null; };
+  rat.getCombat().attack = (whom) => { attacks.push(whom); target = whom; };
+  subject.getCombat().setUnderAttack(rat);
+  assert.equal(subject.getCombat().getAttacker(), rat);
+  const queue = core.World.getAddNPCQueue();
+  const before = queue.length;
+  try {
+    // The tunnel's brother rising at the chest.
+    Object.assign(subject.getAttribute("barrows"), { killed: [], kills: 0, chestOpen: false });
+    Barrows._test.searchChest(subject, 1);
+    const npc = queue.at(-1);
+    assert.equal(state.brother, npc);
+    npc.forceChat = () => npc;
+    try { npc.onAdd(); } catch { /* the fixture world's combat wiring; the takeover comes first */ }
+    assert.equal(reset, 1, "the rat stops");
+    assert.equal(subject.getCombat().getAttacker(), null, "and no longer holds the player in single-way combat");
+    npc.getCombat().attack = () => {};
+    npc.isRegistered = () => true;
+    Barrows._test.processPlayer({ player: subject });
+    assert.deepEqual(attacks, [], "not while the brother fights");
+    // He dies: the rat is back on the player (227/01885 ticks 12118-12119).
+    npc.isDyingFunction = () => true;
+    Barrows._test.processPlayer({ player: subject });
+    assert.deepEqual(attacks, [subject]);
+  } finally {
+    queue.length = before;
+  }
+});
+
+// The Wiki (Barrows/Strategies): "Once the chest is looted, the tunnels will shake and start to collapse, causing
+// occasional damage to the player, and the arrangement of the doors and rooms will shift." Recorded difference:
+// 37 loots show neither (docs/barrows-tunnels.md).
+test("Barrows: looting shifts the doors and rooms, and the collapsing tunnels hurt until left (Wiki)", () => {
+  const subject = player();
+  arrive(subject, CHEST_ROOM);
+  const run = subject.getAttribute("barrows");
+  Object.assign(run, { killed: [0, 1, 2, 3, 4, 5], kills: 6, points: 600, chestOpen: true });
+  // The shift re-rolls the layout and sends it: every door varbit goes out again after the loot.
+  subject.sent.varbits.clear();
+  Barrows._test.searchChest(subject, 1);
+  for (let id = 469; id <= 484; id++) assert.ok(subject.sent.varbits.has(id), `door varbit ${id} re-sent`);
+  assert.deepEqual([...run.openDoors].filter((id) => subject.sent.varbits.get(id) !== 0), [], "the new layout's open doors");
+  const cycle = core.World.getProcessCycle;
+  const damage = () => (subject.getCombat().getHitQueue().hasPendingWork() ? 1 : 0);
+  try {
+    for (let i = 1; i < 10; i++) {
+      core.World.getProcessCycle = () => i;
+      Barrows._test.processPlayer({ player: subject });
+    }
+    assert.equal(damage(), 0, "between the collapse's ticks");
+    core.World.getProcessCycle = () => 10;
+    Barrows._test.processPlayer({ player: subject });
+    assert.equal(damage(), 1, "a collapse hit every 10 ticks");
+    const left = player();
+    arrive(left, CHEST_ROOM);
+    Object.assign(left.getAttribute("barrows"), { killed: [0], kills: 1, points: 100, chestOpen: true });
+    Barrows._test.searchChest(left, 1);
+    arrive(left, SURFACE);
+    core.World.getProcessCycle = () => 20;
+    Barrows._test.processPlayer({ player: left });
+    assert.equal(left.getCombat().getHitQueue().hasPendingWork(), false, "none once out of the tunnels");
+  } finally {
+    core.World.getProcessCycle = cycle;
+  }
+});
+
+test("Barrows: the chest's elite clue is a scroll box once boxes are unlocked, and none when the player can hold no more", () => {
+  const clueEvents = (subject, { box, full }) => {
+    diaryApi.onCustomEvent("treasure-trails:can-receive", (request) => { if (request.player === subject) request.allowed = !full; });
+    diaryApi.onCustomEvent("treasure-trails:clue-item", (request) => {
+      if (request.player === subject && box) request.itemId = core.ItemIdentifiers.SCROLL_BOX_ELITE_;
+    });
+  };
+  const loot = (options) => {
+    const subject = player();
+    clueEvents(subject, options);
+    arrive(subject, CHEST_ROOM);
+    Object.assign(subject.getAttribute("barrows"), { killed: [0], kills: 1, points: 100, chestOpen: true });
+    const random = Math.random;
+    Math.random = () => 0; // every roll: the equipment piece, then the clue
+    try { Barrows._test.searchChest(subject, 1); } finally { Math.random = random; }
+    return subject.collected.map(([id]) => id);
+  };
+  const items = core.ItemIdentifiers;
+  assert.ok(loot({ box: true, full: false }).includes(items.SCROLL_BOX_ELITE_));
+  assert.ok(!loot({ box: true, full: false }).includes(items.CLUE_SCROLL_ELITE_));
+  assert.ok(loot({ box: false, full: false }).includes(items.CLUE_SCROLL_ELITE_));
+  const full = loot({ box: true, full: true });
+  assert.ok(!full.includes(items.SCROLL_BOX_ELITE_) && !full.includes(items.CLUE_SCROLL_ELITE_), String(full));
+});
+
+test("Barrows: Can't Touch Me fails on a melee brother's melee swing, hit or miss, and not on Ahrim's or Karil's attacks", () => {
+  const failed = [];
+  diaryApi.onCustomEvent("combat-achievements:failed", (request) => failed.push([request.player, request.task, request.reason]));
+  const completed = [];
+  diaryApi.onCustomEvent("combat-achievements:complete", (request) => completed.push([request.player, request.task]));
+  const { trackBrotherAttack, trackBrotherHit, BROTHERS } = Barrows._test;
+  const brother = (index) => new core.NPC(BROTHERS[index].npcId, CHEST_ROOM.clone());
+  const melee = core.CombatType.MELEE;
+
+  const clean = player();
+  arrive(clean, CHEST_ROOM);
+  trackBrotherAttack({ attacker: brother(0), target: clean, combatType: core.CombatType.MAGIC });
+  trackBrotherAttack({ attacker: brother(3), target: clean, combatType: core.CombatType.RANGED });
+  Object.assign(clean.getAttribute("barrows"), { killed: [0, 1, 2, 3, 4, 5], kills: 6, points: 600, chestOpen: true });
+  Barrows._test.searchChest(clean, 1);
+  assert.ok(completed.some(([p, task]) => p === clean && task === "Can't Touch Me"), "ranged and magic don't count");
+
+  const hit = player();
+  arrive(hit, CHEST_ROOM);
+  trackBrotherAttack({ attacker: brother(1), target: hit, combatType: melee });
+  trackBrotherAttack({ attacker: brother(1), target: hit, combatType: melee });
+  assert.deepEqual(failed.filter(([p]) => p === hit).map(([, task, reason]) => [task, reason]),
+    [["Can't Touch Me", "Dharok the Wretched performed a melee attack."]], "on the swing, once");
+  Object.assign(hit.getAttribute("barrows"), { killed: [0, 1, 2, 3, 4, 5], kills: 6, points: 600, chestOpen: true });
+  Barrows._test.searchChest(hit, 1);
+  assert.ok(!completed.some(([p, task]) => p === hit && task === "Can't Touch Me"), "not awarded after a melee swing");
+
+  const damaged = player();
+  arrive(damaged, CHEST_ROOM);
+  trackBrotherHit({ attacker: brother(0), target: damaged, hit: { getTotalDamage: () => 0 } });
+  trackBrotherHit({ attacker: brother(0), target: damaged, hit: { getTotalDamage: () => 15 } });
+  trackBrotherHit({ attacker: brother(0), target: damaged, hit: { getTotalDamage: () => 15 } });
+  assert.deepEqual(failed.filter(([p]) => p === damaged).map(([, task, reason]) => [task, reason]),
+    [["Pray for Success", "Ahrim the Blighted damaged you."]]);
+});

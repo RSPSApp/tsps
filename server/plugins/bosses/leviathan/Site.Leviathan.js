@@ -10,10 +10,12 @@ function areaClass() {
   AreaClass = class LeviathanIsland extends Common.core.TemplatedInstanceArea {
     constructor() { super(Common.data.instance.width, Common.data.instance.height); }
     getName() { return "The Leviathan's island"; }
-    /** Scar Tissue on the island; Colossus of the Deep while the Leviathan is fought, and Scar Tissue again after. */
+    /** Scar Tissue on the island; Colossus of the Deep from the fight's start until the kill is counted. */
     getMusicTrack() {
-      const { music } = Common.data;
-      return this.session?.fight?.alive() ? music.fight : music.island;
+      const { music } = Common.data, fight = this.session?.fight;
+      const fought = fight && !fight.stopped && !fight.rewarded && !this.session.ended
+        && fight.boss?.isRegistered() && fight.player.getHitpoints() > 0;
+      return fought ? music.fight : music.island;
     }
     allowSummonPet() { return false; }
     postLeave(mobile, logout) {

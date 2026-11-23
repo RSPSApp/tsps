@@ -225,13 +225,17 @@ export class Bank extends ItemContainer {
     }
 
     /**
-     * Slots in use across the tabs (not the search results): placeholders, and the gaps a withdrawal left
-     * (see shownSlots), take a slot as items do.
+     * Slots in use across the tabs (not the search results): placeholders take a slot as items do, and
+     * so do the gaps the open bank still shows (see shownSlots). Opening the bank closes them.
      */
     public static usedSlots(player: Player): number {
+        const gapsHold = Bank.isOpen(player);
         let used = 0;
         for (let tab = 0; tab < Bank.TOTAL_BANK_TABS; tab++) {
-            if (tab !== Bank.BANK_SEARCH_TAB_INDEX) used += player.getBank(tab).shownSlots();
+            if (tab === Bank.BANK_SEARCH_TAB_INDEX) continue;
+            const bank = player.getBank(tab);
+            if (gapsHold) used += bank.shownSlots();
+            else for (const item of bank.getItems()) if (item != null && item.getId() >= 0) used++;
         }
         return used;
     }
@@ -278,7 +282,7 @@ export class Bank extends ItemContainer {
     }
 
     public getFreeSlots(): number {
-        return Math.max(Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft()), this.gaps());
+        return Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft() + this.gaps());
     }
 
     /** The first empty slot this tab still shows, or -1. */
@@ -323,6 +327,13 @@ export class Bank extends ItemContainer {
         return 0;
     }
 
+    /** Takes `slot` out of the tab: the items after it move up one, gaps included. */
+    public removeSlot(slot: number): Bank {
+        this.items.splice(slot, 1);
+        this.items.push(new Item(-1, 0));
+        return this;
+    }
+
     /** Moves the empty slots to the end, keeping the items' order (placeholders stay). */
     public sortItems(): Bank {
         const filled = this.items.filter((item) => item != null && item.getId() >= 0);
@@ -334,8 +345,8 @@ export class Bank extends ItemContainer {
     }
 
     public static isOpen(player: Player): boolean {
-        return player.getStatus() === PlayerStatus.BANKING &&
-            player.getInterfaceId() === Bank.MAIN_INTERFACE_ID;
+        return player.getStatus?.() === PlayerStatus.BANKING &&
+            player.getInterfaceId?.() === Bank.MAIN_INTERFACE_ID;
     }
 
     public static withdraw(player: Player, item: number, slot: number, amount: number, fromBankTab: number) {
@@ -810,11 +821,8 @@ export class Bank extends ItemContainer {
             return;
         }
         target.setItem(slot, entry.item.clone());
-        entry.item.setId(-1);
-        entry.item.setMeta(null);
-        entry.item.setAmount(0);
         // A moved item leaves no gap behind.
-        player.getBank(entry.tab).sortItems().refreshItems();
+        player.getBank(entry.tab).removeSlot(entry.slot).refreshItems();
     }
 
     /**
@@ -843,10 +851,7 @@ export class Bank extends ItemContainer {
                 return;
             }
             bank.setItem(fromSlot, from.item.clone());
-            from.item.setId(-1);
-            from.item.setMeta(null);
-            from.item.setAmount(0);
-            player.getBank(from.tab).sortItems();
+            player.getBank(from.tab).removeSlot(from.slot);
         }
         Bank.rearrange(player, bank, fromSlot, to.slot);
         if (from.tab !== to.tab) {

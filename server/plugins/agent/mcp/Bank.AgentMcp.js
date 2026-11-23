@@ -10,7 +10,7 @@ module.exports = function registerBankTools(ctx) {
     return Bank.layout(p).map(({ item }, slot) => ({
       slot, id: item.getId(), name: item.getId() >= 0 ? ItemDefinition.forId(item.getId()).getName() : "", amount: item.getAmount(),
       itemId: Bank.displayItemId(item),
-    })).filter((e) => e.amount > 0);
+    })).filter((e) => e.id >= 0 && e.amount > 0);
   };
 
   tool(

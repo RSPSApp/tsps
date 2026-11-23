@@ -158,6 +158,7 @@ function clearFillers(player) {
   const filler = lookup().filler;
   for (const item of bankItems(player, (item) => item.getId() === filler)) {
     item.setId(-1);
+    item.setAmount(0);
     item.setMeta(null);
   }
   player.getBank(0).refreshItems();

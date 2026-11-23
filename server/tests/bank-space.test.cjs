@@ -498,6 +498,7 @@ test("a banker menu without the bank-slots choice gets it after collecting; full
 test("a withdrawal's gap keeps its slot of the space: a full bank refills it, and takes nothing new past it", () => {
   capacity(3);
   const player = createPlayer();
+  player.interfaceId = Bank.MAIN_INTERFACE_ID;
   for (const id of [2000, 2001, 2002]) player.getBank(0).add(new Item(id, 1), false);
   player.getBank(0).getItems()[1].setId(-1);
   player.getBank(0).getItems()[1].setAmount(0);
@@ -511,4 +512,16 @@ test("a withdrawal's gap keeps its slot of the space: a full bank refills it, an
   player.inventory.switchItem(player.getBank(0), new Item(3000, 1), false, 0, false);
   assert.equal(player.getBank(0).getItems()[1].getId(), 3000, "the deposit fills the gap");
   assert.equal(Bank.usedSlots(player), 3);
+});
+
+test("once the bank is closed, a gap no longer holds its slot of the space", () => {
+  capacity(3);
+  const player = createPlayer();
+  for (const id of [2000, 2001, 2002]) player.getBank(0).add(new Item(id, 1), false);
+  player.getBank(0).getItems()[0].setId(-1);
+  player.getBank(0).getItems()[0].setAmount(0);
+  assert.equal(Bank.isOpen(player), false);
+  assert.equal(Bank.usedSlots(player), 2);
+  assert.equal(Bank.freeSlots(player), 1);
+  assert.equal(player.getBank(1).getFreeSlots(), 1);
 });

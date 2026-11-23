@@ -1571,3 +1571,14 @@ test("as captured: opening the bank again closes the gaps, while a refresh of th
   player.getBank(0).open();
   assert.deepEqual(ids(), [FAMILY_CHARGED, LAVA_BATTLESTAFF, MYSTIC_LAVA_STAFF]);
 });
+
+test("moving an item to another tab closes only its own slot; a withdrawal's gap stays", () => {
+  const player = createPlayer();
+  for (const id of [LAVA_BATTLESTAFF, TRIDENT, MYSTIC_LAVA_STAFF, UNRELATED]) player.getBank(0).add(new Item(id, 1), false);
+  player.getBank(1).add(new Item(FAMILY_CHARGED, 1), false);
+  Bank.withdraw(player, LAVA_BATTLESTAFF, 0, 1, 0);
+  // Display slots: tab 1's item, then the main tab's gap, Trident, Mystic lava staff, Unrelated.
+  drag(player, BANK_ITEMS, 3, MYSTIC_LAVA_STAFF, BANK_TABS, Bank.TAB_BUTTON_SLOT_OFFSET + 1);
+  assert.deepEqual(Bank.layout(player).map(({ tab, item }) => [tab, item.getId()]),
+    [[1, FAMILY_CHARGED], [1, MYSTIC_LAVA_STAFF], [0, -1], [0, TRIDENT], [0, UNRELATED]]);
+});

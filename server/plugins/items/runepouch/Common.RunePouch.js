@@ -242,7 +242,6 @@ function takeFromBank(player, runeId, amount) {
   if (!(amount > 0)) return 0;
   let left = amount;
   for (const bank of realBanks(player)) {
-    const before = left;
     for (const item of [...bank.getItems()]) {
       if (!(left > 0) || item?.getId() !== runeId || !isPlainRune(item)) continue;
       const taken = Math.min(left, item.getAmount());
@@ -251,7 +250,6 @@ function takeFromBank(player, runeId, amount) {
       if (player.isSearchingBank()) core.Bank.removeFromBankSearch(player, new core.Item(runeId, taken), false);
       left -= taken;
     }
-    if (left !== before) bank.sortItems();
     if (!(left > 0)) break;
   }
   return amount - left;

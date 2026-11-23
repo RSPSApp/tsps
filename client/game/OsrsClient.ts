@@ -469,6 +469,13 @@ const DEFAULT_LOD_DISTANCE = deriveLodDistanceFromRenderDistance(DEFAULT_RENDER_
 const VARBIT_ACCOUNT_TYPE = 1777;
 const VARBIT_POPOUT_OPEN = 13090;
 const VARBIT_POPOUT_PANEL_DESKTOP_DISABLED = 13982;
+/** The varp holding popout_panel_mobile_enabled (13981) and popout_panel_desktop_disabled (13982). */
+const VARP_POPOUT_PANEL_SETTINGS = 3417;
+/** Cache script 3938 lays the popout panel out for the mobile toplevel (via 909 and 5355). */
+const SCRIPT_MOBILE_POPOUT_LAYOUT = 3938;
+/** The popout interface (728) root, mounted at toplevel_osm:popout (601:131). */
+const POPOUT_ROOT_UID = (728 << 16) | 0;
+const MOBILE_ROOT_INTERFACE_ID = 601;
 const VARC_CHATBOX_SELECTED_TAB = 41;
 /** VarClientID.OSM_CHATBOX_DISABLED: the mobile chatbox is toggled off. */
 const VARC_OSM_CHATBOX_DISABLED = 1220;const ACCOUNT_TYPE_MAIN = 0;
@@ -4477,6 +4484,26 @@ export class OsrsClient {
         this.performLogout(() => this.processLoginAction({ type: "select_server", index }));
     }
 
+    private mobilePopoutLayoutQueued = false;
+
+    /**
+     * The cache lays the mobile popout panel out only at login and on layout passes; its own
+     * listener watches varp 1021 (which popout is open), not the Popout panel (mobile) setting
+     * (3417), so toggling the setting showed or hid nothing until a relog. Re-run the cache's
+     * layout script once, after whatever script changed the varbit has finished.
+     */
+    private scheduleMobilePopoutLayout(): void {
+        if (this.mobilePopoutLayoutQueued) return;
+        this.mobilePopoutLayoutQueued = true;
+        setTimeout(() => {
+            this.mobilePopoutLayoutQueued = false;
+            const widgets = this.widgetManager;
+            if (!widgets || widgets.rootInterface !== MOBILE_ROOT_INTERFACE_ID) return;
+            if (!widgets.getWidgetByUid(POPOUT_ROOT_UID)) return;
+            this.runClientScriptWithInts(SCRIPT_MOBILE_POPOUT_LAYOUT, []);
+        }, 0);
+    }
+
     runClientScriptWithInts(scriptId: number, args: number[]): void {
         if (!this.cs2Vm) return;
         const script = this.cs2Vm.context?.loadScript?.(scriptId | 0);
@@ -7114,6 +7141,7 @@ export class OsrsClient {
                     markVarTransmit(varpId);
                 }
                 this.applyAudioVarpChange(varpId, newValue);
+                if (varpId === VARP_POPOUT_PANEL_SETTINGS) this.scheduleMobilePopoutLayout();
                 this.renderer?.onVarpChange(varpId);
                 if (!this._serverVarpSync && TRANSMIT_VARPS.has(varpId) && isServerConnected()) {
                     try {

@@ -2741,6 +2741,7 @@ export function resolveGameframeRoot(
 
 // Minimap orbs: desktop `orbs`, and the mobile toplevel's own `orbs_osm`, laid out for the
 // mobile orb art (live's Android client mounts it at toplevel_osm:orbs).
+export const POPOUT_GROUP_ID = 728;
 export const ORBS_GROUP_ID = 160;
 export const MOBILE_ORBS_GROUP_ID = 897;
 
@@ -2775,6 +2776,10 @@ export function encodeGameframeBootstrap(playerName: string, root: number = 161,
     [88, 216], [89, 239],
     // The boss HP bar HUD (hpbar_hud), as OSRS opens it at login (164:2 resizable).
     [2, 303],
+    // The popout panel (popout -> toplevel_osrs_stretch:popout, 35): live opens it on every
+    // login (all rsprox captures). The mobile toplevel is the one that shows it, as 601:131
+    // (enum 1745); desktop uses the web sidebar, so the cache's popout reservation stays off.
+    ...(root === MOBILE_GAMEFRAME_ROOT ? [[35, POPOUT_GROUP_ID]] : []),
   ];
   const cameraScript = Buffer.concat([Buffer.alloc(2), scriptArgs([])]);
   cameraScript.writeUInt16BE(626, 0);

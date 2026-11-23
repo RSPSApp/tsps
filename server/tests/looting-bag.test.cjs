@@ -343,6 +343,14 @@ test("one bag per player: a second, carried or banked, stays on the floor (Wiki)
   banked.getBanks = () => [inventory([]), inventory([item(CLOSED_BAG)])];
   assert.equal(take(banked).allow, false, "a banked bag counts");
   assert.equal(owned(banked), true);
+  // Issue 6601: a bank's getValidItems keeps amount-0 entries, which is what a placeholder is.
+  const placeholder = player();
+  const placeholderTab = bankTab();
+  placeholderTab.setItem(0, item(CLOSED_BAG, 0));
+  assert.equal(placeholderTab.getValidItems().length, 1, "the bank keeps the placeholder as a valid item");
+  placeholder.getBanks = () => [placeholderTab];
+  assert.equal(take(placeholder).allow, true, "a bag's placeholder in the bank does not count");
+  assert.equal(owned(placeholder), false);
   const searching = player();
   const tabs = [];
   tabs[core.Bank.BANK_SEARCH_TAB_INDEX] = inventory([item(CLOSED_BAG)]);

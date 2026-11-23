@@ -149,7 +149,7 @@ function reward(player, stock) {
 function ownedFamily(player, names) {
     const ids = new Set(names.map(Data.itemId));
     return [player.getInventory(), player.getEquipment(), ...player.getBanks()].some((container) =>
-        container?.getValidItems().some((item) => ids.has(item.getId())),
+        container?.getValidItems().some((item) => item.getAmount() > 0 && ids.has(item.getId())),
     );
 }
 function canBuy(request) {

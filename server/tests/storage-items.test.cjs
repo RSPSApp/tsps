@@ -47,7 +47,8 @@ function createContainer(capacity, initial = [], bank = false) {
   const items = initial;
   const container = {
     getItems: () => items,
-    getValidItems: () => items.filter((item) => item.getId() > 0 && item.getAmount() > 0),
+    // As ItemContainer.getValidItems: a bank also keeps amount-0 entries, which are placeholders.
+    getValidItems: () => items.filter((item) => item.getId() > 0 && (item.getAmount() > 0 || (bank && item.getAmount() === 0))),
     getAmount: (id) => items.filter((item) => item.getId() === id).reduce((total, item) => total + item.getAmount(), 0),
     contains: (id) => items.some((item) => item.getId() === id && item.getAmount() > 0),
     getFreeSlots: () => capacity - container.getValidItems().length,
@@ -499,6 +500,18 @@ test("destroying the last container of a family loses its contents", () => {
   Storage.store(player, family("tackle-box"), Items.FISHING_BAIT, 5);
   PluginManager.emitCustomEvent("destroy-item:destroyed", { player, itemId: Items.TACKLE_BOX, amount: 1 });
   assert.equal(Storage.total(player, family("tackle-box")), 0);
+});
+
+test("a banked placeholder of a container is not a copy still owned (issue 6601)", () => {
+  const player = createPlayer([]);
+  player.getBank(0).getItems().push(new Item(Items.TACKLE_BOX, 0));
+  assert.equal(player.getBank(0).getValidItems().length, 1, "the bank keeps the placeholder as a valid item");
+  assert.equal(Storage.owns(player, family("tackle-box")), false);
+  Storage.store(player, family("tackle-box"), Items.FISHING_BAIT, 5);
+  PluginManager.emitCustomEvent("destroy-item:destroyed", { player, itemId: Items.TACKLE_BOX, amount: 1 });
+  assert.equal(Storage.total(player, family("tackle-box")), 0, "the contents go with the destroyed box");
+  player.getBank(0).getItems()[0].setAmount(1);
+  assert.equal(Storage.owns(player, family("tackle-box")), true, "a real banked box is still owned");
 });
 
 test("the tackle box takes lit lanterns but not unlit ones, and swaps dragged slots", () => {

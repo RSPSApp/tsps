@@ -39,10 +39,12 @@ class QuestHelperLauncher {
   adminHint(){
     if(this.state==='not-built')return `the bridge is not built. ${SETUP_HINT}`;
     if(this.state==='no-java')return 'no JDK 21 was found. Install one, or set QUEST_HELPER_JAVA_HOME, then restart the server.';
-    if(this.state==='failed')return 'the bridge stopped; see the [quest-helper] lines in the server log, then restart the server.';
+    if(this.state==='failed')return 'the bridge the server started has stopped; see the [quest-helper] lines in the server log, then restart the server.';
     return `set QUEST_HELPER_TOKEN for the server and \`yarn bridge\`, or unset it and let the server start the bridge itself. ${SETUP_HINT}`;
   }
   start(){
+    // A cancelled server shutdown stops the bridge but keeps serving players: start it again.
+    if(this.state==='stopped')this.state='off';
     if(this.state!=='off')return this.ready;
     if(!this.enabled()){this.state='external';return this.ready;}
     const install=path.join(this.root,INSTALL);
@@ -65,11 +67,13 @@ class QuestHelperLauncher {
   async launch(install,javaHome){
     try{this.port=await this.freePort();}catch(error){return this.fail(`could not get a free port (${error.message})`);}
     if(this.state!=='starting')return false;
-    const child=this.spawnImpl(path.join(javaHome,'bin',javaExecutable()),
+    let child;
+    try{child=this.spawnImpl(path.join(javaHome,'bin',javaExecutable()),
       ['-Djava.awt.headless=true','-XX:+EnableDynamicAgentLoading','-cp',path.join(install,'lib','*'),'local.questbridge.BridgeServer',String(this.port)],
       // stdin stays an open pipe: the bridge exits when it closes, so a killed server leaves no JVM.
       {cwd:install,windowsHide:true,stdio:['pipe','pipe','pipe'],
-       env:{...this.env,JAVA_HOME:javaHome,QUEST_HELPER_TOKEN:this.token,QUEST_HELPER_PORT:String(this.port),QUEST_HELPER_EXIT_WITH_PARENT:'1'}});
+       env:{...this.env,JAVA_HOME:javaHome,QUEST_HELPER_TOKEN:this.token,QUEST_HELPER_PORT:String(this.port),QUEST_HELPER_EXIT_WITH_PARENT:'1'}});}
+    catch(error){return this.fail(`could not start (${error.message})`);}
     this.child=child;
     process.once('exit',this.killOnExit);
     for(const stream of [child.stdout,child.stderr])stream?.on('data',chunk=>this.relay(chunk));

@@ -39,22 +39,29 @@ class QuestHelperHttp {
     const launcher=this.launcher;
     if(launcher?.state==='starting')await waitFor(launcher.ready,this.startupWaitMs);
     const own=launcher?.connection?.();
-    if(own)return {base:`http://127.0.0.1:${own.port}`,token:own.token};
+    if(own)return {base:`http://127.0.0.1:${own.port}`,token:own.token,own:true};
+    // A cancelled server shutdown stopped the bridge but players are still here.
+    if(launcher?.state==='stopped'){launcher.start();return this.target();}
     if(launcher?.state==='starting')throw playerError(PLAYER_STARTING,'QUEST_HELPER_STARTING');
     if(['not-built','no-java','failed'].includes(launcher?.state))throw this.notEnabled(launcher.adminHint());
     if(typeof this.token!=='string'||this.token.length<24)throw this.notEnabled(`QUEST_HELPER_TOKEN is not set (24+ characters): ${launcher?.adminHint?.()??DEFAULT_HINT}`);
     return {base:this.base,token:this.token};
   }
   async request(route,body) {
-    const {base,token}=await this.target();
+    const {base,token,own}=await this.target();
     let response;
     try {
       response=await this.fetchImpl(base+route,{method:body===undefined?'GET':'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
     } catch (error) {
       if(error?.name==='TimeoutError'||error?.name==='AbortError')throw playerError(PLAYER_TIMEOUT,'QUEST_HELPER_UNAVAILABLE');
-      throw this.notEnabled(`the bridge at ${base} can't be reached (${error?.cause?.code??error?.message}). Start it with \`yarn bridge\`, or ${DEFAULT_HINT}`);
+      const cause=error?.cause?.code??error?.message;
+      throw this.notEnabled(own
+        ?`the bridge the server started stopped answering (${cause}); see the [quest-helper] lines in the server log.`
+        :`the bridge at ${base} can't be reached (${cause}). Start it with \`yarn bridge\`, or ${DEFAULT_HINT}`);
     }
-    if(response.status===401||response.status===403)throw this.notEnabled(`the bridge at ${base} rejected the server's token; QUEST_HELPER_TOKEN must be the same for the server and the bridge.`);
+    if(response.status===401||response.status===403)throw this.notEnabled(own
+      ?`the bridge the server started rejected its token, so another program may hold port ${new URL(base).port}; restart the server.`
+      :`the bridge at ${base} rejected the server's token; QUEST_HELPER_TOKEN must be the same for the server and the bridge.`);
     if(!response.ok)throw new Error(`Quest Helper engine returned ${response.status}`);
     const reader=response.body.getReader();let bytes=0;const parts=[];
     try {for(;;){const {done,value}=await reader.read();if(done)break;bytes+=value.length;if(bytes>MAX_CHUNKED_PLUGIN_BYTES)throw new Error('Quest Helper result exceeds transport limit');parts.push(value);}}finally{await reader.cancel();}

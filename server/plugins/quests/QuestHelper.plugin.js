@@ -14,7 +14,9 @@ function tutorialAvailable(){const query={available:false};pluginApi.emitCustomE
 function receive(event){if(event.channel!=='quest-helper')return;event.handled=true;void runtime.receive(event.player,event.data);}
 function logout({player}){void runtime.closePlayer(player);}
 function startBridge(){void launcher.start();}
-function shutdown(){launcher.stop();return runtime.shutdown();}
+// Sessions close first, while the bridge they belong to is still up.
+function stopBridge(){launcher.stop();}
+function shutdown(){return runtime.shutdown().finally(stopBridge);}
 // The agent MCP drives this runtime headless; null until the plugin has registered.
 function getRuntime(){return runtime??null;}
 function register(api){

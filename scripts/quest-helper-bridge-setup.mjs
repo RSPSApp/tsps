@@ -49,8 +49,9 @@ const head = git(["rev-parse", "HEAD"], source).stdout?.trim();
 // git refuses to overwrite local edits, and the Gradle build checks the checkout is unmodified.
 if (head !== pinned) run("git", ["checkout", "--detach", pinned], { cwd: source });
 const changes = () => (git(["status", "--porcelain"], source).stdout ?? "").split("\n").filter(Boolean);
-// Files missing from an interrupted checkout come back; anything edited is left for the user.
-if (changes().length && changes().every((line) => line.startsWith(" D"))) run("git", ["checkout", "--", "."], { cwd: source });
+// Files missing from a fresh or interrupted checkout come back (" D" missing from disk, "D " never
+// checked out); anything edited is left for the user.
+if (changes().length && changes().every((line) => /^( D|D )/.test(line))) run("git", ["checkout", "HEAD", "--", "."], { cwd: source });
 if (changes().length) fail(`${source} differs from ${pinned}:\n${changes().slice(0, 10).join("\n")}\nRestore it (git checkout -- .) and run this again.`);
 
 const buildEnv = { ...process.env, JAVA_HOME: javaHome, ...(process.env.QUEST_HELPER_SOURCE ? { QUEST_HELPER_SOURCE: source } : {}) };

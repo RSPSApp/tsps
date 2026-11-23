@@ -103,13 +103,56 @@ test('an unreachable or mismatched bridge is a setup problem, not a player-facin
  await assert.rejects(slow.catalog(),/took too long/);
 });
 
-test('the JDK lookup prefers QUEST_HELPER_JAVA_HOME and finds an installed 21 only',()=>{
+test('the JDK lookup finds a 21, not a 17 whose patch number is 21, nor a JAVA_HOME of another version',()=>{
  const java=path.join('bin','java.exe');
  const adoptium=path.join('C:/PF','Eclipse Adoptium');
- const jdk21=path.join(adoptium,'jdk-21.0.12.101-hotspot'),jdk17=path.join(adoptium,'jdk-17.0.1');
- const list=()=>['jdk-17.0.1','jdk-21.0.12.101-hotspot'];
+ // Folder names as Temurin installs them on this machine; 17.0.21 sorts first.
+ const jdk17=path.join(adoptium,'jdk-17.0.21.9-hotspot'),jdk21=path.join(adoptium,'jdk-21.0.13.9-hotspot');
+ const list=()=>['jdk-17.0.21.9-hotspot','jdk-21.0.13.9-hotspot'];
  const fs=files=>file=>file===adoptium||files.includes(file);
- assert.equal(findJavaHome({env:{QUEST_HELPER_JAVA_HOME:'/qh',JAVA_HOME:'/other'},platform:'win32',home:'/h',exists:fs([path.join('/qh',java)]),list}),'/qh');
- assert.equal(findJavaHome({env:{ProgramFiles:'C:/PF'},platform:'win32',home:'/h',exists:fs([path.join(jdk17,java),path.join(jdk21,java)]),list}),jdk21);
- assert.equal(findJavaHome({env:{ProgramFiles:'C:/PF'},platform:'win32',home:'/h',exists:fs([path.join(jdk17,java)]),list}),null);
+ const both=fs([path.join(jdk17,java),path.join(jdk21,java)]);
+ const noRelease=()=>{throw new Error('ENOENT');};
+ assert.equal(findJavaHome({env:{ProgramFiles:'C:/PF'},platform:'win32',home:'/h',exists:both,list,read:noRelease}),jdk21);
+ assert.equal(findJavaHome({env:{ProgramFiles:'C:/PF'},platform:'win32',home:'/h',exists:fs([path.join(jdk17,java)]),list,read:noRelease}),null);
+ // The release file wins over the folder name.
+ const release=file=>file.startsWith(jdk21)?'JAVA_VERSION="21.0.13"\n':'JAVA_VERSION="17.0.21"\n';
+ assert.equal(findJavaHome({env:{ProgramFiles:'C:/PF'},platform:'win32',home:'/h',exists:both,list,read:release}),jdk21);
+ // An explicit home is used when it is 21 or says nothing, and skipped when it is another version.
+ const homes=fs([path.join('/qh',java),path.join('/j17',java),path.join(jdk21,java)]);
+ const homeRelease=file=>file.startsWith('/j17')?'JAVA_VERSION="17.0.2"':(()=>{throw new Error('ENOENT');})();
+ assert.equal(findJavaHome({env:{QUEST_HELPER_JAVA_HOME:'/qh',JAVA_HOME:'/j17'},platform:'win32',home:'/h',exists:homes,list,read:homeRelease}),'/qh');
+ assert.equal(findJavaHome({env:{JAVA_HOME:'/j17',ProgramFiles:'C:/PF'},platform:'win32',home:'/h',exists:homes,list,read:homeRelease}),jdk21);
 });
+
+test('a cancelled server shutdown starts the bridge again for the next request',async()=>{
+ const {instance,spawned}=launcher();
+ await instance.start();
+ instance.stop();
+ assert.equal(instance.state,'stopped');
+ const http=new QuestHelperHttp({launcher:instance,fetchImpl:async url=>{assert.equal(url,'http://127.0.0.1:45123/catalog');return new Response('{}');}});
+ assert.deepEqual(await http.catalog(),{});
+ assert.equal(spawned.length,2);assert.equal(instance.state,'ready');
+ instance.stop();
+});
+
+test('a bridge the server started gets its own admin hints, not token advice',async()=>{
+ const {instance}=launcher();
+ await instance.start();
+ const logs=[];
+ const dead=new QuestHelperHttp({launcher:instance,log:line=>logs.push(line),fetchImpl:async()=>{throw Object.assign(new TypeError('fetch failed'),{cause:{code:'ECONNREFUSED'}});}});
+ await assert.rejects(dead.catalog(),error=>error.message===PLAYER_NOT_ENABLED);
+ const stolen=new QuestHelperHttp({launcher:instance,log:line=>logs.push(line),fetchImpl:async()=>new Response('{}',{status:401})});
+ await assert.rejects(stolen.catalog(),error=>error.message===PLAYER_NOT_ENABLED);
+ assert.match(logs[0],/the server started stopped answering/);assert.match(logs[1],/another program may hold port 45123/);
+ assert.ok(logs.every(line=>!/QUEST_HELPER_TOKEN|yarn bridge`/.test(line)));
+ instance.stop();
+});
+
+test('a spawn that throws marks the bridge failed instead of rejecting',async()=>{
+ const logged=[];
+ const instance=new QuestHelperLauncher({env:{},root:'/repo',exists:()=>true,findJava:()=>'/jdk21',freePort:async()=>45123,log:line=>logged.push(line),
+  spawnImpl:()=>{throw new TypeError('bad argument');}});
+ assert.equal(await instance.start(),false);
+ assert.equal(instance.state,'failed');assert.match(logged[0],/could not start \(bad argument\)/);
+});
+

@@ -11,6 +11,11 @@ import {
 } from "picogl";
 
 import type { CacheIndex } from "../../rs/cache/CacheIndex";
+import {
+    HITSPLAT_LAYOUT_SLOTS,
+    getHitsplatOffsetX,
+    getHitsplatOffsetY,
+} from "../../game/actor/HitsplatLayout";
 import { ConfigType } from "../../rs/cache/ConfigType";
 import { IndexType } from "../../rs/cache/IndexType";
 import { HitSplatType } from "../../rs/config/hitsplat/HitSplatType";
@@ -76,9 +81,6 @@ export class HitsplatOverlay implements Overlay {
     private centerWorld: vec3 = vec3.create();
     private quadVerts: Float32Array = new Float32Array(6 * 2);
     private quadUvs: Float32Array = new Float32Array([0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 0]);
-    private stackDxBase: Int16Array = new Int16Array([0, 0, -15, 15]);
-    private stackDyBase: Int16Array = new Int16Array([0, -20, -10, -10]);
-    private drawOrder: Uint8Array = new Uint8Array([0, 1, 2, 3]);
 
     // Controls
     scale: number = 1.0;
@@ -145,9 +147,6 @@ export class HitsplatOverlay implements Overlay {
         this.app.disable(PicoGL.DEPTH_TEST);
 
         const centerWorld = this.centerWorld;
-        const stackDxBase = this.stackDxBase;
-        const stackDyBase = this.stackDyBase;
-        const order = this.drawOrder;
         const quadVerts = this.quadVerts;
 
         for (const entry of entries) {
@@ -216,7 +215,9 @@ export class HitsplatOverlay implements Overlay {
             // Base screen Y offset is -12 pixels
             const baseTop = -12 * resolvedScale;
             const variantRaw = entry.variant ?? 0;
-            const variant = ((variantRaw % order.length) + order.length) % order.length;
+            // The entry's slot, which picks its HitsplatLayout offset.
+            const variant =
+                ((variantRaw % HITSPLAT_LAYOUT_SLOTS) + HITSPLAT_LAYOUT_SLOTS) % HITSPLAT_LAYOUT_SLOTS;
 
             const col = (entry.color ?? useType?.textColor ?? 0xffffff) >>> 0;
             // textOffsetY is an additional Y offset for text
@@ -260,11 +261,11 @@ export class HitsplatOverlay implements Overlay {
                   : this.width;
 
             for (let i = 0; i < count; i++) {
-                const pIdx = order[(variant + i) % order.length];
+                const pIdx = (variant + i) % HITSPLAT_LAYOUT_SLOTS;
                 // slot offsets and animated x/y offsets are applied in screen
                 // space before the hitsplat box is laid out from its top edge.
-                const cx = ((stackDxBase[pIdx] * resolvedScale) | 0) + animXOffset;
-                const topY = ((stackDyBase[pIdx] * resolvedScale) | 0) + baseTop + animYOffset;
+                const cx = ((getHitsplatOffsetX(pIdx) * resolvedScale) | 0) + animXOffset;
+                const topY = ((getHitsplatOffsetY(pIdx) * resolvedScale) | 0) + baseTop + animYOffset;
 
                 if (primaryBgParts) {
                     const lw = (primaryBgParts.left.w * resolvedScale) | 0;

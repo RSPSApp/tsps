@@ -270,6 +270,8 @@ export type HitsplatServerPayload = {
     type2?: number;
     damage2?: number;
     delayCycles?: number;
+    /** How many hitsplat slots the actor may use for this hit. */
+    limit?: number;
     tick?: number;
 };
 

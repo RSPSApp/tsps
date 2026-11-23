@@ -1141,8 +1141,9 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         value2: number,
         currentCycle: number,
         delayCycles: number,
+        maxCount?: number,
     ): void {
-        return render.addHitSplatOsrs(this, state, type, value, type2, value2, currentCycle, delayCycles);
+        return render.addHitSplatOsrs(this, state, type, value, type2, value2, currentCycle, delayCycles, maxCount);
     }
 
     public getHitsplatVisibility(

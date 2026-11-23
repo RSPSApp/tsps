@@ -32,7 +32,7 @@ export interface HitsplatEntry {
     color?: number;
     /** Optional per-entry scale multiplier. */
     scale?: number;
-    /** Variant used to rotate default offset pattern. */
+    /** The hitsplat slot, which picks the HitsplatLayout offset it is drawn at. */
     variant?: number;
     /** Optional hitsplat style or sprite name override from the source event. */
     style?: number;

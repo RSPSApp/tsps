@@ -51,6 +51,7 @@ type PlayerHitsplatEvent = {
     type2?: number;
     damage2?: number;
     delayCycles?: number;
+    limit?: number;
     tick?: number;
 };
 
@@ -391,6 +392,7 @@ export class PlayerSyncManager {
                             typeof entry.delayCycles === "number"
                                 ? entry.delayCycles | 0
                                 : undefined,
+                        limit: typeof entry.limit === "number" ? entry.limit | 0 : undefined,
                         tick,
                     });
                 }

@@ -261,10 +261,10 @@ export function registerHitsplat(host: WebGLOsrsRendererHost, event: HitsplatEve
                 }
             }
             const state = host.ensureHitsplatState(host.playerHitsplats, targetId);
-            host.addHitSplatOsrs(state, type, damage, type2, damage2, clientCycle, delayCycles);
+            host.addHitSplatOsrs(state, type, damage, type2, damage2, clientCycle, delayCycles, event.limit);
         } else {
             const state = host.ensureHitsplatState(host.npcHitsplats, targetId);
-            host.addHitSplatOsrs(state, type, damage, type2, damage2, clientCycle, delayCycles);
+            host.addHitSplatOsrs(state, type, damage, type2, damage2, clientCycle, delayCycles, event.limit);
         }
         // Use client cycle for trim operations too
         host.trimHitsplats(clientCycle);

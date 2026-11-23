@@ -474,8 +474,9 @@ export class OverlayHost {
         value2: number,
         currentCycle: number,
         delayCycles: number,
+        maxCount?: number,
     ): void {
-        addHitSplatOsrs(this.typedHost, state, type, value, type2, value2, currentCycle, delayCycles);
+        addHitSplatOsrs(this.typedHost, state, type, value, type2, value2, currentCycle, delayCycles, maxCount);
     }
 
     getHitsplatVisibility(
@@ -1247,7 +1248,7 @@ export class OverlayHost {
             const state =
                 playerServerId > 0 ? this.playerHitsplats.get(playerServerId) : undefined;
             if (state) {
-                for (let slot = 0; slot < 4 && hitsplats.length < hitsplatMaxEntries; slot++) {
+                for (let slot = 0; slot < state.hitSplatCycles.length && hitsplats.length < hitsplatMaxEntries; slot++) {
                     const animProgress = this.getHitsplatVisibility(state, slot, clientCycle);
                     if (animProgress === undefined) continue;
                     const entry = this.acquireHitsplatEntry();
@@ -1260,7 +1261,7 @@ export class OverlayHost {
                     entry.count = 1;
                     entry.color = undefined;
                     entry.scale = RENDER_CONSTANTS.HITSPLAT_SCALE;
-                    entry.variant = slot & 3;
+                    entry.variant = slot;
                     entry.style = state.hitSplatTypes[slot] | 0;
                     entry.type2 = state.hitSplatTypes2[slot] | 0;
                     entry.damage2 = state.hitSplatValues2[slot] | 0;
@@ -1481,7 +1482,7 @@ export class OverlayHost {
                     const healthBarOffset =
                         this.resolvePlayerLogicalHeightTiles(i, playerHeightFallback) + 15 / 128;
 
-                    for (let slot = 0; slot < 4 && hitsplats.length < hitsplatMaxEntries; slot++) {
+                    for (let slot = 0; slot < state.hitSplatCycles.length && hitsplats.length < hitsplatMaxEntries; slot++) {
                         const animProgress = this.getHitsplatVisibility(state, slot, clientCycle);
                         if (animProgress === undefined) continue;
                         const entry = this.acquireHitsplatEntry();
@@ -1494,7 +1495,7 @@ export class OverlayHost {
                         entry.count = 1;
                         entry.color = undefined;
                         entry.scale = RENDER_CONSTANTS.HITSPLAT_SCALE;
-                        entry.variant = slot & 3;
+                        entry.variant = slot;
                         entry.style = state.hitSplatTypes[slot] | 0;
                         entry.type2 = state.hitSplatTypes2[slot] | 0;
                         entry.damage2 = state.hitSplatValues2[slot] | 0;
@@ -1583,7 +1584,7 @@ export class OverlayHost {
                         );
                     }
                     if (!state) return;
-                    for (let slot = 0; slot < 4 && hitsplats.length < hitsplatMaxEntries; slot++) {
+                    for (let slot = 0; slot < state.hitSplatCycles.length && hitsplats.length < hitsplatMaxEntries; slot++) {
                         const animProgress = this.getHitsplatVisibility(state, slot, clientCycle);
                         if (animProgress === undefined) continue;
                         const entry = this.acquireHitsplatEntry();
@@ -1596,7 +1597,7 @@ export class OverlayHost {
                         entry.count = 1;
                         entry.color = undefined;
                         entry.scale = RENDER_CONSTANTS.HITSPLAT_SCALE;
-                        entry.variant = slot & 3;
+                        entry.variant = slot;
                         entry.style = state.hitSplatTypes[slot] | 0;
                         entry.type2 = state.hitSplatTypes2[slot] | 0;
                         entry.damage2 = state.hitSplatValues2[slot] | 0;
@@ -1791,10 +1792,10 @@ export class OverlayHost {
                 }
             }
             const state = this.ensureHitsplatState(this.playerHitsplats, targetId);
-            this.addHitSplatOsrs(state, type, damage, type2, damage2, clientCycle, delayCycles);
+            this.addHitSplatOsrs(state, type, damage, type2, damage2, clientCycle, delayCycles, event.limit);
         } else {
             const state = this.ensureHitsplatState(this.npcHitsplats, targetId);
-            this.addHitSplatOsrs(state, type, damage, type2, damage2, clientCycle, delayCycles);
+            this.addHitSplatOsrs(state, type, damage, type2, damage2, clientCycle, delayCycles, event.limit);
         }
         this.trimHitsplats(clientCycle);
         this.trimHealthBars(clientCycle);

@@ -290,29 +290,19 @@ export class NpcUpdateDecoder {
             if ((mask & 0x20) !== 0) {
                 const hits: HitsplatUpdate[] = [];
                 const hitCount = stream.readUnsignedByteSub() | 0;
+                // r241: type, amount, delay and the slot limit per hit; no secondary splat.
                 for (let i = 0; i < hitCount; i++) {
-                    let type = stream.readUShortSmart() | 0;
-                    let damage = -1;
-                    let type2 = -1;
-                    let damage2 = -1;
-                    const raw = type | 0;
-                    if (raw === 32767) {
-                        type = stream.readUShortSmart() | 0;
-                        damage = stream.readUShortSmart() | 0;
-                        type2 = stream.readUShortSmart() | 0;
-                        damage2 = stream.readUShortSmart() | 0;
-                    } else if (raw !== 32766) {
-                        damage = stream.readUShortSmart() | 0;
-                    } else {
-                        type = -1;
-                    }
+                    const type = stream.readUShortSmart() | 0;
+                    const damage = stream.readUShortSmart() | 0;
                     const delayCycles = stream.readUShortSmart() | 0;
+                    const limit = stream.readUShortSmart() | 0;
                     hits.push({
                         type,
                         damage,
-                        type2,
-                        damage2,
+                        type2: -1,
+                        damage2: -1,
                         delayCycles,
+                        limit,
                     });
                 }
 

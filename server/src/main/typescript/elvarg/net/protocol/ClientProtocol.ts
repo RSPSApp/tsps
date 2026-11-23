@@ -67,7 +67,18 @@ export type PlayerAppearance = {
 
 export type Tile = { x: number; y: number; level: number };
 
-export type HitsplatView = { type: number; damage: number; delay?: number };
+/**
+ * A hitsplat: its cache type, value, delay in client cycles and `limit`, how many hitsplat
+ * slots the client may use for the actor (r241 Actor.addHitsplat maxCount; default
+ * HITSPLAT_SLOT_LIMIT).
+ */
+export type HitsplatView = { type: number; damage: number; delay?: number; limit?: number };
+/**
+ * The hitsplat slot limit live sends with every hit: 8 in all 265,432 hits of the 142 rsprox
+ * recordings with the field (revisions 237-238; the r241 client reads it too). Over 4, the
+ * client gives each hit the lowest free slot.
+ */
+export const HITSPLAT_SLOT_LIMIT = 8;
 /** An actor's headbar: its HP and, when not the default (config 0, 30 wide), which bar. */
 export type HealthView = { current: number; max: number; bar?: { id: number; width: number } };
 /**
@@ -3224,6 +3235,7 @@ function writeHits(bytes: number[], view: ActorUpdateView, npc: boolean): void {
     smart(bytes, hit.type);
     smart(bytes, hit.damage);
     smart(bytes, hit.delay ?? 0);
+    smart(bytes, hit.limit ?? HITSPLAT_SLOT_LIMIT);
   }
   const health = view.health;
   const bars = npc ? view.bars ?? [] : [];

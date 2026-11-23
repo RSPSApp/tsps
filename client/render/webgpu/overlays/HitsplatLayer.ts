@@ -1,3 +1,8 @@
+import {
+    HITSPLAT_LAYOUT_SLOTS,
+    getHitsplatOffsetX,
+    getHitsplatOffsetY,
+} from "../../../game/actor/HitsplatLayout";
 import type { CacheIndex } from "../../../rs/cache/CacheIndex";
 import { ConfigType } from "../../../rs/cache/ConfigType";
 import { IndexType } from "../../../rs/cache/IndexType";
@@ -52,9 +57,6 @@ export class HitsplatLayer {
     private width = 96;
     private height = 40;
 
-    private readonly stackDxBase = new Int16Array([0, 0, -15, 15]);
-    private readonly stackDyBase = new Int16Array([0, -20, -10, -10]);
-    private readonly drawOrder = new Uint8Array([0, 1, 2, 3]);
 
     constructor(host: OverlayHost, screen: ScreenLayer) {
         this.host = host;
@@ -138,9 +140,9 @@ export class HitsplatLayer {
             const count = Math.max(1, Math.min(4, (entry.count ?? this.count ?? 1) | 0));
             const baseTop = -12 * resolvedScale;
             const variantRaw = entry.variant ?? 0;
+            // The entry's slot, which picks its HitsplatLayout offset.
             const variant =
-                ((variantRaw % this.drawOrder.length) + this.drawOrder.length) %
-                this.drawOrder.length;
+                ((variantRaw % HITSPLAT_LAYOUT_SLOTS) + HITSPLAT_LAYOUT_SLOTS) % HITSPLAT_LAYOUT_SLOTS;
 
             const col = (entry.color ?? useType?.textColor ?? 0xffffff) >>> 0;
             const textOffsetY = (useType?.textOffsetY ?? 0) | 0;
@@ -175,12 +177,12 @@ export class HitsplatLayer {
                   : this.width;
 
             for (let i = 0; i < count; i++) {
-                const pIdx = this.drawOrder[(variant + i) % this.drawOrder.length];
+                const pIdx = (variant + i) % HITSPLAT_LAYOUT_SLOTS;
                 const cx =
-                    anchorScreenX + (((this.stackDxBase[pIdx] * resolvedScale) | 0) + animXOffset);
+                    anchorScreenX + (((getHitsplatOffsetX(pIdx) * resolvedScale) | 0) + animXOffset);
                 const topY =
                     anchorScreenY +
-                    (((this.stackDyBase[pIdx] * resolvedScale) | 0) + baseTop + animYOffset);
+                    (((getHitsplatOffsetY(pIdx) * resolvedScale) | 0) + baseTop + animYOffset);
 
                 if (primaryBgParts) {
                     const lw = (primaryBgParts.left.width * resolvedScale) | 0;

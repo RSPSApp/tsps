@@ -8319,6 +8319,7 @@ export class OsrsClient {
                     type2: typeof hit.type2 === "number" ? hit.type2 | 0 : undefined,
                     damage2: typeof hit.damage2 === "number" ? hit.damage2 | 0 : undefined,
                     delayCycles: typeof hit.delayCycles === "number" ? hit.delayCycles | 0 : 0,
+                    limit: typeof hit.limit === "number" ? hit.limit | 0 : undefined,
                     tick: loopCycle | 0,
                 };
                 notifyActorHitsplat(payload);

@@ -916,32 +916,19 @@ export class PlayerUpdateDecoder {
     ): { hits: HitsplatUpdate[]; healthBars: HealthBarUpdate[] } {
         const hits: HitsplatUpdate[] = [];
         const count = stream.readUnsignedByteC() | 0; // readUnsignedByteNeg
+        // r241: type, amount, delay and the slot limit per hit; no secondary splat.
         for (let i = 0; i < count; i++) {
-            let type = -1;
-            let damage = -1;
-            let type2 = -1;
-            let damage2 = -1;
-            const first = stream.readUShortSmart() | 0;
-            if (first === 32767) {
-                type = stream.readUShortSmart() | 0;
-                damage = stream.readUShortSmart() | 0;
-                type2 = stream.readUShortSmart() | 0;
-                damage2 = stream.readUShortSmart() | 0;
-            } else if (first !== 32766) {
-                type = first;
-                damage = stream.readUShortSmart() | 0;
-                type2 = -1;
-                damage2 = -1;
-            }
+            const type = stream.readUShortSmart() | 0;
+            const damage = stream.readUShortSmart() | 0;
             const delay = stream.readUShortSmart() | 0;
-            // even sentinel 32766 (type=-1) still calls Actor.addHitSplat.
-            // This affects slot rotation timing via hitSplatCount even when nothing is rendered.
+            const limit = stream.readUShortSmart() | 0;
             hits.push({
                 type,
                 damage,
-                type2,
-                damage2,
-                delayCycles: delay | 0,
+                type2: -1,
+                damage2: -1,
+                delayCycles: delay,
+                limit,
             });
         }
         const healthBars: HealthBarUpdate[] = [];

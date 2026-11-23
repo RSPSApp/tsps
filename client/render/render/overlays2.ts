@@ -116,6 +116,7 @@ import {
     createActorHealthBarsState,
     createActorHitsplatState,
 } from "../../game/actor/ActorOverlayState";
+import { DEFAULT_HITSPLAT_LIMIT } from "../../game/actor/HitsplatLayout";
 import type { ClientGroundItemStack, GroundItemOverlayEntry } from "../../game/data/ground/GroundItemStore";
 import { NpcEcs } from "../../game/ecs/NpcEcs";
 import type { PlayerAnimKey } from "../../game/ecs/PlayerEcs";
@@ -189,7 +190,14 @@ import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import { RENDER_CONSTANTS } from "./constants";
 
-export function addHitSplatOsrs(host: WebGLOsrsRendererHost, 
+/**
+ * Adds a hit to an actor's hitsplat list, as r241's Actor.addHitsplat does. `maxCount` is the
+ * per-hit limit the server sends (8 on live). Over 4, a hit takes the lowest free slot, so a
+ * lone splat is centred again once the ones before it expire; at 4 or less it takes the slot
+ * after the last showing one. With every slot showing, the definition's replacement mode picks
+ * which one it replaces, or the hit is not shown.
+ */
+export function addHitSplatOsrs(host: WebGLOsrsRendererHost,
         state: ActorHitsplatState,
         type: number,
         value: number,
@@ -197,88 +205,71 @@ export function addHitSplatOsrs(host: WebGLOsrsRendererHost,
         value2: number,
         currentCycle: number,
         delayCycles: number,
+        maxCount: number = DEFAULT_HITSPLAT_LIMIT,
     ): void {
+        const cycle = currentCycle | 0;
+        const limit = Math.min(maxCount | 0, MAX_HITSPLAT_SLOTS);
+        // r241: a hit with no type, or a limit of 0, takes no slot.
+        if ((type | 0) < 0 || limit <= 0) return;
 
-        // Mirror Actor.addHitSplat exactly
-        let allExpired = true; // var7
-        let allActive = true; // var8
-        for (let i = 0; i < 4; i++) {
-            if ((state.hitSplatCycles[i] | 0) > (currentCycle | 0)) {
-                allExpired = false;
-            } else {
-                allActive = false;
-            }
+        const cycles = state.hitSplatCycles;
+        const size = cycles.length;
+        let allActive = size >= limit;
+        let nextIndex = 0;
+        for (let i = 0; i < size; i++) {
+            if ((cycles[i] | 0) > cycle) nextIndex = (i + 1) % limit;
+            else allActive = false;
         }
 
-        let slot = -1; // var9
-        let compareType = -1;
-        let displayCycles = 0;
-        if ((type | 0) >= 0) {
-            const def = host.hitsplatOverlay?.getDefinition?.(type | 0);
-            if (def) {
-                compareType = (def.compareType ?? -1) | 0;
-                displayCycles = (def.displayCycles ?? 70) | 0;
-            } else {
-                compareType = -1;
-                displayCycles = 70;
-            }
-        }
+        const def = host.hitsplatOverlay?.getDefinition?.(type | 0);
+        const replacementMode = def ? (def.compareType ?? -1) | 0 : -1;
+        const displayCycles = def ? (def.displayCycles ?? 70) | 0 : 70;
 
+        let slot = -1;
         if (allActive) {
-            // All 4 slots are active, need to replace one based on compareType
-            if ((compareType | 0) === -1) {
-                return; // No replacement priority defined, skip this hitsplat
-            }
-            slot = 0;
+            // No replacement mode: the hit is not shown.
+            if (replacementMode === -1) return;
             let best = 0;
-            // compareType 0 = replace oldest (lowest cycle), 1 = replace lowest damage
-            if ((compareType | 0) === 0) best = state.hitSplatCycles[0] | 0;
-            else if ((compareType | 0) === 1) best = state.hitSplatValues[0] | 0;
-            for (let i = 1; i < 4; i++) {
-                if ((compareType | 0) === 0) {
-                    const v = state.hitSplatCycles[i] | 0;
-                    if (v < best) {
-                        slot = i;
-                        best = v;
-                    }
-                } else if ((compareType | 0) === 1) {
-                    const v = state.hitSplatValues[i] | 0;
-                    if (v < best) {
-                        slot = i;
-                        best = v;
-                    }
+            for (let j = 0; j < size; j++) {
+                // 0 replaces the one that expires first, 1 the lowest value.
+                let v: number;
+                if (replacementMode === 0) v = cycles[j] | 0;
+                else if (replacementMode === 1) v = state.hitSplatValues[j] | 0;
+                else continue;
+                if (j === 0 || v < best) {
+                    slot = j;
+                    best = v;
                 }
             }
-            // If compareType=1 and new value is <= existing lowest, don't replace
-            if ((compareType | 0) === 1 && (best | 0) >= (value | 0)) {
-                return;
-            }
+            if (replacementMode === 1 && best >= (value | 0)) return;
         } else {
-            // At least one slot is expired, find an empty one
-            if (allExpired) {
-                state.hitSplatCount = 0;
-            }
-            for (let i = 0; i < 4; i++) {
-                const idx = state.hitSplatCount & 3;
-                state.hitSplatCount = (state.hitSplatCount + 1) & 3;
-                if ((state.hitSplatCycles[idx] | 0) <= (currentCycle | 0)) {
-                    slot = idx;
+            if (limit > 4) nextIndex = 0;
+            for (let k = 0; k < limit; k++) {
+                const candidate = nextIndex;
+                nextIndex = (nextIndex + 1) % limit;
+                if (candidate >= cycles.length) {
+                    cycles.push(0);
+                    state.hitSplatTypes.push(-1);
+                    state.hitSplatValues.push(0);
+                    state.hitSplatTypes2.push(-1);
+                    state.hitSplatValues2.push(-1);
+                    slot = cycles.length - 1;
+                    break;
+                }
+                if ((cycles[candidate] | 0) <= cycle) {
+                    slot = candidate;
                     break;
                 }
             }
         }
 
-        if (slot >= 0) {
-            state.hitSplatTypes[slot] = type | 0;
-            state.hitSplatValues[slot] = value | 0;
-            state.hitSplatTypes2[slot] = type2 | 0;
-            state.hitSplatValues2[slot] = value2 | 0;
-            // OSRS: hitSplatCycles[slot] = currentCycle + displayCycles + delayCycles
-            // This stores the END cycle (when hitsplat expires)
-            // Start visibility = hitSplatCycles - displayCycles (calculated at render time)
-            state.hitSplatCycles[slot] = (currentCycle + displayCycles + delayCycles) | 0;
-        }
-    
+        if (slot < 0) return;
+        state.hitSplatTypes[slot] = type | 0;
+        state.hitSplatValues[slot] = value | 0;
+        state.hitSplatTypes2[slot] = type2 | 0;
+        state.hitSplatValues2[slot] = value2 | 0;
+        // The END cycle; the splat shows from (end - displayCycles), after its delay.
+        cycles[slot] = (cycle + displayCycles + (delayCycles | 0)) | 0;
 }
 
 export function getHitsplatVisibility(host: WebGLOsrsRendererHost, 
@@ -324,7 +315,7 @@ export function trimHitsplats(host: WebGLOsrsRendererHost, tick: number): void {
         const controlledId = host.getEffectiveControlledPlayerId();
         for (const [playerId, state] of host.playerHitsplats) {
             let active = false;
-            for (let i = 0; i < 4; i++) {
+            for (let i = 0; i < state.hitSplatCycles.length; i++) {
                 if ((state.hitSplatCycles[i] | 0) > (tick | 0)) {
                     active = true;
                     break;
@@ -339,7 +330,7 @@ export function trimHitsplats(host: WebGLOsrsRendererHost, tick: number): void {
         const npcEcs = host.osrsClient.npcEcs;
         for (const [serverId, state] of host.npcHitsplats) {
             let active = false;
-            for (let i = 0; i < 4; i++) {
+            for (let i = 0; i < state.hitSplatCycles.length; i++) {
                 if ((state.hitSplatCycles[i] | 0) > (tick | 0)) {
                     active = true;
                     break;

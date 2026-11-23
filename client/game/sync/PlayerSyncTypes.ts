@@ -74,6 +74,8 @@ export interface HitsplatUpdate {
     damage2: number;
     /** OSRS extra cycles added to the hitsplat lifetime (var6 in Actor.addHitSplat). */
     delayCycles: number;
+    /** How many hitsplat slots the actor may use for this hit (maxCount in r241). */
+    limit: number;
     currentHp?: number;
     maxHp?: number;
 }

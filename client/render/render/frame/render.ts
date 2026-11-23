@@ -896,7 +896,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                 const state =
                     playerServerId > 0 ? host.playerHitsplats.get(playerServerId) : undefined;
                 if (state) {
-                    for (let slot = 0; slot < 4 && hitsplats.length < hitsplatMaxEntries; slot++) {
+                    for (let slot = 0; slot < state.hitSplatCycles.length && hitsplats.length < hitsplatMaxEntries; slot++) {
                         // Use client cycles and calculate visibility from end cycle
                         const animProgress = host.getHitsplatVisibility(state, slot, clientCycle);
                         if (animProgress === undefined) continue;
@@ -910,7 +910,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                         entry.count = 1;
                         entry.color = undefined;
                         entry.scale = RENDER_CONSTANTS.HITSPLAT_SCALE;
-                        entry.variant = slot & 3;
+                        entry.variant = slot;
                         entry.style = state.hitSplatTypes[slot] | 0;
                         entry.type2 = state.hitSplatTypes2[slot] | 0;
                         entry.damage2 = state.hitSplatValues2[slot] | 0;
@@ -1150,7 +1150,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
 
                         for (
                             let slot = 0;
-                            slot < 4 && hitsplats.length < hitsplatMaxEntries;
+                            slot < state.hitSplatCycles.length && hitsplats.length < hitsplatMaxEntries;
                             slot++
                         ) {
                             // Use client cycles and calculate visibility from end cycle
@@ -1170,7 +1170,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                             entry.count = 1;
                             entry.color = undefined;
                             entry.scale = RENDER_CONSTANTS.HITSPLAT_SCALE;
-                            entry.variant = slot & 3;
+                            entry.variant = slot;
                             entry.style = state.hitSplatTypes[slot] | 0;
                             entry.type2 = state.hitSplatTypes2[slot] | 0;
                             entry.damage2 = state.hitSplatValues2[slot] | 0;
@@ -1278,7 +1278,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                         if (!state) return;
                         for (
                             let slot = 0;
-                            slot < 4 && hitsplats.length < hitsplatMaxEntries;
+                            slot < state.hitSplatCycles.length && hitsplats.length < hitsplatMaxEntries;
                             slot++
                         ) {
                             // Use client cycles and calculate visibility from end cycle
@@ -1298,7 +1298,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
                             entry.count = 1;
                             entry.color = undefined;
                             entry.scale = RENDER_CONSTANTS.HITSPLAT_SCALE;
-                            entry.variant = slot & 3;
+                            entry.variant = slot;
                             entry.style = state.hitSplatTypes[slot] | 0;
                             entry.type2 = state.hitSplatTypes2[slot] | 0;
                             entry.damage2 = state.hitSplatValues2[slot] | 0;

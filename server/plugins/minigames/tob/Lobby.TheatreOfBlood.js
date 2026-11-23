@@ -60,12 +60,14 @@ const ESCAPE_CRYSTALS = [Shared.ITEM.ESCAPE_CRYSTAL];
 const HARD_LOCKED = "Everyone in your party must have completed the Theatre of Blood in Normal Mode to attempt Hard Mode.";
 /** The name the Grouping plugin knows the theatre by. */
 const GROUPING_ACTIVITY = "Theatre of Blood";
+const pendingApplicantHud = new WeakMap();
 
 // ---------------------------------------------------------------- the HUD in Ver Sinhaza
 
 /** The HUD lists the party's names (component 12) and varbit 6440 (tob_client_partystatus) says 1. */
 function refreshHud(player) {
   const party = Parties.partyOf(player);
+  if (party && pendingApplicantHud.get(player) === party) return;
   const sender = player.getPacketSender();
   sender.sendSubInterface(Shared.OVERLAY_HUD_UID, INTERFACE.PARTY_HUD, 1);
   sender.sendVarbit(VARBIT.PARTY_STATE, party ? 1 : 0);
@@ -108,6 +110,7 @@ function leaveParty(player, { leftLobby = false } = {}) {
   const party = Parties.partyOf(player);
   if (!party || party.raid) return;
   party.remove(player);
+  pendingApplicantHud.delete(player);
   // 227/01779 tick 13028 and 234/03299 tick 10627.
   if (leftLobby) player.sendMessage("You have left the lobby, so you have been removed from your party.");
   refreshParty(party);
@@ -303,10 +306,10 @@ function enlist(party, player) {
 
 /** The leader's Accept for one of the party's applicants. */
 function acceptAsLeader(party, applicant, notifyApplicant = true) {
-  answerApplicant(party.leader, party, party.applicants.indexOf(applicant), true, notifyApplicant);
+  answerApplicant(party.leader, party, party.applicants.indexOf(applicant), true, { notifyApplicant, deferHud: false });
 }
 
-function answerApplicant(player, party, index, accept, notifyApplicant = true) {
+function answerApplicant(player, party, index, accept, { notifyApplicant = true, deferHud = true } = {}) {
   const applicant = party.applicants[index];
   if (!applicant) {
     openInformation(player, party);
@@ -324,9 +327,19 @@ function answerApplicant(player, party, index, accept, notifyApplicant = true) {
       Shared.statement(player, `${Shared.displayName(applicant)} appears to have joined another party.`);
       return;
     }
-    if (party.accept(applicant) && notifyApplicant) {
-      // 227/00553 ticks 11915–11916 and 237/01162 tick 12874, before the party status update.
-      applicant.sendMessage(`Your application to the party of ${Shared.displayName(party.leader)} has been accepted.`);
+    if (party.accept(applicant)) {
+      if (notifyApplicant) {
+        applicant.sendMessage(`Your application to the party of ${Shared.displayName(party.leader)} has been accepted.`);
+      }
+      if (deferHud) {
+        // 227/00553 ticks 11915–11916: the message arrives one tick before party status 6440.
+        pendingApplicantHud.set(applicant, party);
+        Shared.later(applicant, 1, () => {
+          if (pendingApplicantHud.get(applicant) !== party) return;
+          pendingApplicantHud.delete(applicant);
+          if (party.has(applicant) && !party.raid) refreshHud(applicant);
+        });
+      }
     }
   } else {
     party.decline(applicant);

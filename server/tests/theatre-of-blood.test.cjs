@@ -390,7 +390,7 @@ for (const [choice, mode, label] of [[1, 'entry', 'Entry'], [2, 'normal', 'Norma
   });
 }
 
-test('accepting an application tells its applicant before the party HUD update; declining still tells them', (t) => {
+test('accepting an application tells its applicant and updates the party HUD on the next tick', (t) => {
   const leader = fakePlayer('Leader Display');
   const accepted = fakePlayer('Accepted');
   const declined = fakePlayer('Declined');
@@ -406,9 +406,19 @@ test('accepting an application tells its applicant before the party HUD update; 
   Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 12 });
   assert.deepEqual(accepted.messages, ['Your application to the party of Leader Display has been accepted.']);
   assert.equal(party.has(accepted), true);
+  assert.equal(accepted.varbits.get(6440) ?? 0, 0, 'the acceptance tick sends no party status update');
+  ticks(1);
   assert.equal(accepted.varbits.get(6440), 1);
   Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 22 });
   assert.deepEqual(declined.messages, ['Your application to the party of Leader Display has been declined.']);
+
+  const departing = fakePlayer('Departing');
+  party.apply(departing);
+  Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 12 });
+  hooks.zoneExits[0]({ player: departing });
+  ticks(1);
+  assert.equal(departing.varbits.get(6440), 0, 'departing cancels a pending positive status update');
+  assert.equal(departing.subs.has(Shared.OVERLAY_HUD_UID), false, 'the HUD stays closed outside the lobby');
 });
 
 test('leaving the lobby tells members once and withdraws applicants quietly', (t) => {

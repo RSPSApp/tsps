@@ -118,12 +118,12 @@ Script 2323's footer takes the viewer's rights and the mode (0 Normal, 1 Entry, 
 
 | Lobby event | Player feedback | Recordings |
 | --- | --- | --- |
-| An application is accepted | The applicant gets "Your application to the party of \<leader's name\> has been accepted." as a game message before party status 6440 changes from 0 to 1. The recordings show both same-tick and next-tick updates. | [227/553](https://rsprox.net/download/553) ticks 11915–11916, [227/554](https://rsprox.net/download/554) tick 101, [227/582](https://rsprox.net/download/582) ticks 313–314, [237/1162](https://rsprox.net/download/1162) tick 12874 |
+| An application is accepted | On a leader's Accept, the applicant gets "Your application to the party of \<leader's name\> has been accepted." as a game message. Party status 6440 changes from 0 to 1 on the following tick, as in recordings 553 and 582. Recordings 554 and 1162 show the same order within one tick. | [227/553](https://rsprox.net/download/553) ticks 11915–11916, [227/554](https://rsprox.net/download/554) tick 101, [227/582](https://rsprox.net/download/582) ticks 313–314, [237/1162](https://rsprox.net/download/1162) tick 12874 |
 | A member leaves the lobby | "You have left the lobby, so you have been removed from your party." appears as a game message with the departure. | [227/1779](https://rsprox.net/download/1779) tick 13028, [234/3299](https://rsprox.net/download/3299) tick 10627 |
 | A player refreshes a party that has disbanded | "That party is no longer recruiting." opens as a message box (229) and the details (50) close. Continue opens the list. | [227/1833](https://rsprox.net/download/1833) ticks 3474–3482 |
 
-The recordings are from Leagues or Grid Master. With TSPS Grouping, the acceptance message
-also appears when a player's own application is auto-accepted. Group members brought in
+The recordings are from Leagues or Grid Master. With TSPS Grouping, a player's own
+auto-accepted application gets the message and the existing immediate party status update. Group members brought in
 automatically when their leader creates a party keep the existing silent join.
 
 ### Notice board estimates

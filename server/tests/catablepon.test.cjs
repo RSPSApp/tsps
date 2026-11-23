@@ -15,6 +15,9 @@ before(async () => {
   require('../plugins/combat/StandardCurses.plugin').register(PluginManager.createApi('StandardCurses'));
   catablepon = require('../plugins/npcs/Catablepon.plugin');
   catablepon.register(PluginManager.createApi('Catablepon'));
+  PluginManager.createApi('CatableponAccuracyTest').onCombatHitRoll((event) => {
+    if (event.attacker.getAttribute?.('catablepon-test:accurate')) event.forceAccurate = true;
+  });
 });
 
 function player(t, strength, base = strength) {
@@ -46,14 +49,13 @@ function glare(npc, p, accurate = true) {
 
 const strength = (p) => p.getSkillManager().getCurrentLevel(core.Skill.STRENGTH);
 
-test('a glare is a Weaken cast with the breath, a zero hit on the cast tick, and the recorded line', (t) => {
+test('a glare is a Weaken cast with the breath, landing on the cast tick with the recorded line', (t) => {
   const { p, npc } = fight(t, 90);
   const { method, hit } = glare(npc, p);
   assert.notEqual(method, npc.getCombatMethod(), 'the glare replaces the default attack');
   assert.equal(npc.getAnimation().getId(), 4272, 'catpon_attack_breath');
   assert.equal(hit.getSpell().spellId(), core.CombatSpells.WEAKEN.spellId());
   assert.equal(hit.getDelay(), 0, 'lands on the cast tick (rec 339 tick 1172)');
-  assert.equal(hit.getTotalDamage(), 0);
   assert.equal(strength(p), 85, '90 -> 85 (rec 339)');
   assert.deepEqual(p.messages, ['You feel weakened.']);
 });
@@ -96,4 +98,43 @@ test("a player's own Weaken keeps the spell's rule: no stacking, 5%, the old lin
   assert.deepEqual(target.messages, ['You feel slightly weakened.']);
   core.CombatSpells.WEAKEN.finishCast(caster, target, true, 0);
   assert.equal(strength(target), 95);
+});
+
+test('glares hit with the catablepon\'s own roll, landed or splashed (rec 339 ticks 1196/1224, rec 75 tick 11430)', (t) => {
+  let landed = 0, splashed = 0;
+  for (let i = 0; i < 300; i++) {
+    const { p, npc } = fight(t, 90);
+    p.getSkillManager().setMaxLevel(core.Skill.DEFENCE, 1).setCurrentLevels(core.Skill.DEFENCE, 1, false);
+    const accurate = i % 2 === 0;
+    const { hit } = glare(npc, p, accurate);
+    assert.ok(hit.getTotalDamage() <= 5, 'level 49 max hit 5');
+    if (accurate) landed = Math.max(landed, hit.getTotalDamage()); else splashed = Math.max(splashed, hit.getTotalDamage());
+  }
+  assert.ok(landed > 0, 'a landed glare can damage');
+  assert.ok(splashed > 0, 'a splashed glare can damage');
+});
+
+test('in a ticked fight glares drain 90 -> 85 -> 80 on their attack ticks, then it attacks as before', (t) => {
+  const { p, npc } = fight(t, 90);
+  p.setAutoRetaliate?.(false);
+  p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99).setCurrentLevels(core.Skill.HITPOINTS, 99, false);
+  for (const mobile of [p, npc]) { mobile.setRegistered(true); mobile.setNeedsPlacement(false); }
+  t.after(() => { for (const mobile of [p, npc]) { mobile.setRegistered(false); core.TaskManager.cancelTasks(mobile); } });
+  npc.setAttribute('catablepon-test:accurate', true);
+  core.World.processCycle = 5000;
+  npc.getCombat().attack(p);
+  const drops = [];
+  let last = strength(p);
+  for (let tick = 0; tick < 40; tick++) {
+    core.World.processCycle++;
+    const attacked = npc.getCombat().performNewAttack(false);
+    p.getCombat().getHitQueue().process(core.World.getProcessCycle());
+    if (strength(p) !== last) {
+      assert.equal(attacked, true, 'the drain lands on the attack tick');
+      drops.push([tick, last, strength(p)]); last = strength(p);
+    }
+  }
+  assert.deepEqual(drops.slice(0, 2).map(([, from, to]) => [from, to]), [[90, 85], [85, 80]]);
+  assert.equal(strength(p), 80, 'stops at 10 drained (8% + 3 of 90)');
+  assert.equal(CombatFactory.getMethod(npc), npc.getCombatMethod());
 });

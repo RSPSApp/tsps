@@ -7,8 +7,9 @@
  * rsprox captures (rec 339 ticks 1172-1236, 1844 ticks 8064/8095, 75 ticks 11422/11434, 1000217,
  * 1000414): every recorded catablepon attack on a player is a Weaken cast. It plays
  * catpon_attack_breath (4272) with weaken_casting (105), weaken_travel (106) and weaken_impact (107),
- * area sounds 3011 and 3010; a splash shows failedspell_impact (85) with sound 227. A landed glare
- * shows "You feel weakened." and the zero hitsplat on the cast's own tick, and lowers Strength by
+ * area sounds 3011 and 3010; a splash shows failedspell_impact (85) with sound 227. Either way it hits
+ * (0-6 recorded, rec 339 ticks 1196/1224, 1723 tick 10068, 75 tick 11430 on a splash) on the cast's own
+ * tick. A landed glare also shows "You feel weakened." on that tick and lowers Strength by
  * floor(5% of the current level) + 1 (90->85, 104->98, 40->37, 37->35, 3->2), stacking on a lowered
  * level (40->37->35).
  *
@@ -52,7 +53,7 @@ let glareSpell;
 let glareMethod;
 
 function createGlare(core) {
-  const { Animation, Graphic, GraphicHeight, CombatSpells, MagicCombatMethod } = core;
+  const { Animation, Graphic, GraphicHeight, CombatSpells, MagicCombatMethod, PendingHit } = core;
   // Weaken (spell id 1157: its curse rule, sounds and splash) cast with the breath, landing on the cast's tick.
   glareSpell = Object.create(CombatSpells.WEAKEN, {
     castAnimation: { value: () => new Animation(BREATH_ANIMATION) },
@@ -66,9 +67,18 @@ function createGlare(core) {
       super.start(npc, target);
     }
 
+    /**
+     * The Weaken's own roll decides only the drain and its impact or splash. The damage is rolled apart:
+     * recorded glares hit 0-6 whether the Weaken lands or splashes (rec 75 tick 11430: a splash that hit 3).
+     * Ours: that roll is the catablepon's own attack (its stab accuracy and 5/6/7 max hit), as no recording
+     * shows which accuracy live uses; Protect from Magic still applies, as the hit is the spell's.
+     */
     hits(npc, target) {
       const hits = super.hits(npc, target);
-      for (const hit of hits) hit.setTotalDamage(0);
+      for (const hit of hits) {
+        const roll = new PendingHit(npc, target, npc.getCombatMethod(), { delay: 0, handleAfterHitEffects: false, ordinary: true });
+        hit.setTotalDamage(roll.getTotalDamage());
+      }
       return hits;
     }
 

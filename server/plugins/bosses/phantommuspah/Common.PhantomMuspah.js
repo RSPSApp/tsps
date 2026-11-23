@@ -213,12 +213,6 @@ function travel(player, message, move, arrived) {
   });
 }
 
-/** A track by its id: unlocked (with its message) and played. */
-function playMusic(player, trackId) {
-  api.emitCustomEvent("music:unlock-track", { player, trackId });
-  player.getPacketSender().sendSong(trackId);
-}
-
 /** Whether the player can still be hit (not dying, not gone). */
 const alive = (player) => player.isRegistered() && player.getHitpoints() > 0 && !player.isDyingReturn?.();
 
@@ -228,7 +222,7 @@ module.exports = {
   init, later, randomInt, pick, shuffle,
   tileIn, lairTile, arena, fromCentre, onArena,
   graphic, tileGraphic, animate, sound, sounds, areaSound,
-  fightMessage, overlay, overlayFade, closeOverlay, travel, playMusic, count, alive,
+  fightMessage, overlay, overlayFade, closeOverlay, travel, count, alive,
   INSIDE_ATTRIBUTE, KILLS_ATTRIBUTE, BEST_TICKS_ATTRIBUTE, CHUNK,
   get api() { return api; },
   get core() { return core; },

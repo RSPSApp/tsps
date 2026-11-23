@@ -73,7 +73,7 @@
     "parasite": 10151
   },
   "varps": { "kills": 2664, "phosaniKills": 2671, "run": 173 },
-  "music": { "fight": 2941, "lobby": 664 },
+  "music": { "fight": 663, "lobby": 664 },
   "entry": {
     "warning": "You are about to begin an encounter with the Nightmare. Dying during this encounter will not be considered a safe death. Are you sure you wish to begin?",
     "phosaniWarning": "You are about to begin an encounter with Phosani's Nightmare. Dying during this encounter will not be considered a safe death. Are you sure you wish to begin?",

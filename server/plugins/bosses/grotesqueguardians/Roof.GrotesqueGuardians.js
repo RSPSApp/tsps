@@ -185,6 +185,11 @@ function defineAreaClass() {
       return "Grotesque Guardians";
     }
 
+    /** Tempest from the Guardians coming down until the statues are back after the kill; silence otherwise. */
+    getMusicTrack() {
+      return this.roof.fight ? Common.data.music.fight : Common.core.Music.SILENCE_TRACK;
+    }
+
     destroy() {
       if (this.isDestroyed?.() === true) return;
       const addQueue = Common.core.World.getAddNPCQueue();

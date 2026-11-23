@@ -35,6 +35,11 @@ function areaClass() {
       return this.dream?.phosani ? "Phosani's Nightmare" : "The Nightmare";
     }
 
+    /** The dream is silent except while the Nightmare is fought, which plays The Bane of Ashihama. */
+    getMusicTrack() {
+      return this.dream?.fight?.state === "fighting" ? Common.data.music.fight : Common.core.Music.SILENCE_TRACK;
+    }
+
     isMulti() {
       return true;
     }
@@ -201,7 +206,6 @@ function pullIn(player, dream) {
       sender.sendVarbit(varbits.minimap, 0);
       Common.sounds(player, [entry.wakeSound]);
       Common.fade(player, entry.fadeIn);
-      Common.api.emitCustomEvent("music:unlock-track", { player, trackId: Common.data.music.fight });
       const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = Common.core;
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
         new StatementDialogue(0, message),
@@ -276,7 +280,6 @@ function leave(player) {
     dream.removePlayer(player);
     player.performAnimation(Common.animation(Common.data.entry.wakeAnim));
     sender.sendVarbit(varbits.minimap, 0);
-    sender.sendSong(Common.data.music.lobby);
     Common.later(1, () => {
       if (!player.isRegistered()) return;
       sender.sendClientScript(out.portalRemoveScript, (out.portalOverlay << 16) | 1, (out.portalOverlay << 16) | 2, ...out.portalRemoveArgs);

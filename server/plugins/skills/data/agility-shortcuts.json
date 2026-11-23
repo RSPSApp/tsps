@@ -3254,14 +3254,18 @@
       "object": [57278,57279],
       "at": [[1324,9766,0],[1324,3364,0]],
       "level": 59,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
+      "unverified": "animation timing has no retail capture; both standing tiles are walkable in the cache map",
       "requires": [
         {
           "skills": {"agility":59},
           "quest": {"key":"shadows_of_custodia","message":"You need to complete Shadows of Custodia to use this shortcut."}
         }
       ],
-      "between": {"ends":[[1323,9766,0],[1324,3363,0]],"cross":[{"use":"tunnel","args":["to"]}]}
+      "note": "The cave changes map: teleport while hidden, never exact-move across the 6403-tile separation.",
+      "between": {"ends":[[1323,9766,0],[1324,3363,0]],"cross":[
+        {"anim":"DUCK"}, {"wait":1}, {"anim":"INVISIBLE"}, {"wait":4},
+        {"tele":"to"}, {"anim":"EMERGE"}, {"wait":1}
+      ]}
     },
     {
       "name": "Gap (Wintertodt) (1)",

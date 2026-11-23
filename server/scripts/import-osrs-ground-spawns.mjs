@@ -60,6 +60,16 @@ const OWNED_EXACT = new Map([
   ["8794:1212:3093:0", "Scrambled.Quest.js per-player saw"],
   ["960:1238:3076:0", "Scrambled.Quest.js per-player planks"],
   ["245:3018:10353:0", "WineOfZamorak.plugin.js Deep Wilderness Dungeon wine"],
+  // Its 7-tick respawn is taken from the Deep Wilderness Dungeon page and captures (4abb2bfb7).
+  ["23489:3018:10353:0", "WineOfZamorak.plugin.js Deep Wilderness Dungeon wine"],
+  // c166cbdf2 gave the base tinderboxes a 2-tick respawn with the Castle Wars supplies rework.
+  ...[[2431,3072,0],[2423,3080,1],[2368,3135,0],[2376,3127,1]]
+    .map(([x,y,z]) => ["590:"+x+":"+y+":"+z, "CastleWars supplies: 2-tick base tinderboxes"]),
+]);
+// Rows beside a same-item legacy spawn that live captures show as a second, separate spawn:
+// rsprox (https://rsprox.net/database) has an obj_add on both tiles in the same recordings.
+const SEPARATE_FROM_NEARBY_LEGACY = new Map([
+  ["1511:2959:3205:0", "Rimmington logs: 2958,3205 and 2959,3205 both added in 37 recordings"],
 ]);
 // Rows inside instanced areas whose plugins build the floor per player or party.
 const OWNED_LOCATIONS = [
@@ -208,11 +218,27 @@ export function importSpawns(source, existing) {
         }
         continue;
       }
+      const matches = present.every(d => (d.amt ?? 1) === row.quantity && d.respawn === row.infobox_respawn_ticks
+        && (d.members === true) === row.members);
+      // A single legacy entry on the row's exact tile is that spawn: take its amount, timer and
+      // world membership from the source. Several entries on one tile, or fields of an unexpected
+      // type, stay reported for review rather than guessed.
+      const [legacy] = present;
+      const wellTyped = present.length === 1
+        && (!Object.hasOwn(legacy, "amt") || (Number.isInteger(legacy.amt) && legacy.amt > 0))
+        && Number.isInteger(legacy.respawn) && legacy.respawn >= 0
+        && (!Object.hasOwn(legacy, "members") || typeof legacy.members === "boolean");
+      if (!matches && wellTyped) {
+        const index = existing.indexOf(legacy);
+        const { id, location, amt: _amt, respawn: _respawn, members: _members, ...rest } = definitions[index];
+        definitions[index] = { id, location, amt:row.quantity, respawn:row.infobox_respawn_ticks,
+          ...(row.members ? { members:true } : {}), ...rest };
+      }
       for (const entry of entries) {
-        entry.status = present.every(d => (d.amt ?? 1) === row.quantity && d.respawn === row.infobox_respawn_ticks
-          && (d.members === true) === row.members)
-          ? "existing-exact" : "existing-exact-state-discrepancy";
+        entry.status = matches ? "existing-exact"
+          : wellTyped ? "existing-source-state-reconciled" : "existing-exact-state-discrepancy";
         entry.existingCount = present.length;
+        if (!matches && wellTyped) entry.previousState = { amt:legacy.amt, respawn:legacy.respawn, members:legacy.members };
       }
       continue;
     }
@@ -230,7 +256,7 @@ export function importSpawns(source, existing) {
     // A legacy spawn of the same item within two tiles is most likely this row placed slightly off.
     // Adding the row would double the spawn, so it is held for placement review instead.
     const sameItemNearby = nearby.filter(d => d.id === row.id);
-    if (sameItemNearby.length) {
+    if (sameItemNearby.length && !SEPARATE_FROM_NEARBY_LEGACY.has(key)) {
       for (const entry of entries) {
         entry.status = "near-legacy-placement-review";
         entry.nearbyLegacy = sameItemNearby;
@@ -249,7 +275,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Every source-clean ground row (not under a Scenery object spawns heading, no unresolved reason, no alias conflict, not owned by a quest or instance) with explicit infobox ticks and no tile override; members rows carry the loader membership gate; rows with a same-item legacy spawn within two tiles are held for placement review; legacy entries preserved except exact source-proven pickup reward projections and audited Temple of Ikov staff state reconciliation from pinned source (alias provenance retained).",
+    policy:"Every source-clean ground row (not under a Scenery object spawns heading, no unresolved reason, no alias conflict, not owned by a quest or instance) with explicit infobox ticks and no tile override; members rows carry the loader membership gate; rows with a same-item legacy spawn within two tiles are held for placement review; a single legacy entry on a row's exact tile takes the row's amount, timer and membership; legacy entries otherwise preserved except exact source-proven pickup reward projections and audited Temple of Ikov staff state reconciliation from pinned source (alias provenance retained).",
     counts, rows:report } };
 }
 

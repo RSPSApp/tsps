@@ -38,7 +38,7 @@ import { examineSlot, isBankItemMenu, itemTarget } from "./bankMenus";
 const EDIT_TAGS_MENU_OPTION = "Edit-tags";
 const MAX_RESULT_COUNT = 250;
 const SEARCH_BANK_INPUT_TEXT =
-    "Show items whose names or tags contain the following text:<br>" + "(To show only tagged items, start your search with 'tag:')";
+    "Show items whose names or tags contain the following text:<br>(To show only tagged items, start your search with 'tag:')";
 const searchBankInputTextFound = (n: number) =>
     `Show items whose names or tags contain the following text: (${n} found)<br>` +
     "(To show only tagged items, start your search with 'tag:')";

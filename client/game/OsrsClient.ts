@@ -3123,7 +3123,7 @@ export class OsrsClient {
                 // IF_SETROTATESPEED: yaw speed in the high short, x speed in the low, per cycle.
                 const w = this.widgetManager?.getWidgetByUid(Number(payload.uid) | 0);
                 if (w) {
-                    w.modelRotationSpeed = ((Number(payload.speedY) | 0) & 0xffff) << 16 | ((Number(payload.speedX) | 0) & 0xffff);
+                    w.modelRotationSpeed = (((Number(payload.speedY) | 0) & 0xffff) << 16) | ((Number(payload.speedX) | 0) & 0xffff);
                     this.widgetManager.invalidateWidgetRender(w, "server-set-rotate-speed");
                 }
             } else if (payload?.action === "set_colour") {

@@ -621,8 +621,8 @@ export const ANAGRAM_CLUES: readonly AnagramClue[] = [
             .build(),
         AnagramClue.builder()
             .itemId(ItemID.TRAIL_MEDIUM_ANAGRAM_EXP3)
-            .textProvider((plugin) => plugin.getClient().getVarbitValue(VarbitID.MM2_SLAYER_MASTER) == 0 ? "I EVEN" : "VESTE")
-            .npcProvider((plugin) => plugin.getClient().getVarbitValue(VarbitID.MM2_SLAYER_MASTER) == 0 ? "Nieve" : "Steve")
+            .textProvider((plugin) => plugin.getClient().getVarbitValue(VarbitID.MM2_SLAYER_MASTER) === 0 ? "I EVEN" : "VESTE")
+            .npcProvider((plugin) => plugin.getClient().getVarbitValue(VarbitID.MM2_SLAYER_MASTER) === 0 ? "Nieve" : "Steve")
             .location(new WorldPoint(2432, 3422, 0))
             .area("The slayer master in Gnome Stronghold")
             .question("How many farming patches are there in Gnome stronghold?")

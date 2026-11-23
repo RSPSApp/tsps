@@ -750,6 +750,56 @@ test("a dead creature lies as its corpse; Harvest beside the hull puts its loot 
   }
 });
 
+test("a killed creature respawns its usual time after its corpse's two minutes, harvested or not", () => {
+  const player = captain();
+  const { boat, owned, loc, hotspot } = aboardWithCannon(player);
+  const harvested = seaNpc(TERN, outboard(boat, owned, hotspot.id, loc, 1));
+  const left = seaNpc(TERN, outboard(boat, owned, hotspot.id, loc, 3));
+  const spawns = [harvested.getLocation().getX(), left.getLocation().getX()];
+  const respawned = new Map();
+  /** The game loop's add and remove phases, for these two terns and their respawns. */
+  const world = () => {
+    const removing = World.getRemoveNPCQueue();
+    for (const npc of [harvested, left]) {
+      if (removing.includes(npc)) {
+        removing.splice(removing.indexOf(npc), 1);
+        World.getNpcs().remove(npc);
+      }
+    }
+    const adding = World.getAddNPCQueue();
+    for (let i = adding.length - 1; i >= 0; i--) {
+      if (adding[i].getId() !== TERN || !spawns.includes(adding[i].getSpawnPosition().getX())) continue;
+      const x = adding.splice(i, 1)[0].getSpawnPosition().getX();
+      respawned.set(x, [...(respawned.get(x) ?? []), World.processCycle]);
+    }
+  };
+  try {
+    const killedAt = World.processCycle;
+    for (const tern of [harvested, left]) {
+      tern.getCombat().addDamage(player, tern.getMaxHitpoints());
+      tern.setHitpoints(0);
+    }
+    for (let i = 0; i < 4; i++) { tick(); world(); }
+    assert.equal(harvested.getId(), 15229, "the tern's corpse");
+    Loot.harvest({ player, npc: harvested, clickType: 1, handled: false });
+    for (let i = 0; i < 4; i++) { tick(); world(); }
+    assert.equal(harvested.isRegistered(), false, "a harvested corpse leaves the water");
+    assert.equal(left.isRegistered(), true, "an unharvested one stays its two minutes");
+    for (let i = 0; i < 260; i++) { tick(); world(); }
+    assert.equal(left.isRegistered(), false);
+    const unharvested = respawned.get(spawns[1]);
+    const afterHarvest = respawned.get(spawns[0]);
+    assert.equal(unharvested?.length, 1, "the unharvested tern respawns once");
+    assert.equal(afterHarvest?.length, 1, "the harvested tern respawns once");
+    assert.equal(afterHarvest[0], unharvested[0], "on the unharvested corpse's time");
+    const respawn = harvested.getDefinition().getRespawn();
+    assert.ok(unharvested[0] - killedAt >= Loot.CORPSE_TICKS + respawn, "two minutes, then its respawn time");
+  } finally {
+    for (const npc of [harvested, left]) if (npc.isRegistered()) World.getNpcs().remove(npc);
+    leave(player);
+  }
+});
+
 test("bounty tasks: accepting sets the counter, harvesting rolls the part, a port master takes them in", () => {
   const player = captain();
   const task = portCommon.DATA.tasks.find((candidate) => candidate.id === 449);

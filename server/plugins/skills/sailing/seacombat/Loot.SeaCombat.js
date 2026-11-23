@@ -38,7 +38,7 @@ const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 const SOUND_LOOT = 2581;
 const SCRIPT_LOOT_FLY = 7192;
 
-/** corpse npc -> `{ owner, creature, harvesting }`. */
+/** corpse npc -> `{ owner, creature, harvesting, expiresAt }`. */
 const corpses = new Map();
 /** Combat clears its damage record during death; keep applied damage, not rolled cannon XP. */
 const damageAtDeath = new WeakMap();
@@ -105,7 +105,8 @@ function onDeath(event) {
   landedDamage.delete(npc);
   // Synthetic/admin deaths without a combat snapshot retain the usual solo reward.
   const damageShare = damage ? Math.max(0, Math.min(1, applied / Math.max(1, damage.hitpoints))) : 1;
-  corpses.set(npc, { owner: killer, creature, damageShare, damagers: event.damagers ?? [killer], harvesting: false });
+  const expiresAt = common.core().World.getProcessCycle() + CORPSE_TICKS;
+  corpses.set(npc, { owner: killer, creature, damageShare, damagers: event.damagers ?? [killer], harvesting: false, expiresAt });
   later(npc, CORPSE_TICKS, () => corpses.delete(npc));
 }
 
@@ -189,7 +190,7 @@ function loot(player, npc, corpse) {
     if (!generated.handled && all.some((drop) => drop.itemId === claim.itemId && drop.amount > 0)) claim.commit();
   }
   corpses.delete(npc);
-  removeCorpse(npc);
+  removeCorpse(npc, corpse);
   if (generated.handled) return;
   const kept = all.filter((drop) => Number.isInteger(drop.itemId) && drop.amount > 0);
   // Wiki (Seed box, Herb sack, Rune pouch), 6 May 2026: they "now work with looting Sailing creatures"; the
@@ -230,10 +231,19 @@ function loot(player, npc, corpse) {
 }
 
 /** The corpse goes once harvested; the creature still respawns on the unharvested corpse's time. */
-function removeCorpse(npc) {
+function removeCorpse(npc, corpse) {
   npc.setScriptedMovement?.(false);
   npc.setFlag?.(IGNORE_CLIPPING_FLAG, false);
-  if (npc.isRegistered?.()) common.core().World.getRemoveNPCQueue().push(npc);
+  if (!npc.isRegistered?.()) return;
+  const { NPCRespawnTask, TaskManager, World } = common.core();
+  World.getRemoveNPCQueue().push(npc);
+  // Its respawn is the living creature, not the corpse.
+  npc.setNpcTransformationId(-1);
+  // The death task's own respawn waits on the corpse's time, and skips a corpse already gone.
+  const respawn = npc.getDefinition().getRespawn();
+  if (respawn <= 0) return;
+  const corpseLeft = Math.max(0, corpse.expiresAt - World.getProcessCycle());
+  TaskManager.submit(new NPCRespawnTask(npc, corpseLeft + respawn));
 }
 
 function attach(api) {

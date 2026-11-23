@@ -18,13 +18,14 @@
  */
 const DAMAGE_PER_TICK = 4;
 /**
- * Every level of the dungeon, west of the Alchemical Hydra's chamber (level 0, x 1356+). Level 1's
- * cave floor runs on to x 1360 (the drakes at 1356,10239; collision map flood fill).
+ * Every level of the dungeon, west of the Alchemical Hydra's chamber (level 0, x 1356+). By
+ * collision map flood fill, level 1's cave floor runs on to x 1361 (the drakes at 1356,10239) and
+ * level 2's to x 1356 (y 10194-10203, beside the hellhounds).
  */
 const DUNGEON = [
   { minX: 1230, maxX: 1355, minY: 10130, maxY: 10290, z: 0 },
-  { minX: 1230, maxX: 1360, minY: 10130, maxY: 10290, z: 1 },
-  { minX: 1230, maxX: 1355, minY: 10130, maxY: 10290, z: 2 },
+  { minX: 1230, maxX: 1361, minY: 10130, maxY: 10290, z: 1 },
+  { minX: 1230, maxX: 1356, minY: 10130, maxY: 10290, z: 2 },
 ];
 /** The Tasakaal's chamber the elevator lands in, the one cool room. */
 const ENTRANCE_CHAMBER = { minX: 1303, maxX: 1320, minY: 10185, maxY: 10214, z: 0 };

@@ -367,7 +367,9 @@
     "flaskOfFervour": {
       "league": 6, "key": "flask-of-fervour", "toolName": "Flask of fervour", "tool": "FLASK_OF_FERVOUR",
       "cooldownTicks": 300, "cooldownCutPerTenDamage": 1, "_cooldownCut": "0.6s (one tick) off the cooldown for every 10 damage of one hit (Wiki).",
-      "explosions": 3, "explosionTicks": [1, 3, 5], "radius": 3, "prayerFraction": 0.6, "pvpPrayerFraction": 0.3, "immuneTicks": 4, "spared": ["Yama"],
+      "explosions": 3, "explosionTicks": [1, 3, 5], "radius": 3, "prayerFraction": 0.6, "pvpPrayerFraction": 0.3, "immuneTicks": 4, "spared": ["Yama", "Blood Moon", "Blue Moon", "Eclipse Moon", "Enraged Blood Moon", "Enraged Blue Moon", "Enraged Eclipse Moon", "Fragment of Seren"],
+      "sparedIds": [9446, 9447, 9448, 9449, 9450, 9451, 9452, 9453, 9454, 9455, 9466, 9467, 9468, 9469, 9470],
+      "_sparedIds": "The Nightmare and Phosani Nightmare Sleepwalkers, Parasites and Husks (Wiki: no damage). By id, as the cache gives the names Sleepwalker, Parasite and Husk to NPCs of other content too.",
       "_explosionTicks": "237/01158: the impacts land 1, 3 and 5 ticks after the Activate tick.",
       "impactDelays": [20, 30, 40], "_impactDelays": "237/01158: each explosion's impact map_anims, on the 8 lines out from the player's tile, at 1, 2 and 3 tiles with these client-cycle delays.",
       "animation": "vengeance_spell_anim_nostalling", "graphic": "leagues_6_sigil_of_life", "impact": "leagues_6_sigil_of_life_impact", "sound": 165,

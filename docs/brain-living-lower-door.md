@@ -30,5 +30,5 @@ unimplemented until it can be captured.
 `server/tests/brain-living-lower-door.test.cjs` sends native object-option and Bind packets and
 advances `World.process()`. It checks east-west crossings from both sides, local-player face syncs,
 the delayed walked approach, cancellation when Bind interrupts the commit, sound timing and the
-two-tick restore on the real cache map. An agent MCP check on the worktree server confirmed the walked approach (open two ticks after
+two-tick restore on the real cache map. An agent MCP check on the worktree server (port 39824, because Windows holds 49824) confirmed the walked approach (open two ticks after
 arrival), both in-reach crossings on the input tick, and the two-tick restore.

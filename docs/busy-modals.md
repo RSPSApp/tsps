@@ -44,8 +44,9 @@ Moving between the CA screens keeps busy at 1, with no 0 in between
   - "restart" on the first tick after a busy modal closes;
   - "run" otherwise.
 - On a restart, woodcutting, mining, fishing, shooting-star mining and dense runestone go back
-  through their start path: the start message and animation, then a fresh click's first-roll
-  delay. An overdue roll doesn't go off the moment the modal closes.
+  through their start path: the start animation (and, for fishing and woodcutting, the start
+  message), then a fresh click's first-roll delay. Star and rock mining swing without the
+  "You swing your pick" line, as 227/00562 t179 shows. An overdue roll doesn't go off the moment the modal closes.
 - Timing: the restart runs on the task tick after the close, one tick later than live's busy-0
   tick in 227/00555.
 

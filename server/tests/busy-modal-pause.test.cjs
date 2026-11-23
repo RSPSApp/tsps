@@ -150,9 +150,15 @@ test("mining waits under the diary journal and resumes after it closes", async (
   await send(f, DIARY_PACKET);
   ticks(15);
   assert.equal(f.mined(), 0, "no ore while the journal is open");
+  const lines = [];
+  const sender = f.p.getPacketSender();
+  const typed = sender.sendTypedMessage.bind(sender);
+  t.mock.method(sender, "sendTypedMessage", (type, text, ...rest) => { lines.push(String(text)); return typed(type, text, ...rest); });
   await send(f, CLOSE_PACKET);
   ticks(1);
   assert.equal(f.mined(), 0, "the overdue roll does not go off on the first tick");
+  ticks(2);
+  assert.equal(lines.some((line) => /swing your pick/.test(line)), false, "the restart swing has no line (live 227/00562 t179)");
   ticks(15);
   assert.ok(f.mined() > 0, "the rock gives ore after the close");
 });

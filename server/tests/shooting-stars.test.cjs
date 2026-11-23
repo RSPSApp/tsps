@@ -652,7 +652,8 @@ test("a busy modal holds star mining; after it closes the swing comes again, the
   runTicks(1, () => 0.1);
   assert.equal(dust(), before, "no roll on the first tick after the close");
   runTicks(1, () => 0.1);
-  assert.ok(p.log.includes(Mining.SWING_MESSAGE), "the swing comes again, without a re-click");
+  assert.ok(p.log.some((line) => /^anim \d+$/.test(line) && line !== "anim 65535"), "the swing animation comes again, without a re-click");
+  assert.equal(p.log.includes(Mining.SWING_MESSAGE), false, "without the swing line (live 227/00562 t179)");
   runTicks(6, () => 0.1);
   assert.ok(dust() > before, "dust resumes");
 });

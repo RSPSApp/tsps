@@ -779,7 +779,10 @@ function spam(player, text) {
 /** The first swing lands the tick after the click (rsprox recordings: message and animation at +1). */
 function swing(player, state) {
   state.swingTick = undefined;
-  spam(player, SWING_MESSAGE);
+  // A restart after a busy modal swings without the line (rsprox 227/00562 t179, a star).
+  const silent = state.silentSwing === true;
+  state.silentSwing = false;
+  if (!silent) spam(player, SWING_MESSAGE);
   player.performAnimation(swingAnimation(state.pickaxe, state.rock));
 }
 
@@ -913,9 +916,11 @@ class MiningTask extends Task {
       const pause = modalPause(state, player);
       if (pause === "paused") continue;
       if (pause === "restart") {
-        // After a busy modal: start over as a click on the rock does (startMining): a swing next
-        // tick, then the first roll (SkillActions.modalPause).
+        // After a busy modal: start over as a click on the rock does (startMining): the swing
+        // animation next tick, without its line, then the first roll (SkillActions.modalPause).
+        // The rock, pickaxe and inventory checks run on that tick before the swing.
         state.swingTick = miningTick + 1;
+        state.silentSwing = true;
         state.nextRollTick = firstRollTick(player, state.pickaxe, state.rock);
         continue;
       }

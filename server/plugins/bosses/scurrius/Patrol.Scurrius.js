@@ -36,21 +36,23 @@ function start(api) {
     execute() {
       if (tick % SPAWN_INTERVAL === 0) {
         const rat = spawn(api, RAT, ...ROUTE[0], Direction.NORTH);
-        if (rat) rats.set(rat, tick);
+        if (rat) {
+          // The recording shows it walking through the player at (3275, 9870).
+          rat.setFlag("movement:walk-through-entities", true);
+          rats.set(rat, tick);
+        }
       }
       for (const [rat, startTick] of rats) {
         const age = tick - startTick;
         if (age === end + END_DELAY) {
           api.removeNpc(rat);
           rats.delete(rat);
-        } else if (age > 0) {
-          // The engine skips some offscreen NPC updates. Resume at the scheduled step on re-entry.
-          const previous = positions[Math.min(age - 1, end)];
-          if (!rat.getLocation().equals(previous)) rat.moveTo(previous);
-          if (age <= end) {
-            rat.setMovementSteps(1);
-            rat.getMovementQueue().addSteps(positions[age]);
-          }
+        } else if (age > 0 && age <= end) {
+          // The spawn turn has passed, even if no client was near enough to place the NPC yet.
+          if (age === 1) rat.setNeedsPlacement(false);
+          rat.setMovementSteps(1);
+          // A checkpoint keeps this NPC in the engine's active movement set while offscreen.
+          rat.getMovementQueue().addCheckpoint(positions[age]);
         }
       }
       tick++;

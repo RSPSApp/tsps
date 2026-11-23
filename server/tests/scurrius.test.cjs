@@ -409,6 +409,25 @@ test("Aldo swaps every spine for an antique lamp", () => {
   prompts.length = 0;
   npcHooks.get("Historian Aldo").Trade({ player: single, npc: { getId: () => Common.ALDO_ID } });
   assert.equal(prompts[0].title, "Trade Scurrius' spine for a combat lamp?");
+
+  prompts.length = 0;
+  const lines = [];
+  single.getDialogueManager = () => ({
+    startDialogues(chain) { lines.push(...chain.getDialogues().values()); },
+  });
+  const use = {
+    player: single, itemId: ItemIdentifiers.SCURRIUS_SPINE,
+    target: { getId: () => Common.ALDO_ID }, definition: { getName: () => "Historian Aldo" },
+  };
+  Aldo._test.useSpine(use);
+  assert.equal(use.handled, true);
+  assert.equal(lines[0].getText(), "Ah, a Scurrius spine! A captivating subject indeed. I'll eagerly take them off your hands, and rest assured, you will be well rewarded.");
+  lines[1].send(single);
+  assert.equal(prompts[0].title, "Trade Scurrius' spine for a combat lamp?");
+  prompts[0].pairs[1]();
+  assert.equal(single.inventory.get(ItemIdentifiers.SCURRIUS_SPINE), 0);
+  assert.equal(single.inventory.get(ItemIdentifiers.ANTIQUE_LAMP_35), 1);
+  assert.equal(lines[2].getText(), "Aldo gives you an Antique lamp for Scurrius' spine.");
 });
 
 test("the lamp offers its seven skills over two pages", () => {
@@ -970,9 +989,8 @@ test("the controller stays put and patrol rats take 48 steps, linger for three t
       let at = new Location(x, y, z);
       const npc = {
         id, face, getLocation: () => at, isRegistered: () => active.has(npc),
-        setScriptedMovement() {}, setMovementSteps() {}, setUntargetable() {}, setFlag() {},
-        moveTo(location) { at = location; },
-        getMovementQueue: () => ({ addSteps(location) { at = location; } }),
+        setScriptedMovement() {}, setMovementSteps() {}, setUntargetable() {}, setFlag() {}, setNeedsPlacement() {},
+        getMovementQueue: () => ({ addCheckpoint(location) { at = location; } }),
       };
       spawned.push(npc);
       active.add(npc);

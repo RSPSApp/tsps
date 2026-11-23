@@ -200,8 +200,10 @@ rolled 0..251 for the projectile, which let an unshielded hit exceed the real ma
 This is fixed: the projectile rolls 0..148. A shielded hit only plays the glyph's block
 animation: the [Ancestral Glyph](https://oldschool.runescape.wiki/w/Ancestral_Glyph) "can
 sustain TzKal-Zuk's attacks indefinitely", and only the Jal-Xil, Jal-Zek and JalTok-Jad he
-summons wear down its 600 hitpoints. (This audit first took Zuk's own hits off the glyph too,
-which broke it after about eight attacks; #6594.) Attack speeds (10, 7 enraged), the 480/240 summon thresholds,
+summons wear down its 600 hitpoints. rsprox 1754, 1000557, 1000603, 1000608, 3299 and 1001311
+agree: the glyph blocks 4-8 Zuk attacks with no hitsplat, and its first damage comes from a
+summon. (This audit first took Zuk's own hits off the glyph too, which broke it after about
+eight attacks; #6594.) Attack speeds (10, 7 enraged), the 480/240 summon thresholds,
 the 600-hitpoint shield, the 15-24 healer ticks and the 5-10 healer blasts already matched.
 
 ## Quest bosses

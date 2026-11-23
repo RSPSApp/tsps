@@ -224,12 +224,18 @@ export class Bank extends ItemContainer {
         return Number.isFinite(capacity) ? Math.max(0, Math.min(Bank.MAX_SLOTS, capacity)) : Bank.MAX_SLOTS;
     }
 
-    /** Slots in use across the tabs, placeholders included (not the search results). */
+    /**
+     * Slots in use across the tabs (not the search results): placeholders take a slot as items do, and
+     * so do the gaps the open bank shows (see shownSlots). Gaps only exist in the open bank: the next
+     * opening closes any left once it is closed, so until then they hold no space.
+     */
     public static usedSlots(player: Player): number {
+        const open = Bank.isOpen(player);
         let used = 0;
         for (let tab = 0; tab < Bank.TOTAL_BANK_TABS; tab++) {
             if (tab === Bank.BANK_SEARCH_TAB_INDEX) continue;
-            for (const item of player.getBank(tab).getItems()) if (item != null && item.getId() >= 0) used++;
+            const bank = player.getBank(tab);
+            used += open ? bank.shownSlots() : bank.getValidItems().length;
         }
         return used;
     }
@@ -270,12 +276,26 @@ export class Bank extends ItemContainer {
         return this.items.length - 1;
     }
 
+    /** A gap in this tab, or a new slot while the player's space allows one. */
     public getEmptySlot(): number {
-        return this.roomLeft() > 0 ? this.freeSlot() : -1;
+        return this.roomLeft() > 0 ? this.freeSlot() : this.gaps()[0] ?? -1;
     }
 
     public getFreeSlots(): number {
-        return Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft());
+        return Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft() + this.gaps().length);
+    }
+
+    /**
+     * The empty slots this tab still shows. Only the open bank has them: once it is closed a gap holds no
+     * space (see usedSlots), so it is no extra room either.
+     */
+    private gaps(): number[] {
+        const player = this.getPlayer();
+        if (player == null || !Bank.isOpen(player)) return [];
+        const gaps: number[] = [];
+        const shown = this.shownSlots();
+        for (let slot = 0; slot < shown; slot++) if ((this.items[slot]?.getId() ?? -1) < 0) gaps.push(slot);
+        return gaps;
     }
 
     /** A full bank accepts reserved placeholders or live stacks with matching metadata. */
@@ -290,6 +310,26 @@ export class Bank extends ItemContainer {
 
     public isEmpty(): boolean {
         return this.items.every((item) => item == null || item.getId() < 0);
+    }
+
+    /**
+     * The slots this tab shows: up to its last item. A stack withdrawn whole with placeholders off
+     * leaves its slot empty, and that gap stays in the tab (a deposit can fill it) until the bank is
+     * opened again; an empty slot after the last item ends the tab instead.
+     */
+    public shownSlots(): number {
+        for (let slot = this.items.length - 1; slot >= 0; slot--) {
+            const item = this.items[slot];
+            if (item != null && item.getId() >= 0) return slot + 1;
+        }
+        return 0;
+    }
+
+    /** Takes `slot` out of the tab: the items after it move up one, gaps included. */
+    public removeSlot(slot: number): Bank {
+        this.items.splice(slot, 1);
+        this.items.push(new Item(-1, 0));
+        return this;
     }
 
     /** Moves the empty slots to the end, keeping the items' order (placeholders stay). */
@@ -363,7 +403,7 @@ export class Bank extends ItemContainer {
                 // Delete placeholder.
                 if (amount <= 0) {
                     player.getBank(itemTab).getItems()[slot].setId(-1);
-                    player.getBank(player.getCurrentBankTab()).sortItems().refreshItems();
+                    player.getBank(itemTab).sortItems().refreshItems();
                     return;
                 }
 
@@ -538,22 +578,25 @@ export class Bank extends ItemContainer {
     /**
      * The bank in the order the client lays it out: tabs 1-9, then the main
      * tab. The cache scripts find each tab's range from the tab-size varbits
-     * (4171-4179), so this order must match them. Placeholders are included.
+     * (4171-4179), so this order must match them. Placeholders are included, and so are the empty
+     * slots a tab still shows (see shownSlots), as items with id -1.
      */
     public static layout(player: Player): Array<{ tab: number; slot: number; item: Item }> {
         const entries: Array<{ tab: number; slot: number; item: Item }> = [];
         for (const tab of [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]) {
-            player.getBank(tab).getItems().forEach((item, slot) => {
-                if (item != null && item.getId() >= 0 && item.getAmount() >= 0) {
-                    entries.push({ tab, slot, item });
-                }
-            });
+            const bank = player.getBank(tab);
+            const items = bank.getItems();
+            const shown = bank.shownSlots();
+            for (let slot = 0; slot < shown; slot++) {
+                entries.push({ tab, slot, item: items[slot] ?? new Item(-1, 0) });
+            }
         }
         return entries;
     }
 
     /** The item the client shows: a placeholder shows its faded cache placeholder. */
     public static displayItemId(item: Item): number {
+        if (item.getId() < 0) return -1;
         if (item.getAmount() > 0) return item.getId();
         const placeholderId = item.getDefinition().getPlaceholderId();
         if (placeholderId >= 0) return placeholderId;
@@ -627,6 +670,7 @@ export class Bank extends ItemContainer {
                     item.setMeta(null);
                 }
             }
+            player.getBank(index).sortItems();
         }
         player.getBank(0).refreshItems();
         GameConstants.PLAYER_PERSISTENCE.requestSave(player, "bank-placeholder-clear");
@@ -775,10 +819,8 @@ export class Bank extends ItemContainer {
             return;
         }
         target.setItem(slot, entry.item.clone());
-        entry.item.setId(-1);
-        entry.item.setMeta(null);
-        entry.item.setAmount(0);
-        player.getBank(entry.tab).refreshItems();
+        // A moved item leaves no gap behind.
+        player.getBank(entry.tab).removeSlot(entry.slot).refreshItems();
     }
 
     /**
@@ -789,7 +831,7 @@ export class Bank extends ItemContainer {
      */
     private static moveItem(player: Player, fromClientSlot: number, itemId: number, toClientSlot: number) {
         const from = Bank.resolveDisplaySlot(player, fromClientSlot);
-        const to = Bank.resolveDisplaySlot(player, toClientSlot);
+        const to = Bank.resolveDropSlot(player, toClientSlot);
         if (!from || !to || Bank.displayItemId(from.item) !== itemId || fromClientSlot === toClientSlot) return;
         const bank = player.getBank(to.tab);
         if (from.tab !== to.tab && !player.insertModeReturn()) {
@@ -806,9 +848,7 @@ export class Bank extends ItemContainer {
                 return;
             }
             bank.setItem(fromSlot, from.item.clone());
-            from.item.setId(-1);
-            from.item.setMeta(null);
-            from.item.setAmount(0);
+            player.getBank(from.tab).removeSlot(from.slot);
         }
         Bank.rearrange(player, bank, fromSlot, to.slot);
         if (from.tab !== to.tab) {
@@ -816,7 +856,14 @@ export class Bank extends ItemContainer {
         }
     }
 
+    /** The bank item at a display slot; an empty slot (a gap) resolves to nothing. */
     public static resolveDisplaySlot(player: Player, clientSlot: number): { tab: number; slot: number; item: Item } | null {
+        const entry = Bank.resolveDropSlot(player, clientSlot);
+        return entry != null && entry.item.getId() >= 0 ? entry : null;
+    }
+
+    /** The bank slot at a display slot, a gap included: where a dragged item can land. */
+    public static resolveDropSlot(player: Player, clientSlot: number): { tab: number; slot: number; item: Item } | null {
         if (!Number.isInteger(clientSlot) || clientSlot < 0) return null;
         return Bank.layout(player)[clientSlot] ?? null;
     }
@@ -1284,7 +1331,7 @@ export class Bank extends ItemContainer {
      * @return
      */
     public static isEmpty(bank: Bank): boolean {
-        return bank.sortItems().getValidItems().length <= 0;
+        return bank.isEmpty();
     }
 
     /**
@@ -1410,9 +1457,9 @@ export class Bank extends ItemContainer {
         this.getPlayer().setStatus(PlayerStatus.BANKING);
         this.getPlayer().setEnteredSyntaxAction(null);
 
-        this.sortItems();
-
         const player = this.getPlayer();
+        // Opening the bank closes the gaps that withdrawals left in every tab.
+        if (opening) for (let tab = 0; tab <= 9; tab++) player.getBank(tab).sortItems();
         const sender = player.getPacketSender();
         const varps = {
             548: 1,
@@ -1429,7 +1476,7 @@ export class Bank extends ItemContainer {
             6590: player.getBankQuantityMode(),
         };
         for (let tab = 1; tab <= 9; tab++) {
-            varbits[4170 + tab] = player.getBank(tab).getValidItems().length;
+            varbits[4170 + tab] = player.getBank(tab).shownSlots();
         }
         player.setInterfaceId(Bank.MAIN_INTERFACE_ID);
         sender.sendInterfaceScript(917, [-1, -2])
@@ -1471,7 +1518,7 @@ export class Bank extends ItemContainer {
         // so re-sending our idea of it would yank the player back to that tab
         // on every item movement. It is sent where the tab actually changes.
         for (let tab = 1; tab <= 9; tab++) {
-            sender.sendVarbit(4170 + tab, this.getPlayer().getBank(tab).getValidItems().length);
+            sender.sendVarbit(4170 + tab, this.getPlayer().getBank(tab).shownSlots());
         }
         sender.sendBankSnapshot().sendItemContainer(this.getPlayer().getInventory(), Bank.INVENTORY_INTERFACE_ID);
         // Plugins that label the side panel's item ops (if1-if4 bits) recompute them here.

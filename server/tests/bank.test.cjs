@@ -1500,3 +1500,98 @@ test("Bank.contains counts the item in every tab, past a placeholder and across 
   player.getBank(Bank.BANK_SEARCH_TAB_INDEX).add(new Item(LAVA_BATTLESTAFF, 1, { charges: 5 }), false);
   assert.equal(Bank.contains(player, new Item(LAVA_BATTLESTAFF, 3)), false);
 });
+
+test("as captured: with placeholders off, a stack withdrawn whole leaves an empty slot the next new deposit fills", () => {
+  const player = createPlayer();
+  player.getBank(0).add(new Item(LAVA_BATTLESTAFF, 1), false);
+  player.getBank(0).add(new Item(TRIDENT, 1), false);
+  player.getBank(0).add(new Item(MYSTIC_LAVA_STAFF, 1), false);
+
+  Bank.withdraw(player, TRIDENT, 1, 1, 0);
+
+  assert.deepEqual(Bank.layout(player).map(({ item }) => Bank.displayItemId(item)), [LAVA_BATTLESTAFF, -1, MYSTIC_LAVA_STAFF]);
+  assert.equal(Bank.resolveDisplaySlot(player, 2).item.getId(), MYSTIC_LAVA_STAFF, "later items keep their slots");
+
+  player.getInventory().add(new Item(UNRELATED, 1), false);
+  Bank.deposit(player, UNRELATED, player.getInventory().getSlotForItemId(UNRELATED), 1, false);
+  assert.deepEqual(Bank.layout(player).map(({ item }) => item.getId()), [LAVA_BATTLESTAFF, UNRELATED, MYSTIC_LAVA_STAFF]);
+});
+
+test("as captured: a tab's size counts its gaps, and emptying its last slot shortens it", () => {
+  const player = createPlayer();
+  for (const id of [LAVA_BATTLESTAFF, TRIDENT, MYSTIC_LAVA_STAFF]) player.getBank(1).add(new Item(id, 1), false);
+  player.getBank(0).add(new Item(UNRELATED, 1), false);
+  const tabSize = () => player.varbits.filter(([id]) => id === 4171).at(-1)?.[1];
+
+  Bank.withdraw(player, TRIDENT, 1, 1, 1);
+  assert.equal(tabSize(), 3);
+  assert.deepEqual(Bank.layout(player).map(({ tab, item }) => [tab, item.getId()]),
+    [[1, LAVA_BATTLESTAFF], [1, -1], [1, MYSTIC_LAVA_STAFF], [0, UNRELATED]]);
+
+  Bank.withdraw(player, MYSTIC_LAVA_STAFF, 2, 1, 1);
+  assert.equal(tabSize(), 1, "the gap before it now ends the tab too");
+  assert.deepEqual(Bank.layout(player).map(({ tab, item }) => [tab, item.getId()]),
+    [[1, LAVA_BATTLESTAFF], [0, UNRELATED]]);
+});
+
+test("an op on an empty bank slot does nothing", () => {
+  const player = createPlayer();
+  player.getBank(0).add(new Item(LAVA_BATTLESTAFF, 1), false);
+  player.getBank(0).add(new Item(TRIDENT, 1), false);
+  Bank.withdraw(player, LAVA_BATTLESTAFF, 0, 1, 0);
+  player.getInventory().resetItems();
+
+  Bank.handleWidgetAction(player, { groupId: Bank.MAIN_INTERFACE_ID, childId: 12, buttonNum: 1, option: "Withdraw-1", slot: 0 });
+
+  assert.equal(player.getInventory().getFreeSlots(), 28);
+  assert.equal(player.getBank(0).getAmount(TRIDENT), 1);
+});
+
+test("as captured: opening the bank again closes the gaps, while a refresh of the open bank keeps them", async (t) => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  await CachePipeline.initialize(process.cwd());
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const player = new Player(null);
+  player.setUsername("bankgaps");
+  t.mock.method(player, "getSession", () => ({ sendClientPacket: () => true }));
+  const world = require("../dist/game/definition/WorldDefinition");
+  t.mock.method(world, "getWorldDefinition", () => ({ name: "Test" }));
+  for (const id of [LAVA_BATTLESTAFF, TRIDENT, MYSTIC_LAVA_STAFF]) player.getBank(0).add(new Item(id, 1), false);
+  player.getBank(1).add(new Item(UNRELATED, 1), false);
+  player.getBank(1).add(new Item(FAMILY_CHARGED, 1), false);
+  player.getBank(0).open();
+  const ids = () => Bank.layout(player).map(({ item }) => item.getId());
+
+  Bank.withdraw(player, TRIDENT, 1, 1, 0);
+  player.getBank(1).getItems()[0].setId(-1);
+  player.getBank(0).open();
+  assert.deepEqual(ids(), [-1, FAMILY_CHARGED, LAVA_BATTLESTAFF, -1, MYSTIC_LAVA_STAFF]);
+
+  player.getPacketSender().sendInterfaceRemoval();
+  player.getBank(0).open();
+  assert.deepEqual(ids(), [FAMILY_CHARGED, LAVA_BATTLESTAFF, MYSTIC_LAVA_STAFF]);
+});
+
+test("moving an item to another tab closes only its own slot; a withdrawal's gap stays", () => {
+  const player = createPlayer();
+  for (const id of [LAVA_BATTLESTAFF, TRIDENT, MYSTIC_LAVA_STAFF, UNRELATED]) player.getBank(0).add(new Item(id, 1), false);
+  player.getBank(1).add(new Item(FAMILY_CHARGED, 1), false);
+  Bank.withdraw(player, LAVA_BATTLESTAFF, 0, 1, 0);
+  // Display slots: tab 1's item, then the main tab's gap, Trident, Mystic lava staff, Unrelated.
+  drag(player, BANK_ITEMS, 3, MYSTIC_LAVA_STAFF, BANK_TABS, Bank.TAB_BUTTON_SLOT_OFFSET + 1);
+  assert.deepEqual(Bank.layout(player).map(({ tab, item }) => [tab, item.getId()]),
+    [[1, FAMILY_CHARGED], [1, MYSTIC_LAVA_STAFF], [0, -1], [0, TRIDENT], [0, UNRELATED]]);
+});
+
+test("an item dragged onto a gap moves into it; a drag from a gap moves nothing", () => {
+  const player = createPlayer();
+  bankOf(player, [A, B, C]);
+  Bank.withdraw(player, B, 1, 1, 0);
+
+  drag(player, BANK_ITEMS, 1, -1, BANK_ITEMS, 2);
+  assert.deepEqual(Bank.layout(player).map(({ item }) => item.getId()), [A, -1, C]);
+
+  drag(player, BANK_ITEMS, 2, C, BANK_ITEMS, 1);
+  assert.deepEqual(Bank.layout(player).map(({ item }) => item.getId()), [A, C]);
+  assert.equal(Bank.resolveDisplaySlot(player, 1).item.getId(), C);
+});

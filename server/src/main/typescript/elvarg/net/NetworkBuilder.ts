@@ -939,7 +939,7 @@ export class ClientConnection {
         case "bank_move":
           if (this.player && Bank.isOpen(this.player)) {
             const from = Bank.resolveDisplaySlot(this.player, packet.from);
-            const to = Bank.resolveDisplaySlot(this.player, packet.to);
+            const to = Bank.resolveDropSlot(this.player, packet.to);
             if (from && to && from.tab === to.tab) {
               this.player.setInsertMode(packet.mode === "insert");
               Bank.rearrange(this.player, this.player.getBank(from.tab), from.slot, to.slot);

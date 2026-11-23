@@ -279,3 +279,18 @@ test('actual kill respawns a fresh normal fight in the same instance and logout 
   assert.equal(h.p.getLocation().getX(), 2063);
   assert.equal(h.p.getAttribute(h.Common.INSIDE_ATTRIBUTE), false);
 });
+test('the island plays Scar Tissue, Colossus of the Deep while the Leviathan is fought, then Scar Tissue again', t => {
+  const h = H.harness(t), Site = require('../plugins/bosses/leviathan/Site.Leviathan');
+  h.api.onCustomEvent('quest:is-complete', request => { request.complete = true; });
+  Site.travel({ player: h.p, objectId: 49212 });
+  const session = Site.sessionOf(h.p);
+  t.after(() => session.end());
+  const [x, y, z] = h.Common.data.site.islandArrival;
+  assert.deepEqual(h.core.Music.tracksAt(x, y, z, false), [750], "the copied map's own track, which the island would play");
+  assert.equal(session.area.getMusicTrack(h.p), 745, 'Scar Tissue on arrival');
+  Site.climb({ player: h.p, objectId: 47593 });
+  assert.ok(session.fight?.alive());
+  assert.equal(session.area.getMusicTrack(h.p), 750, 'Colossus of the Deep during the fight');
+  session.fight.over = true;
+  assert.equal(session.area.getMusicTrack(h.p), 745, 'Scar Tissue once the fight is over');
+});

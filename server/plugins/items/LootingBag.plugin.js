@@ -402,11 +402,12 @@ function destroyBag(event) {
 /**
  * Wiki: "Only one looting bag can be in a player's possession at a time" - carried or banked, open
  * or closed (the Agility dispenser's bag goes only to a player without one "in their inventory or
- * bank"). The bank's search tab only mirrors the other tabs.
+ * bank"). The bank's search tab only mirrors the other tabs, and a bank placeholder (the bag's id
+ * at amount 0, which a bank's getValidItems keeps) owns nothing.
  */
 function ownsBag(player) {
   const banks = (player.getBanks?.() ?? []).filter((bank, tab) => bank && tab !== core.Bank.BANK_SEARCH_TAB_INDEX);
-  return [player.getInventory(), ...banks].some((container) => container.getValidItems().some(isBag));
+  return [player.getInventory(), ...banks].some((container) => container.getValidItems().some((item) => isBag(item) && item.getAmount() > 0));
 }
 
 /** "looting-bag:owned" `{ player, owned }`: whether the player already has a bag, for what hands one out. */

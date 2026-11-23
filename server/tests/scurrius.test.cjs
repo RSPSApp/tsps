@@ -60,7 +60,7 @@ before(async () => {
   new NpcDefinitionLoader().load();
   gamevals = new Gamevals();
   Scurrius.register(api);
-  require("../plugins/items/ratboneweapons/Creation.RatBoneWeapons").attach(api);
+  require("../plugins/items/RatBoneWeapons.plugin").register(api);
 });
 
 function createPlayer({ x = 3295, y = 9867, hp = 50, maxHp = 99, items = {} } = {}) {

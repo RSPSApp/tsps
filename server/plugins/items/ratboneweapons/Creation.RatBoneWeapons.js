@@ -22,6 +22,9 @@ const ALDO_NPC = 12606;
 const NO_MATERIALS = /^If the player does not have the materials in their inventory:$/i;
 const HAS_MATERIALS = /^If the player does have the materials in their inventory:$/i;
 const HANDED = /^Aldo handed the (Bone mace|Bone shortbow|Bone staff) to you\.$/;
+const CONFIRM_WEAPON = /^Okay, I'll make you the Bone (mace|shortbow|staff)\.$/;
+const WEAPON_PROMPT = "Which bone weapon do you want?";
+const NEED_MATERIALS = "Come back when you have all the necessary materials.";
 
 let core = null;
 
@@ -133,10 +136,53 @@ function canPay(player) {
   return player.getInventory().getAmount(core.ItemIdentifiers.COINS) >= ALDO_FEE;
 }
 
+function makeable(player) {
+  return canPay(player) ? Common.weapons.filter(weapon => hasMaterials(player, weapon)) : [];
+}
+
+function aldoRefusal(player) {
+  const { DialogueChainBuilder, NpcDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+    .add(new NpcDialogue(0, ALDO_NPC, NEED_MATERIALS, ALDO)));
+}
+
+/** Trade enters the materials branch of the same generated Talk-to transcript. */
+function offerAldoWeapon(api, offer) {
+  const { player, npc } = offer;
+  if (!makeable(player).length) return;
+  offer.makeWeapon = () => {
+    if (!makeable(player).length) return aldoRefusal(player);
+    api.emitCustomEvent("npc-dialogue:start", {
+      player, npc, npcId: core.NpcIdentifiers.HISTORIAN_ALDO_2, variant: "standard-dialogue", exact: true,
+      select(steps) {
+        return steps.flatMap(step => step.options ?? [])
+          .flatMap(option => option.steps ?? [])
+          .find(step => step.type === "condition" && HAS_MATERIALS.test(step.text))?.steps;
+      },
+    });
+  };
+}
+
+function aldoWeaponMenu(request) {
+  if (!isAldo(request.definition) || request.prompt !== WEAPON_PROMPT) return;
+  const labels = new Set(makeable(request.player).map(weapon => weapon.name + "."));
+  request.options = request.options.filter(option => labels.has(option.text));
+  request.direct = true;
+}
+
+function aldoWeaponLine(request) {
+  if (!isAldo(request.definition)) return;
+  const match = CONFIRM_WEAPON.exec(request.text);
+  if (!match) return;
+  request.speakerId = ALDO_NPC;
+  request.speakerName = ALDO;
+  if (match[1] === "shortbow") request.expression = 567; // RSProx 227/83 tick 20928.
+}
+
 /** Aldo's "materials in their inventory" conditions: any one weapon's, and his fee. */
 function dialogueCondition({ player, definition, text }) {
   if (!isAldo(definition)) return null;
-  const any = canPay(player) && Common.weapons.some((weapon) => hasMaterials(player, weapon));
+  const any = makeable(player).length > 0;
   if (NO_MATERIALS.test(String(text).trim())) return !any;
   if (HAS_MATERIALS.test(String(text).trim())) return any;
   return null;
@@ -151,9 +197,7 @@ function dialogueAction(message) {
   const { player } = message;
   message.handled = true;
   if (!weapon || !canPay(player) || !hasMaterials(player, weapon)) {
-    const { DialogueChainBuilder, NpcDialogue } = core;
-    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
-      .add(new NpcDialogue(0, message.npc?.getId?.() ?? ALDO_NPC, "Come back when you have all the necessary materials.")));
+    aldoRefusal(player);
     return;
   }
   player.getInventory().deleteNumber(core.ItemIdentifiers.COINS, ALDO_FEE);
@@ -166,6 +210,9 @@ function attach(api) {
   api.onItemOnItem(spineOnItem, { noted: false });
   api.onItemOnObject("Scurrius' spine", "Anvil", spineOnAnvil, { noted: false });
   api.onNpcDialogueCondition(dialogueCondition);
+  api.onCustomEvent("rat-bone-weapons:aldo-trade", offerAldoWeapon.bind(null, api));
+  api.onCustomEvent("npc-dialogue:menu", aldoWeaponMenu);
+  api.onCustomEvent("npc-dialogue:line", aldoWeaponLine);
   api.onCustomEvent("npc-dialogue:action", dialogueAction);
 }
 

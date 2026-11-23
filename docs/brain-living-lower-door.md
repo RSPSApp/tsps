@@ -27,12 +27,8 @@ The cache also places loc 22007 at (3817,2847,0), in the same region. Recording 
 establishes behavior at (3817,2841,0); behavior at the second placement is unrecorded and remains
 unimplemented until it can be captured.
 
-`server/tests/brain-living-lower-door.test.cjs` sends native object-option, interface and Bind
-packets and advances `World.process()`. It checks east-west crossings from both sides, local-player
-face syncs, the delayed walked approach, cancellation when Bind or Equipment Stats interrupts the
-commit, sound timing and
-the two-tick restore on the real cache map. View equipment stats cancels only the pending route:
-an ongoing attack keeps its target (live 227/1000539 t1780-1781). Live, that button is refused in
-combat with "You cannot open the equip screen while in combat!"; that refusal is not implemented
-yet. An agent MCP check on the worktree server confirmed the walked approach (open two ticks after
+`server/tests/brain-living-lower-door.test.cjs` sends native object-option and Bind packets and
+advances `World.process()`. It checks east-west crossings from both sides, local-player face syncs,
+the delayed walked approach, cancellation when Bind interrupts the commit, sound timing and the
+two-tick restore on the real cache map. An agent MCP check on the worktree server confirmed the walked approach (open two ticks after
 arrival), both in-reach crossings on the input tick, and the two-tick restore.

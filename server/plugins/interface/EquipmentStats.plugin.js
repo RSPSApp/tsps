@@ -3,7 +3,6 @@ const { Equipment } = require("../../src/main/typescript/elvarg/game/model/conta
 const { EquipPacketListener } = require("../../src/main/typescript/elvarg/net/packet/impl/EquipPacketListener");
 const { examineItem } = require("../../src/main/typescript/elvarg/game/content/ExaminePrice");
 const { WeaponProfiles } = require("../../src/main/typescript/elvarg/game/content/combat/WeaponProfile");
-const { TaskManager } = require("../../src/main/typescript/elvarg/game/task/TaskManager");
 
 // OpenRune cache names: component.wornitems:equipment and interface.equipment.
 const OPEN_EQUIPMENT_STATS_BUTTON = (387 << 16) | 1;
@@ -235,11 +234,6 @@ function update(player) {
 }
 
 function open(player) {
-  // Worn-items' View button cancels a pending object or NPC route (live 227/1000561 t12351-12352).
-  // Cancel it now, since an Escape in the same input batch may remove this modal before the next
-  // tick. Only the walk-to task is cancelled: the combat target, following and repeating skilling
-  // actions are kept (live 227/1000539 t1780-1781: the attack continues).
-  TaskManager.cancelWalkToTasks(player.getIndex());
   if (player.busy?.()) {
     player.getPacketSender().sendInterfaceRemoval();
   }

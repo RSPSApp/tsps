@@ -173,60 +173,6 @@ test("Living lower door: running approach opens two ticks after arrival", async 
   assert.equal(crossing?.faceDirection, undefined, "the eastward crossing has no local face mask");
 });
 
-test("Equipment Stats interrupts a delayed door Open even when Escape closes it in the same turn", async (t) => {
-  settle();
-  assert.ok(isShut());
-  const f = nativeActor(t, [DOOR.x - 1, DOOR.y + 3], true);
-  f.player.getPacketSender().sendChatboxInterface(231);
-  const sender = f.player.getPacketSender();
-  let statsModalOpens = 0;
-  const sendSubInterface = sender.sendSubInterface.bind(sender);
-  t.mock.method(sender, "sendSubInterface", (...args) => {
-    if (args[1] === 84) statsModalOpens++;
-    return sendSubInterface(...args);
-  });
-
-  await f.connection.dispatch([{ type: "object_option", id: DOOR.id, x: DOOR.x, y: DOOR.y, clickType: 1 }]);
-  let arrivalCycle;
-  for (let turns = 0; turns < 12 && arrivalCycle == null; turns++) {
-    core.World.process();
-    if (at(f.player)[0] === DOOR.x - 1 && at(f.player)[1] === DOOR.y) arrivalCycle = core.World.getProcessCycle();
-  }
-  assert.ok(Number.isInteger(arrivalCycle), "the approached player reaches the doorway");
-  core.World.process(); // Captured waiting/facing turn; the delayed Open is still pending.
-  assert.ok(isShut());
-
-  await f.connection.dispatch([
-    { type: "widget_action", widgetId: (387 << 16) | 1, groupId: 387, childId: 1, buttonNum: 1, simple: true },
-    { type: "interface_close" },
-  ]);
-  core.World.process();
-  assert.equal(statsModalOpens, 1, "View equipment stats opened modal 84 before Escape");
-  assert.equal(f.player.getInterfaceId(), -1, "Escape closed the modal in the same input batch");
-
-  assert.deepEqual(at(f.player), [DOOR.x - 1, DOOR.y], "the interrupted interaction does not revive");
-  assert.ok(isShut(), "the door remains closed after the replacement modal closes");
-  assert.deepEqual(f.sounds.filter(([, id]) => id === 62), [], "the canceled Open sends no sound");
-});
-
-test("Equipment Stats cancels only the pending route: an ongoing attack keeps its target", async (t) => {
-  // Live 227/1000539 t1780-1781: the attack continues after View equipment stats is clicked.
-  settle();
-  const f = nativeActor(t, [DOOR.x - 1, DOOR.y + 3]);
-  const npc = core.NPC.create(3106, new core.Location(DOOR.x - 1, DOOR.y + 4, DOOR.z));
-  assert.equal(core.World.getNpcs().add(npc), true);
-  t.after(() => { npc.getCombat().reset?.(); if (npc.isRegistered()) core.World.getNpcs().remove(npc); });
-  f.player.getCombat().attack(npc);
-  core.World.process();
-  assert.ok(f.player.getCombat().getTarget() === npc, "the attack has started");
-
-  await f.connection.dispatch([
-    { type: "widget_action", widgetId: (387 << 16) | 1, groupId: 387, childId: 1, buttonNum: 1, simple: true },
-  ]);
-  core.World.process();
-  assert.ok(f.player.getCombat().getTarget() === npc, "View equipment stats keeps the combat target");
-});
-
 test("Zanaris Market charges only after its frozen opener's crossing is accepted", async (t) => {
   const market = { id: core.ObjectIdentifiers.MAGIC_DOOR_2, x: 2469, y: 4438, z: 0 };
   core.RegionManager.loadMapFiles(market.x, market.y);

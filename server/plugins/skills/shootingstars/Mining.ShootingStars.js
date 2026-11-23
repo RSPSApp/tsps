@@ -20,6 +20,7 @@
  * 99), 32 Mining xp per success (16 on free-to-play worlds), any star size.
  */
 
+const { modalPause } = require("../SkillActions");
 const Common = require("./Common.ShootingStars");
 const Star = require("./Star.ShootingStars");
 const Rewards = require("./Rewards.ShootingStars");
@@ -199,6 +200,15 @@ function tick(random = Math.random) {
     if (inventory.isFull() && inventory.getAmount(Common.core.ItemIdentifiers.STARDUST) <= 0) {
       inventory.full();
       stop(player);
+      continue;
+    }
+    // A busy modal holds the mining, then it starts over as a Mine click does: the swing next
+    // tick, the first roll an interval after (rsprox 227/00562 t153-182; SkillActions.modalPause).
+    const pause = modalPause(session, player);
+    if (pause === "paused") continue;
+    if (pause === "restart") {
+      session.swingTick = world.tick + 1;
+      session.nextAttemptTick = Infinity;
       continue;
     }
     if (session.swingTick !== undefined) {

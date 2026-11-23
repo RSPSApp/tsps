@@ -7,14 +7,16 @@ t1155-1190 (the diary; busy stays 1 across diary-to-diary swaps), 227/00100 t886
 236/03915 t405 (CA), 227/1000296 t5356 (equipment).
 
 While one is open, a repeating gathering action waits. After the modal closes it starts over
-without a re-click: its start message and animation come again, then a full interval to the
-first roll.
+without a re-click: its start message and animation come again, then the same first-roll delay
+as a fresh click.
 
 - 227/00555 t24898-t24920, karambwan fishing under the Collection log: no catch while open. On
   the tick busy goes to 0 (t24918), "You lower the Karambwan vessel." and the vessel animation
   come again. The first catch is at t24920.
-- 227/00562 t153-t182, mining under the Collection log: no swing while open. The close is at
-  t176, a fresh swing at t179, and the first ore at t182.
+- 227/00562 t153-t182, shooting-star mining under the Collection log: no swing while open. The
+  close input is at t176, busy goes to 0 at t177, the mining animation plays again at t179
+  (without the swing message), and the first stardust comes at t182. Rock mining is inferred
+  from this.
 - 227/01757 t8544-t8548, fishing under the diary journal: the diary was open for only two ticks
   between two catches, so it crossed no roll and shows no pause.
 
@@ -41,9 +43,11 @@ Moving between the CA screens keeps busy at 1, with no 0 in between
   - "paused" while a busy modal is open, or while a level-up dialogue holds the session;
   - "restart" on the first tick after a busy modal closes;
   - "run" otherwise.
-- On a restart, woodcutting, mining and fishing go back through their start path: the start
-  message and animation, then the first roll a full interval later. An overdue roll doesn't go
-  off the moment the modal closes.
+- On a restart, woodcutting, mining, fishing, shooting-star mining and dense runestone go back
+  through their start path: the start message and animation, then a fresh click's first-roll
+  delay. An overdue roll doesn't go off the moment the modal closes.
+- Timing: the restart runs on the task tick after the close, one tick later than live's busy-0
+  tick in 227/00555.
 
 Tests: `server/tests/busy-modal-pause.test.cjs`.
 

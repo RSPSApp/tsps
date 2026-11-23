@@ -979,7 +979,10 @@ class FishingTask extends Task {
     this.cycle++;
     fishingTick = this.cycle;
 
+    // A session restarted this tick is re-added to the map, which the loop would visit again.
+    const restarted = new Set();
     for (const [player, session] of this.activeSessions) {
+      if (restarted.has(player)) continue;
       if (!player || !player.isRegistered() || player.getHitpoints() <= 0) {
         this.activeSessions.delete(player);
         continue;
@@ -997,8 +1000,10 @@ class FishingTask extends Task {
       if (pause === "restart") {
         // After a busy modal: start over as a click on the spot does (SkillActions.modalPause).
         const spot = World.getNpcs().get(session.npcIndex);
-        if (spot && spot.getId() === session.npcId) startFishing(player, spot, session.tool, this.activeSessions);
-        else stopFishing(this.activeSessions, player);
+        if (spot && spot.getId() === session.npcId) {
+          restarted.add(player);
+          startFishing(player, spot, session.tool, this.activeSessions);
+        } else stopFishing(this.activeSessions, player);
         continue;
       }
 

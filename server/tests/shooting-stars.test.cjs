@@ -629,3 +629,30 @@ test("a reward-currency shop buys nothing back; a tokkul shop still does", (t) =
   assert.equal(tokkul.coal, 0, "the tokkul shop buys it");
   assert.ok(tokkul.paid > 0, "for tokkul");
 });
+
+test("a busy modal holds star mining; after it closes the swing comes again, then the rolls", () => {
+  // rsprox 227/00562: no dust while the modal is open (t154-177), a fresh swing two ticks after
+  // the close and dust three ticks after that (docs/busy-modals.md).
+  const star = landedStar(9);
+  star.discoveredBy = "someone";
+  const p = miner();
+  let busy = false;
+  p.inBusyModal = () => busy;
+  click(p, star, "Mine");
+  runTicks(4, () => 0.1);
+  const dust = () => p.getInventory().getAmount(core.ItemIdentifiers.STARDUST);
+  const before = dust();
+  assert.ok(before > 0, "mining gives dust before the modal");
+  busy = true;
+  p.log.length = 0;
+  runTicks(12, () => 0.1);
+  assert.equal(dust(), before, "no dust while the modal is open");
+  assert.deepEqual(p.log, [], "no swing while it is open");
+  busy = false;
+  runTicks(1, () => 0.1);
+  assert.equal(dust(), before, "no roll on the first tick after the close");
+  runTicks(1, () => 0.1);
+  assert.ok(p.log.includes(Mining.SWING_MESSAGE), "the swing comes again, without a re-click");
+  runTicks(6, () => 0.1);
+  assert.ok(dust() > before, "dust resumes");
+});

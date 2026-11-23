@@ -248,3 +248,22 @@ test('kill messages print m:ss.cc with precise timing on, m:ss with it off', (t)
   kill(p, false, 150);
   assert.match(p.sent.messages.at(-1), /Fight duration: <col=ff0000>1:30\.00<\/col> \(new personal best\)$/);
 });
+
+test("the dream is silent except while the Nightmare is fought, which plays The Bane of Ashihama", (t) => {
+  const { Music } = require('../dist/game/Music');
+  const dream = new Dream.Dream(false);
+  t.after(() => dream.end());
+  const { minX, minY, plane } = Common.data.arena;
+  assert.deepEqual(Music.tracksAt(minX, minY, plane, false), [663], "the copied arena's own track, which the dream would play on arrival");
+  assert.equal(dream.area.getMusicTrack(), Music.SILENCE_TRACK, 'silent on arrival');
+  for (const [state, track] of [['waiting', Music.SILENCE_TRACK], ['fighting', 663], ['slain', Music.SILENCE_TRACK]]) {
+    dream.fight = { state };
+    assert.equal(dream.area.getMusicTrack(), track, state);
+  }
+  dream.fight = null;
+  assert.equal(Music.trackNames()[Common.data.music.fight], 'The Bane of Ashihama', 'a real track');
+  for (const exit of ['exit', 'phosaniExit', 'respawn']) {
+    const [x, y, z] = Common.data.lobby[exit];
+    assert.deepEqual(Music.tracksAt(x, y, z, false), [Common.data.music.lobby], `waking at ${exit}: the sanctuary's own track plays`);
+  }
+});

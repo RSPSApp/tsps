@@ -47,7 +47,7 @@ Logging out in a dream puts the player back in the sanctuary. A death in one wak
 
 | Moment | What happens | Source |
 | --- | --- | --- |
-| She wakes | "The Nightmare has awoken!", animation 8611, the barriers turn to their fight variant (37731), music 2941 (The Bane of Ashihama). Six ticks later the boss HUD with her shield (colours 132/623/853); two later her phase form, and she attacks. | capture |
+| She wakes | "The Nightmare has awoken!", animation 8611, the barriers turn to their fight variant (37731), and The Bane of Ashihama (663) starts and unlocks. The dream is silent before she wakes and again once she is slain (the dream area's `getMusicTrack`). Six ticks later the boss HUD with her shield (colours 132/623/853); two later her phase form, and she attacks. | capture |
 | Shield | 2,000, +200 a player past five, at most 19,600; Phosani's 400. Hits show as hitsplat 18 and on headbar 13 (140 wide). | Wiki; capture |
 | Shield fails | "As the Nightmare's shield fails, the totems in the area are activated.", her weak form, totems ready (Charge), the HUD on her 2,400 hitpoints (3,200 Phosani's) in the usual colours, the totem overlay (413) in the HUD's side slot, sound 4320. Hits on her: "Your attacks have no effect on the Nightmare." | capture |
 | Totems | 300 each (+30 a player past five, at most 2,640; Phosani's 200); magic charges twice as fast. Hitsplat 22, headbar 36 (100 wide), script 3315 per change. "That totem is already charged."; Phosani's also "The south east totem is fully charged." | Wiki; capture |

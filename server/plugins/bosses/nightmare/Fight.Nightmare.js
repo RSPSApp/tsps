@@ -133,7 +133,7 @@ class Fight {
 
   awaken(reawaken) {
     if (this.stopped || !this.boss?.isRegistered()) return;
-    const { awaken, countdown, music } = Common.data;
+    const { awaken, countdown } = Common.data;
     this.state = "fighting";
     this.startTick = this.tick;
     this.teamSize = Math.max(1, this.players().length);
@@ -146,8 +146,6 @@ class Fight {
     for (const player of this.players()) {
       player.sendMessage(reawaken ? countdown.reawoken : countdown.awoken);
       Common.sounds(player, awaken.sounds);
-      Common.api.emitCustomEvent("music:unlock-track", { player, trackId: music.fight });
-      player.getPacketSender().sendSong(music.fight);
     }
     this.at(awaken.hudTicks, () => {
       this.shieldMax = this.shieldFor(1);
@@ -414,7 +412,7 @@ class Fight {
   }
 
   won() {
-    const { kill, npcs, varbits, music } = Common.data;
+    const { kill, npcs, varbits } = Common.data;
     this.state = "over";
     const ticks = this.tick - this.startTick;
     const players = this.players();
@@ -437,7 +435,6 @@ class Fight {
       });
     } else {
       this.state = "slain";
-      for (const player of players) player.getPacketSender().sendSong(music.lobby);
     }
   }
 

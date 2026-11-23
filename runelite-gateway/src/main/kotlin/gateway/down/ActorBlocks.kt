@@ -17,6 +17,8 @@ class ActorBlock {
     var appearance: AppearanceBlock? = null
     var exactMove: ExactMove? = null
     var resetPath = false
+    /** A temporary move speed for this tick's step (1 walk, 2 run; tsps's `temporaryMovementType`). */
+    var temporaryMoveSpeed: Int? = null
     val spotAnims = ArrayList<SpotAnim>()
     var tint: Tint? = null
     var faceTile: Pair<Int, Int>? = null
@@ -81,6 +83,7 @@ object ActorBlocks {
     private const val PLAYER_FORCE_MOVEMENT = 0x400
     private const val PLAYER_MOVEMENT_TYPE = 0x1000
     private const val PLAYER_MOVEMENT_FLAG = 0x2000
+    private const val TELEPORT_MOVE_SPEED = 127
     private const val PLAYER_SPOT_ANIM = 0x10000
 
     private const val NPC_FACE_ENTITY = 0x08
@@ -125,8 +128,10 @@ object ActorBlocks {
         }
         if (mask and PLAYER_FORCE_MOVEMENT != 0) block.exactMove = exactMove(reader)
         if (mask and PLAYER_MOVEMENT_FLAG != 0) {
-            reader.u8s()
-            block.resetPath = true
+            // tsps writes 127 for a placement (resetPath) and 1 or 2 for a step forced to walk or run
+            // (an agility line walked two tiles at a time, Darkness of Hallowvale's washing line).
+            val speed = reader.u8s()
+            if (speed == TELEPORT_MOVE_SPEED) block.resetPath = true else block.temporaryMoveSpeed = speed
         }
         if (mask and PLAYER_SPOT_ANIM != 0) {
             repeat(reader.u8a()) {

@@ -381,8 +381,12 @@ test("the push: a cutscene with the boat sliding south, then 2585 = 2 and 2587 =
   assert.deepEqual(seen.anims, [810], "human_push (t480)");
   assert.ok(seen.sounds.some(([id, delay]) => id === 3000 && delay === 30));
   assert.ok(seen.cameras.length >= 1);
-  tick(10);
-  assert.equal(startY - boat.getLocation().getY(), 10, "ten tiles south, a tile a tick (t481-490)");
+  for (let i = 1; i <= 10; i++) {
+    tick(1);
+    assert.equal(startY - boat.getLocation().getY(), i, `a tile south on tick ${i} (t481-490)`);
+    // Live's npc teleport with the jump flag clear: clients slide the boat down the ramp (#6639).
+    assert.equal(boat.isTeleportingWithoutJump(), true, `tick ${i}'s move is sent without the jump flag`);
+  }
   tick(1);
   assert.equal(varbit(p, VARBIT.BOAT_BROKEN), 2);
   assert.equal(boat.isRegistered(), false, "the boat NPC goes with the scene");

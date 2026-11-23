@@ -52,4 +52,17 @@ class ActorBlocksTest {
         assertEquals(292, block.kits[11])
         assertEquals(-1, block.objs[11])
     }
+
+    @Test
+    fun `the movement flag keeps a temporary walk apart from a placement`() {
+        // tsps encodePlayerSync: mask 0x2000 (extended, so 0x80 then 0x20), then byteS(type).
+        // 1 is a step forced to walk (Darkness of Hallowvale's washing line, issue 6639): before,
+        // every value read as a placement, so RuneLite snapped the player two tiles a step.
+        val walk = ActorBlocks.player(BlockReader(byteArrayOf(0x80.toByte(), 0x20, (128 - 1).toByte())))
+        assertEquals(1, walk.temporaryMoveSpeed)
+        assertEquals(false, walk.resetPath)
+        val placement = ActorBlocks.player(BlockReader(byteArrayOf(0x80.toByte(), 0x20, (128 - 127).toByte())))
+        assertEquals(null, placement.temporaryMoveSpeed)
+        assertEquals(true, placement.resetPath)
+    }
 }

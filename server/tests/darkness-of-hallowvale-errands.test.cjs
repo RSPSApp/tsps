@@ -14,6 +14,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
+const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
 const { STAGE, VARBIT, impliedVarbits, VARS_ATTRIBUTE, SAVE_VERSION_ATTRIBUTE } = require("../plugins/quests/hallowvale/State.DarknessOfHallowvale");
 
 const STAGE_ATTRIBUTE = "quest.darkness_of_hallowvale.stage";
@@ -110,6 +111,18 @@ const current = (player) => player.getDialogueManager().getCurrent();
 const text = (player) => current(player)?.getText?.() ?? null;
 const head = (player) => current(player)?.getNpcId?.() ?? null;
 const cont = (player) => player.getDialogueManager().advance();
+
+/** The werewolf lines from the open one on: [head, text] each, continuing past each. */
+function werewolfLines(player) {
+  const lines = [];
+  while (current(player)?.getNpcId?.() === 3827 || current(player)?.getNpcId?.() === 3826) {
+    lines.push([head(player), text(player)]);
+    if (lines.length === 5) break;
+    cont(player);
+    tick(1);
+  }
+  return lines;
+}
 const menu = (player) => core.MultiChatboxPrompt.getPending(player);
 const amount = (player, id) => player.getInventory().getAmount(id);
 
@@ -172,6 +185,22 @@ test("Vertida (world 3773): objectbox 193 with the message, the item and 90 on t
   assert.ok(continueToMenu(f.player));
   choose(f.player, "Okay, thanks.");
   assert.equal(amount(f.player, MESSAGE), 1, "one message only");
+});
+
+test("Inspect on Vertida's message: an objectbox with the message and the Wiki's description (#6639)", (t) => {
+  const f = actor(t, STAGE.VERTIDA_MESSAGE, 3629, 9643);
+  f.player.getInventory().setItem(4, new core.Item(MESSAGE, 1));
+  const action = [2, 3, 4, 6, 7].map((op) => ItemActionPacketListener.resolveInventoryWidgetAction(MESSAGE, op))
+    .find((candidate) => candidate?.option === "Inspect");
+  assert.ok(action, "the cache's Inspect");
+  assert.equal(PM.emitItemAction({ player: f.player, item: f.player.getInventory().getItems()[4], itemId: MESSAGE, slot: 4,
+    interfaceId: (149 << 16), clickType: action.optionIndex, option: action.option, handled: false }), true);
+  assert.equal(f.chatboxes.at(-1), OBJECTBOX);
+  assert.equal(f.items.at(-1), MESSAGE);
+  assert.equal(text(f.player), "It's a short message from Vertida to Veliaf. It confirms that the Sanguinesti order of the"
+    + " Myreque is operational, but in need of support.");
+  assert.equal(amount(f.player, MESSAGE), 1, "kept");
+  assert.equal(stageOf(f.player), STAGE.VERTIDA_MESSAGE, "nothing else changes");
 });
 
 test("Vertida at 90 without the message gives another; with it she only reminds", (t) => {
@@ -269,7 +298,14 @@ test("the bush: the werewolf scene in its copy, Morytanian Mystery, 2591 = 0 and
   assert.ok(ownedNpcs(f.player).some((npc) => npc.getNpcTransformationId() === 3827), "3825 -> 3827 (t3599)");
   tick(2);
   assert.ok(f.mounts.includes(453), "the blackout (t3601)");
-  // The dump has the five "Shadowy figure" lines as unavailable; the scene goes straight to its end.
+  // The five "Shadowy figure" lines under the blackout, 3827's and 3826's heads in turn (t3601-3614, #6639).
+  assert.deepEqual(werewolfLines(f.player), [
+    [3827, "I told you to hide it properly!"],
+    [3826, "Not to worry! Now we've got more!"],
+    [3827, "Nah, we can't take him. It'll look suspicious."],
+    [3826, "Let's go! Have you got the tithe?"],
+    [3827, "Of course!"],
+  ]);
   for (let i = 0; i < 6 && !(text(f.player) ?? "").startsWith("Ouch"); i++) { cont(f.player); tick(1); }
   assert.equal(saved(f.player, VARBIT.BUSH), 0, "2591 = 0 (t3618)");
   assert.equal(stageOf(f.player), STAGE.WEREWOLVES_SEEN, "130 (t3621)");
@@ -279,6 +315,16 @@ test("the bush: the werewolf scene in its copy, Morytanian Mystery, 2591 = 0 and
   assert.equal(text(f.player), "Ouch! My poor head!");
   cont(f.player);
   assert.equal(f.varbits.get(12393), 0, "busy cleared (t3625)");
+});
+
+test("the bush: a female character hears the Wiki's \"take her\" (live said \"him\" to a male one, t3608)", (t) => {
+  const f = actor(t, STAGE.DREZEL_TALKED, 3391, 3480, 0, { [VARBIT.BUSH]: 1 });
+  f.player.getAppearance().setLook(0, 1); // Appearance.GENDER: female
+  assert.equal(f.player.getAppearance().isMale(), false);
+  assert.equal(click(f.player, 18121, "Search", [3390, 3480, 0]), true);
+  tick(19);
+  assert.ok(f.mounts.includes(453), "the blackout (t3601)");
+  assert.equal(werewolfLines(f.player)[2][1], "Nah, we can't take her. It'll look suspicious.");
 });
 
 test("the bush does nothing outside 120 with 2591 = 1", (t) => {

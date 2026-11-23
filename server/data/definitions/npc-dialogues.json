@@ -275559,24 +275559,29 @@
           "id": "x6Upep"
         },
         {
-          "type": "unavailable",
-          "id": "mrC25x"
+          "type": "line",
+          "speaker": "Shadowy figure (#1)",
+          "text": "I told you to hide it properly!"
         },
         {
-          "type": "unavailable",
-          "id": "fK9jzp"
+          "type": "line",
+          "speaker": "Shadowy figure (#2)",
+          "text": "Not to worry! Now we've got more!"
         },
         {
-          "type": "unavailable",
-          "id": "hhXCba"
+          "type": "line",
+          "speaker": "Shadowy figure (#1)",
+          "text": "Nah, we can't take her. It'll look suspicious."
         },
         {
-          "type": "unavailable",
-          "id": "hLtroU"
+          "type": "line",
+          "speaker": "Shadowy figure (#2)",
+          "text": "Let's go! Have you got the tithe?"
         },
         {
-          "type": "unavailable",
-          "id": "9N0d9j"
+          "type": "line",
+          "speaker": "Shadowy figure (#1)",
+          "text": "Of course!"
         },
         {
           "type": "action",

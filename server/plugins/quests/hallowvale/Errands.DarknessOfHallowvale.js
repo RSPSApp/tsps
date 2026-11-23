@@ -141,6 +141,9 @@ module.exports = function attachErrands(context) {
   });
   const TELEPORT_OPTION = "Does your offer of a teleport still stand?";
   const SHADOWY_FIGURE = "Shadowy figure";
+  /** Vertida's message's Inspect (Wiki: Transcript:Message (Vertida)). */
+  const MESSAGE_INSPECT = "It's a short message from Vertida to Veliaf. It confirms that the Sanguinesti order of the"
+    + " Myreque is operational, but in need of support.";
 
   // ---------------------------------------------------------------------------
   // The werewolf scene (t3574-3625)
@@ -458,7 +461,11 @@ module.exports = function attachErrands(context) {
     event.speakerId = second ? NPC.WEREWOLF_2 : NPC.WEREWOLF_3;
     event.speakerName = SHADOWY_FIGURE;
     event.expression = second ? EXPRESSION.WOLF_QUIZZICAL : EXPRESSION.WEREWOLF_ANGRY;
-    if (startsWith(event, LINE.TAKE_HIM)) event.before = () => werewolvesLookBack(player);
+    if (startsWith(event, LINE.TAKE_HIM)) {
+      event.before = () => werewolvesLookBack(player);
+      // The Wiki's transcript says "her"; live said "him" to a male character (t3608).
+      if (player.getAppearance?.()?.isMale?.()) event.text = String(event.text ?? step.text).replace(/\bher\b/, "him");
+    }
   }
 
   function werewolvesLookBack(player) {
@@ -693,6 +700,16 @@ module.exports = function attachErrands(context) {
     return null;
   }
 
+  /**
+   * Inspect on Vertida's message (Wiki: Transcript:Message (Vertida), a tbox with the message's
+   * picture; "Read" was renamed "Inspect" on 25 June 2020). Not captured; nothing else changes.
+   */
+  function inspectMessage({ player, itemId }) {
+    if (itemId !== ITEM.MESSAGE) return false;
+    common.itemBox(player, ITEM.MESSAGE, MESSAGE_INSPECT);
+    return true;
+  }
+
   function handleLogout({ player }) {
     if (!player) return;
     searching.delete(player);
@@ -714,5 +731,6 @@ module.exports = function attachErrands(context) {
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:menu", handleMenu);
+  api.onItemAction("Message", { Inspect: inspectMessage });
   api.onPlayerLogout(handleLogout);
 };

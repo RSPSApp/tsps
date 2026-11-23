@@ -159,7 +159,7 @@ const SHOCKWAVES = Object.freeze({ east: DATA.shockwaves.east.tiles, west: DATA.
  * east cave, east out of the west one (npc face_angle, instant, recordings 4052 and 4054).
  */
 const TAIL_FACE = Object.freeze({ east: 512, west: 1536 });
-/** Sunk, the tail is drawn as nothing: every model of its form replaced by -1 (recording 4052). */
+/** Sunk, the tail is drawn as nothing: its models replaced by -1, as recording 4052 (rev 237) sent them. */
 const TAIL_HIDDEN_MODELS = Object.freeze({ [NPC.TAIL]: [-1], [NPC.TAIL_BROKEN]: [-1, -1, -1] });
 
 const SYMBOLS = DATA.symbols;

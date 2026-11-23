@@ -1123,6 +1123,8 @@ export class NPC extends Mobile {
     /**
      * Holds the NPC at an angle (0 south, 512 west, 1024 north, 1536 east) on every viewer's
      * client (OSRS npc face angle); instant snaps to it instead of turning. Null stops sending it.
+     * It is resent every tick while held, so it is for NPCs that stand still (it would override
+     * walking and interaction facing).
      */
     public setFaceAngle(angle: number | null, instant = true): NPC {
         this.faceAngleState = angle === null ? null : { angle: angle & 2047, instant };

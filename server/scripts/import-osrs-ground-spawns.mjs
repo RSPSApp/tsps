@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /**
- * Import an audited ordinary subset of the osrsreboxed ItemSpawnLine export.
+ * Import the osrsreboxed ItemSpawnLine export into ground-items.json.
+ * Every source-clean row is imported unless it is owned by a quest/instance plugin (OWNED_EXACT,
+ * OWNED_LOCATIONS) or a same-item legacy spawn sits within two tiles (held for placement review).
  * Legacy definitions keep their fields and order except where the source explicitly identifies
  * a pickup replacement at the same tile. Raw and conditional rows remain in the report.
  *
- * Infobox Item documents respawn in ticks. For these audited ordinary rows with
- * no tile override, apply the item's explicit infobox value as the spawn's timer.
- * This is an import policy, not automatic inheritance supplied by the Wiki map template.
- * Only separately audited member pages use the existing row-membership loader gate;
- * untyped overrides never become guessed ticks.
+ * Infobox Item documents respawn in ticks. For rows with no tile override, apply the item's
+ * explicit infobox value as the spawn's timer. This is an import policy, not automatic
+ * inheritance supplied by the Wiki map template; untyped overrides never become guessed ticks.
+ * Members rows use the existing row-membership loader gate.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -16,69 +17,13 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const SOURCE_PIN = Object.freeze({
-  repository: "autismoyah-hub/osrsreboxed-db",
-  revision: "2bca5ed3a01c4d7c43c981aa9160981ed64edcfc",
-  exportSha256: "db79758a92e8f26b402258d13b65bbbbe8632d8802f4e2c26db6521761cb012e",
+  repository: "Bandit-HaxUnit/osrsreboxed-db",
+  revision: "6a0d09b19e5698d18f3b1adc594fe3d2a63e92d9",
+  exportSha256: "4c5619a145f07a8ca59496c046aac803bcef8c4249d4d842f87795c72eb75546",
   inputSha256: "00d8bcd0ed7d8d0340f69953fb73aa2e51813f03dbbc964b70d9872fe4ad048a",
 });
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "../..");
-// These pages' F2P rows have been checked as ordinary public ground spawns.
-// Access requirements (e.g. telegrab) do not by themselves make a spawn conditional.
-const AUDITED_ORDINARY_ITEMS = new Map([
-  ["Air rune", 556], ["Body rune", 559], ["Earth rune", 557],
-  ["Fire rune", 554], ["Mind rune", 558], ["Nature rune", 561], ["Water rune", 555],
-  ["Crossbow", 837], ["Shears", 1735],
-]);
-// These pinned member rows were separately checked as ordinary spawns.
-// Air remains held: its raw member row says it may be unobtainable.
-const AUDITED_MEMBER_ORDINARY_ITEMS = new Map([
-  ["Crossbow", 837], ["Shears", 1735], ["Earth rune", 557], ["Mind rune", 558], ["Fire rune", 554], ["Nature rune", 561],
-]);
-// Only this location-pinned selection was audited; the other Sea shell rows stay held.
-const EASTERN_CONCH_SHELL_TILES = new Set([
-  "3258:2481", "3257:2477", "3259:2469", "3261:2458", "3260:2451",
-  "3256:2449", "3261:2444", "3258:2437", "3262:2435",
-]);
-function isAuditedEasternConchShell(row) {
-  return row.page === "Sea shell" && row.id === 31395 && row.members === true
-    && row.location === "[[The Great Conch]] - eastern coast" && row.plane === 0
-    && row.quantity === 1 && row.infobox_respawn_ticks === 50
-    && EASTERN_CONCH_SHELL_TILES.has(`${row.x}:${row.y}`);
-}
-// Exact ordinary rows audited separately from these pages' scenery/quest spawns.
-const AUDITED_MEMBER_ORDINARY_ROWS = new Map([
-  ["Pestle and mortar:233:1667:3068:0", "[[Outer Fortis]]"],
-  ["Vial of water:227:1668:3068:0", "[[Outer Fortis]]"],
-  ["Bucket:1925:1667:3124:0", "[[Civitas illa Fortis]]"],
-  ["Bucket:1925:1644:3093:0", "[[Civitas illa Fortis]]"],
-  ["Pot:1931:1666:3124:0", "[[Civitas illa Fortis]]"],
-  ["Spade:952:1641:3052:0", "[[Outer Fortis]]"],
-  ["Spade:952:1405:2938:0", "[[Aldarin]]"],
-  ["Hammer:2347:1373:2949:0", "[[Aldarin]]"],
-  ["Hammer:2347:1770:3114:0", "[[Civitas illa Fortis]]"],
-  ["Hammer:2347:1773:3060:0", "[[Outer Fortis]]"],
-  ["Hammer:2347:1696:3070:0", "[[Outer Fortis]]"],
-  ["Beer glass:1919:1711:3114:0", "[[Civitas illa Fortis]]"],
-  ["Beer glass:1919:1673:3155:1", "[[Civitas illa Fortis]] - [[Sunrise Palace]] ({{FloorNumber|uk=1}})"],
-  ["Beer glass:1919:1724:3073:0", "[[Outer Fortis]]"],
-  ["Logs:1511:1743:3167:0", "[[Civitas illa Fortis]]"],
-  ["Logs:1511:1744:3166:0", "[[Civitas illa Fortis]]"],
-  ["Logs:1511:1742:3166:0", "[[Civitas illa Fortis]]"],
-  ["Logs:1511:1746:3079:0", "[[Outer Fortis]]"],
-  ["Logs:1511:1742:3079:0", "[[Outer Fortis]]"],
-  ["Logs:1511:1697:3060:0", "[[Outer Fortis]]"],
-  ["Logs:1511:1687:3067:0", "[[Outer Fortis]]"],
-  ["Logs:1511:1678:3062:0", "[[Outer Fortis]]"],
-  ["Logs:1511:1678:3066:0", "[[Outer Fortis]]"],
-  ["Chisel:1755:1657:3142:0", "[[Civitas illa Fortis]] - on a crate in the [[Fortis Blacksmith]] store"],
-  ["Tinderbox:590:1625:3287:0", "[[Salvager Overlook]] - General Store"],
-]);
-function isAuditedMemberOrdinaryRow(row) {
-  const location = AUDITED_MEMBER_ORDINARY_ROWS.get([row.page,row.id,row.x,row.y,row.plane].join(":"));
-  return location !== undefined && row.members === true && row.quantity === 1 && row.infobox_respawn_ticks === 100
-    && location === row.location;
-}
 // This member quest stock is public; pickup eligibility remains in TempleOfIkov.Quest.js.
 // The producer reconciles case-only page aliases and retains their source identities.
 const AUDITED_MEMBER_QUEST_ROWS = new Map([
@@ -94,18 +39,11 @@ function isAuditedMemberQuestRow(row) {
 const AUDITED_LEGACY_STATE = new Map([
   ["84:2638:9906:0", { quantity:1, respawn:0, members:false }],
 ]);
-// Individually audited ordinary Coins rows outside the fully audited Corsair Cove Dungeon row.
-const AUDITED_ORDINARY_EXACT = new Map([
-  ["995:3003:9801:0", "[[Dwarven Mine]]"],
-  ["995:3001:9798:0", "[[Dwarven Mine]]"],
-  ["995:2988:9584:0", "[[Asgarnian Ice Dungeon]]"],
-  ["995:2987:9583:0", "[[Asgarnian Ice Dungeon]]"],
-  ["995:2988:9582:0", "[[Asgarnian Ice Dungeon]]"],
-]);
 const OWNED_EXACT = new Map([
   ["560:2500:2967:0", "Quests.plugin.js Watchtower definition provider"],
   ["2398:2528:9415:0", "Quests.plugin.js Watchtower definition provider"],
   ["2398:2530:9462:0", "Quests.plugin.js Watchtower definition provider"],
+  ["2397:2617:9437:0", "Quests.plugin.js Watchtower definition provider"],
   ["532:1475:9498:1", "MeatAndGreet.Quest.js post-Alpha private scene"],
   ["532:1477:9499:1", "MeatAndGreet.Quest.js post-Alpha private scene"],
   ["532:1478:9497:1", "MeatAndGreet.Quest.js post-Alpha private scene"],
@@ -114,7 +52,20 @@ const OWNED_EXACT = new Map([
   ...[[3161,2389],[3168,2388],[3179,2384],[3190,2379],[3191,2383],[3197,2376]]
     .map(([x,y]) => [String(31395)+":"+x+":"+y+":0", "TroubledTortugans.Quest.js stage-owned materials"]),
   ["401:2962:2600:0", "TroubledTortugans.Quest.js stage-owned seaweed"],
+  ["1351:1683:2975:0", "RibbitingTale.Quest.js takes the axe from the Locus logs loc"],
+  ["2349:1466:9573:0", "TheFinalDawn.Quest.js Teumo's basement barrels"],
+  ["946:1646:3095:0", "TheFinalDawn.Quest.js safehouse loot"],
+  ["307:1331:3330:0", "ShadowsOfCustodia.Quest.js per-player rod spawn"],
+  ["2347:1207:3108:0", "Scrambled.Quest.js per-player hammer"],
+  ["8794:1212:3093:0", "Scrambled.Quest.js per-player saw"],
+  ["960:1238:3076:0", "Scrambled.Quest.js per-player planks"],
+  ["245:3018:10353:0", "WineOfZamorak.plugin.js Deep Wilderness Dungeon wine"],
 ]);
+// Rows inside instanced areas whose plugins build the floor per player or party.
+const OWNED_LOCATIONS = [
+  ["[[Hallowed Sepulchre]]", "HallowedSepulchre per-player floor template integration required"],
+  ["[[Chambers of Xeric]]", "Chambers of Xeric raid instance"],
+];
 for (const [id, points] of [[5559, [[2969,4999],[2970,5000],[3009,5063],[3009,5070]]], [5568, [[3018,5080],[3018,5086],[3011,5082],[3013,5090]]]]) {
   for (const [x,y] of points) for (const plane of [0,1]) {
     OWNED_EXACT.set([id,x,y,plane].join(":"), "Lobby.RoguesDen.js owns plane1; legacy plane0 must not be duplicated");
@@ -124,7 +75,7 @@ const keyOf = (id, x, y, z) => [id, x, y, z].join(":");
 const rowKey = (r) => keyOf(r.id, r.x, r.y, r.plane);
 const definitionKey = (r) => keyOf(r.id, r.location?.x, r.location?.y, r.location?.z);
 const ownerOf = (r) => OWNED_EXACT.get(rowKey(r))
-  ?? (r.location?.includes("[[Hallowed Sepulchre]]") ? "HallowedSepulchre per-player floor template integration required" : null);
+  ?? OWNED_LOCATIONS.find(([link]) => r.location?.includes(link))?.[1] ?? null;
 
 function reconcilePickupReplacements(rows, existing) {
   const statuses = new Map();
@@ -213,21 +164,17 @@ export function importSpawns(source, existing) {
       entry.reasons = [...new Set([...entry.reasons, "conflicting-source-alias-state"])];
     } else if (reconciled.statuses.has(row)) {
       entry.status = reconciled.statuses.get(row);
+    } else if (/scenery/i.test(row.section ?? "")) {
+      // Listed under "Scenery object spawns": the item is taken from a loc, not lying on the ground.
+      entry.status = "scenery-object-spawn";
     } else if (owner) {
       entry.status = "area-owned-or-instance-integration";
       entry.owner = owner;
     } else if (entry.reasons.length) {
       entry.status = "unresolved-source";
-    } else if (row.members !== false
-      && !(row.members === true && AUDITED_MEMBER_ORDINARY_ITEMS.get(row.page) === row.id)
-      && !isAuditedEasternConchShell(row) && !isAuditedMemberOrdinaryRow(row) && !isAuditedMemberQuestRow(row)) {
-      entry.status = "members-world-scope-deferred";
-    } else if (AUDITED_ORDINARY_ITEMS.get(row.page) !== row.id && !isAuditedEasternConchShell(row) && !isAuditedMemberOrdinaryRow(row) && !isAuditedMemberQuestRow(row)
-      && !(row.page === "Coins" && row.members === false
-        && ((AUDITED_ORDINARY_EXACT.has(rowKey(row)) && AUDITED_ORDINARY_EXACT.get(rowKey(row)) === row.location)
-          || (row.id === 995 && row.location === "[[Corsair Cove Dungeon]]" && row.plane === 0
-            && row.quantity === 1 && row.infobox_respawn_ticks === 100)))) {
-      entry.status = "ordinary-page-not-yet-audited";
+    } else if (typeof row.members !== "boolean") {
+      entry.status = "unresolved-source";
+      entry.reasons.push("unknown-world-membership");
     } else if (![row.id,row.x,row.y,row.plane,row.quantity,row.infobox_respawn_ticks].every(Number.isInteger)
       || row.id < 0 || row.plane < 0 || row.plane > 3 || row.quantity <= 0
       || row.infobox_respawn_ticks <= 0 || row.tile_respawn_raw != null) {
@@ -280,6 +227,16 @@ export function importSpawns(source, existing) {
     }
     const nearby = existing.filter(d => d.location?.z === row.plane
       && Math.abs(d.location.x-row.x) <= 2 && Math.abs(d.location.y-row.y) <= 2);
+    // A legacy spawn of the same item within two tiles is most likely this row placed slightly off.
+    // Adding the row would double the spawn, so it is held for placement review instead.
+    const sameItemNearby = nearby.filter(d => d.id === row.id);
+    if (sameItemNearby.length) {
+      for (const entry of entries) {
+        entry.status = "near-legacy-placement-review";
+        entry.nearbyLegacy = sameItemNearby;
+      }
+      continue;
+    }
     const definition = { id:row.id, location:{x:row.x,y:row.y,z:row.plane},
       amt:row.quantity, respawn:row.infobox_respawn_ticks, ...(row.members === true ? {members:true} : {}), description:"OSRS Wiki: "+row.page+" — "+row.location };
     definitions.push(definition);
@@ -292,7 +249,7 @@ export function importSpawns(source, existing) {
   const counts = {};
   for (const entry of report) counts[entry.status] = (counts[entry.status] ?? 0) + 1;
   return { definitions, report: { schema:1, sourceInputSha256:source.input_sha256,
-    policy:"Audited ordinary F2P rune/tool and explicit member Crossbow/Shears/Earth rune/Mind rune/Fire rune/Nature rune and nine exact eastern Great Conch Sea shell rows and exact member ordinary rows plus five exact Dwarven Mine/Asgarnian Ice Dungeon Coins rows and the ordinary Corsair Cove Dungeon Coins row; explicit infobox ticks applied only without tile override; legacy entries preserved except exact source-proven pickup reward projections and audited Temple of Ikov staff state reconciliation from pinned source (alias provenance retained).",
+    policy:"Every source-clean ground row (not under a Scenery object spawns heading, no unresolved reason, no alias conflict, not owned by a quest or instance) with explicit infobox ticks and no tile override; members rows carry the loader membership gate; rows with a same-item legacy spawn within two tiles are held for placement review; legacy entries preserved except exact source-proven pickup reward projections and audited Temple of Ikov staff state reconciliation from pinned source (alias provenance retained).",
     counts, rows:report } };
 }
 

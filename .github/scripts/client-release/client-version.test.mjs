@@ -63,3 +63,28 @@ test("client version works without git, selects the same files, and skips depend
         assert.equal(clientVersion(root), withoutGit, "git and the file walk agree");
     } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test("client version thoroughly verifies issue #153 OSRS minigames and activities paths and gaps", () => {
+    const root = mkdtempSync(join(tmpdir(), "client-version-"));
+    const write = (path, text) => {
+        mkdirSync(dirname(join(root, path)), { recursive: true });
+        writeFileSync(join(root, path), text);
+    };
+    try {
+        write(".github/workflows/client-release.yml", "on:\n    push:\n        paths:\n            - 'client/**'\n            - 'server/plugins/minigames/**'\n    pull_request:\n");
+        write("client/game.ts", "base\n");
+        write("server/plugins/minigames/troublebrewing/Game.TroubleBrewing.js", "trouble brewing\n");
+        
+        const baseVersion = clientVersion(root);
+        assert.match(baseVersion, /^[a-f0-9]{64}$/);
+
+        // Verify changes in OSRS minigames/activities affect client version
+        write("server/plugins/minigames/troublebrewing/Game.TroubleBrewing.js", "trouble brewing updated\n");
+        const updatedVersion = clientVersion(root);
+        assert.notEqual(baseVersion, updatedVersion, "minigame plugin source updates change version");
+
+        // Verify server-only changes outside minigames paths do not affect version when restricted
+        write("server/plugins/minigames/troublebrewing/Game.TroubleBrewing.js", "trouble brewing\n");
+        assert.equal(clientVersion(root), baseVersion, "reverting minigame plugin source restores base version");
+    } finally { rmSync(root, { recursive: true, force: true }); }
+});

@@ -5,7 +5,7 @@
  * line, animation, graphic and sound; for the next 2.4 seconds (four ticks) every hit on the
  * player is 0 (`combat:damage-apply`), and three explosions (1, 3 and 5 ticks after, 237/01158)
  * each deal 60% of the base Prayer level as a typeless hit to every attackable NPC within three
- * tiles, Yama spared, and 30% of it to every player there the area lets the owner fight (PvP),
+ * tiles, spared the NPCs the Wiki says take no damage (Yama, the Moons of Peril, the Fragment of Seren, the Nightmare's Sleepwalkers, Parasites and Husks), and 30% of it to every player there the area lets the owner fight (PvP),
  * each with the recording's impact graphics on the 8 lines out to three tiles. Then three minutes
  * of cooldown, a tick (0.6 seconds) shorter for every 10 damage one of the player's hits deals;
  * Activate or Check meanwhile says how long is left ("on cooldown for another N seconds!",
@@ -86,10 +86,12 @@ function near(player, other) {
   return Math.max(dx, dy) <= effect.radius;
 }
 
-/** Spared by name: the Moons of Peril are nameless multi-NPC parents, so the variant the player sees counts as well. */
+/** Spared by name or id: the Moons of Peril are nameless multi-NPC parents, so the variant the player sees counts as well. */
 function isSpared(player, npc) {
   return effect.spared.includes(npc.getDefinition?.()?.getName?.())
-    || effect.spared.includes(npc.getCurrentDefinition?.(player)?.getName?.());
+    || effect.spared.includes(npc.getCurrentDefinition?.(player)?.getName?.())
+    || effect.sparedIds.includes(npc.getId?.())
+    || effect.sparedIds.includes(npc.getCurrentDefinition?.(player)?.getId?.());
 }
 
 function enemiesAround(player) {

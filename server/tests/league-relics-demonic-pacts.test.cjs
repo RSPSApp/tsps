@@ -1299,7 +1299,7 @@ test("Flask of Fervour: a large NPC is hit when any tile of it is within three t
   assert.deepEqual([farBig.pending, small.pending], [[], []], "5x5 with its edge 4 away, and a 1x1 6 away");
 });
 
-test("Flask of Fervour: a real Moon of Peril (nameless parent id 13016, named only by its variant) is spared; a Goblin is not", (t) => {
+test("Flask of Fervour: a real Moon of Peril (nameless parent id 13016, named only by its variant) and the Nightmare Husk, Parasite and Sleepwalker are spared; a Goblin is not", (t) => {
   const { NPC } = require("../dist/game/entity/impl/npc/NPC");
   const who = cases(FLASK_OF_FERVOUR);
   const tasks = [];
@@ -1310,12 +1310,13 @@ test("Flask of Fervour: a real Moon of Peril (nameless parent id 13016, named on
   const at = new Location(here.getX() + 1, here.getY(), here.getZ());
   const moon = new NPC(13016, at);
   const goblin = new NPC(core.NpcIdentifiers.GOBLIN, at);
+  const nightmare = [9454, 9452, 9446, 9468].map((id) => new NPC(id, at));
   assert.notEqual(moon.getDefinition().getName(), "Blood Moon", "the parent itself carries no Moon name");
-  for (const npc of [moon, goblin]) {
+  for (const npc of [moon, goblin, ...nightmare]) {
     npc.setHitpoints(50);
     npc.getCombat().getHitQueue().addPendingDamage = (hits) => (npc.taken = (npc.taken ?? []).concat(hits.map((hit) => hit.getDamage())));
   }
-  who.relic.getLocalNpcs = () => [moon, goblin];
+  who.relic.getLocalNpcs = () => [moon, goblin, ...nightmare];
   who.relic.getSkillManager().setMaxLevels(Skill.PRAYER, 99, false);
   itemActions.get("Flask of fervour").Activate({ player: who.relic, handled: false });
   const sender = who.relic.getPacketSender();
@@ -1324,6 +1325,7 @@ test("Flask of Fervour: a real Moon of Peril (nameless parent id 13016, named on
   for (const task of tasks.filter((task) => task.getDelay() < 10)) task.execute();
   who.relic.getPacketSender = () => sender;
   assert.equal(moon.taken, undefined);
+  assert.deepEqual(nightmare.map((npc) => npc.taken), [undefined, undefined, undefined, undefined], "the Nightmare Husk, Parasite and Sleepwalker (and Phosani Parasite)");
   assert.ok(goblin.taken?.length > 0, "an ordinary NPC is struck");
 });
 

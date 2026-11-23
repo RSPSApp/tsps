@@ -82,6 +82,11 @@ function createGlare(core) {
       return hits;
     }
 
+    /** The catablepon's own 4 ticks (Wiki; rec 339 ticks 1172-1200), not the stored Weaken's 5. */
+    attackSpeed(npc) {
+      return npc.getCombatMethod().attackSpeed(npc);
+    }
+
     finished(npc) {
       npc.getCombat().setPreviousCast(glareSpell);
       npc.getCombat().setCastSpell(null);

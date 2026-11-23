@@ -12,6 +12,7 @@ let catablepon;
 
 before(async () => {
   await CachePipeline.initialize(process.cwd());
+  new (require('../dist/game/definition/loader/impl/NpcDefinitionLoader').NpcDefinitionLoader)().load();
   require('../plugins/combat/StandardCurses.plugin').register(PluginManager.createApi('StandardCurses'));
   catablepon = require('../plugins/npcs/Catablepon.plugin');
   catablepon.register(PluginManager.createApi('Catablepon'));
@@ -110,11 +111,11 @@ test('glares hit with the catablepon\'s own roll, landed or splashed (rec 339 ti
     assert.ok(hit.getTotalDamage() <= 5, 'level 49 max hit 5');
     if (accurate) landed = Math.max(landed, hit.getTotalDamage()); else splashed = Math.max(splashed, hit.getTotalDamage());
   }
-  assert.ok(landed > 0, 'a landed glare can damage');
+  assert.equal(landed, 5, 'a landed glare reaches the level 49 max hit');
   assert.ok(splashed > 0, 'a splashed glare can damage');
 });
 
-test('in a ticked fight glares drain 90 -> 85 -> 80 on their attack ticks, then it attacks as before', (t) => {
+test('in a ticked fight glares come every 4 ticks, drain 90 -> 85 -> 80 on their attack ticks, then it attacks as before', (t) => {
   const { p, npc } = fight(t, 90);
   p.setAutoRetaliate?.(false);
   p.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99).setCurrentLevels(core.Skill.HITPOINTS, 99, false);
@@ -123,17 +124,26 @@ test('in a ticked fight glares drain 90 -> 85 -> 80 on their attack ticks, then 
   npc.setAttribute('catablepon-test:accurate', true);
   core.World.processCycle = 5000;
   npc.getCombat().attack(p);
-  const drops = [];
+  const drops = [], attacks = [];
+  t.mock.method(npc, 'performAnimation', function (animation) { attacks.push([core.World.getProcessCycle(), animation.getId(), npc.getCombat().getCastSpell()?.spellId?.() ?? null]); });
   let last = strength(p);
-  for (let tick = 0; tick < 40; tick++) {
+  for (let tick = 0; tick < 24; tick++) {
     core.World.processCycle++;
-    const attacked = npc.getCombat().performNewAttack(false);
+    npc.getCombat().preMovementProcess();
+    npc.getCombat().postMovementProcess();
     p.getCombat().getHitQueue().process(core.World.getProcessCycle());
     if (strength(p) !== last) {
-      assert.equal(attacked, true, 'the drain lands on the attack tick');
+      assert.equal(attacks.at(-1)?.[0], core.World.getProcessCycle(), 'the drain lands on the attack tick');
       drops.push([tick, last, strength(p)]); last = strength(p);
     }
   }
+  // Every 4 ticks, glare after glare and into its own attack (Wiki attack speed 4; rec 339 ticks 1172-1200).
+  const cycles = attacks.map(([cycle]) => cycle);
+  assert.ok(cycles.length >= 4, `attacked ${cycles.length} times`);
+  assert.deepEqual(cycles.slice(1).map((cycle, i) => cycle - cycles[i]), new Array(cycles.length - 1).fill(4));
+  const weaken = core.CombatSpells.WEAKEN.spellId();
+  assert.deepEqual(attacks.slice(0, 2).map(([, id, spell]) => [id, spell]), [[4272, weaken], [4272, weaken]]);
+  assert.notEqual(attacks[2][2], weaken, 'past the limit: its own attack, not a glare');
   assert.deepEqual(drops.slice(0, 2).map(([, from, to]) => [from, to]), [[90, 85], [85, 80]]);
   assert.equal(strength(p), 80, 'stops at 10 drained (8% + 3 of 90)');
   assert.equal(CombatFactory.getMethod(npc), npc.getCombatMethod());

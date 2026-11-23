@@ -1203,7 +1203,8 @@ test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording
   const rival = victim("rival", new Location(here.getX(), here.getY() - 2, 0), true);
   const bystander = victim("bystander", new Location(here.getX(), here.getY() + 1, 0), true);
   wilderness.add(rival);
-  who.relic.getLocalNpcs = () => [goblin, far, yama];
+  const immune = ["Blood Moon", "Blue Moon", "Eclipse Moon", "Fragment of Seren"].map((name) => victim(name, new Location(here.getX() + 1, here.getY() + 1, 0)));
+  who.relic.getLocalNpcs = () => [goblin, far, yama, ...immune];
   who.relic.getLocalPlayers = () => [who.relic, rival, bystander];
   const graphics = [];
   const sender = who.relic.getPacketSender();
@@ -1217,6 +1218,7 @@ test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording
   for (const task of explosions) task.execute();
   assert.deepEqual([goblin.pending, rival.pending], [[59, 59, 59], [29, 29, 29]]);
   assert.deepEqual([far.pending, yama.pending, bystander.pending], [[], [], []], "out of reach, spared, not in PvP");
+  assert.deepEqual(immune.map((npc) => npc.pending), [[], [], [], []], "the Moons of Peril and the Fragment of Seren are spared too");
   const impact = core.CacheDefinitions.getSpotanimId("leagues_6_sigil_of_life_impact");
   assert.equal(graphics.length, 72, "8 lines of 3, three times");
   const first = graphics.slice(0, 24);

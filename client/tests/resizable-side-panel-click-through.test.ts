@@ -2,44 +2,36 @@ import assert from "node:assert/strict";
 
 import { isMouseInUIRegion } from "../render/render/interact/menu2";
 
-// In the resizable layouts the world shows around the side panel and its tab stones, and a click
-// there reaches the world (walk, interact). Whether a point is on the panel is the widgets' call
-// (isPointOverWidget); the renderer's static UI region must not swallow the gaps around it.
+// Outside the fixed frame, the only static UI region is the minimap corner. Everything else the
+// interface takes (the side panel, its tab stones, the chatbox) is decided by the widgets drawn
+// there, so the world around them stays clickable in every layout and screen size.
 
-function resizableHost(root: number, width: number, height: number): any {
+const MINIMAP_WIDTH = 216;
+const MINIMAP_HEIGHT = 172;
+
+function hostFor(width: number, height: number): any {
     return {
         canvas: { width, height },
         osrsClient: {
-            widgetManager: { rootInterface: root },
+            widgetManager: { rootInterface: 161 },
             getWidgetInteractionState: () => ({ isPointerOverMinimapClickTarget: () => false }),
             camera: { containsScreenPoint: () => true },
         },
     };
 }
 
-// Points the drawn layout leaves open, beyond the edges of the panel and stones.
-const cases: Array<{ name: string; root: number; width: number; height: number; x: number; y: number }> = [
-    // Modern layout (164), stones in one row under the panel: the strip left of the panel.
-    { name: "left of the side panel (modern)", root: 164, width: 1274, height: 560, x: 1274 - 215, y: 400 },
-    // Classic layout (161), stones in two rows: the world left of the bottom row, and above the
-    // top row on a narrow screen.
-    { name: "left of the bottom stone row (classic)", root: 161, width: 1274, height: 560, x: 1274 - 300, y: 560 - 12 },
-    { name: "above the top stone row (classic, narrow)", root: 161, width: 998, height: 768, x: 998 - 100, y: 425 },
-    // Narrow modern screen: left of the panel and of the stones.
-    { name: "left of the side panel (modern, narrow)", root: 164, width: 874, height: 620, x: 874 - 221, y: 400 },
-    { name: "left of the stone rows (modern, narrow)", root: 164, width: 874, height: 620, x: 874 - 235, y: 620 - 40 },
-];
-
-for (const c of cases) {
-    const host = resizableHost(c.root, c.width, c.height);
-    assert.equal(
-        isMouseInUIRegion(host, c.x, c.y),
-        false,
-        `${c.name}: a click at ${c.x},${c.y} on a ${c.width}x${c.height} ${c.root} frame must reach the world`,
-    );
+for (const [width, height] of [[765, 503], [874, 620], [998, 768], [1274, 560], [1874, 950]]) {
+    const host = hostFor(width, height);
+    const inMinimapCorner = (x: number, y: number) => x >= width - MINIMAP_WIDTH && y <= MINIMAP_HEIGHT;
+    for (let y = 0; y < height; y += 3) {
+        for (let x = 0; x < width; x += 3) {
+            assert.equal(
+                isMouseInUIRegion(host, x, y),
+                inMinimapCorner(x, y),
+                `${width}x${height} at ${x},${y}: ${inMinimapCorner(x, y) ? "minimap corner" : "not a static UI region"}`,
+            );
+        }
+    }
 }
 
-// The minimap corner keeps its static region in the resizable layouts.
-assert.equal(isMouseInUIRegion(resizableHost(161, 1274, 560), 1274 - 100, 80), true);
-
-console.log("Resizable side panel click-through passed:", cases.length, "points");
+console.log("resizable side panel click-through: ok");

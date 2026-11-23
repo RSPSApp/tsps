@@ -1321,11 +1321,19 @@ Tier 1 counts once the character chose its first relic.
   the pet); a Doom of Mokhaiotl delve (`Doom of Mokhaiotl`, Demonic Pacts) its unique roll (not
   Dom); and a pickpocket target's `dropSource` (pickpocketing.json) its `first` rolls: vyres'
   blood shard (`Vyre`) and Prifddinas elves' teleport seed (`Elf (Thieving)`).
+  The key chests ask `drops:chance` with the chest's name for their pre-rolls: Larran's big
+  chest, the brimstone chest, the Zombie Pirate's Locker and the Elven Crystal Chest (the page's
+  Enhanced crystal chest; the dragonstone armour, not the onyx). The Grotesque Guardians roll
+  their own table through NpcDrops with Dusk named, and Corporeal Beast's sigils are a pre-roll
+  group of its table. Item names are matched whole, as the tables name them: Hueycoatl's
+  `Tooth half of key (moon key)` and the frost nagua's `Pendant of Ates (inert)` take a
+  `/^.../` pattern, and Araxxor's row names the `Araxyte fang` its table drops for the amulet of
+  rancour (`tests/league-boosted-drops-data.test.cjs` checks every NPC row against its tables).
   Sources rolled by their own plugins are in the data but inert until that plugin asks
-  `drops:chance` with the source's name: the Grotesque Guardians, Corporeal Beast's sigils (not
-  on its table here), Hunter rumours, the Shrine, the seed pack, the Fountain of Rune, Larran's
-  and the brimstone chest, the Zombie Pirate's Locker, chewed bones, the Volcanic Mine ore pack
-  and Shades of Mort'ton.
+  `drops:chance` with the source's name: Hunter rumours, Hunting, the crystal impling, Vale
+  offerings, the Shrine, the seed pack, the Fountain of Rune, chewed bones, the Volcanic Mine ore
+  pack and Shades of Mort'ton; the Warriors' Guild cyclopes roll their defenders apart from
+  their table.
 - **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic
   Pacts 4x/8x from tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
   the league multiplies `points` (floored) when the passive's `minigames` (leagues.json) lists it. Other

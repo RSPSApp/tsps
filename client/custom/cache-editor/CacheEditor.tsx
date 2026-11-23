@@ -99,6 +99,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     });
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [frame, setFrame] = useState(0);
+    const [playing, setPlaying] = useState(true);
     const [shape, setShape] = useState<LocModelType>(LocModelType.NORMAL);
     const [rotation, setRotation] = useState(0);
     const [shapes, setShapes] = useState<Array<{ type: LocModelType; label: string }>>([]);
@@ -731,10 +732,10 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     }, [authoring, bodies, loadBodies, shown, tab]);
 
     useEffect(() => {
-        if (tab !== "preview" || frames <= 1) return;
+        if (tab !== "preview" || !playing || frames <= 1) return;
         const timer = window.setInterval(() => setFrame((current) => (current + 1) % frames), 120);
         return () => window.clearInterval(timer);
-    }, [frames, tab]);
+    }, [frames, playing, tab]);
 
     /** One editable row of the values table. */
     const commitCell = (field: CacheField, text: string) => {
@@ -1227,7 +1228,8 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                     <span style={{ color: "#7f8899" }}>{rotation * 90}°</span>
                                 </div>
                             ) : null}
-                            <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", color: "#7f8899" }}>
+                            <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", color: "#7f8899" }}>
+                                {frames > 1 ? <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => setPlaying((current) => !current)}>{playing ? "Pause" : "Play"}</button> : null}
                                 <span>drag to orbit · wheel to zoom · double-click to reset</span>
                                 <button style={styles.input} onClick={() => setView({ yaw: 0, pitch: 0, zoom: 1 })}>reset view</button>
                                 <span>{Math.round(view.yaw)}° / {Math.round(view.pitch)}° · {view.zoom.toFixed(2)}×</span>

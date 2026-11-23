@@ -17,6 +17,15 @@
     font: inherit;
 }
 
+.cache-editor select {
+    appearance: none;
+    padding-right: 34px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='m1 1 4 4 4-4' fill='none' stroke='%23c4bfb2' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 12px center !important;
+    background-size: 10px 6px !important;
+}
+
 .cache-editor button {
     cursor: pointer;
     transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
@@ -283,6 +292,8 @@
 }
 
 .cache-editor-result {
+    border: 0;
+    border-radius: 0;
     display: grid;
     grid-template-columns: auto auto minmax(0, 1fr) auto;
     align-items: center;

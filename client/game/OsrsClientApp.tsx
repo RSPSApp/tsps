@@ -325,6 +325,7 @@ function OsrsClientApp() {
                 // No cache yet - will be initialized after download
             );
             clientToDispose = client;
+            if (new URLSearchParams(window.location.search).get("cache") === "1") client.loginState.titleMusicDisabled = true;
             const loginAppearanceReady = client.prepareLoginScreen();
 
             // Set OsrsClient immediately so GameContainer can render the login overlay

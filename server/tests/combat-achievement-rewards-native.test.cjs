@@ -388,7 +388,7 @@ async function askTutor(f, tutor) {
   return linesUntilMenu(f);
 }
 
-test("the Leagues Tutor hands out each available tier as Ghommal does, then shows its menu again", async (t) => {
+test("the Leagues Tutor hands out each available tier as Ghommal does, then ends the conversation", async (t) => {
   for (const tier of Data.tiers()) {
     const f = actor(t);
     earned(f, tier.tier);
@@ -404,7 +404,8 @@ test("the Leagues Tutor hands out each available tier as Ghommal does, then show
     assert.equal(Progress.tierStatus(f.p, tier), 2, tier.name);
     assert.equal(f.p.getInventory().getAmount(tier.lamp), 1);
     assert.equal(f.p.getInventory().getAmount(tier.hilt), 1);
-    assert.ok(menu?.options.includes("What changes have been made for this League?"), "back to the Tutor's menu");
+    assert.equal(menu, null, "the claim ends the conversation");
+    assert.ok(!f.p.getDialogueManager().getCurrent(), "no dialogue left open");
   }
 });
 
@@ -451,5 +452,5 @@ test("the Leagues Tutor works through every unclaimed tier in one conversation",
     assert.equal(f.p.getInventory().getAmount(tier.lamp), 1, tier.name);
     assert.equal(f.p.getInventory().getAmount(tier.hilt), 1, tier.name);
   }
-  assert.ok(menu?.options.includes("What changes have been made for this League?"));
+  assert.equal(menu, null, "the claim ends the conversation");
 });

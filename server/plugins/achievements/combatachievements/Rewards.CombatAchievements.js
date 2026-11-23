@@ -10,8 +10,9 @@
  * are from the Wiki, not established by that recording.
  *
  * The Leagues Tutor hands out the same rewards. Its "Can I claim some Combat rewards?" says there
- * is nothing to claim, or plays Ghommal's claim word for word from "Oh, how have you been getting
- * on?" (the Wiki transcript leaves that branch blank), then shows the Tutor's options again.
+ * is nothing to claim and shows its options again, or plays Ghommal's claim word for word from
+ * "Oh, how have you been getting on?" (the Wiki transcript leaves that branch blank), and the
+ * conversation ends after "Thank you so much!", as Ghommal's does.
  *
  * The lamps, as captured: rubbing opens xpreward with the lamp's level (varp 261), and the
  * chosen skill's experience comes with "<col=0000ff>Your wish has been granted!</col><br>You have
@@ -209,7 +210,7 @@ function dialogueLine(request) {
   request.after = () => claim(player, pending.tier, pending);
 }
 
-/** Ghommal's claim after the player's opening line, with its called branches inlined. */
+/** Ghommal's claim after the player's opening line, with its called branches inlined; it ends the talk. */
 function tutorClaimSteps() {
   if (claimSteps) return claimSteps;
   const record = require("../../../data/definitions/npc-dialogues.json")[CLAIM_PAGE];
@@ -232,9 +233,10 @@ function tutorClaimSteps() {
         ? inline(branches[step.branch])
         : [Array.isArray(step.steps) ? { ...step, steps: inline(step.steps) } : step],
     );
-  claimSteps = inline(
+  const steps = inline(
     (find(record?.variants?.["combat-achievement-rewards"]) ?? []).slice(1),
   );
+  claimSteps = steps.length ? [...steps, { type: "end" }] : steps;
   return claimSteps;
 }
 

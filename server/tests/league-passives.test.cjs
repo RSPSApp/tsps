@@ -673,3 +673,51 @@ test("Demonic Pacts master access bypasses only the master's levels", () => {
     assert.equal(Tasks.meetsMaster(ordinary, master), true, "meeting both requirements still works");
   }
 });
+
+test("boosted drops: a Desert Treasure II boss's unique and orb stages, by their rows' names", () => {
+  const dump = require("../data/definitions/npc-drops.json");
+  const PACTS = 6;
+  const main = character("dt2main", "main");
+  const dp4 = character("dt2dp4", "league", 4, PACTS); // 5x
+  // The ordered chain's state, as ForgottenFourRewards provides it: a fresh one for each roll.
+  (custom["npc-drops:reward-state"] ??= []).push((event) => { if (!event.handled) { event.state = {}; event.handled = true; } });
+  (custom["npc-drops:reward-state-commit"] ??= []).push((event) => { event.committed = true; });
+  const GOLD_RING = 1635; // the vestige's first hit
+  const ORB = 28334; // Awakener's orb
+  for (const [boss, tableId] of [["The Whisperer", "the_whisperer"], ["Duke Sucellus", "duke_sucellus"], ["The Leviathan", "the_leviathan"], ["Vardorvis", "vardorvis"]]) {
+    const table = dump.tables[tableId];
+    const unique = table.reward_chain.stages.find((stage) => stage.key === "tradeable_uniques");
+    // A draw halfway to the boosted chance: a hit at 5x, a miss at 1x.
+    const draw = 2.5 * unique.weight / unique.out_of;
+    const plain = dropsAt(table, main, draw, boss);
+    const boosted = dropsAt(table, dp4, draw, boss);
+    const uniqueIds = new Set([GOLD_RING, ...unique.entries.map((entry) => entry.item_id)]);
+    assert.equal(plain.some((id) => uniqueIds.has(id)), false, `${boss} unboosted: no unique`);
+    assert.equal(boosted.some((id) => uniqueIds.has(id)), true, `${boss} boosted 5x: the unique stage hits`);
+  }
+  // The orb stage on its own (the Whisperer's 1/34), so the unique stage before it can't take the draw.
+  const whisperer = dump.tables.the_whisperer;
+  const orbStage = whisperer.reward_chain.stages.find((stage) => stage.key === "orb");
+  const orbOnly = { ...whisperer, reward_chain: { ...whisperer.reward_chain, stages: [orbStage] } };
+  assert.equal(dropsAt(orbOnly, main, 2.5 / 34, "The Whisperer").includes(ORB), false, "the orb unboosted: 1/34");
+  assert.equal(dropsAt(orbOnly, dp4, 2.5 / 34, "The Whisperer").includes(ORB), true, "the orb boosted 5x: 5/34");
+});
+
+test("an ordered reward stage with only some rows boosted grows by their share, and picks them by their boosted weight", () => {
+  const dp4 = character("partial", "league", 4, 6);
+  (custom["npc-drops:reward-state"] ??= []).push((event) => { if (!event.handled) { event.state = {}; event.handled = true; } });
+  (custom["npc-drops:reward-state-commit"] ??= []).push((event) => { event.committed = true; });
+  const table = {
+    table_id: "partial_stage", wiki_page: "Abyssal demon", entries: [],
+    reward_chain: { type: "ordered_exclusive", state_domain: "partial_stage", stages: [{
+      key: "rare", weight: 1, out_of: 100, main_max_roll: 2,
+      entries: [{ item_id: 4151, name: "Abyssal whip", quantity: [1, 1], weight: 1 }, { item_id: 995, name: "Coins", quantity: [1, 1], weight: 1 }],
+    }] },
+  };
+  // One of two equal rows at 5x: the stage is (5 + 1) / 2 = 3 times as likely, 3/100, and the whip 5 of the 6.
+  assert.deepEqual(dropsAt(table, dp4, 0.029), [4151], "inside 3/100, at the start of the stage: the whip");
+  assert.deepEqual(dropsAt(table, dp4, 0.031), [], "past 3/100: nothing");
+  const main = character("partialmain", "main");
+  assert.deepEqual(dropsAt(table, main, 0.009), [4151], "unboosted: 1/100, the rows half and half");
+  assert.deepEqual(dropsAt(table, main, 0.011), []);
+});

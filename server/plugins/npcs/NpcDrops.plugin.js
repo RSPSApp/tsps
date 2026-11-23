@@ -780,6 +780,20 @@ function chanceRules(player, npc, source) {
   return rules;
 }
 
+/**
+ * How many times likelier an ordered reward stage is for rules that match its rows by name (a
+ * league's boosted drops on a Desert Treasure II boss's uniques): the rows' boosts averaged by
+ * their weights, so a stage whose rows are all boosted is that many times as likely, and one
+ * boosted row of several raises the stage by its own share only. Rules naming the stage's key
+ * (an awakened boss's unique table) are counted on the stage itself.
+ */
+function stageRowsMultiplier(stage, rules) {
+  if (!rules.length) return 1;
+  const total = stage.entries.reduce((sum, row) => sum + row.weight, 0);
+  const boosted = stage.entries.reduce((sum, row) => sum + row.weight * rulesMultiplier(row, rules), 0);
+  return total > 0 ? boosted / total : 1;
+}
+
 /** How many times likelier `entry` is on this kill: the world's boss rare multiplier times the matching chance rules. */
 function entryMultiplier(table, entry, rules) {
   return rareMultiplier(table, entry) * rulesMultiplier(entry, rules);
@@ -1101,7 +1115,8 @@ function rollTable(table, player, npc, context = killContext(player, npc), sourc
   const chance = chanceRules(player, npc, source);
   const questVerdicts = questItemVerdicts(player, npc, table);
   const selected = OrderedRewards.select(table, player, pluginApi, Math.random,
-    (rate, stage) => entryMultiplier(table, { ...stage, ...rate }, chance));
+    (rate, stage) => entryMultiplier(table, { ...stage, ...rate }, chance) * stageRowsMultiplier(stage, chance),
+    (row) => rulesMultiplier(row, chance));
   const drops = [];
   const entries = Array.isArray(table.entries) ? table.entries : [];
   for (const entry of entries) {

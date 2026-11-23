@@ -1294,7 +1294,9 @@ Tier 1 counts once the character chose its first relic.
   casket's Open and the Mimic's reward share `Rolls.uniqueMultiplier`). Kills whose
   table NpcDrops rolls are covered as they are, Araxxor's and Zalcano's included (their plugins
   roll through NpcDrops with the NPC named); the giant lairs' chests pass `source` (Obor,
-  Bryophyta). Revenant kills (the revenant's name; the Revenant maledictus's two rolls too) ask
+  Bryophyta). The Desert Treasure II bosses' uniques and Awakener's orb are stages of an ordered reward
+  chain ([docs/npc-drops-ordered.md](npc-drops-ordered.md)): the rule scales the stage by its rows, so
+  each stage is that many times as likely (the Whisperer's 1/64 unique stage 5/64 at 5x). Revenant kills (the revenant's name; the Revenant maledictus's two rolls too) ask
   `drops:chance` for their own table's unique and ancient artefact rolls, and the Barrows chest
   asks with `Barrows` for its equipment roll: a boosted row's weight grows and its table's
   chance with it, as NpcDrops does. The raids' unique rolls ask per raider with `Chambers of

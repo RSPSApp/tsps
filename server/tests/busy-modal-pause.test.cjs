@@ -2,7 +2,7 @@
 // A busy main modal (varbit 12393: the diary journal, the CA overview, the equipment screen)
 // pauses a repeating gathering action and it resumes after the modal closes, without a re-click
 // (rsprox 227/01757 t8544-8548, 227/00555 t24898-24918, 227/00562 t153-177;
-// docs/interface-interruption.md). Native input: a real Player in the World, its ClientConnection
+// docs/busy-modals.md). Native input: a real Player in the World, its ClientConnection
 // and the packets the client sends, advanced with World.process().
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -34,6 +34,7 @@ before(async () => {
   core = PM.getCoreApi();
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(SPOT_TILE.x, SPOT_TILE.y);
+  core.RegionManager.loadMapFiles(3222, 3218);
   PM.emitServerStartup({});
 });
 after(() => {
@@ -70,6 +71,8 @@ function actor(t, at, skill) {
     const stack = new Error().stack;
     if (stack.includes("rollCatch")) return 0;
     if (stack.includes("rollClueBottles") || stack.includes("Pet") || stack.includes("pet")) return 0.999999;
+    // The spot stays put for the whole test: its relocation timer rolls its longest.
+    if (stack.includes("Relocation.Fishing")) return 0.999999;
     return random();
   };
   t.after(() => { Math.random = random; });
@@ -115,21 +118,29 @@ function miningScene(t) {
   return { ...f, rock, mined: () => f.p.getInventory().getAmount(I.COPPER_ORE) };
 }
 
-test("fishing waits under the diary journal and resumes after it closes, without a re-click", async (t) => {
+test("fishing waits under the diary journal and starts over after it closes, without a re-click", async (t) => {
+  // Live 227/00555: no catch while the modal is open; on the busy-0 tick the start message and
+  // animation come again ("You lower the Karambwan vessel."), then the first catch (t24917-24920).
   const f = fishingScene(t);
   ticks(8);
   assert.ok(f.caught() > 0, "the spot lands a catch before the journal opens");
   await send(f, DIARY_PACKET);
   assert.equal(f.p.getInterfaceId(), 741, "the diary journal opens");
-  assert.equal(f.p.inBusyModal(), true);
+  assert.deepEqual(f.busy, [1], "busy is sent");
   const caught = f.caught();
   ticks(12);
   assert.equal(f.caught(), caught, "no catch while it is open");
   assert.equal(Fishing.isFishingActive(f.p), true, "the session is held, not ended");
   await send(f, CLOSE_PACKET);
-  assert.equal(f.p.inBusyModal(), false);
-  ticks(8);
-  assert.ok(f.caught() > caught, "catches resume after the close");
+  assert.deepEqual(f.busy, [1, 0], "the close clears busy");
+  const animations = [];
+  const perform = f.p.performAnimation.bind(f.p);
+  t.mock.method(f.p, "performAnimation", (animation) => { animations.push(animation?.getId?.()); return perform(animation); });
+  ticks(1);
+  assert.equal(f.caught(), caught, "the overdue roll does not go off on the first tick");
+  assert.ok(animations.some((id) => id > 0 && id !== 65535), "the start animation plays again");
+  ticks(10);
+  assert.ok(f.caught() > caught, "catches resume");
 });
 
 test("mining waits under the diary journal and resumes after it closes", async (t) => {
@@ -140,6 +151,8 @@ test("mining waits under the diary journal and resumes after it closes", async (
   ticks(15);
   assert.equal(f.mined(), 0, "no ore while the journal is open");
   await send(f, CLOSE_PACKET);
+  ticks(1);
+  assert.equal(f.mined(), 0, "the overdue roll does not go off on the first tick");
   ticks(15);
   assert.ok(f.mined() > 0, "the rock gives ore after the close");
 });
@@ -150,10 +163,9 @@ test("busy is set while the journal or the equipment screen is open and cleared 
   await send(f, CLOSE_PACKET);
   await send(f, STATS_PACKET);
   assert.equal(f.p.getInterfaceId(), 84);
-  assert.equal(f.p.inBusyModal(), true);
   await send(f, CLOSE_PACKET);
-  assert.equal(f.p.inBusyModal(), false);
   assert.deepEqual(f.busy, [1, 0, 1, 0], "the equipment screen's busy is cleared too");
+  assert.equal(f.p.inBusyModal(), false);
 });
 
 test("a 12393 sent for a teleport or cutscene pauses nothing", async (t) => {
@@ -186,7 +198,7 @@ test("the CA overview is a busy modal too, across its own screens", async (t) =>
   const f = actor(t, { x: ROCK_TILE.x - 1, y: ROCK_TILE.y }, core.Skill.MINING);
   await send(f, { type: "widget_action", widgetId: (712 << 16) | 3, groupId: 712, childId: 3, slot: 5, buttonNum: 1, opId: 1, itemId: -1 });
   assert.equal(f.p.getInterfaceId(), 717, "the character summary's Combat Achievements row opens the overview");
-  assert.equal(f.p.inBusyModal(), true);
+  assert.deepEqual(f.busy, [1]);
   // Its burger menu's Bosses row (717:17 slot 14) swaps in the bosses list (716): busy stays 1.
   await send(f, { type: "widget_action", widgetId: (717 << 16) | 17, groupId: 717, childId: 17, slot: 14, buttonNum: 1, opId: 1, itemId: -1 });
   assert.equal(f.p.getInterfaceId(), 716, "the bosses list replaces the overview");
@@ -194,4 +206,43 @@ test("the CA overview is a busy modal too, across its own screens", async (t) =>
   await send(f, CLOSE_PACKET);
   assert.equal(f.p.inBusyModal(), false);
   assert.deepEqual(f.busy, [1, 0], "no 0 between the two screens (live 237/1001305 t5413)");
+});
+
+test("woodcutting waits under the diary journal and starts over after it closes", async (t) => {
+  const f = actor(t, { x: 3222, y: 3218 }, core.Skill.WOODCUTTING);
+  f.p.getInventory().add(new core.Item(core.ItemIdentifiers.BRONZE_AXE), true);
+  const tree = new core.GameObject(core.ObjectIdentifiers.TREE, new core.Location(3223, 3218, 0), 10, 0, null);
+  core.ObjectManager.register(tree, true);
+  t.after(() => {
+    for (const task of [...core.TaskManager.pendingTasks.toArray(), ...core.TaskManager.activeTasks]) {
+      if (task.originalTreeObject === tree) { task.stop(); core.ObjectManager.deregister(task.stumpObject, true); }
+    }
+    core.ObjectManager.deregister(tree, true);
+  });
+  // Every roll fails, so the tree stands and each attempt is counted.
+  const fail = Math.random;
+  Math.random = () => (new Error().stack.includes("rollLog") ? 0.999999 : fail());
+  const attempts = [];
+  const observer = "BusyModalChop" + f.p.getIndex();
+  PM.createApi(observer).onCustomEvent("woodcutting:attempt", (e) => { if (e.player === f.p) attempts.push(core.World.getProcessCycle()); });
+  t.after(() => {
+    const hooks = PM.customEventHooks.get("woodcutting:attempt") ?? [];
+    PM.customEventHooks.set("woodcutting:attempt", hooks.filter((h) => h.pluginName !== observer));
+  });
+  await send(f, { type: "object_option", id: tree.getId(), x: 3223, y: 3218, action: "Chop down" });
+  ticks(10);
+  assert.ok(attempts.length > 0, "the chop rolls before the journal opens");
+  await send(f, DIARY_PACKET);
+  const before = attempts.length;
+  ticks(12);
+  assert.equal(attempts.length, before, "no roll while it is open");
+  await send(f, CLOSE_PACKET);
+  const animations = [];
+  const perform = f.p.performAnimation.bind(f.p);
+  t.mock.method(f.p, "performAnimation", (animation) => { animations.push(animation?.getId?.()); return perform(animation); });
+  ticks(1);
+  assert.equal(attempts.length, before, "the overdue roll does not go off on the first tick");
+  assert.ok(animations.some((id) => id > 0 && id !== 65535), "the swing animation plays again");
+  ticks(10);
+  assert.ok(attempts.length > before, "rolls resume without a re-click");
 });

@@ -17,7 +17,7 @@ const SpiritFlakes = require("./fishing/SpiritFlakes.Fishing");
 const KarambwanVessel = require("./fishing/Karambwan.Fishing");
 const ClueBottles = require("./fishing/ClueBottles.Fishing");
 const Relocation = require("./fishing/Relocation.Fishing");
-const { pauseForLevelUp, isPaused } = require("./SkillActions");
+const { pauseForLevelUp, modalPause } = require("./SkillActions");
 
 // Ticks per resource roll (Wiki: Game tick/Action lengths): rods 5, net, cage and harpoon
 // spots 6, karambwan vessels 4. Spots the table leaves out keep the rods' 5.
@@ -992,7 +992,15 @@ class FishingTask extends Task {
         stopFishing(this.activeSessions, player);
         continue;
       }
-      if (isPaused(session, player)) continue;
+      const pause = modalPause(session, player);
+      if (pause === "paused") continue;
+      if (pause === "restart") {
+        // After a busy modal: start over as a click on the spot does (SkillActions.modalPause).
+        const spot = World.getNpcs().get(session.npcIndex);
+        if (spot && spot.getId() === session.npcId) startFishing(player, spot, session.tool, this.activeSessions);
+        else stopFishing(this.activeSessions, player);
+        continue;
+      }
 
       const npc = World.getNpcs().get(session.npcIndex);
       if (!npc || npc.getId() !== session.npcId) {

@@ -895,9 +895,9 @@ export class PacketSender {
   /**
    * Opens or ends a busy main modal: varbit 12393 ("busy"), which live sets while the diary
    * journal, the CA overview or the equipment screen is open, and the server state it stands
-   * for: a repeating gathering action pauses while it is open and resumes after it closes
-   * (rsprox 227/01757 t8544-8548, 227/00555 t24898-24918, 227/00562 t153-177;
-   * docs/interface-interruption.md). Every close route ends it (resetInterfaceState).
+   * for: a repeating gathering action waits while it is open and starts over after it closes
+   * (rsprox 227/00555 t24898-24920, 227/00562 t153-182; SkillActions.modalPause;
+   * docs/busy-modals.md). Every close route ends it (resetInterfaceState).
    * Cutscenes and teleports send 12393 themselves and do not pause anything.
    */
   setBusyModal(open: boolean): this {

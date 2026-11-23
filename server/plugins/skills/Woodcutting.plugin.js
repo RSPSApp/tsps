@@ -18,7 +18,7 @@ const Shrine = require("./woodcutting/Shrine.Woodcutting");
 const SplitLogs = require("./woodcutting/SplitLogs.Woodcutting");
 const KandarinHeadgear = require("./woodcutting/KandarinHeadgear.Woodcutting");
 const FarmedRedwood = require("./farming/Redwood.Farming");
-const { pauseForLevelUp, isPaused, actionInterval } = require("./SkillActions");
+const { pauseForLevelUp, modalPause, actionInterval } = require("./SkillActions");
 
 const DEFAULT_TREE_STUMP_ID = ObjectIds.TREE_STUMP_2;
 // Older trees share models but not stumps, and some sit next to an unrelated stump id; key their
@@ -1384,7 +1384,17 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       stopWoodcutting(activeSessions, player);
       continue;
     }
-    if (isPaused(state, player)) continue;
+    const pause = modalPause(state, player);
+    if (pause === "paused") continue;
+    if (pause === "restart") {
+      // After a busy modal: start over as a click on the tree does (startWoodcutting): the swing
+      // message and animation, then the first roll (SkillActions.modalPause).
+      state.nextActionTick = currentTick + FIRST_ROLL_DELAY_TICKS;
+      state.nextAnimationTick = currentTick + FIRST_ROLL_DELAY_TICKS;
+      sendSpam(player, SWING_MESSAGE);
+      player.performAnimation(new Animation(state.axe.animationId));
+      continue;
+    }
 
     const activeTree = treeAt(
       state.objectId,

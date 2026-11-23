@@ -17,7 +17,7 @@ const VarrockArmour = require("./mining/VarrockArmour.Mining");
 const ProspectorOutfit = require("./mining/ProspectorOutfit.Mining");
 const AncientEssence = require("./mining/AncientEssence.Mining");
 const DenseRunestone = require("./mining/DenseRunestone.Mining");
-const { pauseForLevelUp, isPaused, actionInterval } = require("./SkillActions");
+const { pauseForLevelUp, modalPause, actionInterval } = require("./SkillActions");
 
 // rsprox recordings: a mined-out rock becomes "rocks1"/"rocks2" (the digit of the rock's own gameval,
 // copperrock2 -> rocks2) and the miner is sent a respawn timer by the cache's add_overlaytimer_loc.
@@ -910,7 +910,15 @@ class MiningTask extends Task {
         stopMining(this.activeSessions, player);
         continue;
       }
-      if (isPaused(state, player)) continue;
+      const pause = modalPause(state, player);
+      if (pause === "paused") continue;
+      if (pause === "restart") {
+        // After a busy modal: start over as a click on the rock does (startMining): a swing next
+        // tick, then the first roll (SkillActions.modalPause).
+        state.swingTick = miningTick + 1;
+        state.nextRollTick = firstRollTick(player, state.pickaxe, state.rock);
+        continue;
+      }
 
       const rockObject = state.npcRock ? npcRockTarget(state.npcRock) : MapObjects.get(
         state.objectId,

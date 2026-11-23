@@ -15,15 +15,31 @@ function pauseForLevelUp(event, sessions, stop, onResume) {
 }
 
 /**
- * A gathering session skips this tick, keeping its state: a level-up dialogue holds it
- * (pauseForLevelUp), and so does a busy main modal (the diary journal, the CA overview), which
- * live pauses a chop, a catch or a swing under and resumes after closing without a re-click
- * (rsprox 227/01757 t8544-8548, 227/00555 t24898-24918, 227/00562 t153-177;
- * docs/interface-interruption.md). Its clocks are not advanced, so a roll that fell due goes off
- * on the first tick after.
+ * A gathering session skips this tick, keeping its state, while a level-up dialogue holds it
+ * (pauseForLevelUp) or a busy main modal is open (the diary journal, the CA overview).
  */
 function isPaused(session, player) {
   return session.levelUpPaused === true || player?.inBusyModal?.() === true;
+}
+
+/**
+ * What a gathering session does this tick around a busy modal: "paused" while one is open (or a
+ * level-up holds it), "restart" on the first tick after it closed, and "run" otherwise. Live
+ * starts the action over after the close, without a re-click: its start message and animation,
+ * then a full interval to the first roll (rsprox 227/00555 t24917-24920, karambwan:
+ * "You lower the Karambwan vessel." on the busy-0 tick; 227/00562 t176-182, mining: a fresh
+ * swing two ticks after the close). docs/busy-modals.md.
+ */
+function modalPause(session, player) {
+  if (isPaused(session, player)) {
+    if (player?.inBusyModal?.() === true) session.modalPaused = true;
+    return "paused";
+  }
+  if (session.modalPaused) {
+    session.modalPaused = false;
+    return "restart";
+  }
+  return "run";
 }
 
 /**
@@ -39,4 +55,4 @@ function actionInterval(emitter, player, skill, kind, ticks, saving = 0) {
   return Math.max(1, (request.ticks | 0) - saving);
 }
 
-module.exports = { pauseForLevelUp, isPaused, actionInterval };
+module.exports = { pauseForLevelUp, isPaused, modalPause, actionInterval };

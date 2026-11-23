@@ -235,9 +235,17 @@ function getPriceChecker(player) {
   return player.__priceCheckerContainer;
 }
 
+let pluginApi;
+
 function handlePriceCheckerButton(player, buttonId) {
   switch (buttonId) {
     case OPEN_PRICE_CHECKER_BUTTON:
+      // Live refuses while fighting something alive and opens once the fight is over
+      // (rsprox 240/1001355 t1964 refused, t1969 opened). docs/interface-interruption.md.
+      if (pluginApi.getCombatFactory().inLiveCombat(player)) {
+        player.getPacketSender().sendMessage("You cannot open the price checker screen while in combat.");
+        return true;
+      }
       if (player.busy?.()) {
         player.getPacketSender().sendInterfaceRemoval();
       }
@@ -321,6 +329,7 @@ module.exports = {
   name: "PriceChecker",
   description: "Price checker opened from the worn-items tab: deposit items to see each value and the total, and get them back on close.",
   register(api) {
+    pluginApi = api;
     api.onCustomEvent("interface:closed", returnItems);
     api.onInterfaceActionButton(
       [OPEN_PRICE_CHECKER_BUTTON, PRICE_CHECKER_DEPOSIT_ALL_BUTTON],

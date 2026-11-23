@@ -37,9 +37,11 @@ An NPC's hit closes the open screen server-side on the hit tick, and auto-retali
 same tick (227/1000296 t5358). `CombatFactory.executeHit` already closes a `busy()` player's
 interface on a hit.
 
-Mid-teleport (a passageway, 228/02229 t236), or while dying (227/1000370 t25076-25080), the click
-is dropped. Ours: tsps drops it during a forced move such as a ditch jump too, which is not
-recorded. On one tick during the passageway, a mix of worn-items clicks got "Please finish
+Mid-teleport, held by a loc's delay (a passageway, 228/02229 t238), or while dying
+(227/1000370 t25076-25080), the click is dropped. An object clicked from in reach on the same
+tick still runs, and the screen stays shut (228/02229 t236: the passageway and the click arrive
+together). A route with steps left is cancelled instead (227/1000561 t12352). Ours: tsps also
+drops the click during a forced move such as a ditch jump, which is not recorded. On one tick during the passageway, a mix of worn-items clicks got "Please finish
 what you're doing before opening this menu." (228/02229 t238). That capture can't tell which
 button sent it, so tsps sends nothing.
 
@@ -81,16 +83,6 @@ refused, t1969 opened). tsps uses the same in-combat rule as View equipment stat
   and does not set `busy`. Walking continues on both layouts (226/01694 t5389, 227/00067 t228,
   227/00101 t8689). All settings refuses during a delayed action with "Please finish what you
   are doing before opening the settings menu." (228/02229).
-
-## Mechanism (LostCity, 2004; not evidence of live behaviour)
-
-LostCity's IF_BUTTON handler clears nothing. A main modal makes the player `busy()`, which
-pauses op/ap triggers, the queues and repathing until the modal closes. Walking waypoints still
-step, and follow keeps going. An NPC hit runs `if_close`.
-
-That matches live's skilling pause under the Collection log, the diary and the CA overview, and
-live's hit close. It does not match live's View equipment stats, which stops everything and
-refuses in combat. It does not match live's walk pause on the modern layout either.
 
 ## Not recorded yet
 

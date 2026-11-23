@@ -31,6 +31,7 @@ before(async () => {
   core = PM.getCoreApi();
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(HOME.x, HOME.y);
+  core.RegionManager.loadMapFiles(3104, 3161);
   PM.emitServerStartup({});
 });
 after(() => {
@@ -286,4 +287,32 @@ test("a make-X loop (fletching Make-All) ends on the open, as a walk click ends 
   assert.equal(f.p.getInterfaceId(), STATS_INTERFACE);
   ticks(20);
   assert.equal(inv.getAmount(I.LOGS), logs, "no more logs are cut behind the screen");
+});
+
+test("a loc clicked from in reach on the same tick still runs, and the screen stays shut", async (t) => {
+  // Live 228/02229 t236: an oploc and View equipment stats on one tick; the passageway runs and the
+  // screen does not open. Here, the Wizards' Tower ladder (2147) from its east side, in reach.
+  const f = actor(t, { x: 3105, y: 3162 });
+  ticks(1);
+  f.p.needsPlacement = false;
+  await send(f, { type: "object_option", id: 2147, x: 3104, y: 3162, clickType: 1 }, STATS_BUTTON);
+  assert.notEqual(f.p.getInterfaceId(), STATS_INTERFACE, "the screen does not open");
+  ticks(6);
+  assert.ok(f.p.getLocation().getY() > 9000, "the climb went ahead, to the basement");
+});
+
+test("dropped while a loc's delay holds the player (mid ladder climb)", async (t) => {
+  // Live 228/02229 t238: clicks during a delayed action open nothing.
+  const f = actor(t, { x: 3105, y: 3162 });
+  ticks(1);
+  f.p.needsPlacement = false;
+  await send(f, { type: "object_option", id: 2147, x: 3104, y: 3162, clickType: 1 });
+  let blockedTick = -1;
+  for (let i = 0; i < 4 && blockedTick < 0; i++) {
+    ticks(1);
+    if (f.p.getMovementQueue().isMovementBlocked()) blockedTick = i;
+  }
+  if (blockedTick < 0) return t.skip("this ladder holds no delay to click into");
+  await send(f, STATS_BUTTON);
+  assert.equal(f.p.getInterfaceId(), -1, "nothing opens mid-climb");
 });

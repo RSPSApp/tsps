@@ -234,16 +234,28 @@ function update(player) {
 }
 
 /**
- * Mid-teleport, mid-obstacle, mid forced move (a ditch jump) or dying: live drops the click
- * (rsprox 228/02229 t236, 227/1000370 t25076).
+ * Mid-teleport, mid-obstacle, held by a loc's delay (a ladder climb), mid forced move (a ditch
+ * jump) or dying: live drops the click (rsprox 228/02229 t236-238, 227/1000370 t25076).
  */
 function inDelayedAction(player) {
+  const movement = player.getMovementQueue();
   return player.getHitpoints() <= 0 || player.isLocked?.() || player.isNeedsPlacement?.()
-    || player.getForceMovement?.() != null;
+    || player.getForceMovement?.() != null || movement.isMovementBlocked?.() === true;
+}
+
+/**
+ * An object or NPC clicked from in reach this tick, so it runs this cycle: live runs it and the
+ * screen does not open (rsprox 228/02229 t236, a passageway clicked on the same tick). A route
+ * with steps left is cancelled instead (227/1000561 t12352).
+ */
+function interactionDueNow(player) {
+  const movement = player.getMovementQueue();
+  return pluginApi.getTaskManager().hasWalkToTask(player.getIndex())
+    && movement.size() === 0 && !movement.isMovings?.();
 }
 
 function openFromWornItems({ player }) {
-  if (inDelayedAction(player)) return true;
+  if (inDelayedAction(player) || interactionDueNow(player)) return true;
   // Ours: "being hit" lasts the combat attacker window (8 ticks after an NPC's hit); live's window
   // after walking out of reach is unrecorded.
   if (pluginApi.getCombatFactory().inLiveCombat(player)) {

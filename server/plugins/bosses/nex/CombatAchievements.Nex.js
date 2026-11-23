@@ -12,13 +12,17 @@ const Common = require("./Common.Nex");
 
 const MONSTER = "Nex";
 
-/** Counts the kill; `announce(kills)` tells the player the count before any task finishes. */
-function killed(player, ownKills, announce) {
+/**
+ * Counts the kill; `announce(kills)` tells the player the count before any task finishes. `solo`
+ * (a private fight with no one else in it) rides on the kill report for the league tasks.
+ */
+function killed(player, ownKills, announce, solo = false) {
   let announced = false;
   const request = {
     player,
     monster: MONSTER,
     count: ownKills,
+    solo: solo === true,
     announce: (kills) => {
       announced = true;
       announce(kills);

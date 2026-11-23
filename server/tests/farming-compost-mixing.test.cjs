@@ -1,7 +1,7 @@
 // Real map objects, players, containers, Farming work and native object packets; network only is stubbed.
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, test } = require('node:test');
+const { after, before, test } = require('node:test');
 process.env.DISABLE_PLAYER_BOTS = '1';
 require('../dist/Server').Server.installProductionPathResolver();
 const { PluginManager: PM } = require('../dist/plugins/PluginManager');
@@ -16,6 +16,7 @@ before(async () => {
   Data = require('../plugins/skills/farming/Data.Farming');
   Patches = require('../plugins/skills/farming/Patches.Farming');
   PM.emitServerStartup({});
+  realProcessCycle = core.World.getProcessCycle;
   core.World.getProcessCycle = () => cycle;
   core.RegionManager.loadMapFiles(3056,3312); core.RegionManager.loadMapFiles(1272,3729);
 });
@@ -49,7 +50,8 @@ function setup(t,type='COMPOST',superFirst=true,count=3){
 async function use(f){await input(f,{type:'item_on_object',widgetId:core.Inventory.INTERFACE_ID,objectId:f.patch.id,itemId:f.id,slot:0,x:f.patch.x,y:f.patch.y});}
 async function answer(f,n=1){await input(f,{type:'dialogue_continue',widgetId:core.OptionDialogue.OPTIONS_WIDGET_ID,childIndex:n});}
 // Each tick is a new world cycle, as World.process runs farming before client input.
-let cycle = 0;
+let cycle = 0, realProcessCycle;
+after(() => { if (realProcessCycle) core.World.getProcessCycle = realProcessCycle; });
 function ticks(n) { while (n--) { cycle++; Patches.tick(); } }
 test('both mixing directions and bin sizes require confirmation before any input; Yes fills one automatic batch',async t=>{
  for(const type of ['COMPOST','BIG_COMPOST'])for(const direction of [true,false]){

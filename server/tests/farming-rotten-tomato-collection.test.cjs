@@ -1,7 +1,7 @@
 // Real map objects, players, containers, Farming work and native object packets; network only is stubbed.
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, test } = require('node:test');
+const { after, before, test } = require('node:test');
 process.env.DISABLE_PLAYER_BOTS = '1';
 require('../dist/Server').Server.installProductionPathResolver();
 const { PluginManager: PM } = require('../dist/plugins/PluginManager');
@@ -18,6 +18,7 @@ before(async () => {
   Patches = require('../plugins/skills/farming/Patches.Farming');
   Services = require('../plugins/skills/farming/Services.Farming');
   PM.emitServerStartup({});
+  realProcessCycle = core.World.getProcessCycle;
   core.World.getProcessCycle = () => cycle;
   core.RegionManager.loadMapFiles(3056,3312); core.RegionManager.loadMapFiles(1272,3729);
 });
@@ -49,7 +50,8 @@ async function take(f) {
   await input(f,{type:'object_option',id:f.patch.id,x:f.patch.x,y:f.patch.y,action:'Take'});
 }
 // Each tick is a new world cycle, as World.process runs farming before client input.
-let cycle = 0;
+let cycle = 0, realProcessCycle;
+after(() => { if (realProcessCycle) core.World.getProcessCycle = realProcessCycle; });
 function ticks(n) { while (n--) { cycle++; Patches.tick(); } }
 function amount(f,name) { return f.inv.getAmount(Data.itemId(name)); }
 function stock(f,name,n) { for(let i=0;i<n;i++) f.inv.add(new core.Item(Data.itemId(name)),false); }

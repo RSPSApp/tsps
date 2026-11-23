@@ -50,7 +50,8 @@ When the inventory fills: spam "You have run out of inventory space.", on the ti
 - **Weeds** all go in at once, as many as the bin has room for, two ticks after the animation
   (local 1000103 t712-716: 15; 1000324 t2035-2042: 10, t6786-6788: the last one; Wiki, Weeds).
 - **Clicking again** cancels the loop, as any click does; a click on that same loop (same bin,
-  action and item) picks it back up where it was. Ours: no capture clicks a bin mid-loop.
+  action and item) picks it back up where it was; a click with another item starts at that loop's
+  next step, and a loop paused by a level-up pop-up starts afresh. Ours: no capture clicks a bin mid-loop.
 - **Close:** `human_push` (810) + 2428 and spam "You close the compost bin.", then a tick later game "The contents have begun to rot." and the bin closes.
 - **Open:** `human_push` + 2429 and spam "You open the compost bin.", the bin opening a tick later.
 - **Take compost:** `human_pickuptable` + 2436, the bucket filled a tick later, every four ticks. It starts

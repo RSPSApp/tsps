@@ -56,9 +56,9 @@ function payAndEnter(api, event) {
 
   const request = { player, object: door, handled: false };
   api.emitCustomEvent("door:open", request);
-  if (!request.handled) return;
-  player.getInventory().deleteNumber(api.core.ItemIdentifiers.DIAMOND, 1);
   event.handled = true;
+  if (!request.handled || request.crossingAccepted !== true) return;
+  player.getInventory().deleteNumber(api.core.ItemIdentifiers.DIAMOND, 1);
 }
 
 module.exports = {

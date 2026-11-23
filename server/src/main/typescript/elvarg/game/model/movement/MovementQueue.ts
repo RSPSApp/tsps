@@ -1864,6 +1864,10 @@ export class MovementQueue {
 
         const routeSpec = this.buildObjectRouteSpec(object, routeEvent.blockAccessFlags);
         const operateBeforeMovement = routeEvent.operateBeforeMovement === true && approachRange === 0;
+        const operateBeforeMovementApproachDelay = operateBeforeMovement
+            ? Math.max(0, Math.floor(routeEvent.operateBeforeMovementApproachDelay ?? 0)) : 0;
+        const deferInitialFace = operateBeforeMovementApproachDelay > 0 &&
+            routeEvent.deferInitialFaceUntilApproachDelay === true;
         // A frozen player still operates what they reach from where they stand (a ladder, a
         // cave entrance: Wiki, Freeze); anything further is "I can't reach that!" as live.
         // Another lock (a stun) still stops a frozen player.
@@ -1914,6 +1918,9 @@ export class MovementQueue {
         if (!frozen) {
             queueObjectRoute();
         }
+        // A few captured doors resolve an approached click an extra pre-movement pass after arrival.
+        // An in-reach click has no approach and remains on its input pass.
+        let approachDelayRemaining = this.reachesObject(object, routeSpec) ? 0 : operateBeforeMovementApproachDelay;
 
         const finalDestinationX = this.player.getMovementQueue().pathX;
         const finalDestinationY = this.player.getMovementQueue().pathY;
@@ -1923,7 +1930,8 @@ export class MovementQueue {
 
         //System.err.println("RequestedX=" + objectX + " requestedY=" + objectY + " givenX=" + finalDestinationX + " givenY=" + finalDestinationY);
 
-        this.player.setPositionToFace(new Location(objectX, objectY));
+        if (deferInitialFace) this.player.setPositionToFace(null);
+        else this.player.setPositionToFace(new Location(objectX, objectY));
         const interactionArea = this.player.getPrivateArea();
         const interactionTeleportSerial = this.player.getTeleportSerial();
         const stoodAtClick = this.character.isPlayer() && MapObjects.stillStands(this.player, id, object.getLocation(), object, true);
@@ -2033,6 +2041,11 @@ export class MovementQueue {
             }
             if (invalidTarget) {
                 this.reset(); // the task's own check ends the interaction after this cycle
+                return;
+            }
+            if (operateBeforeMovement && approachDelayRemaining > 0 && this.reachesObject(object, routeSpec)) {
+                approachDelayRemaining--;
+                this.player.forcePositionToFace(new Location(objectX, objectY, this.player.getLocation().getZ()));
                 return;
             }
             if (operateBeforeMovement && this.points.length === 0 && this.reachesObject(object, routeSpec)) {

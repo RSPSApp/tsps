@@ -2,12 +2,13 @@
 
 The Fletching minigame in the Auburn Valley, built from the OSRS Wiki ("Vale Totems", "Totem site", "Vale offerings", the Vale Totem creation template), rsprox captures (recordings 1098, 1100, 1105, 1108, 3127 and 3276 on https://rsprox.net/database, and the regular-world rev 242 recording 20261109T224258-5ab63b4 of the whole miniquest) and the cache. It is one plugin, `server/plugins/minigames/ValeTotems.plugin.js`, with its units in `server/plugins/minigames/valetotems/` and its data in `server/plugins/minigames/data/vale-totems.json`. The accompanying miniquest is the Quests plugin's `server/plugins/quests/quests/ValeTotems.Quest.js`.
 
-The captures were all recorded on Leagues VI and Grid Master worlds. Leagues multiplies the offerings a player collects by 4 (the Wiki calculator's "League offering multiplier"): the captured pile varbit held 10 for a decorated oak totem and "You collect 40 offerings." followed. Everything else matched the Wiki, so the plugin follows the varbit and the Wiki.
+The captures include Leagues VI, Grid Master and ordinary members worlds. Recording 232/3127 has only the members world flag. The Leagues pile varbit held 10 for a decorated oak totem and "You collect 40 offerings." followed. The plugin uses the pile value before that League collection multiplier.
 
 Status:
 - **Done:**
   - building, carving and decorating at all eight sites, with the Fletching level per wood, run energy and Construction xp;
-  - the ents' visit every 80 ticks: offerings, durability, collapse and new spirits;
+  - roaming ents and visits every 80 ticks: offerings, durability, collapse and new spirits;
+  - paired ent trails, four boosted build or carve XP grants, and one-use double offerings;
   - the spirit NPCs at each site, with per-viewer spawn/despawn sequences and slot-2 spot effects;
   - the durability leaves above a carved totem, sent to each viewer's invisible site NPC;
   - claiming and inspecting offerings;
@@ -19,7 +20,7 @@ Status:
   - Bale of flax (Unpack: 25 flax) and Dirty arrowtips (Clean: arrowheads by Fletching level);
   - `::entvisit` for testing.
 - **Not done:**
-  - the ents walking their route, ent trails (double offerings and +15% xp for four actions, `ent_totems_trail_*`), and admiring beautiful scenery for run energy;
+  - admiring the same beautiful scenery as an ent for run energy. The Wiki documents the reward and the captures show pauses. The object selected during each phase and the timing of the selection remain unresolved;
   - the fletching knife's faster actions, the Carpenter's outfit bonus, ent seeds and the clue nests.
 
 ## Layout
@@ -31,7 +32,8 @@ Status:
 | `Totems.ValeTotems.js` | Build, Carve and Decorate. |
 | `Offerings.ValeTotems.js` | The offerings pile (Claim, Inspect) and the Vale offerings item (Rummage, Hasty-rummage, Inspect). |
 | `Loot.ValeTotems.js` | One roll of the rummage loot table. |
-| `Ents.ValeTotems.js` | The 80-tick visit cycle and the spirit NPC spawns. |
+| `Ents.ValeTotems.js` | Roaming NPCs, the 80-tick visit cycle and spirit NPC spawns. |
+| `Trails.ValeTotems.js` | Trail objects, tile steps, per-player ent boosts and the four XP charges. |
 | `Spirits.ValeTotems.js` | References to the actual shared spirit NPCs and effects sent to one viewer. |
 | `Icons.ValeTotems.js` | Invisible site NPCs and viewer-specific durability leaves derived from saved site state. |
 | `Commands.ValeTotems.js` | `::entvisit`. |
@@ -118,7 +120,7 @@ Not captured: the wrong-animal warning, the "still working on it" reminders and 
 - **Ent visits:** every 80 ticks every site is visited at once.
   - A fully carved totem gets its offerings and loses a point of durability. At 0 it collapses, with every site varbit back to 0, on the same visit.
   - A site with no totem gets three new spirits. A built totem, carved or not, keeps its spirits.
-- **Spirit transitions:** RSProx 232/03127 ticks 253/255, 237/01108 ticks 6608/6610 and 237/04054 ticks 5099/5101 show removed species' despawn sequence followed by a slot-2 spot effect, then introduced species' spawn pair two ticks later. Retained species receive neither effect. The detailed 234/03285 ticks 8114/8116 update `animal_1..3` before despawn, keep the old visibility mask for two ticks, then update `multianimal_*_1` before spawn. The cache names the buffalo's sequence family `bison`. These recordings are from the special worlds identified above; this adds their visual contract without changing visit rates or rewards.
+- **Spirit transitions:** RSProx 232/03127 ticks 253/255, 237/01108 ticks 6608/6610 and 237/04054 ticks 5099/5101 show removed species' despawn sequence followed by a slot-2 spot effect, then introduced species' spawn pair two ticks later. Retained species receive neither effect. The detailed 234/03285 ticks 8114/8116 update `animal_1..3` before despawn, keep the old visibility mask for two ticks, then update `multianimal_*_1` before spawn. The cache names the buffalo's sequence family `bison`. These recordings span ordinary and special worlds. The visual contract preserves the visit rates and rewards.
   - Effects belong to one viewer and never change the shared NPC animation/graphic flags. They are queued after NPC sync and discarded when the NPC is absent from that viewer's local list; they are not replayed on later entry or login.
   - The live visibility mask is transient during those two ticks. Saved snapshots always contain the final selected species and mask. Logout settles that mask and stops its timer. A superseding developer-triggered reroll stops the previous timer and restores a reselected despawning actor; that recovery is a defensive lifecycle choice, not a recorded gameplay sequence.
 - **Offerings per visit:** the Wiki's table, the wood's base plus an amount per decoration: oak, willow and maple 2 + 2, yew 3 + 2.5 (rounded down), magic and redwood 3 + 3. Recorded visits matched it for oak, maple, yew and magic.
@@ -134,9 +136,24 @@ Not captured: the wrong-animal warning, the "still working on it" reminders and 
 - **Hasty-rummage:** up to 500 at once: "You rummage through the offerings four times..." then a loot line per rummage.
 - **Inspect (item):** an objectbox, "You have enough offerings to rummage through them<br>once. You've earned 0 Vale Research Points." (green numbers, "4<br>times" for more).
 
+### Ent trails
+
+- The [Vale Totems Wiki revision 15369725](https://oldschool.runescape.wiki/w/Special:PermanentLink/15369725) specifies +15% Fletching XP for the next four successful build or carve actions and resetting the count on another pair. The server applies the percentage before its normal tenths-of-XP handling. Decoration leaves the count alone. In [237/1100](https://rsprox.net/download/1100) ticks 514–557, the player reaches both flowers, gets four charges, builds and carves three times. Ticks 683–756 show another pair, another activation, and common removal 73 ticks after the first flower and 71 after the second.
+- Boosted builds and carves send the filterable line “Your connection to the ents inspires your carving.” before the action feedback. The last charge also sends “Your connection to the ents fades.” between those lines. [237/1100](https://rsprox.net/download/1100) ticks 544, 547, 552 and 557 and [237/1098](https://rsprox.net/download/1098) ticks 22798, 22807, 22813 and 22820 show the same order.
+- The [Ent trail Wiki revision 15203074](https://oldschool.runescape.wiki/w/Special:PermanentLink/15203074) specifies distinct flowers of the same pair, entitlement tied to one ent, doubling once for a built and decorated totem, and expiry after three empty sites. [237/1098](https://rsprox.net/download/1098) ticks 22657–22940 show the entitlement move toward sites 8, 1, 2 and 3. The same decorated oak gains 10 from an ordinary visit and 20 from the buffed one, which clears the entitlement. The Leagues sample appears to carry the buff past three sites without an eligible totem, including sites whose empty state is inferred from the client packets. The implementation follows the Wiki's expiry rule. A built totem with no decorations can receive ordinary offerings without consuming the entitlement.
+- [Ent (Vale Totems), Wiki revision 15373656](https://oldschool.runescape.wiki/w/Special:PermanentLink/15373656) describes an anticlockwise route. The seven connected legs in `vale-totems-ent-routes.json` were assembled from decoded walk/run steps and terminal positions: [237/1098](https://rsprox.net/download/1098) ticks 16952–17246, 17117–32763, 18075–22845, 18163–22925, 16835–22967, 16821–23166 and 16802–23200, with additional edges from [237/1108](https://rsprox.net/download/1108) ticks 7386–8960, [237/1106](https://rsprox.net/download/1106) ticks 3252–3255, [237/1107](https://rsprox.net/download/1107) ticks 3433–3439, and [237/1149](https://rsprox.net/download/1149) tick 3657. The path's site 6 anchors are 237/1098 ticks 16870–16887 and 237/1107 ticks 3802–3805. [234/3276](https://rsprox.net/download/3276) ticks 6027–6050 show arrival, the offering 14 ticks later, and eight intervening ticks before departure.
+- [232/3127](https://rsprox.net/download/3127) ticks 261–278 and 344 show flowers appearing two ticks apart on tiles the roaming ent steps through, then disappearing together. [237/1108](https://rsprox.net/download/1108) ticks 9320–10440 show eight different ent identities at site 2 on 80-tick boundaries, with identities repeating after 640 ticks. The region's existing synchronized site credit remains one visit per site every 80 ticks.
+
 ## Estimates
 
 These are not in the captures or the Wiki:
+
+- **Site 6 route:** use the cache's shortest collision-valid connector from (1455,3312) to (1479,3328) between observed steps. That part of the retail route was outside the capture view.
+- **Movement pacing:** distribute the captured tile steps over 58 travel ticks, with the captured 14- and eight-tick site waits. The individual walk/run and mid-route stop schedule is incomplete; the final two-tile placements are represented as regular steps.
+- **Trail placement:** place each leg's pair on the ent's scheduled tiles at phases 33 and 35 of the 80-tick cycle, with fixed flower rotations. This follows the movement-tied spawn and two-tick gap in 232/3127. The general trigger, placement choices and rotations were not observed.
+- **Trail lifetime:** apply the shared removal at 73 ticks after the first flower to every pair. The recorded lifetimes in 232/3127 and 237/1100 agree. Other circumstances were not established.
+- **Population and spacing:** use eight rotating ents, one per leg at the same phase. This fits the eight recurring identities in 237/1108 and the synchronized site visits. The regular-world population was not established.
+- **Relog:** clear the ent and XP buffs on a new session while preserving saved totems and unrelated bits. Retail persistence was not established.
 
 - **Wrong animals:** one maple totem with one wrong animal got 6 offerings instead of 10, the only sample. Each wrong animal takes 40% off here. The Wiki only says "significantly fewer".
 - **Messages:** "You need a knife to carve the totem.", "Hasty-rummage twice/three times/five times", and the pile's Inspect above twenty, which shows digits.
@@ -147,7 +164,8 @@ These are not in the captures or the Wiki:
 
 ## Checking it
 
-- `node --test server/tests/vale-totems.test.cjs` (after `yarn build`) covers building, carving, decorating, visits, claiming and rummaging.
+- `node --test server/tests/vale-totems.test.cjs` (after `yarn build`) covers building, carving, decorating, visits, claiming and rummaging, including paired activation, the one-use and expiry rules, and the four boosted actions with reset.
+- The local agent MCP gameplay check at `7edd61cb0215cc6c678fecadea44dcf4a0e65bf7` built, carved and decorated a maple totem at site 3. It earned 10 offerings at world tick 400, the player claimed the pile, and the same totem earned 20 at tick 480 after both trail tiles were walked. Walking one flower left the XP count unchanged. A second pair reset three unused charges to four. The next four successful actions consumed all four and the fifth granted the ordinary maple XP. The observed whole XP totals after reset were 167701, 167760, 167818, 167876, 167935 and 167986, consistent with four 58.4 gains and a final 50.8 gain from the server’s tenths handling. The saved final XP matched.
 - `node --test server/tests/vale-totems-quest.test.cjs` covers the quest registration, the site gate, the old totem, the intro, the two lessons, the scripted 100 offerings and completion.
 - `node --test server/tests/vale-totems-scenes.test.cjs` plays the three cutscenes' timelines against the recording's ticks, and a logout mid-scene.
 - `node --test server/tests/vale-totems-specific-effects.test.cjs` uses real Player, PlayerSession, PacketSender, cache varbits, TaskManager and the startup hook's actual NPC spawns. Only transport output and RNG are controlled. It checks the two-tick visibility boundary, packet order/slot/species, a second viewer, saved-state restoration on a fresh player during the transition, logout cancellation and a superseding reroll. The older Vale tests use lightweight player fixtures and supplement this coverage.

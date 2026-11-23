@@ -13,7 +13,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const Shared = require('../plugins/minigames/valetotems/Shared.ValeTotems');
 const State = require('../plugins/minigames/valetotems/State.ValeTotems');
 const Ents = require('../plugins/minigames/valetotems/Ents.ValeTotems');
-const hooks = {};
+const hooks = { startup: [] };
 const viewers = [];
 const SITE = 3;
 
@@ -26,10 +26,11 @@ before(async () => {
     onPlayerLogin: fn => hooks.login = fn,
     onPlayerLogout: fn => hooks.logout = fn,
     onPlayerMapSquareChange: fn => hooks.enter = fn,
-    onServerStartup: fn => hooks.start = fn,
+    onServerStartup: fn => hooks.startup.push(fn),
+    registerArea() {},
   };
   Shared.init(api); State.attach(api); Ents.attach(api);
-  hooks.start();
+  for (const start of hooks.startup) start();
 });
 
 afterEach(() => {

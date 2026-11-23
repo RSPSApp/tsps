@@ -1,6 +1,6 @@
 /**
  * Cooking (https://oldschool.runescape.wiki/w/Cooking): fires, ranges and ovens, doughs, pies and
- * pizzas, and wine, from plugins/skills/data/cooking.json and rsprox captures. See
+ * pizzas, wine and nettle tea, from plugins/skills/data/cooking.json and rsprox captures. See
  * docs/cooking.md; the units are in cooking/.
  */
 const Common = require("./cooking/Common.Cooking");
@@ -9,11 +9,12 @@ const Wine = require("./cooking/Wine.Cooking");
 
 module.exports = {
   name: "Cooking",
-  description: "Cooking on fires, ranges and ovens, plus doughs, pies, pizzas, wine, sacred eels, leaping fish, gnome cooking and dairy churns.",
+  description: "Cooking on fires, ranges and ovens, plus doughs, pies, pizzas, wine, nettle tea, sacred eels, leaping fish, gnome cooking and dairy churns.",
   register(api) {
     require("./cooking/Cookers.Cooking")(api);
     require("./cooking/Recipes.Cooking")(api);
     require("./cooking/Wine.Cooking")(api);
+    require("./cooking/NettleTea.Cooking")(api);
     require("./cooking/SacredEel.Cooking")(api);
     require("./cooking/LeapingFish.Cooking")(api);
     require("./cooking/Gnome.Cooking")(api);

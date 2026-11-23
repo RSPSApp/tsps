@@ -84,8 +84,12 @@ function makeOne(player, recipe) {
     inventory.full();
     return false;
   }
+  // A row's productSlot names the ingredient whose slot the product takes (nettle-water, rsprox
+  // capture 1001702 tick 15607: the nettles' slot empties, the bowl's holds the nettle-water).
+  const productSlot = recipe.productSlotId === undefined ? -1 : inventory.getSlotForItemId(recipe.productSlotId);
   for (const { id, count } of recipe.ingredients) inventory.deleteNumber(id, count);
-  inventory.addItem(new Item(recipe.productId, 1));
+  if (productSlot >= 0 && !inventory.getItems()[productSlot]?.isValid?.()) inventory.setItem(productSlot, new Item(recipe.productId, 1)).refreshItems();
+  else inventory.addItem(new Item(recipe.productId, 1));
   for (const { id, count } of recipe.returns) inventory.addItem(new Item(id, count));
   if (recipe.message) Common.spam(player, recipe.message);
   Common.addXp(player, recipe.xp);

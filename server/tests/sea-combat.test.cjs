@@ -755,7 +755,9 @@ test("a killed creature respawns its usual time after its corpse's two minutes, 
   const { boat, owned, loc, hotspot } = aboardWithCannon(player);
   const harvested = seaNpc(TERN, outboard(boat, owned, hotspot.id, loc, 1));
   const left = seaNpc(TERN, outboard(boat, owned, hotspot.id, loc, 3));
-  const spawns = [harvested.getLocation().getX(), left.getLocation().getX()];
+  const tileOf = (npc) => `${npc.getSpawnPosition().getX()},${npc.getSpawnPosition().getY()}`;
+  const spawns = [tileOf(harvested), tileOf(left)];
+  assert.notEqual(spawns[0], spawns[1]);
   const respawned = new Map();
   /** The game loop's add and remove phases, for these two terns and their respawns. */
   const world = () => {
@@ -768,9 +770,9 @@ test("a killed creature respawns its usual time after its corpse's two minutes, 
     }
     const adding = World.getAddNPCQueue();
     for (let i = adding.length - 1; i >= 0; i--) {
-      if (adding[i].getId() !== TERN || !spawns.includes(adding[i].getSpawnPosition().getX())) continue;
-      const x = adding.splice(i, 1)[0].getSpawnPosition().getX();
-      respawned.set(x, [...(respawned.get(x) ?? []), World.processCycle]);
+      if (adding[i].getId() !== TERN || !spawns.includes(tileOf(adding[i]))) continue;
+      const tile = tileOf(adding.splice(i, 1)[0]);
+      respawned.set(tile, [...(respawned.get(tile) ?? []), World.processCycle]);
     }
   };
   try {
@@ -796,6 +798,30 @@ test("a killed creature respawns its usual time after its corpse's two minutes, 
     assert.ok(unharvested[0] - killedAt >= Loot.CORPSE_TICKS + respawn, "two minutes, then its respawn time");
   } finally {
     for (const npc of [harvested, left]) if (npc.isRegistered()) World.getNpcs().remove(npc);
+    leave(player);
+  }
+});
+
+test("a harvested creature its plugin spawned for a player doesn't respawn", () => {
+  const player = captain();
+  const { boat, owned, loc, hotspot } = aboardWithCannon(player);
+  const at = outboard(boat, owned, hotspot.id, loc, 1);
+  const tern = api.spawnNpc({ id: TERN, x: at.getX(), y: at.getY(), z: 0, owner: player, wanderRadius: 0 });
+  tern.setNeedsPlacement(false);
+  const queued = () => World.getAddNPCQueue().filter((npc) => npc.getId() === TERN && npc.getOwner?.() === player).length;
+  try {
+    tern.getCombat().addDamage(player, tern.getMaxHitpoints());
+    tern.setHitpoints(0);
+    tick(4);
+    Loot.harvest({ player, npc: tern, clickType: 1, handled: false });
+    tick(4);
+    assert.ok(World.getRemoveNPCQueue().includes(tern), "harvested");
+    World.getRemoveNPCQueue().splice(World.getRemoveNPCQueue().indexOf(tern), 1);
+    World.getNpcs().remove(tern);
+    tick(260);
+    assert.equal(queued(), 0, "no clone of a player's own spawn");
+  } finally {
+    if (tern.isRegistered()) World.getNpcs().remove(tern);
     leave(player);
   }
 });

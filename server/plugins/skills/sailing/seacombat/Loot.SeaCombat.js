@@ -240,8 +240,9 @@ function removeCorpse(npc, corpse) {
   // Its respawn is the living creature, not the corpse.
   npc.setNpcTransformationId(-1);
   // The death task's own respawn waits on the corpse's time, and skips a corpse already gone.
+  // A spawn its plugin brings back itself (an owner's) never respawns, as the death task's removal.
   const respawn = npc.getDefinition().getRespawn();
-  if (respawn <= 0) return;
+  if (respawn <= 0 || npc.__skipDefaultRespawn === true) return;
   const corpseLeft = Math.max(0, corpse.expiresAt - World.getProcessCycle());
   TaskManager.submit(new NPCRespawnTask(npc, corpseLeft + respawn));
 }

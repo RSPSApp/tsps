@@ -31,5 +31,8 @@ unimplemented until it can be captured.
 packets and advances `World.process()`. It checks east-west crossings from both sides, local-player
 face syncs, the delayed walked approach, cancellation when Bind or Equipment Stats interrupts the
 commit, sound timing and
-the two-tick restore on the real cache map. Live verification is pending: the worktree's assigned
-agent MCP port 49824 was already occupied, so this review update has no claimed in-game result.
+the two-tick restore on the real cache map. View equipment stats cancels only the pending route:
+an ongoing attack keeps its target (live 227/1000539 t1780-1781). Live, that button is refused in
+combat with "You cannot open the equip screen while in combat!"; that refusal is not implemented
+yet. An agent MCP check on the worktree server confirmed the walked approach (open two ticks after
+arrival), both in-reach crossings on the input tick, and the two-tick restore.

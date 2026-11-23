@@ -1019,7 +1019,7 @@
   {"id":2526,"location":{"x":1243,"y":3678,"z":1},"amt":1,"respawn":100,"description":"Kebos Lowlands"},
   {"id":199,"location":{"x":3044,"y":10313,"z":0},"amt":1,"respawn":200,"description":"UNDIFINED"},
   {"id":1856,"location":{"x":2638,"y":3292,"z":0},"amt":1,"respawn":100,"description":"East Ardougne"},
-  {"id":9652,"location":{"x":3624,"y":9690,"z":0},"amt":1,"respawn":0,"description":"UNDIFINED"},
+  {"id":9652,"location":{"x":3624,"y":9690,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":2347,"location":{"x":3492,"y":3242,"z":1},"amt":1,"respawn":100,"description":"Burgh de Rott"},
   {"id":2347,"location":{"x":2934,"y":3286,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},
   {"id":2347,"location":{"x":3350,"y":3162,"z":0},"amt":1,"respawn":100,"description":"UNDIFINED"},

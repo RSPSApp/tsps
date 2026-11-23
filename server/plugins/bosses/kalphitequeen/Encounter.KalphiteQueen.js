@@ -9,7 +9,9 @@ const molting = new WeakSet();
 
 const KQ_HITPOINTS = 255;
 const KQ_AGGRESSION = { aggressive: true, aggressiveTolerance: false, combatFollowDistance: 9, huntRange: 9 };
-const TRANSFORMATION_TICKS = 20;
+// NPC sequence 6270 and molt graphic 1055's sequence 6269 both last 345 client cycles.
+// The client advances 30 cycles per game tick, so both finish after 12 ticks.
+const TRANSFORMATION_TICKS = 12;
 const AIRBORNE_TIMEOUT_TICKS = 2_000;
 const WORKER_LIFETIME_TICKS = 100;
 const ROPE_LIFETIME_TICKS = 200;

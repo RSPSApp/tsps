@@ -16,7 +16,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 
 let core;
-const TRANSFORMATION_TICKS = 20;
+const TRANSFORMATION_TICKS = 12;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));

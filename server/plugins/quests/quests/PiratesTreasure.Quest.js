@@ -68,8 +68,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
   const PORT_SARIM_LANDING = new Location(3029, 3217, 0);
   const MUSA_POINT_LANDING = new Location(2956, 3146, 0);
   const PANDEMONIUM_LANDING = new Location(3065, 3002, 0);
-  /** Everything south of this is the Pandemonium's waters, well clear of Port Sarim (y 3190+). */
-  const PANDEMONIUM_MAX_Y = 3100;
+  const SEAMAN_MORRIS_NPC_ID = NpcIdentifiers.SEAMAN_MORRIS;
   const TOPLEVEL = 161;
   const OVERLAY_ATMOSPHERE_UID = (TOPLEVEL << 16) | 1;
   const FADE_OVERLAY = 174;
@@ -111,6 +110,12 @@ module.exports = function registerPiratesTreasureQuest(api) {
   const BARTENDER_RUM_COINS_ID = "HEeY2G";
   /** "The customs officer confiscates your rum." (three pages). */
   const RUM_CONFISCATE_STEP_IDS = new Set(["JN4f2Q", "pUSUQY", "et2BjU", "CO6KKg", "pNZxTm"]);
+  /** Seaman Morris's "Where would you like to go?" answers; the trip starts once the player has said it. */
+  const MORRIS_PORT_SARIM_LINE = "I'd like to go to Port Sarim.";
+  const MORRIS_MUSA_POINT_LINE = "I'd like to go to Musa Point.";
+  /** His greeting's "If the player is (not) wearing Karamja gloves:" conditions. */
+  const MORRIS_NO_GLOVES_CONDITION_ID = "k5BpOy";
+  const MORRIS_GLOVES_CONDITION_ID = "8t7bY7";
   /** "30 coins" actions on the two Luthas payment pages. */
   const PAYMENT_STEP_IDS = new Set(["76-Dox", "1YHx0E"]);
   const PAYMENT_MESSAGE_ID = "A0JWWz";
@@ -362,6 +367,11 @@ module.exports = function registerPiratesTreasureQuest(api) {
       if (value.includes("ring of charos")) return wearsRingOfCharos(player);
     }
 
+    if (npcId === SEAMAN_MORRIS_NPC_ID) {
+      if (stepId === MORRIS_NO_GLOVES_CONDITION_ID) return !wearsKaramjaGloves(player);
+      if (stepId === MORRIS_GLOVES_CONDITION_ID) return wearsKaramjaGloves(player);
+    }
+
     if (SAIL_FARE_CONDITION_IDS.has(stepId)) {
       // "Not enough money" uses the fare the Travel click charges: 15 in Karamja gloves (Wiki, Seaman Lorris).
       return player.getInventory().getAmount(COINS_ITEM_ID) < (wearsKaramjaGloves(player) ? GLOVES_FARE : FARE);
@@ -601,6 +611,7 @@ module.exports = function registerPiratesTreasureQuest(api) {
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:condition", handleConditionMet);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:line", handleMorrisDestination);
   api.onCustomEvent("door:toggle", guardStockRoomDoor);
   api.onCustomEvent("teleport:landed", spillRumOnTeleport);
   api.onCustomEvent("ground-items:taken", takeHookedApron);
@@ -717,28 +728,27 @@ module.exports = function registerPiratesTreasureQuest(api) {
     voyage(player, destination, port, route, fare, paid);
   }
 
+  function travelFromPandemoniumToPortSarim({ player }) {
+    leavePandemonium(player, PORT_SARIM_LANDING, "Port Sarim", "pandemonium-port-sarim", FARE);
+  }
+
+  function travelFromPandemoniumToMusaPoint({ player }) {
+    leavePandemonium(player, MUSA_POINT_LANDING, "Musa Point", "pandemonium-musa-point", boatFare(player));
+  }
+
+  /** Talk-to: the destination the player names in Seaman Morris's dialogue sails once they continue past it. */
+  function handleMorrisDestination(event) {
+    if (event.npcId !== SEAMAN_MORRIS_NPC_ID || !event.step?.player) return;
+    if (event.text === MORRIS_PORT_SARIM_LINE) event.after = () => travelFromPandemoniumToPortSarim(event);
+    else if (event.text === MORRIS_MUSA_POINT_LINE) event.after = () => travelFromPandemoniumToMusaPoint(event);
+  }
+
   /**
-   * Seaman Morris sails from the Pandemonium (3063-3065, 3002-3004 since rev 229). npc-spawns.json still
-   * has his old Port Sarim spot (3050,3193), where his options are left alone rather than charging for a
-   * hop across the docks.
+   * Seaman Morris's fares (Wiki, Seaman Morris): 30 coins to either port, but 15 to Musa Point in Karamja gloves;
+   * Port Sarim stays 30. The boarding lines are the boats' own.
    */
-  function onPandemonium(npc) {
-    const at = npc?.getLocation?.();
-    return at != null && at.getY() < PANDEMONIUM_MAX_Y;
-  }
-
-  function travelFromPandemoniumToPortSarim({ player, npc }) {
-    if (onPandemonium(npc)) leavePandemonium(player, PORT_SARIM_LANDING, "Port Sarim", "pandemonium-port-sarim");
-  }
-
-  function travelFromPandemoniumToMusaPoint({ player, npc }) {
-    if (onPandemonium(npc)) leavePandemonium(player, MUSA_POINT_LANDING, "Musa Point", "pandemonium-musa-point");
-  }
-
-  /** Seaman Morris's fare is the boats' own 30 coins (rev 242 capture, tick 187); the gloves' half fare is ours. */
-  function leavePandemonium(player, destination, port, route) {
+  function leavePandemonium(player, destination, port, route, fare) {
     if (sailing.has(player)) return;
-    const fare = boatFare(player);
     if (player.getInventory().getAmount(COINS_ITEM_ID) < fare) {
       // Ours: no capture of Seaman Morris without the fare.
       player.sendMessage("You don't have enough coins to pay for passage.");

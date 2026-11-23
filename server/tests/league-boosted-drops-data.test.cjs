@@ -98,3 +98,12 @@ test("Araxxor's row boosts the Araxyte fang, the part its table drops for the am
   assert.ok(patterns.some((p) => p.test("Araxyte fang")));
   assert.ok(!patterns.some((p) => p.test("Araxyte head")), "the head is not on the page");
 });
+
+test("the Desert Treasure II bosses: the chromium ingot is Trailblazer Reloaded's alone, the Awakener's orb Raging Echoes' and Demonic Pacts'", () => {
+  for (const boss of ["The Whisperer", "Duke Sucellus", "The Leviathan"]) {
+    const boosted = (league, name) => BoostedDrops.patternsFor(league, boss).some((p) => p.test(name));
+    assert.deepEqual([4, 5, 6].map((league) => boosted(league, "Chromium ingot")), [true, false, false], `${boss}: the ingot`);
+    assert.deepEqual([4, 5, 6].map((league) => boosted(league, "Awakener's orb")), [false, true, true], `${boss}: the orb`);
+    assert.deepEqual([4, 5, 6].map((league) => boosted(league, "Virtus mask")), [true, true, true], `${boss}: the virtus robes on every page`);
+  }
+});

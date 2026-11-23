@@ -760,22 +760,33 @@ test("boosted drops: Hunter's own rares (the loot sacks' rares, the tecu salaman
   }
 });
 
-test("combo boss drops: Demonic Pacts drops each part as its finished item, for its characters only", () => {
+test("combo boss drops: Raging Echoes and Demonic Pacts drop each part as its finished item, for their characters only", () => {
   const DATA = require("../plugins/modes/data/league-combo-drops.json");
   const id = (gameval) => core.CacheDefinitions.getObjId(gameval);
-  const dp = character("combo6", "league", 0, 6); // no relic yet: the swap is the league's, not a tier's
-  const echoes = character("combo5", "league", 8, ECHOES);
+  // No relic yet: the swap is the league's, not a tier's.
+  const players = { 4: character("combo4", "league", 0, TRAILBLAZER), 5: character("combo5", "league", 0, ECHOES), 6: character("combo6", "league", 0, 6) };
   const main = character("combomain", "main");
-  assert.equal(DATA.items.length, 17);
-  for (const { source, part, finished } of DATA.items) {
+  const npcNamed = (name) => ({ getDefinition: () => ({ getName: () => name }) });
+  assert.equal(DATA.items.length, 19);
+  for (const { source, part, finished, leagues, npcs } of DATA.items) {
     assert.ok(id(part) > 0 && id(finished) > 0, `${source}: ${part} and ${finished} are in the cache`);
-    const roll = (player, key = "itemId") => ask("npc-drops:roll", { player, drops: [{ [key]: id(part), amount: 3, noted: true }] }).drops[0];
-    assert.deepEqual(roll(dp), { itemId: id(finished), amount: 1, noted: false }, `${source}: ${part} drops as ${finished}`);
-    assert.deepEqual(ask("drops:rolled", { player: dp, source, drops: [{ id: id(part), amount: 1 }] }).drops[0], { id: id(finished), amount: 1 }, `${source} on "drops:rolled"`);
+    const npc = npcs ? npcNamed(npcs[0]) : undefined;
+    const roll = (player) => ask("npc-drops:roll", { player, npc, drops: [{ itemId: id(part), amount: 3, noted: true }] }).drops[0];
+    for (const league of [4, 5, 6]) {
+      const expected = leagues.includes(league) ? { itemId: id(finished), amount: 1, noted: false } : { itemId: id(part), amount: 3, noted: true };
+      assert.deepEqual(roll(players[league]), expected, `${source} in league ${league}`);
+    }
+    if (!npcs) {
+      const league = players[leagues.at(-1)];
+      assert.deepEqual(ask("drops:rolled", { player: league, source, drops: [{ id: id(part), amount: 1 }] }).drops[0], { id: id(finished), amount: 1 }, `${source} on "drops:rolled"`);
+    }
     assert.equal(roll(main).itemId, id(part), `${source}: a main character keeps the part`);
-    assert.equal(roll(echoes).itemId, id(part), `${source}: Raging Echoes keeps the part`);
   }
-  assert.deepEqual(ask("npc-drops:roll", { player: dp, drops: [{ itemId: core.ItemIdentifiers.COINS, amount: 500 }] }).drops[0], { itemId: core.ItemIdentifiers.COINS, amount: 500 }, "other loot is untouched");
+  // The hydra tail is finished from the Alchemical Hydra only, not an ordinary hydra's 1/5,001.
+  const tail = (name) => ask("npc-drops:roll", { player: players[6], npc: npcNamed(name), drops: [{ itemId: id("hydra_tail"), amount: 1 }] }).drops[0].itemId;
+  assert.equal(tail("Alchemical Hydra"), id("bonecrusher_necklace"));
+  assert.equal(tail("Hydra"), id("hydra_tail"));
+  assert.deepEqual(ask("npc-drops:roll", { player: players[6], drops: [{ itemId: core.ItemIdentifiers.COINS, amount: 500 }] }).drops[0], { itemId: core.ItemIdentifiers.COINS, amount: 500 }, "other loot is untouched");
 });
 
 test("combo boss drops through the rollers: the Theatre of Blood's avernic defender, the Colosseum's echo boots, the Chambers' kodai wand", () => {

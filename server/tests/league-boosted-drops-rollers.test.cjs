@@ -78,15 +78,15 @@ test("Vale offerings: the 1/100 unique pre-roll is 5/100 for a boosted character
   assert.equal(Loot.roll(character(t, 4)).id, core.CacheDefinitions.getObjId("bowstring_spool"));
 });
 
-test("seed pack: each high-tier roll's Hespori seed is five times its 5/45, the other seeds sharing the rest", (t) => {
+test("seed pack: each high-tier roll's Hespori seed is five times its 5/44, the other seeds sharing the rest", (t) => {
   const Farming = require("../plugins/skills/farming/Guild.Farming");
-  // Tier 5: 1-3 high rolls; every draw is 0.5. Unboosted, 0.5 of 45 is snapdragon (rows 5,5,5,4,4 reach 23);
-  // boosted, the Hespori seed is 25/45 after the two 2.5/45 rows before it, so 0.5 lands on it.
+  // Tier 5: 1-3 high rolls; every draw is 0.5. Unboosted, 22 of 44 is snapdragon (rows 5,5,5,4,4 reach 23);
+  // boosted, the Hespori seed is 25/44 (0.111-0.679) after the two rows before it, shrunk to share the rest.
   randoms([], 0.5);
   assert.notEqual(Farming.seedPackContents(5, false, character(t))[0].id, I.HESPORI_SEED);
   randoms([], 0.5);
   assert.equal(Farming.seedPackContents(5, false, character(t, 4))[0].id, I.HESPORI_SEED);
-  // Past 15/45 + the boost: a draw of 0.7 is past the Hespori seed's 0.111-0.667 and on another seed.
+  // A draw of 0.7 is past the Hespori seed's 0.111-0.679 and on another seed.
   randoms([], 0.7);
   assert.notEqual(Farming.seedPackContents(5, false, character(t, 4))[0].id, I.HESPORI_SEED);
 });

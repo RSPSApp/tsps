@@ -1296,7 +1296,8 @@ Tier 1 counts once the character chose its first relic.
   roll through NpcDrops with the NPC named); the giant lairs' chests pass `source` (Obor,
   Bryophyta). The Desert Treasure II bosses' uniques and Awakener's orb are stages of an ordered reward
   chain ([docs/npc-drops-ordered.md](npc-drops-ordered.md)): the rule scales the stage by its rows, so
-  each stage is that many times as likely (the Whisperer's 1/64 unique stage 5/64 at 5x). Revenant kills (the revenant's name; the Revenant maledictus's two rolls too) ask
+  each boosted row that many times as likely (at 5x the Whisperer's 1/512 bellator vestige is 1/102; the
+  chromium ingot in the same stage is Trailblazer Reloaded's row alone, so in Demonic Pacts it keeps its rate). Revenant kills (the revenant's name; the Revenant maledictus's two rolls too) ask
   `drops:chance` for their own table's unique and ancient artefact rolls, and the Barrows chest
   asks with `Barrows` for its equipment roll: a boosted row's weight grows and its table's
   chance with it, as NpcDrops does. The raids' unique rolls ask per raider with `Chambers of
@@ -1370,9 +1371,12 @@ this cache (struct 6436's tier enum, param 1020). Its boosted drops rest on the 
 server has: the Wiki's "every Desert Treasure II boss drops every Soulreaper axe piece" is a boost
 on the pieces each boss already drops here, not a new drop.
 
-Its combo boss drops ([Wiki](https://oldschool.runescape.wiki/w/Demonic_Pacts_League#Combo_boss_drops)):
-a part that needs other regions to become usable drops as the finished item, for every Demonic
-Pacts character (relics or not). `league/ComboDrops.LeagueMode.js` swaps them by
+Its combo boss drops, as Raging Echoes' ([Wiki](https://oldschool.runescape.wiki/w/Demonic_Pacts_League#Combo_boss_drops),
+[Raging Echoes](https://oldschool.runescape.wiki/w/Raging_Echoes_League#Combo_boss_drops)): a part that
+needs other regions to become usable drops as the finished item, for every character of either league
+(relics or not); Doom's cloth is Demonic Pacts' only, the adamant and rune dragons' slice and lump
+(as the dragon kiteshield and platebody) Raging Echoes' only, and the hydra tail is finished from the
+Alchemical Hydra only (ordinary hydras drop it too). `league/ComboDrops.LeagueMode.js` swaps them by
 `data/league-combo-drops.json` (cache gamevals) on the rollers' loot before it is kept: NPC kills
 and the bosses rolling through NpcDrops (`npc-drops:roll`: the Grotesque Guardians' core, Araxxor's
 fang, the Alchemical Hydra's claw, leather and tail, Cerberus's eternal crystal, Phantom Muspah's

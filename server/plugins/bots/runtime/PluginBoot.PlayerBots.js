@@ -68,6 +68,7 @@ function bootPlayerBotsRuntime(options = {}) {
   const traversalAssist = createTraversalAssist(botApi, {
     objectIds: [config.wildernessDitchObjectId],
     cachePath: config.objectIndexCachePath,
+    seedPath: config.objectIndexSeedPath,
   });
 
   const faceTarget = (event) => {

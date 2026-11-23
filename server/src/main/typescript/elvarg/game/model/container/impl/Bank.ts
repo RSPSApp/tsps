@@ -224,12 +224,14 @@ export class Bank extends ItemContainer {
         return Number.isFinite(capacity) ? Math.max(0, Math.min(Bank.MAX_SLOTS, capacity)) : Bank.MAX_SLOTS;
     }
 
-    /** Slots in use across the tabs, placeholders included (not the search results). */
+    /**
+     * Slots in use across the tabs (not the search results): placeholders, and the gaps a withdrawal left
+     * (see shownSlots), take a slot as items do.
+     */
     public static usedSlots(player: Player): number {
         let used = 0;
         for (let tab = 0; tab < Bank.TOTAL_BANK_TABS; tab++) {
-            if (tab === Bank.BANK_SEARCH_TAB_INDEX) continue;
-            for (const item of player.getBank(tab).getItems()) if (item != null && item.getId() >= 0) used++;
+            if (tab !== Bank.BANK_SEARCH_TAB_INDEX) used += player.getBank(tab).shownSlots();
         }
         return used;
     }
@@ -270,12 +272,28 @@ export class Bank extends ItemContainer {
         return this.items.length - 1;
     }
 
+    /** A gap in this tab, or a new slot while the player's space allows one. */
     public getEmptySlot(): number {
-        return this.roomLeft() > 0 ? this.freeSlot() : -1;
+        return this.roomLeft() > 0 ? this.freeSlot() : this.firstGap();
     }
 
     public getFreeSlots(): number {
-        return Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft());
+        return Math.max(Math.min(super.getFreeSlots() + Bank.MAX_SLOTS - this.items.length, this.roomLeft()), this.gaps());
+    }
+
+    /** The first empty slot this tab still shows, or -1. */
+    private firstGap(): number {
+        const shown = this.shownSlots();
+        for (let slot = 0; slot < shown; slot++) if ((this.items[slot]?.getId() ?? -1) < 0) return slot;
+        return -1;
+    }
+
+    /** The empty slots this tab still shows. */
+    private gaps(): number {
+        let gaps = 0;
+        const shown = this.shownSlots();
+        for (let slot = 0; slot < shown; slot++) if ((this.items[slot]?.getId() ?? -1) < 0) gaps++;
+        return gaps;
     }
 
     /** A full bank accepts reserved placeholders or live stacks with matching metadata. */
@@ -376,7 +394,7 @@ export class Bank extends ItemContainer {
                 // Delete placeholder.
                 if (amount <= 0) {
                     player.getBank(itemTab).getItems()[slot].setId(-1);
-                    player.getBank(player.getCurrentBankTab()).sortItems().refreshItems();
+                    player.getBank(itemTab).sortItems().refreshItems();
                     return;
                 }
 

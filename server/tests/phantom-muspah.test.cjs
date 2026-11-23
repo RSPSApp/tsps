@@ -443,3 +443,24 @@ test("the actual form and shield callbacks preserve then reset the drained Defen
   assert.equal(f.npc.getMaxLevel(defence), 200, "loaded shield-form base Defence");
   assert.equal(f.npc.getDefenceLevel(), 200, "raising the shield restores Defence");
 });
+
+test("the lair plays Secrets of the North, and More Than Meets the Eye only while the Muspah is fought", (t) => {
+  fakeApi.core.TemplatedInstanceArea ??= require("../dist/game/model/areas/impl/TemplatedInstanceArea").TemplatedInstanceArea;
+  const { Music } = require("../dist/game/Music");
+  const Lair = require("../plugins/bosses/phantommuspah/Lair.PhantomMuspah");
+  t.mock.method(Common, "travel", () => {});
+  const player = new Player(null);
+  t.mock.method(player.getMovementQueue(), "reset", () => {});
+  Lair.enter(player);
+  const { area } = Lair.sessionOf(player);
+  const { arrival, fight } = Common.data.lair.music;
+  const source = Music.instanceSourceTile(area, area.getBaseX() + 27, area.getBaseY() + 35, 0);
+  assert.deepEqual(Music.tracksAt(source.x, source.y, 0, false), [fight], "the copied map's own track, which the lair would play");
+  assert.equal(area.getMusicTrack(player), 743, "Secrets of the North, as on arrival");
+  assert.equal(area.getMusicTrack(player), arrival);
+  const session = Lair.sessionOf(player);
+  session.fight = {};
+  assert.equal(area.getMusicTrack(player), 742, "More Than Meets the Eye during the fight");
+  session.fight = null;
+  assert.equal(area.getMusicTrack(player), arrival, "Secrets of the North again after the kill");
+});

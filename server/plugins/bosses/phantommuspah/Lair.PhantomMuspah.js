@@ -32,6 +32,12 @@ function areaClass() {
       return "Phantom Muspah's lair";
     }
 
+    /** Secrets of the North, and More Than Meets the Eye while the Muspah is fought. */
+    getMusicTrack() {
+      const { arrival, fight } = Common.data.lair.music;
+      return this.session?.fight ? fight : arrival;
+    }
+
     /** Leaving ends the lair. Logging out puts the player by the crevice before they're saved. */
     postLeave(mobile, logout) {
       const session = this.session;
@@ -139,7 +145,6 @@ function enter(player) {
     player.moveTo(session.tile(lair.arrival));
     player.setPositionToFace(session.tile(lair.arrival).clone().add(-1, 0));
     player.setAttribute(Common.INSIDE_ATTRIBUTE, true);
-    Common.playMusic(player, lair.music.arrival);
     session.spawnMuspah(lair.spawnTicks);
   });
 }

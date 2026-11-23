@@ -85,7 +85,7 @@ class Fight {
   }
 
   start() {
-    const { boss, npcs, lair, overlay } = Common.data;
+    const { boss, npcs, overlay } = Common.data;
     const at = this.session.tile(boss.tile);
     const muspah = Common.api.spawnNpc({ id: npcs[this.form], x: at.getX(), y: at.getY(), z: at.getZ(), owner: this.player, wanderRadius: 0 });
     if (!muspah) return;
@@ -102,7 +102,6 @@ class Fight {
     Common.animate(muspah, boss.spawnAnim);
     Common.sound(this.player, boss.spawnSound);
     Common.overlay(this.player, overlay.spawn);
-    Common.playMusic(this.player, lair.music.fight);
     this.spikes.spawnWave();
     this.at(1, () => this.showHitpoints());
     this.at(boss.attackableTicks, () => {

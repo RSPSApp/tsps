@@ -17,6 +17,7 @@ before(async () => {
     hooks = {};
     Patches.attach(new Proxy({}, { get: (_, name) => (...args) => {
         if (name === 'onItemOnObject') hooks.use = args[0];
+        if (name === 'onObjectRoute') hooks.route = args[0];
         if (name === 'onCustomEvent' && args[0] === 'player:world-input') hooks.cancel = args[1];
         if (name === 'onPlayerLogout') hooks.logout ??= args[0];
         if (name === 'onInterfaceActionClick' && args[0].name === 'farmingOptionClick') hooks.choose = args[0];
@@ -44,7 +45,9 @@ function prepare(t, type = 'COMPOST', realChoice = false) {
         t.after(() => player.setRegistered(false));
     }
     const state = Patches.stateFor(player, patch), inventory = player.getInventory();
-    const tick = (count = 1) => { for (let i = 0; i < count; i++) { Patches.tick(); } };
+    let cycle = 1000;
+    t.mock.method(core.World, 'getProcessCycle', () => cycle);
+    const tick = (count = 1) => { for (let i = 0; i < count; i++) { cycle++; Patches.tick(); } };
     const stock = (name, count) => {
         const id = Data.itemId(name);
         for (let i = 0; i < count; i++) inventory.add(new core.Item(id), false);
@@ -56,6 +59,9 @@ function prepare(t, type = 'COMPOST', realChoice = false) {
         hooks.use(event);
         assert.equal(event.handled, true);
     };
+    // A click from where the player stands: its route event and the use land on one cycle.
+    const useHere = id => { hooks.route({ player, objectId: patch.id }); use(id); };
+    const takeHere = () => { hooks.route({ player, objectId: patch.id }); Services.binAction(player, patch, '', Data.itemId('Bucket')); };
     const add = (name, noted = false) => {
         let id = Data.itemId(name); assert.ok(id > 0, name);
         if (noted) { id = core.CacheDefinitions.getItem(id).note; assert.ok(id > 0, `${name} note`); }
@@ -69,7 +75,7 @@ function prepare(t, type = 'COMPOST', realChoice = false) {
         hooks.choose(event);
         assert.equal(event.handled, true);
     };
-    return { player, patch, state, inventory, add, tick, stock, use, choose, animations, sounds, varbits, bin: () => state.bin };
+    return { player, patch, state, inventory, add, tick, stock, use, useHere, takeHere, choose, animations, sounds, varbits, bin: () => state.bin };
 }
 test('cotton bolls produce regular compost in both bin sizes', t => {
     for (const [type, capacity] of [['COMPOST', 15], ['BIG_COMPOST', 30]]) {
@@ -214,4 +220,121 @@ test('bin phases count game ticks even with early, delayed or catch-up ticks', t
         assert.equal(f.animations.length, Math.min(4, Math.floor(tick / 2)), `animation tick ${tick}`);
     }
     assert.equal(f.inventory.getAmount(id), 0);
+});
+
+// #6539: rsprox captures local 1000451 t409, 1000448 t8592, 1000444 t22038, 1000324 t6782.
+test('using an ingredient while standing at the bin animates at once and deposits a tick later', t => {
+    const f = prepare(t), id = f.stock('Orange', 4);
+    f.useHere(id);
+    assert.equal(f.animations.length, 1);
+    assert.deepEqual(f.sounds[0], [2441, 1, 0]);
+    assert.equal(f.bin().count, 0);
+    f.tick();
+    assert.equal(f.bin().count, 1);
+    f.tick();
+    assert.equal(f.animations.length, 2);
+    assert.equal(f.bin().count, 1);
+    f.tick();
+    assert.equal(f.bin().count, 2);
+    f.tick(10);
+    assert.equal(f.bin().count, 4);
+    assert.equal(f.inventory.getAmount(id), 0);
+});
+test('a click from another cycle (the player walked there) keeps the two-tick start', t => {
+    const f = prepare(t), id = f.stock('Orange', 2);
+    hooks.route({ player: f.player, objectId: f.patch.id });
+    f.tick();
+    f.use(id);
+    f.tick();
+    assert.equal(f.animations.length, 0);
+    f.tick();
+    assert.equal(f.animations.length, 1);
+    f.tick();
+    assert.equal(f.bin().count, 1);
+});
+// rsprox captures local 1000103 t712-716 and 1000324 t2035-2042, t6786-6788; Wiki, Weeds.
+test('weeds all go in at once, two ticks after the animation, up to the space left', t => {
+    for (const [type, initial, expected] of [['COMPOST', 0, 15], ['COMPOST', 14, 15], ['BIG_COMPOST', 0, 20]]) {
+        const f = prepare(t, type), id = f.stock('Weeds', 20);
+        Services.binAction(f.player, f.patch, '');
+        f.bin().count = initial;
+        f.useHere(id);
+        assert.equal(f.animations.length, 1);
+        assert.deepEqual(f.sounds[0], [2441, 1, 0]);
+        f.tick();
+        assert.equal(f.bin().count, initial);
+        f.tick();
+        assert.equal(f.bin().count, expected, `${type} from ${initial}`);
+        assert.equal(f.inventory.getAmount(id), 20 - (expected - initial));
+        assert.equal(f.varbits.at(-1)[1], Services.binValue(f.patch, f.state));
+        f.tick(10);
+        assert.equal(f.animations.length, 1);
+        assert.equal(f.bin().count, expected);
+    }
+});
+test('walking to the bin with weeds animates two ticks after arriving and deposits two later', t => {
+    const f = prepare(t), id = f.stock('Weeds', 15);
+    f.use(id);
+    f.tick(2);
+    assert.equal(f.animations.length, 1);
+    f.tick();
+    assert.equal(f.bin().count, 0);
+    f.tick();
+    assert.equal(f.bin().count, 15);
+    assert.equal(f.inventory.getAmount(id), 0);
+});
+function openBin(f, count) {
+    f.state.bin = { count, super: 0, tomatoes: 0, tier: 1, closedAt: 1, open: true };
+    return f.state.bin;
+}
+// rsprox captures local 1000451 t317, t385 and 1000105 t441: scoop a tick after the click.
+test('taking compost while standing at the bin scoops a tick later, then every four ticks', t => {
+    const f = prepare(t), bucket = f.stock('Bucket', 3);
+    openBin(f, 15);
+    f.takeHere();
+    assert.equal(f.animations.length, 0);
+    f.tick();
+    assert.equal(f.animations.length, 1);
+    assert.deepEqual(f.sounds[0], [2436, 1, 0]);
+    f.tick();
+    assert.equal(f.inventory.getAmount(Data.itemId('Compost')), 1);
+    assert.equal(f.bin().count, 14);
+    f.tick(2);
+    assert.equal(f.animations.length, 1);
+    f.tick();
+    assert.equal(f.animations.length, 2);
+    f.tick();
+    assert.equal(f.inventory.getAmount(Data.itemId('Compost')), 2);
+    assert.equal(f.inventory.getAmount(bucket), 1);
+});
+test('clicking the bin again every tick never slows a running fill or take', t => {
+    const f = prepare(t), id = f.stock('Orange', 6);
+    f.useHere(id);
+    for (let i = 0; i < 6; i++) { f.tick(); hooks.cancel({ player: f.player }); f.useHere(id); }
+    assert.equal(f.bin().count, 3);
+    assert.equal(f.animations.length, 4);
+    const g = prepare(t);
+    g.stock('Bucket', 3);
+    openBin(g, 15);
+    g.takeHere();
+    for (let i = 0; i < 6; i++) { g.tick(); hooks.cancel({ player: g.player }); g.takeHere(); }
+    assert.equal(g.inventory.getAmount(Data.itemId('Compost')), 2);
+    assert.equal(g.bin().count, 13);
+});
+test('a click on the same bin after its loop ended or with another item starts afresh', t => {
+    const f = prepare(t), orange = f.stock('Orange', 1), apple = f.stock('Cooking apple', 3);
+    f.useHere(orange);
+    f.tick();
+    assert.equal(f.bin().count, 1);
+    f.tick(3);
+    f.useHere(apple);
+    assert.equal(f.animations.length, 2);
+    f.tick();
+    assert.equal(f.bin().count, 2);
+    hooks.cancel({ player: f.player });
+    f.useHere(f.stock('Orange', 1));
+    assert.equal(f.animations.length, 3);
+    f.tick();
+    assert.equal(f.bin().count, 3);
+    assert.equal(f.inventory.getAmount(apple), 2);
 });

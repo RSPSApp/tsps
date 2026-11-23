@@ -303,9 +303,39 @@ function clearStep(player, work) {
     work.finish();
     return false;
 }
+/** The cycle each player last clicked (or used an item on) a compost bin, from its route event. */
+const BIN_CLICK_CYCLE = new WeakMap();
+/** The last bin loop each player started, kept so a click on the same loop can pick it back up. */
+const LAST_BIN_WORK = new WeakMap();
+let binIds = null;
+function noteBinClick({ player, objectId }) {
+    binIds ??= new Set(Data.CACHE.patches.filter(p => p.type.includes("COMPOST")).map(p => p.id));
+    if (binIds.has(objectId)) BIN_CLICK_CYCLE.set(player, core.World.getProcessCycle());
+}
+/**
+ * Captures (local 1000103, 1000105, 1000324, 1000343, 1000444, 1000448, 1000451; recording 1858):
+ * a player who walks to the bin starts two ticks after arriving. One already standing at it
+ * starts at once: an ingredient goes in with the animation on the click's tick and lands a tick
+ * later (weeds two), compost is scooped a tick after the click. Every click cancels the loop
+ * running before it; one on that same loop (same bin, action and item) whose next step is still
+ * to come picks it back up where it was (Ours: no capture clicks a bin mid-loop).
+ */
 function startBinWork(player, patch, input, action = "fill-bin") {
-    WORK.set(player, { patch, action, input, nextTick: workTick + 2,
-        position: player.getLocation().clone(), depositing: false });
+    const position = player.getLocation().clone();
+    const last = LAST_BIN_WORK.get(player);
+    if (last && last.patch === patch && last.action === action && last.input.bin === input.bin
+        && last.input.id === input.id && last.nextTick > workTick && last.position.equals(position)) {
+        WORK.set(player, last);
+        return;
+    }
+    const stood = BIN_CLICK_CYCLE.get(player) === core.World.getProcessCycle();
+    BIN_CLICK_CYCLE.delete(player);
+    const work = { patch, action, input, nextTick: workTick + 2, position, depositing: false };
+    LAST_BIN_WORK.set(player, work);
+    WORK.set(player, work);
+    if (!stood) return;
+    if (action === "take-bin") work.nextTick = workTick + 1;
+    else if (!fillBinStep(player, work)) WORK.delete(player);
 }
 function fillBinStep(player, work) {
     const { patch, input } = work;
@@ -313,20 +343,26 @@ function fillBinStep(player, work) {
     const bin = stateFor(player, patch).bin;
     const capacity = patch.type === "BIG_COMPOST" ? 30 : 15;
     if (bin !== input.bin || bin.closedAt || bin.open || bin.count >= capacity || !inventory.contains(input.id)) return false;
-    // Captures: animate at +2, deposit at +3, then repeat both phases every two ticks.
+    // Captures: animate, deposit a tick later, then repeat both phases every two ticks. Weeds
+    // all go in at once, two ticks after the animation (local 1000103 t712-716, 1000324 t2035-2042,
+    // t6786-6788; Wiki, Weeds: "it will put all 15 weeds at once").
+    const weeds = input.id === Data.itemId("Weeds");
     if (!work.depositing) {
         animate(player, FILL_BIN_ANIMATION);
         player.getPacketSender().sendSound(FILL_BIN_SOUND, 1, 0);
-    } else {
-        inventory.deleteNumber(input.id, 1);
-        bin.count++;
-        if (input.superItem) bin.super++;
-        if (input.tomato) bin.tomatoes++;
-        bin.tier = bin.super === bin.count ? 2 : bin.tomatoes === bin.count ? 4 : 1;
-        syncPatch(player, patch);
-        if (bin.count >= capacity || !inventory.contains(input.id)) return false;
+        work.depositing = true;
+        work.nextTick = workTick + (weeds ? 2 : 1);
+        return true;
     }
-    work.depositing = !work.depositing;
+    const amount = weeds ? Math.min(inventory.getAmount(input.id), capacity - bin.count) : 1;
+    inventory.deleteNumber(input.id, amount);
+    bin.count += amount;
+    if (input.superItem) bin.super += amount;
+    if (input.tomato) bin.tomatoes += amount;
+    bin.tier = bin.super === bin.count ? 2 : bin.tomatoes === bin.count ? 4 : 1;
+    syncPatch(player, patch);
+    if (weeds || bin.count >= capacity || !inventory.contains(input.id)) return false;
+    work.depositing = false;
     work.nextTick = workTick + 1;
     return true;
 }
@@ -1434,6 +1470,7 @@ function attach(api) {
     api.onCustomEvent("omnishop:can-buy", Rewards.canBuy);
     api.onCustomEvent("omnishop:purchase", Rewards.purchase);
     api.onCustomEvent("level-up:popup-opened", pauseWork);
+    api.onObjectRoute(noteBinClick);
     api.onObjectInteraction(objectInteraction);
     api.onInterfaceActionClick(farmingOptionClick);
     api.onItemOnObject(itemOnObject, { noted: false });

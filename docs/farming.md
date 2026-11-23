@@ -42,12 +42,20 @@ Each swing repeats every 3 ticks; the produce comes `delay` ticks after its swin
 
 When the inventory fills: spam "You have run out of inventory space.", on the tick the last slot fills.
 
-## Compost bins (recording 1858)
+## Compost bins (rsprox captures: recording 1858, local 1000103, 1000105, 1000324, 1000343, 1000444, 1000448, 1000451)
 
-- **Fill:** `human_pickuptable` (832) + 2441 two ticks after the click, the item a tick later, every two ticks.
+- **Fill:** `human_pickuptable` (832) + 2441, the item a tick later, every two ticks. A player who
+  walked to the bin starts two ticks after arriving; one already standing at it animates on the
+  click's tick (local 1000451 t409, 1000448 t8592, 1000444 t22038, 1000324 t6782).
+- **Weeds** all go in at once, as many as the bin has room for, two ticks after the animation
+  (local 1000103 t712-716: 15; 1000324 t2035-2042: 10, t6786-6788: the last one; Wiki, Weeds).
+- **Clicking again** cancels the loop, as any click does; a click on that same loop (same bin,
+  action and item) picks it back up where it was. Ours: no capture clicks a bin mid-loop.
 - **Close:** `human_push` (810) + 2428 and spam "You close the compost bin.", then a tick later game "The contents have begun to rot." and the bin closes.
 - **Open:** `human_push` + 2429 and spam "You open the compost bin.", the bin opening a tick later.
-- **Take compost:** `human_pickuptable` + 2436, the bucket filled a tick later, every four ticks.
+- **Take compost:** `human_pickuptable` + 2436, the bucket filled a tick later, every four ticks. It starts
+  two ticks after arriving, or a tick after the click when already standing at the bin (local 1000451 t317, t385;
+  1000105 t441).
 
 ## Bottomless compost bucket (rsprox captures, local recordings 1001537, 1001562, 1001663, 1001664, 1001928)
 

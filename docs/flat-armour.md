@@ -16,6 +16,13 @@ page and value, keyed by NPC gameval.
   poison and venom, burns and recoil. Hits from NPCs (thralls included) are never changed, and
   poison, burns and recoil are queued past `onNpcHitModify`.
 
+## Ordering
+
+FlatArmour registers with `api.onNpcHitModify(handler, { stage: "base" })`. Base handlers run
+before every ordinary `onNpcHitModify` handler, whatever the plugin load order. So content that
+reads or spends the damage sees the adjusted hit: the Moons' fight health, Dusk's phase floor and
+Nex's damage credit.
+
 ## Data
 
 The ids come from each monster's infobox (`flatarmour`/`id` per version), turned into rev 242

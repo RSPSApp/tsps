@@ -64,7 +64,9 @@ module.exports = {
   register(api) {
     core = api.core;
     load(core.CacheDefinitions);
-    api.onNpcHitModify(applyFlatArmour);
+    // Base stage: before content hooks that read or spend the damage (the Moons' fight health,
+    // Dusk's phase floor, Nex's damage credit).
+    api.onNpcHitModify(applyFlatArmour, { stage: "base" });
   },
   flatArmourOf,
   _test: { applyFlatArmour, armourById },

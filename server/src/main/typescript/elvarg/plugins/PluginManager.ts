@@ -339,6 +339,8 @@ export class PluginManager {
   private static npcBeforeDeathHooks: PluginHook<PluginNpcBeforeDeathEvent>[] = [];
   private static playerBeforeDeathHooks: PluginHook<PluginPlayerBeforeDeathEvent>[] = [];
   private static npcHitModifyHooks: PluginHook<PluginNpcHitModifyEvent>[] = [];
+  /** How many of npcHitModifyHooks (at its front) were registered with stage "base". */
+  private static npcHitModifyBaseCount = 0;
   private static playerHitModifyHooks: PluginHook<PluginPlayerHitModifyEvent>[] = [];
   private static zoneHooks: Array<{
     pluginName: string;
@@ -3646,18 +3648,25 @@ export class PluginManager {
           },
         });
       },
-      onNpcHitModify: (handler) => {
+      onNpcHitModify: (handler, options) => {
         if (typeof handler !== "function") {
           return;
         }
-        PluginManager.npcHitModifyHooks.push({
+        const hook: PluginHook<PluginNpcHitModifyEvent> = {
           ...hookProfile(handler),
           handler: (event) => {
             if (event?.npc && event?.hit) {
               handler(event);
             }
           },
-        });
+        };
+        // Base handlers (stats such as flat armour) run before every ordinary handler, in
+        // registration order, so content hooks read the damage the target really takes.
+        if (options?.stage === "base") {
+          PluginManager.npcHitModifyHooks.splice(PluginManager.npcHitModifyBaseCount++, 0, hook);
+        } else {
+          PluginManager.npcHitModifyHooks.push(hook);
+        }
       },
       onPlayerHitModify: (handler) => {
         if (typeof handler !== "function") {

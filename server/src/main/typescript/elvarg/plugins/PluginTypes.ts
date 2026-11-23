@@ -1175,7 +1175,11 @@ export interface PluginApi {
   ): void;
   onNpcDeath(handler: (event: PluginNpcDeathEvent) => void): void;
   onNpcBeforeDeath(handler: (event: PluginNpcBeforeDeathEvent) => void): void;
-  onNpcHitModify(handler: (event: PluginNpcHitModifyEvent) => void): void;
+  /**
+   * Last-second changes to a hit landing on an NPC. `stage: "base"` handlers (target stats such
+   * as flat armour) run before all others, so content that reads or spends the damage sees it.
+   */
+  onNpcHitModify(handler: (event: PluginNpcHitModifyEvent) => void, options?: { stage?: "base" }): void;
   onPlayerHitModify(handler: (event: PluginPlayerHitModifyEvent) => void): void;
   onCanAttack(handler: (event: PluginCanAttackEvent) => void): void;
   onCanTeleport(handler: (event: PluginCanTeleportEvent) => void): void;

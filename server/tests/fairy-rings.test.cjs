@@ -253,6 +253,19 @@ test("the fairy teleport holds the player from Confirm until the tick after busy
   assert.equal(rec.varbits.get(12393), 0);
 });
 
+test("a player-wide task cancel mid-teleport, or after busy clears, gives back the hold", () => {
+  for (const runs of [2, 5]) {
+    const rec = player();
+    T.setDials(rec.p, "AJR");
+    T.confirmDial(rec.p);
+    runTicks(rec, runs);
+    assert.equal(rec.p.getMovementQueue().isMovementBlocked(), true);
+    TaskManager.cancelTasks(rec.p);
+    assert.equal(rec.p.getMovementQueue().isMovementBlocked(), false, `free after a cancel on run ${runs}`);
+    assert.equal(rec.varbits.get(12393), 0, "busy cleared");
+  }
+});
+
 test("the fairy teleport never takes or gives back a hold it doesn't own", () => {
   const rec = player();
   const queue = rec.p.getMovementQueue();

@@ -479,6 +479,16 @@ function fairyTeleport(player, ring, from, fromClick) {
       super(1, player, false);
     }
 
+    /** Also stopped from outside (a player-wide cancelTasks): the hold and busy go with it. */
+    stop() {
+      super.stop();
+      if (released) {
+        releaseMovement(player, released);
+      } else if (cancelPendingTeleport(player, pending) && player.isRegistered()) {
+        sender.sendVarbit(BUSY_VARBIT, 0);
+      }
+    }
+
     execute() {
       tick++;
       if (released) {

@@ -28,7 +28,6 @@ Tests: `server/tests/light-sources.test.cjs`.
 ## Ours
 
 - The black candle lantern's lighting line and sound are the white one's (not captured).
-
 - The lit emerald lantern (9065 -> 9064) is put out with the candle lantern's lines ("You
   extinguish the lantern." spam, and its refusal as the last light): its own were not captured.
 - The oil, bullseye and sapphire lanterns use the candle lantern's refusal line; they share its

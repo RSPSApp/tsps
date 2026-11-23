@@ -16,8 +16,8 @@
  * Captured (rsprox 70 tick 1626, 75 tick 11666): lighting a torch says "You light your torch." and plays
  * no sequence and no sound. The white candle lantern says "You light the lantern." as a spam (filterable)
  * line and plays synth 3226, with no sequence (rsprox local 1000134, 1000135, 1000140: 6 of 6 lightings);
- * the black candle lantern does the same (Ours, as its Extinguish). Nothing else was captured, so no other item gets a message, sound or animation, and
- * the level refusal reuses OilLights' wording. The lit item replaces the unlit one in its slot (setId), so a
+ * the black candle lantern does the same (Ours, as its Extinguish). Nothing else was captured, so no other
+ * item gets a message, sound or animation, and the level refusal reuses OilLights' wording. The lit item replaces the unlit one in its slot (setId), so a
  * preset, untradeable or unbankable copy stays one, and the current level counts, so a boost lights what it
  * should (Wiki).
  *

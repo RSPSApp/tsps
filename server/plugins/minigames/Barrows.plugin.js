@@ -12,10 +12,35 @@ const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cach
 const { GameObject } = require("../../src/main/typescript/elvarg/game/entity/impl/object/GameObject");
 const { Skill } = require("../../src/main/typescript/elvarg/game/model/Skill");
 const { Equipment } = require("../../src/main/typescript/elvarg/game/model/container/impl/Equipment");
-const { HitDamage } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitDamage");
-const { HitMask } = require("../../src/main/typescript/elvarg/game/content/combat/hit/HitMask");
 /** A door's crossing is a walk through its doorway (236/03929): clipping is ignored for that step. */
 const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
+/**
+ * The crossing's tick swaps each leaf for an invisible wall and puts the open (inactive) leaf on the
+ * wall's outer tile, with two sounds; two ticks later the leaves are back (234/03276, 227/1000436
+ * ticks 10236-10241 and 10243-10245, 236/03929 ticks 378-380). The player is not held.
+ */
+const DOOR_OPEN_TICKS = 2;
+const DOOR_OPEN_SOUNDS = [62, 41];
+const DOOR_INVISWALL = "inviswall";
+const DOOR_INACTIVE = { l: "barrows_door_inactive_l", r: "barrows_door_inactive_r" };
+/** The chest-room door's puzzle (236/03929 ticks 415 and 417): a solve opens it, another click crosses. */
+const PUZZLE_LOCKED = "The door is locked with a strange puzzle.";
+const PUZZLE_SOLVED = "You hear the doors' locking mechanism grind open.";
+/**
+ * A brother gives up once the player is more than this many tiles (either axis) from where he rose:
+ * his face resets, then he goes the tick after (227/00086 ticks 12498-12500 and 12507-12509,
+ * 227/1000433 ticks 17109-17111).
+ */
+const BROTHER_LEASH = 8;
+/** "We'll finish this later..." (227/1000565 tick 2832, 227/1000444 tick 33710, 227/1000265 tick 5994). */
+const BROTHER_FAREWELL = "We'll finish this later...";
+/** The line follows a move into the tunnels or another crypt by three ticks (1000565 ticks 2829-2832). */
+const FAREWELL_MOVE_TICKS = 3;
+/** ... and a leash despawn by one (1000433 ticks 17111-17112). */
+const FAREWELL_LEASH_TICKS = 1;
+/** The brothers chase their target through the tunnels; the leash above is theirs, not the open-world one. */
+const NO_RETREAT_FLAG = "combat:no-retreat";
+const KEEP_TARGET_FLAG = "combat:keep-target";
 const { MagicCombatMethod } = require("../../src/main/typescript/elvarg/game/content/combat/method/impl/MagicCombatMethod");
 const { CombatSpells } = require("../../src/main/typescript/elvarg/game/content/combat/magic/CombatSpells");
 const { MOBILE_CLIENT_ATTRIBUTE } = require("../../src/main/typescript/elvarg/net/protocol/ClientProtocol");
@@ -51,7 +76,11 @@ const CLOSE_INTERFACE_ATTRIBUTE = "interface:close-on-interface-close";
 const POTENTIAL_VARBIT = 463;
 const KILL_COUNT_VARBIT = 464;
 const CHEST_OPEN_VARBIT = 1394;
-/** The tunnels shake (slot, random amplitude) from the looting until the player leaves them. */
+/**
+ * The tunnels shake (slot, random amplitude) from the looting until the player leaves them. Nothing
+ * else follows the loot: no damage, and the doors stay as they were (37 loots in 227/01885,
+ * 227/1000444, 237/04057, 226/01694, 227/1000436 and 234/03276; one player stayed 135 ticks).
+ */
 const LOOTED_SHAKE = [0, 5, 0, 0];
 const LADDER_VISIBLE_VARBIT = 4743;
 const PRAYER_DRAIN_TICKS = 30;
@@ -222,7 +251,7 @@ function syncMinimap(player, phase) {
 function session(player) {
   let value = sessions.get(player);
   if (!value) {
-    value = { npcs: new Set(), brother: null, phase: "outside", puzzle: null, dig: null, crossing: null };
+    value = { npcs: new Set(), brother: null, phase: "outside", puzzle: null, dig: null, crossing: null, farewell: 0 };
     sessions.set(player, value);
   }
   return value;
@@ -343,27 +372,61 @@ function cleanupNpcs(player, keepDying = false) {
   }
 }
 
+/** A live brother, not yet dying: one whose removal ends an unfinished fight. */
+function liveBrother(state) {
+  const npc = state.brother;
+  return npc && !npc.isDyingFunction() && npc.getHitpoints() > 0 ? npc : null;
+}
+
+/** The brother's "We'll finish this later..." once `ticks` have passed (processPlayer). */
+function queueFarewell(state, ticks) {
+  state.farewell = ticks;
+}
+
+/**
+ * A brother takes the player from the crypt monster fighting them: that monster stops facing them
+ * the tick he appears, and attacks again once he is dead (20 cases, e.g. 227/01885 ticks 12108-12119,
+ * 227/1000265 tick 6463). The tunnels are single-way (multiway_indicator is never set there), so the
+ * monster's hold on the player is released for him.
+ */
+function takeOver(player, brother) {
+  for (const npc of session(player).npcs) {
+    if (npc === brother || npc.getCombat().getTarget() !== player) continue;
+    npc.getCombat().reset();
+    player.getCombat().clearAttackerIf(npc);
+  }
+}
+
 function onNpcAdded() {
   NPC.prototype.onAdd.call(this);
   const player = this.getOwner();
   if (session(player).brother === this) {
-    // A brother woken in his crypt, or the tunnel's brother rising at the chest (rsprox_transcripts/227/00086.txt:233215,
-    // and 546 times over the recordings).
-    this.forceChat(this.__barrowsChest ? "You dare steal from us!" : "You dare disturb my rest!");
+    // A brother woken in his crypt says "You dare disturb my rest!", the tunnel's brother rising at the chest
+    // "You dare steal from us!" (rsprox_transcripts/227/00086.txt:233215, and 546 times over the recordings);
+    // one met at a tunnel door says nothing (226/01694 tick 9139, 227/00086 tick 12490).
+    if (this.__barrowsLine) this.forceChat(this.__barrowsLine);
+    // His first attack is three ticks after he appears (226/01694 ticks 8804-8807, 227/00550 ticks 27406-27409).
     this.getTimers().extendOrRegister(TimerKey.COMBAT_ATTACK, 3);
     player.getPacketSender().sendEntityHint(this);
+    takeOver(player, this);
   }
   this.getCombat().attack(player);
 }
 
-function spawnNpc(player, npcId, location, brother = false) {
+function spawnNpc(player, npcId, location, brother = false, line = null) {
   const npc = new NPC(npcId, location.clone());
   npc.setOwner(player);
   npc.__skipDefaultRespawn = true;
   npc.onAdd = onNpcAdded;
   const state = session(player);
   state.npcs.add(npc);
-  if (brother) state.brother = npc;
+  if (brother) {
+    state.brother = npc;
+    npc.__barrowsLine = line;
+    npc.__barrowsRose = location.clone();
+    npc.setFlag(NO_RETREAT_FLAG, true);
+    npc.setFlag(KEEP_TARGET_FLAG, true);
+  }
   World.getAddNPCQueue().push(npc);
   return npc;
 }
@@ -416,6 +479,9 @@ function refuseMoundDig(request) {
 function enterTunnel(player, run, brother) {
   if (getRun(player) !== run || player.getLocation().getZ() !== 3 ||
       player.getLocation().getDistance(brother.crypt) > 10) return;
+  const state = session(player);
+  // An unfinished crypt fight ends with his line (227/1000565 ticks 2829-2832).
+  if (liveBrother(state)) queueFarewell(state, FAREWELL_MOVE_TICKS);
   cleanupNpcs(player, true);
   player.getPacketSender().sendInterfaceRemoval();
   const ladder = getTunnelMap().ladders.find((object) => roomAt(new Location(object.x, object.y)) === run.exitRoom);
@@ -447,7 +513,7 @@ function searchCrypt(player, index) {
   } else {
     // rsprox_transcripts/226/01694.txt:165522 (then the brother's "You dare disturb my rest!" at :165530).
     spam(player, "You don't find anything.");
-    spawnNpc(player, brother.npcId, brother.spawn, true);
+    spawnNpc(player, brother.npcId, brother.spawn, true, "You dare disturb my rest!");
   }
 }
 
@@ -544,31 +610,93 @@ function useLockpickOnDoor(event) {
   return true;
 }
 
+/** A doorway's two leaves: the door and its neighbour on the same varbit. */
+function doorLeaves(door) {
+  return getTunnelMap().doors.filter((entry) => entry.varbit === door.varbit &&
+    Math.abs(entry.x - door.x) + Math.abs(entry.y - door.y) <= 1);
+}
+
+/** The tile beyond the leaf's wall edge (the west, north, east or south one). */
+function outerTile(leaf) {
+  const { x, y, orientation } = leaf;
+  if (orientation === 0) return new Location(x - 1, y);
+  if (orientation === 1) return new Location(x, y + 1);
+  if (orientation === 2) return new Location(x + 1, y);
+  return new Location(x, y - 1);
+}
+
+/**
+ * The open leaf a crossing shows: on the wall's outer tile, the left one turned three quarters and
+ * the right one a quarter from the door (1000436: barrows_door_l_r rotation 3 -> inactive_r 0 at
+ * tick 10239, barrows_door_n_l rotation 2 -> inactive_l 1 at tick 10243).
+ */
+function openLeaf(leaf) {
+  const side = /_r$/.test(CacheDefinitions.getLocNames().get(leaf.id) ?? "") ? "r" : "l";
+  const rotation = (leaf.orientation + (side === "l" ? 3 : 1)) % 4;
+  return new GameObject(CacheDefinitions.getLocId(DOOR_INACTIVE[side]), outerTile(leaf), leaf.type, rotation, null);
+}
+
+/** Which way the player stands at a doorway: the index into either leaf's doorSides, or -1. */
+function doorwaySide(leaves, location) {
+  for (const leaf of leaves) {
+    const index = doorSides(leaf).findIndex((side) => side.equals(location));
+    if (index !== -1) return index;
+  }
+  return -1;
+}
+
+/** The crossing's two ticks are up (or another door is opened first): the leaves are back. */
+function shutDoor(player, crossing) {
+  const sender = player.getPacketSender();
+  crossing.leaves.forEach((leaf, i) => {
+    sender.sendObject(asObject(leaf));
+    sender.sendObjectRemoval(crossing.opened[i]);
+  });
+}
+
+function endCrossing(player, state, phase = phaseOf(player)) {
+  const crossing = state.crossing;
+  if (!crossing) return;
+  state.crossing = null;
+  player.removeFlag(IGNORE_CLIPPING_FLAG);
+  if (phase === "tunnels") shutDoor(player, crossing);
+}
+
 function crossDoor(player, door) {
   const state = session(player);
-  if (state.crossing || player.getForceMovement()) return;
-  const sides = doorSides(door);
-  const from = player.getLocation();
-  const index = sides.findIndex((side) => side.equals(from));
+  if (player.getForceMovement()) return;
+  const leaves = doorLeaves(door);
+  const from = player.getLocation().clone();
+  // From either leaf's tile: live steps diagonally past the other leaf to the tile beyond the one
+  // clicked (227/1000436 tick 10239: (3552,9684) -> (3551,9683) for barrows_door_l_r at 3551,9684).
+  const index = doorwaySide(leaves, from);
   if (index === -1) return;
-  const to = sides[1 - index];
-  const leaves = getTunnelMap().doors.filter((entry) => entry.varbit === door.varbit &&
-    Math.abs(entry.x - door.x) + Math.abs(entry.y - door.y) <= 1);
-  for (const leaf of leaves) player.getPacketSender().sendObjectRemoval(asObject(leaf));
-  state.crossing = { leaves, to, ticks: 3 };
+  const to = doorSides(door)[1 - index];
+  endCrossing(player, state);
+  const sender = player.getPacketSender();
+  const inviswall = CacheDefinitions.getLocId(DOOR_INVISWALL);
+  const opened = leaves.map(openLeaf);
+  leaves.forEach((leaf, i) => {
+    sender.sendObject(new GameObject(inviswall, new Location(leaf.x, leaf.y, leaf.z), leaf.type, leaf.orientation, null));
+    sender.sendObject(opened[i]);
+  });
+  for (const sound of DOOR_OPEN_SOUNDS) sender.sendSoundEffect(sound, 1, 0);
+  state.crossing = { leaves, opened, from, to, ticks: DOOR_OPEN_TICKS };
   // Live walks through the doorway as the door opens (rsprox_transcripts/236/03929.txt: a
   // walk/run step across barrows_door_o_l at 3562,9678, no exact move), not a slide.
   player.setFlag(IGNORE_CLIPPING_FLAG, true);
   const movement = player.getMovementQueue();
   movement.reset();
   movement.addSteps(to.clone());
+  // The monster rises beside the player on the crossing's own tick, whatever they click next
+  // (330 crossings: 236/03929 tick 378, 227/1000436 ticks 10236, 10239, 10243).
+  spawnEncounter(player, roomAt(to), to);
 }
 
 function useDoor(player, door, lockpick = null) {
-  const state = session(player);
-  if (state.crossing || player.getForceMovement()) return;
+  if (player.getForceMovement()) return;
   const run = getRun(player);
-  if (!doorSides(door).some((side) => side.equals(player.getLocation()))) return;
+  if (doorwaySide(doorLeaves(door), player.getLocation()) === -1) return;
   const centre = DOOR_LINKS.find(([id]) => id === door.varbit).slice(1).includes(4);
   const picked = (run.pickedDoors ?? []).includes(door.varbit);
   if (!run.openDoors.includes(door.varbit) && !picked) {
@@ -578,6 +706,7 @@ function useDoor(player, door, lockpick = null) {
     }
   } else if (centre && !picked && !run.puzzleSolved && roomAt(player.getLocation()) !== 4 && !run.looted) {
     if (!pickLock(player, run, door, lockpick)) {
+      spam(player, PUZZLE_LOCKED);
       showPuzzle(player, door);
       return;
     }
@@ -585,7 +714,12 @@ function useDoor(player, door, lockpick = null) {
   crossDoor(player, door);
 }
 
-function spawnEncounter(player, room) {
+/**
+ * A crossing's monster, beside the tile it leads to (`arrival`). Live's crossings raise only crypt
+ * rats, bloodworms, and armed and unarmed skeletons (barrows_skeleton_armed 1687, _unarmed 1685),
+ * besides a brother; the Wiki gives the odds. Ours: the two skeletons are even.
+ */
+function spawnEncounter(player, room, arrival = player.getLocation()) {
   if (room < 0) return;
   const state = session(player);
   const run = getRun(player);
@@ -595,10 +729,10 @@ function spawnEncounter(player, room) {
   const brother = !state.brother && remaining.length && (run.looted || roll < 12)
     ? remaining[randomInt(0, remaining.length - 1)] : -1;
   if (run.looted && brother === -1) return;
-  const id = brother !== -1 ? BROTHERS[brother].npcId : roll < 64 ? Npcs.SKELETON_17 : roll < 96 ? Npcs.BLOODWORM : Npcs.CRYPT_RAT;
+  const skeleton = randomInt(0, 1) === 0 ? Npcs.SKELETON_19 : Npcs.SKELETON_17;
+  const id = brother !== -1 ? BROTHERS[brother].npcId : roll < 64 ? skeleton : roll < 96 ? Npcs.BLOODWORM : Npcs.CRYPT_RAT;
   // Room bounds overlap the doorway/corridor. An empty tile near the room centre may be
   // behind the door, so spawn beside the arrival tile and check the actual wall clipping.
-  const arrival = player.getLocation();
   const area = player.getPrivateArea();
   for (const [dx, dy] of shuffled([[0, 1], [1, 0], [0, -1], [-1, 0]])) {
     const location = new Location(arrival.getX() + dx, arrival.getY() + dy, arrival.getZ());
@@ -691,6 +825,23 @@ function chestBoost(player) {
   };
 }
 
+/**
+ * The chest's elite clue as Treasure Trails hands it out: none while the player can hold no more
+ * of the tier, and a scroll box once boxes are unlocked (X Marks the Spot). The Wiki's Scroll box
+ * (elite) lists the Barrows chest as a source.
+ */
+function eliteClueForm(player, rewards) {
+  const clue = rewards.find((item) => item.getId() === Items.CLUE_SCROLL_ELITE_);
+  if (!clue) return rewards;
+  const allowed = { player, tier: "elite", allowed: null };
+  pluginApi.emitCustomEvent("treasure-trails:can-receive", allowed);
+  if (allowed.allowed === false) return rewards.filter((item) => item !== clue);
+  const form = { player, itemId: clue.getId(), box: false };
+  pluginApi.emitCustomEvent("treasure-trails:clue-item", form);
+  clue.setId(form.itemId);
+  return rewards;
+}
+
 function showRewards(player, rewards) {
   player.setAttribute(CLOSE_INTERFACE_ATTRIBUTE, REWARDS_ID);
   const sender = player.getPacketSender();
@@ -733,8 +884,9 @@ function answerPuzzle(event) {
     player.sendMessage("Wrong! The passages shift around you.");
     return;
   }
+  // Solved, the door is unlocked: the next click on it crosses (236/03929 ticks 417-418).
   pending.run.puzzleSolved = true;
-  crossDoor(player, pending.door);
+  player.sendMessage(PUZZLE_SOLVED);
 }
 
 function searchChest(player, clickType) {
@@ -756,13 +908,13 @@ function searchChest(player, clickType) {
     sender.sendSoundEffect(CHEST_OPEN_SOUND, 1, 0);
     sender.sendVarbit(CHEST_OPEN_VARBIT, 1);
     if (!run.killed.includes(run.tunnel) && !state.brother) {
-      spawnNpc(player, BROTHERS[run.tunnel].npcId, new Location(3550, 9694), true).__barrowsChest = true;
+      spawnNpc(player, BROTHERS[run.tunnel].npcId, new Location(3550, 9694), true, "You dare steal from us!");
     }
     return;
   }
   const diary = { player, diary: "morytania", tier: "hard", complete: false };
   pluginApi.emitCustomEvent("diary:is-complete", diary);
-  const rewards = rollRewards(run, diary.complete === true, chestBoost(player));
+  const rewards = eliteClueForm(player, rollRewards(run, diary.complete === true, chestBoost(player)));
   // Other plugins' items join the loot, in its window (His Faithful Servants' strange icon comes
   // first: BarrowsMiniQuest.bin tick 885, trail_rewardinv's slot 0).
   pluginApi.emitCustomEvent("barrows:chest-rewards", { player, run, rewards });
@@ -772,8 +924,6 @@ function searchChest(player, clickType) {
     player.getInventory().forceAdd(player, item);
     pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId: item.getId(), amount: item.getAmount() });
   }
-  randomiseLayout(run);
-  syncTunnels(player, run);
   pluginApi.emitCustomEvent("barrows:chest-looted", { player });
   // rsprox_transcripts/226/01694.txt:170767-170768: the diary's rune line (spam), then the count.
   if (diary.complete === true) spam(player, "You receive more runes for completing the hard tier of the Morytania achievement diary.");
@@ -808,14 +958,49 @@ function combatAchievementsAtChest(player, run) {
   if ([...MELEE_BROTHERS].every((index) => run.killed.includes(index)) && !run.meleeBrotherAttacked) complete("Can't Touch Me");
 }
 
-/** A brother's hit on the player, for the run's tasks. */
-function trackBrotherHit({ attacker, target, hit }) {
-  if (!target?.isPlayer?.() || !attacker?.isNpc?.()) return;
+/** "You have failed <task>: <reason>" (227/00550 ticks 28886, 29246, 28263), as the player's settings allow. */
+function failTask(player, task, reason) {
+  pluginApi.emitCustomEvent("combat-achievements:failed", { player, task, reason });
+}
+
+/** The brother attacking `target` and the target's unlooted run, or null. */
+function brotherAttack(attacker, target) {
+  if (!target?.isPlayer?.() || !attacker?.isNpc?.()) return null;
   const index = BROTHERS.findIndex((brother) => brother.npcId === attacker.getId());
   const run = index === -1 ? null : target.getAttribute(ATTRIBUTE);
-  if (!run || run.looted) return;
-  if (hit.getTotalDamage() > 0) run.brotherDamage = true;
-  if (MELEE_BROTHERS.has(index) && String(hit.getCombatType?.()) === "MELEE") run.meleeBrotherAttacked = true;
+  return run && !run.looted ? { index, run, name: attacker.getDefinition().getName() } : null;
+}
+
+/**
+ * A melee brother's melee swing fails "Can't Touch Me" as it is made, hit or miss: "Using Protect
+ * from Melee to block damage will not count" (Wiki). 227/00550 tick 28886: "Dharok the Wretched
+ * performed a melee attack." on the swing's tick, for a 0.
+ */
+function trackBrotherAttack({ attacker, target, combatType }) {
+  const attack = brotherAttack(attacker, target);
+  if (!attack || !MELEE_BROTHERS.has(attack.index) || combatType !== pluginApi.core.CombatType.MELEE) return;
+  if (attack.run.meleeBrotherAttacked) return;
+  attack.run.meleeBrotherAttacked = true;
+  failTask(target, "Can't Touch Me", `${attack.name} performed a melee attack.`);
+}
+
+/** A brother's damage fails "Pray for Success" (227/00550 tick 29246, the tick after Ahrim's 15). */
+function trackBrotherHit({ attacker, target, hit }) {
+  const attack = brotherAttack(attacker, target);
+  if (!attack || hit.getTotalDamage() <= 0 || attack.run.brotherDamage) return;
+  attack.run.brotherDamage = true;
+  failTask(target, "Pray for Success", `${attack.name} damaged you.`);
+}
+
+/**
+ * "Faithless Crypt Run" fails the tick after a brother appears to a player who has had prayer
+ * points this run (227/00550 ticks 28262-28263 and 28974-28975).
+ */
+function checkFaithless(player, state, run) {
+  const brother = liveBrother(state);
+  if (!brother || !brother.isRegistered() || brother.__faithlessChecked || run.looted) return;
+  brother.__faithlessChecked = true;
+  if (run.hadPrayer) failTask(player, "Faithless Crypt Run", "You had more than 0 prayer points.");
 }
 
 function answerKillCount({ player, counts }) {
@@ -955,27 +1140,51 @@ function processPlayer({ player }) {
       if (phase === "tunnels") syncTunnels(player, getRun(player));
     }
   }
-  if (state.crossing && --state.crossing.ticks <= 0) {
-    const crossing = state.crossing;
-    state.crossing = null;
-    player.removeFlag(IGNORE_CLIPPING_FLAG);
-    if (phase === "tunnels") {
-      for (const leaf of crossing.leaves) player.getPacketSender().sendObject(asObject(leaf));
-      if (player.getLocation().equals(crossing.to)) spawnEncounter(player, roomAt(crossing.to));
-    }
+  if (state.crossing) {
+    // The doorway's clipping is ignored for the step through it only; a click away the next tick
+    // walks normally (the player is not held: 227/1000436 ticks 10237 and 10240).
+    if (!player.getLocation().equals(state.crossing.from)) player.removeFlag(IGNORE_CLIPPING_FLAG);
+    if (--state.crossing.ticks <= 0) endCrossing(player, state, phase);
   }
-  if (phase === "crypt" || phase === "tunnels") {
-    if (player.getHitpoints() > 0) drainPrayer(player, getRun(player));
-    if (phase === "tunnels" && getRun(player).looted && World.getProcessCycle() % 10 === 0) {
-      player.getCombat().getHitQueue().addPendingDamage([new HitDamage(randomInt(1, 4), HitMask.RED)]);
-    }
-  }
+  if ((phase === "crypt" || phase === "tunnels") && player.getHitpoints() > 0) drainPrayer(player, getRun(player));
   for (const npc of [...state.npcs]) {
     // Let a fatal hit finish crediting its owner even if they climb out on the same tick.
     if (npc.isDyingFunction()) continue;
     if (phase === "outside" || phase === "surface" || npc.getLocation().getZ() !== player.getLocation().getZ() ||
-        npc.getLocation().getDistance(player.getLocation()) >= 40) removeNpc(player, npc);
+        npc.getLocation().getDistance(player.getLocation()) >= 40) {
+      // A brother left behind by a move to another crypt or into the tunnels (a teleport) says his line.
+      if (npc === liveBrother(state) && (phase === "crypt" || phase === "tunnels")) queueFarewell(state, FAREWELL_MOVE_TICKS);
+      removeNpc(player, npc);
+    } else if (npc === state.brother) leashBrother(player, state, npc, phase);
   }
+  if (run) checkFaithless(player, state, run);
+  if (state.farewell > 0 && --state.farewell === 0 && phase !== "outside" && phase !== "surface") player.sendMessage(BROTHER_FAREWELL);
+}
+
+/**
+ * A brother out of reach of where he rose turns away, then goes the tick after; in a crypt with his
+ * line (the Wiki's Barrows Trivia: the message "can also appear if players run too far away from a
+ * brother in the crypts"; 227/1000433 tick 17112 has it in the tunnels, 227/00086 twice without).
+ * Otherwise he keeps after his owner: a brother whose attack the single-way rules refused tries again.
+ */
+function leashBrother(player, state, npc, phase) {
+  if (!npc.isRegistered()) return;
+  const here = player.getLocation();
+  const rose = npc.__barrowsRose ?? npc.getSpawnPosition();
+  const away = Math.max(Math.abs(here.getX() - rose.getX()), Math.abs(here.getY() - rose.getY())) > BROTHER_LEASH;
+  if (!away) {
+    npc.__barrowsLeaving = false;
+    if (npc.getCombat().getTarget() == null) npc.getCombat().attack(player);
+    return;
+  }
+  if (!npc.__barrowsLeaving) {
+    npc.__barrowsLeaving = true;
+    npc.getCombat().reset();
+    npc.setMobileInteraction(null);
+    return;
+  }
+  if (phase === "crypt") queueFarewell(state, FAREWELL_LEASH_TICKS);
+  removeNpc(player, npc);
 }
 
 function cleanupPlayer({ player }) {
@@ -1011,7 +1220,11 @@ function crumbleKeptLockpicksOnDeath({ victim: player }) {
 }
 
 function playerDeath(event) {
+  // A death mid-fight: the brother goes, with his line (227/1000265 ticks 5993-5994, 227/1000565).
+  // Ours: on the death's tick, as the session ends with it.
+  const fighting = sessions.has(event.player) && liveBrother(session(event.player));
   cleanupPlayer(event);
+  if (fighting) event.player.sendMessage(BROTHER_FAREWELL);
   const run = event.player.getAttribute(ATTRIBUTE);
   if (run?.looted) event.player.setAttribute(ATTRIBUTE, freshRun(run.chests));
 }
@@ -1119,6 +1332,7 @@ module.exports = {
     api.onNpcDeath(handleNpcDeath);
     api.onCustomEvent("collection-log:category-count", chestCount);
     api.onCustomEvent("combat-achievements:kill-count", answerKillCount);
+    api.onCombatHitPrepare(trackBrotherAttack);
     api.onCombatHitResolved(trackBrotherHit);
     api.onPlayerProcess(processPlayer);
     api.onPlayerDeath(playerDeath);
@@ -1129,5 +1343,6 @@ module.exports = {
     api.registerNpcCombatMethodProvider(Npcs.AHRIM_THE_BLIGHTED, AhrimCombat);
   },
   _test: { rollRewards, searchChest, searchCrypt, chestCount, phaseOf, syncMinimap, processPlayer, dig, useDoor, doorSides, getTunnelMap, getRun, IGNORE_CLIPPING_FLAG,
+    answerPuzzle, enterTunnel, doorLeaves, session, trackBrotherAttack, trackBrotherHit, BROTHERS,
     useLockpickOnDoor, inspectLockpick, refuseMoundDig, WARNINGS_ATTRIBUTE, playerDeath, crumbleWarnedLockpickOnDeath, crumbleKeptLockpicksOnDeath },
 };

@@ -54,7 +54,7 @@ before(async () => {
   require("../plugins/minigames/castlewars/Areas.CastleWars")({
     core,
     registerArea: (area) => registered.push(area),
-    onServerStartup() {}, onPlayerLogin() {}, onCanEquip() {}, onCanUnequip() {},
+    onServerStartup() {}, onPlayerLogin() {}, onSpellDisabled() {}, onCanEquip() {}, onCanUnequip() {},
     onCustomEvent() {}, onShouldDropItemsOnDeath() {}, onPlayerBeforeDeath() {}, onPlayerDeath() {},
   }, game);
   AreaManager.areas.push(...registered);

@@ -81,6 +81,7 @@ function makePlayer() {
     setAttribute: (key, value) => attrs.set(key, value),
     getInventory: () => inventory,
     getEquipment: () => ({ get: slot => equipment.get(slot) ?? null }),
+    getSkillManager: () => ({ addExperiences() {} }),
     getUsername: () => 'clock-test',
     getPrivateArea: () => null,
     getPacketSender: () => sender,

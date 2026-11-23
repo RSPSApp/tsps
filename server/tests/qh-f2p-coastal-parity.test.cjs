@@ -85,7 +85,7 @@ function player() {
     getDialogueManager: () => manager,
     getUsername: () => 'QuestTester', getDisplayName: () => 'QuestTester',
     getAppearance: () => ({ isMale: () => true }),
-    getSkillManager: () => ({ getCombatLevel: () => 20 }),
+    getSkillManager: () => ({ getCombatLevel: () => 20, addExperiences() {} }),
     sendMessage: (message) => messages.push(message),
     isRegistered: () => true,
     isPlayer: () => true,

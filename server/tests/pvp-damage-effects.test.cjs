@@ -31,6 +31,7 @@ function buildPlayer({ hp = 99, maxHp = 99, prayer = 99, ring = -1, prayers = []
         received,
         isPlayer: () => true,
         getAsPlayer: () => player,
+        getPacketSender: () => ({ sendSoundEffect() {}, sendSound() {} }),
         getHitpoints: () => current.get(Skill.HITPOINTS),
         getPrayerActive: () => active,
         getSkillManager: () => ({

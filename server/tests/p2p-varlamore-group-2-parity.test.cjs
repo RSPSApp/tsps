@@ -174,7 +174,7 @@ function player() {
     getCombat: () => ({reset: noop, getHitQueue:()=>({addPendingDamage: damage=>{p.damage=damage;}})}),
     getUsername: () => 'Parity', getDisplayName: () => 'Parity', getAppearance: () => ({ isMale: () => true }), setPositionToFace: noop, forceChat: noop,
     getHitpoints: () => 99, setLocation: to => { location = to; }, setWalkingDirection: noop,
-    setSkillAnimation: noop, getForceMovement: () => p.forceMovement,
+    getSkillAnimation: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => area, setSkillAnimation: noop, getForceMovement: () => p.forceMovement,
     performAnimation: a => p.animations.push(a.getId()), sendMessage: text => p.messages.push(text),
   }; p.manager = new DialogueManager(p); return p;
 }
@@ -854,7 +854,7 @@ test('TP fountain: production movement only reaches the clipped fountain tile in
   const azali = {
     getId: () => 12913, isPlayer: () => false, isNpc: () => true, getAsNpc: () => azali,
     getLocation: () => location, setLocation: next => { location = next; },
-    getSize: () => 1, getPrivateArea: () => null,
+    getSize: () => 1, getPrivateArea: () => null, getWalkClipArea: () => null, getTeleportSerial: () => 0, getArea: () => null,
     getTimers: () => ({ has: () => false }), isNeedsPlacement: () => false,
     getFollowing: () => null, getMovementSteps: () => 1,
     hasFlag: flag => flag === MovementQueue.IGNORE_CLIPPING_FLAG && bypass,

@@ -37,8 +37,8 @@ const CRATE_TABLE = [
   { item: "CASTLE_WARS_TICKET", amount: [2, 2] },
 ];
 
-before(() => {
-  CachePipeline.initialize(path.resolve(__dirname, ".."));
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
   require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
   require("../plugins/items/OpenableItems.plugin").register(PluginManager.createApi("OpenableItems"));
   const yamaApi = PluginManager.createApi("Yama");
@@ -48,7 +48,7 @@ before(() => {
 
 function playerWith(id, { fill = false, amount = 1 } = {}) {
   const player = {
-    getPacketSender: () => ({ sendItemContainer() {}, sendInterfaceRemoval: () => { player.closes++; }, sendSound: (id) => player.sounds.push(id), sendTypedMessage: (type, text) => { player.messages.push(text); player.chatTypes.push(type); } }),
+    getPacketSender: () => ({ sendItemContainer() {}, sendRunEnergy() {}, sendInterfaceRemoval: () => { player.closes++; }, sendSound: (id) => player.sounds.push(id), sendTypedMessage: (type, text) => { player.messages.push(text); player.chatTypes.push(type); } }),
     // The first box shows, logging its own chat line as the real one does.
     getDialogueManager: () => ({ startDialogues: (builder) => { player.dialogues.push(builder); Dialogue.sendBoxChatLine(player, builder.getDialogues().get(0).getText()); } }),
     sendMessage: (text) => { player.messages.push(text); player.chatTypes.push("game"); },

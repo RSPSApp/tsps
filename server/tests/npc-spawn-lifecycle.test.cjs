@@ -243,7 +243,7 @@ test("crossing a square or teleporting activates the destination before map-squa
   spawnFile([{ id: SMOKE_DEVIL, x: 2400, y: 9440 }], false);
   let countAtHook = 0;
   t.mock.method(PluginManager, "emitPlayerMapSquareChange", () => { countAtHook = live(SMOKE_DEVIL).length; });
-  const player = {};
+  const player = { getTeleportSerial: () => 0, isRegistered: () => true, getLocation: () => new Location(2400, 9440, 0) };
   World.onPlayerMoved(player, new Location(3222, 3218, 0), new Location(2400, 9440, 0));
   assert.equal(countAtHook, 1);
 });
@@ -258,7 +258,7 @@ test("server perf includes login and teleport activation work without a periodic
     return create.apply(this, args);
   });
   const origin = new Location(3222, 3218, 0);
-  const player = { getLocation: () => origin };
+  const player = { getLocation: () => origin, getTeleportSerial: () => 0, isRegistered: () => true };
   ServerPerf.beginTick(1, 0, 0, 0, 0);
   try {
     World.registerPlayerPosition(player);
@@ -281,7 +281,7 @@ test("a teleport during player processing includes new NPCs in that tick's visib
     getLocation: () => location,
     getNpcViewDistance: () => 15,
     getAttribute: () => undefined,
-    getPrivateArea: () => null,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null,
     getArea: () => null,
     getSession: () => ({ getChannel: () => ({ readyState: 1 }) }),
     isPlayerBot: () => false,
@@ -554,7 +554,7 @@ test("a player who has not moved since logging in does not block NPCs until thei
   const player = {
     getLocation: () => origin,
     getNpcViewDistance: () => 15,
-    getPrivateArea: () => null,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, isRegistered: () => true,
     occupiesTile: true,
     deferTileOccupancy: Player.prototype.deferTileOccupancy,
     claimTileOccupancy: Player.prototype.claimTileOccupancy,

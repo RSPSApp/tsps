@@ -149,9 +149,13 @@ function harness() {
         getLocation: () => at,
         getMovementQueue: () => ({
           canWalk: () => true,
+          reset() {},
           walkStep: (dx, dy) => { at = new core.Location(at.getX() + dx, at.getY() + dy, at.getZ()); },
         }),
         getCurrentDefinition: () => ({ getDeathTicks: () => 2 }),
+        isScriptedMovement: () => false,
+        setScriptedMovement() {},
+        getMovementCoordinator: () => ({ updateCoordinator() {} }),
         isRegistered: () => !npc.removed,
       };
       npc.remove = () => { npc.removed = true; };

@@ -337,7 +337,7 @@ test('canonical stepping-stone banks dispatch the ordinary Cross action through 
   H.quest.setStage(p, 4);
   Object.assign(p, {
     isPlayer: () => true, isNpc: () => false, getAsPlayer() { return this; },
-    getIndex: () => 19019, getSize: () => 1, getPrivateArea: () => null,
+    getIndex: () => 19019, getSize: () => 1, getPrivateArea: () => null, getWalkClipArea: () => null, getTeleportSerial: () => 0,
     getHitpoints: () => 99, getRights: () => -1, isPlayerBot: () => false,
     getInventory: () => ({ capacity: () => 28, getItems: () => [] }),
     getFollowing: () => null, getTimers: () => ({ has: () => false }),

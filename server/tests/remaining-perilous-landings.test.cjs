@@ -93,7 +93,7 @@ test('cache placements, boss visibility areas and PathFinder show every arena is
   for (const id of [12861, 12862, 12869]) assert.ok(index[String(id)]?.some(e => e.page === 'Transcript:Perilous Moons'));
   assert.ok(shipped['Perilous Moons'].variants['remnants-of-the-old-ones-talking-to-eyatlalli-with-the-items']);
   const queue = () => ({ reset() {}, setRoute() {}, syncDestinationFlagToRoute() {}, setPathX() { return this; }, setPathY() { return this; }, addCheckpoint() {}, hasRoute: () => false });
-  const walker = (x, y) => ({ isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'PerilousRoute' }), getLocation: () => new core.Location(x, y, 0), getSize: () => 1, getPrivateArea: () => null, getMovementQueue: queue });
+  const walker = (x, y) => ({ isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'PerilousRoute', getAttribute: () => undefined }), getLocation: () => new core.Location(x, y, 0), getSize: () => 1, getPrivateArea: () => null, getMovementQueue: queue });
   for (const [moon, spec] of Object.entries(moons)) {
     const [lx, ly] = landings[moon];
     const [bx, by] = spec.tile;
@@ -161,7 +161,7 @@ test('shop Squeeze-through 51005 is a captured two-way transition and the real o
   assert.equal(door.getDefinition().getInteractions()[0], 'Squeeze-through');
 
   let objectHook;
-  const api = { core, persistAttribute() {}, onObjectInteraction(fn) { if (typeof fn === 'function') objectHook = fn; }, onItemOnObject() {}, onObjectRoute() {}, onCustomEvent() {} };
+  const api = { core, persistAttribute() {}, onObjectInteraction(fn) { if (typeof fn === 'function') objectHook = fn; }, onItemOnObject() {}, onObjectRoute() {}, onCustomEvent() {}, onPlayerLogin() {} };
   require('../plugins/world/LocTeleports.plugin').register(api);
   const p = player();
   p.performAnimation = animation => { p.animation = animation.getId(); };

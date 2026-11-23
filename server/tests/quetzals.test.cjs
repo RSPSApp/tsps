@@ -151,6 +151,7 @@ function createPlayer({ at = new Location(1584, 3053, 0), items = [], varbits = 
     sendSound: (id) => { sent.sounds.push(id); return sender; },
     sendSoundEffect: (id) => { sent.sounds.push(id); return sender; },
     sendItemContainer: () => sender,
+    sendRunEnergy: () => sender,
   };
   const movement = { setBlockMovement: (value) => { blocked = value; return movement; }, reset: () => movement };
   const player = {

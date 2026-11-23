@@ -12,7 +12,7 @@ const { World } = require("../dist/game/World");
 const { Location } = require("../dist/game/model/Location");
 
 function fixture() {
-  const player = {sendMessage() {}, getPacketSender: () => ({sendItemContainer() {}, sendSoundEffect() {}}),
+  const player = {sendMessage() {}, getPacketSender: () => ({sendItemContainer() {}, sendRunEnergy() {}, sendSoundEffect() {}}),
     isPlayerBot: () => false, getLastItemPickup: () => ({reset() {}}),
     getUsername: () => "RewardOverflowTest", getLocation: () => new Location(3222, 3218), getPrivateArea: () => null};
   const inventory = new Inventory(player);

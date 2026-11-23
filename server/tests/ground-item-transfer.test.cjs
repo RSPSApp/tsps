@@ -17,7 +17,7 @@ const {Location} = require("../dist/game/model/Location");
 function fixture() {
   const messages = [], xp = [], player = {getUsername: () => "GroundTransferTest", getPrivateArea: () => null,
     getLocation: () => new Location(3222, 3218), isRegistered: () => true, getHitpoints: () => 10,
-    getPacketSender: () => ({sendItemContainer() {}, sendSoundEffect() {}}),
+    getPacketSender: () => ({sendItemContainer() {}, sendRunEnergy() {}, sendSoundEffect() {}}),
     getSkillManager: () => ({addExperiences: (...args) => xp.push(args)}),
     sendMessage: message => messages.push(message), isPlayerBot: () => false,
     getLastItemPickup: () => ({reset() {}})};

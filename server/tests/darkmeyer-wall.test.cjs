@@ -92,6 +92,7 @@ function createPlayer(at, { agility = 63, ropes = 0, attributes = {} } = {}) {
     getMovementQueue: () => ({ reset() {}, setBlockMovement() {}, handleRegionChange() {} }),
     getForceMovement: () => null,
     setForceMovement() { return player; },
+    getSkillAnimation: () => null,
     setSkillAnimation() {},
     getUpdateFlag: () => ({ flag() {} }),
     performAnimation: (animation) => state.animations.push(animation.getId()),
@@ -111,7 +112,7 @@ function createPlayer(at, { agility = 63, ropes = 0, attributes = {} } = {}) {
       getExperience: () => 0,
     }),
     getPacketSender: () => sender,
-    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage() {} }) }),
+    getCombat: () => ({ holdFullStall() {}, releaseFullStall() {}, getHitQueue: () => ({ addPendingDamage() {} }) }),
     getInventory: () => ({
       getItems: () => [state.held > 0 ? { getId: () => LONG_ROPE } : null],
       contains: (id) => id === LONG_ROPE && state.held > 0,

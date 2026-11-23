@@ -122,7 +122,7 @@ function player({ holdDialogue = false } = {}) {
     getInventory: () => inventory,
     getEquipment: () => equipment,
     getLocation: () => location,
-    getPrivateArea: () => null,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, getHitpoints: () => 10, isRegistered: () => true,
     getRights: () => 0,
     getUsername: () => 'WaterfallTester',
     getPacketSender: () => packet,
@@ -439,9 +439,9 @@ test('the raft landing and rock/swim bank are collision-reachable, not just copi
     setPathY() { return this; }, addCheckpoint() {}, hasRoute: () => false,
   });
   const walker = (x, y) => ({
-    isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'WaterfallRoute' }),
+    isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'WaterfallRoute', getAttribute: () => undefined }),
     getLocation: () => new core.Location(x, y, 0), getSize: () => 1,
-    getPrivateArea: () => null, getMovementQueue: queue,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, getHitpoints: () => 10, isRegistered: () => true, getMovementQueue: queue,
   });
   assert.ok(PathFinder.calculateWalkRoute(walker(2512, 3481), 2512, 3477) > 0,
     'the captured raft landing has a real route to the rock bank');
@@ -556,7 +556,7 @@ test('the inside ledge door swaps to its cache open loc', () => {
   doors.register({
     core: fakeCore,
     onObjectInteraction: (name, actions) => { if (name === 'Door') Object.assign(names, actions); },
-    onRegionLoaded() {}, onServerStartup() {}, onObjectRoute() {}, onCustomEvent() {}, emitCustomEvent() {},
+    onRegionLoaded() {}, onServerStartup() {}, persistAttribute() {}, onPlayerLogout() {}, onPlayerDeath() {}, onPlayerLogin() {}, onObjectRoute() {}, onCustomEvent() {}, emitCustomEvent() {},
   });
   for (const [closedId, openId, face] of [[2000, 2001, 3]]) {
     registered.length = 0; deregistered.length = 0;
@@ -589,9 +589,9 @@ test('north Waterfall large doors match the captured west swing and keep the thr
   require('../plugins/objects/Doors.plugin.js').register({
     core: doorCore,
     onObjectInteraction: (name, actions) => { if (name === 'Large door') Object.assign(names, actions); },
-    onRegionLoaded() {}, onServerStartup() {}, onObjectRoute() {}, onCustomEvent() {}, emitCustomEvent() {},
+    onRegionLoaded() {}, onServerStartup() {}, persistAttribute() {}, onPlayerLogout() {}, onPlayerDeath() {}, onPlayerLogin() {}, onObjectRoute() {}, onCustomEvent() {}, emitCustomEvent() {},
   });
-  const player = { getPrivateArea: () => null, getLocation: () => new core.Location(2581, 9876, 0) };
+  const player = { getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, getHitpoints: () => 10, isRegistered: () => true, getHitpoints: () => 10, isRegistered: () => true, getLocation: () => new core.Location(2581, 9876, 0) };
   const north = MapObjects.get(1521, new core.Location(2582, 9875, 0), null);
   assert.ok(north, 'the north large door is on the real map');
   names.Open({
@@ -647,7 +647,7 @@ test('normal defaults reach and open both Baxtorian 2002 doors through the real 
       if (name === 'Large door') names.large = actions;
       if (name === 'Door') names.door = actions;
     },
-    onRegionLoaded() {}, onServerStartup() {}, onObjectRoute() {},
+    onRegionLoaded() {}, onServerStartup() {}, persistAttribute() {}, onPlayerLogout() {}, onPlayerDeath() {}, onPlayerLogin() {}, onObjectRoute() {},
     onCustomEvent: (event, handler) => q.api.onCustomEvent(event, handler),
     emitCustomEvent: (event, payload) => q.emit(event, payload),
   });
@@ -779,9 +779,9 @@ test('rope crossing uses owner objects, leaves the base rock, and keeps two play
     setPathY() { return this; }, addCheckpoint() {}, hasRoute: () => false,
   });
   const walker = (x, y) => ({
-    isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'WaterfallRoute' }),
+    isPlayer: () => true, getAsPlayer: () => ({ getUsername: () => 'WaterfallRoute', getAttribute: () => undefined }),
     getLocation: () => new core.Location(x, y, 0), getSize: () => 1,
-    getPrivateArea: () => null, getMovementQueue: queue,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, getHitpoints: () => 10, isRegistered: () => true, getMovementQueue: queue,
   });
   assert.equal(PathFinder.calculateRoute(walker(2512, 3470), 1, 2513, 3466, 0, 0, 0, 0, false), 0,
     'there is no exact cache path: the crossing must be scripted, not moveNear');
@@ -847,7 +847,7 @@ test('real MovementQueue walks the scripted crossing over both clipped tiles wit
   const character = {
     isPlayer: () => false, isNpc: () => false, getAsPlayer: () => null,
     getAsNpc: () => ({ getMovementSteps: () => 1 }),
-    getSize: () => 1, getPrivateArea: () => null,
+    getSize: () => 1, getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, getHitpoints: () => 10, isRegistered: () => true,
     getLocation: () => state.location, setLocation: (tile) => { state.location = tile; },
     setWalkingDirection() {}, setRunningDirection() {}, getFollowing: () => null,
     isNeedsPlacement: () => false, getTimers: () => ({ has: () => false }),
@@ -1073,7 +1073,7 @@ test("key 293 opens Golrie's real cell door for ordinary walking, without telepo
   require('../plugins/objects/Doors.plugin.js').register({
     core: { ...core, ObjectManager, MapObjects, Sounds: { sendSound() {} },
       TaskManager: q.api.core.TaskManager },
-    onObjectInteraction() {}, onRegionLoaded() {}, onServerStartup() {}, onObjectRoute() {},
+    onObjectInteraction() {}, onRegionLoaded() {}, onServerStartup() {}, persistAttribute() {}, onPlayerLogout() {}, onPlayerDeath() {}, onPlayerLogin() {}, onObjectRoute() {},
     onCustomEvent: q.api.onCustomEvent, emitCustomEvent: q.emit,
   });
   const route = () => new RsmodRouteFinding().findRoute({

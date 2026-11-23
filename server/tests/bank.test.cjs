@@ -1437,6 +1437,7 @@ test("price checking quantities and closing returns every item", () => {
   const custom = new Map();
   require('../plugins/interface/PriceChecker.plugin').register({
     onCustomEvent: (name, handler) => custom.set(name, handler),
+    getCombatFactory: () => ({ inLiveCombat: () => false }),
     onInterfaceActionButton: (ids, handler) => {
       for (const id of Array.isArray(ids) ? ids : [ids]) buttons.set(id, handler);
     },

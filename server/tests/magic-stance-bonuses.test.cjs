@@ -113,7 +113,8 @@ function arceuusPlayer({ magic = 99, prayer = 50, energy = 40, weapon = -1 } = {
         performGraphic: (graphic) => player.graphics.push(graphic?.getId?.() ?? null),
         performAnimation: (animation) => player.animations.push(animation.getId()),
         sendMessage: (message) => player.messages.push(message),
-        getEquipment: () => ({ getWeapon: () => ({ getId: () => weapon }) }),
+        getEquipment: () => ({ getWeapon: () => ({ getId: () => weapon }), contains: () => false }),
+        getInventory: () => ({ contains: () => false }),
         getSkillManager: () => ({
             getMaxLevel: () => magic,
             getCurrentLevel: (skill) => (skill === 5 ? player.prayer : magic),

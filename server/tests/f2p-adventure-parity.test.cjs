@@ -476,6 +476,7 @@ for (const scenario of ['carried-head-lazy-tabs', 'no-head-lazy-tabs', 'banked-h
     p.isSearchingBank = () => false;
     p.getCurrentBankTab = () => 0;
     p.getInterfaceId = () => -1;
+    p.getStatus = () => null;
     const inventory = new core.Inventory(p);
     p.getInventory = () => inventory;
     inventory.adds(I.COINS, 123);

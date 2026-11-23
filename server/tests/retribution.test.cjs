@@ -41,7 +41,7 @@ before(async () => {
     emitCustomEvent: (name, payload) => { for (const handler of handlers[name] ?? []) handler(payload); },
   };
   Retribution.register(api);
-  Pickpocket.register({ ...api, persistAttribute() {}, onNpcsInteraction() {}, onNpcInteraction() {} });
+  Pickpocket.register({ ...api, persistAttribute() {}, onNpcsInteraction() {}, onNpcInteraction() {}, onItemAction() {} });
 });
 
 let prayerOn;

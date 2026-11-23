@@ -22,6 +22,8 @@ The Minigame Teleport spell (all four spellbooks) and the home teleports (Lumbri
 | 24 | `busy` = 0; the teleport; varp 888 = the current `date_minutes` (varp 3078); animation and graphic reset |
 | 25 | animation reset again |
 
+**Casting again mid-cast** starts the cast over (rsprox captures, local recording 1001238, rev 231, a league world casting Lunar Home Teleport): clicked at tick 10286 and again at 10288; the second click's tick sends the animation and graphic reset, 10289 the chalk circle and sound 193, and the steps follow from there (sound 196 at 10295, 194 at 10301, 195 at 10305, the teleport at 10312). The first cast sends nothing after the second click. The server keeps one cast per player: a new one stops the running one (#6630, where both ran and every sound played twice). Once the cast locks at tick 21 the movement block already refuses the spell (`TeleportHandler.checkReqs`), and the sequence itself refuses a new cast until landing.
+
 **Rat Pits** closes the list and opens the chatbox menu (interface 219, script 58) "Which rat pit would you like to visit?" with "Ardougne (kittens)", "Varrock (grown cats)", "Keldagrim (overgrown cats)", "Port Sarim (wily cats)" and "Cancel". `busy` stays 1 until the choice, which is then tick 0.
 
 **Landing tiles in the captures:** Nightmare Zone (2609, 3121), the Ardougne rat pit (2565, 3320). The Wiki gives (2609, 3114) and (2561, 3320); the server uses the captured tiles and the Wiki's for the rest.

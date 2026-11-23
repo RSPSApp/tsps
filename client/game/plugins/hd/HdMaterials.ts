@@ -10,9 +10,9 @@ const files = HD_TEXTURE_FILES.filter(file => !HD_DETAIL_TEXTURES.includes(file)
 
 /**
  * A 2D context to resample an HD texture image in and read its pixels back from. It is CPU-backed
- * (`willReadFrequently`), as the client's other readback canvases are: a GPU-backed canvas per
- * image left the game's HUD canvases slow to composite after the next resize of the game view,
- * for the rest of the browser session.
+ * (`willReadFrequently`), as the client's text, icon and model readback canvases are: a GPU-backed
+ * canvas per image left the game's HUD canvases slow to composite after the next resize of the
+ * game view, for the rest of the browser session.
  */
 export function createHdReadbackContext(size: number): CanvasRenderingContext2D | null {
     const canvas = document.createElement("canvas");

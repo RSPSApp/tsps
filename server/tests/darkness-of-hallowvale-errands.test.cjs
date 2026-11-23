@@ -327,6 +327,27 @@ test("the bush: a female character hears the Wiki's \"take her\" (live said \"hi
   assert.equal(werewolfLines(f.player)[2][1], "Nah, we can't take her. It'll look suspicious.");
 });
 
+test("the bush: closing the chat on a werewolf line keeps it; the scene still ends with 130 back on the map", (t) => {
+  const f = actor(t, STAGE.DREZEL_TALKED, 3391, 3480, 0, { [VARBIT.BUSH]: 1 });
+  assert.equal(click(f.player, 18121, "Search", [3390, 3480, 0]), true);
+  tick(19);
+  cont(f.player);
+  tick(1);
+  assert.equal(text(f.player), "Not to worry! Now we've got more!");
+  const close = { player: f.player, handled: false };
+  PM.emitCustomEvent("interface:close", close);
+  assert.equal(close.handled, true, "the close is taken (interface_close)");
+  tick(5);
+  assert.equal(text(f.player), "Not to worry! Now we've got more!", "the line stays open");
+  for (let i = 0; i < 8 && !(text(f.player) ?? "").startsWith("Ouch"); i++) { cont(f.player); tick(1); }
+  assert.equal(stageOf(f.player), STAGE.WEREWOLVES_SEEN, "130");
+  assert.deepEqual(at(f.player), [3390, 3479, 0], "back on the map");
+  assert.equal(text(f.player), "Ouch! My poor head!");
+  const after = { player: f.player, handled: false };
+  PM.emitCustomEvent("interface:close", after);
+  assert.equal(after.handled, false, "after the scene a close is ordinary");
+});
+
 test("the bush does nothing outside 120 with 2591 = 1", (t) => {
   const f = actor(t, STAGE.WEREWOLVES_SEEN, 3391, 3480);
   const definition = core.ObjectDefinition.forId(17989);

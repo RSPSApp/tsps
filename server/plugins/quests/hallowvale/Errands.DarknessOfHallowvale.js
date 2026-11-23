@@ -476,6 +476,14 @@ module.exports = function attachErrands(context) {
     for (const wolf of run.wolves) if (wolf) Scenes.face(wolf, BUSH_SCENE.wolvesFace);
   }
 
+  /**
+   * The werewolves' lines are the scene's only way on (their last continue tears it down), so a chat
+   * close (Esc) while the scene plays keeps them open; otherwise the player stayed in the copy.
+   */
+  function keepWerewolfChat(event) {
+    if (event?.player && wolfScenes.has(event.player)) event.handled = true;
+  }
+
   /** t3618: 2591 = 0 and the fade on the last line's continue; the teardown and 130 three ticks on. */
   function werewolvesDepart(event) {
     const { player } = event;
@@ -732,5 +740,6 @@ module.exports = function attachErrands(context) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:menu", handleMenu);
   api.onItemAction("Message", { Inspect: inspectMessage });
+  api.onCustomEvent("interface:close", keepWerewolfChat);
   api.onPlayerLogout(handleLogout);
 };

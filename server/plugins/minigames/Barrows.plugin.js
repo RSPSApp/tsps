@@ -79,11 +79,16 @@ const POTENTIAL_VARBIT = 463;
 const KILL_COUNT_VARBIT = 464;
 const CHEST_OPEN_VARBIT = 1394;
 /**
- * The tunnels shake (slot, random amplitude) from the looting until the player leaves them. Nothing
- * else follows the loot: no damage, and the doors stay as they were (37 loots in 227/01885,
- * 227/1000444, 237/04057, 226/01694, 227/1000436 and 234/03276; one player stayed 135 ticks).
+ * The tunnels shake (slot, random amplitude) from the looting until the player leaves them. The Wiki
+ * (Barrows/Strategies): "Once the chest is looted, the tunnels will shake and start to collapse,
+ * causing occasional damage to the player, and the arrangement of the doors and rooms will shift."
+ * Recorded difference: 37 loots (227/01885, 227/1000444, 237/04057, 226/01694, 227/1000436, 234/03276)
+ * show neither the damage nor a door change before leaving.
  */
 const LOOTED_SHAKE = [0, 5, 0, 0];
+/** Ours: the collapse's "occasional damage" is 1-4 every 10 ticks; the Wiki gives no numbers. */
+const COLLAPSE_TICKS = 10;
+const COLLAPSE_DAMAGE = [1, 4];
 const LADDER_VISIBLE_VARBIT = 4743;
 const PRAYER_DRAIN_TICKS = 30;
 const MINIMAP_STATE_VARBIT = 6719;
@@ -931,6 +936,9 @@ function searchChest(player, clickType) {
     player.getInventory().forceAdd(player, item);
     pluginApi.emitCustomEvent("collection-log:obtain", { player, itemId: item.getId(), amount: item.getAmount() });
   }
+  // The Wiki's "the arrangement of the doors and rooms will shift" (see LOOTED_SHAKE).
+  randomiseLayout(run);
+  syncTunnels(player, run);
   pluginApi.emitCustomEvent("barrows:chest-looted", { player });
   // rsprox_transcripts/226/01694.txt:170767-170768: the diary's rune line (spam), then the count.
   if (diary.complete === true) spam(player, "You receive more runes for completing the hard tier of the Morytania achievement diary.");
@@ -1154,6 +1162,7 @@ function processPlayer({ player }) {
     if (--state.crossing.ticks <= 0) endCrossing(player, state, phase);
   }
   if ((phase === "crypt" || phase === "tunnels") && player.getHitpoints() > 0) drainPrayer(player, getRun(player));
+  if (phase === "tunnels" && run?.looted && player.getHitpoints() > 0) collapse(player);
   for (const npc of [...state.npcs]) {
     // Let a fatal hit finish crediting its owner even if they climb out on the same tick.
     if (npc.isDyingFunction()) continue;
@@ -1171,6 +1180,13 @@ function processPlayer({ player }) {
   }
   if (run) checkFaithless(player, state, run);
   if (state.farewell > 0 && --state.farewell === 0 && phase !== "outside" && phase !== "surface") player.sendMessage(BROTHER_FAREWELL);
+}
+
+/** The looted tunnels' collapse: the Wiki's "occasional damage to the player" (see LOOTED_SHAKE). */
+function collapse(player) {
+  if (World.getProcessCycle() % COLLAPSE_TICKS !== 0) return;
+  const { HitDamage, HitMask } = pluginApi.core;
+  player.getCombat().getHitQueue().addPendingDamage([new HitDamage(randomInt(...COLLAPSE_DAMAGE), HitMask.RED)]);
 }
 
 /**
@@ -1355,6 +1371,6 @@ module.exports = {
     api.registerNpcCombatMethodProvider(Npcs.AHRIM_THE_BLIGHTED, AhrimCombat);
   },
   _test: { rollRewards, searchChest, searchCrypt, chestCount, phaseOf, syncMinimap, processPlayer, dig, useDoor, doorSides, getTunnelMap, getRun, IGNORE_CLIPPING_FLAG,
-    answerPuzzle, enterTunnel, doorLeaves, session, trackBrotherAttack, trackBrotherHit, BROTHERS,
+    answerPuzzle, enterTunnel, doorLeaves, session, trackBrotherAttack, trackBrotherHit, BROTHERS, roomAt,
     useLockpickOnDoor, inspectLockpick, refuseMoundDig, WARNINGS_ATTRIBUTE, playerDeath, crumbleWarnedLockpickOnDeath, crumbleKeptLockpicksOnDeath },
 };

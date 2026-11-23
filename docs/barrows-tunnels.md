@@ -68,12 +68,13 @@ How the tunnels, their doors, the brothers and the chest behave, from rsprox cap
 
 - The loot sends the chest count, jingle 77, one `cam_shake` (0, 5, 0, 0), the reward window,
   and closes `barrows_overlay`.
-- Nothing else follows the loot, in 37 loots across 227/01885, 227/1000444, 237/04057,
-  226/01694, 227/1000436 and 234/03276: no damage (one player stayed 135 ticks) and no door
-  varbit change before leaving. The layout re-rolls when the next mound is dug.
-  - **Recorded difference:** the Wiki says the tunnels "start to collapse, causing occasional
-    damage to the player, and the arrangement of the doors and rooms will shift". The server
-    follows the recordings.
+- The Wiki: "Once the chest is looted, the tunnels will shake and start to collapse, causing
+  occasional damage to the player, and the arrangement of the doors and rooms will shift." The
+  server re-rolls the layout as the chest is looted. Ours: the collapse hits for 1-4 every 10 ticks
+  until the player leaves the tunnels; the Wiki gives no numbers.
+  - **Recorded difference:** 37 loots across 227/01885, 227/1000444, 237/04057, 226/01694,
+    227/1000436 and 234/03276 show neither: no damage (one player stayed 135 ticks) and no door
+    varbit change before leaving. The layout is re-rolled again when the next mound is dug.
 - The elite clue goes through Treasure Trails (`treasure-trails:can-receive`, `clue-item`). None
   is given when the player can hold no more of the tier. It is a scroll box once X Marks the
   Spot unlocks boxes. The Wiki's Scroll box (elite) lists the Barrows chest.

@@ -806,11 +806,13 @@ test("Barrows: the chest room's door says it is puzzle-locked; a solve unlocks i
   const { getTunnelMap, getRun, doorSides, useDoor, answerPuzzle, processPlayer, session } = Barrows._test;
   arrive(subject, CHEST_ROOM);
   const run = getRun(subject);
-  const door = getTunnelMap().doors.find((entry) => entry.varbit === run.puzzleDoor &&
-    doorSides(entry).some((side) => Barrows._test.phaseOf({ getLocation: () => side }) === "tunnels"));
-  // The side outside the chest room (room 4 is the centre).
-  const sides = doorSides(door);
-  const outside = sides.find((side) => side.getDistance(new Location(3551, 9695)) > 6) ?? sides[0];
+  // A leaf of the chest room's hallway, from a side outside the chest room (room 4, the centre): there
+  // the door is puzzle-locked. Room bounds overlap the corridors, so it is the room, not a distance.
+  const { roomAt } = Barrows._test;
+  const [door, outside] = getTunnelMap().doors.filter((entry) => entry.varbit === run.puzzleDoor)
+    .flatMap((entry) => doorSides(entry).map((side) => [entry, side]))
+    .find(([, side]) => roomAt(side) !== 4);
+  assert.ok(door, "a puzzle door side outside the chest room");
   subject.setLocation(outside.clone());
   processPlayer({ player: subject });
   useDoor(subject, door);
@@ -972,26 +974,41 @@ test("Barrows: a brother takes the player from the crypt monster attacking them"
   }
 });
 
-test("Barrows: looting leaves the doors as they were and hurts nobody", () => {
+// The Wiki (Barrows/Strategies): "Once the chest is looted, the tunnels will shake and start to collapse, causing
+// occasional damage to the player, and the arrangement of the doors and rooms will shift." Recorded difference:
+// 37 loots show neither (docs/barrows-tunnels.md).
+test("Barrows: looting shifts the doors and rooms, and the collapsing tunnels hurt until left (Wiki)", () => {
   const subject = player();
   arrive(subject, CHEST_ROOM);
   const run = subject.getAttribute("barrows");
   Object.assign(run, { killed: [0, 1, 2, 3, 4, 5], kills: 6, points: 600, chestOpen: true });
-  const layout = JSON.stringify([run.openDoors, run.puzzleDoor, run.exitRoom]);
-  const varbits = new Map(subject.sent.varbits);
+  // The shift re-rolls the layout and sends it: every door varbit goes out again after the loot.
+  subject.sent.varbits.clear();
   Barrows._test.searchChest(subject, 1);
-  assert.equal(JSON.stringify([run.openDoors, run.puzzleDoor, run.exitRoom]), layout, "the same layout");
-  for (let id = 469; id <= 484; id++) assert.equal(subject.sent.varbits.get(id), varbits.get(id), `door varbit ${id}`);
+  for (let id = 469; id <= 484; id++) assert.ok(subject.sent.varbits.has(id), `door varbit ${id} re-sent`);
+  assert.deepEqual([...run.openDoors].filter((id) => subject.sent.varbits.get(id) !== 0), [], "the new layout's open doors");
   const cycle = core.World.getProcessCycle;
+  const damage = () => (subject.getCombat().getHitQueue().hasPendingWork() ? 1 : 0);
   try {
-    for (let i = 0; i < 40; i++) {
+    for (let i = 1; i < 10; i++) {
       core.World.getProcessCycle = () => i;
       Barrows._test.processPlayer({ player: subject });
     }
+    assert.equal(damage(), 0, "between the collapse's ticks");
+    core.World.getProcessCycle = () => 10;
+    Barrows._test.processPlayer({ player: subject });
+    assert.equal(damage(), 1, "a collapse hit every 10 ticks");
+    const left = player();
+    arrive(left, CHEST_ROOM);
+    Object.assign(left.getAttribute("barrows"), { killed: [0], kills: 1, points: 100, chestOpen: true });
+    Barrows._test.searchChest(left, 1);
+    arrive(left, SURFACE);
+    core.World.getProcessCycle = () => 20;
+    Barrows._test.processPlayer({ player: left });
+    assert.equal(left.getCombat().getHitQueue().hasPendingWork(), false, "none once out of the tunnels");
   } finally {
     core.World.getProcessCycle = cycle;
   }
-  assert.equal(subject.getCombat().getHitQueue().isEmpty(subject), true, "no collapse damage");
 });
 
 test("Barrows: the chest's elite clue is a scroll box once boxes are unlocked, and none when the player can hold no more", () => {

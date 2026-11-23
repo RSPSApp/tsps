@@ -33,7 +33,9 @@ before(() => {
   const api = {
     core: PluginManager.getCoreApi(),
     persistAttribute: (key, value) => hooks.persisted.set(key, value),
+    onServerStartup() {},
     onObjectInteraction: (name, actions) => { (hooks.objects[name] ??= []).push(actions); },
+    onNpcInteraction() {},
     onNpcDeath: (handler) => hooks.npcDeaths.push(handler),
     onPlayerDefeated: (handler) => hooks.defeated.push(handler),
     onPlayerDeath: (handler) => hooks.deaths.push(handler),

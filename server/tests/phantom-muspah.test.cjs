@@ -635,6 +635,7 @@ test("a landed Clear Mind drains the prayer shield, including its last points, i
   const bolts = require("../plugins/combat/EnchantedBolts.plugin")._test;
   bolts.attach(nativeApi);
   t.mock.method(npc, "showHitsplat", () => {});
+  const growthWave = t.mock.method(fight.spikes, "growthWave", () => {});
   player.getSkillManager().setMaxLevel(nativeCore.Skill.PRAYER, 99);
   const proc = () => bolts.EFFECTS["clear-mind"].land({ player, target: npc, pvp: false }, 0);
   fight.shield = 75;
@@ -652,4 +653,5 @@ test("a landed Clear Mind drains the prayer shield, including its last points, i
   const nextTick = fight.events.filter(entry => entry.tick === fight.tick + 1);
   for (const entry of nextTick) entry.action();
   assert.equal(fight.form, "final");
+  assert.equal(growthWave.mock.callCount(), 1);
 });

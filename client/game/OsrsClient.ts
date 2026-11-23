@@ -7208,8 +7208,9 @@ export class OsrsClient {
             // Phase 9: Preparing interface
             await showPhase(90, "Preparing interface...");
             this.widgetManager = new WidgetManager(this.cacheSystem);
+            // The cache scripts test this varc for exactly 1; it reads -1 until the toggle is first used.
             this.widgetManager.isMobileChatDisabled = () =>
-                (this.varManager.getVarcInt(VARC_OSM_CHATBOX_DISABLED) ?? 0) !== 0;
+                this.varManager.getVarcInt(VARC_OSM_CHATBOX_DISABLED) === 1;
             try {
                 const initialMinimapState = this.varManager.getVarbit(MINIMAP_STATE);
                 if (initialMinimapState !== undefined) {

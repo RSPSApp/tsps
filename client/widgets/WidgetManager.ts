@@ -163,17 +163,24 @@ export class WidgetManager {
     isMobileChatDisabled: (() => boolean) | null = null;
 
     private lastMobileChatDisabled = false;
+    private lastAllSettingsOpen = false;
 
     /**
-     * Lay the All Settings window (group 134) out again when the mobile chat is toggled, so it
-     * grows into or gives back the chat's space (MobileHudLayout). Call between frames.
+     * Lay the All Settings window (group 134) and the mobile main modal that hosts it out again
+     * when the mobile chat is toggled or the window opens or closes, so the window grows into or
+     * gives back the chat's space (MobileHudLayout). Call between frames.
      */
     syncMobileChatToggle(): void {
         const disabled = this.isMobileChatDisabled?.() ?? false;
-        if (disabled === this.lastMobileChatDisabled) return;
+        const mainModal = (601 << 16) | 27;
+        const settingsOpen = this.getSubInterface(mainModal)?.group === 134;
+        if (disabled === this.lastMobileChatDisabled && settingsOpen === this.lastAllSettingsOpen) return;
         this.lastMobileChatDisabled = disabled;
+        this.lastAllSettingsOpen = settingsOpen;
         const root = this.groups.get(134)?.root;
         if (root) this.invalidateWidget(root, "chat-toggle");
+        const modal = this.getWidgetByUid(mainModal);
+        if (modal) this.invalidateWidget(modal, "chat-toggle");
     }
 
     /** The widget with contentType 1339 - compass (rotates with camera yaw) */

@@ -91,6 +91,75 @@ test("a canvas-sized window is re-centred when the mobile scale changes under it
     assert.equal(node.rawY, 404, "the centring offset follows the shorter parent");
 });
 
+/** The Settings window as a phone lays it out: 512x334 main modal sitting 140px down the screen. */
+function phoneSettingsWindow(): Node {
+    return {
+        uid: uid(134, 1), x: 0, y: 72, width: 512, height: 189,
+        rawY: 0, rawHeight: 189, heightMode: 0, yPositionMode: 1,
+    };
+}
+
+function phoneManager(chatDisabled: boolean, canvasHeight = 503, modalTop = 140) {
+    return {
+        canvasHeight,
+        getWidgetByUid: (id: number) => (id === uid(601, 27) ? { uid: id, y: modalTop } : undefined),
+        isMobileChatDisabled: () => chatDisabled,
+    };
+}
+
+test("the hidden-chat stretch is measured from the main modal, not the top of the screen", () => {
+    const node = phoneSettingsWindow();
+    adjustMobileHudWidget(node, 512, 334, phoneManager(true));
+    assert.equal(node.height, 482);
+    // 140px (modal) + y must leave the 6px gap, and the window must end inside the 503px canvas.
+    assert.equal(140 + (node.y ?? 0), 6, "its top sits 6px below the screen's top");
+    assert.ok(140 + (node.y ?? 0) + (node.height ?? 0) <= 503 - 15, "its bottom is not cut off");
+});
+
+test("a resize script re-centring the stretched window does not become its new original", () => {
+    const node = phoneSettingsWindow();
+    adjustMobileHudWidget(node, 512, 334, phoneManager(true));
+    // The Settings resize script writes rawY = (parent - height) / 2 on every relayout.
+    Object.assign(node, { rawY: (334 - 482) >> 1, y: ((334 - 482) >> 1) * 2 });
+    adjustMobileHudWidget(node, 512, 334, phoneManager(true));
+    assert.equal(140 + (node.y ?? 0), 6, "the stretch is re-applied from the screen top");
+    // The chat comes back: the window gives its original size and position back.
+    adjustMobileHudWidget(node, 512, 334, phoneManager(false));
+    assert.deepEqual([node.rawY, node.rawHeight, node.y, node.height], [0, 189, 72, 189]);
+});
+
+function phoneModal(): Node {
+    return { uid: uid(601, 27), x: 66, y: 140, width: 512, height: 334, rawY: 64, rawHeight: 334, heightMode: 0, yPositionMode: 1 };
+}
+
+function modalManager(chatDisabled: boolean, group: number) {
+    return { ...phoneManager(chatDisabled), getSubInterface: () => ({ group }) };
+}
+
+test("the main modal fills the screen while a stretched All Settings window needs the room", () => {
+    const modal = phoneModal();
+    adjustMobileHudWidget(modal, 982, 487, modalManager(true, 134));
+    assert.deepEqual([modal.y, modal.height], [0, 487], "the stretched window is no longer clipped to 334px");
+    // Hiding the chat is undone: the modal is back where the cache put it.
+    adjustMobileHudWidget(modal, 982, 487, modalManager(false, 134));
+    assert.deepEqual([modal.rawY, modal.rawHeight, modal.y, modal.height], [64, 334, 140, 334]);
+});
+
+test("the main modal keeps its size for other windows and while the chat is shown", () => {
+    for (const [disabled, group] of [[true, 149], [false, 134]] as const) {
+        const modal = phoneModal();
+        adjustMobileHudWidget(modal, 982, 487, modalManager(disabled, group));
+        assert.deepEqual([modal.y, modal.height], [140, 334], `chat hidden ${disabled}, group ${group}`);
+    }
+});
+
+test("the main modal returns to its size when All Settings closes with the chat hidden", () => {
+    const modal = phoneModal();
+    adjustMobileHudWidget(modal, 982, 487, modalManager(true, 134));
+    adjustMobileHudWidget(modal, 982, 487, modalManager(true, 149));
+    assert.deepEqual([modal.y, modal.height], [140, 334]);
+});
+
 test("other windows are untouched when the chat is hidden", () => {
     const node: Node = { uid: uid(601, 27), x: 15, y: 100, width: 512, height: 334 };
     adjustMobileHudWidget(node, 905, CANVAS_HEIGHT, manager(true));

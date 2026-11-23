@@ -55,4 +55,4 @@ function actionInterval(emitter, player, skill, kind, ticks, saving = 0) {
   return Math.max(1, (request.ticks | 0) - saving);
 }
 
-module.exports = { pauseForLevelUp, isPaused, modalPause, actionInterval };
+module.exports = { pauseForLevelUp, modalPause, actionInterval };

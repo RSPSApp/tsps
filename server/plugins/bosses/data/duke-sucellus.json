@@ -1,6 +1,7 @@
 {
   "$comment": "Authored Duke encounter configuration. IDs/actions and map placements verified in cache revision 241; current normal mechanics from OSRS Wiki Duke Sucellus/Strategies and resource pages. Normal-world recording 1703 establishes visual packet details; quest-specific damage and preparation amounts are not substituted for current repeatable normal mode.",
   "quest": "desert_treasure_ii",
+  "music": { "asylum": 763 },
   "instance": {
     "sourceChunkX": 378,
     "sourceChunkY": 803,

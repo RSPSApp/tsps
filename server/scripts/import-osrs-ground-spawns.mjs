@@ -17,7 +17,7 @@ import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const SOURCE_PIN = Object.freeze({
-  repository: "Bandit-HaxUnit/osrsreboxed-db",
+  repository: "RSPSApp/osrsreboxed-db",
   revision: "6a0d09b19e5698d18f3b1adc594fe3d2a63e92d9",
   exportSha256: "4c5619a145f07a8ca59496c046aac803bcef8c4249d4d842f87795c72eb75546",
   inputSha256: "00d8bcd0ed7d8d0340f69953fb73aa2e51813f03dbbc964b70d9872fe4ad048a",

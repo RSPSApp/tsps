@@ -190,6 +190,8 @@ const GRAVESTONE_CONFIRM_KEY = "varbit:13113";
 const GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE = "settings:gravestone-confirm-192";
 const QUEST_SETTINGS = { 214:13772, 215:13778, 216:13779, 217:13776, 218:13775, 219:13777, 220:13773, 221:13774, 222:13780, 223:13781, 239:13889, 240:13890 };
 const SETTINGS = { ...require("./data/settings.json").settings, ...Object.fromEntries(Object.entries(QUEST_SETTINGS).map(([id, varbit]) => [id, { varbit }])) };
+const SETTINGS_SEARCH_OVERRIDE_SCRIPT = 5968;
+const QUEST_LIST_SEARCH = "Quest List";
 const QUEST_LIST_SETTINGS_BUTTON = (399 << 16) | 11;
 // Colour rows: the varp holding the colour + 1 (0 for the default) and the default colour.
 // The varps are cache script 4181's, the defaults each row's struct (param 1230).
@@ -834,11 +836,12 @@ function chooseNpcAttackOption({ player, slot }) {
   return Number.isInteger(slot) && chooseSettingOption(player, NPC_ATTACK_OPTIONS_SETTING, slot - 1);
 }
 
-function openAllSettings(player) {
+function openAllSettings(player, searching = false) {
   sendSettingsCatalog({ player });
   player.setInterfaceId(ALL_SETTINGS_INTERFACE_ID);
   const sender = player.getPacketSender();
   sender.sendSubInterface(MAIN_MODAL_UID, ALL_SETTINGS_INTERFACE_ID, 0);
+  if (searching) sender.sendClientScript(CHATDEFAULT_STOPINPUT_SCRIPT); // live: after the mount, before the flags
   // The settings/controls are dynamic children created client-side; without
   // these transmit flags their ops never reach us. Op1 over the used slot range.
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_CATEGORIES_CLICKZONE, 0, 15, TRANSMIT_OP1);
@@ -849,9 +852,20 @@ function openAllSettings(player) {
   return true;
 }
 
+/**
+ * The quest list's settings button. Capture (rsprox_transcripts/242/900308.txt lines 1974-1991,
+ * 242/900231.txt lines 35465-35503): the search varbits turn on, clientscript 5968
+ * settings_search_override("Quest List") runs, All Settings opens, chatdefault_stopinput runs, then the flags.
+ * Closing All Settings turns both varbits off (endSettingsSearch).
+ */
 function openQuestSettings({ player }) {
-  showCategory(player, 6); // Interfaces, cache enum422 category3621.
-  return openAllSettings(player);
+  player.getPacketSender()
+    .sendVarbit(FLOATER_IS_SEARCHING_VARBIT, 1)
+    .sendVarbit(FLOATER_SEARCH_LISTEN_FOR_KEYBOARD_VARBIT, 1)
+    .sendClientScript(SETTINGS_SEARCH_OVERRIDE_SCRIPT, QUEST_LIST_SEARCH);
+  openAllSettings(player, true);
+  player.setAttribute("settings-view", SEARCH_VIEW); // rows are read from the whole list while searched
+  return true;
 }
 
 function openColour(player, settingId) {

@@ -465,6 +465,37 @@ test('lost proposal, agreement, potion and charm are reclaimable through their h
   }
 });
 
+test('the Odd Old Man bone sack speaks with its own chathead and name (rsprox_transcripts/232/03224.txt)', () => {
+  const h = setup();
+  try {
+    const p = player();
+    h.quest.setStage(p, 9);
+    h.npcAction(p, N.ODD_OLD_MAN, 3361, 3505, 0, 'Talk-to');
+    const manager = p.getDialogueManager();
+    const sack = [], choices = ['Talk about lucky charms.', "I'm making a cursed voyage."];
+    for (let step = 0; step < 100; step++) {
+      const menu = MultiChatboxPrompt.getPending(p);
+      if (menu) {
+        const index = menu.options.indexOf(choices.shift());
+        assert.ok(index >= 0, `unexpected menu ${JSON.stringify(menu.options)}`);
+        MultiChatboxPrompt.handleInterfaceActionClick({ player: p, groupId: 219, slot: index + 1 });
+        continue;
+      }
+      const current = manager.getCurrent();
+      if (!current) break;
+      if (current.speakerName === 'Sack') sack.push(current);
+      manager.advance();
+    }
+    assert.ok(sack.length > 0, 'the bone sack speaks in the lucky charm conversation');
+    for (const line of sack) {
+      assert.equal(line.getNpcId(), 1266, 'talking_sack head, not the Odd Old Man 1259');
+      assert.equal(line.speakerName, 'Sack');
+    }
+  } finally {
+    h.restore();
+  }
+});
+
 test('shared Curator ownership and the Pandemonium branch follow Quest Helper', () => {
   const curator = (h, p) =>
     h.variants.map((fn) => fn({ player: p, npcId: N.CURATOR_HAIG_HALEN })).find(Boolean) ?? null;

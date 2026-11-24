@@ -155,6 +155,7 @@ module.exports = function registerBoneVoyageQuest(api) {
   const BERRY_NPC_ID = NpcIdentifiers.BERRY_3; // 7235, outside the Woodcutting Guild
   const APOTHECARY_NPC_ID = NpcIdentifiers.APOTHECARY; // 5036
   const ODD_OLD_MAN_NPC_ID = NpcIdentifiers.ODD_OLD_MAN; // 1259
+  const TALKING_SACK_NPC_ID = NpcIdentifiers.BONES; // 1266, talking_sack: the cache calls it "Bones", the chatbox "Sack"
   const DECK_GUARD_NPC_ID = NpcIdentifiers.BARGE_GUARD; // 7768, on the barge: Talk-to, Disembark
   const CANAL_GUARD_NPC_IDS = new Set([
     NpcIdentifiers.BARGE_GUARD_2, // 8012, post-quest: Talk-to, Embark, Quick-Travel
@@ -1019,6 +1020,13 @@ module.exports = function registerBoneVoyageQuest(api) {
 
   function handleLine(event) {
     const { player, npcId, text } = event;
+
+    // The Odd Old Man's sack: the export leaves its lines without speaker_ids and the cache name
+    // "Bones" never matches "Sack", so the clicked NPC's head was shown (rsprox_transcripts/232/03224.txt).
+    if (npcId === ODD_OLD_MAN_NPC_ID && event.step?.speaker === "Sack" && event.pages?.some((entry) => entry.page === PAGE)) {
+      event.speakerId = TALKING_SACK_NPC_ID;
+      return;
+    }
 
     // The Junior Navigator's briefing is spoken inside the Lead Navigator's conversation.
     if (text === BRIEFING_LAST_LINE && (LEAD_NAVIGATOR_NPC_IDS.has(npcId) || JUNIOR_NAVIGATOR_NPC_IDS.has(npcId))

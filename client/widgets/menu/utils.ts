@@ -44,11 +44,10 @@ function getWidgetSubOptions(w: any, actionIndex: number): string[] | undefined 
     }
     const ops = submenus[actionIndex];
     if (!Array.isArray(ops)) return undefined;
-    const out: string[] = [];
-    for (const text of ops) {
-        if (typeof text === "string" && text.length > 0) out.push(text);
-    }
-    return out.length ? out : undefined;
+    // An empty sub-op keeps its place ("" here, not listed in the menu), so each row still
+    // sends its own 1-based sub-op index.
+    const out: string[] = ops.map((text: unknown) => (typeof text === "string" ? text : ""));
+    return out.some((text) => text.length > 0) ? out : undefined;
 }
 
 function buildWidgetOpEntry(w: any, actionIndex: number, option: string, target?: string) {

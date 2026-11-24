@@ -458,11 +458,13 @@ export function widgetEntriesToSimple(
         // The submenu header shows the parent entry's target; sub rows have no target.
         // A pinned submenu row is itself one row: it keeps no copy of its op's submenu.
         if (pinnedSubIndex === undefined && Array.isArray(e.subOptions) && e.subOptions.length > 0) {
-            mapped.subEntries = e.subOptions.map((subText, subIdx) => ({
-                option: subText,
-                target: "",
-                onClick: buildOnClick(e, subText, "", subIdx + 1),
-            }));
+            mapped.subEntries = e.subOptions
+                .map((subText, subIdx) => ({
+                    option: subText,
+                    target: "",
+                    onClick: buildOnClick(e, subText, "", subIdx + 1),
+                }))
+                .filter((sub) => sub.option.length > 0);
         }
         return mapped;
     });

@@ -81,6 +81,7 @@ function fakeApi() {
     onBeforeObjectInteraction: (handler) => (hooks.beforeObject ??= []).push(handler),
     onNpcInteraction: (name, actions) => { hooks.npcs[name] = actions; },
     onNpcRoute: (handler) => (hooks.npcRoute ??= []).push(handler),
+    onCanUnequip: () => {},
     onCombatHitRoll: () => {},
     registerNpcCombatMethodProvider: () => {},
     onInterfaceActionButton: (ids, handler) => hooks.buttons.push({ ids: [].concat(ids), handler }),
@@ -221,6 +222,7 @@ before(async () => {
   Lobby(api);
   Arena(api);
   Rewards(api);
+  Sol(api);
 });
 
 beforeEach(() => {
@@ -803,6 +805,95 @@ function solRun(name = 'Challenger') {
   sol.hp = 1500;
   return { player, run, fight: run.solFight, sol };
 }
+
+function hudEvents(player) {
+  return hooks.emitted.filter(([name, payload]) => name.startsWith('boss-hud:') && payload.player === player);
+}
+
+test('Sol shows his own health bar two ticks after landing and keeps it on his hitpoints', () => {
+  const { player, run, sol } = solRun('SolHud');
+  try {
+    ticks(1);
+    assert.deepEqual(hudEvents(player), [], '237/1150 ticks 14765–14766: no bar on landing or the next tick');
+    ticks(1);
+    assert.deepEqual(hudEvents(player), [
+      ['boss-hud:show', { player, npcId: Sol.SOL, current: 1500, maximum: 1500, fadeIn: false }],
+    ], '237/1150 tick 14767: Sol shows at full health in boss mode');
+
+    for (const current of [1474, 1468]) {
+      sol.setHitpoints(current);
+      for (const onDamage of hooks.custom['combat:damage-applied']) onDamage({ target: sol });
+    }
+    assert.deepEqual(hudEvents(player).slice(1), [
+      ['boss-hud:update', { player, current: 1474 }],
+      ['boss-hud:update', { player, current: 1468 }],
+    ], '237/1150 tick 14777: two hits in one tick each update the bar');
+
+    sol.setHitpoints(1500);
+    ticks(1);
+    assert.deepEqual(hudEvents(player).at(-1), ['boss-hud:update', { player, current: 1500 }], 'the bar also follows healing');
+    ticks(1);
+    assert.equal(hudEvents(player).length, 4, 'unchanged HP sends no redundant update');
+  } finally {
+    run.end('left');
+  }
+});
+
+test('Sol refreshes his health bar after a phase change and keeps it through the end of the fight', () => {
+  const { player, run, sol } = solRun('SolHudTimings');
+  const fades = () => hudEvents(player).filter(([name]) => name === 'boss-hud:fade').map(([, payload]) => payload.fadeIn);
+  const hides = () => hudEvents(player).filter(([name]) => name === 'boss-hud:hide');
+  try {
+    ticks(2);
+    sol.setHitpoints(1350);
+    ticks(1);
+    assert.deepEqual(fades(), [], 'the phase line comes first');
+    for (let count = 1; count <= 5; count++) {
+      ticks(1);
+      assert.deepEqual(fades(), Array(count).fill(true), '237/1150 ticks 14798–14802: refresh each tick');
+    }
+    ticks(1);
+    assert.equal(fades().length, 5, 'the phase refresh is over');
+
+    sol.setHitpoints(0);
+    ticks(1);
+    assert.equal(run.stage, 'won');
+    assert.deepEqual(hudEvents(player).at(-1), ['boss-hud:update', { player, current: 0 }], 'zero HP on the kill tick');
+    for (let count = 1; count <= 8; count++) {
+      ticks(1);
+      assert.equal(fades().length, 5 + count, '237/1150 ticks 14992–14999: refresh after the kill');
+    }
+    ticks(4);
+    assert.equal(fades().length, 13, 'no more refreshes');
+    assert.deepEqual(hides(), [], 'no fade-out by kill +12');
+    ticks(1);
+    assert.deepEqual(hides(), [
+      ['boss-hud:hide', { player, clearContainer: true }],
+    ], '237/1150 ticks 15004 and 15008: fade at +13 and empty the container when the bar clears');
+  } finally {
+    run.end('left');
+  }
+});
+
+test('Sol drops the health bar on player death and never opens it after a player leaves', () => {
+  const { player, run } = solRun('SolHudDeath');
+  try {
+    ticks(2);
+    assert.equal(hudEvents(player).at(-1)?.[0], 'boss-hud:show', 'the player has a bar to hide');
+    Arena.dyingInRun({ player });
+    assert.deepEqual(hudEvents(player).at(-1), ['boss-hud:hide', { player, fade: false, afterTicks: 0 }]);
+    run.end('death');
+    ticks(17);
+    assert.equal(hudEvents(player).length, 2, 'clearing the run does not hide the bar a second time');
+  } finally {
+    run.end('left');
+  }
+
+  const early = solRun('SolHudEarlyLeave');
+  early.run.end('teleported');
+  ticks(2);
+  assert.deepEqual(hudEvents(early.player), [], 'a delayed show cannot survive the end of the run');
+});
 
 test("Sol's weapon and footwork achievements track attacks and actual run steps", () => {
   const { Equipment, ItemIdentifiers } = Shared.core();

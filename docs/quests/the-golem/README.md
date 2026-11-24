@@ -82,7 +82,8 @@ The temple door 6310 is 6363 "Open" below stage 5 and 6364 "Enter" from stage 5 
   bookcase 17320 beside it is that plugin's.
 - **Elissa after the quest** (1931-1941): "What do you do here? | What is this place? | Sorry, I need to go."
 - **The notes** (486-498): Read sets golem_b 3 and opens book 392, "The Ruins of Uzer".
-- **The curator** (556-643): his statuette option appears once the notes are read. "Talk about Fossil
+- **The curator** (556-643): his statuette option appears once the notes are read. The quest keeps him only until
+  the statuette is placed (stage 4); Dig Site, Bone Voyage and Shield of Arrav ask `the-golem:curator-step`. "Talk about Fossil
   Island." leads to "I've got some questions regarding Fossil Island." and its own menu (561-576).
 - **Pickpocket** (649-651): animation 881, synth sound 2581 with delay 10, the key and an item box. No XP.
   Before stage 3: "The curator doesn't seem to have anything of value." (Wiki).

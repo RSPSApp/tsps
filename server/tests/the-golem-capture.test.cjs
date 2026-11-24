@@ -380,6 +380,12 @@ test("before the notes the curator keeps his own conversation (no statuette opti
   const request = { player: f.player, active: true };
   h.PM.emitCustomEvent("the-golem:curator-step", request);
   assert.equal(request.active, false, "Dig Site and Bone Voyage keep the curator");
+  // Once the statuette is in its alcove the quest hands him back (Shield of Arrav's hand-in, Dig Site, Bone Voyage).
+  quest().setStage(f.player, S.REPLACED);
+  f.player.setAttribute(A.LETTER, 3);
+  const after = { player: f.player, active: true };
+  h.PM.emitCustomEvent("the-golem:curator-step", after);
+  assert.equal(after.active, false);
 });
 
 test("t649-653: Pickpocket at stage 3 steals the key with the recorded animation and sound; only once", async (t) => {

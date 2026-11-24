@@ -427,10 +427,13 @@ module.exports = function registerTheGolemQuest(api) {
 
   // --- Who plays which transcript ----------------------------------------------------------------
 
-  /** The curator's statuette conversation, once the notes are read and until the quest ends. */
+  /**
+   * The curator's statuette conversation: once the notes are read, until the statuette is back in its
+   * alcove (stage 4). After that the quest has no business with him; no recording talks to him then.
+   */
   function curatorStepActive(player) {
     const stage = stageOf(player);
-    return stage >= STAGE_OPEN_PORTAL && stage < STAGE_COMPLETE && letterProgress(player) >= NOTES_READ;
+    return stage >= STAGE_OPEN_PORTAL && stage < STAGE_STATUETTE_REPLACED && letterProgress(player) >= NOTES_READ;
   }
 
   function golemVariant(player) {

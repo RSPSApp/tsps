@@ -30,7 +30,7 @@ function DistantWorldPanel({ plugin }: { plugin: DistantWorldPlugin }) {
             ["deferredActions", "Offer approach and interact actions"] ] as const).map(([key, text]) =>
             <label key={key} className="rl-sidebar-check"><input type="checkbox" checked={plugin.config[key]()}
                 onChange={e => plugin.setConfig(key, e.target.checked)} /><span>{text}</span></label>)}
-        <p className="rl-sidebar-panel-copy">Cosmetic NPCs wander within their spawn radii. Stationary spawns stay fixed. This movement is not live activity. Right-click a preview to approach it. Actions require a unique real NPC when you arrive.</p>
+        <p className="rl-sidebar-panel-copy">Previews show known spawns and simulated wandering. Enable Approach and interact to right-click a preview, walk toward it, and use the chosen option on a unique real NPC in range.</p>
         <button className="rl-sidebar-text-button" type="button" onClick={() => plugin.approach.cancel("Approach cancelled.", true)}>Cancel approach</button>
     </div>;
 }

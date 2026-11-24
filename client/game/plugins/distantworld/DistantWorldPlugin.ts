@@ -52,7 +52,7 @@ export class DistantWorldPlugin extends Plugin {
     private backend?: WorkerSearchBackend;
     private nonce = 0;
     private catalogRequest = -1;
-    private resolveRequest = -1;
+    private pendingResolve?: { request: number; intent: ApproachIntent };
     private nextCatalog = 0;
     private catalogAt = 0;
     private serverUnavailable = false;
@@ -77,6 +77,7 @@ export class DistantWorldPlugin extends Plugin {
         previewLimit: this.previewLimit, truncated: false, gpuMiB: 0, sceneryOwner: undefined as string | undefined, version: 0 };
     private dispatching = false;
     readonly approach = new DistantApproach({
+        enabled: () => this.config.deferredActions(),
         backend: () => this.backend ??= new WorkerSearchBackend(new URL(`${process.env.PUBLIC_URL || ""}/shortestpath/collision-map.zip`, window.location.href).href),
         position: () => this.player(),
         walk: (x, y) => this.client.routePlayerTo(x, y, this.client.runMode, true),
@@ -131,6 +132,7 @@ export class DistantWorldPlugin extends Plugin {
     getState() { return this.snapshot; }
     setConfig(key: ConfigKey, value: unknown): void {
         this.manager.setConfiguration(DistantWorldConfig.group, key, String(value));
+        this.cancelDisabledApproach();
         if (key === "npcLimit") this.previewLimit = this.requestedPreviewLimit();
         this.actors = []; this.nextCatalog = 0; this.publish();
     }
@@ -170,7 +172,7 @@ export class DistantWorldPlugin extends Plugin {
     }
     private reset(): void {
         this.approach.cancel(undefined, true); this.world.clear(); this.actors = []; this.eligible = 0; this.poses.clear(); this.motion.clear(); this.poseCursor = 0;
-        this.catalogRequest = this.resolveRequest = -1; this.nonce++;
+        this.catalogRequest = -1; this.pendingResolve = undefined; this.nonce++;
     }
     onGameStateChanged(event: GameStateChanged): void {
         if (event.getGameState() === GameState.LOADING || event.getGameState() === GameState.LOGGED_IN) return;
@@ -178,9 +180,14 @@ export class DistantWorldPlugin extends Plugin {
     }
     onConfigChanged(event: ConfigChanged): void {
         if (event.getGroup() !== DistantWorldConfig.group) return;
-        if (!this.config.deferredActions()) this.approach.cancel("Deferred interaction disabled.", true);
+        this.cancelDisabledApproach();
         this.previewLimit = this.requestedPreviewLimit();
         this.nextCatalog = 0; this.actors = []; this.publish();
+    }
+    private cancelDisabledApproach(): void {
+        if (this.config.deferredActions()) return;
+        this.pendingResolve = undefined;
+        if (this.approach.intent) this.approach.cancel("Approach and interact disabled.", true);
     }
     onMenuOptionClicked(action: MenuActionData): boolean {
         const opcode = action.opcode >= MENU_ACTION_DEPRIORITIZE_OFFSET
@@ -210,15 +217,17 @@ export class DistantWorldPlugin extends Plugin {
             if (this.status !== status) { this.status = status; this.publish(); }
             return;
         }
-        if (now >= this.nextCatalog) {
-            this.catalogRequest = ++this.nonce; this.nextCatalog = now + 3000;
-            const maps = this.client.renderer?.mapManager.visibleMaps.slice(0, 1024).map(map => (map.mapX << 8) | map.mapY);
-            send({ type: "plugin_message", payload: { channel: CHANNEL, data: { type: "catalog", request: this.catalogRequest, radius: this.previewDistance(), maps } } });
-        }
         if (now - this.catalogAt > 8000) {
             // Do not repeatedly erase a partially received first catalog between network pages.
             if (this.world.request >= 0) this.world.clear();
             if (!this.serverUnavailable) this.status = "Scenery active. Waiting for public NPC data from the DistantWorld server plugin.";
+        }
+        if (now >= this.nextCatalog) {
+            this.catalogRequest = ++this.nonce; this.nextCatalog = now + 3000;
+            const maps = this.client.renderer?.mapManager.visibleMaps.slice(0, 1024).map(map => (map.mapX << 8) | map.mapY);
+            send({ type: "plugin_message", payload: { channel: CHANNEL, data: {
+                type: "catalog", request: this.catalogRequest, revision: this.world.revision, radius: this.previewDistance(), maps,
+            } } });
         }
         if (now >= this.nextBudget) { this.nextBudget = now + 1000; this.budget(now); this.publish(); }
         this.buildActors(player, now);
@@ -351,25 +360,30 @@ export class DistantWorldPlugin extends Plugin {
     }
     onPluginMessage(event: PluginMessage): void {
         if (!this.isStarted() || event.channel !== CHANNEL || !this.player()) return;
-        const data = event.data as Record<string, unknown>;
+        const data = event.data as Record<string, unknown> | null;
+        if (!data || typeof data !== "object") return;
         if (data.type === "unavailable") {
             this.world.clear(); this.actors = []; this.eligible = 0; this.poses.clear(); this.motion.clear();
+            this.approach.cancel(undefined, true); this.pendingResolve = undefined;
             this.serverUnavailable = true;
             this.status = "NPC previews unavailable: the connected world has not loaded the DistantWorld server plugin.";
             this.publish(); return;
         }
         if (this.world.accept(data, this.catalogRequest)) {
-            this.motion.retain(this.world.spawns);
+            if (data.type === "catalog") this.motion.retain(this.world.spawns);
             this.serverUnavailable = false;
             this.catalogAt = performance.now();
-            this.status = this.world.supported ? "Public spawn previews. Their live state is known only when in range." : "Previews are unavailable in this map.";
+            if (!this.approach.intent || !this.world.supported) {
+                this.status = this.world.supported ? "Public spawn previews. Their live state is known only when in range." : "Previews are unavailable in this map.";
+            }
             if (!this.world.supported) { this.actors = []; this.approach.cancel(undefined, true); }
             this.publish(); return;
         }
         const intent = this.approach.intent;
-        if (data.type !== "resolved" || data.request !== this.resolveRequest || !intent || data.key !== intent.spawn.key) return;
-        if ((intent.action || intent.examine) && !this.config.deferredActions()) {
-            this.approach.cancel("Deferred interaction disabled.", true); return;
+        if (data.type !== "resolved" || !intent || this.pendingResolve?.intent !== intent
+            || data.request !== this.pendingResolve.request || data.key !== intent.spawn.key) return;
+        if (!this.config.deferredActions()) {
+            this.cancelDisabledApproach(); return;
         }
         const index = Number(data.index), typeId = Number(data.typeId);
         const ecsId = this.client.npcEcs.getEcsIdForServer(index);
@@ -391,11 +405,13 @@ export class DistantWorldPlugin extends Plugin {
         finally { this.dispatching = false; }
     }
     private resolve(intent: ApproachIntent): void {
-        this.resolveRequest = ++this.nonce;
-        send({ type: "plugin_message", payload: { channel: CHANNEL, data: { type: "resolve", request: this.resolveRequest, key: intent.spawn.key } } });
+        const request = ++this.nonce;
+        this.pendingResolve = { request, intent };
+        send({ type: "plugin_message", payload: { channel: CHANNEL, data: { type: "resolve", request, key: intent.spawn.key } } });
     }
     transformMenuEntries(entries: SimpleMenuEntry[], context: MenuTransformContext): SimpleMenuEntry[] {
-        if (context.surface !== "world" || !this.player() || !this.actors.length) return entries;
+        if (context.surface !== "world" || !this.config.deferredActions() || !this.player() || !this.actors.length
+            || !entries.some(row => row.opcode !== MenuOpcode.Cancel && row.option !== "Cancel")) return entries;
         const mouseX = this.client.inputManager.getInteractionMouseX(), mouseY = this.client.inputManager.getInteractionMouseY();
         const scene = this.client.sceneGeometry;
         if (!scene) return entries;
@@ -416,17 +432,16 @@ export class DistantWorldPlugin extends Plugin {
         const type = getEffectiveNpcType(this.client, spawn.typeId);
         if (!type) return entries;
         const normal: SimpleMenuEntry[] = [], low: SimpleMenuEntry[] = [], examine: SimpleMenuEntry[] = [];
-        const makeRow = (option: string, intent: ApproachIntent, actionIndex?: number): SimpleMenuEntry => ({
+        const makeRow = (option: string, intent: ApproachIntent): SimpleMenuEntry => ({
             option,
             target: `${osrsTargetLabel({ option, targetName: spawn.name, targetType: MenuTargetType.NPC,
                 targetId: type.id, targetLevel: type.combatLevel }, {
                 localPlayerCombatLevel: ClientState.localPlayerCombatLevel, includeExamineIds: this.client.debugId,
             })}</col> (distant preview)`,
-            targetType: MenuTargetType.NPC, targetId: type.id, actionIndex, cosmeticNpcKey: spawn.key,
-            // NPC metadata drives native hover text. Only the custom handler may act on a preview.
-            opcode: MenuOpcode.Custom,
-            onClick: (gx, gy) => {
-                const selected = this.config.deferredActions() ? intent : { spawn };
+            targetType: MenuTargetType.NPC, targetId: type.id, cosmeticNpcKey: spawn.key,
+            opcode: MenuOpcode.Custom, deprioritized: true,
+            onClick: (gx, gy, context) => {
+                if (context?.source !== "menu" || !this.config.deferredActions()) return;
                 // Custom preview rows bypass the native world-entry handler. Reuse
                 // its cached click sprites immediately, before asynchronous routing.
                 const renderer = this.client.renderer as unknown as ClickFeedbackHost & { interactionHost?: ClickFeedbackHost };
@@ -434,9 +449,9 @@ export class DistantWorldPlugin extends Plugin {
                 const xy = gx !== undefined && gy !== undefined ? { sx: gx, sy: gy } : host?.toGLClickXY?.();
                 if (xy && closest) host?.spawnClickCross?.(
                     { tileX: Math.floor(closest.x), tileY: Math.floor(closest.y), plane: closest.plane },
-                    xy, selected.action || selected.examine ? "red" : "yellow",
+                    xy, "red",
                 );
-                void this.approach.begin(selected);
+                void this.approach.begin(intent);
             },
         });
         if (this.client.minimenuBlockModes?.[MINIMENU_BLOCK_ENTITY] !== 0) {
@@ -447,17 +462,16 @@ export class DistantWorldPlugin extends Plugin {
                 const deprioritized = isAttack
                     ? ClientState.npcAttackOption === 1 || ClientState.npcAttackOption === 0 && type.combatLevel > ClientState.localPlayerCombatLevel
                     : type.isFollower && ClientState.followerOpsLowPriority;
-                const row = makeRow(option, { spawn, action: option, actionIndex }, actionIndex);
-                if (deprioritized) row.deprioritized = true;
+                const row = makeRow(option, { spawn, action: option, actionIndex });
                 (deprioritized ? low : normal).push(row);
             }
         }
         if (this.client.minimenuBlockModes?.[MINIMENU_BLOCK_EXAMINE] !== 0) {
             examine.push(makeRow("Examine", { spawn, examine: true }));
         }
-        const bottom = entries.findIndex(row => row.deprioritized || (row.opcode ?? 0) >= 1000 || row.option === "Examine" || row.option === "Cancel");
-        const split = bottom < 0 ? entries.length : bottom;
-        return [...normal, ...entries.slice(0, split), ...low, ...examine, ...entries.slice(split)];
+        const last = entries.at(-1);
+        const split = last?.opcode === MenuOpcode.Cancel || last?.option === "Cancel" ? entries.length - 1 : entries.length;
+        return [...entries.slice(0, split), ...normal, ...low, ...examine, ...entries.slice(split)];
     }
 }
 

@@ -13,26 +13,43 @@ export class DistantWorldState {
     viewDistance = 15;
     supported = true;
     request = -1;
+    revision?: number;
     truncated = false;
-    private assembly?: { request: number; parts: number; viewDistance: unknown; supported: unknown; truncated: unknown; pages: Map<number, Record<string, unknown>> };
-    clear(): void { this.spawns = []; this.links.clear(); this.request = -1; this.truncated = false; this.assembly = undefined; }
+    private keys = new Set<string>();
+    private assembly?: { request: number; revision: unknown; parts: number; viewDistance: unknown; supported: unknown; truncated: unknown; pages: Map<number, Record<string, unknown>> };
+    clear(): void {
+        this.spawns = []; this.keys.clear(); this.links.clear(); this.request = -1;
+        this.revision = undefined; this.truncated = false; this.assembly = undefined;
+    }
 
     accept(data: Record<string, unknown>, request: number): boolean {
-        if (data.type !== "catalog" || data.request !== request) return false;
+        if (data.request !== request || !Number.isInteger(data.viewDistance) || Number(data.viewDistance) < 1 || Number(data.viewDistance) > 127) return false;
+        if (data.type === "links") {
+            if (!this.supported || this.revision === undefined || data.revision !== this.revision) return false;
+            const links = parseLinks(data.links, this.keys);
+            if (!links) return false;
+            this.links = links; this.viewDistance = Number(data.viewDistance); this.request = request;
+            return true;
+        }
+        if (data.type !== "catalog" || data.revision !== undefined && (!Number.isSafeInteger(data.revision) || Number(data.revision) < 1)) return false;
         if (data.parts !== undefined) {
             const parts = Number(data.parts), part = Number(data.part);
             if (!Number.isInteger(parts) || parts < 1 || parts > MAX_CATALOG_PAGES || !Number.isInteger(part) || part < 0 || part >= parts
                 || !Array.isArray(data.spawns) || data.spawns.length > 32 || !Array.isArray(data.links) || data.links.length > 32) return false;
-            if (this.assembly?.request !== request) this.assembly = { request, parts, viewDistance: data.viewDistance, supported: data.supported, truncated: data.truncated, pages: new Map() };
+            if (this.assembly?.request !== request) this.assembly = {
+                request, revision: data.revision, parts, viewDistance: data.viewDistance,
+                supported: data.supported, truncated: data.truncated, pages: new Map(),
+            };
             const assembly = this.assembly;
-            if (assembly.parts !== parts || assembly.viewDistance !== data.viewDistance || assembly.supported !== data.supported || assembly.truncated !== data.truncated || assembly.pages.has(part)) return false;
+            if (assembly.parts !== parts || assembly.revision !== data.revision || assembly.viewDistance !== data.viewDistance
+                || assembly.supported !== data.supported || assembly.truncated !== data.truncated || assembly.pages.has(part)) return false;
             assembly.pages.set(part, data);
             if (assembly.pages.size !== parts) return false;
             const pages = [...assembly.pages.entries()].sort((a, b) => a[0] - b[0]).map(entry => entry[1]);
             this.assembly = undefined;
             return this.accept({ ...data, parts: undefined, part: undefined, spawns: pages.flatMap(page => page.spawns as unknown[]), links: pages.flatMap(page => page.links as unknown[]) }, request);
         }
-        if (data.type !== "catalog" || data.request !== request || !Array.isArray(data.spawns) || data.spawns.length > MAX_DISTANT_SPAWNS || !Array.isArray(data.links) || data.links.length > 255) return false;
+        if (!Array.isArray(data.spawns) || data.spawns.length > MAX_DISTANT_SPAWNS) return false;
         const spawns: DistantSpawn[] = [], keys = new Set<string>();
         for (const raw of data.spawns) {
             if (!raw || typeof raw !== "object") return false;
@@ -45,15 +62,11 @@ export class DistantWorldState {
                 ...(Number.isInteger(s.rotation) && s.rotation! >= 0 && s.rotation! <= 2047 ? { rotation: s.rotation } : {}),
                 name: s.name.replace(/<[^>]*>/g, "").slice(0, 80) });
         }
-        const links = new Map<string, number>();
-        for (const raw of data.links) {
-            const link = raw as { key?: string; index?: number };
-            if (!link || typeof link.key !== "string" || !keys.has(link.key) || !Number.isInteger(link.index) || link.index! <= 0 || link.index! > 65534) return false;
-            links.set(link.key, link.index!);
-        }
-        if (!Number.isInteger(data.viewDistance) || Number(data.viewDistance) < 1 || Number(data.viewDistance) > 127) return false;
-        this.spawns = spawns; this.links = links;
+        const links = parseLinks(data.links, keys);
+        if (!links) return false;
+        this.spawns = spawns; this.keys = keys; this.links = links;
         this.viewDistance = Number(data.viewDistance); this.supported = data.supported === true; this.request = request;
+        this.revision = this.supported && typeof data.revision === "number" ? data.revision : undefined;
         this.truncated = data.truncated === true;
         return true;
     }
@@ -65,6 +78,17 @@ export class DistantWorldState {
             .map(s => ({ ...s, priority: priority(s.spawn) }))
             .sort((a, b) => a.priority - b.priority || a.distance - b.distance).slice(0, limit).map(s => s.spawn);
     }
+}
+
+function parseLinks(data: unknown, keys: ReadonlySet<string>): Map<string, number> | undefined {
+    if (!Array.isArray(data) || data.length > 255) return;
+    const links = new Map<string, number>();
+    for (const link of data) {
+        if (!link || typeof link.key !== "string" || !keys.has(link.key)
+            || !Number.isInteger(link.index) || link.index <= 0 || link.index > 65534) return;
+        links.set(link.key, link.index);
+    }
+    return links;
 }
 
 /** Shared quantized poses keep identical NPCs from requesting a distinct mesh every frame. */

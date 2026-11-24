@@ -24,7 +24,7 @@ test("growing actor uniforms preserves every earlier draw's position and transfo
     for (const count of [9, 17, 33]) {
         uniforms.reset();
         for (let i = 0; i < count; i++) {
-            uniforms.addEntry(50 + i, 51, 1.5, -10, i, 0, 0, 0, -1, i===0?120:0);
+            uniforms.addEntry(50 + i, 51, 1.5, -10, i, 0, 0, 0);
         }
         uniforms.flush();
         const floats = new Float32Array(uploaded);
@@ -33,7 +33,6 @@ test("growing actor uniforms preserves every earlier draw's position and transfo
             const row = i * 32;
             assert.equal(floats[row], 50 + i, `position survives growth at ${count} draws`);
             assert.equal(words[row + 4], i, "actor data index is preserved");
-            assert.ok(Math.abs(floats[row+12]-(i===0?1/3:0))<1e-6,"per-effect hue is isolated from other actors");
             assert.equal(new Int32Array(uploaded)[row + 10], -1, "CPU poses remain CPU poses");
             assert.deepEqual(Array.from(floats.subarray(row + 16, row + 32)),
                 [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],

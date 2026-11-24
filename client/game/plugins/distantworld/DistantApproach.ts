@@ -20,6 +20,7 @@ export class DistantApproach {
     private resolving = false;
 
     constructor(private readonly deps: {
+        enabled(): boolean;
         backend(): PathSearchBackend;
         position(): Tile | undefined;
         walk(x: number, y: number): void;
@@ -39,11 +40,15 @@ export class DistantApproach {
     }
 
     async begin(intent: ApproachIntent): Promise<void> {
+        if (!this.deps.enabled()) {
+            this.cancel(undefined, true); return;
+        }
         this.cancel();
         const player = this.deps.position();
         if (!player || player.plane !== intent.spawn.plane) return;
         this.intent = intent; this.started = this.progress = this.deps.now(); this.last = player; this.cursor = 0;
         const generation = this.generation;
+        this.lastResolve = -Infinity;
         this.deps.status(`Finding a route to ${intent.spawn.name}…`);
         try {
             const backend = this.deps.backend();
@@ -70,6 +75,9 @@ export class DistantApproach {
     tick(viewDistance: number): void {
         const intent = this.intent;
         if (!intent) return;
+        if (!this.deps.enabled()) {
+            this.cancel("Approach and interact disabled.", true); return;
+        }
         const player = this.deps.position(), now = this.deps.now();
         if (!player || player.plane !== intent.spawn.plane || (this.last && distanceTo(player, this.last) > 12)) {
             this.cancel("Approach cancelled after a map change.", true); return;

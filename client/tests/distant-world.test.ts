@@ -10,11 +10,14 @@ import type { PathSearchListener } from "../game/plugins/shortestpath/pathfinder
 import { MenuTargetType } from "../rs/MenuEntry";
 import { minMenuSnapshot } from "../rs/cs2/minimenu";
 import { MenuOpcode, MenuState } from "../ui/menu/MenuState";
+import { chooseDefaultMenuEntry } from "../ui/menu/MenuEngine";
 import { worldEntriesToSimple } from "../ui/menu/MenuBridge";
 import { setMenuTransform } from "../ui/menu/menuTransforms";
 import { dispatchMenuAction, menuClickListeners } from "../ui/menu/menuEvents";
 import { ORBS, ORBS_NOMAP } from "../runelite/api/gameval/InterfaceID";
 import { OrbComponent } from "../game/plugins/orbWidgets";
+import { BLACK_DEMON, GREEN_DRAGON, MAN } from "@runelite/api/gameval/NpcID";
+import { NpcModelLoader } from "../rs/config/npctype/NpcModelLoader";
 
 const spawn: DistantSpawn = { key: "1:3300:3200:0", typeId: 1, x: 3300, y: 3200, plane: 0, name: "Guard" };
 const catalog = (extra = {}) => ({ type: "catalog", request: 7, supported: true, viewDistance: 15, spawns: [spawn], links: [], ...extra });
@@ -99,6 +102,7 @@ function approachFixture() {
     let cancelled = 0, stopped = 0, resolves = 0;
     const walks: [number, number][] = [], statuses: string[] = [];
     const approach = new DistantApproach({
+        enabled: () => true,
         backend: () => ({ ready: Promise.resolve(), map: () => undefined, dispose() {}, search: (_request, next) => { listener = next; return () => cancelled++; } }),
         position: () => player, walk: (x, y) => walks.push([x, y]), stop: () => stopped++, resolve: () => resolves++,
         status: text => statuses.push(text), now: () => now,
@@ -181,6 +185,7 @@ test("sidebar lifecycle keeps proxies out of ECS, suppresses live actors, and cl
     try {
         assert.equal(plugin.isEnabled(), false);
         await plugin.start();
+        assert.equal(plugin.config.deferredActions(), false);
         plugin.setConfig('npcLimit', 500);
         assert.equal(plugin.getState().previewLimit, 500, 'the configured count applies immediately rather than growing from a hidden 96-NPC cap');
         assert.equal(toolbar.getNavigations().length, 1);
@@ -211,31 +216,46 @@ test("sidebar lifecycle keeps proxies out of ECS, suppresses live actors, and cl
         hd = false; client.renderer.stats.geometryGpuBytes = 0;
         assert.equal(plugin.scenerySettings()!.drawDistance, standaloneDistance);
         const baseMenu = [{ option: 'Walk here', opcode: MenuOpcode.WalkHere }, { option: 'Cancel', opcode: MenuOpcode.Cancel }];
+        const menuContext = { surface: 'world', menu: true } as const;
+        assert.equal(plugin.transformMenuEntries(baseMenu, menuContext), baseMenu, 'previews are passive by default');
+        plugin.setConfig('deferredActions', true);
+        (plugin as any).buildActors(plugin.player(), performance.now());
         const menu = plugin.transformMenuEntries(baseMenu, { surface: 'world', menu: true });
-        assert.deepEqual(menu.map(row => row.option), ['Talk-to', 'Walk here', 'Examine', 'Cancel']);
-        assert.match(menu[0].target!, /^<col=ffff00>Guard<col=[a-f0-9]+>  \(level-22\)<\/col> \(distant preview\)$/);
+        const preview = menu[1];
+        assert.deepEqual(menu.map(row => row.option), ['Walk here', 'Talk-to', 'Examine', 'Cancel']);
+        assert.match(preview.target!, /^<col=ffff00>Guard<col=[a-f0-9]+>  \(level-22\)<\/col> \(distant preview\)$/);
         client.menuActiveSimpleEntries = menu;
-        assert.deepEqual(minMenuSnapshot(client), { option: 'Talk-to', target: menu[0].target, numOps: 3, type: 2, hasComponentHover: false });
-        assert.equal(menu[0].npcServerId, undefined);
-        assert.equal(menu[0].cosmeticNpcKey, spawn.key, 'native NPC menus retain a separate identity for cosmetic highlighting');
-        assert.equal(menu[0].opcode, MenuOpcode.Custom, 'NPC appearance must not dispatch an NPC packet for a preview');
-        assert.equal(menu[0].identifier, undefined);
+        assert.equal(minMenuSnapshot(client).option, 'Walk here');
+        assert.equal(chooseDefaultMenuEntry(menu, { hasSelectedItem: true, hasSelectedSpell: true }), baseMenu[0]);
+        assert.equal(preview.npcServerId, undefined);
+        assert.equal(preview.cosmeticNpcKey, spawn.key, 'native NPC menus retain a separate identity for cosmetic highlighting');
+        assert.equal(preview.opcode, MenuOpcode.Custom, 'NPC appearance must not dispatch an NPC packet for a preview');
+        assert.equal(preview.identifier, undefined);
+        assert.equal(preview.actionIndex, undefined, 'preview slots cannot be chosen as native shift-click actions');
+        const banker = { option: 'Talk-to', target: 'Banker', opcode: MenuOpcode.NpcFirstOption, npcServerId: 77 };
+        const door = { option: 'Open', target: 'Door', opcode: MenuOpcode.GameObjectFirstOption };
+        const doorExamine = { option: 'Examine', target: 'Door', opcode: MenuOpcode.ExamineObject };
+        const withRealTargets = plugin.transformMenuEntries([banker, door, baseMenu[0], doorExamine, baseMenu[1]], menuContext);
+        assert.deepEqual(withRealTargets.slice(0, 4), [banker, door, baseMenu[0], doorExamine]);
+        assert.equal(chooseDefaultMenuEntry(withRealTargets), banker);
+        const cancelOnly = [baseMenu[1]];
+        assert.equal(plugin.transformMenuEntries(cancelOnly, menuContext), cancelOnly);
         type.actions = ['Talk-to', 'Attack', 'Trade'];
         const previousAttackOption = ClientState.npcAttackOption;
         const previousCombatLevel = ClientState.localPlayerCombatLevel;
         try {
             ClientState.npcAttackOption = 2;
             assert.deepEqual(plugin.transformMenuEntries(baseMenu, { surface: 'world', menu: true }).map(row => row.option),
-                ['Attack', 'Talk-to', 'Trade', 'Walk here', 'Examine', 'Cancel']);
+                ['Walk here', 'Attack', 'Talk-to', 'Trade', 'Examine', 'Cancel']);
             ClientState.npcAttackOption = 1;
             assert.deepEqual(plugin.transformMenuEntries(baseMenu, { surface: 'world', menu: true }).map(row => row.option),
-                ['Talk-to', 'Trade', 'Walk here', 'Attack', 'Examine', 'Cancel']);
+                ['Walk here', 'Talk-to', 'Trade', 'Attack', 'Examine', 'Cancel']);
             ClientState.npcAttackOption = 3;
             assert.equal(plugin.transformMenuEntries(baseMenu, { surface: 'world', menu: true }).some(row => row.option === 'Attack'), false);
             ClientState.npcAttackOption = 0; ClientState.localPlayerCombatLevel = 3;
-            assert.equal(plugin.transformMenuEntries(baseMenu, { surface: 'world', menu: true })[0].option, 'Talk-to');
+            assert.equal(plugin.transformMenuEntries(baseMenu, { surface: 'world', menu: true })[1].option, 'Talk-to');
             ClientState.localPlayerCombatLevel = 99;
-            assert.equal(plugin.transformMenuEntries(baseMenu, { surface: 'world', menu: true })[0].option, 'Attack');
+            assert.equal(plugin.transformMenuEntries(baseMenu, { surface: 'world', menu: true })[1].option, 'Attack');
             client.minimenuBlockModes = [];
             client.minimenuBlockModes[2] = 0;
             assert.deepEqual(plugin.transformMenuEntries(baseMenu, { surface: 'world', menu: true }).map(row => row.option), ['Walk here', 'Examine', 'Cancel']);
@@ -254,14 +274,19 @@ test("sidebar lifecycle keeps proxies out of ECS, suppresses live actors, and cl
             const state = new MenuState();
             const rows = worldEntriesToSimple([{ option: 'Walk here', targetId: -1, targetType: MenuTargetType.NONE, targetName: '', targetLevel: -1 }], { menuState: state });
             client.menuActiveSimpleEntries = rows;
-            assert.equal(minMenuSnapshot(client).type, 2, 'the registered menu remains an NPC hover for native mouseover scripts');
-            assert.equal(rows[0].cosmeticNpcKey, spawn.key, 'menu registration retains the preview identity');
+            const talk = rows.find(row => row.option === 'Talk-to')!;
+            assert.equal(minMenuSnapshot(client).option, 'Walk here', 'native mouseover scripts see the regular default action');
+            assert.equal(chooseDefaultMenuEntry(rows), rows[0]);
+            assert.equal(talk.cosmeticNpcKey, spawn.key, 'menu registration retains the preview identity');
             assert.equal(clickCrosses.length, 0, 'hovering does not animate a click cross');
             const actor = plugin.cosmeticNpcs()[0];
             const clickedTile = {tileX:Math.floor(actor.x),tileY:Math.floor(actor.y),plane:actor.plane};
-            state.invoke(rows[0].menuStateIndex!, 103, 97, {source:'primary'});
+            state.invoke(talk.menuStateIndex!, 102, 96, {source:'primary'});
+            assert.deepEqual(selected, [], 'a primary click cannot start an automated approach');
+            assert.deepEqual(clickCrosses, []);
+            state.invoke(talk.menuStateIndex!, 103, 97, {source:'menu'});
             assert.deepEqual(clickCrosses, [[clickedTile,{sx:103,sy:97},'red']],
-                'a distant NPC primary click immediately uses the native targeted cross');
+                'selecting a preview option immediately uses the native targeted cross');
             // WebGPU exposes the same native feedback through its interaction host.
             (client.renderer as any).interactionHost = {spawnClickCross};
             state.invoke(rows.find(row => row.option === 'Examine')!.menuStateIndex!, 125, 115, {source:'menu'});
@@ -270,11 +295,10 @@ test("sidebar lifecycle keeps proxies out of ECS, suppresses live actors, and cl
             assert.deepEqual(selected, [{ spawn: plugin.world.spawns[0], action: 'Talk-to', actionIndex: 0 }, { spawn: plugin.world.spawns[0], examine: true }],
                 'native-looking rows must invoke deferred intents through the real menu-state path');
             plugin.setConfig('deferredActions', false);
-            state.invoke(rows[0].menuStateIndex!, 110, 105);
-            assert.deepEqual(clickCrosses[2], [clickedTile,{sx:110,sy:105},'yellow'],
-                'approach-only clicks use the native walking cross');
+            state.invoke(talk.menuStateIndex!, 110, 105, {source:'menu'});
+            assert.equal(clickCrosses.length, 2, 'stale preview rows cannot act after disabling the switch');
             delete (client.renderer as any).interactionHost;
-            assert.deepEqual(selected[2], { spawn: plugin.world.spawns[0] }, 'disabling deferred interaction keeps clicks as approach only');
+            assert.equal(selected.length, 2);
             plugin.setConfig('deferredActions', true);
         } finally { setMenuTransform(undefined); plugin.approach.begin = begin; delete (client.renderer as any).interactionHost; }
         (plugin as any).backend = { ready: Promise.resolve(), dispose() {}, search: (_request: unknown, listener: PathSearchListener) => {
@@ -321,7 +345,17 @@ test("sidebar lifecycle keeps proxies out of ECS, suppresses live actors, and cl
             assert.equal(plugin.approach.intent, undefined, 'unrelated widget operations still cancel the deferred interaction');
             assert.equal(stoppedWalking, stopsBeforeOtherAction + 1);
         } finally { menuClickListeners.delete(notifyPlugins); overWidget = false; }
-        plugin.approach.cancel(undefined, true); playerX = 3200;
+        playerX = 3200;
+        await plugin.approach.begin(interaction);
+        plugin.approach.tick(15);
+        const walksBeforeDisable = routed.length, stopsBeforeDisable = stoppedWalking;
+        plugin.setConfig('deferredActions', false);
+        assert.equal(stoppedWalking, stopsBeforeDisable + 1, 'disabling the option stops the active walk');
+        await plugin.approach.begin(interaction);
+        plugin.approach.tick(15);
+        assert.equal(plugin.approach.intent, undefined);
+        assert.equal(routed.length, walksBeforeDisable, 'disabled approaches send no more walks');
+        plugin.setConfig('deferredActions', true);
         linked = true;
         (plugin as any).buildActors(plugin.player(), performance.now());
         assert.equal(plugin.cosmeticNpcs().length, 0, 'a real walking NPC suppresses a preview immediately');
@@ -338,8 +372,16 @@ test("sidebar lifecycle keeps proxies out of ECS, suppresses live actors, and cl
         try {
             playerX = 3290;
             const intent = { spawn, action: "Talk-to", actionIndex: 0 };
-            plugin.approach.intent = intent; (plugin as any).resolveRequest = 91;
+            plugin.approach.intent = intent; (plugin as any).pendingResolve = { request: 91, intent };
             const resolved = (request = 91, typeId = 1) => new PluginMessage('distant-world', { type: 'resolved', request, key: spawn.key, index: 42, typeId });
+            plugin.setConfig('deferredActions', false);
+            plugin.onPluginMessage(resolved());
+            assert.equal(dispatched.length, 0, 'disabling the option blocks a pending final interaction');
+            plugin.setConfig('deferredActions', true);
+            plugin.approach.intent = { ...intent };
+            plugin.onPluginMessage(resolved());
+            assert.equal(dispatched.length, 0, 'an old reply cannot act on a replacement intent for the same spawn');
+            plugin.approach.intent = intent; (plugin as any).pendingResolve = { request: 91, intent };
             plugin.onPluginMessage(resolved(90));
             assert.equal(plugin.approach.intent, intent);
             plugin.onPluginMessage(resolved(91, 2));
@@ -352,7 +394,8 @@ test("sidebar lifecycle keeps proxies out of ECS, suppresses live actors, and cl
             assert.equal(dispatched.length, 1);
             assert.equal(dispatched[0].opcode, 9); assert.equal(dispatched[0].identifier, 42);
             assert.equal(plugin.approach.intent, undefined, 'the deferred action dispatches only once');
-            plugin.approach.intent = { spawn, examine: true };
+            const examineIntent = { spawn, examine: true };
+            plugin.approach.intent = examineIntent; (plugin as any).pendingResolve = { request: 91, intent: examineIntent };
             plugin.onPluginMessage(resolved());
             assert.equal(dispatched.length, 2);
             assert.equal(dispatched[1].opcode, MenuOpcode.ExamineNpc); assert.equal(dispatched[1].identifier, 42);
@@ -382,12 +425,16 @@ test("sidebar lifecycle keeps proxies out of ECS, suppresses live actors, and cl
 
 test("paged spawn catalogs publish atomically, out of order, and discard obsolete partial requests", () => {
     const state = new DistantWorldState();
-    state.accept(catalog(), 7);
-    const page = (part: number, request = 8) => catalog({ request, part, parts: 2, spawns: [{ ...spawn, key: `page:${part}`, x: 3300 + part }] });
+    state.accept(catalog({ revision: 1 }), 7);
+    const page = (part: number, request = 8, revision = 2) =>
+        catalog({ request, revision, part, parts: 2, spawns: [{ ...spawn, key: `page:${part}`, x: 3300 + part }] });
     assert.equal(state.accept(page(1), 8), false);
     assert.equal(state.spawns[0].key, spawn.key, 'a partial catalog does not replace the visible one');
+    assert.equal(state.revision, 1, 'only a completed catalog can be acknowledged');
+    assert.equal(state.accept(page(0, 8, 3), 8), false, 'pages from a different revision cannot be mixed');
     assert.equal(state.accept(page(1), 8), false, 'duplicate pages are ignored');
     assert.equal(state.accept(page(0), 8), true);
+    assert.equal(state.revision, 2);
     assert.deepEqual(state.spawns.map(s => s.key), ['page:0', 'page:1']);
     assert.equal(state.accept(page(0, 9), 9), false);
     assert.equal(state.accept(page(1, 9), 10), false, 'old request cannot finish after the next request');
@@ -416,6 +463,27 @@ test("an expired first catalog can finish across client ticks without its partia
     plugin.onClientTick();
     assert.equal(world.accept(page(1), 1), true);
     assert.equal(world.spawns.length, 2);
+});
+
+test("links-only refreshes update the live handoff and retain complete spawn rows", () => {
+    const state = new DistantWorldState();
+    const response = { type: 'links', request: 8, revision: 1, viewDistance: 20, links: [{ key: spawn.key, index: 42 }] };
+    assert.equal(state.accept(response, 8), false, 'links need a complete catalog');
+    assert.equal(state.accept(catalog({ revision: 1, truncated: true }), 7), true);
+    const spawns = state.spawns;
+    assert.equal(state.accept({ ...response, revision: 2 }, 8), false);
+    assert.equal(state.accept({ ...response, links: [{ key: 'obsolete', index: 42 }] }, 8), false);
+    assert.equal(state.accept(response, 9), false, 'links from a superseded request are ignored');
+    assert.equal(state.accept(response, 8), true);
+    assert.equal(state.spawns, spawns);
+    assert.equal(state.truncated, true);
+    assert.equal(state.links.get(spawn.key), 42);
+    assert.equal(state.viewDistance, 20);
+    assert.equal(state.accept({ ...response, request: 9, links: [] }, 9), true);
+    assert.equal(state.links.size, 0, 'unlinked NPCs are removed at the next refresh');
+    state.clear();
+    assert.equal(state.revision, undefined);
+    assert.equal(state.accept(response, 8), false);
 });
 
 test("cosmetic wandering stays in its radius, respects walls and interpolates without simulating skipped time", () => {
@@ -497,6 +565,12 @@ test("real Varrock and Barbarian Village catalogs keep all NPC types and produce
     const types = factory.getNpcTypeLoader(), vars = new VarManager(factory.getVarBitTypeLoader());
     const seqs = factory.getSeqTypeLoader();
     const locs = factory.getLocTypeLoader(), textures = factory.getTextureLoader();
+    const models = new NpcModelLoader(types, factory.getModelLoader(), textures, seqs, factory.getSeqFrameLoader(),
+        factory.getSkeletalSeqLoader(), vars, 2);
+    for (const id of [MAN, BLACK_DEMON, MAN, GREEN_DRAGON]) {
+        assert.ok(models.getModel(types.load(id), -1, -1), `NPC ${id} produces a cacheable model`);
+    }
+    assert.deepEqual([...models.modelCache.keys()], [MAN, GREEN_DRAGON], 'preview model cache evicts the least recently used model');
     const locModels = new LocModelLoader(locs, factory.getModelLoader(), textures, seqs, factory.getSeqFrameLoader(), factory.getSkeletalSeqLoader());
     const builder = new SceneBuilder(cache.info, factory.getMapFileLoader(), factory.getUnderlayTypeLoader(), factory.getOverlayTypeLoader(), locs, locModels, cache.xteas);
     const maps = new Map([48, 49].map(mapX => {

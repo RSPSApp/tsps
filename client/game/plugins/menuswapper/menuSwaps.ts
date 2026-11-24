@@ -112,7 +112,9 @@ function moveFirst(out: SimpleMenuEntry[], group: Group, option: string, pin: bo
         out[index] = ordered[i];
     });
     // A swap the player chose wins even over "Attack set to right-click" (deprioritized).
-    out[group.positions[0]] = asLeftClickEntry({ ...chosen, deprioritized: false, swapPinned: pin || undefined });
+    const pinned = { ...chosen, deprioritized: false, swapPinned: pin || undefined };
+    // As RuneLite: only an entry the swap moved up stops being a low-priority op.
+    out[group.positions[0]] = chosen === entries[0] ? pinned : asLeftClickEntry(pinned);
     return true;
 }
 

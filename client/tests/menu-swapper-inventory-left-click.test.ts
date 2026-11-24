@@ -57,6 +57,13 @@ test("the shift-drop preset drops with Shift held", () => {
     });
 });
 
+test("a swap to an op that is already on top leaves it low priority, as RuneLite", () => {
+    withSwaps({ swaps: { [sharkKey]: { option: "Drop", name: "Shark" } } }, false, () => {
+        const onlyDrop = { ...shark, targetVerb: undefined, actions: [null, null, null, null, null, null, "Drop"] };
+        assert.equal(primary(onlyDrop).opensMenu, true);
+    });
+});
+
 test("without a swap the item's normal left click is unchanged", () => {
     withSwaps({}, false, () => {
         const action = primary(shark);

@@ -253,17 +253,17 @@ Enraged (150 HP): 5 pools at once, then one more every 3 ticks, and the crystals
 - A totem heals him 75 every 7 ticks.
 - Volatility makes him explode too (graphic 2724).
 
-**Boss health bar** ([RSProx 237/1150](https://rsprox.net/download/1150), ticks 14765–15008):
-- Two ticks after Sol lands, interface 303 shows his NPC ID (12821) and 1,500 HP in boss mode. The standard boss bar colours and open script 2376 are used (ticks 14765–14767).
-- The bar tracks his HP, including successive HP changes on the same tick, and reaches zero on the kill tick (ticks 14777–14991).
-- Each phase change refreshes the bar with script 2887. After the kill it refreshes each tick for eight ticks. It fades out at +13 (script 2889) and clears at +17, including the children of its container (script 2249, ticks 14991–15008).
+**Boss health bar** ([RSProx 237/1150](https://rsprox.net/download/1150), ticks 14765–15008, with comparisons in [237/1156](https://rsprox.net/download/1156) and [234/3285](https://rsprox.net/download/3285)):
+- Two ticks after Sol lands, interface 303 shows his NPC ID (12821) and 1,500 HP in boss mode. It uses colours 25600, 576 and 800 and open script 2376 (R1150 ticks 14765–14767).
+- The bar tracks his HP, including successive HP changes on the same tick, and reaches zero immediately on defeat. The recordings show zero HP on the tick of the retail kill-count message in 20 of 27 kills, and one tick earlier in seven.
+- Each phase change refreshes the bar with script 2887. In 25 of 27 recorded kills the bar refreshes on ticks +1 through +8, fades at +13 (script 2889), and clears at +17, including the children of its container (script 2249, R1150 ticks 14991–15008).
 
 ### Estimates
 
 - Phase changes refresh the bar for all five ticks after the phase line. Captures sometimes skip a tick in that interval.
 - The bar sends its colours and open script once. The captures contain repeated sends of those values.
 - The bar clears immediately if the player dies, teleports or logs out during the fight. The cited kills do not show those exits. Immediate cleanup follows the Vorkath boss bar.
-- Sol uses the common +13 fade delay. Some kills in [RSProx 237/1156](https://rsprox.net/download/1156) fade later.
+- Sol uses the common post-kill refresh, fade and clear timings. R1156 has two longer sequences, with refresh through +10 and fade/clear at +15/+19 after tick 18567, and refresh through +9 and fade/clear at +14/+18 after tick 20183.
 
 **His end:**
 - He says one of his death lines and the kill is counted internally for his next greeting and the lobby scoreboard. The retail kill-count line is the timing reference in the recordings. After his death animation (10888) the run ends.

@@ -384,8 +384,9 @@ function drawBitmapRunGL(
     originY: number,
     scaleX: number,
     scaleY: number,
-): void {
-    if (!text) return;
+    justify?: LineJustification,
+): number {
+    if (!text) return 0;
 
     const atlas = getBitmapFontAtlas(glr, font);
     const buffer = _glyphQuadBuffer;
@@ -393,11 +394,21 @@ function drawBitmapRunGL(
 
     let penX = logicalX;
     let prev = -1;
+    let justified = 0;
     for (let i = 0; i < text.length; i++) {
         let ch = text.charCodeAt(i) & 0xff;
         if (ch === 160) ch = 32;
         if (font.kerning && prev !== -1) {
             penX += font.kerning[(prev << 8) + ch] || 0;
+        }
+        // A justified line widens each space by a share of the spare width, counted in 256ths
+        // of a pixel so the shares add up to the whole.
+        if (justify && ch === 32 && justify.space > 0) {
+            justify.remainder += justify.space;
+            const extra = justify.remainder >> 8;
+            justify.remainder &= 255;
+            penX += extra;
+            justified += extra;
         }
 
         const glyph = atlas.glyphs[ch];
@@ -435,6 +446,49 @@ function drawBitmapRunGL(
             alpha,
         );
     }
+    return justified;
+}
+
+/** Extra width per space of a justified line, in 256ths of a pixel, and the fraction carried. */
+export interface LineJustification {
+    space: number;
+    remainder: number;
+}
+
+/**
+ * How much each space of a justified line grows, in 256ths of a pixel: the spare width shared
+ * over the line's spaces (those outside tags). 0 when the line has no space or already fills
+ * the width, so a line is never squeezed.
+ */
+export function lineJustificationSpace(line: string, width: number, textWidth: number): number {
+    let spaces = 0;
+    let inTag = false;
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === "<") inTag = true;
+        else if (ch === ">") inTag = false;
+        else if (!inTag && ch === " ") spaces++;
+    }
+    if (spaces === 0) return 0;
+    return Math.max(0, Math.trunc(((width - textWidth) * 256) / spaces));
+}
+
+/**
+ * The baseline of the first line and the distance between lines for text spread over its box
+ * (y alignment 3): the spare height is shared equally above, between and below the lines. One
+ * line alone is centred instead.
+ */
+export function spreadLinesVertically(
+    height: number,
+    lineCount: number,
+    lineHeight: number,
+    maxAscent: number,
+    maxDescent: number,
+): { firstBaseline: number; lineHeight: number } {
+    const spare = height - maxAscent - maxDescent - lineHeight * (lineCount - 1);
+    if (lineCount <= 1) return { firstBaseline: maxAscent + Math.trunc(spare / 2), lineHeight };
+    const padding = Math.max(0, Math.trunc(spare / (lineCount + 1)));
+    return { firstBaseline: padding + maxAscent, lineHeight: lineHeight + padding };
 }
 
 function drawBitmapSegmentsGL(
@@ -451,6 +505,7 @@ function drawBitmapSegmentsGL(
     scaleY: number,
     fontAscent: number,
     inlineImageResolver?: InlineImageResolver,
+    justify?: LineJustification,
 ): void {
     const resolveInlineImage = inlineImageResolver ?? (() => undefined);
     let cx = logicalX;
@@ -489,7 +544,7 @@ function drawBitmapSegmentsGL(
             continue;
         }
 
-        const segWidth = (font.measure(seg.text) | 0) as number;
+        let segWidth = (font.measure(seg.text) | 0) as number;
         const shouldShadow = shadow || seg.shadow >= 0;
         const shadowColor = seg.shadow >= 0 ? seg.shadow : 0x000000;
 
@@ -506,10 +561,12 @@ function drawBitmapSegmentsGL(
                 originY,
                 scaleX,
                 scaleY,
+                // The shadow takes the same spacing as the text over it.
+                justify ? { ...justify } : undefined,
             );
         }
 
-        drawBitmapRunGL(
+        segWidth += drawBitmapRunGL(
             glr,
             font,
             seg.text,
@@ -521,6 +578,7 @@ function drawBitmapSegmentsGL(
             originY,
             scaleX,
             scaleY,
+            justify,
         );
 
         if (seg.underline >= 0) {
@@ -631,6 +689,25 @@ export function drawTextGL(
     );
 }
 
+/** The pieces of a word a line may break between: after each "-" that is not inside a tag. */
+function splitAfterHyphens(word: string): string[] {
+    if (word.indexOf("-") === -1) return [word];
+    const pieces: string[] = [];
+    let start = 0;
+    let inTag = false;
+    for (let i = 0; i < word.length - 1; i++) {
+        const ch = word[i];
+        if (ch === "<") inTag = true;
+        else if (ch === ">") inTag = false;
+        else if (ch === "-" && !inTag) {
+            pieces.push(word.slice(start, i + 1));
+            start = i + 1;
+        }
+    }
+    pieces.push(word.slice(start));
+    return pieces;
+}
+
 export function wrapTextToWidth(
     text: string,
     maxW: number,
@@ -652,20 +729,25 @@ export function wrapTextToWidth(
         }
         let cur = "";
         for (let i = 0; i < words.length; i++) {
-            const w = words[i];
-            if (!w) continue;
-            if (!cur) {
-                // single words that don't fit are NOT broken character-by-character.
-                // They are kept intact and allowed to overflow/clip. This prevents stat levels
-                // like "99" from being broken into "9" + "9" on separate lines.
-                cur = w;
-            } else {
-                const test = cur + " " + w;
-                if (measure(test) <= maxW) cur = test;
-                else {
-                    out.push(cur);
-                    // Same here - don't break long words, keep them whole
+            if (!words[i]) continue;
+            // A line may break at a space (which is dropped) or after a "-" (which stays at the
+            // end of its line), as in the OSRS font code.
+            const pieces = splitAfterHyphens(words[i]);
+            for (let j = 0; j < pieces.length; j++) {
+                const w = pieces[j];
+                if (!cur) {
+                    // single words that don't fit are NOT broken character-by-character.
+                    // They are kept intact and allowed to overflow/clip. This prevents stat levels
+                    // like "99" from being broken into "9" + "9" on separate lines.
                     cur = w;
+                } else {
+                    const test = cur + (j === 0 ? " " : "") + w;
+                    if (measure(test) <= maxW) cur = test;
+                    else {
+                        out.push(cur);
+                        // Same here - don't break long words, keep them whole
+                        cur = w;
+                    }
                 }
             }
         }
@@ -711,8 +793,8 @@ export function drawWrappedTextGL(
     color: number,
     lineHeight: number = 12,
     shadow: boolean = true,
-    yAlign: 0 | 1 | 2 = 1,
-    xAlign: 0 | 1 | 2 = 1,
+    yAlign: 0 | 1 | 2 | 3 = 1,
+    xAlign: 0 | 1 | 2 | 3 = 1,
     inlineImageResolver?: InlineImageResolver,
     renderScaleX: number = 1,
     renderScaleY: number = 1,
@@ -789,16 +871,32 @@ export function drawWrappedTextGL(
     const ascent = (font.maxAscent || font.ascent || 0) | 0;
     const descent = (font.maxDescent ?? 0) | 0;
     let baseY0 = ascent;
+    let lineStep = resolvedLineHeight;
     if (yAlign === 1) {
         const space = logicalH - ascent - descent - resolvedLineHeight * (lines.length - 1);
         baseY0 = ascent + ((space / 2) | 0);
     } else if (yAlign === 2) {
         baseY0 = logicalH - descent - resolvedLineHeight * (lines.length - 1);
+    } else if (yAlign === 3) {
+        // Spread: the lines share the spare height; a single line is centred.
+        const spread = spreadLinesVertically(logicalH, lines.length, resolvedLineHeight, ascent, descent);
+        baseY0 = spread.firstBaseline;
+        lineStep = spread.lineHeight;
     }
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        const by = baseY0 + i * resolvedLineHeight;
+        const by = baseY0 + i * lineStep;
         const tx = lineOffsetsRaw[i] | 0;
+        // Justified (x alignment 3): every line but the last is stretched to the full width by
+        // widening its spaces; the last line stays left aligned.
+        let justify: LineJustification | undefined;
+        if (xAlign === 3 && i < lines.length - 1) {
+            const space = lineJustificationSpace(line, logicalW, lineWidths[i] ?? 0);
+            if (space > 0) {
+                justify = { space, remainder: 0 };
+                lineWidths[i] = logicalW;
+            }
+        }
         const segments = useMarkup
             ? (lineSegments[i] ?? parseOsrsMarkup(line, color))
             : [
@@ -824,6 +922,7 @@ export function drawWrappedTextGL(
             safeScaleY,
             ascent,
             inlineImageResolver,
+            justify,
         );
     }
 
@@ -834,7 +933,7 @@ export function drawWrappedTextGL(
         right = Math.max(right, (lineOffsetsRaw[i] | 0) + (lineWidths[i] ?? 0));
     }
     const top = baseY0 - ascent;
-    const bottom = baseY0 + resolvedLineHeight * (lines.length - 1) + descent;
+    const bottom = baseY0 + lineStep * (lines.length - 1) + descent;
     return {
         x: (x | 0) + left * safeScaleX,
         y: (y | 0) + top * safeScaleY,

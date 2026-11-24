@@ -10,6 +10,7 @@ const { z } = require("zod");
 
 const registerEditNpcTools = require("../plugins/agent/mcp/EditNpcs.AgentMcp");
 const registerEditTerrainTools = require("../plugins/agent/mcp/EditTerrain.AgentMcp");
+const { commitMapEdit, effectiveFile, readLayers } = require("../plugins/world/MapEditFiles");
 
 function envelope(tools, name, handler) {
   tools.set(name, async (args) => {
@@ -111,11 +112,10 @@ function emptyTerrainBytes(wide) {
   return new Uint8Array(4 * 64 * 64 * width);
 }
 
-function terrainTestSetup() {
+function terrainTestSetup(dir = fs.mkdtempSync(path.join(os.tmpdir(), "edit-terrain-"))) {
   const tools = new Map();
   const stored = new Map();
   const replaced = [];
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "edit-terrain-"));
   process.env.AGENT_MCP_REGIONS_DIR = path.join(dir, "regions");
   const baseTerrain = emptyTerrainBytes(true);
   const baseObjects = new Uint8Array([1, 2, 3]);
@@ -127,10 +127,12 @@ function terrainTestSetup() {
     MapRegionReplacementManager: {
       getReplacementMapData: (regionId) => stored.get(regionId) ?? null,
       replaceMapRegionData: (regionId, terrainData, objectData, source) => {
-        stored.set(regionId, { terrainData, objectData });
+        stored.set(regionId, { terrainData, objectData, source });
         replaced.push({ regionId, source });
         return { regionId, source, terrainBytes: terrainData.length, objectBytes: objectData?.length ?? 0 };
       },
+      getSource: (regionId) => stored.get(regionId)?.source ?? null,
+      removeMapRegion: (regionId) => stored.delete(regionId),
       // Mirrors the real manager: a pack needs objects, and a caller may supply them
       // for a region whose live replacement is terrain-only.
       getRegionPack: (regionId, objectDataOverride) => {
@@ -152,6 +154,15 @@ function terrainTestSetup() {
   };
   const callRaw = (name, args) => tools.get(name)(args);
   return { tools, call, callRaw, stored, replaced, dir, manager: core.MapRegionReplacementManager };
+}
+
+function worldDataFixture(t) {
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), "edit-world-layers-"));
+  t.after(() => fs.rmSync(data, { recursive: true, force: true }));
+  const resolve = path.resolve;
+  t.mock.method(path, "resolve", (...segments) =>
+    segments.length === 1 && segments[0] === "data" ? data : resolve(...segments));
+  return data;
 }
 
 test("npc tools register", () => {
@@ -314,6 +325,69 @@ test("terrain writes leave exactly one region file, in the editor's pack format"
   assert.equal(fs.existsSync(staleTerrain), false, "the .terrain.dat must not survive next to a .pack");
   assert.equal(fs.existsSync(path.join(dir, `${regionId}.pack`)), true);
   assert.deepEqual(fs.readdirSync(dir).sort(), [`${regionId}.pack`]);
+});
+
+test("terrain saves and clears both sides of a region boundary in one layer", async (t) => {
+  const data = worldDataFixture(t);
+  const { call } = terrainTestSetup(data);
+  const rect = { x1: 3263, y1: 3218, x2: 3264, y2: 3218 };
+  const mapEdits = path.join(data, "map-edits");
+  const painted = await call("paint_ground", { ...rect, overlay: 5 });
+  assert.equal(painted.regions.length, 2);
+  const [layer] = fs.readdirSync(mapEdits);
+  assert.deepEqual(fs.readdirSync(mapEdits), [layer]);
+  const files = painted.regions.map(({ regionId, packFile }) => {
+    const base = path.join(data, "regions", `${regionId}.pack`);
+    assert.equal(packFile, path.join(mapEdits, layer, "regions", path.basename(base)));
+    assert.equal(effectiveFile(base), packFile);
+    return base;
+  });
+  const cleared = await call("clear_terrain", rect);
+  assert.ok(cleared.regions.every((region) => region.matchesCache && !region.persisted));
+  assert.equal(fs.existsSync(path.join(mapEdits, layer)), false);
+  assert.equal(fs.readdirSync(mapEdits).length, 1);
+  assert.deepEqual(files.map((file) => effectiveFile(file)), [null, null]);
+});
+
+test("a failed second terrain region restores the first and saves no layer", async (t) => {
+  const data = worldDataFixture(t);
+  const { callRaw, manager, stored } = terrainTestSetup(data);
+  const first = (50 << 8) | 50;
+  const second = (51 << 8) | 50;
+  const terrainData = emptyTerrainBytes(true);
+  const objectData = Uint8Array.of(4, 5, 6);
+  manager.replaceMapRegionData(first, terrainData, objectData, "editor");
+  const replace = manager.replaceMapRegionData;
+  manager.replaceMapRegionData = (id, ...args) => {
+    if (id === second) throw new Error("injected failure");
+    return replace(id, ...args);
+  };
+  const result = await callRaw("paint_ground", { x1: 3263, y1: 3218, x2: 3264, y2: 3218, overlay: 5 });
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /injected failure/);
+  assert.deepEqual(stored.get(first), { terrainData, objectData, source: "editor" });
+  assert.equal(stored.has(second), false);
+  assert.equal(fs.existsSync(path.join(data, "map-edits")), false);
+});
+
+test("automatic layers only disappear when newer automatic saves cover every path", (t) => {
+  const data = worldDataFixture(t);
+  const pack = "regions/12850.pack";
+  const warps = "definitions/map-warps.json";
+  const commit = (entries, automatic = false) => commitMapEdit(new Map(entries), data, { automatic });
+  const older = commit([[pack, "first terrain"], [warps, "first links"]], true);
+  const editor = commit([[pack, "editor terrain"], [warps, "editor links"]]);
+  const terrain = commit([[pack, "new terrain"]], true);
+  assert.equal(fs.readFileSync(path.join(older, warps), "utf8"), "first links");
+  assert.equal(readLayers(data).effective.get(warps), path.join(editor, warps));
+
+  commit([[warps, null]], true);
+  assert.equal(fs.existsSync(older), false);
+  assert.equal(fs.readFileSync(path.join(editor, pack), "utf8"), "editor terrain");
+  assert.equal(fs.readFileSync(path.join(editor, warps), "utf8"), "editor links");
+  const { effective } = readLayers(data);
+  assert.equal(effective.get(pack), path.join(terrain, pack));
+  assert.equal(effective.get(warps), null);
 });
 
 // --- live-test follow-ups ----------------------------------------------------

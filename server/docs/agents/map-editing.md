@@ -281,8 +281,9 @@ Cost per edited tile, on top of the cache's own encoding:
 What still matters:
 
 1. **Persist like the editor.** The server applies packs from `data/map-edits/<save>/regions`
-   over the base packs. A pack contains the header, object archive, and terrain archive.
-   `/regions/<id>.pack` serves the active replacement.
+   over the base packs. One terrain tool call saves all touched regions in one layer.
+   A pack contains the header, object archive, and terrain archive. `/regions/<id>.pack` serves
+   the active replacement.
 2. **Stream terrain-only when the objects are the problem** — if even the deflated payload will
    not fit, the *packet* drops the objects (`replaceMapRegionData(regionId, terrain, null)`)
    while the *file* keeps the region's objects (the cache's, or a previously loaded pack's).
@@ -311,6 +312,11 @@ entries into binary data — deliberately out of scope.
 them: one compact entry per line, the file's own line endings, untouched entries byte-identical.
 Adding one spawn shows a one-line diff, not a 30,000-line reformat. Do not "tidy" these files
 from a tool.
+
+MCP object edits write the tracked `data/definitions/object-spawns.json` by default. If a world
+already has a layer for that definition, MCP saves a new layer over it. Automatically generated
+layers are removed once newer automatic saves cover every entry. Editor saves, ZIP layers and
+editor backups remain available.
 
 Object entry: `{ id, position: { x, y, z }, type?, face?, remove?, source? }`.
 `remove: true` means "this cache object is gone" and is applied before placements on load.

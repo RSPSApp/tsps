@@ -8,7 +8,7 @@ const { nativeTerrainHeight } = require("../../world/TerrainHeight");
 // underlays, raise/lower/flatten height, and clear tiles back to base. Changes apply per
 // region through the server's region replacement manager, so online players see them when
 // their scene rebuilds (walk, teleport, relog; Refresh map in the ?edit editor), and they
-// persist as data/regions/<regionId>.pack files, which the server loads on startup.
+// persist as region packs in data/map-edits, which the server loads on startup.
 // Visual only: server collision still comes from objects and the base map, exactly as with
 // ?edit editor exports.
 const MAP_SIZE = 64;
@@ -250,23 +250,15 @@ module.exports = function registerEditTerrainTools(ctx) {
 
   const sameBytes = (a, b) => a.length === b.length && a.every((value, index) => value === b[index]);
 
-  // Streams one region's bytes to players and persists it so the server loads it on
-  // startup.
-  //
-  // Persistence uses the editor's format: data/regions/<regionId>.pack (header + object
-  // archive + terrain archive), so agent edits and map-editor exports look the same on
-  // disk and the /regions/<id>.pack endpoint serves either.
-  //
-  // Streaming is a different question. A REGION_REPLACEMENT packet carries 7 + terrain +
+  // A REGION_REPLACEMENT packet carries 7 + terrain +
   // objects bytes against a 65,533-byte ceiling, and dense regions are over it from the cache
   // alone; encodeRegionReplacement deflates those, so they still stream whole (Falador 12084:
   // 82,242 raw, ~13,400 deflated). The terrain-only fallback below remains for objects so large
   // that even the deflated payload will not fit - the client then keeps the cache's objects -
   // while the .pack on disk still carries them.
-  const commitRegion = (regionId, terrain, tiles) => {
+  const replaceRegion = (regionId, terrain, tiles, prior) => {
     const mapX = regionId >> 8;
     const mapY = regionId & 0xff;
-    const prior = MapRegionReplacementManager.getReplacementMapData(regionId);
     const cacheObjects = CacheMaps.getRegion(regionId)?.objectData ?? null;
     // An existing replacement may carry objects from an editor .pack; keep those in
     // preference to the cache's, so an export's object edits are not thrown away.
@@ -286,44 +278,64 @@ module.exports = function registerEditTerrainTools(ctx) {
       result = MapRegionReplacementManager.replaceMapRegionData(regionId, terrain, null, "agent-mcp");
     }
 
-    const dir = regionsDir();
-    fs.mkdirSync(dir, { recursive: true });
-    const packPath = path.join(dir, `${regionId}.pack`);
-    const terrainPath = path.join(dir, `${regionId}.terrain.dat`);
-
-    const persist = (pack, terrain) => {
-      const files = new Map([[packPath, pack], [terrainPath, terrain]]);
-      if (isWorldFile(packPath)) {
-        const layer = commitWorldFiles(files);
-        return { packFile: pack ? path.join(layer, "regions", path.basename(packPath)) : null,
-          terrainFile: terrain ? path.join(layer, "regions", path.basename(terrainPath)) : null };
-      }
-      for (const [file, bytes] of files) {
-        if (bytes) fs.writeFileSync(file, bytes);
-        else if (fs.existsSync(file)) fs.unlinkSync(file);
-      }
-      return { packFile: pack ? packPath : null, terrainFile: terrain ? terrainPath : null };
-    };
-
     // Back to the cache's own terrain and its own objects: nothing to persist, so the
     // region stops loading as a replacement on restart. The live replacement stays for
     // this session, so clients still holding the edited terrain get the cache's on their
     // next scene rebuild.
     const cacheTerrain = CacheMaps.getRegion(regionId)?.terrainData;
     const objectsAreCache = !objects || !cacheObjects || sameBytes(objects, toU8(cacheObjects));
-    if (objectsAreCache && cacheTerrain && sameBytes(terrain, toU8(cacheTerrain))) {
-      return { regionId, mapX, mapY, tiles, ...result, ...persist(null, null),
-        persisted: false, matchesCache: true, streamed };
-    }
+    const matchesCache = Boolean(objectsAreCache && cacheTerrain && sameBytes(terrain, toU8(cacheTerrain)));
+    const pack = matchesCache ? null : MapRegionReplacementManager.getRegionPack(regionId, objects ?? undefined);
+    // Fall back to raw terrain when there is no object archive to put in a pack.
+    const rawTerrain = matchesCache || pack ? null : Buffer.from(terrain);
+    return {
+      result: { regionId, mapX, mapY, tiles, ...result, persisted: !matchesCache,
+        ...(matchesCache && { matchesCache }), streamed },
+      pack,
+      rawTerrain,
+    };
+  };
 
-    const pack = MapRegionReplacementManager.getRegionPack(regionId, objects ?? undefined);
-    if (pack) {
-      return { regionId, mapX, mapY, tiles, ...result, ...persist(pack, null),
-        persisted: true, streamed };
+  const commitRegions = (prepared) => {
+    if (prepared.length === 0) return [];
+    const dir = regionsDir();
+    const layered = isWorldFile(path.join(dir, "0.pack"));
+    const files = new Map();
+    const prior = new Map();
+    try {
+      const replacements = prepared.map(({ regionId, terrain, tiles }) => {
+        const replacement = MapRegionReplacementManager.getReplacementMapData(regionId);
+        prior.set(regionId, { replacement, source: MapRegionReplacementManager.getSource(regionId) });
+        const { result, pack, rawTerrain } = replaceRegion(regionId, terrain, tiles, replacement);
+        files.set(path.join(dir, `${regionId}.pack`), pack);
+        files.set(path.join(dir, `${regionId}.terrain.dat`), rawTerrain);
+        return { result, pack, rawTerrain };
+      });
+      let savedDir = dir;
+      if (layered) {
+        savedDir = path.join(commitWorldFiles(files), "regions");
+      } else {
+        fs.mkdirSync(dir, { recursive: true });
+        for (const [file, bytes] of files) {
+          if (bytes) fs.writeFileSync(file, bytes);
+          else fs.rmSync(file, { force: true });
+        }
+      }
+      return replacements.map(({ result, pack, rawTerrain }) => ({
+        ...result,
+        packFile: pack ? path.join(savedDir, `${result.regionId}.pack`) : null,
+        terrainFile: rawTerrain ? path.join(savedDir, `${result.regionId}.terrain.dat`) : null,
+      }));
+    } catch (error) {
+      for (const [id, { replacement, source }] of prior) {
+        if (replacement) {
+          MapRegionReplacementManager.replaceMapRegionData(id, replacement.terrainData, replacement.objectData, source);
+        } else {
+          MapRegionReplacementManager.removeMapRegion(id);
+        }
+      }
+      throw error;
     }
-    // No object archive for this region in the cache (nothing to build a pack from).
-    return { regionId, mapX, mapY, tiles, ...result, ...persist(null, Buffer.from(terrain)),
-      persisted: true, streamed };
   };
 
   // Patches every touched region, streams it to players, and persists the pack so the
@@ -344,7 +356,7 @@ module.exports = function registerEditTerrainTools(ctx) {
         tiles: regionEdits.length,
       };
     });
-    const regions = prepared.map(({ regionId, terrain, tiles }) => commitRegion(regionId, terrain, tiles));
+    const regions = commitRegions(prepared);
     return { change: label, regions };
   };
 
@@ -448,14 +460,18 @@ module.exports = function registerEditTerrainTools(ctx) {
           }
         }
       }
-      const regions = [];
-      for (const [regionId, tiles] of byRegion) {
+      const prepared = Array.from(byRegion, ([regionId, tiles]) => {
         const current = toU8(baseBytes(regionId).terrainData);
         const cache = CacheMaps.getRegion(regionId);
         if (!cache?.terrainData) throw new Error(`Region ${regionId} is not in the cache`);
         // `tiles` holds one key per plane; report world tiles, as the rectangle has them.
-        regions.push(commitRegion(regionId, restoreTiles(current, toU8(cache.terrainData), tiles, wide), tiles.size / PLANE_COUNT));
-      }
+        return {
+          regionId,
+          terrain: restoreTiles(current, toU8(cache.terrainData), tiles, wide),
+          tiles: tiles.size / PLANE_COUNT,
+        };
+      });
+      const regions = commitRegions(prepared);
       return { change: `clear ${regions.reduce((n, r) => n + r.tiles, 0)} tiles on every plane`, regions };
     }
   );

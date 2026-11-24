@@ -5,10 +5,9 @@ const { sizesOf } = require("./EditSizes.AgentMcp");
 // Map-editing tools for the agent MCP server: search the object (loc) cache, describe
 // definitions, and place/remove live objects.
 //
-// Placements persist in data/definitions/object-spawns.json, so they survive restarts and
-// show up in the ?edit map editor (spawn overlay after a sync, full scene for cache-map
-// objects). Bulk building lives in EditBuild.AgentMcp.js (place_objects, build_shape,
-// build_preset); this file is the single-object toolset it builds on.
+// Placements use data/definitions/object-spawns.json by default, or a map layer when
+// the world already overrides that file. They survive restarts and show up in the
+// ?edit map editor after a sync. Bulk building lives in EditBuild.AgentMcp.js.
 module.exports = function registerEditTools(ctx) {
   const { core, tool, z } = ctx;
   const { GameObject, ObjectManager, Location, ObjectDefinition, CacheDefinitions, World, MapObjects } = core;
@@ -128,7 +127,7 @@ module.exports = function registerEditTools(ctx) {
 
   tool(
     "place_object",
-    "Place one object live in the world: every online player (and the ?edit map editor after a sync) sees it at once. Persists to object-spawns.json, so it survives restarts. type 10 is a normal standing object; face 0-3 rotates it. For more than a handful of tiles use place_objects or build_shape instead.",
+    "Place one object live in the world: every online player (and the ?edit map editor after a sync) sees it at once. Saves to the tracked object-spawns.json by default, or to a new layer if this world already has a saved layer for object spawns. type 10 is a normal standing object; face 0-3 rotates it. For more than a handful of tiles use place_objects or build_shape instead.",
     {
       id: z.number().int().min(0).describe("Object id from search_objects"),
       x: z.number().int().describe("World tile x"),

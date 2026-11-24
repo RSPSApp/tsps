@@ -1,8 +1,5 @@
 import { menuCooldownBlocksPass } from "./menuCooldown";
 import { wrapExamineWithClickCross } from "./checkExamineCross";
-
-/** OSRS adds no further player or NPC once the menu holds this many entries. */
-const MAX_ACTOR_MENU_ENTRIES = 400;
 import { isGroundItemOperationEnabled } from "../../../game/data/ground/GroundItemStore";
 import { buildPlayerActionEntries } from "./playerMenu";
 import Denque from "denque";
@@ -204,6 +201,9 @@ import { KNOWN_WATER_TEXTURE_IDS } from "../../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "../hostInterface";
 import { RENDER_CONSTANTS, formatPlayerCombatLabel } from "../constants";
 import { chatLineMenuEntriesAt } from "../../../game/widgets/interaction/chatLineMenu";
+
+/** OSRS adds no further player or NPC once the menu holds this many entries. */
+const MAX_ACTOR_MENU_ENTRIES = 400;
 
 /** What the last world interaction pass saw, per renderer host. */
 type InteractionPassInputs = {

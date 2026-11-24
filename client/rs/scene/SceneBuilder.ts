@@ -1558,11 +1558,13 @@ export class SceneBuilder {
                     // Overlay id can have the high bit set with extra flags; mask to 15 bits like RuneLite
                     const overlayId = (overlayIds[level][x][y] & 0x7fff) - 1;
 
-                    if (underlayId === -1 && overlayId === -1) {
-                        if (!this.isEnclosedFloorHole(scene, level, x, y)) {
-                            continue;
-                        }
-                    }
+                    const overlay = overlayId === -1 ? undefined : this.overlayTypeLoader.load(overlayId);
+                    // A full, untextured magenta overlay cuts out the floor even when an underlay exists.
+                    const cutout = tileShapes[level][x][y] === 0 &&
+                        overlay?.textureId === -1 && overlay.primaryRgb === 0xff00ff;
+                    const floorHole = ((underlayId === -1 && !overlay) || cutout) &&
+                        this.isEnclosedFloorHole(scene, level, x, y);
+                    if (underlayId === -1 && !overlay && !floorHole) continue;
 
                     const heightSw = heights[level][x][y];
                     const heightSe = heights[level][x + 1][y];
@@ -1603,7 +1605,7 @@ export class SceneBuilder {
                     }
 
                     let tileModel: SceneTileModel;
-                    if (underlayId === -1 && overlayId === -1) {
+                    if (floorHole) {
                         tileModel = this.buildFloorHoleModel(
                             x,
                             y,
@@ -1612,7 +1614,7 @@ export class SceneBuilder {
                             heightNe,
                             heightNw,
                         );
-                    } else if (overlayId === -1) {
+                    } else if (!overlay) {
                         tileModel = new SceneTileModel(
                             0,
                             0,
@@ -1639,8 +1641,6 @@ export class SceneBuilder {
                     } else {
                         const shape = tileShapes[level][x][y] + 1;
                         const rotation = tileRotations[level][x][y];
-
-                        const overlay = this.overlayTypeLoader.load(overlayId);
 
                         let overlayHsl: number;
                         let overlayMinimapHsl: number;
@@ -1704,8 +1704,11 @@ export class SceneBuilder {
                         );
                     }
 
-                    tileModel.underlayId = underlayIds[level][x][y];
-                    tileModel.overlayId = overlayIds[level][x][y] & 0x7fff;
+                    // Pit faces stay untextured in HD too, independent of the cutout's ground materials.
+                    if (!floorHole) {
+                        tileModel.underlayId = underlayIds[level][x][y];
+                        tileModel.overlayId = overlayIds[level][x][y] & 0x7fff;
+                    }
                     scene.newTileModel(level, x, y, tileModel);
                 }
             }

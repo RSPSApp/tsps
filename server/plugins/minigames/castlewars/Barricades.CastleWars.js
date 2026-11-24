@@ -106,7 +106,7 @@ function blowUp(player, npc, slot) {
         && item?.getId() === core.ItemIdentifiers.EXPLOSIVE_POTION && item.getAmount() > 0) blowUp(player, npc, slot);
   })) return;
   player.getInventory().deleteAtSlot(slot, 1);
-  const explosion = core.CacheDefinitions.getSpotanimId("explodingvial");
+  const explosion = core.CacheDefinitions.getSpotanimId("explode");
   player.getPacketSender().sendGlobalGraphic(new core.Graphic(explosion), npc.getLocation());
   game.removeBarricade(npc);
 }

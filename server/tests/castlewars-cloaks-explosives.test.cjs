@@ -65,7 +65,7 @@ test('dropping the Castle Wars explosive consumes that slot and hits only its ow
   p.getCombat().getHitQueue().process(1000);
   assert.equal(p.getHitpoints(), 85);
   assert.equal(other.getHitpoints(), 100);
-  assert.equal(graphics[0].graphic.getId(), core.CacheDefinitions.getSpotanimId('explodingvial'));
+  assert.equal(graphics[0].graphic.getId(), core.CacheDefinitions.getSpotanimId('explode'));
   assert.equal(graphics[0].location.equals(p.getLocation()), true);
   assert.deepEqual(chat, ['Ow!']);
 });

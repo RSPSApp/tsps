@@ -428,7 +428,7 @@ test('explicit explosive use sends a tile explosion and removes the barricade', 
   assert.equal(event.handled, true);
   assert.equal(p.getInventory().contains(core.ItemIdentifiers.EXPLOSIVE_POTION), false);
   assert.equal(game.isBarricade(npc), false);
-  assert.equal(p.graphics[0].graphic.id, core.CacheDefinitions.getSpotanimId('explodingvial'));
+  assert.equal(p.graphics[0].graphic.id, core.CacheDefinitions.getSpotanimId('explode'));
   assert.ok(p.graphics[0].location.equals(npc.getLocation()));
 });
 
@@ -482,7 +482,7 @@ for (const occupiedWest of [false, true]) {
     assert.equal(effects.length, 1);
     assert.equal(effects[0].player.equals(origin), false, 'movement happened before the effect was sent');
     assert.equal(Math.abs(effects[0].player.getX() - origin.getX()) + Math.abs(effects[0].player.getY() - origin.getY()), 1);
-    assert.equal(effects[0].graphic.getId(), core.CacheDefinitions.getSpotanimId('explodingvial'));
+    assert.equal(effects[0].graphic.getId(), core.CacheDefinitions.getSpotanimId('explode'));
     assert.ok(effects[0].location.equals(origin), 'the explosion stays on the barricade tile');
     assert.equal(p.getInventory().contains(potion), false);
     assert.equal(game.isBarricade(npc), false);

@@ -81,7 +81,10 @@ export type WorldMapStateHolder = {
     worldMapImageTiles: Map<number, WorldMapImageTile>;
     /** Sum of worldMapImageTiles' bytes. */
     worldMapImageBytes: number;
+    /** LRU order for eviction: the last draw time plus that draw's priority. */
     worldMapImageAccess: Map<number, number>;
+    /** When each tile was last drawn (performance.now(), no priority): what "stale" means. */
+    worldMapImageDrawnAt?: Map<number, number>;
     pendingWorldMapImageIds: Set<number>;
     failedWorldMapImageIds: Map<number, number>;
     retainedWorldMapImageIds: Set<number>;

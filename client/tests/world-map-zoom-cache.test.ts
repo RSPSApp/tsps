@@ -46,6 +46,7 @@ function zoomState(zoom: number, target = zoom) {
         worldMapImageTiles: new Map(),
         worldMapImageBytes: 0,
         worldMapImageAccess: new Map(),
+        worldMapImageDrawnAt: new Map(),
         pendingWorldMapImageIds: new Set(),
         failedWorldMapImageIds: new Map(),
         retainedWorldMapImageIds: new Set(),
@@ -398,7 +399,7 @@ test("prefetching never evicts another zoom level, however long since it was dra
     cache.worldMapState.zoomPercentage = 100;
     retainWorldMapImageTiles(cache, deps, ring(0, 20, 8));
     // Long undrawn: only their size (another zoom level) protects them.
-    for (const id of cache.worldMapImageTiles.keys()) cache.worldMapImageAccess.set(id, performance.now() - 60_000);
+    for (const id of cache.worldMapImageTiles.keys()) cache.worldMapImageDrawnAt.set(id, performance.now() - 60_000);
     const before = loads.length;
     prefetchWorldMapImageTiles(cache, deps, ring(60, 10, 8));
     await settle();
@@ -417,7 +418,7 @@ test("prefetching replaces this zoom's tiles of places not drawn for a while", a
     }
     // Ten of them were last drawn long ago (a place the map has left).
     const old = [...cache.worldMapImageTiles.keys()].slice(0, 10);
-    for (const id of old) cache.worldMapImageAccess.set(id, performance.now() - 60_000);
+    for (const id of old) cache.worldMapImageDrawnAt.set(id, performance.now() - 60_000);
     retainWorldMapImageTiles(cache, deps, ring(20, 10, 16));
     const before = loads.length;
     prefetchWorldMapImageTiles(cache, deps, ring(60, 10, 8));
@@ -426,4 +427,50 @@ test("prefetching replaces this zoom's tiles of places not drawn for a while", a
     assert.equal(evicted.length, 8, "the eight least recently drawn stale tiles make room");
     assert.ok(cache.worldMapImageBytes <= MAX_WORLDMAP_IMAGE_BYTES);
     for (const id of old.slice(8)) assert.ok(cache.worldMapImageTiles.has(id), "no more than needed is evicted");
+});
+
+test("staleness reads the real draw time, not the access time shifted by draw priority", async () => {
+    const { deps, loads, evicted } = renderer();
+    const cache = zoomState(8);
+    cache.worldMapState.zoomPercentage = 200;
+    // Drawn with a large priority, as renderWidgetTree passes for squares near the centre:
+    // their access times land far in the future.
+    for (let i = 0; i < 36; i++) {
+        retainWorldMapImageTiles(cache, deps, [{ mapX: i, mapY: 10 }]);
+        getWorldMapImageSource(cache, deps, i, 10, 0, 500_000);
+        await settle();
+    }
+    for (let i = 0; i < 36; i++) getWorldMapImageSource(cache, deps, i, 10, 0, 500_000);
+    // Ten seconds later the map has moved on: those squares were last drawn 10s ago.
+    for (const [id, t] of cache.worldMapImageDrawnAt) cache.worldMapImageDrawnAt.set(id, t - 10_000);
+    retainWorldMapImageTiles(cache, deps, ring(40, 10, 16));
+    const before = loads.length;
+    prefetchWorldMapImageTiles(cache, deps, ring(60, 10, 8));
+    await settle();
+    assert.equal(loads.length - before, 8, "the squares left behind make room");
+    assert.equal(evicted.length, 8);
+});
+
+test("prefetching evicts nothing when the stale tiles can't make room for a square", async () => {
+    const { deps, loads, evicted } = renderer();
+    const cache = zoomState(8);
+    cache.worldMapState.zoomPercentage = 200;
+    for (let i = 0; i < 36; i++) {
+        retainWorldMapImageTiles(cache, deps, [{ mapX: i, mapY: 10 }]);
+        getWorldMapImageSource(cache, deps, i, 10);
+        await settle();
+    }
+    // Two stale 200% squares; five on-screen loads already claim more room than they free.
+    const ids = [...cache.worldMapImageTiles.keys()];
+    for (const id of ids.slice(0, 2)) {
+        cache.worldMapImageDrawnAt.set(id, performance.now() - 60_000);
+        cache.worldMapImageAccess.set(id, performance.now() - 60_000);
+    }
+    retainWorldMapImageTiles(cache, deps, ring(40, 10, 16));
+    for (let i = 0; i < 5; i++) cache.pendingWorldMapImageIds.add(-1 - i);
+    const before = loads.length;
+    prefetchWorldMapImageTiles(cache, deps, ring(60, 10, 8));
+    await settle();
+    assert.equal(loads.length - before, 0);
+    assert.equal(evicted.length, 0, "the stale squares stay for a drag back");
 });

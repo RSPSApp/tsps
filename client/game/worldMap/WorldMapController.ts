@@ -83,6 +83,7 @@ export class WorldMapController {
     worldMapImageTiles: Map<number, WorldMapImageTile> = new Map();
     worldMapImageBytes: number = 0;
     worldMapImageAccess: Map<number, number> = new Map();
+    worldMapImageDrawnAt: Map<number, number> = new Map();
     pendingWorldMapImageIds: Set<number> = new Set();
     failedWorldMapImageIds: Map<number, number> = new Map();
     retainedWorldMapImageIds: Set<number> = new Set();

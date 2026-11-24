@@ -246,6 +246,7 @@ function evictWorldMapImage(state: WorldMapStateHolder, deps: WorldMapImageDeps,
     }
     state.worldMapImageTiles.delete(id);
     state.worldMapImageAccess.delete(id);
+    state.worldMapImageDrawnAt?.delete(id);
     clearWorldMapIconsForImageKey(state, id);
 }
 
@@ -259,8 +260,9 @@ const PREFETCH_STALE_MS = 5000;
  * Ours: requests the squares just off screen (the draw's margin, nearest first) so a drag shows
  * them rendered. The client needs no prefetch: it renders a region in the frame it scrolls into
  * view (WorldMapRenderer.drawTiles); our tiles render on a worker and would pop in.
- * Prefetching never evicts another zoom level, or anything drawn in the last few seconds: it
- * fills free budget, then replaces this zoom's tiles of places left behind.
+ * It fills free budget, then replaces this zoom's tiles of places left behind (not drawn for a few
+ * seconds). It never evicts another zoom level itself, though the squares it adds count towards
+ * the budget, so a later on-screen load can push the other level out a little sooner.
  */
 export function prefetchWorldMapImageTiles(
     state: WorldMapStateHolder,
@@ -276,6 +278,7 @@ export function prefetchWorldMapImageTiles(
     const limit = getWorldMapImageByteLimit();
     let room = limit - (state.worldMapImageBytes ?? 0) - state.pendingWorldMapImageIds.size * tileBytes;
     let stale: number[] | undefined;
+    let staleBytes = 0;
     for (const tile of tiles) {
         if (state.pendingWorldMapImageIds.size >= pendingLimit) return;
         const source = tile.sourceTile ?? tile;
@@ -286,26 +289,32 @@ export function prefetchWorldMapImageTiles(
         const mapId = getWorldMapImageKey(state, deps, mapX, mapY, level);
         if (state.worldMapImageTiles.has(mapId) || state.pendingWorldMapImageIds.has(mapId)) continue;
         if (hasRecentlyFailedWorldMapImage(state, mapId)) continue;
-        while (room < tileBytes) {
+        if (room < tileBytes) {
             if (!stale) {
+                // Real draw times: the access times are shifted by each square's draw priority
+                // and can lie well in the future.
+                const drawnAt = state.worldMapImageDrawnAt;
                 const sizeBits = mapId & PIXELS_PER_TILE_MASK;
                 const before = performance.now() - PREFETCH_STALE_MS;
                 stale = Array.from(state.worldMapImageTiles.keys()).filter(
                     (id) =>
                         (id & PIXELS_PER_TILE_MASK) === sizeBits &&
                         !state.retainedWorldMapImageIds.has(id) &&
-                        (state.worldMapImageAccess.get(id) ?? -Infinity) < before,
+                        (drawnAt?.get(id) ?? -Infinity) < before,
                 );
-                stale.sort(
-                    (a, b) =>
-                        (state.worldMapImageAccess.get(b) ?? -Infinity) -
-                        (state.worldMapImageAccess.get(a) ?? -Infinity),
-                );
+                stale.sort((a, b) => (drawnAt?.get(b) ?? -Infinity) - (drawnAt?.get(a) ?? -Infinity));
+                for (const id of stale) staleBytes += state.worldMapImageTiles.get(id)?.bytes ?? 0;
             }
-            const id = stale.pop();
-            if (id === undefined) return;
-            room += state.worldMapImageTiles.get(id)?.bytes ?? 0;
-            evictWorldMapImage(state, deps, id);
+            // Evict only when it makes room for this square; else the loads in flight keep it.
+            if (room + staleBytes < tileBytes) return;
+            while (room < tileBytes) {
+                const id = stale.pop();
+                if (id === undefined) return;
+                const bytes = state.worldMapImageTiles.get(id)?.bytes ?? 0;
+                room += bytes;
+                staleBytes -= bytes;
+                evictWorldMapImage(state, deps, id);
+            }
         }
         queueLoadWorldMapImage(state, deps, mapX, mapY, level, state.worldMapImageCacheEpoch);
         if (state.pendingWorldMapImageIds.has(mapId)) room -= tileBytes;
@@ -330,6 +339,7 @@ function setWorldMapImageTile(
         state.worldMapImageTiles.delete(mapId);
         state.worldMapImageAccess.delete(mapId);
     }
+    state.worldMapImageDrawnAt?.set(mapId, performance.now());
     const bytes = (width | 0) * (height | 0) * 4;
     state.worldMapImageTiles.set(mapId, {
         key: `worldmap:${mapId}:${state.worldMapImageCacheEpoch}`,
@@ -447,6 +457,7 @@ function getWorldMapImageSourceInternal(
     const tile = state.worldMapImageTiles.get(mapId);
     if (tile) {
         state.worldMapImageAccess.set(mapId, accessTime);
+        state.worldMapImageDrawnAt?.set(mapId, performance.now());
     } else if (
         !allowStandIn ||
         state.retainedWorldMapImageIds.size === 0 ||
@@ -460,6 +471,7 @@ function getWorldMapImageSourceInternal(
     const drawId = findBestCachedImageId(state, mapId);
     if (drawId === undefined) return undefined;
     state.worldMapImageAccess.set(drawId, accessTime);
+    state.worldMapImageDrawnAt?.set(drawId, performance.now());
     return state.worldMapImageTiles.get(drawId);
 }
 
@@ -582,6 +594,7 @@ export function clearWorldMapImages(
     state.worldMapImageTiles.clear();
     state.worldMapImageBytes = 0;
     state.worldMapImageAccess.clear();
+    state.worldMapImageDrawnAt?.clear();
     state.worldMapState.clearTileIcons();
     clearIconCache();
     clearRenderCaches();

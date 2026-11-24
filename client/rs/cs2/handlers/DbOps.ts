@@ -119,8 +119,9 @@ function pushTypeDefaults(ctx: any, types: number[], nullReferences: boolean): v
     for (const type of types) {
         if (isStringType(type)) {
             ctx.pushString("");
-        } else if (nullReferences && isReferenceType(type)) {
-            ctx.pushInt(-1);
+        } else if (nullReferences) {
+            // OSRS: an absent value is null (-1) for every type but int (0) and boolean (1), which give 0.
+            ctx.pushInt(type === 0 || type === 1 ? 0 : -1);
         } else {
             ctx.pushInt(0);
         }
@@ -267,6 +268,13 @@ export function registerDbOps(handlers: HandlerMap): void {
                     // Return number of tuples, not total values
                     // Each tuple has col.types.length values
                     count = Math.floor(col.values.length / col.types.length);
+                } else {
+                    // A row without the column has the table's default values, and those count.
+                    const colDef = ctx.dbRepository.getTables().get(tableId)?.getColumn(columnId);
+                    const defaults = colDef?.defaultValues;
+                    if (colDef && defaults && defaults.length > 0 && colDef.types.length > 0) {
+                        count = Math.floor(defaults.length / colDef.types.length);
+                    }
                 }
             }
         }

@@ -99,6 +99,8 @@ export class NpcType extends Type {
     isClickable: boolean;
     isClipped: boolean;
     isFollower: boolean;
+    /** Opcode 123: the "Follower options lower down" setting applies to this NPC. */
+    lowPriorityFollowerOps: boolean;
 
     runSeqId: number;
     runBackSeqId: number;
@@ -159,6 +161,7 @@ export class NpcType extends Type {
         this.isClickable = true;
         this.isClipped = true;
         this.isFollower = false;
+        this.lowPriorityFollowerOps = false;
         this.runSeqId = -1;
         this.runBackSeqId = -1;
         this.runLeftSeqId = -1;
@@ -429,7 +432,7 @@ export class NpcType extends Type {
             }
         } else if (opcode === 123) {
             if (this.cacheInfo.game === "oldschool") {
-                // lowPriorityFollowerOps = true;
+                this.lowPriorityFollowerOps = true;
             } else {
                 const iconHeight = buffer.readUnsignedShort();
             }

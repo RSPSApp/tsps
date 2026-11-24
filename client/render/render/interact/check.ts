@@ -685,6 +685,8 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     if (transformed) npcType = transformed;
                 }
                 if (npcType.name === "null" && !host.osrsClient.debugId) return;
+                // A non-interactable NPC adds nothing to the menu, not even Examine.
+                if (npcType.isInteractable === false && !host.osrsClient.debugId) return;
                 if (npcType.isFollower && (ClientState.followerIndex | 0) !== (sid | 0)) {
                     return;
                 }
@@ -693,7 +695,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 const localY = (worldTileY - baseY) | 0;
                 const npcPlane = npcEcs.getLevel(ecsId) | 0;
                 const isFollowerLowPriority =
-                    npcType.isFollower && ClientState.followerOpsLowPriority;
+                    npcType.lowPriorityFollowerOps === true && ClientState.followerOpsLowPriority;
 
                 // OSRS: For followers with low priority, insert Examine first (opcode 1003).
                 if (isFollowerLowPriority) {

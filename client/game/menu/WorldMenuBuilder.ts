@@ -385,7 +385,7 @@ export function buildNpcMenuEntries(
 ): { actions: OsrsMenuEntry[]; examine: OsrsMenuEntry | null } {
     const actions: OsrsMenuEntry[] = [];
 
-    if (npcType.name === "null" && !ctx.debugId) {
+    if ((npcType.name === "null" || npcType.isInteractable === false) && !ctx.debugId) {
         return { actions: [], examine: null };
     }
 
@@ -397,7 +397,7 @@ export function buildNpcMenuEntries(
         return { actions: [], examine: null };
     }
 
-    const isFollowerLowPriority = npcType.isFollower && ctx.followerOpsLowPriority;
+    const isFollowerLowPriority = npcType.lowPriorityFollowerOps === true && ctx.followerOpsLowPriority;
 
     // OSRS: When follower has low priority, Examine is added FIRST (appears at top of menu)
     // This ensures left-click doesn't trigger follower actions
@@ -473,7 +473,7 @@ export function buildNpcMenuEntries(
             // npcAttackOption === 2: Left-click where available, never deprioritize
         }
         // Follower low priority: deprioritize ALL options on followers
-        if (npcType.isFollower && ctx.followerOpsLowPriority) {
+        if (isFollowerLowPriority) {
             deprioritized = true;
         }
 

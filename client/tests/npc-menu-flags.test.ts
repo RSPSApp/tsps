@@ -1,0 +1,29 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+
+import { buildNpcMenuEntries } from "../game/menu/WorldMenuBuilder";
+
+// OSRS: an NPC flagged non-interactable (opcode 107) adds nothing to the menu, and the
+// "follower options lower down" setting applies only to NPCs with opcode 123, not to every follower.
+
+const ctx: any = { activeSpell: null, selectedItem: null, debugId: false, npcAttackOption: 2, localPlayerCombatLevel: 50, followerOpsLowPriority: true, followerIndex: 7 };
+const callbacks: any = new Proxy({}, { get: () => () => {} });
+const npc = (flags: object): any => ({ id: 1, name: "Cat", combatLevel: 0, actions: ["Pick-up", "Talk-to", null, null, null], isInteractable: true, isFollower: false, lowPriorityFollowerOps: false, ...flags });
+const build = (flags: object) => buildNpcMenuEntries(npc(flags), 0, 0, ctx, callbacks, () => undefined, 7);
+
+test("a non-interactable NPC has no options and no Examine", () => {
+    assert.deepEqual(build({ isInteractable: false }), { actions: [], examine: null });
+});
+
+test("a follower without the low-priority flag keeps normal options", () => {
+    const { actions, examine } = build({ isFollower: true });
+    assert.deepEqual(actions.map((a) => [a.option, !!a.deprioritized]), [["Pick-up", false], ["Talk-to", false]]);
+    assert.equal(examine?.option, "Examine");
+});
+
+test("a follower with the flag gets Examine first and lowered options", () => {
+    const { actions, examine } = build({ isFollower: true, lowPriorityFollowerOps: true });
+    assert.equal(actions[0].option, "Examine");
+    assert.ok(actions.slice(1).every((a) => a.deprioritized));
+    assert.equal(examine, null);
+});

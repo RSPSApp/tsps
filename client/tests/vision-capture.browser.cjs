@@ -1039,8 +1039,9 @@ async function main() {
           topSelfMs: [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, ms]) => `${Math.round(ms)}ms ${k}`),
         };
       }
-      // --world-map-pan N: drag the map (600px or 70% of its width) N times one way, then N times back (15px steps every
-      // 16ms), counting at each step the on-screen squares still drawn without their own tile.
+      // --world-map-pan N: drag the map (600px or 70% of its width) N times one way, then N times back
+      // (--world-map-pan-step px, default 15, every 16ms), counting at each step the on-screen squares
+      // still drawn without their own tile.
       const pans = Number(arg("world-map-pan", "0")) | 0;
       if (pans > 0) {
         const missing = () => cdp.evaluate(`(() => {
@@ -1063,7 +1064,8 @@ async function main() {
             await sleep(120);
             await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: cx, y: cy, button: "left", buttons: 1, clickCount: 1 });
             await sleep(120);
-            for (let dx = 15; dx <= span; dx += 15) {
+            const stepPx = Number(arg("world-map-pan-step", "15")) || 15;
+            for (let dx = stepPx; dx <= span; dx += stepPx) {
               await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: cx + dir * dx, y: cy, button: "left", buttons: 1 });
               await sleep(16);
               steps.push(await missing());

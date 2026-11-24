@@ -113,14 +113,14 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
       getPrivateArea: () => area, setArea(a) {area=a;}, getWildernessLevel: () => 0,
       getLocation: () => location, moveTo(p) { location = p; },
       getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getPacketSender: () => ({ sendConfig: (id, value) => configs.set(id, value), sendVarbit: (id,value) => configs.set(id,value), getVarbit: id => configs.get(id) ?? 0, sendProjectile() {}, sendGraphic() {}, sendSound() {},
+      getPacketSender: () => ({ sendConfig: (id, value) => configs.set(id, value), sendVarbit: (id,value) => configs.set(id,value), getVarbit: id => configs.get(id) ?? 0, sendProjectile() {}, sendGraphic() {}, sendGlobalGraphic() {}, sendSound() {},
         sendTypedMessage: (type, text) => messages.push(text), sendClientScript() {}, sendObjectAnimation() {} }),
       getCombat: () => ({ getTarget: () => null, getAttacker: () => null, getHitQueue: () => ({ addPendingDamage() {} }) }),
       getPrayerActive: () => ({}),
       getMovementQueue: () => ({ canWalk: () => false, reset() {} }),
       getForceMovement: () => force, setForceMovement(f) {force=f;}, getUpdateFlag: () => ({flag(){}}), getRunEnergy: () => 50, setRunEnergy() {},
-      performAnimation(a) { this.animations.push(a.getId()); }, sendMessage(text) { this.messages.push(text); },
-      animations: [], messages, statements: [],
+      performAnimation(a) { this.animations.push(a.getId()); }, performGraphic(g) { this.graphics.push(g.getId()); }, sendMessage(text) { this.messages.push(text); },
+      animations: [], graphics: [], messages, statements: [],
       getDialogueManager() { const statements = this.statements; return { startDialogues(chain) { statements.push(chain); } }; },
     };
   }
@@ -414,14 +414,25 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
       if(crushBones)event.drops=event.drops.filter(drop=>drop.itemId!==I.BONES);
     };
     const hunter=()=>{const f=player();f.moveTo(falconTile);f.levels.set(Skill.HUNTER,70);f.equipment.set(core.Equipment.WEAPON_SLOT,I.FALCONERS_GLOVE_2);return f;};
-    const send=f=>{
+    // The falcon strikes (hit graphic) when it arrives, then shows on its prey FALCON_HIT_TICKS (3) later.
+    const send=(f,reveal=true)=>{
       const kebbit=prey(N.DASHING_KEBBIT,falconTile);
       Math.random=()=>0;Catching.catchNpc({player:f,npc:kebbit,npcId:kebbit.getId()});advance(2);Math.random=()=>0.5;
-      return spawned.at(-1);
+      const bird=spawned.at(-1);
+      if(reveal)advance(3);
+      return bird;
     };
     const full=hunter();full.setSize(0);
-    const falcon=send(full);
+    const falcon=send(full,false);
     assert.equal(falcon.getId(),N.GYR_FALCON_3,"the falcon catches the kebbit even with a full inventory");
+    assert.equal(full.graphics.length,1,"the falcon launches off the glove");
+    assert.ok([918,919,920,921].includes(full.graphics[0]),"with one of the four falcon_launch graphics");
+    assert.equal(falcon.isVisible(),false,"the falcon is hidden while it strikes");
+    Catching.retrieve({player:full,npc:falcon});advance(1);
+    assert.equal(full.experience.has(Skill.HUNTER),false,"it cannot be retrieved before it shows");
+    assert.equal(falcon.isRegistered(),true);
+    advance(2);
+    assert.equal(falcon.isVisible(),true,"the falcon shows on its prey once the hit has played");
     Catching.retrieve({player:full,npc:falcon});advance(1);
     assert.equal(full.experience.get(Skill.HUNTER),156,"a full inventory still retrieves the falcon for the XP");
     assert.equal(falcon.isRegistered(),false);

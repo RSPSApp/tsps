@@ -30,17 +30,23 @@ const RELEASE_SOUND = 7870;
 const RELEASE_DELAY = 45;
 const RELEASE_HEIGHT = 190;
 const RELEASED_TICKS = 1;
-// The falcon's own graphics (cache gamevals falcon_launch_anim..falcon_hit_post3): the launch off the
-// glove has four orientations (rotation 0/90/180/270), then a travel projectile, then the hit on the
-// kebbit (hit and post-hit on one sequence, 5201 = 3 ticks), after which the falcon sits on its prey.
-const FALCON_LAUNCH_GRAPHICS = [918, 919, 920, 921];
+// The falcon's own graphics (cache gamevals falcon_launch_anim, falcon_travel_anim, falcon_hit_anim) with
+// the numbers rsprox capture 3414 records for the Falconry grounds' falconers: spotanim 918 at height 150
+// on the sender, then falcon_travel_anim 922 starting at client cycle 24 and flying 8 cycles per tile
+// (start height 150, angle 10, progress 64). On a kebbit the hit is spotanim 923 on the kebbit, delayed
+// to the projectile's end. The falconers use 918 and 927 whichever way the kebbit lies, so there is no
+// direction-picked graphic here.
+const FALCON_LAUNCH_GRAPHIC = 918;
 const FALCON_TRAVEL_PROJECTILE = 922;
-const FALCON_HIT_GRAPHICS = [924, 925, 926, 927];
-const FALCON_LAUNCH_CYCLES = 30;
-const FALCON_CYCLES_PER_TILE = 12;
-const FALCON_HIT_TICKS = 3;
-const FALCON_START_HEIGHT = 40;
-const FALCON_END_HEIGHT = 20;
+const FALCON_HIT_GRAPHIC = 923;
+const FALCON_LAUNCH_CYCLES = 24;
+const FALCON_CYCLES_PER_TILE = 8;
+// falcon_hit (seq 5200) is 26 client cycles long.
+const FALCON_HIT_CYCLES = 26;
+const FALCON_START_HEIGHT = 150;
+const FALCON_END_HEIGHT = 5;
+const FALCON_ANGLE = 10;
+const FALCON_PROGRESS = 64;
 
 function gloves(player, id) {
   if (id > 0) gloved.add(player);
@@ -91,13 +97,6 @@ function dialogueLend(event) {
   event.end = true;
 }
 
-/** Which of the four rotated falcon graphics matches the way from `from` to `to`. */
-function quarter(from, to) {
-  const dx = to.getX() - from.getX(), dy = to.getY() - from.getY();
-  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 1 : 3;
-  return dy > 0 ? 2 : 0;
-}
-
 function catchFalcon(player, npc, def) {
   const I = H.core.ItemIdentifiers;
   if (!hasFalcon(player)) { player.sendMessage("Borrow a falcon from Matthias first."); return; }
@@ -108,11 +107,13 @@ function catchFalcon(player, npc, def) {
   const reservation = { player };
   H.reserved.set(npc, reservation);
   const cancel = () => { if (H.reserved.get(npc) === reservation) H.reserved.delete(npc); if (hasFalcon(player)) gloves(player, I.FALCONERS_GLOVE_2); };
-  // The farther the kebbit, the longer the falcon flies (Wiki: running up to it shortens the travel).
-  const flight = Math.ceil(H.core.Projectile.arrivalCycles(player.getLocation(), npc.getLocation(), FALCON_LAUNCH_CYCLES, FALCON_CYCLES_PER_TILE) / 30);
-  const ticks = Math.max(2, flight);
+  // The farther the kebbit, the longer the falcon flies (Wiki: running up to it shortens the travel). The catch
+  // resolves on the last tick that starts before the projectile lands; the hit graphic covers the rest.
   const from = player.getLocation().clone(), to = npc.getLocation().clone();
-  const heading = quarter(from, to);
+  const arrival = H.core.Projectile.arrivalCycles(from, npc, FALCON_LAUNCH_CYCLES, FALCON_CYCLES_PER_TILE);
+  const ticks = Math.max(1, Math.floor(arrival / 30));
+  const hitDelay = Math.max(0, arrival - ticks * 30);
+  const hitTicks = Math.ceil((hitDelay + FALCON_HIT_CYCLES) / 30);
   if (!begin(player, ticks, ANIM.FALCON, () => {
     H.reserved.delete(npc);
     if (!hasFalcon(player) || !available(npc) || !nearby(player, npc, 8) || !requireLevel(player, def.level)) { cancel(); return; }
@@ -127,17 +128,17 @@ function catchFalcon(player, npc, def) {
     falcon.untargetable = true;
     // The falcon strikes first (its hit graphic), then settles on the prey and can be retrieved.
     falcon.setVisible(false);
-    const state = { falcon, player, def, due: H.tick + 100, appearAt: H.tick + FALCON_HIT_TICKS };
+    const state = { falcon, player, def, due: H.tick + 100, appearAt: H.tick + hitTicks };
     falcons.set(player, state); caught.set(falcon, state);
-    player.getPacketSender().sendGlobalGraphic(new H.core.Graphic(FALCON_HIT_GRAPHICS[heading]), npc.getLocation());
-    hide(npc, 10, 1);
+    npc.performGraphic(new H.core.Graphic(FALCON_HIT_GRAPHIC, hitDelay));
+    hide(npc, 10, hitTicks);
     player.sendMessage("Your falcon catches the kebbit. Retrieve it to collect the catch.");
   }, cancel)) cancel();
   else {
     gloves(player, I.FALCONERS_GLOVE);
-    player.performGraphic(new H.core.Graphic(FALCON_LAUNCH_GRAPHICS[heading]));
-    new H.core.Projectile(from, to, null, FALCON_TRAVEL_PROJECTILE, FALCON_LAUNCH_CYCLES, ticks * 30,
-      FALCON_START_HEIGHT, FALCON_END_HEIGHT, player.getPrivateArea()).sendProjectile();
+    player.performGraphic(new H.core.Graphic(FALCON_LAUNCH_GRAPHIC, 0, FALCON_START_HEIGHT));
+    new H.core.Projectile(from, to, null, FALCON_TRAVEL_PROJECTILE, FALCON_LAUNCH_CYCLES, arrival,
+      FALCON_START_HEIGHT, FALCON_END_HEIGHT, player.getPrivateArea()).withAngle(FALCON_ANGLE).withProgress(FALCON_PROGRESS).sendProjectile();
   }
 }
 

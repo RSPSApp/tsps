@@ -414,24 +414,23 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
       if(crushBones)event.drops=event.drops.filter(drop=>drop.itemId!==I.BONES);
     };
     const hunter=()=>{const f=player();f.moveTo(falconTile);f.levels.set(Skill.HUNTER,70);f.equipment.set(core.Equipment.WEAPON_SLOT,I.FALCONERS_GLOVE_2);return f;};
-    // The falcon strikes (hit graphic) when it arrives, then shows on its prey FALCON_HIT_TICKS (3) later.
+    // The catch resolves a tick after the send here (the kebbit is on the player's tile: 24 cycles of flight), the
+    // falcon_hit graphic (26 cycles) plays on the kebbit, and the falcon shows on its prey one tick later.
     const send=(f,reveal=true)=>{
       const kebbit=prey(N.DASHING_KEBBIT,falconTile);
-      Math.random=()=>0;Catching.catchNpc({player:f,npc:kebbit,npcId:kebbit.getId()});advance(2);Math.random=()=>0.5;
+      Math.random=()=>0;Catching.catchNpc({player:f,npc:kebbit,npcId:kebbit.getId()});advance(1);Math.random=()=>0.5;
       const bird=spawned.at(-1);
-      if(reveal)advance(3);
+      if(reveal)advance(1);
       return bird;
     };
     const full=hunter();full.setSize(0);
     const falcon=send(full,false);
     assert.equal(falcon.getId(),N.GYR_FALCON_3,"the falcon catches the kebbit even with a full inventory");
-    assert.equal(full.graphics.length,1,"the falcon launches off the glove");
-    assert.ok([918,919,920,921].includes(full.graphics[0]),"with one of the four falcon_launch graphics");
+    assert.deepEqual(full.graphics,[918],"the falcon launches off the glove (falcon_launch_anim)");
     assert.equal(falcon.isVisible(),false,"the falcon is hidden while it strikes");
     Catching.retrieve({player:full,npc:falcon});advance(1);
     assert.equal(full.experience.has(Skill.HUNTER),false,"it cannot be retrieved before it shows");
     assert.equal(falcon.isRegistered(),true);
-    advance(2);
     assert.equal(falcon.isVisible(),true,"the falcon shows on its prey once the hit has played");
     Catching.retrieve({player:full,npc:falcon});advance(1);
     assert.equal(full.experience.get(Skill.HUNTER),156,"a full inventory still retrieves the falcon for the XP");

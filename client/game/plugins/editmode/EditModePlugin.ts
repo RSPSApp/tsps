@@ -2848,6 +2848,7 @@ export class EditModePlugin {
             target?.closest?.(EDITOR_TYPING_SELECTOR)) return;
         const plainKey = !event.ctrlKey && !event.metaKey && !event.altKey;
         if (plainKey && EDITOR_WASD.has(event.code)) {
+            this.host?.getCanvas()?.focus({ preventScroll: true });
             this.cameraKeys.add(event.code);
             event.preventDefault();
             event.stopPropagation();

@@ -198,11 +198,11 @@ test("the Seers' church organ and Sherlock only credit their own actions", async
   await setup();
   const organLocation = new (require("../dist/game/model/Location").Location)(2691, 3461, 0);
   const organ = actor(2695, 3463);
-  Kandarin._test.playOrgan({ player: organ, object: { getLocation: () => organLocation } });
+  Kandarin._test.playOrgan({ player: organ, option: "play", object: { getDefinition: () => ({ getName: () => "Church organ" }), getLocation: () => organLocation } });
   assert.equal(done(organ, "play-the-organ-in-seers-church"), true);
 
   const otherOrgan = actor(3127, 3105, 1);
-  Kandarin._test.playOrgan({ player: otherOrgan, object: { getLocation: () => new (require("../dist/game/model/Location").Location)(3127, 3105, 1) } });
+  Kandarin._test.playOrgan({ player: otherOrgan, option: "play", object: { getDefinition: () => ({ getName: () => "Church organ" }), getLocation: () => new (require("../dist/game/model/Location").Location)(3127, 3105, 1) } });
   assert.equal(done(otherOrgan, "play-the-organ-in-seers-church"), false);
 
   const talker = actor(2733, 3415);
@@ -256,21 +256,26 @@ test("coal mined beside the coal trucks counts; any other coal does not", async 
 test("Kandarin farming diary tasks follow the planted crop and patch", async () => {
   await setup();
   const jute = actor(2666, 3530);
-  Kandarin._test.farmingPlanted({ player: jute, crop: "JUTE", patch: { getX: () => 2666, getY: () => 3525, getZ: () => 0 } });
+  Kandarin._test.farmingPlanted({ player: jute, crop: "JUTE", patch: { x: 2666, y: 3525, z: 0 } });
   assert.equal(done(jute, "plant-some-jute-seeds-in-the-patch-north-of-mcgr"), true);
   const wrongPatch = actor(2666, 3530);
-  Kandarin._test.farmingPlanted({ player: wrongPatch, crop: "JUTE", patch: { getX: () => 2809, getY: () => 3335, getZ: () => 0 } });
+  Kandarin._test.farmingPlanted({ player: wrongPatch, crop: "JUTE", patch: { x: 2809, y: 3335, z: 0 } });
   assert.equal(done(wrongPatch, "plant-some-jute-seeds-in-the-patch-north-of-mcgr"), false);
 
   const limpwurt = actor(2809, 3464);
-  Kandarin._test.farmingHarvested({ player: limpwurt, crop: "LIMPWURT", patch: { getX: () => 2809, getY: () => 3463, getZ: () => 0 } });
+  Kandarin._test.farmingHarvested({ player: limpwurt, crop: "LIMPWURT", patch: { x: 2809, y: 3463, z: 0 } });
   assert.equal(done(limpwurt, "pick-some-limpwurt-root-from-the-farming-patch-i"), true);
 
   const dwarf = actor(2813, 3464);
-  Kandarin._test.farmingHarvested({ player: dwarf, crop: "DWARF_WEED", patch: { getX: () => 2813, getY: () => 3463, getZ: () => 0 } });
+  Kandarin._test.farmingHarvested({ player: dwarf, crop: "DWARF_WEED", patch: { x: 2813, y: 3463, z: 0 } });
   assert.equal(done(dwarf, "pick-some-dwarf-weed-from-the-herb-patch-at-cath"), true);
+  const wrongPlane = actor(2666, 3530, 1);
+  Kandarin._test.farmingPlanted({ player: wrongPlane, crop: "JUTE", patch: { x: 2666, y: 3525, z: 1 } });
+  assert.equal(done(wrongPlane, "plant-some-jute-seeds-in-the-patch-north-of-mcgr"), false);
+  Kandarin._test.farmingPlanted({ player: wrongPlane, crop: "JUTE", patch: null });
+  assert.equal(done(wrongPlane, "plant-some-jute-seeds-in-the-patch-north-of-mcgr"), false);
   const wrongCrop = actor(2813, 3464);
-  Kandarin._test.farmingHarvested({ player: wrongCrop, crop: "GUAM", patch: { getX: () => 2813, getY: () => 3463, getZ: () => 0 } });
+  Kandarin._test.farmingHarvested({ player: wrongCrop, crop: "GUAM", patch: { x: 2813, y: 3463, z: 0 } });
   assert.equal(done(wrongCrop, "pick-some-dwarf-weed-from-the-herb-patch-at-cath"), false);
 });
 

@@ -19,6 +19,7 @@ const TRADING_WITH = /^trading with: /i;
 
 /** A highlighted player: its player store index, display name and highlight colour (0xRRGGBB). */
 export type HighlightedPlayer = { index: number; name: string; color: number };
+type Social = { friends: Set<string>; friendsChat: Set<string>; clan: Set<string> };
 
 /** Names as the game compares them: no case, and underscores, hyphens and nbsp as spaces. */
 export function jagexName(name: string): string {
@@ -77,13 +78,14 @@ export class PlayerIndicatorsPlugin extends Plugin {
         return (vars?.getVarbit?.(INSIDE_WILDERNESS) | 0) === 1 || (vars?.getVarbit?.(PVP_AREA_CLIENT) | 0) === 1;
     }
 
-    private social(): { friends: string[]; friendsChat: string[]; clan: string[] } {
+    /** The friends list, friends chat members and the player's own clan, as normalised names. */
+    social(): Social {
         const context: any = (this.osrsClient as any).cs2Vm?.context ?? {};
-        const names = (list: { name?: string }[] | undefined) => (list ?? []).map((m) => jagexName(m.name ?? ""));
+        const names = (list: { name?: string }[] | undefined) => new Set((list ?? []).map((m) => jagexName(m.name ?? "")));
         return {
             friends: names(context.friendList),
             friendsChat: names(context.clanMembers),
-            clan: (context.clanChannel?.userNames ?? []).map(jagexName),
+            clan: new Set<string>((context.clanChannel?.userNames ?? []).map(jagexName)),
         };
     }
 
@@ -91,7 +93,7 @@ export class PlayerIndicatorsPlugin extends Plugin {
      * RuneLite's PlayerIndicatorsService.getDecorations colour: the first group the player is in
      * whose highlight is on (own player, friend, friends chat, team, clan, others), or undefined.
      */
-    colorFor(index: number): number | undefined {
+    colorFor(index: number, social: Social = this.social()): number | undefined {
         const players: any = (this.osrsClient as any).playerEcs;
         const name = players?.getName(index);
         if (!name) return undefined;
@@ -101,12 +103,11 @@ export class PlayerIndicatorsPlugin extends Plugin {
             return this.enabled(c.highlightOwnPlayer()) ? Number(c.ownPlayerColor()) & 0xffffff : undefined;
         }
         const key = jagexName(name);
-        const social = this.social();
-        const inFriendsChat = social.friendsChat.includes(key);
-        const inClan = social.clan.includes(key);
+        const inFriendsChat = social.friendsChat.has(key);
+        const inClan = social.clan.has(key);
         const team = players.getTeam(index) | 0;
         let color: unknown;
-        if (social.friends.includes(key) && this.enabled(c.highlightFriends())) color = c.friendColor();
+        if (social.friends.has(key) && this.enabled(c.highlightFriends())) color = c.friendColor();
         else if (inFriendsChat && this.enabled(c.highlightFriendsChat())) color = c.friendsChatMemberColor();
         else if (team > 0 && local !== undefined && (players.getTeam(local) | 0) === team && this.enabled(c.highlightTeamMembers())) {
             color = c.teamMemberColor();
@@ -123,27 +124,29 @@ export class PlayerIndicatorsPlugin extends Plugin {
         if (!players || local === undefined) return [];
         const plane = players.getLevel(local) | 0;
         const out: HighlightedPlayer[] = [];
+        const social = this.social();
         for (const index of players.getAllActiveIndices()) {
             if ((players.getLevel(index) | 0) !== plane || players.getIsHidden(index)) continue;
             if ((players.getWorldViewId(index) | 0) >= 0) continue;
-            const color = this.colorFor(index);
+            const color = this.colorFor(index, social);
             if (color !== undefined) out.push({ index, name: players.getName(index).replace(/ /g, " "), color });
         }
         return out;
     }
 
-    private colorForServerId(serverId: number): number | undefined {
+    private colorForServerId(serverId: number, social: Social): number | undefined {
         const index = (this.osrsClient as any).playerEcs?.getIndexForServerId?.(serverId);
-        return index === undefined ? undefined : this.colorFor(index);
+        return index === undefined ? undefined : this.colorFor(index, social);
     }
 
     /** RuneLite's onClientTick menu pass: player entries take the player's colour. */
     transformMenuEntries(entries: SimpleMenuEntry[], context: MenuTransformContext): SimpleMenuEntry[] {
         if (!this.isStarted() || context.surface !== "world" || this.config.colorPlayerMenu() !== true) return entries;
         let out: SimpleMenuEntry[] | undefined;
+        let social: Social | undefined;
         entries.forEach((entry, i) => {
             if (entry.targetType !== MenuTargetType.PLAYER || typeof entry.playerServerId !== "number") return;
-            const color = this.colorForServerId(entry.playerServerId);
+            const color = this.colorForServerId(entry.playerServerId, (social ??= this.social()));
             if (color === undefined) return;
             out ??= entries.slice();
             out[i] = { ...entry, target: decorateTarget(String(entry.target ?? ""), color) };
@@ -153,8 +156,9 @@ export class PlayerIndicatorsPlugin extends Plugin {
 
     /** RuneLite recolours the name in the trade screen's title for a highlighted player. */
     widgetDisplayText(event: WidgetTextEvent): WidgetDisplayText | undefined {
+        if (!this.isStarted() || event.groupId !== TRADEMAIN) return undefined;
         const prefix = event.text.match(TRADING_WITH)?.[0];
-        if (!this.isStarted() || event.groupId !== TRADEMAIN || !prefix) return undefined;
+        if (!prefix) return undefined;
         const name = event.text.slice(prefix.length);
         const players: any = (this.osrsClient as any).playerEcs;
         const index = players?.findIndexByName?.(name);

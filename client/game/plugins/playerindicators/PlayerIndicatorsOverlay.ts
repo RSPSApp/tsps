@@ -69,11 +69,15 @@ export class PlayerIndicatorsOverlay implements WidgetOverlay {
     private build(): Frame {
         const frame: Frame = { shapes: [], texts: [], font: overlayFont("dynamic"), signature: "" };
         const plugin = this.plugin;
+        const config = plugin.config;
+        const wanted = this.minimap
+            ? config.drawMinimapNames() === true
+            : config.drawTiles() === true || String(config.playerNamePosition()) !== "DISABLED";
+        if (!wanted) return frame;
         const highlighted = plugin.highlightedPlayers();
         if (highlighted.length === 0) return frame;
         const client: any = plugin.getClient();
         const players = client.playerEcs;
-        const config = plugin.config;
         const scene = this.minimap ? undefined : client.sceneGeometry;
         const position = String(config.playerNamePosition());
         const drawTiles = config.drawTiles() === true;

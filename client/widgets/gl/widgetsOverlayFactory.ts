@@ -8,7 +8,7 @@ import type { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
 import type { NpcModelLoader } from "../../rs/config/npctype/NpcModelLoader";
 import { ChatheadFactory } from "../../render/ChatheadFactory";
 import { PlayerChatheadFactory } from "../../render/PlayerChatheadFactory";
-import { WIDGET_MODEL_TYPE_LOC, widgetLocModel } from "../../render/render/init/widgetLocModel";
+import { WIDGET_MODEL_TYPE_LOC, WIDGET_MODEL_TYPE_NPC, widgetLocModel } from "../../render/render/init/widgetLocModel";
 import { ItemIconRenderer } from "../../ui/item/ItemIconRenderer";
 import { WidgetsOverlay, WidgetsContext } from "../../ui/devoverlay/WidgetsOverlay";
 import { Model2DRenderer } from "../../ui/model/Model2DRenderer";
@@ -248,6 +248,8 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                         outline?: number,
                                         shadow?: number,
                                         quantityMode?: number,
+                                        width?: number,
+                                        height?: number,
                                     ) => {
                                         // Use ItemIconRenderer to render item icons. Create it lazily:
                                         // loaders can become ready after the overlay is built (WebGPU
@@ -270,6 +272,8 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                                 outline,
                                                 shadow,
                                                 quantityMode,
+                                                width,
+                                                height,
                                             });
                                         }
                                         return undefined;
@@ -513,6 +517,23 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                                 }
                                             }
                                         }
+                                    }
+
+                                    // Model type 9 is an NPC's body (cc_setnpcmodel): modelId is the NPC id.
+                                    if (((params.widget?.modelType ?? 0) | 0) === WIDGET_MODEL_TYPE_NPC) {
+                                        const baseNpcType = host.osrsClient.npcTypeLoader.load(modelId);
+                                        const npcType =
+                                            baseNpcType?.transform?.(
+                                                host.osrsClient.varManager,
+                                                host.osrsClient.npcTypeLoader,
+                                            ) ?? baseNpcType;
+                                        const bodyModel = npcType
+                                            ? host.getInteractNpcModelLoader?.()?.getModel(npcType, -1, -1)
+                                            : undefined;
+                                        // Never the raw model that happens to share the NPC's number.
+                                        return bodyModel
+                                            ? host.model2DRenderer.renderModelInstanceToCanvasExtents(bodyModel, params)
+                                            : undefined;
                                     }
 
                                     if (((params.widget?.modelType ?? 0) | 0) === WIDGET_MODEL_TYPE_LOC) {

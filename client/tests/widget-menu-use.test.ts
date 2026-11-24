@@ -52,7 +52,8 @@ assert.equal(use.menuStateIndex, undefined, "widget actions must not run through
 // (inv op1..5 -> slots 2,3,4,6,7, i.e. action indices 1,2,3,5,6).
 // Pot of flour's only ops are Empty (op4 -> index 5) and Drop, so "Use" is the
 // default action. A weapon keeps its op2 Wield (index 2) as primary.
-const allOpsVisible = () => -1;
+// Every op and target bit, but not bit 0: that one marks a pause button, which lists Continue first.
+const allOpsVisible = () => ~1;
 const noWidgetLookup = () => undefined;
 const entriesFor = (itemId: number, actions: (string | null)[]) =>
     deriveMenuEntriesForWidget(
@@ -97,11 +98,12 @@ assert.equal(
     deriveMenuEntriesForWidget(logs, false, allOpsVisible, noWidgetLookup)[0]?.target,
     "<col=00ff00>High Level Alchemy</col> -> <col=ff9040>Logs",
 );
-// A spell that cannot land on items leaves the item's own menu alone.
+// A spell that cannot land on items: the item is no target, and like every component while
+// something is selected it lists none of its own ops (OSRS), only Cancel.
 selectFor("Cast", "<col=00ff00>Wind Strike</col>", 0x06);
 assert.deepEqual(
     deriveMenuEntriesForWidget(logs, false, allOpsVisible, noWidgetLookup).map((entry) => entry.option),
-    ["Use", "Drop", "Cancel"],
+    ["Cancel"],
 );
 ClientState.clearSpellSelection();
 
@@ -225,7 +227,7 @@ console.log('native Inspect submenu dispatch passed');
     assert.equal(options(notInventory)[0], "Eat", "shift-click drop is the inventory's only");
     ClientState.selectedItemId = 1511;
     ClientState.isItemSelected = 1;
-    assert.equal(options(shark)[0], "Eat", "not while an item is selected");
+    assert.notEqual(options(shark)[0], "Drop", "not while an item is selected");
     ClientState.clearItemSelection();
     setShiftClickDrop(0);
     assert.deepEqual(options(shark), ["Eat", "Use", "Drop", "Cancel"], "setting off: Shift changes nothing");

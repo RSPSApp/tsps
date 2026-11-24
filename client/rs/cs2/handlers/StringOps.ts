@@ -1,8 +1,31 @@
 /**
  * String operations: concatenation, comparison, manipulation
  */
+import { resolveTextTemplatesKeepingEscapes } from "../../font/textTemplates";
+import { compareStringsOsrs } from "../StringCollation";
 import { Opcodes } from "../Opcodes";
 import type { HandlerMap } from "./HandlerTypes";
+
+/**
+ * Text without its markup, as OSRS's removetags leaves it: templates and macros placed first,
+ * then everything from a `<` to the next `>` dropped (to the end if it never closes), stray `>`
+ * dropped, and an `@...@` span dropped with its signs (a lone `@` too).
+ */
+export function removeTags(text: string): string {
+    const source = resolveTextTemplatesKeepingEscapes(text);
+    let out = "";
+    let insideTag = false;
+    for (let i = 0; i < source.length; i++) {
+        const ch = source[i];
+        if (ch === "<") insideTag = true;
+        else if (ch === ">") insideTag = false;
+        else if (ch === "@") {
+            const end = source.indexOf("@", i + 1);
+            if (end !== -1) i = end;
+        } else if (!insideTag) out += ch;
+    }
+    return out;
+}
 
 export function registerStringOps(handlers: HandlerMap): void {
     const MONTHS = [
@@ -21,6 +44,10 @@ export function registerStringOps(handlers: HandlerMap): void {
     ];
 
     // === Basic string operations ===
+    // A null operand of join_string / append reads as the text "null", as Java's string
+    // concatenation gives. (An undefined slot is ours alone, a handler that pushed no value,
+    // and stays empty.)
+    const operandText = (value: any): string => (value === null ? "null" : value ?? "");
     handlers.set(Opcodes.JOIN_STRING, (ctx, intOp) => {
         const count = intOp;
         // PERF: Use array join pattern instead of O(n²) string concatenation
@@ -30,20 +57,20 @@ export function registerStringOps(handlers: HandlerMap): void {
         }
         if (count === 1) {
             // Fast path for single string
-            ctx.pushString(ctx.stringStack[--ctx.stringStackSize] ?? "");
+            ctx.pushString(operandText(ctx.stringStack[--ctx.stringStackSize]));
             return;
         }
         // Collect strings into array (in correct order) then join
         const parts = new Array<string>(count);
         for (let i = count - 1; i >= 0; i--) {
-            parts[i] = ctx.stringStack[--ctx.stringStackSize] ?? "";
+            parts[i] = operandText(ctx.stringStack[--ctx.stringStackSize]);
         }
         ctx.pushString(parts.join(""));
     });
 
     handlers.set(Opcodes.APPEND, (ctx) => {
-        const str2 = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        const str1 = ctx.stringStack[--ctx.stringStackSize] ?? "";
+        const str2 = operandText(ctx.stringStack[--ctx.stringStackSize]);
+        const str1 = operandText(ctx.stringStack[--ctx.stringStackSize]);
         ctx.pushString(str1 + str2);
     });
 
@@ -64,7 +91,7 @@ export function registerStringOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.COMPARE, (ctx) => {
         const str2 = ctx.stringStack[--ctx.stringStackSize] ?? "";
         const str1 = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        ctx.pushInt(str1 === str2 ? 0 : str1 < str2 ? -1 : 1);
+        ctx.pushInt(Math.sign(compareStringsOsrs(str1, str2)));
     });
 
     handlers.set(Opcodes.LOWERCASE, (ctx) => {
@@ -106,7 +133,12 @@ export function registerStringOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.SUBSTRING, (ctx) => {
         const end = ctx.intStack[--ctx.intStackSize] ?? 0;
         const start = ctx.intStack[--ctx.intStackSize] ?? 0;
-        const str = ctx.stringStack[--ctx.stringStackSize] ?? "";
+        const str = ctx.stringStack[--ctx.stringStackSize];
+        // Indices outside the text, or an end before the start, are a script error (as is a
+        // null string); nothing is clamped or swapped.
+        if (typeof str !== "string" || start < 0 || end > str.length || start > end) {
+            throw new Error("RuntimeException");
+        }
         ctx.pushString(str.substring(start, end));
     });
 
@@ -158,13 +190,14 @@ export function registerStringOps(handlers: HandlerMap): void {
     // === Text formatting ===
     handlers.set(Opcodes.ESCAPE, (ctx) => {
         const str = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        // The client's escapeBrackets: <lt> and <gt>, which the fonts draw as < and >.
-        ctx.pushString(str.replace(/[<>]/g, (c: string) => (c === "<" ? "<lt>" : "<gt>")));
+        // The client's escapeBrackets: <lt>, <gt> and <at>, which the fonts draw as <, > and @
+        // (an unescaped @name@ is a text macro).
+        ctx.pushString(str.replace(/[<>@]/g, (c: string) => (c === "<" ? "<lt>" : c === ">" ? "<gt>" : "<at>")));
     });
 
     handlers.set(Opcodes.REMOVETAGS, (ctx) => {
         const str = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        ctx.pushString(str.replace(/<[^>]+>/g, ""));
+        ctx.pushString(removeTags(str));
     });
 
     handlers.set(Opcodes.TEXT_GENDER, (ctx) => {
@@ -212,10 +245,11 @@ export function registerStringOps(handlers: HandlerMap): void {
         const days = ctx.intStack[--ctx.intStackSize];
         // date = (11745 + days) * 86400000 and format "d-MMM-yyyy".
         const date = new Date((11745 + days) * 86_400_000);
-        // A whole UTC day: local fields would show the day before behind UTC.
-        const day = date.getUTCDate();
-        const month = MONTHS[date.getUTCMonth()] ?? "Jan";
-        const year = date.getUTCFullYear();
+        // OSRS reads the date in the player's own time zone, so it is the day before the UTC
+        // date for a player west of UTC.
+        const day = date.getDate();
+        const month = MONTHS[date.getMonth()] ?? "Jan";
+        const year = date.getFullYear();
         ctx.pushString(`${day}-${month}-${year}`);
     });
 
@@ -235,9 +269,8 @@ export function registerStringOps(handlers: HandlerMap): void {
             return;
         }
 
-        // OSRS returns lineCount(text, maxWidth) - just the number of lines!
-        const lines = ctx.splitTextLines(str, fontId, maxWidth);
-        ctx.pushInt(Math.max(1, lines.length));
+        // OSRS returns the number of lines the text breaks into, not a pixel height.
+        ctx.pushInt(ctx.splitTextLines(str, fontId, maxWidth).length);
     });
 
     handlers.set(Opcodes.PARAWIDTH, (ctx) => {

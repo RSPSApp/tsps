@@ -300,7 +300,7 @@ export function extendWindowIntoHiddenChat(
     // A window this hook already stretched may shrink again when the scale grows; one that
     // was naturally taller than the space stays untouched.
     if (extended < (node.height ?? 0) && !stretchedByUs.has(node)) return;
-    const stretchedRawY = top - ((parentH - extended) >> 1);
+    const stretchedRawY = top - (((parentH - extended) / 2) | 0); // the inverse of layout's centring, which divides toward zero
     node.rawHeight = extended;
     node.rawY = stretchedRawY;
     stretchedWindows.set(node, { rawY, rawHeight, stretchedRawY, stretchedRawHeight: extended });

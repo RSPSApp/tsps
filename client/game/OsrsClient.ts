@@ -1,3 +1,4 @@
+import { ObjStackability } from "../rs/config/objtype/ObjStackability";
 import { AGILITY_HELPER_HIGHLIGHT_OBSTACLES_ENABLED, HELPER_AGILITY_HIGHLIGHTED_COURSE } from "@runelite/api/gameval/VarbitID";
 import { retainedInventory, stopInventoryTransmit } from "./sync/InventoryStopTransmit";
 import { openClientUrl } from "../common/openUrl";
@@ -207,14 +208,16 @@ import type { SeqSoundEffect, SeqType } from "../rs/config/seqtype/SeqType";
 import { SeqTypeLoader } from "../rs/config/seqtype/SeqTypeLoader";
 import { SpotAnimTypeLoader } from "../rs/config/spotanimtype/SpotAnimTypeLoader";
 import { VarManager } from "../rs/config/vartype/VarManager";
-import { chatHistory } from "../rs/cs2/ChatHistory";
+import { chatHistory, isOverheadChatFiltered } from "../rs/cs2/ChatHistory";
 import { addExaminePriceLine, EXAMINE_PRICE_ALCH_VARBIT, EXAMINE_PRICE_GE_VARBIT } from "./examinePrice";
 import { alchemyValues, guidePrice, itemPricesPending } from "../network/serverConnection/domain/itemPrices";
 import { FriendLoginUpdates, friendLoginNoticesShown } from "./chat/FriendLoginUpdates";
 import { Cs2Vm, ScriptArgMagic, type ScriptEvent, createScriptEvent } from "../rs/cs2/Cs2Vm";
+import { orderSocialSnapshot } from "../rs/cs2/SocialSort";
 import { setSpawnSearch } from "../rs/cs2/spawnSearch";
 import { Opcodes as Cs2Opcodes } from "../rs/cs2/Opcodes";
 import { BitmapFont } from "../rs/font/BitmapFont";
+import { breakTextLines } from "../rs/font/breakTextLines";
 import { resolveTextTemplates } from "../rs/font/textTemplates";
 import { encodeInteractionIndex } from "../rs/interaction/InteractionIndex";
 import { Inventory, InventorySlotInput } from "../rs/inventory/Inventory";
@@ -1772,6 +1775,9 @@ export class OsrsClient {
             getCustomInterfaces: () => this.customInterfaces,
             getPlayerDesign: () => this.playerDesign,
             getObjTypeLoader: () => this.objTypeLoader,
+            getLeftClickOpensMenu: () => this.settings.leftClickOpensMenu,
+            openWidgetMenuAt: (canvasX, canvasY) =>
+                (this.renderer?.canvas as any)?.__inputBridge?.openMenuAt?.(canvasX, canvasY),
             getInventory: () => this.inventory,
             getMinimapZoomEnabled: () => this.minimapZoomEnabled,
             getMenuOpen: () => this.menuOpen,
@@ -2136,40 +2142,14 @@ export class OsrsClient {
                     }
                 }
                 const font = this.fontCache.get(fontId);
-                const measure = (s: string) =>
-                    this.chatTextMetrics.measureTextWidthOsrsMarkup(s, font);
-
-                // Handle <br> tags and newlines first
-                const normalized = resolveTextTemplates(text).replace(/<br\s*\/?>/gi, "\n");
-                const paragraphs = normalized.split(/\n/);
-                const lines: string[] = [];
-
-                const effectiveWidth = maxWidth;
-
-                for (const para of paragraphs) {
-                    if (!para.trim()) {
-                        lines.push("");
-                        continue;
-                    }
-                    const words = para.split(/\s+/);
-                    let currentLine = "";
-
-                    for (const word of words) {
-                        if (!word) continue;
-                        const testLine = currentLine ? `${currentLine} ${word}` : word;
-                        if (measure(testLine) <= effectiveWidth || !currentLine) {
-                            currentLine = testLine;
-                        } else {
-                            lines.push(currentLine);
-                            currentLine = word;
-                        }
-                    }
-                    if (currentLine) {
-                        lines.push(currentLine);
-                    }
-                }
-
-                return lines.length > 0 ? lines : [""];
+                // OSRS's own line breaking (see breakTextLines). A newline character never
+                // occurs in the game's text; ours may carry one, and it reads as <br>.
+                return breakTextLines(resolveTextTemplates(text).replace(/\n/g, "<br>"), maxWidth, {
+                    advance: (ch) => (font ? font.advances[ch] || font.widths[ch] || 0 : 6),
+                    kerning: (prev, ch) => font?.kerning?.[(prev << 8) + ch] || 0,
+                    iconWidth: (id) =>
+                        id >= 0 ? this.chatTextMetrics.measureTextWidthOsrsMarkup(`<img=${id}>`, font) : undefined,
+                });
             },
             // Local player name - accessed dynamically as it arrives via handshake after cs2Vm creation
             get localPlayerName() {
@@ -2800,6 +2780,9 @@ export class OsrsClient {
                 } catch {}
             },
             overheadChatText: (serverId, text) => {
+                const isLocal = (serverId | 0) === (this.controlledPlayerServerId | 0);
+                // No text means nothing is drawn over the player.
+                if (isOverheadChatFiltered(this.cs2Vm?.messageFilter, text, isLocal)) return "";
                 const ecsIndex = this.playerEcs.getIndexForServerId(serverId | 0);
                 const name = ecsIndex === undefined ? "" : (this.playerEcs.getName(ecsIndex) ?? "");
                 return this.clientPlugins.overheadChatText(name, text);
@@ -3613,10 +3596,15 @@ export class OsrsClient {
             this.unsubscribeFriendsChat = subscribeFriendsChat((snapshot) => {
                 this.friendLoginUpdates.update(snapshot.friends);
                 const channel = snapshot.channel;
-                this.cs2Vm.context.friendList = snapshot.friends.map((friend) => ({ ...friend }));
-                this.cs2Vm.context.ignoreList = snapshot.ignores.map((ignored) => ({ ...ignored }));
-                this.cs2Vm.context.clanMembers =
-                    channel?.members.map((member) => ({ ...member })) ?? [];
+                // The lists arrive in server order; keep the order the sort scripts asked for.
+                const ordered = orderSocialSnapshot(
+                    snapshot.friends.map((friend) => ({ ...friend })),
+                    snapshot.ignores.map((ignored) => ({ ...ignored })),
+                    channel ? channel.members.map((member) => ({ ...member })) : null,
+                );
+                this.cs2Vm.context.friendList = ordered.friends;
+                this.cs2Vm.context.ignoreList = ordered.ignores;
+                this.cs2Vm.context.clanMembers = ordered.members;
                 this.cs2Vm.context.clanName = channel?.name ?? "";
                 this.cs2Vm.context.clanOwner = channel?.owner ?? "";
                 this.cs2Vm.context.clanRank = channel?.localRank ?? 0;
@@ -7077,6 +7065,8 @@ export class OsrsClient {
                         gePrice,
                         haPrice,
                         tradeable: obj?.isTradable === true,
+                        cost: obj?.price ?? 0,
+                        stackable: obj?.stackability === ObjStackability.ALWAYS,
                     };
                 } catch {
                     return {

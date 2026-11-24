@@ -46,7 +46,7 @@ test("enum: the requested output type picks the stack, even for a missing enum",
     assert.deepEqual([s.ints.get(), s.strings.pop()], [[], "null"], "missing enum: still a string");
     s.ints.push(105, 105, 999, 1);
     run(Opcodes.ENUM, s.ctx);
-    assert.deepEqual(s.ints.get(), [-1], "an int when an int is asked for");
+    assert.deepEqual(s.ints.get(), [0], "an int when an int is asked for: 0, as OSRS gives for a missing enum");
 });
 
 test("enum_getinputs returns the enum's keys", () => {

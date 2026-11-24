@@ -1,6 +1,7 @@
 /**
  * Client operations: stats, inventory, world info, viewport, camera, settings
  */
+import { clearTextMacros, setTextMacro } from "../../font/textTemplates";
 import { PostProcessedObjTypeLoader } from "../../config/objtype/ObjTypeLoader";
 import {
     ClientState,
@@ -14,6 +15,14 @@ import { isMobileClient, reportedClientType } from "../ClientType";
 import { VARBIT_ROOF_REMOVAL } from "../../../common/vars";
 import { MenuTargetType } from "../../MenuEntry";
 import { chatHistory } from "../ChatHistory";
+import {
+    DRAW_NAMES_CLANMATES,
+    DRAW_NAMES_FRIENDS,
+    DRAW_NAMES_OTHERS,
+    DRAW_NAMES_SELF,
+    clientDisplayState,
+} from "../ClientDisplayState";
+import { LOCAL_WORLD } from "../SocialSort";
 import { getHoverTarget, getInteractionCanvases, minMenuSnapshot, type MinMenuSnapshot } from "../minimenu";
 import { getRootRenderTransform } from "../../../widgets/menu/utils";
 import { Opcodes } from "../Opcodes";
@@ -68,10 +77,15 @@ function normalizeUiZoomPercent(percent: number, minPercent: number): number {
 }
 
 /** Rev 241 translations_set/clear: key -> text. */
-const TRANSLATIONS = new Map<string, string>();
 
 /** ^gameoption_chat_timestamps: the mode of setting 119 "Chat timestamps" (0 off, 1 server time, 2 local time). */
 const GAMEOPTION_CHAT_TIMESTAMPS = 10;
+
+/** The camera's pitch (0-512) as scripts read it: 128 (level) to 383 (top down). */
+function scriptPitchAngle(cameraPitch: number): number {
+    const pitch = Math.max(0, Math.min(512, cameraPitch | 0));
+    return 128 + Math.floor((pitch * 255) / 512);
+}
 
 export function registerClientOps(handlers: HandlerMap): void {
     // === Clock ===
@@ -234,8 +248,17 @@ export function registerClientOps(handlers: HandlerMap): void {
     // COORD returns the local player's current packed coordinate
     // Does NOT pop from stack - returns player position directly
     handlers.set(Opcodes.COORD, (ctx) => {
-        // return the local player's packed world coordinate.
-        // In this client, ctx.getPlayerLocalX/Y already return world tile coords.
+        // The local player's packed world coordinate, or -1 while there is no local player
+        // (before login, between worlds). ctx.getPlayerLocalX/Y already return world tile coords.
+        const osrsClient = (ctx.widgetManager as any)?.osrsClient;
+        const playerEcs = osrsClient?.playerEcs;
+        if (playerEcs?.getIndexForServerId) {
+            const index = playerEcs.getIndexForServerId(osrsClient.controlledPlayerServerId);
+            if (index === undefined || index < 0) {
+                ctx.pushInt(-1);
+                return;
+            }
+        }
         const plane = ctx.getPlayerPlane?.() ?? 0;
         const localX = ctx.getPlayerLocalX?.() ?? 0;
         const localY = ctx.getPlayerLocalY?.() ?? 0;
@@ -270,7 +293,7 @@ export function registerClientOps(handlers: HandlerMap): void {
 
     // === World info ===
     handlers.set(Opcodes.MAP_WORLD, (ctx) => {
-        ctx.pushInt(301);
+        ctx.pushInt(LOCAL_WORLD);
     });
 
     handlers.set(Opcodes.MAP_MEMBERS, (ctx) => {
@@ -484,6 +507,11 @@ export function registerClientOps(handlers: HandlerMap): void {
     });
 
     // === Camera ===
+    // cam_forceangle / cam_getangle_xa: scripts see the pitch as 128 (level) to 383 (top down);
+    // the camera keeps it as 0-512. A script that reads the pitch and writes it straight back
+    // (the compass's "Look North") must leave it where it was, so writing the angle the camera
+    // already reports does not move it, and any other angle becomes a pitch that reads back as
+    // that same angle.
     handlers.set(Opcodes.CAM_FORCEANGLE, (ctx) => {
         ctx.intStackSize -= 2;
         const camAngleX = ctx.intStack[ctx.intStackSize] | 0;
@@ -492,24 +520,17 @@ export function registerClientOps(handlers: HandlerMap): void {
         const camera = osrsClient?.camera;
         if (!camera) return;
         const clampedCamAngleX = Math.max(128, Math.min(383, camAngleX));
-        const pitch = Math.max(
-            0,
-            Math.min(512, Math.floor(((clampedCamAngleX - 128) * 512) / 255)),
-        );
-        camera.snapToPitch(pitch);
+        if (clampedCamAngleX !== scriptPitchAngle(camera.pitch)) {
+            const pitch = Math.max(0, Math.min(512, Math.ceil(((clampedCamAngleX - 128) * 512) / 255)));
+            camera.snapToPitch(pitch);
+        }
         camera.snapToYaw(camAngleY & 2047);
     });
 
     handlers.set(Opcodes.CAM_GETANGLE_XA, (ctx) => {
         const osrsClient = (ctx.widgetManager as any).osrsClient;
         const camera = osrsClient?.camera;
-        if (!camera) {
-            ctx.pushInt(128);
-            return;
-        }
-        const pitch = Math.max(0, Math.min(512, camera.pitch | 0));
-        const camAngleX = 128 + Math.floor((pitch * 255) / 512);
-        ctx.pushInt(camAngleX | 0);
+        ctx.pushInt(camera ? scriptPitchAngle(camera.pitch) : 128);
     });
 
     handlers.set(Opcodes.CAM_GETANGLE_YA, (ctx) => {
@@ -730,8 +751,39 @@ export function registerClientOps(handlers: HandlerMap): void {
         }
     });
 
+    // setshowmousecross: a top-level layout can turn the click cross off (scripts 901 / 907).
     handlers.set(Opcodes.SETSHOWMOUSECROSS, (ctx) => {
-        ctx.intStackSize--; // pop enabled
+        ClientState.showMouseCross = ctx.intStack[--ctx.intStackSize] === 1;
+    });
+
+    // setdrawplayernames_friends / _clanmates / _others / _self (3120-3123): each turns one group
+    // of players' overhead names on or off; resetdrawplayernames (3124) turns them all off.
+    const drawNameBits: [opcode: number, bit: number][] = [
+        [3120, DRAW_NAMES_FRIENDS],
+        [3121, DRAW_NAMES_CLANMATES],
+        [3122, DRAW_NAMES_OTHERS],
+        [3123, DRAW_NAMES_SELF],
+    ];
+    for (const [opcode, bit] of drawNameBits) {
+        handlers.set(opcode, (ctx) => {
+            if (ctx.intStack[--ctx.intStackSize] === 1) clientDisplayState.drawPlayerNames |= bit;
+            else clientDisplayState.drawPlayerNames &= ~bit;
+        });
+    }
+    handlers.set(3124, () => {
+        clientDisplayState.drawPlayerNames = 0;
+    });
+
+    // setfreecamspeed(speed, slowed speed) (3129).
+    handlers.set(3129, (ctx) => {
+        ctx.intStackSize -= 2;
+        clientDisplayState.freeCamSpeed = ctx.intStack[ctx.intStackSize] | 0;
+        clientDisplayState.freeCamSlowSpeed = ctx.intStack[ctx.intStackSize + 1] | 0;
+    });
+
+    // platformtype (6527): 0 on desktop.
+    handlers.set(6527, (ctx) => {
+        ctx.pushInt(clientDisplayState.platformType);
     });
 
     handlers.set(Opcodes.SETSHOWLOADINGMESSAGES, (ctx) => {
@@ -1571,34 +1623,36 @@ export function registerClientOps(handlers: HandlerMap): void {
         ctx.cs2Vm.inputDialogString = "";
     });
 
-    // translations_set(key, string) / translations_clear (rev 241): the client's translation
-    // table. This client shows the English text, so they are kept but unused.
+    // 3228 / 3229 (named translations_set / translations_clear in the rev 242 command list): a
+    // text macro. Text drawn afterwards places the value wherever it says `@key@`.
     handlers.set(Opcodes.TRANSLATIONS_SET, (ctx) => {
         const text = ctx.stringStack[--ctx.stringStackSize];
         const key = ctx.stringStack[--ctx.stringStackSize];
-        TRANSLATIONS.set(String(key), String(text));
+        setTextMacro(String(key), String(text));
+        ctx.widgetManager?.invalidateAll?.();
     });
-    handlers.set(Opcodes.TRANSLATIONS_CLEAR, () => {
-        TRANSLATIONS.clear();
+    handlers.set(Opcodes.TRANSLATIONS_CLEAR, (ctx) => {
+        clearTextMacros();
+        ctx.widgetManager?.invalidateAll?.();
     });
 
-    // client_version()(int, int): the revision and its minor build (rev 241).
+    // client_version()(int, int): the revision this client runs, which is the revision of the
+    // cache it loaded, and its minor build.
     handlers.set(Opcodes.CLIENT_VERSION, (ctx) => {
-        ctx.pushInt(ctx.clientRevision | 0);
-        ctx.pushInt(0);
+        const osrsClient = (ctx.widgetManager as any)?.osrsClient;
+        const cacheRevision = osrsClient?.loadedCache?.info?.revision;
+        ctx.pushInt((typeof cacheRevision === "number" && cacheRevision > 0 ? cacheRevision : ctx.clientRevision) | 0);
+        ctx.pushInt(1);
     });
 
+    // resume_countdialog: the text is a count only when it is all digits with at most one
+    // leading + or -, nothing else (no spaces), and fits an int; anything else answers 0.
     handlers.set(Opcodes.RESUME_COUNTDIALOG, (ctx) => {
-        const inputString = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        const trimmed = inputString.trim();
+        const inputString = String(ctx.stringStack[--ctx.stringStackSize] ?? "");
         let value = 0;
-
-        // Only parse if string is a valid number
-        if (/^-?\d+$/.test(trimmed)) {
-            value = parseInt(trimmed, 10);
-            if (!Number.isFinite(value)) value = 0;
-            // Clamp to signed 32-bit int range
-            value = Math.max(-2147483648, Math.min(2147483647, value));
+        if (/^[+-]?[0-9]+$/.test(inputString)) {
+            const parsed = BigInt(inputString);
+            if (parsed >= -2147483648n && parsed <= 2147483647n) value = Number(parsed);
         }
 
         // Send to server via callback

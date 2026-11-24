@@ -1,4 +1,4 @@
-import { ClickMode } from "../../InputManager";
+import { ClickMode, wheelNotches } from "../../InputManager";
 import type { WidgetInputControllerDeps, WidgetInputFrame, WidgetInputState } from "./widgetInputTypes";
 import type { WidgetInteractionController } from "../WidgetInteractionController";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
@@ -16,7 +16,8 @@ export function processWidgetIf1ScrollbarInput(
         state.if1ScrollbarDragging = false;
 
         const isLeftHeld = input.clickMode2 === ClickMode.LEFT;
-        const if1WheelDelta = input.wheelDeltaY;
+        // OSRS moves an IF1 list 45 pixels per wheel notch.
+        const if1WheelDelta = wheelNotches(input.wheelDeltaY);
         if (isLeftHeld || if1WheelDelta !== 0) {
             const SCROLLBAR_WIDTH = 16;
             const ARROW_HEIGHT = 16;

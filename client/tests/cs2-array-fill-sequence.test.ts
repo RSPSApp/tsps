@@ -15,6 +15,6 @@ assert.deepEqual([0, 1, 2, 3].map((i) => slots.getInt(i)), [3, 0, 1, 2], "slots 
 
 const part = new Cs2ArrayObject("int", -1, 5, 5);
 part.fillSequence(10, 1, 3);
-assert.deepEqual([0, 1, 2, 3, 4].map((i) => part.getInt(i)), [-1, 10, 11, -1, -1], "a range fills only its slots");
+assert.deepEqual([0, 1, 2, 3, 4].map((i) => part.getInt(i)), [-1, 10, 11, 12, -1], "a start and a count fill only those slots");
 
 console.log("cs2 array fill sequence check passed");

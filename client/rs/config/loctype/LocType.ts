@@ -1,3 +1,4 @@
+import { EntityOps } from "../EntityOps";
 import { toSigned16bit } from "../../../common/utils/MathUtil";
 import { CacheInfo } from "../../cache/CacheInfo";
 import { ByteBuffer } from "../../io/ByteBuffer";
@@ -50,6 +51,8 @@ export class LocType extends Type {
     contrast: number;
 
     actions: string[];
+    /** Sub-options and conditional option names (EntityOps). */
+    entityOps: EntityOps;
 
     mapFunctionId: number;
     mapSceneId: number;
@@ -122,6 +125,7 @@ export class LocType extends Type {
         this.ambient = 0;
         this.contrast = 0;
         this.actions = new Array(5);
+        this.entityOps = new EntityOps();
         this.mapFunctionId = -1;
         this.mapSceneId = -1;
         this.flipMapSceneSprite = false;
@@ -500,22 +504,22 @@ export class LocType extends Type {
         } else if (opcode === 100) {
             const index = buffer.readUnsignedByte();
             const subId = buffer.readUnsignedByte();
-            this.readString(buffer);
+            this.entityOps.addSubOp(index, subId, this.readString(buffer));
         } else if (opcode === 101) {
             const index = buffer.readUnsignedByte();
-            const varp = buffer.readUnsignedShort();
-            const varb = buffer.readUnsignedShort();
+            const varpId = buffer.readUnsignedShort();
+            const varbitId = buffer.readUnsignedShort();
             const min = buffer.readInt();
             const max = buffer.readInt();
-            this.readString(buffer);
+            this.entityOps.addConditionalOp(index, { varpId, varbitId, min, max, name: this.readString(buffer) });
         } else if (opcode === 102) {
             const index = buffer.readUnsignedByte();
             const subId = buffer.readUnsignedShort();
-            const varp = buffer.readUnsignedShort();
-            const varb = buffer.readUnsignedShort();
+            const varpId = buffer.readUnsignedShort();
+            const varbitId = buffer.readUnsignedShort();
             const min = buffer.readInt();
             const max = buffer.readInt();
-            this.readString(buffer);
+            this.entityOps.addConditionalSubOp(index, subId, { varpId, varbitId, min, max, name: this.readString(buffer) });
         } else if (opcode === 103) {
             const occludeType = 0;
         } else if (opcode === 104) {

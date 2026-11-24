@@ -37,6 +37,8 @@ export class ClientState {
     // ========================================
 
     /** Mouse cross X screen position */
+    /** setshowmousecross: whether a click draws its cross at all. */
+    static showMouseCross: boolean = true;
     static mouseCrossX: number = 0;
 
     /** Mouse cross Y screen position */
@@ -366,6 +368,7 @@ export class ClientState {
      * Reset all state (for disconnection/login)
      */
     static reset(): void {
+        this.showMouseCross = true;
         this.playerOptions.clear();
         this.mouseCrossX = 0;
         this.mouseCrossY = 0;

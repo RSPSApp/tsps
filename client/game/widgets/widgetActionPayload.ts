@@ -57,9 +57,10 @@ export function resolveDynamicWidgetParentId(
     const widgetUid = typeof widget?.uid === "number" ? widget.uid | 0 : undefined;
     const directParentUid = validParentId(widget?.parentUid);
     const directId = validParentId(widget?.id);
+    // The component id comes first: for a child inside a script-created layer it is the static
+    // component, where parentUid is the layer's runtime id.
     const direct =
-        directParentUid ??
-        (directId !== undefined && directId !== widgetUid ? directId : undefined);
+        (directId !== undefined && directId !== widgetUid ? directId : undefined) ?? directParentUid;
     if (direct !== undefined) return direct;
 
     const uid = validParentId(widget?.uid);

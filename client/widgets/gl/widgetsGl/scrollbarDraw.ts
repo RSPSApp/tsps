@@ -3,6 +3,7 @@ import { TextureCache } from "../texture-cache";
 import type { GLRenderOpts } from "./glRenderOpts";
 import { SCROLLBAR_BOTTOM_COLOR, SCROLLBAR_THUMB_COLOR, SCROLLBAR_TOP_COLOR, SCROLLBAR_TRACK_COLOR } from "./constants";
 import { scaleLogicalPixels } from "./scaleLogicalPixels";
+import { scrollbarThumb } from "./widgetDrawRules";
 export function drawScrollBar(
     glr: GLRenderer,
     x: number,
@@ -64,21 +65,13 @@ export function drawScrollBar(
         glr.drawRect(x, y + ARROW_HEIGHT, SCROLLBAR_WIDTH, trackHeight, [tr, tg, tb, 1]);
     }
 
-    // Calculate thumb size and position
-    // Reference: UserComparator9.drawScrollBar lines 569-574
-    // var5 = height * (height - 32) / scrollHeight (thumb height)
-    // var6 = (height - 32 - var5) * scrollY / (scrollHeight - height) (thumb position)
-    const availableTrack = trackHeight;
-    let thumbHeight = Math.floor((height * availableTrack) / scrollHeight);
-    const minThumbHeight = scaleLogicalPixels(scaleY, 8);
-    if (thumbHeight < minThumbHeight) thumbHeight = minThumbHeight;
+    // Thumb size and position: the visible share of the track, at least 8 pixels tall.
+    const thumb = scrollbarThumb(height, scrollY, scrollHeight, ARROW_HEIGHT, scaleLogicalPixels(scaleY, 8));
+    const thumbHeight = thumb.height;
+    const thumbY = thumb.offset;
 
-    const maxScrollY = scrollHeight - height;
-    const thumbY =
-        maxScrollY > 0 ? Math.floor(((availableTrack - thumbHeight) * scrollY) / maxScrollY) : 0;
-
-    // Draw thumb
-    if (thumbHeight > 0 && thumbHeight < trackHeight) {
+    // Draw thumb. OSRS draws it whatever its size, also when it fills the track or more.
+    if (thumbHeight > 0) {
         const tr = ((SCROLLBAR_THUMB_COLOR >>> 16) & 0xff) / 255;
         const tg = ((SCROLLBAR_THUMB_COLOR >>> 8) & 0xff) / 255;
         const tb = (SCROLLBAR_THUMB_COLOR & 0xff) / 255;

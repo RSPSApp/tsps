@@ -104,7 +104,7 @@ function pushTuple(
 ): boolean {
     const tupleSize = types.length;
     const startIdx = subIndex * tupleSize;
-    if (tupleSize === 0 || startIdx + tupleSize > values.length || element > tupleSize) {
+    if (tupleSize === 0 || subIndex < 0 || startIdx + tupleSize > values.length || element > tupleSize) {
         return false;
     }
     if (element > 0) {
@@ -119,8 +119,9 @@ function pushTypeDefaults(ctx: any, types: number[], nullReferences: boolean): v
     for (const type of types) {
         if (isStringType(type)) {
             ctx.pushString("");
-        } else if (nullReferences && isReferenceType(type)) {
-            ctx.pushInt(-1);
+        } else if (nullReferences) {
+            // OSRS: an absent value is null (-1) for every type but int (0) and boolean (1), which give 0.
+            ctx.pushInt(type === 0 || type === 1 ? 0 : -1);
         } else {
             ctx.pushInt(0);
         }
@@ -207,37 +208,48 @@ export function registerDbOps(handlers: HandlerMap): void {
         const columnId = (tableColumnPacked >> 4) & 0x7f;
         const element = tupleElementOf(tableColumnPacked);
 
-        // A server-sent row stands in for the cache's (a league's tasks, say); a column it lacks takes the table's defaults.
-        const override = getDbRowOverride(rowId);
-        if (override) {
-            const col = overrideColumn(ctx, override.tableId, columnId, override);
-            if (col && pushTuple(ctx, col.types, col.values, subIndex, element)) return;
-        } else if (ctx.dbRepository) {
-            const rows = ctx.dbRepository.getRows(tableId);
-            const row = rows.find((r) => r.id === rowId);
-            const col = row?.getColumn(columnId);
-            if (col && col.values && col.types.length > 0) {
-                if (pushTuple(ctx, col.types, col.values, subIndex, element)) return;
-            }
-        }
+        const colDef = ctx.dbRepository?.getTables().get(tableId)?.getColumn(columnId);
+        const colTypes: number[] = colDef && colDef.types.length > 0 ? colDef.types : [];
 
-        // No such tuple in the row: the table's default values, else generic defaults.
-        let colTypes: number[] = [];
-        let defaultValues: any[] | undefined;
-        if (ctx.dbRepository) {
-            const tableDef = ctx.dbRepository.getTables().get(tableId);
-            const colDef = tableDef?.getColumn(columnId);
-            if (colDef && colDef.types.length > 0) {
-                colTypes = colDef.types;
-                defaultValues = colDef.defaultValues;
-            }
-        }
-        if (defaultValues && defaultValues.length > 0) {
-            if (pushTuple(ctx, colTypes, defaultValues, subIndex, element)) return;
-            pushTypeDefaults(ctx, selectTypes(colTypes, element), false);
+        // The null row: the null value of every type in the column's tuple, whichever element
+        // the field names, and never the table's default values.
+        if (rowId === -1) {
+            pushTypeDefaults(ctx, colTypes, true);
+            if (colTypes.length === 0) ctx.pushInt(0);
             return;
         }
-        // Reference types (DBROW, OBJ, NPC, etc.) default to -1 (null), other integers to 0.
+
+        // A server-sent row stands in for the cache's (a league's tasks, say); a column the row
+        // lacks takes the table's default values.
+        let col: { values: any[]; types: number[] } | null = null;
+        const override = getDbRowOverride(rowId);
+        if (override) {
+            col = overrideColumn(ctx, override.tableId, columnId, override);
+        } else if (ctx.dbRepository) {
+            const rowCol = ctx.dbRepository.getRows(tableId).find((r) => r.id === rowId)?.getColumn(columnId);
+            if (rowCol && rowCol.values && rowCol.types.length > 0) {
+                col = { values: rowCol.values, types: rowCol.types };
+            }
+        }
+        if (!col && colDef?.defaultValues && colDef.defaultValues.length > 0 && colTypes.length > 0) {
+            col = { values: colDef.defaultValues, types: colTypes };
+        }
+
+        // An element past the end of the tuple is a script error.
+        const types = col ? col.types : colTypes;
+        if (types.length > 0 && element > types.length) {
+            throw new Error("RuntimeException");
+        }
+
+        if (col) {
+            // So is a tuple index the column does not have: db_getfieldcount says how many there are.
+            if (!pushTuple(ctx, col.types, col.values, subIndex, element)) {
+                throw new Error("RuntimeException");
+            }
+            return;
+        }
+
+        // No values at all: reference types (DBROW, OBJ, NPC, etc.) read -1 (null), ints and booleans 0.
         pushTypeDefaults(ctx, selectTypes(colTypes, element), true);
         // If still nothing pushed (no type info), push one int as fallback
         if (colTypes.length === 0) {
@@ -267,6 +279,13 @@ export function registerDbOps(handlers: HandlerMap): void {
                     // Return number of tuples, not total values
                     // Each tuple has col.types.length values
                     count = Math.floor(col.values.length / col.types.length);
+                } else {
+                    // A row without the column has the table's default values, and those count.
+                    const colDef = ctx.dbRepository.getTables().get(tableId)?.getColumn(columnId);
+                    const defaults = colDef?.defaultValues;
+                    if (colDef && defaults && defaults.length > 0 && colDef.types.length > 0) {
+                        count = Math.floor(defaults.length / colDef.types.length);
+                    }
                 }
             }
         }

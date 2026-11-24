@@ -53,6 +53,16 @@ export function formatChatTimestamp(timestampMs: number, mode: number): string {
     return `[${two(hours)}:${two(minutes)}:${two(seconds)}]`;
 }
 
+/**
+ * Whether another player's overhead chat is hidden by the chat message filter
+ * (chat_setmessagefilter): with a filter set, only messages containing it are shown overhead.
+ * The filter is stored lower-case and trimmed; the local player's own text is never hidden.
+ */
+export function isOverheadChatFiltered(filter: string | undefined, text: string, isLocalPlayer: boolean): boolean {
+    if (isLocalPlayer || !filter) return false;
+    return !text.toLowerCase().includes(filter);
+}
+
 // Max messages per type to avoid unbounded growth
 const MAX_MESSAGES_PER_TYPE = 100;
 

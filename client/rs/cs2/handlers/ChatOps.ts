@@ -28,15 +28,59 @@
  * when chat_gettimestamps != 0 (setting 119 "Chat timestamps"); the 8th is its epoch seconds.
  */
 import { LISTENED_CLAN_TYPE, OWN_CLAN_TYPE } from "../../../common/social/Clans";
+import { VARBIT_ROOF_REMOVAL } from "../../../common/vars";
 import { sendChat, sendChatFilter, sendClanChat, sendPrivateMessage, sendReportAbuse } from "../../../network/ServerConnection";
 import { chatHistory, formatChatTimestamp } from "../ChatHistory";
 import { Opcodes } from "../Opcodes";
-import type { HandlerMap } from "./HandlerTypes";
+import { listHasPlayer } from "../SocialSort";
+import type { HandlerContext, HandlerMap } from "./HandlerTypes";
 
 /** What chat_send passes to chat_sendclan for a clan the player belongs to. */
 const CLAN_CHAT_TYPE = 3;
 /** chat_send's guest line (`///`, chatbox mode 3). */
 const GUEST_CHAT_TYPE = 4;
+
+/**
+ * The 6th value of the chat history instructions: 1 when the sender is a friend, 2 when ignored,
+ * else 0. It follows the lists as they are now, so adding or removing a friend re-colours the
+ * lines already in the chatbox.
+ */
+function senderStatus(ctx: HandlerContext, sender: string): number {
+    if (!sender) return 0;
+    if (listHasPlayer(ctx.friendList, sender)) return 1;
+    return listHasPlayer(ctx.ignoreList, sender) ? 2 : 0;
+}
+
+/** The chat type of a line the client itself prints (console output). */
+const CONSOLE_CHAT_TYPE = 99;
+
+/**
+ * The commands the client acts on itself before the line goes to the server: `::toggleroof`,
+ * `::renderself` and `::mouseovertext` each flip a client setting. Names match whatever the case.
+ * `::displayfps` is not handled: this client's FPS readout has no on/off setting.
+ */
+function runClientCommand(ctx: HandlerContext, command: string, osrsClient: any): void {
+    if (!osrsClient) return;
+    const name = command.toLowerCase();
+    if (name === "toggleroof") {
+        const hidden = osrsClient.roofsHidden !== true;
+        osrsClient.setRoofsHidden?.(hidden);
+        // The settings interface reads the roof setting from its varbit.
+        try {
+            ctx.varManager?.setVarbit?.(VARBIT_ROOF_REMOVAL, hidden ? 1 : 0);
+        } catch {
+            /* varManager optional on some hosts */
+        }
+        chatHistory.addMessage(
+            CONSOLE_CHAT_TYPE,
+            hidden ? "Roofs are now all hidden" : "Roofs will only be removed selectively",
+        );
+    } else if (name === "renderself") {
+        osrsClient.renderSelf = osrsClient.renderSelf === false;
+    } else if (name === "mouseovertext") {
+        osrsClient.showMouseOverText = osrsClient.showMouseOverText === false;
+    }
+}
 
 export function registerChatOps(handlers: HandlerMap): void {
     // CHAT_GETFILTER_PUBLIC (5000): Returns public chat mode
@@ -88,7 +132,7 @@ export function registerChatOps(handlers: HandlerMap): void {
             ctx.pushString(msg.sender);
             ctx.pushString(msg.prefix);
             ctx.pushString(msg.text);
-            ctx.pushInt(msg.friendStatus);
+            ctx.pushInt(senderStatus(ctx, msg.sender));
             ctx.pushString(formatChatTimestamp(msg.timestamp, ctx.chatTimestampMode)); // affixed by proc 4742
             ctx.pushInt(Math.floor(msg.timestamp / 1000)); // arrival, seconds since the epoch
         } else {
@@ -117,7 +161,7 @@ export function registerChatOps(handlers: HandlerMap): void {
             ctx.pushString(msg.from);
             ctx.pushString(msg.prefix);
             ctx.pushString(msg.text);
-            ctx.pushInt(msg.isFromFriend ? 1 : msg.isFromIgnored ? 2 : 0);
+            ctx.pushInt(senderStatus(ctx, msg.from));
             ctx.pushString(formatChatTimestamp(msg.timestamp, ctx.chatTimestampMode)); // affixed by proc 4742
             ctx.pushInt(Math.floor(msg.timestamp / 1000)); // arrival, seconds since the epoch
         } else {
@@ -169,18 +213,23 @@ export function registerChatOps(handlers: HandlerMap): void {
         sendPrivateMessage(recipient, message);
     });
 
-    // CHAT_SENDCLAN (5010): Used by the modern Clan channels, which are separate
-    // from the legacy Chat-channel system implemented here. chat_send passes chatType 3
-    // with clan type 0 for the player's own clan (rsprox 322: MessagePublic type=3, clanType=0).
+    // CHAT_SENDCLAN (5010): a line for one of the modern Clan channels, which are separate from
+    // the legacy Chat-channel system. chat_send passes chat type 3 with the clan's type: 0 for
+    // the player's own clan (rsprox 322: MessagePublic type=3, clanType=0), another number for
+    // any further clan they belong to (a Group Ironman group is clan type 1). Chat type 4 is the
+    // clan they are a guest of. Every clan type is sent on; the server decides who hears it.
     // Pops: message (string), chatType (int), clanType (int)
     handlers.set(Opcodes.CHAT_SENDCLAN, (ctx) => {
         const message = ctx.stringStack[--ctx.stringStackSize];
         const clanType = ctx.intStack[--ctx.intStackSize];
         const chatType = ctx.intStack[--ctx.intStackSize];
-        if (clanType === OWN_CLAN_TYPE && chatType === CLAN_CHAT_TYPE && message?.trim()) {
-            sendClanChat(message, OWN_CLAN_TYPE);
+        if (!message?.trim()) return;
+        // Clan type 1 (a Group Ironman group) stays unsent: the server's group chat adds its own
+        // "|" mark to a line that chat_send has already marked.
+        if (chatType === CLAN_CHAT_TYPE && clanType >= 0 && clanType !== 1) {
+            sendClanChat(message, clanType);
             ctx.varManager.setVarcString(335, "");
-        } else if (clanType === OWN_CLAN_TYPE && chatType === GUEST_CHAT_TYPE && message?.trim()) {
+        } else if (chatType === GUEST_CHAT_TYPE && clanType === OWN_CLAN_TYPE) {
             sendClanChat(message, LISTENED_CLAN_TYPE);
             ctx.varManager.setVarcString(335, "");
         }
@@ -242,6 +291,7 @@ export function registerChatOps(handlers: HandlerMap): void {
         const trimmed = typeof command === "string" ? command.trim() : "";
         if (!trimmed) return;
         const osrsClient = (globalThis as any)?.osrsClient;
+        runClientCommand(ctx, trimmed, (ctx.widgetManager as any)?.osrsClient ?? osrsClient);
         // RuneLite-shaped event for plugins; then the legacy engine hook, then the server.
         osrsClient?.runeLite?.postCommandExecuted?.(trimmed);
         // Client plugins may claim a command (e.g. ::317) and consume it locally.
@@ -299,7 +349,7 @@ export function registerChatOps(handlers: HandlerMap): void {
             ctx.pushString(msg.sender);
             ctx.pushString(msg.prefix);
             ctx.pushString(msg.text);
-            ctx.pushInt(msg.friendStatus);
+            ctx.pushInt(senderStatus(ctx, msg.sender));
             ctx.pushString(formatChatTimestamp(msg.timestamp, ctx.chatTimestampMode)); // affixed by proc 4742
             ctx.pushInt(Math.floor(msg.timestamp / 1000)); // arrival, seconds since the epoch
         } else {
@@ -327,7 +377,7 @@ export function registerChatOps(handlers: HandlerMap): void {
             ctx.pushString(msg.from);
             ctx.pushString(msg.prefix);
             ctx.pushString(msg.text);
-            ctx.pushInt(msg.isFromFriend ? 1 : msg.isFromIgnored ? 2 : 0);
+            ctx.pushInt(senderStatus(ctx, msg.from));
             ctx.pushString(formatChatTimestamp(msg.timestamp, ctx.chatTimestampMode)); // affixed by proc 4742
             ctx.pushInt(Math.floor(msg.timestamp / 1000)); // arrival, seconds since the epoch
         } else {

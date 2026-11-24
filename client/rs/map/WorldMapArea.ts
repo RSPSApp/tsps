@@ -1003,7 +1003,7 @@ export class WorldMapState {
         }
         let nearest: WorldMapIconEntry | undefined;
         let nearestDistance = Number.MAX_SAFE_INTEGER;
-        for (const icon of this.getVisibleIcons()) {
+        for (const icon of this.getAreaIcons()) {
             if ((icon.element | 0) !== (elementId | 0)) continue;
             const coord = unpackWorldMapCoord(this.getIconDisplayCoord(icon));
             const dx = coord.x - source.x;
@@ -1017,8 +1017,13 @@ export class WorldMapState {
         return nearest ? this.getIconDisplayCoord(nearest) : -1;
     }
 
+    /**
+     * Starts a walk over the current area's icons. The walk, like the nearest-icon lookup, covers
+     * every icon the area has: turning an element or a category off only stops it being drawn,
+     * so the key and the "find" scripts still see it.
+     */
     iconStart(): { element: number; coord: number } | undefined {
-        this.iconIterator = this.getVisibleIcons();
+        this.iconIterator = this.getAreaIcons();
         this.iconIteratorIndex = 0;
         return this.iconNext();
     }
@@ -1026,7 +1031,7 @@ export class WorldMapState {
     iconNext(): { element: number; coord: number } | undefined {
         while (this.iconIteratorIndex < this.iconIterator.length) {
             const icon = this.iconIterator[this.iconIteratorIndex++];
-            if (this.isIconVisible(icon)) {
+            if ((icon.element | 0) !== -1) {
                 return { element: icon.element, coord: this.getIconDisplayCoord(icon) };
             }
         }
@@ -1107,7 +1112,8 @@ export class WorldMapState {
         this.currentEvent = event;
     }
 
-    private getVisibleIcons(): WorldMapIconEntry[] {
+    /** Every icon of the current area, shown or not. */
+    private getAreaIcons(): WorldMapIconEntry[] {
         const icons: WorldMapIconEntry[] = [];
         const area = this.currentArea;
         const iconGroups = [
@@ -1118,7 +1124,6 @@ export class WorldMapState {
             if (!iconGroup) continue;
             for (const tileIcons of iconGroup.values()) {
                 for (const icon of tileIcons) {
-                    if (!this.isIconVisible(icon)) continue;
                     if (area) {
                         const coord = unpackWorldMapCoord(icon.coord);
                         if (icon.displayCoord !== undefined) {

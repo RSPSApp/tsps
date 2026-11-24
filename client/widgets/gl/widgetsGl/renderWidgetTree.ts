@@ -10,8 +10,9 @@ import {
     drawRichTextGL as UI_drawRichTextGL,
     drawTextGL as UI_drawTextGL,
     drawWrappedTextGL as UI_drawWrappedTextGL,
+    widgetTextAlpha,
 } from "../../../widgets/components/TextRenderer";
-import { runCs1 } from "../../../widgets/cs1/runCs1";
+import { evalCs1Instruction, runCs1 } from "../../../widgets/cs1/runCs1";
 import {
     collectWidgetsAtPointAcrossRoots as UI_collectWidgetsAtPointAcrossRoots,
     deriveMenuEntriesForWidget as UI_deriveMenuEntriesForWidget,
@@ -55,8 +56,21 @@ import { renderArcWidget } from "./arcWidget";
 import { drawScrollBar } from "./scrollbarDraw";
 import { drawWorldMapLabelGL, getWorldMapFlashTexture } from "./worldMapLabels";
 import { scaleLogicalPixels } from "./scaleLogicalPixels";
+import { rectangleAlphas } from "./rectFill";
+import { usesLocalPlayerPose } from "./playerPose";
+import { ObjStackability } from "../../../rs/config/objtype/ObjStackability";
+import {
+    formatIf1Text,
+    heldWidgetTransparency,
+    hiddenWidgetSkipped,
+    itemWidgetText,
+    lineWidgetEndpoints,
+    rotatedSpriteRect,
+    spriteMaskRows,
+} from "./widgetDrawRules";
+import { IF1_TOOLTIP_BORDER, IF1_TOOLTIP_FILL, If1TooltipState, layoutIf1Tooltip } from "./if1Tooltip";
 import { ps } from "./profilingState";
-import { FONT_VERDANA_11, FONT_VERDANA_13, FONT_VERDANA_15 } from "../../../ui/fonts";
+import { FONT_PLAIN_12, FONT_VERDANA_11, FONT_VERDANA_13, FONT_VERDANA_15 } from "../../../ui/fonts";
 import type { WorldMapLabelDraw, WorldMapLabelMetrics } from "./worldMapLabels";
 import { hasSpriteOverride } from "../spriteOverrides";
 import { layoutWorldMapPoint, type PluginWorldMapPointEntry, type RenderedWorldMapPoint, renderedWorldMapPointAt } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
@@ -718,6 +732,19 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
 
     const mousedOverIf1WidgetUid = resolveIf1MousedOverWidgetUid();
 
+    // Legacy tooltip components (type 8) show their box once the mouse has rested on one for a
+    // second. The timer runs in client cycles and lives on the canvas between draw passes.
+    const if1Tooltip: If1TooltipState = (canvasAny.__if1Tooltip ??= new If1TooltipState());
+    const if1TooltipCycle = ((osrsClient?.transmitCycles?.cycleCntr ?? 0) | 0) as number;
+    if1Tooltip.advance(if1TooltipCycle);
+    // No tooltip is picked up while a component is held or the menu is open.
+    let if1TooltipPointer: { x: number; y: number } | null = null;
+    if (inputManager && !osrsClient?.menuOpen && !osrsClient?.widgetInteraction?.clickedWidget) {
+        try {
+            if1TooltipPointer = input.getPointerPos(inputManager);
+        } catch {}
+    }
+
     // Generic steelborder renderer (title/close/divider options)
     // Prefer shared Frame9Slice helpers via plugins/components; no local wrappers here
     function drawWrappedTextGL(
@@ -730,8 +757,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         color: number,
         lineHeight = 12,
         shadow = true,
-        yAlign: 0 | 1 | 2 = 1,
-        xAlign: 0 | 1 | 2 = 1,
+        yAlign: 0 | 1 | 2 | 3 = 1,
+        xAlign: 0 | 1 | 2 | 3 = 1,
+        alpha = 1,
     ) {
         const inlineImageResolver = (imgId: number) => {
             const icon = tc.getSpriteCanvas("mod_icons", imgId | 0);
@@ -755,6 +783,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             inlineImageResolver,
             rootScaleX,
             rootScaleY,
+            alpha,
         );
     }
 
@@ -1028,8 +1057,12 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             return;
         }
 
-        // Parent visible tracking for rendering context
-        const selfVisible = opts.visible.get(w.uid) !== false && !w.hidden;
+        // Parent visible tracking for rendering context.
+        // A hidden legacy layer is still drawn while it is the moused-over layer: legacy
+        // interfaces reveal a hover layer through another component's mouse-over redirect.
+        const selfVisible =
+            (opts.visible.get(w.uid) !== false && !w.hidden) ||
+            !hiddenWidgetSkipped(isIf3, (w.type ?? 0) | 0, mousedOverIf1WidgetUid === ((w.uid as number) | 0));
         const eff = parentVisible && selfVisible;
 
         if (!eff) {
@@ -1104,9 +1137,12 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         // Reference: UserComparator5.drawInterface lines 142-170
         // Type 9 (Line) widgets have special clip calculation for negative dimensions
         let widgetClip: ClipRect;
+        // A line's width and height are signed offsets to its far end: zero is a straight line
+        // and a negative value runs backwards, so they are not clamped like a box's size.
+        const lineEndX = Math.round((logicalX + (w.width | 0)) * rootScaleX + rootOffsetX);
+        const lineEndY = Math.round((logicalY + (w.height | 0)) * rootScaleY + rootOffsetY);
         if (w.type === 9) {
-            // Type 9 lines can have negative dimensions
-            widgetClip = calculateType9Clip(clip, x, y, width, height);
+            widgetClip = calculateType9Clip(clip, x, y, lineEndX - x, lineEndY - y);
         } else {
             widgetClip = calculateStandardClip(clip, x, y, width, height);
         }
@@ -1557,6 +1593,26 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 (r.colour === undefined || r.colour === ((w as any).color ?? 0)),
         );
         if (hiddenRule) return;
+        if (
+            contentType === 1339 &&
+            !(opts.widgetManager?.isMinimapCompassVisible?.() ?? true)
+        ) {
+            // While the minimap state hides the compass, its place is not left empty: the rows
+            // of the component's sprite mask are filled with black.
+            const maskSpriteId = w.spriteId ?? -1;
+            const mask = maskSpriteId >= 0 ? tc.getWidgetSpriteMaskById(maskSpriteId) : undefined;
+            if (mask) {
+                const maskLeft = x + Math.round((width - Math.round(mask.width * rootScaleX)) / 2);
+                const maskTop = y + Math.round((height - Math.round(mask.height * rootScaleY)) / 2);
+                for (const row of spriteMaskRows(mask.xStarts, mask.xWidths)) {
+                    const rx0 = maskLeft + Math.round(row.x * rootScaleX);
+                    const ry0 = maskTop + Math.round(row.y * rootScaleY);
+                    const rx1 = maskLeft + Math.round((row.x + row.w) * rootScaleX);
+                    const ry1 = maskTop + Math.round((row.y + row.h) * rootScaleY);
+                    if (rx1 > rx0 && ry1 > ry0) glr.drawRect(rx0, ry0, rx1 - rx0, ry1 - ry0, [0, 0, 0, 1]);
+                }
+            }
+        }
         if (
             contentType === 1339 &&
             (opts.widgetManager?.isMinimapCompassVisible?.() ?? true)
@@ -2871,11 +2927,16 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
 
             // OSRS transparency: 0 = fully opaque, 255 = fully transparent
             // Scripts set w.transparency via cc_settrans; cache sets w.opacity (same semantics)
-            const trans = w.transparency ?? w.opacity ?? 0;
+            // The rectangle being held for a drag is drawn at transparency 128, like a held
+            // sprite, unless it renders in place while dragged. Gradients keep their own.
+            const ownTrans = w.transparency ?? w.opacity ?? 0;
+            const trans = heldWidgetTransparency(ownTrans, isDragActive || isClickedWidget, !!w.isScrollBar);
+            const rectFillMode = (w.fillMode ?? 0) | 0;
+            const isGradientFill = !!w.filled && (rectFillMode === 1 || rectFillMode === 2);
 
-            // Skip rendering fully transparent rectangles
-            if (trans >= 255) {
-                // Widget is fully transparent, skip drawing
+            const rectAlphas = rectangleAlphas(!!w.filled, rectFillMode, isGradientFill ? ownTrans : trans, w.transparencyBot);
+            if (!rectAlphas.draw) {
+                // A fully transparent solid fill or outline draws nothing; gradients decide for themselves.
             } else if (w.filled) {
                 // OSRS fillMode: 0=SOLID, 1=GRADIENT_VERTICAL, 2=GRADIENT_ALPHA
                 const fillMode = w.fillMode ?? 0;
@@ -2890,7 +2951,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         const rB = ((colorBot >>> 16) & 0xff) / 255;
                         const gB = ((colorBot >>> 8) & 0xff) / 255;
                         const bB = (colorBot & 0xff) / 255;
-                        const a = (255 - trans) / 255;
+                        const a = rectAlphas.top / 255;
                         glr.drawRectGradientVertical(
                             x,
                             y,
@@ -2906,8 +2967,8 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         // Reference: Rasterizer2D_fillRectangleGradientAlpha
                         const colorTop = w.color ?? w.textColor ?? 0xffffff;
                         const colorBot = w.color2 ?? colorTop;
-                        const alphaTop = 255 - (trans & 255);
-                        const alphaBot = 255 - ((w.transparencyBot ?? trans) & 255);
+                        const alphaTop = rectAlphas.top;
+                        const alphaBot = rectAlphas.bottom;
                         glr.drawRectGradientAlpha(
                             x,
                             y,
@@ -2995,10 +3056,11 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             // Scripts set w.transparency via cc_settrans; cache sets w.opacity (same semantics)
             // Clicked/dragged widget is semi-transparent (var14 = 128), except scrollbars.
             // Reference: UserComparator5.drawInterface: if (!var10.isScrollBar) { var14 = 128; }
-            let trans = w.transparency ?? w.opacity ?? 0;
-            if ((isDragActive || isClickedWidget) && !w.isScrollBar) {
-                trans = 128;
-            }
+            const trans = heldWidgetTransparency(
+                w.transparency ?? w.opacity ?? 0,
+                isDragActive || isClickedWidget,
+                !!w.isScrollBar,
+            );
             const alpha = (255 - trans) / 255;
             const itemId = typeof w.itemId === "number" ? (w.itemId as number) | 0 : -1;
             const renderItemSprite = isIf3 && itemId >= 0;
@@ -3040,7 +3102,14 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                                 );
                                 const drawW = Math.max(1, tx1 - tx);
                                 const drawH = Math.max(1, ty1 - ty);
-                                // Draw full sprite - scissor will clip edges
+                                // Draw full sprite - scissor will clip edges.
+                                // A rotated tiled sprite turns every tile about its own centre,
+                                // at full strength (rotation ignores the transparency).
+                                const tileAngle = isIf3 ? (w.spriteAngle ?? 0) : 0;
+                                if (tileAngle !== 0) {
+                                    glr.drawTextureRotated(tex, tx, ty, drawW, drawH, tileAngle, 65536, 0, [0, 0, 0], 1);
+                                    continue;
+                                }
                                 glr.drawTexture(
                                     tex,
                                     tx,
@@ -3085,18 +3154,31 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         const spriteAngle = nativeSpriteDraw ? 0 : (w.spriteAngle ?? 0);
 
                         if (spriteAngle !== 0) {
-                            // Draw rotated sprite - uses 16-bit angle scale (0-65536 = 360 degrees)
+                            // Draw rotated sprite - uses 16-bit angle scale (0-65536 = 360 degrees).
+                            // A rotated sprite is scaled by one factor (component width over
+                            // sprite width) on both axes, centred on the component, and is
+                            // drawn at full strength whatever the component's transparency.
+                            const rotated = rotatedSpriteRect(
+                                logicalX,
+                                logicalY,
+                                w.width | 0,
+                                w.height | 0,
+                                Math.max(1, tex.w | 0),
+                                Math.max(1, tex.h | 0),
+                            );
+                            const rotX = rotated.x * rootScaleX + rootOffsetX;
+                            const rotY = rotated.y * rootScaleY + rootOffsetY;
                             glr.drawTextureRotated(
                                 tex,
-                                drawX,
-                                drawY,
-                                drawW,
-                                drawH,
+                                rotX,
+                                rotY,
+                                rotated.w * rootScaleX,
+                                rotated.h * rootScaleY,
                                 spriteAngle,
                                 65536, // widget spriteAngle uses 16-bit scale
                                 0,
                                 [0, 0, 0],
-                                alpha,
+                                1,
                             );
                         } else {
                             glr.drawTexture(
@@ -3125,7 +3207,15 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 // selected items render with outline=2 (white).
                 const itemOutline =
                     (isSelectedHere ? Math.max(2, borderType | 0) : borderType | 0) | 0;
-                const itemTex = tc.getItemIconById(itemId, qty, itemOutline, spriteShadow, qtyMode);
+                const itemTex = tc.getItemIconById(
+                    itemId,
+                    qty,
+                    itemOutline,
+                    spriteShadow,
+                    qtyMode,
+                    (w.width ?? 36) | 0,
+                    (w.height ?? 32) | 0,
+                );
                 if (itemTex) {
                     glr.drawTexture(
                         itemTex,
@@ -3177,7 +3267,10 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             // localPlayer.getModelInternal() which bakes in the live idle animation.
             // Inject the local player's movement sequence so the widget model animates.
             let liveMovementFrame: number | undefined;
-            if (sequenceId === undefined && ((w.contentType ?? 0) | 0) === 328) {
+            // A player-composition model (model type 7: the worn-equipment and makeover previews)
+            // always stands in the local player's own pose at its live frame, whatever sequence
+            // the widget carries, so the preview breathes and holds its weapon stance.
+            if (usesLocalPlayerPose(w, sequenceId)) {
                 try {
                     const ac = osrsClient?.playerAnimController;
                     const sid = osrsClient?.controlledPlayerServerId;
@@ -3448,21 +3541,8 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             const b = (lineColor & 0xff) / 255;
             const a = 1; // Lines are fully opaque
 
-            // Calculate line endpoints based on lineDirection
-            let x1: number, y1: number, x2: number, y2: number;
-            if (lineDir) {
-                // lineDirection = true: bottom-left to top-right diagonal
-                x1 = x;
-                y1 = y + height;
-                x2 = x + width;
-                y2 = y;
-            } else {
-                // lineDirection = false: top-left to bottom-right diagonal
-                x1 = x;
-                y1 = y;
-                x2 = x + width;
-                y2 = y + height;
-            }
+            // Calculate line endpoints based on lineDirection, from the signed width and height
+            const { x1, y1, x2, y2 } = lineWidgetEndpoints(x, y, lineEndX - x, lineEndY - y, lineDir);
 
             // Draw line using Bresenham's algorithm or thick line algorithm
             if (scaledLineWid === 1) {
@@ -3475,7 +3555,68 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             if (profileWidgetRender) {
                 lineMs += performance.now() - lineStartMs;
             }
-        } else if (w.type === 4 || w.type === 8) {
+        } else if (w.type === 8) {
+            // Type 8 = legacy tooltip. It draws nothing of its own; while the mouse is inside
+            // its visible bounds it counts as the hovered tooltip, and after a second on it a
+            // box with its text appears below it, kept inside the parent's clip.
+            const uid = (w.uid as number) | 0;
+            const pointer = isIf3 ? null : if1TooltipPointer;
+            if (
+                pointer &&
+                pointer.x >= widgetClip.x0 &&
+                pointer.y >= widgetClip.y0 &&
+                pointer.x < widgetClip.x1 &&
+                pointer.y < widgetClip.y1
+            ) {
+                if1Tooltip.hover(uid, if1TooltipCycle);
+            } else {
+                if1Tooltip.leave(uid);
+            }
+            const tooltipFont = if1Tooltip.isShown(uid) ? opts.fontLoader(FONT_PLAIN_12) : undefined;
+            if (tooltipFont) {
+                const tooltipText = formatIf1Text(String(w.text || ""), (i) => evalCs1Instruction(w, i, widgetManager));
+                const fontAscent = (tooltipFont.ascent as number) | 0;
+                const fontTop = ((tooltipFont.maxAscent || tooltipFont.ascent || 0) as number) | 0;
+                const box = layoutIf1Tooltip(
+                    tooltipText,
+                    logicalX,
+                    logicalY,
+                    w.width | 0,
+                    w.height | 0,
+                    Math.floor((clip.x1 - rootOffsetX) / rootScaleX),
+                    Math.floor((clip.y1 - rootOffsetY) / rootScaleY),
+                    fontAscent,
+                    (line) => tooltipFont.measure(line.replace(/<[^>]*>/g, "")) | 0,
+                );
+                const bx0 = Math.round(box.x * rootScaleX + rootOffsetX);
+                const by0 = Math.round(box.y * rootScaleY + rootOffsetY);
+                const bx1 = Math.round((box.x + box.width) * rootScaleX + rootOffsetX);
+                const by1 = Math.round((box.y + box.height) * rootScaleY + rootOffsetY);
+                const edgeW = Math.min(bx1 - bx0, scaleLogicalPixels(rootScaleX, 1));
+                const edgeH = Math.min(by1 - by0, scaleLogicalPixels(rootScaleY, 1));
+                const rgba = (c: number): [number, number, number, number] => [
+                    ((c >>> 16) & 0xff) / 255,
+                    ((c >>> 8) & 0xff) / 255,
+                    (c & 0xff) / 255,
+                    1,
+                ];
+                if (bx1 > bx0 && by1 > by0) {
+                    const border = rgba(IF1_TOOLTIP_BORDER);
+                    glr.drawRect(bx0, by0, bx1 - bx0, by1 - by0, rgba(IF1_TOOLTIP_FILL));
+                    glr.drawRect(bx0, by0, bx1 - bx0, edgeH, border);
+                    glr.drawRect(bx0, by1 - edgeH, bx1 - bx0, edgeH, border);
+                    glr.drawRect(bx0, by0, edgeW, by1 - by0, border);
+                    glr.drawRect(bx1 - edgeW, by0, edgeW, by1 - by0, border);
+                    for (const line of box.lines) {
+                        if (!line.text) continue;
+                        // drawTextGL places the baseline at its top plus the font's max ascent.
+                        const lineX = Math.round(line.x * rootScaleX + rootOffsetX);
+                        const lineY = Math.round((line.baseline - fontTop) * rootScaleY + rootOffsetY);
+                        drawTextGL(line.text, lineX, lineY, bx1 - lineX, by1 - lineY, FONT_PLAIN_12, 0x000000, 0, 0, false);
+                    }
+                }
+            }
+        } else if (w.type === 4) {
             const textStartMs = profileWidgetRender ? performance.now() : 0;
             const textTextureDrawCallsStart = profileWidgetRender
                 ? glr.getPerfCounters().textureDrawCalls
@@ -3518,12 +3659,35 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 if (w.text2) effectiveText = String(w.text2);
                 if (typeof w.mouseOverColor === "number") effectiveColor = w.mouseOverColor;
             }
-            effectiveColor = w.keyboardTextColor ?? effectiveColor;
+            // A modern text component that holds an item shows the item's name, in orange with
+            // " x<quantity>" when the item always stacks or the quantity is not 1.
+            const textItemId = isIf3 && typeof w.itemId === "number" ? w.itemId | 0 : -1;
+            if (textItemId >= 0) {
+                let obj: any;
+                try {
+                    obj = (opts.objLoader ?? osrsClient?.objTypeLoader)?.load?.(textItemId);
+                } catch {}
+                // Without item definitions there is no name to show; the text stays as it is.
+                if (obj) {
+                    effectiveText = itemWidgetText(
+                        obj.name,
+                        obj.stackability === ObjStackability.ALWAYS,
+                        (w.itemQuantity ?? 0) | 0,
+                    );
+                }
+            }
 
-            // Show "Please wait..." for the continue button being processed
-            // NPC head widget rendering
+            // Show "Please wait..." for the continue button being processed, in the
+            // component's base colour (not the hover or alternate colour).
             if (widgetManager?.meslayerContinueWidget === w) {
                 effectiveText = "Please wait...";
+                effectiveColor = w.textColor ?? 0xffffff;
+            }
+            effectiveColor = w.keyboardTextColor ?? effectiveColor;
+
+            // Legacy text fills "%1".."%5" with the component's client script values.
+            if (!isIf3) {
+                effectiveText = formatIf1Text(effectiveText, (i) => evalCs1Instruction(w, i, widgetManager));
             }
 
             // Where the text landed, so wheel input can tell text from the empty box around it.
@@ -3577,8 +3741,10 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     effectiveColor,
                     lineH,
                     !!(w.textShadowed || w.textShadow),
-                    (w.yTextAlignment ?? 0) as 0 | 1 | 2,
-                    (w.xTextAlignment ?? 0) as 0 | 1 | 2,
+                    (w.yTextAlignment ?? 0) as 0 | 1 | 2 | 3,
+                    (w.xTextAlignment ?? 0) as 0 | 1 | 2 | 3,
+                    // OSRS draws text at its component's transparency (0 opaque, 255 invisible).
+                    widgetTextAlpha(w),
                 );
             }
             if (profileWidgetRender) {
@@ -3797,6 +3963,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
     );
     drawNode(root, 0, 0, true, false);
     opts.afterInterfaceDrawn?.(root.groupId ?? (root.uid >>> 16));
+    // A legacy tooltip that is counting up, shown or counting down changes with time alone,
+    // so it asks for the next pass itself.
+    if (if1Tooltip.isActive()) scheduleRender();
 
     // Render deferred dragged widgets on top.
     // Only inventory-style widgets (dragRenderBehaviour >= 2) are deferred.

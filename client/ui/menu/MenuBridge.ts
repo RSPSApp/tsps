@@ -136,6 +136,8 @@ export function osrsTargetLabel(e: OsrsMenuEntry, opts: TargetLabelOptions = {})
                 return 16748608; // orange
             case MenuTargetType.PLAYER:
                 return 16777215; // white
+            case MenuTargetType.WORLD_ENTITY:
+                return 0xeda6ed; // boats and other world entities: pink
             default:
                 return 16777215;
         }
@@ -165,7 +167,9 @@ export function osrsTargetLabel(e: OsrsMenuEntry, opts: TargetLabelOptions = {})
                   )
                 : arrow.right;
         const right = rightBase.length ? `${colorStartTag(baseColor)}${rightBase}` : "";
-        t = left.length && right.length ? `${left} -> ${right}` : `${left}${right}`;
+        // OSRS ends the selected name with a white colour tag, so the arrow never takes the
+        // hovered row's yellow.
+        t = left.length && right.length ? `${left}${colorStartTag(0xffffff)} -> ${right}` : `${left}${right}`;
     } else {
         const base =
             e.targetType === MenuTargetType.NPC || e.targetType === MenuTargetType.PLAYER
@@ -454,11 +458,13 @@ export function widgetEntriesToSimple(
         // The submenu header shows the parent entry's target; sub rows have no target.
         // A pinned submenu row is itself one row: it keeps no copy of its op's submenu.
         if (pinnedSubIndex === undefined && Array.isArray(e.subOptions) && e.subOptions.length > 0) {
-            mapped.subEntries = e.subOptions.map((subText, subIdx) => ({
-                option: subText,
-                target: "",
-                onClick: buildOnClick(e, subText, "", subIdx + 1),
-            }));
+            mapped.subEntries = e.subOptions
+                .map((subText, subIdx) => ({
+                    option: subText,
+                    target: "",
+                    onClick: buildOnClick(e, subText, "", subIdx + 1),
+                }))
+                .filter((sub) => sub.option.length > 0);
         }
         return mapped;
     });

@@ -211,6 +211,36 @@ function getWidgetParamValue(ctx: HandlerContext, widget: any, paramId: number):
  * cc_createchild under their CC parent, so index lookups against the static
  * component must also search nested CCs to see the same flat index space.
  */
+/** A layer's own script-created children, lowest component index first. */
+function childrenInIndexOrder(layer: WidgetNode): WidgetNode[] {
+    const children = (layer.children ?? []).filter((child): child is WidgetNode => !!child);
+    return children.sort((a, b) => ((a.childIndex ?? -1) | 0) - ((b.childIndex ?? -1) | 0));
+}
+
+/**
+ * Every script-created child under a component, nested ones included, lowest component index
+ * first: the order of OSRS's single child array per component.
+ */
+function allDynamicChildren(root: WidgetNode): WidgetNode[] {
+    const out: WidgetNode[] = [];
+    const visit = (widget: WidgetNode) => {
+        for (const child of widget.children ?? []) {
+            if (!child) continue;
+            out.push(child);
+            visit(child);
+        }
+    };
+    visit(root);
+    return out.sort((a, b) => ((a.childIndex ?? -1) | 0) - ((b.childIndex ?? -1) | 0));
+}
+
+/** The static component a widget's children belong to: itself, or its own component when it is a script-created layer. */
+function componentIdOf(parent: WidgetNode, parentUid: number): number {
+    if (((parent.childIndex ?? -1) | 0) < 0) return parentUid;
+    const own = (parent as any).id;
+    return typeof own === "number" && own > 0 ? own | 0 : parentUid;
+}
+
 function findNestedDynamicChild(widget: WidgetNode, childIndex: number): WidgetNode | null {
     if (!Array.isArray(widget.children)) return null;
     for (const child of widget.children) {
@@ -526,21 +556,23 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.pushInt(w ? 1 : 0);
     });
 
-    // cc_find_child(int $index)(boolean): the active component's child at `index` becomes
-    // the active component (rev 241); like cc_find, a miss keeps the old target.
+    // cc_find_child(int $n)(boolean): the active layer's n-th child (0-based, in component
+    // index order) becomes the active component. `n` is a position among the layer's own
+    // children, not a component index.
     handlers.set(Opcodes.CC_FIND_CHILD, (ctx, intOp) => {
-        const childIndex = ctx.intStack[--ctx.intStackSize];
-        const parent = getTargetWidget(ctx, intOp);
-        const w = parent ? (parent.children?.[childIndex] ?? findNestedDynamicChild(parent, childIndex)) : null;
+        const position = ctx.intStack[--ctx.intStackSize];
+        const layer = getTargetWidget(ctx, intOp);
+        const w = layer && ((layer.type ?? 0) | 0) === 0 ? (childrenInIndexOrder(layer)[position] ?? null) : null;
         if (w) {
             setTargetWidget(ctx, intOp, w);
         }
         ctx.pushInt(w ? 1 : 0);
     });
 
-    // cc_childcount()(int): how many children the active component has.
+    // cc_childcount()(int): how many children the active layer has (gaps in the index do not count).
     handlers.set(Opcodes.CC_CHILDCOUNT, (ctx, intOp) => {
-        ctx.pushInt(getTargetWidget(ctx, intOp)?.children?.length ?? 0);
+        const layer = getTargetWidget(ctx, intOp);
+        ctx.pushInt(layer && ((layer.type ?? 0) | 0) === 0 ? childrenInIndexOrder(layer).length : 0);
     });
 
     // cc_assert (rev 241): a debug check that there is an active component; no effect here.
@@ -811,8 +843,9 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         copy.fileId = -1;
         copy.childIndex = dstIndex | 0;
         copy.isIf3 = true;
-        copy.hidden = false;
-        copy.isHidden = false; // BUGFIX: Sync isHidden for render visibility
+        // A copy is as hidden as its source.
+        copy.hidden = src.hidden === true;
+        copy.isHidden = copy.hidden;
         copy.isLayoutValid = false;
 
         parent.children[dstIndex] = copy;
@@ -838,7 +871,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
                 ctx.widgetManager.invalidateDynamicChildrenCache(parent);
             }
             ctx.widgetManager.unregisterWidgetTree(w);
-            setTargetWidget(ctx, intOp, null);
+            // The deleted child stays the active component, as in OSRS.
             if (parent) invalidateWidgetRender(ctx, parent);
         }
     });
@@ -910,8 +943,10 @@ export function registerWidgetOps(handlers: HandlerMap): void {
 
         const child: any = {
             uid: newUid,
-            // dynamic children identify by (parent id, childIndex).
-            id: parentUid,
+            // A child made inside a layer still belongs to the layer's static component: it is
+            // identified by (component id, child index), which is what server event flags,
+            // event_com and op packets name. parentUid keeps the layer for layout and drawing.
+            id: componentIdOf(parent, parentUid),
             parentUid: parentUid,
             groupId: parent.groupId,
             fileId: -1,
@@ -1011,8 +1046,10 @@ export function registerWidgetOps(handlers: HandlerMap): void {
 
         const sibling: any = {
             uid: newUid,
-            // dynamic children identify by (parent id, childIndex).
-            id: parentUid,
+            // A child made inside a layer still belongs to the layer's static component: it is
+            // identified by (component id, child index), which is what server event flags,
+            // event_com and op packets name. parentUid keeps the layer for layout and drawing.
+            id: componentIdOf(parent, parentUid),
             parentUid: parentUid,
             groupId: parent.groupId,
             fileId: -1,
@@ -1105,28 +1142,15 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         };
 
         if (parent) {
-            // Dynamic children array (CC_CREATE/CC_COPY).
-            if (parent.children) {
-                for (let i = 0; i < parent.children.length; i++) {
-                    if (matchChild(parent.children[i] as WidgetNode | null)) {
-                        break;
-                    }
-                }
-            }
-
-            // Static children fallback (IF3 parents use parentUid linkage).
-            if (!found) {
-                const staticChildren = ctx.widgetManager.getStaticChildrenByParentUid(parent.uid);
-                for (let i = 0; i < staticChildren.length; i++) {
-                    const child = staticChildren[i];
-                    if (matchChild(child)) {
-                        break;
-                    }
-                }
+            // Every script-created child of the component is searched, nested ones included
+            // (children made by cc_create_child / cc_create_sibling), in component index order.
+            for (const child of allDynamicChildren(parent)) {
+                if (matchChild(child)) break;
             }
         }
 
-        setTargetWidget(ctx, intOp, found);
+        // A miss leaves the active component as it was.
+        if (found) setTargetWidget(ctx, intOp, found);
         ctx.pushInt(found ? 1 : 0);
     });
 
@@ -1165,7 +1189,8 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.WIDGET_QUERY_NEXT, (ctx, intOp) => {
         const query = getWidgetQuery(ctx);
         const next = query.widgets[query.cursor++] ?? null;
-        setTargetWidget(ctx, intOp, next);
+        // A finished query leaves the active component as it was.
+        if (next) setTargetWidget(ctx, intOp, next);
         ctx.pushInt(next ? 1 : 0);
     });
 
@@ -1521,7 +1546,8 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     // Used by scripts like script8457/8458/8459 to compute absolute coordinates by walking parents.
     handlers.set(Opcodes.CC_GETPARENTLAYER, (ctx, intOp) => {
         const w = getTargetWidget(ctx, intOp);
-        let parentUid = w?.parentUid ?? -1;
+        // A script-created child answers with its static component, however deep it is nested.
+        let parentUid = w && ((w.childIndex ?? -1) | 0) >= 0 ? resolveStaticLayerUid(ctx, w) : (w?.parentUid ?? -1);
         if (w && typeof parentUid === "number" && parentUid !== -1) {
             const currentGroupId = getCurrentWidgetGroupId(ctx);
             const mount = ctx.widgetManager.interfaceParents.get(parentUid);
@@ -1828,6 +1854,14 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const w = getWidgetFromStack(ctx);
         ctx.pushInt(w?.transparency ?? 0);
     });
+    // cc_getblendtrans / if_getblendtrans (1610 / 2610): the bottom transparency an alpha
+    // gradient fades to, as set by 1124 / 2124.
+    handlers.set(1610, (ctx, intOp) => {
+        ctx.pushInt(getTargetWidget(ctx, intOp)?.transparencyBot ?? 0);
+    });
+    handlers.set(2610, (ctx) => {
+        ctx.pushInt(getWidgetFromStack(ctx)?.transparencyBot ?? 0);
+    });
 
     // === Fill ===
     handlers.set(Opcodes.CC_SETFILL, (ctx, intOp) => {
@@ -2050,6 +2084,16 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         w.npcTypeId = npcId >= 0 ? npcId : undefined;
         w.isPlayerChathead = false;
     };
+    // The local player's chathead. The renderer draws one only for a widget flagged as such (the
+    // server's set_player_head sets the same flags); it reads the live appearance itself.
+    const setPlayerHeadSelf = (w: any) => {
+        w.modelType = 3;
+        w.modelId = -1;
+        w.isPlayerChathead = true;
+        w.isPlayerModel = false;
+        w.isNpcChathead = false;
+        w.npcTypeId = undefined;
+    };
     const clearNpcHead = (w: any) => {
         w.isNpcChathead = false;
         w.npcTypeId = undefined;
@@ -2215,12 +2259,14 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     // === Model getters ===
     handlers.set(Opcodes.CC_GETMODELZOOM, (ctx, intOp) => {
         const w = getTargetWidget(ctx, intOp);
-        ctx.pushInt(w?.modelZoom ?? 0);
+        // A component's zoom is 100 until something sets it.
+        ctx.pushInt(w ? (w.modelZoom ?? 100) : 0);
     });
 
     handlers.set(Opcodes.IF_GETMODELZOOM, (ctx) => {
         const w = getWidgetFromStack(ctx);
-        ctx.pushInt(w?.modelZoom ?? 0);
+        // A component's zoom is 100 until something sets it.
+        ctx.pushInt(w ? (w.modelZoom ?? 100) : 0);
     });
 
     handlers.set(Opcodes.CC_GETMODELANGLE_X, (ctx, intOp) => {
@@ -2277,12 +2323,27 @@ export function registerWidgetOps(handlers: HandlerMap): void {
 
     // if_setnpcmodel(npc, component) (rev 241): the NPC's full model (model type 6), where
     // if_setnpchead shows its chathead.
+    // cc_setnpcmodel / if_setnpcmodel (1215 / 2215): the NPC's body model, model type 9.
+    const setNpcModel = (w: any, npcId: number) => {
+        w.modelType = 9;
+        w.modelId = npcId;
+        w.isNpcChathead = false;
+        w.npcTypeId = undefined;
+        w.isPlayerChathead = false;
+    };
     handlers.set(Opcodes.IF_SETNPCMODEL, (ctx) => {
         const w = getWidgetFromStack(ctx);
         const npcId = ctx.intStack[--ctx.intStackSize];
         if (w) {
-            w.modelType = 6;
-            w.modelId = npcId;
+            setNpcModel(w, npcId);
+            invalidateWidgetRender(ctx, w);
+        }
+    });
+    handlers.set(1215, (ctx, intOp) => {
+        const npcId = ctx.intStack[--ctx.intStackSize];
+        const w = getTargetWidget(ctx, intOp);
+        if (w) {
+            setNpcModel(w, npcId);
             invalidateWidgetRender(ctx, w);
         }
     });
@@ -2301,9 +2362,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.CC_SETPLAYERHEAD_SELF, (ctx, intOp) => {
         const w = getTargetWidget(ctx, intOp);
         if (w) {
-            w.modelType = 3;
-            w.modelId = -1;
-            // invalidate on model change
+            setPlayerHeadSelf(w);
             invalidateWidgetRender(ctx, w);
         }
     });
@@ -2311,9 +2370,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.IF_SETPLAYERHEAD_SELF, (ctx) => {
         const w = getWidgetFromStack(ctx);
         if (w) {
-            w.modelType = 3;
-            w.modelId = -1;
-            // invalidate on model change
+            setPlayerHeadSelf(w);
             invalidateWidgetRender(ctx, w);
         }
     });
@@ -3377,15 +3434,14 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         }
     });
 
+    // if_setclickmask (2122): the component form of 1122. It sets the alternate sprite, which
+    // the minimap uses as its click mask; it is not an event-flags mask.
     handlers.set(Opcodes.IF_SETCLICKMASK, (ctx) => {
-        // sets a runtime widget flags override stored in Client.widgetFlags.
-        // Widget flags lookup and server packets that populate widgetFlags ranges.
         const w = getWidgetFromStack(ctx);
-        const mask = ctx.intStack[--ctx.intStackSize];
-        if (w) {
-            ctx.widgetManager.setWidgetFlagsOverride(w, mask);
-            // Keep derived targetMask in sync (bits 11-16) for scripts/UI that read `w.targetMask`.
-            w.targetMask = ((mask >>> 11) & 0x3f) | 0;
+        const id = ctx.intStack[--ctx.intStackSize];
+        if (w && w.spriteId2 !== id) {
+            w.spriteId2 = id;
+            invalidateWidgetRender(ctx, w);
         }
     });
 

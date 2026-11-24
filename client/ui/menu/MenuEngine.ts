@@ -276,6 +276,14 @@ export function normalizeMenuEntries(entries: SimpleMenuEntry[]): SimpleMenuEntr
     return low.concat(high);
 }
 
+/**
+ * A loc's fifth option has opcode 1001. OSRS sorts every opcode of 1000 and above under
+ * "Walk here", so that option is in the menu but a left click walks.
+ */
+function sortsBelowWalkHere(e: SimpleMenuEntry): boolean {
+    return e.targetType === MenuTargetType.LOC && e.actionIndex === 4;
+}
+
 export type DefaultChoiceState = {
     hasSelectedSpell?: boolean;
     hasSelectedItem?: boolean;
@@ -362,7 +370,8 @@ export function chooseDefaultMenuEntry(
     const actionableEntry = entries.find((e) => {
         const lower = String(e.option || "").toLowerCase();
         const action = e.action ?? inferMenuAction(e.option, e.targetType);
-        return !e.deprioritized && !skippedOptions.has(lower) && action !== MenuAction.Examine;
+        return !e.deprioritized && !skippedOptions.has(lower) && action !== MenuAction.Examine &&
+            !sortsBelowWalkHere(e);
     });
     if (actionableEntry) {
         if (!actionableEntry.action)

@@ -145,7 +145,7 @@ test("real specials spend the custom cost, retaining modifiers, inherited varian
 });
 
 
-test("an authored weapon overrides only its own special attack drain", t => {
+test("only the item performing a special attack can override its drain", t => {
   const { Player } = require("../dist/game/entity/impl/player/Player");
   const { Equipment } = require("../dist/game/model/container/impl/Equipment");
   const { Item } = require("../dist/game/model/Item");
@@ -166,6 +166,22 @@ test("an authored weapon overrides only its own special attack drain", t => {
   assert.equal(player.getSpecialPercentage(), 80);
   CombatSpecial.drain(player, 5, true, shieldId);
   assert.equal(player.getSpecialPercentage(), 75);
+
+  const shieldSpecial = special("custom-item-shield-drain", [shieldId], 40, {
+    overrideDrainAmount: true,
+    drainAmountByItemId: { [shieldId]: 25 },
+  });
+  player.getEquipment().setItem(Equipment.SHIELD_SLOT, new Item(shieldId));
+  CombatSpecial.drain(player, 0, false, shieldId);
+  assert.equal(player.getSpecialPercentage(), 50);
+
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const events = t.mock.method(PluginManager, "emitCustomEvent", () => {});
+  CombatSpecial.drain(player, 0, true, shieldId);
+  assert.equal(player.getSpecialPercentage(), 25);
+  const [, cost] = events.mock.calls[0].arguments;
+  assert.equal(cost.specialId, shieldSpecial.getId());
+  assert.equal(cost.cost, 25);
 });
 
 

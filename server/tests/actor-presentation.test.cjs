@@ -53,3 +53,10 @@ test("a slot zero graphic reaches the presentation callback once", () => {
   assert.equal(player.getGraphic().getId(), 5);
   assert.equal(player.getSlotGraphics().has(2), false);
 });
+
+test("an actor queues a slot graphic without inspecting its ID outside presentation", () => {
+  const player = new Player(null);
+  const graphic = { id: 123 };
+  player.performGraphicInSlot(2, graphic);
+  assert.equal(player.getSlotGraphics().get(2), graphic);
+});

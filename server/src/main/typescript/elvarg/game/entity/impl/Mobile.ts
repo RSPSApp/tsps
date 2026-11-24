@@ -476,9 +476,9 @@ export abstract class Mobile extends Entity {
     }
 
     private isGraphicHandledByPresentation(graphic: Graphic | null, slot: number): boolean {
-        if (graphic == null || graphic.getId() < 0) return false;
         const look = ActorPresentation.for(this);
-        return Boolean(look?.onGraphic?.(graphic, slot) || look?.suppressGraphics);
+        if (!look || graphic == null || graphic.getId() < 0) return false;
+        return Boolean(look.onGraphic?.(graphic, slot) || look.suppressGraphics);
     }
 
     /**

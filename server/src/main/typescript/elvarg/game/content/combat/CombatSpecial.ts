@@ -202,28 +202,27 @@ export class CombatSpecial {
      * this was, for "combat-special:performed", when it isn't the wielded weapon (a shield's).
      */
     public static drain(character: Mobile, amount: number, isCost = true, itemId?: number) {
-        const special: CombatSpecial | null = character.isPlayer?.() ? ((character as any).getAsPlayer?.()?.getCombatSpecial?.() ?? null) : null;
-        const weaponId = character.isPlayer?.() ? character.getAsPlayer().getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() : undefined;
+        const player = character.isPlayer?.() ? character.getAsPlayer() : null;
+        const weaponId = player?.getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.();
+        const namesAnotherItem = itemId != null && itemId !== weaponId;
+        const sourceItemId = itemId ?? weaponId;
+        const special = namesAnotherItem ? CombatSpecial.getForWeaponId(itemId) : player?.getCombatSpecial?.() ?? null;
+        const settings = !namesAnotherItem && isCost && weaponId !== undefined ? CombatSpecial.itemSpecials.get(weaponId) : undefined;
         let base = amount;
-        if (itemId === undefined || itemId === weaponId) {
-            // Apply custom weapon pricing when that weapon performed the special.
-            const settings = isCost && weaponId !== undefined ? CombatSpecial.itemSpecials.get(weaponId) : undefined;
-            if (settings || special?.overrideDrainAmount) {
-                base = settings?.drainAmount ?? special?.getDrainAmountForWeaponId(weaponId) ?? amount;
-            }
+        if (settings || special?.overrideDrainAmount) {
+            base = settings?.drainAmount ?? special?.getDrainAmountForWeaponId(sourceItemId) ?? amount;
         }
         character.decrementSpecialPercentage(isCost ? CombatSpecial.cost(character, special, base, "drain").cost : base);
 
         CombatSpecial.ensureRestoreTask(character);
 
-        if (character.isPlayer()) {
-            let p = character.getAsPlayer();
-            CombatSpecial.updateBar(p);
+        if (player) {
+            CombatSpecial.updateBar(player);
             // "combat-special:performed" { player, itemId }: a special attack performed, with the item whose special it
             // was (the wielded weapon unless the caller names another).
             const { PluginManager } = require("../../../plugins/PluginManager");
             PluginManager.emitCustomEvent("combat-special:performed", {
-                player: p, itemId: itemId ?? p.getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() ?? -1,
+                player, itemId: sourceItemId ?? -1,
             });
         }
     }

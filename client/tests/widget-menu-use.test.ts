@@ -222,6 +222,8 @@ console.log('native Inspect submenu dispatch passed');
     assert.equal(shiftChanges, 1, "Shift going down asks for the inventory to be redrawn");
     assert.deepEqual(options(shark), ["Drop", "Eat", "Use", "Cancel"], "Shift held: Drop is the top entry");
     assert.deepEqual([primary(shark).option, primary(shark).opIndex], ["Drop", 7], "and the left click");
+    // Drop is a low-priority op (1007); moved up as the shift click it must not open the menu (#6735).
+    assert.equal(primary(shark).opensMenu, undefined, "the shift click drops instead of opening the menu");
     assert.deepEqual(options(whip), ["Wield", "Use", "Drop", "Cancel"], "an item with no shift-click op keeps its order");
     const notInventory = { ...shark, uid: 15 << 16, parentUid: 15 << 16 };
     assert.equal(options(notInventory)[0], "Eat", "shift-click drop is the inventory's only");

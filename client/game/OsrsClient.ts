@@ -1,5 +1,7 @@
 import { ObjStackability } from "../rs/config/objtype/ObjStackability";
 import { GearTextureLoader } from "../custom/items/GearTextureLoader";
+import { subscribePluginMessages } from '../network/serverConnection/domain/pluginMessages';
+import { receiveActorVisual } from '../render/gfx/ActorVisuals';
 import { AGILITY_HELPER_HIGHLIGHT_OBSTACLES_ENABLED, HELPER_AGILITY_HIGHLIGHTED_COURSE } from "@runelite/api/gameval/VarbitID";
 import { retainedInventory, stopInventoryTransmit } from "./sync/InventoryStopTransmit";
 import { openClientUrl } from "../common/openUrl";
@@ -3407,6 +3409,10 @@ export class OsrsClient {
         });
         // Subscribe to server-side GFX (spot) messages and forward to renderer
         try {
+            const unsubVisual=subscribePluginMessages(message => {
+                const renderer=this.renderer as any;
+                receiveActorVisual(message,renderer?.gfxManager??renderer?.actors?.getActorGfxManager?.());
+            });
             const unsubSpot = subscribeSpot((payload: SpotAnimationPayload) => {
                 try {
                     // spot animation delay is in client cycles (Client.cycle units).
@@ -3450,7 +3456,7 @@ export class OsrsClient {
                     }
                 } catch {}
             });
-            this.unsubscribeSpot = unsubSpot;
+            this.unsubscribeSpot = () => { unsubSpot(); unsubVisual(); };
         } catch {}
         // Subscribe to server-side sound messages and play them
         try {
@@ -8770,6 +8776,11 @@ export class OsrsClient {
         this.worldMap.markWorldMapImageTextureUploaded(key);
     }
 
+    /** The current area's whole-map picture, drawn under its tiles. */
+    getWorldMapCompositeTexture(): { key: string; pixels: Uint8Array; width: number; height: number } | undefined {
+        return this.worldMap.getWorldMapCompositeTexture();
+    }
+
     getWorldMapIcons(mapX: number, mapY: number, level: number = 0): MinimapIcon[] | undefined {
         // Edited regions draw their minimap picture on the world map; use its icons too.
         if (
@@ -8794,6 +8805,12 @@ export class OsrsClient {
         }>,
     ): void {
         this.worldMap.retainWorldMapImageTiles(tiles);
+    }
+
+    prefetchWorldMapImageTiles(
+        tiles: Array<{ mapX: number; mapY: number; level?: number; sourceTile?: { mapX: number; mapY: number; level?: number } }>,
+    ): void {
+        this.worldMap.prefetchWorldMapImageTiles(tiles);
     }
 
     clearWorldMapImages(): void {

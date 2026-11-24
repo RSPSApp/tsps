@@ -1,3 +1,4 @@
+import { ActorPresentation } from '../model/ActorPresentation';
 import { TaskType } from "./TaskType";
 import { PluginContext } from "../../plugins/PluginContext";
 export abstract class Task {
@@ -45,6 +46,7 @@ export abstract class Task {
         }
 
         this.delay = Math.max(0, resolvedDelay);
+        ActorPresentation.capture(this);
         this.countdown = this.delay;
         this.immediate = resolvedImmediate;
         this.type = resolvedType;
@@ -68,6 +70,7 @@ export abstract class Task {
     }
 
     tick(): boolean {
+        if(!ActorPresentation.inScope(this))return ActorPresentation.run(this,()=>this.tick());
         if (this.running && (this.countdown == 0 || --this.countdown == 0)) {
             this.execute();
             this.countdown = this.delay;

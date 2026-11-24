@@ -1,4 +1,5 @@
 // TODO: ported from xrsps-typescript; untested.
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 module.exports = function registerBurningClawsSpecialAttack(api) {
   const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Sound, Sounds } = api.core;
 
@@ -22,14 +23,18 @@ module.exports = function registerBurningClawsSpecialAttack(api) {
     }
 
     handleAfterHitEffects(hit) {
-      const chance = BURN_CHANCE_BY_ROLL[hit.getFirstSuccessfulRangeIndex()];
+      const config = mechanicSettings(this, "burn-rolls", { damage: BURN_TOTAL_DAMAGE, firstChance: BURN_CHANCE_BY_ROLL[0] * 100, secondChance: BURN_CHANCE_BY_ROLL[1] * 100, thirdChance: BURN_CHANCE_BY_ROLL[2] * 100, perHit: true, strong: false });
+      if (!config.enabled) return;
+      let index = hit.getFirstSuccessfulRangeIndex?.() ?? -1;
+      if (index < 0) { if (hit.isAccurate?.() !== true) return; index = 0; }
+      const chance = [config.firstChance, config.secondChance, config.thirdChance][index] / 100;
       if (!chance) {
         return;
       }
-      for (let i = 0; i < hit.getHits().length; i++) {
+      for (let i = 0; i < (config.perHit ? hit.getHits().length : 1); i++) {
         if (Math.random() < chance) {
           api.emitCustomEvent("combat:burn", {
-            attacker: hit.getAttacker(), target: hit.getTarget(), damage: BURN_TOTAL_DAMAGE, severity: "normal",
+            attacker: hit.getAttacker(), target: hit.getTarget(), damage: config.damage, severity: config.strong ? "strong" : "normal",
           });
         }
       }
@@ -42,6 +47,7 @@ module.exports = function registerBurningClawsSpecialAttack(api) {
     drainAmount: DRAIN,
     strengthMultiplier: 1,
     accuracyMultiplier: 1,
+    metadata: { editorMechanics: mechanicSchema("burn-rolls", { damage: BURN_TOTAL_DAMAGE, firstChance: BURN_CHANCE_BY_ROLL[0] * 100, secondChance: BURN_CHANCE_BY_ROLL[1] * 100, thirdChance: BURN_CHANCE_BY_ROLL[2] * 100, perHit: true, strong: false }) },
     traits: {
       hitCount: 3,
       accuracyRollCount: ACCURACY_ROLLS,

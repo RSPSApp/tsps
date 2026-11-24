@@ -49,6 +49,7 @@ import {
 import { environmentAt } from "../render/environment";
 import { getCanvasResolutionScale, syncCameraViewportUnitScale } from "../render/quality";
 import { getCameraViewportRect } from "../render/viewportRect";
+import { sceneryBuildOptions } from "../SceneryPolicy";
 import { GPU_TEXTURE_USAGE, SCENE_DEPTH_FORMAT, SCENE_GROUP, WORLD_TEXTURES_GROUP } from "./bindings";
 import { getControlledPlayerEcsIndex, updateFollowCamera } from "./camera";
 import { resolveWebGPULodDistance, resolveWebGPURenderDistance, updateWebGPUMapStreaming } from "./frameConfig";
@@ -490,6 +491,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             mapY,
             maxLevel: Math.max(0, Math.min(Scene.MAX_LEVELS - 1, Scene.MAX_LEVELS - 1)),
             loadNpcs: false,
+            ...sceneryBuildOptions(this.osrsClient, mapX, mapY),
             smoothTerrain: true,
             ...this.osrsClient.clientPlugins.objectSettings(),
             minimizeDrawCalls: true,
@@ -1011,6 +1013,11 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
             ? (drawScene ? extension.prepareActorVisibility?.(this) : undefined)
             : null;
         this.actors?.update(timeSec, actorShadow);
+        if (this.stats.frameCount % 60 === 0) {
+            let bytes = this.actors?.geometryGpuBytes ?? 0;
+            for (const map of this.mapManager.mapSquares.values()) bytes += map.geometryGpuBytes;
+            this.stats.geometryGpuBytes = bytes;
+        }
         this.overlays?.update(time, deltaTime);
         this.ui?.update(time, deltaTime);
 

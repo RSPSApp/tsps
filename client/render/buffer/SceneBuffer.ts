@@ -342,7 +342,7 @@ export class SceneBuffer {
         return finishBuild(this.addTerrainSteps(scene, borderSize, maxLevel, coreSize, worldTileOffset));
     }
 
-    *addTerrainSteps(scene: Scene, borderSize: number, maxLevel: number, coreSize: number = Scene.MAP_SQUARE_SIZE, worldTileOffset: number = borderSize): Generator<void, number> {
+    *addTerrainSteps(scene: Scene, borderSize: number, maxLevel: number, coreSize: number = Scene.MAP_SQUARE_SIZE, worldTileOffset: number = borderSize, farOnly = false): Generator<void, number> {
         this.setHeightBounds(scene);
         // The grid covers the whole scene (border included), not just the meshed core, so
         // fragments at the edge of the visible core can still sample their border neighbours.
@@ -350,7 +350,7 @@ export class SceneBuffer {
         this.groundColors = buildGroundColorGrid(scene);
         const before = this.vertexCount(), offset = -worldTileOffset * 128;
         const endX = borderSize + coreSize, endY = borderSize + coreSize;
-        for (let level = 0; level < scene.levels; level++) for (let detail = 0; detail < 2; detail++) {
+        for (let level = 0; level < scene.levels; level++) for (let detail = farOnly ? 1 : 0; detail < 2; detail++) {
             for (let cx = borderSize; cx < endX; cx += SCENERY_CHUNK_SIZE) for (let cy = borderSize; cy < endY; cy += SCENERY_CHUNK_SIZE) {
                 yield;
                 const ex = Math.min(cx + SCENERY_CHUNK_SIZE, endX), ey = Math.min(cy + SCENERY_CHUNK_SIZE, endY);

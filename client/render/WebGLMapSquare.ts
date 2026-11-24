@@ -355,6 +355,14 @@ function createLocGeometryResources(
 }
 
 export class WebGLMapSquare {
+    farOnly = false;
+    get geometryGpuBytes(): number {
+        let bytes = this.interleavedBuffer.byteLength + this.indexBuffer.byteLength;
+        for (const group of [this.loc, this.door, this.groundItems]) {
+            if (group) bytes += group.interleavedBuffer.byteLength + group.indexBuffer.byteLength;
+        }
+        return bytes + (this.npcInterleavedBuffer?.byteLength ?? 0) + (this.npcIndexBuffer?.byteLength ?? 0);
+    }
     private static readonly pendingGeometry = new Map<SdMapData,
         { app: PicoApp; upload: MapGeometryUpload<VertexBuffer> }>();
 
@@ -1064,6 +1072,7 @@ export class WebGLMapSquare {
             mapSquare.incNpcOcc(c.plane, c.x, c.y);
         }
         for (const unused of prepared?.values() ?? []) unused.delete();
+        mapSquare.farOnly = !!mapData.farOnly;
         return mapSquare;
     }
 
@@ -2226,6 +2235,7 @@ export class WebGLMapSquare {
         this.heightMapData.set(mapData.heightMapTextureData);
         this.heightMapTexture.data(mapData.heightMapTextureData);
         this.waterMaskTexture.data(mapData.waterMaskTextureData);
+        this.tileOverlays = mapData.tileOverlays;
         this.terrainPickTileOffsets = mapData.terrainPickTileOffsets;
         this.terrainPickVertices = mapData.terrainPickVertices;
         this.terrainPickPlanes = mapData.terrainPickPlanes;

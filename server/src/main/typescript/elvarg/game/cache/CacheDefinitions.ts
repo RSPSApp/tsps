@@ -29,6 +29,7 @@ import { SeqType } from "./codec/rs/config/seqtype/SeqType";
 import { ArchivedDefinitionRegistry, ArchivedDefinitionBundle, ArchivedDefinitionKind, ArchivedDefinitionContext } from "./codec/rs/config/ArchivedDefinitionRegistry";
 import { MAX_GAME_MESSAGE_BYTES } from "../../net/BinaryChannel";
 import { encodeContentData } from "../../net/protocol/ClientProtocol";
+import { customAnimation, customAnimationRows, registerSampledAnimations, sampledAnimationPackets, type SampledAnimationRow } from "./CustomAnimations";
 
 const STRUCT_PARAMS_OPCODE = 249;
 const CACHE_EDITOR_SOURCE = "cache-editor";
@@ -222,6 +223,7 @@ export class CacheDefinitions {
         const state = this.getState(), registry = state.archives;
         const candidate = new ArchivedDefinitionRegistry(state.archiveContext);
         candidate.replace(bundles);
+        this.checkArchivedSampledAnimationIds(candidate);
         for (const kind of ["npc", "loc", "obj"] as const) {
             for (const id of candidate.ids(kind)) {
                 if (this.hasCustomDefinition(kind === "obj" ? "item" : kind, id) || kind === "obj" && this.customItems.has(id)) {
@@ -260,12 +262,19 @@ export class CacheDefinitions {
         const state = this.getState();
         const candidate = new ArchivedDefinitionRegistry(state.archiveContext);
         candidate.replace(bundles);
+        this.checkArchivedSampledAnimationIds(candidate);
         const changed = (kind: ArchivedDefinitionKind) =>
             [...new Set([...state.archives.ids(kind), ...candidate.ids(kind)])].filter(id =>
                 JSON.stringify(state.archives.getSource(kind, id)) !== JSON.stringify(candidate.getSource(kind, id)));
         const result = { npc: changed("npc"), loc: changed("loc"), obj: changed("obj"), seq: changed("seq") };
         this.includeDependentCustomDefinitions(result);
         return result;
+    }
+
+    private static checkArchivedSampledAnimationIds(candidate: ArchivedDefinitionRegistry): void {
+        for (const id of candidate.ids("seq")) {
+            if (customAnimation(id)) throw new Error(`Archived sequence ${id} is already a sampled animation`);
+        }
     }
 
     /** Hydrated gameplay definitions derived from an archive must be invalidated with their base. */
@@ -587,7 +596,36 @@ export class CacheDefinitions {
     }
 
     static getSeq(id: number): SeqType {
+        const row = customAnimation(id);
+        if (row) {
+            const type = new SeqType(id, this.getState().info);
+            type.frameLengths = [...row.frameLengths];
+            type.frameIds = row.frameLengths.map(() => 0);
+            type.frameStep = row.loop ? row.frameLengths.length : -1;
+            type.maxLoops = row.loop ? 99 : 1;
+            type.looping = row.loop;
+            type.priority = 0;
+            type.precedenceAnimating = 0;
+            return type;
+        }
         return this.customSequences.get(id)?.value ?? this.getState().sequences.load(id);
+    }
+
+    static registerSampledAnimations(rows: SampledAnimationRow[], source: string): void {
+        const nativeCount = this.getState().archiveContext.counts.seq ?? 0;
+        registerSampledAnimations(rows, source, nativeCount, id => this.customSequences.has(id) || this.isCacheSeq(id));
+    }
+
+    static hasSampledAnimation(id: number): boolean {
+        return customAnimation(id) !== undefined;
+    }
+
+    static getCustomAnimations(): SampledAnimationRow[] {
+        return customAnimationRows();
+    }
+
+    static getSampledAnimationPackets(): ReturnType<typeof sampledAnimationPackets> {
+        return sampledAnimationPackets();
     }
 
     static getSeqCount(): number {
@@ -666,7 +704,10 @@ export class CacheDefinitions {
             }
             return out;
         };
-        const sequenceMap = decode("animation", sequences, SeqType, (id) => this.isCacheSeq(id), GamevalKind.SEQ);
+        const sequenceMap = decode("animation", sequences, SeqType, (id) => {
+            if (customAnimation(id)) throw new Error(`Custom animation ${id} is already a sampled animation`);
+            return this.isCacheSeq(id);
+        }, GamevalKind.SEQ);
         const spotanimMap = decode("graphic", spotanims, SpotAnimType, (id) => this.isCacheSpotanim(id), GamevalKind.SPOTANIM);
         this.customSequences = sequenceMap;
         this.customSpotanims = spotanimMap;

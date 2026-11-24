@@ -84,6 +84,17 @@ test("warm complete square builds preserve every geometry byte and scene metadat
     const actual = await loader.load(state, input, new BuildSteps());
     assert.deepEqual(actual.data, expected.data, "yielding cannot change geometry, minimaps, bridge flags or picking metadata");
 
+    const far = await loader.load(state, { ...input, farOnly: true }, immediate);
+    assert.ok(far.data?.farOnly);
+    assert.equal(far.data.locsAnimated.length, 0, "horizon scenery does not bake animated meshes");
+    assert.equal(far.data.terrainPickVertices.length, 0);
+    assert.equal(far.data.tileLocIdsByLevel.length, 0, "horizon scenery has no interaction or sound-emitter catalog");
+    const fullBytes = actual.transferables.reduce((sum, buffer) => sum + buffer.byteLength, 0);
+    const farBytes = far.transferables.reduce((sum, buffer) => sum + buffer.byteLength, 0);
+    assert.ok(farBytes < fullBytes, "the real cache region's far payload uses fewer bytes");
+    structuredClone(far.data, { transfer: far.transferables });
+    console.log(`Distant World region 50,50 worker payload: full=${fullBytes}, far=${farBytes} bytes`);
+
     const castleInput = { ...input, mapX: 37, mapY: 48,
         extraLocs: [{ id: 4444, x: 2411, y: 3080, level: 0, shape: 4, rotation: 0 }] };
     const castle = await loader.load(state, castleInput, immediate);
@@ -108,6 +119,10 @@ test("warm complete square builds preserve every geometry byte and scene metadat
     // Reloading again reuses the chunks the first reload packed, and draws the same.
     const secondReload = await loader.load(state, { ...castleInput, locOnly: true }, immediate);
     assert.deepEqual(litTriangles(secondReload.data!.loc), castleTriangles, "reused chunks draw what packed ones did");
+    const farRequestedPartial = await loader.load(state, { ...castleInput, locOnly: true, farOnly: true }, immediate);
+    assert.equal(farRequestedPartial.data?.farOnly, undefined, "partial updates cannot turn detailed locs into an unpickable horizon");
+    assert.deepEqual(farRequestedPartial.data?.loc, ropeReload.data?.loc);
+    assert.ok(farRequestedPartial.data!.tileLocIdsByLevel.length > 0);
 });
 
 test("pool skips cancelled queued jobs and forwards cancellation to a running worker", async () => {

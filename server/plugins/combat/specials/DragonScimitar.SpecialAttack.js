@@ -1,4 +1,5 @@
 // TODO: ported from xrsps-typescript; untested.
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 module.exports = function registerDragonScimitarSpecialAttack(api) {
   const { Animation, CombatFactory, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Sound, Sounds } = api.core;
 
@@ -16,12 +17,14 @@ module.exports = function registerDragonScimitarSpecialAttack(api) {
     }
 
     handleAfterHitEffects(hit) {
+      const config = mechanicSettings(this, "prayer-block", { durationTicks: 8 });
+      if (!config.enabled) return;
       if (!hit.isAccurate() || !hit.getTarget().isPlayer()) {
         return;
       }
       // Wiki: Sever blocks protection prayers for 8 ticks (4.8s); the core
       // block timer is second-granular and starts 5.
-      CombatFactory.disableProtectionPrayers(hit.getTarget().getAsPlayer());
+      CombatFactory.disableProtectionPrayers(hit.getTarget().getAsPlayer(), config.durationTicks * .6);
       hit.getAttacker().getAsPlayer().sendMessage("Your target can no longer use protection prayers.");
     }
   }
@@ -36,6 +39,7 @@ module.exports = function registerDragonScimitarSpecialAttack(api) {
     drainAmount: DRAIN,
     strengthMultiplier: 1,
     accuracyMultiplier: SEVER_ACCURACY_MULTIPLIER,
+    metadata: { editorMechanics: mechanicSchema("prayer-block", { durationTicks: 8 }) },
     traits: {
       hitCount: 1,
       accuracyMultiplier: SEVER_ACCURACY_MULTIPLIER,

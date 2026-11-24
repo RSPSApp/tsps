@@ -5,6 +5,7 @@ import type { OsrsClient } from "../../game/OsrsClient";
 import { buildModelRecolorPairs, createPreviewRenderer, previewModels, previewSpec, scanModelColors, sequenceFrameCount, type ModelColorScan, type PreviewRenderer } from "./CacheEditorPreview";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import "./CacheEditor.css";
+import { CacheEditorTools } from "./CacheEditorTools";
 import {
     type AssetKind, type AssetListing, type AssetRow,
     type CacheDefinition, type CacheField, type CacheKind, type CacheLink,
@@ -787,6 +788,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                     <strong>Cache editor</strong>
                 </div>
                 <p className="cache-editor-header-copy">Inspect, preview, and author cache definitions.</p>
+                <CacheEditorTools contentBase={contentBase} selection={shown} onReturn={(next) => { setMode(next); if (next === "assets") void loadAssets(); }} />
                 <div className={`cache-editor-connection ${contentBase ? "is-configured" : "is-waiting"}`} aria-live="polite">
                     <span className="cache-editor-connection-dot" />
                     {contentBase ? "Client endpoint configured" : "Waiting for client"}

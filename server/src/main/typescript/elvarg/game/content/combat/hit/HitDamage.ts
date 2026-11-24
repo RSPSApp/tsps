@@ -1,3 +1,4 @@
+import { ActorPresentation } from '../../../model/ActorPresentation';
 import { HitMask } from './HitMask';
 import type { Mobile } from '../../../entity/impl/Mobile';
 
@@ -22,7 +23,7 @@ export class HitDamage {
 
     /** Observes health actually lost when this hit lands, before reactive healing. */
     public onApplied(observer: (damageTaken: number) => void): this {
-        this.appliedObservers.push(observer);
+        this.appliedObservers.push(ActorPresentation.bind(observer));
         return this;
     }
 

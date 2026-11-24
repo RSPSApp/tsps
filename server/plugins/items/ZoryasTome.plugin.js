@@ -56,11 +56,13 @@ function weaponOf(player) {
 }
 
 function isTomeId(id) {
+  id=core.ItemAliases?.baseOf?.(Number(id))??id;
   return Number(id) === ids().ZORYAS_TOME || Number(id) === ids().ZORYAS_TOME_UNCHARGED_;
 }
 
 function wieldsTome(player, chargedOnly = false) {
-  const id = Number(weaponOf(player)?.getId?.() ?? -1);
+  const raw = Number(weaponOf(player)?.getId?.() ?? -1);
+  const id = core.ItemAliases?.baseOf?.(raw) ?? raw;
   return id === ids().ZORYAS_TOME || (!chargedOnly && id === ids().ZORYAS_TOME_UNCHARGED_);
 }
 
@@ -107,7 +109,7 @@ function useCharge(player) {
   const left = chargesOf(tome) - 1;
   tome.setMetaValue(CHARGES_META_KEY, Math.max(0, left));
   if (left > 0) return;
-  tome.setId(ids().ZORYAS_TOME_UNCHARGED_);
+  if(core.ItemAliases?.baseOf?.(tome.getId())==null)tome.setId(ids().ZORYAS_TOME_UNCHARGED_);
   player.getEquipment().refreshItems();
   player.getUpdateFlag().flag(Flag.APPEARANCE);
   player.sendMessage("Your Zorya's tome has run out of charges.");
@@ -209,7 +211,7 @@ function onAttackRoll(request) {
 function setCharges(player, tome, value) {
   const clamped = Math.max(0, Math.min(MAX_CHARGES, Math.floor(value)));
   tome.setMetaValue(CHARGES_META_KEY, clamped);
-  tome.setId(clamped > 0 ? ids().ZORYAS_TOME : ids().ZORYAS_TOME_UNCHARGED_);
+  if(core.ItemAliases?.baseOf?.(tome.getId())==null)tome.setId(clamped > 0 ? ids().ZORYAS_TOME : ids().ZORYAS_TOME_UNCHARGED_);
   player.getInventory().refreshItems();
 }
 

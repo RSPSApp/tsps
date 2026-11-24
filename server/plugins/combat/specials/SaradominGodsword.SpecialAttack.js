@@ -25,10 +25,12 @@ module.exports = function registerSaradominGodswordSpecialAttack(api) {
     }
 
     handleAfterHitEffects(hit) {
+      const recovery = { enabled: true, healPercent: 50, prayerPercent: 25, minimumHeal: 10, minimumPrayer: 5, ...this.specialMechanics?.recovery };
+      if (!recovery.enabled) return;
       if (!hit.getAttacker().isPlayer()) {
         return;
       }
-      const rolled = potentialDamage.get(hit);
+      const rolled = this.specialFeatureRolledDamage ?? potentialDamage.get(hit);
       const potential = rolled === undefined ? 0 : Math.floor(rolled * Number(hit.damageMultiplier ?? 1));
       const damage = Math.max(0, Math.floor(hit.getTotalDamage()), potential);
       if (damage <= 0) {
@@ -41,8 +43,8 @@ module.exports = function registerSaradominGodswordSpecialAttack(api) {
       const currentHitpoints = skillManager.getCurrentLevel(Skill.HITPOINTS);
       if (currentHitpoints < maxHitpoints) {
         const heal = Math.max(
-          HEALING_BLADE_MINIMUM_HITPOINTS_HEAL,
-          Math.floor(damage * HEALING_BLADE_HITPOINTS_FRACTION)
+          recovery.minimumHeal,
+          Math.floor(damage * recovery.healPercent / 100)
         );
         skillManager.setCurrentLevels(Skill.HITPOINTS, Math.min(maxHitpoints, currentHitpoints + heal));
       }
@@ -51,8 +53,8 @@ module.exports = function registerSaradominGodswordSpecialAttack(api) {
       const currentPrayer = skillManager.getCurrentLevel(Skill.PRAYER);
       if (currentPrayer < maxPrayer) {
         const restore = Math.max(
-          HEALING_BLADE_MINIMUM_PRAYER_RESTORE,
-          Math.floor(damage * HEALING_BLADE_PRAYER_FRACTION)
+          recovery.minimumPrayer,
+          Math.floor(damage * recovery.prayerPercent / 100)
         );
         skillManager.setCurrentLevels(Skill.PRAYER, Math.min(maxPrayer, currentPrayer + restore));
       }
@@ -71,6 +73,18 @@ module.exports = function registerSaradominGodswordSpecialAttack(api) {
     drainAmount: DRAIN,
     strengthMultiplier: HEALING_BLADE_DAMAGE_MULTIPLIER,
     accuracyMultiplier: HEALING_BLADE_ACCURACY_MULTIPLIER,
+    metadata: { editorMechanics: { version: 1, groups: [{
+      id: "recovery", name: "HP and Prayer recovery", phase: "At impact", hook: "handleAfterHitEffects", event: "damage",
+      trigger: "After a hit passes accuracy and rolls more than zero damage",
+      description: "Restore your HP by {healPercent}% of damage before the enemy HP limit, with a minimum of {minimumHeal}. Restore {prayerPercent}% as Prayer, with a minimum of {minimumPrayer}. Recovery stops at your base HP and Prayer levels.",
+      parameters: [
+        { key: "enabled", label: "Enable recovery", type: "boolean", value: true },
+        { key: "healPercent", label: "Damage restored as HP (%)", type: "number", value: HEALING_BLADE_HITPOINTS_FRACTION * 100, min: 0, max: 100, step: .1 },
+        { key: "minimumHeal", label: "Minimum HP restored", type: "number", value: HEALING_BLADE_MINIMUM_HITPOINTS_HEAL, min: 0, max: 1000, step: 1 },
+        { key: "prayerPercent", label: "Damage restored as Prayer (%)", type: "number", value: HEALING_BLADE_PRAYER_FRACTION * 100, min: 0, max: 100, step: .1 },
+        { key: "minimumPrayer", label: "Minimum Prayer restored", type: "number", value: HEALING_BLADE_MINIMUM_PRAYER_RESTORE, min: 0, max: 1000, step: 1 },
+      ],
+    }] } },
     traits: {
       hitCount: 1,
       accuracyMultiplier: HEALING_BLADE_ACCURACY_MULTIPLIER,

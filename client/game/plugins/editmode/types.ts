@@ -268,7 +268,7 @@ export interface EditModeHost {
     getOverlayTexture?(textureId: number): string | undefined;
     loadWorldDefinition?(): Promise<EditModeWorldDefinition>;
     /** Spawns a cache NPC client-side. Returns the synthetic server id used. */
-    spawnNpc(npcTypeId: number, tile: EditModeTile, rotation: number): number | undefined;
+    spawnNpc(npcTypeId: number, tile: EditModeTile, rotation: number, direction?: number): number | undefined;
     despawnNpc(serverId: number): void;
     /** Hides the client-side NPC for a persisted game spawn until it is shown again. */
     hideNpcSpawn?(spawn: BrowserHostNpcSpawn): void;
@@ -309,6 +309,7 @@ export interface EditModeHost {
         tile: EditModeTile,
         edits: readonly EditModeEdit[],
     ): { regionId: number; data: Uint8Array };
+    hasWideTerrain?(): boolean;
     copyArea?(
         bounds: { minX: number; maxX: number; minY: number; maxY: number },
         edits: readonly EditModeEdit[],

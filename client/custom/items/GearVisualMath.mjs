@@ -1,3 +1,4 @@
+/* global globalThis: readonly */
 // Pure authoring/runtime rules. Preview and the game sample the same bounded layers.
 export const VISUAL_LIMITS={textures:8,particles:8,models:16,particleCount:256,frames:24,keys:64,fps:20};
 export const PATTERNS=['flame','water','noise','runes','stripes','checker','gradient','stars'];

@@ -30,7 +30,7 @@ function halveMeleeDamage(entity, hitDamage, context = {}) {
   if (!isActive(player)) {
     return;
   }
-  const weaponId = player.getEquipment().get(core.Equipment.WEAPON_SLOT)?.getId?.();
+  const weaponId = core.CombatSpecial.weaponIdFor(player);
   if (!staffIds.has(weaponId)) {
     clearPowerOfDeath(player);
     return;

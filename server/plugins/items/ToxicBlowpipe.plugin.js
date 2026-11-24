@@ -82,7 +82,7 @@ function initializePipes() {
 }
 
 function pipeOf(itemId) {
-  return pipeByItem.get(Number(itemId)) ?? null;
+  return pipeByItem.get(Number(itemId)) ?? pipeByItem.get(core.ItemAliases?.baseOf?.(Number(itemId))) ?? null;
 }
 
 /** The kind of pipe a hit was fired from (its fired-shot snapshot), or null when unknown. */
@@ -103,7 +103,8 @@ function isToxicBlowpipeItemId(itemId) {
 }
 
 function isChargedBlowpipeItemId(itemId) {
-  return pipeOf(itemId)?.charged === Number(itemId);
+  const id=Number(itemId);
+  return pipeOf(id)?.charged === (pipeByItem.has(id)?id:core.ItemAliases?.baseOf?.(id)??id);
 }
 
 function isPipeWeapon(rangedWeapon) {
@@ -163,7 +164,7 @@ const BlowpipeState = {
     if (pipe) {
       // A pipe without scales is charged while it holds darts.
       const charged = (pipe.kind.scales && state.scales > 0) || state.dartAmount > 0;
-      item.setId(charged ? pipe.charged : pipe.empty);
+      if(pipeByItem.has(item.getId())||core.ItemAliases?.baseOf?.(item.getId())==null)item.setId(charged ? pipe.charged : pipe.empty);
     }
     return item;
   },

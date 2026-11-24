@@ -1,4 +1,5 @@
 import { GearVisualRegistry } from "../../../custom/items/GearVisualRegistry";
+import { syncSceneryDetail } from "../../SceneryPolicy";
 import { hintArrow } from "../../../game/HintArrow";
 import { projectDeckToWorld } from "../worldEntityMotion";
 import { updateSkyColor } from "../environment";
@@ -644,6 +645,7 @@ export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: num
             Math.max(host.osrsClient.expandedMapLoading | 0, sceneryPadding),
             renderDistance,
         );
+        syncSceneryDetail(host);
         host.syncStreamGenerationFromMapManager();
         profiler.endPhase();
 

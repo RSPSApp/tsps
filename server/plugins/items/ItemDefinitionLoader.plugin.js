@@ -506,6 +506,9 @@ function customModelsResource(_query, segments) {
 
 function sendCustomItems({ player }) {
   const sender = player.getPacketSender();
+  for (const datasets of CacheDefinitions.getSampledAnimationPackets()) {
+    sender.sendContentData("server", datasets);
+  }
   sender.sendContentData("server", [{ key: "customModels", rows: [] }]);
   for (const model of CacheDefinitions.getCustomModels()) {
     sender.sendContentData("server", [{ key: "customModels", rows: [model] }]);

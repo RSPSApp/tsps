@@ -41,8 +41,17 @@ function findWorldMapClickHit(
     return null;
 }
 
-function getWorldMapWidgetPixelsPerTile(state: WorldMapStateHolder, widget: any): { x: number; y: number } {
-    const logicalPixelsPerTile = state.worldMapState.getZoomScale();
+// A click reads the zoom drawn now (RenderOverview's worldMapZoom); a drag the zoom it is easing
+// toward (zoomTarget), so a drag started mid-zoom ends up under the cursor.
+function getWorldMapWidgetPixelsPerTile(
+    state: WorldMapStateHolder,
+    widget: any,
+    zoom: "current" | "target" = "current",
+): { x: number; y: number } {
+    const logicalPixelsPerTile =
+        zoom === "target"
+            ? state.worldMapState.getTargetZoomScale?.() ?? state.worldMapState.getZoomScale()
+            : state.worldMapState.getZoomScale();
     const logicalWidth = Math.max(
         1,
         (widget?.width ?? state.worldMapState.getDisplayPixelWidth() ?? 1) | 0,
@@ -186,7 +195,7 @@ export function handleWorldMapDragInput(
         state.worldMapDragStartMouseY = mouseY | 0;
         state.worldMapDragStartDisplayX = state.worldMapState.displayX | 0;
         state.worldMapDragStartDisplayY = state.worldMapState.displayY | 0;
-        const pixelsPerTile = getWorldMapWidgetPixelsPerTile(state, worldMapHit);
+        const pixelsPerTile = getWorldMapWidgetPixelsPerTile(state, worldMapHit, "target");
         state.worldMapDragPixelsPerTileX = pixelsPerTile.x;
         state.worldMapDragPixelsPerTileY = pixelsPerTile.y;
     }

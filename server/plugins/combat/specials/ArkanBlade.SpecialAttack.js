@@ -1,3 +1,4 @@
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerArkanBladeSpecialAttack(api) {
   const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod } = api.core;
@@ -16,11 +17,13 @@ module.exports = function registerArkanBladeSpecialAttack(api) {
     }
 
     handleAfterHitEffects(hit) {
+      const config = mechanicSettings(this, "burn", { damage: BURN_TOTAL_DAMAGE, chance: 100, strong: true });
+      if (!config.enabled || config.chance < 100 && Math.random() * 100 >= config.chance) return;
       if (!hit.isAccurate() || Math.floor(hit.getTotalDamage()) <= 0) {
         return;
       }
       api.emitCustomEvent("combat:burn", {
-        attacker: hit.getAttacker(), target: hit.getTarget(), damage: BURN_TOTAL_DAMAGE, severity: "strong",
+        attacker: hit.getAttacker(), target: hit.getTarget(), damage: config.damage, severity: config.strong ? "strong" : "normal",
       });
     }
   }
@@ -32,6 +35,7 @@ module.exports = function registerArkanBladeSpecialAttack(api) {
     strengthMultiplier: 1.5,
     accuracyMultiplier: 1.5,
     traits: { hitCount: 1, accuracyMultiplier: 1.5, damageMultiplier: 1.5 },
+    metadata: { editorMechanics: mechanicSchema("burn", { damage: BURN_TOTAL_DAMAGE, chance: 100, strong: true }) },
     combatMethod: new ArkanBladeCombatMethod(),
   });
 };

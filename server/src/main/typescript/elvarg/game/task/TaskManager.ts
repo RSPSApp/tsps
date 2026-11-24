@@ -1,3 +1,4 @@
+import { ActorPresentation } from '../model/ActorPresentation';
 import { Task } from './Task';
 import { TaskType } from './TaskType';
 import { ServerPerf } from '../../util/ServerPerf';
@@ -135,7 +136,7 @@ export class TaskManager {
         task.setRunning(true);
     
         if (task.isImmediate()) {
-            task.execute();
+            ActorPresentation.run(task,()=>task.execute());
         }
     
         TaskManager.pendingTasks.push(task);

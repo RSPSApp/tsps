@@ -3,6 +3,7 @@
  * render distance and the roof plane limit the WebGL renderer computes once per
  * frame before drawing the scene.
  */
+import { syncSceneryDetail } from "../SceneryPolicy";
 import { lowEndDeviceModeEnabled } from "../../game/plugins/lowenddevice/LowEndDeviceMode";
 import { clamp } from "../../common/utils/MathUtil";
 import { ClientState } from "../../game/ClientState";
@@ -46,6 +47,7 @@ export function updateWebGPUMapStreaming(renderer: WebGPURenderer, frameCount: n
         Math.max(client.expandedMapLoading | 0, padding),
         distance,
     );
+    syncSceneryDetail(renderer);
 }
 
 /**
@@ -59,6 +61,8 @@ export function updateWebGPUMapStreaming(renderer: WebGPURenderer, frameCount: n
  * resolveBrowserQualityProfile selects from.
  */
 export function resolveWebGPURenderDistance(renderer: WebGPURenderer): number {
+    const scenery = renderer.osrsClient.clientPlugins.scenerySettings?.();
+    if (scenery) return clamp(scenery.drawDistance | 0, 25, 1024);
     const gpu = renderer.osrsClient.clientPlugins.gpuSettings();
     const base = clamp((gpu?.drawDistance ?? renderer.osrsClient.renderDistance) | 0, 25,
         renderer.osrsClient.clientPlugins.hdEnabled() ? 160 : 90);
@@ -72,6 +76,8 @@ export function resolveWebGPURenderDistance(renderer: WebGPURenderer): number {
 /** Same full-detail radius and device caps as WebGL's resolveEffectiveLodThresholdTiles. */
 export function resolveWebGPULodDistance(renderer: WebGPURenderer): number {
     const distance = resolveWebGPURenderDistance(renderer);
+    const scenery = renderer.osrsClient.clientPlugins.scenerySettings?.();
+    if (scenery) return Math.min(distance, scenery.detailDistance);
     const gpu = renderer.osrsClient.clientPlugins.gpuSettings();
     const base = clamp(gpu ? gpu.drawDistance - 2 : renderer.osrsClient.lodDistance | 0, 0,
         Math.min(distance, renderer.osrsClient.clientPlugins.hdEnabled() ? 48 : distance));

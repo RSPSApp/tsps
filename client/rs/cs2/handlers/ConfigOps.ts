@@ -50,7 +50,7 @@ function itemNameIndex(ctx: HandlerContext): ItemNameIndexEntry[] {
             obj.placeholderTemplate === -1 &&
             obj.noteTemplate === -1
         ) {
-            entries.push({ id, name: obj.name.toLowerCase(), tradable: obj.isTradable === true });
+            entries.push({ id, name: obj.name.toLowerCase(), displayName: obj.name, tradable: obj.isTradable === true });
         }
     }
     ctx.itemNameIndex = { loader, membersWorld, entries };
@@ -189,11 +189,17 @@ export function registerConfigOps(handlers: HandlerMap): void {
             } else if (query.length > 0 && ctx.objTypeLoader) {
                 // A tradable-only search (the Grand Exchange) also drops the untradeable variants
                 // that share a real item's name (Abyssal whip 4178, 20405).
+                const matches: ItemNameIndexEntry[] = [];
                 for (const entry of itemNameIndex(ctx)) {
-                    if ((!tradableOnly || entry.tradable) && entry.name.includes(query)) {
-                        ctx.itemSearchResults.push(entry.id);
-                    }
+                    if ((!tradableOnly || entry.tradable) && entry.name.includes(query)) matches.push(entry);
                 }
+                // OSRS returns the matches sorted by item name (capitals before lower case),
+                // which is the order the Grand Exchange search lists them in.
+                if (matches.length <= ITEM_SEARCH_MAX_RESULTS) {
+                    matches.sort((a, b) =>
+                        a.displayName < b.displayName ? -1 : a.displayName > b.displayName ? 1 : a.id - b.id);
+                }
+                ctx.itemSearchResults = matches.map((entry) => entry.id);
             }
 
             ctx.itemSearchCount = ctx.itemSearchResults.length;

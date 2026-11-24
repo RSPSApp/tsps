@@ -12,9 +12,6 @@ const TIMER_ID = 4;
 const TIMER_COLOURS = { idle: 16765184, caught: 2031427, failed: 16711696 };
 // A caught or missed creature shows the trapping/failing loc this many ticks before the full or failed one.
 const CLOSING_TICKS = 2;
-// A missed net trap's failed loc has no options in the cache: it stands one tick, then the trap collapses and
-// drops its rope and net (rsprox captures 1115, 1128, 4046: failed loc, then the collapse line and the young tree a tick later).
-const NET_FAILED_TICKS = 1;
 // Reset lays the trap again three ticks after the dismantle (captures 1108, 1871, 4002).
 const RESET_LAY_TICKS = 3;
 const DISMANTLE_SOUND = 2632;
@@ -159,15 +156,17 @@ function setState(trap, state, creature = null, animatedId = null) {
   trap.objects.length = 0;
   trap.state = state;
   trap.creature = creature;
+  trap.expires = H.tick + 100;
   const def = H.data.traps[trap.kind];
-  trap.expires = H.tick + (def.tree && state === "failed" ? NET_FAILED_TICKS : 100);
-  const id =animatedId ?? (state === "caught" ? creature.caught : state === "failed" ? def.fail : def.idle);
+  const id = animatedId ?? (state === "caught" ? creature.caught : state === "failed" ? def.fail : def.idle);
   const base = trap.base;
-  if (def.tree && state === "idle") {
-    spawn(trap, def.idleTree, base.getLocation(), base.getType(), base.getFace());
+  if (def.tree && (state === "idle" || state === "failed")) {
+    // A set net trap stands as the set tree and its net. Since the 7 October 2026 update a missed one stands as the reset
+    // tree and net (Dismantle, Reset) for the same minute, then collapses: rsprox 241/911545, 242/911710, 242/912180.
+    spawn(trap, state === "idle" ? def.idleTree : def.failTree, base.getLocation(), base.getType(), base.getFace());
     spawn(trap, id, netTile(trap), base.getType(), base.getFace());
   } else if (def.tree) {
-    // The closing, caught and failed nets are one 1x2 loc over the tree and net tiles, placed on the south-west one.
+    // The closing and caught nets are one 1x2 loc over the tree and net tiles, placed on the south-west one.
     const tree = base.getLocation(), net = netTile(trap);
     const loc = new H.core.Location(Math.min(tree.getX(), net.getX()), Math.min(tree.getY(), net.getY()), tree.getZ());
     spawn(trap, id, loc, base.getType(), base.getFace());

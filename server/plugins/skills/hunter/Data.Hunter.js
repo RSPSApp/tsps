@@ -20,7 +20,8 @@ function build(core) {
     collapse: ["The net trap that you set has collapsed.", core.ChatType.SPAM] };
   const sapling = colour => ({ tree: loc(`hunting_sapling_up_${colour}`), setting: loc(`hunting_sapling_setting_${colour}`),
     idleTree: loc(`hunting_sapling_set_${colour}`), idle: loc(`hunting_sapling_net_set_${colour}`),
-    failing: loc(`hunting_sapling_failing_${colour}`), fail: loc(`hunting_sapling_failed_${colour}`) });
+    failing: loc(`hunting_sapling_failing_${colour}`), failTree: loc(`hunting_sapling_up_reset_${colour}`),
+    fail: loc(`hunting_sapling_net_reset_${colour}`) });
   const traps = {
     bird: { level: 1, item: I.BIRD_SNARE, lureRange: 2, idle: loc("hunting_ojibway_trap"), failing: loc("hunting_ojibway_trap_failing"),
       fail: loc("hunting_ojibway_trap_broken"), animation: 5208, layTicks: 3, layMessage: "You begin setting up the trap.", laySound: 2646,
@@ -129,7 +130,7 @@ function build(core) {
   };
   const data = { traps, creatures, catchLines, butterflies, implings, falconry, birdhouses, aerialFish };
   // Fail on a stale enum at startup instead of creating invalid items/objects in-game.
-  const stages = ["idle", "fail", "failing", "setting", "tree", "idleTree"];
+  const stages = ["idle", "fail", "failing", "setting", "tree", "idleTree", "failTree"];
   for (const value of [...creatures.map(c => [c.npc, c.caught, ...c.loot.map(l => l[0])]),
     ...Object.values(traps).map(def => stages.filter(key => key in def).map(key => def[key])),
     ...butterflies.map(c => [c.npc, c.jar, core.CacheDefinitions.getSpotanimId(c.release)]), ...implings.map(c => [c.jar, ...c.npcs]),

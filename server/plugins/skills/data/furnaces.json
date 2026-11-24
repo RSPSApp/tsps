@@ -1,4 +1,8 @@
 {
   "$comment": "Loc names that work as an ordinary furnace: Smelt (bars, molten glass, cannonballs), gold and silver jewellery, and the Desert Treasure II rings. Clay forge (Neitiznot), Volcanic Furnace (Mount Karuulm), Lava forge (Mor Ul Rek), Ancient Furnace (Grimstone Dungeon) and Cam Torum's Forge are furnaces under other names (OSRS Wiki: Furnace, Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace, Forge (Cam Torum) \"can be used as a regular furnace\"; rsprox capture 1098: Smelt opens the smelting menu). Only Cam Torum's loc is named Forge. The Lovakite furnace smelts lovakite only and is not listed (docs/smithing.md).",
-  "names": ["Furnace", "Small furnace", "Clay forge", "Volcanic Furnace", "Lava forge", "Ancient Furnace", "Forge"]
+  "names": ["Furnace", "Small furnace", "Clay forge", "Volcanic Furnace", "Lava forge", "Ancient Furnace", "Forge"],
+  "$quests": "Furnaces a quest opens: before it, every option and item use on the loc is refused with `message` (smithing/QuestFurnaces.Smithing.js). Cam Torum's Forge needs Perilous Moons (Wiki, Forge (Cam Torum): \"after the completion of Perilous Moons\"); live's refusal is unrecorded, so the line is ours.",
+  "quests": {
+    "Forge": { "quest": "perilous_moons", "message": "You need to have completed Perilous Moons to use the Forge." }
+  }
 }

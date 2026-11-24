@@ -2,8 +2,8 @@
  * Smithing: smelting at furnaces and smithing at anvils. The units live in smithing/:
  * Data (cache products + data/smithing.json), Sessions (the make-X loops), Smelting, Anvil,
  * Cannonballs, Gear (ring of forging, Varrock armour), Godswords, DragonShields (dragon and
- * visage shields, the dragon forge), Spears (the barbarian anvil), CalcifiedDeposit and
- * Superheat.
+ * visage shields, the dragon forge), Spears (the barbarian anvil), CalcifiedDeposit,
+ * Superheat and QuestFurnaces (furnaces a quest opens).
  * docs/smithing.md has the sources.
  */
 const Core = require("./smithing/Core.Smithing");
@@ -18,6 +18,7 @@ const DragonShields = require("./smithing/DragonShields.Smithing");
 const Spears = require("./smithing/Spears.Smithing");
 const CalcifiedDeposit = require("./smithing/CalcifiedDeposit.Smithing");
 const Superheat = require("./smithing/Superheat.Smithing");
+const QuestFurnaces = require("./smithing/QuestFurnaces.Smithing");
 
 const FURNACE_NAMES = new Set([...Smelting.FURNACE_NAMES, "Lovakite furnace"]);
 
@@ -67,6 +68,7 @@ module.exports = {
     api.onCustomEvent("player:interaction-cleared", interrupt);
     api.onCustomEvent("level-up:popup-opened", Sessions.pause);
     api.onItemOnObject(useItemOnObject, { noted: false });
+    QuestFurnaces(api);
     Sessions(api);
     Smelting(api);
     Anvil(api);

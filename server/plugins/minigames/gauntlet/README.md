@@ -12,10 +12,13 @@ Echo entry skips preparation and supplies all three perfected corrupted weapons,
 corrupted armour, fourteen paddlefish, two four-dose egniol potions and a perfected crystal
 dagger. Song of the Elves/Bryn, pet and pending-reward entry checks still apply.
 
-Original inventory/equipment slots, quantities and metadata are synchronously saved in the
-profile's `gauntlet:echo-equipment-escrow` before temporary equipment replaces them. All exit
-paths restore them, including death, disconnect during the entry fade, and reconnect after a
-server interruption. Malformed escrow is retained for recovery rather than deleting items.
+Normal, Corrupted and Echo runs share `Equipment.Gauntlet.js`: original inventory/equipment
+slots, quantities and deep-cloned metadata go into `gauntlet:equipment-escrow`. Entry waits for
+`save` **and** `flush` before replacing containers. Recovery replaces slots idempotently and
+commits their save before releasing transfer guards. The old `gauntlet:echo-equipment-escrow`
+record remains readable. Pre-replacement cancellations keep the actual carried containers;
+active-run recovery restores the stored originals. Write failures keep the record and lock,
+and malformed records require assistance. Disconnects during either fade end the run once.
 
 A successful Echo completion queues its unique roll once in the persisted normal corrupted
 reward chest, alongside ordinary corrupted loot. It does not roll another Echo orb. Ordinary

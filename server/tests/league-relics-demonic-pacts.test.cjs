@@ -2684,3 +2684,26 @@ test("Transmute capped bank falls back to a separate plain stack without merging
   assert.equal(inventory.get(0).getAmount(), 10);
   assert.equal(inventory.get(0).getMeta(), null);
 });
+
+test("Gauntlet carried Flask of Fervour: selected relic retains one flask, resets cooldown and cancels its old ready task", t => {
+  const who = cases(FLASK_OF_FERVOUR), tasks = [];
+  t.mock.method(core.TaskManager, "submit", task => tasks.push(task));
+  const flask = itemActions.get("Flask of fervour"), key = require("../plugins/modes/leaguerelics/FlaskOfFervour.LeagueRelics").READY_AT_ATTRIBUTE;
+  flask.Activate({ player: who.relic, handled: false });
+  const ready = tasks.at(-1);
+  assert.ok(who.relic.getAttribute(key) > Date.now());
+  const id = I.FLASK_OF_FERVOUR, count = who.relic.getInventory().getAmount(id);
+  emit("gauntlet:starting-kit", { player: who.relic, carried: [{ id, amount: 1 }] });
+  assert.equal(who.relic.getInventory().getAmount(id), count + 1);
+  assert.equal(who.relic.getAttribute(key), 0);
+  assert.equal(ready.isRunning(), false, "the previous ready notification cannot fire in the run");
+  const cooldownVarp = core.CacheDefinitions.getVarpId("league_relic_flask_of_fervour_cooldown");
+  assert.equal(who.relic.sent.configs.get(cooldownVarp), 0);
+  for (const p of others(who)) {
+    const before = p.getInventory().getAmount(id);
+    emit("gauntlet:starting-kit", { player: p, carried: [{ id, amount: 1 }] });
+    assert.equal(p.getInventory().getAmount(id), before, "carrying a flask does not grant its unselected relic");
+  }
+  emit("gauntlet:starting-kit", { player: who.relic, carried: [{ id: 995, amount: 1 }] });
+  assert.equal(who.relic.getInventory().getAmount(id), count + 1, "no flask is manufactured when none was carried");
+});

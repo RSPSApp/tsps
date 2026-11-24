@@ -4,7 +4,7 @@
  * The lobby under Prifddinas: the Gauntlet Portal down from the city, the teleport platform back
  * up, Bryn, and the entrance that starts a run.
  *
- * Wiki: nothing can be taken in or out, so the entrance needs an empty inventory and equipment.
+ * Wiki: carried items are stored for the run and returned on leaving, including for Ultimate Ironmen.
  * Bryn turns away anyone who hasn't spoken to him, has a pet out, or has a reward waiting
  * (his lines are from the Wiki's transcript). Enter-corrupted appears once a Gauntlet has been
  * completed (varp 2353, the entrance's multiloc).
@@ -65,10 +65,7 @@ function tryStart(player, corrupted) {
     Shared.npcSay(player, Shared.NPC.BRYN, BRYN.PET);
     return true;
   }
-  if (!Shared.isEmptyHanded(player)) {
-    Shared.statement(player, "You can't take any items into the Gauntlet. Use the deposit box first.");
-    return true;
-  }
+  if (require("./Equipment.Gauntlet").has(player)) return true;
   if (corrupted && !Run.hasCompleted(player)) return true;
   Run.startRun(player, { corrupted });
   return true;

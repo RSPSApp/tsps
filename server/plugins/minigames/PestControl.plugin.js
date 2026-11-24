@@ -222,6 +222,12 @@ const PEST_COMBAT_LEVELS = {
   splatter: [22, 33, 44], shifter: [36, 57, 76], ravager: [36, 53, 71],
   spinner: [37, 55, 74], torcher: [33, 49, 67], defiler: [33, 50, 66], brawler: [51, 76, 101],
 };
+// The Wiki's hit points for each pest at those levels. Set outright: a floor of twice the level gave
+// Novice pests two to three times theirs, and it read the shared definition a Veteran game had raised.
+const PEST_HITPOINTS = {
+  splatter: [13, 23, 33], shifter: [23, 38, 53], ravager: [23, 38, 53],
+  spinner: [33, 53, 73], torcher: [18, 30, 45], defiler: [27, 45, 62], brawler: [53, 83, 113],
+};
 const SPINNER_IDS = new Set(PEST_IDS.spinner.flat());
 const TORCHER_IDS = PEST_IDS.torcher.flat();
 const DEFILER_IDS = PEST_IDS.defiler.flat();
@@ -263,7 +269,7 @@ function applyPestStats(npc, type, tier) {
   stats[0] = level;
   stats[1] = level;
   stats[2] = level;
-  definition.setMaxHitpoints(Math.max(definition.getHitpoints(), level * 2));
+  definition.setMaxHitpoints(PEST_HITPOINTS[type]?.[tier] ?? Math.max(definition.getHitpoints(), level * 2));
   npc.setHitpoints(definition.getHitpoints());
 }
 
@@ -1372,6 +1378,7 @@ module.exports = {
     BOATS,
     commendationsFor,
     PEST_IDS,
+    applyPestStats,
     PORTAL_ORDERS,
     choosePortalOrder,
     clampActivity,

@@ -14,7 +14,7 @@ The dwarven furnace under Keldagrim (`server/plugins/minigames/BlastFurnace.plug
   - The pot holds 28 primary ores (counted together), and 254 each of coal and tin. Pending conveyor loads count towards those limits; excess stays in the inventory. These capacities are documented on the [Blast Furnace page](https://oldschool.runescape.wiki/w/Blast_Furnace).
   - A full stack of 28 bars of any metal blocks further belt loading, including coal. The bars must be collected first; the refused load stays carried.
   - Pending ore is saved separately from the melting pot. Pot counters update when the load arrives. Logging out with only coal on the belt loses that pending coal, while coal already in the pot remains. Mixed pending loads survive logout and resume on return, rather than becoming pot contents immediately ([Wiki](https://oldschool.runescape.wiki/w/Blast_Furnace)).
-  - Each ore type rides the belt as its own NPC (2924-2932), one tile a tick for 3 tiles, then falls into the pot (animation 2434) **(RSPS: timing)**.
+  - Each ore type rides the belt as its own NPC (2924-2932), one tile a tick for 3 tiles, then falls into the pot (animation 2434) **(RSPS: timing)**. Each step is an in-view NPC teleport (`teleportInView`), as for the Motherlode Mine pay-dirt: a plain `moveTo` every tick drops the ore from view for that tick, so it was never drawn after it spawned (issue 6665).
 - **Smelting** happens when the belt is empty. It uses half the coal of a furnace (Wiki), and iron always succeeds.
   - Bars that need coal are made first, so iron with coal in the pot becomes steel, and any iron left over becomes iron bars.
   - Ore waits in the pot until there's enough coal for it.

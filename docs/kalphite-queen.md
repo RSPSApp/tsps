@@ -132,9 +132,23 @@ those fights had status damage on her, so how live shows a burn tick then isn't 
 Ours: damage that still arrives during the molt shows as a 0 splat, and burn stacks keep running
 down; what is left carries over to the airborne form.
 
-In the captures the airborne form takes its first hit 13 to 16 ticks after the molt. The 12-tick
-unlock follows the sequence's 11.5-tick duration; the later hitsplats do not imply an extra tick of
-untargetability.
+Wiki: Kalphite Queen says "When the first form is killed, it takes 20 game ticks (12 seconds) for
+the transition into the second airborne form." We use 12 (`TRANSFORMATION_TICKS`), not 20, because
+the captures show her attackable earlier:
 
-`server/tests/kalphite-queen-molt.test.cjs` loads the real plugins and burns or poisons a real
-Queen through the first form's death.
+- On the molt tick the server already sends `TransformationExtendedInfo(id=965)` (the airborne
+  appearance) and `EnabledOpsExtendedInfo` with every op on (recording 95, tick 5150), so there is
+  no separate form swap at +20.
+- Players were clicking her at +5 to +11 in 27 of the 154 molts, and no hitsplat landed on her
+  before +13 in any of them (recording 95, tick 8873: clicks from +5, first hit +14).
+- First hits land at +13 to +16 right after the unlock; a 20-tick lock would put them at +21 or
+  later.
+
+The 12-tick unlock follows the sequence's 11.5-tick duration; the later hitsplats do not imply an
+extra tick of untargetability. The captures do not record the server's targetability decision, so
+this is inferred from clicks that produced no hit and from where the first hits land. The
+#6430 report ("mage works after 4-5 clicks") has not been reproduced separately.
+
+`server/tests/kalphite-queen-molt.test.cjs` loads the real plugins, burns or poisons a real Queen
+through the first form's death, and asserts she is untargetable on ticks 1 to 11 and targetable on
+tick 12.

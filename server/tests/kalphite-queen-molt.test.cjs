@@ -71,11 +71,12 @@ for (const [label, inflict] of [
     tick(queen);
     assert.equal(queen.getHitpoints(), 1, `still molting on tick ${i}`);
     assert.ok(!queen.isDyingFunction(), `not dying on tick ${i}`);
+    assert.equal(queen.isUntargetable(), true, `untargetable on tick ${i}`);
   }
   tick(queen);
   assert.equal(queen.getId(), core.NpcIdentifiers.KALPHITE_QUEEN_3);
   assert.ok(queen.getHitpoints() >= 254, "the airborne form takes over at full health (less a burn tick due that tick)");
-  assert.equal(queen.isUntargetable(), false);
+  assert.equal(queen.isUntargetable(), false, "targetable on tick 12, when the captures' first hits land at +13");
 });
 
 test("the burn keeps running through the molt and hurts the airborne form", (t) => {

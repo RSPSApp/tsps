@@ -8388,7 +8388,7 @@
   {"level":0,"name":"Sandy rocks","wanderRadius":0,"x":1797,"y":3469,"id":5936},
   {"level":0,"name":"Squirrel","x":1797,"y":3508,"id":1418},
   {"level":0,"name":"Imp","x":1798,"y":3491,"id":5007},
-  {"level":0,"name":"Farmer Gricoller","x":1799,"y":3498,"id":6920},
+  {"level":0,"name":"Farmer Gricoller","x":1799,"y":3498,"id":6920,"wanderRadius":0},
   {"level":0,"name":"Squirrel","x":1800,"y":3519,"id":1418},
   {"level":0,"name":"Sandy rocks","wanderRadius":0,"x":1802,"y":3464,"id":7207},
   {"level":0,"name":"Squirrel","x":1803,"y":3513,"id":1418},

@@ -12,6 +12,9 @@ const TIMER_ID = 4;
 const TIMER_COLOURS = { idle: 16765184, caught: 2031427, failed: 16711696 };
 // A caught or missed creature shows the trapping/failing loc this many ticks before the full or failed one.
 const CLOSING_TICKS = 2;
+// A missed net trap's failed loc has no options in the cache: it stands one tick, then the trap collapses and
+// drops its rope and net (rsprox captures 1115, 1128, 4046: failed loc, then the collapse line and the young tree a tick later).
+const NET_FAILED_TICKS = 1;
 // Reset lays the trap again three ticks after the dismantle (captures 1108, 1871, 4002).
 const RESET_LAY_TICKS = 3;
 const DISMANTLE_SOUND = 2632;
@@ -156,9 +159,9 @@ function setState(trap, state, creature = null, animatedId = null) {
   trap.objects.length = 0;
   trap.state = state;
   trap.creature = creature;
-  trap.expires = H.tick + 100;
   const def = H.data.traps[trap.kind];
-  const id = animatedId ?? (state === "caught" ? creature.caught : state === "failed" ? def.fail : def.idle);
+  trap.expires = H.tick + (def.tree && state === "failed" ? NET_FAILED_TICKS : 100);
+  const id =animatedId ?? (state === "caught" ? creature.caught : state === "failed" ? def.fail : def.idle);
   const base = trap.base;
   if (def.tree && state === "idle") {
     spawn(trap, def.idleTree, base.getLocation(), base.getType(), base.getFace());

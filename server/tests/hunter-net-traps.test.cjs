@@ -114,6 +114,19 @@ test('a miss on a west-facing net shows the failing then failed loc on the net t
   assert.deepEqual(trap.objects.map(o => [name(o), ...xy(o.getLocation())]), [['hunting_sapling_failed_swamp', 1478, 3099]]);
 });
 
+test('a missed net trap collapses a tick after the failed loc, dropping its rope and net (issue 6669)', t => {
+  const { trap, tree } = setTrap(t, 3, 1479, 3099, 29);
+  spring(t, trap, false);
+  tick(); tick();
+  assert.equal(trap.state, 'failed');
+  assert.equal(trap.expires, H.tick + 1);
+  tick();
+  assert.equal(H.traps.size, 0);
+  assert.deepEqual(drops.map(([id, at]) => [id, ...xy(at)]),
+    [[core.ItemIdentifiers.ROPE, 1478, 3099], [core.ItemIdentifiers.SMALL_FISHING_NET, 1478, 3099]]);
+  assert.deepEqual(objects, [tree], 'the young tree is back');
+});
+
 test('a catch plays 739 then 2652 at the net tile; a miss plays 2652 on the failing loc and the net tile', t => {
   const { trap } = setTrap(t, 3, 1479, 3099);
   spring(t, trap, true);

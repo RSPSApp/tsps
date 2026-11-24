@@ -8,7 +8,7 @@
 //   [--clip-secs 5 --clip-fps 10 --clip-out clip.mp4]
 //   [--animation-smoothing on|off] [--check-animation-smoothing 1]
 //   [--check-mobile-keyboard 1] (use --url with ?mobile=1)
-//   [--check-world-map-zoom 1 --world-map-zoom-rounds 3 --world-map-zoom-start-out 0 --world-map-zoom-burst 0 --world-map-pan 0 --world-map-view x,y;x,y] (opens the world map, wheels in/out;
+//   [--check-world-map-zoom 1 --world-map-zoom-rounds 3 --world-map-zoom-start-out 0 --world-map-zoom-burst 0 --world-map-pan 0 --world-map-pan-step 15 --world-map-view x,y;x,y] (opens the world map, wheels in/out;
 //     samples the zoom drawn and the share of solid-black 8x8 blocks over the map)
 //   [--check-mobile-combat-hud 1] (mobile client in Wilderness; checks rotation and captures each layout)
 //   [--check-responsive-gameframe 1] (desktop login, narrow/portrait windows keep the desktop layout)
@@ -1064,7 +1064,7 @@ async function main() {
             await sleep(120);
             await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: cx, y: cy, button: "left", buttons: 1, clickCount: 1 });
             await sleep(120);
-            const stepPx = Number(arg("world-map-pan-step", "15")) || 15;
+            const stepPx = Math.max(1, Number(arg("world-map-pan-step", "15")) || 15);
             for (let dx = stepPx; dx <= span; dx += stepPx) {
               await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: cx + dir * dx, y: cy, button: "left", buttons: 1 });
               await sleep(16);

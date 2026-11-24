@@ -26,6 +26,7 @@ function state() {
         worldMapState,
         worldMapImageTiles: new Map(),
         worldMapImageAccess: new Map(),
+        worldMapImageDrawnAt: new Map(),
         pendingWorldMapImageIds: new Set(),
         failedWorldMapImageIds: new Map(),
         retainedWorldMapImageIds: new Set(),

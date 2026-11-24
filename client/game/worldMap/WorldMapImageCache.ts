@@ -246,7 +246,7 @@ function evictWorldMapImage(state: WorldMapStateHolder, deps: WorldMapImageDeps,
     }
     state.worldMapImageTiles.delete(id);
     state.worldMapImageAccess.delete(id);
-    state.worldMapImageDrawnAt?.delete(id);
+    state.worldMapImageDrawnAt.delete(id);
     clearWorldMapIconsForImageKey(state, id);
 }
 
@@ -300,9 +300,9 @@ export function prefetchWorldMapImageTiles(
                     (id) =>
                         (id & PIXELS_PER_TILE_MASK) === sizeBits &&
                         !state.retainedWorldMapImageIds.has(id) &&
-                        (drawnAt?.get(id) ?? -Infinity) < before,
+                        (drawnAt.get(id) ?? -Infinity) < before,
                 );
-                stale.sort((a, b) => (drawnAt?.get(b) ?? -Infinity) - (drawnAt?.get(a) ?? -Infinity));
+                stale.sort((a, b) => (drawnAt.get(b) ?? -Infinity) - (drawnAt.get(a) ?? -Infinity));
                 for (const id of stale) staleBytes += state.worldMapImageTiles.get(id)?.bytes ?? 0;
             }
             // Evict only when it makes room for this square; else the loads in flight keep it.
@@ -339,7 +339,7 @@ function setWorldMapImageTile(
         state.worldMapImageTiles.delete(mapId);
         state.worldMapImageAccess.delete(mapId);
     }
-    state.worldMapImageDrawnAt?.set(mapId, performance.now());
+    state.worldMapImageDrawnAt.set(mapId, performance.now());
     const bytes = (width | 0) * (height | 0) * 4;
     state.worldMapImageTiles.set(mapId, {
         key: `worldmap:${mapId}:${state.worldMapImageCacheEpoch}`,
@@ -457,7 +457,7 @@ function getWorldMapImageSourceInternal(
     const tile = state.worldMapImageTiles.get(mapId);
     if (tile) {
         state.worldMapImageAccess.set(mapId, accessTime);
-        state.worldMapImageDrawnAt?.set(mapId, performance.now());
+        state.worldMapImageDrawnAt.set(mapId, performance.now());
     } else if (
         !allowStandIn ||
         state.retainedWorldMapImageIds.size === 0 ||
@@ -471,7 +471,7 @@ function getWorldMapImageSourceInternal(
     const drawId = findBestCachedImageId(state, mapId);
     if (drawId === undefined) return undefined;
     state.worldMapImageAccess.set(drawId, accessTime);
-    state.worldMapImageDrawnAt?.set(drawId, performance.now());
+    state.worldMapImageDrawnAt.set(drawId, performance.now());
     return state.worldMapImageTiles.get(drawId);
 }
 
@@ -594,7 +594,7 @@ export function clearWorldMapImages(
     state.worldMapImageTiles.clear();
     state.worldMapImageBytes = 0;
     state.worldMapImageAccess.clear();
-    state.worldMapImageDrawnAt?.clear();
+    state.worldMapImageDrawnAt.clear();
     state.worldMapState.clearTileIcons();
     clearIconCache();
     clearRenderCaches();

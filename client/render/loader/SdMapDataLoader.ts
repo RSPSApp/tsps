@@ -1,4 +1,5 @@
 import { BuildSteps } from "../../common/utils/BuildSteps";
+import { customMapElement } from "../../custom/sprites/CustomMapElement";
 import { nextSequenceFrame } from "../../rs/model/seq/FrameInterpolation";
 import { ConfigType } from "../../rs/cache/ConfigType";
 import { IndexType } from "../../rs/cache/IndexType";
@@ -566,6 +567,8 @@ function createMapFunctionResolver(
             const melLoader = new ArchiveMapElementTypeLoader(cacheInfo, mapElementArchive);
             const spriteCache = new Map<number, MapElementMetadata | undefined>();
             return (mapFuncId: number) => {
+                const custom = customMapElement(mapFuncId);
+                if (custom) return custom;
                 if (!spriteCache.has(mapFuncId)) {
                     let sprite: MapElementMetadata | undefined = undefined;
                     try {

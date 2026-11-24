@@ -1,4 +1,5 @@
 import type { CacheSystem } from "../../rs/cache/CacheSystem";
+import { resolveMapElement } from "../../custom/sprites/CustomMapElement";
 import type { CacheLoaderFactory } from "../../rs/cache/loader/CacheLoaderFactory";
 import type { LocTypeLoader } from "../../rs/config/loctype/LocTypeLoader";
 import type { MapElementTypeLoader } from "../../rs/config/meltype/MapElementTypeLoader";
@@ -101,7 +102,8 @@ export class WorldMapController {
     constructor(private readonly deps: WorldMapControllerDeps) {
         this.iconDeps = {
             loadClientScriptIfExists: (scriptId) => this.deps.loadClientScriptIfExists(scriptId),
-            loadMapElement: (elementId) => this.deps.getMapElementTypeLoader()?.load?.(elementId | 0),
+            loadMapElement: (elementId) =>
+                resolveMapElement(elementId, (id) => this.deps.getMapElementTypeLoader()?.load?.(id)),
             runCs2Script: (script, intArgs) => {
                 this.deps.getCs2Vm()?.run(script, intArgs);
             },
@@ -120,7 +122,8 @@ export class WorldMapController {
                 if (clearCache) this.fallbackArchiveRenderer?.clear();
                 else this.fallbackArchiveRenderer?.cancelLoads();
             },
-            loadMapElement: (elementId) => this.deps.getMapElementTypeLoader()?.load?.(elementId | 0),
+            loadMapElement: (elementId) =>
+                resolveMapElement(elementId, (id) => this.deps.getMapElementTypeLoader()?.load?.(id)),
             getWidgetManager: () => this.deps.getWidgetManager(),
             evictTextureKey: (key) => {
                 const textureCache = this.deps.getRenderer()?.canvas?.__textureCache;
@@ -138,7 +141,9 @@ export class WorldMapController {
         this.clearWorldMapImages();
         state.setElementMetadataResolver((elementId) => {
             try {
-                const element = this.deps.getMapElementTypeLoader()?.load?.(elementId | 0);
+                const element = resolveMapElement(elementId, (id) =>
+                    this.deps.getMapElementTypeLoader()?.load?.(id),
+                );
                 return element ? { category: element.category | 0 } : undefined;
             } catch {
                 return undefined;

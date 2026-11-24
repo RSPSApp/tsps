@@ -112,12 +112,14 @@ Timeline from the first form's death, in game ticks (rsprox 227/234, recordings 
 1864, 3276; 154 molts, `kalphite_update_flying_queen_emerging`, 6270):
 
 - Tick 0: her last hitsplat. She stays in the first form, hitpoints bar at 0, for 7 ticks (101
-  molts) or 8 ticks (53 molts); then the molt packet arrives: `TransformationExtendedInfo(id=965)`,
+  molts) or 8 ticks (53 molts). In all 154 she plays her death animation, sequence 6242
+  (`kalphite_update_queen_death`, 145 client cycles), exactly 4 ticks before the molt packet (recording
+  227/95: last hitsplat at tick 5143, 6242 at 5146, molt at 5150). Then the molt packet arrives: `TransformationExtendedInfo(id=965)`,
   `EnabledOpsExtendedInfo`, sequence 6270 and spotanim 1055 together.
 - Molt tick +0 to +11.5: sequence 6270 and molt graphic 1055's sequence 6269 each last 345 client
   cycles, 11.5 ticks at 30 cycles per tick.
-- Molt tick +13 to +16: her first hitsplat from the player (72 at +13, 66 at +14, 13 at +15, 3 at
-  +16). Players were already clicking her at +5 to +11 in 27 molts and no hit landed before +13
+- Molt tick +13 to +16: her first hitsplat from the player, never before +13 in any of the
+  154 molts (a review recount puts most first hits at +14 to +16, a few later). Players were already clicking her at +5 to +11 in 27 molts and no hit landed before +13
   (recording 95, molt at 8873: clicks from +5, first hit +14). That is hit-arrival timing, so the
   unlock is inferred to be about +12; no packet records the server's targetability decision.
 
@@ -131,7 +133,8 @@ ticks later), and the airborne form's health bar and first splat at about 54 s (
 swapping gear, so that first hit is a late bound, not the unlock).
 
 Ours (`MOLT_DELAY_TICKS` 8, `TRANSFORMATION_TICKS` 12): `transformFirstForm` holds her at 1
-hitpoint and untargetable in the first form with no animation; `MoltStartTask` switches her to the
+hitpoint and untargetable in the first form; `DeathAnimationTask` plays 6242 4 ticks before the molt
+(`MOLT_DELAY_TICKS` - 4, so 4 ticks after the kill); `MoltStartTask` switches her to the
 airborne appearance and plays 6270 and 1055 8 ticks later; `TransformTask` restores 255 hitpoints
 and makes her targetable 12 ticks after that, 20 from the kill. Before this she molted on the kill
 tick and sat in the airborne form, untargetable and with no animation, for 8 more ticks (#6430).

@@ -5,7 +5,7 @@
 // chests' loot and coins).
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { test, before } = require('node:test');
+const { test, before, after, describe, mock } = require('node:test');
 
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
@@ -1094,4 +1094,78 @@ test('silver scroll gates reflect every colour and the worn wealth modifier', ()
     assert.equal(silverRoll(p,[0.99,(1-1e-6)/odds,0],colour).id,Common.objId('shades_swamp_diary'));
     assert.notEqual(silverRoll(p,[0.99,1/odds,0,0],colour).id,Common.objId('shades_swamp_diary'));
   }
+});
+
+
+// Production input path for #6658: the same bronze loc id is used for the surface exit and two inner doors.
+describe('native Shade Catacombs exit', () => {
+  const h = require('./quest-capture-harness.cjs');
+  const EXIT = { id: 4106, x: 3493, y: 9726 };
+  const OUTSIDE = [3485, 3322, 0];
+  const position = f => { const at = f.player.getLocation(); return [at.getX(), at.getY(), at.getZ()]; };
+  before(async () => {
+    h.key = 'shades_of_mortton';
+    const world = require('../dist/game/definition/WorldDefinition'), read = world.readWorldConfig;
+    const config = mock.method(world, 'readWorldConfig', (...args) => {
+      const actual = read(...args);
+      return { ...actual, plugins: { ...actual.plugins, WorldAdmin: false } };
+    });
+    try { await h.setup([[3493, 9725], [3485, 3320]]); } finally { config.mock.restore(); }
+  });
+  after(() => h.teardown());
+  const actor = (t, at = [3493, 9725, 0], items = []) => h.actor(t, { at, items, done: [] });
+  async function open(f, door = EXIT) {
+    await h.dispatch(f, { type: 'object_option', id: door.id, x: door.x, y: door.y, clickType: 1 });
+    h.ticks(f, 4);
+  }
+
+  test('leaving through the mapped exit needs no key', async t => {
+    const f = actor(t);
+    await open(f);
+    assert.deepEqual(position(f), OUTSIDE);
+  });
+
+  for (const [x, toX] of [[3482, 3481], [3504, 3505]]) {
+    test(`internal bronze door at${x},9723 retains its key gate and free return`, async t => {
+      const f = actor(t, [x, 9723, 0]);
+      const door = { id: EXIT.id, x, y: 9723 }, bronzeKey = Common.objId('shadekey_bronze_bloodred');
+      await open(f, door);
+      assert.deepEqual(position(f), [x, 9723, 0]);
+      assert.ok(f.messages.some(({ text }) => text === 'You need a key to open this door.'));
+      f.player.getInventory().adds(bronzeKey, 1);
+      await open(f, door);
+      assert.deepEqual(position(f), [toX, 9723, 0]);
+      assert.equal(f.player.getInventory().getAmount(bronzeKey), 1);
+      f.player.getInventory().deleteNumber(bronzeKey, 1);
+      await open(f, door);
+      assert.deepEqual(position(f), [x, 9723, 0]);
+    });
+  }
+
+  test('a stale remote or wrong-plane exit callback cannot pull a player outside', t => {
+    const f = actor(t, [3493, 9719, 0]);
+    const object = h.core.MapObjects.get(EXIT.id, new Location(EXIT.x, EXIT.y, 0), null);
+    const callback = () => Catacombs.tombDoor({ player: f.player, object });
+    callback();
+    assert.deepEqual(position(f), [3493, 9719, 0]);
+    f.player.setLocation(new Location(3493, 9725, 1));
+    callback();
+    assert.deepEqual(position(f), [3493, 9725, 1]);
+  });
+
+  test('the actual mapped exit leads to the accessible surface, keeping the key', async t => {
+    const bronzeKey = Common.objId('shadekey_bronze_bloodred');
+    const f = actor(t, [3493, 9725, 0], [bronzeKey]);
+    const object = h.core.MapObjects.get(EXIT.id, new Location(EXIT.x, EXIT.y, 0), null);
+    assert.ok(object, 'the real cache map contains the exit');
+    assert.deepEqual([object.getType(), object.getFace()], [0, 1]);
+    await open(f);
+    assert.deepEqual(position(f), OUTSIDE);
+    assert.equal(f.player.getInventory().getAmount(bronzeKey), 1);
+    assert.equal(h.core.RegionManager.getClipping(...OUTSIDE, null), 0, 'outside the wooden doors footprint');
+    await h.dispatch(f, { type: 'move', worldX: 3480, worldY: 3317, modifierFlags: 0, run: false });
+    h.ticks(f, 20);
+    assert.deepEqual(position(f), [3480, 3317, 0], 'normal movement walks around the mound without ignoring collision');
+    assert.equal(f.player.hasFlag('movement:ignore-clipping'), false);
+  });
 });

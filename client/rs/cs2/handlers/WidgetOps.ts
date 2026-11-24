@@ -211,6 +211,29 @@ function getWidgetParamValue(ctx: HandlerContext, widget: any, paramId: number):
  * cc_createchild under their CC parent, so index lookups against the static
  * component must also search nested CCs to see the same flat index space.
  */
+/** A layer's own script-created children, lowest component index first. */
+function childrenInIndexOrder(layer: WidgetNode): WidgetNode[] {
+    const children = (layer.children ?? []).filter((child): child is WidgetNode => !!child);
+    return children.sort((a, b) => ((a.childIndex ?? -1) | 0) - ((b.childIndex ?? -1) | 0));
+}
+
+/**
+ * Every script-created child under a component, nested ones included, lowest component index
+ * first: the order of OSRS's single child array per component.
+ */
+function allDynamicChildren(root: WidgetNode): WidgetNode[] {
+    const out: WidgetNode[] = [];
+    const visit = (widget: WidgetNode) => {
+        for (const child of widget.children ?? []) {
+            if (!child) continue;
+            out.push(child);
+            visit(child);
+        }
+    };
+    visit(root);
+    return out.sort((a, b) => ((a.childIndex ?? -1) | 0) - ((b.childIndex ?? -1) | 0));
+}
+
 function findNestedDynamicChild(widget: WidgetNode, childIndex: number): WidgetNode | null {
     if (!Array.isArray(widget.children)) return null;
     for (const child of widget.children) {
@@ -526,21 +549,23 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         ctx.pushInt(w ? 1 : 0);
     });
 
-    // cc_find_child(int $index)(boolean): the active component's child at `index` becomes
-    // the active component (rev 241); like cc_find, a miss keeps the old target.
+    // cc_find_child(int $n)(boolean): the active layer's n-th child (0-based, in component
+    // index order) becomes the active component. `n` is a position among the layer's own
+    // children, not a component index.
     handlers.set(Opcodes.CC_FIND_CHILD, (ctx, intOp) => {
-        const childIndex = ctx.intStack[--ctx.intStackSize];
-        const parent = getTargetWidget(ctx, intOp);
-        const w = parent ? (parent.children?.[childIndex] ?? findNestedDynamicChild(parent, childIndex)) : null;
+        const position = ctx.intStack[--ctx.intStackSize];
+        const layer = getTargetWidget(ctx, intOp);
+        const w = layer && ((layer.type ?? 0) | 0) === 0 ? (childrenInIndexOrder(layer)[position] ?? null) : null;
         if (w) {
             setTargetWidget(ctx, intOp, w);
         }
         ctx.pushInt(w ? 1 : 0);
     });
 
-    // cc_childcount()(int): how many children the active component has.
+    // cc_childcount()(int): how many children the active layer has (gaps in the index do not count).
     handlers.set(Opcodes.CC_CHILDCOUNT, (ctx, intOp) => {
-        ctx.pushInt(getTargetWidget(ctx, intOp)?.children?.length ?? 0);
+        const layer = getTargetWidget(ctx, intOp);
+        ctx.pushInt(layer && ((layer.type ?? 0) | 0) === 0 ? childrenInIndexOrder(layer).length : 0);
     });
 
     // cc_assert (rev 241): a debug check that there is an active component; no effect here.
@@ -1105,28 +1130,15 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         };
 
         if (parent) {
-            // Dynamic children array (CC_CREATE/CC_COPY).
-            if (parent.children) {
-                for (let i = 0; i < parent.children.length; i++) {
-                    if (matchChild(parent.children[i] as WidgetNode | null)) {
-                        break;
-                    }
-                }
-            }
-
-            // Static children fallback (IF3 parents use parentUid linkage).
-            if (!found) {
-                const staticChildren = ctx.widgetManager.getStaticChildrenByParentUid(parent.uid);
-                for (let i = 0; i < staticChildren.length; i++) {
-                    const child = staticChildren[i];
-                    if (matchChild(child)) {
-                        break;
-                    }
-                }
+            // Every script-created child of the component is searched, nested ones included
+            // (children made by cc_create_child / cc_create_sibling), in component index order.
+            for (const child of allDynamicChildren(parent)) {
+                if (matchChild(child)) break;
             }
         }
 
-        setTargetWidget(ctx, intOp, found);
+        // A miss leaves the active component as it was.
+        if (found) setTargetWidget(ctx, intOp, found);
         ctx.pushInt(found ? 1 : 0);
     });
 

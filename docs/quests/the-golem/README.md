@@ -136,8 +136,10 @@ The Wiki's wording is kept; the capture says:
 ## Not covered
 
 - Ours (no source): the Crafting refusals for the repair and the program, the full-inventory refusal at the
-  throne, the curator's line once the key has been taken, and the skull shutting a tick after the implement
-  when no program is carried (Wiki: it shuts; the delay is not recorded).
+  throne, the curator's line once the key has been taken, the skull shutting a tick after the implement
+  when no program is carried (Wiki: it shuts; the delay is not recorded), Elissa's letter option hidden until
+  the letter is read, the letter read before the start moving nothing, and the key giving no statuette once
+  one is in its alcove.
 - Black dye's Empty option does nothing; no recording empties it.
 - The quest-rating interface (983) and the quest-history varbits (last_quest_*, last_started_*,
   last_completed_*) live sends are not sent by QuestRuntime for any quest.

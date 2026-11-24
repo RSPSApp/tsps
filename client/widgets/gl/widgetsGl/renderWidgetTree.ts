@@ -56,6 +56,7 @@ import { renderArcWidget } from "./arcWidget";
 import { drawScrollBar } from "./scrollbarDraw";
 import { drawWorldMapLabelGL, getWorldMapFlashTexture } from "./worldMapLabels";
 import { scaleLogicalPixels } from "./scaleLogicalPixels";
+import { rectangleAlphas } from "./rectFill";
 import { ps } from "./profilingState";
 import { FONT_VERDANA_11, FONT_VERDANA_13, FONT_VERDANA_15 } from "../../../ui/fonts";
 import type { WorldMapLabelDraw, WorldMapLabelMetrics } from "./worldMapLabels";
@@ -2876,9 +2877,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             // Scripts set w.transparency via cc_settrans; cache sets w.opacity (same semantics)
             const trans = w.transparency ?? w.opacity ?? 0;
 
-            // Skip rendering fully transparent rectangles
-            if (trans >= 255) {
-                // Widget is fully transparent, skip drawing
+            const rectAlphas = rectangleAlphas(!!w.filled, (w.fillMode ?? 0) | 0, trans, w.transparencyBot);
+            if (!rectAlphas.draw) {
+                // A fully transparent solid fill or outline draws nothing; gradients decide for themselves.
             } else if (w.filled) {
                 // OSRS fillMode: 0=SOLID, 1=GRADIENT_VERTICAL, 2=GRADIENT_ALPHA
                 const fillMode = w.fillMode ?? 0;
@@ -2893,7 +2894,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         const rB = ((colorBot >>> 16) & 0xff) / 255;
                         const gB = ((colorBot >>> 8) & 0xff) / 255;
                         const bB = (colorBot & 0xff) / 255;
-                        const a = (255 - trans) / 255;
+                        const a = rectAlphas.top / 255;
                         glr.drawRectGradientVertical(
                             x,
                             y,
@@ -2909,8 +2910,8 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         // Reference: Rasterizer2D_fillRectangleGradientAlpha
                         const colorTop = w.color ?? w.textColor ?? 0xffffff;
                         const colorBot = w.color2 ?? colorTop;
-                        const alphaTop = 255 - (trans & 255);
-                        const alphaBot = 255 - ((w.transparencyBot ?? trans) & 255);
+                        const alphaTop = rectAlphas.top;
+                        const alphaBot = rectAlphas.bottom;
                         glr.drawRectGradientAlpha(
                             x,
                             y,

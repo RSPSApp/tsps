@@ -1840,6 +1840,14 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         const w = getWidgetFromStack(ctx);
         ctx.pushInt(w?.transparency ?? 0);
     });
+    // cc_getblendtrans / if_getblendtrans (1610 / 2610): the bottom transparency an alpha
+    // gradient fades to, as set by 1124 / 2124.
+    handlers.set(1610, (ctx, intOp) => {
+        ctx.pushInt(getTargetWidget(ctx, intOp)?.transparencyBot ?? 0);
+    });
+    handlers.set(2610, (ctx) => {
+        ctx.pushInt(getWidgetFromStack(ctx)?.transparencyBot ?? 0);
+    });
 
     // === Fill ===
     handlers.set(Opcodes.CC_SETFILL, (ctx, intOp) => {

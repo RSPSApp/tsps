@@ -32,7 +32,7 @@ const LECTURES = Object.freeze({
   q5tLEU: "Charles builds your confidence with a well constructed lesson on ship repairs.",
 });
 
-const CAPTAINS_LOG = 31985;
+const CAPTAINS_LOGS = [31985, 31986]; // sailing_log_initial, sailing_log
 const NOTHING_CLAIMABLE = Object.freeze({ owed: false, oceans: [], full: false, xp: 0 });
 
 /**
@@ -41,7 +41,7 @@ const NOTHING_CLAIMABLE = Object.freeze({ owed: false, oceans: [], full: false, 
  * and he gives his nothing-owed answer (no capture has a no-log line).
  */
 function claimable(player) {
-  if (!player.getInventory().contains(CAPTAINS_LOG)) return NOTHING_CLAIMABLE;
+  if (!CAPTAINS_LOGS.some((id) => player.getInventory().contains(id))) return NOTHING_CLAIMABLE;
   const level = player.getSkillManager().getCurrentLevel(common.core().Skill.SAILING);
   const saved = common.progress(player);
   const seas = common.allSeas();

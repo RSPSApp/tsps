@@ -73,7 +73,8 @@ module.exports = function registerPryingTimesQuest(api) {
   const STEVE_NPC_IDS = new Set([STEVE_NPC_ID, STEVE_NPC_ID_2]);
 
   // Items (cache ids; ItemIdentifiers comments).
-  const CAPTAINS_LOG_ITEM_ID = ItemIdentifiers.CAPTAINS_LOG; // 31985
+  const CAPTAINS_LOG_ITEM_ID = ItemIdentifiers.CAPTAINS_LOG; // 31985, sailing_log_initial
+  const FULL_CAPTAINS_LOG_ITEM_ID = ItemIdentifiers.CAPTAINS_LOG_2; // 31986, sailing_log: Pandemonium swaps it in at stage 46
   const CRATE_OF_LOOTY_ITEM_ID = ItemIdentifiers.CRATE_OF_LOOTY; // 32808
   const CROWBAR_ITEM_ID = ItemIdentifiers.CROWBAR; // 31807
   const STOUT_ITEM_ID = ItemIdentifiers.BOTTLE_OF_FISH_BLADDER_STOUT; // 31833
@@ -193,6 +194,7 @@ module.exports = function registerPryingTimesQuest(api) {
   const drinkTrollByPlayer = new WeakMap();
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
+  const holdsCaptainsLog = (player) => held(player, CAPTAINS_LOG_ITEM_ID) || held(player, FULL_CAPTAINS_LOG_ITEM_ID);
   const freeSlots = (player) => player.getInventory().getFreeSlots();
 
   function isSteve(npcId) {
@@ -352,7 +354,7 @@ module.exports = function registerPryingTimesQuest(api) {
         return player.getSkillManager().getCombatLevel() < RECOMMENDED_COMBAT;
       case START_NO_LOG_CONDITION_ID:
       case START_NO_LOG_AGAIN_CONDITION_ID:
-        return !held(player, CAPTAINS_LOG_ITEM_ID);
+        return !holdsCaptainsLog(player);
       case START_MAX_TASKS_CONDITION_ID:
       case START_MAX_TASKS_AGAIN_CONDITION_ID:
         return !hasOpenPortTaskSlot(player);

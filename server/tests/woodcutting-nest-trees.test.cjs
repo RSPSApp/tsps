@@ -113,9 +113,9 @@ test('control: a regular tree outside Pest Control sends the log line, countdown
   assert.equal(f.p.getAttribute(LOGS_CHOPPED), 1);
 });
 
-// Feldip Hunter area, Ape Atoll and Crash Island: every Jungle tree with a Chop-down option fells like a
-// regular tree (Wiki: Jungle tree, level 1, 25 xp, logs, clue nests only).
-for (const id of ['JUNGLE_TREE', 'JUNGLE_TREE_2', 'JUNGLE_TREE_3', 'JUNGLE_TREE_5', 'JUNGLE_TREE_6']) {
+// Feldip Hunter area, Ape Atoll, Crash Island and the Kharazi Jungle's inner trees: a Jungle tree with a
+// Chop-down option fells like a regular tree (Wiki: Jungle tree, level 1, 25 xp, logs, clue nests only).
+for (const id of ['JUNGLE_TREE', 'JUNGLE_TREE_5', 'JUNGLE_TREE_6']) {
   test(`Chop-down on ${id} gives the log and XP`, async (t) => {
     const objectId = core.ObjectIdentifiers[id];
     const def = core.CacheDefinitions.getObject(objectId);
@@ -134,3 +134,14 @@ test('the decorative Jungle tree has no Chop-down option to hook', () => {
   assert.equal(def.name, 'Jungle tree');
   assert.equal(def.actions.some(Boolean), false);
 });
+
+// The Kharazi Jungle wall trees are a different action in the recordings (walk-through, 100 xp, 7 tick respawn),
+// so they stay unchoppable rather than giving a regular tree's log.
+for (const id of ['JUNGLE_TREE_2', 'JUNGLE_TREE_3']) {
+  test(`the Kharazi wall tree ${id} is not chopped as a regular tree`, async (t) => {
+    const f = chopper(t);
+    await chop(t, f, core.ObjectIdentifiers[id]);
+    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.LOGS), 0, 'no log');
+    assert.equal(f.sent.xp, 0, 'no xp');
+  });
+}

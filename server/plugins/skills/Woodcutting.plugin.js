@@ -709,6 +709,10 @@ const PEST_CONTROL_TREE = Object.freeze({
   respawnTimer: false,
 });
 const TREES_BY_OBJECT_ID = new Map(PEST_CONTROL_TREE.objectIds.map((id) => [id, PEST_CONTROL_TREE]));
+// The Kharazi Jungle's wall of trees (every placement of these two ids, in a line at y 2935-2942) is not a regular
+// chop: rsprox 230/02951 ticks 985-1005 walk the player through the tree for 100 xp and a 7 tick respawn. Left out
+// of the "Jungle tree" name hook until that passage exists (Legends' Quest).
+const KHARAZI_WALL_TREE_IDS = new Set([ObjectIds.JUNGLE_TREE_2, ObjectIds.JUNGLE_TREE_3]);
 // Farmed sailing hardwoods chop like the wild trees but regrow on farming's own patch timer.
 const FARMED_HARDWOODS = ["camphor", "ironwood", "rosewood"].map((name) => ({
   ...TREES.find((tree) => tree.name === name),
@@ -1560,7 +1564,7 @@ let ItemOnGroundManager;
 
 function handleChop(event) {
   const tree = TREES_BY_OBJECT_ID.get(event.object?.getId?.()) ?? TREES_BY_NAME.get(event.definition.getName());
-  if (!tree) {
+  if (!tree || KHARAZI_WALL_TREE_IDS.has(event.object?.getId?.())) {
     return;
   }
 

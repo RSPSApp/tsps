@@ -54,9 +54,9 @@ function count(player, attribute, target, task) {
   else DiaryProgress.notifyTaskUpdated(player, DIARY_DATA, task);
 }
 
-/** PiratesTreasure's Musa Point <-> Port Sarim voyage, after the ship lands. */
+/** PiratesTreasure's Musa Point -> Port Sarim voyage and Seaman Morris's Pandemonium -> Port Sarim one (Wiki), after the ship lands. */
 function ferried({ player, route }) {
-  if (route === "musa-point-port-sarim") complete(player, TASK.musaFerry);
+  if (route === "musa-point-port-sarim" || route === "pandemonium-port-sarim") complete(player, TASK.musaFerry);
 }
 
 function wallDiscovered({ player }) {

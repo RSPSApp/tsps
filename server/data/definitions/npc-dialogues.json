@@ -540432,12 +540432,12 @@
                           "id": "YQId7G"
                         },
                         {
-                          "player": "There you go, now where did you see Fluffs?"
+                          "player": "There you go, now where did you see Fluffs ?"
                         },
                         {
                           "type": "line",
                           "speaker": "Shilop",
-                          "text": "We play at an abandoned lumber mill to the north east. Just beyond the Jolly Boar Inn. I saw Fluffs running around in there.",
+                          "text": "I play at an abandoned lumber mill to the north east. Just beyond the Jolly Boar Inn. I saw Fluffs running around in there.",
                           "speaker_ids": [
                             3501
                           ]
@@ -540447,10 +540447,10 @@
                         },
                         {
                           "type": "line",
-                          "speaker": "Wilough",
+                          "speaker": "Shilop",
                           "text": "Well, you'll have to find the broken fence to get in. I'm sure you can manage that.",
                           "speaker_ids": [
-                            3503
+                            3501
                           ]
                         }
                       ]

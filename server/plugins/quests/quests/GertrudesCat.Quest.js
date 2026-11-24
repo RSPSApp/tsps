@@ -99,7 +99,7 @@ module.exports = function registerGertrudesCatQuest(api) {
   const START_HOOK = "quest:gertrude-s-cat:start";
   const COINS_TEXT = "You give the lad 100 coins.";
   const COINS_BOX_ID = "gertrudes-cat:coins-box";
-  /** The pay branch's last line; the coins go and the stage moves once it is continued (tick 274). */
+  /** The pay branch's last line; paying Wilough, the coins go and the stage moves once it is continued (tick 274). */
   const PAID_LAST_LINE = "Well, you'll have to find the broken fence to get in. I'm sure you can manage that.";
   const RECEIVE_KITTEN_ACTION_ID = "hXsla7";
   const FOOD_ACTION_ID = "LPHGJg";
@@ -389,7 +389,11 @@ module.exports = function registerGertrudesCatQuest(api) {
     player.sendMessage("Gertrude gives you another kitten.");
   }
 
-  /** The coins box (an objectbox with the coins, tick 267); the payment itself waits for the last line. */
+  /**
+   * The coins box (an objectbox with the coins). Paying Shilop, the coins go and the stage moves as the
+   * box shows (local recording 1001963 tick 9154); paying Wilough, once the branch's last line is
+   * continued (the whole-quest capture, ticks 267-274).
+   */
   function payTheBoys(event, stage) {
     const { player } = event;
     event.handled = true;
@@ -399,8 +403,16 @@ module.exports = function registerGertrudesCatQuest(api) {
       event.end = true;
       return;
     }
-    pendingPayments.set(player, true);
+    if (event.npcId === SHILOP_NPC_ID) pay(player);
+    else pendingPayments.set(player, true);
     event.steps = [{ type: "message", id: COINS_BOX_ID, text: COINS_TEXT }];
+  }
+
+  function pay(player) {
+    if (quest.getStage(player) !== STAGE_STARTED) return;
+    if (player.getInventory().getAmount(COINS_ITEM_ID) < COINS_PRICE) return;
+    player.getInventory().deleteNumber(COINS_ITEM_ID, COINS_PRICE);
+    quest.setStage(player, STAGE_PAID_BOY);
   }
 
   /** Continuing the pay branch's last line takes the coins and moves the stage, as live does (tick 274). */
@@ -408,11 +420,7 @@ module.exports = function registerGertrudesCatQuest(api) {
     const { player } = request;
     if (!pendingPayments.has(player) || request.step?.text !== PAID_LAST_LINE) return;
     request.after = () => {
-      if (!pendingPayments.delete(player)) return;
-      if (quest.getStage(player) !== STAGE_STARTED) return;
-      if (player.getInventory().getAmount(COINS_ITEM_ID) < COINS_PRICE) return;
-      player.getInventory().deleteNumber(COINS_ITEM_ID, COINS_PRICE);
-      quest.setStage(player, STAGE_PAID_BOY);
+      if (pendingPayments.delete(player)) pay(player);
     };
   }
 

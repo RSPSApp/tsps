@@ -140,7 +140,7 @@
       "object": 2618,
       "level": 1,
       "busy": true,
-      "note": "rsprox captures local GertrudesCat (rev 242) ticks 375-382 and 697-701, 3222 ticks 10828-10833 and 11368-11370",
+      "note": "rsprox captures local GertrudesCat (rev 242) ticks 375-382 and 694-701, 3222 ticks 10828-10833 and 11368-11370, 3225 ticks 55-57",
       "unverified": "the south approach: live walks onto the fence tile (3308,3492), which this cache's collision (clipType 2) blocks, so the climb starts from 3308,3491",
       "between": {"ends":[[3308,3491,0],[3308,3493,0]],"cross":{
         "forward":[{"wait":2},{"move":[3308,3494],"from":[3308,3493],"anim":"WALK_FENCE_NORTH","speed":[0,104],"ticks":3}],

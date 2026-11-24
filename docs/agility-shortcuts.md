@@ -126,14 +126,15 @@ The successful Zanaris squeeze's "You try to squeeze past." is spam too (5 of 5 
 ## Varrock broken fence (the lumber yard)
 
 The "Broken fence (Varrock)" entry follows a revision 242 capture of a whole Gertrude's Cat run
-(the user's own recording, ticks 375-382 north and 697-701 south) and rsprox.net recording 3222
-(revision 232, ticks 10828-10833 north and 11368-11370 south), which agree:
+(the user's own recording, ticks 375-382 north and 694-701 south) and rsprox.net recordings 3222
+(revision 232, ticks 10828-10833 north and 11368-11370 south) and 3225 (ticks 55-57), which agree:
 
 - **North (into the yard):** the player walks onto the fence tile 3308,3492, BUSY goes to 1, and
   two ticks later the exact move `to1` 3308,3493 (cycle 0) to `to2` 3308,3494 (cycle 104) plays
   with `human_walk_fence_north` (882). BUSY clears 3 ticks later.
-- **South (out):** from 3308,3493 the exact move 3308,3492 (cycle 0) to 3308,3491 (cycle 60) plays
-  at once with `human_walk_style` (839). BUSY clears 3 ticks later.
+- **South (out):** the player reaches 3308,3493, faces the fence a tick later, and two ticks after
+  arriving the exact move 3308,3492 (cycle 0) to 3308,3491 (cycle 60) plays with `human_walk_style`
+  (839), BUSY with it. BUSY clears 3 ticks later.
 - **No message** either way; the entry used to say "You climb over the broken fence.".
 
 The move starts on the fence line, one tile past the player, so the runner's `move` step takes a

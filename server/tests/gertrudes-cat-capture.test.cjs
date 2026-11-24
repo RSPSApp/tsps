@@ -377,22 +377,36 @@ test('crates: "You search the crate.", 4 ticks, then nothing or the kitten (give
   assert.equal(f.dialogueText(), 'You find a kitten! You carefully place it in your backpack.');
 });
 
-test('the broken fence: north with human_walk_fence_north to 3308,3494, south with 839 to 3308,3491, no message (ticks 375-382, 697-701)', async (t) => {
+test('the broken fence: north with human_walk_fence_north to 3308,3494, south with 839 to 3308,3491, no message (ticks 375-382, 694-701)', async (t) => {
   const f = fixture(t, [3308, 3490, 0]);
   const fence = core.CacheDefinitions.getLocId('gertrudefence');
   const s = f.tick();
   await f.send({ type: 'object_option', id: fence, x: 3308, y: 3492, clickType: 1 });
-  let landed = null;
-  for (let i = 0; i < 14 && !landed; i++) { f.step(); if (f.p.getLocation().getY() === 3494) landed = f.tick(); }
+  let landed = null, beside = null;
+  for (let i = 0; i < 14 && !landed; i++) {
+    f.step();
+    if (beside === null && f.p.getLocation().getY() === 3491) beside = f.tick();
+    if (f.p.getLocation().getY() === 3494) landed = f.tick();
+  }
+  // North: four ticks after reaching 3308,3491, as 3222 walks 3491 (t+1), the fence tile (t+3) and climbs (t+5).
+  const north = f.since(s).find((e) => e[1] === 'player-anim' && e[2] === seq('human_walk_fence_north'));
+  assert.equal(north?.[0] - beside, 4);
   assert.ok(landed, `at ${f.p.getLocation()}`);
   assert.ok(f.since(s).some((e) => e[1] === 'player-anim' && e[2] === seq('human_walk_fence_north')));
   assert.ok(!f.since(s).some((e) => e[1] === 'sendMessage'), 'no message');
+  // South: two ticks after reaching 3308,3493 (the capture's ticks 696-698, 3222's 11368-11370).
   const g = fixture(t, [3308, 3495, 0]);
   const b = g.tick();
   await g.send({ type: 'object_option', id: fence, x: 3308, y: 3492, clickType: 1 });
-  for (let i = 0; i < 10 && g.p.getLocation().getY() !== 3491; i++) g.step();
+  let arrived = null;
+  for (let i = 0; i < 12 && g.p.getLocation().getY() !== 3491; i++) {
+    g.step();
+    if (arrived === null && g.p.getLocation().getY() === 3493) arrived = g.tick();
+  }
   assert.equal(g.p.getLocation().getY(), 3491);
-  assert.ok(g.since(b).some((e) => e[1] === 'player-anim' && e[2] === 839));
+  const climb = g.since(b).find((e) => e[1] === 'player-anim' && e[2] === 839);
+  assert.ok(climb && arrived !== null);
+  assert.equal(climb[0] - arrived, 2);
 });
 
 test('the return: stage 5, the kitten on the player\'s tile, purrs at 2 and 3, the walk off, both gone and the box at 11 (ticks 665-676)', async (t) => {
@@ -581,4 +595,26 @@ test('a banked kitten: the crate holds no second one', async (t) => {
   for (let i = 0; i < 20 && !f.log.slice(from).some((e) => e[2] === 'You find nothing.'); i++) f.step();
   assert.ok(f.log.slice(from).some((e) => e[2] === 'You find nothing.'));
   assert.equal(f.p.getInventory().getAmount(I().FLUFFS_KITTEN), 0);
+});
+
+test('paying Shilop: the coins and the stage go as the coins box shows; Shilop gives both directions (recording 1001963, ticks 9151-9178)', async (t) => {
+  const f = fixture(t, [3220, 3431, 0]);
+  const shilop = f.npc(N().SHILOP, [3220, 3433, 0]);
+  f.npc(N().WILOUGH, [3221, 3433, 0]);
+  quest.setStage(f.p, 1);
+  f.give(I().COINS, 150);
+  await f.clickNpc(shilop, 1);
+  await f.talk([2, 2], { stop: (line) => line[0] === 'item' });
+  assert.deepEqual(f.read(), ['item', I().COINS, 'You give the lad 100 coins.']);
+  assert.equal(quest.getStage(f.p), 2, 'paid as the box shows');
+  assert.equal(f.p.getInventory().getAmount(I().COINS), 50);
+  await f.cont();
+  const lines = await f.talk();
+  assert.deepEqual(lines.map((l) => [l[1], l[2]]), [
+    ['player', 'There you go, now where did you see Fluffs ?'],
+    [N().SHILOP, 'I play at an abandoned lumber mill to the north east. Just beyond the Jolly Boar Inn. I saw Fluffs running around in there.'],
+    ['player', 'Anything else?'],
+    [N().SHILOP, "Well, you'll have to find the broken fence to get in. I'm sure you can manage that."],
+  ]);
+  assert.equal(f.p.getInventory().getAmount(I().COINS), 50, 'once');
 });

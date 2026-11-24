@@ -26,9 +26,11 @@ wording the Wiki leaves out.
   Shilop, Shilop says every line and asks for 100 coins himself; from Wilough, Shilop chips in
   ("our secret play area", "10 coins.") and Wilough answers the threat ("If you want to hurt my
   brother..."), and the menu reads "Fluffs loss" without the apostrophe. "You decide it's best not
-  to hurt the boy." is a message box. The pay branch was recorded from Wilough only: an objectbox
-  with the coins, then Shilop and Wilough's directions; the coins go and varp 180 becomes 2 as
-  the last line is continued (tick 274), not when the box shows. After paying, the clicked boy
+  to hurt the boy." is a message box. Paying Wilough: an objectbox with the coins, then Shilop's
+  "We play at..." and Wilough's broken fence; the coins go and varp 180 becomes 2 as the last line
+  is continued (tick 274). Paying Shilop (local recording 1001963, revision 242, ticks 9151-9178):
+  the coins go and varp 180 becomes 2 as the objectbox shows, and Shilop gives both directions,
+  "I play at..." and the broken fence, after the player's "Fluffs ?". After paying, the clicked boy
   says where Fluffs is (stage 2); once Fluffs is found (recorded at stage 5) the clicked boy
   boasts and the other says "He can you know!", ending in a message box.
 - **The broken fence:** see [agility-shortcuts.md](../../agility-shortcuts.md#varrock-broken-fence-the-lumber-yard).

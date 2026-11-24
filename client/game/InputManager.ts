@@ -55,7 +55,8 @@ export function isIosLandscapeRotated(): boolean {
     );
 }
 
-export function getMousePos(container: HTMLElement, event: MouseEvent | Touch): vec2 {
+/** `clamp: false` keeps a position past the canvas edge, for drags that go on outside it. */
+export function getMousePos(container: HTMLElement, event: MouseEvent | Touch, clamp = true): vec2 {
     const rect = container.getBoundingClientRect();
 
     // When rotated, use clientWidth/clientHeight for the unrotated layout dimensions.
@@ -93,8 +94,10 @@ export function getMousePos(container: HTMLElement, event: MouseEvent | Touch): 
         cssY = rotatedY;
     }
 
-    cssX = Math.max(0, Math.min(baseW, cssX));
-    cssY = Math.max(0, Math.min(baseH, cssY));
+    if (clamp) {
+        cssX = Math.max(0, Math.min(baseW, cssX));
+        cssY = Math.max(0, Math.min(baseH, cssY));
+    }
 
     // Scale from CSS coordinates to canvas internal coordinates
     // This handles cases where canvas is CSS-scaled (displayed size != internal resolution)
@@ -977,6 +980,25 @@ export class InputManager {
         return true;
     }
 
+    /**
+     * A move with a camera button held (OSRS: mouseDragged). It runs for moves outside the canvas
+     * too, so a drag keeps turning the camera when the cursor leaves it, as AWT's grab does. The
+     * position isn't clamped to the canvas, or the camera would stop at its edge.
+     */
+    private dragCamera(event: MouseEvent): void {
+        if (!this.element || (!this.mouseWheelDown && !this.pendingRightPress)) return;
+        const [x, y] = getMousePos(this.element, event, false);
+        this.startRightCameraDrag(x, y);
+        if (!this.mouseWheelDown) return;
+        const deltaX = this.mouseWheelX - x;
+        const deltaY = this.mouseWheelY - y;
+        this._cameraDragDeltaX += deltaX;
+        this._cameraDragDeltaY += deltaY;
+        this.mouseWheelDragged(deltaX, -deltaY);
+        this.mouseWheelX = x;
+        this.mouseWheelY = y;
+    }
+
     /** True while the right button is held to turn the camera, or might be about to. */
     isRightCameraDrag(): boolean {
         return this.rightCameraDragging || this.pendingRightPress !== undefined;
@@ -1011,17 +1033,7 @@ export class InputManager {
         }
 
         this.checkRightButtonHeld(event);
-        this.startRightCameraDrag(x, y);
-        // Update camera drag position while middle-dragging (OSRS: mouseDragged) - Fixed
-        if (this.mouseWheelDown) {
-            const deltaX = this.mouseWheelX - x;
-            const deltaY = this.mouseWheelY - y;
-            this._cameraDragDeltaX += deltaX;
-            this._cameraDragDeltaY += deltaY;
-            this.mouseWheelDragged(deltaX, -deltaY);
-            this.mouseWheelX = x;
-            this.mouseWheelY = y;
-        }
+        this.dragCamera(event);
 
         this.isTouch = false;
         for (const handler of this.mouseHandlers) handler.onMouseMove?.(event);
@@ -1062,7 +1074,7 @@ export class InputManager {
         document.removeEventListener("mouseup", this.onDocGrabUp, true);
     }
 
-    /** Document-level mousemove — only updates coords when cursor is outside the canvas. */
+    /** Document-level mousemove: the cursor is outside the canvas, but a held button still drags. */
     private onDocGrabMove = (event: MouseEvent) => {
         if (!this.element) return;
         // If the event target is within our element, the element's own onMouseMove handles it.
@@ -1074,6 +1086,7 @@ export class InputManager {
         this.mouseX = x;
         this.mouseY = y;
         this.checkRightButtonHeld(event);
+        this.dragCamera(event);
     };
 
     /** Document-level mouseup — catches releases that occur outside the canvas. */

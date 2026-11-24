@@ -186,6 +186,38 @@ async function main() {
         assert.equal(input.getDeltaCameraX(), 0, "coming back without a button doesn't turn the camera");
     }
 
+    // Moves outside the canvas (another page element, or past the browser window) keep turning
+    // the camera while its button is held, like a drag on the world map keeps moving it.
+    {
+        const { input } = setup(false);
+        mouse("mousedown", 1, 600, 100);
+        mouse("mousemove", 1, 630, 100);
+        assert.equal(input.getDeltaCameraX(), -30);
+        outsideMouse("mousemove", 1, 700, 100, 4);
+        assert.equal(input.getDeltaCameraX(), -100, "the middle drag keeps turning past the edge");
+        outsideMouse("mousemove", 1, 900, 80, 4);
+        assert.deepEqual([input.getDeltaCameraX(), input.getDeltaCameraY()], [-300, 20]);
+        input.consumeCameraDrag();
+        mouse("mousemove", 1, 880, 80); // back over the canvas: measured from the last outside move
+        assert.equal(input.getDeltaCameraX(), 20);
+        outsideMouse("mouseup", 1, 880, 80, 0);
+        assert.equal(input.isCameraDragging(), false);
+        input.consumeCameraDrag();
+        outsideMouse("mousemove", 0, 950, 80, 0);
+        assert.equal(input.getDeltaCameraX(), 0, "no grab after the release");
+    }
+    {
+        const { input } = setup(true);
+        mouse("mousedown", 2, 600, 100);
+        outsideMouse("mousemove", 2, 700, 100, 2); // leaves the canvas before the threshold
+        assert.equal(input.isCameraDragging(), true, "a right press that leaves the canvas drags");
+        assert.equal(input.getDeltaCameraX(), -100);
+        outsideMouse("mousemove", 2, 750, 100, 2);
+        assert.equal(input.getDeltaCameraX(), -150);
+        outsideMouse("mouseup", 2, 750, 100, 0);
+        assert.equal(input.isCameraDragging(), false);
+    }
+
     console.log("right-drag-camera ok");
 }
 

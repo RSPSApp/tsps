@@ -180,15 +180,49 @@ test('Shout-to reaches Nickolaus across the actual cave ledge', async (t) => {
     const spawn = require('../data/definitions/npc-spawns.json').find(row => row.id === 2023);
     assert.deepEqual([spawn.x, spawn.y, spawn.level], [2006, 4959, 3]);
     quest.setStage(player, 3);
-    const canonical = PluginManager.spawnNpc({ id: spawn.id, x: spawn.x, y: spawn.y, z: spawn.level, wanderRadius: 0 });
+    const { NpcSpawnDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcSpawnDefinitionLoader');
+    const definition = new NpcSpawnDefinitionLoader().toDefinition(spawn, 'canonical-test');
+    assert.equal(definition.getRadius(), 5, 'the unmodified spawn loader defaults to five-tile wandering');
+    const canonical = PluginManager.spawnNpc({ id: spawn.id, x: spawn.x, y: spawn.y, z: spawn.level, wanderRadius: definition.getRadius() });
     try {
+      assert.equal(player.getPacketSender().getVarbit(2780), 15, 'the native shout phase is 15');
       assert.equal(canonical.getContentId(player), 1484);
       assert.equal(canonical.getCurrentDefinition(player).getActions()[0], 'Shout-to');
+      assert.deepEqual(xyz(), [1998, 4955, 3], 'player starts the wander observation on the ledge');
+      player.closeInterruptibleInterfaces();
+      const visited = new Set();
+      let seed = 6596;
+      const random = t.mock.method(Math, 'random', () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; });
+      try { for (let i = 0; i < 300; i++) { tick(); visited.add(`${canonical.getLocation().getX()},${canonical.getLocation().getY()}`); } } finally { random.mock.restore(); }
+      assert.ok(visited.size > 1, 'real World ticks move the canonical NPC');
+      t.diagnostic(JSON.stringify({player: xyz(), visited: [...visited], final: [canonical.getLocation().getX(), canonical.getLocation().getY()]}));
       await shout(canonical);
-      assert.ok(player.getDialogueManager().isActive());
+      assert.ok(player.getDialogueManager().isActive(), 'a naturally wandered canonical actor can be shouted to: ' + JSON.stringify(messages));
       assert.match(lines.join(' '), /Hello/);
-      assert.deepEqual(xyz(), [1998, 4955, 3]);
+      canonical.setScriptedMovement(true);
+      // The eastern tile also occurred in the original 300-tick review reproduction.
+      for (const position of new Set([...visited, '2009,4957'])) {
+        player.closeInterruptibleInterfaces(); player.moveTo(new core.Location(1998, 4955, 3));
+        canonical.getMovementQueue().reset(); canonical.setLocation(new core.Location(...position.split(',').map(Number), 3));
+        for (let i = 0; i < 4; i++) tick();
+        await shout(canonical);
+        assert.ok(player.getDialogueManager().isActive(), `native shout reaches observed wander tile ${position}: ${JSON.stringify({player: xyz(), messages})}`);
+      }
     } finally { PluginManager.removeNpc(canonical); player.closeInterruptibleInterfaces(); }
+  });
+  await t.test('a farther visible click still walks along the entrance passage into shout reach', async () => {
+    player.closeInterruptibleInterfaces();
+    player.moveTo(new core.Location(1994, 4960, 3));
+    for (let i = 0; i < 4; i++) tick();
+    assert.equal(core.RegionManager.blocked(player.getLocation(), null), false);
+    assert.ok(player.getLocation().getDistance(npc.getLocation()) > 8, 'the initial tile is outside the stationary shout reach');
+    await shout();
+    assert.ok(player.getDialogueManager().isActive(), JSON.stringify({at: xyz(), messages}));
+    assert.notDeepEqual(xyz(), [1994, 4960, 3], 'ordinary route approaches along the cave passage');
+    assert.ok(player.getLocation().isWithinDistance(npc.getLocation(), 8));
+    assert.equal(core.RegionManager.blocked(player.getLocation(), null), false);
+    player.closeInterruptibleInterfaces(); player.moveTo(new core.Location(1998, 4955, 3));
+    for (let i = 0; i < 4; i++) tick();
   });
   await t.test('repeat and disguise stages keep their existing transcript branches', async () => {
     quest.setStage(player, 4); await shout(); await drain();
@@ -207,7 +241,17 @@ test('Shout-to reaches Nickolaus across the actual cave ledge', async (t) => {
     unchanged({ ...request(), clickType: 2 });
     unchanged({ ...request(), npcId: 1485 });
     const original = npc.getLocation();
-    npc.setLocation(new core.Location(2016, 4947, 3)); unchanged(request()); npc.setLocation(original);
+    for (const [dx, dy] of [[-5, 0], [5, 0], [0, -5], [0, 5], [-5, -5], [5, 5]]) {
+      npc.setLocation(new core.Location(2006 + dx, 4959 + dy, 3));
+      const event = request(); PluginManager.emitNpcRoute(event);
+      assert.equal(event.range, 13, 'the five-tile nest boundary receives only the wander offset');
+      assert.equal(event.ignoreProjectileClip, true);
+    }
+    for (const [dx, dy] of [[-6, 0], [6, 0], [0, -6], [0, 6]]) {
+      npc.setLocation(new core.Location(2006 + dx, 4959 + dy, 3)); unchanged(request());
+    }
+    npc.setLocation(new core.Location(2006, 4959, 2)); unchanged(request());
+    npc.setLocation(original);
     player.setLocation(new core.Location(1998, 4955, 2)); unchanged(request());
     player.setLocation(new core.Location(1998, 4955, 3));
     for (const stage of [0, 2, 6, 8]) { quest.setStage(player, stage); unchanged(request()); }

@@ -232,10 +232,11 @@ module.exports = function registerEaglesPeakQuest(api) {
   const SURFACE_LANDING_TILE = { x: 2328, y: 3496, z: 0 };
   const CAMP_NICKOLAUS_TILE = { x: 2318, y: 3503, z: 0 };
   const DUNGEON_LANDING_TILE = { x: 1994, y: 4984, z: 3 };
-  // The cave spawn (parent 2023) resolves to Shout-to 1484 at native phase 16.
+  // The cave spawn (parent 2023) resolves to Shout-to 1484 at native phase 15.
   const NEST_TILE = { x: 2006, y: 4959, z: 3 };
   // Eight tiles across from the walkable entrance ledge (1998, 4955).
   const NICKOLAUS_SHOUT_RANGE = 8;
+  const NICKOLAUS_NEST_RADIUS = 5;
   const EAGLE_TILE = { x: 2006, y: 4951, z: 3 };
   const KEBBIT_TILE = { x: 1971, y: 4885, z: 2 };
   const BRONZE_PEDESTAL_TILE = { x: 1974, y: 4914, z: 2 };
@@ -937,10 +938,13 @@ module.exports = function registerEaglesPeakQuest(api) {
       || request.definition?.getActions?.()[request.clickType - 1] !== "Shout-to") return;
     const at = request.npc.getLocation();
     const stage = quest.getStage(request.player);
+    const nestDistance = Math.max(Math.abs(at.getX() - NEST_TILE.x), Math.abs(at.getY() - NEST_TILE.y));
     if (stage < STAGE_ENTERED || stage >= STAGE_RESCUED
-      || at.getX() !== NEST_TILE.x || at.getY() !== NEST_TILE.y || at.getZ() !== NEST_TILE.z
+      || nestDistance > NICKOLAUS_NEST_RADIUS
+      || at.getZ() !== NEST_TILE.z
       || request.player.getLocation().getZ() !== NEST_TILE.z) return;
-    request.range = NICKOLAUS_SHOUT_RANGE;
+    // Compensate only for his nest wandering; ordinary walking still approaches from farther away.
+    request.range = NICKOLAUS_SHOUT_RANGE + nestDistance;
     request.ignoreProjectileClip = true;
   }
 

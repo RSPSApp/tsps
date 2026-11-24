@@ -8,12 +8,18 @@ const { PluginManager: PM } = require("../dist/plugins/PluginManager");
 const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
-let core, nextIndex = 9700;
+const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+const JsonPersistence = require("../plugins/persistence/JsonPlayerPersistence.plugin.js");
+let core, codec, nextIndex = 9700;
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   PM.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   core = PM.getCoreApi();
   PM.emitServerStartup({});
+  JsonPersistence.register({
+    getSkillManager: () => require("../dist/game/content/skill/SkillManager").SkillManager,
+    setPlayerPersistence: (backend) => { codec = backend; }, log() {},
+  });
 });
 after(() => PM.emitServerShutdown({}));
 
@@ -127,4 +133,81 @@ test("Death to the Dorgeshuun's tour stop sells through the same coin check on b
     assert.equal(inventory.getAmount(I.COINS), 411);
     assert.equal(inventory.getAmount(I.LIT_CANDLE), 1);
   }
+});
+
+function conversationVarbit(f) {
+  return f.player.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId("swamp_candle_guy_conversation"));
+}
+
+test("the naked-flame warning sets swamp_candle_guy_conversation, and the next talk opens the learnt menu", async t => {
+  const f = fixture(t), inventory = f.player.getInventory(), I = core.ItemIdentifiers;
+  const completed = [];
+  const listener = event => { if (event.player === f.player) completed.push(event.id); };
+  PM.createApi("CandleSellerTest").onCustomEvent("league:complete-task", listener);
+  inventory.setItem(0, new core.Item(I.COINS, 2000));
+  await talk(f);
+  assert.equal(conversationVarbit(f), 0);
+  await choose(f, "Yes please.");
+  // "Yes please." is showing; its continue makes the sale and shows "Here you go then.".
+  await resume(f);
+  assert.equal(f.player.getDialogueManager().getCurrent().getText(), BOUGHT);
+  assert.equal(inventory.getAmount(I.LIT_CANDLE), 1, "sold with the hand-over line");
+  assert.deepEqual(completed, ["buy-a-candle-in-lumbridge"]);
+  assert.equal(conversationVarbit(f), 0, "not before the warning line");
+  await resume(f);
+  assert.match(f.player.getDialogueManager().getCurrent().getText(), /^I should warn you, though/);
+  assert.equal(conversationVarbit(f), 1);
+  f.player.closeInterruptibleInterfaces();
+
+  await talk(f);
+  assert.deepEqual(options(f), ["Yes please.", "One thousand gold?!", "No thanks, I'd rather curse the darkness.", "How do you make lanterns?"]);
+  await choose(f, "Yes please.");
+  const lines = await readLines(f);
+  assert.deepEqual(lines.slice(0, 2), ["Yes please.", BOUGHT]);
+  assert.equal(inventory.getAmount(I.COINS), 0);
+  assert.equal(inventory.getAmount(I.LIT_CANDLE), 2);
+});
+
+test("the haggling menu sets the varbit without a sale; a refused sale does not", async t => {
+  const poor = fixture(t);
+  await talk(poor);
+  await choose(poor, "Yes please.");
+  await readLines(poor);
+  assert.equal(conversationVarbit(poor), 0);
+  assert.equal(poor.player.getAttribute(plugin()._test.CONVERSATION_ATTRIBUTE) === true, false);
+
+  const f = fixture(t);
+  await talk(f);
+  await choose(f, "One thousand gold?!");
+  await readLines(f);
+  assert.ok(options(f).includes("No way."));
+  assert.equal(conversationVarbit(f), 1);
+  assert.equal(f.player.getAttribute(plugin()._test.CONVERSATION_ATTRIBUTE), true);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.LIT_CANDLE), 0);
+});
+
+function plugin() {
+  return require("../plugins/npcs/CandleSeller.plugin.js");
+}
+
+test("the conversation flag survives a save and reload, and login resends the varbit", async t => {
+  const f = fixture(t);
+  await talk(f);
+  await choose(f, "One thousand gold?!");
+  await readLines(f);
+  f.player.closeInterruptibleInterfaces();
+  const raw = JSON.parse(JSON.stringify(PlayerSave.fromPlayer(f.player), codec.replacer.bind(codec)), codec.reviver.bind(codec));
+  const g = fixture(t);
+  codec.hydratePlayerSave(raw).applyToPlayer(g.player);
+  g.player.setRegistered(true);
+  g.player.setLocation(new core.Location(3170, 3176));
+  assert.equal(conversationVarbit(g), 0, "a fresh session has not been told yet");
+  PM.emitPlayerLogin({ player: g.player, username: g.player.getUsername(), isNewAccount: false });
+  assert.equal(conversationVarbit(g), 1);
+  await talk(g);
+  assert.equal(options(g).length, 4);
+
+  const fresh = fixture(t);
+  assert.equal(JSON.stringify(PlayerSave.fromPlayer(fresh.player)).includes(plugin()._test.CONVERSATION_ATTRIBUTE), false,
+    "the starting value is not saved");
 });

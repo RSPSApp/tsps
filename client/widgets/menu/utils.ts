@@ -368,6 +368,16 @@ export function deriveMenuEntriesForWidget(
     return onlyBasic ? entries : transformWidgetMenuEntries(w, entries);
 }
 
+/**
+ * OSRS lists a component's target verb after its ops up to the target priority (default: the
+ * fifth op) and before the later, low-priority ones.
+ */
+function insertTargetVerb(w: any, ops: Array<{ text: string; index: number }>, verb: string): void {
+    const priority = getWidgetTargetPriority(w);
+    const after = ops.findIndex((op) => op.index > priority);
+    ops.splice(after < 0 ? ops.length : after, 0, { text: verb, index: -1 });
+}
+
 /** A widget's menu entries as its ops define them (safe to cache). */
 export function deriveRawMenuEntriesForWidget(
     w: any,
@@ -420,16 +430,8 @@ export function deriveRawMenuEntriesForWidget(
         if (verb) {
             const verbLower = verb.toLowerCase();
             const alreadyHasVerb = ops.some((o) => String(o.text).toLowerCase() === verbLower);
-            if (!alreadyHasVerb) {
-                // Only inventory ops 1-2 are primary. The cache's inventory script
-                // stores op1..5 in widget slots 2,3,4,6,7 (enum 4303), so widget
-                // action indices 1-2 are the primaries; anything first visible
-                // later (pot of flour's Empty is op4 -> index 5) has no primary
-                // op, making "Use" the default action.
-                const primary = ops[0];
-                const insertAt = primary && primary.index <= 2 ? 1 : 0;
-                ops.splice(insertAt, 0, { text: verb, index: -1 }); // -1 = targetVerb, not an action index
-            }
+            // -1 = targetVerb, not an action index
+            if (!alreadyHasVerb) insertTargetVerb(w, ops, verb);
         }
 
         for (const op of ops) {
@@ -441,24 +443,19 @@ export function deriveRawMenuEntriesForWidget(
         }
     } else if (actions.length) {
         const ops: Array<{ text: string; index: number }> = [];
+        let blankOpSlot = false;
         for (let i = 0; i < actions.length; i++) {
             const p = sanitizeText(actions[i]);
             // Only include action if transmit flag is set OR widget has onOp handler
             if (shouldShowMenuOption(flags, i, hasOnOpHandler, opMask)) {
                 if (p) ops.push({ text: p, index: i });
-                else if (verb) ops.push({ text: verb, index: -1 });
+                else if (verb) blankOpSlot = true;
             }
         }
-        // spell action (buttonType=2 / spellActionName) is an explicit menu entry,
-        // not just a placeholder for empty op slots.
-        if (ops.length === 0 && verb) {
-            ops.push({ text: verb, index: -1 });
-        } else if (verb && targetMask > 0 && !ops.some((op) => op.index < 0)) {
-            // OSRS lists a target component's verb between op5 and op6, so a spell with
-            // later ops (High Level Alchemy's Animation, Warnings) still left-clicks "Cast".
-            const after = ops.findIndex((op) => op.index >= 5);
-            ops.splice(after < 0 ? ops.length : after, 0, { text: verb, index: -1 });
-        }
+        // The target verb (a spell's "Cast") is one entry of its own, listed once, after the
+        // ops up to the component's target priority: a spell with later ops (High Level
+        // Alchemy's Animation, Warnings) still left-clicks "Cast".
+        if (verb && (ops.length === 0 || targetMask > 0 || blankOpSlot)) insertTargetVerb(w, ops, verb);
         for (const op of ops) {
             if (op.index >= 0) {
                 entries.push(buildWidgetOpEntry(w, op.index, op.text, target));
@@ -474,11 +471,8 @@ export function deriveRawMenuEntriesForWidget(
     // Pause button widgets (flags & 1) show "Continue" with empty target
 
     // This is added after ops are checked, only if no other actionable entries exist
-    const hasActionableEntry = entries.some(
-        (e) =>
-            e.option && e.option.toLowerCase() !== "cancel" && e.option.toLowerCase() !== "examine",
-    );
-    if (!hasActionableEntry && isPauseButtonWidget(w, getWidgetFlags, getWidgetByUid)) {
+    // OSRS adds it last, so it is the top entry and the left click, whatever ops the widget has.
+    if (isPauseButtonWidget(w, getWidgetFlags, getWidgetByUid)) {
         entries.unshift({ option: "Continue", target: "" });
     }
     entries.push({ option: "Cancel" });

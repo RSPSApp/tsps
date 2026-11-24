@@ -52,7 +52,8 @@ assert.equal(use.menuStateIndex, undefined, "widget actions must not run through
 // (inv op1..5 -> slots 2,3,4,6,7, i.e. action indices 1,2,3,5,6).
 // Pot of flour's only ops are Empty (op4 -> index 5) and Drop, so "Use" is the
 // default action. A weapon keeps its op2 Wield (index 2) as primary.
-const allOpsVisible = () => -1;
+// Every op and target bit, but not bit 0: that one marks a pause button, which lists Continue first.
+const allOpsVisible = () => ~1;
 const noWidgetLookup = () => undefined;
 const entriesFor = (itemId: number, actions: (string | null)[]) =>
     deriveMenuEntriesForWidget(

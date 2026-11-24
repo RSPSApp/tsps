@@ -24,7 +24,7 @@
     "landSeq": 4367,
     "_supports": "The Inferno's rocky supports (rocky_support_multi, as Run.Inferno.js places them), taken out of the copy.",
     "supports": [[30353, 2257, 5349], [30354, 2274, 5351], [30355, 2267, 5335]],
-    "_layouts": "Per challenge, each Jad as [x, y, face, first attack]: the first attack is the tick after the Jads' arrival it first attacks on (rsprox, 126 challenge starts in 21 recordings, rev 227 and 237, among them 227/00550, 01754, 04308, 00223, 00228, local 1000376 and 1001311, all alike). They go round clockwise from the northernmost (the north-west one with four), each on its own tick of the 8-tick cycle: two 4 apart, three 3, four 2, five 2, 1, 2, 2 and 1, six 1. Each then attacks every 8 ticks (a melee every 4, Wiki JalTok-Jad, so a melee shifts that Jad's turn, as recorded).",
+    "_layouts": "Per challenge, each Jad as [x, y, face, first attack]: the first attack is the tick after the Jads' arrival it first attacks on (rsprox, 126 challenge starts in 21 recordings, rev 227 and 237, among them 227/00550, 01754, 04308, 00223, 00228, local 1000376 and 1001311, all alike). They go round clockwise from the northernmost (the north-west one with four), each on its own tick of the 8-tick cycle: two 4 apart, three 3, four 2, five 2, 1, 2, 2 and 1, six 1. In challenges 1-6 each then attacks every 8 ticks (a melee every 4, Wiki JalTok-Jad, so a melee shifts that Jad's turn, as recorded); the Infinite Challenge's recorded Jads (all Leagues V worlds, 227/00227, 00229, 00232, 00233) attack every 6, which is not modelled.",
     "layouts": [
       [[2269, 5349, 6, 4]],
       [[2269, 5334, 1, 8], [2269, 5349, 6, 4]],
@@ -32,7 +32,8 @@
       [[2264, 5336, 2, 10], [2264, 5347, 7, 4], [2274, 5336, 0, 8], [2274, 5347, 5, 6]],
       [[2262, 5343, 4, 11], [2265, 5336, 2, 9], [2269, 5349, 6, 4], [2276, 5343, 3, 6], [2273, 5336, 0, 7]],
       [[2262, 5338, 2, 8], [2262, 5345, 7, 9], [2269, 5334, 1, 7], [2269, 5349, 6, 4], [2276, 5338, 0, 6], [2276, 5345, 5, 5]]
-    ]  },
+    ]
+  },
   "_outside": "rsprox: out of a challenge (completed, failed or by the cave exit) the player stands on 2544,5111 facing east, before TzHaar-Ket-Rak.",
   "outside": [2544, 5111],
   "_healers": "rsprox: five Yt-HurKot come for each Jad once its health bar is under half, and go when it dies. rsprox 2026-11-16 (two First Challenges): they appear scattered 2-4 tiles out from the Jad's footprint and each walks to the nearest tile beside it (a side, never a corner); it heals as it gets there and then every 4 ticks on its own count, and keeps doing so with the Jad at full health (the Jad's spotanim 444 at height 256 with each heal). One the player draws off (a hit or a splash) goes for the player and never heals again. Healers stack only through the engine's NPC flag (World.clearedNpcFlags): in 20261116T202915 and T211301 the drawn-off healers chasing a player who ran through them shared a tile on about 40% of ticks, 27 of 29 stacks forming on a tile the player had just crossed; with no one crossing them (20261116T192826) a healer on its way to heal waited behind another and never healed. Healed amounts, from the health bar: 19 heals restored 174-197 (run 3), 30 heals topped it up from under half by about the 21st (run 1) - about 10 a heal, well under the Inferno healers' 15-24 (Wiki Yt-HurKot). The spread is not readable off a 30-step bar; 5-15 is calibrated round that mean.",

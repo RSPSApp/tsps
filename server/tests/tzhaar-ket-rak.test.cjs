@@ -309,7 +309,7 @@ test('the gates: the challenge before it first, then TzKal-Zuk for the third and
 
 const tileAndFace = (entries) => entries.map(([x, y, face]) => [x, y, face]);
 
-test("a challenge's Jads: as many as its number, on its recorded tiles and facing, first attacks staggered", () => {
+test("a challenge's Jads: as many as its number, on its recorded tiles and facing", () => {
   const player = fakePlayer();
   setCompleted(player, 1, 2, 3, 4, 5);
   player.attributes['inferno:completions'] = 1;

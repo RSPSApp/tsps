@@ -43,3 +43,24 @@ test("removetags drops tags, stray brackets and @ spans", () => {
     assert.equal(strip("mail@x.com @red@hi"), "mailredhi", "@ signs pair up from the left");
     assert.equal(strip("<str_name=Bob>Hi <str_name>"), "Hi Bob", "a template's value survives");
 });
+
+test("enum gives 0 for a missing enum or one without a default; oc_byid rejects ids that are no item", () => {
+    const enumCtx = (enumTypeLoader: any) => {
+        const out: any[] = [];
+        // [keyType, outputType, enumId, key]
+        const ctx: any = { intStack: [105, 105, 9999, 5], intStackSize: 4, pushInt: (v: number) => out.push(v), pushString: (v: string) => out.push(v), enumTypeLoader };
+        handlers.get(Opcodes.ENUM)!(ctx, 0, null as any);
+        return out;
+    };
+    assert.deepEqual(enumCtx({ load: () => undefined }), [0]);
+    assert.deepEqual(enumCtx({ load: () => ({ keys: [1], intValues: [7] }) }), [0]);
+    assert.deepEqual(enumCtx({ load: () => ({ keys: [5], intValues: [7] }) }), [7]);
+    assert.deepEqual(enumCtx({ load: () => ({ keys: [1], intValues: [7], defaultInt: -1 }) }), [-1]);
+
+    const byId = (id: number) => {
+        const out: number[] = [];
+        handlers.get(Opcodes.OC_BYID)!({ intStack: [id], intStackSize: 1, pushInt: (v: number) => out.push(v), objTypeLoader: { getCount: () => 100 } } as any, 0, null as any);
+        return out[0];
+    };
+    assert.deepEqual([byId(0), byId(99), byId(100), byId(-5)], [0, 99, -1, -1]);
+});

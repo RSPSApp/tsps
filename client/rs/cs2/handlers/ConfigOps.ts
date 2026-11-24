@@ -264,7 +264,10 @@ export function registerConfigOps(handlers: HandlerMap): void {
         ctx.pushInt(ctx.intStack[--ctx.intStackSize]);
     });
     handlers.set(Opcodes.OC_BYID, (ctx) => {
-        ctx.pushInt(ctx.intStack[--ctx.intStackSize]);
+        // An id that is no item is null (-1).
+        const id = ctx.intStack[--ctx.intStackSize];
+        const count = ctx.objTypeLoader?.getCount?.();
+        ctx.pushInt(id < 0 || (typeof count === "number" && id >= count) ? -1 : id);
     });
 
     // enum_getoutputs(type $outputtype, enum)(array): every output value, in key order (rev 241).
@@ -501,10 +504,11 @@ export function registerConfigOps(handlers: HandlerMap): void {
         } else {
             if (enumType?.intValues) {
                 const idx = enumType.keys?.indexOf(key) ?? -1;
-                const result = idx >= 0 ? enumType.intValues[idx] : (enumType.defaultInt ?? -1);
+                const result = idx >= 0 ? enumType.intValues[idx] : (enumType.defaultInt ?? 0);
                 ctx.pushInt(result);
             } else {
-                ctx.pushInt(enumType?.defaultInt ?? -1);
+                // A missing or empty enum, or one without a default: OSRS gives 0.
+                ctx.pushInt(enumType?.defaultInt ?? 0);
             }
         }
     });

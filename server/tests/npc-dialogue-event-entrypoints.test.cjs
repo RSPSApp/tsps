@@ -2969,7 +2969,9 @@ for (const withSigil of [false, true]) {
     assert.equal(new Set(lines).size, lines.length, 'no spoken line repeats');
     assert.match(lines[0], /^I sensed a great darkness/);
     assert.match(lines.at(-1), withSigil ? /Take this demonic sigil/ : /I will wait/);
-    assert.equal(quest.getStage(player), withSigil ? 100 : 90, 'the existing sigil handoff advances recruitment once');
+    // The capture's recruiting moves the golem's own varbit (1379 to 3, ours t2021), not the stage.
+    assert.equal(quest.getStage(player), 90);
+    if (withSigil) assert.equal(player.getPacketSender().getVarbit(1379), 3, 'the existing sigil handoff recruits once');
     assert.equal(player.getInventory().getAmount(sigil), 0, 'only the existing sigil handoff consumes the offered item');
     assert.equal(talk(), true, 'the next canonical conversation remains reachable after closing');
     player.closeInterruptibleInterfaces();

@@ -1,3 +1,4 @@
+import { GearVisualRegistry } from "../../../custom/items/GearVisualRegistry";
 import { syncSceneryDetail } from "../../SceneryPolicy";
 import { hintArrow } from "../../../game/HintArrow";
 import { projectDeckToWorld } from "../worldEntityMotion";
@@ -203,6 +204,7 @@ const SCENE_PREVIEW_HALF_TILES = MapManager.SCENE_STREAM_HALF_TILES;
 const WELCOME_SCREEN_GROUP_ID = 378;
 
 export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: number, resized: boolean): void {
+        GearVisualRegistry.setTime(time);
 
         host.osrsClient.runeLite?.postBeforeRender();
 

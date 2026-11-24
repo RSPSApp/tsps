@@ -186,6 +186,7 @@ type DoorGeometryResources = {
 };
 
 type GroundItemGeometryResources = {
+    gearTexturesByOffset?: ReadonlyMap<number, readonly number[]>;
     interleavedBuffer: GpuInterleavedBuffer;
     indexBuffer: GpuIndexBuffer;
     vertexArray: VertexArray;
@@ -1348,6 +1349,10 @@ export class WebGLMapSquare {
         }
         if (isLod) return isAlpha ? p.lodAlpha : p.lod;
         return isAlpha ? p.alpha : p.main;
+    }
+
+    getGroundItemGearTextures(): GroundItemGeometryResources["gearTexturesByOffset"] {
+        return this.groundItems?.gearTexturesByOffset;
     }
 
     getGroundItemDrawCall(
@@ -2586,6 +2591,7 @@ export class WebGLMapSquare {
         );
 
         const groundResources: GroundItemGeometryResources = {
+            gearTexturesByOffset: data.gearTexturesByOffset,
             interleavedBuffer,
             indexBuffer,
             vertexArray,

@@ -1,4 +1,5 @@
 import { Model } from "../../model/Model";
+import { GearVisualRegistry } from "../../../custom/items/GearVisualRegistry";
 import { ModelData } from "../../model/ModelData";
 import { ModelLoader } from "../../model/ModelLoader";
 import { TextureLoader } from "../../texture/TextureLoader";
@@ -93,6 +94,15 @@ export class PlayerModelLoader {
     ) {}
 
     buildStaticModel(
+        appearance: PlayerAppearance,
+        extraObjTypes?: ObjType[],
+        extraRenderLayers?: number[],
+        extraCompositionSlots?: number[],
+    ): Model | undefined {
+        return GearVisualRegistry.withAppearance(appearance.visualClockKey,()=>this.buildStaticModelInternal(appearance,extraObjTypes,extraRenderLayers,extraCompositionSlots));
+    }
+
+    private buildStaticModelInternal(
         appearance: PlayerAppearance,
         extraObjTypes?: ObjType[],
         extraRenderLayers?: number[],
@@ -290,6 +300,7 @@ export class PlayerModelLoader {
             Array.isArray(appearance.kits) ? [...appearance.kits] : [],
             Array.isArray(appearance.equip) ? [...appearance.equip] : new Array(14).fill(-1),
             appearance.headIcons ? { ...appearance.headIcons } : { prayer: -1 },
+            undefined,false,appearance.visualClockKey,
         );
 
         const kits = workingAppearance.kits;
@@ -417,6 +428,7 @@ export class PlayerModelLoader {
             appearance.headIcons ? { ...appearance.headIcons } : { prayer: -1 },
             appearance.npcTransformationId,
             true,
+            appearance.visualClockKey,
         );
         const extras: Array<{ obj: ObjType; slot: EquipmentSlot }> = [];
         for (const slot of [EquipmentSlot.WEAPON, EquipmentSlot.SHIELD, EquipmentSlot.GLOVES]) {

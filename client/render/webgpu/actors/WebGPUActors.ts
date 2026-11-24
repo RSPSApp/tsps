@@ -1,3 +1,4 @@
+import { updateGearVisuals } from "../../../custom/items/GearVisualRuntime";
 import { resolveHeightSamplePlaneForLocal } from "../../../game/scene/PlaneResolver";
 import type { Frustum } from "../../../game/Frustum";
 import { actorBoundsVisible, type ActorBounds } from "../../ActorVisibility";
@@ -83,6 +84,7 @@ interface ActorDrawItem {
     cosmetic?: boolean;
     /** A player's ECS index, for the Shader Effects silhouette. */
     playerPid?: number;
+    gearTextureIds?: readonly number[];
 }
 
 interface MapActorState {
@@ -692,6 +694,9 @@ export class WebGPUActors {
                         boundLabels = labels;
                     }
                 }
+                if (item.gearTextureIds) {
+                    updateGearVisuals(world, this.renderer.osrsClient.textureLoader, item.gearTextureIds);
+                }
                 pass.drawIndexed(item.geometry.indexCount, instances, 0, 0, item.entry);
                 if (priorityPasses) {
                     // The first draw tests against scene depth. This draw updates depth only.
@@ -1137,6 +1142,7 @@ export class WebGPUActors {
                     geometry,
                     entry: entry ??= this.actorEntry(state, map, timeLoaded, modelYOffset, dataIndex, 0, 0, 0, poseRow),
                     playerPid: pid,
+                    gearTextureIds: items === state.alpha ? posed.gearTextureIds : undefined,
                 });
             }
         }

@@ -1,13 +1,14 @@
 import { DEBUG_MODEL_ID, dumpModelColors } from "../../../custom/items/ColorDebugUtil";
 import { CustomItemRegistry } from "../../../custom/items/CustomItemRegistry";
 import { CustomModelRegistry } from "../../../custom/items/CustomModelRegistry";
+import { GearVisualRegistry } from "../../../custom/items/GearVisualRegistry";
 import { Model } from "../../model/Model";
 import { ModelLoader } from "../../model/ModelLoader";
 import { TextureLoader } from "../../texture/TextureLoader";
 import { ObjTypeLoader } from "./ObjTypeLoader";
 
 export class ObjModelLoader {
-    modelCache: Map<number, Model>;
+    modelCache: Map<number|string, Model>;
     private customRevision = -1;
 
     constructor(
@@ -48,7 +49,8 @@ export class ObjModelLoader {
             }
         }
 
-        let model = this.modelCache.get(id);
+        const key=GearVisualRegistry.dynamic(id)?`${id}~${GearVisualRegistry.frame}`:id;
+        let model = this.modelCache.get(key);
         if (model) {
             return model;
         }
@@ -92,7 +94,8 @@ export class ObjModelLoader {
             -10,
             -50,
         );
-        this.modelCache.set(id, model);
+        this.modelCache.set(key, model);
+        while(this.modelCache.size>256)this.modelCache.delete(this.modelCache.keys().next().value!);
         return model;
     }
 

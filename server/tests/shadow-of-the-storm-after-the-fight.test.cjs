@@ -166,9 +166,14 @@ test("the wizards go with the player, however they leave; un-equipping Darklight
   teleport(fighting);
   assert.equal(wizards(fighting).length, 0, "the cast goes with the room");
   // The Wiki: "un-equipping Darklight triggers the final dialogue that completes the quest".
-  const weapon = core.Equipment.WEAPON_SLOT;
-  fighting.p.getEquipment().set(weapon, null).refreshItems();
-  fighting.p.getInventory().add(new core.Item(I.DARKLIGHT), false);
+  // Through the real un-equip path (the worn Darklight goes back to the inventory).
+  const { EquipPacketListener } = require("../dist/net/packet/impl/EquipPacketListener");
+  fighting.p.getEquipment().setItem(core.Equipment.WEAPON_SLOT, new core.Item(I.DARKLIGHT, 1));
+  ticks(fighting, 1);
+  assert.doesNotMatch(text(fighting) ?? "", /^You try to wipe Silverlight clean/, "control: wearing it does not replay the ending");
+  const held = fighting.p.getInventory().getAmount(I.DARKLIGHT);
+  assert.equal(EquipPacketListener.unequip(fighting.p, core.Equipment.WEAPON_SLOT), true);
+  assert.equal(fighting.p.getInventory().getAmount(I.DARKLIGHT), held + 1);
   ticks(fighting, 1);
   assert.match(text(fighting), /^You try to wipe Silverlight clean/, "the ending plays again");
 

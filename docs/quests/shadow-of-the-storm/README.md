@@ -99,6 +99,18 @@ until the ritual. After the quest the room is the plain map with "You step into 
 - **The summoning (2201-2226):** the circle and the open portal back, Agrith-Naar's arrival (482, 4623,
   "Grip of the Talon"), his Fire Blast at Matthew (bones left), the player's lines, then the fight.
 
+- **Every cutscene** (escort, first ritual's end, summoning) closes the side tabs as it starts and
+  reopens them as it ends (716-774, 1741-1790, 2200-2227). If its talk is gone anyway (the chat shut for
+  three ticks), the scene ends the way its last line would (ours).
+
+## The fight
+
+Fire Blast is launched at 51 and lands at 46 + 10 a tile, as the capture's projectiles do (2235, 2513).
+A landed blast shows 128 with fireblast_hit (156) as it lands (2513); a miss splashes, 85 with
+spellfail (227) and no hitsplat (2235 and 42 more). The cast sound 155 is an area sound. The Wiki's
+rules decide the rest: Telekinetic Grab against Protect from Magic out of melee, his hitpoints back to
+12 for a last blow out of melee or without Silverlight.
+
 ## Uzer during the storm (stages 90-110)
 
 - The first climb out of the temple is stopped by falling rocks: the message, spotanim 271, a shake and

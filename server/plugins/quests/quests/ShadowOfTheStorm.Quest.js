@@ -347,6 +347,10 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     start: 0, end: 20, startHeight: 43, endHeight: 31, maxHit: 10 };
   // Ours t2513: his Fire Blast landing on the player shows firebolt_impact (128); on Matthew, 131 (t2212).
   const GFX_FIREBLAST_ON_PLAYER = 128;
+  // Ours t2235 (and 42 more): a miss splashes, failedspell_impact (85) and spellfail (227) as it lands, no hitsplat.
+  const GFX_SPLASH = 85;
+  const SPELL_FAIL_SOUND = 227;
+  const FIREBLAST_HIT_SOUND = 156; // t2513, as it lands
   const FIREBLAST_CAST_SOUND = 155;
   const TELEGRAB = { projectile: 143, graphic: 409, arrivalDelay: 46, castSound: 3006, hitSound: 3007, moveSound: 1851 };
   const AGRITH_MAX_HIT = 10;
@@ -797,7 +801,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     Scenes.later(player, 1, () => {
       Scenes.place(player, ESCORT_ENTRY);
       const scene = roomScene(player, "escort");
-      Scenes.controls(player, true, true);
+      beginCutscene(player);
       scene.__shadowWalls = ESCORT_WALLS.map(({ x, y, face }) =>
         Scenes.loc(scene, { id: INVISWALL_SERVERSIDE_OBJECT_ID, x, y, z: 2, type: 0, face }));
       ensureWizardNpcs(player);
@@ -826,6 +830,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
         if (dave) dave.setPositionToFace(wizardNpcs.get(player)?.get("denath")?.getLocation() ?? tileOf(scene, [2720, 4912, 2]));
         startTranscript(api, player, NpcIdentifiers.EVIL_DAVE_2, PAGE, "infiltrating-the-wizards",
           (steps) => stepsAfter(steps, MSG_ESCORT_THRONE) ?? [], dave);
+        guardCutscene(player, scene, "escort", () => endEscort(player, scene));
       });
     });
   }
@@ -890,19 +895,32 @@ module.exports = function registerShadowOfTheStormQuest(api) {
         Scenes.camera(player, [2718, 4917, 325], [2720, 4912, 150]);
         Scenes.camera(player, [2718, 4909, 325], [2720, 4912, 150], { rate: 2, rate2: 2 });
       });
-      lineAfter(event, () => {
-        for (const wall of scene.__shadowWalls ?? []) removeSceneLoc(scene, wall);
-        scene.__shadowWalls = [];
-      });
+      lineAfter(event, () => removeEscortWalls(scene));
     } else if (/^So you wish to join us\?/.test(text)) {
-      // The room stays as it is; the cutscene state, camera and minimap come back (t773).
+      // The room stays as it is; the cutscene state, camera, minimap and tabs come back (t773).
       lineBefore(event, () => {
         if (Scenes.get(player) !== scene || scene.phase !== "escort") return;
         scene.phase = null;
-        Scenes.controls(player, false);
-        player.getPacketSender().sendCameraReset();
+        endCutscene(player);
       });
     }
+  }
+
+  function removeEscortWalls(scene) {
+    for (const wall of scene.__shadowWalls ?? []) removeSceneLoc(scene, wall);
+    scene.__shadowWalls = [];
+  }
+
+  /** The escort's talk gone before Denath's welcome (guardCutscene): the walls and Dave go, the scene ends. */
+  function endEscort(player, scene) {
+    if (scene.phase !== "escort") return;
+    removeEscortWalls(scene);
+    if (scene.__escortDave) {
+      Scenes.removeActor(scene, scene.__escortDave);
+      scene.__escortDave = null;
+    }
+    scene.phase = null;
+    endCutscene(player);
   }
 
   /** A single phase-owned scene loc; its removal sends the client loc deletion. */
@@ -1587,13 +1605,14 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function startFirstRitualClosing(player) {
     const scene = roomScene(player, "first-ritual-close");
     Scenes.later(scene, 3, () => {
-      Scenes.controls(player, true, true);
+      beginCutscene(player);
       player.sendMessage(""); // t1742: a blank game message as the cutscene starts
       const circle = phaseLoc(scene, { id: AGRITH_RITUAL_CIRCLE_OBJECT_ID, x: 2719, y: 4899, face: 0 });
       scene.__shadowCircle = circle;
       player.getPacketSender().sendSoundEffect(AGRITH_CIRCLE_SOUND, 1, 0);
       Scenes.camera(player, [2720, 4907, 500], RITUAL_CAMERA_LOOK, { rate: 2, rate2: 2 });
       playOutcome(player, NpcIdentifiers.DENATH, FIRST_RITUAL_VARIANT, COND_RITUAL_CORRECT, withBoom);
+      guardCutscene(player, scene, "first-ritual-close", () => endClosing(player, scene));
     });
     const denath = wizardNpcs.get(player)?.get("denath");
     if (denath) denath.__shadowLeaving = true;
@@ -1680,10 +1699,58 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   }
 
   function endClosing(player, scene) {
+    if (scene.phase !== "first-ritual-close") return;
     for (const key of RUNAWAY_KEYS) removeWizard(player, key);
     scene.phase = null;
+    endCutscene(player);
+  }
+
+  /** Ours t2226: the cutscene ends, the sigils go away, everyone turns to him and he attacks. */
+  function demonAttacks(player) {
+    const scene = Scenes.get(player);
+    if (scene?.phase !== "summoning") return;
+    killMatthew(player);
+    spawnAgrithNaar(player);
+    scene.phase = "fight";
+    holdSigils(player, false);
+    endCutscene(player);
+    const demon = demonNpcs.get(player);
+    if (demon) {
+      for (const npc of wizardNpcs.get(player)?.values() ?? []) npc.setPositionToFace(demon.getLocation());
+      demon.getCombat?.().attack?.(player);
+    }
+    scatterCast(player);
+  }
+
+  /**
+   * The cutscene state on, with the side tabs closed as live closes them (ours t716-t719,
+   * t1741-t1743, t2200-t2202): nothing in the inventory can close the chat mid-scene.
+   */
+  function beginCutscene(player) {
+    Scenes.controls(player, true, true);
+    Scenes.hideTabs(player);
+  }
+
+  /** And off, the tabs back (t772-t774, t1788-t1790, t2225-t2227) and the camera on the player. */
+  function endCutscene(player) {
     Scenes.controls(player, false);
+    Scenes.restoreTabs(player);
     player.getPacketSender().sendCameraReset();
+  }
+
+  /**
+   * Ours: a scene that ends on a line also ends if its talk is gone (the chat shut for three ticks:
+   * a relogged client, an interface closed), the way its last line would end it.
+   */
+  function guardCutscene(player, scene, phase, finish) {
+    let shut = 0;
+    const watch = () => {
+      if (player.isRegistered?.() === false || Scenes.get(player) !== scene || scene.phase !== phase) return;
+      shut = Scenes.chatOpen(player) ? 0 : shut + 1;
+      if (shut >= 3) { finish(); return; }
+      Scenes.later(scene, 1, watch);
+    };
+    Scenes.later(scene, 1, watch);
   }
 
   /**
@@ -1720,7 +1787,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
    */
   function startSummoning(player) {
     const scene = roomScene(player, "summoning");
-    Scenes.controls(player, true, true);
+    beginCutscene(player);
     player.sendMessage(""); // t2201: a blank game message as the cutscene starts
     const circle = phaseLoc(scene, { id: AGRITH_RITUAL_CIRCLE_OBJECT_ID, x: 2719, y: 4899, face: 0 });
     if (scene.__shadowClosedPortal) {
@@ -1733,6 +1800,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     Scenes.later(scene, 3, () => {
       spawnAgrithNaar(player);
       playOutcome(player, NpcIdentifiers.MATTHEW, SECOND_RITUAL_VARIANT, COND_SUMMON_CORRECT);
+      guardCutscene(player, scene, "summoning", () => demonAttacks(player));
     });
     Scenes.later(scene, 9, () => removeSceneLoc(scene, circle));
   }
@@ -1966,20 +2034,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       return;
     }
     if (stepId === ACTION_DEMON_ATTACKS) {
-      // Ours t2226: the cutscene ends, the sigils go away, everyone turns to him and he attacks.
       event.handled = true;
-      spawnAgrithNaar(player);
-      const scene = Scenes.get(player);
-      if (scene) scene.phase = "fight";
-      holdSigils(player, false);
-      Scenes.controls(player, false);
-      player.getPacketSender().sendCameraReset();
-      const demon = demonNpcs.get(player);
-      if (demon) {
-        for (const npc of wizardNpcs.get(player)?.values() ?? []) npc.setPositionToFace(demon.getLocation());
-        demon.getCombat?.().attack?.(player);
-      }
-      scatterCast(player);
+      demonAttacks(player);
       return;
     }
     if (stepId === BOOM_STEP_ID) {
@@ -2009,7 +2065,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     const text = String(option ?? "");
 
     const wordIndex = WORD_INDEX.get(text.toLowerCase());
-    if (wordIndex !== undefined) {
+    // The ritual menus are played as Denath's (first) and Matthew's (second).
+    if (wordIndex !== undefined && (DENATH_NPC_IDS.has(npcId) || MATTHEW_NPC_IDS.has(npcId))) {
       let picks = ritualPicks.get(player);
       if (!Array.isArray(picks) || picks.length >= INCANTATION_WORDS.length) picks = [];
       picks.push(wordIndex);
@@ -2019,14 +2076,17 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     }
 
     const skill = SKILL_BY_OPTION.get(text);
-    if (skill) {
+    if (skill && quest.getStage(player) === STAGE_KILLED) {
       player.setAttribute(REWARD_ATTRIBUTE, skill.getIndex());
       return;
     }
 
     // The words are drawn as the player asks, so Denath's next lines can say them; the stage moves
     // with his "You must memorize" line (LINE_TRIGGERS, ours t811 -> t815).
-    if (quest.getStage(player) <= STAGE_IN_GROUP && (text === "What do I have to do?" || text === "I forgot the incantation.")) {
+    // Denath's question, in his own talk or in Evil Dave's escort talk (ours t811).
+    const fromDenath = DENATH_NPC_IDS.has(npcId) || DAVE_NPC_IDS.has(npcId);
+    if (fromDenath && quest.getStage(player) >= STAGE_INFILTRATE && quest.getStage(player) <= STAGE_IN_GROUP
+      && (text === "What do I have to do?" || text === "I forgot the incantation.")) {
       if (!packedIncantation(player)) assignIncantation(player);
     }
   }
@@ -2258,20 +2318,22 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     }
     // Ours t2212: the Fire Blast lands, Matthew falls (2 cycles late) with his cry overhead, and is gone at t2215, his bones left.
     if (MATTHEW_NPC_IDS.has(event.npcId) && /^Aaaargh!$/.test(text) && quest.getStage(player) === STAGE_SUMMONED) {
-      lineBefore(event, () => {
-        const matthew = wizardNpcs.get(player)?.get("matthew");
-        if (!matthew) return;
-        matthew.performGraphic(new Graphic(GFX_BLOOD, 0, GraphicHeight.HIGH));
-        matthew.performAnimation(new Animation(SEQ_TANYA_DEATH, SEQ_DEATH_DELAY));
-        matthew.forceChat(text);
-        setHelperBits(player, helperBits(player) | BIT_MATTHEW);
-        const at = matthew.getLocation();
-        Scenes.later(Scenes.get(player) ?? player, 3, () => {
-          removeWizard(player, "matthew");
-          dropFor(player, ItemIdentifiers.BONES, [at.getX(), at.getY(), at.getZ()]);
-        });
-      });
+      lineBefore(event, () => killMatthew(player));
     }
+  }
+
+  function killMatthew(player) {
+    const matthew = wizardNpcs.get(player)?.get("matthew");
+    if (!matthew || helperBits(player) & BIT_MATTHEW) return;
+    matthew.performGraphic(new Graphic(GFX_BLOOD, 0, GraphicHeight.HIGH));
+    matthew.performAnimation(new Animation(SEQ_TANYA_DEATH, SEQ_DEATH_DELAY));
+    matthew.forceChat("Aaaargh!");
+    setHelperBits(player, helperBits(player) | BIT_MATTHEW);
+    const at = matthew.getLocation();
+    Scenes.later(Scenes.get(player) ?? player, 3, () => {
+      removeWizard(player, "matthew");
+      dropFor(player, ItemIdentifiers.BONES, [at.getX(), at.getY(), at.getZ()]);
+    });
   }
 
   /**
@@ -2957,11 +3019,15 @@ module.exports = function registerShadowOfTheStormQuest(api) {
         return;
       }
       npc.performGraphic?.(new Graphic(FIRE_BLAST.startGraphic, GraphicHeight.HIGH));
-      this.landing = FIRE_BLAST.end;
-      Projectile.createProjectile(
+      const projectile = Projectile.createProjectile(
         npc, target, FIRE_BLAST.projectile, FIRE_BLAST.start, FIRE_BLAST.end,
         FIRE_BLAST.startHeight, FIRE_BLAST.endHeight
-      ).withAngle(16).withProgress(64).sendProjectile();
+      ).withAngle(16).withProgress(64);
+      // Ours t2235/t2513: launched at 51, landing at 46 + 10 a tile (56 next to him, 66 a tile further).
+      this.landing = projectile.getTiming().endCycleOffset;
+      projectile.sendProjectile();
+      const at = npc.getLocation();
+      target.getPacketSender?.().sendAreaSound(FIREBLAST_CAST_SOUND, at.getX(), at.getY(), at.getZ(), 1, 0, 10);
     }
 
     hits(npc, target) {
@@ -2969,8 +3035,16 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       const delay = this.style === CombatType.MAGIC ? Projectile.ticksToLand(this.landing) : 0;
       const hit = new PendingHit(npc, target, this, delay);
       hit.setTotalDamage(Math.min(AGRITH_MAX_HIT, hit.getTotalDamage()));
-      if (this.style === CombatType.MAGIC && hit.isAccurate()) {
-        target.performGraphic?.(new Graphic(GFX_FIREBLAST_ON_PLAYER, this.landing, GraphicHeight.HIGH));
+      if (this.style === CombatType.MAGIC) {
+        const sender = target.getPacketSender?.();
+        if (hit.isAccurate()) {
+          target.performGraphic?.(Graphic.delayed(GFX_FIREBLAST_ON_PLAYER, this.landing, GraphicHeight.HIGH));
+          sender?.sendSoundEffect(FIREBLAST_HIT_SOUND, 1, this.landing);
+        } else {
+          hit.withoutHitsplat();
+          target.performGraphic?.(Graphic.delayed(GFX_SPLASH, this.landing, GraphicHeight.HIGH));
+          sender?.sendSoundEffect(SPELL_FAIL_SOUND, 1, this.landing);
+        }
       }
       return [hit];
     }

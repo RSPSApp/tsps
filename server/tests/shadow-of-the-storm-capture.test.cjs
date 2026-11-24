@@ -39,8 +39,11 @@ after(() => h.teardown());
 // The end of a world tick: overhead lines need their speakers in the player's local NPC list (the
 // harness's player is not in World's update loop), and the room's cast is owner-only.
 const baseTick = h.tick;
+const { HitQueue } = require("../dist/game/content/combat/hit/HitQueue");
 h.tick = (f) => {
   baseTick(f);
+  // The world's "combat_hits" step (World.ts): queued hits land, and deaths start from them.
+  HitQueue.processAll(h.core.World.processCycle);
   const owned = [...h.core.World.getNpcs()].filter((npc) => npc?.getOwner?.() === f.player);
   h.core.World.updateLocalNpcs(f.player, owned);
   for (const npc of owned) npc.setNeedsPlacement(false);
@@ -61,7 +64,7 @@ function actor(t, { tile, stage: value = 0, items = [], attributes = {}, done = 
   const f = h.actor(t, { at: tile, stage: value, done, attributes });
   for (const [id, amount] of items) f.player.getInventory().add(new h.core.Item(id, amount ?? 1), false);
   const sender = f.player.getPacketSender();
-  for (const name of ["mountSubInterface", "sendCameraReset", "sendCameraMoveTo", "sendCameraLookAt", "sendJingle", "sendAreaSound", "sendClientScript"]) {
+  for (const name of ["mountSubInterface", "sendCameraReset", "sendCameraMoveTo", "sendCameraLookAt", "sendJingle", "sendAreaSound", "sendClientScript", "closeSubInterface", "sendTabInterface"]) {
     const original = sender[name].bind(sender);
     sender[name] = (...args) => { f.calls.push({ tick: f.tick, name, args }); return original(...args); };
   }
@@ -744,6 +747,13 @@ test("t2173-2229: the book's order: stage 120, Agrith-Naar on the circle, Matthe
   }
 });
 
+/** A hit through the target's real HitQueue: the engine's own death path runs from it. */
+function landHit(attacker, target, damage) {
+  const hit = new h.core.PendingHit(attacker, target, h.core.CombatFactory.MELEE_COMBAT,
+    { delay: 0, damage, rollAccuracy: false, experience: false, handleAfterHitEffects: false });
+  target.getCombat().getHitQueue().addPendingHit(hit, 0);
+}
+
 test("t2709 and the Wiki: the last hitpoint off with the player out of melee: 'Silverlight's power can't affect...' and back to 12", async (t) => {
   const f = secondActor(t, S.READY);
   await play(f, () => itemOption(f, I.DEMONIC_SIGIL, "Chant"), BOOK_ORDER, { idleTicks: 10 });
@@ -752,9 +762,13 @@ test("t2709 and the Wiki: the last hitpoint off with the player out of melee: 'S
   f.player.moveTo(new h.core.Location(2715, 4908, 2));
   h.tick(f);
   clear(f);
-  assert.equal(h.PM.emitNpcBeforeDeath({ npc: demon, killer: f.player, preventDeath: false }), true);
+  demon.setHitpoints(3);
+  landHit(f.player, demon, 3);
+  h.ticks(f, 3);
   assert.equal(demon.getHitpoints(), 12);
-  assert.deepEqual(texts(f), ["Silverlight's power can't affect Agrith-Naar from this far away."]);
+  assert.ok(demon.isRegistered(), "he lives on");
+  assert.deepEqual(texts(f).filter((text) => text.startsWith("Silverlight")), ["Silverlight's power can't affect Agrith-Naar from this far away."]);
+  assert.equal(stage(f), S.SUMMONED);
 });
 
 test("t2760-2786: the kill: Darklight in its place, the boxes with it, the skill menus, stage 125 on the wire, 10,000 XP in the skill once", async (t) => {
@@ -766,7 +780,14 @@ test("t2760-2786: the kill: Darklight in its place, the boxes with it, the skill
   clear(f);
   const raw = (skill) => Number(f.player.getSkillManager().skills.experience[skill.getIndex()]);
   const before = raw(h.core.Skill.STRENGTH);
-  const said = await play(f, () => { h.PM.emitNpcDeath({ npc: demon, killer: f.player }); h.tick(f); }, ["--- More ---", "--- Previous ---", "* Strength *"]);
+  // Beside him (his tile and size from the server, he may have stepped).
+  const d = demon.getLocation(), size = demon.size?.() ?? demon.getSize?.() ?? 1;
+  f.player.moveTo(new h.core.Location(d.getX(), d.getY() + size, d.getZ()));
+  h.tick(f);
+  assert.ok(h.core.CombatRange.canReach(demon, h.core.CombatFactory.MELEE_COMBAT, f.player),
+    `control: in melee (him ${d.getX()},${d.getY()} size ${size}, player ${f.player.getLocation().getX()},${f.player.getLocation().getY()})`);
+  demon.setHitpoints(4);
+  const said = await play(f, () => landHit(f.player, demon, 4), ["--- More ---", "--- Previous ---", "* Strength *"], { idleTicks: 12 });
   assert.equal(f.player.getEquipment().getItems()[h.core.Equipment.WEAPON_SLOT]?.getId(), I.DARKLIGHT);
   assert.deepEqual(said.slice(0, 3), [
     "ItemStatementDialogue: As you strike the final blow, Silverlight is drenched with Agrith-Naar's foul-smelling ichor!",
@@ -778,8 +799,7 @@ test("t2760-2786: the kill: Darklight in its place, the boxes with it, the skill
   assert.equal(varbit(f, V.STAGE), 125);
   assert.equal(raw(h.core.Skill.STRENGTH) - before, 10000);
   assert.equal(varbit(f, V.CLAY), 4, "the golem back in Uzer");
-  const again = await play(f, () => { h.PM.emitNpcDeath({ npc: demon, killer: f.player }); });
-  void again;
+  h.ticks(f, 5);
   assert.equal(raw(h.core.Skill.STRENGTH) - before, 10000, "no second reward");
 });
 
@@ -926,9 +946,20 @@ test("recovery: logging in in the room at stage 90 before leaving plays Tanya's 
   assert.equal(stage(f), S.PREPARE);
 });
 
-test("death in the fight: back in the room at stage 120, Agrith-Naar is there again", async (t) => {
-  const f = actor(t, { tile: [2721, 4911, 0], stage: S.SUMMONED, items: [[I.SILVERLIGHT_2, 1]], attributes: { [A.HELPERS]: ALL_ARRIVED, [A.WORDS]: PACKED } });
-  h.PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername(), isNewAccount: false });
+test("death in the fight: the player dies to him, respawns outside it, and back in the room at stage 120 he is there again", async (t) => {
+  const f = secondActor(t, S.READY);
+  await play(f, () => itemOption(f, I.DEMONIC_SIGIL, "Chant"), BOOK_ORDER, { idleTicks: 10 });
+  const demon = [...h.core.World.getNpcs()].find((n) => n?.getOwner?.() === f.player && n.getRealId() === N.AGRITH_NAAR);
+  assert.ok(demon, "control: the fight");
+  landHit(demon, f.player, 250);
+  for (let i = 0; i < 30 && f.player.getLocation().getZ() === 2; i++) h.tick(f);
+  h.ticks(f, 3);
+  assert.notEqual(f.player.getLocation().getZ(), 2, "respawned out of the room");
+  assert.ok(f.player.getHitpoints() > 0, "alive again");
+  assert.equal(stage(f), S.SUMMONED, "the stage stays");
+  assert.ok(![...h.core.World.getNpcs()].some((n) => n?.getOwner?.() === f.player && n.isRegistered?.() !== false), "the room's NPCs went with the player");
+  f.player.moveTo(new h.core.Location(2721, 4911, 0));
+  h.ticks(f, 2);
   await click(f, PORTAL.id, PORTAL.tile);
   h.ticks(f, 3);
   assert.deepEqual(at(f), [2720, 4884, 2]);
@@ -1015,4 +1046,112 @@ test("t785-811: Denath's menu in the escort's talk leaves out the question just 
     "Isn't this, you know, wrong?|Why did Josef run away?|What do I have to do?", // t796
     "Isn't this, you know, wrong?|How do you know Agrith-Naar will do all this for us?|What do I have to do?", // t806
   ]);
+});
+
+
+// --- A chat closed mid-cutscene (the review's case: an inventory item op ends the chat) -------------
+
+/** The side tabs: closed as the scene starts and mounted again as it ends (ours t716-774, t1741-1790, t2200-2227). */
+function tabCalls(f) {
+  return { closed: f.calls.filter((c) => c.name === "closeSubInterface").length, mounted: f.calls.filter((c) => c.name === "sendTabInterface").length };
+}
+
+async function eatMidScene(f) {
+  await itemOption(f, I.SHARK, "Eat");
+  h.ticks(f, 8);
+}
+
+function assertSceneOver(f) {
+  assert.equal(varbit(f, 542), 0, "cutscene_status off");
+  assert.equal(f.player.getMovementQueue().isMovementBlocked(), false, "the player can move");
+  assert.equal(f.player.isUntargetable?.() ?? false, false, "targetable again");
+}
+
+test("the escort: the tabs close and come back; a chat closed at Dave's 'Master!' still ends the scene (stage 30)", async (t) => {
+  const f = actor(t, { tile: [2721, 4911, 0], stage: S.INFILTRATE, items: [[I.SILVERLIGHT_2, 1], [I.SHARK, 1]] });
+  wearBlack(f);
+  const dave = h.spawn(f, NPC.DAVE_PORTAL, DAVE_TILE);
+  await play(f, () => h.talk(f, dave), ["I want to join your group.", "I'm evil!"], { idleTicks: 40,
+    until: () => f.said.some((s) => String(s.text).startsWith("Master! This person wants to join us!")) });
+  assert.ok(tabCalls(f).closed > 0, "the tabs closed");
+  assert.equal(varbit(f, 542), 1, "control: mid-scene");
+  await eatMidScene(f);
+  assertSceneOver(f);
+  assert.ok(tabCalls(f).mounted > 0, "the tabs back");
+  assert.equal(stage(f), S.IN_GROUP);
+  assert.ok(![...h.core.World.getNpcs()].some((n) => n?.getOwner?.() === f.player && n.getRealId() === N.EVIL_DAVE_2), "the escort's Dave gone");
+});
+
+test("the first ritual's closing: a chat closed at 'Oh my gods!' still ends it (stage 90, the runaways gone, the tabs back)", async (t) => {
+  const f = ritualActor(t);
+  f.player.getInventory().add(new h.core.Item(I.SHARK, 1), false);
+  await play(f, () => itemOption(f, I.DEMONIC_SIGIL, "Chant"), DENATH_ORDER, { idleTicks: 10,
+    until: () => f.said.some((s) => String(s.text) === "Oh my gods!") });
+  assert.equal(varbit(f, 542), 1, "control: mid-scene");
+  assert.ok(tabCalls(f).closed > 0, "the tabs closed");
+  await eatMidScene(f);
+  assertSceneOver(f);
+  assert.ok(tabCalls(f).mounted > 0, "the tabs back");
+  assert.equal(stage(f), S.RITUAL_DONE);
+  const ids = [...h.core.World.getNpcs()].filter((n) => n?.getOwner?.() === f.player).map((n) => n.getRealId());
+  for (const gone of [N.ERIC, N.TANYA, N.EVIL_DAVE_2]) assert.ok(!ids.includes(gone), `${gone} gone: ${ids}`);
+});
+
+test("the summoning: a chat closed at 'How dare you summon me?' still ends it: Matthew falls, Agrith-Naar attacks", async (t) => {
+  const f = secondActor(t, S.READY);
+  f.player.getInventory().add(new h.core.Item(I.SHARK, 1), false);
+  await play(f, () => itemOption(f, I.DEMONIC_SIGIL, "Chant"), BOOK_ORDER, { idleTicks: 10,
+    until: () => f.said.some((s) => String(s.text) === "How dare you summon me?") });
+  assert.equal(varbit(f, 542), 1, "control: mid-scene");
+  assert.ok(tabCalls(f).closed > 0, "the tabs closed");
+  await eatMidScene(f);
+  assertSceneOver(f);
+  assert.ok(tabCalls(f).mounted > 0, "the tabs back");
+  assert.equal(stage(f), S.SUMMONED);
+  const owned = [...h.core.World.getNpcs()].filter((n) => n?.getOwner?.() === f.player);
+  assert.ok(!owned.some((n) => n.getRealId() === N.MATTHEW), "Matthew fell");
+  const demon = owned.find((n) => n.getRealId() === N.AGRITH_NAAR);
+  assert.ok(demon?.getCombat?.().getTarget?.() === f.player || demon?.getInteractingMobile?.() === f.player, "he attacks the player");
+});
+
+// --- The room as the fight finds it, the second cast, and leaving mid-ritual ------------------------
+
+test("the fight's room: the captured torches (the Wiki's north-western safe spot among them), fire remains, beds and standards", async (t) => {
+  const f = secondActor(t, S.SUMMONED);
+  const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
+  const O = h.core.ObjectIdentifiers;
+  const at = (id, x, y) => MapObjects.getPrivateArea(f.player, id, new h.core.Location(x, y, 2));
+  const torches = [[2725, 4883], [2722, 4881], [2728, 4894], [2722, 4895], [2718, 4895], [2712, 4893], [2716, 4883], [2718, 4881],
+    [2729, 4905], [2722, 4905], [2718, 4905], [2712, 4905], [2723, 4913], [2717, 4913]];
+  for (const [x, y] of torches) assert.ok(at(O.STANDING_TORCH, x, y), `torch at ${x},${y}`);
+  assert.ok(at(O.FIRE_REMAINS, 2728, 4905), "fire remains");
+  for (const [x, y] of [[2728, 4903], [2729, 4906], [2730, 4907], [2726, 4907]]) assert.ok(at(O.CAMPSITE_BED, x, y), `bed at ${x},${y}`);
+  for (const [x, y] of [[2723, 4912], [2717, 4912]]) assert.equal(at(10253, x, y)?.getType?.(), 11, `standard at ${x},${y} (shape 11)`);
+});
+
+test("the second ritual: everyone in the circle turns to its centre as the chant starts", async (t) => {
+  const f = secondActor(t, S.READY);
+  await itemOption(f, I.DEMONIC_SIGIL, "Chant");
+  assert.deepEqual(facing(f.player), [2720, 4900]);
+  const cast = [...h.core.World.getNpcs()].filter((n) => n?.getOwner?.() === f.player && n.getRealId() !== N.AGRITH_NAAR);
+  assert.ok(cast.length >= 7, `control: the cast ${cast.map((n) => n.getRealId())}`);
+  for (const npc of cast) assert.deepEqual(facing(npc), [2720, 4900], `${npc.getRealId()}`);
+});
+
+test("leaving the room in the middle of a chant takes the owner-only cast with it, and the next visit is whole again", async (t) => {
+  const f = ritualActor(t);
+  await play(f, () => itemOption(f, I.DEMONIC_SIGIL, "Chant"), DENATH_ORDER.slice(0, 2), { idleTicks: 2 });
+  assert.ok([...h.core.World.getNpcs()].some((n) => n?.getOwner?.() === f.player), "control: the cast");
+  endChat(f);
+  h.core.PluginManager.updatePlayerZones?.(f.player);
+  f.player.moveTo(new h.core.Location(2721, 4911, 0));
+  h.ticks(f, 3);
+  h.core.PluginManager.updatePlayerZones?.(f.player);
+  h.ticks(f, 2);
+  assert.ok(![...h.core.World.getNpcs()].some((n) => n?.getOwner?.() === f.player && n.isRegistered?.() !== false), "no owner-only NPC left");
+  assert.equal(varbit(f, 542), 0);
+  assert.equal(stage(f), S.RITUAL, "the stage stays");
+  await click(f, PORTAL.id, PORTAL.tile);
+  h.ticks(f, 3);
+  assert.ok([...h.core.World.getNpcs()].some((n) => n?.getOwner?.() === f.player && n.getRealId() === N.DENATH), "Denath again");
 });

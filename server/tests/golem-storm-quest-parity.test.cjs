@@ -50,6 +50,8 @@ function setup(register, options = {}) {
         const projectile = { cast, target, id, start, end, startHeight, endHeight,
           withAngle(angle) { this.angle = angle; return this; },
           withProgress(progress) { this.progress = progress; return this; },
+          // The legacy magic shape's timing (Projectile.getTiming): launched at 51, landing at 56 next to the caster.
+          getTiming() { return { startCycleOffset: 51, endCycleOffset: 56, legacyMagic: true }; },
           sendProjectile() { projectiles.push(this); return this; } };
         return projectile;
       },

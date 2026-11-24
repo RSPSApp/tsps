@@ -15,4 +15,3 @@ export function wrapExamineWithClickCross(
         return (orig as any)?.(entry, evt, ctx);
     };
 }
-

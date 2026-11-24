@@ -789,12 +789,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 }
 
                 const actions = getNpcMenuActions(npcType, host.osrsClient.varManager);
-                // "Depends on combat levels" lowers every option of a higher-level NPC, not only
-                // Attack: the r241 client tests the level for both passes.
-                const levelDeprioritized =
-                    (ClientState.npcAttackOption | 0) === 0 &&
-                    ((npcType.combatLevel ?? 0) | 0) > (ClientState.localPlayerCombatLevel | 0);
-                const followerDeprioritized = isFollowerLowPriority || levelDeprioritized;
+                // The NPC 'Attack' options setting moves only Attack: a higher-level NPC's other
+                // options (Pickpocket, Talk-to) stay the left click.
+                const followerDeprioritized = isFollowerLowPriority;
 
                 // OSRS: Non-attack options first (4..0).
                 for (let actionIdx = 4; actionIdx >= 0; actionIdx--) {

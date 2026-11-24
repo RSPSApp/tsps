@@ -28,13 +28,15 @@ test("a follower with the flag gets Examine first and lowered options", () => {
     assert.equal(examine, null);
 });
 
-test("\"Depends on combat levels\" lowers every option of a higher-level NPC", () => {
-    const guard = npc({ name: "Guard", combatLevel: 60, actions: ["Talk-to", "Attack", "Pickpocket", null, null] });
+test("\"Depends on combat levels\" lowers only Attack on a higher-level NPC", () => {
+    // The Wiki's NPC 'Attack' options: only Attack moves below Walk here, so a low-level player
+    // still left-clicks Pickpocket on a Knight of Ardougne.
+    const knight = npc({ name: "Knight of Ardougne", combatLevel: 46, actions: ["Talk-to", "Attack", "Pickpocket", null, null] });
     const lowered = (npcAttackOption: number, localPlayerCombatLevel: number) =>
-        buildNpcMenuEntries(guard, 0, 0, { ...ctx, npcAttackOption, localPlayerCombatLevel }, callbacks, () => undefined, 7)
+        buildNpcMenuEntries(knight, 0, 0, { ...ctx, npcAttackOption, localPlayerCombatLevel }, callbacks, () => undefined, 7)
             .actions.filter((a) => a.deprioritized).map((a) => a.option).sort();
-    assert.deepEqual(lowered(0, 50), ["Attack", "Pickpocket", "Talk-to"]);
+    assert.deepEqual(lowered(0, 3), ["Attack"]);
     assert.deepEqual(lowered(0, 70), []);
-    assert.deepEqual(lowered(2, 50), []);
-    assert.deepEqual(lowered(1, 50), ["Attack"]);
+    assert.deepEqual(lowered(2, 3), []);
+    assert.deepEqual(lowered(1, 3), ["Attack"]);
 });

@@ -2,14 +2,14 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const dump = require('../data/definitions/npc-drops.json');
 const subtables = require('../data/definitions/npc-drop-subtables.json');
+const { REVENANT_IDS } = require('../plugins/npcs/revenants/Data.Revenants');
 
 test('the conditional-quantity import preserves upstream table identities and NPC variants', () => {
     // Exclude audited obsolete Wiki titles: five nonattackable cultists and the
     // old manta variant lose stale mappings; current encounters remain intact.
-    // 1115: Multi Infobox pages split on their unnumbered dropversions (RSPSApp/osrsreboxed-db#118:
-    // the Mudfoot's Big Adventure outlaws' one table became three, Jelly's became two).
-    assert.equal(Object.keys(dump.tables).length, 1115);
-    assert.equal(Object.keys(dump.npcs).length, 3226);
+    // RSPSApp/osrsreboxed-db#145 adds 11 ordinary revenants and 22 task variant tables.
+    assert.equal(Object.keys(dump.tables).length, 1137);
+    assert.equal(Object.keys(dump.npcs).length, 3237);
     for (const id of [8058, 8060, 13686]) assert.ok(dump.npcs[id], `upstream variant ${id}`);
     for (const id of [8058, 8060, 13686]) assert.deepEqual(dump.npcs[id].tables, [], `quest variant ${id} has no normal boss loot`);
     for (const id of [8059, 8061, 13685]) assert.ok(dump.npcs[id].tables.length > 0, `post-quest variant ${id} retains its table`);
@@ -81,8 +81,9 @@ test('God Wars generals preserve exact source fractions in one exclusive pool', 
         .flatMap(([id, table]) => table.entries.filter(entry => entry.weight_basis && !['conditional_group', 'conditional_pool'].includes(entry.weight_basis)).map(() => id)), []);
     const conditionalTables = Object.entries(dump.tables)
         .filter(([, table]) => table.entries.some(entry => entry.weight_basis === 'conditional_group'))
-        .map(([id]) => id);
-    assert.deepEqual(conditionalTables, ['corporeal_beast'], 'only the imported conditional unique group');
+        .map(([id]) => id).sort();
+    const revenantTables = REVENANT_IDS.flatMap(id => dump.npcs[id].tables);
+    assert.deepEqual(conditionalTables, ['corporeal_beast', ...revenantTables].sort());
     assert.deepEqual(Object.entries(dump.tables).filter(([, table]) => table.entries.some(entry => entry.weight_basis === 'conditional_pool')).map(([id]) => id).sort(),
         ['duke_sucellus', 'the_leviathan', 'the_whisperer', 'vardorvis'], 'conditional pools are the Forgotten Four');
 });

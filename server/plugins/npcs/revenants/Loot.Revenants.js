@@ -3,7 +3,7 @@
  * ether into an absorbing bracelet, and an amulet of avarice noting the rest. Each kill in the
  * caves also counts towards the Revenant maledictus.
  */
-const { REVENANT_IDS, ITEMS, inCaves } = require("./Data.Revenants");
+const { REVENANT_IDS, MALEDICTUS_ID, ITEMS, inCaves } = require("./Data.Revenants");
 const { resetHeals } = require("./Combat.Revenants");
 const { rollDrops } = require("./Drops.Revenants");
 const Bracelet = require("./Bracelet.Revenants");
@@ -14,6 +14,11 @@ const AMULET_SLOT = 2;
 
 function isRevenant(npcId) {
   return REVENANT_IDS.includes(npcId);
+}
+
+/** The revenant death hooks own loot. Keep the imported tables available for lookup. */
+function claimLoot(event) {
+  if (isRevenant(event.npcId) || event.npcId === MALEDICTUS_ID) event.handled = true;
 }
 
 function onTask(player, npc) {
@@ -70,6 +75,7 @@ function dropLoot({ killer, npc, npcId }) {
 }
 
 module.exports = function attachLoot(api) {
+  api.onCustomEvent("npc-drops:claim", claimLoot);
   api.onNpcDeath(dropLoot);
 };
 

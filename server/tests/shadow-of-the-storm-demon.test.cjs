@@ -116,6 +116,19 @@ test("control: out of melee without Protect from Magic he casts Fire Blast, and 
   assert.deepEqual(at(f), OUT_OF_MELEE);
 });
 
+test("rsprox t2513: a Fire Blast that lands on the player shows firebolt_impact (128), not 131", (t) => {
+  const f = fight(t, OUT_OF_MELEE, false);
+  f.method.start(f.demon, f.p);
+  let hit;
+  for (let i = 0; i < 50 && !hit; i++) {
+    f.graphics.length = 0;
+    const [pending] = f.method.hits(f.demon, f.p);
+    if (pending.isAccurate()) hit = pending;
+  }
+  assert.ok(hit, "control: an accurate roll in 50");
+  assert.deepEqual(f.graphics, [128]);
+});
+
 test("control: in melee there is no pull", (t) => {
   const f = fight(t, IN_MELEE, true);
   f.method.start(f.demon, f.p);

@@ -128,6 +128,22 @@ in a ritual (898, 904).
 - Agrith-Naar stays where he was summoned (the Wiki; the NW torch safespot). The capture has him
   shift a tile or two after the player (2229-2758).
 - Black dye: the robe and hat follow the capture's desert clothes and capes and give the vial back.
+- Badden's "Well I came here and opened a portal..." (capture "Well, I came here...", 390) and Reen's
+  post-quest "un-summoned" (capture "un- summoned").
+- The black mushroom crushed into a vial: Land of the Goblins keeps the Wiki's "...pour the juice into a
+  vial." (capture "...create some black dye.", 522, 532, 541).
+- Matthew's "*gulp*" line breaks after "*gulp*" as live does (2134); live's blank line between is
+  dropped by the engine's chat layout.
+- Patrick's "Those gems on the demon's throne look valuable..." shows while The Golem's gems are still
+  on the throne (the Wiki's condition; the recording account had taken them).
+- Dyeing Silverlight takes every clean Silverlight carried (the Wiki's warning on the Silverlight page).
+
+## Menus
+
+Live leaves out the option just asked when a talk's menu comes back (every one of the capture's 35
+talk menus; Denath 785-806, Badden 369-412); the ritual's word menus stay whole. Badden's golem and
+portal answers end back at his topics without the topic that led there (405, 451), where the
+transcript returns to his opening question.
 
 ## Ours
 
@@ -138,9 +154,20 @@ in a ritual (898, 904).
 - A final blow without Silverlight restores his 12 hitpoints with no message (the capture's message is
   for being too far away).
 - The room is a private area at the source coordinates rather than a client instance.
+- The strange implement on the golem once it is reprogrammed: the default "Nothing interesting happens.".
 
 ## Runs
 
 ### 2026-11-24 · agent · claude-opus-5-5
 
-- **Start:** see the PR's playthrough report.
+- **Start:** fresh account `sotsrun1`, The Golem and Demon Slayer completed by fixture, stage 0, one
+  `::tele` to Reen. Every later leg walked or travelled by Quest Helper; the fight in melee to the kill.
+- **Found and fixed:** Denath's lines inside Evil Dave's escort talk neither moved the stage nor used the
+  player's words (the triggers keyed on the NPC clicked); menus repeated the option just asked; the
+  player's "Did you see anything happen last night?" and "Yes." to Matthew were missing (osrsreboxed-db);
+  the escort's Dave stayed in the room; the implement on a reprogrammed golem said nothing.
+- **Checked as is:** rewards once, the repeat chant, relog (stage, varbits, items), the offline save, the
+  post-quest room and talks, Reen's lost-sword recovery.
+- **Vision (after the fixes, account `sotsvis1`, stages set for the setup):** frames of the escort, the
+  first ritual's closing and the summoning at a reader's pace: none black, the view and minimap back after
+  each, everyone on screen. Tanya's death and the storm were checked over MCP, without frames.

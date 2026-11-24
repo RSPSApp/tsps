@@ -247,6 +247,7 @@ test("t543: ink on a red cape: 'You dye the red cape black.' as a game message, 
   const f = actor(t, { tile: UZER, stage: S.INFILTRATE, items: [[I.BLACK_DYE, 1], [I.RED_CAPE, 1]] });
   await useItems(f, I.BLACK_DYE, I.RED_CAPE);
   assert.deepEqual(texts(f), ["You dye the red cape black."]);
+  assert.equal(f.messages.find((m) => m.text === "You dye the red cape black.").type, h.core.ChatType.SPAM, "t543: on the filterable channel");
   assert.equal(count(f, I.BLACK_CAPE), 1);
   assert.equal(count(f, I.VIAL), 1);
   assert.equal(h.shown(f), null);
@@ -325,6 +326,32 @@ test("t715-773: black clothes and the dyed sword: the escort scene, stage 30, Re
   assert.equal(f.player.getMovementQueue().isMovementBlocked(), false);
 });
 
+test("t785-815: the escort's talk goes on to Denath's 'What do I have to do?': stage 40 and this player's own words in his line", async (t) => {
+  const f = actor(t, { tile: [2721, 4911, 0], stage: S.INFILTRATE, items: [[I.SILVERLIGHT_2, 1]] });
+  wearBlack(f);
+  const dave = h.spawn(f, NPC.DAVE_PORTAL, DAVE_TILE);
+  // Denath is spawned by the escort: every NPC's animations, by real id.
+  const proto = (() => { let o = dave; while (o && !Object.prototype.hasOwnProperty.call(o, "performAnimation")) o = Object.getPrototypeOf(o); return o; })();
+  const original = proto.performAnimation;
+  const denathEmotes = [];
+  proto.performAnimation = function (animation) {
+    if (this.getRealId?.() === N.DENATH) denathEmotes.push(animation.getId());
+    return original.call(this, animation);
+  };
+  t.after(() => { proto.performAnimation = original; });
+  const said = await play(f, () => h.talk(f, dave), ["I want to join your group.", "I'm evil!", "What do I have to do?"], { idleTicks: 40 });
+  assert.equal(stage(f), S.DENATH, said.join("\n"));
+  // T783: Denath laughs (861) on "You shall have every wish granted", and the escort's Dave is gone from the room.
+  assert.ok(denathEmotes.includes(861), `${denathEmotes}`);
+  assert.ok(![...h.core.World.getNpcs()].some((n) => n?.getOwner?.() === f.player && n.getRealId() === N.EVIL_DAVE_2), "no Dave in the room");
+  const words = V.WORDS.map((id) => varbit(f, id));
+  assert.deepEqual([...words].sort(), [0, 1, 2, 3, 4]);
+  const spoken = [...words].reverse().map((w) => WORDS[w]).join(" ");
+  const line = said.find((l) => l.startsWith("Denath: You must memorize the incantation carefully."));
+  assert.ok(line?.includes(`It is ${spoken}.`), `${spoken}\n${said.join("\n")}`);
+  assert.ok(heads(f).includes(N.DENATH), `heads ${heads(f)}`);
+});
+
 // --- Denath, Matthew, the golem and the kilns ------------------------------------------------------
 
 const IN_ROOM = [2720, 4908, 2];
@@ -376,6 +403,9 @@ test("t1084-1090: the golem saw it; stage 60 with 'He was carrying a large book'
   const f = actor(t, { tile: UZER, stage: S.MATTHEW });
   const golem = h.spawn(f, NPC.GOLEM, [3488, 3093, 0]);
   const said = await play(f, () => h.talk(f, golem), ["Did you see anything happen last night?"]);
+  // T1084: the player asks it, then the golem's answer (t1085).
+  const asked = said.indexOf("PLAYER: Did you see anything happen last night?");
+  assert.ok(asked >= 0 && said[asked + 1].startsWith("Clay golem: I saw one of the men in dark robes"), said.join("\n"));
   assert.ok(said.some((line) => line.startsWith("Clay golem: He was carrying a large book.")), said.join("\n"));
   assert.equal(stage(f), S.GOLEM);
   assert.ok([0, 1, 2, 3].includes(varbit(f, V.KILN)));
@@ -526,6 +556,7 @@ test("t1711-1788: the right first chant (Denath's order): stage 90, the closing 
     assert.ok(said.includes(line), `${line}\n${lines}`);
   }
   assert.equal(varbit(f, V.DAVE), 1);
+  assert.equal(texts(f).filter((text) => text === "").length, 1, "t1742: one blank game message as the cutscene starts");
   assert.equal(varbit(f, 542), 0, "the cutscene is over");
   // Jennifer's boxes carry her own head, 905 (t1753), not the Shayzien store's Jennifer (305) a name finds.
   assert.ok(heads(f).includes(N.JENNIFER_2) && !heads(f).includes(305), `heads ${heads(f)}`);
@@ -631,6 +662,14 @@ test("t1931-2021: the golem refuses (1379 at 1), the implement reprograms it (2)
   });
   assert.ok(box.some((line) => line.includes("You open the golem's head and search through the dusty scrolls inside...")), box.join("\n"));
   assert.equal(varbit(f, V.GOLEM), 2);
+  // Once reprogrammed the implement does what it does before the refusal (ours: not silent).
+  const again = await play(f, async () => {
+    await f.connection.dispatch([{ type: "item_on_npc", targetIndex: golem.getIndex(), itemId: I.STRANGE_IMPLEMENT, slot: slotOf(f, I.STRANGE_IMPLEMENT), widgetId: 149 << 16 }]);
+    for (let i = 0; i < 6 && !h.shown(f) && !texts(f).length; i++) h.tick(f);
+  });
+  assert.ok(texts(f).includes("Nothing interesting happens."), `${again} ${texts(f)}`);
+  clear(f);
+  endChat(f);
   const said = await play(f, () => h.talk(f, golem));
   assert.ok(said.includes("PLAYER: Take this demonic sigil and go through the portal."), said.join("\n"));
   assert.equal(varbit(f, V.GOLEM), 3);
@@ -659,7 +698,12 @@ test("t2049-2053 and t2124-2135: with all four arrived the room holds the eight;
   assert.ok(no.includes("Matthew: Do hurry! We haven't got much time!"), no.join("\n"));
   assert.equal(stage(f), S.PREPARE);
   const yes = await play(f, () => h.talk(f, cast(f, N.MATTHEW)), ["Yes."]);
-  assert.ok(yes.some((line) => line.startsWith("Matthew: *gulp*")), yes.join("\n"));
+  // T2133-2134: the player's "Yes.", then the line with its break as the chatbox shows it.
+  const gulp = yes.indexOf("Matthew: *gulp* Okay, here we go...");
+  assert.ok(gulp > 0 && yes[gulp - 1] === "PLAYER: Yes.", yes.join("\n"));
+  // Live's "*gulp*<br><br>Okay..." (t2134); the engine's chat layout drops the empty line between.
+  assert.ok(f.calls.some((c) => c.name === "sendString" && c.args[0] === "*gulp*<br>Okay, here we go..."),
+    JSON.stringify(f.calls.filter((c) => c.name === "sendString" && String(c.args[0]).includes("gulp")).map((c) => c.args[0])));
   assert.equal(stage(f), S.READY);
 });
 
@@ -682,6 +726,7 @@ test("t2173-2229: the book's order: stage 120, Agrith-Naar on the circle, Matthe
   const f = secondActor(t, S.READY);
   const said = await play(f, () => itemOption(f, I.DEMONIC_SIGIL, "Chant"), BOOK_ORDER, { idleTicks: 10 });
   assert.equal(stage(f), S.SUMMONED, said.join("\n"));
+  assert.equal(texts(f).filter((text) => text === "").length, 1, "t2201: one blank game message as the cutscene starts");
   for (const line of ["Agrith Naar: Matthew!", "Agrith Naar: How dare you summon me?", "Matthew: Aaaargh!", "PLAYER: He didn't summon you.",
     "PLAYER: I did!", "Agrith Naar: Then prepare to die!"]) assert.ok(said.includes(line), `${line}\n${said.join("\n")}`);
   const demon = [...h.core.World.getNpcs()].find((n) => n?.getOwner?.() === f.player && n.getRealId() === N.AGRITH_NAAR);
@@ -744,7 +789,7 @@ test("after the quest: the portal's 'You step into the portal.' into the plain r
   await click(f, PORTAL.id, PORTAL.tile);
   h.ticks(f, 2);
   assert.deepEqual(at(f), [2720, 4884, 2]);
-  assert.ok(texts(f).includes("You step into the portal."));
+  assert.ok(f.messages.some((m) => m.text === "You step into the portal." && m.type === h.core.ChatType.SPAM), JSON.stringify(f.messages));
   const castIds = new Set([N.DENATH, N.ERIC, N.TANYA, N.MATTHEW, N.JENNIFER_2, N.PATRICK, N.EVIL_DAVE_2, N.FATHER_REEN, N.FATHER_BADDEN, N.CLAY_GOLEM, N.AGRITH_NAAR]);
   assert.deepEqual([...h.core.World.getNpcs()].filter((n) => n?.getOwner?.() === f.player && castIds.has(n.getRealId())).map((n) => n.getRealId()), []);
   assert.equal(varbit(f, V.BADDEN), 3);
@@ -911,4 +956,63 @@ test("item-loss: Badden's line twice (a double click) takes one sigil", async (t
   await play(f, () => h.talk(f, badden));
   await play(f, () => h.talk(f, badden));
   assert.equal(count(f, I.DEMONIC_SIGIL), 1);
+});
+
+// The cache: the kilns' Look-in forms at stage 60 are 10246, 10247, 10248 and 10248 again (the last two share it).
+const LOOK_IN = [10246, 10247, 10248, 10248];
+
+test("every kiln answers Look-in from where a player stands by it (by its id or its Look-in form's), and each can hold the tome", async (t) => {
+  for (let kiln = 0; kiln < KILNS.length; kiln++) {
+    const [id, [x, y]] = KILNS[kiln];
+    for (const [dx, dy, clicked] of [[2, 0, id], [-1, 0, id], [0, 2, id], [0, -1, id], [2, 0, LOOK_IN[kiln]]]) {
+      const f = actor(t, { tile: [x + dx, y + dy, 0], stage: S.GOLEM, attributes: { [A.KILN]: kiln } });
+      const said = await play(f, () => click(f, clicked, [x, y]));
+      const l = f.player.getLocation();
+      assert.deepEqual(said, ["ItemStatementDialogue: You find a book in the kiln."], `kiln ${id} from ${dx},${dy}: at ${l.getX()},${l.getY()} ${JSON.stringify(said)}`);
+    }
+  }
+});
+
+/** Records the animations an NPC plays. */
+function spyAnimations(npc) {
+  const seen = [];
+  const original = npc.performAnimation.bind(npc);
+  npc.performAnimation = (animation) => { seen.push(animation.getId()); return original(animation); };
+  return seen;
+}
+
+const menus = (said) => said.filter((line) => line.startsWith("MENU")).map((line) => line.replace(/^MENU\[[^\]]*\]: /, ""));
+
+test("t366-453: Badden's menus as live shows them: the option just asked left out, his golem and portal answers back at his topics", async (t) => {
+  const f = actor(t, { tile: UZER, stage: S.STARTED, items: [[I.SILVERLIGHT, 1]] });
+  const badden = h.spawn(f, NPC.BADDEN_UZER, [3487, 3092, 0]);
+  const emotes = spyAnimations(badden);
+  const said = await play(f, () => h.talk(f, badden), ["Reen sent me.", "Tell me more about Agrith-Naar.", "Tell me more about Denath.",
+    "Why has he come to Uzer?", "Foul construct? Do you mean the golem?", "Tell me more about Agrith-Naar."]);
+  assert.deepEqual(menus(said), [
+    "Reen sent me.|Just passing through.", // t366
+    "Tell me more about Agrith-Naar.|Tell me more about Denath.|So what do you want me to do?", // t369
+    "Tell me more about Denath.|So what do you want me to do?", // t375
+    "Tell me more about Agrith-Naar.|Why has he come to Uzer?|So what do you want me to do?", // t381
+    // t390 (the Wiki has no comma after "Well")
+    "Tell me more about Agrith-Naar.|Foul construct? Do you mean the golem?|Well I came here and opened a portal to a demon's realm.|So what do you want me to do?",
+    "Tell me more about Agrith-Naar.|So what do you want me to do?", // t405
+    "Tell me more about Denath.|So what do you want me to do?", // t412
+  ]);
+  // T388 summon_point on "As that foul construct over there proves.", t397 emote_angry on "The golem, yes!".
+  assert.deepEqual(emotes, [2891, 859]);
+});
+
+test("t785-811: Denath's menu in the escort's talk leaves out the question just asked", async (t) => {
+  const f = actor(t, { tile: [2721, 4911, 0], stage: S.INFILTRATE, items: [[I.SILVERLIGHT_2, 1]] });
+  wearBlack(f);
+  const dave = h.spawn(f, NPC.DAVE_PORTAL, DAVE_TILE);
+  const said = await play(f, () => h.talk(f, dave), ["I want to join your group.", "I'm evil!", "Isn't this, you know, wrong?",
+    "How do you know Agrith-Naar will do all this for us?", "Why did Josef run away?"], { idleTicks: 40 });
+  assert.deepEqual(menus(said).slice(2), [
+    "Isn't this, you know, wrong?|How do you know Agrith-Naar will do all this for us?|Why did Josef run away?|What do I have to do?", // t785
+    "How do you know Agrith-Naar will do all this for us?|Why did Josef run away?|What do I have to do?", // t790
+    "Isn't this, you know, wrong?|Why did Josef run away?|What do I have to do?", // t796
+    "Isn't this, you know, wrong?|How do you know Agrith-Naar will do all this for us?|What do I have to do?", // t806
+  ]);
 });

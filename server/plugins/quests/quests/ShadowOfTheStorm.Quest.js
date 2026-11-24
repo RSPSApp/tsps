@@ -345,6 +345,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   // Fire Blast (cache CombatSpells.FIRE_BLAST), with Agrith-Naar's Wiki max hit of 10.
   const FIRE_BLAST = { anim: SEQ_DEMON_CASTING, projectile: 130, startGraphic: 129, endGraphic: 131,
     start: 0, end: 20, startHeight: 43, endHeight: 31, maxHit: 10 };
+  // Ours t2513: his Fire Blast landing on the player shows firebolt_impact (128); on Matthew, 131 (t2212).
+  const GFX_FIREBLAST_ON_PLAYER = 128;
   const FIREBLAST_CAST_SOUND = 155;
   const TELEGRAB = { projectile: 143, graphic: 409, arrivalDelay: 46, castSound: 3006, hitSound: 3007, moveSound: 1851 };
   const AGRITH_MAX_HIT = 10;
@@ -800,6 +802,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
         Scenes.loc(scene, { id: INVISWALL_SERVERSIDE_OBJECT_ID, x, y, z: 2, type: 0, face }));
       ensureWizardNpcs(player);
       const dave = Scenes.actor(scene, NpcIdentifiers.EVIL_DAVE_2, ESCORT_ENTRY, null, { direction: 0 });
+      scene.__escortDave = dave;
       player.getPacketSender().sendJingle(DENATH_CUTSCENE_JINGLE, 0);
       Scenes.later(scene, 1, () => {
         Scenes.camera(player, [2715, 4883, 375], [2720, 4884, 350]);
@@ -843,6 +846,38 @@ module.exports = function registerShadowOfTheStormQuest(api) {
 
   function tileOf(scene, tile) {
     return Scenes.tileFor(scene, tile);
+  }
+
+  const SEQ_SUMMON_POINT = 2891;
+  const SEQ_EMOTE_ANGRY = 859;
+  const SEQ_EMOTE_LAUGH = 861;
+  /** The speakers' emotes as their lines show (ours t388 and t432, t397, t783). */
+  const LINE_EMOTES = [
+    { ids: BADDEN_NPC_IDS, line: /^As that foul construct over there proves/, seq: SEQ_SUMMON_POINT },
+    { ids: BADDEN_NPC_IDS, line: /^The golem, yes! An abomination/, seq: SEQ_EMOTE_ANGRY },
+    { ids: DENATH_NPC_IDS, line: /^You shall have every wish granted/, seq: SEQ_EMOTE_LAUGH, key: "denath" },
+  ];
+
+  function lineEmotes(event, text) {
+    if (typeof event.step?.player === "string") return;
+    const player = event.player;
+    for (const emote of LINE_EMOTES) {
+      if (!spokenBy(event, emote.ids) || !emote.line.test(text)) continue;
+      lineBefore(event, () => {
+        const npc = emote.key && !emote.ids.has(event.npc?.getRealId?.() ?? event.npcId)
+          ? wizardNpcs.get(player)?.get(emote.key) : event.npc;
+        npc?.performAnimation?.(new Animation(emote.seq));
+      });
+    }
+    // T783: the escort's Dave goes as Denath laughs.
+    const scene = Scenes.get(player);
+    if (scene?.__escortDave && spokenBy(event, DENATH_NPC_IDS) && /^You shall have every wish granted/.test(text)) {
+      lineBefore(event, () => {
+        if (!scene.__escortDave) return;
+        Scenes.removeActor(scene, scene.__escortDave);
+        scene.__escortDave = null;
+      });
+    }
   }
 
   /** Lines of the escort's own: t754 the camera on Denath, t766 the walls go, t773 the scene ends. */
@@ -1553,6 +1588,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     const scene = roomScene(player, "first-ritual-close");
     Scenes.later(scene, 3, () => {
       Scenes.controls(player, true, true);
+      player.sendMessage(""); // t1742: a blank game message as the cutscene starts
       const circle = phaseLoc(scene, { id: AGRITH_RITUAL_CIRCLE_OBJECT_ID, x: 2719, y: 4899, face: 0 });
       scene.__shadowCircle = circle;
       player.getPacketSender().sendSoundEffect(AGRITH_CIRCLE_SOUND, 1, 0);
@@ -1685,6 +1721,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function startSummoning(player) {
     const scene = roomScene(player, "summoning");
     Scenes.controls(player, true, true);
+    player.sendMessage(""); // t2201: a blank game message as the cutscene starts
     const circle = phaseLoc(scene, { id: AGRITH_RITUAL_CIRCLE_OBJECT_ID, x: 2719, y: 4899, face: 0 });
     if (scene.__shadowClosedPortal) {
       removeSceneLoc(scene, scene.__shadowClosedPortal);
@@ -1706,7 +1743,6 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       run: (p) => p.performAnimation(new Animation(SEQ_EMOTE_ANGRY)) },
     { line: /^Then prepare to die!/, camera: [[2719, 4909, 500], [2720, 4900, 150]], drift: [2719, 4905, 1000] },
   ];
-  const SEQ_EMOTE_ANGRY = 859;
 
   function summonLine(event, text) {
     const scene = Scenes.get(event.player);
@@ -2042,11 +2078,28 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       after: (p) => readyForSummoning(p) },
   ];
 
+  const speakerNames = new WeakMap();
+  /**
+   * Whether one of `ids` says this line: a player's line belongs to the NPC talked to, an NPC's line to
+   * the speaker it names. Denath speaks inside Evil Dave's talk at the escort (ours t773-815), so the
+   * NPC clicked is not always the one speaking.
+   */
+  function spokenBy(event, ids) {
+    const speaker = event.step?.speaker;
+    if (typeof event.step?.player === "string" || !speaker) return ids.has(event.npcId);
+    let names = speakerNames.get(ids);
+    if (!names) {
+      names = new Set([...ids].map((id) => NpcDefinition.forId(id)?.getName?.()).filter(Boolean));
+      speakerNames.set(ids, names);
+    }
+    return names.has(speaker);
+  }
+
   function applyLineTriggers(event, text) {
     const player = event.player;
     const isPlayerLine = typeof event.step?.player === "string";
     for (const trigger of LINE_TRIGGERS) {
-      if (!trigger.ids.has(event.npcId) || Boolean(trigger.player) !== isPlayerLine || !trigger.line.test(text)) continue;
+      if (!spokenBy(event, trigger.ids) || Boolean(trigger.player) !== isPlayerLine || !trigger.line.test(text)) continue;
       if (trigger.before) lineBefore(event, () => trigger.before(player, event));
       if (trigger.after) lineAfter(event, () => trigger.after(player, event));
     }
@@ -2066,6 +2119,38 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     setStage(player, STAGE_READY);
   }
 
+  const BADDEN_OPENER = "Reen sent me.";
+  const BADDEN_TOPICS = ["Tell me more about Agrith-Naar.", "Tell me more about Denath.", "So what do you want me to do?"];
+  const baddenTopic = new WeakMap();
+
+  /**
+   * npc-dialogue:menu for the quest's own talks. Live leaves out the option just asked when a menu comes
+   * back (ours t785-811 Denath, t369-412 Badden, and every talk menu of the capture; only the ritual's
+   * word menus stay whole). Badden's golem and portal answers end back at his topics, without the topic
+   * that led there (t405, t451), where the transcript returns to his opening question.
+   */
+  function shapeMenu(notice) {
+    if (!notice?.player || !OWN_NPC_IDS.has(notice.npcId)) return;
+    const options = notice.options ?? [];
+    if (BADDEN_NPC_IDS.has(notice.npcId)) {
+      if (BADDEN_TOPICS.slice(0, 2).includes(notice.chosen)) baddenTopic.set(notice.player, notice.chosen);
+      const reopened = options.some((o) => o.text === BADDEN_OPENER)
+        && notice.history?.some((menu) => (menu.step?.options ?? []).some((o) => o.text === BADDEN_OPENER));
+      const topics = reopened && notice.history.find((menu) =>
+        BADDEN_TOPICS.every((text) => (menu.step?.options ?? []).some((o) => o.text === text)));
+      if (topics) {
+        const left = baddenTopic.get(notice.player);
+        notice.options = topics.step.options.filter((o) => o.text !== left);
+        return;
+      }
+    }
+    // The ritual's word menus keep all five words (ours t1361-t1368, t1687-t1732).
+    if (options.some((o) => INCANTATION_WORDS.includes(o.text))) return;
+    if (!notice.chosen || options.length < 3) return;
+    if (!options.some((o) => o.text === notice.chosen)) return;
+    notice.options = options.filter((o) => o.text !== notice.chosen);
+  }
+
   /** Fills the wiki placeholders and echoes the incantation words chosen. */
   function fillTranscriptText(event) {
     if (!event?.player || typeof event.text !== "string") return;
@@ -2081,7 +2166,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     }
     // The Wiki's lines carry its author's words; Denath says this player's, the book's order backwards
     // (ours t815 and t830: "Agrith-Naar Camerinthum Caldar Tarren Nahudu" for varbits 1,4,0,3,2).
-    if (DENATH_NPC_IDS.has(event.npcId) && INCANTATION_IN_LINE.test(text) && packedIncantation(event.player)) {
+    if (spokenBy(event, DENATH_NPC_IDS) && INCANTATION_IN_LINE.test(text) && packedIncantation(event.player)) {
       text = text.replace(INCANTATION_IN_LINE, denathIncantation(event.player));
     }
     if (text.includes("[him/her]") || text.includes("[his/her]") || text.includes("[He/She]")) {
@@ -2114,8 +2199,12 @@ module.exports = function registerShadowOfTheStormQuest(api) {
         });
       }
     }
-    if (DENATH_NPC_IDS.has(event.npcId) && /^Player, /.test(text)) text = text.replace(/^Player, /, `${event.player.getDisplayName()}, `);
+    // Ours t2134: the chatbox shows "*gulp*<br><br>Okay, here we go..." where the Wiki writes two spaces (the
+    // engine's chat layout keeps one of the breaks: no empty line).
+    if (spokenBy(event, MATTHEW_NPC_IDS) && /^\*gulp\* +/.test(text)) text = text.replace(/^\*gulp\* +/, "*gulp*<br><br>");
+    if (spokenBy(event, DENATH_NPC_IDS) && /^Player, /.test(text)) text = text.replace(/^Player, /, `${event.player.getDisplayName()}, `);
     applyLineTriggers(event, text);
+    lineEmotes(event, text);
     escortLine(event, text);
     closingLine(event, text);
     summonLine(event, text);
@@ -2163,7 +2252,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       return;
     }
     // Ours t1636: the call to begin, overhead and in the chatbox.
-    if (DENATH_NPC_IDS.has(event.npcId) && /^It is time for the ritual to commence!/.test(text)) {
+    if (spokenBy(event, DENATH_NPC_IDS) && /^It is time for the ritual to commence!/.test(text)) {
       lineBefore(event, () => wizardNpcs.get(player)?.get("denath")?.forceChat(text));
       return;
     }
@@ -2420,6 +2509,11 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     return true;
   }
 
+  /** A filterable ("spam") chat line, as live sends the cape's dye line and the portal's. */
+  function spam(player, text) {
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, text);
+  }
+
   function applyDye(player, clothingId, slots) {
     const { result, name, desert } = BLACK_DYEABLE_CLOTHING.get(clothingId);
     const inventory = player.getInventory();
@@ -2441,7 +2535,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     inventory.refreshItems?.();
     player.getSkillManager().addExperiences(Skill.CRAFTING, DYE_CRAFTING_XP);
     if (desert) itemBox(player, result, `You dye the ${name} black.`);
-    else player.sendMessage(`You dye the ${name} black.`);
+    else spam(player, `You dye the ${name} black.`); // t543: on the filterable channel
   }
 
   function handleItemOnItem(event) {
@@ -2481,8 +2575,9 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     if (stage < STAGE_RITUAL_DONE || stage >= STAGE_KILLED) return; // The Golem owns the implement otherwise
     // Ours t2005: after the golem has refused (Quest Helper's golemRejected gates this step).
     if (!(helperBits(player) & BIT_GOLEM_REFUSED)) return;
-    event.handled = true;
+    // Reprogrammed already: the default "Nothing interesting happens.", as before the refusal (ours).
     if (helperBits(player) & BIT_GOLEM_REPROGRAMMED) return;
+    event.handled = true;
     startTranscript(api, player, npcId, PAGE, "performing-the-ritual-reprogramming-the-golem", undefined, event.target ?? null);
   }
 
@@ -2570,7 +2665,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   function enterThroneRoom(player) {
     const stage = quest.getStage(player);
     if (stage >= STAGE_COMPLETE) {
-      player.sendMessage("You step into the portal.");
+      spam(player, "You step into the portal."); // t2963: filterable
       player.moveTo(new Location(2720, 4884, 2));
       return;
     }
@@ -2583,7 +2678,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   }
 
   function leaveThroneRoom(player) {
-    player.sendMessage("You step into the portal.");
+    spam(player, "You step into the portal."); // t2963: filterable
     Scenes.end(player);
     removeAllWizards(player);
     player.moveTo(new Location(2721, 4911, 0));
@@ -2875,7 +2970,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
       const hit = new PendingHit(npc, target, this, delay);
       hit.setTotalDamage(Math.min(AGRITH_MAX_HIT, hit.getTotalDamage()));
       if (this.style === CombatType.MAGIC && hit.isAccurate()) {
-        target.performGraphic?.(new Graphic(FIRE_BLAST.endGraphic, this.landing, GraphicHeight.HIGH));
+        target.performGraphic?.(new Graphic(GFX_FIREBLAST_ON_PLAYER, this.landing, GraphicHeight.HIGH));
       }
       return [hit];
     }
@@ -3169,6 +3264,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:line", fillTranscriptText);
+  api.onCustomEvent("npc-dialogue:menu", shapeMenu);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("player:bootstrap-complete", handleBootstrapComplete);
   api.onCustomEvent("equipment:changed", darklightRemoved);

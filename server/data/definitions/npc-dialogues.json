@@ -1097780,6 +1097780,9 @@
               "text": "Did you see anything happen last night?",
               "steps": [
                 {
+                  "player": "Did you see anything happen last night?"
+                },
+                {
                   "type": "line",
                   "speaker": "Clay golem",
                   "text": "I saw one of the men in dark robes run out of the temple. He looked very frightened and I feared for his safety.",
@@ -1099711,6 +1099714,9 @@
                   "type": "condition",
                   "text": "With a demonic sigil and Silverlight:",
                   "steps": [
+                    {
+                      "player": "Yes."
+                    },
                     {
                       "type": "line",
                       "speaker": "Matthew",

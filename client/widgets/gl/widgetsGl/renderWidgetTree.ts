@@ -57,6 +57,7 @@ import { drawScrollBar } from "./scrollbarDraw";
 import { drawWorldMapLabelGL, getWorldMapFlashTexture } from "./worldMapLabels";
 import { scaleLogicalPixels } from "./scaleLogicalPixels";
 import { rectangleAlphas } from "./rectFill";
+import { usesLocalPlayerPose } from "./playerPose";
 import { ObjStackability } from "../../../rs/config/objtype/ObjStackability";
 import {
     formatIf1Text,
@@ -3258,7 +3259,10 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             // localPlayer.getModelInternal() which bakes in the live idle animation.
             // Inject the local player's movement sequence so the widget model animates.
             let liveMovementFrame: number | undefined;
-            if (sequenceId === undefined && ((w.contentType ?? 0) | 0) === 328) {
+            // A player-composition model (model type 7: the worn-equipment and makeover previews)
+            // always stands in the local player's own pose at its live frame, whatever sequence
+            // the widget carries, so the preview breathes and holds its weapon stance.
+            if (usesLocalPlayerPose(w, sequenceId)) {
                 try {
                     const ac = osrsClient?.playerAnimController;
                     const sid = osrsClient?.controlledPlayerServerId;

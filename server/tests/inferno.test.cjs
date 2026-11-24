@@ -498,7 +498,7 @@ test('a Yt-HurKot drawn off heals JalTok-Jad only from melee distance (Wiki, #64
   far.walkingTo = undefined;
   const before = jad.setHitpoints(100).getHitpoints();
   tick(player, 4);
-  assert.equal(jad.getHitpoints() - before, 15, 'the one beside it heals while fighting; the one 3 tiles out does not');
+  assert.equal(jad.getHitpoints() - before, 15, 'the one beside it heals while fighting; the one 4 tiles out does not');
   assert.equal(far.walkingTo, undefined, 'the fighting one stays on the player');
   world.random = 0;
   run.leave(player);

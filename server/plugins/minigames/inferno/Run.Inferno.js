@@ -497,9 +497,9 @@ function addJad(session, jad, firstAttackTicks, healerCount, healerSpots = null)
 // Yt-HurKot come once, when a Jad first drops to half health, and heal it until drawn off. Unlike
 // the Fight Caves, Inferno healers do not respawn when Jad heals to full (Wiki: Yt-HurKot).
 // One drawn off still heals from melee distance of its Jad, and only there (Wiki); farther out it
-// fights, and once its fight lapses it walks back. Recorded difference: in the rev 227 Inferno
-// recordings (local 1000602, 1000603, 1000557, 1000608) no healer heals after its first attack on
-// the player, 129 attacks by 24 of them, some from 1 tile of the Jad.
+// fights, and once its fight lapses it walks back. rsprox (rev 227, local 1000602, 1000603,
+// 1000557, 1000608): 24 drawn-off healers made 129 attacks, all from 2 or more tiles off a living
+// Jad, and none healed; no recording has one fighting from melee distance, which follows the Wiki.
 function tendJads(session) {
   const { Animation, Graphic, NpcIdentifiers: Npcs, PathFinder } = core;
   const now = cycle();

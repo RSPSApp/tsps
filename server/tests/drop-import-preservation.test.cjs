@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const path = require('node:path');
 const { test } = require('node:test');
 const dump = require('../data/definitions/npc-drops.json');
 const subtables = require('../data/definitions/npc-drop-subtables.json');
@@ -82,10 +83,36 @@ test('God Wars generals preserve exact source fractions in one exclusive pool', 
     const conditionalTables = Object.entries(dump.tables)
         .filter(([, table]) => table.entries.some(entry => entry.weight_basis === 'conditional_group'))
         .map(([id]) => id).sort();
-    const revenantTables = REVENANT_IDS.flatMap(id => dump.npcs[id].tables);
-    assert.deepEqual(conditionalTables, ['corporeal_beast', ...revenantTables].sort());
+    assert.deepEqual(conditionalTables, ['corporeal_beast']);
     assert.deepEqual(Object.entries(dump.tables).filter(([, table]) => table.entries.some(entry => entry.weight_basis === 'conditional_pool')).map(([id]) => id).sort(),
         ['duke_sucellus', 'the_leviathan', 'the_whisperer', 'vardorvis'], 'conditional pools are the Forgotten Four');
+});
+
+test('the revenant import rolls the unique, secondary and main pools on the same kill', async t => {
+    const { Server } = require('../dist/Server');
+    Server.installProductionPathResolver();
+    const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+    await CachePipeline.initialize(path.resolve(__dirname, '..'));
+    const { PluginManager } = require('../dist/plugins/PluginManager');
+    const NpcDrops = require('../plugins/npcs/NpcDrops.plugin');
+    NpcDrops.register(PluginManager.createApi('NpcDrops'));
+    const { loadDrops, rollOnce, tablesByNpc } = NpcDrops.__internals;
+    loadDrops();
+    let random = 0;
+    t.mock.method(Math, 'random', () => random);
+    for (const id of REVENANT_IDS) {
+        for (const table of tablesByNpc.get(id)) {
+            const tableId = table.table_id;
+            const unique = table.entries.find(row => row.roll_group?.startsWith('unique'));
+            const secondary = table.entries.find(row => row.roll_group === 'secondary');
+            const main = table.entries.find(row => !row.always && !row.separate_roll && !row.pre_roll);
+            random = 0;
+            assert.deepEqual(rollOnce(table, table.entries, null).map(drop => drop.itemId),
+                [unique.item_id, secondary.item_id, main.item_id], tableId);
+            random = 1 - Number.EPSILON;
+            assert.deepEqual(rollOnce(table, table.entries, null), [], `${tableId} has empty slots`);
+        }
+    }
 });
 
 test('God Wars unique outcomes do not also roll the main table independently', t => {

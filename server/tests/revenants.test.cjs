@@ -106,7 +106,7 @@ test("the drop table's item ids are the items the Wiki names", () => {
   assert.deepEqual([ITEMS.ETHER, ITEMS.BRACELET_CHARGED].map(name), ["Revenant ether", "Bracelet of ethereum"]);
 });
 
-test("the imported revenant tables keep both task variants and exact weighted pools", () => {
+test("the imported revenant tables keep both task variants and independent weighted pools", () => {
   const { npcs, tables } = require("../data/definitions/npc-drops.json");
   assert.equal(npcs[Data.MALEDICTUS_ID], undefined, "Maledictus has separate loot rules");
   for (const npcId of Data.REVENANT_IDS) {
@@ -121,7 +121,10 @@ test("the imported revenant tables keep both task variants and exact weighted po
       assert.equal(main.reduce((total, row) => total + row.weight, 0), table.main_max_roll, label);
       const groups = new Map();
       for (const row of entries.filter(row => row.pre_roll || row.separate_roll)) {
-        assert.equal(row.weight_basis, "conditional_group", label);
+        assert.equal(row.separate_roll, true, label);
+        for (const field of ["pre_roll", "group_access_weight", "group_access_out_of"]) {
+          assert.ok(!(field in row), `${label}: ${field}`);
+        }
         const rows = groups.get(row.roll_group) ?? [];
         rows.push(row);
         groups.set(row.roll_group, rows);
@@ -129,7 +132,9 @@ test("the imported revenant tables keep both task variants and exact weighted po
       const unique = table.label === "Off-task" ? "unique" : "unique (on-task)";
       assert.deepEqual([...groups.keys()].sort(), ["secondary", unique], label);
       for (const rows of groups.values()) {
-        assert.equal(rows.reduce((total, row) => total + row.weight, 0), rows[0].out_of, label);
+        const denominator = rows[0].out_of;
+        assert.ok(rows.every(row => row.out_of === denominator), label);
+        assert.ok(rows.reduce((total, row) => total + row.weight, 0) < denominator, label);
       }
       assert.ok(groups.get(unique).some(row => row.item_id === ITEMS.AMULET_OF_AVARICE), label);
     }
@@ -139,8 +144,10 @@ test("the imported revenant tables keep both task variants and exact weighted po
   const coins = offTask.entries.find(row => row.item_id === ITEMS.COINS);
   assert.deepEqual([coins.weight, coins.out_of], [910800, 967560]);
   assert.deepEqual(offTask.entries.find(row => row.item_id === ITEMS.ETHER).quantity, [2, 8]);
-  const avariceRate = table => table.entries.find(row => row.item_id === ITEMS.AMULET_OF_AVARICE).published_rarity;
-  assert.deepEqual([avariceRate(offTask), avariceRate(onTask)], ["400/19546911", "400/3909089"]);
+  for (const [table, denominator] of [[offTask, 19546911], [onTask, 3909089]]) {
+    const avarice = table.entries.find(row => row.item_id === ITEMS.AMULET_OF_AVARICE);
+    assert.equal(avarice.weight * denominator, avarice.out_of * 400);
+  }
 });
 
 // ------------------------------------------------------------------ combat

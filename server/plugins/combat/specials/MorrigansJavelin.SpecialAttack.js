@@ -66,7 +66,7 @@ module.exports = function registerMorrigansJavelinSpecialAttack(api) {
         return false;
       }
       return JAVELIN_ITEM_IDS.includes(
-        character.getAsPlayer().getEquipment().get(Equipment.WEAPON_SLOT).getId()
+        CombatSpecial.weaponIdFor(character.getAsPlayer())
       );
     }
 

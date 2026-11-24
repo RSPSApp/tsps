@@ -3,6 +3,7 @@
 // into it. Real engine: every plugin loaded, a real Player, the native packets through
 // ClientConnection.dispatch.
 process.env.DISABLE_PLAYER_BOTS = "1";
+require('./helpers/isolated-plugin-runtime.cjs')('blowpipe-items');
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, after, test } = require("node:test");

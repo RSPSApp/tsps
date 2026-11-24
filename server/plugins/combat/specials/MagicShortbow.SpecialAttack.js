@@ -57,7 +57,7 @@ function buildMagicShortbowSpecialAttack(core) {
 
     start(character, target) {
       const player = character.getAsPlayer();
-      CombatSpecial.drain(player, player.getCombatSpecial().getDrainAmountForWeaponId(player.getEquipment().get(Equipment.WEAPON_SLOT).getId()));
+      CombatSpecial.drain(player, player.getCombatSpecial().getDrainAmountForWeaponId(CombatSpecial.weaponIdFor(player)));
       player.performAnimation(ANIMATION);
       player.performGraphicInSlot(1, GRAPHIC);
       Sounds.sendSound(player, Sound.MAGIC_SHORTBOW_SPECIAL);

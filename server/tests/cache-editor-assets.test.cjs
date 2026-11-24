@@ -299,3 +299,28 @@ test("the authoring service serves the library, extraction and imports to the lo
     server.close();
   }
 });
+
+
+test("editor animation allocation skips sampled package IDs and refuses requested collisions", () => {
+  const root = rootWith({ "zamorak-godsword-special/player-anim": "zgs" });
+  const source = "asset-allocation-regression";
+  const bytes = require("node:zlib").deflateSync(Buffer.alloc(6));
+  let hash = 2166136261; for (const byte of bytes) hash = Math.imul(hash ^ byte, 16777619);
+  const data = bytes.toString("base64");
+  const rows = [50000, 50001].map(id => ({ id, modelId: 1100000, vertexCount: 1, frameLengths: [3], loop: false,
+    part: 0, total: 1, hash: (hash >>> 0).toString(16), data }));
+  try {
+    CacheDefinitions.registerSampledAnimations(rows, source);
+    assert.equal(CacheDefinitions.hasSampledAnimation(50000), true);
+    const before = Document.read(root);
+    assert.throws(() => Assets.addAsset(root, { kind: "animation", library: "zgs", id: 50001 }, core), /sampled animation/);
+    assert.deepEqual(Document.read(root), before, "refusal stores no doomed editor asset");
+    const added = Assets.addAsset(root, { kind: "animation", library: "zgs" }, core);
+    assert.equal(added.asset.id, 50002);
+    CustomAnimations._test.loadCustomAnimations(core, root);
+  } finally {
+    CacheDefinitions.registerCustomAnimations([], []);
+    CacheDefinitions.registerSampledAnimations([], source);
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

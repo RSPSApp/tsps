@@ -43,7 +43,7 @@ let api = null;
 let core = null;
 
 function wieldsSceptre(player) {
-  return player?.getEquipment?.()?.get?.(core.Equipment.WEAPON_SLOT)?.getId?.() === core.ItemIdentifiers.LITHIC_SCEPTRE;
+  return core.CombatSpecial.weaponIdFor(player) === core.ItemIdentifiers.LITHIC_SCEPTRE;
 }
 
 function stacksOf(player, consume = 0) {

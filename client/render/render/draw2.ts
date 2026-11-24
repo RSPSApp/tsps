@@ -438,6 +438,11 @@ export function resolveEffectiveRenderDistanceTiles(host: WebGLOsrsRendererHost,
             host.syncBrowserQualityProfile();
             return editorDistance;
         }
+        const scenery = host.osrsClient.clientPlugins.scenerySettings?.();
+        if (scenery) {
+            host.syncBrowserQualityProfile();
+            return clamp(scenery.drawDistance | 0, 25, 1024);
+        }
 
         const gpu = host.osrsClient.clientPlugins.gpuSettings();
         const base = clamp((gpu?.drawDistance ?? host.osrsClient.renderDistance) | 0, 25, host.osrsClient.clientPlugins.hdEnabled() ? 160 : 90);

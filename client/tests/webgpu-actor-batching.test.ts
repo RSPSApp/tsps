@@ -100,5 +100,5 @@ test("WebGPU a spot effect shares one actor record between opaque and alpha geom
     f.actors.pushSpotGeometry(target, {}, -1, 3, 0, 0, 10, 7, 0.25, 0.75);
     assert.equal(records.length, 1, "both passes use the same position, actor identity and fractional offsets");
     assert.equal(target.opaque[0].entry, target.alpha[0].entry);
-    assert.deepEqual(records[0].slice(4), [7, 0, 0.25, 0.75]);
+    assert.deepEqual(records[0].slice(4), [7, 0, 0.25, 0.75, -1, 0]);
 });

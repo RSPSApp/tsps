@@ -207,6 +207,7 @@ export function renderOpaqueActorPass(host: WebGLOsrsRendererHost,
             map: WebGLMapSquare;
             npcIndex: number;
             ecsId: number;
+            cosmetic?: boolean;
             npcTypeId: number;
             seqId: number;
             overlaySeqId: number;
@@ -434,6 +435,7 @@ export function renderOpaqueActorPass(host: WebGLOsrsRendererHost,
         }
 
         for (const entry of host.unbatchedNpcRenderEntries) {
+            if (entry.cosmetic && host.hdShadowFrustum) continue;
             if (
                 !host.isMapWithinRenderDistance(
                     entry.map,
@@ -445,12 +447,15 @@ export function renderOpaqueActorPass(host: WebGLOsrsRendererHost,
             ) {
                 continue;
             }
-            const geometry = host.resolveUnbatchedNpcGeometry(entry.ecsId);
+            const geometry = entry.cosmetic
+                ? host.dynamicNpcAnimLoader?.getFrameGeometry(entry.cosmetic.typeId, entry.cosmetic.seqId, entry.cosmetic.frameId)
+                : host.resolveUnbatchedNpcGeometry(entry.ecsId);
             if (!geometry) continue;
             dynamicNpcs.push({
                 map: entry.map,
                 npcIndex: 0,
                 ecsId: entry.ecsId,
+                cosmetic: !!entry.cosmetic,
                 npcTypeId: geometry.npcTypeId,
                 seqId: geometry.seqId,
                 overlaySeqId: geometry.overlaySeqId ?? -1,
@@ -470,16 +475,16 @@ export function renderOpaqueActorPass(host: WebGLOsrsRendererHost,
             for (let i = 0; i < dynamicNpcs.length; i++) {
                 const dyn = dynamicNpcs[i];
                 const npcDataOffset = dyn.dataOffset + dyn.npcIndex;
-                const dynWvId = ecs.getWorldViewId(dyn.ecsId);
-                const priorityPass = !host.hdShadowFrustum && dynWvId < 0 &&
+                const dynWvId = dyn.cosmetic ? -1 : ecs.getWorldViewId(dyn.ecsId);
+                const priorityPass = !dyn.cosmetic && !host.hdShadowFrustum && dynWvId < 0 &&
                     usesNpcPriorityPass(ecs.getNpcTypeId(dyn.ecsId));
                 let instances = 1;
                 while (!priorityPass && i + 1 < dynamicNpcs.length) {
                     const next = dynamicNpcs[i + 1];
                     if (next.geometry.key !== dyn.geometry.key || next.map !== dyn.map ||
                         next.dataOffset + next.npcIndex !== npcDataOffset + instances ||
-                        ecs.getWorldViewId(next.ecsId) !== dynWvId ||
-                        usesNpcPriorityPass(ecs.getNpcTypeId(next.ecsId))) break;
+                        (next.cosmetic ? -1 : ecs.getWorldViewId(next.ecsId)) !== dynWvId ||
+                        (!next.cosmetic && usesNpcPriorityPass(ecs.getNpcTypeId(next.ecsId)))) break;
                     instances++;
                     i++;
                 }

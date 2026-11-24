@@ -4,6 +4,7 @@ import { CacheIndexDat2 } from "./codec/rs/cache/CacheIndex";
 import { ConfigType } from "./codec/rs/cache/ConfigType";
 import { IndexType } from "./codec/rs/cache/IndexType";
 import { ByteBuffer } from "./codec/rs/io/ByteBuffer";
+import {customAnimation} from './CustomAnimations';
 
 function skipSequenceOpcode(buffer: ByteBuffer, opcode: number, revision: number): boolean {
     const skip = (length: number) => {
@@ -110,6 +111,7 @@ const CLIENT_CYCLES_PER_TICK = 30;
  * then left at their defaults, which is what the previous priority-only decoder did.
  */
 function decodeSequence(id: number): SequenceDefinition {
+    const sampled=customAnimation(id);if(sampled)return {priority:0,forcedPriority:5,clientCycles:sampled.frameLengths.reduce((n,v)=>n+v,0)};
     // A custom animation (a cache editor asset) has no file in the cache's archive: read its
     // own bytes, cached by those bytes so a re-registered definition is decoded afresh.
     const custom = CacheDefinitions.getCustomSeqData(id);

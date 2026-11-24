@@ -134,15 +134,22 @@
 }
 
 .cache-editor-mode-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+    align-items: stretch !important;
     padding: 12px 14px !important;
 }
 
 .cache-editor-mode-tabs button {
-    flex: 1;
+    width: 100%;
+    min-width: 0;
+    height: 36px;
     min-height: 36px;
     font-size: 13px;
     font-weight: 500;
     text-transform: none;
+    white-space: nowrap;
 }
 
 .cache-editor-section-heading {

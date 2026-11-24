@@ -76,6 +76,8 @@
   .tabs svg, .menu-toggle svg { width: 18px; height: 18px; flex: none; color: var(--muted); }
   .tabs button[aria-selected="true"] svg { color: var(--accent); }
   .tool-group { display: grid; gap: 4px; margin-top: 24px; }
+  #plugin-tool-links { display: grid; gap: 4px; }
+  #plugin-tool-links:empty { display: none; }
   .tool-group-label {
     margin: 0 10px 4px; color: var(--muted); font-size: 11px;
     font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
@@ -263,6 +265,7 @@
         <span>Cache editor</span>
         <svg class="external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/></svg>
       </a>
+      <div id="plugin-tool-links"></div>
     </nav>
   </aside>
   <button type="button" id="menu-backdrop" class="menu-backdrop" aria-label="Close sections menu" tabindex="-1" hidden></button>
@@ -352,11 +355,63 @@
   };
   var { el, same, has, createPluginPanel, filterGroups } = window.LocalPluginPanel;
   var search = document.getElementById("search");
-  var pluginPanel = createPluginPanel({
+  // Keep local category grouping in this readable host source. The generated
+  // panel bundle can be replaced by upstream updates without losing this behavior.
+  function categorizedPluginPanel(panel) {
+    var groups = [], observer;
+    function refresh() {
+      groups.forEach(function (group) {
+        group.el.hidden = !group.rows.some(function (row) { return !row.el.hidden; });
+        if (search.value.trim()) {
+          if (group.openBeforeSearch === undefined) group.openBeforeSearch = group.el.open;
+          group.el.open = !group.el.hidden;
+        } else if (group.openBeforeSearch !== undefined) {
+          group.el.open = group.openBeforeSearch;
+          delete group.openBeforeSearch;
+        }
+      });
+    }
+    var build = panel.build.bind(panel), searchPlugins = panel.applyPluginSearch.bind(panel);
+    panel.build = function (catalog, options) {
+      if (observer) observer.disconnect();
+      var rows = build(catalog, options), byName = new Map(catalog.plugins.map(function (plugin) { return [plugin.name, plugin]; }));
+      var installed = document.getElementById("plugins-installed"), buckets = new Map();
+      rows.filter(function (row) { return row.kind === "plugin"; }).forEach(function (row) {
+        var plugin = byName.get(row.key);
+        var category = plugin.category || (plugin.packageId && plugin.file.startsWith("imported/") ? "Imported" : plugin.file.split("/").slice(0, -1).map(function (part) { return part.charAt(0).toUpperCase() + part.slice(1); }).join(" / ")) || "Other";
+        if (!buckets.has(category)) buckets.set(category, []);
+        buckets.get(category).push(row);
+        row.search += " " + category.toLowerCase();
+      });
+      installed.querySelectorAll(":scope > details.group").forEach(function (group) { group.remove(); });
+      groups = [...buckets.keys()].sort(function (a, b) {
+        return Number(!a.startsWith("@ Ghost")) - Number(!b.startsWith("@ Ghost")) || a.localeCompare(b);
+      }).map(function (category) {
+        var members = buckets.get(category), group = document.createElement("details"), summary = document.createElement("summary");
+        var count = document.createElement("span"), contents = document.createElement("div");
+        group.className = "group"; contents.className = "rows"; count.className = "folder-count";
+        summary.textContent = category; count.textContent = members.length + (members.length === 1 ? " plugin" : " plugins");
+        summary.appendChild(count); members.forEach(function (row) { contents.appendChild(row.el); });
+        group.append(summary, contents); installed.insertBefore(group, document.getElementById("plugins-empty"));
+        return { el: group, rows: members };
+      });
+      panel.applyPluginSearch();
+      observer = new MutationObserver(function (changes) {
+        if (changes.some(function (change) { return change.target.classList.contains("plugin"); })) refresh();
+      });
+      observer.observe(installed, { subtree: true, attributes: true, attributeFilter: ["hidden"] });
+      return rows;
+    };
+    panel.applyPluginSearch = function () { searchPlugins(); refresh(); };
+    var destroy = panel.destroy.bind(panel);
+    panel.destroy = function () { if (observer) observer.disconnect(); destroy(); };
+    return panel;
+  }
+  var pluginPanel = categorizedPluginPanel(createPluginPanel({
     state: state, components: LocalPanelComponents, search: search, plugins: document.getElementById("panel-plugins"),
     uploadPlugin: uploadPlugin, installPlugin: installPlugin, deletePlugin: deletePlugin,
     updateFooter: updateFooter, readOnly: readOnly, busy: busy,
-  });
+  }));
 
   async function uploadPlugin(file) {
     try {
@@ -441,7 +496,7 @@
     var pageIsLocal = pageHostname === "localhost" || pageHostname === "127.0.0.1" || pageHostname === "[::1]";
     if (!pageIsLocal) return null;
     var url = new URL(href);
-    if (url.protocol !== "http:" || url.hostname !== "localhost" || url.searchParams.get(flag) !== "1") return null;
+    if (url.protocol !== "http:" || url.hostname !== "localhost" || url.username || url.password || url.pathname !== "/" || url.searchParams.get(flag) !== "1") return null;
     return url.href;
   }
 
@@ -454,11 +509,30 @@
     return !link.hidden;
   }
 
+  function updatePluginToolLinks(tools) {
+    var target = document.getElementById("plugin-tool-links");
+    target.replaceChildren();
+    (Array.isArray(tools) ? tools : []).forEach(function (tool) {
+      var href;
+      try { href = localToolHref(tool.url, "cache", location.hostname); } catch (_) { return; }
+      if (!href || typeof tool.label !== "string") return;
+      var link = document.createElement("a");
+      link.className = "tool-link";
+      link.href = href; link.target = "_blank"; link.rel = "noopener noreferrer";
+      link.appendChild(document.querySelector("#cache-editor-link svg").cloneNode(true));
+      var text = document.createElement("span"); text.textContent = tool.label; link.appendChild(text);
+      link.appendChild(document.querySelector("#cache-editor-link svg.external").cloneNode(true));
+      target.appendChild(link);
+    });
+    return target.childElementCount > 0;
+  }
+
   function build() {
     var catalog = state.data.catalog;
     var mapEditorShown = updateToolLink("map-editor-link", state.data.mapEditorUrl, "edit");
     var cacheEditorShown = updateToolLink("cache-editor-link", state.data.cacheEditorUrl, "cache");
-    document.getElementById("tool-group").hidden = !mapEditorShown && !cacheEditorShown;
+    var pluginToolsShown = updatePluginToolLinks(state.data.toolLinks);
+    document.getElementById("tool-group").hidden = !mapEditorShown && !cacheEditorShown && !pluginToolsShown;
     var settings = document.getElementById("settings-fields");
     pluginPanel.clearSpawnPicker();
     settings.textContent = "";

@@ -143,3 +143,64 @@ test("real specials spend the custom cost, retaining modifiers, inherited varian
   CombatSpecial.drain(player, borrowed.getDrainAmount());
   assert.equal(player.getSpecialPercentage(), 75, "a copied variant inherits its variant cost without an override");
 });
+
+
+test("only the item performing a special attack can override its drain", t => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { Equipment } = require("../dist/game/model/container/impl/Equipment");
+  const { Item } = require("../dist/game/model/Item");
+  const player = new Player(null);
+  const weaponId = 59205, shieldId = 59206;
+  const authored = special("custom-item-override-drain", [weaponId], 10, { overrideDrainAmount: true });
+  player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(weaponId));
+  player.setCombatSpecial(authored);
+  player.setSpecialPercentage(100);
+  player.setRecoveringSpecialAttack(true);
+  t.mock.method(CombatSpecial, "updateBar", () => {});
+
+  CombatSpecial.drain(player, 0, false, shieldId);
+  assert.equal(player.getSpecialPercentage(), 100);
+  CombatSpecial.drain(player, 0, false, weaponId);
+  assert.equal(player.getSpecialPercentage(), 90);
+  CombatSpecial.drain(player, 0, false);
+  assert.equal(player.getSpecialPercentage(), 80);
+  CombatSpecial.drain(player, 5, true, shieldId);
+  assert.equal(player.getSpecialPercentage(), 75);
+
+  const shieldSpecial = special("custom-item-shield-drain", [shieldId], 40, {
+    overrideDrainAmount: true,
+    drainAmountByItemId: { [shieldId]: 25 },
+  });
+  player.getEquipment().setItem(Equipment.SHIELD_SLOT, new Item(shieldId));
+  CombatSpecial.drain(player, 0, false, shieldId);
+  assert.equal(player.getSpecialPercentage(), 50);
+
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const events = t.mock.method(PluginManager, "emitCustomEvent", () => {});
+  CombatSpecial.drain(player, 0, true, shieldId);
+  assert.equal(player.getSpecialPercentage(), 25);
+  const [, cost] = events.mock.calls[0].arguments;
+  assert.equal(cost.specialId, shieldSpecial.getId());
+  assert.equal(cost.cost, 25);
+});
+
+
+test("plugins remove only their owned special and preserve newer replacements", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const owner = PluginManager.createApi("SpecialOwnerTest"), other = PluginManager.createApi("SpecialOtherTest");
+  const definition = { id: "owned-special-test", itemIds: [59998], drainAmount: 25, strengthMultiplier: 1, accuracyMultiplier: 1, combatMethod: { type() {} } };
+  owner.registerCombatSpecial(definition);
+  const first = CombatSpecial.getById(definition.id);
+  assert.equal(other.unregisterCombatSpecial(definition.id), false);
+  assert.equal(CombatSpecial.getForWeaponId(59998), first);
+  other.registerCombatSpecial({ ...definition, combatMethod: { type() {} } });
+  const second = CombatSpecial.getById(definition.id);
+  assert.notEqual(second, first);
+  assert.equal(owner.unregisterCombatSpecial(definition.id), false);
+  assert.equal(other.unregisterCombatSpecial(definition.id), true);
+  assert.equal(CombatSpecial.getById(definition.id), first);
+  assert.equal(CombatSpecial.getForWeaponId(59998), first);
+  assert.equal(owner.unregisterCombatSpecial(definition.id), true);
+  assert.equal(CombatSpecial.getById(definition.id), null);
+  assert.equal(CombatSpecial.getForWeaponId(59998), null);
+});

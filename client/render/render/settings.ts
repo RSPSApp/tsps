@@ -272,8 +272,7 @@ export function finishRenderFrame(host: WebGLOsrsRendererHost,
 
         let geoBytes = 0;
         for (const map of host.mapManager.mapSquares.values()) {
-            geoBytes += (map.interleavedBuffer as any)?.byteLength ?? 0;
-            geoBytes += (map.indexBuffer as any)?.byteLength ?? 0;
+            geoBytes += map.geometryGpuBytes ?? ((map.interleavedBuffer?.byteLength ?? 0) + (map.indexBuffer?.byteLength ?? 0));
         }
         try {
             const pr: any = host.playerRenderer as any;

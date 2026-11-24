@@ -1942,7 +1942,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         previewPointer: (tile) => {
             clearPointerPreview();
             const { renderer, target } = resolvePointerTarget();
-            if (renderer && target) {
+            if (renderer && target && (target.kind === "loc" || target.kind === "npc")) {
                 ensureBuildingHighlightRenderer(renderer);
                 const trianglePoints = renderer.buildHighlightTrianglePoints(target);
                 if (trianglePoints && trianglePoints.length >= 3) {
@@ -2065,7 +2065,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         selectPointer: (tile, onlyObjects) => {
             clearSelectionHighlight();
             const { renderer, target } = resolvePointerTarget(onlyObjects);
-            // Cosmetic previews are presentation, not editable scene entities.
+            // Ground items use a separate editor tool.
             if (renderer && target && (target.kind === "loc" || target.kind === "npc")) {
                 selectedModelTarget = target;
                 renderer.interactHighlightActiveTarget = target;

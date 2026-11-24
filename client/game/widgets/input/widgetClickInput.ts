@@ -535,13 +535,17 @@ export function processWidgetClickInput(
                     }
 
                     // Try legacy handlers
+                    let ranCacheClick = false;
                     if (!handled && w.onClick) {
                         invokedAnyHandler = true;
                         deps.executeScriptListener(w, w.onClick, clickCtx);
                         handled = true;
+                        ranCacheClick = true;
                     }
 
-                    if (!handled && w.onOp) {
+                    // The same rule for listeners from the cache: a widget that offers an op runs
+                    // its op script as well as its press script.
+                    if ((!handled || (ranCacheClick && hasActions)) && w.onOp) {
                         invokedAnyHandler = true;
                         deps.executeScriptListener(w, w.onOp, clickCtx);
                         handled = true;

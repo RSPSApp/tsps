@@ -24,5 +24,12 @@
   },
   "animation": "human_poh_build",
   "_buildTicks": "Recorded: the build animation on the arrival tick, the materials, message and varbit the tick after.",
-  "buildTicks": 1
+  "buildTicks": 1,
+  "_dog": "Recorded (capture 3033, rev 231, NPC 7771): Pet plays animation 827 and sends the first line on one tick, the second replyTicks later. Wiki: Dog (Museum Camp).",
+  "dog": {
+    "animation": "human_pickupfloor",
+    "pet": "You pet the dog...",
+    "reply": "He stretches out even further on the warm ground.",
+    "replyTicks": 2
+  }
 }

@@ -10,6 +10,11 @@
 // Recorded: the level and missing-items lines (a game message and the same line in a message box),
 // the cooking pot's tinderbox line, the build animation on the arrival tick and the materials,
 // success line and varbit the tick after. Ours: the hammer line and "Nails" in the missing list.
+//
+// The camp's dog (Tray, NPC "Dog" beside the bank; Wiki "Dog (Museum Camp)", capture 3033, rev 231):
+// Pet plays human_pickupfloor and sends "You pet the dog..." on one tick, and "He stretches out even
+// further on the warm ground." two ticks after it. The dog does not move or speak. Other dogs share
+// the name "Dog", so anything that is not this NPC declines and leaves the answer to their handlers.
 const DATA = require("./data/museum-camp.json");
 const Hammers = require("../items/Hammers");
 
@@ -119,13 +124,25 @@ function approachBuiltSpinningWheel(event) {
   event.approachRange = 1;
 }
 
+/** The camp dog's Pet: the pickup animation and first line now, the second line two ticks on (recorded). */
+function petDog({ player, npc }) {
+  if (npc?.getId?.() !== core().NpcIdentifiers.DOG_2) return false;
+  const { Animation, CountdownTask, TaskManager } = core();
+  player.performAnimation(new Animation(cache().getSeqId(DATA.dog.animation)));
+  player.sendMessage(DATA.dog.pet);
+  TaskManager.submit(new CountdownTask(player, DATA.dog.replyTicks, () => {
+    if (player.isRegistered?.() !== false) player.sendMessage(DATA.dog.reply);
+  }));
+  return true;
+}
+
 function login({ player }) {
   for (const build of DATA.builds) if (isBuilt(player, build)) sendBuilt(player, build);
 }
 
 module.exports = {
   name: "MuseumCamp",
-  description: "Fossil Island Museum Camp's improvements: building the bank chest, well, cooking pot, spinning wheel and loom with Construction.",
+  description: "Fossil Island Museum Camp's improvements: building the bank chest, well, cooking pot, spinning wheel and loom with Construction, and petting the camp's dog.",
   members: true,
   DATA,
   BUILT_ATTRIBUTE,
@@ -137,6 +154,7 @@ module.exports = {
     api.onObjectInteraction("Fire pit", { "Build on": buildCookingPot });
     api.onObjectInteraction("Broken Spinning Wheel", { "Build on": buildSpinningWheel });
     api.onObjectInteraction("Half-built Loom", { "Build on": buildLoom });
+    api.onNpcInteraction("Dog", { Pet: petDog });
     api.onObjectRoute(approachBuiltSpinningWheel);
     api.onPlayerLogin(login);
   },

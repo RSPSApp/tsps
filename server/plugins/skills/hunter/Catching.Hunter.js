@@ -30,6 +30,17 @@ const RELEASE_SOUND = 7870;
 const RELEASE_DELAY = 45;
 const RELEASE_HEIGHT = 190;
 const RELEASED_TICKS = 1;
+// The falcon's own graphics (cache gamevals falcon_launch_anim..falcon_hit_post3): the launch off the
+// glove has four orientations (rotation 0/90/180/270), then a travel projectile, then the hit on the
+// kebbit (hit and post-hit on one sequence, 5201 = 3 ticks), after which the falcon sits on its prey.
+const FALCON_LAUNCH_GRAPHICS = [918, 919, 920, 921];
+const FALCON_TRAVEL_PROJECTILE = 922;
+const FALCON_HIT_GRAPHICS = [924, 925, 926, 927];
+const FALCON_LAUNCH_CYCLES = 30;
+const FALCON_CYCLES_PER_TILE = 12;
+const FALCON_HIT_TICKS = 3;
+const FALCON_START_HEIGHT = 40;
+const FALCON_END_HEIGHT = 20;
 
 function gloves(player, id) {
   if (id > 0) gloved.add(player);
@@ -80,6 +91,13 @@ function dialogueLend(event) {
   event.end = true;
 }
 
+/** Which of the four rotated falcon graphics matches the way from `from` to `to`. */
+function quarter(from, to) {
+  const dx = to.getX() - from.getX(), dy = to.getY() - from.getY();
+  if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 1 : 3;
+  return dy > 0 ? 2 : 0;
+}
+
 function catchFalcon(player, npc, def) {
   const I = H.core.ItemIdentifiers;
   if (!hasFalcon(player)) { player.sendMessage("Borrow a falcon from Matthias first."); return; }
@@ -90,7 +108,12 @@ function catchFalcon(player, npc, def) {
   const reservation = { player };
   H.reserved.set(npc, reservation);
   const cancel = () => { if (H.reserved.get(npc) === reservation) H.reserved.delete(npc); if (hasFalcon(player)) gloves(player, I.FALCONERS_GLOVE_2); };
-  if (!begin(player, 2, ANIM.FALCON, () => {
+  // The farther the kebbit, the longer the falcon flies (Wiki: running up to it shortens the travel).
+  const flight = Math.ceil(H.core.Projectile.arrivalCycles(player.getLocation(), npc.getLocation(), FALCON_LAUNCH_CYCLES, FALCON_CYCLES_PER_TILE) / 30);
+  const ticks = Math.max(2, flight);
+  const from = player.getLocation().clone(), to = npc.getLocation().clone();
+  const heading = quarter(from, to);
+  if (!begin(player, ticks, ANIM.FALCON, () => {
     H.reserved.delete(npc);
     if (!hasFalcon(player) || !available(npc) || !nearby(player, npc, 8) || !requireLevel(player, def.level)) { cancel(); return; }
     if (!chance(player, def)) {
@@ -102,12 +125,20 @@ function catchFalcon(player, npc, def) {
     if (player.getPrivateArea()) falcon.setArea(player.getPrivateArea());
     falcon.getMovementQueue().setBlockMovement(true);
     falcon.untargetable = true;
-    const state = { falcon, player, def, due: H.tick + 100 };
+    // The falcon strikes first (its hit graphic), then settles on the prey and can be retrieved.
+    falcon.setVisible(false);
+    const state = { falcon, player, def, due: H.tick + 100, appearAt: H.tick + FALCON_HIT_TICKS };
     falcons.set(player, state); caught.set(falcon, state);
-    hide(npc);
+    player.getPacketSender().sendGlobalGraphic(new H.core.Graphic(FALCON_HIT_GRAPHICS[heading]), npc.getLocation());
+    hide(npc, 10, 1);
     player.sendMessage("Your falcon catches the kebbit. Retrieve it to collect the catch.");
   }, cancel)) cancel();
-  else gloves(player, I.FALCONERS_GLOVE);
+  else {
+    gloves(player, I.FALCONERS_GLOVE);
+    player.performGraphic(new H.core.Graphic(FALCON_LAUNCH_GRAPHICS[heading]));
+    new H.core.Projectile(from, to, null, FALCON_TRAVEL_PROJECTILE, FALCON_LAUNCH_CYCLES, ticks * 30,
+      FALCON_START_HEIGHT, FALCON_END_HEIGHT, player.getPrivateArea()).sendProjectile();
+  }
 }
 
 /** Wiki (Falconry): bones and fur always, plus a raw dashing kebbit from the dashing kebbit. */
@@ -130,7 +161,7 @@ function retrieve({ player, npc }) {
   const state = caught.get(npc);
   if (!state) return false;
   if (state.player !== player) { player.sendMessage("This isn't your falcon."); return true; }
-  if (!nearby(player, npc)) return true;
+  if (!npc.isVisible() || !nearby(player, npc)) return true;
   begin(player, 1, ANIM.PICKUP, () => {
     if (caught.get(npc) !== state) return;
     collect(player, npc, state.def);
@@ -424,6 +455,10 @@ function login({ player }) {
 
 function process() {
   for (const state of caught.values()) {
+    if (state.appearAt !== undefined && H.tick >= state.appearAt && state.falcon.isRegistered()) {
+      state.falcon.setVisible(true);
+      state.appearAt = undefined;
+    }
     if (H.tick < state.due && state.falcon.isRegistered()) continue;
     if (H.tick >= state.due) state.player.sendMessage(LOST_PREY_MESSAGE);
     removeFalcon(state);

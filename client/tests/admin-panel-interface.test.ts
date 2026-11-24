@@ -199,17 +199,14 @@ test("Cheats combines testing and temporary modes with native selection and name
     f.runtime.onInterfaceClosed(GROUP_ID);
 });
 
-test("AdminPanel and thumbnail Monster Examine retain separate interface definitions", () => {
-    const examine = require("../../server/plugins/interface/monsterexamine/Layout.MonsterExamine").DEFINITION;
+test("AdminPanel materializes its definition in its own widget group", () => {
     const admin = Layout.buildInterface();
-    setCustomInterface(admin); setCustomInterface(examine);
+    assert.equal(admin.groupId, 30022);
+    assert.equal(setCustomInterface(admin), true);
     assert.equal(getCustomInterface(admin.groupId)?.tabs?.labels[0], "Players");
-    assert.equal(getCustomInterface(examine.groupId)?.list?.cards?.maxColumns, 5);
-    for (const definition of [admin, examine]) {
-        const group = getDynamicWidgetGroup(definition.groupId)!;
-        assert.equal(group.widgets.size, definition.widgets.length);
-        assert.ok(definition.widgets.every((widget: any) => widget.uid >>> 16 === definition.groupId));
-    }
+    const group = getDynamicWidgetGroup(admin.groupId)!;
+    assert.equal(group.widgets.size, admin.widgets.length);
+    assert.ok(admin.widgets.every((widget: any) => widget.uid >>> 16 === admin.groupId));
 });
 
 test("private refresh replaces details after native primary selection and clears stale actions", () => {

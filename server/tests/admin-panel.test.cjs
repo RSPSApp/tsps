@@ -21,6 +21,7 @@ before(async () => {
   core = PluginManager.getCoreApi();
   ({ PlayerRights: Rights, Skill, ItemIdentifiers: I } = core);
   require("../plugins/commands/AdminCommands.plugin").register(PluginManager.createApi("AdminCommands"));
+  require("../plugins/quests/QuestCommand.plugin").register(PluginManager.createApi("QuestCommand"));
   require("../plugins/skills/PrayerUnlocks.plugin").register(PluginManager.createApi("PrayerUnlocks"));
   require("../plugins/items/Jewellery.plugin").register(PluginManager.createApi("Jewellery"));
   require("../plugins/combat/Disease.plugin").register(PluginManager.createApi("Disease"));
@@ -145,14 +146,11 @@ test("::admin admits Admin, Owner and Developer, denies Player and Moderator", t
   assert.equal(new Set(f.definition.widgets.map(widget => widget.uid)).size, f.definition.widgets.length);
 });
 
-test("AdminPanel and Monster Examine register separate content resources", t => {
+test("AdminPanel registers its own content resource", t => {
   const f = fixture(t);
-  const examine = require("../plugins/interface/monsterexamine/Layout.MonsterExamine").DEFINITION;
   const { CustomInterfaceRegistry } = require("../dist/game/interfaces/CustomInterfaceRegistry");
-  PluginManager.createApi("MonsterExamine").registerCustomInterface(examine);
+  assert.equal(GROUP_ID, 30022);
   assert.equal(CustomInterfaceRegistry.get(GROUP_ID), f.definition);
-  assert.equal(CustomInterfaceRegistry.get(examine.groupId), examine);
-  assert.notEqual(GROUP_ID, examine.groupId);
 });
 
 test("every authoritative tab click delivers a layout commit even when its content is unchanged", t => {
@@ -180,7 +178,7 @@ test("named targets reject stale prompts, disconnects and demotions", async t =>
 });
 
 test("item search gives named items and quantities, clips capacity, validates and persists", async t => {
-  const f = fixture(t); f.open(); f.choose("TargetOne"); f.search("Bronze arrow"); f.select("Bronze arrow");
+  const f = fixture(t, Rights.OWNER); f.open(); f.choose("TargetOne"); f.search("Bronze arrow"); f.select("Bronze arrow");
   assert.deepEqual(f.actor.items.get(uid(C.PANEL_ICON)), [I.BRONZE_ARROW, 0, 1]);
   assert.equal(f.row("Bronze arrow").panel.description, core.ItemDefinition.forId(I.BRONZE_ARROW).getExamine());
   for (const invalid of [0, -1, 1.5, 2147483648]) { f.action(1); f.amount(invalid); await f.settle(); }
@@ -316,7 +314,7 @@ test("named/coordinate teleports and go/bring respect targets and private instan
 });
 
 test("stats change current/base/XP with +/-1, +/-5, presets and restore", async t => {
-  const f = fixture(t); f.open(); f.choose("TargetOne"); f.section(SECTION.SKILLS); f.skill("Attack"); f.amount(60); await f.settle();
+  const f = fixture(t, Rights.OWNER); f.open(); f.choose("TargetOne"); f.section(SECTION.SKILLS); f.skill("Attack"); f.amount(60); await f.settle();
   for (const [button, op] of [[2, 1], [2, 2], [1, 1], [1, 2]]) { f.action(button, op); await f.settle(); }
   assert.equal(f.target.getSkillManager().getMaxLevel(Skill.ATTACK), 60);
   assert.equal(f.target.getSkillManager().getCurrentLevel(Skill.ATTACK), 60);
@@ -394,8 +392,49 @@ test("forged/cross-tab/closed-panel clicks and command overrides cannot bypass r
   PluginManager.setCommandRights("admin", Rights.NONE); f.actor.setRights(Rights.MODERATOR); f.open(); assert.notEqual(f.actor.getInterfaceId(), GROUP_ID);
 });
 
+test("native player edits recheck command permissions and the selected player's rank", async t => {
+  const f = fixture(t);
+  f.target.setRights(Rights.OWNER);
+  f.target.getBank(0).setItem(0, new core.Item(I.COINS, 1000));
+  f.open();
+  f.choose("TargetOne");
+  f.section(SECTION.SKILLS);
+  f.skill("Attack"); f.amount(77); await f.settle();
+  assert.equal(f.target.getSkillManager().getMaxLevel(Skill.ATTACK), 1);
+  f.section(SECTION.BANK);
+  f.click(V.BANK_START, { opId: 4 }); await f.settle();
+  assert.equal(f.target.getBank(0).getAmount(I.COINS), 1000);
+
+  f.target.setRights(Rights.NONE);
+  f.section(SECTION.SKILLS);
+  f.preset("max"); f.text("CONFIRM"); await f.settle();
+  assert.equal(f.target.getSkillManager().getMaxLevel(Skill.ATTACK), 1);
+  assert.match(f.actor.messages.at(-1), /::master/);
+  f.section(SECTION.BANK);
+  f.click(V.BANK_START, { opId: 4 }); await f.settle();
+  assert.equal(f.target.getBank(0).getAmount(I.COINS), 1000);
+  assert.match(f.actor.messages.at(-1), /::copybank/);
+
+  f.actor.setRights(Rights.OWNER);
+  f.section(SECTION.SKILLS);
+  f.skill("Attack");
+  const previous = PluginManager.commandPermissionsCache;
+  PluginManager.commandPermissionsCache = new Map([["setlevel", Rights.DEVELOPER.getId()]]);
+  t.after(() => { PluginManager.commandPermissionsCache = previous; });
+  f.amount(77); await f.settle();
+  assert.equal(f.target.getSkillManager().getMaxLevel(Skill.ATTACK), 1);
+  assert.match(f.actor.messages.at(-1), /::setlevel/);
+
+  f.target.setRights(Rights.DEVELOPER);
+  f.tab(TAB.TELEPORTS);
+  const before = f.target.getLocation().clone();
+  f.select("varrock teleport"); await f.settle();
+  assert.equal(f.target.getLocation().equals(before), true);
+  assert.match(f.actor.messages.at(-1), /higher-ranked/);
+});
+
 test("pending saves block duplicates and failures report the already-applied live grant", async t => {
-  const f = fixture(t); f.open(); f.choose("TargetOne"); f.search("Bronze arrow"); f.select("Bronze arrow");
+  const f = fixture(t, Rights.OWNER); f.open(); f.choose("TargetOne"); f.search("Bronze arrow"); f.select("Bronze arrow");
   let finish; f.persistence.flush = () => new Promise(resolve => { finish = resolve; }); f.action(0); f.action(0);
   assert.equal(f.target.getInventory().getAmount(I.BRONZE_ARROW), 1); assert.match(f.actor.messages.at(-1), /finish saving/);
   finish(); await new Promise(resolve => setImmediate(resolve));
@@ -421,7 +460,7 @@ test("Character switches every supported spellbook and saves only the selected t
 });
 
 test("Testing sets bounded resources, restores without changing XP, cures and clears combat restrictions", async t => {
-  const f = fixture(t); f.open(); f.choose("TargetOne"); f.tab(TAB.TESTING);
+  const f = fixture(t, Rights.OWNER); f.open(); f.choose("TargetOne"); f.tab(TAB.TESTING);
   f.target.getSkillManager().setMaxLevels(Skill.PRAYER, 70);
   const xp = f.target.getSkillManager().getExperience(Skill.HITPOINTS);
   for (const [name, amount, read] of [
@@ -1028,43 +1067,49 @@ test('native occupied-slot menus set, add and remove the stated quantity and can
   }
 });
 
-test('Add item is exclusive to inventory and bank and reserves an open slot instead of merging into full containers',async t=>{
-  const f=fixture(t,Rights.OWNER);f.open();f.choose('TargetOne');
-  const addPicker=async()=>{
-    f.click(C.CONTAINER_ADD);f.socket('Bronze arrow');
-    const row=JSON.parse(f.actor.texts.get(uid(C.SEARCH_RESPONSE))).rows.find(row=>row.icon===I.BRONZE_ARROW);
-    f.click(C.ROW_LABEL_START,{slot:row.id});f.action(0);await f.settle();
+test("Add item merges stacks in full inventories and unnotes bank grants", async t => {
+  const f = fixture(t, Rights.OWNER);
+  f.open();
+  f.choose("TargetOne");
+  const addPicker = async (id, query, quantity = 1) => {
+    f.click(C.CONTAINER_ADD);
+    f.socket(query);
+    const row = JSON.parse(f.actor.texts.get(uid(C.SEARCH_RESPONSE))).rows.find(row => row.icon === id);
+    assert.ok(row);
+    f.click(C.ROW_LABEL_START, { slot: row.id });
+    f.action(1); f.amount(quantity); await f.settle();
   };
-  f.target.getInventory().setItem(0,new core.Item(I.BRONZE_ARROW,8));
-  f.target.getInventory().setItem(1,new core.Item(I.RAKE,1));
+  const inventory = f.target.getInventory();
+  inventory.setItem(0, new core.Item(I.COINS, 2147483600));
+  for (let slot = 1; slot < inventory.capacity(); slot++) inventory.setItem(slot, new core.Item(I.RAKE, 1));
   f.section(SECTION.INVENTORY);
-  assert.equal(f.actor.hidden.get(uid(C.CONTAINER_ADD)),false);
-  assert.equal(f.actor.texts.get(uid(C.CONTAINER_ADD_LABEL)),'Add item');
-  await addPicker();
-  assert.equal(f.target.getInventory().getItems()[0].getAmount(),8);
-  assert.equal(f.target.getInventory().getItems()[2].getId(),I.BRONZE_ARROW);
-  for(let i=0;i<28;i++) f.target.getInventory().setItem(i,new core.Item(I.BRONZE_ARROW,8));
-  f.section(SECTION.INVENTORY);f.click(C.CONTAINER_ADD);
-  assert.equal(JSON.parse(f.actor.texts.get(uid(C.LAYOUT))).active,TAB.EDITOR);
-  assert.match(f.actor.messages.at(-1),/no available open slot/);
-  assert.equal(f.target.getInventory().getItems()[0].getAmount(),8);
-  f.target.getInventory().setItem(2,new core.Item(-1,0));
-  f.click(C.CONTAINER_ADD);f.socket('Bronze arrow');
-  const row=JSON.parse(f.actor.texts.get(uid(C.SEARCH_RESPONSE))).rows.find(row=>row.icon===I.BRONZE_ARROW);
-  f.target.getInventory().setItem(2,new core.Item(I.RAKE,1));
-  f.click(C.ROW_LABEL_START,{slot:row.id});f.action(0);await f.settle();
-  assert.match(f.actor.messages.at(-1),/no available open slot/,'filling the last slot while searching denies the later grant');
-  assert.equal(f.target.getInventory().getItems()[0].getAmount(),8);
-  f.section(SECTION.EQUIPMENT);assert.equal(f.actor.hidden.get(uid(C.CONTAINER_ADD)),true);
-  f.click(C.CONTAINER_ADD);assert.equal(JSON.parse(f.actor.texts.get(uid(C.LAYOUT))).active,TAB.EDITOR);
-  f.target.getBank(1).setItem(0,new core.Item(I.BRONZE_ARROW,8));
-  f.section(SECTION.BANK);f.click(V.BANK_TAB_START+1);await addPicker();
-  assert.equal(f.target.getBank(1).getItems()[0].getAmount(),8);
-  assert.equal(f.target.getBank(1).getItems()[1].getId(),I.BRONZE_ARROW);
-  assert.equal(f.target.getBank(0).getAmount(I.BRONZE_ARROW),0);
-  for(let i=0;i<core.Bank.MAX_SLOTS;i++) f.target.getBank(1).setItem(i,new core.Item(I.BRONZE_ARROW,8));
-  f.section(SECTION.BANK);f.click(V.BANK_TAB_START+1);f.click(C.CONTAINER_ADD);
-  assert.match(f.actor.messages.at(-1),/no available open slot/);
+  assert.equal(f.actor.hidden.get(uid(C.CONTAINER_ADD)), false);
+  await addPicker(I.COINS, "coins", 100);
+  assert.equal(inventory.getItems()[0].getAmount(), 2147483647);
+  assert.match(f.actor.messages.at(-1), /Only 47 of 100 fit/);
+  await addPicker(I.BRONZE_ARROW, "Bronze arrow");
+  assert.equal(inventory.getAmount(I.BRONZE_ARROW), 0);
+  assert.match(f.actor.messages.at(-1), /no room/);
+
+  f.section(SECTION.EQUIPMENT);
+  assert.equal(f.actor.hidden.get(uid(C.CONTAINER_ADD)), true);
+  f.click(C.CONTAINER_ADD);
+  assert.equal(JSON.parse(f.actor.texts.get(uid(C.LAYOUT))).active, TAB.EDITOR);
+
+  const sword = I.BLACK_SCIMITAR;
+  const note = core.ItemDefinition.forId(sword).getNoteId();
+  assert.equal(core.ItemDefinition.forId(note).isNoted(), true);
+  f.target.getBank(1).setItem(0, new core.Item(I.BRONZE_ARROW, 8));
+  f.section(SECTION.BANK);
+  f.click(V.BANK_TAB_START + 1);
+  await addPicker(note, String(note), 5);
+  assert.equal(f.target.getBank(1).getAmount(note), 0);
+  assert.equal(f.target.getBank(1).getAmount(sword), 5);
+  f.click(V.BANK_TAB_START);
+  await addPicker(sword, String(sword), 3);
+  assert.equal(f.target.getBank(0).getAmount(sword), 0);
+  assert.equal(f.target.getBank(1).getItems().filter(item => item.getId() === sword).length, 1);
+  assert.equal(f.target.getBank(1).getAmount(sword), 8);
 });
 
 test('actual PacketSender publishes ordered widget operations on the modern socket transport',()=>{

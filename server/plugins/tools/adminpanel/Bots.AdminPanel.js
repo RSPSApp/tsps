@@ -29,13 +29,13 @@ function rows(api, actor, state) {
     add("unavailable", "Bot spawning unavailable", "", event.error ?? "Enable PlayerBots to spawn routines and activities.", "");
     return rows;
   }
-  for (const [kind, name] of [["activity", "Bots and activities"], ["routine", "Saved routines"]]) {
+  for (const [kind, name] of [["activity", "Bots and activities"], ["routine", "Routines"]]) {
     const entries = event.launchers.filter(launcher => launcher.kind === kind);
     if (!entries.length) continue;
     add(`group:${kind}`, name, "", "", "", { group: true });
     for (const launcher of entries) add(launcher.key, launcher.name, "", launcher.description, "Configure", { parent: `group:${kind}`, info: launcher.detail });
   }
-  if (!rows.length) add("empty", "No bot launchers available", "", "Save a routine or enable a bot activity to make it available here.", "");
+  if (!rows.length) add("empty", "No bot launchers available", "", "Enable a bot routine or activity to make it available here.", "");
   return rows;
 }
 
@@ -75,7 +75,14 @@ function act(api, actor, state, key, amount) {
     const values = settings.setup[launcher.key] ??= {};
     const index = field.choices.findIndex(choice => choice.value === (values[field.id] ?? field.defaultValue));
     values[field.id] = field.choices[(index + 1) % field.choices.length].value;
-  } else if (event.launchers.some(item => item.key === key)) { settings.key = key; settings.view = "setup"; }
+  } else {
+    const launcher = event.launchers.find(item => item.key === key);
+    if (!launcher) return;
+    if (launcher.allowLocation === false) settings.usePlayerLocation = false;
+    if (launcher.allowSkills === false) settings.copyOwnerSkills = false;
+    settings.key = key;
+    settings.view = "setup";
+  }
 }
 
 module.exports = { rows, act, config, snapshot, CATEGORIES };

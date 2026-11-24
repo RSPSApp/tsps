@@ -60,12 +60,42 @@ function searchItems(core, query) {
       a.name.localeCompare(b.name) || a.id - b.id);
 }
 
-/** Trusted adapters authorize the actor before calling. No command impersonation or save patching. */
-async function applyPlayerTool(api, target, body) {
+function requireNativeAccess(core, actor, target, commands = []) {
+  if (!core.PlayerRights.hasAdminRights(actor) || !core.PluginManager.playerHasCommandRights(actor, "admin")) {
+    throw new PlayerToolError(403, "Admin access is no longer available.");
+  }
+  if (target && target.getRights().getId() > actor.getRights().getId()) {
+    throw new PlayerToolError(403, "You cannot edit a higher-ranked player.");
+  }
+  if (!commands.length) return;
+  const available = core.PluginManager.getRegisteredCommands(actor);
+  for (const command of commands) {
+    if (!available.some(entry => entry.command === command)) {
+      throw new PlayerToolError(403, `This action requires ::${command} permission.`);
+    }
+  }
+}
+
+function requiredCommands(actor, target, body, teleportCommand) {
+  const grants = actor === target ? "item" : "give";
+  switch (body.action) {
+    case "teleport": return [teleportCommand];
+    case "give": return [grants];
+    case "skill": return ["setlevel"];
+    case "preset": return [body.preset === "reset" ? "reset" : "master"];
+    case "quest": return ["quest"];
+    case "container": return body.mode === "add" ? ["copybank", grants] : ["copybank"];
+    default: return [];
+  }
+}
+
+// Only the native adapter supplies a live actor. World Admin authorizes its allowed actions with the owner token.
+async function applyPlayerTool(api, target, body, { actor, teleportCommand = "tele" } = {}) {
   if (!["teleport", "give", "skill", "preset", "restore", "quest", "rank", "container"].includes(body.action)) return null;
   const core = api.core;
   if (core.Server?.isShuttingDown?.()) throw new PlayerToolError(409, "Wait until the server has finished restarting.");
   if (!target || target.isRegistered?.() === false) throw new PlayerToolError(409, "The player is offline.");
+  if (actor) requireNativeAccess(core, actor, target, requiredCommands(actor, target, body, teleportCommand));
   if (target.getProfile() !== (core.GameConstants.WORLD_PROFILE ?? "main")) throw new PlayerToolError(409, "The player is on a different world profile.");
   if (target.isDyingReturn() || target.getHitpoints() <= 0 || target.isTeleportingReturn()) {
     throw new PlayerToolError(409, "Wait until the player is alive and has finished teleporting.");
@@ -126,8 +156,6 @@ async function applyPlayerTool(api, target, body) {
     target.getUpdateFlag().flag(core.Flag.APPEARANCE);
     message = `Applied ${body.preset} skills to ${target.getUsername()}.`;
   } else if (body.action === "rank") {
-    // Only the native adapter supplies a live actor. The web panel keeps its existing rank route.
-    const actor = body.actor;
     const rights = core.PlayerRights;
     const callerRank = actor?.getRights?.().getId();
     const rank = rights?.[body.rank];
@@ -164,4 +192,4 @@ async function applyPlayerTool(api, target, body) {
   return { ok: true, message, ...(extra ? { undo: extra.undo } : {}) };
 }
 
-module.exports = { PlayerToolError, describePlayer, searchItems, applyPlayerTool };
+module.exports = { PlayerToolError, describePlayer, searchItems, applyPlayerTool, requireNativeAccess };

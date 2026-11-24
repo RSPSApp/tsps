@@ -403,13 +403,16 @@ function clickPlanButton({ player, buttonId }) {
   return true;
 }
 
+function openStandalone(deps, event) {
+  event.handled = openBots(event, deps);
+}
+
 function registerBotsInterface({ api, runtime, brainRegistry, storage = { readAvailablePlans, readRoutineSetups, savePlan, saveRoutineSetup } }) {
   const deps = { api, runtime, brainRegistry, storage };
   api.registerCustomInterface(BROWSER_INTERFACE);
   api.registerCustomInterface(SETUP_INTERFACE);
   api.registerCustomInterface(PLAN_INTERFACE);
-  api.onCustomEvent("bots:open-standalone", event => { event.handled = true; openBots(event, deps); });
-  api.registerCommand("bots", command => { const event = {player: command.player, tab: "bots", handled: false}; api.emitCustomEvent("admin:open", event); return event.handled || openBots(command, deps); }, api.core.PlayerRights.DEVELOPER, "Open admin bot controls or the standalone deployment browser");
+  api.onCustomEvent("bots:open-standalone", openStandalone.bind(null, deps));
   api.onInterfaceActionButton(TAB_UIDS, clickTab);
   api.onInterfaceActionButton(rowUids, clickRow);
   api.onInterfaceActionButton(Object.values(BROWSER_BUTTONS).flat().map(uid), clickBrowserButton);

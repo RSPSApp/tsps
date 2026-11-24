@@ -81,8 +81,11 @@ Character owns the four spellbooks and permanent prayer unlocks. Bots uses the
 private `admin:bots` event registered by `runtime/DeploymentService.PlayerBots.js`
 for catalogue and deployment, preserving the existing
 `bots` command permissions and shared bounded deployment functions. `::bots`
-requests `admin:open` with the Bots tab and retains its standalone fallback when
-AdminPanel is disabled. `RegisterBotCommands` contributes built-in launchers through
+requests `admin:open` with the Bots tab. `::bots browser` always opens the
+standalone browser, which also handles existing search and roster arguments.
+The admin tab uses `RoutineCatalog.PlayerBots` and the same managed-bot count
+as the deployment limit. Saved setups and deployment plans are available in the
+standalone browser. `RegisterBotCommands` contributes built-in launchers through
 `bots:collect-launchers`, sharing the existing spawn/recruit handlers and the
 bounded deployment flow. `admin:bot-controls` describes active bots and invokes the
 existing self-controller, behavior, stats, gear, rename, inspection and manual-control
@@ -154,13 +157,13 @@ bind the viewer's own inventory, equipment or bank interface IDs.
 Empty slots open the pictured picker for that exact slot. Occupied slots prompt
 for an exact quantity; zero removes the stack. Right-click offers addition and
 bounded removal actions. Native IF_BUTTOND drags move/swap slots, and bank-tab
-drops move or merge matching metadata stacks. Additions use the selected bank tab.
+drops move or merge stacks with matching metadata. Bank grants unnote items
+and use the selected tab for a new stack.
 The item description remains beside the preview in inventory/equipment views.
-The top-right Add item button is visible only for Inventory and Bank. It requests
-`firstOpen:true`; the shared operation finds an empty slot again at mutation time,
-rejects a full container, and places the new item there. Existing-stack capacity
-does not bypass the empty-slot requirement. The native slot picker still targets
-the exact empty slot clicked. Equipment has no global Add item button.
+The top-right Add item button is visible only for Inventory and Bank. The
+shared operation checks capacity at mutation time. It merges matching stacks
+or allocates a free slot for a new item. For non-stackable inventory items and
+new stacks, the native slot picker still honors the selected empty slot.
 
 Occupied slots publish ordered Set quantity, Add quantity, Remove quantity and
 Remove stack operations. The side preview exposes Set/Add/Remove/Cancel; bank

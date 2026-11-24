@@ -1,6 +1,8 @@
 "use strict";
 
-const { deployRoutineBots, deployRegisteredBots, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS } = require("./Deploy.PlayerBots");
+const { deployRoutineBots, deployRegisteredBots, managedBotCount, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS, DEFAULT_SPAWN_SETUP } = require("./Deploy.PlayerBots");
+const { listedRoutines, routineName } = require("./RoutineCatalog.PlayerBots");
+const { routineOverrideFields, validateRoutineOverrides } = require("./DeploymentOverrides.PlayerBots");
 const { collectActivityLaunchers } = require("./LauncherCatalog.PlayerBots");
 
 function currentLocation(player) {
@@ -10,10 +12,6 @@ function currentLocation(player) {
   const y = typeof location.getY === "function" ? location.getY() : location.y;
   const z = typeof location.getZ === "function" ? location.getZ() : location.z;
   return [x, y, z].every(Number.isInteger) ? { x, y, z } : null;
-}
-function managedBotCount(runtime) {
-  return [...(runtime?.entriesByUsername?.values?.() ?? [])]
-    .filter(entry => typeof entry.adminDeployedActivityId === "string").length;
 }
 function ownerSkillOverrides(player, core) {
   const manager = player?.getSkillManager?.();
@@ -25,21 +23,11 @@ function ownerSkillOverrides(player, core) {
   }
   return Object.keys(levels).length ? levels : null;
 }
-function eligibleActivities(brainRegistry) {
-  return (brainRegistry?.activities ?? [])
-    .filter(activity => activity.manual === true && activity.id?.startsWith("custom_"))
-    .sort((left, right) => left.id.localeCompare(right.id));
-}
-function displayName(id) {
-  const label = String(id).replace(/^custom_/, "").replace(/[_-]+/g, " ").trim();
-  return label ? label.replace(/\b\w/g, letter => letter.toUpperCase()) : String(id);
-}
 function brief(value, max = 140) {
   const text = String(value ?? "").trim();
   return text.length <= max ? text : `${text.slice(0, max - 3).trimEnd()}...`;
 }
-function setupSummary(activity) {
-  const setup = activity.spawnSetup ?? {};
+function setupSummary(setup) {
   const skills = Object.keys(setup.skills ?? {}).length;
   const inventory = Array.isArray(setup.inventory) ? setup.inventory.length : 0;
   const equipment = Array.isArray(setup.equipment) ? setup.equipment.length : 0;
@@ -51,12 +39,16 @@ function setupSummary(activity) {
 }
 
 function getLaunchers(api, brainRegistry) {
-  const routines = eligibleActivities(brainRegistry).map(activity => ({
-    key: `routine:${activity.id}`, kind: "routine", activityId: activity.id, activity,
-    name: displayName(activity.id), detail: activity.repeat === true ? "Repeating routine" : "One-shot routine",
-    description: brief(`${setupSummary(activity)}${activity.usesAiAgent ? " This routine also requires an enabled AI provider." : ""}`),
-    setupFields: [], spawnLocation: activity.spawnSetup?.location,
-  }));
+  const routines = listedRoutines(brainRegistry).map(activity => {
+    const setup = activity.spawnSetup ?? DEFAULT_SPAWN_SETUP;
+    const fields = routineOverrideFields(activity);
+    return {
+      key: `routine:${activity.id}`, kind: "routine", activityId: activity.id, activity,
+      name: activity.name ?? routineName(activity.id), detail: activity.repeat === true ? "Repeating routine" : "One-shot routine",
+      description: brief(`${setupSummary(setup)}${activity.usesAiAgent ? " This routine also requires an enabled AI provider." : ""}`),
+      setupFields: [], spawnLocation: setup.location, allowLocation: fields.includes("location"), allowSkills: fields.includes("skills"),
+    };
+  }).sort((left, right) => left.name.localeCompare(right.name));
   const activities = collectActivityLaunchers(api).map(launcher => ({
     ...launcher, description: brief(`${launcher.description} ${launcher.setupSummary}`),
   }));
@@ -74,6 +66,10 @@ function deployBots(deps, player, request) {
     const skills = ownerSkillOverrides(player, api.core);
     if (!skills) return { ok: false, error: "Your base skill levels are unavailable; turn off the skill override or try again." };
     overrides.skills = skills;
+  }
+  if (launcher.kind === "routine") {
+    try { validateRoutineOverrides(launcher.activity, overrides); }
+    catch (error) { return { ok: false, error: error.message }; }
   }
   const result = launcher.kind === "routine"
     ? deployRoutineBots({ runtime, brainRegistry, core: api.core, activityId: launcher.activityId,
@@ -103,7 +99,7 @@ function adminBots(deps, event) {
     event.launchers = getLaunchers(api, brainRegistry).map(launcher => ({
       key: launcher.key, kind: launcher.kind, name: launcher.name, detail: launcher.detail,
       description: launcher.description, setupFields: launcher.setupFields,
-      location: launcher.spawnLocation,
+      location: launcher.spawnLocation, allowLocation: launcher.allowLocation, allowSkills: launcher.allowSkills,
     }));
   } else if (event.action === "deploy") {
     event.result = !Number.isSafeInteger(event.count) || event.count < 1 || event.count > event.limit
@@ -112,10 +108,14 @@ function adminBots(deps, event) {
 }
 
 function openBots(api, command) {
-  const event = { player: command.player, tab: "bots", handled: false };
-  api.emitCustomEvent("admin:open", event);
-  if (event.handled) return true;
-  const fallback = { ...command, handled: false };
+  const parts = command.parts ?? [];
+  if (parts.length < 2) {
+    const event = { player: command.player, tab: "bots", handled: false };
+    api.emitCustomEvent("admin:open", event);
+    if (event.handled) return true;
+  }
+  const browserParts = parts[1]?.toLowerCase() === "browser" ? [parts[0], ...parts.slice(2)] : parts;
+  const fallback = { ...command, parts: browserParts, handled: false };
   api.emitCustomEvent("bots:open-standalone", fallback);
   if (!fallback.handled) command.player.sendMessage("Enable AdminPanel to open bot controls.");
   return true;
@@ -123,8 +123,7 @@ function openBots(api, command) {
 
 function registerBotDeployment(deps) {
   deps.api.onCustomEvent("admin:bots", adminBots.bind(null, deps));
-  deps.api.registerCommand("bots", openBots.bind(null, deps.api), deps.api.core.PlayerRights.DEVELOPER, "Open the admin Bots tab");
+  deps.api.registerCommand("bots", openBots.bind(null, deps.api), deps.api.core.PlayerRights.DEVELOPER, "Open the admin Bots tab or use ::bots browser for saved setups and deployment plans");
 }
 
-module.exports = { registerBotDeployment, getLaunchers, deployBots, currentLocation, managedBotCount,
-  ownerSkillOverrides, eligibleActivities, displayName, brief, setupSummary };
+module.exports = { registerBotDeployment, ownerSkillOverrides };

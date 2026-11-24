@@ -63,6 +63,8 @@ function render(api, player, state, uid, hide) {
     send(C.TITLE, `Configure ${launcher.name}`);
     send(C.NOTE, launcher.description);
     hide(setupComponents.slice(0, -6), false);
+    hide([C.LOCATION, C.LOCATION_LABEL], launcher.allowLocation === false);
+    hide([C.LEVELS, C.LEVELS_LABEL], launcher.allowSkills === false);
     send(C.COUNT, config.count);
     send(C.LOCATION_LABEL, `Spawn location: ${config.usePlayerLocation ? "My current tile" : "Saved location"}`);
     const at = config.usePlayerLocation ? player.getLocation() : launcher.location;
@@ -76,7 +78,8 @@ function render(api, player, state, uid, hide) {
       state.botButtons.set(C.OPTION_LABEL + i, `field:${field.id}`);
     });
     send(C.HEIGHT, 260 + launcher.setupFields.length * 34);
-    send(C.FEEDBACK, (config.feedback || `${data.managed}/${data.capacity} managed bots. Limit ${data.limit} per spawn.`).slice(0, 120));
+    const managed = data.capacity === null ? data.managed : `${data.managed}/${data.capacity}`;
+    send(C.FEEDBACK, (config.feedback || `${managed} managed bots. Limit ${data.limit} per spawn.`).slice(0, 120));
     send(C.PRIMARY_LABEL, `Spawn ${config.count} bot${config.count === 1 ? "" : "s"}`);
     hide([C.PRIMARY, C.PRIMARY_LABEL], false);
     return;

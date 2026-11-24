@@ -61,7 +61,7 @@ function setupFixture({ activities = routines, plans = [codePlan], storage } = {
     return bot;
   };
   const brainRegistry = { activities, byId: new Map(activities.map(activity => [activity.id, activity])), deploymentPlans: plans };
-  const commands = new Map(), actions = [], interfaces = [];
+  const commands = new Map(), actions = [], interfaces = [], customEvents = new Map();
   const api = {
     core: {
       PlayerRights: { DEVELOPER: DEVELOPER_RIGHT }, Skill: { values: () => [attack] },
@@ -72,10 +72,14 @@ function setupFixture({ activities = routines, plans = [codePlan], storage } = {
     registerCommand(name, handler, rights) { commands.set(name, { handler, rights }); },
     registerCustomInterface(definition) { interfaces.push(definition); },
     onInterfaceActionButton(buttons, handler) { actions.push({ buttons, handler }); },
-    onCustomEvent() {},
-    emitCustomEvent(name) { if (name !== 'admin:open') throw new Error('::bots must not collect activity launchers'); },
+    onCustomEvent(name, handler) { customEvents.set(name, handler); },
+    emitCustomEvent(name, event) {
+      if (customEvents.has(name)) return customEvents.get(name)(event);
+      if (name !== 'admin:open') throw new Error('::bots must not collect activity launchers');
+    },
     sendMultiChatboxPrompt() { throw new Error('Plan setup must stay in the main Configure window'); },
   };
+  require('../plugins/bots/runtime/DeploymentService.PlayerBots').registerBotDeployment({ api, runtime, brainRegistry });
   registerBotsInterface({ api, runtime, brainRegistry, storage });
   const player = fakePlayer();
   const button = (buttonId, slot) => {
@@ -376,7 +380,10 @@ function adminFixture({ activities = [], collectLaunchers } = {}) {
   const commands = new Map(), actions = [], interfaces = [], launches = [], customEvents = new Map();
   const api = {
     core: { PlayerRights: { DEVELOPER: DEVELOPER_RIGHT }, Skill: { values: () => [attack] } },
-    registerCommand(name, handler, rights, description) { commands.set(name, { handler, rights, description }); },
+    registerCommand(name, handler, rights, description) {
+      assert.equal(commands.has(name), false, `::${name} must have one handler`);
+      commands.set(name, { handler, rights, description });
+    },
     registerCustomInterface(definition) { interfaces.push(definition); },
     onInterfaceActionButton(buttons, handler) { actions.push({ buttons, handler }); },
     onCustomEvent(name, handler) { customEvents.set(name, handler); },
@@ -395,6 +402,44 @@ function handlerFor(actions, componentUid) {
   assert.ok(action, `No handler registered for ${componentUid}`);
   return action.handler;
 }
+
+test('the admin bot catalogue shares routine definitions and counts queued native deployments', () => {
+  const f = adminFixture({ activities: routines });
+  f.api.core.PlayerRights.hasAdminRights = () => true;
+  f.api.core.PluginManager = { playerHasCommandRights: () => true };
+  const { trackNativeDeployment } = require('../plugins/bots/runtime/Deploy.PlayerBots');
+  const nativeBot = { isRegistered: () => false };
+  trackNativeDeployment(f.runtime, nativeBot, { getAddPlayerQueue: () => [nativeBot] });
+  f.runtime.entriesByUsername.set('Routine bot', { adminDeployedActivityId: 'oak_trees' });
+  const event = { actor: fakePlayer(), action: 'catalogue' };
+  f.api.emitCustomEvent('admin:bots', event);
+  assert.equal(event.managed, 2);
+  assert.deepEqual(new Set(event.launchers.map(launcher => launcher.key)),
+    new Set(['routine:oak_trees', 'routine:normal_trees', 'routine:varrock_trainer']));
+  const trainer = event.launchers.find(launcher => launcher.key === 'routine:varrock_trainer');
+  assert.equal(trainer.name, 'Plugin Trainer');
+  assert.equal(trainer.allowLocation, false);
+  assert.equal(trainer.allowSkills, true);
+});
+
+test('::bots browser opens the standalone saved setups and plans with AdminPanel enabled', () => {
+  const f = adminFixture({ activities: routines });
+  const player = fakePlayer();
+  let adminOpens = 0;
+  f.customEvents.set('admin:open', event => { event.handled = true; adminOpens++; });
+  const command = f.commands.get('bots').handler;
+  command({ player, parts: ['bots'] });
+  assert.equal(adminOpens, 1);
+  assert.equal(player.interfaceId, -1);
+
+  command({ player, parts: ['bots', 'browser', 'oak'] });
+  assert.equal(adminOpens, 1);
+  assert.equal(player.interfaceId, Layout.GROUP_ID);
+  assert.equal(player.strings.get(Layout.uid(Layout.BROWSER_COMPONENT.SEARCH_INPUT)), 'oak');
+  const { tabLayouts } = _test.sessions.get(player);
+  assert.ok(tabLayouts[0].length > 0, 'the Saved tab has available routines');
+  assert.ok(tabLayouts[2].length > 0, 'the deployment plans still have a command');
+});
 
 test('admin Bots tab uses the same launcher options and deployment bounds and rechecks permissions', () => {
   const fixture = adminFixture({ collectLaunchers(event, { launches }) {

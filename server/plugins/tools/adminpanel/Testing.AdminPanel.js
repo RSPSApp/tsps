@@ -1,4 +1,4 @@
-const { PlayerToolError } = require("../PlayerTools");
+const { PlayerToolError, requireNativeAccess } = require("../PlayerTools");
 
 const BOOKS = [["NORMAL", "Standard"], ["ANCIENT", "Ancient"], ["LUNAR", "Lunar"], ["ARCEUUS", "Arceuus"]];
 const PRAYERS = ["PRESERVE", "RIGOUR", "AUGURY"];
@@ -73,7 +73,9 @@ function cure(api, player) {
 // Called only by the authenticated native panel, never by a command string or public endpoint.
 async function apply(api, actor, player, body) {
   const { core } = api;
-  if (!core.PlayerRights.hasAdminRights(actor) || !core.PluginManager.playerHasCommandRights(actor, "admin")) throw new PlayerToolError(403, "Admin access is no longer available.");
+  const command = body.testing === "special" || body.testing === "restore" ? "spec"
+    : body.testing?.startsWith("prayer:") ? "unlockprayers" : null;
+  requireNativeAccess(core, actor, player, command ? [command] : []);
   if (core.Server.isShuttingDown()) fail("Wait until the server has finished restarting.");
   if (!player?.isRegistered() || core.World.getPlayerByName(player.getUsername()) !== player) fail("The player is offline.");
   if (player.getProfile() !== (core.GameConstants.WORLD_PROFILE ?? "main")) fail("The player is on a different world profile.");

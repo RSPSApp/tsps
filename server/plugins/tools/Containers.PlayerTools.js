@@ -2,6 +2,7 @@
 const fail = message => { const error = new Error(message); error.status = 409; throw error; };
 const signature = item => JSON.stringify([item?.getId(), item?.getAmount(), item?.getMeta?.() ?? null]);
 const fingerprint = container => container.getItems().map(signature).join("|");
+const sameMeta = (a, b) => JSON.stringify(a.getMeta?.() ?? null) === JSON.stringify(b.getMeta?.() ?? null);
 const EQUIPMENT_NAMES = { HEAD_SLOT: "Head", CAPE_SLOT: "Cape", AMULET_SLOT: "Neck", WEAPON_SLOT: "Weapon",
   BODY_SLOT: "Body", SHIELD_SLOT: "Shield", LEG_SLOT: "Legs", HANDS_SLOT: "Hands", FEET_SLOT: "Feet", RING_SLOT: "Ring", AMMUNITION_SLOT: "Ammo" };
 const equipmentNames = core => new Map(Object.entries(EQUIPMENT_NAMES).map(([key, name]) => [core.Equipment[key], name]));
@@ -43,11 +44,13 @@ function putSlot(core, held, name, slot, item) {
   if (name === "bank") while (held.getItems().length <= slot) held.getItems().push(new core.Item(-1, 0));
   held.setItem(slot, item);
 }
-function firstOpenSlot(core, player, name, tab=0) {
-  const held=container(core,player,name,tab),items=held.getItems();
-  const limit=name==='bank'?core.Bank.MAX_SLOTS:held.capacity();
-  for(let slot=0;slot<limit;slot++) if(!items[slot] || items[slot].getId()<0) return slot;
-  return -1;
+function addDestination(core, containers, item, bank) {
+  const id = item.getId();
+  const matching = containers.find(held => held.getItems().some(entry =>
+    entry.getAmount() > 0 && entry.getId() === id && sameMeta(entry, item)));
+  if (matching || !bank) return matching;
+  return containers.find(held => held.getItems().some(entry =>
+    entry.getAmount() === 0 && core.Bank.sharesPlaceholder(entry.getId(), id)));
 }
 function equipAllowed(core, player, slot, item) {
   if (!item || item.getId() < 0) return;
@@ -63,6 +66,7 @@ function apply(core, player, body) {
   const affected = scope(core, player, body.container);
   const before = affected.map(held => held.getCopiedItems());
   let message;
+  let changed = held;
   if (body.mode === "undo") {
     const undo = body.undo;
     if (!undo || undo.container !== body.container || (body.container !== "bank" && undo.held !== held)
@@ -105,7 +109,7 @@ function apply(core, player, body) {
       equipAllowed(core, player, body.destinationSlot, item);
       equipAllowed(core, player, body.slot, other);
     }
-    const merge = body.container === "bank" && other?.getId() === item.getId() && JSON.stringify(other.getMeta?.()) === JSON.stringify(item.getMeta?.());
+    const merge = body.container === "bank" && other?.getId() === item.getId() && sameMeta(other, item);
     if (merge && item.getAmount() + other.getAmount() > 2147483647) fail("The destination stack is full.");
     putSlot(core, destination, body.container, body.destinationSlot, merge ? other.clone().setAmount(item.getAmount()+other.getAmount()) : item.clone());
     putSlot(core, held, body.container, body.slot, merge || !other ? new core.Item(-1,0) : other.clone());
@@ -121,13 +125,10 @@ function apply(core, player, body) {
   } else if (body.mode === "add") {
     if (!Number.isInteger(body.itemId) || !core.CacheDefinitions.hasItem(body.itemId) || core.CacheDefinitions.getItem(body.itemId).placeholderTemplate >= 0) fail("Choose a loaded, usable item.");
     if (!Number.isInteger(body.quantity) || body.quantity < 1 || body.quantity > 2147483647) fail("Enter a positive whole quantity up to 2147483647.");
-    const item = new core.Item(body.itemId, body.quantity), definition = item.getDefinition();
-    if(body.firstOpen) {
-      if(!['inventory','bank'].includes(body.container)) fail("Choose inventory or bank.");
-      const slot=firstOpenSlot(core,player,body.container,body.bankTab??0);
-      if(slot<0) fail(`There is no available open slot in this ${body.container}.`);
-      body={...body,slot,signature:signature(held.getItems()[slot])};
-    }
+    const item = new core.Item(body.itemId, body.quantity);
+    const bank = body.container === "bank";
+    if (bank) item.setId(item.getDefinition().unNote());
+    const definition = item.getDefinition();
     if (body.slot !== undefined) {
       const selected = checkedSlot(core, held, body.container, body.slot);
       if (signature(selected) !== body.signature) fail("That slot changed. Choose the slot again.");
@@ -150,20 +151,22 @@ function apply(core, player, body) {
       if (total > 2147483647) fail("The equipment stack is full.");
       held.setItem(slot, new core.Item(body.itemId, total));
     } else {
-      const room = held.getAddableAmount(item);
-      if (room < 1) fail("There is no room for this item.");
-      given = Math.min(room, body.quantity);
+      const stackable = bank || definition.isStackable();
+      const stack = stackable ? addDestination(core, affected, item, bank) : null;
+      changed = stack ?? held;
+      given = changed.getAddableAmount(item);
+      if (given < 1) fail("There is no room for this item.");
       item.setAmount(given);
-      if (body.slot !== undefined && (body.firstOpen || !(body.container === "bank" && held.contains(body.itemId)))) {
-        const first = body.container === "bank" || definition.isStackable() ? given : 1;
-        putSlot(core, held, body.container, body.slot, new core.Item(body.itemId, first));
-        if (given > first) held.add(new core.Item(body.itemId, given-first), false);
-      } else held.add(item, false);
+      if (body.slot !== undefined && !stack) {
+        const first = stackable ? given : 1;
+        putSlot(core, held, body.container, body.slot, item.clone().setAmount(first));
+        if (given > first) held.add(item.setAmount(given - first), false);
+      } else changed.add(item, false);
     }
     message = `Added ${given} x ${definition.getName()} to ${player.getUsername()}'s ${body.container}.${given < body.quantity ? ` Only ${given} of ${body.quantity} fit.` : ""}`;
   } else fail("Choose a valid item action.");
-  refresh(core, player, held, body.container);
+  refresh(core, player, changed, body.container);
   return { message, undo: body.mode === "undo" ? null : { held, before, after: scopeFingerprint(scope(core, player, body.container)), container: body.container, bankTab: body.bankTab ?? 0 } };
 }
-module.exports = { entries, apply, fingerprint, signature, container, firstOpenSlot,
+module.exports = { entries, apply, fingerprint, signature, container,
   viewFingerprint: (core, player, name) => scopeFingerprint(scope(core, player, name)) };

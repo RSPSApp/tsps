@@ -36,7 +36,7 @@ const registered = player => player && player.isRegistered() &&
 const online = player => registered(player) && !player.isPlayerBot?.();
 const actorOnline = player => registered(player) && (!player.isPlayerBot?.() || player.getSession()?.hasNetworkClient?.());
 const eligible = player => core.PlayerRights.hasAdminRights(player) &&
-  (core.PluginManager?.playerHasCommandRights(player, "admin") ?? true);
+  core.PluginManager.playerHasCommandRights(player, "admin");
 
 // Commands have their registered gate. Clicks and delayed prompts must check it again.
 function session(player) {
@@ -582,7 +582,7 @@ function confirm(player, state, title, body) {
   });
 }
 
-async function apply(player, state, body, targetOverride) {
+async function apply(player, state, body, { targetOverride, teleportCommand } = {}) {
   if (ready(player) !== state) return;
   const target = targetOverride ?? targetOf(player, state);
   if (!target) return;
@@ -590,7 +590,7 @@ async function apply(player, state, body, targetOverride) {
   const editVersion = ++state.version;
   try {
     const result = body.action === "testing" ? await Testing.apply(api, player, target, body)
-      : await applyPlayerTool(api, target, { ...body, actor: player });
+      : await applyPlayerTool(api, target, body, { actor: player, teleportCommand });
     if (body.action === "container" && body.mode === "add" && state.tab === TAB.ITEMS && state.target === target && state.version === editVersion) { state.tab = TAB.EDITOR; state.selected = null; state.pickerSlot = null; }
     if (body.action === "container" && state.target === target) state.undo = result.undo ? { ...result.undo, target } : null;
     if (target !== player) tell(player, result.message);
@@ -670,7 +670,8 @@ function clickAction({ player, buttonId, opId = 1 }) {
       const destination = index === 1 ? entry.target : player;
       if (destination.getPrivateArea()) { tell(player, "The destination player must leave their private instance first."); return true; }
       const location = destination.getLocation();
-      void apply(player, state, { action: "teleport", x: location.getX(), y: location.getY(), z: location.getZ() }, index === 1 ? player : entry.target);
+      void apply(player, state, { action: "teleport", x: location.getX(), y: location.getY(), z: location.getZ() },
+        { targetOverride: index === 1 ? player : entry.target, teleportCommand: index === 1 ? "teleto" : "teletome" });
     }
   } else if (entry.botKey && index === 0) {
     changeBot(player, state, entry.botKey);
@@ -869,10 +870,9 @@ function addItems({ player }) {
   if (state?.tab === TAB.ITEMS) { state.tab = TAB.EDITOR; state.pickerSlot = null; sendRows(player, state, state.tab); return true; }
   if (!state || state.tab !== TAB.EDITOR || ![SECTION.INVENTORY,SECTION.BANK].includes(state.section) || !targetOf(player,state)) return true;
   const name=CONTAINERS[state.section-SECTION.INVENTORY];
-  if(Containers.firstOpenSlot(core,state.target,name,state.bankTab??0)<0) { tell(player,`There is no available open slot in this ${name}.`); return true; }
   cancelPrompt(player,state);
   state.itemDestination = name;
-  state.pickerSlot = {firstOpen:true}; state.tab = TAB.ITEMS; state.selected = null;
+  state.pickerSlot = null; state.tab = TAB.ITEMS; state.selected = null;
   beginSearch(player,state);
   sendRows(player, state, state.tab);
   return true;

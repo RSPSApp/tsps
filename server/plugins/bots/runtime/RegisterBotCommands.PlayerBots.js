@@ -362,11 +362,12 @@ function registerBotCommands(options) {
   // ::botname <current name> <new name> (underscores are spaces); lasts until the bot logs out.
   const rename = ({ player, parts = [], username, displayName }) => {
     const spaced = (text) => String(text ?? "").replace(/_/g, " ").trim();
-    const current = spaced(username ?? parts[1]).toLowerCase();
+    const current = spaced(username ?? parts[1]);
+    const lookup = current.toLowerCase();
     const name = spaced(displayName ?? parts[2]);
     const bot = [...api.core.World.getPlayers()].find(candidate => candidate.isPlayerBot?.() === true &&
-      (candidate.getDisplayName().toLowerCase() === current || candidate.getUsername().toLowerCase() === current));
-    const problem = !bot ? `botname: no bot ${parts[1] ?? ""}` : botNameProblem(name) ??
+      (candidate.getDisplayName().toLowerCase() === lookup || candidate.getUsername().toLowerCase() === lookup));
+    const problem = !bot ? `botname: no bot ${current}` : botNameProblem(name) ??
       (runtime.botNameTaken(bot.getUsername(), name) ? "That name is not available." : null);
     if (problem) {
       player.sendMessage(`${problem} Usage: ::botname <current name> <new name>`);

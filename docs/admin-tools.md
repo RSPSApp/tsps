@@ -1,9 +1,10 @@
 # Admin tools
 
 Type `::admin` to open the native panel. Admin, Owner and Developer accounts can
-open it. Every action and delayed input rechecks the actor's rank, `admin` command
-permission, panel session and selected player's live session and world profile.
-No web login is needed. Group 30022 stays separate from Monster Examine's 30021.
+open it. Every action and delayed input rechecks `::admin` permission, the panel
+session and the selected player's live session and world profile. Player changes
+also respect the relevant command's world-configured permissions and refuse
+targets ranked above the actor.
 
 ## In-game panel
 
@@ -20,7 +21,7 @@ your own player. Bots and other world profiles are excluded.
 | Player editor | Skills, Quests, Staff, Inventory, Equipment, Bank, Character |
 | Cheats | Resources/combat, temporary modes, self-only bank |
 | Spawn | NPCs and Items searches with native previews, Spawn 1 under me, Spawn X, Clear my NPCs |
-| Bots | Built-in spawn behaviors, saved routines, activity launchers, self-bot toggle and active bot management |
+| Bots | Built-in spawn behaviors, routines, activity launchers, self-bot toggle and active bot management |
 
 Teleport to map location opens the world map above the panel. Use the map's dungeon
 and submap navigation, pan or zoom, then click a tile to teleport the selected
@@ -31,41 +32,34 @@ also cancel it, and the click rechecks permissions and the target's live session
 The Character section contains all four spellbooks and the Preserve, Rigour and
 Augury unlocks. These actions affect and save the selected player.
 
-Bots owns its interface and uses the shared runtime deployment and control services.
-It works without the optional standalone bot browser. No admin action runs a chat
-command or forwards a click to that browser. `::bots` is a compatibility shortcut
-that opens the admin tab.
+The Bots tab uses the same routine catalogue and deployment limits as the standalone
+browser. `::bots` opens the tab. Use `::bots browser` to open the standalone browser
+and access saved setups and deployment plans. Bare `::bots` also opens that browser
+when AdminPanel is disabled.
 
-Bots has three sections. Spawn bots lists built-in recruit/follow, autonomous and
-activity spawns, plus saved routines. Select a launcher and click Configure to open
-a separate setup form. Use the quantity's minus/plus controls or click its number,
-choose the spawn location, copied levels and activity options, then click Spawn.
-The result appears above the fixed Spawn and Back controls. The form scrolls in
-smaller windows. Back returns to the launcher browser without losing the settings.
+Under Spawn bots, select a routine or activity and click Configure. Set the quantity
+with the minus/plus controls or click the number to enter it. Some routines allow
+you to change the spawn location or copy your base skill levels. Click Spawn to
+deploy. The result appears above the Spawn and Back controls.
 
-Active bots lists online runtime bots separately. Select one and click Manage bot
-to open its behavior, stats, equipment, rename, inspection and manual-control
-buttons. Each action checks its original command permission and the bot's live
-registration. Manual control uses `::botback` to return to your own character.
-The list includes up to 200 bots. My character has a direct Start/Stop control for
-your own bot controller.
-
-The tab uses your character independently of the player-editor target. Existing
-bot permissions and deployment caps apply. `::bots` opens the tab; the standalone
-browser remains available when AdminPanel is disabled.
+Under Active bots, select a bot and click Manage bot to see its behavior, stats,
+equipment, rename, inspection and manual-control actions. Each action checks its
+original command permission and the bot's live registration. Use `::botback` to
+return to your character after manual control. My character has a separate
+Start/Stop control for your own bot controller.
 
 Teleports has no details panel or second action button. Folder clicks only
 expand/collapse. Search reveals matching descendants; clearing it restores prior
 expansion. Dynamic landings are resolved again at the destination click. Sources,
 private-instance restrictions, coordinate bounds and persistence checks remain.
 Self teleports from this panel preserve it. Coordinates can still be blocked tiles.
-The full source coverage is in [integration notes](../server/plugins/tools/adminpanel/INTEGRATION.md).
+See the [integration notes](https://github.com/RSPSApp/tsps/blob/main/server/plugins/tools/adminpanel/INTEGRATION.md) for the teleport sources.
 
 The slot item picker and both Spawn searches take keyboard focus immediately when
 opened. Clicking elsewhere releases focus; ordinary result refreshes do not take it
 back. They search after a 180 ms typing pause over the authenticated game
 socket. Names need two letters; exact IDs are accepted for experienced users.
-Up to 50 results return. Session, sequence and query checks reject late replies.
+Item results load in pages as you scroll. Session, sequence and query checks reject late replies.
 Changing a query clears old details and actions. Item names lead the result;
 labelled IDs and noted/stack information are in the selected preview. Item results
 include loaded custom items and exclude bank placeholders. The selected item uses
@@ -98,19 +92,19 @@ increases the selected stack. Setting a quantity replaces its amount. The select
 item's controls include Cancel, and bank prompts show a Cancel button above the
 grid. Native right-click menus retain their Cancel entry. Drag items to move or swap
 slots. Drag a bank item onto another tab to move it there, merging matching stacks
-when possible. Bank additions use the selected tab. The player editor has no
+when possible. The player editor has no
 separate Spawn items section. Every edit rechecks the slot's ID, quantity and metadata.
 Nothing drops on the floor. Inventory/bank additions report the actual amount
 that fits. Equipment additions obey wear requirements, equip hooks, stack limits
 and two-handed conflicts, and require an occupied conflicting slot to be removed
 first. Equipment edits refresh appearance, bonuses and weapon interface.
 
-The top-right Add item button is available only for Inventory and Bank. It opens
-the item picker and adds into the first open slot in the selected container/tab.
-A full container refuses the action, even when an existing stack could accept more.
-The server checks for a free slot again when the item is chosen. Equipment uses
-its individual worn slots. The former Undo item edit button is removed. A persistence
-failure reports that a live change may already have happened; do not repeat grants.
+The top-right Add item button opens the picker for Inventory or Bank. Additions
+merge into a matching stack, even when the container is full. A new item uses
+the first free inventory slot or a free slot in the selected bank tab. The bank
+converts notes to their unnoted items and can merge with an existing stack in
+another tab. Equipment uses its individual worn slots. A persistence failure may
+follow a live change. Check the result before repeating a grant.
 
 Cheats groups start collapsed. Searching reveals matching controls and their parent
 groups; clearing the search restores their previous expansion. It retains
@@ -145,67 +139,13 @@ On `feat/content-builders`, the assigned ports are:
 
 | Tool | Address or port |
 | --- | --- |
-| Game client | <http://localhost:3101> |
-| World Admin | <http://localhost:49601/?view=players> |
+| Game client | `http://localhost:3101` |
 | Game connection | 43701 |
 | Agent MCP | 49801 |
 | Gateway | 43901 |
 
 Check `scripts/wt ls` if the worktree's slot changes. Keep the assigned `.env`
 ports; do not substitute the main checkout's defaults.
-
-World Admin requires its own owner token. It does not use the player's game
-password or staff rank. If the browser is not signed in, open
-`http://localhost:49601/?token=<your token>` once, then select **Players**. Use the
-configured `WORLD_ADMIN_TOKEN`, or the token in
-`server/data/definitions/world-admin.token` when no environment token is set.
-The startup message identifies the token source without logging its value.
-Never paste the token into a report, commit, screenshot, or shared link. The panel
-sets an HttpOnly, SameSite cookie and redirects to a URL without the token.
-
-The default listener is loopback-only. Existing WorldAdmin Host, token and Origin
-checks apply to all player-tool routes. Whoever has the panel token already has
-world-owner authority, including the existing ability to assign staff ranks.
-In-game command rank checks are independent of the web token.
-
-## Optional WorldAdmin Players pane
-
-Search the existing player table and select a player. The heading names the target
-of every tool. Gameplay changes require that human player to be online, alive and
-finished teleporting. Controls remain unavailable for offline players. Bots belong
-in the existing Bots pane.
-
-- **Teleport:** choose World spawn or a named destination from TSPS's spell
-  teleport registry, or enter whole X/Y coordinates from 0 to 16383 and plane 0 to
-  3. This is an owner teleport that bypasses travel requirements. Arbitrary
-  coordinates may be blocked tiles. Players must leave private instances in game
-  first, so a web teleport cannot leave stale instance membership behind.
-- **Give items:** search names or an exact ID, select a named result, and enter a
-  positive whole quantity up to 2147483647. Results include loaded custom items
-  and noted variants, but exclude bank placeholders. Search returns at most 50
-  results; refine the name for more specific matches. IDs distinguish identically
-  named variants. The inventory API decides how much fits, and the result reports
-  the actual amount given. Nothing drops to the floor or silently moves to a bank.
-- **Edit stats:** select a named skill and set its base level. Current level and
-  XP update together, as with `::setlevel`. Hitpoints has a minimum of 10; other
-  skills start at 1. Maximums come from TSPS. The controls show current level,
-  base level and XP, including Sailing. Restore sets current levels to their base
-  values and refills run energy without changing base levels or XP.
-- **Edit quests:** when QuestCommand is enabled and quests are registered, select
-  a named quest and Complete or Reset. Complete calls the quest's existing
-  completion routine, including rewards and quest points. Reset uses the existing
-  stage-reset semantics and adjusts quest points. It does not undo item/XP rewards
-  or quest-specific saved progress. A later completion after reset may award
-  rewards again. The form requires acknowledgement before sending a change.
-- Existing rank assignment, kick, ban/unban, mute/unmute, saved inventory,
-  equipment, banks and gameplay JSON inspection remain available.
-
-Online skill and position previews read the live player. Other save-preview
-fields show the persisted snapshot. Each new gameplay action saves the live
-entity through the configured player persistence backend and waits for `flush()`.
-It never patches an online player's saved JSON underneath their session. A save
-failure explicitly reports that the live change already happened; repeating an
-item or quest grant in that situation can duplicate rewards.
 
 ## Existing in-game tools
 
@@ -215,32 +155,28 @@ World configuration can override command permissions; these are the default rank
 
 | Capability | Existing command | Default rank |
 | --- | --- | --- |
-| Search and spawn named items | `::items` | Administrator |
+| Search and spawn named items | `::items` / `::item` | Administrator |
 | Give another player an item | `::give <id> [amount] <player>` | Administrator |
 | Teleport to coordinates | `::tele <x> <y> [plane]` | Administrator |
 | Go to / summon a player | `::teleto <player>` / `::teletome <player>` | Administrator |
 | Set a named skill | `::setlevel <skill> <level> [player]` | Owner |
-| Max / reset own skills | `::master` / `::reset` | Owner |
+| Max / reset skills | `::master` / `::reset` | Owner |
+| Edit inventory, equipment or bank | `::copybank` | Owner |
+| Set special attack energy / unlock prayers | `::spec` / `::unlockprayers` | Owner |
 | Search and spawn NPCs | `::npcs` | Owner |
 | Quest progress, completion, reset | `::quest <name> [complete|reset|stage]` | Administrator |
 | Bank, infinite health/run, noclip | `::bank`, `::infhp`, `::infrun`, `::noclip` | Owner |
 | Moderation | `::kick`, `::ban`, `::unban`, `::mute`, `::unmute` | Owner |
 
-These capabilities were retained rather than ported again. The original
-GhostScape reference was inspected read-only at
-`server/webclient/src/client/ui/AdminPanel.ts`, `AdminData.ts` and
-`server/engine/src/network/game/client/handler/ClientCheatHandler.ts` in that
-checkout. Its working admin tabs cover named teleports, item search and quantities,
-targeted stat changes/presets, quests and staff ranks. Its Account tab is a
-Coming Soon placeholder. GhostScape source, IDs and saves were not copied into TSPS.
+Container grants also require `::item` for your character or `::give` for another
+player. Other container edits use `::copybank` permission. Staff rank changes
+have their own Owner minimum and can only modify lower ranks.
 
 ## Enable, disable and remove
 
-There is no package to install. `server/plugins/tools/AdminPanel.entry.js` is
-loaded by TSPS's normal plugin discovery on the next planned server start. The
-normal entry point is `yarn start` from the project root. This implementation did
-not restart a service or enable a plugin on a running world. Parent integration
-and the normal server reload/start are required before using the new command.
+Install AdminPanel from the Hub and restart the world to register `::admin`. The
+repository's `server/plugins/tools/AdminPanel.entry.js` is the source entry for
+the optional package.
 
 To disable the in-game panel, merge this into the existing
 `server/data/definitions/world.local.json` and apply at a planned restart:
@@ -249,24 +185,7 @@ To disable the in-game panel, merge this into the existing
 { "plugins": { "AdminPanel": false } }
 ```
 
-To remove just the native plugin, remove `AdminPanel.plugin.js` and its sibling
-`adminpanel/` directory. Keep `server/plugins/tools/PlayerTools.js`; the WorldAdmin
-adapter also uses this shared operations library. Neither panel imports the other
-plugin's implementation or depends on the other plugin being enabled. The shared
-library contains the existing validated operations, and quest state still crosses
-plugin boundaries through `quests:admin`.
-
-To disable just the web gameplay controls, merge this into the existing local
-configuration and apply at a planned restart:
-
-```json
-{ "pluginConfig": { "WorldAdmin:playerTools": false } }
-```
-
-Do not replace other local settings. Disabling WorldAdmin removes the web panel
-without disabling `::admin`. Disabling AdminPanel leaves WorldAdmin and the
-existing in-game command plugins available. No saved admin-panel attributes or
-new player data require migration or removal.
+Remove AdminPanel through the Hub to unregister the panel at the next restart.
 
 ## Validation
 
@@ -275,21 +194,7 @@ The focused tests are:
 ```sh
 cd server
 yarn build
-node --test tests/admin-panel.test.cjs tests/world-admin.test.cjs tests/admin-commands.test.cjs tests/quest-command.test.cjs
+node --test tests/admin-panel.test.cjs tests/bot-in-game-interface.test.cjs tests/admin-commands.test.cjs tests/quest-command.test.cjs
 cd ../client
-./node_modules/.bin/tsx --test tests/admin-panel-interface.test.ts tests/world-admin-player-tools.test.ts tests/custom-interface-first-open.test.ts tests/custom-interface-runtime.test.ts
+./node_modules/.bin/tsx --test tests/admin-panel-interface.test.ts tests/custom-interface-first-open.test.ts tests/custom-interface-runtime.test.ts
 ```
-
-The implementation compiled server output to a task-specific temporary directory
-and redirected test imports there. Disposable player saves and HTTP fixtures were
-removed after testing. The native regression drives the real primary-action
-resolver and mouse input handler. It reproduced empty pooled actions before the
-fix and verifies visible details/actions afterward. Lifecycle coverage uses real
-Player/PacketSender objects. Container tests exercise native click/drag packets,
-empty slots, quantity zero, metadata-preserving moves, bank tabs, live refresh,
-stale prompts, equipment gates, persistence and guarded undo. Geometry checks cover
-Fixed and Resizable layouts. Noclip coverage compares direct and ordinary
-collision-aware interaction routes.
-
-Final live appearance and real-world walking have not been verified after reload.
-No service was restarted and no real player was changed.

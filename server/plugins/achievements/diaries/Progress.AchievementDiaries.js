@@ -152,6 +152,16 @@ function notifyTaskProgress(player, diary, taskKey) {
   return true;
 }
 
+/**
+ * A counted task that moved but is not done: `notifyTaskProgress`, plus the chat line OSRS prints
+ * on each step (rsprox 73, 1102, 1710: every banana pick and seaweed pickup before the fifth).
+ */
+function notifyTaskUpdated(player, diary, taskKey) {
+  if (!notifyTaskProgress(player, diary, taskKey)) return false;
+  player.sendMessage(`Well done! A ${diary.name} task has been updated.`);
+  return true;
+}
+
 /** Returns false for unknown or completed tasks; emits `diary:task-completed` after normal updates. */
 function completeTask(player, diary, taskKey) {
   const tier = tierOfTask(diary, taskKey);
@@ -205,5 +215,5 @@ module.exports = function attachProgress(pluginApi) {
 
 Object.assign(module.exports, {
   TASKS_ATTRIBUTE, REWARDS_ATTRIBUTE, doneTasks, claimedTiers, tierCount, isTierComplete, isStarted,
-  notifyTaskProgress, completeTask, claimTier, resetTiers, restore, sendDiary, tierGeneration,
+  notifyTaskProgress, notifyTaskUpdated, completeTask, claimTier, resetTiers, restore, sendDiary, tierGeneration,
 });

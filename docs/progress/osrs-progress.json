@@ -30146,7 +30146,8 @@
             "Konar kalphite task can drop a brimstone key (1/54); kill count is persisted under 'boss:kalphite-queen:kills'.",
             "Status done; KQ is the reference for multi-id combat registration ({ singleton:false }).",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3928 Levers: pull from the lever's tile, with the lever dropping and resetting as live.",
-            "2026-11-24, main 74609edfe: Nothing hurts the Kalphite Queen while she molts (https://github.com/RSPSApp/tsps/pull/4550); the tunnel Look-inside gives the captured headcount for her chamber only (https://github.com/RSPSApp/tsps/pull/5291, https://github.com/RSPSApp/tsps/pull/5359); Hard Desert Diary ropes stay tied on per player (https://github.com/RSPSApp/tsps/pull/5711). Verified by server/tests/kalphite-queen.test.cjs, server/tests/kalphite-queen-molt.test.cjs and docs/kalphite-queen.md. Existing task statuses are unchanged."
+            "2026-11-24, main 74609edfe: Nothing hurts the Kalphite Queen while she molts (https://github.com/RSPSApp/tsps/pull/4550); the tunnel Look-inside gives the captured headcount for her chamber only (https://github.com/RSPSApp/tsps/pull/5291, https://github.com/RSPSApp/tsps/pull/5359); Hard Desert Diary ropes stay tied on per player (https://github.com/RSPSApp/tsps/pull/5711). Verified by server/tests/kalphite-queen.test.cjs, server/tests/kalphite-queen-molt.test.cjs and docs/kalphite-queen.md. Existing task statuses are unchanged.",
+            "2026-11-24, branch fix/kalphite-queen-death-animation: the first form plays her death animation (sequence 6242) 4 ticks before the molt starts, as in all 154 recorded molts (rsprox 227/95, 96, 545, 1757, 1864, 234/3276). Verified by server/tests/kalphite-queen-molt.test.cjs and docs/kalphite-queen.md. Existing task statuses are unchanged."
           ],
           "taskDetails": [
             {

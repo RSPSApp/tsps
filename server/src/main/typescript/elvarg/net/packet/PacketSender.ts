@@ -916,11 +916,11 @@ export class PacketSender {
     return this;
   }
 
-  private resetInterfaceState(): number {
+  private resetInterfaceState(preserveMainInterface = false): number {
     const interfaceId = this.player.getInterfaceId?.() ?? -1;
-    this.releaseInterfaceInventories(interfaceId);
-    if (interfaceId === 12) {
-      this.sendConfig(548, 0).sendVarbit(12393, 0);
+    if (!preserveMainInterface) {
+      this.releaseInterfaceInventories(interfaceId);
+      if (interfaceId === 12) this.sendConfig(548, 0).sendVarbit(12393, 0);
     }
     this.setBusyModal(false);
     getShopManager().close(this.player);
@@ -931,7 +931,7 @@ export class PacketSender {
     this.abortInputPrompt();
     this.player.getDialogueManager?.()?.reset?.();
     this.player.setAttribute?.("destroy-item:pending", -1);
-    this.player.setInterfaceId?.(-1);
+    if (!preserveMainInterface) this.player.setInterfaceId?.(-1);
     this.player.setCreationMenu?.(null);
     this.player.setSearchingBank?.(false);
     this.player.setTeleportInterfaceOpen?.(false);
@@ -956,20 +956,24 @@ export class PacketSender {
     PluginManager.emitCustomEvent("interface:closed", { player: this.player, interfaceId });
   }
 
-  private closeTrackedInterfaces(): boolean {
-    const closable = [...this.subInterfaceTargets.entries()]
-      .filter(([, entry]) => entry.type === 0 || entry.type === 3);
-    const targets = new Set(closable.map(([, entry]) => entry.targetUid));
-    const chatbox = this.chatboxGroupId;
-    const hadChatbox = chatbox >= 0;
-    if (hadChatbox) {
-      targets.add(CHATBOX_MODAL_TARGET_UID);
-      this.chatboxGroupId = -1;
+  private closeTrackedInterfaces(preservedGroupId?: number): boolean {
+    const targets = new Set<number>();
+    for (const [groupId, entry] of this.subInterfaceTargets) {
+      if (groupId !== preservedGroupId && (entry.type === 0 || entry.type === 3)) targets.add(entry.targetUid);
     }
+    const chatbox = this.chatboxGroupId;
+    if (chatbox >= 0 && chatbox !== preservedGroupId) targets.add(CHATBOX_MODAL_TARGET_UID);
     if (targets.size === 0) return false;
+    const closesChatbox = targets.has(CHATBOX_MODAL_TARGET_UID);
+    if (closesChatbox) {
+      this.chatboxGroupId = -1;
+      this.chatboxOwner = undefined;
+    }
     for (const target of targets) this.closeSubInterface(target);
-    if (hadChatbox) this.player.getSession().sendClientPacket(encodeWidgetSetHidden(CHATBOX_MODAL_TARGET_UID, true));
-    if (hadChatbox) this.emitInterfaceClosed(chatbox);
+    if (closesChatbox) {
+      this.player.getSession().sendClientPacket(encodeWidgetSetHidden(CHATBOX_MODAL_TARGET_UID, true));
+      this.emitInterfaceClosed(chatbox);
+    }
     return true;
   }
 
@@ -1023,26 +1027,7 @@ export class PacketSender {
   }
 
   closeInterruptibleInterfaces(worldInteraction = false): this {
-    // World interactions may preserve an explicitly declared tool panel. Input prompts
-    // still end, and the explicit IF_CLOSE path calls this without the opt-in argument.
-    const { CustomInterfaceRegistry } = require("../../game/interfaces/CustomInterfaceRegistry") as typeof import("../../game/interfaces/CustomInterfaceRegistry");
-    if (worldInteraction && CustomInterfaceRegistry.get(this.player.getInterfaceId())?.lifecycle?.persistOnWorldInteraction === true) {
-      this.abortInputPrompt();
-      this.closeCurrentChatbox();
-      return this;
-    }
-    const interfaceId = this.resetInterfaceState();
-    const closed = this.closeTrackedInterfaces();
-    this.endBankSearch(interfaceId);
-    this.emitInterfaceClosed(interfaceId);
-    if (closed) {
-      if (interfaceId === 300 || interfaceId === 334 || interfaceId === 335) {
-        this.sendSubInterface((161 << 16) | 79, MAIN_INVENTORY_GROUP_ID, 1);
-      }
-      return this;
-    }
-    if (interfaceId >= 0) this.player.getSession().sendClientPacket(encodeWidgetClose(interfaceId));
-    return this;
+    return this.sendInterfaceRemoval(worldInteraction);
   }
 
   closeInterface(groupId: number): this {
@@ -1060,7 +1045,17 @@ export class PacketSender {
     return this;
   }
 
-  sendInterfaceRemoval(): this {
+  /** World interactions preserve an opted-in main panel while closing transient interfaces. */
+  sendInterfaceRemoval(worldInteraction = false): this {
+    if (worldInteraction) {
+      const { CustomInterfaceRegistry } = require("../../game/interfaces/CustomInterfaceRegistry") as typeof import("../../game/interfaces/CustomInterfaceRegistry");
+      const groupId = this.player.getInterfaceId?.() ?? -1;
+      if (CustomInterfaceRegistry.get(groupId)?.lifecycle?.persistOnWorldInteraction === true) {
+        this.resetInterfaceState(true);
+        this.closeTrackedInterfaces(groupId);
+        return this;
+      }
+    }
     const interfaceId = this.resetInterfaceState();
     const closed = this.closeTrackedInterfaces();
     this.endBankSearch(interfaceId);

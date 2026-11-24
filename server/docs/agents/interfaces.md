@@ -157,3 +157,33 @@ nonempty row panel field, and op 3 calls `examineItem` with `row.examineId ?? ro
 Use `examineId: -1` for representative group thumbnails. Give pooled controls the matching
 op flags. The host uses its existing item Examine and chat mechanisms; actions consume
 locally and never send a widget gameplay packet. Empty info fields omit that menu action.
+
+## Panel and list behaviour
+
+- `lifecycle.persistOnWorldInteraction: true` keeps the custom main panel open during
+  walking, item actions (including equips and drops), combat hits, teleports and skill
+  starts via `SkillManager.startSkillable`. Those actions still end input prompts and
+  close chatbox and side modals. Use `lifecycle.blocksGameplay: false` when the open panel
+  should also let actions that check `player.busy()` proceed. Explicit closes and modal
+  replacement still remove the panel.
+- `preserveState: true` restores the query, rows, selection, tab and scroll after a close and
+  reopen in the same client session. Logout and disconnect clear this state.
+- Local search matches row names and `terms`. `search.matchSectionAndInfo: true` also
+  matches each section title and the string in `panel.info`.
+- `search.socket` searches over authenticated widget actions. Set `requestComponent` for
+  the widget op and use `sessionComponent` to send a session token as widget text. The op's
+  `target` carries JSON with `session`, `sequence` and `query`. Send JSON containing the
+  same fields and `rows` to `responseComponent`, with an optional `total`. The client
+  ignores responses for an earlier session, sequence or query. `tabs` limits the socket
+  search to those tab indexes. `pageSize` adds `offset` to requests and expects `offset`,
+  `pageSize` and `total` with each response. Use the fixed list layout for paging. When a
+  paged declaration also supplies `list.cards`, the client uses its fixed list layout.
+- `list.rowActions` adds controls to pooled rows. Each entry's `start` identifies the first
+  component in a range of `slotCount` controls. `leafOnly` and `groupOnly` limit which rows
+  show them. Text controls can take `label`, `groupLabel` and `expandedLabel` according
+  to the row type and expansion state. In a clickable list these controls share the row's
+  action slot, so the server receives the row ID even after scrolling or filtering.
+- `tabs.serverDriven: true` waits for the server to send `active` to `tabs.layoutComponent`
+  before switching tabs. Use `pendingComponents` to hide controls while the new data and
+  layout arrive. The layout can also set widget visibility through `visibility` entries
+  with `component` and `hidden`.

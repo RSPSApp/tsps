@@ -391,7 +391,7 @@ import { WidgetTransmitProcessor } from "./widgets/WidgetTransmitProcessor";
 import { CustomInterfaceRuntime } from "../widgets/custom/CustomInterfaceRuntime";
 import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdates";
 import { HeldWidgetProperties } from "../widgets/HeldWidgetProperties";
-import { setCustomInterface } from "../common/gamemode/GamemodeContentStore";
+import { getCustomInterface, setCustomInterface } from "../common/gamemode/GamemodeContentStore";
 import {
     fetchInterfaceDefinition,
     fetchContent,
@@ -1633,13 +1633,18 @@ export class OsrsClient {
         return isCloseOnOutsideClickModalTarget(standardTargetUid, type);
     }
 
-    /** True while a main or side modal is open, so a world click should close it. */
+    /** Whether a click outside a modal should send the global IF_CLOSE. */
     public hasCloseOnOutsideClickModal(): boolean {
         if (!this.widgetManager) return false;
+        let close = false;
         for (const parent of this.widgetManager.interfaceParents.values()) {
-            if (parent.closeOnOutsideClick) return true;
+            if (!parent.closeOnOutsideClick) continue;
+            // The server's world-action path closes transient modals alongside a persistent panel.
+            const definition = getCustomInterface(parent.group);
+            if (definition?.lifecycle?.persistOnWorldInteraction === true) return false;
+            close = true;
         }
-        return false;
+        return close;
     }
 
     /**
@@ -9056,6 +9061,7 @@ export class OsrsClient {
         } catch (err) {
             console.warn("[OsrsClient] WidgetManager clear error:", err);
         }
+        this.customInterfaces?.resetSession();
         this.serverSubInterfaces.clear();
         this.forgetSentInventories();
 

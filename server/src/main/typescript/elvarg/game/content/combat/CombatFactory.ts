@@ -1146,7 +1146,7 @@ export class CombatFactory {
             const sender = playerTarget.getPacketSender();
             if (playerTarget.getRights() != PlayerRights.DEVELOPER && (playerTarget.busy()
                 || sender.hasInterruptibleInterface() || sender.hasInputPrompt())) {
-                sender.closeInterruptibleInterfaces(true);
+                sender.sendInterfaceRemoval(true);
             }
 
             // Prayer effects.

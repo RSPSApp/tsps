@@ -49,6 +49,8 @@ export type CustomInterfaceDeclaration = {
         focusComponents?: number[];
         maxLength?: number;
         exactNumericTerms?: boolean;
+        /** Match section titles and panel.info in local searches. */
+        matchSectionAndInfo?: boolean;
         /** Shown when the query is empty and the box is not focused. */
         placeholder?: string;
         /** False leaves the field unfocused (showing its placeholder) until it is clicked. */
@@ -293,16 +295,10 @@ function toRow(row: any): CustomInterfaceRow {
 }
 
 /** Rows matching the query, with each header kept only while a row under it matches. */
-export function filterRows(rows: CustomInterfaceRow[], query: string,
-    expansion?: ReadonlyMap<number, boolean>, revealAll = false, expandSearch = true): CustomInterfaceRow[] {
+export function filterRows(rows: CustomInterfaceRow[], query: string, expansion?: ReadonlyMap<number, boolean>,
+    { revealAll = false, expandSearch = true, matchSectionAndInfo = false } = {}): CustomInterfaceRow[] {
     const term = query.trim().toLowerCase();
     const byId = new Map(rows.map(row => [row.id, row]));
-    const sections = new Map<number, string>();
-    let section = '';
-    for (const row of rows) {
-        if (row.header) section = row.name;
-        else sections.set(row.id, section);
-    }
     const parents = new Map<number, CustomInterfaceRow[]>();
     for (const row of rows) {
         const chain: CustomInterfaceRow[] = [];
@@ -319,11 +315,20 @@ export function filterRows(rows: CustomInterfaceRow[], query: string,
         if (id === undefined) parents.set(row.id, chain);
     }
     const matching = new Set<number>();
+    let section = "";
     for (const row of rows) {
-        if (row.header || row.expandable || !parents.has(row.id)) continue;
-        const chain = parents.get(row.id)!;
-        const text = `${sections.get(row.id) ?? ''} ${[row, ...chain].map(item => `${item.name} ${item.terms ?? ''} ${item.panel?.info ?? ''}`).join(' ')}`.toLowerCase();
-        if (!text.includes(term)) continue;
+        if (row.header) {
+            section = row.name;
+            continue;
+        }
+        const chain = parents.get(row.id);
+        if (row.expandable || !chain) continue;
+        const terms = [row, ...chain].map(item => {
+            const nameAndTerms = `${item.name} ${item.terms ?? ""}`;
+            return matchSectionAndInfo ? `${nameAndTerms} ${item.panel?.info ?? ""}` : nameAndTerms;
+        }).join(" ");
+        const text = matchSectionAndInfo ? `${section} ${terms}` : terms;
+        if (!text.toLowerCase().includes(term)) continue;
         matching.add(row.id);
         chain.forEach(parent => matching.add(parent.id));
     }
@@ -526,7 +531,10 @@ export class CustomInterfaceRuntime {
             : declaration.preserveState ? this.retained.get(groupId | 0) : undefined;
         this.parked = undefined;
         this.reset();
-        this.declaration = declaration;
+        // Paged socket results have unloaded slots. Use the fixed layout for those declarations.
+        this.declaration = declaration.search?.socket?.pageSize && declaration.list?.cards
+            ? { ...declaration, list: { ...declaration.list, cards: undefined } }
+            : declaration;
         if (declaration.list?.tooltipField) tooltipManager.add(this.hoverTooltip);
         this.focused = !!declaration.search && declaration.search.focusOnOpen !== false;
         if (parked) {
@@ -569,6 +577,13 @@ export class CustomInterfaceRuntime {
             }
             this.reset();
         }
+    }
+
+    resetSession(): void {
+        this.reset();
+        this.parked = undefined;
+        this.retained.clear();
+        this.overlays.clear();
     }
 
     /** The server can drive the query too - prefill, clear, or correct it. */
@@ -1370,12 +1385,17 @@ export class CustomInterfaceRuntime {
         this.fetchState = "idle";
         if (search.dataComponent !== undefined) {
             const list = this.declaration?.list;
-            this.rows = search.exactNumericTerms && /^\d+$/.test(query.trim())
-                ? this.sourceRows.filter(row => row.terms === query.trim())
-                : filterRows(this.sourceRows, query, list?.collapsible ? this.expansion : undefined, false, list?.searchExpandsGroups !== false);
+            const term = query.trim();
+            const exactNumericMatch = search.exactNumericTerms && /^\d+$/.test(term);
+            const { matchSectionAndInfo } = search;
+            this.rows = exactNumericMatch
+                ? this.sourceRows.filter(row => row.terms === term)
+                : filterRows(this.sourceRows, query, list?.collapsible ? this.expansion : undefined,
+                    { expandSearch: list?.searchExpandsGroups !== false, matchSectionAndInfo });
             if (list?.headerSpan) this.rows = spanHeaders(this.rows, Math.max(1, list.columns));
-            this.total = search.exactNumericTerms && /^\d+$/.test(query.trim()) ? this.rows.length
-                : filterRows(this.sourceRows, query, undefined, true).filter(row => !row.header && !row.expandable).length;
+            this.total = exactNumericMatch ? this.rows.length
+                : filterRows(this.sourceRows, query, undefined, { revealAll: true, matchSectionAndInfo })
+                    .filter(row => !row.header && !row.expandable).length;
             this.version++;
             this.renderRows(resetScroll);
             return;

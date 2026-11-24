@@ -501,6 +501,50 @@ async function main(): Promise<void> {
     assert.deepEqual(filterRows(marketRows, "").map((row) => row.id), [900, 1], "browsing hides search-only rows");
     assert.deepEqual(filterRows(marketRows, "rune").map((row) => row.id), [900, 1, 901, 2], "a search reaches them");
 
+    const cityRows = [
+        { id: 900, name: "Cities", header: true },
+        { id: 1, name: "Varrock", terms: "Misthalin" },
+        { id: 2, name: "Lumbridge", panel: { info: "A riverside town" } },
+        { id: 901, name: "Skilling", header: true },
+        { id: 3, name: "Cities tour" },
+    ];
+    assert.deepEqual(filterRows(cityRows, "cities").map(row => row.id), [901, 3]);
+    assert.deepEqual(filterRows(cityRows, "riverside"), []);
+    assert.deepEqual(filterRows(cityRows, "misthalin").map(row => row.id), [900, 1]);
+
+    const CITY_GROUP = 30119;
+    const cityUid = (component: number) => (CITY_GROUP << 16) | component;
+    setCustomInterface({
+        groupId: CITY_GROUP,
+        preserveState: true,
+        widgets: [{ uid: cityUid(0), parentUid: -1 }],
+        search: { inputComponent: 1, dataComponent: 2, matchSectionAndInfo: true },
+        list: { viewComponent: 3, slotCount: 5, columns: 1, rowHeight: 20,
+            iconStart: 10, backgroundStart: 20, itemLabel: "%name" },
+        status: { component: 4, matches: "Results: %total" },
+    });
+    for (const component of [1, 2, 3, 4, 10, 11, 12, 13, 14, 20, 21, 22, 23, 24]) {
+        widgets.set(cityUid(component), { uid: cityUid(component), width: 200, height: 100, scrollY: 0 });
+    }
+    runtime.onInterfaceOpened(CITY_GROUP);
+    runtime.handleSetText(cityUid(2), JSON.stringify(cityRows));
+    runtime.handleSetText(cityUid(1), "cities");
+    assert.deepEqual([10, 11, 12, 13, 14].map(component => widgets.get(cityUid(component)).text),
+        ["Cities", "Varrock", "Lumbridge", "Skilling", "Cities tour"]);
+    assert.equal(widgets.get(cityUid(4)).text, "Results: 3");
+    runtime.handleSetText(cityUid(1), "riverside");
+    assert.equal(widgets.get(cityUid(11)).text, "Lumbridge");
+    assert.equal(widgets.get(cityUid(4)).text, "Results: 1");
+    runtime.onInterfaceClosed(CITY_GROUP);
+    runtime.onInterfaceOpened(CITY_GROUP);
+    assert.equal(widgets.get(cityUid(11)).text, "Lumbridge", "reopening within a session restores the query and rows");
+    runtime.onInterfaceClosed(CITY_GROUP);
+    runtime.resetSession();
+    runtime.onInterfaceOpened(CITY_GROUP, true);
+    assert.equal(widgets.get(cityUid(1)).text, "", "a new session starts with an empty query");
+    assert.equal(widgets.get(cityUid(11)).hidden, true, "a new session starts without the previous rows");
+    runtime.onInterfaceClosed(CITY_GROUP);
+
     // Optional list extras: zebra stripes, a second text line, parts that ride with the row,
     // menu names, section jump buttons and full-width headers. All off unless declared.
     const EXTRA_GROUP = 30120;
@@ -624,6 +668,38 @@ async function main(): Promise<void> {
     runtime.onInterfaceClosed(OVERLAY_GROUP);
     widgets.get(overlayUid(5)).hidden = false;
     assert.equal(runtime.handleHotkey(key("F1")), false, "a closed overlay has no hotkeys");
+    const PAGED_GROUP = 30131;
+    const pagedUid = (component: number) => (PAGED_GROUP << 16) | component;
+    setCustomInterface({
+        groupId: PAGED_GROUP,
+        widgets: [{ uid: pagedUid(0), parentUid: -1 }],
+        search: { inputComponent: 1, debounceMs: 0,
+            socket: { requestComponent: 2, responseComponent: 3, sessionComponent: 4, pageSize: 2 } },
+        list: { viewComponent: 5, slotCount: 2, columns: 1, rowHeight: 20,
+            iconStart: 10, backgroundStart: 20, itemLabel: "%name",
+            cards: { minWidth: 50, maxColumns: 2, gap: 3, height: 80, parts: [] } },
+    });
+    for (const component of [1, 5, 10, 11, 20, 21]) {
+        widgets.set(pagedUid(component), { uid: pagedUid(component), width: 200, height: 40, scrollY: 0 });
+    }
+    let request: Record<string, unknown> | undefined;
+    const paged = new CustomInterfaceRuntime({
+        widgetManager, getCacheSystem: () => undefined, runWidgetScopedClientScript() {}, fetchContent: async () => ({}),
+        sendWidgetActionMessage: (action) => { request = JSON.parse(action.target!); },
+    });
+    paged.onInterfaceOpened(PAGED_GROUP);
+    paged.handleSetText(pagedUid(4), "session");
+    paged.handleSetText(pagedUid(1), "ore");
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(request?.query, "ore");
+    paged.handleSetText(pagedUid(3), JSON.stringify({ ...request, pageSize: 2, total: 8,
+        rows: [{ id: 1, name: "Copper ore" }, { id: 2, name: "Tin ore" }] }));
+    assert.equal(widgets.get(pagedUid(5)).scrollHeight, 160, "paging keeps the fixed row height and space for unloaded rows");
+    assert.equal(widgets.get(pagedUid(11)).text, "Tin ore");
+    widgets.get(pagedUid(5)).scrollY = 40;
+    paged.tick();
+    assert.equal(widgets.get(pagedUid(10)).hidden, true, "unloaded rows have no visible slot content");
+    paged.resetSession();
     console.log("custom-interface-runtime.test.ts: all tests passed");
 }
 

@@ -22,8 +22,12 @@ export function createMinimapGeometry(input: MinimapProjectionInput): MinimapGeo
     return {
         drawnAt: input.now ?? performance.now(), plane: input.plane, scale: input.scale,
         worldToMinimap(x, y) {
-            const p = project(x, y);
-            return Number.isFinite(p.x) && Number.isFinite(p.y) && inside(p.x, p.y, 0) ? [p.x, p.y] : undefined;
+            const relX = (x - input.worldX) * 4;
+            const relY = (input.worldY - y) * 4;
+            // RuneLite's localToMinimap stops at 80 minimap pixels before zoom is applied.
+            if (relX * relX + relY * relY >= 80 * 80) return undefined;
+            const p = input.project(relX, relY);
+            return [p.x, p.y];
         },
         projectMarker(x, y, padding = 6 * input.scale) {
             const p = project(x, y);

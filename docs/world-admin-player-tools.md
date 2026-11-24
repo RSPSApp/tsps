@@ -1,9 +1,10 @@
 # World Admin player tools
 
-Open `http://localhost:49601/?view=players` on the assigned worktree.
+Open `http://localhost:49600/?view=players` on the assigned worktree.
 World Admin authenticates with its own owner token. If the browser is not signed in, open
-`http://localhost:49601/?token=<your token>` once, then select **Players**. Use the
-configured `WORLD_ADMIN_TOKEN`, or the token in
+`http://localhost:49600/?token=<your token>` once, then select **Players**.
+`WORLD_ADMIN_PORT` or the assigned worktree slot changes this port. Use the actual link printed at startup.
+Use the configured `WORLD_ADMIN_TOKEN`, or the token in
 `server/data/definitions/world-admin.token` when no environment token is set.
 The startup message identifies the token source without logging its value.
 Never paste the token into a report, commit, screenshot, or shared link. The panel

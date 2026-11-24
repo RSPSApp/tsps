@@ -73,6 +73,7 @@ function fightAt(px, py, { blocks = [], path = false } = {}) {
   };
   return {
     session,
+    burstingBlocks: new Set(),
     blocks: new Set(blocks.map(([x, y]) => ({ getLocation: () => new Location(x, y, 0) }))),
     boss: { getLocation: () => new Location(1362, 4510, 0), getSize: () => 3 },
     playerTile: () => [px, py],
@@ -165,7 +166,7 @@ function trackUnstableIce(t, { px, py, random, session = {} }) {
       ObjectManager: { register: (pool) => poolRegistrations.push(pool) },
     },
     events: [], pools: new Map(), stats: {}, tick: 0, at: Fight.prototype.at, placePool: Fight.prototype.placePool,
-    poolDamage() {}, prayerPoints() {}, updateHud() {},
+    poolDamage() {}, prayerPoints() {}, updateHud() {}, clearPools() {},
   });
   Common.init({
     ...api,
@@ -254,6 +255,20 @@ test("intact Unstable Ice shatters at +14 with healing and pools, and disappears
   assert.equal(fight.pools.get(key(...alreadyIced)), iceBefore);
   advance(1);
   assert.deepEqual(removed, formed);
+});
+
+test("a kill on the shatter tick clears the burst blocks before their delayed removal", (t) => {
+  const { fight, advance, formed, removed } = trackUnstableIce(t, {
+    px: 1362, py: 4515, random: 0.4,
+  });
+  advance(17);
+  assert.equal(formed.length, 2);
+  assert.ok(formed.every((block) => block.animation === 11035 && block.registered));
+  Fight.prototype.died.call(fight);
+  assert.deepEqual(removed, formed);
+  assert.ok(formed.every((block) => !block.registered));
+  advance(1);
+  assert.deepEqual(removed, formed, "no second removal on the next tick");
 });
 
 for (const [name, session] of [["quest", { quest: true }], ["Echo", { variant: "echo", echoToken: {} }]]) {

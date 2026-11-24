@@ -87,6 +87,7 @@ function burst(fight, block) {
   const { Animation } = Common.core;
   const ice = Common.data.unstableIce;
   fight.blocks.delete(block);
+  fight.burstingBlocks.add(block);
   block.performAnimation(new Animation(ice.breakAnim));
   Common.areaSound(fight.player, ice.breakSound, block.getLocation());
 }
@@ -115,6 +116,7 @@ function shatter(fight, formed) {
       }
     }
     fight.at(removeAfterBreakTicks, () => {
+      fight.burstingBlocks.delete(block);
       if (block.isRegistered()) Common.api.removeNpc(block);
       if (!ordinaryFight) {
         for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) fight.placePool(x + dx, y + dy);
@@ -125,8 +127,11 @@ function shatter(fight, formed) {
 
 /** Every block goes with the fight (her death, the chamber closing). */
 function clear(fight) {
-  for (const block of fight.blocks) if (block.isRegistered()) Common.api.removeNpc(block);
+  for (const block of [...fight.blocks, ...fight.burstingBlocks]) {
+    if (block.isRegistered()) Common.api.removeNpc(block);
+  }
   fight.blocks.clear();
+  fight.burstingBlocks.clear();
 }
 
 // ------------------------------------------------------------------ hooks
@@ -164,10 +169,11 @@ function blockBeforeDeath(event) {
 }
 
 /** Gone: an icy pool where it stood (captured). */
-function blockDeath(event) {
-  const fight = event.npc?.__amoxliatlIce;
+function blockDeath({ npc }) {
+  const fight = npc?.__amoxliatlIce;
   if (!fight) return;
-  const [x, y] = fight.session.worldTile(event.npc.getLocation());
+  fight.burstingBlocks.delete(npc);
+  const [x, y] = fight.session.worldTile(npc.getLocation());
   fight.placePool(x, y);
 }
 

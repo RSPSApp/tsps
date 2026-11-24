@@ -1830,9 +1830,14 @@ module.exports = function registerBelowIceMountainQuest(api) {
     const key = {};
     mining.set(player, key);
     const from = player.getLocation();
+    const canSwing = () => {
+      const again = { player, pickaxe: null };
+      api.emitCustomEvent("mining:best-pickaxe", again);
+      return Boolean(again.pickaxe) && player.getSkillManager().getCurrentLevel(Skill.MINING) >= 10;
+    };
     const still = () => mining.get(player) === key && player.isRegistered?.() !== false
       && player.getPrivateArea() === area && quest.getStage(player) === STAGE_GUARDIAN
-      && !area.mined.has(index) && player.getLocation().equals(from);
+      && !area.mined.has(index) && player.getLocation().equals(from) && canSwing();
     player.sendMessage(PILLAR_SWING_MESSAGE);
     player.performAnimation(request.pickaxe.animation);
     const swing = () => later(player, 1, () => {
@@ -1857,7 +1862,6 @@ module.exports = function registerBelowIceMountainQuest(api) {
    */
   function collapsePillar(player, area, index, location) {
     area.mined.add(index);
-    player.setAttribute(PILLARS_MINED_ATTRIBUTE, area.mined.size);
     player.performAnimation(new Animation(-1));
     const pillar = area.getObjects().find((object) => object.getId() === STRUCTURAL_PILLAR_OBJECT_ID && object.getLocation().equals(location));
     if (pillar) ObjectManager.deregister(pillar, true);
@@ -2071,8 +2075,8 @@ module.exports = function registerBelowIceMountainQuest(api) {
     }
     if (stage === 0) {
       return [
-        "I can start this quest by talking to <col=800000>Willow</col>",
-        "on the path south of <col=800000>Ice Mountain</col>.",
+        `${NAVY}I can start this quest by talking to ${MAROON}Willow${NAVY}`,
+        `${NAVY}on the path south of ${MAROON}Ice Mountain${NAVY}.`,
       ];
     }
     if (stage === STAGE_STARTED) {

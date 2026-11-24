@@ -220,6 +220,13 @@ test('a pillar comes down onto the Guardian as local 1001343 recorded it, and wa
   assert.equal(pillars().length, 4, 'the pillar stands after the player walks off');
   assert.equal(h.xp.length, 0);
 
+  // A swing whose pickaxe is put away stops too.
+  let pickaxe = true;
+  h.api.onCustomEvent('mining:best-pickaxe', event => { if (!pickaxe) event.pickaxe = null; });
+  click(first); pickaxe = false; h.tick(3); pickaxe = true;
+  assert.equal(pillars().length, 4, 'no pickaxe, no fall');
+  assert.equal(h.xp.length, 0);
+
   // Clicked again, it comes down after two failed rolls (2805: a swing, then the fall 1-3 ticks later).
   rolls.push(0.9, 0.9, 0, 0.3, 0.3, 0.3, 0.99);
   const start = h.now();
@@ -725,6 +732,10 @@ test('the journal sends the text local 1001343 recorded at each stage it was ope
     '<str>beneath the mountain. To do this, she wanted me to gather',
     '<str>her old crew together.',
   ];
+  assert.deepEqual(sent(), [
+    '<col=000080>I can start this quest by talking to <col=800000>Willow<col=000080>',
+    '<col=000080>on the path south of <col=800000>Ice Mountain<col=000080>.',
+  ], 'not started: navy with maroon highlights, as main sent it');
   h.quest.setStage(h.player, 1);
   assert.deepEqual(sent(), [...intro, ...burntof,
     '<col=000080>I need to recruit <col=800000>Checkal<col=000080>. I can find him in <col=800000>Barbarian Village<col=000080>.',

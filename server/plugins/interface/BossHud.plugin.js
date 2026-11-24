@@ -5,14 +5,15 @@
  * mode); the server sets those, the bar's colours, and runs its open and fade scripts.
  *
  * Bosses drive it per player through custom events (each sends only what changed):
- * - "boss-hud:show" { player, npcId, current, maximum, colours? } - the values, the bar's colours,
- *   the open script and a fade in.
+ * - "boss-hud:show" { player, npcId, current, maximum, colours?, fadeIn = true } - the values,
+ *   the bar's colours, the open script and an optional fade in.
  * - "boss-hud:update" { player, npcId?, current?, maximum?, colours?, force? } - any of them; new
  *   colours are redrawn (the Doom's shield turns the bar blue).
  * - "boss-hud:fade" { player, fadeIn } - fades it in or out and leaves it there.
  * - "boss-hud:hide" { player, fade = true, afterTicks = 4 } - fades it out, then (as captured, 4
  *   ticks later) clears the values and hides it. A show before then cancels it. With no delay the
  *   values clear at once and a fade is left to finish (the Doom's kill, as captured).
+ *   Set clearContainer to empty the container when the hide completes.
  * - "boss-hud:reset" { player } - hides it and empties its container (the Doom's delve change).
  * - "boss-hud:extra" { player, current, maximum, colours?, hidden? } - the second bar under the
  *   first (rev 241, hpbar_hud_show_extra_bar): the Smorks under Bork, Ocellus' first phase. Live
@@ -102,7 +103,7 @@ function sendValues(player, state, { npcId, current, maximum }, force) {
   if (maximum != null && (force || maximum !== state.maximum)) sender.sendVarbit(MAXIMUM_VARBIT, (state.maximum = maximum));
 }
 
-function showHud({ player, npcId, current, maximum, colours = COLOURS }) {
+function showHud({ player, npcId, current, maximum, colours = COLOURS, fadeIn = true }) {
   if (!player) return;
   if (npcId != null) bossNpcIds.add(npcId);
   const state = stateOf(player);
@@ -115,7 +116,7 @@ function showHud({ player, npcId, current, maximum, colours = COLOURS }) {
   sendColours(player, colours);
   state.colours = colours;
   sender.sendInterfaceScript(OPEN_SCRIPT, OPEN_COMPONENTS);
-  sender.sendInterfaceScript(FADE_IN_SCRIPT, [...FADE_COMPONENTS, SHOW_FADE_FROM]);
+  if (fadeIn) sender.sendInterfaceScript(FADE_IN_SCRIPT, [...FADE_COMPONENTS, SHOW_FADE_FROM]);
 }
 
 function updateHud({ player, npcId, current, maximum, colours, force = false }) {
@@ -151,14 +152,18 @@ function clear(player, hideHp = true) {
   if (hideHp) sender.sendInterfaceDisplayState(HP, true);
 }
 
-function hideHud({ player, fade = true, afterTicks = HIDE_AFTER_TICKS }) {
+function hideHud({ player, fade = true, afterTicks = HIDE_AFTER_TICKS, clearContainer = false }) {
   if (!player) return;
   const state = stateOf(player);
   const generation = ++state.generation;
   state.hiding = true;
   if (fade) fadeHud({ player, fadeIn: false });
+  const finish = () => {
+    clear(player, afterTicks > 0 || !fade);
+    if (clearContainer) player.getPacketSender().sendInterfaceScript(CLEAR_SCRIPT, [CONTAINER]);
+  };
   if (afterTicks <= 0) {
-    clear(player, !fade);
+    finish();
     return;
   }
   const { Task, TaskManager } = core;
@@ -168,7 +173,7 @@ function hideHud({ player, fade = true, afterTicks = HIDE_AFTER_TICKS }) {
     }
     execute() {
       this.stop();
-      if (state.generation === generation && player.isRegistered?.() !== false) clear(player);
+      if (state.generation === generation && player.isRegistered?.() !== false) finish();
     }
   })());
 }

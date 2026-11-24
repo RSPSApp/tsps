@@ -11,6 +11,7 @@
 
 const Shared = require("./Shared.Colosseum");
 const Run = require("./Run.Colosseum");
+const Hud = require("./Hud.Colosseum");
 const Scoreboard = require("./Scoreboard.Colosseum");
 
 const MOD_BUTTONS = Shared.COMPONENT.MOD_BUTTONS.map((component) => (Shared.INTERFACE.INTERMISSION << 16) | component);
@@ -90,7 +91,9 @@ function dieInRun(event) {
  */
 function dyingInRun({ player }) {
   const run = Run.runOf(player);
-  if (run) run.dying = true;
+  if (!run) return;
+  run.dying = true;
+  Hud.drop(run);
 }
 
 /** Logged out inside (a crash, or the server stopping mid-run): the run is gone, back to the lobby. */

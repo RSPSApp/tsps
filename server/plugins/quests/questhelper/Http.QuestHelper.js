@@ -43,7 +43,7 @@ class QuestHelperHttp {
     // A cancelled server shutdown stopped the bridge but players are still here.
     if(launcher?.state==='stopped'){launcher.start();return this.target();}
     if(launcher?.state==='starting')throw playerError(PLAYER_STARTING,'QUEST_HELPER_STARTING');
-    if(['not-built','no-java','failed'].includes(launcher?.state))throw this.notEnabled(launcher.adminHint());
+    if(['browser-host','not-built','no-java','failed'].includes(launcher?.state))throw this.notEnabled(launcher.adminHint());
     if(typeof this.token!=='string'||this.token.length<24)throw this.notEnabled(`QUEST_HELPER_TOKEN is not set (24+ characters): ${launcher?.adminHint?.()??DEFAULT_HINT}`);
     return {base:this.base,token:this.token};
   }

@@ -23,11 +23,28 @@ export function processWidgetHoldInput(
             mouseY: ((my - (widget._absY ?? widget.y ?? 0)) / eventScaleY) | 0,
         };
 
+        // OSRS: a widget is only held while the cursor is over it. Sliding off it ends the press
+        // (its release script runs, repeats stop); onHold resumes if the cursor comes back.
+        const left = widget._absX ?? widget.x ?? 0;
+        const top = widget._absY ?? widget.y ?? 0;
+        const inside =
+            mx >= left && my >= top &&
+            mx < left + (widget.width ?? 0) * eventScaleX &&
+            my < top + (widget.height ?? 0) * eventScaleY;
+        if (!inside) {
+            if (!isNewClick && !widget._pressEnded && !widgetInteraction.isWidgetDraggable?.(widget)) {
+                widget._pressEnded = true;
+                if (widget.eventHandlers?.onRelease) deps.getCs2Vm().invokeEventHandler(widget, "onRelease", holdCtx);
+                else if (widget.onRelease) deps.executeScriptListener(widget, widget.onRelease, holdCtx);
+            }
+            return;
+        }
+
         // onClickRepeat requires isClicked (set by onClick on the previous frame).
         // On the first frame of a click, onClick fires and sets isClicked — onClickRepeat
         // only starts firing from the next frame onward. Using !isNewClick as the guard
         // achieves the same one-frame delay.
-        if (!isNewClick) {
+        if (!isNewClick && !widget._pressEnded) {
             if (widgetInteraction.clickedWidget.eventHandlers?.onClickRepeat) {
                 deps.getCs2Vm().invokeEventHandler(widgetInteraction.clickedWidget, "onClickRepeat", holdCtx);
             } else if (widgetInteraction.clickedWidget.onClickRepeat) {

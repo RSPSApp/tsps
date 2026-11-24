@@ -19,7 +19,16 @@ export function processWidgetHoverInput(
     widgetManager: WidgetManager,
     widgetInteraction: WidgetInteractionController,
 ): void {
-    const { mx, my, hits } = frame;
+    const { mx, my } = frame;
+    // OSRS: while the Choose Option menu is open or a widget is picked up for a drag, nothing is
+    // hovered. Hovered widgets get their mouse-leave, and no mouse-over or repeat runs.
+    const uiMenu = (deps.getRenderer?.()?.canvas as any)?.__ui?.menu;
+    const held = widgetInteraction?.clickedWidget;
+    const hoverSuppressed =
+        deps.getMenuOpen?.() === true ||
+        uiMenu?.open === true ||
+        (!!held && widgetInteraction.isWidgetDraggable?.(held) === true);
+    const hits = hoverSuppressed ? [] : frame.hits;
         try {
             deps.getWorldMap().updateWorldMapIconHover(mx, my);
         } catch {}

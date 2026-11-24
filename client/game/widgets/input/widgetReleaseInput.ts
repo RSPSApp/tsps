@@ -240,8 +240,12 @@ export function processWidgetReleaseInput(
                 });
             }
 
-            // Fire onRelease
-            if (widgetInteraction.clickedWidget.eventHandlers?.onRelease) {
+            // Fire onRelease, unless the press already ended when the cursor slid off the widget.
+            const pressEnded = (widget as any)._pressEnded === true;
+            delete (widget as any)._pressEnded;
+            if (pressEnded) {
+                // released already
+            } else if (widgetInteraction.clickedWidget.eventHandlers?.onRelease) {
                 deps.getCs2Vm().invokeEventHandler(
                     widgetInteraction.clickedWidget,
                     "onRelease",

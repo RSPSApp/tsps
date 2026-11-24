@@ -49,6 +49,52 @@ const COMBAT_TAB = [76, 593];
 const MAGIC_TAB = 82;
 const TABS = [[77, 320], [78, 629], [79, 149], [80, 387], [81, 541], [87, 116], [88, 216]];
 
+/**
+ * cutscene_status and the gravestone marker, with NPC and ground item menus hidden while it is on.
+ * Live toggles hidenpcops, hidelocops and hideobjops with cutscene_status in the same tick
+ * (capture facts in the PR); loc ops remain a separate change.
+ */
+function cinematicState(player, on) {
+  const cinematic = on ? 1 : 0;
+  player.getPacketSender().sendVarbit(CUTSCENE_STATUS_VARBIT, cinematic);
+  player.getPacketSender().sendVarbit(GRAVESTONE_TLI_HIDE_VARBIT, cinematic);
+  player.getPacketSender().sendHideNpcOps(cinematic === 1);
+  player.getPacketSender().sendHideObjOps(cinematic === 1);
+}
+
+/** The side tabs a captured cutscene closes as it starts: combat, stats, journal, inventory, worn, prayer, magic, settings, emotes. */
+function hideSideTabs(player) {
+  const sender = player.getPacketSender();
+  for (const slot of [COMBAT_TAB[0], MAGIC_TAB, ...TABS.map(([tab]) => tab)]) sender.closeSubInterface((TOPLEVEL << 16) | slot);
+}
+
+/**
+ * Every side tab goes back, as live reopens them all (Goblin Diplomacy capture ticks 216, 288), each with its login
+ * setup: the client drops a closed tab's op events, so without it the inventory's item options did nothing until a relog
+ * (see Scenes.ValeTotems). The login gameframe mounts them as raw packets, so the sender cannot say which were up.
+ */
+function restoreSideTabs(player) {
+  const sender = player.getPacketSender();
+  const spellbook = player.getSpellbook().getInterfaceId();
+  sender.sendTabInterface(0, COMBAT_TAB[1]).sendGameframeTabSetup(COMBAT_TAB[1]);
+  sender.sendTabInterface(6, spellbook).sendGameframeTabSetup(spellbook);
+  for (const [slot, group] of TABS) sender.sendTabInterface(slot, group).sendGameframeTabSetup(group);
+  player.getInventory().refreshItems();
+  player.getEquipment().refreshItems();
+}
+
+/**
+ * The client side of a cutscene for a quest that runs its own scene areas (Below Ice Mountain):
+ * cutscene_status, the minimap, hidden menus and the side tabs, on as the scene starts and off as
+ * it ends, the way createQuestScenes' `cutscene` scenes do.
+ */
+function setCutsceneInterface(player, on) {
+  player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, on ? MINIMAP_OFF : 0);
+  cinematicState(player, on);
+  if (on) hideSideTabs(player);
+  else restoreSideTabs(player);
+}
+
 function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   const {
     ActionDialogue, Boundary, CountdownTask, DialogueChainBuilder, GameObject, Location, MultiChatboxPrompt,
@@ -240,37 +286,11 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
     player.getMovementQueue().reset().setBlockMovement(active);
     player.setUntargetable(active && cutscene);
     player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, active ? MINIMAP_OFF : 0);
-    if (cutscene || !active) {
-      const cinematic = active && cutscene ? 1 : 0;
-      player.getPacketSender().sendVarbit(CUTSCENE_STATUS_VARBIT, cinematic);
-      player.getPacketSender().sendVarbit(GRAVESTONE_TLI_HIDE_VARBIT, cinematic);
-      // Live toggles hidenpcops, hidelocops and hideobjops with cutscene_status in the same tick
-      // (capture facts in the PR); loc ops remain a separate change.
-      player.getPacketSender().sendHideNpcOps(cinematic === 1);
-      player.getPacketSender().sendHideObjOps(cinematic === 1);
-    }
+    if (cutscene || !active) cinematicState(player, active && cutscene);
   }
 
-  /** The side tabs a captured cutscene closes as it starts: combat, stats, journal, inventory, worn, prayer, magic, settings, emotes. */
-  function hideTabs(player) {
-    const sender = player.getPacketSender();
-    for (const slot of [COMBAT_TAB[0], MAGIC_TAB, ...TABS.map(([tab]) => tab)]) sender.closeSubInterface((TOPLEVEL << 16) | slot);
-  }
-
-  /**
-   * Every side tab goes back, as live reopens them all (Goblin Diplomacy capture ticks 216, 288), each with its login
-   * setup: the client drops a closed tab's op events, so without it the inventory's item options did nothing until a relog
-   * (see Scenes.ValeTotems). The login gameframe mounts them as raw packets, so the sender cannot say which were up.
-   */
-  function restoreTabs(player) {
-    const sender = player.getPacketSender();
-    const spellbook = player.getSpellbook().getInterfaceId();
-    sender.sendTabInterface(0, COMBAT_TAB[1]).sendGameframeTabSetup(COMBAT_TAB[1]);
-    sender.sendTabInterface(6, spellbook).sendGameframeTabSetup(spellbook);
-    for (const [slot, group] of TABS) sender.sendTabInterface(slot, group).sendGameframeTabSetup(group);
-    player.getInventory().refreshItems();
-    player.getEquipment().refreshItems();
-  }
+  const hideTabs = hideSideTabs;
+  const restoreTabs = restoreSideTabs;
 
   /** An empty chatbox the player cannot continue: the capture's held moments. */
   function hold(player) {
@@ -439,4 +459,4 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   };
 }
 
-module.exports = { createQuestScenes, CAMERA_RATES };
+module.exports = { createQuestScenes, CAMERA_RATES, setCutsceneInterface };

@@ -554,6 +554,7 @@
     "9618": {"name": "null", "anims": {"attack": 2705, "block": 2706, "death": 2707}, "sounds": {"death": 512}},
     "10436": {"name": "Sourhog", "anims": {"attack": 8769, "block": -1, "death": 8771}, "deathTicks": 7, "respawn": 0, "sounds": {"death": 2315}},
     "10506": {"name": "Headless Beast", "anims": {"attack": 2267, "block": 8834, "death": 4929}, "respawn": 0},
+    "10654": {"name": "Ancient Guardian", "anims": {"attack": 8942, "block": -1, "death": 8943}, "deathTicks": 5, "respawn": 0, "sounds": {"death": 4985}},
     "10682": {"name": "Rat", "anims": {"attack": 2705, "block": 2706, "death": 2707}, "sounds": {"death": 512}},
     "10766": {"name": "Xarpus", "anims": {"attack": -1, "block": -1, "death": -1}},
     "10767": {"name": "Xarpus", "anims": {"attack": -1, "block": -1, "death": -1}},

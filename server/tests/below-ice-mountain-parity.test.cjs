@@ -9,8 +9,8 @@ before(async () => {
 });
 let nextIndex = 100;
 function setup({ nativeSpawns = false } = {}) {
-  const hooks = { custom: new Map(), variants: [], namedNpcs: new Map(), namedObjects: new Map(), objects: [], items: [], logout: [] };
-  const tasks = [], spawned = [], removed = [], objects = [], projectiles = [], graphics = [], cameras = [];
+  const hooks = { custom: new Map(), variants: [], namedNpcs: new Map(), namedObjects: new Map(), objects: [], items: [], logout: [], npcDeath: [] };
+  const tasks = [], spawned = [], removed = [], objects = [], projectiles = [], graphics = [], cameras = [], areaSounds = [], closedSubs = [], tabs = [];
   let tick = 0; const executed = new Set();
   const core = { ...PluginManager.getCoreApi(),
     CountdownTask: class { constructor(key, ticks, run) { Object.assign(this, { key, ticks, run }); } },
@@ -22,7 +22,7 @@ function setup({ nativeSpawns = false } = {}) {
     persistAttribute() {}, onNpcDialogueVariant(fn) { hooks.variants.push(fn); }, onNpcDialogueCondition() {},
     onNpcInteraction(target, actions) { if (typeof target === 'string') hooks.namedNpcs.set(target, actions); },
     onObjectInteraction(target, actions) { if (typeof target === 'function') hooks.objects.push(target); else if (typeof target === 'string') hooks.namedObjects.set(target, actions); },
-    onItemOnItem(first, second, fn) { hooks.items.push({ first, second, fn }); }, onPlayerLogout(fn) { hooks.logout.push(fn); },
+    onItemOnItem(first, second, fn) { hooks.items.push({ first, second, fn }); }, onPlayerLogout(fn) { hooks.logout.push(fn); }, onNpcDeath(fn) { hooks.npcDeath.push(fn); },
     onCustomEvent(name, fn) { const list = hooks.custom.get(name) ?? []; list.push(fn); hooks.custom.set(name, list); },
     emitCustomEvent(name, event) { for (const fn of hooks.custom.get(name) ?? []) fn(event); },
     spawnNpc(def) {
@@ -35,12 +35,13 @@ function setup({ nativeSpawns = false } = {}) {
       const flags = new Set();
       const npc = { def, getId: () => def.id, getOwner: () => def.owner, getHitpoints: () => hp, setHitpoints(value) { hp = value; },
         setFlag(flag) { flags.add(flag); }, hasFlag: flag => flags.has(flag),
-        getCombat: () => ({ attack(target) { npc.target = target; } }), isRegistered: () => true,
+        getCombat: () => ({ attack(target) { npc.target = target; }, addDamage(source, amount) { npc.credited.push([source, amount]); } }), isRegistered: () => true,
+        credited: [], hits: [], addTickHit(hit) { npc.hits.push([tick, hit.getDamage()]); }, isDyingFunction: () => false,
         isNpc: () => true, isPlayer: () => false, setArea(value) { area = value; }, getArea: () => area,
         getIndex: () => nextIndex++, getAsNpc() { return npc; }, getLocation: () => tile, moveTo(value) { tile = value; },
         faceTile(value) { npc.facing = value; },
         getMovementQueue: () => ({ addFirstStep(value) { tile = value; }, addSteps(value) { tile = value; } }),
-        performAnimation(value) { npc.animation = value.id; }, performGraphic(value) { npc.graphic = value.id; }, forceChat(value) { npc.chat = value; } };
+        performAnimation(value) { npc.animation = value.id; }, performGraphic(value) { npc.graphic = value.id; npc.graphicObject = value; npc.graphicTick = tick; }, forceChat(value) { npc.chat = value; npc.chatTick = tick; } };
       spawned.push(npc); return npc;
     }, removeNpc(npc) { removed.push(npc); },
   }, { get(target, key) { return target[key] ?? (() => {}); } });
@@ -53,6 +54,8 @@ function setup({ nativeSpawns = false } = {}) {
   const sender = new Proxy({ sendVarbit(id, value) { varbits.set(id, value); return sender; },
     sendCreationMenu(value) { menu = value; return sender; }, sendInterfaceRemoval() { current = null; return sender; },
     sendProjectile(...args) { projectiles.push(args); return sender; }, sendGraphic(...args) { graphics.push(args); return sender; },
+    sendAreaSound(...args) { areaSounds.push([tick, ...args]); return sender; },
+    closeSubInterface(uid) { closedSubs.push([tick, uid]); return sender; }, sendTabInterface(slot, group) { tabs.push([tick, slot, group]); return sender; },
   }, { get(target, key) { return target[key] ?? ((...args) => { if (String(key).startsWith("sendCamera")) {
       if ((key === 'sendCameraMoveTo' || key === 'sendCameraLookAt') && area?.sourceTile) {
         if (area.getName() === 'Barbarian Workout') {
@@ -72,7 +75,8 @@ function setup({ nativeSpawns = false } = {}) {
     getInventory: () => ({ getAmount: id => inventory.get(id) ?? 0, isFull: () => false,
       forceAdd(owner, item) { inventory.set(item.getId(), (inventory.get(item.getId()) ?? 0) + item.getAmount()); },
       deleteNumber(id, count) { inventory.set(id, Math.max(0, (inventory.get(id) ?? 0) - count)); },
-      adds(id, count) { inventory.set(id, (inventory.get(id) ?? 0) + count); } }),
+      adds(id, count) { inventory.set(id, (inventory.get(id) ?? 0) + count); }, refreshItems() {} }),
+    getEquipment: () => ({ refreshItems() {} }), getSpellbook: () => ({ getInterfaceId: () => 218 }),
     getSkillManager: () => ({ getCurrentLevel: skill => skill === core.Skill.MINING ? miningLevel : 99,
       addExperiences(skill, amount) { xp.push({ skill, amount }); } }),
     setPositionToFace(value) { player.facing = value; },
@@ -85,7 +89,7 @@ function setup({ nativeSpawns = false } = {}) {
   const emit = (name, event) => api.emitCustomEvent(name, { player, ...event });
   const action = (npcId, stepId) => { const event = { player, npcId, stepId }; api.emitCustomEvent('npc-dialogue:action', event); return event; };
   const line = (npcId, text) => { const event = { player, npcId, text }; api.emitCustomEvent('npc-dialogue:line', event); return event; };
-  return { api, hooks, core, quest, attrs, inventory, varbits, messages, animations, xp, player, tasks, spawned, removed, objects, projectiles, graphics,
+  return { api, hooks, core, quest, attrs, inventory, varbits, messages, animations, xp, player, tasks, spawned, removed, objects, projectiles, graphics, areaSounds, closedSubs, tabs, now: () => tick,
     emit, action, line, cameras, tick(count) { while (count-- > 0) { tick++; for (const task of [...tasks]) if (!executed.has(task) && task.due <= tick) { executed.add(task); task.run(); } } }, menu: () => menu, setMiningLevel(value) { miningLevel = value; } };
 }
 const CHECKAL = 'quest.below_ice_mountain.checkal', MARLEY = 'quest.below_ice_mountain.marley';
@@ -117,18 +121,31 @@ test('Checkal waits for a nearby real Flex after the workout and prompt', () => 
   h.line(N.CHECKAL, 'Thank you my friend, I will meet you there.').after();
   assert.equal(h.attrs.get(CHECKAL), 40); assert.equal(h.varbits.get(12063), 15);
 });
-test('sandwich recipe requires learning, uses make menu and stays usable after completion', () => {
+test('sandwich recipe requires learning; knife on bread makes it at once, or offers breadcrumbs during Pirate Pete', () => {
   const h = setup(), I = h.core.ItemIdentifiers, recipe = h.hooks.items.find(x => x.second === 'Bread').fn;
   h.quest.setStage(h.player, 1); h.attrs.set(MARLEY, 5);
   for (const id of [I.KNIFE, I.BREAD, I.COOKED_MEAT]) h.inventory.set(id, 2);
-  const event = { player: h.player, usedItemId: I.KNIFE, usedWithItemId: I.BREAD };
-  assert.equal(recipe(event), false);
+  const event = () => ({ player: h.player, usedItemId: I.KNIFE, usedWithItemId: I.BREAD });
+  assert.equal(recipe(event()), false);
   h.line(h.core.NpcIdentifiers.COOK_2, 'Then, you take some bread. I recommend making it fresh.').after();
-  assert.equal(h.varbits.get(12064), 10); assert.equal(recipe(event), true);
-  assert.deepEqual(h.menu().getItems(), [I.BREADCRUMBS, I.STEAK_SANDWICH]); assert.equal(h.inventory.get(I.BREAD), 2);
-  h.menu().execute(I.STEAK_SANDWICH, 1); assert.equal(h.inventory.get(I.STEAK_SANDWICH), 1); assert.equal(h.inventory.get(I.COOKED_MEAT), 1);
+  assert.equal(h.varbits.get(12064), 10);
+  // local 1001343, tick 1435: no Recipe for Disaster, so the sandwich is made with no menu.
+  assert.equal(recipe(event()), true);
+  assert.equal(h.menu(), null);
+  assert.equal(h.inventory.get(I.STEAK_SANDWICH), 1); assert.equal(h.inventory.get(I.BREAD), 1); assert.equal(h.inventory.get(I.COOKED_MEAT), 1);
+  assert.equal(h.animations.at(-1).id, 8938);
   assert.ok(h.messages.includes('You combine the cooked meat and bread to make a Steak sandwich!'));
-  h.quest.setStage(h.player, 5); recipe(event); h.menu().execute(I.STEAK_SANDWICH, 1); assert.equal(h.inventory.get(I.STEAK_SANDWICH), 2);
+  // With no cooked meat there is nothing to make, so the ordinary knife-on-bread answer stands.
+  h.inventory.set(I.COOKED_MEAT, 0);
+  const bare = event(); assert.equal(recipe(bare), false); assert.notEqual(bare.handled, true);
+  h.inventory.set(I.COOKED_MEAT, 1);
+  // 1636, mid-way through Pirate Pete: the make menu offers breadcrumbs too.
+  h.api.onCustomEvent('recipe-for-disaster:breadcrumbs', request => { request.available = true; });
+  assert.equal(recipe(event()), true);
+  assert.deepEqual(h.menu().getItems(), [I.BREADCRUMBS, I.STEAK_SANDWICH]); assert.equal(h.inventory.get(I.BREAD), 1);
+  h.menu().execute(I.STEAK_SANDWICH, 1); assert.equal(h.inventory.get(I.STEAK_SANDWICH), 2); assert.equal(h.inventory.get(I.COOKED_MEAT), 0);
+  h.inventory.set(I.BREAD, 1); h.inventory.set(I.COOKED_MEAT, 1);
+  h.quest.setStage(h.player, 5); recipe(event()); h.menu().execute(I.STEAK_SANDWICH, 1); assert.equal(h.inventory.get(I.STEAK_SANDWICH), 3);
 });
 test('RPS third-round cheat beats the actual shown sign for every player pick', () => {
   const h = setup(), N = h.core.NpcIdentifiers; h.quest.setStage(h.player, 1);
@@ -176,23 +193,90 @@ test('workout lasts 206 ticks, unlocks Flex at its end and cleans up logout', ()
   assert.equal(h.player.getPrivateArea().isDestroyed(), true);
   h.hooks.logout[0]({ player: h.player }); assert.equal(h.attrs.get('below-ice-mountain:training'), 0); assert.equal(h.player.getMovementQueue().blocked, false);
 });
-test('mining needs level/pickaxe, damages each distinct pillar once and gives 10 XP', () => {
+test('a pillar comes down onto the Guardian as local 1001343 recorded it, and walking off stops the swing', t => {
   const h = setup(), N = h.core.NpcIdentifiers, O = h.core.ObjectIdentifiers;
+  const rolls = [];
+  t.mock.method(Math, 'random', () => rolls.length ? rolls.shift() : 0);
   h.quest.setStage(h.player, 3); h.action(N.WILLOW, 'wWX1Ws');
   const guardian = h.spawned.at(-1), mine = h.hooks.objects[0];
-  const click = () => { const object = h.objects.find(object => object.getId() === O.STRUCTURAL_PILLAR);
-    h.player.moveTo(object.getLocation().transform(1, 0)); mine({ player: h.player, objectId: O.STRUCTURAL_PILLAR, object, clickType: 1 }); return object; };
+  const pillars = () => h.objects.filter(object => object.getId() === O.STRUCTURAL_PILLAR);
+  const click = (object = pillars()[0]) => {
+    h.player.moveTo(object.getLocation().transform(1, 0));
+    mine({ player: h.player, objectId: O.STRUCTURAL_PILLAR, object, clickType: 1 });
+    return object;
+  };
   h.setMiningLevel(9); click(); assert.match(h.messages.at(-1), /Mining level of at least 10/);
   h.setMiningLevel(10); click(); assert.match(h.messages.at(-1), /pickaxe/);
   h.api.onCustomEvent('mining:best-pickaxe', event => { event.pickaxe = { animation: new h.core.Animation(625) }; });
-  const first = click(); assert.equal(guardian.getHitpoints(), 40); assert.equal(h.tasks.at(-1).ticks, 8); h.tasks.at(-1).run(); assert.equal(guardian.getHitpoints(), 30);
-  mine({ player: h.player, objectId: O.STRUCTURAL_PILLAR, object: first, clickType: 1 }); assert.equal(guardian.getHitpoints(), 30);
-  for (let i = 0; i < 3; i++) { click(); h.tasks.at(-1).run(); }
-  assert.equal(h.quest.getStage(h.player), 4); assert.equal(h.varbits.get(12063), 40); assert.equal(h.xp.reduce((sum, x) => sum + x.amount, 0), 40); assert.ok(h.removed.includes(guardian));
+
+  // A swing that is walked away from never brings the pillar down (2793-2804: three ticks, then a walk).
+  rolls.push(0.9, 0.9);
+  const first = click();
+  assert.equal(h.messages.at(-1), 'You swing your pick at the pillar.');
+  assert.equal(h.animations.at(-1).id, 625);
+  h.tick(2);
+  h.player.moveTo(first.getLocation().transform(1, 1));
+  h.tick(3);
+  assert.equal(pillars().length, 4, 'the pillar stands after the player walks off');
+  assert.equal(h.xp.length, 0);
+
+  // A swing whose pickaxe is put away stops too.
+  let pickaxe = true;
+  h.api.onCustomEvent('mining:best-pickaxe', event => { if (!pickaxe) event.pickaxe = null; });
+  click(first); pickaxe = false; h.tick(3); pickaxe = true;
+  assert.equal(pillars().length, 4, 'no pickaxe, no fall');
+  assert.equal(h.xp.length, 0);
+
+  // Clicked again, it comes down after two failed rolls (2805: a swing, then the fall 1-3 ticks later).
+  rolls.push(0.9, 0.9, 0, 0.3, 0.3, 0.3, 0.99);
+  const start = h.now();
+  click(first);
+  h.tick(2); assert.equal(pillars().length, 4);
+  h.tick(1);
+  const fell = h.now();
+  assert.equal(fell - start, 3);
+  assert.equal(pillars().length, 3);
+  const mined = h.objects.find(object => object.getId() === O.BROKEN_PILLAR_3);
+  assert.ok(mined.getLocation().equals(first.getLocation()));
+  assert.equal(mined.getFace(), first.getFace());
+  assert.equal(h.animations.at(-1).id, -1, 'the swing stops as the pillar falls');
+  assert.deepEqual(h.xp.map(x => x.amount), [10]);
+  assert.equal(guardian.graphic, 60); assert.equal(guardian.graphicObject.getDelay(), 20); assert.equal(guardian.graphicObject.getHeight(), 10);
+  assert.equal(guardian.graphicTick, fell);
+  const shakes = h.cameras.filter(([at, key]) => at === fell && key === 'sendCameraShake');
+  assert.deepEqual(shakes.map(shake => shake.slice(2, 4)), [[0, 6], [1, 6], [2, 6]], 'three axes, each 5-8');
+  const at = guardian.getLocation();
+  assert.deepEqual(h.areaSounds.filter(([tick]) => tick === fell), [[fell, 1384, at.getX(), at.getY(), 0, 1, 35, 10]]);
+  h.tick(1);
+  assert.equal(guardian.chat, 'Grrr!'); assert.equal(guardian.chatTick, fell + 1);
+  assert.equal(guardian.hits.length, 0);
+  h.tick(1);
+  assert.deepEqual(guardian.hits, [[fell + 2, 12]], 'the rocks hit it two ticks after the fall (2805 -> 2807: 12)');
+  assert.equal(guardian.getHitpoints(), 28);
+  assert.deepEqual(guardian.credited.map(([source, amount]) => [source === h.player, amount]), [[true, 12]]);
+  assert.deepEqual(h.areaSounds.filter(([tick]) => tick === fell + 2), [[fell + 2, 4971, at.getX(), at.getY(), 0, 1, 0, 10]]);
+  h.tick(3); assert.equal(h.cameras.filter(([, key]) => key === 'sendCameraReset').length, 0);
+  h.tick(1); assert.deepEqual(h.cameras.filter(([, key]) => key === 'sendCameraReset').map(([tick]) => tick), [fell + 6]);
+
+  // A mined pillar can't be mined again.
+  const before = h.messages.length;
+  mine({ player: h.player, objectId: O.STRUCTURAL_PILLAR, object: first, clickType: 1 });
+  assert.equal(h.messages.length, before);
+
+  // The fourth pillar takes whatever the Guardian has left.
+  for (const roll of [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]]) { rolls.push(...roll); click(); h.tick(3); }
+  assert.deepEqual(guardian.hits.map(([, damage]) => damage), [12, 10, 10, 8]);
+  assert.equal(guardian.getHitpoints(), 0);
+  assert.deepEqual(h.xp.map(x => x.amount), [10, 10, 10, 10]);
+  assert.equal(h.quest.getStage(h.player), 3, 'the stage waits for the Guardian to die');
+  assert.equal(h.removed.includes(guardian), false, 'its own death removes it');
+  h.hooks.npcDeath[0]({ npc: guardian, npcId: guardian.getId(), killer: h.player });
+  assert.equal(h.quest.getStage(h.player), 4);
+  assert.equal(h.varbits.get(12063), 40);
   h.player.getPrivateArea().destroy();
 });
 
-test('four native pillar hits defeat the guardian without regeneration; ordinary NPCs still regenerate', t => {
+test('a quest-owned Guardian does not regenerate between pillars; ordinary NPCs still regenerate', t => {
   const h = setup({ nativeSpawns: true }), { NPC, Location, World } = h.core;
   const cycle = World.getProcessCycle();
   h.api.removeNpc = npc => { h.removed.push(npc); PluginManager.removeNpc(npc); };
@@ -206,28 +290,17 @@ test('four native pillar hits defeat the guardian without regeneration; ordinary
   ordinary.setHitpoints(30);
   for (let tick = 0; tick < 100; tick++) ordinary.process();
   assert.equal(ordinary.getHitpoints(), 31, 'a normal unflagged NPC regenerates 1 hitpoint per 100 ticks');
+  t.mock.method(Math, 'random', () => 0);
   h.api.onCustomEvent('mining:best-pickaxe', event => { event.pickaxe = { animation: new h.core.Animation(625) }; });
-  for (let mined = 1; mined <= 4; mined++) {
+  for (let mined = 1; mined <= 3; mined++) {
     const object = h.objects.find(object => object.getId() === h.core.ObjectIdentifiers.STRUCTURAL_PILLAR);
     h.player.moveTo(object.getLocation().transform(1, 0));
     h.hooks.objects[0]({ player: h.player, objectId: object.getId(), object, clickType: 1 });
-    h.tasks.at(-1).run();
+    h.tick(3);
     assert.equal(guardian.getHitpoints(), 40 - 10 * mined);
-    if (mined < 4) {
-      for (let tick = 0; tick < 40; tick++) { World.processCycle++; guardian.process(); }
-      assert.equal(guardian.getHitpoints(), 40 - 10 * mined, 'mining-only damage survives ordinary NPC processing');
-    }
+    for (let tick = 0; tick < 100; tick++) { World.processCycle++; guardian.process(); }
+    assert.equal(guardian.getHitpoints(), 40 - 10 * mined, 'mining-only damage survives ordinary NPC processing');
   }
-  assert.equal(h.quest.getStage(h.player), 4);
-  assert.equal(h.varbits.get(12063), 40);
-  assert.equal(h.xp.reduce((sum, award) => sum + award.amount, 0), 40);
-  h.tick(6);
-  const area = h.player.getPrivateArea();
-  assert.deepEqual(h.player.getLocation(), area.sourceTile(2952, 5773), 'captured 2203 finishing-scene placement');
-  assert.deepEqual(h.player.facing, area.sourceTile(2952, 5774));
-  assert.equal(h.animations.at(-1).id, -1, 'combat pose is cleared before the final scene');
-  assert.ok(h.removed.includes(guardian));
-  assert.equal(guardian.isRegistered(), false);
 });
 
 test('entrance uses a private crew and Marley scene, then replaces the awakening with a combat guardian', () => {
@@ -634,5 +707,116 @@ test('finishing re-entry and bag animation use the recorded position and facing'
   assert.deepEqual(h.player.getLocation(), area.sourceTile(2951, 5769));
   assert.deepEqual(h.player.facing, area.sourceTile(2950, 5769), 'west-facing 2223 precedes the rummage at 2224');
   h.tick(1); assert.equal(h.animations.at(-1).id, 6840);
+  h.hooks.logout[0]({ player: h.player });
+});
+
+test('the journal sends the text local 1001343 recorded at each stage it was opened', () => {
+  const h = setup();
+  const BURNTOF = 'quest.below_ice_mountain.burntof';
+  const sent = () => runtime.journalWidgets(h.quest, h.player)[1].staticChildren.map(line => line.text);
+  const intro = [
+    '<col=000080>I spoke to an archaeologist called <col=800000>Willow<col=000080> near <col=800000>Ice Mountain<col=000080>.',
+    '<col=000080>She asked me to help her find a way into some <col=800000>Ancient Ruins<col=000080>',
+    '<col=000080>beneath the mountain. To do this, she wants me to gather her',
+    '<col=000080>old crew together.',
+    '',
+  ];
+  const burntof = [
+    '<col=000080>I need to recruit <col=800000>Burntof<col=000080>. I can find him in the <col=800000>Rising Sun Inn<col=000080> in',
+    '<col=000080><col=800000>Falador<col=000080>.',
+    '',
+  ];
+  const struckIntro = [
+    '<str>I spoke to an archaeologist called Willow near Ice Mountain.',
+    '<str>She asked me to help her find a way into some Ancient Ruins',
+    '<str>beneath the mountain. To do this, she wanted me to gather',
+    '<str>her old crew together.',
+  ];
+  // Not started: "Read journal" opens the quest overview with its start link, read from the
+  // plain start sentence, never the journal.
+  const opened = [];
+  const sender = h.player.getPacketSender();
+  const sub = sender.sendSubInterface;
+  sender.sendSubInterface = (...args) => { opened.push(args[1]); return sender; };
+  const { questMetadata } = require('../plugins/quests/QuestList.QuestRuntime');
+  runtime.openJournal(h.player, h.quest, questMetadata(h.quest, PluginManager.getCoreApi().CacheDefinitions));
+  sender.sendSubInterface = sub;
+  assert.ok(opened.includes(782), 'the overview opens for an unstarted quest');
+  assert.ok(!opened.includes(119), 'not the journal');
+  h.quest.setStage(h.player, 1);
+  assert.deepEqual(sent(), [...intro, ...burntof,
+    '<col=000080>I need to recruit <col=800000>Checkal<col=000080>. I can find him in <col=800000>Barbarian Village<col=000080>.',
+    '',
+    "<col=000080>I need to recruit <col=800000>Marley<col=000080>. <col=800000>Willow<col=000080> doesn't know where he is but",
+    '<col=000080>suggested I ask <col=800000>Charlie<col=000080>, who can be found near the <col=800000>Blue Moon',
+    '<col=800000>Inn<col=000080> in <col=800000>Varrock<col=000080>.',
+  ], 'main varbit 10');
+  h.attrs.set(CHECKAL, 40); h.attrs.set(MARLEY, 10);
+  assert.deepEqual(sent(), [...intro, ...burntof, '<str>I have recruited Checkal.', '',
+    '<col=000080>I need to recruit <col=800000>Marley<col=000080> from the <col=800000>Edgeville Ruins<col=000080>. However, he',
+    '<col=000080>wants me to bring him a <col=800000>Steak Sandwich<col=000080> before he agrees to',
+    "<col=000080>help <col=800000>Willow<col=000080>. To make a <col=800000>Steak Sandwich<col=000080>, I'll need a <col=800000>Knife<col=000080>, some",
+    '<col=000080><col=800000>Bread<col=000080> and some <col=800000>Cooked Meat<col=000080>.',
+  ], 'Checkal recruited, Marley waiting for his sandwich');
+  h.attrs.set(MARLEY, 40); h.attrs.set(BURNTOF, 5);
+  assert.deepEqual(sent(), [...intro,
+    '<col=000080>I need to recruit <col=800000>Burntof<col=000080> from the <col=800000>Rising Sun Inn<col=000080> in <col=800000>Falador<col=000080>.',
+    '<col=000080>However, he wants me to bring him a <col=800000>Beer<col=000080> before he speaks to',
+    '<col=000080>me.',
+    '', '<str>I have recruited Checkal.', '', '<str>I have recruited Marley.',
+  ], 'Burntof waiting for his drink');
+  h.attrs.set(BURNTOF, 40); h.quest.setStage(h.player, 2);
+  assert.deepEqual(sent(), [...struckIntro,
+    '<col=000080>I spoke with <col=800000>Burntof<col=000080>, <col=800000>Checkal<col=000080> and <col=800000>Marley<col=000080>. It took some',
+    "<col=000080>convincing, but they've all agreed to work with <col=800000>Willow<col=000080> again. I",
+    '<col=000080>should meet up with them all at the entrance to the <col=800000>Ancient',
+    '<col=800000>Ruins<col=000080> on the west side of <col=800000>Ice Mountain<col=000080>.',
+  ], 'main varbit 20');
+  h.quest.setStage(h.player, 5);
+  assert.deepEqual(sent(), [...struckIntro,
+    '<str>I spoke with Burntof, Checkal and Marley. It took some',
+    '<str>convincing, but they all agreed to work with Willow again.',
+    '<str>With the help of her crew, Willow managed to gain entry into',
+    '<str>the Ancient Ruins.',
+    '<str>Inside the Ancient Ruins, Willow revealed herself to be a',
+    '<str>graverobber rather than an archaeologist. She tried to kill me,',
+    '<str>but was interrupted by an Ancient Guardian activating. Willow',
+    '<str>and her crew fled, leaving me with the Ancient Guardian.',
+    '<str>I managed to defeat the Ancient Guardian. With Willow gone, I',
+    '<str>claimed my reward from a bag she left behind. Now that no',
+    '<str>one else is trying to kill me, I can explore the Ancient Ruins at',
+    '<str>my leisure.',
+    '',
+    '<col=ff0000>QUEST COMPLETE!',
+  ], 'completed');
+});
+
+test('each scene puts the client in a cutscene and gives the tabs back after it (local 1001343)', () => {
+  const h = setup(), N = h.core.NpcIdentifiers;
+  const state = () => [h.varbits.get(542), h.varbits.get(6719), h.varbits.get(12139)];
+  const inventoryClosed = () => h.closedSubs.some(([, uid]) => uid === ((161 << 16) | 79));
+  h.quest.setStage(h.player, 1); h.attrs.set(CHECKAL, 10);
+  h.action(N.ATLAS, '_RwWTk');
+  assert.deepEqual(state(), [1, 2, 1], 'workout, 837: cutscene_status 1, minimap off, gravestone hidden');
+  assert.ok(inventoryClosed(), 'the side tabs close with it');
+  h.line(N.ATLAS, 'My work is done. Return to Checkal and show him your new-found muscles.').after();
+  assert.deepEqual(state(), [0, 0, 0], 'workout, 1068: all back');
+  assert.ok(h.tabs.some(([, , group]) => group === 149), 'the inventory tab is mounted again');
+
+  h.closedSubs.length = 0; h.tabs.length = 0;
+  h.action(N.BURNTOF, 'Lv8k9i');
+  assert.deepEqual(state(), [1, 2, 1], 'rock-paper-scissors, 2038');
+  assert.ok(inventoryClosed());
+  h.action(N.BURNTOF, 'CU6FG0'); h.tick(8);
+  assert.deepEqual(state(), [0, 0, 0], 'rock-paper-scissors, 2174');
+  assert.ok(h.tabs.some(([, , group]) => group === 149));
+
+  // A logout inside a scene leaves nothing for the next login to undo.
+  h.closedSubs.length = 0; h.tabs.length = 0;
+  h.action(N.BURNTOF, 'Lv8k9i');
+  h.hooks.logout[0]({ player: h.player });
+  assert.equal(h.tabs.length, 0, 'no tab packets go to a player who is logging out');
+  h.action(N.BURNTOF, 'Lv8k9i');
+  assert.deepEqual(state(), [1, 2, 1], 'the next scene after a relog starts a cutscene again');
   h.hooks.logout[0]({ player: h.player });
 });

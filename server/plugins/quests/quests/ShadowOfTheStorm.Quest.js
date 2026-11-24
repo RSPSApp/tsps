@@ -3018,7 +3018,7 @@ module.exports = function registerShadowOfTheStormQuest(api) {
         castTelegrab(npc, target);
         return;
       }
-      npc.performGraphic?.(new Graphic(FIRE_BLAST.startGraphic, GraphicHeight.HIGH));
+      // No cast graphic: none of the capture's 45 casts shows 129 on him.
       const projectile = Projectile.createProjectile(
         npc, target, FIRE_BLAST.projectile, FIRE_BLAST.start, FIRE_BLAST.end,
         FIRE_BLAST.startHeight, FIRE_BLAST.endHeight

@@ -140,8 +140,11 @@ function rollUntil(f, accurate, spy) {
 
 test("rsprox t2513: a Fire Blast that lands shows firebolt_impact (128) and fireblast_hit (156) as the projectile lands", (t) => {
   const f = fight(t, OUT_OF_MELEE, false);
+  const onHim = [];
+  t.mock.method(f.demon, "performGraphic", (graphic) => { onHim.push(graphic.getId()); });
   f.method.start(f.demon, f.p);
   assert.deepEqual(f.sounds, [155], "t2513: fireblast_cast_and_fire as an area sound on the cast");
+  assert.deepEqual(onHim, [], "no cast graphic on him (none in the capture's 45 casts)");
   const timing = f.lastProjectile.getTiming();
   assert.equal(timing.startCycleOffset, 51);
   const spy = spyLanding(t, f);

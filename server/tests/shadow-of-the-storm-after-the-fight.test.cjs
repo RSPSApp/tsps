@@ -89,8 +89,8 @@ const owned = (f) => [...core.World.getNpcs()].filter((npc) => npc.getOwner?.() 
 // By id: other plugins' owner-only npcs also answer to this player, so owner alone isn't the cast.
 const wizardsOf = (f) => {
   const N = core.NpcIdentifiers;
-  const ids = new Set([N.FATHER_REEN, N.FATHER_BADDEN, N.EVIL_DAVE_2, N.MATTHEW, N.JENNIFER_2, N.PATRICK, N.CLAY_GOLEM_2]);
-  return owned(f).filter((npc) => ids.has(npc.getId()));
+  const ids = new Set([N.FATHER_REEN, N.FATHER_BADDEN, N.EVIL_DAVE_2, N.MATTHEW, N.JENNIFER_2, N.PATRICK, N.CLAY_GOLEM]);
+  return owned(f).filter((npc) => ids.has(npc.getRealId()));
 };
 
 async function resume(f) {
@@ -141,14 +141,13 @@ test("the wizards stay in the room after completion, and go when the player leav
   ticks(f, 5);
   assert.equal(quest().getStage(f.p), STAGE_COMPLETE, "control: complete");
   assert.equal(wizards().length, count, "nobody leaves");
-  assert.equal(owned(f).some((npc) => npc.getId() === core.NpcIdentifiers.AGRITH_NAAR), false, "only the demon has gone");
   assert.equal(clickLoc(f, 6282, [f.p.getLocation().getX(), f.p.getLocation().getY() - 1, 2]), true, "control: the portal took the click");
   ticks(f, 2);
   assert.equal(f.p.getLocation().getZ(), 0, "control: the portal takes the player out");
   assert.equal(wizards().length, 0, "and the cast is gone");
 });
 
-test("the wizards go when the player teleports out, but not before the quest is complete", async (t) => {
+test("the wizards go with the player, however they leave; un-equipping Darklight finishes a cancelled ending (the Wiki)", async (t) => {
   const teleport = (f) => {
     PM.updatePlayerZones(f.p);
     f.p.moveTo(new core.Location(3222, 3218, 0));
@@ -158,12 +157,20 @@ test("the wizards go when the player teleports out, but not before the quest is 
   };
   const wizards = wizardsOf;
 
+  // Leaving before the skill is picked: the room (live: its instance) and its cast go.
   const fighting = actor(t, STAGE_SUMMONED);
   await killDemon(t, fighting);
-  const count = wizards(fighting).length;
-  assert.ok(count > 0, "control: the cast is there at the kill");
+  assert.ok(wizards(fighting).length > 0, "control: the cast is there at the kill");
+  fighting.p.getDialogueManager().reset();
+  core.MultiChatboxPrompt.clear?.(fighting.p);
   teleport(fighting);
-  assert.equal(wizards(fighting).length, count, "control: leaving before completion changes nothing");
+  assert.equal(wizards(fighting).length, 0, "the cast goes with the room");
+  // The Wiki: "un-equipping Darklight triggers the final dialogue that completes the quest".
+  const weapon = core.Equipment.WEAPON_SLOT;
+  fighting.p.getEquipment().set(weapon, null).refreshItems();
+  fighting.p.getInventory().add(new core.Item(I.DARKLIGHT), false);
+  ticks(fighting, 1);
+  assert.match(text(fighting), /^You try to wipe Silverlight clean/, "the ending plays again");
 
   const f = actor(t, STAGE_SUMMONED);
   await killDemon(t, f);

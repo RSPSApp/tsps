@@ -252,6 +252,8 @@ test("Shadow of the Storm: dyeing a preset desert shirt keeps it preset", (t) =>
   f.inv.setItem(0, preset(new core.Item(I.DESERT_SHIRT, 1)));
   f.inv.setItem(1, new core.Item(I.BLACK_DYE, 1));
   itemOnItem(f, I.BLACK_DYE, I.DESERT_SHIRT);
+  // The desert shirt asks first (Shadow of the Storm capture t536: "Cancel|Dye it").
+  PM.emitInterfaceActionClick({ player: f.p, buttonId: 193 << 16, action: 1, handled: false });
   assert.equal(amount(f.inv, I.BLACK_DESERT_SHIRT, false), 0);
   assert.equal(amount(f.inv, I.BLACK_DESERT_SHIRT, true), 1);
 });
@@ -318,9 +320,10 @@ test("Shadow of the Storm: a plain dye used beside an earlier preset dye dyes, a
   f.inv.setItem(3, new core.Item(I.RED_CAPE, 1));
   itemOnSlots(f, 1, 3);
   assert.notEqual(f.messages.at(-1), PRESET_TEXT);
-  assert.equal(f.inv.getItems()[1].getId(), I.VIAL, "the used dye became the vial");
+  // Shadow of the Storm capture t543: the black cape lands in the ink's slot, the vial in the cape's.
+  assert.equal(f.inv.getItems()[3].getId(), I.VIAL, "the used dye became the vial, in the cape's slot");
   assert.equal(f.inv.getItems()[0].getId(), I.BLACK_DYE, "the preset dye is untouched");
-  assert.equal(f.inv.getItems()[3].getId(), I.BLACK_CAPE, "the cape used is dyed");
+  assert.equal(f.inv.getItems()[1].getId(), I.BLACK_CAPE, "the cape used is dyed, in the dye's slot");
   assert.equal(f.inv.getItems()[2].getId(), I.RED_CAPE, "the other cape is untouched");
   itemOnSlots(f, 2, 0);
   assert.equal(f.messages.at(-1), PRESET_TEXT, "using the preset dye itself is refused");

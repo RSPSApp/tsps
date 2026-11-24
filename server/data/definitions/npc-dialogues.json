@@ -1095087,15 +1095087,71 @@
               ]
             },
             {
-              "player": "Not yet."
-            },
-            {
-              "type": "line",
-              "speaker": "Father Reen",
-              "text": "You must hurry!",
-              "speaker_ids": [
-                893,
-                894
+              "type": "choice",
+              "options": [
+                {
+                  "text": "Not yet.",
+                  "steps": [
+                    {
+                      "player": "Not yet."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "You must hurry!",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "text": "Do you know where Silverlight is?",
+                  "steps": [
+                    {
+                      "player": "Do you know where Silverlight is?"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player is carrying Silverlight:",
+                      "id": "sotsSC",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Father Reen",
+                          "text": "Yes, you're carrying it.",
+                          "speaker_ids": [
+                            893,
+                            894
+                          ]
+                        },
+                        {
+                          "player": "Oh yes, so I am."
+                        }
+                      ]
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If Silverlight is in the player's bank:",
+                      "id": "sotsSB",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Father Reen",
+                          "text": "Perhaps it's in your bank?",
+                          "speaker_ids": [
+                            893,
+                            894
+                          ]
+                        },
+                        {
+                          "player": "Oh yes, that sounds right."
+                        }
+                      ]
+                    }
+                  ]
+                }
               ]
             },
             {
@@ -1096011,6 +1096067,18 @@
                             {
                               "type": "line",
                               "speaker": "Evil Dave",
+                              "text": "And I love that evil black sword!",
+                              "speaker_ids": [
+                                901,
+                                902,
+                                3394,
+                                4806,
+                                4807
+                              ]
+                            },
+                            {
+                              "type": "line",
+                              "speaker": "Evil Dave",
                               "text": "Okay, I'll take you through to see Denath.",
                               "speaker_ids": [
                                 901,
@@ -1096366,151 +1096434,232 @@
       ],
       "infiltrating-the-wizards-talking-to-father-reen-at-uzer": [
         {
-          "type": "line",
-          "speaker": "Father Reen",
-          "text": "Phew! It's too hot for me out here. But at least I found my way through the desert!",
-          "speaker_ids": [
-            893,
-            894
+          "type": "condition",
+          "text": "If the player lost Silverlight:",
+          "id": "sotsUL",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Father Reen",
+              "text": "Look what I found, all covered in dirt and sand. Silverlight!",
+              "speaker_ids": [
+                893,
+                894
+              ]
+            },
+            {
+              "type": "line",
+              "speaker": "Father Reen",
+              "text": "I've given it a good clean. Make sure you don't lose it again!",
+              "speaker_ids": [
+                893,
+                894
+              ]
+            },
+            {
+              "type": "end"
+            }
           ]
         },
         {
-          "type": "choice",
-          "options": [
+          "type": "condition",
+          "text": "If the player still has Silverlight:",
+          "id": "sotsUH",
+          "steps": [
             {
-              "text": "Why didn't you take the magic carpet?",
-              "steps": [
-                {
-                  "player": "Why didn't you take the magic carpet?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Father Reen",
-                  "text": "Oh dear no, you won't get me up in one of those things! What if the magic failed?",
-                  "speaker_ids": [
-                    893,
-                    894
-                  ]
-                }
+              "type": "line",
+              "speaker": "Father Reen",
+              "text": "Phew! It's too hot for me out here. But at least I found my way through the desert!",
+              "speaker_ids": [
+                893,
+                894
               ]
             },
             {
-              "text": "Why don't you change out of your heavy robes?",
-              "steps": [
+              "type": "choice",
+              "options": [
                 {
-                  "player": "Why don't you change out of your heavy robes?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Father Reen",
-                  "text": "But the rules of my order say I must wear them!",
-                  "speaker_ids": [
-                    893,
-                    894
+                  "text": "Why didn't you take the magic carpet?",
+                  "steps": [
+                    {
+                      "player": "Why didn't you take the magic carpet?"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "Oh dear no, you won't get me up in one of those things! What if the magic failed?",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    }
                   ]
                 },
                 {
-                  "player": "Perhaps the rules were made in a colder place than this?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Father Reen",
-                  "text": "Saradomin's rules are once and for all! It is not our place to question them!",
-                  "speaker_ids": [
-                    893,
-                    894
-                  ]
-                }
-              ]
-            },
-            {
-              "text": "Don't worry, soon I'll have killed the demon and we can all go home!",
-              "steps": [
-                {
-                  "player": "Don't worry, soon I'll have killed the demon and we can all go home!"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Father Reen",
-                  "text": "Summoning a demon! Those wizards make me sick! What kind of sad people would call on a supernatural being to solve their problems for them?",
-                  "speaker_ids": [
-                    893,
-                    894
-                  ]
-                },
-                {
-                  "player": "Um, isn't that like what you do when you pray?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Father Reen",
-                  "text": "What? No, that's totally different, because... um... because we always give thanks to Saradomin, even when he doesn't do anything!",
-                  "speaker_ids": [
-                    893,
-                    894
+                  "text": "Why don't you change out of your heavy robes?",
+                  "steps": [
+                    {
+                      "player": "Why don't you change out of your heavy robes?"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "But the rules of my order say I must wear them!",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    },
+                    {
+                      "player": "Perhaps the rules were made in a colder place than this?"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "Saradomin's rules are once and for all! It is not our place to question them!",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    }
                   ]
                 },
                 {
-                  "type": "line",
-                  "speaker": "Father Reen",
-                  "text": "Not like those wizards! They're so full of themselves, with their fancy robes and their rituals!",
-                  "speaker_ids": [
-                    893,
-                    894
+                  "text": "Do you know where Silverlight is?",
+                  "steps": [
+                    {
+                      "player": "Do you know where Silverlight is?"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player is carrying Silverlight:",
+                      "id": "sotsSC",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Father Reen",
+                          "text": "Yes, you're carrying it.",
+                          "speaker_ids": [
+                            893,
+                            894
+                          ]
+                        },
+                        {
+                          "player": "Oh yes, so I am."
+                        }
+                      ]
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If Silverlight is in the player's bank:",
+                      "id": "sotsSB",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Father Reen",
+                          "text": "Perhaps it's in your bank?",
+                          "speaker_ids": [
+                            893,
+                            894
+                          ]
+                        },
+                        {
+                          "player": "Oh yes, that sounds right."
+                        }
+                      ]
+                    }
                   ]
                 },
                 {
-                  "player": "Um, isn't that like..."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Father Reen",
-                  "text": "No, it's totally different!",
-                  "speaker_ids": [
-                    893,
-                    894
-                  ]
-                },
-                {
-                  "type": "line",
-                  "speaker": "Father Reen",
-                  "text": "Anyway, there must be something wrong with the way they live in their little group and separate themselves from the rest of society. It can't be healthy.",
-                  "speaker_ids": [
-                    893,
-                    894
-                  ]
-                },
-                {
-                  "player": "And that's *nothing* like you being a monk, of course."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Father Reen",
-                  "text": "No, nothing like that.",
-                  "speaker_ids": [
-                    893,
-                    894
-                  ]
-                },
-                {
-                  "type": "line",
-                  "speaker": "Father Reen",
-                  "text": "Wait, are you being sarcastic? Because you should know that sarcasm is specifically forbidden in the holy book of Saradomin!",
-                  "speaker_ids": [
-                    893,
-                    894
-                  ]
-                },
-                {
-                  "player": "Are you sure Saradomin was being serious about that bit?"
-                },
-                {
-                  "type": "line",
-                  "speaker": "Father Reen",
-                  "text": "Shut up!",
-                  "speaker_ids": [
-                    893,
-                    894
+                  "text": "Don't worry, soon I'll have killed the demon and we can all go home!",
+                  "steps": [
+                    {
+                      "player": "Don't worry, soon I'll have killed the demon and we can all go home!"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "Summoning a demon! Those wizards make me sick! What kind of sad people would call on a supernatural being to solve their problems for them?",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    },
+                    {
+                      "player": "Um, isn't that like what you do when you pray?"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "What? No, that's totally different, because... um... because we always give thanks to Saradomin, even when he doesn't do anything!",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "Not like those wizards! They're so full of themselves, with their fancy robes and their rituals!",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    },
+                    {
+                      "player": "Um, isn't that like..."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "No, it's totally different!",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "Anyway, there must be something wrong with the way they live in their little group and separate themselves from the rest of society. It can't be healthy.",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    },
+                    {
+                      "player": "And that's *nothing* like you being a monk, of course."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "No, nothing like that.",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "Wait, are you being sarcastic? Because you should know that sarcasm is specifically forbidden in the holy book of Saradomin!",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    },
+                    {
+                      "player": "Are you sure Saradomin was being serious about that bit?"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "Shut up!",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    }
                   ]
                 }
               ]
@@ -1096520,79 +1096669,139 @@
       ],
       "infiltrating-the-wizards-talking-to-the-dark-wizards-denath": [
         {
-          "type": "line",
-          "speaker": "Denath",
-          "text": "Leave me alone! I am preparing for the summoning ritual. You should make yourself a demonic sigil and practice the incantation with the other wizards.",
-          "speaker_ids": [
-            897,
-            898,
-            5090,
-            5091
+          "type": "condition",
+          "text": "Once the ritual has begun:",
+          "id": "sotsDR",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Denath",
+              "text": "Get to your place in the circle, fool! I want you to lead these dunderheads in the summoning ritual!",
+              "speaker_ids": [
+                897,
+                898,
+                5090,
+                5091
+              ]
+            },
+            {
+              "type": "choice",
+              "options": [
+                {
+                  "text": "Okay.",
+                  "steps": [
+                    {
+                      "player": "Okay."
+                    }
+                  ]
+                },
+                {
+                  "text": "I forgot the incantation.",
+                  "steps": [
+                    {
+                      "player": "I forgot the incantation."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Denath",
+                      "text": "Ignoramus! Are you incapable of even the simplest task? The incantation is Nahudu Camerinthum Caldar Agrith- Naar Tarren.",
+                      "speaker_ids": [
+                        897,
+                        898,
+                        5090,
+                        5091
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "end"
+            }
           ]
         },
         {
-          "type": "choice",
-          "options": [
+          "type": "condition",
+          "text": "Before the ritual:",
+          "id": "sotsDB",
+          "steps": [
             {
-              "text": "Isn't this, you know, wrong?",
-              "steps": [
-                {
-                  "type": "jump",
-                  "id": "mQBlhk",
-                  "steps": [
-                    {
-                      "type": "call",
-                      "branch": "jump-b4dd67730a92408e"
-                    }
-                  ]
-                }
+              "type": "line",
+              "speaker": "Denath",
+              "text": "Leave me alone! I am preparing for the summoning ritual. You should make yourself a demonic sigil and practice the incantation with the other wizards.",
+              "speaker_ids": [
+                897,
+                898,
+                5090,
+                5091
               ]
             },
             {
-              "text": "How do you know Agrith-Naar will do all this for us?",
-              "steps": [
+              "type": "choice",
+              "options": [
                 {
-                  "type": "jump",
-                  "id": "buZ7yr",
+                  "text": "Isn't this, you know, wrong?",
                   "steps": [
                     {
-                      "type": "call",
-                      "branch": "jump-2cb8ba5663992bed"
+                      "type": "jump",
+                      "id": "mQBlhk",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-b4dd67730a92408e"
+                        }
+                      ]
                     }
                   ]
-                }
-              ]
-            },
-            {
-              "text": "Why did Josef run away?",
-              "steps": [
-                {
-                  "type": "jump",
-                  "id": "Icl-Jy",
-                  "steps": [
-                    {
-                      "type": "call",
-                      "branch": "jump-4c056ff65dc84f7c"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "text": "I forgot the incantation.",
-              "steps": [
-                {
-                  "player": "I forgot the incantation."
                 },
                 {
-                  "type": "line",
-                  "speaker": "Denath",
-                  "text": "Ignoramus! Are you incapable of even the simplest task? The incantation is Nahudu Camerinthum Caldar Agrith- Naar Tarren.",
-                  "speaker_ids": [
-                    897,
-                    898,
-                    5090,
-                    5091
+                  "text": "How do you know Agrith-Naar will do all this for us?",
+                  "steps": [
+                    {
+                      "type": "jump",
+                      "id": "buZ7yr",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-2cb8ba5663992bed"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "text": "Why did Josef run away?",
+                  "steps": [
+                    {
+                      "type": "jump",
+                      "id": "Icl-Jy",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-4c056ff65dc84f7c"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "text": "I forgot the incantation.",
+                  "steps": [
+                    {
+                      "player": "I forgot the incantation."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Denath",
+                      "text": "Ignoramus! Are you incapable of even the simplest task? The incantation is Nahudu Camerinthum Caldar Agrith- Naar Tarren.",
+                      "speaker_ids": [
+                        897,
+                        898,
+                        5090,
+                        5091
+                      ]
+                    }
                   ]
                 }
               ]
@@ -1096604,7 +1096813,7 @@
         {
           "type": "line",
           "speaker": "Evil Dave",
-          "text": "Welcome, sister! Soon we'll summon the great demon! Aren't we evil?",
+          "text": "Welcome, my fellow evil-doer! Soon we'll summon the great demon! Aren't we evil?",
           "speaker_ids": [
             901,
             902,
@@ -1097895,6 +1098104,9 @@
             903,
             904
           ]
+        },
+        {
+          "player": "I'll get ready."
         }
       ],
       "infiltrating-the-wizards-talking-to-father-badden": [
@@ -1098035,6 +1098247,9 @@
             903,
             904
           ]
+        },
+        {
+          "player": "I'll get ready."
         }
       ],
       "performing-the-ritual-talking-to-patrick": [
@@ -1098052,7 +1098267,7 @@
         {
           "type": "line",
           "speaker": "Tanya",
-          "text": "Get to your place in the circle and lead the ritual! I'm so excited!",
+          "text": "Get to your place in the circle! You're holding up the ritual!",
           "speaker_ids": [
             907,
             908
@@ -1098289,7 +1098504,7 @@
             {
               "type": "line",
               "speaker": "Matthew",
-              "text": "Quick, Snotra, you've got to get those three to come back! And you'd better take Denath's sigil and find one more person to help.",
+              "text": "Quick, [player name], you've got to get those three to come back! And you'd better take Denath's sigil and find one more person to help.",
               "speaker_ids": [
                 903,
                 904
@@ -1098934,6 +1099149,52 @@
                       "player": "Now take this demonic sigil, and hurry inside!"
                     }
                   ]
+                },
+                {
+                  "text": "Do you know where Silverlight is?",
+                  "steps": [
+                    {
+                      "player": "Do you know where Silverlight is?"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player is carrying Silverlight:",
+                      "id": "sotsSC",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Father Reen",
+                          "text": "Yes, you're carrying it.",
+                          "speaker_ids": [
+                            893,
+                            894
+                          ]
+                        },
+                        {
+                          "player": "Oh yes, so I am."
+                        }
+                      ]
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If Silverlight is in the player's bank:",
+                      "id": "sotsSB",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Father Reen",
+                          "text": "Perhaps it's in your bank?",
+                          "speaker_ids": [
+                            893,
+                            894
+                          ]
+                        },
+                        {
+                          "player": "Oh yes, that sounds right."
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             }
@@ -1099271,25 +1099532,119 @@
       ],
       "performing-the-ritual-talking-to-father-reen-inside-the-throne-room": [
         {
-          "type": "line",
-          "speaker": "Father Reen",
-          "text": "So Agrith-Naar was trapped in our dimension all along, and didn't have any influence until the wizards un- summoned him?",
-          "speaker_ids": [
-            893,
-            894
+          "type": "condition",
+          "text": "If the player lost Silverlight:",
+          "id": "sotsTL",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Father Reen",
+              "text": "You dropped Silverlight, you fool! Now is not the time to lose the only sword that can kill Agrith-Naar!",
+              "speaker_ids": [
+                893,
+                894
+              ]
+            },
+            {
+              "type": "line",
+              "speaker": "Father Reen",
+              "text": "Now don't lose it again!",
+              "speaker_ids": [
+                893,
+                894
+              ]
+            },
+            {
+              "type": "end"
+            }
           ]
         },
         {
-          "type": "line",
-          "speaker": "Father Reen",
-          "text": "I thought slaying him would make the world better, but now we're fighting to return it to how it was before!",
-          "speaker_ids": [
-            893,
-            894
+          "type": "condition",
+          "text": "If the player still has Silverlight:",
+          "id": "sotsTH",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Father Reen",
+              "text": "So Agrith-Naar was trapped in our dimension all along, and didn't have any influence until the wizards un- summoned him?",
+              "speaker_ids": [
+                893,
+                894
+              ]
+            },
+            {
+              "type": "line",
+              "speaker": "Father Reen",
+              "text": "I thought slaying him would make the world better, but now we're fighting to return it to how it was before!",
+              "speaker_ids": [
+                893,
+                894
+              ]
+            },
+            {
+              "player": "Perhaps we can't blame demons for everything that's wrong with the world. Sometimes it's just not that simple."
+            },
+            {
+              "type": "choice",
+              "options": [
+                {
+                  "text": "I'll be back.",
+                  "steps": [
+                    {
+                      "player": "I'll be back."
+                    }
+                  ]
+                },
+                {
+                  "text": "Do you know where Silverlight is?",
+                  "steps": [
+                    {
+                      "player": "Do you know where Silverlight is?"
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If the player is carrying Silverlight:",
+                      "id": "sotsSC",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Father Reen",
+                          "text": "Yes, you're carrying it.",
+                          "speaker_ids": [
+                            893,
+                            894
+                          ]
+                        },
+                        {
+                          "player": "Oh yes, so I am."
+                        }
+                      ]
+                    },
+                    {
+                      "type": "condition",
+                      "text": "If Silverlight is in the player's bank:",
+                      "id": "sotsSB",
+                      "steps": [
+                        {
+                          "type": "line",
+                          "speaker": "Father Reen",
+                          "text": "Perhaps it's in your bank?",
+                          "speaker_ids": [
+                            893,
+                            894
+                          ]
+                        },
+                        {
+                          "player": "Oh yes, that sounds right."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
           ]
-        },
-        {
-          "player": "Perhaps we can't blame demons for everything that's wrong with the world. Sometimes it's just not that simple."
         }
       ],
       "summoning-agrith-naar": [
@@ -1099691,6 +1100046,65 @@
           "speaker_ids": [
             893,
             894
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "I'm trying!",
+              "steps": [
+                {
+                  "player": "I'm trying!"
+                }
+              ]
+            },
+            {
+              "text": "Do you know where Silverlight is?",
+              "steps": [
+                {
+                  "player": "Do you know where Silverlight is?"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player is carrying Silverlight:",
+                  "id": "sotsSC",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "Yes, you're carrying it.",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    },
+                    {
+                      "player": "Oh yes, so I am."
+                    }
+                  ]
+                },
+                {
+                  "type": "condition",
+                  "text": "If Silverlight is in the player's bank:",
+                  "id": "sotsSB",
+                  "steps": [
+                    {
+                      "type": "line",
+                      "speaker": "Father Reen",
+                      "text": "Perhaps it's in your bank?",
+                      "speaker_ids": [
+                        893,
+                        894
+                      ]
+                    },
+                    {
+                      "player": "Oh yes, that sounds right."
+                    }
+                  ]
+                }
+              ]
+            }
           ]
         }
       ],

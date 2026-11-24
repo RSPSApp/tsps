@@ -131,13 +131,15 @@ async function main(): Promise<void> {
     const menu: SimpleMenuEntry[] = [
         { option: "Trade with", target: "<col=ffffff>Pal<col=00ff00>  (level-3)", targetType: MenuTargetType.PLAYER, playerServerId: 101 },
         { option: "Use", target: "<col=ff9040>Coins</col><col=ffffff> -> <col=ffffff>Pal<col=00ff00>  (level-3)", targetType: MenuTargetType.PLAYER, playerServerId: 101 },
+        { option: "Cast", target: "<col=00ff00>Wind Strike</col><col=ffffff> -> <col=ffffff>Pal<col=00ff00>  (level-3)", targetType: MenuTargetType.PLAYER, playerServerId: 101 },
         { option: "Trade with", target: "<col=ffffff>Nobody<col=00ff00>  (level-3)", targetType: MenuTargetType.PLAYER, playerServerId: 999 },
         { option: "Walk here", target: "" },
     ];
     let out = plugin.transformMenuEntries(menu, world);
     assert.equal(out[0].target, "<col=00c853>Pal<col=00ff00>  (level-3)");
     assert.equal(out[1].target, "<col=ff9040>Coins</col><col=ffffff> -> <col=00c853>Pal<col=00ff00>  (level-3)");
-    assert.equal(out[2], menu[2], "unknown players are left alone");
+    assert.equal(out[2].target, "<col=00ff00>Wind Strike</col><col=ffffff> -> <col=00c853>Pal<col=00ff00>  (level-3)");
+    assert.equal(out[3], menu[3], "unknown players are left alone");
     assert.equal(decorateTarget("Pal", 0xff0000), "<col=ff0000>Pal");
     set("colorPlayerMenu", false);
     assert.equal(plugin.transformMenuEntries(menu, world), menu);

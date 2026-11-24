@@ -34,6 +34,9 @@ Config group `playerindicators`, with RuneLite's keys.
 
 ## Differences from RuneLite
 
+- Off on fresh installs (RuneLite turns it on), as NPC Indicators is here.
+- Only players on your level are highlighted.
+
 - No party members: the client has no party.
 - No friends chat or clan rank icons next to names or in menus.
 - "Walk here" over a player keeps its colour.

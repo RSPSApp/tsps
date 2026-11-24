@@ -218,6 +218,28 @@ async function main() {
         assert.equal(input.isCameraDragging(), false);
     }
 
+    // Review of #6755: frames ending mid-drag, with the cursor outside, don't move the origin
+    // (mouseX is clamped to the edge outside the canvas, and -1 just after it leaves).
+    {
+        const { input } = setup(false);
+        const frame = () => { input.consumeCameraDrag(); input.onFrameEnd(); };
+        mouse("mousedown", 1, 630, 100);
+        frame();
+        listeners.get("mouseleave")!({});
+        frame();
+        outsideMouse("mousemove", 1, 650, 100, 4);
+        assert.equal(input.getDeltaCameraX(), -20, "the first move after leaving measures from the press");
+        for (const x of [651, 652, 653]) {
+            frame();
+            outsideMouse("mousemove", 1, x, 100, 4);
+            assert.equal(input.getDeltaCameraX(), -1, "one pixel per frame turns one pixel");
+        }
+        frame();
+        mouse("mousemove", 1, 630, 100);
+        assert.equal(input.getDeltaCameraX(), 23, "coming back measures from the last outside move");
+        mouse("mouseup", 1, 630, 100);
+    }
+
     console.log("right-drag-camera ok");
 }
 

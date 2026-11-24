@@ -1510,10 +1510,8 @@ export class InputManager {
             this._dragStartX = this.mouseX;
             this._dragStartY = this.mouseY;
         }
-        if (this.isCameraDragging()) {
-            this.mouseWheelX = this.mouseX;
-            this.mouseWheelY = this.mouseY;
-        }
+        // The camera drag origin isn't reset here: every move sets it (dragCamera, the touch drag),
+        // and mouseX is clamped to the canvas or -1 once the cursor leaves it.
 
         // Clear per-frame deltas
         this.deltaMouseX = 0;

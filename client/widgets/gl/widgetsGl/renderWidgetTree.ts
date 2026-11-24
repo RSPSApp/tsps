@@ -3207,7 +3207,15 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 // selected items render with outline=2 (white).
                 const itemOutline =
                     (isSelectedHere ? Math.max(2, borderType | 0) : borderType | 0) | 0;
-                const itemTex = tc.getItemIconById(itemId, qty, itemOutline, spriteShadow, qtyMode);
+                const itemTex = tc.getItemIconById(
+                    itemId,
+                    qty,
+                    itemOutline,
+                    spriteShadow,
+                    qtyMode,
+                    (w.width ?? 36) | 0,
+                    (w.height ?? 32) | 0,
+                );
                 if (itemTex) {
                     glr.drawTexture(
                         itemTex,

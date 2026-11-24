@@ -215,6 +215,8 @@ export class TextureCache {
         outline?: number,
         shadow?: number,
         quantityMode?: number,
+        width?: number,
+        height?: number,
     ) => HTMLCanvasElement | undefined;
 
     constructor(
@@ -427,6 +429,8 @@ export class TextureCache {
         outline: number = 0,
         shadow: number = 0,
         quantityMode: number = 2,
+        width: number = 36,
+        height: number = 32,
     ) {
         // key matches UserComparator7.getItemSprite var6 packing.
         const contentKey = `${CustomItemRegistry.revision}:${CustomModelRegistry.revision}:${getDefinitionArchiveKey()}`;
@@ -437,10 +441,15 @@ export class TextureCache {
         }
         let mode = quantityMode | 0;
         const qty = quantity | 0;
-        if (qty === -1) mode = 0;
+        // A component larger than the 36x32 icon gets a sprite drawn at its own size, with no
+        // stack number; smaller ones use the standard icon.
+        const spriteW = Math.max(36, width | 0);
+        const spriteH = Math.max(32, height | 0);
+        const sized = spriteW !== 36 || spriteH !== 32;
+        if (sized || qty === -1) mode = 0;
         else if (mode === 2 && qty !== 1) mode = 1;
 
-        const key = `item:${itemId | 0}:${qty}:${outline | 0}:${shadow | 0}:${mode}`;
+        const key = `item:${itemId | 0}:${qty}:${outline | 0}:${shadow | 0}:${mode}${sized ? `:${spriteW}x${spriteH}` : ""}`;
         const cached = this.glr.getTexture(key);
         if (cached) {
             this.touchItemIcon(key);
@@ -448,7 +457,9 @@ export class TextureCache {
         }
         try {
             if (this.itemIconCanvas) {
-                const can = this.itemIconCanvas(itemId, qty, outline | 0, shadow | 0, mode);
+                const can = sized
+                    ? this.itemIconCanvas(itemId, qty, outline | 0, shadow | 0, mode, spriteW, spriteH)
+                    : this.itemIconCanvas(itemId, qty, outline | 0, shadow | 0, mode);
                 if (can) {
                     const tex = this.glr.createTextureFromCanvas(key, can);
                     this.touchItemIcon(key);

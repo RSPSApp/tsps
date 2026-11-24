@@ -23,6 +23,9 @@ export type ItemIconRenderOptions = {
     outline?: number;
     shadow?: number;
     quantityMode?: number;
+    /** The sprite's size, when not the standard 36x32 (never smaller than that). */
+    width?: number;
+    height?: number;
 };
 
 export class ItemIconRenderer {
@@ -71,6 +74,14 @@ export class ItemIconRenderer {
         const outline = (options.outline ?? 0) | 0;
         const shadow = (options.shadow ?? 0) | 0;
         const qtyModeRaw = (options.quantityMode ?? 2) | 0;
+        // A sprite of any other size than 36x32 is drawn for that size from the item's model,
+        // and never carries a stack number.
+        const width = Math.max(ItemIconRenderer.OSRS_SPRITE_W, (options.width ?? 0) | 0);
+        const height = Math.max(ItemIconRenderer.OSRS_SPRITE_H, (options.height ?? 0) | 0);
+        if (width !== ItemIconRenderer.OSRS_SPRITE_W || height !== ItemIconRenderer.OSRS_SPRITE_H) {
+            const sized = this.getItemSpriteEntry(itemId | 0, qty, outline, shadow, 0, false, 512, width, height);
+            return sized ? this.pixelsToCanvas(sized.pixels, width, height) : undefined;
+        }
         const qtyMode = this.normalizeQuantityMode(qty, qtyModeRaw);
         const key = this.getItemSpriteKey(itemId | 0, qty, outline, shadow, qtyMode);
 
@@ -146,9 +157,11 @@ export class ItemIconRenderer {
         return font;
     }
 
-    private pixelsToCanvas(pixels: Int32Array): HTMLCanvasElement {
-        const sw = ItemIconRenderer.OSRS_SPRITE_W;
-        const sh = ItemIconRenderer.OSRS_SPRITE_H;
+    private pixelsToCanvas(
+        pixels: Int32Array,
+        sw: number = ItemIconRenderer.OSRS_SPRITE_W,
+        sh: number = ItemIconRenderer.OSRS_SPRITE_H,
+    ): HTMLCanvasElement {
 
         const canvas = document.createElement("canvas");
         canvas.width = sw;
@@ -205,8 +218,20 @@ export class ItemIconRenderer {
         font.draw(ctx, text, 0, 9, color);
     }
 
-    private blitTransBgAt(dst: Int32Array, src: Int32Array) {
+    private blitTransBgAt(dst: Int32Array, src: Int32Array, dstWidth?: number) {
         // Equivalent to SpritePixels.drawTransBgAt(0, 0) with 0 treated as transparent.
+        const srcWidth = ItemIconRenderer.OSRS_SPRITE_W;
+        if (dstWidth !== undefined && dstWidth !== srcWidth && src.length === srcWidth * ItemIconRenderer.OSRS_SPRITE_H) {
+            // A standard 36x32 overlay drawn at the top-left of a larger sprite.
+            const rows = Math.min(ItemIconRenderer.OSRS_SPRITE_H, (dst.length / dstWidth) | 0);
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < srcWidth; x++) {
+                    const rgb = src[y * srcWidth + x] | 0;
+                    if (rgb !== 0) dst[y * dstWidth + x] = rgb;
+                }
+            }
+            return;
+        }
         const len = Math.min(dst.length, src.length);
         for (let i = 0; i < len; i++) {
             const rgb = src[i] | 0;
@@ -222,7 +247,10 @@ export class ItemIconRenderer {
         quantityMode: number,
         var5: boolean,
         scale: number = 512,
+        sw: number = ItemIconRenderer.OSRS_SPRITE_W,
+        sh: number = ItemIconRenderer.OSRS_SPRITE_H,
     ): { pixels: Int32Array; isStackable: boolean; canvas?: HTMLCanvasElement } | undefined {
+        const standardSize = sw === ItemIconRenderer.OSRS_SPRITE_W && sh === ItemIconRenderer.OSRS_SPRITE_H;
         // Widgets and the plugin createSprite API share this boundary. The
         // private model loader also holds same-id models across content swaps.
         const contentKey = `${CustomItemRegistry.revision}:${CustomModelRegistry.revision}:${getDefinitionArchiveKey()}`;
@@ -232,7 +260,7 @@ export class ItemIconRenderer {
             this.contentKey = contentKey;
         }
         const key = this.getItemSpriteKey(itemId, quantity, outline, shadow, quantityMode);
-        if (!var5 && scale === 512) {
+        if (!var5 && scale === 512 && standardSize) {
             const cached = this.itemSpriteCache.get(key);
             if (cached) return cached;
         }
@@ -279,13 +307,11 @@ export class ItemIconRenderer {
             overlayPixels = ov.pixels;
         }
 
-        const sw = ItemIconRenderer.OSRS_SPRITE_W;
-        const sh = ItemIconRenderer.OSRS_SPRITE_H;
         const base = new Int32Array(sw * sh);
 
         // Placeholder background is drawn BEFORE the model.
         if (overlayMode === "placeholderTemplate" && overlayPixels) {
-            this.blitTransBgAt(base, overlayPixels);
+            this.blitTransBgAt(base, overlayPixels, sw);
         }
 
         // Model is drawn onto the sprite (transparent pixels leave background intact).
@@ -298,7 +324,7 @@ export class ItemIconRenderer {
 
         // NotedId overlay is drawn AFTER the model, BEFORE outline/shadow.
         if (overlayMode === "notedId" && overlayPixels) {
-            this.blitTransBgAt(base, overlayPixels);
+            this.blitTransBgAt(base, overlayPixels, sw);
         }
 
         // Outline/shadow post-process.
@@ -309,7 +335,7 @@ export class ItemIconRenderer {
 
         // NoteTemplate overlay is drawn AFTER outline/shadow.
         if (overlayMode === "noteTemplate" && overlayPixels) {
-            this.blitTransBgAt(spr.pixels, overlayPixels);
+            this.blitTransBgAt(spr.pixels, overlayPixels, sw);
         }
 
         const entry = { pixels: spr.pixels, isStackable } as {
@@ -317,7 +343,7 @@ export class ItemIconRenderer {
             isStackable: boolean;
             canvas?: HTMLCanvasElement;
         };
-        if (!var5 && scale === 512) this.cacheItemSprite(key, entry);
+        if (!var5 && scale === 512 && standardSize) this.cacheItemSprite(key, entry);
         return entry;
     }
 
@@ -370,8 +396,9 @@ export class ItemIconRenderer {
         const osrsExact = sw === 36 && sh === 32;
         // No extra vertical scaling
         const yScaleFix = 1.0;
-        const centerX = osrsExact ? 16 : (sw / 2) | 0;
-        const centerY = osrsExact ? 16 : (sh / 2) | 0;
+        // OSRS centres the model at half the sprite's height on both axes, whatever its size.
+        const centerX = osrsExact ? 16 : sh >> 1;
+        const centerY = osrsExact ? 16 : sh >> 1;
         Rasterizer3D.setViewport(centerX, centerY);
         for (let i = 0; i < zbuf.length; i++) zbuf[i] = 1e30;
 
@@ -382,7 +409,8 @@ export class ItemIconRenderer {
         const var3 = (it.zan2d | 0) & 2047;
         const var4 = (it.xan2d | 0) & 2047;
         const var5 = it.offsetX2d | 0;
-        const zoom2dRaw = (it.zoom2d | 0) as number;
+        // A sprite wider than 36 brings the model closer in proportion (zoom * 32 / width).
+        const zoom2dRaw = (sw !== 36 ? (((it.zoom2d | 0) * 32) / sw) | 0 : it.zoom2d | 0) as number;
         const zoomMult = typeof opts?.zoomMultiplier === "number" ? opts.zoomMultiplier : 1;
         const zoom2d = Math.max(1, Math.floor(zoom2dRaw * zoomMult));
         const var6 =
@@ -409,7 +437,7 @@ export class ItemIconRenderer {
         const cxv = new Int32Array(vc);
         const cyv = new Int32Array(vc);
         // Use OSRS projection scaling for exact 36x32, else scale with output size
-        const zoom3d = opts?.projectionScale ?? (osrsExact ? 512 : ((512 * sw) / 32) | 0);
+        const zoom3d = opts?.projectionScale ?? 512;
 
         for (let i = 0; i < vc; i++) {
             let vx = model.verticesX[i] | 0;

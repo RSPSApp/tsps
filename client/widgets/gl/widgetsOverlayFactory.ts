@@ -248,6 +248,8 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                         outline?: number,
                                         shadow?: number,
                                         quantityMode?: number,
+                                        width?: number,
+                                        height?: number,
                                     ) => {
                                         // Use ItemIconRenderer to render item icons. Create it lazily:
                                         // loaders can become ready after the overlay is built (WebGPU
@@ -270,6 +272,8 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                                 outline,
                                                 shadow,
                                                 quantityMode,
+                                                width,
+                                                height,
                                             });
                                         }
                                         return undefined;

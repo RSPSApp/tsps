@@ -94,7 +94,7 @@ ends silently at the blast or death. The separate re-infection chat line is defe
 | Behaviour | RSProx recording and ticks |
 | --- | --- |
 | First infection, re-infection, yawns and expiry | [227/1764](https://rsprox.net/download/1764), 11468–11508 |
-| Two spores on one tick | [227/1875](https://rsprox.net/download/1875), 15004 |
+| Two spores burst in one tick, with one infection message to the recorded player | [227/1875](https://rsprox.net/download/1875), 15004 |
 | Tick-30 proximity | [227/554](https://rsprox.net/download/554), 16239, and [237/1148](https://rsprox.net/download/1148), 5178 |
 | Phosani's totem charge and blast, and shared final blast | [237/1148](https://rsprox.net/download/1148), 6472–6478, and [227/1764](https://rsprox.net/download/1764), 10175–10179 |
 | Drowsiness at death | [227/1875](https://rsprox.net/download/1875), 22372 |
@@ -133,6 +133,7 @@ counts once for each player credited.
 - Claws' exact tile pattern: about one tile in each 3x3 block, as many as captured; Phosani's are thick within two tiles of each player.
 - Parasite and husk max hits for Phosani's use the normal ones.
 - Spores don't spread between players.
+- A single player who sets off several spores in one tick is infected once. In 227/1875 at 15004 the second spore was six tiles from the recorded player, so the capture does not establish how several spores triggered by one player are grouped.
 - The shared Nightmare uses the tick-30 proximity rule seen in Phosani's dream. There was no recorded shared-fight case with the player close enough.
 - The blast-form burst gives no new infection. The one nearby case in 237/1148 at 6478 had a player who was already drowsy.
 - Phosani's yawns still drain 6 prayer. A formula of 5 plus one per 20 current prayer fits the captures allowing for ordinary prayer drain, but the formula is an estimate.

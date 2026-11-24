@@ -12,7 +12,7 @@ const { CachePipeline } = require("../dist/game/cache/CachePipeline");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const Chatter = require("../plugins/npcs/NpcChatter.plugin");
 const SKIP = require("../plugins/npcs/data/npc-chatter.json");
-const { load, entryFor, sampleGap, tick, chatterById, live, schedule, setRandom, reset, readDefinitions, setCore } = Chatter._test;
+const { load, entryFor, sampleGap, gestureFor, tick, chatterById, live, schedule, setRandom, reset, readDefinitions, setCore } = Chatter._test;
 
 let core;
 let definitions;
@@ -24,9 +24,20 @@ before(async () => {
   load(definitions);
 });
 
+/** A seeded generator (mulberry32), so every run draws the same gaps and lines. */
+function seeded(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 beforeEach(() => {
   reset();
-  setRandom(null);
+  setRandom(seeded(6754));
 });
 
 function entry(name) {
@@ -102,12 +113,48 @@ test("town criers announce only current news; no line is blank; a hit's sound is
   }
 });
 
+test("the Blast Furnace foreman and pre-launch crier banners are left out", () => {
+  assert.equal(chatterById.has(core.CacheDefinitions.getNpcId("blast_furnace_instructor")), false);
+  for (const name of ["pmod_town_crier_draynor", "pmod_town_crier_varrock", "pmod_town_crier_east_ardoyne"]) {
+    const texts = chatterById.get(core.CacheDefinitions.getNpcId(name)).lines.map((line) => line.text);
+    assert.ok(texts.includes("Hardcore Worlds are now live!"), name);
+    assert.ok(!texts.some((text) => /open November 4th|begins with two new quests/.test(text)), name);
+  }
+});
+
+test("sheep and calves bleat and moo with their captured sounds", (t) => {
+  assert.deepEqual(entry("sheepunsheered").lines[0].sound, { id: 2053, range: 5 }, "the Lumbridge flock");
+  assert.deepEqual(entry("calf").lines[0].sound, { id: 3044, range: 10 });
+  const sheep = npc(core.CacheDefinitions.getNpcId("sheepunsheered"), { at: [3200, 3266, 0] });
+  const sounds = run(t, [sheep], 1, 300);
+  assert.ok(sheep.said.length >= 5);
+  assert.equal(sounds.length, sheep.said.length);
+  assert.ok(sounds.every((sound) => sound.soundId === 2053));
+});
+
+test("a town crier alternates ringing his bell and scratching his head, as live does", (t) => {
+  const line = entry("pmod_town_crier_draynor").lines.find((l) => l.text === "Hardcore Worlds are now live!");
+  assert.ok(line.gestures?.length >= 2, "the line alternates gestures");
+  const crier = npc(core.CacheDefinitions.getNpcId("pmod_town_crier_draynor"), { at: [3095, 3249, 0] });
+  const sounds = run(t, [crier], 1, 4000);
+  const seqs = new Set(crier.played);
+  const gestureSeqs = new Set(line.gestures.map((g) => g.seq));
+  assert.ok([...gestureSeqs].every((seq) => seqs.has(seq)), `played ${[...seqs]}`);
+  assert.ok(sounds.length > 0 && sounds.length < crier.said.length, "only the head scratch has an area sound");
+  assert.ok(sounds.every((sound) => sound.soundId === 3816));
+  assert.deepEqual(gestureFor({ text: "x", seq: 5, weight: 1 }), { text: "x", seq: 5, weight: 1 }, "a line's own gesture");
+});
+
 test("a gap stays between the 5th and 95th percentiles, centred on the median", () => {
   const gap = entry("duck").gap;
-  const draws = Array.from({ length: 4000 }, () => sampleGap(gap)).sort((a, b) => a - b);
+  // Evenly spread draws (i + 0.5) / n: the sample's median is the quantile curve's, with no luck in it.
+  const n = 4000;
+  let i = 0;
+  setRandom(() => (i++ + 0.5) / n);
+  const draws = Array.from({ length: n }, () => sampleGap(gap)).sort((a, b) => a - b);
   assert.ok(draws[0] >= gap[0] && draws[draws.length - 1] <= gap[4]);
   const median = draws[draws.length >> 1];
-  assert.ok(Math.abs(median - gap[2]) <= 3, `median ${median} vs captured ${gap[2]}`);
+  assert.ok(Math.abs(median - gap[2]) <= 1, `median ${median} vs captured ${gap[2]}`);
   assert.equal(sampleGap([8, 8, 8, 8, 8]), 8, "a fixed spacing comes out exact");
 });
 

@@ -59,9 +59,9 @@ async function acquire(f){
   await input(f,{type:'object_option',id:table.getId(),x:1802,y:3503,action:'Search'},()=>!!f.p.getDialogueManager().getCurrent());
   const first=menu(f,['Golovanova seeds (level 34)','Bologano seeds (level 54)','Logavano seeds (level 74)']);
   await input(f,{type:'dialogue_continue',widgetId:core.OptionDialogue.OPTIONS_WIDGET_ID,childIndex:1},()=>f.p.getDialogueManager().getCurrent()!==first);
-  menu(f,['Take 100','Take 1000','Take 10000']);
+  assert.ok(f.p.getEnteredAmountAction(),'the seed table asks how many (#6474)');
   const id=Data.itemId('Golovanova seed'), def=core.ItemDefinition.forId(id); assert.match(def.getName(),/^Golovanova seed$/i); assert.equal(def.isNoted(),false);
-  await input(f,{type:'dialogue_continue',widgetId:core.OptionDialogue.OPTIONS_WIDGET_ID,childIndex:1},()=>f.p.getInventory().getAmount(id)===100);
+  await input(f,{type:'dialogue_amount',amount:100},()=>f.p.getInventory().getAmount(id)===100);
   assert.equal(f.p.getInventory().getAmount(id),100);
 }
 async function enter(f,t){

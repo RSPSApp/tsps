@@ -6,7 +6,8 @@
  * - The entry is staged as recorded (rsprox, data/tzhaar-ket-rak.json): the screen fades as the
  *   challenge is picked, the player lands in the arena 3 ticks later, the screen clears at 6 and
  *   the Jads come at 18, each challenge's on its own tiles.
- * - The Jads fight as the Inferno's (Monsters.Inferno.js), their first attacks a few ticks apart.
+ * - The Jads fight as the Inferno's (Monsters.Inferno.js), each first attacking on its own recorded
+ *   tick: clockwise round the arena from the northernmost, spread over the 8-tick attack cycle.
  *   Each brings five Yt-HurKot at half health: they walk to it and heal it until drawn off, do
  *   not come again, and go when it dies.
  * - The last Jad down completes it: the completion lines at once, the player back by
@@ -70,10 +71,9 @@ class Challenge {
   }
 
   spawnJads() {
-    const { data } = Common;
     this.startTick = Common.cycle();
     const layout = this.layout();
-    for (let index = 0; index < layout.length; index++) this.spawnJad(index, data.jadFirstAttackTicks + index * data.jadStaggerTicks);
+    for (let index = 0; index < layout.length; index++) this.spawnJad(index, layout[index][3]);
   }
 
   spawnJad(index, attackDelay) {

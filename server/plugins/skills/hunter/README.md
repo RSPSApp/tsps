@@ -106,6 +106,9 @@ butterflies and moths 95, 1634, 3279, 4051; herbiboar 127, 552, 554, 1858; bird 
 - A catch shows the creature's trapping loc (the cache's `_full_` loc renamed `_trapping_`, or
   `_catching_` for saplings; box traps add the side the creature came from) and a miss the failing
   loc, with the trap's sound; the full or failed loc follows two ticks later. No message is sent.
+  Since the 7 October 2026 update a missed net trap then stands as the cache's `hunting_sapling_up_reset_<colour>`
+  and `hunting_sapling_net_reset_<colour>` locs (Dismantle, Reset) for the usual 100 ticks before it collapses
+  (rsprox 241/911545, 242/911710, 242/912180). Dismantle returns the rope and net; Reset sets the trap again.
 - Check and Dismantle: the trap's own animation (5212, or 5207 for snares and nets), then two ticks
   later sound 2632, `You dismantle the trap.` and `You've caught a <creature>.` (spam). Pitfalls
   send the dismantle line at once and `You've caught a <creature>!` a tick later. Collapses:

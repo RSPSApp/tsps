@@ -257,6 +257,24 @@ test("auto-weed unlock costs once and both free toggles work even with a full in
     await purchase(f, 14);
     assert.equal(f.score().points, 0);
 });
+// Issue 6474 item 6: the client builds the list on open and again when varp omnishop_redraw changes
+// (client script 7140), and script 4203 swaps the unlock row for the toggle row on farming_blockweeds.
+test("auto-weed purchases redraw the shop list after the varbit changes; others do not", async (t) => {
+    const f = shopper(t, { points: 100 });
+    const sender = () => f.p.getPacketSender();
+    const redraw = () => sender().getVarp(core.CacheDefinitions.getVarpId("omnishop_redraw"));
+    const blockweeds = () => sender().getVarbit(core.CacheDefinitions.getVarbitId("farming_blockweeds"));
+    f.open();
+    const start = redraw();
+    await purchase(f, 4, 3);
+    assert.equal(redraw(), start, "a compost purchase does not redraw");
+    await purchase(f, 14);
+    assert.deepEqual([blockweeds(), redraw()], [2, start + 1], "unlocking: on, and the list told to redraw");
+    await purchase(f, 15);
+    assert.deepEqual([blockweeds(), redraw()], [1, start + 2], "toggled off");
+    await purchase(f, 15);
+    assert.deepEqual([blockweeds(), redraw()], [2, start + 3], "toggled on");
+});
 test("stale, remote, mid-trade, dead and relogged native purchases cannot grant items", async (t) => {
     for (const mode of ["closed", "remote", "trade", "dead", "state"]) {
         const f = shopper(t);

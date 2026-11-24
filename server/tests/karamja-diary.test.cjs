@@ -42,16 +42,18 @@ before(async () => {
 
 function playerAt(x, y, z = 0, { cape = null, privateArea = null } = {}) {
   const attributes = new Map();
+  const messages = [];
   const sender = { sendVarbit() { return sender; } };
   return {
     attributes,
+    messages,
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => new core.Location(x, y, z),
     getPrivateArea: () => privateArea,
     isPlayer: () => true,
     isRegistered: () => true,
-    sendMessage() {},
+    sendMessage(text) { messages.push(text); },
     getPacketSender: () => sender,
     getEquipment: () => ({ get: (slot) => cape == null ? null : { getId: () => cape, slot } }),
   };
@@ -72,6 +74,7 @@ test("five plantation bananas count; other banana trees do not", () => {
   emit("banana-tree:picked", { player, object: tree });
   assert.ok(done(player).has(T.BANANA_TASK));
   assert.equal(player.getAttribute("karamja-diary:bananas-picked"), 5);
+  assert.equal(player.messages.filter((text) => text === "Well done! A Karamja task has been updated.").length, 4);
 
   const ape = playerAt(2700, 2700);
   const apeTree = { getLocation: () => new core.Location(2700, 2700, 0) };
@@ -103,9 +106,18 @@ test("five Karamja seaweed pickups count; another item or island does not", () =
   for (let i = 0; i < 4; i++) {
     emit("ground-items:taken", { player, groundItem: pile, source: "pickup", itemId: core.ItemIdentifiers.SEAWEED, amount: 1 });
     assert.equal(done(player).has(T.SEAWEED_TASK), false);
+    // rsprox 73: each of the first four pickups prints this line
+    assert.deepEqual(player.messages, Array(i + 1).fill("Well done! A Karamja task has been updated."));
   }
   emit("ground-items:taken", { player, groundItem: pile, source: "pickup", itemId: core.ItemIdentifiers.SEAWEED, amount: 1 });
   assert.ok(done(player).has(T.SEAWEED_TASK));
+  // the fifth completes the task: the completion line replaces the update line
+  assert.equal(player.messages.filter((text) => text.includes("task has been updated")).length, 4);
+  assert.match(player.messages.at(-1), /You have completed an easy task in the Karamja area/);
+  // once done, further pickups say nothing
+  const before = player.messages.length;
+  emit("ground-items:taken", { player, groundItem: pile, source: "pickup", itemId: core.ItemIdentifiers.SEAWEED, amount: 1 });
+  assert.equal(player.messages.length, before);
 
   const entrana = playerAt(2804, 3382);
   const entranaPile = { getPosition: () => new core.Location(2804, 3382, 0) };

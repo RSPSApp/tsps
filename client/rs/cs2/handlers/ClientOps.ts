@@ -1,6 +1,7 @@
 /**
  * Client operations: stats, inventory, world info, viewport, camera, settings
  */
+import { clearTextMacros, setTextMacro } from "../../font/textTemplates";
 import { PostProcessedObjTypeLoader } from "../../config/objtype/ObjTypeLoader";
 import {
     ClientState,
@@ -68,7 +69,6 @@ function normalizeUiZoomPercent(percent: number, minPercent: number): number {
 }
 
 /** Rev 241 translations_set/clear: key -> text. */
-const TRANSLATIONS = new Map<string, string>();
 
 /** ^gameoption_chat_timestamps: the mode of setting 119 "Chat timestamps" (0 off, 1 server time, 2 local time). */
 const GAMEOPTION_CHAT_TIMESTAMPS = 10;
@@ -1571,15 +1571,17 @@ export function registerClientOps(handlers: HandlerMap): void {
         ctx.cs2Vm.inputDialogString = "";
     });
 
-    // translations_set(key, string) / translations_clear (rev 241): the client's translation
-    // table. This client shows the English text, so they are kept but unused.
+    // 3228 / 3229 (named translations_set / translations_clear in the rev 242 command list): a
+    // text macro. Text drawn afterwards places the value wherever it says `@key@`.
     handlers.set(Opcodes.TRANSLATIONS_SET, (ctx) => {
         const text = ctx.stringStack[--ctx.stringStackSize];
         const key = ctx.stringStack[--ctx.stringStackSize];
-        TRANSLATIONS.set(String(key), String(text));
+        setTextMacro(String(key), String(text));
+        ctx.widgetManager?.invalidateAll?.();
     });
-    handlers.set(Opcodes.TRANSLATIONS_CLEAR, () => {
-        TRANSLATIONS.clear();
+    handlers.set(Opcodes.TRANSLATIONS_CLEAR, (ctx) => {
+        clearTextMacros();
+        ctx.widgetManager?.invalidateAll?.();
     });
 
     // client_version()(int, int): the revision and its minor build (rev 241).

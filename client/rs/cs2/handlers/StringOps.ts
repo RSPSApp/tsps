@@ -159,8 +159,9 @@ export function registerStringOps(handlers: HandlerMap): void {
     // === Text formatting ===
     handlers.set(Opcodes.ESCAPE, (ctx) => {
         const str = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        // The client's escapeBrackets: <lt> and <gt>, which the fonts draw as < and >.
-        ctx.pushString(str.replace(/[<>]/g, (c: string) => (c === "<" ? "<lt>" : "<gt>")));
+        // The client's escapeBrackets: <lt>, <gt> and <at>, which the fonts draw as <, > and @
+        // (an unescaped @name@ is a text macro).
+        ctx.pushString(str.replace(/[<>@]/g, (c: string) => (c === "<" ? "<lt>" : c === ">" ? "<gt>" : "<at>")));
     });
 
     handlers.set(Opcodes.REMOVETAGS, (ctx) => {

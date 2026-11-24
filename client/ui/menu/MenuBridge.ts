@@ -136,6 +136,8 @@ export function osrsTargetLabel(e: OsrsMenuEntry, opts: TargetLabelOptions = {})
                 return 16748608; // orange
             case MenuTargetType.PLAYER:
                 return 16777215; // white
+            case MenuTargetType.WORLD_ENTITY:
+                return 0xeda6ed; // boats and other world entities: pink
             default:
                 return 16777215;
         }

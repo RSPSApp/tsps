@@ -1042,6 +1042,17 @@ function mermaidAt(spot) {
   return { getId: () => 15154 + spot.mermaid.guide, getLocation: () => new Location(spot.mermaid.at[0], spot.mermaid.at[1], 0), performAnimation() {} };
 }
 
+test("Chartin' Charles pays for either captain's log, the starter or the full one", () => {
+  const { Item } = require("../dist/game/model/Item");
+  for (const id of [31985, 31986]) {
+    const player = captain();
+    common.updateProgress(player, (saved) => { saved.fullOwed = true; saved.fullPaid = false; });
+    assert.equal(tutor.claimable(player).owed, false, "no log, nothing paid");
+    player.getInventory().add(new Item(id, 1), true);
+    assert.equal(tutor.claimable(player).owed, true, `log ${id}`);
+  }
+});
+
 test("every dive has its mermaid, riddle and answers, and its mermaid spawned", () => {
   const spawns = require("../data/definitions/npc-spawns.json");
   for (const spot of common.spotsOfType("mermaid_guide")) {

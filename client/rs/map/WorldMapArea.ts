@@ -625,7 +625,10 @@ export class WorldMapState {
     readonly areasByInternalName = new Map<string, WorldMapArea>();
     mainArea?: WorldMapArea;
     currentArea?: WorldMapArea;
+    /** The zoom the map is heading for (RenderOverview.zoomTarget); what CS2 reads and sets. */
     zoomPercentage = 100;
+    /** The pixels per tile drawn this cycle (RenderOverview.worldMapZoom); eases toward the target. */
+    private zoom = getWorldMapZoomScale(100);
     displayX = 0;
     displayY = 0;
     displayWidth = 512;
@@ -699,7 +702,7 @@ export class WorldMapState {
         state.loaded = state.areasById.size > 0;
         state.currentArea = state.mainArea ?? state.areasById.values().next().value ?? undefined;
         if (state.currentArea) {
-            if (state.currentArea.zoom > 0) state.setZoomPercentage(state.currentArea.zoom);
+            if (state.currentArea.zoom > 0) state.setZoomPercentage(state.currentArea.zoom, true);
             state.jumpToSourceCoordOrOriginInstant(
                 state.currentArea.origin.plane,
                 state.currentArea.origin.x,
@@ -721,7 +724,13 @@ export class WorldMapState {
         return this.areasById.get(id | 0);
     }
 
+    /** Pixels per tile drawn now: mid-animation this is between two zoom levels. */
     getZoomScale(): number {
+        return this.zoom;
+    }
+
+    /** Pixels per tile of the zoom level the map is easing toward. */
+    getTargetZoomScale(): number {
         return getWorldMapZoomScale(this.zoomPercentage);
     }
 
@@ -743,7 +752,7 @@ export class WorldMapState {
         const area = this.getMapArea(id);
         if (!area) return;
         this.currentArea = area;
-        if (area.zoom > 0) this.setZoomPercentage(area.zoom);
+        if (area.zoom > 0) this.setZoomPercentage(area.zoom, true);
         this.jumpToSourceCoordOrOriginInstant(area.origin.plane, area.origin.x, area.origin.y);
     }
 
@@ -751,7 +760,7 @@ export class WorldMapState {
         const area = this.mapAreaAtCoord(plane, x, y) ?? this.mainArea ?? this.currentArea;
         if (!area) return;
         this.currentArea = area;
-        if (area.zoom > 0) this.setZoomPercentage(area.zoom);
+        if (area.zoom > 0) this.setZoomPercentage(area.zoom, true);
         this.jumpToSourceCoordOrOriginInstant(plane, x, y);
     }
 
@@ -764,7 +773,7 @@ export class WorldMapState {
         const area = this.getMapArea(mapAreaId);
         if (!area) return;
         this.currentArea = area;
-        if (area.zoom > 0) this.setZoomPercentage(area.zoom);
+        if (area.zoom > 0) this.setZoomPercentage(area.zoom, true);
         const coord =
             !forceFallback &&
             area.containsCoord(preferredCoord.plane, preferredCoord.x, preferredCoord.y)
@@ -780,8 +789,13 @@ export class WorldMapState {
         return undefined;
     }
 
-    setZoomPercentage(zoom: number): void {
+    /**
+     * A script's zoom eases in over the next cycles (RenderOverview.setZoomPercentage sets only
+     * zoomTarget); opening an area snaps to its zoom (both zoom and zoomTarget are set).
+     */
+    setZoomPercentage(zoom: number, instant = false): void {
         this.zoomPercentage = normalizeWorldMapZoomPercentage(zoom);
+        if (instant) this.zoom = this.getTargetZoomScale();
         if (this.displayPixelWidth > 0 || this.displayPixelHeight > 0) {
             this.recomputeDisplaySize();
         }
@@ -834,8 +848,23 @@ export class WorldMapState {
         this.setDisplayPosition(position?.x ?? area.origin.x, position?.y ?? area.origin.y);
     }
 
+    /**
+     * RenderOverview.smoothZoom, once per 20ms client cycle: the zoom moves a thirtieth of itself
+     * toward the target, so a step from 100% to 200% takes 22 cycles.
+     */
+    private cycleZoom(): boolean {
+        const target = this.getTargetZoomScale();
+        const previous = this.zoom;
+        if (this.zoom < target) this.zoom = Math.min(target, this.zoom + this.zoom / 30);
+        else if (this.zoom > target) this.zoom = Math.max(target, this.zoom - this.zoom / 30);
+        if (this.zoom === previous) return false;
+        if (this.displayPixelWidth > 0 || this.displayPixelHeight > 0) this.recomputeDisplaySize();
+        return true;
+    }
+
     cycle(): boolean {
-        const flashChanged = this.cycleFlash();
+        const zoomChanged = this.cycleZoom();
+        const flashChanged = this.cycleFlash() || zoomChanged;
         if (this.targetX === -1 || this.targetY === -1) {
             return flashChanged;
         }

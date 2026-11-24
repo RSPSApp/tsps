@@ -175454,7 +175454,7 @@
                       "branch": "1wehEl"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -175465,7 +175465,7 @@
                       "branch": "YRgjB_"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -175503,7 +175503,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -175526,7 +175526,7 @@
                             {
                               "type": "message",
                               "text": "The curator hands you a medallion.",
-                              "id": "qrOUUk"
+                              "id": "U9LNui"
                             }
                           ]
                         },
@@ -175537,7 +175537,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -175603,7 +175603,7 @@
                       "branch": "1wehEl"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -175614,7 +175614,7 @@
                       "branch": "YRgjB_"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -175652,7 +175652,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -175675,7 +175675,7 @@
                             {
                               "type": "message",
                               "text": "The curator hands you a medallion.",
-                              "id": "qrOUUk"
+                              "id": "U9LNui"
                             }
                           ]
                         },
@@ -175686,7 +175686,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -255932,57 +255932,47 @@
                 },
                 {
                   "type": "choice",
-                  "options": []
+                  "options": [
+                    {
+                      "text": "What can I do with fossils I find on Fossil Island?",
+                      "steps": [
+                        {
+                          "player": "What can I do with fossils I find on Fossil Island?"
+                        },
+                        {
+                          "npc": "I'm not entirely sure just yet."
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Nevermind.",
+                      "steps": [
+                        {
+                          "player": "Nevermind."
+                        }
+                      ]
+                    }
+                  ]
                 }
               ],
               "id": "5xOdLs"
             },
-            {
-              "text": "What can I do with fossils I find on Fossil Island?",
-              "steps": [
-                {
-                  "player": "What can I do with fossils I find on Fossil Island?"
-                },
-                {
-                  "npc": "I'm not entirely sure just yet."
-                },
-                {
-                  "type": "end"
-                }
-              ]
-            },
-            {
-              "text": "Nevermind.",
-              "steps": [
-                {
-                  "player": "Nevermind."
-                },
-                {
-                  "type": "end"
-                }
-              ]
-            }
-          ]
-        },
-        {
-          "type": "choice",
-          "options": [
             {
               "text": "I found a strange relic while salvaging...",
               "condition": "If the player has a salvaging relic on them:",
               "steps": [
                 {
                   "type": "jump",
-                  "id": "eWmBFm",
+                  "id": "aKpJnW",
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "siVoke"
+                      "branch": "3MGcea"
                     }
                   ]
                 }
               ],
-              "id": "L_kSQT"
+              "id": "36lI-v"
             },
             {
               "text": "Have you any interesting news?",
@@ -256011,12 +256001,12 @@
                       "target": "Transcript:Bone Voyage",
                       "section": "",
                       "text": "Continues in Transcript:Bone Voyage",
-                      "id": "C60sf8",
+                      "id": "G7E9Z9",
                       "resolved": false,
                       "page_available": true
                     }
                   ],
-                  "id": "eSsOcb"
+                  "id": "6GMQvw"
                 },
                 {
                   "type": "condition",
@@ -256032,7 +256022,7 @@
                       "npc": "Be sure to bring anything you find back for examination - we've got a brand new Palaeontology room downstairs dedicated to finds from the island."
                     }
                   ],
-                  "id": "1RIiH_"
+                  "id": "vJxRlb"
                 }
               ]
             },
@@ -256067,7 +256057,7 @@
                       "type": "end"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -256080,7 +256070,7 @@
                       "type": "end"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -256115,7 +256105,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -256133,7 +256123,7 @@
                             {
                               "type": "message",
                               "text": "The curator hands you a medallion.",
-                              "id": "qrOUUk"
+                              "id": "U9LNui"
                             }
                           ]
                         },
@@ -256144,7 +256134,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -256471,7 +256461,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "siVoke"
+                      "branch": "3MGcea"
                     }
                   ]
                 }
@@ -256486,7 +256476,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "GRm96B"
+                      "branch": "ydVSeS"
                     }
                   ]
                 }
@@ -256501,7 +256491,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "mKYe56"
+                      "branch": "c_Z1Ip"
                     }
                   ]
                 }
@@ -256639,7 +256629,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "siVoke"
+                      "branch": "3MGcea"
                     }
                   ]
                 }
@@ -256654,7 +256644,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "GRm96B"
+                      "branch": "ydVSeS"
                     }
                   ]
                 }
@@ -256669,7 +256659,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "mKYe56"
+                      "branch": "c_Z1Ip"
                     }
                   ]
                 }
@@ -256807,7 +256797,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "siVoke"
+                      "branch": "3MGcea"
                     }
                   ]
                 }
@@ -256822,7 +256812,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "GRm96B"
+                      "branch": "ydVSeS"
                     }
                   ]
                 }
@@ -256837,7 +256827,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "mKYe56"
+                      "branch": "c_Z1Ip"
                     }
                   ]
                 }
@@ -256975,7 +256965,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "siVoke"
+                      "branch": "3MGcea"
                     }
                   ]
                 }
@@ -256990,7 +256980,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "GRm96B"
+                      "branch": "ydVSeS"
                     }
                   ]
                 }
@@ -257005,7 +256995,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "mKYe56"
+                      "branch": "c_Z1Ip"
                     }
                   ]
                 }
@@ -257143,7 +257133,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "siVoke"
+                      "branch": "3MGcea"
                     }
                   ]
                 }
@@ -257158,7 +257148,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "GRm96B"
+                      "branch": "ydVSeS"
                     }
                   ]
                 }
@@ -257173,7 +257163,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "mKYe56"
+                      "branch": "c_Z1Ip"
                     }
                   ]
                 }
@@ -257311,7 +257301,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "siVoke"
+                      "branch": "3MGcea"
                     }
                   ]
                 }
@@ -257326,7 +257316,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "GRm96B"
+                      "branch": "ydVSeS"
                     }
                   ]
                 }
@@ -257341,7 +257331,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "mKYe56"
+                      "branch": "c_Z1Ip"
                     }
                   ]
                 }
@@ -257479,7 +257469,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "siVoke"
+                      "branch": "3MGcea"
                     }
                   ]
                 }
@@ -257494,7 +257484,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "GRm96B"
+                      "branch": "ydVSeS"
                     }
                   ]
                 }
@@ -257509,7 +257499,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "mKYe56"
+                      "branch": "c_Z1Ip"
                     }
                   ]
                 }
@@ -257647,7 +257637,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "siVoke"
+                      "branch": "3MGcea"
                     }
                   ]
                 }
@@ -257662,7 +257652,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "GRm96B"
+                      "branch": "ydVSeS"
                     }
                   ]
                 }
@@ -257677,7 +257667,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "mKYe56"
+                      "branch": "c_Z1Ip"
                     }
                   ]
                 }
@@ -257732,7 +257722,7 @@
       ]
     },
     "branches": {
-      "jump-99747e5bb8cecb51": [
+      "jump-71979c206e5449cf": [
         {
           "type": "condition",
           "text": "Before Bone Voyage:",
@@ -257757,12 +257747,12 @@
               "target": "Transcript:Bone Voyage",
               "section": "",
               "text": "Continues in Transcript:Bone Voyage",
-              "id": "C60sf8",
+              "id": "G7E9Z9",
               "resolved": false,
               "page_available": true
             }
           ],
-          "id": "eSsOcb"
+          "id": "6GMQvw"
         },
         {
           "type": "condition",
@@ -257781,7 +257771,7 @@
               "type": "end"
             }
           ],
-          "id": "1RIiH_"
+          "id": "vJxRlb"
         }
       ],
       "jump-5910ecf8c32d74d5": [
@@ -257793,10 +257783,36 @@
         },
         {
           "type": "choice",
-          "options": []
+          "options": [
+            {
+              "text": "What can I do with fossils I find on Fossil Island?",
+              "steps": [
+                {
+                  "player": "What can I do with fossils I find on Fossil Island?"
+                },
+                {
+                  "npc": "I'm not entirely sure just yet."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Nevermind.",
+              "steps": [
+                {
+                  "player": "Nevermind."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
         }
       ],
-      "jump-14054517386e348f": [
+      "jump-2c45c1ec8c908532": [
         {
           "player": "Do you know where I could find any treasure?"
         },
@@ -257813,7 +257829,7 @@
           "type": "end"
         }
       ],
-      "jump-13a862802e3a224f": [
+      "jump-ca4c92591b0d8bc1": [
         {
           "type": "condition",
           "text": "If the player hasn't discovered the digsite pendant:",
@@ -257825,7 +257841,7 @@
               "type": "end"
             }
           ],
-          "id": "Lg_PTN"
+          "id": "TCe4Ju"
         },
         {
           "type": "condition",
@@ -257838,7 +257854,7 @@
               "type": "end"
             }
           ],
-          "id": "MM8_yB"
+          "id": "F6LNBC"
         },
         {
           "type": "condition",
@@ -257873,7 +257889,7 @@
               ]
             }
           ],
-          "id": "2uls3V"
+          "id": "1aURsU"
         },
         {
           "type": "condition",
@@ -257891,7 +257907,7 @@
                     {
                       "type": "message",
                       "text": "The curator hands you a medallion.",
-                      "id": "qrOUUk"
+                      "id": "U9LNui"
                     },
                     {
                       "type": "end"
@@ -257909,13 +257925,13 @@
               ]
             }
           ],
-          "id": "Rp1F04"
+          "id": "UQ4-IT"
         }
       ],
-      "siVoke": [
+      "3MGcea": [
         {
           "type": "call",
-          "branch": "jump-99747e5bb8cecb51"
+          "branch": "jump-71979c206e5449cf"
         }
       ],
       "kLQdcm": [
@@ -257945,16 +257961,16 @@
           "npc": "Hmm.... while it is interesting, I'm afraid you've already brought us one just like it. We'd still be happy to take it off your hands, but I'm afraid we can only offer a monetary reward of 5,000 coins."
         }
       ],
-      "GRm96B": [
+      "ydVSeS": [
         {
           "type": "call",
-          "branch": "jump-14054517386e348f"
+          "branch": "jump-2c45c1ec8c908532"
         }
       ],
-      "mKYe56": [
+      "c_Z1Ip": [
         {
           "type": "call",
-          "branch": "jump-13a862802e3a224f"
+          "branch": "jump-ca4c92591b0d8bc1"
         }
       ]
     }
@@ -318407,7 +318423,32 @@
                 },
                 {
                   "type": "choice",
-                  "options": []
+                  "options": [
+                    {
+                      "text": "What can I do with fossils I find on Fossil Island?",
+                      "steps": [
+                        {
+                          "player": "What can I do with fossils I find on Fossil Island?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Curator Haig Halen",
+                          "text": "I'm not entirely sure just yet.",
+                          "speaker_ids": [
+                            5214
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Nevermind.",
+                      "steps": [
+                        {
+                          "player": "Nevermind."
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -318560,12 +318601,12 @@
                       "target": "Transcript:Bone Voyage",
                       "section": "",
                       "text": "Continues in Transcript:Bone Voyage",
-                      "id": "C60sf8",
+                      "id": "G7E9Z9",
                       "resolved": false,
                       "page_available": true
                     }
                   ],
-                  "id": "eSsOcb"
+                  "id": "6GMQvw"
                 },
                 {
                   "type": "condition",
@@ -318591,7 +318632,7 @@
                       ]
                     }
                   ],
-                  "id": "1RIiH_"
+                  "id": "vJxRlb"
                 }
               ]
             },
@@ -318641,7 +318682,7 @@
                       "type": "end"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -318659,7 +318700,7 @@
                       "type": "end"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -318704,7 +318745,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -318727,7 +318768,7 @@
                             {
                               "type": "message",
                               "text": "The curator hands you a medallion.",
-                              "id": "qrOUUk"
+                              "id": "U9LNui"
                             }
                           ]
                         },
@@ -318738,7 +318779,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -445903,8 +445944,37 @@
               "text": "Talk about Fossil Island.",
               "steps": [
                 {
-                  "type": "call",
-                  "branch": "ZKRGaf"
+                  "player": "I've got some questions regarding Fossil Island."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Curator Haig Halen",
+                  "text": "Ah, how can I help?",
+                  "speaker_ids": [
+                    5214
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "What can I do with fossils I find on Fossil Island?",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "93lpu2"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Nevermind.",
+                      "steps": [
+                        {
+                          "player": "Nevermind."
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -445955,10 +446025,10 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "dwJpG2"
+                      "branch": "MoIger"
                     }
                   ],
-                  "id": "eSsOcb"
+                  "id": "6GMQvw"
                 },
                 {
                   "type": "condition",
@@ -445969,7 +446039,7 @@
                       "branch": "X9TO_8"
                     }
                   ],
-                  "id": "1RIiH_"
+                  "id": "vJxRlb"
                 }
               ]
             },
@@ -445994,7 +446064,7 @@
                       "branch": "1wehEl"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -446005,7 +446075,7 @@
                       "branch": "YRgjB_"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -446043,7 +446113,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -446065,7 +446135,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "aevsei"
+                              "branch": "OOACwV"
                             }
                           ]
                         },
@@ -446076,7 +446146,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -446099,8 +446169,37 @@
               "text": "Talk about Fossil Island.",
               "steps": [
                 {
-                  "type": "call",
-                  "branch": "ZKRGaf"
+                  "player": "I've got some questions regarding Fossil Island."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Curator Haig Halen",
+                  "text": "Ah, how can I help?",
+                  "speaker_ids": [
+                    5214
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "What can I do with fossils I find on Fossil Island?",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "93lpu2"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Nevermind.",
+                      "steps": [
+                        {
+                          "player": "Nevermind."
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -446129,10 +446228,10 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "dwJpG2"
+                      "branch": "MoIger"
                     }
                   ],
-                  "id": "eSsOcb"
+                  "id": "6GMQvw"
                 },
                 {
                   "type": "condition",
@@ -446143,7 +446242,7 @@
                       "branch": "X9TO_8"
                     }
                   ],
-                  "id": "1RIiH_"
+                  "id": "vJxRlb"
                 }
               ]
             },
@@ -446168,7 +446267,7 @@
                       "branch": "1wehEl"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -446179,7 +446278,7 @@
                       "branch": "YRgjB_"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -446217,7 +446316,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -446239,7 +446338,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "aevsei"
+                              "branch": "OOACwV"
                             }
                           ]
                         },
@@ -446250,7 +446349,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -446327,8 +446426,37 @@
               "text": "Talk about Fossil Island.",
               "steps": [
                 {
-                  "type": "call",
-                  "branch": "ZKRGaf"
+                  "player": "I've got some questions regarding Fossil Island."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Curator Haig Halen",
+                  "text": "Ah, how can I help?",
+                  "speaker_ids": [
+                    5214
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "What can I do with fossils I find on Fossil Island?",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "93lpu2"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Nevermind.",
+                      "steps": [
+                        {
+                          "player": "Nevermind."
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -447500,10 +447628,10 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "dwJpG2"
+                      "branch": "MoIger"
                     }
                   ],
-                  "id": "eSsOcb"
+                  "id": "6GMQvw"
                 },
                 {
                   "type": "condition",
@@ -447514,7 +447642,7 @@
                       "branch": "X9TO_8"
                     }
                   ],
-                  "id": "1RIiH_"
+                  "id": "vJxRlb"
                 }
               ]
             },
@@ -447539,7 +447667,7 @@
                       "branch": "1wehEl"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -447550,7 +447678,7 @@
                       "branch": "YRgjB_"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -447588,7 +447716,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -447610,7 +447738,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "aevsei"
+                              "branch": "OOACwV"
                             }
                           ]
                         },
@@ -447621,7 +447749,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -447644,8 +447772,37 @@
               "text": "Talk about Fossil Island.",
               "steps": [
                 {
-                  "type": "call",
-                  "branch": "ZKRGaf"
+                  "player": "I've got some questions regarding Fossil Island."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Curator Haig Halen",
+                  "text": "Ah, how can I help?",
+                  "speaker_ids": [
+                    5214
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "What can I do with fossils I find on Fossil Island?",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "93lpu2"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Nevermind.",
+                      "steps": [
+                        {
+                          "player": "Nevermind."
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -447677,10 +447834,10 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "dwJpG2"
+                      "branch": "MoIger"
                     }
                   ],
-                  "id": "eSsOcb"
+                  "id": "6GMQvw"
                 },
                 {
                   "type": "condition",
@@ -447691,7 +447848,7 @@
                       "branch": "X9TO_8"
                     }
                   ],
-                  "id": "1RIiH_"
+                  "id": "vJxRlb"
                 }
               ]
             },
@@ -447716,7 +447873,7 @@
                       "branch": "1wehEl"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -447727,7 +447884,7 @@
                       "branch": "YRgjB_"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -447765,7 +447922,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -447787,7 +447944,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "aevsei"
+                              "branch": "OOACwV"
                             }
                           ]
                         },
@@ -447798,7 +447955,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -452982,24 +453139,20 @@
           "type": "end"
         }
       ],
-      "ZKRGaf": [
+      "93lpu2": [
         {
-          "player": "I've got some questions regarding Fossil Island."
+          "player": "What can I do with fossils I find on Fossil Island?"
         },
         {
           "type": "line",
           "speaker": "Curator Haig Halen",
-          "text": "Ah, how can I help?",
+          "text": "I'm not entirely sure just yet.",
           "speaker_ids": [
             5214
           ]
-        },
-        {
-          "type": "choice",
-          "options": []
         }
       ],
-      "dwJpG2": [
+      "MoIger": [
         {
           "player": "Have you any interesting news?"
         },
@@ -453030,7 +453183,7 @@
           "target": "Transcript:Bone Voyage",
           "section": "",
           "text": "Continues in Transcript:Bone Voyage",
-          "id": "C60sf8",
+          "id": "G7E9Z9",
           "resolved": false,
           "page_available": true
         }
@@ -453119,11 +453272,11 @@
           "type": "end"
         }
       ],
-      "aevsei": [
+      "OOACwV": [
         {
           "type": "message",
           "text": "The curator hands you a medallion.",
-          "id": "qrOUUk"
+          "id": "U9LNui"
         }
       ]
     }
@@ -1312416,10 +1312569,10 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "dwJpG2"
+                      "branch": "MoIger"
                     }
                   ],
-                  "id": "eSsOcb"
+                  "id": "6GMQvw"
                 },
                 {
                   "type": "condition",
@@ -1312430,7 +1312583,7 @@
                       "branch": "X9TO_8"
                     }
                   ],
-                  "id": "1RIiH_"
+                  "id": "vJxRlb"
                 }
               ]
             },
@@ -1312455,7 +1312608,7 @@
                       "branch": "1wehEl"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -1312466,7 +1312619,7 @@
                       "branch": "YRgjB_"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -1312504,7 +1312657,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -1312527,7 +1312680,7 @@
                             {
                               "type": "message",
                               "text": "The curator hands you a medallion.",
-                              "id": "qrOUUk"
+                              "id": "U9LNui"
                             }
                           ]
                         },
@@ -1312538,7 +1312691,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -1312638,10 +1312791,10 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "dwJpG2"
+                      "branch": "MoIger"
                     }
                   ],
-                  "id": "eSsOcb"
+                  "id": "6GMQvw"
                 },
                 {
                   "type": "condition",
@@ -1312652,7 +1312805,7 @@
                       "branch": "X9TO_8"
                     }
                   ],
-                  "id": "1RIiH_"
+                  "id": "vJxRlb"
                 }
               ]
             },
@@ -1312677,7 +1312830,7 @@
                       "branch": "1wehEl"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -1312688,7 +1312841,7 @@
                       "branch": "YRgjB_"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -1312726,7 +1312879,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -1312749,7 +1312902,7 @@
                             {
                               "type": "message",
                               "text": "The curator hands you a medallion.",
-                              "id": "qrOUUk"
+                              "id": "U9LNui"
                             }
                           ]
                         },
@@ -1312760,7 +1312913,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -1316704,7 +1316857,7 @@
           "id": "15z9zB"
         }
       ],
-      "dwJpG2": [
+      "MoIger": [
         {
           "player": "Have you any interesting news?"
         },
@@ -1316735,7 +1316888,7 @@
           "target": "Transcript:Bone Voyage",
           "section": "",
           "text": "Continues in Transcript:Bone Voyage",
-          "id": "C60sf8",
+          "id": "G7E9Z9",
           "resolved": false,
           "page_available": true
         }
@@ -1383381,7 +1383534,7 @@
           "prompt": "Start The Golem quest?",
           "options": [
             {
-              "text": "Yes",
+              "text": "Yes.",
               "steps": [
                 {
                   "player": "Shall I try to repair you?"
@@ -1383403,7 +1383556,7 @@
               "quest": "The Golem"
             },
             {
-              "text": "No",
+              "text": "No.",
               "steps": [
                 {
                   "player": "I'm not going to find a conversation here!"
@@ -1383778,7 +1383931,7 @@
                 {
                   "type": "line",
                   "speaker": "Elissa",
-                  "text": "AI wrote that letter to my late husband when he was exploring there.",
+                  "text": "I wrote that letter to my late husband when he was exploring there.",
                   "speaker_ids": [
                     5138
                   ]
@@ -1383786,7 +1383939,7 @@
                 {
                   "type": "line",
                   "speaker": "Elissa",
-                  "text": "that was a great city as well, but the museum could only fund one excavation and this one was closer to home.",
+                  "text": "That was a great city as well, but the museum could only fund one excavation and this one was closer to home.",
                   "speaker_ids": [
                     5138
                   ]
@@ -1383798,6 +1383951,14 @@
                   "speaker_ids": [
                     5138
                   ]
+                }
+              ]
+            },
+            {
+              "text": "Sorry, I need to go.",
+              "steps": [
+                {
+                  "player": "Sorry, I need to go."
                 }
               ]
             }
@@ -1383859,6 +1384020,14 @@
                   "speaker_ids": [
                     5138
                   ]
+                }
+              ]
+            },
+            {
+              "text": "Sorry, I need to go.",
+              "steps": [
+                {
+                  "player": "Sorry, I need to go."
                 }
               ]
             }
@@ -1383980,7 +1384149,44 @@
           "type": "choice",
           "options": [
             {
-              "text": "Fossil Island"
+              "text": "Talk about Fossil Island.",
+              "condition": "After Bone Voyage:",
+              "id": "8odAmY",
+              "steps": [
+                {
+                  "player": "I've got some questions regarding Fossil Island."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Curator Haig Halen",
+                  "text": "Ah, how can I help?",
+                  "speaker_ids": [
+                    5214
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "What can I do with fossils I find on Fossil Island?",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "93lpu2"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Nevermind.",
+                      "steps": [
+                        {
+                          "player": "Nevermind."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
               "text": "Have you any interesting news?",
@@ -1383991,10 +1384197,10 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "dwJpG2"
+                      "branch": "MoIger"
                     }
                   ],
-                  "id": "eSsOcb"
+                  "id": "6GMQvw"
                 },
                 {
                   "type": "condition",
@@ -1384005,7 +1384211,7 @@
                       "branch": "X9TO_8"
                     }
                   ],
-                  "id": "1RIiH_"
+                  "id": "vJxRlb"
                 }
               ]
             },
@@ -1384102,7 +1384308,7 @@
                       "branch": "1wehEl"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -1384113,7 +1384319,7 @@
                       "branch": "YRgjB_"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -1384151,7 +1384357,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -1384174,7 +1384380,7 @@
                             {
                               "type": "message",
                               "text": "The curator hands you a medallion.",
-                              "id": "qrOUUk"
+                              "id": "U9LNui"
                             }
                           ]
                         },
@@ -1384185,7 +1384391,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -1384264,7 +1384470,44 @@
           "type": "choice",
           "options": [
             {
-              "text": "Fossil Island"
+              "text": "Talk about Fossil Island.",
+              "condition": "After Bone Voyage:",
+              "id": "7sx9Pa",
+              "steps": [
+                {
+                  "player": "I've got some questions regarding Fossil Island."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Curator Haig Halen",
+                  "text": "Ah, how can I help?",
+                  "speaker_ids": [
+                    5214
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "What can I do with fossils I find on Fossil Island?",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "93lpu2"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Nevermind.",
+                      "steps": [
+                        {
+                          "player": "Nevermind."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
               "text": "Have you any interesting news?",
@@ -1384275,10 +1384518,10 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "dwJpG2"
+                      "branch": "MoIger"
                     }
                   ],
-                  "id": "eSsOcb"
+                  "id": "6GMQvw"
                 },
                 {
                   "type": "condition",
@@ -1384289,7 +1384532,7 @@
                       "branch": "X9TO_8"
                     }
                   ],
-                  "id": "1RIiH_"
+                  "id": "vJxRlb"
                 }
               ]
             },
@@ -1384359,7 +1384602,7 @@
                       "branch": "1wehEl"
                     }
                   ],
-                  "id": "Lg_PTN"
+                  "id": "TCe4Ju"
                 },
                 {
                   "type": "condition",
@@ -1384370,7 +1384613,7 @@
                       "branch": "YRgjB_"
                     }
                   ],
-                  "id": "MM8_yB"
+                  "id": "F6LNBC"
                 },
                 {
                   "type": "condition",
@@ -1384408,7 +1384651,7 @@
                       ]
                     }
                   ],
-                  "id": "2uls3V"
+                  "id": "1aURsU"
                 },
                 {
                   "type": "condition",
@@ -1384431,7 +1384674,7 @@
                             {
                               "type": "message",
                               "text": "The curator hands you a medallion.",
-                              "id": "qrOUUk"
+                              "id": "U9LNui"
                             }
                           ]
                         },
@@ -1384442,7 +1384685,7 @@
                       ]
                     }
                   ],
-                  "id": "Rp1F04"
+                  "id": "UQ4-IT"
                 }
               ]
             }
@@ -1384969,7 +1385212,20 @@
           ]
         }
       ],
-      "dwJpG2": [
+      "93lpu2": [
+        {
+          "player": "What can I do with fossils I find on Fossil Island?"
+        },
+        {
+          "type": "line",
+          "speaker": "Curator Haig Halen",
+          "text": "I'm not entirely sure just yet.",
+          "speaker_ids": [
+            5214
+          ]
+        }
+      ],
+      "MoIger": [
         {
           "player": "Have you any interesting news?"
         },
@@ -1385000,7 +1385256,7 @@
           "target": "Transcript:Bone Voyage",
           "section": "",
           "text": "Continues in Transcript:Bone Voyage",
-          "id": "C60sf8",
+          "id": "G7E9Z9",
           "resolved": false,
           "page_available": true
         }

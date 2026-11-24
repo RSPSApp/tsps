@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-198 quests · ✅ passed: 25 · ⚠️ passed with issues: 20 · 🔄 in progress: 13 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 91
+198 quests · ✅ passed: 25 · ⚠️ passed with issues: 20 · 🔄 in progress: 14 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 90
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -173,7 +173,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [The Frozen Door](the-frozen-door/README.md) | 🔄 in progress |  | agent | claude-sonnet-5-5 |  |
 | The Garden of Death | untested |  |  |  |  |
 | [The Giant Dwarf](giant-dwarf/README.md) | untested |  |  |  |  |
-| The Golem | untested |  |  |  |  |
+| [The Golem](the-golem/README.md) | 🔄 in progress | 2026-11-24 | agent | claude-opus-5-5 |  |
 | [The Grand Tree](grand-tree/README.md) | 🔁 needs recheck | 2026-10-29 | agent | claude-haiku-5-5 | 4 |
 | [The Great Brain Robbery](great-brain-robbery/README.md) | untested |  |  |  |  |
 | [The Hand in the Sand](hand-in-the-sand/README.md) | untested |  |  |  |  |

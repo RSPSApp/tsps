@@ -620,6 +620,19 @@ function characterPages(text) {
   return pages;
 }
 
+/**
+ * The shops an open_shop target names: by exact name, else by name without a leading "The", the fold
+ * osrsreboxed-db's shop matching uses. A step targets the shops dump's page key ("Auburn Pub") while
+ * shops.json shows the recorded title ("The Auburn Pub", see import-osrs-shops.mjs display_name).
+ */
+function shopsNamed(target) {
+  const shops = ShopDefinition.all();
+  const exact = shops.filter((shop) => shop.getName() === target);
+  if (exact.length > 0 || typeof target !== "string") return exact;
+  const bare = (name) => name.replace(/^the\s+/i, "");
+  return shops.filter((shop) => bare(shop.getName()) === bare(target));
+}
+
 function shopName(api, player, npcId, step) {
   if (!Array.isArray(step.shops)) return step.target;
   const request = { player, npcId, target: step.target, shops: step.shops, shop: null };
@@ -1506,7 +1519,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         }
         if (step.type === "action" && step.action === "open_shop") {
           const target = shopName(api, player, npcId, step);
-          const named = ShopDefinition.all().filter((shop) => shop.getName() === target);
+          const named = shopsNamed(target);
           // A skill master's shop also has its skillcape copies under its name (Sellers.SkillCapes): open the
           // shops.json shop, which that plugin turns into the copy for a player with 99.
           const shops = named.length > 1 ? named.filter((shop) => shop.getSource() === "core") : named;

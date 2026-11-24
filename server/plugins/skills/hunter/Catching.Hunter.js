@@ -130,13 +130,13 @@ function catchFalcon(player, npc, def) {
     falcon.setVisible(false);
     const state = { falcon, player, def, due: H.tick + 100, appearAt: H.tick + hitTicks };
     falcons.set(player, state); caught.set(falcon, state);
-    npc.performGraphic(new H.core.Graphic(FALCON_HIT_GRAPHIC, hitDelay));
+    npc.performGraphic(H.core.Graphic.delayed(FALCON_HIT_GRAPHIC, hitDelay));
     hide(npc, 10, hitTicks);
     player.sendMessage("Your falcon catches the kebbit. Retrieve it to collect the catch.");
   }, cancel)) cancel();
   else {
     gloves(player, I.FALCONERS_GLOVE);
-    player.performGraphic(new H.core.Graphic(FALCON_LAUNCH_GRAPHIC, 0, FALCON_START_HEIGHT));
+    player.performGraphic(H.core.Graphic.delayed(FALCON_LAUNCH_GRAPHIC, 0, FALCON_START_HEIGHT));
     new H.core.Projectile(from, to, npc, FALCON_TRAVEL_PROJECTILE, FALCON_LAUNCH_CYCLES, arrival,
       FALCON_START_HEIGHT, FALCON_END_HEIGHT, player.getPrivateArea()).withAngle(FALCON_ANGLE).withProgress(FALCON_PROGRESS).sendProjectile();
   }

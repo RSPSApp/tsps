@@ -453,6 +453,12 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     assert.equal(crusher.counts.has(I.BONES),false,"a bonecrusher takes the bones");
     assert.equal(crusher.counts.get(I.DASHING_KEBBIT_FUR),1);
     crushBones=false;
+    // A kebbit one tile away lands the falcon 2 cycles after the catch tick: that is a delay, not a Priority.
+    const near=hunter(),nearKebbit=prey(N.DASHING_KEBBIT,falconTile.transform(1,0)),hitGraphics=[],basePerform=nearKebbit.performGraphic;
+    nearKebbit.performGraphic=function(g){hitGraphics.push(g);return basePerform.call(this,g);};
+    Math.random=()=>0;Catching.catchNpc({player:near,npc:nearKebbit,npcId:nearKebbit.getId()});advance(1);Math.random=()=>0.5;
+    assert.deepEqual(hitGraphics.map(g=>[g.id,g.delay,g.priority]),[[923,2,0]],"the hit graphic keeps its 2-cycle delay at one tile");
+    advance(100);
     const slow=hunter();send(slow);advance(100);
     assert.equal(slow.messages.at(-1),"Your falcon has left its prey. You see it heading back toward the falconer.");
     assert.equal(slow.experience.has(Skill.HUNTER),false,"lost prey gives no XP");

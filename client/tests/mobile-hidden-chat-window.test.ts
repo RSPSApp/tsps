@@ -88,7 +88,7 @@ test("a canvas-sized window is re-centred when the mobile scale changes under it
     };
     adjustMobileHudWidget(node, 512, 334, manager(true, 1150));
     assert.deepEqual([node.y, node.height], [6, 1129]);
-    assert.equal(node.rawY, 404, "the centring offset follows the shorter parent");
+    assert.equal(node.rawY, 403, "the centring offset follows the shorter parent (centring divides toward zero)");
 });
 
 /** The Settings window as a phone lays it out: 512x334 main modal sitting 140px down the screen. */

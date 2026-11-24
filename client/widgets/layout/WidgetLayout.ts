@@ -16,6 +16,9 @@ export type WidgetLike = {
     // IF3 alignment modes
     widthMode?: number;
     heightMode?: number;
+    // aspect ratio for size mode 4 (1:1 unless set)
+    aspectWidth?: number;
+    aspectHeight?: number;
     xPositionMode?: number;
     yPositionMode?: number;
     // structure
@@ -38,40 +41,31 @@ export type WidgetLike = {
 };
 
 export function alignSize(w: WidgetLike, parentW: number, parentH: number) {
-    // width
-    if (((w.widthMode ?? 0) | 0) === 0) {
-        w.width = (w.rawWidth as number) | 0;
-    } else if (((w.widthMode ?? 0) | 0) === 1) {
+    const widthMode = (w.widthMode ?? 0) | 0;
+    const heightMode = (w.heightMode ?? 0) | 0;
+    // Absolute, minus-parent and proportional sizes first, for both axes.
+    if (widthMode === 1) {
         // setsize_minus -> parent - raw
         w.width = (parentW | 0) - ((w.rawWidth as number) | 0);
-    } else if (((w.widthMode ?? 0) | 0) === 2) {
+    } else if (widthMode === 2) {
         w.width = (((w.rawWidth as number) | 0) * (parentW | 0)) >> 14;
-    } else if (((w.widthMode ?? 0) | 0) === 4) {
-        // Aspect: derive width from current height
-        const aw = Math.max(1, (w.rawWidth as number) | 0 || 1);
-        const ah = Math.max(1, (w.rawHeight as number) | 0 || 1);
-        const h = Math.max(1, (w.height as number) | 0 || 1);
-        w.width = Math.max(1, Math.floor((aw * h) / ah));
-    } else {
+    } else if (widthMode !== 4) {
         w.width = (w.rawWidth as number) | 0;
     }
-    // height
-    if (((w.heightMode ?? 0) | 0) === 0) {
-        w.height = (w.rawHeight as number) | 0;
-    } else if (((w.heightMode ?? 0) | 0) === 1) {
+    if (heightMode === 1) {
         // setsize_minus -> parent - raw
         w.height = (parentH | 0) - ((w.rawHeight as number) | 0);
-    } else if (((w.heightMode ?? 0) | 0) === 2) {
+    } else if (heightMode === 2) {
         w.height = (((w.rawHeight as number) | 0) * (parentH | 0)) >> 14;
-    } else if (((w.heightMode ?? 0) | 0) === 4) {
-        // Aspect: derive height from current width
-        const aw = Math.max(1, (w.rawWidth as number) | 0 || 1);
-        const ah = Math.max(1, (w.rawHeight as number) | 0 || 1);
-        const wd = Math.max(1, (w.width as number) | 0 || 1);
-        w.height = Math.max(1, Math.floor((wd * ah) / aw));
-    } else {
+    } else if (heightMode !== 4) {
         w.height = (w.rawHeight as number) | 0;
     }
+    // Then the aspect mode, from the other axis as just computed. The ratio is the component's
+    // aspect (1:1 unless set), not its raw size.
+    const aspectW = ((w.aspectWidth ?? 1) | 0) || 1;
+    const aspectH = ((w.aspectHeight ?? 1) | 0) || 1;
+    if (widthMode === 4) w.width = ((((w.height as number) | 0) * aspectW) / aspectH) | 0;
+    if (heightMode === 4) w.height = ((((w.width as number) | 0) * aspectH) / aspectW) | 0;
 }
 
 export function alignPosition(w: WidgetLike, parentW: number, parentH: number) {
@@ -85,14 +79,14 @@ export function alignPosition(w: WidgetLike, parentW: number, parentH: number) {
     if (effectiveXMode === 0) {
         w.x = (w.rawX as number) | 0;
     } else if (effectiveXMode === 1) {
-        w.x = ((parentW - ((w.width as number) | 0)) >> 1) + ((w.rawX as number) | 0);
+        w.x = (((parentW - ((w.width as number) | 0)) / 2) | 0) + ((w.rawX as number) | 0);
     } else if (effectiveXMode === 2) {
         w.x = (parentW - ((w.width as number) | 0 || 0) - ((w.rawX as number) | 0)) | 0;
     } else if (effectiveXMode === 3) {
         w.x = (((w.rawX as number) | 0) * (parentW | 0)) >> 14;
     } else if (effectiveXMode === 4) {
         w.x =
-            ((parentW - ((w.width as number) | 0 || 0)) >> 1) +
+            (((parentW - ((w.width as number) | 0 || 0)) / 2) | 0) +
             ((((w.rawX as number) | 0) * (parentW | 0)) >> 14);
     } else {
         // 5
@@ -106,14 +100,14 @@ export function alignPosition(w: WidgetLike, parentW: number, parentH: number) {
     if (effectiveYMode === 0) {
         w.y = (w.rawY as number) | 0;
     } else if (effectiveYMode === 1) {
-        w.y = (((parentH - ((w.height as number) | 0 || 0)) >> 1) + ((w.rawY as number) | 0)) | 0;
+        w.y = ((((parentH - ((w.height as number) | 0 || 0)) / 2) | 0) + ((w.rawY as number) | 0)) | 0;
     } else if (effectiveYMode === 2) {
         w.y = (parentH - ((w.height as number) | 0 || 0) - ((w.rawY as number) | 0)) | 0;
     } else if (effectiveYMode === 3) {
         w.y = (((w.rawY as number) | 0) * (parentH | 0)) >> 14;
     } else if (effectiveYMode === 4) {
         w.y =
-            ((parentH - ((w.height as number) | 0 || 0)) >> 1) +
+            (((parentH - ((w.height as number) | 0 || 0)) / 2) | 0) +
             ((((w.rawY as number) | 0) * (parentH | 0)) >> 14);
     } else {
         w.y =
@@ -163,7 +157,22 @@ export function layoutSingleWidget(w: WidgetLike, parentW: number, parentH: numb
         w.height = Math.max(1, rows * py);
     }
     alignPosition(w, parentW, parentH);
+    clampScroll(w);
     if (layoutAdjuster !== null) layoutAdjuster(w, parentW, parentH);
+}
+
+/** OSRS keeps a component's scroll inside its scroll area whenever it is laid out. */
+function clampScroll(w: WidgetLike): void {
+    if (typeof w.scrollX === "number") {
+        const maxX = (((w.scrollWidth as number) ?? 0) | 0) - ((w.width as number) | 0);
+        if (w.scrollX > maxX) w.scrollX = maxX;
+        if (w.scrollX < 0) w.scrollX = 0;
+    }
+    if (typeof w.scrollY === "number") {
+        const maxY = (((w.scrollHeight as number) ?? 0) | 0) - ((w.height as number) | 0);
+        if (w.scrollY > maxY) w.scrollY = maxY;
+        if (w.scrollY < 0) w.scrollY = 0;
+    }
 }
 
 /**

@@ -28014,7 +28014,7 @@
           "name": "Amoxliatl",
           "tasks": [
             "done",
-            "done",
+            "in-progress",
             "done",
             "done"
           ],
@@ -28039,7 +28039,7 @@
           "devNotes": [
             "Main fdf193b28: #1317 the scoreboard.",
             "Main sync 9949ef068: PR #636 implements the post-quest Amoxliatl beneath the Ruins of Tapoyauik from captures 1147/1695: chamber entry/exit, her attacks and Unstable Ice, kills/kill count, Combat Achievement hooks and loot (docs/amoxliatl.md).",
-            "2026-11-24: attacks and phases done. The shared freeze immunity is tested. Post-quest Icicle Crash distinguishes active prayers, Unstable Ice uses the recorded colour and shatters at 14 ticks with diamond-shaped pools, and she rises 28 ticks after the kill count (R1140; docs/amoxliatl.md). Respawn dialogue still uses the entrance line. The quest and Echo retain their prior mechanics.",
+            "2026-11-24: post-quest Icicle Crash distinguishes active prayers, Unstable Ice uses the recorded colour and shatters at 14 ticks with the Wiki's 3x3 pools, and she rises 28 ticks after kill count. Shared freeze immunity and the encounter changes passed 39 tests across amoxliatl.test.cjs, amoxliatl-scoreboard.test.cjs and freeze-resistance.test.cjs. The attacks and phases task remains in progress pending a source for the spike damage cap. The 6-10 icy-pool damage is sourced separately. See docs/amoxliatl.md and https://github.com/RSPSApp/tsps/pull/6711.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4226 Settings: dialogues, messages and switches follow their All Settings rows."
           ],
           "taskDetails": [

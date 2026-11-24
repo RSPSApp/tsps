@@ -6,7 +6,7 @@
  *   (Wiki). They have 10 hitpoints, so every hit breaks one: it bursts (11035) and is gone a tick
  *   later, leaving an icy pool where it stood (captured).
  * - In the ordinary post-quest fight, any left 14 ticks after forming shatter, each healing her
- *   16-25 with a hitsplat and leaving a diamond of icy pools (R1140 ticks 7912-7927, 8788-8803).
+ *   16-25 with a hitsplat (R1140 ticks 7912-7927, 8788-8803) and leaving a 3x3 square of icy pools (Wiki).
  */
 const Common = require("./Common.Amoxliatl");
 
@@ -98,8 +98,15 @@ function shatter(fight, formed) {
   fight.stats.shattered = true;
   const { shatterHeal: [min, max], postQuest, removeAfterBreakTicks } = Common.data.unstableIce;
   const ordinaryFight = Common.isPostQuestFight(fight.session);
-  const { shatterHealSplat, shatterPoolReach: reach } = postQuest;
+  const { shatterHealSplat } = postQuest;
   let playedPoolSound = false;
+  function placeShatterPools(x, y) {
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        if (fight.placePool(x + dx, y + dy, !ordinaryFight || !playedPoolSound)) playedPoolSound = true;
+      }
+    }
+  }
   for (const block of left) {
     burst(fight, block);
     const heal = Common.randomInt(min, max);
@@ -108,19 +115,12 @@ function shatter(fight, formed) {
     if (ordinaryFight) {
       fight.shatteringBlocks.add(block);
       fight.boss.showHitsplat(heal, { mine: shatterHealSplat, others: shatterHealSplat });
-      for (let dx = -reach; dx <= reach; dx++) {
-        const span = reach - Math.abs(dx);
-        for (let dy = -span; dy <= span; dy++) {
-          if (fight.placePool(x + dx, y + dy, !playedPoolSound)) playedPoolSound = true;
-        }
-      }
+      placeShatterPools(x, y);
     }
     fight.at(removeAfterBreakTicks, () => {
       fight.shatteringBlocks.delete(block);
       if (block.isRegistered()) Common.api.removeNpc(block);
-      if (!ordinaryFight) {
-        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) fight.placePool(x + dx, y + dy);
-      }
+      if (!ordinaryFight) placeShatterPools(x, y);
     });
   }
 }

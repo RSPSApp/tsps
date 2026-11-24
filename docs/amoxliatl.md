@@ -54,7 +54,7 @@ After every 2-4 standard attacks (Wiki) she uses a special: the first at random,
 **Unstable Ice** uses `amoxliatl_summon` (11533), "`<col=00e6e6>Amoxliatl forms some unstable ice blocks around you.`" (spam, R1140 tick 7909), and a throw (projectile 2936, cycles 50-90) at each block's tile with the impact drawn there on landing. 3 ticks later the blocks (13688, "Unstable ice") stand there (11536, sound 9713). The Wiki gives 1-4 blocks near the player; they land on free floor within 4 tiles, never on the player, her or the path.
 
 - Only melee hurts them, and a melee hit on one is a max hit that ignores the weapon's delay and leaves one of a tick (Wiki). They have 10 hitpoints (cache), so every hit breaks one: as captured, the hit shows 10, it bursts (11035, sound 9721), and a tick later it is gone with an icy pool on its tile.
-- Blocks still standing 14 ticks after forming burst (11035, sound 9721) and show one heal hitsplat of 16–25 per block. On that tick, icy pools form on the platform within two Manhattan steps of each bursting block, with one pool sound (9726) from the centre. The blocks disappear one tick after bursting. R1140 ticks 7912–7927 and 8788–8803 show 28 and 25 new pools after accounting for existing ones. The Wiki describes a 3×3 area. [Wiki revision 15399415](https://oldschool.runescape.wiki/w/Special:PermanentLink/15399415)
+- Blocks still standing 14 ticks after forming burst (11035, sound 9721) and show one heal hitsplat of 16–25 per block. On that tick, icy pools fill the available platform tiles in the 3×3 square centred on each bursting block, following the Wiki, with one pool sound (9726) from the centre. The blocks disappear one tick after bursting. The Leagues VI recording R1140 shows a wider, platform-clipped diamond with a Manhattan radius of two. It added 28 pools at tick 7926 and 25 at tick 8802 after accounting for existing pools. [Wiki revision 15399415](https://oldschool.runescape.wiki/w/Special:PermanentLink/15399415)
 
 ### The kill
 
@@ -97,7 +97,7 @@ grave).
 ## Estimates
 
 - Known respawn dialogue difference: R1140 shows three alternate lines on respawn (examples at ticks 7973, 8086 and 8715). TSPS uses the entrance line again on respawn.
-- The spikes' spread is our model of the captured tiles, not a known rule; their damage range (6-10) is the pools' from the Wiki, the captures showing 10 and 6.
+- The spike spread models the captured tiles. The captures show spike hits of 10 and 6, and TSPS uses the Wiki's icy-pool range (6–10) as the spike damage estimate. The actual spike damage cap still needs a source.
 - Where the blocks land within 4 tiles (the capture: 2-4 tiles from the player).
 - The capture's Exit prompt opened with the player a few tiles from the blockage; here the player walks up to it first.
 - The multiway indicator comes on with the move in (tick 2), not with the fade back (tick 4).

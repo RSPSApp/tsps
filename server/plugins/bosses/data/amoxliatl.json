@@ -111,8 +111,7 @@
     "postQuest": {
       "message": "<col=00e6e6>Amoxliatl forms some unstable ice blocks around you.",
       "shatterTicks": 14,
-      "shatterHealSplat": 6,
-      "shatterPoolReach": 2
+      "shatterHealSplat": 6
     },
     "count": [1, 4],
     "reach": 4,

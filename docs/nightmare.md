@@ -80,8 +80,28 @@ Between 1 and 5 standard attacks, then a special (capture). The Nightmare's: hus
 | Corpse Flowers | She leaves, is back at the centre two ticks later, segments (8601) three after that. From then: flowers planted on 1, "The Nightmare splits the area into segments!" and their growth on 3, ready on 4, opening on 8, active 9-29. Flies (1783) from each berry line bordering the player every tick, up to 20, healing her twice; hits from that side heal her. | capture; Wiki |
 | Curse | 8599 with the screen glow (script 3128), two ticks later "The Nightmare has cursed you, shuffling your prayers!" (script 3129); five of her attacks later "You feel the effects of the Nightmare's curse wear off." In every capture the prayer clicked is the one that turns on, so the shuffle is what each protection stops: Magic stops missiles, Missiles melee, Melee magic (Phosani's the other way round). | capture; Wiki |
 | Parasites | 8606; projectile 1770 two ticks later; three after that "The Nightmare has impregnated you with a deadly parasite!" and varbit `parasite` (10151) on. Twenty ticks later it bursts: 40-52 fully grown, 4-9 if a Sanfew serum or Relicym's balm weakened it ("The parasite within you has been weakened."). Out, it heals her shield 31-50 every 4 ticks, or drains the least charged totem, or attacks the player (ranged first). | capture; Wiki |
-| Spores | 8600; one of four captured layouts planted a tick later, the message and growth a tick after, armed on the fifth. Within a tile of one: it bursts (8632) and the player is drowsy for 25 ticks (no running, "*yawn*" every 6 ticks, attacks a tick slower; Phosani's two slower and 6 prayer a yawn). The rest burst on the thirtieth tick. | capture; Wiki |
+| Spores | 8600; one of four captured layouts planted a tick later, the spam message and growth a tick after, armed on the fifth. From tick six, a spore bursts (8632) for a player who ended the previous tick within a tile. The player is drowsy for 25 ticks: no running, yawns at +2, +8, +14 and +20, attacks a tick slower (Phosani's two slower and 6 prayer a yawn). | captures below; Wiki |
 | Surge | She leaves, two ticks later stands at one of twelve lanes' start (three each way across the arena, captured), four after that crosses it in one tick: "The Nightmare surges across the room, damaging you as she does!", up to 60 in her path (about 85 Phosani's). | capture; Wiki |
+
+### Spore re-infection
+
+A second burst restarts the 25 ticks and the yawn schedule, replacing any yawn due on that
+tick. Several nearby spores can burst together with one infection. The thirtieth-tick burst
+also checks the player's previous tile. Charging the totems leaves spores active until they
+burst at the blast form, or four ticks after the final charge in the shared fight. Drowsiness
+ends silently at the blast or death. The separate re-infection chat line is deferred.
+
+| Behaviour | RSProx recording and ticks |
+| --- | --- |
+| First infection, re-infection, yawns and expiry | [227/1764](https://rsprox.net/download/1764), 11468–11508 |
+| Two spores on one tick | [227/1875](https://rsprox.net/download/1875), 15004 |
+| Tick-30 proximity | [227/554](https://rsprox.net/download/554), 16239, and [237/1148](https://rsprox.net/download/1148), 5178 |
+| Phosani's totem charge and blast, and shared final blast | [237/1148](https://rsprox.net/download/1148), 6472–6478, and [227/1764](https://rsprox.net/download/1764), 10175–10179 |
+| Drowsiness at death | [227/1875](https://rsprox.net/download/1875), 22372 |
+
+The spore recordings are from Leagues or Grid Master worlds. The [Nightmare strategy
+Wiki revision](https://oldschool.runescape.wiki/w/Special:PermanentLink/15398325) describes
+drowsiness but does not specify re-infection timing.
 
 ## Loot
 
@@ -113,6 +133,9 @@ counts once for each player credited.
 - Claws' exact tile pattern: about one tile in each 3x3 block, as many as captured; Phosani's are thick within two tiles of each player.
 - Parasite and husk max hits for Phosani's use the normal ones.
 - Spores don't spread between players.
+- The shared Nightmare uses the tick-30 proximity rule seen in Phosani's dream. There was no recorded shared-fight case with the player close enough.
+- The blast-form burst gives no new infection. The one nearby case in 237/1148 at 6478 had a player who was already drowsy.
+- Phosani's yawns still drain 6 prayer. A formula of 5 plus one per 20 current prayer fits the captures allowing for ordinary prayer drain, but the formula is an estimate.
 - The hitpoints-orb Cure action uses a carried Relicym's balm before Sanfew serum for an active parasite; only a committed dose weakens it. Relicym's disease treatment is not modelled. Lunar potion-sharing effects on parasites and the exact no-remedy wording are not established here.
 - The pet's drop rate doesn't fall with team size.
 

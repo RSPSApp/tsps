@@ -552,6 +552,8 @@ function extractWorldMapIcons(
     return icons;
 }
 
+const SERVER_MAP_ICON_SPRITE_START = 30000;
+
 function createMapFunctionResolver(
     state: WorkerState,
 ): (id: number) => MapElementMetadata | undefined {
@@ -566,6 +568,19 @@ function createMapFunctionResolver(
             const melLoader = new ArchiveMapElementTypeLoader(cacheInfo, mapElementArchive);
             const spriteCache = new Map<number, MapElementMetadata | undefined>();
             return (mapFuncId: number) => {
+                if (mapFuncId >= SERVER_MAP_ICON_SPRITE_START) {
+                    return {
+                        spriteId: mapFuncId,
+                        minimapVisible: true,
+                        worldMapVisible: true,
+                        category: 0,
+                        name: undefined,
+                        textColor: 0,
+                        textSize: 0,
+                        horizontalAlignment: 1,
+                        verticalAlignment: 1,
+                    };
+                }
                 if (!spriteCache.has(mapFuncId)) {
                     let sprite: MapElementMetadata | undefined = undefined;
                     try {

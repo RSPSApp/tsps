@@ -359,6 +359,7 @@
     "hitTicks": 3,
     "leaveTicks": 4,
     "blastFormTicks": 6,
+    "lastSporeBlastTicks": 4,
     "blastFormAnim": 8610,
     "blastFormSound": [4262, 4]
   },

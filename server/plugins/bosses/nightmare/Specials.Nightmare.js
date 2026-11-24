@@ -89,20 +89,29 @@ function processPlayer(fight, player) {
   processDrowsy(fight, player);
 }
 
-/** Everything a special left behind, when the fight moves on (a blast, her death). */
-function interrupt(fight) {
+/** Clear interrupted specials, preserving the spores through a totem charge. */
+function interrupt(fight, { keepSpores = false } = {}) {
   Claws.clear(fight);
   Flowers.clear(fight);
-  Spores.clear(fight);
+  if (!keepSpores) {
+    Spores.clear(fight);
+    fight.drowsy.clear();
+  }
   Husks.clear(fight);
   Parasites.clear(fight);
   Surge.clear(fight);
   for (const player of [...fight.curse.keys()]) liftCurse(fight, player, false);
 }
 
+function blastSpores(fight) {
+  Spores.burstAll(fight);
+  fight.drowsy.clear();
+}
+
 function playerLeft(fight, player) {
   liftCurse(fight, player, false);
   endDrowsy(fight, player, false);
+  Spores.playerLeft(fight, player);
   Husks.playerLeft(fight, player);
   Parasites.playerLeft(fight, player);
 }
@@ -169,10 +178,10 @@ function processCurses() {}
 
 /** Spores: drowsy for 25 ticks - no running, slower attacks, yawning (Phosani's drain prayer). */
 function makeDrowsy(fight, player) {
-  if (fight.drowsy.has(player)) return;
   const { spores, varps } = Common.data;
-  fight.drowsy.set(player, { until: fight.tick + spores.drowsyTicks, nextYawn: fight.tick + 2 });
-  player.sendMessage(spores.infected);
+  const previous = fight.drowsy.get(player);
+  fight.drowsy.set(player, { ...previous, until: fight.tick + spores.drowsyTicks, nextYawn: fight.tick + 2 });
+  if (!previous) player.sendMessage(spores.infected);
   if (player.isRunningReturn?.()) {
     player.setRunning(false);
     player.getPacketSender().sendConfig(varps.run, 0);
@@ -232,6 +241,6 @@ function attachSpecials(api) {
 }
 
 module.exports = {
-  attachSpecials, phosaniSets, startPhase, maybeSpecial, process, processPlayer, interrupt, playerLeft, desperation,
+  attachSpecials, phosaniSets, startPhase, maybeSpecial, process, processPlayer, interrupt, blastSpores, playerLeft, desperation,
   heldFlowers, curse, blockedBy, attackLanded, makeDrowsy, drowsyDelay,
 };

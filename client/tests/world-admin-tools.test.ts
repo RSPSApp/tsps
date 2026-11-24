@@ -33,4 +33,11 @@ test('Ghost plugins group first without moving files; plugin shortcuts render as
     assert.match(groups[0].querySelector('summary')!.textContent!, /^@ Ghost Plugins @/);
     for (const name of ['Creator', 'MonsterExamine', 'AdminPanel']) assert.ok(groups[0].textContent!.includes(name));
     assert.equal(data.catalog.plugins[1].file, 'tools/ContentBuilders.plugin.js', 'category never rewrites the source path');
+    const search = w.document.getElementById('search');
+    search.value = '@ Ghost';
+    search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(groups[0].hidden, false, 'readable host grouping stays searchable with the upstream bundle');
+    assert.equal(groups[1].hidden, true, 'empty category groups hide after search');
+
 });

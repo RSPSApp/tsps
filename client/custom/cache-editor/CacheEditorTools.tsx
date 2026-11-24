@@ -91,7 +91,9 @@ export function CacheEditorTools({ contentBase, selection, onReturn }: { content
         setContainer(root); setNativeTabs(root.querySelector('.cache-editor-mode-tabs'));
         const header = root.querySelector<HTMLElement>('.cache-editor-header');
         const resize = () => setTop(header?.offsetHeight ?? 0);
-        resize(); const observer = new ResizeObserver(resize); if (header) observer.observe(header);
+        resize();
+        if (typeof ResizeObserver === "undefined") return;
+        const observer = new ResizeObserver(resize); if (header) observer.observe(header);
         return () => observer.disconnect();
     }, []);
     useEffect(() => {

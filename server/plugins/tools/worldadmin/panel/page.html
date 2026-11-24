@@ -355,11 +355,56 @@
   };
   var { el, same, has, createPluginPanel, filterGroups } = window.LocalPluginPanel;
   var search = document.getElementById("search");
-  var pluginPanel = createPluginPanel({
+  // Keep local category grouping in this readable host source. The generated
+  // panel bundle can be replaced by upstream updates without losing this behavior.
+  function categorizedPluginPanel(panel) {
+    var groups = [], observer;
+    function refresh() {
+      groups.forEach(function (group) {
+        group.el.hidden = !group.rows.some(function (row) { return !row.el.hidden; });
+      });
+    }
+    var build = panel.build.bind(panel), searchPlugins = panel.applyPluginSearch.bind(panel);
+    panel.build = function (catalog, options) {
+      if (observer) observer.disconnect();
+      var rows = build(catalog, options), byName = new Map(catalog.plugins.map(function (plugin) { return [plugin.name, plugin]; }));
+      var installed = document.getElementById("plugins-installed"), buckets = new Map();
+      rows.filter(function (row) { return row.kind === "plugin"; }).forEach(function (row) {
+        var plugin = byName.get(row.key);
+        var category = plugin.category || (plugin.packageId && plugin.file.startsWith("imported/") ? "Imported" : plugin.file.split("/").slice(0, -1).map(function (part) { return part.charAt(0).toUpperCase() + part.slice(1); }).join(" / ")) || "Other";
+        if (!buckets.has(category)) buckets.set(category, []);
+        buckets.get(category).push(row);
+        row.search += " " + category.toLowerCase();
+      });
+      installed.querySelectorAll(":scope > details.group").forEach(function (group) { group.remove(); });
+      groups = [...buckets.keys()].sort(function (a, b) {
+        return Number(!a.startsWith("@ Ghost")) - Number(!b.startsWith("@ Ghost")) || a.localeCompare(b);
+      }).map(function (category) {
+        var members = buckets.get(category), group = document.createElement("details"), summary = document.createElement("summary");
+        var count = document.createElement("span"), contents = document.createElement("div");
+        group.className = "group"; contents.className = "rows"; count.className = "folder-count";
+        summary.textContent = category; count.textContent = members.length + (members.length === 1 ? " plugin" : " plugins");
+        summary.appendChild(count); members.forEach(function (row) { contents.appendChild(row.el); });
+        group.append(summary, contents); installed.insertBefore(group, document.getElementById("plugins-empty"));
+        return { el: group, rows: members };
+      });
+      panel.applyPluginSearch();
+      observer = new MutationObserver(function (changes) {
+        if (changes.some(function (change) { return change.target.classList.contains("plugin"); })) refresh();
+      });
+      observer.observe(installed, { subtree: true, attributes: true, attributeFilter: ["hidden"] });
+      return rows;
+    };
+    panel.applyPluginSearch = function () { searchPlugins(); refresh(); };
+    var destroy = panel.destroy.bind(panel);
+    panel.destroy = function () { if (observer) observer.disconnect(); destroy(); };
+    return panel;
+  }
+  var pluginPanel = categorizedPluginPanel(createPluginPanel({
     state: state, components: LocalPanelComponents, search: search, plugins: document.getElementById("panel-plugins"),
     uploadPlugin: uploadPlugin, installPlugin: installPlugin, deletePlugin: deletePlugin,
     updateFooter: updateFooter, readOnly: readOnly, busy: busy,
-  });
+  }));
 
   async function uploadPlugin(file) {
     try {

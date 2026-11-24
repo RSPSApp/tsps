@@ -99,6 +99,28 @@ async function castleWarsNativeCutouts(): Promise<void> {
         builder.addTileModels(scene, false);
         assertPit(scene.tiles[0][31][27]?.tileModel, "Castle Wars 2399,3099");
         assertPit(scene.tiles[0][32][36]?.tileModel, "Castle Wars 2400,3108");
+        // These cache regions are predominantly full transparent floor cutouts, not individual openings.
+        for (const [mapX, mapY] of [[27, 79], [28, 79], [51, 90]]) {
+            const control = new Scene(1, 64, 64);
+            const data = CacheMaps.getRegion((mapX << 8) | mapY)!;
+            builder.decodeTerrain(control, new Int8Array(data.terrainData), 0, 0, mapX * 64, mapY * 64, mapX, mapY);
+            builder.addTileModels(control, false);
+            const transparent = (x: number, y: number): boolean => {
+                const id = (control.tileOverlays[0][x][y] & 0x7fff) - 1;
+                if (id < 0 || control.tileShapes[0][x][y] !== 0) return false;
+                const overlay = overlayLoader.load(id);
+                return overlay.textureId === -1 && overlay.primaryRgb === 0xff00ff;
+            };
+            let checked = 0;
+            for (let x = 1; x < 63; x++) for (let y = 1; y < 63; y++) {
+                if (!transparent(x, y) || ![[x-1,y],[x+1,y],[x,y-1],[x,y+1]].some(([nx,ny]) => transparent(nx,ny))) continue;
+                assert.equal(control.tiles[0][x][y]!.tileModel!.faces.length, 0,
+                    `cache ${mapX},${mapY} tile ${x},${y}: adjacent transparent cutouts stay hidden`);
+                checked++;
+            }
+            assert.ok(checked > 1000, `cache ${mapX},${mapY}: exercised a large transparent floor region`);
+            console.info(`Transparent region ${mapX},${mapY}: ${checked} adjacent cutouts remain hidden`);
+        }
     } finally {
         CachePipeline.getStore().close();
     }
@@ -113,6 +135,9 @@ function transparentOverlayControls(): void {
     scene.tileOverlays[0][3][3] = 1;
     scene.tileShapes[0][3][3] = 1; // partial cutout keeps its underlay geometry
     scene.tileOverlays[0][8][8] = 2; // textured magenta floor stays textured
+    scene.tileUnderlays[0][2][8] = 0; // legacy missing-floor holes retain their enclosure rule
+    scene.tileOverlays[0][3][8] = 1;
+    scene.tileOverlays[0][4][8] = scene.tileOverlays[0][5][8] = 1; // adjacent cutouts, even over underlays
     scene.tileOverlays[0][1][6] = 1;
     scene.tileUnderlays[0][0][6] = 0; // full cutout beside missing terrain is not an enclosed pit
     const floor = { getHueBlend: () => 0, getHueMultiplier: () => 1, saturation: 0, lightness: 0 };
@@ -121,6 +146,9 @@ function transparentOverlayControls(): void {
         {} as any, { textureLoader: { isSd: () => true, getAverageHsl: () => 0 } } as any, new Map());
     builder.addTileModels(scene, false);
     assertPit(scene.tiles[0][6][6]?.tileModel, "generic full cutout");
+    assertPit(scene.tiles[0][2][8]?.tileModel, "legacy missing-floor hole beside a cutout");
+    assert.equal(scene.tiles[0][4][8]!.tileModel!.faces.length, 0, "adjacent cutouts do not enclose one another");
+    assert.equal(scene.tiles[0][5][8]!.tileModel!.faces.length, 0, "underlays beneath a full cutout are not rendered floor");
     const partial = scene.tiles[0][3][3]!.tileModel!;
     assert.equal(partial.faces.length, 1);
     assert.equal(partial.underlayId, 1);

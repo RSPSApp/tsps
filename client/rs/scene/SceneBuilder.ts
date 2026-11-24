@@ -1563,7 +1563,7 @@ export class SceneBuilder {
                     const cutout = tileShapes[level][x][y] === 0 &&
                         overlay?.textureId === -1 && overlay.primaryRgb === 0xff00ff;
                     const floorHole = ((underlayId === -1 && !overlay) || cutout) &&
-                        this.isEnclosedFloorHole(scene, level, x, y);
+                        this.isEnclosedFloorHole(scene, level, x, y, cutout);
                     if (underlayId === -1 && !overlay && !floorHole) continue;
 
                     const heightSw = heights[level][x][y];
@@ -1720,16 +1720,17 @@ export class SceneBuilder {
      * trapdoor opening inside a building) rather than an unloaded map edge. Those holes
      * get a pit model so the sky is not visible through them.
      */
-    private isEnclosedFloorHole(scene: Scene, level: number, x: number, y: number): boolean {
-        const sizeX = scene.sizeX;
-        const sizeY = scene.sizeY;
-        const floored = (tileX: number, tileY: number): boolean =>
-            tileX >= 0 &&
-            tileY >= 0 &&
-            tileX < sizeX &&
-            tileY < sizeY &&
-            (scene.tileUnderlays[level][tileX][tileY] > 0 ||
-                (scene.tileOverlays[level][tileX][tileY] & 0x7fff) > 0);
+    private isEnclosedFloorHole(scene: Scene, level: number, x: number, y: number, visibleFloorOnly = false): boolean {
+        const floored = (tileX: number, tileY: number): boolean => {
+            if (tileX < 0 || tileY < 0 || tileX >= scene.sizeX || tileY >= scene.sizeY) return false;
+            const underlay = scene.tileUnderlays[level][tileX][tileY] > 0;
+            const overlayId = (scene.tileOverlays[level][tileX][tileY] & 0x7fff) - 1;
+            if (!visibleFloorOnly || overlayId === -1) return underlay || overlayId !== -1;
+            const overlay = this.overlayTypeLoader.load(overlayId);
+            // Full transparent overlays hide their underlay too: adjacent cutouts cannot enclose a new pit.
+            return overlay.textureId !== -1 || overlay.primaryRgb !== 0xff00ff ||
+                (scene.tileShapes[level][tileX][tileY] !== 0 && underlay);
+        };
         return floored(x - 1, y) && floored(x + 1, y) && floored(x, y - 1) && floored(x, y + 1);
     }
 

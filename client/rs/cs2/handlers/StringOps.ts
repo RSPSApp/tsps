@@ -1,6 +1,7 @@
 /**
  * String operations: concatenation, comparison, manipulation
  */
+import { compareStringsOsrs } from "../StringCollation";
 import { Opcodes } from "../Opcodes";
 import type { HandlerMap } from "./HandlerTypes";
 
@@ -64,7 +65,7 @@ export function registerStringOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.COMPARE, (ctx) => {
         const str2 = ctx.stringStack[--ctx.stringStackSize] ?? "";
         const str1 = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        ctx.pushInt(str1 === str2 ? 0 : str1 < str2 ? -1 : 1);
+        ctx.pushInt(Math.sign(compareStringsOsrs(str1, str2)));
     });
 
     handlers.set(Opcodes.LOWERCASE, (ctx) => {

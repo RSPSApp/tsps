@@ -1,6 +1,7 @@
 const { PlayerToolError, requireNativeAccess } = require("../PlayerTools");
 
 const BOOKS = [["NORMAL", "Standard"], ["ANCIENT", "Ancient"], ["LUNAR", "Lunar"], ["ARCEUUS", "Arceuus"]];
+const BOOK_COMMANDS = { NORMAL: "normal", ANCIENT: "ancients", LUNAR: "lunar", ARCEUUS: "arceuus" };
 const PRAYERS = ["PRESERVE", "RIGOUR", "AUGURY"];
 const fail = message => { throw new PlayerToolError(409, message); };
 
@@ -74,7 +75,8 @@ function cure(api, player) {
 async function apply(api, actor, player, body) {
   const { core } = api;
   const command = body.testing === "special" || body.testing === "restore" ? "spec"
-    : body.testing?.startsWith("prayer:") ? "unlockprayers" : null;
+    : body.testing?.startsWith("prayer:") ? "unlockprayers"
+    : body.testing?.startsWith("book:") ? BOOK_COMMANDS[body.testing.slice(5)] : null;
   requireNativeAccess(core, actor, player, command ? [command] : []);
   if (core.Server.isShuttingDown()) fail("Wait until the server has finished restarting.");
   if (!player?.isRegistered() || core.World.getPlayerByName(player.getUsername()) !== player) fail("The player is offline.");

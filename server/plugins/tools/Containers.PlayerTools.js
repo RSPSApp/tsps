@@ -40,6 +40,11 @@ function checkedSlot(core, held, name, slot) {
   if (!Number.isInteger(slot) || slot < 0 || slot >= limit || name === "equipment" && !equipmentNames(core).has(slot)) fail("Choose a valid item slot.");
   return held.getItems()[slot];
 }
+function raisesQuantity(core, player, body) {
+  const held = container(core, player, body.container, body.bankTab ?? 0);
+  const item = checkedSlot(core, held, body.container, body.slot);
+  return body.quantity > (item?.getAmount() ?? 0);
+}
 function putSlot(core, held, name, slot, item) {
   if (name === "bank") while (held.getItems().length <= slot) held.getItems().push(new core.Item(-1, 0));
   held.setItem(slot, item);
@@ -168,5 +173,5 @@ function apply(core, player, body) {
   refresh(core, player, changed, body.container);
   return { message, undo: body.mode === "undo" ? null : { held, before, after: scopeFingerprint(scope(core, player, body.container)), container: body.container, bankTab: body.bankTab ?? 0 } };
 }
-module.exports = { entries, apply, fingerprint, signature, container,
+module.exports = { raisesQuantity, entries, apply, fingerprint, signature, container,
   viewFingerprint: (core, player, name) => scopeFingerprint(scope(core, player, name)) };

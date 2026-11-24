@@ -445,7 +445,7 @@ test("pending saves block duplicates and failures report the already-applied liv
 });
 
 test("Character switches every supported spellbook and saves only the selected target", async t => {
-  const f = fixture(t); f.open(); f.choose("TargetOne"); f.section(SECTION.CHARACTER);
+  const f = fixture(t, Rights.DEVELOPER); f.open(); f.choose("TargetOne"); f.section(SECTION.CHARACTER);
   assert.equal(f.actor.hidden.get(uid(C.LIST_VIEW)), false);
   assert.equal(f.actor.hidden.get(uid(C.SKILL_VIEW)), true);
   for (const [key, name] of [["ANCIENT", "Ancient"], ["LUNAR", "Lunar"], ["ARCEUUS", "Arceuus"], ["NORMAL", "Standard"]]) {
@@ -1229,4 +1229,34 @@ test('Bots visual snapshots use the same server browse, setup and management sta
   assert.equal(f.actor.texts.get(uid(B.TITLE)),'Manage Field Recruit');
   f.click(B.BACK);f.click(B.CATEGORY+2);capture('self');
   assert.equal(f.actor.texts.get(uid(B.PRIMARY_LABEL)),'Start bot control');
+});
+
+
+test("Character refuses spellbook switches without the matching native command", async t => {
+  const f = fixture(t); f.open(); f.choose("TargetOne"); f.section(SECTION.CHARACTER);
+  for (const [label, command] of [["Standard", "normal"], ["Ancient", "ancients"], ["Lunar", "lunar"], ["Arceuus", "arceuus"]]) {
+    f.select(`${label} spellbook`); f.action(0); await f.settle();
+    assert.match(f.actor.messages.at(-1), new RegExp(`::${command}`));
+    assert.equal(f.target.getSpellbook(), core.MagicSpellbook.NORMAL);
+  }
+});
+
+test("all native container grants recheck item and give permissions", async t => {
+  const f = fixture(t, Rights.OWNER);
+  const { applyPlayerTool } = require("../plugins/tools/PlayerTools");
+  const { signature } = require("../plugins/tools/Containers.PlayerTools");
+  const previous = PluginManager.commandPermissionsCache;
+  PluginManager.commandPermissionsCache = new Map([["item", Rights.DEVELOPER.getId()], ["give", Rights.DEVELOPER.getId()]]);
+  t.after(() => { PluginManager.commandPermissionsCache = previous; });
+  for (const target of [f.actor, f.target]) {
+    const inventory = target.getInventory(); inventory.setItem(0, new core.Item(I.COINS, 10));
+    const run = (mode, quantity) => applyPlayerTool({ core }, target, { action: "container", container: "inventory", slot: 0,
+      signature: signature(inventory.getItems()[0]), mode, quantity, itemId: I.COINS }, { actor: f.actor });
+    for (const [mode, quantity] of [["add", 1], ["increase", 1], ["set", 11]]) {
+      await assert.rejects(run(mode, quantity), new RegExp(`::${target === f.actor ? "item" : "give"}`));
+      assert.equal(inventory.getItems()[0].getAmount(), 10);
+    }
+    await run("set", 9);
+    assert.equal(inventory.getItems()[0].getAmount(), 9, "lowering an amount still needs only copybank");
+  }
 });

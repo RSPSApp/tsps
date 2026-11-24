@@ -76,7 +76,7 @@ function requireNativeAccess(core, actor, target, commands = []) {
   }
 }
 
-function requiredCommands(actor, target, body, teleportCommand) {
+function requiredCommands(core, actor, target, body, teleportCommand) {
   const grants = actor === target ? "item" : "give";
   switch (body.action) {
     case "teleport": return [teleportCommand];
@@ -84,7 +84,11 @@ function requiredCommands(actor, target, body, teleportCommand) {
     case "skill": return ["setlevel"];
     case "preset": return [body.preset === "reset" ? "reset" : "master"];
     case "quest": return ["quest"];
-    case "container": return body.mode === "add" ? ["copybank", grants] : ["copybank"];
+    case "container": {
+      const creating = body.mode === "add" || body.mode === "increase" || body.mode === "set" &&
+        require("./Containers.PlayerTools").raisesQuantity(core, target, body);
+      return creating ? ["copybank", grants] : ["copybank"];
+    }
     default: return [];
   }
 }
@@ -95,7 +99,7 @@ async function applyPlayerTool(api, target, body, { actor, teleportCommand = "te
   const core = api.core;
   if (core.Server?.isShuttingDown?.()) throw new PlayerToolError(409, "Wait until the server has finished restarting.");
   if (!target || target.isRegistered?.() === false) throw new PlayerToolError(409, "The player is offline.");
-  if (actor) requireNativeAccess(core, actor, target, requiredCommands(actor, target, body, teleportCommand));
+  if (actor) requireNativeAccess(core, actor, target, requiredCommands(core, actor, target, body, teleportCommand));
   if (target.getProfile() !== (core.GameConstants.WORLD_PROFILE ?? "main")) throw new PlayerToolError(409, "The player is on a different world profile.");
   if (target.isDyingReturn() || target.getHitpoints() <= 0 || target.isTeleportingReturn()) {
     throw new PlayerToolError(409, "Wait until the player is alive and has finished teleporting.");

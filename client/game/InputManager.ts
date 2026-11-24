@@ -850,12 +850,14 @@ export class InputManager {
             this.mouseY = y;
             this.isTouch = false;
             event.preventDefault();
-            if (!this.mouseCamEnabled) return;
-            this.mouseWheelDown = true;
-            this.mouseWheelX = x;
-            this.mouseWheelY = y;
-            this.installDocumentGrab();
-            return;
+            if (this.mouseCamEnabled) {
+                this.mouseWheelDown = true;
+                this.mouseWheelX = x;
+                this.mouseWheelY = y;
+                this.installDocumentGrab();
+                return;
+            }
+            // With the camera option off, OSRS reads the middle button as a left click.
         }
 
         // Right drag turns the camera (Camera plugin): hold the press until it moves or lifts.
@@ -875,7 +877,7 @@ export class InputManager {
             this.clickMode2 = ClickMode.RIGHT;
         }
         // Left click
-        else if (event.button === 0) {
+        else if (event.button === 0 || event.button === 1) {
             this.clickMode1 = ClickMode.LEFT;
             this.clickMode2 = ClickMode.LEFT;
             this._dragStartX = x;

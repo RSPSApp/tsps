@@ -165,7 +165,9 @@ export function osrsTargetLabel(e: OsrsMenuEntry, opts: TargetLabelOptions = {})
                   )
                 : arrow.right;
         const right = rightBase.length ? `${colorStartTag(baseColor)}${rightBase}` : "";
-        t = left.length && right.length ? `${left} -> ${right}` : `${left}${right}`;
+        // OSRS ends the selected name with a white colour tag, so the arrow never takes the
+        // hovered row's yellow.
+        t = left.length && right.length ? `${left}${colorStartTag(0xffffff)} -> ${right}` : `${left}${right}`;
     } else {
         const base =
             e.targetType === MenuTargetType.NPC || e.targetType === MenuTargetType.PLAYER

@@ -27,8 +27,6 @@ const CHEWED_BONES = 11338;
 const MANGLED_BONES = 11337;
 const TINDERBOX = 590;
 const FEROCIOUS_SPIRIT_LIFETIME_TICKS = 300;
-const PYRE_CONSTRUCT_SEQUENCE = "BRUT_PYRE_BOAT_LAUNCH";
-const PYRE_LIGHT_SEQUENCE = "BRUT_PYRE_BOAT_FIRE";
 const PEACEFUL_SPIRIT_RARE_CHANCE = 256;
 
 /** Chewed-bones peaceful spirit table (Wiki). Amount bounds are inclusive. */
@@ -118,11 +116,6 @@ function carriedLog(inventory) {
     if (inventory.contains(id)) return id;
   }
   return null;
-}
-
-function playSequence(player, name) {
-  const id = core.CacheDefinitions.getSeqId(name);
-  if (Number.isInteger(id) && id >= 0) player.performAnimation(new core.Animation(id));
 }
 
 function rollPeacefulReward(random = Math.random) {
@@ -239,7 +232,6 @@ function buildPyre(player, object, logsId) {
     return true;
   }
   inventory.deleteNumber(logsId, 1);
-  playSequence(player, PYRE_CONSTRUCT_SEQUENCE);
   player.getSkillManager().addExperiences(core.Skill.CRAFTING, row.craftXp);
   const next = swap(object, PYRE_BOAT);
   pyres.set(key, { player, logsId, bonesId: null, object: next });
@@ -284,7 +276,6 @@ function itemOnPyre(event) {
       return true;
     }
     const row = PYRE_LOGS.get(use.logsId);
-    playSequence(player, PYRE_LIGHT_SEQUENCE);
     player.getSkillManager().addExperiences(core.Skill.FIREMAKING, row.firemakingXp);
     use.object = swap(object, PYRE_LIT);
     player.sendMessage("You light the pyre.");

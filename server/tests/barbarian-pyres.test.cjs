@@ -22,14 +22,11 @@ function objectAt(id, x, y) {
 
 function player({ inventory = {}, levels = {} } = {}) {
   const messages = [];
-  const animations = [];
   const items = new Map(Object.entries(inventory).map(([id, amount]) => [Number(id), amount]));
   return {
     messages,
-    animations,
     getLocation: () => location(2503, 3498),
     sendMessage: (text) => messages.push(text),
-    performAnimation: (animation) => animations.push(animation.id),
     getInventory: () => ({
       contains: (id) => (items.get(id) ?? 0) > 0,
       getAmount: (id) => items.get(id) ?? 0,
@@ -59,8 +56,6 @@ function fixture() {
       }[id] ?? "") }),
     },
     Skill: { CRAFTING: "CRAFTING", FIREMAKING: "FIREMAKING" },
-    CacheDefinitions: { getSeqId: (name) => ({ BRUT_PYRE_BOAT_LAUNCH: 6734, BRUT_PYRE_BOAT_FIRE: 6733 })[name] },
-    Animation: class { constructor(id) { this.id = id; } },
     Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } },
     ItemOnGroundManager: { registerNonGlobals: (player, item, loc) => groundItems.push({ player, item, loc }) },
     ObjectManager: { register(object) { objects.push(object); } },
@@ -134,7 +129,7 @@ test("lighting a bones pyre needs a tinderbox or bow and grants Firemaking exper
   assert.ok(p.messages.includes("You light the pyre."));
 });
 
-test("construction and lighting animate the player and chewed bones drop a peaceful spirit reward", () => {
+test("chewed bones drop a peaceful spirit reward", () => {
   const f = fixture();
   const p = player({ inventory: { 1351: 1, 1511: 1, 11338: 1, 590: 1 } });
   const originalRandom = Math.random;
@@ -149,7 +144,6 @@ test("construction and lighting animate the player and chewed bones drop a peace
     Math.random = originalRandom;
   }
 
-  assert.deepEqual(p.animations, [6734, 6733]);
   assert.equal(f.groundItems.length, 1);
   assert.equal(f.groundItems[0].player, p);
   assert.equal(f.groundItems[0].item.id, 100);

@@ -89,7 +89,7 @@ window.LocalPlayerTools = {
             value: item.id, text: `${item.name}${item.noted ? " (noted)" : ""} · ${item.id}${item.stackable ? " · stackable" : ""}`,
           })));
           matches.selectedIndex = -1;
-          itemStatus.textContent = result.body.items.length ? `${result.body.items.length} results. Select an item.${result.body.items.length === 50 ? " Refine the search to see more matches." : ""}` : "No items found. Try another name.";
+          itemStatus.textContent = result.body.items.length ? `${result.body.items.length} results. Select an item.` : "No items found. Try another name.";
         } catch (error) {
           if (version === searchVersion && root.isConnected) itemStatus.textContent = error.message;
         }

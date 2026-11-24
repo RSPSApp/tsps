@@ -67,7 +67,6 @@ async function playerRoutes(request, response, url, api, offlineCatalogue) {
     const { action, rights, enabled } = body;
     const candidate = core.World.getPlayerByName(name);
     const target = candidate?.isPlayerBot?.() ? undefined : candidate;
-    if (candidate?.isPlayerBot?.()) throw new HttpError(409, "Use the Bots panel to manage bots.");
     if (!target && !persistence.exists(name, profile)) throw new HttpError(404, "Player not found.");
     const result = await toolAction(api, target, body);
     if (result) {

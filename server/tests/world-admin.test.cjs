@@ -98,11 +98,11 @@ async function start(t, env = {}, opts = {}) {
   const hooks = {};
   const api = {
     core,
+    getPlayerPunishment: () => opts.playerPunishment,
     getPluginConfig: (_key, fallback) => opts.playerTools ?? fallback,
     onServerStartup: (h) => { hooks.startup = h; },
     onServerShutdown: (h) => { hooks.shutdown = h; },
     emitCustomEvent: (name, payload) => {
-      opts.onCustomEvent?.(name, payload);
       state.events.push({ name, payload });
       if (!state.gameUpdateLoaded) return;
       if (name === "GameUpdate:start") {
@@ -285,7 +285,6 @@ test("the panel links to the map and cache editors on this worktree's client por
   assert.equal(catalog.status, 200);
   assert.equal(catalog.json.mapEditorUrl, "http://localhost:3103/?edit=1");
   assert.equal(catalog.json.cacheEditorUrl, "http://localhost:3103/?cache=1");
-  assert.deepEqual(catalog.json.toolLinks, [], "no plugin means no extra shortcuts");
 
   const page = await request(port, { path: "/", headers: auth });
   assert.equal(page.status, 200);
@@ -296,23 +295,6 @@ test("the panel links to the map and cache editors on this worktree's client por
   assert.match(page.text, /<div class="tool-group-label">Tools<\/div>/);
   assert.match(page.text, /\.tool-link:hover \{ background: #2a2c30; color: #fff; \}/);
   assert.match(page.text, /function updateToolLink\(id, href, flag\)/);
-});
-
-test("active plugins contribute local editor shortcuts without hard-coded Creator links", async t => {
-  const { port } = await start(t, { PORT: "3101" }, { onCustomEvent(name, payload) {
-    if (name !== "WorldAdmin:tools") return;
-    payload.tools.push(
-      { id: "npc-editor", label: "NPC editor", params: { cache: "1", tool: "content-builders", "tool-view": "npc" } },
-      { id: "gear-editor", label: "Gear editor", params: { cache: "1", tool: "content-builders", "tool-view": "gear" } },
-      { id: "npc-editor", label: "Duplicate", params: {} },
-      { id: "bad", label: "Invalid", params: { cache: 1 } },
-    );
-  } });
-  const response = await request(port, { path: "/api/catalog", headers: auth });
-  assert.deepEqual(response.json.toolLinks, [
-    { id: "npc-editor", label: "NPC editor", url: "http://localhost:3101/?cache=1&tool=content-builders&tool-view=npc" },
-    { id: "gear-editor", label: "Gear editor", url: "http://localhost:3101/?cache=1&tool=content-builders&tool-view=gear" },
-  ]);
 });
 
 test("retired editor links open the Bots panel behind authentication", async (t) => {
@@ -349,7 +331,7 @@ test("the editor links show only where the page is open on this machine, not on 
   assert.equal(localToolHref("http://localhost:3000/?cache=1", "edit", "localhost"), null);
   assert.throws(() => localToolHref("not a url", "edit", "localhost"));
   // With neither link usable the whole Tools group is hidden, not just its links.
-  assert.match(page, /document\.getElementById\("tool-group"\)\.hidden = !mapEditorShown && !cacheEditorShown && !pluginToolsShown;/);
+  assert.match(page, /document\.getElementById\("tool-group"\)\.hidden = !mapEditorShown && !cacheEditorShown;/);
 });
 
 test("the panel serves its bundled assets with authentication", async (t) => {
@@ -662,6 +644,22 @@ test("player tools can be switched off without removing moderation", async t => 
   assert.equal((await request(port, { path: "/api/players/action?name=Alice", method: "POST", headers: auth,
     body: { action: "give", itemId: 2, quantity: 1 } })).status, 409);
   assert.equal((await request(port, { path: "/api/players", headers: auth })).status, 200);
+});
+
+test("a bot with a saved player's name leaves offline moderation available", async t => {
+  const { core, player, state } = playerToolsFixture(t);
+  player.isPlayerBot = () => true;
+  const bans = [];
+  const { port } = await start(t, {}, { core, playerPunishment: {
+    ban: name => bans.push(name), flush: async () => {},
+  } });
+  const action = body => request(port, { path: "/api/players/action?name=Alice", method: "POST", headers: auth, body });
+  assert.equal((await action({ action: "ban", enabled: true })).status, 200);
+  assert.deepEqual(bans, ["Alice"]);
+  const give = await action({ action: "give", itemId: 2, quantity: 1 });
+  assert.equal(give.status, 409);
+  assert.match(give.json.error, /offline/);
+  assert.equal(state.items, 0);
 });
 
 test("a failed save reports the already-applied live change instead of claiming success", async t => {

@@ -12,7 +12,7 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 let core, I;
-const WATER_BOWL = 6668, SEAWEED_BOWL = 6669, TINY_NET = 6674, BONES = 526;
+const WATER_BOWL = 6668, SEAWEED_BOWL = 6669, TINY_NET = 6674, FISHFOOD_BOX = 6675, BONES = 526;
 before(async () => { await CachePipeline.initialize(path.resolve(__dirname, "..")); PM.loadFromDirectory(path.resolve(__dirname, "../plugins")); core = PM.getCoreApi(); I = core.ItemIdentifiers; PM.emitServerStartup({}); });
 after(() => PM.emitServerShutdown({}));
 
@@ -100,4 +100,19 @@ test("a player who already owns a tiny net is not sold a second one", async (t) 
   await finish(f);
   assert.equal(count(f, TINY_NET), 1);
   assert.equal(count(f, I.COINS), 100);
+});
+
+test("Harry gives one empty fishfood box for free when asked about fishfood", async (t) => {
+  const f = actor(t, { items: [SEAWEED_BOWL] });
+  await choose(f, /Do you have any fishfood/);
+  await finish(f);
+  assert.equal(count(f, FISHFOOD_BOX), 1);
+  assert.equal(count(f, I.COINS), 100);
+});
+
+test("a full inventory gets no fishfood box", async (t) => {
+  const f = actor(t, { items: [SEAWEED_BOWL], fill: true });
+  await choose(f, /Do you have any fishfood/);
+  await finish(f);
+  assert.equal(count(f, FISHFOOD_BOX), 0);
 });

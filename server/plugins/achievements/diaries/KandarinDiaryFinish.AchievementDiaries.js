@@ -74,6 +74,8 @@ const STAMINA_POTION_2 = 12629;
 const STAMINA_MIX_2 = 12633;
 const CAVIAR = 11326;
 const TINY_NET = 6674;
+const EMPTY_FISHFOOD_BOX = 6675;
+const HARRY_FISHFOOD_BOX_STEP = "NnWqGe";
 const FISHBOWL_WATER_SEAWEED = 6669;
 const FISHBOWL_WATER = 6668;
 const PET_FISH_IDS = [6670, 6671, 6672];
@@ -179,7 +181,9 @@ function candlePurchased({ player, shopId, itemId }) {
 function harryDialogue(event) {
   if (event.handled || !event.player) return;
   if (!(event.pages ?? []).some((entry) => entry.page === "Harry")) return;
-  if (event.action !== "receive" || event.stepId !== "2WT853") return;
+  if (event.action !== "receive") return;
+  if (event.stepId === HARRY_FISHFOOD_BOX_STEP) return giveFishfoodBox(event);
+  if (event.stepId !== "2WT853") return;
 
   const inventory = event.player.getInventory();
   if (!inventory.contains(TINY_NET)) {
@@ -199,6 +203,18 @@ function harryDialogue(event) {
     inventory.adds(TINY_NET, 1);
   }
   event.handled = true;
+}
+
+/** "Do you have any fishfood?": Harry hands over an empty fishfood box for free; his transcript sets no limit. */
+function giveFishfoodBox(event) {
+  const inventory = event.player.getInventory();
+  event.handled = true;
+  if (inventory.isFull()) {
+    event.player.sendMessage("You need a free inventory slot for the empty box.");
+    event.end = true;
+    return;
+  }
+  inventory.adds(EMPTY_FISHFOOD_BOX, 1);
 }
 
 /** Harry's Wiki conditions about the fishbowl in the player's inventory and the 10 coins for the tiny net. */

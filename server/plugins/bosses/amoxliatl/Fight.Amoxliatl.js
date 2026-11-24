@@ -253,17 +253,18 @@ class Fight {
   // ------------------------------------------------------------------ the icy pools
 
   /** A pool on a floor tile (cache map), unless one is there already. */
-  placePool(x, y) {
-    if (this.stopped || this.over || !onFloor(x, y) || this.pools.has(key(x, y))) return;
+  placePool(x, y, playSound = true) {
+    if (this.stopped || this.over || !onFloor(x, y) || this.pools.has(key(x, y))) return false;
     const { GameObject, ObjectManager } = this.core;
     const { pools, arena } = Common.data;
     const tile = this.session.tile([x, y, 0]);
-    if (this.core.RegionManager.blocked(tile, this.session.area)) return;
+    if (this.core.RegionManager.blocked(tile, this.session.area)) return false;
     const pool = new GameObject(pools.id, tile, pools.shape, Common.randomInt(0, 3), this.session.area);
     ObjectManager.register(pool, true);
     this.pools.set(key(x, y), pool);
     // As captured, the sound comes from the middle of the platform, not the pool.
-    Common.areaSound(this.player, pools.sound, this.session.tile(arena.centre));
+    if (playSound) Common.areaSound(this.player, pools.sound, this.session.tile(arena.centre));
+    return true;
   }
 
   poolDamage() {

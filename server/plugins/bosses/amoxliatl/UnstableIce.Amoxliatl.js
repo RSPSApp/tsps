@@ -5,8 +5,8 @@
  * - Only melee hurts them, and a melee hit on one is a max hit with no attack delay, at speed 1
  *   (Wiki). They have 10 hitpoints, so every hit breaks one: it bursts (11035) and is gone a tick
  *   later, leaving an icy pool where it stood (captured).
- * - Any left 15 ticks after they form shatter, each healing her 16-25 and leaving icy pools in
- *   the 3x3 around it (Wiki; no capture of a shatter).
+ * - In the ordinary post-quest fight, any left 14 ticks after forming shatter, each healing her
+ *   16-25 with a hitsplat and leaving a diamond of icy pools (R1140 ticks 7912-7927, 8788-8803).
  */
 const Common = require("./Common.Amoxliatl");
 
@@ -46,7 +46,7 @@ function launch(fight) {
   const { Animation, Projectile } = Common.core;
   const ice = Common.data.unstableIce;
   fight.boss.performAnimation(new Animation(ice.anim));
-  const message = Common.isPostQuestFight(fight.session) ? ice.postQuest.message : ice.message;
+  const { message, shatterTicks } = Common.isPostQuestFight(fight.session) ? ice.postQuest : ice;
   fight.player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, message);
   const [min, max] = ice.count;
   const tiles = targets(fight, Common.randomInt(min, max));
@@ -62,7 +62,7 @@ function launch(fight) {
   }
   fight.at(ice.spawnTicks, () => {
     const formed = tiles.map(([x, y]) => form(fight, x, y)).filter(Boolean);
-    if (formed.length > 0) fight.at(ice.shatterTicks, () => shatter(fight, formed));
+    if (formed.length > 0) fight.at(shatterTicks, () => shatter(fight, formed));
   });
 }
 
@@ -91,19 +91,34 @@ function burst(fight, block) {
   Common.areaSound(fight.player, ice.breakSound, block.getLocation());
 }
 
-/** What's left after 15 ticks shatters: she heals, and the ice spreads round each one. */
+/** The remaining blocks burst and heal her. Their models disappear on the next tick. */
 function shatter(fight, formed) {
   const left = formed.filter((block) => fight.blocks.has(block) && block.isRegistered() && block.getHitpoints() > 0);
   if (left.length === 0 || fight.over) return;
   fight.stats.shattered = true;
-  const [min, max] = Common.data.unstableIce.shatterHeal;
+  const { shatterHeal: [min, max], postQuest, removeAfterBreakTicks } = Common.data.unstableIce;
+  const ordinaryFight = Common.isPostQuestFight(fight.session);
+  const { shatterHealSplat, shatterPoolReach: reach } = postQuest;
+  let playedPoolSound = false;
   for (const block of left) {
     burst(fight, block);
-    fight.boss.heal(Common.randomInt(min, max));
+    const heal = Common.randomInt(min, max);
+    fight.boss.heal(heal);
     const [x, y] = fight.session.worldTile(block.getLocation());
-    fight.at(Common.data.unstableIce.removeAfterBreakTicks, () => {
+    if (ordinaryFight) {
+      fight.boss.showHitsplat(heal, { mine: shatterHealSplat, others: shatterHealSplat });
+      for (let dx = -reach; dx <= reach; dx++) {
+        const span = reach - Math.abs(dx);
+        for (let dy = -span; dy <= span; dy++) {
+          if (fight.placePool(x + dx, y + dy, !playedPoolSound)) playedPoolSound = true;
+        }
+      }
+    }
+    fight.at(removeAfterBreakTicks, () => {
       if (block.isRegistered()) Common.api.removeNpc(block);
-      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) fight.placePool(x + dx, y + dy);
+      if (!ordinaryFight) {
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) fight.placePool(x + dx, y + dy);
+      }
     });
   }
 }

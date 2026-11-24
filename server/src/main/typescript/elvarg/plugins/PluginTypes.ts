@@ -1849,6 +1849,8 @@ export interface PluginCoreApi {
 
 export interface PluginModule {
   name: string;
+  /** Optional display category, independent of the source directory. */
+  category?: string;
   /** One line shown beside the plugin on the world config page. */
   description?: string;
   /** pluginConfig options this plugin reads, keyed "<namespace>:<key>". */

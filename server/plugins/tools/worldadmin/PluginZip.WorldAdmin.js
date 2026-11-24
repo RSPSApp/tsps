@@ -12,7 +12,7 @@ const PACKAGE_VERSION = /^\d{1,6}\.\d{1,6}\.\d{1,6}$/;
 const RELEASES = "https://github.com/RSPSApp/tsps-plugins/releases/download";
 
 function parseManifest(text) {
-  const { format, id, name, version, description, config } = JSON.parse(text);
+  const { format, id, name, version, description, config, category } = JSON.parse(text);
   if (format !== 1 || typeof id !== "string" || !PACKAGE_ID.test(id) ||
       typeof name !== "string" || !/^[A-Za-z][A-Za-z0-9]{0,63}$/.test(name) ||
       typeof version !== "string" || !PACKAGE_VERSION.test(version) ||
@@ -20,7 +20,7 @@ function parseManifest(text) {
     throw new Error("Invalid plugin manifest");
   }
   const schema = config && typeof config === "object" && !Array.isArray(config) ? config : undefined;
-  return { format, id, name, version, description, ...(schema && { config: schema }) };
+  return { format, id, name, version, description, ...(schema && { config: schema }), ...(typeof category === "string" && category.trim() && category.length <= 80 && { category: category.trim() }) };
 }
 
 function readEntry(entry) {

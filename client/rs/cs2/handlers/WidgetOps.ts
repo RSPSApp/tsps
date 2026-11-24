@@ -836,8 +836,9 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         copy.fileId = -1;
         copy.childIndex = dstIndex | 0;
         copy.isIf3 = true;
-        copy.hidden = false;
-        copy.isHidden = false; // BUGFIX: Sync isHidden for render visibility
+        // A copy is as hidden as its source.
+        copy.hidden = src.hidden === true;
+        copy.isHidden = copy.hidden;
         copy.isLayoutValid = false;
 
         parent.children[dstIndex] = copy;
@@ -863,7 +864,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
                 ctx.widgetManager.invalidateDynamicChildrenCache(parent);
             }
             ctx.widgetManager.unregisterWidgetTree(w);
-            setTargetWidget(ctx, intOp, null);
+            // The deleted child stays the active component, as in OSRS.
             if (parent) invalidateWidgetRender(ctx, parent);
         }
     });
@@ -1177,7 +1178,8 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.WIDGET_QUERY_NEXT, (ctx, intOp) => {
         const query = getWidgetQuery(ctx);
         const next = query.widgets[query.cursor++] ?? null;
-        setTargetWidget(ctx, intOp, next);
+        // A finished query leaves the active component as it was.
+        if (next) setTargetWidget(ctx, intOp, next);
         ctx.pushInt(next ? 1 : 0);
     });
 
@@ -2245,12 +2247,14 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     // === Model getters ===
     handlers.set(Opcodes.CC_GETMODELZOOM, (ctx, intOp) => {
         const w = getTargetWidget(ctx, intOp);
-        ctx.pushInt(w?.modelZoom ?? 0);
+        // A component's zoom is 100 until something sets it.
+        ctx.pushInt(w ? (w.modelZoom ?? 100) : 0);
     });
 
     handlers.set(Opcodes.IF_GETMODELZOOM, (ctx) => {
         const w = getWidgetFromStack(ctx);
-        ctx.pushInt(w?.modelZoom ?? 0);
+        // A component's zoom is 100 until something sets it.
+        ctx.pushInt(w ? (w.modelZoom ?? 100) : 0);
     });
 
     handlers.set(Opcodes.CC_GETMODELANGLE_X, (ctx, intOp) => {

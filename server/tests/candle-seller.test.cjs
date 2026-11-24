@@ -139,7 +139,7 @@ function conversationVarbit(f) {
   return f.player.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId("swamp_candle_guy_conversation"));
 }
 
-test("the naked-flame warning sets swamp_candle_guy_conversation, and the next talk opens the learnt menu", async t => {
+test("the menu after the naked-flame warning sets swamp_candle_guy_conversation, and the next talk opens the learnt menu", async t => {
   const f = fixture(t), inventory = f.player.getInventory(), I = core.ItemIdentifiers;
   const completed = [];
   const listener = event => { if (event.player === f.player) completed.push(event.id); };
@@ -156,6 +156,9 @@ test("the naked-flame warning sets swamp_candle_guy_conversation, and the next t
   assert.equal(conversationVarbit(f), 0, "not before the warning line");
   await resume(f);
   assert.match(f.player.getDialogueManager().getCurrent().getText(), /^I should warn you, though/);
+  assert.equal(conversationVarbit(f), 0, "not while the warning is showing (recording 1000216 tick 2967)");
+  await resume(f);
+  assert.ok(options(f).includes("Thanks, bye."));
   assert.equal(conversationVarbit(f), 1);
   f.player.closeInterruptibleInterfaces();
 
@@ -210,4 +213,19 @@ test("the conversation flag survives a save and reload, and login resends the va
   const fresh = fixture(t);
   assert.equal(JSON.stringify(PlayerSave.fromPlayer(fresh.player)).includes(plugin()._test.CONVERSATION_ATTRIBUTE), false,
     "the starting value is not saved");
+});
+
+test("walking off at the warning leaves the varbit unset and the standard menu next time", async t => {
+  const f = fixture(t), inventory = f.player.getInventory(), I = core.ItemIdentifiers;
+  inventory.setItem(0, new core.Item(I.COINS, 1000));
+  await talk(f);
+  await choose(f, "Yes please.");
+  await resume(f);
+  await resume(f);
+  assert.match(f.player.getDialogueManager().getCurrent().getText(), /^I should warn you, though/);
+  f.player.closeInterruptibleInterfaces();
+  assert.equal(inventory.getAmount(I.LIT_CANDLE), 1);
+  assert.equal(conversationVarbit(f), 0);
+  await talk(f);
+  assert.equal(options(f).length, 3);
 });

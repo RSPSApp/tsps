@@ -7,15 +7,17 @@
  * 75, 1000176, 1000216 and 1000359, rev 227 Leagues worlds) send the reduced coin stack and the
  * lit candle on the tick of "Here you go then.", and complete the league task on that tick too.
  *
- * Varbit swamp_candle_guy_conversation (284) goes 0 -> 1 with his naked-flame warning after a
- * sale (recordings 75 tick 11664, 1000216 tick 2968, 1000359 tick 6770); the Wiki also marks it
- * on the haggling menu after "One thousand gold?!". Once set, the Wiki's "After learning about
- * lanterns" opening is played (no recording shows that menu).
+ * Varbit swamp_candle_guy_conversation (284) goes 0 -> 1 as the menu after his naked-flame
+ * warning opens: recording 1000216 shows the warning at tick 2967 and the varbit with the menu
+ * at tick 2968, and in 1000176 the player walks off at the warning and it is never sent
+ * (75 tick 11664 and 1000359 tick 6770 continue twice in one tick). The Wiki marks it on the
+ * haggling menu after "One thousand gold?!" as well. Once set, the Wiki's "After learning
+ * about lanterns" opening is played (no recording shows that menu).
  */
 const NO_COINS_CONDITION = "If the player does not have 1000 coins:";
 const HAS_COINS_CONDITION = "If the player has at least 1000 coins:";
-const WARNING_LINE = "I should warn you, though, it can be dangerous to take a naked flame down there. You'd be better off making a lantern.";
-const HAGGLE_REFUSAL_OPTION = "No way.";
+/** One option of each menu that sets the varbit: after the warning, and after "One thousand gold?!". */
+const CONVERSATION_MENU_OPTIONS = ["What's so dangerous about a naked flame?", "No way."];
 const LEARNT_VARIANT = "after-learning-about-lanterns-from-the-candle-seller";
 const CONVERSATION_ATTRIBUTE = "candle-seller:conversation";
 const CONVERSATION_VARBIT = "swamp_candle_guy_conversation";
@@ -61,17 +63,8 @@ function markConversation(player) {
   sendConversation(player);
 }
 
-function warningLine(request) {
-  if (!isCandleSeller(request) || request.text !== WARNING_LINE) return;
-  const before = request.before;
-  request.before = () => {
-    before?.();
-    markConversation(request.player);
-  };
-}
-
-function haggleMenu(notice) {
-  if (!isCandleSeller(notice) || !notice.options.some((option) => option.text === HAGGLE_REFUSAL_OPTION)) return;
+function conversationMenu(notice) {
+  if (!isCandleSeller(notice) || !notice.options.some((option) => CONVERSATION_MENU_OPTIONS.includes(option.text))) return;
   markConversation(notice.player);
 }
 
@@ -99,8 +92,7 @@ module.exports = {
     api.onNpcDialogueCondition(condition);
     api.onNpcDialogueVariant(variant);
     api.onCustomEvent("npc-dialogue:condition", sellCandle);
-    api.onCustomEvent("npc-dialogue:line", warningLine);
-    api.onCustomEvent("npc-dialogue:menu", haggleMenu);
+    api.onCustomEvent("npc-dialogue:menu", conversationMenu);
     api.onPlayerLogin(syncVarbit);
   },
   _test: { CONVERSATION_ATTRIBUTE },

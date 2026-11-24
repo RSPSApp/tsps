@@ -245,7 +245,7 @@ export function processWidgetReleaseInput(
             delete (widget as any)._pressEnded;
             // A widget picked up for a drag (one with a drag parent) was never "clicked" in the
             // OSRS sense, so it has no release script to run.
-            const pickedUp = widgetInteraction.resolveClickedWidgetParent(widget) != null;
+            const pickedUp = widgetInteraction.resolveClickedWidgetParent?.(widget) != null;
             if (pressEnded || pickedUp) {
                 // nothing to release
             } else if (widgetInteraction.clickedWidget.eventHandlers?.onRelease) {

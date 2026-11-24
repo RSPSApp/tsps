@@ -6,48 +6,25 @@
 // One bridge serves every worktree: sessions are per-request UUIDs, so nothing is shared between
 // them and no port slot is needed. Run it beside `yarn start`, not inside it.
 import { spawn } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
-import { homedir, platform } from "node:os";
+import { createRequire } from "node:module";
+import { existsSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const install = join(root, "tools", "quest-helper-bridge", "build", "install", "offline-quest-helper-bridge");
-const java = platform() === "win32" ? "java.exe" : "java";
+// The same JDK 21 lookup the server uses when it starts the bridge itself.
+const { findJavaHome, javaExecutable } = createRequire(import.meta.url)("../server/plugins/quests/questhelper/Java.QuestHelper.js");
 
 const token = process.env.QUEST_HELPER_TOKEN;
 if (!token || token.length < 24) {
-  console.error("QUEST_HELPER_TOKEN is missing or shorter than 24 characters (see .env.example).");
+  console.error("QUEST_HELPER_TOKEN is missing or shorter than 24 characters (see .env.example).\n" +
+    "Without a token you don't need this: `yarn start` starts the built bridge itself.");
   process.exit(1);
 }
 
-/** The bridge runs on Java 21; JAVA_HOME wins, then any installed jdk-21. */
-function findJavaHome() {
-  const named = (dir, prefix) => {
-    if (!existsSync(dir)) return null;
-    for (const entry of readdirSync(dir)) {
-      if (!entry.toLowerCase().includes(prefix)) continue;
-      const home = join(dir, entry);
-      if (existsSync(join(home, "bin", java))) return home;
-    }
-    return null;
-  };
-  for (const candidate of [process.env.QUEST_HELPER_JAVA_HOME, process.env.JAVA_HOME]) {
-    if (candidate && existsSync(join(candidate, "bin", java))) return candidate;
-  }
-  const roots = platform() === "win32"
-    ? [join(process.env.ProgramFiles ?? "C:/Program Files", "Eclipse Adoptium"),
-       join(process.env.ProgramFiles ?? "C:/Program Files", "Java"), join(homedir(), ".gradle", "jdks")]
-    : [join(homedir(), ".gradle", "jdks"), "/usr/lib/jvm", "/Library/Java/JavaVirtualMachines"];
-  for (const dir of roots) {
-    const home = named(dir, "21") ?? named(dir, "jdk-21");
-    if (home) return home;
-  }
-  return null;
-}
-
 if (!existsSync(install)) {
-  console.error(`The bridge is not built. See tools/quest-helper-bridge/README.md:\n  cd tools/quest-helper-bridge && ./gradlew installDist`);
+  console.error(`The bridge is not built. See tools/quest-helper-bridge/README.md:\n  cd tools/quest-helper-bridge && ./gradlew installDist\nor run \`yarn bridge:setup\`.`);
   process.exit(1);
 }
 const lib = join(install, "lib");
@@ -63,7 +40,7 @@ if (!javaHome) {
 
 const args = ["-Djava.awt.headless=true", "-cp", join(lib, "*"), "local.questbridge.BridgeServer"];
 console.log(`quest-helper-bridge: ${javaHome} ${args.slice(2).join(" ")}`);
-const child = spawn(join(javaHome, "bin", java), args, {
+const child = spawn(join(javaHome, "bin", javaExecutable()), args, {
   stdio: "inherit",
   env: { ...process.env, JAVA_HOME: javaHome },
 });

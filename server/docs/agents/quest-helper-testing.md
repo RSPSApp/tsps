@@ -38,8 +38,9 @@ yarn bridge            # quest-helper bridge, reads QUEST_HELPER_TOKEN from the 
 AGENT_MCP=1 yarn start # server (and client, if you want one)
 ```
 
-`QUEST_HELPER_TOKEN` (24+ characters) must be in the root `.env`: the server and the bridge share
-it, and the browser never sees it. Set `QUEST_HELPER_URL` if the bridge is not reachable at
+With `QUEST_HELPER_TOKEN` (24+ characters) in the root `.env`, the server and `yarn bridge` share
+it, and the browser never sees it. With no token, a server whose worktree has a built bridge
+(`yarn bridge:setup`) starts its own instead, on a free port. Set `QUEST_HELPER_URL` if the bridge is not reachable at
 `127.0.0.1:16471` from the server process. Use an HTTP(S) URL without credentials, a query or a
 fragment. `yarn bridge` finds a JDK 21 itself (`JAVA_HOME`,
 `QUEST_HELPER_JAVA_HOME`, then a `jdk-21` install). One bridge serves every worktree — sessions

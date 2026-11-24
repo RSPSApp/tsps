@@ -48,6 +48,7 @@ function player(cooking, carried) {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory,
+    getStatus: () => null,
     getPacketSender: () => packet,
     getEquipment: () => ({ getItems: () => [] }),
     getSkillManager: () => ({ getCurrentLevel: () => cooking }),
@@ -322,6 +323,7 @@ function maker(cooking, carried) {
     getLocation: () => new core.Location(3221, 3218, 0),
     getPrivateArea: () => null,
     getInventory: () => inventory,
+    getStatus: () => null,
     getBanks: () => [],
     getSkillManager: () => ({ getCurrentLevel: () => cooking, addExperiences: (_skill, gained) => xp.push(gained) }),
     performAnimation: (animation) => effects.push(["seq", animation.getId()]),
@@ -553,6 +555,99 @@ test("potato toppings: the Wiki's levels and XP; the bowl toppings give the bowl
     assert.equal(p.getInventory().getAmount(obj("bowl_empty")), bowl ? 1 : 0, `${product} bowl`);
     assert.deepEqual(p.xp, [xp], product);
   }
+});
+
+const KNIFE = ItemIds.KNIFE;
+
+test("a knife chops onion, mushroom, tomato, garlic, tuna, meat and ugthanki into a bowl: no level, no XP, knife kept", () => {
+  const chops = [
+    ["onion", "bowl_onion"], ["bittercap_mushroom", "bowl_mushroom_raw"], ["tomato", "bowl_tomato"],
+    ["garlic", "bowl_garlic"], ["tuna", "bowl_tuna"], ["cooked_meat", "bowl_carne"], ["cooked_ugthanki_meat", "bowl_ugthanki"],
+  ];
+  for (const [food, product] of chops) {
+    const p = maker(1, [[KNIFE, 1], [obj(food), 1], [obj("bowl_empty"), 1]]);
+    assert.equal(useItems(p, "bowl_empty", food).handled, true, product);
+    assert.equal(p.sent.menu, null, "one bowl makes without a menu");
+    ticks(1);
+    assert.equal(p.getInventory().getAmount(obj(product)), 1, product);
+    assert.equal(p.getInventory().getAmount(obj(food)), 0, food);
+    assert.equal(p.getInventory().getAmount(obj("bowl_empty")), 0, `${product} uses the bowl`);
+    assert.equal(p.getInventory().getAmount(KNIFE), 1, "the knife stays");
+    assert.deepEqual(p.xp, [], product);
+    assert.deepEqual(p.sent.spam, [], `${product}: no Wiki line`);
+  }
+});
+
+test("without a knife a bowl and an onion do nothing here", () => {
+  const p = maker(99, [[obj("onion"), 1], [obj("bowl_empty"), 1]]);
+  assert.equal(useItems(p, "onion", "bowl_empty").handled, false);
+  ticks(2);
+  assert.equal(p.getInventory().getAmount(obj("bowl_onion")), 0);
+  assert.equal(p.getInventory().getAmount(obj("onion")), 1);
+  const sauce = maker(99, [[obj("bowl_chilli"), 1], [obj("cooked_meat"), 1]]);
+  assert.equal(useItems(sauce, "bowl_chilli", "cooked_meat").handled, false, "cooked meat needs a knife for chilli");
+});
+
+test("potato topping bowls and kebab mix: the Wiki's levels, XP, knives and returned bowls", () => {
+  // [used, used with, product, level, xp, knife, bowl back]
+  const mixes = [
+    ["bowl_garlic", "gnome_spice", "bowl_chilli", 9, 25, false, false],
+    ["bowl_chilli", "cooked_meat", "bowl_chilli+carne", 11, 0, true, false],
+    ["bowl_chilli", "bowl_carne", "bowl_chilli+carne", 11, 0, false, true],
+    ["tomato", "bowl_egg_scrambled", "bowl_egg+tomato", 23, 0, false, false],
+    ["bowl_mushroom_fried", "bowl_onion_fried", "bowl_mushroom+onion", 57, 0, false, true],
+    ["bowl_sweetcorn", "tuna", "bowl_tuna+sweetcorn", 67, 0, true, false],
+    ["bowl_sweetcorn", "bowl_tuna", "bowl_tuna+sweetcorn", 67, 0, false, true],
+    ["sweetcorn_cooked", "bowl_tuna", "bowl_tuna+sweetcorn", 67, 0, false, false],
+    ["sweetcorn_cooked", "bowl_empty", "bowl_sweetcorn", 1, 0, false, false],
+    ["bowl_onion", "tomato", "bowl_oniontomato", 1, 0, true, false],
+    ["bowl_tomato", "onion", "bowl_oniontomato", 1, 0, true, false],
+    ["bowl_onion", "cooked_ugthanki_meat", "bowl_ugthankionion", 1, 0, true, false],
+    ["bowl_ugthanki", "onion", "bowl_ugthankionion", 1, 0, true, false],
+    ["bowl_tomato", "cooked_ugthanki_meat", "bowl_ugthankitomato", 1, 0, true, false],
+    ["bowl_ugthanki", "tomato", "bowl_ugthankitomato", 1, 0, true, false],
+    ["bowl_oniontomato", "cooked_ugthanki_meat", "bowl_oniontomugthanki", 1, 0, true, false],
+    ["bowl_ugthankionion", "tomato", "bowl_oniontomugthanki", 1, 0, true, false],
+    ["bowl_ugthankitomato", "onion", "bowl_oniontomugthanki", 1, 0, true, false],
+  ];
+  for (const [used, usedWith, product, level, xp, knife, bowl] of mixes) {
+    const carried = (lvl) => maker(lvl, [...(knife ? [[KNIFE, 1]] : []), [obj(used), 1], [obj(usedWith), 1]]);
+    if (level > 1) {
+      const low = carried(level - 1);
+      useItems(low, used, usedWith); ticks(2);
+      assert.equal(low.getInventory().getAmount(obj(product)), 0, `${product} needs ${level}`);
+      assert.match(statementText(low.sent.statements[0]), new RegExp(`Cooking level of ${level} `));
+    }
+    const p = carried(level);
+    assert.equal(useItems(p, usedWith, used).handled, true, `${usedWith} on ${used}`);
+    ticks(1);
+    assert.equal(p.getInventory().getAmount(obj(product)), 1, product);
+    assert.equal(p.getInventory().getAmount(obj(used)), 0, used);
+    assert.equal(p.getInventory().getAmount(obj(usedWith)), 0, usedWith);
+    assert.equal(p.getInventory().getAmount(obj("bowl_empty")), bowl ? 1 : 0, `${product} from ${usedWith}: bowl`);
+    assert.deepEqual(p.xp, xp ? [xp] : [], product);
+  }
+});
+
+test("chilli con carne goes every tick (Wiki: 1 tick); chopping every 2 and stops when the knife goes", () => {
+  const chilli = maker(11, [[obj("bowl_chilli"), 3], [obj("bowl_carne"), 3]]);
+  useItems(chilli, "bowl_chilli", "bowl_carne");
+  chilli.sent.menu.execute(obj("bowl_chilli+carne"), 3);
+  const made = () => chilli.getInventory().getAmount(obj("bowl_chilli+carne"));
+  ticks(1); assert.equal(made(), 1);
+  ticks(1); assert.equal(made(), 2);
+  ticks(1); assert.equal(made(), 3);
+  const p = maker(1, [[KNIFE, 1], [obj("onion"), 3], [obj("bowl_empty"), 3]]);
+  useItems(p, "onion", "bowl_empty");
+  assert.deepEqual(p.sent.menu.getItems(), [obj("bowl_onion")]);
+  p.sent.menu.execute(obj("bowl_onion"), 3);
+  const chopped = () => p.getInventory().getAmount(obj("bowl_onion"));
+  ticks(1); assert.equal(chopped(), 1);
+  ticks(1); assert.equal(chopped(), 1);
+  p.getInventory().deleteNumber(KNIFE, 1);
+  ticks(1); assert.equal(chopped(), 1, "no knife, no more chopping");
+  ticks(4); assert.equal(chopped(), 1);
+  assert.equal(p.getInventory().getAmount(obj("onion")), 2);
 });
 
 test("wine: a jug every 2 ticks with the captured animation, graphic and sound; the line on the last", () => {

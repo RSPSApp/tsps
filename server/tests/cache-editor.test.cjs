@@ -304,7 +304,7 @@ test("the read-only content endpoints serve what the MCP tools serve", () => {
   assert.equal(Catalog.name, "CacheEditorCatalog");
   const api = { core, registerContentEndpoint: (name, handler) => endpoints.set(name, handler), onServerStartup: () => {}, onPlayerLogin: () => {} };
   Catalog.register(api);
-  assert.deepEqual([...endpoints.keys()].sort(), ["cache-assets", "cache-fields", "cache-inspect", "cache-kinds", "cache-search", "cache-used-by"]);
+  assert.deepEqual([...endpoints.keys()].sort(), ["cache-assets", "cache-custom-models", "cache-fields", "cache-inspect", "cache-kinds", "cache-search", "cache-used-by"]);
 
   const kinds = endpoints.get("cache-kinds")(new URLSearchParams(), []);
   assert.ok(kinds.kinds.some((entry) => entry.kind === "loc" && entry.count > 1000));
@@ -568,7 +568,7 @@ test("an upload that is not a cache model is refused, with the reason", () => {
   huge[huge.length - 1] = 0xfd;
   assert.throws(() => Assets.addAsset(root, { kind: "model", name: "x", data: huge.toString("base64") }), /cap is/);
   // Non-model uploads have no runtime consumer and must not appear to succeed.
-  assert.throws(() => Assets.addAsset(root, { kind: "sprite", name: "icon", data: "AAAA" }), /Only model uploads/);
+  assert.throws(() => Assets.addAsset(root, { kind: "sprite", name: "icon", data: "AAAA" }), /Only model, animation and graphic uploads/);
 });
 
 

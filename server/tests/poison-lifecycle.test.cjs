@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');
-const {test}=require('node:test');
+const {test,before}=require('node:test');
 const {Server}=require('../dist/Server');Server.installProductionPathResolver();
 const {Player}=require('../dist/game/entity/impl/player/Player');
 const {PlayerSave}=require('../dist/game/entity/impl/player/persistence/PlayerSave');
@@ -7,6 +7,9 @@ const {GameConstants}=require('../dist/game/GameConstants');
 const {TaskManager}=require('../dist/game/task/TaskManager');
 const {CombatPoisonEffect}=require('../dist/game/task/impl/CombatPoisonEffect');
 const {curePoisonAndVenom}=require('../plugins/items/ConsumableEffects');
+// Player login and logout look up varbits and varps by name, so the cache has to be loaded.
+const path=require('node:path');const {CachePipeline}=require('../dist/game/cache/CachePipeline');
+let cacheReady;before(()=>(cacheReady??=CachePipeline.initialize(path.resolve(__dirname,'..'))));
 
 function player(t,venom=false){
  const p=new Player(null);p.setRegistered(true);p.setPoisonDamage(venom?10:27);p.setVenomed(venom);

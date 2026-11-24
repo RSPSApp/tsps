@@ -63,6 +63,9 @@ function register(api) {
     }
   });
   api.registerContentEndpoint("cache-kinds", () => ({ kinds: inspect.kinds(core) }));
+  // Every custom model (custom items' and the model assets), as players get them at login: the editor
+  // page never logs in, and its previews draw them (a graphic's model is a model asset).
+  api.registerContentEndpoint("cache-custom-models", () => ({ rows: core.CacheDefinitions.getCustomModels() }));
   api.registerContentEndpoint("cache-inspect", (query) => inspect.describe(core, {
     kind: need(query, "kind"),
     id: number(query, "id"),
@@ -92,6 +95,8 @@ function register(api) {
     const offset = Math.max(0, Number(query.get("offset") ?? 0) | 0);
     const limit = Math.min(500, Math.max(1, Number(query.get("limit") ?? 100) | 0));
     const mine = Assets.assetsOf(root).filter((asset) => asset.kind === kind);
+    // Animations and graphics have no index of their own to page through: only the uploads are listed.
+    if (entry.folder) return { kind, index: null, total: mine.length, offset: 0, limit: mine.length, cache: [], mine };
     const store = core.CachePipeline?.getStore?.();
     const cacheIds = [];
     if (store) {

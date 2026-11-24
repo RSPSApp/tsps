@@ -85,8 +85,9 @@ export class Pen {
             const colorAlpha = (part.color >>> 24) & 0xff;
             const a = Math.min(colorAlpha === 0 ? 0xff : colorAlpha, alpha) / 255;
             if (a > 0 && part.text) {
+                const left = cx;
                 const draw = (dx: number, dy: number, color: number) => drawTextGL(this.context.renderer, this.context.fontLoader,
-                    part.text, cx + dx, top + dy, w + 8, h, this.font.id, color, 0, 0, false, a, undefined, scale, scale);
+                    part.text, left + dx, top + dy, w + 8, h, this.font.id, color, 0, 0, false, a, undefined, scale, scale);
                 const one = this.k;
                 if (background === TextBackground.SHADOW) draw(one, one, 0);
                 if (background === TextBackground.OUTLINE) {

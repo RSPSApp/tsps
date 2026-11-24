@@ -109,6 +109,7 @@ function captain({ level = 99 } = {}) {
     }),
     getPacketSender: () => sender,
     getInterfaceId: () => player.interfaceId ?? -1,
+    getStatus: () => null,
     setInterfaceId: (id) => { player.interfaceId = id; },
   });
   player.inventory = new Inventory(player);

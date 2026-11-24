@@ -14,8 +14,10 @@
  * wording, not Wiki text or recorded dialogue.
  *
  * Captured (rsprox 70 tick 1626, 75 tick 11666): lighting a torch says "You light your torch." and plays
- * no sequence and no sound. Nothing else was captured, so no other item gets a message or an animation, and
- * the level refusal reuses OilLights' wording. The lit item replaces the unlit one in its slot (setId), so a
+ * no sequence and no sound. The white candle lantern says "You light the lantern." as a spam (filterable)
+ * line and plays synth 3226, with no sequence (rsprox local 1000134, 1000135, 1000140: 6 of 6 lightings);
+ * the black candle lantern does the same (Ours, as its Extinguish). Nothing else was captured, so no other
+ * item gets a message, sound or animation, and the level refusal reuses OilLights' wording. The lit item replaces the unlit one in its slot (setId), so a
  * preset, untradeable or unbankable copy stays one, and the current level counts, so a boost lights what it
  * should (Wiki).
  *
@@ -37,15 +39,19 @@ const { isCooker } = require("../skills/Cooking.plugin");
 const Darkness = require("../world/Darkness.plugin");
 
 let core;
-/** Unlit item id -> { lit, level, message? }. */
+/** Synth played when a lantern is lit (the oil, bullseye and sapphire lanterns in OilLights use it too). */
+const LANTERN_LIGHT_SOUND = 3226;
+/** Unlit item id -> { lit, level, message?, spam?, sound? }. */
 let lights;
 
 function build(I) {
   return new Map([
     [I.UNLIT_TORCH, { lit: I.LIT_TORCH, level: 1, message: "You light your torch." }],
     [I.CANDLE, { lit: I.LIT_CANDLE, level: 1 }],
-    [I.CANDLE_LANTERN, { lit: I.CANDLE_LANTERN_3, level: 4 }], // white
-    [I.CANDLE_LANTERN_4, { lit: I.CANDLE_LANTERN_6, level: 4 }], // black
+    // White: the spam line and synth 3226 on the click tick (rsprox local 1000134 t438/t585/t780/t1144,
+    // 1000135 t221, 1000140 t763). Ours: the black one (not captured) is lit the same way, as it is put out.
+    [I.CANDLE_LANTERN, { lit: I.CANDLE_LANTERN_3, level: 4, spam: "You light the lantern.", sound: LANTERN_LIGHT_SOUND }],
+    [I.CANDLE_LANTERN_4, { lit: I.CANDLE_LANTERN_6, level: 4, spam: "You light the lantern.", sound: LANTERN_LIGHT_SOUND }],
     [I.UNLIT_BUG_LANTERN, { lit: I.LIT_BUG_LANTERN, level: 33 }],
     [I.EMERALD_LANTERN, { lit: I.EMERALD_LANTERN_2, level: 49 }],
   ]);
@@ -99,6 +105,8 @@ function applyLight(player, item, source) {
   item.setId(source.lit);
   player.getInventory().refreshItems();
   if (source.message) player.sendMessage(source.message);
+  if (source.spam) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, source.spam);
+  if (source.sound) player.getPacketSender().sendSound(source.sound, 100, 0);
   // `light-sources:lit` { player, itemId }: the lit item, on its tick (the league's "Light a Torch",
   // rsprox 237/1098 tick 16024, the tick the tinderbox was used).
   core.PluginManager?.emitCustomEvent?.("light-sources:lit", { player, itemId: source.lit });

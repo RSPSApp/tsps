@@ -376,9 +376,9 @@ test('Family Crest brothers swap gauntlets for free or 25,000 coins, and Chronoz
   award(other);
   assert.equal(items.get(Items.CREST_PART_3) ?? 0, 0, 'a new killer selected at death still needs all four blasts');
   award(caster);
-  assert.equal(items.get(Items.CREST_PART_3), 1, 'the qualified killer receives the crest part');
+  assert.equal(items.get(Items.CREST_PART_3) ?? 0, 0, 'death does not duplicate the canonical ground drop in the inventory');
   creditedKiller = caster;
-  assert.equal(beforeDeath(), true, 'the award consumes the killer’s Blast progress');
+  assert.equal(beforeDeath(), true, 'death consumes the killer’s Blast progress');
 });
 
 test('a shop version named after a quest opens once its quest state matches (#831)', () => {
@@ -21593,6 +21593,7 @@ test('Dragon Slayer II crypt uses canonical template locs and reachable native-v
     onRegionLoaded: () => {},
     onServerStartup: () => {},
     onPlayerProcess: () => {},
+    persistAttribute() {}, onPlayerLogout() {}, onPlayerDeath() {}, onPlayerLogin() {},
   };
   const doorPluginPath = require.resolve('../plugins/objects/Doors.plugin');
   delete require.cache[doorPluginPath];

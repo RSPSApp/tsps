@@ -22,8 +22,8 @@
  *
  * Gaps (each also in the docs page):
  * - Ours: the Crafting-level refusal for a balloon (no source has its words); a sandbag's Empty has no message.
- * - Auguste's sapling uses this plugin's own growth clock (4h, then 6 branches per 30min, Wiki) rather than the Farming
- *   plugin; the capture bought its branches, so planting and cutting are Wiki-only.
+ * - Auguste's sapling is planted by the Farming plugin and grows into an ordinary willow tree (Wiki: Auguste's sapling),
+ *   its branches cut as any willow's; the capture bought its branches, so the planting is Wiki-only.
  * - The crash sites past Entrana are calibrated (no recording crashes there).
  */
 module.exports = function registerEnlightenedJourneyQuest(api) {
@@ -35,7 +35,6 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
     Graphic,
     ItemIdentifiers,
     NpcIdentifiers,
-    ObjectDefinition,
     ObjectIdentifiers,
     Location,
     Skill,
@@ -134,7 +133,6 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
   const AUGUSTES_SAPLING = ItemIdentifiers.AUGUSTES_SAPLING;
   const APPLES = ItemIdentifiers.APPLES_5_; // "Apples(5)", the basket of apples
   const WILLOW_BRANCH = ItemIdentifiers.WILLOW_BRANCH;
-  const SECATEURS = ItemIdentifiers.SECATEURS;
   const LOGS = ItemIdentifiers.LOGS;
   const COINS = ItemIdentifiers.COINS;
   const EMPTY_SACK = ItemIdentifiers.EMPTY_SACK;
@@ -190,8 +188,6 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
     [BIT_BOWL, VARBIT.BOWL],
   ];
 
-  const WILLOW_GROWTH_MS = 4 * 60 * 60 * 1000; // wiki: a willow tree takes 4h
-  const BRANCH_REGROW_MS = 30 * 60 * 1000; // then branches every 30min, 6 at a time
   const SAPLING_REPLACEMENT_COST = 30000;
 
   // Requirement levels (OSRS Wiki; all boostable, checked at the current level).
@@ -205,7 +201,6 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
   const REQUIRED_SANDBAGS = 8;
   const REQUIRED_SILK = 10;
   const REQUIRED_BRANCHES = 12;
-  const BRANCHES_PER_CUT = 6;
   const FLIGHT_LOGS = 10;
   const MAX_FLIGHT_WEIGHT = 40; // kg (Wiki)
   const GRAMS_PER_KG = 1000;
@@ -1239,9 +1234,9 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
     return true;
   }
 
-  /** Empty sacks into sandbags, one a click; sapling onto a patch; secateurs onto the grown tree. */
+  /** Empty sacks into sandbags, one a click; willow branches onto the basket frame. */
   function handleItemOnObject(event) {
-    const { player, itemId, objectId, location } = event;
+    const { player, itemId, objectId } = event;
     if (itemId === EMPTY_SACK && SAND_PIT_OBJECT_IDS.has(objectId)) {
       if (!started(player)) return;
       event.handled = true;
@@ -1254,27 +1249,6 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
       player.getPacketSender().sendTypedMessage(ChatType.SPAM, "You fill the bag with sand.");
       player.performAnimation(new Animation(ANIM_FILL_SANDBAG));
       player.getPacketSender().sendSoundEffect(SOUND_SAND, 1, 0, 0);
-      return;
-    }
-    if (itemId === AUGUSTES_SAPLING && isTreePatch(event)) {
-      event.handled = true;
-      if (!hasFlag(player, BIT_SAPLING_GIVEN) || saplingRecord(player)) return;
-      if (!held(player, AUGUSTES_SAPLING)) return;
-      const now = Date.now();
-      player.getInventory().deleteNumber(AUGUSTES_SAPLING, 1);
-      player.setAttribute(SAPLING_ATTRIBUTE, {
-        x: location.x,
-        y: location.y,
-        z: location.z,
-        plantedAt: now,
-        branchesAt: now + WILLOW_GROWTH_MS,
-        nextBranchesAt: now + WILLOW_GROWTH_MS,
-      });
-      startTranscript(api, player, NpcIdentifiers.AUGUSTE, PAGE, "preparing-for-the-expedition-planting-the-sapling");
-      return;
-    }
-    if (itemId === SECATEURS && cutSaplingBranches(player, location)) {
-      event.handled = true;
       return;
     }
     if (itemId !== WILLOW_BRANCH || !BASKET_FRAME_OBJECT_IDS.has(objectId)) return;
@@ -1303,37 +1277,35 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
     return true;
   }
 
-  /** Secateurs on the planted patch, once the willow has grown. */
-  function cutSaplingBranches(player, location) {
-    const record = saplingRecord(player);
-    if (!record || location.z !== record.z) return false;
-    if (Math.max(Math.abs(location.x - record.x), Math.abs(location.y - record.y)) > 1) return false;
-    if (!held(player, SECATEURS)) return false;
-    const now = Date.now();
-    if (now < record.branchesAt) {
-      player.sendMessage("The willow tree has not finished growing yet.");
-      return true;
-    }
-    if (now < (record.nextBranchesAt ?? record.branchesAt)) {
-      player.sendMessage("There are no branches ready to cut yet.");
-      return true;
-    }
-    const amount = Math.min(BRANCHES_PER_CUT, player.getInventory().getFreeSlots());
-    if (amount <= 0) {
-      player.sendMessage("You don't have enough inventory space.");
-      return true;
-    }
-    player.getInventory().adds(WILLOW_BRANCH, amount);
-    record.nextBranchesAt = now + BRANCH_REGROW_MS;
-    player.setAttribute(SAPLING_ATTRIBUTE, record);
-    player.sendMessage(`You cut ${amount === 1 ? "a willow branch" : `${amount} willow branches`} from the tree.`);
-    return true;
+  /**
+   * Auguste's sapling in a tree patch: the Farming plugin plants it as a willow (Wiki: Auguste's sapling). Its own
+   * planting line gives way to the transcript's two ("Enlightened Journey" transcript, planting the sapling), said as the
+   * sapling takes root, and the record the after-planting talk keys on is kept (Auguste's "hasn't been planted"
+   * branches; he gives no more saplings).
+   */
+  function saplingPlantRules(rules) {
+    if (rules.seedId === AUGUSTES_SAPLING) rules.line = "";
   }
 
-  function isTreePatch(event) {
-    const id = event.object?.getId?.() ?? event.objectId;
-    const name = ObjectDefinition.forPlayer(id, event.player)?.getName?.() ?? "";
-    return name.toLowerCase() === "tree patch";
+  function saplingPlanted({ player, seedId, patch }) {
+    if (seedId !== AUGUSTES_SAPLING) return;
+    player.setAttribute(SAPLING_ATTRIBUTE, { x: patch.x, y: patch.y, z: patch.z, plantedAt: Date.now() });
+    startTranscript(api, player, NpcIdentifiers.AUGUSTE, PAGE, "preparing-for-the-expedition-planting-the-sapling");
+  }
+
+  /**
+   * Before issue 6636 the sapling was "planted" into this plugin's own record and nothing grew on the patch. Such a
+   * record (it has `branchesAt`) is dropped at login, and while the basket still needs branches the sapling comes back
+   * to the inventory to be planted for real; with no free slot the record waits for a later login. Ours: no source;
+   * nothing is said.
+   */
+  function migrateSapling(player) {
+    const record = saplingRecord(player);
+    if (!record || record.branchesAt === undefined) return;
+    const giveBack = stageOf(player) < STAGE.BALLOON_READY && !owns(player, AUGUSTES_SAPLING);
+    if (giveBack && player.getInventory().getFreeSlots() < 1) return;
+    player.setAttribute(SAPLING_ATTRIBUTE, null);
+    if (giveBack) player.getInventory().adds(AUGUSTES_SAPLING, 1);
   }
 
   /** A willow branch on Auguste points at the frame on the platform. */
@@ -1349,17 +1321,6 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
       PAGE,
       "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling-and-handing-in-all-the-ingredients-using-a-willow-branch-on-auguste"
     );
-  }
-
-  /** The MCP/agent time-skip moves the sapling's growth clock. */
-  function advanceTime(event) {
-    const record = event.player ? saplingRecord(event.player) : null;
-    if (!record) return;
-    record.plantedAt -= event.ms;
-    record.branchesAt -= event.ms;
-    record.nextBranchesAt -= event.ms;
-    event.player.setAttribute(SAPLING_ATTRIBUTE, record);
-    event.handledBy.push("EnlightenedJourney");
   }
 
   /**
@@ -1379,6 +1340,7 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
 
   function handleLogin({ player }) {
     migrateStage(player);
+    migrateSapling(player);
     refreshQuestList(player);
     sendWorldVarbits({ player });
   }
@@ -1589,5 +1551,6 @@ module.exports = function registerEnlightenedJourneyQuest(api) {
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
   api.onCustomEvent("player:bootstrap-complete", sendWorldVarbits);
-  api.onCustomEvent("agent:advance-time", advanceTime);
+  api.onCustomEvent("farming:plant-rules", saplingPlantRules);
+  api.onCustomEvent("farming:planted", saplingPlanted);
 };

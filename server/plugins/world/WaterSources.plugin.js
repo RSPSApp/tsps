@@ -8,6 +8,12 @@
  * fountain.", or just "You fill the jug." at a pump. No capture has a waterskin: it is filled
  * the same way.
  *
+ * Ancient fountainheads are water sources in their Regular (Neypotzli's entrance, Fortis temple
+ * crypt) and Blue Moon (the Blue Moon's chamber, Kualti headquarters) versions
+ * (https://oldschool.runescape.wiki/w/Ancient_fountainhead); the Blood Moon, Eclipse Moon and
+ * Ruins of Mokhaiotl versions share the name and fill nothing. Ours: the fill line is the bare
+ * "You fill the jug.", as at a pump.
+ *
  * It lives in plugins/world so it loads after the quest and minigame plugins: their own
  * handlers for one particular source (Taste of Hope's dry fountain, The Mess's sink,
  * Fremennik Trials' tap) run first and keep the click when they take it.
@@ -35,6 +41,7 @@ const WATER_SOURCES = new Map([
 let api;
 let core;
 let FILLED_BY_EMPTY;
+let SOURCE_LOCS;
 
 function defineContainers({ ItemIdentifiers: Items }) {
   FILLED_BY_EMPTY = new Map([
@@ -52,8 +59,25 @@ function defineContainers({ ItemIdentifiers: Items }) {
   ]);
 }
 
+// Water sources by id, where other locs with the same name are not.
+function defineSourceLocs({ ObjectIdentifiers: Objects }) {
+  SOURCE_LOCS = new Set([
+    // Regular
+    Objects.ANCIENT_FOUNTAINHEAD,
+    Objects.ANCIENT_FOUNTAINHEAD_2,
+    Objects.ANCIENT_FOUNTAINHEAD_9,
+    // Blue Moon
+    Objects.ANCIENT_FOUNTAINHEAD_3,
+    Objects.ANCIENT_FOUNTAINHEAD_4,
+  ]);
+}
+
 function sourceName(player, objectId) {
   return core.ObjectDefinition.forPlayer(objectId, player)?.getName()?.toLowerCase() ?? "";
+}
+
+function isWaterSource(objectId, name) {
+  return SOURCE_LOCS.has(objectId) || WATER_SOURCES.has(name);
 }
 
 /** Swaps the first empty container for a full one; false once none are left. */
@@ -74,7 +98,7 @@ function fillFromWaterSource(event) {
   const container = FILLED_BY_EMPTY.get(itemId);
   if (!container) return;
   const name = sourceName(player, objectId);
-  if (!WATER_SOURCES.has(name)) return;
+  if (!isWaterSource(objectId, name)) return;
   event.handled = true;
 
   const sound = name === "well" ? WELL_FILL_SOUND : FILL_SOUND;
@@ -104,6 +128,7 @@ module.exports = {
     api = pluginApi;
     core = api.core;
     defineContainers(core);
+    defineSourceLocs(core);
     api.onItemOnObject(fillFromWaterSource, { noted: false });
   },
 };

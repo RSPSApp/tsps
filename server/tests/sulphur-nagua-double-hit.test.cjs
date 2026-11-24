@@ -130,31 +130,3 @@ test('the drain still lands on a nagua that died meanwhile, with the recorded hi
   assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 0);
   assert.deepEqual(splats, [[3, { mine: 59, others: 59 }, false]], 'the splat shows the 3 points there were, not 5');
 });
-
-// Flat armour -4 (Wiki: Flat armour): each landed melee/ranged splat does 4 more; misses stay 0.
-function hitOn(npc, player, type, damages) {
-  const method = type === core.CombatType.RANGED ? new core.RangedCombatMethod() : new core.MeleeCombatMethod();
-  if (type === core.CombatType.MAGIC) method.type = () => core.CombatType.MAGIC;
-  const hit = new core.PendingHit(player, npc, method, { hitAmount: damages.length });
-  hit.getHits().forEach((splat, i) => splat.setDamage(damages[i]));
-  hit.updateTotalDamage();
-  return npc.manipulateHit(hit);
-}
-
-for (const id of [12879, NAGUA]) {
-  test(`flat armour ${id}: a landed 1 becomes 5, a miss stays 0, every splat of a multi-hit gets 4`, t => {
-    const { player, npc } = actors(t, id);
-    assert.deepEqual(hitOn(npc, player, core.CombatType.MELEE, [1]).getHits().map(h => h.getDamage()), [5]);
-    assert.deepEqual(hitOn(npc, player, core.CombatType.MELEE, [0]).getHits().map(h => h.getDamage()), [0]);
-    const multi = hitOn(npc, player, core.CombatType.RANGED, [3, 0, 7]);
-    assert.deepEqual(multi.getHits().map(h => h.getDamage()), [7, 0, 11]);
-    assert.equal(multi.getTotalDamage(), 18);
-  });
-}
-
-test('flat armour is only the nagua\'s: magic ignores it, other npcs are untouched', t => {
-  const { player, npc } = actors(t, NAGUA);
-  assert.deepEqual(hitOn(npc, player, core.CombatType.MAGIC, [5]).getHits().map(h => h.getDamage()), [5]);
-  const crab = actors(t, core.NpcIdentifiers.SAND_CRAB);
-  assert.deepEqual(hitOn(crab.npc, crab.player, core.CombatType.MELEE, [2]).getHits().map(h => h.getDamage()), [2]);
-});

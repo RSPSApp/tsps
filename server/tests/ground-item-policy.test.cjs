@@ -18,7 +18,7 @@ function fixture(t, {complete = true, members = true} = {}) {
   const player = {getUsername: () => "PolicyTest", getPrivateArea: () => null,
     getLocation: () => new Location(3222, 3218), getSize: () => 1,
     getMovementQueue: () => ({reset() {}}), isRegistered: () => true, getHitpoints: () => 10,
-    getPacketSender: () => ({sendItemContainer() {}, sendSoundEffect() {}}),
+    getPacketSender: () => ({sendItemContainer() {}, sendRunEnergy() {}, sendSoundEffect() {}}),
     getSkillManager: () => ({addExperiences() {}}), sendMessage: text => messages.push(text),
     getLastItemPickup: () => ({reset() {}}), isPlayerBot: () => false,
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),

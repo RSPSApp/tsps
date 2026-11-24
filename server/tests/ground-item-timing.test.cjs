@@ -258,3 +258,40 @@ test("two stacks of one stackable relocated to one tile stay apart, each with it
   while (b.getState() === State.SEEN_BY_PLAYER && !b.isPendingRemoval()) cycle();
   assert.equal(World.getProcessCycle(), newerTiming.privateUntilTick);
 }));
+
+
+// Darkness of Hallowvale's shared legacy lab spawn must survive the first player's pickup.
+test("Haemalchemy volume 1 returns after 10 ticks (6 seconds), including after another pickup", () => withWorld(() => {
+  const { GroundItemSpawnDefinitionLoader } = require("../dist/game/definition/loader/impl/GroundItemSpawnDefinitionLoader");
+  const { ItemIdentifiers } = require("../dist/util/ItemIdentifiers");
+  const bookId = ItemIdentifiers.HAEMALCHEMY_VOLUME_1;
+  const definitions = require("../data/definitions/ground-items.json").filter(spawn => spawn.id === bookId);
+  assert.equal(definitions.length, 1, "one shared laboratory book spawn");
+  const definition = definitions[0];
+  assert.deepEqual(definition.location, { x: 3624, y: 9690, z: 0 });
+  assert.equal(definition.respawn, 10, "zero means never respawn, blocking the next quester");
+  const first = new GroundItemSpawnDefinitionLoader().toItemOnGround(definition);
+  assert.ok(first);
+  assert.equal(first.isStaticSpawn(), true);
+  assert.equal(first.getOwner(), undefined);
+  assert.equal(first.getPrivateArea(), null);
+  ItemOnGroundManager.register(first);
+  const books = () => World.getItems().filter(item => item.getItem().getId() === bookId && !item.isPendingRemoval());
+  for (let pickup = 0; pickup < 2; pickup++) {
+    const [book] = books();
+    assert.ok(book);
+    assert.equal(book.getItem().getAmount(), 1);
+    assert.equal(book.getRespawnTimer(), 10);
+    assert.equal(book.respawns(), true);
+    // Complete pickup uses the same deregister -> world pass -> respawn task lifecycle.
+    ItemOnGroundManager.deregister(book);
+    ItemOnGroundManager.process();
+    assert.equal(books().length, 0);
+    for (let tick = 0; tick < 9; tick++) cycle();
+    assert.equal(books().length, 0, "not restored early");
+    cycle();
+    assert.equal(books().length, 1, "restored for the next quester after 10 ticks");
+    assert.equal(books()[0].getOwner(), undefined);
+    assert.equal(books()[0].getState(), State.SEEN_BY_EVERYONE);
+  }
+}));

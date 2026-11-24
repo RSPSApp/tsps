@@ -8,7 +8,7 @@ import { TextureLoader } from "../../texture/TextureLoader";
 import { SeqType } from "../seqtype/SeqType";
 import { SeqTypeLoader } from "../seqtype/SeqTypeLoader";
 import { VarManager } from "../vartype/VarManager";
-import { NpcType } from "./NpcType";
+import { NpcType, npcTypeHasModel } from "./NpcType";
 import { NpcTypeLoader } from "./NpcTypeLoader";
 
 export class NpcModelLoader {
@@ -49,8 +49,8 @@ export class NpcModelLoader {
             );
         }
 
-        // NPC has no model IDs defined (opcode 1 was never decoded)
-        if (!npcType.modelIds || npcType.modelIds.length === 0) {
+        // NPC has no model IDs defined (opcode 1 was never decoded), or one of them is -1
+        if (!npcTypeHasModel(npcType)) {
             return undefined;
         }
 

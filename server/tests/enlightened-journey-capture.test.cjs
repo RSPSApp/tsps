@@ -77,8 +77,11 @@ function actor(t, { stage = 0, items = [], at = AUGUSTE_AT, flags = 0 } = {}) {
   const graphics = [];
   const graphic = p.performGraphic.bind(p);
   p.performGraphic = (g) => { graphics.push(g.getId?.() ?? g.id); return graphic(g); };
+  const faced = [];
+  const face = p.setPositionToFace.bind(p);
+  p.setPositionToFace = (to, ...rest) => { if (to) faced.push([to.getX(), to.getY()]); return face(to, ...rest); };
   t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); core.TaskManager.cancelTasks(p); });
-  return { p, c, seen, messages, animations, graphics };
+  return { p, c, seen, messages, animations, graphics, faced };
 }
 
 async function input(f, message) { await f.c.dispatch([message]); f.c.processTurnPackets(); core.TaskManager.process(); }
@@ -237,6 +240,7 @@ test('the first experiment: the copy, the camera, the cutscene Auguste\'s head, 
   f.seen.length = 0;
   await next1(f);
   assert.ok(f.seen.some(([kind, , to]) => kind === 'fade' && to === 0), 'fade out on the continue');
+  f.faced.length = 0;
   tick(3);
   const inCopy = where(f);
   assert.notDeepEqual(inCopy, start, 'in the copy of Entrana');
@@ -245,9 +249,13 @@ test('the first experiment: the copy, the camera, the cutscene Auguste\'s head, 
   tick(1);
   assert.deepEqual(f.animations, [5142], 'the balloon set off');
   assert.deepEqual(f.graphics, [880], 'zep_test_balloon_setoff');
+  // Issue 6636: facing south as the balloon goes up (tick 499), so its set-off spotanim rises where it then burns.
+  assert.deepEqual(f.faced.at(-1), [inCopy[0], inCopy[1] - 1], 'the player faces (2808,3354)');
   assert.ok(f.seen.some(([kind, id]) => kind === 'jingle' && id === 116));
   tick(3);
   assert.ok(f.seen.some(([kind, id]) => kind === 'projectile' && id === 882), 'zep_test_balloon_on_fire');
+  await continueTo(f, 'That was perfect. My hypothesis was right!');
+  assert.deepEqual(f.faced.at(-1), [inCopy[0] + 1, inCopy[1]], 'then the cutscene Auguste, east, as the talk carries on (tick 509)');
   const lines = await continueTo(f, "We're doomed.");
   assert.deepEqual(lines, ['That was perfect. My hypothesis was right!', 'Did you not see the burning?', 'One more test. Then we shall proceed.', 'Burning? Fire? Hello?', 'We shall meekly go! No...no...it needs to sound grander. We shall cautiously go...']);
   assert.equal(stage(f), 20, 'not until the scene ends');
@@ -278,7 +286,11 @@ test('the second experiment: four peasants, one shouting overhead; zep_quest 60 
   const shouter = peasants.find((npc) => npc.getId() === 4724);
   const say = shouter.forceChat.bind(shouter);
   shouter.forceChat = (words) => { shouts.push(words); return say(words); };
+  const launch = where(f);
+  f.faced.length = 0;
   const lines = await continueTo(f, 'Well, that went down like a lead balloon.');
+  // Issue 6636: facing south with the set-off (tick 575).
+  assert.ok(f.faced.some(([x, y]) => x === launch[0] && y === launch[1] - 1), `the player faces (2808,3354): ${JSON.stringify(f.faced)}`);
   assert.deepEqual(shouts, ['Burn, stab, burn!', 'Destroy the floating thing!', 'We are peasants against science!']);
   assert.deepEqual(lines, []);
   assert.equal(stage(f), 60);

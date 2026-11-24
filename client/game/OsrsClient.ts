@@ -3123,7 +3123,7 @@ export class OsrsClient {
                 // IF_SETROTATESPEED: yaw speed in the high short, x speed in the low, per cycle.
                 const w = this.widgetManager?.getWidgetByUid(Number(payload.uid) | 0);
                 if (w) {
-                    w.modelRotationSpeed = ((Number(payload.speedY) | 0) & 0xffff) << 16 | ((Number(payload.speedX) | 0) & 0xffff);
+                    w.modelRotationSpeed = (((Number(payload.speedY) | 0) & 0xffff) << 16) | ((Number(payload.speedX) | 0) & 0xffff);
                     this.widgetManager.invalidateWidgetRender(w, "server-set-rotate-speed");
                 }
             } else if (payload?.action === "set_colour") {
@@ -8324,6 +8324,11 @@ export class OsrsClient {
             }
             if (block.faceTile) {
                 applyNpcFaceTile(this.npcEcs, ecsId, block.faceTile);
+            }
+            if (block.faceAngle) {
+                // Instant sets the drawn angle too: the only way to turn an NPC whose turn speed is 0.
+                this.npcEcs.setTargetRot(ecsId, block.faceAngle.angle);
+                if (block.faceAngle.instant) this.npcEcs.setRotation(ecsId, block.faceAngle.angle);
             }
             if (typeof block.faceEntity === "number") {
                 this.npcEcs.setInteractionIndex(ecsId, block.faceEntity | 0);

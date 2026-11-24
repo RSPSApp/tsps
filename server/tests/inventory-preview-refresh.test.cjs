@@ -18,6 +18,7 @@ function actor(t) {
   const player = new Player(null);
   player.setUsername("previewqa");
   const shown = [];
+  t.mock.method(player.getPacketSender(), "sendRunEnergy", () => {}); // the carried-weight packet, not under test
   t.mock.method(player.getPacketSender(), "sendItemContainer", (container, interfaceId) => {
     shown.push({ interfaceId, ids: container.getItems().map((item) => item.getId()) });
   });

@@ -462,6 +462,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `HouseOnTheHillChest` | HouseOnTheHillChest | areas | yes | Fossil Island's House on the Hill stone chest: numulites for the ten Fossil Island Notes, or a clunk or a spike. (members only) |
 | `KalphiteCave` | KalphiteCave | areas | yes | Makes the Kalphite Cave multi-combat and lets only players on a kalphite Slayer task attack its kalphites, with Buggie warning the rest off. (members only) |
 | `Karamja` | Karamja | areas | yes | Karamja volcano access: the rocks, cave entrance and climbing rope between the surface and the TzHaar city. |
+| `KaruulmSlayerDungeon` | KaruulmSlayerDungeon | areas | yes | The Karuulm Slayer Dungeon's extreme heat: 4 damage a tick beyond the entrance chamber without boots of stone, brimstone or granite boots, or the elite Kourend & Kebos Diary reward. (members only) |
 | `Keldagrim` | Keldagrim | areas | yes | Keldagrim access: the cave exit to Rellekka, the cave-to-city passage, the house stairs and the ferrymen across the river. (members only) |
 | `KourendWoodland` | KourendWoodland | areas | yes | The Old Memorial in the Kourend Woodland: Inspect shows King Kharedst IV's inscription, then offers book recharging. (members only) |
 | `McGruborsWood` | McGruborsWood | areas | yes | Keeps McGrubor's Wood's main gate locked, so the wood is entered by the loose railing or a fairy ring. |
@@ -556,6 +557,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ElementalSpells` | Elemental Spells | combat | yes | Elemental combat spells: strike to wave casting, elemental weaknesses and the fragment effects. |
 | `EnchantedBolts` | EnchantedBolts | combat | yes | Enchanted crossbow bolt effects: gem proc chances, graphics, sounds, poison, drains and leech, plus a ::boltproc testing command. (members only) |
 | `EquipmentEffects` | EquipmentEffects | combat | yes | Worn-gear combat effects: Dharok's, obsidian, Inquisitor's, Justiciar, the Salve amulet, dragon hunter, demonbane and golembane gear, the confliction gauntlets, the smoke staves' standard-spellbook bonus, the Virtus robes' Ancient Magicks damage, the bloodbark armour's Blood spell healing, and similar sets. |
+| `FlatArmour` | FlatArmour | combat | yes | NPC flat armour from the Wiki: each landed melee or ranged hitsplat a player deals to a listed monster loses its flat armour (to no less than 0), or gains it when the value is negative; magic, thralls and recoil are unaffected. |
 | `Freezes` | Freezes | combat | yes | Freeze aftermath: red messages for ice spells, expiry warnings, and releasing a player-applied freeze when the two stray over 10 tiles apart. |
 | `Frostweaver` | Frostweaver | combat | yes | Blue Moon set effect: binding and ice casts sometimes add an instant spear attack. (members only) |
 | `HomeTeleports` | HomeTeleports | combat | yes | The free home teleport of the standard, Ancient, Lunar and Arceuus spellbooks, with the long cast and one shared 30-minute cooldown. |
@@ -770,6 +772,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `RockCake` | RockCake | items | yes | Adds the Dwarven rock cake, which is never used up: Eat costs 1 Hitpoint and Guzzle costs 10% of current Hitpoints plus 1. (members only) |
 | `RottenPotato` | RottenPotato | items | yes | The Rotten potato, the moderators' testing item: stats, inventory, house, teleports, random events, rares and transmogrification, for owners and developers. |
 | `RunePouch` | RunePouch | items | yes | Adds the rune pouch and divine rune pouch: storing up to 16,000 of three or four rune types, the interface, bank deposits, loadouts and the Rune-picking setting. (members only) |
+| `SailorsAmulet` | SailorsAmulet | items | yes | Charges the sailors' amulet with law and water runes, ten charges for one law and ten water runes, up to 10,000, and Check shows its charges. (members only) |
 | `Salamanders` | Salamanders | items | yes | Adds the salamander weapons, whose Scorch, Flare and Blaze styles burn one tar per attack and give Blaze a magic maximum hit by creature. (members only) |
 | `SanguinestiStaff` | SanguinestiStaff | items | yes | Adds the Sanguinesti staff: its built-in spell with its projectile and graphics, blood rune charging, uncharging and the chance to heal the caster. (members only) |
 | `ScalyBlueDragonhide` | ScalyBlueDragonhide | items | yes | Scaly blue dragonhide: a knife on it in a bank scrapes 50 noted blue dragon scales. (members only) |
@@ -879,11 +882,13 @@ This table lists bundled plugins that have a description. The world config page 
 | `Asyff` | Asyff | npcs | yes | Adds Asyff and Pellem's Custom Fur Clothing: the Wiki's kebbit, camo, Larupia, Graahk and Kyatt sets, gloves and capes for their fur and coin fees. (members only) |
 | `Baraek` | Baraek | npcs | yes | Makes Baraek in Varrock sell fur for 20 coins, or 18 as the fallback, taking the coins and giving the fur from his dialogue. |
 | `BarbarianTraining` | BarbarianTraining | npcs | yes | Adds Otto's Barbarian Training lessons and progression for fishing, firemaking, Herblore and spear/hasta smithing. (members only) |
+| `Barlak` | Barlak | npcs | yes | Barlak in Dorgesh-Kaan buys long and curved bones for Construction XP, and giant snail and tortoise shells. (members only) |
 | `Bartenders` | Bartenders | npcs | yes | Makes the Blue Moon Inn, Dancing Donkey, Sheared Ram and Dragon Inn bartenders take coins and hand over a beer or Greenman's ale. |
 | `BasiliskKnights` | BasiliskKnights | npcs | yes | Basilisk Knight combat: walks into melee range, then melee or magic beside the player; magic from where it can't step closer, at the player's attack speed (4 ticks at the fastest), with the captured cast. (members only) |
 | `Caique` | Caique | npcs | yes | Lets players pet the sitting caiques of Kastori and the Tlati Rainforest, which peck back for 1 damage with the captured animations. (members only) |
 | `CamdozaalGolems` | CamdozaalGolems | npcs | yes | Lets players Awaken golem rubble in the Ruins of Camdozaal into Flawed, Mind, Body or (members) Chaos golems, which disintegrate if left behind. |
 | `CanifisCitizens` | CanifisCitizens | npcs | yes | Turns Canifis citizens into werewolves when a player attacks them without a Wolfbane, keeping their remaining health. (members only) |
+| `Catablepon` | Catablepon | npcs | yes | Catablepons cast their weakening glare (Weaken) on players until 8% + 3 of their Strength is drained. |
 | `CivilianCats` | CivilianCats | npcs | yes | West Ardougne civilians buy adult, overgrown, wily, lazy and hell cats for 100 Death runes (200 after the Ardougne easy diary) when the cat is used on them; Talk-to offers the price. (members only) |
 | `DemonicGorillas` | DemonicGorillas | npcs | yes | Adds the Crash Site Cavern's demonic and tortured gorillas: style changes after misses, protection prayers, boulders and anti-safespot rules. (members only) |
 | `DormantNpcs` | DormantNpcs | npcs | yes | Makes disguised crabs and wyrms lie dormant as scenery, rising and sinking when a player steps near or attacks them. (members only) |
@@ -899,6 +904,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Gertrude` | Gertrude | npcs | yes | Lets players buy another kitten from Gertrude after her quest for 100 coins and pick its colour, if wearing an activated Ring of Charos. (members only) |
 | `Hans` | Hans | npcs | yes | Lets Hans in Lumbridge tell players how long they have played, completing the Lumbridge diary task for it. |
 | `HoopSnake` | HoopSnake | npcs | yes | Fossil Island's Hoop Snakes: stun one with a blunt attack, pick it up, then roll or release it. (members only) |
+| `Hydras` | Hydras | npcs | yes | Karuulm Slayer Dungeon hydras: magic and ranged attacks that switch style every three attacks, and a poison spit every twelfth that leaves pools on three tiles, with the captured animations, projectiles and sounds. (members only) |
 | `Imps` | Imps | npcs | yes | Imps teleport away in a puff of smoke, when hit and every 30-120 seconds. |
 | `Karim` | Karim | npcs | yes | Karim sells a kebab for one coin through his Talk-to dialogue. |
 | `Killerwatt` | Killerwatt | npcs | yes | Makes Killerwatts hit hard unless the player wears insulated boots, rerolling their hits to max 6 with the boots on and 15 without. (members only) |
@@ -926,6 +932,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `RogueTrader` | RogueTrader | npcs | yes | Ali Morrisane's Rogue Trader errands after The Feud (runes, blackjacks, clothes) that unlock his stock and cheaper magic carpets. (members only) |
 | `RuniteGolem` | RuniteGolem | npcs | yes | Runite Golems in the Resource Area: a killed golem leaves a runite rock mineable for a minute, then respawns after five minutes. (members only) |
 | `Sawmill` | Sawmill | npcs | yes | Sawmill operators: Buy-plank turns logs and coins into planks, with the amount menu and the Wiki's refusal messages. (members only) |
+| `ShadowSpiders` | ShadowSpiders | npcs | yes | Shadow spiders drain half the player's Prayer (rounded up, never the last point) with their first attack of a fight, halved by a spectral spirit shield. (members only) |
 | `Shopkeepers` | Shopkeepers | npcs | yes | Opens shops from NPC Trade options using the shop data, with default and custom NPC-to-shop bindings. |
 | `SilkMerchant` | SilkMerchant | npcs | yes | Silk merchant in Ardougne: haggling dialogue buys every un-noted silk in the inventory at the agreed price. (members only) |
 | `SirRenitee` | SirRenitee | npcs | yes | Sir Renitee, Falador's herald: reports a player's family crest and repaints it for a fee. (members only) |
@@ -993,7 +1000,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BoltEnchanting` | BoltEnchanting | skills | yes | The Enchant Crossbow Bolt spell, which enchants gem bolts ten at a time from the spellbook. (members only) |
 | `BoneAltars` | BoneAltars | skills | yes | Offering bones on altars, including the Chaos Temple altar's boosted Prayer XP and house altars, repeating while bones last. (members only) |
 | `Construction` | Construction | skills | yes | Construction: player-owned houses, rooms, furniture and the house's facilities. (members only) |
-| `Cooking` | Cooking | skills | yes | Cooking on fires, ranges and ovens, plus doughs, pies, pizzas, wine, sacred eels, leaping fish, gnome cooking and dairy churns. |
+| `Cooking` | Cooking | skills | yes | Cooking on fires, ranges and ovens, plus doughs, pies, pizzas, wine, nettle tea, sacred eels, leaping fish, gnome cooking and dairy churns. |
 | `Crafting` | Crafting | skills | yes | Crafting: leather, gems, jewellery, glassblowing, pottery, spinning, weaving, battlestaves, snelms, limestone bricks and light orbs. |
 | `CraftingSpells` | CraftingSpells | skills | yes | Spells that make crafting materials: Lunar Spin Flax, Tan Leather and Superglass Make, and Charge Orb on the obelisks. (members only) |
 | `Ectofuntus` | Ectofuntus | skills | yes | The Ectofuntus in Port Phasmatys: slime, bonemeal (grinding and emptying the pots), worship, ghost disciple tokens, the ectophial teleport and bonecrusher. (members only) |
@@ -1017,7 +1024,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Smithing` | Smithing | skills | yes | Smelting at furnaces and smithing at anvils, plus cannonballs, godswords, dragon and visage shields, barbarian spears, Varrock armour and Superheat Item. |
 | `Thieving` | Thieving | skills | yes | Thieving: pickpocketing NPCs (with the Civitas urchins' distractions of the Wealthy citizens), opening coin pouches, stealing from stalls, blackjacking, the ham trapdoor, the Ardougne castle doors, Dorgesh-Kaan's rich and average chests, the Isle of Souls Dungeon chest, the Aldarin villa chests, the Sailing pirate chests, the Lizardman Temple chests, the lock-pick doors of the magic axe hut, Pirates' Hideout, East Ardougne and the Chaos Druid Tower, the Ardougne Sewers gate, the Crumbling Tower's Dark Chest and Civitas illa Fortis's house robbery (stealing valuables). (members only) |
 | `Woodcutting` | Woodcutting | skills | yes | Woodcutting: chopping trees with the Forestry despawn timer, stump respawns, the logs-chopped tracker, and bird's nest and ring drops. |
-| `Authoring.CacheEditor` | CacheEditorAuthoring | tools | yes | Opens a loopback-only writable service for the cache editor that saves overlay rows and uploads, and only when explicitly enabled for local development. |
+| `Authoring.CacheEditor` | CacheEditorAuthoring | tools | yes | Opens a loopback-only writable service for the cache editor that saves overlay rows and uploads, imports the Blender add-ons' exports and extracts cache models, animations and graphics, only when explicitly enabled for local development. |
 | `Catalog.CacheEditor` | CacheEditorCatalog | tools | yes | Serves read-only cache data to the cache editor page and applies its saved overlay rows at startup so authored changes are live on the next boot. |
 | `WorldAdmin` | WorldAdmin | tools | yes | Local web page for editing world.json settings and plugin switches. |
 | `BeginnerTreasureTrails` | BeginnerTreasureTrails | treasuretrails | yes | Beginner clue scroll trails: the clue runtime, rewards, collection log count and the minor and major scroll case capacity. |
@@ -1036,6 +1043,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `ChristmasDinner` | ChristmasDinner | world | yes | The Christmas 2025 Dinner event: scene, NPC dialogue, serving platters, escort and completion cutscene and rewards, running only in its calendar window. |
 | `CommemorativePlaques` | CommemorativePlaques | world | yes | Reading the Clan Cup Trophy on the Giants' Plateau or the Crack the Clue III noticeboard in Falador opens the cba_plaque winners list with live's text. |
 | `CrossFloor` | CrossFloor | world | no | See nearby players, NPCs, ground items and temporary objects on lower floors. |
+| `CustomAnimations` | CustomAnimations | world | yes | Loads the cache editor's animation and graphic assets as custom animations and graphics, and sends them to players at login. |
 | `CustomSprites` | CustomSprites | world | yes | Serves the world's own sprites (data/sprites) to the browser client over the content API. |
 | `Darkness` | Darkness | world | yes | Makes Lumbridge Swamp Caves and the Mole Hole dark: without a lit light source you are warned, then bitten by insects every tick, and cannot attack; your last light cannot be dropped there. |
 | `DateMinutes` | DateMinutes | world | yes | Sends the client the current minute since 1970 on login and each new minute, so home and minigame teleport cooldown timers can display. |

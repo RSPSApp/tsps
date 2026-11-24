@@ -38,6 +38,10 @@ data/saves/bot-deployment-plans.json
 data/saves/bot-deployment-plans.json.tmp
 data/saves/bot-routine-setups.json
 data/saves/bot-routine-setups.json.tmp
+# Player bots' rebuilt object index (plugins/bots/lib/TraversalAssist.PlayerBots.js); the tracked
+# plugins/bots/data/object-index.json is only its seed.
+data/saves/bot-object-index.json
+data/saves/bot-object-index.json.tmp
 data/saves/colosseum-scoreboard.json
 data/saves/araxxor-scoreboard.json
 # Every boss/minigame scoreboard keeps its world records here (and a .tmp while saving).

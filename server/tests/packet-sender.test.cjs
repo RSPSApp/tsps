@@ -132,6 +132,7 @@ test("a dialogue box opened again resends its texts: the client turns 'Click her
     subInterfaceTargets: new Map(),
     rememberSubInterface: PacketSender.prototype.rememberSubInterface,
     emitInterfaceClosed() {},
+    setChatboxUnclamped() {},
     player: {
       getSession: () => ({ sendClientPacket: (frame) => { frames.push(Buffer.from(frame)); return true; } }),
       getFrameUpdater: () => updater,

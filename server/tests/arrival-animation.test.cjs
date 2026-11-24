@@ -21,6 +21,7 @@ test('a skilling seq started on a step is held a tick; combat seqs are not', asy
   const played = [];
   let stepped = true;
   const player = Object.create(Player.prototype);
+  player.walkOnlySources = new Set();
   Object.assign(player, {
     animation: null,
     getMovementQueue: () => ({ steppedThisWorldCycle: () => stepped }),
@@ -67,6 +68,7 @@ test('the cache says how long a swing animation stays on screen', async () => {
 function buildFighter(stepped) {
   const sent = [];
   const player = Object.create(Player.prototype);
+  player.walkOnlySources = new Set();
   const combat = new Combat(player);
   Object.assign(player, {
     animation: null,

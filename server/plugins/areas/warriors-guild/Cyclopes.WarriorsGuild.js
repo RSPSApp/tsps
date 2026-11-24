@@ -14,6 +14,8 @@ const TOKENS_PER_MINUTE = 10;
 const MINUTE_TICKS = 100;
 const DEFENDER_CHANCE = 50;
 const DRAGON_DEFENDER_CHANCE = 100;
+/** The defenders' row on a league's Boosted drops page. */
+const DROP_SOURCE = "Cyclops";
 const EARNED_ATTRIBUTE = "warriors-guild:defender";
 const LORELAI_ATTRIBUTE = "warriors-guild:basement-unlocked";
 /** The room a player is inside and its clock, kept current so any save (autosave, shutdown, logout) can resume it ({} when outside). */
@@ -349,8 +351,19 @@ function dropDefenders({ player, npc, npcId, drops }) {
   const state = inside.get(player);
   if (!state || state.room !== (top ? "top" : "basement") || npc.getLocation().getZ() !== player.getLocation().getZ()) return;
   const Items = Guild.core.ItemIdentifiers;
-  if (top && Guild.random(1, DEFENDER_CHANCE) === 1) drops.push({ itemId: DEFENDERS[state.tier], amount: 1 });
-  if (!top && Guild.random(1, DRAGON_DEFENDER_CHANCE) === 1) drops.push({ itemId: Items.DRAGON_DEFENDER, amount: 1 });
+  const defender = top ? DEFENDERS[state.tier] : Items.DRAGON_DEFENDER;
+  if (Guild.random(1, top ? DEFENDER_CHANCE : DRAGON_DEFENDER_CHANCE) <= defenderBoost(player, defender)) drops.push({ itemId: defender, amount: 1 });
+}
+
+/**
+ * How many times likelier content makes the defender: "drops:chance" { player, source, rules }
+ * (a league's boosted drops, the page's Cyclops row) answers rules on the defender's name.
+ */
+function defenderBoost(player, itemId) {
+  const rules = [];
+  api.emitCustomEvent("drops:chance", { player, source: DROP_SOURCE, rules });
+  const name = String(Guild.core.ItemDefinition.forId(itemId)?.getName?.() ?? "");
+  return rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
 }
 
 /** Ranged and magic do nothing to the guild's cyclopes and animated armour. */

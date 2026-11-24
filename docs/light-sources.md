@@ -10,6 +10,10 @@ Tests: `server/tests/light-sources.test.cjs`.
 - **Candle lantern, Extinguish** (lit white 4531 -> unlit 4529): "You extinguish the lantern." as
   a spam line, the item changes in its slot (1000134 ticks 365, 575, 599; 1000135; 1000140).
   The black one (4534 -> 4532) was not captured and is put out the same way.
+- **Candle lantern, light** (tinderbox on unlit white 4529 -> lit 4531): "You light the lantern."
+  as a spam line and synth 3226 on the click tick, no sequence (1000134 ticks 438, 585, 780, 1144;
+  1000135 tick 221; 1000140 tick 763). The black one (4532 -> 4534) was not captured and is lit the
+  same way.
 - **Last light, Extinguish:** with nothing else lit in the caves, the item stays lit and a game
   message says why:
   - candle lantern: "Extinguishing the lantern would leave you without a light source."
@@ -23,6 +27,7 @@ Tests: `server/tests/light-sources.test.cjs`.
 
 ## Ours
 
+- The black candle lantern's lighting line and sound are the white one's (not captured).
 - The lit emerald lantern (9065 -> 9064) is put out with the candle lantern's lines ("You
   extinguish the lantern." spam, and its refusal as the last light): its own were not captured.
 - The oil, bullseye and sapphire lanterns use the candle lantern's refusal line; they share its

@@ -50,6 +50,12 @@ export class ActorGfxRuntime {
         this.projectiles = new ProjectileManager(glProxy);
     }
 
+    /** Drops every graphic's geometry and timing (custom graphics changed). */
+    clear(): void {
+        this.cache.clear();
+        this.frameOffsetCache.clear();
+    }
+
     /** Port of GfxRenderer.getFrameOffsets. */
     frameOffsets(spotId: number): number[] | null {
         const cached = this.frameOffsetCache.get(spotId);

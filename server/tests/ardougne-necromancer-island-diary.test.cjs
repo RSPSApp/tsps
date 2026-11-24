@@ -80,7 +80,12 @@ function makePlayer(at = new Location(2600, 3200, 0)) {
     getHitpoints: () => 10,
     isDyingReturn: () => false,
     isRegistered: () => true,
-    getMovementQueue: () => ({ reset() {}, handleRegionChange() {} }),
+    getMovementQueue() {
+      // The fairy teleport holds movement while it plays.
+      return this.movementQueue ??= { blocked: false, generation: 0, reset() { return this; }, handleRegionChange() {},
+        isMovementBlocked() { return this.blocked; }, getBlockMovementGeneration() { return this.generation; },
+        setBlockMovement(value) { this.blocked = value; this.generation++; return this; } };
+    },
     setLocation: (to) => { location = to; },
     moveTo: (to) => { location = to; },
   };

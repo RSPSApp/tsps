@@ -352,6 +352,25 @@ test("the broken rune case: the transcript's runes and 2584 once, then empty", (
   assert.equal(lastText(seen), "You search the rune case, but it appears to be empty.");
 });
 
+test("Read on the fireplace message opens Mauritys Guile's letter on the long scroll (Wiki transcript, #6639)", (t) => {
+  const { p, seen } = player(t, "labreadletter", STAGE.FIREPLACE_OPENED);
+  give(p, 6, MESSAGE);
+  const scripts = [];
+  const sender = p.getPacketSender();
+  const original = sender.sendClientScript.bind(sender);
+  sender.sendClientScript = (id, ...args) => { scripts.push([id, ...args]); return original(id, ...args); };
+  assert.equal(read(p, MESSAGE), true);
+  assert.deepEqual(seen.interfaces, [625], "longscroll");
+  const setup = scripts.find(([id]) => id === 418);
+  assert.ok(setup, "longscroll_setup");
+  const body = String(setup[2]);
+  assert.ok(body.startsWith("To the hopeful reader:<br><br>I am compelled to commit my experience to paper"));
+  assert.ok(body.includes("hidden in depictions of statuesque evil."));
+  assert.ok(body.endsWith("east of the Skull in a Chest Inn. Myreque prevail!<br><br>-Mauritys Guile"));
+  assert.deepEqual(seen.messages, [], "no examine line");
+  assert.equal(slotOf(p, MESSAGE), 6, "the message is kept");
+});
+
 test("Read on Haemalchemy shows the book's objectbox (t7600)", (t) => {
   const { p, seen } = player(t, "labreadbook", STAGE.LAB_OPENED);
   give(p, 6, BOOK);

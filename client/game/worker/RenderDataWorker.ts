@@ -367,6 +367,11 @@ const worker = {
                 state.worldMapTiles?.invalidate();
                 state.npcPoses?.invalidate();
             }
+            if (state && payload.datasets.some(dataset => dataset.key === "customAnimations")) {
+                state.seqTypeLoader.clearCache();
+                state.seqFrameLoader.clearCache();
+                state.npcPoses?.invalidate();
+            }
         });
     },
     initCache(cache: LoadedCache, npcInstances: NpcInstance[], archives: readonly ArchivedDefinitionBundle[] = []) {
@@ -449,7 +454,10 @@ const worker = {
                     );
                 } finally {
                     workerState.sceneJobs--;
-                    if (dataLoader.shouldClearWorkerCacheAfterLoad?.(input) ?? true) clearCache(workerState);
+                    // A loc-only rebuild repeats the models of the square it changes: its decoded
+                    // models stay for the next one. The next whole build clears them again.
+                    const repeatsSquare = sdInput.locOnly === true && !sdInput.instance;
+                    if (!repeatsSquare && (dataLoader.shouldClearWorkerCacheAfterLoad?.(input) ?? true)) clearCache(workerState);
                 }
             };
             const { result: built, reads } = cacheable

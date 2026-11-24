@@ -520,10 +520,11 @@ module.exports = function attachBoat(context) {
       common.anim(player, SEQ.PUSH);
       common.sound(player, SOUND.PUSH, 30);
     });
-    // The boat jumps a tile south each tick (npc teleports, t481-490).
+    // The boat slides a tile south each tick (t481-490): live's npc teleport with the jump flag clear,
+    // which clients walk the boat over. A plain moveTo drops and re-adds it, so it blinked down the ramp.
     for (let i = 0; i < PUSH.slideTiles; i++) {
       Scenes.later(scene, PUSH.slideFrom - PUSH.open + i, () => {
-        if (boat?.isRegistered?.()) boat.moveTo(Scenes.tileFor(scene, [PUSH.boat[0], PUSH.boat[1] - 1 - i, 0]));
+        if (boat?.isRegistered?.()) boat.teleportInView(Scenes.tileFor(scene, [PUSH.boat[0], PUSH.boat[1] - 1 - i, 0]));
       });
     }
     const [panMove, panLook, panRates] = PUSH.pan;

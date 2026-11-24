@@ -72,13 +72,27 @@ Each raid has one `PrivateArea` over the theatre's map squares, x 3136–3391 an
 
 | What | Where | Notes |
 | --- | --- | --- |
-| Notice board (32655, Read) | (3662, 3218) | Opens the party list. |
+| Notice board (32655, Read) | (3662, 3218) | Introduces the raid modes on first use, then opens the party list. |
 | Theatre of Blood (32653, Enter) | (3678, 3216) | The entrance. |
 | Chest (32656, Claim) | (3657, 3215), (3657, 3223) | Item retrieval. |
 | Scoreboard (32987, Read) | (3676, 3223) | Statistics. |
 | Rewards Chest (41437, Claim) | (3650, 3217) | Loot left behind. |
 
 **First conversation:** someone who hasn't spoken to the Mysterious Stranger is called over at the notice board and the entrance: "Hey. Over here." (captured 234/03285 tick 23906). A completion also counts as having met him. Someone without A Taste of Hope hears the Wiki's initial lines; the quest's unit plays the rest.
+
+**First Read after meeting the Stranger:** the board opens a message box (229) about forming or
+joining a party and choosing a difficulty. Walking away before continuing leaves the introduction
+available on the next Read. Continue asks "How experienced are you with raids?" in interface 219
+with Entry Mode first and Normal Mode second. On either answer, varbit 6573
+(`tobquest_used_notice_board`, bit 26 of `tobquest_main`) changes to 1 before the message box
+confirming the default mode. Continue opens the list (364) and closes the box. The flag and mode
+are saved, and later Reads go straight to the list.
+
+The introductions are captured in [227/101](https://rsprox.net/download/101) ticks 25574–25608
+(Entry, with the first box dismissed), [234/3285](https://rsprox.net/download/3285) ticks
+23940–23950 (Normal), and [237/1162](https://rsprox.net/download/1162) ticks 12855–12866 (Normal).
+227/101 ticks 25611–25674 show the first party staying in Entry through the entrance prompt.
+227/553 ticks 11905–11906 and 237/1162 tick 15846 show later Reads opening the list directly.
 
 **The party list (364).**
 - Script 2340 fills rows 0–44 with `name|name|name|name|name|size|preferred size|preferred combat|mode|age`, as captured: no trailing bar.
@@ -102,6 +116,16 @@ Each raid has one `PrivateArea` over the theatre's map squares, x 3136–3391 an
 
 Script 2323's footer takes the viewer's rights and the mode (0 Normal, 1 Entry, 2 Hard; captured). Script 2317's members and 2321's applicants are `name|combat|attack|strength|ranged|magic|defence|hitpoints|prayer|completions`. Leaving Ver Sinhaza (other than into the theatre) or logging out leaves the party or withdraws the application.
 
+| Lobby event | Player feedback | Recordings |
+| --- | --- | --- |
+| An application is accepted | On a leader's Accept, the applicant gets "Your application to the party of \<leader's name\> has been accepted." as a game message. Party status 6440 changes from 0 to 1 on the following tick, as in recordings 553 and 582. Recordings 554 and 1162 show the same order within one tick. | [227/553](https://rsprox.net/download/553) ticks 11915–11916, [227/554](https://rsprox.net/download/554) tick 101, [227/582](https://rsprox.net/download/582) ticks 313–314, [237/1162](https://rsprox.net/download/1162) tick 12874 |
+| A member leaves the lobby | "You have left the lobby, so you have been removed from your party." appears as a game message with the departure. | [227/1779](https://rsprox.net/download/1779) tick 13028, [234/3299](https://rsprox.net/download/3299) tick 10627 |
+| A player refreshes a party that has disbanded | "That party is no longer recruiting." opens as a message box (229) and the details (50) close. Continue opens the list. | [227/1833](https://rsprox.net/download/1833) ticks 3474–3482 |
+
+The recordings are from Leagues or Grid Master. With TSPS Grouping, a player's own
+auto-accepted application gets the message and the existing immediate party status update. Group members brought in
+automatically when their leader creates a party keep the existing silent join.
+
 **The entrance:**
 1. Without a party: "You are not in a party..." with "Form or join a party", "Observe a specific party", "Observe recent party" and "Cancel" (captured).
 2. Only the leader may go in first: "Your leader, X, must go first."
@@ -123,6 +147,16 @@ rsprox captures: the citizens' Theatre lines (local 1000270-1000318, rev 227), t
 Before this the citizens said "That conversation isn't available right now." (Meiyerditch's
 variant is an unavailable marker). Ours: "disguised" is a scented vyre noble piece in each of the
 body, legs and feet slots (the Wiki names no pieces); the clothing line beats the after-quest one.
+
+### Notice board estimates
+
+- Later parties start in the last mode the player chose, including a successful change on the
+  party screen. The captures show the first choice and party, with no second formation after
+  a mode change.
+- A pending applicant who leaves the lobby has their application quietly withdrawn. The
+  departure messages in the captures are for members.
+- Refreshing a party that has entered the Theatre uses the same message as a disbanded party.
+  The recorded stale refresh was after the viewer lost party membership.
 
 ## The raid
 

@@ -85,6 +85,7 @@ function welcomeHarness({ mobile = false, wilderness = false, bot = false, newAc
       sendInterfaceFlags: (...args) => packets.push(['flags', ...args]),
       sendString: (text, uid) => packets.push(['text', uid, text]),
       getVarbit: id => (id === 4084 && orbsHidden ? 1 : 0),
+      sendUrlOpen() {},
     }),
   };
   require('../plugins/interface/WelcomeScreen.plugin').register({

@@ -493,10 +493,7 @@ test('as captured (rev 242): the Karamja boats charge once, fade out, land on th
   assert.equal(p.items.get(995), 30); assert.deepEqual(here(), [3065, 3002, 0]);
   assert.deepEqual(p.messages, ['You pay the boarding charge of 30 coins.', 'You board the ship and sail to the Pandemonium.']);
   q.tick(4); p.messages.length = 0;
-  const morris = (x, y) => ({ getLocation: () => new core.Location(x, y, 0) });
-  q.namedNpc.get('Seaman Morris:Port Sarim')({ player: p, npc: morris(3050, 3193) });
-  assert.deepEqual(p.messages, [], "Morris's stale Port Sarim spawn does not sell a hop across the docks");
-  q.namedNpc.get('Seaman Morris:Port Sarim')({ player: p, npc: morris(3064, 3003) }); q.tick(5);
+  q.namedNpc.get('Seaman Morris:Port Sarim')({ player: p, npc: { getLocation: () => new core.Location(3064, 3003, 0) } }); q.tick(5);
   assert.equal(p.items.get(995), 0); assert.deepEqual(here(), [3029, 3217, 0]);
   assert.deepEqual(p.messages, ['You pay the boarding charge of 30 coins.', 'You board the ship and sail to Port Sarim.']);
   assert.equal(arrived.at(-1), 'pandemonium-port-sarim');

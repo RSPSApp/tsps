@@ -38,6 +38,7 @@ function lands(id, combatType, attacker, lastDamager) {
     combatType,
     target: { getCombat: () => ({ getLastDamager: () => lastDamager }), getHitpoints: () => 99 },
     method: { accuracyDefenceType: () => 0 },
+    accuracyAttackType() { return this.combatType; },
   };
   return PendingHit.prototype.rollSpecialTraits.call(hit, CombatSpecial.getById(id).getTraits(), false, true, 0).accurate;
 }

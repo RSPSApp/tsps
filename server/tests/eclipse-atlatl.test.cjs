@@ -104,6 +104,7 @@ function player({ weapon = I.ECLIPSE_ATLATL, ammo = I.ATLATL_DART, amount = 10, 
     getPacketSender: () => new Proxy({}, { get: () => noop }),
     getAttribute: key => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value),
     getLocation: () => new core.Location(3000, 3000),
+    getPrivateArea: () => null,
     performAnimation: animation => p.animations.push(animation.getId()), performGraphic: graphic => p.graphics.push(graphic.id),
     sendMessage: message => p.messages.push(message),
   };

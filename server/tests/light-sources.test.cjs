@@ -167,6 +167,40 @@ test("as captured (rsprox 70, 75): the torch says 'You light your torch.' and pl
   assert.deepEqual(f.animations, [], "no sequence in the capture");
 });
 
+// rsprox local 1000134 t438/t585/t780/t1144, 1000135 t221, 1000140 t763 (rev 226): tinderbox on the unlit
+// white candle lantern (4529) -> slot becomes 4531, spam "You light the lantern." and synth 3226, same tick.
+test("as captured: a candle lantern says 'You light the lantern.' as spam and plays synth 3226", async (t) => {
+  // White as captured; black (not captured) is lit the same way.
+  for (const [unlit, lit] of [[I.CANDLE_LANTERN, I.CANDLE_LANTERN_3], [I.CANDLE_LANTERN_4, I.CANDLE_LANTERN_6]]) {
+    const f = actor(t, 4);
+    const typed = [];
+    const sounds = [];
+    const sender = f.p.getPacketSender();
+    t.mock.method(sender, "sendTypedMessage", (type, message) => { typed.push([type, message]); return sender; });
+    t.mock.method(sender, "sendSound", (id) => { sounds.push(id); return sender; });
+    f.inv.setItem(0, item(unlit));
+    f.inv.setItem(1, item(I.TINDERBOX));
+    await useOn(f, 1, 0);
+    assert.deepEqual(carried(f), [lit, I.TINDERBOX]);
+    assert.deepEqual(typed, [[core.ChatType.SPAM, "You light the lantern."]]);
+    assert.deepEqual(sounds, [3226]);
+    assert.deepEqual(f.animations, [], "no sequence in the capture");
+  }
+
+  // Below 4 Firemaking it stays unlit: no line, no sound.
+  const low = actor(t, 3);
+  const lowTyped = [];
+  const lowSounds = [];
+  const lowSender = low.p.getPacketSender();
+  t.mock.method(lowSender, "sendTypedMessage", (type, message) => { lowTyped.push(message); return lowSender; });
+  t.mock.method(lowSender, "sendSound", (id) => { lowSounds.push(id); return lowSender; });
+  low.inv.setItem(0, item(I.CANDLE_LANTERN));
+  low.inv.setItem(1, item(I.TINDERBOX));
+  await useOn(low, 1, 0);
+  assert.deepEqual(carried(low), [I.CANDLE_LANTERN, I.TINDERBOX]);
+  assert.deepEqual([lowTyped, lowSounds], [[], []]);
+});
+
 test("the other new lights play no animation either (none captured, none invented)", async (t) => {
   for (const [label, unlit, , level] of LIGHTS.slice(1)) {
     const f = actor(t, level);

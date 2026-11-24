@@ -4422,7 +4422,7 @@
   {"level":0,"name":"Trader Stan","x":3039,"y":3192,"id":1328,"wanderRadius":2},
   {"level":0,"name":"Trader Crewmember","x":3039,"y":3193,"id":1334,"wanderRadius":2},
   {"level":0,"name":"Trader Crewmember","x":3042,"y":3192,"id":1331,"wanderRadius":2},
-  {"level":0,"name":"Seaman Morris","x":3050,"y":3193,"id":8631},
+  {"level":0,"name":"Seaman Morris","x":3064,"y":3003,"id":8631,"wanderRadius":1},
   {"level":2,"name":"Guard","x":3018,"y":3179,"id":1552},
   {"level":0,"name":"Meiyerditch citizen","x":3592,"y":3222,"id":3792,"wanderRadius":0},
   {"level":0,"name":"Meiyerditch citizen","x":3592,"y":3227,"id":3807,"wanderRadius":0},

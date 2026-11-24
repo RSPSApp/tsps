@@ -59,6 +59,7 @@ function setup({ withDoors = false, withTranscript = false, promptChoice = null 
     questCore.CacheDefinitions = {
       // Keep the startup catalog scan empty; the wooden gate table is static.
       getCounts: () => ({ objects: 0 }),
+      getLocId: (name) => require('../dist/game/cache/CacheDefinitions').CacheDefinitions.getLocId(name),
       getObject: (id) => (HEMENSTER_GATE_IDS.has(id) ? { name: 'Gate' } : undefined),
     };
     questCore.MapObjects = {

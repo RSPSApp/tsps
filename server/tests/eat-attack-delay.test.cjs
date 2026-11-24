@@ -26,6 +26,7 @@ before(async () => {
         onItemAction: (eat) => { handler = eat; },
         emitCanEat: () => true,
         emitCustomEvent: () => {},
+        onCustomEvent: () => {},
     });
 });
 
@@ -49,7 +50,7 @@ function buildPlayer() {
         getCombat: () => combat,
         getTimers: () => timers,
         getInventory: () => inventory,
-        getPacketSender: () => ({ sendInterfaceRemoval: () => {}, sendSoundEffect: () => {}, sendConfig: () => {} }),
+        getPacketSender: () => ({ sendInterfaceRemoval: () => {}, sendSoundEffect: () => {}, sendConfig: () => {}, sendTypedMessage: () => {} }),
         getAttribute: () => undefined,
         setAttribute: () => {},
         getHitpoints: () => 50,

@@ -139,7 +139,7 @@ test('straight wall decorations 4/5 are operated from their own tile, as live', 
   const stand = (x, y, size = 1) => ({
     getLocation: () => new Location(x, y, 0),
     getSize: () => size,
-    getPrivateArea: () => null,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null,
   });
   // 29650 is shape 4, face 2 at 1632,4833: reached on its own tile only, never from the
   // library tile beside it or through the wall from the corridor.
@@ -197,7 +197,7 @@ test('clipped type-10 crate 16560 uses its real wall sides without unmasked thro
   const stand = (x, y) => ({
     getLocation: () => new Location(x, y, 0),
     getSize: () => 1,
-    getPrivateArea: () => null,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null,
   });
   // Real clipping: west/south are the wall/corridor sides; east/north satisfy the
   // type-10 rectangle reach. The failed native tile 2950,3508 is correctly false.
@@ -214,7 +214,7 @@ test('clipped type-10 crate 16560 uses its real wall sides without unmasked thro
     isPlayer: () => true, isNpc: () => false, getAsPlayer() { return this; },
     getIndex: () => 1, getUsername: () => 'crate-reach', getSize: () => 1,
     getLocation: () => new Location(2950, 3508, 0),
-    getPrivateArea: () => null,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null,
     getPacketSender: () => ({ getVarbit: () => 0, getVarp: () => 0 }),
   };
   const queue = new MovementQueue(player);
@@ -281,7 +281,7 @@ test('stage 6 painting resolves to its MORPH child and west-adjacent canvas reac
   assert.deepEqual([painting.getSizeX(), painting.getSizeY(), painting.getBlockingMask()], [1, 2, 23]);
   const stand = {
     getLocation: () => ({ getZ: () => 0, getX: () => 1718, getY: () => 9706 }),
-    getSize: () => 1, getPrivateArea: () => null,
+    getSize: () => 1, getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null,
   };
   assert.equal(RegionManager.getClipping(1718, 9706, 0, null), 8, 'drawing wall blocks the west edge');
   const atTile = MapObjects.mapObjects.get(MapObjects.getHash(1719, 9706, 0)) ?? [];
@@ -310,7 +310,7 @@ test('stage 6 canvas dispatches on the painting through the real item-on-object 
   const player = {
     isPlayer: () => true, isNpc: () => false, isPlayerBot: () => false, getAsPlayer() { return this; },
     getIndex: () => 999, getUsername: () => 'canvas-route', getSize: () => 1, getRights: () => -1,
-    getLocation: () => location, getPrivateArea: () => null,
+    getLocation: () => location, getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null,
     getPacketSender: () => ({ getVarbit: id => id === 16663 ? 6 : 0, getVarp: () => 0, sendDestination: noop }),
     getInventory: () => ({ capacity: () => 28, getItems: () => [new Item(30950, 1)] }),
     getPacketSender: () => ({ getVarbit: () => 0, getVarp: () => 0, sendDestination: noop }),
@@ -372,7 +372,7 @@ test('every walkToObject caller shares route masks and cannot operate a door fro
   const player = {
     isPlayer: () => true, isNpc: () => false, isPlayerBot: () => true, getAsPlayer() { return this; },
     getIndex: () => 1, getUsername: () => 'door-reach', getSize: () => 1,
-    getLocation: () => location, getPrivateArea: () => null, setPositionToFace: noop, setDirection: noop,
+    getLocation: () => location, getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, setPositionToFace: noop, setDirection: noop,
   };
   const queue = new MovementQueue(player);
   player.getMovementQueue = () => queue;
@@ -435,7 +435,7 @@ test('ground-item routes can stop on a reachable tile beside a blocked item tile
     isPlayer: () => false,
     getLocation: () => new Location(2598, 7842, 0),
     getSize: () => 1,
-    getPrivateArea: () => null,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null,
     getMovementQueue: () => queue,
   };
   const oldRoute = PathFinder.rsmodRouteFinding;
@@ -477,7 +477,7 @@ test('ground-item pickup accepts only a collision-reachable adjacent tile on the
     getUsername: () => 'ObjectReachTest',
     getLocation: () => location,
     getSize: () => 1,
-    getPrivateArea: () => null,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null,
     getMovementQueue: () => ({ reset: () => { resets++; } }),
     getInventory: () => ({
       getFreeSlots: () => 1,
@@ -544,7 +544,7 @@ test('ladder click waits for arrival before animating and changes plane one tick
     isPlayer: () => true, isNpc: () => false, isPlayerBot: () => true, getAsPlayer() { return this; },
     getIndex: () => 1, getUsername: () => 'tester', getSize: () => 1,
     getLocation: () => location, setLocation: (value) => { location = value; },
-    getPrivateArea: () => null, getHitpoints: () => 10, isNeedsPlacement: () => false,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, getHitpoints: () => 10, isNeedsPlacement: () => false,
     getForceMovement: () => forceMovement,
     getTimers: () => ({ has: () => false }), getFollowing: () => null,
     getDueling: () => ({ getButtonDelay: () => ({ finished: () => true }), inDuel: () => false }),
@@ -641,7 +641,7 @@ test('a frozen player climbs a ladder in reach, and gets "I can\'t reach that!" 
     isPlayer: () => true, isNpc: () => false, isPlayerBot: () => true, getAsPlayer() { return this; },
     getIndex: () => 1, getUsername: () => 'frozen', getSize: () => 1,
     getLocation: () => location, setLocation: (value) => { location = value; },
-    getPrivateArea: () => null, getHitpoints: () => 10, isNeedsPlacement: () => false,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, getHitpoints: () => 10, isNeedsPlacement: () => false,
     getForceMovement: () => null,
     getTrading: () => ({ getButtonDelay: () => ({ finished: () => true }) }),
     getDueling: () => ({ getButtonDelay: () => ({ finished: () => true }), inDuel: () => false }),
@@ -723,7 +723,7 @@ test('an inventory item action cancels the queued object op but keeps the walk',
     isPlayer: () => true, isNpc: () => false, isPlayerBot: () => true, getAsPlayer() { return this; },
     getIndex: () => 1, getUsername: () => 'tester', getSize: () => 1,
     getLocation: () => location, setLocation: (value) => { location = value; },
-    getPrivateArea: () => null, getHitpoints: () => 10, isNeedsPlacement: () => false,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, getHitpoints: () => 10, isNeedsPlacement: () => false,
     getForceMovement: () => null,
     getTimers: () => ({ has: () => false }), getFollowing: () => null, interactionCleared: noop,
     getDueling: () => ({ getButtonDelay: () => ({ finished: () => true }), inDuel: () => false }),
@@ -813,7 +813,7 @@ function parityScene(t, start, blocked) {
     isPlayer: () => true, isNpc: () => false, isPlayerBot: () => false, getAsPlayer() { return this; },
     getIndex: () => 1, getUsername: () => 'tester', getSize: () => 1,
     getLocation: () => location, setLocation: (value) => { location = value; },
-    getPrivateArea: () => null, getHitpoints: () => 10, isNeedsPlacement: () => false,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, getHitpoints: () => 10, isNeedsPlacement: () => false,
     getForceMovement: () => null, getTimers: () => ({ has: () => false }), getFollowing: () => null,
     getDueling: () => ({ getButtonDelay: () => ({ finished: () => true }), inDuel: () => false }),
     getTrading: () => ({ getButtonDelay: () => ({ finished: () => true }) }),
@@ -921,7 +921,7 @@ test('an NPC that changes type during the approach ends it where the player stan
   const sheep = {
     isNpc: () => true, isPlayer: () => false, getId: () => 2693, getSize: () => 1,
     getNpcTransformationId: () => transform, isRegistered: () => true, getHitpoints: () => 10,
-    getPrivateArea: () => null, getLocation: () => new Location(108, 100, 0), getOwner: () => null,
+    getPrivateArea: () => null, getTeleportSerial: () => 0, getWalkClipArea: () => null, getLocation: () => new Location(108, 100, 0), getOwner: () => null,
     getArea: () => null,
   };
   let operated = 0;

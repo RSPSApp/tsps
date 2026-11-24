@@ -5,7 +5,8 @@
  * - Take-off: the logs are paid, zep_if_current_map / screen_dist / balloon_height / sandbags (8)
  *   / logs (10) are set, the first screen's obstacles drawn into zep_interface's 13x20 grid (the
  *   birds, storm creatures and sharks turned to their captured IF_SETANGLE), song 206, the side
- *   tabs closed, zep_interface in the main modal and zep_interface_side beside it.
+ *   tabs closed, the main modal's backdrop set solid black, zep_interface in the main modal and
+ *   zep_interface_side beside it.
  * - Every control moves the balloon one column right: sandbags +2 (one sandbag), logs +1 (one
  *   log), relax 0, the rope -1, the red rope -2 - the counters, the height and the column, the
  *   control's sound, the balloon's two parts placed and the whoosh (3246). One move a tick at
@@ -56,6 +57,14 @@ const CONTROLS = {
   zep_btn_tug_emerg: { rise: -2, sound: 3239 },
 };
 const BAIL = "zep_btn_close";
+/**
+ * toplevel_mainmodal_background (917) with (0, 0): the backdrop behind the main modal, solid black. Live runs it just
+ * before zep_interface opens, at every take-off (rev 242 recording ticks 1640, 2001, 2995, 3045, 3355, 3519, 3696);
+ * the open's toplevel_resize draws the backdrop from the varcs it sets. Without it the world showed round the controls
+ * (issue 6636). The bank sets its own (-1, -2) back, as live does.
+ */
+const MAINMODAL_BACKGROUND_SCRIPT = 917;
+const MAINMODAL_BACKGROUND = [0, 0];
 const MOVE_SOUND = 3246;
 const FLIGHT_SONG = 206;
 const START = { sandbags: 8, logs: 10 };
@@ -184,6 +193,7 @@ function takeOff(player, station, logs, source, { opensRoute = true } = {}) {
   drawScreen(player, route.screens[0]);
   sender.sendSong(FLIGHT_SONG);
   sideTabs(player, false);
+  sender.sendInterfaceScript(MAINMODAL_BACKGROUND_SCRIPT, MAINMODAL_BACKGROUND);
   sender.sendInterface(cache().getInterfaceId(FLIGHT_INTERFACE));
   sender.sendSubInterface(SIDE_MODAL, cache().getInterfaceId(SIDE_INTERFACE), 0);
   place(player, flight);

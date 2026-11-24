@@ -2,7 +2,7 @@ import { mat4, vec3 } from "gl-matrix";
 
 import { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
-import type { NpcType } from "../../rs/config/npctype/NpcType";
+import { type NpcType, npcTypeHasModel } from "../../rs/config/npctype/NpcType";
 import type { LocType } from "../../rs/config/loctype/LocType";
 import type { Model } from "../../rs/model/Model";
 import { Scene } from "../../rs/scene/Scene";
@@ -730,7 +730,7 @@ export class SceneRaycaster {
                     npcType = npcType.transform(this.osrsClient.varManager, this.osrsClient.npcTypeLoader);
                 }
                 // Model-less NPC spawns must not intercept objects behind their bounding box.
-                if (!npcType?.modelIds?.length) continue;
+                if (!npcTypeHasModel(npcType)) continue;
                 isFishingSpot = String(npcType.name ?? "").toLowerCase().includes("fishing spot");
                 // The scaled model's height; size is already the scaled footprint in tiles.
                 heightTiles = (this.npcHeightProvider?.(npcType.id) ?? 200) / 128;
@@ -849,7 +849,7 @@ export class SceneRaycaster {
                 while (npcType?.transforms) {
                     npcType = npcType.transform(this.osrsClient.varManager, this.osrsClient.npcTypeLoader);
                 }
-                if (!npcType?.modelIds?.length) return;
+                if (!npcTypeHasModel(npcType)) return;
                 heightTiles = (this.npcHeightProvider?.(npcType.id) ?? 200) / 128;
             } catch {
                 return;

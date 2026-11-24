@@ -285,7 +285,7 @@ function escapeJagex(text: string): string {
 function unescapeJagex(text: string): string {
     return text.replace(/<lt>/g, "\u0000").replace(/<gt>/g, "\u0001")
         .replace(/<[^>]*>/g, "")
-        .replace(/\u0000/g, "<").replace(/\u0001/g, ">");
+        .split("\u0000").join("<").split("\u0001").join(">");
 }
 
 /** RuneLite's Text.removeTags. */

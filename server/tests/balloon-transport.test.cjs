@@ -91,7 +91,8 @@ function fakePlayer({ at = [2808, 3354], firemaking = 99, boosted = firemaking, 
     }),
     getPacketSender: () => ({
       sendInterfaceRemoval: () => { player.interface = -1; },
-      sendInterface: (id) => { player.interface = id; },
+      sendInterface: (id) => { player.interface = id; (player.opens ??= []).push(['interface', id]); },
+      sendInterfaceScript: (id, args) => { (player.opens ??= []).push(['script', id, args]); },
       sendVarbit: (id, v) => { player.varbits[id] = v; },
       sendSubInterface: (uid, id, type, { postScripts } = {}) => player.fades.push(`fade:${postScripts?.[0]?.args?.[3]}`),
       closeSubInterface: () => player.fades.push('closed'),
@@ -447,6 +448,9 @@ test("take-off as captured: the counters 8 and 10, the route's first map and hei
   const varbit = (name) => player.varbits[core.CacheDefinitions.getVarbitId(name)];
   assert.deepEqual(['zep_if_current_map', 'zep_if_screen_dist', 'zep_if_balloon_height', 'zep_if_sandbags', 'zep_if_logs'].map(varbit), [4, 0, 8, 8, 10]);
   assert.equal(player.interface, core.CacheDefinitions.getInterfaceId('zep_interface'));
+  // Issue 6636: the main modal's backdrop solid black (toplevel_mainmodal_background 0, 0) right before the controls
+  // open, as at every take-off in the rev 242 recording (ticks 1640, 2001, 2995, 3045, 3355, 3519, 3696).
+  assert.deepEqual(player.opens.slice(-2), [['script', 917, [0, 0]], ['interface', core.CacheDefinitions.getInterfaceId('zep_interface')]]);
   assert.deepEqual(player.songs, [206]);
   assert.deepEqual(player.positions.slice(-2).map(([, x, y]) => [x, y]), [[13, 104], [13, 128]], 'the envelope and the basket below it');
   assert.ok(player.blocked);

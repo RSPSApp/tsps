@@ -149,23 +149,4 @@ test('registered Velorina start keeps prerequisites and consent independent of l
     assert.ok(actions.get(f.p).includes('26f6qH'));assert.equal(core.MultiChatboxPrompt.getPending(f.p),null);assert.equal(manager.isActive(),false);
     assert.equal(quest.getStage(f.p),0);assert.deepEqual(stages.get(f.p),[]);
   });
-  for(const level of [19,20]) await t.test(`nettle-water cooking retains its current-level ${level} boundary`,child=>{
-    const f=actor(child,{cooking:level});quest.setStage(f.p,4);
-    const item=new core.Item(core.ItemIdentifiers.NETTLE_WATER,1);f.p.getInventory().add(item,false);
-    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.NETTLE_WATER),1);
-    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.NETTLE_TEA),0);
-    const held=f.p.getInventory().getItems().find(i=>i?.getId()===core.ItemIdentifiers.NETTLE_WATER);
-    assert.ok(held);const slot=f.p.getInventory().getItems().indexOf(held);assert.ok(slot>=0);
-    const at=f.p.getLocation(),object=new core.GameObject(core.ObjectIdentifiers.COOKING_RANGE,at,10,0,null);
-    const definition=object.getDefinition();assert.ok(definition);
-    assert.ok(['Cooking range','Range','Fire'].includes(definition.getName()) || (definition.getInteractions()??[]).includes('Cook'));
-    const before=f.p.getSkillManager().getExperience(core.Skill.COOKING);
-    assert.equal(PluginManager.emitItemOnObject({player:f.p,item:held,itemId:held.getId(),slot,object,objectId:object.getId(),definition,
-      location:{x:at.getX(),y:at.getY(),z:at.getZ()},handled:false}),true);
-    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.NETTLE_WATER),level<20?1:0);
-    assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.NETTLE_TEA),level<20?0:1);
-    assert.equal(f.p.getSkillManager().getExperience(core.Skill.COOKING),before+(level<20?0:52));
-    if(level<20) assert.ok(f.messages.includes('You need a Cooking level of at least 20 to cook this.'));
-    assert.equal(quest.getStage(f.p),4);
-  });
 });

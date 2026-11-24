@@ -128,7 +128,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
   const objects = new Set(), drops = [], grounds = [];
   let npcs = [];
   H.core = { ...core,
-    ObjectManager: { register(o) { objects.add(o); }, deregister(o) { objects.delete(o); } },
+    ObjectManager: { register(o) { objects.add(o); }, deregister(o) { objects.delete(o); }, objectsAt: () => [...objects] },
     MapObjects: { exists: o => objects.has(o), getType: () => null },
     RegionManager: { blocked: () => false, canMove: () => true },
     ItemOnGroundManager: {
@@ -1749,7 +1749,7 @@ test("sound lookup excludes Lost City IDs, altar switches use OSRS audio, and re
 
   const interactions = new Map();
   let menu = null;
-  require("../plugins/objects/Altars.plugin").register({
+  require("../plugins/objects/Altars.plugin").register({ onCanLogout() {}, onPlayerLogout() {},
     core,
     onObjectInteraction: (name, actions) => interactions.set(name, actions),
     sendMultiChatboxPrompt: (_player, title, ...pairs) => { menu = { title, pairs }; },
@@ -1803,7 +1803,7 @@ test("the cache Shrine of Ralos Bask action restores Prayer without reducing boo
   const { PluginManager } = require("../dist/plugins/PluginManager");
   await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
   const core = PluginManager.getCoreApi(), interactions = new Map();
-  require("../plugins/objects/Altars.plugin").register({
+  require("../plugins/objects/Altars.plugin").register({ onCanLogout() {}, onPlayerLogout() {},
     core, onObjectInteraction: (name, actions) => interactions.set(name, actions),
   });
   const shrine = CacheDefinitions.getObject(core.ObjectIdentifiers.SHRINE_OF_RALOS);

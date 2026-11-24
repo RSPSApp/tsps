@@ -18,13 +18,63 @@ export type CacheKind = {
 
 export type CacheField = { name: string; type: string; ref?: string; many?: boolean; note?: string };
 
-export type AssetKind = "model" | "sprite" | "texture";
+export type AssetKind = "model" | "sprite" | "texture" | "animation" | "graphic";
 
-export type AssetRow = { kind: AssetKind; id: number; name: string; file: string; hash: string; size: number };
+export type AssetRow = {
+    kind: AssetKind; id: number; name: string; file: string; hash: string; size: number;
+    /** An animation's frame count and the skeletons (frame maps) it moves. */
+    frames?: number; framemaps?: number[];
+    /** A graphic's model asset and its animation (a custom or a cache sequence). */
+    model?: number | null; animation?: number | null;
+};
+
+/** What can be uploaded: a model file, or an animation's or a graphic's folder (the add-ons' exports). */
+export const UPLOAD_KINDS: readonly AssetKind[] = ["model", "animation", "graphic"];
+export const isFolderKind = (kind: AssetKind) => kind === "animation" || kind === "graphic";
+/** The definition kind an animation or graphic asset is inspected as. */
+export const definitionKindOf = (kind: AssetKind): string | null => kind === "animation" ? "seq" : kind === "graphic" ? "spotanim" : null;
+
+/** One candidate of the asset library: an export under data/models, by its path there. */
+export type LibraryEntry = { path: string; name: string; size?: number; files?: number; stored?: number | null; model?: boolean; animation?: boolean };
+
+/**
+ * Files picked with a folder input, as the authoring service takes them: `{ "seq.dat": base64 }`,
+ * relative to the folder that was picked (a browser names them `player-anim/frames/1-2.dat`).
+ */
+export function folderUpload(files: ReadonlyArray<{ path: string; data: string }>): Record<string, string> {
+    const split = files.map((file) => ({ parts: file.path.split(/[\\/]/).filter(Boolean), data: file.data }));
+    const top = split.length && split.every((file) => file.parts.length > 1 && file.parts[0] === split[0].parts[0]) ? 1 : 0;
+    return Object.fromEntries(split.map((file) => [file.parts.slice(top).join("/"), file.data]));
+}
+
+/** Definition kinds the Model Extractor can write files for. */
+export const EXTRACT_KINDS = ["item", "npc", "loc", "seq", "spotanim"] as const;
+export const canExtract = (kind: string) => (EXTRACT_KINDS as readonly string[]).includes(kind);
+
+/** The Model Extractor's routes, on the loopback authoring service (they read and write local files). */
+export const extractPath = (kind: string, id: number) => `/extract?${query({ kind, id })}`;
+export const libraryPath = (kind: AssetKind) => `/library?${query({ kind })}`;
+export const npcAnimationsPath = (id: number) => `/npc-animations?${query({ id })}`;
+export const animationBodiesPath = (id: number) => `/animation-bodies?${query({ id })}`;
+
+/** A data/models folder name the extractor accepts: lower case letters, digits and dashes. */
+export const folderNameOf = (text: string) => text.toLowerCase().replace(/<[^>]*>/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
+
+export type ExtractRow = { file: string; model: number | null; role: string; format: string };
+export type ExtractDetails = {
+    kind: string; id: number; name: string; symbol?: string | null; folder?: string;
+    rows: ExtractRow[]; notes: string[]; recolours: Array<[number, number]>; retextures: Array<[number, number]>;
+    unsupported?: string; custom?: { kind: AssetKind; id: number };
+};
+
+export type AnimationRow = { id: number; name: string; skeletal: boolean; roles?: string[]; sources?: string[]; fits?: boolean };
+export type NpcAnimations = { id: number; skeleton: number | null; playerSkeleton: boolean; used: AnimationRow[]; related: AnimationRow[]; relatedTotal: number };
+export type AnimationBody = { kind: "npc"; id: number; name: string; why: string };
+export type AnimationBodies = { id: number; skeleton: number | null; playerSkeleton: boolean; bodies: AnimationBody[] };
 
 export type AssetListing = {
     kind: AssetKind;
-    index: number;
+    index: number | null;
     total: number;
     offset: number;
     limit: number;

@@ -214,6 +214,8 @@ export type NpcView = Tile & ActorUpdateView & {
   exactMove?: ForcedMovementView;
   /** A tile to turn to once (OSRS npc face coord). */
   faceTile?: { x: number; y: number };
+  /** A held facing (OSRS npc face angle): instant snaps to it, else it turns at its turn speed. */
+  faceAngle?: { angle: number; instant: boolean };
   /** Body-model slot overrides (OSRS npc model customisation); an empty list resets them. */
   modelCustomisation?: { slot: number; modelId: number }[];
   /** Stand / walk / turn sequence overrides (0 idle, 1 walk, 2 turn left, 3 turn right); an empty list resets them. */
@@ -3156,6 +3158,7 @@ const NPC_MASK = {
   SPOT_ANIM: 0x20000,
   TINT: 0x100,
   TYPE_CUSTOMISATION: 0x40000,
+  FACE_ANGLE: 0x80000,
 } as const;
 
 /** TYPE_CUSTOMISATION's leading flags: which fields follow. None resets the customisation. */
@@ -3292,7 +3295,8 @@ function npcUpdateMask(view: NpcView, writeInteraction: boolean, writeHeadIcon =
     (view.baseAnimations ? NPC_MASK.BASE_ANIMATIONS : 0) |
     (view.transparency ? NPC_MASK.TRANSPARENCY : 0) |
     (view.graphics?.length ? NPC_MASK.SPOT_ANIM : 0) |
-    (view.typeCustomisation ? NPC_MASK.TYPE_CUSTOMISATION : 0);
+    (view.typeCustomisation ? NPC_MASK.TYPE_CUSTOMISATION : 0) |
+    (view.faceAngle ? NPC_MASK.FACE_ANGLE : 0);
 }
 
 /** A flags byte, then the flagged fields: model ids, recolour pairs, a name, a combat level. */
@@ -3445,6 +3449,10 @@ function writeNpcUpdateBlock(view: NpcView, writeInteraction: boolean, writeHead
     bytes.push(view.transparency.to & 0xff);
   }
   if (view.typeCustomisation) writeTypeCustomisation(bytes, view.typeCustomisation);
+  if (view.faceAngle) {
+    shortBE(bytes, view.faceAngle.angle & 2047);
+    bytes.push(view.faceAngle.instant ? 1 : 0);
+  }
   return Buffer.from(bytes);
 }
 

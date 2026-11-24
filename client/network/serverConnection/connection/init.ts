@@ -207,10 +207,16 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
             console.warn("[ws] error", e);
         });
 
-        // Close gracefully before page reload/navigation
+        // Close gracefully once the page is really going away. This must not run in
+        // `beforeunload`: that fires before the browser's Stay/Leave prompt, and choosing Stay
+        // cancels the navigation without reloading the page, so tearing the socket down there
+        // would strand a live session with reconnect suppressed. `pagehide` only fires for a
+        // navigation that was committed (or a close), after any prompt has been answered.
         try {
             if (typeof window !== "undefined") {
-                const onBeforeUnload = () => {
+                const onPageHide = (event: PageTransitionEvent) => {
+                    // The back/forward cache keeps this very document alive: its session survives.
+                    if (event?.persisted) return;
                     try {
                         const g: any = window as any;
                         g[WS_SUPPRESS_RECONNECT_KEY] = true;
@@ -219,9 +225,9 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
                 };
                 // Attach once per page lifetime using a global guard
                 const g: any = window as any;
-                if (!g.__OSRS_CLIENT_WS_UNLOAD_BOUND__) {
-                    window.addEventListener("beforeunload", onBeforeUnload);
-                    g.__OSRS_CLIENT_WS_UNLOAD_BOUND__ = true;
+                if (!g.__OSRS_CLIENT_WS_PAGEHIDE_BOUND__) {
+                    window.addEventListener("pagehide", onPageHide);
+                    g.__OSRS_CLIENT_WS_PAGEHIDE_BOUND__ = true;
                 }
             }
         } catch {}

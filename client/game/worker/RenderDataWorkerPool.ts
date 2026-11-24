@@ -7,6 +7,7 @@ import { ObservablePromise } from "threads/dist/observable-promise";
 import { canUseSharedArrayBuffer, LoadedCache } from "../Caches";
 import { CustomItemRegistry } from "../../custom/items/CustomItemRegistry";
 import { CustomModelRegistry } from "../../custom/items/CustomModelRegistry";
+import { CustomAnimationRegistry } from "../../custom/animations/CustomAnimationRegistry";
 import { getDefinitionArchives } from "../../custom/archives/ArchivedDefinitionStore";
 import { NpcGeometryData } from "../../render/loader/NpcGeometryData";
 import type { NpcInstance } from "../../render/npc/NpcRenderTemplate";
@@ -77,6 +78,7 @@ export class RenderDataWorkerPool {
                     { key: "customItems", rows: Array.from(CustomItemRegistry.getAll(), (item) => item.definition) },
                     { key: "customModels", rows: CustomModelRegistry.getAll() },
                     { key: "customDefinitions", rows: getCustomDefinitions() },
+                    { key: "customAnimations", rows: CustomAnimationRegistry.rows() },
                 ] });
             });
         }
@@ -112,13 +114,40 @@ export class RenderDataWorkerPool {
         signal?: AbortSignal,
     ): QueuedTask<RenderDataWorkerThread, D> {
         const id = ++this.nextMapBuildId;
-        return this.pool.queue(async (worker) => {
+        const run = async (worker: RenderDataWorkerThread) => {
             signal?.throwIfAborted();
             const cancel = () => { void worker.cancelLoad(id).catch(() => {}); };
             signal?.addEventListener("abort", cancel, { once: true });
             try { return await worker.load(loader, input, id) as D; }
             finally { signal?.removeEventListener("abort", cancel); }
-        });
+        };
+        // A loc-only rebuild is a square already built, changed in a few places. One worker keeps
+        // the scenery it packed for the last one (SceneChunkCache), so they all go to that worker
+        // and not to whichever is free; a rebuild landing elsewhere would pack the whole square.
+        const sd = input as Partial<SdMapLoaderInput>;
+        if (sd.locOnly && !sd.instance && !sd.overrideRenderPos && this.workers.length > 1) {
+            return Object.assign(this.runPinned(run), { cancel() {} }) as unknown as QueuedTask<RenderDataWorkerThread, D>;
+        }
+        return this.pool.queue(run);
+    }
+
+    /**
+     * Runs a task on the first worker, as the pool would: alone. A reservation in its running
+     * tasks keeps the pool from handing it another build, and the task starts once the builds
+     * already there are done (a worker's scene builder holds one build's state at a time).
+     */
+    private runPinned<T>(task: (worker: RenderDataWorkerThread) => Promise<T>): Promise<T> {
+        const worker = this.workers[0];
+        let finish!: () => void;
+        const reservation = new Promise<void>((resolve) => { finish = resolve; });
+        const ahead = (worker.runningTasks ?? []).slice();
+        (worker.runningTasks ??= []).push(reservation);
+        const release = () => {
+            worker.runningTasks = worker.runningTasks.filter((running) => running !== reservation);
+            finish();
+            if (!this.disposed) (this.pool as any).scheduleWork?.();
+        };
+        return Promise.allSettled(ahead).then(() => worker.init).then(task).finally(release);
     }
 
     queueNpcGeometry(
@@ -176,12 +205,14 @@ export class RenderDataWorkerPool {
         this.npcPoseWorkers.set(descriptor, reservation);
         (descriptor.runningTasks ??= []).push(reservation.task);
         const generation = this.npcPoseGeneration;
-        if (this.npcPoseModelsRevision !== CustomModelRegistry.revision) {
-            this.npcPoseModelsRevision = CustomModelRegistry.revision;
+        const contentRevision = CustomModelRegistry.revision * 65536 + CustomAnimationRegistry.revision;
+        if (this.npcPoseModelsRevision !== contentRevision) {
+            this.npcPoseModelsRevision = contentRevision;
             const payload = { gamemodeId: "custom-items", datasets: [
                 { key: "customItems", rows: Array.from(CustomItemRegistry.getAll(), item => item.definition) },
                 { key: "customModels", rows: CustomModelRegistry.getAll() },
-                    { key: "customDefinitions", rows: getCustomDefinitions() },
+                { key: "customDefinitions", rows: getCustomDefinitions() },
+                { key: "customAnimations", rows: CustomAnimationRegistry.rows() },
             ] };
             this.npcPoseContentReady = this.runAll(worker => worker.setCustomContent(payload))
                 .catch(error => { this.npcPoseModelsRevision = -1; throw error; });

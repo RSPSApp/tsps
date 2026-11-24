@@ -732,10 +732,17 @@ test('the journal sends the text local 1001343 recorded at each stage it was ope
     '<str>beneath the mountain. To do this, she wanted me to gather',
     '<str>her old crew together.',
   ];
-  assert.deepEqual(sent(), [
-    '<col=000080>I can start this quest by talking to <col=800000>Willow<col=000080>',
-    '<col=000080>on the path south of <col=800000>Ice Mountain<col=000080>.',
-  ], 'not started: navy with maroon highlights, as main sent it');
+  // Not started: "Read journal" opens the quest overview with its start link, read from the
+  // plain start sentence, never the journal.
+  const opened = [];
+  const sender = h.player.getPacketSender();
+  const sub = sender.sendSubInterface;
+  sender.sendSubInterface = (...args) => { opened.push(args[1]); return sender; };
+  const { questMetadata } = require('../plugins/quests/QuestList.QuestRuntime');
+  runtime.openJournal(h.player, h.quest, questMetadata(h.quest, PluginManager.getCoreApi().CacheDefinitions));
+  sender.sendSubInterface = sub;
+  assert.ok(opened.includes(782), 'the overview opens for an unstarted quest');
+  assert.ok(!opened.includes(119), 'not the journal');
   h.quest.setStage(h.player, 1);
   assert.deepEqual(sent(), [...intro, ...burntof,
     '<col=000080>I need to recruit <col=800000>Checkal<col=000080>. I can find him in <col=800000>Barbarian Village<col=000080>.',

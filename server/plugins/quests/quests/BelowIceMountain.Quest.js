@@ -2074,9 +2074,10 @@ module.exports = function registerBelowIceMountainQuest(api) {
         ...JOURNAL_GUARDIAN_STRUCK, ...JOURNAL_COMPLETE_STRUCK, "", "<col=ff0000>QUEST COMPLETE!"];
     }
     if (stage === 0) {
+      // Plain text: the quest list reads its start sentence from these lines and opens the overview.
       return [
-        `${NAVY}I can start this quest by talking to ${MAROON}Willow${NAVY}`,
-        `${NAVY}on the path south of ${MAROON}Ice Mountain${NAVY}.`,
+        "I can start this quest by talking to <col=800000>Willow</col>",
+        "on the path south of <col=800000>Ice Mountain</col>.",
       ];
     }
     if (stage === STAGE_STARTED) {

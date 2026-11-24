@@ -3389,15 +3389,14 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         }
     });
 
+    // if_setclickmask (2122): the component form of 1122. It sets the alternate sprite, which
+    // the minimap uses as its click mask; it is not an event-flags mask.
     handlers.set(Opcodes.IF_SETCLICKMASK, (ctx) => {
-        // sets a runtime widget flags override stored in Client.widgetFlags.
-        // Widget flags lookup and server packets that populate widgetFlags ranges.
         const w = getWidgetFromStack(ctx);
-        const mask = ctx.intStack[--ctx.intStackSize];
-        if (w) {
-            ctx.widgetManager.setWidgetFlagsOverride(w, mask);
-            // Keep derived targetMask in sync (bits 11-16) for scripts/UI that read `w.targetMask`.
-            w.targetMask = ((mask >>> 11) & 0x3f) | 0;
+        const id = ctx.intStack[--ctx.intStackSize];
+        if (w && w.spriteId2 !== id) {
+            w.spriteId2 = id;
+            invalidateWidgetRender(ctx, w);
         }
     });
 

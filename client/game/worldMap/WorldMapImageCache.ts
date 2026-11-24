@@ -448,6 +448,36 @@ export function markWorldMapImageTextureUploaded(
     }
 }
 
+/**
+ * The map squares to keep and render: those on screen once the zoom settles on its target, with
+ * no margin (the client caches only the regions it draws, WorldMapRenderer.drawTiles). Squares
+ * drawn beyond these (the draw's margin, or the old view mid-ease) use whatever is cached: each
+ * 200% square costs 1 MiB, and requesting them would push the previous zoom out of the budget.
+ */
+export function getWorldMapRetainedSquares(
+    bounds: { minX: number; minY: number; maxX: number; maxY: number },
+    displayX: number,
+    displayY: number,
+    width: number,
+    height: number,
+    pixelsPerTile: number,
+    level: number,
+): WorldMapRetainTile[] {
+    const spanX = width / (2 * pixelsPerTile);
+    const spanY = height / (2 * pixelsPerTile);
+    const minMapX = Math.max(bounds.minX >> 6, Math.floor((displayX - spanX) / 64));
+    const maxMapX = Math.min(bounds.maxX >> 6, Math.floor((displayX + spanX) / 64));
+    const minMapY = Math.max(bounds.minY >> 6, Math.floor((displayY - spanY) / 64));
+    const maxMapY = Math.min(bounds.maxY >> 6, Math.floor((displayY + spanY) / 64));
+    const squares: WorldMapRetainTile[] = [];
+    for (let mapY = minMapY; mapY <= maxMapY; mapY++) {
+        for (let mapX = minMapX; mapX <= maxMapX; mapX++) {
+            squares.push({ mapX, mapY, level });
+        }
+    }
+    return squares;
+}
+
 export function retainWorldMapImageTiles(
     state: WorldMapStateHolder,
     deps: WorldMapImageDeps,

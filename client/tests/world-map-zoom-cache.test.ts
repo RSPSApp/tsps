@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
     getWorldMapImageSource,
     getWorldMapImageTile,
+    getWorldMapRetainedSquares,
     retainWorldMapImageTiles,
 } from "../game/worldMap/WorldMapImageCache";
 import { WorldMapCompositeTextures } from "../game/worldMap/WorldMapCompositeTexture";
@@ -295,9 +296,12 @@ test("every area in the cache has a composite texture file", async () => {
 });
 
 /**
- * One frame of renderWidgetTree's world map: draws the squares visible at the zoom drawn now,
- * retaining (and so requesting) only those visible at the zoom being eased toward.
+ * One frame of renderWidgetTree's world map: draws the squares visible at the zoom drawn now
+ * (with its 64-tile margin), retaining and so requesting the squares getWorldMapRetainedSquares
+ * gives for the zoom being eased toward, as the renderer does.
  */
+const AREA_BOUNDS = { minX: 0, minY: 0, maxX: 0x3fff, maxY: 0x3fff };
+
 function squaresAt(cx: number, cy: number, width: number, height: number, pixelsPerTile: number) {
     const spanX = width / (2 * pixelsPerTile) + 64;
     const spanY = height / (2 * pixelsPerTile) + 64;
@@ -315,14 +319,18 @@ async function easedFrame(cache: any, deps: any, zoom: WorldMapState, width: num
     s.zoom = zoom.getZoomScale();
     s.target = zoom.getTargetZoomScale();
     s.zoomPercentage = zoom.zoomPercentage;
-    retainWorldMapImageTiles(cache, deps, squaresAt(s.displayX, s.displayY, width, height, s.target));
+    retainWorldMapImageTiles(
+        cache,
+        deps,
+        getWorldMapRetainedSquares(AREA_BOUNDS, s.displayX, s.displayY, width, height, s.target, 0),
+    );
     for (const { mapX, mapY } of squaresAt(s.displayX, s.displayY, width, height, s.zoom)) {
         getWorldMapImageSource(cache, deps, mapX, mapY);
     }
     await settle();
 }
 
-test("zooming 100% -> 200% -> 100% through the ease keeps the 100% tiles (1024x768 map)", async () => {
+for (const [width, height] of [[1024, 768], [1600, 900], [1920, 1080]]) test(`zooming 100% -> 200% -> 100% through the ease keeps the 100% tiles (${width}x${height} map)`, async () => {
     const { deps, loads } = renderer();
     const zoom = new WorldMapState();
     zoom.setZoomPercentage(100, true);
@@ -330,7 +338,7 @@ test("zooming 100% -> 200% -> 100% through the ease keeps the 100% tiles (1024x7
     const frames = async (n: number) => {
         for (let i = 0; i < n; i++) {
             zoom.cycle();
-            await easedFrame(cache, deps, zoom, 1024, 768);
+            await easedFrame(cache, deps, zoom, width, height);
         }
     };
     await frames(30);
@@ -339,7 +347,7 @@ test("zooming 100% -> 200% -> 100% through the ease keeps the 100% tiles (1024x7
 
     zoom.setZoomPercentage(200);
     await frames(40);
-    const target8 = squaresAt(3200, 3200, 1024, 768, 8).length;
+    const target8 = getWorldMapRetainedSquares(AREA_BOUNDS, 3200, 3200, width, height, 8, 0).length;
     assert.equal(
         loads.filter((l) => l.pixelsPerTile === 8).length,
         target8,

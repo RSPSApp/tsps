@@ -840,7 +840,8 @@ async function main() {
           await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
           // The area's composite fills squares whose tile isn't rendered, so black alone can't show
           // a re-render: count the tiles that enter the cache during the step (each is a render).
-          await cdp.evaluate(`globalThis.__wmTilesBefore = new Set((${CLIENT_JS}).worldMap.worldMapImageTiles.keys())`);
+          // Tile objects, not ids: a square evicted and rendered again keeps its id.
+          await cdp.evaluate(`globalThis.__wmTilesBefore = new Set((${CLIENT_JS}).worldMap.worldMapImageTiles.values()); 0`);
           await wheel(deltaY);
           // The zoom drawn, read every few ms while it eases (screenshots are too slow for this).
           const trace = [];
@@ -852,9 +853,9 @@ async function main() {
           zoomTraces.push({ step: `${label}${round}`, zooms: trace.filter((z, i) => i === 0 || z !== trace[i - 1]) });
           const until = Date.now() + 1500;
           while (Date.now() < until) samples.push(await sample(`${label}${round}`));
-          rendered.push({ step: `${label}${round}`, tiles: await cdp.evaluate(`(() => {
+          rendered.push({ step: `${label}${round}`, round, tiles: await cdp.evaluate(`(() => {
             let n = 0;
-            for (const id of (${CLIENT_JS}).worldMap.worldMapImageTiles.keys()) if (!globalThis.__wmTilesBefore.has(id)) n++;
+            for (const tile of (${CLIENT_JS}).worldMap.worldMapImageTiles.values()) if (!globalThis.__wmTilesBefore.has(tile)) n++;
             return n;
           })()`) });
         }
@@ -868,7 +869,7 @@ async function main() {
         worstSample: worst.label,
         rendered,
         // Tiles rendered after the first round, when every zoom level has been viewed once.
-        revisitRenders: rendered.filter((r) => !r.step.endsWith("0")).reduce((sum, r) => sum + r.tiles, 0),
+        revisitRenders: rendered.filter((r) => r.round > 0).reduce((sum, r) => sum + r.tiles, 0),
         zoomsSeen: [...new Set(samples.map((s) => Math.round(s.zoom * 100) / 100))],
       };
     }

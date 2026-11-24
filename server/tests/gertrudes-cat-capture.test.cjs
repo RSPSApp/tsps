@@ -551,3 +551,34 @@ test('Fluffs after the hand-in: "Miaoww" overhead without a catspeak amulet; wro
   assert.equal(quest.getStage(f.p), 3);
   assert.equal(f.p.getInventory().getAmount(I().BUCKET_OF_MILK), 1);
 });
+
+test('a logout on the tick after the milk or the sardine still lands the hand-over in the save', async (t) => {
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  for (const [stage, item, next, back] of [[2, () => I().BUCKET_OF_MILK, 3, () => I().BUCKET], [3, () => I().SEASONED_SARDINE, 4, null]]) {
+    const f = fixture(t, [3307, 3513, 1]);
+    const fluffs = f.npc(N().GERTRUDES_CAT_2, [3306, 3513, 1]);
+    quest.setStage(f.p, stage);
+    f.give(item());
+    await f.useOn(item(), fluffs);
+    assert.equal(f.p.getInventory().getAmount(item()), 0, 'the item went');
+    assert.equal(quest.getStage(f.p), stage, 'the stage waits a tick');
+    PM.emitPlayerLogout({ player: f.p, username: f.p.getUsername() });
+    const g = fixture(t, [3307, 3513, 1]);
+    PlayerSave.fromPlayer(f.p).applyToPlayer(g.p);
+    assert.equal(quest.getStage(g.p), next);
+    if (back) assert.equal(g.p.getInventory().getAmount(back()), 1);
+  }
+});
+
+test('a banked kitten: the crate holds no second one', async (t) => {
+  const f = fixture(t, [3306, 3501, 0]);
+  const crate = f.npc(N().CRATE, [3305, 3500, 0]);
+  quest.setStage(f.p, 4);
+  f.p.setAttribute('gertrudes-cat:kitten-crate', '3305,3500');
+  f.p.getBank(0).add(new core.Item(I().FLUFFS_KITTEN, 1));
+  const from = f.log.length;
+  await f.clickNpc(crate, 1);
+  for (let i = 0; i < 20 && !f.log.slice(from).some((e) => e[2] === 'You find nothing.'); i++) f.step();
+  assert.ok(f.log.slice(from).some((e) => e[2] === 'You find nothing.'));
+  assert.equal(f.p.getInventory().getAmount(I().FLUFFS_KITTEN), 0);
+});

@@ -161,12 +161,15 @@ module.exports = function registerGertrudesCatQuest(api) {
   const chosenKittens = new WeakMap();
   const scrollKittens = new WeakMap();
   const initialMenus = new WeakMap();
-  /** Players whose milk or sardine Fluffs is taking (the stage moves a tick later). */
-  const handing = new WeakSet();
+  /** player -> the rest of the milk or sardine hand-over (the stage moves a tick later); a logout runs it at once. */
+  const handing = new WeakMap();
   /** Fluffs NPCs on their way home, and where to put them back. */
   const homeward = new WeakMap();
 
   const hasItem = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+  /** Fluffs' kitten anywhere the player keeps it: the backpack or a bank tab. */
+  const holdsKitten = (player) => hasItem(player, FLUFFS_KITTEN_ITEM_ID)
+    || (player.getBanks?.() ?? []).some((bank) => bank?.contains?.(FLUFFS_KITTEN_ITEM_ID));
   const variantSteps = (variant) => loadTranscripts(api)?.[PAGE]?.variants?.[variant] ?? [];
   /** A variant's words by kind: the cat's overhead, the player's line, the message box. */
   function variantWords(variant) {
@@ -593,27 +596,19 @@ module.exports = function registerGertrudesCatQuest(api) {
       }
       event.handled = true;
       player.performAnimation(new Animation(seq(PICKUP_SEQ)));
-      handing.add(player);
-      later(player, 1, () => {
-        handing.delete(player);
+      handOver(player, () => {
         if (itemId === MILK_ITEM_ID) player.getInventory().adds(BUCKET_ITEM_ID, 1);
         if (quest.getStage(player) === STAGE_PAID_BOY) quest.setStage(player, STAGE_GAVE_MILK);
-        const words = variantWords(MILK_VARIANT);
-        if (words.cat && fluffs?.isRegistered?.()) fluffs.forceChat(words.cat);
-      });
+      }, fluffs, MILK_VARIANT);
       return;
     }
     if (itemId === SEASONED_SARDINE_ITEM_ID && stage === STAGE_GAVE_MILK) {
       event.handled = true;
       player.getInventory().deleteNumber(SEASONED_SARDINE_ITEM_ID, 1);
       player.performAnimation(new Animation(seq(PICKUP_SEQ)));
-      handing.add(player);
-      later(player, 1, () => {
-        handing.delete(player);
+      handOver(player, () => {
         if (quest.getStage(player) === STAGE_GAVE_MILK) quest.setStage(player, STAGE_GAVE_SARDINE);
-        const words = variantWords(SARDINE_VARIANT);
-        if (words.cat && fluffs?.isRegistered?.()) fluffs.forceChat(words.cat);
-      });
+      }, fluffs, SARDINE_VARIANT);
       return;
     }
     if (itemId === FLUFFS_KITTEN_ITEM_ID && stage === STAGE_GAVE_SARDINE) {
@@ -627,6 +622,18 @@ module.exports = function registerGertrudesCatQuest(api) {
     // Anything else (milk twice, a sardine after the quest): the game's line (Wiki, Seasoned sardine).
     event.handled = true;
     player.sendMessage("Nothing interesting happens.");
+  }
+
+  /** The item went at once; the stage (and the empty bucket) and her "Mew!" follow a tick later. */
+  function handOver(player, finish, fluffs, variant) {
+    handing.set(player, finish);
+    later(player, 1, () => {
+      if (handing.get(player) !== finish) return;
+      handing.delete(player);
+      finish();
+      const words = variantWords(variant);
+      if (words.cat && fluffs?.isRegistered?.()) fluffs.forceChat(words.cat);
+    });
   }
 
   /** Fluffs and her kitten purr, walk off towards the ladder and are gone (ticks 665-676). */
@@ -759,7 +766,7 @@ module.exports = function registerGertrudesCatQuest(api) {
     const token = hold(player);
     later(player, SEARCH_TICKS, () => {
       if (holds.get(player) !== token) return;
-      const finds = quest.getStage(player) === STAGE_GAVE_SARDINE && !hasItem(player, FLUFFS_KITTEN_ITEM_ID)
+      const finds = quest.getStage(player) === STAGE_GAVE_SARDINE && !holdsKitten(player)
         && !kittenActors.has(player) && tile === kittenCrate(player);
       if (!finds) {
         player.sendMessage("You find nothing.");
@@ -767,7 +774,7 @@ module.exports = function registerGertrudesCatQuest(api) {
       }
       boxThen(player, variantWords(CRATE_FIND_VARIANT).message, () => {
         release(player, token);
-        if (hasItem(player, FLUFFS_KITTEN_ITEM_ID) || quest.getStage(player) !== STAGE_GAVE_SARDINE) return;
+        if (holdsKitten(player) || quest.getStage(player) !== STAGE_GAVE_SARDINE) return;
         // The kitten goes into the backpack as the box is continued (tick 579); a full one leaves it at the player's feet.
         giveReward(player, FLUFFS_KITTEN_ITEM_ID, 1);
       });
@@ -834,7 +841,10 @@ module.exports = function registerGertrudesCatQuest(api) {
   function handleLogout({ player }) {
     removeKittenActor(player);
     pendingPayments.delete(player);
+    // A hand-over cut by the logout still lands, so the save never holds the item gone and the stage not moved.
+    const finish = handing.get(player);
     handing.delete(player);
+    finish?.();
     const token = holds.get(player);
     if (token) release(player, token);
     // The food the reward still owed comes with the save, and is handed over at the next login.

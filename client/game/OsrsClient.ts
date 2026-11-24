@@ -1,3 +1,4 @@
+import { ObjStackability } from "../rs/config/objtype/ObjStackability";
 import { AGILITY_HELPER_HIGHLIGHT_OBSTACLES_ENABLED, HELPER_AGILITY_HIGHLIGHTED_COURSE } from "@runelite/api/gameval/VarbitID";
 import { retainedInventory, stopInventoryTransmit } from "./sync/InventoryStopTransmit";
 import { openClientUrl } from "../common/openUrl";
@@ -7077,6 +7078,8 @@ export class OsrsClient {
                         gePrice,
                         haPrice,
                         tradeable: obj?.isTradable === true,
+                        cost: obj?.price ?? 0,
+                        stackable: obj?.stackability === ObjStackability.ALWAYS,
                     };
                 } catch {
                     return {

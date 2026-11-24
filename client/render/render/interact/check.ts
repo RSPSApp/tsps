@@ -1036,11 +1036,11 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
 
                     // Ground items stay indexed by the raw client plane; bridge promotion is render-only.
                     const plane = resolveGroundItemStackPlane(host.getPlayerRawPlane() | 0);
-                    const stacks = host.osrsClient.groundItems.getStacksAt(
-                        worldTileX,
-                        worldTileY,
-                        plane,
-                    );
+                    // Entries added later sit higher, so the pile is walked from its back: the
+                    // most valuable item ends on top and takes the left click.
+                    const stacks = host.osrsClient.groundItems
+                        .getPileAt(worldTileX, worldTileY, plane)
+                        .reverse();
                     if (!stacks || stacks.length === 0) continue;
                     const plugins = host.osrsClient.clientPlugins;
 

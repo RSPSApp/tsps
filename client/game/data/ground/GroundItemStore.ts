@@ -32,6 +32,9 @@ export type GroundItemMetadata = {
     gePrice: number;
     haPrice: number;
     tradeable: boolean;
+    /** The item definition's cost and whether it stacks: what a pile is ordered by. */
+    cost?: number;
+    stackable?: boolean;
 };
 
 type ResolveMetadata = (itemId: number) => GroundItemMetadata;
@@ -57,10 +60,48 @@ export class GroundItemStore {
         for (const stack of this.stacksById.values()) this.emitMutation({ kind: "despawn", stack });
         this.stacksByTile.clear();
         this.stacksById.clear();
+        this.pilesByTile.clear();
     }
 
     private stacksByTile = new Map<string, ClientGroundItemStack[]>();
     private stacksById = new Map<number, ClientGroundItemStack>();
+    /**
+     * Each tile's pile as OSRS keeps it (stack ids, front first): a new item joins the back, and
+     * after every change to the tile the most valuable item moves to the front.
+     */
+    private pilesByTile = new Map<string, number[]>();
+
+    private pileValue(stack: ClientGroundItemStack): number {
+        const metadata = this.resolveMetadata(stack.itemId | 0);
+        const cost = metadata.cost ?? metadata.gePrice ?? 0;
+        if (!metadata.stackable) return cost;
+        return cost * (stack.quantity < 2147483647 ? stack.quantity + 1 : stack.quantity);
+    }
+
+    private promoteMostValuable(key: string): void {
+        const pile = this.pilesByTile.get(key);
+        if (!pile) return;
+        let best = -1;
+        let bestValue = -99999999;
+        for (let i = 0; i < pile.length; i++) {
+            const stack = this.stacksById.get(pile[i]);
+            if (!stack) continue;
+            const value = this.pileValue(stack);
+            if (value > bestValue) {
+                bestValue = value;
+                best = i;
+            }
+        }
+        if (best > 0) pile.unshift(pile.splice(best, 1)[0]);
+    }
+
+    private removeFromPile(key: string, stackId: number): void {
+        const pile = this.pilesByTile.get(key);
+        if (!pile) return;
+        const index = pile.indexOf(stackId);
+        if (index >= 0) pile.splice(index, 1);
+        if (pile.length === 0) this.pilesByTile.delete(key);
+    }
     private listeners = new Set<() => void>();
     private resolveMetadata: ResolveMetadata = DEFAULT_METADATA_RESOLVER;
     private version = 0;
@@ -128,6 +169,19 @@ export class GroundItemStore {
         if (list) list.push(entry);
         else this.stacksByTile.set(key, [entry]);
         this.stacksById.set(entry.id | 0, entry);
+        const oldKey = existing
+            ? this.tileKey(existing.tile.x | 0, existing.tile.y | 0, existing.tile.level | 0)
+            : undefined;
+        if (oldKey !== key) {
+            if (oldKey !== undefined) {
+                this.removeFromPile(oldKey, entry.id | 0);
+                this.promoteMostValuable(oldKey);
+            }
+            const pile = this.pilesByTile.get(key);
+            if (pile) pile.push(entry.id | 0);
+            else this.pilesByTile.set(key, [entry.id | 0]);
+        }
+        this.promoteMostValuable(key);
         if (!existing) this.emitMutation({ kind: "spawn", stack: entry });
         else if (existing.itemId !== entry.itemId || existing.tile.x !== entry.tile.x || existing.tile.y !== entry.tile.y || existing.tile.level !== entry.tile.level) {
             this.emitMutation({ kind: "despawn", stack: existing });
@@ -160,6 +214,9 @@ export class GroundItemStore {
             if (!existing) continue;
             this.removeEntry(existing);
             this.stacksById.delete(stackId | 0);
+            const pileKey = this.tileKey(existing.tile.x | 0, existing.tile.y | 0, existing.tile.level | 0);
+            this.removeFromPile(pileKey, stackId | 0);
+            this.promoteMostValuable(pileKey);
             this.emitMutation({ kind: "despawn", stack: existing });
         }
         const upserts = Array.isArray(payload.upserts) ? payload.upserts : [];
@@ -208,6 +265,21 @@ export class GroundItemStore {
         const list = this.stacksByTile.get(key);
         if (!list || list.length === 0) return [];
         return list.map((entry) => ({ ...entry, tile: { ...entry.tile } }));
+    }
+
+    /**
+     * The tile's stacks in the order the right-click menu lists them, top first: the most
+     * valuable, then the rest from oldest to newest.
+     */
+    getPileAt(tileX: number, tileY: number, level: number): ClientGroundItemStack[] {
+        const pile = this.pilesByTile.get(this.tileKey(tileX | 0, tileY | 0, level | 0));
+        if (!pile) return [];
+        const result: ClientGroundItemStack[] = [];
+        for (const id of pile) {
+            const entry = this.stacksById.get(id);
+            if (entry) result.push({ ...entry, tile: { ...entry.tile } });
+        }
+        return result;
     }
 
     getStackById(stackId: number): ClientGroundItemStack | undefined {

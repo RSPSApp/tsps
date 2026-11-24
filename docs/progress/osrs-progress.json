@@ -28597,7 +28597,7 @@
             "Implemented in server/plugins/bosses/ChaosElemental.plugin.js: melee/ranged/magic Discord attacks plus Disarm (strips up to 4 equipment slots) and Teleport (moves the player to a nearby free tile).",
             "Registered for ids CHAOS_ELEMENTAL and the JR variants; spawn is in npc-spawns.json at 3261,3927 (Chaos Elemental id 2054; Chaos Fanatic is a separate boss).",
             "Status done; verify the post-rework table id 'chaos_elemental' still matches the spawned id.",
-            "2026-11-24, branch on main a600216fe: all four Chaos Elemental Combat Achievements are awarded. Hoarder (nothing unequipped by Madness) and The Flincher (no damage from its attacks) fail for everyone in the kill once any player is disarmed or hit, as the Wiki says; Adept and Veteran finish from the kill count. Verified by server/tests/chaos-boss-combat-achievements.test.cjs. Existing task statuses are unchanged."
+            "2026-11-24, branch on main a600216fe: all four Chaos Elemental Combat Achievements are awarded. Hoarder (nothing unequipped by Madness) and The Flincher (no damage from its attacks) fail for everyone in the kill once any player in it is disarmed or hit, as the Wiki says; Adept and Veteran finish from the kill count. Verified by server/tests/chaos-boss-combat-achievements.test.cjs. Existing task statuses are unchanged."
           ],
           "taskDetails": [
             {

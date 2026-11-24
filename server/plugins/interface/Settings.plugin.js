@@ -190,6 +190,8 @@ const GRAVESTONE_CONFIRM_KEY = "varbit:13113";
 const GRAVESTONE_CONFIRM_MIGRATED_ATTRIBUTE = "settings:gravestone-confirm-192";
 const QUEST_SETTINGS = { 214:13772, 215:13778, 216:13779, 217:13776, 218:13775, 219:13777, 220:13773, 221:13774, 222:13780, 223:13781, 239:13889, 240:13890 };
 const SETTINGS = { ...require("./data/settings.json").settings, ...Object.fromEntries(Object.entries(QUEST_SETTINGS).map(([id, varbit]) => [id, { varbit }])) };
+const SETTINGS_SEARCH_OVERRIDE_SCRIPT = 5968;
+const QUEST_LIST_SEARCH = "Quest List";
 const QUEST_LIST_SETTINGS_BUTTON = (399 << 16) | 11;
 // Colour rows: the varp holding the colour + 1 (0 for the default) and the default colour.
 // The varps are cache script 4181's, the defaults each row's struct (param 1230).
@@ -849,9 +851,15 @@ function openAllSettings(player) {
   return true;
 }
 
+/**
+ * The quest list's settings button. Capture (rsprox_transcripts/226/01637.txt, 01662.txt): clientscript
+ * 5968 settings_search_override("Quest List") runs, then All Settings opens; no category varbit changes.
+ */
 function openQuestSettings({ player }) {
-  showCategory(player, 6); // Interfaces, cache enum422 category3621.
-  return openAllSettings(player);
+  player.getPacketSender().sendClientScript(SETTINGS_SEARCH_OVERRIDE_SCRIPT, QUEST_LIST_SEARCH);
+  openAllSettings(player);
+  player.setAttribute("settings-view", SEARCH_VIEW); // rows are read from the whole list while searched
+  return true;
 }
 
 function openColour(player, settingId) {

@@ -329,6 +329,11 @@ const SELECTION_TARGETS_ITEM_MASK = 0x30;
  * entry - "Use Knife -> Logs", "Cast High Level Alchemy -> Logs" - and Cancel, in place of its
  * own ops. Undefined when nothing is selected or the widget is not a target.
  */
+/** An item ("Use") or a spell is selected and waiting for its target. */
+export function isSelectionActive(): boolean {
+    return ClientState.isSpellSelected || ClientState.isItemSelected === 1;
+}
+
 export function getSelectionTargetEntries(w: any): SimpleMenuEntry[] | undefined {
     if (!ClientState.isSpellSelected) return undefined;
     if (typeof w?.itemId !== "number" || w.itemId < 0) return undefined;
@@ -355,6 +360,9 @@ export function deriveMenuEntriesForWidget(
     if (!onlyBasic) {
         const selectionEntries = getSelectionTargetEntries(w);
         if (selectionEntries) return selectionEntries;
+        // OSRS lists none of a component's own ops while an item or spell is selected: a
+        // component that is not a target offers only Cancel, and a click on it ends the selection.
+        if (isSelectionActive()) return [{ option: "Cancel" }];
     }
     const entries = deriveRawMenuEntriesForWidget(w, onlyBasic, getWidgetFlags, getWidgetByUid, getWidgetOpMask);
     return onlyBasic ? entries : transformWidgetMenuEntries(w, entries);

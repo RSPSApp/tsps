@@ -4,7 +4,9 @@ import type { ScriptEvent } from "../../../rs/cs2/Cs2Vm";
 import { spawnSearchPick } from "../../../rs/cs2/spawnSearch";
 import { shouldShowMenuOption, shouldTransmitAction } from "../../../widgets/WidgetFlags";
 import {
+    getSelectionTargetEntries,
     isPauseButtonWidget as isPauseButtonWidgetUtil,
+    isSelectionActive,
     sanitizeText,
 } from "../../../widgets/menu/utils";
 import { runWidgetJsOp } from "../../../widgets/custom/dynamicWidgets";
@@ -208,6 +210,26 @@ export function processWidgetClickInput(
                     widgetInteraction.pressedWidget = w;
                     widgetManager?.invalidateAll?.();
                     continue;
+                }
+                // With an item or spell selected, a component that is not its target runs none of
+                // its ops: OSRS still fires its press script, and the click only ends the selection.
+                if (hasHandlers && isSelectionActive() && !getSelectionTargetEntries(w)) {
+                    if (w.eventHandlers?.onClick || w.onClick) {
+                        const scaleX = w._absScaleX ?? 1;
+                        const scaleY = w._absScaleY ?? 1;
+                        const pressCtx: Partial<ScriptEvent> = {
+                            mouseX: ((input.leftClickX - (w._absX ?? w.x ?? 0)) / scaleX) | 0,
+                            mouseY: ((input.leftClickY - (w._absY ?? w.y ?? 0)) / scaleY) | 0,
+                            opIndex: 1,
+                        };
+                        if (w.eventHandlers?.onClick) deps.getCs2Vm().invokeEventHandler(w, "onClick", pressCtx);
+                        else deps.executeScriptListener(w, w.onClick, pressCtx);
+                    }
+                    deps.getSpellSelection().clearSelectedSpell();
+                    ClientState.clearItemSelection();
+                    input.clickMode3 = ClickMode.NONE;
+                    widgetManager?.invalidateAll?.();
+                    break;
                 }
                 if (hasHandlers) {
                     widgetInteraction.clickedWidget = w;

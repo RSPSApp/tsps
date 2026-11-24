@@ -234,6 +234,13 @@ function allDynamicChildren(root: WidgetNode): WidgetNode[] {
     return out.sort((a, b) => ((a.childIndex ?? -1) | 0) - ((b.childIndex ?? -1) | 0));
 }
 
+/** The static component a widget's children belong to: itself, or its own component when it is a script-created layer. */
+function componentIdOf(parent: WidgetNode, parentUid: number): number {
+    if (((parent.childIndex ?? -1) | 0) < 0) return parentUid;
+    const own = (parent as any).id;
+    return typeof own === "number" && own > 0 ? own | 0 : parentUid;
+}
+
 function findNestedDynamicChild(widget: WidgetNode, childIndex: number): WidgetNode | null {
     if (!Array.isArray(widget.children)) return null;
     for (const child of widget.children) {
@@ -936,8 +943,10 @@ export function registerWidgetOps(handlers: HandlerMap): void {
 
         const child: any = {
             uid: newUid,
-            // dynamic children identify by (parent id, childIndex).
-            id: parentUid,
+            // A child made inside a layer still belongs to the layer's static component: it is
+            // identified by (component id, child index), which is what server event flags,
+            // event_com and op packets name. parentUid keeps the layer for layout and drawing.
+            id: componentIdOf(parent, parentUid),
             parentUid: parentUid,
             groupId: parent.groupId,
             fileId: -1,
@@ -1037,8 +1046,10 @@ export function registerWidgetOps(handlers: HandlerMap): void {
 
         const sibling: any = {
             uid: newUid,
-            // dynamic children identify by (parent id, childIndex).
-            id: parentUid,
+            // A child made inside a layer still belongs to the layer's static component: it is
+            // identified by (component id, child index), which is what server event flags,
+            // event_com and op packets name. parentUid keeps the layer for layout and drawing.
+            id: componentIdOf(parent, parentUid),
             parentUid: parentUid,
             groupId: parent.groupId,
             fileId: -1,
@@ -1535,7 +1546,8 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     // Used by scripts like script8457/8458/8459 to compute absolute coordinates by walking parents.
     handlers.set(Opcodes.CC_GETPARENTLAYER, (ctx, intOp) => {
         const w = getTargetWidget(ctx, intOp);
-        let parentUid = w?.parentUid ?? -1;
+        // A script-created child answers with its static component, however deep it is nested.
+        let parentUid = w && ((w.childIndex ?? -1) | 0) >= 0 ? resolveStaticLayerUid(ctx, w) : (w?.parentUid ?? -1);
         if (w && typeof parentUid === "number" && parentUid !== -1) {
             const currentGroupId = getCurrentWidgetGroupId(ctx);
             const mount = ctx.widgetManager.interfaceParents.get(parentUid);

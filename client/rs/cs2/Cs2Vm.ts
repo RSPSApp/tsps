@@ -432,6 +432,15 @@ export interface Cs2Context {
     ) => void;
 }
 
+/**
+ * The component a script-created child reports as event_com: its static component, also when
+ * the child sits inside a script-created layer (the child is then found with cc_find by index).
+ */
+function dynamicComponentId(w: any): number {
+    const id = w?.id;
+    return typeof id === "number" && id > 0 ? id : (w?.parentUid ?? -1);
+}
+
 export class Cs2Vm {
     readonly scriptCallbackListeners = new Set<(script: Script, eventName: string) => void>();
     readonly scriptPreListeners = new Set<(id: number, event: ScriptEvent | null) => void>();
@@ -527,7 +536,7 @@ export class Cs2Vm {
         // Dynamic children (CC_CREATE) report the PARENT's UID for event_com; scripts
         // use event_comsubid (child index) to find the dynamic child via cc_find.
         if (w?.fileId === -1 && (w as any).parentUid != null) {
-            this.eventContext.componentId = ((w as any).parentUid as number) | 0;
+            this.eventContext.componentId = dynamicComponentId(w) | 0;
         } else {
             this.eventContext.componentId = (w?.uid ?? -1) | 0;
         }
@@ -2265,7 +2274,7 @@ export class Cs2Vm {
                         const w = event.widget;
                         // Dynamic children have fileId === -1 and parentUid set
                         if (w?.fileId === -1 && (w as any).parentUid != null) {
-                            substitutedInts[i] = (w as any).parentUid;
+                            substitutedInts[i] = dynamicComponentId(w);
                         } else {
                             substitutedInts[i] = w?.uid ?? -1;
                         }
@@ -2281,7 +2290,7 @@ export class Cs2Vm {
                         // Dynamic drag targets use the same (parent id, child index)
                         // identity as the source widget, not the renderer's runtime UID.
                         substitutedInts[i] = event.dragTarget?.fileId === -1
-                            ? (event.dragTarget.parentUid ?? -1)
+                            ? dynamicComponentId(event.dragTarget)
                             : (event.dragTarget?.uid ?? -1);
                         break;
                     case ScriptArgMagic.DRAG_TARGET_CHILD_INDEX:

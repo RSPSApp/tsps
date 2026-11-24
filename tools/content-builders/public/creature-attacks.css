@@ -1,0 +1,8 @@
+.creature-attacks{display:grid;gap:6px;padding:8px 0;border-bottom:1px solid var(--line,#635338)}
+.creature-attacks h3{margin:0;color:var(--gold,#d9bd76);font-family:Georgia,serif;font-size:14px}
+.creature-attacks>select{width:100%;min-width:0}
+.creature-attack-choice{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:4px;padding:3px 0;font-size:12px}
+.creature-attack-choice button{min-height:30px}
+.creature-attack-field{display:grid;grid-template-columns:minmax(0,1fr) minmax(70px,45%);gap:6px;align-items:center;font-size:12px}
+.creature-attack-field input,.creature-attack-field select{min-width:0;width:100%}
+.creature-attacks :focus-visible{outline:2px solid #e6c66e;outline-offset:2px}

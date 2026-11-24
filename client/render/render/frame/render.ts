@@ -1,3 +1,4 @@
+import { updateGearVisuals } from "../../../custom/items/GearVisualRuntime";
 import { hintArrow } from "../../../game/HintArrow";
 import { projectDeckToWorld } from "../worldEntityMotion";
 import { updateSkyColor } from "../environment";
@@ -202,6 +203,7 @@ const SCENE_PREVIEW_HALF_TILES = MapManager.SCENE_STREAM_HALF_TILES;
 const WELCOME_SCREEN_GROUP_ID = 378;
 
 export function render(host: WebGLOsrsRendererHost, time: number, deltaTime: number, resized: boolean): void {
+        updateGearVisuals(host,time);
 
         host.osrsClient.runeLite?.postBeforeRender();
 

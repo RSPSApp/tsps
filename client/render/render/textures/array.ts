@@ -1,4 +1,5 @@
 import Denque from "denque";
+import { GEAR_TEXTURE_START } from "../../../custom/items/GearVisualRegistry";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
 import { Schema } from "leva/dist/declarations/src/types";
@@ -216,7 +217,7 @@ export function initTextureArray(host: WebGLOsrsRendererHost, ) {
         host.updateTextureFiltering();
 
         const textureArray = host.textureArray;
-        void host.osrsClient.workerPool.preloadWorldTextures(host.textureIds, TEXTURE_SIZE).then((textures) => {
+        void host.osrsClient.workerPool.preloadWorldTextures(host.textureIds.filter(id=>id<GEAR_TEXTURE_START), TEXTURE_SIZE).then((textures) => {
             if (host.textureArray === textureArray) host.updateTextureArray(textures);
         }).catch((error) => {
             if (host.textureArray === textureArray) console.warn("World texture preload failed", error);

@@ -402,6 +402,7 @@ export class PlayerRenderer {
             } catch {}
 
             this.appearanceBaseCache.set(key, rec);
+            while(this.appearanceBaseCache.size>256)this.appearanceBaseCache.delete(this.appearanceBaseCache.keys().next().value!);
             return rec;
         } catch {
             return undefined;
@@ -438,6 +439,7 @@ export class PlayerRenderer {
             appearance.headIcons,
             appearance.npcTransformationId,
             true,
+            appearance.visualClockKey,
         );
     }
 

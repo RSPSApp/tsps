@@ -1,3 +1,4 @@
+import { GearVisualRegistry } from "../../custom/items/GearVisualRegistry";
 import type {
     LeagueMasteryChallengeRow,
     LeagueMasteryNodeRow,
@@ -108,6 +109,7 @@ export function isReady(): boolean {
 
 /** A new connection clears the old world's overlays, including legacy worlds without datasets. */
 export function clearWorldOverlays(): void {
+    GearVisualRegistry.clear();
     worldLocChanges = [];
     worldLocSpawns = [];
     worldTerrainOverrides = [];
@@ -276,10 +278,7 @@ export function loadFromPayload(payload: {
             case "customItems":
                 try {
                     const { CustomItemRegistry } = require("../../custom/items/CustomItemRegistry");
-                    CustomItemRegistry.clear();
-                    for (const def of dataset.rows as any[]) {
-                        CustomItemRegistry.register(def, def.objType?.name);
-                    }
+                    CustomItemRegistry.replaceAll(dataset.rows as any[]);
                     console.log(
                         `[GamemodeContentStore] registered ${dataset.rows.length} custom item(s)`,
                     );

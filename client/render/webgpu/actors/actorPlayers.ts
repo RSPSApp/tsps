@@ -336,6 +336,7 @@ export class PlayerPoseGeometry {
             result = undefined;
         }
         this.baseCache.set(key, result);
+        while(this.baseCache.size>256)this.baseCache.delete(this.baseCache.keys().next().value!);
         return result;
     }
 

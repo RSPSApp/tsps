@@ -1,4 +1,5 @@
 import { ObjStackability } from "../rs/config/objtype/ObjStackability";
+import { GearTextureLoader } from "../custom/items/GearTextureLoader";
 import { AGILITY_HELPER_HIGHLIGHT_OBSTACLES_ENABLED, HELPER_AGILITY_HIGHLIGHTED_COURSE } from "@runelite/api/gameval/VarbitID";
 import { retainedInventory, stopInventoryTransmit } from "./sync/InventoryStopTransmit";
 import { openClientUrl } from "../common/openUrl";
@@ -7020,7 +7021,7 @@ export class OsrsClient {
             initPlayerSyncHuffman(this.cacheSystem);
             this.loaderFactory = getCacheLoaderFactory(cache.info, this.cacheSystem);
 
-            this.textureLoader = this.loaderFactory.getTextureLoader();
+            this.textureLoader = new GearTextureLoader(this.loaderFactory.getTextureLoader());
             this.modelLoader = this.loaderFactory.getModelLoader();
             this.seqTypeLoader = this.loaderFactory.getSeqTypeLoader();
             this.seqFrameLoader = this.loaderFactory.getSeqFrameLoader();

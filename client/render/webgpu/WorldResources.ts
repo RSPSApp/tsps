@@ -1,4 +1,5 @@
 import type { OsrsClient } from "../../game/OsrsClient";
+import { GEAR_TEXTURE_START } from "../../custom/items/GearVisualRegistry";
 import {
     DEFAULT_WATER_MATERIAL,
     ICE_WATER_MATERIAL,
@@ -579,7 +580,7 @@ export class WorldResources {
             textureIdIndexMap,
             loadedTextureIds,
         });
-        void osrsClient.workerPool.preloadWorldTextures(textureIds.slice(0, layerCount - 1), TEXTURE_SIZE)
+        void osrsClient.workerPool.preloadWorldTextures(textureIds.slice(0, layerCount - 1).filter(id=>id<GEAR_TEXTURE_START), TEXTURE_SIZE)
             .then((textures) => world.uploadMapTextures(textures))
             .catch((error) => {
                 if (!world.destroyed) console.warn("World texture preload failed", error);

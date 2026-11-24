@@ -1,4 +1,5 @@
 import { LocAnimated, type LocFrameSoundHandler } from "../loc/LocAnimated";
+import { updateGearVisuals } from "../../custom/items/GearVisualRuntime";
 import type { MultiLocReloadGroup } from "../loc/MultiLocVarps";
 import Denque from "denque";
 import { mat4, vec3 } from "gl-matrix";
@@ -906,6 +907,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     }
 
     override render(time: number, deltaTime: number, _resized: boolean): void {
+        updateGearVisuals(this,time);
         const world = this.world;
         if (!this.device || !this.depthView) return;
         const width = this.canvas.width;

@@ -2,7 +2,7 @@
 
 NPCs that say overhead lines on their own: ducks ("Quack!"), sheep ("Baa!"), cows, the Grand
 Exchange experts, the town criers, the Varrock newspaper seller, the Theatre of Blood orators,
-the Goblin Village soldiers ("Red armour best!", "Stupid greenie!") and about 190 more.
+the Goblin Village soldiers ("Red armour best!", "Stupid greenie!") and about 180 more.
 `server/plugins/npcs/NpcChatter.plugin.js` plays them; the lines and their timing come from
 rsprox captures.
 
@@ -20,9 +20,13 @@ collected, about 1,200 NPCs in all, then narrowed to the lines an NPC says unpro
   a sheep's 2053, a cow's 3044 (range 10) with animation 5854. These are copied when they come
   with most of that line's sightings.
 - **Fight chatter.** The Goblin Village red and green soldiers shout while they fight each other,
-  every few ticks, with no player involved (recordings 3243, 3274). That is in-fighting, not
-  idle chatter, so they speak only while fighting another NPC, and `npc-rivalries.json` now makes
-  the two sides fight.
+  every few ticks, with no player involved (recording 3271; local 1001339, 1001443-1001445,
+  1001555). That is in-fighting, not idle chatter, so they speak only while fighting another NPC,
+  and `npc-rivalries.json` now makes the two sides fight. The combat sound on a hit's tick
+  (3517) is the hit's, not the line's.
+- **Town criers rotate their news.** Draynor's crier said "Leagues V: Raging Echoes is here!" and
+  "Christmas is here!" in rev 227, "Happy Halloween!" in rev 241, and "Hardcore Worlds are now
+  live!" / "Week Two of Quest Month is here!" in rev 242. Only the current news is kept.
 
 ## Data
 
@@ -43,11 +47,20 @@ The extractor leaves out:
 - lines seen in fewer than 2 recordings (this also drops any line naming a player), and NPCs seen
   in fewer than 3 recordings or with fewer than 5 measured gaps;
 - random event, Sailing crew and quest-instance NPCs (`macro_*`, `sailing_crew_*`, `qip_*`, the
-  random event invitations).
+  random event invitations);
+- retired lines. The NPC's newest revision with 3 recordings of it is "now", and lines weigh their
+  sightings there. A line missing from it is dropped when its older share says it should have
+  come 5 or more times, or when "now" already has 200 or more of the NPC's lines (a crier's past
+  news). A line too rare to expect stays;
+- blank lines, and the animation and sound of a line said on the tick the NPC takes a hit (those
+  are the hit's block animation and combat sound).
 
 `server/plugins/npcs/data/npc-chatter.json` is hand-written. `skipNpcs` lists NPCs whose lines
-belong to code that drives them (bosses, minigames, cutscenes, the player-owned house, events, the
-Viking shouters and Sailing's current ducks) or that only answer a player. `skipLines` lists
+belong to code that drives them or that only answer a player: bosses, minigames, cutscenes, the
+player-owned house and events, plus NPCs other plugins already make speak. Those are the Viking
+shouters, Sailing's current ducks, the Warriors' Guild's Shanomi and Kamfreena, the Keldagrim
+ticket vendors, the Mort Myre ghasts (Nature Spirit's attack shouts), and the Varlamore wealthy
+citizens, urchins and house owners (Thieving). `skipLines` lists
 patterns for lines answering another player's theft or pickpocket ("What do you think you're
 doing?", "Hey! Get your hands off there!"). No recording of your own actions can tell those apart
 from chatter, because the other player's click isn't in it.
@@ -67,6 +80,8 @@ from chatter, because the other player's click isn't in it.
 - **Measured gaps run long.** A gap only counts while the NPC stays in view, so NPCs that wander
   off screen leave long gaps out and short ones in. Medians are more reliable than the
   95th percentile.
+- **News within a revision isn't dated.** Rev 242's crier lines include a few sightings of
+  "Hardcore Worlds open November 4th!", recorded before the launch, at a low weight.
 - **Quest state is ignored.** The orators' lines before and after A Taste of Hope, for example,
   are both played.
 - **Triggered lines aren't played yet.** Lines live sends on spawning, on being attacked or when

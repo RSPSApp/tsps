@@ -81,6 +81,27 @@ test("excluded NPCs and theft answers are never scheduled; ducks, sheep, GE expe
   }
 });
 
+test("NPCs other plugins make speak are left to them", () => {
+  for (const name of ["warguild_shanomi", "warguild_kamfreena", "dwarf_city_train_conductor4", "ghast_invis",
+    "fossil_crazy_archaeologist", "varlamore_wealthy_citizen_a", "varlamore_thieving_house_owner_1"]) {
+    assert.equal(chatterById.has(core.CacheDefinitions.getNpcId(name)), false, name);
+  }
+  assert.equal(chatterById.has(core.CacheDefinitions.getNpcId("dwarf_city_train_conductor2")), true,
+    "the Keldagrim announcer, which Chatter.KeldagrimMinecarts.js leaves out, is ours");
+});
+
+test("town criers announce only current news; no line is blank; a hit's sound is not a line's", () => {
+  for (const crier of Object.values(definitions.npcs).filter((npc) => npc.name.startsWith("pmod_town_crier"))) {
+    for (const line of crier.lines) assert.doesNotMatch(line.text, /Christmas|Halloween|Leagues V|Easter|Grid Master/, crier.name);
+  }
+  for (const npcEntry of Object.values(definitions.npcs)) {
+    for (const line of npcEntry.lines) assert.notEqual(line.text.trim(), "", npcEntry.name);
+  }
+  for (const npcEntry of Object.values(definitions.npcs).filter((npc) => npc.name.startsWith("goblin_"))) {
+    for (const line of npcEntry.lines) assert.equal(line.sound, undefined, `${npcEntry.name}: ${line.text}`);
+  }
+});
+
 test("a gap stays between the 5th and 95th percentiles, centred on the median", () => {
   const gap = entry("duck").gap;
   const draws = Array.from({ length: 4000 }, () => sampleGap(gap)).sort((a, b) => a - b);

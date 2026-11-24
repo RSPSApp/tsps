@@ -919,6 +919,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `MonkeySpeak` | MonkeySpeak | npcs | yes | Lets monkeys with an M'speak amulet section talk in words to a player wearing the amulet or past Monkey Madness II. |
 | `Nechryael` | Nechryael | npcs | yes | Lets nechryael and greater nechryael summon up to two death spawns that hit through protection prayers and leave after a minute. (members only) |
 | `NoteExchange` | NoteExchange | npcs | yes | Banknote exchange merchants such as Phials: use a banknote on them to swap it for the real items for a fee per note. |
+| `NpcChatter` | NpcChatter | npcs | yes | NPCs say their ambient overhead lines (ducks, sheep, GE experts, town criers, Goblin Village soldiers) with live timing. |
 | `NpcDialogues` | NpcDialogues | npcs | yes | Plays Talk-to dialogue transcripts for NPCs from the generated dialogue data, with hooks so quests can alter lines, choices and conditions. |
 | `NpcDrops` | NpcDrops | npcs | yes | Rolls NPC drop tables from the Wiki-derived drop data, with subtables, tertiary drops and hand-edited overrides. |
 | `NpcRivalries` | NpcRivalries | npcs | yes | Makes opposing NPC factions, such as Shayzien soldiers against lizardmen and the God Wars armies, hunt and fight each other. (members only) |

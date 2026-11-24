@@ -1,48 +1,43 @@
 /**
  * The Golem (members).
  *
- * Words come from the "The Golem" transcript page; this plugin supplies the
- * variant selector for the clay golem (917/918/5134/5135/5136), Elissa (5138)
- * and Curator Haig Halen (5214), the prose-condition answers, the start hook,
- * the soft-clay repairs, the letter/statuette hunt, the temple statue puzzle,
- * the demon's lair and the reprogramming that completes the quest.
+ * Built against a whole run of the quest on live: the user's RSProx capture TheGolem.bin
+ * (revision 242; docs/quests/the-golem/README.md lists the facts and ticks). Spoken lines come
+ * from the "The Golem" transcript page; messages are the Wiki transcript's, sent as the capture
+ * sends them (game message or item box). Where the capture words a message differently the
+ * Wiki's wording is kept and the README records the difference.
  *
- * Stages (varbit 346 golem_a, varp 437 golem_quest bits 0-4): 0 unstarted, 1 repair golem, 2 open portal, 3 find
- * statuette, 4 statuette replaced, 5 portal opened, 6 demon dead, 7 convince
- * golem, 10 complete.
+ * Stages (varbit 346 golem_a in varp 437): 0 unstarted, 1 repair the golem, 2 open the portal,
+ * 3 the curator told the player about the statuette, 4 statuette replaced, 5 portal open,
+ * 6 seen the demon's skeleton, 7 the golem did not believe it, 10 complete.
  *
- * Route source: Quest Helper pinned at
+ * Sibling varbits in varp 437 (cache transforms in brackets):
+ * 347 golem_b: 1 read the letter, 2 Elissa named the notes, 3 read the notes;
+ * 348 golem_clay (NPC 6277: 0-1 broken 5134, 2-3 damaged 5135, 4 repaired 5136);
+ * 349-351 statuettes A-C (0 faces right 6307, 1 left 6308); 352 statuette D (0 empty 6309,
+ * 1 left, 2 right); 353 the golem's head open; 354 throne gems taken (6301 -> 6302);
+ * 355 statuette retrieved (case 24627 -> 24550); 356 seen the ruins underground.
+ * The temple door 6310 is 6363 "Open" below stage 5 and 6364 "Enter" from stage 5.
+ *
+ * Route: Quest Helper pinned at
  * https://github.com/Zoinkwiz/quest-helper/blob/06da90f982518a093f2fe1c9cfac5547fa7053d3/src/main/java/com/questhelper/helpers/quests/thegolem/TheGolem.java
- * Packet evidence: RSProx capture 3333, which shows
- * seen_underground set on first ruin entry, golem_b 1/2/3 on letter/Elissa/notes,
- * stage 3 on the curator talk, and head_open cleared two ticks after completion.
- * Cache state follows varp 437: 347 golem_b (letter/Elissa/notes/curator),
- * 348 golem_clay (transforms NPC 6277 to 5134/5135/5136), 349-352 the four
- * statuette facings, 353 head open, 354 throne gems, 355 retrieved statuette
- * (transforms the museum case) and 356 seen underground. The values live in
- * JSON varbits; persisted attributes replay them after login.
- *
- * Items on the floor follow Quest Helper: the letter lies at 3479,3092 in
- * Uzer and the strange implement at 2713,4913 underground. They are spawned
- * for the owner on login and when the matching zone is entered.
  */
 module.exports = function registerTheGolemQuest(api) {
-  const { Item, Location, Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, openBook } = require("../QuestRuntime");
+  const { Item, Location, Skill, Animation, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { registerQuest, refreshQuestList, startTranscript, openBook, giveReward, questStartMessage } = require("../QuestRuntime");
 
   const PAGE = "The Golem";
   const VARP_THE_GOLEM = 437; // golem_quest
-  // golem_a: the stage the cache reads, e.g. Uzer's Rug Merchant (NPC 21) shows at 10.
-  const VARBIT_THE_GOLEM = 346;
+  const VARBIT_THE_GOLEM = 346; // golem_a
   const VARBIT_GOLEM_B = 347;
-  const VARBIT_GOLEM_CLAY = 348; // NPC 6277 transform: 0/1 broken, 2/3 damaged, 4 fixed
+  const VARBIT_GOLEM_CLAY = 348;
   const VARBIT_STATUETTE_A = 349;
   const VARBIT_STATUETTE_B = 350;
   const VARBIT_STATUETTE_C = 351;
   const VARBIT_STATUETTE_D = 352;
   const VARBIT_HEAD_OPEN = 353;
   const VARBIT_THRONE_GEMS = 354;
-  const VARBIT_RETRIEVED_STATUETTE = 355; // 24626 transform: 0 full case, 1 open/empty
+  const VARBIT_RETRIEVED_STATUETTE = 355;
   const VARBIT_SEEN_UNDERGROUND = 356;
 
   const STAGE_NOT_STARTED = 0;
@@ -55,51 +50,61 @@ module.exports = function registerTheGolemQuest(api) {
   const STAGE_CONVINCE_GOLEM = 7;
   const STAGE_COMPLETE = 10;
 
+  /** golem_b: the letter hunt. */
+  const LETTER_READ = 1;
+  const ELISSA_TOLD = 2;
+  const NOTES_READ = 3;
+
   const CRAFTING_LEVEL = 20;
   const THIEVING_LEVEL = 25;
   const CLAY_REPAIRS = 4;
 
+  // The world's Uzer golem is 6277, a nameless multi-NPC the client shows as 5134/5135/5136; the
+  // capture's chatheads are 6277 too (if_setnpchead, ticks 25-1447).
+  const GOLEM_NPC_ID = 6277;
   const GOLEM_NPC_IDS = new Set([
+    GOLEM_NPC_ID,
     NpcIdentifiers.CLAY_GOLEM, // 917
     NpcIdentifiers.CLAY_GOLEM_2, // 918
     NpcIdentifiers.BROKEN_CLAY_GOLEM, // 5134
     NpcIdentifiers.DAMAGED_CLAY_GOLEM, // 5135
     NpcIdentifiers.CLAY_GOLEM_3, // 5136
-    // The world's single Uzer spawn is 6277, a nameless transform placeholder
-    // (varbit 348 -> 5134/5135/5136); interaction events can carry the raw id.
-    6277,
   ]);
   const ELISSA_NPC_ID = NpcIdentifiers.ELISSA; // 5138
   const CURATOR_NPC_ID = NpcIdentifiers.CURATOR_HAIG_HALEN; // 5214
-  const DESERT_PHOENIX_NPC_ID = NpcIdentifiers.DESERT_PHOENIX; // 5137
-  const GOLEM_CHAT_HEAD = NpcIdentifiers.BROKEN_CLAY_GOLEM;
 
-  const LETTER_ITEM_ID = ItemIdentifiers.LETTER_2; // 4615 Varmen's letter
+  const LETTER_ITEM_ID = ItemIdentifiers.LETTER_2; // 4615 golem_letter
   const NOTES_ITEM_ID = ItemIdentifiers.VARMENS_NOTES; // 4616
-  const CABINET_KEY_ITEM_ID = ItemIdentifiers.DISPLAY_CABINET_KEY; // 4617
+  const CABINET_KEY_ITEM_ID = ItemIdentifiers.DISPLAY_CABINET_KEY; // 4617 golem_statuettekey
   const STATUETTE_ITEM_ID = ItemIdentifiers.STATUETTE; // 4618
-  const STRANGE_IMPLEMENT_ITEM_ID = ItemIdentifiers.STRANGE_IMPLEMENT; // 4619
+  const STRANGE_IMPLEMENT_ITEM_ID = ItemIdentifiers.STRANGE_IMPLEMENT; // 4619 golem_golemkey
   const MUSHROOM_ITEM_ID = ItemIdentifiers.BLACK_MUSHROOM; // 4620
   const FEATHER_ITEM_ID = ItemIdentifiers.PHOENIX_FEATHER; // 4621
-  const INK_ITEM_ID = ItemIdentifiers.BLACK_DYE; // 4622 black mushroom ink (cache name)
+  const INK_ITEM_ID = ItemIdentifiers.BLACK_DYE; // 4622 golem_ink
   const QUILL_ITEM_ID = ItemIdentifiers.PHOENIX_QUILL_PEN; // 4623
   const PROGRAM_ITEM_ID = ItemIdentifiers.GOLEM_PROGRAM; // 4624
   const SOFT_CLAY_ITEM_ID = ItemIdentifiers.SOFT_CLAY; // 1761
-  const CLAY_ITEM_ID = ItemIdentifiers.CLAY; // 434
-  const VIAL_ITEM_ID = ItemIdentifiers.VIAL; // 229
-  const PESTLE_ITEM_ID = ItemIdentifiers.PESTLE_AND_MORTAR; // 233
   const PAPYRUS_ITEM_ID = ItemIdentifiers.PAPYRUS; // 970
   const HAMMER_ITEM_ID = ItemIdentifiers.HAMMER; // 2347
   const CHISEL_ITEM_ID = ItemIdentifiers.CHISEL; // 1755
-  const RUBY_ITEM_ID = ItemIdentifiers.RUBY; // 1603
-  const EMERALD_ITEM_ID = ItemIdentifiers.EMERALD; // 1605
-  const SAPPHIRE_ITEM_ID = ItemIdentifiers.SAPPHIRE; // 1607
+  const THRONE_GEMS = [ItemIdentifiers.RUBY, ItemIdentifiers.EMERALD, ItemIdentifiers.SAPPHIRE]; // two of each (tick 1230)
 
-  // The Exam Centre's south-east bookcase (Quest Helper 6292 at 3366/3367,3332).
-  const BOOKCASE_OBJECT_ID = ObjectIdentifiers.BOOKCASE_20; // 6292
+  const SEQ_PICKPOCKET = 881; // human_pickpocket: clay, the curator's pocket, the throne
+  const SOUND_REPAIR_CLAY = 1850; // golem_repairclay, delay 5
+  const SOUND_PICK = 2581; // pick
+  const SOUND_TURN_STATUE = 1852;
+  const SOUND_DEMON_DOOR = 1848;
+  const SOUND_PROGRAM = 1849;
+  const LOC_ANIM_DOOR_OPEN = 1909; // golem_door_open, on the temple door (tick 1184)
+
+  // The Exam Centre's south-east bookcase.
+  const BOOKCASE_OBJECT_ID = ObjectIdentifiers.BOOKCASE_20; // 6292 golem_bookcase
   const BOOKCASE_TILE = { x: 3366, y: 3332 };
-  // 24626 is the world's Open-able museum case; 6294/6295 are not placed.
-  const DISPLAY_CASE_IDS = new Set([24626]);
+  const BOOKCASE_SEARCH_TICKS = 2; // "You search the bookcase..." then the find (ticks 468 -> 470, 477 -> 479)
+  // Display case 30 (3257,3453,1), vm_timeline_terracotta_statue, placed once: 24627 Study/Open, then
+  // 24550 Study once emptied.
+  const DISPLAY_CASE_IDS = new Set([24626, 24627]);
+  const CASE_BOX_TICKS = 2; // the statuette arrives, its item box two ticks later (677 -> 679, 759 -> 761)
   const TIMELINE_GROUP = 534;
   const TIMELINE_CLOSE = 1;
   const TIMELINE_TEXT = 2;
@@ -109,7 +114,7 @@ module.exports = function registerTheGolemQuest(api) {
   const CASE_STATUE_MODEL_ID = 25576;
   const CASE_EMPTY_MODEL_ID = 25568;
   const SET_SPINNER_SCRIPT = 65;
-  const STUDY_SEQUENCE = 6383;
+  const STUDY_SEQUENCE = 6383; // vm_display_case_ponder
   const BUSY_VARBIT = 12393;
   const CASE_NUMBER = "30";
   const CASE_DATE = "3rd Age - yr 3000-4000";
@@ -118,45 +123,40 @@ module.exports = function registerTheGolemQuest(api) {
     + "that the craftsmen of the city built as warriors and servants. The statuette was originally part of a "
     + "mechanism whose purpose is unknown.";
   const CASE_STOLEN = "Recently this display was stolen and its whereabouts are unknown.";
-  const THRONE_IDS = new Set([6300, ObjectIdentifiers.THRONE_10, ObjectIdentifiers.THRONE_11]); // 6301/6302
-  // Uzer temple alcoves. 6303-6306 are the placed base objects; the client
-  // transforms them through varbits 349-352 to 6307 (right), 6308 (left) or 6309
-  // (empty). A click can arrive as either the base or the transformed id, so
-  // match the tile too.
+  const THRONE_IDS = new Set([6300, ObjectIdentifiers.THRONE_10, ObjectIdentifiers.THRONE_11]); // 6300 -> 6301/6302
+  const THRONE_TILE = { x: 2719, y: 4913, z: 2 };
+  // The alcoves: the client sends the multiloc's base id (6303-6306), so the tile picks the alcove.
   const ALCOVES = [
     { slot: 0, objectId: 6303, bit: VARBIT_STATUETTE_A, x: 2718, y: 4899, target: 1 },
     { slot: 1, objectId: 6304, bit: VARBIT_STATUETTE_B, x: 2718, y: 4896, target: 1 },
     { slot: 2, objectId: 6305, bit: VARBIT_STATUETTE_C, x: 2725, y: 4899, target: 0 },
     { slot: 3, objectId: 6306, bit: VARBIT_STATUETTE_D, x: 2725, y: 4896, target: 2 },
   ];
+  const ALCOVE_D = ALCOVES[3];
   const ALCOVE_OBJECT_IDS = new Set([...ALCOVES.map((alcove) => alcove.objectId), 6307, 6308, 6309]);
   const MUSHROOM_OBJECT_ID = ObjectIdentifiers.BLACK_MUSHROOMS; // 6311
-  // Both states of the temple door are the same live loc (6363/6364 are not placed).
-  const TEMPLE_DOOR_OBJECT_ID = 6310;
-  const SURFACE_STAIRS_OBJECT_ID = ObjectIdentifiers.STAIRCASE_35; // 6373 Climb-down
-  const TEMPLE_STAIRS_OBJECT_ID = ObjectIdentifiers.STAIRCASE_34; // 6372 Climb-up
-  const SURFACE_STAIRS_TILE = { x: 3492, y: 3092, z: 0 };
-  const TEMPLE_STAIRS_TILE = { x: 2721, y: 4886, z: 0 };
-  const THRONE_ROOM_TILE = { x: 2720, y: 4884, z: 2 }; // capture 3333 portal landing
-  const DEMON_PORTAL_OBJECT_ID = ObjectIdentifiers.PORTAL_13; // 6282 back out of the lair
+  const TEMPLE_DOOR_OBJECT_IDS = new Set([6310, 6363, 6364]); // golem_portal and its two doors
+  const TEMPLE_DOOR_TILE = { x: 2720, y: 4912, z: 0 };
+  const SURFACE_STAIRS_OBJECT_ID = ObjectIdentifiers.STAIRCASE_35; // 6373 golem_insidestairs_top
+  const TEMPLE_STAIRS_OBJECT_ID = ObjectIdentifiers.STAIRCASE_34; // 6372 golem_insidestairs_base
+  const TEMPLE_LANDING = { x: 2721, y: 4886, z: 0 }; // tick 129
+  const SURFACE_LANDING = { x: 3491, y: 3090, z: 0 }; // tick 1127
+  const THRONE_ROOM_LANDING = { x: 2720, y: 4884, z: 2 }; // tick 1195
+  const DEMON_PORTAL_OBJECT_ID = ObjectIdentifiers.PORTAL_13; // 6282 golem_demon_portal
+  const DEMON_PORTAL_TILE = { x: 2719, y: 4883, z: 2 };
+  const DOOR_LANDING = { x: 2721, y: 4911, z: 0 }; // tick 1250
   const LETTER_TILE = { x: 3479, y: 3092, z: 0 };
   const IMPLEMENT_TILE = { x: 2713, y: 4913, z: 0 };
   const UZER_SURFACE_ZONE = { minX: 3465, maxX: 3505, minY: 3075, maxY: 3105, levels: [0] };
   const UZER_RUINS_ZONE = { minX: 2706, maxX: 2738, minY: 4881, maxY: 4918, levels: [0] };
+  const COMPLETED_SCROLL_GROUP = 153;
 
   const START_HOOK = "quest:the-golem:start";
-  const REPAIR_DONE_MESSAGE_ID = "qjXp0f"; // "You repair the golem with a final piece of clay."
-
-  /** This page's condition step ids; several texts ("player succeeds", ...) are shared pages' too. */
-  const OWN_CONDITION_IDS = new Set([
-    "Ji7EyT", // display case knowledge
-    "1V3-sZ", // display cabinet key
-    "mZfxeU", // statuette already taken
-    "LP56DN", // statuette already in the alcove
-    "HuSKOr", // first entry to the portal
-    "1_61bg", // no chisel/hammer for the throne
-    "0dQN2w", // demon-death knowledge for the program
-  ]);
+  /** Lines whose Continue moves the quest on, as the capture's ticks show. */
+  const ELISSA_NOTES_LINE = /^If you're interested in his expedition, the notes he made are in the library in the Exam Centre\.$/;
+  const STATUETTE_QUESTION = /^I'm looking for a statuette recovered from the city of Uzer\.$/;
+  const GOLEM_DISBELIEF_LINE = /^Demon must be defeated! Task incomplete\.$/;
+  const GOLEM_AT_REST_LINE = /^Thank you\. Now my mind is at rest\.$/;
 
   const LETTER_ATTRIBUTE = "quest.the_golem.letter";
   const CLAY_ATTRIBUTE = "quest.the_golem.clay";
@@ -164,9 +164,10 @@ module.exports = function registerTheGolemQuest(api) {
   const THRONE_GEMS_ATTRIBUTE = "quest.the_golem.throne_gems";
   const RETRIEVED_ATTRIBUTE = "quest.the_golem.retrieved_statuette";
   const SEEN_ATTRIBUTE = "quest.the_golem.seen_underground";
+  // The open skull lasts the session: a relog closes it (Ours: live's relog is not captured).
   const HEAD_OPEN_ATTRIBUTE = "quest.the_golem.head_open";
 
-  /** Interface 220's lines 1-15, as captured (rsprox 3333, tick 396). */
+  /** Interface 220's lines 1-15, as captured (tick 117). */
   const LETTER_GROUP = 220;
   const LETTER_LINES = [
     "",
@@ -186,12 +187,17 @@ module.exports = function registerTheGolemQuest(api) {
     "",
   ];
   const NOTES_TITLE = "The Ruins of Uzer";
-  /** The book's 16 pages, as captured (rsprox 3232, ticks 1613-1621). */
+  /** The book's 16 pages, as captured (ticks 488-497). */
   const NOTES_PAGES = require("../data/the-golem-notes-book.json");
+
+  /** Players whose program conversation is playing: its last line completes the quest. */
+  const reprogramming = new WeakSet();
 
   let quest;
 
-  const held = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
+  const inventory = (player) => player.getInventory();
+  const held = (player, itemId) => inventory(player).getAmount(itemId) > 0;
+  const stageOf = (player) => quest.getStage(player);
 
   function numberAttribute(player, key) {
     return Number(player.getAttribute(key)) || 0;
@@ -201,20 +207,17 @@ module.exports = function registerTheGolemQuest(api) {
     return numberAttribute(player, LETTER_ATTRIBUTE);
   }
 
+  function setLetterProgress(player, value) {
+    player.setAttribute(LETTER_ATTRIBUTE, value);
+    setVarbit(player, VARBIT_GOLEM_B, value);
+  }
+
   function clayUsed(player) {
     return numberAttribute(player, CLAY_ATTRIBUTE);
   }
 
-  function craftLevel(player) {
-    return player.getSkillManager().getCurrentLevel(Skill.CRAFTING);
-  }
-
-  function thiefLevel(player) {
-    return player.getSkillManager().getCurrentLevel(Skill.THIEVING);
-  }
-
-  function varbit(player, id) {
-    return player.getPacketSender().getVarbit(id);
+  function level(player, skill) {
+    return player.getSkillManager().getCurrentLevel(skill);
   }
 
   function setVarbit(player, id, value) {
@@ -229,23 +232,61 @@ module.exports = function registerTheGolemQuest(api) {
     const shift = slot * 2;
     const packed = numberAttribute(player, STATUE_ATTRIBUTE);
     player.setAttribute(STATUE_ATTRIBUTE, (packed & ~(3 << shift)) | ((value & 3) << shift));
+    setVarbit(player, ALCOVES[slot].bit, value);
   }
 
-  /** Replays the golem's cache state (varp 437 siblings) after login or a reload. */
+  function headOpen(player) {
+    return player.getAttribute(HEAD_OPEN_ATTRIBUTE) === true;
+  }
+
+  function setHeadOpen(player, open) {
+    player.setAttribute(HEAD_OPEN_ATTRIBUTE, open);
+    setVarbit(player, VARBIT_HEAD_OPEN, open ? 1 : 0);
+  }
+
+  /** Replays the varp 437 siblings after login (the stage itself is the runtime's). */
   function syncGolemVarbits(player) {
     setVarbit(player, VARBIT_GOLEM_B, letterProgress(player));
     setVarbit(player, VARBIT_GOLEM_CLAY, clayUsed(player));
-    setVarbit(player, VARBIT_STATUETTE_A, statueValue(player, 0));
-    setVarbit(player, VARBIT_STATUETTE_B, statueValue(player, 1));
-    setVarbit(player, VARBIT_STATUETTE_C, statueValue(player, 2));
-    setVarbit(player, VARBIT_STATUETTE_D, statueValue(player, 3));
-    setVarbit(player, VARBIT_HEAD_OPEN, player.getAttribute(HEAD_OPEN_ATTRIBUTE) ? 1 : 0);
+    for (const alcove of ALCOVES) setVarbit(player, alcove.bit, statueValue(player, alcove.slot));
+    setVarbit(player, VARBIT_HEAD_OPEN, headOpen(player) ? 1 : 0);
     setVarbit(player, VARBIT_THRONE_GEMS, player.getAttribute(THRONE_GEMS_ATTRIBUTE) ? 1 : 0);
     setVarbit(player, VARBIT_RETRIEVED_STATUETTE, player.getAttribute(RETRIEVED_ATTRIBUTE) ? 1 : 0);
     setVarbit(player, VARBIT_SEEN_UNDERGROUND, player.getAttribute(SEEN_ATTRIBUTE) ? 1 : 0);
   }
 
-  /** A Quest Helper floor spawn, registered for its owner until picked up. */
+  function schedule(player, ticks, run) {
+    const { CountdownTask, TaskManager } = api.core;
+    TaskManager.submit(new CountdownTask(player, ticks, () => {
+      if (player.isRegistered?.() === false) return;
+      run();
+    }));
+  }
+
+  /** An item box (objectbox 193), as live shows a hand-out; `then` runs once it is continued. */
+  function itemBox(player, itemId, text, then) {
+    const { DialogueChainBuilder, ItemStatementDialogue, ActionDialogue } = api.core;
+    const chain = new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text));
+    if (then) chain.add(new ActionDialogue(1, { execute: () => then() }));
+    player.getDialogueManager().startDialogues(chain);
+  }
+
+  /** A plain message box (messagebox 229). */
+  function messageBox(player, text) {
+    const { DialogueChainBuilder, StatementDialogue } = api.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, text)));
+  }
+
+  function spam(player, text) {
+    player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, text);
+  }
+
+  /** Into the inventory, or onto the floor under the player with a full one (Wiki: "Drops to floor"). */
+  function giveOrDrop(player, itemId) {
+    giveReward(player, itemId, 1);
+  }
+
+  /** A floor spawn, registered for its owner until picked up (the Wiki's item spawns). */
   function ensureGroundItem(player, itemId, tile) {
     if (held(player, itemId)) return;
     const location = new Location(tile.x, tile.y, tile.z);
@@ -254,31 +295,69 @@ module.exports = function registerTheGolemQuest(api) {
     manager.registerLocation(player, new Item(itemId, 1), location);
   }
 
+  /** The letter and the strange implement respawn for anyone on or past the quest (Wiki item pages). */
   function ensureQuestItemSpawns(player) {
-    if (letterProgress(player) === 0) ensureGroundItem(player, LETTER_ITEM_ID, LETTER_TILE);
-    if (quest.isStarted(player) && !quest.isComplete(player)) {
-      ensureGroundItem(player, STRANGE_IMPLEMENT_ITEM_ID, IMPLEMENT_TILE);
-    }
+    if (!quest.isStarted(player)) return;
+    ensureGroundItem(player, LETTER_ITEM_ID, LETTER_TILE);
+    ensureGroundItem(player, STRANGE_IMPLEMENT_ITEM_ID, IMPLEMENT_TILE);
+  }
+
+  function atTile(event, tile) {
+    const location = event.location ?? event.object?.getLocation?.();
+    if (!location) return true;
+    const x = location.x ?? location.getX?.();
+    const y = location.y ?? location.getY?.();
+    return x === tile.x && y === tile.y;
   }
 
   function alcoveAt(event) {
-    const location = event.location;
-    if (location) {
-      for (const alcove of ALCOVES) {
-        if (Math.abs(location.x - alcove.x) <= 1 && Math.abs(location.y - alcove.y) <= 1) return alcove;
-      }
-      return null;
-    }
-    return ALCOVES.find((alcove) => alcove.objectId === event.objectId) ?? null;
+    const location = event.location ?? event.object?.getLocation?.();
+    if (!location) return ALCOVES.find((alcove) => alcove.objectId === event.objectId) ?? null;
+    const x = location.x ?? location.getX?.();
+    const y = location.y ?? location.getY?.();
+    return ALCOVES.find((alcove) => alcove.x === x && alcove.y === y) ?? null;
   }
 
   function freeSlots(player) {
-    const inventory = player.getInventory();
-    return typeof inventory.getFreeSlots === "function"
-      ? inventory.getFreeSlots()
-      : inventory.isFull()
-        ? 0
-        : 28;
+    const container = inventory(player);
+    return typeof container.getFreeSlots === "function" ? container.getFreeSlots() : container.isFull() ? 0 : 28;
+  }
+
+  // --- The journal -----------------------------------------------------------------------------
+  // The captured journal opens at stages 2 (ticks 100, 135, 333, 522), 3 (689), 4 (1121), 6 (1209)
+  // and 7 (1288). Lines for the states no capture opens are marked "Ours".
+
+  const GOLEM_ASKED_OPEN = [
+    "The golem asked me to open the <col=800000>portal</col> so it can defeat a",
+    "<col=800000>demon</col>.",
+  ];
+  const GOLEM_ASKED_OPEN_DONE = [
+    "<str>The golem asked me to open the portal so it could defeat a",
+    "<str>demon.",
+  ];
+
+  function journalLetterLines(player, stage) {
+    const progress = letterProgress(player);
+    const lines = [];
+    if (progress === LETTER_READ) {
+      lines.push("Maybe I should speak to <col=800000>Elissa</col> at the <col=800000>Digsite</col> about the letter I");
+      lines.push("found in Uzer.");
+      return lines;
+    }
+    if (progress >= ELISSA_TOLD) lines.push("<str>I talked to Elissa about the letter from the desert.");
+    if (progress === ELISSA_TOLD) {
+      // Ours: no capture opens the journal between Elissa and the notes.
+      lines.push("Elissa told me that <col=800000>Varmen's notes</col> are in the library in the");
+      lines.push("<col=800000>Digsite Exam Centre</col>.");
+      return lines;
+    }
+    if (progress >= NOTES_READ) lines.push("<str>I took Varmen's notes from the Digsite Exam Centre.");
+    if (progress >= NOTES_READ && !player.getAttribute(RETRIEVED_ATTRIBUTE) && stage < STAGE_STATUETTE_REPLACED) {
+      // Captured at stage 2 (tick 522); kept at stage 3 until the statuette is taken (Ours).
+      lines.push("According to <col=800000>Varmen's notes</col>, he removed the <col=800000>statuette</col>");
+      lines.push("during his expedition.");
+    }
+    return lines;
   }
 
   function buildJournal(player, questHandle) {
@@ -292,50 +371,61 @@ module.exports = function registerTheGolemQuest(api) {
         "I will need level 20 Crafting and level 25 Thieving.",
       ];
     }
-    const lines = ["<str>I have spoken to the golem.</str>"];
-    if (stage < STAGE_OPEN_PORTAL) {
-      lines.push("The <col=800000>golem</col> asked me to repair him with soft clay.");
-      lines.push("");
-      lines.push(`Repairs done: ${clayUsed(player)}/${CLAY_REPAIRS}.`);
+    if (stage === STAGE_REPAIR_GOLEM) {
+      // Ours: no capture opens the journal before the repairs are done.
+      return [
+        "<str>I have spoken to the golem.",
+        "The <col=800000>golem</col> asked me to repair it with <col=800000>soft clay</col>.",
+      ];
+    }
+    const lines = ["<str>I have spoken to the golem.", "<str>I have repaired the golem."];
+    if (stage <= STAGE_FIND_STATUETTE) {
+      lines.push(...GOLEM_ASKED_OPEN);
+      if (player.getAttribute(RETRIEVED_ATTRIBUTE)) {
+        lines.push(...journalLetterLines(player, stage));
+        lines.push("<str>I have retrieved the missing statuette from the Varrock");
+        lines.push("<str>Museum.");
+        lines.push("I should take the <col=800000>statuette</col> to Uzer and put it back in the");
+        lines.push("temple.");
+        return lines;
+      }
+      if (player.getAttribute(SEEN_ATTRIBUTE)) {
+        lines.push("To open the portal I will need to find a missing <col=800000>statuette</col>.");
+      } else {
+        lines.push("I should go down the stairs in <col=800000>Uzer</col> and work out how to open");
+        lines.push("the <col=800000>portal</col>.");
+      }
+      lines.push(...journalLetterLines(player, stage));
       return lines;
     }
-    lines.push("<str>I have repaired the golem.</str>");
-    if (stage >= STAGE_PORTAL_OPENED) {
-      lines.push("<str>The golem asked me to open the portal so it can defeat a demon.</str>");
-      lines.push("<str>I have opened the portal.</str>");
-    } else {
-      lines.push("The <col=800000>golem</col> asked me to open the portal so it can");
-      lines.push("defeat the great demon.");
-      if (stage < STAGE_FIND_STATUETTE) {
-        lines.push("I should go down the stairs in <col=800000>Uzer</col> and work out how to open the portal.");
-      } else if (!player.getAttribute(RETRIEVED_ATTRIBUTE)) {
-        lines.push("To open the portal I need the missing <col=800000>statuette</col>, which is in the <col=800000>Varrock Museum</col>.");
-      } else if (stage < STAGE_STATUETTE_REPLACED) {
-        lines.push("I have the missing statuette and should put it back in the temple in <col=800000>Uzer</col>.");
-      } else {
-        lines.push("I have replaced the statuette and should turn the statuettes to open the door.");
-      }
+    const replaced = [
+      "<str>I talked to Elissa about the letter from the desert.",
+      "<str>I took Varmen's notes from the Digsite Exam Centre.",
+      "<str>I have retrieved the missing statuette from the Varrock",
+      "<str>Museum and repaired the puzzle in the temple.",
+    ];
+    if (stage === STAGE_STATUETTE_REPLACED) {
+      return [
+        ...lines, ...GOLEM_ASKED_OPEN, ...replaced,
+        "I should turn the <col=800000>statuettes</col> to the correct sequence to open",
+        "the <col=800000>portal</col>.",
+      ];
     }
-    if (letterProgress(player) === 1) {
-      lines.push("");
-      lines.push("Maybe I should speak to <col=800000>Elissa</col> at the <col=800000>Digsite</col> about the letter I found in Uzer.");
-    } else if (letterProgress(player) === 2) {
-      lines.push("");
-      lines.push("Elissa told me that <col=800000>Varmen's expedition notes</col> are in the library in the <col=800000>Exam Centre</col>.");
-    }
+    lines.push(...GOLEM_ASKED_OPEN_DONE, ...replaced, "<str>I have opened the portal.");
+    // Ours: stage 5 (the door open, the room not yet entered) is not captured.
+    if (stage === STAGE_PORTAL_OPENED) return lines;
+    lines.push("<str>I have visited the demon's lair and seen its skeleton.");
     if (stage === STAGE_DEMON_DEAD) {
-      lines.push("");
-      lines.push("I saw the demon's skeleton in its lair. I should inform the <col=800000>golem</col> that it is dead.");
-    } else if (stage >= STAGE_CONVINCE_GOLEM) {
-      lines.push("");
-      lines.push("<str>I told the golem that the demon was dead, but it did not believe me!</str>");
-      lines.push("I should find some way to convince the <col=800000>golem</col> that its task is done.");
+      lines.push("I should inform the <col=800000>golem</col> that the <col=800000>demon</col> is dead.");
+      return lines;
     }
-    if (stage >= STAGE_COMPLETE) {
-      lines.push("");
-      lines.push("<str>I reprogrammed the golem so that it knows its task is complete.</str>");
-      lines.push("<col=ff0000>QUEST COMPLETE!</col>");
+    lines.push("<str>I told the golem that the demon was dead, but it did not", "<str>believe me!");
+    if (stage < STAGE_COMPLETE) {
+      lines.push("I should find some way to convince the <col=800000>golem</col> that its task is", "done.");
+      return lines;
     }
+    // Ours: the completed journal is not captured.
+    lines.push("<str>I reprogrammed the golem so that it knows its task is complete.", "", "<col=ff0000>QUEST COMPLETE!");
     return lines;
   }
 
@@ -344,45 +434,45 @@ module.exports = function registerTheGolemQuest(api) {
     player.getSkillManager().addExperiences(Skill.THIEVING, 1000);
   }
 
-  /** Which transcript variant each speaker plays, by quest stage. */
-  function selectVariant({ npcId, player }) {
-    const stage = quest.getStage(player);
-    if (GOLEM_NPC_IDS.has(npcId)) {
-      if (stage >= STAGE_COMPLETE) return { page: PAGE, variant: "post-quest-talking-to-the-golem" };
-      if (stage >= STAGE_CONVINCE_GOLEM) {
-        return { page: PAGE, variant: "returning-to-uzer-talking-to-the-golem-again-after-being-told-the-demon-must-be-defeated" };
-      }
-      if (stage === STAGE_DEMON_DEAD) {
-        return { page: PAGE, variant: "returning-to-uzer-talking-to-the-golem-after-entering-the-throne-of-the-demon" };
-      }
-      if (stage >= STAGE_PORTAL_OPENED) {
-        return { page: PAGE, variant: "returning-to-uzer-talking-to-the-golem-after-opening-the-portal" };
-      }
-      if (stage >= STAGE_OPEN_PORTAL) {
-        return { page: PAGE, variant: "using-the-soft-clay-on-the-golem-talking-to-the-golem-again-after-learning-about-the-demon" };
-      }
-      if (stage >= STAGE_REPAIR_GOLEM) {
-        return { page: PAGE, variant: "talking-to-the-golem-to-start-the-quest-talking-to-the-golem-after-starting-the-quest" };
-      }
-      return { page: PAGE, variant: "talking-to-the-golem-to-start-the-quest" };
+  // --- Who plays which transcript ----------------------------------------------------------------
+
+  /** The curator's statuette conversation, once the notes are read and until the quest ends. */
+  function curatorStepActive(player) {
+    const stage = stageOf(player);
+    return stage >= STAGE_OPEN_PORTAL && stage < STAGE_COMPLETE && letterProgress(player) >= NOTES_READ;
+  }
+
+  function golemVariant(player) {
+    const stage = stageOf(player);
+    if (stage >= STAGE_COMPLETE) return "post-quest-talking-to-the-golem";
+    if (stage >= STAGE_CONVINCE_GOLEM) {
+      return "returning-to-uzer-talking-to-the-golem-again-after-being-told-the-demon-must-be-defeated";
     }
+    if (stage === STAGE_DEMON_DEAD) return "returning-to-uzer-talking-to-the-golem-after-entering-the-throne-of-the-demon";
+    if (stage === STAGE_PORTAL_OPENED) return "returning-to-uzer-talking-to-the-golem-after-opening-the-portal";
+    if (stage >= STAGE_OPEN_PORTAL) {
+      return "using-the-soft-clay-on-the-golem-talking-to-the-golem-again-after-learning-about-the-demon";
+    }
+    if (stage >= STAGE_REPAIR_GOLEM) return "talking-to-the-golem-to-start-the-quest-talking-to-the-golem-after-starting-the-quest";
+    return "talking-to-the-golem-to-start-the-quest";
+  }
+
+  /** Which transcript variant each speaker plays. */
+  function selectVariant({ npcId, player }) {
+    if (GOLEM_NPC_IDS.has(npcId)) return { page: PAGE, variant: golemVariant(player) };
     if (npcId === ELISSA_NPC_ID) {
-      if (quest.getStage(player) >= STAGE_FIND_STATUETTE) {
-        return { page: PAGE, variant: "talking-to-elissa-in-the-digsite-talking-to-elissa-after-reading-varmen-s-notes" };
-      }
-      if (letterProgress(player) >= 2) {
+      const progress = letterProgress(player);
+      if (progress >= NOTES_READ) return { page: PAGE, variant: "talking-to-elissa-in-the-digsite-talking-to-elissa-after-reading-varmen-s-notes" };
+      if (progress >= ELISSA_TOLD) {
         return { page: PAGE, variant: "talking-to-elissa-in-the-digsite-talking-to-elissa-again-after-learning-where-the-notes-are" };
       }
       return { page: PAGE, variant: "talking-to-elissa-in-the-digsite" };
     }
     if (npcId === CURATOR_NPC_ID) {
-      // Only the active quest has curator business; Dig Site/Bone Voyage own him
-      // after completion.
-      if (quest.isComplete(player)) return null;
-      if (quest.getStage(player) < STAGE_REPAIR_GOLEM && !player.getAttribute(RETRIEVED_ATTRIBUTE)) {
-        return null;
-      }
-      if (player.getAttribute(RETRIEVED_ATTRIBUTE) || quest.getStage(player) >= STAGE_STATUETTE_REPLACED) {
+      // Wiki: "If no dialogue options appear, you did not read the notes!" Dig Site and Bone
+      // Voyage keep the curator otherwise (the-golem:curator-step).
+      if (!curatorStepActive(player)) return null;
+      if (player.getAttribute(RETRIEVED_ATTRIBUTE)) {
         return { page: PAGE, variant: "visiting-the-varrock-museum-talking-to-curator-haig-after-losing-the-statuette" };
       }
       return { page: PAGE, variant: "visiting-the-varrock-museum-talking-to-curator-haig-in-the-varrock-museum" };
@@ -390,104 +480,111 @@ module.exports = function registerTheGolemQuest(api) {
     return null;
   }
 
-  /** Answer the transcript page's prose conditions. */
-  function answerCondition({ player, npcId, text, stepId }) {
-    const ownsNpc =
-      GOLEM_NPC_IDS.has(npcId) ||
-      npcId === ELISSA_NPC_ID ||
-      npcId === CURATOR_NPC_ID ||
-      npcId === DESERT_PHOENIX_NPC_ID;
-    if (!ownsNpc && !OWN_CONDITION_IDS.has(stepId)) return null;
-    const value = String(text).toLowerCase();
-    const has = (itemId) => player.getInventory().getAmount(itemId) > 0;
-    if (value.includes("not yet learned about the display case")) {
-      return quest.getStage(player) < STAGE_FIND_STATUETTE;
-    }
-    if (value.includes("does not have the key")) {
-      return !has(CABINET_KEY_ITEM_ID);
-    }
-    if (value.includes("already has the statuette")) {
-      return Boolean(player.getAttribute(RETRIEVED_ATTRIBUTE)) || has(STATUETTE_ITEM_ID);
-    }
-    if (value.includes("already a statuette in the alcove")) {
-      return quest.getStage(player) >= STAGE_STATUETTE_REPLACED;
-    }
-    if (value.includes("first time the player has entered the portal")) {
-      // Capture 3333 sets seen_underground when the player first enters the
-      // ruins, long before the portal; the skeleton line still plays on the
-      // first portal entry at stage 5.
-      return quest.getStage(player) === STAGE_PORTAL_OPENED;
-    }
-    if (value.includes("no chisel")) {
-      return !has(CHISEL_ITEM_ID) || !has(HAMMER_ITEM_ID);
-    }
-    if (value.includes("not learned that the demon is dead")) {
-      return quest.getStage(player) < STAGE_DEMON_DEAD;
-    }
-    return null;
+  /**
+   * The curator's "Talk about Fossil Island." borrows his own page's "After Bone Voyage:"
+   * (osrsreboxed-db capture source); its step ids in this page's two museum variants.
+   */
+  const FOSSIL_ISLAND_OPTION_IDS = new Set(["8odAmY", "7sx9Pa"]);
+
+  function answerCondition({ player, npcId, stepId }) {
+    if (npcId !== CURATOR_NPC_ID || !FOSSIL_ISLAND_OPTION_IDS.has(stepId)) return null;
+    const request = { player, key: "bone_voyage", complete: false };
+    api.emitCustomEvent("quest:is-complete", request);
+    return request.complete === true;
+  }
+
+  /** the-golem:curator-step { player, active }: Dig Site and Bone Voyage ask before they claim the curator. */
+  function answerCuratorStep(request) {
+    if (request?.player) request.active = curatorStepActive(request.player);
   }
 
   function handleStartHook({ player, npcId, hook }) {
     if (!GOLEM_NPC_IDS.has(npcId) || hook !== START_HOOK) return;
-    if (quest.getStage(player) < STAGE_REPAIR_GOLEM) quest.setStage(player, STAGE_REPAIR_GOLEM);
+    if (stageOf(player) >= STAGE_REPAIR_GOLEM) return;
+    quest.setStage(player, STAGE_REPAIR_GOLEM);
+    // Tick 28: the start line comes as "Yes." is picked, before the player's line.
+    player.sendMessage(questStartMessage(player, quest.name));
+    ensureQuestItemSpawns(player);
   }
 
-  /** Elissa explaining where Varmen's notes are advances the letter hunt. */
+  /** Lines whose Continue moves the quest on (`after` runs once the player continues past it). */
   function handleDialogueLine(event) {
-    if (event.npcId === ELISSA_NPC_ID && /notes he made are in the library/i.test(String(event.text))) {
-      if (letterProgress(event.player) < 2) {
-        event.player.setAttribute(LETTER_ATTRIBUTE, 2);
-        setVarbit(event.player, VARBIT_GOLEM_B, 2);
-      }
+    const { player } = event;
+    const text = String(event.text ?? "");
+    const chain = (run) => {
+      const previous = event.after;
+      event.after = () => { previous?.(); run(); };
+    };
+    // Tick 376 -> 377: Elissa naming the library sets golem_b 2.
+    if (event.npcId === ELISSA_NPC_ID && ELISSA_NOTES_LINE.test(text)) {
+      chain(() => { if (letterProgress(player) < ELISSA_TOLD) setLetterProgress(player, ELISSA_TOLD); });
+      return;
     }
-    // The golem refuses to believe the demon is dead; this ends the stage-6
-    // conversation and starts the reprogramming hunt (stage 7).
-    if (GOLEM_NPC_IDS.has(event.npcId) && /demon must be defeated.*task incomplete/i.test(String(event.text))) {
-      if (quest.getStage(event.player) === STAGE_DEMON_DEAD) quest.setStage(event.player, STAGE_CONVINCE_GOLEM);
+    // Tick 612 -> 614: asking the curator about the statuette is stage 3.
+    if (event.npcId === CURATOR_NPC_ID && typeof event.step?.player === "string" && STATUETTE_QUESTION.test(text)) {
+      chain(() => {
+        if (stageOf(player) === STAGE_OPEN_PORTAL && letterProgress(player) >= NOTES_READ) quest.setStage(player, STAGE_FIND_STATUETTE);
+      });
+      return;
+    }
+    if (!GOLEM_NPC_IDS.has(event.npcId)) return;
+    if (typeof event.step?.player !== "string") {
+      // Live's head is the multi-NPC itself and its name the form it shows (ticks 25, 51, 65).
+      event.speakerId = GOLEM_NPC_ID;
+      event.speakerName = golemName(player);
+    }
+    // Tick 1275 -> 1276: the golem refusing to believe it is stage 7.
+    if (GOLEM_DISBELIEF_LINE.test(text)) {
+      chain(() => { if (stageOf(player) === STAGE_DEMON_DEAD) quest.setStage(player, STAGE_CONVINCE_GOLEM); });
+      return;
+    }
+    // Tick 1437 -> 1438: the golem's last line completes the quest and takes the program.
+    if (GOLEM_AT_REST_LINE.test(text) && reprogramming.has(player)) {
+      chain(() => completeQuest(player));
     }
   }
 
-  /** Message steps fired by the transcript variants we replay drive state. */
-  function handleAction(event) {
-    if (event.stepId === REPAIR_DONE_MESSAGE_ID && GOLEM_NPC_IDS.has(event.npcId)) {
-      if (quest.getStage(event.player) < STAGE_OPEN_PORTAL) quest.setStage(event.player, STAGE_OPEN_PORTAL);
-    }
+  /** The name of the form 6277 shows (varbit 348: 0-1 broken, 2-3 damaged, 4 repaired). */
+  function golemName(player) {
+    const clay = stageOf(player) >= STAGE_OPEN_PORTAL ? CLAY_REPAIRS : clayUsed(player);
+    const form = clay >= CLAY_REPAIRS ? NpcIdentifiers.CLAY_GOLEM_3
+      : clay >= 2 ? NpcIdentifiers.DAMAGED_CLAY_GOLEM : NpcIdentifiers.BROKEN_CLAY_GOLEM;
+    return api.core.NpcDefinition.forId(form)?.getName?.() ?? "Clay golem";
   }
 
-  /**
-   * The portal's first-entry branch describes the demon's skeleton; walking
-   * through the temple door marks the sighting and moves the quest on.
-   */
-  /** The first ruin entry sets seen_underground; the portal moves the stage on. */
-  function markSeenUnderground(player) {
-    if (player.getAttribute(SEEN_ATTRIBUTE)) return;
-    player.setAttribute(SEEN_ATTRIBUTE, true);
-    setVarbit(player, VARBIT_SEEN_UNDERGROUND, 1);
+  function completeQuest(player) {
+    reprogramming.delete(player);
+    if (quest.isComplete(player) || stageOf(player) !== STAGE_CONVINCE_GOLEM || !held(player, PROGRAM_ITEM_ID)) return;
+    inventory(player).deleteNumber(PROGRAM_ITEM_ID, 1);
+    quest.complete(player);
   }
 
-  function markFirstEntry(player) {
-    if (quest.getStage(player) === STAGE_PORTAL_OPENED) quest.setStage(player, STAGE_DEMON_DEAD);
+  /** Tick 1442: the skull shuts as the completion scroll closes. */
+  function handleInterfaceClosed({ player, interfaceId }) {
+    if (interfaceId === TIMELINE_GROUP) player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+    if (interfaceId === COMPLETED_SCROLL_GROUP && headOpen(player) && quest.isComplete(player)) shutSkull(player);
   }
 
-  /** Reading Varmen's letter starts the hunt; reading his notes sets golem_b 3. */
+  function shutSkull(player) {
+    setHeadOpen(player, false);
+    player.sendMessage("The golem's skull shuts automatically.");
+  }
+
+  // --- Reading -----------------------------------------------------------------------------------
+
+  /** Reading Varmen's letter starts the hunt (tick 117); reading his notes sets golem_b 3 (tick 487). */
   function handleItemAction(event) {
     const option = String(event.option ?? "").toLowerCase();
     if (!option.includes("read")) return;
     if (event.itemId === LETTER_ITEM_ID) {
+      if (letterProgress(event.player) === 0) setLetterProgress(event.player, LETTER_READ);
       showLetter(event.player);
-      if (letterProgress(event.player) === 0) {
-        event.player.setAttribute(LETTER_ATTRIBUTE, 1);
-        setVarbit(event.player, VARBIT_GOLEM_B, 1);
-      }
       event.handled = true;
       return;
     }
     if (event.itemId === NOTES_ITEM_ID) {
+      if (letterProgress(event.player) === ELISSA_TOLD) setLetterProgress(event.player, NOTES_READ);
       openBook(event.player, NOTES_TITLE, NOTES_PAGES);
-      if (letterProgress(event.player) === 2) {
-        event.player.setAttribute(LETTER_ATTRIBUTE, 3);
-        setVarbit(event.player, VARBIT_GOLEM_B, 3);
-      }
       event.handled = true;
     }
   }
@@ -499,166 +596,145 @@ module.exports = function registerTheGolemQuest(api) {
     sender.sendInterface(LETTER_GROUP);
   }
 
+  // --- The golem ---------------------------------------------------------------------------------
+
+  const CLAY_BOXES = [
+    "You apply some clay to the golem's wounds. The clay begins to harden in the hot sun.",
+    "You fix the golem's legs.",
+    "The golem is nearly whole.",
+    "You repair the golem with a final piece of clay.",
+  ];
+
+  /** Ticks 36-63: each soft clay is an animation, the repair sound and an item box. */
   function repairGolem(player, npcId) {
-    const stage = quest.getStage(player);
+    const stage = stageOf(player);
     if (stage <= STAGE_NOT_STARTED) {
       player.sendMessage("Maybe you should ask the golem first!");
-      return;
+      return true;
     }
-    if (stage >= STAGE_OPEN_PORTAL) {
-      player.sendMessage("You have already repaired the golem.");
-      return;
+    if (stage !== STAGE_REPAIR_GOLEM) return false;
+    if (level(player, Skill.CRAFTING) < CRAFTING_LEVEL) {
+      // Ours: the Wiki gives the requirement, not the refusal.
+      player.sendMessage(`You need a Crafting level of ${CRAFTING_LEVEL} to repair the golem.`);
+      return true;
     }
-    if (craftLevel(player) < CRAFTING_LEVEL) {
-      player.sendMessage("You need level 20 crafting to repair the golem.");
-      return;
-    }
-    if (!held(player, SOFT_CLAY_ITEM_ID)) return;
-    player.getInventory().deleteNumber(SOFT_CLAY_ITEM_ID, 1);
-    const used = clayUsed(player) + 1;
+    inventory(player).deleteNumber(SOFT_CLAY_ITEM_ID, 1);
+    const used = Math.min(CLAY_REPAIRS, clayUsed(player) + 1);
     player.setAttribute(CLAY_ATTRIBUTE, used);
-    // The world golem is NPC 6277, transformed by this varbit; the client
-    // switches 5134 -> 5135 -> 5136 as the player adds clay.
     setVarbit(player, VARBIT_GOLEM_CLAY, used);
-    const variant = {
-      1: "using-the-soft-clay-on-the-golem-after-using-the-first-soft-clay",
-      2: "using-the-soft-clay-on-the-golem-after-using-the-second-soft-clay",
-      3: "using-the-soft-clay-on-the-golem-after-using-the-third-soft-clay",
-      4: "using-the-soft-clay-on-the-golem-after-using-the-fourth-soft-clay",
-    }[used];
-    if (variant) startTranscript(api, player, npcId, PAGE, variant);
+    player.performAnimation(new Animation(SEQ_PICKPOCKET));
+    player.getPacketSender().sendSound(SOUND_REPAIR_CLAY, 1, 5);
+    if (used < CLAY_REPAIRS) {
+      itemBox(player, SOFT_CLAY_ITEM_ID, CLAY_BOXES[used - 1]);
+      return true;
+    }
+    quest.setStage(player, STAGE_OPEN_PORTAL);
+    itemBox(player, SOFT_CLAY_ITEM_ID, CLAY_BOXES[3], () =>
+      startTranscript(api, player, npcId, PAGE, "using-the-soft-clay-on-the-golem-after-using-the-fourth-soft-clay",
+        (steps) => steps.filter((step) => step.type !== "message")));
+    return true;
   }
 
-  function openGolemHead(player, npcId) {
-    player.setAttribute(HEAD_OPEN_ATTRIBUTE, true);
-    setVarbit(player, VARBIT_HEAD_OPEN, 1);
-    // Quest Helper keeps Golem_head_open set while the player writes and uses
-    // the program, so play only the opening message, not the wiki's second
-    // "shuts automatically" line.
+  /** Tick 1430: the strange implement opens the skull for the program. */
+  function useImplement(player) {
+    if (stageOf(player) !== STAGE_CONVINCE_GOLEM || headOpen(player)) return false;
+    setHeadOpen(player, true);
+    player.sendMessage("You insert the key and the golem's skull hinges open.");
+    // Wiki "without the new instructions": with nothing to put in, it shuts again (Ours: a tick later).
+    if (!held(player, PROGRAM_ITEM_ID)) schedule(player, 1, () => { if (headOpen(player)) shutSkull(player); });
+    return true;
+  }
+
+  /** Ticks 1434-1438: the program plays the golem's three lines, the last of which completes. */
+  function useProgram(player, npcId) {
+    if (quest.isComplete(player)) return false;
+    if (!headOpen(player)) {
+      player.sendMessage("You can't see a way to put the instructions in the golem's skull");
+      return true;
+    }
+    if (stageOf(player) !== STAGE_CONVINCE_GOLEM) return false;
+    player.getPacketSender().sendSound(SOUND_PROGRAM, 1, 0);
+    reprogramming.add(player);
     startTranscript(api, player, npcId, PAGE,
-      "returning-to-uzer-using-the-strange-implement-on-the-golem-without-the-new-instructions",
-      (steps) => steps.filter((step) => step.id !== "tzrMiL"));
+      "returning-to-uzer-after-using-the-strange-implement-on-the-golem-in-uzer-and-adding-the-new-instructions");
+    return true;
   }
 
-  function closeGolemHead(player) {
-    player.setAttribute(HEAD_OPEN_ATTRIBUTE, false);
-    setVarbit(player, VARBIT_HEAD_OPEN, 0);
-    player.sendMessage("The golem's skull shuts automatically.");
-  }
-
-  function completeWhenDialogueEnds(player, attempts) {
-    const { CountdownTask, TaskManager } = api.core;
-    TaskManager.submit(
-      new CountdownTask({}, 1, () => {
-        if (player.getDialogueManager().isActive() && attempts > 0) {
-          completeWhenDialogueEnds(player, attempts - 1);
-          return;
-        }
-        quest.complete(player);
-        // Capture 3333: head_open stays set through the program dialogue and is
-        // cleared two ticks after completion, with the wiki message.
-        TaskManager.submit(new CountdownTask(player, 2, () => closeGolemHead(player)));
-      })
-    );
-  }
-
-  /** Soft clay repairs the golem; the implement opens its head; the program ends the quest. */
   function handleItemOnNpc(event) {
     const npcId = event.npcId ?? event.target?.getId?.();
-    if (!GOLEM_NPC_IDS.has(npcId)) return;
+    // Every item-on-NPC hook runs; Shadow of the Storm registers first and takes the implement
+    // in its own stages.
+    if (event.handled || !GOLEM_NPC_IDS.has(npcId)) return;
     const { player } = event;
-    if (event.itemId === SOFT_CLAY_ITEM_ID) {
-      event.handled = true;
-      repairGolem(player, npcId);
+    event.handled = true;
+    if (event.itemId === SOFT_CLAY_ITEM_ID && repairGolem(player, GOLEM_NPC_ID)) return;
+    if (event.itemId === STRANGE_IMPLEMENT_ITEM_ID && useImplement(player)) return;
+    if (event.itemId === PROGRAM_ITEM_ID && useProgram(player, GOLEM_NPC_ID)) return;
+    // Anything else, as the statuette at tick 1081 (the engine has no item-on-NPC default).
+    player.sendMessage("Nothing interesting happens.");
+  }
+
+  // --- Making the program ------------------------------------------------------------------------
+
+  /** Converts the clicked copy in place, keeping its slot. */
+  function convert(player, fromId, toId) {
+    const items = inventory(player).getItems?.() ?? [];
+    const slot = items.findIndex((item) => item?.getId() === fromId);
+    if (slot >= 0 && typeof items[slot].setId === "function") {
+      items[slot].setId(toId);
+      inventory(player).refreshItems?.();
       return;
     }
-    if (event.itemId === CLAY_ITEM_ID) {
-      event.handled = true;
-      player.sendMessage("The clay is not soft enough to stick to the golem.");
-      return;
-    }
-    if (event.itemId === STRANGE_IMPLEMENT_ITEM_ID) {
-      event.handled = true;
-      if (player.getAttribute(HEAD_OPEN_ATTRIBUTE)) {
-        player.sendMessage("The golem's head is already open.");
-        return;
-      }
-      openGolemHead(player, npcId);
-      return;
-    }
-    if (event.itemId === PROGRAM_ITEM_ID) {
-      event.handled = true;
-      if (!player.getAttribute(HEAD_OPEN_ATTRIBUTE)) {
-        player.sendMessage("You can't see a way to put the instructions in the golem's skull.");
-        return;
-      }
-      if (quest.isComplete(player)) {
-        player.sendMessage("You have already reprogrammed the golem.");
-        return;
-      }
-      if (quest.getStage(player) < STAGE_CONVINCE_GOLEM) return;
-      player.getInventory().deleteNumber(PROGRAM_ITEM_ID, 1);
-      startTranscript(
-        api,
-        player,
-        npcId,
-        PAGE,
-        "returning-to-uzer-after-using-the-strange-implement-on-the-golem-in-uzer-and-adding-the-new-instructions"
-      );
-      completeWhenDialogueEnds(player, 100);
-    }
+    inventory(player).deleteNumber(fromId, 1);
+    inventory(player).adds(toId, 1);
   }
 
   function handleItemOnItem(event) {
     const { player } = event;
     const ids = [event.usedItemId, event.usedWithItemId];
-    const has = (itemId) => ids.includes(itemId);
-    if (has(MUSHROOM_ITEM_ID) && has(PESTLE_ITEM_ID)) {
+    const pair = (a, b) => ids.includes(a) && ids.includes(b);
+    // The pestle on the mushroom (black dye) is Land of the Goblins' (it registers first), for everyone.
+    if (pair(INK_ITEM_ID, FEATHER_ITEM_ID)) {
       event.handled = true;
-      if (!held(player, MUSHROOM_ITEM_ID)) return;
-      player.getInventory().deleteNumber(MUSHROOM_ITEM_ID, 1);
-      if (!held(player, VIAL_ITEM_ID)) {
-        player.sendMessage("You crush the mushroom, but you have no vial to put the dye in and it goes everywhere!");
-        return;
-      }
-      // In place (setId keeps the vial's meta: a preset vial gives preset ink).
-      const converted = player.getInventory().getItems?.().find((item) => item?.getId() === VIAL_ITEM_ID);
-      if (converted) converted.setId(INK_ITEM_ID);
-      else { player.getInventory().deleteNumber(VIAL_ITEM_ID, 1); player.getInventory().adds(INK_ITEM_ID, 1); }
-      player.getInventory().refreshItems?.();
-      player.sendMessage("You crush the mushroom and pour the juice into a vial.");
+      // Tick 1388: the feather becomes the pen; the dye is not used up.
+      convert(player, FEATHER_ITEM_ID, QUILL_ITEM_ID);
+      itemBox(player, QUILL_ITEM_ID, "You dip the phoenix feather into the dye.");
       return;
     }
-    if (has(INK_ITEM_ID) && has(FEATHER_ITEM_ID)) {
-      event.handled = true;
-      player.getInventory().deleteNumber(INK_ITEM_ID, 1);
-      player.getInventory().deleteNumber(FEATHER_ITEM_ID, 1);
-      player.getInventory().adds(QUILL_ITEM_ID, 1);
-      player.sendMessage("You dip the phoenix feather into the dye.");
-      return;
-    }
-    if (has(PAPYRUS_ITEM_ID) && has(FEATHER_ITEM_ID)) {
+    if (pair(PAPYRUS_ITEM_ID, FEATHER_ITEM_ID)) {
       event.handled = true;
       player.sendMessage("You will need some kind of ink to write with.");
       return;
     }
-    if (has(PAPYRUS_ITEM_ID) && has(QUILL_ITEM_ID)) {
+    if (pair(PAPYRUS_ITEM_ID, QUILL_ITEM_ID)) {
       event.handled = true;
-      if (quest.getStage(player) !== STAGE_CONVINCE_GOLEM) {
-        player.sendMessage("You don't know what to write.");
-        return;
-      }
-      player.getInventory().deleteNumber(PAPYRUS_ITEM_ID, 1);
-      player.getInventory().adds(PROGRAM_ITEM_ID, 1);
-      player.sendMessage("You write on the papyrus: YOUR TASK IS DONE");
+      writeProgram(player);
     }
   }
 
+  /** Tick 1405 -> 1406: one tick, the papyrus becomes the program; the pen is kept. */
+  function writeProgram(player) {
+    if (stageOf(player) < STAGE_DEMON_DEAD) {
+      player.sendMessage("You don't know what to write.");
+      return;
+    }
+    if (level(player, Skill.CRAFTING) < CRAFTING_LEVEL) {
+      // Ours: the Wiki gives the level (boostable), not the refusal.
+      player.sendMessage(`You need a Crafting level of ${CRAFTING_LEVEL} to write the program.`);
+      return;
+    }
+    schedule(player, 1, () => {
+      if (!held(player, PAPYRUS_ITEM_ID) || !held(player, QUILL_ITEM_ID)) return;
+      convert(player, PAPYRUS_ITEM_ID, PROGRAM_ITEM_ID);
+      itemBox(player, PROGRAM_ITEM_ID, "You write on the papyrus:<br>YOUR TASK IS DONE");
+    });
+  }
+
+  // --- The museum --------------------------------------------------------------------------------
+
   /**
-   * Study on display 30. Interface and components are the cache's (vm_timeline, 534). The packets
-   * follow rsprox 1723 tick 14869, Study on the sibling digsite display (528), as no capture opens
-   * 534. The model is that of the loc variant shown (24627, or vm_timeline_no_display). The wording
-   * is the Wiki's; how its paragraphs are split on the interface is inferred.
+   * Study on display 30. Interface and components are the cache's (vm_timeline, 534), as captured
+   * at ticks 670 and 680: the text, then the number, then the model of the case as it stands.
    */
   function studyDisplayCase(player) {
     const stolen = Boolean(player.getAttribute(RETRIEVED_ATTRIBUTE));
@@ -666,7 +742,7 @@ module.exports = function registerTheGolemQuest(api) {
     const model = (TIMELINE_GROUP << 16) | (stolen ? TIMELINE_EMPTY_MODEL : TIMELINE_STATUE_MODEL);
     const sender = player.getPacketSender();
     sender.sendVarbit(BUSY_VARBIT, 1);
-    player.performAnimation(new api.core.Animation(STUDY_SEQUENCE));
+    player.performAnimation(new Animation(STUDY_SEQUENCE));
     sender.sendString(text, (TIMELINE_GROUP << 16) | TIMELINE_TEXT);
     sender.sendString(CASE_NUMBER, (TIMELINE_GROUP << 16) | TIMELINE_NUMBER);
     sender.sendInterfaceRawModel(model, stolen ? CASE_EMPTY_MODEL_ID : CASE_STATUE_MODEL_ID);
@@ -679,169 +755,212 @@ module.exports = function registerTheGolemQuest(api) {
     player.getPacketSender().sendInterfaceRemoval();
   }
 
-  function handleInterfaceClosed({ player, interfaceId }) {
-    if (interfaceId === TIMELINE_GROUP) player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
-  }
-
-  function openDisplayCase(player) {
-    if (player.getAttribute(RETRIEVED_ATTRIBUTE) || held(player, STATUETTE_ITEM_ID)) {
+  /** Ticks 676-679 (Open) and 758-761 (the key on the emptied case): the statuette, then its box. */
+  function retrieveStatuette(player) {
+    if (held(player, STATUETTE_ITEM_ID)) {
       player.sendMessage("You have already taken the statuette.");
       return;
     }
-    if (player.getInventory().isFull()) {
-      player.sendMessage("You do not have enough space for the statuette in your backpack.");
-      return;
+    if (!player.getAttribute(RETRIEVED_ATTRIBUTE)) {
+      player.setAttribute(RETRIEVED_ATTRIBUTE, true);
+      setVarbit(player, VARBIT_RETRIEVED_STATUETTE, 1);
     }
-    player.setAttribute(RETRIEVED_ATTRIBUTE, true);
-    setVarbit(player, VARBIT_RETRIEVED_STATUETTE, 1);
-    player.getInventory().adds(STATUETTE_ITEM_ID, 1);
-    player.sendMessage("You open the cabinet and retrieve the statuette.");
+    giveOrDrop(player, STATUETTE_ITEM_ID);
+    schedule(player, CASE_BOX_TICKS, () => itemBox(player, STATUETTE_ITEM_ID, "You open the cabinet and retrieve the statuette."));
   }
 
-  /** Statuette into an alcove, or hammer and chisel on the gem-encrusted throne. */
-  function handleItemOnObject(event) {
-    if (event.itemId === STATUETTE_ITEM_ID && ALCOVE_OBJECT_IDS.has(event.objectId)) {
-      event.handled = true;
-      const { player } = event;
-      const alcove = alcoveAt(event);
-      if (!alcove || alcove.slot !== 3) {
-        player.sendMessage("There is already a statuette in this alcove.");
-        return;
-      }
-      if (quest.getStage(player) >= STAGE_STATUETTE_REPLACED) {
-        startTranscript(api, player, GOLEM_CHAT_HEAD, PAGE, "returning-to-uzer-using-statuette-on-alcove");
-        return;
-      }
-      if (!held(player, STATUETTE_ITEM_ID)) return;
-      player.getInventory().deleteNumber(STATUETTE_ITEM_ID, 1);
-      // 1 is a valid facing for the missing fourth statuette; one Turn reaches
-      // the target 2.
-      setStatueValue(player, 3, 1);
-      setVarbit(player, VARBIT_STATUETTE_D, 1);
-      startTranscript(api, player, GOLEM_CHAT_HEAD, PAGE, "returning-to-uzer-using-statuette-on-alcove");
-      quest.setStage(player, STAGE_STATUETTE_REPLACED);
+  function openDisplayCase(player) {
+    if (!held(player, CABINET_KEY_ITEM_ID)) {
+      player.sendMessage("The cabinet is locked.");
       return;
     }
-    if (event.itemId === CABINET_KEY_ITEM_ID && DISPLAY_CASE_IDS.has(event.objectId)) {
-      event.handled = true;
-      openDisplayCase(event.player);
+    retrieveStatuette(player);
+  }
+
+  /** Tick 649 -> 651: the key, once the curator has told the player where the statuette is. */
+  function pickCuratorPocket(event) {
+    const { player } = event;
+    if (stageOf(player) !== STAGE_FIND_STATUETTE || ownsKey(player)) {
+      // Ours past the statuette step: the Wiki's line for the step before it.
+      player.sendMessage("The curator doesn't seem to have anything of value.");
       return;
     }
-    if (
-      (event.itemId === HAMMER_ITEM_ID || event.itemId === CHISEL_ITEM_ID) &&
-      THRONE_IDS.has(event.objectId)
-    ) {
-      event.handled = true;
-      const { player } = event;
-      if (player.getAttribute(THRONE_GEMS_ATTRIBUTE)) {
-        player.sendMessage("You have already removed the gems from the throne.");
-        return;
-      }
-      if (!held(player, HAMMER_ITEM_ID) || !held(player, CHISEL_ITEM_ID)) {
-        player.sendMessage("You'll need a chisel as well as a hammer to get the gems.");
-        return;
-      }
-      if (freeSlots(player) < 6) {
-        player.sendMessage("You don't have enough free space to remove all six gems.");
-        return;
-      }
-      player.setAttribute(THRONE_GEMS_ATTRIBUTE, true);
-      setVarbit(player, VARBIT_THRONE_GEMS, 1);
-      player.getInventory().adds(RUBY_ITEM_ID, 2);
-      player.getInventory().adds(EMERALD_ITEM_ID, 2);
-      player.getInventory().adds(SAPPHIRE_ITEM_ID, 2);
-      player.sendMessage("You prise the gems from the demon's throne.");
+    if (level(player, Skill.THIEVING) < THIEVING_LEVEL) {
+      // Ours: the pickpocketing plugin's refusal wording.
+      messageBox(player, `You need level ${THIEVING_LEVEL} thieving to pick the curator's pocket.`);
+      return;
     }
+    player.performAnimation(new Animation(SEQ_PICKPOCKET));
+    player.getPacketSender().sendSound(SOUND_PICK, 1, 10);
+    giveOrDrop(player, CABINET_KEY_ITEM_ID);
+    // The capture's box reads "You pick the curator's pocket and steal a key." (tick 651, and local
+    // recording 1001607); the Wiki transcript's wording is kept.
+    itemBox(player, CABINET_KEY_ITEM_ID, "You steal a tiny key.");
+  }
+
+  /** Wiki: only one copy of the key can be obtained. */
+  function ownsKey(player) {
+    const holds = (container) => container?.getItems?.().some((item) => item?.getId?.() === CABINET_KEY_ITEM_ID && item.getAmount() > 0);
+    if (holds(inventory(player))) return true;
+    const tabs = api.core.Bank?.TOTAL_BANK_TABS ?? 0;
+    for (let tab = 0; tab < tabs; tab++) if (holds(player.getBank?.(tab))) return true;
+    return false;
+  }
+
+  // --- The temple --------------------------------------------------------------------------------
+
+  /** Tick 1100 -> 1102: the statuette goes into the empty alcove, facing left. */
+  function insertStatuette(event) {
+    const { player } = event;
+    const alcove = alcoveAt(event);
+    if (alcove !== ALCOVE_D || statueValue(player, ALCOVE_D.slot) !== 0 || stageOf(player) !== STAGE_FIND_STATUETTE) {
+      player.sendMessage("There is already a statuette in the alcove.");
+      return;
+    }
+    inventory(player).deleteNumber(STATUETTE_ITEM_ID, 1);
+    player.sendMessage("You insert the statuette into the alcove.");
+    setStatueValue(player, ALCOVE_D.slot, 1);
+    quest.setStage(player, STAGE_STATUETTE_REPLACED);
   }
 
   /**
-   * Turn the clicked statuette. A/B/C toggle between the two facings (0 right,
-   * 1 left); D cycles between left and right once placed. The door opens on
-   * a=1, b=1, c=0, d=2, exactly the Quest Helper varbit predicates.
+   * Ticks 1169-1184. A-C turn between right (0) and left (1); the placed one between left (1) and
+   * right (2). Once they face a=1 b=1 c=0 d=2 the door grinds open and they lock.
    */
   function turnStatuette(player, alcove) {
-    const stage = quest.getStage(player);
-    if (stage >= STAGE_PORTAL_OPENED) {
+    if (stageOf(player) >= STAGE_PORTAL_OPENED) {
       player.sendMessage("The statuette is now locked in place.");
       return;
     }
-    const current = varbit(player, alcove.bit);
-    // The three standing statuettes can be turned before the fourth is
-    // recovered; only the empty alcove reports a missing statuette.
-    if (alcove.slot === 3 && (current === 0 || current === 3)) {
-      player.sendMessage("The statuette is missing from this alcove.");
-      return;
-    }
-    const next = alcove.slot === 3 ? (current === 1 ? 2 : 1) : (current === 1 ? 0 : 1);
-    setVarbit(player, alcove.bit, next);
+    const current = statueValue(player, alcove.slot);
+    // The empty alcove (6309) has no Turn on live.
+    if (alcove === ALCOVE_D && (current === 0 || current === 3)) return;
+    const next = alcove === ALCOVE_D ? (current === 1 ? 2 : 1) : (current === 1 ? 0 : 1);
     setStatueValue(player, alcove.slot, next);
-    player.sendMessage(`You turn the statuette to the ${next === 1 ? "left" : "right"}.`);
-    const solved = ALCOVES.every((entry) => varbit(player, entry.bit) === entry.target);
-    if (solved) {
-      player.sendMessage("The door grinds open.");
-      quest.setStage(player, STAGE_PORTAL_OPENED);
-    }
+    const left = alcove === ALCOVE_D ? next === 1 : next === 1;
+    player.sendMessage(`You turn the statuette to the ${left ? "left" : "right"}.`);
+    player.getPacketSender().sendSound(SOUND_TURN_STATUE, 1, 0);
+    const solved = stageOf(player) === STAGE_STATUETTE_REPLACED
+      && ALCOVES.every((entry) => statueValue(player, entry.slot) === entry.target);
+    if (!solved) return;
+    quest.setStage(player, STAGE_PORTAL_OPENED);
+    player.sendMessage("The door grinds open.");
+    const door = templeDoor();
+    if (door) player.getPacketSender().sendObjectAnimation(door, new Animation(LOC_ANIM_DOOR_OPEN));
+    player.getPacketSender().sendSound(SOUND_DEMON_DOOR, 1, 0);
   }
 
-  /** The temple door is the same loc before and after the statuettes open it. */
+  function templeDoor() {
+    const tile = new Location(TEMPLE_DOOR_TILE.x, TEMPLE_DOOR_TILE.y, TEMPLE_DOOR_TILE.z);
+    return api.core.MapObjects?.getObjectsAt?.(tile, null)?.find((object) => TEMPLE_DOOR_OBJECT_IDS.has(object.getId())) ?? null;
+  }
+
+  /** Ticks 1105-1112 (shut) and 1190-1195 (open): the door, then the throne room on plane 2. */
   function useTempleDoor(player) {
-    if (quest.getStage(player) < STAGE_PORTAL_OPENED) {
+    const stage = stageOf(player);
+    if (stage < STAGE_PORTAL_OPENED) {
       player.sendMessage("You can't find any way to open the door.");
       return;
     }
-    // 6310 is the temple portal; the throne room is map plane 2 through 6282.
-    player.moveTo(new Location(THRONE_ROOM_TILE.x, THRONE_ROOM_TILE.y, THRONE_ROOM_TILE.z));
-    startTranscript(api, player, GOLEM_CHAT_HEAD, PAGE, "returning-to-uzer-entering-the-portal");
-    markFirstEntry(player);
+    spam(player, "You step into the portal.");
+    if (stage === STAGE_PORTAL_OPENED) {
+      quest.setStage(player, STAGE_DEMON_DEAD);
+      player.sendMessage("This room is dominated by a colossal horned skeleton!");
+    }
+    player.moveTo(new Location(THRONE_ROOM_LANDING.x, THRONE_ROOM_LANDING.y, THRONE_ROOM_LANDING.z));
   }
 
-  /** Doors owns the generic "Door" name hook, so claim the temple door first. */
+  /** Doors owns the generic "Door" name hook; claim the temple door before it does. */
   function handleDoorToggle(event) {
-    if (event.objectId !== TEMPLE_DOOR_OBJECT_ID) return;
-    // Shadow of the Storm owns this portal after The Golem is complete.
-    const stage = quest.getStage(event.player);
-    if (stage < STAGE_REPAIR_GOLEM || stage >= STAGE_COMPLETE) return;
+    if (event.handled || !TEMPLE_DOOR_OBJECT_IDS.has(event.objectId)) return;
+    if (!atTile(event, TEMPLE_DOOR_TILE)) return;
     event.handled = true;
     useTempleDoor(event.player);
   }
 
-  /** Recorded pick (rsprox 226/01694, 235/03333, 241/911592): pick anim, sound 2581, then an item box. */
+  /** Tick 1230: hammer and chisel take two of each gem from the throne. */
+  function prisGems(player) {
+    if (!held(player, HAMMER_ITEM_ID) || !held(player, CHISEL_ITEM_ID)) {
+      player.sendMessage("You'll need a chisel as well as a hammer to get the gems.");
+      return;
+    }
+    if (freeSlots(player) < THRONE_GEMS.length * 2) {
+      // Ours: the Wiki and the capture have no full-inventory case.
+      player.sendMessage("You don't have enough inventory space.");
+      return;
+    }
+    player.setAttribute(THRONE_GEMS_ATTRIBUTE, true);
+    setVarbit(player, VARBIT_THRONE_GEMS, 1);
+    player.performAnimation(new Animation(SEQ_PICKPOCKET));
+    player.getPacketSender().sendSound(SOUND_PICK, 1, 0);
+    for (const gem of THRONE_GEMS) inventory(player).adds(gem, 2);
+    itemBox(player, THRONE_GEMS[0], "You prise the gems from the demon's throne.");
+  }
+
+  function handleItemOnObject(event) {
+    if (event.handled) return;
+    const { player } = event;
+    if (event.itemId === STATUETTE_ITEM_ID && ALCOVE_OBJECT_IDS.has(event.objectId)) {
+      event.handled = true;
+      insertStatuette(event);
+      return;
+    }
+    if (event.itemId === CABINET_KEY_ITEM_ID && DISPLAY_CASE_IDS.has(event.objectId)) {
+      event.handled = true;
+      retrieveStatuette(player);
+      return;
+    }
+    if ((event.itemId === HAMMER_ITEM_ID || event.itemId === CHISEL_ITEM_ID) && THRONE_IDS.has(event.objectId)
+      && atTile(event, THRONE_TILE) && !player.getAttribute(THRONE_GEMS_ATTRIBUTE)) {
+      event.handled = true;
+      prisGems(player);
+    }
+  }
+
+  /** Recorded pick (rsprox 226/01694, 235/03333, 241/911592, 242 tick 1283): animation, sound, item box. */
   function pickMushroomBox(player) {
-    const { Animation, CacheDefinitions, DialogueChainBuilder, ItemStatementDialogue } = api.core;
+    const { CacheDefinitions } = api.core;
     player.performAnimation(new Animation(CacheDefinitions.getSeqId("human_pickuptable")));
-    player.getPacketSender().sendSound(2581, 1, 0);
-    player.getDialogueManager().startDialogues(
-      new DialogueChainBuilder().add(new ItemStatementDialogue(0, MUSHROOM_ITEM_ID, "You pick a mushroom.")));
+    player.getPacketSender().sendSound(SOUND_PICK, 1, 0);
+    itemBox(player, MUSHROOM_ITEM_ID, "You pick a mushroom.");
+  }
+
+  /** Ticks 463-479: the search line, then the find two ticks later. */
+  function searchBookcase(player) {
+    player.sendMessage("You search the bookcase...");
+    schedule(player, BOOKCASE_SEARCH_TICKS, () => {
+      if (held(player, NOTES_ITEM_ID)) {
+        player.sendMessage("You already have Varmen's expedition notes, so you find nothing of interest.");
+        return;
+      }
+      giveOrDrop(player, NOTES_ITEM_ID);
+      itemBox(player, NOTES_ITEM_ID, "You find Varmen's expedition notes.");
+    });
+  }
+
+  function interactionOption(event) {
+    return String(event.option ?? event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
   }
 
   function handleObjectInteraction(event) {
+    if (event.handled) return;
     const { player, objectId } = event;
     if (objectId === MUSHROOM_OBJECT_ID) {
       event.handled = true;
-      if (!held(player, MUSHROOM_ITEM_ID)) player.getInventory().adds(MUSHROOM_ITEM_ID, 1);
+      if (!held(player, MUSHROOM_ITEM_ID)) inventory(player).adds(MUSHROOM_ITEM_ID, 1);
       pickMushroomBox(player);
       return;
     }
     if (objectId === BOOKCASE_OBJECT_ID) {
+      // Elsewhere, or before Elissa names it, it is the world's ordinary bookcase.
+      if (!atTile(event, BOOKCASE_TILE)) return;
+      if (letterProgress(player) < ELISSA_TOLD && !quest.isComplete(player)) return;
       event.handled = true;
-      const location = event.location;
-      if (location && (Math.abs(location.x - BOOKCASE_TILE.x) > 2 || Math.abs(location.y - BOOKCASE_TILE.y) > 2)) {
-        player.sendMessage("You search the bookcase.");
-        return;
-      }
-      if (letterProgress(player) < 2) {
-        player.sendMessage("You search the bookcase, but find nothing useful.");
-        return;
-      }
-      player.sendMessage("You search the bookcase...");
-      if (!held(player, NOTES_ITEM_ID)) {
-        player.getInventory().adds(NOTES_ITEM_ID, 1);
-        player.sendMessage("You find Varmen's expedition notes.");
-      }
+      searchBookcase(player);
       return;
     }
     if (DISPLAY_CASE_IDS.has(objectId)) {
-      const option = String(event.definition?.getInteractions?.()?.[event.clickType - 1] ?? "").toLowerCase();
+      const option = interactionOption(event);
       if (option.includes("study")) {
         event.handled = true;
         studyDisplayCase(player);
@@ -849,108 +968,74 @@ module.exports = function registerTheGolemQuest(api) {
       }
       if (!option.includes("open")) return;
       event.handled = true;
-      if (!held(player, CABINET_KEY_ITEM_ID)) {
-        player.sendMessage("The cabinet is locked.");
-        return;
-      }
       openDisplayCase(player);
       return;
     }
     if (ALCOVE_OBJECT_IDS.has(objectId)) {
-      event.handled = true;
       const alcove = alcoveAt(event);
       if (!alcove) return;
+      event.handled = true;
       turnStatuette(player, alcove);
       return;
     }
-    if (objectId === TEMPLE_DOOR_OBJECT_ID) {
-      const stage = quest.getStage(player);
-      if (stage < STAGE_REPAIR_GOLEM || stage >= STAGE_COMPLETE) return;
+    if (TEMPLE_DOOR_OBJECT_IDS.has(objectId) && atTile(event, TEMPLE_DOOR_TILE)) {
       event.handled = true;
       useTempleDoor(player);
       return;
     }
     if (objectId === SURFACE_STAIRS_OBJECT_ID) {
       event.handled = true;
-      player.moveTo(new api.core.Location(TEMPLE_STAIRS_TILE.x, TEMPLE_STAIRS_TILE.y, TEMPLE_STAIRS_TILE.z));
+      // Tick 128 -> 129: the landing and the first-visit flag on the same tick.
+      markSeenUnderground(player);
+      player.moveTo(new Location(TEMPLE_LANDING.x, TEMPLE_LANDING.y, TEMPLE_LANDING.z));
       return;
     }
     if (objectId === TEMPLE_STAIRS_OBJECT_ID) {
       event.handled = true;
-      player.moveTo(new api.core.Location(SURFACE_STAIRS_TILE.x, SURFACE_STAIRS_TILE.y, SURFACE_STAIRS_TILE.z));
+      player.moveTo(new Location(SURFACE_LANDING.x, SURFACE_LANDING.y, SURFACE_LANDING.z));
       return;
     }
-    if (objectId === DEMON_PORTAL_OBJECT_ID) {
-      const stage = quest.getStage(player);
-      if (stage < STAGE_DEMON_DEAD || stage >= STAGE_COMPLETE) return;
+    if (objectId === DEMON_PORTAL_OBJECT_ID && atTile(event, DEMON_PORTAL_TILE)) {
       event.handled = true;
-      player.sendMessage("You step into the portal.");
-      player.moveTo(new Location(2721, 4911, 0));
+      spam(player, "You step into the portal.");
+      player.moveTo(new Location(DOOR_LANDING.x, DOOR_LANDING.y, DOOR_LANDING.z));
     }
   }
 
-  /** Pickpocketing the curator needs the statuette lead and 25 Thieving. */
+  /** The first visit below the ruins sets seen_underground (tick 129). */
+  function markSeenUnderground(player) {
+    if (player.getAttribute(SEEN_ATTRIBUTE)) return;
+    player.setAttribute(SEEN_ATTRIBUTE, true);
+    setVarbit(player, VARBIT_SEEN_UNDERGROUND, 1);
+  }
+
   function handleNpcInteraction(event) {
     const { player } = event;
     const actions = event.definition?.getActions?.() ?? [];
     const action = String(actions[event.clickType - 1] ?? "").toLowerCase();
-    // The world's Uzer golem is a transform placeholder (6277 -> 5134...); when
-    // an interaction carries the raw id it is not in the dialogue index, so the
-    // Talk-to variant is replayed here for every handled golem id.
+    // The world's golem (6277) is not in the dialogue index, so its Talk-to plays here. Shadow of
+    // the Storm registers first and claims it in its own stages.
     if (GOLEM_NPC_IDS.has(event.npcId) && action === "talk-to") {
-      const selected = selectVariant({ npcId: event.npcId, player });
-      if (selected) {
-        event.handled = true;
-        startTranscript(api, player, event.npcId, selected.page ?? PAGE, selected.variant ?? selected);
-      }
+      event.handled = true;
+      startTranscript(api, player, GOLEM_NPC_ID, PAGE, golemVariant(player));
       return;
-    }
-    if (event.npcId === CURATOR_NPC_ID && action === "talk-to") {
-      // Capture 3333: the curator conversation moves golem_a from 2 to 3.
-      if (letterProgress(player) >= 3 && quest.getStage(player) < STAGE_FIND_STATUETTE) {
-        quest.setStage(player, STAGE_FIND_STATUETTE);
-      }
-      // Recovery: a lost statuette before it is placed can be handed back.
-      if (
-        player.getAttribute(RETRIEVED_ATTRIBUTE) &&
-        quest.getStage(player) >= STAGE_FIND_STATUETTE &&
-        quest.getStage(player) < STAGE_STATUETTE_REPLACED &&
-        !held(player, STATUETTE_ITEM_ID) &&
-        !player.getInventory().isFull()
-      ) {
-        player.getInventory().adds(STATUETTE_ITEM_ID, 1);
-        player.sendMessage("Curator Haig gives you another statuette from the display case.");
-      }
     }
     if (event.npcId === CURATOR_NPC_ID && action === "pickpocket") {
       event.handled = true;
-      if (letterProgress(player) < 3) {
-        player.sendMessage("The curator doesn't seem to have anything of value.");
-        return;
-      }
-      if (quest.getStage(player) < STAGE_FIND_STATUETTE) quest.setStage(player, STAGE_FIND_STATUETTE);
-      if (held(player, CABINET_KEY_ITEM_ID) || player.getAttribute(RETRIEVED_ATTRIBUTE)) {
-        player.sendMessage("You have already taken the display cabinet key.");
-        return;
-      }
-      if (thiefLevel(player) < THIEVING_LEVEL) {
-        player.sendMessage("You need level 25 Thieving to pickpocket the curator.");
-        return;
-      }
-      player.getInventory().adds(CABINET_KEY_ITEM_ID, 1);
-      player.sendMessage("You pickpocket the curator and take the display cabinet key.");
-      return;
+      pickCuratorPocket(event);
     }
   }
 
   function handleLogin({ player }) {
     refreshQuestList(player);
-    // Recovery: a logout during the two-tick close must not leave the skull open.
-    if (quest.isComplete(player) && player.getAttribute(HEAD_OPEN_ATTRIBUTE)) {
-      closeGolemHead(player);
-    }
+    // The skull is open for the session only.
+    if (headOpen(player)) player.setAttribute(HEAD_OPEN_ATTRIBUTE, false);
     syncGolemVarbits(player);
     ensureQuestItemSpawns(player);
+  }
+
+  function handleLogout({ player }) {
+    reprogramming.delete(player);
   }
 
   function handleZoneEnter({ player }) {
@@ -964,13 +1049,12 @@ module.exports = function registerTheGolemQuest(api) {
     ensureQuestItemSpawns(player);
   }
 
-  api.persistAttribute(LETTER_ATTRIBUTE);
-  api.persistAttribute(CLAY_ATTRIBUTE);
-  api.persistAttribute(STATUE_ATTRIBUTE);
-  api.persistAttribute(THRONE_GEMS_ATTRIBUTE);
-  api.persistAttribute(RETRIEVED_ATTRIBUTE);
-  api.persistAttribute(SEEN_ATTRIBUTE);
-  api.persistAttribute(HEAD_OPEN_ATTRIBUTE);
+  api.persistAttribute(LETTER_ATTRIBUTE, 0);
+  api.persistAttribute(CLAY_ATTRIBUTE, 0);
+  api.persistAttribute(STATUE_ATTRIBUTE, 0);
+  api.persistAttribute(THRONE_GEMS_ATTRIBUTE, false);
+  api.persistAttribute(RETRIEVED_ATTRIBUTE, false);
+  api.persistAttribute(SEEN_ATTRIBUTE, false);
 
   quest = registerQuest(api, {
     key: "the_golem",
@@ -985,15 +1069,16 @@ module.exports = function registerTheGolemQuest(api) {
       { skillId: Skill.THIEVING.getIndex(), amount: 1000, label: "Thieving" },
     ],
     scrollItemId: STATUETTE_ITEM_ID,
+    scrollItemPosition: [78, 126], // tick 1438
     buildJournal,
     onReward: grantReward,
   });
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);
+  api.onCustomEvent("the-golem:curator-step", answerCuratorStep);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
-  api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onItemAction(handleItemAction);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);
@@ -1004,6 +1089,7 @@ module.exports = function registerTheGolemQuest(api) {
   api.onCustomEvent("door:toggle", handleDoorToggle);
   api.onNpcInteraction(handleNpcInteraction);
   api.onPlayerLogin(handleLogin);
+  api.onPlayerLogout(handleLogout);
   api.onZoneEnter(UZER_SURFACE_ZONE, handleZoneEnter);
   api.onZoneEnter(UZER_RUINS_ZONE, handleRuinsZoneEnter);
 };

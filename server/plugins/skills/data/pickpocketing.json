@@ -142,7 +142,7 @@
       "stunTogether": true,
       "lootTracker": false,
       "single": true,
-      "owned": {"ids": [4621], "line": "You already have a phoenix tail-feather."},
+      "owned": {"ids": [4621, 4623], "line": "You already have a phoenix tail-feather."},
       "level": 25,
       "xp": 26,
       "stunDamage": 1,

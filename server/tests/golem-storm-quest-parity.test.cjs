@@ -185,97 +185,8 @@ function setup(register, options = {}) {
     setLocation(x, y, z = 0) { location = new core.Location(x, y, z); } };
 }
 
-test('The Golem: clay morphs, item sources, gated bookcase and per-alcove varbits', () => {
-  const h = setup((api) => require('../plugins/quests/quests/TheGolem.Quest')(api));
-  const I = h.core.ItemIdentifiers;
-  h.quest.setStage(h.player, 1);
-  for (const login of h.hooks.login) login({ player: h.player });
-  assert.ok(h.ground.some((item) => item.id === I.LETTER_2), 'letter floor spawn');
-  assert.ok(h.ground.some((item) => item.id === I.STRANGE_IMPLEMENT), 'implement floor spawn');
-
-  h.inventory.set(I.SOFT_CLAY, 4);
-  for (let clay = 1; clay <= 4; clay++) {
-    h.hooks.itemOnNpc[0]({ player: h.player, npcId: 6277, itemId: I.SOFT_CLAY });
-    assert.equal(h.varbits.get(348), clay, 'golem_clay drives the NPC transform');
-  }
-  h.emit('npc-dialogue:action', { npcId: 6277, stepId: 'qjXp0f' });
-  assert.equal(h.quest.getStage(h.player), 2);
-
-  h.inventory.set(I.LETTER_2, 1);
-  h.hooks.itemActions[0]({ player: h.player, itemId: I.LETTER_2, option: 'Read' });
-  assert.equal(h.varbits.get(347), 1);
-  h.emit('npc-dialogue:line', { npcId: h.core.NpcIdentifiers.ELISSA, text: 'The notes he made are in the library.' });
-  assert.equal(h.varbits.get(347), 2);
-  for (const enter of h.hooks.zoneEnter) enter({ player: h.player });
-  assert.equal(h.varbits.get(356), 1, 'first ruin entry sets seen_underground');
-
-  h.hooks.objects[0]({ player: h.player, objectId: 6292, location: new h.core.Location(3200, 3200, 0) });
-  assert.equal(h.inventory.get(I.VARMENS_NOTES) ?? 0, 0, 'wrong bookcase gives nothing');
-  h.hooks.objects[0]({ player: h.player, objectId: 6292, location: new h.core.Location(3366, 3332, 0) });
-  assert.equal(h.inventory.get(I.VARMENS_NOTES), 1);
-  assert.equal(h.quest.getStage(h.player), 2, 'the bookcase alone does not advance the stage');
-  assert.equal(h.varbits.get(347), 2);
-  h.hooks.itemActions[0]({ player: h.player, itemId: I.VARMENS_NOTES, option: 'Read' });
-  assert.equal(h.varbits.get(347), 3, 'reading the notes sets golem_b 3');
-  for (const npc of h.hooks.npcs) {
-    npc({ player: h.player, npcId: h.core.NpcIdentifiers.CURATOR_HAIG_HALEN, clickType: 1, definition: { getActions: () => ['Talk-to'] } });
-  }
-  assert.equal(h.quest.getStage(h.player), 3, 'the curator conversation advances to find-statuette');
-
-  h.inventory.set(I.DISPLAY_CABINET_KEY, 1);
-  h.hooks.itemOnObject[0]({ player: h.player, itemId: I.DISPLAY_CABINET_KEY, objectId: 24626 });
-  assert.equal(h.inventory.get(I.STATUETTE), 1);
-  assert.equal(h.varbits.get(355), 1, 'museum case opens');
-
-  // A standing statuette can be turned before the fourth is placed.
-  h.hooks.objects[0]({ player: h.player, objectId: 6303, location: new h.core.Location(2718, 4899, 0) });
-  assert.equal(h.varbits.get(349), 1);
-  h.hooks.objects[0]({ player: h.player, objectId: 6303, location: new h.core.Location(2718, 4899, 0) });
-  assert.equal(h.varbits.get(349), 0, 'an extra turn reverses the facing');
-  h.hooks.objects[0]({ player: h.player, objectId: 6303, location: new h.core.Location(2718, 4899, 0) });
-
-  h.hooks.itemOnObject[0]({ player: h.player, itemId: I.STATUETTE, objectId: 6306, location: new h.core.Location(2725, 4896, 0) });
-  assert.equal(h.varbits.get(352), 1, 'placed statuette starts facing left');
-  assert.equal(h.quest.getStage(h.player), 4);
-
-  h.hooks.objects[0]({ player: h.player, objectId: 6304, location: new h.core.Location(2718, 4896, 0) });
-  assert.equal(h.varbits.get(349), 1);
-  assert.equal(h.varbits.get(350), 1);
-  assert.equal(h.varbits.get(351), 0, 'C is already facing right');
-  assert.equal(h.quest.getStage(h.player), 4);
-  h.hooks.objects[0]({ player: h.player, objectId: 6306, location: new h.core.Location(2725, 4896, 0) });
-  assert.equal(h.varbits.get(352), 2);
-  assert.equal(h.quest.getStage(h.player), 5, 'a=1 b=1 c=0 d=2 opens the door');
-
-  h.hooks.objects[0]({ player: h.player, objectId: 6310, location: new h.core.Location(2720, 4912, 0) });
-  assert.equal(h.player.getLocation().z, 2, 'portal moves into the throne room');
-  assert.equal(h.varbits.get(356), 1);
-  assert.equal(h.quest.getStage(h.player), 6);
-
-  // Capture 3333 keeps head_open through the program dialogue and clears it
-  // two ticks after completion.
-  h.quest.setStage(h.player, 7);
-  h.inventory.set(I.STRANGE_IMPLEMENT, 1);
-  h.hooks.itemOnNpc[0]({ player: h.player, npcId: 6277, itemId: I.STRANGE_IMPLEMENT });
-  assert.equal(h.varbits.get(353), 1);
-  h.inventory.set(I.GOLEM_PROGRAM, 1);
-  h.hooks.itemOnNpc[0]({ player: h.player, npcId: 6277, itemId: I.GOLEM_PROGRAM });
-  h.advance();
-  assert.equal(h.quest.getStage(h.player), 10);
-  assert.equal(h.varbits.get(353), 1, 'the skull stays open through completion');
-  h.advance();
-  h.advance();
-  assert.equal(h.varbits.get(353), 0);
-  assert.ok(h.messages.includes("The golem's skull shuts automatically."));
-
-  h.varbits.clear();
-  for (const login of h.hooks.login) login({ player: h.player });
-  assert.equal(h.varbits.get(347), 3);
-  assert.equal(h.varbits.get(348), 4);
-  assert.equal(h.varbits.get(352), 2);
-  assert.equal(h.varbits.get(355), 1);
-  assert.equal(h.varbits.get(356), 1);
-});
+// The Golem's own route (clay, letter, notes, museum, alcoves, door, program) is played through
+// real packets against its revision 242 capture in the-golem-capture.test.cjs.
 
 test('Shadow of the Storm: plane-2 portal, Eric, Tanya cutscene and capture word order', () => {
   const h = setup((api) => require('../plugins/quests/quests/ShadowOfTheStorm.Quest')(api));
@@ -775,6 +686,7 @@ test('The Golem: the curator is released after quest completion', () => {
   const h = setup((api) => require('../plugins/quests/quests/TheGolem.Quest')(api));
   const curator = h.core.NpcIdentifiers.CURATOR_HAIG_HALEN;
   h.quest.setStage(h.player, 3);
+  h.attrs.set('quest.the_golem.letter', 3); // the notes read: the statuette conversation
   assert.ok(h.hooks.variants[0]({ player: h.player, npcId: curator, npc: { getId: () => curator } }));
   h.quest.setStage(h.player, 10);
   assert.equal(h.hooks.variants[0]({ player: h.player, npcId: curator, npc: { getId: () => curator } }), null);

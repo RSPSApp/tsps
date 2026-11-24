@@ -390,8 +390,17 @@ function processPlayer(state, player, api) {
     if (!wasInWilderness) api.emitCustomEvent("persistence:save", { player, reason: "wilderness-entry" });
   } else {
     leaveWilderness(player, facts, wasInWilderness);
+    if (wasInWilderness) emitLeft(api, player);
   }
   state.tiles.set(player, facts);
+}
+
+/**
+ * "wilderness:left" { player }: off Wilderness ground, where items can be lost (Ferox Enclave and
+ * the safe buildings are off it). Walking, teleporting and dying all count; logging out doesn't.
+ */
+function emitLeft(api, player) {
+  api.emitCustomEvent("wilderness:left", { player });
 }
 
 function enterWilderness(player, facts, wasInWilderness) {
@@ -426,11 +435,13 @@ const OFF_PVP_FACTS = Object.freeze({ pvpOverlay: false, safe: false, level: 0, 
 
 // Leaving the area is the exit edge. It is judged off the area, not the tile: an instance can
 // claim a player before moving them, so the tile may still be in the wild.
-function playerLeft(state, player, logout) {
+function playerLeft(api, state, player, logout) {
   const previous = state.tiles.get(player);
   state.tiles.delete(player);
   if (!logout) {
     leaveWilderness(player, OFF_PVP_FACTS, previous?.inWilderness === true);
+    // Into another area: still on Wilderness ground when that area is too (a boss cave).
+    if (previous?.inWilderness === true && tileFactsOf(player)?.inWilderness !== true) emitLeft(api, player);
   }
 }
 
@@ -535,7 +546,7 @@ function wildernessRules(api, state) {
       if (isRealPlayer(mobile)) processPlayer(state, mobile, api);
     },
     postLeave(mobile, logout) {
-      if (isRealPlayer(mobile)) playerLeft(state, mobile, logout);
+      if (isRealPlayer(mobile)) playerLeft(api, state, mobile, logout);
     },
     canAttack,
     canTeleport,

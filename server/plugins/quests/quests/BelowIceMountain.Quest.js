@@ -1925,6 +1925,19 @@ module.exports = function registerBelowIceMountainQuest(api) {
       return true;
     }
     if (!held(player, BREAD_ITEM_ID)) return true;
+    // Breadcrumbs exist only for Pirate Pete's fishcake. Without them there is nothing to choose,
+    // and live makes the sandwich at once (local 1001343, tick 1435); 1636, mid-way through Pirate
+    // Pete, gets the make menu with both.
+    const breadcrumbs = { player, available: false };
+    api.emitCustomEvent("recipe-for-disaster:breadcrumbs", breadcrumbs);
+    if (!breadcrumbs.available) {
+      if (!held(player, COOKED_MEAT_ITEM_ID)) {
+        event.handled = false; // nothing to make: the ordinary knife-on-bread answer stands
+        return false;
+      }
+      makeSandwich(player);
+      return true;
+    }
     // Bread used on the knife preserves its ordinary breadcrumbs action.
     if (usedItemId === BREAD_ITEM_ID) {
       player.getInventory().deleteNumber(BREAD_ITEM_ID, 1);

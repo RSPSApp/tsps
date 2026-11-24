@@ -121,18 +121,31 @@ test('Checkal waits for a nearby real Flex after the workout and prompt', () => 
   h.line(N.CHECKAL, 'Thank you my friend, I will meet you there.').after();
   assert.equal(h.attrs.get(CHECKAL), 40); assert.equal(h.varbits.get(12063), 15);
 });
-test('sandwich recipe requires learning, uses make menu and stays usable after completion', () => {
+test('sandwich recipe requires learning; knife on bread makes it at once, or offers breadcrumbs during Pirate Pete', () => {
   const h = setup(), I = h.core.ItemIdentifiers, recipe = h.hooks.items.find(x => x.second === 'Bread').fn;
   h.quest.setStage(h.player, 1); h.attrs.set(MARLEY, 5);
   for (const id of [I.KNIFE, I.BREAD, I.COOKED_MEAT]) h.inventory.set(id, 2);
-  const event = { player: h.player, usedItemId: I.KNIFE, usedWithItemId: I.BREAD };
-  assert.equal(recipe(event), false);
+  const event = () => ({ player: h.player, usedItemId: I.KNIFE, usedWithItemId: I.BREAD });
+  assert.equal(recipe(event()), false);
   h.line(h.core.NpcIdentifiers.COOK_2, 'Then, you take some bread. I recommend making it fresh.').after();
-  assert.equal(h.varbits.get(12064), 10); assert.equal(recipe(event), true);
-  assert.deepEqual(h.menu().getItems(), [I.BREADCRUMBS, I.STEAK_SANDWICH]); assert.equal(h.inventory.get(I.BREAD), 2);
-  h.menu().execute(I.STEAK_SANDWICH, 1); assert.equal(h.inventory.get(I.STEAK_SANDWICH), 1); assert.equal(h.inventory.get(I.COOKED_MEAT), 1);
+  assert.equal(h.varbits.get(12064), 10);
+  // local 1001343, tick 1435: no Recipe for Disaster, so the sandwich is made with no menu.
+  assert.equal(recipe(event()), true);
+  assert.equal(h.menu(), null);
+  assert.equal(h.inventory.get(I.STEAK_SANDWICH), 1); assert.equal(h.inventory.get(I.BREAD), 1); assert.equal(h.inventory.get(I.COOKED_MEAT), 1);
+  assert.equal(h.animations.at(-1).id, 8938);
   assert.ok(h.messages.includes('You combine the cooked meat and bread to make a Steak sandwich!'));
-  h.quest.setStage(h.player, 5); recipe(event); h.menu().execute(I.STEAK_SANDWICH, 1); assert.equal(h.inventory.get(I.STEAK_SANDWICH), 2);
+  // With no cooked meat there is nothing to make, so the ordinary knife-on-bread answer stands.
+  h.inventory.set(I.COOKED_MEAT, 0);
+  const bare = event(); assert.equal(recipe(bare), false); assert.notEqual(bare.handled, true);
+  h.inventory.set(I.COOKED_MEAT, 1);
+  // 1636, mid-way through Pirate Pete: the make menu offers breadcrumbs too.
+  h.api.onCustomEvent('recipe-for-disaster:breadcrumbs', request => { request.available = true; });
+  assert.equal(recipe(event()), true);
+  assert.deepEqual(h.menu().getItems(), [I.BREADCRUMBS, I.STEAK_SANDWICH]); assert.equal(h.inventory.get(I.BREAD), 1);
+  h.menu().execute(I.STEAK_SANDWICH, 1); assert.equal(h.inventory.get(I.STEAK_SANDWICH), 2); assert.equal(h.inventory.get(I.COOKED_MEAT), 0);
+  h.inventory.set(I.BREAD, 1); h.inventory.set(I.COOKED_MEAT, 1);
+  h.quest.setStage(h.player, 5); recipe(event()); h.menu().execute(I.STEAK_SANDWICH, 1); assert.equal(h.inventory.get(I.STEAK_SANDWICH), 3);
 });
 test('RPS third-round cheat beats the actual shown sign for every player pick', () => {
   const h = setup(), N = h.core.NpcIdentifiers; h.quest.setStage(h.player, 1);

@@ -113,8 +113,11 @@ test("town criers announce only current news; no line is blank; a hit's sound is
   }
 });
 
-test("the Blast Furnace foreman and pre-launch crier banners are left out", () => {
-  assert.equal(chatterById.has(core.CacheDefinitions.getNpcId("blast_furnace_instructor")), false);
+test("the Blast Furnace foreman keeps only his unconditional lines; pre-launch crier banners are left out", () => {
+  const foreman = chatterById.get(core.CacheDefinitions.getNpcId("blast_furnace_instructor"));
+  const said = foreman.lines.map((line) => line.text);
+  assert.ok(said.includes("Work faster!") && said.includes("Keep the temperature controlled."));
+  assert.ok(!said.some((text) => /^Somebody (fix|refuel)/.test(text)), "repair calls follow the machinery");
   for (const name of ["pmod_town_crier_draynor", "pmod_town_crier_varrock", "pmod_town_crier_east_ardoyne"]) {
     const texts = chatterById.get(core.CacheDefinitions.getNpcId(name)).lines.map((line) => line.text);
     assert.ok(texts.includes("Hardcore Worlds are now live!"), name);
@@ -143,6 +146,53 @@ test("a town crier alternates ringing his bell and scratching his head, as live 
   assert.ok(sounds.length > 0 && sounds.length < crier.said.length, "only the head scratch has an area sound");
   assert.ok(sounds.every((sound) => sound.soundId === 3816));
   assert.deepEqual(gestureFor({ text: "x", seq: 5, weight: 1 }), { text: "x", seq: 5, weight: 1 }, "a line's own gesture");
+});
+
+test("the H.A.M. deacon preaches whole sentences, fragment after fragment", (t) => {
+  const deacon = entry("favour_deacon");
+  assert.ok(deacon.phrases.length >= 5);
+  const sentence = deacon.phrases.find((phrase) => phrase[0] === "Let them not ");
+  assert.deepEqual(sentence, ["Let them not ", "infest our ", "cities and towns..."]);
+  const stub = npc(core.CacheDefinitions.getNpcId("favour_deacon"), { at: [3165, 9628, 0] });
+  run(t, [stub], 1, 2000);
+  const starts = new Map(deacon.phrases.map((phrase) => [phrase[0], phrase]));
+  let i = 0;
+  let sentences = 0;
+  while (i < stub.said.length) {
+    const phrase = starts.get(stub.said[i]);
+    assert.ok(phrase, `"${stub.said[i]}" (line ${i}) does not start a sentence`);
+    const rest = stub.said.slice(i, i + phrase.length);
+    if (rest.length < phrase.length) break;
+    assert.deepEqual(rest, phrase);
+    i += phrase.length;
+    sentences++;
+  }
+  assert.ok(sentences >= 10, `${sentences} sentences`);
+});
+
+test("every Goblin Village soldier and every barbarian shouts only in a fight", (t) => {
+  const rivalries = require("../data/definitions/npc-rivalries.json").rivalries;
+  const goblins = rivalries.find((r) => r.name.startsWith("Goblin Village")).sides.flatMap((side) => side.npcs);
+  for (const id of goblins) assert.equal(chatterById.get(id)?.fighting, true, `goblin ${id}`);
+  for (const name of ["fai_barbarian_female_2", "fai_barbarian_female_3", "fai_barbarian_6"]) {
+    assert.equal(chatterById.get(core.CacheDefinitions.getNpcId(name))?.fighting, true, name);
+  }
+  const barbarian = npc(core.CacheDefinitions.getNpcId("fai_barbarian_female_3"), { at: [3075, 3420, 0] });
+  run(t, [barbarian], 1, 120);
+  assert.deepEqual(barbarian.said, [], "no war cry while nothing fights her");
+});
+
+test("idle loops are not gestures; a family takes its excluded member's exclusion", () => {
+  for (const name of ["dorgesh_male_leather_seller", "dorgesh_market_female3"]) {
+    for (const line of entry(name).lines) {
+      assert.equal(line.seq, undefined, `${name}: ${line.text}`);
+      assert.equal(line.gestures, undefined, `${name}: ${line.text}`);
+    }
+  }
+  for (const name of ["poh_hangman_armour2", "poh_hangman_armour4"]) {
+    assert.equal(entry(name)?.family != null, true, `${name} comes from its family`);
+    assert.equal(chatterById.has(core.CacheDefinitions.getNpcId(name)), false, name);
+  }
 });
 
 test("a gap stays between the 5th and 95th percentiles, centred on the median", () => {

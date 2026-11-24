@@ -1,5 +1,5 @@
 {
-  "$comment": "What NpcChatter leaves out of data/definitions/npc-captured-chatter.json (generated from rsprox captures; never edited by hand). `skipNpcs`: NPCs by cache gameval, grouped by why - their lines belong to a boss fight, minigame, cutscene, quest scene or event that its own code drives (or will), or answer something a recording cannot show. 'driven by other tsps plugins': Chatter.WarriorsGuild.js (Shanomi, Kamfreena), Chatter.KeldagrimMinecarts.js (the ticket vendors; its announcer, dwarf_city_train_conductor2, it leaves to this plugin), NatureSpirit.Quest.js (the ghasts' attack shouts), the Thieving wealthy-citizen distractions and house robbery (Varlamore citizens, urchins, house owners). `skipLines`: patterns (case-insensitive), grouped by why: lines that answer another player's theft or pickpocket in view, which no recording of the listener's own actions can tell apart from chatter, and town crier banners recorded before the update they announce went live (the same revision has the 'now live' line). The Blast Furnace foreman's calls for repairs and fuel follow the minigame's machinery state (Machinery.BlastFurnace.js), so he is a minigame NPC. Docs: docs/npc-chatter.md.",
+  "$comment": "What NpcChatter leaves out of data/definitions/npc-captured-chatter.json (generated from rsprox captures; never edited by hand). `skipNpcs`: NPCs by cache gameval, grouped by why - their lines belong to a boss fight, minigame, cutscene, quest scene or event that its own code drives (or will), or answer something a recording cannot show. 'driven by other tsps plugins': Chatter.WarriorsGuild.js (Shanomi, Kamfreena), Chatter.KeldagrimMinecarts.js (the ticket vendors; its announcer, dwarf_city_train_conductor2, it leaves to this plugin), NatureSpirit.Quest.js (the ghasts' attack shouts), the Thieving wealthy-citizen distractions and house robbery (Varlamore citizens, urchins, house owners). `skipLines`: patterns (case-insensitive), grouped by why: lines that answer another player's theft or pickpocket in view, which no recording of the listener's own actions can tell apart from chatter, and town crier banners recorded before the update they announce went live (the same revision has the 'now live' line). The Blast Furnace foreman's calls for repairs and fuel follow the minigame's machinery state (Machinery.BlastFurnace.js), so only his unconditional lines ('Work faster!', 'Keep the temperature controlled.') are his chatter. An NPC whose lines come from its family (`family` in the data) is excluded with any excluded member of that family. Docs: docs/npc-chatter.md.",
   "skipNpcs": {
     "bosses and their summons": [
       "araxxor", "cerberus_spectre_magic", "cerberus_spectre_melee", "cerberus_spectre_ranged", "cowboss",
@@ -12,7 +12,7 @@
       "pest_voidknight_control2", "tempoross_instance_host_e", "tempoross_instance_host_e_victory",
       "tempoross_instance_host_n", "tempoross_instance_host_n_victory", "tempoross_instance_host_s",
       "tempoross_instance_host_s_victory", "tempoross_instance_host_w", "tempoross_instance_host_w_victory",
-      "tempoross_lobby_announcer", "tempoross_lobby_host", "blast_furnace_instructor"
+      "tempoross_lobby_announcer", "tempoross_lobby_host"
     ],
     "cutscenes, quest scenes and quest instances": [
       "darkm_auctioneer", "darkm_buyer_2", "darkm_buyer_3", "darkm_buyer_4", "darkm_buyer_5", "darkm_buyer_6",
@@ -50,6 +50,10 @@
       "steal",
       "stole",
       "guards"
+    ],
+    "the Blast Furnace foreman's calls for repairs and fuel, which follow the machinery's state": [
+      "somebody fix",
+      "somebody refuel"
     ],
     "town crier banners from before the update they announce went live": [
       "open november 4th",

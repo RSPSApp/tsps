@@ -29,7 +29,8 @@ function hasIngredients(inventory, recipe) {
 
 /**
  * Whether the inventory holds every tool the recipe needs but keeps (the Wiki's recipe "tools":
- * a knife to chop into a bowl). Without it the items do nothing here, as for any other pair.
+ * a knife to chop into a bowl). Without it the event is left unhandled, so the pair does nothing,
+ * as any unhandled item pair does (item-on-item has no fallback line).
  */
 function hasTools(inventory, recipe) {
   return (recipe.tools ?? []).every((ids) => [...ids].some((id) => inventory.contains(id)));

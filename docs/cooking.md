@@ -258,7 +258,8 @@ the Wiki ([Nettle tea](https://oldschool.runescape.wiki/w/Nettle_tea),
     mushrooms and fried onions. Tuna and corn at 67: a bowl of sweetcorn and tuna with a knife,
     a bowl of sweetcorn and chopped tuna (one bowl back), or cooked sweetcorn and chopped tuna.
     None of these mixes gives XP but spicy sauce;
-  - without the knife the pair does nothing here (the usual fallback). The Wiki quotes no line
+  - without the knife the pair does nothing and says nothing (item-on-item has no fallback line
+    here; live presumably says "Nothing interesting happens."). The Wiki quotes no line
     for any of them, so they are made silently.
 - Leaping fish (`server/plugins/skills/cooking/LeapingFish.Cooking.js`), the only source of roe
   and caviar for Barbarian Herblore, cut with a knife at any Cooking level, Mod Ash's rates:

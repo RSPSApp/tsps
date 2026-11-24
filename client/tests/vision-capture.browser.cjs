@@ -8,6 +8,8 @@
 //   [--clip-secs 5 --clip-fps 10 --clip-out clip.mp4]
 //   [--animation-smoothing on|off] [--check-animation-smoothing 1]
 //   [--check-mobile-keyboard 1] (use --url with ?mobile=1)
+//   [--check-world-map-zoom 1 --world-map-zoom-rounds 3 --world-map-zoom-start-out 0] (opens the world map, wheels in/out;
+//     samples the zoom drawn and the share of solid-black 8x8 blocks over the map)
 //   [--check-mobile-combat-hud 1] (mobile client in Wilderness; checks rotation and captures each layout)
 //   [--check-responsive-gameframe 1] (desktop login, narrow/portrait windows keep the desktop layout)
 //   [--check-responsive-mobile-start 1] (phone-emulated login, disable emulation, then repeat resize switches)
@@ -740,6 +742,121 @@ async function main() {
         })()`);
         summary.mobileCombatHud.push({ width, height, ...geometry, sidebar });
       }
+    }
+
+    if (arg("check-world-map-zoom", "0") === "1") {
+      // Opens the world map from its orb, then zooms in and out a step at a time with the wheel,
+      // sampling the map between steps: the zoom drawn (it eases between levels) and how much of
+      // the map shows as solid black 8x8 blocks (squares with no tile drawn).
+      // Where the map was last drawn (canvas pixels), in CSS pixels for the screenshot clip.
+      const mapRect = async () => cdp.evaluate(`(() => {
+        const c = ${CLIENT_JS}, view = c.worldMap.worldMapViewport, canvas = c.renderer.canvas;
+        if (!view || !(view.width > 0) || !(view.height > 0) || !c.widgetManager.getGroup(595)) return null;
+        const rect = canvas.getBoundingClientRect();
+        const sx = rect.width / canvas.width, sy = rect.height / canvas.height;
+        return { x: rect.left + view.x * sx, y: rect.top + view.y * sy, width: view.width * sx, height: view.height * sy };
+      })()`);
+      const opened = await cdp.evaluate(`(() => {
+        const c = ${CLIENT_JS}, wm = c.widgetManager;
+        for (const w of wm.getGroup(160)?.widgetsByUid?.values() ?? []) {
+          if (wm.isEffectivelyHidden(w.uid)) continue;
+          const ops = Array.from(w.actions ?? w.ops ?? [], (op) => String(op ?? ""));
+          // "Floating World Map" (op 2), the windowed map the server opens; not Fullscreen.
+          const opIndex = ops.findIndex((op) => /^floating world map$/i.test(op.replace(/<[^>]*>/g, "").trim()));
+          if (opIndex < 0) continue;
+          c.handleWidgetAction({ widget: w, option: ops[opIndex], opIndex: opIndex + 1, source: "primary" });
+          return ops[opIndex];
+        }
+        return null;
+      })()`);
+      if (!opened) {
+        const orbs = await cdp.evaluate(`(() => {
+          const wm = (${CLIENT_JS}).widgetManager;
+          return [...(wm.getGroup(160)?.widgetsByUid?.values() ?? [])]
+            .map((w) => ({ uid: w.uid, ops: Array.from(w.actions ?? [], (op) => String(op ?? "")) }))
+            .filter((w) => w.ops.some((op) => /map/i.test(op)));
+        })()`);
+        throw new Error("world map orb not found: " + JSON.stringify(orbs));
+      }
+      const settled = () => cdp.evaluate(`(() => { const c = ${CLIENT_JS}; return !c.worldMap.hasPendingImages(); })()`);
+      let rect = null;
+      for (let i = 0; i < 80 && !rect; i++) { await sleep(250); rect = await mapRect(); }
+      if (!rect) {
+        const state = await cdp.evaluate(`(() => {
+          const c = ${CLIENT_JS}, wm = c.widgetManager, group = wm.getGroup(595);
+          return { root: wm.rootInterface, group: !!group, widgets: group ? group.widgetsByUid.size : 0,
+            maps: [...(group?.widgetsByUid?.values() ?? [])].filter((w) => (w.contentType | 0) === 1400)
+              .map((w) => ({ uid: w.uid, hidden: wm.isEffectivelyHidden(w.uid), w: w.width, h: w.height })) };
+        })()`);
+        throw new Error("world map did not open: " + JSON.stringify({ opened, state }));
+      }
+      for (let i = 0; i < 60 && !(await settled()); i++) await sleep(250);
+      // Sample the middle of the map, away from its frame and the edge arrows.
+      const clip = { x: rect.x + rect.width * 0.2, y: rect.y + rect.height * 0.2, width: rect.width * 0.6, height: rect.height * 0.6, scale: 1 };
+      const sample = async (label) => {
+        const shot = await cdp.send("Page.captureScreenshot", { format: "png", clip });
+        if (!shot?.result?.data) throw new Error("world map screenshot failed: " + JSON.stringify(shot).slice(0, 300) + " clip " + JSON.stringify(clip));
+        return cdp.evaluate(`(async () => {
+          const c = ${CLIENT_JS};
+          const bytes = Uint8Array.from(atob(${JSON.stringify(shot.result.data)}), (ch) => ch.charCodeAt(0));
+          const image = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+          const canvas = new OffscreenCanvas(image.width, image.height);
+          const g = canvas.getContext("2d");
+          g.drawImage(image, 0, 0);
+          const { data, width, height } = g.getImageData(0, 0, image.width, image.height);
+          let blocks = 0, black = 0;
+          for (let by = 0; by + 8 <= height; by += 8) for (let bx = 0; bx + 8 <= width; bx += 8) {
+            blocks++;
+            let solid = true;
+            for (let y = by; y < by + 8 && solid; y++) for (let x = bx; x < bx + 8; x++) {
+              const o = (y * width + x) * 4;
+              if (data[o] > 4 || data[o + 1] > 4 || data[o + 2] > 4) { solid = false; break; }
+            }
+            if (solid) black++;
+          }
+          const s = c.worldMapState;
+          return { label: ${JSON.stringify(label)}, t: Math.round(performance.now()), zoom: s.getZoomScale(),
+            target: s.zoomPercentage, blackBlocks: black, blocks, blackFraction: black / Math.max(1, blocks) };
+        })()`);
+      };
+      const wheel = (deltaY) => cdp.send("Input.dispatchMouseEvent", {
+        type: "mouseWheel", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, deltaX: 0, deltaY,
+      });
+      // --world-map-zoom-start-out N: wheel out N steps first (each settled), to test the far zooms.
+      for (let i = 0; i < (Number(arg("world-map-zoom-start-out", "0")) | 0); i++) {
+        await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+        await wheel(120);
+        await sleep(600);
+        for (let j = 0; j < 80 && !(await settled()); j++) await sleep(250);
+      }
+      const samples = [await sample("settled")];
+      const zoomTraces = [];
+      const rounds = Number(arg("world-map-zoom-rounds", "3")) | 0;
+      for (let round = 0; round < rounds; round++) {
+        for (const [deltaY, label] of [[-120, "in"], [120, "out"]]) {
+          await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+          await wheel(deltaY);
+          // The zoom drawn, read every few ms while it eases (screenshots are too slow for this).
+          const trace = [];
+          const traceUntil = Date.now() + 500;
+          while (Date.now() < traceUntil) {
+            trace.push(await cdp.evaluate(`Math.round((${CLIENT_JS}).worldMapState.getZoomScale() * 1000) / 1000`));
+            await sleep(10);
+          }
+          zoomTraces.push({ step: `${label}${round}`, zooms: trace.filter((z, i) => i === 0 || z !== trace[i - 1]) });
+          const until = Date.now() + 1500;
+          while (Date.now() < until) samples.push(await sample(`${label}${round}`));
+        }
+      }
+      const worst = samples.reduce((max, s) => (s.blackFraction > max.blackFraction ? s : max), samples[0]);
+      summary.worldMapZoom = {
+        opened,
+        samples,
+        zoomTraces,
+        worstBlackFraction: worst.blackFraction,
+        worstSample: worst.label,
+        zoomsSeen: [...new Set(samples.map((s) => Math.round(s.zoom * 100) / 100))],
+      };
     }
 
     if (arg("check-animation-smoothing", "0") === "1") {

@@ -15,7 +15,7 @@ const Superheat = require("../plugins/skills/smithing/Superheat.Smithing");
 const buttons = new Map(), objects = new Map(), itemActions = new Map(), events = new Map(), tasks = [], players = [];
 const successEvents = [];
 let disconnect, itemOnObject, CacheDefinitions;
-const extraItemOnObject = [], startups = [];
+const extraItemOnObject = [], startups = [], beforeObject = [];
 let denyAnvil = false;
 function registerSmithing() {
   Smithing.register({
@@ -36,6 +36,7 @@ function registerSmithing() {
     onItemOnObject: (handler) => { if (!itemOnObject) itemOnObject = handler; else extraItemOnObject.push(handler); },
     onItemOnItem() {}, onSpellOnItem() {}, log() {},
     onObjectInteraction: (name, actions) => objects.set(name, actions),
+    onBeforeObjectInteraction: handler => beforeObject.push(handler),
     onInterfaceActionButton: (ids, handler) => { for (const id of ids) buttons.set(id, handler); },
   });
 }

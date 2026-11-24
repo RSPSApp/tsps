@@ -33,6 +33,7 @@ const Shared = require("./Shared.Colosseum");
 const Patterns = require("./SolPatterns.Colosseum");
 const Hazards = require("./Hazards.Colosseum");
 const Effects = require("./ModifierEffects.Colosseum");
+const Hud = require("./Hud.Colosseum");
 const DIALOGUES = require("../../../data/definitions/npc-dialogues.json")["Sol Heredit"].variants;
 
 const SOL = 12821;
@@ -187,6 +188,7 @@ function land(run) {
   run.stage = "wave";
   run.waveTicks = 0;
   Hazards.waveStarted(run);
+  Hud.landed(run);
 }
 
 function removeSeat(run) {
@@ -458,11 +460,14 @@ function fireCrystal(run, fight, crystal) {
 function tick(run) {
   const fight = run.solFight;
   if (!fight || run.stage !== "wave" || fight.npc.getHitpoints() <= 0) return;
+  Hud.update(run);
+  const phase = fight.phase;
   while (fight.phase + 1 < PHASES.length && fight.npc.getHitpoints() <= PHASES[fight.phase + 1].hp) {
     fight.phase++;
     say(fight, line(PHASES[fight.phase].variant));
     transition(run, fight);
   }
+  if (fight.phase !== phase) Hud.phaseChanged(run);
   if (fight.phase === ENRAGED && --fight.enragedSandIn <= 0) {
     fight.enragedSandIn = SAND.enragedEvery;
     placeSand(run, Patterns.sandTargets(tileOf(run.player), 1, run.random, (tile) => Hazards.hasSand(run, tile)));
@@ -481,6 +486,7 @@ function tick(run) {
 function defeated(run) {
   const fight = run.solFight;
   if (!fight) return;
+  Hud.defeated(run);
   say(fight, line("standard-dialogue-death"));
   const player = run.player;
   player.setAttribute(ATTR.KILLS, (Number(player.getAttribute(ATTR.KILLS)) || 0) + 1);
@@ -493,6 +499,7 @@ function playerDied(run) {
 
 /** The run is over: the barricade comes down. */
 function cleared(run) {
+  Hud.drop(run);
   const { ObjectManager } = Shared.core();
   for (const object of run.barricade ?? []) ObjectManager.deregister(object, true);
   run.barricade = [];
@@ -506,6 +513,7 @@ module.exports = function registerSolHeredit(api) {
   api.registerNpcCombatMethodProvider([SOL], method(), { singleton: false });
   api.onCanUnequip(defend);
   api.onCombatHitRoll(parried);
+  api.onCustomEvent("combat:damage-applied", Hud.damageApplied);
 };
 
 module.exports.SOL = SOL;

@@ -341,10 +341,11 @@ module.exports = function registerDigSiteQuest(api) {
     player.getSkillManager().addExperiences(Skill.HERBLORE, 2000);
   }
 
-  function isQuestStarted(player, key) {
-    const request = { player, key, started: false };
-    api.emitCustomEvent("quest:is-started", request);
-    return request.started === true;
+  /** The Golem's statuette conversation owns the curator while it runs (the-golem:curator-step). */
+  function golemCuratorStep(player) {
+    const request = { player, active: false };
+    api.emitCustomEvent("the-golem:curator-step", request);
+    return request.active === true;
   }
 
   function isQuestComplete(player, key) {
@@ -451,7 +452,7 @@ module.exports = function registerDigSiteQuest(api) {
     }
     if (npcId === CURATOR_NPC_ID) {
       // The Golem reuses the museum curator only while its museum step is active.
-      if (isQuestStarted(player, "the_golem") && !isQuestComplete(player, "the_golem")) return null;
+      if (golemCuratorStep(player)) return null;
       // Only while the letter is still owed; otherwise the curator's own dialogue.
       if (!awaitingLetter(player)) return null;
       if (!stamped(player) && held(player, UNSTAMPED_LETTER_ITEM_ID)) {

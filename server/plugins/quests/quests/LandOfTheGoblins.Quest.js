@@ -614,6 +614,28 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     inventory.deleteAtSlot(mushroomSlot, 1);
     vial.setId(BLACK_DYE_ITEM_ID);
     inventory.refreshItems();
+    // The Golem's transcript (Wiki); its revision 242 capture (tick 1309) and local recording
+    // 1001607 read "You crush the mushroom and create some black dye.", in the same item box.
+    const { DialogueChainBuilder, ItemStatementDialogue } = api.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      .add(new ItemStatementDialogue(0, BLACK_DYE_ITEM_ID, "You crush the mushroom and pour the juice into a vial.")));
+  }
+
+  /** Wiki (The Golem transcript): the pestle on the mushroom with no vial spills it. */
+  function spillDye(player, mushroomSlot) {
+    const inventory = player.getInventory();
+    const items = inventory.getItems?.();
+    const slot = items && Number.isInteger(mushroomSlot) && items[mushroomSlot]?.getId() === BLACK_MUSHROOM_ITEM_ID
+      ? mushroomSlot : items?.findIndex((item) => item?.getId() === BLACK_MUSHROOM_ITEM_ID) ?? -1;
+    if (items && restricted(items[slot])) {
+      player.sendMessage(PRESET_TEXT);
+      return;
+    }
+    if (slot >= 0) inventory.deleteAtSlot(slot, 1);
+    else inventory.deleteNumber(BLACK_MUSHROOM_ITEM_ID, 1);
+    const { DialogueChainBuilder, StatementDialogue } = api.core;
+    player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+      .add(new StatementDialogue(0, "You crush the mushroom, but you have no vial to put the dye in and it goes everywhere!")));
   }
 
   /** Keys can legitimately be banked; a banked key is owned and must not be duplicated. */
@@ -1767,11 +1789,12 @@ module.exports = function registerLandOfTheGoblinsQuest(api) {
     const pestle = first === PESTLE_AND_MORTAR_ITEM_ID ? second : second === PESTLE_AND_MORTAR_ITEM_ID ? first : null;
     if (pestle === BLACK_MUSHROOM_ITEM_ID) {
       event.handled = true;
+      const mushroomSlot = first === BLACK_MUSHROOM_ITEM_ID ? event.usedItemSlot : event.usedWithItemSlot;
       if (!held(player, VIAL_ITEM_ID)) {
-        player.sendMessage("You need an empty vial to make the dye.");
+        spillDye(player, mushroomSlot);
         return;
       }
-      grindDye(player, { mushroomSlot: first === BLACK_MUSHROOM_ITEM_ID ? event.usedItemSlot : event.usedWithItemSlot });
+      grindDye(player, { mushroomSlot });
       return;
     }
     const mail = first === GOBLIN_MAIL_ITEM_ID ? second : second === GOBLIN_MAIL_ITEM_ID ? first : null;

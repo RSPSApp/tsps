@@ -1180,6 +1180,16 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       || (event.usedItemId === second && event.usedWithItemId === first);
   }
 
+  /**
+   * "recipe-for-disaster:breadcrumbs" { player, available }: whether a knife on bread can make
+   * breadcrumbs, which only Pirate Pete's fishcake needs. Below Ice Mountain's steak sandwich
+   * shares the knife and bread and only offers the choice while this is true (rsprox 1636, mid-way
+   * through Pirate Pete, gets the make menu; local 1001343, with no Recipe for Disaster, doesn't).
+   */
+  function handleBreadcrumbsQuery(request) {
+    if (stage(request.player) >= STAGE_OPENING_COMPLETE && !hasFlag(request.player, 4)) request.available = true;
+  }
+
   function handlePirateFoodItems(event) {
     const { player } = event;
     if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 4)) return;
@@ -3871,6 +3881,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("recipe-for-disaster:rescue-status", handleRescueStatusQuery);
+  api.onCustomEvent("recipe-for-disaster:breadcrumbs", handleBreadcrumbsQuery);
   api.onCustomEvent("recipe-for-disaster:complete-rescue", handleCompleteRescue);
   api.onCustomEvent("npc-drops:quest-item", handleAmikQuestItemDrop);
   api.onCustomEvent("npc-dialogue:choice", handlePirateChoice);

@@ -739,6 +739,19 @@ test('Prying Times start gate requires both quests, both skills and an open task
   assert.equal(condition('KQdAeL'), true);
 });
 
+test('Prying Times start sees the full captain log Pandemonium swaps in, not only the starter log (#6661)', () => {
+  const h = makeHarness('../plugins/quests/quests/PryingTimes.Quest', { Sailing: 12, Smithing: 30 });
+  const N = h.core.NpcIdentifiers, I = h.core.ItemIdentifiers;
+  const condition = (stepId) => h.hooks.conditions[0]({ player: h.player, npcId: N.SQUAWKING_STEVE_BEANIE, stepId });
+  assert.equal(condition('KQdAeL'), true, 'no log');
+  h.inventory.set(I.CAPTAINS_LOG_2, 1);
+  assert.equal(condition('KQdAeL'), false, 'full log');
+  assert.equal(condition('gOV6qS'), false, 'full log, asked again');
+  h.inventory.delete(I.CAPTAINS_LOG_2);
+  h.inventory.set(I.CAPTAINS_LOG, 1);
+  assert.equal(condition('KQdAeL'), false, 'starter log');
+});
+
 test('Troubled Tortugans Floopa follows boarding, at-sea distance and disembark recovery', () => {
   const h = makeHarness('../plugins/quests/quests/TroubledTortugans.Quest');
   h.quest.setStage(h.player, 8);

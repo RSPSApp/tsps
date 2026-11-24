@@ -26,7 +26,7 @@ before(async () => {
   RegionManager.init();
 });
 
-function setup({ complete = ['the_dig_site'], started = [] } = {}) {
+function setup({ complete = ['the_dig_site'], started = [], golemCuratorStep = false } = {}) {
   const completeKeys = new Set(complete), startedKeys = new Set(started);
   const variants = [], conditions = [], custom = new Map(), named = new Map(), objects = new Map();
   const buttons = [];
@@ -58,6 +58,8 @@ function setup({ complete = ['the_dig_site'], started = [] } = {}) {
     emitCustomEvent: (name, event) => {
       if (name === 'quest:is-complete') event.complete = completeKeys.has(event.key);
       if (name === 'quest:is-started') event.started = startedKeys.has(event.key);
+      // The Golem's statuette conversation (notes read, before completion) keeps the curator.
+      if (name === 'the-golem:curator-step') event.active = golemCuratorStep;
       for (const fn of custom.get(name) ?? []) fn(event);
     },
     spawnNpc: (def) => {
@@ -465,6 +467,61 @@ test('lost proposal, agreement, potion and charm are reclaimable through their h
   }
 });
 
+test('the Odd Old Man bone sack speaks with its own chathead and name (rsprox_transcripts/232/03224.txt)', () => {
+  const h = setup();
+  try {
+    const p = player();
+    h.quest.setStage(p, 9);
+    h.npcAction(p, N.ODD_OLD_MAN, 3361, 3505, 0, 'Talk-to');
+    const manager = p.getDialogueManager();
+    const sack = [], choices = ['Talk about lucky charms.', "I'm making a cursed voyage."];
+    for (let step = 0; step < 100; step++) {
+      const menu = MultiChatboxPrompt.getPending(p);
+      if (menu) {
+        const index = menu.options.indexOf(choices.shift());
+        assert.ok(index >= 0, `unexpected menu ${JSON.stringify(menu.options)}`);
+        MultiChatboxPrompt.handleInterfaceActionClick({ player: p, groupId: 219, slot: index + 1 });
+        continue;
+      }
+      const current = manager.getCurrent();
+      if (!current) break;
+      if (current.speakerName === 'Sack') sack.push(current);
+      manager.advance();
+    }
+    assert.ok(sack.length > 0, 'the bone sack speaks in the lucky charm conversation');
+    for (const line of sack) {
+      assert.equal(line.getNpcId(), 1266, 'talking_sack head, not the Odd Old Man 1259');
+      assert.equal(line.speakerName, 'Sack');
+    }
+  } finally {
+    h.restore();
+  }
+});
+
+test('the Odd Old Man sack keeps its chathead in the Rag and Bone Man I intro (rsprox_transcripts/232/03224.txt)', () => {
+  const h = setup();
+  try {
+    const p = player();
+    h.quest.setStage(p, 0); // Bone Voyage not started: the Odd Old Man plays the Rag and Bone Man I intro
+    h.npcAction(p, N.ODD_OLD_MAN, 3361, 3505, 0, 'Talk-to');
+    const manager = p.getDialogueManager(), sack = [];
+    for (let step = 0; step < 100; step++) {
+      if (MultiChatboxPrompt.getPending(p)) break; // the intro ends in a menu: no choice is made
+      const current = manager.getCurrent();
+      if (!current) break;
+      if (current.speakerName === 'Sack') sack.push(current);
+      manager.advance();
+    }
+    assert.ok(sack.length > 0, 'the bone sack speaks in the Rag and Bone Man I intro');
+    for (const line of sack) {
+      assert.equal(line.getNpcId(), 1266, 'talking_sack head, not the Odd Old Man 1259');
+      assert.equal(line.speakerName, 'Sack');
+    }
+  } finally {
+    h.restore();
+  }
+});
+
 test('shared Curator ownership and the Pandemonium branch follow Quest Helper', () => {
   const curator = (h, p) =>
     h.variants.map((fn) => fn({ player: p, npcId: N.CURATOR_HAIG_HALEN })).find(Boolean) ?? null;
@@ -487,13 +544,23 @@ test('shared Curator ownership and the Pandemonium branch follow Quest Helper', 
     noDigSite.restore();
   }
 
-  const golemActive = setup({ complete: ['the_dig_site'], started: ['the_golem'] });
+  const golemActive = setup({ complete: ['the_dig_site'], started: ['the_golem'], golemCuratorStep: true });
   try {
     const p = player();
     golemActive.quest.setStage(p, 0);
     assert.equal(curator(golemActive, p), null, 'an active Golem museum step keeps the Curator');
   } finally {
     golemActive.restore();
+  }
+
+  const golemStarted = setup({ complete: ['the_dig_site'], started: ['the_golem'] });
+  try {
+    const p = player();
+    golemStarted.quest.setStage(p, 0);
+    assert.equal(curator(golemStarted, p), 'starting-out-talking-to-curator-haig-halen',
+      'The Golem started but before its statuette conversation leaves Bone Voyage the Curator');
+  } finally {
+    golemStarted.restore();
   }
 
   const golemDone = setup({ complete: ['the_dig_site', 'the_golem'] });
@@ -552,9 +619,13 @@ test('Bone Voyage owns the Curator in-quest and hands him back to the standard d
     const p = player();
     completed.quest.setStage(p, 11);
     assert.equal(completed.quest.isComplete(p), true);
-    const lines = talkLines(completed)(p, ['Talk about Fossil Island.', 'Have you any interesting news?']);
-    assert.ok(lines.some((text) => text.includes("I've got some questions regarding Fossil Island.")),
+    const talk = talkLines(completed);
+    // The Fossil Island questions are their own menu (The Golem's revision 242 capture, ticks 558-576).
+    const fossils = talk(p, ['Talk about Fossil Island.', 'Nevermind.']);
+    assert.ok(fossils.some((text) => text.includes("I've got some questions regarding Fossil Island.")),
       'the post-quest fossil-island option is offered');
+    assert.ok(fossils.includes('Nevermind.'), 'its own menu, then back out');
+    const lines = talk(p, ['Have you any interesting news?']);
     assert.ok(lines.some((text) => text.includes("We've seen some incredible specimens come back from Fossil Island!")),
       'completion selects the canonical standard Curator dialogue');
     assert.ok(!lines.some((text) => text.includes('The expedition to the island North of Morytania')),

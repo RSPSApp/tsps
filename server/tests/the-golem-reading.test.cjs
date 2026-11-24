@@ -84,6 +84,8 @@ const nextPage = (f) => send(f, { type: "dialogue_continue", widgetId: uid(BOOK_
 
 test("the letter opens in its own interface with the captured lines, and not in the chatbox", async (t) => {
   const f = actor(t);
+  // Started: the repairs are done, as when the capture reads it (golem_a 2, tick 117).
+  require("../plugins/quests/QuestRuntime").questNamed("The Golem").setStage(f.p, 2);
   await read(f, I.LETTER_2);
   assert.equal(f.p.getInterfaceId(), LETTER_GROUP, "interface 220 is open");
   const line = (child) => f.strings.get(uid(LETTER_GROUP, child));

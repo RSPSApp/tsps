@@ -113,14 +113,14 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
       getPrivateArea: () => area, setArea(a) {area=a;}, getWildernessLevel: () => 0,
       getLocation: () => location, moveTo(p) { location = p; },
       getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value),
-      getPacketSender: () => ({ sendConfig: (id, value) => configs.set(id, value), sendVarbit: (id,value) => configs.set(id,value), getVarbit: id => configs.get(id) ?? 0, sendProjectile() {}, sendGraphic() {}, sendSound() {},
+      getPacketSender: () => ({ sendConfig: (id, value) => configs.set(id, value), sendVarbit: (id,value) => configs.set(id,value), getVarbit: id => configs.get(id) ?? 0, sendProjectile() {}, sendGraphic() {}, sendGlobalGraphic() {}, sendSound() {},
         sendTypedMessage: (type, text) => messages.push(text), sendClientScript() {}, sendObjectAnimation() {} }),
       getCombat: () => ({ getTarget: () => null, getAttacker: () => null, getHitQueue: () => ({ addPendingDamage() {} }) }),
       getPrayerActive: () => ({}),
       getMovementQueue: () => ({ canWalk: () => false, reset() {} }),
       getForceMovement: () => force, setForceMovement(f) {force=f;}, getUpdateFlag: () => ({flag(){}}), getRunEnergy: () => 50, setRunEnergy() {},
-      performAnimation(a) { this.animations.push(a.getId()); }, sendMessage(text) { this.messages.push(text); },
-      animations: [], messages, statements: [],
+      performAnimation(a) { this.animations.push(a.getId()); }, performGraphic(g) { this.graphics.push(g.getId()); }, sendMessage(text) { this.messages.push(text); },
+      animations: [], graphics: [], messages, statements: [],
       getDialogueManager() { const statements = this.statements; return { startDialogues(chain) { statements.push(chain); } }; },
     };
   }
@@ -414,14 +414,30 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
       if(crushBones)event.drops=event.drops.filter(drop=>drop.itemId!==I.BONES);
     };
     const hunter=()=>{const f=player();f.moveTo(falconTile);f.levels.set(Skill.HUNTER,70);f.equipment.set(core.Equipment.WEAPON_SLOT,I.FALCONERS_GLOVE_2);return f;};
-    const send=f=>{
-      const kebbit=prey(N.DASHING_KEBBIT,falconTile);
-      Math.random=()=>0;Catching.catchNpc({player:f,npc:kebbit,npcId:kebbit.getId()});advance(2);Math.random=()=>0.5;
-      return spawned.at(-1);
+    // The catch resolves a tick after the send here (the kebbit is on the player's tile: 24 cycles of flight), the
+    // falcon_hit graphic (26 cycles) plays on the kebbit, and the falcon shows on its prey one tick later.
+    let sentKebbit;const flights=[],baseFlight=core.Projectile.prototype.sendProjectile;
+    core.Projectile.prototype.sendProjectile=function(){flights.push(this);};
+    const send=(f,reveal=true)=>{
+      const kebbit=sentKebbit=prey(N.DASHING_KEBBIT,falconTile);
+      Math.random=()=>0;Catching.catchNpc({player:f,npc:kebbit,npcId:kebbit.getId()});advance(1);Math.random=()=>0.5;
+      const bird=spawned.at(-1);
+      if(reveal)advance(1);
+      return bird;
     };
     const full=hunter();full.setSize(0);
-    const falcon=send(full);
+    const falcon=send(full,false);
     assert.equal(falcon.getId(),N.GYR_FALCON_3,"the falcon catches the kebbit even with a full inventory");
+    assert.deepEqual(full.graphics,[918],"the falcon launches off the glove (falcon_launch_anim)");
+    assert.equal(flights.length,1);
+    assert.equal(flights[0].projectileId,922,"the falcon flies as falcon_travel_anim");
+    assert.equal(flights[0].lockon,sentKebbit,"locked on to the kebbit, so it follows it if it steps");
+    assert.deepEqual([flights[0].getTiming().startCycleOffset,flights[0].getTiming().endCycleOffset],[24,24],"24 cycles to launch, 8 per tile");
+    assert.equal(falcon.isVisible(),false,"the falcon is hidden while it strikes");
+    Catching.retrieve({player:full,npc:falcon});advance(1);
+    assert.equal(full.experience.has(Skill.HUNTER),false,"it cannot be retrieved before it shows");
+    assert.equal(falcon.isRegistered(),true);
+    assert.equal(falcon.isVisible(),true,"the falcon shows on its prey once the hit has played");
     Catching.retrieve({player:full,npc:falcon});advance(1);
     assert.equal(full.experience.get(Skill.HUNTER),156,"a full inventory still retrieves the falcon for the XP");
     assert.equal(falcon.isRegistered(),false);
@@ -437,11 +453,17 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     assert.equal(crusher.counts.has(I.BONES),false,"a bonecrusher takes the bones");
     assert.equal(crusher.counts.get(I.DASHING_KEBBIT_FUR),1);
     crushBones=false;
+    // A kebbit one tile away lands the falcon 2 cycles after the catch tick: that is a delay, not a Priority.
+    const near=hunter(),nearKebbit=prey(N.DASHING_KEBBIT,falconTile.transform(1,0)),hitGraphics=[],basePerform=nearKebbit.performGraphic;
+    nearKebbit.performGraphic=function(g){hitGraphics.push(g);return basePerform.call(this,g);};
+    Math.random=()=>0;Catching.catchNpc({player:near,npc:nearKebbit,npcId:nearKebbit.getId()});advance(1);Math.random=()=>0.5;
+    assert.deepEqual(hitGraphics.map(g=>[g.id,g.delay,g.priority]),[[923,2,0]],"the hit graphic keeps its 2-cycle delay at one tile");
+    advance(100);
     const slow=hunter();send(slow);advance(100);
     assert.equal(slow.messages.at(-1),"Your falcon has left its prey. You see it heading back toward the falconer.");
     assert.equal(slow.experience.has(Skill.HUNTER),false,"lost prey gives no XP");
     assert.equal(slow.equipment.get(core.Equipment.WEAPON_SLOT),I.FALCONERS_GLOVE_2);
-    api.emitCustomEvent=baseEmit;
+    api.emitCustomEvent=baseEmit;core.Projectile.prototype.sendProjectile=baseFlight;
 
     const crabId=[...Crabs.bases].find(([id])=>Crabs.species(new core.GameObject(id,q.getLocation(),10,0,null)).level===21)[0];
     const crabObject=new core.GameObject(crabId,q.getLocation().clone(),10,0,null);

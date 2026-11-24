@@ -304,6 +304,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
 
   const HANDKERCHIEF_ITEM = ItemIdentifiers.HANDKERCHIEF; // 19521
   const MYSTERIOUS_NOTE_ITEM = ItemIdentifiers.MYSTERIOUS_NOTE; // 19505
+  const MYSTERIOUS_NOTE_LEMON_ITEM = ItemIdentifiers.MYSTERIOUS_NOTE_2; // 19507 (mm2_mysterious_note_lemon)
   const MYSTERIOUS_NOTE_HEATED_ITEM = ItemIdentifiers.MYSTERIOUS_NOTE_3; // 19509
   const SCRAWLED_NOTE_ITEM = ItemIdentifiers.SCRAWLED_NOTE_2; // 19511
   const TRANSLATED_NOTE_ITEM = ItemIdentifiers.TRANSLATED_NOTE; // 19513
@@ -1114,8 +1115,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
         advance(player, STAGE_ANITA);
         return;
       case "B8_LH9": // half-burned note in the ashes
-        if (!hasItem(player, MYSTERIOUS_NOTE_ITEM) && !hasItem(player, MYSTERIOUS_NOTE_HEATED_ITEM)
-          && !hasItem(player, SCRAWLED_NOTE_ITEM) && !hasItem(player, TRANSLATED_NOTE_ITEM)) {
+        if (!hasMysteriousNote(player)) {
           addItem(player, MYSTERIOUS_NOTE_ITEM);
         }
         return;
@@ -1405,8 +1405,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     if (FIRE_REMAINS_IDS.has(objectId) && option === "Investigate") {
       event.handled = true;
       if (stageOf(player) < STAGE_ANITA) return;
-      if (!hasItem(player, MYSTERIOUS_NOTE_ITEM) && !hasItem(player, MYSTERIOUS_NOTE_HEATED_ITEM)
-        && !hasItem(player, SCRAWLED_NOTE_ITEM) && !hasItem(player, TRANSLATED_NOTE_ITEM)) {
+      if (!hasMysteriousNote(player)) {
         addItem(player, MYSTERIOUS_NOTE_ITEM);
       }
       play(player, NpcIdentifiers.KING_NARNODE_SHAREEN, "chapter-i-searching-fire-remains");
@@ -1415,10 +1414,8 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     }
     if (objectId === CANDLES_ID && option === "Investigate") {
       event.handled = true;
-      if (hasItem(player, MYSTERIOUS_NOTE_ITEM)) {
-        player.getInventory().deleteNumber(MYSTERIOUS_NOTE_ITEM, 1);
-        addItem(player, MYSTERIOUS_NOTE_HEATED_ITEM);
-        player.sendMessage("You hold the note over the candle; hidden writing starts to brown.");
+      if (hasItem(player, MYSTERIOUS_NOTE_LEMON_ITEM)) {
+        heatLemonNote(player);
       } else {
         player.sendMessage("A candle burns on the table.");
       }
@@ -1542,7 +1539,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   }
 
   function hasMysteriousNote(player) {
-    return hasItem(player, MYSTERIOUS_NOTE_ITEM) || hasItem(player, MYSTERIOUS_NOTE_HEATED_ITEM)
+    return hasItem(player, MYSTERIOUS_NOTE_ITEM) || hasItem(player, MYSTERIOUS_NOTE_LEMON_ITEM) || hasItem(player, MYSTERIOUS_NOTE_HEATED_ITEM)
       || hasItem(player, SCRAWLED_NOTE_ITEM) || hasItem(player, TRANSLATED_NOTE_ITEM);
   }
 
@@ -1670,8 +1667,15 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
     if (pair.has(PESTLE_ITEM) && pair.has(LEMON_ITEM)) {
       event.handled = true;
       if (!hasItem(player, LEMON_ITEM)) return;
+      // Wiki (Monkey Madness II): "Use your pestle and mortar on the lemon to apply it to the note."
+      if (!hasItem(player, MYSTERIOUS_NOTE_ITEM)) {
+        player.sendMessage("You need the mysterious note to apply the lemon to.");
+        return;
+      }
       player.getInventory().deleteNumber(LEMON_ITEM, 1);
-      player.sendMessage("You mash the lemon; you can smear the pulp onto the note.");
+      player.getInventory().deleteNumber(MYSTERIOUS_NOTE_ITEM, 1);
+      addItem(player, MYSTERIOUS_NOTE_LEMON_ITEM);
+      player.sendMessage("You mash the lemon and smear the juice onto the note.");
       return;
     }
     if (pair.has(PESTLE_ITEM) && pair.has(GRAPES_ITEM)) {
@@ -1708,12 +1712,20 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
 
   function handleItemOnObject(event) {
     const { itemId, objectId, player } = event;
-    if (itemId === MYSTERIOUS_NOTE_ITEM && objectId === CANDLES_ID) {
+    if (objectId !== CANDLES_ID) return;
+    if (itemId === MYSTERIOUS_NOTE_LEMON_ITEM) {
       event.handled = true;
-      player.getInventory().deleteNumber(MYSTERIOUS_NOTE_ITEM, 1);
-      addItem(player, MYSTERIOUS_NOTE_HEATED_ITEM);
-      player.sendMessage("You hold the note over the candle; hidden writing starts to brown.");
+      if (hasItem(player, MYSTERIOUS_NOTE_LEMON_ITEM)) heatLemonNote(player);
+    } else if (itemId === MYSTERIOUS_NOTE_ITEM) {
+      event.handled = true;
+      player.sendMessage("Nothing interesting happens.");
     }
+  }
+
+  function heatLemonNote(player) {
+    player.getInventory().deleteNumber(MYSTERIOUS_NOTE_LEMON_ITEM, 1);
+    addItem(player, MYSTERIOUS_NOTE_HEATED_ITEM);
+    player.sendMessage("You hold the note over the candle; hidden writing starts to brown.");
   }
 
   function handleItemOnNpc(event) {
@@ -1799,7 +1811,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
       return;
     }
     if (option !== "read") return;
-    if (itemId === MYSTERIOUS_NOTE_ITEM) {
+    if (itemId === MYSTERIOUS_NOTE_ITEM || itemId === MYSTERIOUS_NOTE_LEMON_ITEM) {
       event.handled = true;
       play(player, NpcIdentifiers.KING_NARNODE_SHAREEN, "chapter-i-reading-the-mysterious-note");
       return;

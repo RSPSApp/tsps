@@ -155,6 +155,7 @@ module.exports = function registerBoneVoyageQuest(api) {
   const BERRY_NPC_ID = NpcIdentifiers.BERRY_3; // 7235, outside the Woodcutting Guild
   const APOTHECARY_NPC_ID = NpcIdentifiers.APOTHECARY; // 5036
   const ODD_OLD_MAN_NPC_ID = NpcIdentifiers.ODD_OLD_MAN; // 1259
+  const TALKING_SACK_NPC_ID = NpcIdentifiers.BONES; // 1266, talking_sack: the cache calls it "Bones", the chatbox "Sack"
   const DECK_GUARD_NPC_ID = NpcIdentifiers.BARGE_GUARD; // 7768, on the barge: Talk-to, Disembark
   const CANAL_GUARD_NPC_IDS = new Set([
     NpcIdentifiers.BARGE_GUARD_2, // 8012, post-quest: Talk-to, Embark, Quick-Travel
@@ -745,10 +746,11 @@ module.exports = function registerBoneVoyageQuest(api) {
     return request.complete === true;
   }
 
-  function isQuestStarted(player, key) {
-    const request = { player, key, started: false };
-    api.emitCustomEvent("quest:is-started", request);
-    return request.started === true;
+  /** The Golem's statuette conversation owns the curator while it runs (the-golem:curator-step). */
+  function golemCuratorStep(player) {
+    const request = { player, active: false };
+    api.emitCustomEvent("the-golem:curator-step", request);
+    return request.active === true;
   }
 
   /** Synchronous Museum contract: the real Museum handler fills request.kudos. */
@@ -887,7 +889,7 @@ module.exports = function registerBoneVoyageQuest(api) {
     if (npcId === CURATOR_NPC_ID) {
       // The Golem's museum step owns the curator while that quest is in progress,
       // and The Dig Site owns him until it is complete (Bone Voyage requires it).
-      if ((isQuestStarted(player, "the_golem") && !isQuestComplete(player, "the_golem")) ||
+      if (golemCuratorStep(player) ||
         !isQuestComplete(player, DIG_SITE_KEY)) return null;
       // After Bone Voyage the Curator is the canonical standard-dialogue NPC
       // again. Select it here because this plugin registers before the other
@@ -950,9 +952,9 @@ module.exports = function registerBoneVoyageQuest(api) {
         return npcId === CURATOR_NPC_ID ? false : null;
       case "YIFCBb": // If the player has completed The Dig Site but doesn't have enough Kudos:
         return npcId === CURATOR_NPC_ID ? isQuestComplete(player, DIG_SITE_KEY) && kudosOf(player) < 100 : null;
-      case "eSsOcb": // Before Bone Voyage:
+      case "6GMQvw": // Before Bone Voyage: (the news option; the curator's page and those borrowing it)
         return npcId === CURATOR_NPC_ID ? !quest.isComplete(player) : null;
-      case "1RIiH_": // After Bone Voyage:
+      case "vJxRlb": // After Bone Voyage:
       case "5xOdLs": // After Bone Voyage: the fossil-island questions option
         return npcId === CURATOR_NPC_ID ? quest.isComplete(player) : null;
       case "LV2D06": // If the player does not have the requirements to enter the Woodcutting Guild:
@@ -1019,6 +1021,15 @@ module.exports = function registerBoneVoyageQuest(api) {
 
   function handleLine(event) {
     const { player, npcId, text } = event;
+
+    // The Odd Old Man's sack: the export leaves its lines without speaker_ids and the cache name
+    // "Bones" never matches "Sack", so the clicked NPC's head was shown (rsprox_transcripts/232/03224.txt).
+    // This covers every Odd Old Man conversation, including Rag and Bone Man I and II, where the sack
+    // also shows head 1266 (rsprox_transcripts/232/03224.txt, 241/911571, 242/911688).
+    if (npcId === ODD_OLD_MAN_NPC_ID && event.step?.speaker === "Sack") {
+      event.speakerId = TALKING_SACK_NPC_ID;
+      return;
+    }
 
     // The Junior Navigator's briefing is spoken inside the Lead Navigator's conversation.
     if (text === BRIEFING_LAST_LINE && (LEAD_NAVIGATOR_NPC_IDS.has(npcId) || JUNIOR_NAVIGATOR_NPC_IDS.has(npcId))

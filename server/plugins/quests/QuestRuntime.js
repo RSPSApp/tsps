@@ -288,8 +288,12 @@ function questListAction({ player, slot, opId, action }) {
  * a line already opening on navy gets no second one: live never doubles it ("<col=000080><col=000080>"
  * is in no RSProx journal; 235/3344's Mage Arena charge lines open on one navy tag).
  */
-function journalText(line) {
+function journalText(line, quest = null) {
   const text = String(line ?? "");
+  // A quest whose lines were copied from a capture sends them as live wrote each one: a wrapped
+  // line that opens on a highlight sometimes carries the navy tag first and sometimes doesn't
+  // (local 1001343's Below Ice Mountain journal has both).
+  if (quest?.journalAsSent) return text;
   if (!text || text.startsWith("<str>") || text.includes("<col=ff0000>")) return text;
   const opening = text.startsWith(JOURNAL_TEXT_COLOUR) ? "" : JOURNAL_TEXT_COLOUR;
   return opening + text.replace(/<\/col>/g, JOURNAL_TEXT_COLOUR);
@@ -313,7 +317,7 @@ function journalWidgets(quest, player) {
       id: (JOURNAL_GROUP << 16) | JOURNAL_TEXTLAYER_CHILD,
       staticChildren: journalLines(quest, player).map((line, index) => ({
         id: (JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index),
-        text: journalText(line),
+        text: journalText(line, quest),
       })),
     },
   ];
@@ -397,7 +401,7 @@ function openJournal(player, quest, row = questMetadata(quest, coreApi?.CacheDef
   packet.sendInterfaceScript(SCRIPT_QJ_RESET, []);
   setText((JOURNAL_GROUP << 16) | JOURNAL_TITLE_CHILD, `<col=7f0000>${row?.displayname?.[0] ?? quest.name}</col>`);
   lines.forEach((line, index) => {
-    setText((JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index), journalText(line));
+    setText((JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index), journalText(line, quest));
   });
   packet.sendInterfaceScript(SCRIPT_QJ_SCROLL, [0, lines.length]);
 }

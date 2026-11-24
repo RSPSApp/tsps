@@ -74,7 +74,10 @@ const STAMINA_POTION_2 = 12629;
 const STAMINA_MIX_2 = 12633;
 const CAVIAR = 11326;
 const TINY_NET = 6674;
+const EMPTY_FISHFOOD_BOX = 6675;
+const HARRY_FISHFOOD_BOX_STEP = "NnWqGe";
 const FISHBOWL_WATER_SEAWEED = 6669;
+const FISHBOWL_WATER = 6668;
 const PET_FISH_IDS = [6670, 6671, 6672];
 const SEERS_BANK_TOP = { minX: 2720, maxX: 2732, minY: 3486, maxY: 3495, z: 3 };
 // Cache walls 38848 at x=2730/2741,y=3463..3474; doors 25825/25827 at 2735/2736,3472.
@@ -178,7 +181,9 @@ function candlePurchased({ player, shopId, itemId }) {
 function harryDialogue(event) {
   if (event.handled || !event.player) return;
   if (!(event.pages ?? []).some((entry) => entry.page === "Harry")) return;
-  if (event.action !== "receive" || event.stepId !== "2WT853") return;
+  if (event.action !== "receive") return;
+  if (event.stepId === HARRY_FISHFOOD_BOX_STEP) return giveFishfoodBox(event);
+  if (event.stepId !== "2WT853") return;
 
   const inventory = event.player.getInventory();
   if (!inventory.contains(TINY_NET)) {
@@ -198,6 +203,32 @@ function harryDialogue(event) {
     inventory.adds(TINY_NET, 1);
   }
   event.handled = true;
+}
+
+/** "Do you have any fishfood?": Harry hands over an empty fishfood box for free; his transcript sets no limit. */
+function giveFishfoodBox(event) {
+  const inventory = event.player.getInventory();
+  event.handled = true;
+  if (inventory.isFull()) {
+    event.player.sendMessage("You need a free inventory slot for the empty box.");
+    event.end = true;
+    return;
+  }
+  inventory.adds(EMPTY_FISHFOOD_BOX, 1);
+}
+
+/** Harry's Wiki conditions about the fishbowl in the player's inventory and the 10 coins for the tiny net. */
+function harryCondition({ player, pages, text }) {
+  if (!player || typeof text !== "string" || !(pages ?? []).some((entry) => entry.page === "Harry")) return null;
+  const inventory = player.getInventory();
+  const water = inventory.contains(FISHBOWL_WATER);
+  const seaweed = inventory.contains(FISHBOWL_WATER_SEAWEED);
+  if (text.includes("fishbowl filled with only water")) return water && !seaweed;
+  if (text.includes("fishbowl filled with water and seaweed")) return seaweed;
+  if (text.includes("either a fishbowl filled with water")) return water || seaweed;
+  if (text.includes("doesn't have has 10 coins")) return inventory.getAmount(core.ItemIdentifiers.COINS) < 10;
+  if (text.includes("has 10 coins")) return inventory.getAmount(core.ItemIdentifiers.COINS) >= 10;
+  return null;
 }
 
 /** Aquarium (id 10091) "Fish-in": Wiki Fishbowl (pet), 10 Fishing, 1 xp, tiny net, bowl with seaweed. */
@@ -477,6 +508,7 @@ module.exports = {
     registry.onCustomEvent("diary:task", diaryProgress);
     registry.onCustomEvent("shop:purchase", candlePurchased);
     registry.onCustomEvent("npc-dialogue:action", harryDialogue);
+    registry.onNpcDialogueCondition(harryCondition);
     registry.onCustomEvent("npc-dialogue:action", foresterArms);
     registry.onCustomEvent("fishing:success", fishingSuccess);
     registry.onCustomEvent("cooking:success", cookingSuccess);
@@ -507,7 +539,7 @@ module.exports = {
     TINY_NET, PET_FISH_IDS, GRANITE_BODY_COST, BA_SHOP_ID, FANCY_STONE_STYLE,
     MAPLE_LOGS, MAGIC_LOGS, CHEWED_BONES, SEERS_COURTHOUSE,
     pending, inBox, near, diaryProgress, AQUARIUM, AQUARIUM_ID,
-    openCandleShop, candlePurchased, harryDialogue, fishPet, foresterArms, fishingSuccess,
+    openCandleShop, candlePurchased, harryDialogue, harryCondition, fishPet, foresterArms, fishingSuccess,
     cookingSuccess, woodcuttingSuccess, fletchingMade, herbloreMade,
     agilityObstacle, hemensterChest, houseRedecorated, blackboardRead, graniteBodyBought,
     equipmentChanged, staminaMix, firemakingSuccess, pyreBuilt, resolveCandleShop, credit,

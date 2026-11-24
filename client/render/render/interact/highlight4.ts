@@ -286,7 +286,7 @@ export function spawnClickCross(host: WebGLOsrsRendererHost,
         color: "red" | "yellow",
     ): void {
 
-        if (!tile) return;
+        if (!tile || !ClientState.showMouseCross) return;
         const playerPlane = host.getPlayerBasePlane() | 0;
         let plane = tile.plane ?? playerPlane;
         let tileX = tile.tileX | 0;

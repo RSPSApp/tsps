@@ -730,8 +730,9 @@ export function registerClientOps(handlers: HandlerMap): void {
         }
     });
 
+    // setshowmousecross: a top-level layout can turn the click cross off (scripts 901 / 907).
     handlers.set(Opcodes.SETSHOWMOUSECROSS, (ctx) => {
-        ctx.intStackSize--; // pop enabled
+        ClientState.showMouseCross = ctx.intStack[--ctx.intStackSize] === 1;
     });
 
     handlers.set(Opcodes.SETSHOWLOADINGMESSAGES, (ctx) => {

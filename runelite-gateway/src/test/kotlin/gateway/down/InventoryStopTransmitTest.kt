@@ -26,6 +26,7 @@ import net.rsprox.protocol.session.Session
 import net.rsprox.protocol.v242.ServerPacketDecoderServiceV242
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import java.nio.file.Files
 import java.util.Base64
 import java.util.concurrent.TimeUnit
 
@@ -165,17 +166,27 @@ class InventoryStopTransmitTest {
                 CachePipeline.getStore().close();
             })().catch(error => { console.error(error); process.exitCode = 1; });
         """.trimIndent()
-        val process = ProcessBuilder("node", "-r", "./server/node_modules/ts-node/register/transpile-only", "-e", script)
-            .redirectError(ProcessBuilder.Redirect.INHERIT).apply {
-                environment()["TS_NODE_PROJECT"] = "server/tsconfig.json"
-                environment()["BROWSER_HOST"] = "1" // Missing cache must fail instead of downloading.
-            }.start()
-        val finished = process.waitFor(60, TimeUnit.SECONDS)
-        if (!finished) process.destroyForcibly()
-        assertTrue(finished, "server packet producer timed out")
-        val output = process.inputStream.bufferedReader().readText()
-        assertEquals(0, process.exitValue(), output)
-        return Gson().fromJson(output, Array<Shop>::class.java).toList()
+        // A file cannot fill the child's stdout pipe while this thread waits (notably on Windows).
+        val outputFile = Files.createTempFile("tsps-shop-producer-", ".json")
+        var process: Process? = null
+        try {
+            process = ProcessBuilder("node", "-r", "./server/node_modules/ts-node/register/transpile-only", "-e", script)
+                .redirectOutput(outputFile.toFile())
+                .redirectError(ProcessBuilder.Redirect.INHERIT).apply {
+                    environment()["TS_NODE_PROJECT"] = "server/tsconfig.json"
+                    environment()["BROWSER_HOST"] = "1" // Missing cache must fail instead of downloading.
+                }.start()
+            assertTrue(process.waitFor(60, TimeUnit.SECONDS), "server packet producer timed out")
+            val output = Files.readString(outputFile)
+            assertEquals(0, process.exitValue(), output)
+            return Gson().fromJson(output, Array<Shop>::class.java).toList()
+        } finally {
+            if (process?.isAlive == true) {
+                process.destroyForcibly()
+                process.waitFor(5, TimeUnit.SECONDS)
+            }
+            Files.deleteIfExists(outputFile)
+        }
     }
 
     private fun scriptInventory(id: Int, slot: Int, item: Int, count: Int) {

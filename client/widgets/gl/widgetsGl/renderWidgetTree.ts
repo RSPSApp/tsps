@@ -22,6 +22,7 @@ import {
 import { MinimapRenderer, getMinimapMaps } from "../MinimapRenderer";
 import { drawChooseOptionMenu } from "../choose-option";
 import { isChatMessageAreaWidget } from "../../../game/widgets/interaction/chatboxClickThrough";
+import { heldWidgetTranslucentUid } from "../../../game/widgets/interaction/widgetDragHelpers";
 import { GLRenderer } from "../renderer";
 import {
     ClipRect,
@@ -169,13 +170,12 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
     const rootScaleX = Number.isFinite(rootScaleXRaw) && rootScaleXRaw > 0 ? rootScaleXRaw : 1.0;
     const rootScaleY = Number.isFinite(rootScaleYRaw) && rootScaleYRaw > 0 ? rootScaleYRaw : 1.0;
 
-    // The widget currently being clicked (Client.clickedWidget) is drawn semi-transparent.
+    // The widget being held for a drag (Client.clickedWidget) is drawn semi-transparent.
     // Reference: UserComparator5.drawInterface: if (var10 == Client.clickedWidget && !var10.isScrollBar) { var14 = 128; }
+    // Our clickedWidget also holds plain buttons, which stay opaque (heldWidgetTranslucentUid).
     // Note: `widgetInteraction` is a private TS field on OsrsClient but exists at runtime; read via `any`.
     const osrsClient = (opts.game as any)?.osrsClient as any;
-    const clickedWidget = osrsClient?.widgetInteraction?.clickedWidget;
-    const clickedWidgetUid: number | null =
-        typeof clickedWidget?.uid === "number" ? ((clickedWidget.uid | 0) as number) : null;
+    const clickedWidgetUid = heldWidgetTranslucentUid(widgetManager, osrsClient?.widgetInteraction?.clickedWidget);
 
     // PERF: Validate all dirty layouts in one pass before rendering
     // This avoids per-widget ensureLayout calls during tree traversal

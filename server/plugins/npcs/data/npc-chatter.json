@@ -1,0 +1,50 @@
+{
+  "$comment": "What NpcChatter leaves out of data/definitions/npc-captured-chatter.json (generated from rsprox captures; never edited by hand). `skipNpcs`: NPCs by cache gameval, grouped by why - their lines belong to a boss fight, minigame, cutscene, quest scene or event that its own code drives (or will), or answer something a recording cannot show. `skipLines`: patterns (case-insensitive) for lines that answer another player's theft or pickpocket in view, which no recording of the listener's own actions can tell apart from chatter. Docs: docs/npc-chatter.md.",
+  "skipNpcs": {
+    "bosses and their summons": [
+      "araxxor", "cerberus_spectre_magic", "cerberus_spectre_melee", "cerberus_spectre_ranged", "cowboss",
+      "godwars_bandos_avatar", "huey_seer", "nex", "nex_spawning", "rt_ice_king", "vetion_single",
+      "whisperer_soul_vulnerable", "elite_dark_mage_1", "elite_dark_mage_2"
+    ],
+    "minigames and their lobbies": [
+      "colosseum_master", "game_brew_red_parrot_helper", "gotr_cordelia_1op", "gotr_cordelia_2ops", "gotr_tamara_1op",
+      "hallowed_floor3_owl_01", "hallowed_floor3_owl_02", "mm_lab_conveyor_chatter", "pest_voidknight_control1",
+      "pest_voidknight_control2", "tempoross_instance_host_e", "tempoross_instance_host_e_victory",
+      "tempoross_instance_host_n", "tempoross_instance_host_n_victory", "tempoross_instance_host_s",
+      "tempoross_instance_host_s_victory", "tempoross_instance_host_w", "tempoross_instance_host_w_victory",
+      "tempoross_lobby_announcer", "tempoross_lobby_host"
+    ],
+    "cutscenes, quest scenes and quest instances": [
+      "darkm_auctioneer", "darkm_buyer_2", "darkm_buyer_3", "darkm_buyer_4", "darkm_buyer_5", "darkm_buyer_6",
+      "deal_pete", "fourdiamonds_sword_bandit_1", "magic_hunter_wizard_dwarf", "royal_cutscene_prince_brand",
+      "royal_cutscene_princess_astrid", "royal_fremennik_teen1", "royal_fremennik_teen2", "royal_fremennik_teen3",
+      "royal_fremennik_teen5", "vmq3_temple_cultist_pedestal_vis", "tol_npc_builder04"
+    ],
+    "player-owned house": [
+      "poh_hangman_armour1", "poh_hangman_armour3", "poh_mimic", "poh_skillpet_agility", "poh_supreme_pet",
+      "poh_zamorak_pet"
+    ],
+    "events and leagues": [
+      "count_check", "gathering_event_entlings_npc_01", "gathering_event_entlings_npc_01_pruned",
+      "gathering_event_woodcutting_leprechaun", "league6_imp_reading_2", "league6_imp_relic_carry_4", "postie_pete"
+    ],
+    "driven by other tsps plugins": [
+      "frisd_iznot_viking_shouter", "frisd_izso_viking_shouter", "sailing_charting_current_duck_moving",
+      "sailing_charting_current_duck_stopped"
+    ],
+    "answers to a player (thanks, refusals, course prompts)": [
+      "messenger_1", "misc_fisherman", "misc_gardener", "misc_lumberjack", "reldo_normal", "werewolf_trainer_stick",
+      "hans"
+    ]
+  },
+  "skipLines": [
+    "what do you think you're doing",
+    "get your hands off",
+    "in me pocket",
+    "out of my pockets",
+    "thief",
+    "steal",
+    "stole",
+    "guards"
+  ]
+}

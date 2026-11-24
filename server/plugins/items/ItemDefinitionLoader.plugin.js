@@ -510,6 +510,8 @@ function customModelsResource(_query, segments) {
 
 function sendCustomItems({ player }) {
   const sender = player.getPacketSender();
+  sender.sendContentData("server", [{key:"customSampledAnimations",rows:[]}]);
+  for(const animation of CacheDefinitions.getCustomAnimations())sender.sendContentData("server",[{key:"customSampledAnimations",rows:[animation]}]);
   sender.sendContentData("server", [{ key: "customModels", rows: [] }]);
   for (const model of CacheDefinitions.getCustomModels()) {
     sender.sendContentData("server", [{ key: "customModels", rows: [model] }]);

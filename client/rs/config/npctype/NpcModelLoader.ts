@@ -1,3 +1,5 @@
+import { SampledAnimationRegistry } from "../../../custom/animations/SampledAnimationRegistry";
+import { CustomModelRegistry } from "../../../custom/items/CustomModelRegistry";
 import { applyInterpolatedFrames, interpolationFrame, type ActorInterpolation } from "../../model/seq/FrameInterpolation";
 import { Model } from "../../model/Model";
 import { ModelData } from "../../model/ModelData";
@@ -69,7 +71,8 @@ export class NpcModelLoader {
                 return undefined;
             }
 
-            const merged = ModelData.merge(models, models.length);
+            // A sampled model owns its exact vertex order, including coincident vertices.
+            const merged = models.length === 1 && CustomModelRegistry.get(npcType.modelIds[0]) ? models[0] : ModelData.merge(models, models.length);
 
             if (npcType.recolorFrom) {
                 const retexture =
@@ -110,7 +113,10 @@ export class NpcModelLoader {
 
         if (actionSeqType || movementSeqType) {
             model = Model.copyAnimated(model, false, true);
-            this.applyNpcSequenceTransformations(
+            const sampled = SampledAnimationRegistry.get(seqId) ? {id:seqId,frame,blend:interpolation?.base} : SampledAnimationRegistry.get(movementSeqId) ? {id:movementSeqId,frame:movementFrame,blend:interpolation?.overlay} : null;
+            if (sampled && npcType.modelIds.length === 1) {
+                SampledAnimationRegistry.apply(model,npcType.modelIds[0],sampled.id,sampled.frame,sampled.blend?.next??sampled.frame,sampled.blend?.alpha??0);
+            } else this.applyNpcSequenceTransformations(
                 model,
                 actionSeqType,
                 seqId | 0,

@@ -1,3 +1,4 @@
+import { SampledAnimationRegistry } from "../../custom/animations/SampledAnimationRegistry";
 import type {
     LeagueMasteryChallengeRow,
     LeagueMasteryNodeRow,
@@ -114,7 +115,7 @@ export function clearWorldOverlays(): void {
 }
 
 export function isDefinitionDataset({ key }: { key: string }): boolean {
-    return key === "definitionArchives" || key === "customDefinitions" || key === "customDefinitionsAppend";
+    return key === "customSampledAnimations" || key === "definitionArchives" || key === "customDefinitions" || key === "customDefinitionsAppend";
 }
 
 export function loadFromPayload(payload: {
@@ -287,6 +288,11 @@ export function loadFromPayload(payload: {
                     console.log("[GamemodeContentStore] failed to register custom items", err);
                 }
                 break;
+            case "customSampledAnimations": {
+                if (dataset.rows.length === 0) SampledAnimationRegistry.clear();
+                for (const row of dataset.rows) SampledAnimationRegistry.accept(row as any);
+                break;
+            }
             case "customAnimations": {
                 const { CustomAnimationRegistry } = require("../../custom/animations/CustomAnimationRegistry");
                 if (dataset.rows.length === 0) CustomAnimationRegistry.clear();

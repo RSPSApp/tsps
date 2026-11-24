@@ -1,3 +1,4 @@
+import { SampledAnimationRegistry } from "../../custom/animations/SampledAnimationRegistry";
 import { interpolationKey, type ActorInterpolation } from "../../rs/model/seq/FrameInterpolation";
 /**
  * DynamicNpcAnimLoader - Builds dynamic NPC sequence metadata and current-frame geometry on demand.
@@ -72,7 +73,7 @@ export class DynamicNpcAnimLoader {
     private readonly modelAppearances = new Map<number, string>();
     private contentContext?: string;
     private contextKey?: string;
-    private readonly contextInputs = { textures: -1, customModels: -1, models: -1, revision: -1 };
+    private readonly contextInputs = { textures: -1, customModels: "", models: -1, revision: -1 };
     private opaqueSceneBuf: SceneBuffer | undefined;
     private alphaSceneBuf: SceneBuffer | undefined;
 
@@ -122,7 +123,7 @@ export class DynamicNpcAnimLoader {
     getContextKey(): string {
         // Read for every actor every frame: the strings are rebuilt only when an input changes.
         const textures = this.textureIdIndexMap?.size ?? 0;
-        const customModels = CustomModelRegistry.revision;
+        const customModels = `${CustomModelRegistry.revision}:${SampledAnimationRegistry.revision}`;
         const models = (this.modelLoader ?? this.npcModelLoader?.modelLoader)?.revision ?? 0;
         const inputs = this.contextInputs;
         if (
@@ -347,6 +348,7 @@ export class DynamicNpcAnimLoader {
     }
 
     private isSequenceFrameReady(seqId: number, frameId: number): boolean {
+        if(SampledAnimationRegistry.get(seqId))return true;
         const seqType = this.seqTypeLoader?.load(seqId | 0);
         if (!seqType) return false;
         if (seqType.isSkeletalSeq()) {

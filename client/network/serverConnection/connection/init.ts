@@ -1,3 +1,5 @@
+import { SampledAnimationRegistry } from "../../../custom/animations/SampledAnimationRegistry";
+import { CustomAnimationRegistry } from "../../../custom/animations/CustomAnimationRegistry";
 import { resetProtocolCompatibility, startWelcomeTimer, receiveProtocolGreeting, isProtocolRejected } from "../protocolCompatibility";
 import { replaceCustomDefinitions } from "../../../custom/definitions/CustomDefinitionStore";
 import { PlayerSyncContext } from "../../../game/sync/PlayerSyncContext";
@@ -51,6 +53,8 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
     try {
         CustomItemRegistry.clear();
         CustomModelRegistry.clear();
+        CustomAnimationRegistry.clear();
+        SampledAnimationRegistry.clear();
         replaceDefinitionArchives([]);
         replaceCustomDefinitions([]);
         clearWorldOverlays();
@@ -61,7 +65,7 @@ export function initServerConnection(url: string = DEFAULT_URL): void {
         client?.locTypeLoader?.clearCache();
         client?.renderer?.invalidateDefinitionCaches();
         void client?.workerPool?.runAll((worker: any) => worker.setCustomContent({
-            gamemodeId: "connection-reset", datasets: [{ key: "customItems", rows: [] }, { key: "customModels", rows: [] }, { key: "definitionArchives", rows: [] }, { key: "customDefinitions", rows: [] }],
+            gamemodeId: "connection-reset", datasets: [{ key: "customItems", rows: [] }, { key: "customModels", rows: [] }, {key:"customSampledAnimations",rows:[]}, {key:"customAnimations",rows:[{kind:"reset"}]}, { key: "definitionArchives", rows: [] }, { key: "customDefinitions", rows: [] }],
         })).catch((error: unknown) => console.error("Archived worker reset failed", error));
         state.playerSyncContext = new PlayerSyncContext();
         state.playerUpdateDecoder = new PlayerUpdateDecoder();

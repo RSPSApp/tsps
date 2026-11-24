@@ -1,3 +1,4 @@
+import { CustomSeqTypeLoader } from "../../../custom/animations/CustomSeqTypeLoader";
 import { CustomDefinitionLoader } from "../../../custom/definitions/CustomDefinitionStore";
 import { CustomObjTypeLoader } from "../../../custom/items/CustomObjTypeLoader";
 import { CustomNpcTypeLoader } from "../../../custom/npcs/CustomNpcTypeLoader";
@@ -278,17 +279,16 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
     getSeqTypeLoader(): SeqTypeLoader {
         if (this.seqTypeLoader) return this.seqTypeLoader;
         if (this.cacheInfo.game === "oldschool") {
-            // Custom animations (CustomAnimationRegistry) answer their ids first.
-            return this.seqTypeLoader = withCustomTypes(this.getArchivedLoaders().seq, SeqType, this.cacheInfo,
-                id => CustomAnimationRegistry.seq(id));
+            return this.seqTypeLoader = new CustomSeqTypeLoader(withCustomTypes(this.getArchivedLoaders().seq, SeqType, this.cacheInfo,
+                id => CustomAnimationRegistry.seq(id)), this.cacheInfo);
         }
         if (this.isIndexConfigs()) {
             const seqIndex = this.cacheSystem.getIndex(IndexType.RS2.seqs);
-            return (this.seqTypeLoader = new IndexSeqTypeLoader(this.cacheInfo, seqIndex));
+            return (this.seqTypeLoader = new CustomSeqTypeLoader(new IndexSeqTypeLoader(this.cacheInfo, seqIndex),this.cacheInfo));
         } else {
             const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
             const seqsArchive = configIndex.getArchive(ConfigType.DAT2.seqs);
-            return (this.seqTypeLoader = new ArchiveSeqTypeLoader(this.cacheInfo, seqsArchive));
+            return (this.seqTypeLoader = new CustomSeqTypeLoader(new ArchiveSeqTypeLoader(this.cacheInfo, seqsArchive),this.cacheInfo));
         }
     }
 

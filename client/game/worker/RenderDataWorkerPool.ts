@@ -1,3 +1,5 @@
+import { SampledAnimationRegistry } from "../../custom/animations/SampledAnimationRegistry";
+import { CustomAnimationRegistry } from "../../custom/animations/CustomAnimationRegistry";
 import { getCustomDefinitions } from "../../custom/definitions/CustomDefinitionStore";
 import { ModuleThread, Pool, spawn } from "threads";
 import { QueuedTask } from "threads/dist/master/pool";
@@ -7,7 +9,6 @@ import { ObservablePromise } from "threads/dist/observable-promise";
 import { canUseSharedArrayBuffer, LoadedCache } from "../Caches";
 import { CustomItemRegistry } from "../../custom/items/CustomItemRegistry";
 import { CustomModelRegistry } from "../../custom/items/CustomModelRegistry";
-import { CustomAnimationRegistry } from "../../custom/animations/CustomAnimationRegistry";
 import { getDefinitionArchives } from "../../custom/archives/ArchivedDefinitionStore";
 import { NpcGeometryData } from "../../render/loader/NpcGeometryData";
 import type { NpcInstance } from "../../render/npc/NpcRenderTemplate";
@@ -36,7 +37,7 @@ export class RenderDataWorkerPool {
     private readonly worldMapRequests = new Set<() => void>();
     private disposed = false;
     npcPoseGeneration = 0;
-    private npcPoseModelsRevision = -1;
+    private npcPoseModelsRevision: number | string = -1;
     private npcPoseContentReady: Promise<void> = Promise.resolve();
     private readonly npcPoseRequests = new Set<() => void>();
     private readonly npcPoseWorkers = new Map<WorkerDescriptor<RenderDataWorkerThread>, PoseReservation>();
@@ -77,6 +78,9 @@ export class RenderDataWorkerPool {
                 return w.setCustomContent({ gamemodeId: "custom-items", datasets: [
                     { key: "customItems", rows: Array.from(CustomItemRegistry.getAll(), (item) => item.definition) },
                     { key: "customModels", rows: CustomModelRegistry.getAll() },
+                    { key: "customSampledAnimations", rows: [] },
+                    { key: "customSampledAnimations", rows: SampledAnimationRegistry.getAll() },
+                    { key: "customAnimations", rows: CustomAnimationRegistry.rows() },
                     { key: "customDefinitions", rows: getCustomDefinitions() },
                     { key: "customAnimations", rows: CustomAnimationRegistry.rows() },
                 ] });
@@ -205,7 +209,7 @@ export class RenderDataWorkerPool {
         this.npcPoseWorkers.set(descriptor, reservation);
         (descriptor.runningTasks ??= []).push(reservation.task);
         const generation = this.npcPoseGeneration;
-        const contentRevision = CustomModelRegistry.revision * 65536 + CustomAnimationRegistry.revision;
+        const contentRevision = `${CustomModelRegistry.revision}:${CustomAnimationRegistry.revision}:${SampledAnimationRegistry.revision}`;
         if (this.npcPoseModelsRevision !== contentRevision) {
             this.npcPoseModelsRevision = contentRevision;
             const payload = { gamemodeId: "custom-items", datasets: [
@@ -213,6 +217,8 @@ export class RenderDataWorkerPool {
                 { key: "customModels", rows: CustomModelRegistry.getAll() },
                 { key: "customDefinitions", rows: getCustomDefinitions() },
                 { key: "customAnimations", rows: CustomAnimationRegistry.rows() },
+                { key: "customSampledAnimations", rows: [] },
+                { key: "customSampledAnimations", rows: SampledAnimationRegistry.getAll() },
             ] };
             this.npcPoseContentReady = this.runAll(worker => worker.setCustomContent(payload))
                 .catch(error => { this.npcPoseModelsRevision = -1; throw error; });

@@ -1,6 +1,6 @@
 {
   "updated": "2026-11-24",
-  "note": "Progress measures functional equivalence with OSRS through implementation tasks: done counts fully, in progress counts halfway, and to do counts zero. Automated test coverage is evidence, not a scoring requirement. Reconciled against tsps main 3e9ee2d67 on 11 November 2026, covering 1,355 merged PRs since the 6 November checkpoint 3b61a15a8. This sync credits the implemented portions of Clan Wars, Burthorpe Games Room, ranked PvP Arena, Trouble Brewing, Intelligence Gathering, Halloween, seasonal rares, Brutus and Maggot King. It also records Hunter Rumours, diary and League task updates, Sailing, bank-funded Grand Exchange offers, Curse of the Empty Lord, quest progression fixes, combat and interface work. Existing inventory, task scope and weights are retained. Only merged main changes are credited. On 24 November 2026 every item whose recorded implementation or subject was changed by a PR merged after 3e9ee2d67 was reconciled against main 74609edfe: each such item has a dated note crediting the merged work, and statuses changed only where a task's full acceptance is now met.",
+  "note": "Progress measures functional equivalence with OSRS through implementation tasks: done counts fully, in progress counts halfway, and to do counts zero. Automated test coverage is evidence, not a scoring requirement. Reconciled against tsps main 3e9ee2d67 on 11 November 2026, covering 1,355 merged PRs since the 6 November checkpoint 3b61a15a8. This sync credits the implemented portions of Clan Wars, Burthorpe Games Room, ranked PvP Arena, Trouble Brewing, Intelligence Gathering, Halloween, seasonal rares, Brutus and Maggot King. It also records Hunter Rumours, diary and League task updates, Sailing, bank-funded Grand Exchange offers, Curse of the Empty Lord, quest progression fixes, combat and interface work. Existing inventory, task scope and weights are retained. Only merged main changes are credited. On 24 November 2026 the items touched by PRs merged after 3e9ee2d67 were reviewed against main 74609edfe (https://github.com/RSPSApp/tsps/pull/6691): each credited item has a dated note; 57 touched items were reviewed and left unchanged (listed in that PR). Statuses move to done only where a task's full acceptance is met, and to in-progress where a slice is delivered.",
   "schema": {
     "item": [
       "name",
@@ -14607,7 +14607,7 @@
             "The warlord only drops orbs two and three after orb one is returned to the King; the third tracker's clue encodes a single-digit coordinate.",
             "Main 82657e165: #1526 a fresh playthrough recorded.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4016 Tree Gnome Village: climb the crumbled wall, the warlord walks home, the tree glows. #3517 Open the Khazard stronghold door from inside. #3514 Fix Tree Gnome Village dialogue, chest and Elkoy Follow.",
-            "2026-11-24, main 74609edfe: The whole quest is aligned with the revision 242 captures (https://github.com/RSPSApp/tsps/pull/5967) after the seven https://github.com/RSPSApp/tsps/pull/4890 points and Talk-to for Elkoy and the warlord (https://github.com/RSPSApp/tsps/pull/5100); chanters wander one tile and Elkoy's inbound line waits 5 ticks (https://github.com/RSPSApp/tsps/pull/5979). Verified by server/tests/tree-gnome-village-capture.test.cjs, docs/quests/tree-gnome-village/README.md, server/tests/qh728-q117.test.cjs. Existing task statuses are unchanged."
+            "2026-11-24, main 74609edfe: The whole quest is aligned with the revision 242 captures (https://github.com/RSPSApp/tsps/pull/5967) after the seven points of issue https://github.com/RSPSApp/tsps/issues/4890 and Talk-to for Elkoy and the warlord (https://github.com/RSPSApp/tsps/pull/5100); chanters wander one tile and Elkoy's inbound line waits 5 ticks (https://github.com/RSPSApp/tsps/pull/5979). Verified by server/tests/tree-gnome-village-capture.test.cjs, docs/quests/tree-gnome-village/README.md, server/tests/qh728-q117.test.cjs. Existing task statuses are unchanged."
           ],
           "taskDetails": [
             {
@@ -30363,7 +30363,7 @@
             "Main 82657e165: #1631 the cove refuses attacks off a Kraken Slayer task. The private instance remains.",
             "Main 8403b60db (4 November 2026): #1960 — The merged Wiki/recording audit corrects the relevant fight behavior; findings, sources and remaining inferred values are listed in docs/audits/boss-fights*.md. Existing access/fidelity gaps are not promoted by attack-specific fixes.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3350 fix: thralls deal no damage to kurasks, turoths or Vyrewatch Sentinels. #3091 Kraken: say that private rooms use the public respawn delay. #3085 Add private Kraken Cove entry.",
-            "2026-11-24, main 74609edfe: The private room asks \"Pay 25,000 x Coins?\", warns that items left inside are lost and confirms the payment (https://github.com/RSPSApp/tsps/pull/5879, https://github.com/RSPSApp/tsps/pull/5422); the Kraken Combat Achievements are tracked (https://github.com/RSPSApp/tsps/pull/6096). Verified by server/tests/kraken.test.cjs, server/tests/kraken-combat-achievements.test.cjs and docs/kraken.md. Failure and recovery remains in-progress; its recorded private-room gap was closed before the import, so it should be re-assessed against the wipe/death criteria. Existing task statuses are otherwise unchanged."
+            "2026-11-24, main 74609edfe: The private room asks \"Pay 25,000 x Coins?\", warns that items left inside are lost and confirms the payment (https://github.com/RSPSApp/tsps/pull/5879, https://github.com/RSPSApp/tsps/pull/5422); the Kraken Combat Achievements are tracked (https://github.com/RSPSApp/tsps/pull/6096). Verified by server/tests/kraken.test.cjs, server/tests/kraken-combat-achievements.test.cjs and docs/kraken.md. Failure and recovery remains in-progress; private-room cleanup and item loss on leaving are documented (docs/kraken.md, Private room), but public-room tentacles after a player's death are still unevidenced. Existing task statuses are otherwise unchanged."
           ],
           "taskDetails": [
             {
@@ -30426,7 +30426,7 @@
                 "Clear tentacles/instance on wipe, teleport and disconnect.",
                 "Standard death rules.",
                 "Re-entry after failure is fresh.",
-                "Remaining (2026-11-24): the private 25k room exists (docs/kraken.md); re-check public-room tentacle cleanup after a death and private-room item loss on leaving before marking done."
+                "Remaining (2026-11-24): private-room cleanup and item loss on leaving are documented (docs/kraken.md, Private room); still unevidenced: public-room tentacles after a player's death."
               ],
               "acceptanceCriteria": [
                 "No tentacles persist after a wipe.",

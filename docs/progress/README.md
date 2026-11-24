@@ -74,6 +74,9 @@ scores. They provide starting points for an acceptance-by-acceptance reassessmen
 | Mahogany Homes | [Work orders/client checklists #5049](https://github.com/RSPSApp/tsps/pull/5049), [provenance #5062](https://github.com/RSPSApp/tsps/pull/5062); [Construction](../construction.md). | Reconcile stale cancellation/blueprint claims against current source and Wiki; do not implement a stale missing-work description blindly. |
 | Golem crafting | [Regular crafting #5054](https://github.com/RSPSApp/tsps/pull/5054), [continuous-input shaping #5110](https://github.com/RSPSApp/tsps/pull/5110); [mechanics and limits](../golem-crafting.md). | Imported all-todo statuses predate this playable loop. Repeatable monolith and disclosed timing/orientation limits require separate qualification. |
 
-These four rows were reconciled on 24 November 2026, together with every other item a PR merged after
-the import touched. Each item's `2026-11-24, main 74609edfe` note records the outcome and what remains.
+These four rows were reconciled on 24 November 2026 with the other items touched by PRs merged
+after the import ([#6691](https://github.com/RSPSApp/tsps/pull/6691)). Each credited item has a dated
+`2026-11-24, main 74609edfe` note recording the outcome and what remains; 57 touched items were
+reviewed and left unchanged (listed in that PR). Statuses move to done only where a task's full
+acceptance is met, and to in-progress where a slice is delivered.
 

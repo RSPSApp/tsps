@@ -411,6 +411,12 @@ After changing a plugin's `description` or `config`, run `yarn --cwd server worl
 | `ShootingStars:announce` | boolean | `false` | **Announce landings.** Tells everyone online where a star landed. Useful on small worlds; OSRS has no such message. |
 | `ShootingStars:intervalMinutes` | number (> 0) | *90* | **Minutes between shooting stars.** Time between stars; a random 15 minutes either way is added on top. |
 
+#### Plugin area `tools` (`pluginConfig`)
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| `WorldAdmin:playerTools` | boolean | `true` | **Player tools.** Show live teleport, item, skill and quest controls in the Players panel. The panel token grants owner access. |
+
 #### Plugin area `world` (`pluginConfig`)
 
 | Key | Type | Default | Description |

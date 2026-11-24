@@ -477,6 +477,12 @@ export function buildNpcMenuEntries(
                 }
             }
             // npcAttackOption === 2: Left-click where available, never deprioritize
+        } else if (
+            ctx.npcAttackOption === 0 &&
+            (typeof npcType.combatLevel === "number" ? npcType.combatLevel : 0) > ctx.localPlayerCombatLevel
+        ) {
+            // "Depends on combat levels" lowers a higher-level NPC's other options too.
+            deprioritized = true;
         }
         // Follower low priority: deprioritize ALL options on followers
         if (isFollowerLowPriority) {

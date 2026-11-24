@@ -789,7 +789,12 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 }
 
                 const actions = getNpcMenuActions(npcType, host.osrsClient.varManager);
-                const followerDeprioritized = isFollowerLowPriority;
+                // "Depends on combat levels" lowers every option of a higher-level NPC, not only
+                // Attack: the r241 client tests the level for both passes.
+                const levelDeprioritized =
+                    (ClientState.npcAttackOption | 0) === 0 &&
+                    ((npcType.combatLevel ?? 0) | 0) > (ClientState.localPlayerCombatLevel | 0);
+                const followerDeprioritized = isFollowerLowPriority || levelDeprioritized;
 
                 // OSRS: Non-attack options first (4..0).
                 for (let actionIdx = 4; actionIdx >= 0; actionIdx--) {

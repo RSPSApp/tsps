@@ -27,3 +27,14 @@ test("a follower with the flag gets Examine first and lowered options", () => {
     assert.ok(actions.slice(1).every((a) => a.deprioritized));
     assert.equal(examine, null);
 });
+
+test("\"Depends on combat levels\" lowers every option of a higher-level NPC", () => {
+    const guard = npc({ name: "Guard", combatLevel: 60, actions: ["Talk-to", "Attack", "Pickpocket", null, null] });
+    const lowered = (npcAttackOption: number, localPlayerCombatLevel: number) =>
+        buildNpcMenuEntries(guard, 0, 0, { ...ctx, npcAttackOption, localPlayerCombatLevel }, callbacks, () => undefined, 7)
+            .actions.filter((a) => a.deprioritized).map((a) => a.option).sort();
+    assert.deepEqual(lowered(0, 50), ["Attack", "Pickpocket", "Talk-to"]);
+    assert.deepEqual(lowered(0, 70), []);
+    assert.deepEqual(lowered(2, 50), []);
+    assert.deepEqual(lowered(1, 50), ["Attack"]);
+});

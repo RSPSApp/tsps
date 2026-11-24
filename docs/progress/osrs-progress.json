@@ -5007,14 +5007,17 @@
           "wiki": "https://oldschool.runescape.wiki/w/Gertrude%27s_Cat",
           "implementedIn": [
             "server/plugins/quests/quests/GertrudesCat.Quest.js",
-            "server/plugins/quests/QuestRuntime.js"
+            "server/plugins/quests/QuestRuntime.js",
+            "server/plugins/npcs/Gertrude.plugin.js",
+            "server/plugins/skills/data/agility-shortcuts.json"
           ],
           "devNotes": [
             "Ported in server/plugins/quests/quests/GertrudesCat.Quest.js (transcript-driven variant selection, conditions and hand-ins); see the file header for documented gaps.",
             "Transcript page is \"Gertrude's Cat\"; the kitten is a pets-system feature (server/plugins/npcs/Pets.plugin.js), so hand the pet off to that plugin rather than owning follow behaviour here.",
             "The doogle-leaf + sardine combination is an onItemOnItem recipe.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3673 Fix Gertrude's Cat crate randomisation and Mew cues. #3509 Show Fluffs' missing quest hints. #2905 Fix Gertrude kitten choice feedback and reward scroll. 4 merged PRs changed recorded implementation files for this entry.",
-            "2026-11-24, main 74609edfe: Fluffs' hints are shown as a message box (https://github.com/RSPSApp/tsps/pull/4427). Verified by server/tests/gertrudes-cat-fluffs-hint.test.cjs. All tasks were already done; no status change."
+            "2026-11-24, main 74609edfe: Fluffs' hints are shown as a message box (https://github.com/RSPSApp/tsps/pull/4427). Verified by server/tests/gertrudes-cat-fluffs-hint.test.cjs. All tasks were already done; no status change.",
+            "2026-11-24, feat/quest-gertrudes-cat: aligned with a revision 242 capture of a whole run (boys' talk by clicked boy, payment on the last line, Fluffs' swipe/hand-over/return timings, crates, dropped kitten, broken fence, kitten follower reward, journal), with RSPSApp/osrsreboxed-db#142 for the dialogue. Verified by server/tests/gertrudes-cat-capture.test.cjs and a fresh natural playthrough (docs/quests/gertrudes-cat/README.md). Remaining: the kitten's own care wording (Pets plugin) and the quest rating box."
           ],
           "taskDetails": [
             {

@@ -652,7 +652,8 @@ test("the cache-backed Varrock broken fence crosses its clipped north-south edge
   const south = createPlayer(3308, 3491, 0, 1);
   assert.notEqual(operate(south, objectId, [3308, 3492, 0]), false);
   assert.deepEqual(tileOf(south), [3308, 3494, 0], "Climb-over lands north of the clipped fence");
-  assert.ok(south.state.messages.includes("You climb over the broken fence."));
+  // Live sends no message for it (Gertrude's Cat capture, revision 242, ticks 375-382).
+  assert.ok(!south.state.messages.some((message) => /climb over/i.test(message)), JSON.stringify(south.state.messages));
   assert.equal(south.getAttribute("agility.obstacle") ?? null, null);
 
   const north = createPlayer(3308, 3494, 0, 1);

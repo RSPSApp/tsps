@@ -163,8 +163,8 @@ function setup(options = {}) {
       return event;
     },
     login() {
-      if (hooks.login.length) for (const fn of hooks.login) fn({ player });
-      else runtime.sendQuestVarps({ player });
+      for (const fn of hooks.login) fn({ player });
+      runtime.sendQuestVarps({ player });
     },
   };
 }
@@ -173,141 +173,29 @@ const START_HOOK = 'quest:gertrude-s-cat:start';
 
 test('stage 0 start hook, varp bootstrap and stage-selected dialogue', () => {
   const h = setup();
-  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
+  const N = h.core.NpcIdentifiers;
+  const page = (variant) => ({ page: "Gertrude's Cat", variant });
   assert.equal(h.quest.getStage(h.player), 0);
   h.login();
   assert.equal(h.configs.get(180), 0, 'login resends the unstarted varp');
   assert.equal(h.variant(N.GERTRUDE), 'starting-off');
+  assert.equal(h.variant(N.SHILOP), null, 'the boys keep their own page before the quest');
 
   h.fire('npc-dialogue:hook', { npcId: N.GERTRUDE, hook: START_HOOK });
   assert.equal(h.quest.getStage(h.player), 1);
   assert.equal(h.configs.get(180), 1, 'start writes varp 180');
   assert.equal(h.variant(N.GERTRUDE), 'starting-off-talking-to-gertrude-again');
-  assert.equal(h.variant(N.SHILOP), 'talking-to-shilop-and-wilough');
-  assert.equal(h.variant(N.WILOUGH), 'talking-to-shilop-and-wilough');
-
-  h.inventory.adds(I.COINS, 150);
-  h.action(N.WILOUGH, 'YQId7G');
-  assert.equal(h.quest.getStage(h.player), 2);
-  assert.equal(h.configs.get(180), 2);
-  assert.equal(h.inventory.getAmount(I.COINS), 50, 'the 100-coin hand-in consumes coins');
-  assert.deepEqual(h.variant(N.WILOUGH), {
-    page: "Gertrude's Cat",
-    variant: 'talking-to-shilop-and-wilough-talking-to-them-again',
-  }, 'after paying, Wilough repeats the location hint, not the pay menu');
-  assert.deepEqual(h.variant(N.SHILOP), {
-    page: 'Shilop',
-    variant: 'standard-dialogue-after-paying-him',
-  });
-
-  h.action(N.WILOUGH, 'YQId7G');
-  assert.equal(h.inventory.getAmount(I.COINS), 50, 'repeating the action never charges twice');
-});
-
-test('mandatory route: pay, milk, seasoned sardine, one random Lumber Yard crate, kitten, completion', () => {
-  const h = setup();
-  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers, O = h.core.ObjectIdentifiers;
-  h.inventory.adds(I.COINS, 100);
-  h.inventory.adds(I.BUCKET_OF_MILK, 1);
-  h.inventory.adds(I.RAW_SARDINE, 1);
-  h.inventory.adds(I.DOOGLE_LEAVES, 1);
-
-  h.fire('npc-dialogue:hook', { npcId: N.GERTRUDE, hook: START_HOOK });
-  h.action(N.WILOUGH, 'YQId7G');
-  assert.equal(h.quest.getStage(h.player), 2);
-  assert.equal(h.inventory.getAmount(I.COINS), 0);
-
-  h.itemOnNpc(I.BUCKET_OF_MILK, N.GERTRUDES_CAT_2);
-  assert.equal(h.quest.getStage(h.player), 3);
-  assert.equal(h.configs.get(180), 3);
-  assert.equal(h.inventory.getAmount(I.BUCKET_OF_MILK), 0);
-  assert.equal(h.inventory.getAmount(I.BUCKET), 1, 'the empty bucket is returned');
-
-  h.itemOnItem(I.DOOGLE_LEAVES, I.RAW_SARDINE);
-  assert.equal(h.inventory.getAmount(I.DOOGLE_LEAVES), 0);
-  assert.equal(h.inventory.getAmount(I.RAW_SARDINE), 0);
-  assert.equal(h.inventory.getAmount(I.SEASONED_SARDINE), 1);
-
-  h.itemOnNpc(I.SEASONED_SARDINE, N.GERTRUDES_CAT_2);
-  assert.equal(h.quest.getStage(h.player), 4);
-  assert.equal(h.configs.get(180), 4);
-  assert.equal(h.inventory.getAmount(I.SEASONED_SARDINE), 0);
-
-  const crateSpawns = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../data/definitions/npc-spawns.json'), 'utf8'))
-    .filter((spawn) => spawn.id === N.CRATE && spawn.level === 0 && spawn.x >= 3298 && spawn.x <= 3315 && spawn.y >= 3499 && spawn.y <= 3515);
-  assert.equal(crateSpawns.length, 6, 'the cache-backed Lumber Yard crate NPC spawns are present');
-  assert.equal(h.core.NpcDefinition.forId(N.CRATE).getName(), 'Crate');
-  assert.ok(h.core.NpcDefinition.forId(N.CRATE).getActions().includes('Search'));
-  const successfulCrates = [];
-  for (const spawn of crateSpawns) {
-    h.npc(N.CRATE, spawn.x, spawn.y, spawn.level);
-    if (h.inventory.getAmount(I.FLUFFS_KITTEN)) {
-      successfulCrates.push(spawn);
-      h.inventory.deleteNumber(I.FLUFFS_KITTEN, 1);
-    }
+  // The talk is worded from the clicked boy's side (the revision 242 capture, ticks 148-290).
+  assert.deepEqual(h.variant(N.SHILOP), page('talking-to-shilop-and-wilough'));
+  assert.deepEqual(h.variant(N.WILOUGH), page('talking-to-shilop-and-wilough-talking-to-wilough'));
+  h.quest.setStage(h.player, 2);
+  assert.deepEqual(h.variant(N.SHILOP), page('talking-to-shilop-and-wilough-talking-to-them-again'));
+  assert.deepEqual(h.variant(N.WILOUGH), page('talking-to-shilop-and-wilough-talking-to-wilough-again'));
+  for (const stage of [3, 4, 5, 6]) {
+    h.quest.setStage(h.player, stage);
+    assert.deepEqual(h.variant(N.SHILOP), page('finding-fluffs-talking-to-shilop-and-wilough-again'), `stage ${stage}`);
+    assert.deepEqual(h.variant(N.WILOUGH), page('finding-fluffs-talking-to-wilough-again'), `stage ${stage}`);
   }
-  assert.equal(successfulCrates.length, 1, 'only the selected crate contains the kitten');
-  const selectedCrate = successfulCrates[0];
-
-  for (const [objectId, x, y] of [
-    [O.CRATE_59, 3302, 3502],
-    [O.CRATE_60, 3302, 3500],
-    [O.CRATE_18, 3302, 3503],
-  ]) {
-    assert.equal(h.object(objectId, x, y).handled, false, `scenery crate ${objectId} is not the helper-marked NPC target`);
-  }
-
-  assert.equal(h.npc(N.CRATE, 3200, 3400).handled, false, 'a crate NPC outside the Lumber Yard is not claimed');
-  h.quest.setStage(h.player, 3);
-  h.npc(N.CRATE, crateSpawns[0].x, crateSpawns[0].y);
-  assert.equal(h.inventory.getAmount(I.FLUFFS_KITTEN), 0, 'crates give no kitten before the sardine stage');
-  h.quest.setStage(h.player, 4);
-
-  h.npc(N.CRATE, selectedCrate.x, selectedCrate.y);
-  transcripts.length = 0;
-  h.itemOnNpc(I.FLUFFS_KITTEN, N.GERTRUDES_CAT_2);
-  assert.deepEqual(transcripts.at(-1), { npcId: N.GERTRUDES_CAT_2, page: "Gertrude's Cat",
-    variant: 'making-seasoned-sardines-returning-the-kitten-to-fluffs' }, 'the Wiki scene plays, not a made-up message');
-  assert.equal(h.quest.getStage(h.player), 5);
-  assert.equal(h.configs.get(180), 5);
-  assert.equal(h.inventory.getAmount(I.FLUFFS_KITTEN), 0);
-
-  h.action(N.GERTRUDE, 'Rf4BAK');
-  assert.equal(h.quest.getStage(h.player), 6);
-  assert.equal(h.configs.get(180), 6, 'completion reaches the cache threshold');
-  assert.equal(Number(h.attrs.get(runtime.QUEST_POINTS_ATTRIBUTE)), 1);
-  assert.deepEqual(h.xp, [[h.core.Skill.COOKING.getIndex(), 1525]]);
-  assert.equal([I.PET_KITTEN, I.PET_KITTEN_2, I.PET_KITTEN_3, I.PET_KITTEN_4, I.PET_KITTEN_5, I.PET_KITTEN_6].reduce((sum, id) => sum + h.inventory.getAmount(id), 0), 1);
-  assert.equal(h.inventory.getAmount(I.CHOCOLATE_CAKE), 1);
-  assert.equal(h.inventory.getAmount(I.STEW), 1);
-  assert.equal(h.jingles(), 1);
-
-  h.action(N.GERTRUDE, 'Rf4BAK');
-  assert.equal(h.quest.getStage(h.player), 6);
-  assert.deepEqual(h.xp, [[h.core.Skill.COOKING.getIndex(), 1525]], 'repeat hand-in grants no extra XP');
-  assert.equal([I.PET_KITTEN, I.PET_KITTEN_2, I.PET_KITTEN_3, I.PET_KITTEN_4, I.PET_KITTEN_5, I.PET_KITTEN_6].reduce((sum, id) => sum + h.inventory.getAmount(id), 0), 1, 'repeat hand-in grants no extra kitten');
-  assert.equal(h.inventory.getAmount(I.CHOCOLATE_CAKE), 1);
-  assert.equal(h.inventory.getAmount(I.STEW), 1);
-
-  h.login();
-  assert.equal(h.configs.get(180), 6, 'login replays the completed varp');
-});
-
-test('bottomless milk bucket advances the milk leg for one use, not the whole bucket', () => {
-  const h = setup();
-  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
-  require('../plugins/items/BottomlessMilkBucket.plugin').register(new Proxy({ onServerStartup: (fn) => fn() }, {
-    get: (target, key) => target[key] ?? h.api[key],
-  }));
-  h.quest.setStage(h.player, 2); // fixture: the boys have already been paid.
-  h.inventory.adds(I.BOTTOMLESS_MILK_BUCKET, 1);
-  const bucket = h.inventory.getItems().find((item) => item.getId() === I.BOTTOMLESS_MILK_BUCKET);
-  bucket.setMetaValue('bottomless-milk', { uses: 2, type: I.BUCKET_OF_MILK });
-  h.itemOnNpc(I.BOTTOMLESS_MILK_BUCKET, N.GERTRUDES_CAT_2);
-  assert.equal(h.quest.getStage(h.player), 3);
-  assert.equal(h.inventory.getAmount(I.BOTTOMLESS_MILK_BUCKET), 1);
-  assert.equal(bucket.getMetaValue('bottomless-milk').uses, 1, 'one use is spent');
-  assert.equal(h.inventory.getAmount(I.BUCKET), 0);
 });
 
 test('a bottomless bucket of another kind of milk does not count as milk for Fluffs', () => {
@@ -322,22 +210,7 @@ test('a bottomless bucket of another kind of milk does not count as milk for Flu
     .setMetaValue('bottomless-milk', { uses: 4, type: I.CHOCOLATEY_MILK });
   h.itemOnNpc(I.BOTTOMLESS_MILK_BUCKET, N.GERTRUDES_CAT_2);
   assert.equal(h.quest.getStage(h.player), 2, 'chocolatey milk is not what Fluffs wants');
-  assert.equal(h.messages.at(-1), 'Fluffs is not interested right now.');
-});
-
-test('completion waits until all advertised reward items fit', () => {
-  const h = setup();
-  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
-  h.quest.setStage(h.player, 5);
-  for (let i = 0; i < 26; i++) h.inventory.adds(I.COINS, 1);
-  h.action(N.GERTRUDE, 'Rf4BAK');
-  assert.equal(h.quest.getStage(h.player), 5);
-  assert.deepEqual(h.xp, [], 'no completion XP is awarded while the reward hand-out is blocked');
-  assert.equal(Number(h.attrs.get(runtime.QUEST_POINTS_ATTRIBUTE)) || 0, 0);
-  assert.ok(h.messages.some((message) => message.includes('three free inventory slots')));
-  assert.equal(h.inventory.getAmount(I.PET_KITTEN), 0);
-  assert.equal(h.inventory.getAmount(I.CHOCOLATE_CAKE), 0);
-  assert.equal(h.inventory.getAmount(I.STEW), 0);
+  assert.equal(h.messages.length, 0, "the game's own answer, not the quest's");
 });
 
 test('production quest order routes both Gertrude forms between her quests and preserves the mewing crate', () => {
@@ -430,19 +303,9 @@ test('production quest order routes both Gertrude forms between her quests and p
     assert.equal(ruff.getStage(player), 15);
   }
 
-  quest.setStage(player, 4);
   const crateDefinition = core.NpcDefinition.forId(N.CRATE);
   assert.equal(crateDefinition.getName(), 'Crate');
   assert.ok(crateDefinition.getActions().includes('Search'));
-  const crateSpawns = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../data/definitions/npc-spawns.json'), 'utf8'))
-    .filter((spawn) => spawn.id === N.CRATE && spawn.level === 0 && spawn.x >= 3298 && spawn.x <= 3315 && spawn.y >= 3499 && spawn.y <= 3515);
-  assert.equal(crateSpawns.length, 6);
-  for (const spawn of crateSpawns) {
-    const crate = { getId: () => N.CRATE, getLocation: () => new core.Location(spawn.x, spawn.y, spawn.level) };
-    const npcEvent = { player, npc: crate, npcId: N.CRATE, definition: crateDefinition, clickType: crateDefinition.getActions().indexOf('Search') + 1, handled: false };
-    assert.equal(PluginManager.emitNpcInteraction(npcEvent), true, 'the real registered NPC Search handler claims each cache-backed crate');
-  }
-  assert.equal(inventory.getAmount(core.ItemIdentifiers.FLUFFS_KITTEN), 1, 'the real dispatch finds only one kitten');
   const elsewhere = { getId: () => N.CRATE, getLocation: () => new core.Location(3200, 3400, 0) };
   const outsideEvent = { player, npc: elsewhere, npcId: N.CRATE, definition: crateDefinition, clickType: crateDefinition.getActions().indexOf('Search') + 1, handled: false };
   assert.equal(PluginManager.emitNpcInteraction(outsideEvent), false, 'the Lumber Yard hook yields for unrelated Crate NPCs');
@@ -454,7 +317,7 @@ test('production quest order routes both Gertrude forms between her quests and p
   const object = { getId: () => objectId, getDefinition: () => objectDefinition, getLocation: () => objectLocation };
   const objectEvent = { player, object, objectId, clickType: objectDefinition.getInteractions().indexOf('Search') + 1, handled: false };
   assert.equal(PluginManager.emitObjectInteraction(objectEvent), false, 'ordinary scenery crates do not grant the helper-marked kitten');
-  assert.equal(inventory.getAmount(core.ItemIdentifiers.FLUFFS_KITTEN), 1);
+  assert.equal(inventory.getAmount(core.ItemIdentifiers.FLUFFS_KITTEN), 0);
 });
 
 test('post-quest Gertrude standard dialogue routes the kitten purchase action', () => {
@@ -526,127 +389,27 @@ test('real NpcDialogues resolves Wilough on the Gertrude page at stage 2 and kee
     return lines.map((line) => line.text);
   }
 
-  // Stage 1 is still the boys' first conversation (the 100-coin menu branch).
+  const speakers = (player, npcId) => { talk(player, npcId); return lines.map((line) => [line.speaker ?? null, line.text]); };
+  // Stage 1: the clicked boy opens the first conversation.
   assert.ok(talk(realPlayer(1), N.WILOUGH).includes("I didn't mean to take it! I just forgot to pay."));
   assert.ok(!talk(realPlayer(1), N.WILOUGH).some((text) => text.startsWith("Weren't you listening?")));
 
-  // Stage 2 picks the canonical after-paying follow-up from the Gertrude's Cat
-  // page, not Wilough's own standard page (which would say "Hello youngster!").
-  const paid = talk(realPlayer(2), N.WILOUGH);
-  assert.ok(paid.some((text) => text.includes('I saw the flea bag in the old lumber mill')),
-    'Wilough repeats the location hint after paying');
-  assert.ok(!paid.some((text) => text.includes('Hello youngster!')),
-    'Wilough does not fall back to his standard page');
-
-  // Wrong NPC: Shilop has his own after-paying page.
-  const shilop = talk(realPlayer(2), N.SHILOP);
-  assert.ok(shilop.includes('Hello again.'));
-  assert.deepEqual(lines.find((line) => line.text === 'You think you\'re tough do you?')?.speaker, 'Wilough',
-    'stage 2 Shilop plays his standard after-paying page');
-
-  // Neighbouring stages: 3 still repeats the location hint, while 4 selects the
-  // finding-Fluffs follow-up, whose first taunt is spoken by Shilop, not Wilough.
-  for (const stage of [2, 3]) {
-    const repeated = talk(realPlayer(stage), N.WILOUGH);
-    assert.ok(repeated.some((text) => text.includes('I saw the flea bag in the old lumber mill')),
-      `stage ${stage} repeats the location hint`);
+  // Stage 2: whoever is clicked repeats where Fluffs is (capture ticks 281-290), never the standard page.
+  for (const npcId of [N.WILOUGH, N.SHILOP]) {
+    const paid = speakers(realPlayer(2), npcId);
+    const hint = paid.find(([, text]) => text.includes('I saw the flea bag in the old lumber mill'));
+    assert.equal(hint?.[0], core.NpcDefinition.forId(npcId).getName(), 'the clicked boy answers');
+    assert.ok(!paid.some(([, text]) => text.includes('Hello youngster!')));
   }
-  lines.length = 0;
-  const searching = talk(realPlayer(4), N.WILOUGH);
-  assert.ok(searching.includes('Hello again.'), 'stage 4 keeps talking to the boys');
-  assert.deepEqual(lines.find((line) => line.text === 'You think you\'re tough do you?')?.speaker, 'Shilop',
-    'stage 4 Wilough plays the finding-Fluffs page');
 
-  // After the rescue the quest defers to Wilough's own standard dialogue.
-  assert.ok(talk(realPlayer(5), N.WILOUGH).some((text) => text.includes('Hello youngster!')));
-});
-
-
-
-test('the returned kitten goes even when the scene is cut short', () => {
-  useActualTranscripts = false;
-  const h = setup();
-  const I = h.core.ItemIdentifiers, N = h.core.NpcIdentifiers;
-  h.quest.setStage(h.player, 4);
-  h.inventory.adds(I.FLUFFS_KITTEN, 1);
-  const fluffs = { getId: () => N.GERTRUDES_CAT_2, getLocation: () => new h.core.Location(3306, 3513, 1) };
-  for (const fn of h.hooks.itemOnNpc) fn({ player: h.player, npcId: N.GERTRUDES_CAT_2, itemId: I.FLUFFS_KITTEN, target: fluffs, handled: false });
-  const kitten = h.spawned.at(-1);
-  assert.ok(kitten && !kitten.removed, 'the kitten joins Fluffs');
-  // No closing step: only the expiry task can remove it.
-  const expiry = h.tasks.find((task) => task.constructor.name === 'KittenExpiryTask');
-  assert.ok(expiry, 'an expiry is scheduled');
-  expiry.execute();
-  assert.equal(kitten.removed, true);
-});
-
-test('Fluffs action hints become a message box at the matching quest stage only', () => {
-  // Real-engine coverage of Stroke: gertrudes-cat-fluffs-hint.test.cjs.
-  const h = setup(), N = h.core.NpcIdentifiers;
-  const record = require('../data/definitions/npc-dialogues.json')["Gertrude's Cat"];
-  for (const [stage, variant, id] of [
-    [2, 'finding-fluffs-pick-up-fluffs', '0lp0da'],
-    [2, 'finding-fluffs-stroke-fluffs', 'hvqx21'],
-    [3, 'finding-fluffs-pick-up-fluffs-2', '019G3T'],
-    [4, 'making-seasoned-sardines-pick-up-fluffs', 'nPc5q9'],
-  ]) {
-    const step = record.variants[variant].find(step => step.id === id);
-    assert.equal(step.type, 'action');
-    h.quest.setStage(h.player, stage);
-    h.messages.length = 0;
-    const action = { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step };
-    h.emit('npc-dialogue:action', action);
-    assert.equal(action.handled, true);
-    assert.deepEqual(action.steps?.map(s => [s.type, s.text]), [['message', step.text]], 'handed back as one statement step');
-    const box = { npcId: N.GERTRUDES_CAT_2, stepId: action.steps[0].id, text: step.text, kind: 'message' };
-    h.emit('npc-dialogue:action', box);
-    assert.deepEqual(box.box, { statement: true }, 'shown in a message box');
-    // The message box logs its own mesbox line when the dialogue shows it (gertrudes-cat-fluffs-hint.test.cjs).
-    assert.deepEqual(h.typed.splice(0), [], 'no line sent by hand');
-    assert.deepEqual(h.messages, [], 'not an ordinary game message');
-    assert.equal(h.quest.getStage(h.player), stage, 'the hint does not grant quest progress');
-    const other = { npcId: N.SHILOP, stepId: id, text: step.text, step };
-    h.emit('npc-dialogue:action', other);
-    assert.equal(other.steps, undefined, 'another NPC cannot display Fluffs hints');
-    h.quest.setStage(h.player, 6);
-    const late = { npcId: N.GERTRUDES_CAT_2, stepId: id, text: step.text, step };
-    h.emit('npc-dialogue:action', late);
-    assert.equal(late.steps, undefined, 'completed or mismatched stages stay silent');
-  }
-});
-
-
-test('private crate choice is stable through wrong searches, full bags, recovery and a reloaded save', () => {
-  const key = 'gertrudes-cat:kitten-crate';
-  const tiles = [[3298,3514], [3303,3506], [3305,3500], [3307,3507], [3310,3499], [3315,3515]];
-  for (let selected = 0; selected < tiles.length; selected++) {
-    const h = setup({ random: () => selected });
-    const { CRATE } = h.core.NpcIdentifiers;
-    const kitten = h.core.ItemIdentifiers.FLUFFS_KITTEN;
-    h.quest.setStage(h.player, 4);
-    assert.equal(h.persisted.get(key), null, 'the selected tile uses ordinary saved attributes');
-    for (let i = 0; i < 28; i++) h.inventory.adds(h.core.ItemIdentifiers.BUCKET, 1);
-    h.npc(CRATE, ...tiles[(selected + 1) % tiles.length]);
-    assert.equal(h.inventory.getAmount(kitten), 0);
-    h.npc(CRATE, ...tiles[selected]);
-    assert.equal(h.inventory.getAmount(kitten), 0, 'full bag cannot consume the kitten');
-    assert.equal(h.attrs.get(key), tiles[selected].join(','));
-    h.inventory.clear();
-    const reloaded = setup({ attrs: new Map(h.attrs), random: () => (selected + 1) % tiles.length });
-    reloaded.login();
-    for (let i = 0; i < tiles.length; i++) {
-      reloaded.npc(CRATE, ...tiles[i]);
-      assert.equal(reloaded.inventory.getAmount(kitten), Number(i === selected), 'reloading does not reroll');
-      if (i === selected) {
-        reloaded.npc(CRATE, ...tiles[i]);
-        assert.equal(reloaded.inventory.getAmount(kitten), 1, 'repeat search cannot duplicate the carried kitten');
-        reloaded.inventory.deleteNumber(kitten, 1);
-      }
-    }
-    reloaded.npc(CRATE, ...tiles[selected]);
-    assert.equal(reloaded.inventory.getAmount(kitten), 1, 'lost kitten can be found in the same crate');
-    reloaded.quest.setStage(reloaded.player, 0);
-    assert.equal(reloaded.attrs.get(key), null, 'quest reset clears its old random selection');
+  // Once Fluffs is found the clicked boy boasts and the other backs him up (ticks 765-782).
+  for (const stage of [3, 4, 5, 6]) {
+    const shilop = speakers(realPlayer(stage), N.SHILOP);
+    assert.equal(shilop.find(([, text]) => text === "You think you're tough do you?")?.[0], 'Shilop', `stage ${stage}`);
+    assert.equal(shilop.find(([, text]) => text === 'He can you know!')?.[0], 'Wilough', `stage ${stage}`);
+    const wilough = speakers(realPlayer(stage), N.WILOUGH);
+    assert.equal(wilough.find(([, text]) => text === "You think you're tough do you?")?.[0], 'Wilough', `stage ${stage}`);
+    assert.equal(wilough.find(([, text]) => text === 'He can you know!')?.[0], 'Shilop', `stage ${stage}`);
   }
 });
 

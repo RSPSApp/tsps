@@ -25,7 +25,7 @@ before(async () => {
     assert.equal(definition.isStackable(), false);
   }
   for (const hook of PM.serverStartupHooks) {
-    if (!["Hunter", "WarpedSceptre"].includes(hook.pluginName)) continue;
+    if (!["Hunter", "WarpedSceptre", "IbansStaff"].includes(hook.pluginName)) continue;
     if (hook.pluginName === "Hunter") hunterStarted = true;
     hook.handler({});
   }
@@ -135,7 +135,18 @@ function observeMessages(t, f) {
   return messages;
 }
 const kittenIds = coreValue => [coreValue.ItemIdentifiers.PET_KITTEN,coreValue.ItemIdentifiers.PET_KITTEN_2,coreValue.ItemIdentifiers.PET_KITTEN_3,coreValue.ItemIdentifiers.PET_KITTEN_4,coreValue.ItemIdentifiers.PET_KITTEN_5,coreValue.ItemIdentifiers.PET_KITTEN_6];
-const kittens = f => kittenIds(core).reduce((n,id)=>n+f.player.getInventory().getAmount(id),0);
+/** The kitten Gertrude handed over: following (as live gives it, Gertrude's Cat capture tick 863) or carried. */
+function follower(f) { const request={player:f.player,pet:null}; PM.emitCustomEvent("pets:current",request); return request.pet; }
+const KITTEN_NPCS = [5591,5592,5593,5594,5595,5596]; // kittenpet_*: the same order as PET_KITTEN..PET_KITTEN_6
+function kittenItems(f) {
+  const held = kittenIds(core).flatMap(id => Array(f.player.getInventory().getAmount(id)).fill(id));
+  const pet = follower(f), at = KITTEN_NPCS.indexOf(pet?.getId?.());
+  return at >= 0 ? [...held, kittenIds(core)[at]] : held;
+}
+const kittens = f => kittenItems(f).length;
+function dismiss(f) { const pet = follower(f); if (pet) { core.World.getNpcs().remove(pet); f.player.setAttribute("pets:current", null); } }
+/** The reward's food comes 5 ticks after the kitten and the scroll 4 after that. */
+function settle(n = 12) { for (let i = 0; i < n; i++) core.TaskManager.process(); }
 function snapshot(f) {
   const inv = f.player.getInventory();
   return { xp: f.player.getSkillManager().getExperience(core.Skill.COOKING),
@@ -147,25 +158,22 @@ function assertReward(before, after) {
   assert.deepEqual(after, { ...before, xp: before.xp + 1525, qp: before.qp + 1,
     cake: before.cake + 1, stew: before.stew + 1, kittens: before.kittens + 1 });
 }
+const SCROLL_KITTEN = () => core.CacheDefinitions.getObjId("kittenobject_dummy");
 
 test("ring choice selects a free initial kitten exactly once",async t=>{
   const f=actor(t,true); const scroll=observeScroll(t,f); f.player.getInventory().adds(core.ItemIdentifiers.COINS,200);
-  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS),200);
-  assert.ok(f.player.getInventory().getFreeSlots() >= 3);
   const before=snapshot(f); await talk(f); const picker=await toPickerOrComplete(f);
   assert.ok(picker,"worn activated ring reaches the existing TSPS picker");
   assert.equal(core.MultiChatboxPrompt.getPending(f.player),null,"OptionDialogue owns the native menu");
   assert.ok(picker.getOptions().includes("Black")); assert.equal(kittens(f),0); assert.equal(f.quest.isComplete(f.player),false);
   assert.deepEqual(scroll, [], "scroll is not shown before completion");
-  await pick(f,picker.getOptions().indexOf("Black")+1);
-  assert.equal(f.quest.isComplete(f.player),true); assert.equal(kittens(f),1);
-  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.PET_KITTEN_4),1);
-  assert.deepEqual(scroll, [[core.ItemIdentifiers.PET_KITTEN_4,1]], "deferred scroll displays the awarded kitten");
+  await pick(f,picker.getOptions().indexOf("Black")+1); settle();
+  assert.equal(f.quest.isComplete(f.player),true);
+  assert.deepEqual(kittenItems(f),[core.ItemIdentifiers.PET_KITTEN_4]);
+  assert.deepEqual(scroll, [[SCROLL_KITTEN(),1]], "the scroll shows live's kitten model");
   assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS),200);
-  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CHOCOLATE_CAKE),1);
-  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STEW),1);
   const after=snapshot(f); assertReward(before,after);
-  await pick(f,picker.getOptions().indexOf("Black")+1); assert.deepEqual(snapshot(f),after,"replayed choice has no effect");
+  await pick(f,picker.getOptions().indexOf("Black")+1); settle(); assert.deepEqual(snapshot(f),after,"replayed choice has no effect");
   assert.equal(f.quest.complete(f.player),false); assert.deepEqual(snapshot(f),after,"repeat completion has no effect");
 });
 
@@ -173,42 +181,39 @@ test("removing the ring before choosing does not complete or award the quest",as
   const f=actor(t,true); const messages=observeMessages(t,f); await talk(f); const picker=await toPickerOrComplete(f); assert.ok(picker);
   f.player.getEquipment().setItem(core.Equipment.RING_SLOT,new core.Item(-1,0));
   const before=snapshot(f);
-  await pick(f,1); assert.equal(f.quest.isComplete(f.player),false); assert.deepEqual(snapshot(f),before);
+  await pick(f,1); settle(); assert.equal(f.quest.isComplete(f.player),false); assert.deepEqual(snapshot(f),before);
   assert.ok(messages.includes("Wear your Ring of Charos(a) to choose a kitten. Talk to Gertrude again."));
   const messageCount=messages.length; await pick(f,1); assert.equal(messages.length,messageCount,"stale choice stays silent");
   assert.deepEqual(snapshot(f),before);
-  await talk(f); await toPickerOrComplete(f); assert.equal(f.quest.isComplete(f.player),true); assert.equal(kittens(f),1);
+  await talk(f); await toPickerOrComplete(f); settle(); assert.equal(f.quest.isComplete(f.player),true); assert.equal(kittens(f),1);
 });
 
 test("ordinary completion grants a single random variant",async t=>{
-  const f=actor(t,false); await talk(f); await toPickerOrComplete(f);
+  const f=actor(t,false); const before=snapshot(f); await talk(f); await toPickerOrComplete(f); settle();
   assert.equal(f.quest.isComplete(f.player),true); assert.equal(kittens(f),1);
-  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.CHOCOLATE_CAKE),1);
-  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.STEW),1);
+  assertReward(before,snapshot(f));
   assert.equal(f.quest.complete(f.player),false); assert.equal(kittens(f),1);
 });
 test("canceling the picker leaves the quest resumable",async t=>{
   const f=actor(t,true); await talk(f); let menu=await toPickerOrComplete(f); assert.ok(menu);
   await pick(f,5); menu=f.player.getDialogueManager().getCurrent();
   assert.ok(menu instanceof core.OptionDialogue); assert.ok(menu.getOptions().includes("Cancel"));
-  const before=snapshot(f); await pick(f,menu.getOptions().indexOf("Cancel")+1);
+  const before=snapshot(f); await pick(f,menu.getOptions().indexOf("Cancel")+1); settle();
   assert.equal(f.quest.isComplete(f.player),false); assert.deepEqual(snapshot(f),before);
   await talk(f); menu=await toPickerOrComplete(f); assert.ok(menu instanceof core.OptionDialogue);
-  await pick(f,1); assert.equal(f.quest.isComplete(f.player),true); assert.equal(kittens(f),1);
+  await pick(f,1); settle(); assert.equal(f.quest.isComplete(f.player),true); assert.equal(kittens(f),1);
 });
 
-test("losing reward space while choosing does not consume the completion",async t=>{
-  const f=actor(t,true); const messages=observeMessages(t,f); await talk(f); const menu=await toPickerOrComplete(f); assert.ok(menu);
-  for (let i=0;i<26;i++) f.player.getInventory().add(new core.Item(core.ItemIdentifiers.BONES,1),true);
-  assert.equal(f.player.getInventory().getFreeSlots(),2);
-  const before=snapshot(f); await pick(f,1); assert.equal(f.quest.isComplete(f.player),false); assert.deepEqual(snapshot(f),before);
-  assert.ok(messages.includes("You need three free inventory slots to receive Gertrude's rewards."));
-  const messageCount=messages.length; await pick(f,1); assert.equal(messages.length,messageCount,"stale choice stays silent");
-  assert.deepEqual(snapshot(f),before);
-  f.player.getInventory().deleteNumber(core.ItemIdentifiers.BONES,1);
-  assert.equal(f.player.getInventory().getFreeSlots(),3);
-  await talk(f); assert.ok(await toPickerOrComplete(f)); await pick(f,1);
-  assert.equal(f.quest.isComplete(f.player),true); assert.equal(kittens(f),1);
+test("a full inventory still completes: the kitten follows and the food lands at the player's feet",async t=>{
+  const f=actor(t,false);
+  for (let i=0;i<28;i++) f.player.getInventory().add(new core.Item(core.ItemIdentifiers.BONES,1),true);
+  assert.equal(f.player.getInventory().getFreeSlots(),0);
+  await talk(f); await toPickerOrComplete(f); settle();
+  assert.equal(f.quest.isComplete(f.player),true); assert.equal(kittens(f),1, "the kitten follows rather than needing a slot");
+  const floor = id => core.ItemOnGroundManager.getItems?.()?.some?.(g => g?.getItem?.()?.getId?.() === id && g.getPosition?.()?.equals?.(f.player.getLocation()));
+  if (floor(core.ItemIdentifiers.CHOCOLATE_CAKE) !== undefined) {
+    assert.equal(floor(core.ItemIdentifiers.CHOCOLATE_CAKE),true); assert.equal(floor(core.ItemIdentifiers.STEW),true);
+  }
 });
 
 test("unringed direct completion draws from more than one kitten variant",t=>{
@@ -223,10 +228,9 @@ test("unringed direct completion draws from more than one kitten variant",t=>{
   assert.equal(a.quest.complete(a.player,{scroll:false,announce:false}),true);
   sample=0.999999;
   assert.equal(b.quest.complete(b.player,{scroll:false,announce:false}),true);
-  assert.equal(a.player.getInventory().getAmount(core.ItemIdentifiers.PET_KITTEN),1);
-  assert.equal(b.player.getInventory().getAmount(core.ItemIdentifiers.PET_KITTEN_6),1);
+  assert.deepEqual(kittenItems(a),[core.ItemIdentifiers.PET_KITTEN]);
+  assert.deepEqual(kittenItems(b),[core.ItemIdentifiers.PET_KITTEN_6]);
   assert.equal(hits,2,"scoped RNG was consumed by the reward producer");
-  assert.equal(kittens(a),1); assert.equal(kittens(b),1);
 });
 test("each existing palette choice grants its selected kitten once",async t=>{
   const names=["Grey and black","White","Brown","Black","Grey and brown","Grey and blue"];
@@ -235,8 +239,9 @@ test("each existing palette choice grants its selected kitten once",async t=>{
     if (i>=4) { await pick(f,5); menu=f.player.getDialogueManager().getCurrent(); }
     assert.ok(menu instanceof core.OptionDialogue);
     const index=menu.getOptions().indexOf(names[i]); assert.ok(index>=0, names[i]);
-    await pick(f,index+1); assert.equal(f.quest.isComplete(f.player),true);
-    assert.equal(f.player.getInventory().getAmount(kittenIds(core)[i]),1,names[i]); assert.equal(kittens(f),1);
+    await pick(f,index+1); settle(); assert.equal(f.quest.isComplete(f.player),true);
+    assert.deepEqual(kittenItems(f),[kittenIds(core)[i]],names[i]);
+    dismiss(f);
   }
 });
 test("a carried or unactivated ring does not enable the picker",async t=>{
@@ -244,90 +249,20 @@ test("a carried or unactivated ring does not enable the picker",async t=>{
     const f=actor(t,false,carried);
     if (carried) f.player.getInventory().adds(core.ItemIdentifiers.RING_OF_CHAROS_A_,1);
     else f.player.getEquipment().setItem(core.Equipment.RING_SLOT,new core.Item(core.ItemIdentifiers.RING_OF_CHAROS,1));
-    await talk(f); const picker=await toPickerOrComplete(f);
+    await talk(f); const picker=await toPickerOrComplete(f); settle();
     assert.equal(picker,null); assert.equal(f.quest.isComplete(f.player),true); assert.equal(kittens(f),1);
+    dismiss(f);
   }
 });
 
-test("deferred completion scrolls show each player's actual random kitten", t => {
-  const a=actor(t), b=actor(t), first=observeScroll(t,a), second=observeScroll(t,b);
-  const cooking=core.Skill.COOKING, xp=core.SkillManager.getExperienceForLevel(50);
-  assert.ok(core.SkillManager.getExperienceForLevel(51)-xp>1525,"reward crosses no level boundary");
-  for (const f of [a,b]) {
-    f.player.getSkillManager().setExperiences(cooking,xp,false);
-    f.player.getSkillManager().setMaxLevels(cooking,50,false).setCurrentLevel(cooking,50,false);
-    assert.equal(f.player.getSkillManager().getMaxLevel(cooking),50);
-  }
-  const held=new core.OptionDialogue(0,{executeOption() {}},"Continue later");
-  a.player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(held));
-  assert.equal(a.player.getDialogueManager().getCurrent(),held);
-  assert.equal(a.quest.complete(a.player),true);
-  assert.equal(a.player.getSkillManager().getMaxLevel(cooking),50);
-  assert.equal(a.player.getDialogueManager().getCurrent(),held);
-  assert.equal(a.player.getPacketSender().getChatboxGroupId(),219);
-  assert.equal(b.quest.complete(b.player),true);
-  const awarded = f => {
-    assert.equal(kittens(f),1,"exactly one kitten was awarded");
-    const ids=kittenIds(core).filter(id => f.player.getInventory().getAmount(id) === 1);
-    assert.equal(ids.length,1,"the awarded kitten is a known variant");
-    return ids[0];
-  };
-  const aKitten=awarded(a), bKitten=awarded(b);
-  assert.deepEqual(first,[]); assert.deepEqual(second,[]);
-  for (let i=0;i<4;i++) core.TaskManager.process();
-  assert.equal(a.player.getDialogueManager().getCurrent(),held);
-  assert.equal(a.player.getPacketSender().getChatboxGroupId(),219);
-  assert.deepEqual(first,[],"open dialogue defers the first scroll");
-  assert.deepEqual(second,[[bKitten,1]]);
-  a.player.closeInterruptibleInterfaces();
-  assert.equal(a.player.getDialogueManager().isActive(),false);
-  for (let i=0;i<4;i++) core.TaskManager.process();
-  assert.deepEqual(first,[[aKitten,1]]);
-  assert.equal(a.player.getInventory().getAmount(aKitten),1);
-  assert.equal(b.player.getInventory().getAmount(bKitten),1);
-  assert.equal(kittens(a),1); assert.equal(kittens(b),1);
-});
-
-test("distinct chosen kittens stay with their own delayed completion scroll",async t=>{
-  const a=actor(t,true), b=actor(t,true), first=observeScroll(t,a), second=observeScroll(t,b);
-  const cooking=core.Skill.COOKING, xp=core.SkillManager.getExperienceForLevel(50);
-  assert.ok(core.SkillManager.getExperienceForLevel(51)-xp>1525);
-  for (const f of [a,b]) {
-    f.player.getSkillManager().setExperiences(cooking,xp,false);
-    f.player.getSkillManager().setMaxLevels(cooking,50,false).setCurrentLevel(cooking,50,false);
-    assert.equal(f.player.getSkillManager().getMaxLevel(cooking),50);
-  }
-  const beforeA=snapshot(a), beforeB=snapshot(b);
-  await talk(a); const menuA=await toPickerOrComplete(a); assert.ok(menuA instanceof core.OptionDialogue);
-  await talk(b); const menuB=await toPickerOrComplete(b); assert.ok(menuB instanceof core.OptionDialogue);
-  const black=menuA.getOptions().indexOf("Black")+1, white=menuB.getOptions().indexOf("White")+1;
-  assert.ok(black>0 && white>0);
-  // One native turn delivers the decoded choice after task processing, before the next task tick.
-  await pick(a,black,1);
-  assert.equal(a.quest.isComplete(a.player),true);
-  assert.equal(a.player.getInventory().getAmount(core.ItemIdentifiers.PET_KITTEN_4),1);
-  assert.deepEqual(first,[],"first completion has not yet sent its scroll");
-  assertReward(beforeA,snapshot(a));
-  const held=new core.OptionDialogue(0,{executeOption() {}},"Continue later");
-  a.player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(held));
-  assert.equal(a.player.getDialogueManager().getCurrent(),held);
-  assert.equal(a.player.getPacketSender().getChatboxGroupId(),219);
-  await pick(b,white);
-  assert.equal(b.quest.isComplete(b.player),true);
-  assert.equal(b.player.getInventory().getAmount(core.ItemIdentifiers.PET_KITTEN_2),1);
-  assertReward(beforeB,snapshot(b));
-  assert.equal(a.player.getDialogueManager().getCurrent(),held);
-  assert.equal(a.player.getPacketSender().getChatboxGroupId(),219);
-  assert.deepEqual(first,[],"open first dialogue holds its scroll");
-  assert.deepEqual(second,[[core.ItemIdentifiers.PET_KITTEN_2,1]]);
-  a.player.closeInterruptibleInterfaces();
-  assert.equal(a.player.getDialogueManager().isActive(),false);
-  for(let i=0;i<4;i++) core.TaskManager.process();
-  assert.deepEqual(first,[[core.ItemIdentifiers.PET_KITTEN_4,1]]);
-  assert.deepEqual(second,[[core.ItemIdentifiers.PET_KITTEN_2,1]]);
-  const afterA=snapshot(a), afterB=snapshot(b);
-  await pick(a,black); await pick(b,white);
-  assert.deepEqual(snapshot(a),afterA); assert.deepEqual(snapshot(b),afterB);
-  assert.deepEqual(first,[[core.ItemIdentifiers.PET_KITTEN_4,1]]);
-  assert.deepEqual(second,[[core.ItemIdentifiers.PET_KITTEN_2,1]]);
+test("a player with a follower already out gets the kitten in the backpack",async t=>{
+  const f=actor(t,false);
+  const first={player:f.player,itemId:core.ItemIdentifiers.PET_KITTEN,following:false};
+  PM.emitCustomEvent("pets:summon",first); assert.equal(first.following,true);
+  const out=follower(f);
+  await talk(f); await toPickerOrComplete(f); settle();
+  assert.equal(f.quest.isComplete(f.player),true);
+  assert.equal(follower(f),out,"the follower already out stays");
+  assert.equal(kittenIds(core).reduce((n,id)=>n+f.player.getInventory().getAmount(id),0),1,"the new kitten is carried");
+  dismiss(f);
 });

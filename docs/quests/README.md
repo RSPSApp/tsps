@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-198 quests · ✅ passed: 25 · ⚠️ passed with issues: 20 · 🔄 in progress: 14 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 90
+198 quests · ✅ passed: 24 · ⚠️ passed with issues: 21 · 🔄 in progress: 14 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 90
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -75,7 +75,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Fishing Contest](fishing-contest/README.md) | ✅ passed |  | agent |  |  |
 | Forgettable Tale... | untested |  |  |  |  |
 | [Garden of Tranquillity](garden-of-tranquillity/README.md) | untested |  |  |  |  |
-| [Gertrude's Cat](gertrudes-cat/README.md) | ✅ passed | 2026-10-23 | agent |  | 1 |
+| [Gertrude's Cat](gertrudes-cat/README.md) | ⚠️ passed with issues | 2026-11-24 | agent | claude-opus-5-5 | 1 |
 | [Getting Ahead](getting-ahead/README.md) | ⚠️ passed with issues | 2026-10-23 | agent |  | 3 |
 | [Ghosts Ahoy](ghosts-ahoy/README.md) | ⚠️ passed with issues | 2026-11-12 | agent | claude-opus-5-5 |  |
 | [Goblin Diplomacy](goblin-diplomacy/README.md) | ⚠️ passed with issues | 2026-10-25 | community |  |  |

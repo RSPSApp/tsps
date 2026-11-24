@@ -624,6 +624,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `NpcContact` | NpcContact | interface | yes | NPC Contact's contact list (interface 75) and the conversation each contact opens. (members only) |
 | `Omnishop` | Omnishop | interface | yes | Opens Jagex's shared reward shop interface from the cache's shop data, tracks currency balances and handles buying and selling for other plugins' shops. |
 | `PoisonTimer` | Poison Timer | interface | yes | Sends the poison and venom state to the client so the poison timer shows the seconds until the next damage hit. |
+| `PopoutPanel` | PopoutPanel | interface | yes | Popout panel buttons (mobile): open and close the XP tracker, loot tools and hiscores in the panel. |
 | `PriceChecker` | PriceChecker | interface | yes | Price checker opened from the worn-items tab: deposit items to see each value and the total, and get them back on close. |
 | `ReportAbuse` | ReportAbuse | interface | yes | Report option on players and the chatbox Report button open the report form; submitted reports are written to a JSON-lines file. |
 | `RunAutoEnable` | RunAutoEnable | interface | yes | Settings option to turn run back on by itself once energy recovers to a chosen threshold after running out. |

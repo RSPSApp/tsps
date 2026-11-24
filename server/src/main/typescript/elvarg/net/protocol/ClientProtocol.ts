@@ -2744,6 +2744,21 @@ export function resolveGameframeRoot(
 // Minimap orbs: desktop `orbs`, and the mobile toplevel's own `orbs_osm`, laid out for the
 // mobile orb art (live's Android client mounts it at toplevel_osm:orbs).
 export const POPOUT_GROUP_ID = 728;
+// popout:buttons (728:6), the desktop buttons: live enables op1 on its three right after the mount
+// (every rsprox capture, 227/02137.txt:3010). popout:osm_buttons (728:37) holds the mobile toplevel's,
+// each the even child before its icon (toplevel_osm_setup_popout_buttons), so op1 on 0-4.
+// plugins/interface/PopoutPanel.plugin.js answers the clicks.
+const POPOUT_BUTTONS_UID = (POPOUT_GROUP_ID << 16) | 6;
+const POPOUT_BUTTONS_LAST_SLOT = 2;
+const POPOUT_OSM_BUTTONS_UID = (POPOUT_GROUP_ID << 16) | 37;
+const POPOUT_OSM_BUTTONS_LAST_SLOT = 4;
+
+function encodePopoutButtonEvents(): Buffer[] {
+  return [
+    encodeWidgetSetFlagsRange(POPOUT_BUTTONS_UID, 0, POPOUT_BUTTONS_LAST_SLOT, FIRST_OPTION_FLAG),
+    encodeWidgetSetFlagsRange(POPOUT_OSM_BUTTONS_UID, 0, POPOUT_OSM_BUTTONS_LAST_SLOT, FIRST_OPTION_FLAG),
+  ];
+}
 export const ORBS_GROUP_ID = 160;
 export const MOBILE_ORBS_GROUP_ID = 897;
 
@@ -2794,7 +2809,9 @@ export function encodeGameframeBootstrap(playerName: string, root: number = 161,
     packet(ServerPacket.WIDGET_SET_ROOT, rootPayload, 0),
     // Mounts are addressed by the OSRS-stretch (161) child for every layout;
     // the client maps them onto the active root's components (pane redirects).
-    ...mounts.map(([child, group, postScript]) => encodeOpenSub(161, child, group, postScript)),
+    ...mounts.flatMap(([child, group, postScript]) => group === POPOUT_GROUP_ID
+      ? [encodeOpenSub(161, child, group, postScript), ...encodePopoutButtonEvents()]
+      : [encodeOpenSub(161, child, group, postScript)]),
     encodeOpenSub(SIDE_JOURNAL_GROUP_ID, SIDE_JOURNAL_TAB_CONTAINER_CHILD_ID, INTERFACE_CHARACTER_SUMMARY_ID),
     encodeOpenSub(SIDE_CHANNELS_GROUP_ID, SIDE_CHANNELS_CONTENT_CHILD_ID, CHAT_CHANNEL_GROUP_ID),
     ...encodeGameframeFlags(root),

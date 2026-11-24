@@ -74,12 +74,16 @@ export function expandTextMacros(text: string): string {
  * every `<strNAME>` replaced, and `<at>` turned into @.
  */
 export function resolveTextTemplates(text: string): string {
+    return resolveText(text, false);
+}
+
+function resolveText(text: string, keepEscapes: boolean, placeMacros = true): string {
     if (!text) return text;
     if (text.indexOf(DEFINITION_PREFIX) === -1 && text.indexOf("@") === -1 && text.indexOf("<at>") === -1) return text;
-    const cached = resolved.get(text);
+    const cached = keepEscapes ? undefined : resolved.get(text);
     if (cached !== undefined) return cached;
 
-    const source = expandTextMacros(text);
+    const source = placeMacros ? expandTextMacros(text) : text;
     const values = new Map<string, string>();
     let stripped = "";
     let i = 0;
@@ -104,13 +108,19 @@ export function resolveTextTemplates(text: string): string {
     stripped += source.slice(i);
 
     // Only a name that was defined is a reference: `<str>` alone is strikethrough.
-    const out = stripped
-        .replace(/<str([a-z0-9_]+)>/gi, (tag, name: string) =>
-            values.has(name.toLowerCase()) ? values.get(name.toLowerCase())! : name.startsWith("_") ? "" : tag)
-        .replace(/<at>/g, "@");
-    if (resolved.size >= MAX_CACHED) resolved.delete(resolved.keys().next().value as string);
-    resolved.set(text, out);
+    const placed = stripped.replace(/<str([a-z0-9_]+)>/gi, (tag, name: string) =>
+        values.has(name.toLowerCase()) ? values.get(name.toLowerCase())! : name.startsWith("_") ? "" : tag);
+    const out = keepEscapes ? placed : placed.replace(/<at>/g, "@");
+    if (!keepEscapes) {
+        if (resolved.size >= MAX_CACHED) resolved.delete(resolved.keys().next().value as string);
+        resolved.set(text, out);
+    }
     return out;
+}
+
+/** Templates placed, with macros and `<at>` left as they are (for code that strips markup next). */
+export function resolveTextTemplatesKeepingEscapes(text: string): string {
+    return resolveText(text, true, false);
 }
 
 /** The `>` that closes a definition whose value starts at `from`, skipping tags inside it. */

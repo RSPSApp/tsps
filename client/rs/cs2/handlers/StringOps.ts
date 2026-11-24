@@ -1,9 +1,31 @@
 /**
  * String operations: concatenation, comparison, manipulation
  */
+import { resolveTextTemplatesKeepingEscapes } from "../../font/textTemplates";
 import { compareStringsOsrs } from "../StringCollation";
 import { Opcodes } from "../Opcodes";
 import type { HandlerMap } from "./HandlerTypes";
+
+/**
+ * Text without its markup, as OSRS's removetags leaves it: templates and macros placed first,
+ * then everything from a `<` to the next `>` dropped (to the end if it never closes), stray `>`
+ * dropped, and an `@...@` span dropped with its signs (a lone `@` too).
+ */
+export function removeTags(text: string): string {
+    const source = resolveTextTemplatesKeepingEscapes(text);
+    let out = "";
+    let insideTag = false;
+    for (let i = 0; i < source.length; i++) {
+        const ch = source[i];
+        if (ch === "<") insideTag = true;
+        else if (ch === ">") insideTag = false;
+        else if (ch === "@") {
+            const end = source.indexOf("@", i + 1);
+            if (end !== -1) i = end;
+        } else if (!insideTag) out += ch;
+    }
+    return out;
+}
 
 export function registerStringOps(handlers: HandlerMap): void {
     const MONTHS = [
@@ -166,7 +188,7 @@ export function registerStringOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.REMOVETAGS, (ctx) => {
         const str = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        ctx.pushString(str.replace(/<[^>]+>/g, ""));
+        ctx.pushString(removeTags(str));
     });
 
     handlers.set(Opcodes.TEXT_GENDER, (ctx) => {

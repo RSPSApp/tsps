@@ -4,6 +4,21 @@
 import { Opcodes } from "../Opcodes";
 import type { HandlerMap } from "./HandlerTypes";
 
+/** A floating-point result as Java's (int) cast gives it: truncated, clamped to the int range, NaN as 0. */
+export function doubleToInt(value: number): number {
+    if (Number.isNaN(value)) return 0;
+    if (value >= 2147483647) return 2147483647;
+    if (value <= -2147483648) return -2147483648;
+    return Math.trunc(value);
+}
+
+/** -1 unless the whole text is a base-10 int. */
+export function parseStrictInt(text: string | null | undefined): number {
+    if (typeof text !== "string" || !/^[+-]?[0-9]+$/.test(text)) return -1;
+    const value = Number(text);
+    return value > 2147483647 || value < -2147483648 ? -1 : value | 0;
+}
+
 export function registerMathOps(handlers: HandlerMap): void {
     // === Basic arithmetic ===
     handlers.set(Opcodes.ADD, (ctx) => {
@@ -45,7 +60,9 @@ export function registerMathOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.POW, (ctx) => {
         const b = ctx.intStack[--ctx.intStackSize];
         const a = ctx.intStack[--ctx.intStackSize];
-        ctx.pushInt(Math.pow(a, b) | 0);
+        // OSRS: a base of 0 gives 0 (even to the power 0), and a result outside the int range
+        // stops at its end instead of wrapping.
+        ctx.pushInt(a === 0 ? 0 : doubleToInt(Math.pow(a, b)));
     });
 
     handlers.set(Opcodes.INVPOW, (ctx) => {
@@ -250,9 +267,8 @@ export function registerMathOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.STRING_TO_INT, (ctx) => {
         const str = ctx.stringStack[--ctx.stringStackSize];
-        // Parse string to int, return -1 if not a valid number
-        const num = parseInt(str, 10);
-        ctx.pushInt(isNaN(num) ? -1 : num);
+        // The whole string must be an int (an optional sign, then digits, in range); else -1.
+        ctx.pushInt(parseStrictInt(str));
     });
 
     handlers.set(Opcodes.SETBIT_RANGE_VALUE, (ctx) => {

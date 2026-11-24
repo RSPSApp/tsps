@@ -387,6 +387,24 @@ export function addUnbatchedNpcRenderData(host: WebGLOsrsRendererHost): void {
             entries.push({ map, ecsId, dataOffset });
         }
 
+        for (const npc of host.osrsClient.clientPlugins.cosmeticNpcs?.() ?? []) {
+            if (host.actorRenderCount >= 8192) break;
+            const map = host.mapManager.visibleMaps.find(m => m.mapX === Math.floor(npc.x / 64) && m.mapY === Math.floor(npc.y / 64));
+            if (!map) continue;
+            const dataOffset = host.actorRenderCount++;
+            if (host.actorRenderData.length < (dataOffset + 1) * 8) {
+                const next = new Uint16Array(Math.max(host.actorRenderData.length * 2, (dataOffset + 1) * 8));
+                next.set(host.actorRenderData); host.actorRenderData = next;
+            }
+            const o = dataOffset * 8;
+            host.actorRenderData.fill(0, o, o + 8);
+            host.actorRenderData[o] = Math.round((npc.x - map.getRenderBaseTileX()) * 128);
+            host.actorRenderData[o + 1] = Math.round((npc.y - map.getRenderBaseTileY()) * 128);
+            const plane = resolveHeightSamplePlaneForLocal(map, npc.plane, Math.floor(npc.x) & 63, Math.floor(npc.y) & 63);
+            host.actorRenderData[o + 2] = plane | (npc.rotation << 2);
+            entries.push({ map, ecsId: -1, dataOffset, cosmetic: npc });
+        }
+
 }
 
 export function addPlayerRenderData(host: WebGLOsrsRendererHost, map: WebGLMapSquare) {

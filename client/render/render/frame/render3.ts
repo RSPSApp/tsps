@@ -207,6 +207,7 @@ export function renderTransparentNpcPass(host: WebGLOsrsRendererHost,
             map: WebGLMapSquare;
             npcIndex: number;
             ecsId: number;
+            cosmetic?: boolean;
             npcTypeId: number;
             seqId: number;
             overlaySeqId: number;
@@ -442,6 +443,7 @@ export function renderTransparentNpcPass(host: WebGLOsrsRendererHost,
         }
 
         for (const entry of host.unbatchedNpcRenderEntries) {
+            if (entry.cosmetic && host.hdShadowFrustum) continue;
             if (
                 !host.isMapWithinRenderDistance(
                     entry.map,
@@ -453,12 +455,15 @@ export function renderTransparentNpcPass(host: WebGLOsrsRendererHost,
             ) {
                 continue;
             }
-            const geometry = host.resolveUnbatchedNpcGeometry(entry.ecsId);
+            const geometry = entry.cosmetic
+                ? host.dynamicNpcAnimLoader?.getFrameGeometry(entry.cosmetic.typeId, entry.cosmetic.seqId, entry.cosmetic.frameId)
+                : host.resolveUnbatchedNpcGeometry(entry.ecsId);
             if (!geometry) continue;
             dynamicNpcs.push({
                 map: entry.map,
                 npcIndex: 0,
                 ecsId: entry.ecsId,
+                cosmetic: !!entry.cosmetic,
                 npcTypeId: geometry.npcTypeId,
                 seqId: geometry.seqId,
                 overlaySeqId: geometry.overlaySeqId ?? -1,
@@ -484,7 +489,7 @@ export function renderTransparentNpcPass(host: WebGLOsrsRendererHost,
                 dynDrawCall.uniform("u_mapPos", [dyn.map.renderPosX, dyn.map.renderPosY]);
                 dynDrawCall.uniform("u_timeLoaded", dyn.map.timeLoaded);
                 {
-                    const dynWvId = host.osrsClient.npcEcs.getWorldViewId(dyn.ecsId);
+                    const dynWvId = (dyn.cosmetic ? -1 : host.osrsClient.npcEcs.getWorldViewId(dyn.ecsId));
                     if (dynWvId >= 0) {
                         const dynDeckH = host.getWorldEntityDeckHeight(0, 0);
                         dynDrawCall.uniform("u_modelYOffset", host.getNpcModelYOffset(dynDeckH));

@@ -363,6 +363,7 @@ function writeMapUniform(
 }
 
 export class WebGPUMapSquare implements MapSquare {
+    farOnly = false;
     private static readonly pendingGeometry = new Map<RenderMapData,
         { device: GPUDevice; upload: MapGeometryUpload<GPUBuffer> }>();
 
@@ -459,6 +460,17 @@ export class WebGPUMapSquare implements MapSquare {
     private readonly opaqueBatches: MapDrawBatch[] = [];
     private readonly alphaBatches: MapDrawBatch[] = [];
     private readonly groups = new Map<GeometryGroupKind, GeometryGroup>();
+    get geometryGpuBytes(): number {
+        const buffers = new Set<GPUBuffer>();
+        for (const group of this.groups.values()) {
+            for (const buffer of group.buffers) buffers.add(buffer);
+            if (group.uniformBuffer) buffers.add(group.uniformBuffer);
+        }
+        let bytes = 0;
+        for (const buffer of buffers) bytes += buffer.size;
+        return bytes;
+    }
+
 
     private constructor(
         device: GPUDevice,
@@ -553,6 +565,7 @@ export class WebGPUMapSquare implements MapSquare {
         square.terrainPickTileOffsets = mapData.terrainPickTileOffsets ?? new Uint32Array(0);
         square.terrainPickVertices = mapData.terrainPickVertices ?? new Float32Array(0);
         square.terrainPickPlanes = mapData.terrainPickPlanes ?? new Uint8Array(0);
+        square.farOnly = !!mapData.farOnly;
         return square;
     }
 

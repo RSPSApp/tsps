@@ -1458,7 +1458,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         previewPointer: (tile) => {
             clearPointerPreview();
             const { renderer, target } = resolvePointerTarget();
-            if (renderer && target) {
+            if (renderer && target && (target.kind === "loc" || target.kind === "npc")) {
                 ensureBuildingHighlightRenderer(renderer);
                 const trianglePoints = renderer.buildHighlightTrianglePoints(target);
                 if (trianglePoints && trianglePoints.length >= 3) {
@@ -1554,7 +1554,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             clearSelectionHighlight();
             const { renderer, target } = resolvePointerTarget();
             // The editor picks scenery and NPCs only (resolveEditScenePick), never ground items.
-            if (renderer && target && target.kind !== "item") {
+            if (renderer && target && (target.kind === "loc" || target.kind === "npc")) {
                 selectedModelTarget = target;
                 renderer.interactHighlightActiveTarget = target;
                 renderer.interactHighlightActiveFromInteraction = false;

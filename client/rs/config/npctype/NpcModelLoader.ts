@@ -22,6 +22,7 @@ export class NpcModelLoader {
         readonly seqFrameLoader: SeqFrameLoader,
         readonly skeletalSeqLoader: SkeletalSeqLoader | undefined,
         readonly varManager: VarManager,
+        readonly maxCacheEntries = 0,
     ) {
         this.modelCache = new Map();
     }
@@ -55,6 +56,10 @@ export class NpcModelLoader {
         }
 
         let model = this.modelCache.get(npcType.id);
+        if (model && this.maxCacheEntries > 0) {
+            this.modelCache.delete(npcType.id);
+            this.modelCache.set(npcType.id, model);
+        }
         if (!model) {
             const missesBefore = this.modelLoader.missCount ?? 0;
             const models = new Array<ModelData>(npcType.modelIds.length);
@@ -98,6 +103,9 @@ export class NpcModelLoader {
             );
 
             this.modelCache.set(npcType.id, model);
+            while (this.maxCacheEntries > 0 && this.modelCache.size > this.maxCacheEntries) {
+                this.modelCache.delete(this.modelCache.keys().next().value!);
+            }
         }
 
         const hasScale = npcType.widthScale !== 128 || npcType.heightScale !== 128;

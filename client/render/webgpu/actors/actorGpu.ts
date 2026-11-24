@@ -314,6 +314,17 @@ export class ActorGeometryCache {
         private readonly maxPooledBytes: number = 16 * 1024 * 1024,
     ) {}
 
+    get geometryGpuBytes(): number {
+        let bytes = this.pooledBytes;
+        const buffers = new Set<GPUBuffer>(this.retired);
+        for (const item of this.entries.values()) {
+            buffers.add(item.vertices); buffers.add(item.indices);
+            if (item.labels) buffers.add(item.labels);
+        }
+        for (const buffer of buffers) bytes += buffer.size;
+        return bytes;
+    }
+
     /** Undefined means evicted/unbuilt; null means this pass was built and has no faces. */
     get(key: string): GpuGeometry | null | undefined {
         const geometry = this.entries.get(key);

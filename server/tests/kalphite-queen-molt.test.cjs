@@ -16,7 +16,10 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 
 let core;
-const TRANSFORMATION_TICKS = 20;
+// The molt starts 8 ticks after the first form's death and she is targetable 12 ticks into it
+// (rsprox gap of 7 or 8 ticks from her last hitsplat to the molt; Wiki: 20 ticks from the kill).
+const MOLT_START_TICK = 8;
+const UNLOCK_TICK = 20;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -63,26 +66,33 @@ for (const [label, inflict] of [
   const { player, queen } = fight(t);
   inflict(player, queen);
   queen.decrementHealth(new HitDamage(queen.getHitpoints(), HitMask.RED));
-  assert.equal(queen.getId(), core.NpcIdentifiers.KALPHITE_QUEEN_3, "the first form's death starts the molt");
+  assert.equal(queen.getId(), core.NpcIdentifiers.KALPHITE_QUEEN_2, "she stands in the first form until the molt starts");
   assert.equal(queen.getHitpoints(), 1);
   assert.ok(!queen.isDyingFunction());
-  for (let i = 1; i < TRANSFORMATION_TICKS; i++) {
+  assert.equal(queen.isUntargetable(), true, "untargetable from the first form's death");
+  for (let i = 1; i < UNLOCK_TICK; i++) {
     if (label === "poison" && i % 4 === 0) inflict(player, queen);
     tick(queen);
     assert.equal(queen.getHitpoints(), 1, `still molting on tick ${i}`);
     assert.ok(!queen.isDyingFunction(), `not dying on tick ${i}`);
+    assert.equal(queen.isUntargetable(), true, `untargetable on tick ${i}`);
+    assert.equal(
+      queen.getId(),
+      i < MOLT_START_TICK ? core.NpcIdentifiers.KALPHITE_QUEEN_2 : core.NpcIdentifiers.KALPHITE_QUEEN_3,
+      `form on tick ${i}: the molt starts on tick ${MOLT_START_TICK}`,
+    );
   }
   tick(queen);
   assert.equal(queen.getId(), core.NpcIdentifiers.KALPHITE_QUEEN_3);
   assert.ok(queen.getHitpoints() >= 254, "the airborne form takes over at full health (less a burn tick due that tick)");
-  assert.equal(queen.isUntargetable(), false);
+  assert.equal(queen.isUntargetable(), false, "targetable on tick 20 (8 before the molt plus 12 into it), the Wiki's 20 from the kill");
 });
 
 test("the burn keeps running through the molt and hurts the airborne form", (t) => {
   const { player, queen } = fight(t);
   PM.emitCustomEvent("combat:burn", { attacker: player, target: queen, damage: 10 });
   queen.decrementHealth(new HitDamage(queen.getHitpoints(), HitMask.RED));
-  for (let i = 0; i < TRANSFORMATION_TICKS; i++) tick(queen);
+  for (let i = 0; i < UNLOCK_TICK; i++) tick(queen);
   assert.ok(burnRemaining(queen) > 0, "stacks left after the molt");
   const landed = queen.getHitpoints();
   for (let i = 0; i < 4; i++) tick(queen);

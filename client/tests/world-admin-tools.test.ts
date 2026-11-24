@@ -39,5 +39,9 @@ test('Ghost plugins group first without moving files; plugin shortcuts render as
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(groups[0].hidden, false, 'readable host grouping stays searchable with the upstream bundle');
     assert.equal(groups[1].hidden, true, 'empty category groups hide after search');
+    assert.equal((groups[0] as HTMLDetailsElement).open, true, 'search opens matching categories');
+    search.value = '';
+    search.dispatchEvent(new w.Event('input', { bubbles: true }));
+    assert.equal((groups[0] as HTMLDetailsElement).open, false, 'clearing search restores the previous state');
 
 });

@@ -362,6 +362,13 @@
     function refresh() {
       groups.forEach(function (group) {
         group.el.hidden = !group.rows.some(function (row) { return !row.el.hidden; });
+        if (search.value.trim()) {
+          if (group.openBeforeSearch === undefined) group.openBeforeSearch = group.el.open;
+          group.el.open = !group.el.hidden;
+        } else if (group.openBeforeSearch !== undefined) {
+          group.el.open = group.openBeforeSearch;
+          delete group.openBeforeSearch;
+        }
       });
     }
     var build = panel.build.bind(panel), searchPlugins = panel.applyPluginSearch.bind(panel);

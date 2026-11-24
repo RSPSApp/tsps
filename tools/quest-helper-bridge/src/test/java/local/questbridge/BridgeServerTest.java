@@ -28,6 +28,12 @@ class BridgeServerTest {
     return HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
   }
 
+  static int sendForwardedLines(int port, String... lines) throws Exception {
+    var builder = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/health")).GET();
+    for (String line : lines) builder.header("X-Forwarded-For", line);
+    return HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString()).statusCode();
+  }
+
   @Test
   void loopbackStaysTheDefaultWithNoLimitOrCors() {
     var o = options(Map.of());
@@ -151,6 +157,19 @@ class BridgeServerTest {
           assertEquals(200, send(port, "GET", "/health", first).statusCode());
           assertEquals(trusted ? 200 : 429, send(port, "GET", "/health", second).statusCode());
           assertEquals(429, send(port, "GET", "/health", first).statusCode());
+        } finally {
+          server.stop(0);
+        }
+      }
+      // A proxy that appends its own header line leaves the caller's forged lines first.
+      try (var engine = new BridgeEngine()) {
+        var server = BridgeServer.start(o, engine, () -> 0);
+        try {
+          int port = server.getAddress().getPort();
+          for (int i = 1; i <= 3; i++) {
+            int status = sendForwardedLines(port, "6.6.6." + i, "10.0.0.1");
+            assertEquals(i == 1 ? 200 : 429, status, "request " + i + " trusted=" + trusted);
+          }
         } finally {
           server.stop(0);
         }

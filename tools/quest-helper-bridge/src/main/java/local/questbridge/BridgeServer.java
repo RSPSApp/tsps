@@ -174,11 +174,15 @@ public final class BridgeServer {
   }
 
   static String clientAddress(HttpExchange exchange, Options options) {
-    String forwarded = exchange.getRequestHeaders().getFirst("X-Forwarded-For");
-    if (options.trustProxy() && forwarded != null && !forwarded.isBlank()) {
-      // The proxy appends the address it saw; anything before it came from the caller.
-      String[] hops = forwarded.split(",");
-      return hops[hops.length - 1].trim();
+    if (options.trustProxy()) {
+      // A proxy that appends its own header line leaves the caller's forged lines first, so key
+      // on the last hop of the last line: the address the trusted proxy itself saw.
+      List<String> lines = exchange.getRequestHeaders().get("X-Forwarded-For");
+      if (lines != null && !lines.isEmpty()) {
+        String[] hops = lines.get(lines.size() - 1).split(",");
+        String last = hops[hops.length - 1].trim();
+        if (!last.isEmpty()) return last;
+      }
     }
     return exchange.getRemoteAddress().getAddress().getHostAddress();
   }

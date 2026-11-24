@@ -17,6 +17,7 @@ import { spellClickNeedsTarget, spellWidgetChildSlot } from "../SpellSelectionCo
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 import type { WidgetInputControllerDeps, WidgetInputFrame, WidgetInputState } from "./widgetInputTypes";
 import type { PrimaryWidgetAction } from "./widgetPrimaryAction";
+import { applyIf1ButtonVarp } from "./if1ButtonVarp";
 import { isCombatSkillWidgetAction } from "../widgetActionPayload";
 import { isChatMessageAreaWidget, isChatboxClickThroughActive } from "../interaction/chatboxClickThrough";
 
@@ -416,6 +417,9 @@ export function processWidgetClickInput(
                         deps.openWidgetMenuAt(menuX, menuY);
                         break;
                     }
+                    // A legacy toggle or select button shows its new state at once.
+                    const varManager = deps.getVarManager?.();
+                    if (varManager) applyIf1ButtonVarp(w, varManager);
                     // A widget a plugin built (RuneLite's JavaScriptCallback op listener).
                     if (runWidgetJsOp({ widget: w, ...primaryAction })) {
                         widgetInteraction.clickedWidgetHandled = true;

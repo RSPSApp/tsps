@@ -33,8 +33,8 @@ const RELEASED_TICKS = 1;
 // The falcon's own graphics (cache gamevals falcon_launch_anim, falcon_travel_anim, falcon_hit_anim) with
 // the numbers rsprox capture 3414 records for the Falconry grounds' falconers: spotanim 918 at height 150
 // on the sender, then falcon_travel_anim 922 starting at client cycle 24 and flying 8 cycles per tile
-// (start height 150, angle 10, progress 64). On a kebbit the hit is spotanim 923 on the kebbit, delayed
-// to the projectile's end. The falconers use 918 and 927 whichever way the kebbit lies, so there is no
+// (start height 150, angle 10, progress 64) locked on to the kebbit. On a kebbit the hit is spotanim 923 on
+// the kebbit, delayed to the projectile's end. The falconers use 918 and 927 whichever way the kebbit lies, so there is no
 // direction-picked graphic here.
 const FALCON_LAUNCH_GRAPHIC = 918;
 const FALCON_TRAVEL_PROJECTILE = 922;
@@ -137,7 +137,7 @@ function catchFalcon(player, npc, def) {
   else {
     gloves(player, I.FALCONERS_GLOVE);
     player.performGraphic(new H.core.Graphic(FALCON_LAUNCH_GRAPHIC, 0, FALCON_START_HEIGHT));
-    new H.core.Projectile(from, to, null, FALCON_TRAVEL_PROJECTILE, FALCON_LAUNCH_CYCLES, arrival,
+    new H.core.Projectile(from, to, npc, FALCON_TRAVEL_PROJECTILE, FALCON_LAUNCH_CYCLES, arrival,
       FALCON_START_HEIGHT, FALCON_END_HEIGHT, player.getPrivateArea()).withAngle(FALCON_ANGLE).withProgress(FALCON_PROGRESS).sendProjectile();
   }
 }

@@ -416,8 +416,10 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     const hunter=()=>{const f=player();f.moveTo(falconTile);f.levels.set(Skill.HUNTER,70);f.equipment.set(core.Equipment.WEAPON_SLOT,I.FALCONERS_GLOVE_2);return f;};
     // The catch resolves a tick after the send here (the kebbit is on the player's tile: 24 cycles of flight), the
     // falcon_hit graphic (26 cycles) plays on the kebbit, and the falcon shows on its prey one tick later.
+    let sentKebbit;const flights=[],baseFlight=core.Projectile.prototype.sendProjectile;
+    core.Projectile.prototype.sendProjectile=function(){flights.push(this);};
     const send=(f,reveal=true)=>{
-      const kebbit=prey(N.DASHING_KEBBIT,falconTile);
+      const kebbit=sentKebbit=prey(N.DASHING_KEBBIT,falconTile);
       Math.random=()=>0;Catching.catchNpc({player:f,npc:kebbit,npcId:kebbit.getId()});advance(1);Math.random=()=>0.5;
       const bird=spawned.at(-1);
       if(reveal)advance(1);
@@ -427,6 +429,10 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     const falcon=send(full,false);
     assert.equal(falcon.getId(),N.GYR_FALCON_3,"the falcon catches the kebbit even with a full inventory");
     assert.deepEqual(full.graphics,[918],"the falcon launches off the glove (falcon_launch_anim)");
+    assert.equal(flights.length,1);
+    assert.equal(flights[0].projectileId,922,"the falcon flies as falcon_travel_anim");
+    assert.equal(flights[0].lockon,sentKebbit,"locked on to the kebbit, so it follows it if it steps");
+    assert.deepEqual([flights[0].getTiming().startCycleOffset,flights[0].getTiming().endCycleOffset],[24,24],"24 cycles to launch, 8 per tile");
     assert.equal(falcon.isVisible(),false,"the falcon is hidden while it strikes");
     Catching.retrieve({player:full,npc:falcon});advance(1);
     assert.equal(full.experience.has(Skill.HUNTER),false,"it cannot be retrieved before it shows");
@@ -451,7 +457,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     assert.equal(slow.messages.at(-1),"Your falcon has left its prey. You see it heading back toward the falconer.");
     assert.equal(slow.experience.has(Skill.HUNTER),false,"lost prey gives no XP");
     assert.equal(slow.equipment.get(core.Equipment.WEAPON_SLOT),I.FALCONERS_GLOVE_2);
-    api.emitCustomEvent=baseEmit;
+    api.emitCustomEvent=baseEmit;core.Projectile.prototype.sendProjectile=baseFlight;
 
     const crabId=[...Crabs.bases].find(([id])=>Crabs.species(new core.GameObject(id,q.getLocation(),10,0,null)).level===21)[0];
     const crabObject=new core.GameObject(crabId,q.getLocation().clone(),10,0,null);

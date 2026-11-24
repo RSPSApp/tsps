@@ -12,7 +12,9 @@ Under **View → Background**, choose **Studio**, **Lumbridge courtyard**, **Al 
 
 ## Open it
 
-Run `./start-local.sh` from this checkout. It enables Creator, uses this worktree's assigned ports, and opens the cache editor. If Creator is already running, it opens that instance without starting another server. Use `./start-local.sh --no-open` to leave browser opening to you.
+Install **Creator** from WorldAdmin's Plugin Hub, or [build and import the portable ZIP](#install-the-portable-authoring-plugin). The game server loads the installed `server/plugins/imported/content-builders/ContentBuilders.plugin.js`. The source `ContentBuilders.entry.js` is a packaging input and the server skips it.
+
+Stop the stack after installing Creator. Run `./start-local.sh` from this checkout to start it with Creator enabled on its assigned ports and open the cache editor. If Creator is already running, it opens that instance without starting another server. Use `./start-local.sh --no-open` to leave browser opening to you.
 
 To start manually with the cache editor enabled:
 
@@ -140,7 +142,7 @@ node tools/content-builders/package.mjs
 
 Import the ZIP in the TSPS admin panel's Plugins tab, restart the world with `CACHE_EDITOR_ENABLED=1`, and open **NPC Creator** or **Gear Creator**. The package contains the UI, cache adapter, project store and content exporter inside one plugin entry, as required by the existing TSPS importer. It unpacks only its own runtime files beneath the installed plugin's `data/runtime/`. Projects are kept in its `data/projects/` directory. It resolves the receiving checkout's existing dependencies and native cache loaders; it does not patch source files or download dependencies during installation.
 
-The receiving TSPS checkout needs the optional cache-editor tool host, sampled creature animation support, custom combat/presentation APIs, and custom gear visual support from this feature set. Stock clients without these integrations cannot run every Creator function. The source entry uses `.entry.js` so it is not auto-loaded alongside an installed Hub package. The build emits the normal `ContentBuilders.plugin.js` inside the ZIP.
+The receiving TSPS checkout needs the optional cache-editor tool host, sampled creature animation support, custom combat/presentation APIs, and custom gear visual support from this feature set. Stock clients without these integrations cannot run every Creator function. The ZIP contains the loadable `ContentBuilders.plugin.js` entry.
 
 The generated archive is `release/content-builders-2.2.0.zip`. Release archives and compatibility patches are build products and are not checked into the TSPS source PR.
 

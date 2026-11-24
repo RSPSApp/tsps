@@ -8,7 +8,7 @@ case "${1:-}" in
   --no-open) open_page=0 ;;
   --help|-h)
     echo "Usage: ./start-local.sh [--no-open]"
-    echo "Starts this checkout with Creator enabled and opens its cache editor."
+    echo "Starts this checkout with its installed Creator plugin enabled."
     echo "If Creator is already running, opens that instance. Ctrl+C stops a newly started stack."
     exit 0 ;;
   '') ;;
@@ -41,6 +41,11 @@ if ready; then
   echo "Using the running Creator."
   open_creator
   exit 0
+fi
+if [[ ! -f server/plugins/imported/content-builders/ContentBuilders.plugin.js ]]; then
+  echo "Install Creator from the Plugin Hub in WorldAdmin, then stop the stack and rerun this script." >&2
+  echo "See tools/content-builders/README.md for the local ZIP build and import steps." >&2
+  exit 1
 fi
 if curl --silent --fail --max-time 2 --output /dev/null "http://localhost:${client_port}/"; then
   echo "This checkout's client is running, but Creator is unavailable." >&2

@@ -1,5 +1,5 @@
 import Denque from "denque";
-import { GEAR_TEXTURE_START } from "../../../custom/items/GearVisualRegistry";
+import { GEAR_TEXTURE_START, isGearTextureId } from "../../../custom/items/GearVisualRegistry";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
 import { Schema } from "leva/dist/declarations/src/types";
@@ -298,21 +298,13 @@ export function updateTextureArray(host: WebGLOsrsRendererHost, textures: Map<nu
                 continue;
             }
 
-            host.gl.texSubImage3D(
-                PicoGL.TEXTURE_2D_ARRAY,
-                0,
-                0,
-                0,
-                index,
-                TEXTURE_SIZE,
-                TEXTURE_SIZE,
-                1,
-                PicoGL.RGBA,
-                PicoGL.UNSIGNED_BYTE,
-                new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength),
-            );
+            if (isGearTextureId(id)) {
+                uploadGearTextureLevels(host.gl, index, pixels);
+            } else {
+                uploadTextureLevel(host.gl, index, 0, TEXTURE_SIZE, pixels);
+                updatedCount++;
+            }
             host.loadedTextureIds.add(id);
-            updatedCount++;
         }
         if (updatedCount > 0) {
             // Mipmap generation for a large TEXTURE_2D_ARRAY is expensive and can stall hard.
@@ -323,6 +315,44 @@ export function updateTextureArray(host: WebGLOsrsRendererHost, textures: Map<nu
             host.textureMipmapsDirtyUpdates += updatedCount;
         }
     
+}
+
+function uploadTextureLevel(
+    gl: WebGL2RenderingContext,
+    layer: number,
+    level: number,
+    size: number,
+    pixels: Int32Array,
+): void {
+    gl.texSubImage3D(
+        PicoGL.TEXTURE_2D_ARRAY, level, 0, 0, layer, size, size, 1, PicoGL.RGBA, PicoGL.UNSIGNED_BYTE,
+        new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength),
+    );
+}
+
+function uploadGearTextureLevels(gl: WebGL2RenderingContext, layer: number, pixels: Int32Array): void {
+    // Gear frames change independently of map streaming. Build only this layer's mip chain.
+    uploadTextureLevel(gl, layer, 0, TEXTURE_SIZE, pixels);
+    for (let size = TEXTURE_SIZE, level = 1; size > 1; size >>= 1, level++) {
+        const nextSize = size >> 1;
+        const next = new Int32Array(nextSize * nextSize);
+        for (let y = 0; y < nextSize; y++) {
+            for (let x = 0; x < nextSize; x++) {
+                const offset = (y * size + x) * 2;
+                const a = pixels[offset], b = pixels[offset + 1];
+                const c = pixels[offset + size], d = pixels[offset + size + 1];
+                let word = 0;
+                for (let shift = 0; shift < 32; shift += 8) {
+                    const sum = ((a >>> shift) & 255) + ((b >>> shift) & 255) +
+                        ((c >>> shift) & 255) + ((d >>> shift) & 255);
+                    word |= ((sum + 2) >> 2) << shift;
+                }
+                next[y * nextSize + x] = word;
+            }
+        }
+        uploadTextureLevel(gl, layer, level, nextSize, next);
+        pixels = next;
+    }
 }
 
 export function maybeRegenerateTextureMipmaps(host: WebGLOsrsRendererHost, nowMs: number): void {

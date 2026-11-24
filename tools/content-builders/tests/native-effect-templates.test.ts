@@ -134,7 +134,14 @@ test('native templates retain split-roll functions, area targeting, utility beha
     }finally{process.chdir(cwd);}
 });
 
-test('every audited native reference imports explicit roll rules and reusable mechanics instead of a hidden base',async()=>{
+test('every audited native reference imports explicit rules and mechanics with Windows path separators', async (t) => {
+    const relative = path.relative;
+    t.mock.method(path, 'relative', (from: string, to: string) => {
+        const result = relative(from, to);
+        return from === root && to.startsWith(path.join(root, 'server/plugins') + path.sep)
+            ? result.replaceAll('/', '\\')
+            : result;
+    });
     const {validateRuleFeatures}=await import('../shared/attack-rules.mjs'),{validateExtraFeatures}=await import('../shared/attack-features.mjs');
     const cache=new BuilderCache(root);try{
         const references=[];for(let offset=0;;offset+=50){const result=cache.specialDonors('',offset);references.push(...result.rows);if(references.length>=result.total)break;}

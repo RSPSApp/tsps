@@ -19,14 +19,17 @@ test('portable authoring plugin validates and starts its embedded tool without s
         const parsed=readPluginZip(authoringZip());assert.equal(parsed.manifest.name,'ContentBuilders');assert.equal(parsed.manifest.category,'@ Ghost Plugins @');
         const payload=parsed.source.match(/const PAYLOAD = '([^']+)'/);assert.ok(payload);const files=JSON.parse(gunzipSync(Buffer.from(payload[1],'base64')).toString());assert.match(files['shared/gear-visuals.mjs'],/export function renderTexture/);assert.ok(!files['shared/gear-visuals.mjs'].includes('../../../client/'),'portable visual sampling must not depend on the source checkout');
         const directory=path.join(temp,'imported/content-builders');fs.mkdirSync(directory,{recursive:true});fs.writeFileSync(path.join(directory,parsed.file),parsed.source);
-        const hooks:any={},endpoints:any={},module={exports:{} as any};let log='';
+        const hooks:any={},events:any={},module={exports:{} as any};let log='';
         const pluginRequire=name=>name==='node:child_process'?{spawn:(exe,args,options)=>{assert.ok(args[0].startsWith(temp),'launcher comes from the installed bundle');assert.ok(!args[0].includes('tools/content-builders'),'no source-tree launcher');child=spawn(exe,args,{...options,stdio:['ignore','pipe','pipe']});child.stdout.on('data',d=>log=(log+d).slice(-3000));child.stderr.on('data',d=>log=(log+d).slice(-3000));return child;}}:require(name);
         vm.runInNewContext(parsed.source,{module,Buffer,require:pluginRequire,__dirname:directory,process:{execPath:process.execPath,env:{...process.env,TSPS_ROOT:root,CACHE_EDITOR_ENABLED:'1',WT_SLOT:String(port-3890)}} ,console,setTimeout,clearTimeout});
-        module.exports.register({registerContentEndpoint:(key,fn)=>endpoints[key]=fn,onServerStartup:fn=>hooks.start=fn,onServerShutdown:fn=>hooks.stop=fn,onCustomEvent:()=>{},log:()=>{}});
+        module.exports.register({onServerStartup:fn=>hooks.start=fn,onServerShutdown:fn=>hooks.stop=fn,onCustomEvent:(key,fn)=>events[key]=fn,log:()=>{}});
         assert.equal(child,undefined,'registration only attaches hooks');hooks.start();
         const url=`http://127.0.0.1:${port}`;let ready=false;
         for(let n=0;n<100;n++){try{if((await fetch(url+'/api/info')).ok){ready=true;break;}}catch{}if(child.exitCode!==null)break;await new Promise(r=>setTimeout(r,100));}
-        assert.ok(ready,log);assert.deepEqual(Array.from(endpoints['cache-editor-tools']().tools,tool=>tool.label),['NPC Creator','Gear Creator']);
+        assert.ok(ready,log);
+        const discovery = { tools: [] };
+        events['cache-editor:tools'](discovery);
+        assert.deepEqual(Array.from(discovery.tools, (tool: { label: string }) => tool.label), ['NPC Creator', 'Gear Creator']);
         assert.ok((await (await fetch(url+'/app.mjs')).text()).includes('addPart'));
         assert.ok((await (await fetch(url+'/library.mjs')).text()).includes('thumbnail'));
         for(const name of ['build','paint','sculpt','animate','data','gear-effects','creature-attacks','gear-set','gear-visuals'])for(const extension of ['mjs','css']) {

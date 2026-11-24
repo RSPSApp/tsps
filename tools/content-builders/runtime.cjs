@@ -55,8 +55,7 @@ function startup(api) {
         if (!type || c.settings.weaponInterface && !weapon) throw new Error('Builder equipment slot or weapon style is unavailable.');
         if (c.settings.specialFrom >= 0 && !core.CombatSpecial.getForWeaponId(c.settings.specialFrom)) throw new Error('The chosen special attack donor has no registered special.');
         const rows = [...cache.getCustomItems(), c.item];
-        cache.validateItemVisualBudget?.(rows);
-        core.encodeContentData('server', [{ key: 'customItems', rows }]);
+        if (!cache.getCustomItemPackets) core.encodeContentData('server', [{ key: 'customItems', rows }]);
         // registerCustomItems validates before replacing its maps; retain every other package's rows.
         // It clears the model list, which is restored with the complete merged list below.
         cache.registerCustomItems(rows);

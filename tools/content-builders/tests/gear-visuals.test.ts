@@ -89,9 +89,9 @@ test('real exported gear carries all visual layers through native models and the
         }
         const ids=textures.getTextureIds();assert.equal(ids.length,native.factory.getTextureLoader().getTextureIds().length+GEAR_TEXTURE_COUNT);
         assert.deepEqual(textures.getMaterial(GEAR_TEXTURE_START),{animU:0,animV:0,frameCount:1,animSpeed:0,alphaCutOff:.01});
-        const pixels=GearVisualRegistry.texturePixels(textures.base,16).get(GEAR_TEXTURE_START)!.slice(),rgba=renderTexture(compiled.content.item.visuals.models[0].textures[0],16,GearVisualRegistry.time),argb=pixels[0]>>>0;
+        const pixels=GearVisualRegistry.texturePixel(GEAR_TEXTURE_START,textures.base,16)!.slice(),rgba=renderTexture(compiled.content.item.visuals.models[0].textures[0],16,GearVisualRegistry.time),argb=pixels[0]>>>0;
         assert.deepEqual([(argb>>>16)&255,(argb>>>8)&255,argb&255,argb>>>24],Array.from(rgba.slice(0,4)),'the atlas expects ARGB words, whose BGRA bytes are swizzled by both shaders');
-        GearVisualRegistry.setTime(1300);assert.notDeepEqual(GearVisualRegistry.texturePixels(textures.base,16).get(GEAR_TEXTURE_START),pixels);
+        GearVisualRegistry.setTime(1300);assert.notDeepEqual(GearVisualRegistry.texturePixel(GEAR_TEXTURE_START,textures.base,16),pixels);
         const old=GearVisualRegistry.model(model.modelId);const invalid=structuredClone(compiled.content.item);invalid.visuals.models[1].particles[0].vertexIndices[0]=999999;
         assert.throws(()=>CustomItemRegistry.register(invalid),/selection/);assert.equal(GearVisualRegistry.model(model.modelId),old,'failed replacement leaves the active visuals intact');
         const registered=CustomItemRegistry.get(project.ids.definition);assert.throws(()=>CustomItemRegistry.replaceAll([invalid]),/selection/);assert.equal(CustomItemRegistry.get(project.ids.definition),registered,'invalid datasets cannot partially clear valid gear');
@@ -104,10 +104,24 @@ test('real exported gear carries all visual layers through native models and the
         assert.notDeepEqual(firstPose!.verticesY,secondPose!.verticesY,'one-shot motion starts separately for each worn appearance, even long after page load');assert.notEqual(actionAppearance.getCacheKey(),secondWearer.getCacheKey(),'different one-shot ages cannot share posed geometry');
         CustomItemRegistry.register(compiled.content.item);
         for(const backend of ['webgl','webgpu']){
-            let uploads=0;const target:any={loadedTextureIds:new Set(),uploadMapTextures:()=>uploads++};
-            const renderer:any={osrsClient:{textureLoader:textures},...(backend==='webgpu'?{world:target}:{loadedTextureIds:target.loadedTextureIds,textureArray:{},updateTextureArray:target.uploadMapTextures})};
-            updateGearVisuals(renderer,1500);updateGearVisuals(renderer,1501);assert.equal(uploads,1,`${backend} uploads each visual frame once`);updateGearVisuals(renderer,1550);assert.equal(uploads,2);
+            let uploads = 0;
+            const loadedTextureIds = new Set<number>();
+            const upload = (pixels: Map<number, Int32Array>) => {
+                uploads++;
+                for (const id of pixels.keys()) loadedTextureIds.add(id);
+            };
+            const target = backend === "webgpu" ? { loadedTextureIds, uploadMapTextures: upload }
+                : { loadedTextureIds, textureArray: {}, updateTextureArray: upload };
+            const draw = (time: number) => {
+                GearVisualRegistry.setTime(time);
+                updateGearVisuals(target, textures, [GEAR_TEXTURE_START]);
+            };
+            draw(1500);
+            draw(1501);
+            assert.equal(uploads, 1, `${backend} uploads each visual frame once`);
+            draw(1550);
+            assert.equal(uploads, 2);
         }
-        CustomItemRegistry.clear();assert.equal(GearVisualRegistry.model(model.modelId),undefined);assert.equal(GearVisualRegistry.texturePixels(textures.base).size,0,'world changes clear material and emitter state');
+        CustomItemRegistry.clear();assert.equal(GearVisualRegistry.model(model.modelId),undefined);assert.equal(GearVisualRegistry.texturePixel(GEAR_TEXTURE_START,textures.base),undefined,'world changes clear material and emitter state');
     }finally{CustomItemRegistry.clear();CustomModelRegistry.clear();cache.close();}
 });

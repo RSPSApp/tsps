@@ -25,8 +25,7 @@ function startup(api) {
         prepared.push({c,type,weapon});
     }
     const rows=[...previousItems,...items.map(c=>c.item)];
-    cache.validateItemVisualBudget?.(rows);
-    core.encodeContentData('server',[{key:'customItems',rows}]);
+    if (!cache.getCustomItemPackets) core.encodeContentData('server', [{ key: 'customItems', rows }]);
     cache.registerCustomItems(rows);
     for(const {c,type,weapon}of prepared){
         const definition=core.ItemDefinition.registerCustom(c.id,c.baseId,{

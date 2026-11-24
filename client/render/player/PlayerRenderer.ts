@@ -1,3 +1,5 @@
+import { getModelGearTextures, updateGearVisuals } from "../../custom/items/GearVisualRuntime";
+import { isGearTextureId } from "../../custom/items/GearVisualRegistry";
 import { playerInterpolation } from "./PlayerInterpolation";
 import { applyInterpolatedFrames, interpolationFrame, interpolationKey, type ActorInterpolation } from "../../rs/model/seq/FrameInterpolation";
 import { vec2 } from "gl-matrix";
@@ -384,7 +386,7 @@ export class PlayerRenderer {
                     const texLoader = mv.textureLoader;
                     for (let i = 0; i < rec.baseModel.faceCount; i++) {
                         const tid = rec.baseModel.faceTextures[i];
-                        if (tid !== -1 && texLoader.isSd?.(tid)) used.add(tid);
+                        if (tid !== -1 && !isGearTextureId(tid) && texLoader.isSd?.(tid)) used.add(tid);
                     }
                 }
                 if (used.size > 0) {
@@ -2739,6 +2741,7 @@ export class PlayerRenderer {
 
                 const baseRec = this.ensureBaseForAppearance(group.appearance);
                 if (!baseRec) continue;
+                const gearTextures = getModelGearTextures(baseRec.baseModel.faceTextures);
 
                 slots.length = 0;
                 let batchSource: (typeof group.instances)[number] | undefined;
@@ -2786,6 +2789,7 @@ export class PlayerRenderer {
                               group.interpolation,
                           );
                     if ((counts.countAlpha | 0) > 0) {
+                        updateGearVisuals(r, r.osrsClient.textureLoader, gearTextures);
                         const playerDraw = gpuGeometry?.alpha
                             ? r
                                   .configureDrawCall(gpuGeometry.alpha.drawCall)
@@ -2830,6 +2834,7 @@ export class PlayerRenderer {
                     );
 
                     if ((counts.countAlpha | 0) <= 0) continue;
+                    updateGearVisuals(r, r.osrsClient.textureLoader, gearTextures);
 
                     // Per-player WorldView: apply deck height + bobbing transform
                     const wvIdAlpha = playerEcsAlpha?.getWorldViewId?.(inst.pid) ?? -1;

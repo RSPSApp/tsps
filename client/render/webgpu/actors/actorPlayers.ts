@@ -1,3 +1,5 @@
+import { getModelGearTextures } from "../../../custom/items/GearVisualRuntime";
+import { isGearTextureId } from "../../../custom/items/GearVisualRegistry";
 import { packedActorBounds, type ActorBounds } from "../../ActorVisibility";
 import { playerInterpolation } from "../../player/PlayerInterpolation";
 import { applyInterpolatedFrames, interpolationFrame, interpolationKey, type ActorInterpolation } from "../../../rs/model/seq/FrameInterpolation";
@@ -24,6 +26,7 @@ import { LabelPose, LabelRig } from "../../player/LabelPose";
  */
 
 export interface PosedActorGeometry {
+    gearTextureIds?: readonly number[];
     /** Geometry cache key: the pose for CPU-posed meshes, the appearance for rest meshes. */
     key: string;
     opaqueVertices: Uint8Array;
@@ -71,6 +74,7 @@ export function buildLabelledActorRestMesh(
     const alpha = build(true);
     return {
         key,
+        gearTextureIds: getModelGearTextures(baseModel.faceTextures),
         opaqueVertices: opaque.vertices,
         opaqueIndices: opaque.indices,
         opaqueLabels: opaque.labels,
@@ -348,7 +352,7 @@ export class PlayerPoseGeometry {
             if (model.faceTextures) {
                 for (let i = 0; i < model.faceCount; i++) {
                     const tid = model.faceTextures[i];
-                    if (tid !== -1 && textureLoader.isSd?.(tid)) used.add(tid);
+                    if (tid !== -1 && !isGearTextureId(tid) && textureLoader.isSd?.(tid)) used.add(tid);
                 }
             }
             if (used.size === 0) return;
@@ -415,6 +419,7 @@ export class PlayerPoseGeometry {
 
             model.calculateBoundsCylinder();
             return [{
+                gearTextureIds: getModelGearTextures(model.faceTextures),
                 logicalHeight: model.height,
                 key: "",
                 opaqueVertices,

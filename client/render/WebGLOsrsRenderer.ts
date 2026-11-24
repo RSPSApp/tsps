@@ -2425,8 +2425,9 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         roofPlaneLimit: number,
         map?: WebGLMapSquare,
         lod: boolean = false,
+        gearTexturesByOffset?: ReadonlyMap<number, readonly number[]>,
     ): void {
-        return render.drawWithRoofPlaneFilter(this, drawCall, drawRanges, drawRangePlanes, roofPlaneLimit, map, lod);
+        return render.drawWithRoofPlaneFilter(this, drawCall, drawRanges, drawRangePlanes, roofPlaneLimit, map, lod, gearTexturesByOffset);
     }
 
     public getMapTileDistanceFromPoint(map: WebGLMapSquare, tileX: number, tileY: number): number {

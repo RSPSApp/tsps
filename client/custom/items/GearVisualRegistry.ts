@@ -6,14 +6,21 @@ import type { TextureLoader } from "../../rs/texture/TextureLoader";
 // world's textures or changes the layer indices already baked into map geometry.
 export const GEAR_TEXTURE_START = 30000;
 export const GEAR_TEXTURE_COUNT = 32;
+
+export function isGearTextureId(id: number): boolean {
+    return id >= GEAR_TEXTURE_START && id < GEAR_TEXTURE_START + GEAR_TEXTURE_COUNT;
+}
 const models=new Map<number,any>();
 const textures=new Map<number,any>();
 const owners=new Map<number,number[]>();
 const ownerTextures=new Map<number,number[]>();
 let time=0,frame=0;
-let pixelFrame=-1,pixelRevision=-1,pixelSize=-1;
-const pixels=new Map<number,Int32Array>();
-const textureCache=new Map<number,{row:any;size:number;frame:number;pixels:Int32Array}>();
+let textureCache = new WeakMap<TextureLoader, Map<number, {
+    row: object;
+    size: number;
+    frame: number;
+    pixels: Int32Array;
+}>>();
 let clockId=0,samplingKey:object|undefined;
 let clocks=new WeakMap<object,{id:number;items:Map<number,{epoch:number;start:number}>}>();
 const objectClocks=new Map<number,object>();
@@ -83,7 +90,7 @@ export const GearVisualRegistry={
         owners.set(owner,validated.models.map((r:any)=>r.modelId));this.revision++;
         ownerTextures.set(owner,[...aliases.values()]);
     },
-    clear():void {models.clear();textures.clear();owners.clear();ownerTextures.clear();pixels.clear();textureCache.clear();objectClocks.clear();clocks=new WeakMap();samplingKey=undefined;pixelFrame=-1;this.revision++;},
+    clear():void {models.clear();textures.clear();owners.clear();ownerTextures.clear();textureCache=new WeakMap();objectClocks.clear();clocks=new WeakMap();samplingKey=undefined;this.revision++;},
     model(id:number):any {return models.get(id);},
     dynamic(owner:number):boolean {return (owners.get(owner)??[]).some(id=>{const m=models.get(id);return m.models.length||m.particles.length;});},
     appearanceKey(equipment:number[],key?:object):string {
@@ -109,29 +116,48 @@ export const GearVisualRegistry={
         if(model.textures.length){data.faceTextures??=new Int16Array(data.faceCount).fill(-1);for(const row of model.textures)for(const index of row.faceIndices)data.faceTextures[index]=row.textureId;}
         return data;
     },
-    texturePixels(base:TextureLoader,size=128):Map<number,Int32Array> {
-        if(pixelFrame===frame&&pixelRevision===this.revision&&pixelSize===size)return pixels;
-        pixels.clear();
-        for(const [id,row] of textures){
-            try{
-                const animated=row.scroll.some((n:number)=>n!==0)||row.spin!==0||row.source==='frames'&&row.frames.length>1||row.source==='cache'&&base.getFrameCount(row.sourceId)>1||row.source==='pattern'&&['flame','water','noise','runes','stars'].includes(row.pattern);
-                const cached=textureCache.get(id);
-                if(cached&&cached.row===row&&cached.size===size&&(!animated||cached.frame===frame)){pixels.set(id,cached.pixels);continue;}
-                let source;
-                if(row.source==='cache'){
-                    const count=Math.max(1,base.getFrameCount(row.sourceId)),native=base.getPixelsArgb(row.sourceId,size,false,1,Math.floor(time*row.frameRate)%count),rgba=new Uint8Array(size*size*4);
-                    for(let i=0;i<native.length;i++){const v=native[i];rgba[i*4]=(v>>>16)&255;rgba[i*4+1]=(v>>>8)&255;rgba[i*4+2]=v&255;rgba[i*4+3]=v>>>24;}
-                    source={size,pixels:rgba};
-                }else if(row.source==='frames'){
-                    const f=row.frames[Math.floor(time*row.frameRate)%row.frames.length];source={size:f.size,pixels:Uint8Array.from(atob(f.pixels),(c:string)=>c.charCodeAt(0))};
+    texturePixel(id: number, base: TextureLoader, size = 128): Int32Array | undefined {
+        const row = textures.get(id);
+        if (!row) return undefined;
+        let cache = textureCache.get(base);
+        if (!cache) textureCache.set(base, cache = new Map());
+        try {
+            const animated = row.scroll.some((n: number) => n !== 0) || row.spin !== 0 ||
+                (row.source === "frames" && row.frames.length > 1) ||
+                (row.source === "cache" && base.getFrameCount(row.sourceId) > 1) ||
+                (row.source === "pattern" && ["flame", "water", "noise", "runes", "stars"].includes(row.pattern));
+            const cached = cache.get(id);
+            if (cached && cached.row === row && cached.size === size && (!animated || cached.frame === frame)) {
+                return cached.pixels;
+            }
+            let source;
+            if (row.source === "cache") {
+                const count = Math.max(1, base.getFrameCount(row.sourceId));
+                const native = base.getPixelsArgb(row.sourceId, size, false, 1, Math.floor(time * row.frameRate) % count);
+                const rgba = new Uint8Array(size * size * 4);
+                for (let i = 0; i < native.length; i++) {
+                    const v = native[i];
+                    rgba[i * 4] = (v >>> 16) & 255;
+                    rgba[i * 4 + 1] = (v >>> 8) & 255;
+                    rgba[i * 4 + 2] = v & 255;
+                    rgba[i * 4 + 3] = v >>> 24;
                 }
-                const rgba=renderTexture(row,size,time,source),result=new Int32Array(size*size);
-                // World atlases upload the words' BGRA bytes; both shaders sample .bgra.
-                // The authoring canvas consumes RGBA bytes directly instead.
-                for(let i=0;i<result.length;i++)result[i]=(rgba[i*4+3]<<24)|(rgba[i*4]<<16)|(rgba[i*4+1]<<8)|rgba[i*4+2];
-                pixels.set(id,result);textureCache.set(id,{row,size,frame,pixels:result});
-            }catch{/* A sparse cache source can still be streaming. Retry next visual frame. */}
+                source = { size, pixels: rgba };
+            } else if (row.source === "frames") {
+                const f = row.frames[Math.floor(time * row.frameRate) % row.frames.length];
+                source = { size: f.size, pixels: Uint8Array.from(atob(f.pixels), (c: string) => c.charCodeAt(0)) };
+            }
+            const rgba = renderTexture(row, size, time, source);
+            const pixels = new Int32Array(size * size);
+            // Both world shaders sample the uploaded BGRA bytes as .bgra.
+            for (let i = 0, j = 0; i < pixels.length; i++, j += 4) {
+                pixels[i] = (rgba[j + 3] << 24) | (rgba[j] << 16) | (rgba[j + 1] << 8) | rgba[j + 2];
+            }
+            if (size === 128) cache.set(id, { row, size, frame, pixels });
+            return pixels;
+        } catch {
+            // A sparse cache source can still be streaming. Retry when the surface is drawn.
+            return undefined;
         }
-        pixelFrame=frame;pixelRevision=this.revision;pixelSize=size;return pixels;
     },
 };

@@ -47,7 +47,10 @@ collide with cache items.
   any gear slot. The client samples them before the player's pose in WebGL and WebGPU.
   Exported packages require `CacheDefinitions.ITEM_VISUALS_VERSION === 1`.
 
-The loader validates every row at startup and throws on a bad one, naming the item. On the client,
+The loader validates each item at registration. Multiple item rows may arrive in batches at
+login. Each item must fit in a single 64 KiB game message after compression. The registration
+error names an oversized item so you can reduce its imported surface image size or frame count.
+On the client,
 `CustomItemRegistry` (`client/custom/items/`) holds the rows and `CustomObjTypeLoader` wraps the
 cache's `ObjTypeLoader`, so custom items show in inventories, shops and tooltips like any other.
 

@@ -5,12 +5,13 @@ const { spawn } = require('node:child_process');
 const PAYLOAD = null;
 let child, restartTimer, running = false, failures = 0;
 const port = 3890 + Number(process.env.WT_SLOT || 0);
-function tools() {
-    return { tools: process.env.CACHE_EDITOR_ENABLED === '1' && process.env.BROWSER_HOST !== '1'
+function tools(event) {
+    const available = process.env.CACHE_EDITOR_ENABLED === '1' && process.env.BROWSER_HOST !== '1'
         ? [
             { id: 'npc-editor', label: 'NPC Creator', url: `http://localhost:${port}/embedded?view=npc`, aliases: [{ id: 'content-builders' }, { id: 'content-builders', view: 'npc' }] },
             { id: 'gear-editor', label: 'Gear Creator', url: `http://localhost:${port}/embedded?view=gear`, aliases: [{ id: 'content-builders', view: 'gear' }] },
-        ] : [] };
+        ] : [];
+    event.tools.push(...available);
 }
 function findRoot() {
     let root=process.env.TSPS_ROOT || __dirname;
@@ -73,7 +74,7 @@ module.exports = {
     description: 'Visual creature and gear creation in the cache editor. Projects and exported plugins stay outside the OSRS cache.',
     dependsOn: ['CacheEditorCatalog'],
     register(api) {
-        api.registerContentEndpoint('cache-editor-tools', tools);
+        api.onCustomEvent('cache-editor:tools', tools);
         api.onCustomEvent('WorldAdmin:tools', shortcuts);
         api.onServerStartup(start.bind(null, api));
         api.onServerShutdown(stop);

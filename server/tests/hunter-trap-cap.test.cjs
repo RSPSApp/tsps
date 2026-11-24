@@ -19,7 +19,7 @@ before(async () => {
   // Isolate placement physics; actor, skills, inventory, shared count and timed lay are real.
   H.core = { ...core,
     MapObjects: { getType: () => null }, RegionManager: { blocked: () => false },
-    ObjectManager: { register() {}, deregister() {} },
+    ObjectManager: { register() {}, deregister() {}, objectsAt: () => [] },
     ItemOnGroundManager: { registerLocation(_player, item, location) {
       return { getItem: () => item, getLocation: () => location, isPendingRemoval: () => false };
     }, deregister() {} },

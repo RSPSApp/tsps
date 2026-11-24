@@ -2311,12 +2311,27 @@ export function registerWidgetOps(handlers: HandlerMap): void {
 
     // if_setnpcmodel(npc, component) (rev 241): the NPC's full model (model type 6), where
     // if_setnpchead shows its chathead.
+    // cc_setnpcmodel / if_setnpcmodel (1215 / 2215): the NPC's body model, model type 9.
+    const setNpcModel = (w: any, npcId: number) => {
+        w.modelType = 9;
+        w.modelId = npcId;
+        w.isNpcChathead = false;
+        w.npcTypeId = undefined;
+        w.isPlayerChathead = false;
+    };
     handlers.set(Opcodes.IF_SETNPCMODEL, (ctx) => {
         const w = getWidgetFromStack(ctx);
         const npcId = ctx.intStack[--ctx.intStackSize];
         if (w) {
-            w.modelType = 6;
-            w.modelId = npcId;
+            setNpcModel(w, npcId);
+            invalidateWidgetRender(ctx, w);
+        }
+    });
+    handlers.set(1215, (ctx, intOp) => {
+        const npcId = ctx.intStack[--ctx.intStackSize];
+        const w = getTargetWidget(ctx, intOp);
+        if (w) {
+            setNpcModel(w, npcId);
             invalidateWidgetRender(ctx, w);
         }
     });

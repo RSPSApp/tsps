@@ -1,5 +1,8 @@
 import { menuCooldownBlocksPass } from "./menuCooldown";
 import { wrapExamineWithClickCross } from "./checkExamineCross";
+
+/** OSRS adds no further player or NPC once the menu holds this many entries. */
+const MAX_ACTOR_MENU_ENTRIES = 400;
 import { isGroundItemOperationEnabled } from "../../../game/data/ground/GroundItemStore";
 import { buildPlayerActionEntries } from "./playerMenu";
 import Denque from "denque";
@@ -514,6 +517,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 return normalized.length > 0 && clanMemberNames.has(normalized);
             };
 
+            let deferredCombatTarget: { ecsIndex: number; worldTileX: number; worldTileY: number } | undefined;
             const addPlayerMenuEntries = (
                 ecsIndex: number,
                 worldTileX: number,
@@ -521,8 +525,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
             ): void => {
                 const idx = ecsIndex | 0;
                 if (idx < 0) return;
-                if (playerIds.has(idx)) return;
-                playerIds.add(idx);
+                // OSRS stops adding actors at 400 entries, and lists a stacked actor once for
+                // every actor under the cursor it shares a tile with.
+                if (menuEntries.length >= MAX_ACTOR_MENU_ENTRIES) return;
 
                 const sidRaw = playerEcs.getServerIdForIndex?.(idx);
                 if (typeof sidRaw !== "number") return;
@@ -664,8 +669,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 const sid = npcServerId | 0;
                 const ecsId = npcEcsId | 0;
                 if (sid <= 0 || ecsId <= 0) return;
-                if (npcIds.has(sid)) return;
-                npcIds.add(sid);
+                if (menuEntries.length >= MAX_ACTOR_MENU_ENTRIES) return;
 
                 // The pick carries the cache type; a server type customisation (an Echo boss's
                 // name and level) lives on the NPC's synthetic ECS type for that same base. The
@@ -1209,6 +1213,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     if (hit.playerEcsIndex != null) {
                         const ecsIndex = hit.playerEcsIndex;
                         if (ecsIndex == null) continue;
+                        // One pass per actor under the cursor, however many of its faces the ray met.
+                        if (playerIds.has(ecsIndex | 0)) continue;
+                        playerIds.add(ecsIndex | 0);
                         const firstNpcs: number[] = [];
 
                         const playerSubX = playerEcs.getX(ecsIndex) | 0;
@@ -1261,7 +1268,14 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                             }
                         }
 
-                        addPlayerMenuEntries(ecsIndex, worldTileX, worldTileY);
+                        // The player you are fighting is added after everything else, so their
+                        // options are on top of a stack.
+                        const combatTarget = ClientState.combatTargetPlayerIndex | 0;
+                        if (combatTarget !== -1 && ((playerEcs.getServerIdForIndex?.(ecsIndex | 0) ?? -2) | 0) === combatTarget) {
+                            deferredCombatTarget = { ecsIndex: ecsIndex | 0, worldTileX, worldTileY };
+                        } else {
+                            addPlayerMenuEntries(ecsIndex, worldTileX, worldTileY);
+                        }
                         // Later entries win the menu order, including when the ray hit the player first.
                         for (const npc of firstNpcs) {
                             addNpcMenuEntries(
@@ -1276,6 +1290,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         const npcServerId = hit.npcServerId;
                         const npcEcsId = hit.npcEcsId;
                         if (npcServerId == null || npcEcsId == null) continue;
+                        if (npcIds.has(npcServerId | 0)) continue;
+                        npcIds.add(npcServerId | 0);
+                        let selfAdded = false;
 
                         const worldTileX = (hit.tileX ?? 0) | 0;
                         const worldTileY = (hit.tileY ?? 0) | 0;
@@ -1313,6 +1330,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                             const npcType = host.getEffectiveNpcType(interactId);
                             if (npcType?.drawPriority !== NpcDrawPriority.DRAW_PRIORITY_FIRST) {
                                 addNpcMenuEntries(interactId, npcServerId, npcEcsId, worldTileX, worldTileY);
+                                selfAdded = true;
                             }
                             // Players on the same coords
                             const hitMapId = hit.mapId | 0;
@@ -1329,15 +1347,25 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                             }
                         }
 
-                        addNpcMenuEntries(
-                            interactId | 0,
-                            npcServerId | 0,
-                            npcEcsId | 0,
-                            worldTileX,
-                            worldTileY,
-                        );
+                        if (!selfAdded) {
+                            addNpcMenuEntries(
+                                interactId | 0,
+                                npcServerId | 0,
+                                npcEcsId | 0,
+                                worldTileX,
+                                worldTileY,
+                            );
+                        }
                     }
                 }
+            }
+
+            if (deferredCombatTarget) {
+                addPlayerMenuEntries(
+                    deferredCombatTarget.ecsIndex,
+                    deferredCombatTarget.worldTileX,
+                    deferredCombatTarget.worldTileY,
+                );
             }
 
             // Wrap NPC/LOC/PLAYER/OBJ entries to spawn a red cross when selected

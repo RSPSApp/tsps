@@ -31,7 +31,7 @@ The workout runs in a private template scene, using the recorded 206-cycle span 
 
 Burntof accepts regular beer, Asgarnian ale, dwarven stout and wizard's mind bomb. Using a drink directly on him works, as does the dialogue hand-in. His upstairs scene plays the hand animations, five-cycle round reveals, third-round cheat and Tina's arrival. The cheat beats the sign actually displayed in the third round. Each of the player's three choices leads to recruitment.
 
-The sandwich recipe unlocks when the cook explains the bread/meat combination. Knife-on-bread opens the cache creation menu with breadcrumbs and steak sandwich; knife-on-meat can make the sandwich directly. It consumes one bread and one cooked meat, retains the knife, plays sequence8938 and works after completion. Using a sandwich on Marley starts the hand-in dialogue.
+The sandwich recipe unlocks when the cook explains the bread/meat combination. Knife on bread or on cooked meat makes the sandwich at once (local 1001343, tick 1435). The creation menu with breadcrumbs and steak sandwich appears only while Freeing Pirate Pete's breadcrumbs are available (rsprox 1636, whose account had Recipe for Disaster started). It consumes one bread and one cooked meat, retains the knife, plays sequence8938 and works after completion. Using a sandwich on Marley starts the hand-in dialogue.
 
 The entrance scene creates a private crew, explosion and rubble replacements, the Marley disguise/tripwires, indoor crew, earthquake and awakening. The combat Guardian and its four mineable pillars occupy a separate private instance. Pillars need a usable pickaxe and Mining 10 (boostable) and give 10 Mining XP each (Wiki). A broken pillar can't be mined again. The Guardian attacks after the cutscene and on re-entry. Its death, by combat or by the fourth pillar, starts the finishing dialogue.
 
@@ -176,6 +176,8 @@ the entrance through the crew fleeing (2335-2782) and the finish (2876-2939): cu
 the gravestone marker, NPC and item menus hidden and the side tabs closed, all back as each one ends. The quest
 now does this with the shared quest-scene helper. Live also sets `fov_clamp`, the area-sound and draw-distance
 overrides and hides loc menus, which the shared helper doesn't send for any quest.
+
+**Steak sandwich.** Knife on bread made the sandwich on the same tick with no menu (1435: message, sequence 8938). 1636's make menu with breadcrumbs came from its account being part-way through Pirate Pete, so the menu is now offered only while Recipe for Disaster says breadcrumbs can be made.
 
 **Recorded differences kept from the Wiki.** The female account hears "madam" where the Wiki writes
 "[sir/miss]" (Checkal twice, Marley once), and "strongman" where it writes "[strongman/strongwoman]"

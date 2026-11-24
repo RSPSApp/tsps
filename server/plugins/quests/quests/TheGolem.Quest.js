@@ -23,7 +23,7 @@
  * https://github.com/Zoinkwiz/quest-helper/blob/06da90f982518a093f2fe1c9cfac5547fa7053d3/src/main/java/com/questhelper/helpers/quests/thegolem/TheGolem.java
  */
 module.exports = function registerTheGolemQuest(api) {
-  const { Item, Location, Skill, Animation, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
+  const { Location, Skill, Animation, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, openBook, giveReward, questStartMessage } = require("../QuestRuntime");
 
   const PAGE = "The Golem";
@@ -145,9 +145,7 @@ module.exports = function registerTheGolemQuest(api) {
   const DEMON_PORTAL_OBJECT_ID = ObjectIdentifiers.PORTAL_13; // 6282 golem_demon_portal
   const DEMON_PORTAL_TILE = { x: 2719, y: 4883, z: 2 };
   const DOOR_LANDING = { x: 2721, y: 4911, z: 0 }; // tick 1250
-  const LETTER_TILE = { x: 3479, y: 3092, z: 0 };
-  const IMPLEMENT_TILE = { x: 2713, y: 4913, z: 0 };
-  const UZER_SURFACE_ZONE = { minX: 3465, maxX: 3505, minY: 3075, maxY: 3105, levels: [0] };
+  // The letter (3479,3092) and the strange implement (2713,4913) are world spawns (ground-items.json).
   const UZER_RUINS_ZONE = { minX: 2706, maxX: 2738, minY: 4881, maxY: 4918, levels: [0] };
   const COMPLETED_SCROLL_GROUP = 153;
 
@@ -284,22 +282,6 @@ module.exports = function registerTheGolemQuest(api) {
   /** Into the inventory, or onto the floor under the player with a full one (Wiki: "Drops to floor"). */
   function giveOrDrop(player, itemId) {
     giveReward(player, itemId, 1);
-  }
-
-  /** A floor spawn, registered for its owner until picked up (the Wiki's item spawns). */
-  function ensureGroundItem(player, itemId, tile) {
-    if (held(player, itemId)) return;
-    const location = new Location(tile.x, tile.y, tile.z);
-    const manager = api.getItemOnGroundManager();
-    if (manager.getGroundItem(player.getUsername(), itemId, location, player.getPrivateArea())) return;
-    manager.registerLocation(player, new Item(itemId, 1), location);
-  }
-
-  /** The letter and the strange implement respawn for anyone on or past the quest (Wiki item pages). */
-  function ensureQuestItemSpawns(player) {
-    if (!quest.isStarted(player)) return;
-    ensureGroundItem(player, LETTER_ITEM_ID, LETTER_TILE);
-    ensureGroundItem(player, STRANGE_IMPLEMENT_ITEM_ID, IMPLEMENT_TILE);
   }
 
   function atTile(event, tile) {
@@ -461,6 +443,8 @@ module.exports = function registerTheGolemQuest(api) {
   function selectVariant({ npcId, player }) {
     if (GOLEM_NPC_IDS.has(npcId)) return { page: PAGE, variant: golemVariant(player) };
     if (npcId === ELISSA_NPC_ID) {
+      // Tick 1934: after the quest her first menu, without the letter (handleMenu).
+      if (quest.isComplete(player)) return { page: PAGE, variant: "talking-to-elissa-in-the-digsite" };
       const progress = letterProgress(player);
       if (progress >= NOTES_READ) return { page: PAGE, variant: "talking-to-elissa-in-the-digsite-talking-to-elissa-after-reading-varmen-s-notes" };
       if (progress >= ELISSA_TOLD) {
@@ -493,6 +477,15 @@ module.exports = function registerTheGolemQuest(api) {
     return request.complete === true;
   }
 
+  const LETTER_OPTION = "I found a letter in the desert with your name on.";
+
+  /** Ticks 1934 and 1940: after the quest Elissa's menu is "What do you do here?|What is this place?|Sorry, I need to go." */
+  function handleMenu(notice) {
+    if (notice.npcId !== ELISSA_NPC_ID || !notice.player || !quest.isComplete(notice.player)) return;
+    if (!notice.options.some((option) => option.text === LETTER_OPTION)) return;
+    notice.options = notice.options.filter((option) => option.text !== LETTER_OPTION);
+  }
+
   /** the-golem:curator-step { player, active }: Dig Site and Bone Voyage ask before they claim the curator. */
   function answerCuratorStep(request) {
     if (request?.player) request.active = curatorStepActive(request.player);
@@ -504,7 +497,6 @@ module.exports = function registerTheGolemQuest(api) {
     quest.setStage(player, STAGE_REPAIR_GOLEM);
     // Tick 28: the start line comes as "Yes." is picked, before the player's line.
     player.sendMessage(questStartMessage(player, quest.name));
-    ensureQuestItemSpawns(player);
   }
 
   /** Lines whose Continue moves the quest on (`after` runs once the player continues past it). */
@@ -577,7 +569,8 @@ module.exports = function registerTheGolemQuest(api) {
     const option = String(event.option ?? "").toLowerCase();
     if (!option.includes("read")) return;
     if (event.itemId === LETTER_ITEM_ID) {
-      if (letterProgress(event.player) === 0) setLetterProgress(event.player, LETTER_READ);
+      // Ours: the letter is a world spawn; read before the start it moves nothing (no capture reads it then).
+      if (letterProgress(event.player) === 0 && quest.isStarted(event.player)) setLetterProgress(event.player, LETTER_READ);
       showLetter(event.player);
       event.handled = true;
       return;
@@ -1031,22 +1024,15 @@ module.exports = function registerTheGolemQuest(api) {
     // The skull is open for the session only.
     if (headOpen(player)) player.setAttribute(HEAD_OPEN_ATTRIBUTE, false);
     syncGolemVarbits(player);
-    ensureQuestItemSpawns(player);
   }
 
   function handleLogout({ player }) {
     reprogramming.delete(player);
   }
 
-  function handleZoneEnter({ player }) {
-    if (player?.isPlayerBot?.() === true) return;
-    ensureQuestItemSpawns(player);
-  }
-
   function handleRuinsZoneEnter({ player }) {
     if (player?.isPlayerBot?.() === true) return;
     markSeenUnderground(player);
-    ensureQuestItemSpawns(player);
   }
 
   api.persistAttribute(LETTER_ATTRIBUTE, 0);
@@ -1079,6 +1065,7 @@ module.exports = function registerTheGolemQuest(api) {
   api.onCustomEvent("the-golem:curator-step", answerCuratorStep);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
+  api.onCustomEvent("npc-dialogue:menu", handleMenu);
   api.onItemAction(handleItemAction);
   api.onItemOnItem(handleItemOnItem);
   api.onItemOnNpc(handleItemOnNpc);
@@ -1090,6 +1077,5 @@ module.exports = function registerTheGolemQuest(api) {
   api.onNpcInteraction(handleNpcInteraction);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
-  api.onZoneEnter(UZER_SURFACE_ZONE, handleZoneEnter);
   api.onZoneEnter(UZER_RUINS_ZONE, handleRuinsZoneEnter);
 };

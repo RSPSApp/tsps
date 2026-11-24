@@ -225,14 +225,8 @@ test("t75-97: from stage 2 the golem's three questions each answer", async (t) =
 
 // --- The letter, Elissa and the notes ------------------------------------------------------------
 
-test("t113-117: the letter lies by the golem once started; Read shows interface 220 and sets golem_b 1", async (t) => {
-  const f = actor(t, { stage: S.PORTAL });
-  h.PM.emitPlayerLogin({ player: f.player, username: f.player.getUsername() });
-  const ground = h.core.World.getItemOnGroundManager?.() ?? null;
-  void ground;
-  await h.dispatch(f, { type: "ground_item_action", itemId: I.LETTER_2, x: 3479, y: 3092, option: "Take" });
-  h.ticks(f, 15);
-  assert.equal(count(f, I.LETTER_2), 1, "the letter was picked up");
+test("t113-117: Read on the letter (a world spawn) shows interface 220 and sets golem_b 1", async (t) => {
+  const f = actor(t, { stage: S.PORTAL, items: [[I.LETTER_2, 1]] });
   clear(f);
   await itemOption(f, I.LETTER_2, "Read");
   assert.equal(varbit(f, V.B), 1);
@@ -301,6 +295,25 @@ test("t349-354, t618-625: the captured branches the main route skips answer, wit
   assert.ok(heads(f).length > 0 && heads(f).every((id) => id === CURATOR), `heads ${heads(f)}`);
   const treasure = await play(f, () => h.talk(f, curator), ["Do you know where I could find any treasure?"]);
   assert.equal(treasure.at(-1), "Curator Haig Halen: Any treasures this museum knows about it goes to great lengths to acquire.");
+});
+
+test("t1931-1941: after the quest Elissa's menu has no letter option", async (t) => {
+  const f = actor(t, { stage: S.COMPLETE, tile: [3374, 3430, 0], attributes: { [A.LETTER]: 3 } });
+  const elissa = h.spawn(f, ELISSA, [3374, 3429, 0]);
+  const said = await play(f, () => h.talk(f, elissa), ["Sorry, I need to go."]);
+  assert.deepEqual(said, [
+    "Elissa: Hello there.",
+    "MENU[Select an option]: What do you do here?|What is this place?|Sorry, I need to go.",
+    "PLAYER: Sorry, I need to go.",
+  ]);
+});
+
+test("the letter read before the quest starts moves nothing", async (t) => {
+  const f = actor(t, { items: [[I.LETTER_2, 1]] });
+  await itemOption(f, I.LETTER_2, "Read");
+  assert.equal(f.player.getAttribute(A.LETTER) ?? 0, 0);
+  const strings = new Map(f.calls.filter((c) => c.name === "sendString").map((c) => [c.args[1], c.args[0]]));
+  assert.equal(strings.get((220 << 16) | 3), "Dearest Varmen,", "it still reads");
 });
 
 test("t463-479: the bookcase: the search line, the notes two ticks later, then 'already have' with them", async (t) => {
@@ -729,7 +742,7 @@ test("the journal reads as captured at each stage the capture opens it", (t) => 
 
 // --- Persistence, recovery and shared owners ------------------------------------------------------
 
-test("the side varbits survive a save and reload, and the letter and implement respawn for a started quest", async (t) => {
+test("the side varbits survive a save and reload", async (t) => {
   const f = actor(t, { stage: S.REPLACED, attributes: {
     [A.LETTER]: 3, [A.CLAY]: 4, [A.RETRIEVED]: true, [A.SEEN]: true, [A.GEMS]: true, [A.STATUES]: (1 << 0) | (1 << 2) | (2 << 6),
   } });

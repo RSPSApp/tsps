@@ -69,8 +69,9 @@ The temple door 6310 is 6363 "Open" below stage 5 and 6364 "Enter" from stage 5 
 - **Soft clay** (36-63): each is animation 881, synth sound 1850 with delay 5, and an item box with the soft
   clay. The fourth box is followed by the golem's lines. Before the start: "Maybe you should ask the golem
   first!" (Wiki).
-- **The letter** (113-117): it lies at 3479,3092 (Wiki spawn) and respawns. Read sets golem_b 1 and shows
-  interface 220.
+- **The letter** (113-117): a world spawn at 3479,3092 (Wiki, `ground-items.json`), as is the strange
+  implement at 2713,4913. Read sets golem_b 1 and shows interface 220; read before the quest starts it moves
+  nothing (ours: no recording reads it then).
 - **Stairs**: Climb-down 6373 from 3491,3090 lands on 2721,4886 (129); Climb-up 6372 lands on 3491,3090
   (1127). No animation.
 - **Elissa** (338-388): her first two menus end with "Sorry, I need to go.", which ends the talk with that
@@ -79,6 +80,7 @@ The temple door 6310 is 6363 "Open" below stage 5 and 6364 "Enter" from stage 5 
   after arriving, then two ticks later either the notes and an item box (470, 479) or, with the notes held,
   "You already have Varmen's expedition notes, so you find nothing of interest." (475). The Dig Site's
   bookcase 17320 beside it is that plugin's.
+- **Elissa after the quest** (1931-1941): "What do you do here? | What is this place? | Sorry, I need to go."
 - **The notes** (486-498): Read sets golem_b 3 and opens book 392, "The Ruins of Uzer".
 - **The curator** (556-643): his statuette option appears once the notes are read. "Talk about Fossil
   Island." leads to "I've got some questions regarding Fossil Island." and its own menu (561-576).
@@ -125,6 +127,8 @@ The Wiki's wording is kept; the capture says:
   Wiki's "You crush the mushroom and pour the juice into a vial." is used.
 - "Damage... severe... task... incomplete..." with a lower-case "task" (25). The Wiki's capital is kept.
 - The curator's menu lists the statuette option second (558). The Wiki's order, fourth, is kept.
+- Entering the throne room, live sends the music unlock before "You step into the portal." (1195); ours after
+  (the region music system).
 
 ## Not covered
 
@@ -132,10 +136,24 @@ The Wiki's wording is kept; the capture says:
   throne, the curator's line once the key has been taken, and the skull shutting a tick after the implement
   when no program is carried (Wiki: it shuts; the delay is not recorded).
 - Black dye's Empty option does nothing; no recording empties it.
-- The quest-rating interface (983) live opens with the scroll is not sent.
+- The quest-rating interface (983) and the quest-history varbits (last_quest_*, last_started_*,
+  last_completed_*) live sends are not sent by QuestRuntime for any quest.
+- Picking a black mushroom with one held shows the box and gives none (unchanged; not recorded).
 
 ## Runs
 
 ### 2026-11-24 · agent · claude-opus-5-5
 
-- **Start:** see the PR's Testing section.
+- **Start:** fresh account; setup before the baseline: Crafting 20, Thieving 25, soft clay x4, vial, pestle and
+  mortar, papyrus, hammer, chisel, food, Varrock teleports, stamina potions, waterskins, coins; one `::tele` to
+  Uzer.
+- **Route:** every step by its real click, no `::tele` or stage setting after the start; `travel_to` (walks
+  skipped) between Uzer, the Digsite, Varrock and back, the phoenix grabbed in the desert. Screenshots after the
+  stairs both ways, the door into the throne room and the portal back: none black, the player visible.
+- **Result:** stages 1, 2, 3, 4, 5, 6, 7, 10 on their recorded actions; +1 QP, +1,000 Crafting, +1,000 Thieving
+  once; repeat gave nothing; a relog and the saved row kept stage 10 and the XP; post-quest golem, Elissa,
+  curator and the Uzer carpet checked.
+- **Found:** the letter doubled (a per-player copy beside the world spawn, fixed) and post-quest Elissa still
+  offered the statuette question (fixed). Outside the quest: a Shantay Guard attacked and killed the account
+  north of the pass while the desert warning was open, and the Uzer carpet charges without live's fare lines.
+- **Not checked:** the Quest Helper overlay (no bridge), animations and sounds on screen, the chatbox name.

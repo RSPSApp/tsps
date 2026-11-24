@@ -1,10 +1,11 @@
 /**
- * Below Ice Mountain. Capture 1636 supplies quest variables, interaction order,
+ * Below Ice Mountain. Captures 1636 and local 1001343 supply quest variables, interaction order,
  * montage timing and messages; docs/below-ice-mountain.md records the evidence.
  * The five saved story stages remain compatible with existing characters; the
  * cache receives OSRS's separate main, recruitment, reward and emote varbits.
  */
 const CameraShake = require("../../interface/CameraShake.plugin");
+const { setCutsceneInterface } = require("../QuestScenes");
 
 module.exports = function registerBelowIceMountainQuest(api) {
   const {
@@ -113,6 +114,20 @@ module.exports = function registerBelowIceMountainQuest(api) {
   const FLEX_ANIMATION_ID = 8917;
   const EXPLOSION_OBJECT_ID = 20246; // Capture-only invisible explosion loc; no cache identifier name.
   const ROCK_FALL_GRAPHIC_ID = 60;
+  // Structural pillars (local 1001343, ticks 2793-2877).
+  const PILLAR_SWING_MESSAGE = "You swing your pick at the pillar.";
+  const PILLAR_MINING_XP = 10;
+  const PILLAR_ROCKFALL_SOUND = 1384;
+  const GUARDIAN_HIT_SOUND = 4971;
+  const PILLAR_CAMERA_RESET_TICKS = 6;
+  // The recording shakes each axis by 5-8 (12 axis shakes over four pillars).
+  const PILLAR_SHAKE_MIN = 5, PILLAR_SHAKE_MAX = 8;
+  // Ours: the Wiki says only that the pillars "damage" the Guardian and that the fourth defeats it.
+  // The recording's first three dealt 12, 12 and 10, so a pillar deals 10-12 and the last one the rest.
+  const PILLAR_DAMAGE_MIN = 10, PILLAR_DAMAGE_MAX = 12;
+  // Ours: each tick after the swing the pillar comes down at even odds. The recording's four came
+  // down 1, 2, 3 and 2 ticks after the swing, and one more swing went 3 ticks without it.
+  const PILLAR_COLLAPSE_CHANCE = 0.5;
 
   // Sequences and sounds from capture 1636.
   const MARLEY_EAT_SEQ = 829;
@@ -811,6 +826,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
     player.setAttribute(STORY_SCENE_ATTRIBUTE, 1);
     scene.enter(player);
     player.moveTo(scene.sourceTile(2956, 3369));
+    cutscene(player, true);
     player.getMovementQueue().setBlockMovement(true);
     player.setUntargetable(true);
     scene.burntof = sceneActor(player, scene, NpcIdentifiers.BURNTOF_3, 2956, 3370);
@@ -825,6 +841,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
     const scene = storyScenes.get(player);
     if (!scene) return;
     storyScenes.delete(player);
+    cutscene(player, false);
     player.setAttribute(STORY_SCENE_ATTRIBUTE, 0);
     player.setNpcTransformationId?.(-1);
     player.setForceMovement(null);
@@ -905,6 +922,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
     player.setAttribute(STORY_SCENE_ATTRIBUTE, 2);
     scene.enter(player);
     player.moveTo(scene.sourceTile(2995, 3495));
+    cutscene(player, true);
     player.getMovementQueue().setBlockMovement(true);
     player.setUntargetable(true);
     scene.crew = [sceneActor(player, scene, NpcIdentifiers.CHECKAL_2, 2994, 3494, 4), sceneActor(player, scene, NpcIdentifiers.BURNTOF_3, 2996, 3492, 2),
@@ -1114,6 +1132,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
     player.setAttribute(TRAINING_ATTRIBUTE, 1);
     scene.enter(player);
     player.moveTo(scene.sourceTile(...SCENES.workout[0].position));
+    cutscene(player, true);
     player.getMovementQueue().reset().setBlockMovement(true);
     player.setUntargetable(true);
     player.getPacketSender().sendInterfaceRemoval();
@@ -1138,6 +1157,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
     const scene = training.get(player);
     if (!scene) return;
     training.delete(player);
+    cutscene(player, false);
     player.setAttribute(TRAINING_ATTRIBUTE, 0);
     player.setForceMovement(null);
     player.getMovementQueue().setBlockMovement(false);
@@ -1258,6 +1278,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
       sceneLater(player, area, 2, () => player.getPacketSender().sendCameraReset());
       sceneLater(player, area, 5, () => {
         storyScenes.delete(player);
+        cutscene(player, false);
         player.setAttribute(STORY_SCENE_ATTRIBUTE, 0);
         player.setUntargetable(false);
         player.getMovementQueue().setBlockMovement(false);
@@ -1295,6 +1316,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
         if (quest.getStage(player) !== STAGE_GUARDIAN_DEAD || player.getPrivateArea() !== area) return;
         moveTo(player, { x: 2950, y: 5769 });
         area?.destroy();
+        cutscene(player, false);
         player.getMovementQueue().setBlockMovement(false);
         player.setUntargetable(false);
         quest.complete(player);
@@ -1671,6 +1693,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
     transitionFade(player, area, 7, 1); // 2197 death, 2198 out, 2204 in, 2206 first line.
     sceneLater(player, area, 6, () => {
       positionForFinishingScene(player, area);
+      cutscene(player, true);
       player.getPacketSender().sendCameraReset();
     });
     sceneLater(player, area, 7, () => sceneCamera(player, area, [2957, 5777, 450], [2952, 5773, 300]));
@@ -1689,6 +1712,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
   }
 
   function handlePlayerLogout({ player }) {
+    inCutscene.delete(player); // a new login starts with the client's own state
     const npc = guardians.get(player);
     if (npc) {
       guardians.delete(player);
@@ -1754,6 +1778,34 @@ module.exports = function registerBelowIceMountainQuest(api) {
     startTranscript(api, event.player, RAMARNO_NPC_ID, PAGE, "finishing-up");
   }
 
+  /**
+   * Live's cutscene client state around each of the quest's four scenes (local 1001343: the workout
+   * 837-1068, rock-paper-scissors 2038-2174, the entrance to the crew fleeing 2335-2782 and the
+   * finish 2876-2939): cutscene_status, the minimap off, NPC menus hidden and the side tabs closed,
+   * all back as the scene ends.
+   */
+  const inCutscene = new WeakSet();
+  function cutscene(player, on) {
+    if (on === inCutscene.has(player)) return;
+    if (on) inCutscene.add(player);
+    else inCutscene.delete(player);
+    setCutsceneInterface(player, on);
+  }
+
+  function later(player, ticks, action) {
+    TaskManager.submit(new CountdownTask(player, ticks, action));
+  }
+
+  function guardianAlive(guardian) {
+    return Boolean(guardian) && guardian.isRegistered?.() !== false && guardian.getHitpoints() > 0
+      && guardian.isDyingFunction?.() !== true;
+  }
+
+  /**
+   * Mining a structural pillar, as local 1001343 recorded it (ticks 2793-2877, four pillars and
+   * five interrupted or retried swings): the click sends the spam message and the pickaxe swing,
+   * and the pillar comes down 1, 2, 3 and 2 ticks later. Walking off stops it.
+   */
   function handlePillarMine(event) {
     if (event.objectId !== STRUCTURAL_PILLAR_OBJECT_ID) return;
     const { player } = event;
@@ -1763,7 +1815,8 @@ module.exports = function registerBelowIceMountainQuest(api) {
     if (!area || player.getPrivateArea() !== area) return;
     const location = event.object?.getLocation() ?? new Location(event.location.x, event.location.y, 0);
     const index = PILLAR_TILES.findIndex((tile) => area.sourceTile(tile.x, tile.y).equals(location));
-    if (index < 0 || area.mined.has(index) || mining.has(player)) return;
+    if (index < 0 || area.mined.has(index)) return;
+    // Wiki (Structural pillar): Mining 10, boostable (Below Ice Mountain, requirements).
     if (player.getSkillManager().getCurrentLevel(Skill.MINING) < 10) {
       player.sendMessage("You need a Mining level of at least 10 to mine this rock.");
       return;
@@ -1774,31 +1827,68 @@ module.exports = function registerBelowIceMountainQuest(api) {
       player.sendMessage("You don't have a pickaxe which you can use.");
       return;
     }
+    const key = {};
+    mining.set(player, key);
+    const from = player.getLocation();
+    const still = () => mining.get(player) === key && player.isRegistered?.() !== false
+      && player.getPrivateArea() === area && quest.getStage(player) === STAGE_GUARDIAN
+      && !area.mined.has(index) && player.getLocation().equals(from);
+    player.sendMessage(PILLAR_SWING_MESSAGE);
     player.performAnimation(request.pickaxe.animation);
-    mining.set(player, index);
-    // shortcut: 1636 takes the combat route; verify the eight-tick mining delay against a mining capture.
-    TaskManager.submit(new CountdownTask(player, 8, () => {
-      if (mining.get(player) !== index) return;
-      mining.delete(player);
-      if (player.getPrivateArea() !== area || quest.getStage(player) !== STAGE_GUARDIAN
-        || !player.getLocation().isWithinDistance(location, 2)) return;
-      area.mined.add(index);
-      player.performAnimation(new Animation(-1));
-      const pillar = area.getObjects().find((object) => object.getId() === STRUCTURAL_PILLAR_OBJECT_ID && object.getLocation().equals(location));
-      if (pillar) ObjectManager.deregister(pillar, true);
-      ObjectManager.register(new GameObject(BROKEN_PILLAR_OBJECT_ID, location, 10, PILLAR_TILES[index].face, area), true);
-      player.getSkillManager().addExperiences(Skill.MINING, 10);
-      const guardian = guardians.get(player);
-      if (guardian) {
-        const damage = Math.min(10, guardian.getHitpoints());
-        guardian.setHitpoints(guardian.getHitpoints() - damage);
-        guardian.addTickHit?.(new HitDamage(damage, HitMask.RED));
-        if (guardian.getHitpoints() <= 0) {
-          api.removeNpc(guardian);
-          defeatGuardian(player);
-        }
+    const swing = () => later(player, 1, () => {
+      if (!still()) {
+        if (mining.get(player) === key) mining.delete(player);
+        return;
       }
-    }));
+      if (Math.random() >= PILLAR_COLLAPSE_CHANCE) return swing();
+      mining.delete(player);
+      collapsePillar(player, area, index, location);
+    });
+    swing();
+  }
+
+  /**
+   * One pillar coming down onto the Guardian (local 1001343, ticks 2805, 2825, 2845 and 2862): on
+   * that tick the swing stops, the pillar becomes the mined loc, the Mining XP drops, rocks fall on
+   * the Guardian (rockfall 60, area sound 1384) and the camera shakes; a tick later it growls, a
+   * tick after that the rocks hit it as someone else's damage (splat 17, area sound 4971), and the
+   * camera resets six ticks after the fall. The killing pillar's damage goes through the Guardian's
+   * ordinary death, as the combat route's does.
+   */
+  function collapsePillar(player, area, index, location) {
+    area.mined.add(index);
+    player.setAttribute(PILLARS_MINED_ATTRIBUTE, area.mined.size);
+    player.performAnimation(new Animation(-1));
+    const pillar = area.getObjects().find((object) => object.getId() === STRUCTURAL_PILLAR_OBJECT_ID && object.getLocation().equals(location));
+    if (pillar) ObjectManager.deregister(pillar, true);
+    ObjectManager.register(new GameObject(BROKEN_PILLAR_OBJECT_ID, location, 10, PILLAR_TILES[index].face, area), true);
+    // Wiki (Structural pillar): 10 Mining XP per pillar.
+    player.getSkillManager().addExperiences(Skill.MINING, PILLAR_MINING_XP);
+    const sender = player.getPacketSender();
+    for (let axis = 0; axis < 3; axis++) {
+      CameraShake.send(sender, "atmospheric", axis, PILLAR_SHAKE_MIN + Math.floor(Math.random() * (PILLAR_SHAKE_MAX - PILLAR_SHAKE_MIN + 1)));
+    }
+    later(player, PILLAR_CAMERA_RESET_TICKS, () => {
+      if (player.isRegistered?.() !== false && player.getPrivateArea() === area) sender.sendCameraReset();
+    });
+    const guardian = guardians.get(player);
+    if (!guardianAlive(guardian)) return;
+    const at = (npc) => npc.getLocation();
+    guardian.performGraphic(Graphic.delayed(ROCK_FALL_GRAPHIC_ID, 20, 10));
+    sender.sendAreaSound(PILLAR_ROCKFALL_SOUND, at(guardian).getX(), at(guardian).getY(), at(guardian).getZ(), 1, 35, 10);
+    later(player, 1, () => { if (guardianAlive(guardian)) guardian.forceChat("Grrr!"); });
+    later(player, 2, () => {
+      if (!guardianAlive(guardian) || guardians.get(player) !== guardian) return;
+      const damage = Math.min(guardian.getHitpoints(), area.mined.size >= PILLAR_TILES.length
+        ? guardian.getHitpoints()
+        : PILLAR_DAMAGE_MIN + Math.floor(Math.random() * (PILLAR_DAMAGE_MAX - PILLAR_DAMAGE_MIN + 1)));
+      player.getPacketSender().sendAreaSound(GUARDIAN_HIT_SOUND, at(guardian).getX(), at(guardian).getY(), at(guardian).getZ(), 1, 0, 10);
+      // The miner is credited so the Guardian's own death reaches handleNpcDeath; the splat stays
+      // the "other" type live shows, as the damage has no source.
+      guardian.getCombat().addDamage(player, damage);
+      guardian.addTickHit(new HitDamage(damage, HitMask.RED));
+      guardian.setHitpoints(guardian.getHitpoints() - damage);
+    });
   }
 
   // ==========================================================================
@@ -1881,23 +1971,90 @@ module.exports = function registerBelowIceMountainQuest(api) {
   // Journal and reward
   // ==========================================================================
 
-  function memberLine(player, attribute, label) {
-    return memberState(player, attribute) >= MEMBER_RECRUITED
-      ? `<str>I recruited ${label}.</str>`
-      : `I still need to convince <col=800000>${label}</col>.`;
+  // The journal as live writes it (local 1001343: opened at main varbit 10, three times at 15 with
+  // different recruits, at 20 and after completion). Struck paragraphs are the same story in the
+  // past tense, without colours.
+  const NAVY = "<col=000080>", MAROON = "<col=800000>";
+  const JOURNAL_INTRO = [
+    `${NAVY}I spoke to an archaeologist called ${MAROON}Willow${NAVY} near ${MAROON}Ice Mountain${NAVY}.`,
+    `${NAVY}She asked me to help her find a way into some ${MAROON}Ancient Ruins${NAVY}`,
+    `${NAVY}beneath the mountain. To do this, she wants me to gather her`,
+    `${NAVY}old crew together.`,
+  ];
+  const JOURNAL_INTRO_STRUCK = [
+    "<str>I spoke to an archaeologist called Willow near Ice Mountain.",
+    "<str>She asked me to help her find a way into some Ancient Ruins",
+    "<str>beneath the mountain. To do this, she wanted me to gather",
+    "<str>her old crew together.",
+  ];
+  const JOURNAL_BURNTOF = [
+    `${NAVY}I need to recruit ${MAROON}Burntof${NAVY}. I can find him in the ${MAROON}Rising Sun Inn${NAVY} in`,
+    `${NAVY}${MAROON}Falador${NAVY}.`,
+  ];
+  const JOURNAL_BURNTOF_DRINK = [
+    `${NAVY}I need to recruit ${MAROON}Burntof${NAVY} from the ${MAROON}Rising Sun Inn${NAVY} in ${MAROON}Falador${NAVY}.`,
+    `${NAVY}However, he wants me to bring him a ${MAROON}Beer${NAVY} before he speaks to`,
+    `${NAVY}me.`,
+  ];
+  const JOURNAL_CHECKAL = [
+    `${NAVY}I need to recruit ${MAROON}Checkal${NAVY}. I can find him in ${MAROON}Barbarian Village${NAVY}.`,
+  ];
+  const JOURNAL_MARLEY = [
+    `${NAVY}I need to recruit ${MAROON}Marley${NAVY}. ${MAROON}Willow${NAVY} doesn't know where he is but`,
+    `${NAVY}suggested I ask ${MAROON}Charlie${NAVY}, who can be found near the ${MAROON}Blue Moon`,
+    `${MAROON}Inn${NAVY} in ${MAROON}Varrock${NAVY}.`,
+  ];
+  const JOURNAL_MARLEY_SANDWICH = [
+    `${NAVY}I need to recruit ${MAROON}Marley${NAVY} from the ${MAROON}Edgeville Ruins${NAVY}. However, he`,
+    `${NAVY}wants me to bring him a ${MAROON}Steak Sandwich${NAVY} before he agrees to`,
+    `${NAVY}help ${MAROON}Willow${NAVY}. To make a ${MAROON}Steak Sandwich${NAVY}, I'll need a ${MAROON}Knife${NAVY}, some`,
+    `${NAVY}${MAROON}Bread${NAVY} and some ${MAROON}Cooked Meat${NAVY}.`,
+  ];
+  const JOURNAL_RECRUITED = [
+    `${NAVY}I spoke with ${MAROON}Burntof${NAVY}, ${MAROON}Checkal${NAVY} and ${MAROON}Marley${NAVY}. It took some`,
+    `${NAVY}convincing, but they've all agreed to work with ${MAROON}Willow${NAVY} again. I`,
+    `${NAVY}should meet up with them all at the entrance to the ${MAROON}Ancient`,
+    `${MAROON}Ruins${NAVY} on the west side of ${MAROON}Ice Mountain${NAVY}.`,
+  ];
+  const JOURNAL_RECRUITED_STRUCK = [
+    "<str>I spoke with Burntof, Checkal and Marley. It took some",
+    "<str>convincing, but they all agreed to work with Willow again.",
+  ];
+  const JOURNAL_ENTERED_STRUCK = [
+    "<str>With the help of her crew, Willow managed to gain entry into",
+    "<str>the Ancient Ruins.",
+  ];
+  const JOURNAL_GUARDIAN_STRUCK = [
+    "<str>Inside the Ancient Ruins, Willow revealed herself to be a",
+    "<str>graverobber rather than an archaeologist. She tried to kill me,",
+    "<str>but was interrupted by an Ancient Guardian activating. Willow",
+    "<str>and her crew fled, leaving me with the Ancient Guardian.",
+  ];
+  const JOURNAL_COMPLETE_STRUCK = [
+    "<str>I managed to defeat the Ancient Guardian. With Willow gone, I",
+    "<str>claimed my reward from a bag she left behind. Now that no",
+    "<str>one else is trying to kill me, I can explore the Ancient Ruins at",
+    "<str>my leisure.",
+  ];
+
+  /**
+   * A recruit's paragraph. Live recorded each one before its errand, and Burntof waiting for his
+   * drink and Marley waiting for his sandwich. Ours: Checkal's errand (Atlas and the Flex),
+   * Burntof once he has his drink, and Marley before the cook keep the nearest recorded paragraph.
+   */
+  function recruitParagraph(player, attribute, name) {
+    const state = memberState(player, attribute);
+    if (state >= MEMBER_RECRUITED) return [`<str>I have recruited ${name}.`];
+    if (attribute === BURNTOF_ATTRIBUTE) return state >= MEMBER_IN_PROGRESS ? JOURNAL_BURNTOF_DRINK : JOURNAL_BURNTOF;
+    if (attribute === MARLEY_ATTRIBUTE) return state >= MEMBER_IN_PROGRESS ? JOURNAL_MARLEY_SANDWICH : JOURNAL_MARLEY;
+    return JOURNAL_CHECKAL;
   }
 
   function buildJournal(player, handle) {
     const stage = handle.getStage(player);
     if (stage >= STAGE_COMPLETE) {
-      return [
-        "<str>Willow asked me to help her break into ancient ruins beneath</str>",
-        "<str>Ice Mountain, and I recruited her old crew to do it.</str>",
-        "<str>Inside we woke an Ancient Guardian, which I defeated.</str>",
-        "<str>I met Ramarno, the last of the Imcando dwarves of Camdozaal.</str>",
-        "",
-        "<col=ff0000>QUEST COMPLETE!</col>",
-      ];
+      return [...JOURNAL_INTRO_STRUCK, ...JOURNAL_RECRUITED_STRUCK, ...JOURNAL_ENTERED_STRUCK,
+        ...JOURNAL_GUARDIAN_STRUCK, ...JOURNAL_COMPLETE_STRUCK, "", "<col=ff0000>QUEST COMPLETE!"];
     }
     if (stage === 0) {
       return [
@@ -1905,34 +2062,17 @@ module.exports = function registerBelowIceMountainQuest(api) {
         "on the path south of <col=800000>Ice Mountain</col>.",
       ];
     }
-    const lines = [
-      "<str>Willow asked me to help her break into ancient ruins beneath</str>",
-      "<str>Ice Mountain, and to recruit her old excavation team.</str>",
-      "",
-    ];
     if (stage === STAGE_STARTED) {
-      lines.push(memberLine(player, BURNTOF_ATTRIBUTE, "Burntof"));
-      lines.push(memberLine(player, CHECKAL_ATTRIBUTE, "Checkal"));
-      lines.push(memberLine(player, MARLEY_ATTRIBUTE, "Marley"));
-      return lines;
+      return [...JOURNAL_INTRO,
+        "", ...recruitParagraph(player, BURNTOF_ATTRIBUTE, "Burntof"),
+        "", ...recruitParagraph(player, CHECKAL_ATTRIBUTE, "Checkal"),
+        "", ...recruitParagraph(player, MARLEY_ATTRIBUTE, "Marley")];
     }
-    lines.push("<str>All three of the crew have agreed to help Willow.</str>");
-    if (stage === STAGE_RECRUITED) {
-      lines.push("");
-      lines.push("I should meet Willow at the ruins entrance on the west");
-      lines.push("side of <col=800000>Ice Mountain</col>.");
-      return lines;
-    }
-    lines.push("<str>Burntof blew the rocks open and we entered the ruins.</str>");
-    if (stage === STAGE_GUARDIAN) {
-      lines.push("");
-      lines.push("An <col=800000>Ancient Guardian</col> woke up and the crew ran off.");
-      lines.push("I should defeat it, or mine the four structural pillars.");
-      return lines;
-    }
-    lines.push("<str>I defeated the Ancient Guardian.</str>");
-    lines.push("");
-    lines.push("I should search <col=800000>Willow's bag</col> for anything useful.");
+    if (stage === STAGE_RECRUITED) return [...JOURNAL_INTRO_STRUCK, ...JOURNAL_RECRUITED];
+    // Ours: no recording opens the journal inside the ruins, so it shows what the completed
+    // journal says has happened by then, with no current task.
+    const lines = [...JOURNAL_INTRO_STRUCK, ...JOURNAL_RECRUITED_STRUCK, ...JOURNAL_ENTERED_STRUCK];
+    if (mainProgress(stage, player) >= 35) lines.push(...JOURNAL_GUARDIAN_STRUCK);
     return lines;
   }
 
@@ -1994,6 +2134,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
     rewardItemId: COINS_ITEM_ID,
     rewardItemLabel: "2,000 Coins",
     scrollItemId: STEAK_SANDWICH_ITEM_ID,
+    journalAsSent: true,
     completionJingleId: 152,
     // The capture's scroll wraps this reward over two rows and lists nothing else (2253).
     otherRewards: ["Access to the Ruins of", "Camdozaal"],

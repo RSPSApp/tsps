@@ -3309,7 +3309,8 @@
             "Remaining limits are visual (actor microsteps, crew trap choreography, lighting); the pillar mining delay follows the Wiki.",
             "Main 8403b60db (4 November 2026): #2139 — Keep Ancient Guardian pillar damage during Below Ice Mountain. Prior task credit and any documented puzzle/follower/cutscene substitutions remain unchanged.",
             "Main 3b61a15a8 (6 November 2026): #2395 Fix Below Ice Mountain scene geometry and captured actor poses. Existing completion credit and documented limitations are retained unless explicitly updated below.",
-            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4234 Settings: camera shake effects follow the combat and atmospheric camera shake settings."
+            "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4234 Settings: camera shake effects follow the combat and atmospheric camera shake settings.",
+            "2026-11-24, feat/quest-below-ice-mountain: aligned against a second whole-quest capture (local 1001343, revision 240) that mines the pillars. Mining a structural pillar now plays as recorded (swing message, rockfall on the Guardian, sounds, camera shake and reset, its growl and a 10-12 hit) and the fourth pillar kills the Guardian through its ordinary death animation and timing; the journal sends the recorded text at each captured stage; the four scenes put the client in a cutscene (minimap, tabs, NPC menus) and give it back. Verified by server/tests/below-ice-mountain-parity.test.cjs and below-ice-mountain-pillars.test.cjs; evidence in docs/below-ice-mountain.md. Limits: pillar damage and success odds come from one recording; journal text for uncaptured stages reuses the nearest recorded paragraph; the Guardian's attack and hit sounds are not sent."
           ],
           "taskDetails": [
             {

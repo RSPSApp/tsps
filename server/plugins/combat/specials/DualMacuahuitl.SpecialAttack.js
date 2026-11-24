@@ -26,7 +26,7 @@ function hasFullBloodMoonArmour(player) {
 }
 
 function usingWeapon(player) {
-  return weaponIds().includes(player.getEquipment().get(core.Equipment.WEAPON_SLOT).getId());
+  return weaponIds().includes(core.CombatSpecial.weaponIdFor(player));
 }
 
 function addSetText(request) {

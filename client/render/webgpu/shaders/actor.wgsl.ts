@@ -633,6 +633,7 @@ fn vs_${kind}(${vertexParams(kind)}) -> ActorVertexOutput {${placement(kind)}
     out.v_alphaCutOff = getMaterial(vertex.textureId).alphaCutOff;
     out.v_fogAmount = actorFogAmount(localPos);
     out.v_transparency = actorTransparency;
+    out.v_visualHueShift = actorU.u_pad2.x;
 ${ext?.actor.vertex ?? ""}
     return out;
 }
@@ -668,6 +669,19 @@ function fragmentWgsl(alpha: boolean, ext?: WebGPUSceneShaders): string {
 // then ordinary vertex lighting. White untextured samples preserve the HSL palette.
 fn applyBrightness(texel: vec3<f32>, lit: vec3<f32>) -> vec3<f32> {
     return pow(max(texel, vec3<f32>(0.0)), vec3<f32>(scene.u_brightness)) * lit;
+}
+
+
+fn shiftVisualHue(rgb:vec3<f32>,turns:f32)->vec3<f32>{
+    if(turns==0.0){return rgb;}
+    let high=max(rgb.r,max(rgb.g,rgb.b));let low=min(rgb.r,min(rgb.g,rgb.b));let chroma=high-low;
+    if(chroma<0.000001){return rgb;}
+    var hue=(rgb.r-rgb.g)/chroma+4.0;
+    if(high==rgb.r){hue=(rgb.g-rgb.b)/chroma;}else if(high==rgb.g){hue=(rgb.b-rgb.r)/chroma+2.0;}
+    hue=glslMod(hue+turns*6.0,6.0);let x=chroma*(1.0-abs(glslMod(hue,2.0)-1.0));
+    var shifted=vec3<f32>(chroma,0.0,x);
+    if(hue<1.0){shifted=vec3<f32>(chroma,x,0.0);}else if(hue<2.0){shifted=vec3<f32>(x,chroma,0.0);}else if(hue<3.0){shifted=vec3<f32>(0.0,chroma,x);}else if(hue<4.0){shifted=vec3<f32>(0.0,x,chroma);}else if(hue<5.0){shifted=vec3<f32>(x,0.0,chroma);}
+    return shifted+vec3<f32>(low);
 }
 
 fn sampleModelTexture(textureId: u32, texCoord: vec2<f32>) -> vec4<f32> {
@@ -714,6 +728,7 @@ ${discardBlock}
 ${slots?.palette ?? ""}
     var surface = applyBrightness(textureColor.rgb, paletteColor);
 
+    surface = shiftVisualHue(surface, input.v_visualHueShift);
     var fog = clamp(input.v_fogAmount, 0.0, 1.0);
     fog = smoothstep(0.0, 1.0, fog);
     var fogColor = scene.u_skyColor.rgb;
@@ -778,6 +793,7 @@ struct ActorVertexOutput {
     @location(3) @interpolate(flat) v_alphaCutOff: f32,
     @location(4) v_fogAmount: f32,
     // The fade sits at the last location, clear of the extensions' (from 5 up).
+    @location(14) @interpolate(flat) v_visualHueShift: f32,
     @location(15) @interpolate(flat) v_transparency: f32,${ext?.actor.varyings ?? ""}
 };
 

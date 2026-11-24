@@ -56,7 +56,7 @@ import { NpcPoseGeometry } from "./actorNpcs";
 import { DynamicNpcAnimLoader } from "../../npc/DynamicNpcAnimLoader";
 import { AsyncNpcPoseCache } from "../../npc/AsyncNpcPoseCache";
 import { getNpcPriorityGeometry, usesNpcPriorityPass } from "../../npc/NpcPriorityPass";
-import { TILE_GFX_LIFT_UNITS, type GfxInstance, type GfxManager } from "../../gfx/GfxManager";
+import { graphicAgeMs, TILE_GFX_LIFT_UNITS, type GfxInstance, type GfxManager } from "../../gfx/GfxManager";
 import type { GfxCache } from "../../gfx/GfxCache";
 
 /**
@@ -1297,7 +1297,7 @@ export class WebGPUActors {
         const runtime = this.gfx;
         if (!runtime || inst.startTimeMs == null) return;
         const nowMs = (performance?.now?.() as number) || Date.now();
-        const ageMs = Math.max(0, nowMs - (inst.startTimeMs | 0));
+        const ageMs = graphicAgeMs(inst,nowMs);
         const frameIdx = runtime.frameIndexByAge(inst.spotId, Math.floor(ageMs));
         const frameCycle = runtime.frameCycleFor(inst.spotId, frameIdx, ageMs);
         const tiles =
@@ -1316,6 +1316,8 @@ export class WebGPUActors {
             dataIndex,
             0,
             0,
+            "gfx",
+            inst.hueShift ?? 0,
         );
     }
 
@@ -1331,6 +1333,7 @@ export class WebGPUActors {
         subX: number,
         subY: number,
         kind: "gfx" | "projectile" = "gfx",
+        hueShift: number = 0,
     ): void {
         const cache = this.gfx?.cache;
         if (!cache) return;
@@ -1355,6 +1358,8 @@ export class WebGPUActors {
                         0,
                         subX,
                         subY,
+                        -1,
+                        hueShift,
                     ),
                 });
             }
@@ -1379,6 +1384,8 @@ export class WebGPUActors {
                         0,
                         subX,
                         subY,
+                        -1,
+                        hueShift,
                     ),
                 });
             }
@@ -1395,6 +1402,7 @@ export class WebGPUActors {
         subX: number,
         subY: number,
         poseRow: number = -1,
+        hueShift: number = 0,
     ): number {
         // u_mapPos is where the map is drawn: an instance scene's base, not its square's corner
         // (WebGL passes renderPosX/Y too); the two match for normal squares.
@@ -1408,6 +1416,7 @@ export class WebGPUActors {
             subX,
             subY,
             poseRow,
+            hueShift,
         );
     }
 

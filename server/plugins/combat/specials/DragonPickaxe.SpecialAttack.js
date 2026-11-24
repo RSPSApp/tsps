@@ -1,3 +1,4 @@
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 module.exports = function registerDragonPickaxeSpecialAttack(api) {
   const { Animation, CombatMethod, CombatSpecial, CombatType, Equipment, ItemIdentifiers, Skill, Sounds } = api.core;
 
@@ -49,7 +50,7 @@ module.exports = function registerDragonPickaxeSpecialAttack(api) {
         return;
       }
       const player = character.getAsPlayer();
-      const weaponId = player.getEquipment().get(Equipment.WEAPON_SLOT).getId();
+      const weaponId = CombatSpecial.weaponIdFor(player);
       character.forceChat(FORCED_CHAT);
       character.performAnimation(PICKAXE_ANIMATIONS.get(weaponId));
       const location = character.getLocation();
@@ -63,10 +64,16 @@ module.exports = function registerDragonPickaxeSpecialAttack(api) {
         delay: 0,
         radius: 1,
       });
-      const skillManager = character.getAsPlayer().getSkillManager();
-      const base = skillManager.getMaxLevel(Skill.MINING);
-      const current = skillManager.getCurrentLevel(Skill.MINING);
-      skillManager.setCurrentLevels(Skill.MINING, Math.max(current, base + MINING_BOOST));
+      this.applySpecialFeature(character);
+    }
+
+    applySpecialFeature(character) {
+      if (!character.isPlayer()) return;
+      const config = mechanicSettings(this, "skill-boost", { skill: "mining", flat: MINING_BOOST, percent: 0 });
+      if (!config.enabled) return;
+      const skill = Skill[config.skill.toUpperCase()], skillManager = character.getAsPlayer().getSkillManager();
+      const base = skillManager.getMaxLevel(skill), current = skillManager.getCurrentLevel(skill);
+      skillManager.setCurrentLevels(skill, Math.max(current, base + config.flat + Math.floor(base * config.percent / 100)));
     }
   }
 
@@ -77,6 +84,7 @@ module.exports = function registerDragonPickaxeSpecialAttack(api) {
     strengthMultiplier: 1,
     accuracyMultiplier: 1,
     traits: { skipAttack: true },
+    metadata: { editorMechanics: mechanicSchema("skill-boost", { skill: "mining", flat: MINING_BOOST, percent: 0, _event: "launch", _hook: "applySpecialFeature" }) },
     combatMethod: new DragonPickaxeCombatMethod(),
   });
 };

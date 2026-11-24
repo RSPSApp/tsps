@@ -195,6 +195,7 @@ export class MapActorUniforms {
         subOffsetX: number,
         subOffsetY: number,
         poseRow: number = -1,
+        hueShift: number = 0,
     ): number {
         const entry = this.entryCount++;
         if (entry >= this.capacity) {
@@ -218,6 +219,8 @@ export class MapActorUniforms {
             this.worldEntityTransform === IDENTITY_MAT4 ? 0 : 1,
             true,
         );
+        f[base + 12] = hueShift / 360;
+        f[base + 13] = f[base + 14] = f[base + 15] = 0;
         f.set(this.worldEntityTransform, base + 16);
         return entry;
     }

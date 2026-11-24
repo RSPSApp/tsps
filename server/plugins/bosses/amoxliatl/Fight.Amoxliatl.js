@@ -69,8 +69,8 @@ class Fight {
     /** key(x, y) on the cache map -> the pool's GameObject. */
     this.pools = new Map();
     this.blocks = new Set();
-    // Burst blocks stay registered until their removal on the next tick.
-    this.burstingBlocks = new Set();
+    // Keep post-quest shatters available to cleanup until next-tick removal.
+    this.shatteringBlocks = new Set();
     this.hudShown = false;
     this.shownHp = -1;
     this.stats = { damageTaken: 0, prayerLost: false, shattered: false, usedTemotli: false, otherWeapon: false };

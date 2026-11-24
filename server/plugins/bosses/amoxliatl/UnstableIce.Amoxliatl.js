@@ -87,7 +87,6 @@ function burst(fight, block) {
   const { Animation } = Common.core;
   const ice = Common.data.unstableIce;
   fight.blocks.delete(block);
-  fight.burstingBlocks.add(block);
   block.performAnimation(new Animation(ice.breakAnim));
   Common.areaSound(fight.player, ice.breakSound, block.getLocation());
 }
@@ -107,6 +106,7 @@ function shatter(fight, formed) {
     fight.boss.heal(heal);
     const [x, y] = fight.session.worldTile(block.getLocation());
     if (ordinaryFight) {
+      fight.shatteringBlocks.add(block);
       fight.boss.showHitsplat(heal, { mine: shatterHealSplat, others: shatterHealSplat });
       for (let dx = -reach; dx <= reach; dx++) {
         const span = reach - Math.abs(dx);
@@ -116,7 +116,7 @@ function shatter(fight, formed) {
       }
     }
     fight.at(removeAfterBreakTicks, () => {
-      fight.burstingBlocks.delete(block);
+      fight.shatteringBlocks.delete(block);
       if (block.isRegistered()) Common.api.removeNpc(block);
       if (!ordinaryFight) {
         for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) fight.placePool(x + dx, y + dy);
@@ -127,11 +127,11 @@ function shatter(fight, formed) {
 
 /** Every block goes with the fight (her death, the chamber closing). */
 function clear(fight) {
-  for (const block of [...fight.blocks, ...fight.burstingBlocks]) {
+  for (const block of [...fight.blocks, ...fight.shatteringBlocks]) {
     if (block.isRegistered()) Common.api.removeNpc(block);
   }
   fight.blocks.clear();
-  fight.burstingBlocks.clear();
+  fight.shatteringBlocks.clear();
 }
 
 // ------------------------------------------------------------------ hooks
@@ -169,11 +169,10 @@ function blockBeforeDeath(event) {
 }
 
 /** Gone: an icy pool where it stood (captured). */
-function blockDeath({ npc }) {
-  const fight = npc?.__amoxliatlIce;
+function blockDeath(event) {
+  const fight = event.npc?.__amoxliatlIce;
   if (!fight) return;
-  fight.burstingBlocks.delete(npc);
-  const [x, y] = fight.session.worldTile(npc.getLocation());
+  const [x, y] = fight.session.worldTile(event.npc.getLocation());
   fight.placePool(x, y);
 }
 

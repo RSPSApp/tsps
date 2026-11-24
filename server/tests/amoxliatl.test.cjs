@@ -73,7 +73,7 @@ function fightAt(px, py, { blocks = [], path = false } = {}) {
   };
   return {
     session,
-    burstingBlocks: new Set(),
+    shatteringBlocks: new Set(),
     blocks: new Set(blocks.map(([x, y]) => ({ getLocation: () => new Location(x, y, 0) }))),
     boss: { getLocation: () => new Location(1362, 4510, 0), getSize: () => 3 },
     playerTile: () => [px, py],

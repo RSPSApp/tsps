@@ -26,7 +26,7 @@ a colour. A player takes the colour of the first group they are in whose setting
 - **Colorize player menu:** the player's right-click entries, including Use and Cast on them.
 - The trade screen's "Trading with:" name, for a highlighted player.
 
-Highlights draw over the scene and under interfaces, for players on your level.
+Tiles and names draw over the scene and under interfaces; minimap names draw over the minimap.
 
 ## Storage
 
@@ -36,7 +36,6 @@ Config group `playerindicators`, with RuneLite's keys.
 
 - Off on fresh installs (RuneLite turns it on), as NPC Indicators is here.
 - Only players on your level are highlighted.
-
 - No party members: the client has no party.
 - No friends chat or clan rank icons next to names or in menus.
 - "Walk here" over a player keeps its colour.

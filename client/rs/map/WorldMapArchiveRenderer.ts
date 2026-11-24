@@ -1052,13 +1052,17 @@ export class WorldMapArchiveRenderer {
             if (shape === 0) {
                 this.fillTile(pixels, width, x, y, scaleHandler.pixelsPerTile, overlayColor);
             } else {
+                // The client passes underlay 0 here: fully transparent in fillRectangleTemplate,
+                // which blends whenever a colour isn't opaque (its overlay and ground colours carry
+                // alpha 0xFF). So only the shape's overlay half is drawn and the layer below shows
+                // through the rest; filling it with 0 drew black triangles along river banks.
                 this.drawTemplateTile(
                     pixels,
                     width,
                     x,
                     y,
                     scaleHandler.pixelsPerTile,
-                    0,
+                    undefined,
                     overlayColor,
                     scaleHandler.getTemplate(shape, data.overlayRotations?.[plane]?.[index] ?? 0),
                 );
@@ -1258,7 +1262,8 @@ export class WorldMapArchiveRenderer {
         x: number,
         y: number,
         size: number,
-        underlayColor: number,
+        /** Undefined leaves the pixels outside the shape as they are (a transparent underlay). */
+        underlayColor: number | undefined,
         overlayColor: number,
         template: Int8Array | undefined,
     ): void {
@@ -1266,9 +1271,18 @@ export class WorldMapArchiveRenderer {
             this.fillTile(pixels, width, x, y, size, overlayColor);
             return;
         }
-        const underlayRgb = underlayColor & 0xffffff;
         const overlayRgb = overlayColor & 0xffffff;
         let templateIndex = 0;
+        if (underlayColor === undefined) {
+            for (let yy = 0; yy < size; yy++) {
+                let offset = (y + yy) * width + x;
+                for (let xx = 0; xx < size; xx++, offset++) {
+                    if (template[templateIndex++] !== 0) pixels[offset] = overlayRgb;
+                }
+            }
+            return;
+        }
+        const underlayRgb = underlayColor & 0xffffff;
         for (let yy = 0; yy < size; yy++) {
             let offset = (y + yy) * width + x;
             for (let xx = 0; xx < size; xx++) {
@@ -1541,4 +1555,9 @@ export class WorldMapArchiveRenderer {
 }
 
 /** For tests: the cache-format decoders. */
-export const worldMapFormatForTests = { readCompositeMap, decodeWorldMapData0Geography, decodeHeaderlessChunkRegion };
+export const worldMapFormatForTests = {
+    readCompositeMap,
+    decodeWorldMapData0Geography,
+    decodeHeaderlessChunkRegion,
+    scaleHandler: (pixelsPerTile: number) => new WorldMapScaleHandler(pixelsPerTile),
+};

@@ -414,19 +414,11 @@ export class TextureCache {
 
     /**
      * Load a sprite by its archive/sprite ID (used for minimap icons).
+     * Delegates to getSpriteById so custom server sprites (>= 30000) and overrides work too.
      * @param spriteId The sprite archive ID
      */
     getBySpriteId(spriteId: number) {
-        const key = `sprite:${spriteId}`;
-        const cached = this.glr.getTexture(key);
-        if (cached) return cached;
-        try {
-            const spr = SpriteLoader.loadIntoIndexedSprite(this.spriteIndex, spriteId);
-            if (!spr) return undefined;
-            return this.glr.createTextureFromCanvas(key, spriteToCanvas(spr));
-        } catch {
-            return undefined;
-        }
+        return this.getSpriteById(spriteId);
     }
 
     public getItemIconById(

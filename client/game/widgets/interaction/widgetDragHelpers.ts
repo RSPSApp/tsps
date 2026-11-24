@@ -56,6 +56,19 @@ export function isWidgetDraggable(widgetManager: WidgetManager | undefined, w: a
     return false;
 }
 
+/**
+ * The uid of the held widget the renderer draws semi-transparent, or null.
+ *
+ * OSRS only makes a draggable component Client.clickedWidget, so only a held draggable (an
+ * inventory item) is drawn at transparency 128. Our clickedWidget is any pressed widget with
+ * handlers; a pressed button such as a side tab stone stays opaque, as live does (issue 6690:
+ * the selected stone showed at half strength until the mouse was released).
+ */
+export function heldWidgetTranslucentUid(widgetManager: WidgetManager | undefined, clickedWidget: any): number | null {
+    if (typeof clickedWidget?.uid !== "number") return null;
+    return isWidgetDraggable(widgetManager, clickedWidget) ? clickedWidget.uid | 0 : null;
+}
+
 export function clearDragWidgetVisualState(
     widgetManager: WidgetManager | undefined,
     widget: any,

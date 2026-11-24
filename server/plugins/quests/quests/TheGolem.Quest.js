@@ -188,6 +188,8 @@ module.exports = function registerTheGolemQuest(api) {
   /** The book's 16 pages, as captured (ticks 488-497). */
   const NOTES_PAGES = require("../data/the-golem-notes-book.json");
 
+  /** Players whose bookcase search is under way (two ticks). */
+  const searching = new WeakSet();
   /** Players whose program conversation is playing: its last line completes the quest. */
   const reprogramming = new WeakSet();
 
@@ -277,6 +279,12 @@ module.exports = function registerTheGolemQuest(api) {
 
   function spam(player, text) {
     player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, text);
+  }
+
+  /** A copy the player dropped (or was given with a full inventory) on the tile under them. */
+  function onFloorHere(player, itemId) {
+    const manager = api.core.ItemOnGroundManager;
+    return Boolean(manager?.getGroundItem?.(player.getUsername(), itemId, player.getLocation(), player.getPrivateArea?.() ?? null));
   }
 
   /** Into the inventory, or onto the floor under the player with a full one (Wiki: "Drops to floor"). */
@@ -481,7 +489,9 @@ module.exports = function registerTheGolemQuest(api) {
 
   /** Ticks 1934 and 1940: after the quest Elissa's menu is "What do you do here?|What is this place?|Sorry, I need to go." */
   function handleMenu(notice) {
-    if (notice.npcId !== ELISSA_NPC_ID || !notice.player || !quest.isComplete(notice.player)) return;
+    if (notice.npcId !== ELISSA_NPC_ID || !notice.player) return;
+    // Ours before the letter is read (no capture talks to her then); tick 1934 after the quest.
+    if (!quest.isComplete(notice.player) && letterProgress(notice.player) >= LETTER_READ) return;
     if (!notice.options.some((option) => option.text === LETTER_OPTION)) return;
     notice.options = notice.options.filter((option) => option.text !== LETTER_OPTION);
   }
@@ -509,7 +519,7 @@ module.exports = function registerTheGolemQuest(api) {
     };
     // Tick 376 -> 377: Elissa naming the library sets golem_b 2.
     if (event.npcId === ELISSA_NPC_ID && ELISSA_NOTES_LINE.test(text)) {
-      chain(() => { if (letterProgress(player) < ELISSA_TOLD) setLetterProgress(player, ELISSA_TOLD); });
+      chain(() => { if (letterProgress(player) === LETTER_READ) setLetterProgress(player, ELISSA_TOLD); });
       return;
     }
     // Tick 612 -> 614: asking the curator about the statuette is stage 3.
@@ -750,7 +760,8 @@ module.exports = function registerTheGolemQuest(api) {
 
   /** Ticks 676-679 (Open) and 758-761 (the key on the emptied case): the statuette, then its box. */
   function retrieveStatuette(player) {
-    if (held(player, STATUETTE_ITEM_ID)) {
+    // Wiki: a lost statuette is replaced from the case; once it is in its alcove there is none to lose (Ours).
+    if (held(player, STATUETTE_ITEM_ID) || onFloorHere(player, STATUETTE_ITEM_ID) || stageOf(player) >= STAGE_STATUETTE_REPLACED) {
       player.sendMessage("You have already taken the statuette.");
       return;
     }
@@ -794,7 +805,7 @@ module.exports = function registerTheGolemQuest(api) {
   /** Wiki: only one copy of the key can be obtained. */
   function ownsKey(player) {
     const holds = (container) => container?.getItems?.().some((item) => item?.getId?.() === CABINET_KEY_ITEM_ID && item.getAmount() > 0);
-    if (holds(inventory(player))) return true;
+    if (holds(inventory(player)) || onFloorHere(player, CABINET_KEY_ITEM_ID)) return true;
     const tabs = api.core.Bank?.TOTAL_BANK_TABS ?? 0;
     for (let tab = 0; tab < tabs; tab++) if (holds(player.getBank?.(tab))) return true;
     return false;
@@ -920,9 +931,12 @@ module.exports = function registerTheGolemQuest(api) {
 
   /** Ticks 463-479: the search line, then the find two ticks later. */
   function searchBookcase(player) {
+    if (searching.has(player)) return;
+    searching.add(player);
     player.sendMessage("You search the bookcase...");
     schedule(player, BOOKCASE_SEARCH_TICKS, () => {
-      if (held(player, NOTES_ITEM_ID)) {
+      searching.delete(player);
+      if (held(player, NOTES_ITEM_ID) || onFloorHere(player, NOTES_ITEM_ID)) {
         player.sendMessage("You already have Varmen's expedition notes, so you find nothing of interest.");
         return;
       }

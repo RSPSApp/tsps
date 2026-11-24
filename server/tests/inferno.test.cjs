@@ -479,6 +479,31 @@ test('Inferno Yt-HurKot heal JalTok-Jad 15-24 every 4 ticks (Wiki)', () => {
   run.leave(player);
 });
 
+test('a Yt-HurKot drawn off heals JalTok-Jad only from melee distance (Wiki, #6492)', () => {
+  const { player, session } = startAt(67);
+  world.random = 0;
+  tick(player, 10);
+  const jad = [...session.npcs].find((npc) => npc.id === Npcs.JALTOK_JAD);
+  const earlier = new Set(world.npcs);
+  jad.setHitpoints(170);
+  tick(player);
+  const [near, far, ...rest] = world.npcs.filter((npc) => npc.id === Npcs.YT_HURKOT_2 && !earlier.has(npc));
+  assert.equal(rest.length, 3);
+  rest.forEach(kill);
+  tick(player);
+  near.moveTo(jad.getLocation().transform(-1, 0));
+  far.moveTo(jad.getLocation().transform(-4, 0));
+  near.getCombat().attack(player);
+  far.getCombat().attack(player);
+  far.walkingTo = undefined;
+  const before = jad.setHitpoints(100).getHitpoints();
+  tick(player, 4);
+  assert.equal(jad.getHitpoints() - before, 15, 'the one beside it heals while fighting; the one 4 tiles out does not');
+  assert.equal(far.walkingTo, undefined, 'the fighting one stays on the player');
+  world.random = 0;
+  run.leave(player);
+});
+
 test('Inferno Yt-HurKot do not respawn when JalTok-Jad heals to full and drops again (Wiki)', () => {
   const { player, session } = startAt(67);
   tick(player, 10);

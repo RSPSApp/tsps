@@ -778,6 +778,59 @@ test("with a full inventory the notes, the key and the statuette drop under the 
   assert.equal(gems.player.getAttribute(A.GEMS) ?? false, false, "the gems are still there to take");
 });
 
+test("a full inventory and a second click put no second notes or key on the floor", async (t) => {
+  const fill = (f) => { while (!f.player.getInventory().isFull()) f.player.getInventory().add(new h.core.Item(I.BONES, 1), false); };
+  const floor = (f, id) => h.core.ItemOnGroundManager.getGroundItem(f.player.getUsername(), id, f.player.getLocation(), f.player.getPrivateArea());
+  const said = (f, text) => f.messages.filter((m) => m.text === text).length;
+  const notes = actor(t, { stage: S.PORTAL, tile: [3366, 3333, 0], attributes: { [A.LETTER]: 2 } });
+  fill(notes);
+  await h.dispatch(notes, { type: "object_option", id: 6292, x: 3366, y: 3332, clickType: 1 });
+  await notes.connection.dispatch([{ type: "object_option", id: 6292, x: 3366, y: 3332, clickType: 1 }]);
+  h.ticks(notes, 4);
+  await h.continueLine(notes);
+  await click(notes, 6292, [3366, 3332]);
+  h.ticks(notes, 3);
+  assert.ok(floor(notes, I.VARMENS_NOTES), "the notes are on the floor");
+  assert.equal(said(notes, "You find Varmen's expedition notes."), 1, "found once");
+  assert.equal(said(notes, "You already have Varmen's expedition notes, so you find nothing of interest."), 1);
+  const key = actor(t, { stage: S.STATUETTE, tile: [3257, 3446, 0], attributes: { [A.LETTER]: 3 } });
+  const curator = h.spawn(key, CURATOR, [3258, 3447, 0]);
+  fill(key);
+  await h.talk(key, curator, 3);
+  await h.continueLine(key);
+  clear(key);
+  await h.talk(key, curator, 3);
+  h.ticks(key, 2);
+  assert.ok(floor(key, I.DISPLAY_CABINET_KEY));
+  assert.deepEqual(texts(key), ["The curator doesn't seem to have anything of value."], "no second key");
+});
+
+test("once the statuette is in its alcove the key gives no other", async (t) => {
+  const f = actor(t, { stage: S.REPLACED, tile: [3257, 3452, 1], items: [[I.DISPLAY_CABINET_KEY, 1]], attributes: { [A.RETRIEVED]: true } });
+  await useOnObject(f, 24626, [3257, 3453], I.DISPLAY_CABINET_KEY);
+  h.ticks(f, 3);
+  assert.equal(count(f, I.STATUETTE), 0);
+});
+
+test("before the letter is read Elissa has no letter option, and her library line moves nothing", async (t) => {
+  const f = actor(t, { stage: S.UNSTARTED, tile: [3374, 3430, 0] });
+  const elissa = h.spawn(f, ELISSA, [3374, 3429, 0]);
+  const said = await play(f, () => h.talk(f, elissa), ["Sorry, I need to go."]);
+  assert.equal(said[1], "MENU[Select an option]: What do you do here?|What is this place?|Sorry, I need to go.");
+  assert.equal(f.player.getAttribute(A.LETTER) ?? 0, 0);
+});
+
+test("a standing statuette turns back the other way (A-C toggle)", async (t) => {
+  const f = actor(t, { stage: S.REPLACED, tile: [2718, 4899, 0], attributes: { [A.STATUES]: 1 << 6 } });
+  f.player.getPacketSender().sendVarbit(V.D, 1);
+  await click(f, ...ALCOVE.A);
+  assert.equal(varbit(f, V.A), 1);
+  clear(f);
+  await click(f, ...ALCOVE.A);
+  assert.equal(varbit(f, V.A), 0);
+  assert.deepEqual(texts(f), ["You turn the statuette to the right."]);
+});
+
 test("the phoenix gives no feather while a quill pen is carried (Wiki)", async (t) => {
   const f = actor(t, { stage: S.CONVINCE, tile: [3416, 3161, 0], items: [[I.PHOENIX_QUILL_PEN, 1]], thieving: 60 });
   const phoenix = h.spawn(f, 5137, [3417, 3161, 0]);

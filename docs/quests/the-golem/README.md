@@ -126,6 +126,9 @@ The Wiki's wording is kept; the capture says:
 - Crushing the mushroom: "You crush the mushroom and create some black dye." (1309, and local 1001607). The
   Wiki's "You crush the mushroom and pour the juice into a vial." is used.
 - "Damage... severe... task... incomplete..." with a lower-case "task" (25). The Wiki's capital is kept.
+- Three obvious slips in the Wiki transcript are corrected to the capture (as Rum Deal's start prompt was):
+  the start prompt's "Yes."/"No." (Wiki "Yes"/"No", tick 26), Elissa's "I wrote"/"That" (Wiki "AI wrote",
+  a lower-case "that", ticks 375-376), and "The golem's skull shuts automatically." (Wiki "golems", tick 1442).
 - The curator's menu lists the statuette option second (558). The Wiki's order, fourth, is kept.
 - Entering the throne room, live sends the music unlock before "You step into the portal." (1195); ours after
   (the region music system).

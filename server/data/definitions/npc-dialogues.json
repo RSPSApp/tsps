@@ -135569,9 +135569,9 @@
               {
                 "type": "action",
                 "text": "Atlazora's Rest shop opens.",
-                "action": "open_interface",
+                "action": "open_shop",
                 "action_source": "text",
-                "target": "Atlazora's Rest shop",
+                "target": "Atlazora's Rest",
                 "id": "GpjnlN"
               }
             ]
@@ -135608,9 +135608,9 @@
               {
                 "type": "action",
                 "text": "Auburn Pub shop opens.",
-                "action": "open_interface",
+                "action": "open_shop",
                 "action_source": "text",
-                "target": "Auburn Pub shop",
+                "target": "Auburn Pub",
                 "id": "HYLNzN"
               }
             ]
@@ -195989,8 +195989,13 @@
                         },
                         {
                           "type": "jump",
-                          "reference": "above",
-                          "id": "GYtX2n"
+                          "id": "GYtX2n",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-8f0f1029cd06653b"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -196044,7 +196049,7 @@
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "jump-3d0de15e42fd4221"
+                                      "branch": "jump-8f0f1029cd06653b"
                                     }
                                   ]
                                 }
@@ -196196,7 +196201,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-3d0de15e42fd4221"
+                      "branch": "jump-8f0f1029cd06653b"
                     }
                   ]
                 }
@@ -196220,11 +196225,80 @@
           ]
         }
       ],
-      "jump-3d0de15e42fd4221": [
+      "jump-8f0f1029cd06653b": [
         {
-          "type": "jump",
-          "reference": "above",
-          "id": "GYtX2n"
+          "type": "condition",
+          "text": "If the player does not have 1000 coins:",
+          "steps": [
+            {
+              "player": "But I don't have that kind of money on me."
+            },
+            {
+              "npc": "Well then, no candle for you!"
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "i0s0_3"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has at least 1000 coins:",
+          "steps": [
+            {
+              "npc": "Here you go then."
+            },
+            {
+              "npc": "I should warn you, though, it can be dangerous to take a naked flame down there. You'd be better off making a lantern."
+            },
+            {
+              "type": "choice",
+              "options": [
+                {
+                  "text": "What's so dangerous about a naked flame?",
+                  "steps": [
+                    {
+                      "player": "What's so dangerous about a naked flame?"
+                    },
+                    {
+                      "npc": "Heh heh... You'll find out."
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ]
+                },
+                {
+                  "text": "How do you make lanterns?",
+                  "steps": [
+                    {
+                      "type": "jump",
+                      "id": "8IMBFn",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-14fa1bdcb093445e"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "text": "Thanks, bye.",
+                  "steps": [
+                    {
+                      "player": "Thanks, bye."
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "id": "jVncUE"
         }
       ],
       "jump-3f8f516cf4033901": [
@@ -196338,8 +196412,13 @@
                 },
                 {
                   "type": "jump",
-                  "reference": "above",
-                  "id": "GYtX2n"
+                  "id": "GYtX2n",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "jump-8f0f1029cd06653b"
+                    }
+                  ]
                 }
               ]
             },
@@ -196396,7 +196475,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "jump-3d0de15e42fd4221"
+                              "branch": "jump-8f0f1029cd06653b"
                             }
                           ]
                         }
@@ -305835,8 +305914,13 @@
                         },
                         {
                           "type": "jump",
-                          "reference": "above",
-                          "id": "GYtX2n"
+                          "id": "GYtX2n",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "jump-8f0f1029cd06653b"
+                            }
+                          ]
                         }
                       ]
                     },
@@ -305925,7 +306009,7 @@
                                   "steps": [
                                     {
                                       "type": "call",
-                                      "branch": "jump-3d0de15e42fd4221"
+                                      "branch": "jump-8f0f1029cd06653b"
                                     }
                                   ]
                                 }
@@ -313258,7 +313342,7 @@
                   "steps": [
                     {
                       "type": "call",
-                      "branch": "jump-3d0de15e42fd4221"
+                      "branch": "jump-8f0f1029cd06653b"
                     }
                   ]
                 }
@@ -313282,11 +313366,100 @@
           ]
         }
       ],
-      "jump-3d0de15e42fd4221": [
+      "jump-8f0f1029cd06653b": [
         {
-          "type": "jump",
-          "reference": "above",
-          "id": "GYtX2n"
+          "type": "condition",
+          "text": "If the player does not have 1000 coins:",
+          "steps": [
+            {
+              "player": "But I don't have that kind of money on me."
+            },
+            {
+              "type": "line",
+              "speaker": "Candle seller",
+              "text": "Well then, no candle for you!",
+              "speaker_ids": [
+                1896
+              ]
+            },
+            {
+              "type": "end"
+            }
+          ],
+          "id": "i0s0_3"
+        },
+        {
+          "type": "condition",
+          "text": "If the player has at least 1000 coins:",
+          "steps": [
+            {
+              "type": "line",
+              "speaker": "Candle seller",
+              "text": "Here you go then.",
+              "speaker_ids": [
+                1896
+              ]
+            },
+            {
+              "type": "line",
+              "speaker": "Candle seller",
+              "text": "I should warn you, though, it can be dangerous to take a naked flame down there. You'd be better off making a lantern.",
+              "speaker_ids": [
+                1896
+              ]
+            },
+            {
+              "type": "choice",
+              "options": [
+                {
+                  "text": "What's so dangerous about a naked flame?",
+                  "steps": [
+                    {
+                      "player": "What's so dangerous about a naked flame?"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Candle seller",
+                      "text": "Heh heh... You'll find out.",
+                      "speaker_ids": [
+                        1896
+                      ]
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ]
+                },
+                {
+                  "text": "How do you make lanterns?",
+                  "steps": [
+                    {
+                      "type": "jump",
+                      "id": "8IMBFn",
+                      "steps": [
+                        {
+                          "type": "call",
+                          "branch": "jump-14fa1bdcb093445e"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "text": "Thanks, bye.",
+                  "steps": [
+                    {
+                      "player": "Thanks, bye."
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "id": "jVncUE"
         }
       ],
       "jump-3f8f516cf4033901": [
@@ -1100356,7 +1100529,7 @@
               "steps": [
                 {
                   "type": "call",
-                  "branch": "4GzeHk"
+                  "branch": "IcsRnt"
                 }
               ]
             },
@@ -1100433,7 +1100606,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "4GzeHk"
+                              "branch": "IcsRnt"
                             }
                           ]
                         },
@@ -1102362,7 +1102535,7 @@
           "id": "dfjxEe"
         }
       ],
-      "4GzeHk": [
+      "IcsRnt": [
         {
           "type": "line",
           "speaker": "Bartender (Auburn Pub)",
@@ -1102377,9 +1102550,9 @@
         {
           "type": "action",
           "text": "Auburn Pub shop opens.",
-          "action": "open_interface",
+          "action": "open_shop",
           "action_source": "text",
-          "target": "Auburn Pub shop",
+          "target": "Auburn Pub",
           "id": "HYLNzN"
         }
       ],
@@ -1214408,9 +1214581,9 @@
               {
                 "type": "action",
                 "text": "Spike's Spikes shop opens.",
-                "action": "open_interface",
+                "action": "open_shop",
                 "action_source": "text",
-                "target": "Spike's Spikes shop",
+                "target": "Spike's Spikes",
                 "id": "jbpXPQ"
               }
             ]

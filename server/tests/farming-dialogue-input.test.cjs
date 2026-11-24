@@ -55,6 +55,7 @@ async function input(f, ...packets) {
 
 const resume = (f, n, widgetId = core.OptionDialogue.OPTIONS_WIDGET_ID) =>
   input(f, { type: 'dialogue_continue', widgetId, childIndex: n });
+const amount = (f, n) => input(f, { type: 'dialogue_amount', amount: n });
 const options = f => f.p.getDialogueManager().getCurrent()?.getOptions?.() ?? [];
 
 test('native choices 1 through 4 execute the corresponding displayed action exactly once', async t => {
@@ -153,17 +154,19 @@ test('an unrelated widget action cannot fall through into the current Farming ch
 });
 
 for (const [choice, name] of [[1, 'Golovanova'], [2, 'Bologano'], [3, 'Logavano']]) {
-  test(`native Seed table -> ${name} -> Take 100 gives the selected seeds`, async t => {
+  test(`native Seed table -> ${name} -> a typed amount gives the selected seeds`, async t => {
     const f = actor(t);
     await input(f, { type: 'object_option', id: core.ObjectIdentifiers.SEED_TABLE, x: 1802, y: 3503, action: 'Search' });
     assert.equal(options(f).length, 3, JSON.stringify({ id: core.ObjectIdentifiers.SEED_TABLE,
       busy: f.p.busy(), placement: f.p.isNeedsPlacement(), messages: f.messages, location: f.p.getLocation() }));
     await resume(f, choice);
-    assert.deepEqual(options(f), ['Take 100', 'Take 1000', 'Take 10000']);
-    await resume(f, 1);
+    // Issue 6474: the table asks how many instead of offering 100, 1000 and 10000.
+    assert.deepEqual(options(f), []);
+    assert.ok(f.p.getEnteredAmountAction(), 'an amount prompt is waiting');
+    await amount(f, 100);
     assert.equal(f.p.getInventory().getAmount(Data.itemId(`${name} seed`)), 100);
-    await resume(f, 1);
-    assert.equal(f.p.getInventory().getAmount(Data.itemId(`${name} seed`)), 100);
+    await amount(f, 100);
+    assert.equal(f.p.getInventory().getAmount(Data.itemId(`${name} seed`)), 100, 'one prompt takes one answer');
   });
 }
 
@@ -174,26 +177,26 @@ test('full inventory and walking away prevent native seed collection', async t =
     await input(f, { type: 'object_option', id: core.ObjectIdentifiers.SEED_TABLE, x: 1802, y: 3503, action: 'Search' });
     assert.equal(options(f).length, 3);
     await resume(f, 3);
-    assert.deepEqual(options(f), ['Take 100', 'Take 1000', 'Take 10000']);
+    assert.ok(f.p.getEnteredAmountAction(), 'an amount prompt is waiting');
     if (!full) f.p.setLocation(new core.Location(1815, 3502, 0));
-    await resume(f, 1);
+    await amount(f, 100);
     assert.equal(f.p.getInventory().getAmount(Data.itemId('Logavano seed')), 0);
   }
 });
 
-test('all three quantity choices work, with the existing 10,000-seed limit', async t => {
-  for (const [choice, count] of [[1, 100], [2, 1000], [3, 10000]]) {
+test('any typed seed amount works, with the 10,000-seed limit', async t => {
+  for (const [typed, count] of [[100, 100], [1000, 1000], [37, 37], [10000, 10000], [2_000_000_000, 10000]]) {
     const f = actor(t);
     await input(f, { type: 'object_option', id: core.ObjectIdentifiers.SEED_TABLE, x: 1802, y: 3503, action: 'Search' });
     await resume(f, 3);
-    await resume(f, choice);
-    assert.equal(f.p.getInventory().getAmount(Data.itemId('Logavano seed')), count);
+    await amount(f, typed);
+    assert.equal(f.p.getInventory().getAmount(Data.itemId('Logavano seed')), count, String(typed));
   }
   const f = actor(t), seed = Data.itemId('Logavano seed');
   f.p.getInventory().add(new core.Item(seed, 9999), false);
   await input(f, { type: 'object_option', id: core.ObjectIdentifiers.SEED_TABLE, x: 1802, y: 3503, action: 'Search' });
   await resume(f, 3);
-  await resume(f, 3);
+  await amount(f, 10000);
   assert.equal(f.p.getInventory().getAmount(seed), 10000);
 });
 
@@ -202,7 +205,7 @@ test('seed collection uses the last free slot and does not change the other 27 i
   for (let i = 0; i < 27; i++) f.p.getInventory().add(new core.Item(rake, 1), false);
   await input(f, { type: 'object_option', id: core.ObjectIdentifiers.SEED_TABLE, x: 1802, y: 3503, action: 'Search' });
   await resume(f, 3);
-  await resume(f, 1);
+  await amount(f, 100);
   assert.equal(f.p.getInventory().getAmount(Data.itemId('Logavano seed')), 100);
   assert.equal(f.p.getInventory().getAmount(rake), 27);
   assert.equal(f.p.getInventory().getFreeSlots(), 0);

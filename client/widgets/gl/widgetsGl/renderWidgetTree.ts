@@ -1729,7 +1729,29 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         };
                     }
                 }
-                osrsClient?.retainWorldMapImageTiles?.(visibleWorldMapTiles);
+                // Tiles are kept and requested for the view the zoom is easing toward, not the
+                // one drawn mid-ease: zooming in, the squares only on screen at the old zoom would
+                // otherwise each render at the new size and push that zoom's tiles out of the cache.
+                // Those squares still draw, from whatever size is cached.
+                const targetPixelsPerTile = worldMapState.getTargetZoomScale?.() ?? logicalPixelsPerTile;
+                let retainedWorldMapTiles: Array<{ mapX: number; mapY: number; level?: number }> =
+                    visibleWorldMapTiles;
+                if (targetPixelsPerTile !== logicalPixelsPerTile) {
+                    const bounds = currentArea.getBounds();
+                    const spanX = logicalWidth / (2 * targetPixelsPerTile) + 64;
+                    const spanY = logicalHeight / (2 * targetPixelsPerTile) + 64;
+                    const minMapX = Math.max(bounds.minX >> 6, Math.floor((displayX - spanX) / 64));
+                    const maxMapX = Math.min(bounds.maxX >> 6, Math.floor((displayX + spanX) / 64));
+                    const minMapY = Math.max(bounds.minY >> 6, Math.floor((displayY - spanY) / 64));
+                    const maxMapY = Math.min(bounds.maxY >> 6, Math.floor((displayY + spanY) / 64));
+                    retainedWorldMapTiles = [];
+                    for (let mapY = minMapY; mapY <= maxMapY; mapY++) {
+                        for (let mapX = minMapX; mapX <= maxMapX; mapX++) {
+                            retainedWorldMapTiles.push({ mapX, mapY, level: worldMapLevel });
+                        }
+                    }
+                }
+                osrsClient?.retainWorldMapImageTiles?.(retainedWorldMapTiles);
 
                 // The area's whole-map picture under the tiles, so a square still rendering
                 // shows the area's colours, never black (WorldMapCompositeTexture).

@@ -293,3 +293,64 @@ test("every area in the cache has a composite texture file", async () => {
         assert.deepEqual([...data], [0x89, 0x50, 0x4e, 0x47], `${area.internalName}'s is a PNG`);
     }
 });
+
+/**
+ * One frame of renderWidgetTree's world map: draws the squares visible at the zoom drawn now,
+ * retaining (and so requesting) only those visible at the zoom being eased toward.
+ */
+function squaresAt(cx: number, cy: number, width: number, height: number, pixelsPerTile: number) {
+    const spanX = width / (2 * pixelsPerTile) + 64;
+    const spanY = height / (2 * pixelsPerTile) + 64;
+    const squares = [];
+    for (let mapY = Math.floor((cy - spanY) / 64); mapY <= Math.floor((cy + spanY) / 64); mapY++) {
+        for (let mapX = Math.floor((cx - spanX) / 64); mapX <= Math.floor((cx + spanX) / 64); mapX++) {
+            squares.push({ mapX, mapY });
+        }
+    }
+    return squares;
+}
+
+async function easedFrame(cache: any, deps: any, zoom: WorldMapState, width: number, height: number) {
+    const s = cache.worldMapState;
+    s.zoom = zoom.getZoomScale();
+    s.target = zoom.getTargetZoomScale();
+    s.zoomPercentage = zoom.zoomPercentage;
+    retainWorldMapImageTiles(cache, deps, squaresAt(s.displayX, s.displayY, width, height, s.target));
+    for (const { mapX, mapY } of squaresAt(s.displayX, s.displayY, width, height, s.zoom)) {
+        getWorldMapImageSource(cache, deps, mapX, mapY);
+    }
+    await settle();
+}
+
+test("zooming 100% -> 200% -> 100% through the ease keeps the 100% tiles (1024x768 map)", async () => {
+    const { deps, loads } = renderer();
+    const zoom = new WorldMapState();
+    zoom.setZoomPercentage(100, true);
+    const cache = zoomState(4);
+    const frames = async (n: number) => {
+        for (let i = 0; i < n; i++) {
+            zoom.cycle();
+            await easedFrame(cache, deps, zoom, 1024, 768);
+        }
+    };
+    await frames(30);
+    const loads100 = loads.filter((l) => l.pixelsPerTile === 4).length;
+    assert.ok(loads100 > 0);
+
+    zoom.setZoomPercentage(200);
+    await frames(40);
+    const target8 = squaresAt(3200, 3200, 1024, 768, 8).length;
+    assert.equal(
+        loads.filter((l) => l.pixelsPerTile === 8).length,
+        target8,
+        "only the squares in the 200% view render at 8px, not the whole 100% view",
+    );
+    assert.ok(cache.worldMapImageBytes <= MAX_WORLDMAP_IMAGE_BYTES, "within the budget");
+
+    zoom.setZoomPercentage(100);
+    await frames(40);
+    assert.equal(loads.filter((l) => l.pixelsPerTile === 4).length, loads100, "no 100% square renders again");
+    zoom.setZoomPercentage(200);
+    await frames(40);
+    assert.equal(loads.filter((l) => l.pixelsPerTile === 8).length, target8, "nor any 200% square");
+});

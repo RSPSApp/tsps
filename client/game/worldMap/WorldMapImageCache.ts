@@ -388,7 +388,13 @@ function getWorldMapImageSourceInternal(
     const tile = state.worldMapImageTiles.get(mapId);
     if (tile) {
         state.worldMapImageAccess.set(mapId, accessTime);
-    } else {
+    } else if (
+        !allowStandIn ||
+        state.retainedWorldMapImageIds.size === 0 ||
+        state.retainedWorldMapImageIds.has(mapId)
+    ) {
+        // A square drawn only mid-ease, outside the view the zoom settles on, isn't requested:
+        // it draws a stand-in and leaves the screen before its render would land.
         queueLoadWorldMapImage(state, deps, mapX, mapY, level, state.worldMapImageCacheEpoch);
     }
     if (!allowStandIn) return tile;

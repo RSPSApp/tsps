@@ -850,7 +850,7 @@ export class WorldMapState {
 
     /**
      * RenderOverview.smoothZoom, once per 20ms client cycle: the zoom moves a thirtieth of itself
-     * toward the target, so a step from 100% to 200% takes about 21 cycles.
+     * toward the target, so a step from 100% to 200% takes 22 cycles.
      */
     private cycleZoom(): boolean {
         const target = this.getTargetZoomScale();

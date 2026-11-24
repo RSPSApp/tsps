@@ -14,7 +14,8 @@ import { prependColorTag, stripTags } from "../npcindicators/npcMatching";
 import { type HighlightSetting, PlayerIndicatorsConfig } from "./PlayerIndicatorsConfig";
 import { PlayerIndicatorsOverlay } from "./PlayerIndicatorsOverlay";
 
-const TRADING_WITH_TEXT = "Trading with: ";
+/** The trade screen title's prefix; matched without case, as the title reads "Trading With: ". */
+const TRADING_WITH = /^trading with: /i;
 
 /** A highlighted player: its player store index, display name and highlight colour (0xRRGGBB). */
 export type HighlightedPlayer = { index: number; name: string; color: number };
@@ -43,12 +44,17 @@ export class PlayerIndicatorsPlugin extends Plugin {
 
     readonly config = inject(ConfigManager).getConfig(PlayerIndicatorsConfig);
     private readonly osrsClient: OsrsClient;
-    readonly widgetOverlay: WidgetOverlay;
+    /** The scene overlay, then the minimap overlay. */
+    readonly overlays: readonly WidgetOverlay[];
 
     constructor(osrsClient?: OsrsClient) {
         super();
         this.osrsClient = osrsClient ?? inject<OsrsClient>(CLIENT_TOKEN);
-        this.widgetOverlay = new PlayerIndicatorsOverlay(this);
+        this.overlays = [new PlayerIndicatorsOverlay(this, false), new PlayerIndicatorsOverlay(this, true)];
+    }
+
+    widgetOverlays(): WidgetOverlay[] {
+        return this.isStarted() ? [...this.overlays] : [];
     }
 
     getClient(): OsrsClient {
@@ -145,15 +151,16 @@ export class PlayerIndicatorsPlugin extends Plugin {
         return out ?? entries;
     }
 
-    /** RuneLite recolours the trade screen's "Trading with: <name>" title for a highlighted player. */
+    /** RuneLite recolours the name in the trade screen's title for a highlighted player. */
     widgetDisplayText(event: WidgetTextEvent): WidgetDisplayText | undefined {
-        if (!this.isStarted() || event.groupId !== TRADEMAIN || !event.text.startsWith(TRADING_WITH_TEXT)) return undefined;
-        const name = event.text.slice(TRADING_WITH_TEXT.length);
+        const prefix = event.text.match(TRADING_WITH)?.[0];
+        if (!this.isStarted() || event.groupId !== TRADEMAIN || !prefix) return undefined;
+        const name = event.text.slice(prefix.length);
         const players: any = (this.osrsClient as any).playerEcs;
         const index = players?.findIndexByName?.(name);
         const color = index === undefined ? undefined : this.colorFor(index);
         if (color === undefined) return undefined;
-        return { text: `${TRADING_WITH_TEXT}${prependColorTag(name, color)}</col>` };
+        return { text: `${prefix}${prependColorTag(name, color)}</col>` };
     }
 }
 

@@ -58,8 +58,8 @@ const client: any = {
     minimapGeometry: { drawnAt: -1e9, plane: 0, scale: 1, worldToMinimap: (x: number, y: number) => [x, -y] },
 };
 type Frame = [[number[], number[][]][], [string, number, number, number][]];
-const frame = (plugin: PlayerIndicatorsPlugin): Frame => {
-    const sig = plugin.widgetOverlay.signature();
+const frame = (plugin: PlayerIndicatorsPlugin, minimap = false): Frame => {
+    const sig = plugin.overlays[minimap ? 1 : 0].signature();
     return sig === "" ? [[], []] : JSON.parse(sig);
 };
 
@@ -109,7 +109,8 @@ async function main(): Promise<void> {
     set("playerNamePosition", "MODEL_RIGHT");
     assert.equal(frame(plugin)[1][1][2], 32015 + 10, "ten pixels right of the model");
     set("playerNamePosition", "DISABLED");
-    assert.equal(plugin.widgetOverlay.signature(), "");
+    assert.equal(plugin.overlays[0].signature(), "");
+    assert.deepEqual(plugin.overlays.map((o) => o.drawBelowWidgets), [true, false], "minimap names above the widgets");
     set("drawTiles", true);
     [shapes, texts] = frame(plugin);
     assert.equal(shapes.length, 7);
@@ -118,9 +119,10 @@ async function main(): Promise<void> {
     assert.equal(texts.length, 0);
     set("drawTiles", false);
     set("drawMinimapNames", true);
-    assert.equal(plugin.widgetOverlay.signature(), "", "no minimap names while the minimap isn't drawn");
+    assert.equal(plugin.overlays[1].signature(), "", "no minimap names while the minimap isn't drawn");
     client.minimapGeometry.drawnAt = performance.now();
-    texts = frame(plugin)[1];
+    assert.equal(plugin.overlays[0].signature(), "", "minimap names aren't in the scene overlay");
+    texts = frame(plugin, true)[1];
     assert.deepEqual(texts.find((t) => t[0] === "Pal"), ["Pal", FRIEND, 3202, -3200]);
     set("playerNamePosition", "ABOVE_HEAD");
 
@@ -144,18 +146,20 @@ async function main(): Promise<void> {
     // The trade screen's title.
     const title = (text: string, groupId = TRADEMAIN) =>
         plugin.widgetDisplayText({ groupId, text, width: 100, height: 20, lineHeight: 12 })?.text;
+    assert.equal(title("Trading With: Pal"), "Trading With: <col=00c853>Pal</col>");
     assert.equal(title("Trading with: Pal"), "Trading with: <col=00c853>Pal</col>");
     assert.equal(title("Trading with: Pal", 12), undefined, "only the trade screen");
     assert.equal(title("Trading with: Nobody"), undefined);
 
     // Logged out or stopped: nothing.
     client.gameState = 10;
-    assert.equal(plugin.widgetOverlay.signature(), "");
+    assert.deepEqual(plugin.overlays.map((o) => o.signature()), ["", ""]);
     client.gameState = 30;
     await plugin.stop();
-    assert.equal(plugin.widgetOverlay.signature(), "");
+    assert.deepEqual(plugin.widgetOverlays(), []);
+    assert.deepEqual(plugin.overlays.map((o) => o.signature()), ["", ""]);
     assert.equal(plugin.transformMenuEntries(menu, world), menu);
-    assert.equal(title("Trading with: Pal"), undefined);
+    assert.equal(title("Trading With: Pal"), undefined);
 }
 
 main()

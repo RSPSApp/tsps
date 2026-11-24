@@ -19,14 +19,16 @@ const ACTOR_HORIZONTAL_TEXT_MARGIN = 10;
 
 /**
  * RuneLite's PlayerIndicatorsTileOverlay, PlayerIndicatorsOverlay and
- * PlayerIndicatorsMinimapOverlay in one 2D pass under the widgets: the tile under each
- * highlighted player, its name, and its name on the minimap.
+ * PlayerIndicatorsMinimapOverlay: in the scene (under the widgets) the tile under each
+ * highlighted player and its name; on the minimap (above the widgets) its name.
  */
 export class PlayerIndicatorsOverlay implements WidgetOverlay {
-    readonly drawBelowWidgets = true;
+    readonly drawBelowWidgets: boolean;
     private frame?: Frame;
 
-    constructor(private readonly plugin: PlayerIndicatorsPlugin) {}
+    constructor(private readonly plugin: PlayerIndicatorsPlugin, private readonly minimap: boolean) {
+        this.drawBelowWidgets = !minimap;
+    }
 
     signature(): string {
         this.frame = this.build();
@@ -72,7 +74,7 @@ export class PlayerIndicatorsOverlay implements WidgetOverlay {
         const client: any = plugin.getClient();
         const players = client.playerEcs;
         const config = plugin.config;
-        const scene = client.sceneGeometry;
+        const scene = this.minimap ? undefined : client.sceneGeometry;
         const position = String(config.playerNamePosition());
         const drawTiles = config.drawTiles() === true;
 
@@ -111,7 +113,7 @@ export class PlayerIndicatorsOverlay implements WidgetOverlay {
             }
         }
 
-        const minimap = client.minimapGeometry;
+        const minimap = this.minimap ? client.minimapGeometry : undefined;
         if (config.drawMinimapNames() === true && minimap && performance.now() - minimap.drawnAt < 500) {
             for (const player of highlighted) {
                 if ((players.getLevel(player.index) | 0) !== minimap.plane) continue;

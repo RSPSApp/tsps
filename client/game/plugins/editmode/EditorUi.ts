@@ -1042,8 +1042,8 @@ class EditorChrome {
                 createActionButton("Set spawn point", createSpawnIcon, () => this.plugin.setSpawnPoint()),
             );
         }
-        if (hasTileRange) {
-            const copy = createActionButton("Copy", createDuplicateIcon, () => {
+        if (selection.kind !== "npc") {
+            const copy = createActionButton("Copy area", createDuplicateIcon, () => {
                 try {
                     const contents = this.plugin.copyArea();
                     void navigator.clipboard.writeText(contents).then(
@@ -1054,8 +1054,21 @@ class EditorChrome {
                     this.toast(`Copy failed: ${error instanceof Error ? error.message : String(error)}`);
                 }
             });
-            actions.append(copy,
-
+            actions.append(copy);
+            if (!hasTileRange) {
+                const destination = { tileX: selection.tileX, tileY: selection.tileY, plane: selection.plane };
+                const paste = createActionButton("Paste area", createDuplicateIcon, () => {
+                    void Promise.resolve().then(() => navigator.clipboard.readText()).then(contents => {
+                        this.plugin.pasteArea(contents, destination);
+                        this.toast("Area pasted. Undo takes it back; Save keeps it.");
+                    }).catch(error => this.toast(`Paste failed: ${error instanceof Error ? error.message : String(error)}`));
+                });
+                paste.title = "Paste at this southwest tile on all four levels. Replaces terrain and objects; adds copied NPCs.";
+                actions.append(paste);
+            }
+        }
+        if (hasTileRange) {
+            actions.append(
                 createActionButton("Clear area", createTrashIcon, () => this.plugin.clearArea()),
                 createActionButton("Flatten area", createLayersIcon, () => this.plugin.flattenArea()),
             );

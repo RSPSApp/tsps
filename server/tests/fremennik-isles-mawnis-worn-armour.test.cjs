@@ -1,5 +1,5 @@
 // Run after `yarn build`: node --test tests/fremennik-isles-mawnis-worn-armour.test.cjs
-// The Fremennik Isles, stage 16 (decree delivered): Mawnis checks for the yak-hide top and legs. Worn pieces count as well
+// The Fremennik Isles, Mawnis checks: yak-hide top and legs (stage 16) and Neitiznot shield (stage 17). Worn items count as well
 // as carried ones (issue #6715 item 4); with only one piece held he still asks for the other.
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -79,4 +79,26 @@ test("Mawnis does not accept a single worn piece", (t) => {
   const p = actor(t);
   wear(p, core.Equipment.BODY_SLOT, core.ItemIdentifiers.YAK_HIDE_ARMOUR);
   assert.equal(talk(p), STAGE_DECREE_DELIVERED);
+});
+
+const STAGE_CHAMPION = 18;
+
+test("Mawnis accepts a worn Neitiznot shield at stage 17", (t) => {
+  const p = actor(t);
+  QuestRuntime.questNamed("The Fremennik Isles").setStage(p, STAGE_ARMOUR_DONE);
+  wear(p, core.Equipment.SHIELD_SLOT, core.ItemIdentifiers.NEITIZNOT_SHIELD);
+  assert.equal(talk(p), STAGE_CHAMPION);
+});
+
+test("Mawnis accepts a carried Neitiznot shield at stage 17", (t) => {
+  const p = actor(t);
+  QuestRuntime.questNamed("The Fremennik Isles").setStage(p, STAGE_ARMOUR_DONE);
+  p.getInventory().adds(core.ItemIdentifiers.NEITIZNOT_SHIELD, 1);
+  assert.equal(talk(p), STAGE_CHAMPION);
+});
+
+test("Mawnis holds stage 17 without a Neitiznot shield", (t) => {
+  const p = actor(t);
+  QuestRuntime.questNamed("The Fremennik Isles").setStage(p, STAGE_ARMOUR_DONE);
+  assert.equal(talk(p), STAGE_ARMOUR_DONE);
 });

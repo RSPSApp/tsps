@@ -888,7 +888,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     if (stage >= STAGE_HEAD_TAKEN) return play(player, npcId, "returning-victorious-returning-to-mawnis-victorious");
     if (stage >= STAGE_CHAMPION) return play(player, npcId, "gear-of-a-champion-swearing-your-oaths-talking-to-mawnis");
     if (stage === STAGE_ARMOUR_DONE) {
-      if (hasItem(player, NEITIZNOT_SHIELD)) {
+      if (carriedOrWorn(player, NEITIZNOT_SHIELD)) {
         setStage(player, STAGE_CHAMPION);
         return play(player, npcId, "gear-of-a-champion-swearing-your-oaths-talking-to-mawnis");
       }

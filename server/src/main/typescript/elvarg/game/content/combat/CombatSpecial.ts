@@ -15,6 +15,10 @@ import type { WeaponSpecialTraits, SpecialAttackTargeting } from "./WeaponSpecia
 /** Weapon special attacks are defined by plugins, not hardcoded here. */
 export interface CombatSpecialDefinition {
     id: string;
+    /** Reuse a registered behavior, preserving its native identity for plugin hooks. */
+    inheritFromItemId?: number;
+    overrideDrainAmount?: boolean;
+    decorateResolvedMethod?: (method: CombatMethod) => CombatMethod;
     itemIds: number[];
     drainAmount: number;
     strengthMultiplier: number;
@@ -35,6 +39,14 @@ export interface CombatSpecialDefinition {
 }
 
 export class CombatSpecial {
+    public static readonly TEMPLATE_VERSION = 1;
+    private readonly template: CombatSpecial | null;
+    private readonly templateItemId: number | undefined;
+    /** Native behavior identity, while inventory and equipment retain their custom ids. */
+    public static weaponIdFor(player: Player): number {const id=player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.()??-1;return CombatSpecial.getForWeaponId(id)?.templateItemId??id;}
+    private readonly overrideDrainAmount: boolean;
+    private readonly methodDecorator?: (method: CombatMethod) => CombatMethod;
+    public resolveProvidedMethod(method: CombatMethod): CombatMethod {return this.methodDecorator?.(method)??method;}
     private static readonly registry: CombatSpecial[] = [];
     private static readonly byId = new Map<string, CombatSpecial>();
     private static readonly byItemId = new Map<number, CombatSpecial>();
@@ -83,6 +95,23 @@ export class CombatSpecial {
         return special;
     }
 
+    /** Remove one registration without deleting newer replacements. */
+    public static unregister(id: string, expected: CombatSpecial): boolean {
+        if (CombatSpecial.byId.get(id) !== expected) return false;
+        const index = CombatSpecial.registry.indexOf(expected);
+        if (index < 0) return false;
+        CombatSpecial.registry.splice(index, 1);
+        const previous = [...CombatSpecial.registry].reverse().find(s => s.id === id);
+        if (previous) CombatSpecial.byId.set(id, previous);
+        else CombatSpecial.byId.delete(id);
+        for (const itemId of expected.identifiers) if (CombatSpecial.byItemId.get(itemId) === expected) {
+            const replacement = [...CombatSpecial.registry].reverse().find(s => s.identifiers.includes(itemId));
+            if (replacement) CombatSpecial.byItemId.set(itemId, replacement);
+            else CombatSpecial.byItemId.delete(itemId);
+        }
+        return true;
+    }
+
     public static all(): CombatSpecial[] {
         return CombatSpecial.registry.slice();
     }
@@ -99,6 +128,11 @@ export class CombatSpecial {
     }
 
     constructor(definition: CombatSpecialDefinition){
+        this.methodDecorator=definition.decorateResolvedMethod;
+        this.templateItemId=definition.inheritFromItemId;
+        this.template=definition.inheritFromItemId===undefined?null:CombatSpecial.getForWeaponId(definition.inheritFromItemId);
+        if(definition.inheritFromItemId!==undefined&&!this.template)throw new Error("The special attack template is not registered.");
+        this.overrideDrainAmount=definition.overrideDrainAmount===true;
         this.id = definition.id;
         this.identifiers = definition.itemIds;
         this.drainAmount = definition.drainAmount;
@@ -172,8 +206,8 @@ export class CombatSpecial {
         const weaponId = character.isPlayer?.() ? character.getAsPlayer().getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() : undefined;
         const settings = weaponId !== undefined ? CombatSpecial.itemSpecials.get(weaponId) : undefined;
         // Implementations pass their native cost; price custom weapons before applying the usual modifiers.
-        const base = isCost && settings ? settings.drainAmount ?? special?.getDrainAmountForWeaponId(weaponId) ?? amount : amount;
-        character.decrementSpecialPercentage(isCost ? CombatSpecial.cost(character, special, base, "drain").cost : amount);
+        const base = isCost && settings ? settings.drainAmount ?? special?.getDrainAmountForWeaponId(weaponId) ?? amount : isCost && special?.overrideDrainAmount ? special.getDrainAmountForWeaponId(weaponId) : amount;
+        character.decrementSpecialPercentage(isCost ? CombatSpecial.cost(character, special, base, "drain").cost : special?.overrideDrainAmount ? special.getDrainAmountForWeaponId(weaponId) : amount);
 
         CombatSpecial.ensureRestoreTask(character);
 
@@ -398,7 +432,7 @@ export class CombatSpecial {
     }
 
     public getId(): string {
-        return this.id;
+        return this.template?.getId() ?? this.id;
     }
 
     public getIdentifiers(): number[] {
@@ -446,6 +480,8 @@ export class CombatSpecial {
     }
 
     /** Roll overrides for this special, if any. */
+    public getTraitsFor(player: Player): WeaponSpecialTraits | undefined {return this.traitsFor?this.traitsFor(player):this.traits;}
+
     public getTraits(): WeaponSpecialTraits | undefined {
         return this.traits;
     }
@@ -468,7 +504,7 @@ export class CombatSpecial {
             return null;
         }
         const special = player.getCombatSpecial();
-        return (special?.traitsFor ? special.traitsFor(player) : special?.getTraits()) ?? null;
+        return (special?.getTraitsFor(player)) ?? null;
     }
 
 }

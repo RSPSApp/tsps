@@ -1,3 +1,4 @@
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 module.exports = function registerDragonAxeSpecialAttack(api) {
   const { Animation, CombatMethod, CombatSpecial, CombatType, Equipment, Graphic, GraphicHeight, ItemIdentifiers, Skill, Sound, Sounds } = api.core;
 
@@ -24,7 +25,7 @@ module.exports = function registerDragonAxeSpecialAttack(api) {
       if (!character.isPlayer()) {
         return;
       }
-      const weaponId = character.getAsPlayer().getEquipment().get(Equipment.WEAPON_SLOT).getId();
+      const weaponId = CombatSpecial.weaponIdFor(character.getAsPlayer());
       character.forceChat(FORCED_CHAT);
       character.performAnimation(ANIMATION);
       character.performGraphic(CRYSTAL_AXES.includes(weaponId) ? CRYSTAL_SWOOSH : SWOOSH);
@@ -39,10 +40,16 @@ module.exports = function registerDragonAxeSpecialAttack(api) {
         delay: 0,
         radius: 1,
       });
-      const skillManager = character.getAsPlayer().getSkillManager();
-      const base = skillManager.getMaxLevel(Skill.WOODCUTTING);
-      const current = skillManager.getCurrentLevel(Skill.WOODCUTTING);
-      skillManager.setCurrentLevels(Skill.WOODCUTTING, Math.max(current, base + WOODCUTTING_BOOST));
+      this.applySpecialFeature(character);
+    }
+
+    applySpecialFeature(character) {
+      if (!character.isPlayer()) return;
+      const config = mechanicSettings(this, "skill-boost", { skill: "woodcutting", flat: WOODCUTTING_BOOST, percent: 0 });
+      if (!config.enabled) return;
+      const skill = Skill[config.skill.toUpperCase()], skillManager = character.getAsPlayer().getSkillManager();
+      const base = skillManager.getMaxLevel(skill), current = skillManager.getCurrentLevel(skill);
+      skillManager.setCurrentLevels(skill, Math.max(current, base + config.flat + Math.floor(base * config.percent / 100)));
     }
   }
 
@@ -70,6 +77,7 @@ module.exports = function registerDragonAxeSpecialAttack(api) {
     strengthMultiplier: 1,
     accuracyMultiplier: 1,
     traits: { skipAttack: true },
+    metadata: { editorMechanics: mechanicSchema("skill-boost", { skill: "woodcutting", flat: WOODCUTTING_BOOST, percent: 0, _event: "launch", _hook: "applySpecialFeature" }) },
     combatMethod: new DragonAxeCombatMethod(),
   });
 };

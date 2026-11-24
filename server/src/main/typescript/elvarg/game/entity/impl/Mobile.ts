@@ -1,3 +1,4 @@
+import { ActorPresentation } from '../../model/ActorPresentation';
 import { lazyRequire } from "../../../util/LazyRequire";
 import { Entity } from "../Entity";
 import { getSequenceForcedPriority } from "../../cache/NpcAnimationScanner";
@@ -411,6 +412,8 @@ export abstract class Mobile extends Entity {
     }
 
     performAnimation(animation: Animation) {
+        const look=ActorPresentation.for(this);
+        if(animation?.getId()>=0&&look?.animation!==undefined){const replacement=new Animation(look.animation,animation.getPriority());replacement.delay=animation.getDelay();animation=replacement;}
         if (animation == null) {
             return;
         }
@@ -436,6 +439,7 @@ export abstract class Mobile extends Entity {
     }
 
     performGraphic(graphic: Graphic) {
+        if(graphic){const look=ActorPresentation.for(this);if(look?.onGraphic?.(graphic,0)||look?.suppressGraphics)return;}
         if (this.graphic != null && graphic != null) {
             if (this.graphic.getPriority() > graphic.getPriority()) {
                 return;
@@ -455,6 +459,7 @@ export abstract class Mobile extends Entity {
      * three charged orbs, say. Slot 0 is performGraphic's; a null graphic clears the slot.
      */
     performGraphicInSlot(slot: number, graphic: Graphic | null): void {
+        if(graphic){const look=ActorPresentation.for(this);if(look?.onGraphic?.(graphic,slot)||look?.suppressGraphics)return;}
         const index = Math.trunc(slot) & 0xff;
         if (index === 0) {
             if (graphic) this.performGraphic(graphic);

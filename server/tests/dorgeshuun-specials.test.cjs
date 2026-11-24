@@ -33,13 +33,13 @@ const player = (name) => ({ name, isPlayer: () => true, isNpc: () => false, isRe
 
 /** Whether the special's hit lands when every accuracy roll misses and `lastDamager` hit the target last. */
 function lands(id, combatType, attacker, lastDamager) {
-  const hit = {
+  const hit = Object.assign(Object.create(PendingHit.prototype), {
     attacker,
     combatType,
     target: { getCombat: () => ({ getLastDamager: () => lastDamager }), getHitpoints: () => 99 },
     method: { accuracyDefenceType: () => 0 },
     accuracyAttackType() { return this.combatType; },
-  };
+  });
   return PendingHit.prototype.rollSpecialTraits.call(hit, CombatSpecial.getById(id).getTraits(), false, true, 0).accurate;
 }
 

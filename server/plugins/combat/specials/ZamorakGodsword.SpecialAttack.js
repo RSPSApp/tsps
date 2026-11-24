@@ -17,9 +17,11 @@ module.exports = function registerZamorakGodswordSpecialAttack(api) {
     }
 
     handleAfterHitEffects(hit) {
+      const freeze = { enabled: true, durationTicks: 32, ...this.specialMechanics?.freeze };
+      if (!freeze.enabled) return;
       if (hit.isAccurate()) {
         hit.getTarget().performGraphic(ICE_GRAPHIC);
-        CombatFactory.freeze(hit.getTarget(), FREEZE_SECONDS, undefined, hit.getAttacker());
+        CombatFactory.freeze(hit.getTarget(), freeze.durationTicks * .6, undefined, hit.getAttacker());
       }
     }
   }
@@ -30,6 +32,16 @@ module.exports = function registerZamorakGodswordSpecialAttack(api) {
     drainAmount: DRAIN,
     strengthMultiplier: 1.1,
     accuracyMultiplier: 2,
+    metadata: { editorMechanics: { version: 1, groups: [{
+      id: "freeze", name: "Freeze", phase: "At impact", hook: "handleAfterHitEffects", event: "accurate",
+      trigger: "When the hit passes accuracy, even if it deals zero damage",
+      description: "Freeze the enemy for {durationTicks} ticks ({durationTicks:seconds} s), unless immunity or existing freeze protection prevents it.",
+      preview: { graphic: 369, recipient: "target" },
+      parameters: [
+        { key: "enabled", label: "Enable freeze", type: "boolean", value: true },
+        { key: "durationTicks", label: "Freeze duration (ticks)", type: "number", value: FREEZE_SECONDS / .6, min: 1, max: 100, step: 1 },
+      ],
+    }] } },
     traits: {
       hitCount: 1,
       accuracyMultiplier: 2,

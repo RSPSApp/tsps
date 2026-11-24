@@ -5,12 +5,33 @@
  * as the item it copies wherever it has no entry of its own.
  */
 export class ItemAliases {
+    public static readonly SCOPED_VERSION = 1;
     private static readonly aliases = new Map<number, number>();
+    private static readonly owners = new Map<number, symbol>();
+    private static readonly leases = new Map<number, {owner:symbol;previous:number|undefined;previousOwner:symbol|undefined;previousLease:any;disposed:boolean}>();
 
     /** `aliasId` behaves as `baseId` wherever it has no entry of its own. */
     public static register(aliasId: number, baseId: number): void {
         if (!Number.isInteger(aliasId) || !Number.isInteger(baseId) || aliasId <= 0 || baseId <= 0 || aliasId === baseId) return;
         ItemAliases.aliases.set(aliasId, baseId);
+        ItemAliases.owners.delete(aliasId);
+        ItemAliases.leases.delete(aliasId);
+    }
+
+    /** Reversible ownership for plugin-defined weapon profiles and ammunition tables. */
+    public static registerScoped(aliasId:number,baseId:number):{dispose:()=>void} {
+        if(!Number.isInteger(aliasId)||!Number.isInteger(baseId)||aliasId<=0||baseId<=0||aliasId===baseId)throw new Error('Invalid item alias.');
+        const previous=this.aliases.get(aliasId),previousOwner=this.owners.get(aliasId),owner=Symbol();
+        const lease={owner,previous,previousOwner,previousLease:this.leases.get(aliasId),disposed:false};
+        this.aliases.set(aliasId,baseId);this.owners.set(aliasId,owner);this.leases.set(aliasId,lease);
+        return {dispose:()=>{
+            if(lease.disposed)return;lease.disposed=true;if(this.owners.get(aliasId)!==owner)return;
+            let value=previous,restoredOwner=previousOwner,restoredLease=lease.previousLease;
+            while(restoredLease?.disposed){value=restoredLease.previous;restoredOwner=restoredLease.previousOwner;restoredLease=restoredLease.previousLease;}
+            if(value===undefined)this.aliases.delete(aliasId);else this.aliases.set(aliasId,value);
+            if(restoredOwner===undefined)this.owners.delete(aliasId);else this.owners.set(aliasId,restoredOwner);
+            if(restoredLease===undefined)this.leases.delete(aliasId);else this.leases.set(aliasId,restoredLease);
+        }};
     }
 
     /** The item an id stands in for, or null when it is nobody's copy. */

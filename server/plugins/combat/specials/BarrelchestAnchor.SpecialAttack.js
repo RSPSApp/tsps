@@ -1,3 +1,4 @@
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 // TODO: ported from xrsps-typescript; untested.
 function buildSpecial(core) {
   const { Animation, CombatSpecial, Graphic, GraphicHeight, ItemIdentifiers, MeleeCombatMethod, Skill, Sound, Sounds } = core;
@@ -8,18 +9,20 @@ function buildSpecial(core) {
   const GRAPHIC = new Graphic(1027, GraphicHeight.MIDDLE);
   const PLAYER_DRAIN_ORDER = [Skill.DEFENCE, Skill.ATTACK, Skill.RANGED, Skill.MAGIC];
 
-  function sunder(target, damage) {
-    let remainingDrain = Math.max(0, Math.floor(Math.floor(damage) * DRAIN_FRACTION));
+  function sunder(target, damage, config) {
+    let remainingDrain = Math.max(0, Math.floor(Math.floor(damage) * config.percent / 100));
     if (remainingDrain <= 0) {
       return;
     }
     const skillManager = target.isPlayer() ? target.getAsPlayer().getSkillManager() : target.getAsNpc();
-    for (const skill of PLAYER_DRAIN_ORDER) {
+    for (const name of config.order) {
+      if (name === "prayer" && !target.isPlayer()) continue;
+      const skill = Skill[name.toUpperCase()];
       if (remainingDrain <= 0) {
         break;
       }
       const currentLevel = Math.max(0, Math.floor(skillManager.getCurrentLevel(skill)));
-      const drainAmount = Math.min(remainingDrain, Math.max(0, currentLevel - (target.isPlayer() ? 1 : 0)));
+      const drainAmount = Math.min(remainingDrain, Math.max(0, currentLevel - (target.isPlayer() ? config.playerFloor : 0)));
       if (drainAmount <= 0) {
         continue;
       }
@@ -37,7 +40,9 @@ function buildSpecial(core) {
     }
 
     handleAfterHitEffects(hit) {
-      sunder(hit.getTarget(), hit.getTotalDamage());
+      const config = mechanicSettings(this, "ordered-drain", { percent: DRAIN_FRACTION * 100, order: ["defence", "attack", "ranged", "magic"], playerFloor: 1 });
+      if (!config.enabled) return;
+      sunder(hit.getTarget(), hit.getTotalDamage(), config);
     }
   }
 
@@ -52,6 +57,7 @@ function buildSpecial(core) {
       accuracyMultiplier: 2,
       damageMultiplier: 1.1,
     },
+    metadata: { editorMechanics: mechanicSchema("ordered-drain", { percent: DRAIN_FRACTION * 100, order: ["defence", "attack", "ranged", "magic"], playerFloor: 1 }) },
     combatMethod: new BarrelchestAnchorCombatMethod(),
   };
 }

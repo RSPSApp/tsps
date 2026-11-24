@@ -296,6 +296,7 @@ export class PluginManager {
   private static playerProcessHooks: PluginHook<PluginPlayerProcessEvent>[] = [];
   private static playerLevelUpHooks: PluginHook<PluginPlayerLevelUpEvent>[] = [];
   private static experienceGainedHooks: PluginHook<PluginExperienceGainedEvent>[] = [];
+  private static ownedCombatSpecials = new WeakMap<CombatSpecial, string>();
   private static customEventHooks = new Map<
     PluginCustomEventName,
     PluginHook<any>[]
@@ -2778,6 +2779,7 @@ export class PluginManager {
       Sounds: require("../game/Sounds").Sounds,
       Location: require(`${model}/Location`).Location,
       Mobile: require("../game/entity/impl/Mobile").Mobile,
+      ActorVisuals: require("../game/model/ActorVisuals").ActorVisuals,
       encodePluginMessage: require("../net/protocol/ClientProtocol").encodePluginMessage,
       encodeChatMessage: require("../net/protocol/ClientProtocol").encodeChatMessage,
       encodeClanSettingsFull: require("../net/protocol/ClientProtocol").encodeClanSettingsFull,
@@ -4992,6 +4994,13 @@ export class PluginManager {
         }
         WeaponProfiles.register(profile);
       },
+      unregisterCombatSpecial: (id) => {
+        const special = CombatSpecial.getById(id);
+        if (!special || PluginManager.ownedCombatSpecials.get(special) !== pluginName) return false;
+        if (!CombatSpecial.unregister(id, special)) return false;
+        PluginManager.ownedCombatSpecials.delete(special);
+        return true;
+      },
       registerCombatSpecial: (definition) => {
         if (
           !definition ||
@@ -5009,6 +5018,7 @@ export class PluginManager {
           return;
         }
         const registered = CombatSpecial.register(definition as PluginCombatSpecialDefinition);
+        if (registered) PluginManager.ownedCombatSpecials.set(registered, pluginName);
         if (!registered) {
           console.warn(
             `[plugins] ${pluginName} failed to register combat special ${definition.id}`

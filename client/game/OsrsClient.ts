@@ -1,4 +1,6 @@
 import { ObjStackability } from "../rs/config/objtype/ObjStackability";
+import { subscribePluginMessages } from '../network/serverConnection/domain/pluginMessages';
+import { receiveActorVisual } from '../render/gfx/ActorVisuals';
 import { AGILITY_HELPER_HIGHLIGHT_OBSTACLES_ENABLED, HELPER_AGILITY_HIGHLIGHTED_COURSE } from "@runelite/api/gameval/VarbitID";
 import { retainedInventory, stopInventoryTransmit } from "./sync/InventoryStopTransmit";
 import { openClientUrl } from "../common/openUrl";
@@ -3406,6 +3408,10 @@ export class OsrsClient {
         });
         // Subscribe to server-side GFX (spot) messages and forward to renderer
         try {
+            const unsubVisual=subscribePluginMessages(message => {
+                const renderer=this.renderer as any;
+                receiveActorVisual(message,renderer?.gfxManager??renderer?.actors?.getActorGfxManager?.());
+            });
             const unsubSpot = subscribeSpot((payload: SpotAnimationPayload) => {
                 try {
                     // spot animation delay is in client cycles (Client.cycle units).
@@ -3449,7 +3455,7 @@ export class OsrsClient {
                     }
                 } catch {}
             });
-            this.unsubscribeSpot = unsubSpot;
+            this.unsubscribeSpot = () => { unsubSpot(); unsubVisual(); };
         } catch {}
         // Subscribe to server-side sound messages and play them
         try {

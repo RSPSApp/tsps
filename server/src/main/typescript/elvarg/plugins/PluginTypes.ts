@@ -982,6 +982,9 @@ export interface PluginCombatMethodResolver {
 
 export interface PluginCombatSpecialDefinition {
   id: string;
+  inheritFromItemId?: number;
+  overrideDrainAmount?: boolean;
+  decorateResolvedMethod?: (method:any)=>any;
   itemIds: number[];
   drainAmount: number;
   strengthMultiplier: number;
@@ -1602,6 +1605,8 @@ export interface PluginApi {
   registerSpellRuneSource(source: PluginSpellRuneSource): void;
   registerRangedCombatModifier(modifier: PluginRangedCombatModifier): void;
   registerWeaponProfile(profile: WeaponCombatProfile): void;
+  /** Removes only a special currently owned by the calling plugin. */
+  unregisterCombatSpecial(id: string): boolean;
   /**
    * Registers a weapon special attack. `id` is a stable plugin-chosen key (used by
    * core for the granite maul queued-attack path and by cross-plugin lookups).
@@ -1725,6 +1730,7 @@ export interface PluginCoreApi {
   /** Every character profile, the main one first (persistence/PlayerProfile). */
   PLAYER_PROFILES: readonly import("../game/entity/impl/player/persistence/PlayerProfile").PlayerProfile[];
   Skills: any;
+  ActorVisuals: typeof import("../game/model/ActorVisuals").ActorVisuals;
   encodePluginMessage: typeof import("../net/protocol/ClientProtocol").encodePluginMessage;
   encodeChatMessage: typeof import("../net/protocol/ClientProtocol").encodeChatMessage;
   encodeClanSettingsFull: typeof import("../net/protocol/ClientProtocol").encodeClanSettingsFull;

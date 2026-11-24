@@ -35,7 +35,7 @@ function isDragonArrow(player) {
 function descentOf(player) {
   const { Equipment, ItemIdentifiers } = core;
   const descent = isDragonArrow(player) ? DESCENT_OF_DRAGONS : DESCENT_OF_DARKNESS;
-  const bountyHunter = player.getEquipment().get(Equipment.WEAPON_SLOT).getId() === ItemIdentifiers.DARK_BOW_BH_;
+  const bountyHunter = core.CombatSpecial.weaponIdFor(player) === ItemIdentifiers.DARK_BOW_BH_;
   return { ...descent, minimum: descent.minimum + (bountyHunter ? 2 : 0), bountyHunter };
 }
 

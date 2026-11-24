@@ -1,3 +1,4 @@
+import { graphicAgeMs } from './GfxManager';
 import { vec2 } from "gl-matrix";
 import PicoGL, { DrawCall, Texture } from "picogl";
 
@@ -121,7 +122,7 @@ export class GfxRenderer {
             for (const entry of entries) {
                 const { inst, slot } = entry;
                 if (inst.startTimeMs == null) continue;
-                const ageMs = Math.max(0, nowMs - (inst.startTimeMs | 0));
+                const ageMs = graphicAgeMs(inst,nowMs);
                 const frameIdx = this.computeSpotFrameIdxByMs(inst.spotId, Math.floor(ageMs));
 
                 // Dispatch frame-sounds once per frame change for this instance
@@ -189,7 +190,7 @@ export class GfxRenderer {
                         frameIdx,
                     ),
                 );
-                const key = `${inst.spotId}|${frameIdx}|${frameCycle}`;
+                const key = `${inst.spotId}|${frameIdx}|${frameCycle}|${inst.hueShift??0}`;
                 const arr = groups.get(key) ?? [];
                 const yOffUnits = resolveYOffset(entry) | 0;
                 arr.push({ slot, yOffUnits });
@@ -198,7 +199,7 @@ export class GfxRenderer {
 
             for (const [key, instances] of groups) {
                 if (instances.length === 0) continue;
-                const [spotStr, frameStr, cycleStr] = key.split("|");
+                const [spotStr, frameStr, cycleStr, hueStr] = key.split("|");
                 const spotId = parseInt(spotStr, 10) | 0;
                 const frameIdx = parseInt(frameStr, 10) | 0;
                 const frameCycle = parseInt(cycleStr, 10) | 0;
@@ -247,7 +248,8 @@ export class GfxRenderer {
                     dc.uniform("u_modelYOffset", (yOff + (onDeck && deck ? deck.yOffset : 0)) | 0);
                     for (const inst of groupInstances) {
                         dc.uniform("u_drawIdOverride", inst.slot | 0);
-                        dc.draw();
+                        dc.uniform("u_visualHueShift", Number(hueStr)/360);
+                        try { dc.draw(); } finally { (prog as any).uniform("u_visualHueShift", 0); }
                     }
                 }
 

@@ -143,3 +143,24 @@ test("real specials spend the custom cost, retaining modifiers, inherited varian
   CombatSpecial.drain(player, borrowed.getDrainAmount());
   assert.equal(player.getSpecialPercentage(), 75, "a copied variant inherits its variant cost without an override");
 });
+
+
+test("plugins remove only their owned special and preserve newer replacements", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const owner = PluginManager.createApi("SpecialOwnerTest"), other = PluginManager.createApi("SpecialOtherTest");
+  const definition = { id: "owned-special-test", itemIds: [59998], drainAmount: 25, strengthMultiplier: 1, accuracyMultiplier: 1, combatMethod: { type() {} } };
+  owner.registerCombatSpecial(definition);
+  const first = CombatSpecial.getById(definition.id);
+  assert.equal(other.unregisterCombatSpecial(definition.id), false);
+  assert.equal(CombatSpecial.getForWeaponId(59998), first);
+  other.registerCombatSpecial({ ...definition, combatMethod: { type() {} } });
+  const second = CombatSpecial.getById(definition.id);
+  assert.notEqual(second, first);
+  assert.equal(owner.unregisterCombatSpecial(definition.id), false);
+  assert.equal(other.unregisterCombatSpecial(definition.id), true);
+  assert.equal(CombatSpecial.getById(definition.id), first);
+  assert.equal(CombatSpecial.getForWeaponId(59998), first);
+  assert.equal(owner.unregisterCombatSpecial(definition.id), true);
+  assert.equal(CombatSpecial.getById(definition.id), null);
+  assert.equal(CombatSpecial.getForWeaponId(59998), null);
+});

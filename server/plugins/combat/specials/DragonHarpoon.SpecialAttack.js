@@ -1,3 +1,4 @@
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 module.exports = function registerDragonHarpoonSpecialAttack(api) {
   const { Animation, CombatMethod, CombatSpecial, CombatType, Equipment, Graphic, ItemIdentifiers, Skill, Sound, Sounds } = api.core;
 
@@ -46,7 +47,7 @@ module.exports = function registerDragonHarpoonSpecialAttack(api) {
       if (!character.isPlayer()) {
         return;
       }
-      const weaponId = character.getAsPlayer().getEquipment().get(Equipment.WEAPON_SLOT).getId();
+      const weaponId = CombatSpecial.weaponIdFor(character.getAsPlayer());
       const crystal = CRYSTAL_HARPOONS.includes(weaponId);
       character.forceChat(FORCED_CHAT);
       character.performAnimation(HARPOON_ANIMATIONS.get(weaponId));
@@ -54,10 +55,16 @@ module.exports = function registerDragonHarpoonSpecialAttack(api) {
       // rsprox_transcripts/227/00075.txt:77210 (and every recorded Fishstabber): synth sound 2538, the dragon
       // battleaxe special's.
       Sounds.sendSound(character, Sound.DRAGON_BATTLEAXE_SPECIAL);
-      const skillManager = character.getAsPlayer().getSkillManager();
-      const base = skillManager.getMaxLevel(Skill.FISHING);
-      const current = skillManager.getCurrentLevel(Skill.FISHING);
-      skillManager.setCurrentLevels(Skill.FISHING, Math.max(current, base + FISHING_BOOST));
+      this.applySpecialFeature(character);
+    }
+
+    applySpecialFeature(character) {
+      if (!character.isPlayer()) return;
+      const config = mechanicSettings(this, "skill-boost", { skill: "fishing", flat: FISHING_BOOST, percent: 0 });
+      if (!config.enabled) return;
+      const skill = Skill[config.skill.toUpperCase()], skillManager = character.getAsPlayer().getSkillManager();
+      const base = skillManager.getMaxLevel(skill), current = skillManager.getCurrentLevel(skill);
+      skillManager.setCurrentLevels(skill, Math.max(current, base + config.flat + Math.floor(base * config.percent / 100)));
     }
   }
 
@@ -68,6 +75,7 @@ module.exports = function registerDragonHarpoonSpecialAttack(api) {
     strengthMultiplier: 1,
     accuracyMultiplier: 1,
     traits: { skipAttack: true },
+    metadata: { editorMechanics: mechanicSchema("skill-boost", { skill: "fishing", flat: FISHING_BOOST, percent: 0, _event: "launch", _hook: "applySpecialFeature" }) },
     combatMethod: new DragonHarpoonCombatMethod(),
   });
 };

@@ -204,10 +204,15 @@ export class CombatSpecial {
     public static drain(character: Mobile, amount: number, isCost = true, itemId?: number) {
         const special: CombatSpecial | null = character.isPlayer?.() ? ((character as any).getAsPlayer?.()?.getCombatSpecial?.() ?? null) : null;
         const weaponId = character.isPlayer?.() ? character.getAsPlayer().getEquipment?.()?.get(Equipment.WEAPON_SLOT)?.getId?.() : undefined;
-        const settings = weaponId !== undefined ? CombatSpecial.itemSpecials.get(weaponId) : undefined;
-        // Implementations pass their native cost; price custom weapons before applying the usual modifiers.
-        const base = isCost && settings ? settings.drainAmount ?? special?.getDrainAmountForWeaponId(weaponId) ?? amount : isCost && special?.overrideDrainAmount ? special.getDrainAmountForWeaponId(weaponId) : amount;
-        character.decrementSpecialPercentage(isCost ? CombatSpecial.cost(character, special, base, "drain").cost : special?.overrideDrainAmount ? special.getDrainAmountForWeaponId(weaponId) : amount);
+        let base = amount;
+        if (itemId === undefined || itemId === weaponId) {
+            // Apply custom weapon pricing when that weapon performed the special.
+            const settings = isCost && weaponId !== undefined ? CombatSpecial.itemSpecials.get(weaponId) : undefined;
+            if (settings || special?.overrideDrainAmount) {
+                base = settings?.drainAmount ?? special?.getDrainAmountForWeaponId(weaponId) ?? amount;
+            }
+        }
+        character.decrementSpecialPercentage(isCost ? CombatSpecial.cost(character, special, base, "drain").cost : base);
 
         CombatSpecial.ensureRestoreTask(character);
 

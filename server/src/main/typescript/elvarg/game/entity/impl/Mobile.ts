@@ -412,10 +412,16 @@ export abstract class Mobile extends Entity {
     }
 
     performAnimation(animation: Animation) {
-        const look=ActorPresentation.for(this);
-        if(animation?.getId()>=0&&look?.animation!==undefined){const replacement=new Animation(look.animation,animation.getPriority());replacement.delay=animation.getDelay();animation=replacement;}
         if (animation == null) {
             return;
+        }
+        if (animation.getId() >= 0 && animation.getId() !== Animation.DEFAULT_RESET_ANIMATION.getId()) {
+            const replacementId = ActorPresentation.for(this)?.animation;
+            if (replacementId !== undefined) {
+                const replacement = new Animation(replacementId, animation.getPriority());
+                replacement.delay = animation.getDelay();
+                animation = replacement;
+            }
         }
         if (this.animation != null && animation != null) {
             if (this.animation.getPriority() > animation.getPriority()) {
@@ -439,7 +445,7 @@ export abstract class Mobile extends Entity {
     }
 
     performGraphic(graphic: Graphic) {
-        if(graphic){const look=ActorPresentation.for(this);if(look?.onGraphic?.(graphic,0)||look?.suppressGraphics)return;}
+        if (this.isGraphicHandledByPresentation(graphic, 0)) return;
         if (this.graphic != null && graphic != null) {
             if (this.graphic.getPriority() > graphic.getPriority()) {
                 return;
@@ -459,14 +465,20 @@ export abstract class Mobile extends Entity {
      * three charged orbs, say. Slot 0 is performGraphic's; a null graphic clears the slot.
      */
     performGraphicInSlot(slot: number, graphic: Graphic | null): void {
-        if(graphic){const look=ActorPresentation.for(this);if(look?.onGraphic?.(graphic,slot)||look?.suppressGraphics)return;}
         const index = Math.trunc(slot) & 0xff;
         if (index === 0) {
             if (graphic) this.performGraphic(graphic);
             return;
         }
+        if (this.isGraphicHandledByPresentation(graphic, slot)) return;
         (this.slotGraphics ??= new Map()).set(index, graphic);
         this.getUpdateFlag().flag(Flag.GRAPHIC);
+    }
+
+    private isGraphicHandledByPresentation(graphic: Graphic | null, slot: number): boolean {
+        if (graphic == null || graphic.getId() < 0) return false;
+        const look = ActorPresentation.for(this);
+        return Boolean(look?.onGraphic?.(graphic, slot) || look?.suppressGraphics);
     }
 
     /**

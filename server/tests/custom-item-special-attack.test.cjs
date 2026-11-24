@@ -145,6 +145,30 @@ test("real specials spend the custom cost, retaining modifiers, inherited varian
 });
 
 
+test("an authored weapon overrides only its own special attack drain", t => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { Equipment } = require("../dist/game/model/container/impl/Equipment");
+  const { Item } = require("../dist/game/model/Item");
+  const player = new Player(null);
+  const weaponId = 59205, shieldId = 59206;
+  const authored = special("custom-item-override-drain", [weaponId], 10, { overrideDrainAmount: true });
+  player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(weaponId));
+  player.setCombatSpecial(authored);
+  player.setSpecialPercentage(100);
+  player.setRecoveringSpecialAttack(true);
+  t.mock.method(CombatSpecial, "updateBar", () => {});
+
+  CombatSpecial.drain(player, 0, false, shieldId);
+  assert.equal(player.getSpecialPercentage(), 100);
+  CombatSpecial.drain(player, 0, false, weaponId);
+  assert.equal(player.getSpecialPercentage(), 90);
+  CombatSpecial.drain(player, 0, false);
+  assert.equal(player.getSpecialPercentage(), 80);
+  CombatSpecial.drain(player, 5, true, shieldId);
+  assert.equal(player.getSpecialPercentage(), 75);
+});
+
+
 test("plugins remove only their owned special and preserve newer replacements", () => {
   const { PluginManager } = require("../dist/plugins/PluginManager");
   const owner = PluginManager.createApi("SpecialOwnerTest"), other = PluginManager.createApi("SpecialOtherTest");

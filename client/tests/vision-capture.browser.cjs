@@ -8,7 +8,7 @@
 //   [--clip-secs 5 --clip-fps 10 --clip-out clip.mp4]
 //   [--animation-smoothing on|off] [--check-animation-smoothing 1]
 //   [--check-mobile-keyboard 1] (use --url with ?mobile=1)
-//   [--check-world-map-zoom 1 --world-map-zoom-rounds 3 --world-map-zoom-start-out 0 --world-map-zoom-burst 0 --world-map-pan 0] (opens the world map, wheels in/out;
+//   [--check-world-map-zoom 1 --world-map-zoom-rounds 3 --world-map-zoom-start-out 0 --world-map-zoom-burst 0 --world-map-pan 0 --world-map-view x,y;x,y] (opens the world map, wheels in/out;
 //     samples the zoom drawn and the share of solid-black 8x8 blocks over the map)
 //   [--check-mobile-combat-hud 1] (mobile client in Wilderness; checks rotation and captures each layout)
 //   [--check-responsive-gameframe 1] (desktop login, narrow/portrait windows keep the desktop layout)
@@ -862,6 +862,36 @@ async function main() {
         await wheel(startOut > 0 ? 120 : -120);
         startFillMs.push(await waitSettled());
       }
+      // --world-map-view "x,y;x,y": centre the map on each world coordinate, wait until every
+      // square on screen has its tile, save the map as <out>-view-<i>.png and count its pure-black
+      // pixels (r, g and b all under 4).
+      const views = arg("world-map-view", null);
+      if (views) {
+        summary.worldMapViews = [];
+        let i = 0;
+        for (const view of views.split(";")) {
+          const [vx, vy] = view.split(",").map(Number);
+          await cdp.evaluate(`(() => { const s = (${CLIENT_JS}).worldMapState; s.jumpToSourceCoordInstant(0, ${vx | 0}, ${vy | 0}); return 0; })()`);
+          await sleep(200);
+          const fillMs = await waitSettled();
+          await sleep(300);
+          const shot = await cdp.send("Page.captureScreenshot", { format: "png", clip: { ...rect, scale: 1 } });
+          const file = out.replace(/\.png$/, "") + `-view-${i++}.png`;
+          fs.writeFileSync(file, Buffer.from(shot.result.data, "base64"));
+          const black = await cdp.evaluate(`(async () => {
+            const bytes = Uint8Array.from(atob(${JSON.stringify(shot.result.data)}), (ch) => ch.charCodeAt(0));
+            const image = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+            const g = new OffscreenCanvas(image.width, image.height).getContext("2d");
+            g.drawImage(image, 0, 0);
+            const d = g.getImageData(0, 0, image.width, image.height).data;
+            let n = 0;
+            for (let p = 0; p < d.length; p += 4) if (d[p] < 4 && d[p + 1] < 4 && d[p + 2] < 4) n++;
+            return n;
+          })()`);
+          summary.worldMapViews.push({ view, file, fillMs, blackPixels: black });
+        }
+      }
+
       // --world-map-tile-bench N: render N squares around the view one at a time on the page,
       // with the client's own (fallback) world map renderer, under the CPU profiler.
       const bench = Number(arg("world-map-tile-bench", "0")) | 0;

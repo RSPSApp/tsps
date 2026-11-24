@@ -7,12 +7,19 @@ const ChaosElementalAttackType = {
 const SPECIAL_HIT_DELAY = 2;
 
 /**
- * Set on it for the rest of its life (its respawn is a new NPC without them), for its Combat
- * Achievements: once Madness unequips anything from anyone (Hoarder), and once any of its attacks
- * deals damage to anyone (The Flincher).
+ * The players it has done these to in its life (its respawn is a new NPC without them), for its
+ * Combat Achievements: Madness unequipped something of theirs (Hoarder), one of its attacks
+ * damaged them (The Flincher).
  */
-const DISARMED_ATTRIBUTE = "chaos-elemental:disarmed-someone";
-const DAMAGED_ATTRIBUTE = "chaos-elemental:damaged-someone";
+const DISARMED_ATTRIBUTE = "chaos-elemental:disarmed-players";
+const DAMAGED_ATTRIBUTE = "chaos-elemental:damaged-players";
+
+function markPlayer(npc, attribute, player) {
+  if (!npc?.setAttribute) return;
+  const players = npc.getAttribute(attribute) ?? new Set();
+  players.add(player);
+  npc.setAttribute(attribute, players);
+}
 
 /** Core classes, from api.core when the combat method is built. */
 let Animation, CombatType, Equipment, Flag, Graphic, Item, Misc, PendingHit, Projectile, WeaponInterfaceManager;
@@ -115,7 +122,7 @@ function combatClass(api) {
         return;
       }
       const target = hit.getTarget();
-      if (target.isPlayer?.() && Number(hit.getTotalDamage?.() ?? 0) > 0) hit.getAttacker?.()?.setAttribute?.(DAMAGED_ATTRIBUTE, true);
+      if (target.isPlayer?.() && Number(hit.getTotalDamage?.() ?? 0) > 0) markPlayer(hit.getAttacker?.(), DAMAGED_ATTRIBUTE, target.getAsPlayer());
       switch (this.currentCombatType) {
         case CombatType.MELEE:
           target.performGraphic(ChaosElementalCombatMethod.MELEE_COMBAT_GFX);
@@ -143,7 +150,7 @@ function applyChaosElementalSpecial(attackType, character, target) {
 
   const player = target.getAsPlayer();
   if (attackType === ChaosElementalAttackType.DISARM) {
-    if (disarmChaosElemental(player)) character?.setAttribute?.(DISARMED_ATTRIBUTE, true);
+    if (disarmChaosElemental(player)) markPlayer(character, DISARMED_ATTRIBUTE, player);
     return;
   }
 

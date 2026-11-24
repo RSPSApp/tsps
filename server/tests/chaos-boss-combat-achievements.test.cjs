@@ -196,6 +196,17 @@ test("Hoarder: another player's items being unequipped fails it for everyone in 
   assert.deepEqual([done(fighter, 'Hoarder'), done(other, 'Hoarder')], [false, false]);
 });
 
+test('Hoarder and The Flincher: a passer-by it disarmed or hit, not in the kill, fails neither', () => {
+  const fighter = createPlayer();
+  const passer = createPlayer({ worn: { 3: 861 } });
+  const npc = elemental([fighter, passer]);
+  madness(npc, passer);
+  discord(npc, passer, 9);
+  assert.deepEqual(passer.inventory, [861]);
+  kill(npc, fighter);
+  assert.deepEqual([done(fighter, 'Hoarder'), done(fighter, 'The Flincher')], [true, true]);
+});
+
 test('Hoarder: Madness that takes nothing (a full inventory, or nothing worn) still completes it', () => {
   const full = createPlayer({ worn: { 3: 861 }, freeSlots: 0 });
   const bare = createPlayer();
@@ -296,6 +307,7 @@ test('Praying to the Gods: ten kills in a row complete it on the tenth', () => {
   for (let i = 1; i <= 9; i++) kill(fanatic(), player);
   drink(player, 'Saradomin brew');
   drink(player, 'Antipoison');
+  drink(player, 'Prayer mix'); // Not on the Wiki's list, which is only these potions.
   assert.equal(done(player, 'Praying to the Gods'), false);
   kill(fanatic(), player);
   assert.equal(done(player, 'Praying to the Gods'), true);

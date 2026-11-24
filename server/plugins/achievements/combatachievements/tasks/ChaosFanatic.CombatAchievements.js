@@ -18,14 +18,12 @@ const PRAYING_TO_THE_GODS_KILLS = 10;
 const PRAYING_KILLS_ATTRIBUTE = "combat-achievements:praying-to-the-gods-kills";
 
 /**
- * The Wiki's list (Praying to the Gods, "Strategy"), by the names "potions:drunk" gives: a
- * blighted super restore is a Super restore. Ours: their barbarian mixes and the forgotten brew,
- * which restore prayer as the potions do.
+ * The Wiki's list (Praying to the Gods, "Strategy": only these), by the names "potions:drunk"
+ * gives; a blighted super restore is a Super restore.
  */
 const PRAYER_RESTORING_POTIONS = new Set([
   "Prayer potion", "Prayer regeneration potion", "Zamorak brew", "Super restore", "Sanfew serum",
   "Ancient brew", "Moonlight moth mix",
-  "Prayer mix", "Zamorak mix", "Super restore mix", "Ancient mix", "Forgotten brew",
 ]);
 
 let api;

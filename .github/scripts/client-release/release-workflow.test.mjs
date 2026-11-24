@@ -26,6 +26,7 @@ test("both release events include shared client inputs and interface generator d
         "server/plugins/items/BlightedItems.js",
         "server/plugins/items/data/food.json",
         "server/scripts/browser-host-interface-definitions.ts",
+        "server/plugins/agent/mcp/DiagonalWall.AgentMcp.js",
         "server/plugins/interface/teleportinterface/Layout.TeleportInterface.js",
         "server/plugins/interface/widgetGroup.js",
         "server/src/main/typescript/elvarg/game/content/combat/CombatType.ts",

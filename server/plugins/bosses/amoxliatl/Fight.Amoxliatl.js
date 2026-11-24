@@ -11,7 +11,7 @@
  * - After every 2-4 standard attacks (Wiki) a special, the first at random and then in turn:
  *   Icicle Crash (Fight here) and Unstable Ice (UnstableIce.Amoxliatl). With the player on the
  *   path to her platform she has no room for Unstable Ice and only uses Icicle Crash.
- * - Icicle Crash (11531): every prayer off and the red message, then an icicle that lands 5 ticks
+ * - Icicle Crash (11531): turn active prayers off and announce the attack, then an icicle that lands 5 ticks
  *   later for up to 34; Protect from Magic turned back on in time negates it (Wiki).
  */
 const Common = require("./Common.Amoxliatl");
@@ -69,6 +69,8 @@ class Fight {
     /** key(x, y) on the cache map -> the pool's GameObject. */
     this.pools = new Map();
     this.blocks = new Set();
+    // Keep post-quest shatters available to cleanup until next-tick removal.
+    this.shatteringBlocks = new Set();
     this.hudShown = false;
     this.shownHp = -1;
     this.stats = { damageTaken: 0, prayerLost: false, shattered: false, usedTemotli: false, otherWeapon: false };
@@ -222,8 +224,9 @@ class Fight {
   icicleCrash() {
     const { Animation, PrayerHandler, Projectile } = this.core;
     const { icicle } = Common.data;
-    PrayerHandler.deactivatePrayers(this.player);
-    this.player.sendMessage(icicle.message);
+    const disablePrayers = !Common.isPostQuestFight(this.session) || this.player.getPrayerActive().some(Boolean);
+    if (disablePrayers) PrayerHandler.deactivatePrayers(this.player);
+    this.player.sendMessage(disablePrayers ? icicle.message : icicle.plainMessage);
     this.boss.performAnimation(new Animation(icicle.anim));
     const spec = icicle.projectile;
     new Projectile(Projectile.centreOf(this.boss), this.player.getLocation(), this.player, spec.id, spec.start, spec.end,
@@ -252,17 +255,18 @@ class Fight {
   // ------------------------------------------------------------------ the icy pools
 
   /** A pool on a floor tile (cache map), unless one is there already. */
-  placePool(x, y) {
-    if (this.stopped || this.over || !onFloor(x, y) || this.pools.has(key(x, y))) return;
+  placePool(x, y, playSound = true) {
+    if (this.stopped || this.over || !onFloor(x, y) || this.pools.has(key(x, y))) return false;
     const { GameObject, ObjectManager } = this.core;
     const { pools, arena } = Common.data;
     const tile = this.session.tile([x, y, 0]);
-    if (this.core.RegionManager.blocked(tile, this.session.area)) return;
+    if (this.core.RegionManager.blocked(tile, this.session.area)) return false;
     const pool = new GameObject(pools.id, tile, pools.shape, Common.randomInt(0, 3), this.session.area);
     ObjectManager.register(pool, true);
     this.pools.set(key(x, y), pool);
     // As captured, the sound comes from the middle of the platform, not the pool.
-    Common.areaSound(this.player, pools.sound, this.session.tile(arena.centre));
+    if (playSound) Common.areaSound(this.player, pools.sound, this.session.tile(arena.centre));
+    return true;
   }
 
   poolDamage() {

@@ -14,6 +14,8 @@ const PANEL_ASSETS = new Map([
   ["panel.js", "application/javascript; charset=utf-8"],
   ["panel.css", "text/css; charset=utf-8"],
   ["bot-management.js", "application/javascript; charset=utf-8"],
+  ["PlayerTools.WorldAdmin.js", "application/javascript; charset=utf-8"],
+  ["PlayerTools.WorldAdmin.css", "text/css; charset=utf-8"],
   ["skill-icons.json", "application/json; charset=utf-8"],
   // The game client's icons (client/public/favicon), so the page's tab matches the game's.
   ["favicon.svg", "image/svg+xml"],

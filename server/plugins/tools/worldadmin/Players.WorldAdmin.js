@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { HttpError, readJson, send } = require("./Http.WorldAdmin");
 const { originAllowed } = require("./Access.WorldAdmin");
+const { playerTools, toolRoutes, toolAction } = require("./PlayerTools.WorldAdmin");
 
 const USERNAME = /^[a-z0-9][a-z0-9 _-]{0,19}$/i;
 const key = name => name.toLowerCase().replace(/_/g, " ");
@@ -49,6 +50,7 @@ function parseSave(json) {
 }
 
 async function playerRoutes(request, response, url, api, offlineCatalogue) {
+  if (toolRoutes(request, response, url, api)) return true;
   if (!["/api/players", "/api/players/save", "/api/players/action"].includes(url.pathname)) return false;
   const core = api?.core;
   const persistence = core?.GameConstants?.PLAYER_PERSISTENCE;
@@ -61,10 +63,17 @@ async function playerRoutes(request, response, url, api, offlineCatalogue) {
     if (!originAllowed(request)) throw new HttpError(403, "Cross-origin request refused");
     if (!core || !persistence || core.Server.isShuttingDown?.()) throw new HttpError(409, "Start the server before managing players.");
     if (!USERNAME.test(name)) throw new HttpError(400, "Invalid player name.");
-    const { action, rights, enabled } = await readJson(request);
+    const body = await readJson(request);
+    const { action, rights, enabled } = body;
     const candidate = core.World.getPlayerByName(name);
     const target = candidate?.isPlayerBot?.() ? undefined : candidate;
+    if (candidate?.isPlayerBot?.()) throw new HttpError(409, "Use the Bots panel to manage bots.");
     if (!target && !persistence.exists(name, profile)) throw new HttpError(404, "Player not found.");
+    const result = await toolAction(api, target, body);
+    if (result) {
+      send(response, 200, result);
+      return true;
+    }
     if (action === "rights") {
       if (!Number.isInteger(rights) || rights < 0 || rights > 4) throw new HttpError(400, "Invalid player rights.");
       const rank = core.PlayerRights.fromId(rights);
@@ -115,9 +124,17 @@ async function playerRoutes(request, response, url, api, offlineCatalogue) {
     if (!save && !live.has(username)) throw new HttpError(404, "Player not found.");
     // Gameplay fields only. Account credentials and remembered login tokens stay on the server.
     const { skills, inventory, equipment, banks, position, appearance, totalKills, deaths, highestKillstreak } = save ?? {};
+    const tools = playerTools(api, live.get(username));
+    // Preview current skill values and position while online, rather than the last autosave.
+    const liveSkills = tools.skills?.some(skill => skill.level !== undefined) ? {
+      maxLevel: tools.skills.map(skill => skill.level),
+      level: tools.skills.map(skill => skill.current),
+      experience: tools.skills.map(skill => skill.experience),
+    } : skills;
     send(response, 200, {
       player: row(username, save),
-      save: { skills, inventory, equipment, banks, position, appearance, totalKills, deaths, highestKillstreak },
+      save: { skills: liveSkills, inventory, equipment, banks, position: tools.position ?? position, appearance, totalKills, deaths, highestKillstreak },
+      tools,
     });
   }
   return true;

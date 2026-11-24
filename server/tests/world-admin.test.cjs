@@ -16,6 +16,22 @@ const ENV_KEYS = [
 ];
 const TOKEN = "test-token-abcdefghijklmnop";
 
+test("item searches retain every matching installed set member beyond the first fifty results", () => {
+  const { searchItems } = require("../plugins/tools/PlayerTools");
+  const names = new Map(Array.from({ length: 49 }, (_, id) => [id, `Ancient artifact ${String(id).padStart(2, "0")}`]));
+  const members = [[60003, "Ancient Faceguard"], [60004, "Ancient Chestplate"], [60005, "Ancient Platelegs"], [60006, "Cape of Ancients"]];
+  for (const [id, name] of members) names.set(id, name);
+  const core = {
+    CacheDefinitions: { getBaseCounts: () => ({ items: 49 }), getCustomItems: () => members.map(([id]) => ({ id })),
+      getCustomDefinitions: () => [], hasItem: id => names.has(id), getItem: () => ({ placeholderTemplate: -1 }) },
+    ItemDefinition: { forId: id => ({ getName: () => names.get(id), isNoted: () => false, isStackable: () => false }) },
+  };
+  const results = searchItems(core, "ancient");
+  assert.equal(results.length, 53, "matching items must not disappear behind an undisclosed result limit");
+  for (const [id] of members) assert.ok(results.some(row => row.id === id));
+  assert.deepEqual(searchItems(core, "60006").map(row => row.id), [60006]);
+});
+
 function freshPlugin(pluginFile = PLUGIN) {
   for (const key of Object.keys(require.cache)) {
     if (key.includes(`${path.sep}tools${path.sep}worldadmin${path.sep}`) || key === pluginFile) {
@@ -78,12 +94,15 @@ async function start(t, env = {}, opts = {}) {
     },
     World: { getPlayers: () => ({ sizeReturn: () => state.online }) },
   };
+  Object.assign(core, opts.core);
   const hooks = {};
   const api = {
     core,
+    getPluginConfig: (_key, fallback) => opts.playerTools ?? fallback,
     onServerStartup: (h) => { hooks.startup = h; },
     onServerShutdown: (h) => { hooks.shutdown = h; },
     emitCustomEvent: (name, payload) => {
+      opts.onCustomEvent?.(name, payload);
       state.events.push({ name, payload });
       if (!state.gameUpdateLoaded) return;
       if (name === "GameUpdate:start") {
@@ -266,6 +285,7 @@ test("the panel links to the map and cache editors on this worktree's client por
   assert.equal(catalog.status, 200);
   assert.equal(catalog.json.mapEditorUrl, "http://localhost:3103/?edit=1");
   assert.equal(catalog.json.cacheEditorUrl, "http://localhost:3103/?cache=1");
+  assert.deepEqual(catalog.json.toolLinks, [], "no plugin means no extra shortcuts");
 
   const page = await request(port, { path: "/", headers: auth });
   assert.equal(page.status, 200);
@@ -276,6 +296,23 @@ test("the panel links to the map and cache editors on this worktree's client por
   assert.match(page.text, /<div class="tool-group-label">Tools<\/div>/);
   assert.match(page.text, /\.tool-link:hover \{ background: #2a2c30; color: #fff; \}/);
   assert.match(page.text, /function updateToolLink\(id, href, flag\)/);
+});
+
+test("active plugins contribute local editor shortcuts without hard-coded Creator links", async t => {
+  const { port } = await start(t, { PORT: "3101" }, { onCustomEvent(name, payload) {
+    if (name !== "WorldAdmin:tools") return;
+    payload.tools.push(
+      { id: "npc-editor", label: "NPC editor", params: { cache: "1", tool: "content-builders", "tool-view": "npc" } },
+      { id: "gear-editor", label: "Gear editor", params: { cache: "1", tool: "content-builders", "tool-view": "gear" } },
+      { id: "npc-editor", label: "Duplicate", params: {} },
+      { id: "bad", label: "Invalid", params: { cache: 1 } },
+    );
+  } });
+  const response = await request(port, { path: "/api/catalog", headers: auth });
+  assert.deepEqual(response.json.toolLinks, [
+    { id: "npc-editor", label: "NPC editor", url: "http://localhost:3101/?cache=1&tool=content-builders&tool-view=npc" },
+    { id: "gear-editor", label: "Gear editor", url: "http://localhost:3101/?cache=1&tool=content-builders&tool-view=gear" },
+  ]);
 });
 
 test("retired editor links open the Bots panel behind authentication", async (t) => {
@@ -312,7 +349,7 @@ test("the editor links show only where the page is open on this machine, not on 
   assert.equal(localToolHref("http://localhost:3000/?cache=1", "edit", "localhost"), null);
   assert.throws(() => localToolHref("not a url", "edit", "localhost"));
   // With neither link usable the whole Tools group is hidden, not just its links.
-  assert.match(page, /document\.getElementById\("tool-group"\)\.hidden = !mapEditorShown && !cacheEditorShown;/);
+  assert.match(page, /document\.getElementById\("tool-group"\)\.hidden = !mapEditorShown && !cacheEditorShown && !pluginToolsShown;/);
 });
 
 test("the panel serves its bundled assets with authentication", async (t) => {
@@ -320,6 +357,8 @@ test("the panel serves its bundled assets with authentication", async (t) => {
   for (const [file, type] of [
     ["panel.js", "application/javascript"],
     ["panel.css", "text/css"],
+    ["PlayerTools.WorldAdmin.js", "application/javascript"],
+    ["PlayerTools.WorldAdmin.css", "text/css"],
     ["skill-icons.json", "application/json"],
     ["favicon.svg", "image/svg+xml"],
     ["favicon-96x96.png", "image/png"],
@@ -504,6 +543,136 @@ test("the Players panel reads saved characters and keeps login credentials priva
   assert.equal(details.json.save.skills.maxLevel[3], 10);
   assert.doesNotMatch(details.text, /private-hash|private-token/);
   assert.equal((await request(port, { path: "/api/players/save?name=..", headers: auth })).status, 400);
+});
+
+function playerToolsFixture(t) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "world-admin-tools-"));
+  const originalDatabase = process.env.PLAYER_SAVE_DATABASE_PATH;
+  process.env.PLAYER_SAVE_DATABASE_PATH = path.join(directory, "players.sqlite");
+  const db = new (require("node:sqlite").DatabaseSync)(process.env.PLAYER_SAVE_DATABASE_PATH);
+  db.exec("CREATE TABLE player_saves (username TEXT PRIMARY KEY, save_json TEXT)");
+  db.close();
+  t.after(() => {
+    if (originalDatabase === undefined) delete process.env.PLAYER_SAVE_DATABASE_PATH;
+    else process.env.PLAYER_SAVE_DATABASE_PATH = originalDatabase;
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const attack = { getName: () => "Attack", getIndex: () => 0 };
+  const hp = { getName: () => "Hitpoints", getIndex: () => 1 };
+  class Location {
+    constructor(x, y, z) { Object.assign(this, { x, y, z }); }
+    getX() { return this.x; } getY() { return this.y; } getZ() { return this.z; }
+  }
+  const state = { level: 1, xp: 0, items: 0, room: 3, position: new Location(3200, 3200, 0), saves: [], flushes: 0 };
+  const manager = {
+    getMaxLevel: skill => skill === hp ? 10 : state.level,
+    getCurrentLevel: skill => skill === hp ? 10 : state.level,
+    getExperience: () => state.xp,
+    getCombatLevel: () => 3, getTotalLevel: () => 11,
+    setCurrentLevels() { return this; },
+    setMaxLevels(_skill, level) { state.level = level; return this; },
+    setExperience(_skill, xp) { state.xp = xp; return this; },
+  };
+  const player = {
+    getUsername: () => "Alice", getRights: () => ({ getId: () => 0 }), getProfile: () => "main",
+    isRegistered: () => true, isDyingReturn: () => state.dying, getHitpoints: () => 10,
+    isTeleportingReturn: () => false, getPrivateArea: () => state.instance,
+    getSkillManager: () => manager, getLocation: () => state.position,
+    moveTo: location => { state.position = location; },
+    getInventory: () => ({ getAddableAmount: () => state.room, getAmount: () => state.items, adds: (_id, amount) => { state.items += amount; } }),
+    getUpdateFlag: () => ({ flag() {} }), sendMessage() {}, setRunEnergy() {},
+  };
+  const item = { getName: () => "Bronze arrow", isNoted: () => false, isStackable: () => true };
+  const core = {
+    Location, Skill: { values: () => [attack, hp], HITPOINTS: hp },
+    SkillManager: { getMaxAchievingLevel: () => 99, getExperienceForLevel: level => level * 100 },
+    SpellTeleports: { getTeleportDestinations: () => [{ name: "varrock teleport", destination: new Location(3213, 3424, 0) }] },
+    GameConstants: { WORLD_PROFILE: "main", DEFAULT_LOCATION: new Location(3221, 3218, 0), PLAYER_PERSISTENCE: {
+      exists: () => true, save: (_player, reason) => { state.saves.push(reason); }, flush: async () => { state.flushes++; },
+    } },
+    World: { getPlayers: () => ({ stream: () => [player], sizeReturn: () => 1 }), getPlayerByName: name => name.toLowerCase() === "alice" ? player : null },
+    CacheDefinitions: { getCounts: () => ({ items: 3 }), getCustomItems: () => [], getCustomDefinitions: () => [],
+      hasItem: id => id === 2, getItem: () => ({ placeholderTemplate: -1, boughtTemplate: -1 }) },
+    ItemDefinition: { forId: () => item }, Item: class { constructor(id, amount) { Object.assign(this, { id, amount }); } },
+    TeleportHandler: { onTeleporting() {} }, WeaponInterfaceManager: { assign() {} }, Flag: { APPEARANCE: 1 },
+  };
+  return { state, core, player };
+}
+
+test("player tools require the panel token and same-origin writes; GET never mutates", async t => {
+  const fixture = playerToolsFixture(t);
+  const { port } = await start(t, {}, { core: fixture.core });
+  for (const path of ["/api/players/tools", "/api/players/items?q=arrow", "/api/players/action?name=Alice"]) {
+    assert.equal((await request(port, { path })).status, 401);
+  }
+  assert.equal((await request(port, { path: "/api/players/action?name=Alice", headers: auth })).status, 405);
+  assert.equal((await request(port, { path: "/api/players/action?name=Alice", method: "POST",
+    headers: { ...auth, Origin: "https://untrusted.invalid" }, body: { action: "give", itemId: 2, quantity: 5 } })).status, 403);
+  const search = await request(port, { path: "/api/players/items?q=arrow", headers: auth });
+  assert.equal(search.json.items[0].name, "Bronze arrow");
+  assert.equal((await request(port, { path: "/api/players/tools", headers: auth })).json.destinations[1].name, "varrock teleport");
+  assert.deepEqual(fixture.state.saves, []);
+  assert.equal(fixture.state.items, 0);
+});
+
+test("live tools persist the selected player, return partial give counts and validate before changing", async t => {
+  const { state, core } = playerToolsFixture(t);
+  const { port } = await start(t, {}, { core });
+  const action = body => request(port, { path: "/api/players/action?name=Alice", method: "POST", headers: auth, body });
+  for (const body of [
+    { action: "give", itemId: 999, quantity: 1 }, { action: "give", itemId: 2, quantity: 0 },
+    { action: "give", itemId: 2, quantity: 1.5 }, { action: "give", itemId: 2, quantity: 2147483648 },
+    { action: "skill", skill: "Hitpoints", level: 9 }, { action: "skill", skill: "Attack", level: 100 },
+    { action: "skill", skill: "Bogus", level: 50 }, { action: "teleport", x: -1, y: 5, z: 0 },
+    { action: "teleport", x: 1, y: 5, z: 4 }, { action: "teleport", destination: "invented" },
+    { action: "teleport", x: "3213", y: 3424, z: 0 },
+  ]) assert.equal((await action(body)).status, 400, JSON.stringify(body));
+  assert.equal(state.saves.length, 0);
+  const given = await action({ action: "give", itemId: 2, quantity: 10 });
+  assert.equal(given.status, 200);
+  assert.match(given.json.message, /Only 3 of 10 fit/);
+  assert.equal(state.items, 3);
+  assert.equal((await action({ action: "skill", skill: "Attack", level: 60 })).status, 200);
+  assert.equal(state.level, 60);
+  assert.equal(state.xp, 6000);
+  assert.equal((await action({ action: "teleport", destination: "varrock teleport" })).status, 200);
+  assert.equal(state.position.x, 3213);
+  assert.equal((await action({ action: "teleport", x: 3000, y: 3300, z: 2 })).status, 200);
+  assert.equal(state.position.z, 2);
+  const preview = await request(port, { path: "/api/players/save?name=Alice", headers: auth });
+  assert.equal(preview.json.save.skills.maxLevel[0], 60);
+  assert.equal(preview.json.tools.skills[0].name, "Attack");
+  assert.equal(preview.json.save.position.z, 2);
+  assert.equal(state.flushes, 4);
+  state.room = 0;
+  assert.equal((await action({ action: "give", itemId: 2, quantity: 1 })).status, 409);
+  state.instance = {};
+  assert.equal((await action({ action: "teleport", destination: "World spawn" })).status, 409);
+  state.dying = true;
+  assert.equal((await action({ action: "skill", skill: "Attack", level: 50 })).status, 409);
+  assert.equal(state.saves.length, 4);
+  assert.equal((await request(port, { path: "/api/players/action?name=Offline", method: "POST", headers: auth,
+    body: { action: "give", itemId: 2, quantity: 1 } })).status, 409);
+});
+
+test("player tools can be switched off without removing moderation", async t => {
+  const fixture = playerToolsFixture(t);
+  const { port } = await start(t, {}, { core: fixture.core, playerTools: false });
+  assert.equal((await request(port, { path: "/api/players/tools", headers: auth })).json.enabled, false);
+  assert.equal((await request(port, { path: "/api/players/action?name=Alice", method: "POST", headers: auth,
+    body: { action: "give", itemId: 2, quantity: 1 } })).status, 409);
+  assert.equal((await request(port, { path: "/api/players", headers: auth })).status, 200);
+});
+
+test("a failed save reports the already-applied live change instead of claiming success", async t => {
+  const { core, state } = playerToolsFixture(t);
+  core.GameConstants.PLAYER_PERSISTENCE.flush = async () => { throw new Error("fixture disk full"); };
+  const { port } = await start(t, {}, { core });
+  const result = await request(port, { path: "/api/players/action?name=Alice", method: "POST", headers: auth,
+    body: { action: "give", itemId: 2, quantity: 1 } });
+  assert.equal(result.status, 500);
+  assert.equal(state.items, 1);
+  assert.match(result.json.error, /live change happened.*saving failed.*Do not repeat/);
 });
 
 test("restart mode: nodemon.json's TSPS_RESTARTER=nodemon means dev, with or without npm_lifecycle_event", async (t) => {

@@ -12,6 +12,7 @@
  */
 
 const Shared = require("./Shared.Gauntlet");
+const Equipment = require("./Equipment.Gauntlet");
 const GauntletMap = require("./Map.Gauntlet");
 const Resources = require("./Resources.Gauntlet");
 const Monsters = require("./Monsters.Gauntlet");
@@ -53,14 +54,6 @@ function runInside(player) {
 // Nodes beside a lit neighbour show lit (the unclickable version two ids on).
 const NODES = { regular: [36101, 36102], corrupted: [35998, 35999] };
 const LIT_NODE_OFFSET = 2;
-
-function savePlayer(player) {
-  try {
-    Shared.core().GameConstants.PLAYER_PERSISTENCE?.save(player, "gauntlet");
-  } catch (error) {
-    console.warn("[gauntlet] could not save", player.getUsername?.(), error);
-  }
-}
 
 function statsOf(player) {
   const saved = player.getAttribute(ATTR_STATS);
@@ -107,7 +100,7 @@ class GauntletRun {
     this.random = random;
     this.map = GauntletMap.createMap({ corrupted, random });
     this.map.run = this;
-    this.stage = "prep";
+    this.stage = "entering";
     this.prepTicks = Shared.PREP_TICKS[this.mode];
     this.prepLeft = this.prepTicks;
     this.startCycle = 0;
@@ -129,15 +122,16 @@ class GauntletRun {
   start() {
     if (this.echo) return require("./Echo.Gauntlet").startRun(this);
     const player = this.player;
-    // Saved as they step in (in the lobby, empty-handed), so nothing is lost if the server stops.
-    savePlayer(player);
     player.setAttribute(ATTR_RUN, this.mode);
-    Shared.fadeMove(player, () => {
-      if (this.stage === "ended") return;
+    Equipment.begin(this, () => Shared.fadeMove(player, () => {
+      if (this.stage === "ended" || player.isRegistered?.() === false) return;
+      try {
+      Equipment.replace(this);
       Shared.clearItems(player);
       this.giveStartingItems();
       player.resetAttributes();
       this.map.enter(player);
+      this.stage = "prep";
       this.lightNodesAround(this.map.room(this.map.start.x, this.map.start.y));
       // The Hunllef waits in its room from the start (the room is lit and can be seen into).
       this.hunllef = new HunllefFight(this);
@@ -149,7 +143,12 @@ class GauntletRun {
       sender.sendSubInterface(Shared.OVERLAY_HUD_UID, Shared.INTERFACE.TIMER, 1);
       sender.sendClientScript(Shared.SCRIPT.TIMER_START, this.prepLeft);
       this.timer = Shared.repeat(this, 1, () => this.tick());
-    });
+      Equipment.entered(this);
+      } catch (error) {
+        this.end("entry-failed", { fade: false });
+        console.warn("[gauntlet] entry failed", player.getUsername(), error);
+      }
+    }));
   }
 
   giveStartingItems() {
@@ -285,16 +284,18 @@ class GauntletRun {
    * Everything carried is taken; the player is put back in the lobby. `fromArea` when the maze
    * itself is being left (a logout), which then needs no leaving.
    */
-  end(reason, { fade = reason === "exit" || reason === "escape" || reason === "completed", fromArea = false } = {}) {
-    if (this.stage === "ended") return;
-    if (this.echo) return require("./Echo.Gauntlet").endRun(this, reason, { fromArea });
+  end(reason, { fade = reason === "exit" || reason === "escape" || reason === "completed", fromArea = false, restore = true } = {}) {
+    if (this.stage === "ended") {
+      if (reason === "logout") this.finishLeave?.();
+      return;
+    }
+    if (this.echo) return require("./Echo.Gauntlet").endRun(this, reason, { fromArea, restore });
     this.stage = "ended";
     this.timer?.stop?.();
     this.hunllef?.stop();
     Resources.stopGathering(this.player);
-    runs.delete(this.player.getUsername());
     const player = this.player;
-    player.setAttribute(ATTR_RUN, null);
+    if (restore) Equipment.hold(player);
     const now = Shared.core().World.getProcessCycle();
     if (reason === "death") {
       recordStat(player, "deaths", this.mode);
@@ -305,8 +306,10 @@ class GauntletRun {
     Shared.api()?.emitCustomEvent?.("gauntlet:end", { run: this, player, reason, reward });
 
     const leave = () => {
-      Shared.clearItems(player);
-      player.resetAttributes();
+      if (!this.finishLeave) return;
+      this.finishLeave = null;
+      forgetRun(this);
+      player.setAttribute(ATTR_RUN, null);
       const sender = player.getPacketSender();
       sender.closeSubInterface(Shared.OVERLAY_HUD_UID);
       sender.sendVarbit(Shared.VARBIT.BOSS_PHASE, 0);
@@ -315,14 +318,15 @@ class GauntletRun {
       // Leave before moving, so the scene goes straight back to the normal map.
       if (!fromArea && player.getArea?.() === this.map) this.map.leave(player, reason === "logout");
       player.moveTo(Shared.loc(Shared.LOBBY));
-      // Saved back in the lobby; a logout saves on its own right after.
-      if (reason !== "logout") savePlayer(player);
+      this.map.destroy();
+      Rewards.setReward(player, this.mode, reward);
+      if (restore) Equipment.recover(player);
       if (reason === "death") player.sendMessage("Oh dear, you are dead!");
       else if (reason !== "logout" && reason !== "completed") player.sendMessage("You leave the Gauntlet.");
       for (const message of messages) player.sendMessage(message);
-      Rewards.setReward(player, this.mode, reward);
       if (reward) player.sendMessage("Your reward awaits you in the nearby chest.");
     };
+    this.finishLeave = leave;
     if (fade) Shared.fadeMove(player, leave);
     else leave();
   }
@@ -360,8 +364,10 @@ GauntletRun.prototype.completionMessages = function completionMessages(now, { ec
 };
 
 function startRun(player, options) {
+  if (runOf(player) || Equipment.has(player)) return null;
   const run = new GauntletRun(player, options);
-  run.start();
+  try { run.start(); }
+  catch (error) { run.end("entry-failed", { fade: false, restore: Equipment.has(player) }); throw error; }
   return run;
 }
 function forgetRun(run) { if (runs.get(run.player.getUsername()) === run) runs.delete(run.player.getUsername()); }

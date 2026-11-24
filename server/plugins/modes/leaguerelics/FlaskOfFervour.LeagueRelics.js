@@ -202,6 +202,18 @@ function dealtDamage({ player, hit }) {
   }
 }
 
+/** The Wiki permits the carried flask in the Gauntlet and resets its cooldown on entry. */
+function gauntletKit({ player, carried }) {
+  const id = core.ItemIdentifiers[effect.tool];
+  if (!active(player) || !carried.some(item => item.id === id)) return;
+  player.getInventory().adds(id, 1);
+  player.getInventory().refreshItems();
+  readyTasks.get(player)?.stop?.();
+  readyTasks.delete(player);
+  player.setAttribute(READY_AT_ATTRIBUTE, 0);
+  sendCooldown(player);
+}
+
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
@@ -211,6 +223,7 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("combat:damage-apply", damageApply);
   api.onPlayerDealtDamage(dealtDamage);
   api.onCustomEvent("league:login", login);
+  api.onCustomEvent("gauntlet:starting-kit", gauntletKit);
 };
 
 module.exports.READY_AT_ATTRIBUTE = READY_AT_ATTRIBUTE;

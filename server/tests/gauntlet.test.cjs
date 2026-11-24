@@ -25,6 +25,7 @@ before(async () => {
   Shared.bind({ core: PluginManager.getCoreApi() });
   // As on a members world, the minigame loads before the quest registration.
   nativeApi = PluginManager.createApi('GauntletQuestEntryTest');
+  require('../plugins/minigames/gauntlet/Equipment.Gauntlet').register(nativeApi);
   require('../plugins/minigames/gauntlet/Lobby.Gauntlet')(nativeApi);
   require('../plugins/quests/quests/SongOfTheElves.Quest')(nativeApi);
   songQuest = require('../plugins/quests/QuestRuntime').questNamed('Song of the Elves');
@@ -142,7 +143,7 @@ Scoreboard.useFile(scoreboardFile);
 
 // Saves are recorded, not written.
 const saves = [];
-PluginManager.getCoreApi().GameConstants.PLAYER_PERSISTENCE = { save: (player) => saves.push(player.getUsername()) };
+PluginManager.getCoreApi().GameConstants.PLAYER_PERSISTENCE = { save: (player) => saves.push(player.getUsername()), flush() {} };
 
 /** A plugin NPC: enough of one for the maze to hold it. */
 function fakeNpc(id, x, y, z) {
@@ -187,6 +188,8 @@ function fakeApi() {
     onShouldDropItemsOnDeath: (handler) => hooks.drops.push(handler),
     onPlayerDeath: (handler) => hooks.death.push(handler),
     onCanTeleport: (handler) => hooks.teleports.push(handler),
+    onPlayerLogout: handler => { (hooks.logout ??= []).push(handler); },
+    onPlayerDisconnect: handler => { (hooks.disconnect ??= []).push(handler); },
     onCanAttack: (handler) => { (hooks.canAttackAll ??= []).push(handler); hooks.canAttack ??= handler; },
     onNpcHitModify: (handler) => { hooks.hitModify = handler; },
     onNpcDeath: (handler) => { hooks.npcDeathHandler = handler; },
@@ -305,9 +308,11 @@ function fakePlayer(name = 'Tester') {
     getQuickPrayers: () => ({ setEnabled() {} }),
     getCombat: () => ({
       reset() {},
+      holdFullStall() { p.storageLocked = true; },
+      releaseFullStall() { p.storageLocked = false; },
       getHitQueue: () => ({ addPendingDamage: (hits) => p.damage.push(...hits.map((hit) => hit.getDamage())) }),
     }),
-    getMovementQueue: () => ({ reset() {} }),
+    getMovementQueue: () => ({ reset() {}, setBlockMovement(blocked) { p.movementBlocked = blocked; } }),
     getDialogueManager: () => ({ startDialogues: (chain) => p.statements.push(chain) }),
     getPacketSender() {
       const sender = {
@@ -358,7 +363,7 @@ test('the Gauntlet Portal in Prifddinas lands two tiles south of where runs end,
   assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [3032, 6125, 1]);
 });
 
-test('the entrance turns players away until they have spoken to Bryn, and with items on them', () => {
+test('the entrance requires Bryn and stores carried items before entering', () => {
   bindHooks();
   const player = fakePlayer('Entrant');
   player.setAttribute('quest.song_of_the_elves.stage', songQuest.completionValue);
@@ -369,7 +374,9 @@ test('the entrance turns players away until they have spoken to Bryn, and with i
   assert.equal(hooks.variants[0]({ player, npcId: 9020 }), null, 'only the first time');
   player.inventory.adds(995);
   interact('The Gauntlet', 'Enter', player, null);
-  assert.equal(Run.runOf(player), null, 'nothing may be taken in');
+  assert.ok(Run.runOf(player), 'carried items are accepted and stored');
+  Run.runOf(player).end('exit', { fade: false });
+  assert.equal(player.inventory.getAmount(995), 1, 'the original coins are still carried');
   player.inventory.resetItems();
   interact('The Gauntlet', 'Enter-corrupted', player, null);
   assert.equal(Run.runOf(player), null, 'Corrupted needs a completion first');
@@ -417,6 +424,8 @@ function questEntrant(t, name, complete, errors) {
   // The Corrupted option must already be unlocked to make quest refusal causal.
   player.setAttribute(Run.ATTR_STATS, { completions: { regular: 1, corrupted: 0 } });
   player.setLocation(new Location(3032, 6127, 1));
+  player.setRegistered(true);
+  player.needsPlacement = false;
   return player;
 }
 
@@ -1478,4 +1487,332 @@ test('Echo Hunllef chest preserves normal corrupted rewards and saved uniques wi
   Rewards.openChest(player,seeded(3));assert.ok(player.inventory.contains(I.CORRUPTED_SCEPTRE)||hooks.ground.includes(I.CORRUPTED_SCEPTRE));
   assert.equal(player.inventory.contains(Rewards.ID.CRYSTAL_SHARD),true);assert.deepEqual(seen,[undefined]);
   assert.equal(Rewards.waitingReward(player),null);Rewards.openChest(player);assert.equal(seen.length,1);
+});
+
+test('Gauntlet entry stores a real player\'s carried slots instead of requiring the bank (#6708)', t => {
+  const errors = [], player = questEntrant(t, 'carried-gauntlet', true, errors);
+  Shared.bind(nativeApi);
+  player.getInventory().setItem(7, new (Shared.core().Item)(995, 120, { original: ['coins'] }));
+  player.getEquipment().setItem(3, new (Shared.core().Item)(1277, 1, { original: 'sword' }));
+  assert.equal(nativeEntrance(player, 1), true);
+  assert.ok(Run.runOf(player), 'the production lobby accepts carried inventory and equipment');
+});
+
+const EquipmentStore = require('../plugins/minigames/gauntlet/Equipment.Gauntlet');
+const drainWrites = () => new Promise(resolve => setImmediate(resolve));
+function pendingPersistence(t) {
+  const constants = Shared.core().GameConstants, original = constants.PLAYER_PERSISTENCE;
+  const writes = [], barriers = [];
+  constants.PLAYER_PERSISTENCE = {
+    save(player) { writes.push({ inventory: EquipmentStore.snapshot(player.getInventory()), equipment: EquipmentStore.snapshot(player.getEquipment()),
+      escrow: JSON.parse(JSON.stringify(player.getAttribute(EquipmentStore.ESCROW_ATTRIBUTE) ?? null)),
+      reward: JSON.parse(JSON.stringify(Rewards.waitingReward(player) ?? null)) }); },
+    flush() { return new Promise((resolve, reject) => barriers.push({ resolve, reject })); },
+  };
+  t.after(() => { constants.PLAYER_PERSISTENCE = original; });
+  return { writes, barriers };
+}
+function originals(player) {
+  return { inventory: EquipmentStore.snapshot(player.getInventory()), equipment: EquipmentStore.snapshot(player.getEquipment()) };
+}
+
+test('normal and corrupted Gauntlet return exact original slots and nested metadata on every exit', () => {
+  for (const corrupted of [false, true]) for (const reason of ['exit', 'death', 'logout', 'left', 'completed']) {
+    bindHooks();
+    const p = fakePlayer(`Stored${corrupted}${reason}`);
+    p.inventory.slots[26] = { id: 995, amount: 54321, meta: { nested: { original: ['coins'] } } };
+    p.equipment.slots[3] = { id: 1277, amount: 1, meta: { original: 9 } };
+    const before = originals(p);
+    const run = Run.startRun(p, { corrupted, random: seeded(8) });
+    ticks(3);
+    assert.equal(p.inventory.contains(995), false);
+    assert.equal(p.equipment.contains(1277), false);
+    assert.equal(p.getAttribute(EquipmentStore.ESCROW_ATTRIBUTE).stored, true);
+    run.end(reason, { fade: false });
+    assert.deepEqual(originals(p), before);
+    assert.equal(p.getAttribute(EquipmentStore.ESCROW_ATTRIBUTE), null);
+    assert.equal(p.storageLocked, false);
+    assert.equal(run.map.isDestroyed(), true);
+    run.end(reason);
+    assert.deepEqual(originals(p), before, 'a second end never duplicates or clears originals');
+  }
+});
+
+test('entry and recovery await durable writes; originals and completion reward share the terminal snapshot', async t => {
+  bindHooks();
+  const p = fakePlayer('DurableGauntlet'); p.inventory.slots[7] = { id: 995, amount: 17, meta: { nested: [1] } };
+  const before = originals(p), io = pendingPersistence(t);
+  const run = Run.startRun(p, { random: seeded(9) });
+  assert.equal(run.stage, 'entering');
+  assert.equal(p.storageLocked, true);
+  assert.deepEqual(originals(p), before, 'save queued, original containers untouched');
+  ticks(4);
+  assert.deepEqual(originals(p), before, 'ticking alone cannot pass the write barrier');
+  io.barriers.shift().resolve(); await drainWrites(); ticks(3);
+  assert.equal(run.stage, 'prep');
+  assert.equal(p.storageLocked, false);
+  assert.equal(p.inventory.contains(995), false);
+  run.end('completed', { fade: false });
+  assert.deepEqual(originals(p), before);
+  assert.equal(p.storageLocked, true, 'restored items remain unavailable while their save is pending');
+  assert.equal(EquipmentStore.has(p), true);
+  const final = io.writes.at(-1);
+  assert.deepEqual(final.inventory, before.inventory);
+  assert.equal(final.escrow, null);
+  assert.ok(final.reward, 'pending completion reward is included in the same durable snapshot');
+  io.barriers.shift().resolve(); await drainWrites();
+  assert.equal(p.storageLocked, false);
+  assert.equal(EquipmentStore.has(p), false);
+});
+
+test('reordering items during the entry write aborts without restoring an older snapshot', async t => {
+  bindHooks();
+  const p = fakePlayer('ChangedEntry'); p.inventory.slots[3] = { id: 995, amount: 8 };
+  const io = pendingPersistence(t), warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args));
+  const run = Run.startRun(p, { random: seeded(10) });
+  p.inventory.slots[8] = p.inventory.slots[3]; p.inventory.slots[3] = null;
+  io.barriers.shift().resolve(); await drainWrites(); ticks(3);
+  assert.equal(run.stage, 'ended');
+  assert.equal(p.inventory.slots[8].amount, 8);
+  assert.equal(p.inventory.slots[3], null, 'the pre-clear recovery keeps the actual current containers');
+  assert.equal(p.storageLocked, true);
+  io.barriers.shift().resolve(); await drainWrites();
+  assert.equal(p.storageLocked, false);
+  assert.equal(p.inventory.getAmount(995), 8);
+  assert.equal(warnings.length, 1);
+});
+
+test('failed entry/restore writes keep recovery protected and failed old-session callbacks never enqueue another save', async t => {
+  bindHooks();
+  const warnings = []; t.mock.method(console, 'warn', (...args) => warnings.push(args));
+  const p = fakePlayer('FailedEntry'); p.inventory.slots[2] = { id: 995, amount: 12 };
+  const before = originals(p), io = pendingPersistence(t);
+  const run = Run.startRun(p, { random: seeded(10) });
+  io.barriers.shift().reject(new Error('write failed')); await drainWrites();
+  assert.equal(run.stage, 'ended'); assert.deepEqual(originals(p), before);
+  io.barriers.shift().reject(new Error('recovery write also failed')); await drainWrites();
+  assert.equal(p.storageLocked, true); assert.equal(EquipmentStore.has(p), true);
+  EquipmentStore.recover(p);
+  io.barriers.shift().resolve(); await drainWrites();
+  assert.deepEqual(originals(p), before); assert.equal(p.storageLocked, false);
+
+  const old = fakePlayer('RemovedEntry'); old.inventory.slots[4] = { id: 995, amount: 99 };
+  old.isRegistered = () => true;
+  const removed = Run.startRun(old, { random: seeded(11) });
+  old.isRegistered = () => false;
+  const count = io.writes.length;
+  io.barriers.shift().reject(new Error('old-session failure')); await drainWrites();
+  assert.equal(io.writes.length, count, 'removed old player never writes over a later login');
+  assert.equal(removed.map.isDestroyed(), true); assert.equal(Run.runOf(old), null);
+  assert.equal(old.inventory.getAmount(995), 99);
+});
+
+test('disconnect during either entry or exit fade restores originals once and cannot run a late kit replacement', () => {
+  for (const exit of [false, true]) {
+    bindHooks(); const p = fakePlayer(`Fade${exit}`);
+    p.inventory.slots[5] = { id: 995, amount: 40 }; const before = originals(p);
+    const run = Run.startRun(p, { random: seeded(4) });
+    if (exit) { ticks(3); run.end('exit'); assert.equal(Run.runOf(p), run); }
+    assert.equal(p.storageLocked, true);
+    for (const handler of hooks.disconnect) handler({ player: p });
+    assert.equal(Run.runOf(p), null);
+    assert.deepEqual(originals(p), before);
+    ticks(4);
+    assert.deepEqual(originals(p), before);
+    assert.equal(p.storageLocked, false);
+  }
+});
+
+test('save-shaped stored and legacy Echo equipment recover; malformed rows never discard current items', () => {
+  bindHooks(); const p = fakePlayer('SavedEquipment');
+  p.inventory.slots[21] = { id: 995, amount: 22, meta: { tree: { a: [2] } } };
+  const before = originals(p);
+  const record = JSON.parse(JSON.stringify({ version: 1, stored: true, ...before }));
+  p.inventory.resetItems(); p.inventory.adds(I.CRYSTAL_AXE_3);
+  p.setAttribute(EquipmentStore.ESCROW_ATTRIBUTE, record);
+  EquipmentStore.recover(p); assert.deepEqual(originals(p), before);
+  p.setAttribute(EquipmentStore.LEGACY_ECHO_ATTRIBUTE, { version: 1, ...before });
+  p.inventory.resetItems(); EquipmentStore.recover(p); assert.deepEqual(originals(p), before);
+  for (const invalid of [false, 0, '', { id: 995, amount: 0 }, { id: 9999999, amount: 1 }]) {
+    const broken = JSON.parse(JSON.stringify(record)); broken.inventory[1] = invalid;
+    p.setAttribute(EquipmentStore.ESCROW_ATTRIBUTE, broken);
+    assert.equal(EquipmentStore.recover(p), true);
+    assert.deepEqual(originals(p), before);
+    assert.equal(p.getAttribute(EquipmentStore.ESCROW_ATTRIBUTE), broken);
+    assert.equal(p.storageLocked, true);
+  }
+  p.setAttribute(EquipmentStore.ESCROW_ATTRIBUTE, record); EquipmentStore.recover(p);
+});
+
+test('native queued bank, worn, drag and trade packets cannot transfer stored items; a legacy reorder safely cancels entry', async t => {
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const session = new PlayerSession(channel), p = new Player(session), connection = new ClientConnection(channel);
+  connection.player = p; session.setPlayer(p);
+  p.setIndex(1700); p.setUsername('native-gauntlet'); p.setRegistered(true);
+  songQuest.setStage(p, songQuest.completionValue);
+  p.setAttribute(Lobby.ATTR_SPOKEN_TO_BRYN, true);
+  p.setAttribute(Run.ATTR_STATS, { completions: { regular: 1, corrupted: 0 } });
+  p.setLocation(new Location(3032, 6127, 1)); p.needsPlacement = false;
+  p.getInventory().setItem(7, new (Shared.core().Item)(995, 120, { original: ['coins'] }));
+  p.getEquipment().setItem(3, new (Shared.core().Item)(1277, 1, { original: 'sword' }));
+  Shared.bind(nativeApi); Run.sendCompletionVarp(p);
+  t.after(() => { Run.runOf(p)?.end('logout', { fade: false }); TaskManager.cancelTasks(p); p.setRegistered(false); });
+  const io = pendingPersistence(t), before = originals(p), warnings = [];
+  t.mock.method(console, 'warn', (...args) => warnings.push(args));
+  const loc = Shared.core().MapObjects.get(37340, new Location(3032, 6128, 1), null);
+  assert.ok(loc, 'the actual entrance multiloc is in the cache map');
+  assert.equal(ObjectDefinition.forPlayer(loc.getId(), p).id, 36084);
+  await connection.dispatch([{ type: 'object_option', id: 36084, x: 3032, y: 6128, clickType: 1 }]);
+  connection.processTurnPackets();
+  for (let i = 0; i < 12 && !Run.runOf(p); i++) {
+    TaskManager.process(); const mq = p.getMovementQueue(); mq.beginCycle(); if (mq.hasPendingWork()) mq.process();
+    TaskManager.processWalkTo(p.getIndex());
+  }
+  const run = Run.runOf(p); assert.ok(run, 'actual ClientConnection -> object packet -> route -> lobby entry');
+  assert.equal(p.getCombat().isHeldStall(), true);
+  assert.equal(Shared.core().Bank.isOpen(p), false);
+  await connection.dispatch([
+    { type: 'bank_deposit_inventory' }, { type: 'bank_deposit_equipment' },
+    { type: 'bank_move', from: 0, to: 1, mode: 'swap' },
+    { type: 'widget_action', groupId: 387, childId: 15, widgetId: (387 << 16) | 15, slot: 3, itemId: 1277, buttonNum: 1 },
+    { type: 'widget_drag', sourceWidgetId: 3214, sourceSlot: 7, targetWidgetId: 3214, targetSlot: 8 },
+    { type: 'trade_action', action: 'offer', itemId: 995, quantity: 120, slot: 7 },
+    { type: 'inventory_action', widgetId: 149 << 16, slot: 7, itemId: 995, option: 'Drop', optionIndex: 5 },
+  ]);
+  connection.processTurnPackets();
+  assert.deepEqual(originals(p), before, 'stale transfer packets move neither original container');
+  assert.equal(p.getBanks().some(bank => bank && (bank.getAmount(995) || bank.getAmount(1277))), false);
+  await connection.dispatch([{ type: 'inventory_move', widgetId: 3214, from: 7, to: 8 }]); connection.processTurnPackets();
+  assert.equal(p.getInventory().getItems()[8].getAmount(), 120, 'legacy inventory reorder changes slots only');
+  io.barriers.shift().resolve(); await drainWrites(); ticks(3);
+  assert.equal(run.stage, 'ended', 'entry revalidation catches the changed container');
+  assert.equal(p.getInventory().getItems()[8].getAmount(), 120);
+  assert.equal(p.getInventory().getItems()[7].getId(), -1, 'recovery does not re-create the old slot');
+  await connection.dispatch([{ type: 'inventory_move', widgetId: 3214, from: 8, to: 9 }]); connection.processTurnPackets();
+  io.barriers.shift().resolve(); await drainWrites();
+  assert.equal(p.getCombat().isHeldStall(), true, 'a recovery-time reorder waits for its own save');
+  assert.equal(io.writes.at(-1).inventory[9].amount, 120);
+  io.barriers.shift().resolve(); await drainWrites();
+  assert.equal(p.getCombat().isHeldStall(), false);
+  assert.equal(p.getInventory().getAmount(995), 120);
+  assert.equal(warnings.length, 1);
+});
+
+test('pre-snapshot entry errors preserve carried items and release the allocated map without a transfer lock', t => {
+  bindHooks(); const p = fakePlayer('PreSnapshotFailure'); p.inventory.slots[3] = { id: 995, amount: 33 };
+  p.getStatus = () => Shared.core().PlayerStatus.TRADING;
+  const before = originals(p);
+  assert.throws(() => Run.startRun(p, { random: seeded(3) }), /Finish trading/);
+  assert.deepEqual(originals(p), before);
+  assert.equal(Run.runOf(p), null);
+  assert.equal(EquipmentStore.has(p), false);
+  assert.equal(p.storageLocked === true, false);
+});
+
+test('real JSON writes preserve original gear and the recovery record across a fresh backend and player', async t => {
+  const plugin = require('../plugins/persistence/JsonPlayerPersistence.plugin');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'gauntlet-equipment-'));
+  const oldDirectory = plugin.JsonPlayerPersistence.SAVE_DIRECTORY, oldPersistence = Shared.core().GameConstants.PLAYER_PERSISTENCE;
+  const p = questEntrant(t, 'stored-json', true, []);
+  Shared.bind(nativeApi);
+  p.getInventory().setItem(23, new (Shared.core().Item)(995, 91, { charged: { bits: [1, 2] } }));
+  p.getEquipment().setItem(3, new (Shared.core().Item)(1277, 1, { original: 'sword' }));
+  const before = originals(p);
+  try {
+    plugin.JsonPlayerPersistence.SAVE_DIRECTORY = directory;
+    plugin.register({ getSkillManager: () => Shared.core().SkillManager, setPlayerPersistence: backend => { Shared.core().GameConstants.PLAYER_PERSISTENCE = backend; }, log() {} });
+    const persistence = Shared.core().GameConstants.PLAYER_PERSISTENCE;
+    const run = Run.startRun(p, { random: seeded(18) });
+    await persistence.flush(); await drainWrites();
+    const pendingSave = new plugin.JsonPlayerPersistence().load(p.getUsername());
+    assert.equal(pendingSave.attributes[EquipmentStore.ESCROW_ATTRIBUTE].stored, false);
+    ticks(3);
+    assert.equal(p.getAttribute(EquipmentStore.ESCROW_ATTRIBUTE).stored, true);
+    assert.equal(p.getInventory().contains(995), false);
+    persistence.save(p, 'gauntlet-mid-run'); await persistence.flush();
+    TaskManager.cancelTasks(p); Run.forgetRun(run); run.map.destroy(); p.setRegistered(false); // An interrupted process cannot finish its old fade or write again.
+    const freshBackend = new plugin.JsonPlayerPersistence(), saved = freshBackend.load(p.getUsername());
+    assert.ok(saved.attributes[EquipmentStore.ESCROW_ATTRIBUTE], 'the real backend committed escrow before the kit');
+    assert.equal(saved.attributes[EquipmentStore.ESCROW_ATTRIBUTE].stored, true);
+    const fresh = new Player(null); fresh.setUsername(p.getUsername()); saved.applyToPlayer(fresh);
+    const sender = new Proxy({}, { get: () => () => sender }); fresh.getPacketSender = () => sender;
+    const refreshedWeapons = [], assign = Shared.core().WeaponInterfaceManager.assign;
+    t.mock.method(Shared.core().WeaponInterfaceManager, 'assign', player => {
+      if (player === fresh) refreshedWeapons.push(player.getEquipment().getItems()[3].getId());
+      return assign(player);
+    });
+    EquipmentStore.recover(fresh);
+    await persistence.flush(); await drainWrites();
+    assert.deepEqual(originals(fresh), before);
+    assert.deepEqual(refreshedWeapons, [1277], 'combat interface refresh sees the restored sword, never the temporary kit');
+    assert.equal(fresh.getBonusManager().attackBonus[0], Shared.core().ItemDefinition.forId(1277).getBonuses()[0]);
+    assert.equal(fresh.getCombat().isHeldStall(), false);
+    const committed = new plugin.JsonPlayerPersistence().load(p.getUsername());
+    assert.equal(committed.attributes[EquipmentStore.ESCROW_ATTRIBUTE] ?? null, null);
+    const final = new Player(null); committed.applyToPlayer(final); assert.deepEqual(originals(final), before);
+    await persistence.flush(); await drainWrites();
+  } finally {
+    Shared.core().GameConstants.PLAYER_PERSISTENCE = oldPersistence;
+    plugin.JsonPlayerPersistence.SAVE_DIRECTORY = oldDirectory;
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('native Gauntlet kit retains the selected carried flask, activates it without consuming it, and restores the original on exit', async t => {
+  const { PlayerSession } = require('../dist/net/PlayerSession'), { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const core = PluginManager.getCoreApi(), channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const session = new PlayerSession(channel), p = new Player(session), connection = new ClientConnection(channel);
+  session.setPlayer(p); connection.player = p;
+  p.setUsername('nativeflask'); p.setLongUsername(core.Misc.stringToLongBigInt(p.getUsername())); p.setProfile('league');
+  p.setAttribute('bot-skip-persistence', true); p.setAttribute('league:relics', { 7: 3 });
+  p.setAttribute(Lobby.ATTR_SPOKEN_TO_BRYN, true); songQuest.setStage(p, songQuest.completionValue);
+  p.setLocation(new Location(3032, 6127, 1));
+  Shared.bind(nativeApi);
+  nativeApi.onCustomEvent('league:profile', request => { if (request.player === p) request.league = 6; });
+  require('../plugins/modes/leaguerelics/Common.LeagueRelics').init(nativeApi);
+  require('../plugins/modes/leaguerelics/FlaskOfFervour.LeagueRelics')(nativeApi);
+  const key = require('../plugins/modes/leaguerelics/FlaskOfFervour.LeagueRelics').READY_AT_ATTRIBUTE;
+  p.setAttribute(key, Date.now() + 180000);
+  const flask = I.FLASK_OF_FERVOUR;
+  p.getInventory().setItem(20, new core.Item(flask, 1, { original: { tag: ['carried'] } }));
+  p.getInventory().setItem(25, new core.Item(995, 314)); const before = originals(p);
+  assert.equal(core.World.getPlayers().add(p), true);
+  t.after(() => { Run.runOf(p)?.end('logout', { fade: false }); core.World.getPlayers().remove(p); TaskManager.cancelTasks(p); });
+  for (let i = 0; i < 4 && p.isNeedsPlacement(); i++) core.World.process();
+  assert.equal(p.isNeedsPlacement(), false);
+  await connection.dispatch([{ type: 'object_option', id: 36083, x: 3032, y: 6128, clickType: 1 }]); connection.processTurnPackets();
+  for (let i = 0; i < 12 && !Run.runInside(p); i++) core.World.process();
+  const run = Run.runInside(p); assert.ok(run, 'ordinary routed entrance reached the real instance');
+  assert.equal(p.getInventory().getAmount(flask), 1);
+  assert.equal(p.getInventory().contains(995), false);
+  assert.equal(p.getAttribute(key), 0, 'entry resets the carried selected flask cooldown');
+  const slot = p.getInventory().getItems().findIndex(item => item?.getId() === flask);
+  await connection.dispatch([{ type: 'inventory_action', widgetId: 149 << 16, slot, itemId: flask, option: 'Activate', optionIndex: 1 }]); connection.processTurnPackets();
+  assert.ok(p.getAttribute(key) > Date.now(), 'the production item action activated the flask');
+  assert.equal(p.getInventory().getAmount(flask), 1, 'activation never changes to the unobtainable empty variant');
+  run.end('exit', { fade: false });
+  assert.deepEqual(originals(p), before);
+  assert.equal(p.getInventory().getAmount(flask), 1);
+});
+
+test('Gauntlet gear command cannot replace original items during entry or recovery waits', async t => {
+  const commands = {}, api = bindHooks();
+  require('../plugins/minigames/gauntlet/Commands.Gauntlet')({ ...api, registerCommand: (name, fn) => { commands[name] = fn; } });
+  const p = fakePlayer('PendingGearCommand'); p.inventory.slots[1] = { id: 995, amount: 45 };
+  const before = originals(p), io = pendingPersistence(t);
+  const run = Run.startRun(p, { random: seeded(6) });
+  commands.gauntletgear({ player: p, parts: ['gauntletgear'] });
+  commands.gauntletboss({ player: p });
+  commands.gauntlettime({ player: p, parts: ['gauntlettime', '1'] });
+  assert.equal(run.stage, 'entering');
+  assert.equal(p.storageLocked, true);
+  assert.deepEqual(originals(p), before);
+  io.barriers.shift().resolve(); await drainWrites(); ticks(3);
+  run.end('exit', { fade: false });
+  commands.gauntletgear({ player: p, parts: ['gauntletgear'] });
+  assert.deepEqual(originals(p), before);
+  io.barriers.shift().resolve(); await drainWrites();
 });

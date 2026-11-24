@@ -9,6 +9,7 @@ module.exports = {
   description: "Adds the Gauntlet and Corrupted Gauntlet: the lobby under Prifddinas, the maze built for each run and the Crystalline Hunllef.",
   members: true,
   register(api) {
+    require("./gauntlet/Equipment.Gauntlet").register(api);
     require("./gauntlet/Lobby.Gauntlet")(api);
     require("./gauntlet/Run.Gauntlet")(api);
     require("./gauntlet/Prep.Gauntlet")(api);

@@ -101,9 +101,9 @@ function startTimer(player) {
   }
 }
 
-/** Wiki: the heat holds off while a dialogue box is open; captures show interfaces do too. */
+/** The heat holds off while the player is busy or an interface blocks gameplay. */
 function busy(player) {
-  return player.busy() || player.getDialogueManager().isActive() || player.getPacketSender().hasInterruptibleInterface();
+  return player.busy() || player.hasBlockingInterface();
 }
 
 function spam(player, message) {

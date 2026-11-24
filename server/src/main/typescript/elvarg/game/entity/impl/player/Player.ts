@@ -917,7 +917,7 @@ export class Player extends Mobile {
     hasBlockingInterface(): boolean {
         const groupId = this.getInterfaceId();
         if (this.dialogueManager.isActive()) return true;
-        if (groupId < 0) return this.packetSender.hasInterruptibleInterface();
+        if (groupId <= 0) return this.packetSender.hasInterruptibleInterface();
         if (!this.mainInterfaceAllowsGameplay(groupId)) return true;
         return this.packetSender.hasModalInterface(groupId);
     }

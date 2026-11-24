@@ -218,7 +218,9 @@ All on the tick the level is gained:
 4. **Total level:** on passing a multiple of 25, `Congratulations, you've reached a total level of <n>.`
 5. **Pop-up**, unless set to Disabled: script 2379 (`toplevel_chatbox_resetbackground`), then `levelup_display` (233) in the chatbox modal with `<col=000080>Congratulations, you just advanced a <Skill> level.`, `Your <Skill> level is now <n>.`, `Click here to continue`, and only that skill's icon shown.
 
-With pop-ups disabled, players kept skilling and fighting straight through their level-ups (one recording has 539 in a row). With pop-ups enabled, SkillLevelUp emits `level-up:popup-opened` `{ player, skill, pause }`; skilling plugins retain their current session and pause its progress. Continuing the last queued skill/combat notification resumes that session with its remaining resources and work. Moving, starting another action, closing/replacing the popup, dying or logging out cancels it. Resume-on-Continue follows issue #1071's requested behavior; the captured popup packets remain unchanged.
+With pop-ups disabled, players kept skilling and fighting straight through their level-ups (one recording has 539 in a row). With pop-ups enabled, SkillLevelUp emits `level-up:popup-opened` with `{ player, skill, pause }`. Skilling plugins that handle the event can pause their current session. Continuing the last queued skill/combat notification resumes a paused session with its remaining resources and work. Moving, starting another action, closing/replacing the pop-up, dying or logging out cancels it. Resume-on-Continue follows issue #1071's requested behavior.
+
+A blocking level-up pop-up ends an active Crafting batch. After pressing Continue, open the make menu again to use the remaining materials.
 
 Experience paid in the middle of a conversation lands at once, but its level-up (message, jingle, graphic and pop-up) waits until the conversation has closed and comes the tick after (the user's Mahogany Homes captures, rev 241/242: 20261111T012755 t897 experience, t902 last line, t903 level-up; 20261029T203602 t7336-7346), so it no longer cuts a reward conversation short.
 

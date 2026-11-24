@@ -95,12 +95,12 @@ test("Cut-wood without arctic pine sends the captured refusal and no menu", (t) 
   assert.deepEqual(log, ["message Only arctic pine may be cut here."]);
 });
 
-test("split logs: 2 ticks after the choice, then every 3, each log in its own slot", (t) => {
+test("split logs: 2 ticks after the choice, then every 3, each log in its own slot", async (t) => {
   const { p, log } = actor(t);
   const logSlots = p.getInventory().getItems().map((item, slot) => (item?.getId() === I.ARCTIC_PINE_LOGS ? slot : -1)).filter((s) => s >= 0);
   const xp = p.getSkillManager().getExperience(core.Skill.WOODCUTTING);
   cutWood(p);
-  p.getCreationMenu().execute(I.SPLIT_LOG, 4);
+  await chooseStumpRecipe(p, 4, I.SPLIT_LOG);
   const dragonSeq = core.CacheDefinitions.getSeqId("human_woodcrafting_axe_dragon");
   const perItem = ["spam You split some arctic pine logs.", `seq ${dragonSeq}`, "sound 2101"];
   const ticks = run(log, 12);
@@ -113,15 +113,15 @@ test("split logs: 2 ticks after the choice, then every 3, each log in its own sl
   assert.equal(p.getSkillManager().getExperience(core.Skill.WOODCUTTING) - xp, 20, "5 Woodcutting XP per log");
 });
 
-test("the chosen amount stops the loop, and walking away ends it", (t) => {
+test("the chosen amount stops the loop, and walking away ends it", async (t) => {
   const { p, log } = actor(t);
   cutWood(p);
-  p.getCreationMenu().execute(I.SPLIT_LOG, 1);
+  await chooseStumpRecipe(p, 1, I.SPLIT_LOG);
   run(log, 10);
   assert.equal(p.getInventory().getAmount(I.SPLIT_LOG), 1);
   assert.equal(p.getInventory().getAmount(I.ARCTIC_PINE_LOGS), 3);
   cutWood(p);
-  p.getCreationMenu().execute(I.SPLIT_LOG, 3);
+  await chooseStumpRecipe(p, 3, I.SPLIT_LOG);
   run(log, 2);
   assert.equal(p.getInventory().getAmount(I.SPLIT_LOG), 2);
   p.setLocation(new core.Location(STUMP.x + 1, STUMP.y + 1, STUMP.z));
@@ -129,11 +129,11 @@ test("the chosen amount stops the loop, and walking away ends it", (t) => {
   assert.equal(p.getInventory().getAmount(I.SPLIT_LOG), 2, "moving off the tile stops splitting");
 });
 
-test("splitting needs 56 Woodcutting and an axe", (t) => {
+test("splitting needs 56 Woodcutting and an axe", async (t) => {
   for (const [level, items] of [[55, [[I.DRAGON_AXE, 1], [I.ARCTIC_PINE_LOGS, 2]]], [99, [[I.ARCTIC_PINE_LOGS, 2]]]]) {
     const { p, log } = actor(t, { level, items });
     cutWood(p);
-    p.getCreationMenu().execute(I.SPLIT_LOG, 2);
+    await chooseStumpRecipe(p, 2, I.SPLIT_LOG);
     run(log, 8);
     assert.equal(p.getInventory().getAmount(I.SPLIT_LOG), 0);
     assert.equal(p.getInventory().getAmount(I.ARCTIC_PINE_LOGS), 2);
@@ -141,11 +141,11 @@ test("splitting needs 56 Woodcutting and an axe", (t) => {
   }
 });
 
-test("each split requires a usable axe and current level, and uses the current axe", (t) => {
+test("each split requires a usable axe and current level, and uses the current axe", async (t) => {
   for (const change of ["axe", "level", "replacement"]) {
     const { p, log } = actor(t, { level: 56, items: [[I.BRONZE_AXE, 1], [I.ARCTIC_PINE_LOGS, 4]] });
     cutWood(p);
-    p.getCreationMenu().execute(I.SPLIT_LOG, 4);
+    await chooseStumpRecipe(p, 4, I.SPLIT_LOG);
     run(log, 2);
     if (change === "level") p.getSkillManager().setCurrentLevels(core.Skill.WOODCUTTING, 55);
     else {
@@ -160,11 +160,11 @@ test("each split requires a usable axe and current level, and uses the current a
   }
 });
 
-test("interaction replacement and emotes interrupt splitting", (t) => {
+test("interaction replacement and emotes interrupt splitting", async (t) => {
   for (const event of ["player:interaction-cleared", "player:emote"]) {
     const { p, log } = actor(t);
     cutWood(p);
-    p.getCreationMenu().execute(I.SPLIT_LOG, 4);
+    await chooseStumpRecipe(p, 4, I.SPLIT_LOG);
     run(log, 2);
     PM.emitCustomEvent(event, { player: p, reason: "item" });
     run(log, 9);
@@ -172,10 +172,10 @@ test("interaction replacement and emotes interrupt splitting", (t) => {
   }
 });
 
-test("the shield choice without the parts sends the captured line", (t) => {
+test("the shield choice without the parts sends the captured line", async (t) => {
   const { p, log } = actor(t);
   cutWood(p);
-  p.getCreationMenu().execute(I.NEITIZNOT_SHIELD, 1);
+  await chooseStumpRecipe(p, 1);
   assert.deepEqual(log, ["message You need 2 arctic pine logs, a bronze nail and some rope to make a Neitiznot shield."]);
   assert.equal(p.getInventory().getAmount(I.ARCTIC_PINE_LOGS), 4);
 });
@@ -187,8 +187,12 @@ async function send(p, packet) {
   await c.dispatch([packet]);
   c.processTurnPackets();
 }
-async function chooseShield(p, amount, split=false) {
-  await send(p,{type:'dialogue_continue',widgetId:(270<<16)|(require('../dist/net/packet/PacketSender').CREATION_MENU_FIRST_ITEM_COMPONENT+(split?1:0)),childIndex:amount});
+async function chooseStumpRecipe(p, amount, itemId = I.NEITIZNOT_SHIELD) {
+  const { CREATION_MENU_GROUP_ID, CREATION_MENU_FIRST_ITEM_COMPONENT } = require("../dist/net/packet/PacketSender");
+  const recipe = p.getCreationMenu().getItems().indexOf(itemId);
+  assert.ok(recipe >= 0, "the recipe is in the make menu");
+  const component = CREATION_MENU_FIRST_ITEM_COMPONENT + recipe;
+  await send(p, { type: "dialogue_continue", widgetId: (CREATION_MENU_GROUP_ID << 16) | component, childIndex: amount });
 }
 function shieldActor(t, {stage=17, level=56, held=0, logs=4, nails=2, ropes=2, hammer=true}={}) {
   const items=[[I.ARCTIC_PINE_LOGS,logs],[I.BRONZE_NAILS,nails],[I.ROPE,ropes]];
@@ -201,7 +205,7 @@ test('native shield quantity 2 produces at +2/+5, retains the first, and gives 3
   const {p,log}=shieldActor(t); const inv=p.getInventory();
   const xp=p.getSkillManager().getExperience(core.Skill.CRAFTING);
   assert.equal(core.CacheDefinitions.getSeqId('human_woodcrafting_hammer'),5754);
-  cutWood(p); await chooseShield(p,2);
+  cutWood(p); await chooseStumpRecipe(p,2);
   assert.equal(inv.getAmount(I.NEITIZNOT_SHIELD),0,'selection only starts a delayed batch');
   run(log,1);assert.equal(inv.getAmount(I.NEITIZNOT_SHIELD),0);
   run(log,1);assert.equal(inv.getAmount(I.NEITIZNOT_SHIELD),1);
@@ -217,7 +221,7 @@ test('native shield quantity 2 produces at +2/+5, retains the first, and gives 3
 
 for(const [amount,held,logs,nails,ropes,want] of [[1,0,6,3,3,1],[2,1,6,3,3,2],[28,0,5,3,3,2],[28,0,6,1,3,1],[28,0,6,3,1,1]]) {
   test('shield quantity/material cap '+[amount,held,logs,nails,ropes].join('/'),async t=>{
-    const {p,log}=shieldActor(t,{held,logs,nails,ropes});cutWood(p);await chooseShield(p,amount);run(log,12);
+    const {p,log}=shieldActor(t,{held,logs,nails,ropes});cutWood(p);await chooseStumpRecipe(p,amount);run(log,12);
     assert.equal(p.getInventory().getAmount(I.NEITIZNOT_SHIELD),held+want);
     assert.equal(p.getInventory().getAmount(I.ARCTIC_PINE_LOGS),logs-2*want);
     assert.equal(p.getInventory().getAmount(I.BRONZE_NAILS),nails-want);
@@ -226,7 +230,7 @@ for(const [amount,held,logs,nails,ropes,want] of [[1,0,6,3,3,1],[2,1,6,3,3,2],[2
 }
 test('shield requirements retain stage 17 gate, allow completed quest, and require current level and hammer',async t=>{
   for(const options of [{stage:16},{level:55},{hammer:false},{stage:17},{stage:340}]) {
-    const {p,log}=shieldActor(t,options);cutWood(p);await chooseShield(p,1);run(log,8);
+    const {p,log}=shieldActor(t,options);cutWood(p);await chooseStumpRecipe(p,1);run(log,8);
     const succeeds=options.stage===17||options.stage===340;
     assert.equal(p.getInventory().getAmount(I.NEITIZNOT_SHIELD),succeeds?1:0,JSON.stringify(options));
     assert.equal(p.getInventory().getAmount(I.ARCTIC_PINE_LOGS),succeeds?2:4);
@@ -234,7 +238,7 @@ test('shield requirements retain stage 17 gate, allow completed quest, and requi
 });
 test('each shield rechecks hammer, boosted Woodcutting and live materials before output',async t=>{
   for(const loss of ['hammer','level','logs','nails','rope']) {
-    const {p,log}=shieldActor(t);cutWood(p);await chooseShield(p,2);run(log,2);
+    const {p,log}=shieldActor(t);cutWood(p);await chooseStumpRecipe(p,2);run(log,2);
     if(loss==='level')p.getSkillManager().setCurrentLevels(core.Skill.WOODCUTTING,55);
     else p.getInventory().deleteNumber({hammer:I.HAMMER,logs:I.ARCTIC_PINE_LOGS,nails:I.BRONZE_NAILS,rope:I.ROPE}[loss],28);
     run(log,5);assert.equal(p.getInventory().getAmount(I.NEITIZNOT_SHIELD),1,loss);
@@ -243,7 +247,7 @@ test('each shield rechecks hammer, boosted Woodcutting and live materials before
 });
 test('native walking, emotes, interface replacement and disconnect stop shield batch without consuming pending materials',async t=>{
   for(const interruption of ['walk','emote','interface','disconnect']) {
-    const {p,log}=shieldActor(t);cutWood(p);await chooseShield(p,2);run(log,2);
+    const {p,log}=shieldActor(t);cutWood(p);await chooseStumpRecipe(p,2);run(log,2);
     if(interruption==='walk')await send(p,{type:'move',worldX:2342,worldY:3809,modifierFlags:0,run:false});
     if(interruption==='emote')PM.emitCustomEvent('player:emote',{player:p});
     if(interruption==='interface')p.getPacketSender().sendInterface(12);
@@ -254,7 +258,7 @@ test('native walking, emotes, interface replacement and disconnect stop shield b
 });
 test('bank hammer remove/return and closing before next tick cannot revive shield batch',async t=>{
   const {Bank}=require('../dist/game/model/container/impl/Bank');
-  const {p,log}=shieldActor(t);cutWood(p);await chooseShield(p,2);run(log,2);
+  const {p,log}=shieldActor(t);cutWood(p);await chooseStumpRecipe(p,2);run(log,2);
   p.getBank(0).open();assert.equal(Bank.isOpen(p),true);
   Bank.deposit(p,I.HAMMER,p.getInventory().getSlotForItemId(I.HAMMER),1,false);
   assert.equal(p.getInventory().getAmount(I.HAMMER),0);
@@ -262,13 +266,13 @@ test('bank hammer remove/return and closing before next tick cannot revive shiel
   assert.equal(p.getInventory().getAmount(I.HAMMER),1);
   p.getPacketSender().sendInterfaceRemoval();run(log,8);
   assert.equal(p.getInventory().getAmount(I.NEITIZNOT_SHIELD),1);
-  cutWood(p);await chooseShield(p,1);run(log,2);assert.equal(p.getInventory().getAmount(I.NEITIZNOT_SHIELD),2,'fresh selection after banking works');
+  cutWood(p);await chooseStumpRecipe(p,1);run(log,2);assert.equal(p.getInventory().getAmount(I.NEITIZNOT_SHIELD),2,'fresh selection after banking works');
 });
 test('rapid native reselection and switching split/shield replace pending activity',async t=>{
   for(const sequence of [[false,false],[false,true],[true,false]]) {
     const {p,log}=shieldActor(t,{logs:6,nails:3,ropes:3});p.getInventory().adds(I.BRONZE_AXE,1);
-    cutWood(p);await chooseShield(p,3,sequence[0]);run(log,1);
-    cutWood(p);await chooseShield(p,1,sequence[1]);run(log,10);
+    cutWood(p);await chooseStumpRecipe(p, 3, sequence[0] ? I.SPLIT_LOG : I.NEITIZNOT_SHIELD);run(log,1);
+    cutWood(p);await chooseStumpRecipe(p, 1, sequence[1] ? I.SPLIT_LOG : I.NEITIZNOT_SHIELD);run(log,10);
     assert.equal(p.getInventory().getAmount(I.NEITIZNOT_SHIELD),sequence[1]?0:1,sequence.join('/'));
     assert.equal(p.getInventory().getAmount(I.SPLIT_LOG),sequence[1]?1:0,sequence.join('/'));
   }
@@ -276,7 +280,7 @@ test('rapid native reselection and switching split/shield replace pending activi
 test('completed shield output persists while the unfinished batch is absent after real save hydration',async t=>{
   const {PlayerSave}=require('../dist/game/entity/impl/player/persistence/PlayerSave');
   let codec;require('../plugins/persistence/JsonPlayerPersistence.plugin').register({getSkillManager:()=>core.SkillManager,setPlayerPersistence:value=>codec=value,log(){}});
-  const {p,log}=shieldActor(t);cutWood(p);await chooseShield(p,2);run(log,2);
+  const {p,log}=shieldActor(t);cutWood(p);await chooseStumpRecipe(p,2);run(log,2);
   PM.emitPlayerDisconnect({player:p,username:p.getUsername()});p.setRegistered(false);
   const saved=JSON.parse(JSON.stringify(PlayerSave.fromPlayer(p),codec.replacer.bind(codec)),codec.reviver.bind(codec));
   const fresh=actor(t,{items:[]});codec.hydratePlayerSave(saved).applyToPlayer(fresh.p);run(fresh.log,8);

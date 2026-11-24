@@ -83,7 +83,7 @@ function createPlayer(slots, { construction = 99, wielded = {} } = {}) {
     getIndex: () => 7,
     isRegistered: () => true,
     getHitpoints: () => 10,
-    getInterfaceId: () => -1,
+    hasBlockingInterface: () => false,
     getMovementQueue: () => ({ size: () => 0 }),
     getLocation: () => ANCHOR,
     getAttribute: (key) => attributes.get(key),

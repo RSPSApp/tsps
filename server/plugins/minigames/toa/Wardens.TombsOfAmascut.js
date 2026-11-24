@@ -2096,8 +2096,15 @@ function routeToCrystal(event) {
   event.destination = { x, y: CRYSTAL_EDGE.y, z: Z };
 }
 
+/** Actual combat forms; cinematic actors and projectile/scenery helpers stay excluded. */
+function describeEncounters({ npcIds }) {
+  const N = Shared.core().NpcIdentifiers;
+  for (const id of [N.ELIDINIS_WARDEN_3, N.ELIDINIS_WARDEN_4, N.ELIDINIS_WARDEN_7, N.ELIDINIS_WARDEN_8, N.TUMEKENS_WARDEN_3, N.TUMEKENS_WARDEN_4, N.TUMEKENS_WARDEN_7, N.TUMEKENS_WARDEN_8, N.COL_00FFFF_CORE_COL, N.COL_00FFFF_CORE_COL_2]) npcIds.add(id);
+}
+
 module.exports = function registerWardens(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("WARDENS_P1", WardensRoom);
   Raid.registerRoom("WARDENS_P3", WardensFinalRoom);
   api.onNpcInteraction("Osmumten", { Begin: beginWardens, "Talk-to": talkToWardensOsmumten });

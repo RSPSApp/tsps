@@ -1056,6 +1056,7 @@ module.exports = function registerIdesOfMilkQuest(api) {
   api.persistAttribute(DONT_ASK_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [QUEST_BRUTUS_NPC_ID, DEMONIC_BRUTUS_NPC_ID],
     key: "the_ides_of_milk",
     name: "The Ides of Milk",
     varpId: VARP_COWQUEST,

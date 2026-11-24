@@ -1243,6 +1243,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [NpcIdentifiers.SKELETON_HELLHOUND],
     key: "in_search_of_the_myreque",
     name: "In Search of the Myreque",
     varpId: VARP_IN_SEARCH_OF_THE_MYREQUE,

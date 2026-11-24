@@ -1241,6 +1241,21 @@ function tableForNpc(npcId, player = null, npc = null) {
   return tables[0];
 }
 
+/** Read-only effective sources. Never run kill selectors, RNG, reward commits or drop hooks. */
+function describeDrops(event) {
+  ensureDropsLoaded?.();
+  const table = tableForNpc(event.npcId, event.player, event.npc);
+  event.source = structuredClone({
+    table: table ? withoutOtherLocations(table, event.npc) : null,
+    shared: Object.fromEntries(sharedTables),
+    combatLevel: npcCombatLevel(event.npc),
+    categories: Object.fromEntries([...sharedCategories].map(([name, split]) => [name, {
+      categories: SeedCategories.distribution(split.categories, split.multiplier, npcCombatLevel(event.npc))
+        .map(({ category, probability }) => ({ ...category, probability })),
+    }])),
+  });
+}
+
 function dropFor(player, npc, npcId, location, damagers = []) {
   const table = tableForNpc(npcId, player, npc);
   if (!itemOnGroundManager) {
@@ -1397,6 +1412,7 @@ module.exports = {
       return stats;
     };
     ensureDropsLoaded = ensureDrops;
+    api.onCustomEvent("npc-drops:describe", describeDrops);
     api.onCustomEvent("npc-drops:extra-rolls", extraRolls);
     api.onCustomEvent("npc-drops:table-rolls", tableRolls);
     api.onCustomEvent("npc-drops:roll-shared", rollSharedRequest);

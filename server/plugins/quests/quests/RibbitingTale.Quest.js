@@ -938,6 +938,7 @@ module.exports = function registerRibbitingTaleQuest(api) {
   api.persistAttribute(STAGE_VERSION_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [CUTHBERT_COMBAT_NPC_ID],
     key: QUEST_KEY,
     name: "The Ribbiting Tale of a Lily Pad Labour Dispute",
     varpId: 4152,

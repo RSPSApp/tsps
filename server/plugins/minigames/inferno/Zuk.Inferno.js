@@ -379,4 +379,10 @@ function clearArena(session) {
   state.healers = [];
 }
 
-module.exports = { init, begin, tend, provoke, closeHud, claimZukDrops };
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  const N = core.NpcIdentifiers;
+  for (const id of [N.TZKAL_ZUK, N.JAL_XIL_2, N.JAL_ZEK_2, N.JALTOK_JAD_2, N.JAL_MEJJAK]) npcIds.add(id);
+}
+
+module.exports = { init, begin, tend, provoke, closeHud, claimZukDrops, describeEncounters };

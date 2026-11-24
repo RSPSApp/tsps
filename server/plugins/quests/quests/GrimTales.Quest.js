@@ -1390,6 +1390,7 @@ module.exports = function registerGrimTalesQuest(api) {
   api.persistAttribute(RUPERT_HELMET_GIVEN_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [GLOD_NPC_ID],
     key: "grim_tales",
     name: "Grim Tales",
     varpId: VARP_GRIM_TALES,

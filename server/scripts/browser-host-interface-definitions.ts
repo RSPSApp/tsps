@@ -5,6 +5,8 @@ const plugins = [
   "DestroyItem",
   "TeleportInterface",
   "MaxHitsInterface",
+  "MonsterExamine",
+  "Bestiary",
   "SideJournalDefaults",
 ];
 

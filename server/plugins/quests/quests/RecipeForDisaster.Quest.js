@@ -3862,6 +3862,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.persistAttribute(FINAL_FIGHT_ATTRIBUTE);
   api.persistAttribute(FINAL_BOSS_DEFEATED_ATTRIBUTE);
   quest = registerQuest(api, {
+    combatNpcIds: () => [...FINAL_NPCS, NpcIdentifiers.JUBBLY_BIRD, NpcIdentifiers.EVIL_CHICKEN],
     key: QUEST,
     name: "Recipe for Disaster",
     varpId: VARP_RFD,

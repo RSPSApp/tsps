@@ -1580,6 +1580,7 @@ module.exports = function registerTempleOfIkovQuest(api) {
   const PAGE = "Temple of Ikov";
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [FIRE_WARRIOR_NPC_ID],
     key: "temple_of_ikov",
     name: "Temple of Ikov",
     varpId: VARP_TEMPLE_OF_IKOV,

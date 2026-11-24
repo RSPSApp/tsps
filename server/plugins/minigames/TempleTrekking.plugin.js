@@ -8,11 +8,22 @@
 const Common = require("./templetrekking/Common.TempleTrekking");
 const Trek = require("./templetrekking/Trek.TempleTrekking");
 
+/** Playable opponents from the same tables that start each encounter. */
+function describeEncounters({ npcIds }) {
+  for (const event of Object.values(Common.data.events)) {
+    if (event.kind !== "combat") continue;
+    for (const id of [...event.npcs, ...(event.visible ?? [])]) npcIds.add(id);
+  }
+  const N = Common.data.npcs;
+  for (const id of [N.templetrek_zombie, N.templetrek_tentacle_arm, N.templetrek_tentacle_head]) npcIds.add(id);
+}
+
 module.exports = {
   name: "TempleTrekking",
   description: "Adds Temple Trekking and the Burgh de Rott Ramble: escorting a follower between Burgh de Rott and Paterdomus, with events on the way and a reward token.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Common.init(api);
     api.persistAttribute(Common.TOKEN_POINTS_ATTRIBUTE);
     api.persistAttribute(Common.PACK_ATTRIBUTE);

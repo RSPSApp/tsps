@@ -1309,6 +1309,7 @@ module.exports = function registerDemonSlayerQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [DELRITH_NPC_ID],
     key: "demon_slayer",
     name: "Demon Slayer",
     varpId: VARP_DEMON_SLAYER,

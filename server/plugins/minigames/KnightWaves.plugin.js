@@ -22,11 +22,17 @@
 const Common = require("./knightwaves/Common.KnightWaves");
 const Room = require("./knightwaves/Room.KnightWaves");
 
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  for (const knight of Common.KNIGHTS) npcIds.add(knight.id);
+}
+
 module.exports = {
   name: "KnightWaves",
   description: "Adds the Knight Waves Training Ground: eight Round Table knights, melee-only, and the Chivalry/Piety unlock.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Common.init(api);
     api.persistAttribute(Common.WAVE_ATTRIBUTE, 0);
     api.onCustomEvent("knight-waves:is-complete", Common.answerComplete);

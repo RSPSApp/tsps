@@ -472,6 +472,13 @@ function splitTzKek(player, session, npc) {
   spawn(session, player, Npcs.TZ_KEK_5, { x: at.x + 1, y: at.y });
 }
 
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  for (let wave = 1; wave < FINAL_WAVE; wave++) for (const id of waveMonsters(wave)) npcIds.add(id);
+  const N = core.NpcIdentifiers;
+  for (const id of [N.TZTOK_JAD, N.YT_HURKOT, N.TZ_KEK_5]) npcIds.add(id);
+}
+
 module.exports = {
   name: "TzhaarFightCaves",
   description: "Adds the TzHaar Fight Cave: 63 waves ending with TzTok-Jad, healers, wave resume on logout and the cave's entry and exit.",
@@ -497,6 +504,7 @@ module.exports = {
     pluginApi.onCanTeleport(noTeleportOut);
     pluginApi.onCanLogout(holdLogout);
     pluginApi.onCustomEvent("npc-drops:tertiary-chance", jadPetChance);
+    pluginApi.onCustomEvent("bestiary:encounters", describeEncounters);
     pluginApi.registerCommand("fightcavewave", setNextWave, core.PlayerRights.DEVELOPER, "Set the next Fight Cave wave");
   },
   waveMonsters,

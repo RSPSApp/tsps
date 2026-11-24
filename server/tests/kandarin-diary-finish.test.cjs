@@ -38,6 +38,7 @@ function fixture(t) {
     },
     onObjectInteraction() {},
     onItemOnItem() {},
+    onNpcDialogueCondition() {},
     registerArea(area) { this.area = area; },
     sendMultiChatboxPrompt() {},
   };
@@ -123,6 +124,7 @@ function progressFixture() {
     },
     onObjectInteraction() {},
     onItemOnItem() {},
+    onNpcDialogueCondition() {},
     registerArea(area) { this.area = area; },
     sendMultiChatboxPrompt() {},
   };

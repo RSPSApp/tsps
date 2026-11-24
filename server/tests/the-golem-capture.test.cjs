@@ -281,6 +281,28 @@ test("t338-388: Elissa's menus as captured; golem_b 2 only once her library line
   ]);
 });
 
+test("t349-354, t618-625: the captured branches the main route skips answer, with Elissa's and the curator's heads", async (t) => {
+  const f = actor(t, { stage: S.PORTAL, tile: [3374, 3430, 0], attributes: { [A.LETTER]: 3 } });
+  const elissa = h.spawn(f, ELISSA, [3374, 3429, 0]);
+  const varrock = await play(f, () => h.talk(f, elissa), ["What is this place?", "I don't know, Varrock is pretty impressive."]);
+  assert.deepEqual(varrock.slice(-2), [
+    "PLAYER: I don't know, Varrock palace is impressive.",
+    "Elissa: Hmph. I don't think it will look this good when it's been buried in the ground for three thousand years!",
+  ]);
+  const statuette = await play(f, () => h.talk(f, elissa), ["Where is the statuette that Varmen took back from Uzer?"]);
+  assert.equal(statuette.at(-1), "Elissa: Now it's on display in the Varrock museum.");
+  assert.ok(heads(f).length > 0 && heads(f).every((id) => id === ELISSA), `heads ${heads(f)}`);
+  f.player.setLocation(new h.core.Location(3257, 3446, 0));
+  const curator = h.spawn(f, CURATOR, [3258, 3447, 0]);
+  clear(f);
+  const portal = await play(f, () => h.talk(f, curator),
+    ["I'm looking for a statuette recovered from the city of Uzer.", "I want to open a portal to the lair of an elder-demon."]);
+  assert.equal(portal.at(-1), "Curator Haig Halen: Good heavens! I'd never let you do such a dangerous thing.");
+  assert.ok(heads(f).length > 0 && heads(f).every((id) => id === CURATOR), `heads ${heads(f)}`);
+  const treasure = await play(f, () => h.talk(f, curator), ["Do you know where I could find any treasure?"]);
+  assert.equal(treasure.at(-1), "Curator Haig Halen: Any treasures this museum knows about it goes to great lengths to acquire.");
+});
+
 test("t463-479: the bookcase: the search line, the notes two ticks later, then 'already have' with them", async (t) => {
   const f = actor(t, { stage: S.PORTAL, tile: [3366, 3333, 0], attributes: { [A.LETTER]: 2 } });
   await h.dispatch(f, { type: "object_option", id: 6292, x: 3366, y: 3332, clickType: 1 });
@@ -369,6 +391,14 @@ test("t649-653: Pickpocket at stage 3 steals the key with the recorded animation
   assert.equal(count(f, I.DISPLAY_CABINET_KEY), 1, "only one key");
 });
 
+test("Pickpocket under 25 Thieving is refused and gives no key (Wiki requirement)", async (t) => {
+  const f = actor(t, { stage: S.STATUETTE, tile: [3257, 3446, 0], attributes: { [A.LETTER]: 3 }, thieving: 24 });
+  const curator = h.spawn(f, CURATOR, [3258, 3447, 0]);
+  await h.talk(f, curator, 3);
+  assert.equal(h.shown(f)?.text, "You need level 25 thieving to pick the curator's pocket.");
+  assert.equal(count(f, I.DISPLAY_CABINET_KEY), 0);
+});
+
 test("t665-761: the case: locked, Open with the key, the box two ticks later, Study shows it stolen, the key gets another", async (t) => {
   const f = actor(t, { stage: S.STATUETTE, tile: [3257, 3452, 1], attributes: { [A.LETTER]: 3 } });
   await click(f, 24626, [3257, 3453], 2);
@@ -445,6 +475,17 @@ test("t1100-1184: the statuette goes in the empty alcove; turned to a=1 b=1 c=0 
   clear(f);
   await click(f, ...ALCOVE.C);
   assert.deepEqual(texts(f), ["The statuette is now locked in place."]);
+});
+
+test("stage 5 (Wiki, not captured): the golem's 'I opened the portal.' exchange", async (t) => {
+  const f = actor(t, { stage: S.OPEN });
+  const golem = h.spawn(f, GOLEM, GOLEM_TILE);
+  assert.deepEqual(await play(f, () => h.talk(f, golem)), [
+    "Clay golem: My task is incomplete. You must open the portal so I can defeat the great demon.",
+    "PLAYER: I opened the portal.",
+    "Clay golem: Golems cannot pass through the portal. But the demon will soon emerge. I must ready myself for combat!",
+  ]);
+  assert.equal(stage(f), S.OPEN);
 });
 
 test("t1190-1250: through the open door to the throne room; the skeleton line the first time only; back out", async (t) => {
@@ -698,6 +739,30 @@ test("the side varbits survive a save and reload, and the letter and implement r
   assert.deepEqual([V.B, V.CLAY, V.A, V.BB, V.C, V.D, V.RETRIEVED, V.SEEN, V.GEMS].map((id) => sender.getVarbit(id)), [3, 4, 1, 1, 0, 2, 1, 1, 1]);
   const manager = h.core.World.getItemOnGroundManager?.() ?? h.PM.getCoreApi().ItemOnGroundManager;
   void manager;
+});
+
+test("with a full inventory the notes, the key and the statuette drop under the player (Wiki), and the gems wait", async (t) => {
+  const fill = (f) => { while (!f.player.getInventory().isFull()) f.player.getInventory().add(new h.core.Item(I.BONES, 1), false); };
+  const floor = (f, id) => h.core.ItemOnGroundManager.getGroundItem(f.player.getUsername(), id, f.player.getLocation(), f.player.getPrivateArea());
+  const notes = actor(t, { stage: S.PORTAL, tile: [3366, 3333, 0], attributes: { [A.LETTER]: 2 } });
+  fill(notes);
+  await click(notes, 6292, [3366, 3332]);
+  h.ticks(notes, 2);
+  assert.ok(floor(notes, I.VARMENS_NOTES), "the notes are on the floor");
+  const key = actor(t, { stage: S.STATUETTE, tile: [3257, 3446, 0], attributes: { [A.LETTER]: 3 } });
+  const curator = h.spawn(key, CURATOR, [3258, 3447, 0]);
+  fill(key);
+  await h.talk(key, curator, 3);
+  assert.ok(floor(key, I.DISPLAY_CABINET_KEY), "the key is on the floor");
+  const statuette = actor(t, { stage: S.STATUETTE, tile: [3257, 3452, 1], items: [[I.DISPLAY_CABINET_KEY, 1]] });
+  fill(statuette);
+  await click(statuette, 24626, [3257, 3453], 2);
+  assert.ok(floor(statuette, I.STATUETTE), "the statuette is on the floor");
+  const gems = actor(t, { stage: S.SEEN, tile: [2720, 4912, 2], items: [[I.HAMMER, 1], [I.CHISEL, 1]] });
+  fill(gems);
+  await useOnObject(gems, 6300, [2719, 4913], I.HAMMER);
+  assert.deepEqual(texts(gems), ["You don't have enough inventory space."]);
+  assert.equal(gems.player.getAttribute(A.GEMS) ?? false, false, "the gems are still there to take");
 });
 
 test("the phoenix gives no feather while a quill pen is carried (Wiki)", async (t) => {

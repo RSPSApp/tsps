@@ -457,6 +457,7 @@ function sporeFight(t, phosani = false) {
   const packets = [];
   const objects = new Set();
   const players = [];
+  const achievements = [];
   const location = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0 });
   const movement = { setBlockMovement: () => movement, reset() {} };
   const fight = Object.assign(Object.create(Fight.Fight.prototype), {
@@ -476,6 +477,9 @@ function sporeFight(t, phosani = false) {
   t.after(() => Common.init(fakeApi));
   Common.init({
     ...fakeApi,
+    emitCustomEvent(name, event) {
+      if (name === "combat-achievements:complete") achievements.push(event);
+    },
     core: {
       ...fakeApi.core,
       GameObject: class {
@@ -525,7 +529,7 @@ function sporeFight(t, phosani = false) {
   }
   const lines = () => packets.filter(([, type, text]) => type === "game" && [SPORE_INFECTED, SPORE_REINFECTED, SPORE_WORN].includes(text));
   const bursts = () => packets.filter(([, type, , anim]) => type === "loc" && anim === 8632);
-  return { fight, packets, objects, addPlayer, tick, until, lines, bursts };
+  return { fight, packets, objects, addPlayer, tick, until, lines, bursts, achievements };
 }
 
 test("re-infection restarts the 25-tick duration and skips the yawn due on that tick", (t) => {
@@ -643,7 +647,7 @@ test("the Nightmare's last totem blast bursts the spores four ticks after the ch
 });
 
 test("Phosani's death ends a re-infection silently without clearing its achievement failure", (t) => {
-  const { fight, packets, addPlayer, until, lines } = sporeFight(t, true);
+  const { fight, packets, addPlayer, until, lines, achievements } = sporeFight(t, true);
   const player = addPlayer();
   Specials.makeDrowsy(fight, player);
   CombatAchievements.sporesSlowed(fight, player);
@@ -657,9 +661,10 @@ test("Phosani's death ends a re-infection silently without clearing its achievem
   assert.deepEqual(lines(), [[0, "game", SPORE_INFECTED]]);
   assert.deepEqual(packets.filter(([, kind]) => kind === "overhead"),
     [2, 8, 16, 22].map((tick) => [tick, "overhead", "*yawn*"]));
-  achievementEvents.length = 0;
   CombatAchievements.judge(fight, player);
-  assert.ok(!achievementEvents.some(({ task }) => task === "I Would Simply React"));
+  const tasks = achievements.filter((event) => event.player === player).map(({ task }) => task);
+  assert.ok(tasks.includes("I Would Simply React"), "the achievement event collector receives this player's awards");
+  assert.ok(!tasks.includes("Perfect Phosani's Nightmare"), "the spore failure survived re-infection");
 });
 
 test("the spore summon line is spam with its original colour and text", (t) => {

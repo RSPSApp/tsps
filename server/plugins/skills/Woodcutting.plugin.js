@@ -308,7 +308,9 @@ const TREES = [
   },
   {
     name: "normal tree",
-    objectNames: ["Tree", "Dead tree", "Evergreen tree", "Dying tree"],
+    // "Jungle tree" is the Feldip, Ape Atoll and Crash Island kind with a Chop-down option. The decorative
+    // ones have no option, and Trouble Brewing's (Cut-Down) is handled by its own minigame plugin.
+    objectNames: ["Tree", "Dead tree", "Evergreen tree", "Dying tree", "Jungle tree"],
     action: ["Chop down", "Chop-down"],
     requiredLevel: 1,
     xpReward: 25,

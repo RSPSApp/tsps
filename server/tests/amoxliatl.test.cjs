@@ -215,7 +215,7 @@ test("Unstable Ice sends the recorded cyan spam line", (t) => {
   assert.deepEqual(messages, [[ChatType.SPAM, "<col=00e6e6>Amoxliatl forms some unstable ice blocks around you."]]);
 });
 
-test("intact Unstable Ice shatters at +14 with healing and pools, and disappears at +15", (t) => {
+test("intact Unstable Ice shatters at +14 with healing and 3x3 pools, and disappears at +15", (t) => {
   const { fight, advance, formed, healed, splats, sounds, removed, poolRegistrations } = trackUnstableIce(t, {
     px: 1362, py: 4515, random: 0.4,
   });
@@ -225,13 +225,13 @@ test("intact Unstable Ice shatters at +14 with healing and pools, and disappears
   assert.equal(formed.length, 2);
   assert.ok(formed.every((block) => block.animation === 11536));
   const centres = formed.map((block) => fight.session.worldTile(block.getLocation()));
-  const rawDiamond = centres.flatMap(([x, y]) => [
-    [x, y], [x - 2, y], [x + 2, y], [x, y - 2], [x, y + 2],
+  const squares = centres.flatMap(([x, y]) => [
+    [x, y],
     [x - 1, y - 1], [x - 1, y], [x - 1, y + 1], [x, y - 1], [x, y + 1],
     [x + 1, y - 1], [x + 1, y], [x + 1, y + 1],
   ]);
-  assert.ok(rawDiamond.some(([x, y]) => !onFloor(x, y)), "a diamond reaches beyond the floor");
-  const onPlatform = rawDiamond.filter(([x, y]) => onFloor(x, y));
+  assert.ok(squares.some(([x, y]) => !onFloor(x, y)), "a square reaches beyond the floor");
+  const onPlatform = squares.filter(([x, y]) => onFloor(x, y));
   const alreadyIced = onPlatform[0];
   fight.placePool(...alreadyIced);
   const iceBefore = fight.pools.get(key(...alreadyIced));

@@ -205,7 +205,7 @@ function startCrafting(player, category, recipe, amount, anchor) {
     }
     execute() {
       if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getMovementQueue().size() > 0 ||
-        player.getInterfaceId() !== -1 || player.getLocation().getDistance(anchor) > 2) {
+        player.hasBlockingInterface() || player.getLocation().getDistance(anchor) > 2) {
         this.stop();
         return;
       }

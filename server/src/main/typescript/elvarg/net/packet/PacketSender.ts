@@ -1018,8 +1018,12 @@ export class PacketSender {
   }
 
   public hasInterruptibleInterface(): boolean {
-    return this.chatboxGroupId >= 0 || [...this.subInterfaceTargets.values()]
-      .some((entry) => entry.type === 0 || entry.type === 3);
+    return this.hasModalInterface();
+  }
+
+  public hasModalInterface(ignoredMainGroupId?: number): boolean {
+    return this.chatboxGroupId >= 0 || [...this.subInterfaceTargets]
+      .some(([groupId, entry]) => groupId !== ignoredMainGroupId && (entry.type === 0 || entry.type === 3));
   }
 
   public getInterruptibleInterfaceOpens(): number {

@@ -908,11 +908,22 @@ export class Player extends Mobile {
         return this.packetSender.isBusyModal();
     }
 
+    private mainInterfaceAllowsGameplay(groupId: number): boolean {
+        const { CustomInterfaceRegistry } = require("../../../interfaces/CustomInterfaceRegistry") as typeof import("../../../interfaces/CustomInterfaceRegistry");
+        return CustomInterfaceRegistry.get(groupId)?.lifecycle?.blocksGameplay === false;
+    }
+
+    /** Whether a main modal, dialogue or side modal is blocking gameplay. */
+    hasBlockingInterface(): boolean {
+        const groupId = this.getInterfaceId();
+        if (this.dialogueManager.isActive()) return true;
+        if (groupId < 0) return this.packetSender.hasInterruptibleInterface();
+        if (!this.mainInterfaceAllowsGameplay(groupId)) return true;
+        return this.packetSender.hasModalInterface(groupId);
+    }
+
     busy(): boolean {
-        if (this.interfaceId > 0) {
-            const { CustomInterfaceRegistry } = require("../../../interfaces/CustomInterfaceRegistry") as typeof import("../../../interfaces/CustomInterfaceRegistry");
-            if (CustomInterfaceRegistry.get(this.interfaceId)?.lifecycle?.blocksGameplay !== false) return true;
-        }
+        if (this.interfaceId > 0 && !this.mainInterfaceAllowsGameplay(this.interfaceId)) return true;
         if (this.getHitpoints() <= 0) {
             return true;
         }

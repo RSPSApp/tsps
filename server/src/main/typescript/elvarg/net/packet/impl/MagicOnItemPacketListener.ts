@@ -492,7 +492,7 @@ export class MagicOnItemPacketListener {
         // carries on (Wiki, Golden God: actions that would normally cancel Alchemy don't while it casts automatically).
         const sender = player.getPacketSender?.();
         if (!queued.automatic
-          && (player.getDialogueManager?.()?.isActive?.() || sender?.hasInterruptibleInterface?.() || sender?.hasInputPrompt?.())) return;
+          && (player.hasBlockingInterface?.() || sender?.hasInputPrompt?.())) return;
         listener.castAlchemy(player, queued.spellId, queued.slot, queued.itemId, true, queued.source);
       }
     });

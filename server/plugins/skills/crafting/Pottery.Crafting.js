@@ -144,7 +144,7 @@ function startPottery(player, station, recipe, amount, firing) {
     }
     execute() {
       if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getMovementQueue().size() > 0 ||
-          player.getForceMovement() != null || player.getInterfaceId() !== -1 || !player.getLocation().equals(origin) ||
+          player.getForceMovement() != null || player.hasBlockingInterface() || !player.getLocation().equals(origin) ||
           player.getLocation().getDistance(station.getLocation()) > 2 || !has()) {
         this.stop();
         return;

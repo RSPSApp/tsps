@@ -1040,6 +1040,7 @@ test("as captured: closing the bank by any route ends a bank search; closing any
       const player = recordingPlayer();
       PacketSender.prototype[route].call({
         player,
+        sendInterfaceRemoval: PacketSender.prototype.sendInterfaceRemoval,
         resetInterfaceState: () => interfaceId,
         closeTrackedInterfaces: () => true,
         sendSubInterface: () => {},

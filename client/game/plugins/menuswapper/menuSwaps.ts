@@ -1,5 +1,5 @@
 import { MenuTargetType } from "../../../rs/MenuEntry";
-import type { SimpleMenuEntry } from "../../../ui/menu/MenuEngine";
+import { asLeftClickEntry, type SimpleMenuEntry } from "../../../ui/menu/MenuEngine";
 import type { MenuTransformContext } from "../../../ui/menu/menuTransforms";
 import type { MenuSwapKind, MenuSwapperPluginConfig, MenuSwapperPresets } from "./types";
 
@@ -112,7 +112,7 @@ function moveFirst(out: SimpleMenuEntry[], group: Group, option: string, pin: bo
         out[index] = ordered[i];
     });
     // A swap the player chose wins even over "Attack set to right-click" (deprioritized).
-    out[group.positions[0]] = { ...chosen, deprioritized: false, swapPinned: pin || undefined };
+    out[group.positions[0]] = asLeftClickEntry({ ...chosen, deprioritized: false, swapPinned: pin || undefined });
     return true;
 }
 

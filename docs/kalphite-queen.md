@@ -106,49 +106,49 @@ currently in the boss room"); its 2017 note ("currently inside the lair") fits e
 two or more fill the same sentence ("no adventurers", "N adventurers"; ours, uncaptured). The surface rope still moves the player on the tick of use; the capture moves them 2
 ticks after arrival.
 
-## No damage while she molts (#4548)
+## The molt and no damage while she molts (#4548, #6430)
 
-When the first form dies, `transformFirstForm` switches her appearance to airborne, holds her at
-1 hitpoint and untargetable while sequence 6270 and molt graphic 1055 play, then restores the
-airborne form at 255 hitpoints. The sequences (6270 and 6269) both last 345 client cycles, or 11.5
-game ticks at 30 client cycles per tick. The next server-tick boundary is 12 ticks after the
-transform update.
-Untargetable prevents both incoming attacks and her own attacks during that animation, and the hit
-queue is cleared. Direct damage (a burn's tick, poison, venom) is queued straight onto her pending
-damage. A burn ticking at the moment of the kill took her last hitpoint mid-molt, and since she
-already had the airborne id, the before-death hook let her die: the second form was skipped.
+Timeline from the first form's death, in game ticks (rsprox 227/234, recordings 95, 96, 545, 1757,
+1864, 3276; 154 molts, `kalphite_update_flying_queen_emerging`, 6270):
 
-The encounter now marks her as molting from the first form's death until the airborne form takes
-over, and zeroes any damage applied to her meanwhile (`combat:damage-apply`).
+- Tick 0: her last hitsplat. She stays in the first form, hitpoints bar at 0, for 7 ticks (101
+  molts) or 8 ticks (53 molts); then the molt packet arrives: `TransformationExtendedInfo(id=965)`,
+  `EnabledOpsExtendedInfo`, sequence 6270 and spotanim 1055 together.
+- Molt tick +0 to +11.5: sequence 6270 and molt graphic 1055's sequence 6269 each last 345 client
+  cycles, 11.5 ticks at 30 cycles per tick.
+- Molt tick +13 to +16: her first hitsplat from the player (72 at +13, 66 at +14, 13 at +15, 3 at
+  +16). Players were already clicking her at +5 to +11 in 27 molts and no hit landed before +13
+  (recording 95, molt at 8873: clicks from +5, first hit +14). That is hit-arrival timing, so the
+  unlock is inferred to be about +12; no packet records the server's targetability decision.
 
-From the rsprox captures (rev 227 and 234, recordings 95, 96, 545, 1757, 1864, 3276): across 154
-molts (`kalphite_update_flying_queen_emerging`, 6270), the first hitsplat lands 13–16 recording
-ticks after the transform update: 72 at +13, 66 at +14, 13 at +15 and 3 at +16. This is hit-arrival
-timing, not a direct measurement of when targeting becomes available; it includes the player's
-attack and hit timing after the animation. The captures therefore fit unlocking at the next server
-tick boundary (+12) after the 11.5-tick animation, followed by hits landing from +13 onward. None of
-those fights had status damage on her, so how live shows a burn tick then isn't captured.
+Wiki: Kalphite Queen: "When the first form is killed, it takes 20 game ticks (12 seconds) for the
+transition into the second airborne form." That is the whole span from the kill: 8 ticks before the
+molt starts and 12 ticks of molt. The Wiki is silent on whether she can be targeted during it.
 
-Ours: damage that still arrives during the molt shows as a 0 splat, and burn stacks keep running
-down; what is left carries over to the airborne form.
+A recent public kill agrees (YouTube WbepbOvvTgs, stepped frame by frame): the killing splat and a
+0/255 health reading at about 39.6 s, her shell breaking apart from about 44.4-45.0 s (about 5 s, 8
+ticks later), and the airborne form's health bar and first splat at about 54 s (the player was
+swapping gear, so that first hit is a late bound, not the unlock).
 
-Wiki: Kalphite Queen says "When the first form is killed, it takes 20 game ticks (12 seconds) for
-the transition into the second airborne form." We use 12 (`TRANSFORMATION_TICKS`), not 20, because
-the captures show her attackable earlier:
+Ours (`MOLT_DELAY_TICKS` 8, `TRANSFORMATION_TICKS` 12): `transformFirstForm` holds her at 1
+hitpoint and untargetable in the first form with no animation; `MoltStartTask` switches her to the
+airborne appearance and plays 6270 and 1055 8 ticks later; `TransformTask` restores 255 hitpoints
+and makes her targetable 12 ticks after that, 20 from the kill. Before this she molted on the kill
+tick and sat in the airborne form, untargetable and with no animation, for 8 more ticks (#6430).
+The 8 is the Wiki's 20 minus the 12-tick molt; the captures show 7 or 8.
 
-- On the molt tick the server already sends `TransformationExtendedInfo(id=965)` (the airborne
-  appearance) and `EnabledOpsExtendedInfo` with every op on (recording 95, tick 5150), so there is
-  no separate form swap at +20.
-- Players were clicking her at +5 to +11 in 27 of the 154 molts, and no hitsplat landed on her
-  before +13 in any of them (recording 95, tick 8873: clicks from +5, first hit +14).
-- First hits land at +13 to +16 right after the unlock; a 20-tick lock would put them at +21 or
-  later.
+Untargetable prevents both incoming attacks and her own attacks, and the hit queue is cleared.
+Direct damage (a burn's tick, poison, venom) is queued straight onto her pending damage. A burn
+ticking at the moment of the kill took her last hitpoint mid-molt, and since she already had the
+airborne id, the before-death hook let her die: the second form was skipped (#4548). The encounter
+marks her as molting from the first form's death until the airborne form takes over, and zeroes
+any damage applied to her meanwhile (`combat:damage-apply`). In the captures no hitsplat lands on
+her in the 12 ticks after the molt starts; none of those fights had status damage on her, so how
+live shows a burn tick then isn't captured. Ours: damage that still arrives shows as a 0 splat, burn
+stacks keep running down, and what is left carries over to the airborne form.
 
-The 12-tick unlock follows the sequence's 11.5-tick duration; the later hitsplats do not imply an
-extra tick of untargetability. The captures do not record the server's targetability decision, so
-this is inferred from clicks that produced no hit and from where the first hits land. The
-#6430 report ("mage works after 4-5 clicks") has not been reproduced separately.
+The #6430 report ("mage works after 4-5 clicks") has not been reproduced separately.
 
 `server/tests/kalphite-queen-molt.test.cjs` loads the real plugins, burns or poisons a real Queen
-through the first form's death, and asserts she is untargetable on ticks 1 to 11 and targetable on
-tick 12.
+through the first form's death, and asserts she stays in the first form for 7 ticks, is airborne
+from tick 8, is untargetable on ticks 0 to 19 and targetable on tick 20.

@@ -139,7 +139,6 @@ in a ritual (898, 904).
   capture shows them as one, 1620).
 - Agrith-Naar stays where he was summoned (the Wiki; the NW torch safespot). The capture has him
   shift a tile or two after the player (2229-2758).
-- Black dye: the robe and hat follow the capture's desert clothes and capes and give the vial back.
 - Badden's "Well I came here and opened a portal..." (capture "Well, I came here...", 390) and Reen's
   post-quest "un-summoned" (capture "un- summoned").
 - The black mushroom crushed into a vial: Land of the Goblins keeps the Wiki's "...pour the juice into a
@@ -167,6 +166,13 @@ transcript returns to his opening question.
   for being too far away).
 - The room is a private area at the source coordinates rather than a client instance.
 - The strange implement on the golem once it is reprogrammed: the default "Nothing interesting happens.".
+- Black dye gives the vial back for every item it dyes. The capture shows it for the desert shirt and
+  robe and the red cape (528, 537, 543), and the Wiki's Black cape page agrees; the Wiki says nothing
+  for the other desert clothes, so they follow the capture.
+- Dying in the fight: no source covers it. The player respawns as from any death, the stage stays 120,
+  and the portal brings back a room with Agrith-Naar at full health and the cast that had arrived.
+- A logout in the summoning before Matthew's death line: he is dead at the next login (he always dies
+  in that scene).
 
 ## Runs
 

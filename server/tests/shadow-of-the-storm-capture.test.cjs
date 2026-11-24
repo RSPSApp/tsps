@@ -194,6 +194,7 @@ test("without The Golem and Demon Slayer Reen does not start it", async (t) => {
   const reen = h.spawn(f, NPC.REEN_AK, REEN_AK_TILE);
   await play(f, () => h.talk(f, reen), ["Yes."]);
   assert.equal(stage(f), S.UNSTARTED);
+  assert.ok(texts(f).includes("You need to have completed The Golem and Demon Slayer to start Shadow of the Storm."), JSON.stringify(texts(f)));
 });
 
 // --- Badden and the golem in Uzer -----------------------------------------------------------------
@@ -264,6 +265,15 @@ test("t701: a mushroom on Silverlight: the item box with the dyed sword", async 
   assert.equal(count(f, I.SILVERLIGHT_2), 1);
   assert.equal(count(f, I.SILVERLIGHT), 0);
   assert.equal(count(f, I.BLACK_MUSHROOM), 0);
+});
+
+test("the Wiki (Silverlight): dyeing takes every clean Silverlight carried and leaves one dyed sword", async (t) => {
+  const f = actor(t, { tile: UZER, stage: S.INFILTRATE, items: [[I.BLACK_MUSHROOM, 1], [I.SILVERLIGHT, 1], [I.SILVERLIGHT, 1]] });
+  assert.equal(count(f, I.SILVERLIGHT), 2, "control: two swords");
+  await useItems(f, I.BLACK_MUSHROOM, I.SILVERLIGHT);
+  for (let i = 0; i < 4 && !h.shown(f); i++) h.tick(f);
+  assert.equal(count(f, I.SILVERLIGHT_2), 1);
+  assert.equal(count(f, I.SILVERLIGHT), 0);
 });
 
 // --- Evil Dave and the escort ---------------------------------------------------------------------
@@ -979,6 +989,8 @@ test("interruption: a logout in the summoning cutscene comes back at stage 120 w
   assert.equal(varbit(g, 542), 0);
   assert.equal(g.player.getMovementQueue().isMovementBlocked(), false);
   assert.ok([...h.core.World.getNpcs()].some((n) => n?.getOwner?.() === g.player && n.getRealId() === N.AGRITH_NAAR), "the demon");
+  assert.ok(![...h.core.World.getNpcs()].some((n) => n?.getOwner?.() === g.player && n.getRealId() === N.MATTHEW && n.isRegistered?.() !== false),
+    "Matthew died in the scene, though his line never played");
 });
 
 test("item-loss: Badden's line twice (a double click) takes one sigil", async (t) => {
@@ -1154,4 +1166,89 @@ test("leaving the room in the middle of a chant takes the owner-only cast with i
   await click(f, PORTAL.id, PORTAL.tile);
   h.ticks(f, 3);
   assert.ok([...h.core.World.getNpcs()].some((n) => n?.getOwner?.() === f.player && n.getRealId() === N.DENATH), "Denath again");
+});
+
+
+// --- Regression guards the old parity tests held (review of 1048fe9d8) -------------------------------
+
+const { MapObjects: MAP_OBJECTS } = require("../dist/game/entity/impl/object/MapObjects");
+
+/** The loc `id` the player can see within `radius` of a tile, with its tile. */
+function findLoc(f, id, [cx, cy, z], radius = 4) {
+  for (let dx = -radius; dx <= radius; dx++) for (let dy = -radius; dy <= radius; dy++) {
+    const location = new h.core.Location(cx + dx, cy + dy, z);
+    if (MAP_OBJECTS.getPrivateArea(f.player, id, location)) return [cx + dx, cy + dy];
+  }
+  return null;
+}
+
+test("the portals at a middle stage: 6310 into the room (2720,4884,2) and 6282 back out (2721,4911,0)", async (t) => {
+  const f = actor(t, { tile: [2721, 4911, 0], stage: S.DENATH });
+  await click(f, PORTAL.id, PORTAL.tile);
+  h.ticks(f, 3);
+  assert.deepEqual(at(f), [2720, 4884, 2]);
+  const exit = findLoc(f, 6282, [2720, 4884, 2]);
+  assert.ok(exit, "control: the exit portal in the room");
+  await click(f, 6282, exit);
+  h.ticks(f, 3);
+  assert.deepEqual(at(f), [2721, 4911, 0]);
+  assert.ok(![...h.core.World.getNpcs()].some((n) => n?.getOwner?.() === f.player && n.isRegistered?.() !== false), "the room's cast left behind");
+});
+
+test("a logout in the middle of the first chant: the room and its owner-only cast go, and the next login is free to move", async (t) => {
+  const f = ritualActor(t);
+  await play(f, () => itemOption(f, I.DEMONIC_SIGIL, "Chant"), DENATH_ORDER.slice(0, 2), { idleTicks: 2 });
+  const owned = [...h.core.World.getNpcs()].filter((n) => n?.getOwner?.() === f.player);
+  assert.ok(owned.length >= 7, "control: the chorus");
+  // The logout itself (reload only copies the save into a new session).
+  h.PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  const g = reload(t, f);
+  assert.ok(owned.every((n) => n.isRegistered?.() === false), `every cast NPC unregistered: ${owned.filter((n) => n.isRegistered?.() !== false).map((n) => `${n.getRealId()}@${n.getLocation().getX()},${n.getLocation().getY()},${n.getLocation().getZ()} owner=${n.getOwner?.() === g.player ? "new" : n.getOwner?.() === f.player ? "old" : "?"}`)}`);
+  h.ticks(g, 3);
+  assert.equal(varbit(g, 542), 0);
+  assert.equal(g.player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(quest().getStage(g.player), S.RITUAL);
+});
+
+test("only the owner's blow ends it: another player killing the owner's Agrith-Naar completes nothing", async (t) => {
+  const f = secondActor(t, S.READY);
+  await play(f, () => itemOption(f, I.DEMONIC_SIGIL, "Chant"), BOOK_ORDER, { idleTicks: 10 });
+  const demon = [...h.core.World.getNpcs()].find((n) => n?.getOwner?.() === f.player && n.getRealId() === N.AGRITH_NAAR);
+  const other = actor(t, { tile: [2719, 4902, 2], stage: S.SUMMONED, items: [[I.SILVERLIGHT_2, 1]] });
+  other.player.getEquipment().setItem(h.core.Equipment.WEAPON_SLOT, new h.core.Item(I.SILVERLIGHT_2, 1));
+  demon.setHitpoints(2);
+  landHit(other.player, demon, 2);
+  h.ticks(f, 6);
+  assert.equal(stage(f), S.SUMMONED, "the owner's quest stays at the fight");
+  assert.equal(quest().getStage(other.player), S.SUMMONED, "and the other player's does not move");
+  assert.notEqual(other.player.getEquipment().getItems()[h.core.Equipment.WEAPON_SLOT]?.getId(), I.DARKLIGHT);
+  assert.notEqual(f.player.getEquipment().getItems()[h.core.Equipment.WEAPON_SLOT]?.getId(), I.DARKLIGHT);
+});
+
+test("the fight through the real combat loop: Fire Blast from range, Telekinetic Grab under Protect from Magic, and he stays put (the Wiki)", async (t) => {
+  const f = secondActor(t, S.READY);
+  await play(f, () => itemOption(f, I.DEMONIC_SIGIL, "Chant"), BOOK_ORDER, { idleTicks: 10 });
+  const demon = [...h.core.World.getNpcs()].find((n) => n?.getOwner?.() === f.player && n.getRealId() === N.AGRITH_NAAR);
+  const home = [demon.getLocation().getX(), demon.getLocation().getY()];
+  const projectiles = [];
+  const create = h.core.Projectile.createProjectile;
+  h.core.Projectile.createProjectile = (...args) => { if (args[0] === demon) projectiles.push(args[2]); return create.apply(h.core.Projectile, args); };
+  t.after(() => { h.core.Projectile.createProjectile = create; });
+  const fightTicks = (n) => { for (let i = 0; i < n; i++) { demon.process(); h.tick(f); } };
+  // Ours t2709: he casts at a player standing at 2719,4910.
+  f.player.moveTo(new h.core.Location(2719, 4910, 2));
+  f.player.setHitpoints(990);
+  h.tick(f); // the move is placed before he picks a target
+  demon.getCombat().attack(f.player);
+  fightTicks(12);
+  assert.ok(projectiles.includes(130), `Fire Blast out of melee: ${projectiles}`);
+  projectiles.length = 0;
+  f.player.getPrayerActive()[h.core.PrayerHandler.PROTECT_FROM_MAGIC] = true;
+  f.player.moveTo(new h.core.Location(2719, 4910, 2));
+  h.tick(f);
+  demon.getCombat().attack(f.player);
+  fightTicks(12);
+  assert.ok(projectiles.includes(143), `Telekinetic Grab under Protect from Magic: ${projectiles}`);
+  assert.ok(h.core.CombatRange.canReach(demon, h.core.CombatFactory.MELEE_COMBAT, f.player), "pulled into melee");
+  assert.deepEqual([demon.getLocation().getX(), demon.getLocation().getY()], home, "he never moves");
 });

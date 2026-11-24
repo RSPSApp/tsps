@@ -3134,6 +3134,8 @@ module.exports = function registerShadowOfTheStormQuest(api) {
     // A helper on their way (or Denath on his) when the player left has arrived (gone).
     settleArrivals(player);
     if (quest.getStage(player) >= STAGE_RITUAL_DONE) setHelperBits(player, helperBits(player) | BIT_DENATH);
+    // The summoning kills Matthew (t2212); a logout before his line still leaves him dead.
+    if (quest.getStage(player) >= STAGE_SUMMONED) setHelperBits(player, helperBits(player) | BIT_MATTHEW);
     syncShadowVarbits(player);
     handleZoneEnter({ player });
     if (quest.getStage(player) === STAGE_RITUAL_DONE && !(helperBits(player) & BIT_TANYA) && inThroneRoom(player)) {

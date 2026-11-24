@@ -101,6 +101,7 @@ export function cacheKey(info: CacheInfo, input: SdMapLoaderInput, npcsHash: str
         input.loadNpcs,
         input.smoothTerrain,
         input.minimizeDrawCalls,
+        ...(input.farOnly ? ["farOnly:v2"] : []),
         input.loadNpcs ? npcsHash : "",
         ...(getCustomDefinitionKey() ? [`customDefinitions:${getCustomDefinitionKey()}`] : []),
         ...(definitionArchiveKey ? [`definitionArchives:${definitionArchiveKey}`] : []),

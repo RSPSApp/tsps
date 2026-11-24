@@ -188,15 +188,20 @@ import {
 import { KNOWN_WATER_TEXTURE_IDS } from "../../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "../hostInterface";
 import { resolveItemHighlightTargetFromEntry } from "./highlightItem";
+import { resolveCosmeticNpcHighlightTarget } from "./highlightCosmeticNpc";
 import { projectDeckToWorld } from "../worldEntityMotion";
 import { RENDER_CONSTANTS, InteractHighlightTarget } from "../constants";
 
 export function resolveInteractHighlightTargetFromEntry(host: WebGLOsrsRendererHost, 
-        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId"> | undefined,
+        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId" | "cosmeticNpcKey"> | undefined,
         fallbackTile?: { tileX: number; tileY: number; plane?: number },
     ): InteractHighlightTarget | undefined {
 
         if (!entry) return undefined;
+        // A stale preview must disappear rather than resolve a different live NPC.
+        if (entry.cosmeticNpcKey !== undefined) {
+            return resolveCosmeticNpcHighlightTarget(host, entry.cosmeticNpcKey);
+        }
         if (entry.targetType === MenuTargetType.LOC) {
             return host.resolveLocHighlightTargetFromEntry(entry, fallbackTile);
         }

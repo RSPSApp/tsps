@@ -199,6 +199,12 @@ export interface NpcHighlightTarget {
     plane: number;
 }
 
+export interface CosmeticNpcHighlightTarget {
+    kind: "cosmetic-npc";
+    key: string;
+    plane: number;
+}
+
 /** A ground item: the outline is the model of the stack its menu entry names. */
 export interface ItemHighlightTarget {
     kind: "item";
@@ -209,7 +215,7 @@ export interface ItemHighlightTarget {
     plane: number;
 }
 
-export type InteractHighlightTarget = LocHighlightTarget | NpcHighlightTarget | ItemHighlightTarget;
+export type InteractHighlightTarget = LocHighlightTarget | NpcHighlightTarget | CosmeticNpcHighlightTarget | ItemHighlightTarget;
 
 export type LocReloadBatchState = {
     id: number;

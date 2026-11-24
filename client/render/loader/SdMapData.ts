@@ -64,6 +64,7 @@ export type LocGeometryData = {
 };
 
 export type SdMapData = {
+    farOnly?: boolean;
     mapX: number;
     mapY: number;
 

@@ -1,4 +1,5 @@
 import { PingGrapherPlugin } from "../../../game/plugins/pinggrapher/PingGrapherPlugin";
+import { DistantWorldPlugin } from "../../../game/plugins/distantworld/DistantWorldPlugin";
 import { CharactersPlugin } from "../../../game/plugins/characters/CharactersPlugin";
 import { AnimationSmoothingConfig } from "../../../game/plugins/animationsmoothing/AnimationSmoothingConfig";
 import { BugReportPlugin } from "../../../game/plugins/bugreport/BugReportPlugin";
@@ -140,6 +141,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     PuzzleSolverPlugin,
     StretchedModePlugin,
     GpuPlugin,
+    DistantWorldPlugin,
     ShaderFxPlugin,
     LowEndDevicePlugin,
     CameraPlugin,

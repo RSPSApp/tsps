@@ -15,6 +15,8 @@ export type SimpleMenuEntry = {
     mapY?: number;
     playerServerId?: number;
     npcServerId?: number;
+    /** Presentation-only identity. Never an NPC type, ECS slot or server index. */
+    cosmeticNpcKey?: string;
     actionIndex?: number; // 0-based option index for LOC/OBJ/NPC/PLAYER actions
     opcode?: number; // precomputed OSRS client opcode when known
     identifier?: number;

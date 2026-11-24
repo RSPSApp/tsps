@@ -405,17 +405,23 @@ test('login sends back every setting the player changed', () => {
   assert.ok(player.sent.includes('varp 287=0'));
 });
 
-test('quest-list Settings opens native Interfaces category with controls transmitted', () => {
+test('quest-list Settings opens the search view and still transmits the controls', () => {
   const { buttons } = registered();
   const player = recordingPlayer();
   player.setInterfaceId = id => player.sent.push(`interface ${id}`);
   const sender = player.getPacketSender();
+  const flags = [];
+  const scripts = [];
   sender.sendSubInterface = () => sender;
-  sender.sendInterfaceFlagsRange = () => sender;
+  sender.sendInterfaceFlagsRange = (...args) => { flags.push(args); return sender; };
+  sender.sendClientScript = (...args) => { scripts.push(args); return sender; };
+  const category = sender.getVarbit(9656);
   assert.equal(typeof buttons.get((399 << 16) | 11), 'function');
   assert.equal(buttons.get((399 << 16) | 11)({ player }), true);
-  assert.equal(player.getAttribute('settings-view'), 6);
-  assert.equal(sender.getVarbit(9656), 6);
+  assert.equal(player.getAttribute('settings-view'), -1);
+  assert.equal(sender.getVarbit(9656), category, 'category untouched');
+  assert.deepEqual(scripts.find(args => args[0] === 5968), [5968, 'Quest List']);
+  assert.ok(flags.length > 0, 'row and control flags are transmitted');
 });
 
 test('quest colour picker saves RGB+1, accepts black, rejects invalid amounts and resets defaults', () => {

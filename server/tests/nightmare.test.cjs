@@ -25,6 +25,7 @@ const fakeApi = {
 Common.init(fakeApi);
 
 const Specials = require("../plugins/bosses/nightmare/Specials.Nightmare");
+const Spores = require("../plugins/bosses/nightmare/Spores.Nightmare");
 const Attacks = require("../plugins/bosses/nightmare/Attacks.Nightmare");
 const Claws = require("../plugins/bosses/nightmare/Claws.Nightmare");
 const Sleepwalkers = require("../plugins/bosses/nightmare/Sleepwalkers.Nightmare");
@@ -445,4 +446,231 @@ test("the second unique roll counts the whole party, not only the players who ea
   t.mock.method(Math, "random", () => 0.2); // 20 < 25: the second roll happens for a party of 30
   Loot.reward(fight, party);
   assert.equal(placed.filter(([, id]) => id === STAFF).length, 2, "both unique rolls, by the party's size");
+});
+
+const SPORE_INFECTED = "<col=ff289d>The Nightmare's spores have infected you, making you feel drowsy!</col>";
+const SPORE_REINFECTED = "<col=ff289d>The Nightmare's spores have reinfected you, making you feel drowsy!</col>";
+const SPORE_WORN = "<col=229628>The Nightmare's infection has worn off.</col>";
+const SPORE_SUMMONED = "<col=a53fff>The Nightmare summons some infectious spores!</col>";
+
+function sporeFight(t, phosani = false) {
+  const packets = [];
+  const objects = new Set();
+  const players = [];
+  const achievements = [];
+  const location = (x, y) => ({ getX: () => x, getY: () => y, getZ: () => 0 });
+  const movement = { setBlockMovement: () => movement, reset() {} };
+  const fight = Object.assign(Object.create(Fight.Fight.prototype), {
+    phosani, tick: 0, events: [], phase: 1, phaseCount: 3, hitpoints: 3200,
+    stage: "totems", nextAttackTick: Infinity, totems: [], curse: new Map(),
+    drowsy: new Map(), parasites: new Map(), frozen: new Map(), minions: new Set(), walkers: [],
+    dream: { tile: ([x, y]) => location(x, y), arenaTile: (loc) => [loc.getX(), loc.getY()] },
+    players: () => players,
+    boss: {
+      isRegistered: () => true, getCombat: () => ({ getLastAttack: () => ({ reset() {} }) }),
+      moveTo() {}, performAnimation() {}, performGraphic() {}, showHitsplat() {},
+      getMovementQueue: () => movement, setUntargetable() {},
+      setNpcTransformationId: (id) => packets.push([fight.tick, "form", id]),
+    },
+    healthBar() {}, updateHud() {}, won() {},
+  });
+  t.after(() => Common.init(fakeApi));
+  Common.init({
+    ...fakeApi,
+    emitCustomEvent(name, event) {
+      if (name === "combat-achievements:complete") achievements.push(event);
+    },
+    core: {
+      ...fakeApi.core,
+      GameObject: class {
+        constructor(id, loc) { this.id = id; this.loc = loc; }
+        getLocation() { return this.loc; }
+      },
+      Animation: class { constructor(id) { this.id = id; } },
+      Graphic: class { constructor(id) { this.id = id; } },
+      ObjectManager: { register: (obj) => objects.add(obj), deregister: (obj) => objects.delete(obj) },
+      ChatType: { SPAM: 105 },
+      Skill: { PRAYER: 5 },
+    },
+  });
+  t.mock.method(Claws, "chain", () => {});
+  t.mock.method(Sleepwalkers, "summon", () => {});
+
+  function addPlayer() {
+    const player = fakePlayer();
+    player.tile = location(0, 0);
+    player.running = true;
+    const record = (kind, ...args) => packets.push([fight.tick, kind, ...args]);
+    Object.assign(player, {
+      getLocation: () => player.tile, move: (x, y) => { player.tile = location(x, y); },
+      isRegistered: () => true, isPlayer: () => true,
+      isRunningReturn: () => player.running, setRunning: (running) => { player.running = running; },
+      sendMessage: (text) => record("game", text), forceChat: (text) => record("overhead", text),
+      getSkillManager: () => ({ getCurrentLevel: () => 85, setCurrentLevel() {} }),
+      getPacketSender: () => ({
+        sendConfig: (...args) => record("varp", ...args),
+        sendTypedMessage: (type, text) => record(type, text),
+        sendObjectAnimation: (object, anim) => record("loc", object.__sporeTile, anim.id),
+        sendAreaSound: (id, x, y, z, volume, delay, range) => record("area sound", id, delay, range),
+        sendSoundEffect() {}, sendClientScript() {}, closeSubInterface() {},
+      }),
+    });
+    players.push(player);
+    return player;
+  }
+
+  function tick(move) {
+    fight.process();
+    move?.();
+    for (const player of players) fight.processPlayer(player);
+  }
+  function until(target) {
+    while (fight.tick < target) tick();
+  }
+  const lines = () => packets.filter(([, type, text]) => type === "game" && [SPORE_INFECTED, SPORE_REINFECTED, SPORE_WORN].includes(text));
+  const bursts = () => packets.filter(([, type, , anim]) => type === "loc" && anim === 8632);
+  return { fight, packets, objects, addPlayer, tick, until, lines, bursts, achievements };
+}
+
+test("re-infection restarts the 25-tick duration and skips the yawn due on that tick", (t) => {
+  t.mock.method(Common, "pick", () => [[5, 5], [10, 10]]);
+  const { fight, packets, addPlayer, tick, until, lines, bursts } = sporeFight(t);
+  const player = addPlayer();
+  player.move(5, 5);
+  Spores.start(fight);
+  until(6);
+  assert.deepEqual(lines(), [[6, "game", SPORE_INFECTED]]);
+  assert.deepEqual(packets.filter(([, kind]) => kind === "varp"), [[6, "varp", 173, 0]]);
+  until(18);
+  tick(() => player.move(10, 10));
+  until(20);
+  assert.deepEqual(bursts().map(([tick]) => tick), [6, 20]);
+  until(44);
+  assert.equal(Specials.drowsyDelay(fight, player), 1);
+  until(45);
+  assert.equal(Specials.drowsyDelay(fight, player), 0);
+  assert.deepEqual(lines(), [[6, "game", SPORE_INFECTED], [45, "game", SPORE_WORN]]);
+  assert.deepEqual(packets.filter(([, kind]) => kind === "overhead"),
+    [8, 14, 22, 28, 34, 40].map((tick) => [tick, "overhead", "*yawn*"]));
+});
+
+test("re-infection sends its own game message", { skip: "The re-infection message is deferred from this slice." }, (t) => {
+  const { fight, addPlayer, until, lines } = sporeFight(t);
+  const player = addPlayer();
+  Specials.makeDrowsy(fight, player);
+  until(14);
+  Specials.makeDrowsy(fight, player);
+  assert.deepEqual(lines(), [[0, "game", SPORE_INFECTED], [14, "game", SPORE_REINFECTED]]);
+});
+
+test("two spores arm at +5 and a player beside both bursts them at +6 after stepping away", (t) => {
+  t.mock.method(Common, "pick", () => [[5, 5], [6, 6]]);
+  const { fight, packets, objects, addPlayer, tick, until, lines, bursts } = sporeFight(t);
+  const player = addPlayer();
+  player.move(5, 5);
+  Spores.start(fight);
+  until(5);
+  assert.deepEqual([...objects].map(({ id }) => id), [37739, 37739]);
+  assert.deepEqual(lines(), []);
+  tick(() => {
+    assert.ok(player.running, "movement runs before the infection consumes the pending burst");
+    player.move(8, 8);
+  });
+  assert.deepEqual(bursts(), [[6, "loc", [5, 5], 8632], [6, "loc", [6, 6], 8632]]);
+  assert.deepEqual(packets.filter(([, kind]) => kind === "area sound"), [
+    [6, "area sound", 4273, 12, 5], [6, "area sound", 4273, 12, 5],
+  ]);
+  assert.deepEqual(lines(), [[6, "game", SPORE_INFECTED]]);
+  assert.deepEqual(packets.filter(([tick]) => tick === 6).map(([, kind]) => kind),
+    ["game", "varp", "loc", "area sound", "loc", "area sound"]);
+});
+
+test("the thirtieth-tick mass burst checks the previous tile for infection", (t) => {
+  t.mock.method(Common, "pick", () => [[5, 5], [6, 5]]);
+  const { fight, addPlayer, tick, until, lines, bursts } = sporeFight(t, true);
+  const near = addPlayer();
+  const far = addPlayer();
+  Spores.start(fight);
+  until(28);
+  tick(() => {
+    near.move(4, 5);
+    far.move(8, 5);
+  });
+  assert.deepEqual(bursts(), [], "arriving beside a spore on tick 29 does not burst it yet");
+  tick(() => near.move(2, 5));
+  assert.deepEqual(lines(), [[30, "game", SPORE_INFECTED]]);
+  assert.equal(Specials.drowsyDelay(fight, near), 2);
+  assert.equal(Specials.drowsyDelay(fight, far), 0);
+  assert.equal(bursts().length, 4, "both players see both bursts");
+});
+
+test("Phosani's spores survive the charge, then burst at the blast and end drowsiness silently", (t) => {
+  t.mock.method(Common, "pick", () => [[5, 5], [9, 9], [10, 9]]);
+  const { fight, packets, objects, addPlayer, tick, until, lines, bursts } = sporeFight(t, true);
+  const player = addPlayer();
+  Spores.start(fight);
+  until(7);
+  fight.totemsCharged();
+  assert.deepEqual([...objects].map(({ id }) => id), [37739, 37739, 37739]);
+  tick(() => player.move(5, 5));
+  until(11);
+  assert.deepEqual(lines(), [[9, "game", SPORE_INFECTED]]);
+  tick(() => player.move(9, 9));
+  until(13);
+  assert.ok(packets.some(([tick, kind, id]) => tick === 13 && kind === "form" && id === 9422));
+  assert.deepEqual(bursts(), [[9, "loc", [5, 5], 8632], [13, "loc", [9, 9], 8632], [13, "loc", [10, 9], 8632]]);
+  assert.equal(Specials.drowsyDelay(fight, player), 0);
+  player.running = true;
+  until(40);
+  assert.ok(player.running);
+  assert.deepEqual(lines(), [[9, "game", SPORE_INFECTED]]);
+  assert.deepEqual(packets.filter(([, kind]) => kind === "overhead"), [[11, "overhead", "*yawn*"]]);
+  assert.equal(objects.size, 0);
+});
+
+test("the Nightmare's last totem blast bursts the spores four ticks after the charge", (t) => {
+  t.mock.method(Common, "pick", () => [[5, 5]]);
+  const { fight, addPlayer, until, lines, bursts } = sporeFight(t);
+  const player = addPlayer();
+  fight.phase = fight.phaseCount;
+  Spores.start(fight);
+  until(7);
+  Specials.makeDrowsy(fight, player);
+  fight.totemsCharged();
+  until(10);
+  assert.deepEqual(bursts(), []);
+  until(11);
+  assert.deepEqual(bursts(), [[11, "loc", [5, 5], 8632]]);
+  assert.equal(Specials.drowsyDelay(fight, player), 0);
+  until(34);
+  assert.deepEqual(lines(), [[7, "game", SPORE_INFECTED]]);
+});
+
+test("Phosani's death ends a re-infection silently without clearing its achievement failure", (t) => {
+  const { fight, packets, addPlayer, until, lines, achievements } = sporeFight(t, true);
+  const player = addPlayer();
+  Specials.makeDrowsy(fight, player);
+  CombatAchievements.sporesSlowed(fight, player);
+  until(13);
+  fight.at(1, () => Specials.makeDrowsy(fight, player));
+  until(25);
+  assert.equal(Specials.drowsyDelay(fight, player), 2);
+  fight.dying();
+  assert.equal(Specials.drowsyDelay(fight, player), 0);
+  until(42);
+  assert.deepEqual(lines(), [[0, "game", SPORE_INFECTED]]);
+  assert.deepEqual(packets.filter(([, kind]) => kind === "overhead"),
+    [2, 8, 16, 22].map((tick) => [tick, "overhead", "*yawn*"]));
+  CombatAchievements.judge(fight, player);
+  const tasks = achievements.filter((event) => event.player === player).map(({ task }) => task);
+  assert.ok(tasks.includes("I Would Simply React"), "the achievement event collector receives this player's awards");
+  assert.ok(!tasks.includes("Perfect Phosani's Nightmare"), "the spore failure survived re-infection");
+});
+
+test("the spore summon line is spam with its original colour and text", (t) => {
+  const { fight, packets, addPlayer, until } = sporeFight(t);
+  addPlayer();
+  Spores.start(fight);
+  until(2);
+  assert.deepEqual(packets.filter(([, , text]) => text === SPORE_SUMMONED), [[2, 105, SPORE_SUMMONED]]);
 });

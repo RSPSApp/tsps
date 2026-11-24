@@ -1,7 +1,8 @@
 // Run after `yarn build`: node --test tests/museum-camp.test.cjs
 //
 // Fossil Island's Museum Camp improvements against the Wiki (Museum Camp) and rsprox captures 73,
-// local 1000187, 1000189 and 1000410 (rev 227), with a real Player, Inventory and skills.
+// local 1000187, 1000189 and 1000410 (rev 227), and the camp dog against capture 3033 (rev 231), with
+// a real Player, Inventory and skills.
 process.env.BROWSER_HOST = '1';
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
@@ -16,6 +17,7 @@ const { TaskManager } = require('../dist/game/task/TaskManager');
 
 let Camp, core;
 const hooks = {};
+const npcHooks = {};
 
 before(() => {
   CachePipeline.initialize();
@@ -23,6 +25,7 @@ before(() => {
   const api = new Proxy({
     core,
     onObjectInteraction: (name, actions) => { hooks[name] = actions; },
+    onNpcInteraction: (name, actions) => { npcHooks[name] = actions; },
     onPlayerLogin: (fn) => { hooks.login = fn; },
   }, { get: (target, key) => (key in target ? target[key] : () => {}) });
   Camp = require('../plugins/areas/MuseumCamp.plugin');
@@ -301,4 +304,31 @@ test('the personally built camp wheel is reachable and spins through ordinary ob
     PluginManager.emitObjectRoute(event);
     assert.equal(event.approachRange, undefined, 'unbuilt and other object routes retain ordinary reach');
   }
+});
+
+test('the camp dog (NPC 7771): Pet plays the pickup animation and says the recorded line, the reply two ticks on (capture 3033)', (t) => {
+  const p = player(t);
+  const dog = { getId: () => core.NpcIdentifiers.DOG_2 };
+  assert.equal(core.NpcIdentifiers.DOG_2, 7771);
+  assert.equal(typeof npcHooks.Dog.Pet, 'function', 'Pet is hooked on the name Dog');
+  assert.notEqual(npcHooks.Dog.Pet({ player: p, npc: dog }), false);
+  assert.deepEqual(p.anims, [core.CacheDefinitions.getSeqId('human_pickupfloor')], 'animation 827 at once');
+  assert.equal(core.CacheDefinitions.getSeqId('human_pickupfloor'), 827);
+  assert.deepEqual(p.lines, ['You pet the dog...']);
+  TaskManager.process();
+  assert.deepEqual(p.lines, ['You pet the dog...'], 'nothing a tick later');
+  TaskManager.process();
+  assert.deepEqual(p.lines, ['You pet the dog...', 'He stretches out even further on the warm ground.']);
+});
+
+test('the camp dog declines any other Dog, leaving it to the Myths Guild and Final Dawn handlers', (t) => {
+  const p = player(t);
+  for (const id of [core.NpcIdentifiers.DOG_3, core.NpcIdentifiers.GUARD_DOG_3, undefined]) {
+    assert.equal(npcHooks.Dog.Pet({ player: p, npc: { getId: () => id } }), false);
+  }
+  assert.equal(npcHooks.Dog.Pet({ player: p, npc: null }), false);
+  TaskManager.process();
+  TaskManager.process();
+  assert.deepEqual(p.lines, []);
+  assert.deepEqual(p.anims, []);
 });

@@ -3,7 +3,7 @@
  * npc-combat-defs) and every icy pool goes with a puff. 2 ticks later (`deathTicks`) she is gone:
  * "Your Amoxliatl kill count is: N." (varp 4403, through Combat Achievements), the fight's
  * length against the personal best, and the loot on her middle tile (NpcDrops). The HUD fades 4
- * ticks after that. She rises again on her platform 29 ticks later (Wiki: respawn) for as long as
+ * ticks after that. She rises again on her platform 28 ticks later (R1140 ticks 7945-7973) for as long as
  * the player stays.
  */
 const Common = require("./Common.Amoxliatl");

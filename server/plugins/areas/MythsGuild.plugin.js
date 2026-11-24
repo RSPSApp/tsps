@@ -109,6 +109,23 @@ function enterPortal(player, destination) {
   }));
 }
 
+/** A region load re-clips the top floor when it is the guild's region (the startup clip covers the first load). */
+function clipTopFloorRegion({ regionId }) {
+  if (regionId === TOP_FLOOR_REGION) clipTopFloorVoid();
+}
+
+function enterHeroesPortal({ player }) {
+  enterPortal(player, PORTALS["Portal of Heroes"]);
+}
+
+function enterChampionsPortal({ player }) {
+  enterPortal(player, PORTALS["Portal of Champions"]);
+}
+
+function enterLegendsPortal({ player }) {
+  enterPortal(player, PORTALS["Portal of Legends"]);
+}
+
 module.exports = {
   name: "MythsGuild",
   description: "The Myths' Guild's statue down to its basement, the guild dog's Pet, its top floor's edges and its three guild portals.",
@@ -120,9 +137,9 @@ module.exports = {
     api.onObjectInteraction("Mythic Statue", { Enter: enterBasement });
     api.onNpcInteraction("Dog", { Pet: petDog });
     api.onServerStartup(clipTopFloorVoid);
-    api.onRegionLoaded(({ regionId }) => { if (regionId === TOP_FLOOR_REGION) clipTopFloorVoid(); });
-    for (const [name, destination] of Object.entries(PORTALS)) {
-      api.onObjectInteraction(name, { Enter: ({ player }) => enterPortal(player, destination) });
-    }
+    api.onRegionLoaded(clipTopFloorRegion);
+    api.onObjectInteraction("Portal of Heroes", { Enter: enterHeroesPortal });
+    api.onObjectInteraction("Portal of Champions", { Enter: enterChampionsPortal });
+    api.onObjectInteraction("Portal of Legends", { Enter: enterLegendsPortal });
   },
 };

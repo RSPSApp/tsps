@@ -115,7 +115,9 @@ test('Kalphite Queen molts into her normal airborne form, re-dressed, and comple
   const p=player('kalphite-queen');emit('echo-boss:start',{player:p,boss:'kalphite-queen'});const session=Queen._test.sessions.get(p),npc=session.npc;
   Queen._test.died({npc,killer:p});assert.equal(events.some(row=>row.name==='echo-boss:completed'),false);
   const death={npc,preventDeath:false};emit('beforeDeath',death);assert.equal(death.preventDeath,true);
-  assert.equal(npc.transform,base.NpcIdentifiers.KALPHITE_QUEEN_3,'the normal airborne form');assert.equal(npc.hp,1);
+  assert.notEqual(npc.transform,base.NpcIdentifiers.KALPHITE_QUEEN_3,'she stands in the first form until the molt starts');assert.equal(npc.hp,1);
+  assert.equal(tasks.length,2,'the death animation and the molt start');tasks.shift().execute();assert.notEqual(npc.transform,base.NpcIdentifiers.KALPHITE_QUEEN_3,'the death animation leaves her in the first form');tasks.shift().execute();
+  assert.equal(npc.transform,base.NpcIdentifiers.KALPHITE_QUEEN_3,'the normal airborne form');
   assert.equal(configured.at(-1).role,'air','dressed as the Echo airborne form');
   assert.equal(tasks.length,1);tasks.shift().execute();assert.equal(npc.hp,900,'air form restores its own profile health');assert.equal(npc.untargetable,false);
   emit('death',{npc,killer:p});emit('death',{npc,killer:p});assert.equal(events.filter(row=>row.name==='echo-boss:completed').length,1);

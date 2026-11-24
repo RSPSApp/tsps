@@ -14,7 +14,7 @@ function start(fight) {
   fight.boss.performAnimation(Common.animation(spores.anim));
   for (const player of fight.players()) Common.sounds(player, spores.sounds);
   const layout = Common.pick(spores.layouts);
-  const state = { locs: [], armed: false, start: fight.tick };
+  const state = { locs: [], armed: false, start: fight.tick, previousTiles: new Map() };
   fight.spores = state;
   fight.at(spores.initialTicks, () => {
     if (fight.spores !== state) return;
@@ -30,7 +30,7 @@ function start(fight) {
   fight.at(spores.messageTicks, () => {
     if (fight.spores !== state) return;
     for (const player of fight.players()) {
-      player.sendMessage(spores.message);
+      player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, spores.message);
       for (const object of state.locs) player.getPacketSender().sendObjectAnimation(object, Common.animation(spores.spawnAnim));
     }
   });
@@ -39,14 +39,11 @@ function start(fight) {
     state.locs = state.locs.map((object) => replace(fight, object, spores.locs.armed));
     state.armed = true;
   });
-  fight.at(spores.endTicks, () => {
-    if (fight.spores !== state) return;
-    for (const object of [...state.locs]) burst(fight, object);
-    fight.at(2, () => fight.spores === state && clear(fight));
-  });
   if (fight.phosani) {
     const { chain } = Common.data.claws;
-    fight.at(CHAIN_AFTER, () => fight.spores === state && require("./Claws.Nightmare").chain(fight));
+    fight.at(CHAIN_AFTER, () => {
+      if (fight.spores === state && fight.stage !== "blast") require("./Claws.Nightmare").chain(fight);
+    });
     return CHAIN_AFTER + chain.every * chain.count + 6;
   }
   return null;
@@ -72,20 +69,46 @@ function burst(fight, object) {
   fight.at(2, () => Common.core.ObjectManager.deregister(object, false));
 }
 
-/** Within a tile of an armed spore: it bursts and the player turns drowsy. */
-function processPlayer(fight, player) {
-  const state = fight.spores;
-  if (!state?.armed) return;
-  const [px, py] = fight.dream.arenaTile(player.getLocation());
-  for (const object of [...state.locs]) {
-    const [x, y] = object.__sporeTile;
-    if (Math.max(Math.abs(px - x), Math.abs(py - y)) > 1) continue;
-    burst(fight, object);
-    require("./Specials.Nightmare").makeDrowsy(fight, player);
-  }
+function nearby(state, tile) {
+  if (!tile) return [];
+  const [px, py] = tile;
+  return state.locs.filter(({ __sporeTile: [x, y] }) => Math.max(Math.abs(px - x), Math.abs(py - y)) <= 1);
 }
 
-function process() {}
+/** A player sets off spores beside the tile they occupied after the previous move. */
+function processPlayer(fight, player) {
+  const state = fight.spores;
+  if (!state) return;
+  const previous = state.previousTiles.get(player);
+  state.previousTiles.set(player, fight.dream.arenaTile(player.getLocation()));
+  if (!state.armed || fight.tick <= state.start + Common.data.spores.armTicks) return;
+  const spores = nearby(state, previous);
+  if (spores.length === 0) return;
+  require("./Specials.Nightmare").makeDrowsy(fight, player);
+  for (const object of spores) burst(fight, object);
+}
+
+function process(fight) {
+  const state = fight.spores;
+  if (!state || fight.tick < state.start + Common.data.spores.endTicks) return;
+  for (const player of fight.players()) {
+    if (nearby(state, state.previousTiles.get(player)).length > 0) {
+      require("./Specials.Nightmare").makeDrowsy(fight, player);
+    }
+  }
+  burstAll(fight);
+}
+
+function burstAll(fight) {
+  const state = fight.spores;
+  if (!state) return;
+  for (const object of [...state.locs]) burst(fight, object);
+  fight.spores = null;
+}
+
+function playerLeft(fight, player) {
+  fight.spores?.previousTiles.delete(player);
+}
 
 function clear(fight) {
   const state = fight.spores;
@@ -94,4 +117,4 @@ function clear(fight) {
   fight.spores = null;
 }
 
-module.exports = { start, process, processPlayer, clear };
+module.exports = { start, process, processPlayer, burstAll, playerLeft, clear };

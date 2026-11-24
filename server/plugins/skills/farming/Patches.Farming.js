@@ -376,6 +376,10 @@ function workStep(player, work) {
         return;
     }
     if (work.levelUpPaused || workTick < work.nextTick) return;
+    if (work.action === "fill-cans") {
+        if (!fillNextCan(player, work)) WORK.delete(player);
+        return;
+    }
     let again;
     if (work.action === "fill-bin") again = fillBinStep(player, work);
     else if (work.action === "take-bin") {
@@ -1028,6 +1032,62 @@ function fillHaySack(player, slot) {
     player.getPacketSender().sendSound(SCARECROW_SOUND, 1, HAY_SACK_SOUND_DELAY);
     spam(player, "You fill the sack with straw.");
 }
+const WATER_SOURCES = new Set(["fountain", "sink", "gold sink", "waterpump", "water pump", "pump and drain", "pump and tub", "water barrel", "well"]);
+const WATERING_CAN_NAME = /^(?:Watering can(?:\([1-8]\))?|Gricoller's can)$/;
+/** human_pickuptable and its sound (rsprox 1108, 1855, 3267, 3275: the same on the click's tick at every source). */
+const FILL_CAN_SOUND = 2609;
+/** Sources whose line names them: "You fill the watering can from the fountain." (127, 1855) and "... from the water barrel." (3267); the Water pump's is plain (1108, 3275). */
+const FILL_CAN_FROM = new Set(["fountain", "water barrel"]);
+/** A watering can on a well (3275 types it as a message box). */
+const WELL_REFUSES_CAN = "If I drop my watering can down there I don't think I'm likely to get it back.";
+/** Ticks between one can filling and the next (rsprox 3267 ticks 1076 and 1080; 3275 ticks 28252 to 28288). */
+const FILL_CAN_PERIOD = 4;
+/**
+ * A can used on a source fills on the click's own tick (after the walk), then every empty can in the
+ * inventory follows, lowest slot first, one per FILL_CAN_PERIOD ticks with the same swing, sound and line:
+ * one click filled slots 9 to 18 in 3275 (28243 click, fills 28252 to 28288) and slots 7 and 8 in 3267. Only
+ * plain empty cans are taken: the 10-stack in 3275 is never filled. Any other input clears WORK and ends it.
+ */
+function fillWateringCan(player, event, object, source) {
+    if (source === "well") {
+        player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, WELL_REFUSES_CAN)));
+        return;
+    }
+    if ([core.ObjectIdentifiers.WATER_PUMP_2, core.ObjectIdentifiers.WATER_PUMP_3].includes(object.getId())) {
+        player.sendMessage("This water pump is damaged."); return;
+    }
+    const can = player.getInventory().forSlot(event.itemSlot);
+    if (can?.getId() !== event.itemId) return;
+    if (!fillCan(player, can, source)) return;
+    if (nextEmptyCan(player)) {
+        WORK.set(player, { action: "fill-cans", source, position: player.getLocation().clone(), nextTick: workTick + FILL_CAN_PERIOD });
+    }
+}
+/** The lowest-slot empty "Watering can" (not Gricoller's, not a part-filled one). */
+function nextEmptyCan(player) {
+    const emptyCan = Data.itemId("Watering can");
+    const slot = player.getInventory().getSlotForItemId(emptyCan);
+    return slot >= 0 ? player.getInventory().forSlot(slot) : null;
+}
+/** Fills one can with the swing, sound and line; false for a can that is already full. */
+function fillCan(player, can, source) {
+    if (core.CacheDefinitions.getItem(can.getId()).name === "Gricoller's can") can.setMetaValue(GRICOLLER_WATER_META, 1000);
+    else if (can.getId() === Data.itemId("Watering can(8)")) return false;
+    else can.setId(Data.itemId("Watering can(8)"));
+    player.getInventory().refreshItems();
+    animate(player, PICKUP_TABLE_ANIMATION);
+    sound(player, FILL_CAN_SOUND);
+    spam(player, `You fill the watering can${FILL_CAN_FROM.has(source) ? ` from the ${source}` : ""}.`);
+    return true;
+}
+/** One chained fill; true while more empty cans remain. */
+function fillNextCan(player, work) {
+    const can = nextEmptyCan(player);
+    if (!can) return false;
+    fillCan(player, can, work.source);
+    work.nextTick = workTick + FILL_CAN_PERIOD;
+    return nextEmptyCan(player) !== null;
+}
 function itemOnObject(event) {
     const { player, itemId: id, object, location } = event;
     WORK.delete(player);
@@ -1040,17 +1100,9 @@ function itemOnObject(event) {
             event.handled = true;
             fillHaySack(player, event.itemSlot); return;
         }
-        if (["fountain", "sink", "gold sink", "waterpump", "water pump", "pump and drain", "pump and tub", "water barrel", "well"].includes(name) && /^(?:Watering can(?:\([1-8]\))?|Gricoller's can)$/.test(core.CacheDefinitions.getItem(id).name)) {
+        if (WATER_SOURCES.has(name) && WATERING_CAN_NAME.test(core.CacheDefinitions.getItem(id).name)) {
             event.handled = true;
-            if ([core.ObjectIdentifiers.WATER_PUMP_2, core.ObjectIdentifiers.WATER_PUMP_3].includes(object.getId())) {
-                player.sendMessage("This water pump is damaged."); return;
-            }
-            if (player.getInventory().forSlot(event.itemSlot)?.getId() === id) {
-                const can = player.getInventory().forSlot(event.itemSlot);
-                if (core.CacheDefinitions.getItem(id).name === "Gricoller's can") can.setMetaValue(GRICOLLER_WATER_META, 1000);
-                else can.setId(Data.itemId("Watering can(8)"));
-                player.getInventory().refreshItems();
-            }
+            fillWateringCan(player, event, object, name); return;
         }
         return;
     }

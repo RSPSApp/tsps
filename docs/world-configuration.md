@@ -470,7 +470,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Misthalin` | Misthalin | areas | yes | Misthalin area interactions: the Edgeville dungeon ladder and trapdoor, Varrock's manhole to the sewers and the West Bank's locked back door, the Wizards' Tower basement, and the Lumbridge Swamp Caves dark hole and wall markers. |
 | `MorUiRek` | MorUiRek | areas | yes | Mor Ul Rek (the TzHaar city): its cave exit back to the Karamja volcano and its hot vent doors. (members only) |
 | `MotherlodeMine` | MotherlodeMine | areas | yes | Motherlode Mine: mining pay-dirt, washing it in Prospector Percy's machine and collecting ore from the sack, with its HUD. (members only) |
-| `MuseumCamp` | MuseumCamp | areas | yes | Fossil Island Museum Camp's improvements: building the bank chest, well, cooking pot, spinning wheel and loom with Construction. (members only) |
+| `MuseumCamp` | MuseumCamp | areas | yes | Fossil Island Museum Camp's improvements: building the bank chest, well, cooking pot, spinning wheel and loom with Construction, and petting the camp's dog. (members only) |
 | `MuseumEntrance` | MuseumEntrance | areas | yes | Guards entry to the Varrock Museum cleaning area, including on free worlds. |
 | `MythsGuild` | MythsGuild | areas | yes | The Myths' Guild's statue down to its basement, the guild dog's Pet, its top floor's edges and its three guild portals. (members only) |
 | `MythsGuildBarrier` | MythsGuildBarrier | areas | yes | The Myths' Guild magical barriers (bridge and basement) and the Lithkren Vault barriers: open after Dragon Slayer II. (members only) |
@@ -887,6 +887,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `BasiliskKnights` | BasiliskKnights | npcs | yes | Basilisk Knight combat: walks into melee range, then melee or magic beside the player; magic from where it can't step closer, at the player's attack speed (4 ticks at the fastest), with the captured cast. (members only) |
 | `Caique` | Caique | npcs | yes | Lets players pet the sitting caiques of Kastori and the Tlati Rainforest, which peck back for 1 damage with the captured animations. (members only) |
 | `CamdozaalGolems` | CamdozaalGolems | npcs | yes | Lets players Awaken golem rubble in the Ruins of Camdozaal into Flawed, Mind, Body or (members) Chaos golems, which disintegrate if left behind. |
+| `CandleSeller` | CandleSeller | npcs | yes | The Candle seller by the Lumbridge Swamp Caves sells a lit candle for 1,000 coins through his Talk-to dialogue. (members only) |
 | `CanifisCitizens` | CanifisCitizens | npcs | yes | Turns Canifis citizens into werewolves when a player attacks them without a Wolfbane, keeping their remaining health. (members only) |
 | `Catablepon` | Catablepon | npcs | yes | Catablepons cast their weakening glare (Weaken) on players until 8% + 3 of their Strength is drained. |
 | `CivilianCats` | CivilianCats | npcs | yes | West Ardougne civilians buy adult, overgrown, wily, lazy and hell cats for 100 Death runes (200 after the Ardougne easy diary) when the cat is used on them; Talk-to offers the price. (members only) |

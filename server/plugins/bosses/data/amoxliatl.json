@@ -34,13 +34,14 @@
   },
   "music": 807,
   "spawn": {
+    "about": "Respawn ticks are counted from the kill-count message (R1140).",
     "tile": [1362, 4510, 0],
     "direction": "EAST",
     "afterArrivalTicks": 5,
     "anim": 11527,
     "say": "Euat! You are not welcome here!",
     "firstAttackTicks": 4,
-    "respawnTicks": 29
+    "respawnTicks": 28
   },
   "hud": {
     "colours": [3204, 11761, 21407],
@@ -97,6 +98,7 @@
   "icicle": {
     "anim": 11531,
     "message": "<col=ff3045>Amoxliatl disables your prayers and launches an icicle attack!</col>",
+    "plainMessage": "<col=ff3045>Amoxliatl launches an icicle attack!</col>",
     "projectile": { "id": 2936, "start": 50, "end": 150, "startHeight": 448, "endHeight": 0, "angle": 128, "progress": 83 },
     "impactTicks": 5,
     "impactSpotanim": 2935,
@@ -106,6 +108,11 @@
   "unstableIce": {
     "anim": 11533,
     "message": "<col=00ffff>Amoxliatl forms some unstable ice blocks around you.",
+    "postQuest": {
+      "message": "<col=00e6e6>Amoxliatl forms some unstable ice blocks around you.",
+      "shatterTicks": 14,
+      "shatterHealSplat": 6
+    },
     "count": [1, 4],
     "reach": 4,
     "projectile": { "id": 2936, "start": 50, "end": 90, "startHeight": 112, "endHeight": 0, "angle": 255, "progress": 83 },

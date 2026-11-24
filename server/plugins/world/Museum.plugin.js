@@ -950,6 +950,11 @@ function handleBootstrap({ player }) {
   sendKudosVarbit(player);
 }
 
+/** After the museum map closes, the kudos HUD comes back for a player who had it up. */
+function reshowKudosHud(player) {
+  if (kudosHudShown.has(player)) showKudosHud(player);
+}
+
 module.exports = {
   name: "Museum",
   description: "Varrock Museum Kudos: the Dig Site cleaning activity, the finds storage crate, display cases, Historian Minas's quest timeline reports, Curator Haig Halen's salvaging relics, the fossil displays and the wall maps.",
@@ -984,6 +989,6 @@ module.exports = {
     require("./museum/SalvagingRelics.Museum")(pluginApi);
     require("./museum/StorageCrate.Museum")(pluginApi);
     FossilDisplays(pluginApi);
-    MuseumMap(pluginApi, (player) => { if (kudosHudShown.has(player)) showKudosHud(player); });
+    MuseumMap(pluginApi, reshowKudosHud);
   },
 };

@@ -336,6 +336,10 @@ function workStep(player, work) {
         return;
     }
     if (work.levelUpPaused || workTick < work.nextTick) return;
+    if (work.action === "fill-cans") {
+        if (!fillNextCan(player, work)) WORK.delete(player);
+        return;
+    }
     let again;
     if (work.action === "fill-bin") again = fillBinStep(player, work);
     else if (work.action === "take-bin") {
@@ -984,9 +988,13 @@ const FILL_CAN_SOUND = 2609;
 const FILL_CAN_FROM = new Set(["fountain", "water barrel"]);
 /** A watering can on a well (3275 types it as a message box). */
 const WELL_REFUSES_CAN = "If I drop my watering can down there I don't think I'm likely to get it back.";
+/** Ticks between one can filling and the next (rsprox 3267 ticks 1076 and 1080; 3275 ticks 28252 to 28288). */
+const FILL_CAN_PERIOD = 4;
 /**
- * One can per click, as live: each can is clicked on the source itself (3275 clicks nine in a row in no
- * order, and the others stay as they were), and the click's own tick brings the line, the swing and the sound.
+ * A can used on a source fills on the click's own tick (after the walk), then every empty can in the
+ * inventory follows, lowest slot first, one per FILL_CAN_PERIOD ticks with the same swing, sound and line:
+ * one click filled slots 9 to 18 in 3275 (28243 click, fills 28252 to 28288) and slots 7 and 8 in 3267. Only
+ * plain empty cans are taken: the 10-stack in 3275 is never filled. Any other input clears WORK and ends it.
  */
 function fillWateringCan(player, event, object, source) {
     if (source === "well") {
@@ -998,13 +1006,35 @@ function fillWateringCan(player, event, object, source) {
     }
     const can = player.getInventory().forSlot(event.itemSlot);
     if (can?.getId() !== event.itemId) return;
-    if (core.CacheDefinitions.getItem(event.itemId).name === "Gricoller's can") can.setMetaValue(GRICOLLER_WATER_META, 1000);
-    else if (can.getId() === Data.itemId("Watering can(8)")) return;
+    if (!fillCan(player, can, source)) return;
+    if (nextEmptyCan(player)) {
+        WORK.set(player, { action: "fill-cans", source, position: player.getLocation().clone(), nextTick: workTick + FILL_CAN_PERIOD });
+    }
+}
+/** The lowest-slot empty "Watering can" (not Gricoller's, not a part-filled one). */
+function nextEmptyCan(player) {
+    const emptyCan = Data.itemId("Watering can");
+    const slot = player.getInventory().getSlotForItemId(emptyCan);
+    return slot >= 0 ? player.getInventory().forSlot(slot) : null;
+}
+/** Fills one can with the swing, sound and line; false for a can that is already full. */
+function fillCan(player, can, source) {
+    if (core.CacheDefinitions.getItem(can.getId()).name === "Gricoller's can") can.setMetaValue(GRICOLLER_WATER_META, 1000);
+    else if (can.getId() === Data.itemId("Watering can(8)")) return false;
     else can.setId(Data.itemId("Watering can(8)"));
     player.getInventory().refreshItems();
     animate(player, PICKUP_TABLE_ANIMATION);
     sound(player, FILL_CAN_SOUND);
     spam(player, `You fill the watering can${FILL_CAN_FROM.has(source) ? ` from the ${source}` : ""}.`);
+    return true;
+}
+/** One chained fill; true while more empty cans remain. */
+function fillNextCan(player, work) {
+    const can = nextEmptyCan(player);
+    if (!can) return false;
+    fillCan(player, can, work.source);
+    work.nextTick = workTick + FILL_CAN_PERIOD;
+    return nextEmptyCan(player) !== null;
 }
 function itemOnObject(event) {
     const { player, itemId: id, object, location } = event;

@@ -44,10 +44,13 @@ When the inventory fills: spam "You have run out of inventory space.", on the ti
 
 ## Watering cans on a water source (rsprox 1108, 127, 1855, 3267, 3275)
 
-A can used on the source fills **that one can**, on the click's own tick (after the walk): `human_pickuptable`
+A can used on the source fills **that can** on the click's own tick (after the walk): `human_pickuptable`
 (832), sound 2609, spam line, and the can becomes Watering can(8) (5340), from empty or part-filled alike.
-Nothing fills the other cans: capture 3275 clicks nine in a row in no particular slot order, each answered
-once, and the rest stay as they were. A second click two ticks later (27481, 27483, 27485) is answered at once.
+Then the **other empty cans fill by themselves**, lowest slot first, one every 4 ticks with the same swing,
+sound and line, and no input between: one click in 3275 (tick 28243) fills slots 9 to 18 at 28252, 28256 ...
+28288, and 3267 fills slots 7 and 8 at 1076 and 1080 from one click on the barrel. Only plain empty
+`Watering can`s are taken (part-filled cans and the 10-stack in 3275 slot 5 never are; Gricoller's can is not captured and is left out too). Any
+other click, walking away or using another item ends the chain; a later click starts it again from that can.
 
 | Source (loc) | Line |
 | --- | --- |

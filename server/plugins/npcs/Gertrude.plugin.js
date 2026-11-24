@@ -147,6 +147,23 @@ function onDialogueAction(api, event) {
   }
 }
 
+const RAISING_A_KITTEN = /already owning a kitten/i;
+
+/** A kitten from her is still being raised: carried, banked or following (rsprox capture of the quest, tick 883). */
+function raisingKitten(player, api) {
+  if (holdsKittenItem(player)) return true;
+  const request = { player, pet: null };
+  api.emitCustomEvent("pets:current", request);
+  return request.pet?.getDefinition?.()?.getName?.() === "Kitten";
+}
+
+/** "While already owning a kitten:" on her own page. */
+function answerCondition(api, { player, npcId, text }) {
+  if (!RAISING_A_KITTEN.test(String(text ?? ""))) return null;
+  if (api.core.NpcDefinition?.forId?.(npcId)?.getName?.() !== "Gertrude") return null;
+  return raisingKitten(player, api);
+}
+
 module.exports = {
   name: "Gertrude",
   description: "Lets players buy another kitten from Gertrude after her quest for 100 coins and pick its colour, if wearing an activated Ring of Charos.",
@@ -156,11 +173,12 @@ module.exports = {
     api.onNpcInteraction("Gertrude", { Kitten: onGertrudeKitten.bind(null, api) });
     api.onCustomEvent("npc-dialogue:action", onDialogueAction.bind(null, api));
     api.onCustomEvent("gertrude:initial-kitten-menu", onInitialKittenMenu.bind(null, api));
+    api.onNpcDialogueCondition(answerCondition.bind(null, api));
   },
   _test: {
     GERTRUDES_CAT_QUEST, KITTEN_COST, RING_OF_CHAROS_A, KITTEN_ITEM_IDS, KITTEN_COLOURS,
     KITTEN_COLOUR_CHOSEN_EVENT, hasCharosAEquipped, holdsKittenItem, followingCat,
     kittenQuestComplete, canChooseKitten, chooseKittenColour, onGertrudeKitten,
-    openKittenColourMenu, onDialogueAction,
+    openKittenColourMenu, onDialogueAction, raisingKitten, answerCondition,
   },
 };

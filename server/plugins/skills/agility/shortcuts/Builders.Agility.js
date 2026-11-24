@@ -30,6 +30,7 @@ const ShortcutAnim = Object.freeze({
   CRUMBLED_WALL: 840, // human_walk_crumbledwall
   CLIMB_TRELLIS: 12091, // human_climb_trellis
   WALK_BACKWARDS: 820, // human_walk_b
+  WALK_FENCE_NORTH: 882, // human_walk_fence_north
   LONG_CRAWL: 2796, // human_longcrawl
   SHORT_JUMP: 12196, // human_yama_shortjump01
   STEPPING_STONE_JUMP: 769, // human_steppingstonejump

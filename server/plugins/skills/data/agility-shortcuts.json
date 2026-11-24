@@ -139,8 +139,13 @@
       "name": "Broken fence (Varrock)",
       "object": 2618,
       "level": 1,
-      "end": "You climb over the broken fence.",
-      "stile": {"axis":"y"}
+      "busy": true,
+      "note": "rsprox captures local GertrudesCat (rev 242) ticks 375-382 and 697-701, 3222 ticks 10828-10833 and 11368-11370",
+      "unverified": "the south approach: live walks onto the fence tile (3308,3492), which this cache's collision (clipType 2) blocks, so the climb starts from 3308,3491",
+      "between": {"ends":[[3308,3491,0],[3308,3493,0]],"cross":{
+        "forward":[{"wait":2},{"move":[3308,3494],"from":[3308,3493],"anim":"WALK_FENCE_NORTH","speed":[0,104],"ticks":3}],
+        "back":[{"move":[3308,3491],"from":[3308,3492],"anim":"CLIMB_OVER","speed":[0,60],"ticks":3}]
+      }}
     },
     {
       "name": "Stepping stone (Lumbridge Swamp)",

@@ -748,6 +748,22 @@ function awardPetRequest(request) {
   request.awarded = awardPet(request.player, request.itemId);
 }
 
+/**
+ * `pets:summon` { player, itemId, following }: content that hands a pet over in person (Gertrude's first
+ * kitten) drops it as the player's follower, with no award, insurance or "followed" lines. With a
+ * follower already out it goes into the inventory (or under the player when that is full), as a
+ * reward drop does; `summoned` says the pet system took it, `following` whether it now follows.
+ */
+function summonPetRequest(request) {
+  const player = request?.player;
+  if (!player || !Number.isInteger(request.itemId) || !getPetForItemId(request.itemId)) return;
+  request.summoned = true;
+  drop(player, request.itemId, true, { silent: true });
+  const current = player.getAttribute?.(CURRENT_PET_ATTRIBUTE);
+  request.following = current?.isRegistered?.() === true && getPetByNpcId(current.getId())?.itemId === request.itemId;
+  request.pet = request.following ? current : null;
+}
+
 /** Does the player hold this pet item anywhere (follower, inventory, bank)? */
 function holdsPetItem(player, itemId) {
   if (holdsPetItemOutsideHouse(player, itemId)) return true;
@@ -2384,6 +2400,7 @@ module.exports = {
     api.onCustomEvent("pets:eligible", answerPetEligibility);
     api.onCustomEvent("pets:release", releasePet);
     api.onCustomEvent("pets:award", awardPetRequest);
+    api.onCustomEvent("pets:summon", summonPetRequest);
     api.onCustomEvent("pets:wily-cat-status", answerWilyCatStatus);
     api.onCustomEvent("pets:naming-candidate", answerNamingCandidate);
     api.onCustomEvent("pets:train-wily-cat", trainWilyCat);

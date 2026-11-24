@@ -539534,6 +539534,19 @@
                   "player": "Do you have any more kittens?"
                 },
                 {
+                  "type": "condition",
+                  "text": "While already owning a kitten:",
+                  "steps": [
+                    {
+                      "npc": "Aren't you still raising that other kitten? Only once it's fully grown and it no longer needs your attention will I let you have another kitten."
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "ZJlZKy"
+                },
+                {
                   "npc": "Indeed I have. They are 100 coins each, do you want one?"
                 },
                 {
@@ -539879,6 +539892,15 @@
                   "player": "Well, I suppose I could."
                 },
                 {
+                  "type": "action",
+                  "text": "Gertrude's Cat is started.",
+                  "id": "yOq6G5",
+                  "action": "quest_start",
+                  "quest": "Gertrude's Cat",
+                  "hook": "quest:gertrude-s-cat:start",
+                  "action_source": "text"
+                },
+                {
                   "type": "line",
                   "speaker": "Gertrude",
                   "text": "Really? Thank you so much! I really have no idea where she could be!",
@@ -539898,15 +539920,6 @@
                 },
                 {
                   "player": "Alright then, I'll see what I can do."
-                },
-                {
-                  "type": "action",
-                  "text": "Gertrude's Cat is started.",
-                  "id": "yOq6G5",
-                  "action": "quest_start",
-                  "quest": "Gertrude's Cat",
-                  "hook": "quest:gertrude-s-cat:start",
-                  "action_source": "text"
                 }
               ]
             },
@@ -539974,32 +539987,21 @@
         },
         {
           "type": "line",
-          "speaker": "Wilough/Shilop",
-          "text": "I didn't mean to take it! I just forgot to pay."
+          "speaker": "Shilop",
+          "text": "I didn't mean to take it! I just forgot to pay.",
+          "speaker_ids": [
+            3501
+          ]
         },
         {
           "player": "What? I'm trying to help your mum find Fluffs."
         },
         {
-          "type": "unavailable",
-          "steps": [
-            {
-              "type": "line",
-              "speaker": "Wilough",
-              "text": "I might be able to help. Fluffs followed me to my secret play area, I haven't seen her since.",
-              "speaker_ids": [
-                3503
-              ]
-            }
-          ],
-          "id": "LgothB"
-        },
-        {
           "type": "line",
-          "speaker": "Wilough",
+          "speaker": "Shilop",
           "text": "Ohh...well, in that case I might be able to help. Fluffs followed me to my secret play area, I haven't seen her since.",
           "speaker_ids": [
-            3503
+            3501
           ]
         },
         {
@@ -540007,10 +540009,10 @@
         },
         {
           "type": "line",
-          "speaker": "Wilough",
+          "speaker": "Shilop",
           "text": "If I told you that, it wouldn't be a secret.",
           "speaker_ids": [
-            3503
+            3501
           ]
         },
         {
@@ -540024,16 +540026,195 @@
                 },
                 {
                   "type": "line",
-                  "speaker": "Wilough",
+                  "speaker": "Shilop",
                   "text": "W..wh..what?! Y..you wouldn't! A young lad like me! I'd have you behind bars before nightfall!",
+                  "speaker_ids": [
+                    3501
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "You decide it's best not to hurt the boy.",
+                  "id": "dURcwg"
+                }
+              ]
+            },
+            {
+              "text": "What will make you tell me?",
+              "steps": [
+                {
+                  "player": "What will make you tell me?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Shilop",
+                  "text": "Well...now you ask, I am a bit short on cash.",
+                  "speaker_ids": [
+                    3501
+                  ]
+                },
+                {
+                  "player": "How much?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Shilop",
+                  "text": "100 coins should cover it.",
+                  "speaker_ids": [
+                    3501
+                  ]
+                },
+                {
+                  "player": "100 coins! Why should I pay you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Shilop",
+                  "text": "You shouldn't, but I won't help otherwise. I never liked that cat anyway, so what do you say?",
+                  "speaker_ids": [
+                    3501
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "I'm not paying you a penny.",
+                      "steps": [
+                        {
+                          "player": "I'm not paying you a penny."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Shilop",
+                          "text": "Okay then, I'll find another way to make money.",
+                          "speaker_ids": [
+                            3501
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Okay then, I'll pay.",
+                      "steps": [
+                        {
+                          "player": "Okay then, I'll pay."
+                        },
+                        {
+                          "type": "action",
+                          "text": "You give the lad 100 coins.",
+                          "id": "YQId7G"
+                        },
+                        {
+                          "player": "There you go, now where did you see Fluffs?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Shilop",
+                          "text": "We play at an abandoned lumber mill to the north east. Just beyond the Jolly Boar Inn. I saw Fluffs running around in there.",
+                          "speaker_ids": [
+                            3501
+                          ]
+                        },
+                        {
+                          "player": "Anything else?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Wilough",
+                          "text": "Well, you'll have to find the broken fence to get in. I'm sure you can manage that.",
+                          "speaker_ids": [
+                            3503
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Well never mind, it's Fluffs' loss.",
+              "steps": [
+                {
+                  "player": "Well, never mind, it's Fluffs' loss."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Shilop",
+                  "text": "I'm sure my mum will get over it.",
+                  "speaker_ids": [
+                    3501
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "talking-to-shilop-and-wilough-talking-to-wilough": [
+        {
+          "player": "Hello there, I've been looking for you."
+        },
+        {
+          "type": "line",
+          "speaker": "Wilough",
+          "text": "I didn't mean to take it! I just forgot to pay.",
+          "speaker_ids": [
+            3503
+          ]
+        },
+        {
+          "player": "What? I'm trying to help your mum find Fluffs."
+        },
+        {
+          "type": "line",
+          "speaker": "Shilop",
+          "text": "I might be able to help. Fluffs followed me to our secret play area and I haven't seen her since.",
+          "speaker_ids": [
+            3501
+          ]
+        },
+        {
+          "player": "Where is this play area?"
+        },
+        {
+          "type": "line",
+          "speaker": "Shilop",
+          "text": "If I told you that, it wouldn't be a secret.",
+          "speaker_ids": [
+            3501
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Tell me sonny, or I will hurt you.",
+              "steps": [
+                {
+                  "player": "Tell me sonny, or I will hurt you."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Shilop",
+                  "text": "W..wh..what?! Y..you wouldn't! A young lad like me!",
+                  "speaker_ids": [
+                    3501
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Wilough",
+                  "text": "If you want to hurt my brother you'll first have to get by me!",
                   "speaker_ids": [
                     3503
                   ]
                 },
                 {
-                  "type": "action",
-                  "text": "You decided it's best not to hurt the boy.",
-                  "id": "wA_RKT"
+                  "type": "message",
+                  "text": "You decide it's best not to hurt the boy.",
+                  "id": "vH_ahr"
                 }
               ]
             },
@@ -540125,17 +540306,17 @@
                         {
                           "type": "action",
                           "text": "You give the lad 100 coins.",
-                          "id": "YQId7G"
+                          "id": "kTdLlY"
                         },
                         {
-                          "player": "There you go, now where did you see Fluffs ?"
+                          "player": "There you go, now where did you see Fluffs?"
                         },
                         {
                           "type": "line",
-                          "speaker": "Wilough",
-                          "text": "I play at an abandoned lumber mill to the north east. Just beyond the Jolly Boar Inn. I saw Fluffs running around in there.",
+                          "speaker": "Shilop",
+                          "text": "We play at an abandoned lumber mill to the north east. Just beyond the Jolly Boar Inn. I saw Fluffs running around in there.",
                           "speaker_ids": [
-                            3503
+                            3501
                           ]
                         },
                         {
@@ -540156,17 +540337,17 @@
               ]
             },
             {
-              "text": "Well never mind, it's Fluffs' loss.",
+              "text": "Well never mind, it's Fluffs loss.",
               "steps": [
                 {
-                  "player": "Well, never mind, it's Fluffs' loss."
+                  "player": "Well, never mind, it's Fluffs loss."
                 },
                 {
                   "type": "line",
-                  "speaker": "Wilough",
+                  "speaker": "Shilop",
                   "text": "I'm sure my mum will get over it.",
                   "speaker_ids": [
-                    3503
+                    3501
                   ]
                 }
               ]
@@ -540175,6 +540356,19 @@
         }
       ],
       "talking-to-shilop-and-wilough-talking-to-them-again": [
+        {
+          "player": "Where did you say you saw Fluffs?"
+        },
+        {
+          "type": "line",
+          "speaker": "Shilop",
+          "text": "Weren't you listening? I saw the flea bag in the old lumber mill just north east of here. Just walk past the Jolly Boar Inn and you should find it.",
+          "speaker_ids": [
+            3501
+          ]
+        }
+      ],
+      "talking-to-shilop-and-wilough-talking-to-wilough-again": [
         {
           "player": "Where did you say you saw Fluffs?"
         },
@@ -540253,9 +540447,9 @@
           "presentation": "overhead"
         },
         {
-          "type": "action",
+          "type": "message",
           "text": "Maybe the cat is thirsty?",
-          "id": "0lp0da"
+          "id": "K5ESCl"
         }
       ],
       "finding-fluffs-stroke-fluffs": [
@@ -540270,9 +540464,9 @@
           "presentation": "overhead"
         },
         {
-          "type": "action",
+          "type": "message",
           "text": "Perhaps the cat wants something?",
-          "id": "hvqx21"
+          "id": "52ADQA"
         }
       ],
       "finding-fluffs-giving-fluffs-milk": [
@@ -540295,9 +540489,9 @@
           "presentation": "overhead"
         },
         {
-          "type": "action",
+          "type": "message",
           "text": "Maybe the cat is hungry?",
-          "id": "019G3T"
+          "id": "aEf962"
         }
       ],
       "finding-fluffs-talking-to-shilop-and-wilough-again": [
@@ -540335,9 +540529,49 @@
           "player": "Really?"
         },
         {
-          "type": "action",
+          "type": "message",
           "text": "The boy begins to jump around with his fists up. You decide it's best not to kill him just yet.",
-          "id": "46aUEQ"
+          "id": "Xo3wTL"
+        }
+      ],
+      "finding-fluffs-talking-to-wilough-again": [
+        {
+          "player": "Hello again."
+        },
+        {
+          "type": "line",
+          "speaker": "Wilough",
+          "text": "You think you're tough do you?",
+          "speaker_ids": [
+            3503
+          ]
+        },
+        {
+          "player": "Pardon?"
+        },
+        {
+          "type": "line",
+          "speaker": "Wilough",
+          "text": "I can beat anyone up!",
+          "speaker_ids": [
+            3503
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Shilop",
+          "text": "He can you know!",
+          "speaker_ids": [
+            3501
+          ]
+        },
+        {
+          "player": "Really?"
+        },
+        {
+          "type": "message",
+          "text": "The boy begins to jump around with his fists up. You decide it's best not to kill him just yet.",
+          "id": "2dzi_K"
         }
       ],
       "finding-fluffs-talking-to-gertrude-again": [
@@ -540417,9 +540651,9 @@
           "presentation": "overhead"
         },
         {
-          "type": "action",
+          "type": "message",
           "text": "The cat seems afraid to leave. In the distance you can hear kittens mewing...",
-          "id": "nPc5q9"
+          "id": "kCuFVw"
         }
       ],
       "making-seasoned-sardines-talking-to-gertrude-after-giving-fluffs-the-sardine": [
@@ -540450,9 +540684,9 @@
       ],
       "making-seasoned-sardines-searching-crates": [
         {
-          "type": "action",
+          "type": "message",
           "text": "You find a kitten! You carefully place it in your backpack.",
-          "id": "oIRPfq"
+          "id": "j3jkh3"
         },
         {
           "type": "action",
@@ -540475,9 +540709,9 @@
           "presentation": "overhead"
         },
         {
-          "type": "action",
-          "text": "Fluffs has run off home with her offsping.",
-          "id": "9c0VXK"
+          "type": "message",
+          "text": "Fluffs has run off home with her offspring.",
+          "id": "7kRcQV"
         }
       ],
       "finishing-up": [
@@ -540495,8 +540729,8 @@
         },
         {
           "type": "message",
-          "text": "Gertrude gives you a hug",
-          "id": "Ehk30_"
+          "text": "Gertrude gives you a hug.",
+          "id": "pzZa7q"
         },
         {
           "type": "line",
@@ -540550,9 +540784,9 @@
           ]
         },
         {
-          "type": "action",
+          "type": "message",
           "text": "Gertrude gives you a kitten.",
-          "id": "Cp1jMn"
+          "id": "p4XNbu"
         },
         {
           "type": "action",
@@ -540562,8 +540796,8 @@
         },
         {
           "type": "action",
-          "text": "...and some food!",
-          "id": "gv0Vlw"
+          "text": "... and some food!",
+          "id": "LPHGJg"
         },
         {
           "type": "unavailable",
@@ -540573,6 +540807,11 @@
           "type": "action",
           "text": "Congratulations! Quest complete!",
           "id": "Rf4BAK"
+        }
+      ],
+      "after-the-quest-pick-up-fluffs": [
+        {
+          "player": "Oh, it looks like Fluffs has returned. I'd better leave her alone."
         }
       ]
     }
@@ -987127,6 +987366,17 @@
                           "player": "Do you have any more kittens?"
                         },
                         {
+                          "type": "condition",
+                          "text": "While already owning a kitten:",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "3lTFtJ"
+                            }
+                          ],
+                          "id": "ZJlZKy"
+                        },
+                        {
                           "type": "line",
                           "speaker": "Gertrude",
                           "text": "Indeed I have. They are 100 coins each, do you want one?",
@@ -987226,6 +987476,17 @@
                       "steps": [
                         {
                           "player": "Do you have any more kittens?"
+                        },
+                        {
+                          "type": "condition",
+                          "text": "While already owning a kitten:",
+                          "steps": [
+                            {
+                              "type": "call",
+                              "branch": "3lTFtJ"
+                            }
+                          ],
+                          "id": "ZJlZKy"
                         },
                         {
                           "type": "line",
@@ -987338,6 +987599,17 @@
               "steps": [
                 {
                   "player": "Do you have any more kittens?"
+                },
+                {
+                  "type": "condition",
+                  "text": "While already owning a kitten:",
+                  "steps": [
+                    {
+                      "type": "call",
+                      "branch": "3lTFtJ"
+                    }
+                  ],
+                  "id": "ZJlZKy"
                 },
                 {
                   "type": "line",
@@ -992648,6 +992920,20 @@
       ]
     },
     "branches": {
+      "3lTFtJ": [
+        {
+          "type": "line",
+          "speaker": "Gertrude",
+          "text": "Aren't you still raising that other kitten? Only once it's fully grown and it no longer needs your attention will I let you have another kitten.",
+          "speaker_ids": [
+            7284,
+            7723
+          ]
+        },
+        {
+          "type": "end"
+        }
+      ],
       "-KXtkQ": [
         {
           "player": "Yes please."

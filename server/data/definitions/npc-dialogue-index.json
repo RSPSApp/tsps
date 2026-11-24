@@ -26520,7 +26520,10 @@
       "page": "Transcript:Gertrude's Cat",
       "variants": [
         "talking-to-shilop-and-wilough",
-        "finding-fluffs-talking-to-shilop-and-wilough-again"
+        "talking-to-shilop-and-wilough-talking-to-wilough",
+        "talking-to-shilop-and-wilough-talking-to-them-again",
+        "finding-fluffs-talking-to-shilop-and-wilough-again",
+        "finding-fluffs-talking-to-wilough-again"
       ]
     }
   ],
@@ -26546,8 +26549,10 @@
       "page": "Transcript:Gertrude's Cat",
       "variants": [
         "talking-to-shilop-and-wilough",
-        "talking-to-shilop-and-wilough-talking-to-them-again",
-        "finding-fluffs-talking-to-shilop-and-wilough-again"
+        "talking-to-shilop-and-wilough-talking-to-wilough",
+        "talking-to-shilop-and-wilough-talking-to-wilough-again",
+        "finding-fluffs-talking-to-shilop-and-wilough-again",
+        "finding-fluffs-talking-to-wilough-again"
       ]
     }
   ],

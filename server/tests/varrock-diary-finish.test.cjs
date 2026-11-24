@@ -74,6 +74,7 @@ function serviceFixture(t, plugin, { questComplete = true, pet = null } = {}) {
     core,
     onInterfaceActionButton(id, handler) { buttons.set(id, handler); },
     onNpcInteraction(name, actions) { npcActions.set(name, actions); },
+    onNpcDialogueCondition() {},
     onCustomEvent(name, handler) {
       const handlers = events.get(name) ?? [];
       handlers.push(handler);

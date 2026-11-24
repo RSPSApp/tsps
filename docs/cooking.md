@@ -5,7 +5,7 @@
 - `Common.Cooking.js` – the data, level and cape checks, message helpers and the keyed step runner.
 - `Cookers.Cooking.js` – fires, ranges and ovens: one loop for every cooker.
 - `Recipes.Cooking.js` – one item used on another: doughs, pie shells, pie fillings, the pizza
-  steps and toppings, and the baked potato toppings.
+  steps and toppings, the baked potato toppings and the bowl foods chopped with a knife.
 - `Wine.Cooking.js` – unfermented wine and its fermenting.
 - `Churn.Cooking.js` – dairy churns: cream, butter and cheese.
 
@@ -229,6 +229,38 @@ the Wiki ([Nettle tea](https://oldschool.runescape.wiki/w/Nettle_tea),
   on a baked potato at 39 (40 XP), then on the potato with butter cheese at 47 (40), chilli con
   carne at 41 (15), egg and tomato at 51 (45), mushroom & onion at 64 (55) or tuna and corn at
   68 (10). Every step is 2 ticks. The chilli and tuna bowls come back empty.
+- Bowl foods, from each item's recipe box ([Chopped onion](https://oldschool.runescape.wiki/w/Chopped_onion),
+  [Sliced mushrooms](https://oldschool.runescape.wiki/w/Sliced_mushrooms),
+  [Chopped tomato](https://oldschool.runescape.wiki/w/Chopped_tomato),
+  [Chopped garlic](https://oldschool.runescape.wiki/w/Chopped_garlic),
+  [Chopped tuna](https://oldschool.runescape.wiki/w/Chopped_tuna),
+  [Minced meat](https://oldschool.runescape.wiki/w/Minced_meat),
+  [Chopped ugthanki](https://oldschool.runescape.wiki/w/Chopped_ugthanki),
+  [Sweetcorn (bowl)](https://oldschool.runescape.wiki/w/Sweetcorn_(bowl)),
+  [Spicy sauce](https://oldschool.runescape.wiki/w/Spicy_sauce),
+  [Chilli con carne](https://oldschool.runescape.wiki/w/Chilli_con_carne),
+  [Egg and tomato](https://oldschool.runescape.wiki/w/Egg_and_tomato),
+  [Mushroom & onion](https://oldschool.runescape.wiki/w/Mushroom_%26_onion),
+  [Tuna and corn](https://oldschool.runescape.wiki/w/Tuna_and_corn),
+  [Onion & tomato](https://oldschool.runescape.wiki/w/Onion_%26_tomato),
+  [Ugthanki & onion](https://oldschool.runescape.wiki/w/Ugthanki_%26_onion),
+  [Ugthanki & tomato](https://oldschool.runescape.wiki/w/Ugthanki_%26_tomato),
+  [Kebab mix](https://oldschool.runescape.wiki/w/Kebab_mix)), all members-only, 2 ticks each
+  unless noted:
+  - with a knife carried (a recipe's `tools`), an onion, mushroom, tomato, garlic, tuna, cooked
+    meat or ugthanki meat goes into an empty bowl: no level, no XP, the knife stays. Cooked
+    sweetcorn goes into a bowl without one;
+  - with a knife, onion, tomato and ugthanki meat combine two at a time into onion & tomato,
+    ugthanki & onion and ugthanki & tomato, and the third makes kebab mix (all level 1, no XP);
+  - spicy sauce: chopped garlic and gnome spice, 9 (25 XP). Chilli con carne at 11: spicy sauce
+    and cooked meat with a knife, or spicy sauce and minced meat (one bowl back), 1 tick each.
+    Egg and tomato at 23: scrambled egg and a tomato, no knife. Mushroom & onion at 57: fried
+    mushrooms and fried onions. Tuna and corn at 67: a bowl of sweetcorn and tuna with a knife,
+    a bowl of sweetcorn and chopped tuna (one bowl back), or cooked sweetcorn and chopped tuna.
+    None of these mixes gives XP but spicy sauce;
+  - without the knife the pair does nothing and says nothing (item-on-item has no fallback line
+    here; live presumably says "Nothing interesting happens."). The Wiki quotes no line
+    for any of them, so they are made silently.
 - Leaping fish (`server/plugins/skills/cooking/LeapingFish.Cooking.js`), the only source of roe
   and caviar for Barbarian Herblore, cut with a knife at any Cooking level, Mod Ash's rates:
   - every cut uses one fish. A successful cut gives roe (caviar from sturgeon), the static
@@ -292,10 +324,12 @@ the Wiki ([Nettle tea](https://oldschool.runescape.wiki/w/Nettle_tea),
 
 - Where Sinew sits in a range's menu among other foods (ours: after them all); no capture mixes
   them. Sinew on a player-owned house range plays its `human_firecooking`, unconfirmed.
-- Making chopped onions and sliced mushrooms (a knife and a bowl): the recipes have no tools, so
-  only the cooking of them is here. The other potato topping bowls (chilli con carne, egg and
-  tomato, mushroom & onion, tuna and corn) are not made here either; they come from drops and
-  trade.
+- The bowl foods' lines: the Wiki gives none and nothing is captured, so they are made silently.
+  Ours: mushroom & onion gives one of its two bowls back (the Wiki's text uses two bowls, its
+  recipe box lists none back). A Fletching knife worn does not count as the knife (Tuna and corn
+  page); only the plain knives carried do.
+- The ugthanki kebab (kebab mix on pitta bread, 40 XP): its failure chance to a bad kebab is from
+  a Discord answer, not stated by the Wiki, so it is not made here.
 - The potato topping lines other than butter's: no capture or Wiki text gives them, so cheese,
   chilli, egg, mushroom and tuna potatoes are made without a line. The egg and mushroom bowls
   come back like the chilli and tuna ones (ours: their Wiki recipes list no bowl). The toppings'

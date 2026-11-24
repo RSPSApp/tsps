@@ -1,6 +1,7 @@
 /**
  * Using one ingredient on another: flour and water into the four doughs, pastry dough into a pie
- * dish, the pie fillings and part pies, and the pizza steps and toppings. Recipes, levels and XP
+ * dish, the pie fillings and part pies, the pizza steps and toppings, and the bowl foods chopped
+ * with a knife and mixed for the potato toppings and kebabs. Recipes, levels and XP
  * are the Wiki's (plugins/skills/data/cooking.json); the menus, lines and timing are from rsprox
  * captures (recordings 75, 564, 1858). None of these steps plays an animation or sound.
  */
@@ -24,6 +25,15 @@ const CHOCOLATE_BOMB_BOWL = 9563;
 
 function hasIngredients(inventory, recipe) {
   return recipe.ingredients.every(({ id, count }) => inventory.getAmount(id) >= count);
+}
+
+/**
+ * Whether the inventory holds every tool the recipe needs but keeps (the Wiki's recipe "tools":
+ * a knife to chop into a bowl). Without it the event is left unhandled, so the pair does nothing,
+ * as any unhandled item pair does (item-on-item has no fallback line).
+ */
+function hasTools(inventory, recipe) {
+  return (recipe.tools ?? []).every((ids) => [...ids].some((id) => inventory.contains(id)));
 }
 
 /** Inventory slots one make frees by using up this ingredient. */
@@ -79,7 +89,7 @@ function canMake(player, recipe) {
 function makeOne(player, recipe, preferredSlot = -1) {
   const { Item, Skill } = Common.core;
   const inventory = player.getInventory();
-  if (!availableOnWorld(recipe) || !hasIngredients(inventory, recipe)) return false;
+  if (!availableOnWorld(recipe) || !hasIngredients(inventory, recipe) || !hasTools(inventory, recipe)) return false;
   if (!hasRoom(inventory, recipe)) {
     inventory.full();
     return false;
@@ -226,7 +236,7 @@ function useItemOnItem(event) {
     return;
   }
   const recipe = Common.recipeWith(usedItemId, usedWithItemId);
-  if (!recipe) return;
+  if (!recipe || !hasTools(player.getInventory(), recipe)) return;
   event.handled = true;
   const productSlot = recipe.productSlotId === usedItemId ? event.usedItemSlot
     : recipe.productSlotId === usedWithItemId ? event.usedWithItemSlot : undefined;

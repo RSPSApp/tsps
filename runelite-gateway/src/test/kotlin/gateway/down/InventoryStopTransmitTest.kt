@@ -170,8 +170,10 @@ class InventoryStopTransmitTest {
                 environment()["TS_NODE_PROJECT"] = "server/tsconfig.json"
                 environment()["BROWSER_HOST"] = "1" // Missing cache must fail instead of downloading.
             }.start()
+        val finished = process.waitFor(60, TimeUnit.SECONDS)
+        if (!finished) process.destroyForcibly()
+        assertTrue(finished, "server packet producer timed out")
         val output = process.inputStream.bufferedReader().readText()
-        assertTrue(process.waitFor(60, TimeUnit.SECONDS), "server packet producer timed out")
         assertEquals(0, process.exitValue(), output)
         return Gson().fromJson(output, Array<Shop>::class.java).toList()
     }

@@ -1023,7 +1023,9 @@ module.exports = function registerBoneVoyageQuest(api) {
 
     // The Odd Old Man's sack: the export leaves its lines without speaker_ids and the cache name
     // "Bones" never matches "Sack", so the clicked NPC's head was shown (rsprox_transcripts/232/03224.txt).
-    if (npcId === ODD_OLD_MAN_NPC_ID && event.step?.speaker === "Sack" && event.pages?.some((entry) => entry.page === PAGE)) {
+    // This covers every Odd Old Man conversation, including Rag and Bone Man I and II, where the sack
+    // also shows head 1266 (rsprox_transcripts/232/03224.txt, 241/911571, 242/911688).
+    if (npcId === ODD_OLD_MAN_NPC_ID && event.step?.speaker === "Sack") {
       event.speakerId = TALKING_SACK_NPC_ID;
       return;
     }

@@ -2070,6 +2070,16 @@ export function registerWidgetOps(handlers: HandlerMap): void {
         w.npcTypeId = npcId >= 0 ? npcId : undefined;
         w.isPlayerChathead = false;
     };
+    // The local player's chathead. The renderer draws one only for a widget flagged as such (the
+    // server's set_player_head sets the same flags); it reads the live appearance itself.
+    const setPlayerHeadSelf = (w: any) => {
+        w.modelType = 3;
+        w.modelId = -1;
+        w.isPlayerChathead = true;
+        w.isPlayerModel = false;
+        w.isNpcChathead = false;
+        w.npcTypeId = undefined;
+    };
     const clearNpcHead = (w: any) => {
         w.isNpcChathead = false;
         w.npcTypeId = undefined;
@@ -2321,9 +2331,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.CC_SETPLAYERHEAD_SELF, (ctx, intOp) => {
         const w = getTargetWidget(ctx, intOp);
         if (w) {
-            w.modelType = 3;
-            w.modelId = -1;
-            // invalidate on model change
+            setPlayerHeadSelf(w);
             invalidateWidgetRender(ctx, w);
         }
     });
@@ -2331,9 +2339,7 @@ export function registerWidgetOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.IF_SETPLAYERHEAD_SELF, (ctx) => {
         const w = getWidgetFromStack(ctx);
         if (w) {
-            w.modelType = 3;
-            w.modelId = -1;
-            // invalidate on model change
+            setPlayerHeadSelf(w);
             invalidateWidgetRender(ctx, w);
         }
     });

@@ -38,8 +38,19 @@ collide with cache items.
 - `models` (optional): model ids (1000000+) mapped to `.dat` files under `server/data/models/`.
   Every `objType` model field of 1000000 or more must name one of them.
 - `specialAttack` (optional): see below.
+- `retainWornModelForAnimations` (optional): animation IDs whose poses keep this item's worn
+  model instead of the sequence's replacement item. Empty-hand cues still hide the item.
+  Creator exports populate this list for authored movements and special attacks. Re-export
+  existing gear to add the policy; native weapons and unrelated tool animations are unchanged.
+- `visuals` (optional): version 1 item visuals, with compiled surface bindings, particle
+  geometry and motion tracks for each custom model. Creator's Visuals tab authors these on
+  any gear slot. The client samples them before the player's pose in WebGL and WebGPU.
+  Exported packages require `CacheDefinitions.ITEM_VISUALS_VERSION === 1`.
 
-The loader validates every row at startup and throws on a bad one, naming the item. On the client,
+The loader validates each item at registration. Multiple item rows may arrive in batches at
+login. Each item must fit in a single 64 KiB game message after compression. The registration
+error names an oversized item so you can reduce its imported surface image size or frame count.
+On the client,
 `CustomItemRegistry` (`client/custom/items/`) holds the rows and `CustomObjTypeLoader` wraps the
 cache's `ObjTypeLoader`, so custom items show in inventories, shops and tooltips like any other.
 

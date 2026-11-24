@@ -1,3 +1,4 @@
+import { isGearTextureId } from "../../custom/items/GearVisualRegistry";
 import { vec3 } from "gl-matrix";
 
 import { ObjModelLoader } from "../../rs/config/objtype/ObjModelLoader";
@@ -47,6 +48,7 @@ export type GroundItemGeometryBuildData = {
     modelTextureDataInteractLod: Uint16Array;
     modelTextureDataInteractLodAlpha: Uint16Array;
     usedTextureIds: Set<number>;
+    gearTexturesByOffset?: ReadonlyMap<number, readonly number[]>;
 };
 
 const tempVec = vec3.create();
@@ -108,6 +110,7 @@ export function buildGroundItemGeometry(
     }
 
     const sceneBuf = new SceneBuffer(textureLoader, textureIdIndexMap, filtered.length * 64);
+    let gearTexturesByOffset: Map<number, readonly number[]> | undefined;
     // Relative to where the map is drawn (an instance scene's base), matching u_mapPos.
     const mapBaseX = map.getRenderBaseTileX?.() ?? map.mapX * Scene.MAP_SQUARE_SIZE;
     const mapBaseY = map.getRenderBaseTileY?.() ?? map.mapY * Scene.MAP_SQUARE_SIZE;
@@ -166,6 +169,15 @@ export function buildGroundItemGeometry(
             const alphaOffset = sceneBuf.indexByteOffset();
             sceneBuf.addModel(model, alphaFaces, tempVec, false);
             const alphaElements = (sceneBuf.indexByteOffset() - alphaOffset) / 4;
+            if (alphaElements > 0) {
+                const gearTextureIds = new Set<number>();
+                for (const face of alphaFaces) {
+                    if (isGearTextureId(face.textureId)) gearTextureIds.add(face.textureId);
+                }
+                if (gearTextureIds.size > 0) {
+                    (gearTexturesByOffset ??= new Map()).set(alphaOffset, [...gearTextureIds]);
+                }
+            }
             pushDrawCommand(
                 [
                     sceneBuf.drawCommandsAlpha,
@@ -239,5 +251,6 @@ export function buildGroundItemGeometry(
             sceneBuf.drawCommandsInteractLodAlpha,
         ),
         usedTextureIds: new Set(sceneBuf.usedTextureIds),
+        gearTexturesByOffset,
     };
 }

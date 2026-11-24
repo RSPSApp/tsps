@@ -1,5 +1,5 @@
 import { getCustomDefinitionKey } from "../../../custom/definitions/CustomDefinitionStore";
-import { isDefinitionDataset, loadFromPayload } from "../../../common/gamemode/GamemodeContentStore";
+import { assembleCustomItemBatches, isDefinitionDataset, loadFromPayload } from "../../../common/gamemode/GamemodeContentStore";
 import { applyClanChannelDelta, applyClanSettingsDelta } from "../../../common/social/Clans";
 import { openClientUrl } from "../../../common/openUrl";
 import { ClientState } from "../../../game/ClientState";
@@ -288,7 +288,11 @@ export function handleInboundUi(msg: any): boolean {
         return true;
     }
     if (msg.type === "gamemode_data") {
-        const datasets = msg.payload?.datasets;
+        const incoming = msg.payload?.datasets;
+        if (!Array.isArray(incoming)) return true;
+        const datasets = assembleCustomItemBatches(incoming);
+        if (datasets.length === 0 && incoming.length > 0) return true;
+        msg.payload = { ...msg.payload, datasets };
         if (datasets?.length === 1 && datasets[0].key === "worldMapPlayers") {
             // Staff world map dots: [x, y, plane, isBot] rows, drawn by the map renderer.
             const g: any = (typeof window !== "undefined" ? window : globalThis) as any;

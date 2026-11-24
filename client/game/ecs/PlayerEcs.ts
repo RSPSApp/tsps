@@ -1500,6 +1500,7 @@ export class PlayerEcs {
 
             const rec = { baseModel: base, baseCenterX: cx, baseCenterZ: cz, defaultHeightTiles };
             this.appearanceBaseCache.set(key, rec);
+            while(this.appearanceBaseCache.size>256)this.appearanceBaseCache.delete(this.appearanceBaseCache.keys().next().value!);
             return rec;
         } catch {
             return undefined;

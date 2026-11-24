@@ -1,3 +1,4 @@
+import { GearVisualRegistry } from "../../custom/items/GearVisualRegistry";
 import { SampledAnimationRegistry, type SampledAnimationRow } from "../../custom/animations/SampledAnimationRegistry";
 import type {
     LeagueMasteryChallengeRow,
@@ -107,8 +108,52 @@ export function isReady(): boolean {
     return ready;
 }
 
+type ContentDataset = { key: string; rows: unknown[] };
+const MAX_CUSTOM_ITEMS = 65022 - 50000 + 1;
+let pendingCustomItems: { count: number; rows: unknown[] } | undefined;
+
+/** Short login packets carry one registry. Publish its rows only after the final batch. */
+export function assembleCustomItemBatches(datasets: ContentDataset[]): ContentDataset[] {
+    if (!datasets.some(({ key }) => key === "customItemsBatch")) {
+        if (datasets.some(({ key }) => key === "customItems")) pendingCustomItems = undefined;
+        return datasets;
+    }
+    const assembled: ContentDataset[] = [];
+    for (const dataset of datasets) {
+        if (dataset.key !== "customItemsBatch") {
+            if (dataset.key === "customItems") pendingCustomItems = undefined;
+            assembled.push(dataset);
+            continue;
+        }
+        if (!Array.isArray(dataset.rows)) {
+            pendingCustomItems = undefined;
+            continue;
+        }
+        const [count] = dataset.rows;
+        if (dataset.rows.length === 1 && typeof count === "number") {
+            pendingCustomItems = Number.isInteger(count) && count > 0 && count <= MAX_CUSTOM_ITEMS
+                ? { count, rows: [] }
+                : undefined;
+        } else if (pendingCustomItems && dataset.rows.length) {
+            const pending = pendingCustomItems;
+            if (pending.rows.length + dataset.rows.length > pending.count) {
+                pendingCustomItems = undefined;
+                continue;
+            }
+            pending.rows.push(...dataset.rows);
+            if (pending.rows.length === pending.count) {
+                assembled.push({ key: "customItems", rows: pending.rows });
+                pendingCustomItems = undefined;
+            }
+        }
+    }
+    return assembled;
+}
+
 /** A new connection clears the old world's overlays, including legacy worlds without datasets. */
 export function clearWorldOverlays(): void {
+    pendingCustomItems = undefined;
+    GearVisualRegistry.clear();
     worldLocChanges = [];
     worldLocSpawns = [];
     worldTerrainOverrides = [];
@@ -280,10 +325,7 @@ export function loadFromPayload(payload: {
             case "customItems":
                 try {
                     const { CustomItemRegistry } = require("../../custom/items/CustomItemRegistry");
-                    CustomItemRegistry.clear();
-                    for (const def of dataset.rows as any[]) {
-                        CustomItemRegistry.register(def, def.objType?.name);
-                    }
+                    CustomItemRegistry.replaceAll(dataset.rows as any[]);
                     console.log(
                         `[GamemodeContentStore] registered ${dataset.rows.length} custom item(s)`,
                     );

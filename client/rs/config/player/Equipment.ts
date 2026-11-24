@@ -1,5 +1,6 @@
 import { ObjType } from "../objtype/ObjType";
 import { PlayerAppearance } from "./PlayerAppearance";
+import { CustomItemRegistry } from "../../../custom/items/CustomItemRegistry";
 
 // Mirrors OSRS slot ordering used by PlayerComposition.equipment (12 slots)
 export enum EquipmentSlot {
@@ -140,14 +141,23 @@ export function deriveAdditionalEquipSlotsFromParams(obj: ObjType | undefined): 
 export function withSeqHandItems(
     app: PlayerAppearance,
     seq: { leftHandItem: number; rightHandItem: number } | undefined,
+    sequenceId = -1,
 ): PlayerAppearance {
     if (!seq || (app.npcTransformationId ?? -1) >= 0) return app;
     if (seq.leftHandItem < 0 && seq.rightHandItem < 0) return app;
     const unoffset = (id: number) => (id >= 512 ? id - 512 : -1);
     const equip = app.equip.slice();
-    if (seq.leftHandItem >= 0) equip[EquipmentSlot.SHIELD] = unoffset(seq.leftHandItem);
-    if (seq.rightHandItem >= 0) equip[EquipmentSlot.WEAPON] = unoffset(seq.rightHandItem);
-    return new PlayerAppearance(app.gender, app.colors, app.kits, equip, app.headIcons);
+    const replace = (slot: EquipmentSlot, heldItem: number) => {
+        if (heldItem < 0) return;
+        // Authored combat borrows the pose, not the donor's weapon. Explicit hand hiding
+        // and unrelated actions (fishing, emotes) keep their native behaviour.
+        if (heldItem >= 512 && CustomItemRegistry.get(equip[slot])?.definition.retainWornModelForAnimations?.includes(sequenceId)) return;
+        equip[slot] = unoffset(heldItem);
+    };
+    replace(EquipmentSlot.SHIELD, seq.leftHandItem);
+    replace(EquipmentSlot.WEAPON, seq.rightHandItem);
+    if (equip[EquipmentSlot.SHIELD] === app.equip[EquipmentSlot.SHIELD] && equip[EquipmentSlot.WEAPON] === app.equip[EquipmentSlot.WEAPON]) return app;
+    return new PlayerAppearance(app.gender, app.colors, app.kits, equip, app.headIcons,undefined,app.firstPersonArmsOnly,app.visualClockKey);
 }
 
 /** The appearance with an active action sequence's held items, after its start delay. */
@@ -159,5 +169,5 @@ export function withActionSeqHandItems(
     forcedSequence = false,
 ): PlayerAppearance {
     if (forcedSequence || (actionSeqId | 0) < 0 || actionDelay !== 0) return app;
-    return withSeqHandItems(app, seq);
+    return withSeqHandItems(app, seq, actionSeqId);
 }

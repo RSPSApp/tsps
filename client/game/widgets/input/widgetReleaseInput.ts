@@ -217,7 +217,15 @@ export function processWidgetReleaseInput(
                 // A script-draggable item with no op of its own runs the op of the widget beneath it.
                 const actionWidget = widgetInteraction.dragPassThroughWidget ?? widgetInteraction.clickedWidget;
                 widgetInteraction.dragPassThroughWidget = null;
-                const { option, target, slot, itemId, opIndex, opSubIndex } = getPrimaryWidgetAction(actionWidget);
+                const { option, target, slot, itemId, opIndex, opSubIndex, opensMenu } = getPrimaryWidgetAction(actionWidget);
+                if (opensMenu && deps.openWidgetMenuAt) {
+                    // A draggable widget's click waits for the release; the menu opens where it was pressed.
+                    const pressX = (widget._absX ?? 0) + widgetInteraction.clickedWidgetX;
+                    const pressY = (widget._absY ?? 0) + widgetInteraction.clickedWidgetY;
+                    widgetInteraction.clearWidgetInteractionState();
+                    deps.openWidgetMenuAt(pressX, pressY);
+                    return;
+                }
                 deps.handleWidgetAction({
                     widget: actionWidget,
                     option,

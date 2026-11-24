@@ -1773,6 +1773,9 @@ export class OsrsClient {
             getCustomInterfaces: () => this.customInterfaces,
             getPlayerDesign: () => this.playerDesign,
             getObjTypeLoader: () => this.objTypeLoader,
+            getLeftClickOpensMenu: () => this.settings.leftClickOpensMenu,
+            openWidgetMenuAt: (canvasX, canvasY) =>
+                (this.renderer?.canvas as any)?.__inputBridge?.openMenuAt?.(canvasX, canvasY),
             getInventory: () => this.inventory,
             getMinimapZoomEnabled: () => this.minimapZoomEnabled,
             getMenuOpen: () => this.menuOpen,

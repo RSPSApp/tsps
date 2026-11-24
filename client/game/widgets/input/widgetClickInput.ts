@@ -405,6 +405,17 @@ export function processWidgetClickInput(
                     // Handlers can mutate widget ops (e.g., Mute -> Unmute), but the transmitted action
                     // should reflect what was clicked pre-mutation.
                     const primaryAction = getPrimaryWidgetAction(w);
+                    // OSRS opens the menu instead of running the top entry when that entry is a
+                    // low-priority op, or in one-button mode when there is a choice to make.
+                    if (primaryAction.opensMenu && deps.openWidgetMenuAt) {
+                        const menuX = input.leftClickX;
+                        const menuY = input.leftClickY;
+                        widgetInteraction.clickedWidget = null;
+                        widgetInteraction.clickedWidgetParent = null;
+                        input.clickMode3 = ClickMode.NONE;
+                        deps.openWidgetMenuAt(menuX, menuY);
+                        break;
+                    }
                     // A widget a plugin built (RuneLite's JavaScriptCallback op listener).
                     if (runWidgetJsOp({ widget: w, ...primaryAction })) {
                         widgetInteraction.clickedWidgetHandled = true;

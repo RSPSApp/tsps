@@ -822,19 +822,25 @@ async function main() {
       const wheel = (deltaY) => cdp.send("Input.dispatchMouseEvent", {
         type: "mouseWheel", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, deltaX: 0, deltaY,
       });
-      // --world-map-zoom-start-out N: wheel out N steps first (each settled), to test the far zooms.
-      for (let i = 0; i < (Number(arg("world-map-zoom-start-out", "0")) | 0); i++) {
+      // --world-map-zoom-start-out N: wheel out N steps first (each settled; negative zooms in),
+      // to test the far or near zoom levels.
+      const startOut = Number(arg("world-map-zoom-start-out", "0")) | 0;
+      for (let i = 0; i < Math.abs(startOut); i++) {
         await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
-        await wheel(120);
+        await wheel(startOut > 0 ? 120 : -120);
         await sleep(600);
         for (let j = 0; j < 80 && !(await settled()); j++) await sleep(250);
       }
       const samples = [await sample("settled")];
       const zoomTraces = [];
+      const rendered = [];
       const rounds = Number(arg("world-map-zoom-rounds", "3")) | 0;
       for (let round = 0; round < rounds; round++) {
         for (const [deltaY, label] of [[-120, "in"], [120, "out"]]) {
           await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+          // The area's composite fills squares whose tile isn't rendered, so black alone can't show
+          // a re-render: count the tiles that enter the cache during the step (each is a render).
+          await cdp.evaluate(`globalThis.__wmTilesBefore = new Set((${CLIENT_JS}).worldMap.worldMapImageTiles.keys())`);
           await wheel(deltaY);
           // The zoom drawn, read every few ms while it eases (screenshots are too slow for this).
           const trace = [];
@@ -846,6 +852,11 @@ async function main() {
           zoomTraces.push({ step: `${label}${round}`, zooms: trace.filter((z, i) => i === 0 || z !== trace[i - 1]) });
           const until = Date.now() + 1500;
           while (Date.now() < until) samples.push(await sample(`${label}${round}`));
+          rendered.push({ step: `${label}${round}`, tiles: await cdp.evaluate(`(() => {
+            let n = 0;
+            for (const id of (${CLIENT_JS}).worldMap.worldMapImageTiles.keys()) if (!globalThis.__wmTilesBefore.has(id)) n++;
+            return n;
+          })()`) });
         }
       }
       const worst = samples.reduce((max, s) => (s.blackFraction > max.blackFraction ? s : max), samples[0]);
@@ -855,6 +866,9 @@ async function main() {
         zoomTraces,
         worstBlackFraction: worst.blackFraction,
         worstSample: worst.label,
+        rendered,
+        // Tiles rendered after the first round, when every zoom level has been viewed once.
+        revisitRenders: rendered.filter((r) => !r.step.endsWith("0")).reduce((sum, r) => sum + r.tiles, 0),
         zoomsSeen: [...new Set(samples.map((s) => Math.round(s.zoom * 100) / 100))],
       };
     }

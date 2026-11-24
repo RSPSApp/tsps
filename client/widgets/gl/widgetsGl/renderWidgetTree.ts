@@ -1,4 +1,5 @@
 import { ClientState } from "../../../game/ClientState";
+import { resolveMapElement } from "../../../custom/sprites/CustomMapElement";
 import { hintArrow, hintArrowTileOffset, isHintArrowBlinkOn } from "../../../game/HintArrow";
 import type { InputManager } from "../../../game/InputManager";
 import { profiler } from "../../../render/PerformanceProfiler";
@@ -1794,7 +1795,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     if (mapElementCache.has(elementId)) return mapElementCache.get(elementId);
                     let element;
                     try {
-                        element = osrsClient?.mapElementTypeLoader?.load?.(elementId | 0);
+                        element = resolveMapElement(elementId, (id) =>
+                            osrsClient?.mapElementTypeLoader?.load?.(id),
+                        );
                     } catch {
                         element = undefined;
                     }
@@ -2136,7 +2139,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     if (mapElementCache.has(elementId)) return mapElementCache.get(elementId);
                     let element;
                     try {
-                        element = osrsClient?.mapElementTypeLoader?.load?.(elementId | 0);
+                        element = resolveMapElement(elementId, (id) =>
+                            osrsClient?.mapElementTypeLoader?.load?.(id),
+                        );
                     } catch {
                         element = undefined;
                     }

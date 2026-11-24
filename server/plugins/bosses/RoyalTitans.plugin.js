@@ -17,11 +17,17 @@ const Hud = require("./royaltitans/Hud.RoyalTitans");
 const Commands = require("./royaltitans/Commands.RoyalTitans");
 const CombatAchievements = require("./royaltitans/CombatAchievements.RoyalTitans");
 
+
+function describeEncounters({ npcIds }) {
+  for (const id of [Shared.BRANDA_ID, Shared.ELDRIC_ID, Shared.FIRE_MINION_ID, Shared.ICE_MINION_ID]) npcIds.add(id);
+}
+
 module.exports = {
   name: "RoyalTitans",
   description: "Branda and Eldric in the Asgarnian Ice Dungeon: a 1-2 player instance with stomps, elemental rows, Elemental Blast and per-player corpse claims.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Shared.init(api);
     Combat.attach(api);
     Specials.attach(api);

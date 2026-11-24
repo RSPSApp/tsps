@@ -41,6 +41,9 @@ const bossIds = new Map([
   ['Cerberus', [5862]], ['Kraken', [494]], ['Zulrah', [2042, 2043, 2044]], ['GiantLairs', [7416, 8195]],
   ['Skotizo', [7286]], ['Nex', [11278]], ['Scurrius', [7221]], ['Vardorvis', [12223]], ['Araxxor', [13668]],
   ['MaggotKing', [15742]], ['Vorkath', [8061]], ['MoonsOfPeril', [13011, 13012, 13013]], ['Amoxliatl', [13685]],
+  ['DoomOfMokhaiotl', [14707]], ['MadAngel', [16305]], ['GemstoneCrab', [14779]],
+  ['Nightmare', [9425, 9426, 9427, 9416, 9417, 9418, 11153]], ['RoyalTitans', [12596, 14147]],
+  ['ShellbaneGryphon', [14860]], ['GrotesqueGuardians', [7852, 7884]],
   ['Hueycoatl', [14009]], ['Yama', [14176]], ['PhantomMuspah', [12077, 12078]],
 ]);
 before(async () => {
@@ -63,6 +66,8 @@ before(async () => {
   require('../plugins/bosses/CountDraynor.plugin').register(sourceApi('CountDraynor'));
   require('../plugins/bosses/Elvarg.plugin').register(sourceApi('Elvarg'));
   for (const name of bossIds.keys()) require(`../plugins/bosses/${name}.plugin`).register(sourceApi(name));
+  const superiors = require('../plugins/skills/slayer/Superiors.Slayer');
+  const slayerApi = sourceApi('SlayerSuperiors'); superiors.init(slayerApi); superiors.attach(slayerApi);
   require('../plugins/skills/Farming.plugin').register(sourceApi('Farming'));
   require('../plugins/quests/Quests.plugin').register(sourceApi('Quests'));
   Examine.register(PM.createApi('MonsterExamine'));
@@ -188,7 +193,8 @@ test('eligibility requires actual spawns or source-owned fights; exact loot, com
 test('scripted bosses are discoverable from their owning fight plugins without static spawns', () => {
   const rows = new Map(buildCatalog({ ...core, NpcSpawnDefinition: { all: () => [] } },
     encounterIds(PM.createApi('Bestiary'))).map(row => [row.id, row]));
-  for (const [name, ids] of [...bossIds, ['Farming', [core.NpcIdentifiers.HESPORI]]]) {
+  for (const [name, ids] of [...bossIds, ['Farming', [core.NpcIdentifiers.HESPORI]],
+    ['SlayerSuperiors', [7388, 7393, 7405, 7409]]]) {
     const provided = sourceIds(name);
     for (const id of ids) {
       assert.ok(provided.has(id), `${name} declares combat form ${id}`);

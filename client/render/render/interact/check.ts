@@ -788,7 +788,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     return;
                 }
 
-                const actions = getNpcMenuActions(npcType);
+                const actions = getNpcMenuActions(npcType, host.osrsClient.varManager);
                 const followerDeprioritized = isFollowerLowPriority;
 
                 // OSRS: Non-attack options first (4..0).
@@ -1007,7 +1007,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     // LOC actions inserted 4..0, then Examine; op flags from the server hide ops.
                     const opFlags = host.osrsClient.locOpFlagsAt?.(worldTileX, worldTileY, interactId);
                     for (let actionIdx = 4; actionIdx >= 0; actionIdx--) {
-                        const option = resolvedLocType.actions?.[actionIdx];
+                        const option = resolvedLocType.entityOps
+                            ? resolvedLocType.entityOps.opName(actionIdx, resolvedLocType.actions?.[actionIdx], host.osrsClient.varManager)
+                            : resolvedLocType.actions?.[actionIdx];
                         if (!option) continue;
                         if (opFlags !== undefined && (opFlags & (1 << actionIdx)) === 0) continue;
                         menuEntries.push({
@@ -1158,7 +1160,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         const actions = objType.groundActions ?? [];
                         for (let actionIdx = 4; actionIdx >= 0; actionIdx--) {
                             if (!isGroundItemOperationEnabled(stack, actionIdx)) continue;
-                            const option = actions[actionIdx];
+                            const option = objType.entityOps
+                                ? objType.entityOps.opName(actionIdx, actions[actionIdx], host.osrsClient.varManager)
+                                : actions[actionIdx];
                             if (option) {
                                 const capturedStack = stack;
                                 menuEntries.push({

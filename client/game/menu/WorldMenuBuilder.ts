@@ -7,6 +7,7 @@
  *
  * Menu construction follows the same priority and structure as the Java client.
  */
+import type { OpVarReader } from "../../rs/config/EntityOps";
 import {
     type MenuEntry,
     MenuTargetType,
@@ -138,8 +139,13 @@ const MORPHABLE_PET_NPC_IDS = new Set([
 
 const CASTLE_WARS_BARRICADE_IDS = new Set([5722, 5724, 15582, 15584]);
 
-export function getNpcMenuActions(npcType: NpcType): string[] {
+export function getNpcMenuActions(npcType: NpcType, vars?: OpVarReader): string[] {
     const actions = [...(npcType.actions ?? [])];
+    // A varp/varbit condition can rename an option, or blank it (the option is then not offered).
+    const ops = npcType.entityOps;
+    if (ops && !ops.isEmpty && vars) {
+        for (let i = 0; i < actions.length; i++) actions[i] = ops.opName(i, actions[i], vars) as string;
+    }
     if (CASTLE_WARS_BARRICADE_IDS.has(npcType.id)) {
         return actions.map((action) => action === "Burn" ? "" : action);
     }

@@ -1,3 +1,4 @@
+import { EntityOps } from "../EntityOps";
 import { CacheInfo } from "../../cache/CacheInfo";
 import { ByteBuffer } from "../../io/ByteBuffer";
 import { ParamsMap, Type } from "../Type";
@@ -56,6 +57,8 @@ export class NpcType extends Type {
     retextureTo!: number[];
 
     actions: string[];
+    /** Sub-options and conditional option names (EntityOps). */
+    entityOps: EntityOps;
 
     drawMapDot: boolean;
 
@@ -136,6 +139,7 @@ export class NpcType extends Type {
         this.walkLeftSeqId = -1;
         this.walkRightSeqId = -1;
         this.actions = new Array<string>(5);
+        this.entityOps = new EntityOps();
         this.drawMapDot = true;
         this.combatLevel = -1;
         this.attackLevel = -1;
@@ -531,22 +535,22 @@ export class NpcType extends Type {
         } else if (opcode === 251) {
             const index = buffer.readUnsignedByte();
             const subId = buffer.readUnsignedByte();
-            this.readString(buffer);
+            this.entityOps.addSubOp(index, subId, this.readString(buffer));
         } else if (opcode === 252) {
             const index = buffer.readUnsignedByte();
-            const varp = buffer.readUnsignedShort();
-            const varb = buffer.readUnsignedShort();
+            const varpId = buffer.readUnsignedShort();
+            const varbitId = buffer.readUnsignedShort();
             const min = buffer.readInt();
             const max = buffer.readInt();
-            this.readString(buffer);
+            this.entityOps.addConditionalOp(index, { varpId, varbitId, min, max, name: this.readString(buffer) });
         } else if (opcode === 253) {
             const index = buffer.readUnsignedByte();
             const subId = buffer.readUnsignedShort();
-            const varp = buffer.readUnsignedShort();
-            const varb = buffer.readUnsignedShort();
+            const varpId = buffer.readUnsignedShort();
+            const varbitId = buffer.readUnsignedShort();
             const min = buffer.readInt();
             const max = buffer.readInt();
-            this.readString(buffer);
+            this.entityOps.addConditionalSubOp(index, subId, { varpId, varbitId, min, max, name: this.readString(buffer) });
         } else if (opcode === 249) {
             this.params = Type.readParamsMap(buffer, this.params);
         } else {

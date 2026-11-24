@@ -1,4 +1,5 @@
 import { menuCooldownBlocksPass } from "./menuCooldown";
+import { wrapExamineWithClickCross } from "./checkExamineCross";
 import { isGroundItemOperationEnabled } from "../../../game/data/ground/GroundItemStore";
 import { buildPlayerActionEntries } from "./playerMenu";
 import Denque from "denque";
@@ -1343,13 +1344,14 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
             try {
                 const tileForMenu = host.osrsClient.menuTile ?? hoveredTile;
                 for (const e of menuEntries) {
-                    if (
-                        (e.targetType === MenuTargetType.NPC ||
-                            e.targetType === MenuTargetType.LOC ||
-                            e.targetType === MenuTargetType.PLAYER ||
-                            e.targetType === MenuTargetType.OBJ) &&
-                        e.option !== "Examine"
-                    ) {
+                    const onEntity =
+                        e.targetType === MenuTargetType.NPC ||
+                        e.targetType === MenuTargetType.LOC ||
+                        e.targetType === MenuTargetType.PLAYER ||
+                        e.targetType === MenuTargetType.OBJ;
+                    if (onEntity && e.option === "Examine") {
+                        wrapExamineWithClickCross(host, e, tileForMenu);
+                    } else if (onEntity) {
                         const orig = e.onClick;
                         e.onClick = (entry, evt?: MouseEvent, ctx?: unknown) =>
                             host.performWorldEntryAction(

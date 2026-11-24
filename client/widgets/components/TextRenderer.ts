@@ -693,6 +693,12 @@ export function shouldAutoWrapText(
     return !(height < resolvedLineHeight + ascent + descent && height < resolvedLineHeight * 2);
 }
 
+/** The alpha a text component draws at: 255 minus its transparency. */
+export function widgetTextAlpha(w: { transparency?: number; opacity?: number }): number {
+    const transparency = (w.transparency ?? w.opacity ?? 0) & 0xff;
+    return (255 - transparency) / 255;
+}
+
 export function drawWrappedTextGL(
     glr: GLRenderer,
     fontLoader: FontLoader,
@@ -710,6 +716,7 @@ export function drawWrappedTextGL(
     inlineImageResolver?: InlineImageResolver,
     renderScaleX: number = 1,
     renderScaleY: number = 1,
+    alpha: number = 1,
 ) {
     text = resolveTextTemplates(text);
     // Early exit for empty text
@@ -810,7 +817,7 @@ export function drawWrappedTextGL(
             tx,
             by,
             shadow,
-            1,
+            alpha,
             x | 0,
             y | 0,
             safeScaleX,

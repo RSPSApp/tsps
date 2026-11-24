@@ -10,6 +10,7 @@ import {
     drawRichTextGL as UI_drawRichTextGL,
     drawTextGL as UI_drawTextGL,
     drawWrappedTextGL as UI_drawWrappedTextGL,
+    widgetTextAlpha,
 } from "../../../widgets/components/TextRenderer";
 import { runCs1 } from "../../../widgets/cs1/runCs1";
 import {
@@ -732,6 +733,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
         shadow = true,
         yAlign: 0 | 1 | 2 = 1,
         xAlign: 0 | 1 | 2 = 1,
+        alpha = 1,
     ) {
         const inlineImageResolver = (imgId: number) => {
             const icon = tc.getSpriteCanvas("mod_icons", imgId | 0);
@@ -755,6 +757,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             inlineImageResolver,
             rootScaleX,
             rootScaleY,
+            alpha,
         );
     }
 
@@ -3579,6 +3582,8 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     !!(w.textShadowed || w.textShadow),
                     (w.yTextAlignment ?? 0) as 0 | 1 | 2,
                     (w.xTextAlignment ?? 0) as 0 | 1 | 2,
+                    // OSRS draws text at its component's transparency (0 opaque, 255 invisible).
+                    widgetTextAlpha(w),
                 );
             }
             if (profileWidgetRender) {

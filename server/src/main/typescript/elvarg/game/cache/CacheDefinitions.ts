@@ -576,6 +576,10 @@ export class CacheDefinitions {
         registerSampledAnimations(rows, source, nativeCount, id => this.customSequences.has(id) || this.isCacheSeq(id));
     }
 
+    static hasSampledAnimation(id: number): boolean {
+        return customAnimation(id) !== undefined;
+    }
+
     static getCustomAnimations(): SampledAnimationRow[] {
         return customAnimationRows();
     }

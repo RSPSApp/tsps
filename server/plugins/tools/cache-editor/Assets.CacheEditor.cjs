@@ -132,14 +132,15 @@ function checkName(document, kind, name, id, core) {
     }
 }
 
-function nextId(document, kind, root, requested) {
+function nextId(document, kind, root, requested, core) {
     const entry = ASSET_KINDS[kind];
     const taken = new Set((document.assets ?? []).filter((row) => row.kind === kind).map((row) => row.id));
+    const occupied = id => taken.has(id) || kind === "animation" && core?.CacheDefinitions?.hasSampledAnimation?.(id);
     // An id asked for (keeping one that plugins already use): in the kind's range, and free.
     if (requested !== undefined && requested !== null) {
         const id = Number(requested);
         if (!Number.isInteger(id) || id < entry.start || (entry.end !== undefined && id > entry.end)) throw error(`A ${kind} id is ${entry.start}..${entry.end ?? "up"}`);
-        if (taken.has(id)) throw error(`${kind} ${id} is already an asset`);
+        if (occupied(id)) throw error(`${kind} ${id} is already an asset or sampled animation`);
         return id;
     }
     if (kind === "model") {
@@ -150,7 +151,7 @@ function nextId(document, kind, root, requested) {
         }
     }
     let id = entry.start;
-    while (taken.has(id)) id += 1;
+    while (occupied(id)) id += 1;
     if (entry.end !== undefined && id > entry.end) throw error(`No ${kind} ids are left (they end at ${entry.end})`);
     return id;
 }
@@ -262,7 +263,7 @@ function addAnimation(root, { name, files, library, replace, id: requested }, co
         const existing = (document.assets ?? []).find((row) => row.kind === "animation" && row.hash === hash);
         if (existing) return { asset: existing, reused: true, revision: Document.revision(document), document };
     }
-    const id = replace === undefined ? nextId(document, "animation", root, requested) : Number(replace);
+    const id = replace === undefined ? nextId(document, "animation", root, requested, core) : Number(replace);
     const rowName = replace === undefined ? folderName("animation", name, library ? library.split("/").filter(Boolean).join("_") : `animation_${id}`) : undefined;
     if (rowName) checkName(document, "animation", rowName, id, core);
     // Players get each animation in one content packet: check the row they would get, as the server

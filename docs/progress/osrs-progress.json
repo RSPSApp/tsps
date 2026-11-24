@@ -28596,7 +28596,8 @@
           "devNotes": [
             "Implemented in server/plugins/bosses/ChaosElemental.plugin.js: melee/ranged/magic Discord attacks plus Disarm (strips up to 4 equipment slots) and Teleport (moves the player to a nearby free tile).",
             "Registered for ids CHAOS_ELEMENTAL and the JR variants; spawn is in npc-spawns.json at 3261,3927 (Chaos Elemental id 2054; Chaos Fanatic is a separate boss).",
-            "Status done; verify the post-rework table id 'chaos_elemental' still matches the spawned id."
+            "Status done; verify the post-rework table id 'chaos_elemental' still matches the spawned id.",
+            "2026-11-24, branch on main a600216fe: all four Chaos Elemental Combat Achievements are awarded. Hoarder (nothing unequipped by Madness) and The Flincher (no damage from its attacks) fail for everyone in the kill once any player in it is disarmed or hit, as the Wiki says; Adept and Veteran finish from the kill count. Verified by server/tests/chaos-boss-combat-achievements.test.cjs. Existing task statuses are unchanged."
           ],
           "taskDetails": [
             {
@@ -28695,7 +28696,8 @@
             "Implemented in server/plugins/bosses/ChaosFanatic.plugin.js: magic attack (anim 811, projectile 554), a 3-tile-area special (projectiles 551, 1-25 typeless damage) and an occasional disarm (1/10 on finish).",
             "Forced chat quotes are included; wilderness spawn near 2979,3846 in npc-spawns.json.",
             "Status done; the special's damage range and the disarm roll are the values most likely to drift from the wiki.",
-            "Main 8403b60db (4 November 2026): #1960 — The merged Wiki/recording audit corrects the relevant fight behavior; findings, sources and remaining inferred values are listed in docs/audits/boss-fights*.md. Existing access/fidelity gaps are not promoted by attack-specific fixes."
+            "Main 8403b60db (4 November 2026): #1960 — The merged Wiki/recording audit corrects the relevant fight behavior; findings, sources and remaining inferred values are listed in docs/audits/boss-fights*.md. Existing access/fidelity gaps are not promoted by attack-specific fixes.",
+            "2026-11-24, branch on main a600216fe: all four Chaos Fanatic Combat Achievements are awarded. Sorry, What Was That? fails once his explosion lands on anyone; Praying to the Gods counts ten kills in a row, starting over on a prayer-restoring potion or on leaving the Wilderness (Ferox Enclave included), not on logout; Champion and Adept finish from the kill count. Verified by server/tests/chaos-boss-combat-achievements.test.cjs and server/tests/ferox-enclave.test.cjs. Limitation: a Stat Restore Pot Share dose does not reset Praying to the Gods. Existing task statuses are unchanged."
           ],
           "taskDetails": [
             {

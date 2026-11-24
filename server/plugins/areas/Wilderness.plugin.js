@@ -94,6 +94,8 @@ const PVP_LEVEL_SCRIPT = 388;
 // ponytail: the client has no "gameframe ready" packet, so the login mount is simply
 // retried a few ticks later; raise this if it still loses the race on slow clients.
 const MOUNT_RETRY_TICKS = 3;
+/** Ticks until a player another area took while still on Wilderness ground is checked again. */
+const CLAIMED_LEAVE_CHECK_TICKS = 1;
 
 // ---------------------------------------------------------------------------
 // Combat rules
@@ -440,9 +442,16 @@ function playerLeft(api, state, player, logout) {
   state.tiles.delete(player);
   if (!logout) {
     leaveWilderness(player, OFF_PVP_FACTS, previous?.inWilderness === true);
-    // Into another area: still on Wilderness ground when that area is too (a boss cave).
-    if (previous?.inWilderness === true && tileFactsOf(player)?.inWilderness !== true) emitLeft(api, player);
+    if (previous?.inWilderness !== true) return;
+    if (tileFactsOf(player)?.inWilderness !== true) emitLeft(api, player);
+    // Claimed by another area before the move that takes them there (an instance's entry): judged
+    // once the move is done. Still on Wilderness ground, that area is on it too (a boss cave).
+    else api.getTaskManager().submit(new api.core.CountdownTask({}, CLAIMED_LEAVE_CHECK_TICKS, () => leftAfterClaim(api, player)));
   }
+}
+
+function leftAfterClaim(api, player) {
+  if (player.isRegistered?.() !== false && tileFactsOf(player)?.inWilderness !== true) emitLeft(api, player);
 }
 
 function remountIfOnline(player) {

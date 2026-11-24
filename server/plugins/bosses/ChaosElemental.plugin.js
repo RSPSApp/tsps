@@ -115,7 +115,7 @@ function combatClass(api) {
         return;
       }
       const target = hit.getTarget();
-      if (Number(hit.getTotalDamage?.() ?? 0) > 0) hit.getAttacker?.()?.setAttribute?.(DAMAGED_ATTRIBUTE, true);
+      if (target.isPlayer?.() && Number(hit.getTotalDamage?.() ?? 0) > 0) hit.getAttacker?.()?.setAttribute?.(DAMAGED_ATTRIBUTE, true);
       switch (this.currentCombatType) {
         case CombatType.MELEE:
           target.performGraphic(ChaosElementalCombatMethod.MELEE_COMBAT_GFX);

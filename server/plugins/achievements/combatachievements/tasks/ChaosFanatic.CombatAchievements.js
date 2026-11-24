@@ -40,9 +40,15 @@ function drank(event) {
   if (PRAYER_RESTORING_POTIONS.has(event?.name)) resetPrayingKills(event);
 }
 
+function prayingDone(player) {
+  const request = { player, task: PRAYING_TO_THE_GODS, done: false };
+  api.emitCustomEvent("combat-achievements:has-task", request);
+  return request.done === true;
+}
+
 function died({ npc, killer, preventDeath }) {
-  if (preventDeath || npc?.getAttribute?.("echo-boss:encounter") || npcName(npc) !== NPC_NAME) return;
-  if (killer?.isPlayer?.() !== true) return;
+  if (preventDeath || npcName(npc) !== NPC_NAME) return;
+  if (killer?.isPlayer?.() !== true || prayingDone(killer)) return;
   const kills = (Number(killer.getAttribute(PRAYING_KILLS_ATTRIBUTE)) || 0) + 1;
   killer.setAttribute(PRAYING_KILLS_ATTRIBUTE, kills);
   if (kills >= PRAYING_TO_THE_GODS_KILLS) api.emitCustomEvent("combat-achievements:complete", { player: killer, task: PRAYING_TO_THE_GODS });

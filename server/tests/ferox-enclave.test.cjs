@@ -226,7 +226,7 @@ function enclaveWorld(t) {
   });
   const custom = new Map(), startup = [], global = { attack: [], process: [] };
   const apiFor = (name) => new Proxy({
-    core, sendMultiChatboxPrompt: recordPrompt,
+    core, sendMultiChatboxPrompt: recordPrompt, getTaskManager: () => TaskManager,
     registerArea(area) { area.pluginName = name; AreaManager.areas.push(area); },
     onCustomEvent(name, handler) { custom.set(name, [...(custom.get(name) ?? []), handler]); },
     emitCustomEvent(name, event) { for (const handler of custom.get(name) ?? []) handler(event); },
@@ -767,4 +767,31 @@ test('"wilderness:left" fires once on leaving Wilderness ground: into Ferox, by 
   step(3109, 3629);
   p.getArea().postLeave(p, true);
   assert.deepEqual(left, [p, p], 'logging out');
+});
+
+test('"wilderness:left" for an instance that claims the player before moving them: judged once moved', (t) => {
+  const { core, actor, on } = enclaveWorld(t);
+  const left = [];
+  on('wilderness:left', ({ player }) => left.push(player));
+  const p = actor(new Location(3109, 3629, 0));
+  const sender = new Proxy({}, { get: () => () => sender });
+  Object.assign(p, {
+    isPlayerBot: () => false, getWildernessLevel: () => 0, setWildernessLevel() {}, getPacketSender: () => sender,
+    getSkillManager: () => ({ getCombatLevel: () => 100, getMaxLevel: () => 99 }), getUpdateFlag: () => ({ flag() {} }),
+  });
+  p.moveTo(new Location(3109, 3630, 0));
+  core.AreaManager.process(p);
+  const claim = (instance) => { instance.enter(p); p.setArea(instance); };
+  // A cave on Wilderness ground: claimed, and still in the Wilderness a tick later.
+  claim(new (class Cave extends core.Area {})([]));
+  TaskManager.process();
+  assert.deepEqual(left, [], 'still on Wilderness ground');
+  // Back out, then an instance off Wilderness ground that claims first and moves after.
+  core.AreaManager.process(p);
+  assert.equal(p.getArea().getName(), 'WildernessArea');
+  claim(new (class Lair extends core.Area {})([]));
+  p.moveTo(new Location(2271, 4698, 0));
+  assert.deepEqual(left, [], 'not before the move is done');
+  TaskManager.process();
+  assert.deepEqual(left, [p], 'once off Wilderness ground');
 });

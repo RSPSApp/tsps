@@ -241,6 +241,16 @@ test('The Flincher: being hit fails it, and so does another player being hit', (
   assert.equal(done(flincher, 'The Flincher'), true, 'the respawn starts clean');
 });
 
+test("The Flincher: its hits on something other than a player don't count", () => {
+  const player = createPlayer();
+  const npc = elemental([player]);
+  const other = spawn(core.NpcIdentifiers.CHAOS_FANATIC);
+  other.performGraphic = () => {};
+  discord(npc, other, 15);
+  kill(npc, player);
+  assert.equal(done(player, 'The Flincher'), true);
+});
+
 // ------------------------------------------------------------------ Chaos Fanatic
 
 /** His explosion: three books around `target`, landing four ticks later. */
@@ -289,6 +299,8 @@ test('Praying to the Gods: ten kills in a row complete it on the tenth', () => {
   assert.equal(done(player, 'Praying to the Gods'), false);
   kill(fanatic(), player);
   assert.equal(done(player, 'Praying to the Gods'), true);
+  kill(fanatic(), player);
+  assert.equal(prayingKills(player), 10, 'once done, the count stops');
 });
 
 test('Praying to the Gods: every potion the Wiki lists starts the count over', () => {

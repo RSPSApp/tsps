@@ -57,8 +57,10 @@ rewards, or execute spawn/death/quest callbacks. No Bestiary dependency is requi
 Providers include Chambers of Xeric, Theatre of Blood, Tombs of Amascut, Pest
 Control, Mage Arena and other minigames. Boss providers include Cerberus, Kraken,
 Zulrah, Hespori, Obor, Bryophyta, Skotizo, Nex, Scurrius, Vardorvis, Araxxor,
-Maggot King, Vorkath, the Moons of Peril, Amoxliatl, the Hueycoatl, Yama and Phantom
-Muspah. Other sources include Count Draynor, Elvarg and the awake forms of dormant creatures.
+Maggot King, Vorkath, the Moons of Peril, Amoxliatl, the Hueycoatl, Yama, Phantom
+Muspah, Doom of Mokhaiotl, Mad Angel, Gemstone Crab, the Nightmare and Phosani,
+Royal Titans, Shellbane gryphon and the Grotesque Guardians. Other sources include
+Count Draynor, Elvarg, Slayer superiors and the awake forms of dormant creatures.
 
 Quest sources declare their combat opponents with `combatNpcIds` in `registerQuest`
 metadata. They can pass an array or a read-only function that returns IDs. Disabling a

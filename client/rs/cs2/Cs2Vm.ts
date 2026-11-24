@@ -18,6 +18,7 @@ import type { Inventory } from "../inventory/Inventory";
 import type { WorldMapState } from "../map/WorldMapArea";
 import { Opcodes } from "./Opcodes";
 import { Script } from "./Script";
+import { ScriptEndSignal, endScript } from "./ScriptEnd";
 import {
     ExecutionState,
     type HandlerContext,
@@ -1366,7 +1367,17 @@ export class Cs2Vm {
         }
     }
 
+    /**
+     * cc_callonresize / if_callonresize: queues the component's onResize listener. A component
+     * without one ends the calling script there and then (quietly, callers included), so a loop
+     * over children stops at the first child that has no listener.
+     */
     queueResize(widget: WidgetNode): void {
+        const listener = widget.eventHandlers?.onResize;
+        const raw = (widget as any).onResize;
+        if (!(listener && listener.scriptId > 0) && !(Array.isArray(raw) && raw.length > 0)) {
+            endScript();
+        }
         // queueing resize from script depth 10+ throws.
         if (this.eventDepth >= 10) {
             throw new Error("RuntimeException");
@@ -1408,6 +1419,27 @@ export class Cs2Vm {
                 this.context.widgetManager.meslayerContinueWidget,
             );
             this.context.widgetManager.meslayerContinueWidget = null;
+        }
+    }
+
+    /**
+     * A script that stops on an error still has its deferred work done: the ops it triggered are
+     * clicked, a close it asked for happens and the resizes it queued run. Only what follows the
+     * failing instruction is lost. The run itself stays aborted.
+     */
+    private flushDeferredActionsAfterError(): void {
+        if (
+            this.pendingResizeQueue.length === 0 &&
+            this.pendingTriggerOpQueue.length === 0 &&
+            !this.pendingIfClose
+        ) {
+            return;
+        }
+        this.executionState = ExecutionState.RUNNING;
+        try {
+            this.flushDeferredActionsIfTopLevel();
+        } finally {
+            this.executionState = ExecutionState.ABORTED;
         }
     }
 
@@ -1894,6 +1926,13 @@ export class Cs2Vm {
                     }
                 }
             } catch (err) {
+                if (err instanceof ScriptEndSignal) {
+                    // The instruction ended the script: its callers stop with it, quietly, and
+                    // the run finishes as a normal one does.
+                    while (restoreCallerFrame()) {}
+                    this.executionState = ExecutionState.FINISHED;
+                    break;
+                }
                 const error = this.createError(
                     err instanceof Error ? err.message : String(err),
                     currentScript,
@@ -1918,13 +1957,17 @@ export class Cs2Vm {
         if (this.executionState === ExecutionState.FINISHED) {
             finalizeSuccessfulTopLevel();
         }
-        if (this.executionState === ExecutionState.ABORTED) {
+        const aborted = this.executionState === ExecutionState.ABORTED;
+        if (aborted) {
             for (const listener of this.scriptPostListeners) listener(currentScript.id);
             for (let i = this.callStackDepth - 1; i >= 0; i--) {
                 for (const listener of this.scriptPostListeners) listener(this.callStack[i].script.id);
             }
         }
         cleanupFrames();
+        if (aborted) {
+            this.flushDeferredActionsAfterError();
+        }
     }
 
     /** Public execute method for backward compatibility */

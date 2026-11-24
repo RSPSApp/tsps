@@ -107,15 +107,75 @@ export class Cs2ArrayObject {
         this._length++;
     }
 
-    private compare(a: any, b: any): number {
-        if (this.valueType === "int") {
-            return ((a as number) | 0) - ((b as number) | 0);
+    /**
+     * Sorts the first `high + 1` keys ascending, carrying `companion` (if any) along. Equal keys
+     * end up in the order the OSRS client leaves them in, so this is its procedure step for step:
+     * the middle element is the pivot and is parked at the end; each element left of it moves to
+     * the low side when `goesLow(key, pivot, index)` holds; the pivot then lands between the two
+     * sides, which are sorted the same way.
+     */
+    private static sortRange(
+        keys: any[],
+        companion: any[] | null,
+        low: number,
+        high: number,
+        goesLow: (key: any, pivot: any, index: number) => boolean,
+    ): void {
+        if (low >= high) return;
+        const middle = (low + high) >> 1;
+        let store = low;
+        const pivot = keys[middle];
+        keys[middle] = keys[high];
+        keys[high] = pivot;
+        let pivotCompanion: any;
+        if (companion) {
+            pivotCompanion = companion[middle];
+            companion[middle] = companion[high];
+            companion[high] = pivotCompanion;
         }
-        const sa = a == null ? "" : String(a);
-        const sb = b == null ? "" : String(b);
-        return sa.localeCompare(sb);
+        for (let i = low; i < high; i++) {
+            if (!goesLow(keys[i], pivot, i)) continue;
+            const key = keys[i];
+            keys[i] = keys[store];
+            keys[store] = key;
+            if (companion) {
+                const held = companion[i];
+                companion[i] = companion[store];
+                companion[store] = held;
+            }
+            store++;
+        }
+        keys[high] = keys[store];
+        keys[store] = pivot;
+        if (companion) {
+            companion[high] = companion[store];
+            companion[store] = pivotCompanion;
+        }
+        Cs2ArrayObject.sortRange(keys, companion, low, store - 1, goesLow);
+        Cs2ArrayObject.sortRange(keys, companion, store + 1, high, goesLow);
     }
 
+    /**
+     * An int goes low when it is below the pivot; one equal to the pivot goes low too at an odd
+     * index (never when the pivot is the largest int).
+     */
+    private static intGoesLow(key: number, pivot: number, index: number): boolean {
+        const tie = pivot === 2147483647 ? 0 : index & 1;
+        return (key | 0) < (pivot | 0) + tie;
+    }
+
+    /**
+     * Strings order by their UTF-16 code units, as Java's String.compareTo does (not by
+     * locale). One equal to the pivot goes low at an odd index. A null pivot sends everything
+     * low; a null key otherwise stays high.
+     */
+    private static stringGoesLow(key: any, pivot: any, index: number): boolean {
+        if (pivot == null) return true;
+        if (key == null) return false;
+        return key < pivot || ((index & 1) === 1 && key === pivot);
+    }
+
+    /** array_sort: sorts this array, moving `optionalPair`'s values with their keys. */
     sortAllWith(optionalPair: Cs2ArrayObject | null): void {
         if (this._length <= 1) return;
         this.ensureWritable();
@@ -125,60 +185,77 @@ export class Cs2ArrayObject {
         if (optionalPair && optionalPair._length < this._length) {
             throw new Error("RuntimeException");
         }
-        const indices = new Array<number>(this._length);
-        for (let i = 0; i < this._length; i++) indices[i] = i;
-        indices.sort((a, b) => this.compare(this.values[a], this.values[b]));
+        const high = this._length - 1;
+        if (this.valueType === "int") {
+            Cs2ArrayObject.sortRange(this.values, optionalPair?.values ?? null, 0, high, Cs2ArrayObject.intGoesLow);
+            return;
+        }
+        if (optionalPair) {
+            Cs2ArrayObject.sortRange(this.values, optionalPair.values, 0, high, Cs2ArrayObject.stringGoesLow);
+            return;
+        }
+        // Strings on their own: a plain ascending sort (equal strings cannot be told apart), and
+        // a null among them is an error.
+        const sorted = this.values.slice(0, this._length);
+        if (sorted.some((value) => value == null)) {
+            throw new Error("RuntimeException");
+        }
+        sorted.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+        for (let i = 0; i < this._length; i++) this.values[i] = sorted[i];
+    }
 
-        const sortedPrimary = new Array<any>(this._length);
+    /**
+     * array_max / array_min: the index of the first largest (smallest) value, -1 when empty.
+     * Strings compare by code unit; a null is never picked over the first value, and comparing
+     * against a null first value is an error.
+     */
+    private argExtreme(sign: 1 | -1): number {
+        let index = -1;
         for (let i = 0; i < this._length; i++) {
-            sortedPrimary[i] = this.values[indices[i]];
+            if (index === -1) {
+                index = i;
+                continue;
+            }
+            const value = this.values[i];
+            const best = this.values[index];
+            if (this.valueType === "int") {
+                if (sign > 0 ? (value | 0) > (best | 0) : (value | 0) < (best | 0)) index = i;
+                continue;
+            }
+            if (value == null) continue;
+            if (best == null) throw new Error("RuntimeException");
+            if (sign > 0 ? value > best : value < best) index = i;
         }
-        for (let i = 0; i < this._length; i++) {
-            this.values[i] = sortedPrimary[i];
-        }
-
-        if (!optionalPair) return;
-        const sortedPair = new Array<any>(this._length);
-        for (let i = 0; i < this._length; i++) {
-            sortedPair[i] = optionalPair.values[indices[i]];
-        }
-        for (let i = 0; i < this._length; i++) {
-            optionalPair.values[i] = sortedPair[i];
-        }
+        return index;
     }
 
     getArgMax(): number {
-        if (this._length <= 0) return -1;
-        let index = 0;
-        for (let i = 1; i < this._length; i++) {
-            if (this.compare(this.values[i], this.values[index]) > 0) {
-                index = i;
-            }
-        }
-        return index;
+        return this.argExtreme(1);
     }
 
     getArgMin(): number {
-        if (this._length <= 0) return -1;
-        let index = 0;
-        for (let i = 1; i < this._length; i++) {
-            if (this.compare(this.values[i], this.values[index]) < 0) {
-                index = i;
-            }
-        }
-        return index;
+        return this.argExtreme(-1);
     }
 
-    /** Sets `[start, end)` to first, first + 1, … (a negative bound means the array's edge). */
-    fillSequence(first: number, start: number, end: number): void {
+    /**
+     * The slots a (start, count) pair covers: a negative start is 0, and a negative count or
+     * one that runs past the end stops at the array's end, so (0, -1) is the whole array.
+     */
+    private countedRange(start: number, count: number): [number, number] {
+        const from = start < 0 ? 0 : start;
+        const end = (from + count) | 0;
+        return [from, count < 0 || end < 0 || end > this._length ? this._length : end];
+    }
+
+    /** array_generaterange: first, first + 1, ... into `count` slots from `start`. */
+    fillSequence(first: number, start: number, count: number): void {
         this.ensureWritable();
         if (this.valueType !== "int") {
             throw new Error("RuntimeException");
         }
-        const startIndex = start < 0 ? 0 : start;
-        const endIndex = end < 0 || end > this._length ? this._length : end;
-        for (let i = startIndex; i < endIndex; i++) {
-            this.values[i] = (first + i - startIndex) | 0;
+        const [from, to] = this.countedRange(start, count);
+        for (let i = from; i < to; i++) {
+            this.values[i] = (first + i - from) | 0;
         }
     }
 
@@ -224,11 +301,12 @@ export class Cs2ArrayObject {
         return -1;
     }
 
-    /** array_fill: `value` into [start, end). */
-    fill(value: any, start: number, end: number): void {
+    /** array_fill: `value` into `count` slots from `start`; a start past the end is an error. */
+    fill(value: any, start: number, count: number): void {
         this.ensureWritable();
         this.ensureType(value);
-        const [from, to] = this.range(start, end);
+        const [from, to] = this.countedRange(start, count);
+        if (from > to) throw new Error("RuntimeException");
         for (let i = from; i < to; i++) this.values[i] = value;
     }
 
@@ -250,8 +328,9 @@ export class Cs2ArrayObject {
         this._length = length;
     }
 
-    /** array_randomise: Collections.shuffle, `nextInt(bound)` from a java.util.Random. */
+    /** array_randomise: a swap per slot from the end, `nextInt(bound)` from a java.util.Random. */
     shuffle(nextInt: (bound: number) => number): void {
+        if (this._length <= 1) return;
         this.ensureWritable();
         for (let i = this._length - 1; i > 0; i--) {
             const j = nextInt(i + 1);

@@ -19,6 +19,34 @@ export function parseStrictInt(text: string | null | undefined): number {
     return value > 2147483647 || value < -2147483648 ? -1 : value | 0;
 }
 
+/** Whether a bit index names one of an int's 32 bits. */
+function isIntBit(bit: number): boolean {
+    return bit >= 0 && bit <= 31;
+}
+
+/**
+ * The mask of a low..high bit range, before it is shifted into place: `high - low + 1` ones
+ * (all 32 for a full range). A range that ends more than one bit before it starts is an error.
+ */
+function bitRangeMask(low: number, high: number): number {
+    const count = high - low + 1;
+    if (count < 0) throw new Error("RuntimeException");
+    return count >= 32 ? -1 : ((1 << count) - 1) | 0;
+}
+
+/**
+ * sin / cos of a 14-bit angle scaled by 16384. OSRS keeps a table at four times the scale,
+ * cut towards zero, and shifts the entry down two bits: a negative value so rounds away from
+ * zero when the dropped bits are set.
+ */
+export function osrsSin(angle: number): number {
+    return Math.trunc(65536 * Math.sin((angle & 0x3fff) * 3.834951969714103e-4)) >> 2;
+}
+
+export function osrsCos(angle: number): number {
+    return Math.trunc(65536 * Math.cos((angle & 0x3fff) * 3.834951969714103e-4)) >> 2;
+}
+
 export function registerMathOps(handlers: HandlerMap): void {
     // === Basic arithmetic ===
     handlers.set(Opcodes.ADD, (ctx) => {
@@ -111,19 +139,20 @@ export function registerMathOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.SETBIT, (ctx) => {
         const bit = ctx.intStack[--ctx.intStackSize];
         const value = ctx.intStack[--ctx.intStackSize];
-        ctx.pushInt(value | (1 << bit));
+        // A bit index outside 0-31 leaves the value as it is.
+        ctx.pushInt(isIntBit(bit) ? value | (1 << bit) : value);
     });
 
     handlers.set(Opcodes.CLEARBIT, (ctx) => {
         const bit = ctx.intStack[--ctx.intStackSize];
         const value = ctx.intStack[--ctx.intStackSize];
-        ctx.pushInt(value & ~(1 << bit));
+        ctx.pushInt(isIntBit(bit) ? value & ~(1 << bit) : value);
     });
 
     handlers.set(Opcodes.TESTBIT, (ctx) => {
         const bit = ctx.intStack[--ctx.intStackSize];
         const value = ctx.intStack[--ctx.intStackSize];
-        ctx.pushInt((value & (1 << bit)) !== 0 ? 1 : 0);
+        ctx.pushInt(isIntBit(bit) && (value & (1 << bit)) !== 0 ? 1 : 0);
     });
 
     handlers.set(Opcodes.TOGGLEBIT, (ctx) => {
@@ -145,24 +174,37 @@ export function registerMathOps(handlers: HandlerMap): void {
         const high = ctx.intStack[--ctx.intStackSize];
         const low = ctx.intStack[--ctx.intStackSize];
         const value = ctx.intStack[--ctx.intStackSize];
-        const mask = ((1 << (high - low + 1)) - 1) << low;
-        ctx.pushInt(value | mask);
+        // A bound outside 0-31 leaves the value as it is (for all the range instructions).
+        if (!isIntBit(low) || !isIntBit(high)) {
+            ctx.pushInt(value);
+            return;
+        }
+        ctx.pushInt(value | (bitRangeMask(low, high) << low));
     });
 
     handlers.set(Opcodes.CLEARBIT_RANGE, (ctx) => {
         const high = ctx.intStack[--ctx.intStackSize];
         const low = ctx.intStack[--ctx.intStackSize];
         const value = ctx.intStack[--ctx.intStackSize];
-        const mask = ((1 << (high - low + 1)) - 1) << low;
-        ctx.pushInt(value & ~mask);
+        if (!isIntBit(low) || !isIntBit(high)) {
+            ctx.pushInt(value);
+            return;
+        }
+        ctx.pushInt(value & ~(bitRangeMask(low, high) << low));
     });
 
     handlers.set(Opcodes.GETBIT_RANGE, (ctx) => {
         const high = ctx.intStack[--ctx.intStackSize];
         const low = ctx.intStack[--ctx.intStackSize];
         const value = ctx.intStack[--ctx.intStackSize];
-        const mask = (1 << (high - low + 1)) - 1;
-        ctx.pushInt((value >> low) & mask);
+        if (!isIntBit(low) || !isIntBit(high)) {
+            ctx.pushInt(value);
+            return;
+        }
+        // The bits above `high` are shifted out, then the range is brought down unsigned, so
+        // a full 0-31 range gives the value back.
+        const drop = 31 - high;
+        ctx.pushInt(((value << drop) >>> (low + drop)) | 0);
     });
 
     // === Min/Max ===
@@ -231,24 +273,21 @@ export function registerMathOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.ADDPERCENT, (ctx) => {
         const percent = ctx.intStack[--ctx.intStackSize];
         const value = ctx.intStack[--ctx.intStackSize];
-        ctx.pushInt((value + (value * percent) / 100) | 0);
+        // Int arithmetic: the product wraps, and its hundredth is cut towards zero before it is
+        // added (10 less 15% is 10 + (-150 / 100) = 9, not 8).
+        ctx.pushInt((value + ((Math.imul(value, percent) / 100) | 0)) | 0);
     });
 
     // === Trigonometry (OSRS fixed-point: 16384 units = 360°, values scaled by 16384) ===
     const OSRS_ANGLE_SCALE = 16384;
-    const OSRS_ANGLE_TO_RAD = (2 * Math.PI) / OSRS_ANGLE_SCALE;
     const RAD_TO_OSRS_ANGLE = OSRS_ANGLE_SCALE / (2 * Math.PI);
 
     handlers.set(Opcodes.SIN, (ctx) => {
-        const angle = ctx.intStack[ctx.intStackSize - 1] & 0x3fff; // mask to 0-16383
-        ctx.intStack[ctx.intStackSize - 1] =
-            (Math.sin(angle * OSRS_ANGLE_TO_RAD) * OSRS_ANGLE_SCALE) | 0;
+        ctx.intStack[ctx.intStackSize - 1] = osrsSin(ctx.intStack[ctx.intStackSize - 1]);
     });
 
     handlers.set(Opcodes.COS, (ctx) => {
-        const angle = ctx.intStack[ctx.intStackSize - 1] & 0x3fff; // mask to 0-16383
-        ctx.intStack[ctx.intStackSize - 1] =
-            (Math.cos(angle * OSRS_ANGLE_TO_RAD) * OSRS_ANGLE_SCALE) | 0;
+        ctx.intStack[ctx.intStackSize - 1] = osrsCos(ctx.intStack[ctx.intStackSize - 1]);
     });
 
     handlers.set(Opcodes.ATAN2, (ctx) => {
@@ -279,10 +318,14 @@ export function registerMathOps(handlers: HandlerMap): void {
         const newBits = ctx.intStack[ctx.intStackSize + 1];
         const lowBit = ctx.intStack[ctx.intStackSize + 2];
         const highBit = ctx.intStack[ctx.intStackSize + 3];
-        // Clear the range first
-        const mask = ((1 << (highBit - lowBit + 1)) - 1) << lowBit;
-        const maxValue = (1 << (highBit - lowBit + 1)) - 1;
+        if (!isIntBit(lowBit) || !isIntBit(highBit)) {
+            ctx.pushInt(value);
+            return;
+        }
+        // The range is cleared, then the new bits go in, capped at the range's largest value.
+        // The cap is a signed int, so over all 32 bits it is -1: any value from 0 up stores -1.
+        const maxValue = bitRangeMask(lowBit, highBit);
         const clampedBits = newBits > maxValue ? maxValue : newBits;
-        ctx.pushInt((value & ~mask) | (clampedBits << lowBit));
+        ctx.pushInt((value & ~(maxValue << lowBit)) | (clampedBits << lowBit));
     });
 }

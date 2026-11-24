@@ -4,6 +4,7 @@ import { setCustomInterface } from "../common/gamemode/GamemodeContentStore";
 import { SMITHING_BAR_MODAL_GROUP_ID } from "../common/ui/widgets";
 import { Cs2Vm } from "../rs/cs2/Cs2Vm";
 import { Opcodes } from "../rs/cs2/Opcodes";
+import { ScriptEndSignal } from "../rs/cs2/ScriptEnd";
 import { createHandlerMap } from "../rs/cs2/handlers";
 import { loadCustomWidgetGroup } from "../widgets/custom/CustomWidgetGroups";
 import { WidgetLoader } from "../widgets/WidgetLoader";
@@ -149,7 +150,13 @@ for (const [opcode, args] of [
     vm.intStackSize = 0;
     for (const arg of args) vm.pushInt(arg);
     vm.pushInt(loadingLayer);
-    handlers.get(opcode)!(context, 0, null);
+    try {
+        handlers.get(opcode)!(context, 0, null);
+    } catch (err) {
+        // if_callonresize ends the script when the component has no onResize listener; the
+        // component was looked up (and its group loaded) first.
+        if (!(err instanceof ScriptEndSignal)) throw err;
+    }
     assert.equal(manager.isGroupLoaded(SHOP), true, `opcode ${opcode} loads the closed group for its component`);
 }
 assert.deepEqual([loaded, remounted], [[], []], "none of those lookups reports an open");

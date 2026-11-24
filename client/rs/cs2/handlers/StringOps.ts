@@ -44,6 +44,10 @@ export function registerStringOps(handlers: HandlerMap): void {
     ];
 
     // === Basic string operations ===
+    // A null operand of join_string / append reads as the text "null", as Java's string
+    // concatenation gives. (An undefined slot is ours alone, a handler that pushed no value,
+    // and stays empty.)
+    const operandText = (value: any): string => (value === null ? "null" : value ?? "");
     handlers.set(Opcodes.JOIN_STRING, (ctx, intOp) => {
         const count = intOp;
         // PERF: Use array join pattern instead of O(n²) string concatenation
@@ -53,20 +57,20 @@ export function registerStringOps(handlers: HandlerMap): void {
         }
         if (count === 1) {
             // Fast path for single string
-            ctx.pushString(ctx.stringStack[--ctx.stringStackSize] ?? "");
+            ctx.pushString(operandText(ctx.stringStack[--ctx.stringStackSize]));
             return;
         }
         // Collect strings into array (in correct order) then join
         const parts = new Array<string>(count);
         for (let i = count - 1; i >= 0; i--) {
-            parts[i] = ctx.stringStack[--ctx.stringStackSize] ?? "";
+            parts[i] = operandText(ctx.stringStack[--ctx.stringStackSize]);
         }
         ctx.pushString(parts.join(""));
     });
 
     handlers.set(Opcodes.APPEND, (ctx) => {
-        const str2 = ctx.stringStack[--ctx.stringStackSize] ?? "";
-        const str1 = ctx.stringStack[--ctx.stringStackSize] ?? "";
+        const str2 = operandText(ctx.stringStack[--ctx.stringStackSize]);
+        const str1 = operandText(ctx.stringStack[--ctx.stringStackSize]);
         ctx.pushString(str1 + str2);
     });
 
@@ -129,7 +133,12 @@ export function registerStringOps(handlers: HandlerMap): void {
     handlers.set(Opcodes.SUBSTRING, (ctx) => {
         const end = ctx.intStack[--ctx.intStackSize] ?? 0;
         const start = ctx.intStack[--ctx.intStackSize] ?? 0;
-        const str = ctx.stringStack[--ctx.stringStackSize] ?? "";
+        const str = ctx.stringStack[--ctx.stringStackSize];
+        // Indices outside the text, or an end before the start, are a script error (as is a
+        // null string); nothing is clamped or swapped.
+        if (typeof str !== "string" || start < 0 || end > str.length || start > end) {
+            throw new Error("RuntimeException");
+        }
         ctx.pushString(str.substring(start, end));
     });
 
@@ -260,9 +269,8 @@ export function registerStringOps(handlers: HandlerMap): void {
             return;
         }
 
-        // OSRS returns lineCount(text, maxWidth) - just the number of lines!
-        const lines = ctx.splitTextLines(str, fontId, maxWidth);
-        ctx.pushInt(Math.max(1, lines.length));
+        // OSRS returns the number of lines the text breaks into, not a pixel height.
+        ctx.pushInt(ctx.splitTextLines(str, fontId, maxWidth).length);
     });
 
     handlers.set(Opcodes.PARAWIDTH, (ctx) => {

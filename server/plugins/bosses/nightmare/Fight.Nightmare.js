@@ -247,7 +247,7 @@ class Fight {
     if (this.stage !== "totems") return;
     this.stage = "blast";
     const { totems, fight } = Common.data;
-    Specials.interrupt(this);
+    Specials.interrupt(this, { keepSpores: true });
     Totems.fire(this);
     this.at(totems.hitTicks, () => {
       const last = this.phase >= this.phaseCount;
@@ -258,7 +258,8 @@ class Fight {
       Totems.sleep(this);
       this.updateHud();
       if (last && !this.phosani) {
-        this.dying();
+        this.dying({ keepSpores: true });
+        this.at(totems.lastSporeBlastTicks - totems.hitTicks, () => Specials.blastSpores(this));
         return;
       }
       if (last) this.messageAll(fight.messages.survives);
@@ -274,6 +275,7 @@ class Fight {
     this.stage = "sleepwalkers";
     this.boss.moveTo(this.dream.tile(Common.data.arena.centre));
     this.boss.setNpcTransformationId(this.phosani ? npcs.phosani.blast : npcs.blast);
+    Specials.blastSpores(this);
     this.boss.performAnimation(Common.animation(totems.blastFormAnim));
     this.boss.getMovementQueue().setBlockMovement(true).reset();
     this.boss.getCombat().reset?.();
@@ -388,7 +390,7 @@ class Fight {
 
   // ------------------------------------------------------------------ her end
 
-  dying() {
+  dying({ keepSpores = false } = {}) {
     if (this.stage === "dead") return;
     const { kill, npcs } = Common.data;
     this.stage = "dead";
@@ -396,7 +398,7 @@ class Fight {
         (npc.__nightmareHusk || npc.__nightmareParasite))) {
       CombatAchievements.crushHourFailed(this);
     }
-    Specials.interrupt(this);
+    Specials.interrupt(this, { keepSpores });
     Sleepwalkers.clear(this);
     this.boss.getCombat().reset?.();
     this.boss.setUntargetable?.(true);

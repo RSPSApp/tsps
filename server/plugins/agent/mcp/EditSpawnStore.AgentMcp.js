@@ -1,4 +1,5 @@
 const fs = require("fs");
+const { effectiveFile, isWorldFile, commitWorldFiles } = require("../../world/MapEditFiles");
 
 // Reads and writes the definition files the edit tools persist to
 // (object-spawns.json, npc-spawns.json).
@@ -9,8 +10,10 @@ const fs = require("fs");
 // of one line, not of thirty thousand.
 
 function readEntries(file) {
+  const source = isWorldFile(file) ? effectiveFile(file) : file;
+  if (!source) return [];
   try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    const parsed = JSON.parse(fs.readFileSync(source, "utf8"));
     if (!Array.isArray(parsed)) throw new Error(`${file}: expected a JSON array`);
     return parsed;
   } catch (error) {
@@ -44,7 +47,8 @@ function writeEntries(file, entries) {
   let trailing = false;
   let lines = new Map();
   try {
-    const original = fs.readFileSync(file, "utf8");
+    const source = isWorldFile(file) ? effectiveFile(file) : file;
+    const original = source ? fs.readFileSync(source, "utf8") : "";
     if (original.includes("\r\n")) newline = "\r\n";
     trailing = original.endsWith("\n");
     lines = originalLines(original);
@@ -58,7 +62,9 @@ function writeEntries(file, entries) {
   const body = entries.length === 0
     ? "[]"
     : `[${newline}${entries.map(lineFor).join(`,${newline}`)}${newline}]`;
-  fs.writeFileSync(file, body + (trailing ? newline : ""));
+  const contents = body + (trailing ? newline : "");
+  if (isWorldFile(file)) commitWorldFiles(new Map([[file, contents]]));
+  else fs.writeFileSync(file, contents);
 }
 
 /** Object spawns: { id, position: { x, y, z }, type, face, remove?, source? }. */

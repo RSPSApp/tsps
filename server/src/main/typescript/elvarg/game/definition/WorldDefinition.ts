@@ -1,3 +1,4 @@
+import { mapEditFiles } from "../../util/MapEditFiles";
 import * as fs from "fs";
 import * as path from "path";
 import { Boundary } from "../model/Boundary";
@@ -61,9 +62,16 @@ export function readWorldConfig(scopedSettings?: ScopedPluginSettings): JsonObje
     const shipped = object(JSON.parse(fs.readFileSync(path.resolve("data/definitions/world.json"), "utf8")), "world.json");
     // Optional per-deployment overrides (gitignored), so a live world can differ from the
     // shipped world.json (e.g. its XP rate or tutorial) and still update from main by fast-forward.
-    const localFile = path.resolve("data/definitions/world.local.json");
-    if (!fs.existsSync(localFile)) return preserveLegacyCrossFloorDefault(normalizeWorldPluginConfig(shipped, scopedSettings));
-    const local = object(JSON.parse(fs.readFileSync(localFile, "utf8")), "world.local.json");
+    const layers = mapEditFiles.readLayers(path.resolve("data")).effective;
+    const localFile = mapEditFiles.effectiveFile(path.resolve("data/definitions/world.local.json"), layers);
+    const local = localFile && fs.existsSync(localFile)
+        ? object(JSON.parse(fs.readFileSync(localFile, "utf8")), "world.local.json") : {};
+    for (const key of ["spawn", "zones"] as const) {
+        const name = `map-${key}.json`;
+        const file = mapEditFiles.effectiveFile(path.resolve("data/definitions", name), layers);
+        if (file && fs.existsSync(file)) local[key] = JSON.parse(fs.readFileSync(file, "utf8"));
+    }
+    if (!Object.keys(local).length) return preserveLegacyCrossFloorDefault(normalizeWorldPluginConfig(shipped, scopedSettings));
     return mergeWorldConfig(shipped, local, scopedSettings);
 }
 

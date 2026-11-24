@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 
 import { EditModePlugin } from "../game/plugins/editmode/EditModePlugin";
+import { parseAreaStamp } from "../game/plugins/editmode/AreaStamp";
 import { parseEditorLocation, regionBounds, regionIdOf } from "../game/plugins/editmode/EditorCoordinates";
-import { MAX_REGION_PACK_PAYLOAD, buildRegionPack, oversizedRegionPacks, parseRegionPack } from "../game/plugins/editmode/RegionPack";
+import { MAX_REGION_PACK_PAYLOAD, buildRegionPack, oversizedRegionPacks, parseRegionPack, readRegionOverlays } from "../game/plugins/editmode/RegionPack";
 import { adjustHeightBytes } from "../game/plugins/editmode/TerrainHeight";
-import type { EditModeEdit } from "../game/plugins/editmode/types";
+import { buildZoneGroundGeometry } from "../game/plugins/editmode/ZoneGroundOverlay";
+import type { EditModeEdit, EditModeHost } from "../game/plugins/editmode/types";
 import { getOverlayShapeTriangles } from "../rs/scene/SceneTileModel";
 
 const area = (triangles: [number, number][][]): number => triangles.reduce((sum, [a, b, c]) =>
@@ -20,6 +22,12 @@ assert.equal(new Set([0, 1, 2, 3].map(corners)).size, 4, "each rotation of a dia
 for (let shape = 0; shape < 12; shape++) {
     const covered = area(getOverlayShapeTriangles(shape, 0));
     assert.ok(covered > 0 && covered <= 1, `shape ${shape} draws an overlay inside the tile`);
+}
+{
+    const rect = { minX: 2, maxX: 2, minY: 3, maxY: 3, plane: 1, shape: 1, rotation: 3, alpha: 1, colorRgb: 0x506070 };
+    const { positions } = buildZoneGroundGeometry([rect], () => -1);
+    const vertices = Array.from({ length: positions.length / 3 }, (_, index) => [positions[index * 3] - 2, positions[index * 3 + 2] - 3]);
+    assert.deepEqual(vertices, getOverlayShapeTriangles(1, 3).flat(), "the immediate paint preview shares the saved shape and rotation");
 }
 
 // Height: the block moves fully and the rings around it fall off towards nothing.
@@ -54,8 +62,9 @@ for (const bad of ["", "abc", "1,2,3,4", "3222,3218,9", "99999", "-1,5", "20000,
 // Plugin wiring against a recording host.
 const calls: unknown[][] = [];
 const refreshes: number[][] = [];
+const blockedFrames: { tileX: number; tileY: number; plane: number }[][] = [];
 let pointer = { tileX: 3222, tileY: 3218, plane: 0 };
-const makePlugin = () => {
+const makePlugin = (getTerrainHeight: (tile: typeof pointer) => number = () => -1, overrides?: Partial<EditModeHost>) => {
     const plugin = new EditModePlugin();
     plugin.attach({
         getCanvas: () => undefined,
@@ -64,7 +73,12 @@ const makePlugin = () => {
         isLoggedIn: () => true,
         setFreeCamera: () => {},
         cancelPendingClick: () => {},
-        getTerrainHeight: () => -1,
+        getTerrainHeight,
+        getLocPlacementShape: () => 10,
+        getStampObjectInfo: () => ({ sizeX: 1, sizeY: 1, interactive: false }),
+        getTerrainFlags: () => 0,
+        getCameraTile: () => pointer,
+        showBlockedTiles: (tiles: typeof pointer[]) => blockedFrames.push(tiles),
         jumpCameraToTile: () => {},
         setTerrainOverlay: (tile: unknown, overlay: number, shape: number, rotation: number) =>
             calls.push(["paint", tile, overlay, shape, rotation]),
@@ -74,10 +88,212 @@ const makePlugin = () => {
         restoreLoc: () => calls.push(["restore"]),
         refreshEditedRegions: (regions: number[]) => refreshes.push(regions),
         selectTileRange: (start: any, end: any) => ({ ...start, tileEndX: end.tileX, tileEndY: end.tileY, locId: -1, locName: "" }),
+        ...overrides,
     } as any);
     plugin.setConfig({ enabled: true, active: true, overlayId: 7 });
     return plugin;
 };
+
+// A vertex gets another application after the brush leaves and returns. The
+// entire drag, including its repeated passes, still shares one history entry.
+{
+    const plugin = makePlugin();
+    const origin = { ...pointer };
+    const far = { ...pointer, tileX: pointer.tileX + 3 };
+    plugin.setTerrainBrush({ action: "raise", radius: 0, step: 4 });
+    const brush = plugin as unknown as {
+        applyTerrainStroke(path: (typeof pointer)[]): void;
+    };
+    brush.applyTerrainStroke([origin, origin, far, origin]);
+    const height = () => plugin.getConfig().edits.findLast((edit) => edit.kind === "height" &&
+        edit.tileX === origin.tileX && edit.tileY === origin.tileY)?.locId;
+    assert.equal(height(), 24, "a second pass raises the vertex again while a stationary sample does nothing");
+    assert.equal(plugin.undo(), true);
+    assert.equal(plugin.getConfig().edits.length, 0);
+    assert.equal(plugin.undo(), false);
+    assert.equal(plugin.redo(), true);
+    assert.equal(height(), 24);
+}
+
+{
+    const plugin = makePlugin();
+    const origin = { ...pointer };
+    const middle = { ...origin, tileX: origin.tileX + 1 };
+    const far = { ...origin, tileX: origin.tileX + 2 };
+    plugin.armScatter([1276], 0, 0.5);
+    const scatter = plugin as unknown as { applyScatter(path: (typeof pointer)[]): void };
+    const samples = [0.9, 0.9, 0.9, 0, 0, 0, 0.9];
+    const random = Math.random;
+    Math.random = () => samples.shift() ?? 0.9;
+    try {
+        scatter.applyScatter([origin, origin, far, origin]);
+    } finally {
+        Math.random = random;
+    }
+    assert.deepEqual(plugin.getConfig().edits, [{ kind: "place", ...middle, locId: 1276, shape: 10, rotation: 0 }],
+        "scatter can place on a previously missed tile after leaving and returning");
+    assert.equal(plugin.undo(), true);
+    assert.deepEqual(plugin.getConfig().edits, []);
+}
+
+{
+    const oldPointer = pointer;
+    const random = Math.random;
+    const requestFrame = globalThis.requestAnimationFrame;
+    const cancelFrame = globalThis.cancelAnimationFrame;
+    const frames = new Map<number, FrameRequestCallback>();
+    let frameId = 0;
+    globalThis.requestAnimationFrame = (callback) => { frames.set(++frameId, callback); return frameId; };
+    globalThis.cancelAnimationFrame = (id) => { frames.delete(id); };
+    const renderFrame = () => {
+        const pending = [...frames.values()];
+        frames.clear();
+        for (const callback of pending) callback(0);
+    };
+    const areaPreviews: (readonly (typeof pointer)[])[] = [];
+    const plugin = makePlugin(undefined, { setScatterBrushPreview: (tiles) => { areaPreviews.push([...tiles]); } });
+    type BrushGesture = {
+        onMouseDown(event: MouseEvent): void;
+        onMouseMove(event: MouseEvent): void;
+        onMouseUp(event: MouseEvent): void;
+    };
+    const gesture = plugin as unknown as BrushGesture;
+    const input = (step: number): MouseEvent => {
+        pointer = { ...oldPointer, tileX: oldPointer.tileX + step };
+        return { button: 0, clientX: step * 12, clientY: 0, preventDefault() {} } as MouseEvent;
+    };
+    Math.random = () => 0.005;
+    try {
+        plugin.armScatter([1276], 10, 0.001);
+        renderFrame();
+        areaPreviews.length = 0;
+        gesture.onMouseDown(input(0));
+        for (let step = 1; step <= 30; step++) gesture.onMouseMove(input(step));
+        renderFrame();
+        assert.equal(areaPreviews.length, 1, "multiple mouse events draw a single wide brush preview per frame");
+        const preview = areaPreviews[0];
+        assert.ok(preview.some((tile) => tile.tileX === oldPointer.tileX - 10 && tile.tileY === oldPointer.tileY));
+        assert.ok(preview.some((tile) => tile.tileX === oldPointer.tileX + 40 && tile.tileY === oldPointer.tileY));
+        assert.equal(plugin.getConfig().edits.length, 0, "release mode leaves edits alone while previewing");
+        gesture.onMouseUp(input(30));
+        assert.equal(plugin.getConfig().edits.length, 0, "half-percent samples miss at minimum density");
+
+        const previewed: EditModeEdit[] = [];
+        const rebuilds: number[][] = [];
+        let updates = 0;
+        const livePlugin = makePlugin(undefined, {
+            previewScatteredLocs: (edits) => { previewed.push(...edits); },
+            refreshEditedRegions: (regions) => { rebuilds.push(regions); },
+        });
+        const liveGesture = livePlugin as unknown as BrushGesture;
+        livePlugin.setConfig({ brushTiming: "live" });
+        livePlugin.armScatter([1276], 10, 0.001);
+        livePlugin.subscribe(() => { updates++; });
+        Math.random = () => 0;
+        liveGesture.onMouseDown(input(0));
+        assert.ok(previewed.length > 0, "live mode previews scenery on press");
+        for (let step = 1; step <= 30; step++) liveGesture.onMouseMove(input(step));
+        renderFrame();
+        assert.equal(previewed.length, preview.length, "live batches cover the same tiles as the release preview");
+        assert.equal(rebuilds.length, 0, "live previews do not rebuild the map during a drag");
+        assert.equal(updates, 0, "live placement skips full workspace refreshes during a drag");
+        liveGesture.onMouseUp(input(30));
+        assert.equal(updates, 1);
+        assert.equal(rebuilds.length, 1);
+        assert.equal(livePlugin.undo(), true);
+        assert.deepEqual(livePlugin.getConfig().edits, []);
+        assert.equal(livePlugin.redo(), true);
+        assert.equal(livePlugin.getConfig().edits.length, preview.length);
+        assert.equal(livePlugin.undo(), true);
+
+        liveGesture.onMouseDown(input(0));
+        assert.ok(livePlugin.getConfig().edits.length > 0);
+        assert.equal(livePlugin.cancelBrushStroke(), true);
+        assert.deepEqual(livePlugin.getConfig().edits, []);
+        assert.equal(livePlugin.undo(), false, "cancelling a live stroke leaves no undo step");
+        renderFrame();
+    } finally {
+        pointer = oldPointer;
+        Math.random = random;
+        globalThis.requestAnimationFrame = requestFrame;
+        globalThis.cancelAnimationFrame = cancelFrame;
+    }
+}
+
+{
+    const plugin = makePlugin();
+    plugin.setTerrainBrush({ action: "block", radius: 0 });
+    plugin.applyAtPointer();
+    assert.deepEqual(blockedFrames.at(-1), [pointer], "the blocked overlay updates as soon as a stroke lands");
+    plugin.setTerrainBrush({ action: "unblock", radius: 0 });
+    plugin.applyAtPointer();
+    assert.deepEqual(blockedFrames.at(-1), [], "the blocked overlay clears as soon as the tile is unblocked");
+    plugin.undo();
+    assert.deepEqual(blockedFrames.at(-1), [pointer], "undo updates the overlay without a checkbox toggle");
+}
+
+{
+    const sample = ({ tileX, tileY }: typeof pointer) => -(16 + tileX - pointer.tileX + 2 * (tileY - pointer.tileY)) / 16;
+    const plugin = makePlugin(sample);
+    const house = parseAreaStamp({
+        name: "House", foundation: true, source: { x: 0, y: 0 }, width: 3, height: 2,
+        objects: [{ id: 1, dx: 0, dy: 0, z: 0, type: 0, face: 0 }],
+        tiles: [{ dx: 0, dy: 0, z: 0, flag: 4 }, { dx: 3, dy: 2, z: 1, height: 37 }],
+    });
+    plugin.armStamp(house, { turns: 1, terrain: "floors", interactive: false });
+    plugin.applyAtPointer();
+    const edits = plugin.getConfig().edits;
+    const elevations = new Set<number>();
+    for (let dx = 0; dx <= 2; dx++) for (let dy = 0; dy <= 3; dy++) {
+        const tile = { tileX: pointer.tileX + dx, tileY: pointer.tileY + dy, plane: 0 };
+        const height = edits.find((edit) => edit.kind === "height" && edit.plane === 0 &&
+            edit.tileX === tile.tileX && edit.tileY === tile.tileY)?.locId;
+        elevations.add(height ?? -16 * sample(tile));
+    }
+    assert.equal(elevations.size, 1, "every vertex under the rotated building is level");
+    assert.ok(edits.some((edit) => edit.kind === "height" && edit.plane === 1 && edit.locId === 37),
+        "levelling ground leaves the template's upper-floor gaps intact");
+    plugin.undo();
+    assert.deepEqual(plugin.getConfig().edits, [], "foundation and stamp undo together");
+}
+
+{
+    const original = pointer;
+    pointer = { tileX: 3262, tileY: 3218, plane: 0 };
+    const home = regionIdOf(pointer.tileX, pointer.tileY);
+    const east = regionIdOf(pointer.tileX + 2, pointer.tileY);
+    const available = new Set([home]);
+    const notices: string[] = [];
+    const validation: number[][] = [];
+    const plugin = makePlugin(({ tileX, tileY }) => -(16 + tileX - pointer.tileX + tileY - pointer.tileY) / 16, {
+        isEditableMapRegion: (region) => available.has(region),
+        validateStampRegions: (regions) => {
+            validation.push([...regions]);
+            assert.ok(regions.every((region) => available.has(region)), "a visible scene border cannot be saved as a map");
+        },
+    });
+    plugin.setNoticeListener((message) => notices.push(message));
+    const house = parseAreaStamp({
+        name: "Boundary house", foundation: true, source: { x: 0, y: 0 }, width: 2, height: 2,
+        objects: [{ id: 1, dx: 1, dy: 0, z: 0, type: 0, face: 0 }],
+        tiles: [{ dx: 2, dy: 2, z: 1, height: 37 }],
+    });
+    plugin.armStamp(house, { turns: 0, terrain: "floors", interactive: false });
+    plugin.applyAtPointer();
+    assert.ok(plugin.getConfig().edits.some((edit) => edit.kind === "place"), "the entire footprint fits on the last two mapped columns");
+    assert.deepEqual(validation.at(-1), [home]);
+    assert.ok(plugin.undo());
+
+    pointer = { ...pointer, tileX: 3263 };
+    plugin.applyAtPointer();
+    assert.deepEqual(plugin.getConfig().edits, []);
+    assert.match(notices.at(-1) ?? "", new RegExp(`outside the mapped area.*${east}`));
+    available.add(east);
+    plugin.applyAtPointer();
+    assert.ok(plugin.getConfig().edits.some((edit) => edit.kind === "place" && edit.tileX === 3264));
+    assert.deepEqual(new Set(validation.at(-1)), available);
+    pointer = original;
+}
 
 // Painting uses the picked shape and rotation, and R turns it.
 {
@@ -98,6 +314,11 @@ const makePlugin = () => {
     const edit: EditModeEdit = { kind: "terrain", locId: 7, tileX: 3200, tileY: 3200, plane: 0, shape: 1, rotation: 3 };
     const pack = parseRegionPack(buildRegionPack((50 << 8) | 50, 40000, 39999, new Uint8Array([0]), terrain, [edit], false));
     assert.deepEqual(Array.from(pack.terrainData.subarray(0, 3)), [2 + 1 * 4 + 3, 7, 0]);
+    const base = parseRegionPack(buildRegionPack((50 << 8) | 50, 40000, 39999, new Uint8Array([0]), terrain,
+        [edit, { ...edit, kind: "underlay", locId: 3 }], false));
+    const material = readRegionOverlays(base.terrainData, false, true);
+    assert.equal(material.overlays[0], 7);
+    assert.equal(material.underlays?.[0], 3, "undo can preview the original base ground under a shaped overlay");
 }
 
 // Saving checks the packet the server can stream: raw when the sections fit, deflated when not.
@@ -236,6 +457,7 @@ const makePlugin = () => {
     assert.ok(plugin.getState().selection, "a bad location changes nothing");
     assert.equal(plugin.goToLocation("3222, 3218, 1"), true);
     assert.equal(plugin.getState().selection, undefined);
+    assert.equal(plugin.getConfig().heightLevel, 1, "a coordinate with a floor moves editing to that floor");
 }
 
 // Undo after a save has nothing to take back: those edits are the base map now.

@@ -433,6 +433,11 @@ export function isMapWithinRenderDistance(host: WebGLOsrsRendererHost,
 }
 
 export function resolveEffectiveRenderDistanceTiles(host: WebGLOsrsRendererHost, frameId: number): number {
+        const editorDistance = host.osrsClient.editorRenderDistance;
+        if (editorDistance !== undefined) {
+            host.syncBrowserQualityProfile();
+            return editorDistance;
+        }
 
         const gpu = host.osrsClient.clientPlugins.gpuSettings();
         const base = clamp((gpu?.drawDistance ?? host.osrsClient.renderDistance) | 0, 25, host.osrsClient.clientPlugins.hdEnabled() ? 160 : 90);

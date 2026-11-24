@@ -1,6 +1,8 @@
 const fs = require("fs");
+const { isWorldFile, commitWorldFiles } = require("../../world/MapEditFiles");
 const path = require("path");
 const geometry = require("./EditGeometry.AgentMcp");
+const { nativeTerrainHeight } = require("../../world/TerrainHeight");
 
 // Ground-tile tools for the agent MCP server: inspect and repaint terrain overlays and
 // underlays, raise/lower/flatten height, and clear tiles back to base. Changes apply per
@@ -210,6 +212,7 @@ module.exports = function registerEditTerrainTools(ctx) {
               result.underlay = opcode - 81;
             }
           }
+          if (wanted) return result;
         }
       }
     }
@@ -288,6 +291,20 @@ module.exports = function registerEditTerrainTools(ctx) {
     const packPath = path.join(dir, `${regionId}.pack`);
     const terrainPath = path.join(dir, `${regionId}.terrain.dat`);
 
+    const persist = (pack, terrain) => {
+      const files = new Map([[packPath, pack], [terrainPath, terrain]]);
+      if (isWorldFile(packPath)) {
+        const layer = commitWorldFiles(files);
+        return { packFile: pack ? path.join(layer, "regions", path.basename(packPath)) : null,
+          terrainFile: terrain ? path.join(layer, "regions", path.basename(terrainPath)) : null };
+      }
+      for (const [file, bytes] of files) {
+        if (bytes) fs.writeFileSync(file, bytes);
+        else if (fs.existsSync(file)) fs.unlinkSync(file);
+      }
+      return { packFile: pack ? packPath : null, terrainFile: terrain ? terrainPath : null };
+    };
+
     // Back to the cache's own terrain and its own objects: nothing to persist, so the
     // region stops loading as a replacement on restart. The live replacement stays for
     // this session, so clients still holding the edited terrain get the cache's on their
@@ -295,22 +312,17 @@ module.exports = function registerEditTerrainTools(ctx) {
     const cacheTerrain = CacheMaps.getRegion(regionId)?.terrainData;
     const objectsAreCache = !objects || !cacheObjects || sameBytes(objects, toU8(cacheObjects));
     if (objectsAreCache && cacheTerrain && sameBytes(terrain, toU8(cacheTerrain))) {
-      for (const file of [packPath, terrainPath]) if (fs.existsSync(file)) fs.unlinkSync(file);
-      return { regionId, mapX, mapY, tiles, ...result, packFile: null, terrainFile: null,
+      return { regionId, mapX, mapY, tiles, ...result, ...persist(null, null),
         persisted: false, matchesCache: true, streamed };
     }
 
     const pack = MapRegionReplacementManager.getRegionPack(regionId, objects ?? undefined);
     if (pack) {
-      fs.writeFileSync(packPath, pack);
-      if (fs.existsSync(terrainPath)) fs.unlinkSync(terrainPath);
-      return { regionId, mapX, mapY, tiles, ...result, packFile: packPath, terrainFile: null,
+      return { regionId, mapX, mapY, tiles, ...result, ...persist(pack, null),
         persisted: true, streamed };
     }
     // No object archive for this region in the cache (nothing to build a pack from).
-    fs.writeFileSync(terrainPath, Buffer.from(terrain));
-    if (fs.existsSync(packPath)) fs.unlinkSync(packPath);
-    return { regionId, mapX, mapY, tiles, ...result, packFile: null, terrainFile: terrainPath,
+    return { regionId, mapX, mapY, tiles, ...result, ...persist(null, Buffer.from(terrain)),
       persisted: true, streamed };
   };
 
@@ -324,17 +336,15 @@ module.exports = function registerEditTerrainTools(ctx) {
       if (!byRegion.has(regionId)) byRegion.set(regionId, []);
       byRegion.get(regionId).push(edit);
     }
-    const regions = [];
-    for (const [regionId, regionEdits] of byRegion) {
+    const prepared = Array.from(byRegion, ([regionId, regionEdits]) => {
       const base = baseBytes(regionId);
-      const mapX = regionId >> 8;
-      const mapY = regionId & 0xff;
-      regions.push(commitRegion(
+      return {
         regionId,
-        patchTerrain(toU8(base.terrainData), regionEdits, mapX, mapY, wide),
-        regionEdits.length,
-      ));
-    }
+        terrain: patchTerrain(toU8(base.terrainData), regionEdits, regionId >> 8, regionId & 0xff, wide),
+        tiles: regionEdits.length,
+      };
+    });
+    const regions = prepared.map(({ regionId, terrain, tiles }) => commitRegion(regionId, terrain, tiles));
     return { change: label, regions };
   };
 
@@ -480,20 +490,74 @@ module.exports = function registerEditTerrainTools(ctx) {
   const tileAt = (x, y, z) => decodeTile(
     toU8(baseBytes(regionIdFor(x, y)).terrainData), z, x & 0x3f, y & 0x3f, wideTerrain(),
   );
+  tool("set_walkability", "Set the terrain blocking flag in a rectangle and preserve the other tile flags. Reload the saved pack to update live clipping.", {
+    ...rectSchema,
+    blocked: z.boolean(),
+  }, ({ blocked, ...rect }) => {
+    if (typeof blocked !== "boolean") throw new Error("Choose whether the tiles should be blocked");
+    const { minX, maxX, minY, maxY, z } = normalizeRect(rect);
+    const edits = [];
+    for (let x = minX; x <= maxX; x++) {
+      for (let y = minY; y <= maxY; y++) {
+        const before = tileAt(x, y, z).flag ?? 0;
+        const after = blocked ? before | 1 : before & ~1;
+        if (after > 32) throw new Error(`Tile ${x},${y} cannot combine its existing flags with a walking block`);
+        if (before !== after) edits.push({ kind: "flag", tileX: x, tileY: y, plane: z, locId: after });
+      }
+    }
+    return applyEdits(edits, `updated walkability on ${edits.length} tiles`);
+  });
   /**
    * Height edits that level a building's footprint and blend its edge (levelPlan), read from
-   * the live terrain on plane 0. Callers apply them with their own edits, before placing.
+   * the live terrain on the placement plane. Callers apply them with their own edits, before placing.
    */
   const levelEdits = (x0, y0, x1, y1, options = {}) => {
+    const { plane = 0, ...levelOptions } = options;
+    const vertices = new Map();
+    const regions = new Map();
+    const wide = wideTerrain();
+    const read = (x, y, z) => {
+      if (x < 0 || x > 16383 || y < 0 || y > 16383) return;
+      const key = `${x}:${y}:${z}`;
+      if (vertices.has(key)) return vertices.get(key);
+      const id = regionIdFor(x, y);
+      if (!regions.has(id)) {
+        const data = MapRegionReplacementManager.getReplacementMapData(id)?.terrainData ?? CacheMaps.getRegion(id)?.terrainData;
+        regions.set(id, data && toU8(data));
+      }
+      const data = regions.get(id);
+      if (!data) return;
+      const tile = decodeTile(data, z, x & 63, y & 63, wide);
+      vertices.set(key, tile);
+      return tile;
+    };
+    const absolute = (x, y, z) => {
+      if (z < 0) return 0;
+      const tile = read(x, y, z);
+      if (!tile) return;
+      const gap = tile.height ?? (z === 0 ? nativeTerrainHeight(x, y) : 30);
+      return (gap === 1 ? 0 : gap) + absolute(x, y, z - 1);
+    };
     // Tiles on or next to an indoor floor (flag 4) belong to a building already standing:
     // its walls sit on those corners, so the blend leaves them be.
-    const indoor = (x, y) => ((tileAt(x, y, 0).flag ?? 0) & 4) !== 0;
+    const indoor = (x, y) => ((read(x, y, plane)?.flag ?? 0) & 4) !== 0;
     const keep = (x, y) => {
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) if (indoor(x + dx, y + dy)) return true;
       return false;
     };
-    const plan = geometry.levelPlan((x, y) => tileAt(x, y, 0).height, x0, y0, x1, y1, { keep, ...options });
-    const edits = plan.tiles.map((tile) => ({ kind: "height", tileX: tile.x, tileY: tile.y, plane: 0, locId: tile.height }));
+    const plan = geometry.levelPlan((x, y) => absolute(x, y, plane), x0, y0, x1, y1, { keep, ...levelOptions });
+    if (plan.unknown) throw new Error("The foundation reaches terrain that has no map square");
+    const edits = [];
+    for (const { x, y, height } of plan.tiles) {
+      const gap = height - absolute(x, y, plane - 1);
+      if (gap < 0 || gap > 255) {
+        if (x >= x0 && x <= x1 + 1 && y >= y0 && y <= y1 + 1) {
+          throw new Error("The ground below varies too much to level the footprint on this plane");
+        }
+        continue;
+      }
+      edits.push({ kind: "height", tileX: x, tileY: y, plane, locId: gap === 1 ? 0 : gap });
+    }
     return { edits, level: plan.level, spread: plan.spread, moved: plan.moved, unknown: plan.unknown };
   };
   return { applyEdits, tileAt, levelEdits };

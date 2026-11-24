@@ -42,6 +42,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { listWarps, warpForObject, warpMenuActions, warpArrival } = require("./MapWarps");
 
 const MINIMAP_STATE_VARBIT = 6719;
 const MINIMAP_OFF = 2;
@@ -508,6 +509,64 @@ function useLoc(event) {
   if (play(event.player, event.object, event.clickType)) event.handled = true;
 }
 
+function sendWarpMenuActions({ player }) {
+  if (!player.getSession?.() || !player.getPacketSender()?.sendContentData) return;
+  const rows = warpMenuActions();
+  // Content packets have a 65,535-byte frame. Publish the list in bounded batches.
+  for (let start = 0; start < Math.max(rows.length, 1); start += 250) {
+    player.getPacketSender().sendContentData("server", [{
+      key: start === 0 ? "mapWarpActions" : "mapWarpActionsAppend",
+      rows: rows.slice(start, start + 250),
+    }]);
+  }
+}
+
+function refreshWarpMenuActions() {
+  for (const player of core.World.getPlayers()) if (player) sendWarpMenuActions({ player });
+}
+
+function onLogin(event) {
+  restoreVarbits(event);
+  sendWarpMenuActions(event);
+}
+
+function resolveWarpMenuActions({ player, object, options }) {
+  if (player.getPrivateArea() || object.getPrivateArea?.()) return;
+  for (let op = 1; op <= 5; op++) {
+    const label = warpForObject(core, object, op)?.actionLabel;
+    if (label) options[op - 1] = label;
+  }
+}
+
+/** Placement-specific editor links run before generic doors, stairs and ladders. */
+function useMapWarp(event) {
+  const { player, object, clickType } = event;
+  if (event.handled || player.getPrivateArea() || object.getPrivateArea?.()) return;
+  const location = object.getLocation();
+  const from = [location.getX(), location.getY(), location.getZ()];
+  const warp = warpForObject(core, object, clickType);
+  if (!warp) return;
+  event.handled = true;
+  const vanilla = entryFor(object, clickType);
+  const entry = { id: warp.id, x: from[0], y: from[1], z: from[2], tick: 2, ...vanilla };
+  const gate = failedGate(player, entry);
+  if (gate) return refuse(player, gate.refuse);
+  const start = player.getLocation().clone();
+  const cross = (destination) => {
+    if (!player.getLocation().equals(start) || player.getPrivateArea()) return;
+    const arrival = warpArrival(core, destination, from);
+    if (!arrival) return player.sendMessage("There is no clear arrival tile beside that object.");
+    const landing = new core.Location(...arrival);
+    if (!core.TeleportHandler.destinationAllowed(player, landing)) return;
+    if (entry.warn && !warningOff(player, entry.warn.varbit)) warn(player, object, entry, arrival);
+    else if (entry.ask) ask(player, object, entry, arrival);
+    else travel(player, entry, arrival);
+  };
+  if (warp.destinations.length === 1) cross(warp.destinations[0]);
+  else pluginApi.sendMultiChatboxPrompt(player, "Where would you like to go?",
+    ...warp.destinations.flatMap((destination) => [destination.label, () => cross(destination)]));
+}
+
 /** Ladders' "does anyone own this ladder?": captured ladders and staircases answer it. */
 function claimLadder(request) {
   if (request.handled) return;
@@ -541,13 +600,17 @@ module.exports = {
     entries = loadEntries();
     swaps = loadSwaps();
     toggles = loadToggles();
+    listWarps();
     api.persistAttribute(TIED_ATTRIBUTE);
     api.persistAttribute(WARNINGS_OFF_ATTRIBUTE);
     api.persistAttribute(TOGGLED_ATTRIBUTE);
-    api.onPlayerLogin(restoreVarbits);
+    api.onPlayerLogin(onLogin);
     api.onObjectInteraction(useLoc);
+    api.onBeforeObjectInteraction(useMapWarp);
     api.onObjectRoute(routeToLoc);
     api.onItemOnObject(useItemOnLoc);
+    api.onCustomEvent("map-warps:changed", refreshWarpMenuActions);
+    api.onCustomEvent("object:menu-options", resolveWarpMenuActions);
     api.onCustomEvent("ladders:climb", claimLadder);
     api.onCustomEvent("loc-teleports:captured", answerCaptured);
     api.onCustomEvent("door:toggle", claimDoorToggle);

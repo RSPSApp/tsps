@@ -96,6 +96,14 @@ let dynamicWidgetGroups: Map<number, { root: any; widgets: Map<number, any> }> |
 // Behaviour declarations for server-defined interfaces, keyed by group id. See
 // widgets/custom/CustomInterfaceRuntime for what the client does with them.
 let customInterfaces: Map<number, any> | null = null;
+type MapWarpAction = { id: number; op: number; from: [number, number, number]; actionLabel: string };
+const mapWarpActions = new Map<string, Map<number, string>>();
+const warpObjectKey = (id: number, x: number, y: number, plane: number) => `${id}:${x}:${y}:${plane}`;
+
+export function getMapWarpActions(id: number, x: number, y: number, plane: number): ReadonlyMap<number, string> | undefined {
+    return mapWarpActions.size ? mapWarpActions.get(warpObjectKey(id, x, y, plane)) : undefined;
+}
+
 let worldLocChanges: WorldLocChangeRow[] = [];
 let worldLocSpawns: WorldLocSpawnRow[] = [];
 let worldTerrainOverrides: WorldTerrainOverrideRow[] = [];
@@ -108,6 +116,7 @@ export function isReady(): boolean {
 
 /** A new connection clears the old world's overlays, including legacy worlds without datasets. */
 export function clearWorldOverlays(): void {
+    mapWarpActions.clear();
     worldLocChanges = [];
     worldLocSpawns = [];
     worldTerrainOverrides = [];
@@ -123,6 +132,20 @@ export function loadFromPayload(payload: {
 }): void {
     for (const dataset of payload.datasets) {
         switch (dataset.key) {
+            case "mapWarpActions":
+            case "mapWarpActionsAppend": {
+                if (dataset.key === "mapWarpActions") mapWarpActions.clear();
+                for (const row of dataset.rows as MapWarpAction[]) {
+                    if (!row || !Array.isArray(row.from) || row.from.length !== 3 ||
+                        !Number.isInteger(row.id) || !Number.isInteger(row.op) || row.op < 1 || row.op > 5 ||
+                        typeof row.actionLabel !== "string" || !row.actionLabel) continue;
+                    const key = warpObjectKey(row.id, ...row.from);
+                    let options = mapWarpActions.get(key);
+                    if (!options) mapWarpActions.set(key, options = new Map());
+                    options.set(row.op - 1, row.actionLabel);
+                }
+                break;
+            }
             case "customDefinitions": {
                 const { replaceCustomDefinitions } = require("../../custom/definitions/CustomDefinitionStore");
                 replaceCustomDefinitions(dataset.rows);

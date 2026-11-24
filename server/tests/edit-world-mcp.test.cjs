@@ -217,8 +217,17 @@ test("terrain tools register", () => {
   const { tools } = terrainTestSetup();
   assert.deepEqual(
     [...tools.keys()],
-    ["describe_tile", "paint_ground", "set_height", "clear_terrain", "list_region_packs"],
+    ["describe_tile", "paint_ground", "set_height", "clear_terrain", "list_region_packs", "set_walkability"],
   );
+});
+
+test("walkability changes only the ground blocking bit", async () => {
+  const { call } = terrainTestSetup();
+  const tile = { x1: 3200, y1: 3200, x2: 3200, y2: 3200, z: 0 };
+  await call("set_walkability", { ...tile, blocked: true });
+  assert.equal((await call("describe_tile", { x: 3200, y: 3200, z: 0 })).flag, 1);
+  await call("set_walkability", { ...tile, blocked: false });
+  assert.equal((await call("describe_tile", { x: 3200, y: 3200, z: 0 })).flag ?? 0, 0);
 });
 
 test("paint_ground round-trips through describe_tile and persists a pack", async () => {

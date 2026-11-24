@@ -3,6 +3,8 @@
 // (scripts/loc-teleport-matching.cjs), the data against the cache, and the plugin playing an
 // entry as live OSRS does.
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const { test, before } = require("node:test");
 
@@ -52,9 +54,13 @@ before(async () => {
     persistAttribute() {},
     onPlayerLogin: (handler) => (hooks.login = handler),
     onObjectInteraction: (handler) => { hooks.object = handler; native.onObjectInteraction(handler); },
+    onBeforeObjectInteraction: (handler) => { hooks.before = handler; native.onBeforeObjectInteraction(handler); },
     onObjectRoute: (handler) => (hooks.route = handler),
     onItemOnObject: (handler) => (hooks.itemOnObject = handler),
-    onCustomEvent: (name, handler) => (hooks[name] = handler),
+    onCustomEvent: (name, handler) => {
+      hooks[name] = handler;
+      if (name === "object:menu-options") native.onCustomEvent(name, handler);
+    },
     sendMultiChatboxPrompt: (player, title, ...pairs) => prompts.push({ title, options: pairs.filter((_, i) => i % 2 === 0), pick: (text) => pairs[pairs.indexOf(text) + 1]() }),
     emitCustomEvent: (name, payload) => { emitted.push([name, payload]); PluginManager.emitCustomEvent(name, payload); },
   });
@@ -1343,6 +1349,42 @@ test("a toggled trapdoor is sent again at login, as live sends varbit 1888 on lo
   visit.player.setAttribute(LocTeleports._test.TOGGLED_ATTRIBUTE, { hundred_dave_trapdoor: 1 });
   hooks.login({ player: visit.player });
   assert.deepEqual(visit.ticks[0], ["varbit 1888=1"]);
+});
+
+test("a custom warp publishes a new option and takes a normal click on unnamed ground scenery", (t) => {
+  const { normalizeWarp, updateWarps } = require("../plugins/world/MapWarps");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "warp-click-"));
+  const previous = process.env.AGENT_MCP_MAP_WARPS_FILE;
+  process.env.AGENT_MCP_MAP_WARPS_FILE = path.join(directory, "map-warps.json");
+  const player = nativeHamPlayer();
+  const from = [3163, 3252, 0];
+  const to = [3167, 3252, 0];
+  const grass = 4735;
+  const scenery = new core.GameObject(grass, new core.Location(...from), 22, 0, null);
+  core.RegionManager.loadMapFiles(from[0], from[1]);
+  MapObjects.add(scenery);
+  const warp = normalizeWarp({ id: grass, op: 4, from, actionLabel: "Go through", destinations: [{ label: "Clearing", to }] });
+  t.after(() => {
+    MapObjects.remove(scenery);
+    updateWarps([warp], true);
+    if (previous === undefined) delete process.env.AGENT_MCP_MAP_WARPS_FILE;
+    else process.env.AGENT_MCP_MAP_WARPS_FILE = previous;
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  assert.ok(!core.ObjectDefinition.forId(grass).getInteractions()?.some(Boolean));
+  updateWarps([warp]);
+  const content = [];
+  player.getPacketSender().sendContentData = (_id, datasets) => content.push(...datasets);
+  hooks.login({ player });
+  assert.deepEqual(content, [{ key: "mapWarpActions", rows: [{ id: grass, op: 4, from, actionLabel: "Go through" }] }]);
+  const execute = new ObjectActionPacketListener();
+  execute.executeAction(player, grass, from[0], from[1], 0, "Go through");
+  nativeTicks(player, 6);
+  assert.ok(player.getLocation().equals(new core.Location(...to)));
+  player.setLocation(new core.Location(...from));
+  execute.executeAction(player, grass, from[0], from[1], 4);
+  nativeTicks(player, 6);
+  assert.ok(player.getLocation().equals(new core.Location(...to)), "numbered client packets take the same link");
 });
 
 test("Monk's Friend keeps its cave ladder; other cellar ladders of that id go where the captures show", () => {

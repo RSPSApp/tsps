@@ -1,3 +1,4 @@
+import { mapEditFiles } from "../../util/MapEditFiles";
 import * as crypto from "crypto";
 import * as fs from "fs";
 import * as path from "path";
@@ -57,8 +58,8 @@ export class WorldConfigStore {
         const shippedFile = JSON.parse(fs.readFileSync(path.join(dir, "world.json"), "utf8"));
         if (!isObject(shippedFile)) throw new Error("world.json must be an object");
         const shipped = normalizeWorldPluginConfig(shippedFile);
-        const localFile = path.join(dir, "world.local.json");
-        if (!fs.existsSync(localFile)) {
+        const localFile = mapEditFiles.effectiveFile(path.join(dir, "world.local.json"));
+        if (!localFile || !fs.existsSync(localFile)) {
             return { shipped, local: {}, localExists: false, localHash: "" };
         }
         const raw = fs.readFileSync(localFile);
@@ -243,7 +244,8 @@ export class WorldConfigStore {
     /** Replaces world.local.json atomically. Refuses a stale hash or an unparseable current file. */
     public static write(dir: string, nextLocal: JsonObject, expectedHash: string): void {
         const file = path.join(dir, "world.local.json");
-        const current = fs.existsSync(file) ? fs.readFileSync(file) : undefined;
+        const effective = mapEditFiles.effectiveFile(file);
+        const current = effective && fs.existsSync(effective) ? fs.readFileSync(effective) : undefined;
         const currentHash = current ? sha256(current) : "";
         if (currentHash !== expectedHash) {
             throw new Error("world.local.json changed since loaded; reload the page and try again");
@@ -256,6 +258,11 @@ export class WorldConfigStore {
                 throw new Error(`world.local.json does not parse (${(err as Error).message}); fix it by hand first`);
             }
             if (!isObject(parsed)) throw new Error("world.local.json does not parse as an object; fix it by hand first");
+        }
+        const data = path.dirname(dir);
+        if (mapEditFiles.readLayers(data).effective.has("definitions/world.local.json")) {
+            mapEditFiles.commitMapEdit(new Map([["definitions/world.local.json", JSON.stringify(nextLocal, null, 2) + "\n"]]), data);
+            return;
         }
         const temp = path.join(dir, `.world.local.json.${process.pid}.${Date.now()}.tmp`);
         try {

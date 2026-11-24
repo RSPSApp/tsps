@@ -59,6 +59,8 @@ export function updateWebGPUMapStreaming(renderer: WebGPURenderer, frameCount: n
  * resolveBrowserQualityProfile selects from.
  */
 export function resolveWebGPURenderDistance(renderer: WebGPURenderer): number {
+    const editorDistance = renderer.osrsClient.editorRenderDistance;
+    if (editorDistance !== undefined) return editorDistance;
     const gpu = renderer.osrsClient.clientPlugins.gpuSettings();
     const base = clamp((gpu?.drawDistance ?? renderer.osrsClient.renderDistance) | 0, 25,
         renderer.osrsClient.clientPlugins.hdEnabled() ? 160 : 90);

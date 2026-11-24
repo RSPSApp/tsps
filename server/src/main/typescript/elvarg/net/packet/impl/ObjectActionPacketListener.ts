@@ -51,15 +51,17 @@ export class ObjectActionPacketListener {
     }
     const definition = ObjectDefinition.forPlayer(object.getId(), player);
     if (!definition) return;
+    const options = [...(definition.getInteractions() ?? [])];
+    PluginManager.emitCustomEvent("object:menu-options", { player, object, options });
     if (!Number.isInteger(clickType) || clickType < 1 || clickType > 5) {
       const normalized = action?.trim().toLowerCase();
       clickType = normalized
-        ? (definition?.getInteractions()?.findIndex((option) => option?.toLowerCase() === normalized) ?? -1) + 1
+        ? options.findIndex((option) => option?.toLowerCase() === normalized) + 1
         : 0;
     }
     if (clickType < 1 || clickType > 5) return;
 
-    const option = definition?.getInteractions()?.[clickType - 1]?.toLowerCase();
+    const option = options[clickType - 1]?.toLowerCase();
     const executeInteraction = () => {
       // Another player may have opened, emptied or replaced it on the way: nothing happens. A loc
       // on another boat's deck is checked on that deck (the player's own area doesn't hold it).

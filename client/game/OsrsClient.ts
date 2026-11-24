@@ -688,6 +688,7 @@ export class OsrsClient {
 
     // Browser scenery budget in tiles; HD supports up to 160, standard rendering 90.
     renderDistance: number = DEFAULT_RENDER_DISTANCE;
+    editorRenderDistance?: number;
     // Map square radius around player to keep loaded (0 = 1 map, 1 = 3x3 grid, 2 = 5x5 grid)
     mapRadius: number = DEFAULT_MAP_RADIUS;
     // OSRS top-level map loader expanded loading level (0..5), 8-tile steps.
@@ -1214,11 +1215,22 @@ export class OsrsClient {
         if (this.pruneBurningLogMeshes()) this.refreshGroundItemMeshes();
     }
 
+    private editorGroundItemPreview: ClientGroundItemStack[] = [];
+
+    setEditorGroundItemPreview(stacks: ClientGroundItemStack[]): void {
+        this.editorGroundItemPreview = stacks;
+        this.refreshGroundItemMeshes();
+    }
+
     /** Mesh input only. Menus, labels and plugins continue to read the ground item store. */
     getGroundItemMeshStacks(): ClientGroundItemStack[] {
         this.pruneBurningLogMeshes();
         const stacks = this.groundItems.getAllStacks();
         for (const { stack } of this.burningLogMeshes.values()) stacks.push(stack);
+        for (const preview of this.editorGroundItemPreview) {
+            if (!this.groundItems.getStacksAt(preview.tile.x, preview.tile.y, preview.tile.level)
+                .some((stack) => stack.itemId === preview.itemId)) stacks.push(preview);
+        }
         return stacks;
     }
 

@@ -5,6 +5,7 @@ const { MapRegionReplacementManager } = require("../../../src/main/typescript/el
 const { CacheMaps } = require("../../../src/main/typescript/elvarg/game/cache/CacheMaps");
 const { Buffer } = require("../../../src/main/typescript/elvarg/game/collision/Buffer");
 const { ObjectDefinition } = require("../../../src/main/typescript/elvarg/game/definition/ObjectDefinition");
+const { nativeTerrainHeight } = require("../TerrainHeight");
 const { ObjectType } = require("./ObjectType.ProceduralRegionStream");
 const {
   PRESET_OUTPUT_PATH,
@@ -120,56 +121,6 @@ function decodeRegionObjects(regionId) {
   return objects;
 }
 
-function terrainNoise(x, y) {
-  let n = x + y * 57;
-  n = (n << 13) ^ n;
-  const raw = (Math.imul(n, Math.imul(Math.imul(n, n), 15731) + 789221) + 1376312589) & 0x7fffffff;
-  return (raw >> 19) & 0xff;
-}
-
-function terrainSmoothNoise(x, y) {
-  const corners =
-    terrainNoise(x - 1, y - 1) + terrainNoise(x + 1, y - 1) + terrainNoise(x - 1, y + 1) + terrainNoise(x + 1, y + 1);
-  const sides = terrainNoise(x - 1, y) + terrainNoise(x + 1, y) + terrainNoise(x, y - 1) + terrainNoise(x, y + 1);
-  const center = terrainNoise(x, y);
-  return ((corners >> 4) + (sides >> 3) + (center >> 2)) | 0;
-}
-
-function terrainInterpolate(a, b, angle, frequencyReciprocal) {
-  const theta = (angle * Math.PI) / frequencyReciprocal;
-  const cosine = (65536 - ((Math.cos(theta) * 65536) | 0)) >> 1;
-  return ((a * (65536 - cosine)) >> 16) + ((b * cosine) >> 16);
-}
-
-function terrainInterpolatedNoise(x, y, frequencyReciprocal) {
-  const l = Math.floor(x / frequencyReciprocal);
-  const i1 = x & (frequencyReciprocal - 1);
-  const j1 = Math.floor(y / frequencyReciprocal);
-  const k1 = y & (frequencyReciprocal - 1);
-  const l1 = terrainSmoothNoise(l, j1);
-  const i2 = terrainSmoothNoise(l + 1, j1);
-  const j2 = terrainSmoothNoise(l, j1 + 1);
-  const k2 = terrainSmoothNoise(l + 1, j1 + 1);
-  const l2 = terrainInterpolate(l1, i2, i1, frequencyReciprocal);
-  const i3 = terrainInterpolate(j2, k2, i1, frequencyReciprocal);
-  return terrainInterpolate(l2, i3, k1, frequencyReciprocal);
-}
-
-function terrainVertexHeight(x, y) {
-  let mapHeight =
-    terrainInterpolatedNoise(x + 45365, y + 91923, 4) -
-    128 +
-    ((terrainInterpolatedNoise(x + 10294, y + 37821, 2) - 128) >> 1) +
-    ((terrainInterpolatedNoise(x, y, 1) - 128) >> 2);
-  mapHeight = (mapHeight * 0.3 + 35) | 0;
-  if (mapHeight < 10) {
-    mapHeight = 10;
-  } else if (mapHeight > 60) {
-    mapHeight = 60;
-  }
-  return mapHeight;
-}
-
 function decodeRegionTerrainData(regionId) {
   const region = RegionManager.getRegionid(regionId);
   if (!region) {
@@ -193,7 +144,7 @@ function decodeRegionTerrainData(regionId) {
           const tileType = stream.readUShort();
           if (tileType === 0) {
             if (z === 0) {
-              heights[0][tileX][tileY] = -terrainVertexHeight(932731 + absX + tileX, 556238 + absY + tileY) * 8;
+              heights[0][tileX][tileY] = -nativeTerrainHeight(absX + tileX, absY + tileY) * 8;
             } else {
               heights[z][tileX][tileY] = heights[z - 1][tileX][tileY] - 240;
             }

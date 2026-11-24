@@ -70,6 +70,9 @@ export type SdMapData = {
     /** Main-thread-only source snapshot for lazily requested minimap floors. */
     minimapInput?: SdMapLoaderInput;
 
+    /** Loc/terrain edit version of a WebGL build waiting for GPU application. */
+    locReloadVersion?: number;
+
     /** Main-thread-only timing data enabled by `?map-profile=1`. */
     mapProfile?: { queuedAt: number; workerReadyAt: number };
 

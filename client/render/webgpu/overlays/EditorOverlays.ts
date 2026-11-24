@@ -3,6 +3,7 @@ import { mat4 } from "gl-matrix";
 import type { MapIconGroundEntry } from "../../../game/plugins/editmode/MapIconGroundOverlay";
 import { buildMapIconGroundVertices } from "../../../game/plugins/editmode/MapIconGroundOverlay";
 import type { LocPlacementPreview, LocPlacementPreviewClient, LocPlacementPreviewRenderer } from "../../../game/plugins/editmode/LocPlacementPreviewOverlay";
+import { groupLocPreviews } from "../../../game/plugins/editmode/LocPlacementPreviewOverlay";
 import { buildZoneGroundGeometry, type ZoneGroundRect } from "../../../game/plugins/editmode/ZoneGroundOverlay";
 import { ContourGroundType, SceneBuffer, type DrawCommand } from "../../buffer/SceneBuffer";
 import { buildLocGeometryData } from "../../loader/SdMapDataLoader";
@@ -254,19 +255,48 @@ export class EditorOverlays {
     private pendingCapture?: { points: ReadonlyArray<readonly [number, number, number]>; resolve: (image: string | undefined) => void };
     readonly zones: EditorGroundLayer;
     readonly wall: EditorGroundLayer;
+    readonly paint: EditorGroundLayer;
     readonly icons: EditorGroundLayer;
     readonly preview: EditorLocPreview;
+    private readonly scattered = new Map<string, EditorLocPreview>();
+    private readonly construction = new Map<string, EditorLocPreview>();
     constructor(private readonly renderer: WebGPURenderer) {
         this.zones = new EditorGroundLayer(renderer);
         this.wall = new EditorGroundLayer(renderer, false);
+        this.paint = new EditorGroundLayer(renderer);
         this.icons = new EditorGroundLayer(renderer);
         this.preview = new EditorLocPreview(renderer);
     }
     draw(pass: GPURenderPassEncoder, visibility: SceneryDrawContext): void {
         this.zones.draw(pass);
+        this.paint.draw(pass);
         this.icons.draw(pass);
-        this.preview.draw(pass, visibility);
         this.wall.draw(pass);
+        this.preview.draw(pass, visibility);
+        for (const preview of this.scattered.values()) preview.draw(pass, visibility);
+        for (const preview of this.construction.values()) preview.draw(pass, visibility);
+    }
+    setScatterPreviews(client: LocPlacementPreviewClient, renderer: LocPlacementPreviewRenderer, previews: readonly LocPlacementPreview[]): void {
+        this.setGroupedPreviews(this.scattered, client, renderer, previews);
+    }
+    setConstructionPreviews(client: LocPlacementPreviewClient, renderer: LocPlacementPreviewRenderer, previews: readonly LocPlacementPreview[]): void {
+        this.setGroupedPreviews(this.construction, client, renderer, previews);
+    }
+    private setGroupedPreviews(
+        layers: Map<string, EditorLocPreview>, client: LocPlacementPreviewClient,
+        renderer: LocPlacementPreviewRenderer, previews: readonly LocPlacementPreview[],
+    ): void {
+        const groups = groupLocPreviews(previews);
+        for (const [key, layer] of layers) {
+            if (groups.has(key)) continue;
+            layer.dispose();
+            layers.delete(key);
+        }
+        for (const [key, entries] of groups) {
+            let layer = layers.get(key);
+            if (!layer) layers.set(key, layer = new EditorLocPreview(this.renderer));
+            layer.setPreviews(client, renderer, entries);
+        }
     }
     capture(points: ReadonlyArray<readonly [number, number, number]>): Promise<string | undefined> {
         this.pendingCapture?.resolve(undefined);
@@ -323,6 +353,10 @@ export class EditorOverlays {
     }
     dispose(): void {
         this.pendingCapture?.resolve(undefined); this.pendingCapture = undefined;
-        this.zones.dispose(); this.wall.dispose(); this.icons.dispose(); this.preview.dispose();
+        this.zones.dispose(); this.wall.dispose(); this.paint.dispose(); this.icons.dispose(); this.preview.dispose();
+        for (const preview of this.scattered.values()) preview.dispose();
+        this.scattered.clear();
+        for (const preview of this.construction.values()) preview.dispose();
+        this.construction.clear();
     }
 }

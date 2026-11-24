@@ -26,6 +26,7 @@ interface RawNpcSpawnDefinition {
     y: number;
     level: number;
     wanderRadius?: number;
+    leashRadius?: number | null;
     direction?: number;
     /** A spawn patch entry that removes the matching persisted spawn. */
     remove?: boolean;
@@ -205,7 +206,8 @@ export class NpcSpawnDefinitionLoader extends DefinitionLoader {
             Direction.valueOf(facingId),
             radius,
             String(raw.name ?? ""),
-            source
+            source,
+            Number.isFinite(raw.leashRadius) ? Math.max(radius, Math.min(255, Math.trunc(raw.leashRadius as number))) : undefined,
         );
     }
 
@@ -309,6 +311,7 @@ export class NpcSpawnDefinitionLoader extends DefinitionLoader {
         if (PluginManager.emitCanSpawnNpc(definition.getId(), definition.getPosition()) === false) return false;
         const npc = NPC.create(definition.getId(), definition.getPosition().clone());
         npc.getMovementCoordinator().setRadius(definition.getRadius() ?? NpcSpawnDefinitionLoader.DEFAULT_WANDER_RADIUS);
+        npc.getMovementCoordinator().setLeashRadius(definition.getLeashRadius());
         npc.setFace(definition.getFacing());
         npc.setSpawnLineage(NpcSpawnDefinitionLoader.lineage);
         const describedNpc = npc as NPC & { setDescription?(description: string): void };

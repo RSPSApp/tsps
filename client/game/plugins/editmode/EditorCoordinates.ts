@@ -1,4 +1,4 @@
-const WORLD_COORD_MAX = 0x3fff;
+export const WORLD_COORD_MAX = 0x3fff;
 const REGION_ID_MAX = 0xffff;
 const REGION_SIZE = 64;
 

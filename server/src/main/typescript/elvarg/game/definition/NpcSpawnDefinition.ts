@@ -16,7 +16,8 @@ export class NpcSpawnDefinition extends DefaultSpawnDefinition {
         facing: Direction,
         radius: number | null,
         description: string = "",
-        source: string = "core"
+        source: string = "core",
+        private readonly leashRadius?: number,
     ) {
         super(id, position);
         this.facing = facing;
@@ -41,6 +42,10 @@ export class NpcSpawnDefinition extends DefaultSpawnDefinition {
         return this.radius;
     }
 
+    public getLeashRadius(): number | undefined {
+        return this.leashRadius;
+    }
+
     public getDescription(): string {
         return this.description;
     }
@@ -56,6 +61,7 @@ export class NpcSpawnDefinition extends DefaultSpawnDefinition {
         return def.getPosition().equals(this.getPosition())
             && def.getId() == this.getId()
             && def.getFacing() == this.getFacing()
-            && def.getRadius() == this.getRadius();
+            && def.getRadius() == this.getRadius()
+            && def.getLeashRadius() === this.getLeashRadius();
     }
 }

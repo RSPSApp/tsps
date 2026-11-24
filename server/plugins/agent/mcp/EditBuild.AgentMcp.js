@@ -151,6 +151,56 @@ function collapseOverlaps(placements) {
   return { placements: [...byTile.values()], overlapped: placements.length - byTile.size };
 }
 
+/** Builds a placement list from a preset/shape description without touching the world. */
+const planParts = (parts, { originX, originY, params, rotation, catalog }) => {
+  const placements = [];
+  const materials = catalog?.materials ?? {};
+  const materialId = (name) => {
+    const key = resolveValue(name, params);
+    const entry = materials[key];
+    if (entry) return entry.id;
+    const numericId = Number(key);
+    if (Number.isInteger(numericId)) return numericId;
+    throw new Error(`Unknown material "${key}"; known: ${Object.keys(materials).join(", ")}`);
+  };
+  for (const part of parts) {
+    const id = materialId(part.material);
+    const tiles = expandPart(part, originX, originY, params, rotation);
+    for (const tile of tiles) {
+      placements.push({
+        id,
+        x: tile.x,
+        y: tile.y,
+        z: numeric(part.z, params, 0),
+        type: numeric(part.type, params, 10),
+        face: part.face !== undefined ? numeric(part.face, params, 0)
+          : geometry.facingFor(originX, originY, tile.x, tile.y),
+      });
+    }
+  }
+  return placements;
+};
+
+/**
+ * Expands a preset into placements. A preset with `repeat` runs once per value of
+ * the named parameter - tiered_city repeats its ring/tower parts per radius.
+ */
+const planPreset = (entry, x, y, rotation, params, catalog) => {
+  const merged = { ...(entry.params ?? {}), ...params };
+  const repeatKey = entry.repeat ? Object.keys(entry.repeat)[0] : undefined;
+  const repeatValues = repeatKey ? resolveValue(entry.repeat[repeatKey], merged) : undefined;
+  if (!Array.isArray(repeatValues)) {
+    return planParts(entry.parts, { originX: x, originY: y, params: merged, rotation, catalog });
+  }
+  const placements = [];
+  for (const value of repeatValues) {
+    placements.push(...planParts(entry.parts, {
+      originX: x, originY: y, params: { ...merged, [repeatKey]: value }, rotation, catalog,
+    }));
+  }
+  return placements;
+};
+
 module.exports = function registerEditBuildTools(ctx) {
   const { core, tool, z } = ctx;
   const { GameObject, ObjectManager, Location, ObjectDefinition, CacheDefinitions } = core;
@@ -182,12 +232,11 @@ module.exports = function registerEditBuildTools(ctx) {
    * tile partway through must not leave half a structure standing in the world with
    * nothing persisted, because that divergence lasts until the next restart.
    */
-  const applyPlacements = (requested) => {
+  const validatePlacements = (requested) => {
     if (requested.length > MAX_BATCH) {
       throw new Error(`Batch of ${requested.length} exceeds ${MAX_BATCH}; split the build`);
     }
     const { placements, overlapped } = collapseOverlaps(requested);
-    if (placements.length === 0) return { placed: 0, skipped: [], persisted: 0, overlapped, replaced: 0 };
     const problems = [];
     placements.forEach((item, index) => {
       const { id, x, y, z = 0, type = 10, face = 0 } = item;
@@ -204,6 +253,12 @@ module.exports = function registerEditBuildTools(ctx) {
       );
     }
 
+    return { placements, overlapped };
+  };
+
+  const applyPlacements = (requested, prepared = validatePlacements(requested)) => {
+    const { placements, overlapped } = prepared;
+    if (placements.length === 0) return { placed: 0, skipped: [], persisted: 0, overlapped, replaced: 0 };
     const spawnStore = store();
     const entries = spawnStore.read();
     let placed = 0;
@@ -233,56 +288,6 @@ module.exports = function registerEditBuildTools(ctx) {
     }
     if (persisted > 0 || replaced > 0) spawnStore.write(entries);
     return { placed, skipped, persisted, overlapped, replaced };
-  };
-
-  /** Builds a placement list from a preset/shape description without touching the world. */
-  const planParts = (parts, { originX, originY, params, rotation, catalog }) => {
-    const placements = [];
-    const materials = catalog?.materials ?? {};
-    const materialId = (name) => {
-      const key = resolveValue(name, params);
-      const entry = materials[key];
-      if (entry) return entry.id;
-      const numericId = Number(key);
-      if (Number.isInteger(numericId)) return numericId;
-      throw new Error(`Unknown material "${key}"; known: ${Object.keys(materials).join(", ")}`);
-    };
-    for (const part of parts) {
-      const id = materialId(part.material);
-      const tiles = expandPart(part, originX, originY, params, rotation);
-      for (const tile of tiles) {
-        placements.push({
-          id,
-          x: tile.x,
-          y: tile.y,
-          z: numeric(part.z, params, 0),
-          type: numeric(part.type, params, 10),
-          face: part.face !== undefined ? numeric(part.face, params, 0)
-            : geometry.facingFor(originX, originY, tile.x, tile.y),
-        });
-      }
-    }
-    return placements;
-  };
-
-  /**
-   * Expands a preset into placements. A preset with `repeat` runs once per value of
-   * the named parameter - tiered_city repeats its ring/tower parts per radius.
-   */
-  const planPreset = (entry, x, y, rotation, params, catalog) => {
-    const merged = { ...(entry.params ?? {}), ...params };
-    const repeatKey = entry.repeat ? Object.keys(entry.repeat)[0] : undefined;
-    const repeatValues = repeatKey ? resolveValue(entry.repeat[repeatKey], merged) : undefined;
-    if (!Array.isArray(repeatValues)) {
-      return planParts(entry.parts, { originX: x, originY: y, params: merged, rotation, catalog });
-    }
-    const placements = [];
-    for (const value of repeatValues) {
-      placements.push(...planParts(entry.parts, {
-        originX: x, originY: y, params: { ...merged, [repeatKey]: value }, rotation, catalog,
-      }));
-    }
-    return placements;
   };
 
   const summarize = (placements) => {
@@ -429,5 +434,8 @@ module.exports = function registerEditBuildTools(ctx) {
 
   // Templates (EditTemplates.AgentMcp.js) place through the same path, so their
   // placements validate, collapse and persist exactly like a build's.
-  return { applyPlacements };
+  return { applyPlacements, validatePlacements };
 };
+
+module.exports.readCatalog = readCatalog;
+module.exports.planPreset = planPreset;

@@ -259,13 +259,14 @@ test('workbench edits creatures and worn gear, recovers drafts and exports valid
         assert.ok(!(await evaluate(`document.getElementById('projects').textContent`)).includes('Dragon scimitar'),'Open lists projects for this creator');
         await evaluate(`document.getElementById('projects-dialog').close()`);
         // Exercise the native entry host with the actual plugin's declared contributions.
-        const pluginModule = { exports: {} as any }, endpoints: any = {};
+        const pluginModule = { exports: {} as any }, hooks: any = {};
         vm.runInNewContext(fs.readFileSync(path.join(root, 'server/plugins/tools/content-builders/ContentBuilders.entry.js'), 'utf8'), {
             module: pluginModule, require: requireServer, __dirname: path.join(root, 'server/plugins/tools/content-builders'),
             process: { env: { CACHE_EDITOR_ENABLED: '1' }, execPath: process.execPath }, console,
         });
-        pluginModule.exports.register({ registerContentEndpoint: (name, fn) => endpoints[name] = fn, onCustomEvent() {}, onServerStartup() {}, onServerShutdown() {} });
-        const contributedTools = endpoints['cache-editor-tools']().tools.map(tool => ({ ...tool, url: origin + new URL(tool.url).pathname + new URL(tool.url).search }));
+        pluginModule.exports.register({ onCustomEvent: (name, fn) => hooks[name] = fn, onServerStartup() {}, onServerShutdown() {} });
+        const discovery = { tools: [] }; hooks['cache-editor:tools'](discovery);
+        const contributedTools = discovery.tools.map(tool => ({ ...tool, url: origin + new URL(tool.url).pathname + new URL(tool.url).search }));
         const requireClient = createRequire(path.join(root, 'client/package.json')), esbuild = requireClient('esbuild');
         const bundle = await esbuild.build({
             stdin: { contents: `import React from 'react';import{createRoot}from'react-dom/client';import{CacheEditorTools}from${JSON.stringify(path.join(root,'client/custom/cache-editor/CacheEditorTools.tsx'))};

@@ -143,12 +143,13 @@ test('cache-editor plugin registers an optional local tool without starting a pr
         vm.runInNewContext(code, { module, require: fakeRequire, __dirname: path.join(root, 'server/plugins/tools/content-builders'), process: { env: { CACHE_EDITOR_ENABLED: enabled, BROWSER_HOST: browserHost, WT_SLOT: '1' }, execPath: process.execPath }, console, clearTimeout });
         const api = { registerContentEndpoint: (name, fn) => endpoints[name] = fn, onServerStartup: fn => hooks.start = fn, onServerShutdown: fn => hooks.stop = fn, onCustomEvent: (name, fn) => hooks[name] = fn, log: () => {} };
         module.exports.register(api); assert.equal(spawned.length, 0);
-        assert.equal(endpoints['cache-editor-tools']().tools.length, available ? 2 : 0);
+        const discovery = { tools: [] }; hooks['cache-editor:tools'](discovery);
+        assert.equal(discovery.tools.length, available ? 2 : 0);
         const event = { tools: [] }; hooks['WorldAdmin:tools'](event);
         assert.equal(event.tools.length, available ? 2 : 0);
         assert.equal(module.exports.category, '@ Ghost Plugins @');
         if (available) {
-            const entries = endpoints['cache-editor-tools']().tools;
+            const entries = discovery.tools;
             assert.deepEqual(Array.from(entries, entry => entry.label), ['NPC Creator', 'Gear Creator']);
             assert.deepEqual(Array.from(entries, entry => new URL(entry.url).searchParams.get('view')), ['npc', 'gear']);
             assert.deepEqual(Array.from(event.tools, entry => entry.params.tool), Array.from(entries, entry => entry.id));

@@ -71,7 +71,7 @@ The data contracts are `ruleFeatures`, `extraFeatures` and `nativeFeatures`. Por
 
 ## Optional tool metadata
 
-`cache-editor-tools` declares two `{ id, label, url }` entries. The generic host accepts optional `aliases: [{ id, view? }]` metadata, matching an older `tool` and optional `tool-view` query to a declared entry. The destination URL supplies the workspace. The host contains no Creator IDs or workspace rules. Plugin removal contributes no tabs or WorldAdmin links. No WorldAdmin source changes are required.
+`cache-editor:tools` announces two `{ id, label, url }` entries to the generic tool collector. The generic host accepts optional `aliases: [{ id, view? }]` metadata, matching an older `tool` and optional `tool-view` query to a declared entry. The destination URL supplies the workspace. The host contains no Creator IDs or workspace rules. Plugin removal contributes no tabs or WorldAdmin links. No WorldAdmin source changes are required.
 
 ## Visual parts and animation
 

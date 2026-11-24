@@ -13,7 +13,7 @@ import {SampledAnimationRegistry} from '../../../client/custom/animations/Sample
 import {CustomModelRegistry} from '../../../client/custom/items/CustomModelRegistry';
 import {NpcType} from '../../../client/rs/config/npctype/NpcType';
 import {NpcModelLoader} from '../../../client/rs/config/npctype/NpcModelLoader';
-import {registerCustomAnimations,customAnimationRows} from '../../../server/src/main/typescript/elvarg/game/cache/CustomAnimations';
+import {registerSampledAnimations,customAnimationRows} from '../../../server/src/main/typescript/elvarg/game/cache/CustomAnimations';
 import {getSequenceStall,getSequencePriority} from '../../../server/src/main/typescript/elvarg/game/cache/NpcAnimationScanner';
 test('cow + goblin arm retains independent attack motion in exported native game models',()=>{
     const cache=new BuilderCache(path.resolve(import.meta.dirname,'../../..'));
@@ -24,14 +24,14 @@ test('cow + goblin arm retains independent attack motion in exported native game
         const normalized=validateProject(project),clip=compileMotion(normalized,cache,'attack');assert.ok(clip);assert.notDeepEqual(clip.frames[0].vertices.slice(cow.mesh.vertices.length),clip.frames.at(-1).vertices.slice(cow.mesh.vertices.length),'arm deforms during its own attack');
         const still=structuredClone(normalized);still.parts[1].motion.mode='still';const host=compileMotion(still,cache,'attack');assert.ok(clip.frames.some((frame,i)=>frame.vertices.slice(cow.mesh.vertices.length).some((v,j)=>Math.hypot(...v.map((n,a)=>n-host.frames[Math.min(i,host.frames.length-1)].vertices[cow.mesh.vertices.length+j][a]))>8)),'own attack differs from following the cow');
         const compiled=compileProject(normalized,cache);assert.ok(pluginZip(compiled).length>0);assert.equal(compiled.content.animations.attack,50003);assert.equal(compiled.content.definition.fields.idleSeqId,50000);
-        registerCustomAnimations(compiled.content.animationRows,'test:axe-cow',cache.counts().seq);assert.equal(getSequencePriority(50003),0);assert.ok(getSequenceStall(50003).ticks>0);assert.ok(customAnimationRows().length);
+        registerSampledAnimations(compiled.content.animationRows,'test:axe-cow',cache.counts().seq,() => false);assert.equal(getSequencePriority(50003),0);assert.ok(getSequenceStall(50003).ticks>0);assert.ok(customAnimationRows().length);
         for(const row of compiled.content.models)CustomModelRegistry.register(row);
         const rows=compiled.content.animationRows.filter(row=>row.id===50003);for(const row of [...rows].reverse())SampledAnimationRegistry.accept(row);
         const factory=(cache as any).factory,loader=new NpcModelLoader(factory.getNpcTypeLoader(),factory.getModelLoader(),factory.getTextureLoader(),factory.getSeqTypeLoader(),factory.getSeqFrameLoader(),factory.getSkeletalSeqLoader(),{} as any),type=new NpcType(58000,cache.info);type.modelIds=[1100000];
         const order=modelVertexOrder(clip.mesh),first=loader.getModel(type,50003,0)!,last=loader.getModel(type,50003,clip.frames.length-1)!;
         assert.equal(first.verticesCount,order.length,'single custom model keeps coincident donor vertices');
         for(let i=0;i<order.length;i++){assert.deepEqual([first.verticesX[i],first.verticesY[i],first.verticesZ[i]],clip.frames[0].vertices[order[i]]);assert.deepEqual([last.verticesX[i],last.verticesY[i],last.verticesZ[i]],clip.frames.at(-1).vertices[order[i]]);}
-        assert.throws(()=>registerCustomAnimations(compiled.content.animationRows,'different-owner',nativeSeqCount),/another package/);
+        assert.throws(()=>registerSampledAnimations(compiled.content.animationRows,'different-owner',nativeSeqCount,() => false),/another package/);
         SampledAnimationRegistry.clear();assert.equal(SampledAnimationRegistry.get(50003),undefined,'disconnect clears sampled animation assets');
         const authored=structuredClone(normalized);authored.parts[0].motion.mode='still';authored.parts[1].motion.mode='still';authored.parts[1].motion.keys.attack=[{time:0,position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]},{time:400,position:[0,0,0],rotation:[70,0,0],scale:[1,1,1]},{time:800,position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}];
         const custom=compileProject(authored,cache);assert.ok(custom.content.animationRows.some(row=>row.id===50003),'a wholly authored movement exports without a native sequence');

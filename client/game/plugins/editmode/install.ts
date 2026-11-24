@@ -72,7 +72,7 @@ import {
     type LocPlacementPreviewRenderer,
 } from "./LocPlacementPreviewOverlay";
 import { ModelImageCaptureOverlay } from "./ModelImageCaptureOverlay";
-import { buildAreaClipboard, buildRegionPack, parseRegionPack, buildObjectSpawnExport, objectSpawnEdits, readRegionOverlays } from "./RegionPack";
+import { buildAreaClipboard, copyAreaNpcs, buildRegionPack, parseRegionPack, buildObjectSpawnExport, objectSpawnEdits, readRegionOverlays } from "./RegionPack";
 import {
     ZoneGroundOverlay,
     type ZoneGroundRect,
@@ -1820,7 +1820,9 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             return swatches;
         },
         loadWorldDefinition,
-        spawnNpc: (npcTypeId, tile, rotation) => spawnEditorNpc(client, npcTypeId, tile, rotation),
+        spawnNpc: (npcTypeId, tile, rotation, direction) => direction === undefined
+            ? spawnEditorNpc(client, npcTypeId, tile, rotation)
+            : spawnEditorNpcWithOrientation(client, npcTypeId, tile, DIRECTION_TO_ORIENTATION[direction] ?? 0),
         setFreeCamera: (enabled) => {
             if (enabled) {
                 for (const code of ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]) {
@@ -1866,11 +1868,23 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         jumpCameraToTile: (tile) => {
             frameCameraOnTile(client, tile, false);
         },
-        copyArea: (bounds, edits) => buildAreaClipboard(
-            bounds,
-            (tileX, tileY) => buildEditorRegionPack(client, { tileX, tileY, plane: 0 }, sceneEdits(edits), editorRegionReplacements).data,
-            hasWideTerrain(client),
-        ),
+        hasWideTerrain: () => hasWideTerrain(client),
+        copyArea: (bounds, edits) => {
+            if (!objectSpawns) throw new Error("Object spawns are still loading; try Copy again shortly");
+            const spawns: BrowserHostNpcSpawn[] = [];
+            for (let x = bounds.minX >> 6; x <= bounds.maxX >> 6; x++) {
+                for (let y = bounds.minY >> 6; y <= bounds.maxY >> 6; y++) {
+                    const entries = loadedNpcSpawnRegions.get((x << 8) | y);
+                    if (!entries) throw new Error("NPC spawns are still loading; try Copy again shortly");
+                    spawns.push(...entries.filter(entry => !entry.hidden).map(entry => entry.spawn));
+                }
+            }
+            return buildAreaClipboard(
+                bounds,
+                (tileX, tileY) => buildEditorRegionPack(client, { tileX, tileY, plane: 0 }, sceneEdits(edits), editorRegionReplacements).data,
+                hasWideTerrain(client), copyAreaNpcs(spawns, edits),
+            );
+        },
         getRegionOverlays: (regionId, edits) => {
             try {
                 // Objects play no part in overlays, so their edits are left out of the pack.

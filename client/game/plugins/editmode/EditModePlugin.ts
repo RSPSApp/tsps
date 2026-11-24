@@ -1,3 +1,4 @@
+import { areaPasteEdits, oversizedRegionPacks } from "./RegionPack";
 import type { Camera } from "../../Camera";
 import type { ObjectSpawn } from "./hostProtocol/objectSpawnsMessage";
 import { waterArea, generateIslandEdits } from "./IslandGenerator";
@@ -94,7 +95,7 @@ type UndoEntry = {
     start: number;
     removed: EditModeEdit[];
     added: EditModeEdit[];
-    /** Added edits reach the scene through the region rebuild alone, so redo must not place them too. */
+    /** Map edits reach the scene through the rebuild; NPC edits still dispatch on redo. */
     rebuildOnly?: boolean;
 };
 
@@ -905,10 +906,26 @@ export class EditModePlugin {
     }
 
     copyArea(): string {
-        const range = this.getSelectionRange();
-        if (!range) throw new Error("Select an area to copy");
+        const selection = this.selection;
+        const range = this.getSelectionRange() ?? (selection && selection.kind !== "npc" ? {
+            minX: selection.tileX, maxX: selection.tileX, minY: selection.tileY, maxY: selection.tileY,
+        } : undefined);
+        if (!range) throw new Error("Select a tile or area to copy");
         if (!this.host?.copyArea) throw new Error("Map data is unavailable");
         return this.host.copyArea(range, this.config.edits);
+    }
+
+    /** The selected southwest tile is captured by the UI before its asynchronous clipboard read. */
+    pasteArea(contents: string, destination: EditModeTile | undefined = this.selection): void {
+        if (!destination || !this.host?.exportRegionPack) throw new Error("Select a destination tile with loaded map data");
+        const edits = areaPasteEdits(contents, destination, this.host.hasWideTerrain?.() ?? true);
+        const combined = [...this.config.edits, ...edits];
+        const regions = new Map<number, EditModeTile>();
+        for (const edit of edits) if (edit.kind !== "npc") regions.set(regionIdOf(edit.tileX, edit.tileY), edit);
+        // Prepare every destination pack before changing edits, NPCs or undo history.
+        const packs = [...regions.values()].map(tile => this.host!.exportRegionPack!(tile, combined));
+        if (oversizedRegionPacks(packs).length) throw new Error("Pasted area exceeds the region packet limit");
+        this.commitEdits(edits, false);
     }
 
     private islandArea() {
@@ -1136,6 +1153,7 @@ export class EditModePlugin {
                 edit.locId,
                 { tileX: edit.tileX, tileY: edit.tileY, plane: edit.plane },
                 edit.rotation,
+                edit.direction,
             );
             if (serverId !== undefined) this.spawnedNpcs.set(key, serverId);
         }
@@ -1187,7 +1205,7 @@ export class EditModePlugin {
             if (isTileEdit(edit) && touched.has(tileKey(edit))) this.dispatch(edit);
         }
         for (const edit of incoming) {
-            if (applyIncoming && !isTileEdit(edit)) this.dispatch(edit);
+            if ((applyIncoming || edit.kind === "npc") && !isTileEdit(edit)) this.dispatch(edit);
         }
         this.refreshSpecialRegions(changed, this.config.edits, true);
     }
@@ -1540,10 +1558,8 @@ export class EditModePlugin {
     /** `index`: where the edits go in the list (and so in the saved patch); the end by default. */
     private commitEdits(edits: EditModeEdit[], applyImmediately = true, index = this.config.edits.length): void {
         if (edits.length === 0) return;
-        if (applyImmediately) {
-            for (const edit of edits) {
-                this.dispatch(edit);
-            }
+        for (const edit of edits) {
+            if (applyImmediately || edit.kind === "npc") this.dispatch(edit);
         }
         const next = [...this.config.edits.slice(0, index), ...edits, ...this.config.edits.slice(index)];
         this.setConfig({ edits: next });
@@ -1566,6 +1582,7 @@ export class EditModePlugin {
                 edit.locId,
                 { tileX: edit.tileX, tileY: edit.tileY, plane: edit.plane },
                 edit.rotation,
+                edit.direction,
             );
             if (serverId !== undefined) this.spawnedNpcs.set(key, serverId);
             return;
@@ -2043,7 +2060,8 @@ export class EditModePlugin {
                 )
                 .map((edit) => ({
                     kind: edit.kind,
-                    locId: toInt(edit.locId, 0, 0, edit.kind === "height" || edit.kind === "flag" ? 0xff : 0xffff),
+                    locId: toInt(edit.locId, 0, 0, edit.kind === "height" || edit.kind === "flag" ? 0xff :
+                        edit.kind === "terrain" || edit.kind === "underlay" ? 0xffff : 0x7fffffff),
                     tileX: toInt(edit.tileX, 0, 0, 0xffff),
                     tileY: toInt(edit.tileY, 0, 0, 0xffff),
                     plane: toInt(edit.plane, 0, 0, 3),

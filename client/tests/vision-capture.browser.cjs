@@ -8,7 +8,7 @@
 //   [--clip-secs 5 --clip-fps 10 --clip-out clip.mp4]
 //   [--animation-smoothing on|off] [--check-animation-smoothing 1]
 //   [--check-mobile-keyboard 1] (use --url with ?mobile=1)
-//   [--check-world-map-zoom 1 --world-map-zoom-rounds 3 --world-map-zoom-start-out 0] (opens the world map, wheels in/out;
+//   [--check-world-map-zoom 1 --world-map-zoom-rounds 3 --world-map-zoom-start-out 0 --world-map-zoom-burst 0 --world-map-pan 0] (opens the world map, wheels in/out;
 //     samples the zoom drawn and the share of solid-black 8x8 blocks over the map)
 //   [--check-mobile-combat-hud 1] (mobile client in Wilderness; checks rotation and captures each layout)
 //   [--check-responsive-gameframe 1] (desktop login, narrow/portrait windows keep the desktop layout)
@@ -756,6 +756,17 @@ async function main() {
         const sx = rect.width / canvas.width, sy = rect.height / canvas.height;
         return { x: rect.left + view.x * sx, y: rect.top + view.y * sy, width: view.width * sx, height: view.height * sy };
       })()`);
+      // Time every world map tile load (request to reply) and count tiles actually rendered.
+      await cdp.evaluate(`(() => {
+        const pool = (${CLIENT_JS}).workerPool;
+        const log = globalThis.__wmTileLog = [];
+        const load = pool.loadWorldMapTile.bind(pool);
+        pool.loadWorldMapTile = (input) => {
+          const t0 = performance.now();
+          return load(input).then((reply) => { log.push({ t0, ms: performance.now() - t0, tile: !!reply?.tile }); return reply; });
+        };
+        return 0;
+      })()`);
       const opened = await cdp.evaluate(`(() => {
         const c = ${CLIENT_JS}, wm = c.widgetManager;
         for (const w of wm.getGroup(160)?.widgetsByUid?.values() ?? []) {
@@ -778,7 +789,27 @@ async function main() {
         })()`);
         throw new Error("world map orb not found: " + JSON.stringify(orbs));
       }
-      const settled = () => cdp.evaluate(`(() => { const c = ${CLIENT_JS}; return !c.worldMap.hasPendingImages(); })()`);
+      // Every square on screen at the target zoom has its own tile, and the zoom has stopped easing.
+      const settled = () => cdp.evaluate(`(() => {
+        const c = ${CLIENT_JS}, wm = c.worldMap, s = c.worldMapState;
+        if ((s.getTargetZoomScale?.() ?? s.getZoomScale()) !== s.getZoomScale() || wm.retainedWorldMapImageIds.size === 0) return false;
+        for (const id of wm.retainedWorldMapImageIds) if (!wm.worldMapImageTiles.has(id)) return false;
+        return true;
+      })()`);
+      const waitSettled = async () => {
+        const t0 = Date.now();
+        for (let i = 0; i < 300 && !(await settled()); i++) await sleep(50);
+        if (!(await settled())) {
+          // Timed out: name the squares on screen still without a tile.
+          (summary.worldMapStuck ??= []).push(await cdp.evaluate(`(() => {
+            const wm = (${CLIENT_JS}).worldMap;
+            return [...wm.retainedWorldMapImageIds].filter((id) => !wm.worldMapImageTiles.has(id))
+              .map((id) => ({ x: (id >>> 8) & 0xff, y: id & 0xff, ppt: (id >>> 18) & 0xf,
+                pending: wm.pendingWorldMapImageIds.has(id), failed: wm.failedWorldMapImageIds.has(id) }));
+          })()`));
+        }
+        return Date.now() - t0;
+      };
       let rect = null;
       for (let i = 0; i < 80 && !rect; i++) { await sleep(250); rect = await mapRect(); }
       if (!rect) {
@@ -790,7 +821,7 @@ async function main() {
         })()`);
         throw new Error("world map did not open: " + JSON.stringify({ opened, state }));
       }
-      for (let i = 0; i < 60 && !(await settled()); i++) await sleep(250);
+      const openFillMs = await waitSettled();
       // Sample the middle of the map, away from its frame and the edge arrows.
       const clip = { x: rect.x + rect.width * 0.2, y: rect.y + rect.height * 0.2, width: rect.width * 0.6, height: rect.height * 0.6, scale: 1 };
       const sample = async (label) => {
@@ -825,11 +856,211 @@ async function main() {
       // --world-map-zoom-start-out N: wheel out N steps first (each settled; negative zooms in),
       // to test the far or near zoom levels.
       const startOut = Number(arg("world-map-zoom-start-out", "0")) | 0;
+      const startFillMs = [];
       for (let i = 0; i < Math.abs(startOut); i++) {
         await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
         await wheel(startOut > 0 ? 120 : -120);
-        await sleep(600);
-        for (let j = 0; j < 80 && !(await settled()); j++) await sleep(250);
+        startFillMs.push(await waitSettled());
+      }
+      // --world-map-tile-bench N: render N squares around the view one at a time on the page,
+      // with the client's own (fallback) world map renderer, under the CPU profiler.
+      const bench = Number(arg("world-map-tile-bench", "0")) | 0;
+      if (bench > 0) {
+        await cdp.send("Profiler.enable");
+        await cdp.send("Profiler.setSamplingInterval", { interval: 100 });
+        await cdp.send("Profiler.start");
+        summary.worldMapTileBench = await cdp.evaluate(`(async () => {
+          const c = ${CLIENT_JS}, wm = c.worldMap, s = c.worldMapState, area = s.currentArea;
+          const r = wm.createFallbackRenderer();
+          if (${arg("world-map-tile-bench-wait", "0") === "1"} && c.js5) r.options.waitForGroup = (i, a) => c.js5.requestGroup(i, a, true);
+          // Time the steps a cold square awaits: ground sprite decode and cache group reads.
+          const stepMs = { decode: 0, decodes: 0, geography: 0 };
+          const decode = r.decodeWorldMapSprite.bind(r);
+          r.decodeWorldMapSprite = async (...args) => {
+            const t = performance.now();
+            try { return await decode(...args); } finally { stepMs.decode += performance.now() - t; stepMs.decodes++; }
+          };
+          const cx = (s.displayX >> 6), cy = (s.displayY >> 6);
+          const out = { pixelsPerTile: Math.ceil(s.getTargetZoomScale()), times: [] };
+
+          for (let i = 0; i < ${bench}; i++) {
+            const x = cx - 8 + (i % 16), y = cy - 1 + Math.floor(i / 16);
+            const t0 = performance.now();
+            const tile = await r.loadTile(area, x, y, out.pixelsPerTile);
+            out.times.push([x, y, Math.round(performance.now() - t0), !!tile]);
+          }
+          out.stepMs = stepMs;
+          // After the renders (their ground groups are local now): the renderer's ground sprite decode against the browser's, pixel for pixel.
+          const compare = { sprites: 0, mismatched: 0 };
+          for (const id of out.times.map(([x, y]) => (x << 8) | y)) {
+            let archive;
+            try { archive = r.groundIndex.getArchive(id); } catch { continue; }
+            for (const f of archive.files) {
+              const ours = await decode(f.data);
+              const bytes = new Uint8Array(f.data.byteLength);
+              bytes.set(new Uint8Array(f.data.buffer, f.data.byteOffset, f.data.byteLength));
+              const bmp = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+              const g = new OffscreenCanvas(bmp.width, bmp.height).getContext("2d", { willReadFrequently: true });
+              g.drawImage(bmp, 0, 0);
+              const px = g.getImageData(0, 0, bmp.width, bmp.height).data;
+              compare.sprites++;
+              for (let i = 0; i < bmp.width * bmp.height; i++) {
+                const want = (px[i * 4] << 16) | (px[i * 4 + 1] << 8) | px[i * 4 + 2];
+                if (ours?.[(Math.floor(i / bmp.width)) * 64 + (i % bmp.width)] !== want) { compare.mismatched++; break; }
+              }
+            }
+          }
+          out.compare = compare;
+          return out;
+        })()`);
+        const { result } = await cdp.send("Profiler.stop");
+        const byId = new Map(result.profile.nodes.map((n) => [n.id, n]));
+        const parent = new Map();
+        for (const n of result.profile.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
+        const self = new Map(), incl = new Map();
+        result.profile.samples.forEach((id, i) => {
+          const dt = (result.profile.timeDeltas[i] ?? 0) / 1000;
+          const name = (n) => `${n.callFrame.functionName || "(anon)"}:${n.callFrame.lineNumber + 1}`;
+          self.set(name(byId.get(id)), (self.get(name(byId.get(id))) ?? 0) + dt);
+          const seen = new Set();
+          for (let cur = id; cur !== undefined; cur = parent.get(cur)) {
+            const k = name(byId.get(cur));
+            if (seen.has(k)) continue;
+            seen.add(k);
+            incl.set(k, (incl.get(k) ?? 0) + dt);
+          }
+        });
+        summary.worldMapTileBenchSelf = [...self].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([k, v]) => `${Math.round(v)}ms ${k}`);
+        summary.worldMapTileBenchIncl = [...incl].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, v]) => `${Math.round(v)}ms ${k}`);
+      }
+
+      // --world-map-zoom-burst N: spin the wheel N steps in quickly, then N out, recording frame
+      // gaps (requestAnimationFrame) and a CPU profile summarised by self time.
+      const burst = Number(arg("world-map-zoom-burst", "0")) | 0;
+      if (burst > 0) {
+        await cdp.evaluate(`(() => {
+          const frames = globalThis.__wmFrames = [];
+          const tick = (t) => { frames.push(t); if (!globalThis.__wmFramesStop) requestAnimationFrame(tick); };
+          requestAnimationFrame(tick);
+          return 0;
+        })()`);
+        await cdp.send("Profiler.enable");
+        await cdp.send("Profiler.setSamplingInterval", { interval: 200 });
+        await cdp.send("Profiler.start");
+        const start = await cdp.evaluate("performance.now()");
+        await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+        const wheelTimes = [];
+        for (const deltaY of [-120, 120]) {
+          for (let i = 0; i < burst; i++) {
+            wheelTimes.push(`${deltaY < 0 ? "in" : "out"}@${Math.round((await cdp.evaluate("performance.now()")) - start)}`);
+            await wheel(deltaY);
+            await sleep(40);
+          }
+          await sleep(2500);
+        }
+        const { result } = await cdp.send("Profiler.stop");
+        const frames = await cdp.evaluate(`(() => { globalThis.__wmFramesStop = true; return globalThis.__wmFrames; })()`);
+        const gaps = frames.slice(1).map((t, i) => t - frames[i]);
+        const byId = new Map(result.profile.nodes.map((n) => [n.id, n]));
+        const self = new Map();
+        result.profile.samples.forEach((id, i) => {
+          const n = byId.get(id);
+          const f = n.callFrame;
+          const key = `${f.functionName || "(anonymous)"} ${String(f.url).split("/").pop()}:${f.lineNumber + 1}`;
+          self.set(key, (self.get(key) ?? 0) + (result.profile.timeDeltas[i] ?? 0) / 1000);
+        });
+        // Callers (three frames up) of the hottest functions, by self time.
+        const parent = new Map();
+        for (const n of result.profile.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
+        const frameName = (n) => `${n.callFrame.functionName || "(anonymous)"} ${String(n.callFrame.url).split("/").pop()}:${n.callFrame.lineNumber + 1}`;
+        const callers = new Map();
+        result.profile.samples.forEach((id, i) => {
+          const chain = [];
+          for (let cur = id; cur !== undefined && chain.length < 4; cur = parent.get(cur)) chain.push(frameName(byId.get(cur)));
+          const key = chain.join(" <- ");
+          callers.set(key, (callers.get(key) ?? 0) + (result.profile.timeDeltas[i] ?? 0) / 1000);
+        });
+        // Inclusive time of world map functions (a sample counts once per function on its stack).
+        const inclusive = new Map();
+        result.profile.samples.forEach((id, i) => {
+          const seen = new Set();
+          for (let cur = id; cur !== undefined; cur = parent.get(cur)) {
+            const name = byId.get(cur).callFrame.functionName;
+            if (!/worldmap|prune|retain|standin|bestcached|composite|drawnode/i.test(name) || seen.has(name)) continue;
+            seen.add(name);
+            inclusive.set(name, (inclusive.get(name) ?? 0) + (result.profile.timeDeltas[i] ?? 0) / 1000);
+          }
+        });
+        summary.worldMapZoomBurstInclusive = [...inclusive.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25)
+          .map(([k, ms]) => `${Math.round(ms)}ms ${k}`);
+        summary.worldMapZoomBurstStacks = [...callers.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)
+          .map(([k, ms]) => `${Math.round(ms)}ms ${k}`);
+        summary.worldMapZoomBurst = {
+          durationMs: Math.round(frames[frames.length - 1] - start),
+          frames: frames.length,
+          maxFrameGapMs: Math.round(Math.max(0, ...gaps)),
+          gapsOver100ms: gaps.map((g, i) => [g, frames[i] - start]).filter(([g]) => g > 100).map(([g, at]) => `${Math.round(g)}ms@${Math.round(at)}`),
+          wheelTimes,
+          fpsPer500ms: (() => {
+            const out = [];
+            for (let t = start; t < frames[frames.length - 1]; t += 500) out.push(frames.filter((f) => f >= t && f < t + 500).length * 2);
+            return out;
+          })(),
+          topSelfMs: [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, ms]) => `${Math.round(ms)}ms ${k}`),
+        };
+      }
+      // --world-map-pan N: drag the map (600px or 70% of its width) N times one way, then N times back (15px steps every
+      // 16ms), counting at each step the on-screen squares still drawn without their own tile.
+      const pans = Number(arg("world-map-pan", "0")) | 0;
+      if (pans > 0) {
+        const missing = () => cdp.evaluate(`(() => {
+          const wm = (${CLIENT_JS}).worldMap;
+          let n = 0;
+          for (const id of wm.retainedWorldMapImageIds) if (!wm.worldMapImageTiles.has(id)) n++;
+          return { x: (${CLIENT_JS}).worldMapState.displayX, missing: n, onScreen: wm.retainedWorldMapImageIds.size, cached: wm.worldMapImageTiles.size,
+            pending: wm.pendingWorldMapImageIds.size };
+        })()`);
+        // Off centre: the "You are here" marker over the middle would take the press.
+        const cy = rect.y + rect.height * 0.3;
+        const span = Math.min(600, rect.width * 0.7);
+        const steps = [];
+        const startX = await cdp.evaluate(`(${CLIENT_JS}).worldMapState.displayX`);
+        for (const dir of [-1, 1]) {
+          for (let pan = 0; pan < pans; pan++) {
+            // Hover, press and hold a moment first: the client reads input once per 20ms cycle.
+            const cx = rect.x + rect.width * (dir < 0 ? 0.85 : 0.15);
+            await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: cx, y: cy });
+            await sleep(120);
+            await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: cx, y: cy, button: "left", buttons: 1, clickCount: 1 });
+            await sleep(120);
+            for (let dx = 15; dx <= span; dx += 15) {
+              await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: cx + dir * dx, y: cy, button: "left", buttons: 1 });
+              await sleep(16);
+              steps.push(await missing());
+            }
+            await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: cx + dir * span, y: cy, button: "left", clickCount: 1 });
+            await sleep(300);
+          }
+        }
+        summary.worldMapPan = {
+          tileLoads: await cdp.evaluate(`(() => {
+            const log = globalThis.__wmTileLog, ms = log.filter((l) => l.tile).map((l) => l.ms).sort((a, b) => a - b);
+            const q = (f) => Math.round(ms[Math.min(ms.length - 1, Math.floor(ms.length * f))] ?? 0);
+            return { requests: log.length, rendered: ms.length, empty: log.length - ms.length, p50: q(0.5), p90: q(0.9), max: q(1) };
+          })()`),
+          openFillMs,
+          startFillMs,
+          zoom: await cdp.evaluate(`(${CLIENT_JS}).worldMapState.zoomPercentage`),
+          steps: steps.length,
+          startX,
+          xRange: [Math.min(...steps.map((s) => s.x)), Math.max(...steps.map((s) => s.x))],
+          stepsWithMissing: steps.filter((s) => s.missing > 0).length,
+          maxMissing: Math.max(0, ...steps.map((s) => s.missing)),
+          missingAt: steps.map((s, i) => [i, s.missing, s.pending]).filter(([, m]) => m > 0).map(([i, m, p]) => `${i}:${m}/${p}`),
+          missingSquareSteps: steps.reduce((sum, s) => sum + s.missing, 0),
+          onScreen: Math.max(0, ...steps.map((s) => s.onScreen)),
+          cachedAtEnd: steps[steps.length - 1]?.cached,
+        };
       }
       const samples = [await sample("settled")];
       const zoomTraces = [];

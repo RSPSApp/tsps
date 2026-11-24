@@ -1,3 +1,4 @@
+import type { SampledAnimationDataset } from "../../common/gamemode/GamemodeContentStore";
 import { SampledAnimationRegistry } from "../../custom/animations/SampledAnimationRegistry";
 import { CustomAnimationRegistry } from "../../custom/animations/CustomAnimationRegistry";
 import { getCustomDefinitions } from "../../custom/definitions/CustomDefinitionStore";
@@ -39,6 +40,8 @@ export class RenderDataWorkerPool {
     npcPoseGeneration = 0;
     private npcPoseModelsRevision: number | string = -1;
     private npcPoseContentReady: Promise<void> = Promise.resolve();
+    private sampledRevision = -1;
+    private sampledContentReady: Promise<void> = Promise.resolve();
     private readonly npcPoseRequests = new Set<() => void>();
     private readonly npcPoseWorkers = new Map<WorkerDescriptor<RenderDataWorkerThread>, PoseReservation>();
 
@@ -72,20 +75,17 @@ export class RenderDataWorkerPool {
         this.npcPoseModelsRevision = -1;
         for (const cancel of this.npcPoseRequests) cancel();
         for (const reservation of this.npcPoseWorkers.values()) this.releasePoseWorker(reservation, false);
-        for (const worker of this.workers) {
-            worker.init.then((w) => {
-                w.initCache(cache, npcInstances, getDefinitionArchives());
-                return w.setCustomContent({ gamemodeId: "custom-items", datasets: [
-                    { key: "customItems", rows: Array.from(CustomItemRegistry.getAll(), (item) => item.definition) },
-                    { key: "customModels", rows: CustomModelRegistry.getAll() },
-                    { key: "customSampledAnimations", rows: [] },
-                    { key: "customSampledAnimations", rows: SampledAnimationRegistry.getAll() },
-                    { key: "customAnimations", rows: CustomAnimationRegistry.rows() },
-                    { key: "customDefinitions", rows: getCustomDefinitions() },
-                    { key: "customAnimations", rows: CustomAnimationRegistry.rows() },
-                ] });
-            });
-        }
+        void this.runAll(w => {
+            w.initCache(cache, npcInstances, getDefinitionArchives());
+            return w.setCustomContent({ gamemodeId: "custom-items", datasets: [
+                { key: "customItems", rows: Array.from(CustomItemRegistry.getAll(), item => item.definition) },
+                { key: "customModels", rows: CustomModelRegistry.getAll() },
+                { key: "customDefinitions", rows: getCustomDefinitions() },
+                { key: "customAnimations", rows: CustomAnimationRegistry.rows() },
+            ] });
+        });
+        this.sampledRevision = -1;
+        void this.setSampledAnimationContent().catch(error => console.error("Sampled worker content failed", error));
         this.cancelWorldMapTiles(true);
         queueMicrotask(() => { if (!this.disposed) (this.pool as any).scheduleWork?.(); });
     }
@@ -102,6 +102,25 @@ export class RenderDataWorkerPool {
 
     async runAll(task: (w: RenderDataWorkerThread) => any): Promise<void> {
         await Promise.all(this.workers.map((desc) => desc.init.then(task)));
+    }
+
+    setSampledAnimationContent(changes?: SampledAnimationDataset[]): Promise<void> {
+        const revision = SampledAnimationRegistry.revision;
+        if (this.sampledRevision === revision) return this.sampledContentReady;
+
+        // New workers and failed updates need a snapshot. Normal packet handling sends only
+        // completed clips, so a worker never needs to assemble parts across network packets.
+        let datasets = changes;
+        if (this.sampledRevision === -1 || !datasets) {
+            const rows = SampledAnimationRegistry.getAll();
+            datasets = [{ key: "customSampledAnimations", rows: [] }];
+            if (rows.length) datasets.push({ key: "customSampledAnimations", rows });
+        }
+        const payload = { gamemodeId: "custom-items", datasets };
+        this.sampledRevision = revision;
+        this.sampledContentReady = this.runAll(worker => worker.setCustomContent(payload))
+            .catch(error => { this.sampledRevision = -1; throw error; });
+        return this.sampledContentReady;
     }
 
     initLoader(loader: RenderDataLoader<any, any>): Promise<void> {
@@ -209,7 +228,7 @@ export class RenderDataWorkerPool {
         this.npcPoseWorkers.set(descriptor, reservation);
         (descriptor.runningTasks ??= []).push(reservation.task);
         const generation = this.npcPoseGeneration;
-        const contentRevision = `${CustomModelRegistry.revision}:${CustomAnimationRegistry.revision}:${SampledAnimationRegistry.revision}`;
+        const contentRevision = `${CustomModelRegistry.revision}:${CustomAnimationRegistry.revision}`;
         if (this.npcPoseModelsRevision !== contentRevision) {
             this.npcPoseModelsRevision = contentRevision;
             const payload = { gamemodeId: "custom-items", datasets: [
@@ -217,8 +236,6 @@ export class RenderDataWorkerPool {
                 { key: "customModels", rows: CustomModelRegistry.getAll() },
                 { key: "customDefinitions", rows: getCustomDefinitions() },
                 { key: "customAnimations", rows: CustomAnimationRegistry.rows() },
-                { key: "customSampledAnimations", rows: [] },
-                { key: "customSampledAnimations", rows: SampledAnimationRegistry.getAll() },
             ] };
             this.npcPoseContentReady = this.runAll(worker => worker.setCustomContent(payload))
                 .catch(error => { this.npcPoseModelsRevision = -1; throw error; });
@@ -232,7 +249,8 @@ export class RenderDataWorkerPool {
                 if (!dispatched) this.releasePoseWorker(reservation); };
             this.npcPoseRequests.add(cancel);
             signal?.addEventListener("abort", cancel, { once: true });
-            void this.npcPoseContentReady.then(() => descriptor.init).then(async worker => {
+            void Promise.all([this.npcPoseContentReady, this.setSampledAnimationContent()])
+                .then(() => descriptor.init).then(async worker => {
                 if (settled || this.disposed || signal?.aborted || generation !== this.npcPoseGeneration) return undefined;
                 dispatched = true;
                 try { return await worker.loadNpcPose(input); }

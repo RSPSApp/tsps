@@ -348,9 +348,9 @@ export class DynamicNpcAnimLoader {
     }
 
     private isSequenceFrameReady(seqId: number, frameId: number): boolean {
-        if(SampledAnimationRegistry.get(seqId))return true;
         const seqType = this.seqTypeLoader?.load(seqId | 0);
         if (!seqType) return false;
+        if (SampledAnimationRegistry.isSampledSequence(seqType)) return true;
         if (seqType.isSkeletalSeq()) {
             return !!this.skeletalSeqLoader?.load(seqType.skeletalId);
         }

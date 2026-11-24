@@ -1,5 +1,4 @@
 import { SampledAnimationRegistry } from "../../../custom/animations/SampledAnimationRegistry";
-import { CustomModelRegistry } from "../../../custom/items/CustomModelRegistry";
 import { applyInterpolatedFrames, interpolationFrame, type ActorInterpolation } from "../../model/seq/FrameInterpolation";
 import { Model } from "../../model/Model";
 import { ModelData } from "../../model/ModelData";
@@ -15,6 +14,7 @@ import { NpcTypeLoader } from "./NpcTypeLoader";
 
 export class NpcModelLoader {
     modelCache: Map<number, Model>;
+    private sampledRevision = SampledAnimationRegistry.revision;
 
     constructor(
         readonly npcTypeLoader: NpcTypeLoader,
@@ -56,6 +56,9 @@ export class NpcModelLoader {
             return undefined;
         }
 
+        if (this.sampledRevision !== SampledAnimationRegistry.revision) {
+            this.clearCache();
+        }
         let model = this.modelCache.get(npcType.id);
         if (!model) {
             const missesBefore = this.modelLoader.missCount ?? 0;
@@ -72,7 +75,9 @@ export class NpcModelLoader {
             }
 
             // A sampled model owns its exact vertex order, including coincident vertices.
-            const merged = models.length === 1 && CustomModelRegistry.get(npcType.modelIds[0]) ? models[0] : ModelData.merge(models, models.length);
+            const merged = models.length === 1 && models[0] && SampledAnimationRegistry.hasModel(npcType.modelIds[0])
+                ? models[0]
+                : ModelData.merge(models, models.length);
 
             if (npcType.recolorFrom) {
                 const retexture =
@@ -113,19 +118,30 @@ export class NpcModelLoader {
 
         if (actionSeqType || movementSeqType) {
             model = Model.copyAnimated(model, false, true);
-            const sampled = SampledAnimationRegistry.get(seqId) ? {id:seqId,frame,blend:interpolation?.base} : SampledAnimationRegistry.get(movementSeqId) ? {id:movementSeqId,frame:movementFrame,blend:interpolation?.overlay} : null;
-            if (sampled && npcType.modelIds.length === 1) {
-                SampledAnimationRegistry.apply(model,npcType.modelIds[0],sampled.id,sampled.frame,sampled.blend?.next??sampled.frame,sampled.blend?.alpha??0);
-            } else this.applyNpcSequenceTransformations(
-                model,
-                actionSeqType,
-                seqId | 0,
-                frame | 0,
-                movementSeqType,
-                movementSeqId | 0,
-                movementFrame | 0,
-                interpolation,
-            );
+            const sampledAction = SampledAnimationRegistry.isSampledSequence(actionSeqType);
+            const sampledMovement = SampledAnimationRegistry.isSampledSequence(movementSeqType);
+            const sampled = sampledAction || !actionSeqType && sampledMovement;
+            if (sampled) {
+                if (npcType.modelIds.length === 1) {
+                    const id = sampledAction ? seqId : movementSeqId;
+                    const sampleFrame = sampledAction ? frame : movementFrame;
+                    const blend = sampledAction ? interpolation?.base : interpolation?.overlay;
+                    SampledAnimationRegistry.apply(
+                        model, npcType.modelIds[0], id, sampleFrame, blend?.next ?? sampleFrame, blend?.alpha ?? 0,
+                    );
+                }
+            } else {
+                this.applyNpcSequenceTransformations(
+                    model,
+                    actionSeqType,
+                    seqId | 0,
+                    frame | 0,
+                    sampledMovement ? undefined : movementSeqType,
+                    movementSeqId | 0,
+                    movementFrame | 0,
+                    interpolation,
+                );
+            }
         } else if (hasScale) {
             model = Model.copyAnimated(model, true, true);
         }
@@ -383,5 +399,6 @@ export class NpcModelLoader {
 
     clearCache(): void {
         this.modelCache.clear();
+        this.sampledRevision = SampledAnimationRegistry.revision;
     }
 }

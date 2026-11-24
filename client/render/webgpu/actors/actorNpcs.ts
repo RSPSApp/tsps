@@ -123,7 +123,7 @@ export class NpcPoseGeometry {
     }
 
     private supportedFrames(type: SeqType, frame: number, next?: number, allowMissingNext = false): boolean {
-        if (SampledAnimationRegistry.get(type.id) || type.isSkeletalSeq() || !type.frameIds?.length) return false;
+        if (SampledAnimationRegistry.isSampledSequence(type) || type.isSkeletalSeq() || !type.frameIds?.length) return false;
         for (const index of next === undefined ? [frame] : [frame, next]) {
             const loaded = this.client.seqFrameLoader.load(type.frameIds[Math.max(0, index) % type.frameIds.length]);
             if (!loaded && index === next && allowMissingNext) continue;

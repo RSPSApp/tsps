@@ -1,4 +1,6 @@
-import { inflateSync } from 'node:zlib';
+import { inflateSync } from "node:zlib";
+import { encodeContentData } from "../../net/protocol/ClientProtocol";
+import { ServerPacketId } from "../../net/protocol/ServerPackets";
 export type SampledAnimationRow = {
     id: number;
     modelId: number;
@@ -10,6 +12,10 @@ export type SampledAnimationRow = {
     hash: string;
     data: string;
 };
+type SampledAnimationDataset = { key: "customSampledAnimations"; rows: SampledAnimationRow[] };
+const dataset = (rows: SampledAnimationRow[]): SampledAnimationDataset => ({ key: "customSampledAnimations", rows });
+let packets: SampledAnimationDataset[][] | undefined;
+
 const bundles = new Map<number, {
     source: string;
     rows: SampledAnimationRow[];
@@ -17,7 +23,12 @@ const bundles = new Map<number, {
 function hash(bytes: Uint8Array) { let n = 2166136261; for (const b of bytes)
     n = Math.imul(n ^ b, 16777619); return (n >>> 0).toString(16); }
 /** Validate every chunk before replacing any source-owned registrations. */
-export function registerCustomAnimations(input: SampledAnimationRow[], source: string, nativeCount: number): void {
+export function registerSampledAnimations(
+    input: SampledAnimationRow[],
+    source: string,
+    nativeCount: number,
+    hasSequence: (id: number) => boolean,
+): void {
     if (!Array.isArray(input) || input.length > 288 || typeof source !== 'string' || !source)
         throw new Error('Invalid custom animation source');
     const next = new Map<number, SampledAnimationRow[]>();
@@ -27,6 +38,8 @@ export function registerCustomAnimations(input: SampledAnimationRow[], source: s
         if (bundles.has(row.id) && bundles.get(row.id)!.source !== source)
             throw new Error(`Animation ${row.id} belongs to another package`);
         const rows = next.get(row.id) ?? [];
+        if (!rows.length && hasSequence(row.id))
+            throw new Error(`Animation ${row.id} is already a cache, archived or editor sequence`);
         if (rows.some(r => r.part === row.part))
             throw new Error('Duplicate animation chunk');
         rows.push(structuredClone(row));
@@ -46,6 +59,34 @@ export function registerCustomAnimations(input: SampledAnimationRow[], source: s
             bundles.delete(id);
     for (const [id, rows] of next)
         bundles.set(id, { source, rows });
+    packets = undefined;
 }
 export const customAnimation = (id: number) => bundles.get(id)?.rows[0];
 export const customAnimationRows = () => [...bundles.values()].flatMap(bundle => bundle.rows.map(row => structuredClone(row)));
+
+/** Cache the packet batches until registrations change. The first packet replaces the old set. */
+export function sampledAnimationPackets(): SampledAnimationDataset[][] {
+    if (packets) return packets;
+    const next: SampledAnimationDataset[][] = [];
+    let prefix = [dataset([])];
+    let batch: SampledAnimationRow[] = [];
+    for (const row of customAnimationRows()) {
+        try {
+            encodeContentData("server", [...prefix, dataset([...batch, row])]);
+        } catch (error) {
+            if (!batch.length || !(error instanceof Error) ||
+                error.message !== `Server packet ${ServerPacketId.GAMEMODE_DATA} exceeds short length`) {
+                throw error;
+            }
+            next.push([...prefix, dataset(batch)]);
+            prefix = [];
+            batch = [];
+            // Verify the row on its own before it becomes the next batch.
+            encodeContentData("server", [dataset([row])]);
+        }
+        batch.push(row);
+    }
+    next.push(batch.length ? [...prefix, dataset(batch)] : prefix);
+    packets = next;
+    return packets;
+}

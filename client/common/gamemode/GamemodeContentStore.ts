@@ -1,4 +1,4 @@
-import { SampledAnimationRegistry } from "../../custom/animations/SampledAnimationRegistry";
+import { SampledAnimationRegistry, type SampledAnimationRow } from "../../custom/animations/SampledAnimationRegistry";
 import type {
     LeagueMasteryChallengeRow,
     LeagueMasteryNodeRow,
@@ -115,13 +115,16 @@ export function clearWorldOverlays(): void {
 }
 
 export function isDefinitionDataset({ key }: { key: string }): boolean {
-    return key === "customSampledAnimations" || key === "definitionArchives" || key === "customDefinitions" || key === "customDefinitionsAppend";
+    return key === "definitionArchives" || key === "customDefinitions" || key === "customDefinitionsAppend";
 }
+
+export type SampledAnimationDataset = { key: "customSampledAnimations"; rows: SampledAnimationRow[] };
 
 export function loadFromPayload(payload: {
     gamemodeId: string;
     datasets: Array<{ key: string; rows: unknown[] }>;
-}): void {
+}): SampledAnimationDataset[] {
+    const sampledChanges: SampledAnimationDataset[] = [];
     for (const dataset of payload.datasets) {
         switch (dataset.key) {
             case "customDefinitions": {
@@ -289,8 +292,24 @@ export function loadFromPayload(payload: {
                 }
                 break;
             case "customSampledAnimations": {
-                if (dataset.rows.length === 0) SampledAnimationRegistry.clear();
-                for (const row of dataset.rows) SampledAnimationRegistry.accept(row as any);
+                if (!dataset.rows.length) {
+                    const revision = SampledAnimationRegistry.revision;
+                    SampledAnimationRegistry.clear();
+                    if (SampledAnimationRegistry.revision !== revision) {
+                        sampledChanges.push({ key: dataset.key, rows: [] });
+                    }
+                    break;
+                }
+                const installed: SampledAnimationRow[] = [];
+                for (const row of dataset.rows as SampledAnimationRow[]) {
+                    try {
+                        const completed = SampledAnimationRegistry.accept(row);
+                        if (completed) installed.push(...completed);
+                    } catch (err) {
+                        console.log("[GamemodeContentStore] bad sampled animation", row?.id, row?.part, err);
+                    }
+                }
+                if (installed.length) sampledChanges.push({ key: dataset.key, rows: installed });
                 break;
             }
             case "customAnimations": {
@@ -350,6 +369,7 @@ export function loadFromPayload(payload: {
             customTasksByStructId?.size ?? 0
         } custom tasks`,
     );
+    return sampledChanges;
 }
 
 /** A server-sent struct param, or undefined to read the cache. */

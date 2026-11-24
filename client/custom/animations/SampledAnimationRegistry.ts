@@ -21,6 +21,7 @@ type Entry = {
     types: Map<string, SeqType>;
 };
 const entries = new Map<number, Entry>();
+const sampledTypes = new WeakSet<SeqType>();
 const pending = new Map<number, {
     row: SampledAnimationRow;
     rows: Map<number, SampledAnimationRow>;
@@ -48,7 +49,7 @@ function valid(row: SampledAnimationRow): void {
 }
 export const SampledAnimationRegistry = {
     revision: 0,
-    accept(row: SampledAnimationRow): void {
+    accept(row: SampledAnimationRow): SampledAnimationRow[] | undefined {
         valid(row);
         const installed = entries.get(row.id);
         if (installed && metadata(installed.row) === metadata(row))
@@ -65,10 +66,10 @@ export const SampledAnimationRegistry = {
         bundle.rows.set(row.part, structuredClone(row));
         if (bundle.rows.size !== row.total)
             return;
+        pending.delete(row.id);
         const rows = Array.from({ length: row.total }, (_, i) => bundle!.rows.get(i)!);
         const binary = atob(rows.map(r => r.data).join("")), compressed = Uint8Array.from(binary, c => c.charCodeAt(0));
         if (animationHash(compressed) !== row.hash) {
-            pending.delete(row.id);
             throw new Error("Animation checksum mismatch");
         }
         const expectedBytes = row.vertexCount * row.frameLengths.length * 6;
@@ -80,14 +81,8 @@ export const SampledAnimationRegistry = {
             if (size > expectedBytes) throw new Error("Animation exceeds declared size");
             chunks.push(chunk);
         };
-        try {
-            inflater.push(compressed, true);
-        } catch (error) {
-            pending.delete(row.id);
-            throw error;
-        }
+        inflater.push(compressed, true);
         if (inflater.err || size !== expectedBytes) {
-            pending.delete(row.id);
             throw new Error("Animation geometry is truncated");
         }
         const bytes = new Uint8Array(size);
@@ -100,12 +95,26 @@ export const SampledAnimationRegistry = {
         for (let i = 0; i < poses.length; i++)
             poses[i] = view.getInt16(i * 2, true);
         entries.set(row.id, { row: rows[0], rows, poses, types: new Map() });
-        pending.delete(row.id);
         this.revision++;
+        return rows;
     },
     get(id: number): Entry | undefined { return entries.get(id); },
+    ids(): IterableIterator<number> { return entries.keys(); },
     getAll(): SampledAnimationRow[] { return [...entries.values()].flatMap(entry => entry.rows); },
-    clear(): void { entries.clear(); pending.clear(); this.revision++; },
+    hasModel(modelId: number): boolean {
+        for (const entry of entries.values()) {
+            if (entry.row.modelId === modelId) return true;
+        }
+        return false;
+    },
+    isSampledSequence(type: SeqType | undefined): boolean {
+        return type !== undefined && sampledTypes.has(type);
+    },
+    clear(): void {
+        if (entries.size) this.revision++;
+        entries.clear();
+        pending.clear();
+    },
     sequence(id: number, info: CacheInfo): SeqType | undefined {
         const entry = entries.get(id);
         if (!entry)
@@ -122,6 +131,7 @@ export const SampledAnimationRegistry = {
             type.priority = 0;
             type.precedenceAnimating = 0;
             type.forcedPriority = 5;
+            sampledTypes.add(type);
             entry.types.set(key, type);
         }
         return type;

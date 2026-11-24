@@ -34,6 +34,9 @@ export interface MinimapGeometry {
     scale: number;
     /** Canvas device pixels for a fractional world tile, or undefined beyond the minimap's reach. */
     worldToMinimap(worldX: number, worldY: number): readonly [number, number] | undefined;
+    /** Mask-clipped marker placement. Edge results are directions, never visible world pins. */
+    projectMarker?(worldX: number, worldY: number, padding?: number):
+        { x: number; y: number; edge: boolean; angle: number } | undefined;
 }
 
 /** Resolve the server plane at the polygon center, then sample its individual corners. */

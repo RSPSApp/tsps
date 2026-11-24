@@ -50,6 +50,45 @@ Rules for both:
   `search.extraDataComponents` lists more hidden components whose rows follow
   `dataComponent`'s, and each part can be replaced on its own.
   `plugins/interface/TeleportInterface.plugin.js` uses all of these.
+- A table can declare `list.textColumns: [{ start, field, baseY? }]`. Each pooled slot fills
+  the text component `start + slot` from the matching row's `panel[field]`, preserving
+  trusted server markup as `list.select` does. Empty rows and headers hide these cells unless
+  the column declares the header layout described below.
+  Backgrounds must paint before icons and text. Static widget siblings paint by component
+  ID, so give backgrounds lower IDs than icons and text. The runtime
+  refreshes pooled rows and scroll bounds when the list viewport changes size.
+- A single-column list can opt into `collapsible: true`. Rows with `expandable: true`
+  own following children identified by `parentId`; `collapsed: true` closes a group on a
+  fresh open. `groupLabel` accepts `%toggle` as `[+]`/`[-]` and the usual `%name` replacement.
+  `groupColor` and `groupHeight` style those rows. Optional `rowChrome` declares pooled
+  `borderStart`, `dividerStart`, `guideStart`, `toggleStart` and `toggleGlyphStart` component
+  ranges, each with `slotCount` widgets. Use native rectangles for borders/dividers/guides
+  and a framed button plus text glyph for the disclosure. `indent` and `maxIndent` bound the
+  horizontal offset of descendants. The runtime hides/repositions these controls as slots
+  are reused; toggle components use the same local action as the whole folder row.
+  A group text-column value can use `%action` for its current click instruction.
+  Search reveals matching descendants and
+  their ancestors; clearing search restores expansion, which also survives a root remount.
+  Cyclic/orphaned ancestry is ignored, and nesting is bounded to 12 parents. Folder toggles
+  stay local. Give their pooled widgets a transmitted op flag and an action as usual so the
+  native menu can offer the click; both primary mouse-down and menu actions invoke the
+  runtime before scripts or gameplay transmission, so local controls work on left-click too.
+- `list.headerStyle: { height, backgroundColor, fontId?, textColor?, labelX?, labelWidth? }`
+  gives section titles a full-width background and separate text style. Optional `labelY`
+  and `labelHeight` leave space for a subtitle. A text column with
+  `header: { baseY, x, width, height }` displays its panel field on headers in that raw layout;
+  without it, the column stays hidden on headers. `indent: true` on a text column makes it
+  follow the row's hierarchy offset. Width values retain the declared widget's width mode.
+  `labelX`/`labelWidth`
+  override the label's raw layout values; defaults are 8/16. Compact headers and optional
+  group heights use measured row offsets for both pooling and scrolling. Other lists retain
+  their existing fixed row heights. `list.select.local: true` makes item details stay local
+  too; the declared `texts` can update both a scroll region's text and hidden content height.
+- Custom widgets can opt into `maxWidth`/`maxHeight` to cap aligned dimensions before
+  positioning. For a growing modal, first request the appropriate native mainmodal size
+  through the cache script, as Bank or Omnishop does; resizing only the custom root cannot
+  enlarge a fixed-size mount. NPC model widgets can opt into `npcFullBody: true` to fit an
+  animated body inside their bounds using the normal NPC model/sequence loaders.
 - `sendString` skips text equal to the last it sent to that component. Text the client
   changes on its own (a typed search) is unknown to the server, so clear its copy with
   `player.getFrameUpdater().clear(uid)` before resetting it.
@@ -90,3 +129,31 @@ updates leave them alone.
 
 Adding an interface of this kind should need no client change. If it does, the missing
 capability belongs in the runtime as a declared option, not in a feature-specific module.
+
+
+Custom text widgets may opt into `overflowScroll: true` for clipped single-line overflow
+that moves left with pauses at both ends. It resets on text/width changes. Use it for compact
+labels, not paragraphs. `list.tooltipField` names a row panel field for the existing native
+TooltipManager/TooltipOverlay; `status.tooltipComponent` supplies a hidden text component
+for the status tooltip. `getPointer` is supplied by the host and returns no pointer while
+menus are open. These tooltips are removed on interface close and wrap within the canvas.
+
+
+Lists can opt into `cards: { minWidth, maxColumns, gap, height, parts }`. Sibling leaf rows
+pack into responsive native cards; section headings remain full-width bands. By default folders are bands too; `cards.groups`
+opts expandable groups into tiles. Changing parent flushes the current card row. Each part names a
+pooled component `start` and card-relative `x`, `y`, `width`, `height`; `stretch` uses the
+card width minus `width`, and `align` can be `center` or `right`. Parts can set `fontId`,
+`textColor`, `textAlignment`, `singleLine` and a `%text` template. Size the slot pool for
+the maximum viewport including partially visible rows, and keep all component ranges
+separate. The runtime restores original geometry/positioning modes as cards become bands.
+This presentation does not change filtering, local expansion or row tooltip semantics.
+
+
+`cards.groupParts` overrides/adds native component geometry for group tiles after `parts`.
+A local list can declare `actions: { examine: true, info: { label, field } }` for native
+right-click ops. Op 1 retains selection/expansion, op 2 calls the host `showInfo` with the
+nonempty row panel field, and op 3 calls `examineItem` with `row.examineId ?? row.icon`.
+Use `examineId: -1` for representative group thumbnails. Give pooled controls the matching
+op flags. The host uses its existing item Examine and chat mechanisms; actions consume
+locally and never send a widget gameplay packet. Empty info fields omit that menu action.

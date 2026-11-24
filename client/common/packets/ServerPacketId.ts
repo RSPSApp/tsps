@@ -93,6 +93,7 @@ export const enum ServerPacketId {
     WIDGET_SET_MODEL = 117,
     WIDGET_SET_POSITION = 118,
     WIDGET_SET_COLOUR = 119,
+    WIDGET_SET_ACTIONS = 171, // uid(4), count(1), native operation labels
 
     // ========================================
     // CHAT/MESSAGES (120-129)
@@ -244,6 +245,7 @@ export const SERVER_PACKET_LENGTHS: Record<ServerPacketId, number> = {
     [ServerPacketId.WIDGET_OPEN_SUB]: -2,
     [ServerPacketId.WIDGET_CLOSE_SUB]: 4, // targetUid(4)
     [ServerPacketId.WIDGET_SET_TEXT]: -2,
+    [ServerPacketId.WIDGET_SET_ACTIONS]: -2,
     [ServerPacketId.WIDGET_SET_MODEL]: 8, // uid(4) + raw modelId(4)
     [ServerPacketId.WIDGET_SET_POSITION]: 8, // uid(4) + x(2) + y(2)
     [ServerPacketId.WIDGET_SET_ANGLE]: 10, // uid(4) + angleX(2) + angleY(2) + zoom(2)

@@ -96,6 +96,7 @@ import {
   encodeWidgetSetPlayerHead,
   encodeWidgetSetRoot,
   encodeWidgetSetText,
+  encodeWidgetSetActions,
   type ScriptInventorySnapshot,
   MAIN_INVENTORY_GROUP_ID,
   MAIN_INVENTORY_SLOT_FLAGS,
@@ -708,13 +709,7 @@ export class PacketSender {
     id: number,
     actions: Array<string | null | undefined>
   ): PacketSender {
-    const out = new PacketBuilder(125, PacketType.VARIABLE);
-    out.putInt(id);
-    out.put(Math.max(0, Math.min(255, actions?.length ?? 0)));
-    for (const action of actions ?? []) {
-      out.putString(String(action ?? ""));
-    }
-    this.player.getSession().write(out);
+    this.player.getSession().sendClientPacket(encodeWidgetSetActions(id, actions));
     return this;
   }
 
@@ -1027,7 +1022,15 @@ export class PacketSender {
     return this.interruptibleInterfaceOpens;
   }
 
-  closeInterruptibleInterfaces(): this {
+  closeInterruptibleInterfaces(worldInteraction = false): this {
+    // World interactions may preserve an explicitly declared tool panel. Input prompts
+    // still end, and the explicit IF_CLOSE path calls this without the opt-in argument.
+    const { CustomInterfaceRegistry } = require("../../game/interfaces/CustomInterfaceRegistry") as typeof import("../../game/interfaces/CustomInterfaceRegistry");
+    if (worldInteraction && CustomInterfaceRegistry.get(this.player.getInterfaceId())?.lifecycle?.persistOnWorldInteraction === true) {
+      this.abortInputPrompt();
+      this.closeCurrentChatbox();
+      return this;
+    }
     const interfaceId = this.resetInterfaceState();
     const closed = this.closeTrackedInterfaces();
     this.endBankSearch(interfaceId);

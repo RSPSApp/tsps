@@ -427,7 +427,7 @@ const ESC_POPUP_DISMISS_SCRIPT = 1205;
 const FLOATER_CHILD = 18;
 /** Server-set widget properties held while their cache interface is not loaded. */
 const HELD_WIDGET_ACTIONS: ReadonlySet<string> = new Set([
-    "set_text", "set_hidden", "set_model", "set_angle", "set_colour", "set_position", "set_item",
+    "set_text", "set_actions", "set_hidden", "set_model", "set_angle", "set_colour", "set_position", "set_item",
     "set_npc_head", "set_animation", "set_player_head", "set_rotate_speed",
 ]);
 const DEFAULT_ROOT_INTERFACE = 161;
@@ -1723,7 +1723,11 @@ export class OsrsClient {
     private initCustomInterfaces(): void {
         this.customInterfaces = new CustomInterfaceRuntime({
             widgetManager: this.widgetManager,
+            getPointer: () => this.menuOpen || this.inputManager.mouseX < 0 || this.inputManager.mouseY < 0
+                ? undefined : { x: this.inputManager.mouseX, y: this.inputManager.mouseY },
             getCacheSystem: () => this.cacheSystem,
+            examineItem: (itemId) => { this.examineWidgetItem({ itemId, itemQuantity: 1 }); },
+            showInfo: (text) => this.addGameMessage(text),
             runWidgetScopedClientScript: (widgetUid, scriptId, args, phase) =>
                 this.runWidgetScopedClientScript(widgetUid, scriptId, args, phase),
             fetchContent,
@@ -3065,9 +3069,17 @@ export class OsrsClient {
                         this.widgetManager.invalidateWidgetRender(w);
                     }
                 }
+            } else if (payload?.action === "set_actions") {
+                const w = this.widgetManager?.getWidgetByUid(Number(payload.uid) | 0);
+                if (w && Array.isArray(payload.actions)) {
+                    w.actions = payload.actions.slice(0, 32).map((action: unknown) => String(action ?? ""));
+                    markWidgetInteractionDirty(w);
+                    this.widgetManager.invalidateWidgetRender(w);
+                }
             } else if (payload?.action === "set_hidden") {
                 const uid = Number(payload.uid) | 0;
                 const hidden = !!payload.hidden;
+                if (this.customInterfaces.handleSetHidden?.(uid, hidden)) return;
                 const w = this.widgetManager?.getWidgetByUid(uid);
                 if (w && this.widgetManager && (w.hidden !== hidden || w.isHidden !== hidden)) {
                     w.isHidden = hidden;

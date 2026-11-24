@@ -23,6 +23,8 @@ export type Model2DParams = {
     offsetX2d?: number;
     offsetY2d?: number;
     modelHeightOffset2d?: number;
+    /** Centre the complete projected bounds inside a preview, independently of its model origin. */
+    fitToWidget?: { width: number; height: number; padding?: number };
     orthographic?: boolean;
     // UI/item sprites in OSRS do not z-test; default to no depth testing
     depthTest?: boolean;
@@ -378,6 +380,23 @@ export class Model2DRenderer {
             return { canvas: canEmpty, offsetX: 0, offsetY: 0 };
         }
 
+        const fitted = params.fitToWidget;
+        if (fitted) {
+            // Change the projection scale before rasterising, rather than clipping a body
+            // anchored at its feet or stretching an already rendered image.
+            const inset = Math.max(4, fitted.padding ?? 8) + 3;
+            const scale = Math.min(
+                Math.max(1, fitted.width - inset * 2) / Math.max(1, maxX - minX),
+                Math.max(1, fitted.height - inset * 2) / Math.max(1, maxY - minY),
+            );
+            it.zoom3d = Math.max(1, Math.floor(zoom3d * scale));
+            const actualScale = it.zoom3d / zoom3d;
+            minX *= actualScale;
+            maxX *= actualScale;
+            minY *= actualScale;
+            maxY *= actualScale;
+        }
+
         // Compute tight integer bbox with a small safety border to avoid edge cutoffs.
         // Some NPC chatheads (e.g., hats/helms) sit right on the projected edge and get clipped
         // when rounding; give a few extra pixels of breathing room.
@@ -436,7 +455,7 @@ export class Model2DRenderer {
         const img = ctx.createImageData(sw, sh);
         img.data.set(rgba);
         ctx.putImageData(img, 0, 0);
-        return { canvas: can, offsetX: dx, offsetY: dy };
+        return { canvas: can, offsetX: fitted ? sw / 2 : dx, offsetY: fitted ? sh / 2 : dy };
     }
 
     private getTexture(id: number) {

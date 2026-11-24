@@ -627,4 +627,47 @@ async function main(): Promise<void> {
     console.log("custom-interface-runtime.test.ts: all tests passed");
 }
 
+// A server-owned view changes rows and geometry together, while a newly opened
+// picker takes typing without requiring another click in its input field.
+{
+    const group = 30212, id = (component: number) => (group << 16) | component;
+    const localWidgets = new Map<number, any>();
+    for (let component = 0; component <= 10; component++) localWidgets.set(id(component), {
+        uid: id(component), width: 200, height: 100, rawWidth: 200, rawHeight: 100,
+        parentUid: component ? id(0) : -1, actions: ["Select"], flags: 2,
+    });
+    setCustomInterface({ groupId: group, widgets: [...localWidgets.values()],
+        search: { inputComponent: 1, dataComponent: 2, focusOnOpen: false, focusOnTabs: [1] },
+        list: { viewComponent: 3, slotCount: 1, columns: 1, rowHeight: 20, labelStart: 10 },
+        tabs: { components: [5, 6], labelComponents: [7, 8], labels: ["Travel", "Picker"],
+            layoutComponent: 4, serverDriven: true, pendingComponents: [1, 3, 9, 10] },
+    });
+    const local = new CustomInterfaceRuntime({ widgetManager: {
+        getWidgetByUid: (uid: number) => localWidgets.get(uid), getInterfaceParentContainerUid: () => 1,
+        invalidateWidget() {}, invalidateWidgetRender() {}, invalidateScroll() {},
+    } as any, getCacheSystem: () => undefined, runWidgetScopedClientScript() {}, fetchContent: async () => ({}) });
+    local.onInterfaceOpened(group);
+    local.handleSetText(id(2), JSON.stringify([{ id: 1, name: "Destination" }, { id: 2, name: "Search result" }]));
+    local.handleSetText(id(4), JSON.stringify({ active: 0, tabs: [[1], [2]],
+        visibility: [{ component: 1, hidden: false }, { component: 3, hidden: false }, { component: 9, hidden: false }, { component: 10, hidden: false }] }));
+    local.handleWidgetOp(group, 6);
+    assert.equal(localWidgets.get(id(3)).hidden, true,
+        "a server-driven tab hides old content immediately instead of painting new rows in the old layout");
+    assert.equal(local.handleSearchKeyEvents([{ keyTyped: 0, keyPressed: 120 }]), false,
+        "a pending view cannot type into its hidden search");
+    local.handleSetText(id(2), JSON.stringify([{ id: 2, name: "Search result" }]));
+    assert.equal(localWidgets.get(id(3)).hidden, true, "partial data does not expose an uncommitted view");
+    local.handleSetText(id(4), JSON.stringify({ active: 1, tabs: [[1], [2]],
+        visibility: [{ component: 1, hidden: false }, { component: 3, hidden: false }, { component: 9, hidden: true }, { component: 10, hidden: false }] }));
+    assert.equal(localWidgets.get(id(3)).hidden, false);
+    assert.equal(localWidgets.get(id(9)).hidden, true, "the old tab's footer stays hidden after commit");
+    assert.equal(local.isSearchFocused(), true, "opening the picker owns typing immediately");
+    assert.equal(local.handleSearchKeyEvents([{ keyTyped: 0, keyPressed: 120 }]), true);
+    local.handleWidgetFocus(group, 9);
+    assert.equal(local.isSearchFocused(), false, "clicking elsewhere releases typing");
+    local.handleSetText(id(4), JSON.stringify({ active: 1, tabs: [[1], [2]], visibility: [] }));
+    assert.equal(local.isSearchFocused(), false, "refreshing the same view does not steal focus back");
+    local.onInterfaceClosed(group);
+}
+
 void main();

@@ -12,6 +12,8 @@ import { ContentApi } from "../../net/http/ContentApi";
 export type CustomInterfaceDefinition = {
     groupId: number;
     widgets: unknown[];
+    /** Preserve this main panel during world interactions; explicit close/replacement still wins. */
+    lifecycle?: { persistOnWorldInteraction?: boolean; blocksGameplay?: boolean };
     [key: string]: unknown;
 };
 

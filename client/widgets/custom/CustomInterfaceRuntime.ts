@@ -2,7 +2,16 @@ import { getCustomInterface } from "../../common/gamemode/GamemodeContentStore";
 import { IndexType } from "../../rs/cache/IndexType";
 import { markWidgetInteractionDirty } from "../WidgetInteraction";
 import type { WidgetManager } from "../WidgetManager";
-import { sendWidgetAction } from "../../network/ServerConnection";
+import { sendWidgetAction, sendWidgetActionMessage } from "../../network/ServerConnection";
+import { tooltipManager, type Tooltip } from "@runelite/client/ui/overlay/tooltip/TooltipManager";
+import { collectInputWidgetsAtPoint } from "../../game/widgets/interaction/widgetClickProbe";
+import { layoutCards, type CardPlacement, type CardStyle } from './cardLayout';
+import { CardGroupBackdropPool, type CardGroupBackdrop } from './cardGroupBackdrops';
+
+type CardPart = { start: number; x: number; y: number; width: number; height: number;
+    stretch?: boolean; align?: 'center' | 'right'; textTemplate?: string; singleLine?: boolean;
+    fontId?: number; textColor?: number; textAlignment?: number };
+const ROW_PRIMARY_OP = 1, ROW_INFO_OP = 2, ROW_EXAMINE_OP = 3;
 
 /**
  * Server-declared behaviour for a custom widget group: a search box, a virtual list of
@@ -29,6 +38,8 @@ export type CustomInterfaceDeclaration = {
      * moves so its right edge touches the side panel's left edge. The fixed frame keeps `rawX`.
      */
     dockBesideSidePanel?: boolean;
+    /** Retain public browser state while another custom interface is open. */
+    preserveState?: boolean;
     search?: {
         /** Text component the typed query is rendered into. */
         inputComponent: number;
@@ -37,10 +48,13 @@ export type CustomInterfaceDeclaration = {
         /** Components that take focus when clicked; defaults to the input and its box. */
         focusComponents?: number[];
         maxLength?: number;
+        exactNumericTerms?: boolean;
         /** Shown when the query is empty and the box is not focused. */
         placeholder?: string;
         /** False leaves the field unfocused (showing its placeholder) until it is clicked. */
         focusOnOpen?: boolean;
+        /** Focus a newly opened search view, without taking focus back on data refreshes. */
+        focusOnTabs?: number[];
         caret?: string;
         /** "%s" is replaced with the typed text. */
         textTemplate?: string;
@@ -59,6 +73,11 @@ export type CustomInterfaceDeclaration = {
         queryParam?: string;
         limit?: number;
         debounceMs?: number;
+        /** Private live search over the authenticated widget-action socket. Responses are
+         * { session, sequence, query, rows, total?, offset?, pageSize? }; stale responses are ignored.
+         * pageSize enables a bounded, scroll-driven cache for flat result lists. */
+        socket?: { requestComponent: number; responseComponent: number; sessionComponent: number;
+            tabs?: number[]; minimumLength?: number; allowNumeric?: boolean; idle?: string; pageSize?: number; retainedPages?: number };
     };
     list?: {
         viewComponent: number;
@@ -66,6 +85,8 @@ export type CustomInterfaceDeclaration = {
         slotCount: number;
         columns: number;
         rowHeight: number;
+        /** Responsive native cards. Sections are bands; groups can opt into tiles too. */
+        cards?: CardStyle & { parts: CardPart[]; groupParts?: CardPart[] };
         iconStart: number;
         iconBaseY?: number;
         backgroundStart: number;
@@ -76,6 +97,10 @@ export type CustomInterfaceDeclaration = {
          */
         labelStart?: number;
         labelBaseY?: number;
+        labelXWithoutIcon?: number;
+        /** Additional text columns filled from trusted server-authored row.panel fields. */
+        textColumns?: { start: number; field: string; baseY?: number; indent?: boolean;
+            header?: { baseY: number; x: number; width: number; height: number } }[];
         /** "%name", "%id" and "%detail" are replaced per row. */
         itemLabel?: string;
         /**
@@ -91,8 +116,31 @@ export type CustomInterfaceDeclaration = {
         rowParts?: number[];
         /** The label of a header row; "%name" is replaced. */
         headerLabel?: string;
+        /** Optional single-column tree groups, toggled entirely on the client. */
+        collapsible?: boolean;
+        searchExpandsGroups?: boolean;
+        groupLabel?: string;
+        groupHeight?: number;
+        groupColor?: number;
+        leafActions?: string[];
+        /** Op 1 expands locally; declared additional group operations go to the server. */
+        groupActions?: string[];
+        /** Optional native pooled controls. Component ranges each contain slotCount widgets. */
+        rowChrome?: { borderStart: number; dividerStart: number; guideStart: number;
+            toggleStart: number; toggleGlyphStart: number; indent: number; maxIndent?: number };
+        headerStyle?: { height: number; backgroundColor: number; fontId?: number;
+            textColor?: number; labelX?: number; labelWidth?: number; labelHeight?: number; labelY?: number };
         /** Clicking a row sends its id to the server as the action's slot. */
         clickable?: boolean;
+        /** Additional per-row controls. Each start spans slotCount pooled components. */
+        rowActions?: Array<{ start: number; leafOnly?: boolean; groupOnly?: boolean;
+            label?: string; groupLabel?: string; expandedLabel?: string }>;
+        /** Do not bind NPC models beyond the visible cards plus this pixel buffer. */
+        overscan?: number;
+        /** Full row explanation served by the existing native TooltipOverlay. */
+        tooltipField?: string;
+        /** Local row ops: op 2 displays a nonempty panel field; op 3 uses the host's item examine. */
+        actions?: { examine?: boolean; info?: { label: string; field: string } };
         /**
          * Shows a clicked row's details at once, without waiting a tick for the server: each
          * `texts` component takes the row's `panel` value of that name, `iconComponent` takes
@@ -100,9 +148,21 @@ export type CustomInterfaceDeclaration = {
          */
         select?: {
             op?: number;
+            /** Handle details on the client without transmitting a widget action. */
+            local?: boolean;
+            /** Clear selected details when a new local filter is typed. Default preserves legacy panels. */
+            clearOnQuery?: boolean;
+            backgroundColor?: number;
+            emptyComponent?: number;
             texts?: Record<string, number>;
             iconComponent?: number;
+            /** Manage preview visibility from the selected row. Omitted for legacy server-controlled visibility. */
+            autoHideIcon?: boolean;
             showComponents?: number[];
+            /** Show each named action only while the selected row supplies its label. */
+            actionComponents?: Array<{ field: string; components: number[] }>;
+            /** Hide these controls when a new query clears the selection. */
+            clearComponents?: number[];
         };
         /** Text lists have no inventory item associated with each row. */
         textOnly?: boolean;
@@ -142,6 +202,7 @@ export type CustomInterfaceDeclaration = {
     }>;
     status?: {
         component: number;
+        tooltipComponent?: number;
         idle?: string;
         loading?: string;
         empty?: string;
@@ -166,8 +227,20 @@ export type CustomInterfaceDeclaration = {
         /** "%s" is replaced with the tab's label. */
         activeTemplate?: string;
         inactiveTemplate?: string;
+        activeColor?: number;
+        inactiveColor?: number;
+        activeLabelIndices?: Record<number, number>;
         layoutComponent: number;
         clearQuery?: boolean;
+        /** Wait for an authoritative layout commit before showing the next view. */
+        serverDriven?: boolean;
+        /** Content masked while a server-driven tab's rows and widget state arrive. */
+        pendingComponents?: number[];
+        /** Visibility of static tab content, applied locally on the same click. */
+        visibility?: Array<{ component: number; tabs: number[] }>;
+        /** Restore a base layout on every tab switch, then apply the active tab's overrides. */
+        geometry?: Array<{ component: number; base: { rawX?: number; rawY?: number; rawWidth?: number; rawHeight?: number };
+            overrides: Record<number, { rawX?: number; rawY?: number; rawWidth?: number; rawHeight?: number }> }>;
     };
 };
 
@@ -176,6 +249,11 @@ export type CustomInterfaceRow = {
     name: string;
     /** Item shown in the row's icon slot, for lists with separate labels. */
     icon?: number;
+    /** Optional cache NPC body preview in the list's icon and selection preview. */
+    npc?: number;
+    animation?: number;
+    /** Override the examine target; -1 means a representative thumbnail, not a single item. */
+    examineId?: number;
     /** Plain text for the label's "%detail". */
     detail?: string;
     /** Extra words the search matches, never shown. */
@@ -184,6 +262,9 @@ export type CustomInterfaceRow = {
     header?: boolean;
     /** Shown only while a query is typed: a search reaches it, browsing does not. */
     searchOnly?: boolean;
+    parentId?: number;
+    expandable?: boolean;
+    collapsed?: boolean;
     /** Text for the declared select panel, by name; server markup is kept. */
     panel?: Record<string, string>;
 };
@@ -193,10 +274,16 @@ function toRow(row: any): CustomInterfaceRow {
         id: row.id | 0,
         name: String(row.name ?? ""),
         icon: Number.isInteger(row.icon) ? row.icon : undefined,
+        npc: Number.isInteger(row.npc) && row.npc >= 0 ? row.npc : undefined,
+        animation: Number.isInteger(row.animation) ? row.animation : undefined,
+        examineId: Number.isInteger(row.examineId) ? row.examineId : undefined,
         detail: typeof row.detail === "string" ? row.detail : undefined,
         terms: typeof row.terms === "string" ? row.terms : undefined,
         header: row.header === true,
         searchOnly: row.searchOnly === true || undefined,
+        parentId: Number.isInteger(row.parentId) && row.parentId > 0 ? row.parentId : undefined,
+        expandable: row.expandable === true,
+        collapsed: row.collapsed === true,
         panel: row.panel && typeof row.panel === "object"
             ? Object.fromEntries(
                   Object.entries(row.panel).filter(([, value]) => typeof value === "string"),
@@ -206,8 +293,40 @@ function toRow(row: any): CustomInterfaceRow {
 }
 
 /** Rows matching the query, with each header kept only while a row under it matches. */
-export function filterRows(rows: CustomInterfaceRow[], query: string): CustomInterfaceRow[] {
+export function filterRows(rows: CustomInterfaceRow[], query: string,
+    expansion?: ReadonlyMap<number, boolean>, revealAll = false, expandSearch = true): CustomInterfaceRow[] {
     const term = query.trim().toLowerCase();
+    const byId = new Map(rows.map(row => [row.id, row]));
+    const sections = new Map<number, string>();
+    let section = '';
+    for (const row of rows) {
+        if (row.header) section = row.name;
+        else sections.set(row.id, section);
+    }
+    const parents = new Map<number, CustomInterfaceRow[]>();
+    for (const row of rows) {
+        const chain: CustomInterfaceRow[] = [];
+        const seen = new Set([row.id]);
+        let id = row.parentId;
+        while (id !== undefined && chain.length < 12 && !seen.has(id)) {
+            seen.add(id);
+            const parent = byId.get(id);
+            if (!parent?.expandable) break;
+            chain.push(parent);
+            id = parent.parentId;
+        }
+        // Ignore malformed/cyclic/orphaned ancestry, including multipart data not yet complete.
+        if (id === undefined) parents.set(row.id, chain);
+    }
+    const matching = new Set<number>();
+    for (const row of rows) {
+        if (row.header || row.expandable || !parents.has(row.id)) continue;
+        const chain = parents.get(row.id)!;
+        const text = `${sections.get(row.id) ?? ''} ${[row, ...chain].map(item => `${item.name} ${item.terms ?? ''} ${item.panel?.info ?? ''}`).join(' ')}`.toLowerCase();
+        if (!text.includes(term)) continue;
+        matching.add(row.id);
+        chain.forEach(parent => matching.add(parent.id));
+    }
     const result: CustomInterfaceRow[] = [];
     let header: CustomInterfaceRow | undefined;
     for (const row of rows) {
@@ -216,8 +335,8 @@ export function filterRows(rows: CustomInterfaceRow[], query: string): CustomInt
             continue;
         }
         if (row.searchOnly && !term) continue;
-        const text = `${row.name} ${row.terms ?? ""}`.toLowerCase();
-        if (!text.includes(term)) continue;
+        if (!matching.has(row.id)) continue;
+        if (!revealAll && !(term && expandSearch) && parents.get(row.id)?.some(parent => !(expansion?.get(parent.id) ?? !parent.collapsed))) continue;
         if (header) {
             result.push(header);
             header = undefined;
@@ -279,6 +398,10 @@ export type CustomInterfaceRuntimeDeps = {
     fetchContent: (path: string) => Promise<unknown>;
     /** Sends a hotkey's click; defaults to the server connection. */
     sendWidgetAction?: typeof sendWidgetAction;
+    sendWidgetActionMessage?: typeof sendWidgetActionMessage;
+    getPointer?: () => { x: number; y: number } | undefined;
+    examineItem?: (itemId: number) => void;
+    showInfo?: (text: string) => void;
 };
 
 function sanitize(value: string | undefined): string {
@@ -286,6 +409,8 @@ function sanitize(value: string | undefined): string {
 }
 
 /** What the server sent an interface, and the player's place in it, kept over a re-mount. */
+type SocketSearchResult = { query: string; rows: CustomInterfaceRow[]; total: number; pages?: Map<number,CustomInterfaceRow[]> };
+
 type ParkedInterfaceState = {
     focused: boolean;
     query: string;
@@ -294,9 +419,15 @@ type ParkedInterfaceState = {
     activeTab: number;
     selectedRowId: number | undefined;
     labelActions: Map<number, unknown>;
+    expansion: Map<number, boolean>;
+    scrollY?: number;
+    socketSession: string;
+    socketSequence: number;
+    socketResult?: SocketSearchResult;
 };
 
 export class CustomInterfaceRuntime {
+    private readonly previewModels = new WeakMap<object, Record<string, unknown>>();
     private declaration?: CustomInterfaceDeclaration;
     private focused = false;
     private query = "";
@@ -306,6 +437,13 @@ export class CustomInterfaceRuntime {
     private renderedVersion = -1;
     private version = 0;
     private visibleStartRow = -1;
+    private listSize = "";
+    private rowOffsets: number[] = [];
+    private cardPlacements: CardPlacement[] = [];
+    private cardGroupBackdrops: CardGroupBackdrop[] = [];
+    private readonly cardGroupBackdropPool = new CardGroupBackdropPool();
+    private expansion = new Map<number, boolean>();
+    private rowStyleDefaults = new WeakMap<object, Record<string, unknown>>();
     /** Row shown in each list slot, for clickable lists. */
     private slotRows: (CustomInterfaceRow | undefined)[] = [];
     private labelActions = new Map<number, unknown>();
@@ -318,20 +456,53 @@ export class CustomInterfaceRuntime {
     private dataParts: CustomInterfaceRow[][] = [];
     private tabLayouts: Array<Array<number | { header: string }>> = [];
     private activeTab = 0;
+    private pendingTab?: number;
+    private pendingVisibility = new Map<number, boolean>();
     private scrollbarState = new Map<number, string>();
     private fetchTimer: ReturnType<typeof setTimeout> | undefined;
     private fetchSequence = 0;
     private fetchState: "idle" | "loading" | "error" = "idle";
+    private socketSession = "";
+    private socketSequence = 0;
+    private socketPagesPending = new Set<number>();
+    private socketResult?: SocketSearchResult;
     /**
      * The last closed interface, until the next one opens. A root change (Play on the welcome
      * screen) closes every interface and mounts it again, and the server sends nothing again:
      * that re-mount takes this back instead of starting empty.
      */
+    private readonly retained = new Map<number, ParkedInterfaceState>();
     private parked?: { groupId: number; state: ParkedInterfaceState };
     /** Open overlay panels by group. */
     private overlays = new Map<number, { declaration: CustomInterfaceDeclaration; rawX?: number }>();
 
     constructor(private readonly deps: CustomInterfaceRuntimeDeps) {}
+
+    private readonly hoverTooltip = (): Tooltip | undefined => {
+        const field = this.declaration?.list?.tooltipField;
+        const pointer = this.deps.getPointer?.();
+        if (!field || !pointer || !this.isAttached()) return undefined;
+        const hits = collectInputWidgetsAtPoint(this.deps.widgetManager, pointer.x, pointer.y);
+        for (const hit of hits.reverse()) {
+            if (hit.groupId !== this.declaration?.groupId) return undefined;
+            const status = this.declaration?.status;
+            if (status && status.component === hit.fileId && status.tooltipComponent !== undefined) {
+                return { text: String(this.widget(status.tooltipComponent)?.text ?? ''), maxWidth: 420 };
+            }
+            const list = this.declaration!.list!;
+            const starts = [list.backgroundStart, list.iconStart, list.labelStart,
+                list.rowChrome?.toggleStart, list.rowChrome?.toggleGlyphStart,
+                ...(list.textColumns ?? []).map(column => column.start)];
+            for (const start of starts) {
+                if (start === undefined) continue;
+                const slot = hit.fileId - start;
+                if (slot < 0 || slot >= list.slotCount) continue;
+                const text = this.slotRows[slot]?.panel?.[field];
+                return text ? { text, maxWidth: 420 } : undefined;
+            }
+        }
+        return undefined;
+    };
 
     isSearchFocused(): boolean {
         return this.focused;
@@ -351,13 +522,16 @@ export class CustomInterfaceRuntime {
             this.tickOverlays();
             return true;
         }
-        const parked = remount && this.parked?.groupId === (groupId | 0) ? this.parked.state : undefined;
+        const parked = remount && this.parked?.groupId === (groupId | 0) ? this.parked.state
+            : declaration.preserveState ? this.retained.get(groupId | 0) : undefined;
         this.parked = undefined;
         this.reset();
         this.declaration = declaration;
+        if (declaration.list?.tooltipField) tooltipManager.add(this.hoverTooltip);
         this.focused = !!declaration.search && declaration.search.focusOnOpen !== false;
         if (parked) {
-            Object.assign(this, parked);
+            const { scrollY, ...saved } = parked;
+            Object.assign(this, saved);
             this.applyData();
         }
         this.syncInput();
@@ -367,6 +541,11 @@ export class CustomInterfaceRuntime {
         if (parked && declaration.search) {
             // Its widgets stayed loaded, scroll position included.
             this.scheduleFetch(false);
+            const view = declaration.list && this.widget(declaration.list.viewComponent);
+            if (view && parked.scrollY !== undefined) {
+                view.scrollY = Math.min(parked.scrollY, Math.max(0, view.scrollHeight - view.height));
+                this.refreshVisibleSlots(true);
+            }
             if (this.selectedRowId !== undefined) this.applySelection(this.selectedRowId);
         } else {
             this.renderRows(true);
@@ -377,9 +556,17 @@ export class CustomInterfaceRuntime {
     onInterfaceClosed(groupId: number): void {
         if (this.overlays.delete(groupId | 0)) return;
         if (((this.declaration?.groupId ?? -1) | 0) === (groupId | 0)) {
-            const { focused, query, dataParts, tabLayouts, activeTab, selectedRowId, labelActions } = this;
-            const state = { focused, query, dataParts, tabLayouts, activeTab, selectedRowId, labelActions };
-            this.parked = { groupId: groupId | 0, state };
+            const { focused, query, dataParts, tabLayouts, activeTab, selectedRowId, labelActions, expansion,
+                socketSession, socketSequence, socketResult } = this;
+            const state = { focused, query, dataParts, tabLayouts, activeTab, selectedRowId, labelActions, expansion,
+                socketSession, socketSequence, socketResult };
+            const view = this.declaration?.list && this.widget(this.declaration.list.viewComponent);
+            const snapshot = { ...state, scrollY: view?.scrollY ?? 0 };
+            this.parked = { groupId: groupId | 0, state: snapshot };
+            if (this.declaration?.preserveState) {
+                if (this.retained.size >= 8) this.retained.delete(this.retained.keys().next().value!);
+                this.retained.set(groupId | 0, snapshot);
+            }
             this.reset();
         }
     }
@@ -387,6 +574,47 @@ export class CustomInterfaceRuntime {
     /** The server can drive the query too - prefill, clear, or correct it. */
     handleSetText(uid: number, text: string): boolean {
         const search = this.declaration?.search;
+        const socket = search?.socket;
+        if (socket && uid === this.uid(socket.sessionComponent)) {
+            if (this.socketSession !== text) {
+                this.socketSession = text;
+                this.socketSequence = 0;
+                this.socketResult = undefined;
+                this.socketPagesPending.clear();
+                if (this.socketSearchActive()) this.scheduleFetch();
+            }
+            return true;
+        }
+        if (socket && uid === this.uid(socket.responseComponent)) {
+            let result: any;
+            try { result = JSON.parse(text); } catch { return true; }
+            if (!this.socketSearchActive() || !this.socketSession || result?.session !== this.socketSession
+                || result.sequence !== this.socketSequence || result.query !== this.query) return true;
+            const refresh = this.socketResult?.query === this.query;
+            // Older hosts still send one complete result without page metadata.
+            if(result.pageSize!==undefined&&result.pageSize!==socket.pageSize)return true;
+            const pageSize=result.pageSize===socket.pageSize?socket.pageSize:undefined,offset=result.offset??0;
+            if(pageSize&&(!Number.isSafeInteger(offset)||offset<0||offset%pageSize!==0||!this.socketPagesPending.has(offset)&&!this.socketResult?.pages?.has(offset)))return true;
+            const received: CustomInterfaceRow[] = Array.isArray(result.rows) ? result.rows.filter((row: any) =>
+                Number.isInteger(row?.id) && row.id > 0 && typeof row.name === "string").map(toRow) : [];
+            const total=Number.isSafeInteger(result.total)&&result.total>=0?result.total:received.length;
+            if(pageSize){
+                this.socketPagesPending.delete(offset);
+                if(received.length>pageSize||offset>total||offset+received.length>total)return true;
+                const pages=refresh?this.socketResult?.pages??new Map<number,CustomInterfaceRow[]>():new Map<number,CustomInterfaceRow[]>();pages.set(offset,received);
+                const previous=this.socketResult;
+                const rows=previous&&refresh&&previous.total===total?previous.rows.slice():new Array<CustomInterfaceRow>(total);
+                received.forEach((row,index)=>rows[offset+index]=row);
+                this.socketResult={query:this.query,rows,total,pages};
+            }else {this.socketPagesPending.clear();this.socketResult = { query: this.query, rows:received, total };}
+            this.fetchState = result.error ? "error" : "idle";
+            this.rows = this.socketResult.rows;
+            this.total = this.socketResult.total;
+            this.version++;
+            this.renderRows(!refresh);
+            if (this.selectedRowId !== undefined) this.applySelection(this.selectedRowId);
+            return true;
+        }
         const part = this.dataComponents().findIndex((component) => uid === this.uid(component));
         if (part >= 0) {
             let rows: CustomInterfaceRow[] = [];
@@ -408,7 +636,7 @@ export class CustomInterfaceRuntime {
             // is another list, not the same one refreshed.
             const sectionNow = this.sourceRows[0];
             const otherList = !!sectionBefore?.header && !!sectionNow?.header && sectionBefore.name !== sectionNow.name;
-            this.scheduleFetch(otherList);
+            if (!this.socketSearchActive()) this.scheduleFetch(otherList);
             if (this.selectedRowId !== undefined) this.applySelection(this.selectedRowId);
             return true;
         }
@@ -424,10 +652,26 @@ export class CustomInterfaceRuntime {
                 ? layout.tabs.map((tab: unknown) => (Array.isArray(tab) ? tab : []))
                 : [];
             const opened = Number.isInteger(layout?.active);
+            const previousTab = this.activeTab;
+            const pending = this.pendingTab;
             if (opened) this.activeTab = layout.active;
+            if (opened && tabs.serverDriven && tabs.clearQuery && previousTab !== this.activeTab) {
+                this.query = "";
+                this.syncInput();
+            }
+            if (opened && (pending === undefined || pending === this.activeTab)) this.finishTabTransition();
             this.applyTabLabels();
+            for (const entry of Array.isArray(layout?.visibility) ? layout.visibility : []) {
+                if (Number.isInteger(entry?.component) && typeof entry.hidden === "boolean") {
+                    this.setComponentHidden(entry.component, entry.hidden);
+                }
+            }
+            if (opened && tabs.serverDriven && previousTab !== this.activeTab && search?.focusOnTabs
+                && !search.focusOnTabs.includes(this.activeTab)) this.setFocus(false);
+            if (opened && this.pendingTab === undefined && (previousTab !== this.activeTab || pending !== undefined || layout?.focusSearch === true)
+                && search?.focusOnTabs?.includes(this.activeTab)) this.setFocus(true);
             this.sourceRows = this.tabRows();
-            this.scheduleFetch(opened);
+            if (!this.socketSearchActive() || opened) this.scheduleFetch(opened);
             if (this.selectedRowId !== undefined) this.applySelection(this.selectedRowId);
             return true;
         }
@@ -450,7 +694,8 @@ export class CustomInterfaceRuntime {
         if (!list?.clickable || (groupId | 0) !== (declaration!.groupId | 0)) {
             return undefined;
         }
-        for (const start of [list.iconStart, list.labelStart, list.backgroundStart]) {
+        for (const start of [list.iconStart, list.labelStart, list.backgroundStart,
+            ...(list.textColumns ?? []).map(column => column.start), ...(list.rowActions ?? []).map(action => action.start)]) {
             if (start === undefined) continue;
             const slot = (childId | 0) - start;
             if (slot >= 0 && slot < list.slotCount) {
@@ -480,6 +725,23 @@ export class CustomInterfaceRuntime {
             -1,
         );
         if (index < 0) return;
+        if (declaration.list?.select?.clearComponents) this.clearSelection();
+        if (tabs.serverDriven) {
+            this.pendingTab = index;
+            this.setFocus(false);
+            if (tabs.clearQuery) {
+                this.query = "";
+                this.syncInput();
+            }
+            for (const component of tabs.pendingComponents ?? []) {
+                const widget = this.widget(component);
+                if (!widget) continue;
+                if (!this.pendingVisibility.has(component)) this.pendingVisibility.set(component, !!(widget.hidden || widget.isHidden));
+                this.writeHidden(component, true);
+            }
+            return;
+        }
+        const previousTab = this.activeTab;
         this.activeTab = index;
         this.applyTabLabels();
         this.sourceRows = this.tabRows();
@@ -488,6 +750,34 @@ export class CustomInterfaceRuntime {
             this.syncInput();
         }
         this.scheduleFetch(true);
+        if (previousTab !== index && declaration.search?.focusOnTabs?.includes(index)) this.setFocus(true);
+    }
+
+    /** Hold incoming visibility behind a pending view's mask until its layout commits. */
+    handleSetHidden(uid: number, hidden: boolean): boolean {
+        if (this.pendingTab === undefined || uid >>> 16 !== this.declaration?.groupId) return false;
+        const component = uid & 0xffff;
+        if (!this.pendingVisibility.has(component)) return false;
+        this.pendingVisibility.set(component, hidden);
+        return true;
+    }
+
+    private setComponentHidden(component: number, hidden: boolean): void {
+        if (!this.handleSetHidden(this.uid(component), hidden)) this.writeHidden(component, hidden);
+    }
+
+    private writeHidden(component: number, hidden: boolean): void {
+        const widget = this.widget(component);
+        if (!widget || (!!widget.hidden === hidden && !!widget.isHidden === hidden)) return;
+        widget.hidden = widget.isHidden = hidden;
+        markWidgetInteractionDirty(widget);
+        this.deps.widgetManager.invalidateWidget(widget, "custom-interface-view");
+    }
+
+    private finishTabTransition(): void {
+        this.pendingTab = undefined;
+        for (const [component, hidden] of this.pendingVisibility) this.writeHidden(component, hidden);
+        this.pendingVisibility.clear();
     }
 
     private dataComponents(): number[] {
@@ -526,12 +816,28 @@ export class CustomInterfaceRuntime {
     private applyTabLabels(): void {
         const tabs = this.declaration?.tabs;
         if (!tabs) return;
+        for (const entry of tabs.geometry ?? []) {
+            const widget = this.widget(entry.component);
+            if (!widget) continue;
+            Object.assign(widget, entry.base, entry.overrides[this.activeTab]);
+            this.deps.widgetManager.invalidateWidget(widget, "custom-interface-tab-layout");
+        }
         tabs.labelComponents.forEach((component, index) => {
-            const template = index === this.activeTab
+            const activeIndex = tabs.activeLabelIndices?.[this.activeTab] ?? this.activeTab;
+            const plate = this.widget(tabs.components[index]);
+            const color = index === activeIndex ? tabs.activeColor : tabs.inactiveColor;
+            if (plate && color !== undefined) {
+                plate.color = color;
+                this.deps.widgetManager.invalidateWidgetRender(plate);
+            }
+            const template = index === activeIndex
                 ? tabs.activeTemplate ?? "%s"
                 : tabs.inactiveTemplate ?? "%s";
             this.setText(component, template.replace("%s", tabs.labels[index] ?? ""));
         });
+        for (const entry of tabs.visibility ?? []) {
+            this.setComponentHidden(entry.component, !entry.tabs.includes(this.activeTab));
+        }
     }
 
     /** A clickable row was sent with this op: the select op shows the row's details now. */
@@ -543,21 +849,29 @@ export class CustomInterfaceRuntime {
 
     private applySelection(rowId: number): void {
         const select = this.declaration?.list?.select;
-        const row = this.catalog.get(rowId)
+        const row = this.socketSearchActive() ? this.socketResult?.rows.find(row => row?.id === rowId) : this.catalog.get(rowId)
             ?? this.sourceRows.find((candidate) => candidate.id === rowId && !candidate.header);
         if (!select || !row) return;
         this.selectedRowId = rowId;
+        this.setSelectionEmpty(false);
         for (const [field, component] of Object.entries(select.texts ?? {})) {
             this.setText(component, row.panel?.[field] ?? "");
         }
         const icon = select.iconComponent === undefined ? undefined : this.widget(select.iconComponent);
         if (icon) {
-            const itemId = row.icon ?? -1;
-            icon.itemId = itemId;
-            icon.itemQuantity = itemId >= 0 ? 1 : 0;
-            icon.itemAmount = itemId >= 0 ? 1 : 0;
+            this.applyRowPreview(icon, row);
+            if (select.autoHideIcon) icon.hidden = icon.isHidden = row.icon === undefined && row.npc === undefined;
             markWidgetInteractionDirty(icon);
             this.deps.widgetManager.invalidateWidgetRender(icon);
+        }
+        for (const action of select.actionComponents ?? []) {
+            for (const component of action.components) {
+                const widget = this.widget(component);
+                if (!widget) continue;
+                widget.hidden = widget.isHidden = !row.panel?.[action.field];
+                markWidgetInteractionDirty(widget);
+                this.deps.widgetManager.invalidateWidget(widget, "custom-interface-action-state");
+            }
         }
         for (const component of select.showComponents ?? []) {
             const widget = this.widget(component);
@@ -569,9 +883,55 @@ export class CustomInterfaceRuntime {
             // Showing can change layout, which hidden widgets skip.
             this.deps.widgetManager.invalidateWidget(widget, "custom-interface-select");
         }
+        if (select.backgroundColor !== undefined) this.refreshVisibleSlots(true);
     }
 
-    handleWidgetClick(groupId: number, childId: number): boolean {
+    private setSelectionEmpty(empty: boolean): void {
+        const component = this.declaration?.list?.select?.emptyComponent;
+        const widget = component === undefined ? undefined : this.widget(component);
+        if (widget) {
+            widget.hidden = widget.isHidden = !empty;
+            this.deps.widgetManager.invalidateWidgetRender(widget);
+        }
+    }
+
+    private applyRowPreview(widget: any, row?: CustomInterfaceRow): void {
+        const npc = row?.npc;
+        if (npc !== undefined) {
+            if (!this.previewModels.has(widget)) this.previewModels.set(widget, Object.fromEntries(
+                ["type", "isNpcChathead", "isPlayerChathead", "npcTypeId", "modelType", "modelId"].map(key => [key, widget[key]])));
+            if (widget.npcTypeId !== npc || widget.sequenceId !== row?.animation) {
+                widget.modelFrame = widget.modelFrameCycle = 0;
+                widget.animationId = widget.sequenceId = row?.animation ?? -1;
+            }
+            Object.assign(widget, { type: 6, isNpcChathead: true, isPlayerChathead: false, npcTypeId: npc, modelType: 2, modelId: npc });
+        } else {
+            const original = this.previewModels.get(widget);
+            if (original) {
+                Object.assign(widget, original); this.previewModels.delete(widget);
+                widget.animationId = widget.sequenceId = -1;
+                widget.modelFrame = widget.modelFrameCycle = 0;
+            }
+        }
+        widget.itemId = row?.icon ?? -1;
+        widget.itemQuantity = widget.itemAmount = widget.itemId >= 0 ? 1 : 0;
+    }
+
+    private clearSelection(): void {
+        this.selectedRowId = undefined;
+        this.setSelectionEmpty(true);
+        const select = this.declaration?.list?.select;
+        for (const component of Object.values(select?.texts ?? {})) this.setText(component, "");
+        for (const component of select?.clearComponents ?? []) {
+            const widget = this.widget(component);
+            if (!widget) continue;
+            widget.hidden = widget.isHidden = true;
+            markWidgetInteractionDirty(widget);
+            this.deps.widgetManager.invalidateWidget(widget, "custom-interface-clear-selection");
+        }
+    }
+
+    handleWidgetClick(groupId: number, childId: number, opId = ROW_PRIMARY_OP): boolean {
         if (groupId === this.declaration?.groupId) {
             for (const region of this.declaration.scroll ?? []) {
                 if (!region.resetOnComponents?.includes(childId)) continue;
@@ -582,7 +942,46 @@ export class CustomInterfaceRuntime {
                 }
                 this.refreshScrollbar(region.viewComponent, region.scrollbarComponent);
             }
+            const list = this.declaration.list;
+            if (list?.collapsible || list?.select?.local) {
+                const starts = [list.iconStart, list.labelStart, list.backgroundStart,
+                    list.rowChrome?.toggleStart, list.rowChrome?.toggleGlyphStart,
+                    ...(list.rowActions ?? []).map(action => action.start),
+                    ...(list.textColumns ?? []).map(column => column.start)];
+                for (const start of starts) {
+                    if (start === undefined) continue;
+                    const slot = childId - start;
+                    if (slot < 0 || slot >= list.slotCount) continue;
+                    const row = this.slotRows[slot];
+                    if (!row || row.header) return true;
+                    this.setFocus(false);
+                    if (opId === ROW_INFO_OP && list.actions?.info) {
+                        const text = row.panel?.[list.actions.info.field];
+                        if (text) this.deps.showInfo?.(text);
+                        return true;
+                    }
+                    if (opId === ROW_EXAMINE_OP && list.actions?.examine) {
+                        const itemId = row.examineId ?? row.icon ?? -1;
+                        if (itemId >= 0) this.deps.examineItem?.(itemId);
+                        return true;
+                    }
+                    if (opId !== ROW_PRIMARY_OP && list.actions) return true;
+                    if (row.expandable && opId !== ROW_PRIMARY_OP && list.groupActions?.[opId - 1]) return false;
+                    if (!row.expandable && !list.select?.local) return false;
+                    if (list.select?.local) this.applySelection(row.id);
+                    if (list.collapsible && row.expandable && (!this.query.trim() || list.searchExpandsGroups === false)) {
+                        this.expansion.set(row.id, !(this.expansion.get(row.id) ?? !row.collapsed));
+                        this.scheduleFetch(false);
+                    }
+                    return true;
+                }
+            }
         }
+        return this.handleWidgetFocus(groupId, childId);
+    }
+
+    /** Update focus for any press without executing a row's action a second time. */
+    handleWidgetFocus(groupId: number, childId: number): boolean {
         const search = this.declaration?.search;
         if (!search) {
             return false;
@@ -614,10 +1013,12 @@ export class CustomInterfaceRuntime {
         const list = this.declaration?.list;
         const columns = Math.max(1, list?.columns ?? 1);
         const rowHeight = list?.rowHeight ?? 0;
-        const headerHeight = list?.headerSpan?.height ?? rowHeight;
+        const headerHeight = list?.headerSpan?.height ?? (columns === 1 ? list?.headerStyle?.height : undefined) ?? rowHeight;
         const tops = [0];
         for (let at = 0; at < this.rows.length; at += columns) {
-            tops.push(tops[tops.length - 1] + (this.rows[at]?.header ? headerHeight : rowHeight));
+            const row = this.rows[at];
+            const height = row?.header ? headerHeight : columns === 1 && row?.expandable ? list?.groupHeight ?? rowHeight : rowHeight;
+            tops.push(tops[tops.length - 1] + Math.max(1, height));
         }
         this.topsOf = this.rows;
         this.tops = tops;
@@ -678,7 +1079,7 @@ export class CustomInterfaceRuntime {
 
     handleSearchKeyEvents(keyEvents: Array<{ keyTyped: number; keyPressed: number }>): boolean {
         const search = this.declaration?.search;
-        if (!search || !this.focused) {
+        if (!search || !this.focused || this.pendingTab !== undefined) {
             return false;
         }
         if (!this.isAttached()) {
@@ -788,12 +1189,26 @@ export class CustomInterfaceRuntime {
         if (!this.declaration || !this.isAttached()) {
             return;
         }
+        const list = this.declaration.list;
+        const view = list ? this.widget(list.viewComponent) : undefined;
+        if (view) {
+            this.deps.widgetManager.ensureLayout?.(view);
+            const size = `${view.width},${view.height}`;
+            if (size !== this.listSize) {
+                this.listSize = size;
+                // A taller modal exposes more rows; a narrower one changes the row widths
+                // and clamps its scroll. Refresh once for each size, even without new data.
+                this.renderRows(false);
+            }
+        }
         this.initializeScrollView();
         this.applyScrollRegions();
         this.refreshVisibleSlots();
     }
 
     private reset(): void {
+        this.finishTabTransition();
+        tooltipManager.remove(this.hoverTooltip);
         if (this.fetchTimer) {
             clearTimeout(this.fetchTimer);
             this.fetchTimer = undefined;
@@ -809,12 +1224,22 @@ export class CustomInterfaceRuntime {
         this.version = 0;
         this.renderedVersion = -1;
         this.visibleStartRow = -1;
+        this.listSize = "";
+        this.rowOffsets = [];
+        this.cardPlacements = [];
+        this.cardGroupBackdrops = [];
+        this.cardGroupBackdropPool.reset();
+        this.expansion = new Map();
         this.slotRows = [];
         this.selectedRowId = undefined;
         this.catalog = new Map();
         this.dataParts = [];
         this.tabLayouts = [];
         this.activeTab = 0;
+        this.socketSession = "";
+        this.socketSequence = 0;
+        this.socketResult = undefined;
+        this.socketPagesPending.clear();
         this.labelActions = new Map();
         this.scrollbarState.clear();
     }
@@ -899,13 +1324,58 @@ export class CustomInterfaceRuntime {
         }
         if (this.fetchTimer) {
             clearTimeout(this.fetchTimer);
+            this.fetchTimer = undefined;
         }
+        // Invalidate HTTP results as soon as typing changes, including clearing the field.
+        this.fetchSequence++;
         const query = this.query;
+        if (resetScroll && this.declaration?.list?.select?.clearOnQuery && this.selectedRowId !== undefined) this.clearSelection();
+        const socket = search.socket;
+        if (socket) {
+            if (this.socketSearchActive()) {
+                if (!resetScroll && this.socketResult?.query === query) {
+                    this.rows = this.socketResult.rows;
+                    this.total = this.socketResult.total;
+                    this.version++;
+                    this.renderRows(false);
+                    return;
+                }
+                this.socketSequence++;
+                this.clearSelection();
+                this.socketResult = undefined;
+                this.socketPagesPending.clear();
+                this.rows = [];
+                this.total = 0;
+                this.fetchState = this.socketQueryReady() ? "loading" : "idle";
+                this.version++;
+                this.renderRows(true);
+                if (this.socketSession) {
+                    const session = this.socketSession, sequence = this.socketSequence;
+                    const groupId = this.declaration!.groupId, childId = socket.requestComponent;
+                    this.fetchTimer = setTimeout(() => {
+                        this.fetchTimer = undefined;
+                        if (!this.isAttached() || !this.socketSearchActive() || query !== this.query
+                            || session !== this.socketSession || sequence !== this.socketSequence) return;
+                        if(socket.pageSize)this.socketPagesPending.add(0);
+                        (this.deps.sendWidgetActionMessage ?? sendWidgetActionMessage)({
+                            widgetId: this.uid(childId), groupId, childId, opId: 1,
+                            target: JSON.stringify({ session, sequence, query, ...(socket.pageSize?{offset:0}:{}) }),
+                        });
+                    }, search.debounceMs ?? DEFAULT_DEBOUNCE_MS);
+                }
+                return;
+            }
+            this.socketSequence++;
+        }
+        this.fetchState = "idle";
         if (search.dataComponent !== undefined) {
-            this.rows = filterRows(this.sourceRows, query);
             const list = this.declaration?.list;
+            this.rows = search.exactNumericTerms && /^\d+$/.test(query.trim())
+                ? this.sourceRows.filter(row => row.terms === query.trim())
+                : filterRows(this.sourceRows, query, list?.collapsible ? this.expansion : undefined, false, list?.searchExpandsGroups !== false);
             if (list?.headerSpan) this.rows = spanHeaders(this.rows, Math.max(1, list.columns));
-            this.total = this.rows.filter((row) => !row.header).length;
+            this.total = search.exactNumericTerms && /^\d+$/.test(query.trim()) ? this.rows.length
+                : filterRows(this.sourceRows, query, undefined, true).filter(row => !row.header && !row.expandable).length;
             this.version++;
             this.renderRows(resetScroll);
             return;
@@ -922,6 +1392,37 @@ export class CustomInterfaceRuntime {
             () => void this.fetchRows(query),
             search.debounceMs ?? DEFAULT_DEBOUNCE_MS,
         );
+    }
+
+    private socketSearchActive(): boolean {
+        const socket = this.declaration?.search?.socket;
+        return !!socket && (!socket.tabs || socket.tabs.includes(this.activeTab));
+    }
+
+    private socketQueryReady(): boolean {
+        const socket = this.declaration?.search?.socket;
+        const query = this.query.trim();
+        return query.length >= (socket?.minimumLength ?? 1) || !!(socket?.allowNumeric && /^\d+$/.test(query));
+    }
+
+    private loadSocketWindow(start: number): void {
+        const socket=this.declaration?.search?.socket,result=this.socketResult;
+        if(!socket?.pageSize||!result?.pages||!this.socketSearchActive())return;
+        const size=socket.pageSize,center=Math.floor(start/size)*size,retained=Math.max(3,socket.retainedPages??3),radius=Math.floor(retained/2);
+        const offsets=Array.from({length:retained},(_,i)=>center+(i-radius)*size).filter(offset=>offset>=0&&offset<result.total);
+        // Only loaded nearby pages own row metadata. The sparse array preserves
+        // absolute scroll positions without retaining offscreen item details.
+        let evicted=false;
+        for(const [offset,rows]of result.pages)if(!offsets.includes(offset)){
+            result.pages.delete(offset);rows.forEach((_,i)=>delete result.rows[offset+i]);evicted=true;
+        }
+        if(evicted){this.rows=result.rows;this.version++;}
+        for(const offset of offsets)if(!result.pages.has(offset)&&!this.socketPagesPending.has(offset)&&this.socketPagesPending.size<retained){
+            this.socketPagesPending.add(offset);
+            const groupId=this.declaration!.groupId,childId=socket.requestComponent;
+            (this.deps.sendWidgetActionMessage??sendWidgetActionMessage)({widgetId:this.uid(childId),groupId,childId,opId:1,
+                target:JSON.stringify({session:this.socketSession,sequence:this.socketSequence,query:this.query,offset})});
+        }
     }
 
     private async fetchRows(query: string): Promise<void> {
@@ -980,8 +1481,19 @@ export class CustomInterfaceRuntime {
         }
 
         const totalRows = Math.max(1, Math.ceil(this.rows.length / Math.max(1, list.columns)));
+        this.cardPlacements = [];
+        this.cardGroupBackdrops = [];
+        this.rowOffsets = this.rowTops();
         const viewHeight = Math.max(0, view.height | 0);
-        const scrollHeight = Math.max(viewHeight, this.rowTop(totalRows));
+        let contentHeight = this.rowTop(totalRows);
+        if (list.cards) {
+            const layout = layoutCards(this.rows, view.width, list.cards, list.headerStyle?.height ?? list.rowHeight,
+                list.groupHeight ?? list.rowHeight, list.rowChrome?.indent ?? 0, list.rowChrome?.maxIndent ?? 24);
+            this.cardPlacements = layout.placements;
+            this.cardGroupBackdrops = layout.backdrops;
+            contentHeight = layout.height;
+        }
+        const scrollHeight = Math.max(viewHeight, contentHeight);
         view.scrollWidth = Math.max(0, view.width | 0);
         view.scrollHeight = scrollHeight;
         const maxScrollY = Math.max(0, scrollHeight - viewHeight);
@@ -1000,6 +1512,10 @@ export class CustomInterfaceRuntime {
         if (!status) {
             return;
         }
+        if (this.socketSearchActive() && !this.socketQueryReady()) {
+            this.setText(status.component, this.declaration?.search?.socket?.idle ?? status.idle ?? "");
+            return;
+        }
 
         if (this.fetchState === "error" && status.error) {
             this.setText(status.component, status.error);
@@ -1014,7 +1530,7 @@ export class CustomInterfaceRuntime {
             return;
         }
 
-        const shown = this.rows.length;
+        const shown = this.declaration?.list?.collapsible ? this.total : this.rows.length;
         if (shown === 0) {
             this.setText(status.component, status.empty ?? "");
             return;
@@ -1031,7 +1547,30 @@ export class CustomInterfaceRuntime {
             return;
         }
 
-        const startRow = this.rowAt(Math.max(0, view.scrollY | 0));
+        const scrollY = Math.max(0, view.scrollY | 0);
+        if (list.cards?.groupBackdrops) {
+            this.cardGroupBackdropPool.sync(this.cardGroupBackdrops, list.cards.groupBackdrops,
+                scrollY, view.height, component => this.widget(component), widget => {
+                    this.deps.widgetManager.invalidateWidget(widget, 'custom-interface-card-group');
+                    this.deps.widgetManager.invalidateWidgetRender(widget);
+                });
+        }
+        let low = 0, high = list.cards ? this.cardPlacements.length : Math.max(0, this.rowOffsets.length - 2);
+        while (low < high) {
+            if (list.cards) {
+                // Several cards share a y. Keep the first intersecting card, including a partial row.
+                const mid = (low + high) >>> 1;
+                const p = this.cardPlacements[mid];
+                if (p.y + p.height <= scrollY) low = mid + 1;
+                else high = mid;
+            } else {
+                const mid = (low + high + 1) >>> 1;
+                if (this.rowOffsets[mid] <= scrollY) low = mid;
+                else high = mid - 1;
+            }
+        }
+        const startRow = list.cards ? low : this.rowAt(scrollY);
+        this.loadSocketWindow(startRow*Math.max(1,list.columns));
         if (!force && startRow === this.visibleStartRow && this.renderedVersion === this.version) {
             return;
         }
@@ -1040,39 +1579,100 @@ export class CustomInterfaceRuntime {
 
         const label = list.itemLabel ?? "";
         const headerLabel = list.headerLabel ?? "%name";
+        const ancestors = list.rowChrome ? new Map(this.sourceRows.map(row => [row.id, row])) : undefined;
+        const hasRowStyles = !!(list.cards || list.headerStyle || list.collapsible || list.rowChrome
+            || list.textColumns?.some(column => column.header));
         for (let slot = 0; slot < list.slotCount; slot++) {
-            const poolRow = Math.floor(slot / list.columns);
+            const poolRow = list.cards ? slot : Math.floor(slot / list.columns);
             const column = slot % list.columns;
             const resultRow = startRow + poolRow;
-            const found = this.rows[resultRow * list.columns + column];
+            const found = this.rows[list.cards ? resultRow : resultRow * list.columns + column];
             // A blank beside a spanning header shows nothing.
-            const row = found?.header && !found.name ? undefined : found;
+            const placement = list.cards ? this.cardPlacements[resultRow] : undefined;
+            const outside = placement && list.overscan !== undefined && placement.y > scrollY + view.height + list.overscan;
+            const row = outside || (found?.header && !found.name) ? undefined : found;
+            const isCard = !!placement?.card;
             const background = this.widget(list.backgroundStart + slot);
             const icon = this.widget(list.iconStart + slot);
             const text = list.labelStart === undefined ? icon : this.widget(list.labelStart + slot);
             if (!background || !icon || !text) {
                 continue;
             }
+            // Save the declaration's op before an empty/header slot clears its actions.
+            // Otherwise first-open pooling caches [], and native clicks resolve to "Ok"
+            // without an op id, so neither the server nor the details panel selects it.
+            if (!this.labelActions.has(slot)) this.labelActions.set(slot, text.actions);
             this.slotRows[slot] = row;
+            const chrome = list.rowChrome;
+            let depth = 0, parentId = row?.parentId;
+            while (parentId && depth < 12) {
+                const parent = ancestors?.get(parentId);
+                if (!parent?.expandable) break;
+                depth++;
+                parentId = parent.parentId;
+            }
+            const indent = chrome ? Math.min(depth * chrome.indent, chrome.maxIndent ?? 24) : 0;
+            const cells = (list.textColumns ?? []).map(column => this.widget(column.start + slot));
+            if (hasRowStyles) {
+                for (const widget of [background, icon, text, ...cells]) {
+                    if (!widget) continue;
+                    if (!this.rowStyleDefaults.has(widget)) this.rowStyleDefaults.set(widget,
+                        Object.fromEntries(['rawX', 'rawWidth', 'rawHeight', 'widthMode', 'heightMode', 'xPositionMode',
+                            'yPositionMode', 'xTextAlignment', 'fontId', 'textColor', 'color', 'actions']
+                            .map(key => [key, widget[key]])));
+                    Object.assign(widget, this.rowStyleDefaults.get(widget));
+                }
+                if (row?.header && list.headerStyle) {
+                    const style = list.headerStyle;
+                    background.color = style.backgroundColor;
+                    background.rawHeight = style.height;
+                    text.rawX = style.labelX ?? 8;
+                    text.rawWidth = style.labelWidth ?? 16;
+                    text.rawHeight = style.labelHeight ?? style.height;
+                    text.fontId = style.fontId ?? text.fontId;
+                    text.textColor = style.textColor ?? text.textColor;
+                } else if (row?.expandable) {
+                    background.rawHeight = list.groupHeight ?? list.rowHeight;
+                    text.rawHeight = background.rawHeight;
+                    background.color = list.groupColor ?? background.color;
+                }
+                if (chrome && !row?.header) {
+                    for (const widget of [background, icon, text]) {
+                        widget.rawX += indent;
+                        if (widget.widthMode === 1) widget.rawWidth += indent;
+                    }
+                }
+                if (row && !row.header && !row.expandable && row.icon === undefined && row.npc === undefined
+                    && list.labelXWithoutIcon !== undefined) {
+                    text.rawX = indent + list.labelXWithoutIcon;
+                    if (text.widthMode === 1) text.rawWidth = text.rawX + 8;
+                }
+                // Style changes include geometry. Revalidate before painting the reused slot.
+                this.deps.widgetManager.invalidateWidget(text, 'custom-interface-row-style');
+                this.deps.widgetManager.invalidateWidget(background, 'custom-interface-row-style');
+                this.deps.widgetManager.invalidateWidget(icon, 'custom-interface-row-style');
+            }
 
-            const rowY = this.rowTop(resultRow);
-            const backgroundY = (list.backgroundBaseY ?? 0) + rowY;
-            const iconY = (list.iconBaseY ?? 0) + rowY;
+            const top = placement?.y ?? this.rowOffsets[resultRow] ?? resultRow * list.rowHeight;
+            const expanded = (!!this.query.trim() && list.searchExpandsGroups !== false) || (!!row && (this.expansion.get(row.id) ?? !row.collapsed));
+            const backgroundY = (list.backgroundBaseY ?? 0) + top;
+            const iconY = (list.iconBaseY ?? 0) + top;
+            const rowY = top;
             background.rawY = backgroundY;
             background.y = backgroundY;
             icon.rawY = iconY;
             icon.y = iconY;
             if (text !== icon) {
-                const labelY = (list.labelBaseY ?? 0) + rowY;
+                const labelY = (row?.header ? list.headerStyle?.labelY ?? list.labelBaseY ?? 0 : list.labelBaseY ?? 0) + top;
                 text.rawY = labelY;
                 text.y = labelY;
             }
 
             const hidden = !row;
-            background.hidden = hidden || !!row?.header;
+            background.hidden = hidden || (!!row?.header && !list.headerStyle);
             background.isHidden = background.hidden;
-            icon.hidden = hidden;
-            icon.isHidden = hidden;
+            icon.hidden = hidden || (text !== icon && row?.icon === undefined && row?.npc === undefined);
+            icon.isHidden = icon.hidden;
             text.hidden = hidden;
             text.isHidden = hidden;
 
@@ -1086,19 +1686,23 @@ export class CustomInterfaceRuntime {
             icon.itemId = itemId;
             icon.itemQuantity = itemId >= 0 ? 1 : 0;
             icon.itemAmount = itemId >= 0 ? 1 : 0;
+            if (text !== icon && row?.npc !== undefined) this.applyRowPreview(icon, row);
+            else if (text !== icon && icon.isNpcChathead) this.applyRowPreview(icon, row);
             if (text !== icon) {
-                icon.hidden = hidden || itemId < 0;
+                icon.hidden = hidden || (itemId < 0 && row?.npc === undefined) || (!!chrome && !!row?.expandable && !isCard);
                 icon.isHidden = icon.hidden;
             }
             text.text = !row
                 ? ""
-                : (row.header ? headerLabel : label)
+                : (row.header ? headerLabel : row.expandable ? list.groupLabel ?? label : label)
+                      .replace('%toggle', expanded ? '[-]' : '[+]')
                       .replace("%name", sanitize(row.name))
                       .replace("%id", String(row.id | 0))
                       .replace("%detail", sanitize(row.detail));
             const moved = [
                 ...(list.detailStart === undefined ? [] : [this.widget(list.detailStart + slot)]),
                 ...(list.rowParts ?? []).map((start) => this.widget(start + slot)),
+                ...(list.rowActions ?? []).map(({ start }) => this.widget(start + slot)),
             ].filter(Boolean);
             for (const part of moved) {
                 if (!this.rowPartOffsets.has(part)) this.rowPartOffsets.set(part, part.rawY | 0);
@@ -1109,6 +1713,16 @@ export class CustomInterfaceRuntime {
                 part.isHidden = part.hidden;
                 markWidgetInteractionDirty(part);
                 this.deps.widgetManager.invalidateWidgetRender(part);
+            }
+            for (const action of list.rowActions ?? []) {
+                const widget = this.widget(action.start + slot);
+                if (!widget) continue;
+                widget.hidden = widget.isHidden = hidden || !!row?.header
+                    || !!action.leafOnly && !!row?.expandable || !!action.groupOnly && !row?.expandable;
+                if (widget.type === 4 && (action.label !== undefined || action.groupLabel !== undefined || action.groupOnly)) {
+                    widget.text = row?.expandable ? expanded && action.expandedLabel !== undefined ? action.expandedLabel
+                        : action.groupLabel ?? action.label ?? (expanded ? 'Hide variants' : 'See variants') : action.label ?? '';
+                }
             }
             if (list.detailStart !== undefined) {
                 const detail = this.widget(list.detailStart + slot);
@@ -1127,13 +1741,116 @@ export class CustomInterfaceRuntime {
                 const lines = list.headerSpan.fillColor !== undefined && column === 1 && !!found?.header && !found.name;
                 this.styleSpanningHeader(!!row?.header, view, background, text, resultRow, lines);
             }
-            if (list.stripeColors && row && !row.header) {
+            if (list.stripeColors && row && !row.header && !row.expandable) {
                 background.color = list.stripeColors[resultRow & 1];
             }
+            if (row && row.id === this.selectedRowId && list.select?.backgroundColor !== undefined) {
+                background.color = list.select.backgroundColor;
+            }
             if (list.nameTarget) text.opBase = row && !row.header ? `<col=ff9040>${sanitize(row.name)}</col>` : "";
-            if (list.clickable) {
+            if (list.nameTarget) for (const { start } of list.rowActions ?? []) {
+                const action = this.widget(start + slot);
+                if (action) action.opBase = row ? `<col=ff9040>${sanitize(row.name)}</col>` : '';
+            }
+            for (const column of list.textColumns ?? []) {
+                const widget = this.widget(column.start + slot);
+                if (!widget) continue;
+                widget.rawY = widget.y = (column.baseY ?? 0) + top;
+                widget.hidden = widget.isHidden = hidden || (!!row?.header && !column.header);
+                // panel is also the server's formatted text source for list.select.
+                widget.text = row?.panel?.[column.field] ?? "";
+                if (row?.expandable) widget.text = widget.text.replace('%action', this.query.trim()
+                    ? 'Search results' : expanded ? 'Click to collapse' : 'Click to expand');
+                if (row?.header && column.header) {
+                    widget.rawX = column.header.x;
+                    widget.rawWidth = column.header.width;
+                    widget.rawY = widget.y = top + column.header.baseY;
+                    widget.rawHeight = column.header.height;
+                } else if (chrome && column.indent) {
+                    widget.rawX += indent;
+                    if (widget.widthMode === 1) widget.rawWidth += indent;
+                }
+                if (chrome || column.header) {
+                    this.deps.widgetManager.invalidateWidget(widget, 'custom-interface-row-column');
+                }
+                markWidgetInteractionDirty(widget);
+                this.deps.widgetManager.invalidateWidgetRender(widget);
+            }
+            const controls = chrome ? [this.widget(chrome.toggleStart + slot), this.widget(chrome.toggleGlyphStart + slot)] : [];
+            if (chrome) {
+                const height = placement?.height ?? (this.rowOffsets[resultRow + 1] ?? top + list.rowHeight) - top;
+                const decorations = [
+                    { start: chrome.borderStart, visible: !!row?.expandable || isCard, x: indent + 1, y: 2, height: height - 4 },
+                    { start: chrome.dividerStart, visible: !!row, x: indent, y: height - 1, height: 1 },
+                    { start: chrome.guideStart, visible: !isCard && (!!row?.header || depth > 0), x: row?.header ? 1 : Math.max(1, indent - 3),
+                        y: row?.header ? 7 : 0, height: row?.header ? height - 14 : height },
+                    { start: chrome.toggleStart, visible: !!row?.expandable, x: indent + 7, y: 7, height: 22 },
+                    { start: chrome.toggleGlyphStart, visible: !!row?.expandable, x: indent + 7, y: 7, height: 22 },
+                ];
+                for (const decoration of decorations) {
+                    const widget = this.widget(decoration.start + slot);
+                    if (!widget) continue;
+                    widget.hidden = widget.isHidden = hidden || !decoration.visible;
+                    widget.rawX = decoration.x;
+                    widget.rawY = widget.y = top + decoration.y;
+                    widget.rawHeight = decoration.height;
+                    if (decoration.start === chrome.borderStart || decoration.start === chrome.dividerStart) widget.widthMode = 1;
+                    if (widget.widthMode === 1) widget.rawWidth = decoration.x + (decoration.start === chrome.borderStart ? 1 : 0);
+                    if (isCard && decoration.start === chrome.borderStart) {
+                        widget.widthMode = 0;
+                        widget.rawX = placement!.x + 1;
+                        widget.rawWidth = placement!.width - 2;
+                    }
+                    if (decoration.start === chrome.guideStart) widget.rawWidth = row?.header ? 3 : 1;
+                    if (decoration.start === chrome.toggleGlyphStart) widget.text = expanded ? '-' : '+';
+                    this.deps.widgetManager.invalidateWidget(widget, 'custom-interface-row-control');
+                    this.deps.widgetManager.invalidateWidgetRender(widget);
+                }
+            }
+            if (isCard && list.cards && placement) {
+                background.rawX = placement.x;
+                background.rawWidth = placement.width;
+                background.rawHeight = placement.height;
+                background.widthMode = background.heightMode = background.xPositionMode = background.yPositionMode = 0;
+                for (const part of [...list.cards.parts, ...(row?.expandable ? list.cards.groupParts ?? [] : [])]) {
+                    const widget = this.widget(part.start + slot);
+                    if (!widget) continue;
+                    widget.hoverOwnerUid = background.uid;
+                    const width = Math.max(1, part.stretch ? placement.width - part.width : part.width);
+                    widget.widthMode = widget.heightMode = widget.xPositionMode = widget.yPositionMode = 0;
+                    widget.rawWidth = width;
+                    widget.rawHeight = part.height;
+                    widget.rawX = placement.x + part.x + (part.align === 'center' ? Math.floor((placement.width - width) / 2)
+                        : part.align === 'right' ? placement.width - width : 0);
+                    widget.rawY = widget.y = top + part.y;
+                    if (part.fontId !== undefined) widget.fontId = part.fontId;
+                    if (part.textColor !== undefined) widget.textColor = part.textColor;
+                    if (part.textAlignment !== undefined) widget.xTextAlignment = part.textAlignment;
+                    if (part.singleLine) widget.text = String(widget.text ?? '').replace(/<br\s*\/?\s*>|\n/gi, ' ');
+                    if (part.textTemplate && widget.text) widget.text = part.textTemplate.replace('%text', widget.text);
+                    this.deps.widgetManager.invalidateWidget(widget, 'custom-interface-card-part');
+                    this.deps.widgetManager.invalidateWidgetRender(widget);
+                    markWidgetInteractionDirty(widget);
+                }
+                this.deps.widgetManager.invalidateWidget(background, 'custom-interface-card');
+            }
+            if (list.collapsible || list.select?.local) {
+                for (const widget of [background, icon, text, ...cells, ...controls]) {
+                    if (!widget) continue;
+                    widget.actions = !row || row.header ? [] : row.expandable
+                        ? list.groupActions ?? [this.query.trim() ? 'Details' : (this.expansion.get(row.id) ?? !row.collapsed) ? 'Collapse' : 'Expand']
+                        : list.leafActions ?? (list.tooltipField && !list.select?.texts ? [] : ['Details']);
+                    if (list.actions && row && !row.header) {
+                        widget.actions = [row.expandable ? widget.actions[0] : null,
+                            list.actions.info && row.panel?.[list.actions.info.field] ? list.actions.info.label : null,
+                            list.actions.examine && (row.examineId ?? row.icon ?? -1) >= 0 ? 'Examine' : null];
+                        widget.dataText = sanitize(row.name);
+                    }
+                    markWidgetInteractionDirty(widget);
+                }
+            }
+            if (list.clickable && !list.collapsible && !list.select?.local) {
                 // A header is a title, not a destination: it offers no ops.
-                if (!this.labelActions.has(slot)) this.labelActions.set(slot, text.actions);
                 text.actions = row?.header ? [] : this.labelActions.get(slot);
             }
 

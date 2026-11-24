@@ -891,7 +891,7 @@ export class Player extends Mobile {
             (this.status !== PlayerStatus.NONE || this.interfaceId >= 0 || this.dialogueManager.isActive() ||
                 this.packetSender.hasInterruptibleInterface() || this.packetSender.hasInputPrompt())
         ) {
-            this.packetSender.closeInterruptibleInterfaces();
+            this.packetSender.closeInterruptibleInterfaces(true);
         }
     }
 
@@ -910,7 +910,8 @@ export class Player extends Mobile {
 
     busy(): boolean {
         if (this.interfaceId > 0) {
-            return true;
+            const { CustomInterfaceRegistry } = require("../../../interfaces/CustomInterfaceRegistry") as typeof import("../../../interfaces/CustomInterfaceRegistry");
+            if (CustomInterfaceRegistry.get(this.interfaceId)?.lifecycle?.blocksGameplay !== false) return true;
         }
         if (this.getHitpoints() <= 0) {
             return true;

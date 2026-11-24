@@ -1,5 +1,5 @@
 /** A tooltip's text: `<br>` or `</br>` breaks lines, `<col=rrggbb>` and `</col>` colour them. */
-export type Tooltip = { text: string };
+export type Tooltip = { text: string; maxWidth?: number };
 
 /** Asked every frame for the tooltip to show now, if any (RuneLite's per-frame `add`). */
 export type TooltipSource = () => Tooltip | undefined;

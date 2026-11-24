@@ -2,7 +2,31 @@
  * Social operations: Friends, Ignore, Clan chat
  */
 import { Opcodes } from "../Opcodes";
-import type { HandlerMap } from "./HandlerTypes";
+import { listHasPlayer, socialSort, type SocialSortList, type SocialSortRule } from "../SocialSort";
+import type { HandlerContext, HandlerMap } from "./HandlerTypes";
+
+/**
+ * The sort instructions of one list: `clear` forgets the rules, each rule instruction pops a
+ * direction flag and adds its rule behind the ones already set, `sort` re-orders the list.
+ */
+function registerSortOps(
+    handlers: HandlerMap,
+    sorter: SocialSortList<any>,
+    list: (ctx: HandlerContext) => any[],
+    clear: number,
+    sort: number,
+    rules: [opcode: number, rule: SocialSortRule][],
+): void {
+    handlers.set(clear, () => sorter.clearRules());
+    for (const [opcode, rule] of rules) {
+        handlers.set(opcode, (ctx) => {
+            sorter.addRule(rule, ctx.intStack[--ctx.intStackSize] === 1);
+        });
+    }
+    handlers.set(sort, (ctx) => {
+        sorter.sort(list(ctx));
+    });
+}
 
 export function registerSocialOps(handlers: HandlerMap): void {
     // === Friends ===
@@ -52,48 +76,27 @@ export function registerSocialOps(handlers: HandlerMap): void {
     });
 
     handlers.set(Opcodes.FRIEND_TEST, (ctx) => {
+        // The name may come from a chat line, where a rank icon tag leads it; names match in
+        // their cleaned form (case, accents and space/underscore/hyphen do not matter).
         const name = ctx.stringStack[--ctx.stringStackSize];
-        const isFriend = ctx.friendList.some((f) => f.name.toLowerCase() === name.toLowerCase());
+        const isFriend = listHasPlayer(ctx.friendList, name);
         ctx.pushInt(isFriend ? 1 : 0);
     });
 
-    // === Friend Sorting ===
-    handlers.set(Opcodes.FRIEND_SORT_CLEAR, () => {
-        /* no-op */
-    });
-    handlers.set(Opcodes.FRIEND_SORT_ADD_NAME, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.FRIEND_SORT_ADD_WORLD, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.FRIEND_SORT_ADD_RANK, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.FRIEND_SORT_ADD_NAME_LEGACY, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.FRIEND_SORT_ADD_5, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.FRIEND_SORT_ADD_6, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.FRIEND_SORT_ADD_7, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.FRIEND_SORT_ADD_8, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.FRIEND_SORT_ADD_9, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.FRIEND_SORT_ADD_10, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.FRIEND_SORT_APPLY, () => {
-        /* no-op */
-    });
+    // === Friend sorting (3628-3639, 3656) ===
+    registerSortOps(handlers, socialSort.friends, (ctx) => ctx.friendList, 3628, 3639, [
+        [3629, "natural"],
+        [3630, "name"],
+        [3631, "world"],
+        [3632, "worldChange"],
+        [3633, "online"],
+        [3634, "onlineName"],
+        [3635, "onlineWorldChange"],
+        [3636, "sameWorld"],
+        [3637, "sameWorldName"],
+        [3638, "sameWorldChange"],
+        [3656, "rank"],
+    ]);
 
     // === Ignore ===
     handlers.set(Opcodes.IGNORE_COUNT, (ctx) => {
@@ -124,23 +127,15 @@ export function registerSocialOps(handlers: HandlerMap): void {
 
     handlers.set(Opcodes.IGNORE_TEST, (ctx) => {
         const name = ctx.stringStack[--ctx.stringStackSize];
-        const isIgnored = ctx.ignoreList.some((i) => i.name.toLowerCase() === name.toLowerCase());
+        const isIgnored = listHasPlayer(ctx.ignoreList, name);
         ctx.pushInt(isIgnored ? 1 : 0);
     });
 
-    // === Ignore Sorting ===
-    handlers.set(Opcodes.IGNORE_SORT_CLEAR, () => {
-        /* no-op */
-    });
-    handlers.set(Opcodes.IGNORE_SORT_ADD_NAME, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.IGNORE_SORT_ADD_2, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.IGNORE_SORT_APPLY, () => {
-        /* no-op */
-    });
+    // === Ignore sorting (3640-3643) ===
+    registerSortOps(handlers, socialSort.ignores, (ctx) => ctx.ignoreList, 3640, 3643, [
+        [3641, "natural"],
+        [3642, "name"],
+    ]);
 
     // === Clan chat (legacy friends chat / clan chat system) ===
     handlers.set(Opcodes.CLAN_GETCHATDISPLAYNAME, (ctx) => {
@@ -230,33 +225,18 @@ export function registerSocialOps(handlers: HandlerMap): void {
         }
     });
 
-    // === Clan Sorting ===
-    handlers.set(Opcodes.CLAN_SORT_CLEAR, () => {
-        /* no-op */
-    });
-    handlers.set(Opcodes.CLAN_SORT_ADD_NAME, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.CLAN_SORT_ADD_RANK, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.CLAN_SORT_ADD_WORLD, (ctx) => {
-        ctx.intStackSize--;
-    });
-    handlers.set(Opcodes.FRIENDLIST_SORT_RANK, (ctx) => {
-        ctx.intStackSize--; // ascending
-    });
-
-    // === Friends Chat Sorting (different from friend list sorting) ===
-    handlers.set(Opcodes.FRIENDSCHAT_SORT_ADD, (ctx) => {
-        ctx.intStackSize--; // pop ascending boolean
-        /* no-op - add comparator to friends chat */
-    });
-    handlers.set(Opcodes.FRIENDSCHAT_SORT, () => {
-        /* no-op - sort friends chat */
-    });
-    handlers.set(Opcodes.FRIENDSCHAT_SORT_ADD_RANK, (ctx) => {
-        ctx.intStackSize--; // pop ascending boolean
-        /* no-op - add rank comparator to friends chat */
-    });
+    // === Friends chat member sorting (3644-3655, 3657) ===
+    registerSortOps(handlers, socialSort.friendsChat, (ctx) => ctx.clanMembers, 3644, 3655, [
+        [3645, "natural"],
+        [3646, "name"],
+        [3647, "world"],
+        [3648, "worldChange"],
+        [3649, "online"],
+        [3650, "onlineName"],
+        [3651, "onlineWorldChange"],
+        [3652, "sameWorld"],
+        [3653, "sameWorldName"],
+        [3654, "sameWorldChange"],
+        [3657, "rank"],
+    ]);
 }

@@ -9,7 +9,7 @@ The Fortis Colosseum, built from the OSRS Wiki, a live rsprox capture (the lobby
 | 1 | Lobby, Minimus, entry, the arena, intermission and modifier choice, waves and reinforcements, leaving and death | Done |
 | 2 | The seven enemy types' own attacks | Done |
 | 3 | Modifier effects | Done |
-| 4 | Sol Heredit | Done (no boss health HUD yet) |
+| 4 | Sol Heredit | Done (see remaining work below) |
 | 5 | Rewards, the chest, Glory and the pet | Done |
 | 6 | The scoreboard, and the Colosseum's items (Dizana's quiver, echo boots, Tonalztics of Ralos, the quiver exchange with Minimus) | To do |
 
@@ -27,6 +27,7 @@ The Fortis Colosseum, built from the OSRS Wiki, a live rsprox capture (the lobby
 | `Lobby.*` | The way down and back up, Minimus's introduction, the bank chest and the tunnel. |
 | `Arena.*` | Minimus's Start-wave and Leave, the intermission buttons, death and login. |
 | `SolHeredit.*` | Wave 12: Sol Heredit's greeting, landing, attacks, phases, sand and light crystals. |
+| `Hud.*` | Sol Heredit's boss health bar and its timing. |
 | `SolPatterns.Colosseum.js` | The tiles Sol's attacks cover, the barricade, and where his sand falls. |
 | `Loot.Colosseum.js` | The rewards chest's tables (from the Wiki) and the rolls. |
 | `Rewards.*` | The run's loot and Glory, and the rewards chest. |
@@ -252,12 +253,23 @@ Enraged (150 HP): 5 pools at once, then one more every 3 ticks, and the crystals
 - A totem heals him 75 every 7 ticks.
 - Volatility makes him explode too (graphic 2724).
 
+**Boss health bar** ([RSProx 237/1150](https://rsprox.net/download/1150), ticks 14765–15008):
+- Two ticks after Sol lands, interface 303 shows his NPC ID (12821) and 1,500 HP in boss mode. The standard boss bar colours and open script 2376 are used (ticks 14765–14767).
+- The bar tracks his HP, including successive HP changes on the same tick, and reaches zero on the kill tick (ticks 14777–14991).
+- Each phase change refreshes the bar with script 2887. After the kill it refreshes each tick for eight ticks. It fades out at +13 (script 2889) and clears at +17, including the children of its container (script 2249, ticks 14991–15008).
+
+### Estimates
+
+- Phase changes refresh the bar for all five ticks after the phase line. Captures sometimes skip a tick in that interval.
+- The bar sends its colours and open script once. The captures contain repeated sends of those values.
+- The bar clears immediately if the player dies, teleports or logs out during the fight. The cited kills do not show those exits. Immediate cleanup follows the Vorkath boss bar.
+- Sol uses the common +13 fade delay. Some kills in [RSProx 237/1156](https://rsprox.net/download/1156) fade later.
+
 **His end:**
-- He says one of his death lines, the kill is counted (no greeting next time), and after his death animation (10888) the run ends.
+- He says one of his death lines and the kill is counted internally for his next greeting and the lobby scoreboard. The retail kill-count line is the timing reference in the recordings. After his death animation (10888) the run ends.
 - If the player dies, he says one of his lines for that.
 
 **Not done yet:**
-- The boss health HUD.
 - The enraged crystals aiming at the player.
 - The camera of the live cutscene.
 

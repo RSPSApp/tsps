@@ -2,7 +2,7 @@
 let core;
 let api;
 let CRAWLING, AIRBORNE, KQ_IDS, KQ_WORKER;
-let KqWorker, WorkerDespawnTask, KalphiteQueenCombat, MoltStartTask, TransformTask, RevertTask;
+let KqWorker, WorkerDespawnTask, KalphiteQueenCombat, DeathAnimationTask, MoltStartTask, TransformTask, RevertTask;
 const rangedPrayerDrains = new WeakSet();
 /** Queens between the first form's death and the airborne form taking over (MOLT_DELAY_TICKS + TRANSFORMATION_TICKS). */
 const molting = new WeakSet();
@@ -15,6 +15,8 @@ const KQ_AGGRESSION = { aggressive: true, aggressiveTolerance: false, combatFoll
 // 345 client cycles, or 11.5 ticks at 30 cycles per tick.
 const MOLT_DELAY_TICKS = 8;
 const TRANSFORMATION_TICKS = 12;
+// rsprox (154 molts): she plays kalphite_update_queen_death exactly 4 ticks before the molt packet.
+const DEATH_ANIMATION_LEAD_TICKS = 4;
 const AIRBORNE_TIMEOUT_TICKS = 2_000;
 const WORKER_LIFETIME_TICKS = 100;
 const ROPE_LIFETIME_TICKS = 200;
@@ -37,6 +39,7 @@ const CHAMBER_ROPE_TUNNEL = 10230;
 const CHAMBER_AREA = { minX: 3456, maxX: 3519, minY: 9472, maxY: 9535, z: 0 };
 const SURFACE_EXIT_ROPE = 3829;
 const CHAMBER_EXIT_ROPE = 3832;
+const DEATH_ANIMATION = 6242; // kalphite_update_queen_death
 const MOLT_ANIMATION = 6270;
 const MOLT_GRAPHIC = 1055;
 const MAGIC_PROJECTILE = 280;
@@ -210,6 +213,16 @@ function defineTypes() {
     }
   }
 
+  class DeathAnimationTask extends core.Task {
+    constructor(npc) { super(MOLT_DELAY_TICKS - DEATH_ANIMATION_LEAD_TICKS, npc); this.npc = npc; }
+    execute() {
+      if (molting.has(this.npc) && this.npc.isRegistered?.() && this.npc.getHitpoints?.() > 0) {
+        this.npc.performAnimation(new core.Animation(DEATH_ANIMATION));
+      }
+      this.stop();
+    }
+  }
+
   class MoltStartTask extends core.Task {
     constructor(npc) { super(MOLT_DELAY_TICKS, npc); this.npc = npc; }
     execute() {
@@ -253,7 +266,7 @@ function defineTypes() {
     }
   }
 
-  return { KqWorker, WorkerDespawnTask, KalphiteQueenCombat, MoltStartTask, TransformTask, RevertTask };
+  return { KqWorker, WorkerDespawnTask, KalphiteQueenCombat, DeathAnimationTask, MoltStartTask, TransformTask, RevertTask };
 }
 
 function transformFirstForm(event) {
@@ -267,6 +280,7 @@ function transformFirstForm(event) {
   npc.setHitpoints(1);
   npc.getCombat().reset();
   npc.getCombat().getHitQueue().clear();
+  core.TaskManager.submit(new DeathAnimationTask(npc));
   core.TaskManager.submit(new MoltStartTask(npc));
 }
 
@@ -485,7 +499,7 @@ function attach(pluginApi) {
   AIRBORNE = core.NpcIdentifiers.KALPHITE_QUEEN_3;
   KQ_IDS = [CRAWLING, AIRBORNE, core.NpcIdentifiers.KALPHITE_QUEEN_4, core.NpcIdentifiers.KALPHITE_QUEEN_5];
   KQ_WORKER = core.NpcIdentifiers.KALPHITE_WORKER_3;
-  ({ KqWorker, WorkerDespawnTask, KalphiteQueenCombat, MoltStartTask, TransformTask, RevertTask } = defineTypes());
+  ({ KqWorker, WorkerDespawnTask, KalphiteQueenCombat, DeathAnimationTask, MoltStartTask, TransformTask, RevertTask } = defineTypes());
   configureAggression();
   core.NpcDefinition.forId(CRAWLING).setRespawn(50);
   api.onCustomEvent("collection-log:category-count", collectionLogCount);

@@ -135569,9 +135569,9 @@
               {
                 "type": "action",
                 "text": "Atlazora's Rest shop opens.",
-                "action": "open_interface",
+                "action": "open_shop",
                 "action_source": "text",
-                "target": "Atlazora's Rest shop",
+                "target": "Atlazora's Rest",
                 "id": "GpjnlN"
               }
             ]
@@ -135608,9 +135608,9 @@
               {
                 "type": "action",
                 "text": "Auburn Pub shop opens.",
-                "action": "open_interface",
+                "action": "open_shop",
                 "action_source": "text",
-                "target": "Auburn Pub shop",
+                "target": "Auburn Pub",
                 "id": "HYLNzN"
               }
             ]
@@ -1100376,7 +1100376,7 @@
               "steps": [
                 {
                   "type": "call",
-                  "branch": "4GzeHk"
+                  "branch": "IcsRnt"
                 }
               ]
             },
@@ -1100453,7 +1100453,7 @@
                           "steps": [
                             {
                               "type": "call",
-                              "branch": "4GzeHk"
+                              "branch": "IcsRnt"
                             }
                           ]
                         },
@@ -1102382,7 +1102382,7 @@
           "id": "dfjxEe"
         }
       ],
-      "4GzeHk": [
+      "IcsRnt": [
         {
           "type": "line",
           "speaker": "Bartender (Auburn Pub)",
@@ -1102397,9 +1102397,9 @@
         {
           "type": "action",
           "text": "Auburn Pub shop opens.",
-          "action": "open_interface",
+          "action": "open_shop",
           "action_source": "text",
-          "target": "Auburn Pub shop",
+          "target": "Auburn Pub",
           "id": "HYLNzN"
         }
       ],
@@ -1214428,9 +1214428,9 @@
               {
                 "type": "action",
                 "text": "Spike's Spikes shop opens.",
-                "action": "open_interface",
+                "action": "open_shop",
                 "action_source": "text",
-                "target": "Spike's Spikes shop",
+                "target": "Spike's Spikes",
                 "id": "jbpXPQ"
               }
             ]

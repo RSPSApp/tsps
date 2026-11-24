@@ -26,7 +26,12 @@ before(async () => {
  mockApi = {
   core: { ...PluginManager.getCoreApi(), WorldDefinition: { hasGlobalWorldTag: () => dwarfOperated } },
   spawnNpc: ({ id }) => {
-    const npc = { id, removed: false, moveTo() {}, performAnimation() {}, setScriptedMovement() {} };
+    const npc = {
+      id, removed: false, inViewMoves: [], plainMoves: 0,
+      moveTo() { npc.plainMoves++; },
+      teleportInView(location) { npc.inViewMoves.push([location.getX(), location.getY()]); },
+      performAnimation() {}, setScriptedMovement() {},
+    };
     spawned.push(npc);
     return npc;
   },
@@ -599,6 +604,19 @@ test("iron with coal smelts into steel with half the coal; the rest is iron", ()
   assert.ok(Math.abs(p.xp - (6 * 17.5 + 4 * 12.5)) < 1e-9);
   assert.equal(p.varbits.get(943), 6, "steel bar varbit");
   assert.equal(p.varbits.get(DISPENSER), 1, "pouring");
+});
+
+// Issue 6665: clients drop an NPC from view for the tick of a plain moveTo, so an ore moved that way
+// every tick was never drawn after it spawned. Live floats it along with an in-view teleport (as the
+// Motherlode Mine pay-dirt does, #6420).
+test("ore rides the belt one tile a tick with in-view teleports, never a plain moveTo", () => {
+  const p = player({ items: { [ItemIds.IRON_ORE]: 4 } });
+  stateOf(p).coffer = 1000;
+  putOre(p);
+  assert.equal(spawned.length, 1, "one ore npc");
+  ticks(3);
+  assert.deepEqual(spawned[0].inViewMoves, [[1942, 4965], [1942, 4964], [1942, 4963]]);
+  assert.equal(spawned[0].plainMoves, 0, "a plain moveTo hides the ore for the tick");
 });
 
 test("mithril waits in the pot for its coal, and primary ore is capped at 28", () => {

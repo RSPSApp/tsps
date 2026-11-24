@@ -5,6 +5,7 @@ import {
     getWorldMapImageSource,
     getWorldMapImageTile,
     getWorldMapRetainedSquares,
+    prefetchWorldMapImageTiles,
     retainWorldMapImageTiles,
 } from "../game/worldMap/WorldMapImageCache";
 import { WorldMapCompositeTextures } from "../game/worldMap/WorldMapCompositeTexture";
@@ -91,7 +92,7 @@ async function drawFrame(cache: any, deps: any, w: number, h: number) {
 
 /** Draws frames until every square has its tile (loads are capped per frame). */
 async function drawUntilLoaded(cache: any, deps: any, w: number, h: number) {
-    for (let frame = 0; frame < 20; frame++) {
+    for (let frame = 0; frame < 200; frame++) {
         await drawFrame(cache, deps, w, h);
         if (cache.pendingWorldMapImageIds.size === 0 && retainedAllLoaded(cache)) break;
     }
@@ -156,7 +157,7 @@ test("tiles are evicted by bytes, oldest first, never the ones on screen", async
     const { deps, evicted } = renderer();
     // 8 pixels per tile: 1 MiB a square, so 36 squares fill the budget.
     const cache = zoomState(8);
-    await drawFrame(cache, deps, 6, 6);
+    await drawUntilLoaded(cache, deps, 6, 6);
     assert.equal(cache.worldMapImageBytes, 36 * 512 * 512 * 4);
     assert.ok(cache.worldMapImageBytes <= MAX_WORLDMAP_IMAGE_BYTES);
     assert.equal(evicted.length, 0);
@@ -165,9 +166,11 @@ test("tiles are evicted by bytes, oldest first, never the ones on screen", async
     cache.worldMapState.displayX += 64 * 6;
     const squares = [];
     for (let x = 0; x < 6; x++) for (let y = 0; y < 6; y++) squares.push({ mapX: 46 + x, mapY: 40 + y });
-    retainWorldMapImageTiles(cache, deps, squares);
-    for (const { mapX, mapY } of squares) getWorldMapImageSource(cache, deps, mapX, mapY);
-    await settle();
+    for (let frame = 0; frame < 20; frame++) {
+        retainWorldMapImageTiles(cache, deps, squares);
+        for (const { mapX, mapY } of squares) getWorldMapImageSource(cache, deps, mapX, mapY);
+        await settle();
+    }
     assert.ok(cache.worldMapImageBytes <= MAX_WORLDMAP_IMAGE_BYTES);
     assert.equal(evicted.length, 36, "every old square was evicted for a new one");
     for (const { mapX, mapY } of squares) {
@@ -361,4 +364,66 @@ for (const [width, height] of [[1024, 768], [1600, 900], [1920, 1080]]) test(`zo
     zoom.setZoomPercentage(200);
     await frames(40);
     assert.equal(loads.filter((l) => l.pixelsPerTile === 8).length, target8, "nor any 200% square");
+});
+
+function ring(x0: number, y0: number, count: number) {
+    return Array.from({ length: count }, (_, i) => ({ mapX: x0 + i, mapY: y0 }));
+}
+
+test("squares just off screen are prefetched into free budget, with half the load slots at most", async () => {
+    const { deps, loads } = renderer();
+    const cache = zoomState(1);
+    retainWorldMapImageTiles(cache, deps, ring(40, 40, 4));
+    prefetchWorldMapImageTiles(cache, deps, ring(50, 40, 40));
+    await settle();
+    // Pending limit: max(8, min(128, 4 retained)) = 8, so 4 prefetches.
+    assert.deepEqual(loads.map((l) => l.mapX), [50, 51, 52, 53], "nearest first, half the slots");
+    prefetchWorldMapImageTiles(cache, deps, ring(50, 40, 40));
+    await settle();
+    assert.deepEqual(loads.slice(4).map((l) => l.mapX), [54, 55, 56, 57], "cached ones are skipped");
+});
+
+test("prefetching never evicts another zoom level, however long since it was drawn", async () => {
+    const { deps, loads, evicted } = renderer();
+    // Fill the budget with 200% tiles, then settle at 100%: no room, nothing of this size stale.
+    const cache = zoomState(8);
+    cache.worldMapState.zoomPercentage = 200;
+    for (let i = 0; i < 36; i++) {
+        retainWorldMapImageTiles(cache, deps, [{ mapX: i, mapY: 10 }]);
+        getWorldMapImageSource(cache, deps, i, 10);
+        await settle();
+    }
+    assert.equal(cache.worldMapImageBytes, MAX_WORLDMAP_IMAGE_BYTES);
+    cache.worldMapState.zoom = cache.worldMapState.target = 4;
+    cache.worldMapState.zoomPercentage = 100;
+    retainWorldMapImageTiles(cache, deps, ring(0, 20, 8));
+    // Long undrawn: only their size (another zoom level) protects them.
+    for (const id of cache.worldMapImageTiles.keys()) cache.worldMapImageAccess.set(id, performance.now() - 60_000);
+    const before = loads.length;
+    prefetchWorldMapImageTiles(cache, deps, ring(60, 10, 8));
+    await settle();
+    assert.equal(loads.length, before, "no prefetch: the 200% tiles are another zoom level");
+    assert.equal(evicted.length, 0);
+});
+
+test("prefetching replaces this zoom's tiles of places not drawn for a while", async () => {
+    const { deps, loads, evicted } = renderer();
+    const cache = zoomState(8);
+    cache.worldMapState.zoomPercentage = 200;
+    for (let i = 0; i < 36; i++) {
+        retainWorldMapImageTiles(cache, deps, [{ mapX: i, mapY: 10 }]);
+        getWorldMapImageSource(cache, deps, i, 10);
+        await settle();
+    }
+    // Ten of them were last drawn long ago (a place the map has left).
+    const old = [...cache.worldMapImageTiles.keys()].slice(0, 10);
+    for (const id of old) cache.worldMapImageAccess.set(id, performance.now() - 60_000);
+    retainWorldMapImageTiles(cache, deps, ring(20, 10, 16));
+    const before = loads.length;
+    prefetchWorldMapImageTiles(cache, deps, ring(60, 10, 8));
+    await settle();
+    assert.equal(loads.length - before, 8, "the slots allow 8 prefetches, room comes from the stale tiles");
+    assert.equal(evicted.length, 8, "the eight least recently drawn stale tiles make room");
+    assert.ok(cache.worldMapImageBytes <= MAX_WORLDMAP_IMAGE_BYTES);
+    for (const id of old.slice(8)) assert.ok(cache.worldMapImageTiles.has(id), "no more than needed is evicted");
 });

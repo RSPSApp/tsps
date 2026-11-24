@@ -97,19 +97,11 @@ function findBestCachedImageId(state: WorldMapStateHolder, mapId: number): numbe
 }
 
 function updateWorldMapImageRequestEpoch(state: WorldMapStateHolder, deps: WorldMapImageDeps): number {
+    // Only a new area or zoom level makes the loads in flight useless. Panning doesn't: a square
+    // that just left the screen is still worth caching for the drag back, and cancelling at every
+    // 64-tile step threw away the squares about to land, so a steady drag kept reloading them.
     const zoomBucket = Math.max(1, Math.round((state.worldMapState.zoomPercentage || 100) / 25));
-    // The widget's size in pixels, not displayWidth/Height in tiles: those follow the zoom while
-    // it eases in, and a new key every cycle would cancel the loads the new zoom just started.
-    const width = state.worldMapState.getDisplayPixelWidth?.() ?? state.worldMapState.displayWidth;
-    const height = state.worldMapState.getDisplayPixelHeight?.() ?? state.worldMapState.displayHeight;
-    const viewportKey = [
-        state.worldMapState.getCurrentMapAreaId(),
-        (state.worldMapState.displayX | 0) >> 6,
-        (state.worldMapState.displayY | 0) >> 6,
-        zoomBucket,
-        (width | 0) >> 6,
-        (height | 0) >> 6,
-    ].join(":");
+    const viewportKey = `${state.worldMapState.getCurrentMapAreaId()}:${zoomBucket}`;
     if (viewportKey !== state.worldMapImageRequestViewportKey) {
         state.worldMapImageRequestViewportKey = viewportKey;
         state.worldMapImageRequestEpoch = (state.worldMapImageRequestEpoch + 1) | 0;
@@ -243,13 +235,80 @@ function pruneWorldMapImages(state: WorldMapStateHolder, deps: WorldMapImageDeps
     );
     for (const id of ids) {
         if (state.worldMapImageBytes <= limit) break;
-        const tile = state.worldMapImageTiles.get(id);
-        if (tile) {
-            releaseWorldMapImageTile(state, deps, tile);
+        evictWorldMapImage(state, deps, id);
+    }
+}
+
+function evictWorldMapImage(state: WorldMapStateHolder, deps: WorldMapImageDeps, id: number): void {
+    const tile = state.worldMapImageTiles.get(id);
+    if (tile) {
+        releaseWorldMapImageTile(state, deps, tile);
+    }
+    state.worldMapImageTiles.delete(id);
+    state.worldMapImageAccess.delete(id);
+    clearWorldMapIconsForImageKey(state, id);
+}
+
+/** Loads in flight (all kinds) under which a prefetch may start. */
+const PREFETCH_IN_FLIGHT = 8;
+
+/** A tile at this zoom not drawn for this long may make room for prefetched squares. */
+const PREFETCH_STALE_MS = 5000;
+
+/**
+ * Ours: requests the squares just off screen (the draw's margin, nearest first) so a drag shows
+ * them rendered. The client needs no prefetch: it renders a region in the frame it scrolls into
+ * view (WorldMapRenderer.drawTiles); our tiles render on a worker and would pop in.
+ * Prefetching never evicts another zoom level, or anything drawn in the last few seconds: it
+ * fills free budget, then replaces this zoom's tiles of places left behind.
+ */
+export function prefetchWorldMapImageTiles(
+    state: WorldMapStateHolder,
+    deps: WorldMapImageDeps,
+    tiles: WorldMapRetainTile[],
+): void {
+    // A few loads at most: the worker shares its time between every load in flight, so a deep
+    // prefetch queue would slow the squares scrolling onto the screen.
+    const pendingLimit = Math.min(PREFETCH_IN_FLIGHT, getWorldMapImagePendingLimit(state) >> 1);
+    if (state.pendingWorldMapImageIds.size >= pendingLimit) return;
+    const pixelsPerTile = getRequestPixelsPerTile(state);
+    const tileBytes = 64 * pixelsPerTile * 64 * pixelsPerTile * 4;
+    const limit = getWorldMapImageByteLimit();
+    let room = limit - (state.worldMapImageBytes ?? 0) - state.pendingWorldMapImageIds.size * tileBytes;
+    let stale: number[] | undefined;
+    for (const tile of tiles) {
+        if (state.pendingWorldMapImageIds.size >= pendingLimit) return;
+        const source = tile.sourceTile ?? tile;
+        const mapX = source.mapX | 0;
+        const mapY = source.mapY | 0;
+        if (mapX < 0 || mapY < 0 || mapX >= MapManager.MAX_MAP_X || mapY >= MapManager.MAX_MAP_Y) continue;
+        const level = source.level ?? 0;
+        const mapId = getWorldMapImageKey(state, deps, mapX, mapY, level);
+        if (state.worldMapImageTiles.has(mapId) || state.pendingWorldMapImageIds.has(mapId)) continue;
+        if (hasRecentlyFailedWorldMapImage(state, mapId)) continue;
+        while (room < tileBytes) {
+            if (!stale) {
+                const sizeBits = mapId & PIXELS_PER_TILE_MASK;
+                const before = performance.now() - PREFETCH_STALE_MS;
+                stale = Array.from(state.worldMapImageTiles.keys()).filter(
+                    (id) =>
+                        (id & PIXELS_PER_TILE_MASK) === sizeBits &&
+                        !state.retainedWorldMapImageIds.has(id) &&
+                        (state.worldMapImageAccess.get(id) ?? -Infinity) < before,
+                );
+                stale.sort(
+                    (a, b) =>
+                        (state.worldMapImageAccess.get(b) ?? -Infinity) -
+                        (state.worldMapImageAccess.get(a) ?? -Infinity),
+                );
+            }
+            const id = stale.pop();
+            if (id === undefined) return;
+            room += state.worldMapImageTiles.get(id)?.bytes ?? 0;
+            evictWorldMapImage(state, deps, id);
         }
-        state.worldMapImageTiles.delete(id);
-        state.worldMapImageAccess.delete(id);
-        clearWorldMapIconsForImageKey(state, id);
+        queueLoadWorldMapImage(state, deps, mapX, mapY, level, state.worldMapImageCacheEpoch);
+        if (state.pendingWorldMapImageIds.has(mapId)) room -= tileBytes;
     }
 }
 
@@ -469,13 +528,16 @@ export function getWorldMapRetainedSquares(
     const maxMapX = Math.min(bounds.maxX >> 6, Math.floor((displayX + spanX) / 64));
     const minMapY = Math.max(bounds.minY >> 6, Math.floor((displayY - spanY) / 64));
     const maxMapY = Math.min(bounds.maxY >> 6, Math.floor((displayY + spanY) / 64));
-    const squares: WorldMapRetainTile[] = [];
+    const squares: Array<WorldMapRetainTile & { distance: number }> = [];
     for (let mapY = minMapY; mapY <= maxMapY; mapY++) {
         for (let mapX = minMapX; mapX <= maxMapX; mapX++) {
-            squares.push({ mapX, mapY, level });
+            const dx = mapX * 64 + 32 - displayX;
+            const dy = mapY * 64 + 32 - displayY;
+            squares.push({ mapX, mapY, level, distance: dx * dx + dy * dy });
         }
     }
-    return squares;
+    // Nearest the centre first: the order squares are requested in.
+    return squares.sort((a, b) => a.distance - b.distance);
 }
 
 export function retainWorldMapImageTiles(

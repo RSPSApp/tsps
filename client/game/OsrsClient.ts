@@ -8810,6 +8810,12 @@ export class OsrsClient {
         this.worldMap.retainWorldMapImageTiles(tiles);
     }
 
+    prefetchWorldMapImageTiles(
+        tiles: Array<{ mapX: number; mapY: number; level?: number; sourceTile?: { mapX: number; mapY: number; level?: number } }>,
+    ): void {
+        this.worldMap.prefetchWorldMapImageTiles(tiles);
+    }
+
     clearWorldMapImages(): void {
         this.worldMap.clearWorldMapImages();
     }

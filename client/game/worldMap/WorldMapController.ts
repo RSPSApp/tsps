@@ -26,6 +26,7 @@ import {
     getWorldMapImageSource,
     getWorldMapImageTile,
     markWorldMapImageTextureUploaded as markTextureUploaded,
+    prefetchWorldMapImageTiles as prefetchTiles,
     retainWorldMapImageTiles as retainTiles,
     scheduleWorldMapImageRepaint,
     type WorldMapImageDeps,
@@ -317,6 +318,10 @@ export class WorldMapController {
 
     retainWorldMapImageTiles(tiles: WorldMapRetainTile[]): void {
         retainTiles(this, this.imageDeps, tiles);
+    }
+
+    prefetchWorldMapImageTiles(tiles: WorldMapRetainTile[]): void {
+        prefetchTiles(this, this.imageDeps, tiles);
     }
 
     clearWorldMapImages(): void {

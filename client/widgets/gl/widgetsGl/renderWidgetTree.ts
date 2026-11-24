@@ -1732,17 +1732,17 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 }
                 // Kept and requested: the squares on screen at the zoom being eased toward
                 // (getWorldMapRetainedSquares). The rest drawn here use whatever size is cached.
-                osrsClient?.retainWorldMapImageTiles?.(
-                    getWorldMapRetainedSquares(
-                        currentArea.getBounds(),
-                        displayX,
-                        displayY,
-                        logicalWidth,
-                        logicalHeight,
-                        worldMapState.getTargetZoomScale?.() ?? logicalPixelsPerTile,
-                        worldMapLevel,
-                    ),
+                const targetPixelsPerTile = worldMapState.getTargetZoomScale?.() ?? logicalPixelsPerTile;
+                const retainedWorldMapSquares = getWorldMapRetainedSquares(
+                    currentArea.getBounds(),
+                    displayX,
+                    displayY,
+                    logicalWidth,
+                    logicalHeight,
+                    targetPixelsPerTile,
+                    worldMapLevel,
                 );
+                osrsClient?.retainWorldMapImageTiles?.(retainedWorldMapSquares);
 
                 // The area's whole-map picture under the tiles, so a square still rendering
                 // shows the area's colours, never black (WorldMapCompositeTexture).
@@ -1818,6 +1818,17 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         1,
                         1,
                     );
+                }
+
+                if (targetPixelsPerTile === logicalPixelsPerTile) {
+                    // Squares in the draw's margin, just off screen, render ahead of a drag.
+                    osrsClient?.prefetchWorldMapImageTiles?.(visibleWorldMapTiles);
+                } else {
+                    // Mid zoom-out the target view is larger than what is drawn yet: request all of
+                    // it now, nearest first, so it's rendered by the time the ease shows it.
+                    for (const square of retainedWorldMapSquares) {
+                        osrsClient?.getWorldMapImageSource?.(square.mapX, square.mapY, square.level ?? worldMapLevel);
+                    }
                 }
 
                 const mapElementCache =

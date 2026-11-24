@@ -51,7 +51,7 @@ function count(player, attribute, target, task) {
   const total = (Number(player.getAttribute(attribute)) || 0) + 1;
   player.setAttribute(attribute, Math.min(total, target));
   if (total >= target) complete(player, task);
-  else DiaryProgress.notifyTaskProgress(player, DIARY_DATA, task);
+  else DiaryProgress.notifyTaskUpdated(player, DIARY_DATA, task);
 }
 
 /** PiratesTreasure's Musa Point <-> Port Sarim voyage, after the ship lands. */

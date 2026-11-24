@@ -836,11 +836,12 @@ function chooseNpcAttackOption({ player, slot }) {
   return Number.isInteger(slot) && chooseSettingOption(player, NPC_ATTACK_OPTIONS_SETTING, slot - 1);
 }
 
-function openAllSettings(player) {
+function openAllSettings(player, searching = false) {
   sendSettingsCatalog({ player });
   player.setInterfaceId(ALL_SETTINGS_INTERFACE_ID);
   const sender = player.getPacketSender();
   sender.sendSubInterface(MAIN_MODAL_UID, ALL_SETTINGS_INTERFACE_ID, 0);
+  if (searching) sender.sendClientScript(CHATDEFAULT_STOPINPUT_SCRIPT); // live: after the mount, before the flags
   // The settings/controls are dynamic children created client-side; without
   // these transmit flags their ops never reach us. Op1 over the used slot range.
   sender.sendInterfaceFlagsRange(ALL_SETTINGS_CATEGORIES_CLICKZONE, 0, 15, TRANSMIT_OP1);
@@ -852,12 +853,17 @@ function openAllSettings(player) {
 }
 
 /**
- * The quest list's settings button. Capture (rsprox_transcripts/226/01637.txt, 01662.txt): clientscript
- * 5968 settings_search_override("Quest List") runs, then All Settings opens; no category varbit changes.
+ * The quest list's settings button. Capture (rsprox_transcripts/242/900308.txt lines 1974-1991,
+ * 242/900231.txt lines 35465-35503): the search varbits turn on, clientscript 5968
+ * settings_search_override("Quest List") runs, All Settings opens, chatdefault_stopinput runs, then the flags.
+ * Closing All Settings turns both varbits off (endSettingsSearch).
  */
 function openQuestSettings({ player }) {
-  player.getPacketSender().sendClientScript(SETTINGS_SEARCH_OVERRIDE_SCRIPT, QUEST_LIST_SEARCH);
-  openAllSettings(player);
+  player.getPacketSender()
+    .sendVarbit(FLOATER_IS_SEARCHING_VARBIT, 1)
+    .sendVarbit(FLOATER_SEARCH_LISTEN_FOR_KEYBOARD_VARBIT, 1)
+    .sendClientScript(SETTINGS_SEARCH_OVERRIDE_SCRIPT, QUEST_LIST_SEARCH);
+  openAllSettings(player, true);
   player.setAttribute("settings-view", SEARCH_VIEW); // rows are read from the whole list while searched
   return true;
 }

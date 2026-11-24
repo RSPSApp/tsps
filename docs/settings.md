@@ -220,7 +220,7 @@ All on the tick the level is gained:
 
 With pop-ups disabled, players kept skilling and fighting straight through their level-ups (one recording has 539 in a row). With pop-ups enabled, SkillLevelUp emits `level-up:popup-opened` with `{ player, skill, pause }`. Skilling plugins that handle the event can pause their current session. Continuing the last queued skill/combat notification resumes a paused session with its remaining resources and work. Moving, starting another action, closing/replacing the pop-up, dying or logging out cancels it. Resume-on-Continue follows issue #1071's requested behavior.
 
-A blocking level-up pop-up ends an active Crafting batch. After pressing Continue, open the make menu again to use the remaining materials.
+Blocking level-up pop-ups end active batches for Crafting, log splitting, orb charging and the shipwrights' workbench. After pressing Continue, restart the action to use the remaining materials.
 
 Experience paid in the middle of a conversation lands at once, but its level-up (message, jingle, graphic and pop-up) waits until the conversation has closed and comes the tick after (the user's Mahogany Homes captures, rev 241/242: 20261111T012755 t897 experience, t902 last line, t903 level-up; 20261029T203602 t7336-7346), so it no longer cuts a reward conversation short.
 

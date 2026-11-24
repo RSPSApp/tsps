@@ -34,13 +34,14 @@
   },
   "music": 807,
   "spawn": {
+    "about": "Respawn ticks are counted from the kill-count message (R1140).",
     "tile": [1362, 4510, 0],
     "direction": "EAST",
     "afterArrivalTicks": 5,
     "anim": 11527,
     "say": "Euat! You are not welcome here!",
     "firstAttackTicks": 4,
-    "respawnTicks": 29
+    "respawnTicks": 28
   },
   "hud": {
     "colours": [3204, 11761, 21407],

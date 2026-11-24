@@ -403,6 +403,16 @@ function createCavesArea() {
   return new RevenantCaves([CAVES]);
 }
 
+function describeScrolls({ list }) {
+  for (const destination of SCROLL_DESTINATIONS) list.push({ scroll: "Revenant cave teleport", key: destination.name,
+    name: `Revenant cave teleport: ${destination.name} entrance`, tile: [...destination.to, 0] });
+}
+
+function describeTeleports({ list }) {
+  for (const destination of SCROLL_DESTINATIONS) list.push({ path: ["Items", "Teleport scrolls", "Revenant cave teleport"],
+    key: destination.name, name: `${destination.name} entrance`, tile: [...destination.to, 0] });
+}
+
 module.exports = {
   name: "RevenantCaves",
   description: "Revenant Caves entrances (100,000 coin fee), exits and teleport scroll, with the Wilderness rules applying inside.",
@@ -421,6 +431,8 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
+    pluginApi.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
+    pluginApi.onCustomEvent("teleport-scroll:destinations", describeScrolls);
     [FEE_PAID_ATTRIBUTE, FEE_AUTO_ATTRIBUTE, SCROLL_LOCATION_ATTRIBUTE, CREVICE_WARNED_ATTRIBUTE]
       .forEach((key) => pluginApi.persistAttribute(key));
     pluginApi.onObjectInteraction("Cavern", { Enter: enter });

@@ -29,6 +29,10 @@ function teleport({ player }) {
   return true;
 }
 
+function describeTeleports({ list }) {
+  list.push({ path: ["Items", "Mythical cape"], key: "myths-guild", name: "Myths' Guild", tile: [...MYTHS_GUILD] });
+}
+
 module.exports = {
   name: "MythicalCape",
   description: "Lets the mythical cape teleport the player to the Myths' Guild from the inventory or worn, with no charges, as does the Mythical max cape.",
@@ -36,6 +40,7 @@ module.exports = {
   register(api) {
     core = api.core;
     for (const name of ["Mythical cape", "Mythical max cape"]) api.onItemAction(name, { Teleport: teleport });
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   },
   _test: { teleport, MYTHS_GUILD },
 };

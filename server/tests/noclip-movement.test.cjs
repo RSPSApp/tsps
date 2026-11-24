@@ -149,3 +149,20 @@ test('a noclip click on an L-shaped distance (40 east, 20 south) reaches its end
   assert.equal(end.getX(), ORIGIN.x + 40);
   assert.equal(end.getY(), ORIGIN.y - 20);
 });
+
+test('noclip interaction routing chooses the straight unobstructed approach instead of a wall detour', t => {
+  const { RsmodRouteFinding } = require('../dist/game/model/movement/path/RsmodRouteFinding');
+  // A wall column between the player and destination. The normal route must go north around it.
+  const original=PathFinder.rsmodRouteFinding;
+  PathFinder.rsmodRouteFinding=new RsmodRouteFinding((x,y)=>x===ORIGIN.x+2&&y<ORIGIN.y+5?0x200100:0);
+  t.after(()=>{PathFinder.rsmodRouteFinding=original;});
+  const destination=new Location(ORIGIN.x+5,ORIGIN.y,0);
+  const flagged=player(true);flagged.setLocation(new Location(ORIGIN.x,ORIGIN.y,0));
+  PathFinder.calculateGroundItemRoute(flagged,destination);
+  const queue=flagged.getMovementQueue();
+  assert.equal(queue.points.length,1,'a pickup click must not route around the wall');
+  assert.equal(queue.points.peekLast().position.getY(),ORIGIN.y);
+  const plain=player(false);plain.setLocation(new Location(ORIGIN.x,ORIGIN.y,0));
+  PathFinder.calculateGroundItemRoute(plain,destination);
+  assert.ok(plain.getMovementQueue().points.length>1,'ordinary players still detour');
+});

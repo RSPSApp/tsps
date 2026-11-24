@@ -130,8 +130,14 @@ function refillAtEctofuntus({ player, itemId }) {
   return true;
 }
 
+function describeTeleports({ list }) {
+  list.push({ path: ["Items", "Ectophial"], key: "ectofuntus", name: "Ectofuntus (landing area origin)",
+    tile: [LANDING_XS[0], LANDING_Y, 0] });
+}
+
 module.exports = function attachEctophial(api) {
   api.onItemAction("Ectophial", { Empty: empty });
+  api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   api.onItemOnObject("Ectophial", "Ectofuntus", refillAtEctofuntus);
   api.onPlayerHitModify(protectRefill);
   api.onCustomEvent("combat:damage-apply", protectDirectDamage);

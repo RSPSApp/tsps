@@ -146,6 +146,11 @@ function onLowWarmth(request) {
   if (request?.player && saveFromDeath(request.player)) request.activated = true;
 }
 
+function describeTeleports({ player, list }) {
+  list.push({ path: ["Jewellery", "Ring of life"], key: "respawn", name: "Respawn point", location: respawnPoint(player), resolve: respawnPoint },
+    { path: ["Jewellery", "Ring of life"], key: "ardougne", name: "Ardougne marketplace", tile: [...ARDOUGNE_MARKET] });
+}
+
 module.exports = {
   name: "RingOfLife",
   description: "Teleports the wearer to their respawn point and breaks the ring when a hit leaves 10% Hitpoints or less, with the Defence cape doing the same.",
@@ -154,6 +159,7 @@ module.exports = {
   register(api) {
     core = api.core;
     pluginApi = api;
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     ringIds = new Set([core.ItemIdentifiers.RING_OF_LIFE]);
     api.persistAttribute(ARDOUGNE_ATTRIBUTE, false);
     api.registerIncomingDamageModifier(onIncomingDamage);

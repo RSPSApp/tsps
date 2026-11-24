@@ -145,6 +145,14 @@ function crumbleSpareTablet(event) {
   player.sendMessage(SPARE_TABLET_MESSAGE);
 }
 
+function describeTeleports({ list }) {
+  // Catalogue event is read-only and includes quest destinations regardless of this target's unlocks.
+  const request = { destinations: [VER_SINHAZA, SLEPE] };
+  api.emitCustomEvent("drakan-medallion:catalogue", request);
+  for (const destination of request.destinations) list.push({ path: ["Jewellery", "Drakan's medallion"],
+    key: labelOf(destination), name: labelOf(destination), tile: [destination.tile.x, destination.tile.y, destination.tile.z] });
+}
+
 module.exports = {
   name: "DrakansMedallion",
   description: "Drakan's medallion: teleports to Ver Sinhaza, Darkmeyer, Slepe and Castle Drakan from the inventory or worn option, capped at Wilderness level 20.",
@@ -164,6 +172,7 @@ module.exports = {
     api.onItemAction("Slepey tablet", { Inspect: inspectTablet });
     api.onCustomEvent("player:bootstrap-complete", syncSlepeVarbit);
     api.onGroundItemPickup(crumbleSpareTablet);
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   },
   _test: { crumbleSpareTablet, SPARE_TABLET_MESSAGE, useSlepeyTablet, inspectTablet, syncSlepeVarbit, TABLET_USED_MESSAGE, INSPECT_MESSAGES },
 };

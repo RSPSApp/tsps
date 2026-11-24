@@ -219,6 +219,58 @@ test("::setlevel refuses levels a skill can't have, and skill names it can't tel
   assert.equal(owner.getSkillManager().getMaxLevel(Skill.ATTACK), 1, "nothing changed");
 });
 
+test("WorldAdmin player tools use real item containers and persist levels, XP and teleports in isolated JSON saves", async t => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "world-admin-native-"));
+  const plugin = require("../plugins/persistence/JsonPlayerPersistence.plugin");
+  const { toolAction, playerTools } = require("../plugins/tools/worldadmin/PlayerTools.WorldAdmin");
+  const originalDirectory = plugin.JsonPlayerPersistence.SAVE_DIRECTORY;
+  const originalPersistence = core.GameConstants.PLAYER_PERSISTENCE;
+  plugin.JsonPlayerPersistence.SAVE_DIRECTORY = directory;
+  let persistence;
+  plugin.register({ getSkillManager: () => SkillManager, setPlayerPersistence: value => { persistence = value; }, log() {} });
+  core.GameConstants.PLAYER_PERSISTENCE = persistence;
+  t.after(async () => {
+    await persistence.flush();
+    core.GameConstants.PLAYER_PERSISTENCE = originalPersistence;
+    plugin.JsonPlayerPersistence.SAVE_DIRECTORY = originalDirectory;
+    fs.rmSync(directory, { recursive: true, force: true });
+  });
+  const bob = login("Panel Fixture");
+  core.World.players[Symbol.iterator] = function* () { yield* online; };
+  t.after(() => { delete core.World.players[Symbol.iterator]; });
+  // This fixture is online without starting a socket or adding an entity to the running world.
+  bob.isRegistered = () => true;
+  const api = { core, emitCustomEvent() {} };
+  await toolAction(api, bob, { action: "skill", skill: "Attack", level: 60 });
+  await toolAction(api, bob, { action: "give", itemId: I.BRONZE_ARROW, quantity: 10 });
+  const partial = await toolAction(api, bob, { action: "give", itemId: I.BRONZE_SCIMITAR, quantity: 100 });
+  assert.match(partial.message, /Only 27 of 100 fit/);
+  assert.equal(bob.getInventory().getAmount(I.BRONZE_ARROW), 10);
+  assert.equal(bob.getInventory().getAmount(I.BRONZE_SCIMITAR), 27);
+  await toolAction(api, bob, { action: "teleport", destination: "varrock teleport" });
+  assert.equal(bob.getLocation().getX(), 3213);
+  assert.equal(bob.getLocation().getY(), 3424);
+  bob.getSkillManager().setCurrentLevels(Skill.ATTACK, 20);
+  bob.setRunEnergy(15);
+  await toolAction(api, bob, { action: "restore" });
+  assert.equal(bob.getSkillManager().getCurrentLevel(Skill.ATTACK), 60);
+  assert.equal(bob.getRunEnergy(), 100);
+  const saved = persistence.load(bob.getUsername(), bob.getProfile());
+  assert.equal(saved.getSkills().maxLevel[Skill.ATTACK.getIndex()], 60);
+  assert.equal(saved.getSkills().experience[Skill.ATTACK.getIndex()], SkillManager.getExperienceForLevel(60));
+  assert.equal(saved.getPosition().getX(), 3213);
+  const preview = playerTools(api, bob);
+  assert.equal(preview.skills.find(skill => skill.name === "Attack").current, 60);
+  assert.ok(preview.skills.some(skill => skill.name === "Sailing"));
+  let search;
+  require("../plugins/tools/worldadmin/PlayerTools.WorldAdmin").toolRoutes({ method: "GET" }, {
+    writeHead() {}, end(json) { search = JSON.parse(json); },
+  }, new URL("http://localhost/api/players/items?q=Bronze%20arrow"), api);
+  assert.ok(search.items.some(item => item.id === I.BRONZE_ARROW && item.name === "Bronze arrow"));
+});
+
 
 /** A real bounded NPC list, without starting a server or touching world files. */
 function npcWorld(t, capacity = 30) {

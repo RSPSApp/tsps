@@ -188,6 +188,7 @@ function dismantle({ player, item, slot }) {
 
 function attach(pluginApi) {
   init(pluginApi);
+  pluginApi.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   pluginApi.persistAttribute(STATUES_ATTRIBUTE, 0);
   pluginApi.onPlayerLogin(sendStatues);
   pluginApi.onObjectInteraction("Statue", { Activate: activateStatue });
@@ -205,6 +206,11 @@ function attach(pluginApi) {
     Kastori: wornTeleport,
     "Nemus Retreat": wornTeleport,
   });
+}
+
+function describeTeleports({ list }) {
+  for (const destination of DESTINATIONS) list.push({ path: ["Jewellery", "Pendant of Ates"],
+    key: destination.label, name: destination.label, tile: [...destination.tile] });
 }
 
 module.exports = {

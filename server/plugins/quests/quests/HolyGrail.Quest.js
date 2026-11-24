@@ -435,6 +435,13 @@ module.exports = function registerHolyGrailQuest(api) {
     TeleportHandler.confirm(player, destination, () => TeleportHandler.teleport(player, destination, TeleportType.NORMAL, false));
   }
 
+  function describeTeleports({ list }) {
+    for (const [key, name, tile] of [["brimhaven", "Brimhaven tower", BRIMHAVEN_TILE],
+      ["withered", "Fisher Realm (withered)", WITHERED_ARRIVAL_TILE], ["restored", "Fisher Realm (restored)", RESTORED_ARRIVAL_TILE]]) {
+      list.push({ path: ["Items", "Magic whistle"], key, name, tile: [tile.x, tile.y, tile.z] });
+    }
+  }
+
   function blowWhistle({ player }) {
     const location = player.getLocation();
     if (inFisherRealm(location)) {
@@ -713,6 +720,7 @@ module.exports = function registerHolyGrailQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:choice", handleChoice);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   api.onItemAction("Magic whistle", { Blow: blowWhistle });
   api.onItemAction("Grail bell", { Ring: ringGrailBell });
   api.onItemAction("Magic gold feather", { "Blow-on": blowFeather });

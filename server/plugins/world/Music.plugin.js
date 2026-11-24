@@ -6,6 +6,7 @@ const Playlists = require("./Playlists.Music");
 
 const COINS = 995;
 const CAPE_PRICE = 99000;
+const CAPE_TELEPORT = [2689, 3550, 0];
 const AIR_GUITAR_VARBIT = 4673;
 const MUSIC_GROUP_ID = 239;
 const MUSIC_JUKEBOX_CHILD_ID = 11;
@@ -264,7 +265,7 @@ function capeAction(event) {
     }
     // The usual teleport checks, as the other skill capes make (Common.SkillCapes teleport): Wilderness level,
     // teleblock, busy, and the area's and plugins' own refusals (jail, instances, duels).
-    const destination = new core.Location(2689, 3550, 0);
+    const destination = new core.Location(...CAPE_TELEPORT);
     if (!core.TeleportHandler.checkReqs(player, destination)) return;
     core.TeleportHandler.confirm(player, destination, () => core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false));
   } else if (option === (itemId === core.ItemIdentifiers.MUSIC_CAPE ? "trim" : "untrim")) {
@@ -641,12 +642,17 @@ function buildSelectableTracks(tracks) {
     .map(row => ({ ...tracksByRow.get(row.id), released: row.int(13, 1) === 1 }));
 }
 
+function describeTeleports({ list }) {
+  list.push({ path: ["Skillcapes", "Music cape"], key: "falo", name: "Falo the Bard", tile: [...CAPE_TELEPORT] });
+}
+
 module.exports = {
   name: "Music",
   description: "The music tab: track unlocking, jukebox selection, now-playing, the music cape from Olaf the Bard and air guitar unlock.",
   register(api) {
     core = api.core;
     pluginApi = api;
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     const tracks = core.Music.tracks();
     selectableTracks = buildSelectableTracks(tracks);
     trackNames = Object.fromEntries(tracks.map(({ id, name }) => [id, name]));

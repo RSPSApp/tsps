@@ -315,8 +315,21 @@ function capeOption(event) {
   else handler(event.player);
 }
 
+function catalogueRespawn(player) {
+  const request = { player, location: null };
+  api.emitCustomEvent("respawn-point:location", request);
+  return request.location ?? Capes.core.GameConstants.DEFAULT_LOCATION;
+}
+
+function describeTeleports({ player, list }) {
+  for (const source of ["Defence cape", "Max cape"]) list.push({ path: ["Skillcapes", source], key: "respawn",
+    name: "Respawn point (Ring of Life perk)", location: catalogueRespawn(player), resolve: catalogueRespawn },
+  { path: ["Skillcapes", source], key: "ardougne", name: "Ardougne marketplace (Ring of Life perk)", tile: [...ARDOUGNE_MARKET] });
+}
+
 module.exports = function attachOptions(pluginApi) {
   api = pluginApi;
+  api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   api.persistAttribute(ROL_OFF_ATTRIBUTE, false);
   api.persistAttribute(ROL_ARDOUGNE_ATTRIBUTE, false);
   api.persistAttribute(JUNK_OFF_ATTRIBUTE, false);

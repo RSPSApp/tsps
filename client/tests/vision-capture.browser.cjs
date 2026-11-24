@@ -122,6 +122,10 @@ function killBrowser(proc) {
   }
   // Sweep any of ours that outlived the tree kill (re-parented children).
   killOurBrowserProcesses();
+  if (proc?.visionProfile) {
+    try { fs.rmSync(proc.visionProfile, { recursive: true, force: true }); } catch {}
+    delete proc.visionProfile;
+  }
 }
 
 function createCdp(url) {
@@ -193,6 +197,7 @@ async function tryBrowser(bin, viewport, budgetMs, targetHref) {
     `--user-data-dir=${profile}`,
     "about:blank",
   ], { stdio: process.env.VISION_DEBUG ? ["ignore", "ignore", "inherit"] : "ignore", detached: true });
+  proc.visionProfile = profile;
   proc.unref();
   let cdp = null;
   const cleanup = () => {
@@ -813,6 +818,56 @@ async function main() {
           fs.writeFileSync(scenePath, Buffer.from(scene.png, "base64"));
           summary.sceneScreenshot = scenePath;
         }
+      }
+    }
+
+    if (arg("admin-bots-fixtures", null)) {
+      const directory = path.resolve(arg("admin-bots-fixtures"));
+      summary.adminBots = [];
+      await waitFor(cdp, deadline, () => cdp.evaluate(`(${CLIENT_JS}).gameState`), value => value === 10);
+      for (const name of ["browse", "setup", "active", "manage", "self"]) {
+        const snapshot = JSON.parse(fs.readFileSync(path.join(directory, `${name}.json`), "utf8"));
+        await cdp.evaluate(`(async () => {
+          const c = ${CLIENT_JS}, data=${JSON.stringify(snapshot)};
+          const originalFetch=window.fetch.bind(window);
+          window.fetch=(input,init)=>String(input).includes("/interfaces/30022")
+            ? Promise.resolve(new Response(JSON.stringify(data.definition),{status:200,headers:{"content-type":"application/json"}}))
+            : originalFetch(input,init);
+          c.stateMachine.transition(30, true);
+          c.handleWidgetPayload({action:"set_root",groupId:${Number(arg("admin-bots-root","164"))}});
+          c.handleWidgetPayload({action:"open_sub",groupId:30022,targetUid:(161<<16)|16,type:0,
+            postScripts:[{scriptId:917,args:[-1,-3]},{scriptId:227,args:[(30022<<16)|1,"Admin tools"]}]});
+          for(let i=0;i<300&&!c.widgetManager.getWidgetByUid(30022<<16);i++)await new Promise(requestAnimationFrame);
+          if(!c.widgetManager.getWidgetByUid(30022<<16))throw new Error("Admin widgets did not mount");
+          if(${Number(arg("admin-bots-root","164"))} !== 161) {
+            // Render the native group as a top-level fixture so a logged-out
+            // gameframe's fixed viewport cannot clip its resizable modal.
+            c.widgetManager.setRootInterface(30022);
+            c.widgetManager.fixtureParentLookup ??= c.widgetManager.getInterfaceParentContainerUid.bind(c.widgetManager);
+            c.widgetManager.getInterfaceParentContainerUid = group => group === 30022 ? 0 : c.widgetManager.fixtureParentLookup(group);
+            c.customInterfaces.onInterfaceOpened(30022);
+            c.runWidgetScopedClientScript((30022<<16)|1,227,[(30022<<16)|1,"Admin tools"],"post");
+          }
+          for(const [uid,text] of data.texts) {
+            if(!c.customInterfaces.handleSetText(uid,text)) {
+              const widget=c.widgetManager.getWidgetByUid(uid);
+              if(widget){widget.text=text;c.widgetManager.invalidateWidgetRender(widget);}
+            }
+          }
+          for(const [uid,hidden] of data.hidden)c.handleWidgetPayload({action:"set_hidden",uid,hidden});
+          for(const [uid,actions] of data.actions)c.handleWidgetPayload({action:"set_actions",uid,actions});
+          for(let i=0;i<30;i++)await new Promise(requestAnimationFrame);
+          c.customInterfaces.tick();
+          const layout=JSON.parse(data.texts.find(([id])=>id===((30022<<16)|16))[1]);
+          if(layout.tabs[6].length && !c.customInterfaces.rows.length)throw new Error("Admin browser fixture has no rendered rows");
+          window.fetch=originalFetch;
+          if(!c.isLoggedIn() || !c.widgetManager.getWidgetByUid(30022<<16))throw new Error("Admin fixture is not visible in the game UI");
+        })()`);
+        const targetPath = path.join(directory, `${name}.png`);
+        const shot = await cdp.send("Page.captureScreenshot", {format:"png"});
+        if(!shot.result?.data)throw new Error("Admin screenshot returned no pixels");
+        fs.writeFileSync(targetPath, Buffer.from(shot.result.data,"base64"));
+        summary.adminBots.push(targetPath);
       }
     }
 

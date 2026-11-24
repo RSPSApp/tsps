@@ -355,6 +355,10 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   const give = (player, itemId, amount = 1) => player.getInventory().adds(itemId, amount);
   const take = (player, itemId, amount = 1) => player.getInventory().deleteNumber(itemId, amount);
 
+  function describeTeleports({ list }) {
+    list.push({ path: ["Items", "Teleport crystal"], key: "lletya", name: "Lletya", tile: [LLETYA_SQUARE.x, LLETYA_SQUARE.y, LLETYA_SQUARE.z] });
+  }
+
   function activateTeleportCrystal(event) {
     const { player, itemId } = event ?? {};
     if (!player || !TELEPORT_CRYSTALS.has(itemId) || itemId === ItemIdentifiers.CRYSTAL_TELEPORT_SEED) return;
@@ -1592,6 +1596,7 @@ module.exports = function registerMourningsEndPartIQuest(api) {
   api.onObjectInteraction(handleObjectInteraction);
   api.onNpcDeath(handleNpcDeath);
   api.onCustomEvent("ladders:climb", claimHqLadder);
+  api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
   api.onCanEquip(canEquipDevice);

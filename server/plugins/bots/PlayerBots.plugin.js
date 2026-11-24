@@ -8,6 +8,7 @@ const {
   initPlayerBotStateCoreAccess,
 } = require("./behaviours/state/State.PlayerBots");
 const { registerBotCommands } = require("./runtime/RegisterBotCommands.PlayerBots");
+const { registerBotsInterface } = require("./interface/Bots.PlayerBots");
 const { registerBotEvents } = require("./runtime/RegisterBotEvents.PlayerBots");
 const { registerPvpChatter } = require("./behaviours/pvp/PvpChatter.PlayerBots");
 const { createBotPluginLogging } = require("./runtime/PluginLogging.PlayerBots");
@@ -310,6 +311,8 @@ module.exports = {
       flashHintArrowTaskFactory: boot.flashHintArrowTaskFactory,
       brainRegistry: boot.brainRegistry,
     });
+
+    registerBotsInterface({ api, runtime: boot.runtime, brainRegistry: boot.brainRegistry });
 
     registerAiBots({
       api,

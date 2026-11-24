@@ -378,6 +378,15 @@ function menuClosed({ player, interfaceId }) {
   player.getPacketSender().sendInterfaceScript(SCRIPT_RESTORE_INPUT);
 }
 
+function describeTeleports({ list }) {
+  for (const tree of trees) {
+    if (tree.house) continue;
+    // Farming's canonical patch anchor uses the same west-side fallback as destination().
+    const landing = tree.landing ?? (tree.grown && [tree.grown[0] - 1, tree.grown[1], tree.grown[2]]);
+    if (landing) list.push({ path: ["Spirit trees"], key: tree.name, name: tree.name, tile: [...landing] });
+  }
+}
+
 module.exports = {
   name: "SpiritTrees",
   description: "Spirit tree network: the location menu, travel, talk-to and last-destination, with trees you cannot use greyed out.",
@@ -387,6 +396,7 @@ module.exports = {
     core = api.core;
     pluginApi = api;
     trees = loadTrees();
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     api.persistAttribute(LAST_DESTINATION_ATTRIBUTE);
     api.onPlayerLogin(restorePrevious);
     api.onObjectInteraction("Spirit tree", { Travel: travelOption, "Talk-to": talkToOption, "Last-destination": lastDestinationOption });

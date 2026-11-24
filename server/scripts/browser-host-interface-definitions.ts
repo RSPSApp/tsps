@@ -9,6 +9,7 @@ const plugins = [
 ];
 
 const definitions: Array<{ groupId: number; widgets: unknown[] }> = [buildPresetsInterfaceDefinition()];
+definitions.push(require("../plugins/tools/adminpanel/Layout.AdminPanel").buildInterface());
 const api = new Proxy(
   { registerCustomInterface: (definition: { groupId: number; widgets: unknown[] }) => definitions.push(definition) },
   { get: (target, key) => target[key as keyof typeof target] ?? (() => {}) },

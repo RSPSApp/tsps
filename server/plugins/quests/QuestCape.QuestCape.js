@@ -195,6 +195,10 @@ function onQuestCompleted({ player }) {
   }
 }
 
+function describeTeleports({ list }) {
+  list.push({ path: ["Skillcapes", "Quest point cape"], key: "legends-guild", name: "Legends' Guild", tile: [GATE_LOCATION.x, GATE_LOCATION.y, GATE_LOCATION.z] });
+}
+
 module.exports = function attachQuestCape(api) {
   pluginApi = api;
   Items = api.core.ItemIdentifiers;
@@ -205,6 +209,7 @@ module.exports = function attachQuestCape(api) {
   api.onPlayerLogin(removeInvalidCape);
   api.onCustomEvent("quest:completed", onQuestCompleted);
   api.onCustomEvent("quest-cape:can-use", answerCapeRequirement);
+  api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
 };
 
 module.exports._test = { allQuestsComplete, allDiariesComplete, answerCapeRequirement, canEquip, buyCape, trimCape, untrimCape, teleport, removeInvalidCape, canonicalQuestName };

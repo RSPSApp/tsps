@@ -408,8 +408,8 @@ function registerBotsInterface({ api, runtime, brainRegistry, storage = { readAv
   api.registerCustomInterface(BROWSER_INTERFACE);
   api.registerCustomInterface(SETUP_INTERFACE);
   api.registerCustomInterface(PLAN_INTERFACE);
-  api.registerCommand("bots", command => openBots(command, deps), api.core.PlayerRights.DEVELOPER,
-    "Open bot deployment, or deploy a castle-wars or soul-wars team roster");
+  api.onCustomEvent("bots:open-standalone", event => { event.handled = true; openBots(event, deps); });
+  api.registerCommand("bots", command => { const event = {player: command.player, tab: "bots", handled: false}; api.emitCustomEvent("admin:open", event); return event.handled || openBots(command, deps); }, api.core.PlayerRights.DEVELOPER, "Open admin bot controls or the standalone deployment browser");
   api.onInterfaceActionButton(TAB_UIDS, clickTab);
   api.onInterfaceActionButton(rowUids, clickRow);
   api.onInterfaceActionButton(Object.values(BROWSER_BUTTONS).flat().map(uid), clickBrowserButton);

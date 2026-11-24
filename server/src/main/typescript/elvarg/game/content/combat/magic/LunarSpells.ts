@@ -280,9 +280,12 @@ export class LunarSpells {
     /**
      * Destination, cost and level of every Lunar teleport, in the same shape as the standard and
      * Arceuus spellbooks: the construction portals reuse them for their own costs and Magic checks.
+     * Read-only catalogues may opt into the separately named group spells; portal callers keep
+     * the existing self-teleport list.
      */
-    public static getTeleportDestinations() {
-        return Array.from(this.TELEPORTS, ([name, spell]) => ({
+    public static getTeleportDestinations(includeGroup = false) {
+        const spells = includeGroup ? [...this.TELEPORTS, ...this.GROUP_TELEPORTS] : this.TELEPORTS;
+        return Array.from(spells, ([name, spell]) => ({
             name,
             level: spell.levelRequired(),
             experience: spell.data.experience,

@@ -8779,6 +8779,11 @@ export class OsrsClient {
         this.worldMap.markWorldMapImageTextureUploaded(key);
     }
 
+    /** The current area's whole-map picture, drawn under its tiles. */
+    getWorldMapCompositeTexture(): { key: string; pixels: Uint8Array; width: number; height: number } | undefined {
+        return this.worldMap.getWorldMapCompositeTexture();
+    }
+
     getWorldMapIcons(mapX: number, mapY: number, level: number = 0): MinimapIcon[] | undefined {
         // Edited regions draw their minimap picture on the world map; use its icons too.
         if (

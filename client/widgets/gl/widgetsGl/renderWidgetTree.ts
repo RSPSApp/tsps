@@ -1674,7 +1674,8 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     displayY,
                     logicalWidth | 0,
                     logicalHeight | 0,
-                    worldMapState.zoomPercentage | 0,
+                    // The zoom drawn this frame, which eases between levels.
+                    logicalPixelsPerTile,
                     worldMapLevel,
                 ].join(":");
                 const visibleTileCache = worldMapRenderHost?.__worldMapVisibleTileCache;
@@ -1729,6 +1730,31 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     }
                 }
                 osrsClient?.retainWorldMapImageTiles?.(visibleWorldMapTiles);
+
+                // The area's whole-map picture under the tiles, so a square still rendering
+                // shows the area's colours, never black (WorldMapCompositeTexture).
+                const composite = osrsClient?.getWorldMapCompositeTexture?.();
+                if (composite) {
+                    const compositeTex = tc.getTextureFromRgbaPixels(
+                        composite.key,
+                        composite.pixels,
+                        composite.width,
+                        composite.height,
+                    );
+                    if (compositeTex) {
+                        const areaBounds = currentArea.getBounds();
+                        const compositeTopLeft = projectDisplayToScreen(areaBounds.minX, areaBounds.maxY + 1);
+                        glr.drawTexture(
+                            compositeTex,
+                            compositeTopLeft.x,
+                            compositeTopLeft.y,
+                            (areaBounds.maxX + 1 - areaBounds.minX) * pixelsPerTileX,
+                            (areaBounds.maxY + 1 - areaBounds.minY) * pixelsPerTileY,
+                            1,
+                            1,
+                        );
+                    }
+                }
 
                 const editedRegions: Map<number, unknown> | undefined =
                     currentArea.id === 0 ? (osrsClient?.renderer as any)?.mapRegionReplacements : undefined;

@@ -9,8 +9,8 @@ import {
     MAX_FAILED_WORLDMAP_IDS_MOBILE,
     MAX_PENDING_WORLDMAP_TILE_LOADS,
     MAX_PENDING_WORLDMAP_TILE_LOADS_MOBILE,
-    MAX_WORLDMAP_URLS,
-    MAX_WORLDMAP_URLS_MOBILE,
+    MAX_WORLDMAP_IMAGE_BYTES,
+    MAX_WORLDMAP_IMAGE_BYTES_MOBILE,
     WORLDMAP_TILE_RETRY_MS,
     type WorldMapImageTile,
     type WorldMapRetainTile,
@@ -27,8 +27,25 @@ export type WorldMapImageDeps = {
     scheduleRepaint: () => void;
 };
 
-function getWorldMapImageLimit(): number {
-    return isTouchDevice ? MAX_WORLDMAP_URLS_MOBILE : MAX_WORLDMAP_URLS;
+function getWorldMapImageByteLimit(): number {
+    return isTouchDevice ? MAX_WORLDMAP_IMAGE_BYTES_MOBILE : MAX_WORLDMAP_IMAGE_BYTES;
+}
+
+/** Bits of an image key holding its pixels per tile (getWorldMapImageKey). */
+const PIXELS_PER_TILE_SHIFT = 18;
+const PIXELS_PER_TILE_MASK = 0xf << PIXELS_PER_TILE_SHIFT;
+const MAX_PIXELS_PER_TILE = 8;
+
+/**
+ * Pixels per tile tiles are rendered at: the client draws regions at ceil(zoom) and scales them.
+ * Ours: the target zoom, not the zoom mid-animation. The client renders each in-between size
+ * synchronously and drops it a few cycles later; a worker would only finish them after the
+ * animation, so only the size the map settles on is requested, and the draw scales whatever
+ * size is cached meanwhile (getWorldMapImageSource).
+ */
+function getRequestPixelsPerTile(state: WorldMapStateHolder): number {
+    const zoom = state.worldMapState.getTargetZoomScale?.() ?? state.worldMapState.getZoomScale?.() ?? 1;
+    return Math.max(1, Math.min(MAX_PIXELS_PER_TILE, Math.ceil(zoom)));
 }
 
 function getWorldMapImagePendingLimit(state: WorldMapStateHolder): number {
@@ -53,23 +70,45 @@ export function getWorldMapImageKey(
     level: number = 0,
 ): number {
     const baseKey = deps.getMinimapImageKey(mapX, mapY, level);
-    const pixelsPerTile = Math.max(
-        1,
-        Math.min(8, Math.ceil(state.worldMapState.getZoomScale?.() ?? 1)),
-    );
+    const pixelsPerTile = getRequestPixelsPerTile(state);
     const areaId = Math.max(0, state.worldMapState.getCurrentMapAreaId() | 0) & 0x1ff;
-    return baseKey | ((pixelsPerTile & 0xf) << 18) | (areaId << 22);
+    return baseKey | ((pixelsPerTile & 0xf) << PIXELS_PER_TILE_SHIFT) | (areaId << 22);
+}
+
+/**
+ * The cached size of a map square that draws best at the zoom drawn now, which mid-animation
+ * may not be the requested size. The smallest size at or above ceil(zoom) stays sharp when
+ * shrunk (the client's own choice once rendered); failing that, the largest smaller one is
+ * stretched until the wanted size renders.
+ */
+function findBestCachedImageId(state: WorldMapStateHolder, mapId: number): number | undefined {
+    const zoom = state.worldMapState.getZoomScale?.() ?? 1;
+    const needed = Math.max(1, Math.min(MAX_PIXELS_PER_TILE, Math.ceil(zoom)));
+    const squareKey = mapId & ~PIXELS_PER_TILE_MASK;
+    for (let size = needed; size <= MAX_PIXELS_PER_TILE; size++) {
+        const id = squareKey | (size << PIXELS_PER_TILE_SHIFT);
+        if (state.worldMapImageTiles.has(id)) return id;
+    }
+    for (let size = needed - 1; size >= 1; size--) {
+        const id = squareKey | (size << PIXELS_PER_TILE_SHIFT);
+        if (state.worldMapImageTiles.has(id)) return id;
+    }
+    return undefined;
 }
 
 function updateWorldMapImageRequestEpoch(state: WorldMapStateHolder, deps: WorldMapImageDeps): number {
     const zoomBucket = Math.max(1, Math.round((state.worldMapState.zoomPercentage || 100) / 25));
+    // The widget's size in pixels, not displayWidth/Height in tiles: those follow the zoom while
+    // it eases in, and a new key every cycle would cancel the loads the new zoom just started.
+    const width = state.worldMapState.getDisplayPixelWidth?.() ?? state.worldMapState.displayWidth;
+    const height = state.worldMapState.getDisplayPixelHeight?.() ?? state.worldMapState.displayHeight;
     const viewportKey = [
         state.worldMapState.getCurrentMapAreaId(),
         (state.worldMapState.displayX | 0) >> 6,
         (state.worldMapState.displayY | 0) >> 6,
         zoomBucket,
-        (state.worldMapState.displayWidth | 0) >> 6,
-        (state.worldMapState.displayHeight | 0) >> 6,
+        (width | 0) >> 6,
+        (height | 0) >> 6,
     ].join(":");
     if (viewportKey !== state.worldMapImageRequestViewportKey) {
         state.worldMapImageRequestViewportKey = viewportKey;
@@ -155,17 +194,22 @@ export function clearWorldMapIconCache(state: WorldMapStateHolder): void {
     state.worldMapIconCacheAreaId = state.worldMapState.getCurrentMapAreaId();
 }
 
-function releaseWorldMapImageTile(deps: WorldMapImageDeps, tile: { key: string }): void {
+function releaseWorldMapImageTile(
+    state: WorldMapStateHolder,
+    deps: WorldMapImageDeps,
+    tile: WorldMapImageTile,
+): void {
     deps.evictTextureKey(tile.key);
+    state.worldMapImageBytes = Math.max(0, (state.worldMapImageBytes ?? 0) - (tile.bytes ?? 0));
 }
 
 function clearWorldMapIconsForImageKey(
     state: WorldMapStateHolder,
     mapId: number,
 ): void {
-    const tileKey = mapId & ~0x3c0000;
+    const tileKey = mapId & ~PIXELS_PER_TILE_MASK;
     for (const id of state.worldMapImageTiles.keys()) {
-        if (id !== mapId && (id & ~0x3c0000) === tileKey) {
+        if (id !== mapId && (id & ~PIXELS_PER_TILE_MASK) === tileKey) {
             invalidateWorldMapIconCacheForId(state, mapId);
             return;
         }
@@ -182,23 +226,26 @@ function clearWorldMapIconsForImageKey(
     invalidateWorldMapIconCacheForId(state, mapId);
 }
 
+/**
+ * Least recently drawn first, until the tiles fit the byte budget. Tiles on screen (and their
+ * stand-ins) are never evicted, even past the budget.
+ */
 function pruneWorldMapImages(state: WorldMapStateHolder, deps: WorldMapImageDeps): void {
-    const limit = getWorldMapImageLimit();
-    const retainedLimit = Math.max(limit, state.retainedWorldMapImageIds.size);
-    const loadedCount = state.worldMapImageTiles.size;
-    if (loadedCount <= retainedLimit) return;
-    const ids = Array.from(state.worldMapImageTiles.keys());
+    const limit = getWorldMapImageByteLimit();
+    if ((state.worldMapImageBytes ?? 0) <= limit) return;
+    const ids = Array.from(state.worldMapImageTiles.keys()).filter(
+        (id) => !state.retainedWorldMapImageIds.has(id),
+    );
     ids.sort(
         (a, b) =>
             (state.worldMapImageAccess.get(a) ?? -Infinity) -
             (state.worldMapImageAccess.get(b) ?? -Infinity),
     );
-    const removableIds = ids.filter((id) => !state.retainedWorldMapImageIds.has(id));
-    const toRemove = removableIds.slice(0, loadedCount - retainedLimit);
-    for (const id of toRemove) {
+    for (const id of ids) {
+        if (state.worldMapImageBytes <= limit) break;
         const tile = state.worldMapImageTiles.get(id);
         if (tile) {
-            releaseWorldMapImageTile(deps, tile);
+            releaseWorldMapImageTile(state, deps, tile);
         }
         state.worldMapImageTiles.delete(id);
         state.worldMapImageAccess.delete(id);
@@ -220,16 +267,19 @@ function setWorldMapImageTile(
     const mapId = getWorldMapImageKey(state, deps, mapX, mapY, level);
     const oldTile = state.worldMapImageTiles.get(mapId);
     if (oldTile) {
-        releaseWorldMapImageTile(deps, oldTile);
+        releaseWorldMapImageTile(state, deps, oldTile);
         state.worldMapImageTiles.delete(mapId);
         state.worldMapImageAccess.delete(mapId);
     }
+    const bytes = (width | 0) * (height | 0) * 4;
     state.worldMapImageTiles.set(mapId, {
         key: `worldmap:${mapId}:${state.worldMapImageCacheEpoch}`,
         pixels,
         width: width | 0,
         height: height | 0,
+        bytes,
     });
+    state.worldMapImageBytes = (state.worldMapImageBytes ?? 0) + bytes;
     state.worldMapImageAccess.set(mapId, performance.now());
     state.worldMapState.setTileIcons(mapX | 0, mapY | 0, level | 0, icons);
     invalidateWorldMapIconCacheForId(state, mapId);
@@ -261,7 +311,7 @@ function queueLoadWorldMapImage(
 
     const archiveRenderer = deps.getWorldMapArchiveRenderer();
     const area = state.worldMapState.currentArea;
-    const pixelsPerTile = Math.ceil(state.worldMapState.getZoomScale?.() ?? 1);
+    const pixelsPerTile = getRequestPixelsPerTile(state);
     if (!archiveRenderer) {
         rememberFailedWorldMapImage(state, mapId);
         return;
@@ -330,6 +380,7 @@ function getWorldMapImageSourceInternal(
     mapY: number,
     level: number,
     accessPriority: number,
+    allowStandIn: boolean,
 ): WorldMapImageTile | undefined {
     updateWorldMapImageRequestEpoch(state, deps);
     const mapId = getWorldMapImageKey(state, deps, mapX, mapY, level);
@@ -337,10 +388,14 @@ function getWorldMapImageSourceInternal(
     const tile = state.worldMapImageTiles.get(mapId);
     if (tile) {
         state.worldMapImageAccess.set(mapId, accessTime);
-        return tile;
+    } else {
+        queueLoadWorldMapImage(state, deps, mapX, mapY, level, state.worldMapImageCacheEpoch);
     }
-    queueLoadWorldMapImage(state, deps, mapX, mapY, level, state.worldMapImageCacheEpoch);
-    return undefined;
+    if (!allowStandIn) return tile;
+    const drawId = findBestCachedImageId(state, mapId);
+    if (drawId === undefined) return undefined;
+    state.worldMapImageAccess.set(drawId, accessTime);
+    return state.worldMapImageTiles.get(drawId);
 }
 
 export function getWorldMapImageTile(
@@ -354,9 +409,13 @@ export function getWorldMapImageTile(
     if (mapX < 0 || mapY < 0 || mapX >= MapManager.MAX_MAP_X || mapY >= MapManager.MAX_MAP_Y) {
         return undefined;
     }
-    return getWorldMapImageSourceInternal(state, deps, mapX, mapY, level, accessPriority);
+    return getWorldMapImageSourceInternal(state, deps, mapX, mapY, level, accessPriority, false);
 }
 
+/**
+ * The image to draw for a map square: the one rendered for the current zoom, or while that
+ * renders, the same square at another zoom (the draw scales it to the square's size).
+ */
 export function getWorldMapImageSource(
     state: WorldMapStateHolder,
     deps: WorldMapImageDeps,
@@ -368,7 +427,7 @@ export function getWorldMapImageSource(
     if (mapX < 0 || mapY < 0 || mapX >= MapManager.MAX_MAP_X || mapY >= MapManager.MAX_MAP_Y) {
         return undefined;
     }
-    return getWorldMapImageSourceInternal(state, deps, mapX, mapY, level, accessPriority);
+    return getWorldMapImageSourceInternal(state, deps, mapX, mapY, level, accessPriority, true);
 }
 
 export function markWorldMapImageTextureUploaded(
@@ -401,7 +460,11 @@ export function retainWorldMapImageTiles(
         ) {
             continue;
         }
-        retained.add(getWorldMapImageKey(state, deps, mapX, mapY, retainedTile.level ?? 0));
+        const mapId = getWorldMapImageKey(state, deps, mapX, mapY, retainedTile.level ?? 0);
+        retained.add(mapId);
+        // The size drawn mid-zoom, or until mapId renders, must outlive tiles loading around it.
+        const drawId = findBestCachedImageId(state, mapId);
+        if (drawId !== undefined) retained.add(drawId);
     }
     state.retainedWorldMapImageIds = retained;
     pruneWorldMapImages(state, deps);
@@ -416,9 +479,10 @@ export function clearWorldMapImages(
     state.worldMapImageCacheEpoch = (state.worldMapImageCacheEpoch + 1) | 0;
     deps.cancelTileLoads?.(true);
     for (const tile of state.worldMapImageTiles.values()) {
-        releaseWorldMapImageTile(deps, tile);
+        releaseWorldMapImageTile(state, deps, tile);
     }
     state.worldMapImageTiles.clear();
+    state.worldMapImageBytes = 0;
     state.worldMapImageAccess.clear();
     state.worldMapState.clearTileIcons();
     clearIconCache();

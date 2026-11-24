@@ -32,6 +32,7 @@ import {
 } from "./WorldMapImageCache";
 import { getWorldMapIcons as getIcons } from "./WorldMapTileIcons";
 import { findWorldMapWidgetForRepaint } from "./WorldMapRepaint";
+import { WorldMapCompositeTextures, type WorldMapCompositeTexture } from "./WorldMapCompositeTexture";
 import {
     clearWorldMapRenderCaches,
     getWorldMapMenuEntriesAt as getMenuEntriesAt,
@@ -79,6 +80,7 @@ export class WorldMapController {
     private worldMapArchiveRenderer?: Pick<WorldMapArchiveRenderer, "loadTile">;
     private fallbackArchiveRenderer?: WorldMapArchiveRenderer;
     worldMapImageTiles: Map<number, WorldMapImageTile> = new Map();
+    worldMapImageBytes: number = 0;
     worldMapImageAccess: Map<number, number> = new Map();
     pendingWorldMapImageIds: Set<number> = new Set();
     failedWorldMapImageIds: Map<number, number> = new Map();
@@ -98,6 +100,7 @@ export class WorldMapController {
 
     private readonly iconDeps: WorldMapIconDeps;
     private readonly imageDeps: WorldMapImageDeps;
+    private readonly compositeTextures: WorldMapCompositeTextures;
 
     constructor(private readonly deps: WorldMapControllerDeps) {
         this.iconDeps = {
@@ -135,10 +138,22 @@ export class WorldMapController {
             },
             scheduleRepaint: () => this.scheduleRepaint(),
         };
+        this.compositeTextures = new WorldMapCompositeTextures(
+            () => {
+                try {
+                    return this.deps.getCacheSystem();
+                } catch {
+                    return undefined;
+                }
+            },
+            () => this.scheduleRepaint(),
+            (key) => this.imageDeps.evictTextureKey(key),
+        );
     }
 
     setWorldMapState(state: WorldMapState): void {
         this.clearWorldMapImages();
+        this.compositeTextures.clear();
         state.setElementMetadataResolver((elementId) => {
             try {
                 const element = resolveMapElement(elementId, (id) =>
@@ -290,6 +305,10 @@ export class WorldMapController {
 
     markWorldMapImageTextureUploaded(key: string): void {
         markTextureUploaded(this, key);
+    }
+
+    getWorldMapCompositeTexture(): WorldMapCompositeTexture | undefined {
+        return this.compositeTextures.get(this.worldMapState?.currentArea);
     }
 
     getWorldMapIcons(mapX: number, mapY: number, level: number = 0): MinimapIcon[] | undefined {

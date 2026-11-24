@@ -39,12 +39,18 @@ const Loot = require("./kraken/Loot.Kraken");
 const Instance = require("./kraken/Instance.Kraken");
 const CombatAchievements = require("./kraken/CombatAchievements.Kraken");
 
+function describeEncounters({ npcIds }) {
+  const { BOSS, CAVE_KRAKEN, TENTACLE } = Shared.ids();
+  for (const id of [BOSS, CAVE_KRAKEN, TENTACLE]) npcIds.add(id);
+}
+
 module.exports = {
   name: "Kraken",
   description: "The Kraken and cave krakens in Kraken Cove: disturb the whirlpool to surface them, four tentacles beside the boss, and Magic-only damage.",
   members: true,
   register(api) {
     Shared.bind(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Disturb.attach(api);
     MagicOnly.attach(api);
     Typeless.attach(api);

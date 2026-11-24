@@ -26,11 +26,12 @@ function encounterIds(api) {
 function catalog(core, encounters = []) {
   const rows = [];
   const count = Math.min(MAX_DEFINITIONS, core.CacheDefinitions.getCounts().npcs);
-  for (const id of playableIds(core, encounters)) {
+  const declared = new Set(encounters);
+  for (const id of playableIds(core, declared)) {
     if (id >= count) continue;
     const definition = core.NpcDefinition.forId(id);
     const level = definition.getCombatLevel();
-    if (!definition.isAttackable() || !Number.isInteger(level) || level <= 0) continue;
+    if (!definition.isAttackable() || !Number.isInteger(level) || level < 0 || (level === 0 && !declared.has(id))) continue;
     const name = plain(definition.getName(), 100);
     if (!name || name.toLowerCase() === 'null') continue;
     rows.push({ id, name, level, hp: definition.getHitpoints() });

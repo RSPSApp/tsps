@@ -82,7 +82,7 @@ function buildInterface() {
   for (const component of [C.HEIGHT, C.NOTE, ...DATA_COMPONENTS]) add(component, root, { type: TYPE_TEXT, hidden: true, isHidden: true });
   return { groupId: GROUP_ID, widgets,
     search: { inputComponent: C.INPUT, backgroundComponent: C.SEARCH, dataComponent: C.DATA,
-      extraDataComponents: DATA_COMPONENTS.slice(1), maxLength: 50,
+      extraDataComponents: DATA_COMPONENTS.slice(1), maxLength: 50, matchSectionAndInfo: true,
       placeholder: '<col=b9ab96>Search items or drop groups...</col>', textTemplate: '%s', caret: '|',
       focusColor: 0x443927, blurColor: COLOR.inset },
     list: { viewComponent: C.LIST, scrollbarComponent: C.BAR, slotCount: SLOTS, columns: 1,

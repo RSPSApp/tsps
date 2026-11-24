@@ -37,6 +37,12 @@ function sourceIds(name) {
   return request.npcIds;
 }
 const catalog = value => buildCatalog(value, encounterIds(PM.createApi('Bestiary')));
+const bossIds = new Map([
+  ['Cerberus', [5862]], ['Kraken', [494]], ['Zulrah', [2042, 2043, 2044]], ['GiantLairs', [7416, 8195]],
+  ['Skotizo', [7286]], ['Nex', [11278]], ['Scurrius', [7221]], ['Vardorvis', [12223]], ['Araxxor', [13668]],
+  ['MaggotKing', [15742]], ['Vorkath', [8061]], ['MoonsOfPeril', [13011, 13012, 13013]], ['Amoxliatl', [13685]],
+  ['Hueycoatl', [14009]], ['Yama', [14176]], ['PhantomMuspah', [12077, 12078]],
+]);
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   new NpcDefinitionLoader().load();
@@ -56,6 +62,8 @@ before(async () => {
   require('../plugins/bosses/KingBlackDragon.plugin').register(sourceApi('KingBlackDragon'));
   require('../plugins/bosses/CountDraynor.plugin').register(sourceApi('CountDraynor'));
   require('../plugins/bosses/Elvarg.plugin').register(sourceApi('Elvarg'));
+  for (const name of bossIds.keys()) require(`../plugins/bosses/${name}.plugin`).register(sourceApi(name));
+  require('../plugins/skills/Farming.plugin').register(sourceApi('Farming'));
   require('../plugins/quests/Quests.plugin').register(sourceApi('Quests'));
   Examine.register(PM.createApi('MonsterExamine'));
   Bestiary.register(PM.createApi('Bestiary'));
@@ -177,6 +185,32 @@ test('eligibility requires actual spawns or source-owned fights; exact loot, com
     exactNonemptyLootIds: drops.size, sourceDeclaredIds: declared.size }));
 });
 
+test('scripted bosses are discoverable from their owning fight plugins without static spawns', () => {
+  const rows = new Map(buildCatalog({ ...core, NpcSpawnDefinition: { all: () => [] } },
+    encounterIds(PM.createApi('Bestiary'))).map(row => [row.id, row]));
+  for (const [name, ids] of [...bossIds, ['Farming', [core.NpcIdentifiers.HESPORI]]]) {
+    const provided = sourceIds(name);
+    for (const id of ids) {
+      assert.ok(provided.has(id), `${name} declares combat form ${id}`);
+      assert.ok(rows.has(id), `${name} combat form ${id} can be browsed`);
+    }
+  }
+});
+
+test('provider combatants with no fixed combat level can be browsed', () => {
+  const rows = new Map(catalog(core).map(row => [row.id, row]));
+  for (const source of ['ChambersOfXeric', 'PestControl', 'TombsOfAmascut', 'MageArena']) {
+    const combatants = [...sourceIds(source)].filter(id => {
+      const definition = core.NpcDefinition.forId(id);
+      return definition.isAttackable() && definition.getCombatLevel() === 0;
+    });
+    assert.ok(combatants.length > 0, `${source} has attackable combatants without a fixed cache level`);
+    for (const id of combatants) {
+      assert.equal(rows.get(id)?.level, 0, `${source} combat form ${id} can be browsed with a zero cache level`);
+    }
+  }
+});
+
 test('native Attack checks tolerate null actions and default stats never establish catalogue eligibility', () => {
   const spawnIds = [1, 2, 3, 4], records = new Map();
   const definition = (name, level, actions) => Object.assign(new core.NpcDefinition(), { name, combatLevel: level, actions });
@@ -188,6 +222,8 @@ test('native Attack checks tolerate null actions and default stats never establi
     NpcSpawnDefinition: { all: () => spawnIds.slice(0, 3).map(id => ({ getId: () => id })) },
     NpcDefinition: { forId: id => records.get(id) } };
   assert.deepEqual(buildCatalog(fake).map(row => row.id), [3]);
+  assert.deepEqual(buildCatalog(fake, [1, 2]).map(row => row.id).sort(), [2, 3],
+    'a declaration admits attackable level-zero definitions and still excludes non-combat actors');
   assert.equal(records.get(3).getHitpoints(), 10, 'default HP does not disqualify a genuinely sourced fight');
 });
 

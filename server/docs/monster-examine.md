@@ -1,13 +1,14 @@
 # Monster examine plugin
 
-`MonsterExamine` opens a game-rendered window when the TSPS client examines a visible,
-attackable NPC. It uses server-defined widgets, the existing NPC and item model loaders,
-and the shared custom-interface search/scroll runtime. No gameplay DOM overlay is installed.
+`MonsterExamine` is an optional server plugin that opens a native window when the
+TSPS client examines a visible, attackable NPC. The client waits for the server to
+confirm contextual examine support. Until then, and on older servers, Examine sends
+the ordinary NPC text request.
 
 ## Bestiary companion
 
-The `Bestiary` server plugin appears under `@ Ghost Plugins @`. Open it with the top-left
-**Back to Bestiary** button on any monster examine page, or use the named Bestiary entry in
+After installation, the `Bestiary` server plugin appears under `@ Ghost Plugins @`.
+Open it with the **Back to Bestiary** button on a monster examine page or use the Bestiary entry in
 the native Commands window, `Ctrl+/`. `::bestiary` and `::bestiary goblin` are also available.
 The native window fills the available modal space in Fixed and Resizable mode.
 Its responsive grid scrolls continuously, with native inline name/ID search and
@@ -26,13 +27,14 @@ Thumbnails are type-6 `npcFullBody` widgets bound only for visible cards with th
 cache idle sequence. The existing `NpcModelLoader` and `Model2DRenderer` rasterize
 the actual posed body.
 The catalogue reads the loaded `NpcDefinition`/cache data, capped at 65,536 definitions, and
-keeps IDs separate. It is cached on first open for the plugin lifetime. A positive combat level
-and native combat action are necessary, but do not establish that a cache entry is playable.
-An ID must also have at least one of these sources:
+keeps IDs separate. It builds the catalogue on first open and caches it until the plugin
+stops. An entry must be attackable and have one of these sources.
 
-- A configured spawn in `NpcSpawnDefinition.all()`, including a valid descendant of a cache
-  transform chain. Transform traversal rejects sentinels, out-of-cache IDs and cycles.
-- A source-owned playable encounter declaration through `bestiary:encounters`.
+- A configured spawn in `NpcSpawnDefinition.all()` or a valid descendant of its cache
+  transform chain, with a positive combat level. Transform traversal rejects sentinels,
+  out-of-cache IDs and cycles.
+- A playable encounter declaration through `bestiary:encounters`. A direct declaration
+  can include attackable forms that have no fixed combat level in the cache.
 
 An exact drop-table mapping is useful diagnostic data, but cannot establish availability:
 the cache/export may describe event-only or unimplemented content. Names, matching levels,
@@ -52,20 +54,19 @@ spawn/death presentation forms, invulnerable room scenery and broad lists of com
 aliases do not qualify. Handlers must not spawn NPCs, inspect or modify player saves, roll
 rewards, or execute spawn/death/quest callbacks. No Bestiary dependency is required.
 
-Providers cover Fight Caves, Inferno, Pest Control, Barbarian Assault, Gauntlet, Colosseum,
-Nightmare Zone, Knight Waves, Champions' Challenge, TzHaar-Ket-Rak, Chambers of Xeric,
-Theatre of Blood, Tombs of Amascut, Barrows, Soul Wars, Temple Trekking, Count Draynor, Elvarg and dormant
-creatures' actual awake forms. Quest sources declare their combat opponents with
-`combatNpcIds` in `registerQuest` metadata. An array or a read-only function returning IDs
-is accepted. Each declaration attaches to that source's API, so disabling it removes its
-provider. This retains genuine no-drop quest fights such as the Lost City tree spirit,
-Grand Tree black demon, Dream Mentor bosses and Below Ice Mountain guardian without
-admitting all the quest's cutscene actors.
+Providers include Chambers of Xeric, Theatre of Blood, Tombs of Amascut, Pest
+Control, Mage Arena and other minigames. Boss providers include Cerberus, Kraken,
+Zulrah, Hespori, Obor, Bryophyta, Skotizo, Nex, Scurrius, Vardorvis, Araxxor,
+Maggot King, Vorkath, the Moons of Peril, Amoxliatl, the Hueycoatl, Yama and Phantom
+Muspah. Other sources include Count Draynor, Elvarg and the awake forms of dormant creatures.
 
-Future scripted encounters without a static spawn need the same source-owned declaration,
-whether or not they have a loot table. The filter is an evidence policy, not a cache-name
-blacklist. Find can still correctly report no known public location for a conditional/private
-encounter.
+Quest sources declare their combat opponents with `combatNpcIds` in `registerQuest`
+metadata. They can pass an array or a read-only function that returns IDs. Disabling a
+source removes its declarations. Examples include the Lost City tree spirit, the Grand Tree
+black demon, the Dream Mentor bosses and the Below Ice Mountain guardian.
+
+A scripted fight without a configured spawn needs a provider to appear in the catalogue.
+Find may report that no public location is known for a conditional or private encounter.
 
 Use **Find** on an examine page or right-click a creature card for **Find**. **Clear pins**
 is available on both windows. Find reads `api.core.NpcSpawnDefinition.all()`, the canonical
@@ -109,19 +110,16 @@ uses the nearest retained known spawn home. Without a known location, positive l
 restricted drop rows cannot be selected; live NPC examine remains the authoritative
 location-specific view. No death/RNG/reward-state selectors are called.
 
-Disable/remove the companion by changing the `Bestiary` plugin switch through the normal
-owner workflow or removing `Bestiary.plugin.js` and `bestiary/`. Monster Examine continues
-to work; its navigation buttons give a disabled message if the companion is absent. The
-companion can still browse cards if Monster Examine is disabled; opening details explains
-that the examine plugin is required. Keep `monsterexamine/Access.MonsterExamine.js`,
-`monsterexamine/Layout.MonsterExamine.js` and the shared widget helper with a standalone companion installation. Its client marker code
-is `client/game/plugins/monsterexamine/BestiaryPins.ts`.
+Install Bestiary from the server Plugin Hub and restart the world. You can remove it
+through the Hub or disable it with the `Bestiary` switch in the world's plugin settings.
+Apply either change at a restart. Monster Examine can open its details window on its own.
+Bestiary can browse cards on its own and prompts players to enable Monster Examine
+when they open details. Its client marker code is
+`client/game/plugins/monsterexamine/BestiaryPins.ts`.
 
-Packaged browser-host/WebRTC interface bundles must include `"Bestiary"` in the `plugins`
-array in `server/scripts/browser-host-interface-definitions.ts`.
-It registers group 30023. The ordinary
-server content endpoint already serves the registered interface. No new runtime helper
-hooks are needed. Removing the companion from a package also removes that export entry.
+The browser-host/WebRTC build exports the Bestiary catalogue and map navigation layouts
+directly from source as groups 30023 and 30024. A running server serves those groups when
+the installed Bestiary plugin registers them.
 
 Focused validation uses the existing dependency installation:
 
@@ -203,46 +201,33 @@ scrollbars keep the interface in the game's visual style. The inset NPC preview 
 
 ## Install, enable and remove
 
-This source checkout already installs plugins from `server/plugins` at server startup.
-Build the client and server after applying this branch, using their existing `npm run build`
-commands. The client rebuild also exports the interface for browser-host/WebRTC clients.
-Start through the checkout's normal `yarn start` workflow with its existing ports.
+Install **Monster Examine** from the server Plugin Hub and restart the world. Install
+**Bestiary** separately if you want the catalogue and Find controls. Both packages
+require the TSPS interface and network support from #6742 and #6743. The checkout
+contains the source package entries
+`server/plugins/interface/MonsterExamine.entry.js` and
+`server/plugins/interface/Bestiary.entry.js`. Server startup discovers installed
+`.plugin.js` entries, so the Hub installation is what makes these plugins available
+to the world.
 
-In the client's plugin sidebar, search for **Monster Examine** and use its on/off switch.
-It is enabled by default and the existing RuneLite configuration saves the preference for
-that client profile. Turning it off immediately restores native text examines on the next
-examine, without restarting the game or changing the world. Turning it back on restores
-the monster window. A window already open can be closed normally.
+The Monster Examine package includes `Access.MonsterExamine.js`,
+`Accuracy.MonsterExamine.js`, `Drops.MonsterExamine.js`,
+`Facts.MonsterExamine.js` and `Layout.MonsterExamine.js`. The packages use the
+shared `server/plugins/interface/widgetGroup.js` helper. The client build exports
+the Monster Examine layout directly for browser-host/WebRTC clients.
 
-The removable feature files are:
+The client's **Monster Examine** plugin is enabled for new profiles. To return to
+text examines, turn it off in the client plugin sidebar. The client saves that
+preference and applies it on the next examine. Re-enabling requests contextual
+examine support again. Close any open examine window through the usual close button.
 
-- `server/plugins/interface/MonsterExamine.entry.js`
-- `server/plugins/interface/monsterexamine/Layout.MonsterExamine.js`
-- `server/plugins/interface/monsterexamine/Drops.MonsterExamine.js`
-- `server/plugins/interface/monsterexamine/Facts.MonsterExamine.js`
-
-The client sidebar entry is `client/game/plugins/monsterexamine/MonsterExaminePlugin.ts`,
-registered in `client/runelite/client/plugins/index.ts`. Remove that registration and file
-for complete client source removal. Its toggle uses the existing plugin manager and menu
-hook; it adds no separate settings storage or per-tick work.
-
-They use the existing shared `server/plugins/interface/widgetGroup.js`; no dependencies or
-save migration are needed. Keep these paths together when copying the plugin to another
-checkout with this branch's generic runtime support.
-
-The server plugin is also enabled by default. For a world-wide disable, merge
-`"plugins": { "MonsterExamine": false }` into the world's
-existing `server/data/definitions/world.local.json` settings to disable it, then restart the
-server through the normal owner workflow. Set the value to `true` to enable it again. Do not
-replace other settings. If the deployment still uses the deprecated `disabledPlugins` list,
-that list takes precedence; add/remove `MonsterExamine` there instead.
-
-Disabling the plugin immediately restores the ordinary NPC examine text on the next server
-start. Removing its plugin entry file and helper directory has the same server effect. For
-complete source removal, also remove the `MonsterExamine` entry from
-`server/scripts/browser-host-interface-definitions.ts` before the next client build. The
-remaining generic facilities are inert without a listener. Existing official/native clients
-that send only an NPC type keep their ordinary text examine.
+To disable the server plugin for the whole world, merge
+`"plugins": { "MonsterExamine": false }` into
+`server/data/definitions/world.local.json` and restart. Set the switch to `true`
+to enable an installed plugin again. If the world still uses the deprecated
+`disabledPlugins` list, that list takes precedence. Remove the package through
+the Hub to unregister it on the next restart. The server then returns ordinary
+NPC examine text.
 
 ## Data and limits
 
@@ -297,11 +282,11 @@ server work, drop-state mutation or new public player-data endpoint.
 ## Generic integration
 
 - `NetworkBuilder.ts` accepts the existing authenticated plugin-message envelope on
-  `entity-examine`, validates its live NPC context, emits `world:npc-examine`, and sends
-  normal typed text when no plugin handles it. Native type-only examines use the same
-  fallback. The sidebar's `MonsterExaminePlugin` sends that context only while started;
-  `MenuAction.ts` keeps native examine as its default path. The existing transformed-type
-  resolver on `OsrsClient` is public so the plugin uses the same IDs as native examines.
+  `entity-examine`. It acknowledges capability probes, validates live NPC context,
+  emits `world:npc-examine` and sends typed examine text when no plugin handles the
+  event. The client uses this channel for examines after it receives the capability
+  reply for its session. `MenuAction.ts` sends native examines by default. Both paths use
+  the transformed-type resolver on `OsrsClient`.
 - `AccuracyFormulasDpsCalc.ts` adds an optional preview flag. Normal combat keeps its existing
   default behavior; preview avoids hit-time events rather than triggering equipment procs.
   This class was already exposed through `api.core`; no new core exports were required.
@@ -612,35 +597,3 @@ while browsing, preserving the existing lazy preview pool.
 The generic custom-list options `groupActions` and `rowActions.groupLabel` let
 collapsed groups declare their own server operations and button captions.
 Expansion stays local; Find variants transmits the server-owned group row ID.
-
-### Parameterized shared drop sources
-
-Revenant pages include `{{Revenants/Drops|combat=...|hitpoints=...}}` instead of
-inline drop rows. The prior dumper skipped that include, so all twelve cached
-Revenant definitions lacked imported tables. The repair lives in the producer at
-`../osrsreboxed-db/scripts/drops/included_tables.py`, with loader integration in
-`update.py` and regressions in `test/test_drops_dump.py`. It discovers `/Drops`
-includes, caches official raw template source, substitutes parameters, evaluates
-bounded arithmetic and conditional branches, and separates declared table versions.
-Missing, cyclic or unresolved drop sources abort generation instead of silently
-publishing incomplete rows. No NPC-specific downstream override is used.
-
-The official source is
-https://oldschool.runescape.wiki/w/Template:Revenants/Drops?action=raw .
-Its fetched source is retained in the producer's
-`data/drops/included-templates-wiki-page-text.json` for offline repeatability.
-The producer checkout is based on `9c8c2b4` on branch `fix/shared-drop-includes`.
-The unmodified producer reproduced the imported NPC export SHA-256
-`4a7dd8c6289535363eb7a9cdf1a833e34a03b8755f4124a0437e701c8cb19993`.
-Regeneration uses `SOURCE_DATE_EPOCH=1794182400`, preserving the existing metadata
-date. Two runs must match byte-for-byte before import. Every prior NPC mapping and
-table remains identical; twelve NPCs and twenty-four variant tables are added.
-The repaired NPC export SHA-256 is
-`6f1ae4622413b5d16adccffa404b06f572dc0721d9207aa65d7a8a5e3c9d70aa`.
-The shared subtables export is unchanged.
-
-Examine describes the effective server table. Native selection currently defaults
-to the first, Off-task table for this family. On-task tables remain separate in the
-export; skull and Slayer-task switching are not added by this repair. Source notes
-about conditional rates and even ether quantities remain visible. This fixes missing
-reward recognition without claiming complete Revenant kill-roll mechanics.

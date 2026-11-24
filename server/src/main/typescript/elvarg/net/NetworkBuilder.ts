@@ -796,8 +796,10 @@ export class ClientConnection {
           }
           if (++this.pluginMessageCount > 64) continue;
           if (packet.channel === "entity-examine") {
-            const { kind, id, index } = packet.data;
-            if (kind === "npc" && Number.isInteger(id) && Number.isInteger(index)) {
+            const { type, probeId, kind, id, index } = packet.data;
+            if (type === "probe" && Number.isSafeInteger(probeId)) {
+              this.player.getSession().sendClientPacket(encodePluginMessage(packet.channel, { type: "supported", probeId }));
+            } else if (kind === "npc" && Number.isInteger(id) && Number.isInteger(index)) {
               this.examineNpc(Number(id), Number(index));
             }
             continue;

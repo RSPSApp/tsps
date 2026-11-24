@@ -12,6 +12,7 @@ const { PluginManager: PM } = require('../dist/plugins/PluginManager');
 const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerSession } = require('../dist/net/PlayerSession');
 const { ClientConnection } = require('../dist/net/NetworkBuilder');
+const { decodePluginMessagePayload } = require('../dist/net/protocol/ClientProtocol');
 const { ObjectDefinition } = require('../dist/game/definition/ObjectDefinition');
 const { NpcDefinitionLoader } = require('../dist/game/definition/loader/impl/NpcDefinitionLoader');
 
@@ -86,6 +87,20 @@ function contextualExaminer(t, enabled = true) {
     data: { kind: 'npc', id: npc.getContentId(p), index: npc.getIndex(), ...overrides } }], true);
   return { ...f, p, npc, strings, opens, scripts, examine };
 }
+
+test('an entity-examine capability probe only acknowledges support', async (t) => {
+  const f = contextualExaminer(t);
+  const messages = [];
+  t.mock.method(f.p.getSession(), 'sendClientPacket', bytes => {
+    messages.push(decodePluginMessagePayload(bytes.subarray(3)));
+    return true;
+  });
+  await f.conn.dispatch([{ type: 'plugin_message', channel: 'entity-examine',
+    data: { type: 'probe', probeId: 17 } }], true);
+  assert.deepEqual(messages, [{ channel: 'entity-examine', data: { type: 'supported', probeId: 17 } }]);
+  assert.deepEqual(f.opens, []);
+  assert.deepEqual(f.typed, []);
+});
 
 test('enabled monster examine opens a native model and live stats without consuming combat or rolling RNG', async (t) => {
   const f = contextualExaminer(t);

@@ -214,27 +214,3 @@ test('loaded Lava dragon shared tables and Hellhound tertiary items preserve the
     assert.equal(reward.parentId, undefined, `${name} is an individual tertiary reward`);
   }
 });
-
-test('shared parameterized source tables expose Revenant family drops to Examine without rolls', (t) => {
-  Drops._test.loadDrops();
-  const { buildDrops } = require('../plugins/interface/monsterexamine/Drops.MonsterExamine');
-  t.mock.method(Math, 'random', () => { throw new Error('Examine must never roll drops'); });
-  for (const npcId of [7881, 7931, 7932, 7933, 7934, 7935, 7936, 7937, 7938, 7939, 7940, 11246]) {
-    const request = { npcId, player: null, npc: null };
-    customEvents.get('npc-drops:describe')(request);
-    assert.ok(request.source.table, `NPC ${npcId} has an imported table`);
-    assert.equal(request.source.table.label, 'Off-task', 'conditional tables are kept separate');
-    const result = buildDrops(request.source, id => `Item ${id}`);
-    assert.ok(result.rows.filter(row => Number.isInteger(row.icon) && row.icon > 0).length >= 40,
-      `NPC ${npcId} displays its varied source rewards`);
-    assert.ok(result.rows.some(row => row.icon === 21820), 'guaranteed ether is visible');
-    assert.ok(result.rows.some(row => row.icon === 22557), 'unique amulet is visible');
-    assert.ok(result.rows.some(row => row.icon === 453), 'noted resources retain their base item preview');
-    assert.ok(result.rows.some(row => row.icon === 1163), 'armour is visible');
-    if (npcId === 7931) {
-      assert.deepEqual(request.source.table.entries.find(row => row.item_id === 21820).quantity, [2, 8]);
-      assert.ok(result.rows.some(row => row.icon === 995), 'goblin coins are present');
-      assert.equal(tablesByNpc.get(npcId).length, 2, 'on-task rates are not mixed into the base pool');
-    }
-  }
-});

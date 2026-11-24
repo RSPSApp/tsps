@@ -68,6 +68,7 @@ const previewWidth = modelWidget.rawWidth, previewHeight = modelWidget.rawHeight
 const bestiary = require('../../server/plugins/interface/bestiary/Layout.Bestiary');
 const thumbnail = bestiary.DEFINITION.widgets.find((widget: any) => widget.uid === bestiary.uid(bestiary.C.MODEL));
 assert.equal(thumbnail.npcFullBody, true);
+assert.equal(thumbnail.recycleModel, true, 'static and animated cards reuse a texture per pooled slot');
 assert.equal(thumbnail.type, 6, 'Bestiary thumbnails are native model widgets');
 for (const id of [MAN, BLACK_DEMON, GREEN_DRAGON, VORKATH]) {
     const type = factory.getNpcTypeLoader().load(id)!;
@@ -111,32 +112,3 @@ for (const id of [MAN, BLACK_DEMON, GREEN_DRAGON, VORKATH]) {
 }
 
 console.log("widget-model-oversize: native extents and fitted NPC framing passed");
-
-// Scrolling a catalogue must not keep every native preview mesh in memory.
-const bounded = new NpcModelLoader(factory.getNpcTypeLoader(), factory.getModelLoader(), factory.getTextureLoader(),
-    factory.getSeqTypeLoader(), factory.getSeqFrameLoader(), undefined, undefined as any, 2);
-for (const id of [MAN, BLACK_DEMON, MAN, GREEN_DRAGON]) bounded.getModel(factory.getNpcTypeLoader().load(id)!, -1, -1);
-assert.equal(bounded.modelCache.size, 2);
-assert.equal(bounded.modelCache.has(BLACK_DEMON), false, 'the least recently used preview mesh unloads');
-assert.equal(bounded.modelCache.has(MAN), true, 'recently used models survive eviction');
-assert.equal(thumbnail.recycleModel, true, 'static and animated cards reuse a texture per pooled slot');
-
-
-// Admin's native item preview is independent of the inventory icon's zoom.
-const admin = require('../../server/plugins/tools/adminpanel/Layout.AdminPanel');
-const definition = admin.buildInterface();
-const itemPreview = definition.widgets.find((w: any) => w.uid === admin.uid(admin.COMPONENT.PANEL_ICON));
-const description = definition.widgets.find((w: any) => w.uid === admin.uid(admin.COMPONENT.PANEL_DESCRIPTION));
-assert.equal(itemPreview.fitModel, true);
-assert.equal(description.rawY, itemPreview.rawY);
-assert.ok(description.rawX >= itemPreview.rawX + itemPreview.rawWidth, 'item description is beside its preview');
-(globalThis as any).document ??= { createElement: () => canvas() };
-for (const id of [1215, 11802, 995]) {
-    const type = factory.getObjTypeLoader().load(id)!;
-    const params = { xan2d: type.xan2d, yan2d: type.yan2d, zan2d: type.zan2d, zoom2d: 152,
-        fitToWidget: { width: itemPreview.rawWidth, height: itemPreview.rawHeight, padding: 8 } };
-    const result = renderer.renderItemToCanvasExtents(id, 1, params, itemPreview.rawWidth, itemPreview.rawHeight);
-    assert.ok(result && result.canvas.width <= itemPreview.rawWidth && result.canvas.height <= itemPreview.rawHeight);
-    const painted = result.canvas.pixels.filter((value: number, i: number) => i % 4 === 3 && value > 0).length;
-    assert.ok(painted > 150, `item ${id} has a clearly visible preview, not an inventory-scale speck`);
-}

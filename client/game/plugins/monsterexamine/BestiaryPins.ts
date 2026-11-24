@@ -73,31 +73,30 @@ export class BestiaryPins implements WidgetOverlay {
     }
     private shapes(): Shape[] {
         const selection = this.selection(), map = this.client.minimapGeometry;
-        if (!selection || !map || performance.now() - map.drawnAt >= 500 || ClientState.inInstance) return [];
+        if (!selection || !map?.projectMarker || performance.now() - map.drawnAt >= 500 || ClientState.inInstance) return [];
         const state = this.client.playerMovementSync?.getState?.(this.client.controlledPlayerServerId);
         if (!state || (state.level | 0) !== map.plane) return [];
-        const shapes: Shape[] = [], edges = new Map<number, { p: Point; distance: number }>();
+        const shapes: Shape[] = [];
+        const edges = new Map<number, { x: number; y: number; angle: number; distance: number }>();
         const s = Math.max(1, map.scale);
         for (const p of selection.points) {
             if (p.plane !== map.plane) continue;
-            const projected = map.projectMarker?.(p.x + 0.5, p.y + 0.5, 6 * s);
-            const fallback = projected ? undefined : map.worldToMinimap(p.x + 0.5, p.y + 0.5);
-            if (!projected && !fallback) continue;
-            const x = projected?.x ?? fallback![0], y = projected?.y ?? fallback![1];
-            if (projected?.edge) {
-                const sector = (Math.round(projected.angle / (Math.PI / 4)) + 8) % 8;
+            const projected = map.projectMarker(p.x + 0.5, p.y + 0.5, 6 * s);
+            if (!projected) continue;
+            const { x, y, angle } = projected;
+            if (projected.edge) {
+                const sector = (Math.round(angle / (Math.PI / 4)) + 8) % 8;
                 const distance = Math.hypot(p.x - state.tileX, p.y - state.tileY);
-                if (!edges.has(sector) || distance < edges.get(sector)!.distance) edges.set(sector, { p, distance });
+                if (distance < (edges.get(sector)?.distance ?? Infinity)) edges.set(sector, { x, y, angle, distance });
             } else {
                 shapes.push({ edge: false, points: [[x, y - 4 * s], [x + 4 * s, y], [x, y + 4 * s], [x - 4 * s, y]] });
             }
         }
-        for (const { p } of edges.values()) {
-            const q = map.projectMarker!(p.x + 0.5, p.y + 0.5, 6 * s)!;
-            const dx = Math.cos(q.angle) * s, dy = Math.sin(q.angle) * s;
-            shapes.push({ edge: true, points: [[q.x + dx * 5, q.y + dy * 5],
-                [q.x - dx * 3 - dy * 3, q.y - dy * 3 + dx * 3],
-                [q.x - dx * 3 + dy * 3, q.y - dy * 3 - dx * 3]] });
+        for (const { x, y, angle } of edges.values()) {
+            const dx = Math.cos(angle) * s, dy = Math.sin(angle) * s;
+            shapes.push({ edge: true, points: [[x + dx * 5, y + dy * 5],
+                [x - dx * 3 - dy * 3, y - dy * 3 + dx * 3],
+                [x - dx * 3 + dy * 3, y - dy * 3 - dx * 3]] });
         }
         return shapes;
     }

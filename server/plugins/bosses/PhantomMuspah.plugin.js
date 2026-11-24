@@ -11,12 +11,18 @@ const Fight = require("./phantommuspah/Fight.PhantomMuspah");
 const Loot = require("./phantommuspah/Loot.PhantomMuspah");
 const Scoreboard = require("./phantommuspah/Scoreboard.PhantomMuspah");
 
+function describeEncounters({ npcIds }) {
+  const { ranged, melee, shielded, final } = Common.data.npcs;
+  for (const id of [ranged, melee, shielded, final]) npcIds.add(id);
+}
+
 module.exports = {
   name: "PhantomMuspah",
   description: "The Phantom Muspah past Secrets of the North: a private lair, its five forms and spikes, lightning clouds, shockwave, corruption and loot.",
   members: true,
   register(api) {
     Common.init(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Lair.attachLair(api);
     Fight.attachFight(api);
     Loot.attachLoot(api);

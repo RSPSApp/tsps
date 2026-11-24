@@ -32,7 +32,8 @@ async function main() {
     const beforeInstance = ClientState.inInstance;
     try {
         await plugin.start();
-        assert.deepEqual(readWire(), [{ type: 'plugin_message', channel: 'bestiary', data: { type: 'client-state', enabled: true } }]);
+        assert.deepEqual(readWire().filter(message => message.type === 'plugin_message' && message.channel === 'bestiary'),
+            [{ type: 'plugin_message', channel: 'bestiary', data: { type: 'client-state', enabled: true } }]);
         const points = [{ x: 3201, y: 3201, plane: 0 }, { x: 3203, y: 3202, plane: 0 },
             { x: 3500, y: 3200, plane: 0 }, { x: 3600, y: 3200, plane: 0 },
             { x: 3200, y: 3200, plane: 1 }, { x: 3201, y: 3201, plane: 0 }];
@@ -56,8 +57,10 @@ async function main() {
         const rotated = client.minimapGeometry.projectMarker(3500, 3200);
         assert.ok(unrotated.x > 170 && Math.abs(unrotated.y - 100) < 1);
         assert.ok(rotated.y > 170 && Math.abs(rotated.x - 100) < 1, 'edge directions follow camera rotation');
-        assert.equal(geometry(2).worldToMinimap(3215, 3200), undefined, 'zoom-in does not draw through the mask');
-        assert.ok(geometry(0.25).worldToMinimap(3260, 3200), 'zoom-out uses real visible reach, not a fixed 20-tile cutoff');
+        assert.equal(geometry(2).projectMarker!(3215, 3200)?.edge, true, 'zoom-in places off-map points on the mask edge');
+        assert.equal(geometry(0.25).projectMarker!(3260, 3200)?.edge, false, 'zoom-out uses the visible mask reach');
+        client.minimapGeometry = { ...geometry(), projectMarker: () => undefined };
+        assert.deepEqual(plugin.pins.draw(context), [], 'points rejected by the mask cannot draw through the legacy projection');
         client.minimapGeometry = geometry(); client.minimapGeometry.drawnAt -= 501;
         assert.deepEqual(plugin.pins.draw(context), [], 'hidden/stale minimaps do not keep stale pins');
         client.minimapGeometry = geometry(); ClientState.inInstance = true;

@@ -6,6 +6,7 @@
  * (Retrieval.Vorkath). Drops roll automatically from
  * data/definitions/npc-drops.json.
  */
+const Shared = require("./vorkath/Shared.Vorkath");
 const Wake = require("./vorkath/Wake.Vorkath");
 const Combat = require("./vorkath/Combat.Vorkath");
 const Specials = require("./vorkath/Specials.Vorkath");
@@ -15,11 +16,17 @@ const CombatAchievements = require("./vorkath/CombatAchievements.Vorkath");
 const Retrieval = require("./vorkath/Retrieval.Vorkath");
 const { initDragonfireProtectionCoreAccess } = require("../combat/DragonfireProtection");
 
+function describeEncounters({ npcIds }) {
+  npcIds.add(Shared.AWAKE_ID);
+  npcIds.add(Shared.QUEST_AWAKE_ID);
+}
+
 module.exports = {
   name: "Vorkath",
   description: "Vorkath after Dragon Slayer II: wake her on Ungael, fight her fireballs and acid, rapid-fire and freeze specials, with Torfinn returning items on death.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     initDragonfireProtectionCoreAccess(api);
     Wake.attach(api);
     Combat.attach(api);

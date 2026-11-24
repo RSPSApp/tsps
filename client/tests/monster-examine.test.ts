@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { GameState } from '@runelite/api/GameState';
+import { GameStateChanged, PluginMessage } from '@runelite/api/events';
 import { menuAction, setNpcExamineIdResolver } from '../ui/menu/MenuAction';
 import { MenuOpcode } from '../ui/menu/MenuState';
 import { flushPackets, setPacketSocket } from '../network/packet';
@@ -83,14 +85,16 @@ async function testPluginToggle(): Promise<void> {
     const resolveNpcExamineTypeId = (index: number) => index === 123 ? 132 : undefined;
     setNpcExamineIdResolver(resolveNpcExamineTypeId);
     const storage = defaultConfigStorage();
-    function createManager(): PluginManager {
-        const bus = new EventBus();
+    const client = { resolveNpcExamineTypeId, gameState: GameState.LOGIN_SCREEN };
+    function createManager(bus = new EventBus()): PluginManager {
         const manager = new PluginManager(bus, new ConfigManager(bus, storage));
-        manager.getInjector().provide(CLIENT_TOKEN, { resolveNpcExamineTypeId });
+        manager.getInjector().provide(CLIENT_TOKEN, client);
         manager.loadCorePlugins([MonsterExaminePlugin]);
         return manager;
     }
-    const manager = createManager();
+    const bus = new EventBus();
+    const manager = createManager(bus);
+    await new Promise<void>(resolve => setImmediate(resolve));
     const plugin = manager.getPlugin(MonsterExaminePlugin)!;
     assert.equal(manager.getDescriptor(plugin).name, 'Monster Examine');
     assert.equal(manager.getDescriptor(plugin).hidden, undefined, 'visible in the plugin list');
@@ -99,24 +103,56 @@ async function testPluginToggle(): Promise<void> {
     hooks.add(plugin);
     const menuClick = (action: Parameters<typeof hooks.onMenuOptionClicked>[0]) => hooks.onMenuOptionClicked(action);
     menuClickListeners.add(menuClick);
-    function examine(opcode = MenuOpcode.ExamineNpc, index = 123): ReturnType<typeof decodeClientPackets> {
+    function capturePackets(action: () => void): ReturnType<typeof decodeClientPackets> {
         sent.length = 0;
-        menuAction(0, 0, opcode, index, -1, 'Examine', 'Hobgoblin', 0, 0);
+        action();
         flushPackets();
         return decodeClientPackets(Buffer.concat(sent.map(packet => Buffer.from(packet))));
     }
-    const contextual = [{ type: 'plugin_message', channel: 'entity-examine', data: { kind: 'npc', id: 132, index: 123 } }];
-    assert.deepEqual(examine(), contextual, 'enabled plugin consumes examine and sends exactly one contextual request');
+    function examine(opcode = MenuOpcode.ExamineNpc, index = 123): ReturnType<typeof decodeClientPackets> {
+        return capturePackets(() => menuAction(0, 0, opcode, index, -1, 'Examine', 'Hobgoblin', 0, 0));
+    }
+    function changeState(gameState: GameState) {
+        client.gameState = gameState;
+        return capturePackets(() => bus.post(new GameStateChanged(gameState)));
+    }
+    const channel = 'entity-examine';
+    const probe = (probeId: number) => ({ type: 'plugin_message', channel, data: { type: 'probe', probeId } });
+    const supported = (probeId: number) => bus.post(new PluginMessage(channel, { type: 'supported', probeId }));
+    const native = [{ type: 'examine_npc', id: 132 }];
+    const contextual = [{ type: 'plugin_message', channel, data: { kind: 'npc', id: 132, index: 123 } }];
+    assert.ok(changeState(GameState.LOGGED_IN).some(packet => packet.type === 'plugin_message' && packet.channel === channel
+        && packet.data.type === 'probe' && packet.data.probeId === 1));
+    assert.deepEqual(examine(), native, 'examining while awaiting support sends one ordinary examine');
+    bus.post(new PluginMessage(channel, { type: 'unavailable' }));
+    assert.deepEqual(examine(), native, 'an older server still receives ordinary examines');
+    changeState(GameState.HOPPING);
+    assert.ok(changeState(GameState.LOGGED_IN).some(packet => packet.type === 'plugin_message' && packet.channel === channel
+        && packet.data.type === 'probe' && packet.data.probeId === 2));
+    supported(1);
+    assert.deepEqual(examine(), native, 'a previous session response cannot enable support');
+    supported(2);
+    assert.deepEqual(examine(), contextual, 'the confirmed server receives one contextual examine');
     assert.deepEqual(examine(MenuOpcode.ExamineNpc + 2000), contextual, 'deprioritized examines work');
     assert.deepEqual(examine(MenuOpcode.ExamineNpc, 999), [], 'stale entities do not become unrelated type examines');
     assert.equal(plugin.onMenuOptionClicked({ opcode: MenuOpcode.Cancel } as any), false, 'other menu actions remain native');
+    changeState(GameState.CONNECTION_LOST);
+    assert.deepEqual(examine(), native, 'connection loss clears active support');
+    changeState(GameState.LOGGED_IN);
+    supported(3);
+    assert.deepEqual(examine(), contextual, 'the reconnected server can confirm support');
     await manager.setPluginEnabled(plugin, false);
     assert.equal(plugin.isStarted(), false);
     assert.deepEqual(examine(), [{ type: 'examine_npc', id: 132 }], 'disable immediately restores the native text path');
     const restored = createManager();
     assert.equal(restored.isEnabled(MonsterExaminePlugin), false, 'disabled preference survives a fresh manager');
     assert.equal(restored.getPlugin(MonsterExaminePlugin)!.isStarted(), false);
+    sent.length = 0;
     await manager.setPluginEnabled(plugin, true);
+    const packets = decodeClientPackets(Buffer.concat(sent.map(packet => Buffer.from(packet))));
+    assert.deepEqual(packets.filter(packet => packet.type === 'plugin_message' && packet.channel === channel), [probe(4)]);
+    assert.deepEqual(examine(), native, 're-enabling requests support before taking over examines');
+    supported(4);
     assert.deepEqual(examine(), contextual, 're-enable restores the window request');
     const enabledAgain = createManager();
     assert.equal(enabledAgain.isEnabled(MonsterExaminePlugin), true, 'enabled preference is saved too');
@@ -168,7 +204,8 @@ async function main(): Promise<void> {
     assert.deepEqual(filterRows(nested, '').map(row => row.id), [1, 2]);
     assert.deepEqual(filterRows(nested, '', new Map([[2, true]])).map(row => row.id), [1, 2, 3]);
     assert.deepEqual(filterRows(nested, 'Steel').map(row => row.id), [1, 2, 3, 4], 'search reveals every matching ancestor');
-    assert.deepEqual(filterRows(nested, 'Main table').map(row => row.id), [1, 2, 3, 4], 'section names also match their contents');
+    assert.deepEqual(filterRows(nested, 'Main table', undefined, DEFINITION.search).map(row => row.id),
+        [1, 2, 3, 4], 'Monster Examine search includes section titles and their contents');
     testNativeModalSizing();
     // Drive the actual server-declared layout with real custom runtime filtering and row pooling.
     assert.equal(setCustomInterface(DEFINITION), true);

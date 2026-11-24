@@ -29,6 +29,8 @@ function gameval(kind, name) {
 
 /** An obj gameval name, or a numeric item id for items the cache names ambiguously. */
 const obj = (nameOrId) => typeof nameOrId === "number" ? nameOrId : gameval("obj", nameOrId);
+/** A recipe's tool, carried but not used up: "knife" is any plain knife, anything else one obj. */
+const tool = (name) => name === "knife" ? knives() : new Set([obj(name)]);
 const ingredient = (entry) => Array.isArray(entry)
   ? { id: obj(entry[0]), count: entry[1] }
   : { id: obj(entry), count: 1 };
@@ -51,6 +53,7 @@ function index() {
       ingredients: row.ingredients.map(ingredient),
       returns: (row.returns ?? []).map(ingredient),
       productSlotId: row.productSlot === undefined ? undefined : obj(row.productSlot),
+      tools: (row.tools ?? []).map(tool),
       xp: row.xp ?? 0,
       timing: row.timing ?? [1, 2],
     };

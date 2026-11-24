@@ -389,6 +389,12 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return player.getInventory().getAmount(itemId) >= amount;
   }
 
+  /** Carried in the inventory or worn (Mawnis counts either). */
+  function carriedOrWorn(player, itemId) {
+    if (hasItem(player, itemId)) return true;
+    return (player.getEquipment().getItems() || []).some((item) => item && item.getId?.() === itemId);
+  }
+
   function isFull(player) {
     return player.getInventory().isFull?.() === true;
   }
@@ -882,18 +888,18 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     if (stage >= STAGE_HEAD_TAKEN) return play(player, npcId, "returning-victorious-returning-to-mawnis-victorious");
     if (stage >= STAGE_CHAMPION) return play(player, npcId, "gear-of-a-champion-swearing-your-oaths-talking-to-mawnis");
     if (stage === STAGE_ARMOUR_DONE) {
-      if (hasItem(player, NEITIZNOT_SHIELD)) {
+      if (carriedOrWorn(player, NEITIZNOT_SHIELD)) {
         setStage(player, STAGE_CHAMPION);
         return play(player, npcId, "gear-of-a-champion-swearing-your-oaths-talking-to-mawnis");
       }
       return play(player, npcId, "gear-of-a-champion-making-the-neitiznot-shield-talking-to-mawnis-before-making-the-shield");
     }
     if (stage === STAGE_DECREE_DELIVERED) {
-      if (hasItem(player, YAK_HIDE_BODY) && hasItem(player, YAK_HIDE_LEGS)) {
+      if (carriedOrWorn(player, YAK_HIDE_BODY) && carriedOrWorn(player, YAK_HIDE_LEGS)) {
         setStage(player, STAGE_ARMOUR_DONE);
         return play(player, npcId, "gear-of-a-champion-making-yak-hide-armor-talking-to-mawnis-after-making-a-full-set-of-yak-hide");
       }
-      if (hasItem(player, YAK_HIDE_BODY) || hasItem(player, YAK_HIDE_LEGS)) {
+      if (carriedOrWorn(player, YAK_HIDE_BODY) || carriedOrWorn(player, YAK_HIDE_LEGS)) {
         return play(player, npcId, "gear-of-a-champion-making-yak-hide-armor-talking-to-mawnis-after-having-made-one-piece-of-yak-hide-armour");
       }
       return play(player, npcId, "gear-of-a-champion-learning-about-the-gear-talking-to-mawnis-again");

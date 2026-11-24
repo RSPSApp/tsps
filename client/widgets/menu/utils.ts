@@ -1,7 +1,7 @@
 import { ClientState } from "../../game/ClientState";
 import { MenuTargetType } from "../../rs/MenuEntry";
 import { SHOPSIDE } from "../../runelite/api/gameval/InterfaceID";
-import { getShiftClickActionIndex } from "../../ui/menu/MenuEngine";
+import { asLeftClickEntry, getShiftClickActionIndex } from "../../ui/menu/MenuEngine";
 import { applyMenuTransform } from "../../ui/menu/menuTransforms";
 import { isDropTarget, isPauseButton, shouldShowMenuOption } from "../WidgetFlags";
 
@@ -287,7 +287,7 @@ function applyShiftClickDrop<T extends { option: string; opIndex?: number }>(ite
     const widgetOp = INVENTORY_OBJ_OP_WIDGET_OPS[index];
     const at = entries.findIndex((e) => e.opIndex === widgetOp);
     if (at <= 0) return entries;
-    return [entries[at], ...entries.slice(0, at), ...entries.slice(at + 1)];
+    return [asLeftClickEntry(entries[at]), ...entries.slice(0, at), ...entries.slice(at + 1)];
 }
 
 /**

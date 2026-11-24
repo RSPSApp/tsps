@@ -39,6 +39,17 @@ export type MenuClickContext = {
 };
 
 /**
+ * An entry a plugin or setting moved to the top to be the left click (a menu swap, shift-click
+ * drop). A low-priority widget op (1007) would make that click open the menu instead, so it
+ * becomes a normal op (57); both run the same op.
+ */
+export function asLeftClickEntry<T extends object>(entry: T): T {
+    return (entry as { opcode?: number }).opcode === MenuOpcode.CC_OP_LowPriority
+        ? { ...entry, opcode: MenuOpcode.CC_OP }
+        : entry;
+}
+
+/**
  * shouldLeftClickOpenMenu
  *
  * Determines if a left-click should open the menu instead of executing the default action.

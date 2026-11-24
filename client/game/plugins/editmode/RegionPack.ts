@@ -1,8 +1,10 @@
 import * as pako from "pako";
+import { DIRECTION_TO_ORIENTATION, quarterTurnToDirection } from "../../../common/Direction";
+import { generateHeight } from "../../../rs/util/HeightCalc";
+import type { BrowserHostNpcSpawn } from "./hostProtocol/npcSpawnMessage";
 
 import type { ObjectSpawn } from "./hostProtocol/objectSpawnsMessage";
 import type { EditModeEdit, EditModeRegionOverlays } from "./types";
-import { generateHeight } from "../../../rs/util/HeightCalc";
 
 const MAP_SIZE = 64;
 const PLANE_COUNT = 4;
@@ -138,7 +140,7 @@ function applyLocEdits(
                 loc.plane !== edit.plane ||
                 loc.shape !== edit.shape,
         );
-        if (edit.kind === "place" && edit.locId > 0) {
+        if (edit.kind === "place" && edit.locId >= 0) {
             locs.push({
                 id: edit.locId,
                 x,
@@ -409,12 +411,19 @@ export function buildAreaClipboard(
     bounds: { minX: number; maxX: number; minY: number; maxY: number },
     getPack: (tileX: number, tileY: number) => Uint8Array,
     wideTerrain: boolean,
+    npcs: readonly BrowserHostNpcSpawn[] = [],
 ): string {
+    if (bounds.minX < 0 || bounds.minY < 0 || bounds.maxX >= 16383 || bounds.maxY >= 16383 ||
+        bounds.maxX < bounds.minX || bounds.maxY < bounds.minY ||
+        bounds.maxX - bounds.minX >= 128 || bounds.maxY - bounds.minY >= 128) {
+        throw new Error("Select an area of at most 128 by 128 tiles inside the map");
+    }
+    const heights: Array<{ x: number; y: number; plane: number; height: number }> = [];
     const tiles: Array<{ x: number; y: number; plane: number; terrain: number[] }> = [];
     const objects: Loc[] = [];
     const contains = (x: number, y: number) => x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
-    for (let mapX = bounds.minX >> 6; mapX <= bounds.maxX >> 6; mapX++) {
-        for (let mapY = bounds.minY >> 6; mapY <= bounds.maxY >> 6; mapY++) {
+    for (let mapX = bounds.minX >> 6; mapX <= (bounds.maxX + 1) >> 6; mapX++) {
+        for (let mapY = bounds.minY >> 6; mapY <= (bounds.maxY + 1) >> 6; mapY++) {
             const pack = parseRegionPack(getPack(mapX * MAP_SIZE, mapY * MAP_SIZE));
             if (pack.regionId !== ((mapX << 8) | mapY)) throw new Error("Wrong region returned for selection");
             for (const loc of decodeLocs(pack.objectData)) {
@@ -442,10 +451,13 @@ export function buildAreaClipboard(
                         }
                         const worldX = mapX * MAP_SIZE + x;
                         const worldY = mapY * MAP_SIZE + y;
-                        if (contains(worldX, worldY)) tiles.push({
-                            x: worldX - bounds.minX, y: worldY - bounds.minY, plane,
-                            terrain: Array.from(data.subarray(start, offset)),
-                        });
+                        if (worldX >= bounds.minX && worldX <= bounds.maxX + 1 &&
+                            worldY >= bounds.minY && worldY <= bounds.maxY + 1) {
+                            const terrain = Array.from(data.subarray(start, offset));
+                            const x = worldX - bounds.minX, y = worldY - bounds.minY;
+                            heights.push({ x, y, plane, height: readAreaTerrain(terrain, wideTerrain, worldX, worldY, plane).height });
+                            if (contains(worldX, worldY)) tiles.push({ x, y, plane, terrain });
+                        }
                     }
                 }
             }
@@ -455,7 +467,130 @@ export function buildAreaClipboard(
     // underlays, overlays, shapes and rotations exactly. The origin retains noise coordinates.
     return JSON.stringify({ format: "elvarg-map-area", version: 1, origin: { x: bounds.minX, y: bounds.minY },
         width: bounds.maxX - bounds.minX + 1, height: bounds.maxY - bounds.minY + 1,
-        planes: PLANE_COUNT, wideTerrain, tiles, objects });
+        planes: PLANE_COUNT, wideTerrain, tiles, objects, heights,
+        npcs: npcs.filter(npc => contains(npc.tileX, npc.tileY)).map(npc => ({
+            ...npc, tileX: npc.tileX - bounds.minX, tileY: npc.tileY - bounds.minY,
+        })) });
+}
+
+/** Snapshots visible persisted NPCs and editor additions, retaining spawn settings rather than wandering positions. */
+export function copyAreaNpcs(spawns: readonly BrowserHostNpcSpawn[], edits: readonly EditModeEdit[]): BrowserHostNpcSpawn[] {
+    const key = (spawn: BrowserHostNpcSpawn) => `${spawn.id}:${spawn.tileX}:${spawn.tileY}:${spawn.plane}`;
+    const overrides = new Map<string, EditModeEdit[]>();
+    for (const edit of edits) if (edit.kind === "npcWander") {
+        const k = `${edit.locId}:${edit.tileX}:${edit.tileY}:${edit.plane}`;
+        const rows = overrides.get(k) ?? [];
+        rows.push(edit);
+        overrides.set(k, rows);
+    }
+    return [
+        ...spawns.map(spawn => {
+            const override = overrides.get(key(spawn))?.shift();
+            return { ...spawn, ...(override?.wanderRadius === undefined ? {} : { wanderRadius: override.wanderRadius }),
+                ...(override?.direction === undefined ? {} : { direction: override.direction }) };
+        }),
+        ...edits.filter(edit => edit.kind === "npc").map(edit => ({
+            id: edit.locId, tileX: edit.tileX, tileY: edit.tileY, plane: edit.plane,
+            direction: edit.direction ?? quarterTurnToDirection(edit.rotation),
+            ...(edit.wanderRadius === undefined ? {} : { wanderRadius: edit.wanderRadius }),
+        })),
+    ];
+}
+
+function readAreaTerrain(data: number[], wide: boolean, x: number, y: number, plane: number) {
+    if (!Array.isArray(data) || data.length > 64 || data.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)) {
+        throw new Error("Invalid area terrain record");
+    }
+    let offset = 0;
+    const read = (width = wide ? 2 : 1): number => {
+        if (offset + width > data.length) throw new Error("Incomplete area terrain record");
+        const value = width === 2 ? data[offset] * 256 + data[offset + 1] : data[offset];
+        offset += width;
+        return value;
+    };
+    let overlay = 0, shape = 0, rotation = 0, underlay = 0, flag = 0, height = 0;
+    for (;;) {
+        const opcode = read();
+        if (opcode <= 1) {
+            height = opcode === 1 ? read(1) : plane === 0 ? generateHeight(x + 932731, y + 556238) : 30;
+            if (height === 1) height = 0;
+            if (offset !== data.length) throw new Error("Extra bytes in area terrain record");
+            return { overlay, shape, rotation, underlay, flag, height };
+        }
+        if (opcode <= 49) {
+            overlay = read(); shape = (opcode - 2) >> 2; rotation = (opcode - 2) & 3;
+        } else if (opcode <= 81) flag = opcode - 49;
+        else underlay = opcode - 81;
+    }
+}
+
+/** Validate the entire clipboard before producing one ordinary, undoable editor edit batch. */
+export function areaPasteEdits(contents: string, destination: { tileX: number; tileY: number }, wideTerrain: boolean): EditModeEdit[] {
+    if (typeof contents !== "string" || contents.length > 20_000_000) throw new Error("Area clipboard is too large");
+    const area = JSON.parse(contents);
+    const integer = (value: unknown, max: number) => Number.isInteger(value) && (value as number) >= 0 && (value as number) <= max;
+    if (!area || area.format !== "elvarg-map-area" || area.version !== 1 || area.planes !== 4 ||
+        !integer(area.width, 128) || area.width === 0 || !integer(area.height, 128) || area.height === 0 ||
+        !integer(area.origin?.x, 16383) || !integer(area.origin?.y, 16383) || typeof area.wideTerrain !== "boolean" ||
+        !integer(destination.tileX, 16383 - area.width) || !integer(destination.tileY, 16383 - area.height) ||
+        area.origin.x + area.width > 16384 || area.origin.y + area.height > 16384 ||
+        !Array.isArray(area.tiles) || area.tiles.length !== area.width * area.height * 4 ||
+        !Array.isArray(area.objects) || area.objects.length > 100_000 ||
+        (area.npcs !== undefined && (!Array.isArray(area.npcs) || area.npcs.length > 100_000))) {
+        throw new Error("Invalid or incomplete area clipboard");
+    }
+    const edits: EditModeEdit[] = [];
+    const add = (kind: EditModeEdit["kind"], x: number, y: number, plane: number, locId: number, shape = 0, rotation = 0) =>
+        edits.push({ kind, tileX: destination.tileX + x, tileY: destination.tileY + y, plane, locId, shape, rotation });
+    const seen = new Set<string>();
+    for (let x = 0; x < area.width; x++) for (let y = 0; y < area.height; y++) add("clear", x, y, 0, 0);
+    for (const tile of area.tiles) {
+        if (!tile || !integer(tile.x, area.width - 1) || !integer(tile.y, area.height - 1) || !integer(tile.plane, 3)) {
+            throw new Error("Invalid area tile");
+        }
+        const key = `${tile.plane}:${tile.x}:${tile.y}`;
+        if (seen.has(key)) throw new Error("Duplicate area tile");
+        seen.add(key);
+        const terrain = readAreaTerrain(tile.terrain, area.wideTerrain, area.origin.x + tile.x, area.origin.y + tile.y, tile.plane);
+        if (!wideTerrain && (terrain.overlay > 255 || terrain.underlay > 174)) throw new Error("Terrain does not fit this cache revision");
+        add("underlay", tile.x, tile.y, tile.plane, terrain.underlay);
+        add("flag", tile.x, tile.y, tile.plane, terrain.flag);
+        if (terrain.overlay) add("terrain", tile.x, tile.y, tile.plane, terrain.overlay, terrain.shape, terrain.rotation);
+        add("height", tile.x, tile.y, tile.plane, terrain.height);
+    }
+    // New copies include the far-edge vertices too. Older v1 copies retain the destination's far edge.
+    if (area.heights !== undefined) {
+        if (!Array.isArray(area.heights) || area.heights.length !== (area.width + 1) * (area.height + 1) * 4) {
+            throw new Error("Incomplete area heights");
+        }
+        seen.clear();
+        for (const vertex of area.heights) {
+            if (!vertex || !integer(vertex.x, area.width) || !integer(vertex.y, area.height) ||
+                !integer(vertex.plane, 3) || !integer(vertex.height, 255) || vertex.height === 1) throw new Error("Invalid area height");
+            const key = `${vertex.plane}:${vertex.x}:${vertex.y}`;
+            if (seen.has(key)) throw new Error("Duplicate area height");
+            seen.add(key);
+            add("height", vertex.x, vertex.y, vertex.plane, vertex.height);
+        }
+    }
+    for (const loc of area.objects) {
+        if (!loc || !integer(loc.id, 0x7fffffff) || !integer(loc.x, area.width - 1) ||
+            !integer(loc.y, area.height - 1) || !integer(loc.plane, 3) || !integer(loc.shape, 22) || !integer(loc.rotation, 3)) {
+            throw new Error("Invalid area object");
+        }
+        add("place", loc.x, loc.y, loc.plane, loc.id, loc.shape, loc.rotation);
+    }
+    for (const npc of area.npcs ?? []) {
+        if (!npc || !integer(npc.id, 0x7fffffff) || !integer(npc.tileX, area.width - 1) || !integer(npc.tileY, area.height - 1) ||
+            !integer(npc.plane, 3) || (npc.direction !== undefined && !integer(npc.direction, 7)) ||
+            (npc.wanderRadius !== undefined && !integer(npc.wanderRadius, 255)) || npc.remove !== undefined) throw new Error("Invalid area NPC");
+        add("npc", npc.tileX, npc.tileY, npc.plane, npc.id, 0,
+            npc.direction === undefined ? 0 : ((DIRECTION_TO_ORIENTATION[npc.direction] ?? 0) / 512) & 3);
+        Object.assign(edits[edits.length - 1],
+            npc.direction === undefined ? {} : { direction: npc.direction },
+            npc.wanderRadius === undefined ? {} : { wanderRadius: npc.wanderRadius });
+    }
+    return edits;
 }
 
 /** Decodes each tile's overlay, shape and rotation from region terrain data, as the scene builder reads them. */

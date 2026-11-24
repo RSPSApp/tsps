@@ -83,3 +83,27 @@ test("every world map area, composite map and geography file in the cache decode
     }
     assert.ok(regions > 1000, `${regions} regions decoded (${info.name})`);
 });
+
+test("a shaped overlay on an upper layer draws its shape only, leaving the layer below", () => {
+    // WorldMapRegion.drawTileOverlays passes underlay 0 for layers 1+: transparent in the
+    // client's fillRectangleTemplate, so the bank's ground shows through, not black.
+    const { WorldMapArchiveRenderer } = require("../rs/map/WorldMapArchiveRenderer");
+    const renderer = Object.create(WorldMapArchiveRenderer.prototype);
+    renderer.getFloorOverlayColor = () => 0x3355aa;
+    const pixelsPerTile = 4;
+    const width = 64 * pixelsPerTile;
+    const pixels = new Int32Array(width * width).fill(0x228822); // layer 0 already drawn
+    const tile = 0; // tile (0, 0)
+    const data = {
+        planes: 2,
+        floorOverlayIds: [new Int16Array(4096), Object.assign(new Int16Array(4096), { [tile]: 5 })],
+        overlayShapes: [new Int8Array(4096), Object.assign(new Int8Array(4096), { [tile]: 2 })],
+        overlayRotations: [new Int8Array(4096), new Int8Array(4096)],
+    };
+    renderer.drawTileOverlays(pixels, width, 0, 0, data, F.scaleHandler(pixelsPerTile), 0);
+    const drawn = new Set<number>();
+    for (let y = 63 * pixelsPerTile; y < 64 * pixelsPerTile; y++) {
+        for (let x = 0; x < pixelsPerTile; x++) drawn.add(pixels[y * width + x]);
+    }
+    assert.deepEqual([...drawn].sort(), [0x228822, 0x3355aa], "the shape is water, the rest keeps the ground");
+});

@@ -26,6 +26,7 @@ function state() {
         worldMapState,
         worldMapImageTiles: new Map(),
         worldMapImageAccess: new Map(),
+        worldMapImageDrawnAt: new Map(),
         pendingWorldMapImageIds: new Set(),
         failedWorldMapImageIds: new Map(),
         retainedWorldMapImageIds: new Set(),
@@ -108,7 +109,8 @@ test("a stale viewport reply cannot publish or remove a newer request for the sa
     const loadDeps = { ...deps(() => new Promise(resolve => replies.push(resolve))), cancelTileLoads: () => cancelled++ };
     getWorldMapImageTile(cache, loadDeps, 1, 1);
     await new Promise(resolve => setTimeout(resolve, 0));
-    cache.worldMapState.displayX += 64;
+    // A new zoom level (same rendered size here) cancels what is in flight.
+    cache.worldMapState.zoomPercentage = 50;
     getWorldMapImageTile(cache, loadDeps, 1, 1);
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(replies.length, 2, "the new viewport replaces the old pending request");
@@ -122,4 +124,24 @@ test("a stale viewport reply cannot publish or remove a newer request for the sa
     assert.equal(cache.pendingWorldMapImageIds.size, 0);
     assert.equal(cache.worldMapImageTiles.size, 1);
     assert.equal(cancelled, 2);
+});
+
+test("panning keeps the loads in flight instead of cancelling them at each 64-tile step", async () => {
+    const cache = state();
+    const replies: Array<(tile: any) => void> = [];
+    const tile = { pixels: new Uint8Array(64 * 64 * 4), width: 64, height: 64, icons: [] };
+    let cancelled = 0;
+    const loadDeps = { ...deps(() => new Promise(resolve => replies.push(resolve))), cancelTileLoads: () => cancelled++ };
+    getWorldMapImageTile(cache, loadDeps, 1, 1);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const startCancels = cancelled;
+    cache.worldMapState.displayX += 64 * 3;
+    cache.worldMapState.displayY -= 64 * 2;
+    getWorldMapImageTile(cache, loadDeps, 4, 1);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(cancelled, startCancels, "a pan cancels nothing");
+    assert.equal(replies.length, 2, "the first square isn't requested again");
+    replies[0](tile);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(cache.worldMapImageTiles.size, 1, "the square left behind still lands in the cache");
 });

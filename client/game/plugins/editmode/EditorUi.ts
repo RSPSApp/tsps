@@ -3659,8 +3659,8 @@ class EditorChrome {
         if (!hasTileRange) actions.append(createActionButton("Test in game", createMoveIcon, () => {
             if (!this.plugin.testTile(selection)) this.toast(`Log in as staff and use ::tele ${selection.tileX} ${selection.tileY} ${selection.plane}`);
         }));
-        if (hasTileRange) {
-            const copy = createActionButton("Copy", createDuplicateIcon, () => {
+        if (selection.kind !== "npc") {
+            const copy = createActionButton("Copy area", createDuplicateIcon, () => {
                 try {
                     const contents = this.areaForClipboard();
                     void navigator.clipboard.writeText(contents).then(
@@ -3671,7 +3671,21 @@ class EditorChrome {
                     this.toast(`Copy failed: ${error instanceof Error ? error.message : String(error)}`);
                 }
             });
-            actions.append(copy,
+            actions.append(copy);
+            if (!hasTileRange) {
+                const destination = { tileX: selection.tileX, tileY: selection.tileY, plane: selection.plane };
+                const paste = createActionButton("Paste area", createDuplicateIcon, () => {
+                    void Promise.resolve().then(() => navigator.clipboard.readText()).then(contents => {
+                        this.plugin.pasteArea(contents, destination);
+                        this.toast("Area pasted. Undo takes it back; Save keeps it.");
+                    }).catch(error => this.toast(`Paste failed: ${error instanceof Error ? error.message : String(error)}`));
+                });
+                paste.title = "Paste at this southwest tile on all four levels. Replaces terrain and objects; adds copied NPCs.";
+                actions.append(paste);
+            }
+        }
+        if (hasTileRange) {
+            actions.append(
                 createActionButton("Duplicate area", createDuplicateIcon, () => this.duplicateArea()),
                 createActionButton("Save as preset", createSaveIcon, () => this.saveSelectionAsPreset()),
                 createActionButton("Build here", createLayersIcon, () => this.openBuildPanel(selection)),

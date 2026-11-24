@@ -1,3 +1,4 @@
+import { areaPasteEdits, oversizedRegionPacks } from "./RegionPack";
 import type { Camera } from "../../Camera";
 import { planAreaStamp, previewAreaStamp, stampSize, type AreaStamp, type AreaStampOptions } from "./AreaStamp";
 import type { GroundItemPlacement } from "./EditorGroundItems";
@@ -131,7 +132,7 @@ type UndoEntry = {
     start: number;
     removed: EditModeEdit[];
     added: EditModeEdit[];
-    /** Added edits reach the scene through the region rebuild alone, so redo must not place them too. */
+    /** Map edits reach the scene through the rebuild; NPC edits still dispatch on redo. */
     rebuildOnly?: boolean;
     scattered?: boolean;
     items?: { undo: () => void; redo: () => void };
@@ -1026,8 +1027,11 @@ export class EditModePlugin {
     }
 
     copyArea(includeNpcs = false): string {
-        const range = this.getSelectionRange();
-        if (!range) throw new Error("Select an area to copy");
+        const selection = this.selection;
+        const range = this.getSelectionRange() ?? (selection && selection.kind !== "npc" ? {
+            minX: selection.tileX, maxX: selection.tileX, minY: selection.tileY, maxY: selection.tileY,
+        } : undefined);
+        if (!range) throw new Error("Select a tile or area to copy");
         if (!this.host?.copyArea) throw new Error("Map data is unavailable");
         const contents = this.host.copyArea(range, this.config.edits);
         if (!includeNpcs || !this.host.getAreaNpcs) return contents;
@@ -1774,6 +1778,19 @@ export class EditModePlugin {
         }
     }
 
+    /** The selected southwest tile is captured by the UI before its asynchronous clipboard read. */
+    pasteArea(contents: string, destination: EditModeTile | undefined = this.selection): void {
+        if (!destination || !this.host?.exportRegionPack) throw new Error("Select a destination tile with loaded map data");
+        const edits = areaPasteEdits(contents, destination, this.host.hasWideTerrain?.() ?? true);
+        const combined = [...this.config.edits, ...edits];
+        const regions = new Map<number, EditModeTile>();
+        for (const edit of edits) if (edit.kind !== "npc") regions.set(regionIdOf(edit.tileX, edit.tileY), edit);
+        // Prepare every destination pack before changing edits, NPCs or undo history.
+        const packs = [...regions.values()].map(tile => this.host!.exportRegionPack!(tile, combined));
+        if (oversizedRegionPacks(packs).length) throw new Error("Pasted area exceeds the region packet limit");
+        this.commitEdits(edits, false);
+    }
+
     private islandArea() {
         const range = this.getSelectionRange();
         if (!range || range.plane !== 0 || range.maxX - range.minX < 2 || range.maxY - range.minY < 2 || !this.host?.isWaterOverlay || !this.host.getTerrainHeight) return;
@@ -2003,6 +2020,7 @@ export class EditModePlugin {
                 edit.locId,
                 { tileX: edit.tileX, tileY: edit.tileY, plane: edit.plane },
                 edit.rotation,
+                edit.direction,
             );
             if (serverId !== undefined) this.spawnedNpcs.set(key, serverId);
         }
@@ -2480,6 +2498,7 @@ export class EditModePlugin {
                 edit.locId,
                 { tileX: edit.tileX, tileY: edit.tileY, plane: edit.plane },
                 edit.rotation,
+                edit.direction,
             );
             if (serverId !== undefined) this.spawnedNpcs.set(key, serverId);
             return;
@@ -3265,7 +3284,8 @@ export class EditModePlugin {
                 )
                 .map((edit) => ({
                     kind: edit.kind,
-                    locId: toInt(edit.locId, 0, 0, edit.kind === "height" || edit.kind === "flag" ? 0xff : 0xffff),
+                    locId: toInt(edit.locId, 0, 0, edit.kind === "height" || edit.kind === "flag" ? 0xff :
+                        edit.kind === "terrain" || edit.kind === "underlay" ? 0xffff : 0x7fffffff),
                     tileX: toInt(edit.tileX, 0, 0, 0xffff),
                     tileY: toInt(edit.tileY, 0, 0, 0xffff),
                     plane: toInt(edit.plane, 0, 0, 3),

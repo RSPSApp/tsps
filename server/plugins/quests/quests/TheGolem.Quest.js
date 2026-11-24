@@ -281,10 +281,11 @@ module.exports = function registerTheGolemQuest(api) {
     player.getPacketSender().sendTypedMessage(api.core.ChatType.SPAM, text);
   }
 
-  /** A copy the player dropped (or was given with a full inventory) on the tile under them. */
+  /** A copy on the floor that is still the player's own (dropped, or given with a full inventory). */
   function onFloorHere(player, itemId) {
-    const manager = api.core.ItemOnGroundManager;
-    return Boolean(manager?.getGroundItem?.(player.getUsername(), itemId, player.getLocation(), player.getPrivateArea?.() ?? null));
+    const username = player.getUsername();
+    return api.core.World.getItems().some((ground) => ground && !ground.isPendingRemoval?.()
+      && ground.getItem?.()?.getId?.() === itemId && ground.getOwner?.() === username);
   }
 
   /** Into the inventory, or onto the floor under the player with a full one (Wiki: "Drops to floor"). */

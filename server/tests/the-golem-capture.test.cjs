@@ -798,10 +798,14 @@ test("a full inventory and a second click put no second notes or key on the floo
   fill(key);
   await h.talk(key, curator, 3);
   await h.continueLine(key);
+  // A step away from the dropped key: still only one (Wiki).
+  key.player.setLocation(new h.core.Location(3257, 3448, 0));
   clear(key);
   await h.talk(key, curator, 3);
   h.ticks(key, 2);
-  assert.ok(floor(key, I.DISPLAY_CABINET_KEY));
+  const keysOnFloor = h.core.World.getItems().filter((g) => g?.getItem?.()?.getId?.() === I.DISPLAY_CABINET_KEY
+    && g.getOwner() === key.player.getUsername());
+  assert.equal(keysOnFloor.length, 1, "the first key is still on the floor, and no second");
   assert.deepEqual(texts(key), ["The curator doesn't seem to have anything of value."], "no second key");
 });
 

@@ -82,6 +82,8 @@ export class WorldMapTileJob {
                 mapScenes: state.minimapImageRenderer.mapScenes,
                 varManager: this.vars,
                 maxRenderedRegionBytes: 0,
+                // The worker streams the cache: wait on each group's fetch, not a 250ms poll.
+                waitForGroup: state.js5 ? (indexId, archiveId) => state.js5!.requestGroup(indexId, archiveId, true) : undefined,
                 beforeRaster: async (signal) => {
                     // Yield the worker task queue and let foreground geometry finish first.
                     do { await new Promise(resolve => setTimeout(resolve, 0)); }

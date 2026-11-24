@@ -2,7 +2,8 @@ import type { CacheIndex } from "../cache/CacheIndex";
 import type { CacheSystem } from "../cache/CacheSystem";
 import { IndexType } from "../cache/IndexType";
 import { isGroupMissingError } from "../cache/js5/GroupMissingError";
-import { retryOnMissingGroup } from "../cache/js5/retryOnMissingGroup";
+import { retryOnMissingGroup, type WaitForGroup } from "../cache/js5/retryOnMissingGroup";
+import { decodeRgbPng } from "./decodeRgbPng";
 import type { OverlayFloorTypeLoader } from "../config/floortype/FloorTypeLoader";
 import type { LocType } from "../config/loctype/LocType";
 import type { LocTypeLoader } from "../config/loctype/LocTypeLoader";
@@ -53,6 +54,8 @@ export type WorldMapArchiveRendererOptions = {
     maxRenderedRegionBytes?: number;
     /** Lets a cache worker finish foreground scene builds before raster work. */
     beforeRaster?: (signal?: AbortSignal) => Promise<void>;
+    /** Waits for a streamed cache group's fetch instead of polling for it (see retryOnMissingGroup). */
+    waitForGroup?: WaitForGroup;
 };
 
 export type WorldMapRenderArea = Pick<WorldMapArea, "id" | "internalName" | "backgroundColor" |
@@ -565,7 +568,7 @@ export class WorldMapArchiveRenderer {
         let pinned = false;
         try {
             const areaData = await Promise.race([
-                retryOnMissingGroup(() => aborted() ? undefined : this.getAreaData(area)), cancelled,
+                retryOnMissingGroup(() => aborted() ? undefined : this.getAreaData(area), undefined, undefined, this.options.waitForGroup), cancelled,
             ]);
             if (!areaData || aborted()) return undefined;
             region = this.getRegion(areaData, mapX | 0, mapY | 0);
@@ -581,7 +584,7 @@ export class WorldMapArchiveRenderer {
             const source = region.data0 ?? region.data1[0];
             // Keep cold geography and ground requests parallel, including single-worker clients.
             const ready = await Promise.race([Promise.all([
-                retryOnMissingGroup(() => aborted() ? false : this.loadGeography(currentRegion)),
+                retryOnMissingGroup(() => aborted() ? false : this.loadGeography(currentRegion), undefined, undefined, this.options.waitForGroup),
                 this.getGroundColors(source.groupId, source.headerless ? source.fileId : 0),
             ]), cancelled]);
             if (!ready || !ready[0] || !ready[1] || aborted()) return undefined;
@@ -1380,7 +1383,7 @@ export class WorldMapArchiveRenderer {
         try {
             // Waits for the group to stream in when the cache is sparse.
             const archive = await Promise.race([
-                retryOnMissingGroup(() => signal.aborted ? undefined : this.groundIndex.getArchive(groupId)), cancelled,
+                retryOnMissingGroup(() => signal.aborted ? undefined : this.groundIndex.getArchive(groupId), undefined, undefined, this.options.waitForGroup), cancelled,
             ]);
             if (archive && !signal.aborted) {
                 const file = archive.getFile(fileId) ?? archive.getFile(0) ?? archive.files[0];
@@ -1399,6 +1402,17 @@ export class WorldMapArchiveRenderer {
     }
 
     private async decodeWorldMapSprite(data: Int8Array, signal?: AbortSignal): Promise<Int32Array | undefined> {
+        // Every ground sprite is a 64x64 RGB PNG: decode it here rather than wait on the browser.
+        const png = decodeRgbPng(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+        if (png) {
+            const width = Math.min(TILE_COUNT, png.width);
+            const height = Math.min(TILE_COUNT, png.height);
+            const colors = new Int32Array(TILE_AREA);
+            for (let y = 0; y < height; y++) {
+                colors.set(png.rgb.subarray(y * png.width, y * png.width + width), y * TILE_COUNT);
+            }
+            return colors;
+        }
         const bytes = new Uint8Array(data.byteLength) as Uint8Array<ArrayBuffer>;
         bytes.set(data as unknown as Uint8Array);
         let image: ImageBitmap | HTMLImageElement | undefined;

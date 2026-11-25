@@ -378,7 +378,7 @@ test("the spikes hurt a player still on one when they come up, not one who stepp
   const spiked = new Set([key(1365, 4511), key(1366, 4511)]);
   Fight.prototype.spikesErupt.call(fightOn(1365, 4511), spiked);
   assert.equal(hits.length, 1);
-  assert.ok(hits[0] >= 6 && hits[0] <= 10, `${hits[0]}`);
+  assert.ok(hits[0] >= 6 && hits[0] <= 16, `${hits[0]} (R1140: 6-16 over 94 spike hits)`);
   Fight.prototype.spikesErupt.call(fightOn(1365, 4513), spiked);
   assert.equal(hits.length, 1, "stepped off: no damage");
 });

@@ -41,7 +41,7 @@ She attacks 4 ticks after rising, then every 8 ticks (both captures), following 
 
 ### Standard attack
 
-`amoxliatl_attack` (11530) and a magic hit of up to 22 on the same tick (captured: the player's block on that tick); Protect from Magic blocks it. The ice spikes (map animation 2942) are drawn on the floor around the player as captured: of the tiles within 6 of the player, their own about 3 in 4, the next ring about 2 in 3, the rest about 1 in 4 (counted over 13 attacks, 18-50 tiles each). Each is one 150-cycle animation (seq 11543): a short warning, then the spike rising through ticks 2-3. 3 ticks after the attack they hit a player who was still on one of their tiles the tick before: typeless 10 and 6 in the two captured cases (1147, ticks 352 and 360), 6-10 here as the Wiki gives the pools. Every player who had stepped off by then took nothing (the other 11 attacks), the Wiki's "step back two tiles after she starts a standard attack".
+`amoxliatl_attack` (11530) and a magic hit of up to 22 on the same tick (captured: the player's block on that tick); Protect from Magic blocks it. The ice spikes (map animation 2942) are drawn on the floor around the player as captured: of the tiles within 6 of the player, their own about 3 in 4, the next ring about 2 in 3, the rest about 1 in 4 (counted over 13 attacks, 18-50 tiles each). Each is one 150-cycle animation (seq 11543): a short warning, then the spike rising through ticks 2-3. 3 ticks after the attack they hit a player who was still on one of their tiles the tick before: 10 and 6 in the two cases captured in 1147 (ticks 352 and 360), and 6-16 over 94 spike hits in R1140, every value from 6 to 16 seen. Every player who had stepped off by then took nothing (the other 11 attacks), the Wiki's "step back two tiles after she starts a standard attack".
 
 3 ticks after the attack an icy pool (54279, a random rotation) forms on the tile the player stood on when she attacked (captured), with sound 9726 from the middle of the platform (always 1365,4511, both captures). Standing on a pool deals 6-10 a tick (Wiki; R1140 shows 6-10 over 113 pool hits). Pools stay until she dies: on the killing blow each one goes with a puff (map animation 2938, captured).
 
@@ -98,7 +98,7 @@ grave).
 
 ## Estimates
 
-- The spike spread models the captured tiles. The captures show spike hits of 10 and 6, and TSPS uses the Wiki's icy-pool range (6–10) as the spike damage estimate. The actual spike damage cap still needs a source.
+- The spike spread models the captured tiles.
 - Where the blocks land within 4 tiles (the capture: 2-4 tiles from the player).
 - The capture's Exit prompt opened with the player a few tiles from the blockage; here the player walks up to it first.
 - The multiway indicator comes on with the move in (tick 2), not with the fade back (tick 4).

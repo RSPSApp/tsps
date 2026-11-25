@@ -74,12 +74,12 @@
     "hurtSound": 9711
   },
   "spikes": {
-    "about": "Map animations on tiles around the player, as captured: the player's own tile about 3 in 4, the tiles next to it about 2 in 3, the rest out to 6 about 1 in 4. 3 ticks after the attack they come up: typeless damage to a player still on one (captured 10 and 6; 6-10 as the Wiki gives the pools).",
+    "about": "Map animations on tiles around the player, as captured: the player's own tile about 3 in 4, the tiles next to it about 2 in 3, the rest out to 6 about 1 in 4. 3 ticks after the attack they come up and hit a player still on one, as her hit: 6-16 (R1140: 94 spike hits, every value from 6 to 16).",
     "spotanim": 2942,
     "reach": 6,
     "chance": [0.77, 0.64, 0.28],
     "damageTicks": 3,
-    "damage": [6, 10]
+    "damage": [6, 16]
   },
   "pools": {
     "about": "An icy pool on the player's tile 3 ticks after each standard attack (captured); standing on one deals 6-10 a tick (Wiki). They stay until she dies, then go with a puff (captured).",

@@ -305,6 +305,7 @@ export function renderGeometryPass(host: WebGLOsrsRendererHost, transparent: boo
                         groundBatch.drawRanges,
                         groundDrawRangePlanes,
                         roofPlaneLimit, map, isLod,
+                        transparent ? map.getGroundItemGearTextures() : undefined,
                     );
                 }
 

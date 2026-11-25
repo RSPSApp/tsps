@@ -367,7 +367,7 @@ export function widgetEntriesToSimple(
         // Item Examine (including static equipment slots) keeps its local text/price
         // owner. An itemless CC_CREATE row can instead configure Examine as an op.
         const examineOperation = lower === "examine" && hasNativeWidgetOperation(e) &&
-            widget?.fileId === -1 && widget?.itemId < 0 && typeof e.onClick !== "function";
+            (widget?.fileId === -1 || widget?.examineAsOperation === true) && widget?.itemId < 0 && typeof e.onClick !== "function";
         const shouldDispatchWidgetAction =
             !e.suppressWidgetAction &&
             lower !== "cancel" &&

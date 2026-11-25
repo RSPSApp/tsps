@@ -1,3 +1,4 @@
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 // TODO: Soulshot special attack animation/graphic ids not found; skipped.
 function buildSpecial(core) {
   const { CombatPosition, CombatSpecial, Equipment, ItemIdentifiers, Misc, PendingHit, RangedCombatMethod, Skill, Sound } = core;
@@ -14,18 +15,20 @@ function buildSpecial(core) {
     return Math.max(0, Math.floor(0.5 + ((level + 10) * (strength + 64)) / 640));
   }
 
-  function soulshot(target, damage) {
+  function soulshot(target, damage, config) {
     if (damage <= 0) {
       return;
     }
     const skillManager = target.isPlayer() ? target.getAsPlayer().getSkillManager() : target.getAsNpc();
-    const current = skillManager.getCurrentLevel(Skill.MAGIC);
-    const max = skillManager.getMaxLevel(Skill.MAGIC);
+    const skill = Skill[config.skill.toUpperCase()];
+    if (config.skill === "prayer" && !target.isPlayer()) return;
+    const current = skillManager.getCurrentLevel(skill);
+    const max = skillManager.getMaxLevel(skill);
     // Only drains while Magic has not already been reduced.
-    if (current < max) {
+    if (config.requireUnreduced && current < max) {
       return;
     }
-    skillManager.setCurrentLevels(Skill.MAGIC, Math.max(0, current - damage));
+    skillManager.setCurrentLevels(skill, Math.min(current, Math.max(target.isPlayer() ? config.playerFloor : 0, current - Math.floor(damage * config.percent / 100))));
   }
 
   class SeercullCombatMethod extends RangedCombatMethod {
@@ -50,10 +53,12 @@ function buildSpecial(core) {
     }
 
     handleAfterHitEffects(hit) {
+      const config = mechanicSettings(this, "damage-drain", { skill: "magic", percent: 100, requireUnreduced: true, playerFloor: 0 });
+      if (!config.enabled) return;
       if (!hit.isAccurate()) {
         return;
       }
-      soulshot(hit.getTarget(), Math.floor(hit.getTotalDamage()));
+      soulshot(hit.getTarget(), Math.floor(hit.getTotalDamage()), config);
     }
   }
 
@@ -64,6 +69,7 @@ function buildSpecial(core) {
     strengthMultiplier: 1,
     accuracyMultiplier: 1,
     traits: { guaranteedHit: true },
+    metadata: { editorMechanics: mechanicSchema("damage-drain", { skill: "magic", percent: 100, requireUnreduced: true, playerFloor: 0 }) },
     combatMethod: new SeercullCombatMethod(),
   };
 }

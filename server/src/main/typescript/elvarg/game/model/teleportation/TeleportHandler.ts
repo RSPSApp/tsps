@@ -207,7 +207,7 @@ export class TeleportHandler {
 
     public static onTeleporting(player: Player, closeInterfaces: boolean = true): void {
         player.getSkillManager().stopSkillable();
-        if (closeInterfaces) player.getPacketSender().sendInterfaceRemoval();
+        if (closeInterfaces) player.getPacketSender().sendInterfaceRemoval(true);
         player.getCombat().reset();
     }
 

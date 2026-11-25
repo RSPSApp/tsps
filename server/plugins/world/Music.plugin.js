@@ -17,6 +17,8 @@ const MUSIC_NOW_PLAYING_REFRESH_SCRIPT = 3936;
 const MUSIC_JUKEBOX_ROW_FLAGS = 62;
 const MUSIC_NOW_PLAYING_FLAGS = 60;
 const WELCOME_PLAY_BUTTON_UID = (378 << 16) | 72;
+// Cache Music DB rows 2956/2957: the two songs a Church organ can play (Wiki: Church organ).
+const CHURCH_ORGAN_TRACKS = [39, 40];
 /** The Music tab's Area, Shuffle and Single mode buttons and Skip Track, by the mode each sets. */
 const MODE_BUTTONS = new Map([[14, 0], [15, 1], [16, 2]].map(([child, mode]) => [(MUSIC_GROUP_ID << 16) | child, mode]));
 const SKIP_BUTTON_UID = (MUSIC_GROUP_ID << 16) | 17;
@@ -336,6 +338,14 @@ function selectMusicTrack(event) {
   player.getSession().setCurrentMusicTrack(track.id);
   // The real sender also announces audio:play-song, including to Treasure Trails' Cecilia listener.
   player.getPacketSender().sendSong(track.id);
+}
+
+/** Church organs use normal music volume, without changing the player's music mode or playlists. */
+function playChurchOrgan({ player }) {
+  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_use_chapel_organ")));
+  const track = CHURCH_ORGAN_TRACKS[Math.floor(Math.random() * CHURCH_ORGAN_TRACKS.length)];
+  player.getPacketSender().sendSong(track);
+  return true;
 }
 
 function onMusicLogin({ player }) {
@@ -688,6 +698,7 @@ module.exports = {
     api.persistAttribute(SELECTED_TRACK_ATTRIBUTE, -1);
     api.persistAttribute(Playlists.PLAYLISTS_ATTRIBUTE, []);
     api.onPlayerLogin(onMusicLogin);
+    api.onObjectInteraction("Church organ", { Play: playChurchOrgan });
     api.onInterfaceActionButton(WELCOME_PLAY_BUTTON_UID, onMusicWelcomeAction);
     api.onCustomEvent("gameframe:ready", onMusicWelcomeAction);
     api.onInterfaceActionButton((MUSIC_GROUP_ID << 16) | MUSIC_JUKEBOX_CHILD_ID, selectMusicTrack);

@@ -1,3 +1,4 @@
+import { isGearTextureId } from "../../custom/items/GearVisualRegistry";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -304,7 +305,7 @@ export function rebuildGroundItemsForMap(host: WebGLOsrsRendererHost,
 
         const textureUpdates = new Map<number, Int32Array>();
         for (const texId of data.usedTextureIds) {
-            if (host.loadedTextureIds.has(texId)) continue;
+            if (isGearTextureId(texId) || host.loadedTextureIds.has(texId)) continue;
             try {
                 const pixels = textureLoader.getPixelsArgb(texId, RENDER_CONSTANTS.TEXTURE_SIZE, true, 1.0);
                 textureUpdates.set(texId, pixels);

@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-198 quests · ✅ passed: 24 · ⚠️ passed with issues: 21 · 🔄 in progress: 14 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 90
+198 quests · ✅ passed: 24 · ⚠️ passed with issues: 21 · 🔄 in progress: 15 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 89
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -140,7 +140,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Sea Slug](sea-slug/README.md) | ✅ passed | 2026-11-10 | agent | claude-opus-5-5 | 1 |
 | [Secrets of the North](secrets-of-the-north/README.md) | untested |  |  |  |  |
 | Shades of Mort'ton | untested |  |  |  |  |
-| Shadow of the Storm | untested |  |  |  |  |
+| [Shadow of the Storm](shadow-of-the-storm/README.md) | 🔄 in progress | 2026-11-24 | agent | claude-opus-5-5 |  |
 | [Shadows of Custodia](shadows-of-custodia/README.md) | untested |  |  |  |  |
 | [Sheep Herder](sheep-herder/README.md) | untested |  |  |  |  |
 | [Sheep Shearer](sheep-shearer/README.md) | 🔁 needs recheck | 2026-11-07 | agent | claude-opus-5-5 | 5 |

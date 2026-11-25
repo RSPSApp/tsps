@@ -143,3 +143,118 @@ test("real specials spend the custom cost, retaining modifiers, inherited varian
   CombatSpecial.drain(player, borrowed.getDrainAmount());
   assert.equal(player.getSpecialPercentage(), 75, "a copied variant inherits its variant cost without an override");
 });
+
+test("login batches custom item rows and refuses an unsendable item at registration", async (t) => {
+  const { CachePipeline } = require("../dist/game/cache/CachePipeline");
+  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
+  const { MAX_GAME_MESSAGE_BYTES } = require("../dist/net/BinaryChannel");
+  const { encodeContentData } = require("../dist/net/protocol/ClientProtocol");
+  await CachePipeline.initialize(require("node:path").resolve(__dirname, ".."));
+  const originalItems = CacheDefinitions.getCustomItems();
+  const originalModels = CacheDefinitions.getCustomModels();
+  t.after(() => {
+    CacheDefinitions.registerCustomItems(originalItems);
+    CacheDefinitions.setCustomModels(originalModels);
+  });
+  let login;
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({
+    log() {},
+    registerContentEndpoint() {},
+    onPlayerLogin(fn) { login = fn; },
+  });
+
+  function item(id, length) {
+    const image = Buffer.alloc(length);
+    let seed = id;
+    for (let i = 0; i < length; i++) {
+      seed = (Math.imul(seed, 1664525) + 1013904223) | 0;
+      image[i] = seed >>> 24;
+    }
+    return {
+      id,
+      objType: { name: "Test animated gear" },
+      visuals: { version: 1, models: [{ textures: [{ id: "texture", frames: [
+        { size: 128, pixels: image.toString("base64") },
+      ] }] }] },
+    };
+  }
+  const rows = [item(59500, 20000), item(59501, 20000), item(59502, 20000), item(59503, 20000)];
+  CacheDefinitions.registerCustomItems(rows);
+  assert.throws(() => CacheDefinitions.registerCustomItems([...rows, item(59504, 95000)]),
+    /item 59504 exceeds the compressed login packet limit/);
+  assert.deepEqual(CacheDefinitions.getCustomItems().map(({ id }) => id), rows.map(({ id }) => id));
+
+  const sent = [];
+  login({ player: { getPacketSender: () => ({ sendContentData(source, datasets) {
+    const packet = encodeContentData(source, datasets);
+    assert.ok(packet.length <= MAX_GAME_MESSAGE_BYTES);
+    assert.equal(packet.readUInt16BE(1), packet.length - 3);
+    sent.push(...datasets.filter(dataset => dataset.key.startsWith("customItems")));
+  } }) } });
+  assert.equal(sent.length, 3, "send the count and two batches of two items");
+  assert.deepEqual(sent[0], { key: "customItemsBatch", rows: [rows.length] });
+  assert.deepEqual(sent.slice(1).flatMap(dataset => dataset.rows.map(({ id }) => id)), rows.map(({ id }) => id));
+
+  CacheDefinitions.registerCustomItems([rows[0]]);
+  assert.equal(CacheDefinitions.getCustomItemPackets()[0].key, "customItems", "small worlds keep the single-packet format");
+});
+
+test("only the item performing a special attack can override its drain", t => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { Equipment } = require("../dist/game/model/container/impl/Equipment");
+  const { Item } = require("../dist/game/model/Item");
+  const player = new Player(null);
+  const weaponId = 59205, shieldId = 59206;
+  const authored = special("custom-item-override-drain", [weaponId], 10, { overrideDrainAmount: true });
+  player.getEquipment().setItem(Equipment.WEAPON_SLOT, new Item(weaponId));
+  player.setCombatSpecial(authored);
+  player.setSpecialPercentage(100);
+  player.setRecoveringSpecialAttack(true);
+  t.mock.method(CombatSpecial, "updateBar", () => {});
+
+  CombatSpecial.drain(player, 0, false, shieldId);
+  assert.equal(player.getSpecialPercentage(), 100);
+  CombatSpecial.drain(player, 0, false, weaponId);
+  assert.equal(player.getSpecialPercentage(), 90);
+  CombatSpecial.drain(player, 0, false);
+  assert.equal(player.getSpecialPercentage(), 80);
+  CombatSpecial.drain(player, 5, true, shieldId);
+  assert.equal(player.getSpecialPercentage(), 75);
+
+  const shieldSpecial = special("custom-item-shield-drain", [shieldId], 40, {
+    overrideDrainAmount: true,
+    drainAmountByItemId: { [shieldId]: 25 },
+  });
+  player.getEquipment().setItem(Equipment.SHIELD_SLOT, new Item(shieldId));
+  CombatSpecial.drain(player, 0, false, shieldId);
+  assert.equal(player.getSpecialPercentage(), 50);
+
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const events = t.mock.method(PluginManager, "emitCustomEvent", () => {});
+  CombatSpecial.drain(player, 0, true, shieldId);
+  assert.equal(player.getSpecialPercentage(), 25);
+  const [, cost] = events.mock.calls[0].arguments;
+  assert.equal(cost.specialId, shieldSpecial.getId());
+  assert.equal(cost.cost, 25);
+});
+
+
+test("plugins remove only their owned special and preserve newer replacements", () => {
+  const { PluginManager } = require("../dist/plugins/PluginManager");
+  const owner = PluginManager.createApi("SpecialOwnerTest"), other = PluginManager.createApi("SpecialOtherTest");
+  const definition = { id: "owned-special-test", itemIds: [59998], drainAmount: 25, strengthMultiplier: 1, accuracyMultiplier: 1, combatMethod: { type() {} } };
+  owner.registerCombatSpecial(definition);
+  const first = CombatSpecial.getById(definition.id);
+  assert.equal(other.unregisterCombatSpecial(definition.id), false);
+  assert.equal(CombatSpecial.getForWeaponId(59998), first);
+  other.registerCombatSpecial({ ...definition, combatMethod: { type() {} } });
+  const second = CombatSpecial.getById(definition.id);
+  assert.notEqual(second, first);
+  assert.equal(owner.unregisterCombatSpecial(definition.id), false);
+  assert.equal(other.unregisterCombatSpecial(definition.id), true);
+  assert.equal(CombatSpecial.getById(definition.id), first);
+  assert.equal(CombatSpecial.getForWeaponId(59998), first);
+  assert.equal(owner.unregisterCombatSpecial(definition.id), true);
+  assert.equal(CombatSpecial.getById(definition.id), null);
+  assert.equal(CombatSpecial.getForWeaponId(59998), null);
+});

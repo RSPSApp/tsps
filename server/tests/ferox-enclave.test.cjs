@@ -226,7 +226,7 @@ function enclaveWorld(t) {
   });
   const custom = new Map(), startup = [], global = { attack: [], process: [] };
   const apiFor = (name) => new Proxy({
-    core, sendMultiChatboxPrompt: recordPrompt,
+    core, sendMultiChatboxPrompt: recordPrompt, getTaskManager: () => TaskManager,
     registerArea(area) { area.pluginName = name; AreaManager.areas.push(area); },
     onCustomEvent(name, handler) { custom.set(name, [...(custom.get(name) ?? []), handler]); },
     emitCustomEvent(name, event) { for (const handler of custom.get(name) ?? []) handler(event); },
@@ -250,7 +250,8 @@ function enclaveWorld(t) {
     AreaManager.process(p);
     return p;
   }
-  return { core, actor, global, area: AreaManager.areas.find((area) => area.getName() === 'FeroxEnclaveArea') };
+  const on = (name, handler) => custom.set(name, [...(custom.get(name) ?? []), handler]);
+  return { core, actor, global, on, area: AreaManager.areas.find((area) => area.getName() === 'FeroxEnclaveArea') };
 }
 
 test('Ferox has no global combat/process hooks and does no work for distant players', (t) => {
@@ -739,4 +740,58 @@ test("busy: the Castle Wars portal and the free-for-all questions clear it when 
   xp.p.getPacketSender().closeInterruptibleInterfaces();
   xp.tick();
   assert.deepEqual(xp.busy, [1, 0]);
+});
+
+test('"wilderness:left" fires once on leaving Wilderness ground: into Ferox, by teleport, not on logout', (t) => {
+  const { core, actor, on } = enclaveWorld(t);
+  const left = [];
+  on('wilderness:left', ({ player }) => left.push(player));
+  const p = actor(new Location(3109, 3629, 0));
+  // The Wilderness rules run for real players only.
+  let wildernessLevel = 0;
+  const sender = new Proxy({}, { get: () => () => sender });
+  Object.assign(p, {
+    getPacketSender: () => sender,
+    isPlayerBot: () => false, getWildernessLevel: () => wildernessLevel, setWildernessLevel: (level) => { wildernessLevel = level; },
+    getSkillManager: () => ({ getCombatLevel: () => 100, getMaxLevel: () => 99 }), getUpdateFlag: () => ({ flag() {} }),
+  });
+  const step = (x, y) => { p.moveTo(new Location(x, y, 0)); core.AreaManager.process(p); };
+  step(3109, 3630);
+  step(3110, 3630);
+  assert.deepEqual(left, [], 'walking in the Wilderness');
+  step(3123, 3629);
+  assert.deepEqual(left, [p], 'into Ferox Enclave');
+  step(3109, 3629);
+  step(3222, 3218);
+  assert.deepEqual(left, [p, p], 'teleported to Lumbridge');
+  step(3109, 3629);
+  p.getArea().postLeave(p, true);
+  assert.deepEqual(left, [p, p], 'logging out');
+});
+
+test('"wilderness:left" for an instance that claims the player before moving them: judged once moved', (t) => {
+  const { core, actor, on } = enclaveWorld(t);
+  const left = [];
+  on('wilderness:left', ({ player }) => left.push(player));
+  const p = actor(new Location(3109, 3629, 0));
+  const sender = new Proxy({}, { get: () => () => sender });
+  Object.assign(p, {
+    isPlayerBot: () => false, getWildernessLevel: () => 0, setWildernessLevel() {}, getPacketSender: () => sender,
+    getSkillManager: () => ({ getCombatLevel: () => 100, getMaxLevel: () => 99 }), getUpdateFlag: () => ({ flag() {} }),
+  });
+  p.moveTo(new Location(3109, 3630, 0));
+  core.AreaManager.process(p);
+  const claim = (instance) => { instance.enter(p); p.setArea(instance); };
+  // A cave on Wilderness ground: claimed, and still in the Wilderness a tick later.
+  claim(new (class Cave extends core.Area {})([]));
+  TaskManager.process();
+  assert.deepEqual(left, [], 'still on Wilderness ground');
+  // Back out, then an instance off Wilderness ground that claims first and moves after.
+  core.AreaManager.process(p);
+  assert.equal(p.getArea().getName(), 'WildernessArea');
+  claim(new (class Lair extends core.Area {})([]));
+  p.moveTo(new Location(2271, 4698, 0));
+  assert.deepEqual(left, [], 'not before the move is done');
+  TaskManager.process();
+  assert.deepEqual(left, [p], 'once off Wilderness ground');
 });

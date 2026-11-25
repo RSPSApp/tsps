@@ -26,7 +26,7 @@ export interface InteractHighlightOverlayContext {
     getTargets: () => ReadonlyArray<InteractHighlightDrawTarget>;
 }
 
-const MAX_TRI_POINTS = 131072; // 43k triangles
+const TRI_POINTS_PER_UPLOAD = 131070; // Complete triangles per batch.
 const DEFAULT_ALPHA = 0.95;
 const DEFAULT_OUTLINE_RADIUS = 1.9;
 
@@ -152,7 +152,7 @@ export class InteractHighlightOverlay implements Overlay {
     private quadArray?: VertexArray;
     private quadDrawCall?: DrawCall;
 
-    private readonly triVerts = new Float32Array(MAX_TRI_POINTS * 3);
+    private readonly triVerts = new Float32Array(TRI_POINTS_PER_UPLOAD * 3);
     private readonly color = new Float32Array(4);
     private readonly texelSize = new Float32Array(2);
 
@@ -225,15 +225,6 @@ export class InteractHighlightOverlay implements Overlay {
                 continue;
             }
 
-            const triCount = this.writeTriangleVerts(triPoints);
-            if (triCount < 3) {
-                continue;
-            }
-
-            this.triPositions.data(this.triVerts.subarray(0, triCount * 3));
-            this.triPositions.numItems = triCount;
-            this.triArray.numElements = triCount;
-
             // Apply world entity bobbing transform (identity for non-overlay entities)
             this.triDrawCall.uniform(
                 "u_worldEntityTransform",
@@ -245,7 +236,13 @@ export class InteractHighlightOverlay implements Overlay {
             this.app.disable(PicoGL.BLEND);
             this.app.clearColor(0.0, 0.0, 0.0, 0.0);
             this.app.clear();
-            this.triDrawCall.draw();
+            for (let start = 0; start + 2 < triPoints.length; start += TRI_POINTS_PER_UPLOAD) {
+                const triCount = this.writeTriangleVerts(triPoints, start);
+                this.triPositions.data(this.triVerts.subarray(0, triCount * 3));
+                this.triPositions.numItems = triCount;
+                this.triArray.numElements = triCount;
+                this.triDrawCall.draw();
+            }
 
             const color = target.color >>> 0;
             this.color[0] = ((color >> 16) & 0xff) / 255.0;
@@ -323,11 +320,12 @@ export class InteractHighlightOverlay implements Overlay {
 
     private writeTriangleVerts(
         triPoints: ReadonlyArray<readonly [number, number, number]>,
+        start: number,
     ): number {
-        const maxCount = Math.min((triPoints.length / 3) | 0, (MAX_TRI_POINTS / 3) | 0) * 3;
+        const maxCount = Math.min(Math.floor((triPoints.length - start) / 3) * 3, TRI_POINTS_PER_UPLOAD);
         let vi = 0;
         for (let i = 0; i < maxCount; i++) {
-            const p = triPoints[i];
+            const p = triPoints[start + i];
             this.triVerts[vi++] = p[0];
             this.triVerts[vi++] = p[1];
             this.triVerts[vi++] = p[2];

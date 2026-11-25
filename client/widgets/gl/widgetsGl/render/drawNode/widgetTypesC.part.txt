@@ -107,19 +107,27 @@
                     ((resolvedFont as any)?.lineHeight as number) ||
                     ((resolvedFont as any)?.ascent as number) ||
                     12;
+                const singleLine = w.overflowScroll ? normalized.replace(/\n/g, ' ') : normalized;
+                const measuredWidth = w.overflowScroll ? resolvedFont?.measure(singleLine.replace(/<[^>]*>/g, '')) ?? 0 : 0;
+                const scrolling = w.overflowScroll && measuredWidth * rootScaleX > width;
+                const offset = w.overflowScroll ? scrollingTextOffset(w, singleLine, measuredWidth * rootScaleX, width, performance.now()) : 0;
+                if (w.overflowScroll) sc.pushCanvasRect(widgetClip.x0, widgetClip.y0,
+                    widgetClip.x1 - widgetClip.x0, widgetClip.y1 - widgetClip.y0);
                 drawWrappedTextGL(
-                    normalized,
-                    x,
+                    singleLine,
+                    x - offset,
                     y,
-                    width,
+                    w.overflowScroll ? Math.max(width, Math.ceil(measuredWidth * rootScaleX) + 1) : width,
                     height,
                     w.fontId ?? -1,
                     effectiveColor,
                     lineH,
                     !!(w.textShadowed || w.textShadow),
                     (w.yTextAlignment ?? 0) as 0 | 1 | 2,
-                    (w.xTextAlignment ?? 0) as 0 | 1 | 2,
+                    (w.overflowScroll ? 0 : w.xTextAlignment ?? 0) as 0 | 1 | 2,
                 );
+                if (w.overflowScroll) sc.pop();
+                if (scrolling) requestRender();
             }
             if (profileWidgetRender) {
                 textTextureDrawCalls +=

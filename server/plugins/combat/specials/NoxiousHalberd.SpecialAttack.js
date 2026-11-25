@@ -17,7 +17,7 @@ module.exports = function registerNoxiousHalberdSpecialAttack(api) {
   ];
 
   function wieldsHalberd(player) {
-    return HALBERD_IDS.includes(player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.());
+    return HALBERD_IDS.includes(CombatSpecial.weaponIdFor(player));
   }
 
   /** What the next poison or venom hit would deal: venom stores its damage, poison its severity. */

@@ -1,3 +1,4 @@
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 function buildSpecial(core) {
   const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Skill, Sound, Sounds } = core;
 
@@ -8,18 +9,20 @@ function buildSpecial(core) {
   const FLAT_DRAIN = 1;
   const DRAINED_SKILLS = [Skill.ATTACK, Skill.STRENGTH, Skill.DEFENCE];
 
-  function weaken(hit) {
+  function weaken(hit, config) {
     if (!hit.isAccurate()) {
       return;
     }
     const target = hit.getTarget();
     const skillManager = target.isPlayer() ? target.getAsPlayer().getSkillManager() : target.getAsNpc();
     const demon = target.isNpc?.() && target.getAsNpc().getCurrentDefinition().hasAttribute("demon");
-    const fraction = demon ? 0.15 : DRAIN_FRACTION;
-    for (const skill of DRAINED_SKILLS) {
+    const fraction = (demon ? config.demonPercent : config.percent) / 100;
+    for (const name of ["attack", "strength", "defence", "magic", "ranged", "prayer"]) {
+      if (!config[name] || name === "prayer" && !target.isPlayer()) continue;
+      const skill = Skill[name.toUpperCase()];
       const baseLevel = skillManager.getMaxLevel(skill);
       const current = skillManager.getCurrentLevel(skill);
-      const drainAmount = Math.floor(baseLevel * fraction) + FLAT_DRAIN;
+      const drainAmount = Math.floor(baseLevel * fraction) + config.flat;
       skillManager.setCurrentLevels(skill, Math.max(target.isPlayer() ? 1 : 0, current - drainAmount));
     }
   }
@@ -36,7 +39,9 @@ function buildSpecial(core) {
     }
 
     handleAfterHitEffects(hit) {
-      weaken(hit);
+      const config = mechanicSettings(this, "stat-drain", { percent: DRAIN_FRACTION * 100, demonPercent: 15, flat: FLAT_DRAIN, attack: true, strength: true, defence: true });
+      if (!config.enabled) return;
+      weaken(hit, config);
     }
   }
 
@@ -47,6 +52,7 @@ function buildSpecial(core) {
     strengthMultiplier: 1,
     accuracyMultiplier: 1,
     traits: { hitCount: 1, meleeDefenceBonusIndex: 0 },
+    metadata: { editorMechanics: mechanicSchema("stat-drain", { percent: DRAIN_FRACTION * 100, demonPercent: 15, flat: FLAT_DRAIN }) },
     combatMethod: new EmberlightCombatMethod(),
   };
 }

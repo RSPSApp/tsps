@@ -123,6 +123,7 @@ function playerWith(entries = [], { level = 99, threadUses } = {}) {
     }),
     sendMessage: text => log.push(['message', text]),
     performAnimation: animation => log.push(['animation', animation.getId()]),
+    hasBlockingInterface: () => player.interfaceId !== -1,
     getInterfaceId: () => player.interfaceId,
     setInterfaceId: id => { player.interfaceId = id; },
     isRegistered: () => true,
@@ -1431,6 +1432,7 @@ test("native ordinary crafting stops for inventory Bury and permits the same act
   const { ClientConnection } = require("../dist/net/NetworkBuilder");
   const { CREATION_MENU_GROUP_ID, CREATION_MENU_FIRST_ITEM_COMPONENT } = require("../dist/net/packet/PacketSender");
   const Shared = require("../plugins/skills/crafting/Shared.Crafting");
+  const { CustomInterfaceRegistry } = require("../dist/game/interfaces/CustomInterfaceRegistry");
   PluginManager.loadFromDirectory(path.resolve(__dirname, "../plugins"));
   const core = PluginManager.getCoreApi(), I = core.ItemIdentifiers;
   core.RegionManager.init(); core.RegionManager.loadMapFiles(3222, 3218);
@@ -1439,9 +1441,12 @@ test("native ordinary crafting stops for inventory Bury and permits the same act
   assert.equal(core.WorldDefinition.isMembersWorld, productionMembersWorld);
   assert.equal(core.WorldDefinition.isMembersWorld(), true);
   assert.equal(CREATION_MENU_GROUP_ID, 270);
+  const panelId = 30197;
+  CustomInterfaceRegistry.register({ groupId: panelId, widgets: [],
+    lifecycle: { persistOnWorldInteraction: true, blocksGameplay: false } });
   let index = 1920;
   for (const route of ["leather", "glass"]) {
-    for (const input of ["stationary", "inventory Bury", "widget Bury", "widget Examine", "permission veto", "equipment dispatch"]) {
+    for (const input of ["stationary", "non-blocking panel", "inventory Bury", "widget Bury", "widget Examine", "permission veto", "equipment dispatch"]) {
       await t.test(`${route}: ${input}`, async t => {
         const channel = { kind: "test", remoteAddress: "127.0.0.1", isOpen: () => true,
           send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
@@ -1507,7 +1512,11 @@ test("native ordinary crafting stops for inventory Bury and permits the same act
         await begin();
         assert.equal(total(material), 2); assert.equal(total(product), 0); assert.deepEqual(gains, []);
         const interrupted = input.endsWith("Bury");
-        if (input === "permission veto" || input === "equipment dispatch") {
+        if (input === "non-blocking panel") {
+          p.getPacketSender().sendInterface(panelId);
+          p.closeInterruptibleInterfaces();
+          assert.equal(p.getInterfaceId(), panelId);
+        } else if (input === "permission veto" || input === "equipment dispatch") {
           const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
           if (input === "permission veto") {
             // The real dispatcher must honor a refusal before clearing an interaction.
@@ -1551,6 +1560,7 @@ test("native ordinary crafting stops for inventory Bury and permits the same act
           assert.equal(p.getAttribute(THREAD_USES_ATTRIBUTE) ?? 0, interrupted ? 0 : 1);
         }
         assert.equal(p.getAttribute(Shared.CRAFTING_TASK_ATTRIBUTE), null);
+        if (input === "non-blocking panel") assert.equal(p.getInterfaceId(), panelId);
         // The same actor must be able to start and finish the next ordinary action.
         await begin();
         for (let i = 0; i < 5; i++) turn();

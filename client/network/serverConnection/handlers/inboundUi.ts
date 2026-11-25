@@ -1,5 +1,5 @@
 import { getCustomDefinitionKey } from "../../../custom/definitions/CustomDefinitionStore";
-import { isDefinitionDataset, loadFromPayload } from "../../../common/gamemode/GamemodeContentStore";
+import { assembleCustomItemBatches, isDefinitionDataset, loadFromPayload } from "../../../common/gamemode/GamemodeContentStore";
 import { applyClanChannelDelta, applyClanSettingsDelta } from "../../../common/social/Clans";
 import { openClientUrl } from "../../../common/openUrl";
 import { ClientState } from "../../../game/ClientState";
@@ -288,7 +288,11 @@ export function handleInboundUi(msg: any): boolean {
         return true;
     }
     if (msg.type === "gamemode_data") {
-        const datasets = msg.payload?.datasets;
+        const incoming = msg.payload?.datasets;
+        if (!Array.isArray(incoming)) return true;
+        const datasets = assembleCustomItemBatches(incoming);
+        if (datasets.length === 0 && incoming.length > 0) return true;
+        msg.payload = { ...msg.payload, datasets };
         if (datasets?.length === 1 && datasets[0].key === "worldMapPlayers") {
             // Staff world map dots: [x, y, plane, isBot] rows, drawn by the map renderer.
             const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
@@ -315,16 +319,17 @@ export function handleInboundUi(msg: any): boolean {
             const itemRevision = CustomItemRegistry.revision;
             const archiveKey = getDefinitionArchiveKey();
             const definitionsKey = getCustomDefinitionKey();
-            loadFromPayload(msg.payload);
+            const sampledChanges = loadFromPayload(msg.payload);
             const g: any = (typeof window !== "undefined" ? window : globalThis) as any;
             const mv = g?.__osrsClient;
             const animations = datasets?.some((dataset: any) => dataset.key === "customAnimations");
-            if (animations) {
-                // Animations and graphics are only played by actors and graphics: clear what plays
-                // them, not every definition (on WebGPU that restarts the map load).
+            if (animations || sampledChanges.length) {
                 mv?.seqTypeLoader?.clearCache();
-                mv?.seqFrameLoader?.clearCache();
-                mv?.spotAnimTypeLoader?.clearCache();
+                if (animations) {
+                    mv?.seqFrameLoader?.clearCache();
+                    mv?.spotAnimTypeLoader?.clearCache();
+                }
+                // Actor poses can refresh without restarting the map load.
                 mv?.renderer?.invalidateAnimationCaches?.();
             }
             if (datasets?.some((dataset: any) =>
@@ -338,15 +343,21 @@ export function handleInboundUi(msg: any): boolean {
                     mv?.renderer?.invalidateDefinitionCaches();
                 }
             }
-            if (animations || datasets?.some((dataset: any) =>
+            const otherDatasets = datasets?.filter((dataset: any) => dataset.key !== "customSampledAnimations");
+            if (animations || otherDatasets?.some((dataset: any) =>
                 dataset.key === "customItems" || dataset.key === "customModels" || isDefinitionDataset(dataset))) {
-                mv?.workerPool?.runAll((worker: any) => worker.setCustomContent(msg.payload))
+                const payload = { ...msg.payload, datasets: otherDatasets };
+                mv?.workerPool?.runAll((worker: any) => worker.setCustomContent(payload))
                     .catch((error: unknown) => console.error("Custom worker content failed", error));
+            }
+            if (sampledChanges.length) {
+                mv?.workerPool?.setSampledAnimationContent(sampledChanges)
+                    .catch((error: unknown) => console.error("Sampled worker content failed", error));
             }
             if (CustomItemRegistry.revision !== itemRevision || getDefinitionArchiveKey() !== archiveKey || getCustomDefinitionKey() !== definitionsKey) {
                 markItemDefinitionsChanged();
             }
-            if (mv && typeof mv.refreshGamemodeWorldLocs === "function") {
+            if (otherDatasets?.length && typeof mv?.refreshGamemodeWorldLocs === "function") {
                 mv.refreshGamemodeWorldLocs();
             }
             console.log(`[ws] gamemode_data loaded: ${msg.payload?.gamemodeId ?? "unknown"}`);

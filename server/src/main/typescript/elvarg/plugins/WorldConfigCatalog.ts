@@ -18,6 +18,8 @@ export interface CatalogPlugin {
     file: string;
     /** First folder under the plugins directory. */
     area: string;
+    /** Optional display category; the source path remains unchanged. */
+    category?: string;
     description?: string;
     members: boolean;
     dependsOn: string[];
@@ -135,7 +137,7 @@ export class WorldConfigCatalog {
                         // Only the server's startup loader may execute an imported ZIP's source.
                         awaitingLoad = true;
                         module = {
-                            name: fileName, description: manifest.description,
+                            name: fileName, description: manifest.description, category: packageId ? manifest.category : undefined,
                             config: packageId ? manifest.config : undefined,
                             register() {},
                         };
@@ -154,6 +156,7 @@ export class WorldConfigCatalog {
                     name,
                     file: relative.join("/"),
                     area: relative[0],
+                    ...(typeof module.category === "string" && module.category.trim() && module.category.length <= 80 ? { category: module.category.trim() } : {}),
                     description: typeof module.description === "string" ? module.description : undefined,
                     members: module.members === true,
                     dependsOn: PluginManager.normalizePluginDependencies(name, module.dependsOn, file),

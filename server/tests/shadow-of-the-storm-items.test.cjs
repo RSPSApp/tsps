@@ -119,11 +119,14 @@ test("black dye: each Wiki recipe gives its product, either way round, for one d
       put(f, I.BLACK_DYE, dyeSlot);
       put(f, I[from], clothSlot);
       await useOn(f, 0, 1);
+      // The desert clothes ask first (ours t526: "Cancel|Dye it" in an object box).
+      if (from.startsWith("DESERT_")) await send(f, { type: "dialogue_continue", widgetId: 193 << 16, childIndex: 1 });
       assert.equal(f.inv.getAmount(I[to]), 1, `${from} gives ${to}`);
       assert.equal(f.inv.getAmount(I[from]), 0, `${from} is used`);
       assert.equal(f.inv.getAmount(I.BLACK_DYE), 0, `the dye is used on ${from}`);
       assert.deepEqual(f.xp, [[core.Skill.CRAFTING, 2.5]], `${from} gives 2.5 Crafting XP`);
-      assert.equal(f.inv.getAmount(I.VIAL), to === "BLACK_CAPE" ? 1 : 0, `${from}: a vial back only as the Black cape page lists`);
+      // Ours t528, t537, t543: the desert robe, the shirt and a cape each give the vial back.
+      assert.equal(f.inv.getAmount(I.VIAL), 1, `${from}: the vial back`);
     }
   }
 });
@@ -140,8 +143,10 @@ test("control: the dye refuses what the Wiki does not list, and keeps both", asy
 
 // ------------------------------------------------------------------ demonic tome
 
-test("the demonic tome reads as the native book, with the captured first spread", async (t) => {
+test("the demonic tome reads as the native book, as captured (ours t1497-t1503)", async (t) => {
   const f = actor(t, 70);
+  // This player's incantation, the book's order (varbits 3,2,4,0,1); each player's is drawn when Denath tells it.
+  f.p.setAttribute("quest.shadow_of_the_storm.incantation", 4371);
   put(f, I.DEMONIC_TOME, 0);
   await send(f, { type: "inventory_action", slot: 0, itemId: I.DEMONIC_TOME, widgetId: 3214, option: "Read" });
   assert.equal(f.p.getInterfaceId(), BOOK, "the book is open");
@@ -161,7 +166,7 @@ test("the demonic tome reads as the native book, with the captured first spread"
   }
   const text = seen.filter(Boolean).join(" ");
   assert.match(text, /Camerinthum Agrith-Naar Tarren Caldar Nahudu/, "the tome has the incantation, the reverse of Denath's");
-  assert.match(text, /The last pages of the book have been torn out/, "and ends where the Wiki does");
+  assert.match(text, /The last pages of the book have been torn out/, "and ends as captured");
   assert.equal(f.inv.getAmount(I.DEMONIC_TOME), 1, "reading keeps it");
 });
 

@@ -1,3 +1,4 @@
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 // TODO: ported from xrsps-typescript; untested.
 // A Warstrike that drains nothing asks "combat-special:missed-drain" whether the target still
 // loses some levels (Tekton: 10, https://oldschool.runescape.wiki/w/Bandos_godsword).
@@ -21,13 +22,14 @@ function buildSpecial(api) {
     [Skill.RANGED, 0],
   ];
 
-  function warstrike(target, damage) {
-    let remainingDrain = Math.max(0, Math.floor(damage));
+  function warstrike(target, damage, config) {
+    let remainingDrain = Math.max(0, Math.floor(damage * config.percent / 100));
     if (remainingDrain <= 0) {
       return;
     }
     const skillManager = target.isPlayer() ? target.getAsPlayer().getSkillManager() : target.getAsNpc();
-    for (const [skill, minimumLevel] of PLAYER_DRAIN_ORDER) {
+    for (const name of config.order) {
+      const skill = Skill[name.toUpperCase()], minimumLevel = config.playerFloor;
       if (remainingDrain <= 0) {
         break;
       }
@@ -53,14 +55,16 @@ function buildSpecial(api) {
     }
 
     handleAfterHitEffects(hit) {
+      const config = mechanicSettings(this, "ordered-drain", { percent: 100, order: ["defence", "strength", "prayer", "attack", "magic", "ranged"], playerFloor: 0 });
+      if (!config.enabled) return;
       const damage = hit.isAccurate() ? Math.floor(hit.getTotalDamage()) : 0;
       if (damage > 0) {
-        warstrike(hit.getTarget(), damage);
+        warstrike(hit.getTarget(), damage, config);
         return;
       }
       const missed = { hit, specialId: ID, fraction: 0, levels: 0 };
       api.emitCustomEvent("combat-special:missed-drain", missed);
-      warstrike(hit.getTarget(), missed.levels);
+      warstrike(hit.getTarget(), missed.levels, config);
     }
   }
 
@@ -76,6 +80,7 @@ function buildSpecial(api) {
       damageMultiplierStages: [1.1, 1.1],
       meleeDefenceBonusIndex: SLASH_DEFENCE_BONUS_INDEX,
     },
+    metadata: { editorMechanics: mechanicSchema("ordered-drain", { percent: 100, order: ["defence", "strength", "prayer", "attack", "magic", "ranged"], playerFloor: 0 }) },
     combatMethod: new BandosGodswordCombatMethod(),
   };
 }

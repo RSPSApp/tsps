@@ -13,9 +13,9 @@ function buildSpecial(api) {
   const ANIMATION = new Animation(1378);
   const GRAPHIC = new Graphic(1292, Priority.HIGH);
 
-  function smash(hit) {
-    if (hit.isAccurate() && Math.floor(hit.getTotalDamage()) > 0) {
-      drainDefence(hit, DEFENCE_DRAIN_FRACTION);
+  function smash(hit, config) {
+    if (hit.isAccurate() && (!config.requireDamage || Math.floor(hit.getTotalDamage()) > 0)) {
+      drainDefence(hit, config.percent / 100);
       return;
     }
     const missed = { hit, specialId: ID, fraction: 0, levels: 0 };
@@ -46,7 +46,8 @@ function buildSpecial(api) {
     }
 
     handleAfterHitEffects(hit) {
-      smash(hit);
+      const config = { enabled: true, percent: DEFENCE_DRAIN_FRACTION * 100, requireDamage: true, ...this.specialMechanics?.["defence-drain"] };
+      if (config.enabled) smash(hit, config);
     }
   }
 
@@ -56,6 +57,16 @@ function buildSpecial(api) {
     drainAmount: DRAIN,
     strengthMultiplier: 1.5,
     accuracyMultiplier: 1,
+    metadata: { editorMechanics: { version: 1, groups: [{
+      id: "defence-drain", name: "Defence reduction", phase: "At impact", hook: "handleAfterHitEffects", event: "resolved",
+      trigger: "When the hit passes accuracy; some bosses also allow a reduction on a miss",
+      description: "Remove {percent}% of the enemy's current Defence level. Choose whether the hit must deal damage. Bosses may limit how far their Defence can be reduced.",
+      parameters: [
+        { key: "enabled", label: "Enable Defence reduction", type: "boolean", value: true },
+        { key: "percent", label: "Current Defence removed (%)", type: "number", value: DEFENCE_DRAIN_FRACTION * 100, min: 0, max: 100, step: .1 },
+        { key: "requireDamage", label: "Require positive damage", type: "boolean", value: true },
+      ],
+    }] } },
     traits: {
       hitCount: 1,
       accuracyMultiplier: 1,

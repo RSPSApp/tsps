@@ -40,6 +40,11 @@ export type WidgetServerPayload =
           serverOwned?: boolean;
       }
     | {
+          action: "set_actions";
+          uid: number;
+          actions: string[];
+      }
+    | {
           action: "set_hidden";
           uid: number;
           hidden: boolean;

@@ -20,7 +20,7 @@ module.exports = function registerDragonKnifeSpecialAttack(api) {
         return false;
       }
       const player = character.getAsPlayer();
-      const weaponId = player.getEquipment().get(Equipment.WEAPON_SLOT).getId();
+      const weaponId = CombatSpecial.weaponIdFor(player);
       if (!(weaponId === ItemIdentifiers.DRAGON_KNIFE
         || weaponId === ItemIdentifiers.DRAGON_KNIFE_P_
         || weaponId === ItemIdentifiers.DRAGON_KNIFE_P_PLUS_
@@ -33,7 +33,7 @@ module.exports = function registerDragonKnifeSpecialAttack(api) {
     start(character, target) {
       const player = character.getAsPlayer();
       CombatSpecial.drain(player, DRAIN);
-      const weaponId = player.getEquipment().get(Equipment.WEAPON_SLOT).getId();
+      const weaponId = CombatSpecial.weaponIdFor(player);
       player.performAnimation(weaponId === ItemIdentifiers.DRAGON_KNIFE ? ANIMATION : POISON_ANIMATION);
       Sounds.sendSound(character, Sound.THROW_DART);
       Projectile.createProjectile(character, target, 1629, 30, 60, 40, 36).sendProjectile();

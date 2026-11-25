@@ -85,6 +85,7 @@ async function start(t, env = {}, opts = {}) {
     onServerShutdown: (h) => { hooks.shutdown = h; },
     emitCustomEvent: (name, payload) => {
       state.events.push({ name, payload });
+      opts.onCustomEvent?.(name, payload);
       if (!state.gameUpdateLoaded) return;
       if (name === "GameUpdate:start") {
         if (state.scheduled) { payload.error = "already scheduled"; return; }
@@ -266,6 +267,7 @@ test("the panel links to the map and cache editors on this worktree's client por
   assert.equal(catalog.status, 200);
   assert.equal(catalog.json.mapEditorUrl, "http://localhost:3103/?edit=1");
   assert.equal(catalog.json.cacheEditorUrl, "http://localhost:3103/?cache=1");
+  assert.deepEqual(catalog.json.toolLinks, [], "no plugin means no extra shortcuts");
 
   const page = await request(port, { path: "/", headers: auth });
   assert.equal(page.status, 200);
@@ -312,7 +314,7 @@ test("the editor links show only where the page is open on this machine, not on 
   assert.equal(localToolHref("http://localhost:3000/?cache=1", "edit", "localhost"), null);
   assert.throws(() => localToolHref("not a url", "edit", "localhost"));
   // With neither link usable the whole Tools group is hidden, not just its links.
-  assert.match(page, /document\.getElementById\("tool-group"\)\.hidden = !mapEditorShown && !cacheEditorShown;/);
+  assert.match(page, /document\.getElementById\("tool-group"\)\.hidden = !mapEditorShown && !cacheEditorShown && !pluginToolsShown;/);
 });
 
 test("the panel serves its bundled assets with authentication", async (t) => {
@@ -1037,4 +1039,22 @@ test("behind the local panel's pipe the game's page stays http, even with the TL
     req.end();
   });
   assert.equal(status, 200);
+});
+
+
+test("active plugins contribute local editor shortcuts without hard-coded Creator links", async t => {
+  const { port } = await start(t, { PORT: "3101" }, { onCustomEvent(name, payload) {
+    if (name !== "WorldAdmin:tools") return;
+    payload.tools.push(
+      { id: "npc-editor", label: "NPC editor", params: { cache: "1", tool: "content-builders", "tool-view": "npc" } },
+      { id: "gear-editor", label: "Gear editor", params: { cache: "1", tool: "content-builders", "tool-view": "gear" } },
+      { id: "npc-editor", label: "Duplicate", params: {} },
+      { id: "bad", label: "Invalid", params: { cache: 1 } },
+    );
+  } });
+  const response = await request(port, { path: "/api/catalog", headers: auth });
+  assert.deepEqual(response.json.toolLinks, [
+    { id: "npc-editor", label: "NPC editor", url: "http://localhost:3101/?cache=1&tool=content-builders&tool-view=npc" },
+    { id: "gear-editor", label: "Gear editor", url: "http://localhost:3101/?cache=1&tool=content-builders&tool-view=gear" },
+  ]);
 });

@@ -113,6 +113,24 @@ function clientToolUrl(flag) {
   return `http://localhost:${port}/?${flag}=1`;
 }
 
+/** Plugins contribute query parameters; this host owns the local client origin. */
+function pluginTools() {
+  const event = { tools: [] };
+  pluginApi.emitCustomEvent("WorldAdmin:tools", event);
+  const seen = new Set();
+  return (Array.isArray(event.tools) ? event.tools : []).filter(tool => tool && /^[a-z][a-z0-9-]{0,63}$/.test(tool.id) &&
+    typeof tool.label === "string" && tool.label.trim().length > 0 && tool.label.length <= 60 &&
+    tool.params && typeof tool.params === "object" && !Array.isArray(tool.params) &&
+    Object.entries(tool.params).every(([key, value]) => /^[a-z][a-z0-9-]{0,39}$/.test(key) && typeof value === "string" && value.length <= 100) &&
+    !seen.has(tool.id) && seen.add(tool.id)).slice(0, 20).flatMap(tool => {
+      const base = clientToolUrl("cache");
+      if (!base) return [];
+      const url = new URL(base);
+      for (const [key, value] of Object.entries(tool.params)) url.searchParams.set(key, value);
+      return [{ id: tool.id, label: tool.label, url: url.href }];
+    });
+}
+
 function catalogAction() {
   const layers = readLayers();
   const status = gameUpdateStatus();
@@ -126,6 +144,7 @@ function catalogAction() {
       layers: layerSummary(layers),
       cacheEditorUrl: clientToolUrl("cache"),
       mapEditorUrl: clientToolUrl("edit"),
+      toolLinks: pluginTools(),
       mode: restartMode(),
       onlinePlayers: onlinePlayers(),
       playerCount: players.length - bots,

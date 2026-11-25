@@ -785,7 +785,7 @@ function feedbackPlayer(core) {
     getLocation: () => location, moveTo(value) { location = value; },
     getInventory: () => inventory, getEquipment: () => ({ contains: () => false }), getPacketSender: () => sender,
     getMovementQueue: () => ({ size: () => 0 }), getForceMovement: () => null,
-    isRegistered: () => true, getHitpoints: () => 99,
+    isRegistered: () => true, getHitpoints: () => 99, hasBlockingInterface: () => false,
     prayerPointDrain: 7, setPrayerPointDrain(drain) { p.prayerPointDrain = drain; },
     getUsername: () => "feedback-test", getDisplayName: () => "feedback-test", getIndex: () => 1, isPlayerBot: () => false,
     performAnimation: a => animations.push(a.getId()), performGraphic: g => graphics.push(g.getId()), sendMessage: m => messages.push(m),
@@ -1740,7 +1740,6 @@ test("client feedback IDs and per-gem animations exist in the active OSRS cache"
       assert.ok(configs.getFile(ConfigType.DAT2.seqs, animation)?.data.length, `gem sequence ${animation}`);
       const p = feedbackPlayer(core), I = core.ItemIdentifiers;
       p.skills = { getCurrentLevel: () => 99, addExperiences() {} };
-      p.getInterfaceId = () => -1;
       p.counts.set(I.CHISEL, 1); p.counts.set(I[`UNCUT_${uncut}`], 1);
       hooks.onItemOnItem({ player: p, usedItemId: I.CHISEL, usedWithItemId: I[`UNCUT_${uncut}`] });
       // rsprox 1875: the gem is cut on the tick after it is chosen in the skillmulti menu.

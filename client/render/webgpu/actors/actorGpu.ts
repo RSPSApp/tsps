@@ -195,6 +195,7 @@ export class MapActorUniforms {
         subOffsetX: number,
         subOffsetY: number,
         poseRow: number = -1,
+        hueShift: number = 0,
     ): number {
         const entry = this.entryCount++;
         if (entry >= this.capacity) {
@@ -218,6 +219,8 @@ export class MapActorUniforms {
             this.worldEntityTransform === IDENTITY_MAT4 ? 0 : 1,
             true,
         );
+        f[base + 12] = hueShift / 360;
+        f[base + 13] = f[base + 14] = f[base + 15] = 0;
         f.set(this.worldEntityTransform, base + 16);
         return entry;
     }
@@ -313,6 +316,17 @@ export class ActorGeometryCache {
         private readonly maxEntries: number = 1024,
         private readonly maxPooledBytes: number = 16 * 1024 * 1024,
     ) {}
+
+    get geometryGpuBytes(): number {
+        let bytes = this.pooledBytes;
+        const buffers = new Set<GPUBuffer>(this.retired);
+        for (const item of this.entries.values()) {
+            buffers.add(item.vertices); buffers.add(item.indices);
+            if (item.labels) buffers.add(item.labels);
+        }
+        for (const buffer of buffers) bytes += buffer.size;
+        return bytes;
+    }
 
     /** Undefined means evicted/unbuilt; null means this pass was built and has no faces. */
     get(key: string): GpuGeometry | null | undefined {

@@ -20,6 +20,7 @@ const MAP_LOAD_RETRY_BASE_DELAY_MS = 250;
 const MAP_LOAD_RETRY_MAX_DELAY_MS = 5000;
 
 export interface MapSquare {
+    farOnly?: boolean;
     mapX: number;
     mapY: number;
     getRenderBaseTileX?(): number;
@@ -285,8 +286,7 @@ export class MapManager<T extends MapSquare> {
           }
         | undefined {
         if (useSceneBaseStreaming && sceneBaseX >= 0 && sceneBaseY >= 0) {
-            const expandedTiles =
-                Math.max(0, Math.min(MapManager.SCENE_MAX_EXPANDED_LEVEL, expandedMapLoading | 0)) *
+            const expandedTiles = this.resolveExpandedMapLoading(expandedMapLoading, this.viewRangeTiles) *
                 MapManager.SCENE_EXPANDED_STEP_TILES;
             return {
                 minX: sceneBaseX - expandedTiles,
@@ -522,14 +522,16 @@ export class MapManager<T extends MapSquare> {
             Math.floor(tileZ / Scene.MAP_SQUARE_SIZE),
         );
         if (this.invalidMapIds.has(mapId)) return true;
-        return this.activeGridMapIdSet.has(mapId) && this.mapSquares.get(mapId)?.canRender(frameCount) === true;
+        const map = this.mapSquares.get(mapId);
+        return this.activeGridMapIdSet.has(mapId) && !map?.farOnly && map?.canRender(frameCount) === true;
     }
 
     private isTargetGridReady(frameCount: number): boolean {
         for (let i = 0; i < this.gridMapCount; i++) {
             const mapId = this.gridMapIds[i];
             if (!this.gatesScene(mapId)) continue;
-            if (this.invalidMapIds.has(mapId) || this.mapSquares.get(mapId)?.canRender(frameCount)) {
+            const map = this.mapSquares.get(mapId);
+            if (this.invalidMapIds.has(mapId) || (!map?.farOnly && map?.canRender(frameCount))) {
                 continue;
             }
             return false;
@@ -578,11 +580,10 @@ export class MapManager<T extends MapSquare> {
         this.gridTransitionPending = false;
     }
 
-    private resolveExpandedMapLoading(expandedMapLoading?: number): number {
-        return Math.max(
-            0,
-            Math.min(MapManager.SCENE_MAX_EXPANDED_LEVEL, Number(expandedMapLoading) | 0),
-        );
+    private resolveExpandedMapLoading(expandedMapLoading?: number, distance = 0): number {
+        const cap = Math.max(MapManager.SCENE_MAX_EXPANDED_LEVEL,
+            MapManager.getSceneryPadding(Math.min(1024, distance)));
+        return Math.max(0, Math.min(cap, Number(expandedMapLoading) | 0));
     }
 
     private collectRenderGridMapIds(posX: number, posZ: number): number[] {
@@ -637,7 +638,7 @@ export class MapManager<T extends MapSquare> {
         this.viewRangeTiles = streamRangeTiles === undefined ? -1 : Math.max(0, streamRangeTiles);
         const playerMapX = Math.floor(posX / Scene.MAP_SQUARE_SIZE);
         const playerMapY = Math.floor(posZ / Scene.MAP_SQUARE_SIZE);
-        const expandedLoadingLevel = this.resolveExpandedMapLoading(expandedMapLoading);
+        const expandedLoadingLevel = this.resolveExpandedMapLoading(expandedMapLoading, streamRangeTiles);
 
         const useSceneBaseStreaming = baseFiniteAndPositive;
         const sortX = camera.getPosX();
@@ -812,7 +813,7 @@ export class MapManager<T extends MapSquare> {
             if (!this.isMapInView(mapId)) continue;
             viewMapCount++;
             if (!this.activeGridMapIdSet.has(mapId)) this.gridTransitionPending = true;
-            if (this.gatesScene(mapId)) this.loadMap(mapId >> 8, mapId & 0xff, false, this.gridRevision);
+            if (this.gatesScene(mapId)) this.loadMap(mapId >> 8, mapId & 0xff, !!this.mapSquares.get(mapId)?.farOnly, this.gridRevision);
         }
         for (let i = 0; i < this.gridMapCount; i++) {
             const mapId = this.gridMapIds[i];

@@ -19,6 +19,9 @@ export type WidgetLike = {
     // aspect ratio for size mode 4 (1:1 unless set)
     aspectWidth?: number;
     aspectHeight?: number;
+    /** Optional bounds for server-defined resizable panels; cache widgets omit these. */
+    maxWidth?: number;
+    maxHeight?: number;
     xPositionMode?: number;
     yPositionMode?: number;
     // structure
@@ -66,6 +69,8 @@ export function alignSize(w: WidgetLike, parentW: number, parentH: number) {
     const aspectH = ((w.aspectHeight ?? 1) | 0) || 1;
     if (widthMode === 4) w.width = ((((w.height as number) | 0) * aspectW) / aspectH) | 0;
     if (heightMode === 4) w.height = ((((w.width as number) | 0) * aspectH) / aspectW) | 0;
+    if (w.maxWidth !== undefined) w.width = Math.min(w.width ?? 0, Math.max(1, w.maxWidth));
+    if (w.maxHeight !== undefined) w.height = Math.min(w.height ?? 0, Math.max(1, w.maxHeight));
 }
 
 export function alignPosition(w: WidgetLike, parentW: number, parentH: number) {

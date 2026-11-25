@@ -1,4 +1,5 @@
 // TODO: ported from xrsps-typescript; untested.
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 module.exports = function registerAbyssalBludgeonSpecialAttack(api) {
   const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Priority, Skill, Sound, Sounds } = api.core;
 
@@ -7,24 +8,12 @@ module.exports = function registerAbyssalBludgeonSpecialAttack(api) {
   const ANIMATION = new Animation(3299);
   const GRAPHIC = new Graphic(1284, Priority.HIGH);
 
-  // Penance is a per-attack max-hit multiplier, which the static trait registry
-  // cannot compute. start() runs before hits(), so the value is stamped here.
-  // ponytail: shared mutable trait object; per-attack stamp is safe single-threaded.
+  // Keep player-dependent bonuses separate from the shared static hit pattern.
   const TRAITS = { hitCount: 1, damageMultiplier: 1 };
 
   class AbyssalBludgeonCombatMethod extends MeleeCombatMethod {
     start(character, target) {
       CombatSpecial.drain(character, DRAIN);
-
-      let damageMultiplier = 1;
-      if (character.isPlayer()) {
-        const skillManager = character.getAsPlayer().getSkillManager();
-        const basePrayer = Math.max(0, Math.floor(skillManager.getMaxLevel(Skill.PRAYER)));
-        const currentPrayer = Math.max(0, Math.floor(skillManager.getCurrentLevel(Skill.PRAYER)));
-        const missingPrayer = Math.max(0, basePrayer - currentPrayer);
-        damageMultiplier += missingPrayer * DAMAGE_PER_MISSING_PRAYER_POINT;
-      }
-      TRAITS.damageMultiplier = damageMultiplier;
 
       character.performAnimation(ANIMATION);
       Sounds.playAreaSoundAt(character, Sound.GRANITE_MAUL_SPECIAL);
@@ -33,7 +22,18 @@ module.exports = function registerAbyssalBludgeonSpecialAttack(api) {
     handleAfterHitEffects(hit) {
       hit.getTarget().performGraphic(GRAPHIC);
     }
+
+    getSpecialFeatureTraits(character) {
+      const config = mechanicSettings(this, "missing-resource-bonus", { skill: "prayer", damagePerPoint: DAMAGE_PER_MISSING_PRAYER_POINT * 100, accuracyPerPoint: 0, capEnabled: false, damageCap: 100 });
+      if (!config.enabled || !character.isPlayer()) return {};
+      const manager = character.getAsPlayer().getSkillManager(), skill = Skill[config.skill.toUpperCase()];
+      const missing = Math.max(0, Math.floor(manager.getMaxLevel(skill)) - Math.floor(manager.getCurrentLevel(skill)));
+      const damage = missing * config.damagePerPoint / 100;
+      return { damageMultiplier: 1 + (config.capEnabled ? Math.min(damage, config.damageCap / 100) : damage), accuracyMultiplier: 1 + missing * config.accuracyPerPoint / 100 };
+    }
   }
+
+  const method = new AbyssalBludgeonCombatMethod();
 
   api.registerCombatSpecial({
     id: "abyssal_bludgeon",
@@ -42,6 +42,8 @@ module.exports = function registerAbyssalBludgeonSpecialAttack(api) {
     strengthMultiplier: 1,
     accuracyMultiplier: 1,
     traits: TRAITS,
-    combatMethod: new AbyssalBludgeonCombatMethod(),
+    traitsFor: player => ({ ...TRAITS, ...method.getSpecialFeatureTraits(player) }),
+    metadata: { editorMechanics: mechanicSchema("missing-resource-bonus", { skill: "prayer", damagePerPoint: DAMAGE_PER_MISSING_PRAYER_POINT * 100, accuracyPerPoint: 0, capEnabled: false, damageCap: 100, _event: "traits", _hook: "getSpecialFeatureTraits" }) },
+    combatMethod: method,
   });
 };

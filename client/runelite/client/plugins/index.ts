@@ -1,4 +1,5 @@
 import { PingGrapherPlugin } from "../../../game/plugins/pinggrapher/PingGrapherPlugin";
+import { DistantWorldPlugin } from "../../../game/plugins/distantworld/DistantWorldPlugin";
 import { CharactersPlugin } from "../../../game/plugins/characters/CharactersPlugin";
 import { AnimationSmoothingConfig } from "../../../game/plugins/animationsmoothing/AnimationSmoothingConfig";
 import { BugReportPlugin } from "../../../game/plugins/bugreport/BugReportPlugin";
@@ -50,6 +51,7 @@ import { LootTrackerPlugin } from "../../../game/plugins/loottracker/LootTracker
 import { NotesConfig } from "../../../game/plugins/notes/NotesPlugin";
 import { ObjectIndicatorsPlugin } from "../../../game/plugins/objectindicators/ObjectIndicatorsPlugin";
 import { NpcIndicatorsPlugin } from "../../../game/plugins/npcindicators/NpcIndicatorsPlugin";
+import { PlayerIndicatorsPlugin } from "../../../game/plugins/playerindicators/PlayerIndicatorsPlugin";
 import { NotesPlugin } from "../../../game/plugins/notes/NotesPlugin";
 import { StatusBarsPlugin } from "../../../game/plugins/statusbars/StatusBarsPlugin";
 import { StretchedModePlugin } from "../../../game/plugins/stretchedmode/StretchedModePlugin";
@@ -112,6 +114,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     CombatLevelPlugin,
     NotesPlugin,
     NpcIndicatorsPlugin,
+    PlayerIndicatorsPlugin,
     ImplingsPlugin,
     ObjectIndicatorsPlugin,
     ChatNotificationsPlugin,
@@ -140,6 +143,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     PuzzleSolverPlugin,
     StretchedModePlugin,
     GpuPlugin,
+    DistantWorldPlugin,
     ShaderFxPlugin,
     LowEndDevicePlugin,
     CameraPlugin,

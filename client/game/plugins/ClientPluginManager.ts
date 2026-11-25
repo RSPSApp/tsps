@@ -25,6 +25,7 @@ import type { LoginStretch } from "../login/renderer/types";
 import type { WebGLOsrsRendererHost } from "../../render/render/hostInterface";
 import type { OverheadTextEntry } from "../../ui/devoverlay/Overlay";
 import type { GpuSettings } from "./gpu/GpuPlugin";
+import type { CosmeticNpc, ScenerySettings } from "./ScenePresentation";
 import type { ShaderFxRuntime } from "./shaderfx/ShaderFxState";
 import type { InteractHighlightPluginConfig } from "./interacthighlight/InteractHighlightConfig";
 import type { FixedStretch } from "./stretchedmode/StretchedModePlugin";
@@ -256,6 +257,8 @@ export type WidgetDragEvent = { source: any; target: any };
 export interface ClientPlugin {
     /** Cache and renderer initialization completed successfully. */
     clientReady?(signal: AbortSignal): void;
+    scenerySettings?(): ScenerySettings | undefined;
+    cosmeticNpcs?(): readonly CosmeticNpc[];
     /** Return true to defer an accepted login's handshake to a plugin. */
     beforeLoginHandshake?(sendHandshake: () => void): boolean;
     /** Extra player headicons; return stable, immutable sprites so textures can be reused. */
@@ -405,6 +408,21 @@ export interface ClientPlugin {
 }
 
 export class ClientPluginManager {
+    scenerySettings(): ScenerySettings | undefined {
+        // Graphics plugins own the scenery pipeline while active. Cosmetic actors are independent.
+        if (this.gpuSettings() || this.hdEnabled()) return undefined;
+        for (const plugin of this.implementing("scenerySettings")) {
+            const settings = plugin.scenerySettings!();
+            if (settings) return settings;
+        }
+        return undefined;
+    }
+
+    cosmeticNpcs(): readonly CosmeticNpc[] {
+        const plugins = this.implementing("cosmeticNpcs");
+        if (plugins.length === 1) return plugins[0].cosmeticNpcs!();
+        return plugins.flatMap(plugin => [...plugin.cosmeticNpcs!()]);
+    }
     private readonly plugins: ClientPlugin[] = [];
     // Per-frame and per-actor hooks walk only the plugins that implement them.
     private readonly implementers = new Map<keyof ClientPlugin, ClientPlugin[]>();

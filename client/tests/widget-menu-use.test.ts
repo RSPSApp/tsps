@@ -222,6 +222,8 @@ console.log('native Inspect submenu dispatch passed');
     assert.equal(shiftChanges, 1, "Shift going down asks for the inventory to be redrawn");
     assert.deepEqual(options(shark), ["Drop", "Eat", "Use", "Cancel"], "Shift held: Drop is the top entry");
     assert.deepEqual([primary(shark).option, primary(shark).opIndex], ["Drop", 7], "and the left click");
+    // Drop is a low-priority op (1007); moved up as the shift click it must not open the menu (#6735).
+    assert.equal(primary(shark).opensMenu, undefined, "the shift click drops instead of opening the menu");
     assert.deepEqual(options(whip), ["Wield", "Use", "Drop", "Cancel"], "an item with no shift-click op keeps its order");
     const notInventory = { ...shark, uid: 15 << 16, parentUid: 15 << 16 };
     assert.equal(options(notInventory)[0], "Eat", "shift-click drop is the inventory's only");
@@ -317,3 +319,19 @@ console.log("inventory shift-click drop passed");
     setPacketSocket(undefined as any);
 }
 console.log('configured itemless dynamic Examine routes through real flagged packet owner');
+
+// A server-owned creature card explicitly owns its Examine operation.
+{
+    const widget = { uid: (30023 << 16) | 40, groupId: 30023, fileId: 40, childIndex: -1,
+        itemId: -1, actions: ['Examine', 'Find'], flags: 6, examineAsOperation: true };
+    const sent: any[] = []; let local = 0;
+    const entries = deriveMenuEntriesForWidget(widget, false, () => 6, noWidgetLookup);
+    const mapped = widgetEntriesToSimple(entries, { chosenWidget: widget, scheduleRender() {},
+        ui: { onWidgetAction: (event: any) => sent.push(event), onWidgetExamine: () => local++ } });
+    mapped.find(entry => entry.option === 'Examine')!.onClick?.();
+    assert.equal(sent.length, 1, 'right-click creature Examine must reach its server operation');
+    assert.equal(sent[0].opIndex, 1); assert.equal(local, 0);
+    const resolve = createPrimaryWidgetActionResolver({ getSpellSelection: () => ({ getWidgetTargetMask: () => 0 }) } as any,
+        {} as any, { getWidgetFlags: () => 6, getWidgetOpMask: () => 0, getWidgetByUid: noWidgetLookup } as any, {} as any);
+    assert.equal(resolve(widget).option, 'Examine', 'the creature card primary action must not turn into Find');
+}

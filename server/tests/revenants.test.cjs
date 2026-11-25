@@ -106,6 +106,50 @@ test("the drop table's item ids are the items the Wiki names", () => {
   assert.deepEqual([ITEMS.ETHER, ITEMS.BRACELET_CHARGED].map(name), ["Revenant ether", "Bracelet of ethereum"]);
 });
 
+test("the imported revenant tables keep both task variants and independent weighted pools", () => {
+  const { npcs, tables } = require("../data/definitions/npc-drops.json");
+  assert.equal(npcs[Data.MALEDICTUS_ID], undefined, "Maledictus has separate loot rules");
+  for (const npcId of Data.REVENANT_IDS) {
+    const variants = npcs[npcId].tables.map(tableId => tables[tableId]);
+    assert.deepEqual(variants.map(table => table.label), ["Off-task", "On-task"], String(npcId));
+    for (const table of variants) {
+      const entries = table.entries;
+      const label = table.table_name;
+      assert.ok(entries.some(row => row.item_id === ITEMS.ETHER && row.always), label);
+      const main = entries.filter(row => !row.always && !row.pre_roll && !row.separate_roll);
+      assert.ok(main.every(row => row.out_of === table.main_max_roll), label);
+      assert.equal(main.reduce((total, row) => total + row.weight, 0), table.main_max_roll, label);
+      const groups = new Map();
+      for (const row of entries.filter(row => row.pre_roll || row.separate_roll)) {
+        assert.equal(row.separate_roll, true, label);
+        for (const field of ["pre_roll", "group_access_weight", "group_access_out_of"]) {
+          assert.ok(!(field in row), `${label}: ${field}`);
+        }
+        const rows = groups.get(row.roll_group) ?? [];
+        rows.push(row);
+        groups.set(row.roll_group, rows);
+      }
+      const unique = table.label === "Off-task" ? "unique" : "unique (on-task)";
+      assert.deepEqual([...groups.keys()].sort(), ["secondary", unique], label);
+      for (const rows of groups.values()) {
+        const denominator = rows[0].out_of;
+        assert.ok(rows.every(row => row.out_of === denominator), label);
+        assert.ok(rows.reduce((total, row) => total + row.weight, 0) < denominator, label);
+      }
+      assert.ok(groups.get(unique).some(row => row.item_id === ITEMS.AMULET_OF_AVARICE), label);
+    }
+  }
+
+  const [offTask, onTask] = npcs[Data.REVENANTS.GOBLIN].tables.map(tableId => tables[tableId]);
+  const coins = offTask.entries.find(row => row.item_id === ITEMS.COINS);
+  assert.deepEqual([coins.weight, coins.out_of], [910800, 967560]);
+  assert.deepEqual(offTask.entries.find(row => row.item_id === ITEMS.ETHER).quantity, [2, 8]);
+  for (const [table, denominator] of [[offTask, 19546911], [onTask, 3909089]]) {
+    const avarice = table.entries.find(row => row.item_id === ITEMS.AMULET_OF_AVARICE);
+    assert.equal(avarice.weight * denominator, avarice.out_of * 400);
+  }
+});
+
 // ------------------------------------------------------------------ combat
 
 test("style: melee next to the target unless protected, Magic further away unless protected", () => {
@@ -330,6 +374,39 @@ test("loot: under the revenant for the killer, ether absorbed, avarice notes", (
   assert.ok(CacheDefinitions.getItem(id).noteTemplate > 0 || CacheDefinitions.getItem(id).stackable, "noted by the amulet");
   assert.ok(obtains.length > 0 && obtains.every((event) => event.player === killer), "each drop is credited to the killer");
   assert.ok(obtains.some((event) => event.itemId === ITEMS.ETHER), "ether is credited even when the bracelet absorbs it");
+});
+
+test("revenant deaths skip generic loot while other NPCs still roll their tables", (t) => {
+  const NpcDrops = require("../plugins/npcs/NpcDrops.plugin");
+  const registered = [];
+  const genericKills = [];
+  const ground = { registerLocation: (_owner, drop) => registered.push(drop.getId()) };
+  NpcDrops.register({ ...PluginManager.createApi("NpcDrops"), getItemOnGroundManager: () => ground });
+  const api = PluginManager.createApi("Revenants");
+  Revenants.init({ ...api, core: { ...core, ItemOnGroundManager: ground } });
+  Loot(api);
+  api.onCustomEvent("npc-drops:generated", ({ npcId }) => genericKills.push(npcId));
+  t.mock.method(Math, "random", () => 0.999);
+
+  const at = new Location(3222, 3218, 0);
+  const killer = player({ at });
+  killer.getPacketSender = () => ({ sendClientScript() {} });
+  const kill = (npcId) => {
+    const npc = { ...revenant(npcId), getLocation: () => at };
+    PluginManager.emitNpcDeath({ killer, npc, npcId });
+  };
+
+  const chicken = core.NpcIdentifiers.CHICKEN;
+  kill(chicken);
+  assert.ok(registered.includes(core.ItemIdentifiers.RAW_CHICKEN));
+  for (const id of Data.REVENANT_IDS) {
+    assert.equal(NpcDrops.__internals.tablesByNpc.get(id).length, 2, String(id));
+    registered.length = 0;
+    kill(id);
+    assert.equal(registered.filter(itemId => itemId === ITEMS.ETHER).length, 1, String(id));
+  }
+  kill(Data.MALEDICTUS_ID);
+  assert.deepEqual(genericKills, [chicken]);
 });
 
 // ------------------------------------------------------------------ spawns

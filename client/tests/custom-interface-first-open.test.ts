@@ -11,10 +11,12 @@ import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdat
 import { HeldWidgetProperties } from "../widgets/HeldWidgetProperties";
 import { markWidgetInteractionDirty } from "../widgets/WidgetInteraction";
 import { WidgetManager } from "../widgets/WidgetManager";
+import { deriveRawMenuEntriesForWidget } from "../widgets/menu/utils";
 import {
     encodeWidgetOpenSub,
     encodeWidgetSetRoot,
     encodeWidgetSetText,
+    encodeWidgetSetActions,
 } from "../../server/src/main/typescript/elvarg/net/protocol/ClientProtocol";
 
 // A server-defined interface opened right after login, while the welcome screen is the root:
@@ -139,6 +141,7 @@ async function main() {
         ])));
         send(encodeWidgetSetText(uid(C.LAYOUT), JSON.stringify({ active: 1, tabs: [[1], [{ header: "Section" }, 2, 3]] })));
         send(encodeWidgetSetText(uid(C.INPUT), ""));
+        send(encodeWidgetSetActions(uid(C.LABEL), ["Set quantity", "Add quantity", "Remove quantity"]));
         assert.equal(client.pendingInterfaceUpdates.size, 1, "held until the definition arrives");
         assert.equal(wm.getWidgetByUid(uid(C.STATUS)), undefined);
 
@@ -149,6 +152,21 @@ async function main() {
             status: "2 listed", rows: ["[Section]", "Bravo", "Charlie"],
             tabs: ["<col=ffd27f>Mine</col>", "<col=ffffff>All</col>"], input: "|",
         }, "the held rows and layout are applied once the fetched interface mounts");
+        assert.deepEqual(wm.getWidgetByUid(uid(C.LABEL))?.actions,
+            ["Set quantity", "Add quantity", "Remove quantity"],
+            "server action labels arrive before loading and replace static menu labels");
+        const actionWidget = wm.getWidgetByUid(uid(C.LABEL))!;
+        actionWidget.flags = 0x0e;
+        assert.deepEqual(deriveRawMenuEntriesForWidget(actionWidget).filter(entry => entry.option !== "Cancel")
+            .map(entry => [entry.option, entry.opIndex]),
+            [["Set quantity", 1], ["Add quantity", 2], ["Remove quantity", 3]],
+            "native menu labels retain the server operation numbers");
+        send(encodeWidgetSetActions(uid(C.LABEL), ["Set quantity", null, "Remove quantity"]));
+        assert.deepEqual(actionWidget.actions, ["Set quantity", "", "Remove quantity"],
+            "clearing an intermediate operation does not shift later operation numbers");
+        send(encodeWidgetSetActions(uid(C.LABEL), []));
+        assert.deepEqual(wm.getWidgetByUid(uid(C.LABEL))?.actions, [],
+            "an empty action update clears all old operations");
 
         client.customInterfaces.handleSearchKeyEvents([{ keyTyped: 0, keyPressed: "h".charCodeAt(0) }]);
         const searched = {

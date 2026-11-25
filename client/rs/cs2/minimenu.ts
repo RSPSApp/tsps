@@ -120,6 +120,16 @@ export const minMenuSnapshot = (osrsClient: any): MinMenuSnapshot => {
         ?.hoveredWidgetsByUid as Map<number, any> | undefined;
     const hasHoveredWidgetState = !aimsAtWorld && !!(hoveredWidgetsByUid && hoveredWidgetsByUid.size > 0);
     const hasComponentHover = componentTargetFromClicks || hasHoveredWidgetState;
+    const widgetUid = typeof hoverTarget?.widgetUid === 'number' ? hoverTarget.widgetUid
+        : hoverId.startsWith('widget:') ? parseInt(hoverId.substring(7), 10) : undefined;
+    let widget = typeof widgetUid === 'number' ? osrsClient?.widgetManager?.getWidgetByUid?.(widgetUid) : undefined;
+    const visited = new Set<number>();
+    while (widget && !visited.has(widget.uid)) {
+        if (widget.suppressHoverText) return { option: '', target: '', numOps: 0, type: 0,
+            hasComponentHover: true, widgetUid };
+        visited.add(widget.uid);
+        widget = osrsClient.widgetManager.getWidgetByUid(widget.parentUid);
+    }
     const primaryOption = hoverTarget?.primaryOption;
     let componentOption = typeof primaryOption?.option === "string" ? primaryOption.option : "";
     let componentTarget = typeof primaryOption?.target === "string" ? primaryOption.target : "";

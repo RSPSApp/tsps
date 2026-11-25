@@ -394,7 +394,7 @@ import { WidgetTransmitProcessor } from "./widgets/WidgetTransmitProcessor";
 import { CustomInterfaceRuntime } from "../widgets/custom/CustomInterfaceRuntime";
 import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdates";
 import { HeldWidgetProperties } from "../widgets/HeldWidgetProperties";
-import { setCustomInterface } from "../common/gamemode/GamemodeContentStore";
+import { getCustomInterface, setCustomInterface } from "../common/gamemode/GamemodeContentStore";
 import {
     fetchInterfaceDefinition,
     fetchContent,
@@ -430,7 +430,7 @@ const ESC_POPUP_DISMISS_SCRIPT = 1205;
 const FLOATER_CHILD = 18;
 /** Server-set widget properties held while their cache interface is not loaded. */
 const HELD_WIDGET_ACTIONS: ReadonlySet<string> = new Set([
-    "set_text", "set_hidden", "set_model", "set_angle", "set_colour", "set_position", "set_item",
+    "set_text", "set_actions", "set_hidden", "set_model", "set_angle", "set_colour", "set_position", "set_item",
     "set_npc_head", "set_animation", "set_player_head", "set_rotate_speed",
 ]);
 const DEFAULT_ROOT_INTERFACE = 161;
@@ -1636,13 +1636,18 @@ export class OsrsClient {
         return isCloseOnOutsideClickModalTarget(standardTargetUid, type);
     }
 
-    /** True while a main or side modal is open, so a world click should close it. */
+    /** Whether a click outside a modal should send the global IF_CLOSE. */
     public hasCloseOnOutsideClickModal(): boolean {
         if (!this.widgetManager) return false;
+        let close = false;
         for (const parent of this.widgetManager.interfaceParents.values()) {
-            if (parent.closeOnOutsideClick) return true;
+            if (!parent.closeOnOutsideClick) continue;
+            // The server's world-action path closes transient modals alongside a persistent panel.
+            const definition = getCustomInterface(parent.group);
+            if (definition?.lifecycle?.persistOnWorldInteraction === true) return false;
+            close = true;
         }
-        return false;
+        return close;
     }
 
     /**
@@ -1726,7 +1731,11 @@ export class OsrsClient {
     private initCustomInterfaces(): void {
         this.customInterfaces = new CustomInterfaceRuntime({
             widgetManager: this.widgetManager,
+            getPointer: () => this.menuOpen || this.inputManager.mouseX < 0 || this.inputManager.mouseY < 0
+                ? undefined : { x: this.inputManager.mouseX, y: this.inputManager.mouseY },
             getCacheSystem: () => this.cacheSystem,
+            examineItem: (itemId) => { this.examineWidgetItem({ itemId, itemQuantity: 1 }); },
+            showInfo: (text) => this.addGameMessage(text),
             runWidgetScopedClientScript: (widgetUid, scriptId, args, phase) =>
                 this.runWidgetScopedClientScript(widgetUid, scriptId, args, phase),
             fetchContent,
@@ -3068,9 +3077,17 @@ export class OsrsClient {
                         this.widgetManager.invalidateWidgetRender(w);
                     }
                 }
+            } else if (payload?.action === "set_actions") {
+                const w = this.widgetManager?.getWidgetByUid(Number(payload.uid) | 0);
+                if (w && Array.isArray(payload.actions)) {
+                    w.actions = payload.actions.slice(0, 32).map((action: unknown) => String(action ?? ""));
+                    markWidgetInteractionDirty(w);
+                    this.widgetManager.invalidateWidgetRender(w);
+                }
             } else if (payload?.action === "set_hidden") {
                 const uid = Number(payload.uid) | 0;
                 const hidden = !!payload.hidden;
+                if (this.customInterfaces.handleSetHidden?.(uid, hidden)) return;
                 const w = this.widgetManager?.getWidgetByUid(uid);
                 if (w && this.widgetManager && (w.hidden !== hidden || w.isHidden !== hidden)) {
                     w.isHidden = hidden;
@@ -9062,6 +9079,7 @@ export class OsrsClient {
         } catch (err) {
             console.warn("[OsrsClient] WidgetManager clear error:", err);
         }
+        this.customInterfaces?.resetSession();
         this.serverSubInterfaces.clear();
         this.forgetSentInventories();
 

@@ -988,6 +988,14 @@ export function decodeServerPacket(data: Uint8Array | ArrayBuffer): DecodedServe
             };
         }
 
+        case ServerPacketId.WIDGET_SET_ACTIONS: {
+            const uid = reader.readInt();
+            const count = reader.readByte();
+            if (count > 32) throw new Error("Widget operation count exceeds 32");
+            const actions = Array.from({ length: count }, () => reader.readString());
+            return { type: "widget", payload: { action: "set_actions", uid, actions } };
+        }
+
         case ServerPacketId.WIDGET_SET_HIDDEN:
             return {
                 type: "widget",

@@ -64,6 +64,8 @@ export class WebGPUUi {
             osrsClient,
             app: this.adapterApp as unknown as PicoApp,
             computeUiRenderMetrics: (bufW, bufH) => this.computeUiRenderMetrics(bufW, bufH),
+            getInteractNpcModelLoader: () => this.renderer.interactionHost.getInteractNpcModelLoader(),
+            getInteractLocModelLoader: () => this.renderer.interactionHost.getInteractLocModelLoader(),
         };
         this.widgetsHost = adapter;
         try {

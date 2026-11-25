@@ -419,6 +419,20 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                                     host.osrsClient.npcTypeLoader,
                                                 ) ?? baseNpcType;
                                             const portrait = params.widget.npcPortraitFit === true;
+                                            // Server-defined type-6 widgets can opt into a fitted,
+                                            // animated NPC body using the existing model/sequence loaders.
+                                            if (params.widget.npcFullBody === true) {
+                                                const body = npcType ? host.getInteractNpcModelLoader?.()?.getModel(
+                                                    npcType, params.sequenceId ?? -1, params.sequenceFrame ?? -1,
+                                                ) : undefined;
+                                                return body ? host.model2DRenderer.renderModelInstanceToCanvasExtents(
+                                                    body, { ...fitPortraitParams(body, params),
+                                                        // NpcModelLoader has already applied the idle pose.
+                                                        sequenceId: undefined, sequenceFrame: undefined,
+                                                        fitToWidget: { width: params.widget.width, height: params.widget.height, padding: 8 },
+                                                    },
+                                                ) : undefined;
+                                            }
                                             if (
                                                 npcType &&
                                                 npcType.chatheadModelIds &&
@@ -560,7 +574,7 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                             return host.model2DRenderer.renderItemToCanvasExtents(
                                                 itemId | 0,
                                                 qty,
-                                                params,
+                                                widgetAny.fitModel ? { ...params, fitToWidget: { width, height, padding: 8 } } : params,
                                                 width,
                                                 height,
                                             );

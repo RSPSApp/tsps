@@ -81,6 +81,7 @@ function player({ onyx = 0, shard = 0, greegree = false, crafting = 70 } = {}) {
     getMovementQueue: () => ({ size: () => 0 }),
     getForceMovement: () => null,
     getLocation: () => ({ equals: () => true, clone() { return this; }, getDistance: () => 0 }),
+    hasBlockingInterface: () => false,
     getInterfaceId: () => -1,
     getAttribute: () => null,
     setAttribute: () => {},

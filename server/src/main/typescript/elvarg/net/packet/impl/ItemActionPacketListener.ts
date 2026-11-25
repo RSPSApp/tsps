@@ -120,9 +120,9 @@ export class ItemActionPacketListener {
       }
     }
 
-    // Non-equipment item actions interrupt the current modal. Equipping has its own
+    // Non-equipment item actions interrupt ordinary modals and preserve opted-in tools. Equipping has its own
     // interface guard so the equipment-stats screen can remain open like OSRS.
-    player.getPacketSender().sendInterfaceRemoval();
+    player.getPacketSender().sendInterfaceRemoval(true);
 
     switch (itemId) {
       case 9520:

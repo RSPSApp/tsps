@@ -52,7 +52,11 @@ type PendingHitConfig = {
      * fight style (a derived hit that pays another style's XP).
      */
     experienceSkills?: readonly number[];
-    /** A pre-rolled damage value, still passing through damage hooks and the HP cap. */
+    /**
+     * A pre-rolled damage value. With rollAccuracy:false and handleAfterHitEffects:false it is
+     * authoritative (derived/cannon damage): no weapon roll/proc hooks run again. Final per-splat
+     * target-stat adjustments and the HP cap still apply. Other uses keep ordinary damage hooks.
+     */
     damage?: number;
     /** Fixed status damage for direct application: no attack rolls, bonuses or roll-time procs. */
     statusDamage?: boolean;
@@ -415,12 +419,27 @@ export class PendingHit {
         // reactions are deliberately not applied here: they are read at impact.
         let remaining = Math.max(0, this.target.getHitpoints());
         const capToRemaining = (damage: HitDamage): HitDamage => {
+            // Final per-splat roll adjustments precede HP/budget caps and swing-time XP.
+            // `hits` is still being built: consumers edit `damage`, not getHits().
+            PluginManager.emitCustomEvent("combat:hit-finalize", {
+                attacker: this.attacker, target: this.target, hit: this, damage,
+            });
             if (damage.getDamage() > remaining) {
                 damage.setDamage(remaining);
             }
             remaining -= damage.getDamage();
             return damage;
         };
+
+        // Scripted follow-up/cannon rolls are authoritative, not another roll of the worn weapon.
+        if (hitAmount === 1 && fixedDamage !== undefined && !rollAccuracy && !this.handleAfterHitEffects) {
+            const value = Math.floor(Math.max(0, Math.floor(fixedDamage)) * this.damageMultiplier);
+            const damage = new HitDamage(value, value > 0 ? HitMask.RED : HitMask.BLUE);
+            this.accurate = damage.getDamage() > 0;
+            capToRemaining(damage);
+            this.totalDamage = damage.getDamage();
+            return [damage];
+        }
 
         if (hitAmount === 1) {
             const roll = { attacker: this.attacker, target: this.target, combatType: this.combatType, forceAccurate: false, forceMaxHit: false, bypassProtectionPrayer };
@@ -456,13 +475,10 @@ export class PendingHit {
             if (rollAccuracy && !this.accurate) this.failedAccuracyChecks = 1;
             // Cap the roll to the HP held when it was made, before the hit-time
             // protection/Elysian reductions, so tick-eating and XP see this value.
-            capToRemaining(damage);
             if (this.damageMultiplier !== 1) {
                 damage.setDamage(Math.floor(damage.getDamage() * this.damageMultiplier));
-                // The multiplier is a size bonus, never an excuse for an overkill splat.
-                const hitpointCap = Math.max(0, this.target.getHitpoints());
-                if (damage.getDamage() > hitpointCap) damage.setDamage(hitpointCap);
             }
+            capToRemaining(damage);
             this.totalDamage = damage.getDamage();
             return [damage];
         }

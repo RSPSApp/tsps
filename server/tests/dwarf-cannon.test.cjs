@@ -44,6 +44,7 @@ before(async () => {
   Cannon.init({ core, emitCustomEvent: () => {} });
   const api = PluginManager.createApi("DwarfCannonTest");
   api.onCombatHitResolved(Firing.payExperience);
+  require("../plugins/combat/FlatArmour.plugin").register(PluginManager.createApi("CannonFlatArmour"));
   SlayerEquipment.init(api);
   api.onNpcHitModify(SlayerEquipment.npcHit);
 });
@@ -915,4 +916,38 @@ test("sea creatures are never targeted (Wiki)", () => {
   assert.ok(shark.getDefinition().getActions().includes("Attack"), "a sea creature has Attack");
   assert.equal(Firing.canTarget(p, shark), false);
   assert.equal(Firing.targetFor(cannon, p), null);
+});
+
+
+test("6782: a cannon's supplied roll gets flat armour once, with only 2 Ranged XP per damage", t => {
+  const p = gunner();
+  const cannon = built(p);
+  const npc = spawnNpc(core.CacheDefinitions.getNpcId('frost_nagua'), 3260, 3262);
+  npc.setHitpoints(100);
+  const hpXp = p.getSkillManager().getExperience(core.Skill.HITPOINTS);
+  t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => true);
+  t.mock.method(Math, 'random', () => 1 / 31 + 0.001); // steel cannon roll 1
+  Firing.shoot(cannon, p, npc);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.RANGED), 0, 'no ordinary swing-time XP');
+  runTicks(p, 2);
+  assert.equal(npc.getHitpoints(), 95, 'rolled1 plus4 armour, not overwritten or applied twice');
+  assert.equal(p.getSkillManager().getExperience(core.Skill.RANGED), 10);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.HITPOINTS), hpXp);
+});
+
+test("6782: a cannon miss stays zero and never rolls the owner's worn weapon effects", t => {
+  const p = gunner();
+  const cannon = built(p);
+  const npc = spawnNpc(core.CacheDefinitions.getNpcId('frost_nagua'), 3260, 3262);
+  npc.setHitpoints(100);
+  // These are the mutation points used by minimum-damage arrows and enchanted bolts.
+  const weaponRoll = t.mock.method(core.CombatFactory, 'getHitDamage', () => { throw new Error('cannon rolled worn weapon'); });
+  const weaponEffects = t.mock.method(PluginManager, 'emitCombatHitDamage', () => { throw new Error('cannon triggered worn weapon effect'); });
+  t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => false);
+  Firing.shoot(cannon, p, npc);
+  runTicks(p, 2);
+  assert.equal(weaponRoll.mock.calls.length, 0);
+  assert.equal(weaponEffects.mock.calls.length, 0);
+  assert.equal(npc.getHitpoints(), 100);
+  assert.equal(p.getSkillManager().getExperience(core.Skill.RANGED), 0);
 });

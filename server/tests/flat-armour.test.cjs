@@ -18,6 +18,8 @@ before(async () => {
   core.RegionManager.init(); core.RegionManager.loadMapFiles(3222, 3218);
   Plugin = require('../plugins/combat/FlatArmour.plugin');
   Plugin.register(PluginManager.createApi('FlatArmourTest'));
+  require('../plugins/npcs/SulphurNagua.plugin').register(PluginManager.createApi('SulphurNaguaTest'));
+  core.GameConstants.EXPERIENCE_MULTIPLIER = 1;
 });
 
 function actors(t, gameval) {
@@ -34,15 +36,23 @@ function actors(t, gameval) {
   return { player, npc };
 }
 
-/** A hit from `attacker` with these splat damages, through the NPC's hit-modify hook as the hit queue does. */
-function hitOn(npc, attacker, type, damages) {
+/** Scripted raw rolls through the real constructor and impact hook, as the hit queue does. */
+function rolledHit(npc, attacker, type, damages, protectionType, options = {}) {
   const method = type === core.CombatType.RANGED ? new core.RangedCombatMethod() : new core.MeleeCombatMethod();
   if (type === core.CombatType.MAGIC) method.type = () => core.CombatType.MAGIC;
-  const hit = new core.PendingHit(attacker, npc, method, { hitAmount: damages.length });
-  hit.getHits().forEach((splat, i) => splat.setDamage(damages[i]));
-  hit.updateTotalDamage();
-  return npc.manipulateHit(hit);
+  const original = core.CombatFactory.getHitDamage;
+  const protection = core.PendingHit.prototype.getProtectionType;
+  let next = 0;
+  core.CombatFactory.getHitDamage = () => new core.HitDamage(damages[next++], core.HitMask.RED);
+  if (protectionType) core.PendingHit.prototype.getProtectionType = () => protectionType;
+  try {
+    return new core.PendingHit(attacker, npc, method, { hitAmount: damages.length, rollAccuracy: false, ...options });
+  } finally {
+    core.CombatFactory.getHitDamage = original;
+    core.PendingHit.prototype.getProtectionType = protection;
+  }
 }
+const hitOn = (npc, ...args) => npc.manipulateHit(rolledHit(npc, ...args));
 const splats = hit => hit.getHits().map(h => h.getDamage());
 
 test('every gameval in the data resolves to a cache npc, and the Wiki values are on them', () => {
@@ -77,9 +87,10 @@ test('negative flat armour: a landed 1 against a Frost Nagua becomes 5, a miss s
 });
 
 test('the Sulphur Nagua keeps its -4 (now from the shared table)', t => {
-  for (const gameval of ['pmoon_sulphur_nagua', 'pmoon_quest_nagua_vis']) {
+  for (const gameval of ['pmoon_sulphur_nagua', 'pmoon_quest_nagua', 'pmoon_quest_nagua_vis']) {
     const { player, npc } = actors(t, gameval);
     assert.deepEqual(splats(hitOn(npc, player, core.CombatType.MELEE, [1])), [5], gameval);
+    assert.equal(npc.getCombatXpMultiplier(), gameval === 'pmoon_sulphur_nagua' ? 1.05 : 1, gameval);
   }
 });
 
@@ -94,11 +105,138 @@ test('positive flat armour: a Giant rockslug (2) takes 2 off a landed hit, and a
 test('magic, other NPCs and monsters without flat armour are untouched', t => {
   const { player, npc } = actors(t, 'frost_nagua');
   assert.deepEqual(splats(hitOn(npc, player, core.CombatType.MAGIC, [5])), [5], 'player magic ignores flat armour');
-  const voidwaker = new core.PendingHit(player, npc, new core.MeleeCombatMethod(), { hitAmount: 1 });
-  voidwaker.getHits()[0].setDamage(5); voidwaker.updateTotalDamage();
-  t.mock.method(voidwaker, 'getProtectionType', () => core.CombatType.MAGIC);
-  assert.deepEqual(splats(npc.manipulateHit(voidwaker)), [5], 'a melee swing dealing magic damage (the Voidwaker special) ignores it');
+  assert.deepEqual(splats(hitOn(npc, player, core.CombatType.MELEE, [5], core.CombatType.MAGIC)), [5],
+    'a melee swing dealing magic damage (the Voidwaker special) ignores it');
   const other = actors(t, core.NpcIdentifiers.SAND_CRAB);
   assert.deepEqual(splats(hitOn(npc, other.npc, core.CombatType.MELEE, [5])), [5], 'an NPC attacker (a thrall, say) is untouched');
   assert.deepEqual(splats(hitOn(other.npc, player, core.CombatType.MELEE, [2])), [2], 'a sand crab has no flat armour');
+});
+
+
+// #6782: the real constructor/queue/XP producer, not a manually modified completed hit.
+function queuedBlow(player, npc, damage, options = {}) {
+  const hit = new core.PendingHit(player, npc, new core.MeleeCombatMethod(), {
+    damage, rollAccuracy: false, experienceSkills: [core.Skill.ATTACK.getIndex()], ...options,
+  });
+  core.CombatFactory.addPendingHit(hit);
+  return hit;
+}
+
+test('6782: a Sulphur Nagua landed 1 pays 21 Attack XP for its adjusted 5 damage exactly once', t => {
+  const { player, npc } = actors(t, 'pmoon_sulphur_nagua');
+  const skills = player.getSkillManager();
+  const before = skills.getExperience(core.Skill.ATTACK);
+  const hpBefore = skills.getExperience(core.Skill.HITPOINTS);
+  const hit = queuedBlow(player, npc, 1);
+  assert.equal(skills.getExperience(core.Skill.ATTACK) - before, 21);
+  assert.equal(skills.getExperience(core.Skill.HITPOINTS) - hpBefore, 7);
+  assert.equal(hit.getTotalDamage(), 5);
+  const hp = npc.getHitpoints();
+  npc.getCombat().getHitQueue().process(core.World.getProcessCycle() + 10);
+  assert.equal(hp - npc.getHitpoints(), 5);
+  assert.equal(skills.getExperience(core.Skill.ATTACK) - before, 21, 'landing pays no second XP');
+});
+
+test('6782: armour is applied before the first HP cap in both directions', t => {
+  const positive = actors(t, 'superior_rockslug');
+  positive.npc.setHitpoints(10);
+  const hit = queuedBlow(positive.player, positive.npc, 20);
+  assert.equal(hit.getTotalDamage(), 10, '20 minus 2 armour is capped to 10 HP');
+  assert.equal(positive.player.getSkillManager().getExperience(core.Skill.ATTACK), 40);
+  positive.npc.getCombat().getHitQueue().process(core.World.getProcessCycle() + 10);
+  assert.equal(positive.npc.getHitpoints(), 0, 'lethal positive-armour hit is not reduced twice');
+  const negative = actors(t, 'pmoon_quest_nagua_vis');
+  negative.npc.setHitpoints(3);
+  const small = queuedBlow(negative.player, negative.npc, 1);
+  assert.equal(small.getTotalDamage(), 3, '1 plus 4 armour bonus is capped to 3 HP');
+  assert.equal(negative.player.getSkillManager().getExperience(core.Skill.ATTACK), 12, 'quest Nagua has no XP bonus');
+});
+
+
+test('6782: multi-splat damage and XP share the HP and producer budget after flat armour', t => {
+  const { player, npc } = actors(t, 'frost_nagua');
+  npc.setHitpoints(9);
+  const hit = rolledHit(npc, player, core.CombatType.RANGED, [1, 0, 3], undefined, {
+    damageBudget: { remaining: 6 }, experienceSkills: [core.Skill.RANGED.getIndex()],
+  });
+  assert.deepEqual(splats(hit), [5, 0, 4], 'each landed splat gets armour before the shared HP cap');
+  core.CombatFactory.addPendingHit(hit);
+  assert.deepEqual(splats(hit), [5, 0, 1]);
+  assert.equal(player.getSkillManager().getExperience(core.Skill.RANGED), 24);
+  npc.getCombat().getHitQueue().process(core.World.getProcessCycle() + 10);
+  assert.equal(npc.getHitpoints(), 3);
+  assert.equal(player.getSkillManager().getExperience(core.Skill.RANGED), 24);
+});
+
+test('6782: positive armour can zero XP; a size multiplier precedes flat armour', t => {
+  const positive = actors(t, 'superior_rockslug');
+  assert.equal(queuedBlow(positive.player, positive.npc, 1).getTotalDamage(), 0);
+  assert.equal(positive.player.getSkillManager().getExperience(core.Skill.ATTACK), 0);
+  const negative = actors(t, 'frost_nagua');
+  assert.equal(queuedBlow(negative.player, negative.npc, 2, { damageMultiplier: 1.5 }).getTotalDamage(), 7,
+    'size bonus multiplies the raw 2 to 3, then negative armour adds 4');
+});
+
+test('6782: the first-successful special branch finalizes each distributed splat', t => {
+  const { player, npc } = actors(t, 'frost_nagua');
+  const traits = { hitCount: 4, guaranteedHit: true, firstSuccessfulAccuracyDamageRanges: [{
+    minimumDamageMultiplier: 1, maximumDamageMultiplier: 1,
+    hitDamageMultipliers: [0.5, 0.25, 0.25, 0.125],
+  }] };
+  t.mock.method(core.CombatSpecial, 'activeTraitsFor', () => traits);
+  const hit = rolledHit(npc, player, core.CombatType.MELEE, [8, 8, 8, 8]);
+  assert.deepEqual(splats(hit), [8, 6, 6, 5], 'raw 4,2,2,1 splats each gain 4');
+});
+
+test('6782: status damage and directly queued recoil/burn damage bypass roll armour and XP', t => {
+  const { player, npc } = actors(t, 'frost_nagua');
+  const hp = npc.getHitpoints();
+  const status = queuedBlow(player, npc, 3, { statusDamage: true });
+  assert.equal(status.getTotalDamage(), 3);
+  npc.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(2, core.HitMask.RED).setSource(player)]);
+  npc.getCombat().getHitQueue().process(core.World.getProcessCycle() + 10);
+  assert.equal(hp - npc.getHitpoints(), 5);
+  assert.equal(player.getSkillManager().getExperience(core.Skill.ATTACK), 0);
+});
+
+
+test('6782: ordinary configured damage retains weapon hooks; authoritative fixed follow-ups do not', t => {
+  const { player, npc } = actors(t, 'frost_nagua');
+  const rolls = t.mock.method(PluginManager, 'emitCombatHitDamage');
+  const ordinary = queuedBlow(player, npc, 1);
+  assert.equal(rolls.mock.calls.length, 1, 'ordinary configured damage still runs the existing hook');
+  assert.equal(ordinary.getTotalDamage(), 5);
+  const fixed = queuedBlow(player, npc, 2, { handleAfterHitEffects: false, experience: false });
+  assert.equal(rolls.mock.calls.length, 1, 'supplied follow-up roll does not proc the worn weapon again');
+  assert.equal(fixed.getTotalDamage(), 6, 'flat armour still applies to the supplied roll');
+  const scaled = queuedBlow(player, npc, 2, { handleAfterHitEffects: false, experience: false, damageMultiplier: 1.5 });
+  assert.equal(scaled.getTotalDamage(), 7, 'authoritative supplied roll retains its explicit size bonus before armour');
+  t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => false);
+  const missable = queuedBlow(player, npc, 5, { handleAfterHitEffects: false, rollAccuracy: true });
+  assert.equal(missable.getTotalDamage(), 0, 'fixed damage that requests accuracy can still miss (Duke-style producer)');
+  assert.equal(rolls.mock.calls.length, 2, 'missable configured hit keeps the ordinary damage hook');
+});
+
+test('6782: the actual Karil follow-up keeps half-primary damage, its own armour and no second XP', t => {
+  const { player, npc } = actors(t, 'frost_nagua');
+  const I = core.ItemIdentifiers, E = core.Equipment;
+  for (const [slot, id] of [[E.HEAD_SLOT,I.KARILS_COIF], [E.BODY_SLOT,I.KARILS_LEATHERTOP],
+    [E.LEG_SLOT,I.KARILS_LEATHERSKIRT], [E.WEAPON_SLOT,I.KARILS_CROSSBOW], [E.AMULET_SLOT,I.AMULET_OF_THE_DAMNED_FULL_]]) {
+    assert.ok(Number.isInteger(id), 'cache-backed equipment id');
+    player.getEquipment().setItem(slot, new core.Item(id, 1));
+  }
+  let dealt, secondary;
+  const factory = new Proxy(core.CombatFactory, { get: (obj, key) => key === 'addPendingHit'
+    ? hit => { secondary = hit; obj.addPendingHit(hit); } : obj[key] });
+  const api = new Proxy({ core, getCombatFactory: () => factory, onPlayerDealtDamage: fn => { dealt = fn; } },
+    { get: (obj, key) => key in obj ? obj[key] : () => {} });
+  require('../plugins/items/BarrowsEquipment.plugin').register(api);
+  const primary = rolledHit(npc, player, core.CombatType.RANGED, [4]);
+  assert.equal(primary.getTotalDamage(), 8);
+  t.mock.method(Math, 'random', () => 0);
+  dealt({ player, target: npc, hit: primary });
+  assert.ok(secondary, 'real equipped-set handler queued its follow-up');
+  assert.equal(secondary.getTotalDamage(), 8, 'half of primary8, then each landed splat gains4');
+  assert.equal(secondary.rewardsExperience(), false);
+  assert.equal(player.getSkillManager().getExperience(core.Skill.RANGED), 0);
 });

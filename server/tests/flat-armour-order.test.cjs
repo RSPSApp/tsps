@@ -1,5 +1,5 @@
-// Flat armour is a target stat: it runs in onNpcHitModify's "base" stage, before content hooks that
-// read or spend the damage. Here the Moons of Peril and a plain recorder hook register *before*
+// Flat armour is a target stat: it finalizes each rolled splat before HP/XP and content hooks that
+// read or spend the damage at impact. Here the Moons of Peril and a plain recorder hook register *before*
 // FlatArmour (plugins load in directory order, bosses/ before combat/) and still see the adjusted hit.
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict');
@@ -35,10 +35,7 @@ function newPlayer(t, at) {
 }
 
 function meleeHit(player, npc, damage) {
-  const hit = new core.PendingHit(player, npc, new core.MeleeCombatMethod(), { hitAmount: 1 });
-  hit.getHits()[0].setDamage(damage);
-  hit.updateTotalDamage();
-  return hit;
+  return new core.PendingHit(player, npc, new core.MeleeCombatMethod(), { damage, rollAccuracy: false });
 }
 
 test('an ordinary hook registered earlier reads the damage after flat armour', t => {

@@ -43519,6 +43519,7 @@
             "server/plugins/combat/EquipmentEffects.plugin.js"
           ],
           "devNotes": [
+            "25 November 2026 (#6782): shared NPC flat armour now finalizes each selected melee/ranged splat before HP caps and swing-time XP; normal Sulphur Nagua 13033 receives its 5% combat XP bonus, quest variants retain 0%. Native queue/XP/impact and positive/negative/multi-splat/exclusion regressions are recorded in docs/flat-armour.md; supplied checkpoints/rolls, no rendered or retail-capture proof. Existing task statuses retained.",
             "Main 62d662706: #1519 extended melee reach uses projectile line of sight, so water and low obstacles no longer block halberds; #1490 NPCs drop a target they cannot reach instead of locking onto it.",
             "Melee is core-owned, not a plugin: MeleeCombatMethod.ts:21 queues one PendingHit, CombatFactory.addPendingHit grants XP/skull and adds a 1-tick melee delivery hop (CombatFactory.ts:584).",
             "Formulas are central: effective attack level in AccuracyFormulasDpsCalc.ts:184 (style +3/+1, +8, prayer %, void 110%) and max hit in DamageFormulas.ts:98 ((effStrength*(strBonus+64)+320)/640).",
@@ -43622,6 +43623,7 @@
             "docs/projectile-audit.md"
           ],
           "devNotes": [
+            "25 November 2026 (#6782): shared NPC flat armour now finalizes each selected melee/ranged splat before HP caps and swing-time XP; normal Sulphur Nagua 13033 receives its 5% combat XP bonus, quest variants retain 0%. Native queue/XP/impact and positive/negative/multi-splat/exclusion regressions are recorded in docs/flat-armour.md; supplied checkpoints/rolls, no rendered or retail-capture proof. Existing task statuses retained.",
             "Main fdf193b28: #1312 ranged weapons use the cache's attack range, +2 on Longrange up to 10.",
             "Core-owned: RangedCombatMethod.hits (line 20) derives per-distance PendingHit delays from WeaponProfiles.hitDelays; start (line 48) sends the projectile/graphic, plays the fire sound and decrements ammo (CombatFactory.decrementAmmo).",
             "Ammo validation is CombatFactory.checkAmmo (line 1103) called from RangedCombatMethod.canAttack/canPursue; ranged max hit is DamageFormulas.calculateMaxRangedHit (line 228) and the ranged accuracy roll is AccuracyFormulasDpsCalc.attackRangedRoll (line 383).",

@@ -10,6 +10,7 @@
  * - a broken dragon hasta is repaired into a dragon hasta for free, with a warning when the player
  *   hasn't learned hasta smithing (they can't wield it yet).
  *
+ * rsprox recording 1533 (rev 224) has the hasta menus and the "No." reply (no conversion played).
  * rsprox recording 1529 (rev 224, ticks 485-537) plays the spear conversion: carrying the spear,
  * the Talk-to greeting is followed by a top-level menu ("Let's talk about my training.", "Can you
  * help me with hastae?", "I'd better get going." among others); the hastae menu lists only what
@@ -167,7 +168,9 @@ function createHastae(api, deps) {
     pending.set(player, { key, cost });
     Scenes.hold(player);
     Scenes.fade(player, true);
-    Scenes.controls(player, true, true);
+    // Rec 1529: only the fade at +0; cutscene_status and the minimap go with the copy at +2 (open).
+    player.getMovementQueue().reset().setBlockMovement(true);
+    player.setUntargetable(true);
     Scenes.later(player, TIMING.open, () => open(player));
   }
 

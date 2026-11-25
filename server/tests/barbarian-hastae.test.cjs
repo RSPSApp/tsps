@@ -136,11 +136,14 @@ test('rec 1529: the spear becomes a hasta for 300,000 coins after the anvil scen
   await f.send({type: 'dialogue_continue', widgetId: (219 << 16) | 1, childIndex: 1}, 1); // the choice's own tick
   // Ticks after the choice: the copy opens at 2, the strikes at 6 and 10, the real map at 14, the hasta at 15.
   const states = [];
+  const cutscene = [];
   for (let tick = 1; tick <= 15; tick++) {
     f.tick();
+    cutscene.push(p.getPacketSender().getVarbit(542));
     states.push({tick, at: at(p), spear: count(p, I.ZAMORAKIAN_SPEAR), hasta: count(p, I.ZAMORAKIAN_HASTA), coins: count(p, I.COINS)});
   }
   assert.deepEqual(states[0].at, [2502, 3487, 0], 'still on the real map during the fade');
+  assert.deepEqual(cutscene.slice(0, 2), [0, 1], 'cutscene_status with the copy at +2, not the fade (rec 1529 tick 524)');
   assert.ok(states[1].at[0] > 6400, `in the grotto copy at tick 2: ${states[1].at}`);
   for (const s of states.slice(0, 14)) {
     assert.equal(s.spear, 1, `spear kept at tick ${s.tick}`);

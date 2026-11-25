@@ -1648,7 +1648,8 @@
       [
         "TOPAZ_AMULET_U_",
         "TOPAZ_AMULET"
-      ]
+      ],
+      ["SALVE_SHARD", "SALVE_AMULET", "amulet", "BALL_OF_WOOL", 0]
     ]
   },
   "battlestaves": {

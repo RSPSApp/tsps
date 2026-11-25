@@ -431,7 +431,7 @@ test('Start-wave before wave 1 keeps prayers on and sets busy one tick after ope
   assert.equal(player.varbits.get(12393), 0);
   start({ player, npc: run.minimus });
   assert.deepEqual(player.scripts.at(-1), offer);
-  assert.equal(player.messages.length, messages, '237/1156 t9870: no warning before wave 1');
+  assert.equal(player.messages.length, messages, '237/1150 t32509-32517: no warning before wave 1');
   ticks(1);
   run.selectModifier(1);
   assert.equal(run.confirm(), true);
@@ -445,7 +445,7 @@ test('automatic intermission turns off active prayers and quick prayers on the r
   t.after(() => run.end('left'));
   const magic = PluginManager.getCoreApi().PrayerHandler.PROTECT_FROM_MAGIC;
   player.prayers[magic] = true;
-  player.getPacketSender().sendVarbit(4116, 1).sendQuickPrayersState(true);
+  player.getPacketSender().sendVarbit(4116, 1).sendVarbit(4101, 1 << 12).sendQuickPrayersState(true);
   player.getQuickPrayers().setEnabled(true);
   run.tick();
   assert.equal(run.wave, 1);
@@ -455,6 +455,7 @@ test('automatic intermission turns off active prayers and quick prayers on the r
   ticks(1);
   assert.equal(player.prayers[magic], false, '237/1150 t12189: prayer off at +3');
   assert.equal(player.varbits.get(4116), 0);
+  assert.equal(player.varbits.get(4101), 0);
   assert.equal(player.varbits.get(4103), 0);
   assert.equal(player.getQuickPrayers().enabled, false);
 });

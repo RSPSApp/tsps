@@ -32,14 +32,14 @@ function reachMinimus(event) {
 
 function startWave(event) {
   const run = ownRun(event);
-  if (!run) return false;
+  if (!run || event.npc !== run.minimus) return false;
   run.openIntermission();
   return true;
 }
 
 function leave(event) {
   const run = ownRun(event);
-  if (!run) return false;
+  if (!run || event.npc !== run.minimus) return false;
   run.askToLeave();
   return true;
 }

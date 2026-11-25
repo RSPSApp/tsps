@@ -96,6 +96,7 @@ function fakePlayer(name, location = IN_VER_SINHAZA(), { metStranger = true } = 
         sendInterfaceRemoval: () => sender,
         sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
         sendInterfaceFlags: () => sender,
+        sendInterfaceFlagsRange: () => sender,
         sendString: (text, uid) => { p.texts[uid] = text; return sender; },
       };
       return sender;

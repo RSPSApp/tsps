@@ -11,8 +11,13 @@ function gas(fight, tile, preparation = false) {
     const warning = preparation ? 4 : 1, end = preparation ? 11 : t.combatGasMinTicks + Common.random(t.combatGasMaxTicks - t.combatGasMinTicks);
     s.passiveExpiry.set(vent, s.tick + end + 4);
     vent.performGraphic(Common.core.Graphic.delayed(g.gasSpawn, warning * 30));
+    const sounds = Common.data.sounds;
+    Common.areaSound(s, sounds.ventSpawn, tile);
     for (let tick = warning + 2; tick < end; tick += 2)
-      fight.at(tick, () => vent.performGraphic(new Common.core.Graphic(g.gasIdle)));
+      fight.at(tick, () => {
+        vent.performGraphic(new Common.core.Graphic(g.gasIdle));
+        Common.areaSound(s, sounds.ventIdle, tile);
+      });
     for (let tick = warning + 1; tick < end; tick++)
       fight.at(tick, () => {
         if (Model.near(Common.source(s, s.player.getLocation()), tile)) {
@@ -52,6 +57,7 @@ function ice(fight, tile) {
   Common.graphic(s, Common.data.graphics.iceWarning, tile);
   fight.at(Common.data.timing.iceWarning, () => {
     Common.graphic(s, Common.data.graphics.iceImpact, tile);
+    Common.areaSound(s, Common.data.sounds.iceImpact, tile);
     if (Model.near(Common.source(s, s.player.getLocation()), tile, 0)) {
       Common.hurt(fight, 18);
       fight.freeze(2, true);

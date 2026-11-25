@@ -66,16 +66,21 @@ test('Duke raw hazards retain their non-reflecting damage path',t=>{
   assert.equal(h.p.getAttribute(h.core.CombatFactory.RECOIL_DAMAGE_ATTRIBUTE),undefined);
 });
 
-test("normal-world gaze warning and successful avoidance retain their captured colours", (t) => {
+test("gaze warning and successful avoidance use the rev 227+ colours and resolve four ticks later", (t) => {
   const h = Harness.harness(t);
   h.enter();
   h.move([3035, 6451]);
   h.fight.wake();
   h.fight.nextAttack = Infinity;
   h.fight.gaze();
-  assert.ok(h.messages.includes("<col=6800bf>Duke Sucellus turns his gaze upon you..."));
-  h.step(5);
-  assert.ok(h.spam.includes("<col=06600c>You manage to avoid Duke Sucellus' gaze."));
+  assert.ok(h.messages.includes("<col=a53fff>Duke Sucellus turns his gaze upon you..."));
+  const synths = () => h.packets.filter(([name]) => name === "sendSoundEffect").map(([, id]) => id);
+  assert.ok(synths().includes(7215), "gaze start sound");
+  h.step(3);
+  assert.equal(h.spam.length, 0);
+  h.step();
+  assert.ok(h.spam.includes("<col=229628>You manage to avoid Duke Sucellus' gaze."));
+  assert.ok(synths().includes(168), "gaze resolved sound");
   assert.equal(h.p.getHitpoints(), 99);
 });
 
@@ -137,17 +142,24 @@ test("prison eyes animate their original locs instead of replacing them with awa
   assert.ok(!placements.some(([id]) => h.C.data.extremities.some((eye) => id === eye.id + 3)));
 });
 
-test("gaze failure feedback precedes the normal-mode bounded damage by one tick", (t) => {
+test("a failed gaze shows its line and spotanim, then freezes and hurts a tick later (1751)", (t) => {
   const h = Harness.harness(t);
   h.enter();
   h.move([3039, 6451]);
   h.fight.wake();
   h.fight.nextAttack = Infinity;
   t.mock.method(Math, "random", () => 0.5);
+  const graphics = [];
+  t.mock.method(h.p, "performGraphicInSlot", (slot, graphic) => graphics.push([slot, graphic.getId()]));
   h.fight.gaze();
-  h.step(5);
+  h.step(4);
   assert.ok(h.spam.includes("<col=ff3045>You failed to avoid Duke Sucellus' gaze."));
+  assert.deepEqual(graphics, [[2, 369]]);
   assert.equal(h.p.getHitpoints(), 99);
+  assert.equal(h.messages.includes("<col=ef1020>You have been frozen!</col>"), false);
+  h.step();
+  assert.ok(h.messages.includes("<col=ef1020>You have been frozen!</col>"));
+  assert.ok(h.p.getTimers().has(h.core.TimerKey.FREEZE), "the failed gaze freezes the player");
   h.step();
   assert.ok(h.p.getHitpoints() < 99);
   assert.equal(h.C.data.normal.gaze, 101, "one quest hit of 70 is not the normal-mode maximum");
@@ -183,7 +195,7 @@ test("gas holder uses the captured visual phases and never hurts before the acti
   assert.equal(vent.__removed, true);
 });
 
-test("eye awakening is tied to the Duke waking and frozen feedback uses its captured slots", (t) => {
+test("waking swaps the extremities to their awake locs and frozen feedback uses its captured slots", (t) => {
   const h = Harness.harness(t);
   h.enter();
   h.packets.length = 0;
@@ -191,12 +203,16 @@ test("eye awakening is tied to the Duke waking and frozen feedback uses its capt
   h.fight.nextAttack = Infinity;
   const animations = () => h.packets.filter(([name]) => name === "sendObjectAnimation");
   assert.deepEqual(animations().map(([, , animation]) => animation.getId()), new Array(6).fill(10186));
+  const placed = [];
+  t.mock.method(h.session, "place", (id) => placed.push(id));
   h.step();
-  assert.deepEqual(animations().slice(6).map(([, , animation]) => animation.getId()), new Array(6).fill(10185));
+  assert.deepEqual(placed, h.C.data.extremities.map((eye) => eye.id + 3), "1751/3285: locs 47547-47549 a tick after waking");
   const graphics = [];
   t.mock.method(h.p, "performGraphicInSlot", (slot, graphic) => graphics.push({ slot, id: graphic.getId(), height: graphic.getHeight(), delay: graphic.getDelay() }));
   h.fight.freeze(5, true);
-  assert.ok(h.messages.includes("<col=e00a19>You've been frozen in place!"));
+  assert.ok(h.messages.includes("<col=ff3045>You've been frozen in place!"));
+  assert.ok(h.packets.some(([name, id]) => name === "sendSoundEffect" && id === 7200));
+  assert.ok(h.packets.some(([name, id]) => name === "sendSoundEffect" && id === 171));
   assert.deepEqual(graphics, [
     { slot: 4, id: 1575, height: 124, delay: 0 },
     { slot: 2, id: 369, height: 0, delay: 0 },
@@ -222,4 +238,61 @@ test("gas visuals belong to private vent NPCs and are cleaned up when the encoun
   assert.ok(!h.packets.some(([name, graphic]) => name === "sendGraphic" && [2431, 2432, 2433].includes(graphic.getId())));
   h.fight.stop();
   assert.ok(removed.includes(vent));
+});
+
+test("the kill closes the extremities, plays its loot effect and music, and the respawn restores them (1751/91/3285)", (t) => {
+  const h = Harness.harness(t);
+  const session = h.enter();
+  h.move([3035, 6451]);
+  h.fight.wake();
+  h.fight.nextAttack = Infinity;
+  h.step(2);
+  const fight = h.fight, placed = [];
+  const place = session.place.bind(session);
+  t.mock.method(session, "place", (id, ...rest) => { placed.push(id); return place(id, ...rest); });
+  h.packets.length = 0;
+  const eyeAnimations = () => h.packets.filter(([name]) => name === "sendObjectAnimation").map(([, , animation]) => animation.getId());
+  fight.fell();
+  assert.deepEqual(eyeAnimations(), new Array(6).fill(10190));
+  h.step();
+  assert.deepEqual(eyeAnimations(), new Array(12).fill(10190), "10190 is sent on two ticks");
+  assert.deepEqual(placed, []);
+  h.step();
+  assert.deepEqual(placed, h.C.data.extremities.map((eye) => eye.id + 6), "dead locs 47550-47552 two ticks after the lethal hit");
+  h.step(2);
+  fight.won(h.p);
+  assert.ok(h.messages.includes("Fight duration: <col=ff0000>0:03.60</col> (new personal best)"), "six ticks from wake to the kill count message");
+  const loot = h.packets.find(([name, graphic]) => name === "sendGraphic" && graphic.getId() === 85);
+  assert.ok(loot, "spotanim 85 on the loot tile");
+  assert.equal(loot[1].getHeight(), 16);
+  assert.deepEqual(h.C.source(session, loot[2]), [3039, 6451]);
+  assert.ok(h.packets.some(([name, id]) => name === "sendSong" && id === 759), "Prison Break at the kill");
+  placed.length = 0;
+  h.packets.length = 0;
+  h.step(23 - 4);
+  assert.notEqual(h.fight, fight, "respawned 23 ticks after the lethal hit");
+  assert.deepEqual(placed.filter((id) => h.C.data.extremities.some((eye) => eye.id === id)), h.C.data.extremities.map((eye) => eye.id));
+  assert.equal(session.boss.getAnimation()?.getId(), 10182);
+  assert.ok(h.packets.some(([name, id]) => name === "sendSong" && id === 763), "Eye See You again at respawn");
+  const shows = h.emitted.filter(([name, event]) => name === "boss-hud:show" && event.npcId === 12167);
+  assert.deepEqual(shows.at(-1)[1].maximum, 200, "the HUD shows the sleeping poison meter");
+});
+
+test("combat sends its recorded sounds: magic impact, gas spit and the slam area sound", (t) => {
+  const h = Harness.harness(t);
+  h.enter();
+  h.fight.wake();
+  h.fight.nextAttack = Infinity;
+  h.move([3039, 6440]);
+  h.fight.auto();
+  assert.ok(h.packets.some(([name, id, , delay]) => name === "sendSoundEffect" && id === 7197 && delay === 120));
+  h.move([3039, 6451]);
+  h.fight.auto();
+  const slam = h.packets.find(([name, id]) => name === "sendAreaSound" && id === 2707);
+  assert.ok(slam, "melee slam area sound");
+  assert.equal(slam[7], 10, "radius");
+  h.fight.gas();
+  assert.ok(h.packets.some(([name, id]) => name === "sendSoundEffect" && id === 5002));
+  h.step(2);
+  assert.ok(h.packets.some(([name, id, , , , , , radius]) => name === "sendAreaSound" && id === 2041 && radius === 3), "vent spawn");
 });

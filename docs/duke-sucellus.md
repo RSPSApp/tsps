@@ -6,13 +6,13 @@ The members-only plugin implements the repeatable normal encounter after Desert 
 
 Vats accept partial ingredients and hand-crush raw mushrooms one-for-one. A complete six-of-each recipe ferments for six ticks. Check uses the captured ingredient messagebox; Empty refunds the stored amounts atomically. A full inventory preserves the vat and its contents. Picking and grinding repeat until interrupted; mining uses the selected pickaxe interval and stops after five minutes. The iron pickaxe yields first after seven server processing steps and repeats every seven ticks. Tick manipulation and unmeasured pickaxe tiers are not claimed exact.
 
-The June/July 2025 preparation changes remain: eight mushroom picks, resources retained between kills, level-dependent powder yields, five-point powder feeding once per tick, two normal poison doses and 10 Herblore XP per poison. Feeding displays a separate green preparation meter and hitsplats; it cannot queue combat damage against the awakened boss. The final feed wakes him on the next tick. Resource objects become inactive during combat.
+The June/July 2025 preparation changes remain: eight mushroom picks, resources retained between kills, level-dependent powder yields, five-point powder feeding once per tick, two normal poison doses (splats of 125, then the remaining 75) and 10 Herblore XP per poison. Feeding displays a separate green preparation meter and hitsplats, and the boss health HUD shows that meter from Duke's spawn; it cannot queue combat damage against the awakened boss. The final feed sends "Duke is waking up." and wakes him on the next tick. Resource objects become inactive during combat.
 
-Normal combat uses 485 HP, five-tick attacks and four-tick enrage attacks at 121 HP. Melee shows the seven-tile row at launch, applies chip on that cycle and checks the aimed slam two ticks later. Magic launches from the mouth with cycles50/120, raw height350 to100, and applies damage four ticks later. Its slot2 impact is sent at cast time with delay120. Gaze checks cover after five ticks and applies failed-gaze damage one tick later; the captured warning/success colors and failure text remain. Eyes animate in place and wake with the Duke. Freeze feedback retains its captured slots, graphics and message.
+Normal combat uses 485 HP, five-tick attacks and four-tick enrage attacks at 121 HP. Melee shows the seven-tile row at launch, applies chip on that cycle and checks the aimed slam two ticks later. Magic launches from the mouth with cycles50/120, raw height350 to100, and applies damage four ticks later. Its slot2 impact is sent at cast time with delay120. Gaze checks cover four ticks after it starts; a failure shows spotanim369, then freezes the player with "You have been frozen!" and applies its damage a tick later. The extremities animate in place during preparation; at wake they become their awake locs (id+3), at death they close (10190) and become their dead locs (id+6), and on respawn Duke plays 10182 and they return to their sleeping locs. Freeze feedback retains its captured slots, graphics and message.
 
 Preparation and combat gas use private vent NPCs. Preparation eyes, cones, icefalls and gas retain the later timing/geometry corrections. Every owned boss, timer, vent and cone has `combat:no-regen` before being added to the instance, through removal. Wake, death, exit and respawn clear the appropriate scheduled effects and actors.
 
-Kill time freezes at lethal damage. Counts, personal/world records and novice grave discounts persist. The drop roller receives the exact dead boss's perfect-kill context. Cold Feet tracks actual running, including preparation, and resets at lethal damage for the next attempt. Mirror Image compares actual player and Duke attack-launch cycles. Five-perfect-kill and speed achievements remain; any observed Slayer assignment excludes speed awards. The native scoreboard requires quest completion.
+Kill time runs from waking to the kill count message (the 25 June 2025 timer) and is shown as `Fight duration: <col=ff0000>m:ss.cc</col>` with the personal best; the kill also plays spotanim85 on the loot tile and switches the music to Prison Break until the respawn. Counts, personal/world records and novice grave discounts persist. The drop roller receives the exact dead boss's perfect-kill context. Cold Feet tracks actual running, including preparation, and resets at lethal damage for the next attempt. Mirror Image compares actual player and Duke attack-launch cycles. Five-perfect-kill and speed achievements remain; any observed Slayer assignment excludes speed awards. The native scoreboard requires quest completion.
 
 ## Source evidence and version boundaries
 
@@ -36,7 +36,7 @@ The original source audits decoded [RSProx1703](https://rsprox.net/download/1703
 
 The later audit decoded [1751](https://rsprox.net/download/1751), [1827](https://rsprox.net/download/1827) and [3285](https://rsprox.net/download/3285) with the same official source and launcher1.0.5. These are Leagues V/Grid Master worlds. Duke level758 identifies normal variants in the former;3285's level1099 and370-point meter identify awakened Duke and are excluded from normal mechanics. Event worlds corroborate presentation, not normal damage, XP, yields or player attack rates. No ordinary-world postquest packet recording was found.
 
-Retained normal-variant presentation includes independent eye clocks (middle/south/north, two-tick stagger), three-vent preparation groups every25ticks, two combat spits three ticks apart, native poison/vat headbars and a24tick corpse/respawn boundary. Combat vent holders spawn two ticks after the spit, warn for one tick, then damage from holder+2 until their empirical12–14tick lifetime ends. This supersedes the older quest-holder visual schedule; it does not establish exact current normal damage or lifetime RNG.
+Retained normal-variant presentation includes independent eye clocks (middle/south/north, two-tick stagger), three-vent preparation groups every25ticks, two combat spits three ticks apart, native poison/vat headbars and a23tick lethal-to-respawn boundary. Combat vent holders spawn two ticks after the spit, warn for one tick, then damage from holder+2 until their empirical12–14tick lifetime ends. This supersedes the older quest-holder visual schedule; it does not establish exact current normal damage or lifetime RNG.
 
 Ordinary footage and primary descriptions constrain the remaining geometry and gathering behavior:
 
@@ -81,3 +81,20 @@ retaliation, and non-reflecting hazard controls. Fresh prerequisite build and al
 and found no important issue. Full/native/integration verification is recorded
 in the PR. This does not establish new damage bounds, RNG draw order, vent/ice
 selection or combat timing constants.
+
+## Capture parity pass, 24 November 2026
+
+A second sweep compared the plugin with the postquest normal kills in [91](https://rsprox.net/download/91), 1751 and 1827 (rev227, Leagues V), the awakened kills in [555](https://rsprox.net/download/555) and 3285 (presentation only), and 1703. Captures 100, 1754, 1767 and 3168 contain no fight.
+
+| Change | Evidence |
+| --- | --- |
+| Poison dose 125 (125 then 75 to fill 200) | every normal wake in 91/1751/1827; awakened 125/125/120 is the same in 555 (Dec 2024) and 3285 (Oct 2025) |
+| Gaze outcome at +4, failure freeze and damage at +5 | 91, 555, 1703, 1751 (twice), 3285; failed normal gazes at 1751 ticks 9807/9808 and 11055/11056 |
+| Kill timer from wake to the kill count message, precise format | 3285: wake 20197, message 20267, `0:42`; the speed tasks' 25 June 2025 change |
+| Awake/dead extremity locs, 10190, 10182 respawn 23 ticks after the lethal hit | 1751 ticks 4152-4198, 91 ticks 11010/11033, 3285 ticks 20197-20265 |
+| HUD from spawn, spotanim85 on the loot tile, Prison Break (759) at the kill and Eye See You (763) at respawn | varps 1682/1683 and music in 91; spotanim85 in 91/1827/3285 |
+| Sounds 7215/168 gaze, 7197 magic (delay120), 5002 gas spit, 2727 eye freeze, 7200/171 icefall freeze, 3600 salt; area sounds 2707 slam (radius10), 2041/3052 vent spawn and idle (radius3), 7170 icefall (radius2) | co-occurrence with the matching boss sequences, spotanims and messages in 91/1751/1703 |
+| Message colours `ff289d`/`a53fff`/`229628`/`ff3045` | every rev227+ capture; 1703's darker set is not used |
+| Texts: mushroom inventory full, empty vat "Mushroom one/two", rev234 "No ingredients you're holding can fit into the vat." | 1751, 555, 3285 |
+
+Not changed: Duke's own hit sound (area sound 7181, radius9) is not sent, since the engine's NPC combat sounds come from generated data. The failed-gaze freeze length is unmeasured; the recordings only show move clicks refused for at least three ticks, so it reuses the extremities' five ticks. Sounds 2663, 2685 and 2739 have no consistent trigger in the recordings and are left out.

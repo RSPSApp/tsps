@@ -969,7 +969,7 @@ test('Short speaker labels take the head of the participant the export resolved 
   assert.deepEqual(heads('This is'), [JATIZSO_GUARD]);
 });
 
-test('The Border Guard\'s "Guard" lines show the clicked guard\'s head and cache name (#6762)', () => {
+test('The Border Guard\'s "Guard" lines show the clicked guard\'s head (#6762)', () => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const { startTranscript } = require('../plugins/quests/QuestRuntime');
   const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
@@ -990,25 +990,14 @@ test('The Border Guard\'s "Guard" lines show the clicked guard\'s head and cache
       const toll = [...chain.getDialogues().values()].find(e => e.getNpcId && e.getText().includes('pay a toll'));
       assert.ok(toll, 'the toll line plays');
       toll.send(player);
-      // rsprox 1001336 t3099: if_setnpchead chat_left:head borderguard1, chat_left:name "Border Guard".
+      // rsprox 1001336 t3099: if_setnpchead chat_left:head borderguard1. The name stays the Wiki's
+      // "Guard" (live: "Border Guard", a recorded difference in docs/al-kharid-toll-gate.md).
       assert.ok(sent.some(row => row[0] === 'sendNpcHeadOnInterface' && row[1] === clicked && row[2] === (231 << 16 | 2)));
-      assert.ok(sent.some(row => row[0] === 'sendString' && row[1] === 'Border Guard' && row[2] === (231 << 16 | 4)));
+      assert.ok(sent.some(row => row[0] === 'sendString' && row[1] === 'Guard' && row[2] === (231 << 16 | 4)));
     }
   } finally {
     NpcDefinition.forId = original;
   }
-});
-
-test('Only a short label the export resolved to the clicked NPC takes its cache name', () => {
-  const { typedSpeakerName } = require('../plugins/npcs/NpcDialogues.plugin');
-  const guard = { getId: () => 4287, getName: () => 'Border Guard' };
-  const step = { type: 'line', speaker: 'Guard', speaker_ids: [4287, 4288] };
-  assert.equal(typedSpeakerName(step, 4287, guard), undefined);
-  // Another speaker, an unresolved label, or a label that is not part of the name keeps the label.
-  assert.equal(typedSpeakerName(step, 4288, guard), 'Guard');
-  assert.equal(typedSpeakerName({ speaker: 'Guard' }, 4287, guard), 'Guard');
-  assert.equal(typedSpeakerName({ speaker: 'Zanik', speaker_ids: [4287] }, 4287, guard), 'Zanik');
-  assert.equal(typedSpeakerName({ speaker: 'Sue', speaker_ids: [13404] }, 13404, { getId: () => 13404, getName: () => 'null' }), 'Sue');
 });
 
 test('A listed speaker the quest or cache names keeps that id; only an unnamed one takes the first', () => {

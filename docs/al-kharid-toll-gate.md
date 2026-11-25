@@ -43,10 +43,10 @@ Talk-to on a guard (user's rsprox recording 1001336, tick 3099) sends `if_setnpc
 chat_left:head` with the clicked guard (`borderguard1`, 4287) and names it "Border Guard". The
 Wiki transcript labels the guard "Guard"; the dialogue export resolves that label to the page's
 own NPC (`speaker_ids` 4287/4288, RSPSApp/osrsreboxed-db#148), so the line shows the clicked
-guard's head and cache name rather than the first cache NPC called "Guard" (#6762).
+guard's head rather than the first cache NPC called "Guard" (#6762).
 
-Recorded difference: live says "a toll of ten gold coins", the Wiki "10 gold coins". The
-Wiki's wording is kept.
+Recorded differences, where the Wiki's wording is kept: live names the speaker "Border Guard",
+the Wiki "Guard"; live says "a toll of ten gold coins", the Wiki "10 gold coins".
 
 A crossing that starts from the guard dialogue waits one tick before the step. Stepping when the
 dialogue packet arrives shows on the client as a two-tile jump. The gate still shuts two ticks

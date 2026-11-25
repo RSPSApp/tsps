@@ -21,6 +21,21 @@ const WAVE_HIT_TICKS = 4;
 const WAVE_GRAPHIC = 1641;
 const WAVE_SOUND = 4063;
 const IMPACT_HEIGHT = 124;
+// 234/03282 ticks 553–557 and 226/01695 ticks 10686–10696.
+const VINES_LAND_TICKS = 4;
+const VINES_GRAPHIC = 1643;
+const VINES_THROW_SOUND = 4062;
+const VINES_LAND_SOUND = 4065;
+const VINES_LOOSEN_SOUND = 4057;
+const ESCAPE_TICKS = 6;
+// Wiki 15403580 gives a ten-tick hold and 40+ damage.
+// Estimates: start the clock on landing and retain the 40–50 damage roll.
+const VINES_HOLD_TICKS = 10;
+const VINES_MIN_DAMAGE = 40;
+const VINES_MAX_DAMAGE = 50;
+// Estimate: one of four tenth attacks was vines and no fight reached eleven.
+const VINES_FIRST_ATTACK = 10;
+const VINES_CHANCE = 1 / 4;
 // 234/03282 ticks 234 and 1045: poison varp 16 means a starting hit of four.
 // Estimate: retain a one-in-eight draw per damaging hit. Two eligible volleys
 // poisoned the player, but each carried two damaging splats.
@@ -50,6 +65,7 @@ class HesporiArea extends core.PrivateArea {
 }
 const FIGHTS = new WeakMap();
 const NPC_FIGHTS = new WeakMap();
+const VINE_TASKS = new WeakMap();
 const WARNINGS = new WeakMap();
 const ENTRIES = new WeakMap();
 const REENTRY_ACTION = "farming-hespori-reentry";
@@ -124,7 +140,7 @@ function flowers(fight) {
 function challengeHespori(event) {
     if (FIGHTS.has(event.player)) { event.handled = true; return; }
     const fight = { player: event.player, patch: event.location, area: event.area, quest: true,
-        boss: null, flowers: [], phase: 0, attacks: 0, vinesUntil: 0, escapeClicks: 0 };
+        boss: null, flowers: [], phase: 0, attacks: 0 };
     FIGHTS.set(fight.player, fight);
     fight.boss = spawn(fight, core.NpcIdentifiers.HESPORI_2, fight.patch.x, fight.patch.y);
     fight.maxHitpoints = fight.boss.getMaxHitpoints();
@@ -184,7 +200,7 @@ function startFight(player, patch, acceptedWarning = false) {
     player.sendMessage("The Hespori doesn't take kindly to your attempt to harvest it.");
     player.getPacketSender().sendSound(HARVEST_SOUND, 1, 0);
     player.moveTo(HARVEST_TILE.clone());
-    const fight = { player, patch, area, boss: null, flowers: [], phase: 0, attacks: 0, vinesUntil: 0, escapeClicks: 0,
+    const fight = { player, patch, area, boss: null, flowers: [], phase: 0, attacks: 0,
         startedAt: core.World.getProcessCycle() };
     FIGHTS.set(player, fight);
     fight.boss = spawn(fight, core.NpcIdentifiers.HESPORI, patch.x, patch.y);
@@ -200,6 +216,47 @@ function startFight(player, patch, acceptedWarning = false) {
 }
 // Capture (234/03282 tick 557): the entangle line is red.
 const VINES_MESSAGE = "<col=ef1020>The Hespori entangles you in some vines!</col>";
+const LOOSEN_MESSAGE = "You feel the vines loosen slightly as you try to move.";
+
+class HesporiVines extends core.Task {
+    held = false;
+    escapeTicks = 0;
+    lastEscapeCycle = -1;
+
+    constructor(fight) {
+        super(VINES_LAND_TICKS);
+        this.player = fight.player;
+        this.area = fight.area;
+    }
+
+    execute() {
+        const { player } = this;
+        if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getArea() !== this.area) {
+            this.release();
+            return;
+        }
+        if (this.held) {
+            this.release();
+            const damage = VINES_MIN_DAMAGE + Math.floor(Math.random() * (VINES_MAX_DAMAGE - VINES_MIN_DAMAGE + 1));
+            player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(damage, core.HitMask.RED)]);
+            return;
+        }
+        this.held = true;
+        this.setDelay(VINES_HOLD_TICKS);
+        player.getMovementQueue().setBlockMovement(true).reset();
+        player.getCombat().reset();
+        player.performGraphic(core.Graphic.atHeight(VINES_GRAPHIC, IMPACT_HEIGHT));
+        player.sendMessage(VINES_MESSAGE);
+        player.getPacketSender().sendSound(VINES_LAND_SOUND, 1, 0);
+    }
+
+    release() {
+        this.stop();
+        VINE_TASKS.delete(this.player);
+        if (this.held) this.player.getMovementQueue().setBlockMovement(false);
+    }
+}
+
 function beginBossAttacks(fight) {
     const combat = fight.boss.getCombat();
     combat.setAttackDelay(FIRST_ATTACK_TICKS);
@@ -222,18 +279,18 @@ class HesporiCombat extends core.CombatMethod {
     start(npc, target) {
         const fight = NPC_FIGHTS.get(npc);
         if (!fight) return;
-        // ponytail: approximate the documented 30–40 second entangle window; exact scheduling needs an OSRS capture.
-        this.special = ++fight.attacks % 9 === 0;
+        fight.attacks++;
+        this.special = !fight.threwVines && fight.attacks >= VINES_FIRST_ATTACK && Math.random() < VINES_CHANCE;
         this.style = Math.random() < 0.5 ? core.CombatType.RANGED : core.CombatType.MAGIC;
         npc.performAnimation(new core.Animation(this.style === core.CombatType.RANGED && !this.special ? ANIMATION.RANGED : ANIMATION.SPECIAL));
         if (this.special) {
-            core.Projectile.createProjectile(npc, target, PROJECTILE.VINES, 40, 65, 31, 43).sendProjectile();
-            fight.vinesUntil = core.World.getProcessCycle() + 10;
-            fight.escapeClicks = 0;
-            target.getMovementQueue().setBlockMovement(true).reset();
-            target.getCombat().reset();
-            target.performGraphic(new core.Graphic(1643));
-            target.sendMessage(VINES_MESSAGE);
+            fight.threwVines = true;
+            sendProjectile(npc, target, PROJECTILE.VINES, WAVE_SHAPE);
+            target.getPacketSender().sendSound(VINES_THROW_SOUND, 1, 0);
+            // The thrown vine belongs to the player and arena. The boss can die before it lands.
+            const vines = new HesporiVines(fight);
+            VINE_TASKS.set(target, vines);
+            core.TaskManager.submit(vines);
         } else if (this.style === core.CombatType.RANGED) {
             for (const shot of SPORE_SHOTS) sendProjectile(npc, target, PROJECTILE.RANGE, shot);
         } else {
@@ -281,7 +338,7 @@ function hesporiCanAttack(event) {
     if (NPC_FIGHTS.get(event.attacker)?.flowers.includes(event.attacker)) { event.allow = false; return; }
     const fight = NPC_FIGHTS.get(event.target);
     if (!fight) return;
-    if (fight.player !== event.attacker || fight.vinesUntil || (event.target === fight.boss && fight.flowers.some(n => n.getHitpoints() > 0))) event.allow = false;
+    if (fight.player !== event.attacker || VINE_TASKS.get(event.attacker)?.held || (event.target === fight.boss && fight.flowers.some(n => n.getHitpoints() > 0))) event.allow = false;
 }
 function hesporiHit(event) {
     const fight = NPC_FIGHTS.get(event.target);
@@ -298,26 +355,35 @@ function hesporiDamage(event) {
 }
 function hesporiInput(event) {
     cancelWarning(event);
-    const fight = FIGHTS.get(event.player);
-    if (!fight?.vinesUntil || !["move", "npc_option", "spell_on_npc"].includes(event.packet.type)) return;
+    const { player, packet } = event;
+    const vines = VINE_TASKS.get(player);
+    if (!vines?.held) return;
+    if (packet.type === "npc_option") {
+        const npc = core.World.getNpcs().get(packet.index);
+        const option = npc?.getCurrentDefinition(player)?.getActions()?.[packet.clickType - 1];
+        if (!core.NpcDefinition.isCombatOption(option)) return;
+    } else if (packet.type !== "move" && packet.type !== "spell_on_npc") return;
+
+    const cycle = core.World.getProcessCycle();
+    if (cycle === vines.lastEscapeCycle) {
+        event.handled = true;
+        return;
+    }
+    vines.lastEscapeCycle = cycle;
+    if (++vines.escapeTicks === ESCAPE_TICKS) {
+        vines.release();
+        player.sendMessage("You break free of the vines.");
+        return;
+    }
     event.handled = true;
-    if (++fight.escapeClicks < 6) { event.player.sendMessage("You feel the vines loosen slightly as you try to move."); return; }
-    releaseVines(fight);
-    event.player.sendMessage("You break free of the vines.");
-}
-function releaseVines(fight) {
-    fight.vinesUntil = 0;
-    fight.player.getMovementQueue().setBlockMovement(false);
+    player.sendMessage(LOOSEN_MESSAGE);
+    player.getPacketSender().sendSound(VINES_LOOSEN_SOUND, 1, 0);
 }
 function hesporiProcess({ player }) {
     const fight = FIGHTS.get(player);
     if (!fight) return;
     if (player.getArea() !== fight.area) { hesporiLogout({ player }); return; }
     if (fight.quest) keepQuestHesporiEngaged(fight);
-    if (fight.vinesUntil && core.World.getProcessCycle() >= fight.vinesUntil) {
-        releaseVines(fight);
-        player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(40 + Math.floor(Math.random() * 11), core.HitMask.RED)]);
-    }
 }
 function describeEncounters({ npcIds }) {
     npcIds.add(core.NpcIdentifiers.HESPORI);
@@ -357,7 +423,6 @@ function hesporiLoot(event) {
     if (fight.echoToken) { addEchoHarvest(fight.player, loot); return; }
     Patches.stateFor(fight.player, fight.patch).hesporiLoot = harvestItems(loot);
     Patches.stateFor(fight.player, fight.patch).hesporiFight = false;
-    releaseVines(fight);
     for (const flower of fight.flowers) core.World.getRemoveNPCQueue().push(flower);
     FIGHTS.delete(fight.player);
     Patches.syncPatch(fight.player, fight.patch);
@@ -408,7 +473,6 @@ function announceKill(fight) {
 }
 function finishQuestHespori(fight) {
     if (!FIGHTS.has(fight.player)) return;
-    releaseVines(fight);
     for (const flower of fight.flowers) core.World.getRemoveNPCQueue().push(flower);
     FIGHTS.delete(fight.player);
     core.PluginManager.emitCustomEvent("hespori:quest-defeated", { player: fight.player });
@@ -418,7 +482,6 @@ function questHesporiDeath({ npc }) {
     if (fight?.echoToken && fight.boss === npc) {
         if (fight.completed || fight.ended) return;
         fight.completed = true;
-        releaseVines(fight);
         for (const flower of fight.flowers) core.World.getRemoveNPCQueue().push(flower);
         fight.flowers = [];
         api.emitCustomEvent("echo-boss:completed", { player: fight.player, boss: "hespori", token: fight.echoToken, npcs: [npc],
@@ -434,10 +497,10 @@ function questHesporiDeath({ npc }) {
 }
 function hesporiLogout({ player, logout = false }) {
     cancelWarning({ player });
+    VINE_TASKS.get(player)?.release();
     const fight = FIGHTS.get(player);
     if (!fight) return;
     if (!fight.quest && !fight.echoToken) Patches.stateFor(player, fight.patch).hesporiFight = false;
-    releaseVines(fight);
     for (const npc of [fight.boss, ...fight.flowers]) if (npc) core.World.getRemoveNPCQueue().push(npc);
     FIGHTS.delete(player);
     if (fight.echoToken) {
@@ -462,6 +525,7 @@ function hesporiDeathDrop(event) {
     event.handled = true;
 }
 function hesporiPlayerDeath(event) {
+    VINE_TASKS.get(event.player)?.release();
     const fight = FIGHTS.get(event.player);
     if (fight?.echoToken) { hesporiLogout(event); return; }
     // Item capture precedes this hook. An unsafe death without lost items still
@@ -549,7 +613,7 @@ function startEcho(request) {
     const patch = Data.CACHE.patches.find(p => p.type === "HESPORI");
     const area = new HesporiArea();
     const fight = { player, patch, area, echoToken: claim.token, variant: "echo", boss: null,
-        flowers: [], phase: 0, attacks: 0, vinesUntil: 0, escapeClicks: 0 };
+        flowers: [], phase: 0, attacks: 0 };
     try {
         area.enter(player);
         player.moveTo(HARVEST_TILE.clone());

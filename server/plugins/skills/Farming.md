@@ -477,6 +477,49 @@ curing a crop; recordings 3254 and 3262 show a Pyromancer using a similarly name
 sequence. They are not used to infer Cure Plant's animation, graphics, timing,
 sounds or interface packet order. Those details remain unverified against live
 OSRS; no claim of complete visual or timing parity is made.
+## Hespori attacks and vines
+
+[RSProx R3282](https://rsprox.net/download/3282) records one player on a Grid Master
+world (revision 234.1), with 14 farming fights and 121 attacks between ticks 217
+and 1755. [RSProx R1695](https://rsprox.net/download/1695) records the quest
+Hespori on a normal world (revision 226.1). Its vine escape is the only recorded
+escape used here (1 of 1). Timings below are game ticks. Projectile and graphic
+delays are client cycles.
+
+| Behaviour | Observation and source |
+| --- | --- |
+| Attack rhythm | The first attack comes three ticks after rise sequence 8221, then attacks are six ticks apart. R3282 has 14 first attacks and 107 gaps. |
+| Spore volley | Sequence 8224 launches two 1639 projectiles at 30–60 and 55–85 cycles. Both use angle 8, progress 64 and heights 98/58. Both splats land at +2 in 61 of 61 volleys in R3282, including 220→222 and 499→501. |
+| Wave | Sequence 8223 launches 1640 at 90–120 cycles, angle 8, progress 64, heights 340/158. The attack tick sends player graphic 1641 at height 124 and sound 4063, both with delay 120. One splat lands at +4 in 59 of 59 waves in R3282, including 226→230 and 511→515. |
+| Vine throw | Sequence 8223 sends 1642 with the wave shape and sound 4062 with delay zero. The throw deals no direct damage. R3282 tick 553 (1 of 1). |
+| Vine landing | At +4 the player is held and receives the red game message, spotanim 1643 at height 124 and sound 4065, both with delay zero. R3282 ticks 553→557 and R1695 ticks 10686→10690. The farming recording begins the message with “The Hespori” where the Wiki begins with “Hespori”. |
+| Vine in flight at death | The throw lands after the boss's death sequence. R3282 has death sequence 8225 at 555, the landing at 557 and the kill count at 559 (1 of 1). |
+| Escape | The first five ticks with a move or attack click each produce one loosen message and sound 4057. The sixth frees the player. In R1695, four NPC attack inputs at 10694 and four at 10695 produce one line and sound on each tick, followed by the escape at 10696. This follows the [Wiki mechanics section](https://oldschool.runescape.wiki/w/Special:PermanentLink/15403580). Its strategy section says “7 times”. TSPS retains its existing break-free wording. |
+| Attacks while held | R1695 shows a spore volley at 10692 while the player is held, with both splats at 10694. |
+| Hold duration | Ten ticks without an escape, per the [Hespori Wiki revision 15403580](https://oldschool.runescape.wiki/w/Special:PermanentLink/15403580). The recordings do not show an expiry hit. |
+| Poison | R3282 ticks 234 and 1045 show the poison message and varp 102 changing from 0 to 16 on the impact tick of a damaging volley. This represents starting damage of four, as in the Wiki infobox. |
+
+**Estimates**
+
+- From the tenth attack onward, an eligible attack has a 1-in-4 chance to throw
+  vines, at most once per fight. One of four tenth attacks threw vines, no
+  ninth attack did, and none of the 14 fights reached an eleventh attack. The
+  Wiki strategy's “30–40 seconds” is compatible with the one throw at 34
+  seconds. R3282 also shows fights of comparable length without a throw.
+- Expiry retains the 40–50 damage roll. The Wiki specifies 40+ and neither
+  recording establishes an upper bound or distribution.
+- The ten-tick expiry clock starts on landing. The recording shows when the
+  hold takes effect and the Wiki supplies the duration. Neither gives an
+  expiry timestamp.
+- Poison retains a 1-in-8 chance per damaging hit. Both eligible volleys
+  applied poison, each with two damaging splats. The other damage ticks were
+  already poisoned or under antipoison. These observations cannot isolate a
+  per-hit chance.
+
+The quest and Echo fights share the same attack controller. R1695 also shows
+quest-specific projectiles 1964 and 1967 and spotanim 1968. They are a lead for
+separate quest work. The captures supply no Echo-specific evidence.
+
 # Leagues VI Echo Hespori placeholder
 
 The orb's Echo branch starts a seedless private fight without accessing the

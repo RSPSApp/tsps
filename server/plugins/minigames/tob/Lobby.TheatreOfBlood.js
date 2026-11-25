@@ -72,8 +72,8 @@ function refreshHud(player) {
   sender.sendSubInterface(Shared.OVERLAY_HUD_UID, INTERFACE.PARTY_HUD, 1);
   sender.sendVarbit(VARBIT.PARTY_STATE, party ? 1 : 0);
   const lines = Array.from({ length: Shared.MAX_PARTY_SIZE }, (_, i) =>
-    (party?.members[i] ? Shared.displayName(party.members[i]) : "-"));
-  sender.sendString(`${lines.join("<br>")}<br>`, uid(INTERFACE.PARTY_HUD, 12));
+    (party?.members[i] ? partyDisplayName(party.members[i]) : "-"));
+  sender.sendString(lines.join("<br>"), uid(INTERFACE.PARTY_HUD, 12));
 }
 
 function refreshParty(party) {
@@ -183,13 +183,17 @@ function selectRow(event) {
 
 // ---------------------------------------------------------------- 50: a party's information
 
+function partyDisplayName(player) {
+  return Shared.displayName(player).replaceAll(" ", "\u00a0");
+}
+
 /** A member's line: name, combat, attack, strength, ranged, magic, defence, hitpoints, prayer, completions. */
 function memberLine(player) {
   const { Skill } = Shared.core();
   const skills = player.getSkillManager();
   const levels = [Skill.ATTACK, Skill.STRENGTH, Skill.RANGED, Skill.MAGIC, Skill.DEFENCE, Skill.HITPOINTS, Skill.PRAYER]
     .map((skill) => skills.getMaxLevel(skill));
-  return `${Shared.displayName(player)}|${skills.getCombatLevel()}|${levels.join("|")}|${Stats.completionsOf(player, "normal")}`;
+  return `${partyDisplayName(player)}|${skills.getCombatLevel()}|${levels.join("|")}|${Stats.completionsOf(player, "normal")}`;
 }
 
 function openInformation(player, party) {
@@ -197,14 +201,15 @@ function openInformation(player, party) {
   const sender = player.getPacketSender();
   player.setAttribute(ATTR.VIEWING, party.id);
   sender.sendInterface(INTERFACE.PARTY_INFORMATION);
+  const rights = party.rightsOf(player);
   for (let index = 0; index < Shared.MAX_PARTY_SIZE; index++) {
     const member = party.members[index];
-    sender.sendClientScript(SCRIPT.PARTY_MEMBER, 2, member ? memberLine(member) : "");
+    sender.sendClientScript(SCRIPT.PARTY_MEMBER, rights, member ? memberLine(member) : "");
   }
   if (party.has(player) || party.applicants.includes(player)) {
     for (const applicant of party.applicants) sender.sendClientScript(SCRIPT.PARTY_APPLICANT, memberLine(applicant));
   }
-  sender.sendClientScript(SCRIPT.PARTY_FOOTER, party.rightsOf(player), party.preferredSize, party.preferredCombat, Shared.MODES[party.mode].index);
+  sender.sendClientScript(SCRIPT.PARTY_FOOTER, rights, party.preferredSize, party.preferredCombat, Shared.MODES[party.mode].index);
 }
 
 /**

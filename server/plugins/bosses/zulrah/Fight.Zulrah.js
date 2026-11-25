@@ -5,11 +5,10 @@
  *
  * Wiki ("Zulrah", "Zulrah/Strategies"):
  * - Zulrah rises once the player continues the boat dialogue or does anything else.
- * - It attacks every 3 ticks, up to 41: green form with Ranged, blue form with Magic and
- *   sometimes Ranged (Magic much more often), and the "Jad" phase alternating the two. Damage is
- *   rolled as the attack starts, and an attack that lands envenoms even through prayer. The Wiki
- *   adds that after 3 minutes the green form may switch unpredictably between the two; rsprox
- *   3276's two green phases past 3 minutes are all Ranged (10 of 10), so that is not modelled.
+ * - It attacks every 3 ticks, up to 41: green form with Ranged (after 3 minutes it may switch
+ *   unpredictably between Ranged and Magic), blue form with Magic and sometimes Ranged (Magic
+ *   much more often), and the "Jad" phase alternating the two. Damage is rolled as the attack
+ *   starts, and an attack that lands envenoms even through prayer.
  * - The red form stares at the player's tile, then whips its tail there: 20-30 typeless damage
  *   and a stun, avoided by moving two tiles away. It does this twice.
  * - Between phases it dives and resurfaces, maybe in another form and place; it cannot be
@@ -39,8 +38,15 @@ const DIVE_HOLDS_HITS_TICKS = 6;
 /** rsprox: a run of barrages or orbs takes a tick more before an attack or the dive. */
 const SPIT_RUN_EXTRA_TICKS = 1;
 const BLUE_RANGED_CHANCE = 0.3;
+/** Three minutes of game time; after this, green-form attacks may use either style (Wiki). */
+const LONG_FIGHT_TICKS = 300;
+/**
+ * The Wiki gives no ratio for the long-fight green mix. rsprox 3276's two green phases past
+ * 3 minutes are 10 of 10 Ranged, so the mix is kept mostly Ranged (an inference).
+ */
+const LONG_GREEN_RANGED_CHANCE = 0.9;
 const FORM_ID = { green: Shared.NPC.GREEN, red: Shared.NPC.RED, blue: Shared.NPC.BLUE };
-/** rsprox: the knock-back's exact move faces west (512), the way the player is thrown. */
+/** rsprox: the knock-back's exact move faces west (512), toward Zulrah, as the player is thrown east. */
 const KNOCKBACK_FACING_WEST = 3;
 
 const ANIM = { ATTACK: 5069, SPAWN: 5071, DIVE: 5072, RISE: 5073, TAIL_LEFT: 5806, TAIL_RIGHT: 5807, KNOCKBACK: 1157 };
@@ -60,8 +66,8 @@ const PROJECTILE = {
 /**
  * rsprox (19 tail phases): the swings' animations 7 ticks apart (8 in 2), each striking 5 ticks
  * after it (the second 5 or 6; sound 2720 on the tile), and the dive or next step 8 ticks after
- * the second (9 in 5). Four recorded hits threw the player west, 2 tiles after anim 5806 and 1
- * after 5807, wherever they stood.
+ * the second (9 in 5). Four recorded hits threw the player east, away from Zulrah, 2 tiles after
+ * anim 5806 and 1 after 5807; every one had the player east of it, facing it.
  */
 const TAIL = {
   aimAt: [0, 7],
@@ -287,7 +293,11 @@ class ZulrahFight {
 
   expand([kind, ...args]) {
     if (kind === "ranged") {
-      return Array.from({ length: args[0] }, () => () => this.attack("ranged"));
+      return Array.from({ length: args[0] }, () => () => {
+        const longFightMix = this.phase?.form === "green" && this.duration() >= LONG_FIGHT_TICKS;
+        const style = longFightMix && this.random() >= LONG_GREEN_RANGED_CHANCE ? "magic" : "ranged";
+        return this.attack(style);
+      });
     }
     if (kind === "magic") {
       return Array.from({ length: args[0] }, () => () => this.attack(this.random() < BLUE_RANGED_CHANCE ? "ranged" : "magic"));
@@ -456,21 +466,20 @@ class ZulrahFight {
     player.performAnimation(new Animation(ANIM.KNOCKBACK));
     player.setMobileInteraction?.(this.zulrah);
     CombatFactory.stun(player, TAIL.stunSeconds, true);
-    player.sendMessage("You're stunned!");
     const damage = Math.min(Shared.randomInt(this.random, ...TAIL.damage), player.getHitpoints());
     player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.RED)]);
     CombatAchievements.avoidableDamage(this, damage);
     CombatFactory.poisonEntity(player, 6, 2);
   }
 
-  /** West, 2 tiles after anim 5806 or 1 after 5807 (rsprox), stopping at anything in the way. */
+  /** East, 2 tiles after anim 5806 or 1 after 5807 (rsprox), stopping at anything in the way. */
   knockbackTile(player) {
     const { RegionManager } = Shared.core();
     const here = player.getLocation();
     const tiles = TAIL.knockback[this.tailAnim] ?? 1;
     let at = here.clone();
     for (let step = 1; step <= tiles; step++) {
-      const x = here.getX() - step;
+      const x = here.getX() + step;
       const y = here.getY();
       if (!RegionManager.canMove(at.getX(), at.getY(), x, y, 0, 1, 1, this.area)) break;
       at = Shared.loc({ x, y });

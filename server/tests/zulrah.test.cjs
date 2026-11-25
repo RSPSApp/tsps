@@ -434,16 +434,18 @@ test('the tail hits the aimed tile and its neighbours, but not two tiles away or
   fight.end();
 });
 
-test('the tail throws the player west, 2 tiles after anim 5806 and 1 after 5807 (rsprox)', () => {
+test('the tail throws the player east, 2 tiles after anim 5806 and 1 after 5807 (rsprox)', () => {
   const { player, fight } = startedFight();
   fight.zulrah = fakeNpc(Shared.NPC.RED, 2266, 3073);
-  player.location = new Location(2268, 3069, 0);
+  // rsprox 1161/1157: (2272, 3077) to (2274, 3077) after 5806, (2273, 3077) to (2274, 3077) after 5807.
+  player.location = new Location(2272, 3077, 0);
   fight.tailAnim = Fight.ANIM.TAIL_LEFT;
   let destination = fight.knockbackTile(player);
-  assert.deepEqual([destination.getX(), destination.getY()], [2266, 3069]);
+  assert.deepEqual([destination.getX(), destination.getY()], [2274, 3077]);
+  player.location = new Location(2273, 3077, 0);
   fight.tailAnim = Fight.ANIM.TAIL_RIGHT;
   destination = fight.knockbackTile(player);
-  assert.deepEqual([destination.getX(), destination.getY()], [2267, 3069]);
+  assert.deepEqual([destination.getX(), destination.getY()], [2274, 3077]);
   assert.ok((RegionManager.getClipping(destination.getX(), destination.getY(), 0, null) & RegionManager.BLOCKED_MASK) === 0, 'onto the island');
   fight.end();
 });
@@ -488,6 +490,28 @@ test('blue form mixes in Ranged; the Jad phase alternates from its first style',
   styles.length = 0;
   fight.expand(['jad', 'magic', 4]).forEach((action) => action());
   assert.deepEqual(styles, ['magic', 'ranged', 'magic', 'ranged']);
+  fight.end();
+});
+
+test('green form past 3 minutes mixes in Magic, mostly Ranged (Wiki; rsprox 3276 10 of 10 Ranged)', () => {
+  const { fight } = startedFight();
+  const styles = [];
+  fight.attack = (style) => { styles.push(style); return 3; };
+  fight.phase = { ...fight.phase, form: 'green' };
+  fight.startedAt = fight.ticks - 299;
+  fight.expand(['ranged', 2]).forEach((action) => action());
+  assert.deepEqual(styles, ['ranged', 'ranged'], 'before 3 minutes it is always Ranged');
+  styles.length = 0;
+  fight.startedAt = fight.ticks - 300;
+  fight.expand(['ranged', 1]).forEach((action) => action());
+  fight.random = () => 0.89;
+  fight.expand(['ranged', 1]).forEach((action) => action());
+  assert.deepEqual(styles, ['magic', 'ranged'], 'random 0.9 and up is Magic');
+  fight.phase = { ...fight.phase, form: 'blue' };
+  fight.random = () => 0.99;
+  styles.length = 0;
+  fight.expand(['ranged', 1]).forEach((action) => action());
+  assert.deepEqual(styles, ['ranged'], 'only the green form mixes');
   fight.end();
 });
 

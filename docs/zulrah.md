@@ -61,7 +61,7 @@ The server resolves both per player, so the options are handled by name.
 
 **Ranged and Magic attacks:**
 - Every 3 ticks, max hit 41.
-- The Wiki says that after 3 minutes green-form attacks can unpredictably use Ranged or Magic. Not modelled: in #3276 both green phases past 3 minutes are all Ranged (10 of 10 attacks).
+- The Wiki says that after 3 minutes green-form attacks can unpredictably use Ranged or Magic. The Wiki gives no ratio, and in #3276 both green phases past 3 minutes are all Ranged (10 of 10 attacks), so each such attack is Ranged 9 times in 10 (an inference).
 - Damage is rolled with the player's prayer as the attack starts (Wiki).
 - An attack that lands envenoms (venom 6), even through prayer (Wiki).
 - Projectiles: Ranged 1044, Magic 1046, from cycle 40 to 90 at any distance, heights 92 to 12, slope 0, progress 0 (rsprox; it prints the heights four times over, 370 and 50).
@@ -74,7 +74,7 @@ The server resolves both per player, so the options are handled by name.
 - Anyone within one tile of the aimed tile is hit; two tiles away is safe (Wiki).
 - The four tiles beside the pillars, (2263/2264/2272/2273, 3072), are never hit (Near-Reality, the Wiki's safespot).
 - In rotations 1 and 2, the first swing never reaches (2274, 3077) on the north-east tip (Near-Reality).
-- A hit deals 20-30 typeless damage (Wiki; the two recorded hits were 22 and 28), stuns for 3 seconds with "You're stunned!", envenoms, and throws the player west with anim 1157: 2 tiles after anim 5806, 1 after 5807. All four recorded throws went west, wherever the player stood (Near-Reality threw them up to 4 tiles away from Zulrah).
+- A hit deals 20-30 typeless damage (Wiki; the two recorded hits were 22 and 28), stuns for 3 seconds, envenoms, and throws the player east, away from Zulrah, with anim 1157: 2 tiles after anim 5806, 1 after 5807. The player keeps facing west, toward Zulrah. All four recorded throws had the player east of Zulrah (Near-Reality threw them up to 4 tiles away from it). No message comes with the hit; "You're stunned!" is the movement code's reply to clicks while stunned, as in the captures.
 - Near-Reality rolls 0-41; the Wiki says 20-30.
 - Which way Zulrah faces, and whether it uses anim 5806 or 5807, follows Near-Reality.
 
@@ -242,5 +242,5 @@ Sound effects played to the player (Near-Reality's unless marked):
 - **Line of sight:** whether a pillar blocking line of sight skips an attack.
 - **Text:** the boat's "Return to Zulrah's shrine?" choice and the priestess's lines.
 - **Sounds:** the sound effect ids.
-- **Rare mechanics:** the Wiki's long-fight green style switch (not seen in 10 recorded attacks) and the extra phase deviation after the first rotation are not implemented pending evidence for their selection and odds.
+- **Rare mechanics:** the extra phase deviation after the first rotation is not implemented pending evidence for their selection and odds.
 - **Retrieval UI and resurrection:** the shared cache interface was captured for Vorkath, not Zulrah; the Zulrah-specific UI and daily rescue behavior still need direct capture confirmation.

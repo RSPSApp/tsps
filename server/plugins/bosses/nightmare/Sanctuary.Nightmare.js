@@ -5,14 +5,16 @@
  * - the first drink has Sister Senga stop the player and tell them about Phosani (her lines as
  *   captured, setting varbits 12419 and 10240 as it goes); later drinks go straight to the warning;
  * - Shura (multinpc 9459) and Sister Senga (9473) gain Collect once the player has been in their
- *   dream (varbits 10137 and 10239), kept for later logins.
+ *   dream (varbits 10137 and 10239), kept for later logins;
+ * - Shura's introduction plays the first time the player talks to her, or tries the sleeping
+ *   Nightmare before talking to her (rsprox 1148 2905), and sets nightmare_intro (10136).
  */
 const Common = require("./Common.Nightmare");
 const Dream = require("./Dream.Nightmare");
 
 const FIRST_ENTRY_ATTRIBUTE = "nightmare:first-entry";
 const PHOSANI_FIRST_ENTRY_ATTRIBUTE = "nightmare:phosani-first-entry";
-const SENGA = 9472;
+const SENGA = 9473;
 
 const SENGA_INTRO = [
   ["npc", "I would advise against doing that, traveller. You do not yet know what you are up against."],
@@ -80,12 +82,40 @@ function syncVarbits({ player }) {
   const sender = player.getPacketSender();
   const { varbits } = Common.data;
   sender.sendVarbit(varbits.poolEnabled, 1);
+  if (introduced(player)) sender.sendVarbit(varbits.intro, 1);
   if (player.getAttribute(FIRST_ENTRY_ATTRIBUTE)) sender.sendVarbit(varbits.firstEntry, 1);
   if (player.getAttribute(PHOSANI_FIRST_ENTRY_ATTRIBUTE)) sender.sendVarbit(varbits.phosaniFirstEntry, 1);
   if (player.getAttribute(Common.PHOSANI_INTRO_ATTRIBUTE)) {
     sender.sendVarbit(varbits.phosaniSkipIntro, 1);
     sender.sendVarbit(varbits.phosaniIntro, 1);
   }
+}
+
+/** Shura's introduction heard; players who fought her before it was tracked count as having heard it. */
+function introduced(player) {
+  return Boolean(player.getAttribute(Common.SHURA_INTRO_ATTRIBUTE) || player.getAttribute(FIRST_ENTRY_ATTRIBUTE) ||
+    Common.count(player, Common.KILLS_ATTRIBUTE) > 0);
+}
+
+function markIntroduced(player) {
+  player.setAttribute(Common.SHURA_INTRO_ATTRIBUTE, true);
+  player.getPacketSender().sendVarbit(Common.data.varbits.intro, 1);
+}
+
+/** Talk-to Shura before her introduction: the introduction. */
+function shuraVariant({ player, definition }) {
+  if (definition?.getName?.() !== "Shura" || introduced(player)) return null;
+  markIntroduced(player);
+  return Common.data.entry.shura.firstVariant;
+}
+
+/** Trying the sleeping Nightmare first: Shura calls the player over, then her introduction. */
+function shuraStopsPlayer(player) {
+  if (introduced(player)) return false;
+  markIntroduced(player);
+  const request = { player, npc: null, npcId: Common.data.entry.shura.npc, variant: Common.data.entry.shura.gateVariant, handled: false };
+  Common.api.emitCustomEvent("npc-dialogue:start", request);
+  return true;
 }
 
 /** Entering a dream unlocks Collect on its keeper. */
@@ -97,8 +127,10 @@ function attachSanctuary(api) {
   api.persistAttribute(FIRST_ENTRY_ATTRIBUTE);
   api.persistAttribute(PHOSANI_FIRST_ENTRY_ATTRIBUTE);
   api.persistAttribute(Common.PHOSANI_INTRO_ATTRIBUTE);
+  api.persistAttribute(Common.SHURA_INTRO_ATTRIBUTE);
+  api.onNpcDialogueVariant(shuraVariant);
   api.onPlayerLogin(syncVarbits);
   api.onObjectInteraction("Pool of Nightmares", { "Drink-from": drinkFrom });
 }
 
-module.exports = { attachSanctuary, enteredDream };
+module.exports = { attachSanctuary, enteredDream, shuraStopsPlayer, introduced };

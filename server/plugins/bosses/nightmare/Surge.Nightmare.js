@@ -1,8 +1,9 @@
 /**
  * Surge, as captured: she leaves (the animation her flowers start with), two ticks later stands at
  * the start of one of twelve lanes - three across the arena each way, either direction - and four
- * ticks after that crosses it in one tick with the message to everyone. Anyone in her path is hit
- * for up to 60 (about 85 by Phosani's, Wiki).
+ * ticks after that crosses it in one tick. Anyone in her path is hit for up to 60 (about 85 by
+ * Phosani's, Wiki) and gets the message, as a spam-filtered line; no one else does (rsprox 564 299;
+ * 76 surges in 10 captures). Her next attack comes 5 ticks after the surge (83 of 83).
  */
 const Common = require("./Common.Nightmare");
 
@@ -36,10 +37,11 @@ function start(fight) {
     const maxY = Math.max(from[1], to[1]) + SIZE - 1;
     const max = fight.phosani ? surge.phosaniMaxHit : surge.maxHit;
     for (const player of fight.players()) {
-      player.sendMessage(surge.message);
       Common.sounds(player, surge.sounds);
       const [x, y] = fight.dream.arenaTile(player.getLocation());
-      if (x >= minX && x <= maxX && y >= minY && y <= maxY) Common.damage(player, Common.randomInt(Math.ceil(max / 2), max), fight);
+      if (x < minX || x > maxX || y < minY || y > maxY) continue;
+      player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, surge.message);
+      Common.damage(player, Common.randomInt(Math.ceil(max / 2), max), fight);
     }
   });
   return surge.surgeTicks + Common.data.specials.after.surge;

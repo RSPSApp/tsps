@@ -227,7 +227,11 @@ function logout({ player }) {
 function playerDeath({ player }) { sessionOf(player)?.end(); }
 function shutdown() { for (const session of [...sessions.values()]) logout({ player: session.player }); }
 
-/** The quest reuses the same chamber and hazards with the cache's 400-HP guardian. */
+/**
+ * The quest reuses the same chamber and hazards with the cache's 400-HP guardian. As captured
+ * (R1140, R1695), her track comes on with the move in and she is there 2 ticks later, as the fade
+ * comes back.
+ */
 function questFight(request) {
   if (sessionOf(request.player)) return;
   const session = new Session(request.player, true);
@@ -236,10 +240,13 @@ function questFight(request) {
   Common.travel(request.player, () => {
     if (session.ended) return;
     session.area.enter(request.player);
+    const { music, spawn } = Common.data;
     request.player.moveTo(session.tile([1371, 4511, 0]));
     request.player.setAttribute(Common.INSIDE_ATTRIBUTE, true);
     session.placeExits();
-    Common.later(Common.data.spawn.afterArrivalTicks, () => session.spawnBoss());
+    Common.api.emitCustomEvent("music:unlock-track", { player: request.player, trackId: music });
+    request.player.getPacketSender().sendSong(music);
+    Common.later(spawn.questAfterArrivalTicks, () => session.spawnBoss());
   });
 }
 

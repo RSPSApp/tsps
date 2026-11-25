@@ -331,7 +331,9 @@ module.exports = function ruins(shared) {
     if (stage(player) !== S.FIGHT) return;
     advance(player, S.BANISHED);
     player.moveTo(new Location(1615, 3211, 0));
-    play(player, 13686, V.BANISH, steps => steps.filter(step => step.type !== 'action'));
+    // Her "Zema ami miki!" and the teleport were the chamber's (Amoxliatl's questEnd); as captured,
+    // the banishment line comes a tick after the player lands.
+    Scenes.later(player, 1, () => play(player, 13686, V.BANISH, steps => steps.filter(step => step.type !== 'action' && step.presentation !== 'overhead')));
   }
   function cleanupHostiles(player) {
     for (const npc of hostiles.get(player) ?? []) if (npc.isRegistered()) api.removeNpc(npc);

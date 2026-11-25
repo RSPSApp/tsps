@@ -2,9 +2,9 @@
 
 Amoxliatl (https://oldschool.runescape.wiki/w/Amoxliatl), the post-quest boss beneath the Ruins of Tapoyauik, solo, built from rsprox captures (https://rsprox.net/database, recordings 1140, 1147 and 1695), the OSRS Wiki (Amoxliatl, Amoxliatl/Strategies) and the cache. It is one plugin, `server/plugins/bosses/Amoxliatl.plugin.js`, with one unit per part in `server/plugins/bosses/amoxliatl/` and its data in `plugins/bosses/data/amoxliatl.json`.
 
-Recordings 1140 and 1147 are from Leagues VI worlds (rev 237). R1147 gives the way in and out and the kill. The ordinary post-quest encounter in R1140 supplies the special attack messages, shatter sequence and respawn interval. Recording 1695 (rev 226, a main world) shows the quest variant (`amoxliatl_quest`, 400 hitpoints). [R1140](https://rsprox.net/download/1140) · [R1147](https://rsprox.net/download/1147) · [R1695](https://rsprox.net/download/1695)
+Recordings 1140 and 1147 are from Leagues VI worlds (rev 237). R1147 gives the way in and out and the kill. The ordinary post-quest encounter in R1140 supplies the special attack messages, shatter sequence and respawn interval. Recording 1695 (rev 226, a main world) shows the quest variant (`amoxliatl_quest`, 400 hitpoints); R1140 has the same quest fight (ticks 7540-7700) before its 40 post-quest kills (7839-12675), and then Echo kills (12960 on). [R1140](https://rsprox.net/download/1140) · [R1147](https://rsprox.net/download/1147) · [R1695](https://rsprox.net/download/1695)
 
-The Heart of Darkness's own fight stays the quest plugin's, at the frozen door; outside her chamber she makes only her plain attack (11530 and the magic hit), with none of the chamber's mechanics.
+The Heart of Darkness's fight is in her chamber too, started by the quest plugin (`amoxliatl:quest-fight`); see [The quest's fight](#the-quests-fight). Outside her chamber she makes only her plain attack (11530 and the magic hit), with none of the chamber's mechanics.
 
 ## Layout
 
@@ -41,19 +41,20 @@ She attacks 4 ticks after rising, then every 8 ticks (both captures), following 
 
 ### Standard attack
 
-`amoxliatl_attack` (11530) and a magic hit of up to 22 on the same tick (captured: the player's block on that tick); Protect from Magic blocks it. The ice spikes (map animation 2942) are drawn on the floor around the player as captured: of the tiles within 6 of the player, their own about 3 in 4, the next ring about 2 in 3, the rest about 1 in 4 (counted over 13 attacks, 18-50 tiles each). Each is one 150-cycle animation (seq 11543): a short warning, then the spike rising through ticks 2-3. 3 ticks after the attack they hit a player who was still on one of their tiles the tick before: typeless 10 and 6 in the two captured cases (1147, ticks 352 and 360), 6-10 here as the Wiki gives the pools. Every player who had stepped off by then took nothing (the other 11 attacks), the Wiki's "step back two tiles after she starts a standard attack".
+`amoxliatl_attack` (11530) and a magic hit of up to 22 on the same tick (captured: the player's block on that tick); Protect from Magic blocks it. The ice spikes (map animation 2942) are drawn on the floor around the player as captured: of the tiles within 6 of the player, their own about 3 in 4, the next ring about 2 in 3, the rest about 1 in 4 (counted over 13 attacks, 18-50 tiles each). Each is one 150-cycle animation (seq 11543): a short warning, then the spike rising through ticks 2-3. 3 ticks after the attack they hit a player who was still on one of their tiles the tick before: typeless 6-16 (R1140: 92 spike hits from 6 to 16, none with the pools' sound; R1147 ticks 352 and 360: 10 and 6). Every player who had stepped off by then took nothing (the other 11 attacks), the Wiki's "step back two tiles after she starts a standard attack".
 
-3 ticks after the attack an icy pool (54279, a random rotation) forms on the tile the player stood on when she attacked (captured), with sound 9726 from the middle of the platform (always 1365,4511, both captures). Standing on a pool deals 6-10 typeless damage a tick (Wiki). Pools stay until she dies: on the killing blow each one goes with a puff (map animation 2938, captured).
+3 ticks after the attack an icy pool (54279, a random rotation) forms on the tile the player stood on when she attacked (captured), with sound 9726 from the middle of the platform (always 1365,4511, both captures). Standing on a pool deals 6-10 typeless damage a tick (Wiki; R1140's pool hits are all 6-10), each hit with sound 4464 (R1140). Pools stay until she dies: on the killing blow each one goes with a puff (map animation 2938, captured).
 
 ### Specials
 
-After every 2-4 standard attacks (Wiki) she uses a special: the first at random, then in turn (both captures: four standard attacks, a special, three, the other). With the player on the 3-wide path to her platform (x 1372 and east) she has no room for Unstable Ice and uses Icicle Crash (Wiki).
+After every 2-4 standard attacks (Wiki) she uses a special: the first at random, then in turn (both captures: four standard attacks, a special, three, the other). With the player on the 3-wide path to her platform (x 1372 and east) she has no room for Unstable Ice and uses Icicle Crash (Wiki). Her next attack comes 9 ticks after Icicle Crash and 7 after Unstable Ice, not her usual 8 (R1140: 38 of 38 and 40 of 40; R1695 ticks 4871-4880 and 4905-4912).
 
 **Icicle Crash** clears active prayers before sending the game message "`<col=ff3045>Amoxliatl disables your prayers and launches an icicle attack!</col>`" (R1140 tick 7875). With no prayer active, it leaves prayer state alone and sends "`<col=ff3045>Amoxliatl launches an icicle attack!</col>`" (ticks 9718 and 9783). The message is followed by `amoxliatl_point` (11531) and an icicle (projectile 2936, cycles 50-150, heights 448 to 0) homing on the player. 5 ticks later it lands (spot 2935, sound 9720) for up to 34 magic damage; Protect from Magic on by then negates it (Wiki).
 
-**Unstable Ice** uses `amoxliatl_summon` (11533), "`<col=00e6e6>Amoxliatl forms some unstable ice blocks around you.`" (spam, R1140 tick 7909), and a throw (projectile 2936, cycles 50-90) at each block's tile with the impact drawn there on landing. 3 ticks later the blocks (13688, "Unstable ice") stand there (11536, sound 9713). The Wiki gives 1-4 blocks near the player; they land on free floor within 4 tiles, never on the player, her or the path.
+**Unstable Ice** uses `amoxliatl_summon` (11533), "`<col=00e6e6>Amoxliatl forms some unstable ice blocks around you.`" (spam, R1140 tick 7909), and a throw (projectile 2936, cycles 50-90) at each block's tile with the impact drawn there on landing. 3 ticks later the blocks (13688, "Unstable ice") stand there (11536, sound 9713). The Wiki gives 1-4 blocks near the player; they land on free floor within 5 tiles, never on the player, her or the path (R1140: 117 blocks, 9 of them 5 tiles from the player).
 
 - Only melee hurts them, and a melee hit on one is a max hit that ignores the weapon's delay and leaves one of a tick (Wiki). They have 10 hitpoints (cache), so every hit breaks one: as captured, the hit shows 10, it bursts (11035, sound 9721), and a tick later it is gone with an icy pool on its tile.
+- 2 ticks before blocks still standing would shatter she winds up (`11534`; R1140 ticks 7924, 8800 and 12433, every shatter it shows).
 - Blocks still standing 14 ticks after forming burst (11035, sound 9721) and show one heal hitsplat of 16–25 per block. On that tick, icy pools fill the available platform tiles in the 3×3 square centred on each bursting block, following the Wiki, with one pool sound (9726) from the centre. The blocks disappear one tick after bursting. The Leagues VI recording R1140 shows a wider, platform-clipped diamond with a Manhattan radius of two. It added 28 pools at tick 7926 and 25 at tick 8802 after accounting for existing pools. [Wiki revision 15399415](https://oldschool.runescape.wiki/w/Special:PermanentLink/15399415)
 
 ### The kill
@@ -97,14 +98,20 @@ grave).
 ## Estimates
 
 - Known respawn dialogue difference: R1140 shows three alternate lines on respawn (examples at ticks 7973, 8086 and 8715). TSPS uses the entrance line again on respawn.
-- The spike spread models the captured tiles. The captures show spike hits of 10 and 6, and TSPS uses the Wiki's icy-pool range (6–10) as the spike damage estimate. The actual spike damage cap still needs a source.
-- Where the blocks land within 4 tiles (the capture: 2-4 tiles from the player).
+- The spike spread models the captured tiles. Spike damage is the range R1140 shows (6-16); the Wiki gives none.
+- Where the blocks land within 5 tiles (R1140: 1-5 tiles from the player, most at 2-3).
 - The capture's Exit prompt opened with the player a few tiles from the blockage; here the player walks up to it first.
 - The multiway indicator comes on with the move in (tick 2), not with the fade back (tick 4).
 
+## The quest's fight
+
+As captured twice (R1695 ticks 4831-4934, R1140 ticks 7605-7693): the same fade into her chamber, the player at 1371,4511, her track (807) unlocked and played with the move in. The guardian (`amoxliatl_quest`, 13686) is there 2 ticks later as the fade comes back, with no rise and no line, and attacks 4 ticks after that; the fight is hers in every other way, with the quest's colours on the special messages.
+
+She doesn't die. At 0 HP (`questEnd` in `Kills.Amoxliatl.js`) she becomes `amoxliatl_quest_inactive` (13687), plays 11531 with "Zema ami miki!" overhead and as `npc_say`, her pools go with a puff, and she throws one last icicle (2936, cycles 50-90, heights 112 to 25) at the player. 3 ticks later the player teleports (4018, spot 2754) as she plays her death (11532), sound 7928 a tick after; 6 ticks after the 0 HP the player is at 1615,3211, and a tick later the quest's "Amoxliatl banishes you from Tapoyauik." No loot, kill count or best time.
+
 ## Not in yet
 
-- The quest's fight in her chamber (`amoxliatl_quest`, her `amoxliatl_quest_inactive` turn and the banishment): the quest plugin keeps its own.
+- The Echo's own mechanics (see below), though R1140 captures them.
 
 ## Testing
 

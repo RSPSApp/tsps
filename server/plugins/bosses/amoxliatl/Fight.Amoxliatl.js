@@ -2,15 +2,17 @@
  * The fight with Amoxliatl, as captured (docs/amoxliatl.md) with the Wiki's rules
  * (https://oldschool.runescape.wiki/w/Amoxliatl/Strategies):
  * - She rises (11527) facing east with "Euat! You are not welcome here!", the HP HUD comes up in
- *   her colours, and 4 ticks later she attacks; then every 8 ticks. She follows the player to
+ *   her colours, and 4 ticks later she attacks; then every 8 ticks. The quest's guardian is just
+ *   there as the fade comes back, with no rise and no line (R1140, R1695). She follows the player to
  *   melee distance (the Wiki's "drag").
  * - Her standard attack (11530) is a magic hit of up to 22 on the same tick, which Protect from
  *   Magic blocks, with ice spikes across the floor around the player. 3 ticks later the spikes
- *   come up, 6-10 to a player still on one, and an icy pool forms on the tile the player stood on;
+ *   come up, 6-16 to a player still on one (R1140), and an icy pool forms on the tile the player stood on;
  *   it deals 6-10 a tick to anyone on it (Wiki) and stays until she dies.
  * - After every 2-4 standard attacks (Wiki) a special, the first at random and then in turn:
  *   Icicle Crash (Fight here) and Unstable Ice (UnstableIce.Amoxliatl). With the player on the
- *   path to her platform she has no room for Unstable Ice and only uses Icicle Crash.
+ *   path to her platform she has no room for Unstable Ice and only uses Icicle Crash. Her next
+ *   attack comes 9 ticks after Icicle Crash and 7 after Unstable Ice (R1140, R1695).
  * - Icicle Crash (11531): turn active prayers off and announce the attack, then an icicle that lands 5 ticks
  *   later for up to 34; Protect from Magic turned back on in time negates it (Wiki).
  */
@@ -100,10 +102,12 @@ class Fight {
   start() {
     const { spawn, hud } = Common.data;
     const { Animation } = this.core;
-    this.boss.performAnimation(new Animation(spawn.anim));
-    this.boss.forceChat(spawn.say);
-    // As captured, the line goes to the chatbox too, as her npc_say message.
-    this.player.getPacketSender().sendTypedMessage(this.core.ChatType.NPC_SAY, spawn.say, this.boss.getDefinition().getName());
+    if (!this.session.quest) {
+      this.boss.performAnimation(new Animation(spawn.anim));
+      this.boss.forceChat(spawn.say);
+      // As captured, the line goes to the chatbox too, as her npc_say message.
+      this.player.getPacketSender().sendTypedMessage(this.core.ChatType.NPC_SAY, spawn.say, this.boss.getDefinition().getName());
+    }
     this.hudShown = true;
     this.shownHp = this.boss.getHitpoints();
     Common.api.emitCustomEvent("boss-hud:show", {
@@ -216,6 +220,8 @@ class Fight {
     this.nextSpecial = this.nextSpecial === ICICLE ? UNSTABLE_ICE : ICICLE;
     if (kind === ICICLE) this.icicleCrash();
     else UnstableIce.launch(this);
+    // The engine has already set her usual 8 ticks; the specials take their own (R1140).
+    this.boss.getCombat().setAttackDelay(Common.data.specials.nextAttackTicks[kind]);
     return [];
   }
 
@@ -272,8 +278,9 @@ class Fight {
   poolDamage() {
     const [x, y] = this.playerTile();
     if (!this.pools.has(key(x, y)) || this.player.getHitpoints() <= 0) return;
-    const [min, max] = Common.data.pools.damage;
+    const { damage: [min, max], hurtSound } = Common.data.pools;
     this.hurtPlayer(Common.randomInt(min, max));
+    this.player.getPacketSender().sendSoundEffect(hurtSound, 1, 0);
   }
 
   /** Her death takes every pool with it, each with a puff (captured). */

@@ -1106,3 +1106,125 @@ test('active encounter logout distinguishes a crystal eject from a death and rej
     party.disband();
   }
 });
+
+function recordStatement(player) {
+  player.getDialogueManager = () => ({
+    startDialogues: (chain) => chain.getDialogues().get(0).send(player),
+  });
+}
+
+function wardensReadyUp(t, size) {
+  CachePipeline.initialize();
+  const Shared = toaApi();
+  const Raid = require('../plugins/minigames/toa/RaidState.TombsOfAmascut');
+  const Parties = require('../plugins/minigames/toa/Parties.TombsOfAmascut');
+  const rooms = new Map();
+  t.mock.method(Raid, 'registerRoom', (key, RoomClass) => rooms.set(key, RoomClass));
+  t.mock.method(Raid, 'onRaidArea', () => {});
+  const { api, calls } = recordingApi();
+  require('../plugins/minigames/toa/Wardens.TombsOfAmascut')(api);
+  const begin = calls.find(({ name, args }) => name === 'onNpcInteraction' && args[0] === 'Osmumten').args[1].Begin;
+  let tick = 100;
+  Shared.bind({ core: { ...api.core, World: { getProcessCycle: () => tick } } });
+
+  const players = Array.from({ length: size }, (_, i) => boardPlayer(`Member${i + 1}`));
+  for (const player of players) {
+    player.sendMessage = (text) => player.sent.push(['game', text]);
+    recordStatement(player);
+  }
+  const party = Parties.createParty(players[0]);
+  for (const player of players.slice(1)) party.addPlayer(player);
+  const raid = new Raid.Raid(party, players[0]);
+  const room = new (rooms.get('WARDENS_P1'))(raid, Shared.ROOMS.WARDENS_P1);
+  // The preceding paths and combat scenery are outside this fixture. Begin still runs the
+  // registered interaction, real room start and timer, and statement packet calls.
+  Object.assign(room, { ready: new Set(), readyDeadline: -1, wardens: { elidinis: {}, tumeken: {} } });
+  raid.rooms.set(room.key, room);
+  raid.roomKey = room.key;
+  for (const player of players) raid.member(player).roomKey = room.key;
+  t.after(() => {
+    raid.dispose();
+    party.disband();
+    toaApi();
+  });
+
+  return {
+    room, raid, players,
+    click(player) { assert.equal(begin({ player }), true); },
+    at(cycle) { tick = cycle; room.tick(); },
+    results() {
+      return players.map((player) => player.sent.splice(0).filter(([kind, , uid]) =>
+        kind === 'game' || kind === 'sendTypedMessage' || (kind === 'sendString' && uid === (229 << 16 | 3))));
+    },
+  };
+}
+
+const WARDENS_START = ['game', 'Challenge started: The Wardens.'];
+const WARDENS_BOX = 'The challenge will either begin once everyone else in your party is<br>ready or after 2 minutes have passed from the first ready up.';
+const WARDENS_WAIT = 'The challenge will begin once everyone else in your party is ready.';
+const readyCount = (count, total) => ['game', `${count}/${total} party members are now ready.`];
+const readyStatement = (text) => [
+  ['sendTypedMessage', 115, text.replaceAll('<br>', ' ')], // mesbox
+  ['sendString', text, 229 << 16 | 3],
+];
+
+test('Osmumten Begin immediately starts a solo Wardens fight with only the start line', (t) => {
+  const wardens = wardensReadyUp(t, 1);
+  wardens.click(wardens.players[0]);
+  assert.equal(wardens.room.isStarted(), true);
+  assert.deepEqual(wardens.results(), [[WARDENS_START]]);
+});
+
+test('Wardens party ready-ups announce the count before the new member’s message box', (t) => {
+  const wardens = wardensReadyUp(t, 3);
+  const [first, second, last] = wardens.players;
+  const expected = (i) => wardens.players.map((_, member) =>
+    [readyCount(i + 1, 3), ...(member === i ? readyStatement(WARDENS_BOX) : [])]);
+  wardens.click(first);
+  assert.equal(wardens.room.isStarted(), false);
+  const firstResult = wardens.results();
+
+  wardens.click(second);
+  assert.equal(wardens.room.isStarted(), false);
+  const secondResult = wardens.results();
+
+  wardens.click(first);
+  assert.deepEqual([...wardens.room.ready], [first, second], 'Begin again preserves the ready set');
+  assert.deepEqual(wardens.results(), [readyStatement(WARDENS_WAIT), [], []]);
+
+  wardens.click(last);
+  assert.equal(wardens.room.isStarted(), true);
+  assert.deepEqual(wardens.results(), [[WARDENS_START], [WARDENS_START], [WARDENS_START]]);
+  assert.deepEqual({ firstResult, secondResult }, { firstResult: expected(0), secondResult: expected(1) });
+});
+
+test('Wardens count uses current raid membership and only reaches the Wardens room', (t) => {
+  const wardens = wardensReadyUp(t, 4);
+  const [left, first, unready, elsewhere] = wardens.players;
+  wardens.click(left);
+  wardens.results();
+  // The earlier readier has since left and the fourth member is still in the Nexus.
+  wardens.raid.players = [first, unready, elsewhere];
+  wardens.raid.member(elsewhere).roomKey = 'MAIN_HALL';
+  wardens.click(first);
+  assert.equal(wardens.room.isStarted(), false);
+  assert.deepEqual(wardens.results(), [
+    [], [readyCount(1, 3), ...readyStatement(WARDENS_BOX)], [readyCount(1, 3)], [],
+  ]);
+});
+
+test('the Wardens ready-up timer starts the fight 200 ticks after the first Begin', (t) => {
+  const wardens = wardensReadyUp(t, 3);
+  const [first, second] = wardens.players;
+  wardens.click(first);
+  wardens.at(150);
+  wardens.click(second);
+  wardens.click(first);
+  wardens.results();
+  wardens.at(299);
+  assert.equal(wardens.room.isStarted(), false);
+  assert.deepEqual(wardens.results(), [[], [], []]);
+  wardens.at(300);
+  assert.equal(wardens.room.isStarted(), true);
+  assert.deepEqual(wardens.results(), [[WARDENS_START], [WARDENS_START], [WARDENS_START]]);
+});

@@ -83,7 +83,8 @@ function requiredCommands(core, actor, target, body, teleportCommand) {
     case "give": return [grants];
     case "skill": return ["setlevel"];
     case "preset": return [body.preset === "reset" ? "reset" : "master"];
-    case "quest": return ["quest"];
+    case "quest":
+    case "quest-bulk": return ["quest"];
     case "container": {
       const creating = body.mode === "add" || body.mode === "increase" || body.mode === "set" &&
         require("./Containers.PlayerTools").raisesQuantity(core, target, body);
@@ -95,7 +96,7 @@ function requiredCommands(core, actor, target, body, teleportCommand) {
 
 // Only the native adapter supplies a live actor. World Admin authorizes its allowed actions with the owner token.
 async function applyPlayerTool(api, target, body, { actor, teleportCommand = "tele" } = {}) {
-  if (!["teleport", "give", "skill", "preset", "restore", "quest", "rank", "container"].includes(body.action)) return null;
+  if (!["teleport", "give", "skill", "preset", "restore", "quest", "quest-bulk", "rank", "container"].includes(body.action)) return null;
   const core = api.core;
   if (core.Server?.isShuttingDown?.()) throw new PlayerToolError(409, "Wait until the server has finished restarting.");
   if (!target || target.isRegistered?.() === false) throw new PlayerToolError(409, "The player is offline.");
@@ -177,7 +178,11 @@ async function applyPlayerTool(api, target, body, { actor, teleportCommand = "te
     target.setRunEnergy(100);
     message = `Restored ${target.getUsername()}'s current levels and run energy.`;
   } else {
-    if (typeof body.quest !== "string" || !["complete", "reset"].includes(body.mode)) throw new PlayerToolError(400, "Choose a quest and Complete or Reset.");
+    if (body.action === "quest-bulk") {
+      if (!["complete-all", "reset-all"].includes(body.mode)) throw new PlayerToolError(400, "Choose Unlock all quests or Reset all quests.");
+    } else if (typeof body.quest !== "string" || !["complete", "reset"].includes(body.mode)) {
+      throw new PlayerToolError(400, "Choose a quest and Complete or Reset.");
+    }
     const event = { player: target, key: body.quest, action: body.mode };
     api.emitCustomEvent("quests:admin", event);
     if (!event.handled) throw new PlayerToolError(409, "Quest tools are unavailable. Enable QuestCommand on the next server start.");

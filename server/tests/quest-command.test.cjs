@@ -129,6 +129,24 @@ test("real reward owners preserve noted bank identity and miniquest overflow", a
       assert.equal(inventory.add, original.add);
       assert.equal(inventory.forceAdd, original.forceAdd);
     });
+    clear();
+    await t.test("admin bulk completion refreshes a target's open bank", t => {
+      const itemId = core.ItemIdentifiers.MITHRIL_ORE;
+      const snapshot = t.mock.method(player.getPacketSender(), "sendBankSnapshot");
+      player.setStatus(core.PlayerStatus.BANKING).setInterfaceId(core.Bank.MAIN_INTERFACE_ID);
+      t.after(() => player.setStatus(core.PlayerStatus.NONE).setInterfaceId(-1));
+      QuestCommand.register({
+        ...routingApi,
+        registerCommand() {},
+        onCustomEvent() {},
+        emitCustomEvent(_name, { player }) {
+          player.getInventory().add(new core.Item(itemId, 5), false);
+        },
+      });
+      QuestCommand._test.adminQuestRequest({ player, action: "complete-all" });
+      assert.equal(bankAmount(itemId), 5);
+      assert.equal(snapshot.mock.callCount(), 1);
+    });
   } finally {
     inventory.add = original.add;
     inventory.forceAdd = original.forceAdd;
@@ -220,4 +238,49 @@ test("the admin plugin event lists named quests and reuses completion and reset 
   const invalid = { player, key: "missing", action: "complete" };
   QuestCommand._test.adminQuestRequest(invalid);
   assert.match(invalid.error, /registered quest/);
+});
+
+test("admin bulk quest actions preserve command completion and registered quest reset semantics", () => {
+  const player = createPlayer();
+  const inventory = { add() {}, forceAdd() {}, refreshItems() {} };
+  player.getInventory = () => inventory;
+  let miniquestComplete = false;
+  let request;
+  QuestCommand.register({
+    core: { Bank: { isOpen: () => false } },
+    registerCommand() {},
+    onCustomEvent(name, handler) {
+      assert.equal(name, "quests:admin");
+      request = action => {
+        const event = { player, action };
+        handler(event);
+        return event;
+      };
+    },
+    emitCustomEvent(name, event) {
+      assert.equal(name, "quest:complete-all-miniquests");
+      assert.equal(event.player, player);
+      assert.ok(grandTree.isComplete(player));
+      if (!miniquestComplete) event.completed.push("Fixture miniquest");
+      miniquestComplete = true;
+    },
+  });
+  player.setAttribute(QuestRuntime.QUEST_POINTS_ATTRIBUTE, 1);
+  const quests = QuestRuntime.getRegisteredQuests();
+  const totalPoints = quests.reduce((points, quest) => points + quest.questPoints, 1);
+  const unlock = request("complete-all");
+  assert.equal(unlock.handled, true);
+  assert.match(unlock.message, new RegExp(`\\b${quests.length + 1} completed, 0 already complete, 0 errors`));
+  assert.ok(unlock.quests.every(quest => quest.complete));
+  assert.equal(player.getAttribute(QuestRuntime.QUEST_POINTS_ATTRIBUTE), totalPoints);
+  assert.match(request("complete-all").message, /^Quest completion: 0 completed,/);
+  assert.equal(player.getAttribute(QuestRuntime.QUEST_POINTS_ATTRIBUTE), totalPoints);
+
+  run(player, "quest grand tree 40");
+  const reset = request("reset-all");
+  assert.equal(reset.handled, true);
+  assert.ok(reset.quests.every(quest => quest.stage === 0 && !quest.complete));
+  assert.equal(player.getAttribute(QuestRuntime.QUEST_POINTS_ATTRIBUTE), 1);
+  assert.equal(miniquestComplete, true);
+  assert.match(request("reset-all").message, /0 reset, 0 errors/);
 });

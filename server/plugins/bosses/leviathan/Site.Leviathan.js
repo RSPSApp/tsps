@@ -148,6 +148,21 @@ function quickEscape({ player, objectId }) {
   if (objectId !== Common.ids.locs.boatEscape || !sessionOf(player)) return false;
   leave(player); return true;
 }
+/**
+ * The climbed handholds are a wall, so the arena has no walk back to the island boat. Wiki
+ * (Handholds (The Leviathan)): "Players who wish to leave the Leviathan without teleporting out can
+ * click the rowboat after killing it once." From the arena floor the boat's op runs where the
+ * player stands instead of routing to a loc they can no longer reach.
+ */
+function boatFromArena(event) {
+  const locs = Common.ids.locs;
+  if (![ISLAND_BOAT, locs.boatEscape, locs.boatLeave].includes(event.objectId)) return;
+  const session = sessionOf(event.player);
+  if (!session) return;
+  const at = event.player.getLocation();
+  if (session.sourceTile(at)[0] < Common.data.site.arenaArrival[0]) return;
+  event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
+}
 function leave(player) {
   const session = sessionOf(player);
   if (!session) return;
@@ -202,6 +217,7 @@ function attach(api) {
   Records.attach(api);
   api.persistAttribute(Common.INSIDE_ATTRIBUTE, false);
   api.onObjectInteraction('Rowboat', { Travel: travel, Escape: escape, 'Quick-escape': quickEscape });
+  api.onObjectRoute(boatFromArena);
   api.onObjectInteraction('Handholds', { Climb: climb });
   api.onObjectInteraction('Stepping Stone', { Cross: cross });
   api.onObjectInteraction('Scoreboard', { Read: readScoreboard });
@@ -211,4 +227,4 @@ function attach(api) {
   api.onPlayerDeath(death);
   api.onCustomEvent('gravestones:grave-location', grave);
 }
-module.exports = { attach, Session, sessionOf, travel, climb, leave, cross, escape, quickEscape };
+module.exports = { attach, Session, sessionOf, travel, climb, leave, cross, escape, quickEscape, boatFromArena };

@@ -222,6 +222,29 @@ test('the handholds become a wall once climbed and cannot be climbed back out', 
   assert.ok(session.sourceTile(h.p.getLocation())[0] >= h.Common.data.site.arenaArrival[0], 'still in the arena');
 });
 
+test('the rowboat is used from the arena floor, where the sealed handholds leave no walk back to it', t => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { h, Site, session } = site(t);
+  t.mock.method(PluginManager, 'emitObjectRoute', event => h.dispatch('onObjectRoute', event));
+  const boatAt = session.tile(h.Common.data.site.islandBoat);
+  const boat = () => h.core.ObjectManager.objectsAt(boatAt).find(o => o.getType() === 10 && o.getPrivateArea() === session.area);
+  // Off the arena floor (on the island) the boat still routes normally.
+  const island = { player: h.p, objectId: 49215, destination: null };
+  Site.boatFromArena(island);
+  assert.equal(island.destination, null);
+  Site.climb({ player: h.p, objectId: 47593 });
+  const fight = session.fight;
+  fight.boss.getCombat().addDamage(h.p, 1); fight.boss.setHitpoints(0);
+  for (let tick = 0; tick < 8 && !fight.rewarded; tick++) h.step();
+  assert.equal(boat().getId(), 49214);
+  const from = h.p.getLocation();
+  let operated = false;
+  h.p.getMovementQueue().walkToObject(boat(), { execute: () => { operated = Site.travel({ player: h.p, objectId: boat().getId() }); } });
+  assert.equal(operated, true, 'the Travel op runs from the arena tile, not "I can\'t reach that!"');
+  assert.equal(session.ended, true);
+  assert.notDeepEqual(h.p.getLocation(), from);
+});
+
 test('Escape asks "Are you sure you want to leave?" and Quick-escape leaves at once', t => {
   const { h, Site, session } = site(t);
   const prompts = [];

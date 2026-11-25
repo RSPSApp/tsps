@@ -144,6 +144,7 @@ function completeAllQuests(api, player) {
     routing.restore();
   }
   player.getInventory().refreshItems();
+  if (api.core.Bank.isOpen(player)) player.getBank(0).refreshItems();
 
   const messages = [
     `Quest completion: ${completed} completed, ${alreadyComplete} already complete, ${errors.length} errors.`,

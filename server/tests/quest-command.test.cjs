@@ -129,6 +129,24 @@ test("real reward owners preserve noted bank identity and miniquest overflow", a
       assert.equal(inventory.add, original.add);
       assert.equal(inventory.forceAdd, original.forceAdd);
     });
+    clear();
+    await t.test("admin bulk completion refreshes a target's open bank", t => {
+      const itemId = core.ItemIdentifiers.MITHRIL_ORE;
+      const snapshot = t.mock.method(player.getPacketSender(), "sendBankSnapshot");
+      player.setStatus(core.PlayerStatus.BANKING).setInterfaceId(core.Bank.MAIN_INTERFACE_ID);
+      t.after(() => player.setStatus(core.PlayerStatus.NONE).setInterfaceId(-1));
+      QuestCommand.register({
+        ...routingApi,
+        registerCommand() {},
+        onCustomEvent() {},
+        emitCustomEvent(_name, { player }) {
+          player.getInventory().add(new core.Item(itemId, 5), false);
+        },
+      });
+      QuestCommand._test.adminQuestRequest({ player, action: "complete-all" });
+      assert.equal(bankAmount(itemId), 5);
+      assert.equal(snapshot.mock.callCount(), 1);
+    });
   } finally {
     inventory.add = original.add;
     inventory.forceAdd = original.forceAdd;
@@ -229,6 +247,7 @@ test("admin bulk quest actions preserve command completion and registered quest 
   let miniquestComplete = false;
   let request;
   QuestCommand.register({
+    core: { Bank: { isOpen: () => false } },
     registerCommand() {},
     onCustomEvent(name, handler) {
       assert.equal(name, "quests:admin");

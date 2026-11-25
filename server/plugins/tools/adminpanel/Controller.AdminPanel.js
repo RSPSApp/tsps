@@ -9,7 +9,7 @@ const V = ContainerView.C;
 const Containers = require("../Containers.PlayerTools");
 const { randomUUID } = require("node:crypto");
 const { describePlayer, searchItems, applyPlayerTool } = require("../PlayerTools");
-const { GROUP_ID, MAIN_MODAL_UID, COMPONENT: C, TAB_LABELS, DATA_COMPONENTS, BUTTONS, ROW_SLOTS, PRESETS, SKILL_ORDER, uid } = Layout;
+const { GROUP_ID, MAIN_MODAL_UID, COMPONENT: C, TAB_LABELS, DATA_COMPONENTS, BUTTONS, ROW_SLOTS, PRESETS, QUEST_ACTIONS, SKILL_ORDER, uid } = Layout;
 const TAB = { PLAYERS: 0, TELEPORTS: 1, ITEMS: 2, EDITOR: 3, STATS: 3, QUESTS: 3, STAFF: 3, CHEATS: 4, TESTING: 4, GODMODE: 4, SPAWN: 5, NPCS: 5, BOTS: 6 };
 const SECTION = { SKILLS: 0, QUESTS: 1, STAFF: 2, INVENTORY: 3, EQUIPMENT: 4, BANK: 5, CHARACTER: 6 };
 const CONTAINERS = ["inventory", "equipment", "bank"];
@@ -26,6 +26,7 @@ const ACTION_BUTTONS = BUTTONS.flatMap(({ button, label }) => [uid(button), uid(
 const UTILITY_BUTTONS = [uid(C.UTILITY), uid(C.UTILITY_LABEL)];
 const SKILL_BUTTONS = SKILL_ORDER.map(index => uid(C.SKILL_BUTTON_START + index));
 const PRESET_BUTTONS = PRESETS.flatMap((_, index) => [uid(C.PRESET_START + index), uid(C.PRESET_LABEL_START + index)]);
+const QUEST_BUTTONS = QUEST_ACTIONS.flatMap((_, i) => [C.QUEST_ACTION_START + i, C.QUEST_ACTION_LABEL_START + i]);
 const sessions = new WeakMap();
 let api;
 let core;
@@ -82,6 +83,7 @@ function visibility(player, state) {
   hide([V.EQUIPMENT], !container || state.section !== SECTION.EQUIPMENT);
   hide([V.BANK_VIEW, V.BANK_SCROLLBAR, V.BANK_TABS, V.BANK_INFO], !bank);
   hide([C.SKILL_VIEW, C.SKILL_SCROLLBAR], !skills);
+  hide(QUEST_BUTTONS, state.tab !== TAB.EDITOR || state.section !== SECTION.QUESTS);
   hide([C.PANEL, C.PANEL_BORDER, C.DETAIL_VIEW, C.DETAIL_SCROLLBAR], teleport || skills || bank || botForm);
   hide([C.UTILITY, C.UTILITY_LABEL, C.MAP_TELEPORT, C.MAP_TELEPORT_LABEL], !teleport);
   hide(Layout.SECTION_LABELS.flatMap((_, i) => [C.SECTION_START + i, C.SECTION_LABEL_START + i]), !editor);
@@ -637,6 +639,18 @@ function clickPreset({ player, buttonId, opId = 1 }) {
   return true;
 }
 
+function clickQuestAction({ player, buttonId, opId = 1 }) {
+  const state = ready(player);
+  if (!state || state.tab !== TAB.EDITOR || state.section !== SECTION.QUESTS || opId !== 1 || !targetOf(player, state)) return true;
+  const index = QUEST_ACTIONS.findIndex((_, i) => buttonId === uid(C.QUEST_ACTION_START + i) || buttonId === uid(C.QUEST_ACTION_LABEL_START + i));
+  if (index < 0) return true;
+  const [mode, label] = QUEST_ACTIONS[index];
+  const effect = mode === "complete-all" ? "Completes quests and supported miniquests with rewards."
+    : "Resets quest stages and points. Keeps rewards and may keep quest-specific progress.";
+  confirm(player, state, `${label} for ${state.target.getUsername()}? ${effect}`, { action: "quest-bulk", mode });
+  return true;
+}
+
 function useTarget(player, state, target) {
   if (!online(target)) { tell(player, "Choose an online human player on this world."); return; }
   cancelPrompt(player, state);
@@ -926,6 +940,7 @@ function attach(pluginApi) {
   pluginApi.onInterfaceActionButton(uid(C.SELF_BUTTON), useSelf);
   pluginApi.onInterfaceActionButton(SKILL_BUTTONS, clickSkill);
   pluginApi.onInterfaceActionButton(PRESET_BUTTONS, clickPreset);
+  pluginApi.onInterfaceActionButton(QUEST_BUTTONS.map(uid), clickQuestAction);
   pluginApi.onCustomEvent("player:widget-action", searchSocket);
   pluginApi.onCustomEvent("player:world-input", mapTeleport);
   pluginApi.onCustomEvent("admin:open", openFromEvent);

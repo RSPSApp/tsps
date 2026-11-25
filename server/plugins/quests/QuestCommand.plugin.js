@@ -145,12 +145,31 @@ function completeAllQuests(api, player) {
   }
   player.getInventory().refreshItems();
 
-  player.sendMessage(`Quest completion: ${completed} completed, ${alreadyComplete} already complete, ${errors.length} errors.`);
-  player.sendMessage(`Rewards: ${routing.tally.banked} items sent to your bank, ${routing.tally.skipped} experience items not given.`);
+  const messages = [
+    `Quest completion: ${completed} completed, ${alreadyComplete} already complete, ${errors.length} errors.`,
+    `Rewards: ${routing.tally.banked} items sent to your bank, ${routing.tally.skipped} experience items not given.`,
+  ];
   if (errors.length) {
     const names = errors.slice(0, 5).join(", ");
-    player.sendMessage(`Completion errors: ${names}${errors.length > 5 ? `, and ${errors.length - 5} more` : ""}.`);
+    messages.push(`Completion errors: ${names}${errors.length > 5 ? `, and ${errors.length - 5} more` : ""}.`);
   }
+  return messages;
+}
+
+function resetAllQuests(player, quests) {
+  let reset = 0;
+  let errors = 0;
+  for (const quest of quests) {
+    if (quest.getStage(player) === 0) continue;
+    try {
+      setStage(player, quest, 0);
+      reset++;
+    } catch (error) {
+      errors++;
+      console.error(`[quest command] resetting ${quest.name} (${quest.key}) failed:`, error);
+    }
+  }
+  return `Quest reset: ${reset} reset, ${errors} errors. Rewards are kept.`;
 }
 
 let api;
@@ -165,7 +184,7 @@ function questCommand({ player, parts }) {
     return true;
   }
   if (normalise(name) === "all" && (action === null || action === "complete")) {
-    completeAllQuests(api, player);
+    for (const message of completeAllQuests(api, player)) player.sendMessage(message);
     return true;
   }
   const matches = findQuests(name);
@@ -187,13 +206,17 @@ function questCommand({ player, parts }) {
   return true;
 }
 
-// Trusted plugin-to-plugin requests. WorldAdmin authorizes its HTTP caller before emitting.
+// Trusted plugin-to-plugin requests. PlayerTools runs after the caller's authorization checks.
 function adminQuestRequest(event) {
   const { player, key, action } = event;
   if (!player) return;
   const quests = QuestRuntime.getRegisteredQuests();
   event.handled = true;
-  if (action !== undefined) {
+  if (action === "complete-all") {
+    event.message = completeAllQuests(api, player)[0];
+  } else if (action === "reset-all") {
+    event.message = resetAllQuests(player, quests);
+  } else if (action !== undefined) {
     const quest = quests.find(quest => quest.key === key);
     if (!quest || !["complete", "reset"].includes(action)) {
       event.error = "Choose a registered quest and Complete or Reset.";

@@ -56,7 +56,7 @@ function fixture(t, rights = Rights.ADMINISTRATOR, extraTeleports = []) {
       event.handled = true; event.quests = quests;
       if (event.action) {
         mutations.push({ target: event.player, action: event.action });
-        quests[0].complete = event.action === "complete";
+        quests[0].complete = ["complete", "complete-all"].includes(event.action);
         quests[0].stage = quests[0].complete ? 2 : 0;
         event.message = `${quests[0].name}: ${event.action}`;
       }
@@ -371,6 +371,48 @@ test("quest buttons act directly through their owning plugin with no typed confi
   assert.match(f.actor.messages.at(-1), /offline/);
   f.open(); f.section(SECTION.QUESTS); f.select("Fixture quest"); f.actor.setRights(Rights.MODERATOR); f.action(0);
   assert.equal(f.mutations.length, 2); assert.equal(f.actor.getInterfaceId(), -1);
+});
+
+test("bulk quest buttons confirm the selected target and recheck rank and quest permission", async t => {
+  const f = fixture(t);
+  const previous = PluginManager.commandPermissionsCache;
+  t.after(() => { PluginManager.commandPermissionsCache = previous; });
+  f.open(); f.choose("TargetOne"); f.section(SECTION.SKILLS);
+  assert.equal(f.actor.hidden.get(uid(C.QUEST_ACTION_START)), true);
+  f.click(C.QUEST_ACTION_START);
+  assert.ok(!f.actor.getEnteredSyntaxAction(), "a click outside Quests cannot open the prompt");
+
+  f.section(SECTION.QUESTS);
+  assert.equal(f.actor.hidden.get(uid(C.QUEST_ACTION_LABEL_START)), false);
+  f.click(C.QUEST_ACTION_LABEL_START);
+  assert.match(f.actor.messages.at(-1), /Unlock all quests for TargetOne/);
+  f.text("cancel");
+  assert.equal(f.mutations.length, 0);
+  f.click(C.QUEST_ACTION_START);
+  const stale = f.actor.getEnteredSyntaxAction();
+  f.choose("TargetTwo");
+  stale.execute("CONFIRM");
+  assert.equal(f.mutations.length, 0, "changing the target invalidates confirmation");
+
+  f.choose("TargetOne"); f.section(SECTION.QUESTS);
+  f.click(C.QUEST_ACTION_START); f.text("CONFIRM"); await f.settle();
+  assert.deepEqual(f.mutations, [{ target: f.target, action: "complete-all" }]);
+  assert.equal(f.row("Fixture quest").panel.info, "Complete");
+
+  f.click(C.QUEST_ACTION_START + 1);
+  f.target.setRights(Rights.OWNER); f.text("CONFIRM"); await f.settle();
+  assert.match(f.actor.messages.at(-1), /higher-ranked/);
+  f.target.setRights(Rights.NONE);
+  f.click(C.QUEST_ACTION_START + 1);
+  PluginManager.commandPermissionsCache = new Map([["quest", Rights.OWNER.getId()]]);
+  f.text("CONFIRM"); await f.settle();
+  assert.match(f.actor.messages.at(-1), /::quest permission/);
+  assert.equal(f.mutations.length, 1);
+
+  PluginManager.commandPermissionsCache = previous;
+  f.click(C.QUEST_ACTION_START + 1); f.text("CONFIRM"); await f.settle();
+  assert.deepEqual(f.mutations[1], { target: f.target, action: "reset-all" });
+  assert.equal(f.row("Fixture quest").panel.info, "Stage 0");
 });
 
 test("staff ranks protect owners/developers, own rank and delayed authority", async t => {

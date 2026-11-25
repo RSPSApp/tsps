@@ -3,9 +3,9 @@
 /**
  * The theatre's books. Wiki (Theatre of Blood, Rewards; each book's page): each boss leaves its book
  * on the ground when it's beaten, and the grand bookshelves in the vault hold all six.
- * Estimates: the book lands where the player stands, only for someone without it, and a bookshelf
- * hands out the first one the player is missing. The books' text isn't transcribed here, so
- * reading one says so.
+ * Captures: one private drop for 200 ticks in the completion tick. See docs/theatre-of-blood.md.
+ * Estimates: only players without the book receive one, jailed players still qualify, and
+ * the normal Take action suffices. A bookshelf hands out the first book the player is missing.
  */
 
 const Shared = require("./Shared.TheatreOfBlood");
@@ -18,6 +18,13 @@ const ROOM_BOOKS = {
   XARPUS: "THE_WILD_HUNT",
   VERZIK: "VERZIK_VITUR_PATIENT_RECORD",
 };
+const FIXED_BOOK_TILES = {
+  MAIDEN: { x: 3168, y: 4447, z: 0 },
+  NYLOCAS: { x: 3295, y: 4248, z: 0 },
+  SOTETSEG: { x: 3279, y: 4328, z: 0 },
+  XARPUS: { x: 3170, y: 4387, z: 1 },
+};
+const BOOK_DESPAWN_TICKS = 200;
 const READABLE = ["Serafina's diary", "The Butcher", "Arachnids of Vampyrium", "The Shadow Realm", "The Wild Hunt", "Verzik Vitur - Patient Record"];
 
 function bookId(name) {
@@ -30,9 +37,15 @@ function owns(player, id) {
 
 function roomWon({ room, player }) {
   const name = ROOM_BOOKS[room.key];
-  if (!name || owns(player, bookId(name))) return;
+  if (!name) return;
+  const id = bookId(name);
+  if (owns(player, id)) return;
   const { Item, ItemOnGroundManager } = Shared.core();
-  ItemOnGroundManager.registerLocation(player, new Item(bookId(name), 1), player.getLocation().clone());
+  const tile = FIXED_BOOK_TILES[room.key];
+  const position = tile ? Shared.loc(tile) : player.getLocation().clone();
+  ItemOnGroundManager.registerLocation(player, new Item(id, 1), position, room.area, {
+    goesGlobal: false, despawnDelay: BOOK_DESPAWN_TICKS,
+  });
 }
 
 function searchShelf({ player }) {

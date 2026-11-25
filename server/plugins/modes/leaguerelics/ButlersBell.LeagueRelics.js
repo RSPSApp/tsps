@@ -19,10 +19,10 @@
  * Ours, with no source (no recording of the bell exists): the job menu (the rows' raw nouns in
  * action_id order, the default title), where he stands (the random events' free tile beside the
  * player) and that he leaves at logout or out of view, and that the collection goes to the bank
- * (what it can't take stays with him). The new-job request also stops his work — nothing accrues
- * until a new job starts, offline too — so a fast job cannot outrun the change, and a change
- * left half-done (the dialogue closed) leaves the old job stopped until a new job is assigned
- * (the progress owed is never materialised). Not here: the bell's Check (its line is in no source).
+ * (what it can't take stays with him). The change's collection also stops his work — nothing
+ * accrues until a new job starts, offline too — so a fast job cannot outrun the re-talk; a
+ * request left half-done (the dialogue closed, nothing collected) leaves the old job running,
+ * as live. Not here: the bell's Check (its line is in no source).
  */
 const Common = require("./Common.LeagueRelics");
 const DATA = require("../data/league-butlers-bell.json");
@@ -98,7 +98,7 @@ function roll(table) {
 /**
  * Brings the job up to now: every whole item its rate has earned since it began goes into the
  * butler's store (the fraction carried by moving the start on), and a processed item's XP is
- * owed. A job stopped by a change request accrues nothing.
+ * owed. A job stopped by the change's collection accrues nothing.
  */
 function catchUp(player, now = Date.now()) {
   const current = job(player);
@@ -186,7 +186,7 @@ function chooseProcessing(player, row) {
   ])]);
 }
 
-/** His work stops until a new job starts: nothing accrues, offline too. */
+/** The change's collection stops his work until a new job starts: nothing accrues, offline too. */
 function pauseJob(player) {
   const current = job(player);
   if (current && !current.paused) player.setAttribute(JOB_ATTRIBUTE, { ...current, since: Date.now(), paused: true });
@@ -194,17 +194,17 @@ function pauseJob(player) {
 
 function newJob(player) {
   catchUp(player);
-  pauseJob(player);
   const rows = [...jobTable().values()].sort((a, b) => a.action - b.action);
   const menuStep = menu(player, null, rows.map((row) => [row.raw, () => chooseProcessing(player, row)]));
   if (holds(player)) {
-    // The collection runs on the apology's continue; as the live transcript, the conversation
-    // ends there — the player re-talks the butler for the new job (his work is stopped
-    // meanwhile, so nothing accrues in the interval).
+    // The collection runs on the apology's continue and stops his work there (nothing accrues
+    // until a new job starts, offline too); as the live transcript, the conversation ends there,
+    // and the player re-talks the butler for the new job. A request closed before the
+    // collection leaves the old job running, as live.
     chain(player, [
       playerSays(line(player, "newJob")),
       npcSays(player, line(player, "collectFirst")),
-      then(() => collect(player)),
+      then(() => { collect(player); pauseJob(player); }),
     ]);
     return;
   }

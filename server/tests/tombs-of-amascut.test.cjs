@@ -1213,6 +1213,20 @@ test('Wardens count uses current raid membership and only reaches the Wardens ro
   ]);
 });
 
+test('repeating Osmumten Begin starts the Wardens when the unready member has left', (t) => {
+  const wardens = wardensReadyUp(t, 2);
+  const [ready, unready] = wardens.players;
+  wardens.click(ready);
+  assert.equal(wardens.room.isStarted(), false);
+  assert.deepEqual(wardens.results(), [[readyCount(1, 2), ...readyStatement(WARDENS_BOX)], [readyCount(1, 2)]]);
+
+  // The raid's leave handler has removed the unready member from the roster.
+  wardens.raid.players = wardens.raid.players.filter((player) => player !== unready);
+  wardens.click(ready);
+  assert.equal(wardens.room.isStarted(), true);
+  assert.deepEqual(wardens.results(), [[WARDENS_START], []]);
+});
+
 test('the Wardens ready-up timer starts the fight 200 ticks after the first Begin', (t) => {
   const wardens = wardensReadyUp(t, 3);
   const [first, second] = wardens.players;

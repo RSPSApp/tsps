@@ -19,9 +19,9 @@
  * Slayer-area box) so the boss and its tentacles can pile one player. Loot lands on
  * a fixed verified shore tile (Loot.Kraken.js), not under the body.
  *
- * Estimates (no capture yet): BOSS_WAKE_RADIUS and DISTURB_RANGE, the early-Disurb
- * "Nothing happens." message, explosive consumption, the throw animation (783) and
- * the 6-tick throw-to-wake delay. The boss-side crevice landing is RSPS-cross-checked
+ * Estimates (no capture yet): BOSS_WAKE_RADIUS and DISTURB_RANGE, the early-Disturb
+ * "Nothing happens." message. See docs/kraken.md for the explosive and respawn
+ * evidence and estimates. The boss-side crevice landing is RSPS-cross-checked
  * (see Crevice.Kraken.js). The cove refuses attacks off-task (Area.Kraken.js); the 25k
  * private room is owned and cleaned up by Instance.Kraken.js. The Combat Achievements the
  * fight decides are CombatAchievements.Kraken.js's.

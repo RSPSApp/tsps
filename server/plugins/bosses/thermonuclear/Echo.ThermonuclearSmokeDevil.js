@@ -141,6 +141,9 @@ function spawnEcho(session) {
     npc.__skipDefaultRespawn = true;
     npc.__thermonuclearEchoSession = session;
     npc.setFlag(NPC.WALK_THROUGH_ENTITIES_FLAG, true);
+    // rsprox 1161: none of the 36 Echoes ever walked, though the player often stood under
+    // them: it doesn't step off a player beneath it, or chase.
+    npc.getMovementQueue().setBlockMovement(true);
     session.area.add(npc);
     const configure = { player, boss: BOSS, role: "boss", npc, token: session.token, configured: false };
     Common.api.emitCustomEvent("echo-boss:configure", configure);

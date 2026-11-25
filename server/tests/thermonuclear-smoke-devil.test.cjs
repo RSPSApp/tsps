@@ -371,7 +371,7 @@ test('Echo entry keeps 93 Slayer but does not require a task, isolates players a
     core:{...core,PrivateArea,Projectile:{centreOf:npc=>npc},TaskManager:{submit(task){task.setRunning(true);tasks.push(task);}}},
     registerNpcCombatMethodProvider(){assert.fail('Echo uses the normal devil\'s controller');},
     // Its fight is tested in echo-thermonuclear-smoke-devil.test.cjs: at 0 HP here it stops at once.
-    spawnNpc(options){const combat=makeCombat();const npc={id:options.id,at:[options.x,options.y,options.z],setFlag(){},getCombat:()=>combat,getHitpoints:()=>0,isRegistered:()=>true,
+    spawnNpc(options){const combat=makeCombat();const npc={id:options.id,at:[options.x,options.y,options.z],setFlag(){},getCombat:()=>combat,getHitpoints:()=>0,isRegistered:()=>true,getMovementQueue:()=>({setBlockMovement(b){npc.blocked=b;}}),
       performGraphic(graphic){npc.graphic=graphic.getId?.()??graphic.id;},performAnimation(animation){npc.animation=animation.getId?.()??animation.id;}};
       spawned.push(npc);return npc;},
     emitCustomEvent(name,event){events.push(name);if(name==='echo-boss:configure')event.configured=true;if(name==='echo-boss:claim')event.token='thermy-'+spawned.length;},
@@ -406,6 +406,7 @@ test('Echo entry keeps 93 Slayer but does not require a task, isolates players a
     const method=new (Fight.methodClass())();
     assert.deepEqual(method.hits(spawned[0],a),[],'the Echo has no attack-turn attack: its fight shoots');
     assert.equal(method.attackDistance(spawned[0]),64,'and never walks to reach the player');
+    assert.equal(spawned[0].blocked,true,'nor steps off a player under it (rsprox.net 1161: none of 36 Echoes walked)');
     Echo.death({npc:spawned[0]});Echo.death({npc:spawned[0]});
     assert.equal(events.filter(n=>n==='echo-boss:completed').length,1);
     assert.equal(spawned[0].__thermonuclearEchoSession.fight.stopped,true,'its shots go with it');

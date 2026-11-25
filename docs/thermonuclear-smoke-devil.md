@@ -162,7 +162,8 @@ rules. Echo requires base 93 Slayer but no assignment.
 number is in `data/thermonuclear-smoke-devil.json` (`echo`). The [Wiki](https://oldschool.runescape.wiki/w/Thermonuclear_smoke_devil_(Echo))
 describes the same fight; where the two differ the recording is followed, and where the recording is
 silent the Wiki is (marked below). The Echo stands on (2362, 9448), in the middle of its pools, and
-never moves; the normal boss's attack turn does nothing for it.
+never moves, not even to step off a player standing under it (none of the 36 recorded Echoes
+walked); the normal boss's attack turn does nothing for it.
 
 **Entering** (29 recorded entries, ticks from the orb's Yes): the screen fades and "You enter the
 Smokey Cave." is sent at once, the minimap goes a tick later, the player is moved in at 2 (29 of 29),

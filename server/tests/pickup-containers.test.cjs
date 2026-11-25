@@ -15,6 +15,9 @@ const { Player } = require("../dist/game/entity/impl/player/Player");
 const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { State } = require("../dist/game/entity/impl/grounditem/ItemOnGround");
+const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+const Settings = require("../plugins/interface/Settings.plugin");
+const { NATIVE_CLIENT_ATTRIBUTE } = require("../dist/net/protocol/ClientProtocol");
 
 const HOME = [3222, 3218];
 const RUNES = "rune-pouch:runes";
@@ -101,6 +104,104 @@ test("row 306 is a toggle on take_runes_toggle, off by default, and the setting 
   assert.deepEqual(settings[306], { name: "Rune-picking behaviour", varbit: core.CacheDefinitions.getVarbitId("take_runes_toggle") });
   const f = actor(t);
   assert.equal(f.p.getPacketSender().getVarbit(5698), 1);
+});
+
+/** The official cache's flattened search order, without browser-only enum overrides. */
+function nativeRows() {
+  const all = [], categories = new Map();
+  for (const [, struct] of [...core.CacheDefinitions.getEnumValues(422)].sort(([a],[b]) => a-b)) {
+    const category = core.CacheDefinitions.getStructParams(Number(struct));
+    const rows = [...core.CacheDefinitions.getEnumValues(Number(category.get(745)))].sort(([a],[b]) => a-b)
+      .map(([, row]) => Number(core.CacheDefinitions.getStructParams(Number(row)).get(1077)));
+    categories.set(Number(category.get(743)), rows);
+    all.push(...rows);
+  }
+  return { all, categories };
+}
+
+/** Native IF_BUTTON1, as carried by the gateway, through the real decoder and turn queue. */
+async function nativeSetting(f, settingId, category = -1) {
+  f.p.setAttribute(NATIVE_CLIENT_ATTRIBUTE, true);
+  Settings.openAllSettings(f.p);
+  f.p.setAttribute("settings-view", category);
+  const catalog = nativeRows();
+  const slot = (category === -1 ? catalog.all : catalog.categories.get(category)).indexOf(settingId);
+  assert.ok(slot >= 0, `native setting ${settingId} is in the cache rows`);
+  const frame = Buffer.alloc(9);
+  frame[0] = 23; // native IF_BUTTON1
+  frame.writeInt32BE((134 << 16) | 20, 1);
+  frame.writeUInt16BE(slot, 5);
+  frame.writeUInt16BE(65535, 7); // no item
+  await f.c.handle(frame);
+  f.c.processTurnPackets();
+  assert.equal(f.p.getPacketSender().getVarbit(9657), settingId, "native packet selects its cache row");
+}
+
+test("native Rune-picking search row persists, keeps Ammo separate and controls real pouch pickup after login", async t => {
+  const f = actor(t, { runes: false });
+  f.p.setAttribute(NATIVE_CLIENT_ATTRIBUTE, true);
+  const sender = f.p.getPacketSender(), packets = [], content = [], flags = [];
+  const send = f.p.getSession().sendClientPacket.bind(f.p.getSession());
+  t.mock.method(f.p.getSession(), "sendClientPacket", frame => { packets.push(Buffer.from(frame)); return send(frame); });
+  t.mock.method(sender, "sendContentData", (source, data) => { content.push([source,data]); return sender; });
+  const sendFlags = sender.sendInterfaceFlagsRange.bind(sender);
+  t.mock.method(sender, "sendInterfaceFlagsRange", (...args) => { flags.push(args); return sendFlags(...args); });
+  sender.sendConfig(1598, 1 << 5); // unrelated sibling bit
+  withPouch(f, [[I.AIR_RUNE, 100], null, null, null]);
+  await nativeSetting(f, 306);
+  assert.equal(sender.getVarbit(5698), 1);
+  assert.equal(sender.getVarbit(5697), 0, "Rune search never changes Ammo");
+  assert.equal(sender.getVarp(1598), (1 << 29) | (1 << 5));
+  assert.equal(content.filter(([source]) => source === "settings:catalog").length, 0, "native cache does not receive an unusable browser override");
+  assert.ok(flags.some(([uid,from,to]) => uid === ((134 << 16)|20) && from === 0 && to === nativeRows().all.length-1));
+  assert.ok(packets.some(frame => frame[0] === 42 && frame.readUInt16BE(1) === 5698 && frame.readInt32BE(3) === 1),
+    "the actual session sends the native rune varbit update, not the neighboring Ammo bit");
+  assert.equal(f.p.getAttribute("settings:values")["varbit:5698"], 1);
+  const loaded = actor(t, { runes: false });
+  PlayerSave.fromPlayer(f.p).applyToPlayer(loaded.p);
+  loaded.p.setAttribute(NATIVE_CLIENT_ATTRIBUTE, true);
+  PM.emitPlayerLogin({player:loaded.p,username:loaded.p.getUsername()});
+  assert.equal(loaded.p.getPacketSender().getVarbit(5698), 1, "PlayerSave restores the selected Rune setting into a fresh real Player");
+  const ground = pile(t, loaded, I.AIR_RUNE, 25);
+  await take(loaded, I.AIR_RUNE);
+  assert.equal(pouchAmount(loaded,I.AIR_RUNE), 125);
+  assert.equal(loaded.inv.getAmount(I.AIR_RUNE), 0);
+  assert.equal(ground.isPendingRemoval(), true);
+  assert.deepEqual(loaded.events,[25]);
+  await nativeSetting(loaded, 306); // off through search
+  assert.equal(loaded.p.getPacketSender().getVarbit(5698),0);
+  const off = actor(t,{runes:false});
+  PlayerSave.fromPlayer(loaded.p).applyToPlayer(off.p);
+  off.p.setAttribute(NATIVE_CLIENT_ATTRIBUTE,true);
+  PM.emitPlayerLogin({player:off.p,username:off.p.getUsername()});
+  assert.equal(off.p.getPacketSender().getVarbit(5698),0,"off persists too");
+  pile(t, off, I.AIR_RUNE, 7);
+  await take(off,I.AIR_RUNE);
+  assert.equal(pouchAmount(off,I.AIR_RUNE),125);
+  assert.equal(off.inv.getAmount(I.AIR_RUNE),7);
+  await nativeSetting(f,305);
+  assert.equal(sender.getVarbit(5697),1,"Ammo search reaches Ammo");
+  assert.equal(sender.getVarbit(5698),1,"Ammo search does not undo Rune");
+  await nativeSetting(f,306,5); // Gameplay category: same Rune setting, raw category order
+  assert.equal(sender.getVarbit(5698),0);
+  const last = nativeRows().all.at(-1);
+  await nativeSetting(f,last);
+  assert.equal(sender.getVarbit(9657),last,"last search row remains reachable");
+});
+
+for (const [label, slots, rune] of [
+  ["nonmatching rune", [[556,100],null,null,null], 554],
+  ["full matching slot", [[556,15990],null,null,null], 556],
+]) test(`native search activation retains inventory fallback for ${label}`, async t => {
+  const f = actor(t,{runes:false});
+  await nativeSetting(f,306);
+  withPouch(f,slots);
+  const before = pouchAmount(f,rune);
+  f.p.getPacketSender().sendInterfaceRemoval();
+  pile(t,f,rune,25);
+  await take(f,rune);
+  assert.equal(pouchAmount(f,rune),before);
+  assert.equal(f.inv.getAmount(rune),25);
 });
 
 test("picked-up runes go into a pouch slot that already holds them", async (t) => {

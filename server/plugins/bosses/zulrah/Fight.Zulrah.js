@@ -5,18 +5,18 @@
  *
  * Wiki ("Zulrah", "Zulrah/Strategies"):
  * - Zulrah rises once the player continues the boat dialogue or does anything else.
- * - It attacks every 3 ticks, up to 41: green form with Ranged (after 3 minutes it may switch
- *   unpredictably between Ranged and Magic), blue form with Magic and sometimes Ranged (Magic
- *   much more often), and the "Jad" phase alternating the two. Damage is rolled as the attack
- *   starts, and an attack that lands envenoms even through prayer.
+ * - It attacks every 3 ticks, up to 41: green form with Ranged, blue form with Magic and
+ *   sometimes Ranged (Magic much more often), and the "Jad" phase alternating the two. Damage is
+ *   rolled as the attack starts, and an attack that lands envenoms even through prayer. The Wiki
+ *   adds that after 3 minutes the green form may switch unpredictably between the two; rsprox
+ *   3276's two green phases past 3 minutes are all Ranged (10 of 10), so that is not modelled.
  * - The red form stares at the player's tile, then whips its tail there: 20-30 typeless damage
  *   and a stun, avoided by moving two tiles away. It does this twice.
  * - Between phases it dives and resurfaces, maybe in another form and place; it cannot be
  *   attacked while under.
- * RSProx #820 confirms spawn/attack/rise animations 5071/5069/5073 and cloud projectile 1045.
- * Near-Reality still supplies the unverified timings; tail tiles/knock-back; and the blue
- * form's 3-in-10 Ranged share. The Wiki gives no ratio for the long-fight green style mix, so
- * the uniform choice below is an explicit inference.
+ * rsprox 820/1161/3276/1157/3342 (77 fights) give the animations, the timings below, the
+ * projectiles, the tail's ticks and knock-back, and the blue form's Ranged share (41 of 121
+ * attacks; Near-Reality's 3 in 10 is kept). The tail's safe tiles are still Near-Reality's.
  */
 
 const Shared = require("./Shared.Zulrah");
@@ -26,39 +26,50 @@ const { Hazards, envenom } = require("./Hazards.Zulrah");
 
 const MAX_HIT = 41;
 const STEP_TICKS = 3;
-const FIRST_STEP_TICKS = 9;
+/** rsprox: the first barrage 11 ticks after Zulrah first rises (75 of 77 fights; 13 in the others). */
+const FIRST_STEP_TICKS = 11;
+/** rsprox: the player's first attack lands 4 ticks after any rise, never sooner. */
 const INTERACT_AFTER_RISE = 4;
+/** rsprox: it resurfaces (moved, changed and rising, in one tick) 3 ticks after diving. */
 const DIVE_TICKS = 3;
-/** Three minutes of game time; after this, green-form attacks may use either style (Wiki). */
-const LONG_FIGHT_TICKS = 300;
-/**
- * Resurfacing teleports Zulrah, and a teleported NPC is left out of every player's view for
- * that tick, so the rise is played on the next one, when it is back: 1 + 3 = 4 ticks to act.
- */
-const RESURFACE_TICKS = 1;
+/** rsprox: then its next phase starts 3 ticks after rising (84 of 84 dives). */
 const RISE_TO_ACT_TICKS = 3;
+/** rsprox: hits already on their way when it dives land together 6 ticks after (63 of 63). */
+const DIVE_HOLDS_HITS_TICKS = 6;
+/** rsprox: a run of barrages or orbs takes a tick more before an attack or the dive. */
+const SPIT_RUN_EXTRA_TICKS = 1;
 const BLUE_RANGED_CHANCE = 0.3;
-/** Wiki says the long-fight style is unpredictable but gives no ratio; uniform is inferred. */
-const LONG_GREEN_RANGED_CHANCE = 0.5;
 const FORM_ID = { green: Shared.NPC.GREEN, red: Shared.NPC.RED, blue: Shared.NPC.BLUE };
+/** rsprox: the knock-back's exact move faces west (512), the way the player is thrown. */
+const KNOCKBACK_FACING_WEST = 3;
 
 const ANIM = { ATTACK: 5069, SPAWN: 5071, DIVE: 5072, RISE: 5073, TAIL_LEFT: 5806, TAIL_RIGHT: 5807, KNOCKBACK: 1157 };
-/** endCycle = start + duration + perTile * distance (Near-Reality's projectile timings). */
+/**
+ * rsprox (map_projanim_v2, 1,045 of Zulrah's): every flight starts and ends on fixed client
+ * cycles whatever the distance, at slope 0 from the start of its tile. Heights are the packet's
+ * (rsprox prints them four times over: 370, 50 and 20). A barrage's second cloud is thrown 5
+ * cycles after the first, at slope 10. Clouds are aimed at the cloud's south-west tile.
+ */
 const PROJECTILE = {
-  ranged: { id: 1044, start: 40, duration: 18, perTile: 5 },
-  magic: { id: 1046, start: 40, duration: 18, perTile: 5 },
-  clouds: [{ id: 1045, start: 40, duration: 28, perTile: 5 }, { id: 1045, start: 40, duration: 58, perTile: 5 }],
-  snakeling: { id: 1047, start: 40, duration: 90, perTile: 5 },
+  ranged: { id: 1044, start: 40, end: 90, from: 92, to: 12, angle: 0 },
+  magic: { id: 1046, start: 40, end: 90, from: 92, to: 12, angle: 0 },
+  clouds: [{ id: 1045, start: 40, end: 90, from: 92, to: 5, angle: 0 }, { id: 1045, start: 45, end: 120, from: 92, to: 5, angle: 10 }],
+  snakeling: { id: 1047, start: 40, end: 120, from: 92, to: 5, angle: 0 },
 };
-const PROJECTILE_HEIGHT = { from: 65, to: 10 };
 
+/**
+ * rsprox (19 tail phases): the swings' animations 7 ticks apart (8 in 2), each striking 5 ticks
+ * after it (the second 5 or 6; sound 2720 on the tile), and the dive or next step 8 ticks after
+ * the second (9 in 5). Four recorded hits threw the player west, 2 tiles after anim 5806 and 1
+ * after 5807, wherever they stood.
+ */
 const TAIL = {
-  aimAt: [0, 9],
-  strikeAt: [5, 15],
-  endsAt: 18,
+  aimAt: [0, 7],
+  strikeAt: [5, 12],
+  endsAt: 15,
   damage: [20, 30],
   stunSeconds: 3,
-  knockback: 4,
+  knockback: { [ANIM.TAIL_LEFT]: 2, [ANIM.TAIL_RIGHT]: 1 },
   /** Beside the pillars, where the tail cannot reach (Near-Reality; the Wiki's safespot). */
   safe: [[2273, 3072], [2272, 3072], [2264, 3072], [2263, 3072]],
   /** Near-Reality: in rotations 1 and 2 the first swing never reaches this tile on the north-east tip. */
@@ -244,7 +255,7 @@ class ZulrahFight {
     if (!this.zulrah || this.zulrah.getHitpoints() <= 0 || !this.zulrah.isRegistered()) return true;
     // Its attacks are scripted, so keep its health from regenerating as if out of combat.
     this.zulrah.getCombat().getLastAttack?.().reset?.();
-    if (this.surfaced) this.facePlayer();
+    if (this.surfaced && !this.facingTile) this.facePlayer();
     if (player.getHitpoints() <= 0) return true;
     while (this.ticks >= this.nextAt && this.stage === "fight") {
       if (this.actions.length === 0) this.beginPhase(this.cursor.next(), true);
@@ -265,20 +276,18 @@ class ZulrahFight {
     if (dive) {
       this.actions.push(() => this.dive());
       this.actions.push(() => this.resurface(phase));
-      this.actions.push(() => this.surface());
     }
-    for (const step of phase.steps) this.actions.push(...this.expand(step));
+    const spit = (step) => step?.[0] === "clouds" || step?.[0] === "snakeling";
+    phase.steps.forEach((step, index) => {
+      this.actions.push(...this.expand(step));
+      const next = phase.steps[index + 1];
+      if (spit(step) && !spit(next) && next?.[0] !== "wait") this.actions.push(() => SPIT_RUN_EXTRA_TICKS);
+    });
   }
 
   expand([kind, ...args]) {
     if (kind === "ranged") {
-      return Array.from({ length: args[0] }, () => () => {
-        const longFightMix = this.phase?.form === "green" && this.duration() >= LONG_FIGHT_TICKS;
-        const style = longFightMix
-          ? (this.random() < LONG_GREEN_RANGED_CHANCE ? "ranged" : "magic")
-          : "ranged";
-        return this.attack(style);
-      });
+      return Array.from({ length: args[0] }, () => () => this.attack("ranged"));
     }
     if (kind === "magic") {
       return Array.from({ length: args[0] }, () => () => this.attack(this.random() < BLUE_RANGED_CHANCE ? "ranged" : "magic"));
@@ -291,6 +300,7 @@ class ZulrahFight {
     if (kind === "clouds") return [() => this.spitClouds(args[0])];
     if (kind === "snakeling") return [() => this.spitSnakeling(args[0])];
     if (kind === "melee") return this.tail();
+    if (kind === "wait") return [() => args[0]];
     throw new Error(`unknown Zulrah step ${kind}`);
   }
 
@@ -299,12 +309,12 @@ class ZulrahFight {
   fire(projectile, to) {
     const { Projectile } = Shared.core();
     const npc = this.zulrah;
-    const from = Projectile.centreOf(npc);
-    const target = to.getLocation ? to.getLocation() : to;
-    const end = projectile.start + projectile.duration + from.getDistance(target) * projectile.perTile;
+    const { id, start, end, from: high, to: low, angle } = projectile;
     const shot = to.getLocation
-      ? Projectile.createProjectile(npc, to, projectile.id, projectile.start, end, PROJECTILE_HEIGHT.from, PROJECTILE_HEIGHT.to)
-      : new Projectile(from, target, null, projectile.id, projectile.start, end, PROJECTILE_HEIGHT.from, PROJECTILE_HEIGHT.to, this.area);
+      ? Projectile.createProjectile(npc, to, id, start, end, high, low)
+      : new Projectile(Projectile.centreOf(npc), to, null, id, start, end, high, low, this.area);
+    shot.withAngle?.(angle);
+    shot.withProgress?.(0);
     shot.sendProjectile();
     this.lastFlight = end;
     return Math.max(1, Math.ceil(end / 30));
@@ -315,6 +325,8 @@ class ZulrahFight {
     const { Animation, CombatFactory, PendingHit, RegionManager } = Shared.core();
     const npc = this.zulrah;
     const player = this.player;
+    this.facingTile = false;
+    this.facePlayer();
     npc.performAnimation(new Animation(ANIM.ATTACK));
     if (!RegionManager.canProjectileAttackTarget(npc, player)) return STEP_TICKS;
     const delay = this.fire(PROJECTILE[style], player);
@@ -328,21 +340,30 @@ class ZulrahFight {
   }
 
   /**
-   * Zulrah keeps facing the player while it is up. Live, it turns to the tiles it spits clouds
-   * and snakelings at and whips its tail toward; NPC updates here carry no face-tile, only
-   * face-entity, so it stays on the player then too.
+   * Zulrah faces the player while it is up, except that it turns to the tile it spits a cloud or
+   * orb at, or whips its tail toward, until its next attack (rsprox: a face-angle with the face
+   * on the player cleared, then the player again when it next attacks).
    */
   facePlayer() {
     if (this.zulrah?.getInteractingMobile?.() !== this.player) this.zulrah?.setMobileInteraction?.(this.player);
   }
 
+  faceTile(tile) {
+    const npc = this.zulrah;
+    this.facingTile = true;
+    npc?.setMobileInteraction?.(null);
+    npc?.setPositionToFace?.(Shared.loc(tile));
+  }
+
   spitClouds([x1, y1, x2, y2]) {
     const { Animation } = Shared.core();
     const tiles = [{ x: x1, y: y1 }, { x: x2, y: y2 }];
+    this.faceTile(tiles[0]);
     this.zulrah.performAnimation(new Animation(ANIM.ATTACK));
     Shared.sound(this.player, Shared.SOUND.CLOUD_SPIT);
     tiles.forEach((tile, index) => {
-      const ticks = this.fire(PROJECTILE.clouds[index], Shared.loc(tile));
+      // rsprox: aimed at the south-west tile of the 3x3 cloud, where its loc goes.
+      const ticks = this.fire(PROJECTILE.clouds[index], Shared.loc({ x: tile.x - 1, y: tile.y - 1 }));
       Shared.later(this, ticks, () => {
         if (this.stage === "fight" && this.zulrah?.getHitpoints() > 0) this.hazards.addCloud(tile);
       });
@@ -353,6 +374,7 @@ class ZulrahFight {
   spitSnakeling([x, y]) {
     const { Animation } = Shared.core();
     const tile = { x, y };
+    this.faceTile(tile);
     this.zulrah.performAnimation(new Animation(ANIM.ATTACK));
     Shared.sound(this.player, Shared.SOUND.SNAKELING_SPIT);
     const ticks = this.fire(PROJECTILE.snakeling, Shared.loc(tile));
@@ -364,7 +386,7 @@ class ZulrahFight {
 
   // ---------------------------------------------------------------- the tail
 
-  /** Two swings: aim at the player's tile, strike it 5 (then 6) ticks later. */
+  /** Two swings 7 ticks apart: aim at the player's tile, strike it 5 ticks later. */
   tail() {
     const [aim1, aim2] = TAIL.aimAt;
     const [strike1, strike2] = TAIL.strikeAt;
@@ -389,6 +411,7 @@ class ZulrahFight {
     const y = tile.getY();
     const north = y >= 3074;
     this.tailTarget = tile.clone();
+    this.faceTile({ x, y });
     let anim = null;
     if (y === 3078) {
       if (x < zul.getX() - 1) anim = north ? ANIM.TAIL_RIGHT : ANIM.TAIL_LEFT;
@@ -401,6 +424,7 @@ class ZulrahFight {
       anim = x >= 2268 ? ANIM.TAIL_LEFT : ANIM.TAIL_RIGHT;
     }
     if (anim) this.zulrah.performAnimation(new Animation(anim));
+    this.tailAnim = anim ?? ANIM.TAIL_RIGHT;
   }
 
   strikeTail(first = false) {
@@ -409,6 +433,7 @@ class ZulrahFight {
     const here = player.getLocation();
     const target = this.tailTarget;
     if (!target || player.getHitpoints() <= 0) return;
+    Shared.sound(player, Shared.SOUND.TAIL_STRIKE);
     if (Math.abs(here.getX() - target.getX()) > 1 || Math.abs(here.getY() - target.getY()) > 1) return;
     if (TAIL.safe.some(([x, y]) => here.getX() === x && here.getY() === y)) return;
     const [sx, sy] = TAIL.firstSwingSafe;
@@ -425,45 +450,32 @@ class ZulrahFight {
     const here = player.getLocation();
     if (!destination.equals(here)) {
       const offset = new Location(destination.getX() - here.getX(), destination.getY() - here.getY());
-      const direction = this.facingZulrah(here);
+      const direction = KNOCKBACK_FACING_WEST;
       TaskManager.submit(new ForceMovementTask(player, 1, new ForceMovement(here.clone(), offset, 0, 30, direction, -1)));
     }
     player.performAnimation(new Animation(ANIM.KNOCKBACK));
     player.setMobileInteraction?.(this.zulrah);
     CombatFactory.stun(player, TAIL.stunSeconds, true);
-    player.sendMessage("You have been stunned!");
+    player.sendMessage("You're stunned!");
     const damage = Math.min(Shared.randomInt(this.random, ...TAIL.damage), player.getHitpoints());
     player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, HitMask.RED)]);
     CombatAchievements.avoidableDamage(this, damage);
     CombatFactory.poisonEntity(player, 6, 2);
   }
 
-  /** Up to four tiles straight away from Zulrah, stopping at anything in the way. */
+  /** West, 2 tiles after anim 5806 or 1 after 5807 (rsprox), stopping at anything in the way. */
   knockbackTile(player) {
     const { RegionManager } = Shared.core();
-    const centre = centreOf(this.zulrah);
     const here = player.getLocation();
-    const dx = here.getX() - centre.x;
-    const dy = here.getY() - centre.y;
-    const length = Math.hypot(dx, dy) || 1;
+    const tiles = TAIL.knockback[this.tailAnim] ?? 1;
     let at = here.clone();
-    for (let step = 1; step <= TAIL.knockback; step++) {
-      const x = Math.round(here.getX() + (dx / length) * step);
-      const y = Math.round(here.getY() + (dy / length) * step);
-      if (x === at.getX() && y === at.getY()) continue;
+    for (let step = 1; step <= tiles; step++) {
+      const x = here.getX() - step;
+      const y = here.getY();
       if (!RegionManager.canMove(at.getX(), at.getY(), x, y, 0, 1, 1, this.area)) break;
       at = Shared.loc({ x, y });
     }
     return at;
-  }
-
-  /** The force-movement direction (0 north, 1 east, 2 south, 3 west) facing Zulrah. */
-  facingZulrah(here) {
-    const centre = centreOf(this.zulrah);
-    const dx = centre.x - here.getX();
-    const dy = centre.y - here.getY();
-    if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 1 : 3;
-    return dy >= 0 ? 0 : 2;
   }
 
   // ---------------------------------------------------------------- diving
@@ -474,26 +486,31 @@ class ZulrahFight {
     this.interactAt = Infinity;
     this.surfaced = false;
     npc.performAnimation(new Animation(ANIM.DIVE));
-    // It cannot be attacked under the swamp: whoever is attacking it stops.
+    npc.setMobileInteraction?.(null);
+    // It cannot be attacked under the swamp: whoever is attacking it stops, and what is already
+    // on its way lands together once it is back up (rsprox; the Wiki: "shortly after it resurfaces").
     if (this.player.getCombat().getTarget() === npc) this.player.getCombat().reset();
+    npc.getCombat().getHitQueue?.().holdIncomingFor?.(DIVE_HOLDS_HITS_TICKS);
     return DIVE_TICKS;
   }
 
-  /** Under the swamp: to its next place, in its next form. */
+  /**
+   * To its next place, in its next form, rising, all in one tick: rsprox sends the move with the
+   * jump flag and anim 5073 together, so it is a telejump, not a teleport out of view.
+   */
   resurface(phase) {
-    const npc = this.zulrah;
-    npc.moveTo(Shared.loc(Shared.POSITION[phase.at].spawn));
-    npc.setNpcTransformationId(FORM_ID[phase.form] === Shared.NPC.GREEN ? -1 : FORM_ID[phase.form]);
-    return RESURFACE_TICKS;
-  }
-
-  /** Back in view the tick after its teleport: it rises, facing the player. */
-  surface() {
     const { Animation } = Shared.core();
-    this.zulrah.performAnimation(new Animation(ANIM.RISE));
+    const npc = this.zulrah;
+    const to = Shared.loc(Shared.POSITION[phase.at].spawn);
+    if (npc.telejump) npc.telejump(to);
+    else npc.moveTo(to);
+    npc.setNpcTransformationId(FORM_ID[phase.form] === Shared.NPC.GREEN ? -1 : FORM_ID[phase.form]);
+    npc.performAnimation(new Animation(ANIM.RISE));
+    Shared.sound(this.player, Shared.SOUND.RISE);
     this.surfaced = true;
+    this.facingTile = false;
     this.facePlayer();
-    this.interactAt = this.ticks + RISE_TO_ACT_TICKS;
+    this.interactAt = this.ticks + INTERACT_AFTER_RISE;
     return RISE_TO_ACT_TICKS;
   }
 

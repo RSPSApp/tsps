@@ -28,6 +28,8 @@ const NPC = {
   BLUE: 2044,
   SNAKELING_MELEE: 2045,
   SNAKELING_MAGIC: 2046,
+  /** rsprox 1161/1157: what each snakeling turns into as it dies with Zulrah. */
+  SNAKELING_DEAD: 2047,
   PRIESTESS: 2033,
 };
 const FORM_IDS = new Set([NPC.GREEN, NPC.RED, NPC.BLUE]);
@@ -55,12 +57,16 @@ const SHRINE = { minX: 2250, maxX: 2285, minY: 3055, maxY: 3085 };
 /** Near-Reality: where the boat leaves the player, and where Zulrah first rises. */
 const PLAYER_START = { x: 2268, y: 3068, z: 0 };
 
-/** Zulrah's four places (Near-Reality): its south-west tile. */
+/**
+ * Zulrah's four places: its south-west tile. rsprox 820/1161/3276/1157 (77 fights): relative to
+ * the middle and the boat's landing tile, east is (2276, 3071) and west (2256, 3071); Near-Reality
+ * had them one tile off, at (2276, 3072) and (2257, 3071).
+ */
 const POSITION = {
   middle: { spawn: { x: 2266, y: 3073 } },
   south: { spawn: { x: 2266, y: 3062 } },
-  west: { spawn: { x: 2257, y: 3071 } },
-  east: { spawn: { x: 2276, y: 3072 } },
+  west: { spawn: { x: 2256, y: 3071 } },
+  east: { spawn: { x: 2276, y: 3071 } },
 };
 
 const ATTR = {
@@ -116,13 +122,17 @@ function repeat(key, ticks, action) {
 }
 
 /**
- * Near-Reality's sound effects. Delays are client cycles (20 ms), so an impact sound can wait
- * for its projectile.
+ * Sound effects. Delays are client cycles (20 ms), so an impact sound can wait for its
+ * projectile. rsprox 1161/3276/1157: the attacks' 213/224 and 162/163, a barrage's 790 as it is
+ * spat and 1930 as each cloud lands, an orb's 788 and the snakeling's 797 as it lands, the rise's
+ * 2496 and the tail strike's 2720. The cloud's going (795/796) and the snakelings' attack sounds
+ * are still Near-Reality's.
  */
 const SOUND = {
   RANGED: 213, RANGED_IMPACT: 224, MAGIC: 162, MAGIC_IMPACT: 163,
-  CLOUD_SPIT: 796, CLOUD_LAND: 790, CLOUD_GONE: [795, 796],
-  SNAKELING_SPIT: 788, SNAKELING_LAND: 1930, SNAKELING_MELEE: 794, SNAKELING_MAGIC: 224, SNAKELING_MAGIC_IMPACT: 794,
+  CLOUD_SPIT: 790, CLOUD_LAND: 1930, CLOUD_GONE: [795, 796],
+  SNAKELING_SPIT: 788, SNAKELING_LAND: 797, SNAKELING_MELEE: 794, SNAKELING_MAGIC: 224, SNAKELING_MAGIC_IMPACT: 794,
+  RISE: 2496, TAIL_STRIKE: 2720,
 };
 
 function sound(player, id, delay = 0) {

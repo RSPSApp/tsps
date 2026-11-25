@@ -9,10 +9,12 @@
  * - Snakelings attack with melee or magic, never both, and envenom like Zulrah. They have 1
  *   hitpoint, die after 40 seconds and die with Zulrah.
  * Wiki ("Snakeling"): melee (2045) max 15, magic (2046) max 13, attack speed 3.
- * Near-Reality: the cloud lasts 30 ticks and hits for 1-4 a tick; a snakeling is magic one time
- * in four, rises with anim 2413 and attacks 3 ticks after landing, from up to 6 tiles away
- * when it is magic. The magic snakeling's projectile is 1230; melee hits land at once. Their
- * sound effects.
+ * rsprox 820/1161/3276/1157: the cloud lasts 30 ticks and hits for 1-4 a tick; a snakeling is
+ * magic about half the time (38 of 77), rises with anim 2413 and attacks 3 ticks after landing;
+ * the magic one's projectile 1230 flies from cycle 10 to 30 at heights 15 to 16, slope 0, from
+ * 92/128 along its tile. On Zulrah's death each snakeling turns into 2047 as it dies.
+ * Near-Reality: the magic snakeling's 6-tile reach, melee hits landing at once, and the
+ * snakelings' attack sounds.
  */
 
 const Shared = require("./Shared.Zulrah");
@@ -22,10 +24,10 @@ const CLOUD = { ticks: 30, damage: [1, 4] };
 const SNAKELING = {
   lifeTicks: 67,
   wakeTicks: 3,
-  magicChance: 0.25,
+  magicChance: 0.5,
   speed: 3,
   melee: { max: 15, range: 1 },
-  magic: { max: 13, range: 6, projectile: { id: 1230, start: 30, duration: 18, perTile: 5, from: 15, to: 16 } },
+  magic: { max: 13, range: 6, projectile: { id: 1230, start: 10, end: 30, from: 15, to: 16, angle: 0, progress: 92 } },
   anim: { attack: 1741, spawn: 2413 },
   venom: 6,
 };
@@ -70,8 +72,8 @@ function snakelingMethod() {
         return;
       }
       const p = this.def.projectile;
-      const end = p.start + p.duration + npc.getLocation().getDistance(target.getLocation()) * p.perTile;
-      Projectile.createProjectile(npc, target, p.id, p.start, end, p.from, p.to).sendProjectile();
+      const end = p.end;
+      Projectile.createProjectile(npc, target, p.id, p.start, end, p.from, p.to).withAngle(p.angle).withProgress(p.progress).sendProjectile();
       Shared.sound(target, Shared.SOUND.SNAKELING_MAGIC);
       Shared.sound(target, Shared.SOUND.SNAKELING_MAGIC_IMPACT, end);
       this.hitDelay = Math.max(1, Math.ceil(end / 30));
@@ -187,9 +189,12 @@ class Hazards {
     this.tickSnakelings(player);
   }
 
-  /** Zulrah is dead: its snakelings die with it and its clouds clear. */
+  /** Zulrah is dead: its snakelings die (as 2047, rsprox) and its clouds clear. */
   clearOnDeath() {
-    for (const npc of [...this.snakelings]) this.kill(npc);
+    for (const npc of [...this.snakelings]) {
+      if (npc.getHitpoints() > 0) npc.setNpcTransformationId?.(Shared.NPC.SNAKELING_DEAD);
+      this.kill(npc);
+    }
     for (const cloud of [...this.clouds]) this.removeCloud(cloud);
   }
 

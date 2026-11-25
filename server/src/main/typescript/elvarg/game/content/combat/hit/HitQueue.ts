@@ -17,8 +17,20 @@ export class HitQueue {
     private lastAppliedHit: HitDamage | null = null;
     private poisonSplats = 0;
     private incomingGeneration = 0;
+    /** Until this world cycle, hits coming in wait rather than land (holdIncomingFor). */
+    private heldUntil = -1;
 
     constructor(private readonly character: Mobile) {}
+
+    /**
+     * Holds the hits coming in to the owner for `ticks` ticks from now, then lands them together,
+     * as an animation stall does for a player. For content where a target briefly can't be hit but
+     * what is already on its way still lands later (Zulrah diving: rsprox, they land 6 ticks after).
+     */
+    holdIncomingFor(ticks: number): void {
+        this.heldUntil = Math.max(this.heldUntil, World.getProcessCycle() + Math.max(0, ticks | 0));
+        if (this.hasPendingWork()) HitQueue.active.add(this);
+    }
 
     /**
      * Catch-all for entities that did not take a turn this cycle - inactive NPCs and
@@ -58,9 +70,10 @@ export class HitQueue {
         // content that stops the animation early has to release the hits it was holding on that
         // tick rather than on the deadline the stall once had. Only players stall, so an NPC's hits
         // keep landing on the dot - and an NPC's Combat has nothing to ask.
-        const hold = this.character.isPlayer()
-            ? this.character.getCombat().getIncomingHitCycle()
-            : -1;
+        const hold = Math.max(
+            this.heldUntil,
+            this.character.isPlayer() ? this.character.getCombat().getIncomingHitCycle() : -1,
+        );
         const stalled = hold > currentCycle;
         if (stalled) {
             // A held hit still keeps its target from logging out (Combat.markHeldHit), as a landed one would.

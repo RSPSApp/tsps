@@ -3693,6 +3693,11 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   }
 
   /** Darkmeyer joins the medallion's destinations once the quest is done (Wiki: Drakan's medallion). */
+  // A separate read-only catalogue includes the canonical landing without quest/player checks.
+  function describeDarkmeyerMedallionDestination({ destinations }) {
+    destinations.push({ label: "Darkmeyer", tile: { ...DARKMEYER_MEDALLION_TILE } });
+  }
+
   function addDarkmeyerMedallionDestination(event) {
     if (!event?.player || !Array.isArray(event.destinations) || !quest.isComplete(event.player)) return;
     event.destinations.push({ label: "Darkmeyer", tile: DARKMEYER_MEDALLION_TILE });
@@ -3840,6 +3845,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   api.onItemAction("Tome of Experience", { Read: readTome });
   api.onItemAction("Old note", { Read: readOldNote });
   api.onCustomEvent("drakan-medallion:destinations", addDarkmeyerMedallionDestination);
+  api.onCustomEvent("drakan-medallion:catalogue", describeDarkmeyerMedallionDestination);
   api.onNpcDeath(handleNpcDeath);
   api.onNpcBeforeDeath(handleVanstromBeforeDeath);
   api.registerArea(new CarlFollowArea());

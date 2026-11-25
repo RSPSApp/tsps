@@ -219,7 +219,6 @@ test("::setlevel refuses levels a skill can't have, and skill names it can't tel
   assert.equal(owner.getSkillManager().getMaxLevel(Skill.ATTACK), 1, "nothing changed");
 });
 
-
 /** A real bounded NPC list, without starting a server or touching world files. */
 function npcWorld(t, capacity = 30) {
   const { MobileList } = require("../dist/game/entity/impl/MobileList");

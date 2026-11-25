@@ -101,12 +101,18 @@ function teleport({ player }) {
   return true;
 }
 
+function describeTeleports({ list }) {
+  list.push({ path: ["Items", "Chronicle"], key: "champions-guild", name: "Champions' Guild (landing area centre)",
+    tile: [LANDING_CENTRE.x, LANDING_CENTRE.y, 0] });
+}
+
 module.exports = {
   name: "Chronicle",
   description: "Chronicle: teleports to the Champions' Guild for one charge, charged with teleport cards up to 1,000, with Check charges.",
   _test: { MAX_CHARGES, CHARGES_ATTRIBUTE, LANDING_CENTRE, LANDING_RADIUS, charges, chargeWithCards, checkCharges, teleport },
   register(api) {
     core = api.core;
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     api.persistAttribute(CHARGES_ATTRIBUTE, 0);
     api.onItemAction("Chronicle", { Teleport: teleport, "Check charges": checkCharges, "Check Charges": checkCharges });
     api.onItemOnItem("Teleport card", "Chronicle", chargeWithCards, { noted: false });

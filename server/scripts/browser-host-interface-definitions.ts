@@ -9,6 +9,7 @@ const plugins = [
 ];
 
 const definitions: Array<{ groupId: number; widgets: unknown[] }> = [buildPresetsInterfaceDefinition()];
+definitions.push(require("../plugins/tools/adminpanel/Layout.AdminPanel").buildInterface());
 definitions.push(require("../plugins/interface/monsterexamine/Layout.MonsterExamine").DEFINITION);
 definitions.push(require("../plugins/interface/bestiary/Layout.Bestiary").DEFINITION);
 definitions.push(require("../plugins/interface/bestiary/MapNavigation.Bestiary").DEFINITION);

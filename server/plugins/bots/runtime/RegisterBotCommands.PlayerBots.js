@@ -12,12 +12,13 @@ const {
 
 const { registerBotControlCommands } = require("./Control.PlayerBots");
 const { validateSpawnSetup, applySpawnSetup } = require("./SpawnSetup.PlayerBots");
-const { registerBotsInterface } = require("../interface/Bots.PlayerBots");
 const { isDeployableRoutine } = require("./RoutineCatalog.PlayerBots");
+const { registerBotDeployment } = require("./DeploymentService.PlayerBots");
+const { registerAdminBotControls } = require("./AdminControls.PlayerBots");
 
 function registerBotCommands(options) {
   registerBotControlCommands(options);
-  registerBotsInterface({ api: options.api, runtime: options.runtime, brainRegistry: options.brainRegistry });
+  registerBotDeployment({ api: options.api, runtime: options.runtime, brainRegistry: options.brainRegistry });
   const {
     api,
     botApi,
@@ -90,8 +91,8 @@ function registerBotCommands(options) {
   };
 
   const pendingRecruits = new Map();
-  api.registerCommand("bot", ({ player, parts }) => {
-    const requested = (parts[1] ?? "recruit").toLowerCase();
+  const spawnBot = ({ player, parts = [], requestedMode, spawnLocation, skillOverrides, spawnedBots }) => {
+    const requested = (requestedMode ?? parts[1] ?? "recruit").toLowerCase();
     const wantsAuto = requested === "auto";
     const isRecruitRequest =
       requested === "recruit" ||
@@ -112,7 +113,7 @@ function registerBotCommands(options) {
         player.sendMessage("Recruit activity is unavailable.");
         return true;
       }
-      const recruit = runtime.spawnPvpBot(player.getLocation(), {
+      const recruit = runtime.spawnPvpBot(spawnLocation ?? player.getLocation(), {
         mode: behaviorMode.PVP,
         activity: "developer",
       });
@@ -132,7 +133,11 @@ function registerBotCommands(options) {
           : `Unable to start following for ${recruitUsername}.`
       );
       if (started) {
+        if (skillOverrides) applySpawnSetup(recruit, { skills: skillOverrides }, api.core);
+        spawnedBots?.push(recruit);
         pendingRecruits.set(recruit, { owner: player, behavior: "recruit" });
+      } else if (spawnedBots) {
+        recruit.requestLogout?.();
       }
       return true;
     }
@@ -144,7 +149,7 @@ function registerBotCommands(options) {
       return true;
     }
     const loc = setup?.location;
-    const spawn = loc ? new core.Location(loc.x, loc.y, loc.z) : player.getLocation();
+    const spawn = spawnLocation ?? (loc ? new core.Location(loc.x, loc.y, loc.z) : player.getLocation());
     const bot = runtime.spawnPvpBot(spawn, {
       mode: activity?.usesPvpEngine ? behaviorMode.PVP : activity?.mode ?? normalizedBehavior,
       activity: "developer",
@@ -155,6 +160,7 @@ function registerBotCommands(options) {
       return true;
     }
     applySpawnSetup(bot, setup, core);
+    if (skillOverrides) applySpawnSetup(bot, { skills: skillOverrides }, core);
     if (activity) {
       const attached = startActivity(bot, activity.id, { home: spawn });
       player.sendMessage(
@@ -162,12 +168,16 @@ function registerBotCommands(options) {
           ? `${bot.getUsername()} spawned as ${activity.mode} (brain).`
           : `Unable to attach the brain to ${bot.getUsername()}.`
       );
+      if (attached) spawnedBots?.push(bot);
+      else if (spawnedBots) bot.requestLogout?.();
       return true;
     }
+    spawnedBots?.push(bot);
     // The factory queues a world login. Clan membership and mode activation need the bot registered.
     pendingRecruits.set(bot, { owner: player, behavior: normalizedBehavior });
     return true;
-  }, PlayerRights.DEVELOPER, "Manage player bots");
+  };
+  api.registerCommand("bot", spawnBot, PlayerRights.DEVELOPER, "Manage player bots");
   api.onPlayerProcess(({ player: owner }) => {
     if (owner.isPlayerBot?.()) return;
     for (const [bot, pending] of pendingRecruits) {
@@ -210,8 +220,8 @@ function registerBotCommands(options) {
     }
   });
 
-  api.registerCommand("botme", ({ player, parts }) => {
-    const mode = (parts[1] ?? "toggle").toLowerCase();
+  const selfBot = ({ player, parts = [], requestedMode }) => {
+    const mode = (requestedMode ?? parts[1] ?? "toggle").toLowerCase();
     if (mode === "status") {
       const enabled = runtime.hasControllerForPlayer(player);
       player.sendMessage(`botme: ${enabled ? "enabled" : "disabled"}`);
@@ -255,11 +265,12 @@ function registerBotCommands(options) {
 
     player.sendMessage("Usage: ::botme [on|off|toggle|status]");
     return true;
-  }, PlayerRights.ADMINISTRATOR, "Control yourself as a bot");
+  };
+  api.registerCommand("botme", selfBot, PlayerRights.ADMINISTRATOR, "Control yourself as a bot");
 
-  api.registerCommand("bh", ({ player, parts }) => {
-    const usernameArg = parts[1];
-    const behaviorArg = parts[2]?.toLowerCase();
+  const behavior = ({ player, parts = [], username, requestedMode }) => {
+    const usernameArg = username ?? parts[1];
+    const behaviorArg = (requestedMode ?? parts[2])?.toLowerCase();
     if (!usernameArg || !behaviorArg) {
       player.sendMessage(`Usage: ::bh <username> <${supportedBehaviorList}|manual>`);
       return true;
@@ -345,16 +356,18 @@ function registerBotCommands(options) {
       behavior: assigned,
     });
     return true;
-  }, PlayerRights.ADMINISTRATOR, "Set bot behaviour");
+  };
+  api.registerCommand("bh", behavior, PlayerRights.ADMINISTRATOR, "Set bot behaviour");
 
   // ::botname <current name> <new name> (underscores are spaces); lasts until the bot logs out.
-  api.registerCommand("botname", ({ player, parts }) => {
+  const rename = ({ player, parts = [], username, displayName }) => {
     const spaced = (text) => String(text ?? "").replace(/_/g, " ").trim();
-    const current = spaced(parts[1]).toLowerCase();
-    const name = spaced(parts[2]);
+    const current = spaced(username ?? parts[1]);
+    const lookup = current.toLowerCase();
+    const name = spaced(displayName ?? parts[2]);
     const bot = [...api.core.World.getPlayers()].find(candidate => candidate.isPlayerBot?.() === true &&
-      (candidate.getDisplayName().toLowerCase() === current || candidate.getUsername().toLowerCase() === current));
-    const problem = !bot ? `botname: no bot ${parts[1] ?? ""}` : botNameProblem(name) ??
+      (candidate.getDisplayName().toLowerCase() === lookup || candidate.getUsername().toLowerCase() === lookup));
+    const problem = !bot ? `botname: no bot ${current}` : botNameProblem(name) ??
       (runtime.botNameTaken(bot.getUsername(), name) ? "That name is not available." : null);
     if (problem) {
       player.sendMessage(`${problem} Usage: ::botname <current name> <new name>`);
@@ -363,15 +376,17 @@ function registerBotCommands(options) {
     bot.setDisplayName(name);
     player.sendMessage(`${bot.getUsername()} is now shown as ${name}.`);
     return true;
-  }, PlayerRights.DEVELOPER, "Rename a bot's display name");
+  };
+  api.registerCommand("botname", rename, PlayerRights.DEVELOPER, "Rename a bot's display name");
 
   // Live brain state for one bot: activity frames, the top action's own summary,
   // pending walk and combat target. For diagnosing stuck bots without a debugger.
-  api.registerCommand("botinfo", ({ player, parts }) => {
-    let bot = parts[1] ? runtime.resolveControlledPlayer(parts[1]) : null;
-    if (!bot && parts[1]) {
+  const info = ({ player, parts = [], username: requestedUsername }) => {
+    const name = requestedUsername ?? parts[1];
+    let bot = name ? runtime.resolveControlledPlayer(name) : null;
+    if (!bot && name) {
       // Bots owned by other plugins (Castle Wars, Pest Control) are not in this runtime.
-      const other = api.getWorld()?.getPlayerByName?.(parts[1]) ?? null;
+      const other = api.getWorld()?.getPlayerByName?.(name) ?? null;
       bot = other?.isPlayerBot?.() === true ? other : null;
     }
     const username = bot?.getUsername?.();
@@ -399,7 +414,8 @@ function registerBotCommands(options) {
       `door=${door ? `${door.key} stand=${door.stand.x},${door.stand.y} routes=${door.routes}` : "none"} ` +
       `ticked=${brain?.lastTickAt ? Math.round((nowMs - brain.lastTickAt) / 100) / 10 : "-"}s ago`);
     return true;
-  }, PlayerRights.DEVELOPER, "Inspect a bot's brain");
+  };
+  api.registerCommand("botinfo", info, PlayerRights.DEVELOPER, "Inspect a bot's brain");
 
   api.registerCommand("bothotspots", ({ player }) => {
     const countsByHotspot = new Map();
@@ -436,6 +452,7 @@ function registerBotCommands(options) {
     );
     return true;
   }, PlayerRights.ADMINISTRATOR, "Show bot hotspot counts");
+  registerAdminBotControls(options, { spawnBot, selfBot, behavior, rename, info, findBrainActivity });
 }
 
 module.exports = {

@@ -578,12 +578,40 @@ function landingTile(request) {
   if (centre) request.tile = landing(centre);
 }
 
+let catalogueTablets;
+function describeTeleports({ list }) {
+  if (!catalogueTablets) {
+    const spells = new Map([...core.SpellTeleports.getTeleportDestinations(), ...core.LunarSpells.getTeleportDestinations(),
+      ...core.ArceuusSpells.getTeleportDestinations()].filter(spell => spell.name !== HOUSE_TABLET).map(spell => [spell.name, spell.destination]));
+    const tablets = new Map();
+    for (const id of core.CacheDefinitions.getObjNames().keys()) {
+      const item = core.CacheDefinitions.getItem(id);
+      const name = item?.name?.toLowerCase();
+      if (spells.has(name) && item.inventoryActions?.some(action => action?.toLowerCase() === "break")) tablets.set(name, { name: item.name, location: spells.get(name) });
+    }
+    catalogueTablets = [...tablets.values()];
+  }
+  for (const tablet of catalogueTablets) {
+    list.push({ path: ["Items", "Teleport tablets"], key: tablet.name, name: tablet.name, location: tablet.location.clone() });
+    const alternate = TABLETS.alternates[tablet.name.toLowerCase()];
+    if (alternate) list.push({ path: ["Items", "Teleport tablets"], key: `${tablet.name}:${alternate.alternate}`,
+      name: `${tablet.name}: ${alternate.alternate}`, tile: [...alternate.tile] });
+  }
+}
+
+/** All stored-scroll consumers share these read-only descriptors with the scroll book. */
+function describeScrolls({ list }) {
+  for (const [name, tile] of Object.entries(TABLETS.scrolls)) list.push({ scroll: name, key: name, name, tile: [...tile] });
+}
+
 module.exports = {
   name: "SpellTeleports",
   description: "Teleport tablets and spell teleports, including house tablets and redirected scrolls, from the teleport-tablets data file.",
   register(api) {
     core = api.core;
     pluginApi = api;
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
+    api.onCustomEvent("teleport-scroll:destinations", describeScrolls);
     api.persistAttribute(ALTERNATES_ATTRIBUTE, 0);
     api.persistAttribute(LEGACY_WARNINGS_ATTRIBUTE, 0);
     api.onItemAction(useTablet);

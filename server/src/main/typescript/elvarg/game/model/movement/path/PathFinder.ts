@@ -25,6 +25,12 @@ export class PathFinder {
         lastEmittedAtMs: number;
     }>();
     private static readonly rsmodRouteFinding = new RsmodRouteFinding();
+    // Preserve native reach/shape rules without collision detours for noclip
+    // interaction routes as well as explicit ground walk clicks.
+    private static readonly unclippedRouteFinding = new RsmodRouteFinding(() => 0);
+    private static routeFinder(entity: Mobile): RsmodRouteFinding {
+        return isNoclip(entity) ? PathFinder.unclippedRouteFinding : PathFinder.rsmodRouteFinding;
+    }
 
     /**
      * The area an entity's routes read clipping from. Content checks a tile with a stand-in (a ladder's
@@ -192,7 +198,7 @@ export class PathFinder {
         const srcY = entity.getLocation().getY();
         const regionBaseX = entity.getLocation().getRegionX() << 3;
         const regionBaseY = entity.getLocation().getRegionY() << 3;
-        const route = PathFinder.rsmodRouteFinding.findRoute({
+        const route = PathFinder.routeFinder(entity).findRoute({
             level: height,
             srcX,
             srcY,
@@ -251,7 +257,7 @@ export class PathFinder {
     }
 
     public static reachedEntity(entity: Mobile, target: Mobile): boolean {
-        return PathFinder.rsmodRouteFinding.reachedAbsolute({
+        return PathFinder.routeFinder(entity).reachedAbsolute({
             level: entity.getLocation().getZ(),
             srcX: entity.getLocation().getX(),
             srcY: entity.getLocation().getY(),
@@ -275,7 +281,7 @@ export class PathFinder {
         locShape: number,
         blockAccessFlags: number
     ): boolean {
-        return PathFinder.rsmodRouteFinding.reachedAbsolute({
+        return PathFinder.routeFinder(entity).reachedAbsolute({
             level: entity.getLocation().getZ(),
             srcX: entity.getLocation().getX(),
             srcY: entity.getLocation().getY(),
@@ -326,7 +332,7 @@ export class PathFinder {
     static isOnEntityRouteEnd(player: Mobile, target: Mobile, range = 1): boolean {
         const { destX, destY, destinationSize } = PathFinder.entityRouteArea(target, range);
         const location = player.getLocation();
-        const route = PathFinder.rsmodRouteFinding.findRoute({
+        const route = PathFinder.routeFinder(player).findRoute({
             level: location.getZ(),
             srcX: location.getX(),
             srcY: location.getY(),
@@ -366,7 +372,7 @@ export class PathFinder {
 
         for (const destination of destinations) {
             if (destination.getZ() !== level) continue;
-            const route = PathFinder.rsmodRouteFinding.findRoute({
+            const route = PathFinder.routeFinder(player).findRoute({
                 level,
                 srcX,
                 srcY,
@@ -486,7 +492,7 @@ export class PathFinder {
         if (PathFinder.reachedTile(entity, destination)) {
             return true;
         }
-        return PathFinder.rsmodRouteFinding.reachedAbsolute({
+        return PathFinder.routeFinder(entity).reachedAbsolute({
             level: entity.getLocation().getZ(),
             srcX: entity.getLocation().getX(),
             srcY: entity.getLocation().getY(),

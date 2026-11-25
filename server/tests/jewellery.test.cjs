@@ -64,6 +64,7 @@ Jewellery.register({
   getBonusManager: () => ({ update() {} }),
   core: { ChatType: require('../dist/net/protocol/ClientProtocol').ChatType, Animation: require('../dist/game/model/Animation').Animation, TaskManager: { submit() {} }, CountdownTask: class {}, EndDialogue: class {}, ObjectIdentifiers, ItemIdentifiers, ItemDefinition, ObjectDefinition, Flag: require("../dist/game/model/Flag").Flag, DialogueChainBuilder, StatementDialogue, ItemStatementDialogue },
   persistAttribute() {},
+  onCustomEvent() {},
   onItemAction: (handler) => { itemAction = handler; },
   onItemOnObject: (handler) => { itemOnObjectHandlers.push(handler); },
   onPlayerLogin: (handler) => { loginHandler = handler; },

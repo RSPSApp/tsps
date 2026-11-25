@@ -319,12 +319,22 @@ function closed({ player, interfaceId: closedId }) {
   if (closedId === interfaceId()) sendVarbit(player, BUSY_VARBIT, 0, true);
 }
 
+function describeTeleports({ list }) {
+  const supported = new Set(scrollTable().map(entry => scrollName(entry).toLowerCase()));
+  const request = { list: [] };
+  api.emitCustomEvent("teleport-scroll:destinations", request);
+  for (const place of request.list) if (supported.has(place.scroll.toLowerCase())) {
+    list.push({ path: ["Items", BOOK], key: `${place.scroll}:${place.key}`, name: place.name, tile: [...place.tile] });
+  }
+}
+
 module.exports = {
   name: "MasterScrollBook",
   description: "Adds the Master scroll book: stores 20 kinds of teleport scroll (up to 1000 each), reads them from interface 597 or as the default Teleport.",
   members: true,
   register(pluginApi) {
     api = pluginApi;
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     core = pluginApi.core;
     api.persistAttribute(SCROLLS_ATTRIBUTE, null);
     api.persistAttribute(DEFAULT_ATTRIBUTE, 0);

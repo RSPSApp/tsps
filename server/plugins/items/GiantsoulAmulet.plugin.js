@@ -186,6 +186,11 @@ function itemAction(event) {
   event.handled = true;
 }
 
+function describeTeleports({ list }) {
+  for (const destination of LAIRS) list.push({ path: ["Jewellery", "Giantsoul amulet"],
+    key: destination.label, name: destination.label, tile: [...destination.tile] });
+}
+
 module.exports = {
   name: "GiantsoulAmulet",
   description: "Charges the giantsoul amulet with big bones and law runes and teleports to Bryophyta's, Obor's or the Royal Titans' lairs, one charge each.",
@@ -194,6 +199,7 @@ module.exports = {
     api = pluginApi;
     core = pluginApi.core;
     api.onItemAction(itemAction);
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     api.onItemOnItem(chargeWithItems);
   },
   CHARGES_META_KEY,

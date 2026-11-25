@@ -77,9 +77,19 @@ function readStoredScroll(request) {
   readScroll(request);
 }
 
+function describeScrolls({ list }) {
+  list.push({ scroll: SCROLL_NAME, key: SCROLL_NAME, name: SCROLL_NAME, tile: [...DESTINATION] });
+}
+
+function describeTeleports({ list }) {
+  list.push({ path: ["Items", "Teleport scrolls"], key: SCROLL_NAME, name: SCROLL_NAME, tile: [...DESTINATION] });
+}
+
 function attach(api) {
   api.onItemAction(SCROLL_NAME, { Teleport: readScroll });
   api.onCustomEvent("teleport-scroll:read", readStoredScroll);
+  api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
+  api.onCustomEvent("teleport-scroll:destinations", describeScrolls);
 }
 
 module.exports = { attach, _test: { readScroll, questComplete } };

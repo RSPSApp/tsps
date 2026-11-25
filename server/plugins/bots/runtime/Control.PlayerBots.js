@@ -11,9 +11,9 @@ function untrackControlSession(target, owner) {
   if (controls.get(target) === owner) controls.delete(target);
 }
 
-function controlBot({ player, parts }) {
+function controlBot({ player, parts = [], username }) {
   const { api, runtime, resetMovementState } = services;
-  const name = parts.slice(1).join(" ").replace(/_/g, " ").toLowerCase();
+  const name = (username ?? parts.slice(1).join(" ")).replace(/_/g, " ").toLowerCase();
   const entry = [...runtime.entriesByUsername.values()].find(({ player: bot }) =>
     bot.getUsername().toLowerCase() === name || bot.getDisplayName().toLowerCase() === name);
   if (!entry || !runtime.playerBotUsernames.has(entry.player.getUsername()) || entry.manuallyControlled) {
@@ -39,9 +39,9 @@ function controlBot({ player, parts }) {
 }
 
 /** Copies the administrator's base levels and experience onto an active bot. */
-function copyStatsToBot({ player, parts }) {
+function copyStatsToBot({ player, parts = [], username }) {
   const { api, runtime } = services;
-  const name = parts.slice(1).join(" ").replace(/_/g, " ").toLowerCase();
+  const name = (username ?? parts.slice(1).join(" ")).replace(/_/g, " ").toLowerCase();
   const entry = [...runtime.entriesByUsername.values()].find(({ player: bot }) =>
     bot.getUsername().toLowerCase() === name || bot.getDisplayName().toLowerCase() === name);
   if (!entry || !runtime.playerBotUsernames.has(entry.player.getUsername())) {
@@ -74,9 +74,9 @@ function copyStatsToBot({ player, parts }) {
 }
 
 /** Copies the administrator's worn equipment onto an active bot, empty slots included. */
-function copyGearToBot({ player, parts }) {
+function copyGearToBot({ player, parts = [], username }) {
   const { api, runtime } = services;
-  const name = parts.slice(1).join(" ").replace(/_/g, " ").toLowerCase();
+  const name = (username ?? parts.slice(1).join(" ")).replace(/_/g, " ").toLowerCase();
   const entry = [...runtime.entriesByUsername.values()].find(({ player: bot }) =>
     bot.getUsername().toLowerCase() === name || bot.getDisplayName().toLowerCase() === name);
   if (!entry || !runtime.playerBotUsernames.has(entry.player.getUsername())) {
@@ -131,4 +131,4 @@ function registerBotControlCommands(options) {
   api.onPlayerDisconnect(releaseRemovedPlayer);
 }
 
-module.exports = { registerBotControlCommands, trackControlSession, untrackControlSession };
+module.exports = { registerBotControlCommands, trackControlSession, untrackControlSession, controlBot, copyStatsToBot, copyGearToBot };

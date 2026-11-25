@@ -52,6 +52,10 @@ function crush(event) {
   return true;
 }
 
+function describeTeleports({ list }) {
+  list.push({ path: ["Items", "Calcified moth"], key: "cam-torum", name: "Cam Torum", tile: [...DESTINATION] });
+}
+
 module.exports = {
   name: "CalcifiedMoth",
   description: "Crushing a calcified moth teleports to Cam Torum once Perilous Moons has opened the city.",
@@ -59,6 +63,7 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     api.onItemAction("Calcified moth", { Crush: crush });
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   },
   _test: { crush, DESTINATION, CRUSH_MESSAGE, LOCKED_MESSAGE, CITY_OPEN_STAGE },
 };

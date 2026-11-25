@@ -15,7 +15,9 @@ const confirms = [];
 const events = [];
 let reqsPass = true;
 let offsets = [];
+const catalogueHandlers = new Map();
 Crystal.register({
+  onCustomEvent: (name, handler) => catalogueHandlers.set(name, handler),
   core: {
     Location: class { constructor(x, y, z) { Object.assign(this, { x, y, z }); } },
     CacheDefinitions: { getVarbitId: (name) => (name === "mourning_teleport_destination_toggle" ? TOGGLE_VARBIT : -1) },
@@ -114,4 +116,15 @@ test("the saved toggle is sent at login, and nothing is sent when it is off", ()
   const off = createPlayer();
   hooks.login({ player: off });
   assert.deepEqual(off.sent, []);
+});
+
+
+test("the destination provider reads canonical landing data without RNG or player access", t => {
+  t.mock.method(Math, "random", () => { throw new Error("catalogue must not roll a landing"); });
+  const player = new Proxy({}, { get(_target, key) { throw new Error(`catalogue read player.${String(key)}`); } });
+  const request = { player, list: [] };
+  catalogueHandlers.get("adminpanel:teleport-destinations")(request);
+  assert.deepEqual(request.list.map(place => place.tile), [[LLETYA.x, LLETYA.y, LLETYA.z], [PRIFDDINAS.x, PRIFDDINAS.y, PRIFDDINAS.z]]);
+  assert.ok(request.list.every(place => place.path.join("/") === "Items/Eternal teleport crystal"));
+  assert.match(request.list[1].name, /area centre/);
 });

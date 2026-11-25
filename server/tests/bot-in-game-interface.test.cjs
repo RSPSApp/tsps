@@ -61,7 +61,7 @@ function setupFixture({ activities = routines, plans = [codePlan], storage } = {
     return bot;
   };
   const brainRegistry = { activities, byId: new Map(activities.map(activity => [activity.id, activity])), deploymentPlans: plans };
-  const commands = new Map(), actions = [], interfaces = [];
+  const commands = new Map(), actions = [], interfaces = [], customEvents = new Map();
   const api = {
     core: {
       PlayerRights: { DEVELOPER: DEVELOPER_RIGHT }, Skill: { values: () => [attack] },
@@ -72,9 +72,14 @@ function setupFixture({ activities = routines, plans = [codePlan], storage } = {
     registerCommand(name, handler, rights) { commands.set(name, { handler, rights }); },
     registerCustomInterface(definition) { interfaces.push(definition); },
     onInterfaceActionButton(buttons, handler) { actions.push({ buttons, handler }); },
-    emitCustomEvent() { throw new Error('::bots must not collect activity launchers'); },
+    onCustomEvent(name, handler) { customEvents.set(name, handler); },
+    emitCustomEvent(name, event) {
+      if (customEvents.has(name)) return customEvents.get(name)(event);
+      if (name !== 'admin:open') throw new Error('::bots must not collect activity launchers');
+    },
     sendMultiChatboxPrompt() { throw new Error('Plan setup must stay in the main Configure window'); },
   };
+  require('../plugins/bots/runtime/DeploymentService.PlayerBots').registerBotDeployment({ api, runtime, brainRegistry });
   registerBotsInterface({ api, runtime, brainRegistry, storage });
   const player = fakePlayer();
   const button = (buttonId, slot) => {
@@ -366,4 +371,174 @@ test('copying skills uses base levels and normalized names', () => {
   const core = { Skill: { values: () => [attack, woodcutting, bad] } };
   assert.deepEqual(_test.ownerSkillOverrides(player, core), { attack: 72, woodcutting: 99 });
   assert.equal(_test.ownerSkillOverrides({}, core), null);
+});
+
+function adminFixture({ activities = [], collectLaunchers } = {}) {
+  const attack = { getName: () => 'Attack' };
+  const runtime = { entriesByUsername: new Map() };
+  const brainRegistry = { activities, byId: new Map(activities.map(activity => [activity.id, activity])) };
+  const commands = new Map(), actions = [], interfaces = [], launches = [], customEvents = new Map();
+  const api = {
+    core: { PlayerRights: { DEVELOPER: DEVELOPER_RIGHT }, Skill: { values: () => [attack] } },
+    registerCommand(name, handler, rights, description) {
+      assert.equal(commands.has(name), false, `::${name} must have one handler`);
+      commands.set(name, { handler, rights, description });
+    },
+    registerCustomInterface(definition) { interfaces.push(definition); },
+    onInterfaceActionButton(buttons, handler) { actions.push({ buttons, handler }); },
+    onCustomEvent(name, handler) { customEvents.set(name, handler); },
+    emitCustomEvent(name, event) {
+      if (customEvents.has(name)) return customEvents.get(name)(event);
+      if (name === 'bots:collect-launchers') collectLaunchers?.(event, { runtime, launches });
+    },
+  };
+  require('../plugins/bots/runtime/DeploymentService.PlayerBots').registerBotDeployment({api,runtime,brainRegistry});
+  registerBotsInterface({ api, runtime, brainRegistry });
+  return { api, runtime, brainRegistry, commands, actions, interfaces, launches, customEvents };
+}
+
+function handlerFor(actions, componentUid) {
+  const action = actions.find(candidate => candidate.buttons.includes(componentUid));
+  assert.ok(action, `No handler registered for ${componentUid}`);
+  return action.handler;
+}
+
+test('the admin bot catalogue shares routine definitions and counts queued native deployments', () => {
+  const f = adminFixture({ activities: routines });
+  f.api.core.PlayerRights.hasAdminRights = () => true;
+  f.api.core.PluginManager = { playerHasCommandRights: () => true };
+  const { trackNativeDeployment } = require('../plugins/bots/runtime/Deploy.PlayerBots');
+  const nativeBot = { isRegistered: () => false };
+  trackNativeDeployment(f.runtime, nativeBot, { getAddPlayerQueue: () => [nativeBot] });
+  f.runtime.entriesByUsername.set('Routine bot', { adminDeployedActivityId: 'oak_trees' });
+  const event = { actor: fakePlayer(), action: 'catalogue' };
+  f.api.emitCustomEvent('admin:bots', event);
+  assert.equal(event.managed, 2);
+  assert.deepEqual(new Set(event.launchers.map(launcher => launcher.key)),
+    new Set(['routine:oak_trees', 'routine:normal_trees', 'routine:varrock_trainer']));
+  const trainer = event.launchers.find(launcher => launcher.key === 'routine:varrock_trainer');
+  assert.equal(trainer.name, 'Plugin Trainer');
+  assert.equal(trainer.allowLocation, false);
+  assert.equal(trainer.allowSkills, true);
+});
+
+test('::bots browser opens the standalone saved setups and plans with AdminPanel enabled', () => {
+  const f = adminFixture({ activities: routines });
+  const player = fakePlayer();
+  let adminOpens = 0;
+  f.customEvents.set('admin:open', event => { event.handled = true; adminOpens++; });
+  const command = f.commands.get('bots').handler;
+  command({ player, parts: ['bots'] });
+  assert.equal(adminOpens, 1);
+  assert.equal(player.interfaceId, -1);
+
+  command({ player, parts: ['bots', 'browser', 'oak'] });
+  assert.equal(adminOpens, 1);
+  assert.equal(player.interfaceId, Layout.GROUP_ID);
+  assert.equal(player.strings.get(Layout.uid(Layout.BROWSER_COMPONENT.SEARCH_INPUT)), 'oak');
+  const { tabLayouts } = _test.sessions.get(player);
+  assert.ok(tabLayouts[0].length > 0, 'the Saved tab has available routines');
+  assert.ok(tabLayouts[2].length > 0, 'the deployment plans still have a command');
+});
+
+test('admin Bots tab uses the same launcher options and deployment bounds and rechecks permissions', () => {
+  const fixture = adminFixture({ collectLaunchers(event, { launches }) {
+    event.register({ id: 'test-activity', name: 'Test activity', description: 'Activity bots.',
+      setupFields: [{ id: 'role', label: 'Role', choices: [{value:'attack',label:'Attack'},{value:'defend',label:'Defend'}] }],
+      deploy({runtime,count,location,setup,skillOverrides}) {
+        launches.push({count,location,setup,skillOverrides});
+        const spawned = Array.from({length:count},(_,i)=>`AdminBot${i}`);
+        spawned.forEach(username=>runtime.entriesByUsername.set(username,{player:{isPlayerBot:()=>true,getUsername:()=>username}}));
+        return {spawned};
+      },
+    });
+  } });
+  let allowed = true;
+  fixture.api.core.PlayerRights.hasAdminRights = () => allowed;
+  fixture.api.core.PluginManager = {playerHasCommandRights:()=>allowed};
+  const originalEmit = fixture.api.emitCustomEvent;
+  fixture.api.emitCustomEvent = (name,event) => fixture.customEvents.has(name)
+    ? fixture.customEvents.get(name)(event) : originalEmit(name,event);
+  const actor = fakePlayer(); actor.getSkillManager=()=>({getMaxLevel:()=>73});
+  const Bots = require('../plugins/tools/adminpanel/Bots.AdminPanel');
+  const state = {};
+  assert.ok(Bots.rows(fixture.api,actor,state).some(row=>row.name==='Test activity'));
+  Bots.act(fixture.api,actor,state,'activity:test-activity');
+  Bots.act(fixture.api,actor,state,'count',2);
+  Bots.act(fixture.api,actor,state,'location');
+  Bots.act(fixture.api,actor,state,'levels');
+  Bots.act(fixture.api,actor,state,'field:role');
+  assert.match(Bots.act(fixture.api,actor,state,'deploy'),/Spawned 2\/2/);
+  assert.deepEqual(fixture.launches[0],{count:2,location:{x:3200,y:3201,z:0},setup:{role:'defend'},skillOverrides:{attack:73}});
+  assert.match(Bots.act(fixture.api,actor,state,'count',0),/Choose 1-/);
+  const invalid = {actor,action:'deploy',key:'activity:test-activity',count:101};
+  fixture.customEvents.get('admin:bots')(invalid);
+  assert.equal(invalid.result.ok,false);
+  assert.equal(fixture.launches.length,1);
+  allowed=false;
+  assert.match(Bots.act(fixture.api,actor,state,'deploy'),/permission/);
+  assert.equal(fixture.launches.length,1);
+});
+
+test('::bots routes to the admin Bots tab when AdminPanel handles the request', () => {
+  const f=adminFixture();const player=fakePlayer();
+  const emit=f.api.emitCustomEvent;
+  f.api.emitCustomEvent=(name,event)=>{
+    if(name==='admin:open'){assert.equal(event.player,player);assert.equal(event.tab,'bots');event.handled=true;}
+    else emit(name,event);
+  };
+  f.commands.get('bots').handler({player,parts:['bots']});
+  assert.equal(player.interfaceId,-1,'the old standalone browser was not opened');
+});
+
+
+test('Bots offers built-in spawning and live controls with no custom routines or contributed launchers', () => {
+  const {registerAdminBotControls}=require('../plugins/bots/runtime/AdminControls.PlayerBots');
+  const Bots=require('../plugins/tools/adminpanel/Bots.AdminPanel');
+  const f=adminFixture({activities:[{id:'pvp',mode:'pvp'},{id:'follow_owner',mode:'follow_owner'},{id:'roam',mode:'roaming'}]});
+  const calls=[];let permitted=true;
+  f.api.core.PlayerRights.hasAdminRights=()=>true;
+  f.api.core.PluginManager={playerHasCommandRights:(_player,command)=>command==='admin'||permitted};
+  f.api.core.Location=class {constructor(x,y,z){Object.assign(this,{x,y,z});}};
+  f.runtime.hasControllerForPlayer=()=>false;
+  f.runtime.entriesByUsername.set('ExistingBot',{player:{isPlayerBot:()=>true,isRegistered:()=>true,getUsername:()=> 'ExistingBot',getDisplayName:()=> 'Existing Bot'},state:{mode:'pvp'}});
+  const handlers={
+    findBrainActivity:mode=>f.brainRegistry.activities.find(a=>a.mode===(mode==='recruit'?'follow_owner':mode)),
+    spawnBot(args){
+      calls.push(args);
+      const username=`SpawnedBot${calls.length}`,bot={getUsername:()=>username,isPlayerBot:()=>true,isRegistered:()=>false};
+      f.runtime.entriesByUsername.set(username,{player:bot});args.spawnedBots.push(bot);
+    },
+    selfBot:args=>calls.push({self:args}),behavior:args=>calls.push({behavior:args}),rename:args=>calls.push({rename:args}),info() {},
+  };
+  registerAdminBotControls({api:f.api,runtime:f.runtime,brainRegistry:f.brainRegistry},handlers);
+  const emit=f.api.emitCustomEvent;
+  f.api.emitCustomEvent=(name,event)=>f.customEvents.has(name)?f.customEvents.get(name)(event):emit(name,event);
+  const actor=fakePlayer(),state={};
+  const rows=Bots.rows(f.api,actor,state);
+  assert.ok(rows.some(row=>row.name==='Recruit / follow me'));
+  assert.ok(rows.some(row=>row.name==='Autonomous bot'));
+  assert.ok(rows.some(row=>row.name==='Pvp bot'));
+  state.botConfig.category='active';
+  assert.ok(Bots.rows(f.api,actor,state).some(row=>row.name==='Existing Bot'));
+  state.botConfig.category='spawn';
+  assert.ok(!rows.some(row=>/No bot/.test(row.name)));
+  Bots.act(f.api,actor,state,'activity:player-bot.recruit');
+  Bots.act(f.api,actor,state,'count',2);
+  assert.match(Bots.act(f.api,actor,state,'deploy'),/Spawned 2\/2/);
+  assert.deepEqual(calls.slice(0,2).map(call=>call.requestedMode),['recruit','recruit']);
+  assert.equal(f.runtime.entriesByUsername.get('SpawnedBot1').adminDeployedLauncherId,'player-bot.recruit');
+  Bots.act(f.api,actor,state,'manage:ExistingBot');
+  assert.equal(state.botConfig.view,'manage');
+  assert.equal(state.botConfig.bot,'ExistingBot');
+  assert.deepEqual(Bots.rows(f.api,actor,state),[],'management actions belong to their own form');
+  Bots.act(f.api,actor,state,'control:behavior:manual');
+  assert.equal(calls.at(-1).behavior.username,'ExistingBot');
+  assert.equal(calls.at(-1).behavior.requestedMode,'manual');
+  Bots.act(f.api,actor,state,'control:rename','New Name');assert.equal(calls.at(-1).rename.displayName,'New Name');
+  const count=calls.length;permitted=false;
+  assert.match(Bots.act(f.api,actor,state,'control:rename','Blocked'),/permission/);
+  assert.equal(calls.length,count);
+  permitted=true;f.runtime.entriesByUsername.delete('ExistingBot');
+  assert.match(Bots.act(f.api,actor,state,'control:behavior:manual'),/no longer online/);
 });

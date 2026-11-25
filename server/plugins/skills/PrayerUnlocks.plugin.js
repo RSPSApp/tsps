@@ -233,11 +233,13 @@ function prayerRequirements(event) {
 }
 
 /** Admin command: grant a scroll prayer without going through the scroll. */
-function unlockPrayer({ player, prayer }) {
+function unlockPrayer(event) {
+  const { player, prayer } = event;
   const scroll = lockingScroll(prayer);
   if (!scroll) return;
   player.setAttribute(scroll.attribute, true);
   sendUnlock(player, scroll);
+  event.handled = true;
 }
 
 /**

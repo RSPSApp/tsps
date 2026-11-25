@@ -1201,6 +1201,10 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   }
 
   /** Route item: breaking the sphere is the quest's Goblin Village teleport. */
+  function describeTeleports({ list }) {
+    list.push({ path: ["Items", "Goblin village sphere"], key: "goblin-village", name: "Goblin Village (Another Slice of H.A.M. route)", location: VILLAGE_LANDING.clone() });
+  }
+
   function breakRouteSphere(event) {
     const { player } = event;
     if (stageOf(player) !== STAGE_SCRIBE) return false;
@@ -1679,6 +1683,7 @@ module.exports = function registerAnotherSliceOfHAMQuest(api) {
   api.onItemOnObject(handleItemOnObject, { noted: false });
   api.onItemOnNpc(handleItemOnNpc, { noted: false });
   api.onItemAction("Ancient mace", { Wield: wieldAncientMace });
+  api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   api.onItemAction("Goblin village sphere", { Break: breakRouteSphere });
   api.onItemDropPolicy(handleItemDropPolicy);
   api.onObjectInteraction(handleObjectInteraction);

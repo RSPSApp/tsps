@@ -328,6 +328,11 @@ function login({ player }) {
   player.getPacketSender().sendVarbit(choiceVarbit, savedChoice(player));
 }
 
+function describeTeleports({ list }) {
+  for (const obelisk of data.obelisks) list.push({ path: ["Wilderness obelisks"], key: String(obelisk.id),
+    name: `${obelisk.level} (pad centre)`, tile: [obelisk.corner[0] + 2, obelisk.corner[1] + 2, 0] });
+}
+
 module.exports = {
   name: "WildernessObelisks",
   description: "The six Wilderness obelisks and the house obelisk: activating one teleports everyone on its pad (the house one, its user) to a random or chosen obelisk, with Set Destination after the hard diary.",
@@ -337,6 +342,7 @@ module.exports = {
     api = pluginApi;
     core = api.core;
     data = load();
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     ObstacleRunner.init(api);
     choiceVarbit = core.CacheDefinitions.getVarbitId(data.choiceVarbit);
     if (choiceVarbit === null || choiceVarbit === undefined) throw new Error(`[WildernessObelisks] unknown varbit ${data.choiceVarbit}`);

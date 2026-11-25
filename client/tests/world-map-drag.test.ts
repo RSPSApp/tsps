@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { applyPendingWorldMapDrag, handleWorldMapDragInput } from "../game/worldMap/WorldMapInput";
+import { applyPendingWorldMapDrag, handleWorldMapDragInput, resolveWorldMapClickCoord } from "../game/worldMap/WorldMapInput";
 
 /** The world map widget (content type 1400) and an edge arrow ("Focus on ...") drawn over it. */
 const MAP = { uid: (595 << 16) | 7, type: 0, contentType: 1400, width: 400, height: 300, _absX: 0, _absY: 0, _absWidth: 400, _absHeight: 300 };
@@ -71,3 +71,23 @@ const frame = (state: any, hits: any[], x: number, y: number, isNewClick: boolea
 }
 
 console.log("world map drag: ok");
+
+
+// Crossing the drag threshold cancels a click even when the pointer returns.
+{
+    const state=holder();
+    frame(state,[MAP],200,150,true,true);
+    frame(state,[MAP],210,150,false,true);
+    frame(state,[MAP],200,150,false,true);
+    assert.equal(state.worldMapClickStartMouseX,-1);
+}
+
+// Submaps translate display tiles back into their source world coordinate and plane.
+{
+    const state=holder();
+    state.worldMapState.currentArea={coord:(x:number,y:number)=>({x:x-400,y:y+6400,plane:2})};
+    assert.deepEqual(resolveWorldMapClickCoord(state,MAP,208,146),{x:2802,y:9601,plane:2});
+    const scaled={...MAP,_absWidth:800,_absHeight:600};
+    assert.deepEqual(resolveWorldMapClickCoord(state,scaled,416,292),{x:2802,y:9601,plane:2});
+    assert.equal(resolveWorldMapClickCoord(state,MAP,401,150),undefined);
+}

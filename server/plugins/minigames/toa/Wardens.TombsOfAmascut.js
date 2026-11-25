@@ -31,7 +31,8 @@
  * hitpoints: 100, the 20% heal and 5% for each of four siphon sets.
  *
  * Captures:
- * - Ready up: 1852 19851 (first), 19872 (again). Start: 14 3586 (Osmumten's 5546, gone 2 later).
+ * - Ready up: 1852 19849 (1/3), 19851 (2/3, then the second member's box), 19872 (Begin again).
+ *   Start: 14 3586 (Osmumten's 5546, gone 2 later).
  * - Orbs: 14 3588-3632: spawn every 2 ticks from the start + 2; paths and order tile by tile; 10
  *   ticks to arrive; a player on the tile by the obelisk takes 3 and no orb comes (3590-3610).
  * - Charging: bars in 14 and 1759: 5/3% a tick, 3% an orb; Ancient Haste 2.43% and about 4% (fit,
@@ -100,7 +101,7 @@ const ORB_PATHS = {
   tumeken: [[[3819, 5154]], [[3811, 5154], [3813, 5152], [3819, 5152]], [[3811, 5154], [3813, 5156], [3819, 5156]]],
 };
 const READY_TIMEOUT = 200;
-const READY_FIRST = "The challenge will either begin once everyone else in your party is ready or after 2 minutes have passed from the first ready up.";
+const READY_NOTICE = "The challenge will either begin once everyone else in your party is<br>ready or after 2 minutes have passed from the first ready up.";
 const READY_WAITING = "The challenge will begin once everyone else in your party is ready.";
 const WARDEN_POINTS = { OBELISK: 1.5, WARDEN: 2, CORE: 0, FINAL: 2.5 };
 const HITPOINTS = { OBELISK: 260, SHIELD: 140, CORE: 4500, FINAL: 880 };
@@ -458,19 +459,30 @@ class WardensRoom extends WardenRoomBase {
   // -------------------------------------------------------------- the start
 
   /**
-   * Osmumten's Begin: the first to ready up starts the two minutes and is told so. Anyone else,
-   * or the first again, hears the shorter line. Everyone still in the raid has to be ready.
+   * Osmumten's Begin: the first ready-up starts the timer. Each new ready-up while anyone
+   * is unready sends a room count followed by a box for that member. Repeating Begin while
+   * anyone is still unready shows the short box.
    */
   setReady(player) {
     if (this.stage !== Raid.STAGE.IDLE) return;
-    const first = this.readyDeadline < 0;
-    this.ready.add(player);
-    if (first) this.readyDeadline = Shared.cycle() + READY_TIMEOUT;
-    if (this.raid.players.every((member) => this.ready.has(member))) {
+    const alreadyReady = this.ready.has(player);
+    if (!alreadyReady) {
+      this.ready.add(player);
+      if (this.readyDeadline < 0) this.readyDeadline = Shared.cycle() + READY_TIMEOUT;
+    }
+
+    const party = this.raid.players;
+    const readyCount = party.filter((member) => this.ready.has(member)).length;
+    if (readyCount === party.length) {
       this.begin();
       return;
     }
-    Shared.statement(player, first ? READY_FIRST : READY_WAITING);
+    if (alreadyReady) {
+      Shared.statement(player, READY_WAITING);
+      return;
+    }
+    this.message(`${readyCount}/${party.length} party members are now ready.`);
+    Shared.statement(player, READY_NOTICE);
   }
 
   begin() {

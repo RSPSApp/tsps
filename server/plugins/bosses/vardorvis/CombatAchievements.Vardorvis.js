@@ -59,10 +59,11 @@ function judge(fight, ticks) {
 /**
  * Axe Enthusiast times the three-minute enrage, and fails the first time the player leaves the
  * middle 5x5 at any point of the fight: rsprox 1156 fails it at about 44% of his hitpoints,
- * before the enrage ("You have failed Axe Enthusiast: You left the inner 25 tiles.").
+ * before the enrage ("You have failed Axe Enthusiast: You left the inner 25 tiles."), and the
+ * awakened kill sends the same line (1156 line 1038186); judge() still never completes it awakened.
  */
 function tick(fight) {
-  if (fight.awakened || !fight.engaged || fight.over) return;
+  if (!fight.engaged || fight.over) return;
   if (!fight.leftAxeCentre) {
     const [x, y] = Common.siteTile(fight.session.area, fight.player.getLocation());
     const [centreX, centreY] = Common.data.axes.centre;

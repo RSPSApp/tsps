@@ -125,7 +125,7 @@ test('Perfect Vardorvis fails once a kill, at the first damage, awakened too', (
     }
 });
 
-test('Axe Enthusiast fails the first time the player leaves the middle 5x5, before the enrage too', () => {
+test('Axe Enthusiast fails the first time the player leaves the middle 5x5, before the enrage and awakened too', () => {
     const f = fixture();
     const [cx, cy] = Common.data.axes.centre;
     f.fight.engaged = true;
@@ -144,7 +144,8 @@ test('Axe Enthusiast fails the first time the player leaves the middle 5x5, befo
     awakened.fight.engaged = true;
     awakened.player.location = new Location(cx + 4, cy);
     CombatAchievements.tick(awakened.fight);
-    assert.equal(awakened.failed.length, 0, 'not an awakened task');
+    assert.deepEqual(awakened.failed.map(({ task, reason }) => [task, reason]),
+        [['Axe Enthusiast', 'You left the inner 25 tiles.']], 'rsprox 1156 fails it awakened too');
 });
 
 test('the dash comes 30 ticks in and every 30 after (25 awakened), above 570 hitpoints too', t => {

@@ -175,7 +175,7 @@ Vardorvis is counted by event (`data/monsters.json` countedByEvent), so the kill
 - `CombatAchievements.Vardorvis.js` judges the three speed tasks (under 1:15, 1:05, 0:55, off a slayer task), Vardorvis Sleeper (an awakened kill), Perfect Vardorvis (five perfect kills in one visit) and Axe Enthusiast (three minutes of the enrage without leaving the middle 5x5).
 - Failures go through `combat-achievements:failed`, once a kill, as the player's settings allow (1156):
   - "You have failed Perfect Vardorvis: You took damage from Vardorvis." at the first damage that spoils the kill (awakened too).
-  - "You have failed Axe Enthusiast: You left the inner 25 tiles." the first time the player leaves the middle 5x5, at any point of the fight (1156 fails it at about 44% of his hitpoints, before the enrage).
+  - "You have failed Axe Enthusiast: You left the inner 25 tiles." the first time the player leaves the middle 5x5, at any point of the fight, awakened too (1156 fails it at about 44% of his hitpoints, before the enrage, and again in its awakened kill).
 - Adept and Master finish from the count.
 - "Kill Awakened Vardorvis." no longer reads as a plain kill-count task: "awakened" is now a condition word in `Data.CombatAchievements.js`, which also keeps the other DT2 bosses' Sleeper tasks from completing on a normal kill.
 

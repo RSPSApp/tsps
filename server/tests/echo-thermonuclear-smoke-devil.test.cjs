@@ -159,6 +159,15 @@ test("a shot lands 5 ticks after it is fired: a pool and the right prayer decide
   d.run(11);
   assert.deepEqual(d.log.filter((e) => e[0] === 11 && e[1] === "hit").map((e) => e.slice(2)), [["ranged", 0]]);
   assert.equal(ECHO.orbs.missChance, 0.14);
+  // A bare face (the Slayer rule's verdict on the hit roll): never a miss, always the maximum, then the
+  // pool and prayer rule (Wiki, Thermonuclear smoke devil/Strategies: "even more damage").
+  for (const [prayer, expected] of [["magic", 62], ["ranged", 31]]) {
+    const e = setup({ playerAt: [2370, 9450], prayer });
+    e.fight.random = () => 0;
+    e.fight.core = { ...e.fight.core, PluginManager: { emitCombatHitRoll: (roll) => { roll.forceAccurate = true; roll.forceMaxHit = true; } } };
+    e.run(11);
+    assert.deepEqual(e.log.filter((x) => x[0] === 11 && x[1] === "hit").map((x) => x[3]), [expected], `bare face, ${prayer} prayer`);
+  }
 });
 
 test("the special: damage fixed at launch by distance, its flight as recorded, lands and the Echo prays against the last style", () => {

@@ -252,7 +252,16 @@ class EchoFight {
     const hit = new PendingHit(this.boss, this.player, styleMethod(style), { delay: 0, rollAccuracy: false });
     // Wiki: only the special triggers Vengeance.
     hit.setTriggersVengeance?.(false);
-    if (this.random() < ECHO.orbs.missChance) {
+    // The hit roll's own rules, as every boss hit asks them: without a facemask the Slayer rule makes
+    // it accurate and the maximum (Wiki, Thermonuclear smoke devil/Strategies: the boss "will deal even
+    // more damage and drain stats"; the drain follows on landing).
+    const roll = { attacker: this.boss, target: this.player, combatType: hit.getCombatType?.(), forceAccurate: false, forceMaxHit: false, bypassProtectionPrayer: true };
+    this.core.PluginManager?.emitCombatHitRoll?.(roll);
+    if (roll.forceMaxHit) {
+      hit.markProtectionBypassed();
+      for (const part of hit.getHits()) part.setDamage(Math.floor(ECHO.orbs.damage.max * multiplier));
+      hit.updateTotalDamage();
+    } else if (!roll.forceAccurate && this.random() < ECHO.orbs.missChance) {
       hit.markProtectionBypassed();
       for (const part of hit.getHits()) {
         part.setDamage(0);

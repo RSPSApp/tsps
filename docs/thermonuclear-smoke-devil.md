@@ -229,8 +229,13 @@ bare face takes the Echo's shots whole (`Equipment.Slayer.js`).
 - Vengeance: triggered only by the special.
 - Its prayer against melee: the Wiki's rule covers every style; only ranged and magic were recorded
   against it, and the quarter damage is the recorded magic figure.
-- The fight without a facemask: no capture. The normal boss's facemask rule (an unprotected hit of 15
-  and stat drains) applies, never lowering a bigger hit.
+- The fight without a facemask: no capture. [Thermonuclear smoke devil/Strategies](https://oldschool.runescape.wiki/w/Thermonuclear_smoke_devil/Strategies):
+  a facemask, gas mask or Slayer helmet is "mandatory when fighting the boss, or it will deal even more
+  damage and drain stats". The Echo's shots take the Slayer rule's verdict on the hit roll as every boss
+  hit does: a bare face is never missed and takes the maximum (62, then the pool and prayer rule), and
+  its stats drain on landing; the rule's unprotected hit (15) never lowers a bigger one.
+- Not implemented here (nor for the normal boss): the page's damage "from the smoke" itself, apart
+  from the boss's attacks.
 
 ## Not verified
 

@@ -1759,6 +1759,7 @@ module.exports = function registerRoyalTroubleQuest(api) {
   api.persistAttribute(KNOW_TEENS_ATTRIBUTE);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [GIANT_SEA_SNAKE_NPC_ID],
     key: "royal_trouble",
     name: "Royal Trouble",
     varpId: 730,

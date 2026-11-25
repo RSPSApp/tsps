@@ -6,11 +6,16 @@
  */
 const Lairs = require("./giantlairs/Common.GiantLairs");
 
+function describeEncounters({ npcIds }) {
+  for (const lair of Lairs.lairs) npcIds.add(lair.boss);
+}
+
 module.exports = {
   name: "GiantLairs",
   description: "Obor and Bryophyta: their key-locked lairs, fights, chests and giant bones.",
   register(api) {
     Lairs.init(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     require("./giantlairs/Lair.GiantLairs")(api);
     require("./giantlairs/Obor.GiantLairs")(api);
     require("./giantlairs/Bryophyta.GiantLairs")(api);

@@ -499,8 +499,14 @@ function enterPortal(event) {
   return room instanceof SotetsegRoom ? room.leaveRealm(event.player) : false;
 }
 
+/** Combat forms only; presentation forms and room scenery do not qualify. */
+function describeEncounters({ npcIds }) {
+  for (const ids of Object.values(NPC_BY_MODE)) npcIds.add(ids.FIGHTING);
+}
+
 module.exports = function registerSotetseg(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("SOTETSEG", SotetsegRoom);
   Shared.onObject(api, OBJECT.PORTAL, enterPortal);
 };

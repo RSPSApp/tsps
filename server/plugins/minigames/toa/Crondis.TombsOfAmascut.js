@@ -660,8 +660,15 @@ function crocodileStruck(event) {
   if (state && event.player) state.attackers.add(event.player);
 }
 
+/** Actual combat forms; cinematic actors and projectile/scenery helpers stay excluded. */
+function describeEncounters({ npcIds }) {
+  const N = Shared.core().NpcIdentifiers;
+  for (const id of [N.CROCODILE_5]) npcIds.add(id);
+}
+
 module.exports = function registerCrondisPuzzle(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("CRONDIS_PUZZLE", CrondisPuzzleRoom);
   Raid.registerRaidItems(CONTAINER);
   Shared.onObject(api, "Waterfall", useWaterfall);

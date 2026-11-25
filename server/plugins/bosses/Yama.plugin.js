@@ -15,12 +15,18 @@ const Judge = require("./yama/Judge.Yama");
 const Lockbox = require("./yama/Lockbox.Yama");
 const Dossier = require("./yama/Dossier.Yama");
 
+function describeEncounters({ npcIds }) {
+  npcIds.add(Common.data.npcs.yama);
+  npcIds.add(Common.data.npcs.judge);
+}
+
 module.exports = {
   name: "Yama",
   description: "Yama at the bottom of the Chasm of Fire: the Voice of Yama, a solo instance, the three-phase fight with the Judge of Yama, and the loot.",
   members: true,
   register(api) {
     Common.init(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Domain.attachDomain(api);
     Voice.attachVoice(api);
     Throne.attachThrone(api);

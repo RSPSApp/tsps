@@ -18,12 +18,18 @@ const Lobby = require("./hueycoatl/Lobby.Hueycoatl");
 const CombatAchievements = require("./hueycoatl/CombatAchievements.Hueycoatl");
 const Commands = require("./hueycoatl/Commands.Hueycoatl");
 
+function describeEncounters({ npcIds }) {
+  const { HEAD, TAIL, BODY } = Shared.NPC;
+  for (const id of [HEAD, TAIL, BODY]) npcIds.add(id);
+}
+
 module.exports = {
   name: "Hueycoatl",
   description: "The Hueycoatl in the Darkfrost, Varlamore: a public or private fight with five body segments, Rain Fire, pillars, the half-health shield and a final phase.",
   members: true,
   register(api) {
     Shared.init(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Session.init(api);
     Attacks.attach(api);
     Pillars.attach(api);

@@ -1320,11 +1320,18 @@ function chestCount(request) {
   if (request.category === "Barrows Chests") request.count = Number(request.player.getAttribute(ATTRIBUTE)?.chests) || 0;
 }
 
+/** Playable opponents from the same tables that start each encounter. */
+function describeEncounters({ npcIds }) {
+  for (const brother of BROTHERS) npcIds.add(brother.npcId);
+  for (const id of CREATURES) npcIds.add(id);
+}
+
 module.exports = {
   name: "Barrows",
   description: "Adds the Barrows minigame: the six brothers' crypts and puzzle door, the prayer drain, the reward chest, the Barrows minimap, the strange old lockpick on the tunnel doors and the Strange Old Man's condensed tunnel warnings.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     World = api.getWorld();
     RegionManager = api.getRegionManager();
     TaskManager = api.getTaskManager();

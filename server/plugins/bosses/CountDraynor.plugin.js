@@ -151,10 +151,16 @@ function countDied({ npc }) {
   // The owner stays in the basement and can leave by its ordinary staircase.
 }
 
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  npcIds.add(pluginApi.core.NpcIdentifiers.COUNT_DRAYNOR);
+}
+
 module.exports = {
   name: "CountDraynor",
   description: "Count Draynor's coffin fight: the coffin raises him, with regeneration, garlic weakness and his hit modifiers.",
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     pluginApi = api;
     api.onCustomEvent("ladders:climb", climbManorStairs);
     api.onCustomEvent("count-draynor:arriving", arriving);

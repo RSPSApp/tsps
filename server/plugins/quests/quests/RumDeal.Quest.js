@@ -687,6 +687,7 @@ module.exports = function registerRumDealQuest(api) {
   api.persistAttribute(ATTRIBUTES.SPIRIT, 0);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [NPCS.EVIL_SPIRIT],
     key: "rum_deal",
     name: "Rum Deal",
     varpId: VARP_QUEST,

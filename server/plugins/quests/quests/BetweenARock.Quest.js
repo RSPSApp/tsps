@@ -1470,6 +1470,7 @@ module.exports = function registerBetweenARockQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [ARZINIAN_AVATAR_OF_STRENGTH_2, ARZINIAN_AVATAR_OF_STRENGTH_3, ARZINIAN_AVATAR_OF_RANGING_2, ARZINIAN_AVATAR_OF_RANGING_3, ARZINIAN_AVATAR_OF_MAGIC_2, ARZINIAN_AVATAR_OF_MAGIC_3],
     key: "between_a_rock",
     name: "Between a Rock...",
     varpId: VARP_DWARFROCK,

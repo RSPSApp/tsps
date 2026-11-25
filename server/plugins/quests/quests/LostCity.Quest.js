@@ -478,6 +478,7 @@ module.exports = function registerLostCityQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [TREE_SPIRIT_NPC_ID],
     key: "lost_city",
     name: "Lost City",
     varpId: VARP_LOST_CITY,

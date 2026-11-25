@@ -1101,6 +1101,7 @@ module.exports = function registerGettingAheadQuest(api) {
   api.persistAttribute(FINISH_PENDING_ATTRIBUTE, 0);
   api.persistAttribute(TANNING_UNLOCKED_ATTRIBUTE, 0);
   quest = registerQuest(api, {
+    combatNpcIds: () => [HEADLESS_BEAST_NPC_ID],
     key: "getting_ahead",
     name: "Getting Ahead",
     varpId: VARP_GETTING_AHEAD,

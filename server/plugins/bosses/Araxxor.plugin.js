@@ -6,6 +6,7 @@
  * araxxor table when the corpse is harvested or destroyed. Her Combat Achievements are decided
  * by the fight (CombatAchievements.Araxxor.js).
  */
+const Shared = require("./araxxor/Shared.Araxxor");
 const Area = require("./araxxor/Area.Araxxor");
 const Combat = require("./araxxor/Combat.Araxxor");
 const Specials = require("./araxxor/Specials.Araxxor");
@@ -16,11 +17,16 @@ const Commands = require("./araxxor/Commands.Araxxor");
 const CombatAchievements = require("./araxxor/CombatAchievements.Araxxor");
 const Scoreboard = require("./araxxor/Scoreboard.Araxxor");
 
+function describeEncounters({ npcIds }) {
+  npcIds.add(Shared.BOSS_ID);
+}
+
 module.exports = {
   name: "Araxxor",
   description: "Araxxor in the Morytania spider lair: a solo instance with eggs, acid specials, the 25% enrage, a harvestable corpse and Combat Achievements.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Combat.attach(api);
     Specials.attach(api);
     Minions.attach(api);

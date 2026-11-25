@@ -275,6 +275,11 @@ function hesporiProcess({ player }) {
         player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(40 + Math.floor(Math.random() * 11), core.HitMask.RED)]);
     }
 }
+function describeEncounters({ npcIds }) {
+    npcIds.add(core.NpcIdentifiers.HESPORI);
+    npcIds.add(core.NpcIdentifiers.HESPORI_2);
+}
+
 function keepQuestHesporiEngaged(fight) {
     if (!fight?.quest || !fight.boss || fight.boss.getHitpoints() <= 0) return false;
     fight.boss.getCombat().getLastAttack().reset();
@@ -568,4 +573,4 @@ function attachEcho(pluginApi) {
 
 Object.assign(module.exports, { attachEcho, echoPatchValue, echoPatchInteraction, startEcho });
 
-Object.assign(module.exports, { formatFightTicks, VINES_MESSAGE, warningInterfaceChanged, reentryAction, questHesporiDeath, challengeHespori, harvestHespori, HesporiCombat, hesporiHitRoll, hesporiCanAttack, hesporiHit, hesporiDamage, hesporiInput, hesporiProcess, keepQuestHesporiEngaged, hesporiLoot, hesporiLogout, hesporiDeathDrop, hesporiPlayerDeath, hesporiNpc, hesporiCave, wipeForGroupIronman });
+Object.assign(module.exports, { describeEncounters, formatFightTicks, VINES_MESSAGE, warningInterfaceChanged, reentryAction, questHesporiDeath, challengeHespori, harvestHespori, HesporiCombat, hesporiHitRoll, hesporiCanAttack, hesporiHit, hesporiDamage, hesporiInput, hesporiProcess, keepQuestHesporiEngaged, hesporiLoot, hesporiLogout, hesporiDeathDrop, hesporiPlayerDeath, hesporiNpc, hesporiCave, wipeForGroupIronman });

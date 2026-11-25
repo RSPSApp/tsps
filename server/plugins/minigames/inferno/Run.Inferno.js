@@ -805,9 +805,16 @@ function completions(player) {
   return Number(player.getAttribute(ATTR_COMPLETIONS) ?? 0);
 }
 
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  for (const id of Object.values(ids())) npcIds.add(id);
+  const N = core.NpcIdentifiers;
+  for (const id of [N.JAL_AKREK_MEJ, N.JAL_AKREK_XIL, N.JAL_AKREK_KET, N.YT_HURKOT_2, N.YT_HURKOT_3]) npcIds.add(id);
+}
+
 module.exports = {
   ATTR_WAVE, ATTR_SUPPORTS, ATTR_COMPLETIONS, TZHAAR_KET_KEH,
-  init, spawn, say, tile, cycle, addJad, sessionOf,
+  init, spawn, say, tile, cycle, addJad, sessionOf, describeEncounters,
   enter, leave, completions, setNextWave, processRun, defeatedLine, runDeath, keepItemsInRun, noTeleportOut, guardPassives, supportsCollapse, resumeRun, runLogout,
   tryRevive, failedRunTokkul, monsterHitpoints, createArea,
 };

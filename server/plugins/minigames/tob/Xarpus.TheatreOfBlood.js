@@ -612,8 +612,14 @@ function rangedOrMagicWeapon(player) {
   return `${/^[aeiou]/i.test(name) ? "an" : "a"} ${name}`;
 }
 
+/** Combat forms only; presentation forms and room scenery do not qualify. */
+function describeEncounters({ npcIds }) {
+  for (const ids of Object.values(NPC)) npcIds.add(ids.FIGHTING);
+}
+
 module.exports = function registerXarpus(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("XARPUS", XarpusRoom);
 };
 

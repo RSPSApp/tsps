@@ -1116,8 +1116,15 @@ function iceSlows(event) {
   }
 }
 
+/** Actual combat forms; cinematic actors and projectile/scenery helpers stay excluded. */
+function describeEncounters({ npcIds }) {
+  const N = Shared.core().NpcIdentifiers;
+  for (const id of [N.AKKHA, N.AKKHA_2, N.AKKHA_3, N.AKKHA_4, N.AKKHA_5, N.AKKHA_6, N.AKKHA_7, N.AKKHAS_SHADOW]) npcIds.add(id);
+}
+
 module.exports = function registerAkkha(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("HET_BOSS", AkkhaRoom);
   api.onNpcHitModify(filterDamage);
   api.onNpcBeforeDeath(akkhaDowned);

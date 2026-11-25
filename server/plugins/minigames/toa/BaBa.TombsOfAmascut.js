@@ -920,8 +920,15 @@ function certainHits(roll) {
   }
 }
 
+/** Actual combat forms; cinematic actors and projectile/scenery helpers stay excluded. */
+function describeEncounters({ npcIds }) {
+  const N = Shared.core().NpcIdentifiers;
+  for (const id of [N.BA_BA, N.BABOON]) npcIds.add(id);
+}
+
 module.exports = function registerBaBa(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("APMEKEN_BOSS", BaBaRoom);
   api.onNpcBeforeDeath(babaDowned);
   api.onNpcHitModify(boulderStruck);

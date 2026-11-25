@@ -1634,8 +1634,16 @@ function searchSkeleton(event) {
   return true;
 }
 
+/** Combat forms only; presentation forms and room scenery do not qualify. */
+function describeEncounters({ npcIds }) {
+  for (const ids of Object.values(NPC_BY_MODE)) {
+    for (const id of [ids.PHASE1, ids.PHASE2, ids.PHASE3, ids.ATHANATOS, ids.MATOMENOS, ...Object.values(ids.NYLOS)]) npcIds.add(id);
+  }
+}
+
 module.exports = function registerVerzik(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("VERZIK", VerzikRoom);
   api.onBeforeNpcInteraction(talkToVerzik);
   api.onCustomEvent("combat-special:can-use", allowDawnbringer);

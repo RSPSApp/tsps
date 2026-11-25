@@ -37,4 +37,17 @@ function select(categories, multiplier, combatLevel, randomInt) {
     return categories[categories.length - 1];
 }
 
-module.exports = { validCategories, select };
+/** Exact read-only probabilities over the same integer intervals used by select. */
+function distribution(categories, multiplier, combatLevel) {
+    if (!Number.isSafeInteger(combatLevel) || combatLevel < 1) return [{ category: categories[0], probability: 1 }];
+    const bound = combatLevel * multiplier;
+    let minimum = 0;
+    return categories.flatMap(category => {
+        const maximum = Math.min(bound, category.maximum_exclusive ?? bound);
+        const probability = Math.max(0, maximum - minimum) / bound;
+        minimum = maximum;
+        return probability > 0 ? [{ category, probability }] : [];
+    });
+}
+
+module.exports = { validCategories, select, distribution };

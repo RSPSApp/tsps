@@ -46,6 +46,7 @@ import { ItemPricesPlugin } from "../../../game/plugins/itemprices/ItemPricesPlu
 import { ItemRarityPlugin } from "../../../game/plugins/itemrarity/ItemRarityPlugin";
 import { MenuSwapperPlugin } from "../../../game/plugins/menuswapper/MenuSwapperPlugin";
 import { DoorKickerPlugin } from "../../../game/plugins/doorkicker/DoorKickerPlugin";
+import { MonsterExaminePlugin } from "../../../game/plugins/monsterexamine/MonsterExaminePlugin";
 import { InventorySetupsPlugin } from "../../../game/plugins/inventorysetups/InventorySetupsPlugin";
 import { LootTrackerPlugin } from "../../../game/plugins/loottracker/LootTrackerPlugin";
 import { NotesConfig } from "../../../game/plugins/notes/NotesPlugin";
@@ -112,6 +113,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     // After Bank Tags: it registers its "clue" tags with Bank Tags' TagManager.
     ClueScrollPlugin,
     CombatLevelPlugin,
+    MonsterExaminePlugin,
     NotesPlugin,
     NpcIndicatorsPlugin,
     PlayerIndicatorsPlugin,

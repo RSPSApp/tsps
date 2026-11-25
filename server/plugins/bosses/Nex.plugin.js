@@ -19,12 +19,18 @@ const Forge = require("./nex/Forge.Nex");
 const CombatAchievements = require("./nex/CombatAchievements.Nex");
 const Commands = require("./nex/Commands.Nex");
 
+function describeEncounters({ npcIds }) {
+  const { nex, soulSplit, deflect } = Common.data.npcs;
+  for (const id of [nex, soulSplit, deflect]) npcIds.add(id);
+}
+
 module.exports = {
   name: "Nex",
   description: "Nex and the Ancient Prison: public and private fights, five phases, loot and reclaim chests, the Ancient Forge, Torva repair and Combat Achievements.",
   members: true,
   register(api) {
     Common.init(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     // The chamber's Area first: it lies inside the prison's, and the first match wins.
     Chamber.attachChamber(api);
     Prison.attachPrison(api);

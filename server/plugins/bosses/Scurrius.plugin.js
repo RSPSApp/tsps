@@ -12,12 +12,18 @@ const Aldo = require("./scurrius/Aldo.Scurrius");
 const Patrol = require("./scurrius/Patrol.Scurrius");
 const CombatAchievements = require("./scurrius/CombatAchievements.Scurrius");
 
+function describeEncounters({ npcIds }) {
+  npcIds.add(Common.PUBLIC_ID);
+  npcIds.add(Common.SOLO_ID);
+}
+
 module.exports = {
   name: "Scurrius",
   description: "Scurrius in the Varrock Sewers: the public and private lair, the fight, food piles, kill count, loot and Historian Aldo's lamps.",
   members: true,
   register(api) {
     Common.init(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Fight.attach(api);
     Lair.attach(api);
     FoodPile.attach(api);

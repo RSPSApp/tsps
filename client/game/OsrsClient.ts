@@ -1495,7 +1495,8 @@ export class OsrsClient {
         }
     }
 
-    private resolveNpcExamineTypeId(serverId: number): number | undefined {
+    /** Visible cache type for an NPC examine, including transforms and custom type aliases. */
+    resolveNpcExamineTypeId(serverId: number): number | undefined {
         const normalizedServerId = serverId | 0;
         if (normalizedServerId < 0) {
             return undefined;

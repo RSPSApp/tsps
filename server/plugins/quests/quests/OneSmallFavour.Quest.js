@@ -2003,6 +2003,7 @@ module.exports = function registerOneSmallFavourQuest(api) {
   api.persistAttribute(GUTHIX_REST_LEARNED_ATTRIBUTE, false);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [SLAGILITH],
     key: "one_small_favour",
     name: "One Small Favour",
     varpId: VARP_ONE_SMALL_FAVOUR,

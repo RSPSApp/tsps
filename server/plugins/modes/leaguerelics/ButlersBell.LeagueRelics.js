@@ -9,21 +9,20 @@
  * (data/league-butlers-bell.json). His work runs on the clock, offline too: what is owed is
  * reckoned whenever he is spoken to, from the minutes since the job began, the fraction carried.
  * A processed item shares its 10 XP (the row's processed_xp) in the row's skill as it is
- * collected. Talk-to and Collect follow the Wiki transcript word for word, and so does the
- * new-job flow, ours except where marked below: asking for a new job stops his clock first
- * (nothing accrues while the player walks the change dialogue), collects what he holds, and
- * then offers the new job in the same dialogue (the live transcript ends there); the job's
- * process-or-raw choice comes with both rates, "Show me what you've collected so far." when he
- * holds anything, and the collection shown on "The Fruits of Your Butler's Labour" (954,
- * inventory butlers_bell_collection).
+ * collected. Talk-to, Collect and the new-job flow follow the Wiki transcript word for word:
+ * asking for a new job while he holds anything plays the apology, the collection is shown, and
+ * the conversation ends — the player re-talks him for the new job; the job's process-or-raw
+ * choice comes with both rates, "Show me what you've collected so far." when he holds anything,
+ * and the collection shown on "The Fruits of Your Butler's Labour" (954, inventory
+ * butlers_bell_collection).
  *
  * Ours, with no source (no recording of the bell exists): the job menu (the rows' raw nouns in
  * action_id order, the default title), where he stands (the random events' free tile beside the
  * player) and that he leaves at logout or out of view, and that the collection goes to the bank
- * (what it can't take stays with him). The new-job request's stop, the change offered without a
- * re-talk, and a change left half-done (the dialogue closed) resuming the old job from the
- * request moment (the progress owed while the change was walked never materialises) are ours
- * too. Not here: the bell's Check (its line is in no source).
+ * (what it can't take stays with him). The new-job request also stops his work — nothing accrues
+ * until a new job starts, offline too — so a fast job cannot outrun the change, and a change
+ * left half-done (the dialogue closed) leaves the old job stopped until a new job is assigned
+ * (the progress owed is never materialised). Not here: the bell's Check (its line is in no source).
  */
 const Common = require("./Common.LeagueRelics");
 const DATA = require("../data/league-butlers-bell.json");
@@ -98,11 +97,12 @@ function roll(table) {
 
 /**
  * Brings the job up to now: every whole item its rate has earned since it began goes into the
- * butler's store (the fraction carried by moving the start on), and a processed item's XP is owed.
+ * butler's store (the fraction carried by moving the start on), and a processed item's XP is
+ * owed. A job stopped by a change request accrues nothing.
  */
 function catchUp(player, now = Date.now()) {
   const current = job(player);
-  const row = current && jobTable().get(current.action);
+  const row = current && !current.paused && jobTable().get(current.action);
   if (!row) return;
   const rate = rateOf(row, current.processing);
   const items = Math.floor(((now - current.since) / MINUTE_MS) * rate);
@@ -186,26 +186,25 @@ function chooseProcessing(player, row) {
   ])]);
 }
 
-/** The clock stops while the change is walked: nothing accrues until a new job is started. */
-function stopClock(player) {
+/** His work stops until a new job starts: nothing accrues, offline too. */
+function pauseJob(player) {
   const current = job(player);
-  if (current) player.setAttribute(JOB_ATTRIBUTE, { ...current, since: Date.now() });
+  if (current && !current.paused) player.setAttribute(JOB_ATTRIBUTE, { ...current, since: Date.now(), paused: true });
 }
 
 function newJob(player) {
   catchUp(player);
-  stopClock(player);
+  pauseJob(player);
   const rows = [...jobTable().values()].sort((a, b) => a.action - b.action);
   const menuStep = menu(player, null, rows.map((row) => [row.raw, () => chooseProcessing(player, row)]));
   if (holds(player)) {
-    // The collection runs on the apology's continue and moves the chain on to the menu itself,
-    // so the player presses Continue once and the job menu shows (as the NightmareZone `at` pages).
-    const manager = player.getDialogueManager();
+    // The collection runs on the apology's continue; as the live transcript, the conversation
+    // ends there — the player re-talks the butler for the new job (his work is stopped
+    // meanwhile, so nothing accrues in the interval).
     chain(player, [
       playerSays(line(player, "newJob")),
       npcSays(player, line(player, "collectFirst")),
-      (index) => new core.ActionDialogue(index, { execute: () => { collect(player); manager.startDialogue(index + 1); } }),
-      menuStep,
+      then(() => collect(player)),
     ]);
     return;
   }

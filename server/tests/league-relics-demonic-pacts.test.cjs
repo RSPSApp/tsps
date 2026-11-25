@@ -2240,15 +2240,19 @@ test("Butler's Bell: Talk-to, as the transcript: a new job from the cache's five
   Butler().talk({ player, npc });
   assert.deepEqual(shown[4][1][1], ["I have a new job for you.", "Show me what you've collected so far.", "Nothing."]);
   shown[4][1][2].execute(1);
-  assert.equal(shown[5].length, 4, "said, the butler's apology, the collection, then the job menu");
+  assert.equal(shown[5].length, 3, "said, the butler's apology, the collection — as the transcript, the conversation ends there");
   shown[5][2][2].send(player);
   assert.equal(banked(player, I.RAW_SHARK), 3);
-  assert.deepEqual(shown[5][3][1], ["Logs", "Ore", "Fish", "Herbs", "Flax"], "the change, no re-talk");
+  assert.equal(player.getAttribute(Butler().JOB_ATTRIBUTE).paused, true, "his work stops while the change is walked");
+  Butler().talk({ player, npc });
+  assert.deepEqual(shown[6][1][1], ["I have a new job for you.", "Nothing."], "nothing owed while stopped");
+  shown[6][1][2].execute(1);
+  assert.deepEqual(shown[7][1][1], ["Logs", "Ore", "Fish", "Herbs", "Flax"], "the new job, on the re-talk");
   assert.equal(Butler().talk({ player: cases(BUTLERS_BELL).without, npc }), false, "not their butler");
   Butler().butlers.delete(player);
 });
 
-test("Butler's Bell: a new-job request stops his clock: nothing accrues while the change is walked, then the new job starts fresh", (t) => {
+test("Butler's Bell: a new-job request stops his work until a new job is assigned: nothing accrues while the change is walked or away, then the new job starts fresh", (t) => {
   const player = cases(BUTLERS_BELL).relic;
   const npc = { getId: () => 15636 };
   Butler().butlers.set(player, npc);
@@ -2260,16 +2264,23 @@ test("Butler's Bell: a new-job request stops his clock: nothing accrues while th
   assert.equal(Butler().talk({ player, npc }), true);
   shown[0][1][2].execute(1);
   const change = shown[1];
-  assert.equal(change.length, 4, "said, apology, collection, job menu");
+  assert.equal(change.length, 3, "said, apology, collection — the transcript ends there");
   assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [["FLAX", 1000]], "20 minutes at 50 a minute");
-  const job = player.getAttribute(Butler().JOB_ATTRIBUTE);
-  assert.ok(job.since >= now && job.since < now + 60_000, "the clock stopped at the request");
+  assert.equal(player.getAttribute(Butler().JOB_ATTRIBUTE).paused, true, "his work stops at the request");
   // The player walks the chain; the collection banks exactly what the request owed.
   change[2][2].send(player);
   assert.equal(banked(player, I.FLAX), 1000, "nothing else accrued while the change was walked");
   assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), []);
-  change[3][2].execute(2);
-  const choice = shown[2][0];
+  Butler().catchUp(player, now + 20 * 60_000);
+  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [], "stopped work accrues nothing, offline too");
+  // The transcript ends the conversation: the new job is taken on the re-talk.
+  Butler().talk({ player, npc });
+  assert.deepEqual(shown[2][1][1], ["I have a new job for you.", "Nothing."], "nothing owed while stopped");
+  shown[2][1][2].execute(1);
+  const jobs = shown[3][1];
+  assert.deepEqual(jobs[1], ["Logs", "Ore", "Fish", "Herbs", "Flax"]);
+  jobs[2].execute(2);
+  const choice = shown[4][0];
   assert.deepEqual(choice[1], ["Yes, process them. <col=3366ff>(4/Minute)</col>", "No, just give me the raw materials. <col=3366ff>(8/Minute)</col>"]);
   choice[2].execute(2);
   const fresh = player.getAttribute(Butler().JOB_ATTRIBUTE);
@@ -2280,7 +2291,7 @@ test("Butler's Bell: a new-job request stops his clock: nothing accrues while th
   Butler().butlers.delete(player);
 });
 
-test("Butler's Bell: a change left half-done resumes the old job from the request moment, and re-asking walks the same flow", (t) => {
+test("Butler's Bell: a change left half-done stops the old job until a new job is assigned, and re-asking walks the same flow", (t) => {
   const player = cases(BUTLERS_BELL).relic;
   const npc = { getId: () => 15636 };
   Butler().butlers.set(player, npc);
@@ -2291,22 +2302,30 @@ test("Butler's Bell: a change left half-done resumes the old job from the reques
   const shown = dialogues(t, player);
   assert.equal(Butler().talk({ player, npc }), true);
   shown[0][1][2].execute(1);
-  assert.equal(shown[1].length, 4, "said, apology, collection, job menu");
+  assert.equal(shown[1].length, 3, "said, apology, collection");
   assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [["FLAX", 500]], "10 minutes at 50 a minute");
-  // The player closes the dialogue without choosing: the old job resumes from the request.
-  const frozen = player.getAttribute(Butler().JOB_ATTRIBUTE).since;
-  Butler().catchUp(player, frozen + 20 * 60_000);
-  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [["FLAX", 1500]], "back at it from the request");
+  // The player closes the dialogue without collecting: the old job stays stopped.
+  const job = player.getAttribute(Butler().JOB_ATTRIBUTE);
+  assert.equal(job.paused, true, "stopped at the request");
+  Butler().catchUp(player, job.since + 20 * 60_000);
+  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [["FLAX", 500]], "stopped work accrues nothing, offline too");
+  // Re-asking walks the same flow: apology, collection, done.
   Butler().talk({ player, npc });
   assert.deepEqual(shown[2][1][1], ["I have a new job for you.", "Show me what you've collected so far.", "Nothing."]);
   shown[2][1][2].execute(1);
-  assert.equal(shown[3].length, 4, "collect, then the menu, again");
+  assert.equal(shown[3].length, 3, "collect first, again");
   shown[3][2][2].send(player);
-  assert.equal(banked(player, I.FLAX), 1500);
-  shown[3][3][2].execute(1);
-  const choice = shown[4][0];
+  assert.equal(banked(player, I.FLAX), 500);
+  // Then the new job, on the re-talk.
+  Butler().talk({ player, npc });
+  assert.deepEqual(shown[4][1][1], ["I have a new job for you.", "Nothing."]);
+  shown[4][1][2].execute(1);
+  const jobs = shown[5][1];
+  jobs[2].execute(1);
+  const choice = shown[6][0];
   choice[2].execute(2);
-  assert.deepEqual({ ...player.getAttribute(Butler().JOB_ATTRIBUTE), since: 0 }, { action: 1, processing: false, since: 0, xp: 0 });
+  const fresh = player.getAttribute(Butler().JOB_ATTRIBUTE);
+  assert.deepEqual({ ...fresh, since: 0 }, { action: 1, processing: false, since: 0, xp: 0 }, "the new job, a fresh clock");
   Butler().butlers.delete(player);
 });
 

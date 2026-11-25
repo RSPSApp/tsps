@@ -526,15 +526,46 @@ export function syncMobileLoginInput(host: WebGLOsrsRendererHost, focus: boolean
         host.syncMobileLoginInputPosition();
 
         if (focus && document.activeElement !== input) {
-            try {
-                input.focus({ preventScroll: true });
-            } catch {
-                input.focus();
-            }
+            focusMobileLoginInput(input);
         }
         if (focus) {
-            const end = input.value.length;
-            input.setSelectionRange(end, end);
+            selectMobileLoginInputEnd(input);
         }
     
+}
+
+const warnedMobileLoginInputFailures = new Set<string>();
+
+/** A refused focus or selection is reported once per kind, so bug reports keep the real error. */
+function warnMobileLoginInputFailure(kind: string, error: unknown): void {
+    if (warnedMobileLoginInputFailures.has(kind)) return;
+    warnedMobileLoginInputFailures.add(kind);
+    console.warn(`[mobile-login] ${kind} refused by the browser`, error);
+}
+
+/**
+ * Focus the hidden login input. Mobile browsers can refuse a programmatic focus (it normally
+ * needs an activation event), and an uncaught exception here would escape the render frame and
+ * look like a client crash. The bare `focus()` fallback is for engines without FocusOptions.
+ */
+function focusMobileLoginInput(input: HTMLInputElement): void {
+    try {
+        input.focus({ preventScroll: true });
+        return;
+    } catch {}
+    try {
+        input.focus();
+    } catch (error) {
+        warnMobileLoginInputFailure("focus", error);
+    }
+}
+
+/** Put the caret after the field's text, where the engine allows moving it. */
+function selectMobileLoginInputEnd(input: HTMLInputElement): void {
+    const end = input.value.length;
+    try {
+        input.setSelectionRange(end, end);
+    } catch (error) {
+        warnMobileLoginInputFailure("selection", error);
+    }
 }

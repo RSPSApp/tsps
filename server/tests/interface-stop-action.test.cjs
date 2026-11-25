@@ -318,3 +318,64 @@ test("dropped while a loc's delay holds the player (mid ladder climb)", async (t
   await send(f, STATS_BUTTON);
   assert.equal(f.p.getInterfaceId(), -1, "nothing opens mid-climb");
 });
+
+test("walking keeps a persistent panel and closes creation and side modals", async (t) => {
+  const { CustomInterfaceRegistry } = require("../dist/game/interfaces/CustomInterfaceRegistry");
+  const { encodeWidgetCloseSub, encodeWidgetSetHidden } = require("../dist/net/protocol/ClientProtocol");
+  const f = actor(t);
+  const groupId = 30198;
+  CustomInterfaceRegistry.register({ groupId, widgets: [], lifecycle: { persistOnWorldInteraction: true, blocksGameplay: false } });
+  const main = (161 << 16) | 16;
+  const side = (161 << 16) | 79;
+  const chat = (162 << 16) | 568;
+  const sender = f.p.getPacketSender();
+  f.p.setInterfaceId(groupId);
+  const panel = sender.mountSubInterface(main, groupId, 0);
+  assert.equal(f.p.busy(), false);
+  sender.sendSubInterface(side, 301, 3);
+  sender.sendCreationMenu({
+    getItems: () => [core.ItemIdentifiers.COPPER_ORE],
+    getTitle: () => "How many?",
+  });
+  assert.equal(sender.getSubInterfaceAt(chat)?.groupId, 270);
+  assert.ok(f.p.getCreationMenu());
+  f.p.setAttribute("destroy-item:pending", 42);
+  f.p.setStatus(core.PlayerStatus.BANKING);
+  const frames = [];
+  t.mock.method(f.p.getSession(), "sendClientPacket", (frame) => frames.push(Buffer.from(frame)));
+
+  await send(f, { type: "move", worldX: HOME.x + 2, worldY: HOME.y, modifierFlags: 0, run: false });
+  assert.equal(f.p.getInterfaceId(), groupId);
+  assert.equal(sender.getSubInterfaceAt(main), panel);
+  assert.equal(sender.getSubInterfaceAt(chat), undefined, "the production menu must close when its state is cleared");
+  assert.equal(sender.getSubInterfaceAt(side), undefined, "the side modal must close too");
+  assert.equal(f.p.getCreationMenu(), null);
+  assert.equal(f.p.getAttribute("destroy-item:pending"), -1);
+  assert.equal(f.p.getStatus(), core.PlayerStatus.NONE);
+  assert.ok(frames.some(frame => frame.equals(encodeWidgetCloseSub(chat))));
+  assert.ok(frames.some(frame => frame.equals(encodeWidgetCloseSub(side))));
+  assert.ok(frames.some(frame => frame.equals(encodeWidgetSetHidden(chat, true))));
+  assert.ok(!frames.some(frame => frame.equals(encodeWidgetCloseSub(main))));
+
+  await send(f, { type: "interface_close" });
+  assert.equal(f.p.getInterfaceId(), -1, "explicit close removes the persistent panel");
+  assert.equal(sender.getSubInterfaceAt(main), undefined);
+});
+
+test("starting a skill keeps a panel that persists through world interactions", (t) => {
+  const { CustomInterfaceRegistry } = require("../dist/game/interfaces/CustomInterfaceRegistry");
+  const f = actor(t);
+  const groupId = 30199;
+  CustomInterfaceRegistry.register({ groupId, widgets: [], lifecycle: { persistOnWorldInteraction: true, blocksGameplay: false } });
+  const sender = f.p.getPacketSender();
+  const target = (161 << 16) | 16;
+  f.p.setInterfaceId(groupId);
+  const panel = sender.mountSubInterface(target, groupId, 0);
+  const skill = { hasRequirements: () => true, start: t.mock.fn(), cancel() {} };
+
+  f.p.getSkillManager().startSkillable(skill);
+  assert.equal(f.p.getSkill(), skill);
+  assert.equal(skill.start.mock.callCount(), 1);
+  assert.equal(f.p.getInterfaceId(), groupId);
+  assert.equal(sender.getSubInterfaceAt(target), panel);
+});

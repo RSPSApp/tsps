@@ -636,8 +636,7 @@ export class SkillManager {
         // Stop previous skills..
         this.stopSkillable();
 
-        // Close interfaces..
-        this.player.getPacketSender().sendInterfaceRemoval();
+        this.player.getPacketSender().sendInterfaceRemoval(true);
 
         // Check if we have the requirements to start this skill..
         if (!skill.hasRequirements(this.player)) {

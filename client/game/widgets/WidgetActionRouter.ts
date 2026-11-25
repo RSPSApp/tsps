@@ -114,7 +114,8 @@ export class WidgetActionRouter {
                   ? w.childIndex
                   : w?.uid & 0xffff;
 
-        if (this.deps.getCustomInterfaces().handleWidgetClick(groupId | 0, childId | 0)) {
+        if (this.deps.getCustomInterfaces().handleWidgetClick(groupId | 0, childId | 0,
+            event.opIndex ?? inferWidgetOpId(w, event.option) ?? 1)) {
             return;
         }
 

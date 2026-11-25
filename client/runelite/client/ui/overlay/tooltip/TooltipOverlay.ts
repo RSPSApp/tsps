@@ -1,6 +1,6 @@
 import type { OsrsClient } from "../../../../../game/OsrsClient";
 import type { WidgetOverlay, WidgetOverlayDrawContext } from "../../../../../game/plugins/ClientPluginManager";
-import { drawTextGL } from "../../../../../widgets/components/TextRenderer";
+import { drawTextGL, wrapTextToWidth } from "../../../../../widgets/components/TextRenderer";
 import { Plugin, type PluginDescriptor } from "../../../plugins/Plugin";
 import { CLIENT_TOKEN, inject } from "../../../plugins/PluginInjector";
 import { overlayFont, overlayFontsVersion } from "../OverlayFonts";
@@ -64,7 +64,10 @@ export class TooltipOverlay implements WidgetOverlay {
         const lineHeight = LINE_HEIGHT * textScaleY;
 
         const boxes = current.tooltips.map((tooltip) => {
-            const lines = tooltip.text.split(BR);
+            const limit = tooltip.maxWidth === undefined ? undefined
+                : Math.max(40, Math.min(tooltip.maxWidth * sx, context.renderer.canvas.width - 16 * sx));
+            const lines = limit === undefined ? tooltip.text.split(BR)
+                : wrapTextToWidth(tooltip.text, limit - 2 * OFFSET * sx, line => textWidth(measure, line));
             const w = Math.max(...lines.map((line) => textWidth(measure, line))) + 2 * OFFSET * sx;
             const h = lines.length * lineHeight + 2 * OFFSET * sy;
             return { lines, w, h };

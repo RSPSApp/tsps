@@ -319,3 +319,19 @@ console.log("inventory shift-click drop passed");
     setPacketSocket(undefined as any);
 }
 console.log('configured itemless dynamic Examine routes through real flagged packet owner');
+
+// A server-owned creature card explicitly owns its Examine operation.
+{
+    const widget = { uid: (30023 << 16) | 40, groupId: 30023, fileId: 40, childIndex: -1,
+        itemId: -1, actions: ['Examine', 'Find'], flags: 6, examineAsOperation: true };
+    const sent: any[] = []; let local = 0;
+    const entries = deriveMenuEntriesForWidget(widget, false, () => 6, noWidgetLookup);
+    const mapped = widgetEntriesToSimple(entries, { chosenWidget: widget, scheduleRender() {},
+        ui: { onWidgetAction: (event: any) => sent.push(event), onWidgetExamine: () => local++ } });
+    mapped.find(entry => entry.option === 'Examine')!.onClick?.();
+    assert.equal(sent.length, 1, 'right-click creature Examine must reach its server operation');
+    assert.equal(sent[0].opIndex, 1); assert.equal(local, 0);
+    const resolve = createPrimaryWidgetActionResolver({ getSpellSelection: () => ({ getWidgetTargetMask: () => 0 }) } as any,
+        {} as any, { getWidgetFlags: () => 6, getWidgetOpMask: () => 0, getWidgetByUid: noWidgetLookup } as any, {} as any);
+    assert.equal(resolve(widget).option, 'Examine', 'the creature card primary action must not turn into Find');
+}

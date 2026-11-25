@@ -59,3 +59,28 @@ test("WebGPU presents each loading frame while world resources are unavailable",
     assert.deepEqual(updates, [[1000, 16], [1016, 16]],
         "loading percent/text changes must reach the DOM surface instead of a blank canvas");
 });
+
+
+test("WebGPU widget adapter exposes the same lazy native preview loaders as world interaction", async () => {
+    const paths = ['../widgets/gl/widgetsOverlayFactory', '../render/webgpu/ui/presentation', '../render/webgpu/ui/WebGPUUi'].map(path => require.resolve(path));
+    const previous = paths.map(path => require.cache[path]);
+    let host: any;
+    const npcLoader = {}, locLoader = {};
+    try {
+        require.cache[paths[0]] = { ...previous[0], exports: { createWidgetsOverlay: (adapter: any) => { host = adapter; return {}; } } } as any;
+        require.cache[paths[1]] = { ...previous[1], exports: { WebgpuUiPresentation: class { attachLoginLayer() {} } } } as any;
+        delete require.cache[paths[2]];
+        const { WebGPUUi: ActualUi } = require(paths[2]);
+        let calls = 0;
+        const renderer = { canvas: { width: 800, height: 600 }, osrsClient: {}, interactionHost: {
+            getInteractNpcModelLoader() { calls++; return npcLoader; },
+            getInteractLocModelLoader() { return locLoader; },
+        } };
+        await new ActualUi(renderer).init();
+        assert.equal(calls, 0, 'preview loaders stay lazy before cache initialization');
+        assert.equal(host.getInteractNpcModelLoader?.(), npcLoader, 'full-body widgets need the native NPC loader under WebGPU');
+        assert.equal(host.getInteractLocModelLoader?.(), locLoader);
+    } finally {
+        paths.forEach((path, index) => { if (previous[index]) require.cache[path] = previous[index]; else delete require.cache[path]; });
+    }
+});

@@ -2370,6 +2370,15 @@ export function encodeWidgetSetText(uid: number, text: string, serverOwned?: boo
   ]));
 }
 
+/** Replace all native operation labels. Empty entries retain their operation index. */
+export function encodeWidgetSetActions(uid: number, actions: ReadonlyArray<string | null | undefined>): Buffer {
+  const labels = (actions ?? []).slice(0, 32).map(action => String(action ?? "").replace(/\0/g, "").slice(0, 1024));
+  const header = Buffer.alloc(5);
+  header.writeInt32BE(uid | 0);
+  header[4] = labels.length;
+  return encodeServerPacket(ServerPacketId.WIDGET_SET_ACTIONS, Buffer.concat([header, ...labels.map(string)]));
+}
+
 export function encodeWidgetSetHidden(uid: number, hidden: boolean): Buffer {
   const payload = Buffer.alloc(5);
   payload.writeInt32BE(uid | 0);

@@ -95,6 +95,9 @@ export interface WidgetNode {
     rawHeight?: number;
     widthMode?: number; // widthAlignment in Java
     heightMode?: number; // heightAlignment in Java
+    /** Optional bounds for server-defined resizable panels. */
+    maxWidth?: number;
+    maxHeight?: number;
     /** Fit a server-defined interface inside the scene viewport in Fixed mode. */
     fitToViewport?: boolean;
     /** Rendered as its own root so drawing and input share the fitted transform. */
@@ -123,6 +126,16 @@ export interface WidgetNode {
     yTextAlignment?: number; // 0=top, 1=center, 2=bottom
     lineHeight?: number;
     buttonText?: string; // IF1 button tooltip text (Ok, Select, Continue)
+    /** Opt-in single-line scrolling for overflowing custom widget text. */
+    overflowScroll?: boolean;
+    /** Custom itemless components may route Examine as a server operation. */
+    examineAsOperation?: boolean;
+    /** Reuse this pooled widget's render texture as its model changes. */
+    recycleModel?: boolean;
+    /** Fit an item model to its preview bounds instead of the cache inventory zoom. */
+    fitModel?: boolean;
+    /** Labelled panels can suppress redundant minimenu hover text for their descendants. */
+    suppressHoverText?: boolean;
 
     color?: number; // rectangle color
     color2?: number; // gradient second color (for fillMode gradient)
@@ -144,6 +157,9 @@ export interface WidgetNode {
 
     spriteId?: number; // primary sprite (IF3/cache sprite and what CC_SETGRAPHIC/IF_SETGRAPHIC set)
     spriteId2?: number; // alternate sprite (legacy IF1 CS1 / CC_SETGRAPHIC2)
+
+    /** Optional shared hover background for compound controls such as thumbnail cards. */
+    hoverOwnerUid?: number;
 
     // IF1 hover redirect
     mouseOverRedirect?: number; // IF1: same-group fileId to treat as hovered instead (-1 = none)

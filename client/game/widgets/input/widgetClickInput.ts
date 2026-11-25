@@ -78,7 +78,7 @@ export function processWidgetClickInput(
             // which would make every click, the search box's own, a click elsewhere.
             const topHit = [...clickHits].reverse().find((w: any) => offersMenuOp(w, getWidgetFlags, getWidgetOpMask))
                 ?? clickHits[clickHits.length - 1];
-            deps.getCustomInterfaces?.()?.handleWidgetClick?.(
+            deps.getCustomInterfaces?.()?.handleWidgetFocus?.(
                 topHit ? ((topHit.groupId ?? topHit.uid >>> 16) | 0) : -1,
                 !topHit ? -1
                     : topHit.fileId != null && topHit.fileId >= 0 ? topHit.fileId | 0
@@ -432,6 +432,18 @@ export function processWidgetClickInput(
                         cursorX: widgetInteraction.clickedWidgetX,
                         cursorY: widgetInteraction.clickedWidgetY,
                     })) {
+                        widgetInteraction.clickedWidgetHandled = true;
+                        break;
+                    }
+
+                    // Local custom-interface controls must use the same path as menu
+                    // actions. Transmitting their op directly bypasses search, details
+                    // and tree toggles, so a working right-click would have no left-click.
+                    if (deps.getCustomInterfaces?.()?.handleWidgetClick?.(
+                        (w.groupId ?? w.uid >>> 16) | 0,
+                        (w.fileId >= 0 ? w.fileId : w.uid & 0xffff) | 0,
+                        primaryAction.opIndex ?? 1,
+                    )) {
                         widgetInteraction.clickedWidgetHandled = true;
                         break;
                     }

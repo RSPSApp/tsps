@@ -58,7 +58,7 @@ export class CombatPoisonEffect extends Task {
     const player = this.entity.isPlayer() ? this.entity.getAsPlayer() : null;
     const clock = player?.getCombat().getPoisonClock();
     const afflicted = this.entity.isPoisoned();
-    const modal = !!player && (player.getInterfaceId() > 0 || player.getPacketSender().hasInterruptibleInterface());
+    const modal = player?.hasBlockingInterface() ?? false;
     if (clock && (!modal || afflicted)) {
       const reduction = clock.takeReduction();
       if (reduction && !afflicted && player) {

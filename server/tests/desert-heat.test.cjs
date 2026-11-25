@@ -11,7 +11,7 @@ const { Location } = require("../dist/game/model/Location");
 const DesertHeat = require("../plugins/areas/DesertHeat.plugin");
 const Waterskins = require("../plugins/items/Waterskins.plugin");
 
-let core;
+let core, login, logout;
 
 before(async () => {
   await CachePipeline.initialize();
@@ -20,10 +20,11 @@ before(async () => {
   DesertHeat.register({
     core,
     onServerStartup: (handler) => startup.push(handler),
-    onPlayerLogin() {},
+    onPlayerLogin: (handler) => { login = handler; },
     onPlayerMapSquareChange() {},
-    onPlayerLogout() {},
+    onPlayerLogout: (handler) => { logout = handler; },
     onCustomEvent() {},
+    emitCustomEvent() {},
   });
   for (const handler of startup) {
     if (handler.name === "defineData") handler();
@@ -90,6 +91,47 @@ test("armour shortens the timer by slot and clothing lengthens it, as captured",
   assert.equal(heatInterval(wearing("DESERT_SHIRT", "DESERT_ROBE", "DESERT_BOOTS")), 200);
   // Wiki: the prospector helmet adds 6 seconds although it is a helmet.
   assert.equal(heatInterval(wearing("PROSPECTOR_HELMET")), 160);
+});
+
+test("desert heat spends waterskin doses with a persistent panel and waits for a blocking chatbox", (t) => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { CustomInterfaceRegistry } = require("../dist/game/interfaces/CustomInterfaceRegistry");
+  const panelId = 30197;
+  const chatboxId = 231;
+  CustomInterfaceRegistry.register({ groupId: panelId, widgets: [],
+    lifecycle: { persistOnWorldInteraction: true, blocksGameplay: false } });
+  const player = new Player(new PlayerSession({ kind: "test", isOpen: () => true, send: () => true }));
+  player.setLocation(at(3416, 2848));
+  player.needsPlacement = false;
+  player.setRegistered(true);
+  login({ player });
+  t.after(() => logout({ player }));
+
+  const { heatTick, heatInterval } = DesertHeat._test;
+  const sender = player.getPacketSender();
+  const inventory = player.getInventory();
+  inventory.setItem(0, new core.Item(id("WATERSKIN_4_"), 1));
+  sender.sendInterface(panelId);
+  player.closeInterruptibleInterfaces();
+  assert.equal(player.getInterfaceId(), panelId);
+  assert.equal(sender.hasInterruptibleInterface(), true);
+  const interval = heatInterval(player);
+  const tickToStrike = () => {
+    for (let tick = 0; tick < interval; tick++) heatTick();
+  };
+
+  heatTick(); // Entering the heat starts the timer.
+  tickToStrike();
+  assert.equal(inventory.getItems()[0].getId(), id("WATERSKIN_3_"));
+
+  sender.sendChatboxInterface(chatboxId);
+  tickToStrike();
+  assert.equal(inventory.getItems()[0].getId(), id("WATERSKIN_3_"));
+  sender.closeInterface(chatboxId);
+  heatTick();
+  assert.equal(inventory.getItems()[0].getId(), id("WATERSKIN_2_"));
+  assert.equal(player.getInterfaceId(), panelId);
 });
 
 test("cactus cutting succeeds from about 12% at level 1 to 99% at 99", () => {

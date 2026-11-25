@@ -184,9 +184,9 @@ function castQueued(player) {
   const spell = queuedCasts.get(player)?.spell;
   queuedCasts.delete(player);
   if (!spell || !player.isRegistered() || player.getHitpoints() <= 0) return;
-  // A dialogue, menu or prompt opened while the cast waited drops it, as a queued alchemy is dropped.
+  // A blocking interface or input prompt drops the waiting cast, as with queued alchemy.
   const sender = player.getPacketSender();
-  if (player.getDialogueManager()?.isActive?.() || sender?.hasInterruptibleInterface?.() || sender?.hasInputPrompt?.()) return;
+  if (player.hasBlockingInterface() || sender?.hasInputPrompt?.()) return;
   castLunarCraftingSpell({ player, spellName: spell.name, handled: false });
 }
 

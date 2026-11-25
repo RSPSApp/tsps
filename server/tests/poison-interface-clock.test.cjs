@@ -11,13 +11,12 @@ function fixture(t, venom = false) {
   player.setRegistered(true);
   player.setPoisonDamage(venom ? 6 : 30);
   player.setVenomed(venom);
-  let open = true;
-  t.mock.method(player, 'getInterfaceId', () => open ? 1 : -1);
+  player.setInterfaceId(1);
   t.mock.method(player.getCombat().getHitQueue(), 'addPendingDamage', values => hits.push(...values));
   const task = new CombatPoisonEffect(player);
   task.setRunning(true);
   t.after(() => task.stop());
-  return { player, task, hits, setOpen(value) { open = value; },
+  return { player, task, hits, setOpen(value) { player.setInterfaceId(value ? 1 : -1); },
     step(count = 1) { for (let i = 0; i < count; i++) task.tick(); } };
 }
 
@@ -150,4 +149,35 @@ test('the captured continuous modal timeline holds a due pulse until close, then
     if (h.hits.length !== previous) hitTicks.push(tick);
   }
   assert.deepEqual(hitTicks, [5184, 5214]);
+});
+
+test('a persistent non-blocking main panel lets poison/venom tick, even after a world interaction', t => {
+  const { CustomInterfaceRegistry } = require('../dist/game/interfaces/CustomInterfaceRegistry');
+  const groupId = 30197;
+  CustomInterfaceRegistry.register({ groupId, widgets: [], lifecycle: { persistOnWorldInteraction: true, blocksGameplay: false } });
+  const sideTarget = (161 << 16) | 79;
+  for (const venom of [false, true]) {
+    const h = nativeModalFixture(t, venom);
+    h.sender.sendInterface(groupId);
+    h.player.closeInterruptibleInterfaces();
+    assert.equal(h.player.getInterfaceId(), groupId);
+    assert.equal(h.sender.hasInterruptibleInterface(), true);
+    h.step(30);
+    assert.deepEqual(h.hits.map(hit => hit.getDamage()), [6]);
+
+    h.sender.sendSubInterface(sideTarget, 387, 3);
+    h.step(35);
+    assert.equal(h.hits.length, 1, 'the side modal still holds damage');
+    h.sender.closeInterface(387);
+    h.step();
+    assert.equal(h.hits.length, 2);
+
+    h.sender.sendChatboxInterface(231);
+    h.step(35);
+    assert.equal(h.hits.length, 2, 'the chatbox still holds damage');
+    h.sender.closeInterface(231);
+    h.step();
+    assert.equal(h.hits.length, 3);
+    assert.equal(h.player.getInterfaceId(), groupId);
+  }
 });

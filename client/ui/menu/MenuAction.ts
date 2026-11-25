@@ -915,8 +915,9 @@ function nativeMenuAction(
     // EXAMINE_NPC (1003)
     if (opcode === MenuOpcode.ExamineNpc) {
         setVisualFeedback(false);
-        const examineNpcId =
-            npcExamineIdResolver?.(identifier) ?? (Number.isFinite(identifier) ? identifier : -1);
+        const examineNpcId = npcExamineIdResolver
+            ? npcExamineIdResolver(identifier) ?? -1
+            : Number.isFinite(identifier) ? identifier : -1;
         if (examineNpcId >= 0) {
             const pkt = createPacket(ClientPacket.EXAMINE_NPC);
             pkt.packetBuffer.writeShortAdd(examineNpcId);

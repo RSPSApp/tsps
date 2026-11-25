@@ -81,7 +81,7 @@ function startCharging(player, spell) {
       this.from = player.getLocation().clone();
     }
     execute() {
-      if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getInterfaceId() !== -1 ||
+      if (!player.isRegistered() || player.getHitpoints() <= 0 || player.hasBlockingInterface() ||
           !player.getLocation().equals(this.from) || !chargeOnce(player, spell)) {
         this.stop();
       }

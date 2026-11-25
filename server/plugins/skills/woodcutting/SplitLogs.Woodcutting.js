@@ -140,7 +140,7 @@ function startBatch(player, amount, canMake, makeOne) {
     execute() {
       if (player.getAttribute(TASK_ATTRIBUTE) !== this || !player.isRegistered() || player.getHitpoints() <= 0 ||
         player.getMovementQueue().size() > 0 || !player.getLocation().equals(startLocation) ||
-        player.getInterfaceId() !== -1 || !canMake()) {
+        player.hasBlockingInterface() || !canMake()) {
         this.stop();
         return;
       }

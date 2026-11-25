@@ -244,7 +244,7 @@ test('forced vines are eligible from the tenth attack and happen at most once pe
   assert.equal(f.animations.filter(([, id]) => id === 8224 || id === 8223).length, 14);
 });
 
-test('poison applies at a damaging hit with severity four, and misses never poison', t => {
+test('poison starts at a damaging hit with varp 16, and zero damage never poisons', t => {
   const f = fixture(t, 0);
   const poison = core.CombatFactory.poisonEntity.bind(core.CombatFactory);
   const applied = [];
@@ -260,8 +260,9 @@ test('poison applies at a damaging hit with severity four, and misses never pois
   tick(5);
   assert.deepEqual(applied, [], 'the second attack has not landed');
   tick();
-  assert.deepEqual(applied, [[rise + 11, 4], [rise + 11, 4]]);
+  assert.deepEqual(applied, [[rise + 11, 16], [rise + 11, 16]]);
   assert.ok(f.messages.some(([at, text]) => at === rise + 11 && text === 'You have been poisoned!'));
+  assert.equal(f.player.getPacketSender().getVarp(102), 16);
 });
 
 test('quest and Echo Hespori attack with the shared packet shape and cadence', t => {

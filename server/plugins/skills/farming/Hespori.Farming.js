@@ -7,6 +7,25 @@ const Services = require("./Services.Farming");
 const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 const ANIMATION = { SPAWN: 8221, SPECIAL: 8223, RANGED: 8224 };
 const PROJECTILE = { RANGE: 1639, MAGIC: 1640, VINES: 1642 };
+// 234/03282: first swing at rise +3 in 14 fights, then 107 gaps of six ticks.
+const FIRST_ATTACK_TICKS = 3;
+const ATTACK_TICKS = 6;
+// 234/03282: 61 spore volleys and 59 waves. Heights here are in packet units.
+const SPORE_SHAPE = { startHeight: 98, endHeight: 58 };
+const SPORE_SHOTS = [{ start: 30, end: 60, ...SPORE_SHAPE }, { start: 55, end: 85, ...SPORE_SHAPE }];
+const WAVE_SHAPE = { start: 90, end: 120, startHeight: 340, endHeight: 158 };
+const PROJECTILE_ANGLE = 8;
+const PROJECTILE_PROGRESS = 64;
+const SPORE_HIT_TICKS = 2;
+const WAVE_HIT_TICKS = 4;
+const WAVE_GRAPHIC = 1641;
+const WAVE_SOUND = 4063;
+const IMPACT_HEIGHT = 124;
+// 234/03282 ticks 234 and 1045: poison varp 16 means a starting hit of four.
+// Estimate: retain a one-in-eight draw per damaging hit. Two eligible volleys
+// poisoned the player, but each carried two damaging splats.
+const POISON_SEVERITY = 16;
+const POISON_CHANCE = 1 / 8;
 /** 234/03282: the Hespori cave's Exit lands here, west of the cave (1232,3728 was inside its footprint), and Enter there. */
 const EXIT = new core.Location(1230, 3730, 0);
 const ENTRY = new core.Location(1242, 10082, 0);
@@ -110,7 +129,7 @@ function challengeHespori(event) {
     fight.boss = spawn(fight, core.NpcIdentifiers.HESPORI_2, fight.patch.x, fight.patch.y);
     fight.maxHitpoints = fight.boss.getMaxHitpoints();
     flowers(fight);
-    fight.boss.getCombat().attack(fight.player);
+    beginBossAttacks(fight);
     event.handled = true;
 }
 // Capture (recording 3282): the harvest is refused on the next tick as the player is moved in front of
@@ -175,17 +194,29 @@ function startFight(player, patch, acceptedWarning = false) {
     fight.maxHitpoints = 300;
     fight.boss.performAnimation(new core.Animation(ANIMATION.SPAWN));
     flowers(fight);
-    fight.boss.getCombat().attack(player);
+    beginBossAttacks(fight);
     state.hesporiFight = true;
     Patches.syncPatch(player, patch);
 }
 // Capture (234/03282 tick 557): the entangle line is red.
 const VINES_MESSAGE = "<col=ef1020>The Hespori entangles you in some vines!</col>";
+function beginBossAttacks(fight) {
+    const combat = fight.boss.getCombat();
+    combat.setAttackDelay(FIRST_ATTACK_TICKS);
+    combat.attack(fight.player);
+}
+
+function sendProjectile(npc, target, id, { start, end, startHeight, endHeight }) {
+    // PacketSender multiplies heights by four; Projectile passes start and end cycles through.
+    core.Projectile.createProjectile(npc, target, id, start, end, startHeight / 4, endHeight / 4)
+        .withAngle(PROJECTILE_ANGLE).withProgress(PROJECTILE_PROGRESS).sendProjectile();
+}
+
 class HesporiCombat extends core.CombatMethod {
-     style = core.CombatType.RANGED;
-     special = false;
+    style = core.CombatType.RANGED;
+    special = false;
     type() { return this.style; }
-    attackSpeed() { return 6; }
+    attackSpeed() { return ATTACK_TICKS; }
     attackDistance() { return 16; }
     canAttack(npc, target) { return NPC_FIGHTS.get(npc)?.player === target; }
     start(npc, target) {
@@ -195,21 +226,27 @@ class HesporiCombat extends core.CombatMethod {
         this.special = ++fight.attacks % 9 === 0;
         this.style = Math.random() < 0.5 ? core.CombatType.RANGED : core.CombatType.MAGIC;
         npc.performAnimation(new core.Animation(this.style === core.CombatType.RANGED && !this.special ? ANIMATION.RANGED : ANIMATION.SPECIAL));
-        core.Projectile.createProjectile(npc, target, this.special ? PROJECTILE.VINES : this.style === core.CombatType.RANGED ? PROJECTILE.RANGE : PROJECTILE.MAGIC, 40, 65, 31, 43).sendProjectile();
         if (this.special) {
+            core.Projectile.createProjectile(npc, target, PROJECTILE.VINES, 40, 65, 31, 43).sendProjectile();
             fight.vinesUntil = core.World.getProcessCycle() + 10;
             fight.escapeClicks = 0;
             target.getMovementQueue().setBlockMovement(true).reset();
             target.getCombat().reset();
             target.performGraphic(new core.Graphic(1643));
             target.sendMessage(VINES_MESSAGE);
+        } else if (this.style === core.CombatType.RANGED) {
+            for (const shot of SPORE_SHOTS) sendProjectile(npc, target, PROJECTILE.RANGE, shot);
+        } else {
+            sendProjectile(npc, target, PROJECTILE.MAGIC, WAVE_SHAPE);
+            target.performGraphic(core.Graphic.delayed(WAVE_GRAPHIC, WAVE_SHAPE.end, IMPACT_HEIGHT));
+            target.getPacketSender().sendSound(WAVE_SOUND, 1, WAVE_SHAPE.end);
         }
     }
     hits(npc, target) {
         if (this.special) return [];
         const ranged = this.style === core.CombatType.RANGED;
-        return Array.from({ length: ranged ? 2 : 1 }, (_, index) => {
-            const hit = new core.PendingHit(npc, target, this, 2 + index);
+        return Array.from({ length: ranged ? SPORE_SHOTS.length : 1 }, () => {
+            const hit = new core.PendingHit(npc, target, this, ranged ? SPORE_HIT_TICKS : WAVE_HIT_TICKS);
             const prayer = target.getPrayerActive()[ranged ? core.PrayerHandler.PROTECT_FROM_MISSILES : core.PrayerHandler.PROTECT_FROM_MAGIC];
             // Echo Wiki specifies magic 52; the normal ranged cap (8), prayer caps
             // and double-spore attack remain explicit normal-mechanics placeholders.
@@ -223,10 +260,17 @@ class HesporiCombat extends core.CombatMethod {
         });
     }
     handleAfterHitEffects(hit) {
-        // ponytail: poison severity is documented; its proc probability remains an estimate.
-        if (hit.getTotalDamage() > 0 && Math.random() < 0.125) core.CombatFactory.poisonEntity(hit.getTarget(), 4);
+        if (hit.getTotalDamage() > 0 && Math.random() < POISON_CHANCE) {
+            core.CombatFactory.poisonEntity(hit.getTarget(), POISON_SEVERITY);
+        }
     }
 }
+function hesporiNpcPoison(event) {
+    // The encounter rolls its own poison after a damaging hit, even though the cache
+    // also marks this NPC as poisonous for the generic combat path.
+    if (NPC_FIGHTS.get(event.attacker)?.boss === event.attacker) event.handled = true;
+}
+
 function hesporiHitRoll(event) {
     const fight = NPC_FIGHTS.get(event.attacker);
     if (fight?.boss === event.attacker) event.bypassProtectionPrayer = true;
@@ -521,7 +565,7 @@ function startEcho(request) {
             fight.boss.setAttribute(core.CombatFactory.RECOIL_IMMUNE_ATTRIBUTE, true);
             fight.boss.performAnimation(new core.Animation(ANIMATION.SPAWN));
             flowers(fight);
-            fight.boss.getCombat().attack(player);
+            beginBossAttacks(fight);
         } else fight.completed = true;
         Patches.syncPatch(player, patch);
     } catch (error) {
@@ -573,4 +617,4 @@ function attachEcho(pluginApi) {
 
 Object.assign(module.exports, { attachEcho, echoPatchValue, echoPatchInteraction, startEcho });
 
-Object.assign(module.exports, { describeEncounters, formatFightTicks, VINES_MESSAGE, warningInterfaceChanged, reentryAction, questHesporiDeath, challengeHespori, harvestHespori, HesporiCombat, hesporiHitRoll, hesporiCanAttack, hesporiHit, hesporiDamage, hesporiInput, hesporiProcess, keepQuestHesporiEngaged, hesporiLoot, hesporiLogout, hesporiDeathDrop, hesporiPlayerDeath, hesporiNpc, hesporiCave, wipeForGroupIronman });
+Object.assign(module.exports, { describeEncounters, formatFightTicks, VINES_MESSAGE, warningInterfaceChanged, reentryAction, questHesporiDeath, challengeHespori, harvestHespori, HesporiCombat, hesporiNpcPoison, hesporiHitRoll, hesporiCanAttack, hesporiHit, hesporiDamage, hesporiInput, hesporiProcess, keepQuestHesporiEngaged, hesporiLoot, hesporiLogout, hesporiDeathDrop, hesporiPlayerDeath, hesporiNpc, hesporiCave, wipeForGroupIronman });

@@ -129,5 +129,77 @@
   "kill": {
     "about": "As captured: the pools go on the killing blow; 2 ticks later (deathTicks) the kill count, the fight's length and the loot on her middle tile.",
     "killCountVarp": 4403
+  },
+  "respawnLines": {
+    "about": "As captured (R1140, normal and Echo alike): every rise after the first in a visit says one of these; the first says spawn.say.",
+    "lines": ["Euat! We are not done yet!", "Euat! I am not so easily destroyed!", "Euat! This is not yet over!"]
+  },
+  "echo": {
+    "about": "The Leagues VI Echo (rsprox.net 1140, rev 237.1: 7 Echoes, 6 kills). Ticks count from her turn (A). Ids are gameval names. Projectile heights are as recorded on the wire (4x the engine's).",
+    "turns": {
+      "about": "Her turns run on the fight's own clock: the first 4 ticks after she rises, then every 4; the turn after a phase cast 5 ticks later; in the enrage every 2.",
+      "first": 4,
+      "every": 4,
+      "afterPhase": 5,
+      "enrageEvery": 2
+    },
+    "phases": {
+      "about": "Decided on a turn, on her hitpoints after that tick's damage. Recorded: the first cast at 476-516, never at 538 or more (the Wiki says 500); the second at 220-250, never at 262 or more (the Wiki's 250).",
+      "first": { "hitpoints": 520, "say": "Rani grows within me!" },
+      "second": { "hitpoints": 250, "say": "Let the darkness consume you!" }
+    },
+    "standard": {
+      "about": "Her turn below the enrage: two magic shots that land 3 and 4 ticks later (Protect from Magic blocks them: 160 of 160), and the black icicle the next tick at the tile the player stood on.",
+      "seq": "npc_djinn_01_combo_merge",
+      "sounds": [{ "id": 8655, "delay": 35 }, { "id": 8667, "delay": 70 }, { "id": 8726, "delay": 90 }],
+      "shot": {
+        "spotanim": "leagues_6_vfx_amoxliatl_ice_block_projectile_02",
+        "arcs": [{ "delay": 60, "end": 90 }, { "delay": 90, "end": 120 }],
+        "angle": 128, "progress": 90, "startHeight": 400, "endHeight": 70,
+        "landTicks": [3, 4],
+        "maxHit": 30,
+        "maxHitAbout": "Recorded unprayed: 0, 0, 2, 3, 6, 8, 10, 24, 27 and 30 (10 shots). The Wiki's 93 doesn't fit."
+      }
+    },
+    "enrage": {
+      "about": "From the second phase cast: no magic shots, only the icicle, every 2 ticks.",
+      "seq": "npc_djinn_01_melee",
+      "sound": { "id": 8655, "delay": 48 }
+    },
+    "icicle": {
+      "about": "Sent the tick after her turn from her middle tile to where the player stood on her turn; lands 2 ticks later. A player on its tile or the spikes at the end of the tick before takes 18-26 (stepping off on the landing tick is too late: 19 of 19), through Protect from Magic; a player who isn't hit hears it shatter.",
+      "sendTicks": 1,
+      "landTicks": 2,
+      "projectile": { "spotanim": "leagues_6_vfx_amoxliatl_ice_block_projectile_01", "delay": 0, "end": 60, "angle": 128, "progress": 90, "startHeight": 400, "endHeight": 70 },
+      "impact": { "spotanim": "leagues_6_vfx_amoxliatl_ice_block_projectile_impact_01", "delay": 60 },
+      "shadow": "gargboss_debris_shadow_60",
+      "missSound": 7965,
+      "damage": [18, 26]
+    },
+    "spikes": {
+      "about": "As it lands: its tile and every floor tile 2-4 steps from it, but not the 8 around it (the Wiki's safe tiles), each delayed 2 cycles a step.",
+      "spotanim": "leagues_6_vfx_amoxliatl_ice_floor_attack_01",
+      "reach": 4,
+      "delayPerStep": 2
+    },
+    "phase": {
+      "about": "A phase cast in place of a turn: the spikes on every floor tile within 2 steps of the player at once, prayers turned off the next tick, and 3 ticks later the hit (as the icicle's) and a pool on each tile.",
+      "seq": "amoxliatl_attack",
+      "sound": 6867,
+      "spotanim": "leagues_6_vfx_amoxliatl_ice_floor_combined_01",
+      "reach": 2,
+      "disableTicks": 1,
+      "message": "<col=ff3045>Amoxliatl disables your prayers.</col>",
+      "landTicks": 3
+    },
+    "pools": {
+      "about": "An icy pool where each icicle lands and on each phase tile, unless one is there. A pool hurts from its second tick: 7-15 to a player on it (10 recorded). It goes after 100 ticks (4 recorded) or with her, with a puff.",
+      "loc": "amoxliatl_ice_echo",
+      "shape": 10,
+      "hurtFromTicks": 2,
+      "damage": [7, 15],
+      "lifetimeTicks": 100,
+      "clearSpotanim": "leagues_6_vfx_amoxliatl_ice_disappear_01"
+    }
   }
 }

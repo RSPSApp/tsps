@@ -379,16 +379,22 @@ test('the quest guardian ends its chamber without regular loot, kill counts, per
   assert.deepEqual(emitted, [{ name: 'amoxliatl:quest-defeated', payload: { player: actor } }]);
 });
 
-test('Echo completes once without normal kill, best-time, achievement or respawn credit', () => {
+test('Echo completes once without normal kill, best-time or achievement credit, and the next Echo rises 28 ticks later', () => {
   let death;
   require('../plugins/bosses/amoxliatl/Kills.Amoxliatl')({
     persistAttribute() {}, onNpcBeforeDeath() {}, onNpcDeath(handler) { death = handler; },
     onCustomEvent() {}, onPlayerLogin() {},
   });
-  Common.init({core:{ Projectile:{centreOf:()=>({x:1,y:2,z:0})} },emitCustomEvent:(name,payload)=>emitted.push({name,payload})});
+  const tasks = [];
+  const taskManager = { submit(task) { task.setRunning(true); tasks.push(task); } };
+  Common.init({core:{ Task, TaskManager: taskManager, Projectile:{centreOf:()=>({x:1,y:2,z:0})} },emitCustomEvent:(name,payload)=>emitted.push({name,payload})});
   emitted.length=0;
-  const session={echoToken:'echo-amox'};
-  const fight={stopped:false,player:{},session,hideHud(){},stop(){this.stopped=true;}};
+  const messages = [], attributes = new Map([[Common.BEST_TICKS_ATTRIBUTE, 66]]);
+  const player = { getAttribute: (k) => attributes.get(k), setAttribute: (k, v) => attributes.set(k, v), sendMessage: (m) => messages.push(m),
+    getPacketSender: () => ({ sendConfig() { assert.fail('the normal kill count is left alone'); } }) };
+  let respawned = 0;
+  const session={echoToken:'echo-amox', boss: {}, respawnEcho() { respawned++; }};
+  const fight={stopped:false,player,session,duration:()=>99,hideHud(){},stop(){this.stopped=true;}};
   const npc={__amoxliatlFight:fight};
   death({npc}); death({npc});
   assert.equal(emitted.length,1);
@@ -396,4 +402,11 @@ test('Echo completes once without normal kill, best-time, achievement or respawn
   assert.equal(emitted[0].payload.token,'echo-amox');
   assert.deepEqual(emitted[0].payload.npcs,[npc]);
   assert.equal(session.echoCompleted,true);
+  // R1140, 6 of 6: the normal boss's line, against the normal personal best (0:39.60 there).
+  assert.deepEqual(messages, ['Fight duration: <col=ff0000>0:59.40</col>. Personal best: 0:39.60']);
+  assert.equal(attributes.get(Common.BEST_TICKS_ATTRIBUTE), 66, 'the normal personal best is not changed');
+  for (let tick = 1; tick <= 27; tick++) tasks.forEach((task) => task.tick());
+  assert.equal(respawned, 0);
+  tasks.forEach((task) => task.tick());
+  assert.equal(respawned, 1, 'with the player still there, the next Echo 28 ticks after the kill count');
 });

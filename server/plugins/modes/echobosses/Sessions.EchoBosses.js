@@ -39,7 +39,8 @@ function validate(event) {
  * normal boss for this session, or changed its form. It becomes the session's Echo actor:
  * dressed as the role's Echo form and marked, so normal kill credit, drops and orb rolls skip it.
  * `configured` answers whether it was accepted, and `maxHits` the Wiki's labelled per-attack
- * maxima ({ label, maxHit }) for a controller that caps by attack.
+ * maxima ({ label, maxHit }) for a controller that caps by attack. `timeFromNow` starts the
+ * encounter's time here, for a boss live times from its spawn rather than the entry.
  */
 function configure(event) {
   const session = matching(event);
@@ -55,6 +56,7 @@ function configure(event) {
   }
   event.npc.setAttribute(ENCOUNTER_ATTRIBUTE, { token: session.token, player: session.player, boss: session.boss });
   session.actors.add(event.npc);
+  if (event.timeFromNow === true) session.startedAt = api.core.World.getProcessCycle();
   event.configured = true;
 }
 

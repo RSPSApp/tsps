@@ -98,12 +98,13 @@ class Fight {
   }
 
   start() {
-    const { spawn, hud } = Common.data;
+    const { spawn, hud, respawnLines } = Common.data;
     const { Animation } = this.core;
     this.boss.performAnimation(new Animation(spawn.anim));
-    this.boss.forceChat(spawn.say);
-    // As captured, the line goes to the chatbox too, as her npc_say message.
-    this.player.getPacketSender().sendTypedMessage(this.core.ChatType.NPC_SAY, spawn.say, this.boss.getDefinition().getName());
+    // As captured, she rises with "You are not welcome here!" the first time in a visit, then one
+    // of the others.
+    const lines = respawnLines.lines;
+    this.say(this.session.rises++ > 0 ? lines[Common.randomInt(0, lines.length - 1)] : spawn.say);
     this.hudShown = true;
     this.shownHp = this.boss.getHitpoints();
     Common.api.emitCustomEvent("boss-hud:show", {
@@ -111,6 +112,13 @@ class Fight {
     });
     this.boss.getCombat().attack(this.player);
     this.boss.getCombat().setAttackDelay(spawn.firstAttackTicks);
+  }
+
+  /** Over her head, and as captured in the chatbox as her npc_say message, under her shown name. */
+  say(line) {
+    this.boss.forceChat(line);
+    const name = this.boss.getTypeCustomisationForUpdate?.()?.name ?? this.boss.getDefinition().getName();
+    this.player.getPacketSender().sendTypedMessage(this.core.ChatType.NPC_SAY, line, name);
   }
 
   /** Every tick: due events, the pools under the player, the prayer the task watches, the HUD. */
@@ -320,9 +328,9 @@ class Fight {
   }
 }
 
-/** She rises: a fight for the session, run on its own tick task. */
-function begin(session, boss) {
-  const fight = new Fight(session, boss);
+/** She rises: a fight for the session, run on its own tick task (the Echo's own: EchoFight.Amoxliatl). */
+function begin(session, boss, FightClass = Fight) {
+  const fight = new FightClass(session, boss);
   session.fight = fight;
   boss.__amoxliatlFight = fight;
   const { Task, TaskManager } = Common.core;
@@ -399,4 +407,4 @@ function attachFight(api) {
   api.onCombatHitResolved(playerHurt);
 }
 
-module.exports = { attachFight, begin, Fight, onFloor, floorTiles, key };
+module.exports = { attachFight, begin, Fight, onFloor, floorTiles, key, magicStyle };

@@ -220,18 +220,18 @@ const LOOSEN_MESSAGE = "You feel the vines loosen slightly as you try to move.";
 
 class HesporiVines extends core.Task {
     held = false;
+    encounterComplete = false;
     escapeTicks = 0;
     lastEscapeCycle = -1;
 
     constructor(fight) {
         super(VINES_LAND_TICKS);
-        this.player = fight.player;
-        this.area = fight.area;
+        this.fight = fight;
     }
 
     execute() {
-        const { player } = this;
-        if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getArea() !== this.area) {
+        const { player, area } = this.fight;
+        if (!player.isRegistered() || player.getHitpoints() <= 0 || player.getArea() !== area) {
             this.release();
             return;
         }
@@ -248,13 +248,23 @@ class HesporiVines extends core.Task {
         player.performGraphic(core.Graphic.atHeight(VINES_GRAPHIC, IMPACT_HEIGHT));
         player.sendMessage(VINES_MESSAGE);
         player.getPacketSender().sendSound(VINES_LAND_SOUND, 1, 0);
+        if (this.encounterComplete) this.release();
     }
 
     release() {
+        const { player } = this.fight;
         this.stop();
-        VINE_TASKS.delete(this.player);
-        if (this.held) this.player.getMovementQueue().setBlockMovement(false);
+        VINE_TASKS.delete(player);
+        if (this.held) player.getMovementQueue().setBlockMovement(false);
     }
+}
+
+function finishVines(fight) {
+    const vines = VINE_TASKS.get(fight.player);
+    if (vines?.fight !== fight) return;
+    // An airborne throw still sends its landing effects if completion comes first.
+    if (vines.held) vines.release();
+    else vines.encounterComplete = true;
 }
 
 function beginBossAttacks(fight) {
@@ -423,6 +433,7 @@ function hesporiLoot(event) {
     if (fight.echoToken) { addEchoHarvest(fight.player, loot); return; }
     Patches.stateFor(fight.player, fight.patch).hesporiLoot = harvestItems(loot);
     Patches.stateFor(fight.player, fight.patch).hesporiFight = false;
+    finishVines(fight);
     for (const flower of fight.flowers) core.World.getRemoveNPCQueue().push(flower);
     FIGHTS.delete(fight.player);
     Patches.syncPatch(fight.player, fight.patch);
@@ -473,6 +484,7 @@ function announceKill(fight) {
 }
 function finishQuestHespori(fight) {
     if (!FIGHTS.has(fight.player)) return;
+    finishVines(fight);
     for (const flower of fight.flowers) core.World.getRemoveNPCQueue().push(flower);
     FIGHTS.delete(fight.player);
     core.PluginManager.emitCustomEvent("hespori:quest-defeated", { player: fight.player });
@@ -482,6 +494,7 @@ function questHesporiDeath({ npc }) {
     if (fight?.echoToken && fight.boss === npc) {
         if (fight.completed || fight.ended) return;
         fight.completed = true;
+        finishVines(fight);
         for (const flower of fight.flowers) core.World.getRemoveNPCQueue().push(flower);
         fight.flowers = [];
         api.emitCustomEvent("echo-boss:completed", { player: fight.player, boss: "hespori", token: fight.echoToken, npcs: [npc],

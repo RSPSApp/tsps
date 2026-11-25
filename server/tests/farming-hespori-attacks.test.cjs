@@ -189,15 +189,27 @@ test('vines launch with their recorded packet and take hold four ticks later', t
   assert.ok(f.hits.every(([at]) => at <= launch), 'vines have no direct hit');
 });
 
-test('vines already in flight land even after the boss dies', t => {
+test('vines in flight land after death and release without damage on encounter completion', t => {
   const f = fixture(t, 0);
   const { boss, launch } = throughFirstVines(f);
   tick(launch + 2 - f.now());
+  f.setRoll(0.2);
   boss.getCombat().addDamage(f.player, boss.getHitpoints());
   boss.setHitpoints(0);
   tick(2);
   assert.equal(blocked(f), true);
   assert.deepEqual(f.messages.filter(([, text]) => text === ENTANGLE), [[launch + 4, ENTANGLE]]);
+
+  let completed = false;
+  while (f.now() < launch + 13 && !completed) {
+    tick();
+    completed = f.messages.some(([, text]) => text.startsWith('Your Hespori kill count is:'));
+  }
+  assert.equal(completed, true, 'the normal kill completes before the vines would expire');
+  assert.equal(blocked(f), false, 'encounter completion releases the vines');
+  tick(launch + 14 - f.now());
+  assert.deepEqual(f.messages.filter(([, text]) => text === ENTANGLE), [[launch + 4, ENTANGLE]]);
+  assert.equal(f.hits.some(([at]) => at > launch), false, 'there is no post-kill expiry hit');
 });
 
 test('clicks on six different ticks free the player while the boss keeps attacking', t => {

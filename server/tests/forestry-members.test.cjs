@@ -167,12 +167,14 @@ test('the occupied nest attacks the tick after the reach: block, stun graphic, s
   assert.equal(p.inventory.getAmount(28661), 0, 'nothing while stunned');
 });
 
-test('a pheasant flies to the empty nest every 8 or 12 ticks; an egg taken mid-flight is lost when it lands', () => {
+test('a pheasant flies to the empty nest every 8 or 12 ticks; it stuns only players next to the nest it lands on', () => {
   const p = fakePlayer();
-  const event = startEvent('pheasant', [p]);
+  const q = fakePlayer();
+  const event = startEvent('pheasant', [p, q]);
   const empty = event.nests.find((n) => !n.occupied);
   ticks(8);
   assert.equal(empty.incoming, true, 'a pheasant is on its way');
+  p.location = new Location(empty.at.getX() + 1, empty.at.getY(), 0);
   retrieve(p, empty);
   ticks(1);
   assert.equal(p.inventory.getAmount(28661), 1);
@@ -181,6 +183,20 @@ test('a pheasant flies to the empty nest every 8 or 12 ticks; an egg taken mid-f
   assert.equal(p.messages.at(-1), "The nest's inhabitant attacks you, causing you to drop all your pheasant eggs.");
   assert.equal(p.inventory.getAmount(28661), 0);
   assert.equal(event.nests.filter((n) => n.occupied).length, 3);
+
+  // Moving on to the next nest before it lands keeps the egg: Wiki, the stun is for players
+  // next to the nest, not for whoever reached into it.
+  ticks(10); // the next flight, at tick 20
+  const next = event.nests.find((n) => !n.occupied);
+  assert.equal(next.incoming, true);
+  q.location = new Location(next.at.getX() + 1, next.at.getY(), 0);
+  retrieve(q, next);
+  ticks(1);
+  assert.equal(q.inventory.getAmount(28661), 1);
+  q.location = new Location(next.at.getX() + 1, next.at.getY() + 3, 0);
+  ticks(1);
+  assert.equal(next.occupied, true);
+  assert.equal(q.inventory.getAmount(28661), 1, 'away from the nest when it lands, so no stun');
 });
 
 test('the hand-in pays bark and XP; ineligible pays 1 XP; the end at 200 ticks', () => {
@@ -292,6 +308,27 @@ test('Disarm takes 9 ticks: synth 2387 at the start and end, the trap seq and a 
   assert.equal(xp(p, 'Hunter'), 35);
 });
 
+test('several players can disarm the same trap; the first to finish removes it', () => {
+  const p = fakePlayer({ level: 70 });
+  const q = fakePlayer({ level: 70 });
+  Math.random = () => 0;
+  const event = startEvent('poachers', [p, q]);
+  ticks(6);
+  Math.random = random;
+  const [trap] = event.traps;
+  disarm(p, trap);
+  disarm(q, trap);
+  assert.equal(p.spam.at(-1), 'You start disarming the trap...');
+  assert.equal(q.spam.at(-1), 'You start disarming the trap...', 'the second player is not refused');
+  assert.equal(trap.disarmers.size, 2);
+  ticks(9);
+  assert.equal(event.traps.has(trap), false);
+  ticks(1);
+  assert.equal(bark(p), 11);
+  assert.equal(bark(q), 0, 'the trap is gone before the other action finishes');
+  assert.equal(Poachers.sessions.has(q), false, 'the second action ends with the trap');
+});
+
 test('a trap springs when the fox has stood on it 2 ticks: sounds 7541 and 2387 a tick later, gone after 2', () => {
   const effects = recordEffects();
   try {
@@ -343,9 +380,7 @@ test('saving the fox: synth 7531 and the line, the gift a tick later for a disar
     let turn = 0;
     for (let i = 0; i < 200 && Poachers.events.has(event); i++) {
       for (const trap of event.traps) {
-        if (!trap.disarming && ![...Poachers.sessions.keys()].some((pl) => Poachers.sessions.get(pl).event === event && pl === (turn % 2 ? late : p))) {
-          disarm(turn++ % 2 ? late : p, trap);
-        }
+        if (trap.disarmers.size === 0) disarm(turn++ % 2 ? late : p, trap);
       }
       const [oldest] = event.traps;
       if (oldest) foxOnto(event, oldest);
@@ -470,11 +505,13 @@ test("switching traps mid-disarm frees the first to spring", () => {
   const [a, b] = event.traps;
   disarm(p, a);
   disarm(p, b);
-  assert.equal(a.disarming, false);
-  assert.equal(b.disarming, true);
+  assert.equal(a.disarmers.has(p), false);
+  assert.equal(b.disarmers.has(p), true);
+  assert.equal(a.disarmers.size, 0, 'the first trap is free to spring again');
   const other = fakePlayer();
   disarm(other, a);
   assert.equal(Poachers.sessions.get(other).trap, a, 'someone else can take it on');
+  assert.equal(a.disarmers.has(other), true);
 });
 
 test("an egg from another pheasant event isn't taken", () => {

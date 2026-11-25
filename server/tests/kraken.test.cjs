@@ -866,7 +866,7 @@ test("joint private respawn waits for an already-dying unhit tentacle and retrie
 });
 
 for (const leaveBeforeWake of [false, true]) {
-  test(`delayed private explosive ${leaveBeforeWake ? "is not consumed after exit" : "wakes the boss in the room"}`, async t => {
+  test(`delayed private explosive ${leaveBeforeWake ? "stays spent and does not wake the boss after exit" : "wakes the boss in the room"}`, async t => {
     const { core, PluginManager } = await nativeBootstrap(), actor = nativeActor(t, core);
     actor.player.getInventory().adds(core.ItemIdentifiers.COINS, 25000);
     actor.player.getInventory().adds(core.ItemIdentifiers.FISHING_EXPLOSIVE, 1);
@@ -877,17 +877,175 @@ for (const leaveBeforeWake of [false, true]) {
     const boss = room.getNpcs().find(npc => npc.getRealId() === core.NpcIdentifiers.WHIRLPOOL_2);
     const item = actor.player.getInventory().getItems().find(entry => entry.getId() === core.ItemIdentifiers.FISHING_EXPLOSIVE);
     assert.ok(boss?.isRegistered() && item);
+    actor.player.moveTo(new core.Location(2280, 10031, 0));
     PluginManager.emitItemOnNpc({ player: actor.player, target: boss, item,
       itemId: item.getId(), npcId: boss.getId(), handled: false });
     if (leaveBeforeWake) {
+      actor.player.moveTo(new core.Location(2280, 10022, 0));
       const exit = core.World.findCacheObject(actor.player, core.ObjectIdentifiers.CREVICE_5, new core.Location(2280, 10021, 0));
       assert.ok(exit);
       assert.equal(nativeObject(PluginManager, { ...actor, object: exit }, 1), true);
       assert.equal(room.isDestroyed(), true);
     }
-    const delay = require("../plugins/bosses/kraken/Disturb.Kraken").THROW_DELAY_TICKS;
-    for (let i = 0; i < delay + 2; i++) core.TaskManager.process();
-    assert.equal(actor.player.getInventory().getAmount(core.ItemIdentifiers.FISHING_EXPLOSIVE), leaveBeforeWake ? 1 : 0);
-    if (!leaveBeforeWake) assert.equal(boss.getId(), core.NpcIdentifiers.KRAKEN);
+    for (let i = 0; i < 20; i++) core.TaskManager.process();
+    assert.equal(actor.player.getInventory().getAmount(core.ItemIdentifiers.FISHING_EXPLOSIVE), 0);
+    assert.equal(boss.getId(), leaveBeforeWake ? core.NpcIdentifiers.WHIRLPOOL_2 : core.NpcIdentifiers.KRAKEN);
+  });
+}
+
+async function nativeKrakenEncounter(t, roomType) {
+  const { core, PluginManager, api, npcDeaths } = await nativeBootstrap();
+  const actor = nativeActor(t, core);
+  const { WHIRLPOOL_2, WHIRLPOOL_3 } = core.NpcIdentifiers;
+  let room = null;
+  if (roomType === "private") {
+    actor.player.getInventory().adds(core.ItemIdentifiers.COINS, 25000);
+    assert.equal(nativeObject(PluginManager, actor, 2), true);
+    await nativeChoice(actor, 1);
+    room = actor.player.getPrivateArea();
+    actor.rooms.push(room);
+    assert.ok(room?.hasMember(actor.player));
+  } else {
+    assert.equal(nativeObject(PluginManager, actor, 1), true);
+    assert.equal(actor.player.getPrivateArea(), null);
+    const spawns = require("../data/definitions/npc-spawns.json");
+    for (const { id, x, y, level } of spawns.filter(spawn => [WHIRLPOOL_2, WHIRLPOOL_3].includes(spawn.id))) {
+      assert.ok(api.spawnNpc({ id, x, y, z: level, wanderRadius: 0 })?.isRegistered());
+    }
+    t.after(() => {
+      require("../plugins/bosses/kraken/Respawn.Kraken").releaseArea(null);
+      for (const npc of encounter()) api.removeNpc(npc);
+      for (const npc of core.World.getAddNPCQueue().slice()) {
+        if ([WHIRLPOOL_2, WHIRLPOOL_3].includes(npc.getRealId()) && npc.getPrivateArea() === null) api.removeNpc(npc);
+      }
+    });
+  }
+  function encounter() {
+    return [...core.World.getNpcs()].filter(npc => npc.getPrivateArea() === room
+      && [WHIRLPOOL_2, WHIRLPOOL_3].includes(npc.getRealId()));
+  }
+  const boss = encounter().find(npc => npc.getId() === WHIRLPOOL_2);
+  const tentacles = encounter().filter(npc => npc.getId() === WHIRLPOOL_3);
+  assert.ok(boss?.isRegistered());
+  assert.equal(tentacles.length, 4);
+  return { core, PluginManager, actor, npcDeaths, encounter, boss, tentacles };
+}
+
+async function explosiveFixture(t, x, y, roomType = "private") {
+  const { core, PluginManager, actor, boss, tentacles } = await nativeKrakenEncounter(t, roomType);
+  const { player } = actor;
+  const { FISHING_EXPLOSIVE } = core.ItemIdentifiers;
+  player.getInventory().adds(FISHING_EXPLOSIVE, 2);
+  player.moveTo(new core.Location(x, y, 0));
+  player.setNeedsPlacement(false);
+
+  function throwExplosive() {
+    const item = player.getInventory().getItems().find(entry => entry.getId() === FISHING_EXPLOSIVE);
+    assert.ok(item);
+    assert.equal(player.getPrivateArea(), boss.getPrivateArea());
+    assert.equal(boss.getId(), core.NpcIdentifiers.WHIRLPOOL_2);
+    PluginManager.emitItemOnNpc({ player, target: boss, item,
+      itemId: item.getId(), npcId: boss.getId(), handled: false });
+  }
+
+  return { core, PluginManager, actor, player, boss, tentacles, throwExplosive };
+}
+
+test.skip("the fishing explosive sends its recorded throw line (mechanics-only: message omitted)");
+
+test("a three-tile explosive throw spends one item and sends the recorded launch", async t => {
+  const { core, player, boss, throwExplosive } = await explosiveFixture(t, 2280, 10031);
+  const { encodeProjectiles, encodeSound } = require("../dist/net/protocol/ClientProtocol");
+  const packets = t.mock.method(player.getSession(), "sendClientPacket");
+  const count = () => player.getInventory().getAmount(core.ItemIdentifiers.FISHING_EXPLOSIVE);
+  assert.equal(count(), 2);
+  throwExplosive();
+  const graphic = player.getGraphic();
+  assert.deepEqual({
+    remaining: count(),
+    animation: player.getAnimation()?.getId(),
+    graphic: graphic && [graphic.getId(), graphic.getHeight(), graphic.getDelay()],
+  }, { remaining: 1, animation: 385, graphic: [50, 96, 0] });
+  const projectile = encodeProjectiles([{
+    projectileId: 49, source: { x: 2280, y: 10031, level: 0 }, sourceHeight: 163,
+    target: { x: 2280, y: 10036, level: 0 }, endHeight: 0,
+    slope: 50, startPos: 32, startCycleOffset: 28, endCycleOffset: 151,
+    targetActor: { kind: "npc", index: boss.getIndex() },
+  }]);
+  const sound = encodeSound(2379, { loops: 1, delay: 151 });
+  throwExplosive();
+  assert.equal(count(), 1, "a duplicate attempt during flight spends nothing");
+  for (const packet of [projectile, sound]) {
+    assert.equal(packets.mock.calls.filter(({ arguments: [sent] }) => packet.equals(sent)).length, 1);
+  }
+});
+
+for (const { x, y, end, rise } of [
+  { x: 2280, y: 10031, end: 151, rise: 8 },
+  { x: 2278, y: 10024, end: 396, rise: 16 },
+]) {
+  test(`a fishing explosive from (${x}, ${y}) raises the tentacles at +${rise} and the boss at +${rise + 2}`, async t => {
+    const { core, player, boss, tentacles, throwExplosive } = await explosiveFixture(t, x, y);
+    const { WHIRLPOOL_2, KRAKEN, WHIRLPOOL_3, ENORMOUS_TENTACLE } = core.NpcIdentifiers;
+    const animations = tentacles.map(npc => t.mock.method(npc, "performAnimation"));
+    const bossAnimations = t.mock.method(boss, "performAnimation");
+    const projectile = t.mock.method(player.getPacketSender(), "sendProjectile");
+    throwExplosive();
+    for (let tick = 1; tick <= rise + 2; tick++) {
+      core.World.process();
+      assert.deepEqual(tentacles.map(npc => npc.getId()), Array(4).fill(tick < rise ? WHIRLPOOL_3 : ENORMOUS_TENTACLE),
+        `tentacles on throw +${tick}`);
+      assert.equal(boss.getId(), tick < rise + 2 ? WHIRLPOOL_2 : KRAKEN, `boss on throw +${tick}`);
+      if (tick === rise || (rise === 8 && tick === rise + 1)) {
+        const expected = tick === rise ? [3860] : [3860, 3618];
+        for (const animation of animations) {
+          assert.deepEqual(animation.mock.calls.map(({ arguments: [anim] }) => anim.getId()), expected);
+        }
+      }
+    }
+    assert.equal(bossAnimations.mock.calls[0]?.arguments[0].getId(), 7135);
+    assert.deepEqual(projectile.mock.calls.filter(({ arguments: args }) => args[4] === 49)
+      .map(({ arguments: args }) => args[3]), [end]);
+  });
+}
+
+test("leaving the public room before the wake keeps the explosive spent and allows another throw", async t => {
+  const { core, PluginManager, actor, player, boss, tentacles, throwExplosive } =
+    await explosiveFixture(t, 2280, 10031, "public");
+  const { WHIRLPOOL_2, WHIRLPOOL_3, KRAKEN } = core.NpcIdentifiers;
+  throwExplosive();
+  player.moveTo(new core.Location(2280, 10022, 0));
+  const exit = core.World.findCacheObject(player, core.ObjectIdentifiers.CREVICE_5, new core.Location(2280, 10021, 0));
+  assert.ok(exit);
+  assert.equal(nativeObject(PluginManager, { ...actor, object: exit }, 1), true);
+  for (let tick = 0; tick < 10; tick++) core.World.process();
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.FISHING_EXPLOSIVE), 1);
+  assert.equal(boss.getId(), WHIRLPOOL_2);
+  assert.deepEqual(tentacles.map(npc => npc.getId()), Array(4).fill(WHIRLPOOL_3));
+  assert.equal(nativeObject(PluginManager, actor, 1), true);
+  player.moveTo(new core.Location(2280, 10031, 0));
+  throwExplosive();
+  tickUntil(core, () => boss.getId() === KRAKEN, 10, "the next throw completes after the abandoned wake");
+  assert.equal(player.getInventory().getAmount(core.ItemIdentifiers.FISHING_EXPLOSIVE), 0);
+});
+
+for (const [roomType, random, delay] of [["public", 0, 10], ["private", 1 - Number.EPSILON, 14]]) {
+  test(`the ${roomType} boss and all four tentacle whirlpools return together on removal +${delay}`, async t => {
+    const { core, actor, npcDeaths, encounter, boss, tentacles } = await nativeKrakenEncounter(t, roomType);
+    const { WHIRLPOOL_2, KRAKEN, WHIRLPOOL_3, ENORMOUS_TENTACLE } = core.NpcIdentifiers;
+    for (const tentacle of tentacles) tentacle.setNpcTransformationId(ENORMOUS_TENTACLE);
+    actor.deaths.push(...tentacles);
+    const rng = t.mock.method(Math, "random", () => random);
+    killNativeNpc(t, core, actor, boss, KRAKEN);
+    tickUntil(core, () => !boss.isRegistered(), boss.getCurrentDefinition().getDeathTicks() + 10,
+      "the engine removed the original boss");
+    rng.mock.restore();
+    assert.ok(npcDeaths.includes(boss), "the boss death reached the registered hook");
+    const whirlpools = id => encounter().filter(npc => npc.getId() === id).length;
+    for (let tick = 1; tick <= delay; tick++) {
+      core.World.process();
+      assert.deepEqual([whirlpools(WHIRLPOOL_2), whirlpools(WHIRLPOOL_3)], tick < delay ? [0, 0] : [1, 4],
+        `registered replacements at removal +${tick}`);
+    }
   });
 }

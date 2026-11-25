@@ -41,7 +41,7 @@ teleports (`loc-teleports.json`: cave entrance/exit 30177/30178), kill tracking
   nearby tentacle whirlpools have surfaced. Disturbing the boss early says "Nothing happens."
   (estimate). The boss starts at (2278, 10034) and its four tentacle whirlpools are
   at (2275/2284, 10034/10038).
-- **Fishing explosive:** spend one on the throw. The player plays sequence 385
+- **Fishing explosive:** spend one from the selected inventory slot on the throw. The player plays sequence 385
   (`human_throw`) with spotanim 50 (`vial_launch`) at height 96. Projectile 49
   (`vial_travel`) starts at the player's tile and targets the centre of the whirlpool.
   It starts at cycle 28 with angle 50, progress 32 and heights 163/0. Its end cycle

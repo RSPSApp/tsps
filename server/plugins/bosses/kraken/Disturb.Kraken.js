@@ -148,7 +148,7 @@ function cancelExplosiveWake(player) {
 }
 
 /** Fishing explosive on the large whirlpool. Cave krakens still only surface via Disturb. */
-function explosive({ player, target, itemId }) {
+function explosive({ player, target, item, itemId, slot }) {
   const { BOSS, BOSS_WHIRLPOOL } = Shared.ids();
   const { Animation, Graphic, Projectile, ItemIdentifiers } = Shared.core();
   const { FISHING_EXPLOSIVE, FISHING_EXPLOSIVE_2 } = ItemIdentifiers;
@@ -164,13 +164,13 @@ function explosive({ player, target, itemId }) {
   }
   if (pendingWakes.has(target)) return true;
   const inventory = player.getInventory();
-  if (inventory.getAmount(itemId) < 1) return true;
+  if (!item || inventory.get(slot) !== item || item.getId() !== itemId || item.getAmount() < 1) return true;
 
   const startingRoom = target.getPrivateArea?.();
   const startingArea = player.getArea();
   const wake = { player, tentaclesUp: false };
   pendingWakes.set(target, wake);
-  inventory.deleteNumber(itemId, 1);
+  inventory.deleteAtSlot(slot, 1);
   const endCycles = Projectile.arrivalCycles(player, target, THROW_END_BASE_CYCLES, THROW_CYCLES_PER_TILE);
   player.performAnimation(new Animation(THROW_ANIM));
   player.performGraphic(Graphic.atHeight(THROW_SPOTANIM, THROW_SPOTANIM_HEIGHT));

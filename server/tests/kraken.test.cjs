@@ -876,10 +876,12 @@ for (const leaveBeforeWake of [false, true]) {
     const room = actor.player.getPrivateArea();
     actor.rooms.push(room);
     const boss = room.getNpcs().find(npc => npc.getRealId() === core.NpcIdentifiers.WHIRLPOOL_2);
-    const item = actor.player.getInventory().getItems().find(entry => entry.getId() === core.ItemIdentifiers.FISHING_EXPLOSIVE);
+    const inventory = actor.player.getInventory();
+    const slot = inventory.getSlotForItemId(core.ItemIdentifiers.FISHING_EXPLOSIVE);
+    const item = inventory.get(slot);
     assert.ok(boss?.isRegistered() && item);
     actor.player.moveTo(new core.Location(2280, 10031, 0));
-    PluginManager.emitItemOnNpc({ player: actor.player, target: boss, item,
+    PluginManager.emitItemOnNpc({ player: actor.player, target: boss, item, slot,
       itemId: item.getId(), npcId: boss.getId(), handled: false });
     if (leaveBeforeWake) {
       actor.player.moveTo(new core.Location(2280, 10022, 0));
@@ -940,12 +942,12 @@ async function explosiveFixture(t, x, y, roomType = "private") {
   player.moveTo(new core.Location(x, y, 0));
   player.setNeedsPlacement(false);
 
-  function throwExplosive() {
-    const item = player.getInventory().getItems().find(entry => entry.getId() === FISHING_EXPLOSIVE);
-    assert.ok(item);
+  function throwExplosive(slot = player.getInventory().getSlotForItemId(FISHING_EXPLOSIVE)) {
+    const item = player.getInventory().get(slot);
+    assert.equal(item?.getId(), FISHING_EXPLOSIVE);
     assert.equal(player.getPrivateArea(), boss.getPrivateArea());
     assert.equal(boss.getId(), core.NpcIdentifiers.WHIRLPOOL_2);
-    PluginManager.emitItemOnNpc({ player, target: boss, item,
+    PluginManager.emitItemOnNpc({ player, target: boss, item, slot,
       itemId: item.getId(), npcId: boss.getId(), handled: false });
   }
 
@@ -958,15 +960,24 @@ test("a three-tile explosive throw spends one item and sends the recorded launch
   const { core, player, boss, throwExplosive } = await explosiveFixture(t, 2280, 10031);
   const { encodeProjectiles, encodeSound } = require("../dist/net/protocol/ClientProtocol");
   const packets = t.mock.method(player.getSession(), "sendClientPacket");
-  const count = () => player.getInventory().getAmount(core.ItemIdentifiers.FISHING_EXPLOSIVE);
-  assert.equal(count(), 2);
-  throwExplosive();
+  const { FISHING_EXPLOSIVE } = core.ItemIdentifiers;
+  const inventory = player.getInventory();
+  const firstSlot = inventory.getSlotForItemId(FISHING_EXPLOSIVE);
+  const firstAmount = inventory.get(firstSlot).getAmount();
+  const selectedSlot = 7;
+  inventory.setItem(selectedSlot, new core.Item(FISHING_EXPLOSIVE, 1).setMetaValue(core.Item.PRESET_META, true));
+  assert.notEqual(firstSlot, selectedSlot);
+  const count = () => inventory.getAmount(FISHING_EXPLOSIVE);
+  assert.equal(count(), 3);
+  throwExplosive(selectedSlot);
   const graphic = player.getGraphic();
   assert.deepEqual({
     remaining: count(),
     animation: player.getAnimation()?.getId(),
     graphic: graphic && [graphic.getId(), graphic.getHeight(), graphic.getDelay()],
-  }, { remaining: 1, animation: 385, graphic: [50, 96, 0] });
+  }, { remaining: 2, animation: 385, graphic: [50, 96, 0] });
+  assert.equal(inventory.get(firstSlot).getAmount(), firstAmount, "the unclicked stack stays intact");
+  assert.notEqual(inventory.get(selectedSlot)?.getId(), FISHING_EXPLOSIVE, "the clicked stack was spent");
   const projectile = encodeProjectiles([{
     projectileId: 49, source: { x: 2280, y: 10031, level: 0 }, sourceHeight: 163,
     target: { x: 2280, y: 10036, level: 0 }, endHeight: 0,
@@ -975,7 +986,7 @@ test("a three-tile explosive throw spends one item and sends the recorded launch
   }]);
   const sound = encodeSound(2379, { loops: 1, delay: 151 });
   throwExplosive();
-  assert.equal(count(), 1, "a duplicate attempt during flight spends nothing");
+  assert.equal(count(), 2, "a duplicate attempt during flight spends nothing");
   for (const packet of [projectile, sound]) {
     assert.equal(packets.mock.calls.filter(({ arguments: [sent] }) => packet.equals(sent)).length, 1);
   }

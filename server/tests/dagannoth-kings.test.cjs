@@ -15,6 +15,7 @@ const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { Gamevals, GamevalKind } = require("../dist/game/cache/Gamevals");
 const { RegionManager } = require("../dist/game/collision/RegionManager");
 const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { Location } = require("../dist/game/model/Location");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { TaskManager } = require("../dist/game/task/TaskManager");
@@ -385,6 +386,7 @@ for (const [lair, y] of [["public", 4449], ["Slayer", 4385]]) {
     const animations = [];
     const player = {
       getLocation: () => new Location(2900, y, 0),
+      getPrivateArea: () => null,
       moveTo: (tile) => moves.push([tile.getX(), tile.getY(), tile.getZ()]),
       sendMessage: (message) => messages.push(message),
       performAnimation: (animation) => animations.push(animation),
@@ -396,6 +398,23 @@ for (const [lair, y] of [["public", 4449], ["Slayer", 4385]]) {
     assert.deepEqual(moves, [[1912, 4367, 0]]);
   });
 }
+
+test("Climb-up in a private lair keeps the original outside tile", () => {
+  // The Echo room uses the ordinary cache map at the public lair's coordinates.
+  const privateArea = new core.PrivateArea();
+  const location = { x: 2899, y: 4449, z: 0 };
+  const ladder = MapObjects.get(Common.EXIT_LADDER_ID, new Location(location.x, location.y, location.z), privateArea);
+  assert.ok(ladder, "the cache ladder must resolve in the private lair");
+  const moves = [];
+  const player = {
+    getLocation: () => new Location(2900, 4449, 0),
+    getPrivateArea: () => privateArea,
+    moveTo: (tile) => moves.push([tile.getX(), tile.getY(), tile.getZ()]),
+  };
+  const objectId = ladder.getId();
+  assert.equal(objectClicks[`${objectId}:1`]({ player, location, objectId }), true);
+  assert.deepEqual(moves, [[1910, 4367, 0]]);
+});
 
 test("Standard and Slayer still land immediately when entering from the exit tile", () => {
   const moves = [];

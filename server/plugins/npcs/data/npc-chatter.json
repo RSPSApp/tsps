@@ -42,7 +42,8 @@
       "hosidius_servery_diner_north_4", "hosidius_servery_diner_south_1", "hosidius_servery_diner_south_2",
       "hosidius_servery_diner_south_3", "hosidius_servery_diner_south_4", "eadgar_zoo_keeper_aviary",
       "dwarf_city_shop_bakery", "dwarf_city_shop_craft", "dwarf_city_shop_silver", "fairy_frog",
-      "vm_patrol_route_workmen_1", "vm_patrol_route_wheelbarrow_empty", "dwarf_city_dwarf_sack_in_cart_full2",
+      "vm_patrol_route_workmen_1", "vm_patrol_route_wheelbarrow_empty", "dwarf_city_dwarf_sack_in_cart_full",
+      "dwarf_city_dwarf_sack_in_cart_full2", "dwarf_city_dwarf_sack_in_cart_full3",
       "dwarf_city_old_dwarf1", "dwarf_city_old_dwarf2", "fai_varrock_guard02", "fai_varrock_guard02_f_variant02",
       "fai_varrock_guard_captain02"
     ],

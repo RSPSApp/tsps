@@ -95,7 +95,7 @@ excluded:
 - NPCs that speak in short exchanges with other NPCs, or when something passes: the Hosidius and
   Lovakengj drunks' stories, the Hosidius diners, Hegir's argument, the zoo keeper's exchange
   with Postie Pete, Sune's errands to the shop dwarves, the fairy frog, the Varlamore workmen and
-  the Varrock guards they pass, and the Keldagrim sack carts. They speak in a burst every few
+  the Varrock guards they pass, and the Keldagrim sack carts (all three variants). They speak in a burst every few
   hundred ticks, so the captured gap is the spacing inside one burst, and drawing lines at random
   at that gap would repeat it forever;
 - the Khazard battlefield's gnome troops, whose battle cries have no battle in tsps.

@@ -198,7 +198,8 @@ test("idle loops are not gestures; a family takes its excluded member's exclusio
 test("quest chanters, lobby callers, exchanges and battle cries are left out", () => {
   for (const name of ["chantergnome", "honest_jimmy", "hosidius_drunken_farmer_boss_1", "lovakengj_drunkard_boss",
     "hosidius_servery_diner_north_3", "eadgar_zoo_keeper_aviary", "dwarf_city_shop_silver", "fairy_frog",
-    "vm_patrol_route_workmen_1", "dwarf_city_dwarf_sack_in_cart_full2", "dwarf_city_old_dwarf1",
+    "vm_patrol_route_workmen_1", "dwarf_city_dwarf_sack_in_cart_full", "dwarf_city_dwarf_sack_in_cart_full2",
+    "dwarf_city_dwarf_sack_in_cart_full3", "dwarf_city_old_dwarf1",
     "battlefield_gnome_troop", "fai_varrock_guard_captain02", "fai_varrock_guard02"]) {
     assert.equal(chatterById.has(core.CacheDefinitions.getNpcId(name)), false, name);
   }

@@ -87,9 +87,17 @@ function bossDeath(event) {
     if (session.echoCompleted) return;
     session.echoCompleted = true;
     Common.api.emitCustomEvent("echo-boss:completed", { player, boss: "amoxliatl", token: session.echoToken, npcs: [event.npc], location: Common.core.Projectile.centreOf(event.npc) });
-    fight.hideHud();
-    fight.stop();
-    // Keep the exit available, but never respawn a second boss in this session.
+    // Recorded (R1140, 6 of 6): after the Echo's own lines, the normal boss's duration line,
+    // against the normal personal best; the normal kill count is left alone (varp 4403 unsent).
+    const best = Number(player.getAttribute(Common.BEST_TICKS_ATTRIBUTE)) || 0;
+    if (best) player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(fight.duration())}</col>. Personal best: ${Common.formatTicks(best)}`);
+    // As the normal boss: the HUD fades, and the next Echo rises if the player stays.
+    Common.later(HUD_FADE_AFTER_REMOVAL_TICKS, () => {
+      fight.hideHud();
+      fight.stop();
+    });
+    session.boss = null;
+    Common.later(Common.data.spawn.respawnTicks, () => session.respawnEcho());
     return;
   }
   // The quest's guardian never dies (questEnd); nothing here is hers.

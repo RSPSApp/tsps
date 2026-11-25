@@ -3,9 +3,10 @@
 A Demonic Pacts League (Leagues VI) character carrying a region's Echo orb is asked at the
 boss's entrance whether to fight its Echo. Yes starts a private encounter with that boss's
 Echo. No orb is consumed. All nine encounters exist, with the Wiki's Echo stats and Echo
-equipment rolls. **The Echo Thermonuclear smoke devil fights as live does**, from its recording
-(its smoke pools, shot sets, charged special, prayer and enrage:
-[thermonuclear-smoke-devil.md](thermonuclear-smoke-devil.md)). **The other eight are placeholders:**
+equipment rolls. **The Echo Thermonuclear smoke devil and the Echo Amoxliatl fight as live does**,
+from their recordings (Thermy's smoke pools, shot sets, charged special, prayer and enrage:
+[thermonuclear-smoke-devil.md](thermonuclear-smoke-devil.md); Amoxliatl's shots, black icicles,
+phase casts, enrage and pools: [amoxliatl.md](amoxliatl.md)). **The other seven are placeholders:**
 each fights exactly like its normal boss; their Echo-specific attacks, shared health and special
 mechanics are not implemented. A capture of Echo Hunllef exists (below) and is left for a
 follow-up; the recordings found were not searched exhaustively, so others may exist too. Each
@@ -54,7 +55,7 @@ the Wiki lists their Echo ids as `override<normal id>`; no recording of them has
 
 Sent here as live does: the Echo models, name and combat level; Thermy's spawn spotanim and
 sequence; and at completion the kill-count message (no space after "is:" on the first kill, a
-space after), then "You have set a new personal best" or else "Duration" (timed from entry), and
+space after), then "You have set a new personal best" or else "Duration" (timed from entry; Amoxliatl from each Echo's rise, as live times her), and
 the `league_echo_pb_`/`killcount_` varbits. Echo Hunllef first sends the Corrupted Gauntlet's
 own "Corrupted challenge duration" and "Preparation time" lines. It shares the Corrupted personal
 best but adds no Corrupted completion count (live's `total_completed_gauntlet_hm` is unchanged).
@@ -65,7 +66,8 @@ Echo run starts at the boss; live's Echo runs spend a few seconds in the start r
 | Boss | Echo appearance | Notes |
 |---|---|---|
 | Cerberus, Thermonuclear smoke devil, Corrupted Hunllef, Hespori, Kalphite Queen (both forms), the three Dagannoth Kings, Dawn, Dusk phases 1-3 | Echo models | The stub's whole model list and recolours (Rex and Prime drop their normal recolours) |
-| King Black Dragon, Amoxliatl | Echo model | No NPC stub: the single model (60340, 60338) their `leagues_echo_bosses` row's struct gives the League Areas panel (param 1999; param 1322 is the normal model) |
+| King Black Dragon | Echo model | No NPC stub: the single model (60340) its `leagues_echo_bosses` row's struct gives the League Areas panel (param 1999; param 1322 is the normal model) |
+| Amoxliatl | Echo models, as recorded | No NPC stub: live sends 60338 (her row's model) in place of her body (54438), her 54437, and 60339 (rsprox.net 1140, 7 of 7) |
 | Dusk phase 4 | Normal | A size-6 form with its own rig; the only Echo Dusk is size 4 |
 
 Every Echo is named `<normal name> (Echo)` with its Wiki Echo combat level. Thermy's name keeps
@@ -128,6 +130,7 @@ Captures of Echo mechanics, for that follow-up:
 |---|---|---|
 | rsprox.net 1158 (rev 237) | 110 Echo Corrupted Hunllef kills | Echo crystals (`crystal_hunllef_crystals_echo_crystals`, 14142) and their hits (`leagues_6_crystal_hunleff_crystals_hit`); Echo ranged and magic projectiles (`leagues_6_crystal_hunleff_range_travel`, `_magic_travel`); an anti-prayer attack (`leagues_6_hunleff_antiprayer_travel`) |
 | rsprox.net 1161 (rev 237) | 31 Echo Thermonuclear smoke devil kills | Implemented: smoke pools, the ranged/magic shot sets, the charged special, its prayer and the enrage ([thermonuclear-smoke-devil.md](thermonuclear-smoke-devil.md)) |
+| rsprox.net 1140 (rev 237) | 6 Echo Amoxliatl kills | Implemented: see [amoxliatl.md](amoxliatl.md) |
 | rsprox.net 89 (rev 227) | 43 Leagues V Echo Dagannoth Kings encounters | A different league's Echo Kings; whether Leagues VI's match is unknown |
 
 A search of rsprox.net/database for the `league_echo_killcount_*` varbits also matched three

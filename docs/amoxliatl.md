@@ -41,15 +41,17 @@ She attacks 4 ticks after rising, then every 8 ticks (both captures), following 
 
 ### Standard attack
 
-`amoxliatl_attack` (11530) and a magic hit of up to 22 on the same tick (captured: the player's block on that tick); Protect from Magic blocks it. The ice spikes (map animation 2942) are drawn on the floor around the player as captured: of the tiles within 6 of the player, their own about 3 in 4, the next ring about 2 in 3, the rest about 1 in 4 (counted over 13 attacks, 18-50 tiles each). Each is one 150-cycle animation (seq 11543): a short warning, then the spike rising through ticks 2-3. 3 ticks after the attack they hit a player who was still on one of their tiles the tick before: typeless 6-16 (R1140: 92 spike hits from 6 to 16, none with the pools' sound; R1147 ticks 352 and 360: 10 and 6). Every player who had stepped off by then took nothing (the other 11 attacks), the Wiki's "step back two tiles after she starts a standard attack".
+`amoxliatl_attack` (11530) and a magic hit of up to 22 on the same tick (captured: the player's block on that tick); Protect from Magic blocks it. The ice spikes (map animation 2942) are drawn on the floor around the player as captured: of the tiles within 6 of the player, their own about 3 in 4, the next ring about 2 in 3, the rest about 1 in 4 (counted over 13 attacks, 18-50 tiles each). Each is one 150-cycle animation (seq 11543): a short warning, then the spike rising through ticks 2-3. 3 ticks after the attack they hit a player who was still on one of their tiles the tick before: 6-16 (R1140: over 90 spike hits from 6 to 16, none with the pools' sound; R1147 ticks 352 and 360: 10 and 6). Every player who had stepped off by then took nothing (the other 11 attacks), the Wiki's "step back two tiles after she starts a standard attack".
 
-3 ticks after the attack an icy pool (54279, a random rotation) forms on the tile the player stood on when she attacked (captured), with sound 9726 from the middle of the platform (always 1365,4511, both captures). Standing on a pool deals 6-10 typeless damage a tick (Wiki; R1140's pool hits are all 6-10), each hit with sound 4464 (R1140). Pools stay until she dies: on the killing blow each one goes with a puff (map animation 2938, captured).
+3 ticks after the attack an icy pool (54279, a random rotation) forms on the tile the player stood on when she attacked (captured), with sound 9726 from the middle of the platform (always 1365,4511, both captures). Standing on a pool deals 6-10 a tick (Wiki; R1140's pool hits are all 6-10), each hit with sound 4464 (R1140). Pools stay until she dies: on the killing blow each one goes with a puff (map animation 2938, captured).
+
+Her spikes and pools are her hits, not plain damage: through prayer and never missing, but from her. On live, with a shield worn, Thorns answered every one the next tick (R1140: 106 of 106 pool hits and 86 of 86 spike hits; it answered none while the shield was off). So Thorns and the shield reflect pact apply to them here (issue #6422).
 
 ### Specials
 
 After every 2-4 standard attacks (Wiki) she uses a special: the first at random, then in turn (both captures: four standard attacks, a special, three, the other). With the player on the 3-wide path to her platform (x 1372 and east) she has no room for Unstable Ice and uses Icicle Crash (Wiki). Her next attack comes 9 ticks after Icicle Crash and 7 after Unstable Ice, not her usual 8 (R1140: 38 of 38 and 40 of 40; R1695 ticks 4871-4880 and 4905-4912).
 
-**Icicle Crash** clears active prayers before sending the game message "`<col=ff3045>Amoxliatl disables your prayers and launches an icicle attack!</col>`" (R1140 tick 7875). With no prayer active, it leaves prayer state alone and sends "`<col=ff3045>Amoxliatl launches an icicle attack!</col>`" (ticks 9718 and 9783). The message is followed by `amoxliatl_point` (11531) and an icicle (projectile 2936, cycles 50-150, heights 448 to 0) homing on the player. 5 ticks later it lands (spot 2935, sound 9720) for up to 34 magic damage; Protect from Magic on by then negates it (Wiki).
+**Icicle Crash** clears active prayers before sending the game message "`<col=ff3045>Amoxliatl disables your prayers and launches an icicle attack!</col>`" (R1140 tick 7875). With no prayer active, it leaves prayer state alone and sends "`<col=ff3045>Amoxliatl launches an icicle attack!</col>`" (ticks 9718 and 9783). The message is followed by `amoxliatl_point` (11531) and an icicle (projectile 2936, cycles 50-150, heights 448 to 0 on the wire: 112 to 0 in the data, which `PacketSender.sendProjectile` multiplies by 4) homing on the player. 5 ticks later it lands (spot 2935, sound 9720) for up to 34 magic damage; Protect from Magic on by then negates it (Wiki).
 
 **Unstable Ice** uses `amoxliatl_summon` (11533), "`<col=00e6e6>Amoxliatl forms some unstable ice blocks around you.`" (spam, R1140 tick 7909), and a throw (projectile 2936, cycles 50-90) at each block's tile with the impact drawn there on landing. 3 ticks later the blocks (13688, "Unstable ice") stand there (11536, sound 9713). The Wiki gives 1-4 blocks near the player; they land on free floor within 5 tiles, never on the player, her or the path (R1140: 117 blocks, 9 of them 5 tiles from the player).
 
@@ -97,7 +99,6 @@ grave).
 
 ## Estimates
 
-- Known respawn dialogue difference: R1140 shows three alternate lines on respawn (examples at ticks 7973, 8086 and 8715). TSPS uses the entrance line again on respawn.
 - The spike spread models the captured tiles. Spike damage is the range R1140 shows (6-16); the Wiki gives none.
 - Where the blocks land within 5 tiles (R1140: 1-5 tiles from the player, most at 2-3).
 - The capture's Exit prompt opened with the player a few tiles from the blockage; here the player walks up to it first.
@@ -115,24 +116,112 @@ She doesn't die. At 0 HP (`questEnd` in `Kills.Amoxliatl.js`) she becomes `amoxl
 
 ## Testing
 
-From `server/` after `yarn build` and `yarn ensure-cache`, run `node --test tests/amoxliatl.test.cjs tests/amoxliatl-scoreboard.test.cjs tests/freeze-resistance.test.cjs`.
+From `server/` after `yarn build` and `yarn ensure-cache`, run `node --test tests/amoxliatl.test.cjs tests/echo-amoxliatl.test.cjs tests/amoxliatl-scoreboard.test.cjs tests/freeze-resistance.test.cjs`.
 
 Developer commands: `::amoxliatl` (outside her door), `::amoxliatlhp <hitpoints>`, `::amoxliatlspecial <icicle|ice>` (her next attack). `::quest heart of darkness complete` opens the door.
-# Leagues VI Echo placeholder
 
-The Echo orb's Yes branch creates a separate private chamber with the normal
-Amoxliatl and her normal fight controller. EchoBosses gives that instance the Wiki
-Echo profile (650 HP, Magic 240, maximum magic hit 93, eight-tick attacks) and the cache's
-Echo model (her leagues_echo_bosses row). Normal and quest Amoxliatl definitions remain
-unchanged ([echo-bosses.md](echo-bosses.md)). The normal spikes, icy pools, alternating
-Icicle Crash/Unstable Ice, movement and protection logic remain in use. Their
-normal hazard and special-hit values are intentional placeholders: this is not
-an implementation of Echo-specific mechanics.
+# Leagues VI Echo
 
-The central Echo service validates VI/orb ownership and owns the encounter identity.
-Her normal loot drops as from a normal kill, and the service adds the Echo unique roll once. A completed Echo does not
-respawn, award ordinary Amoxliatl kill count/personal bests, or judge normal Combat
-Achievements. Departure, death, logout and shutdown cancel the fight and pending
-damage. Delayed entry and spawning revalidate the session and carried orb.
+A Leagues VI character carrying the Varlamore echo orb is asked "Fight the Echo of Amoxliatl?" at
+the door. Yes leads to a private chamber of her own, the same way in as the normal fight. The Echo
+is the normal Amoxliatl, dressed by EchoBosses with the Wiki's Echo profile (650 hitpoints) and
+live's Echo models ([echo-bosses.md](echo-bosses.md)). She fights as recorded:
+[rsprox.net 1140](https://rsprox.net/download/1140) (rev 237.1), with 7 Echoes and 6 kills.
+`EchoFight.Amoxliatl.js` runs her turns. The normal fight still runs her rising, the HP HUD and
+her death. Every number is in `amoxliatl.json` (`echo`), with ids by gameval name.
+
+## Her turns
+
+She attacks on the fight's own clock: the first turn 4 ticks after she rises, then every 4. The
+combat engine's attack turn does nothing for her. She follows the player to melee distance like
+the normal boss.
+
+| From her turn | What happens |
+| --- | --- |
+| +0 | The combo animation and two magic shots at the player |
+| +1 | The black icicle, from her middle to the tile the player stood on at +0 |
+| +3 | The first shot lands. The icicle lands with its spikes, and a pool forms on its tile |
+| +4 | The second shot lands |
+
+- **Magic shots:** Protect from Magic blocks them (160 of 160). Unprayed, they hit 0-30.
+- **Icicle damage:** the icicle and its spikes hit whoever is on them as the tick before the
+  landing ends.
+  - Stepping off on the landing tick is too late: 19 of 19 were hit.
+  - They hit through prayer, for 18-26.
+- **Spike area:** the icicle's tile, and every floor tile 2-4 steps away, except the 8 tiles
+  around it.
+  - Those 8 tiles are safe: 149 of 149 players there took no spike damage. That matches the Wiki.
+  - Each spike shows 2 client cycles later per step from the tile.
+- **No hit:** the player hears the icicle shatter (sound 7965).
+
+## The phase casts and the enrage
+
+On her first turn at or below **520** hitpoints, the turn is a phase cast instead. She casts
+again on her first turn at or below **250**.
+
+- **The 520 threshold:**
+  - Recorded casts came at 476-516 HP. Turns at 538 HP or more never cast.
+  - The Wiki says 500, which doesn't fit casts at 516, 514 and 513.
+  - The second threshold fits the Wiki's 250.
+- **What a cast does:**
+  - She says "Rani grows within me!" or, for the second, "Let the darkness consume you!".
+  - Spikes cover every floor tile within 2 steps of the player: 13 tiles on open floor.
+  - The next tick, prayers go off with "Amoxliatl disables your prayers.".
+  - 3 ticks after the cast, the same hit as the icicle's lands on anyone still on those tiles.
+    Pools form on them, except where one already is.
+- **Her next turn** comes 5 ticks after a cast.
+
+From the second cast she is enraged. Her turns come every 2 ticks: only the icicle, with no magic
+shots.
+
+## Pools
+
+- **Damage:** a pool hurts a player on it from its second tick on, for 7-15 a tick (10 recorded).
+  Nothing happens the tick after it forms.
+- **Lifetime:** it goes after 100 ticks with a puff (4 recorded). The Wiki says "~40 or so
+  seconds".
+- **Her death:** every pool goes when she dies.
+
+## Her hits
+
+The icicle, the spikes and the pools are her hits, like her shots.
+
+- On live, Thorns answers them as it answers her shots, the next tick:
+  - every enraged icicle hit while the player wore a shield (5 of 5);
+  - two pool ticks with nothing else landing (fight 6, ticks 13 and 14).
+- With a weapon in place of the shield, nothing answered.
+- So the same "an NPC hit the player" effects (Thorns, the shield reflect pact) apply to them
+  here.
+- The normal fight's spikes and pools are her hits too (see the normal fight above).
+
+## Kills and respawns
+
+- **Kill messages:**
+  - The Echo service sends the Echo's kill count and its personal best, or "Duration".
+  - Each Echo is timed from her rise, as live times her: 99 ticks from the rise to the kill count
+    read 0:59.40.
+  - The normal boss's "Fight duration: … Personal best: …" line follows, against the normal
+    personal best (6 of 6).
+  - The normal kill count isn't touched (varp 4403 unsent).
+- **HUD:** it fades as after a normal kill.
+- **Respawn:**
+  - With the player still in the chamber, the next Echo rises 28 ticks after the kill count, as
+    the normal boss does. The recorded Echoes rose 26-28 ticks after it.
+  - Each rise is a new Echo encounter, so the orb must still be carried. Without it, none rises.
+- **Rise lines:** she says "Euat! You are not welcome here!" when she first rises in a visit, and
+  after that one of "We are not done yet!", "I am not so easily destroyed!" and "This is not yet
+  over!". The normal boss now does the same, as R1140 shows for both.
+
+## Not verified
+
+- **Magic shot max hit:** 30 comes from 10 unprayed shots. The Wiki gives a max hit of 93, which
+  doesn't fit.
+- **Hit ranges:** the icicle's 18-26 and the pools' 7-15 are the recorded ranges. The 26 and 15
+  were single hits.
+- **Respawn timing:** why an Echo sometimes rose a tick or two earlier than 28.
+- **Normal personal best:** whether an Echo kill faster than the normal personal best would
+  replace it. No recorded kill was faster.
+- **No normal personal best yet:** with none, the normal duration line is not sent. Nothing shows
+  what live sends then.
 
 Source: [Echo Amoxliatl](https://oldschool.runescape.wiki/w/Amoxliatl_(Echo)).

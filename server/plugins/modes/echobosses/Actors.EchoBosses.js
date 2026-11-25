@@ -23,11 +23,13 @@ const variants = require("../../../data/definitions/npc-encounter-variants.json"
  * Every role an Echo adapter configures. `normal` is the gameval of the normal form the role's
  * appearance replaces; `echo` the official Echo stub whose models it wears. KBD and Amoxliatl
  * have no stub: `echoRow` names their `leagues_echo_bosses` row, whose struct holds the single
- * Echo model the League Areas panel draws. `profile` names the Wiki profile when it differs
- * from `role`: the Wiki gives Dusk one Echo profile (its phase-4 form's).
+ * Echo model the League Areas panel draws. `models` is a recorded model list, worn in place of
+ * either. `profile` names the Wiki profile when it differs from `role`: the Wiki gives Dusk one
+ * Echo profile (its phase-4 form's).
  */
 const ROLES = [
-  { boss: "amoxliatl", role: "boss", normal: "amoxliatl", echo: null, echoRow: "leagues_echo_amoxliatl" },
+  // rsprox.net 1140 (7 of 7): the row's model in place of her body (54438), her 54437, and 60339.
+  { boss: "amoxliatl", role: "boss", normal: "amoxliatl", echo: null, echoRow: "leagues_echo_amoxliatl", models: [60338, 54437, 60339] },
   { boss: "cerberus", role: "boss", normal: "cerberus_attacking", echo: "league_6_cerberus" },
   { boss: "corrupted-hunllef", role: "boss", normal: "crystal_hunllef_melee_hm", echo: "league_6_crystal_hunllef_melee" },
   { boss: "dagannoth-kings", role: "rex", normal: "dagcave_melee_boss", echo: "league_6_dagcave_melee_boss" },
@@ -80,7 +82,10 @@ function profileOf(entry) {
 function typeCustomisation(entry, normal, echo, profile, rowModel) {
   const custom = { name: entry.name ?? `${normal.name} (Echo)` };
   if (Number.isSafeInteger(profile.combat_level)) custom.combatLevel = profile.combat_level;
-  if (echo?.modelIds?.length) {
+  if (entry.models?.length) {
+    custom.models = [...entry.models];
+    custom.recolours = [];
+  } else if (echo?.modelIds?.length) {
     custom.models = [...echo.modelIds];
     custom.recolours = (echo.recolorFrom ?? []).map((from, index) => ({ from, to: echo.recolorTo[index] }));
   } else if (Number.isInteger(rowModel)) {

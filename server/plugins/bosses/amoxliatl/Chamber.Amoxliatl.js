@@ -69,8 +69,7 @@ class Session {
   constructor(player, quest = false, echoToken = null) {
     this.player = player;
     this.quest = quest;
-    // Echo deliberately reuses the normal fight, ice and attack ordering. Echo specials
-    // are not implemented until their mechanics have been captured.
+    // The Echo fights its own way (EchoFight.Amoxliatl) in the same chamber.
     this.variant = echoToken ? "echo" : "normal";
     this.echoToken = echoToken;
     this.area = new (areaClass())();
@@ -81,6 +80,8 @@ class Session {
     this.fight = null;
     /** Kills since the player came in (Kemo Makti). */
     this.kills = 0;
+    /** Times she has risen this visit: her line differs after the first. */
+    this.rises = 0;
     this.ended = false;
   }
 
@@ -126,12 +127,29 @@ class Session {
     if (this.echoToken) {
       // The normal Amoxliatl, given the Echo profile by EchoBosses (the Wiki's Echo is an
       // override of her own id, with no separate appearance).
-      const configure = { player: this.player, boss: "amoxliatl", role: "boss", npc: boss, token: this.echoToken, configured: false };
+      // Live times each Echo from her rise (R1140: 99 ticks from the rise to the kill count read 0:59.40).
+      const configure = { player: this.player, boss: "amoxliatl", role: "boss", npc: boss, token: this.echoToken, configured: false, timeFromNow: true };
       Common.api.emitCustomEvent("echo-boss:configure", configure);
       if (!configure.configured) { this.failEntry(); return; }
     }
     this.boss = boss;
-    require("./Fight.Amoxliatl").begin(this, boss);
+    if (this.echoToken) require("./EchoFight.Amoxliatl").begin(this, boss);
+    else require("./Fight.Amoxliatl").begin(this, boss);
+  }
+
+  /**
+   * Live: with the player still in the chamber, the next Echo rises after a kill, as the normal
+   * boss does. Each is its own Echo encounter, claimed again, so the orb must still be carried;
+   * without it none rises.
+   */
+  respawnEcho() {
+    if (this.ended || this.player.getArea() !== this.area || this.player.getHitpoints() <= 0) return;
+    Common.api.emitCustomEvent("echo-boss:release", { player: this.player, token: this.echoToken });
+    const claim = { player: this.player, boss: "amoxliatl", token: null };
+    Common.api.emitCustomEvent("echo-boss:claim", claim);
+    this.echoToken = claim.token;
+    this.echoCompleted = false;
+    if (this.echoToken) this.spawnBoss();
   }
 
   failEntry() {

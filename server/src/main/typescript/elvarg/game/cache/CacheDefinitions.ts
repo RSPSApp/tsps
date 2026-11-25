@@ -157,8 +157,15 @@ export class CacheDefinitions {
     private static spriteIndex?: CacheIndexDat2;
 
     private static getState() {
-        if (this.state) return this.state;
+        return this.state ?? this.loadState();
+    }
 
+    /**
+     * Kept out of getState: this body makes closures, so V8 gives it a context object on every
+     * entry, before any early return. Inside getState that was 48 bytes of garbage per definition
+     * lookup, several per NPC per tick (issue 6036).
+     */
+    private static loadState(): NonNullable<typeof CacheDefinitions.state> {
         const active = CachePipeline.getActive();
         const info: CacheInfo = {
             name: active.name,
@@ -929,6 +936,7 @@ export class CacheDefinitions {
         }
         this.customDefinitionSources.set(source, next);
         this.customDefinitions = new Map([...this.customDefinitionSources.values()].flatMap((defined) => [...defined]));
+        this.customCountFloor = null;
         this.customDefinitionCache = new Map();
         return next.size;
     }
@@ -1009,14 +1017,38 @@ export class CacheDefinitions {
             ?? this.getState().objects.load(id);
     }
 
-    static getCounts(): { npcs: number; items: number; objects: number; seqs: number } {
-        const counts = this.getBaseCounts();
+    /**
+     * Definition counts, custom definitions included. Every NPC asks several times a tick (through
+     * NpcDefinition.forId and NPC.getSize), so the custom definitions' share is worked out once per
+     * change of them, and the same frozen object comes back until a count changes (issue 6036: a
+     * fresh object and a split of every custom key per call were ~14% of the server's garbage).
+     */
+    static getCounts(): Readonly<{ npcs: number; items: number; objects: number; seqs: number }> {
+        const state = this.getState();
+        const floor = this.customCountFloor ??= this.customDefinitionCounts();
+        const npcs = Math.max(state.npcs.getCount(), floor.npcs);
+        const items = Math.max(state.items.getCount(), floor.items);
+        const objects = Math.max(state.objects.getCount(), floor.objects);
+        const seqs = state.archives.getCount("seq");
+        const cached = this.countsCache;
+        if (cached && cached.npcs === npcs && cached.items === items && cached.objects === objects && cached.seqs === seqs) {
+            return cached;
+        }
+        return this.countsCache = Object.freeze({ npcs, items, objects, seqs });
+    }
+
+    private static customCountFloor: { npcs: number; items: number; objects: number } | null = null;
+    private static countsCache: Readonly<{ npcs: number; items: number; objects: number; seqs: number }> | null = null;
+
+    /** Highest custom id + 1 per kind: the floor custom definitions put under each count. */
+    private static customDefinitionCounts(): { npcs: number; items: number; objects: number } {
+        const floor = { npcs: 0, items: 0, objects: 0 };
         for (const key of this.customDefinitions.keys()) {
             const [kind, id] = key.split(":");
             const field = kind === "npc" ? "npcs" : kind === "loc" ? "objects" : "items";
-            counts[field] = Math.max(counts[field], Number(id) + 1);
+            floor[field] = Math.max(floor[field], Number(id) + 1);
         }
-        return counts;
+        return floor;
     }
 
     static getBaseCounts(): { npcs: number; items: number; objects: number; seqs: number } {

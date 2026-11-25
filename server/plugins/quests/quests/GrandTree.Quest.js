@@ -1133,6 +1133,7 @@ module.exports = function registerGrandTreeQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [BLACK_DEMON_ID],
     key: "grand_tree",
     name: "The Grand Tree",
     varpId: VARP_GRAND_TREE,

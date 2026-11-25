@@ -2140,6 +2140,7 @@ module.exports = function registerBelowIceMountainQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [ANCIENT_GUARDIAN_NPC_ID],
     key: "below_ice_mountain",
     name: "Below Ice Mountain",
     varpId: 2951,

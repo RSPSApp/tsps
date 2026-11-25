@@ -560,6 +560,12 @@ function pickQuestShopVersion(request) {
   request.shop = request.shops.find((name) => questShopVersionApplies(name, request.player)) ?? null;
 }
 
+/** A quest declares only its actual combat opponents, never all its scene actors. */
+function describeEncounters(quest, { npcIds }) {
+  const ids = typeof quest.combatNpcIds === "function" ? quest.combatNpcIds() : quest.combatNpcIds ?? [];
+  for (const id of ids) npcIds.add(id);
+}
+
 function registerQuestWidgets(api) {
   coreApi = api.core;
   if (widgetsRegistered) return;
@@ -833,6 +839,7 @@ function sendQuestVarps({ player }) {
 function registerQuest(api, def) {
   if (!def || !def.key || !def.name) throw new Error("registerQuest requires a key and name");
   registerQuestWidgets(api);
+  if (def.combatNpcIds) api.onCustomEvent("bestiary:encounters", describeEncounters.bind(null, def));
   api.persistAttribute(stageAttribute(def.key), 0);
   api.persistAttribute(QUEST_POINTS_ATTRIBUTE, 0);
   api.persistAttribute(EXPERIENCE_WITHHELD_ATTRIBUTE, []);

@@ -1313,6 +1313,7 @@ module.exports = function registerDreamMentorQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => BOSS_ORDER,
     key: "dream_mentor",
     name: "Dream Mentor",
     varpId: 1003,

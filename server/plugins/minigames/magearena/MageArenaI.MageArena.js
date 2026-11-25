@@ -395,6 +395,7 @@ module.exports = function registerMageArenaI(pluginApi) {
   core = api.core;
   quest = QuestRuntime.registerQuest(api, {
     key: "mage_arena_i",
+    combatNpcIds: FORMS.map(form => core.NpcIdentifiers[form.id]),
     name: "Mage Arena I",
     varpId: PROGRESS_VARP,
     startedValue: STARTED,

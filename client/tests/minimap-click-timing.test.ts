@@ -12,7 +12,8 @@ const canvas: any = {
         getWidgetSpriteMaskById: () => ({ width: 200, height: 200, texture: {},
             contains: (x: number, y: number) => Math.hypot(x - 100, y - 100) < 100 }),
     },
-    __minimapRenderer: new Proxy({}, { get: () => noop }),
+    __minimapRenderer: new Proxy({ relativeToScreen: (x: number, y: number) => ({ x: 100 + x, y: 100 + y }) },
+        { get: (object, key) => (object as any)[key] ?? noop }),
 };
 (globalThis as any).window ??= { addEventListener: noop, removeEventListener: noop, devicePixelRatio: 1 };
 (globalThis as any).document ??= { createElement: () => canvas, addEventListener: noop, removeEventListener: noop };
@@ -54,6 +55,10 @@ async function main() {
         hostW: 200, hostH: 200, skipTooltip: true, visible: new Map(), game: { osrsClient: client } as any,
     });
     assert.equal(bridge.getClicks().pick(120, 100)?.id, "minimap:click-to-walk");
+    assert.equal(typeof client.minimapGeometry.projectMarker, 'function', 'the active native minimap exposes the shared marker projection');
+    assert.deepEqual(client.minimapGeometry.worldToMinimap(3201, 3200), [104, 100]);
+    assert.equal(client.minimapGeometry.worldToMinimap(3300, 3200), undefined, 'active renderer clips world pins against its real mask');
+    assert.equal(client.minimapGeometry.projectMarker(3300, 3200).edge, true, 'the active renderer supplies an honest distant direction');
 
     ClientState.baseX = 3152;
     ClientState.baseY = 3152;

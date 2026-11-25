@@ -222,6 +222,7 @@ function attach(pluginApi) {
   pluginApi.onItemOnObject?.(handleItemOnObject);
   pluginApi.onGroundItemPickup?.(handleGroundItemPickup);
   pluginApi.onCustomEvent?.("npc-drops:roll", suppressMatchDrops);
+  pluginApi.onCustomEvent?.("bestiary:encounters", describeEncounters);
   pluginApi.onCanAttack?.(handleCanAttack);
   pluginApi.onPlayerDealtDamage?.(handleDealtDamage);
   pluginApi.onNpcDeath?.(handleNpcDeath);
@@ -234,6 +235,13 @@ function attach(pluginApi) {
   pluginApi.onCustomEvent?.("escape-crystal:escape", handleEscapeCrystal);
   pluginApi.onCanTrade?.(handleCanTrade);
   pluginApi.registerRangedAmmoHandler?.(Items.rangedAmmoHandler);
+}
+
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  for (const id of Object.values(data.PENANCE_IDS).flat()) npcIds.add(id);
+  npcIds.add(data.NPC.QUEEN);
+  npcIds.add(data.NPC.QUEEN_SPAWN);
 }
 
 module.exports = {

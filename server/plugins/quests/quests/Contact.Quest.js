@@ -1212,6 +1212,7 @@ module.exports = function registerContactQuest(api) {
   api.persistAttribute(LAMP_WISHES_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [GIANT_SCARAB_NPC_ID],
     key: "contact",
     name: "Contact!",
     varpId: VARP_CONTACT_MASTER,

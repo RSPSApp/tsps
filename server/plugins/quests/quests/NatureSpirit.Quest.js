@@ -1791,6 +1791,7 @@ module.exports = function registerNatureSpiritQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [GHAST_VISIBLE_NPC_ID],
     key: "nature_spirit",
     name: "Nature Spirit",
     varpId: VARP_NATURE_SPIRIT,

@@ -974,8 +974,15 @@ function kephriDowned(event) {
   }
 }
 
+/** Actual combat forms; cinematic actors and projectile/scenery helpers stay excluded. */
+function describeEncounters({ npcIds }) {
+  const N = Shared.core().NpcIdentifiers;
+  for (const id of [N.KEPHRI, N.KEPHRI_2, N.KEPHRI_3, N.AGILE_SCARAB, N.SCARAB_SWARM_6, N.SOLDIER_SCARAB, N.SPITTING_SCARAB, N.ARCANE_SCARAB]) npcIds.add(id);
+}
+
 module.exports = function registerKephri(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("SCABARAS_BOSS", KephriRoom);
   api.onNpcHitModify(kephriHit);
   api.onPlayerHitModify(bodyguardHit);

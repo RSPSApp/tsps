@@ -13,11 +13,17 @@ const Rules = require("./championschallenge/Rules.ChampionsChallenge");
 const Combat = require("./championschallenge/Combat.ChampionsChallenge");
 const Rewards = require("./championschallenge/Rewards.ChampionsChallenge");
 
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  for (const champion of Common.DATA.champions) npcIds.add(champion.npc);
+}
+
 module.exports = {
   name: "ChampionsChallenge",
   description: "Adds the Champions' Challenge: Larxus and the champions' scrolls, the ten champions in the Guild basement, Leon d'Cour and the Chest of Champions.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Common.init(api);
     Gallery.attachGallery(api);
     Larxus.attachLarxus(api);

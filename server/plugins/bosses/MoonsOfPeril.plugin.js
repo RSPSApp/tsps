@@ -9,12 +9,17 @@ const Common = require("./moonsofperil/Common.MoonsOfPeril");
 const Cycle = require("./moonsofperil/Cycle.MoonsOfPeril");
 const Arena = require("./moonsofperil/Arena.MoonsOfPeril");
 
+function describeEncounters({ npcIds }) {
+  for (const moon of Common.MOONS) npcIds.add(Common.data.moons[moon].visibleNpc);
+}
+
 module.exports = {
   name: "MoonsOfPeril",
   description: "The Moons of Peril: the Blood, Blue and Eclipse Moons under Cam Torum, Neypotzli's camps and fishing, the Lunar Chest and Eyatlalli's offerings.",
   members: true,
   register(api) {
     Common.init(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Cycle.attachCycle(api);
     Arena.attachArena(api);
     require("./moonsofperil/BloodMoon.MoonsOfPeril")(api);

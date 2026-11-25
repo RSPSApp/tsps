@@ -1537,6 +1537,7 @@ module.exports = function registerSoulsBaneQuest(api) {
   api.persistAttribute(TOLNA_HEADS_ATTRIBUTE);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [...ANGER_MONSTER_SPAWNS.map(([id]) => id), FEAR_REAPER_NPC_ID, ...CONFUSION_BEAST_NPC_IDS, ...HOPELESS_PHASE_NPC_IDS, ...TOLNA_HEAD_NPC_IDS],
     key: "a_souls_bane",
     name: "A Soul's Bane",
     varpId: 709,

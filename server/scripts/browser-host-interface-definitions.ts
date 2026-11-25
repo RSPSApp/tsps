@@ -9,6 +9,9 @@ const plugins = [
 ];
 
 const definitions: Array<{ groupId: number; widgets: unknown[] }> = [buildPresetsInterfaceDefinition()];
+definitions.push(require("../plugins/interface/monsterexamine/Layout.MonsterExamine").DEFINITION);
+definitions.push(require("../plugins/interface/bestiary/Layout.Bestiary").DEFINITION);
+definitions.push(require("../plugins/interface/bestiary/MapNavigation.Bestiary").DEFINITION);
 const api = new Proxy(
   { registerCustomInterface: (definition: { groupId: number; widgets: unknown[] }) => definitions.push(definition) },
   { get: (target, key) => target[key as keyof typeof target] ?? (() => {}) },

@@ -2003,6 +2003,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
   api.persistAttribute(TROLL_KILLS_ATTRIBUTE);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [ICE_TROLL_KING],
     key: "the_fremennik_isles",
     name: "The Fremennik Isles",
     varpId: VARP_FREMENNIK_ISLES,

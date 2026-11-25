@@ -926,6 +926,7 @@ module.exports = function registerHorrorFromTheDeepQuest(api) {
   api.persistAttribute(ATTR_FLAGS);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [DAGANNOTH_JR_ID, ...MOTHER_PHASES.map(form => form.npcId)],
     key: "horror_from_the_deep",
     name: "Horror from the Deep",
     varpId: VARP_HORROR_FROM_THE_DEEP,

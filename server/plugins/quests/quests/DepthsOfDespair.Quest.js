@@ -946,6 +946,7 @@ module.exports = function registerDepthsOfDespairQuest(api) {
   api.persistAttribute(MEMOIR_PAGE_ADDED_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [SAND_SNAKE_NPC_ID],
     key: "the_depths_of_despair",
     name: "The Depths of Despair",
     varpId: VARP_HOSIDIUS_QUEST,

@@ -2674,6 +2674,7 @@ module.exports = function registerLunarDiplomacyQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [NpcIdentifiers.ME],
     key: "lunar_diplomacy",
     name: "Lunar Diplomacy",
     varpId: 823,

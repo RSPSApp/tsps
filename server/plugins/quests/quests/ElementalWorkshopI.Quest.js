@@ -871,6 +871,7 @@ module.exports = function registerElementalWorkshopIQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [NpcIdentifiers.EARTH_ELEMENTAL_2],
     key: "elemental_workshop_i",
     name: "Elemental Workshop I",
     varbitId: VARBIT_QUEST_STATUS,

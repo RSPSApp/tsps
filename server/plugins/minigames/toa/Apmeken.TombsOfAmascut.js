@@ -794,8 +794,15 @@ function baboonWeakness(event) {
   }
 }
 
+/** The existing wave table distinguishes fighting baboons from scene/puzzle actors. */
+function describeEncounters({ npcIds }) {
+  const N = Shared.core().NpcIdentifiers, table = waves(N);
+  for (const id of [...table.special, ...table.waves.flat(), ...table.extra, N.BABOON_THRALL]) if (id >= 0) npcIds.add(id);
+}
+
 module.exports = function registerApmekenPuzzle(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("APMEKEN_PUZZLE", ApmekenPuzzleRoom);
   Raid.registerRaidItems(api.core.ItemIdentifiers.NEUTRALISING_POTION);
   api.onObjectClick([HAMMER_CRATE, POTION_CRATE], 1, takeSupplies);

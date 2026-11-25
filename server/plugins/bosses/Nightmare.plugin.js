@@ -16,11 +16,22 @@ const Retrieval = require("./nightmare/Retrieval.Nightmare");
 const Specials = require("./nightmare/Specials.Nightmare");
 const Scoreboard = require("./nightmare/Scoreboard.Nightmare");
 
+
+function describeEncounters({ npcIds }) {
+  const npcs = Common.data.npcs;
+  for (const id of [...npcs.phases, ...npcs.weak, npcs.blast, ...Object.values(npcs.husks), npcs.parasite,
+    npcs.parasiteWeak, ...npcs.sleepwalkers, ...Object.values(npcs.phosani.sets),
+    ...Object.values(npcs.phosani.weakSets), npcs.phosani.desperation, npcs.phosani.blast,
+    ...Object.values(npcs.phosani.husks), npcs.phosani.parasite, npcs.phosani.parasiteWeak,
+    npcs.phosani.sleepwalker]) npcIds.add(id);
+}
+
 module.exports = {
   name: "Nightmare",
   description: "The Nightmare and Phosani's Nightmare in the Sisterhood Sanctuary: dreams, phases, totems, sleepwalkers, loot and Shura's and Senga's item keeping.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Common.init(api);
     Dream.attachDream(api);
     Fight.attachFight(api);

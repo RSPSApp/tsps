@@ -17,11 +17,19 @@ const Potions = require("./nightmarezone/Potions.NightmareZone");
 const PowerUps = require("./nightmarezone/PowerUps.NightmareZone");
 const Rewards = require("./nightmarezone/Rewards.NightmareZone");
 
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  for (let i = 0; i < Common.data.bosses.length; i++) {
+    for (const difficulty of ["normal", "hard"]) for (const id of Common.bossForms(i, difficulty)) npcIds.add(id);
+  }
+}
+
 module.exports = {
   name: "Nightmare Zone",
   description: "Adds the Nightmare Zone: Dominic's dream menus and coffer, the dream arena and bosses, absorption and overload potions, and power-ups.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Common.init(api);
     Dominic.attachDominic(api);
     Coffer.attachCoffer(api);

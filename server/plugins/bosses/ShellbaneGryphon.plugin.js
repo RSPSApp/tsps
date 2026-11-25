@@ -10,11 +10,17 @@ const Kills = require("./shellbane/Kills.ShellbaneGryphon");
 const Nama = require("./shellbane/Nama.ShellbaneGryphon");
 const Scoreboard = require("./shellbane/Scoreboard.ShellbaneGryphon");
 
+
+function describeEncounters({ npcIds }) {
+  npcIds.add(Common.ids.npcs.boss);
+}
+
 module.exports = {
   name: "ShellbaneGryphon",
   description: "The Shellbane gryphon: its private cave under the Great Conch, its attacks, knockback, spit and whirlwind specials, the kill, and Elder Nama's clue-step entry and Statistics scoreboard.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Common.init(api);
     Cave.attach(api);
     Combat.attach(api);

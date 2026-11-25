@@ -401,14 +401,20 @@ test("Shades of Mort'ton repairs to native 100/20, sanctifies serum and complete
   h.equipment.hands = I.FLAMTAER_BRACELET;
   const random = Math.random;
   Math.random = () => 0; // every build roll succeeds
+  const builds = () => h.xp.filter((entry) => entry.skill === h.core.Skill.CRAFTING && entry.amount === 76).length;
   try {
     h.object(O.BROKEN_WALL);
     assert.equal(h.configs.get(343), 1, 'the first build lands at once');
     assert.equal(h.quest.getStage(h.player), 55);
+    assert.equal(builds(), 1);
+    h.object(O.BROKEN_WALL);
+    h.object(O.BROKEN_WALL);
+    assert.equal(builds(), 1, 'spam clicks while the build is running do not roll again');
     h.runTasks();
   } finally {
     Math.random = random;
   }
+  assert.equal(builds(), 100, 'one build attempt per interval, not one per click');
   assert.equal(h.configs.get(343), 100);
   assert.equal(h.configs.get(344), 0, 'every set went into the resource pool and was spent');
   assert.equal(h.inventory.get(I.LIMESTONE_BRICK), 0);

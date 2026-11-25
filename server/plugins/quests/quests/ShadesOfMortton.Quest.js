@@ -321,6 +321,8 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   const BRACELET_CHARGES_ATTRIBUTE = "shades-of-mortton:flamtaer-bracelet-charges";
   // A running build or sanctify loop, so a new click or a step away ends the old one.
   const ACTION_ATTRIBUTE = "shades-of-mortton:action";
+  const ACTION_REPAIR = "repair";
+  const ACTION_SANCTIFY = "sanctify";
   const PERM_ULSQUIRE_ATTRIBUTE = "shades-of-mortton:perm-ulsquire";
   const PERM_RAZMIRE_ATTRIBUTE = "shades-of-mortton:perm-razmire";
   const MULTI_ATTRIBUTE = "shades-of-mortton:multi";
@@ -1247,15 +1249,15 @@ module.exports = function registerShadesOfMorttonQuest(api) {
 
   /**
    * Runs `step` every `ticks` until it returns false, the player walks away or logs out, or
-   * another loop replaces it.
+   * another loop replaces it. The token records the action, so a wall click can tell an
+   * already-running repair from a fresh one.
    */
-  function repeatAction(player, ticks, step) {
-    const token = {};
+  function repeatAction(player, ticks, step, kind) {
+    const token = { kind, start: player.getLocation().clone() };
     player.setAttribute(ACTION_ATTRIBUTE, token);
-    const start = player.getLocation().clone();
     const run = () => {
       if (!isOnline(player) || player.getAttribute(ACTION_ATTRIBUTE) !== token) return;
-      if (!player.getLocation().equals(start)) {
+      if (!player.getLocation().equals(token.start)) {
         player.setAttribute(ACTION_ATTRIBUTE, null);
         return;
       }
@@ -1364,6 +1366,11 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       player.sendMessage("You're not sure how you would go about fixing this.");
       return;
     }
+    // A wall click while this build is still running must not roll again: live keeps one
+    // attempt per interval. An empty pool is the exception, so a fresh set continues at once.
+    const active = player.getAttribute(ACTION_ATTRIBUTE);
+    if (active?.kind === ACTION_REPAIR && player.getLocation().equals(active.start)
+        && resourcesOf(player) > 0) return;
     if (hammerBoost(player) === null) {
       player.sendMessage("You need a hammer to repair this temple.");
       return;
@@ -1412,7 +1419,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       });
       checkAltarUnlock(player);
       return true;
-    });
+    }, ACTION_REPAIR);
   }
 
   function sanctifyGate(player, item) {
@@ -1484,7 +1491,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       }
       if (made === 0) player.sendMessage("You have nothing to sanctify.");
       return false;
-    });
+    }, ACTION_SANCTIFY);
   }
 
   function sanctifySerum(player) {

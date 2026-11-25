@@ -78,7 +78,7 @@ function boxTrapsUnlocked(player) {
 function groundTileOccupied(player, kind, location) {
   const area = player.getPrivateArea();
   if (H.core.RegionManager.blocked(location, area)) return true;
-  if (kind === "box") {
+  if (kind === "box" || kind === "bird") {
     return H.core.ObjectManager.objectsAt(location).some(object => object.getPrivateArea() === area
       && !object.getOwner() && (object.getType() === 10 || object.getType() === 22));
   }

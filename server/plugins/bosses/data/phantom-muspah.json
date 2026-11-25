@@ -192,9 +192,33 @@
         [
           6662,
           22
+        ],
+        [
+          6846,
+          80
+        ],
+        [
+          6843,
+          81
+        ],
+        [
+          6802,
+          83
+        ],
+        [
+          6753,
+          87
+        ],
+        [
+          6685,
+          88
         ]
       ],
       "projectileTicks": 2,
+      "projectileSound": [
+        6730,
+        24
+      ],
       "projectile": {
         "id": 2327,
         "start": 24,
@@ -421,7 +445,6 @@
     "brightSpot": 2330,
     "darkSpot": 2331,
     "maxHit": 80,
-    "hitTicks": 1,
     "map": {
       "west": -12,
       "north": 10,
@@ -466,6 +489,7 @@
       7309,
       14617
     ],
+    "breakSound": 6805,
     "drainSplat": 60,
     "healSplat": 6
   },

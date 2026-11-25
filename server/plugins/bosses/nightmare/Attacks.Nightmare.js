@@ -47,20 +47,38 @@ function prayerFactor(fight, player, style, prayer) {
   return blocked === style ? attacks.rightPrayer : attacks.wrongPrayer;
 }
 
-/** Phosani's third phase: the protection the player already has is switched off as she attacks. */
-function breakProtection(fight, players) {
+const PROTECTIONS = { magic: "PROTECT_FROM_MAGIC", ranged: "PROTECT_FROM_MISSILES", melee: "PROTECT_FROM_MELEE" };
+
+/**
+ * Phosani's third phase: the protection that would stop this attack is switched off on her
+ * animation's tick; any other stays on (rsprox 1148 6837-7138, 1156 29250-29530: Magic off on her
+ * magic, Missiles off on her ranged, Magic left on through ranged and melee). While cursed, the
+ * protection that stops the style is the shuffled one (not captured).
+ */
+function breakProtection(fight, players, style) {
   if (!fight.phosani || fight.phase !== 3) return;
   const { PrayerHandler } = Common.core;
+  const Specials = require("./Specials.Nightmare");
   for (const player of players) {
-    let disabled = false;
-    for (const prayer of ["PROTECT_FROM_MAGIC", "PROTECT_FROM_MISSILES", "PROTECT_FROM_MELEE"]) {
-      if (PrayerHandler.isActivated(player, PrayerHandler[prayer])) {
-        PrayerHandler.deactivatePrayer(player, PrayerHandler[prayer]);
-        disabled = true;
-      }
-    }
-    if (disabled) require("./CombatAchievements.Nightmare").prayerDisabled(fight, player);
+    const prayer = Object.keys(PROTECTIONS).find((name) => Specials.blockedBy(fight, player, name) === style);
+    const handle = PrayerHandler[PROTECTIONS[prayer]];
+    if (!prayer || !PrayerHandler.isActivated(player, handle)) continue;
+    PrayerHandler.deactivatePrayer(player, handle);
+    require("./CombatAchievements.Nightmare").prayerDisabled(fight, player);
   }
+}
+
+/**
+ * Flight time grows with distance (captured, every revision: magic 30, ranged 20, plus the
+ * Chebyshev distance from her centre tile; a player beside her is 3 away, so 33 and 23).
+ */
+function flight(boss, player, spec) {
+  const { minX, minY, maxX, maxY } = bodyBounds(boss);
+  const cx = Math.floor((minX + maxX) / 2);
+  const cy = Math.floor((minY + maxY) / 2);
+  const at = player.getLocation();
+  const distance = Math.max(Math.abs(at.getX() - cx), Math.abs(at.getY() - cy));
+  return { ...spec.projectile, end: spec.projectile.base + distance };
 }
 
 function maxHit(fight, style) {
@@ -72,14 +90,15 @@ function maxHit(fight, style) {
 function attack(fight, target) {
   const boss = fight.boss;
   const players = fight.players();
-  const meleeChance = fight.phosani && fight.phase === 3 ? 0.6 : 0.33;
-  const style = inMeleeReach(boss, target, target.getLocation()) && Math.random() < meleeChance
+  const { meleeChance } = Common.data.attacks;
+  const chance = fight.phosani && fight.phase === fight.phaseCount ? meleeChance.phosaniLast : meleeChance.normal;
+  const style = inMeleeReach(boss, target, target.getLocation()) && Math.random() < chance
     ? "melee"
     : Math.random() < 0.5 ? "magic" : "ranged";
   const spec = Common.data.attacks[style];
   boss.performAnimation(Common.animation(spec.anim));
   for (const player of players) Common.sounds(player, spec.sounds);
-  breakProtection(fight, players);
+  breakProtection(fight, players, style);
   if (style === "melee") {
     fight.at(spec.hitTicks, () => {
       if (fight.stopped || !boss.isRegistered()) return;
@@ -90,7 +109,6 @@ function attack(fight, target) {
           prayed: (s, prayer) => prayerFactor(fight, player, s, prayer),
         });
         Common.sounds(player, [spec.hitSound]);
-        require("./Specials.Nightmare").attackLanded(fight, player);
       }
     });
     return;
@@ -98,13 +116,13 @@ function attack(fight, target) {
   fight.at(spec.projectileTicks, () => {
     if (fight.stopped || !boss.isRegistered()) return;
     for (const player of fight.players()) {
-      Common.projectile(fight.dream.area, boss, player, spec.projectile);
-      if (spec.impact) player.performGraphic(Common.graphic(spec.impact.id, { delay: spec.projectile.end, height: spec.impact.height }));
-      Common.sounds(player, [[spec.impactSound ?? 223, spec.projectile.end]]);
+      const shot = flight(boss, player, spec);
+      Common.projectile(fight.dream.area, boss, player, shot);
+      if (spec.impact) player.performGraphic(Common.graphic(spec.impact.id, { delay: shot.end, height: spec.impact.height }));
+      Common.sounds(player, [[spec.impactSound ?? 223, shot.end]]);
       Common.strike(boss, player, style, maxHit(fight, style), spec.hitTicks - spec.projectileTicks, {
         prayed: (s, prayer) => prayerFactor(fight, player, s, prayer),
       });
-      require("./Specials.Nightmare").attackLanded(fight, player);
     }
   });
 }

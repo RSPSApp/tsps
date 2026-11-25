@@ -101,7 +101,9 @@ Live OSRS copies the arena's map square into an instance. Here the arena is a pr
   - none on wave 12, Sol Heredit's.
 
   A wave cleared before then ends without them (Wiki).
-- **Clearing:** "Wave N completed! Duration: m:ss.ss" (Offline_Scape), and Minimus reappears a tile north of the player.
+- **Clearing waves 1–11:** Minimus and the modifier screen (865) return three ticks after the wave-completed message. Minimus looks for an open tile north of the player first. Active prayers and quick prayers turn off on the return tick. Before wave 1, Start-wave opens the screen without switching off prayers. See [RSProx 237/1150](https://rsprox.net/download/1150), ticks 12186–12189 and 27297–27299, and [234/3285](https://rsprox.net/download/3285), ticks 10555–10558.
+- **Modifier offer:** Closing and using Start-wave again reopens the same offer. The last argument to script 4931 is the bitmask of chosen modifier keys, including one bit for a modifier with multiple tiers. On revision 237, busy (12393) is set on an automatic open and one tick after a Start-wave open. Confirming or closing clears it. See [RSProx 237/1150](https://rsprox.net/download/1150), ticks 12202–12208 and 12400–12663. Revision 234 recording 3285 has no busy writes in this flow.
+- **Choice warning (known gap):** After waves 1–11, using Start-wave on Minimus to reopen the screen with the offer still unchosen sends the choice warning on the reopen tick in the recordings. Start-wave opens before wave 1 are silent. TSPS omits this warning. See [RSProx 237/1150](https://rsprox.net/download/1150), ticks 12400–12402 and 12660–12663, [237/1156](https://rsprox.net/download/1156), ticks 16666–16669, and [234/3285](https://rsprox.net/download/3285), ticks 10559–10562.
 
 **Leaving and dying:**
 - Minimus's Leave before wave 1: "Are you sure you wish to leave?" (Yes./No.).
@@ -265,8 +267,12 @@ Enraged (150 HP): 5 pools at once, then one more every 3 ticks, and the crystals
 - The bar clears immediately if the player dies, teleports or logs out during the fight. The cited kills do not show those exits. Immediate cleanup follows the Vorkath boss bar.
 - TSPS refreshes the bar on ticks +1 through +8 after defeat. It skips the extra refresh observed on the retail kill-count message tick when zero HP arrived a tick earlier. TSPS fades at +13 and clears at +17. R1156 has two longer sequences, with refresh through +10 and fade/clear at +15/+19 after tick 18567, and refresh through +9 and fade/clear at +14/+18 after tick 20183.
 
+- TSPS keeps Minimus and the offer on a silent intermission close. Four recorded closes sent the choice warning on the close tick, then sent it again on the Start-wave reopen tick. The conditions for the close-tick warning are unknown. See [RSProx 237/1156](https://rsprox.net/download/1156), ticks 16666–16668, 17860–17862 and 18186–18188, and [234/3285](https://rsprox.net/download/3285), ticks 10559–10562.
+- Kill-tick jingle 283 is omitted. It played on four of the 27 recorded kills, and its trigger is unknown ([237/1150](https://rsprox.net/download/1150), ticks 14991, 26217 and 30956, and [234/3285](https://rsprox.net/download/3285), tick 13169).
+
 **His end:**
-- He says one of his death lines and the kill is counted internally for his next greeting and the lobby scoreboard. The retail kill-count line is the timing reference in the recordings. After his death animation (10888) the run ends.
+- He says one of his death lines and the kill is counted on that tick for his next greeting and the lobby scoreboard. The retail kill-count line is the timing reference in the recordings.
+- With Volatility, Sol's gib (12832) appears at his south-west tile nine ticks after the kill and graphic 2724 appears at the centre of his footprint. The gib disappears three ticks later ([RSProx 237/1150](https://rsprox.net/download/1150), ticks 14991–15003).
 - If the player dies, he says one of his lines for that.
 
 **Not done yet:**
@@ -283,8 +289,10 @@ Enraged (150 HP): 5 pools at once, then one more every 3 ticks, and the crystals
 - Left out: the Varlamore token on wave 3 (the Wiki gives its rate as "varies").
 - Values are the items' GE prices (`item-prices.json`). The capture's 80 splinters at 30,560 is 382 each.
 
-**The chest** (Wiki; rsprox captures 1193, 1227 and 4117; tiles **RSPS**):
-- Forfeiting between waves, or beating Sol Heredit (once his death animation has played and his hazards have gone), brings the Rewards Chest (loc 50741, appear anim 10825) out at (1829, 3105), with Minimus at (1830, 3103) to leave by.
+**The chest** (Wiki and RSProx):
+- Forfeiting between waves brings out the Rewards Chest and Minimus together.
+- After Sol's defeat, Minimus appears at (1830, 3103) facing west with jingle 305 at +8. The Rewards Chest (50741, shape 10, rotation 1, appear animation 10825) appears at (1829, 3105) at +9. With Volatility those ticks are +10 and +11. The retail chest announcement is omitted.
+- The Wiki describes the ground hazards subsiding and the chest appearing after the kill. Solarflare was removed on the kill tick without Volatility and on the chest tick with it. See [Wiki revision 15404131](https://oldschool.runescape.wiki/w/Special:PermanentLink/15404131) and [237/1150](https://rsprox.net/download/1150), ticks 25440–25449 and 14991–15003, [237/1156](https://rsprox.net/download/1156), ticks 9802–9814 and 11395–11404 (both Leagues VI), and [234/3285](https://rsprox.net/download/3285), ticks 13169–13181 (Grid Master).
 - Search opens interface 864 and sends inventory 843. Its reward list is component 17, and its Discard-all, Take-all and Bank-all buttons are components 13, 14 and 15. Capture 4117 shows taking one item, entering two with Take-X, both answers to the discard confirmation, and the empty-chest message. Capture 1193 shows Take-All on one item; capture 1227 shows Bank-all clearing the 80 splinters after wave 1.
 - Refusals (captures 1193 and 1194, Leagues VI worlds; no normal-world capture has them): Bank-all with no room gives one "Your bank cannot hold your items.", Take-all with no room "You don't have enough space to take anything.", a single Take with no room "You don't have enough inventory space to take any.", and Bank-all on an emptied chest "You have nothing to deposit.". The chest keeps its rewards and resends its value line. Every recorded refusal had nothing fit; when only part fits we take what fits without a line (ours).
 - The chest value uses script 4929, whose current cache definition takes a long. The older interface's value text and item setup are also sent as shown in the captures. Varbit 9802 marks loot opened and clears on leaving the arena.

@@ -8,8 +8,8 @@
  *   hitpoints; she leaves, comes back charging a blast, sleepwalkers walk to her
  *   (Sleepwalkers.Nightmare) and she restores her shield in her next form.
  * - Her attacks (Attacks.Nightmare) and specials (Specials.Nightmare) run on her own timer.
- * - The last blast: The Nightmare dies (her body stays, Disturb starts the next fight in 10s);
- *   Phosani's survives it, lashes out for 150 more hitpoints, then dies and reawakens by herself.
+ * - The last blast: The Nightmare dies; Phosani's survives it, lashes out for 150 more hitpoints,
+ *   then dies. Either body stays until Disturb wakes her for the next fight in 10s.
  */
 const Common = require("./Common.Nightmare");
 const Scoreboard = require("./Scoreboard.Nightmare");
@@ -117,25 +117,26 @@ class Fight {
 
   /** The first player in starts the countdown; Phosani's dream starts at once. */
   playerArrived(player) {
-    if (this.state === "sleeping") this.beginCountdown(this.phosani ? Common.data.countdown.phosani : Common.data.countdown.normal);
+    if (this.state === "sleeping") this.beginCountdown(this.phosani ? Common.data.countdown.phosani : Common.data.countdown.normal, false, Common.data.countdown.lead);
     if (this.state !== "sleeping" && this.state !== "waiting") this.showHud(player);
   }
 
-  beginCountdown(steps, reawaken = false) {
+  /** Her countdown: the first message `lead` ticks from now, each `left` ticks before she wakes. */
+  beginCountdown(steps, reawaken = false, lead = 0) {
     const { countdown } = Common.data;
     this.state = "waiting";
     const total = steps[0][0];
     for (const [left, seconds] of steps) {
-      this.at(total - left, () => this.messageAll((reawaken ? countdown.reawaken : countdown.message).replace("[n]", seconds)));
+      this.at(lead + total - left, () => this.messageAll((reawaken ? countdown.reawaken : countdown.message).replace("[n]", seconds)));
     }
-    this.at(total, () => this.awaken(reawaken));
+    this.at(lead + total, () => this.awaken(reawaken));
   }
 
   awaken(reawaken) {
     if (this.stopped || !this.boss?.isRegistered()) return;
     const { awaken, countdown } = Common.data;
     this.state = "fighting";
-    this.startTick = this.tick;
+    if (reawaken) this.boss.moveTo(this.dream.tile(Common.data.arena.centre));
     this.teamSize = Math.max(1, this.players().length);
     this.phase = 0;
     this.hitpoints = this.maxHitpoints();
@@ -163,6 +164,9 @@ class Fight {
   startPhase(phase) {
     if (this.stopped || !this.boss?.isRegistered()) return;
     this.phase = phase;
+    // The kill's duration runs from her first form to her death animation (rsprox 3350: form 48,
+    // death 253, "2:03"; every fight 17-19 ticks short of wake to kill message).
+    if (phase === 1) this.startTick = this.tick;
     this.stage = "shield";
     this.shieldMax = this.shieldFor(phase);
     this.shield = this.shieldMax;
@@ -212,10 +216,12 @@ class Fight {
     const hold = Specials.maybeSpecial(this, target);
     if (hold != null) {
       this.nextAttackTick = this.tick + hold;
+      Specials.actionTaken(this);
       return;
     }
     if (this.stage === "desperate") return;
     Attacks.attack(this, target);
+    Specials.actionTaken(this);
   }
 
   /** Per player in the dream, each tick (the area's process). */
@@ -247,7 +253,8 @@ class Fight {
     if (this.stage !== "totems") return;
     this.stage = "blast";
     const { totems, fight } = Common.data;
-    Specials.interrupt(this, { keepSpores: true });
+    Specials.curseEndsAtBlast(this);
+    Specials.interrupt(this, { keepSpores: true, keepCurse: true });
     Totems.fire(this);
     this.at(totems.hitTicks, () => {
       const last = this.phase >= this.phaseCount;
@@ -405,6 +412,7 @@ class Fight {
     this.boss.getMovementQueue().setBlockMovement(true).reset();
     const deathAt = this.phosani ? 1 : kill.deathTicks - Common.data.totems.hitTicks;
     this.at(deathAt, () => {
+      this.deathTick = this.tick;
       this.boss.performAnimation(Common.animation(kill.deathAnim));
       this.boss.setNpcTransformationId(this.phosani ? npcs.phosani.dying : npcs.dying);
       Totems.closeOverlay(this);
@@ -416,7 +424,7 @@ class Fight {
   won() {
     const { kill, npcs, varbits } = Common.data;
     this.state = "over";
-    const ticks = this.tick - this.startTick;
+    const ticks = (this.deathTick ?? this.tick) - this.startTick;
     const players = this.players();
     this.boss.setNpcTransformationId(this.phosani ? npcs.phosani.dead : npcs.dead);
     this.placeBarriers(Common.data.awaken.barriers.open);
@@ -428,16 +436,7 @@ class Fight {
       sender.sendVarbit(varbits.present, 1);
       this.hideHud(player, false);
     }
-    if (this.phosani) {
-      this.at(7, () => {
-        this.messageAll(Common.data.countdown.begins);
-        this.boss.setNpcTransformationId(npcs.phosani.initial);
-        this.resetForNext();
-        this.beginCountdown(Common.data.countdown.phosani, true);
-      });
-    } else {
-      this.state = "slain";
-    }
+    this.state = "slain";
   }
 
   count(player, ticks, team) {
@@ -453,7 +452,8 @@ class Fight {
     // player turns it on, "1:31.20" and "Personal best: 1:31.20" after).
     const precise = Scoreboard.preciseTiming(player);
     const time = (value) => Scoreboard.formatTicks(value, precise);
-    const duration = kill.duration.replace("[team]", team === 1 ? "Solo" : String(team)).replace("[time]", time(ticks));
+    // "Team size: 2 players" (rsprox 1875 15070; "3 players", "4 players" too).
+    const duration = kill.duration.replace("[team]", team === 1 ? "Solo" : `${team} players`).replace("[time]", time(ticks));
     if (!best || ticks < best) {
       player.setAttribute(bestKey, ticks);
       Common.api.emitCustomEvent("boss:personal-best", { player, boss: this.phosani ? "Phosani's Nightmare" : "The Nightmare", ticks });
@@ -467,12 +467,21 @@ class Fight {
     Common.api.emitCustomEvent("collection-log:count", { player, category: "The Nightmare" });
   }
 
-  /** Disturb on her body after a kill: the next fight, in 10 seconds (Wiki). */
-  disturbAgain() {
+  /**
+   * Disturb on her body after a kill, in either fight (rsprox 3346 714-733, 1875 15098, 3350
+   * 307-326, 3389 2243): the player's animation, "begins to wake..." a tick later, then the 10s
+   * count; her body keeps its dead form where it lies until she reawakens.
+   */
+  disturbAgain(player) {
     if (this.state !== "slain") return;
-    this.boss.setNpcTransformationId(Common.data.npcs.initial);
+    const { countdown } = Common.data;
+    this.state = "waking";
+    player?.performAnimation(Common.animation(countdown.disturbAnim, countdown.disturbAnimDelay));
     this.resetForNext();
-    this.beginCountdown(Common.data.countdown.phosani, true);
+    this.at(1, () => {
+      this.messageAll(countdown.begins);
+      this.beginCountdown(countdown.phosani, true, 1);
+    });
   }
 
   resetForNext() {
@@ -480,7 +489,7 @@ class Fight {
     this.stage = "asleep";
     this.hitpoints = this.maxHitpoints();
     this.shield = 0;
-    this.boss.moveTo(this.dream.tile(Common.data.arena.centre));
+    this.deathTick = null;
     for (const totem of this.totems) totem.charge = 0;
     CombatAchievements.reset(this);
   }
@@ -639,7 +648,7 @@ function disturbBody({ player, npc }) {
   const fight = fightOf(npc);
   if (!fight) return false;
   if (require("./Dream.Nightmare").dreamOf(player) !== fight.dream) return true;
-  fight.disturbAgain();
+  fight.disturbAgain(player);
   return true;
 }
 

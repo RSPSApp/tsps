@@ -27,6 +27,14 @@ const HATCH_ANIMATION = 11503;
 const EGG_ANIMATION = 11506;
 const EGG_DEATH_ANIMATION = 11508;
 const RUPTURA_BURST_ATTRIBUTE = "araxxor:ruptura-burst";
+/** Captured: a Ruptura bursts two ticks after it stops by its target. */
+const RUPTURA_PRIME_TICKS = 2;
+/** Captured: each araxyte's death with the boss, as [animation, ticks until it goes]. */
+const BOSS_DEATH = Object.freeze({
+  [Shared.MINION_ID.mirrorback]: Object.freeze([11510, 2]),
+  [Shared.MINION_ID.acidic]: Object.freeze([Shared.EXPLODE_ANIMATION, 2]),
+  [Shared.MINION_ID.ruptura]: Object.freeze([Shared.EXPLODE_ANIMATION, 4]),
+});
 const INSTANT_KILL_WEAPONS = ["noxious halberd", "crossbow", "ballista"];
 
 function alive(entity) {
@@ -174,20 +182,45 @@ function pinEggs(session) {
   }
 }
 
-/** Everything still standing crumbles when the boss dies: eggs (11508) and minions go. */
-function crumbleAll(bossNpc) {
+/**
+ * Her brood dies with her (captured, ticks from her death animation; rsprox 550, 1768, 788, 3280,
+ * 3347): every living araxyte plays its death animation on that tick and goes (Acidic 11504 and the
+ * Mirrorback 11510 two ticks later, Ruptura 11504 four), with no acid splash or blast; the eggs
+ * crumble (11508) the tick after and go two ticks later, freeing their tiles then. `lag` is the
+ * ticks until her death animation.
+ */
+function dieWithBoss(bossNpc, lag = 0) {
   const session = sessionOf(bossNpc);
   if (!session) return;
-  for (const entry of session.eggs) {
-    if (!alive(entry.npc)) continue;
-    entry.npc.performAnimation(new core.Animation(EGG_DEATH_ANIMATION));
-    later(2, entry.npc, () => core.World.getRemoveNPCQueue().push(entry.npc));
-    unblockEgg(entry);
-  }
-  for (const minion of session.minions) {
-    if (alive(minion)) core.World.getRemoveNPCQueue().push(minion);
-  }
+  const minions = session.minions.filter(alive);
   session.minions.length = 0;
+  for (const minion of minions) {
+    // Nothing more from them: no attack, no burst, no step.
+    minion.setAttribute?.(RUPTURA_BURST_ATTRIBUTE, true);
+    minion.getCombat?.().reset?.();
+    minion.setMobileInteraction?.(null);
+    minion.getMovementQueue?.().setBlockMovement?.(true);
+  }
+  const eggs = session.eggs.filter((entry) => alive(entry.npc));
+  const dieNow = (ticks, action) => (ticks > 0 ? later(ticks, bossNpc, action) : action());
+  dieNow(lag, () => {
+    for (const minion of minions) {
+      if (!minion.isRegistered?.()) continue;
+      const [animation, removeAfter] = BOSS_DEATH[minion.getId?.()] ?? [Shared.EXPLODE_ANIMATION, 2];
+      minion.performAnimation(new core.Animation(animation));
+      later(removeAfter, minion, () => core.World.getRemoveNPCQueue().push(minion));
+    }
+  });
+  dieNow(lag + 1, () => {
+    for (const entry of eggs) {
+      if (!entry.npc.isRegistered?.()) continue;
+      entry.npc.performAnimation(new core.Animation(EGG_DEATH_ANIMATION));
+      later(2, entry.npc, () => {
+        unblockEgg(entry);
+        core.World.getRemoveNPCQueue().push(entry.npc);
+      });
+    }
+  });
 }
 
 /**
@@ -208,15 +241,45 @@ function edgeDistance(npc, target) {
   return Math.max(dx, dy);
 }
 
-/** The Ruptura's burst: 11504 with the 2925 explosion, then 2 ticks later the blast lands
- * (captured) on the boss, nearby players, minions and idle eggs - the egg-lure tactic works
- * because a burst catches the next egg too. The araxyte goes two ticks after that. */
-function explodeRuptura(npc, target) {
+/**
+ * The Ruptura reaches its target (captured, rsprox 550 and 1768): it stops and stops facing it,
+ * and two ticks later bursts.
+ */
+function primeRuptura(npc) {
   if (npc.getAttribute?.(RUPTURA_BURST_ATTRIBUTE) === true) return;
+  npc.setAttribute?.(RUPTURA_BURST_ATTRIBUTE, true);
+  npc.getMovementQueue?.().setBlockMovement?.(true);
+  npc.getMovementQueue?.().reset?.();
+  npc.setMobileInteraction?.(null);
+  npc.getCombat?.().reset?.();
+  later(RUPTURA_PRIME_TICKS, npc, () => {
+    if (!alive(npc)) return;
+    explodeRuptura(npc);
+  });
+}
+
+/**
+ * The Ruptura's burst: 11504 with the 2925 explosion. The tick after, the blast reaches players
+ * near it; the tick after that (captured) the boss, minions and idle eggs - the egg-lure tactic
+ * works because a burst catches the next egg too. The araxyte goes two ticks after that.
+ */
+function explodeRuptura(npc) {
   npc.setAttribute?.(RUPTURA_BURST_ATTRIBUTE, true);
   npc.getMovementQueue?.().setBlockMovement?.(true);
   npc.performAnimation(new core.Animation(Shared.EXPLODE_ANIMATION));
   npc.performGraphic(new core.Graphic(Shared.RUPTURA_EXPLOSION_GFX));
+  later(1, npc, () => {
+    for (const player of npc.getPlayersWithinDistance?.(5) ?? []) {
+      if (!alive(player)) continue;
+      const distance = edgeDistance(npc, player);
+      if (distance < Shared.RUPTURA_PLAYER_DAMAGE.length) {
+        player.getCombat().getHitQueue().addPendingDamage([
+          new core.HitDamage(Shared.RUPTURA_PLAYER_DAMAGE[distance], core.HitMask.RED),
+        ]);
+        CombatAchievements.avoidableDamage(player, Shared.RUPTURA_PLAYER_DAMAGE[distance], CombatAchievements.FAILURE.ruptura);
+      }
+    }
+  });
   later(2, npc, () => {
     const session = sessionOf(npc);
     const boss = session?.npc ?? null;
@@ -230,16 +293,6 @@ function explodeRuptura(npc, target) {
         boss.getCombat().getHitQueue().addPendingDamage([
           new core.HitDamage(Shared.RUPTURA_BOSS_DAMAGE[distance], core.HitMask.BLUE),
         ]);
-      }
-    }
-    for (const player of npc.getPlayersWithinDistance?.(5) ?? []) {
-      if (!alive(player)) continue;
-      const distance = edgeDistance(npc, player);
-      if (distance < Shared.RUPTURA_PLAYER_DAMAGE.length) {
-        player.getCombat().getHitQueue().addPendingDamage([
-          new core.HitDamage(Shared.RUPTURA_PLAYER_DAMAGE[distance], core.HitMask.RED),
-        ]);
-        CombatAchievements.avoidableDamage(player, Shared.RUPTURA_PLAYER_DAMAGE[distance]);
       }
     }
     let araxytesKilled = 0;
@@ -353,7 +406,7 @@ function modifyHit(event) {
   player.getCombat().getHitQueue().addPendingDamage([
     new core.HitDamage(recoil, core.HitMask.RED),
   ]);
-  CombatAchievements.avoidableDamage(player, recoil);
+  CombatAchievements.avoidableDamage(player, recoil, CombatAchievements.FAILURE.reflected);
 }
 
 /** The eggs themselves are inert: no attacks, no retaliation, no pursuit. */
@@ -395,7 +448,7 @@ function minionClass() {
       if (id === Shared.MINION_ID.ruptura) {
         if (edgeDistance(npc, target) <= 2) {
           this.attack = "burst";
-          explodeRuptura(npc, target);
+          primeRuptura(npc);
         }
         return;
       }
@@ -444,11 +497,18 @@ function minionClass() {
   };
 }
 
+/** Captured: every tick the Mirrorback takes a hit has area sound 4020 on its tile. */
+function mirrorbackHitSound({ target }) {
+  if (!target?.isNpc?.() || target.getId?.() !== Shared.MINION_ID.mirrorback) return;
+  Shared.playHitSound(core, target, Shared.HIT_SOUND.mirrorback);
+}
+
 function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   BonusManager = pluginApi.getBonusManager();
   pluginApi.onNpcHitModify(modifyHit);
+  pluginApi.onCustomEvent("combat:damage-apply", mirrorbackHitSound);
   pluginApi.registerNpcCombatMethodProvider(
     [core.NpcIdentifiers.EGG_10, core.NpcIdentifiers.EGG_11, core.NpcIdentifiers.EGG_12],
     eggClass(),
@@ -467,9 +527,11 @@ module.exports = {
   hatchNext,
   ensureTargets,
   pinEggs,
-  crumbleAll,
+  dieWithBoss,
+  primeRuptura,
   explodeRuptura,
   modifyHit,
+  mirrorbackHitSound,
   instantKillWeapon,
   crushStyle,
   minionClass,

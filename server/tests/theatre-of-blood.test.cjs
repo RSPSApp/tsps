@@ -19,7 +19,7 @@ const Lobby = require('../plugins/minigames/tob/Lobby.TheatreOfBlood');
 const RaidUnit = require('../plugins/minigames/tob/Raid.TheatreOfBlood');
 const Retrieval = require('../plugins/minigames/tob/Retrieval.TheatreOfBlood');
 
-const hooks = { prompts: [] };
+const hooks = { prompts: [], commands: {} };
 
 /** Any hook registration the units make that a test doesn't need is a no-op. */
 function fakeApi() {
@@ -53,6 +53,7 @@ function fakeApiBase() {
     onPlayerDeath() {},
     onCanTeleport() {},
     onItemAction() {},
+    registerCommand: (name, handler) => { hooks.commands[name] = handler; },
     sendMultiChatboxPrompt: (player, title, ...args) => hooks.prompts.push({ player, title, args }),
     spawnNpc: () => null,
     removeNpc() {},
@@ -128,6 +129,7 @@ function fakePlayer(name) {
     getInventory: () => p.inventory,
     getEquipment: () => p.equipment,
     getBank: () => fakeContainer(10),
+    getBanks: () => [],
     getSkillManager: () => ({
       getMaxLevel: () => 99,
       getCurrentLevel: (skill) => (skill.getIndex?.() === 3 ? p.hp : 99),
@@ -197,7 +199,10 @@ before(() => {
   RaidUnit(api);
   Retrieval(api);
   require('../plugins/minigames/tob/Rewards.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/Bloat.TheatreOfBlood')(api);
   require('../plugins/minigames/tob/Verzik.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/Books.TheatreOfBlood')(api);
+  require('../plugins/minigames/tob/Commands.TheatreOfBlood')(api);
   require('../plugins/minigames/tob/Entry.TheatreOfBlood')(api);
   require('../plugins/minigames/tob/InfoBoard.TheatreOfBlood')(api);
   require('../plugins/minigames/tob/Stats.TheatreOfBlood')(api);
@@ -467,9 +472,10 @@ for (const status of ['disbanded', 'inside the Theatre']) {
 
 // ------------------------------------------------------------------ the raid
 
-function startRaid(names = ['Solo']) {
+function startRaid(names = ['Solo'], mode = 'normal') {
   const players = names.map(fakePlayer);
   const party = Parties.create(players[0]);
+  party.mode = mode;
   for (const other of players.slice(1)) {
     party.apply(other);
     party.accept(other);
@@ -1192,6 +1198,162 @@ test('the strategy table outside a raid is left alone', (t) => {
   assert.equal(InfoBoard.read({ player: reader, objectId: 33014, option: 'Read' }), false);
   assert.deepEqual(reader.sent.interfaces, []);
 });
+
+// ------------------------------------------------------------------ books
+
+function captureBookDrops(t) {
+  const drops = [];
+  const { ItemOnGroundManager } = PluginManager.getCoreApi();
+  t.mock.method(ItemOnGroundManager, 'registerLocation', (player, item, position, area, options) => {
+    drops.push({
+      player, area, options,
+      id: item.getId(),
+      count: item.getAmount(),
+      tile: [position.getX(), position.getY(), position.getZ()],
+      tick: Shared.cycle(),
+      messages: [...player.messages],
+    });
+  });
+  return drops;
+}
+
+function assertBookDrop(drop, raid, player, id, tile) {
+  assert.ok(drop, 'the book was registered');
+  assert.equal(drop.player, player);
+  assert.equal(drop.id, id);
+  assert.equal(drop.count, 1);
+  assert.deepEqual(drop.tile, tile);
+  assert.equal(drop.area, raid.area);
+  assert.deepEqual(drop.options, { goesGlobal: false, despawnDelay: 200 });
+}
+
+const fixedBookTiles = [
+  ['MAIDEN', 22504, [3168, 4447, 0]],
+  ['NYLOCAS', 22508, [3295, 4248, 0]],
+  ['SOTETSEG', 22510, [3279, 4328, 0]],
+  ['XARPUS', 22512, [3170, 4387, 1]],
+];
+
+for (const mode of ['entry', 'normal', 'hard']) {
+  test(`Theatre books: fixed tiles, private lifetime and completion order in ${mode}`, (t) => {
+    const { raid, players: [solo] } = startRaid(['BookHunter'], mode);
+    t.after(() => raid.dispose());
+    const drops = captureBookDrops(t);
+    for (const [key, id, tile] of fixedBookTiles) {
+      const room = raid.buildRoom(key);
+      solo.location = Shared.loc(room.def.entrance);
+      const tick = Shared.cycle();
+      room.complete();
+      assertBookDrop(drops.at(-1), raid, solo, id, tile);
+      assert.equal(drops.at(-1).tick, tick);
+      assert.ok(drops.at(-1).messages.at(-1).startsWith(
+        `Wave '${room.def.name}' ${Shared.MODES[mode].tag} complete!`,
+      ));
+      room.complete(); // Replaying completion must not register another stack.
+    }
+    assert.equal(drops.length, fixedBookTiles.length);
+  });
+}
+
+test('Theatre books: separate drops for eligible players, including a jailed player', (t) => {
+  const { raid, players: [ann, bob, carrying, banked] } = startRaid(['BookAnn', 'BookBob', 'BookBag', 'BookBank']);
+  t.after(() => raid.dispose());
+  const drops = captureBookDrops(t);
+  carrying.inventory.setItem(0, new Item(22504, 1));
+  const bank = fakeContainer(10);
+  bank.setItem(0, new Item(22504, 1));
+  banked.getBanks = () => [bank];
+  raid.room.start();
+  raid.member(ann).inFight = true;
+  raid.member(bob).inFight = true;
+  bob.hp = 0;
+  raid.onPlayerDied(bob);
+  assert.equal(raid.member(bob).jailed, true);
+
+  raid.room.complete();
+
+  assert.equal(drops.length, 2);
+  assertBookDrop(drops[0], raid, ann, 22504, [3168, 4447, 0]);
+  assertBookDrop(drops[1], raid, bob, 22504, [3168, 4447, 0]);
+});
+
+for (const [x, y] of [[3299, 4448], [3288, 4441]]) {
+  test(`Theatre books: Bloat's centre at ${x},${y} after its three-tick death`, (t) => {
+    const { raid, players: [solo] } = startRaid();
+    t.after(() => raid.dispose());
+    const drops = captureBookDrops(t);
+    const room = raid.buildRoom('BLOAT');
+    const bloat = fakeVerzik();
+    bloat.location = new Location(x, y, 0);
+    bloat.hp = 0;
+    room.bloat = bloat;
+    room.state = {};
+    room.npcs.add(bloat);
+    room.start();
+
+    room.tick();
+    assert.equal(room.state.dying, true);
+    ticks(2);
+    assert.equal(drops.length, 0);
+    ticks(1);
+
+    assert.equal(room.isCompleted(), true);
+    assert.equal(room.npcs.has(bloat), false);
+    assert.equal(drops.length, 1);
+    assertBookDrop(drops[0], raid, solo, 22506, [x + 2, y + 2, 0]);
+    assert.match(drops[0].messages.at(-1), /^Wave 'The Pestilent Bloat'/);
+  });
+}
+
+test('Theatre books: Verzik drops from her post-transition tile after the final lines', (t) => {
+  const { raid, players: [solo] } = startRaid();
+  t.after(() => raid.dispose());
+  const drops = captureBookDrops(t);
+  const room = raid.buildRoom('VERZIK');
+  const verzik = fakeVerzik();
+  verzik.location = new Location(3168, 4306, 0);
+  room.verzik = verzik;
+  room.npcs.add(verzik);
+  room.phase = 3;
+  room.stage = 'started';
+
+  room.endPhase();
+  ticks(2);
+  assert.deepEqual(Shared.tileOf(verzik), { x: 3170, y: 4308, z: 0 });
+  ticks(5);
+  assert.equal(drops.length, 0);
+  ticks(1);
+
+  assert.equal(room.isCompleted(), true);
+  assert.equal(room.npcs.has(verzik), false);
+  assert.equal(drops.length, 1);
+  assertBookDrop(drops[0], raid, solo, 22514, [3171, 4309, 0]);
+  const lines = drops[0].messages.filter((line) => /Final Challenge|total completion|count is/.test(line));
+  assert.equal(lines.length, 3);
+  assert.match(lines[0], /^Wave 'The Final Challenge'/);
+  assert.match(lines[1], /^Theatre of Blood total completion time:/);
+  assert.match(lines[2], /^Your completed Theatre of Blood count is:/);
+});
+
+for (const [key, id, tile] of [['BLOAT', 22506, [3301, 4447, 0]], ['VERZIK', 22514, [3166, 4312, 0]]]) {
+  test(`Theatre books: tobcomplete uses the ${key} fallback without a boss death`, (t) => {
+    const { raid, players: [solo] } = startRaid();
+    t.after(() => raid.dispose());
+    const drops = captureBookDrops(t);
+    const room = raid.buildRoom(key);
+    const npc = fakeVerzik();
+    room.npcs.add(npc);
+    if (key === 'VERZIK') room.verzik = npc;
+    else room.bloat = npc;
+
+    assert.equal(hooks.commands.tobcomplete({ player: solo }), true);
+
+    assert.equal(room.isCompleted(), true);
+    assert.equal(room.npcs.has(npc), false);
+    assert.equal(drops.length, 1);
+    assertBookDrop(drops[0], raid, solo, id, tile);
+  });
+}
 
 // ------------------------------------------------------------------ modes, records, tasks
 

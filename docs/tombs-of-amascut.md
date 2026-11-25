@@ -200,6 +200,20 @@ The first version was written without access to the Wiki or the cache, so it fol
 - **Sound ids:** RuneLite has no names for them.
 - **Unnamed cache entries:** these keep their numeric constants: Warden charging orb 11769, hidden Warden 11765, departing spirit 11829, blade objects 45748/45749, platform 45606, siphon block 26209.
 
+### Wardens ready-up
+
+- Each new readiness before the last sends the room a plain party count. The member who readied then sees the two-minute message box in the same tick, with a line break after "your party is". The other members receive only the count. [227/581, ticks 2892–2897 and 5823](https://rsprox.net/download/581) · [227/1838, ticks 1718–1722](https://rsprox.net/download/1838) · [227/1845, ticks 2513–2525](https://rsprox.net/download/1845) · [227/1852, ticks 19849–19851 and 24280–24292](https://rsprox.net/download/1852)
+- Choosing Begin again opens the short waiting box for that member. The final ready-up starts the challenge with only the start line, as does solo Begin. All cited party captures are from Leagues V. The solo start in 223/14 is from an ordinary members' world. [227/1753, tick 9910](https://rsprox.net/download/1753) · [227/1852, ticks 12370–12375 and 19872–19878](https://rsprox.net/download/1852) · [227/1759, ticks 10774–10777](https://rsprox.net/download/1759) · [223/14, ticks 3585–3586](https://rsprox.net/download/14) · [227/553, tick 10924](https://rsprox.net/download/553) · [227/1779, tick 14838](https://rsprox.net/download/1779)
+
+The captures show both U+00A0 and ASCII spaces inside different player names in the same party overlay. One name retains its ASCII space in the overlay, a party details row and later raid messages. The rules for deciding which spacing to use remain open. [227/1838, ticks 144–145, 1159, 2283 and 2325](https://rsprox.net/download/1838)
+
+### Ready-up estimates
+
+- The fight starts 200 ticks after the first ready-up if anyone is still waiting. The captures show the two-minute notice and parties starting before expiry. The timer keeps the existing implementation.
+- The denominator and the set of eligible readied players use current raid membership. The count goes to the members currently in the Wardens' room. The cited party captures show everyone together.
+
+As before the ready-up count change, Begin starts the fight if every remaining member is ready after someone leaves. This departure case is covered by a server regression test.
+
 ## Verification
 
 Developer accounts can use `::toa` to teleport to the lobby beneath Necropolis (not from inside a raid).

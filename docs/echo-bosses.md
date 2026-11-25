@@ -1,14 +1,16 @@
-# Leagues VI Echo bosses (normal-mechanics placeholders)
+# Leagues VI Echo bosses
 
 A Demonic Pacts League (Leagues VI) character carrying a region's Echo orb is asked at the
 boss's entrance whether to fight its Echo. Yes starts a private encounter with that boss's
 Echo. No orb is consumed. All nine encounters exist, with the Wiki's Echo stats and Echo
-equipment rolls. **Their combat is a placeholder:** each Echo fights exactly like its normal
-boss. Echo-specific attacks, shared health and special mechanics are not implemented. Captures
-of Echo Hunllef and Echo Thermy exist (below) and are left for a follow-up; the recordings found
-were not searched exhaustively, so others may exist too. Each boss's module and page says what it
-keeps. The Echo Amoxliatl is the exception: she fights as recorded (rsprox.net 1140; see
-[amoxliatl.md](amoxliatl.md)).
+equipment rolls. **The Echo Thermonuclear smoke devil and the Echo Amoxliatl fight as live does**,
+from their recordings (Thermy's smoke pools, shot sets, charged special, prayer and enrage:
+[thermonuclear-smoke-devil.md](thermonuclear-smoke-devil.md); Amoxliatl's shots, black icicles,
+phase casts, enrage and pools: [amoxliatl.md](amoxliatl.md)). **The other seven are placeholders:**
+each fights exactly like its normal boss; their Echo-specific attacks, shared health and special
+mechanics are not implemented. A capture of Echo Hunllef exists (below) and is left for a
+follow-up; the recordings found were not searched exhaustively, so others may exist too. Each
+boss's module and page says what it keeps.
 
 Source: [Echo bosses and echo equipment](https://oldschool.runescape.wiki/w/Demonic_Pacts_League/Echo_bosses_and_echo_equipment)
 and each linked boss page.
@@ -127,7 +129,7 @@ Captures of Echo mechanics, for that follow-up:
 | Recording | Fights | Echo-only mechanics recorded |
 |---|---|---|
 | rsprox.net 1158 (rev 237) | 110 Echo Corrupted Hunllef kills | Echo crystals (`crystal_hunllef_crystals_echo_crystals`, 14142) and their hits (`leagues_6_crystal_hunleff_crystals_hit`); Echo ranged and magic projectiles (`leagues_6_crystal_hunleff_range_travel`, `_magic_travel`); an anti-prayer attack (`leagues_6_hunleff_antiprayer_travel`) |
-| rsprox.net 1161 (rev 237) | 31 Echo Thermonuclear smoke devil kills | Smoke pools (`leagues_6_vfx_smoke_devil_pool_spawn`, `_idle_01`, `_despawn`, `_shield`); Echo ranged, magic and special projectiles (`leagues_6_vfx_lore_dust_devil_attack_*_projanim`) |
+| rsprox.net 1161 (rev 237) | 31 Echo Thermonuclear smoke devil kills | Implemented: smoke pools, the ranged/magic shot sets, the charged special, its prayer and the enrage ([thermonuclear-smoke-devil.md](thermonuclear-smoke-devil.md)) |
 | rsprox.net 1140 (rev 237) | 6 Echo Amoxliatl kills | Implemented: see [amoxliatl.md](amoxliatl.md) |
 | rsprox.net 89 (rev 227) | 43 Leagues V Echo Dagannoth Kings encounters | A different league's Echo Kings; whether Leagues VI's match is unknown |
 

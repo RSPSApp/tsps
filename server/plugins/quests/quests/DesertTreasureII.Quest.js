@@ -6518,6 +6518,16 @@ module.exports = function registerDesertTreasureII(api) {
       else statement(p, `The statue looks like it's meant to be holding something. A plaque on it reads: '${STATUE_TITLES[index]}'`);
       return true;
     }
+    // Once its medallion is back, and for all four after the quest (rsprox 1827, 3168 at the
+    // vault's statues 49499 and 49501): "The statue is holding a medallion."
+    if (STATUES.has(objectId)) {
+      const index = STATUES.get(objectId);
+      const holding = s >= S.COMPLETE || (placedMask(p) & (1 << index)) !== 0;
+      statement(p, holding
+        ? `The statue is holding a medallion. A plaque on it reads: '${STATUE_TITLES[index]}'`
+        : `The statue looks like it's meant to be holding something. A plaque on it reads: '${STATUE_TITLES[index]}'`);
+      return true;
+    }
     if (vaultTile && ([O.VAULT_DOOR, O.VAULT_DOOR_2, O.VAULT_DOOR_3].includes(objectId)
       || (objectId === O.STEPS_23 && vaultTile.x === 3925 && vaultTile.y === 9630))) {
       leaveVault(p);

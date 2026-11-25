@@ -153,12 +153,19 @@ class BloatRoom extends Raid.Room {
     if (!state.asleep && --state.walkLeft <= 0 && state.sinceTurn >= WALK.afterTurn) this.fallAsleep();
   }
 
+  get bookDropTile() {
+    // A developer skip can finish the room without a death.
+    const { x, y, z } = this.bookDropOrigin ?? START;
+    return { x: x + CENTRE_OFFSET, y: y + CENTRE_OFFSET, z };
+  }
+
   die() {
     const { Animation } = Shared.core();
     const bloat = this.bloat;
     this.state.dying = true;
     bloat.getMovementQueue().reset();
     bloat.getMovementQueue().setBlockMovement(true);
+    this.bookDropOrigin = Shared.tileOf(bloat);
     bloat.performAnimation(new Animation(ANIMATION.DYING));
     this.later(DEATH_TICKS, () => {
       this.despawn(bloat);

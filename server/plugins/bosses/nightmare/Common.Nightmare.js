@@ -24,6 +24,8 @@ const SKIP_LEAVE_WARNING_ATTRIBUTE = "nightmare:skip-leave-warning";
 const HELD_ITEMS_ATTRIBUTE = "nightmare:held-items";
 /** Sister Senga's introduction has been heard. */
 const PHOSANI_INTRO_ATTRIBUTE = "nightmare:phosani-intro";
+/** Shura's introduction has been heard (varbit nightmare_intro). */
+const SHURA_INTRO_ATTRIBUTE = "nightmare:shura-intro";
 
 const CHUNK = 8;
 
@@ -193,7 +195,8 @@ module.exports = {
   tileGraphic, areaSound, projectile, styleMethod, protectedStyle, strike, damage, heal, formatTicks,
   INSIDE_ATTRIBUTE, KILLS_ATTRIBUTE, PHOSANI_KILLS_ATTRIBUTE, BEST_ATTRIBUTE, PHOSANI_BEST_ATTRIBUTE,
   DEATHS_ATTRIBUTE, PHOSANI_DEATHS_ATTRIBUTE,
-  SKIP_WARNING_ATTRIBUTE, PHOSANI_SKIP_WARNING_ATTRIBUTE, SKIP_LEAVE_WARNING_ATTRIBUTE, HELD_ITEMS_ATTRIBUTE, PHOSANI_INTRO_ATTRIBUTE, CHUNK,
+  SKIP_WARNING_ATTRIBUTE, PHOSANI_SKIP_WARNING_ATTRIBUTE, SKIP_LEAVE_WARNING_ATTRIBUTE, HELD_ITEMS_ATTRIBUTE, PHOSANI_INTRO_ATTRIBUTE,
+  SHURA_INTRO_ATTRIBUTE, CHUNK,
   get api() { return api; },
   get core() { return core; },
   get data() { return data; },

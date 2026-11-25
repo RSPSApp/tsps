@@ -89,6 +89,36 @@ test('hits due during a full animation stall are kept until it releases', () => 
     }
 });
 
+// rsprox (Zulrah): hits on their way when it dives land together 6 ticks after the dive.
+test('holdIncomingFor keeps an NPC\'s incoming hits until the hold ends, then lands them together', () => {
+    const { CombatFactory } = require('../dist/game/content/combat/CombatFactory');
+    const { World } = require('../dist/game/World');
+    const target = buildTarget(100);
+    target.isUntargetable = () => false;
+    target.getCombat = () => ({ markHeldHit() {} });
+    const attacker = { isRegistered: () => true, getHitpoints: () => 50 };
+    const swing = (damage) => ({ getTarget: () => target, getAttacker: () => attacker, getTotalDamage: () => damage });
+
+    const landed = [];
+    const executeHit = CombatFactory.executeHit;
+    const getProcessCycle = World.getProcessCycle;
+    CombatFactory.executeHit = (hit) => landed.push(hit);
+    World.getProcessCycle = () => 10;
+    try {
+        const queue = new HitQueue(target);
+        queue.addPendingHit(swing(7), 11);
+        queue.addPendingHit(swing(5), 13);
+        queue.holdIncomingFor(6);
+        for (let cycle = 11; cycle < 16; cycle++) queue.process(cycle);
+        assert.deepEqual(landed, [], 'held through the dive');
+        queue.process(16);
+        assert.deepEqual(landed.map((hit) => hit.getTotalDamage()), [7, 5], 'landing together when the hold ends');
+    } finally {
+        CombatFactory.executeHit = executeHit;
+        World.getProcessCycle = getProcessCycle;
+    }
+});
+
 test('an unmoving target is not stalled, so an NPC takes its hits on the dot', () => {
     const { CombatFactory } = require('../dist/game/content/combat/CombatFactory');
     const target = buildTarget(100);

@@ -18,6 +18,7 @@ const COMPONENT = {
   SKILL_CURRENT_START: 190, SKILL_BASE_START: 220, SKILL_BUTTON_START: 250, SKILL_NAME_START: 280,
   SECTION_START: 500, SECTION_LABEL_START: 510, ADD_ITEMS: 520, ADD_ITEMS_LABEL: 521, EDITOR_HINT: 522, CONTAINER_ADD: 523, CONTAINER_ADD_LABEL: 524,
   SPAWN_START: 530, SPAWN_LABEL_START: 532, MAP_TELEPORT: 534, MAP_TELEPORT_LABEL: 535,
+  QUEST_ACTION_START: 536, QUEST_ACTION_LABEL_START: 538,
   LIST_BACKGROUND: 900, ROW_BACKGROUND_START: 1000, ROW_LABEL_START: 1100, ROW_ICON_START: 1200,
   ROW_BORDER_START: 1300, ROW_DIVIDER_START: 1400, ROW_GUIDE_START: 1500, ROW_TOGGLE_START: 1600, ROW_GLYPH_START: 1700,
 };
@@ -28,6 +29,7 @@ const ROW_SLOTS = 64;
 const DATA_COMPONENTS = [COMPONENT.DATA_START, COMPONENT.EXTRA_DATA_START].flatMap(start => Array.from({ length: 8 }, (_, i) => start + i));
 const BUTTONS = Array.from({ length: 4 }, (_, i) => ({ button: COMPONENT.BUTTON_START + i, label: COMPONENT.BUTTON_LABEL_START + i }));
 const PRESETS = [["max", "Max all"], ["combat", "Max combat"], ["reset", "Reset all"], ["restore", "Restore"]];
+const QUEST_ACTIONS = [["complete-all", "Unlock all quests"], ["reset-all", "Reset all quests"]];
 const SKILL_ORDER = [0, 3, 14, 2, 16, 13, 1, 15, 10, 4, 17, 7, 5, 12, 11, 6, 9, 8, 20, 18, 19, 22, 21, 23];
 const TAB_VISIBILITY = [];
 const uid = component => (GROUP_ID << 16) | component;
@@ -67,6 +69,8 @@ function buildInterface(skillIcons = new Map(), equipmentIcons = new Map()) {
   add(C.SEARCH_BOX, root, box(18, 116, 458, 26, { ...clickable, color: 0x2b241b, widthMode: 1, rawWidth: 36 }));
   add(C.SEARCH_INPUT, root, text(26, 116, 446, 26, { ...clickable, mouseOverColor: 0xe8ded0, yTextAlignment: 1, widthMode: 1, rawWidth: 52 }));
   add(C.STATUS, root, text(18, 146, 458, 16, { textColor: 0xb8ab94, widthMode: 1, rawWidth: 36 }));
+  QUEST_ACTIONS.forEach(([, label], i) => button(C.QUEST_ACTION_START + i, C.QUEST_ACTION_LABEL_START + i,
+    root, 18 + (QUEST_ACTIONS.length - 1 - i) * 116, 145, 112, 18, label, { ...hidden, xPositionMode: 2, actions: [label] }));
   [...DATA_COMPONENTS, C.LAYOUT, C.SEARCH_REQUEST, C.SEARCH_RESPONSE, C.SEARCH_SESSION]
     .forEach(component => add(component, root, { type: TYPE_TEXT, ...hidden }));
   const list = add(C.LIST_VIEW, root, { rawX: 18, rawY: 166, rawWidth: 294, rawHeight: 180,
@@ -180,4 +184,4 @@ function buildInterface(skillIcons = new Map(), equipmentIcons = new Map()) {
       ] },
     status: { component: C.STATUS, matches: "%total listed", loading: "Searching...", error: "Search unavailable. Try again.", empty: "No matches. Try another name." } };
 }
-module.exports = { GROUP_ID, MAIN_MODAL_UID, COMPONENT, TAB_LABELS, SECTION_LABELS, SPAWN_LABELS, DATA_COMPONENTS, BUTTONS, ROW_SLOTS, PRESETS, SKILL_ORDER, TAB_VISIBILITY, uid, buildInterface };
+module.exports = { GROUP_ID, MAIN_MODAL_UID, COMPONENT, TAB_LABELS, SECTION_LABELS, SPAWN_LABELS, DATA_COMPONENTS, BUTTONS, ROW_SLOTS, PRESETS, QUEST_ACTIONS, SKILL_ORDER, TAB_VISIBILITY, uid, buildInterface };

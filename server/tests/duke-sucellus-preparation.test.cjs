@@ -125,7 +125,7 @@ test("normal-world preparation feedback and mushroom repetition use the captured
   assert.ok(animations.includes(h.core.CacheDefinitions.getSeqId("qip_cook_hopper_grain")));
   assert.ok(h.messages.includes("The mixture in the vat begins to ferment."));
   h.step(6);
-  assert.ok(h.messages.includes("<col=06600c>A fermentation vat is ready to be emptied.</col>"));
+  assert.ok(h.messages.includes("<col=229628>A fermentation vat is ready to be emptied.</col>"));
   const beforeXp = h.p.getSkillManager().getExperience(h.core.Skill.HERBLORE);
   h.Prep.collect(session, tile);
   assert.equal(h.p.getSkillManager().getExperience(h.core.Skill.HERBLORE) - beforeXp, 10, "current normal-mode recipe XP is retained");
@@ -140,8 +140,10 @@ test("vat Check and refusal messages use the messagebox rather than ordinary cha
   const { items, resources } = h.C.data;
   const tile = resources.vats[0];
   h.move([tile[0], tile[1] - 1]);
+  vatAction(h, "Check");
+  assert.ok(h.packets.some((packet) => packet[0] === "sendString" && packet[1] === "Mushroom one:  0 / 6<br>Mushroom two:  0 / 6<br>Salax salt:  0 / 6"), "an empty vat names its mushrooms generically (1751)");
   h.Prep.fill(session, tile);
-  assert.ok(h.packets.some((packet) => packet[0] === "sendString" && packet[1] === "You don't appear to have any ingredients to add."));
+  assert.ok(h.packets.some((packet) => packet[0] === "sendString" && packet[1] === "No ingredients you're holding can fit into the vat."));
   h.add(items.muscaPowder, 6);
   h.add(items.arderPowder, 3);
   h.add(items.salt, 6);
@@ -172,8 +174,10 @@ test("feeding preserves supported powder use and shows the captured animation, s
   h.add(items.poison, 2);
   h.Prep.feed({ player: h.p, npc: session.boss });
   h.Prep.feed({ player: h.p, npc: session.boss });
+  assert.ok(h.messages.includes("Duke is waking up."), "3285: on the final dose's tick");
+  assert.equal(h.messages.includes("<col=ff289d>Duke Sucellus awakens..."), false);
   h.step();
-  assert.ok(h.messages.includes("<col=ef0083>Duke Sucellus awakens..."));
+  assert.ok(h.messages.includes("<col=ff289d>Duke Sucellus awakens..."));
   assert.equal(session.boss.getHitpoints(), h.C.data.normal.hitpoints, "feeding never queues damage against the awakened boss");
 });
 
@@ -192,4 +196,21 @@ test("forty left-click powder feeds wake the normal Duke and further clicks cons
   h.add(items.poison, 3);
   h.Prep.feed({ player: h.p, npc: session.boss });
   assert.equal(h.p.getInventory().getAmount(items.poison), 3, "awake feeding cannot spend poison either");
+});
+
+test("the HUD shows the poison meter from spawn and mushroom picking refuses a full inventory with its own line", (t) => {
+  const h = Harness.harness(t);
+  const session = h.enter();
+  const shows = h.emitted.filter(([name]) => name === "boss-hud:show");
+  assert.deepEqual(shows.map(([, event]) => [event.npcId, event.current, event.maximum]), [[12167, 0, 200]]);
+  h.move([3039, 6451]);
+  h.add(h.C.data.items.poison);
+  h.Prep.feed({ player: h.p, npc: session.boss });
+  assert.ok(h.emitted.some(([name, event]) => name === "boss-hud:update" && event.current === 125));
+  h.p.getInventory().add(new h.core.Item(995, 1));
+  for (let slot = h.p.getInventory().getFreeSlots(); slot > 0; slot--) h.add(1511);
+  h.move([3047, 6453]);
+  h.Prep.pick(session, "musca");
+  assert.ok(h.messages.includes("You don't have enough inventory space for any more mushrooms."));
+  assert.equal(session.picks.musca, 0);
 });

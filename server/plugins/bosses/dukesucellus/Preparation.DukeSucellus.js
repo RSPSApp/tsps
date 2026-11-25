@@ -75,6 +75,11 @@ function pickOne(session, type) {
     session.player.sendMessage('These mushrooms have been picked clean.');
     return false;
   }
+  const mushroom = new Common.core.Item(items[type], 1);
+  if (session.player.getInventory().getAddableAmount(mushroom) < 1) {
+    session.player.sendMessage(Common.data.messages.mushroomsFull);
+    return false;
+  }
   if (Common.give(session.player, items[type])) {
     session.picks[type]++;
     animate(session.player, 'picking_low');
@@ -205,7 +210,8 @@ function fill(session, at) {
     }
   }
   if (!added) {
-    Common.messageBox(p, "You don't appear to have any ingredients to add.");
+    // The rev 234 text (3285); rev 227 said "You don't appear to have any ingredients to add."
+    Common.messageBox(p, Common.data.messages.noIngredients);
     return true;
   }
   session.vats.set(key, vat);
@@ -253,7 +259,13 @@ function check(session, tile) {
   if (!nearVat(session, tile))
     return false;
   const vat = session.vats.get(vatKey(tile));
-  const lines = [{ id: Common.data.items.muscaPowder, label: "Musca powder" }, { id: Common.data.items.arderPowder, label: "Arder powder" }, { id: Common.data.items.salt, label: "Salax salt" }].map(({ id, label }, index) => label + (index === 0 ? ": " : ":  ") + (vat?.amounts[id] ?? 0) + " / " + Common.data.resources.ingredients);
+  const { items, resources } = Common.data;
+  const empty = !vat || [items.muscaPowder, items.arderPowder, items.salt].every(id => !vat.amounts[id]);
+  // An empty vat names its mushrooms generically (1751, 555); a filled one names the powders (1703, 91).
+  const rows = empty
+    ? [{ id: items.muscaPowder, label: "Mushroom one:  " }, { id: items.arderPowder, label: "Mushroom two:  " }, { id: items.salt, label: "Salax salt:  " }]
+    : [{ id: items.muscaPowder, label: "Musca powder: " }, { id: items.arderPowder, label: "Arder powder:  " }, { id: items.salt, label: "Salax salt:  " }];
+  const lines = rows.map(({ id, label }) => label + (vat?.amounts[id] ?? 0) + " / " + resources.ingredients);
   Common.messageBox(session.player, lines.join("<br>"));
   return true;
 }
@@ -313,7 +325,7 @@ function process(session) {
     session.wakeAt = null;
     session.picks = { arder: 0, musca: 0 };
     session.fight.wake();
-    session.player.sendMessage("<col=ef0083>Duke Sucellus awakens...");
+    session.player.sendMessage(Common.data.messages.awakens);
   }
   for (const vat of session.vats.values())
     if (!vat.ready && vat.readyAt != null && session.tick >= vat.readyAt) {
@@ -323,7 +335,7 @@ function process(session) {
       if (!session.fight.active && !session.fight.over)
         session.place(Common.data.objects.readyVat, vat.tile, vatRotation(vat.tile));
       sound(session.player, 2655);
-      session.player.sendMessage('<col=06600c>A fermentation vat is ready to be emptied.</col>');
+      session.player.sendMessage(Common.data.messages.vatReady);
     }
 }
 function mineStep(session, a) {
@@ -341,6 +353,7 @@ function mineStep(session, a) {
   if (!Common.give(p, Common.data.items.salt, amount))
     return false;
   p.performAnimation(a.pickaxe.animation);
+  sound(p, Common.data.sounds.saltMined);
   spam(p, 'You manage to mine some salt.');
   p.getSkillManager().addExperiences(Common.core.Skill.MINING, 5);
   return true;
@@ -377,9 +390,12 @@ function feed(event) {
   splat.setSource(event.player);
   session.boss.addTickHit(splat);
   session.boss.setDisplayedHealth({ current: session.meter, max: Common.data.normal.meter, bar: Common.data.meters.poison });
+  Common.api.emitCustomEvent('boss-hud:update', { player: event.player, current: session.meter });
   if (item !== items.poison)
     session.lastPowderCycle = cycle;
   if (result.awake) {
+    // 3285 (rev 234): this line on the final dose's tick, "awakens" on the next.
+    event.player.sendMessage(Common.data.messages.wakingUp);
     session.wakeAt = session.tick + 1;
   }
   return true;

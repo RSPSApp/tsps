@@ -249,7 +249,10 @@ test('ordinary melee still needs an open cardinal edge', (t) => {
 
 // ------------------------------------------------------------------ rotations
 
-/** The Wiki's rotation overview, phase by phase: place, form and the steps' kinds and counts. */
+/**
+ * The Wiki's rotation overview, phase by phase: place, form and the steps' kinds and counts.
+ * Rotation 4's middle green phase is 5 Ranged attacks, as both rotation-4 runs in rsprox 3276 are.
+ */
 const WIKI = [
   ['middle red melee', 'middle blue magic4', 'south green ranged5 S S C C S S', 'middle red melee', 'west blue magic5',
     'south green C C C S S S S', 'south blue magic5 S C S C S', 'west green jad-ranged10 C C C C', 'middle red melee'],
@@ -258,12 +261,12 @@ const WIKI = [
   ['east green ranged5 S S S', 'middle red C S C S C S melee', 'west blue magic5', 'south green ranged5', 'east blue magic5',
     'middle green C C C S S S', 'west green ranged5', 'middle blue magic5 C C S S S', 'east green jad-magic10', 'middle blue S S S S'],
   ['east blue S S S S magic6', 'south green ranged4 C C', 'west blue S S S S magic4', 'middle red melee C C', 'east green ranged4',
-    'south green S S S S S S C C C', 'west blue magic5 S S S S', 'middle green ranged4', 'middle blue magic4 C C C',
+    'south green S S S S S S C C C', 'west blue magic5 S S S S', 'middle green ranged5', 'middle blue magic4 C C C',
     'east green jad-magic8', 'middle blue S S S S'],
 ];
 
 function describe(phase) {
-  const steps = phase.steps.map(([kind, ...args]) => {
+  const steps = phase.steps.filter(([kind]) => kind !== 'wait').map(([kind, ...args]) => {
     if (kind === 'clouds') return 'C';
     if (kind === 'snakeling') return 'S';
     if (kind === 'jad') return `jad-${args[0]}${args[1]}`;
@@ -353,26 +356,52 @@ test('Zulrah rises once the boat dialogue is gone, and opens with its barrages',
   assert.equal(fight.zulrah.facing, player, 'it faces the player from the start');
   assert.equal(fight.attackable, false, 'not while rising');
   fight.zulrah.facing = null;
-  ticks(9);
+  ticks(11);
   assert.equal(fight.attackable, true);
-  assert.equal(fight.zulrah.facing, player, 'and keeps facing them through the barrages');
-  assert.deepEqual(log[0], [rose + 9, 'clouds', '2269,3069,2272,3070'], 'first barrage 9 ticks after rising');
+  assert.equal(fight.zulrah.facing, player, 'and keeps facing them until it spits');
+  // rsprox (77 fights): the first barrage 11 ticks after rising, at these two tiles.
+  assert.deepEqual(log[0], [rose + 11, 'clouds', '2269,3069,2272,3069'], 'first barrage 11 ticks after rising');
   ticks(9);
-  assert.deepEqual(log.map((entry) => entry[0] - rose), [9, 12, 15, 18], 'a barrage every 3 ticks');
-  // Dives 3 ticks after the last barrage, resurfaces red in the middle 3 ticks later.
+  assert.deepEqual(log.map((entry) => entry[0] - rose), [11, 14, 17, 20], 'a barrage every 3 ticks');
+  // rsprox: dives 4 ticks after the last barrage, and is back up red in the middle 3 ticks later.
   ticks(3);
+  assert.ok(!fight.zulrah.anims.includes(Fight.ANIM.DIVE), 'a run of barrages takes a tick more');
+  ticks(1);
   assert.ok(fight.zulrah.anims.includes(Fight.ANIM.DIVE));
   assert.equal(fight.attackable, false, 'not under the swamp');
-  ticks(3);
-  assert.equal(fight.zulrah.getId(), Shared.NPC.RED, 'moved and changed under the swamp');
-  assert.ok(!fight.zulrah.anims.includes(Fight.ANIM.RISE), 'a teleported NPC is out of view that tick');
+  ticks(2);
+  assert.ok(!fight.zulrah.anims.includes(Fight.ANIM.RISE));
   ticks(1);
-  assert.ok(fight.zulrah.anims.includes(Fight.ANIM.RISE), 'it rises the tick after, back in view');
+  assert.equal(fight.zulrah.getId(), Shared.NPC.RED, 'moved and changed');
+  assert.ok(fight.zulrah.anims.includes(Fight.ANIM.RISE), 'rising on the same tick (a telejump)');
   assert.equal(fight.zulrah.facing, player, 'facing the player');
+  assert.equal(fight.attackable, false, 'not until 4 ticks after rising');
   ticks(3);
-  assert.deepEqual(log.slice(4).map((entry) => [entry[0] - rose, entry[1]]), [[28, 'aim']], 'the tail is aimed 4 ticks after rising');
-  ticks(15);
-  assert.deepEqual(log.slice(4).map((entry) => [entry[0] - rose, entry[1]]), [[28, 'aim'], [33, 'strike'], [37, 'aim'], [43, 'strike']]);
+  assert.deepEqual(log.slice(4).map((entry) => [entry[0] - rose, entry[1]]), [[30, 'aim']], 'the tail is aimed 3 ticks after rising');
+  assert.equal(fight.attackable, false);
+  ticks(1);
+  assert.equal(fight.attackable, true);
+  ticks(11);
+  assert.deepEqual(log.slice(4).map((entry) => [entry[0] - rose, entry[1]]), [[30, 'aim'], [35, 'strike'], [37, 'aim'], [42, 'strike']],
+    'rsprox: swings 7 ticks apart, each striking 5 ticks after');
+  fight.end();
+});
+
+test('a run of orbs takes a tick more before the next attack; the next phase starts 6 ticks after the dive', () => {
+  const { player, fight } = startedFight({ rotation: 3 });
+  player.dialogueActive = false;
+  ticks(1);
+  const log = [];
+  fight.spitClouds = () => { log.push([fight.ticks, 'C']); return 3; };
+  fight.spitSnakeling = () => { log.push([fight.ticks, 'S']); return 3; };
+  fight.attack = (style) => { log.push([fight.ticks, style[0]]); return 3; };
+  fight.dive = () => { log.push([fight.ticks, 'dive']); return 3; };
+  ticks(70);
+  const rose = log[0][0] - 11;
+  const phase2 = log.slice(5).map(([at, what]) => [at - rose, what]);
+  // rsprox 3276/1161: rotation 4 opens east blue with four orbs at 30, 33, 36, 39 and its first
+  // attack at 43, then six attacks, the dive 3 ticks after the last and the next attack 6 after that.
+  assert.deepEqual(phase2.slice(0, 12), [[30, 'S'], [33, 'S'], [36, 'S'], [39, 'S'], [43, 'm'], [46, 'm'], [49, 'm'], [52, 'm'], [55, 'm'], [58, 'm'], [61, 'dive'], [67, 'r']]);
   fight.end();
 });
 
@@ -405,12 +434,18 @@ test('the tail hits the aimed tile and its neighbours, but not two tiles away or
   fight.end();
 });
 
-test('the tail throws the player back, away from Zulrah and onto the island', () => {
+test('the tail throws the player east, 2 tiles after anim 5806 and 1 after 5807 (rsprox)', () => {
   const { player, fight } = startedFight();
   fight.zulrah = fakeNpc(Shared.NPC.RED, 2266, 3073);
-  player.location = new Location(2268, 3069, 0);
-  const destination = fight.knockbackTile(player);
-  assert.ok(destination.getY() < 3069, 'pushed south, away from Zulrah');
+  // rsprox 1161/1157: (2272, 3077) to (2274, 3077) after 5806, (2273, 3077) to (2274, 3077) after 5807.
+  player.location = new Location(2272, 3077, 0);
+  fight.tailAnim = Fight.ANIM.TAIL_LEFT;
+  let destination = fight.knockbackTile(player);
+  assert.deepEqual([destination.getX(), destination.getY()], [2274, 3077]);
+  player.location = new Location(2273, 3077, 0);
+  fight.tailAnim = Fight.ANIM.TAIL_RIGHT;
+  destination = fight.knockbackTile(player);
+  assert.deepEqual([destination.getX(), destination.getY()], [2274, 3077]);
   assert.ok((RegionManager.getClipping(destination.getX(), destination.getY(), 0, null) & RegionManager.BLOCKED_MASK) === 0, 'onto the island');
   fight.end();
 });
@@ -458,6 +493,28 @@ test('blue form mixes in Ranged; the Jad phase alternates from its first style',
   fight.end();
 });
 
+test('green form past 3 minutes mixes in Magic, mostly Ranged (Wiki; rsprox 3276 10 of 10 Ranged)', () => {
+  const { fight } = startedFight();
+  const styles = [];
+  fight.attack = (style) => { styles.push(style); return 3; };
+  fight.phase = { ...fight.phase, form: 'green' };
+  fight.startedAt = fight.ticks - 299;
+  fight.expand(['ranged', 2]).forEach((action) => action());
+  assert.deepEqual(styles, ['ranged', 'ranged'], 'before 3 minutes it is always Ranged');
+  styles.length = 0;
+  fight.startedAt = fight.ticks - 300;
+  fight.expand(['ranged', 1]).forEach((action) => action());
+  fight.random = () => 0.89;
+  fight.expand(['ranged', 1]).forEach((action) => action());
+  assert.deepEqual(styles, ['magic', 'ranged'], 'random 0.9 and up is Magic');
+  fight.phase = { ...fight.phase, form: 'blue' };
+  fight.random = () => 0.99;
+  styles.length = 0;
+  fight.expand(['ranged', 1]).forEach((action) => action());
+  assert.deepEqual(styles, ['ranged'], 'only the green form mixes');
+  fight.end();
+});
+
 test('leaving the shrine ends the fight and takes everything with it', () => {
   const { player, fight } = startedFight();
   player.dialogueActive = false;
@@ -494,11 +551,15 @@ test('snakelings are melee or magic, attack the player, and die after 67 ticks o
   const { player, fight } = startedFight({ random: () => 0.1 });
   const magic = fight.hazards.addSnakeling({ x: 2263, y: 3076 });
   assert.equal(magic.getId(), Shared.NPC.SNAKELING_MAGIC);
-  assert.equal(magic.target, player);
+  fight.hazards.tickSnakelings(player);
+  fight.hazards.tickSnakelings(player);
+  assert.equal(magic.target, null, 'still waking (rsprox: it stays put for 3 ticks)');
+  fight.hazards.tickSnakelings(player);
+  assert.equal(magic.target, player, 'then attacks');
   fight.random = () => 0.9;
   const melee = fight.hazards.addSnakeling({ x: 2263, y: 3073 });
   assert.equal(melee.getId(), Shared.NPC.SNAKELING_MELEE);
-  for (let i = 0; i < 66; i++) fight.hazards.tickSnakelings(player);
+  for (let i = 0; i < 63; i++) fight.hazards.tickSnakelings(player);
   assert.ok(magic.hp > 0);
   fight.hazards.tickSnakelings(player);
   assert.ok(magic.hp <= 0, 'gone after 40 seconds');
@@ -535,7 +596,8 @@ test('a kill counts, times the fight, drops the loot under the player and leaves
   hooks.npcDeath.forEach((handler) => handler({ npc: zulrah, killer: player }));
   assert.equal(player.getAttribute(Shared.ATTR.KILLS), 1);
   assert.match(player.messages.at(-2), /Your Zulrah kill count is: <col=ff0000>1<\/col>/);
-  assert.match(player.messages.at(-1), /Fight duration: <col=ff0000>0:12\.00<\/col> \(new personal best\)/);
+  // 20 ticks up, less the 9 the live timer lags the kill hook by: 11 ticks.
+  assert.match(player.messages.at(-1), /Fight duration: <col=ff0000>0:06\.60<\/col> \(new personal best\)/);
   assert.equal(fight.teleport.getId(), Shared.OBJECT.TELEPORT);
   assert.ok(!fight.teleport.getLocation().equals(player.getLocation()), 'beside the player');
   fight.end();

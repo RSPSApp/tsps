@@ -10,6 +10,7 @@ import gateway.tsps.TspsPacket
 import gateway.tsps.TspsServerPacket
 import gateway.tsps.TspsWriter
 import net.rsprot.protocol.game.outgoing.interfaces.IfSetEventsV2
+import net.rsprot.protocol.game.outgoing.varp.VarpLarge
 import net.rsprot.protocol.message.OutgoingGameMessage
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -38,6 +39,22 @@ class InterfacesEventsTest {
     fun `other components' V2 events pass through`() {
         interfaces.handle(TspsPacket(TspsServerPacket.WIDGET_SET_FLAGS_RANGE_V2, TspsWriter().i32(BANK_ITEMS).u16(0).u16(815).i32(DRAG).i32(OPS).body()))
         assertEquals(DRAG, (sent.single() as IfSetEventsV2).events1)
+    }
+
+    @Test
+    fun `rune and ammo setting varbits keep each other and unrelated bits in the native whole varp`() {
+        interfaces.handle(TspsPacket(TspsServerPacket.VARP_SMALL, TspsWriter().u16(1598).u8(32).body()))
+        // PacketSender sends separate VARBIT updates; the official client receives whole VARP1598.
+        for ((bit, value, expected) in listOf(
+            Triple(5698, 1, (1 shl 29) or 32),
+            Triple(5697, 1, (1 shl 29) or (1 shl 28) or 32),
+            Triple(5698, 0, (1 shl 28) or 32),
+        )) {
+            interfaces.handle(TspsPacket(TspsServerPacket.VARBIT, TspsWriter().u16(bit).i32(value).body()))
+            val update = sent.last() as VarpLarge
+            assertEquals(1598, update.id)
+            assertEquals(expected, update.value)
+        }
     }
 
     private companion object {

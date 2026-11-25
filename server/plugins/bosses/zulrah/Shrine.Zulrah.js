@@ -27,6 +27,11 @@ const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 const { examineItem } = require("../../../src/main/typescript/elvarg/game/content/ExaminePrice");
 
 const DAMAGE_CAP = 50;
+/**
+ * rsprox 1161/3276/1157 (24 kills): "Fight duration" reads 3 ticks less than Zulrah's rise to its
+ * death animation, and this hook runs 6 ticks after that animation starts (its death ticks).
+ */
+const KILL_TIMER_LAG_TICKS = 3 + 6;
 const ZUL_ANDRA_SCROLL = "Zul-andra teleport";
 const BOSS_NAME = "Zulrah";
 const HALBERD_REACH = 2;
@@ -204,7 +209,7 @@ function onZulrahDeath({ npc }) {
   fight.onZulrahDeath();
   const kills = (Number(player.getAttribute(Shared.ATTR.KILLS)) || 0) + 1;
   player.setAttribute(Shared.ATTR.KILLS, kills);
-  const ticks = fight.duration();
+  const ticks = Math.max(0, fight.duration() - KILL_TIMER_LAG_TICKS);
   CombatAchievements.killed(player, fight, kills, ticks);
   const best = Number(player.getAttribute(Shared.ATTR.BEST_TIME)) || 0;
   sendBossKillCount(player, `Your Zulrah kill count is: <col=ff0000>${kills}</col>.`);

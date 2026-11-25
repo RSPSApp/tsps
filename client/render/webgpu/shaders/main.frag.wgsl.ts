@@ -297,11 +297,20 @@ fn applyBrightness(texel: vec3<f32>, lit: vec3<f32>) -> vec3<f32> {
     return pow(max(texel, vec3<f32>(0.0)), vec3<f32>(scene.u_brightness)) * lit;
 }
 
+// World textures are read texel-exact (nearest, repeat-wrapped), like the software rasterizer and
+// the WebGL renderer's default filter: linear sampling blurs texels on close-up walls and floors.
+// The shared u_sampler stays linear for the water textures.
+fn loadWorldTexel(texCoord: vec2<f32>, layer: i32) -> vec4<f32> {
+    let size = vec2<i32>(textureDimensions(u_textures).xy);
+    let texel = min(vec2<i32>(fract(texCoord) * vec2<f32>(size)), size - vec2<i32>(1));
+    return textureLoad(u_textures, texel, layer, 0);
+}
+
 fn sampleModelTexture(textureId: u32, texCoord: vec2<f32>) -> vec4<f32> {
     if (textureId == 0u) {
         return vec4<f32>(1.0);
     }
-    return textureSampleLevel(u_textures, u_sampler, texCoord, i32(textureId), 0.0).bgra;
+    return loadWorldTexel(texCoord, i32(textureId)).bgra;
 }
 
 @fragment
@@ -319,8 +328,8 @@ ${discardBlock}
         let frame0 = floor(frameT);
         let frame1 = glslMod(frame0 + 1.0, f32(frameCount));
         let tMix = fract(frameT);
-        let tex0 = textureSampleLevel(u_textures, u_sampler, input.v_texCoord, i32(f32(input.v_texId) + frame0), 0.0).bgra;
-        let tex1 = textureSampleLevel(u_textures, u_sampler, input.v_texCoord, i32(f32(input.v_texId) + frame1), 0.0).bgra;
+        let tex0 = loadWorldTexel(input.v_texCoord, i32(f32(input.v_texId) + frame0)).bgra;
+        let tex1 = loadWorldTexel(input.v_texCoord, i32(f32(input.v_texId) + frame1)).bgra;
         textureColor = mix(tex0, tex1, tMix);
         alpha = textureColor.a * input.v_color.a;
     }

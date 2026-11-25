@@ -248,10 +248,25 @@ All 50 tasks have a mode in `CombatAchievements.*` and a condition somewhere. Ca
 | Holy and Sanguine ornament kits | New rows in `ornament-kits.json`, charged and uncharged, refunded on Dismantle (Wiki). Holy rapier played. |
 | Scythe of Vitur | Existing plugin read against the Wiki: hits, max-hit halving, the well, charges. No change. |
 | Sanguinesti staff | Existing plugin read against the Wiki: max hit, leech, charges. No change. |
-| Books | `Books.*`: each boss leaves its book for someone without it, and the bookshelves give the first one missing. Their text isn't transcribed, so reading says the writing's too faded. |
+| Books | `Books.*`: the boss's book lands in the completion tick at the tile below and stays owner-only for 200 ticks. The bookshelves give the first one missing. |
 | Sanguine dust | Drops from Hard Mode. Lil' Zik's forms are `Dust.Pets.js`'s. |
 | Sinhaza shrouds | `Stats.*`: tiers 1-5 at 100, 500, 1000, 1500 and 2000 Normal or Hard completions, from the Mysterious Stranger's "What do you have for me?"; Change moves between earned tiers (Wiki; Transcript:Mysterious Stranger). The refusal of a tier not earned yet is our wording. Unit tested, not played: no account here has 100 completions. |
 | Dawnbringer | Its special, and every other, now says "You don't have enough power left." when energy is short, as 24 captures do (`Combat.ts`, `CombatSpecial.ts`). It can also be dropped in Verzik's room during phase 1 and picked up by a teammate (the Wiki's way of passing it), drops on death, and is removed when phase 1 ends or when its holder leaves. |
+
+All 233 room wins across 16 recordings placed one book for the recording player in the completion tick, after the wave message. Verzik's book followed the final recorded completion lines. The captures are from Leagues V, Grid Master and Leagues VI, and the sample includes Entry, Normal and Hard Mode. [Entry, ticks 25754–27274](https://rsprox.net/download/101) · [Normal, ticks 368–1810](https://rsprox.net/download/1163) · [Hard, ticks 879–4390](https://rsprox.net/download/1852)
+
+| Boss | Book ID | Drop tile | Example |
+| --- | --- | --- | --- |
+| Maiden | 22504 | (3168, 4447, 0) | [227/101, tick 25754](https://rsprox.net/download/101) |
+| Bloat | 22506 | South-west tile when the death animation begins, plus (2, 2) | [237/1162, ticks 13464–13467](https://rsprox.net/download/1162) |
+| Nylocas Vasilias | 22508 | (3295, 4248, 0) | [227/554, tick 942](https://rsprox.net/download/554) |
+| Sotetseg | 22510 | (3279, 4328, 0) | [227/554, ticks 1140–1158](https://rsprox.net/download/554) |
+| Xarpus | 22512 | (3170, 4387, 1) | [227/1837, ticks 3417–3616](https://rsprox.net/download/1837) |
+| Verzik | 22514 | Death form's south-west tile plus (1, 1) after it moves | [237/1163, ticks 1804–1810](https://rsprox.net/download/1163) |
+
+Bloat's three-tick delay starts at the death animation. In one win it last moved at tick 2330, began the animation at 2331 and dropped its book at 2334. In another it last moved at 4130, began the animation at 4151 and dropped its book at 4154. [227/554, ticks 2330–2334 and 4130–4154](https://rsprox.net/download/554)
+
+The drops carry `despawn=200`, `ownership=self` and `neverturnpublic=true`. Xarpus' book is added at tick 3417 and removed at 3616 with the player still in the room. When an area reload sends a book again, it reports the original stack's remaining time. Sotetseg's book appears at tick 1140 with 200 ticks and is sent again at 1158 with 181. [227/1837, ticks 3417–3616](https://rsprox.net/download/1837) · [227/554, ticks 1140–1158](https://rsprox.net/download/554)
 
 Xarpus' splat also poisons, starting at 2 (Wiki, Strategies; "You have been poisoned!" captured).
 
@@ -261,6 +276,7 @@ Over the agent MCP (2026-11-02). No fight was played at full length: every boss 
 - **Solo, Normal:** party through the notice board, the Stranger's gate, the entrance and its prompts, then every room through its real barriers and passages. That includes both of Sotetseg's mazes run to the portal, the Xarpus north barrier, the skeleton and the door, all three of Verzik's phases to her death, the vault's chest, strategy table, bookshelf and crystal, and leaving. The Nylocas room was skipped with `::tobcomplete`. Verzik was finished for real once and skipped once to test the vault.
 - **Two players, Normal, Hard and Entry:** the Maiden fought; the Bloat finished with `::tobcomplete`, because a script can't time going in as a player does and its flies kill in about 8 ticks; the Nylocas skipped; Sotetseg's mazes run, then `::tobcomplete`; Xarpus fought; Verzik not reached in these.
 - **Scenarios:** a death, the jail and release when the room is won; a team wipe, the retrieval chest refusing without coins, taking the fee, giving back, then empty; logging out mid-fight and rejoining into the jail; a crystal carried at logout; teleports refused; a crystal used on a teammate; auto-afk firing on a hit; two parties at once, each with its own Maiden, unseen and unattackable by the other; spectating the most recent party and teleporting out; the scoreboard; the Avernic defender and a Holy kit.
+- **Boss books (2026-11-25):** agent MCP in Normal Mode. The solo run checked all six drops and took the Maiden's diary. Bloat's death animation began at tick 1228 on (3288, 4444, 0), and its book appeared at (3290, 4446, 0) at 1231. Verzik's death form appeared at (3168, 4315, 0) at 1139, and her book appeared at (3169, 4316, 0) at 1145. The two-player run took one diary per player. A was unable to take B's diary after the normal public-reveal threshold. A stationary check saw the Xarpus book on plane 1 at completion tick 992 and at 1190, then saw it gone at 1191. The runs used the developer room commands, reduced boss hitpoints, and a headless client.
 - **Unit tests (2026-11-03):** a wipe with one member who never entered; unclaimed vault loot lost on entering another raid and on logging out (Lil' Zik still delivered); a seven-item roll showing six, with Discard-all and Take-all leaving the seventh and showing it; the loot interface feeding the collection log and the category's kill count; Verzik's auto-attacks, green ball, yellow strikes and webs doing nothing after `die()`; the Dawnbringer dropped, visible to a teammate, and dropped on death; Hard's supply chest a band lower.
 
 ## What isn't verified
@@ -272,6 +288,7 @@ Over the agent MCP (2026-11-02). No fight was played at full length: every boss 
 - **Estimates with no source:** the jail's stance (RuneLite's name), the retrieval lot's second-wipe timing, Sotetseg's tornado damage, the Hard realm's sections for three runners, Hard's dots' 80 per strike, Hard Matomenos' blast, each death costing a fifth of a player's standing (unique chance, weighting, commons, tertiaries), the MVP's formula, supply grading.
 - **Checked against the Wiki or the cache and left as they are:** the pillars have the cache's 185 hitpoints (NPC 8379) and collapse on phase 2 damaging and stunning adjacent players (Wiki, Supporting Pillar); urnbombs check Protect from Missiles when they land while the blood spell checks Protect from Magic during her animation (Wiki, Verzik Vitur); Sotetseg has no maze immunity in the Wiki (the players who stay in the arena can still attack him); the between-room heal is in captures outside Entry; and a second team wipe before reclaiming replaces the retrieval lot (Wiki, Death mechanics).
 - **Our wording, not captured:** the Vyre Orator's lines, "Are you ready to proceed?", the crystal's, the Avernic defender's, Hard's refusal, Entry's retry line, the supply chest's Open line.
+- **Book-drop estimates:** a player who already owns the book, including a banked copy, receives none. The captures show repeat drops. No pickup was observed, so ownership at a later kill is unestablished. Jailed party members qualify under the existing raid rule, with no recorded room win observed from jail. Taking a book uses the ordinary Take action with no extra message, since no pickup was captured.
 - **Not built, for want of a source:**
   - Varbit 6400 `tob_verzik_throne_visible`: no capture changes it, and its values are unknown.
   - The books' text: the Wiki's transcripts are the books' whole text, too much to copy in.
@@ -284,7 +301,7 @@ Over the agent MCP (2026-11-02). No fight was played at full length: every boss 
 | Command | What it does |
 | --- | --- |
 | `::tob` | To Ver Sinhaza, by the notice board. |
-| `::tobcomplete` | Completes the room your party has reached, removing its NPCs. |
+| `::tobcomplete` | Completes the room your party has reached, removing its NPCs. Without a boss death, Bloat uses its spawn plus (2, 2) and Verzik uses her phase-three start plus (1, 1). |
 | `::tobroom <room>` | Moves your party to a room (`MAIDEN`, `BLOAT`, `NYLOCAS`, `SOTETSEG`, `XARPUS`, `VERZIK`, `REWARDS`). |
 
 The Theatre of Blood is also in `::teleports` under Minigames.

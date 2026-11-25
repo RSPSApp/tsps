@@ -1,5 +1,5 @@
 /**
- * Vardorvis' head (rsprox 3285): with one of his slashes a head rises on a tile near him, screams
+ * Vardorvis' head (rsprox 3285, 1156): with one of his slashes a head rises on a tile near him, screams
  * and spits a projectile at the player ("Vardorvis' head gazes upon you..."). It does no damage;
  * three ticks later, as it lands, the head goes and - unless the player was praying against it and
  * he still lives - their protection prayers switch off: "You've been injured and can't use

@@ -1,5 +1,5 @@
 {
-  "$comment": "Vardorvis after Desert Treasure II (plugins/bosses/Vardorvis.plugin.js, docs/vardorvis.md). Tiles are the ritual site's own (region 4405); the instance copies its chunks unturned. Timings are server ticks; delays on map animations are client cycles (30 a tick). Captured from rsprox recordings 3285 (rev 234) and 3344 (rev 235); numbers marked Wiki in docs/vardorvis.md come from the OSRS Wiki.",
+  "$comment": "Vardorvis after Desert Treasure II (plugins/bosses/Vardorvis.plugin.js, docs/vardorvis.md). Tiles are the ritual site's own (region 4405); the instance copies its chunks unturned. Timings are server ticks; delays on map animations are client cycles (30 a tick). Captured from rsprox recordings 3285 (rev 234), 3344 (rev 235), 1156 (rev 237) and 1703 (rev 226, the quest's fight on a normal world); numbers marked Wiki in docs/vardorvis.md come from the OSRS Wiki.",
   "instance": { "sourceChunkX": 139, "sourceChunkY": 425, "width": 5, "height": 5 },
   "npcs": {
     "boss": 12223,
@@ -8,6 +8,7 @@
     "axe": 12227,
     "axeStatic": 12229
   },
+  "spawnProp": { "npc": 12229, "tile": [1119, 3414, 0], "face": "SOUTH", "anim": 10335, "animTicks": 8, "goneAfterHitTicks": 2 },
   "quest": "desert_treasure_ii",
   "site": {
     "entryLoc": 49495,
@@ -53,7 +54,7 @@
     "firstAxesTicks": 14,
     "axeTicks": 13,
     "enragedAxeTicks": 8,
-    "axesAfterStrangleTicks": 8,
+    "axesAfterReleaseTicks": 3,
     "enrageShare": 0.33,
     "specialsBelow": 570,
     "awakenedSpecialsBelow": 1140
@@ -103,7 +104,7 @@
   },
   "head": {
     "message": "<col=ff289d>Vardorvis' head gazes upon you...</col>",
-    "lockMessage": "You've been injured and can't use protection prayers!",
+    "lockMessage": "<col=ff3045>You've been injured and can't use protection prayers!</col>",
     "refusedMessage": "You've been injured and can't use that prayer!",
     "landSound": 4015,
     "flightTicks": 3,
@@ -111,6 +112,8 @@
     "prayerDrain": 10,
     "spread": 3,
     "pairGapTicks": 1,
+    "readyTicks": { "normal": 5, "awakened": 2, "afterStrangle": 2 },
+    "chance": 0.6,
     "pairBelowShare": 0.5,
     "styles": {
       "ranged": { "projectile": 2521, "scream": 2550, "impact": 2552, "sound": 3539, "prayer": "PROTECT_FROM_MISSILES" },
@@ -122,7 +125,7 @@
   "dash": {
     "anim": 10341,
     "sound": 7154,
-    "darts": [[500, 1], [130, 2], [0, 3]],
+    "darts": { "normal": [[500, 1], [130, 2], [0, 3]], "awakened": [[1000, 1], [260, 2], [0, 3]] },
     "sides": [[[-2, -1], [-2, 0]], [[1, -1], [1, 0]], [[-1, 1], [0, 1]], [[-1, -2], [0, -2]]],
     "warningSpot": 2510,
     "eruptSpot": 2512,
@@ -134,9 +137,7 @@
     "tiles": [3, 5],
     "reach": 2,
     "maxHit": { "normal": 25, "awakened": 40 },
-    "cooldownTicks": 15,
-    "firstTicks": 30,
-    "chance": 0.6
+    "everyTicks": { "normal": 30, "awakened": 25 }
   },
   "strangle": {
     "startAnim": 10342,
@@ -167,6 +168,10 @@
     "awakenedKillCountVarp": 3971,
     "message": "Your Vardorvis kill count is: <col=ff0000>%d</col>.",
     "awakenedMessage": "Your Vardorvis (Awakened) kill count is: <col=ff0000>%d</col>.",
-    "awakenedTask": "Vardorvis Sleeper"
+    "awakenedTask": "Vardorvis Sleeper",
+    "perfectTask": "Perfect Vardorvis",
+    "perfectFailure": "You took damage from Vardorvis.",
+    "axeTask": "Axe Enthusiast",
+    "axeFailure": "You left the inner 25 tiles."
   }
 }

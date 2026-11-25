@@ -1,16 +1,21 @@
 /**
- * A fight with Vardorvis (docs/vardorvis.md), as captured (rsprox 3285, 3344):
- * - He rises on his spot facing north-west and the boss HUD comes up a tick later. He isn't
+ * A fight with Vardorvis (docs/vardorvis.md), as captured (rsprox 3285, 3344, 1156, 1703):
+ * - He rises on his spot facing north-west, with an axe prop (12229) nine tiles west of him, and
+ *   the boss HUD comes up a tick later. The prop plays its anim eight ticks after he rises and
+ *   goes two ticks after the first hit. He isn't
  *   aggressive; the first hit to land on him (a miss too) raises the barrier (Barrier.Vardorvis),
  *   starts the fight's clock and has him run at the player.
  * - He attacks every 5 ticks from the tick after that first hit: a slash (32-43 as his hitpoints
  *   fall, Wiki; a quarter through Protect from Melee) landing a tick later, healing him half of it.
  * - Axes come 14 ticks into the fight, then every 13 (8 once he's below a third, and always when
  *   awakened) (Axes.Vardorvis).
- * - Below 570 hitpoints (1,140 awakened) the specials join in: the strangle takes an attack's
- *   place or an axe set's (and the axes follow 8 ticks after it) (Strangle.Vardorvis); his head's
- *   gaze rides with a slash after an axe set (Head.Vardorvis); the dash takes an attack's place
- *   (Dash.Vardorvis). Which of them comes when is inferred from 16 kills (docs/vardorvis.md).
+ * - The dash takes an attack's place 30 ticks into the fight and every 30 after (25 awakened), at
+ *   any hitpoints (rsprox 1703 darts at 89%) (Dash.Vardorvis).
+ * - Below 570 hitpoints (1,140 awakened) the other specials join in: the strangle takes an
+ *   attack's place or an axe set's, and the axes follow 3 ticks after he lets go
+ *   (Strangle.Vardorvis); his head's gaze may ride with a slash from 5 ticks after an axe set (2
+ *   awakened or after a strangle) until the next set (Head.Vardorvis). Which comes when is fitted
+ *   to rsprox 1156's 21 kills and 3285's 16 (docs/vardorvis.md).
  * - His Strength rises and his Defence falls in step with his hitpoints (Wiki).
  * - The kill: his death animation; four ticks on the kill count, the fight's time, the loot and
  *   the rocks open; a tick later the tendrils sink; the HUD goes at twelve; he rises again at
@@ -59,6 +64,7 @@ class Fight {
     this.over = false;
     this.stopped = false;
     this.perfectKill = true;
+    this.prop = null;
     this.axeEnrageTicks = 0;
     this.leftAxeCentre = false;
   }
@@ -66,7 +72,11 @@ class Fight {
   /** Only damage actually taken during this fight can spoil its loot bonus. */
   recordDamage(amount) {
     if (amount <= 0 || this.over || this.stopped || this.session.ended || this.session.fight !== this) return;
+    if (!this.perfectKill) return;
     this.perfectKill = false;
+    // rsprox 1156: "You have failed Perfect Vardorvis: You took damage from Vardorvis." once a kill.
+    const { kill } = Common.data;
+    Common.api.emitCustomEvent("combat-achievements:failed", { player: this.player, task: kill.perfectTask, reason: kill.perfectFailure });
   }
 
   /** Runs `action` `ticks` ticks into the fight. */
@@ -97,9 +107,27 @@ class Fight {
     this.startCycle = Common.core.World.getProcessCycle();
     Barrier.raise(this.session);
     this.nextAttack = this.tick + clock.firstAttackTicks;
-    this.nextDash = this.tick + Common.data.dash.firstTicks;
+    this.nextDash = this.tick + this.dashEvery();
     this.axesDue = this.tick + (this.awakened ? clock.firstAttackTicks + clock.enragedAxeTicks : clock.firstAxesTicks);
     this.boss.getCombat().attack(this.player);
+    const prop = this.prop;
+    if (prop) this.at(Common.data.spawnProp.goneAfterHitTicks, () => this.removeProp(prop));
+  }
+
+  /** The dash's cadence: from 30 ticks in and every 30 after (25 awakened; rsprox 1703, 1156). */
+  dashEvery() {
+    return Common.data.dash.everyTicks[this.awakened ? "awakened" : "normal"];
+  }
+
+  removeProp(prop = this.prop) {
+    if (prop?.isRegistered?.()) Common.api.removeNpc(prop);
+    if (this.prop === prop) this.prop = null;
+  }
+
+  /** The strangle let go (escaped or tightened): the axes follow 3 ticks later (rsprox 1156). */
+  released() {
+    if (this.stopped || this.over) return;
+    this.axesDue = this.tick + Common.data.clock.axesAfterReleaseTicks;
   }
 
   process() {
@@ -138,8 +166,11 @@ class Fight {
     }
     Axes.throwSet(this);
     this.axesDue = this.tick + (this.enraged ? clock.enragedAxeTicks : clock.axeTicks);
-    // Captured: the head comes with the first slash 5 ticks after the axes, 2 after a strangle's.
-    if (this.specialsOpen()) this.headReadyAt = this.tick + (this.afterStrangle ? 2 : 5);
+    // Captured (1156): a head may come from 5 ticks after the axes (2 awakened or after a
+    // strangle) until the next set; a set it misses has no head.
+    const { readyTicks } = Common.data.head;
+    const ready = this.afterStrangle ? readyTicks.afterStrangle : readyTicks[this.awakened ? "awakened" : "normal"];
+    this.headReadyAt = this.specialsOpen() ? this.tick + ready : Infinity;
     this.afterStrangle = false;
   }
 
@@ -165,20 +196,22 @@ class Fight {
       this.lastSpecial = "strangle";
       this.strangles++;
       this.afterStrangle = true;
-      this.axesDue = this.tick + clock.axesAfterStrangleTicks;
+      this.headReadyAt = Infinity;
+      // The axes wait for him to let go (released()).
+      this.axesDue = Infinity;
       this.nextAttack = this.tick + clock.attackTicks;
       Strangle.start(this);
       return;
     }
     if (!this.inReach()) return;
-    if (this.specialsOpen() && this.tick >= this.nextDash && this.tick < this.headReadyAt && Math.random() < Common.data.dash.chance) {
+    if (this.tick >= this.nextDash) {
       this.lastSpecial = "dash";
-      this.nextDash = this.tick + Common.data.dash.cooldownTicks;
+      this.nextDash = this.tick + this.dashEvery();
       Dash.start(this);
       return;
     }
     this.melee();
-    if (this.specialsOpen() && this.tick >= this.headReadyAt) {
+    if (this.specialsOpen() && this.tick >= this.headReadyAt && Math.random() < Common.data.head.chance) {
       this.headReadyAt = Infinity;
       this.lastSpecial = "head";
       Head.gaze(this);
@@ -260,12 +293,13 @@ class Fight {
     }
     const bestKey = awakened ? Common.AWAKENED_BEST_TICKS_ATTRIBUTE : Common.BEST_TICKS_ATTRIBUTE;
     const best = Common.count(player, bestKey);
+    const precise = Common.preciseTiming(player);
     if (!best || ticks < best) {
       player.setAttribute(bestKey, ticks);
       Common.api.emitCustomEvent("boss:personal-best", { player, boss: `${awakened ? "Awakened " : ""}${BOSS_NAME}`, ticks });
-      player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col> (new personal best)`);
+      player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(ticks, precise)}</col> (new personal best)`);
     } else {
-      player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(ticks)}</col>. Personal best: ${Common.formatTicks(best)}`);
+      player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(ticks, precise)}</col>. Personal best: ${Common.formatTicks(best, precise)}`);
     }
     Scoreboard.won(ticks, awakened);
     CombatAchievements.judge(this, ticks);
@@ -293,6 +327,7 @@ class Fight {
     if (this.stopped) return;
     this.stopped = true;
     this.events = [];
+    this.removeProp();
     Axes.clear(this);
     Head.clear(this);
     Strangle.clear(this);
@@ -317,6 +352,14 @@ function spawnBoss(session) {
   session.fight = fight;
   fight.scaleStats();
   fight.at(1, () => fight.showHud());
+  // Every capture's spawn: an axe prop (12229) rises with him, plays 10335 eight ticks later and
+  // goes two ticks after the first hit.
+  const { spawnProp } = Common.data;
+  const prop = session.spawn(spawnProp.npc, spawnProp.tile, spawnProp.face);
+  if (prop) {
+    fight.prop = prop;
+    fight.at(spawnProp.animTicks, () => prop.isRegistered?.() && prop.performAnimation(new Common.core.Animation(spawnProp.anim)));
+  }
   const { Task, TaskManager } = Common.core;
   TaskManager.submit(new (class extends Task {
     constructor() {

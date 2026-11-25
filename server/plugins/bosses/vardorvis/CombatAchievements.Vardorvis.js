@@ -56,13 +56,23 @@ function judge(fight, ticks) {
   for (const [task, seconds] of SPEED_TASKS) if (ticks * 0.6 < seconds) complete(task);
 }
 
-/** Axe Enthusiast tracks the three-minute enrage while the player stays in the middle 5x5. */
+/**
+ * Axe Enthusiast times the three-minute enrage, and fails the first time the player leaves the
+ * middle 5x5 at any point of the fight: rsprox 1156 fails it at about 44% of his hitpoints,
+ * before the enrage ("You have failed Axe Enthusiast: You left the inner 25 tiles.").
+ */
 function tick(fight) {
-  if (fight.awakened || !fight.engaged || !fight.enraged) return;
-  const [x, y] = Common.siteTile(fight.session.area, fight.player.getLocation());
-  const [centreX, centreY] = Common.data.axes.centre;
-  if (Math.abs(x - centreX) > 2 || Math.abs(y - centreY) > 2) fight.leftAxeCentre = true;
-  fight.axeEnrageTicks++;
+  if (fight.awakened || !fight.engaged || fight.over) return;
+  if (!fight.leftAxeCentre) {
+    const [x, y] = Common.siteTile(fight.session.area, fight.player.getLocation());
+    const [centreX, centreY] = Common.data.axes.centre;
+    if (Math.abs(x - centreX) > 2 || Math.abs(y - centreY) > 2) {
+      fight.leftAxeCentre = true;
+      const { kill } = Common.data;
+      Common.api.emitCustomEvent("combat-achievements:failed", { player: fight.player, task: kill.axeTask, reason: kill.axeFailure });
+    }
+  }
+  if (fight.enraged) fight.axeEnrageTicks++;
 }
 
 function answerKillCount({ player, counts }) {

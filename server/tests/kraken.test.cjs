@@ -815,7 +815,8 @@ test("joint private respawn waits for an already-dying unhit tentacle and retrie
   assert.equal(tentacles.length, 4);
   for (const tentacle of tentacles) tentacle.setNpcTransformationId(core.NpcIdentifiers.ENORMOUS_TENTACLE);
   boss.setNpcTransformationId(core.NpcIdentifiers.KRAKEN);
-  const delay = Math.max(1, boss.getDefinition().getRespawn());
+  const { BOSS_RESPAWN_TICKS } = require("../plugins/bosses/kraken/Respawn.Kraken");
+  const delay = BOSS_RESPAWN_TICKS[1];
   const longDeath = delay * 2 + 10;
   const definition = tentacles[0].getCurrentDefinition();
   t.mock.method(definition, "getDeathTicks", () => longDeath);

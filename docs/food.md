@@ -64,6 +64,7 @@ The full-plugin decoded Eat tests for same-name cabbage variants, energy restora
 | `eatDelay` | Ticks until the next bite, per bite or for all (default 3). |
 | `combo` | A combo food. |
 | `leaves` | The item left after the last bite (`Pie dish`, `Bowl`). |
+| `leavesInFreeSlot` | `true`: that item goes to the first free slot once the food is gone, rather than its slot (the fruit blast and pineapple punch's cocktail glass). |
 | `boost`, `drain`, `restore` | Skills by name and amount: a boost to base + amount, a drain from it, a restore up to base. Boost and restore amounts may be `{ "flat", "percent" }` of the base level; percent is a fraction (for example, `0.02` for 2%). |
 | `refusedIn` | `{ "<area name>": "<message>" }`: refused with that message while the eater is in an area of that name (purple sweets in the Doom of Mokhaiotl, Fortis Colosseum and the Inferno; Wiki: Purple sweets, Inferno line from rsprox 227/00200). |
 | `stamina`, `area`, `option` | Apply the shared stamina effect, require a `food:area` scene check (its owner may set the refusal `message`), or consume via a cache action other than Eat. |
@@ -155,8 +156,10 @@ leave their vessel. Checked 7 November 2026 against the Wiki pages
 [Jug of wine](https://oldschool.runescape.wiki/w/Jug_of_wine),
 [Half full wine jug](https://oldschool.runescape.wiki/w/Half_full_wine_jug),
 [Cup of tea](https://oldschool.runescape.wiki/w/Cup_of_tea),
-[Fruit blast](https://oldschool.runescape.wiki/w/Fruit_blast) and
-[Pineapple punch](https://oldschool.runescape.wiki/w/Pineapple_punch):
+[Fruit blast](https://oldschool.runescape.wiki/w/Fruit_blast),
+[Pineapple punch](https://oldschool.runescape.wiki/w/Pineapple_punch),
+[Premade fr' blast](https://oldschool.runescape.wiki/w/Premade_fr%27_blast) and
+[Premade p' punch](https://oldschool.runescape.wiki/w/Premade_p%27_punch):
 
 - A jug of wine heals 11 and lowers Attack by 2; a half full wine jug heals 7 and lowers Attack
   by 2. Both leave a jug (the Wiki states the leftover only for the cocktails and the tea, so the
@@ -173,8 +176,15 @@ leave their vessel. Checked 7 November 2026 against the Wiki pages
   sound 2393 on the same tick, and the `tracking_food_eaten` varp doesn't change (rsprox 229/00245,
   blue, pink and purple at ticks 510, 603 and 607; 229/02530). Ours: the other six colours follow
   the three recorded ones, and the eat delay is the default 3 ticks (no source gives one).
-- Fruit blast and pineapple punch heal 9, leave a cocktail glass and print "You drink the
-  cocktail. It tastes great.".
+- Fruit blast, pineapple punch and their Blurberry Bar premades (premade fr' blast, premade p'
+  punch) heal 9, leave a cocktail glass and print "You drink the cocktail. It tastes great." (Wiki
+  pages of each). rsprox captures: the line is spam, with sound 2401 and human_eat; a pineapple
+  punch adds a second spam line, "You feel slightly reinvigorated.", even at full health (rsprox
+  948 tick 18256), and a fruit blast sends none (local 20261111T225402-5ab63b4 tick 37). The glass
+  goes to the first free slot once the drink is gone (`leavesInFreeSlot`): the fruit blast drunk
+  from slot 14 left the glass in slot 8, the first free one, and the punch's glass took its own
+  slot 11, the first free once drunk. Ours: the premades follow their cocktails' captured lines and
+  glass slot (no capture drinks a premade).
 
 The dizzy gnome cocktails and their Blurberry Bar premades are drinks in
 `plugins/items/Potions.plugin.js` (tests: `server/tests/alcohol-drinks.test.cjs`). From the Wiki

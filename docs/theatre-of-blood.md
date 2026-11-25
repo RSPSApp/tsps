@@ -99,7 +99,7 @@ The introductions are captured in [227/101](https://rsprox.net/download/101) tic
 - The buttons are pause buttons. Refresh, My/Make party and Friends/Clan (varbit 12988) are children 0, 1 and 2 of component 3 (enum 1938), so a click arrives as RESUME_PAUSEBUTTON, handled in `onInterfaceActionClick`. Rows are components 18–62, with a plain "View party" op.
 - Varp 1740 (`tob_mycontroller` in the symbols) is 0 for someone in a party, -1 otherwise, as captured.
 
-**A party's information (50).** Every button resumes a child of component 0:
+**A party's information (50).** The controls under component 0 each resume their own slot.
 
 | Slot | Button |
 | --- | --- |
@@ -114,11 +114,17 @@ The introductions are captured in [227/101](https://rsprox.net/download/101) tic
 | 12–21 | Accept applicants |
 | 22–31 | Decline applicants |
 
-Script 2323's footer takes the viewer's rights and the mode (0 Normal, 1 Entry, 2 Hard; captured). Script 2317's members and 2321's applicants are `name|combat|attack|strength|ranged|magic|defence|hitpoints|prayer|completions`. Leaving Ver Sinhaza (other than into the theatre) or logging out leaves the party or withdraws the application.
+Each opening runs script 5239 without arguments, then enables op 1 on the up and down arrows at components 63–72. The member script (2317) and footer (2323) both receive the viewer's rights. The footer also receives the mode (0 Normal, 1 Entry, 2 Hard). Member and applicant rows (2317 and 2321) are `name|combat|attack|strength|ranged|magic|defence|hitpoints|prayer|completions`. The rows and lobby HUD use U+00A0 in names with spaces. The HUD joins its five slots with `<br>`, with a dash for each empty slot.
+[237/1162](https://rsprox.net/download/1162) ticks 12869–12875 and 15849–15861, [237/1163](https://rsprox.net/download/1163) ticks 61, 79 and 176
+
+The leader can use the arrows to swap neighboring party members. A swap involving first place opens **Continue?** directly in this implementation. **Yes** swaps the members and makes the new first member leader. The one recorded hand-over, on a Leagues VI world, shows a message box before the confirmation. [Wiki change](https://oldschool.runescape.wiki/w/Theatre_of_Blood?oldid=15393349) · [237/1162](https://rsprox.net/download/1162) ticks 15849–15861
+
+Leaving Ver Sinhaza (other than into the theatre) or logging out leaves the party or withdraws the application.
 
 | Lobby event | Player feedback | Recordings |
 | --- | --- | --- |
 | An application is accepted | On a leader's Accept, the applicant gets "Your application to the party of \<leader's name\> has been accepted." as a game message. Party status 6440 changes from 0 to 1 on the following tick, as in recordings 553 and 582. Recordings 554 and 1162 show the same order within one tick. | [227/553](https://rsprox.net/download/553) ticks 11915–11916, [227/554](https://rsprox.net/download/554) tick 101, [227/582](https://rsprox.net/download/582) ticks 313–314, [237/1162](https://rsprox.net/download/1162) tick 12874 |
+| The leader confirms a first-place swap | The former leader sees the reordered party details with member rights. Their lobby HUD follows on the next tick. The entrance requires the new leader to go first. | [237/1162](https://rsprox.net/download/1162) ticks 15859–15861; entrance refusal in [237/1163](https://rsprox.net/download/1163) ticks 93–105 |
 | A member leaves the lobby | "You have left the lobby, so you have been removed from your party." appears as a game message with the departure. | [227/1779](https://rsprox.net/download/1779) tick 13028, [234/3299](https://rsprox.net/download/3299) tick 10627 |
 | A player refreshes a party that has disbanded | "That party is no longer recruiting." opens as a message box (229) and the details (50) close. Continue opens the list. | [227/1833](https://rsprox.net/download/1833) ticks 3474–3482 |
 
@@ -157,6 +163,13 @@ body, legs and feet slots (the Wiki names no pieces); the clothing line beats th
   departure messages in the captures are for members.
 - Refreshing a party that has entered the Theatre uses the same message as a disbanded party.
   The recorded stale refresh was after the viewer lost party membership.
+
+### Party screen estimates
+
+- Arrows below first place swap the two adjacent members immediately and redraw the details and lobby HUD. The recording only shows a swap involving first place.
+- The down arrow on row one asks for the same confirmation as the up arrow on row two. The recording shows the up arrow.
+- Choosing **No** or dismissing the confirmation keeps the order and reopens the details. The recorded answer was **Yes**.
+- Arrows from viewers other than the leader, arrows with no adjacent member, and arrows after raid entry leave the order as it was. The server redraws the details when the screen is available. The captured click was from the leader in the lobby.
 
 ## The raid
 
@@ -277,6 +290,7 @@ Over the agent MCP (2026-11-02). No fight was played at full length: every boss 
 - **Two players, Normal, Hard and Entry:** the Maiden fought; the Bloat finished with `::tobcomplete`, because a script can't time going in as a player does and its flies kill in about 8 ticks; the Nylocas skipped; Sotetseg's mazes run, then `::tobcomplete`; Xarpus fought; Verzik not reached in these.
 - **Scenarios:** a death, the jail and release when the room is won; a team wipe, the retrieval chest refusing without coins, taking the fee, giving back, then empty; logging out mid-fight and rejoining into the jail; a crystal carried at logout; teleports refused; a crystal used on a teammate; auto-afk firing on a hit; two parties at once, each with its own Maiden, unseen and unattackable by the other; spectating the most recent party and teleporting out; the scoreboard; the Avernic defender and a Holy kit.
 - **Boss books (2026-11-25):** agent MCP in Normal Mode. The solo run checked all six drops and took the Maiden's diary. Bloat's death animation began at tick 1228 on (3288, 4444, 0), and its book appeared at (3290, 4446, 0) at 1231. Verzik's death form appeared at (3168, 4315, 0) at 1139, and her book appeared at (3169, 4316, 0) at 1145. The two-player run took one diary per player. A was unable to take B's diary after the normal public-reveal threshold. A stationary check saw the Xarpus book on plane 1 at completion tick 992 and at 1190, then saw it gone at 1191. The runs used the developer room commands, reduced boss hitpoints, and a headless client.
+- On 2026-11-25, two headless agent MCP accounts formed a party through the notice board. The packet sender emitted script 5239, the ten op 1 flags and the viewer's rights. The spaced name used U+00A0 in the details and lobby HUD. After **Yes**, the former leader's details redrew with member rights, followed by their reordered HUD on the next tick. The former leader's arrow left the order intact. **No** and Escape reopened the details for the new leader. The entrance named the new leader to the former leader, then the new leader entered with the two-member party.
 - **Unit tests (2026-11-03):** a wipe with one member who never entered; unclaimed vault loot lost on entering another raid and on logging out (Lil' Zik still delivered); a seven-item roll showing six, with Discard-all and Take-all leaving the seventh and showing it; the loot interface feeding the collection log and the category's kill count; Verzik's auto-attacks, green ball, yellow strikes and webs doing nothing after `die()`; the Dawnbringer dropped, visible to a teammate, and dropped on death; Hard's supply chest a band lower.
 
 ## What isn't verified

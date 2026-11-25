@@ -96,10 +96,11 @@
     "order": ["icicle", "unstableIce"]
   },
   "icicle": {
+    "about": "Projectile heights here are the engine's: R1140 sends startheight 448 on the wire, which PacketSender.sendProjectile makes from 112 (x4), as for Unstable Ice.",
     "anim": 11531,
     "message": "<col=ff3045>Amoxliatl disables your prayers and launches an icicle attack!</col>",
     "plainMessage": "<col=ff3045>Amoxliatl launches an icicle attack!</col>",
-    "projectile": { "id": 2936, "start": 50, "end": 150, "startHeight": 448, "endHeight": 0, "angle": 128, "progress": 83 },
+    "projectile": { "id": 2936, "start": 50, "end": 150, "startHeight": 112, "endHeight": 0, "angle": 128, "progress": 83 },
     "impactTicks": 5,
     "impactSpotanim": 2935,
     "impactSound": 9720,

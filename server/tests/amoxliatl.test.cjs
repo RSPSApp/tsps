@@ -97,6 +97,7 @@ test("unstable ice lands on free floor near the player: not on them, her, the pa
 });
 
 class TestProjectile {
+  constructor(...args) { TestProjectile.last = args; }
   static centreOf(npc) { return npc.getLocation(); }
   withAngle() { return this; }
   withProgress() { return this; }
@@ -113,6 +114,25 @@ test("Icicle Crash sends the plain game message and leaves prayers alone when al
   const result = castIcicle([false, false]);
   assert.deepEqual(result.feedback, [[ChatType.GAME, "<col=ff3045>Amoxliatl launches an icicle attack!</col>"]]);
   assert.deepEqual(result.prayers, [false, false]);
+});
+
+test("Icicle Crash's icicle leaves at R1140's height: 448 on the wire, which carries the engine's x4", () => {
+  castIcicle([false, false]);
+  const [, , , id, start, end, startHeight, endHeight] = TestProjectile.last;
+  assert.deepEqual([id, start, end, startHeight * 4, endHeight * 4], [2936, 50, 150, 448, 0]);
+});
+
+test("her spikes and pools hit as she does: a hit from her, through prayer, never missing (Thorns answers it on live)", (t) => {
+  const api = Common.api;
+  Common.init({ ...api, core: { ...Common.core, CombatMethod: class {}, CombatType: { MAGIC: "magic" } } });
+  t.after(() => Common.init(api));
+  const queued = [];
+  class PendingHit { constructor(attacker, target, method, config) { Object.assign(this, { attacker, target, config }); } }
+  const boss = {}, player = { getHitpoints: () => 99, getCombat: () => ({ getHitQueue: () => ({ addPendingHit: (hit) => queued.push(hit) }) }) };
+  Fight.prototype.hurtPlayer.call({ core: { PendingHit, World: { getProcessCycle: () => 0 } }, boss, player }, 8);
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0].attacker, boss, "from her, so Thorns and the shield reflect pact see it");
+  assert.deepEqual(queued[0].config, { delay: 0, damage: 8, rollAccuracy: false, bypassProtectionPrayer: true, experience: false });
 });
 
 test("Icicle Crash turns off active prayers before sending the disable game message", () => {

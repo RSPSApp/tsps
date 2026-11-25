@@ -158,12 +158,18 @@ class Fight {
     return x >= Common.data.arena.pathFromX;
   }
 
-  /** Typeless damage on the player now (pools, her heal-free hazards). */
+  /**
+   * Her hazards' damage on the player now (her spikes and pools): a hit from her, through prayer and
+   * never missing. Live counts them as her hits: with a shield, Thorns answered every pool and spike
+   * hit the next tick (R1140: 106 of 106 and 86 of 86). Nagua Negation counts it as it resolves.
+   */
   hurtPlayer(amount) {
-    const { HitDamage, HitMask } = this.core;
+    if (this.player.getHitpoints() <= 0) return;
+    const { PendingHit, World } = this.core;
     const damage = Math.max(0, Math.floor(amount));
-    if (damage > 0) this.stats.damageTaken += damage;
-    this.player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, damage > 0 ? HitMask.RED : HitMask.BLUE)]);
+    const hit = new PendingHit(this.boss, this.player, magicStyle(),
+      { delay: 0, damage, rollAccuracy: false, bypassProtectionPrayer: true, experience: false });
+    this.player.getCombat().getHitQueue().addPendingHit(hit, World.getProcessCycle());
   }
 
   // ------------------------------------------------------------------ the attack slot

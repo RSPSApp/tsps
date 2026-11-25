@@ -43,13 +43,15 @@ She attacks 4 ticks after rising, then every 8 ticks (both captures), following 
 
 `amoxliatl_attack` (11530) and a magic hit of up to 22 on the same tick (captured: the player's block on that tick); Protect from Magic blocks it. The ice spikes (map animation 2942) are drawn on the floor around the player as captured: of the tiles within 6 of the player, their own about 3 in 4, the next ring about 2 in 3, the rest about 1 in 4 (counted over 13 attacks, 18-50 tiles each). Each is one 150-cycle animation (seq 11543): a short warning, then the spike rising through ticks 2-3. 3 ticks after the attack they hit a player who was still on one of their tiles the tick before: typeless 10 and 6 in the two captured cases (1147, ticks 352 and 360), 6-10 here as the Wiki gives the pools. Every player who had stepped off by then took nothing (the other 11 attacks), the Wiki's "step back two tiles after she starts a standard attack".
 
-3 ticks after the attack an icy pool (54279, a random rotation) forms on the tile the player stood on when she attacked (captured), with sound 9726 from the middle of the platform (always 1365,4511, both captures). Standing on a pool deals 6-10 typeless damage a tick (Wiki). Pools stay until she dies: on the killing blow each one goes with a puff (map animation 2938, captured).
+3 ticks after the attack an icy pool (54279, a random rotation) forms on the tile the player stood on when she attacked (captured), with sound 9726 from the middle of the platform (always 1365,4511, both captures). Standing on a pool deals 6-10 a tick (Wiki; R1140 shows 6-10 over 113 pool hits). Pools stay until she dies: on the killing blow each one goes with a puff (map animation 2938, captured).
+
+Her spikes and pools are her hits, not plain damage: through prayer and never missing, but from her. On live, with a shield worn, Thorns answered every one the next tick (R1140: 106 of 106 pool hits and 86 of 86 spike hits; it answered none while the shield was off). So Thorns and the shield reflect pact apply to them here (issue #6422).
 
 ### Specials
 
 After every 2-4 standard attacks (Wiki) she uses a special: the first at random, then in turn (both captures: four standard attacks, a special, three, the other). With the player on the 3-wide path to her platform (x 1372 and east) she has no room for Unstable Ice and uses Icicle Crash (Wiki).
 
-**Icicle Crash** clears active prayers before sending the game message "`<col=ff3045>Amoxliatl disables your prayers and launches an icicle attack!</col>`" (R1140 tick 7875). With no prayer active, it leaves prayer state alone and sends "`<col=ff3045>Amoxliatl launches an icicle attack!</col>`" (ticks 9718 and 9783). The message is followed by `amoxliatl_point` (11531) and an icicle (projectile 2936, cycles 50-150, heights 448 to 0) homing on the player. 5 ticks later it lands (spot 2935, sound 9720) for up to 34 magic damage; Protect from Magic on by then negates it (Wiki).
+**Icicle Crash** clears active prayers before sending the game message "`<col=ff3045>Amoxliatl disables your prayers and launches an icicle attack!</col>`" (R1140 tick 7875). With no prayer active, it leaves prayer state alone and sends "`<col=ff3045>Amoxliatl launches an icicle attack!</col>`" (ticks 9718 and 9783). The message is followed by `amoxliatl_point` (11531) and an icicle (projectile 2936, cycles 50-150, heights 448 to 0 on the wire: 112 to 0 in the data, which `PacketSender.sendProjectile` multiplies by 4) homing on the player. 5 ticks later it lands (spot 2935, sound 9720) for up to 34 magic damage; Protect from Magic on by then negates it (Wiki).
 
 **Unstable Ice** uses `amoxliatl_summon` (11533), "`<col=00e6e6>Amoxliatl forms some unstable ice blocks around you.`" (spam, R1140 tick 7909), and a throw (projectile 2936, cycles 50-90) at each block's tile with the impact drawn there on landing. 3 ticks later the blocks (13688, "Unstable ice") stand there (11536, sound 9713). The Wiki gives 1-4 blocks near the player; they land on free floor within 4 tiles, never on the player, her or the path.
 
@@ -183,7 +185,7 @@ The icicle, the spikes and the pools are her hits, like her shots.
 - With a weapon in place of the shield, nothing answered.
 - So the same "an NPC hit the player" effects (Thorns, the shield reflect pact) apply to them
   here.
-- The normal fight's pools and spikes are still plain damage, which issue #6422 covers.
+- The normal fight's spikes and pools are her hits too (see the normal fight above).
 
 ## Kills and respawns
 

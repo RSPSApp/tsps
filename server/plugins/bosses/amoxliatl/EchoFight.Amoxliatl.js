@@ -12,8 +12,8 @@
  *   and a pool on each tile. The turn after it comes 5 ticks later.
  * - From the second cast (the enrage): only the icicle, every 2 ticks.
  * - A pool hurts from its second tick, 7-15 a tick, and goes after 100 ticks.
- * Her hazards are her hits (rsprox.net 1140: Thorns answers the icicle and the pools as it does
- * her shots), so they come from her, not as plain damage.
+ * Her hazards are her hits (Fight.hurtPlayer): on live, Thorns answers the icicle and the pools as
+ * it does her shots.
  */
 const Common = require("./Common.Amoxliatl");
 const { Fight, begin: beginFight, onFloor, floorTiles, key, magicStyle } = require("./Fight.Amoxliatl");
@@ -140,7 +140,7 @@ class EchoFight extends Fight {
     });
     this.at(phase.landTicks, () => {
       if (this.over) return;
-      if (this.playerOn(tiles)) this.bossHit(Common.randomInt(...ECHO().icicle.damage));
+      if (this.playerOn(tiles)) this.hurtPlayer(Common.randomInt(...ECHO().icicle.damage));
       for (const [x, y] of tiles) this.placePool(x, y, false);
       Common.areaSound(this.player, Common.data.pools.sound, this.session.tile(Common.data.arena.centre));
     });
@@ -177,7 +177,7 @@ class EchoFight extends Fight {
       Common.tileGraphic(this.player, this.session.tile([...tile, 0]), spotanim, count * spikes.delayPerStep);
     }
     // The player's tile now is where they stood as the last tick ended (this runs before their step).
-    if (this.playerOn(spiked.map(({ tile }) => tile))) this.bossHit(Common.randomInt(...icicle.damage));
+    if (this.playerOn(spiked.map(({ tile }) => tile))) this.hurtPlayer(Common.randomInt(...icicle.damage));
     else this.sound({ id: icicle.missSound });
     this.placePool(centre[0], centre[1], false);
     Common.areaSound(this.player, Common.data.pools.sound, this.session.tile(Common.data.arena.centre));
@@ -212,7 +212,7 @@ class EchoFight extends Fight {
     const [x, y] = this.playerTile();
     const formed = this.poolTicks.get(key(x, y));
     if (formed === undefined || this.tick - formed < ECHO().pools.hurtFromTicks || this.player.getHitpoints() <= 0) return;
-    this.bossHit(Common.randomInt(...ECHO().pools.damage));
+    this.hurtPlayer(Common.randomInt(...ECHO().pools.damage));
   }
 
   clearPools(puff = true) {
@@ -230,15 +230,6 @@ class EchoFight extends Fight {
   playerOn(tiles) {
     const [px, py] = this.playerTile();
     return tiles.some(([x, y]) => x === px && y === py);
-  }
-
-  /** Her fixed-damage hit on the player: through prayer, never missing, and hers for retaliation and Thorns. */
-  bossHit(damage) {
-    if (this.player.getHitpoints() <= 0) return;
-    const { PendingHit, World } = this.core;
-    const hit = new PendingHit(this.boss, this.player, magicStyle(),
-      { delay: 0, damage, rollAccuracy: false, bypassProtectionPrayer: true, experience: false });
-    this.player.getCombat().getHitQueue().addPendingHit(hit, World.getProcessCycle());
   }
 
   projectile(name, from, to, lockon, delay, end, arc) {

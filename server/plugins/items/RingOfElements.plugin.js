@@ -359,6 +359,11 @@ function initializeFrom(coreApi, pluginApi) {
   initialize(coreApi);
 }
 
+function describeTeleports({ list }) {
+  for (const destination of DESTINATIONS) list.push({ path: ["Jewellery", "Ring of the elements"],
+    key: destination.label, name: destination.label, tile: [...destination.tile] });
+}
+
 module.exports = {
   name: "RingOfElements",
   description: "Charges the ring of the elements with runes and teleports beside the four elemental altars, one charge each, with a bank uncharge option.",
@@ -374,5 +379,6 @@ module.exports = {
     pluginApi.onPlayerLogin(syncVarbits);
     pluginApi.onItemAction(ringAction);
     pluginApi.onItemOnItem(chargeWithRunes);
+    pluginApi.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   },
 };

@@ -253,6 +253,7 @@ function uncharge({ player, item }) {
 
 function attach(pluginApi) {
   init(pluginApi);
+  pluginApi.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   pluginApi.persistAttribute(UNLOCKED_ATTRIBUTE, 0);
   for (const ring of ["Ring of shadows", "Ring of shadows (uncharged)"]) {
     for (const rune of ["Soul rune", "Blood rune", "Death rune", "Law rune"]) {
@@ -274,6 +275,11 @@ function attach(pluginApi) {
     "Lassar Undercity": wornTeleport,
     "The Stranglewood": wornTeleport,
   });
+}
+
+function describeTeleports({ list }) {
+  for (const destination of DESTINATIONS) list.push({ path: ["Jewellery", "Ring of shadows"],
+    key: destination.label, name: destination.label, tile: [...destination.tile] });
 }
 
 module.exports = {

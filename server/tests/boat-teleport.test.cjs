@@ -14,6 +14,7 @@ const { Item } = require("../dist/game/model/Item");
 const { MagicSpellbook } = require("../dist/game/model/MagicSpellbook");
 
 const teleports = [];
+const catalogueHandlers = new Map();
 let allowTeleport = true;
 let confirmAnswer = true;
 let holdConfirm = false;
@@ -34,7 +35,7 @@ before(async () => {
   plugin = require("../plugins/skills/sailing/BoatTeleport.Sailing");
   plugin.register({
     core: {
-      Location, CacheDefinitions, Item, MagicSpellbook,
+      Location, CacheDefinitions, Item, MagicSpellbook, Sailing: require("../dist/game/content/sailing/Sailing").Sailing,
       Spell: FakeSpell,
       Skill: { MAGIC: "MAGIC" },
       TeleportHandler: {
@@ -54,7 +55,7 @@ before(async () => {
     emitCustomEvent: (name, query) => {
       if (name === "quest:is-complete" && query.key === "pandemonium") query.complete = query.player.pandemonium !== false;
     },
-    onCustomEvent() {},
+    onCustomEvent(name, handler) { catalogueHandlers.set(name, handler); },
     persistAttribute() {},
   });
 });
@@ -238,4 +239,25 @@ test("after a teleport warning the spell checks the boat again: moved meanwhile,
   assert.deepEqual(player.xp, []);
   assert.deepEqual(player.casts, [false]);
   assert.ok(player.sent.includes("sendVarbit 12393=0"));
+});
+
+
+test("the catalogue reads moored boat tiles and revalidates a boat without travel or busy writes", t => {
+  t.mock.method(Math, "random", () => { throw new Error("catalogue RNG"); });
+  const owned = boat(0, "port_sarim"), player = createPlayer([owned]);
+  const before = teleports.length;
+  player.getPacketSender = () => { throw new Error("catalogue must not clear busy or send packets"); };
+  const request = { player, list: [] };
+  catalogueHandlers.get("adminpanel:teleport-destinations")(request);
+  assert.equal(request.list.length, 2, "spell and tablet retain separate sources");
+  const place = request.list.find(value => value.path[0] === "Items");
+  const Sailing = require("../dist/game/content/sailing/Sailing").Sailing;
+  const first = Sailing.getDock("port_sarim").landing;
+  assert.deepEqual(place.tile, [first.x, first.y, first.z]);
+  owned.location.dock = "catherby";
+  const moved = Sailing.getDock("catherby").landing;
+  assert.deepEqual(place.resolve(player), [moved.x, moved.y, moved.z]);
+  owned.location = { kind: "lost" };
+  assert.deepEqual(place.resolve(player), [], "moving/unavailable boats cannot use a stale landing");
+  assert.equal(teleports.length, before);
 });

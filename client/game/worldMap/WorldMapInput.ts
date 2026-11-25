@@ -74,7 +74,7 @@ function getWorldMapWidgetPixelsPerTile(
     };
 }
 
-function resolveWorldMapClickCoord(
+export function resolveWorldMapClickCoord(
     state: WorldMapStateHolder,
     widget: any,
     mouseX: number,
@@ -166,10 +166,10 @@ export function handleWorldMapDragInput(
             if (
                 clickHit &&
                 Date.now() - state.worldMapClickStartTimeMs <= 500 &&
-                deltaX >= -25 &&
-                deltaX <= 25 &&
-                deltaY >= -25 &&
-                deltaY <= 25
+                deltaX >= -5 &&
+                deltaX <= 5 &&
+                deltaY >= -5 &&
+                deltaY <= 5
             ) {
                 if (!jumpToWorldMapPoint(state, mouseX | 0, mouseY | 0)) {
                     const coord = resolveWorldMapClickCoord(state, clickHit, mouseX | 0, mouseY | 0);
@@ -206,6 +206,8 @@ export function handleWorldMapDragInput(
 
     const deltaX = (mouseX | 0) - state.worldMapDragStartMouseX;
     const deltaY = (mouseY | 0) - state.worldMapDragStartMouseY;
+    // A pan is never a teleport click, even if the pointer returns to its starting tile.
+    if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) resetWorldMapClick(state);
     // Until the mouse moves there is nothing to drag: leave the view to anything else moving it.
     if (deltaX === 0 && deltaY === 0) return true;
     const nextX =

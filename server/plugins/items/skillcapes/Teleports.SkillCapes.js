@@ -235,8 +235,29 @@ function syncOnLogin({ player }) {
   syncChinchompaVarbit(player);
 }
 
+/** Describes only static destinations. Home/boat options need their owning travel provider. */
+function catalogueDestination(label) {
+  const key = destinationKey(label);
+  const tile = Capes.DATA.teleports[key] ?? Capes.DATA.housePortals[key];
+  return tile ? { key, name: label, tile: [...tile] } : null;
+}
+
+function describeTeleports({ player, list }) {
+  const travel = { player, list: [] };
+  api.emitCustomEvent("skillcapes:travel-destinations", travel);
+  for (const place of travel.list) list.push({ path: ["Skillcapes", "Sailing cape"], ...place });
+  for (const [skill, options] of Object.entries(OPTIONS)) {
+    const labels = skill === "HUNTER" ? HUNTER_CHOICES : skill === "CONSTRUCTION" ? HOUSE_CHOICES
+      : Object.values(options).filter(value => typeof value === "string");
+    const destinations = new Map(labels.map(catalogueDestination).filter(Boolean).map(place => [place.key, place]));
+    const source = `${skill[0]}${skill.slice(1).toLowerCase()} cape`;
+    for (const place of destinations.values()) list.push({ path: ["Skillcapes", source], ...place });
+  }
+}
+
 module.exports = function attachTeleports(pluginApi) {
   api = pluginApi;
+  api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   api.persistAttribute(HUNTER_GUILD_ATTRIBUTE, false);
   api.onItemAction(capeTeleportAction);
   // A mounted cape (house cape hanger) runs its option as the item would: { player, itemId, option }.
@@ -254,3 +275,5 @@ module.exports.chooseFrom = chooseFrom;
 module.exports.HOUSE_MENU_TITLE = HOUSE_MENU_TITLE;
 module.exports.HOUSE_CHOICES = HOUSE_CHOICES;
 module.exports._test = { destinationKey, goTo, capeTeleportAction, apaturaVariant, apaturaChoice, HUNTER_GUILD_ATTRIBUTE };
+
+module.exports.catalogueDestination = catalogueDestination;

@@ -6,7 +6,7 @@ const { CacheDefinitions } = require("../../src/main/typescript/elvarg/game/cach
 const { Wilderness } = require("../../src/main/typescript/elvarg/game/content/wilderness/Wilderness");
 const { Item } = require("../../src/main/typescript/elvarg/game/model/Item");
 const { Flag } = require("../../src/main/typescript/elvarg/game/model/Flag");
-const { JEWELLERY, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, DIGSITE_PENDANT_UNLOCKS, visitedKourend, destinationUnlockDone } = require("./Teleports.Jewellery");
+const { JEWELLERY, RING_OF_WEALTH_DESTINATIONS, DEFAULT_WILDERNESS_LEVEL, LOCKED_DESTINATION_MESSAGE, DIGSITE_PENDANT_UNLOCKS, visitedKourend, destinationUnlockDone } = require("./Teleports.Jewellery");
 const { castRechargeDragonstone } = require("./RechargeDragonstone.Jewellery");
 
 /** Item param holding a worn item's first equipment option (RuneLite: OC_ITEM_OP1). */
@@ -355,12 +355,38 @@ function resendLithkrenRedirect({ player }) {
   if (player?.getAttribute(DIGSITE_PENDANT_UNLOCKS.lithkren_necklace_enchanter) === true) sendLithkrenRedirect(player);
 }
 
+function describeTeleports({ player, list }) {
+  const { core } = pluginApi;
+  // Publish the native source catalogue without making consumers import gameplay modules.
+  for (const piece of [...JEWELLERY.filter(piece => !piece.destinationsFrom), { key: "wealth", noun: "Ring of wealth", destinations: RING_OF_WEALTH_DESTINATIONS }]) {
+    const label = piece.key === "glory" ? "Amulet of glory" : String(piece.noun).replace(/[-_]/g, " ").replace(/\b\w/g, letter => letter.toUpperCase());
+    for (const destination of piece.destinations) {
+      const resolve = typeof destination.tile === "function" ? target => destination.tile(target, pluginApi) : undefined;
+      list.push({path: ["Jewellery", label], key: destination.label, name: destination.label,
+        tile: resolve ? resolve(player) : [...destination.tile], resolve});
+    }
+  }
+  for (const piece of JEWELLERY) {
+    const ids = [...(piece.destinationsFrom ? [piece.charged[0][0]] : []), ...(piece.eternal ?? [])];
+    for (const id of ids) {
+      const source = core.CacheDefinitions.getItem(id)?.name?.replace(/\s*\(t\d+\)/i, " (t)").replace(/\(\d+\)/g, "").trim();
+      if (!source) continue;
+      for (const destination of piece.destinations) {
+        const resolve = typeof destination.tile === "function" ? target => destination.tile(target, pluginApi) : undefined;
+        list.push({ path: ["Jewellery", source], key: destination.label, name: destination.label,
+          tile: resolve ? resolve(player) : [...destination.tile], resolve });
+      }
+    }
+  }
+}
+
 module.exports = {
   name: "Jewellery",
   description: "Runs charged and eternal jewellery such as dueling rings, games necklaces and glories: Rub and worn-option teleports, charge counts and Check messages.",
   members: true,
   register(api) {
     pluginApi = api;
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     BonusManager = api.getBonusManager();
     api.onItemAction(handleJewelleryAction);
     for (const key of Object.values(DIGSITE_PENDANT_UNLOCKS)) api.persistAttribute(key, false);
@@ -370,5 +396,5 @@ module.exports = {
     require("./Recharge.Jewellery")(api);
     api.onSpellCast(castRechargeDragonstone.bind(null, api));
   },
-  _test: { JEWELLERY_BY_ITEM, chargeMessage, nextItemId, useCharge, MACHINE_BIND_LINE },
+  _test: { describeTeleports, JEWELLERY_BY_ITEM, chargeMessage, nextItemId, useCharge, MACHINE_BIND_LINE },
 };

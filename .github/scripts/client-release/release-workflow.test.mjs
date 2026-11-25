@@ -26,6 +26,10 @@ test("both release events include shared client inputs and interface generator d
         "server/plugins/items/BlightedItems.js",
         "server/plugins/items/data/food.json",
         "server/scripts/browser-host-interface-definitions.ts",
+        "server/plugins/tools/adminpanel/BotView.AdminPanel.js",
+        "server/plugins/tools/adminpanel/Bots.AdminPanel.js",
+        "server/plugins/tools/adminpanel/Containers.AdminPanel.js",
+        "server/plugins/tools/adminpanel/Layout.AdminPanel.js",
         "server/plugins/interface/bestiary/Layout.Bestiary.js",
         "server/plugins/interface/bestiary/MapNavigation.Bestiary.js",
         "server/plugins/interface/monsterexamine/Layout.MonsterExamine.js",
@@ -132,7 +136,7 @@ for (const input of JSON.parse(process.env.RELEASE_SHARED_INPUTS)) require(proce
 require(process.env.RELEASE_INPUT_ROOT + "/server/scripts/browser-host-interface-definitions.ts");
 `);
         const run = spawnSync(process.execPath, [join(root, "client/node_modules/tsx/dist/cli.mjs"), runner], {
-            cwd: join(root, "server"), encoding: "utf8", timeout: 30000,
+            cwd: join(root, "server"), encoding: "utf8", timeout: 30000, maxBuffer: 4 * 1024 * 1024,
             env: {
                 ...process.env, BROWSER_HOST: "1", DISABLE_PLAYER_BOTS: "1",
                 NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --require ${JSON.stringify(preload)}`,

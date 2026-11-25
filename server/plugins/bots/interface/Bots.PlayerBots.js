@@ -403,13 +403,16 @@ function clickPlanButton({ player, buttonId }) {
   return true;
 }
 
+function openStandalone(deps, event) {
+  event.handled = openBots(event, deps);
+}
+
 function registerBotsInterface({ api, runtime, brainRegistry, storage = { readAvailablePlans, readRoutineSetups, savePlan, saveRoutineSetup } }) {
   const deps = { api, runtime, brainRegistry, storage };
   api.registerCustomInterface(BROWSER_INTERFACE);
   api.registerCustomInterface(SETUP_INTERFACE);
   api.registerCustomInterface(PLAN_INTERFACE);
-  api.registerCommand("bots", command => openBots(command, deps), api.core.PlayerRights.DEVELOPER,
-    "Open bot deployment, or deploy a castle-wars or soul-wars team roster");
+  api.onCustomEvent("bots:open-standalone", openStandalone.bind(null, deps));
   api.onInterfaceActionButton(TAB_UIDS, clickTab);
   api.onInterfaceActionButton(rowUids, clickRow);
   api.onInterfaceActionButton(Object.values(BROWSER_BUTTONS).flat().map(uid), clickBrowserButton);

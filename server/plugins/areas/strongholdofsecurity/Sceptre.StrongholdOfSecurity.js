@@ -297,6 +297,7 @@ function attach(pluginApi) {
   api.persistAttribute(IMBUED_ATTRIBUTE, false);
   api.persistAttribute(SOLZTUN_MET_ATTRIBUTE, false);
   api.onPlayerLogin(restore);
+  api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   for (const entry of SCEPTRE.combines) api.onItemOnItem(name(entry.items[0]), name(entry.items[1]), combine);
   for (const held of [sceptre, imbued]) api.onItemAction(held, { Invoke: invoke, Divine: divine });
   for (const piece of Object.keys(SCEPTRE.pieces)) api.onItemOnItem(name(piece), imbued, rechargeWithPiece);
@@ -306,6 +307,11 @@ function attach(pluginApi) {
   api.onCustomEvent("npc-dialogue:action", solztunAction);
   api.onCustomEvent("npc-dialogue:line", solztunLine);
   api.onItemOnNpc(useOnSolztun);
+}
+
+function describeTeleports({ list }) {
+  for (const source of ["Skull sceptre", "Skull sceptre (i)"]) list.push({ path: ["Items", source],
+    key: "stronghold-entrance", name: "Stronghold of Security entrance", tile: [...Data.DATA.surface] });
 }
 
 module.exports = {

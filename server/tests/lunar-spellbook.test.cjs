@@ -268,3 +268,18 @@ test("Lunar teleport arrival identifies only the caster after a successful landi
     spells.forEach((spell, i) => { spell.pay = pay[i]; spell.castable = castable[i]; });
   }
 });
+
+test("the read-only destination accessor opts into all seven named group spells without changing portal callers", t => {
+  t.mock.method(Math, "random", () => { throw new Error("cataloguing Lunar spells must not roll a landing"); });
+  const self = LunarSpells.getTeleportDestinations();
+  const all = LunarSpells.getTeleportDestinations(true);
+  assert.equal(all.length, self.length + 7);
+  assert.deepEqual(all.slice(0, self.length), self);
+  for (const [name, spell] of LunarSpells.GROUP_TELEPORTS) {
+    const entry = all.find(value => value.name === name);
+    assert.ok(entry, name);
+    assert.equal(entry.destination, spell.teleport.destination);
+    assert.equal(entry.level, CacheDefinitions.getSpellRequirements(name).level);
+    assert.ok(!self.some(value => value.name === name), "existing portal list stays self-only");
+  }
+});

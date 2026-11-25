@@ -3401,7 +3401,7 @@ test('bh manual stops AI and movement without logging out; another bh assignment
       controlPlayer(_owner, _bot, released) { releaseControl = released; return true; },
       releasePlayerControl() { releaseControl(); return true; },
     }, registerCommand: (name, handler) => commands.set(name, handler),
-      registerCustomInterface() {}, onInterfaceActionButton() {},
+      registerCustomInterface() {}, onInterfaceActionButton() {}, onCustomEvent() {},
       onPlayerProcess() {}, onPlayerLogout() {}, onPlayerDisconnect() {} },
     runtime, brainRegistry, resetMovementState, botApi: { log() {} },
     taskManager: { submit() {} }, flashHintArrowTaskFactory() {},
@@ -3923,4 +3923,52 @@ test('a name only a league character is saved under is taken for a new AI bot', 
   assert.ok(real.PLAYER_PROFILES.includes(real.LEAGUE_PROFILE), 'PRE: the league profile is one of the profiles');
   for (const name of ['mainonly', 'leagueonly', 'online', 'rostered']) assert.equal(nameHeld(core, roster, name), true, name);
   assert.equal(nameHeld(core, roster, 'free'), false);
+});
+
+
+test('admin bot deployment works without registering or calling the standalone bots UI',t=>{
+  const {registerBotCommands}=require('../plugins/bots/runtime/RegisterBotCommands.PlayerBots');
+  const {configureBrainActivities}=require('../plugins/bots/brain/BrainActivities.PlayerBots');
+  const {collectActivityLaunchers}=require('../plugins/bots/runtime/LauncherCatalog.PlayerBots');
+  const core=require('../dist/plugins/PluginManager').PluginManager.getCoreApi();
+  const owner=nativeFollowCombatPlayer(t,'launch-owner',new Location(3200,3200));
+  owner.setPlayerBot(false);owner.setRights(core.PlayerRights.DEVELOPER);
+  const runtime={entriesByUsername:new Map(),botStatesByName:new Map(),playerBotUsernames:new Set(),hasControllerForPlayer:()=>false};
+  runtime.hasControllerForUsername=name=>runtime.entriesByUsername.has(name);
+  runtime.resolveControlledPlayer=name=>runtime.entriesByUsername.get(name)?.player;
+  runtime.spawnPvpBot=location=>{
+    const name=`launcher${runtime.entriesByUsername.size}`;
+    const player=nativeFollowCombatPlayer(t,name,location.clone());
+    const state={mode:'pvp',autonomy:{},home:{x:location.getX(),y:location.getY(),z:location.getZ()}};
+    runtime.entriesByUsername.set(name,{player,state});runtime.botStatesByName.set(name,state);runtime.playerBotUsernames.add(name);
+    return player;
+  };
+  const activities=[{id:'pvp',mode:'pvp',actions:[]},{id:'follow_owner',mode:'follow_owner',actions:[]},{id:'roam',mode:'roaming',actions:[]}];
+  const brainRegistry={activities,byId:new Map(activities.map(a=>[a.id,a]))};
+  configureBrainActivities({runtime,registry:brainRegistry,world:{},resetMovementState(){}});
+  const hooks=new Map();let interfaceRegistrations=0;
+  const api={core,registerCommand(){},registerCustomInterface(){interfaceRegistrations++;},onInterfaceActionButton(){},onPlayerProcess(){},onPlayerLogout(){},onPlayerDisconnect(){},
+    onCustomEvent(name,handler){hooks.set(name,handler);},emitCustomEvent(name,event){hooks.get(name)?.(event);}};
+  registerBotCommands({api,runtime,brainRegistry,behaviorMode:{PVP:'pvp'},botApi:{log(){}},resetMovementState(){},taskManager:{submit(){}},flashHintArrowTaskFactory(){}});
+  assert.equal(interfaceRegistrations,0,'runtime does not register either standalone interface');
+  assert.equal(hooks.has('bots:open-standalone'),false,'no standalone UI handler is installed');
+  const Bots=require('../plugins/tools/adminpanel/Bots.AdminPanel');
+  const adminState={};
+  assert.ok(Bots.rows(api,owner,adminState).some(row=>row.name==='Autonomous bot'));
+  const launchers=collectActivityLaunchers(api);
+  assert.ok(launchers.some(l=>l.name==='Autonomous bot'));
+  for(const [id,brain] of [['player-bot.pvp','pvp'],['player-bot.recruit','follow_owner']]){
+    const launcher=launchers.find(l=>l.id===id);assert.ok(launcher);
+    owner.moveTo(new Location(2884,9798,2));
+    Bots.act(api,owner,adminState,launcher.key);
+    const before=runtime.entriesByUsername.size;
+    assert.match(Bots.act(api,owner,adminState,'deploy'),/Spawned 1\/1/);
+    const entry=runtime.entriesByUsername.get(`launcher${before}`);
+    assert.ok(entry.brain.isRunningActivity(brain));
+    assert.equal(entry.player.getLocation().getZ(),2);
+    if(brain==='follow_owner')assert.equal(entry.player.getAttribute(require('../plugins/bots/runtime/RecruitConstants.PlayerBots').ATTR_RECRUIT_OWNER_USERNAME),owner.getUsername());
+  }
+  const bot=runtime.entriesByUsername.values().next().value.player;
+  const request={actor:owner,action:'apply',operation:'behavior',mode:'manual',username:bot.getUsername()};
+  hooks.get('admin:bot-controls')(request);assert.equal(request.error,undefined);assert.equal(runtime.entriesByUsername.get(bot.getUsername()).behaviorPaused,true);
 });

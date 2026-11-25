@@ -43,6 +43,7 @@ const browserHostInterfaces = JSON.parse(
     execFileSync(process.execPath, [path.join(appRoot, "node_modules/tsx/dist/cli.mjs"), "scripts/browser-host-interface-definitions.ts"], {
         cwd: path.resolve(appRoot, "../server"),
         encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
     }),
 );
 for (const definition of browserHostInterfaces) {

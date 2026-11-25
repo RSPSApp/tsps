@@ -92,7 +92,9 @@ function hasFountainRuneAccess(player) {
 
 /** Tells the client when the Fountain's range is entered or left, so the spellbook lights up. */
 function syncSpellbook({ player }) {
-  const active = hasFountainRuneAccess(player);
+  const display = { player, active: false };
+  api.emitCustomEvent("magic:infinite-rune-display", display);
+  const active = display.active || hasFountainRuneAccess(player);
   if ((lit.get(player) ?? false) === active) return;
   lit.set(player, active);
   player.getPacketSender().sendVarbit(ACTIVE_VARBIT, active ? 1 : 0);
@@ -133,6 +135,7 @@ module.exports = function attachFountainOfRune(pluginApi) {
   api.onCanGainExperience(blockMagicExperience);
   api.onCustomEvent("magic:alchemy-payment", noAlchemyExperience);
   api.onCustomEvent("magic:alchemy-completed", lowAlchemyAtFountain);
+  api.onCustomEvent("magic:sync-rune-display", syncSpellbook);
 };
 
 Object.assign(module.exports, { hasFountainRuneAccess });

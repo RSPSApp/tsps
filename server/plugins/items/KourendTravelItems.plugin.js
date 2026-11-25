@@ -586,6 +586,14 @@ function onItemAction(event) {
   else if (event.itemId === ANCIENT_TABLET_ID) inspectTablet(event);
 }
 
+function describeTeleports({ list }) {
+  for (const source of ["Kharedst's memoirs", "Book of the dead"]) {
+    for (const page of MEMOIRS_PAGES) list.push({ path: ["Items", source], key: page.key, name: page.label, tile: [...page.tile] });
+  }
+  for (const destination of XERIC_DESTINATIONS) list.push({ path: ["Jewellery", "Xeric's talisman"],
+    key: destination.key, name: destination.label, tile: [...destination.tile] });
+}
+
 module.exports = {
   name: "KourendTravelItems",
   description: "Adds Kharedst's memoirs, the Book of the Dead and Xeric's talisman teleports to Kourend, with charges and Wilderness limits.",
@@ -593,6 +601,7 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     registerQuestWidgets(pluginApi);
     api.persistAttribute(MEMOIRS_CHARGES_ATTRIBUTE, -1);
     api.persistAttribute(MEMOIRS_CHARGED_PAGES_ATTRIBUTE, 0);

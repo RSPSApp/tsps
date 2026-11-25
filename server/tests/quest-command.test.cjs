@@ -200,3 +200,24 @@ test("::quest all routing: lamps skipped, bankable to the bank, unbankable and b
   assert.equal(inventory.add, original.add);
   assert.equal(inventory.forceAdd, original.forceAdd);
 });
+
+test("the admin plugin event lists named quests and reuses completion and reset semantics", () => {
+  const player = createPlayer();
+  const query = { player };
+  QuestCommand._test.adminQuestRequest(query);
+  assert.equal(query.handled, true);
+  assert.equal(query.quests.find(quest => quest.key === grandTree.key).name, "The Grand Tree");
+  const complete = { player, key: grandTree.key, action: "complete" };
+  QuestCommand._test.adminQuestRequest(complete);
+  assert.equal(player.getAttribute("quest.points"), 5);
+  assert.equal(complete.quests.find(quest => quest.key === grandTree.key).complete, true);
+  QuestCommand._test.adminQuestRequest({ player, key: grandTree.key, action: "complete" });
+  assert.equal(player.getAttribute("quest.points"), 5, "repeated completion is idempotent");
+  const reset = { player, key: grandTree.key, action: "reset" };
+  QuestCommand._test.adminQuestRequest(reset);
+  assert.equal(player.getAttribute("quest.points"), 0);
+  assert.equal(grandTree.getStage(player), 0);
+  const invalid = { player, key: "missing", action: "complete" };
+  QuestCommand._test.adminQuestRequest(invalid);
+  assert.match(invalid.error, /registered quest/);
+});

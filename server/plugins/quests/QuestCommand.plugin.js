@@ -187,12 +187,33 @@ function questCommand({ player, parts }) {
   return true;
 }
 
+// Trusted plugin-to-plugin requests. WorldAdmin authorizes its HTTP caller before emitting.
+function adminQuestRequest(event) {
+  const { player, key, action } = event;
+  if (!player) return;
+  const quests = QuestRuntime.getRegisteredQuests();
+  event.handled = true;
+  if (action !== undefined) {
+    const quest = quests.find(quest => quest.key === key);
+    if (!quest || !["complete", "reset"].includes(action)) {
+      event.error = "Choose a registered quest and Complete or Reset.";
+      return;
+    }
+    if (action === "complete") quest.complete(player);
+    else setStage(player, quest, 0);
+    event.message = describe(player, quest);
+  }
+  event.quests = quests.map(quest => ({ key: quest.key, name: quest.name,
+    stage: quest.getStage(player), complete: quest.isComplete(player) }));
+}
+
 module.exports = {
   name: "QuestCommand",
   description: "Adds the admin ::quest command to show, set, complete or reset a player's quest stage, for testing quest-gated content.",
   register(registry) {
     api = registry;
     api.registerCommand("quest", questCommand, PlayerRights.ADMINISTRATOR, "Complete all quests or show, set, complete or reset one quest: ::quest all");
+    api.onCustomEvent("quests:admin", adminQuestRequest);
   },
-  _test: { questCommand, findQuests, routeRewards },
+  _test: { questCommand, findQuests, routeRewards, adminQuestRequest },
 };

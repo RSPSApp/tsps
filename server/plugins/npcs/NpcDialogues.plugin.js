@@ -245,6 +245,21 @@ function listedSpeakerId(step, definition, speakerIdByName) {
   return ids.includes(named) ? named : ids[0];
 }
 
+/**
+ * The chatbox name for a typed line. Live titles an NPC's line with its cache name, and the
+ * Wiki often shortens it ("Guard" for the Border Guard: rsprox 1001336 t3099 names it
+ * "Border Guard"). So a label the export resolved to the clicked NPC (`speaker_ids`) that is
+ * the last words of that NPC's cache name shows the cache name; any other label is kept.
+ */
+function typedSpeakerName(step, speakerId, definition) {
+  const name = definition?.getName?.();
+  if (!Array.isArray(step.speaker_ids) || speakerId !== definition?.getId?.() || !step.speaker_ids.includes(speakerId)) return step.speaker;
+  const words = text => String(text ?? "").toLowerCase().match(/[a-z0-9']+/g) ?? [];
+  const label = words(step.speaker), full = words(name);
+  return label.length && label.length < full.length && full.slice(-label.length).join(" ") === label.join(" ")
+    ? undefined : step.speaker;
+}
+
 /** Transcript page name -> an NPC id that speaks it, so cutscene/paired speakers
  * get their own chathead instead of borrowing the NPC being talked to. */
 function speakerIdIndex(index, NpcDefinition) {
@@ -1275,7 +1290,7 @@ function startDialogue(api, event, steps, branches = {}, context = {}) {
         }
         const animation = request.expression ?? step.expression;
         const expression = Number.isInteger(animation) && animation >= 0 ? animation : undefined;
-        const speakerName = request.speakerName ?? (typedLine ? step.speaker : undefined);
+        const speakerName = request.speakerName ?? (typedLine ? typedSpeakerName(step, speakerId, definition) : undefined);
         // `holdTicks` (set by a line handler): the line shows first without "Click here to
         // continue", which comes that many ticks later (a cutscene's camera moving, as live).
         const hold = Number.isInteger(request.holdTicks) && request.holdTicks > 0
@@ -1573,6 +1588,7 @@ module.exports = {
   collectMenuBefore,
   speakerIdIndex,
   listedSpeakerId,
+  typedSpeakerName,
   register(api) {
     const dialogueFile = path.join(GameConstants.DEFINITIONS_DIRECTORY, "npc-dialogues.json");
     const indexFile = path.join(GameConstants.DEFINITIONS_DIRECTORY, "npc-dialogue-index.json");

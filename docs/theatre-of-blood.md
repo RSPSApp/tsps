@@ -258,7 +258,7 @@ All 233 room wins across 16 recordings placed one book for the recording player 
 | Boss | Book ID | Drop tile | Example |
 | --- | --- | --- | --- |
 | Maiden | 22504 | (3168, 4447, 0) | [227/101, tick 25754](https://rsprox.net/download/101) |
-| Bloat | 22506 | Death tile plus (2, 2) | [237/1162, ticks 13464–13467](https://rsprox.net/download/1162) |
+| Bloat | 22506 | South-west tile when the death animation begins, plus (2, 2) | [237/1162, ticks 13464–13467](https://rsprox.net/download/1162) |
 | Nylocas Vasilias | 22508 | (3295, 4248, 0) | [227/554, tick 942](https://rsprox.net/download/554) |
 | Sotetseg | 22510 | (3279, 4328, 0) | [227/554, ticks 1140–1158](https://rsprox.net/download/554) |
 | Xarpus | 22512 | (3170, 4387, 1) | [227/1837, ticks 3417–3616](https://rsprox.net/download/1837) |

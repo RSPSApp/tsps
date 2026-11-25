@@ -236,7 +236,12 @@ function answerIsSuperior(request) {
   if (request?.npc && isSuperior(request.npc)) request.superior = true;
 }
 
+function describeEncounters({ npcIds }) {
+  for (const id of resolve().values()) npcIds.add(id);
+}
+
 function attach(pluginApi) {
+  pluginApi.onCustomEvent("bestiary:encounters", describeEncounters);
   pluginApi.onCustomEvent("slayer:task-kill", taskKillEvent);
   pluginApi.onCustomEvent("slayer:is-superior", answerIsSuperior);
   pluginApi.onCustomEvent("npc-drops:add", addUniques);

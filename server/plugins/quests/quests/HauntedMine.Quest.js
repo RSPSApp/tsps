@@ -1249,6 +1249,7 @@ module.exports = function registerHauntedMineQuest(api) {
   api.persistAttribute(SCHEMA_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [TREUS_DAYTH_NPC_ID],
     key: "haunted_mine",
     name: "Haunted Mine",
     varpId: VARP_HAUNTED_MINE,

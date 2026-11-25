@@ -9,12 +9,17 @@ const Lair = require("./skotizo/Lair.Skotizo");
 const Fight = require("./skotizo/Fight.Skotizo");
 const CombatAchievements = require("./skotizo/CombatAchievements.Skotizo");
 
+function describeEncounters({ npcIds }) {
+  npcIds.add(Common.DATA.npcs.boss);
+}
+
 module.exports = {
   name: "Skotizo",
   description: "Skotizo in the Catacombs of Kourend: dark totems, the altar that opens the lair, awakened altars, spawns, the kill and Combat Achievements.",
   members: true,
   register(api) {
     Common.init(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     require("./skotizo/Totems.Skotizo")(api);
     require("./skotizo/Teleports.Skotizo")(api);
     Lair.attachLair(api);

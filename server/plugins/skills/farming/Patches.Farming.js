@@ -1584,6 +1584,7 @@ function attach(api) {
     api.onCustomEvent("npc-drops:generated", Hespori.hesporiLoot);
     Hespori.attachEcho(api);
     Gardeners.attach(api);
+    api.onCustomEvent("bestiary:encounters", Hespori.describeEncounters);
     api.onCustomEvent("hespori:quest-challenge", Hespori.challengeHespori);
     api.onCustomEvent("item-retrieval:items", retrievalItems);
     api.onCustomEvent("group-ironman:wipe-tradeables", Hespori.wipeForGroupIronman);

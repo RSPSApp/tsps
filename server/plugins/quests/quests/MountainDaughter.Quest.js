@@ -1211,6 +1211,7 @@ module.exports = function registerMountainDaughterQuest(api) {
   api.persistAttribute(BURIED_ATTRIBUTE);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [KENDAL_FIGHTING_NPC_ID],
     key: "mountain_daughter",
     name: "Mountain Daughter",
     varpId: VARP_MOUNTAIN_DAUGHTER,

@@ -1494,6 +1494,7 @@ module.exports = function registerSpiritsOfTheElidQuest(api) {
   api.persistAttribute(BITS_ATTRIBUTE);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => ROOMS.map(room => room.golemNpcId),
     key: "spirits_of_the_elid",
     name: "Spirits of the Elid",
     varpId: VARP_SPIRITS_OF_THE_ELID,

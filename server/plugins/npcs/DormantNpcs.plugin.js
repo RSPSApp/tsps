@@ -198,6 +198,11 @@ function killed({ killer, npc }) {
   }
 }
 
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  for (const family of DATA?.families ?? []) for (const id of Object.values(family.awake)) npcIds.add(id);
+}
+
 module.exports = {
   name: "DormantNpcs",
   description: "Makes disguised crabs and wyrms lie dormant as scenery, rising and sinking when a player steps near or attacks them.",
@@ -210,6 +215,7 @@ module.exports = {
     pluginApi.onPlayerLogout(forget);
     pluginApi.onPlayerDisconnect(forget);
     pluginApi.onNpcDeath(killed);
+    pluginApi.onCustomEvent("bestiary:encounters", describeEncounters);
     pluginApi.onCanAttack(onAttack);
   },
   _test: { start, track, tick, wake, sleep, killed, onAttack, inTaskArea, watched, awake, crabSquares, dormantIds },

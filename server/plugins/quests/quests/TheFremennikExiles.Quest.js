@@ -2615,6 +2615,7 @@ module.exports = function registerTheFremennikExilesQuest(api) {
   api.persistAttribute(SCHEMA_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [BASILISK_YOUNGLING, NpcIdentifiers.BASILISK, NpcIdentifiers.MONSTROUS_BASILISK_2, NpcIdentifiers.THE_JORMUNGAND_3],
     key: "the_fremennik_exiles",
     name: "The Fremennik Exiles",
     varpId: VARP_FREMENNIK_EXILES,

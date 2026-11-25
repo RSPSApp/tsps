@@ -1469,6 +1469,7 @@ module.exports = function registerDesertTreasureIQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [DAMIS_FIRST_NPC_ID, DAMIS_SECOND_NPC_ID, DESSOUS_NPC_ID, KAMIL_NPC_ID, FAREED_NPC_ID],
     key: "desert_treasure_i",
     name: "Desert Treasure I",
     varpId: VARP_DESERT_TREASURE,

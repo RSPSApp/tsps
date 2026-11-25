@@ -2,6 +2,7 @@ import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import { GameConstants } from "../game/GameConstants";
 import { World } from "../game/World";
+import { CrossFloor } from "../game/CrossFloor";
 import { Player } from "../game/entity/impl/player/Player";
 import { PlayerSave } from "../game/entity/impl/player/persistence/PlayerSave";
 import { DisplayNames } from "../game/entity/impl/player/DisplayNames";
@@ -794,6 +795,15 @@ export class ClientConnection {
             this.pluginMessageCount = 0;
           }
           if (++this.pluginMessageCount > 64) continue;
+          if (packet.channel === "entity-examine") {
+            const { type, probeId, kind, id, index } = packet.data;
+            if (type === "probe" && Number.isSafeInteger(probeId)) {
+              this.player.getSession().sendClientPacket(encodePluginMessage(packet.channel, { type: "supported", probeId }));
+            } else if (kind === "npc" && Number.isInteger(id) && Number.isInteger(index)) {
+              this.examineNpc(Number(id), Number(index));
+            }
+            continue;
+          }
           const event = { player: this.player, channel: packet.channel, data: packet.data, handled: false };
           PluginManager.emitCustomEvent("network:plugin-message", event);
           if (!event.handled) this.player.getSession().sendClientPacket(encodePluginMessage(packet.channel, { type: "unavailable" }));
@@ -1349,11 +1359,7 @@ export class ClientConnection {
         case "item_spawner_search":
           continue;
         case "examine_npc":
-          if (this.player) {
-            const definition = NpcDefinition.forId(packet.id);
-            // rsprox: examines have their own chat types (npc_examine, e.g. 237/01098.txt).
-            this.player.getPacketSender().sendTypedMessage(ChatType.NPC_EXAMINE, definition.getExamine());
-          }
+          this.examineNpc(packet.id);
           continue;
         case "examine_object":
           if (this.player) {
@@ -1448,6 +1454,25 @@ export class ClientConnection {
           continue;
       }
     }
+  }
+
+  /** Native examines still work; contextual transport additionally identifies a live NPC. */
+  private examineNpc(id: number, index?: number): void {
+    const player = this.player;
+    if (!player || !Number.isInteger(id) || id < 0 || id >= CacheDefinitions.getCounts().npcs) return;
+    let npc;
+    if (index !== undefined) {
+      if (!player.isRegistered() || !Number.isInteger(index) || index < 0) return;
+      npc = World.getNpcs().get(index);
+      if (!npc || !player.getLocalNpcs().includes(npc) || !npc.isRegistered() || !npc.isVisible()
+        || BoatManager.syncArea(npc) !== BoatManager.syncArea(player) || npc.getContentId(player) !== id
+        || !CrossFloor.visible(BoatManager.rootLocation(player), BoatManager.rootLocation(npc), player.getNpcViewDistance())
+        || !BoatManager.canSeeAboard(player, npc) || (npc.isOwnerOnly() && npc.getOwner() !== player)) return;
+    }
+    const event = { player, npcId: id, npc, handled: false };
+    PluginManager.emitCustomEvent("world:npc-examine", event);
+    if (!event.handled) player.getPacketSender().sendTypedMessage(ChatType.NPC_EXAMINE,
+      (npc?.getCurrentDefinition(player) ?? NpcDefinition.forId(id)).getExamine());
   }
 
   private rejectLoginExtension(error: unknown): void {

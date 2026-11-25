@@ -1124,6 +1124,7 @@ module.exports = function registerTreeGnomeVillageQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [WARLORD_COMBAT_ID],
     key: "tree_gnome_village",
     name: "Tree Gnome Village",
     varpId: VARP_TREE_GNOME_VILLAGE,

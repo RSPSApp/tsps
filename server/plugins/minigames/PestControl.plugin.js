@@ -1350,11 +1350,18 @@ function escapeCrystal(request) {
   request.escaped = true;
 }
 
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  for (const id of Object.values(PEST_IDS).flat(2)) npcIds.add(id);
+  for (const boat of BOATS) for (const id of boat.unshieldedIds) npcIds.add(id);
+}
+
 module.exports = {
   name: "PestControl",
   description: "Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points, the Squire's shop, the outpost's score board of wins per lander and the Void seal's Rub.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     AreaManager = api.getAreaManager();
     ObjectManager = api.getObjectManager();
     RegionManager = api.getRegionManager();

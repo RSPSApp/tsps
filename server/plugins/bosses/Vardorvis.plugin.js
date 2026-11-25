@@ -13,12 +13,17 @@ const Strangle = require("./vardorvis/Strangle.Vardorvis");
 const CombatAchievements = require("./vardorvis/CombatAchievements.Vardorvis");
 const Scoreboard = require("./vardorvis/Scoreboard.Vardorvis");
 
+function describeEncounters({ npcIds }) {
+  npcIds.add(Common.data.npcs.boss);
+}
+
 module.exports = {
   name: "Vardorvis",
   description: "Vardorvis at the Stranglewood ritual site: a private instance, tendril barrier, slashes, axes, head gaze, spikes, strangle and the kill.",
   members: true,
   register(api) {
     Common.init(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Site.attachSite(api);
     Fight.attachFight(api);
     Head.attachHead(api);

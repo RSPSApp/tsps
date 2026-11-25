@@ -345,8 +345,14 @@ class BloatRoom extends Raid.Room {
   }
 }
 
+/** Combat forms only; presentation forms and room scenery do not qualify. */
+function describeEncounters({ npcIds }) {
+  for (const id of Object.values(BLOATS)) npcIds.add(id);
+}
+
 module.exports = function registerBloat(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("BLOAT", BloatRoom);
 };
 

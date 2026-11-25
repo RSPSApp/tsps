@@ -249,10 +249,16 @@ function installCombatMethod() {
   pluginApi.registerNpcCombatMethodProvider(ELVARG_IDS, ElvargCombatMethod, { singleton: false });
 }
 
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  npcIds.add(ELVARG_BASE_ID);
+}
+
 module.exports = {
   name: "Elvarg",
   description: "Elvarg for Dragon Slayer: her lair, melee and dragonfire breath checked against antifire protection, and her kill state.",
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     pluginApi = api;
     api.persistAttribute(INSIDE_LAIR_ATTRIBUTE, false);
     api.onServerStartup(installCombatMethod);

@@ -2737,6 +2737,7 @@ module.exports = function registerAKingdomDividedQuest(api) {
   api.persistAttribute(`${HELPED_ATTRIBUTE}.shayzien`);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [JUDGE_OF_YAMA_NPC_ID, ASSASSIN_SETTLEMENT_ID, ASSASSIN_SHAYZIEN_ID, XAMPHUR_ID],
     key: "a_kingdom_divided",
     name: "A Kingdom Divided",
     varpId: VARP_AKD,

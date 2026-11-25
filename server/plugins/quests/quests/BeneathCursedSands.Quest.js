@@ -2233,6 +2233,7 @@ module.exports = function registerBeneathCursedSandsQuest(api) {
   api.persistAttribute(OWED_CIRCLET_ATTRIBUTE);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [MENAPHITE_AKH, SCARAB_MAGE, CHAMPION_OF_SCABARAS, HEAD_MENAPHITE_GUARD],
     key: "beneath_cursed_sands",
     name: "Beneath Cursed Sands",
     varpId: 3421, // bcs_primary

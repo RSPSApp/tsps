@@ -2251,6 +2251,7 @@ module.exports = function registerMonkeyMadnessIIQuest(api) {
   api.persistAttribute(SCRAWLED_READ_ATTRIBUTE);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [GLOUGH_DEMON_ID, LAB_GORILLA_ID, STRONGHOLD_GORILLA_ID, ...CRASH_TORTURED_IDS, ...CRASH_DEMONIC_IDS],
     key: "monkey_madness_ii",
     name: "Monkey Madness II",
     varpId: 1339,

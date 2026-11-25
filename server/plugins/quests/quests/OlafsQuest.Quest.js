@@ -1198,6 +1198,7 @@ module.exports = function registerOlafsQuestQuest(api) {
   api.persistAttribute(WALL_ATTRIBUTE, WALL_INITIAL_PACKED);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [ULFRIC_NPC_ID],
     key: "olafs_quest",
     name: "Olaf's Quest",
     varpId: 994,

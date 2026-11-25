@@ -987,6 +987,7 @@ module.exports = function registerWitchsHouseQuest(api) {
   itemOnGroundManager = api.getItemOnGroundManager();
 
   quest = registerQuest(api, {
+    combatNpcIds: () => EXPERIMENT_NPC_IDS,
     key: "witchs_house",
     name: "Witch's House",
     varpId: VARP_WITCHS_HOUSE,

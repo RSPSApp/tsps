@@ -3774,6 +3774,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   api.persistAttribute(CARL_PROGRESS_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [KROY_FIGHT_ID, DAMIEN_FIGHT_ID, VANSTROM_FIGHT_ID, VANSTROM_ENRAGE_ID, BLOODVELD_ID, ACIDIC_BLOODVELD_ID, ...NAIL_BEAST_IDS, ...JUVI_IDS, ZOMBIE_NPC_ID],
     key: "sins_of_the_father",
     name: "Sins of the Father",
     varpId: 2712, // myq5

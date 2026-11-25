@@ -5,11 +5,17 @@
  * laid-out chambers (or Challenge Mode's fixed ones), and later its rooms and the Great Olm.
  * Each unit lives in ./cox/; add one line per unit.
  */
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  for (const monster of require("./cox/Monsters.ChambersOfXeric").MONSTERS) for (const id of monster.ids) npcIds.add(id);
+}
+
 module.exports = {
   name: "ChambersOfXeric",
   description: "Adds the Chambers of Xeric raid: the Mount Quidamortem party board, random or Challenge Mode chamber layouts and the rooms.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     require("./cox/Lobby.ChambersOfXeric")(api);
     require("./cox/Raid.ChambersOfXeric")(api);
     require("./cox/EscapeCrystal.ChambersOfXeric")(api);

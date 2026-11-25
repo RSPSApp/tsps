@@ -1246,6 +1246,7 @@ module.exports = function registerMyArmsBigAdventureQuest(api) {
   api.persistAttribute(TOOLS_ATTRIBUTE);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [BABY_ROC_NPC_ID, GIANT_ROC_NPC_ID],
     key: "my_arms_big_adventure",
     name: "My Arm's Big Adventure",
     varpId: 905, // myarm_quest

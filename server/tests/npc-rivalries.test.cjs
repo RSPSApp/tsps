@@ -76,6 +76,15 @@ test("lizardmen and Shayzien soldiers are each other's enemies; shamans are no o
   assert.equal(rivalSquares.has(`${1449 >> 6},${3699 >> 6},0`), true, "a canyon soldier's square is watched");
 });
 
+test("Goblin Village's red and green goblins are each other's enemies, not their own side's", () => {
+  const red = core.CacheDefinitions.getNpcId("goblin_red_soldier_6");
+  const green = core.CacheDefinitions.getNpcId("goblin_green_soldier_2");
+  assert.equal(enemies.get(red)?.has(green), true);
+  assert.equal(enemies.get(green)?.has(red), true);
+  assert.equal(enemies.get(red)?.has(core.CacheDefinitions.getNpcId("goblin_red_soldier_4")), false);
+  assert.equal(rivalSquares.has(`${2955 >> 6},${3500 >> 6},0`), true, "Goblin Village is watched");
+});
+
 test("a lizardman beside a soldier picks a fight, and both land real hits", (t) => {
   const lizardman = spawn(t, LIZARDMAN, FIELD.x, FIELD.y);
   const soldier = spawn(t, CANYON_SOLDIER, FIELD.x + 1, FIELD.y);

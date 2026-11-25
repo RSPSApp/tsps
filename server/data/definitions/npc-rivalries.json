@@ -16,6 +16,22 @@
           "npcs": [6914, 6915, 6916, 6917, 6918, 6919, 8563, 8564, 10947]
         }
       ]
+    },
+    {
+      "name": "Goblin Village red and green goblins",
+      "source": "Wiki Transcript:Goblin Diplomacy, 'goblin in-fighting': the village's red and green goblins trade 'Red armour best!' / 'Green armour best!' as they fight; rsprox captures 3271 (rev 234) and local 1001339, 1001443-1001445 and 1001555 (rev 240-241): the soldiers hit each other with no player attacking them, shouting those lines (data/definitions/npc-captured-chatter.json marks them `fighting`).",
+      "sides": [
+        {
+          "name": "Red goblins",
+          "$comment": "goblin_red_soldier_2-8 (655-661), the Goblin Village spawns.",
+          "npcs": [655, 656, 657, 658, 659, 660, 661]
+        },
+        {
+          "name": "Green goblins",
+          "$comment": "goblin_green_soldier_2-8 (662-668), the Goblin Village spawns.",
+          "npcs": [662, 663, 664, 665, 666, 667, 668]
+        }
+      ]
     }
   ]
 }

@@ -212,6 +212,8 @@ The captures show both U+00A0 and ASCII spaces inside different player names in 
 - The fight starts 200 ticks after the first ready-up if anyone is still waiting. The captures show the two-minute notice and parties starting before expiry. The timer keeps the existing implementation.
 - The denominator and the set of eligible readied players use current raid membership. The count goes to the members currently in the Wardens' room. The cited party captures show everyone together.
 
+As before the ready-up count change, Begin starts the fight if every remaining member is ready after someone leaves. This departure case is covered by a server regression test.
+
 ## Verification
 
 Developer accounts can use `::toa` to teleport to the lobby beneath Necropolis (not from inside a raid).

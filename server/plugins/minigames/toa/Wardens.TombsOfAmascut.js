@@ -459,22 +459,26 @@ class WardensRoom extends WardenRoomBase {
   // -------------------------------------------------------------- the start
 
   /**
-   * Osmumten's Begin: the first ready-up starts the timer. Each new ready-up before the last
-   * sends a room count followed by a box for that member. Repeating Begin only shows the short box.
+   * Osmumten's Begin: the first ready-up starts the timer. Each new ready-up while anyone
+   * is unready sends a room count followed by a box for that member. Repeating Begin while
+   * anyone is still unready shows the short box.
    */
   setReady(player) {
     if (this.stage !== Raid.STAGE.IDLE) return;
-    if (this.ready.has(player)) {
-      Shared.statement(player, READY_WAITING);
-      return;
+    const alreadyReady = this.ready.has(player);
+    if (!alreadyReady) {
+      this.ready.add(player);
+      if (this.readyDeadline < 0) this.readyDeadline = Shared.cycle() + READY_TIMEOUT;
     }
 
-    this.ready.add(player);
-    if (this.readyDeadline < 0) this.readyDeadline = Shared.cycle() + READY_TIMEOUT;
     const party = this.raid.players;
     const readyCount = party.filter((member) => this.ready.has(member)).length;
     if (readyCount === party.length) {
       this.begin();
+      return;
+    }
+    if (alreadyReady) {
+      Shared.statement(player, READY_WAITING);
       return;
     }
     this.message(`${readyCount}/${party.length} party members are now ready.`);

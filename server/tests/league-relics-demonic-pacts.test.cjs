@@ -894,6 +894,28 @@ test("Eternal Sustenance: the food eaten is back in its slot", () => {
   for (const player of others(who)) assert.notEqual(player.getInventory().getItems()[3]?.getId(), I.SHARK);
 });
 
+test("Eternal Sustenance: a cocktail's glass left in an earlier free slot is undone with the drink", () => {
+  const who = cases(ETERNAL_SUSTENANCE);
+  for (const player of [who.relic, ...others(who)]) {
+    const inventory = player.getInventory();
+    inventory.setItem(0, new core.Item(I.COINS, 1));
+    inventory.setItem(6, new core.Item(I.FRUIT_BLAST, 1));
+    const snapshot = inventory.getItems().map((item) => item?.getId?.() ?? -1);
+    hooks.onCanEat({ player, itemId: I.FRUIT_BLAST, allow: null });
+    // Food: the drink leaves slot 6 and its glass takes slot 1, the first free one (leavesInFreeSlot).
+    inventory.deleteAtSlot(6, 1, false);
+    inventory.setItem(1, new core.Item(I.COCKTAIL_GLASS, 1));
+    emit("food:eaten", { player, itemId: I.FRUIT_BLAST, heal: 9 });
+    player.snapshot = snapshot;
+  }
+  const ids = (player) => player.getInventory().getItems().map((item) => item?.getId?.() ?? -1);
+  assert.deepEqual(ids(who.relic), who.relic.snapshot, "the drink is back and no glass is left");
+  for (const player of others(who)) {
+    assert.equal(ids(player)[1], I.COCKTAIL_GLASS, "without the relic the glass stays");
+    assert.equal(ids(player)[6], -1);
+  }
+});
+
 test("Eternal Sustenance: a preset food eaten comes back as a preset copy, not a plain one", () => {
   const who = cases(ETERNAL_SUSTENANCE);
   const player = who.relic;

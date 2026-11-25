@@ -56,6 +56,7 @@ const TOTEM = {
 /** Reentry's and Volatility's sand, and Sol Heredit's. */
 const SAND = { strong: { min: 1, max: 15, every: 2 }, sol: { min: 6, max: 8, every: 1 } };
 const EXPLOSION = { max: 15, delay: 2 };
+const SOL_EXPLOSION = { gib: 12832, delay: 9, gibTicks: 3 };
 const EXPLOSION_GFX = { human: 2713, manticore: 2721, colossus: 2722, minotaur: 2723, sol: 2724 };
 /** Corners of wave 12's barricaded arena that the orb circles, as 3x3 "pillars" (estimate). */
 const SOL_CORNERS = [{ x: 1819, y: 3101 }, { x: 1827, y: 3101 }, { x: 1819, y: 3109 }, { x: 1827, y: 3109 }];
@@ -324,6 +325,15 @@ function explosionGfx(kind) {
   return EXPLOSION_GFX.human;
 }
 
+/** The gib is scenery and outlasts the chest appearing on the victory tick. */
+function removeSolGib(run) {
+  const gib = run.solGib;
+  if (!gib) return;
+  run.solGib = null;
+  run.area.detach(gib);
+  Shared.api().removeNpc(gib);
+}
+
 /** An enemy has died: its totem goes, and under Volatility it explodes. */
 function enemyDied(run, npc, kind) {
   const record = run.totems.get(npc);
@@ -339,8 +349,15 @@ function enemyDied(run, npc, kind) {
   const reach = Math.min(level, 2);
   const centre = { x: x + Math.floor(size / 2), y: y + Math.floor(size / 2) };
   if (kind === "manticore") npc.performAnimation(new Animation(MANTICORE_EXPLODE_ANIM));
-  Shared.later(run, EXPLOSION.delay, () => {
-    if (run.stage === "ended") return;
+  const sol = kind === "sol";
+  Shared.later(run, sol ? SOL_EXPLOSION.delay : EXPLOSION.delay, () => {
+    if (run.stage === "ended" || (sol && run.dying)) return;
+    // RSProx 237/01150 t14991-15003: Sol's gib is at his origin, with the blast at his centre.
+    if (sol) {
+      run.solGib = run.spawnNpc(SOL_EXPLOSION.gib, { x, y });
+      run.solGib?.setFlag?.(Shared.core().NPC.WALK_THROUGH_ENTITIES_FLAG);
+      Shared.later(run, SOL_EXPLOSION.gibTicks, () => removeSolGib(run));
+    }
     const graphic = Object.assign(new Graphic(explosionGfx(kind)), { delay: 0, height: 0 });
     run.player.getPacketSender().sendGraphic(graphic, Shared.loc(centre));
     const tile = playerAt(run);
@@ -366,10 +383,13 @@ function tick(run) {
 }
 
 /** A wave is over: swarms, the orb and totems go, and so does any sand that isn't permanent. */
-function waveEnded(run) {
-  for (const npc of [...run.hazards]) removeHazard(run, npc);
+function waveEnded(run, { keepSolarflare = false } = {}) {
+  const orb = keepSolarflare ? run.solarflare?.npc : null;
+  for (const npc of run.hazards) {
+    if (npc !== orb) removeHazard(run, npc);
+  }
   run.bees = [];
-  run.solarflare = null;
+  if (!keepSolarflare) run.solarflare = null;
   run.totems.clear();
   clearSand(run, false);
 }
@@ -380,5 +400,5 @@ function cleared(run) {
 }
 
 module.exports = {
-  NPC, PILLARS, SOL_CORNERS, ring, addSand, hasSand, javelinLanded, enemyDied, waveStarted, tick, waveEnded, cleared,
+  NPC, PILLARS, SOL_CORNERS, ring, addSand, hasSand, javelinLanded, enemyDied, waveStarted, tick, waveEnded, cleared, removeSolGib,
 };

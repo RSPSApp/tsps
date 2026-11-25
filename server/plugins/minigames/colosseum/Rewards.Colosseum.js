@@ -17,7 +17,7 @@
  *   down to even. Only the best run counts, and dying keeps a run's Glory; teleporting out doesn't.
  * - Wave 12's pet roll (Smol Heredit, 1/200).
  * rsprox 1227 and 4117: the rewards modal, item withdrawal, banking and discard confirmation.
- * Offline_Scape: the chest's and Minimus's tiles.
+ * RSProx 237/01150 t25440-25449 and t14991-15002: the chest's and Minimus's tiles and timing.
  * RuneLite (gameval): the chest's appearing animation 10825.
  */
 
@@ -30,6 +30,7 @@ const INVENTORY = { REWARDS: 843, FUTURE: 844, PREVIOUS: 845 };
 const INVENTORY_SIZE = 28;
 const CHEST = { id: 50741, x: 1829, y: 3105, rotation: 1, appear: 10825 };
 const MINIMUS_BY_CHEST = { x: 1830, y: 3103 };
+const VICTORY_JINGLE = 305;
 const VARP_CURRENT_GLORY = 4132;
 
 const CHEST_INTERFACE = 864;
@@ -140,14 +141,22 @@ function lost(run) {
   run.player.getPacketSender().sendString("Total Value: 0", VALUE_UID);
 }
 
-/** The run is over with loot to claim: the chest comes out, with Minimus beside it. */
+function bringOutMinimus(run, options) {
+  run.spawnMinimus(MINIMUS_BY_CHEST, options);
+}
+
+function announceVictory(run) {
+  bringOutMinimus(run, { face: Shared.core().Direction.WEST.getId() });
+  run.player.getPacketSender().sendJingle(VICTORY_JINGLE, 0);
+}
+
+/** The run is over with loot to claim: bring out the rewards chest. */
 function bringOutChest(run) {
   const { Animation, GameObject, ObjectManager } = Shared.core();
   const chest = new GameObject(CHEST.id, Shared.loc(CHEST), 10, CHEST.rotation, run.area);
   ObjectManager.register(chest, true);
   run.player.getPacketSender().sendObjectAnimation?.(chest, new Animation(CHEST.appear));
   run.chest = chest;
-  run.spawnMinimus(MINIMUS_BY_CHEST);
 }
 
 function removeChest(run) {
@@ -322,6 +331,6 @@ module.exports = function registerColosseumRewards(api) {
 
 Object.assign(module.exports, {
   INVENTORY, CHEST, MINIMUS_BY_CHEST, VARP_CURRENT_GLORY,
-  start, intermission, gloryFor, waveCompleted, keepGlory, lost, bringOutChest, removeChest,
+  start, intermission, gloryFor, waveCompleted, keepGlory, lost, bringOutChest, bringOutMinimus, announceVictory, removeChest,
   openChest, valueOf, rewardsOf,
 });

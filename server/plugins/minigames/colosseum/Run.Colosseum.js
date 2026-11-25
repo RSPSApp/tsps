@@ -14,8 +14,8 @@
  *   to the modifier's Glory, the modifier's tier varbit, and the wave starts five ticks later:
  *   the highest-wave varbit, the start time (varp 4133) and the "Wave: 1" message, with the trio
  *   and the shaman playing anim 10861 as they appear.
- * Offline_Scape (from its captures): Minimus reappears one tile north of the player after each
- * wave, and the wave-cleared message.
+ * RSProx 237/01150 t12186-12203 and 234/03285 t10555-10558: Minimus and the modifier
+ * screen return together three ticks after the wave, with prayers turned off.
  */
 
 const Shared = require("./Shared.Colosseum");
@@ -31,8 +31,11 @@ const Scoreboard = require("./Scoreboard.Colosseum");
 
 const ATTR_RUN = "colosseum:run";
 const WAVE_START_DELAY = 5;
-/** Sol Heredit's death animation plays out before the chest appears. */
-const SOL_DEATH_TICKS = 5;
+const WAVE_RETURN_TICKS = 3;
+const ALL_PRAYERS_ACTIVE = 4101;
+/** RSProx 237/01150 t25440-25449 and t14991-15002: Minimus comes out a tick before the chest. */
+const SOL_REWARD_TICKS = 8;
+const SOL_VOLATILITY_REWARD_TICKS = 10;
 const SECOND_GREETING_DELAY = 3;
 const MINIMUS_SPAWN_ANIM = 10862;
 const HUMAN_SPAWN_ANIM = 10861;
@@ -107,6 +110,8 @@ class ColosseumRun {
     this.wave = 0;
     this.stage = "intermission";
     this.offered = [];
+    this.offerWave = null;
+    this.intermissionBusyTask = null;
     this.npcs = new Set();
     this.waveStart = 0;
     this.waveTicks = 0;
@@ -126,6 +131,7 @@ class ColosseumRun {
     this.waveDamage = 0;
     /** Wave 12: Sol Heredit's fight, and the gladiators' barricade. */
     this.solFight = null;
+    this.solGib = null;
     this.barricade = [];
     /** The loot so far, this run's Glory, and whether an enemy has hurt the player this wave. */
     this.loot = null;
@@ -187,10 +193,10 @@ class ColosseumRun {
     ObjectManager.register(new GameObject(Shared.OBJECT.SOL_SEAT_BLOCKER, Shared.loc(Shared.SOL_SEAT), 10, 0, this.area), true);
   }
 
-  spawnMinimus(tile) {
+  spawnMinimus(tile, options) {
     const { Animation } = Shared.core();
     this.removeMinimus();
-    this.minimus = this.spawnNpc(Shared.NPC.MINIMUS_ARENA, tile);
+    this.minimus = this.spawnNpc(Shared.NPC.MINIMUS_ARENA, tile, options);
     this.minimus?.performAnimation(new Animation(MINIMUS_SPAWN_ANIM));
   }
 
@@ -214,21 +220,43 @@ class ColosseumRun {
 
   // ---------------------------------------------------------------- intermission
 
-  /** Minimus's Start-wave: the intermission screen with three modifiers to choose from. */
-  openIntermission() {
-    if (this.stage !== "intermission") return;
+  /** Opens the same offer on the wave return and any subsequent Start-wave clicks. */
+  openIntermission({ automatic = false } = {}) {
     const player = this.player;
+    if (this.stage !== "intermission" || this.dying || player.getInterfaceId() === Shared.INTERFACE.INTERMISSION) return;
     const sender = player.getPacketSender();
-    this.offered = this.modifiers.offer(this.wave + 1, this.random);
+    const nextWave = this.wave + 1;
+    if (this.offerWave !== nextWave) {
+      this.offered = this.modifiers.offer(nextWave, this.random);
+      this.offerWave = nextWave;
+    }
     this.modifiers.sync(player);
     sender.sendVarbit(Shared.VARBIT.SELECTED_MODIFIER, 0);
     const values = Rewards.intermission(this);
     sender.sendInterface(Shared.INTERFACE.INTERMISSION);
-    // The waves done, the offer, then the loot's value so far, the next wave's and the last
-    // wave's (capture).
-    sender.sendClientScript(Shared.SCRIPT.INTERMISSION_INIT, this.wave, ...this.offered, ...values, 0);
+    // Waves done, offer, loot values, and the bitmask of modifiers already taken.
+    sender.sendClientScript(Shared.SCRIPT.INTERMISSION_INIT, this.wave, ...this.offered, ...values, this.modifiers.activeMask());
     for (const [component, from, to] of INTERMISSION_EVENTS) {
       sender.sendInterfaceFlagsRange((Shared.INTERFACE.INTERMISSION << 16) | component, from, to, OP1);
+    }
+    // RSProx 237/01150 t12401-12402: Start-wave sets busy a tick after opening.
+    this.intermissionBusyTask?.stop();
+    this.intermissionBusyTask = null;
+    if (!automatic) {
+      this.intermissionBusyTask = Shared.later(this, 1, () => {
+        this.intermissionBusyTask = null;
+        if (this.stage === "intermission" && !this.dying && player.getInterfaceId() === Shared.INTERFACE.INTERMISSION) {
+          sender.setBusyModal(true);
+        }
+      });
+    }
+  }
+
+  closeIntermission() {
+    this.intermissionBusyTask?.stop();
+    this.intermissionBusyTask = null;
+    if (this.player.getInterfaceId() === Shared.INTERFACE.INTERMISSION) {
+      this.player.getPacketSender().sendInterfaceRemoval();
     }
   }
 
@@ -237,7 +265,8 @@ class ColosseumRun {
    * the three buttons' highlight and 4932 for Continue - as its click script 4938 runs them.
    */
   selectModifier(choice) {
-    if (this.stage !== "intermission" || choice < 1 || choice > this.offered.length) return;
+    if (this.stage !== "intermission" || this.player.getInterfaceId() !== Shared.INTERFACE.INTERMISSION
+      || choice < 1 || choice > this.offered.length) return;
     this.player.getPacketSender()
       .sendVarbit(Shared.VARBIT.SELECTED_MODIFIER, choice)
       .sendClientScript(Shared.SCRIPT.INTERMISSION_BUTTONS, ...this.offered, this.wave)
@@ -246,17 +275,19 @@ class ColosseumRun {
 
   /** Continue: the picked modifier is taken and the next wave starts five ticks later. */
   confirm() {
-    if (this.stage !== "intermission") return false;
+    if (this.stage !== "intermission" || this.dying || this.player.getInterfaceId() !== Shared.INTERFACE.INTERMISSION) return false;
     const sender = this.player.getPacketSender();
     const choice = sender.getVarbit(Shared.VARBIT.SELECTED_MODIFIER);
     const key = this.offered[choice - 1];
     if (key == null) return false;
     this.modifiers.add(key);
+    this.offered = [];
+    this.offerWave = null;
     this.modifiers.sync(this.player);
     Effects.picked(this);
     sender.sendConfig(Shared.VARP.LAST_MODIFIER_GLORY, byKey(key)?.glory ?? 0)
-      .sendVarbit(Shared.VARBIT.SELECTED_MODIFIER, 0)
-      .sendInterfaceRemoval();
+      .sendVarbit(Shared.VARBIT.SELECTED_MODIFIER, 0);
+    this.closeIntermission();
     this.removeMinimus();
     this.stage = "starting";
     Shared.later(this, WAVE_START_DELAY, () => this.startWave());
@@ -352,7 +383,7 @@ class ColosseumRun {
     Scoreboard.waveCompleted(this);
     this.stage = "intermission";
     Rewards.waveCompleted(this);
-    Hazards.waveEnded(this);
+    Hazards.waveEnded(this, { keepSolarflare: this.wave === Shared.FINAL_WAVE && this.modifiers.has("volatility") });
     Effects.waveCompleted(this);
     // `colosseum:wave-completed` { player, wave }: the wave just cleared (a league's "Complete Wave 1 / 12").
     Shared.api().emitCustomEvent("colosseum:wave-completed", { player: this.player, wave: this.wave });
@@ -364,25 +395,38 @@ class ColosseumRun {
     const minutes = Math.floor(seconds / 60);
     const rest = (seconds % 60).toFixed(2).padStart(5, "0");
     this.player.sendMessage(`Wave ${this.wave} completed! Duration: <col=ef1020>${minutes}:${rest}</col>`);
-    this.spawnMinimus(this.minimusTileNearPlayer());
+    Shared.later(this, WAVE_RETURN_TICKS, () => {
+      if (this.stage !== "intermission" || this.dying) return;
+      Shared.core().PrayerHandler.deactivatePrayers(this.player, false);
+      // RSProx 237/01150 t12189: busy precedes the automatic return.
+      this.player.getPacketSender().sendVarbit(ALL_PRAYERS_ACTIVE, 0).setBusyModal(true);
+      if (!this.minimus) this.spawnMinimus(this.minimusTileNearPlayer());
+      this.openIntermission({ automatic: true });
+    });
   }
 
-  /** Sol Heredit is beaten: once he has fallen, the hazards go and the chest comes out. */
+  /** Record the kill on this tick and schedule the rewards. */
   defeatedSol() {
     Sol.defeated(this);
     CombatAchievements.solDefeated(this);
     Scoreboard.solDefeated(this);
     this.stage = "won";
-    Shared.later(this, SOL_DEATH_TICKS, () => this.finish());
+    const rewardTicks = this.modifiers.has("volatility") ? SOL_VOLATILITY_REWARD_TICKS : SOL_REWARD_TICKS;
+    Shared.later(this, rewardTicks, () => {
+      if (this.stage === "won" && !this.dying) Rewards.announceVictory(this);
+    });
+    Shared.later(this, rewardTicks + 1, () => this.finish());
   }
 
-  /** The run is over with its loot: Glory is kept, and the chest appears with Minimus. */
+  /** Open the reward area after victory or an early forfeit. */
   finish() {
-    if (this.stage === "ended" || this.stage === "finished") return;
+    if (this.dying || (this.stage !== "won" && this.stage !== "intermission")) return;
+    const won = this.stage === "won";
     this.stage = "finished";
     Rewards.keepGlory(this);
     Hazards.cleared(this);
     Rewards.bringOutChest(this);
+    if (!won) Rewards.bringOutMinimus(this);
   }
 
   // ---------------------------------------------------------------- leaving
@@ -392,12 +436,13 @@ class ColosseumRun {
    * warning, as the transcript has it, and then the chest.
    */
   askToLeave() {
+    if (this.stage !== "intermission" && this.stage !== "finished") return;
+    this.closeIntermission();
     const player = this.player;
     if (this.stage === "finished" || (this.stage === "intermission" && this.wave === 0)) {
       Shared.options(player, "Are you sure you wish to leave?", "Yes.", () => this.end("left"), "No.", () => {});
       return;
     }
-    if (this.stage !== "intermission") return;
     const { DialogueChainBuilder, NpcDialogue, ActionDialogue } = Shared.core();
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
       new NpcDialogue(0, Shared.NPC.MINIMUS_ARENA, "Leaving now will forfeit your run, with you only being rewarded the items you have earned so far."),
@@ -415,6 +460,7 @@ class ColosseumRun {
   end(reason, { fromArea = false } = {}) {
     if (this.stage === "ended") return;
     this.stage = "ended";
+    this.closeIntermission();
     this.timer?.stop?.();
     runs.delete(this.player);
     const player = this.player;
@@ -429,6 +475,7 @@ class ColosseumRun {
     for (const npc of [...this.npcs]) Shared.api().removeNpc(npc);
     this.npcs.clear();
     Hazards.cleared(this);
+    Hazards.removeSolGib(this);
     Sol.cleared(this);
     Effects.ended(this);
     this.removeMinimus();

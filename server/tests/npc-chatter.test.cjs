@@ -195,6 +195,36 @@ test("idle loops are not gestures; a family takes its excluded member's exclusio
   }
 });
 
+test("quest chanters, lobby callers, exchanges and battle cries are left out", () => {
+  for (const name of ["chantergnome", "honest_jimmy", "hosidius_drunken_farmer_boss_1", "lovakengj_drunkard_boss",
+    "hosidius_servery_diner_north_3", "eadgar_zoo_keeper_aviary", "dwarf_city_shop_silver", "fairy_frog",
+    "vm_patrol_route_workmen_1", "dwarf_city_dwarf_sack_in_cart_full2", "dwarf_city_old_dwarf1",
+    "battlefield_gnome_troop", "fai_varrock_guard_captain02", "fai_varrock_guard02"]) {
+    assert.equal(chatterById.has(core.CacheDefinitions.getNpcId(name)), false, name);
+  }
+});
+
+test("an NPC that skipLines strips of most of its sightings is dropped, as its gap was theirs", () => {
+  const entryData = { lines: [{ text: "What do you think you're doing?", weight: 243 }, { text: "Another boring day.", weight: 2 }],
+    gap: [10, 11, 13, 16, 67] };
+  assert.equal(entryFor(entryData), null);
+  assert.notEqual(entryFor({ ...entryData, lines: [entryData.lines[0], { text: "Another boring day.", weight: 300 }] }), null);
+});
+
+test("no chatter NPC idles at more than a line every 3 ticks", (t) => {
+  // A sweep for the review's runaway repeats (chanters, drunks, diners): every NPC idle, 1,200 ticks.
+  const fast = [];
+  for (const [id, chatter] of chatterById) {
+    if (chatter.fighting) continue;
+    const stub = npc(id);
+    reset();
+    run(t, [stub], 1, 1200);
+    if (stub.said.length > 400) fast.push(`${id}: ${stub.said.length}`);
+  }
+  // The orators (7-8 ticks), the cat box (3-5) and phrase NPCs are the fastest live speakers.
+  assert.deepEqual(fast, []);
+});
+
 test("a gap stays between the 5th and 95th percentiles, centred on the median", () => {
   const gap = entry("duck").gap;
   // Evenly spread draws (i + 0.5) / n: the sample's median is the quantile curve's, with no luck in it.
@@ -266,7 +296,7 @@ test("an NPC that leaves the active regions or the world is dropped", (t) => {
 });
 
 test("a line pattern in skipLines removes it, and an order naming a removed line is dropped", () => {
-  const chatter = entryFor({ lines: [{ text: "Stop! Thief!", weight: 5 }, { text: "Lovely day.", weight: 1 }], gap: [1, 2, 3, 4, 5],
+  const chatter = entryFor({ lines: [{ text: "Stop! Thief!", weight: 1 }, { text: "Lovely day.", weight: 5 }], gap: [1, 2, 3, 4, 5],
     order: ["Stop! Thief!", "Lovely day."] });
   assert.deepEqual(chatter.lines.map((line) => line.text), ["Lovely day."]);
   assert.equal(chatter.order, null);

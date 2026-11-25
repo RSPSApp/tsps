@@ -2,7 +2,7 @@
 
 NPCs that say overhead lines on their own: ducks ("Quack!"), sheep ("Baa!"), cows, the Grand
 Exchange experts, the town criers, the Varrock newspaper seller, the Theatre of Blood orators,
-the Goblin Village soldiers ("Red armour best!", "Stupid greenie!") and about 200 more.
+the Goblin Village soldiers ("Red armour best!", "Stupid greenie!") and about 140 more.
 `server/plugins/npcs/NpcChatter.plugin.js` plays them; the lines and their timing come from
 rsprox captures.
 
@@ -68,6 +68,7 @@ The extractor leaves out:
   "in-fighting") keeps its lines, as does a line the Wiki doesn't have;
 - lines seen in fewer than 2 recordings (this also drops any line naming a player), and NPCs seen
   in fewer than 3 recordings or with fewer than 5 measured gaps;
+- followers (pet cats and dogs), which speak to and around their owner;
 - random event, Sailing crew and quest-instance NPCs (`macro_*`, `sailing_crew_*`, `qip_*`, the
   random event invitations);
 - retired lines. The NPC's newest revision with 3 recordings of it is "now", and lines weigh their
@@ -87,7 +88,17 @@ player-owned house and events, plus NPCs other plugins already make speak. Those
 shouters, Sailing's current ducks, the Warriors' Guild's Shanomi and Kamfreena, the Keldagrim
 ticket vendors, the Mort Myre ghasts (Nature Spirit's attack shouts), and the Varlamore wealthy
 citizens, urchins and house owners (Thieving). An NPC whose data comes from its family is
-excluded with any excluded member of that family (the hangman armours, the H.A.M. buyers).
+excluded with any excluded member of that family (the hangman armours, the H.A.M. buyers). Also
+excluded:
+- the Tree Gnome Village chanters, whose "Su tana." / "En tania." belong to the quest's ceremony;
+- Honest Jimmy, whose calls depend on the Trouble Brewing lobby;
+- NPCs that speak in short exchanges with other NPCs, or when something passes: the Hosidius and
+  Lovakengj drunks' stories, the Hosidius diners, Hegir's argument, the zoo keeper's exchange
+  with Postie Pete, Sune's errands to the shop dwarves, the fairy frog, the Varlamore workmen and
+  the Varrock guards they pass, and the Keldagrim sack carts. They speak in a burst every few
+  hundred ticks, so the captured gap is the spacing inside one burst, and drawing lines at random
+  at that gap would repeat it forever;
+- the Khazard battlefield's gnome troops, whose battle cries have no battle in tsps.
 
 `skipLines` lists text patterns, grouped by reason:
 - lines answering another player's theft or pickpocket ("What do you think you're doing?",
@@ -109,6 +120,8 @@ excluded with any excluded member of that family (the hangman armours, the H.A.M
   cycle order from a random start. A phrase is picked by its first line's weight and said whole,
   its fragments `phraseGap` apart. A line with `gestures` draws one by weight each time.
 - An NPC talking to or fighting a player, or dying, waits 5 ticks and tries again.
+- An NPC whose remaining lines are under half its sightings after `skipLines` is dropped: its
+  captured gap is the spacing of the removed lines.
 
 ## Limitations
 
@@ -118,8 +131,11 @@ excluded with any excluded member of that family (the hangman armours, the H.A.M
 - **News within a revision isn't dated.** Pre-launch banners like "Hardcore Worlds open
   November 4th!" are left out by `skipLines`; after the next regeneration, check the criers'
   lines for new ones.
-- **Quest state is ignored.** The orators' lines before and after A Taste of Hope, for example,
+- **Quest state is ignored.** The orators' lines before and after The Blood Moon Rises, for example,
   are both played.
+- **Bursts and exchanges aren't modelled.** NPCs that speak in bursts or answer each other are
+  excluded rather than played at the wrong rate; a burst model (lines clustered within about 20
+  ticks, gap between bursts) and conversation partners are a follow-up.
 - **Triggered lines aren't played yet.** Lines live sends on spawning, on being attacked or when
   a player approaches are left for a follow-up; the Wiki transcripts' variant names are the
   starting point.

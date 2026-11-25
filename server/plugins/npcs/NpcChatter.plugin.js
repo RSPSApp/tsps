@@ -31,6 +31,8 @@ const SKIP_LINES = Object.values(SKIP.skipLines).flat();
 const DATA_FILE = "npc-captured-chatter.json";
 /** Ticks between scans of the active NPCs for chatter NPCs not yet scheduled. */
 const DISCOVER_TICKS = 8;
+/** The share of an NPC's sightings skipLines must leave for its captured gap to still hold. */
+const KEPT_SHARE = 0.5;
 /** Ticks a busy NPC waits before trying its line again. */
 const BUSY_RETRY_TICKS = 5;
 /** The quantiles npc-captured-chatter.json stores gaps at, as fractions. */
@@ -76,10 +78,16 @@ function skippedLine(text) {
   return SKIP_LINES.some((pattern) => lower.includes(pattern));
 }
 
-/** One NPC's chatter from its generated entry, or null when nothing of it is left to say. */
+/**
+ * One NPC's chatter from its generated entry, or null when nothing of it is left to say, or when
+ * skipLines took most of what it said: its captured gap is then the spacing of the lines removed
+ * (a Varrock guard's theft answers), not of what is left.
+ */
 function entryFor(entry) {
   const lines = entry.lines.filter((line) => !skippedLine(line.text));
   if (lines.length === 0) return null;
+  const weightOf = (list) => list.reduce((sum, line) => sum + line.weight, 0);
+  if (weightOf(lines) < KEPT_SHARE * weightOf(entry.lines)) return null;
   const kept = new Set(lines.map((line) => line.text));
   const byText = new Map(lines.map((line) => [line.text, line]));
   const order = entry.order?.every((text) => kept.has(text)) ? entry.order.map((text) => byText.get(text)) : null;

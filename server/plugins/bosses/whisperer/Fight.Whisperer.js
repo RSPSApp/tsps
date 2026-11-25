@@ -527,7 +527,7 @@ function onDeath({ npc }) {
   player.sendMessage(`Fight duration: <col=ff0000>${duration(ticks)}</col>${!best || ticks < best ? ' (new personal best)' : `. Personal best: ${duration(best)}`}`);
   Rewards.complete(fight);
   fight.entrance(Common.data.objects.exit);
-  // Every recorded kill (3281, 3299) shows the Odd Figure again 15 ticks after the kill message.
+  // Wiki: 30 ticks. Recorded kills (3281, 3299) show the Odd Figure again after 15; the Wiki wins.
   Common.later(Common.data.respawnTicks, () => {
     if (!fight.session.ended && fight.session.fight === fight)
       fight.session.respawn();

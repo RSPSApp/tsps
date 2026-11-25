@@ -1776,3 +1776,61 @@ test('capture 3281: volley impacts, melee and binding send their recorded sounds
     f.fight.bind();
     assert.deepEqual(f.sounds.map(([id])=>id),[151]);
 });
+test('captures 3281/3285: seed endings use the player realm ids and hatch the light seeds left standing', () => {
+    for (const [shadow, vanish, hatched, sound] of [[false,2464,2465,7480],[true,2461,2462,7311]]) {
+        const f=recordingFixture();
+        f.player.moveTo(new core.Location(2640,6390,0));
+        startSpecial(f.fight,'seeds');
+        if(shadow)f.fight.setShadow(true);
+        const seeds=f.fight.special.seeds, light=seeds.filter(s=>s.light).length, dark=seeds.length-light;
+        f.fight.special.left=1;
+        Specials.process(f.fight);
+        assert.equal(f.fight.special,null);
+        assert.equal(f.graphics.filter(([id])=>id===vanish).length,dark);
+        assert.equal(f.graphics.filter(([id])=>id===hatched).length,light);
+        assert.equal(f.projectiles.filter(id=>id===2456).length,light,'each hatch sends a leech');
+        assert.ok(f.sounds.some(([id])=>id===sound));
+    }
+});
+test('captures 3281/3285: the stomp that clears the last light seed hatches it instead of the stomp burst', () => {
+    const f=recordingFixture();
+    startSpecial(f.fight,'seeds');
+    f.fight.setShadow(true);
+    const seeds=f.fight.special.seeds, last=seeds.find(s=>s.light);
+    for(const seed of seeds)if(seed.light&&seed!==last)seed.active=false;
+    f.player.moveTo(new core.Location(last.x,last.y,0));
+    Specials.process(f.fight);
+    assert.equal(f.fight.special,null);
+    assert.deepEqual(f.graphics.filter(([id])=>id===2462),[[2462,last.x,last.y]]);
+    assert.equal(f.graphics.filter(([id])=>id===2463).length,0);
+    assert.equal(f.graphics.filter(([id])=>id===2461).length,seeds.filter(s=>!s.light).length);
+});
+test('captures 3281/3285/3299: souls flying into the boss use 2457 in the normal realm', () => {
+    const f=recordingFixture();
+    startSpecial(f.fight,'souls');
+    const souls=f.fight.special.souls.length;
+    while(f.fight.special)Specials.process(f.fight);
+    assert.equal(f.projectiles.filter(id=>id===2457).length,souls);
+    assert.equal(f.projectiles.filter(id=>id===2458).length,0);
+});
+test('capture 3281: the player stays in the Shadow Realm 2 ticks after seeds and 7 after a souls timeout', () => {
+    for (const [kind, hold] of [['seeds',2],['souls',7]]) {
+        const f=recordingFixture();
+        f.player.moveTo(new core.Location(2640,6390,0));
+        startSpecial(f.fight,kind);
+        f.fight.setShadow(true);
+        f.fight.special.left=1;
+        while(f.fight.special)Specials.process(f.fight);
+        for(let tick=1;tick<hold;tick++){
+            f.fight.process();
+            assert.equal(f.fight.shadow,true,`${kind}: still inside at +${tick}`);
+            assert.equal(f.player.getLocation().getX(),2640-256);
+        }
+        f.fight.process();
+        assert.equal(f.fight.shadow,false,`${kind}: out at +${hold}`);
+        assert.equal(f.player.getLocation().getX(),2640);
+    }
+});
+test('the Odd Figure respawn keeps the Wiki 30 ticks', () => {
+    assert.equal(Common.data.respawnTicks,30);
+});

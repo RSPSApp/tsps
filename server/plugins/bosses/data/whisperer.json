@@ -46,7 +46,11 @@
     "bind": 2467,
     "screech": 2471,
     "soulSpawn": 668,
-    "soulAbsorb": 2458
+    "soulAbsorb": {
+      "normal": 2457,
+      "shadow": 2458
+    },
+    "leechHatch": 2456
   },
   "objects": {
     "seedLight": 47573,
@@ -278,7 +282,14 @@
     "screechWater": 2451,
     "seedSpawn": 2459,
     "seedStomp": 2463,
-    "seedsEnd": 2461,
+    "seedsVanish": {
+      "normal": 2464,
+      "shadow": 2461
+    },
+    "seedsHatch": {
+      "normal": 2465,
+      "shadow": 2462
+    },
     "columnSpawn": 2450
   },
   "sounds": {
@@ -358,7 +369,10 @@
       ]
     ],
     "seedStomp": 7263,
-    "seedsEnd": 7311,
+    "seedsEnd": {
+      "normal": 7480,
+      "shadow": 7311
+    },
     "bindCast": 151,
     "bindImpact": 7461
   },
@@ -699,6 +713,14 @@
       "endHeight": 100,
       "angle": 127,
       "progress": 128
+    },
+    "hatch": {
+      "delay": 30,
+      "cycles": 70,
+      "startHeight": 0,
+      "endHeight": 0,
+      "angle": 255,
+      "progress": 0
     }
   },
   "whisper": {
@@ -718,5 +740,9 @@
     "delayTicks": 3
   },
   "healSplat": 6,
-  "respawnTicks": 15
+  "respawnTicks": 30,
+  "shadowExitTicks": {
+    "seeds": 2,
+    "souls": 7
+  }
 }

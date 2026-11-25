@@ -173,7 +173,9 @@ function specialTimer(fight, special) {
   special.timerShown = true;
   fight.boss.showHeadbar(timer.headbar, { fill: Math.round(timer.width * remaining / span) });
 }
-function finish(fight, result) {
+/** `exitTicks`: how long the player stays in the Shadow Realm after the special ends.
+ * Recorded: seeds 2 (3281: 2668 -> 2670), souls timeout 7 (2933 -> 2940). */
+function finish(fight, result, exitTicks = 0) {
   // Recorded: the depletion (58) and both "deter" lines are spam; "Leeches from the shadows hatch..." is a game message.
   if (!fight.special?.depleted)
     spam(fight.player, Common.data.messages.deplete);
@@ -183,6 +185,16 @@ function finish(fight, result) {
     fight.player.sendMessage(Common.data.messages[result]);
   clear(fight);
   fight.completed++;
+  if (exitTicks > 0 && fight.shadow) {
+    // Hold the fight until the realm exit; the end effects play for the realm the player is in.
+    fight.transitionUntil = fight.tick + exitTicks;
+    fight.nextAttack = fight.transitionUntil + 15;
+    fight.at(exitTicks, () => resume(fight));
+    return;
+  }
+  resume(fight);
+}
+function resume(fight) {
   fight.nextAttack = fight.tick + 15;
   fight.setShadow(false);
   // A crossed health threshold replaces the bind with the next special.
@@ -192,16 +204,36 @@ function finish(fight, result) {
   }
   fight.bind();
 }
-/** Seeds end (capture 3281, 2668): the boss blasts (10252), every seed still standing bursts (2461). */
-function seedsEnd(fight, special) {
+function realm(fight) {
+  return fight.shadow ? 'shadow' : 'normal';
+}
+/** A light seed that hatches: hatch graphic and a leech (2456) flying from it into the player. */
+function hatch(fight, seed) {
+  const { Location } = Common.core, geometry = Common.data.soulProjectiles.hatch;
+  Common.graphicAt(fight.player, Common.data.graphics.seedsHatch[realm(fight)], seed.x, seed.y);
+  const from = new Location(seed.x, seed.y, fight.player.getLocation().getZ());
+  fight.player.getPacketSender().sendProjectile(from, fight.player.getLocation(), 0, geometry.cycles, Common.data.projectiles.leechHatch, geometry.startHeight, geometry.endHeight, fight.player, geometry.delay, geometry.angle, geometry.progress);
+}
+/** Seeds end: the boss blasts (10252). Standing dark seeds vanish; light seeds still standing
+ * at the timeout hatch, and so does the last light seed when its stomp ends the special.
+ * Ids depend on the player's realm: shadow 2461/2462 + sound 7311 (3281: 2668, 3285: 23397),
+ * normal 2464/2465 + sound 7480 (3285: 20965, 21848). Each hatch sends leech projectile 2456. */
+function seedsEnd(fight, special, last = null) {
   fight.boss.performAnimation(new Common.core.Animation(Common.data.animations.screechBlast));
-  for (const seed of special.seeds)
-    if (seed.active)
-      Common.graphicAt(fight.player, Common.data.graphics.seedsEnd, seed.x, seed.y);
-  Common.sound(fight.player, Common.data.sounds.seedsEnd);
+  for (const seed of special.seeds) {
+    if (!seed.active)
+      continue;
+    if (seed.light)
+      hatch(fight, seed);
+    else
+      Common.graphicAt(fight.player, Common.data.graphics.seedsVanish[realm(fight)], seed.x, seed.y);
+  }
+  if (last)
+    hatch(fight, last);
+  Common.sound(fight.player, Common.data.sounds.seedsEnd[realm(fight)]);
 }
 /** Chant timeout (capture 3281, 2933): the souls still standing go quiet, fade (5542) and fly
- * into the boss on 2458. They leave three ticks later, with the result message and the
+ * into the boss: 2458 in the Shadow Realm, 2457 in the normal realm (3285: 21476, 3299: 15330). They leave three ticks later, with the result message and the
  * Strange Whisper naming the sets the player didn't finish. */
 function soulsEnd(fight, special, result) {
   const target = Common.core.Projectile.centreOf(fight.boss);
@@ -211,7 +243,7 @@ function soulsEnd(fight, special, result) {
     const npc = soul.npc;
     npc.forceChat('');
     npc.performAnimation(new Common.core.Animation(Common.data.animations.soulFade));
-    soulProjectile(fight, npc.getLocation(), target, Common.data.soulProjectiles.absorb, Common.data.projectiles.soulAbsorb);
+    soulProjectile(fight, npc.getLocation(), target, Common.data.soulProjectiles.absorb, Common.data.projectiles.soulAbsorb[realm(fight)]);
     npc.__whispererSoul = null;
     soul.npc = null;
     Common.later(Common.data.whisper.delayTicks, () => Common.remove(npc));
@@ -341,24 +373,28 @@ function process(fight) {
       seed.active = false;
       if (seed.object)
         fight.player.getPacketSender().sendObjectRemoval(seed.object);
-      Common.graphicAt(fight.player, Common.data.graphics.seedStomp, seed.x, seed.y);
-      Common.sound(fight.player, Common.data.sounds.seedStomp);
+      const last = seed.light && special.seeds.every(s => !s.light || !s.active);
+      // The stomp that ends the special shows the hatch instead (3281: 2668, 3285: 21848).
+      if (!last) {
+        Common.graphicAt(fight.player, Common.data.graphics.seedStomp, seed.x, seed.y);
+        Common.sound(fight.player, Common.data.sounds.seedStomp);
+      }
       if (!seed.light) {
         special.clean = false;
         Common.damage(fight, Common.random(15, 25));
       }
-      if (special.seeds.every(s => !s.light || !s.active)) {
+      if (last) {
         if (special.clean)
           fight.changeSanity(15);
-        seedsEnd(fight, special);
-        finish(fight, special.clean ? 'seedsPerfect' : 'seedsDone');
+        seedsEnd(fight, special, seed);
+        finish(fight, special.clean ? 'seedsPerfect' : 'seedsDone', Common.data.shadowExitTicks.seeds);
         return;
       }
     }
     if (special.left <= 0) {
       Common.damage(fight, 75, 75);
       seedsEnd(fight, special);
-      finish(fight, 'seedsFailed');
+      finish(fight, 'seedsFailed', Common.data.shadowExitTicks.seeds);
     }
   }
   else if (special.kind === 'screech' && special.left <= 0) {
@@ -389,7 +425,7 @@ function process(fight) {
       }
       const result = special.rewarded.size ? 'soulsPartial' : 'soulsFailed';
       soulsEnd(fight, special, result);
-      finish(fight, null);
+      finish(fight, null, Common.data.shadowExitTicks.souls);
     }
   }
 }

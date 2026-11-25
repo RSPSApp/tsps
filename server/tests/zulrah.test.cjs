@@ -527,11 +527,15 @@ test('snakelings are melee or magic, attack the player, and die after 67 ticks o
   const { player, fight } = startedFight({ random: () => 0.1 });
   const magic = fight.hazards.addSnakeling({ x: 2263, y: 3076 });
   assert.equal(magic.getId(), Shared.NPC.SNAKELING_MAGIC);
-  assert.equal(magic.target, player);
+  fight.hazards.tickSnakelings(player);
+  fight.hazards.tickSnakelings(player);
+  assert.equal(magic.target, null, 'still waking (rsprox: it stays put for 3 ticks)');
+  fight.hazards.tickSnakelings(player);
+  assert.equal(magic.target, player, 'then attacks');
   fight.random = () => 0.9;
   const melee = fight.hazards.addSnakeling({ x: 2263, y: 3073 });
   assert.equal(melee.getId(), Shared.NPC.SNAKELING_MELEE);
-  for (let i = 0; i < 66; i++) fight.hazards.tickSnakelings(player);
+  for (let i = 0; i < 63; i++) fight.hazards.tickSnakelings(player);
   assert.ok(magic.hp > 0);
   fight.hazards.tickSnakelings(player);
   assert.ok(magic.hp <= 0, 'gone after 40 seconds');

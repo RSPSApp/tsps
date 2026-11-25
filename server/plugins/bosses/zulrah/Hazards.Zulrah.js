@@ -10,7 +10,8 @@
  *   hitpoint, die after 40 seconds and die with Zulrah.
  * Wiki ("Snakeling"): melee (2045) max 15, magic (2046) max 13, attack speed 3.
  * rsprox 820/1161/3276/1157: the cloud lasts 30 ticks and hits for 1-4 a tick; a snakeling is
- * magic about half the time (38 of 77), rises with anim 2413 and attacks 3 ticks after landing;
+ * magic about half the time (38 of 77), rises with anim 2413 and stays put until it wakes 3 ticks
+ * after landing, then walks or attacks;
  * the magic one's projectile 1230 flies from cycle 10 to 30 at heights 15 to 16, slope 0, from
  * 92/128 along its tile. On Zulrah's death each snakeling turns into 2047 as it dies.
  * Near-Reality: the magic snakeling's 6-tile reach, melee hits landing at once, and the
@@ -153,8 +154,11 @@ class Hazards {
     npc.__zulrahLeft = SNAKELING.lifeTicks;
     npc.performAnimation(new Animation(SNAKELING.anim.spawn));
     Shared.sound(this.fight.player, Shared.SOUND.SNAKELING_LAND);
-    npc.getCombat().setAttackDelay?.(SNAKELING.wakeTicks);
-    npc.getCombat().attack(this.fight.player);
+    // rsprox 3276: it stays where it landed, facing the player, until it wakes 3 ticks later;
+    // only then does it walk or attack.
+    npc.__zulrahWakesAt = SNAKELING.lifeTicks - SNAKELING.wakeTicks;
+    npc.getMovementQueue?.().setBlockMovement?.(true);
+    npc.setMobileInteraction?.(this.fight.player);
     this.snakelings.add(npc);
     return npc;
   }
@@ -169,6 +173,8 @@ class Hazards {
         this.kill(npc);
         continue;
       }
+      if (npc.__zulrahLeft > npc.__zulrahWakesAt) continue;
+      if (npc.__zulrahLeft === npc.__zulrahWakesAt) npc.getMovementQueue?.().setBlockMovement?.(false);
       const target = npc.getCombat().getTarget();
       if (target !== player && player.getHitpoints() > 0) npc.getCombat().attack(player);
     }

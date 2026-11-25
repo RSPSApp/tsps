@@ -4,8 +4,7 @@
  * Disturbing Kraken whirlpools (see ../Kraken.plugin.js for behaviour and sources).
  *
  * Wiki (Kraken): to start the fight, use a fishing explosive on the large whirlpool (496)
- * (the wake lands 6 ticks after the throw, estimate), or disturb the four whirlpools
- * around it (5534) first — only when
+ * or disturb the four whirlpools around it (5534) first. Only when
  * all four are disturbed can the larger one be disturbed, waking the Kraken (494) with
  * level 112 Enormous Tentacles (5535). Wiki (Cave kraken): fishing explosives do NOT
  * surface regular cave krakens (493); those are Disturbed normally.
@@ -23,11 +22,22 @@ const BOSS_WAKE_RADIUS = 10;
  * there is projectile line of sight (the engine's `reached` check enforces both).
  */
 const DISTURB_RANGE = 10;
-/** Player throw animation (GnomeBall's PLAYER.THROW, 783): no Kraken-specific throw was
- * captured, so the generic throw stands in (estimate). */
-const THROW_ANIM = 783;
-/** Ticks from throw to wake: throw, splash pause, then emerge as separate beats. */
-const THROW_DELAY_TICKS = 6;
+// RSProx 237/1150 t11209 and t11318; 237/1151 t3538 and t3623.
+const THROW_ANIM = 385; // human_throw
+const THROW_SPOTANIM = 50; // vial_launch
+const THROW_SPOTANIM_HEIGHT = 96;
+const THROW_PROJECTILE = 49; // vial_travel
+const THROW_SOUND = 2379;
+const THROW_LAUNCH_CYCLES = 28;
+const THROW_END_BASE_CYCLES = 46;
+const THROW_CYCLES_PER_TILE = 35;
+// PacketSender multiplies projectile heights by four.
+const THROW_PROJECTILE_START_HEIGHT = 163 / 4;
+const THROW_PROJECTILE_ANGLE = 50;
+const THROW_PROJECTILE_PROGRESS = 32;
+const TENTACLE_RISE_AFTER_IMPACT = 2;
+const BOSS_RISE_AFTER_TENTACLES = 2;
+const RISE_ATTACK_DELAY = 1;
 /** Estimate (no capture yet): disturbing the boss early does nothing. */
 const BOSS_DISTURB_TOO_EARLY = "Nothing happens.";
 
@@ -35,13 +45,15 @@ function sameArea(player, npc) {
   return player?.getPrivateArea?.() === npc?.getPrivateArea?.();
 }
 
-function surface(npc, surfacedId, animId, player) {
+function surface(npc, surfacedId, animId, player, attackDelay = 0) {
   const { Animation } = Shared.core();
   npc.setNpcTransformationId(surfacedId);
   npc.performAnimation(new Animation(animId));
   if (Shared.alive(player) && Shared.alive(npc)) {
     try {
-      npc.getCombat?.().attack?.(player);
+      const combat = npc.getCombat?.();
+      if (attackDelay) combat?.extendAttackDelay(attackDelay);
+      combat?.attack?.(player);
     } catch {
       // Attack best-effort: the wake itself is what matters.
     }
@@ -75,11 +87,11 @@ function whirlpoolsNear(at, area) {
   return found;
 }
 
-function wakeNearbyTentacles(bossNpc, player) {
+function wakeNearbyTentacles(bossNpc, player, attackDelay = 0) {
   const { TENTACLE } = Shared.ids();
   const { SURFACE_ANIM } = Shared;
   for (const other of whirlpoolsNear(bossNpc.getLocation?.(), bossNpc.getPrivateArea?.())) {
-    surface(other, TENTACLE, SURFACE_ANIM.tentacle, player);
+    surface(other, TENTACLE, SURFACE_ANIM.tentacle, player, attackDelay);
   }
 }
 
@@ -126,21 +138,20 @@ function disturb({ player, npc }) {
   return false;
 }
 
-/** Whirlpools with a throw already in the air: further throws are swallowed, not consumed. */
-const pendingWakes = new Set();
+// Each target accepts one explosive until its wake finishes.
+const pendingWakes = new Map();
 
-/**
- * Fishing explosive on the large whirlpool: wakes the Kraken and its tentacles (Wiki).
- * The player throws (783, estimate) and the wake lands a moment later. The explosive
- * is consumed when the wake lands, not on the throw, so spam, logout or death in the
- * window costs nothing (all estimates: consumption, throw anim, delay).
- * Used on anything else kraken it does nothing (Wiki: explosives cannot surface
- * regular cave krakens).
- */
+function cancelExplosiveWake(player) {
+  for (const [target, wake] of pendingWakes) {
+    if (wake.player === player && !wake.tentaclesUp) pendingWakes.delete(target);
+  }
+}
+
+/** Fishing explosive on the large whirlpool. Cave krakens still only surface via Disturb. */
 function explosive({ player, target, itemId }) {
   const { BOSS, BOSS_WHIRLPOOL } = Shared.ids();
-  const { Animation } = Shared.core();
-  const { FISHING_EXPLOSIVE, FISHING_EXPLOSIVE_2 } = Shared.core().ItemIdentifiers;
+  const { Animation, Graphic, Projectile, ItemIdentifiers } = Shared.core();
+  const { FISHING_EXPLOSIVE, FISHING_EXPLOSIVE_2 } = ItemIdentifiers;
   if (itemId !== FISHING_EXPLOSIVE && itemId !== FISHING_EXPLOSIVE_2) return;
   if (!target?.isNpc?.() || !Shared.alive(target) || !Shared.alive(player)) return;
   if (!sameArea(player, target)) return;
@@ -152,18 +163,41 @@ function explosive({ player, target, itemId }) {
     return;
   }
   if (pendingWakes.has(target)) return true;
-  pendingWakes.add(target);
-  const startingArea = target.getPrivateArea?.();
-  const { SURFACE_ANIM } = Shared;
+  const inventory = player.getInventory();
+  if (inventory.getAmount(itemId) < 1) return true;
+
+  const startingRoom = target.getPrivateArea?.();
+  const startingArea = player.getArea();
+  const wake = { player, tentaclesUp: false };
+  pendingWakes.set(target, wake);
+  inventory.deleteNumber(itemId, 1);
+  const endCycles = Projectile.arrivalCycles(player, target, THROW_END_BASE_CYCLES, THROW_CYCLES_PER_TILE);
   player.performAnimation(new Animation(THROW_ANIM));
-  later(THROW_DELAY_TICKS, () => {
-    pendingWakes.delete(target);
-    if (!Shared.alive(target) || target.getId?.() !== BOSS_WHIRLPOOL || !Shared.alive(player)) return;
-    if (startingArea?.isKrakenInstance === true
-      && (startingArea.isDestroyed() || player.getPrivateArea?.() !== startingArea || target.getPrivateArea?.() !== startingArea)) return;
-    player.getInventory()?.deleteNumber?.(itemId, 1);
-    surface(target, BOSS, SURFACE_ANIM.boss, player);
-    wakeNearbyTentacles(target, player);
+  player.performGraphic(Graphic.atHeight(THROW_SPOTANIM, THROW_SPOTANIM_HEIGHT));
+  Projectile.createProjectile(player, target, THROW_PROJECTILE, THROW_LAUNCH_CYCLES, endCycles,
+    THROW_PROJECTILE_START_HEIGHT, 0).withAngle(THROW_PROJECTILE_ANGLE)
+    .withProgress(THROW_PROJECTILE_PROGRESS).sendProjectile();
+  player.getPacketSender().sendSoundEffect(THROW_SOUND, 1, endCycles, 1);
+
+  // The samples at 3, 8 and 10 tiles support this landing-relative estimate.
+  const tentacleRise = Math.ceil(endCycles / 30) + TENTACLE_RISE_AFTER_IMPACT;
+  const canWake = () => Shared.alive(target) && target.getId() === BOSS_WHIRLPOOL
+    && !startingRoom?.isDestroyed?.() && target.getPrivateArea() === startingRoom;
+  later(tentacleRise, () => {
+    if (pendingWakes.get(target) !== wake) return;
+    if (!canWake() || !Shared.alive(player) || !sameArea(player, target) || player.getArea() !== startingArea) {
+      pendingWakes.delete(target);
+      return;
+    }
+    wake.tentaclesUp = true;
+    wakeNearbyTentacles(target, player, RISE_ATTACK_DELAY);
+    later(BOSS_RISE_AFTER_TENTACLES, () => {
+      pendingWakes.delete(target);
+      if (canWake()) {
+        const disturber = sameArea(player, target) && player.getArea() === startingArea ? player : null;
+        surface(target, BOSS, Shared.SURFACE_ANIM.boss, disturber, RISE_ATTACK_DELAY);
+      }
+    });
   });
   return true;
 }
@@ -210,4 +244,4 @@ function attach(api) {
   api.onItemOnNpc(explosive);
 }
 
-module.exports = { attach, disturb, explosive, bossReady, npcRoute, BOSS_WAKE_RADIUS, DISTURB_RANGE, THROW_ANIM, THROW_DELAY_TICKS };
+module.exports = { attach, disturb, explosive, bossReady, npcRoute, BOSS_WAKE_RADIUS, DISTURB_RANGE, cancelExplosiveWake };

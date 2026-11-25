@@ -157,7 +157,9 @@ Barbarian Gathering's container in the Demonic Pacts League (Wiki: Knapsack;
 - **Fills itself** while open and not full, and then a full inventory keeps gathering. Its gathering
   is heard from the relics plugin after Hotfoot's processing (`Knapsack.gathering`), so Hotfoot's
   cooked fish and bars go in as they are (Wiki).
-- **Fill, an item used on it, Check, Open and Close** work as for the other containers.
+- **Fill, an item used on it, Open and Close** work as for the other containers.
+- **Check** prints chat lines, as the Forager's pouch's recorded Check does (rsprox 237): "You look in
+  your knapsack and see:", then "N x Item" per kind, or "Your knapsack is empty.".
 - **Dispose** asks which kind to delete and deletes all of it (Wiki, Relics: "dispose option will ask
   what to destroy").
 - **Taking things out:** only at a bank (Wiki). The bank's "Empty containers" button

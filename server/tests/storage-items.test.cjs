@@ -634,7 +634,7 @@ test("a full inventory keeps gathering while an open Knapsack has room", () => {
   assert.equal(room(createPlayer([new Item(knapsackClosed(), 1), ...items(Items.BRONZE_DAGGER, 27)]), Items.LOGS), false);
 });
 
-test("Fill takes what it can from the inventory, an item used on it that item; Check lists it", () => {
+test("Fill takes what it can from the inventory, an item used on it that item; Check lists it in the chatbox", () => {
   const bag = new Item(knapsackClosed(), 1);
   const player = createPlayer([bag, ...items(Items.LOGS, 5), ...items(Items.RAW_TROUT, 3), new Item(Items.BRONZE_DAGGER, 1)]);
   option(player, bag, "Fill");
@@ -642,7 +642,12 @@ test("Fill takes what it can from the inventory, an item used on it that item; C
   assert.equal(player.getInventory().getAmount(Items.RAW_TROUT), 0);
   assert.equal(player.getInventory().getAmount(Items.BRONZE_DAGGER), 1, "not a kind it holds");
   option(player, bag, "Check");
-  assert.deepEqual(player.boxes.at(-1).split("<br>"), [Knapsack.MESSAGE.CONTAINS, "5 x Logs, 3 x Raw trout (8/140)"]);
+  // As the Forager's pouch's recorded Check: a header, then one line per kind; no box.
+  assert.deepEqual(player.messages.slice(-3), [Knapsack.MESSAGE.CONTAINS, "5 x Logs", "3 x Raw trout"]);
+  assert.equal(player.boxes.length, 0);
+  const empty = createPlayer([new Item(knapsackClosed(), 1)]);
+  option(empty, empty.getInventory().getItems()[0], "Check");
+  assert.deepEqual(empty.messages, [Knapsack.MESSAGE.CONTAINS, Knapsack.MESSAGE.CHECKED_EMPTY]);
   const ore = new Item(Items.IRON_ORE, 1);
   player.getInventory().getItems().push(ore);
   PluginManager.emitItemOnItem({ player, usedItem: ore, usedWithItem: bag, handled: false });

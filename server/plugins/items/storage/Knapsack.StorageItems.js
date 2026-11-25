@@ -8,8 +8,9 @@
  *   named "Knapsack", so open and closed are told apart by id. Its gathering is heard from the
  *   relics plugin, after Hotfoot's processing (`gathering`), so Hotfoot's cooked fish and bars go
  *   in as they are (Wiki).
- * - Fill puts in what it takes from the inventory, and an item used on it does the same; Check lists
- *   what it holds.
+ * - Fill puts in what it takes from the inventory, and an item used on it does the same. Check lists
+ *   what it holds in the chatbox, as the Forager's pouch, Leagues VI's other multi-kind relic
+ *   container, does (rsprox 237): a header, then "N x Item" per kind.
  * - Dispose deletes what it holds, anywhere: it asks which kind (Wiki, Relics: "dispose option will
  *   ask what to destroy").
  * - Items only come out at a bank (Wiki): the bank's "Empty containers" button, and the bank panel's
@@ -23,13 +24,13 @@ const OPEN = "barbarian_knapsack";
 const CLOSED = "barbarian_knapsack_closed";
 const CAPACITY = 140;
 const KINDS = 3;
-/** Ours, all of them: no recording shows the Knapsack. */
+/** Ours, all of them: no recording shows the Knapsack. Check follows the Forager's pouch's recorded pattern. */
 const MESSAGE = {
   FULL: "Your knapsack is full.",
   KINDS: "Your knapsack can only hold three different kinds of item.",
   NOTHING: "You have nothing your knapsack can hold.",
   CHECKED_EMPTY: "Your knapsack is empty.",
-  CONTAINS: "Your knapsack contains:",
+  CONTAINS: "You look in your knapsack and see:",
   CANNOT: "Your knapsack can't hold that.",
   DISPOSE_TITLE: "Dispose of what?",
   DISPOSED: "You dispose of the {item} in your knapsack.",
@@ -96,13 +97,15 @@ function fill({ player }) {
   if (moved === 0) player.sendMessage(refusal(player, held[0]));
 }
 
+/** Chatbox lines, as the Forager's pouch's Check (rsprox 237): the header, then each kind or the empty line. */
 function check({ player }) {
   const held = Storage.contents(player, family);
+  player.sendMessage(MESSAGE.CONTAINS);
   if (!held.length) {
     player.sendMessage(MESSAGE.CHECKED_EMPTY);
     return;
   }
-  Storage.showBox(player, [MESSAGE.CONTAINS, `${Storage.describe(held).join(", ")} (${Storage.total(player, family)}/${CAPACITY})`]);
+  for (const line of Storage.describe(held)) player.sendMessage(line);
 }
 
 function toggle({ player, item }) {

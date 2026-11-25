@@ -179325,7 +179325,11 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "You must pay a toll of 10 gold coins to pass."
+          "text": "You must pay a toll of 10 gold coins to pass.",
+          "speaker_ids": [
+            4287,
+            4288
+          ]
         },
         {
           "type": "choice",
@@ -179339,7 +179343,11 @@
                 {
                   "type": "line",
                   "speaker": "Guard",
-                  "text": "Ok suit yourself."
+                  "text": "Ok suit yourself.",
+                  "speaker_ids": [
+                    4287,
+                    4288
+                  ]
                 }
               ]
             },
@@ -179352,7 +179360,11 @@
                 {
                   "type": "line",
                   "speaker": "Guard",
-                  "text": "The money goes to the city of Al-Kharid."
+                  "text": "The money goes to the city of Al-Kharid.",
+                  "speaker_ids": [
+                    4287,
+                    4288
+                  ]
                 }
               ]
             },
@@ -179404,7 +179416,11 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "You may pass for free, you are a friend of Al-Kharid."
+          "text": "You may pass for free, you are a friend of Al-Kharid.",
+          "speaker_ids": [
+            4287,
+            4288
+          ]
         },
         {
           "type": "action",
@@ -179419,7 +179435,11 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "You may pass for free, for you are a friend of Al-Kharid, but your goblin friend must stay on this side."
+          "text": "You may pass for free, for you are a friend of Al-Kharid, but your goblin friend must stay on this side.",
+          "speaker_ids": [
+            4287,
+            4288
+          ]
         },
         {
           "player": "Why?"
@@ -179427,7 +179447,11 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "Why do you think this gate is here, if not to keep the goblins out of Al Kharid?"
+          "text": "Why do you think this gate is here, if not to keep the goblins out of Al Kharid?",
+          "speaker_ids": [
+            4287,
+            4288
+          ]
         },
         {
           "player": "But Zanik isn't like the other goblins!"
@@ -205246,7 +205270,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "You and whose army mate? You and whose army?"
+                  "text": "You and whose army mate? You and whose army?",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Oooh, sorry, didn't realise you could hear me?"
@@ -205254,7 +205281,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "Well I can, so watch what you say in future."
+                  "text": "Well I can, so watch what you say in future.",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Righto!"
@@ -205270,7 +205300,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "Well, I have to say, I am pretty peckish, but thankfully, I don't eat humans... often."
+                  "text": "Well, I have to say, I am pretty peckish, but thankfully, I don't eat humans... often.",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Oooh, sorry, didn't realise you could hear me?"
@@ -205278,7 +205311,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "Well I can, so watch what you say in future."
+                  "text": "Well I can, so watch what you say in future.",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Righto!"
@@ -205294,7 +205330,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "You'll catch a stiff kick if you talk about me like that again!"
+                  "text": "You'll catch a stiff kick if you talk about me like that again!",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Oooh, sorry, didn't realise you could hear me?"
@@ -205302,7 +205341,10 @@
                 {
                   "type": "line",
                   "speaker": "Camel",
-                  "text": "Well I can, so watch what you say in future."
+                  "text": "Well I can, so watch what you say in future.",
+                  "speaker_ids": [
+                    4674
+                  ]
                 },
                 {
                   "player": "Righto!"
@@ -213233,7 +213275,10 @@
             {
               "type": "line",
               "speaker": "Hassan",
-              "text": "Hey, do not treat the Emir's palace like a climbing frame for children, whoever you are!"
+              "text": "Hey, do not treat the Emir's palace like a climbing frame for children, whoever you are!",
+              "speaker_ids": [
+                4285
+              ]
             }
           ],
           "id": "vLjDeJ"
@@ -213245,7 +213290,10 @@
             {
               "type": "line",
               "speaker": "Hassan",
-              "text": "Hey, while you have our gratitude for saving the prince, you must earn our trust more fully before the Emir will tolerate you climbing through his windows like a thief!"
+              "text": "Hey, while you have our gratitude for saving the prince, you must earn our trust more fully before the Emir will tolerate you climbing through his windows like a thief!",
+              "speaker_ids": [
+                4285
+              ]
             }
           ],
           "id": "etorYU"
@@ -213260,7 +213308,10 @@
         {
           "type": "line",
           "speaker": "Hassan",
-          "text": "Greetings I am Hassan, Chancellor to the Emir of Al- Kharid."
+          "text": "Greetings I am Hassan, Chancellor to the Emir of Al- Kharid.",
+          "speaker_ids": [
+            4285
+          ]
         },
         {
           "type": "choice",
@@ -213285,7 +213336,10 @@
                 {
                   "type": "line",
                   "speaker": "Hassan",
-                  "text": "We manage, in our humble way. We are a wealthy town and we have water. It cures many thirsts."
+                  "text": "We manage, in our humble way. We are a wealthy town and we have water. It cures many thirsts.",
+                  "speaker_ids": [
+                    4285
+                  ]
                 },
                 {
                   "type": "message",
@@ -213300,7 +213354,10 @@
                 {
                   "type": "line",
                   "speaker": "Hassan",
-                  "text": "You are welcome. They are not expensive. We have them here to stop the elite guard being bothered. They are a little harder to kill."
+                  "text": "You are welcome. They are not expensive. We have them here to stop the elite guard being bothered. They are a little harder to kill.",
+                  "speaker_ids": [
+                    4285
+                  ]
                 }
               ]
             }
@@ -213311,7 +213368,10 @@
         {
           "type": "line",
           "speaker": "Hassan",
-          "text": "You are a friend of the town of Al-Kharid. If we have more tasks to complete, we will ask you. Please, keep in contact. Good employees are not easy to find."
+          "text": "You are a friend of the town of Al-Kharid. If we have more tasks to complete, we will ask you. Please, keep in contact. Good employees are not easy to find.",
+          "speaker_ids": [
+            4285
+          ]
         }
       ]
     }
@@ -389408,7 +389468,10 @@
         {
           "type": "line",
           "speaker": "Cat",
-          "text": "Get your hands off that, you dirty human!"
+          "text": "Get your hands off that, you dirty human!",
+          "speaker_ids": [
+            2346
+          ]
         },
         {
           "type": "line",
@@ -558416,7 +558479,10 @@
                   {
                     "type": "line",
                     "speaker": "Banker",
-                    "text": "Why? You don't use the bank."
+                    "text": "Why? You don't use the bank.",
+                    "speaker_ids": [
+                      6084
+                    ]
                   },
                   {
                     "player": "Oh yeah... Never mind then."
@@ -590031,7 +590097,10 @@
         {
           "type": "line",
           "speaker": "Hrafn",
-          "text": "Meow!"
+          "text": "Meow!",
+          "speaker_ids": [
+            1898
+          ]
         }
       ],
       "standard-dialogue-when-spoken-to-with-a-catspeak-amulet": [
@@ -590041,7 +590110,10 @@
         {
           "type": "line",
           "speaker": "Hrafn",
-          "text": "One does not wish to be disturbed."
+          "text": "One does not wish to be disturbed.",
+          "speaker_ids": [
+            1898
+          ]
         },
         {
           "player": "What?"
@@ -752761,7 +752833,11 @@
         {
           "type": "line",
           "speaker": "Rologarth",
-          "text": "How goes it, friend?"
+          "text": "How goes it, friend?",
+          "speaker_ids": [
+            1270,
+            1271
+          ]
         },
         {
           "player": "I stole the Ring of Charos from Fenkenstrain."
@@ -752769,7 +752845,11 @@
         {
           "type": "line",
           "speaker": "Rologarth",
-          "text": "I saw him climb up into the Tower to hide it. It doesn't matter - soon the werewolves will come for him, and his experiments will be forever ceased."
+          "text": "I saw him climb up into the Tower to hide it. It doesn't matter - soon the werewolves will come for him, and his experiments will be forever ceased.",
+          "speaker_ids": [
+            1270,
+            1271
+          ]
         },
         {
           "player": "Do you want the ring back? It is yours after all."
@@ -752777,7 +752857,11 @@
         {
           "type": "line",
           "speaker": "Rologarth",
-          "text": "No, you keep it, my friend. Werewolves hunger for the scent of live flesh - I have no need for the ring. I have my castle back, if not my soul."
+          "text": "No, you keep it, my friend. Werewolves hunger for the scent of live flesh - I have no need for the ring. I have my castle back, if not my soul.",
+          "speaker_ids": [
+            1270,
+            1271
+          ]
         }
       ]
     }
@@ -867268,7 +867352,12 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "Sorry, you can't come in here."
+          "text": "Sorry, you can't come in here.",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         }
       ],
       "dig-site-gate-without-153-kudos": [
@@ -867286,7 +867375,12 @@
           "type": "line",
           "speaker": "Guard",
           "text": "Sorry - workman's gate only.",
-          "presentation": "overhead"
+          "presentation": "overhead",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         },
         {
           "npc": "Hello there! Sorry, I can't stop to talk. I'm guarding this workman's gate. I'm afraid you can't come through here - you'll need to find another way around."
@@ -867302,7 +867396,12 @@
           "type": "line",
           "speaker": "Guard",
           "text": "Sorry - workman's gate only.",
-          "presentation": "overhead"
+          "presentation": "overhead",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         }
       ],
       "dig-site-gate-with-153-kudos": [
@@ -867319,7 +867418,12 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "Welcome! Would you like to go into the Dig Site archaeology cleaning area?"
+          "text": "Welcome! Would you like to go into the Dig Site archaeology cleaning area?",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         },
         {
           "type": "choice",
@@ -867366,7 +867470,12 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "Sorry, you can't come in here unless you've completed the Dig Site quest."
+          "text": "Sorry, you can't come in here unless you've completed the Dig Site quest.",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         }
       ],
       "museum-doors-dialogue-after-completing-the-dig-site": [
@@ -867393,7 +867502,12 @@
         {
           "type": "line",
           "speaker": "Guard",
-          "text": "Hold up there, workman coming through! You'll have to wait a moment; don't want to fall into that wheelbarrow!"
+          "text": "Hold up there, workman coming through! You'll have to wait a moment; don't want to fall into that wheelbarrow!",
+          "speaker_ids": [
+            1910,
+            1911,
+            1912
+          ]
         }
       ]
     }
@@ -1041065,7 +1041179,10 @@
       {
         "type": "line",
         "speaker": "Ben",
-        "text": "Daddy I'm tired."
+        "text": "Daddy I'm tired.",
+        "speaker_ids": [
+          7012
+        ]
       },
       {
         "type": "line",
@@ -1263362,14 +1263479,22 @@
         {
           "type": "line",
           "speaker": "Pupil",
-          "text": "Aww, but miss, it's sooo exciting."
+          "text": "Aww, but miss, it's sooo exciting.",
+          "speaker_ids": [
+            1913,
+            1922
+          ]
         }
       ],
       "the-teacher-and-pupil-on-the-2nd-floor": [
         {
           "type": "line",
           "speaker": "Pupil",
-          "text": "That man over there talks funny, miss."
+          "text": "That man over there talks funny, miss.",
+          "speaker_ids": [
+            1913,
+            1922
+          ]
         },
         {
           "type": "line",

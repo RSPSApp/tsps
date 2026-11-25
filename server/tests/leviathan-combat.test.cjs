@@ -128,7 +128,7 @@ test('a third volley roar cancelled by a shadow stun does not prematurely unlock
   h.step();
   assert.equal(h.fight.tier, 2, 'the third advance is still waiting for its roar');
   assert.equal(h.fight.stun(), true);
-  h.move([2076,6372]); h.prayer('melee'); h.step(18);
+  h.move([2076,6372]); h.prayer('melee'); h.step(20);
   assert.equal(h.fight.volleyRoars, 2);
   assert.deepEqual(bites, []);
   assert.ok(orbs.length > 1, 'stun expiry resumes the volley rather than lifting the bite limit');
@@ -205,7 +205,7 @@ test('a reflected bite can kill the boss and freezes the already-imperfect fight
   h.step();
   assert.equal(h.fight.boss.getHitpoints(), 0);
   assert.equal(h.fight.over, true);
-  assert.equal(h.fight.finishedTicks, 2);
+  assert.equal(h.fight.finishedTicks, undefined, 'the timer runs on to the kill message');
   h.step(4);
   assert.equal(h.p.getHitpoints(), 49);
   assert.equal(h.fight.perfect, false);
@@ -229,7 +229,7 @@ test('a bite queued after the player turn applies HP before lethal reflection on
   h.step();
   assert.equal(h.fight.boss.getHitpoints(), 0);
   assert.equal(h.fight.over, true);
-  assert.equal(h.fight.finishedTicks, 3);
+  assert.equal(h.fight.finishedTicks, undefined, 'the timer runs on to the kill message');
   assert.equal(h.fight.perfect, false);
 });
 
@@ -254,8 +254,13 @@ test('shadow stuns are spell-ID based, front cap and ranged rear punishment lead
   h.fight.nextAttack = Infinity;
   const spell = h.core.CombatSpells.SHADOW_RUSH.getSpell();
   h.api.emitCustomEvent('magic:hit-effects', { attacker: h.p, target: h.fight.boss, spell });
+  // rsprox 1703/00100: the stun lands two ticks after the impact, with its message.
+  assert.equal(h.fight.stuns, 0);
+  h.step(); assert.equal(h.fight.stuns, 0);
+  h.step();
   assert.equal(h.fight.stuns, 1);
-  assert.equal(h.fight.stunnedUntil - h.fight.tick, 15);
+  assert.deepEqual(h.messages.filter(m => m.includes('stuns the Leviathan')), ['<col=229628>Your spell stuns the Leviathan!</col>']);
+  assert.equal(h.fight.stunnedUntil - h.fight.tick, 16, 'fifteen ticks from the animation reset a tick later');
   const front = h.hit(40);
   h.dispatch('onNpcHitModify', { npc: h.fight.boss, hit: front });
   assert.equal(front.getTotalDamage(), 10);
@@ -273,16 +278,17 @@ test('shadow stuns are spell-ID based, front cap and ranged rear punishment lead
   assert.notEqual(h.fight.special, first);
 });
 
-test('a shadow stun holds the native stunned idle after the three-tick reaction and releases at fifteen ticks', t => {
-  const h = H.harness(t);
+test('a shadow stun resets the animation with spotanim 2379 a tick later and releases fifteen ticks after that', t => {
+  const h = H.harness(t), graphics = [];
   h.fight.nextAttack = Infinity;
+  t.mock.method(h.fight.boss, 'performGraphic', graphic => graphics.push(graphic.getId()));
   h.fight.stun();
-  assert.equal(h.fight.boss.getAnimation().getId(), 10282);
-  h.step(2);
-  assert.equal(h.fight.boss.getAnimation().getId(), 10282);
+  assert.notEqual(h.fight.boss.getAnimation()?.getId(), 10282, 'no roar or stun-idle sequence: rsprox 1703/00100');
+  assert.deepEqual(graphics, []);
   h.step();
-  assert.equal(h.fight.boss.getAnimation().getId(), 10294);
-  h.step(11);
+  assert.equal(h.fight.boss.getAnimation().getId(), 65535);
+  assert.deepEqual(graphics, [2379]);
+  h.step(14);
   assert.equal(h.fight.stunnedUntil > h.fight.tick, true);
   h.step();
   assert.equal(h.fight.stunnedUntil, 0);

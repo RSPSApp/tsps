@@ -6518,6 +6518,16 @@ module.exports = function registerDesertTreasureII(api) {
       else statement(p, `The statue looks like it's meant to be holding something. A plaque on it reads: '${STATUE_TITLES[index]}'`);
       return true;
     }
+    // Past the vault, a statue given its medallion says so (rsprox 1827 and 3168, loc 49499-49505,
+    // mesbox 229); one still waiting keeps the earlier line.
+    if (s >= S.VAULT && vaultTile && STATUES.has(objectId)
+      && [[3941, 9635], [3931, 9635], [3931, 9625], [3941, 9625]].some(([x, y]) => vaultTile.x === x && vaultTile.y === y)) {
+      const index = STATUES.get(objectId);
+      statement(p, (placedMask(p) & (1 << index))
+        ? `The statue is holding a medallion. A plaque on it reads: '${STATUE_TITLES[index]}'`
+        : `The statue looks like it's meant to be holding something. A plaque on it reads: '${STATUE_TITLES[index]}'`);
+      return true;
+    }
     if (vaultTile && ([O.VAULT_DOOR, O.VAULT_DOOR_2, O.VAULT_DOOR_3].includes(objectId)
       || (objectId === O.STEPS_23 && vaultTile.x === 3925 && vaultTile.y === 9630))) {
       leaveVault(p);

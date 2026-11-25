@@ -657,7 +657,7 @@ test('crossing the next special threshold replaces the post-special bind', () =>
             for (const soul of f.fight.special.souls.filter(soul => soul.group === 0)) Specials.soulDied(f.fight, soul.npc);
         const projectiles = [];
         const sender = f.player.getPacketSender();
-        f.player.getPacketSender = () => new Proxy(sender, { get: (target, key) => key === 'sendProjectile' ? (...args) => projectiles.push(args) : target[key] });
+        f.player.getPacketSender = () => new Proxy(sender, { get: (target, key) => key === 'sendProjectile' ? (...args) => { if (args[4] === Common.data.projectiles.bind) projectiles.push(args); } : target[key] });
         while (f.fight.special) f.fight.process();
         assert.equal(projectiles.length, skipsBind ? 0 : 1, `HP ${hp}`);
         if (skipsBind) {
@@ -963,7 +963,7 @@ test('enrage tentacles choose all eight cardinal and diagonal origins', t => {
 });
 
 test('special preparation and screech fragment window follow normal packet phases',()=>{
-    for(const [kind,delay] of [['seeds',6],['screech',5],['souls',4]]){
+    for(const [kind,delay] of [['seeds',6],['screech',5],['souls',3]]){
         const f=fixture();Specials.start(f.fight,kind);
         assert.equal(f.fight.special.active,false);assert.equal(f.fight.special.switchAllowed,false);
         for(let tick=1;tick<delay;tick++){Specials.process(f.fight);assert.equal(f.fight.special.active,false);}
@@ -982,7 +982,7 @@ test('special preparation and screech fragment window follow normal packet phase
             Specials.process(f.fight);assert.equal(f.fight.special,null);
         }
         if(kind==='seeds'||kind==='souls'){
-            const remaining=kind==='seeds'?40:17;
+            const remaining=kind==='seeds'?40:18;
             assert.equal(f.fight.special.left,remaining);
             for(let tick=1;tick<remaining;tick++)Specials.process(f.fight);
             assert.ok(f.fight.special,'special remains active until its deadline');
@@ -1440,7 +1440,7 @@ test('native screech water waves fill the source footprint while active columns 
     for(const shadow of [false,true]) {
         const f=fixture(),waves=[];
         const sender=f.player.getPacketSender();
-        f.player.getPacketSender=()=>new Proxy(sender,{get:(target,key)=>key==='sendGraphic'?(graphic,location)=>waves.push({graphic,location}):target[key]});
+        f.player.getPacketSender=()=>new Proxy(sender,{get:(target,key)=>key==='sendGraphic'?(graphic,location)=>{if(graphic.getId()===Common.data.graphics.screechWater)waves.push({graphic,location});}:target[key]});
         f.fight.setShadow(shadow);startSpecial(f.fight,'screech');
         f.player.moveTo(new core.Location(shadow?2400:2656,6379,0));
         const counts=[];
@@ -1672,4 +1672,107 @@ test('Ketla reclaims a lost blackstone fragment, but not while one is banked', (
     } finally {
         Common.init({ core, emitCustomEvent() { }, removeNpc() { } });
     }
+});
+
+function recordingFixture() {
+    const f=fixture(), messages=[], typed=[], sounds=[], graphics=[], objects=[], projectiles=[];
+    f.player.sendMessage=text=>messages.push(text);
+    const sender=new Proxy({}, {get:(_,name)=>(...args)=>{
+        if(name==='sendSoundEffect')sounds.push([args[0],args[2]]);
+        if(name==='sendTypedMessage')typed.push([args[0],args[1]]);
+        if(name==='sendGraphic')graphics.push([args[0].getId(),args[1].getX(),args[1].getY()]);
+        if(name==='sendObject')objects.push([args[0].getId(),args[0].getLocation().getX(),args[0].getLocation().getY()]);
+        if(name==='sendProjectile')projectiles.push(args[4]);
+        return sender;}});
+    f.player.getPacketSender=()=>sender;
+    return Object.assign(f,{messages,typed,sounds,graphics,objects,projectiles});
+}
+test('capture 3281: special announcements go with the appearance and the pulse follows at the recorded tick', () => {
+    for (const [kind, pulse] of [['seeds',6],['screech',5],['souls',3]]) {
+        const f=recordingFixture();
+        Specials.start(f.fight,kind);
+        Specials.process(f.fight);
+        assert.deepEqual(f.messages,[Common.data.messages[kind]]);
+        for(let age=2;age<pulse;age++)Specials.process(f.fight);
+        assert.equal(f.messages.length,1);
+        Specials.process(f.fight);
+        assert.deepEqual(f.messages,[Common.data.messages[kind],Common.data.messages.pulse]);
+    }
+});
+test('capture 3281: the boss shows the special countdown on headbar 35 and removes it', () => {
+    const f=recordingFixture();
+    startSpecial(f.fight,'seeds');
+    Specials.process(f.fight);
+    const bar=()=>f.boss.getHeadbars().find(b=>b.id===35);
+    assert.equal(bar().fill,78);
+    Specials.process(f.fight);
+    assert.equal(bar().fill,76);
+    Specials.clear(f.fight);
+    assert.equal(bar().remove,true);
+});
+test('capture 3281: screech depletes the fragment at +14 and not again when it ends', () => {
+    const f=recordingFixture();
+    startSpecial(f.fight,'screech');
+    const depletions=()=>f.typed.filter(([,text])=>text===Common.data.messages.deplete).length;
+    for(let age=6;age<14;age++)Specials.process(f.fight);
+    assert.equal(depletions(),0);
+    Specials.process(f.fight);
+    assert.equal(depletions(),1);
+    while(f.fight.special)Specials.process(f.fight);
+    assert.equal(depletions(),1);
+});
+test('capture 3281: souls spawn on 668 a tick after the pulse, chant every three ticks and end with the Strange Whisper', t => {
+    const f=recordingFixture();
+    Specials.start(f.fight,'souls');
+    for(let age=1;age<=3;age++)Specials.process(f.fight);
+    assert.equal(f.projectiles.filter(id=>id===668).length,12);
+    assert.ok(f.fight.special.souls.every(s=>s.npc===null));
+    Specials.process(f.fight);
+    assert.ok(f.fight.special.souls.every(s=>s.npc));
+    f.fight.setShadow(true);
+    const said=[];
+    for(const soul of f.fight.special.souls)soul.npc.forceChat=text=>said.push([f.fight.special.age,text]);
+    for(let age=5;age<=13;age++)Specials.process(f.fight);
+    assert.deepEqual([...new Set(said.map(([age])=>age))],[7,10,13]);
+    // Finish the Vita set only.
+    for(const soul of f.fight.special.souls.filter(s=>s.group===0)){soul.npc.setHitpoints(0);Specials.soulDied(f.fight,soul.npc);}
+    while(f.fight.special)Specials.process(f.fight);
+    assert.ok(f.typed.some(([,text])=>text===Common.data.messages.deplete));
+    assert.ok(!f.messages.includes(Common.data.messages.soulsPartial),'the result waits three ticks');
+    assert.equal(f.projectiles.filter(id=>id===2458).length,10);
+    for(let tick=0;tick<3;tick++)f.fight.process();
+    assert.ok(f.messages.includes(Common.data.messages.soulsPartial));
+    assert.ok(f.typed.some(([type,text])=>type===core.ChatType.NPC_SAY&&text==='Strange Whisper| Sanitas Mors Oratio.'));
+});
+test('capture 3281: shadow columns carry their HP model and normal columns a recorded look', () => {
+    const f=recordingFixture();
+    startSpecial(f.fight,'screech');
+    for(const column of f.fight.special.columns)
+        assert.ok(Common.data.models.columnNormal.includes(column.npc.getModelCustomisationForUpdate()[0].modelId));
+    assert.equal(f.graphics.filter(([id])=>id===2450).length,32);
+    f.fight.setShadow(true);
+    for(const column of f.fight.special.columns)
+        assert.equal(column.npc.getModelCustomisationForUpdate()[0].modelId,Common.data.models.columnShadowByHp[column.hp]);
+});
+test('capture 3281: realm changes swap the boss model and the entrance tentacles', () => {
+    const f=recordingFixture();
+    f.fight.wake();
+    assert.deepEqual(f.objects.map(([id])=>id),Array(9).fill(47584));
+    f.objects.length=0;
+    f.fight.setShadow(true);
+    assert.deepEqual(f.boss.getModelCustomisationForUpdate(),[{slot:0,modelId:49220}]);
+    assert.deepEqual(f.objects.map(([id,x])=>[id,x+256]),Common.data.objects.entrance.map(([x])=>[47585,x]));
+    f.fight.setShadow(false);
+    assert.deepEqual(f.boss.getModelCustomisationForUpdate(),[]);
+});
+test('capture 3281: volley impacts, melee and binding send their recorded sounds', () => {
+    const f=recordingFixture();
+    f.fight.impact('ranged');f.fight.impact('magic');
+    assert.deepEqual(f.sounds.map(([id])=>id),[7316,7343]);
+    f.sounds.length=0;
+    f.fight.melee();
+    assert.deepEqual(f.sounds,[[7359,0],[7444,30]]);
+    f.sounds.length=0;
+    f.fight.bind();
+    assert.deepEqual(f.sounds.map(([id])=>id),[151]);
 });

@@ -40,5 +40,65 @@
   },
   "sounds": {
     "attack": 272
+  },
+  "echo": {
+    "$comment": "Leagues VI Echo Thermonuclear smoke devil (EchoFight.ThermonuclearSmokeDevil.js, docs/thermonuclear-smoke-devil.md). Everything here is from rsprox.net 1161 (rev 237.1, 31 Echo kills): ticks count from the Echo's spawn tick or from the event named, as recorded; spotanims and sequences are gameval names. Damage figures are the recording's; the Wiki's (Thermonuclear smoke devil (Echo)) differ where noted in the doc.",
+    "spawnTile": [2362, 9448, 0],
+    "spawnSound": 10072,
+    "pools": {
+      "tiles": [[2368, 9451], [2368, 9448], [2360, 9453], [2362, 9454], [2365, 9454], [2367, 9453], [2360, 9446], [2362, 9445], [2367, 9446], [2365, 9445], [2359, 9448], [2359, 9451]],
+      "firstSpawnTicks": 3,
+      "spawn": "leagues_6_vfx_smoke_devil_pool_spawn",
+      "idle": "leagues_6_vfx_smoke_devil_pool_idle_01",
+      "despawn": "leagues_6_vfx_smoke_devil_pool_despawn",
+      "shield": "leagues_6_vfx_smoke_devil_pool_shield",
+      "spawnSound": 10071,
+      "protectSound": 10074,
+      "protectMessage": "The power resonating here protects you from the blast."
+    },
+    "orbs": {
+      "firstSetTicks": 6,
+      "setsPerCycle": 4,
+      "perSet": 3,
+      "orbTicks": 2,
+      "setTicks": 12,
+      "landTicks": 5,
+      "attackSeq": "lore_dust_devil_attack",
+      "launchSound": 272,
+      "projectile": { "delay": 29, "end": 150, "angle": 5, "progress": 220, "startHeight": 246, "endHeight": 40 },
+      "ranged": { "projectile": "leagues_6_vfx_lore_dust_devil_attack_ranged_projanim", "impact": "leagues_6_vfx_lore_dust_devil_attack_ranged_impactanim" },
+      "magic": { "projectile": "leagues_6_vfx_lore_dust_devil_attack_magic_projanim", "impact": "leagues_6_vfx_lore_dust_devil_attack_magic_impactanim", "launchSound": 10076, "launchSoundDelay": 16 },
+      "impactHeight": 40,
+      "impactSound": { "id": 1418, "range": 4 },
+      "damage": { "min": 48, "max": 62 },
+      "missChance": 0.14,
+      "missChance$comment": "12 of the 88 recorded shots that hit off a pool hit 0 (ranged 5/36, magic 7/52): the same for both styles, so not the Echo's magic level (15)."
+    },
+    "enrage": {
+      "$comment": "A set alternates (RMR or MRM, from the style it would have had) once the Echo's HP is below 660 when the set before it (or the special) launched its last shot, 8 ticks before the set. Fits 186 of 187 recorded sets; the Wiki says 50%.",
+      "hitpoints": 660,
+      "decideTicksBefore": 8
+    },
+    "special": {
+      "chargeSeq": "lore_dust_devil_attack_special_01",
+      "launchSeq": "lore_dust_devil_attack_special_02",
+      "chargeTicks": 8,
+      "chargeSeqEvery": 2,
+      "chargeBar": { "id": 34, "fill": 0, "endFill": 60, "cycles": 240 },
+      "projectile": "leagues_6_vfx_lore_dust_devil_attack_special_projanim",
+      "projectileArc": { "delay": 29, "angle": 5, "progress": 180, "startHeight": 246, "endHeight": 120, "baseEnd": 6, "endPerTile": 10, "minEnd": 60 },
+      "impact": "leagues_6_vfx_lore_dust_devil_attack_special_impactanim",
+      "impactHeight": 120,
+      "launchAreaSound": { "id": 5200, "range": 15 },
+      "landSound": 5288,
+      "damage": { "perTile": 13, "fromTiles": 11, "max": 130, "min": 9 },
+      "poolsBackTicks": 14,
+      "nextSetTicks": 18
+    },
+    "overhead": {
+      "$comment": "Head icon (spriteindex) by style; the style it protects against does a quarter of its damage (recorded: protected magic peaked at 7 against 31 unprotected).",
+      "icons": { "melee": 0, "ranged": 1, "magic": 2 },
+      "protectedDamage": 0.25
+    }
   }
 }

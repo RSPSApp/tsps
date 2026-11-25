@@ -1,11 +1,13 @@
 "use strict";
 
-/** The normal Thermonuclear smoke devil, dressed by EchoBosses in the Echo appearance and Wiki
- * stats, with its NORMAL typeless smoke shot, facemask rule and movement. Echo charged attacks,
- * knockback and elemental changes are intentionally missing. No Slayer assignment is required
- * for Echo; the base 93 Slayer requirement remains.
+/** The Leagues VI Echo Thermonuclear smoke devil: the normal boss, dressed by EchoBosses in the
+ * Echo appearance and Wiki stats, in a private copy of the room, fighting as live does (rsprox.net
+ * 1161): smoke pools, sets of ranged and magic shots, the charged special and its prayer
+ * (EchoFight.ThermonuclearSmokeDevil.js). No Slayer assignment is required for Echo; the base 93
+ * Slayer requirement remains.
  */
 const Common = require("./Common.ThermonuclearSmokeDevil");
+const EchoFight = require("./EchoFight.ThermonuclearSmokeDevil");
 const BOSS = "thermonuclear-smoke-devil";
 const INSIDE_ATTRIBUTE = "thermonuclear-smoke-devil:echo-inside";
 const sessions = new Map();
@@ -13,6 +15,7 @@ const sessions = new Map();
 function end(session) {
   if (!session || session.ended) return;
   session.ended = true;
+  session.fight?.stop();
   sessions.delete(session.player);
   session.player.setAttribute(INSIDE_ATTRIBUTE, null);
   session.player.getCombat().reset();
@@ -61,7 +64,8 @@ function start(request) {
         super.postLeave(mobile, logout);
       }
     })();
-    const [x, y, z] = Common.DATA.spawnTile;
+    // Live's Echo stands on its own tile in the middle of the pools, not the normal boss's spawn.
+    const [x, y, z] = Common.DATA.echo.spawnTile;
     session.npc = Common.api.spawnNpc({ id: Common.BOSS_ID, x, y, z, owner: player, ownerOnly: true, wanderRadius: 0 });
     if (!session.npc) throw new Error("Echo Thermonuclear spawn failed");
     session.npc.__skipDefaultRespawn = true;
@@ -75,6 +79,7 @@ function start(request) {
     session.area.enter(player);
     player.moveTo(Common.location(Common.INSIDE_TILE));
     player.setAttribute(INSIDE_ATTRIBUTE, true);
+    EchoFight.begin(session, session.npc);
   } catch (error) {
     end(session);
     player.sendMessage("The Echo encounter could not be started.");
@@ -85,6 +90,8 @@ function death({ npc }) {
   const session = npc?.__thermonuclearEchoSession;
   if (!session || session.ended || session.completed) return;
   session.completed = true;
+  // Its shots in flight go with it (recorded: none lands after the death).
+  session.fight?.stop();
   Common.api.emitCustomEvent("echo-boss:completed", { player: session.player, boss: BOSS, token: session.token, npcs: [npc], location: Common.core.Projectile.centreOf(npc) });
 }
 function logout({ player }) {
@@ -99,8 +106,15 @@ function login({ player }) {
   player.setAttribute(INSIDE_ATTRIBUTE, null);
   player.moveTo(Common.location(Common.OUTSIDE_TILE));
 }
+/** The player's hits on the Echo: the style it prays against, and the last style to land. */
+function hitModify({ npc, hit }) {
+  const fight = npc?.__thermonuclearEchoSession?.fight;
+  if (!fight || fight.stopped || !hit?.getAttacker?.()?.isPlayer?.()) return;
+  fight.onHit(hit);
+}
 function attach(api) {
   api.persistAttribute(INSIDE_ATTRIBUTE);
+  api.onNpcHitModify(hitModify);
   api.onCustomEvent("echo-boss:start", start);
   api.onNpcDeath(death);
   api.onPlayerLogout(logout);
@@ -108,4 +122,4 @@ function attach(api) {
   api.onPlayerLogin(login);
   api.onServerShutdown(shutdown);
 }
-module.exports = { attach, start, end, death };
+module.exports = { attach, start, end, death, hitModify };

@@ -148,15 +148,70 @@ delay (2 ticks) reproduces the typical landing.
 - Cannon destruction (live destroys a cannon set up in the room; here setup is refused).
 - Wind-spell 20% weakness (Wiki, 2025) and the walk-under/safespot/redemption methods -
 player-side choices, no server behaviour.
-# Leagues VI Echo placeholder
+# Leagues VI Echo Thermonuclear smoke devil
 
 The matching orb opens an isolated private fight with the normal boss, which
-EchoBosses dresses in the Echo appearance and Wiki profile (1,200 HP, maximum hit 51,
-two-tick attacks) for that instance only ([echo-bosses.md](echo-bosses.md)). It deliberately
-uses the normal boss's smoke projectile, typeless prayer penetration, facemask
-rule and movement. Echo charged attacks and other Echo specials are not implemented;
-this encounter does not claim Echo combat parity. Ordinary public fights keep
-their existing task and diary rules. Echo requires base 93 Slayer but no assignment.
+EchoBosses dresses in the Echo appearance and Wiki profile (1,200 HP) for that instance only
+([echo-bosses.md](echo-bosses.md)). Ordinary public fights keep their existing task and diary
+rules. Echo requires base 93 Slayer but no assignment.
+
+## The fight, as recorded
+
+`plugins/bosses/thermonuclear/EchoFight.ThermonuclearSmokeDevil.js` runs the fight from
+[rsprox.net 1161](https://rsprox.net/download/1161) (rev 237.1, 31 Echo kills); every id, tick and
+number is in `data/thermonuclear-smoke-devil.json` (`echo`). The [Wiki](https://oldschool.runescape.wiki/w/Thermonuclear_smoke_devil_(Echo))
+describes the same fight; where the two differ the recording is followed. The Echo stands on
+(2362, 9448), in the middle of its pools, and never moves; the normal boss's attack turn does nothing
+for it. Ticks below count from its spawn.
+
+| Tick | What happens |
+| --- | --- |
+| 0 | The Echo appears (`leagues_6_lore_dust_devil_spawn_spotanim`, `lore_lust_devil_spawn`, synth 10072) |
+| 3 | Twelve smoke pools appear around it (`leagues_6_vfx_smoke_devil_pool_spawn`, synth 10071 each); from the next tick each live pool's idle loop is sent every tick |
+| 6, 18, 30, 42 | A set of three shots, one every 2 ticks: ranged, magic, ranged, magic (`lore_dust_devil_attack`; projectiles `..._attack_ranged_projanim` / `..._magic_projanim`, starttime 29, endtime 150; synth 272, and 10076 for magic) |
+| 54 | The special charges: the pools go (`..._pool_despawn`), `lore_dust_devil_attack_special_01` every 2 ticks for 8 ticks, head bar 34 filling over 240 cycles |
+| 62 | The blast: `..._attack_special_02`, area sound 5200, projectile `..._attack_special_projanim` |
+| 68 | The pools come back |
+| 72 | The next cycle's first set |
+
+**A shot** lands 5 ticks after it is fired, on the player wherever they stand then. A live pool
+under them is used up:
+
+| Pool | Prayer against the shot's style | Damage | Shown |
+| --- | --- | --- | --- |
+| live | right | none | `..._pool_shield`, spam "The power resonating here protects you from the blast.", synth 10074 |
+| live | wrong | half | the shot's impact (area sound 1418) |
+| none | right | half | the shot's impact |
+| none | wrong | whole | the shot's impact |
+
+That is 816 protected shots of 816, and 22 of 22 halved on a pool with the wrong prayer. A hit is
+48-62 (the Wiki's maximum hit is 51); about one in seven misses, either style alike (12 of the 88
+off-pool shots), so the miss is a flat chance rather than an accuracy roll on the Echo's levels
+(its magic level is 15). Shots still in flight when it dies never land.
+
+**The special** is typeless, its damage and flight fixed when it is cast: 13 a tile of Chebyshev
+distance from the Echo's footprint, 13 x (11 - tiles), at least 9 and at most 130 (recorded at 4-12
+tiles: 91, 78, 39, 26, 13, 9, 9; the Wiki's 130 underneath). Its flight is 10 cycles a tile, 60 at
+least; it lands round(cycles / 30) ticks later (2 to 4 recorded).
+
+**Its prayer**: as the special lands the Echo prays against the style of the last of the player's
+hits to land on it (head icon 1 ranged, 2 magic, 0 melee), and that style does a quarter of its
+damage (recorded: protected magic peaked at 7 against 31 unprotected).
+
+**The enrage**: once the Echo is below 660 HP when a set is decided, 8 ticks before it (when the set
+before it, or the special, fires its last shot), every set alternates, starting with the style it
+would have had: RMR or MRM. This fits 186 of the 187 recorded sets; the Wiki says 50% HP, which
+fits fewer.
+
+The Slayer facemask rule's unprotected hit (15 for this boss) no longer lowers a bigger hit, so a
+bare face takes the Echo's shots whole (`Equipment.Slayer.js`).
+
+## Not verified
+
+- Damage and flight of the special closer than 4 tiles (none recorded; 130 at most, from the Wiki).
+- The fight without a facemask (no capture).
+- Prayer reduction for melee (only ranged and magic were recorded against the Echo's prayer).
+- The enrage's one recorded exception: a set started at 630 HP stayed normal.
 
 The central Echo service owns rewards/progression and suppresses normal orb rolls.
 The adapter completes once, never respawns, and clears its actors/pending damage

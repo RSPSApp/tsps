@@ -356,7 +356,7 @@ test("the crevice only moves players by the boss room", () => {
 
 test('Echo entry keeps 93 Slayer but does not require a task, isolates players and completes once', () => {
   const events=[], spawned=[];
-  const makeCombat=()=>({reset(){},getHitQueue(){return {clear:()=>{this.cleared=true;}};}});
+  const makeCombat=()=>({reset(){},attack(){},getHitQueue(){return {clear:()=>{this.cleared=true;}};}});
   class PrivateArea {
     constructor(){this.entities=[];}
     add(npc){this.entities.push(npc);}
@@ -367,12 +367,13 @@ test('Echo entry keeps 93 Slayer but does not require a task, isolates players a
   const echoApi={
     core:{...core,PrivateArea,Projectile:{centreOf:npc=>npc}},
     registerNpcCombatMethodProvider(){assert.fail('Echo uses the normal devil\'s controller');},
-    spawnNpc(options){const combat=makeCombat();const npc={id:options.id,setFlag(){},getCombat:()=>combat,
+    spawnNpc(options){const combat=makeCombat();const npc={id:options.id,at:[options.x,options.y,options.z],setFlag(){},getCombat:()=>combat,
       performGraphic(graphic){npc.graphic=graphic.getId?.()??graphic.id;},performAnimation(animation){npc.animation=animation.getId?.()??animation.id;}};
       spawned.push(npc);return npc;},
     emitCustomEvent(name,event){events.push(name);if(name==='echo-boss:configure')event.configured=true;if(name==='echo-boss:claim')event.token='thermy-'+spawned.length;},
   };
-  const makePlayer=level=>{const combat=makeCombat();return {getSkillManager:()=>({getMaxLevel:()=>level}),setAttribute(){},getCombat:()=>combat,moveTo(){},sendMessage(){}};};
+  const makePlayer=level=>{const combat=makeCombat();return {getSkillManager:()=>({getMaxLevel:()=>level}),setAttribute(){},getCombat:()=>combat,moveTo(){},sendMessage(){},
+    getPacketSender:()=>({sendSoundEffect(){}})};};
   Common.init(echoApi);
   try {
     Echo.start({player:makePlayer(92),boss:'thermonuclear-smoke-devil'});
@@ -385,13 +386,16 @@ test('Echo entry keeps 93 Slayer but does not require a task, isolates players a
     assert.deepEqual(spawned.map(npc=>npc.id),[Common.BOSS_ID,Common.BOSS_ID],'the normal Thermonuclear smoke devil');
     assert.equal(spawned[0].graphic,core.CacheDefinitions.getSpotanimId('leagues_6_lore_dust_devil_spawn_spotanim'),'live\'s Echo spawn spotanim');
     assert.equal(spawned[0].animation,core.CacheDefinitions.getSeqId('lore_lust_devil_spawn'),'live\'s Echo spawn sequence');
+    assert.deepEqual(spawned[0].at,[2362,9448,0],'live\'s Echo tile, in the middle of its pools (rsprox.net 1161)');
     assert.notEqual(a.area,b.area);
     assert.equal(events.includes('slayer:on-task'),false);
-    const hit={attacker:{isNpc:()=>true,...spawned[0]}};
-    Typeless.thermonuclearTypeless(hit);
-    assert.equal(hit.bypassProtectionPrayer,true,'normal typeless attack retained for Echo');
+    assert.ok(spawned[0].__thermonuclearEchoSession.fight,'each Echo runs its own fight');
+    const method=new (Fight.methodClass())();
+    assert.deepEqual(method.hits(spawned[0],a),[],'the Echo has no attack-turn attack: its fight shoots');
+    assert.equal(method.attackDistance(spawned[0]),64,'and never walks to reach the player');
     Echo.death({npc:spawned[0]});Echo.death({npc:spawned[0]});
     assert.equal(events.filter(n=>n==='echo-boss:completed').length,1);
+    assert.equal(spawned[0].__thermonuclearEchoSession.fight.stopped,true,'its shots go with it');
     Echo.end(spawned[0].__thermonuclearEchoSession);
     Echo.end(spawned[1].__thermonuclearEchoSession);
     assert.equal(a.getCombat().cleared,true);

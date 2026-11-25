@@ -37,13 +37,12 @@ function owns(player, id) {
 
 function roomWon({ room, player }) {
   const name = ROOM_BOOKS[room.key];
-  if (!name) return;
+  const tile = FIXED_BOOK_TILES[room.key] ?? room.bookDropTile;
+  if (!name || !tile) return;
   const id = bookId(name);
   if (owns(player, id)) return;
   const { Item, ItemOnGroundManager } = Shared.core();
-  const tile = FIXED_BOOK_TILES[room.key] ?? room.bookDropTile;
-  const position = Shared.loc(tile);
-  ItemOnGroundManager.registerLocation(player, new Item(id, 1), position, room.area, {
+  ItemOnGroundManager.registerLocation(player, new Item(id, 1), Shared.loc(tile), room.area, {
     goesGlobal: false, despawnDelay: BOOK_DESPAWN_TICKS,
   });
 }

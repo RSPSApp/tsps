@@ -4,18 +4,22 @@ const { test } = require("node:test");
 
 const Common = require("../plugins/bosses/nightmare/Common.Nightmare");
 
-const hooks = { custom: {}, npc: {}, drop: null, condition: null };
+const hooks = { custom: {}, npc: {}, drop: null, condition: null, buttons: {} };
+const COMPONENTS = { "gravestone_retrieval:items": 602 << 16 | 3, "gravestone_retrieval:button": 602 << 16 | 6, "gravestone_retrieval:discard": 602 << 16 | 14, "toplevel_osrs_stretch:mainmodal": 161 << 16 | 16 };
 const achievementEvents = [];
 const fakeApi = {
   core: {
     Item: class { constructor(id, amount, meta) { this.id = id; this.amount = amount; this.meta = meta; } },
-    ItemDefinition: { forId: (id) => ({ isStackable: () => id === 995 }) },
+    ItemDefinition: { forId: (id) => ({ isStackable: () => id === 995, getGrandExchangeValue: () => 0 }) },
+    CacheDefinitions: { getComponentId: (name) => COMPONENTS[name], getVarpId: (name) => (name === "if1" ? 261 : 262) },
+    examineItem() {},
   },
   persistAttribute() {},
   onPlayerDeathItemDrop(handler) { hooks.drop = handler; },
   onPlayerDeathDrops(handler) { hooks.deathDrops = handler; },
   onNpcsInteraction(names, actions) { for (const name of names) hooks.npc[name] = actions; },
   onNpcDialogueCondition(handler) { hooks.condition = handler; },
+  onInterfaceActionButton(component, handler) { hooks.buttons[component] = handler; },
   onCustomEvent(name, handler) { (hooks.custom[name] ??= []).push(handler); },
   emitCustomEvent(name, event) {
     if (name === "combat-achievements:complete") achievementEvents.push(event);
@@ -35,19 +39,51 @@ const CombatAchievements = require("../plugins/bosses/nightmare/CombatAchievemen
 const Dream = require("../plugins/bosses/nightmare/Dream.Nightmare");
 const Retrieval = require("../plugins/bosses/nightmare/Retrieval.Nightmare");
 Retrieval.attachRetrieval(fakeApi);
+// The shared fee contract (Gravestones' in the game): paid from the inventory here.
+fakeApi.onCustomEvent("gravestones:pay-fee", (request) => {
+  const { coins } = request.player;
+  if (coins.amount < request.amount) return;
+  coins.amount -= request.amount;
+  request.source = "inventory";
+  request.message = `Payment has been taken from your inventory: ${request.amount.toLocaleString("en-GB")} x Coins`;
+});
+
+/** Collect on a keeper, then the Item Retrieval Service's button twice: pay, then take. */
+function collectAll(player, name, id) {
+  hooks.npc[name].Collect({ player, definition: { getName: () => name, getId: () => id } });
+  assert.equal(player.open.has(602), true, "Collect opens the Item Retrieval Service (602)");
+  hooks.buttons[COMPONENTS["gravestone_retrieval:button"]]({ player });
+  hooks.buttons[COMPONENTS["gravestone_retrieval:button"]]({ player });
+}
 
 function fakePlayer() {
   const store = new Map();
   const coins = { amount: 100_000 };
   const added = [];
   const messages = [];
+  const open = new Set();
+  const configs = new Map();
   return {
     added,
     messages,
     coins,
+    open,
+    configs,
+    getPacketSender: () => ({
+      sendInterfaceRemoval() { open.clear(); },
+      sendConfig(id, value) { configs.set(id, value); },
+      sendVarbit() {},
+      sendInventory() {},
+      sendInterfaceScript() {},
+      sendSubInterface(_parent, id) { open.add(id); },
+      sendInterfaceFlagsRange() {},
+      sendString() {},
+      isSubInterfaceOpen: (id) => open.has(id),
+    }),
     getAttribute: (key) => store.get(key),
     setAttribute: (key, value) => store.set(key, value),
     sendMessage: (text) => messages.push(text),
+    getLocation: () => ({ clone() { return this; } }),
     getInventory: () => ({
       getAmount: () => coins.amount,
       delete: (_id, amount) => { coins.amount -= amount; },
@@ -55,18 +91,22 @@ function fakePlayer() {
       getFreeSlots: () => 28,
       getAddableAmount: (item) => item.amount,
       add: (item) => added.push(item.meta == null ? [item.id, item.amount] : [item.id, item.amount, item.meta]),
+      refreshItems() {},
     }),
   };
 }
 
-test("Phosani's three phases alternate the Wiki's A and B special sets", () => {
-  const isA = (set) => set === 2 || set === 4;
+test("Phosani's three phases are consecutive steps of the captured form cycle 9416 -> 11153 -> 9418 -> 9417", () => {
+  const forms = Common.data.npcs.phosani.sets;
+  const cycle = [9416, 11153, 9418, 9417];
   for (let i = 0; i < 50; i++) {
     const sets = Specials.phosaniSets();
     assert.equal(sets.length, 3);
-    assert.equal(isA(sets[0]), isA(sets[2]));
-    assert.notEqual(isA(sets[0]), isA(sets[1]));
+    const ids = sets.map((set) => forms[String(set)]);
+    const start = cycle.indexOf(ids[0]);
+    assert.deepEqual(ids, [0, 1, 2].map((k) => cycle[(start + k) % 4]));
     for (const set of sets) assert.ok(Common.data.specials.phosaniSets[String(set)]);
+    for (const set of sets) assert.deepEqual([...Common.data.specials.phosaniOrder[String(set)]].sort(), [...Common.data.specials.phosaniSets[String(set)]].sort());
   }
 });
 
@@ -78,14 +118,16 @@ test("each Phosani set holds a spawn, a special paired with her claws, and curse
   }
 });
 
-test("her curse shuffles what each protection stops, the other way round in Phosani's dream", () => {
+test("her curse shuffles what each protection stops, the same way in Phosani's dream (rsprox: magic into Melee, ranged into Magic, 0 damage)", () => {
   const player = {};
   const normal = { phosani: false, curse: new Map([[player, { attacks: 5 }]]) };
   const phosani = { phosani: true, curse: new Map([[player, { attacks: 5 }]]) };
   assert.equal(Specials.blockedBy(normal, player, "magic"), "ranged");
   assert.equal(Specials.blockedBy(normal, player, "ranged"), "melee");
   assert.equal(Specials.blockedBy(normal, player, "melee"), "magic");
-  assert.equal(Specials.blockedBy(phosani, player, "melee"), "ranged");
+  assert.equal(Specials.blockedBy(phosani, player, "melee"), "magic");
+  assert.equal(Specials.blockedBy(phosani, player, "magic"), "ranged");
+  assert.equal(Specials.blockedBy(phosani, player, "ranged"), "melee");
   assert.equal(Specials.blockedBy({ phosani: false, curse: new Map() }, player, "magic"), "magic");
 });
 
@@ -212,10 +254,11 @@ test("a death in a dream leaves the items with its keeper, for 60,000 coins", ()
   assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE).holder, "shura");
   assert.equal(hooks.condition({ player, definition: { getName: () => "Shura" }, text: "If the player has items in Shura's collection:" }), true);
   assert.equal(hooks.condition({ player, definition: { getName: () => "Sister Senga" }, text: "If the player has items in Sister Senga's collection:" }), false);
-  hooks.npc.Shura.Collect({ player, definition: { getName: () => "Shura", getId: () => 9414 } });
+  collectAll(player, "Shura", 9414);
   assert.deepEqual(player.added, [[4151, 1]]);
   assert.equal(player.coins.amount, 40_000);
   assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE), null);
+  assert.equal(player.configs.get(261), -1, "if1 clears once Shura holds nothing");
 });
 
 test("a second dream death loses the first death's items: the keeper holds only the new death's, fee due again, meta kept", () => {
@@ -234,7 +277,7 @@ test("a second dream death loses the first death's items: the keeper holds only 
   }
   assert.deepEqual(player.messages, ["Your items left with Shura have been lost."], "said once, for the earlier lot");
   assert.equal(player.getAttribute(Common.HELD_ITEMS_ATTRIBUTE).paid, false);
-  hooks.npc.Shura.Collect({ player, definition: { getName: () => "Shura", getId: () => 9414 } });
+  collectAll(player, "Shura", 9414);
   assert.equal(player.coins.amount, 40_000, "the fee is taken for the new lot");
   assert.deepEqual(player.added, [[6585, 1, { charges: 30000 }], [4151, 1]], "the same death's items stay together; the first death's food is gone");
 });
@@ -276,6 +319,7 @@ test("Sister Senga's introduction never leaves an action mid-chain, and sets its
   };
   fakeApi.onObjectInteraction = (name, actions) => { objects[name] = actions; };
   fakeApi.onPlayerLogin = () => {};
+  fakeApi.onNpcDialogueVariant = () => {};
   Sanctuary.attachSanctuary(fakeApi);
   objects["Pool of Nightmares"]["Drink-from"]({ player });
   for (let i = 0; i < chains.length; i++) {
@@ -549,12 +593,12 @@ test("re-infection restarts the 25-tick duration and skips the yawn due on that 
   assert.equal(Specials.drowsyDelay(fight, player), 1);
   until(45);
   assert.equal(Specials.drowsyDelay(fight, player), 0);
-  assert.deepEqual(lines(), [[6, "game", SPORE_INFECTED], [45, "game", SPORE_WORN]]);
+  assert.deepEqual(lines(), [[6, "game", SPORE_INFECTED], [20, "game", SPORE_REINFECTED], [45, "game", SPORE_WORN]]);
   assert.deepEqual(packets.filter(([, kind]) => kind === "overhead"),
     [8, 14, 22, 28, 34, 40].map((tick) => [tick, "overhead", "*yawn*"]));
 });
 
-test("re-infection sends its own game message", { skip: "The re-infection message is deferred from this slice." }, (t) => {
+test("re-infection sends its own game message (rsprox 1764 11483)", (t) => {
   const { fight, addPlayer, until, lines } = sporeFight(t);
   const player = addPlayer();
   Specials.makeDrowsy(fight, player);
@@ -658,7 +702,7 @@ test("Phosani's death ends a re-infection silently without clearing its achievem
   fight.dying();
   assert.equal(Specials.drowsyDelay(fight, player), 0);
   until(42);
-  assert.deepEqual(lines(), [[0, "game", SPORE_INFECTED]]);
+  assert.deepEqual(lines(), [[0, "game", SPORE_INFECTED], [14, "game", SPORE_REINFECTED]], "no worn-off line after her death");
   assert.deepEqual(packets.filter(([, kind]) => kind === "overhead"),
     [2, 8, 16, 22].map((tick) => [tick, "overhead", "*yawn*"]));
   CombatAchievements.judge(fight, player);

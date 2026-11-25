@@ -1,8 +1,10 @@
 /**
  * Parasites, as captured: her animation, two ticks later the parasite flies at the player, three
  * after that it takes hold (the message, and varbit 10151 turns the hitpoints orb pink), and
- * twenty ticks later it bursts out: 40-52 damage fully grown, 4-9 if a Sanfew serum or Relicym's
- * balm weakened it first, with its own message and the parasite rising where the player stands.
+ * twenty ticks later it bursts out (twenty-one if weakened: 84 of 84 captured, 552 20798-20819):
+ * 40-52 damage fully grown, 4-9 if a Sanfew serum or Relicym's balm weakened it first, with its own
+ * message, the player's burst animation (8557, 1875 14770) and the parasite rising where the player
+ * stands. It first acts three ticks after rising (six in Phosani's dream), then every 4.
  *
  * Then it helps her (Wiki): every 4 ticks it restores 31-50 of her shield, or takes as much charge
  * from the least charged totem; with neither to help, it attacks the player, ranged first, then
@@ -36,7 +38,7 @@ function start(fight) {
 function infect(fight, player) {
   const { parasite, varbits } = Common.data;
   if (fight.parasites.has(player)) return;
-  fight.parasites.set(player, { burstAt: fight.tick + parasite.burstTicks, weak: false });
+  fight.parasites.set(player, { infectedAt: fight.tick, burstAt: fight.tick + parasite.burstTicks, weak: false });
   player.sendMessage(parasite.infected);
   player.getPacketSender().sendVarbit(varbits.parasite, 1);
 }
@@ -46,6 +48,7 @@ function weaken(fight, player) {
   const state = fight.parasites.get(player);
   if (!state || state.weak) return;
   state.weak = true;
+  state.burstAt = state.infectedAt + Common.data.parasite.weakBurstTicks;
   player.getPacketSender().sendVarbit(Common.data.varbits.parasite, 0);
   player.sendMessage(Common.data.parasite.weakened);
 }
@@ -59,6 +62,7 @@ function burst(fight, player, state) {
     ? (fight.phosani ? parasite.burstDamage.phosaniWeak : parasite.burstDamage.weak)
     : (fight.phosani ? parasite.burstDamage.phosaniFull : parasite.burstDamage.full);
   player.sendMessage(state.weak ? parasite.burstWeak : parasite.burstFull);
+  player.performAnimation(Common.animation(parasite.burstAnim));
   player.performGraphic(Common.graphic(state.weak ? parasite.vomitWeak : parasite.vomit));
   Common.sounds(player, parasite.burstSounds);
   Common.damage(player, Common.randomInt(...range), fight, state.weak);
@@ -67,7 +71,8 @@ function burst(fight, player, state) {
   const npc = fight.dream.spawn(id, [...fight.dream.arenaTile(player.getLocation()), Common.data.arena.plane]);
   if (!npc) return;
   npc.__nightmareFight = fight;
-  npc.__nightmareParasite = { weak: state.weak, next: fight.tick + parasite.speed, ranged: true, player };
+  const first = fight.phosani ? parasite.phosaniFirstTicks : parasite.firstTicks;
+  npc.__nightmareParasite = { weak: state.weak, next: fight.tick + first, ranged: true, player };
   npc.performAnimation(Common.animation(parasite.spawnAnim));
   fight.minions.add(npc);
 }

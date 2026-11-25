@@ -84,11 +84,18 @@ spinolyp magic uses the ranged-defence roll (Wiki + Mod Ash).
 wording, uncaptured); Private is answered as not yet available (follow-up);
 Peek counts the public lair ("...no adventurers inside." when empty, uncaptured
 wording following the other bosses).
-- **Out:** the Climb-up ladders (10229 at (2899, 4449) and (2899, 4385)) walk back
-to (1910, 4367). No capture of the exit exists; the destination mirrors the
-entrance side.
+- **Out:** Climb-up on either lair ladder (10229 at (2899, 4449) and (2899, 4385))
+lands at (1912, 4367, 0), east of the Kings' ladder, on the click tick with no
+climbing animation or game message. The two exits were recorded with the normal
+kings in Leagues V, at ticks 3814 and 3821. The Kings' ladder can be used again
+from that landing tile. [RSProx 227/1856](https://rsprox.net/download/1856)
 - **::teleports** lands by the ladder room at (1908, 4367), so every entry starts
 outside like the other boss teleports.
+
+### Estimates
+
+- The Echo encounter's return, logout and grave tile remains (1910, 4367, 0).
+The ladder recording covers the normal lairs.
 
 ## The fight
 

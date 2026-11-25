@@ -55,6 +55,7 @@ class Fight {
     if (this.stunnedUntil) {
       if (this.tick < this.stunnedUntil) return;
       this.stunnedUntil = 0;
+      this.endStunPose();
       if (!this.awakened) this.boss.performAnimation(Common.core.Animation.DEFAULT_RESET_ANIMATION);
       this.nextAttack = this.tick + Model.volley(this.tier, this.awakened).interval;
     }
@@ -153,11 +154,21 @@ class Fight {
     const epoch = this.volleyEpoch;
     this.at(reset, () => {
       if (!this.alive() || this.volleyEpoch !== epoch || !(this.stunnedUntil > this.tick) || this.special) return;
+      // rsprox 227/00100 ticks 8243/8269/8295/8321: sequence reset, 2379 at delay 30, and the
+      // ready animation set to the stun idle (10294) until the boss attacks again.
       this.boss.performAnimation(Common.core.Animation.DEFAULT_RESET_ANIMATION);
-      this.boss.performGraphic(Common.graphic("stunImpact"));
+      this.boss.performGraphic(Common.graphic("stunImpact", Common.data.normalStun.graphicDelay));
+      this.boss.setBaseAnimations({ idle: Common.ids.seqs.stunIdle });
+      this.stunPose = true;
     });
     this.player.getCombat().setAttackDelay(0);
     return true;
+  }
+  /** The stun idle is cleared when the stun ends, however it ends (rsprox 227/00100 tick 8251). */
+  endStunPose() {
+    if (!this.stunPose) return;
+    this.stunPose = false;
+    if (this.boss?.isRegistered()) this.boss.setBaseAnimations(null);
   }
   beginSpecial() {
     if (!this.alive() || this.enraged) return;
@@ -171,6 +182,7 @@ class Fight {
   }
   enterEnrage() {
     this.enraged = true; this.stunnedUntil = 0; this.shots = 0;
+    this.endStunPose();
     this.volleyEpoch++;
     // Smoke already in progress must resolve. Other outstanding impacts remain in flight.
     if (this.special !== "smoke") this.special = null;
@@ -190,6 +202,7 @@ class Fight {
     if (!this.alive() || !taken || !this.stunnedUntil) return;
     if (rear || this.stunHealth - this.boss.getHitpoints() >= this.stats.hitpoints * 0.25) {
       this.stunnedUntil = 0; this.tier = Model.resetTier(this.stuns); this.shots = 0;
+      this.endStunPose();
       this.beginSpecial();
     }
   }
@@ -200,13 +213,13 @@ class Fight {
     this.over = true;
     Achievements.end(this);
     // Rubble stays through the six-tick death animation; Rewards crumbles it after the kill.
-    this.events = []; this.cancelDamage(); this.hazards.clearActors();
+    this.events = []; this.cancelDamage(); this.hazards.clearActors(); this.endStunPose();
     Common.areaSound(this.player, this.session.area, Common.data.arena.centre, "death");
     Common.api.emitCustomEvent("boss-hud:hide", { player: this.player, fade: false, afterTicks: 0 });
   }
   stop() {
     if (this.stopped) return;
-    this.stopped = true; this.events = []; this.cancelDamage(); this.hazards.clear();
+    this.stopped = true; this.events = []; this.cancelDamage(); this.hazards.clear(); this.endStunPose();
     Achievements.end(this);
     if (this.boss?.isRegistered()) {
       if (this.boss.getPrivateArea() === this.session.area) this.session.area.remove(this.boss);

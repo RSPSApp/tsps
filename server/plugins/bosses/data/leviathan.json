@@ -16,7 +16,7 @@
     { "npc": "tailRing3", "tile": [2096,6389,0], "face": "SOUTH_WEST", "bite": "tailBite3" }
   ],
   "roar": { "flightTicks": 7, "graphicDelayCycles": 50, "debrisRoars": 2, "fallingBreaks": { "min": 11, "max": 30, "delays": [20, 50, 80] }, "cameraShake": { "slots": [0, 1, 2], "min": 5, "max": 8 }, "tellRegions": { "lightning": [[2072,6371,2074,6373], [2088,6371,2090,6373]], "smoke": [[2081,6364,2083,6366], [2080,6378,2082,6380]] } },
-  "normalStun": { "messageTicks": 2, "resetTicks": 3, "message": "<col=229628>Your spell stuns the Leviathan!</col>" },
+  "normalStun": { "messageTicks": 2, "resetTicks": 3, "graphicDelay": 30,"message": "<col=229628>Your spell stuns the Leviathan!</col>" },
   "rubbleCrumbleTicks": 1,
   "sounds": { "spawn": 7037, "magicLaunch": 7030, "rangedLaunch": 7041, "meleeLaunch": 7040, "roar": 7043, "roarDelay": 5, "roarRumble": 1678, "roarRumbleLoops": 5, "bossHit": 7031, "death": 7034, "areaRadius": 15 },
   "normalLightning": { "loopStartTicks": 3, "firstWarningTicks": 5, "pulses": 35, "sideOrbs": 5, "sideIntervalTicks": 6, "sideFlightTicks": 8, "endAnimationTicks": 42, "endTicks": 44 },

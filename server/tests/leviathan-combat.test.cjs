@@ -279,20 +279,40 @@ test('shadow stuns are spell-ID based, front cap and ranged rear punishment lead
 });
 
 test('a shadow stun resets the animation with spotanim 2379 a tick later and releases fifteen ticks after that', t => {
-  const h = H.harness(t), graphics = [];
+  const h = H.harness(t), graphics = [], poses = [];
   h.fight.nextAttack = Infinity;
-  t.mock.method(h.fight.boss, 'performGraphic', graphic => graphics.push(graphic.getId()));
+  t.mock.method(h.fight.boss, 'performGraphic', graphic => graphics.push([graphic.getId(), graphic.getDelay()]));
+  t.mock.method(h.fight.boss, 'setBaseAnimations', sequences => { poses.push(sequences); return h.fight.boss; });
   h.fight.stun();
   assert.notEqual(h.fight.boss.getAnimation()?.getId(), 10282, 'no roar or stun-idle sequence: rsprox 1703/00100');
   assert.deepEqual(graphics, []);
+  assert.deepEqual(poses, []);
   h.step();
+  // rsprox 227/00100 tick 8243: sequence reset, 2379 at delay 30, ready animation 10294 (stun idle).
   assert.equal(h.fight.boss.getAnimation().getId(), 65535);
-  assert.deepEqual(graphics, [2379]);
+  assert.deepEqual(graphics, [[2379, 30]]);
+  assert.deepEqual(poses, [{ idle: 10294 }]);
   h.step(14);
   assert.equal(h.fight.stunnedUntil > h.fight.tick, true);
+  assert.equal(poses.length, 1);
   h.step();
   assert.equal(h.fight.stunnedUntil, 0);
   assert.equal(h.fight.boss.getAnimation().getId(), 65535);
+  assert.deepEqual(poses, [{ idle: 10294 }, null], 'the stun idle is cleared when the stun ends');
+});
+
+test('a stun broken by a rear hit or by enrage clears the stun idle', t => {
+  for (const end of ['rear', 'enrage']) {
+    const h = H.harness(t), poses = [];
+    t.mock.method(Math, 'random', () => 0);
+    h.fight.nextAttack = Infinity;
+    t.mock.method(h.fight.boss, 'setBaseAnimations', sequences => { poses.push(sequences); return h.fight.boss; });
+    h.fight.stun();
+    h.step();
+    assert.deepEqual(poses, [{ idle: 10294 }]);
+    if (end === 'rear') h.fight.afterDamage(1, true); else h.fight.enterEnrage();
+    assert.deepEqual(poses, [{ idle: 10294 }, null], end);
+  }
 });
 
 test('a rear punishment before the stun reaction ends cannot be overwritten by its queued idle', t => {

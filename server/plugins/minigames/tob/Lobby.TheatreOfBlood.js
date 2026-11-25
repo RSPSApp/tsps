@@ -23,6 +23,7 @@ const Stats = require("./Stats.TheatreOfBlood");
 const { INTERFACE, SCRIPT, VARP, VARBIT } = Shared;
 const { RIGHTS } = Parties;
 const MESSAGE_BOX = 229;
+const CONFIRMATION_MENU = 219;
 const USED_NOTICE_BOARD_ATTRIBUTE = "tob:used-notice-board";
 
 const uid = (group, component) => (group << 16) | component;
@@ -48,6 +49,10 @@ const INFO_BUTTON = {
   BACK: 0, REFRESH: 1, UNBLOCK: 2, SIZE: 3, COMBAT: 4, PRIMARY: 5, MODE: 6,
   MEMBER_FIRST: 7, ACCEPT_FIRST: 12, DECLINE_FIRST: 22,
 };
+// 237/1162 tick 15849: an up and down button for each of the five member rows.
+const INFO_ARROW_FIRST = 63;
+const INFO_ARROW_UIDS = Array.from({ length: Shared.MAX_PARTY_SIZE * 2 },
+  (_, index) => uid(INTERFACE.PARTY_INFORMATION, INFO_ARROW_FIRST + index));
 const OP1 = 1 << 1;
 const MYSTERIOUS_STRANGER_SHOP = 1240;
 const ATTR = {
@@ -61,6 +66,7 @@ const HARD_LOCKED = "Everyone in your party must have completed the Theatre of B
 /** The name the Grouping plugin knows the theatre by. */
 const GROUPING_ACTIVITY = "Theatre of Blood";
 const pendingApplicantHud = new WeakMap();
+const pendingPartyHandover = new WeakMap();
 
 // ---------------------------------------------------------------- the HUD in Ver Sinhaza
 
@@ -76,10 +82,10 @@ function refreshHud(player) {
   sender.sendString(lines.join("<br>"), uid(INTERFACE.PARTY_HUD, 12));
 }
 
-function refreshParty(party) {
+function refreshParty(party, deferHudFor = null) {
   if (!party) return;
   for (const member of party.members) {
-    refreshHud(member);
+    if (member !== deferHudFor) refreshHud(member);
     if (isViewing(member, party)) openInformation(member, party);
   }
   for (const applicant of party.applicants) {
@@ -201,6 +207,8 @@ function openInformation(player, party) {
   const sender = player.getPacketSender();
   player.setAttribute(ATTR.VIEWING, party.id);
   sender.sendInterface(INTERFACE.PARTY_INFORMATION);
+  sender.sendClientScript(SCRIPT.PARTY_ARROWS);
+  for (const arrow of INFO_ARROW_UIDS) sender.sendInterfaceFlagsRange(arrow, -1, -1, OP1);
   const rights = party.rightsOf(player);
   for (let index = 0; index < Shared.MAX_PARTY_SIZE; index++) {
     const member = party.members[index];
@@ -413,6 +421,76 @@ function clickInformation(event) {
     // The client waits on a pause button until the interface is redrawn.
     openInformation(player, party);
   }
+}
+
+function refreshPartyOrder(party, deferHudFor = null) {
+  refreshParty(party, deferHudFor);
+  for (const viewer of Shared.core().World.getPlayers()) {
+    if (viewer.getInterfaceId() === INTERFACE.PARTY_INFORMATION && isViewing(viewer, party)
+      && !party.has(viewer) && !party.applicants.includes(viewer)) {
+      openInformation(viewer, party);
+    }
+  }
+}
+
+function finishPartyHandover(player, request, accepted) {
+  if (pendingPartyHandover.get(player) !== request) return;
+  pendingPartyHandover.delete(player);
+  const { party, member } = request;
+  if (viewedParty(player) !== party || !party.isLeader(player) || !Shared.inVerSinhaza(player.getLocation())) return;
+  if (!accepted || party.raid || party.members[1] !== member) {
+    openInformation(player, party);
+    return;
+  }
+
+  party.swap(0, 1);
+  refreshPartyOrder(party, player);
+  // 237/1162 ticks 15860–15861: the old leader's details redraw before their lobby HUD.
+  Shared.later(player, 1, () => {
+    if (Parties.partyOf(player) === party && !party.raid) refreshHud(player);
+  });
+}
+
+function partyHandoverClosed({ player, interfaceId }) {
+  if (interfaceId !== CONFIRMATION_MENU) return;
+  const request = pendingPartyHandover.get(player);
+  if (!request) return;
+  // The prompt closes before its choice callback. Handle dismissal only if no choice consumed it.
+  Shared.later(player, 1, () => {
+    if (pendingPartyHandover.get(player) !== request) return;
+    if (player.getInterfaceId() >= 0 || player.getPacketSender().getChatboxGroupId() >= 0) {
+      pendingPartyHandover.delete(player);
+      return;
+    }
+    finishPartyHandover(player, request, false);
+  });
+}
+
+function clickPartyArrow(event) {
+  const { player, buttonId } = event;
+  if (player.getInterfaceId() !== INTERFACE.PARTY_INFORMATION || (event.opId ?? event.action) !== 1) return;
+  const party = viewedParty(player);
+  if (!party) return;
+  event.handled = true;
+
+  const arrow = (buttonId & 0xffff) - INFO_ARROW_FIRST;
+  const from = Math.floor(arrow / 2);
+  const to = from + (arrow % 2 === 0 ? -1 : 1);
+  if (!party.isLeader(player) || party.raid || !party.members[from] || !party.members[to]) {
+    openInformation(player, party);
+    return;
+  }
+  if (from === 0 || to === 0) {
+    const request = { party, member: party.members[1] };
+    player.getPacketSender().sendInterfaceRemoval();
+    pendingPartyHandover.set(player, request);
+    Shared.options(player, "Continue?",
+      "Yes", () => finishPartyHandover(player, request, true),
+      "No", () => finishPartyHandover(player, request, false));
+    return;
+  }
+  party.swap(from, to);
+  refreshPartyOrder(party);
 }
 
 /** A pause button on either interface: its parent and the child resumed. */
@@ -670,6 +748,8 @@ module.exports = function registerTheatreLobby(api) {
   Shared.onObject(api, Shared.OBJECT.ENTRANCE, useEntrance);
   api.onInterfaceActionClick(resumeButton);
   api.onInterfaceActionButton(LIST_ROW_UIDS, selectRow);
+  api.onInterfaceActionButton(INFO_ARROW_UIDS, clickPartyArrow);
+  api.onCustomEvent("interface:closed", partyHandoverClosed);
 };
 
 Object.assign(module.exports, {

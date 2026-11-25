@@ -1156,6 +1156,38 @@ test('Volatility delays the chest and Solarflare and leaves Sol’s gib for thre
   assert.equal(gib.isRegistered(), false, '237/1150 t15003: gib removed at +12');
 });
 
+test('leaving a run cancels Sol’s gib while its spawn is still queued', (t) => {
+  const { run, sol } = solRun('Queued gib');
+  const api = Shared.api();
+  const spawnNpc = api.spawnNpc;
+  const removeNpc = api.removeNpc;
+  const queue = api.core.World.getAddNPCQueue();
+  const gibId = 12832;
+  let gib;
+  t.after(() => {
+    run.end('logout');
+    if (gib) PluginManager.removeNpc(gib);
+  });
+  t.mock.method(api, 'spawnNpc', (options) => {
+    const npc = spawnNpc(options);
+    if (options.id === gibId) {
+      gib = npc;
+      gib.registered = false;
+      queue.push(gib);
+    }
+    return npc;
+  });
+  t.mock.method(api, 'removeNpc', (npc) => npc === gib ? PluginManager.removeNpc(npc) : removeNpc(npc));
+  run.modifiers.add(Modifiers.byId('volatility').key);
+
+  sol.hp = 0;
+  run.tick();
+  ticks(9);
+  assert.ok(gib && queue.includes(gib) && !gib.isRegistered(), 'the gib is pending registration');
+  run.end('logout');
+  assert.equal(queue.includes(gib), false, 'the ended run leaves no queued gib');
+});
+
 test('dying after Sol falls cancels the pending victory rewards', (t) => {
   const { player, run, sol } = solRun('Dying victor');
   t.after(() => run.end('death'));

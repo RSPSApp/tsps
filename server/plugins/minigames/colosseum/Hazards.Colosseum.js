@@ -331,7 +331,7 @@ function removeSolGib(run) {
   if (!gib) return;
   run.solGib = null;
   run.area.detach(gib);
-  if (gib.isRegistered()) Shared.api().removeNpc(gib);
+  Shared.api().removeNpc(gib);
 }
 
 /** An enemy has died: its totem goes, and under Volatility it explodes. */

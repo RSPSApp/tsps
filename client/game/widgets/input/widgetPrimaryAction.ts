@@ -114,7 +114,9 @@ export function createPrimaryWidgetActionResolver(
                 hasSelectedSpell: ClientState.isSpellSelected,
                 hasSelectedItem: ClientState.isItemSelected === 1,
             };
-            const chosen = chooseDefaultMenuEntry(normalized, state);
+            const chosen = menuWidget.examineAsOperation === true
+                ? normalized.find(e => hasNativeWidgetOperation(e) && String(e.option).toLowerCase() === "examine") ?? chooseDefaultMenuEntry(normalized, state)
+                : chooseDefaultMenuEntry(normalized, state);
             opensMenu =
                 !state.hasSelectedSpell &&
                 !state.hasSelectedItem &&
@@ -124,7 +126,7 @@ export function createPrimaryWidgetActionResolver(
             const lower = String(chosen?.option || "").toLowerCase();
             const isNonAction =
                 lower === "cancel" ||
-                lower === "examine" ||
+                (lower === "examine" && menuWidget.examineAsOperation !== true) ||
                 (lower === "inspect" && !hasNativeWidgetOperation(chosen)) ||
                 lower === "walk here";
             if (chosen && !isNonAction) {

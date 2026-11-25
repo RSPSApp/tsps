@@ -24,8 +24,15 @@ function limitOf(query) {
   return Number.isInteger(limit) && limit > 0 && limit <= 100 ? limit : 20;
 }
 
+function editorTools(api) {
+  const event = { tools: [] };
+  api.emitCustomEvent?.("cache-editor:tools", event);
+  return { tools: event.tools };
+}
+
 function register(api) {
   const { core } = api;
+  api.registerContentEndpoint("cache-editor-tools", editorTools.bind(null, api));
   // Apply the overlay document once at startup, so an authored row is live on the next boot without
   // an encoder or a cache repack. Load failures are reported, never silently ignored.
   const root = path.resolve(__dirname, "../../..");

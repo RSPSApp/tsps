@@ -34,10 +34,10 @@ const FLAX_ATTRIBUTE = "kandarin-diary:flax-picked";
 let api;
 
 function inBox(location, box) {
-  return location
-    && location.getX() >= box.minX && location.getX() <= box.maxX
-    && location.getY() >= box.minY && location.getY() <= box.maxY
-    && location.getZ() === box.z;
+  const x = location?.getX?.() ?? location?.x;
+  const y = location?.getY?.() ?? location?.y;
+  const z = location?.getZ?.() ?? location?.z;
+  return x >= box.minX && x <= box.maxX && y >= box.minY && y <= box.maxY && z === box.z;
 }
 
 function credit(player, task) {
@@ -133,7 +133,8 @@ function npcDeath({ killer, npc }) {
   }
 }
 
-function playOrgan({ player, object }) {
+function playOrgan({ player, object, option }) {
+  if (option !== "play" || object.getDefinition().getName() !== "Church organ") return;
   if (inBox(object.getLocation(), SEERS_ORGAN)) credit(player, "play-the-organ-in-seers-church");
 }
 
@@ -165,7 +166,7 @@ module.exports = {
     api.onCustomEvent("fairy-rings:travelled", fairyRingTravelled);
     api.onCustomEvent("spell:teleport-arrival", teleportArrival);
     api.onNpcDeath(npcDeath);
-    api.onObjectInteraction("Church organ", { Play: playOrgan });
+    api.onCustomEvent("object:operated", playOrgan);
     api.onNpcInteraction(SHERLOCK, { "Talk-to": talkToSherlock });
     api.onCustomEvent("treasure-trails:npc-talked-to", clueTalk);
   },

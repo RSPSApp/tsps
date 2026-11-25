@@ -1,3 +1,4 @@
+import { ActorPresentation } from '../../model/ActorPresentation';
 import { CrossFloor } from "../../CrossFloor";
 import { CombatPosition } from "./CombatPosition";
 import { NpcCombatSounds } from "../../definition/NpcCombatSounds";
@@ -155,7 +156,7 @@ export class CombatFactory {
             for (const resolver of PluginManager.getCombatMethodResolvers()) {
                 const resolved = resolver.resolve(attacker);
                 if (resolved) {
-                    return resolved;
+                    return player.isSpecialActivated()?getPlayerCombatSpecial(player)?.resolveProvidedMethod(resolved)??resolved:resolved;
                 }
             }
 
@@ -1079,6 +1080,7 @@ export class CombatFactory {
     }
 
     public static executeHit(qHit: PendingHit) {
+        if(qHit&&!ActorPresentation.inScope(qHit))return ActorPresentation.run(qHit,()=>CombatFactory.executeHit(qHit));
         if (!qHit) {
             return;
         }
@@ -1146,7 +1148,7 @@ export class CombatFactory {
             const sender = playerTarget.getPacketSender();
             if (playerTarget.getRights() != PlayerRights.DEVELOPER && (playerTarget.busy()
                 || sender.hasInterruptibleInterface() || sender.hasInputPrompt())) {
-                sender.sendInterfaceRemoval();
+                sender.sendInterfaceRemoval(true);
             }
 
             // Prayer effects.
@@ -1417,14 +1419,14 @@ export class CombatFactory {
         }
     }
 
-    public static disableProtectionPrayers(player: Player) {
+    public static disableProtectionPrayers(player: Player, durationSeconds = 5) {
         // Player has already been prayer-disabled
         if (!player.getCombat().getPrayerBlockTimer().finished()) {
             return;
         }
         // OSRS: the dragon scimitar's Sever blocks protection prayers for 8
         // ticks (4.8s). The shared timer counts whole seconds, so use 5.
-        player.getCombat().getPrayerBlockTimer().start(5);
+        player.getCombat().getPrayerBlockTimer().start(Math.max(1, Math.ceil(durationSeconds)));
         PrayerHandler.resetPrayers(player, PrayerHandler.PROTECTION_PRAYERS);
         player.sendMessage("You have been disabled and can no longer use protection prayers.");
     }

@@ -1,0 +1,48 @@
+.paint-tab{font:13px "Trebuchet MS",Arial,sans-serif;color:var(--text,#ece2c6);min-width:0}
+.paint-tab h2,.paint-tab h3{font-family:Georgia,serif;color:var(--gold,#d9bd76)}
+.paint-tab .paint-section{border-bottom:1px solid #63533870;padding:4px 0 10px}
+.paint-tab .paint-section h3{margin:8px 0}
+.paint-tab .paint-note{font-size:12px;color:var(--muted,#b5a68a);line-height:1.45;margin:7px 0}
+.paint-tab .paint-field{display:grid;gap:4px;margin:7px 0;font-size:12px}
+.paint-tab .paint-field>input,.paint-tab .paint-field>select{width:100%;min-width:0}
+.paint-tab .paint-check{display:flex;align-items:center;gap:5px;margin:7px 0;font-size:12px;line-height:1.35}
+.paint-tab .paint-check input{flex-shrink:0}
+.paint-tab .paint-tool-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+.paint-tab .paint-tool-grid button{text-align:center!important;min-height:30px;white-space:normal}
+.paint-tab .paint-colour-row{display:flex;align-items:center;gap:5px;margin:9px 0}
+.paint-tab .paint-colour-row input[type=color]{width:42px;height:31px;flex-shrink:0}
+.paint-tab .paint-colour-row input[type=text]{width:75px;flex:1;min-width:55px}
+.paint-tab .paint-colour-row button{font-size:12px;padding:5px}
+.paint-tab .paint-swatches{display:flex;flex-wrap:wrap;gap:5px;margin:7px 0}
+.paint-tab .paint-swatch{display:block;width:26px;height:26px;min-height:26px;padding:0!important;flex-shrink:0;background:var(--paint-colour)!important;border:2px solid #8f7c53;border-radius:2px}
+.paint-tab .paint-swatch:hover,.paint-tab .paint-swatch[aria-pressed=true]{border-color:#ffe9ae;outline:1px solid #17130d;outline-offset:-4px}
+.paint-tab .paint-small-label{width:100%;font-size:11px;color:var(--muted,#b5a68a)}
+.paint-tab .paint-wide{width:100%;margin:4px 0;white-space:normal;text-align:center!important}
+.paint-tab .paint-presets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+.paint-tab .paint-preset{display:flex;align-items:center;justify-content:space-between;gap:5px;min-height:33px;padding:5px 6px;min-width:0;font-size:12px}
+.paint-tab .paint-palette-strip{display:flex;gap:1px;flex-shrink:0}
+.paint-tab .paint-palette-strip i{width:12px;height:19px;border:1px solid #bca66b70}
+.paint-tab .paint-part-choices{max-height:180px;overflow:auto;border:1px solid var(--line,#635338);padding:3px 6px}
+.paint-tab .paint-part-choices label{overflow-wrap:anywhere}
+.paint-tab .paint-search{display:flex;gap:4px;margin:7px 0}
+.paint-tab .paint-search input{flex:1;min-width:0;width:100%}
+.paint-tab .paint-source-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+.paint-tab .paint-source{padding:2px 2px 5px;min-width:0;display:flex;flex-direction:column;align-items:center;white-space:normal;text-align:center!important}
+.paint-tab .paint-source canvas{width:100%;height:78px;object-fit:contain}
+.paint-tab .paint-source span{font-size:12px;line-height:1.3;overflow-wrap:anywhere}
+.paint-tab .paint-actions{display:flex;align-items:center;justify-content:space-between;gap:5px;margin-top:8px;flex-wrap:wrap}
+.paint-tab .paint-actions button{flex:1;text-align:center!important}
+.paint-tab .paint-count{font-size:11px;color:var(--muted,#b5a68a)}
+.paint-tab .paint-comparison{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:8px 0}
+.paint-tab .paint-comparison figure{margin:0;min-width:0;border:1px solid var(--line,#635338);background:#14130f}
+.paint-tab .paint-comparison canvas{display:block;width:100%;height:116px;object-fit:contain}
+.paint-tab .paint-comparison figcaption{font-size:12px;text-align:center;padding:4px;border-top:1px solid #63533870}
+.paint-tab .paint-remaps{max-height:225px;overflow:auto;scrollbar-width:thin}
+.paint-tab .paint-remap{display:grid;grid-template-columns:26px 18px 32px minmax(0,1fr);gap:6px;align-items:center;margin:5px 0;font-size:11px}
+.paint-tab .paint-remap input[type=color]{width:32px;height:27px;padding:1px}
+.paint-tab .paint-remap .paint-count{overflow-wrap:anywhere}
+.paint-tab .paint-static{cursor:default}
+.paint-tab :focus-visible{outline:2px solid #e6c66e;outline-offset:2px}
+@media(max-width:760px){.paint-tab .paint-tool-grid button,.paint-tab .paint-preset,.paint-tab .paint-wide{min-height:36px}.paint-tab .paint-swatch{width:30px;height:30px}.paint-tab .paint-remap .paint-swatch{width:26px;height:26px}}
+
+.paint-colour-row{flex-wrap:wrap}.paint-skin{display:inline-flex;align-items:center;gap:6px}.paint-skin::before{content:"";width:15px;height:15px;background:var(--paint-colour);border:1px solid #ffc7f2}.paint-skin[aria-pressed="true"]{outline:2px solid #ef4cdb;outline-offset:1px}

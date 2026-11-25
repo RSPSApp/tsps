@@ -94,6 +94,8 @@ const PVP_LEVEL_SCRIPT = 388;
 // ponytail: the client has no "gameframe ready" packet, so the login mount is simply
 // retried a few ticks later; raise this if it still loses the race on slow clients.
 const MOUNT_RETRY_TICKS = 3;
+/** Ticks until a player another area took while still on Wilderness ground is checked again. */
+const CLAIMED_LEAVE_CHECK_TICKS = 1;
 
 // ---------------------------------------------------------------------------
 // Combat rules
@@ -390,8 +392,17 @@ function processPlayer(state, player, api) {
     if (!wasInWilderness) api.emitCustomEvent("persistence:save", { player, reason: "wilderness-entry" });
   } else {
     leaveWilderness(player, facts, wasInWilderness);
+    if (wasInWilderness) emitLeft(api, player);
   }
   state.tiles.set(player, facts);
+}
+
+/**
+ * "wilderness:left" { player }: off Wilderness ground, where items can be lost (Ferox Enclave and
+ * the safe buildings are off it). Walking, teleporting and dying all count; logging out doesn't.
+ */
+function emitLeft(api, player) {
+  api.emitCustomEvent("wilderness:left", { player });
 }
 
 function enterWilderness(player, facts, wasInWilderness) {
@@ -426,12 +437,21 @@ const OFF_PVP_FACTS = Object.freeze({ pvpOverlay: false, safe: false, level: 0, 
 
 // Leaving the area is the exit edge. It is judged off the area, not the tile: an instance can
 // claim a player before moving them, so the tile may still be in the wild.
-function playerLeft(state, player, logout) {
+function playerLeft(api, state, player, logout) {
   const previous = state.tiles.get(player);
   state.tiles.delete(player);
   if (!logout) {
     leaveWilderness(player, OFF_PVP_FACTS, previous?.inWilderness === true);
+    if (previous?.inWilderness !== true) return;
+    if (tileFactsOf(player)?.inWilderness !== true) emitLeft(api, player);
+    // Claimed by another area before the move that takes them there (an instance's entry): judged
+    // once the move is done. Still on Wilderness ground, that area is on it too (a boss cave).
+    else api.getTaskManager().submit(new api.core.CountdownTask({}, CLAIMED_LEAVE_CHECK_TICKS, () => leftAfterClaim(api, player)));
   }
+}
+
+function leftAfterClaim(api, player) {
+  if (player.isRegistered?.() !== false && tileFactsOf(player)?.inWilderness !== true) emitLeft(api, player);
 }
 
 function remountIfOnline(player) {
@@ -535,7 +555,7 @@ function wildernessRules(api, state) {
       if (isRealPlayer(mobile)) processPlayer(state, mobile, api);
     },
     postLeave(mobile, logout) {
-      if (isRealPlayer(mobile)) playerLeft(state, mobile, logout);
+      if (isRealPlayer(mobile)) playerLeft(api, state, mobile, logout);
     },
     canAttack,
     canTeleport,

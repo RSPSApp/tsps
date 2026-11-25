@@ -507,12 +507,13 @@ export class Player extends Mobile {
             return;
         }
         this.arrivalAnimation = null;
+        const previousGeneration = this.getAnimationGeneration();
         super.performAnimation(animation);
         // Wiki: Animation stall. A swing's animation is measured here, the one place every
-        // source of one (styles, specials, spells) arrives. A seq turned away by priority was
-        // never started, so it must not be measured.
-        if (animation != null && this.getAnimation() === animation) {
-            this.getCombat().onAnimationStarted(animation.getId());
+        // source of one (styles, specials, spells) arrives. Measure the accepted sequence,
+        // including any presentation replacement.
+        if (this.getAnimationGeneration() !== previousGeneration) {
+            this.getCombat().onAnimationStarted(this.getAnimation().getId());
         }
     }
 
@@ -891,7 +892,7 @@ export class Player extends Mobile {
             (this.status !== PlayerStatus.NONE || this.interfaceId >= 0 || this.dialogueManager.isActive() ||
                 this.packetSender.hasInterruptibleInterface() || this.packetSender.hasInputPrompt())
         ) {
-            this.packetSender.closeInterruptibleInterfaces();
+            this.packetSender.closeInterruptibleInterfaces(true);
         }
     }
 
@@ -908,10 +909,22 @@ export class Player extends Mobile {
         return this.packetSender.isBusyModal();
     }
 
+    private mainInterfaceAllowsGameplay(groupId: number): boolean {
+        const { CustomInterfaceRegistry } = require("../../../interfaces/CustomInterfaceRegistry") as typeof import("../../../interfaces/CustomInterfaceRegistry");
+        return CustomInterfaceRegistry.get(groupId)?.lifecycle?.blocksGameplay === false;
+    }
+
+    /** Whether a main modal, dialogue or side modal is blocking gameplay. */
+    hasBlockingInterface(): boolean {
+        const groupId = this.getInterfaceId();
+        if (this.dialogueManager.isActive()) return true;
+        if (groupId <= 0) return this.packetSender.hasInterruptibleInterface();
+        if (!this.mainInterfaceAllowsGameplay(groupId)) return true;
+        return this.packetSender.hasModalInterface(groupId);
+    }
+
     busy(): boolean {
-        if (this.interfaceId > 0) {
-            return true;
-        }
+        if (this.interfaceId > 0 && !this.mainInterfaceAllowsGameplay(this.interfaceId)) return true;
         if (this.getHitpoints() <= 0) {
             return true;
         }

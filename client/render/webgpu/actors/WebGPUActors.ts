@@ -1,3 +1,5 @@
+import { updateGearVisuals } from "../../../custom/items/GearVisualRuntime";
+import { resolveHeightSamplePlaneForLocal } from "../../../game/scene/PlaneResolver";
 import type { Frustum } from "../../../game/Frustum";
 import { actorBoundsVisible, type ActorBounds } from "../../ActorVisibility";
 import { ACTOR_VERTEX_STRIDE } from "../../buffer/ActorNormals";
@@ -28,6 +30,7 @@ import {
 } from "../shaders/actor.wgsl";
 import { ActorGfxRuntime } from "./actorGfx";
 import {
+    ACTOR_MAX,
     ActorDataTexture,
     ActorGeometryCache,
     MapActorUniforms,
@@ -54,7 +57,7 @@ import { NpcPoseGeometry } from "./actorNpcs";
 import { DynamicNpcAnimLoader } from "../../npc/DynamicNpcAnimLoader";
 import { AsyncNpcPoseCache } from "../../npc/AsyncNpcPoseCache";
 import { getNpcPriorityGeometry, usesNpcPriorityPass } from "../../npc/NpcPriorityPass";
-import { TILE_GFX_LIFT_UNITS, type GfxInstance, type GfxManager } from "../../gfx/GfxManager";
+import { graphicAgeMs, TILE_GFX_LIFT_UNITS, type GfxInstance, type GfxManager } from "../../gfx/GfxManager";
 import type { GfxCache } from "../../gfx/GfxCache";
 
 /**
@@ -78,8 +81,10 @@ interface ActorDrawItem {
     geometry: GpuGeometry;
     entry: number;
     priorityPass?: boolean;
+    cosmetic?: boolean;
     /** A player's ECS index, for the Shader Effects silhouette. */
     playerPid?: number;
+    gearTextureIds?: readonly number[];
 }
 
 interface MapActorState {
@@ -479,6 +484,7 @@ export class WebGPUActors {
         const renderDistanceTiles = this.resolveRenderDistanceTiles();
 
         const visible = this.renderer.mapManager.visibleMaps;
+        const cosmeticMaps = new Map<number, WebGPUMapSquare>();
         for (let i = 0; i < visible.length; i++) {
             const map = visible[i];
             const state = this.mapStates.get(getMapSquareId(map.mapX, map.mapY));
@@ -502,9 +508,20 @@ export class WebGPUActors {
             this.packMapProjectiles(state, map);
             this.packMapWorldGfx(state, map);
             this.packMapAttachedGfx(state, map);
-            state.uniforms.flush();
             this.frameMaps.push(state);
+            cosmeticMaps.set(getMapSquareId(map.mapX, map.mapY), map);
         }
+
+        // Cosmetic actors allocate only after every authoritative actor and GFX.
+        for (const npc of client.clientPlugins.cosmeticNpcs?.() ?? []) {
+            const id = getMapSquareId(Math.floor(npc.x / 64), Math.floor(npc.y / 64));
+            const map = cosmeticMaps.get(id);
+            if (!map) continue;
+            const state = this.mapStates.get(id);
+            if (!state) continue;
+            this.packCosmeticNpc(state, map, npc);
+        }
+        for (const state of this.frameMaps) state.uniforms.flush();
 
         // Zero the padding texels so stale actors from previous frames never leak in.
         const rows = Math.max(1, Math.ceil((writer.count * 2) / 16));
@@ -642,6 +659,7 @@ export class WebGPUActors {
             pass.setBindGroup(2, bindGroup);
             for (let i = 0; i < items.length; i++) {
                 const item = items[i];
+                if (depth && item.cosmetic) continue;
                 const variants = extended ? this.variants.get(item.pipeline) : undefined;
                 const pipeline = depth ? variants?.depth : variants?.extended ?? item.pipeline;
                 if (!pipeline) continue;
@@ -650,7 +668,7 @@ export class WebGPUActors {
                 if (!alpha && !item.priorityPass) {
                     while (i + 1 < items.length) {
                         const next = items[i + 1];
-                        if (next.priorityPass || next.pipeline !== item.pipeline || next.geometry !== item.geometry ||
+                        if (next.cosmetic !== item.cosmetic || next.priorityPass || next.pipeline !== item.pipeline || next.geometry !== item.geometry ||
                             next.entry !== item.entry + instances) break;
                         instances++;
                         i++;
@@ -675,6 +693,9 @@ export class WebGPUActors {
                         pass.setVertexBuffer(1, labels);
                         boundLabels = labels;
                     }
+                }
+                if (item.gearTextureIds) {
+                    updateGearVisuals(world, this.renderer.osrsClient.textureLoader, item.gearTextureIds);
                 }
                 pass.drawIndexed(item.geometry.indexCount, instances, 0, 0, item.entry);
                 if (priorityPasses) {
@@ -1017,6 +1038,45 @@ export class WebGPUActors {
         }
     }
 
+    get geometryGpuBytes(): number {
+        return (this.geometry?.geometryGpuBytes ?? 0) + (this.priorityGeometry?.geometryGpuBytes ?? 0);
+    }
+
+    private packCosmeticNpc(state: MapActorState, map: WebGPUMapSquare,
+        npc: import("../../../game/plugins/ScenePresentation").CosmeticNpc): void {
+        if (this.writer.count >= ACTOR_MAX) return;
+        const request: Parameters<DynamicNpcAnimLoader["getFrameGeometry"]> = [npc.typeId, npc.seqId, npc.frameId];
+        let posed: ReturnType<NpcPoseGeometry["resolve"]>, poseRow = -1;
+        // Eligible classic animations keep one rest mesh on the GPU and update shared label matrices.
+        // Unsupported animations and HD normals use the existing asynchronous mesh fallback.
+        if (npc.seqId >= 0) try {
+            posed = this.npcPose?.resolve([npc.typeId, npc.seqId, npc.frameId, -1, 0,
+                { base: { next: npc.frameId, alpha: 0 } }], !!this.world?.extensionActive);
+            if (posed?.matrices) poseRow = this.poseRowFor(posed.poseKey!, posed.matrices);
+        } catch {}
+        const geometry = poseRow >= 0 ? posed! : this.asyncNpcPoses?.get(request);
+        const fallbackKey = !geometry ? this.asyncNpcPoses?.getFallbackKey(request) : undefined;
+        if (!geometry && !fallbackKey) return;
+        const dataIndex = this.writer.alloc();
+        if (dataIndex < 0) return;
+        this.writer.writeZero(dataIndex);
+        const o = dataIndex * 8;
+        this.writer.data[o] = Math.round((npc.x - map.getRenderBaseTileX()) * 128);
+        this.writer.data[o + 1] = Math.round((npc.y - map.getRenderBaseTileY()) * 128);
+        // No server interaction id is written for a cosmetic actor.
+        const plane = resolveHeightSamplePlaneForLocal(map, npc.plane, Math.floor(npc.x) & 63, Math.floor(npc.y) & 63);
+        this.writer.data[o + 2] = plane | (npc.rotation << 2);
+        const entry = this.actorEntry(state, map, map.timeLoaded, NPC_MODEL_Y_OFFSET, dataIndex, 0, 0, 0, poseRow);
+        for (const alpha of [false, true]) {
+            const gpu = geometry ? this.geometry?.getOrCreate(`${geometry.key}|${alpha ? "a" : "o"}`,
+                alpha ? geometry.alphaVertices : geometry.opaqueVertices, alpha ? geometry.alphaIndices : geometry.opaqueIndices,
+                poseRow >= 0 ? (alpha ? posed!.alphaLabels : posed!.opaqueLabels) : undefined)
+                : this.geometry?.get(`${fallbackKey}|${alpha ? "a" : "o"}`);
+            const pipeline = this.pipelines.get("npc")?.[alpha ? 1 : 0];
+            if (gpu && pipeline) (alpha ? state.alpha : state.opaque).push({ pipeline, geometry: gpu, entry, cosmetic: true });
+        }
+    }
+
     private hasResidentNpcPose(key: string): boolean {
         const opaque = this.geometry?.get(`${key}|o`);
         const alpha = this.geometry?.get(`${key}|a`);
@@ -1082,6 +1142,7 @@ export class WebGPUActors {
                     geometry,
                     entry: entry ??= this.actorEntry(state, map, timeLoaded, modelYOffset, dataIndex, 0, 0, 0, poseRow),
                     playerPid: pid,
+                    gearTextureIds: items === state.alpha ? posed.gearTextureIds : undefined,
                 });
             }
         }
@@ -1242,7 +1303,7 @@ export class WebGPUActors {
         const runtime = this.gfx;
         if (!runtime || inst.startTimeMs == null) return;
         const nowMs = (performance?.now?.() as number) || Date.now();
-        const ageMs = Math.max(0, nowMs - (inst.startTimeMs | 0));
+        const ageMs = graphicAgeMs(inst,nowMs);
         const frameIdx = runtime.frameIndexByAge(inst.spotId, Math.floor(ageMs));
         const frameCycle = runtime.frameCycleFor(inst.spotId, frameIdx, ageMs);
         const tiles =
@@ -1261,6 +1322,8 @@ export class WebGPUActors {
             dataIndex,
             0,
             0,
+            "gfx",
+            inst.hueShift ?? 0,
         );
     }
 
@@ -1276,6 +1339,7 @@ export class WebGPUActors {
         subX: number,
         subY: number,
         kind: "gfx" | "projectile" = "gfx",
+        hueShift: number = 0,
     ): void {
         const cache = this.gfx?.cache;
         if (!cache) return;
@@ -1300,6 +1364,8 @@ export class WebGPUActors {
                         0,
                         subX,
                         subY,
+                        -1,
+                        hueShift,
                     ),
                 });
             }
@@ -1324,6 +1390,8 @@ export class WebGPUActors {
                         0,
                         subX,
                         subY,
+                        -1,
+                        hueShift,
                     ),
                 });
             }
@@ -1340,6 +1408,7 @@ export class WebGPUActors {
         subX: number,
         subY: number,
         poseRow: number = -1,
+        hueShift: number = 0,
     ): number {
         // u_mapPos is where the map is drawn: an instance scene's base, not its square's corner
         // (WebGL passes renderPosX/Y too); the two match for normal squares.
@@ -1353,6 +1422,7 @@ export class WebGPUActors {
             subX,
             subY,
             poseRow,
+            hueShift,
         );
     }
 

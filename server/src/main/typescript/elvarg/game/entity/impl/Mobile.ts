@@ -1,3 +1,4 @@
+import { ActorPresentation } from '../../model/ActorPresentation';
 import { lazyRequire } from "../../../util/LazyRequire";
 import { Entity } from "../Entity";
 import { getSequenceForcedPriority } from "../../cache/NpcAnimationScanner";
@@ -414,6 +415,14 @@ export abstract class Mobile extends Entity {
         if (animation == null) {
             return;
         }
+        if (animation.getId() >= 0 && animation.getId() !== Animation.DEFAULT_RESET_ANIMATION.getId()) {
+            const replacementId = ActorPresentation.for(this)?.animation;
+            if (replacementId !== undefined) {
+                const replacement = new Animation(replacementId, animation.getPriority());
+                replacement.delay = animation.getDelay();
+                animation = replacement;
+            }
+        }
         if (this.animation != null && animation != null) {
             if (this.animation.getPriority() > animation.getPriority()) {
                 return;
@@ -436,6 +445,7 @@ export abstract class Mobile extends Entity {
     }
 
     performGraphic(graphic: Graphic) {
+        if (this.isGraphicHandledByPresentation(graphic, 0)) return;
         if (this.graphic != null && graphic != null) {
             if (this.graphic.getPriority() > graphic.getPriority()) {
                 return;
@@ -460,8 +470,15 @@ export abstract class Mobile extends Entity {
             if (graphic) this.performGraphic(graphic);
             return;
         }
+        if (this.isGraphicHandledByPresentation(graphic, slot)) return;
         (this.slotGraphics ??= new Map()).set(index, graphic);
         this.getUpdateFlag().flag(Flag.GRAPHIC);
+    }
+
+    private isGraphicHandledByPresentation(graphic: Graphic | null, slot: number): boolean {
+        const look = ActorPresentation.for(this);
+        if (!look || graphic == null || graphic.getId() < 0) return false;
+        return Boolean(look.onGraphic?.(graphic, slot) || look.suppressGraphics);
     }
 
     /**

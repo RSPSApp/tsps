@@ -81,6 +81,10 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
 
     registerMinimapSource(data: SdMapData): void {
         const input = data.minimapInput;
+        if (data.farOnly) {
+            this.minimapSources.delete(getMapSquareId(data.mapX, data.mapY));
+            return;
+        }
         if (!input || data.doorOnly || data.locOnly || input.instance || input.overrideRenderPos) return;
         this.minimapSources.set(getMapSquareId(data.mapX, data.mapY), { ...input, loadedTextureIds: new Set() });
         for (let level = 0; level < 4; level++) this.osrsClient.setMinimapImageUrl(data.mapX, data.mapY, undefined, level);

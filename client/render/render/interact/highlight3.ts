@@ -385,11 +385,11 @@ export function getNpcWorldTile(host: WebGLOsrsRendererHost, ecsId: number): { x
 }
 
 export function resolveNpcHighlightTargetFromEntry(host: WebGLOsrsRendererHost, 
-        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId"> | undefined,
+        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId" | "cosmeticNpcKey"> | undefined,
         fallbackTile?: { tileX: number; tileY: number; plane?: number },
     ): NpcHighlightTarget | undefined {
 
-        if (!entry) return undefined;
+        if (!entry || entry.cosmeticNpcKey !== undefined) return undefined;
         if (entry.targetType !== MenuTargetType.NPC) return undefined;
         if (typeof entry.npcServerId === "number") {
             return host.resolveNpcHighlightTargetFromServerId(entry.npcServerId);

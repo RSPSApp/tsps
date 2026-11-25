@@ -262,6 +262,7 @@ test('both close routes announce interface:closed with the interface that closed
     for (const route of ['sendInterfaceRemoval', 'closeInterruptibleInterfaces']) {
       PacketSender.prototype[route].call({
         player: {},
+        sendInterfaceRemoval: PacketSender.prototype.sendInterfaceRemoval,
         resetInterfaceState: () => 134,
         closeTrackedInterfaces: () => true,
         endBankSearch: () => {},

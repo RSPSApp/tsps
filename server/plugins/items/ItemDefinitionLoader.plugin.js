@@ -453,10 +453,6 @@ function buildItemDefinitions(policy) {
     }
     if (row.specialAttack !== undefined) validateSpecialAttack(row);
   }
-  // ponytail: one compressed packet per model/definition list; use chunked delivery if these outgrow 64 KiB.
-  if (encodeContentData("server", [{ key: "customItems", rows: customRows }]).length > 0xffff) {
-    throw new Error("[custom-items] definitions exceed the transport limit");
-  }
   CacheDefinitions.registerCustomItems(customRows);
   CacheDefinitions.setCustomModels(customModels);
   for (const row of CacheDefinitions.getCustomItems()) {
@@ -510,11 +506,16 @@ function customModelsResource(_query, segments) {
 
 function sendCustomItems({ player }) {
   const sender = player.getPacketSender();
+  for (const datasets of CacheDefinitions.getSampledAnimationPackets()) {
+    sender.sendContentData("server", datasets);
+  }
   sender.sendContentData("server", [{ key: "customModels", rows: [] }]);
   for (const model of CacheDefinitions.getCustomModels()) {
     sender.sendContentData("server", [{ key: "customModels", rows: [model] }]);
   }
-  sender.sendContentData("server", [{ key: "customItems", rows: CacheDefinitions.getCustomItems() }]);
+  for (const dataset of CacheDefinitions.getCustomItemPackets()) {
+    sender.sendContentData("server", [dataset]);
+  }
 }
 
 module.exports = {

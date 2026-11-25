@@ -139,7 +139,7 @@ export class EquipPacketListener {
       player.getInterfaceId() !== Equipment.EQUIPMENT_SCREEN_INTERFACE_ID &&
       !EquipPacketListener.preservesInterfaceOnEquip(player)
     ) {
-      player.getPacketSender().sendInterfaceRemoval();
+      player.getPacketSender().sendInterfaceRemoval(true);
     }
 
     player.getSkillManager().stopSkillable();

@@ -24,6 +24,11 @@ const EXPLOSION_MAX_HIT = 31;
 
 /** How many of his attacks still have to be standard before he may roll a special. */
 const COOLDOWN_ATTRIBUTE = "chaos-fanatic:cooldown-attacks";
+/**
+ * Set on him for the rest of his life once his explosion lands on anyone's tile (the Combat
+ * Achievement "Sorry, What Was That?"); his respawn is a new NPC without it.
+ */
+const EXPLOSION_HIT_ATTRIBUTE = "chaos-fanatic:explosion-hit";
 
 /** The NPC's own transcript lines (data/definitions/npc-dialogues.json, "when-attacking-the-player"). */
 const QUOTES = [
@@ -180,6 +185,7 @@ function combatClass(api) {
               target.getPacketSender().sendGlobalGraphic(EXPLOSION_END_GFX, pos);
               for (const splashPlayer of npc.getPlayersWithinDistance(10)) {
                 if (splashPlayer.getLocation().equals(pos)) {
+                  npc.setAttribute(EXPLOSION_HIT_ATTRIBUTE, true);
                   splashPlayer
                     .getCombat()
                     .getHitQueue()
@@ -226,6 +232,7 @@ function combatClass(api) {
 }
 
 module.exports = {
+  EXPLOSION_HIT_ATTRIBUTE,
   name: "ChaosFanatic",
   description: "The Chaos Fanatic's attack mix of explosions, a disarming projectile and standard magic.",
   members: true,

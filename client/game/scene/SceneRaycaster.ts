@@ -318,7 +318,7 @@ export class SceneRaycaster {
 
         for (let i = 0; i < visibleCount; i++) {
             const map = visibleMaps[i] as WebGLMapSquare | undefined;
-            if (!map) continue;
+            if (!map || map.farOnly) continue;
 
             // For world entity maps (ships), transform the ray to account for the
             // bobbing/rotation animation so loc hit-testing matches the rendered position.

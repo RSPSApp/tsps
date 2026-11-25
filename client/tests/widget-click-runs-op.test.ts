@@ -12,7 +12,7 @@ function click(widget: any, beneath: any[] = []): string[] {
     const fired: string[] = [];
     const deps = {
         getCustomInterfaces: () => ({
-            handleWidgetClick: (groupId: number, childId: number) => { customClicks.push([groupId, childId]); return false; },
+            handleWidgetFocus: (groupId: number, childId: number) => { customClicks.push([groupId, childId]); return false; },
         }),
         getCs2Vm: () => ({
             invokeEventHandler: (target: any, eventType: string) => {

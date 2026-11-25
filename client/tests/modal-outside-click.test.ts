@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
+import { setCustomInterface } from "../common/gamemode/GamemodeContentStore";
 import { getWorldClickBlockingWidgetAtPoint } from "../game/widgets/interaction/widgetClickProbe";
 import { isCloseOnOutsideClickModalTarget } from "../game/widgets/gameframePanes";
 import { WidgetManager } from "../widgets/WidgetManager";
@@ -160,4 +162,26 @@ assert.equal(real.interfaceParents.get(MAIN_MODAL)?.closeOnOutsideClick, true);
 real.openSubInterface((ROOT << 16) | 74, BANK, 3, true);
 assert.equal(real.interfaceParents.get((ROOT << 16) | 74)?.closeOnOutsideClick, true);
 
-console.log("modal outside click tests passed");
+async function checkPersistentPanel(): Promise<void> {
+    (globalThis as any).self = globalThis;
+    require.extensions[".glsl"] = (module, file) => { module.exports = readFileSync(file, "utf8"); };
+    for (const extension of [".png", ".jpg", ".webp"]) {
+        require.extensions[extension] = (module, file) => { module.exports = file; };
+    }
+    const { OsrsClient } = await import("../game/OsrsClient");
+    const group = 30132;
+    setCustomInterface({ groupId: group, widgets: [widget(group << 16, 0, 0, 488, 330)],
+        lifecycle: { persistOnWorldInteraction: true, blocksGameplay: false } });
+    const widgetManager = managerFor(MAIN_MODAL, group, true);
+    const host = Object.assign(Object.create(OsrsClient.prototype), { widgetManager });
+    const sideUid = (ROOT << 16) | 74;
+    widgetManager.interfaceParents.set(sideUid, { group: BANK, type: 3, closeOnOutsideClick: true });
+
+    assert.equal(getWorldClickBlockingWidgetAtPoint(widgetManager, null, 500, 332), null);
+    assert.equal(host.hasCloseOnOutsideClickModal(), false,
+        "an outside click over the world sends no global IF_CLOSE while the persistent panel is mounted");
+    widgetManager.interfaceParents.delete(MAIN_MODAL);
+    assert.equal(host.hasCloseOnOutsideClickModal(), true, "ordinary modals still close on an outside click");
+}
+
+void checkPersistentPanel().then(() => console.log("modal outside click tests passed"));

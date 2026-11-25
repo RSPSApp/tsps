@@ -177,7 +177,7 @@ function startMaking(player, {
       if (!player.isRegistered() || player.getHitpoints() <= 0 ||
         player.getMovementQueue().size() > 0 || player.getForceMovement() != null ||
         !player.getLocation().equals(startLocation) ||
-        player.getInterfaceId() !== -1 || (anchor && player.getLocation().getDistance(anchor) > 2) || !has()) {
+        player.hasBlockingInterface() || (anchor && player.getLocation().getDistance(anchor) > 2) || !has()) {
         this.stop();
         return;
       }

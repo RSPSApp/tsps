@@ -66,6 +66,33 @@ test("Spin Flax: a cast clicked during the last one waits and is cast when it en
   p.setRegistered(false);
 });
 
+test("queued Spin Flax casts under a non-blocking panel and drops under a blocking chatbox or prompt", () => {
+  const { CustomInterfaceRegistry } = require("../dist/game/interfaces/CustomInterfaceRegistry");
+  const panelId = 30197;
+  CustomInterfaceRegistry.register({ groupId: panelId, widgets: [],
+    lifecycle: { persistOnWorldInteraction: true, blocksGameplay: false } });
+
+  for (const blocker of ["none", "chatbox", "prompt"]) {
+    const p = caster();
+    p.setRegistered(true);
+    const sender = p.getPacketSender();
+    const strings = () => p.getInventory().getAmount(core.ItemIdentifiers.BOW_STRING);
+    cycle += 100;
+    cast({ player: p, spellName: "Spin Flax", handled: false });
+    cycle++;
+    cast({ player: p, spellName: "Spin Flax", handled: false });
+    assert.equal(strings(), 5, "the second cast waits");
+
+    sender.sendInterface(panelId);
+    if (blocker === "chatbox") sender.sendChatboxInterface(231);
+    if (blocker === "prompt") p.setEnteredAmountAction({ execute() {} });
+    for (let tick = 0; tick < 4; tick++) { cycle++; core.TaskManager.process(); }
+    assert.equal(strings(), blocker === "none" ? 10 : 5, blocker);
+    assert.equal(p.getInterfaceId(), panelId);
+    p.setRegistered(false);
+  }
+});
+
 test("a different spell clicked while one waits is cast after its own casting time, not the replaced one's", () => {
   const p = caster();
   p.setRegistered(true);

@@ -383,6 +383,7 @@ test("a registered Neitiznot stump checks current Woodcutting before making a sh
     queued.execute(); // Scoped walk adapter: no natural walking or timing claim.
     const menu = p.getCreationMenu();
     assert.deepEqual(menu?.getItems(), [I.NEITIZNOT_SHIELD, I.SPLIT_LOG], "Cut-wood opens the stump's menu");
+    p.getPacketSender().closeCreationMenu();
     menu.execute(choice, 1);
     core.TaskManager.process();
     core.TaskManager.process();

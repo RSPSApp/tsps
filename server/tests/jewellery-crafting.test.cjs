@@ -86,6 +86,7 @@ function playerWith(entries = []) {
     getPacketSender: () => sender, sendMessage: text => log.push(['message',text]),
     performAnimation: anim => log.push(['animation',anim.getId()]),
     performGraphic: gfx => log.push(['graphic',gfx.getId(),gfx.getHeight()]),
+    hasBlockingInterface: () => player.interfaceId !== -1,
     getInterfaceId: () => player.interfaceId, setInterfaceId: id => { player.interfaceId = id; },
     setEnteredAmountAction: action => { player.amountAction = action; },
     getUsername: () => 'JewelleryTest', getIndex: () => 1, isPlayerBot: () => false,

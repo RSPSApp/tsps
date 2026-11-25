@@ -1,3 +1,5 @@
+import { updateGearVisuals } from "../../../custom/items/GearVisualRuntime";
+import { isGearTextureId } from "../../../custom/items/GearVisualRegistry";
 import type { ClientGroundItemStack } from "../../../game/data/ground/GroundItemStore";
 import { Scene } from "../../../rs/scene/Scene";
 import { MAX_TEXTURES, TEXTURE_SIZE } from "../../render/constants";
@@ -41,6 +43,7 @@ type MeshBatch = {
 type GroundItemMeshMap = {
     mapId: number;
     opaque: MeshBatch;
+    gearTexturesByOffset?: ReadonlyMap<number, readonly number[]>;
     alpha: MeshBatch;
     mapUniformsBindGroup: GPUBindGroup;
     mapUniformBuffer: GPUBuffer;
@@ -306,6 +309,8 @@ export class GroundItemMeshes {
                 const elements = range[1] | 0;
                 const instances = range[2] | 0;
                 if (elements <= 0 || instances <= 0) continue;
+                const textures = mesh.gearTexturesByOffset?.get(range[0]);
+                if (textures) updateGearVisuals(world, this.renderer.osrsClient.textureLoader, textures);
                 pass.setBindGroup(MAP_UNIFORMS_GROUP, mesh.mapUniformsBindGroup, [i * MAP_UNIFORM_STRIDE]);
                 pass.drawIndexed(
                     elements,
@@ -359,7 +364,7 @@ export class GroundItemMeshes {
         const textureUpdates = new Map<number, Int32Array>();
         const world = getWorldResources(this.renderer);
         for (const texId of data.usedTextureIds) {
-            if (world?.loadedTextureIds.has(texId)) continue;
+            if (isGearTextureId(texId) || world?.loadedTextureIds.has(texId)) continue;
             try {
                 const pixels = textureLoader.getPixelsArgb(texId, TEXTURE_SIZE, true, 1.0);
                 textureUpdates.set(texId, pixels);
@@ -471,7 +476,7 @@ export class GroundItemMeshes {
             ],
         });
 
-        return { mapId, opaque, alpha, mapUniformBuffer, mapUniformsBindGroup, rangeCount };
+        return { mapId, opaque, alpha, gearTexturesByOffset: data.gearTexturesByOffset, mapUniformBuffer, mapUniformsBindGroup, rangeCount };
     }
 
     /**

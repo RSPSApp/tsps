@@ -22,9 +22,11 @@ import {
     withStackedIf1ButtonEntries as UI_withStackedIf1ButtonEntries,
 } from "../../../widgets/menu/utils";
 import { MinimapRenderer, getMinimapMaps } from "../MinimapRenderer";
+import { createMinimapGeometry } from "../../../game/scene/minimapProjection";
 import { drawChooseOptionMenu } from "../choose-option";
 import { isChatMessageAreaWidget } from "../../../game/widgets/interaction/chatboxClickThrough";
 import { heldWidgetTranslucentUid } from "../../../game/widgets/interaction/widgetDragHelpers";
+import { getWorldMapRetainedSquares } from "../../../game/worldMap/WorldMapImageCache";
 import { GLRenderer } from "../renderer";
 import {
     ClipRect,
@@ -76,6 +78,7 @@ import { hasSpriteOverride } from "../spriteOverrides";
 import { layoutWorldMapPoint, type PluginWorldMapPointEntry, type RenderedWorldMapPoint, renderedWorldMapPointAt } from "@runelite/client/ui/overlay/worldmap/worldMapLayout";
 import { CanvasTextureCache } from "@runelite/client/ui/overlay/CanvasTextureCache";
 import { overlayFont } from "@runelite/client/ui/overlay/OverlayFonts";
+import { scrollingTextOffset } from "../../components/textOverflow";
 
 /** Textures for RuneLite world map point images, one per canvas, bounded. */
 const worldMapPointTextures = new CanvasTextureCache(64);
@@ -731,6 +734,9 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
     }
 
     const mousedOverIf1WidgetUid = resolveIf1MousedOverWidgetUid();
+    const hoverTargetUid = clicks?.getHoverTarget?.()?.widgetUid;
+    const hoveredOwnerUid = typeof hoverTargetUid === 'number'
+        ? widgetManager?.getWidgetByUid(hoverTargetUid)?.hoverOwnerUid : undefined;
 
     // Legacy tooltip components (type 8) show their box once the mouse has rested on one for a
     // second. The timer runs in client cycles and lives on the canvas between draw passes.
@@ -1573,6 +1579,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                 ? ((w as any).__clickTargetId &&
                       (clicks?.isHover?.((w as any).__clickTargetId) ?? false)) ||
                   clicks?.isHover?.(`widget:${w.uid}`) ||
+                  hoveredOwnerUid === widgetUid ||
                   false
                 : mousedOverIf1WidgetUid === widgetUid);
         if (profileWidgetRender) {
@@ -1730,7 +1737,8 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     displayY,
                     logicalWidth | 0,
                     logicalHeight | 0,
-                    worldMapState.zoomPercentage | 0,
+                    // The zoom drawn this frame, which eases between levels.
+                    logicalPixelsPerTile,
                     worldMapLevel,
                 ].join(":");
                 const visibleTileCache = worldMapRenderHost?.__worldMapVisibleTileCache;
@@ -1784,7 +1792,44 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         };
                     }
                 }
-                osrsClient?.retainWorldMapImageTiles?.(visibleWorldMapTiles);
+                // Kept and requested: the squares on screen at the zoom being eased toward
+                // (getWorldMapRetainedSquares). The rest drawn here use whatever size is cached.
+                const targetPixelsPerTile = worldMapState.getTargetZoomScale?.() ?? logicalPixelsPerTile;
+                const retainedWorldMapSquares = getWorldMapRetainedSquares(
+                    currentArea.getBounds(),
+                    displayX,
+                    displayY,
+                    logicalWidth,
+                    logicalHeight,
+                    targetPixelsPerTile,
+                    worldMapLevel,
+                );
+                osrsClient?.retainWorldMapImageTiles?.(retainedWorldMapSquares);
+
+                // The area's whole-map picture under the tiles, so a square still rendering
+                // shows the area's colours, never black (WorldMapCompositeTexture).
+                const composite = osrsClient?.getWorldMapCompositeTexture?.();
+                if (composite) {
+                    const compositeTex = tc.getTextureFromRgbaPixels(
+                        composite.key,
+                        composite.pixels,
+                        composite.width,
+                        composite.height,
+                    );
+                    if (compositeTex) {
+                        const areaBounds = currentArea.getBounds();
+                        const compositeTopLeft = projectDisplayToScreen(areaBounds.minX, areaBounds.maxY + 1);
+                        glr.drawTexture(
+                            compositeTex,
+                            compositeTopLeft.x,
+                            compositeTopLeft.y,
+                            (areaBounds.maxX + 1 - areaBounds.minX) * pixelsPerTileX,
+                            (areaBounds.maxY + 1 - areaBounds.minY) * pixelsPerTileY,
+                            1,
+                            1,
+                        );
+                    }
+                }
 
                 const editedRegions: Map<number, unknown> | undefined =
                     currentArea.id === 0 ? (osrsClient?.renderer as any)?.mapRegionReplacements : undefined;
@@ -1835,6 +1880,17 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         1,
                         1,
                     );
+                }
+
+                if (targetPixelsPerTile === logicalPixelsPerTile) {
+                    // Squares in the draw's margin, just off screen, render ahead of a drag.
+                    osrsClient?.prefetchWorldMapImageTiles?.(visibleWorldMapTiles);
+                } else {
+                    // Mid zoom-out the target view is larger than what is drawn yet: request all of
+                    // it now, nearest first, so it's rendered by the time the ease shows it.
+                    for (const square of retainedWorldMapSquares) {
+                        osrsClient?.getWorldMapImageSource?.(square.mapX, square.mapY, square.level ?? worldMapLevel);
+                    }
                 }
 
                 const mapElementCache =
@@ -2441,20 +2497,15 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                         width: maskW,
                         height: maskH,
                     });
-                    // For plugins marking things on the minimap (RuneLite's localToMinimap,
-                    // which gives up 80 minimap pixels out).
-                    osrsClient.minimapGeometry = {
-                        drawnAt: performance.now(),
+                    osrsClient.minimapGeometry = createMinimapGeometry({
                         plane: playerLevel,
                         scale: minimapRenderScale,
-                        worldToMinimap: (wx: number, wy: number) => {
-                            const relX = (wx - worldX) * 4;
-                            const relY = (worldY - wy) * 4;
-                            if (relX * relX + relY * relY >= 6400) return undefined;
-                            const p = minimapRenderer.relativeToScreen(relX, relY);
-                            return [p.x, p.y] as const;
-                        },
-                    };
+                        worldX, worldY, centerX, centerY,
+                        project: (relX, relY) => minimapRenderer.relativeToScreen(relX, relY),
+                        contains: (px, py) => minimapMask.contains(
+                            ((px - maskX) / maskW) * minimapMask.width,
+                            ((py - maskY) / maskH) * minimapMask.height),
+                    });
 
                     // Instances have one combined image, located at the scene origin.
                     const minimapMaps = getMinimapMaps(osrsClient.renderer, playerTileX, playerTileY);
@@ -3361,7 +3412,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     ? `item:${w.itemId | 0}:${(w.itemQuantity ?? 0) | 0}`
                     : `model:${(w.modelType ?? 0) | 0}:${modelId}`;
             const cacheKey =
-                isAnimated || isPlayerDesignPreview || (isPlayerModel && !appearanceKey) ||
+                isAnimated || w.recycleModel === true || isPlayerDesignPreview || (isPlayerModel && !appearanceKey) ||
                 ((w as any).isPlayerChathead === true && appearanceKey?.startsWith("npc:"))
                     ? null // NPC morphs can change with var state even when the appearance is unchanged
                     : `wm:${modelCacheId}:${rx}:${ry}:${rz}:${zoom}:${offX}:${offY}:o${
@@ -3385,7 +3436,7 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
             const sequenceFrame =
                 liveMovementFrame !== undefined ? liveMovementFrame : (w.modelFrame ?? 0) | 0;
             const animatedKey =
-                isAnimated && !cacheKey && !isPlayerDesignPreview && !isPlayerModel &&
+                (isAnimated || w.recycleModel === true) && !cacheKey && !isPlayerDesignPreview && !isPlayerModel &&
                 ((w as any).isPlayerChathead !== true ||
                     (!!appearanceKey && !appearanceKey.startsWith("npc:")))
                     ? `wa:${modelCacheId}:${sequenceId}:${sequenceFrame}:${rx}:${ry}:${rz}:${zoom}:${offX}:${offY}:o${
@@ -3731,21 +3782,29 @@ export function renderWidgetTreeGL(glr: GLRenderer, root: Widget, opts: GLRender
                     ((resolvedFont as any)?.lineHeight as number) ||
                     ((resolvedFont as any)?.ascent as number) ||
                     12;
+                const singleLine = w.overflowScroll ? normalized.replace(/\n/g, ' ') : normalized;
+                const measuredWidth = w.overflowScroll ? resolvedFont?.measure(singleLine.replace(/<[^>]*>/g, '')) ?? 0 : 0;
+                const scrolling = w.overflowScroll && measuredWidth * rootScaleX > width;
+                const offset = w.overflowScroll ? scrollingTextOffset(w, singleLine, measuredWidth * rootScaleX, width, performance.now()) : 0;
+                if (w.overflowScroll) sc.pushCanvasRect(widgetClip.x0, widgetClip.y0,
+                    widgetClip.x1 - widgetClip.x0, widgetClip.y1 - widgetClip.y0);
                 w._textBounds = drawWrappedTextGL(
-                    normalized,
-                    x,
+                    singleLine,
+                    x - offset,
                     y,
-                    width,
+                    w.overflowScroll ? Math.max(width, Math.ceil(measuredWidth * rootScaleX) + 1) : width,
                     height,
                     w.fontId ?? -1,
                     effectiveColor,
                     lineH,
                     !!(w.textShadowed || w.textShadow),
                     (w.yTextAlignment ?? 0) as 0 | 1 | 2 | 3,
-                    (w.xTextAlignment ?? 0) as 0 | 1 | 2 | 3,
+                    (w.overflowScroll ? 0 : w.xTextAlignment ?? 0) as 0 | 1 | 2 | 3,
                     // OSRS draws text at its component's transparency (0 opaque, 255 invisible).
                     widgetTextAlpha(w),
                 );
+                if (w.overflowScroll) sc.pop();
+                if (scrolling) requestRender();
             }
             if (profileWidgetRender) {
                 textTextureDrawCalls +=

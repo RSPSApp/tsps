@@ -55,7 +55,7 @@ export class DropItemPacketListener {
     if (itemSlot < 0 || itemSlot >= player.getInventory().capacity()) return;
 
     if (player.busy()) {
-      player.getPacketSender().sendInterfaceRemoval();
+      player.getPacketSender().sendInterfaceRemoval(true);
     }
 
     let item = player.getInventory().getItems()[itemSlot];
@@ -68,7 +68,7 @@ export class DropItemPacketListener {
       player.sendMessage("Drop item: " + item.getId().toString() + ".");
     }
 
-    player.getPacketSender().sendInterfaceRemoval();
+    player.getPacketSender().sendInterfaceRemoval(true);
 
     // Stop skilling..
     player.getSkillManager().stopSkillable();

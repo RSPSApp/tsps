@@ -1,4 +1,6 @@
 export type SdMapLoaderInput = {
+    /** Whole overworld square with compact far geometry; ignored for partial/instance/minimap builds. */
+    farOnly?: boolean;
     mapProfileEnabled?: boolean;
     /** Reuse/store this build in the browser's IndexedDB map square cache. */
     persistentCache?: boolean;

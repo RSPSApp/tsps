@@ -1,3 +1,4 @@
+const { mechanicSchema, mechanicSettings } = require("./Mechanics.SpecialAttack");
 // TODO: ported from xrsps-typescript; untested.
 module.exports = function registerStatiusWarhammerBhSpecialAttack(api) {
   const { Animation, CombatSpecial, Graphic, ItemIdentifiers, MeleeCombatMethod, Skill, Sound, Sounds } = api.core;
@@ -16,17 +17,19 @@ module.exports = function registerStatiusWarhammerBhSpecialAttack(api) {
     }
 
     handleAfterHitEffects(hit) {
-      if (Math.floor(hit.getTotalDamage()) <= 0) {
+      const config = mechanicSettings(this, "defence-drain", { percent: DEFENCE_DRAIN_FRACTION * 100, requireDamage: true, playersOnly: true });
+      if (!config.enabled) return;
+      if (!hit.isAccurate() || config.requireDamage && Math.floor(hit.getTotalDamage()) <= 0) {
         return;
       }
       const target = hit.getTarget();
-      if (!target.isPlayer()) {
+      if (config.playersOnly && !target.isPlayer()) {
         // TODO: NPC combat-stat drain is not exposed by our core NPC state.
         return;
       }
-      const skillManager = target.getAsPlayer().getSkillManager();
+      const skillManager = target.isPlayer() ? target.getAsPlayer().getSkillManager() : target.getAsNpc();
       const current = skillManager.getCurrentLevel(Skill.DEFENCE);
-      const drainAmount = Math.floor(current * DEFENCE_DRAIN_FRACTION);
+      const drainAmount = Math.floor(current * config.percent / 100);
       skillManager.setCurrentLevels(Skill.DEFENCE, Math.max(0, current - drainAmount));
     }
   }
@@ -42,6 +45,7 @@ module.exports = function registerStatiusWarhammerBhSpecialAttack(api) {
       minimumDamageMultiplier: 0.25,
       maximumDamageMultiplier: 1.25,
     },
+    metadata: { editorMechanics: mechanicSchema("defence-drain", { percent: DEFENCE_DRAIN_FRACTION * 100, requireDamage: true, playersOnly: true }) },
     combatMethod: new StatiusWarhammerBhCombatMethod(),
   });
 };

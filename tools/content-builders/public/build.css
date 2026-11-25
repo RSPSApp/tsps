@@ -1,0 +1,35 @@
+/* Build stays inside the existing inspector and inherits the creator's warm palette. */
+.build-tab{min-width:0;font-family:"Trebuchet MS",Arial,sans-serif}
+.build-tab .build-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 0}
+.build-tab .build-heading h3{margin:0;font-family:Georgia,serif}
+.build-tab .build-reset{padding:2px 7px;font-size:11px;color:var(--muted)}
+.build-tab .build-identity,.build-tab .build-hint{font-size:11px;line-height:1.45;color:var(--muted);margin:5px 0;overflow-wrap:anywhere}
+.build-tab .build-source{display:flex;justify-content:space-between;align-items:center;gap:5px;padding-bottom:6px;font-size:11px;color:var(--muted);border-bottom:1px solid #63533870}
+.build-tab .build-source button{font-size:11px;padding:3px 6px}
+.build-tab .build-actions{gap:4px;margin:6px 0}
+.build-tab .build-actions button{font-size:12px;flex:1;padding:5px 6px}
+.build-tab .build-transform-row{grid-template-columns:83px minmax(22px,1fr) 63px;gap:5px!important;margin:6px 0!important}
+.build-tab .build-transform-row input[type=number]{width:100%;padding:4px 3px;font-variant-numeric:tabular-nums}
+.build-tab .build-axis{display:flex;align-items:center;gap:4px;min-width:0;font-size:11px}
+.build-tab .build-axis small{font-weight:bold;width:12px;flex-shrink:0;text-align:center}
+.build-tab [data-axis=x] small,.build-tab .build-nudges [data-axis=x]>span{color:#e3a68f}
+.build-tab [data-axis=y] small,.build-tab .build-nudges [data-axis=y]>span{color:#b9cf8f}
+.build-tab [data-axis=z] small,.build-tab .build-nudges [data-axis=z]>span{color:#a1c5de}
+.build-tab .build-value-row{display:grid;grid-template-columns:minmax(0,1fr) 66px;align-items:center}
+.build-tab .build-value-row .build-axis{font-size:12px}
+.build-tab .build-value-row input{width:100%}
+.build-tab input[aria-invalid=true]{border-color:#f2b19c;outline:1px solid #f2b19c}
+.build-tab .build-group>details{border-bottom:0;padding:0}
+.build-tab .build-group>details>summary{padding:5px 0;font-size:11px;color:var(--muted)}
+.build-tab .build-step{display:flex;justify-content:space-between;align-items:center;gap:7px}
+.build-tab .build-step select{width:auto;padding:3px;font-size:11px}
+.build-tab .build-nudges{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin:6px 0}
+.build-tab .build-nudges>div{display:grid;grid-template-columns:1fr 16px 1fr;align-items:center;text-align:center;gap:2px}
+.build-tab .build-nudges button{padding:3px;min-height:29px;font-size:16px}
+.build-tab .build-shortcuts{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;line-height:1.4;margin:4px 0}
+.build-tab .build-shortcuts dt{color:var(--text)}
+.build-tab .build-shortcuts dd{margin:0;color:var(--muted)}
+.build-tab button:focus-visible,.build-tab input:focus-visible,.build-tab select:focus-visible,.build-tab summary:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+@media(max-width:1100px){.build-tab .build-transform-row{grid-template-columns:73px minmax(20px,1fr) 58px}.build-tab .build-actions button{font-size:11px}.build-tab .build-axis small{width:9px}}
+
+.gear-view-generator{display:grid;gap:8px;padding:8px 0 12px}.gear-view-generator h3{color:var(--gold)}.gear-view-generator .build-hint{margin:0}.gear-view-generator select{width:100%}.gear-view-drafts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.gear-view-drafts figure{margin:0;min-width:0;text-align:center}.gear-view-drafts canvas{width:100%;height:auto;background:#14130f}.gear-view-drafts figcaption{font-size:12px;color:var(--muted)}

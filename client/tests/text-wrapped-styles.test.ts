@@ -97,3 +97,17 @@ assert.deepEqual(
 );
 
 console.log("text-wrapped-styles: ok");
+
+// An overflowing custom line moves only left, dwells at both ends and restarts.
+const { overflowOffset, scrollingTextOffset } = require('../widgets/components/textOverflow');
+assert.equal(overflowOffset(70, 10, 1200), 0);
+assert.equal(overflowOffset(70, 10, 2200), 24);
+assert.equal(overflowOffset(70, 10, 3700), 60);
+assert.equal(overflowOffset(70, 10, 4800), 60);
+assert.equal(overflowOffset(70, 10, 4900), 0);
+assert.equal(overflowOffset(8, 10, 2200), 0, 'fitting text stays still');
+const pooled = {};
+assert.equal(scrollingTextOffset(pooled, 'first', 70, 10, 0), 0);
+assert.equal(scrollingTextOffset(pooled, 'first', 70, 10, 2200), 24);
+assert.equal(scrollingTextOffset(pooled, 'second', 70, 10, 2200), 0, 'a recycled row starts from its beginning');
+assert.equal(scrollingTextOffset(pooled, 'second', 70, 20, 4400), 0, 'resizing resets the reading pause');

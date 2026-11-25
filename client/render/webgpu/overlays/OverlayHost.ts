@@ -986,7 +986,7 @@ export class OverlayHost {
 
     resolveNpcHighlightTargetFromEntry(
         entry:
-            | Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId">
+            | Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId" | "cosmeticNpcKey">
             | undefined,
         fallbackTile?: { tileX: number; tileY: number; plane?: number },
     ): NpcHighlightTarget | undefined {
@@ -995,7 +995,7 @@ export class OverlayHost {
 
     resolveInteractHighlightTargetFromEntry(
         entry:
-            | Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId">
+            | Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId" | "cosmeticNpcKey">
             | undefined,
         fallbackTile?: { tileX: number; tileY: number; plane?: number },
     ): InteractHighlightTarget | undefined {

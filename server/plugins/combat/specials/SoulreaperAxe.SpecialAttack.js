@@ -31,7 +31,7 @@ function setStacks(player, value) {
 }
 
 function wieldsAxe(player) {
-  return axeIds.has(player.getEquipment().get(core.Equipment.WEAPON_SLOT).getId());
+  return axeIds.has(core.CombatSpecial.weaponIdFor(player));
 }
 
 function beheading(player) {
@@ -92,7 +92,7 @@ function buildSpecial(api) {
 
   class BeheadCombatMethod extends MeleeCombatMethod {
     start(character) {
-      const ornament = character.getEquipment().get(core.Equipment.WEAPON_SLOT).getId() === ItemIdentifiers.SOULREAPER_AXE_O_;
+      const ornament = core.CombatSpecial.weaponIdFor(character) === ItemIdentifiers.SOULREAPER_AXE_O_;
       character.performAnimation(animation);
       character.performGraphic(ornament ? ornamentGraphic : graphic);
       // Behead costs no energy, but it is a special attack performed ("combat-special:performed" rides on drain).

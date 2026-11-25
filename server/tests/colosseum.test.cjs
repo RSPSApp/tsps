@@ -380,7 +380,7 @@ test('a run: Minimus greets, the screen offers the modifiers, and confirming sta
   click(41);
   assert.equal(player.varbits.get(9790), 1, 'Blasphemy tier varbit');
   assert.equal(player.varbits.get('varp4135'), 100);
-  assert.equal(run.minimus, null);
+  assert.equal(run.minimus?.getId() ?? null, null);
   ticks(4);
   assert.equal(run.stage, 'starting');
   ticks(1);
@@ -396,7 +396,7 @@ test('a run: Minimus greets, the screen offers the modifiers, and confirming sta
   assert.equal(run.stage, 'intermission');
   assert.match(player.messages.at(-1), /^Wave 1 completed! Duration: /);
   for (let offset = 0; offset <= 2; offset++) {
-    assert.equal(run.minimus, null, `237/1150 t12186-12188: no Minimus at +${offset}`);
+    assert.equal(run.minimus?.getId() ?? null, null, `237/1150 t12186-12188: no Minimus at +${offset}`);
     assert.equal(player.getInterfaceId(), -1);
     ticks(1);
   }
@@ -437,7 +437,7 @@ test('Start-wave before wave 1 keeps prayers on and sets busy one tick after ope
   assert.equal(run.confirm(), true);
   assert.equal(player.varbits.get(12393), 0, '237/1150 t12203: Confirm clears busy immediately');
   assert.equal(player.getInterfaceId(), -1);
-  assert.equal(run.minimus, null);
+  assert.equal(run.minimus?.getId() ?? null, null);
 });
 
 test('automatic intermission turns off active prayers and quick prayers on the return tick', (t) => {
@@ -476,7 +476,7 @@ test('closing a between-wave modal keeps Minimus and all eight offer arguments o
   player.getPacketSender().sendInterfaceRemoval();
   assert.equal(player.varbits.get(12393) ?? 0, 0);
   assert.equal(player.messages.length, messages, '237/1150 t12660: a plain close is silent');
-  assert.equal(run.minimus, minimus);
+  assert.ok(run.minimus === minimus, 'closing leaves the same Minimus in place');
   run.random = () => 0.999;
   start({ player, npc: minimus });
   assert.equal(player.getInterfaceId(), 865, '237/1150 t12662: Start-wave reopens it');
@@ -1096,14 +1096,14 @@ test('wave 12: Sol greets by attempt, lands behind the barricade, and his death 
   assert.equal(player.getAttribute(Sol.ATTR.KILLS), 1);
   assert.equal(player.getAttribute(Scoreboard.ATTR.BEST), run.totalTicks, "the run's time is the scoreboard's best");
   ticks(7);
-  assert.equal(run.minimus, null, '237/1150 t25447: no Minimus through +7');
-  assert.equal(run.chest, null);
+  assert.equal(run.minimus?.getId() ?? null, null, '237/1150 t25447: no Minimus through +7');
+  assert.equal(run.chest?.getId() ?? null, null);
   assert.deepEqual(player.jingles, []);
   ticks(1);
   assert.deepEqual(player.jingles, [[305, 0]], '237/1150 t25448: jingle at +8');
   assert.deepEqual([run.minimus.location.getX(), run.minimus.location.getY(), run.minimus.face],
     [1830, 3103, 3], 'Minimus appears at +8 facing west');
-  assert.equal(run.chest, null);
+  assert.equal(run.chest?.getId() ?? null, null);
   ticks(1);
   assert.equal(run.stage, 'finished');
   assert.deepEqual(
@@ -1130,8 +1130,8 @@ test('Volatility delays the chest and Solarflare and leaves Sol’s gib for thre
   run.tick();
   assert.equal(player.getAttribute(Sol.ATTR.KILLS), 1);
   ticks(8);
-  assert.equal(run.chest, null);
-  assert.equal(run.minimus, null);
+  assert.equal(run.chest?.getId() ?? null, null);
+  assert.equal(run.minimus?.getId() ?? null, null);
   assert.deepEqual(player.jingles, []);
   assert.equal(orb.isRegistered(), true, '237/1150 t14991–14999: the orb survives the kill tick');
   assert.equal(player.graphics.some(([id]) => id === 2724), false, 'no early explosion');
@@ -1141,11 +1141,11 @@ test('Volatility delays the chest and Solarflare and leaves Sol’s gib for thre
   assert.deepEqual([gib.location.getX(), gib.location.getY()], [1822, 3106]);
   assert.equal(run.npcs.has(gib), false, 'the gib is not an enemy');
   assert.deepEqual(player.graphics.filter(([id]) => id === 2724), [[2724, 1824, 3108]]);
-  assert.equal(run.minimus, null);
+  assert.equal(run.minimus?.getId() ?? null, null);
   ticks(1);
   assert.deepEqual(player.jingles, [[305, 0]], '237/1150 t15001: jingle at +10');
   assert.equal(run.minimus?.getId(), 12808);
-  assert.equal(run.chest, null);
+  assert.equal(run.chest?.getId() ?? null, null);
   assert.equal(orb.isRegistered(), true);
   ticks(1);
   assert.equal(run.chest?.getId(), 50741, '237/1150 t15002: chest at +11');
@@ -1164,8 +1164,8 @@ test('dying after Sol falls cancels the pending victory rewards', (t) => {
   ticks(7);
   Arena.dyingInRun({ player });
   ticks(4);
-  assert.equal(run.chest, null);
-  assert.equal(run.minimus, null);
+  assert.equal(run.chest?.getId() ?? null, null);
+  assert.equal(run.minimus?.getId() ?? null, null);
   assert.deepEqual(player.jingles, []);
 });
 

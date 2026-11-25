@@ -107,7 +107,7 @@ grave).
 
 As captured twice (R1695 ticks 4831-4934, R1140 ticks 7605-7693): the same fade into her chamber, the player at 1371,4511, her track (807) unlocked and played with the move in. The guardian (`amoxliatl_quest`, 13686) is there 2 ticks later as the fade comes back, with no rise and no line, and attacks 4 ticks after that; the fight is hers in every other way, with the quest's colours on the special messages.
 
-She doesn't die. At 0 HP (`questEnd` in `Kills.Amoxliatl.js`) she becomes `amoxliatl_quest_inactive` (13687), plays 11531 with "Zema ami miki!" overhead and as `npc_say`, her pools go with a puff, and she throws one last icicle (2936, cycles 50-90, heights 112 to 25) at the player. 3 ticks later the player teleports (4018, spot 2754) as she plays her death (11532), sound 7928 a tick after; 6 ticks after the 0 HP the player is at 1615,3211, and a tick later the quest's "Amoxliatl banishes you from Tapoyauik." No loot, kill count or best time.
+She doesn't die. At 0 HP (`questEnd` in `Kills.Amoxliatl.js`) she becomes `amoxliatl_quest_inactive` (13687), plays 11531 with "Zema ami miki!" overhead and as `npc_say`, her pools go with a puff, and she throws one last icicle (2936, cycles 50-90, heights 112 to 25) at the player. 3 ticks later the player teleports (4018, spot 2754) as she plays her death (11532), sound 7928 and the HP HUD going a tick after; 6 ticks after the 0 HP the player is at 1615,3211, and a tick later the quest's "Amoxliatl banishes you from Tapoyauik." No loot, kill count or best time. As recorded, the quest moves on (varbit 72 to 74, `amoxliatl:quest-won`) and the player is held on the 0 HP tick, so a logout before the teleport keeps the win and is saved at 1615,3211.
 
 ## Not in yet
 

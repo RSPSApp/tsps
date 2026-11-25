@@ -8,9 +8,10 @@
  *
  * The quest's guardian doesn't die (R1140 ticks 7686-7693, R1695 4926-4934): at 0 HP she becomes
  * amoxliatl_quest_inactive (13687) with 11531 and "Zema ami miki!", her pools go with a puff, and she
- * throws a last icicle at the player. 3 ticks later the player teleports (4018, 2754) as she plays
- * her death (11532), the sound 7928 a tick after, and 6 ticks after the 0 HP the player is out:
- * the quest plugin's banishment ("amoxliatl:quest-defeated").
+ * throws a last icicle at the player. The quest moves on that tick ("amoxliatl:quest-won") and the
+ * player is held. 3 ticks later the player teleports (4018, 2754) as she plays her death (11532),
+ * the sound 7928 and the HUD going a tick after, and 6 ticks after the 0 HP the player is out: the
+ * quest plugin's banishment ("amoxliatl:quest-defeated").
  */
 const Common = require("./Common.Amoxliatl");
 const CombatAchievements = require("./CombatAchievements.Amoxliatl");
@@ -37,6 +38,11 @@ function questEnd(fight) {
   const { Animation, ChatType, Graphic, Projectile } = Common.core;
   const { session, player, boss } = fight;
   const end = Common.data.questEnd;
+  // As captured, the quest moves on (varbit 72 to 74) and the player is held on the 0 HP tick, so a
+  // logout or death before the teleport keeps the won fight (Chamber saves them at `outside`).
+  session.banished = true;
+  session.holdGeneration = player.getMovementQueue().reset().setBlockMovement(true).getBlockMovementGeneration();
+  Common.api.emitCustomEvent('amoxliatl:quest-won', { player });
   fight.died();
   boss.setHitpointsLocked(true);
   boss.getCombat().reset();
@@ -60,10 +66,14 @@ function questEnd(fight) {
     player.performGraphic(new Graphic(end.playerSpotanim));
     boss.performAnimation(new Animation(end.deathAnim));
   });
-  Common.later(end.soundTicks, () => live() && player.getPacketSender().sendSoundEffect(end.sound, 1, 0));
+  // Both recordings hide her HP bar with the sound (R1140 7690, R1695 4931), 2 ticks before the player is out.
+  Common.later(end.soundTicks, () => {
+    if (!live()) return;
+    player.getPacketSender().sendSoundEffect(end.sound, 1, 0);
+    fight.hideHud();
+  });
   Common.later(end.outTicks, () => {
     if (!live()) return;
-    fight.hideHud();
     session.end();
     Common.api.emitCustomEvent('amoxliatl:quest-defeated', { player });
   });

@@ -57,7 +57,7 @@ function areaClass() {
      */
     postLeave(mobile, logout) {
       const player = mobile.isPlayer?.() && this.session?.player === mobile.getAsPlayer() ? mobile.getAsPlayer() : null;
-      if (player && logout) player.setLocation(Common.toLocation(Common.data.door.outside));
+      if (player && logout) player.setLocation(this.session.outside());
       if (player) this.session.end();
       super.postLeave(mobile, logout);
     }
@@ -139,10 +139,18 @@ class Session {
     this.end();
   }
 
+  /** Where a logout is saved: outside the door, or where the quest banishes a player who has already won. */
+  outside() {
+    return Common.toLocation(this.banished ? Common.data.questEnd.outside : Common.data.door.outside);
+  }
+
   end() {
     if (this.ended) return;
     this.ended = true;
     sessions.delete(this.player);
+    // questEnd held the player from the 0 HP tick; give it back unless something else took it since.
+    const movement = this.player.getMovementQueue();
+    if (this.banished && movement.getBlockMovementGeneration() === this.holdGeneration) movement.setBlockMovement(false);
     this.fight?.stop();
     if (this.echoToken) {
       this.player.getCombat().reset();
@@ -221,7 +229,7 @@ function validateEcho(player, token) {
 function logout({ player }) {
   const session = sessionOf(player);
   if (!session) return;
-  if (player.getArea() === session.area) player.setLocation(Common.toLocation(Common.data.door.outside));
+  if (player.getArea() === session.area) player.setLocation(session.outside());
   session.end();
 }
 function playerDeath({ player }) { sessionOf(player)?.end(); }

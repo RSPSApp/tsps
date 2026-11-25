@@ -132,7 +132,7 @@
     "shatterHeal": [16, 25]
   },
   "questEnd": {
-    "about": "The quest's guardian doesn't die (R1140 ticks 7686-7693, R1695 4926-4934): at 0 HP she becomes 13687 with 11531 and 'Zema ami miki!', her pools go, and she throws one last icicle at the player; 3 ticks later the player's teleport (4018, 2754) and her death (11532), the sound a tick after, and the player is out 6 ticks after the 0 HP.",
+    "about": "The quest's guardian doesn't die (R1140 ticks 7686-7693, R1695 4926-4934): at 0 HP she becomes 13687 with 11531 and 'Zema ami miki!', her pools go, and she throws one last icicle at the player; 3 ticks later the player's teleport (4018, 2754) and her death (11532), the sound and the HP HUD going (hpbar_hud_npc -1) a tick after, and the player is out 6 ticks after the 0 HP. The quest varbit moves on (72 to 74) and the player is held on the 0 HP tick; a logout before the teleport is saved at `outside`, where the quest lands the player (R1140 tick 7692).",
     "inactive": 13687,
     "anim": 11531,
     "say": "Zema ami miki!",
@@ -143,7 +143,8 @@
     "deathAnim": 11532,
     "soundTicks": 4,
     "sound": 7928,
-    "outTicks": 6
+    "outTicks": 6,
+    "outside": [1615, 3211, 0]
   },
   "kill": {
     "about": "As captured: the pools go on the killing blow; 2 ticks later (deathTicks) the kill count, the fight's length and the loot on her middle tile.",

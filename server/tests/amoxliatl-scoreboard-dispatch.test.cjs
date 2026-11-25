@@ -107,6 +107,29 @@ test('a death in a real chamber counts, as onPlayerDefeated hears it', (t) => {
   assert.equal(text(p, 11), '1');
 });
 
+test("a logout between the quest guardian's 0 HP and the teleport keeps the won fight", (t) => {
+  const p = reader(t);
+  const S = { FIGHT: 72, BANISHED: 74 };
+  quest.setStage(p, S.FIGHT);
+  PluginManager.emitCustomEvent('amoxliatl:quest-fight', { player: p, handled: false });
+  tick(8);
+  const session = Chamber.sessionOf(p);
+  assert.ok(session?.quest && session.boss, 'her quest fight is on');
+  session.boss.setHitpoints(0);
+  session.boss.appendDeath();
+  assert.equal(quest.getStage(p), S.BANISHED, 'the quest moves on at 0 HP');
+  assert.equal(p.getMovementQueue().isMovementBlocked(), true, 'held for the banishment');
+  tick(2);
+  // A logout's first step (Player.onLogout): the area's leave, as the area's plugin.
+  PluginManager.callArea(p.getArea(), 'leave', p, true);
+  assert.equal(Chamber.sessionOf(p), null);
+  assert.equal(quest.getStage(p), S.BANISHED);
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [1615, 3211, 0], 'saved where she banishes you');
+  assert.equal(p.getMovementQueue().isMovementBlocked(), false, 'the hold is given back');
+  tick(6);
+  assert.equal(quest.getStage(p), S.BANISHED, 'nothing runs after the logout');
+});
+
 test("a death in the quest's own fight in her chamber is not counted", (t) => {
   const p = reader(t);
   PluginManager.emitCustomEvent('amoxliatl:quest-fight', { player: p, handled: false });

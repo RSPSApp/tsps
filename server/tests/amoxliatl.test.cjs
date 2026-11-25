@@ -443,6 +443,10 @@ test("the quest's guardian banishes at 0 HP instead of dying", (t) => {
   const combat = (who) => ({ reset: () => at(`${who} combat reset`), getHitQueue: () => ({ clear() {} }) });
   const player = {
     isRegistered: () => true, getLocation: () => new Location(1365, 4511, 0), getCombat: () => combat("player"),
+    getMovementQueue() {
+      const queue = { reset: () => queue, setBlockMovement: (blocked) => { at(`held ${blocked}`); return queue; }, getBlockMovementGeneration: () => 1 };
+      return queue;
+    },
     performAnimation: (a) => at(`player anim ${a.id}`), performGraphic: (g) => at(`player spot ${g.id}`),
     getPacketSender: () => ({
       sendTypedMessage: (type, text, from) => at(`${type} ${from}|${text}`),
@@ -466,12 +470,14 @@ test("the quest's guardian banishes at 0 HP instead of dying", (t) => {
   death({ npc: boss });
   for (tick = 1; tick <= 6; tick++) tasks.forEach((task) => task.isRunning() && task.tick());
   assert.deepEqual(log, [
+    [0, "held true"], ["amoxliatl:quest-won", true],
     [0, "ice goes"], [0, "locked true"], [0, "boss combat reset"], [0, "player combat reset"], [0, "becomes 13687"],
     [0, "boss anim 11531"], [0, "says Zema ami miki!"], [0, `${ChatType.NPC_SAY} Amoxliatl|Zema ami miki!`],
     [3, "player anim 4018"], [3, "player spot 2754"], [3, "boss anim 11532"],
-    [4, "sound 7928"],
-    [6, "hud hidden"], [6, "chamber ends"], ["amoxliatl:quest-defeated", true],
+    [4, "sound 7928"], [4, "hud hidden"],
+    [6, "chamber ends"], ["amoxliatl:quest-defeated", true],
   ]);
+  assert.equal(session.banished, true);
 });
 
 test('Echo completes once without normal kill, best-time, achievement or respawn credit', () => {

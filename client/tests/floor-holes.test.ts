@@ -2,12 +2,19 @@ import { strict as assert } from "node:assert";
 import path from "node:path";
 
 import { Scene } from "../rs/scene/Scene";
+import { LocEntity } from "../rs/scene/entity/LocEntity";
+import { ModelData } from "../rs/model/ModelData";
 import { CachePipeline } from "../../server/src/main/typescript/elvarg/game/cache/CachePipeline";
 import { CacheMaps } from "../../server/src/main/typescript/elvarg/game/cache/CacheMaps";
 import { CacheIndexDat2 } from "../../server/src/main/typescript/elvarg/game/cache/codec/rs/cache/CacheIndex";
 import { OverlayFloorType } from "../rs/config/floortype/OverlayFloorType";
 import { ByteBuffer } from "../rs/io/ByteBuffer";
-import { SceneBuilder } from "../rs/scene/SceneBuilder";
+import { LocLoadType, SceneBuilder } from "../rs/scene/SceneBuilder";
+import { getSceneLocs } from "../render/loc/SceneLocs";
+import { CacheSystem } from "../rs/cache/CacheSystem";
+import { getCacheLoaderFactory } from "../rs/cache/loader/CacheLoaderFactory";
+import { LocModelLoader } from "../rs/config/loctype/LocModelLoader";
+import { loadCache, loadCacheInfos, loadCacheList } from "../scripts/cache/load-util";
 
 /**
  * Floor holes (ladder and trapdoor openings) are tiles the map gives no floor. They must draw
@@ -126,6 +133,37 @@ async function castleWarsNativeCutouts(): Promise<void> {
     }
 }
 
+function nativeShaftGeometry(): void {
+    const info = loadCacheList(loadCacheInfos()).latest;
+    const cache = loadCache(info);
+    const factory = getCacheLoaderFactory(info, CacheSystem.fromFiles(info, cache.files));
+    const locTypes = factory.getLocTypeLoader();
+    const models = new LocModelLoader(locTypes, factory.getModelLoader(), factory.getTextureLoader(),
+        factory.getSeqTypeLoader(), factory.getSeqFrameLoader(), factory.getSkeletalSeqLoader());
+    const builder = new SceneBuilder(info, factory.getMapFileLoader(), factory.getUnderlayTypeLoader(),
+        factory.getOverlayTypeLoader(), locTypes, models, cache.xteas);
+    const castle = builder.buildScene(2368, 3072, 64, 64, false, LocLoadType.MODELS);
+    const locs = getSceneLocs(locTypes, castle, 0, 3).locs;
+    for (const [worldX, worldY] of [[2369, 3125], [2430, 3082]]) {
+        const x = worldX - 2368, y = worldY - 3072;
+        const ladder = locs.find(loc => loc.interactId === 4912 && loc.level === 0 &&
+            (loc.sceneX >> 7) === x && (loc.sceneZ >> 7) === y);
+        assert.ok(ladder, `native ladder at ${worldX},${worldY} is in the full built scene`);
+        assert.equal(Math.max(...ladder.model.verticesY), 192, "the ladder shaft extends below the old 64-unit pit bottom");
+        assert.equal(castle.tiles[0][x][y]!.tileModel!.faces.length, 0,
+            `Castle Wars ${worldX},${worldY}: terrain must not cover the existing ladder shaft`);
+    }
+    assertPit(castle.tiles[0][31][27]?.tileModel, "full build Castle Wars 2399,3099");
+    assertPit(castle.tiles[0][32][36]?.tileModel, "full build Castle Wars 2400,3108");
+    const trapdoorScene = builder.buildScene(2992, 3136, 32, 32, false, LocLoadType.MODELS);
+    const trapdoor = getSceneLocs(locTypes, trapdoorScene, 0, 3, 32).locs.find(loc => loc.interactId === 1738 &&
+        (loc.sceneX >> 7) === 16 && (loc.sceneZ >> 7) === 14);
+    assert.ok(trapdoor, "the native deep trapdoor control is present");
+    assert.ok(Math.max(...trapdoor.model.verticesY) > 64, "the trapdoor has its own deep model geometry");
+    assert.equal(trapdoorScene.tiles[0][16][14]!.tileModel!.faces.length, 0,
+        "deep trapdoors outside Castle Wars also retain their original shaft");
+}
+
 function transparentOverlayControls(): void {
     const scene = new Scene(1, 12, 12);
     for (let x = 0; x < scene.sizeX; x++) for (let y = 0; y < scene.sizeY; y++) {
@@ -135,6 +173,11 @@ function transparentOverlayControls(): void {
     scene.tileOverlays[0][3][3] = 1;
     scene.tileShapes[0][3][3] = 1; // partial cutout keeps its underlay geometry
     scene.tileOverlays[0][8][8] = 2; // textured magenta floor stays textured
+    scene.tileOverlays[0][7][3] = scene.tileOverlays[0][9][3] = 1;
+    scene.newFloorDecoration(0, 7, 3, 0, new LocEntity(1, 22, 0, 0, 7, 3, -1, false), 0n, 0);
+    const shaft = new ModelData();
+    shaft.verticesY = new Int32Array([0, 192]);
+    scene.newFloorDecoration(0, 9, 3, 0, shaft, 0n, 0);
     scene.tileUnderlays[0][2][8] = 0; // legacy missing-floor holes retain their enclosure rule
     scene.tileOverlays[0][3][8] = 1;
     scene.tileOverlays[0][4][8] = scene.tileOverlays[0][5][8] = 1; // adjacent cutouts, even over underlays
@@ -147,6 +190,8 @@ function transparentOverlayControls(): void {
     builder.addTileModels(scene, false);
     assertPit(scene.tiles[0][6][6]?.tileModel, "generic full cutout");
     assertPit(scene.tiles[0][2][8]?.tileModel, "legacy missing-floor hole beside a cutout");
+    assert.equal(scene.tiles[0][7][3]!.tileModel!.faces.length, 0, "deferred animated/multiloc geometry is not covered");
+    assert.equal(scene.tiles[0][9][3]!.tileModel!.faces.length, 0, "unlit scenery model data preserves its shaft too");
     assert.equal(scene.tiles[0][4][8]!.tileModel!.faces.length, 0, "adjacent cutouts do not enclose one another");
     assert.equal(scene.tiles[0][5][8]!.tileModel!.faces.length, 0, "underlays beneath a full cutout are not rendered floor");
     const partial = scene.tiles[0][3][3]!.tileModel!;
@@ -161,4 +206,4 @@ function transparentOverlayControls(): void {
     assert.equal(scene.tiles[0][5][6]!.tileModel!.faces.length, 2, "ordinary floor is unchanged");
 }
 
-castleWarsNativeCutouts().then(transparentOverlayControls).catch(error => { console.error(error); process.exitCode = 1; });
+castleWarsNativeCutouts().then(nativeShaftGeometry).then(transparentOverlayControls).catch(error => { console.error(error); process.exitCode = 1; });

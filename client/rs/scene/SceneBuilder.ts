@@ -22,6 +22,7 @@ import { ByteBuffer } from "../io/ByteBuffer";
 import { getMapSquareId } from "../map/MapFileIndex";
 import { MapFileLoader } from "../map/MapFileLoader";
 import { Model } from "../model/Model";
+import { ModelData } from "../model/ModelData";
 import { HSL_RGB_MAP, adjustOverlayLight, adjustUnderlayLight, packHsl } from "../util/ColorUtil";
 import { generateHeight } from "../util/HeightCalc";
 import { CollisionMap } from "./CollisionMap";
@@ -1563,7 +1564,8 @@ export class SceneBuilder {
                     const cutout = tileShapes[level][x][y] === 0 &&
                         overlay?.textureId === -1 && overlay.primaryRgb === 0xff00ff;
                     const floorHole = ((underlayId === -1 && !overlay) || cutout) &&
-                        this.isEnclosedFloorHole(scene, level, x, y, cutout);
+                        this.isEnclosedFloorHole(scene, level, x, y, cutout) &&
+                        (!cutout || !this.hasBelowFloorLoc(scene, level, x, y));
                     if (underlayId === -1 && !overlay && !floorHole) continue;
 
                     const heightSw = heights[level][x][y];
@@ -1732,6 +1734,21 @@ export class SceneBuilder {
                 (scene.tileShapes[level][tileX][tileY] !== 0 && underlay);
         };
         return floored(x - 1, y) && floored(x + 1, y) && floored(x, y - 1) && floored(x, y + 1);
+    }
+
+    /** A new cutout pit must not cover a shaft already supplied by scenery. */
+    private hasBelowFloorLoc(scene: Scene, level: number, x: number, y: number): boolean {
+        const tile = scene.tiles[level][x][y];
+        if (!tile) return false;
+        const entities = [tile.floorDecoration?.entity, tile.wall?.entity0, tile.wall?.entity1,
+            tile.wallDecoration?.entity0, tile.wallDecoration?.entity1, ...tile.locs.map(loc => loc.entity)];
+        return entities.some(entity => {
+            if (!entity) return false;
+            if (entity instanceof Model) return (entity.contourVerticesY ?? entity.verticesY).some(height => height > 0);
+            if (entity instanceof ModelData) return entity.verticesY.some(height => height > 0);
+            // Animated/multiloc geometry is deferred: do not put an opaque floor through an unknown model.
+            return true;
+        });
     }
 
     /**

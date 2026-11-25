@@ -338,6 +338,7 @@ test('a fresh account starts with the side panel setting live sends', () => {
 
 test('dialogue catalog extension preserves cache data, is idempotent, and rejects ambiguous native metadata', t => {
   const native = new Map(CacheDefinitions.getEnumValues(1561));
+  assert.deepEqual(Settings.settingsEnumEntries(1561, true), [...native], 'native clients use their raw cache rows');
   const extended = Settings.settingsEnumEntries(1561);
   assert.deepEqual([...CacheDefinitions.getEnumValues(1561)], [...native], 'the cache itself is never patched');
   const getEnums = CacheDefinitions.getEnumValues.bind(CacheDefinitions);

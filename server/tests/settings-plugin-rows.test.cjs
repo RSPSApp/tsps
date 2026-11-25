@@ -300,7 +300,7 @@ test('Farming protection payment confirmation (295): an old save\'s "don\'t ask 
   assert.equal('gardenerNoAsk' in Patches.farmFor(fresh.p), false);
 });
 
-test('native dialogue display is reachable in category and search, changes only its bit, and survives saved login', async t => {
+test('browser dialogue display is reachable in category and search, changes only its bit, and survives saved login', async t => {
   const f = actor(t), sender = f.p.getPacketSender(), content = [], flags = [];
   const sendContent = sender.sendContentData.bind(sender), sendFlags = sender.sendInterfaceFlagsRange.bind(sender);
   t.mock.method(sender, 'sendContentData', (source, datasets) => { content.push({source, datasets}); return sendContent(source, datasets); });
@@ -308,7 +308,7 @@ test('native dialogue display is reachable in category and search, changes only 
   Settings.openAllSettings(f.p);
   assert.equal(content[0].source, 'settings:catalog', 'the override owns only its named content sender');
   const override = content.flatMap(c => c.datasets).find(d => d.key === 'enumOverrides')?.rows.find(r => r.enumId === 1561);
-  assert.ok(override, 'native Chat catalog must expose the existing dialogue-display struct');
+  assert.ok(override, 'browser Chat catalog must expose the existing dialogue-display struct');
   assert.equal(override.entries.filter(([, id]) => id === 4452).length, 1);
   assert.deepEqual(override.entries.slice(0, -1), [...CacheDefinitions.getEnumValues(1561)], 'existing native Chat rows keep their keys and order');
   assert.equal(CacheDefinitions.getStructParams(4452).get(1077), 303);
@@ -347,4 +347,22 @@ test('native dialogue display is reachable in category and search, changes only 
   assert.equal(varbit(f.p, 9657), ids.at(-1), 'the last search row reaches its own setting');
   await clickRow(2, chatRow - 1);
   assert.equal(varbit(f.p, 9657), ids[ids.indexOf(303) - 1], 'the preceding native row keeps its identity');
+
+  // Both catalog variants coexist in one process: opening one must not reuse the other's indices.
+  const native = actor(t), nativeIds = [];
+  native.p.setAttribute('native-client', true);
+  for (const [, categoryStruct] of CacheDefinitions.getEnumValues(422)) {
+    const category = CacheDefinitions.getStructParams(Number(categoryStruct));
+    for (const [, row] of CacheDefinitions.getEnumValues(Number(category.get(745))))
+      nativeIds.push(Number(CacheDefinitions.getStructParams(Number(row)).get(1077)));
+  }
+  Settings.openAllSettings(native.p);
+  native.p.setAttribute('settings-view', -1);
+  await input(native, {type:'widget_action', widgetId:(134 << 16) | 20, groupId:134, childId:20, buttonNum:1, slot:nativeIds.indexOf(306)});
+  assert.equal(varbit(native.p, 9657),306,'native search keeps raw cache indices after browser catalog use');
+  assert.equal(varbit(native.p,5698),1);
+  assert.equal(varbit(native.p,5697),0);
+  await clickRow(-1,ids.indexOf(303));
+  assert.equal(varbit(f.p,9657),303,'browser search retains its extra row after native catalog use');
+  assert.equal(varbit(f.p,14709),1);
 });

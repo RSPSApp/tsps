@@ -542,6 +542,10 @@ Rows 305 and 306 are `data/settings.json` toggles, off for a new account. While 
 | Ammo-picking behaviour | 305 | varbit 5697 `take_ammo_toggle` | Ammo matching the worn ammo slot stacks there (`npcs/Tutors.plugin.js`); otherwise ammo matching a worn Dizana's quiver goes into it (`items/DizanasQuiver.plugin.js`) |
 | Rune-picking behaviour | 306 | varbit 5698 `take_runes_toggle` | Runes picked up, or made at an altar, go into the carried rune pouch when a slot already holds that rune with room for all of them (`items/runepouch/Pickup.RunePouch.js`, [rune-pouch.md](rune-pouch.md)) |
 
+RuneLite/native clients use the settings rows in their unchanged cache. The browser has one additional Chat row (Dialogue display, setting 303), advertised through its enum override. The server keeps a separate cache-derived catalogue for each client type, including search indices and clickable ranges. Without this distinction, the extra Chat row shifted native search indices: selecting Rune-picking (306) reached Ammo-picking (305), whose next update cleared the native client's locally selected Rune checkbox.
+
+`tests/pickup-containers.test.cjs` exercises native IF_BUTTON1 bytes through the real decoder, turn queue, settings handler, PlayerSave/fresh login and ground Take path. `tests/settings-plugin-rows.test.cjs` checks browser 303 and native Rune searches in the same process; `runelite-gateway/src/test/kotlin/gateway/down/InterfacesEventsTest.kt` checks the separate Rune/Ammo updates preserve both bits and unrelated bits in the native whole varp. These are in-process protocol tests, without a rendered client or live RuneLite session.
+
 The tutors write the same rows: the Ranged combat tutor's "Can you toggle my ammo to equip when I pick it up please?" sets 305, and the Magic combat tutor's "Let's discuss how my runes act when I pick them up." sets 306. A pre-Settings Ranged tutor choice saved on the old `ranged:equip-ammo-on-pickup` attribute is migrated into row 305 at login unless a setting is already saved.
 
 - **Not done**: the bolt pouch, the row's other target for ammo, is not in tsps yet (see row 356).

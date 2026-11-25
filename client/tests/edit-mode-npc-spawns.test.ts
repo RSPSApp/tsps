@@ -21,6 +21,7 @@ Object.assign(globalThis, {
     requestAnimationFrame: dom.window.requestAnimationFrame.bind(dom.window),
     cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window),
 });
+dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
 const canvas = document.querySelector("canvas")!;
 
 {
@@ -436,20 +437,25 @@ plugin.importNpcSpawnEdits([{
 }]);
 const { mountEditorUi } = require("../game/plugins/editmode/EditorUi");
 const FileSaver = require("file-saver");
-const savedFiles: Array<{ name: string; contents: Promise<string> }> = [];
+const savedFiles: Array<{ name: string; contents: Blob }> = [];
 const originalSaveAs = FileSaver.saveAs;
 FileSaver.saveAs = (blob: Blob, name: string) => {
-    savedFiles.push({ name, contents: blob.text() });
+    savedFiles.push({ name, contents: blob });
 };
 const removeUi = mountEditorUi(plugin);
-const download = [...document.querySelectorAll('[role="toolbar"] button')]
-    .find((button) => button.getAttribute("aria-label") === "Download world and map edits") as HTMLButtonElement;
+document.querySelector<HTMLButtonElement>('button[aria-label="Review and save pending map changes"]')!.click();
+const download = document.querySelector<HTMLButtonElement>('[data-map-editor="review-changes"] button[aria-label="Download map overrides as a ZIP"]')!;
 assert.ok(download, "standalone editors have the download action");
 const savedNpcPatch = async (): Promise<string> => {
     download.click();
-    const file = savedFiles.find((saved) => saved.name === "npc-spawns-custom.json");
-    assert.ok(file, "the editor writes npc-spawns-custom.json");
-    return file.contents;
+    const deadline = Date.now() + 1500;
+    while (!savedFiles.length && Date.now() < deadline) await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    const file = savedFiles.find((saved) => saved.name === "map-overrides.zip");
+    assert.ok(file, "the editor writes a map layer ZIP");
+    const zip = await require("jszip").loadAsync(await file.contents.arrayBuffer());
+    const patch = Object.keys(zip.files).find((path) => path.endsWith("/definitions/npc-spawns-custom.json"));
+    assert.ok(patch, "the ZIP includes the NPC patch");
+    return zip.file(patch).async("string");
 };
 
 void (async () => {

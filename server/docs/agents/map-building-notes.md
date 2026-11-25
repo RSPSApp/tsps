@@ -71,7 +71,7 @@ build the houses (doors to the road) and fields, then decorate and add people la
 | Floors and flags in a house | Indoor tiles: floor overlay 81 and flag 4 on every storey (the roof hides when you are under it); flag 16 on the roof plane over the whole footprint |
 | Top-down screenshots show a hole in the middle of a roof | Real houses too (pasted varrock-house-a): the camera, not the build. Judge roofs from an angle |
 | A generated door opens | Varrock's door 11773 placed by `build_house` opens to 11774 and the player walks in |
-| `capture_style`'s window guess for varrock-house (4501) is a small wall lamp | Real windows there may be wall variants (23826); placing a variant in place of a wall piece is not built yet |
+| Varrock windows | 4501 is a small wall lamp. Seeded Varrock houses use 23826, the actual shape-0 window wall in the same footprint. |
 | Graveyard path overlay 1 in the desert | Renders light grey, not brown dirt |
 | Overlay 343 (Pollnivneach's street) | Renders as light sand in the desert: a good desert street. Al Kharid's 26 reads green-grey |
 | **`includeCache` clears your own placements too** | It razes everything in the rectangle. Clearing desert rubble off a road after decorating took the well, benches, crates, a signpost and a palm with it. Clear roads and sites first, then decorate |
@@ -97,6 +97,11 @@ build the houses (doors to the road) and fields, then decorate and add people la
 | `lumbridge-castle` | Lumbridge castle | Wall 1911, door 1535 |
 | `emir-sandstone` | Emir's Arena | Wall overridden to 44884 (low wall); the most common piece there is the wooden fence 3125 |
 | `lumbridge-fence` | Lumbridge cow field | Fence 980 with gate 1558; a pen with a gate checked by screenshot |
+| `lumbridge-cottage`, `draynor-cottage` | Lumbridge inn at 3227,3229 and Ned's cottage at 3095,3254 | The eaves and slopes use different loc IDs. The inn uses 1790 and 1924, Ned's cottage uses 1791 and 1643. |
+| `falador-house`, `seers-timber`, `canifis-timber` | East Falador at 3024,3350, Seers' anvil block at 2702,3485 and Canifis inn at 3472,3489 | Shape-0 window locs 24189, 25899 and 24376. Canifis needs 24379 for its shape-1 corners. |
+| `al-kharid-sandstone` | Northwest Al Kharid at 3268,3177 | Sandstone wall 1415, classic roof 1925 and eaves 1791. |
+| `warriors-stone`, `cooks-stone`, `crafting-stone` | Warriors' Guild at 2837,3536, Cooks' Guild at 3137,3442 and Crafting Guild at 2927,3273 | Main walls 23949, 2554 and 1904. Furnishing sets draw from armour, ranges, potter's wheels and related locs in those map squares. |
+| `barbarian-timber`, `edgeville-ruins`, `draynor-manor` | Barbarian Village at 3071,3425, Edgeville ruins at 3078,3467 and Draynor Manor at 3094,3358 | Timber 11558 has no shape 1. Ruin masonry variants 1624–1626 were all placed in the native Edgeville map. Manor wall 11512 uses the same slate roof family as Ned's cottage. |
 
 A capture guesses roles from what is most common in the rectangle, so a rectangle that takes
 in a neighbour's building can pick that building's piece; check the result and override with
@@ -126,7 +131,10 @@ in a neighbour's building can pick that building's piece; check the result and o
   looks black or flat in a screenshot, flip it.
 - **Diagonal walls (shape 9)**: read off Falador castle, a south-west to north-east chain uses
   rotation 0 or 2, north-west to south-east 1 or 3; the pair differ in which face is finished.
-  Joints between a diagonal run and a straight one use small shape-1 pieces (not generated yet).
+  Falador (2963,3334 to 2964,3335) and Lumbridge castle (3215,3209 to 3216,3210) place a
+  shape-1 piece of the same rotation on the thick side of a seam. Draw walls and `build_wall`
+  add this piece when their style has one. Barbarian timber uses its native shape-9 pieces
+  without separate joints, as in Barbarian Village at 3084,3427 and 3085,3428.
 - **Edge-walling a region**: for every tile inside the shape, put a wall on each edge facing an
   outside tile (one edge → shape 0, two → shape 2). That closes ellipses and boxes with no gaps
   and leaves openings wherever you skip an edge.

@@ -20,6 +20,8 @@ export interface DetectedBuilding {
     shape: "Rectangle" | "Irregular";
     tiles: BuildingTile[];
     structureTiles: BuildingTile[];
+    boundaryWalls: ReadonlySet<string>;
+    terrainRoofPlane?: number;
 }
 
 interface WallEdge {
@@ -30,12 +32,13 @@ interface WallEdge {
     id: number;
     level: number;
     door: boolean;
-    type: number;
+    typeRot: number;
 }
 
 const MAX_ROOF_TILES = 4096;
 // ponytail: widest roofless interior observed in cache buildings; raise with map evidence.
 const MAX_ROOF_GAP = 4;
+const CARDINAL = [[-1, 0], [1, 0], [0, -1], [0, 1]] as const;
 const WEST = 1;
 const NORTH = 2;
 const EAST = 4;
@@ -203,12 +206,22 @@ function rectangleBoundaryCovered(
     return west.size > 0 && east.size > 0 && south.size > 0 && north.size > 0;
 }
 
+interface BuildingDetectionOptions {
+    isIndoor?: (x: number, y: number, level: number) => boolean;
+}
+
+export function buildingWallKey(x: number, y: number, loc: BuildingMapLoc): string {
+    return `${loc.id}:${x}:${y}:${loc.level}:${loc.typeRot}`;
+}
+
+/** Detect a roof made of locs or enclosed indoor tiles covered by terrain. */
 /** Detects a connected roof and, for non-rectangles, its closed wall circumference. */
 export function detectRectangularBuilding(
     pointerX: number,
     pointerY: number,
     getLocs: (x: number, y: number) => BuildingMapLoc[],
     isDoor: (id: number) => boolean = () => false,
+    options: BuildingDetectionOptions = {},
 ): DetectedBuilding | undefined {
     const cache = new Map<string, BuildingMapLoc[]>();
     const at = (x: number, y: number): BuildingMapLoc[] => {
@@ -235,42 +248,139 @@ export function detectRectangularBuilding(
         );
     };
 
+    const describe = (
+        footprint: Set<string>,
+        maxPlane: number,
+        roofGap: boolean,
+        terrainRoofPlane?: number,
+    ): DetectedBuilding | undefined => {
+        const tiles = [...footprint].map(tile);
+        const xs = tiles.map(({ x }) => x);
+        const ys = tiles.map(({ y }) => y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const width = maxX - minX + 1;
+        const depth = maxY - minY + 1;
+        const rectangular = footprint.size === width * depth;
+        const edges: WallEdge[] = [];
+        // Visit only the footprint and its neighbours, even for a winding roof.
+        const wallAnchors = new Set(footprint);
+        for (const { x, y } of tiles) {
+            for (const [dx, dy] of CARDINAL) wallAnchors.add(point(x + dx, y + dy));
+        }
+        for (const key of wallAnchors) {
+            const { x, y } = tile(key);
+            for (const loc of at(x, y)) {
+                if (loc.level > maxPlane || loc.typeRot === undefined) continue;
+                const segments = wallSegments(x, y, loc.typeRot);
+                if (segments.length === 0) continue;
+                const door = isDoor(loc.id);
+                for (const [a, b] of segments) {
+                    edges.push({ a, b, x, y, id: loc.id, level: loc.level, door, typeRot: loc.typeRot });
+                }
+            }
+        }
+
+        const boundary = edges.filter((candidate) => edgeBordersFootprint(candidate, footprint));
+        const cycle = closedWallCycle(edges, minX, maxX, minY, maxY);
+        const cyclePoints = cycle.flatMap((candidate) => [tile(candidate.a), tile(candidate.b)]);
+        const cycleEnclosesFootprint =
+            cyclePoints.length > 0 &&
+            Math.min(...cyclePoints.map(({ x }) => x)) <= minX &&
+            Math.max(...cyclePoints.map(({ x }) => x)) >= maxX + 1 &&
+            Math.min(...cyclePoints.map(({ y }) => y)) <= minY &&
+            Math.max(...cyclePoints.map(({ y }) => y)) >= maxY + 1;
+        const hasPerimeter = cycleEnclosesFootprint ||
+            (rectangular && rectangleBoundaryCovered(boundary, minX, maxX, minY, maxY));
+        const cornerTiles = new Set(
+            edges.filter(({ typeRot }) => [1, 2, 3, 9].includes(typeRot & 0x3f))
+                .map(({ x, y }) => point(x, y)),
+        );
+        const reachesEverySide =
+            edges.some(({ x }) => x <= minX + 1) && edges.some(({ x }) => x >= maxX - 1) &&
+            edges.some(({ y }) => y <= minY + 1) && edges.some(({ y }) => y >= maxY - 1);
+        // Long roof strips without a perimeter are often bridges. Very small roofs and terrain
+        // ceilings also need perimeter evidence to distinguish buildings from map decoration.
+        if (!hasPerimeter && (
+            terrainRoofPlane !== undefined || footprint.size < 4 || Math.min(width, depth) === 1 ||
+            (rectangular && !roofGap && Math.min(width, depth) <= 3 && Math.max(width, depth) >= Math.min(width, depth) * 3)
+        )) return undefined;
+        if (!rectangular && !cycle.length && (!reachesEverySide || cornerTiles.size < 4)) return undefined;
+
+        const walls = [...boundary];
+        for (const candidate of edges) {
+            // Ground and upper walls often use different IDs, and a roof overhang can leave
+            // ground walls inset by one tile. Retain those floors even when a higher cycle closes.
+            if (footprint.has(point(candidate.x, candidate.y))) walls.push(candidate);
+        }
+        const counts = new Map<number, number>();
+        const wallIds = new Set<string>();
+        let minPlane = maxPlane;
+        const structure = new Set(footprint);
+        for (const candidate of walls) {
+            const key = buildingWallKey(candidate.x, candidate.y, candidate);
+            if (wallIds.has(key)) continue;
+            wallIds.add(key);
+            structure.add(point(candidate.x, candidate.y));
+            minPlane = Math.min(minPlane, candidate.level);
+            if (!candidate.door) counts.set(candidate.id, (counts.get(candidate.id) ?? 0) + 1);
+        }
+        const wallId = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
+        if (wallId === undefined) return undefined;
+        return {
+            minX, maxX, minY, maxY, minPlane, maxPlane, wallId,
+            shape: rectangular ? "Rectangle" : "Irregular",
+            tiles,
+            structureTiles: [...structure].map(tile),
+            boundaryWalls: new Set(boundary.map((candidate) => buildingWallKey(candidate.x, candidate.y, candidate))),
+            terrainRoofPlane,
+        };
+    };
+
+    const roofChecked = new Set<string>();
+    const indoorChecked = Array.from({ length: 3 }, () => new Set<string>());
     for (let radius = 0; radius <= 1; radius++) {
         for (let dx = -radius; dx <= radius; dx++) {
             for (let dy = -radius; dy <= radius; dy++) {
                 if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
                 const seedX = pointerX + dx;
                 const seedY = pointerY + dy;
-                for (const seed of at(seedX, seedY)) {
-                    if (!isRoof(seed)) continue;
-
+                const seedKey = point(seedX, seedY);
+                if (!roofChecked.has(seedKey) && at(seedX, seedY).some(isRoof)) {
                     const roof = new Set<string>();
-                    const bridges = new Set<string>();
-                    const queue: Array<[number, number]> = [[seedX, seedY]];
+                    const gaps = new Set<string>();
+                    const queue: Array<readonly [number, number]> = [[seedX, seedY]];
+                    let maxPlane = 0;
                     for (let i = 0; i < queue.length && roof.size <= MAX_ROOF_TILES; i++) {
                         const [x, y] = queue[i];
                         const key = point(x, y);
-                        if (roof.has(key) || !at(x, y).some(isRoof)) continue;
+                        if (roof.has(key)) continue;
                         roof.add(key);
-                        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
-                            const adjacentX = x + dx;
-                            const adjacentY = y + dy;
+                        roofChecked.add(key);
+                        for (const loc of at(x, y)) {
+                            if (isRoof(loc)) maxPlane = Math.max(maxPlane, loc.level);
+                        }
+                        for (const [offsetX, offsetY] of CARDINAL) {
+                            const adjacentX = x + offsetX;
+                            const adjacentY = y + offsetY;
                             if (at(adjacentX, adjacentY).some(isRoof)) {
                                 queue.push([adjacentX, adjacentY]);
                                 continue;
                             }
-                            if (blockedBetween(x, y, x - dx, y - dy)) continue;
+                            if (blockedBetween(x, y, x - offsetX, y - offsetY)) continue;
                             let previousX = x;
                             let previousY = y;
                             for (let distance = 1; distance <= MAX_ROOF_GAP + 1; distance++) {
-                                const nextX = x + dx * distance;
-                                const nextY = y + dy * distance;
+                                const nextX = x + offsetX * distance;
+                                const nextY = y + offsetY * distance;
                                 if (blockedBetween(previousX, previousY, nextX, nextY)) break;
                                 if (at(nextX, nextY).some(isRoof)) {
-                                    if (blockedBetween(nextX, nextY, nextX + dx, nextY + dy)) break;
+                                    if (blockedBetween(nextX, nextY, nextX + offsetX, nextY + offsetY)) break;
                                     queue.push([nextX, nextY]);
                                     for (let gap = 1; gap < distance; gap++) {
-                                        bridges.add(point(x + dx * gap, y + dy * gap));
+                                        gaps.add(point(x + offsetX * gap, y + offsetY * gap));
                                     }
                                     break;
                                 }
@@ -279,119 +389,44 @@ export function detectRectangularBuilding(
                             }
                         }
                     }
-                    // ponytail: cap pathological connected roofs; lift only if real maps exceed it.
-                    if (roof.size < 4 || roof.size > MAX_ROOF_TILES) continue;
-
-                    const footprint = new Set([...roof, ...bridges]);
-                    const tiles = [...footprint].map(tile);
-                    const xs = tiles.map(({ x }) => x);
-                    const ys = tiles.map(({ y }) => y);
-                    const minX = Math.min(...xs);
-                    const maxX = Math.max(...xs);
-                    const minY = Math.min(...ys);
-                    const maxY = Math.max(...ys);
-                    if (minX === maxX || minY === maxY) continue;
-                    const maxPlane = Math.max(
-                        ...tiles.flatMap(({ x, y }) =>
-                            at(x, y).filter(isRoof).map(({ level }) => level | 0),
-                        ),
-                    );
-                    const width = maxX - minX + 1;
-                    const depth = maxY - minY + 1;
-                    const rectangular = footprint.size === width * depth;
-                    const edges: WallEdge[] = [];
-                    for (let x = minX - 1; x <= maxX + 1; x++) {
-                        for (let y = minY - 1; y <= maxY + 1; y++) {
-                            for (const loc of at(x, y)) {
-                                if (loc.level > maxPlane) continue;
-                                const door = isDoor(loc.id);
-                                const type = (loc.typeRot ?? -1) & 0x3f;
-                                for (const [a, b] of wallSegments(x, y, loc.typeRot)) {
-                                    edges.push({
-                                        a,
-                                        b,
-                                        x,
-                                        y,
-                                        id: loc.id | 0,
-                                        level: loc.level | 0,
-                                        door,
-                                        type,
-                                    });
-                                }
-                            }
+                    if (roof.size <= MAX_ROOF_TILES) {
+                        const footprint = new Set([...roof, ...gaps]);
+                        if (footprint.size <= MAX_ROOF_TILES) {
+                            const building = describe(footprint, maxPlane, gaps.size > 0);
+                            if (building) return building;
                         }
                     }
-
-                    const cycle = closedWallCycle(edges, minX, maxX, minY, maxY);
-                    const cyclePoints = cycle.flatMap((candidate) => [tile(candidate.a), tile(candidate.b)]);
-                    const cycleEnclosesFootprint =
-                        cyclePoints.length > 0 &&
-                        Math.min(...cyclePoints.map(({ x }) => x)) <= minX &&
-                        Math.max(...cyclePoints.map(({ x }) => x)) >= maxX + 1 &&
-                        Math.min(...cyclePoints.map(({ y }) => y)) <= minY &&
-                        Math.max(...cyclePoints.map(({ y }) => y)) >= maxY + 1;
-                    const cornerTiles = new Set(
-                        edges
-                            .filter(({ type }) => type === 1 || type === 2 || type === 3 || type === 9)
-                            .map(({ x, y }) => point(x, y)),
-                    );
-                    const reachesEverySide =
-                        edges.some(({ x }) => x <= minX + 1) &&
-                        edges.some(({ x }) => x >= maxX - 1) &&
-                        edges.some(({ y }) => y <= minY + 1) &&
-                        edges.some(({ y }) => y >= maxY - 1);
-                    // Some cache buildings mix wall IDs and corner models which do not form a
-                    // mathematically closed edge graph. Four corners around every roof side is
-                    // the map-data equivalent, while the roof footprint still excludes fences.
-                    if (
-                        rectangular &&
-                        bridges.size === 0 &&
-                        !cycleEnclosesFootprint &&
-                        !rectangleBoundaryCovered(edges, minX, maxX, minY, maxY) &&
-                        Math.min(width, depth) <= 3 &&
-                        Math.max(width, depth) >= Math.min(width, depth) * 3
-                    ) {
-                        // ponytail: narrow unenclosed roof strips are bridges/ridges; revisit if
-                        // cache evidence produces a real long, three-tile-deep building without walls.
-                        continue;
-                    }
-                    if (!rectangular && !cycle.length && (!reachesEverySide || cornerTiles.size < 4)) {
-                        continue;
-                    }
-                    const boundary = cycleEnclosesFootprint ? cycle : edges;
-                    const walls = boundary.filter(({ door }) => !door);
-                    const wallId = [...new Set(walls.map(({ id }) => id))]
-                        .sort(
-                            (a, b) =>
-                                walls.filter(({ id }) => id === b).length -
-                                walls.filter(({ id }) => id === a).length,
-                        )[0];
-                    if (wallId === undefined) continue;
-
-                    const structure = new Set(footprint);
-                    for (const candidate of cycle) {
-                        if (edgeBordersFootprint(candidate, footprint)) {
-                            structure.add(point(candidate.x, candidate.y));
+                }
+                if (!options.isIndoor) continue;
+                for (let level = 0; level < indoorChecked.length; level++) {
+                    const checked = indoorChecked[level];
+                    if (checked.has(seedKey) || !options.isIndoor(seedX, seedY, level)) continue;
+                    const indoor = new Set<string>([seedKey]);
+                    const queue = [[seedX, seedY]];
+                    for (let i = 0; i < queue.length && indoor.size <= MAX_ROOF_TILES; i++) {
+                        const [x, y] = queue[i];
+                        for (const [dx, dy] of CARDINAL) {
+                            const nextX = x + dx, nextY = y + dy;
+                            const key = point(nextX, nextY);
+                            if (indoor.has(key) || !options.isIndoor(nextX, nextY, level)) continue;
+                            indoor.add(key);
+                            queue.push([nextX, nextY]);
                         }
                     }
-                    const relevantEdges = cycleEnclosesFootprint
-                        ? cycle
-                        : edges.filter(({ id, x, y }) => id === wallId && footprint.has(point(x, y)));
-                    const minPlane = relevantEdges.length
-                        ? Math.min(...relevantEdges.map(({ level }) => level))
-                        : 0;
-                    return {
-                        minX,
-                        maxX,
-                        minY,
-                        maxY,
-                        minPlane,
-                        maxPlane,
-                        wallId,
-                        shape: rectangular ? "Rectangle" : "Irregular",
-                        tiles,
-                        structureTiles: [...structure].map(tile),
-                    };
+                    for (const key of indoor) checked.add(key);
+                    if (indoor.size > MAX_ROOF_TILES) continue;
+                    const roofPlane = level + 1;
+                    let hasRoofLocs = false;
+                    for (const key of indoor) {
+                        const { x, y } = tile(key);
+                        if (at(x, y).some((loc) => loc.level >= roofPlane && isRoof(loc))) {
+                            hasRoofLocs = true;
+                            break;
+                        }
+                    }
+                    if (hasRoofLocs) continue;
+                    const building = describe(indoor, roofPlane, false, roofPlane);
+                    if (building) return building;
                 }
             }
         }

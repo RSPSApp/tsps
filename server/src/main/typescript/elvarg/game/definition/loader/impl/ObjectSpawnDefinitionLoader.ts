@@ -1,3 +1,4 @@
+import { mapEditFiles } from "../../../../util/MapEditFiles";
 import { DefinitionLoader } from '../DefinitionLoader';
 import { GameConstants } from '../../../GameConstants';
 import { ObjectSpawnDefinition } from '../../ObjectSpawnDefinition';
@@ -18,8 +19,8 @@ interface RawObjectSpawn {
 export class ObjectSpawnDefinitionLoader extends DefinitionLoader {
     public static readonly DEFINITION_TYPE = "object_spawns";
     load() {
-        const filePath = this.file();
-        const content = fs.readFileSync(filePath, "utf8");
+        const filePath = mapEditFiles.effectiveFile(this.file());
+        const content = filePath ? fs.readFileSync(filePath, "utf8") : "[]";
         const core = JSON.parse(content);
         if (!Array.isArray(core)) throw new Error(`${filePath}: expected object spawn array`);
         const loaded = this.loadSources<RawObjectSpawn>(ObjectSpawnDefinitionLoader.DEFINITION_TYPE);

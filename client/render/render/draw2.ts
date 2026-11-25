@@ -441,6 +441,11 @@ export function isMapWithinRenderDistance(host: WebGLOsrsRendererHost,
 }
 
 export function resolveEffectiveRenderDistanceTiles(host: WebGLOsrsRendererHost, frameId: number): number {
+        const editorDistance = host.osrsClient.editorRenderDistance;
+        if (editorDistance !== undefined) {
+            host.syncBrowserQualityProfile();
+            return editorDistance;
+        }
         const scenery = host.osrsClient.clientPlugins.scenerySettings?.();
         if (scenery) {
             host.syncBrowserQualityProfile();

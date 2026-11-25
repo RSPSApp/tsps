@@ -420,7 +420,9 @@ export function isValidMapData(host: WebGLOsrsRendererHost, mapData: SdMapData):
         return (
             mapData.cacheName === host.osrsClient.loadedCache?.info?.name &&
             mapData.loadNpcs === host.loadNpcs &&
-            mapData.smoothTerrain === host.smoothTerrain
+            mapData.smoothTerrain === host.smoothTerrain &&
+            (mapData.locReloadVersion === undefined ||
+                mapData.locReloadVersion === (host.locReloadVersions.get(getMapSquareId(mapData.mapX, mapData.mapY)) ?? 0))
         );
     
 }

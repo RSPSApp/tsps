@@ -14,11 +14,11 @@ Three separate stores, and it matters which one you are touching:
 | What | Where it lives | Who sees it |
 | --- | --- | --- |
 | Live objects/NPCs | the running world (`ObjectManager`, `World`) | players connected now |
-| Persisted spawns | `data/definitions/object-spawns.json`, `npc-spawns.json` | everyone, after a server restart |
-| Terrain | `data/regions/<id>.pack` (the map editor's format) | players on scene rebuild; editor after sync |
+| Persisted spawns | Base files in `data/definitions` plus editor layers | everyone, after a server restart |
+| Terrain | Base packs in `data/regions` plus editor layers | players on scene rebuild; editor after sync |
 
 A placement tool does the first two together: it registers the object immediately *and*
-appends it to the spawn file. Terrain tools register a region replacement and write the pack.
+writes the updated spawn list in a new map layer. Terrain tools register a region replacement and save the pack in a layer.
 Nothing needs a manual restart.
 
 ## Tools
@@ -145,26 +145,34 @@ build_wall { "style": "falador-white", "closed": true, "facing": "out",
 - `gates` are corners whose next edge stays open; the style's gate or door hangs there unless
   `gateDoors: false`.
 
-Shipped styles: `falador-white`, `varrock-city-wall`, `varrock-house` (walls, door, slate roof),
-`lumbridge-castle`, `emir-sandstone` (low wall), `lumbridge-fence`.
+`list_styles` includes regional houses, guild masonry, field fences, arena sandstone and broken
+stone. For palettes with compatible straight wall variants, `build_wall` accepts a `seed`
+to distribute them along the run.
 
 ### Generators
 
-New structures in a captured style, laid out by rules read off real ones. Decoration ids come
-from `plugins/agent/data/edit-sets.json` (hand-maintained, every id checked).
+The editor and MCP use the same planners. `list_structure_recipes` lists dimensions, style roles,
+entrances and decoration profiles. New recipes use cache locs in `edit-structure-sets.json`;
+the original house, farm and graveyard use `edit-sets.json`.
 
 | Tool | Builds |
 | --- | --- |
+| `build_structure` | Seeded houses, taverns, shops, smithies, banks, chapels, guilds, ruins and towns. Defaults to preview. Set `includePlan: true` to get the locs and terrain edits. |
 | `build_house` | Walls on the ring round the inside, a door, window frames, floors and a hip roof; 1-2 storeys |
 | `build_graveyard` | A fenced or walled yard with a gate, a path up the middle, rows of gravestones, a tombstone, dead trees |
 | `build_farm` | A fenced field of crops (wheat, cabbage, potato) in rows with walkways, a scarecrow and hay |
 
 ```jsonc
+build_structure { "name": "crossroads-village", "x": 3440, "y": 2978, "seed": 42, "entrance": "east", "flatten": false }
 build_house     { "style": "varrock-house", "x": 3440, "y": 2978, "width": 7, "height": 6, "door": "south" }
 build_graveyard { "style": "lumbridge-fence", "x": 3440, "y": 2988, "width": 9, "height": 8 }
 build_farm      { "style": "lumbridge-fence", "x": 3440, "y": 2999, "width": 9, "height": 6, "crop": "wheat" }
 ```
 
+- Set `interior` and `exterior` to override the profile or choose `empty` and `bare` for a shell.
+  Reuse the same seed and options with `dryRun: false` to apply the previewed layout. `flatten`
+  levels the footprint before placing buildings. Use `flatten: false` to plan a layout without an
+  existing terrain square.
 - `build_house` needs a style with `roof` (capture it round a real roofed building); its (x, y)
   is the footprint's low corner, walls included. The roof is Varrock's hip roof rule: eaves,
   then a ring of slopes per plane, flat tops where it runs out. Floors get the indoor flag, so
@@ -241,9 +249,9 @@ deleted, so it no longer loads as a replacement after a restart. It stays regist
 rest of the session, so clients still holding the edited terrain get the cache's on their next
 scene rebuild.
 
-Terrain is **visual only**: collision still comes from objects and the base map. If you level
-a hill, build the floor you want to walk on with objects, or accept that movement follows the
-cache.
+Ground paint and sculpting change the rendered terrain. To change walkability, use
+`set_walkability` to set or clear the blocking flag, then `reload_saved_region` to rebuild
+server clipping from that pack. Walls and other objects still contribute their own clipping.
 
 ## The 65 KB packet budget
 
@@ -272,9 +280,10 @@ Cost per edited tile, on top of the cache's own encoding:
 
 What still matters:
 
-1. **Persist like the editor** — edits are written as `data/regions/<id>.pack` (header + object
-   archive + terrain archive), the same format the map editor exports and the server loads, so
-   the `/regions/<id>.pack` endpoint serves either.
+1. **Persist like the editor.** The server applies packs from `data/map-edits/<save>/regions`
+   over the base packs. One terrain tool call saves all touched regions in one layer.
+   A pack contains the header, object archive, and terrain archive. `/regions/<id>.pack` serves
+   the active replacement.
 2. **Stream terrain-only when the objects are the problem** — if even the deflated payload will
    not fit, the *packet* drops the objects (`replaceMapRegionData(regionId, terrain, null)`)
    while the *file* keeps the region's objects (the cache's, or a previously loaded pack's).
@@ -304,13 +313,116 @@ them: one compact entry per line, the file's own line endings, untouched entries
 Adding one spawn shows a one-line diff, not a 30,000-line reformat. Do not "tidy" these files
 from a tool.
 
+MCP object edits write the tracked `data/definitions/object-spawns.json` by default. If a world
+already has a layer for that definition, MCP saves a new layer over it. Automatically generated
+layers are removed once newer automatic saves cover every entry. Editor saves, ZIP layers and
+editor backups remain available.
+
 Object entry: `{ id, position: { x, y, z }, type?, face?, remove?, source? }`.
 `remove: true` means "this cache object is gone" and is applied before placements on load.
 
+## Generating landscapes
+
+`list_landscapes` lists the six landforms, five cache-sampled biomes and size
+presets. In `generate_landscape`, `x` and `y` are the south-west tile.
+Use `squares` for a connected nonrectangular footprint. The generator can infer the bounds.
+`extend: true` blends from adjacent terrain. Use `edgeBlend` to set the distance in
+tiles, `foliage` for density as a percentage, and `lakes` for extra inland lakes.
+Omit both to find empty space automatically.
+Give a size preset or dimensions from 6 to 512 tiles per side. Relief defaults
+to 100%, native scenery is on, and the seed fixes the shape and scenery layout.
+
+```text
+generate_landscape { "x": 4736, "y": 5056, "landform": "island", "biome": "tropical", "size": "massive", "seed": 236 }
+```
+
+The default dry run returns a shaded elevation overview, scenery count, region
+IDs and occupied squares. Set `dryRun: false` to write and load the new
+region packs. Creation requires empty map squares for the entire footprint.
+Align the origin to a multiple of 64 to use the fewest squares for large maps.
+Open an example at `/?edit=1&at=x,y,plane` or enter its coordinates in the editor.
+
+The editor, MCP, and `::genterrain` use the same terrain planner for the built-in
+biomes. The planner uses compatible materials and models from existing
+`::dumpterrain` captures. The staff command streams one square of rolling
+hills. Use the editor or MCP for shaped shores and saved multi-square maps.
+`::genterrain` also supports custom captures by name.
+
 ## Editor integration
 
+Open `/?edit=1`. The selection control switches between objects and NPCs, ground and
+areas, and whole buildings. The rail switches editing tools, the inspector shows
+the selected object or tool controls, and the top bar groups validation and saving.
+
+- Select an area and choose **Duplicate area** to place a rotated copy, or **Build
+  here** to prefill the structure's dimensions. **Build** on the rail opens Wall,
+  Structure and Stamp. Use Stamp to open an exported area or a server template saved
+  with `capture_template`. Structure uses the planners behind the MCP building tools.
+- **Terrain brush settings** beside the pencil group Paint, Sculpt and Walkability.
+  The brush can paint base ground and overlays, raise or lower land, smooth
+  bumps, flatten an area, grade a ramp, and set the ground blocking flag. Its map-edge
+  controls appear in the inspector after **Select region** and show steep steps on
+  the selected region and level. **Align** edits the selected region. The MCP
+  equivalent for ground blocking is `set_walkability`. Walkability shows blocked
+  tiles in red as you paint. The unblock brush previews in green.
+- Switch the **Objects** palette from Single to Scatter to brush scenery onto the
+  map. Scatter arms as soon as you choose it. Pick one of the biome sets or a
+  search result, adjust radius and density, and click or drag. Escape stops the
+  brush and Undo removes a whole stroke.
+- To make your own scatter set, use **New set** in the Scatter controls. Name the
+  set, click the objects in search results, and save it to your browser profile.
+  Search renders model thumbnails as the rows come into view.
+- **Editor settings** offers Classic and GhostUI layouts. GhostUI groups Select,
+  Terrain, Build & Place, Travel & Warps, and Maps in the top bar.
+  World map, Go to, and Reset camera sit beside the floor controls. Both layouts
+  offer an editor-only render distance of 25 to 160 tiles.
+- **Build & Place → Select objects** opens the object action bar. Move and
+  Duplicate preview the new position before a click places the object.
+  Ctrl+V pastes exported map areas.
+- In **Travel & Warps**, pick any scenery object or choose an existing link.
+  Set its in-game action text and pick an arrival tile or object. Open the world
+  map within the wizard to reach another area. For object arrivals the server
+  picks a clear tile beside the object. Multiple destinations open an in-game
+  choice. A return action can use the arrival object or another object.
+  Removing a paired link restores both original menu slots.
+- **MCP:** `list_map_warps` returns saved links, and `set_map_warp` adds or updates one.
+  Use `actionLabel` to name a menu action, `destinations[].beside: { id, at: [x,y,z] }`
+  for object arrivals, and `returnFrom: { id, op, from, actionLabel }` to set a return.
+  Omit `returnFrom` to keep the existing pair or pass `null` to make the route
+  one-way. `remove_map_warp` deletes a link and its paired return.
+- Choose a result in **Ground items** to place a stack with a quantity and respawn
+  interval. The editor and `set_map_ground_item`, `remove_map_ground_item` and
+  `list_map_ground_items` share `data/definitions/ground-items-custom.json`.
+- In GhostUI, **Maps → Create new map** opens the world map. Drag across empty map
+  squares or use **Add or remove squares** for shapes such as an L. Choose the landform
+  and biome, then adjust height variation, foliage and lakes. The camera moves to the
+  selected squares for a 3D preview. Reroll in place or choose **Keep this terrain** to
+  add the result to the draft. Rivers follow the selected footprint through its shared edges.
+- **Expand map portion** uses the same picker, with at least one edge against existing
+  terrain. **Match nearby terrain** borrows ground and natural objects along that edge.
+  **Edge blend** sets how far the ground and height transition reaches into the new squares.
+- **Reroll map draft** reopens the active generated map before saving. Undo can restore
+  the previous generated layout or remove the draft. Classic still offers **Create map square**
+  for a single surface, cave or copied square.
+- Building stamps level their foundation before placing the building. The
+  foundation includes the outer north and east vertices and blends into nearby
+  land. The stamp inspector can turn leveling off. **Objects and all terrain**
+  keeps the stamp's own height profile.
+
+**Review changes → Save to server** works for edited tiles and new territory.
+Choose the server folder or its `data` folder when prompted. Each save adds a
+folder under `data/map-edits`. The server uses the latest entry for each map
+file, over the existing files and cache. **Export ZIP** packages a layer you
+can extract into the same world's `data` folder. Restart that server to apply it.
+
+Use **Load in game** for up to 12 saved map squares while signed in as owner.
+The same action can copy the owner command for use in a separate game tab.
+Larger saves and definition changes apply on restart. MCP can reload an individual
+pack with `reload_saved_region`. You can keep editing after a save. Use **Server
+folder & backups** to add a rollback layer, then restart the server and reopen the editor.
+
 The standalone editor (`/?edit`, `/?editor`) is a logged-out scene preview. It pulls server
-state on open and on **Refresh map**:
+state on open and on **Refresh world data**:
 
 - `GET /regions` → active replacement ids
 - `GET /regions/<id>.pack` or `/regions/<id>.terrain` → terrain bytes

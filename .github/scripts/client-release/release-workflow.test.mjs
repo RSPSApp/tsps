@@ -26,6 +26,7 @@ test("both release events include shared client inputs and interface generator d
         "server/plugins/items/BlightedItems.js",
         "server/plugins/items/data/food.json",
         "server/scripts/browser-host-interface-definitions.ts",
+        "server/plugins/agent/mcp/DiagonalWall.AgentMcp.js",
         "server/plugins/tools/adminpanel/BotView.AdminPanel.js",
         "server/plugins/tools/adminpanel/Bots.AdminPanel.js",
         "server/plugins/tools/adminpanel/Containers.AdminPanel.js",

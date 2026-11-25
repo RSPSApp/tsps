@@ -1,4 +1,5 @@
 import type { EditModeTile } from "./types";
+import { WORLD_COORD_MAX } from "./EditorCoordinates";
 
 export type TileCorner = "sw" | "se" | "ne" | "nw";
 
@@ -15,6 +16,58 @@ export interface VertexRange {
 
 export function heightToByte(height: number, below: number): number {
     return Math.max(0, Math.min(MAX_HEIGHT_BYTE, Math.round((below - height) * HEIGHT_BYTES_PER_TILE)));
+}
+
+/** Heights are stored at south-west vertices. Level the far north and east edges as well. */
+export function levelFoundation(
+    low: EditModeTile,
+    width: number,
+    depth: number,
+    sample: (tile: EditModeTile) => number | undefined,
+    keep: (tile: EditModeTile) => boolean,
+    isMapped: (tile: EditModeTile) => boolean = () => true,
+): { tile: EditModeTile; height: number }[] {
+    const maxX = low.tileX + width;
+    const maxY = low.tileY + depth;
+    if (maxX - 1 > WORLD_COORD_MAX || maxY - 1 > WORLD_COORD_MAX) throw new Error("The foundation would reach past the map edge");
+    const core: number[] = [];
+    let minimum = -Infinity;
+    let maximum = Infinity;
+    const below = (tile: EditModeTile) => tile.plane === 0 ? 0 : sample({ ...tile, plane: tile.plane - 1 });
+    for (let x = low.tileX; x <= Math.min(maxX, WORLD_COORD_MAX); x++) for (let y = low.tileY; y <= Math.min(maxY, WORLD_COORD_MAX); y++) {
+        const tile = { tileX: x, tileY: y, plane: low.plane };
+        if (!isMapped(tile)) continue;
+        const base = below(tile);
+        const current = sample(tile);
+        if (base === undefined || current === undefined) {
+            if (x === maxX || y === maxY) continue;
+            throw new Error("Move the camera closer so the whole stamp footprint is visible");
+        }
+        core.push(current);
+        minimum = Math.max(minimum, base - 255 / HEIGHT_BYTES_PER_TILE);
+        maximum = Math.min(maximum, base);
+    }
+    if (minimum > maximum) throw new Error("The ground below varies too much for a level foundation on this plane");
+    core.sort((a, b) => a - b);
+    const target = Math.max(minimum, Math.min(maximum, core[core.length >> 1]));
+    const blend = 2;
+    const edits: { tile: EditModeTile; height: number }[] = [];
+    for (let x = Math.max(0, low.tileX - blend); x <= Math.min(WORLD_COORD_MAX, maxX + blend); x++) {
+        for (let y = Math.max(0, low.tileY - blend); y <= Math.min(WORLD_COORD_MAX, maxY + blend); y++) {
+            const tile = { tileX: x, tileY: y, plane: low.plane };
+            if (!isMapped(tile)) continue;
+            const ring = Math.max(low.tileX - x, x - maxX, low.tileY - y, y - maxY, 0);
+            if (ring && keep(tile)) continue;
+            const base = below(tile);
+            const current = sample(tile);
+            if (base === undefined || current === undefined) continue;
+            const next = target + (current - target) * ring / (blend + 1);
+            const byte = heightToByte(next, base);
+            const height = byte === 1 ? 0 : byte;
+            if (height !== heightToByte(current, base)) edits.push({ tile, height });
+        }
+    }
+    return edits;
 }
 
 export function cornerVertex(tile: EditModeTile, corner: TileCorner): VertexRange {

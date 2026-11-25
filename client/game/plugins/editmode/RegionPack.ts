@@ -261,14 +261,15 @@ export function buildRegionPack(
     edits: readonly EditModeEdit[],
     wideTerrain: boolean,
     includeObjectEdits = true,
+    newRegion = false,
 ): Uint8Array {
     const mapX = regionId >> 8;
     const mapY = regionId & 0xff;
     if (
         regionId < 0 ||
         regionId > 0xffff ||
-        objectArchiveId < 0 ||
-        terrainArchiveId < 0
+        (!newRegion && (objectArchiveId < -1 || terrainArchiveId < 0)) ||
+        (newRegion && (objectArchiveId !== -1 || terrainArchiveId !== -1))
     ) {
         throw new Error("The active region is missing from the cache");
     }
@@ -286,6 +287,58 @@ export function buildRegionPack(
     view.setInt32(24 + objects.length, terrain.length);
     pack.set(terrain, 28 + objects.length);
     return pack;
+}
+
+/** A synthetic region uses ordinary cache terrain and loc streams with no native archive IDs. */
+export function createRegionPack(
+    regionId: number, wide: boolean, underlay: number, cave: boolean,
+    source?: ParsedRegionPack,
+): Uint8Array {
+    const tiles: number[] = [];
+    if (source) {
+        // Bake procedural ground heights at their original coordinates so copied land keeps its profile.
+        const edits: EditModeEdit[] = [];
+        let cursor = 0;
+        const step = wide ? 2 : 1;
+        const read = () => {
+            if (cursor + step > source.terrainData.length) throw new Error("Source region terrain is incomplete");
+            const value = wide ? (source.terrainData[cursor] << 8) | source.terrainData[cursor + 1] : source.terrainData[cursor];
+            cursor += step;
+            return value;
+        };
+        for (let x = 0; x < MAP_SIZE; x++) {
+            for (let y = 0; y < MAP_SIZE; y++) {
+                for (;;) {
+                    const code = read();
+                    if (code === 1) {
+                        cursor++;
+                        break;
+                    }
+                    if (code === 0) {
+                        const originalX = (source.regionId >> 8) * MAP_SIZE + x;
+                        const originalY = (source.regionId & 255) * MAP_SIZE + y;
+                        edits.push({ kind: "height", tileX: (regionId >> 8) * MAP_SIZE + x,
+                            tileY: (regionId & 255) * MAP_SIZE + y, plane: 0, shape: 0, rotation: 0,
+                            locId: generateHeight(originalX + 932731, originalY + 556238) });
+                        break;
+                    }
+                    if (code <= 49) read();
+                }
+            }
+        }
+        return buildRegionPack(regionId, -1, -1, Uint8Array.of(0), source.terrainData, edits, wide, true, true);
+    }
+    if (!Number.isInteger(underlay) || underlay < 1 || underlay > (wide ? 65454 : 174)) throw new Error("Choose a base ground colour");
+    for (let level = 0; level < PLANE_COUNT; level++) {
+        for (let index = 0; index < MAP_SIZE * MAP_SIZE; index++) {
+            if (level === 0) writeTerrainValue(tiles, 81 + underlay, wide);
+            if (level === 0 && cave) {
+                writeTerrainValue(tiles, 1, wide);
+                tiles.push(24);
+            } else writeTerrainValue(tiles, 0, wide);
+        }
+    }
+    return buildRegionPack(regionId, -1, -1, Uint8Array.of(0), Uint8Array.from(tiles), [], wide, true, true);
 }
 
 /** MapRegionReplacementManager.MAX_PACKET_PAYLOAD: the payload ceiling of one region packet. */
@@ -541,12 +594,15 @@ export function areaPasteEdits(contents: string, destination: { tileX: number; t
 }
 
 /** Decodes each tile's overlay, shape and rotation from region terrain data, as the scene builder reads them. */
-export function readRegionOverlays(data: Uint8Array, wideTerrain: boolean): EditModeRegionOverlays {
+export function readRegionOverlays(
+    data: Uint8Array, wideTerrain: boolean, includeUnderlays = false,
+): EditModeRegionOverlays & { underlays?: Uint16Array } {
     const tileCount = PLANE_COUNT * MAP_SIZE * MAP_SIZE;
     const result = {
         overlays: new Uint16Array(tileCount),
         shapes: new Uint8Array(tileCount),
         rotations: new Uint8Array(tileCount),
+        underlays: includeUnderlays ? new Uint16Array(tileCount) : undefined,
     };
     const width = wideTerrain ? 2 : 1;
     let offset = 0;
@@ -568,10 +624,32 @@ export function readRegionOverlays(data: Uint8Array, wideTerrain: boolean): Edit
                 result.overlays[index] = read();
                 result.shapes[index] = (opcode - 2) >> 2;
                 result.rotations[index] = (opcode - 2) & 3;
+            } else if (opcode > 81 && result.underlays) {
+                result.underlays[index] = opcode - 81;
             }
         }
     }
     return result;
+}
+
+export function readRegionFlags(data: Uint8Array, wide: boolean): Uint8Array {
+    const flags = new Uint8Array(PLANE_COUNT * MAP_SIZE * MAP_SIZE);
+    let offset = 0;
+    const width = wide ? 2 : 1;
+    for (let index = 0; index < flags.length; index++) {
+        while (true) {
+            if (offset + width > data.length) throw new Error("Truncated region terrain data");
+            const opcode = wide ? (data[offset] << 8) | data[offset + 1] : data[offset];
+            offset += width;
+            if (opcode <= 1) {
+                offset += opcode;
+                break;
+            }
+            if (opcode <= 49) offset += width;
+            else if (opcode <= 81) flags[index] = opcode - 49;
+        }
+    }
+    return flags;
 }
 
 /** Compare complete previews to their original map, preserving ids needed for collision removal. */
@@ -602,6 +680,10 @@ export function objectSpawnEdits(spawns: readonly ObjectSpawn[]): EditModeEdit[]
 }
 
 /** Preserve untouched records; pack mode consumes records baked into exported regions. */
+export function isLocEdit(edit: EditModeEdit): boolean {
+    return edit.kind === "place" || edit.kind === "delete" || edit.kind === "clear";
+}
+
 export function buildObjectSpawnExport(
     spawns: readonly ObjectSpawn[],
     edits: readonly EditModeEdit[],
@@ -609,10 +691,7 @@ export function buildObjectSpawnExport(
     getObjectData: (regionId: number) => Uint8Array,
 ): ObjectSpawn[] | undefined {
     const regionId = (x: number, y: number) => ((x >> 6) << 8) | (y >> 6);
-    const regions = new Set(edits.filter((edit) => edit.kind !== "npc" &&
-        edit.kind !== "npcDelete" && edit.kind !== "npcWander" &&
-        (!saveToJson || edit.kind === "place" || edit.kind === "delete" || edit.kind === "clear")
-    ).map((edit) => regionId(edit.tileX, edit.tileY)));
+    const regions = new Set(edits.filter(isLocEdit).map((edit) => regionId(edit.tileX, edit.tileY)));
     const result = spawns.filter((spawn) => !regions.has(regionId(spawn.position.x, spawn.position.y)));
     if (!saveToJson) return result.length === spawns.length ? undefined : result;
     if (regions.size === 0) return undefined;

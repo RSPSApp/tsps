@@ -1,4 +1,7 @@
 const fs = require("fs");
+const path = require("path");
+const { randomUUID } = require("node:crypto");
+const { effectiveFile, isWorldFile, commitWorldFiles } = require("../../world/MapEditFiles");
 
 // Reads and writes the definition files the edit tools persist to
 // (object-spawns.json, npc-spawns.json).
@@ -9,8 +12,10 @@ const fs = require("fs");
 // of one line, not of thirty thousand.
 
 function readEntries(file) {
+  const source = isWorldFile(file) ? effectiveFile(file) : file;
+  if (!source) return [];
   try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
+    const parsed = JSON.parse(fs.readFileSync(source, "utf8"));
     if (!Array.isArray(parsed)) throw new Error(`${file}: expected a JSON array`);
     return parsed;
   } catch (error) {
@@ -40,11 +45,13 @@ function originalLines(original) {
 }
 
 function writeEntries(file, entries) {
+  const worldFile = isWorldFile(file);
+  const source = worldFile ? effectiveFile(file) : file;
   let newline = "\n";
   let trailing = false;
   let lines = new Map();
   try {
-    const original = fs.readFileSync(file, "utf8");
+    const original = source ? fs.readFileSync(source, "utf8") : "";
     if (original.includes("\r\n")) newline = "\r\n";
     trailing = original.endsWith("\n");
     lines = originalLines(original);
@@ -58,7 +65,24 @@ function writeEntries(file, entries) {
   const body = entries.length === 0
     ? "[]"
     : `[${newline}${entries.map(lineFor).join(`,${newline}`)}${newline}]`;
-  fs.writeFileSync(file, body + (trailing ? newline : ""));
+  const contents = body + (trailing ? newline : "");
+  if (!worldFile) {
+    fs.writeFileSync(file, contents);
+    return;
+  }
+  // Ordinary object edits are source changes. If the world already supplies a
+  // layered definition, use its current data and preserve the editor's saved layer.
+  if (source !== file || path.basename(file) !== "object-spawns.json") {
+    commitWorldFiles(new Map([[file, contents]]));
+    return;
+  }
+  const temp = `${file}.${randomUUID()}.tmp`;
+  try {
+    fs.writeFileSync(temp, contents, { flag: "wx" });
+    fs.renameSync(temp, file);
+  } finally {
+    fs.rmSync(temp, { force: true });
+  }
 }
 
 /** Object spawns: { id, position: { x, y, z }, type, face, remove?, source? }. */

@@ -1,0 +1,51 @@
+{
+  "interiors": {
+    "cottage": { "label": "Cottage", "ground": [
+      ["rear", 7183], ["table", 7169, 595], ["left", 7194, 1017], ["corner", 5122, 5123, 362]
+    ], "single": [["right", 7190, 422]], "upper": [
+      ["rear", 7190, 422], ["left", 7194, 1017], ["corner", 1158, 5123]
+    ], "rear": [["rear", 7190, 422], ["right", 7194], ["corner", 1158, 365]] },
+    "tavern": { "label": "Tavern", "ground": [
+      ["rear", 11626], ["table", 7169, 595], ["table", 2333, 25930], ["rear", 15662, 15663], ["corner", 14867, 5123]
+    ], "upper": [["rear", 7190, 422], ["right", 7190, 422], ["left", 7194], ["corner", 1158]],
+      "rear": [["rear", 7183], ["left", 7175], ["right", 1017, 1018], ["corner", 15662, 14867]] },
+    "merchant": { "label": "Shop", "ground": [
+      ["rear", 11626], ["left", 1017, 1016, 1018], ["left", 1017, 1016, 1018], ["right", 7175], ["corner", 5122, 25780]
+    ], "upper": [["rear", 7190, 422], ["left", 7194, 1017], ["corner", 10159, 25775]],
+      "rear": [["rear", 1017, 1018], ["left", 1016, 1017], ["corner", 10159, 25775], ["corner", 10159, 357]] },
+    "smithy": { "label": "Smithy", "ground": [
+      ["rear", 24009], ["centre", 2097], ["left", 610, 24170], ["corner", 10159, 25775]
+    ], "upper": [["rear", 1017, 1016], ["corner", 10159, 25775], ["corner", 5122, 5123]],
+      "rear": [["rear", 1017, 1018], ["corner", 10159, 25775], ["corner", 362, 5123]] },
+    "crafting": { "label": "Crafting hall", "ground": [
+      ["rear", 610, 24170], ["centre", 14887], ["right", 14889], ["table", 7169, 595], ["corner", 10159, 25775]
+    ], "upper": [["rear", 14889], ["left", 1017, 1016], ["table", 7169, 595], ["corner", 1158]],
+      "rear": [["rear", 14889], ["left", 1016, 1018], ["corner", 10159, 25775]] },
+    "combat": { "label": "Combat hall", "ground": [
+      ["centre", 1900], ["left", 835], ["left", 817, 818, 819, 820], ["left", 817, 818, 819, 820],
+      ["right", 1106], ["corner", 724, 11606]
+    ], "upper": [["rear", 835], ["left", 817, 818, 819, 820], ["table", 2333, 25930], ["corner", 724, 11606]],
+      "rear": [["rear", 835], ["left", 817, 818, 819, 820], ["corner", 10159, 25775], ["corner", 724, 11606]] },
+    "cookery": { "label": "Cookery", "ground": [
+      ["rear", 7183], ["rear", 1763], ["table", 7169, 595], ["right", 7175], ["corner", 5122, 5123, 362]
+    ], "upper": [["rear", 7175], ["left", 1017, 1016, 1018], ["table", 7169, 595], ["corner", 5122, 5123]],
+      "rear": [["rear", 11696], ["left", 1017, 1016], ["corner", 365], ["corner", 5122, 5123]] },
+    "bank": { "label": "Bank", "ground": [
+      ["rear", 25808], ["rear", 25808], ["rear", 25808], ["left", 1106], ["corner", 1158], ["corner", 25775, 10159]
+    ], "upper": [["rear", 1017, 1016], ["left", 7175], ["corner", 25775, 10159]],
+      "rear": [["rear", 1017, 1016], ["corner", 25775, 10159], ["corner", 25775, 10159]] },
+    "chapel": { "label": "Chapel", "ground": [
+      ["focal", 409, 4008], ["left-pew", 1106], ["right-pew", 1106], ["left-pew", 1106], ["right-pew", 1106],
+      ["corner", 724, 11606], ["corner", 724, 11606]
+    ], "upper": [["rear", 1106], ["left", 1017, 1016], ["corner", 724, 11606]] }
+  },
+  "exteriors": {
+    "garden": { "label": "Garden", "locs": [1299, 1173, 1189, 1190, 1192] },
+    "frontage": { "label": "Street frontage", "locs": [2492, 1173, 1188, 878] },
+    "yard": { "label": "Work yard", "locs": [304, 298, 878] },
+    "overgrown": { "label": "Overgrown", "locs": [1181, 1174, 1299, 1282, 1394] }
+  },
+  "chairs": [1088, 1092, 7182, 25771],
+  "square": [878, 884, 7143, 2307],
+  "ruins": [1181, 1174, 1299, 1282, 1394, 398]
+}

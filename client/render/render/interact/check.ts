@@ -39,6 +39,7 @@ import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
 import { CollisionFlag } from "../../../common/CollisionFlag";
 import { VARBIT_IN_WILDERNESS, VARBIT_TRADE_OPTION_DISABLED } from "../../../common/vars";
 import {
+    getMapWarpActions,
     getWorldLocChanges,
     getWorldLocSpawns,
     getWorldTerrainOverrides,
@@ -913,12 +914,17 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                             resolvedLocType = transformed;
                         }
                     }
-                    if (resolvedLocType.name === "null" && !host.osrsClient.debugId) continue;
-
                     const worldTileX = (hit.tileX ?? 0) | 0;
                     const worldTileY = (hit.tileY ?? 0) | 0;
                     const localX = (worldTileX - baseX) | 0;
                     const localY = (worldTileY - baseY) | 0;
+                    const weIndex = (host as any).getWorldEntityIndexForMapId?.(hit.mapId);
+                    const currentWorldView = host.getControlledPlayerWorldViewId?.() ?? -1;
+                    const warpActions = !host.instanceActive && currentWorldView < 0 && (weIndex === undefined || weIndex < 0)
+                        ? getMapWarpActions(interactId, worldTileX, worldTileY, hit.locLevel ?? interactionPlane)
+                        : undefined;
+                    if (resolvedLocType.name === "null" && !host.osrsClient.debugId && !warpActions?.size) continue;
+                    const targetName = resolvedLocType.name === "null" && warpActions?.size ? "Scenery" : resolvedLocType.name;
 
                     const dedupeKey = `${interactId | 0}|${localX | 0}|${localY | 0}`;
                     if (locIds.has(dedupeKey)) continue;
@@ -926,8 +932,6 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
 
                     // A loc hit on a static ship's deck scene offers the world entity's own
                     // actions (Board/Attack) instead, unless the player is already on it.
-                    const weIndex = (host as any).getWorldEntityIndexForMapId?.(hit.mapId);
-                    const currentWorldView = (host as any).getControlledPlayerWorldViewId?.() ?? -1;
                     if (typeof weIndex === "number" && weIndex >= 0 && !worldEntityIds.has(weIndex)) {
                         worldEntityIds.add(weIndex);
                         const overlay = (host as any).worldEntityOverlays?.get(weIndex);
@@ -1009,16 +1013,17 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     // LOC actions inserted 4..0, then Examine; op flags from the server hide ops.
                     const opFlags = host.osrsClient.locOpFlagsAt?.(worldTileX, worldTileY, interactId);
                     for (let actionIdx = 4; actionIdx >= 0; actionIdx--) {
-                        const option = resolvedLocType.entityOps
+                        const customAction = warpActions?.get(actionIdx);
+                        const option = customAction ?? (resolvedLocType.entityOps
                             ? resolvedLocType.entityOps.opName(actionIdx, resolvedLocType.actions?.[actionIdx], host.osrsClient.varManager)
-                            : resolvedLocType.actions?.[actionIdx];
+                            : resolvedLocType.actions?.[actionIdx]);
                         if (!option) continue;
-                        if (opFlags !== undefined && (opFlags & (1 << actionIdx)) === 0) continue;
+                        if (!customAction && opFlags !== undefined && (opFlags & (1 << actionIdx)) === 0) continue;
                         menuEntries.push({
                             option,
                             targetId: interactId,
                             targetType: MenuTargetType.LOC,
-                            targetName: resolvedLocType.name,
+                            targetName,
                             targetLevel: -1,
                             mapX: localX,
                             mapY: localY,
@@ -1033,7 +1038,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         option: "Examine",
                         targetId: interactId,
                         targetType: MenuTargetType.LOC,
-                        targetName: resolvedLocType.name,
+                        targetName,
                         targetLevel: -1,
                         mapX: localX,
                         mapY: localY,

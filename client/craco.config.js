@@ -64,13 +64,15 @@ module.exports = {
     },
     webpack: {
         configure: (webpackConfig) => {
-            // Share only the pure collision/motion helper and the blighted item rule with the server plugins.
+            // Share the pure geometry and item rules with the server plugins.
             const motionPath = path.resolve(appRoot, "../server/plugins/world/ContinuousMotion.FreeMovement.js");
+            const diagonalWallPath = path.resolve(appRoot, "../server/plugins/agent/mcp/DiagonalWall.AgentMcp.js");
             const blightedItemsPath = path.resolve(appRoot, "../server/plugins/items/BlightedItems.js");
             const foodDataPath = path.resolve(appRoot, "../server/plugins/items/data/food.json");
             for (const plugin of webpackConfig.resolve.plugins ?? []) {
                 if (plugin.constructor.name === "ModuleScopePlugin") {
                     plugin.allowedFiles.add(motionPath);
+                    plugin.allowedFiles.add(diagonalWallPath);
                     plugin.allowedFiles.add(blightedItemsPath);
                     plugin.allowedFiles.add(foodDataPath);
                 }

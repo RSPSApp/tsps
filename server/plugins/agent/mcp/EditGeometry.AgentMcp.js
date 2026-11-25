@@ -5,6 +5,8 @@
 //
 // Every function returns [{ x, y }], de-duplicated, in a stable order.
 
+const { diagonalWallFace, diagonalWallJoin } = require("./DiagonalWall.AgentMcp");
+
 const ROUND = Math.round;
 
 /** Tiles along a straight line, both ends included. */
@@ -171,10 +173,6 @@ function rotateOffset(dx, dy, turns, width, height) {
   return { dx: x, dy: y };
 }
 
-// Diagonal walls (shape 9) read off Falador castle: chains running south-west to north-east
-// use rotation 0 or 2, north-west to south-east rotation 1 or 3; the pair differ in which
-// side shows the finished face.
-const DIAGONAL_FACE = { ne: 0, nw: 1 };
 // Straight wall rotations by tile edge, and the L corner (shape 2) for two edges of one tile.
 const EDGE_FACE = { W: 0, N: 1, E: 2, S: 3 };
 const CORNER_FACE = { "N,W": 0, "E,N": 1, "E,S": 2, "S,W": 3 };
@@ -217,6 +215,15 @@ function wallPath(points, options = {}) {
   const edges = new Map();
   const diagonals = new Map();
   const openings = [];
+  const vertices = new Map();
+  const touch = (x, y, face) => {
+    if (!options.diagonalJoins) return;
+    const key = `${x},${y}`;
+    if (!vertices.has(key)) vertices.set(key, { x, y, count: 0, faces: new Set() });
+    const vertex = vertices.get(key);
+    vertex.count++;
+    if (face !== undefined) vertex.faces.add(face);
+  };
   for (let i = 0; i + 1 < corners.length; i++) {
     let [x, y] = corners[i];
     const [tx, ty] = corners[i + 1];
@@ -229,9 +236,13 @@ function wallPath(points, options = {}) {
         // Which finished face shows depends on the walking direction and the side asked for;
         // walking east, rotation 0/1 showed it on the right (checked by screenshot).
         const flip = (sx > 0) === (side === "left");
-        const face = (DIAGONAL_FACE[sx === sy ? "ne" : "nw"] + (flip ? 2 : 0)) & 3;
+        const face = diagonalWallFace(sx, sy, flip);
         if (open) openings.push({ ...tile, type: 9, face });
-        else diagonals.set(`${tile.x},${tile.y}`, { ...tile, face });
+        else {
+          diagonals.set(`${tile.x},${tile.y}`, { ...tile, face });
+          touch(x, y, face);
+          touch(x + sx, y + sy, face);
+        }
         x += sx;
         y += sy;
         continue;
@@ -250,6 +261,8 @@ function wallPath(points, options = {}) {
         const key = `${tile.x},${tile.y}`;
         if (!edges.has(key)) edges.set(key, { ...tile, sides: [] });
         if (!edges.get(key).sides.includes(edge)) edges.get(key).sides.push(edge);
+        touch(x, y, undefined);
+        touch(x + sx, y + sy, undefined);
       }
       x += sx;
       y += sy;
@@ -289,6 +302,19 @@ function wallPath(points, options = {}) {
   }
   for (const piece of diagonals.values()) pieces.push({ ...piece, type: 9 });
   pieces.push(...posts);
+  if (vertices.size) {
+    const occupied = new Set([...pieces, ...openings].map(({ x, y }) => `${x},${y}`));
+    for (const { x, y, count, faces } of vertices.values()) {
+      if (count < 2) continue;
+      for (const face of faces) {
+        const join = diagonalWallJoin(x, y, face);
+        const key = `${join.x},${join.y}`;
+        if (occupied.has(key)) continue;
+        occupied.add(key);
+        pieces.push({ ...join, diagonalJoin: true });
+      }
+    }
+  }
   return { pieces, openings };
 }
 
@@ -398,9 +424,9 @@ function levelPlan(heightAt, x0, y0, x1, y1, options = {}) {
   return { level, tiles, spread, unknown, moved };
 }
 
-// Furniture against a wall turns away from it, read off a Varrock house: against the south
-// wall rotation 2, west 3, north 1, east 0.
-const AWAY_FROM_WALL = { south: 2, west: 3, north: 1, east: 0 };
+// Standard chair and bed models face south at rotation 0. Individual pieces can offset this.
+const AWAY_FROM_WALL = { south: 2, west: 3, north: 0, east: 1 };
+const LEGACY_WALL_FACING = { ...AWAY_FROM_WALL, north: 1, east: 0 };
 
 /**
  * Where furniture goes in a room: the inside tiles x0-x1, y0-y1, with its door on `door`
@@ -415,18 +441,26 @@ const AWAY_FROM_WALL = { south: 2, west: 3, north: 1, east: 0 };
 function furnishPlan(room, items) {
   const { x0, y0, x1, y1, door, doorX, doorY } = room;
   const taken = new Set();
+  const random = room.random;
+  const varied = (list) => {
+    if (!random || list.length < 2) return list;
+    const offset = random(list.length);
+    return [...list.slice(offset), ...list.slice(0, offset)];
+  };
   const key = (x, y) => `${x},${y}`;
   const inside = (x, y) => x >= x0 && x <= x1 && y >= y0 && y <= y1;
   const free = (x, y) => inside(x, y) && !taken.has(key(x, y));
   // The corridor: from the door tile straight to the opposite wall.
   const corridor = [];
   const vertical = door === "south" || door === "north";
+  const far = { south: [doorX, y1], north: [doorX, y0], west: [x1, doorY], east: [x0, doorY] }[door];
   if (vertical) for (let y = y0; y <= y1; y++) corridor.push([doorX, y]);
   else for (let x = x0; x <= x1; x++) corridor.push([x, doorY]);
-  for (const [x, y] of corridor) taken.add(key(x, y));
+  const end = key(...far);
+  const hasFocalPoint = !room.through && room.ladder === undefined && corridor.length >= 4 && items.some(({ place }) => place === "focal");
+  for (const [x, y] of corridor) if (!hasFocalPoint || key(x, y) !== end) taken.add(key(x, y));
   const placed = [];
   const skipped = [];
-  const far = { south: [doorX, y1], north: [doorX, y0], west: [x1, doorY], east: [x0, doorY] }[door];
   // The ladder stands beside the corridor's far end, so it is reached by walking straight in.
   if (room.ladder !== undefined) {
     const spots = vertical ? [[far[0] - 1, far[1]], [far[0] + 1, far[1]]] : [[far[0], far[1] - 1], [far[0], far[1] + 1]];
@@ -446,21 +480,28 @@ function furnishPlan(room, items) {
   for (let x = x1; x >= x0; x--) slots.push([x, y0, "south", [-1, 0]]);
   for (let y = y0; y <= y1; y++) slots.push([x0, y, "west", [0, 1]]);
   const corners = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]];
+  const cellsAt = (x, y, width, height) => {
+    const cells = [];
+    for (let dx = 0; dx < width; dx++) for (let dy = 0; dy < height; dy++) cells.push([x + dx, y + dy]);
+    return cells;
+  };
   const cornerOf = (x, y) => corners.some(([cx, cy]) => cx === x && cy === y);
   for (const item of items) {
     const [w, h] = item.size ?? [1, 1];
-    if (item.place === "wall") {
+    if (item.place === "wall" || item.place === "focal") {
       // Turned away from the wall, its footprint turns with it (a 1x2 bed against the west wall
       // lies across the room, head to the wall, as Varrock's are); it stands touching the wall.
       let done = false;
-      for (const [x, y, side] of slots) {
-        const face = AWAY_FROM_WALL[side];
+      const candidates = varied(slots);
+      const preferred = item.wall ? [...candidates.filter((slot) => slot[2] === item.wall), ...candidates.filter((slot) => slot[2] !== item.wall)] : candidates;
+      for (const [x, y, side] of preferred) {
+        const face = item.face ?? (((random ? AWAY_FROM_WALL : LEGACY_WALL_FACING)[side] + (item.faceOffset ?? 0)) & 3);
         const { width: fw, height: fh } = footprint(10, face, w, h);
         const lowX = side === "east" ? x - fw + 1 : x;
         const lowY = side === "north" ? y - fh + 1 : y;
-        const cells = [];
-        for (let dx = 0; dx < fw; dx++) for (let dy = 0; dy < fh; dy++) cells.push([lowX + dx, lowY + dy]);
+        const cells = cellsAt(lowX, lowY, fw, fh);
         if (!cells.every(([cx, cy]) => free(cx, cy) && !cornerOf(cx, cy))) continue;
+        if (hasFocalPoint && item.place === "focal" && !cells.some(([cx, cy]) => key(cx, cy) === end)) continue;
         for (const [cx, cy] of cells) taken.add(key(cx, cy));
         placed.push({ id: item.id, x: lowX, y: lowY, face, role: "wall" });
         done = true;
@@ -468,9 +509,10 @@ function furnishPlan(room, items) {
       }
       if (!done) skipped.push({ id: item.id, role: "wall" });
     } else if (item.place === "corner") {
-      const spot = corners.find(([x, y]) => free(x, y));
+      const spots = corners.map(([x, y]) => [x === x1 ? x - w + 1 : x, y === y1 ? y - h + 1 : y]);
+      const spot = varied(spots).find(([x, y]) => cellsAt(x, y, w, h).every(([cx, cy]) => free(cx, cy)));
       if (spot) {
-        taken.add(key(...spot));
+        for (const [cx, cy] of cellsAt(...spot, w, h)) taken.add(key(cx, cy));
         placed.push({ id: item.id, x: spot[0], y: spot[1], face: 0, role: "corner" });
       } else skipped.push({ id: item.id, role: "corner" });
     } else if (item.place === "centre") {
@@ -481,16 +523,33 @@ function furnishPlan(room, items) {
       // Nearer the corridor than the wall, so the table is reached and does not hug a wall.
       const mid = lo === (vertical ? x0 : y0) ? Math.ceil((lo + hi) / 2) : Math.floor((lo + hi) / 2);
       const other = vertical ? Math.floor((y0 + y1) / 2) : Math.floor((x0 + x1) / 2);
-      const [tx, ty] = vertical ? [mid, other] : [other, mid];
-      if (!free(tx, ty)) { skipped.push({ id: item.id, role: "centre" }); continue; }
-      taken.add(key(tx, ty));
-      placed.push({ id: item.id, x: tx, y: ty, face: 0, role: "centre" });
-      for (const chair of item.chairs ?? []) {
-        const seats = vertical ? [[tx, ty - 1, 1], [tx, ty + 1, 3]] : [[tx - 1, ty, 0], [tx + 1, ty, 2]];
-        const seat = seats.find(([x, y]) => free(x, y));
-        if (!seat) continue;
-        taken.add(key(seat[0], seat[1]));
-        placed.push({ id: chair, x: seat[0], y: seat[1], face: seat[2], role: "chair" });
+      const spots = [vertical ? [mid, other, 0] : [other, mid, 0]];
+      if (random) {
+        for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+          spots.push([x, y, 0]);
+          if (w !== h) spots.push([x, y, 1]);
+        }
+      }
+      const options = (random ? varied(spots) : spots).flatMap(([x, y, face]) => {
+        const { width, height } = footprint(10, face, w, h);
+        const cells = cellsAt(x, y, width, height);
+        if (!cells.every(([cx, cy]) => free(cx, cy) && (!random || !cornerOf(cx, cy)))) return [];
+        // Chairs sit opposite each other on the long sides, facing the table.
+        const sx = x + Math.floor((width - 1) / 2), sy = y + Math.floor((height - 1) / 2);
+        const seats = width > height || (width === height && vertical)
+          ? [[sx, y - 1, 2], [sx, y + height, 0]]
+          : [[x - 1, sy, 3], [x + width, sy, 1]];
+        const chairs = seats.filter(([cx, cy]) => free(cx, cy)).slice(0, item.chairs?.length ?? 0);
+        const distance = Math.abs(sx - spots[0][0]) + Math.abs(sy - spots[0][1]);
+        return [{ x, y, face, cells, chairs, distance }];
+      });
+      const spot = options.sort((a, b) => b.chairs.length - a.chairs.length || a.distance - b.distance)[0];
+      if (!spot) { skipped.push({ id: item.id, role: "centre" }); continue; }
+      for (const [cx, cy] of spot.cells) taken.add(key(cx, cy));
+      placed.push({ id: item.id, x: spot.x, y: spot.y, face: spot.face, role: "centre" });
+      for (const [index, [x, y, face]] of spot.chairs.entries()) {
+        taken.add(key(x, y));
+        placed.push({ id: item.chairs[index], x, y, face, role: "chair" });
       }
     }
   }

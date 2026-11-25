@@ -300,6 +300,7 @@ export async function queueLoadMap(host: WebGLOsrsRendererHost,
 
         if (mapData && host.isValidMapData(mapData)) {
             mapData.minimapInput = input;
+            mapData.locReloadVersion = locReloadVersion;
             markMapWorkerReady(mapData, queuedAt);
             if (typeof locReloadBatchId === "number") {
                 host.resolveLocReloadBatchMap(locReloadBatchId, mapId, mapData);

@@ -25,6 +25,8 @@ assert.deepEqual(buildObjectSpawnExport([...changes, elsewhere], edits, false, (
 assert.equal(buildObjectSpawnExport([], edits, false, () => base.objectData), undefined);
 assert.deepEqual(buildObjectSpawnExport([], [chair, { ...chair, rotation: 3 }], true, () => base.objectData)?.map(s => [s.remove ?? false, s.face]), [[true, 2], [false, 3]], "rotations retain the original collision removal");
 const terrainEdit: EditModeEdit = { ...chair, kind: "terrain", locId: 1, shape: 0, rotation: 0 };
+assert.equal(buildObjectSpawnExport(changes, [terrainEdit], false, () => base.objectData), undefined,
+    "a terrain-only save does not migrate unrelated object spawn definitions");
 const jsonPack = parseRegionPack(buildRegionPack(region, 1, 2, base.objectData, terrain, [...edits, terrainEdit], false, false));
 assert.deepEqual(jsonPack.objectData, base.objectData, "JSON mode never bakes object edits into terrain packs");
 assert.notDeepEqual(jsonPack.terrainData, terrain);

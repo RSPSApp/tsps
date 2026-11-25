@@ -57,7 +57,10 @@ function buildMcpServer(core) {
   require("./mcp/Edit.AgentMcp")(ctx);
   const build = require("./mcp/EditBuild.AgentMcp")(ctx);
   require("./mcp/EditNpcs.AgentMcp")(ctx);
+  require("./mcp/EditWarps.AgentMcp")(ctx, () => pluginApi.emitCustomEvent("map-warps:changed", {}));
+  require("./mcp/EditGroundItems.AgentMcp")(ctx);
   const terrain = require("./mcp/EditTerrain.AgentMcp")(ctx);
+  require("./mcp/EditLandscape.AgentMcp")(ctx);
   const templates = require("./mcp/EditTemplates.AgentMcp")(ctx, { build, terrain });
   const styles = require("./mcp/EditStyles.AgentMcp")(ctx, { build, terrain, objectsIn: templates.objectsIn });
   require("./mcp/EditGenerators.AgentMcp")(ctx, { build, terrain, styles });

@@ -152,15 +152,15 @@ export class MapRegionReplacementManager {
   public static getRegionPack(regionId: number, objectDataOverride?: Uint8Array): Buffer | null {
     const replacement = this.replacements.get(regionId);
     const files = CacheMaps.getArchiveIds(regionId);
-    if (!replacement || !files) return null;
+    if (!replacement || (!files && !replacement.objectData)) return null;
     const objects = objectDataOverride ?? replacement.objectData;
     if (!objects) return null;
     const objectData = Buffer.from(objects);
     const terrainData = Buffer.from(replacement.terrainData);
     const pack = Buffer.alloc(28 + objectData.length + terrainData.length);
     pack.writeInt32BE(1, 0);
-    pack.writeInt32BE(files.objectFile, 4);
-    pack.writeInt32BE(files.terrainFile, 8);
+    pack.writeInt32BE(files?.objectFile ?? -1, 4);
+    pack.writeInt32BE(files?.terrainFile ?? -1, 8);
     pack.writeInt32BE(regionId >> 8, 12);
     pack.writeInt32BE(regionId & 0xff, 16);
     pack.writeInt32BE(objectData.length, 20);
@@ -373,8 +373,8 @@ export class MapRegionReplacementManager {
       throw new Error(`pack region does not match ${regionId}: ${packPath}`);
     }
     const files = CacheMaps.getArchiveIds(regionId);
-    if (!files || data.readInt32BE(4) !== files.objectFile ||
-        data.readInt32BE(8) !== files.terrainFile) {
+    if (data.readInt32BE(4) !== (files?.objectFile ?? -1) ||
+        data.readInt32BE(8) !== (files?.terrainFile ?? -1)) {
       throw new Error(`pack archive IDs do not match the active cache: ${packPath}`);
     }
     const firstLength = data.readInt32BE(20);

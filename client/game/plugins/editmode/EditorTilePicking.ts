@@ -6,6 +6,7 @@ export interface EditorPickMap {
     heightMapData: Int16Array;
     heightMapSize: number;
     borderSize: number;
+    farOnly?: boolean;
     getRenderBaseWorldX(): number;
     getRenderBaseWorldY(): number;
     getLocalTileSpan(): number;
@@ -13,11 +14,20 @@ export interface EditorPickMap {
 
 /** Pick the edited floor's heightfield, including tiles with no rendered floor mesh. */
 export function pickEditorTile(ray: Ray, plane: number, maps: readonly EditorPickMap[]): EditModeTile | undefined {
+    return pickEditorTileHit(ray, plane, maps)?.tile;
+}
+
+export function pickEditorTileHit(
+    ray: Ray,
+    plane: number,
+    maps: readonly EditorPickMap[],
+    acceptsTile: (x: number, y: number) => boolean = () => true,
+): { tile: EditModeTile; t: number } | undefined {
     let bestT = Infinity;
     let best: EditModeTile | undefined;
     for (const map of maps) {
         const size = map.heightMapSize, span = map.getLocalTileSpan();
-        if (!size || !span || !map.heightMapData || map.heightMapData.length < (plane + 1) * size * size) continue;
+        if (map.farOnly || !size || !span || !map.heightMapData || map.heightMapData.length < (plane + 1) * size * size) continue;
         const baseX = map.getRenderBaseWorldX(), baseY = map.getRenderBaseWorldY();
         const bounds = rayIntersectsBox(ray, [baseX, -1000, baseY], [baseX + span, 1000, baseY + span]);
         if (!bounds) continue;
@@ -44,7 +54,7 @@ export function pickEditorTile(ray: Ray, plane: number, maps: readonly EditorPic
             const c: [number, number, number] = [baseX + x + 1, height(x + 1, y + 1), baseY + y + 1];
             const d: [number, number, number] = [baseX + x, height(x, y + 1), baseY + y + 1];
             const t = Math.min(rayIntersectsTriangle(ray, a, b, c) ?? Infinity, rayIntersectsTriangle(ray, a, c, d) ?? Infinity);
-            if (t >= enter - 1e-4 && t <= exit + 1e-4 && t < bestT) {
+            if (t >= enter - 1e-4 && t <= exit + 1e-4 && t < bestT && acceptsTile(baseX + x, baseY + y)) {
                 bestT = t;
                 best = { tileX: baseX + x, tileY: baseY + y, plane };
             }
@@ -54,5 +64,5 @@ export function pickEditorTile(ray: Ray, plane: number, maps: readonly EditorPic
             if (nextY === next) { y += stepY; nextY += deltaY; }
         }
     }
-    return best;
+    return best && { tile: best, t: bestT };
 }

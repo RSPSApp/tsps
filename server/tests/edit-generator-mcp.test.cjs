@@ -139,7 +139,9 @@ test("furniture keeps a corridor from the door, faces away from walls, and turns
   // The north wall has no room left (ladder, corridor, a corner kept for corner pieces), so it
   // stands against the east wall, facing away from it, its 1x2 footprint along the wall.
   assert.deepEqual([range.x, range.y, range.face], [4, 1, 0]);
-  assert.equal(plan.placed.filter((p) => p.id === 3).length, 2);
+  const table = plan.placed.find((p) => p.id === 2);
+  const chairs = plan.placed.filter((p) => p.id === 3);
+  assert.deepEqual(chairs.map(({ x, y, face }) => [x - table.x, y - table.y, face]), [[0, -1, 2], [0, 1, 0]]);
 });
 
 test("a two-storey house gets a ladder pair on one tile and furniture on both floors", async () => {

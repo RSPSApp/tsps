@@ -1,3 +1,4 @@
+import { getMapWarpActions } from "../../common/gamemode/GamemodeContentStore";
 import { mat4, vec3 } from "gl-matrix";
 
 import { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
@@ -53,6 +54,8 @@ export interface SceneRaycastHit {
     mapId: number;
     tileX?: number;
     tileY?: number;
+    locLevel?: number;
+    locTypeRot?: number;
     /** For NPC hits: server ID for direct lookup (avoids iterating all NPCs) */
     npcServerId?: number;
     /** For NPC hits: ECS ID for direct access to NPC data */
@@ -68,6 +71,8 @@ export interface SceneRaycastOptions {
      * Restrict world interactions (LOC/OBJ/NPC/PLAYER) to the current client plane.
      */
     basePlane?: number;
+    /** If set, only pick locs on visible planes, with no actor or item hits. */
+    locPlaneLimit?: number;
 }
 
 export class SceneRaycaster {
@@ -269,6 +274,8 @@ export class SceneRaycaster {
                 ? Math.max(0, Math.min(Scene.MAX_LEVELS - 1, options.basePlane | 0))
                 : undefined;
 
+        const locPlaneLimit = options?.locPlaneLimit;
+
         // interact buffers disable picking when full fog is reached.
         // Match that by filtering out hits beyond the fog boundary: a rounded
         // square of half-extent u_renderDistance (see shaders/includes/fog.glsl).
@@ -347,17 +354,17 @@ export class SceneRaycaster {
             // Ground/OBJ hits via tile traversal in this map along the ray segment [tEnter, tExit]
             // Collect ground items and LOCs via efficient DDA tile traversal
             // (only visits tiles the ray actually passes through)
-            this.traverseMapTiles(map, effectiveRay, tEnter, tExit, maxDistance, hits, basePlane);
+            this.traverseMapTiles(map, effectiveRay, tEnter, tExit, maxDistance, hits, basePlane, locPlaneLimit);
 
             // NPC hits for this map (3D AABB in world space)
-            this.collectNpcHitsForMap(map, effectiveRay, maxDistance, hits, basePlane);
+            if (locPlaneLimit === undefined) this.collectNpcHitsForMap(map, effectiveRay, maxDistance, hits, basePlane);
         }
 
         // NPCs aboard a boat stand in deck coordinates, which no map square holds.
-        this.collectDeckNpcHits(ray, maxDistance, hits, basePlane);
+        if (locPlaneLimit === undefined) this.collectDeckNpcHits(ray, maxDistance, hits, basePlane);
 
         // Player hits (global, then bucketed per map)
-        if (hasPlanarDir) {
+        if (hasPlanarDir && locPlaneLimit === undefined) {
             this.collectPlayerHits(ray, maxDistance, hits, basePlane);
         }
 
@@ -425,6 +432,7 @@ export class SceneRaycaster {
         maxDistance: number,
         hits: SceneRaycastHit[],
         basePlane?: number,
+        locPlaneLimit?: number,
     ): void {
         const baseX = map.getRenderBaseTileX();
         const baseY = map.getRenderBaseTileY();
@@ -474,6 +482,7 @@ export class SceneRaycaster {
                 visitedAnchors,
                 resolvedLocTypes,
                 basePlane,
+                locPlaneLimit,
             );
             if (tileX === endTileX && tileY === endTileY) break;
             if (nextX < nextY) {
@@ -497,6 +506,7 @@ export class SceneRaycaster {
         visitedAnchors?: Uint8Array,
         resolvedLocTypes?: Map<number, LocType>,
         basePlane?: number,
+        locPlaneLimit?: number,
     ): void {
         const local = this.getMapLocalTile(map, worldTileX, worldTileY);
         if (!local) {
@@ -523,8 +533,9 @@ export class SceneRaycaster {
         // over the full tile footprint using bridge-aware ground height. This matches
         // the debug AABB overlay for dropped items.
         const groundItemStartPlane = typeof groundItemPlane === "number" ? groundItemPlane : 0;
-        const groundItemEndPlane =
-            typeof groundItemPlane === "number" ? groundItemPlane + 1 : Scene.MAX_LEVELS;
+        const groundItemEndPlane = locPlaneLimit === undefined
+            ? (groundItemPlane ?? (Scene.MAX_LEVELS - 1)) + 1
+            : 0;
         for (let level = groundItemStartPlane; level < groundItemEndPlane; level++) {
             const stacks = groundItems.getStacksAt(worldTileX, worldTileY, level);
             if (!stacks || stacks.length === 0) continue;
@@ -575,8 +586,9 @@ export class SceneRaycaster {
         const LOC_SEARCH_RANGE = 6;
         const mapTileSpan = map.getLocalTileSpan();
         const startPlane = typeof interactionLevel === "number" ? interactionLevel : 0;
-        const endPlane =
-            typeof interactionLevel === "number" ? interactionLevel + 1 : Scene.MAX_LEVELS;
+        const endPlane = locPlaneLimit === undefined
+            ? (interactionLevel ?? (Scene.MAX_LEVELS - 1)) + 1
+            : Math.min(Scene.MAX_LEVELS, locPlaneLimit + 1);
 
         for (let level = startPlane; level < endPlane; level++) {
             for (let anchorDx = -LOC_SEARCH_RANGE; anchorDx <= LOC_SEARCH_RANGE; anchorDx++) {
@@ -614,7 +626,8 @@ export class SceneRaycaster {
                         // Loc id 0 is a real loc (Dwarf Cannon's remains multiloc).
                         if (!(locId >= 0)) continue;
                         const locType = this.getResolvedLocType(locId, resolvedLocTypes);
-                        if (!locType || !this.isLocTypeInteractive(locType)) continue;
+                        if (!locType || (!this.isLocTypeInteractive(locType) &&
+                            !getMapWarpActions(locId, anchorWorldX, anchorWorldY, level))) continue;
 
                         const packedTypeRot =
                             locIndex < locTypeRots.length
@@ -684,6 +697,8 @@ export class SceneRaycaster {
                             mapId,
                             tileX: anchorWorldX,
                             tileY: anchorWorldY,
+                            locLevel: level,
+                            locTypeRot: packedTypeRot,
                         });
                     }
                 }

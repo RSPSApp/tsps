@@ -2,6 +2,7 @@ import { getCustomDefinitionKey } from "../../../custom/definitions/CustomDefini
 import { connectEditorCustomContent } from "./EditorCustomContent";
 import { OBJECT_SPAWNS_MESSAGE, OBJECT_SPAWNS_REQUEST_MESSAGE, parseObjectSpawns, type ObjectSpawn, type ObjectSpawnsMessage } from "./hostProtocol/objectSpawnsMessage";
 import { isKnownWaterTextureId } from "../../../render/water/WaterTextureIds";
+import { adjustOverlayLight, HSL_RGB_MAP } from "../../../rs/util/ColorUtil";
 import { getContentApiBase } from "../../../network/serverConnection/contentApi";
 import { TILE_FLAG_UNDER_ROOF } from "../../scene/TileRenderFlags";
 import { ClientState } from "../../ClientState";
@@ -10,12 +11,12 @@ import { setAudioSuspended } from "../../audio/audioContext";
 import type { EditorOverlays } from "../../../render/webgpu/overlays/EditorOverlays";
 import type { App as PicoApp, UniformBuffer } from "picogl";
 import type { Ray } from "../../math/Raycast";
-import type { SceneRaycastHit, SceneRaycaster } from "../../scene/SceneRaycaster";
+import type { SceneRaycastHit, SceneRaycastOptions, SceneRaycaster } from "../../scene/SceneRaycaster";
 import { MenuTargetType } from "../../../rs/MenuEntry";
 import { IndexType } from "../../../rs/cache/IndexType";
 import { packWorldMapCoord } from "../../../rs/map/WorldMapArea";
 import { SpriteLoader } from "../../../rs/sprite/SpriteLoader";
-import { DIRECTION_TO_ORIENTATION, MovementDirection } from "../../../common/Direction";
+import { DIRECTION_TO_ORIENTATION, MovementDirection, quarterTurnToDirection } from "../../../common/Direction";
 import { InteractType } from "../../../render/InteractType";
 import type { MinimapIcon } from "../../../render/loader/SdMapData";
 import { isDoorLocType } from "../../../render/loc/SceneLocs";
@@ -24,6 +25,8 @@ import type {
     LocHighlightTarget,
 } from "../../../render/render/constants";
 import type { InteractHighlightDrawTarget } from "../../../ui/devoverlay/InteractHighlightOverlay";
+import { MapManager } from "../../MapManager";
+import { sendChat } from "../../../network/serverConnection/outgoing/inventoryChat";
 import type { Overlay } from "../../../ui/devoverlay/Overlay";
 import { spriteToCanvas } from "../../../ui/item/ItemIcon";
 import {
@@ -56,9 +59,14 @@ import {
 } from "./hostProtocol/worldDefinitionMessage";
 import type { OsrsClient } from "../../OsrsClient";
 import { createBrowserEditModePluginPersistence } from "./BrowserEditModePluginPersistence";
-import { detectRectangularBuilding, type DetectedBuilding } from "./BuildingDetector";
-import { pickEditorTile, type EditorPickMap } from "./EditorTilePicking";
+import { buildingWallKey, detectRectangularBuilding, type BuildingMapLoc, type DetectedBuilding } from "./BuildingDetector";
+import { pickEditorTile, pickEditorTileHit, type EditorPickMap } from "./EditorTilePicking";
 import { EditModePlugin } from "./EditModePlugin";
+import type { LocModelLoader } from "../../../rs/config/loctype/LocModelLoader";
+import type { LocModelType } from "../../../rs/config/loctype/LocModelType";
+import type { Model2DRenderer } from "../../../ui/model/Model2DRenderer";
+import { Model } from "../../../rs/model/Model";
+import { parseEditorLocation } from "./EditorCoordinates";
 import { mountEditorUi } from "./EditorUi";
 import { EditorWorldMap } from "./EditorWorldMap";
 import {
@@ -67,12 +75,14 @@ import {
 } from "./MapIconGroundOverlay";
 import {
     LocPlacementPreviewOverlay,
+    ScatterPlacementPreviewOverlay,
     getLocPlacementShape,
+    type LocPlacementPreview,
     type LocPlacementPreviewClient,
     type LocPlacementPreviewRenderer,
 } from "./LocPlacementPreviewOverlay";
 import { ModelImageCaptureOverlay } from "./ModelImageCaptureOverlay";
-import { buildAreaClipboard, copyAreaNpcs, buildRegionPack, parseRegionPack, buildObjectSpawnExport, objectSpawnEdits, readRegionOverlays } from "./RegionPack";
+import { buildAreaClipboard, copyAreaNpcs, buildRegionPack, createRegionPack, parseRegionPack, buildObjectSpawnExport, isLocEdit, objectSpawnEdits, readRegionFlags, readRegionOverlays } from "./RegionPack";
 import {
     ZoneGroundOverlay,
     type ZoneGroundRect,
@@ -101,6 +111,9 @@ const EDITOR_SPAWN_TILE_SLOT = 253;
 const EDITOR_SPAWN_TILE_GROUP = 253;
 const EDITOR_PATH_TILE_SLOT = 252;
 const EDITOR_PATH_TILE_GROUP = 252;
+const EDITOR_BLOCKED_TILE_SLOT = 251;
+const EDITOR_TRAVEL_SOURCE_SLOT = 250;
+const EDITOR_TRAVEL_ARRIVAL_SLOT = 249;
 const TILE_HIGHLIGHT_ALWAYS_ON_TOP = 0x10;
 const EDITOR_SELECTION_MAX_SPAN = 128;
 const SEARCH_RESULT_LIMIT = 60;
@@ -130,30 +143,36 @@ type EditorRegionReplacement = {
     objectData?: Uint8Array;
 };
 
-/** Reuses the scene's exact model picker, but includes scenery hidden from the game menu. */
-export function raycastEditScene(
-    raycaster: SceneRaycaster,
+/** Include scenery that has no game menu entry when picking in Creator. */
+function raycastEditorHits(
+    raycaster: Pick<SceneRaycaster, "raycast">,
     ray: Ray,
-    basePlane?: number,
-): SceneRaycastHit | undefined {
-    const editorRaycaster = raycaster as unknown as {
-        raycast: SceneRaycaster["raycast"];
+    options: SceneRaycastOptions,
+): SceneRaycastHit[] {
+    const editorRaycaster = raycaster as typeof raycaster & {
         isLocTypeInteractive?: (locType: unknown) => boolean;
     };
     const originalFilter = editorRaycaster.isLocTypeInteractive;
     try {
         if (originalFilter) editorRaycaster.isLocTypeInteractive = () => true;
-        return editorRaycaster
-            .raycast(ray, { maxDistance: 4096, maxHits: 1000, basePlane })
-            .find(
-                (hit) =>
-                    hit.interactType === InteractType.LOC ||
-                    (hit.interactType === InteractType.NPC && hit.playerEcsIndex === undefined),
-            );
+        return editorRaycaster.raycast(ray, options);
     } finally {
         if (originalFilter) editorRaycaster.isLocTypeInteractive = originalFilter;
     }
 }
+
+export function raycastEditScene(
+    raycaster: Pick<SceneRaycaster, "raycast">,
+    ray: Ray,
+    basePlane?: number,
+    onlyObjects = false,
+): SceneRaycastHit | undefined {
+    return raycastEditorHits(raycaster, ray, { maxDistance: 4096, maxHits: 1000, basePlane }).find(
+        (hit) => hit.interactType === InteractType.LOC ||
+            (!onlyObjects && hit.interactType === InteractType.NPC && hit.playerEcsIndex === undefined),
+    );
+}
+
 /** Tiles the camera pulls back along its view ray when framing a tile. */
 const EDITOR_CAMERA_DISTANCE = 22;
 /** Tighter opening frame so the editor starts near the configured world spawn. */
@@ -460,9 +479,12 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         createBrowserEditModePluginPersistence("osrs.plugin.edit_mode.v1"),
     );
     client.editorCameraInput = (deltaTime) => plugin.handleCameraInput(client.camera, deltaTime);
+    const isRegionOccupied = (id: number) => client.mapFileIndex.getTerrainArchiveId(id >> 8, id & 255) !== -1 ||
+        client.mapFileIndex.getLocArchiveId(id >> 8, id & 255) !== -1 ||
+        editorRegionReplacements.has(id) || serverRegionIds.has(id) || terrainHost(client)?.mapRegionReplacements.has(id) === true;
     const editorWorldMap = new EditorWorldMap(
         client,
-        (tile) => frameCameraOnTile(client, tile, false),
+        (tile) => plugin.goToLocation(`${tile.tileX}, ${tile.tileY}, ${tile.plane}`),
         () => {
             const state = plugin.getState();
             return state.world.definition
@@ -473,12 +495,53 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         (bounds, tag) => plugin.addWorldZone(bounds, tag),
         (index, tag) => plugin.setWorldZoneType(index, tag),
         (index) => plugin.deleteWorldZone(index),
+        async (mapX, mapY, plane) => {
+            const live = terrainHost(client)?.mapRegionReplacements;
+            const replacements = new Map<number, { terrainData: Int8Array; objectData?: Int8Array }>();
+            const signed = (bytes: Uint8Array) => new Int8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            for (let x = Math.max(0, mapX - 1); x <= Math.min(255, mapX + 1); x++) {
+                for (let y = Math.max(0, mapY - 1); y <= Math.min(255, mapY + 1); y++) {
+                    const id = (x << 8) | y;
+                    const visible = live?.get(id);
+                    const base = editorRegionReplacements.get(id);
+                    if (visible) replacements.set(id, visible);
+                    else if (base) replacements.set(id, { terrainData: signed(base.terrainData),
+                        objectData: base.objectData && signed(base.objectData) });
+                }
+            }
+            const data = await client.workerPool.queueMinimap({
+                mapX, mapY, maxLevel: plane, loadNpcs: false, smoothTerrain: true, minimizeDrawCalls: true,
+                loadedTextureIds: new Set(), mapRegionReplacements: replacements,
+            }, plane);
+            return data?.minimapBlobs[plane];
+        },
+        isRegionOccupied,
     );
     const overlayTexturePreviews = new Map<number, string>();
     let previewNpc = false;
+    let thumbnailRenderer: Model2DRenderer | undefined;
+    let itemThumbnailRenderer: import("../../../ui/item/ItemIconRenderer").ItemIconRenderer | undefined;
+    let thumbnailModelLoader: OsrsClient["modelLoader"];
+    const renderModelThumbnail = async (model: Model): Promise<string | undefined> => {
+        const { objTypeLoader, modelLoader, textureLoader } = client;
+        if (!objTypeLoader || !modelLoader || !textureLoader) return;
+        if (thumbnailModelLoader !== modelLoader) {
+            thumbnailModelLoader = modelLoader;
+            thumbnailRenderer = undefined;
+            itemThumbnailRenderer = undefined;
+        }
+        if (!thumbnailRenderer) {
+            const { Model2DRenderer } = await import("../../../ui/model/Model2DRenderer");
+            thumbnailRenderer = new Model2DRenderer(objTypeLoader, modelLoader, textureLoader);
+        }
+        return thumbnailRenderer.renderModelInstanceToCanvasExtents(model, {
+            xan2d: 256, yan2d: 256, orthographic: true, depthTest: true,
+            fitToWidget: { width: 64, height: 64, padding: 4 },
+        })?.canvas.toDataURL("image/png");
+    };
     let previewNpcType = -1;
     let previewNpcRotation = -1;
-    let buildingPreviewTileKey: string | undefined;
+    let buildingPreview: { renderer: TerrainHost; key: string; edits: readonly EditModeEdit[] } | undefined;
     let pointerModelHighlight: InteractHighlightDrawTarget | undefined;
     let buildingModelHighlight: InteractHighlightDrawTarget | undefined;
     let buildingSelectionHighlight: InteractHighlightDrawTarget | undefined;
@@ -491,6 +554,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
               plane: number;
               x: number;
               y: number;
+              onlyObjects: boolean;
               pick: { tile: EditModeTile; target?: InteractHighlightTarget } | undefined;
           }
         | undefined;
@@ -500,6 +564,9 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     let mapIconGroundManager: TerrainHost["overlayManager"];
     let locPlacementPreviewOverlay: Pick<LocPlacementPreviewOverlay, "setPreview" | "setPreviews" | "clear"> | undefined;
     let locPlacementPreviewManager: TerrainHost["overlayManager"];
+    let constructionRenderer: TerrainHost | undefined;
+    let constructionLayer: Pick<ScatterPlacementPreviewOverlay, "setPreviews"> | undefined;
+    let hasConstructionPreview = false;
     let modelImageCaptureOverlay: ModelImageCaptureOverlay | undefined;
     let modelImageCaptureManager: TerrainHost["overlayManager"];
     let selectedModelTarget: InteractHighlightTarget | undefined;
@@ -509,6 +576,10 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     let zoneGroundOverlay: Pick<ZoneGroundOverlay, "setRects" | "invalidate"> | undefined;
     let zoneGroundManager: TerrainHost["overlayManager"];
     const editorRegionReplacements = new Map<number, EditorRegionReplacement>();
+    let serverRegionIds = new Set<number>();
+    const savedAwaitingLoad = new Set<number>();
+    let landscapePreviewIds = new Set<number>();
+    let landscapeViewDistance: number | undefined;
     // Suppressions each editor delete created, so undo removes only its own.
     const deletedLocOverrides = new Map<string, string[]>();
     let objectSpawns: ObjectSpawn[] | undefined = browserHostWindow() ? undefined : [];
@@ -651,6 +722,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                     shape: 0,
                     rotation: 0,
                     ...(record.wanderRadius === undefined ? {} : { wanderRadius: record.wanderRadius }),
+                    ...(record.leashRadius === undefined ? {} : { leashRadius: record.leashRadius }),
                     ...(direction === undefined ? {} : { direction }),
                 }
                 : {
@@ -662,6 +734,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                     shape: LOC_SHAPE_NORMAL,
                     rotation,
                     ...(record.wanderRadius === undefined ? {} : { wanderRadius: record.wanderRadius }),
+                    ...(record.leashRadius === undefined ? {} : { leashRadius: record.leashRadius }),
                     ...(direction === undefined ? {} : { direction }),
                 });
         }
@@ -675,9 +748,16 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     // Interact Highlight plugin for this to override.
     client.clientPlugins.add({ interactHighlightConfig: () => EDITOR_INTERACT_HIGHLIGHT });
     let terrainPreviewSignature = "";
+    let hasScatterBrushPreview = false;
 
+    const clearConstructionPreview = (): void => {
+        if (!hasConstructionPreview || !constructionRenderer) return;
+        constructionLayer?.setPreviews(client, constructionRenderer as unknown as LocPlacementPreviewRenderer, []);
+        hasConstructionPreview = false;
+    };
     const clearPlacementPreview = (): void => {
         locPlacementPreviewOverlay?.clear();
+        clearConstructionPreview();
         wallGroundOverlay?.setRects([]);
         if (previewNpc) {
             despawnEditorNpc(client, EDITOR_NPC_PREVIEW_SERVER_ID);
@@ -687,26 +767,204 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         previewNpcRotation = -1;
     };
     const clearTerrainPreview = (): void => {
+        if (hasScatterBrushPreview) {
+            hasScatterBrushPreview = false;
+            wallGroundOverlay?.setRects([]);
+        }
         if (!terrainPreviewSignature) return;
         terrainPreviewSignature = "";
         client.tileHighlightManager.clear(EDITOR_PATH_TILE_SLOT);
     };
-    const setTerrainPreview = (edits: readonly EditModeEdit[]): void => {
-        const signature = edits
-            .map((edit) => `${edit.tileX},${edit.tileY},${edit.plane},${edit.locId},${edit.shape},${edit.rotation}`)
-            .join(";");
+    // Full material geometry arrives from the worker. This layer draws the
+    // edited shape in the meantime and follows the renderer across reloads.
+    const paintRects = new Map<number, Map<string, ZoneGroundRect[]>>();
+    const submittedPaint = new Map<number, Map<string, ZoneGroundRect[]>>();
+    const paintReloads = new Set<number>();
+    const scatterPreviews = new Map<number, Map<string, LocPlacementPreview>>();
+    const submittedScatter = new Map<number, Map<string, LocPlacementPreview>>();
+    const recentScatterPreviews: { mapId: number; key: string; preview: LocPlacementPreview }[] = [];
+    const maxScatterPreviews = 160;
+    let brushRenderer: TerrainHost | undefined;
+    let paintLayer: Pick<ZoneGroundOverlay, "setRects"> | undefined;
+    let scatterLayer: Pick<ScatterPlacementPreviewOverlay, "setPreviews"> | undefined;
+    let paintFrame: number | undefined;
+    const scatterKey = (edit: EditModeEdit): string => `${edit.tileX},${edit.tileY},${edit.plane},${edit.locId},${edit.shape},${edit.rotation}`;
+    const drawPaint = (): void => {
+        paintLayer?.setRects([...paintRects.values()].flatMap((rects) => [...rects.values()].flat()));
+    };
+    const drawScatteredLocs = (): void => {
+        if (!scatterLayer || !brushRenderer) return;
+        const previews = recentScatterPreviews
+            .filter(({ mapId, key, preview }) => scatterPreviews.get(mapId)?.get(key) === preview)
+            .map(({ preview }) => preview);
+        scatterLayer.setPreviews(client, brushRenderer as unknown as LocPlacementPreviewRenderer, previews);
+    };
+    const retirePreviews = <T,>(mapId: number, awaiting: Map<number, Map<string, T>>, previews: Map<number, Map<string, T>>): boolean => {
+        const submitted = awaiting.get(mapId);
+        if (!submitted) return false;
+        awaiting.delete(mapId);
+        const current = previews.get(mapId);
+        if (!current) return false;
+        for (const [key, value] of submitted) {
+            if (current.get(key) === value) current.delete(key);
+        }
+        if (!current.size) previews.delete(mapId);
+        return true;
+    };
+    const onBrushMapAdded = ({ mapX, mapY }: { mapX: number; mapY: number }): void => {
+        const mapId = (mapX << 8) | mapY;
+        if (retirePreviews(mapId, submittedPaint, paintRects)) drawPaint();
+        if (retirePreviews(mapId, submittedScatter, scatterPreviews)) drawScatteredLocs();
+        if (hasScatterBrushPreview) wallGroundOverlay?.invalidate();
+    };
+    const watchBrushRenderer = (renderer: TerrainHost): void => {
+        if (brushRenderer === renderer) return;
+        brushRenderer?.mapManager.mapAddedListeners?.delete(onBrushMapAdded);
+        if (hasScatterBrushPreview) clearTerrainPreview();
+        paintLayer?.setRects([]);
+        paintRects.clear();
+        submittedPaint.clear();
+        paintReloads.clear();
+        scatterPreviews.clear();
+        submittedScatter.clear();
+        recentScatterPreviews.length = 0;
+        drawScatteredLocs();
+        brushRenderer = renderer;
+        paintLayer = renderer.editorOverlays?.paint;
+        scatterLayer = renderer.editorOverlays && { setPreviews: renderer.editorOverlays.setScatterPreviews.bind(renderer.editorOverlays) };
+        if (!paintLayer && renderer.overlayManager && renderer.app && renderer.sceneUniformBuffer) {
+            const layer = new ZoneGroundOverlay();
+            const scatter = new ScatterPlacementPreviewOverlay();
+            const args = { app: renderer.app, sceneUniforms: renderer.sceneUniformBuffer };
+            layer.init(args);
+            scatter.init(args);
+            renderer.overlayManager.add(layer);
+            renderer.overlayManager.add(scatter);
+            paintLayer = layer;
+            scatterLayer = scatter;
+        }
+        renderer.mapManager.mapAddedListeners?.add(onBrushMapAdded);
+    };
+    const queuePaintReload = (renderer: TerrainHost, tile: EditModeTile, key: string, rects: ZoneGroundRect[]): void => {
+        watchBrushRenderer(renderer);
+        const mapId = renderer.getMapIdForWorldTile(tile.tileX, tile.tileY);
+        if (rects.length) {
+            let current = paintRects.get(mapId);
+            if (!current) paintRects.set(mapId, current = new Map());
+            current.set(key, rects);
+        } else {
+            paintRects.get(mapId)?.delete(key);
+        }
+        paintReloads.add(mapId);
+        const flush = (): void => {
+            paintFrame = undefined;
+            const renderer = brushRenderer!;
+            drawPaint();
+            for (const id of paintReloads) {
+                const rects = paintRects.get(id);
+                if (rects?.size) submittedPaint.set(id, new Map(rects));
+                else {
+                    paintRects.delete(id);
+                    submittedPaint.delete(id);
+                }
+                renderer.pendingLocUpdates?.add(id);
+                renderer.scheduleLocReload(id >> 8, id & 0xff);
+            }
+            paintReloads.clear();
+            zoneGroundOverlay?.invalidate();
+        };
+        if (paintFrame !== undefined) return;
+        if (typeof requestAnimationFrame === "function") paintFrame = requestAnimationFrame(flush);
+        else flush();
+    };
+    const paintPreviewColor = (overlayId: number): number | undefined => {
+        if (overlayId <= 0) return;
+        try {
+            const definition = client.loaderFactory.getOverlayTypeLoader().load(overlayId - 1);
+            if (definition.textureId >= 0 && client.textureLoader?.isSd(definition.textureId)) {
+                return HSL_RGB_MAP[adjustOverlayLight(client.textureLoader.getAverageHsl(definition.textureId), 96)];
+            }
+            return definition.primaryRgb === 0xff00ff ? undefined : definition.primaryRgb;
+        } catch { return; }
+    };
+    const paintRect = (tile: EditModeTile, colorRgb: number, shape?: number, rotation?: number): ZoneGroundRect => ({
+        minX: tile.tileX, maxX: tile.tileX, minY: tile.tileY, maxY: tile.tileY,
+        plane: tile.plane, shape, rotation, colorRgb, alpha: 1,
+    });
+    const basePaintByTerrain = new WeakMap<Uint8Array | Int8Array, ReturnType<typeof readRegionOverlays>>();
+    const underlayEdits = new Map<string, number>();
+    let underlayEditsSource: readonly EditModeEdit[] | undefined;
+    const basePaintPreview = (tile: EditModeTile, showOverlay: boolean): ZoneGroundRect[] => {
+        const regionId = regionIdForTile(tile.tileX, tile.tileY);
+        try {
+            const data = editorRegionReplacements.get(regionId)?.terrainData ?? client.loaderFactory.getMapFileLoader()
+                .getTerrainData(tile.tileX >> 6, tile.tileY >> 6, client.loadedCache?.xteas);
+            if (!data) return [];
+            let base = basePaintByTerrain.get(data);
+            if (!base) {
+                base = readRegionOverlays(new Uint8Array(data.buffer, data.byteOffset, data.byteLength), hasWideTerrain(client), true);
+                basePaintByTerrain.set(data, base);
+            }
+            const index = (tile.plane * 64 + (tile.tileX & 63)) * 64 + (tile.tileY & 63);
+            const rects: ZoneGroundRect[] = [];
+            const edits = plugin.getConfig().edits;
+            if (edits !== underlayEditsSource) {
+                underlayEditsSource = edits;
+                underlayEdits.clear();
+                for (const edit of edits) {
+                    if (edit.kind === "underlay") underlayEdits.set(`${edit.tileX},${edit.tileY},${edit.plane}`, edit.locId);
+                }
+            }
+            const underlay = underlayEdits.get(`${tile.tileX},${tile.tileY},${tile.plane}`) ?? base.underlays?.[index] ?? 0;
+            if (underlay > 0) {
+                const definition = client.loaderFactory.getUnderlayTypeLoader().load(underlay - 1);
+                if ("rgbColor" in definition && typeof definition.rgbColor === "number") rects.push(paintRect(tile, definition.rgbColor));
+            }
+            if (showOverlay) {
+                const color = paintPreviewColor(base.overlays[index] & 0x7fff);
+                if (color !== undefined) rects.push(paintRect(tile, color, base.shapes[index], base.rotations[index]));
+            }
+            return rects;
+        } catch { return []; }
+    };
+    const previewScatteredLocs = (edits: readonly EditModeEdit[]): void => {
+        if (!edits.length) return;
+        const renderer = terrainHost(client);
+        if (!renderer) return;
+        watchBrushRenderer(renderer);
+        for (const edit of edits) {
+            if (edit.kind !== "place") continue;
+            const mapId = renderer.getMapIdForWorldTile(edit.tileX, edit.tileY);
+            let previews = scatterPreviews.get(mapId);
+            if (!previews) scatterPreviews.set(mapId, previews = new Map());
+            const key = scatterKey(edit);
+            const preview = {
+                locId: edit.locId, x: edit.tileX, y: edit.tileY,
+                plane: edit.plane, shape: edit.shape, rotation: edit.rotation,
+            };
+            previews.set(key, preview);
+            recentScatterPreviews.push({ mapId, key, preview });
+        }
+        // The worker draws the full stroke after its region builds.
+        if (recentScatterPreviews.length > maxScatterPreviews) {
+            recentScatterPreviews.splice(0, recentScatterPreviews.length - maxScatterPreviews);
+        }
+        drawScatteredLocs();
+    };
+    const setTerrainPreview = (tiles: readonly EditModeTile[], color = PATH_PREVIEW_COLOR): void => {
+        const signature = tiles.length ? `${color}:${tiles.map((tile) => `${tile.tileX},${tile.tileY},${tile.plane}`).join(";")}` : "";
         if (terrainPreviewSignature === signature) return;
         clearTerrainPreview();
-        if (edits.length === 0) return;
+        if (!tiles.length) return;
         terrainPreviewSignature = signature;
         client.tileHighlightManager.configure(
             EDITOR_PATH_TILE_SLOT,
-            PATH_PREVIEW_COLOR,
+            color,
             2,
             20,
             TILE_HIGHLIGHT_ALWAYS_ON_TOP,
         );
-        for (const edit of edits) {
+        for (const edit of tiles) {
             client.tileHighlightManager.set(
                 packWorldMapCoord({ x: edit.tileX, y: edit.tileY, plane: edit.plane }),
                 EDITOR_PATH_TILE_SLOT,
@@ -714,13 +972,46 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             );
         }
     };
+    const setScatterBrushPreview = (tiles: readonly EditModeTile[]): void => {
+        const renderer = terrainHost(client);
+        if (!renderer || !tiles.length) return;
+        watchBrushRenderer(renderer);
+        const layer = ensureWallGroundOverlay(renderer);
+        if (!layer) {
+            setTerrainPreview(tiles);
+            return;
+        }
+
+        // The brush is on one plane. Merge each row of its painted area into runs for the ground batch.
+        const rows = new Map<number, number[]>();
+        for (const { tileX, tileY } of tiles) {
+            let xs = rows.get(tileY);
+            if (!xs) rows.set(tileY, xs = []);
+            xs.push(tileX);
+        }
+        const rects: ZoneGroundRect[] = [];
+        const style = { plane: tiles[0].plane, colorRgb: PATH_PREVIEW_COLOR, alpha: 0.27 };
+        for (const [y, xs] of rows) {
+            xs.sort((a, b) => a - b);
+            let start = xs[0];
+            for (let i = 0; i < xs.length; i++) {
+                const end = xs[i];
+                if (xs[i + 1] === end + 1) continue;
+                rects.push({ ...style, minX: start, maxX: end, minY: y, maxY: y });
+                start = xs[i + 1];
+            }
+        }
+        hasScatterBrushPreview = true;
+        layer.setRects(rects);
+    };
     const clearPointerPreview = (): void => {
-        buildingPreviewTileKey = undefined;
+        buildingPreview = undefined;
         pointerModelHighlight = undefined;
         buildingModelHighlight = undefined;
         client.tileHighlightManager.clear(EDITOR_HOVER_TILE_SLOT);
         terrainHost(client)?.clearInteractHighlightHoverTarget();
     };
+    const flagsByTerrain = new WeakMap<Uint8Array | Int8Array, Uint8Array>();
     const clearSelectionHighlight = (): void => {
         clearPointerPreview();
         selectedModelTarget = undefined;
@@ -818,6 +1109,23 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         locPlacementPreviewManager = renderer.overlayManager;
         locPlacementPreviewOverlay = overlay;
         return overlay;
+    };
+    const drawConstructionPreviews = (renderer: TerrainHost, previews: readonly LocPlacementPreview[]): void => {
+        if (constructionRenderer !== renderer) {
+            clearConstructionPreview();
+            constructionRenderer = renderer;
+            constructionLayer = renderer.editorOverlays && {
+                setPreviews: renderer.editorOverlays.setConstructionPreviews.bind(renderer.editorOverlays),
+            };
+            if (!constructionLayer && renderer.overlayManager && renderer.app && renderer.sceneUniformBuffer) {
+                const overlay = new ScatterPlacementPreviewOverlay();
+                overlay.init({ app: renderer.app, sceneUniforms: renderer.sceneUniformBuffer });
+                renderer.overlayManager.add(overlay);
+                constructionLayer = overlay;
+            }
+        }
+        constructionLayer?.setPreviews(client, renderer as unknown as LocPlacementPreviewRenderer, previews);
+        hasConstructionPreview = Boolean(constructionLayer && previews.length);
     };
     const ensureModelImageCaptureOverlay = (
         renderer: TerrainHost,
@@ -1055,13 +1363,20 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             tileEndY: endY,
         };
     };
+    let editorTilePick: { renderer: TerrainHost; frame: number; x: number; y: number; plane: number; tile?: EditModeTile } | undefined;
     const getEditorPointerTile = (renderer: TerrainHost) => {
-        if (client.inputManager.mouseX < 0 || client.inputManager.mouseY < 0) return undefined;
-        const ray = renderer.screenToRay(client.inputManager.mouseX, client.inputManager.mouseY);
-        return ray ? pickEditorTile(ray, plugin.getConfig().heightLevel,
-            renderer.mapManager.visibleMaps.slice(0, renderer.mapManager.visibleMapCount)) : undefined;
+        const { mouseX: x, mouseY: y } = client.inputManager;
+        if (x < 0 || y < 0) return undefined;
+        const frame = renderer.currentFrameCount;
+        const plane = plugin.getConfig().heightLevel;
+        if (editorTilePick?.renderer === renderer && editorTilePick.frame === frame && editorTilePick.x === x &&
+            editorTilePick.y === y && editorTilePick.plane === plane) return editorTilePick.tile;
+        const ray = renderer.screenToRay(x, y);
+        const tile = ray ? pickEditorTile(ray, plane, renderer.mapManager.visibleMaps.slice(0, renderer.mapManager.visibleMapCount)) : undefined;
+        editorTilePick = { renderer, frame, x, y, plane, tile };
+        return tile;
     };
-    const resolveEditScenePick = (renderer: TerrainHost) => {
+    const resolveEditScenePick = (renderer: TerrainHost, onlyObjects = false) => {
         const x = client.inputManager.mouseX;
         const y = client.inputManager.mouseY;
         if (
@@ -1069,7 +1384,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             editorPickCache.frame === renderer.currentFrameCount &&
             editorPickCache.plane === plugin.getConfig().heightLevel &&
             editorPickCache.x === x &&
-            editorPickCache.y === y
+            editorPickCache.y === y &&
+            editorPickCache.onlyObjects === onlyObjects
         ) {
             return editorPickCache.pick;
         }
@@ -1077,9 +1393,10 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         const hit =
             ray && renderer.sceneRaycaster
                 ? raycastEditScene(
-                      renderer.sceneRaycaster as SceneRaycaster,
+                      renderer.sceneRaycaster,
                       ray,
                       renderer.getPlayerRawPlane(),
+                      onlyObjects,
                   )
                 : undefined;
         let pick: { tile: EditModeTile; target?: InteractHighlightTarget } | undefined;
@@ -1096,13 +1413,11 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                 };
             } else if (hit.interactType === InteractType.LOC) {
                 const playerPlane = renderer.getPlayerRawPlane();
-                const loc = renderer
-                    .getLocIdsAtTileAllLevels(hit.tileX, hit.tileY)
-                    .filter(({ id }) => id === hit.interactId)
-                    .sort(
-                        (a, b) =>
-                            Math.abs(a.level - playerPlane) - Math.abs(b.level - playerPlane),
-                    )[0];
+                const loc = hit.locLevel === undefined
+                    ? renderer.getLocIdsAtTileAllLevels(hit.tileX, hit.tileY)
+                        .filter(({ id }) => id === hit.interactId)
+                        .sort((a, b) => Math.abs(a.level - playerPlane) - Math.abs(b.level - playerPlane))[0]
+                    : { level: hit.locLevel, typeRot: hit.locTypeRot };
                 if (loc) {
                     const typeRot = loc.typeRot;
                     pick = {
@@ -1131,15 +1446,15 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                 };
             }
         }
-        editorPickCache = { renderer, frame: renderer.currentFrameCount, plane: plugin.getConfig().heightLevel, x, y, pick };
+        editorPickCache = { renderer, frame: renderer.currentFrameCount, plane: plugin.getConfig().heightLevel, x, y, onlyObjects, pick };
         return pick;
     };
-    const resolvePointerTarget = () => {
+    const resolvePointerTarget = (onlyObjects = false) => {
         const renderer = terrainHost(client);
         if (!renderer) return { renderer, target: undefined };
         return {
             renderer,
-            target: resolveEditScenePick(renderer)?.target,
+            target: resolveEditScenePick(renderer, onlyObjects)?.target,
         };
     };
     const ensureBuildingHighlightRenderer = (renderer: TerrainHost): void => {
@@ -1183,7 +1498,11 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         renderer.getRoofPlaneLimit = () => {
             if (!isEditing()) return getBaseRoofPlaneLimit();
             const config = plugin.getConfig();
+            if (config.floorView === "all") return 3;
+            if (config.floorView === "one-above") return Math.min(3, config.heightLevel + 1);
+            if (config.floorView === "up-to" || (config.ghostUi && !config.floorView)) return config.heightLevel;
             if (!config.renderAllHeightLevels) return config.heightLevel;
+            if (plugin.isSelectingBuilding()) return 3;
             if (config.heightLevel === 0) {
                 const selection = plugin.getState().selection;
                 if (selection?.plane === 0 && (selection.kind === "loc" || selection.kind === "npc") &&
@@ -1210,22 +1529,87 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             (!isEditing() ||
                 (client.playerEcs.getLevel(ecsId) | 0) <= renderer.getRoofPlaneLimit());
     };
-    const analyseBuilding = (tile: EditModeTile) => {
-        const renderer = terrainHost(client);
-        if (!renderer) return undefined;
-        const building = detectRectangularBuilding(
-            tile.tileX,
-            tile.tileY,
-            (x, y) => renderer.getLocIdsAtTileAllLevels(x, y),
+    const resolveBuilding = (renderer: TerrainHost, fallback?: EditModeTile): DetectedBuilding | undefined => {
+        const { mouseX, mouseY } = client.inputManager;
+        if (mouseX < 0 || mouseY < 0) return undefined;
+        const ray = renderer.screenToRay(mouseX, mouseY);
+        if (!ray) return undefined;
+        const maps = renderer.mapManager.visibleMaps.slice(0, renderer.mapManager.visibleMapCount);
+        const roofLimit = renderer.getRoofPlaneLimit();
+        const ground = pickEditorTileHit(ray, 0, maps);
+        const locs = new Map<string, BuildingMapLoc[]>();
+        const getLocs = (x: number, y: number) => {
+            const key = `${x}:${y}`;
+            let at = locs.get(key);
+            if (!at) {
+                at = renderer.getLocIdsAtTileAllLevels(x, y);
+                locs.set(key, at);
+            }
+            return at;
+        };
+        const isIndoor = (x: number, y: number, plane: number) =>
+            (renderer.getTileRenderFlagAt(plane, x, y) & TILE_FLAG_UNDER_ROOF) !== 0;
+        const detect = (x: number, y: number) => detectRectangularBuilding(
+            x, y, getLocs,
             (id) => {
                 const type = client.locTypeLoader.load(id);
                 return !!type && isDoorLocType(type);
             },
+            { isIndoor },
         );
-        if (!building) return undefined;
 
+        const surfaces: Array<{ t: number; x: number; y: number; roofPlane?: number; wallKey?: string }> = [];
+        for (let plane = 1; plane <= roofLimit; plane++) {
+            const hit = pickEditorTileHit(ray, plane, maps, (x, y) => isIndoor(x, y, plane - 1));
+            if (hit) surfaces.push({ t: hit.t, x: hit.tile.tileX, y: hit.tile.tileY, roofPlane: plane });
+        }
+        if (renderer.sceneRaycaster) {
+            const hits = raycastEditorHits(renderer.sceneRaycaster, ray, {
+                maxDistance: Math.min(4096, (ground?.t ?? 4096) + 0.125),
+                locPlaneLimit: roofLimit,
+            });
+            for (const hit of hits) {
+                if (hit.tileX === undefined || hit.tileY === undefined ||
+                    hit.locTypeRot === undefined || hit.locLevel === undefined) continue;
+                const shape = hit.locTypeRot & 0x3f;
+                if (shape > 9 && (shape < 12 || shape > 21)) continue;
+                const wallKey = buildingWallKey(hit.tileX, hit.tileY,
+                    { id: hit.interactId, level: hit.locLevel, typeRot: hit.locTypeRot });
+                surfaces.push({ t: hit.t, x: hit.tileX, y: hit.tileY, wallKey });
+            }
+        }
+        surfaces.sort((a, b) => a.t - b.t);
+        const resolved = new Map<string, DetectedBuilding | undefined>();
+        for (const surface of surfaces) {
+            const { x, y, roofPlane, wallKey } = surface;
+            const key = `${x}:${y}`;
+            if (!resolved.has(key)) resolved.set(key, detect(x, y));
+            const building = resolved.get(key);
+            if (!building) continue;
+            if (roofPlane !== undefined && building.terrainRoofPlane !== roofPlane) continue;
+            if (building.boundaryWalls.has(wallKey ?? "") || building.tiles.some((tile) => tile.x === x && tile.y === y)) {
+                return building;
+            }
+        }
+        const tile = fallback ?? ground?.tile;
+        return tile && detect(tile.tileX, tile.tileY);
+    };
+
+    const analyseBuilding = (renderer: TerrainHost, building: DetectedBuilding) => {
         ensureBuildingHighlightRenderer(renderer);
         const trianglePoints: Array<readonly [number, number, number]> = [];
+        const terrainRoofPlane = building.terrainRoofPlane;
+        if (terrainRoofPlane !== undefined) {
+            const vertex = (x: number, y: number): readonly [number, number, number] =>
+                [x, renderer.sampleHeightAtExactPlane(x, y, terrainRoofPlane), y];
+            for (const { x, y } of building.tiles) {
+                const a = vertex(x, y);
+                const b = vertex(x + 1, y);
+                const c = vertex(x + 1, y + 1);
+                const d = vertex(x, y + 1);
+                trianglePoints.push(a, b, c, a, c, d);
+            }
+        }
         const seen = new Set<string>();
         let objectCount = 0;
         let wallCount = 0;
@@ -1276,11 +1660,10 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                     const wallLike = modelType <= 3 || modelType === 9;
                     const locType = wallLike ? client.locTypeLoader.load(loc.id) : undefined;
                     const door = !!locType && isDoorLocType(locType);
-                    if (perimeterTiles.has(`${x}:${y}`) && (modelType === 10 || modelType === 22)) {
-                        continue;
-                    }
+                    const boundaryWall = wallLike && building.boundaryWalls.has(buildingWallKey(x, y, loc));
                     if (
                         wallLike &&
+                        !boundaryWall &&
                         loc.id !== building.wallId &&
                         !door &&
                         perimeterTiles.has(`${x}:${y}`) &&
@@ -1290,7 +1673,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                     }
                     if (
                         !roofTiles.has(`${x}:${y}`) &&
-                        !wallLike &&
+                        !boundaryWall &&
                         !(modelType >= 4 && modelType <= 8)
                     ) {
                         continue;
@@ -1326,7 +1709,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                         locModelType: modelType,
                         locRotation: (loc.typeRot >>> 6) & 3,
                     });
-                    if (points) trianglePoints.push(...points);
+                    if (points) for (const point of points) trianglePoints.push(point);
                 }
             }
         }
@@ -1365,8 +1748,11 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         }
     };
 
-    const refreshEditedRegions = async (regionIds: readonly number[]) => {
-        for (const regionId of regionIds) {
+    const dirtyEditorRegions = new Set<number>();
+    let editorRebuild: Promise<void> | undefined;
+    const rebuildEditorRegions = async () => {
+        for (const regionId of dirtyEditorRegions) {
+            dirtyEditorRegions.delete(regionId);
             try {
                 const tile = {
                     tileX: (regionId >> 8) << 6,
@@ -1381,14 +1767,41 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                     // Reading sparse map archives queues their download. The
                     // rendered worker map does not guarantee main-thread data.
                     await client.js5.settled();
+                    // Every caller reads the latest editor state, including strokes
+                    // applied while this region's base archives were fetching.
+                    dirtyEditorRegions.delete(regionId);
                     pack = buildEditorRegionPack(client, tile, sceneEdits(plugin.getConfig().edits), editorRegionReplacements);
                 }
                 const replacement = parseRegionPack(pack.data);
+                const previews = scatterPreviews.get(regionId);
+                if (previews?.size) submittedScatter.set(regionId, new Map(previews));
                 client.onRegionReplacement({ ...replacement, allowReload: true });
             } catch (error) {
                 console.warn(`[edit-mode] failed to rebuild region ${regionId}`, error);
             }
         }
+    };
+
+    const refreshEditedRegions = (regionIds: readonly number[]): Promise<void> => {
+        for (const id of regionIds) dirtyEditorRegions.add(id);
+        editorRebuild ??= Promise.resolve().then(async () => {
+            try {
+                while (dirtyEditorRegions.size) await rebuildEditorRegions();
+            } finally {
+                editorRebuild = undefined;
+            }
+        });
+        return editorRebuild;
+    };
+
+    const clearEditorReplacement = (id: number): void => {
+        editorRegionReplacements.delete(id);
+        const renderer = terrainHost(client);
+        renderer?.mapRegionReplacements.delete(id);
+        const x = id >> 8, y = id & 255;
+        renderer?.scheduleLocReload(x, y);
+        client.renderer.mapManager.removeMap(x, y);
+        client.renderer.mapManager.addInvalidMap(x, y);
     };
 
     /**
@@ -1397,51 +1810,122 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
      * world. Local unsaved edits keep applying on top at rebuild. Browser-host
      * editors receive all of this through host messaging instead.
      */
-    const syncServerReplacements = async (): Promise<void> => {
+    const pullServerReplacements = async (): Promise<void> => {
         if (browserHostWindow()) return;
         const base = getContentApiBase();
         if (!base) return;
         const touched = new Set<number>();
+        const sameBytes = (first?: Uint8Array, second?: Uint8Array) => first === second ||
+            (!!first && !!second && first.length === second.length && first.every((byte, i) => byte === second[i]));
+        const acceptRegion = (id: number, pack: EditorRegionReplacement): void => {
+            if (plugin.isNewMapSquare(id)) return;
+            const saved = savedAwaitingLoad.has(id) && editorRegionReplacements.get(id);
+            // Until the server loads the save, its running map can still be the previous version.
+            if (saved && (!sameBytes(saved.terrainData, pack.terrainData) || !sameBytes(saved.objectData, pack.objectData))) return;
+            savedAwaitingLoad.delete(id);
+            const previous = editorRegionReplacements.get(id);
+            if (previous && sameBytes(previous.terrainData, pack.terrainData) && sameBytes(previous.objectData, pack.objectData)) return;
+            editorRegionReplacements.set(id, pack);
+            touched.add(id);
+        };
         try {
-            const list = await (await fetch(`${base}/regions`)).json();
-            for (const regionId of list?.regions ?? []) {
-                if (!Number.isInteger(regionId)) continue;
-                try {
-                    const packResponse = await fetch(`${base}/regions/${regionId}.pack`);
-                    if (packResponse.ok) {
-                        const pack = parseRegionPack(new Uint8Array(await packResponse.arrayBuffer()));
-                        editorRegionReplacements.set(regionId, {
-                            terrainData: Uint8Array.from(pack.terrainData),
-                            objectData: pack.objectData ? Uint8Array.from(pack.objectData) : undefined,
-                        });
-                    } else {
-                        const terrainResponse = await fetch(`${base}/regions/${regionId}.terrain`);
-                        if (!terrainResponse.ok) continue;
-                        editorRegionReplacements.set(regionId, {
-                            terrainData: new Uint8Array(await terrainResponse.arrayBuffer()),
-                            objectData: undefined,
-                        });
-                    }
-                    touched.add(regionId);
-                } catch (error) {
-                    console.warn(`[edit-mode] failed to load server region ${regionId}`, error);
-                }
+            const response = await fetch(`${base}/regions`, { cache: "no-store" });
+            if (!response.ok) throw new Error(`World returned HTTP ${response.status}`);
+            const list = await response.json();
+            if (!Array.isArray(list?.regions)) throw new Error("World did not return a region list");
+            const ids: number[] = list.regions.filter(Number.isInteger);
+            const next = new Set(ids);
+            for (const id of serverRegionIds) {
+                if (!next.has(id) && !savedAwaitingLoad.has(id) && !plugin.isNewMapSquare(id)) clearEditorReplacement(id);
             }
+            serverRegionIds = next;
+            const load = async (id: number) => {
+                if (plugin.isNewMapSquare(id)) return;
+                try {
+                    const packResponse = await fetch(`${base}/regions/${id}.pack`, { cache: "no-store" });
+                    if (packResponse.ok) {
+                        acceptRegion(id, parseRegionPack(new Uint8Array(await packResponse.arrayBuffer())));
+                    } else {
+                        const terrainResponse = await fetch(`${base}/regions/${id}.terrain`, { cache: "no-store" });
+                        if (terrainResponse.ok) acceptRegion(id, { terrainData: new Uint8Array(await terrainResponse.arrayBuffer()) });
+                    }
+                } catch (error) {
+                    console.warn(`[edit-mode] failed to load server region ${id}`, error);
+                }
+            };
+            for (let i = 0; i < ids.length; i += 8) await Promise.all(ids.slice(i, i + 8).map(load));
         } catch (error) {
             console.warn("[edit-mode] failed to list server regions", error);
         }
         try {
             const spawns = parseObjectSpawns(await loadLocalEditorData("object-spawns"));
+            const previous = objectSpawns;
             objectSpawns = spawns;
-            for (const spawn of spawns) touched.add(regionIdForTile(spawn.position.x, spawn.position.y));
+            for (const spawn of [...previous ?? [], ...spawns]) touched.add(regionIdForTile(spawn.position.x, spawn.position.y));
         } catch (error) {
             console.warn("[edit-mode] failed to load server object spawns", error);
         }
         if (touched.size > 0) await refreshEditedRegions([...touched]);
     };
 
+    let activeMapSync: Promise<void> | undefined;
+    const syncServerReplacements = () => activeMapSync ??= pullServerReplacements().finally(() => {
+        activeMapSync = undefined;
+    });
+
     plugin.attach({
         getCanvas: () => client.renderer?.canvas as HTMLCanvasElement | undefined,
+        setEditorRenderDistance: (distance) => {
+            client.editorRenderDistance = landscapeViewDistance === undefined ? distance : Math.max(landscapeViewDistance, distance ?? 0);
+        },
+        loadObjectThumbnail: async (id) => {
+            const { textureLoader, locTypeLoader } = client;
+            const loader = terrainHost(client)?.getInteractLocModelLoader?.();
+            if (!loader || !textureLoader || !locTypeLoader) return;
+            const base = locTypeLoader.load(id);
+            const type = base?.transforms ? base.transform(client.varManager, locTypeLoader) ?? base : base;
+            if (!type) return;
+            const preferred = getLocPlacementShape(type);
+            const load = () => loader.getModel(type, preferred as LocModelType, 0);
+            let source = load();
+            if (!source && client.js5) {
+                await client.js5.settled();
+                source = load();
+            }
+            if (!source) return;
+            const model = source instanceof Model ? source : source.light(textureLoader, source.ambient, source.contrast, -50, -10, -50);
+            return renderModelThumbnail(model);
+        },
+        loadNpcThumbnail: async (id) => {
+            const loader = terrainHost(client)?.getInteractNpcModelLoader?.();
+            const type = client.npcTypeLoader?.load(id);
+            if (!loader || !type) return;
+            let model = loader.getModel(type, -1, -1);
+            if (!model && client.js5) {
+                await client.js5.settled();
+                model = loader.getModel(type, -1, -1);
+            }
+            return model ? renderModelThumbnail(model) : undefined;
+        },
+        loadItemThumbnail: async (id) => {
+            const { objTypeLoader, modelLoader, textureLoader, cacheSystem } = client;
+            if (!objTypeLoader || !modelLoader || !textureLoader) return;
+            if (thumbnailModelLoader !== modelLoader) {
+                thumbnailModelLoader = modelLoader;
+                thumbnailRenderer = undefined;
+                itemThumbnailRenderer = undefined;
+            }
+            if (!itemThumbnailRenderer) {
+                const { ItemIconRenderer } = await import("../../../ui/item/ItemIconRenderer");
+                itemThumbnailRenderer = new ItemIconRenderer(objTypeLoader, modelLoader, textureLoader, cacheSystem);
+            }
+            let icon = itemThumbnailRenderer.renderToCanvas(id);
+            if (!icon && client.js5) {
+                await client.js5.settled();
+                icon = itemThumbnailRenderer.renderToCanvas(id);
+            }
+            return icon?.toDataURL("image/png");
+        },
         getCameraTile: () => ({
             tileX: Math.round(client.camera.getPosX()),
             tileY: Math.round(client.camera.getPosZ()),
@@ -1480,20 +1964,29 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             );
         },
         previewBuilding: (tile) => {
-            const tileKey = `${tile.tileX}:${tile.tileY}:${tile.plane}`;
-            if (buildingPreviewTileKey === tileKey) return;
+            const renderer = terrainHost(client);
+            const building = renderer && resolveBuilding(renderer, tile);
+            if (!renderer || !building) {
+                clearPointerPreview();
+                return;
+            }
+            const key = `${building.minX}:${building.minY}:${building.maxX}:${building.maxY}:${building.minPlane}:${building.maxPlane}`;
+            const edits = plugin.getConfig().edits;
+            if (buildingPreview?.renderer === renderer && buildingPreview.key === key && buildingPreview.edits === edits) return;
             clearPointerPreview();
-            const analysis = analyseBuilding(tile);
-            if (!analysis) return;
-            buildingPreviewTileKey = tileKey;
+            const analysis = analyseBuilding(renderer, building);
+            buildingPreview = { renderer, key, edits };
             buildingModelHighlight = analysis.highlight;
-            if (!analysis.highlight) setBuildingTileFallback(analysis.building, EDITOR_HOVER_TILE_SLOT);
+            if (!analysis.highlight) {
+                setBuildingTileFallback(building, EDITOR_HOVER_TILE_SLOT);
+            }
         },
         selectBuilding: (tile) => {
             clearSelectionHighlight();
-            const analysis = analyseBuilding(tile);
-            if (!analysis) return undefined;
-            const building = analysis.building;
+            const renderer = terrainHost(client);
+            const building = renderer && resolveBuilding(renderer, tile);
+            if (!renderer || !building) return undefined;
+            const analysis = analyseBuilding(renderer, building);
             buildingSelectionHighlight = analysis.highlight;
             if (!analysis.highlight) {
                 setBuildingTileFallback(building, EDITOR_SELECTION_TILE_SLOT);
@@ -1550,10 +2043,29 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             );
             return entry ? { locId: entry.targetId | 0, locName: entry.targetName } : undefined;
         },
-        selectPointer: (tile) => {
+        projectObject: (object) => {
+            const renderer = terrainHost(client);
+            const canvas = client.renderer?.canvas;
+            if (!renderer || !canvas || !renderer.getPreferredMapForWorldTile(object.tileX, object.tileY)) return;
+            const sized = object.shape === 10 || object.shape === 11 || object.shape === 22;
+            const definition = sized ? client.locTypeLoader.load(object.locId) : undefined;
+            const rotated = (object.rotation ?? 0) & 1;
+            const x = object.tileX + ((rotated ? definition?.sizeY : definition?.sizeX) ?? 1) / 2;
+            const y = object.tileY + ((rotated ? definition?.sizeX : definition?.sizeY) ?? 1) / 2;
+            const height = renderer.getTileHeightAtPlane(x, y, object.plane);
+            const projected = renderer.worldToScreen(x, height, y);
+            if (!projected) return;
+            const bounds = canvas.getBoundingClientRect();
+            const { screenWidth, screenHeight } = client.camera;
+            return {
+                x: bounds.left + projected[0] * bounds.width / Math.max(1, screenWidth),
+                y: bounds.top + projected[1] * bounds.height / Math.max(1, screenHeight),
+            };
+        },
+        selectPointer: (tile, onlyObjects) => {
             clearSelectionHighlight();
-            const { renderer, target } = resolvePointerTarget();
-            // The editor picks scenery and NPCs only (resolveEditScenePick), never ground items.
+            const { renderer, target } = resolvePointerTarget(onlyObjects);
+            // Ground items use a separate editor tool.
             if (renderer && target && (target.kind === "loc" || target.kind === "npc")) {
                 selectedModelTarget = target;
                 renderer.interactHighlightActiveTarget = target;
@@ -1604,6 +2116,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                     npcWanderRadius: customEdit
                         ? customEdit.wanderRadius ?? 5
                         : wanderEdit?.wanderRadius ?? spawnEntry?.spawn.wanderRadius ?? 5,
+                    npcLeashRadius: customEdit ? customEdit.leashRadius
+                        : wanderEdit?.leashRadius === undefined ? spawnEntry?.spawn.leashRadius : wanderEdit.leashRadius,
                 };
             }
 
@@ -1671,8 +2185,8 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                 },
             );
         },
-        setWallPreview: (walls, height) => {
-            if (walls.length === 0) {
+        setWallPreview: (walls, height, floors = []) => {
+            if (!walls.length && !floors.length) {
                 clearPlacementPreview();
                 return;
             }
@@ -1680,40 +2194,41 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             previewNpc = false;
             previewNpcType = -1;
             previewNpcRotation = -1;
+            locPlacementPreviewOverlay?.clear();
             const renderer = terrainHost(client);
             if (!renderer) return;
-            const minX = Math.min(...walls.map((wall) => wall.tileX));
-            const maxX = Math.max(...walls.map((wall) => wall.tileX));
-            const minY = Math.min(...walls.map((wall) => wall.tileY));
-            const maxY = Math.max(...walls.map((wall) => wall.tileY));
-            ensureWallGroundOverlay(renderer)?.setRects(
-                height === undefined
-                    ? []
-                    : [{
-                        minX,
-                        maxX,
-                        minY,
-                        maxY,
-                        plane: walls[0].plane,
-                        colorRgb: WALL_PREVIEW_GROUND_COLOR,
-                        alpha: 0.65,
-                        height,
-                    }],
-            );
+            const colors = new Map<number, number | undefined>();
+            const rects: ZoneGroundRect[] = floors.flatMap((floor) => {
+                if (!colors.has(floor.locId)) colors.set(floor.locId, paintPreviewColor(floor.locId));
+                const colorRgb = colors.get(floor.locId);
+                if (colorRgb === undefined) return [];
+                return [{
+                    minX: floor.tileX, maxX: floor.tileX, minY: floor.tileY, maxY: floor.tileY,
+                    plane: floor.plane, colorRgb, alpha: 0.52, height: floor.previewHeight,
+                    shape: floor.shape, rotation: floor.rotation,
+                }];
+            });
+            if (height !== undefined && walls.length > 0) {
+                const ground = { plane: walls[0].plane, colorRgb: WALL_PREVIEW_GROUND_COLOR, alpha: 0.65, height };
+                if (walls[0].shape === 9) {
+                    for (const wall of walls) rects.push({
+                        ...ground, minX: wall.tileX, maxX: wall.tileX, minY: wall.tileY, maxY: wall.tileY,
+                    });
+                } else {
+                    rects.push({
+                        ...ground, minX: Math.min(...walls.map((wall) => wall.tileX)),
+                        maxX: Math.max(...walls.map((wall) => wall.tileX)),
+                        minY: Math.min(...walls.map((wall) => wall.tileY)),
+                        maxY: Math.max(...walls.map((wall) => wall.tileY)),
+                    });
+                }
+            }
+            ensureWallGroundOverlay(renderer)?.setRects(rects);
             ensureBuildingHighlightRenderer(renderer);
-            ensureLocPlacementPreviewOverlay(renderer)?.setPreviews(
-                client as unknown as LocPlacementPreviewClient,
-                client.renderer as unknown as LocPlacementPreviewRenderer,
-                walls.map((wall) => ({
-                    locId: wall.locId,
-                    x: wall.tileX,
-                    y: wall.tileY,
-                    plane: wall.plane,
-                    shape: wall.shape,
-                    rotation: wall.rotation,
-                    height,
-                })),
-            );
+            drawConstructionPreviews(renderer, walls.map((wall) => ({
+                locId: wall.locId, x: wall.tileX, y: wall.tileY, plane: wall.plane,
+                shape: wall.shape, rotation: wall.rotation, height: wall.previewHeight ?? height,
+            })));
         },
         clearPlacementPreview,
         setAudioMuted: (muted) => {
@@ -1752,6 +2267,116 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             const type = base.transforms ? base.transform(client.varManager, client.locTypeLoader) ?? base : base;
             return getLocPlacementShape(type);
         },
+        getLocPlacementShapes: (locId) => {
+            const loc = client.locTypeLoader.load(locId);
+            return loc.types?.length ? [...new Set(loc.types)].filter((shape) => shape >= 0 && shape <= 22) : [getLocPlacementShape(loc)];
+        },
+        hasLocAt: (tile) => {
+            const renderer = terrainHost(client);
+            if (!renderer?.getPreferredMapForWorldTile(tile.tileX, tile.tileY)) return true;
+            return renderer.getLocIdsAtTileAllLevels(tile.tileX, tile.tileY)
+                .some(({ level, typeRot }) => level === tile.plane && (typeRot === undefined || typeRot >> 2 !== 22));
+        },
+        getStampObjectInfo: (id) => {
+            try {
+                const loc = client.locTypeLoader.load(id);
+                if (!loc?.models?.length && !loc?.transforms?.length) return;
+                return { sizeX: loc.sizeX, sizeY: loc.sizeY, interactive: loc.actions?.some(Boolean) ?? false };
+            } catch {
+                return;
+            }
+        },
+        isEditableMapRegion: (id) => editorRegionReplacements.has(id) ||
+            terrainHost(client)?.mapRegionReplacements.has(id) === true ||
+            client.mapFileIndex.getTerrainArchiveId(id >> 8, id & 255) !== -1,
+        validateStampRegions: (regions) => {
+            const unavailable = regions.filter((id) => !readEditorRegion(client, id, editorRegionReplacements));
+            if (unavailable.length === 0) return;
+            const retry = () => {
+                const missing = unavailable.find((id) => !readEditorRegion(client, id, editorRegionReplacements));
+                if (missing !== undefined) throw new Error(`Could not read map data for region ${missing}. Try placing the stamp again.`);
+            };
+            if (client.js5) return client.js5.settled().then(retry);
+            retry();
+        },
+        prepareNewRegion: async (id, underlay, cave, copyFrom) => {
+            const x = id >> 8;
+            const y = id & 255;
+            if (!Number.isInteger(id) || id < 0 || x >= MapManager.MAX_MAP_X || y >= MapManager.MAX_MAP_Y) {
+                throw new Error(`Choose map-square coordinates within 0–${MapManager.MAX_MAP_X - 1}, 0–${MapManager.MAX_MAP_Y - 1}`);
+            }
+            if (client.mapFileIndex.getTerrainArchiveId(x, y) !== -1 || client.mapFileIndex.getLocArchiveId(x, y) !== -1 ||
+                editorRegionReplacements.has(id) ||
+                terrainHost(client)?.mapRegionReplacements.has(id)) {
+                throw new Error(`Region ${id} already has a map`);
+            }
+            let source;
+            if (copyFrom !== undefined) {
+                const tile = { tileX: (copyFrom >> 8) << 6, tileY: (copyFrom & 255) << 6, plane: 0 };
+                const load = () => buildEditorRegionPack(client, tile, [], editorRegionReplacements, false);
+                let pack;
+                try {
+                    pack = load();
+                } catch (error) {
+                    if (!client.js5) throw error;
+                    await client.js5.settled();
+                    pack = load();
+                }
+                source = parseRegionPack(pack.data);
+            }
+            return createRegionPack(id, hasWideTerrain(client), underlay, cave, source);
+        },
+        showLandscapePreview: (packs) => {
+            const incoming = packs.map(({ data }) => parseRegionPack(data));
+            const next = new Set(incoming.map(({ regionId }) => regionId));
+            for (const id of landscapePreviewIds) {
+                if (next.has(id)) continue;
+                const base = editorRegionReplacements.get(id);
+                if (base) client.onRegionReplacement({ regionId: id, ...base, allowReload: true });
+                else clearEditorReplacement(id);
+            }
+            landscapePreviewIds = next;
+            const distance = plugin.getConfig().renderDistance;
+            if (incoming.length) {
+                const columns = incoming.map(({ regionId }) => regionId >> 8);
+                const rows = incoming.map(({ regionId }) => regionId & 255);
+                const span = 1 + Math.max(Math.max(...columns) - Math.min(...columns), Math.max(...rows) - Math.min(...rows));
+                landscapeViewDistance = Math.min(160, span * 42 + 24);
+                client.editorRenderDistance = Math.max(landscapeViewDistance, distance ?? 0);
+            } else {
+                landscapeViewDistance = undefined;
+                client.editorRenderDistance = plugin.handlesCanvasInput() ? distance : undefined;
+            }
+            for (const replacement of incoming) client.onRegionReplacement({ ...replacement, allowReload: true });
+        },
+        frameLandscape: (tile, span) => {
+            client.camera.snapToYaw(EDITOR_CAMERA_YAW);
+            client.camera.snapToPitch(span <= 64 ? 410 : 465);
+            frameCameraOnTile(client, tile, false, Math.max(46, Math.min(138, span * 0.8)));
+        },
+        previewNewRegion: (data) => {
+            const pack = parseRegionPack(data);
+            editorRegionReplacements.set(pack.regionId, pack);
+            client.onRegionReplacement({ ...pack, allowReload: true });
+        },
+        removeNewRegion: clearEditorReplacement,
+        isRegionOccupied,
+        loadTemplateCatalog: async () => JSON.parse(await loadLocalEditorData("templates")),
+        loadTemplate: async (name) => JSON.parse(await loadLocalEditorData(`templates/${encodeURIComponent(name)}`)),
+        loadMapPlans: async () => JSON.parse(await loadLocalEditorData("map-plans")),
+        previewMapPlan: async (query) => {
+            const result = JSON.parse(await loadLocalEditorData(`map-plans/preview?${query}`));
+            if (result?.error) throw new Error(result.error);
+            return result;
+        },
+        loadTravel: async (kind) => JSON.parse(await loadLocalEditorData(kind)),
+        getLocActions: (id) => client.locTypeLoader.load(id)?.actions ?? [],
+        loadGroundItems: async () => JSON.parse(await loadLocalEditorData("ground-items-custom")),
+        previewGroundItems: (items) => client.setEditorGroundItemPreview(items.map((item, index) => ({
+            id: -index - 1, itemId: item.id, quantity: item.amt, enabledOps: 0,
+            tile: { x: item.location.x, y: item.location.y, level: item.location.z },
+            name: "", gePrice: 0, haPrice: 0, tradeable: false,
+        }))),
         getLocName: (locId) => client.locTypeLoader?.load(locId)?.name ?? "",
         getNpcName: (npcTypeId) => client.npcTypeLoader?.load(npcTypeId)?.name ?? "",
         search: async (kind, query) => {
@@ -1819,6 +2444,22 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             }
             return swatches;
         },
+        getUnderlaySwatches: () => {
+            const loader = client.loaderFactory?.getUnderlayTypeLoader?.();
+            if (!loader) return [];
+            const swatches = [];
+            for (let id = 1; id <= loader.getCount(); id++) {
+                try {
+                    const floor = loader.load(id - 1);
+                    if ("rgbColor" in floor && typeof floor.rgbColor === "number") {
+                        swatches.push({ id, colorRgb: floor.rgbColor & 0xffffff });
+                    }
+                } catch {
+                    // The cache definition may still be downloading.
+                }
+            }
+            return swatches;
+        },
         loadWorldDefinition,
         spawnNpc: (npcTypeId, tile, rotation, direction) => direction === undefined
             ? spawnEditorNpc(client, npcTypeId, tile, rotation)
@@ -1865,6 +2506,11 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             if (renderer) ensureHeightLevelRenderer(renderer);
         },
         isLoggedIn: () => client.isLoggedIn(),
+        testTile: (tile) => {
+            sendChat(`::tele ${tile.tileX} ${tile.tileY} ${tile.plane}`);
+            frameCameraOnTile(client, tile, false);
+        },
+        reloadSavedRegions: (ids) => sendChat(`::reloadmap ${ids.join(" ")}`),
         jumpCameraToTile: (tile) => {
             frameCameraOnTile(client, tile, false);
         },
@@ -1885,6 +2531,31 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                 hasWideTerrain(client), copyAreaNpcs(spawns, edits),
             );
         },
+        getAreaNpcs: ({ minX, maxX, minY, maxY }) => {
+            const inside = ({ tileX, tileY }: { tileX: number; tileY: number }) =>
+                tileX >= minX && tileX <= maxX && tileY >= minY && tileY <= maxY;
+            const result: BrowserHostNpcSpawn[] = [];
+            const edits = plugin.getConfig().edits;
+            for (const entries of loadedNpcSpawnRegions.values()) {
+                for (const { spawn, hidden } of entries) {
+                    if (hidden || !inside(spawn)) continue;
+                    const edit = edits.find((edit) => edit.kind === "npcWander" && edit.locId === spawn.id &&
+                        edit.tileX === spawn.tileX && edit.tileY === spawn.tileY && edit.plane === spawn.plane);
+                    result.push({
+                        ...spawn, wanderRadius: edit?.wanderRadius ?? spawn.wanderRadius,
+                        leashRadius: edit?.leashRadius === undefined ? spawn.leashRadius : edit.leashRadius,
+                    });
+                }
+            }
+            for (const edit of edits) {
+                if (edit.kind === "npc" && inside(edit)) result.push({
+                    id: edit.locId, tileX: edit.tileX, tileY: edit.tileY, plane: edit.plane,
+                    direction: edit.direction ?? quarterTurnToDirection(edit.rotation),
+                    wanderRadius: edit.wanderRadius, leashRadius: edit.leashRadius,
+                });
+            }
+            return result;
+        },
         getRegionOverlays: (regionId, edits) => {
             try {
                 // Objects play no part in overlays, so their edits are left out of the pack.
@@ -1896,25 +2567,28 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
                 return undefined;
             }
         },
+        getLoadedMapData: (id) => editorRegionReplacements.get(id),
         markMapEditsSaved: (packs, spawns) => {
             for (const pack of packs) {
                 const parsed = parseRegionPack(pack.data);
                 editorRegionReplacements.set(pack.regionId, parsed);
+                if (!browserHostWindow()) savedAwaitingLoad.add(pack.regionId);
             }
             if (spawns !== undefined) objectSpawns = spawns;
         },
-        exportObjectSpawns: (edits) => {
+        exportObjectSpawns: (edits, saveToJson) => {
             if (!objectSpawns) throw new Error("Object spawns are still loading from the host; try Save again shortly");
-            return buildObjectSpawnExport(objectSpawns, edits, plugin.getConfig().saveObjectSpawns, (regionId) =>
+            return buildObjectSpawnExport(objectSpawns, edits, saveToJson, (regionId) =>
                 parseRegionPack(buildEditorRegionPack(client, {
                     tileX: (regionId >> 8) << 6, tileY: (regionId & 0xff) << 6, plane: 0,
                 }, [], editorRegionReplacements).data).objectData,
             );
         },
-        exportRegionPack: (tile, edits) => {
+        exportRegionPack: (tile, edits, saveToJson) => {
             if (!objectSpawns) throw new Error("Object spawns are still loading from the host; try Save again shortly");
-            const saveToJson = plugin.getConfig().saveObjectSpawns;
-            return buildEditorRegionPack(client, tile, saveToJson ? edits : sceneEdits(edits), editorRegionReplacements, !saveToJson);
+            const regionId = regionIdForTile(tile.tileX, tile.tileY);
+            const bakeObjects = !saveToJson && edits.some((edit) => isLocEdit(edit) && regionIdForTile(edit.tileX, edit.tileY) === regionId);
+            return buildEditorRegionPack(client, tile, bakeObjects ? sceneEdits(edits) : edits, editorRegionReplacements, bakeObjects);
         },
         rotateCamera: (deltaX, deltaY) => {
             const camera = client.camera;
@@ -1933,39 +2607,39 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             ClientState.mouseCrossState = 100;
         },
         levelCamera: () => {
-            frameCameraOnTile(
-                client,
-                {
-                    tileX: Math.round(client.camera.getPosX()),
-                    tileY: Math.round(client.camera.getPosZ()),
-                    plane: plugin.getConfig().heightLevel,
-                },
-                true,
-            );
+            client.camera.snapToYaw(EDITOR_CAMERA_YAW);
+            client.camera.snapToPitch(EDITOR_CAMERA_PITCH);
         },
-        toggleWorldMap: () => {
-            editorWorldMap.toggle(plugin.getCameraTile());
+        toggleWorldMap: (actions) => {
+            editorWorldMap.toggle(plugin.getCameraTile(), actions);
         },
         isEditorModalOpen: () => editorWorldMap.isOpen(),
+        closeEditorWorldMap: () => editorWorldMap.close(),
         setTerrainOverlay: (tile, overlay, shape, rotation) => {
             const renderer = terrainHost(client);
             if (!renderer) return;
-            renderer.terrainOverrides.set(`${tile.tileX},${tile.tileY},${tile.plane}`, {
+            const key = `${tile.tileX},${tile.tileY},${tile.plane}`;
+            renderer.terrainOverrides.set(key, {
                 overlay: overlay | 0,
                 shape: shape | 0,
                 rotation: rotation & 0x3,
             });
-            reloadTile(renderer, tile);
-            zoneGroundOverlay?.invalidate();
+            const colorRgb = paintPreviewColor(overlay);
+            const rects = overlay === 0 ? basePaintPreview(tile, false) : colorRgb === undefined ? [] : [paintRect(tile, colorRgb, shape, rotation)];
+            queuePaintReload(renderer, tile, key, rects);
         },
         setTerrainPreview,
         clearTerrainPreview,
+        setScatterBrushPreview,
+        previewScatteredLocs,
         clearTerrainOverride: (tile) => {
             const renderer = terrainHost(client);
             if (!renderer) return;
-            renderer.terrainOverrides.delete(`${tile.tileX},${tile.tileY},${tile.plane}`);
-            reloadTile(renderer, tile);
-            zoneGroundOverlay?.invalidate();
+            const key = `${tile.tileX},${tile.tileY},${tile.plane}`;
+            renderer.terrainOverrides.delete(key);
+            const mapId = renderer.getMapIdForWorldTile(tile.tileX, tile.tileY);
+            const stillPreviewing = paintRects.get(mapId)?.has(key);
+            queuePaintReload(renderer, tile, key, stillPreviewing ? [] : basePaintPreview(tile, true));
         },
         getTerrainOverlay: (tile) => {
             const renderer = terrainHost(client);
@@ -1982,6 +2656,48 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             const renderer = terrainHost(client);
             if (!renderer?.getPreferredMapForWorldTile(tile.tileX, tile.tileY)) return undefined;
             return renderer.getTileHeightAtPlane(tile.tileX, tile.tileY, tile.plane);
+        },
+        getTerrainFlags: (tile) => {
+            const renderer = terrainHost(client);
+            if (!renderer?.getPreferredMapForWorldTile(tile.tileX, tile.tileY)) return undefined;
+            return renderer.getTileRenderFlagAt(tile.plane, tile.tileX, tile.tileY);
+        },
+        getBaseRegionFlags: (regionId) => {
+            const x = regionId >> 8;
+            const y = regionId & 255;
+            try {
+                const data = editorRegionReplacements.get(regionId)?.terrainData ??
+                    client.loaderFactory.getMapFileLoader().getTerrainData(x, y, client.loadedCache?.xteas);
+                if (!data) return;
+                const cached = flagsByTerrain.get(data);
+                if (cached) return cached;
+                const flags = readRegionFlags(new Uint8Array(data.buffer, data.byteOffset, data.byteLength), hasWideTerrain(client));
+                flagsByTerrain.set(data, flags);
+                return flags;
+            } catch { return undefined; }
+        },
+        showBlockedTiles: (tiles) => {
+            client.tileHighlightManager.clear(EDITOR_BLOCKED_TILE_SLOT);
+            if (!tiles.length) return;
+            client.tileHighlightManager.configure(EDITOR_BLOCKED_TILE_SLOT, 0xef4444, 1, 35, TILE_HIGHLIGHT_ALWAYS_ON_TOP);
+            for (const tile of tiles) {
+                client.tileHighlightManager.set(
+                    packWorldMapCoord({ x: tile.tileX, y: tile.tileY, plane: tile.plane }),
+                    EDITOR_BLOCKED_TILE_SLOT, EDITOR_BLOCKED_TILE_SLOT,
+                );
+            }
+        },
+        showTravelMarkers: (sources, arrivals) => {
+            const draw = (tiles: readonly EditModeTile[], slot: number, color: number) => {
+                client.tileHighlightManager.clear(slot);
+                if (!tiles.length) return;
+                client.tileHighlightManager.configure(slot, color, 2, 25, TILE_HIGHLIGHT_ALWAYS_ON_TOP);
+                for (const tile of tiles) client.tileHighlightManager.set(
+                    packWorldMapCoord({ x: tile.tileX, y: tile.tileY, plane: tile.plane }), slot, slot,
+                );
+            };
+            draw(sources, EDITOR_TRAVEL_SOURCE_SLOT, 0xfbbf24);
+            draw(arrivals, EDITOR_TRAVEL_ARRIVAL_SLOT, 0x67e8f9);
         },
         refreshEditedRegions,
         syncServerReplacements,
@@ -2025,7 +2741,24 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
         },
     });
 
+    let lastPreviewEdits: readonly EditModeEdit[] | undefined;
     plugin.subscribe(() => {
+        const edits = plugin.getConfig().edits;
+        if (scatterPreviews.size && edits !== lastPreviewEdits) {
+            lastPreviewEdits = edits;
+            const placements = new Set(edits.filter((edit) => edit.kind === "place").map(scatterKey));
+            let changed = false;
+            for (const [region, previews] of scatterPreviews) {
+                for (const key of previews.keys()) {
+                    if (!placements.has(key)) changed = previews.delete(key) || changed;
+                }
+                if (!previews.size) {
+                    scatterPreviews.delete(region);
+                    submittedScatter.delete(region);
+                }
+            }
+            if (changed) drawScatteredLocs();
+        }
         if (objectSpawnPreviewPending && plugin.getState().scenePreview) {
             objectSpawnPreviewPending = false;
             void refreshEditedRegions([...new Set((objectSpawns ?? []).map((spawn) => regionIdForTile(spawn.position.x, spawn.position.y)))]);
@@ -2146,6 +2879,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
     // ?edit=1 opens the client straight in the editor instead of changing the
     // normal welcome-screen button.
     if (isMapEditorUrl()) {
+        const requested = parseEditorLocation(new URLSearchParams(window.location.search).get("at") ?? "");
         // ponytail: polled, because the cache load and the world definition
         // fetch settle independently and neither has a ready event to hook.
         const timer = window.setInterval(() => {
@@ -2153,7 +2887,7 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
             if (client.gameState !== GameState.LOGIN_SCREEN) return;
             if (!client.loadedCache || plugin.getState().world.loading) return;
             window.clearInterval(timer);
-            plugin.setScenePreview(true);
+            plugin.setScenePreview(true, requested && { ...requested, plane: requested.plane ?? 0 });
         }, 250);
     }
     window.setInterval(syncNpcSpawnRegions, 500);
@@ -2167,18 +2901,22 @@ export function installEditMode(client: OsrsClient): EditModePlugin {
  */
 type TerrainHost = {
     currentFrameCount: number;
+    getInteractLocModelLoader?(): LocModelLoader | undefined;
+    getInteractNpcModelLoader?(): import("../../../rs/config/npctype/NpcModelLoader").NpcModelLoader | undefined;
     editorOverlays?: EditorOverlays;
     app?: PicoApp;
     sceneUniformBuffer?: UniformBuffer;
     overlayManager?: { add(overlay: Overlay): unknown };
     mapManager: {
         visibleMapCount: number;
+        mapAddedListeners?: Set<(map: { mapX: number; mapY: number }) => void>;
         visibleMaps: Array<EditorPickMap & {
             mapX: number;
             mapY: number;
         }>;
     };
     screenToRay(mouseX: number, mouseY: number): Ray | null;
+    worldToScreen(x: number, height: number, y: number): Float32Array | number[] | undefined;
     sceneRaycaster: Pick<SceneRaycaster, "raycast"> | null;
     getPlayerRawPlane(): number;
     getEffectivePlaneForTile(x: number, y: number, plane: number): number;
@@ -2261,6 +2999,27 @@ function hasWideTerrain(client: OsrsClient): boolean {
     return client.loadedCache?.info.game === "oldschool" && (client.loadedCache?.info.revision ?? 0) >= 209;
 }
 
+const EMPTY_MAP_OBJECTS = Uint8Array.of(0);
+
+function readEditorRegion(client: OsrsClient, regionId: number, replacements: Map<number, EditorRegionReplacement>) {
+    const mapX = regionId >> 8;
+    const mapY = regionId & 255;
+    const mapFileLoader = client.loaderFactory.getMapFileLoader();
+    const replacement = replacements.get(regionId) ?? terrainHost(client)?.mapRegionReplacements.get(regionId);
+    const xteas = client.loadedCache?.xteas;
+    const terrainArchiveId = client.mapFileIndex.getTerrainArchiveId(mapX, mapY);
+    const objectArchiveId = client.mapFileIndex.getLocArchiveId(mapX, mapY);
+    const terrainData = replacement?.terrainData ?? mapFileLoader.getTerrainData(mapX, mapY, xteas);
+    const objectData = replacement?.objectData ?? (objectArchiveId === -1
+        ? EMPTY_MAP_OBJECTS : mapFileLoader.getLocData(mapX, mapY, xteas));
+    if (!terrainData || !objectData) return;
+    // Keep the imported/cache base separate from temporary editor preview packs.
+    if (!replacements.has(regionId)) replacements.set(regionId, {
+        terrainData: new Uint8Array(terrainData), objectData: new Uint8Array(objectData),
+    });
+    return { terrainData, objectData, terrainArchiveId, objectArchiveId };
+}
+
 function buildEditorRegionPack(
     client: OsrsClient,
     tile: EditModeTile,
@@ -2271,27 +3030,21 @@ function buildEditorRegionPack(
     const mapX = tile.tileX >> 6;
     const mapY = tile.tileY >> 6;
     const regionId = (mapX << 8) | mapY;
-    const mapFileLoader = client.loaderFactory.getMapFileLoader();
-    const replacement = replacements.get(regionId) ?? terrainHost(client)?.mapRegionReplacements.get(regionId);
-    const xteas = client.loadedCache?.xteas;
-    const terrainData = replacement?.terrainData ?? mapFileLoader.getTerrainData(mapX, mapY, xteas);
-    const objectData = replacement?.objectData ?? mapFileLoader.getLocData(mapX, mapY, xteas);
-    if (!terrainData || !objectData) throw new Error(`Region ${regionId} is not loaded`);
-    // Keep the imported/cache base separate from temporary editor preview packs.
-    if (!replacements.has(regionId)) replacements.set(regionId, {
-        terrainData: new Uint8Array(terrainData), objectData: new Uint8Array(objectData),
-    });
+    const region = readEditorRegion(client, regionId, replacements);
+    if (!region) throw new Error(`Region ${regionId} is not loaded`);
+    const { terrainData, objectData, terrainArchiveId, objectArchiveId } = region;
     return {
         regionId,
         data: buildRegionPack(
             regionId,
-            client.mapFileIndex.getLocArchiveId(mapX, mapY),
-            client.mapFileIndex.getTerrainArchiveId(mapX, mapY),
+            objectArchiveId,
+            terrainArchiveId,
             objectData,
             terrainData,
             edits,
             hasWideTerrain(client),
             includeObjectEdits,
+            terrainArchiveId === -1 && objectArchiveId === -1,
         ),
     };
 }

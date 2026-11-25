@@ -4,7 +4,7 @@ import type { ObjectSpawn } from "./hostProtocol/objectSpawnsMessage";
 export const LOC_SHAPE_NORMAL = 10;
 export const LOC_SHAPE_FLOOR_DECORATION = 22;
 
-export type EditModeTool = "select" | "place" | "delete" | "terrain" | "path" | "wall" | "fill";
+export type EditModeTool = "select" | "place" | "delete" | "terrain" | "path" | "wall" | "fill" | "stamp" | "pick" | "scatter";
 
 /** Reference editor fallback for a dirt path; overlay 2 is water in this cache. */
 export const DEFAULT_PATH_OVERLAY_ID = 1;
@@ -114,9 +114,12 @@ export interface EditModeEdit extends EditModeTile {
     rotation: number;
     /** Wandering range for a spawn; 0 keeps the NPC anchored. */
     wanderRadius?: number;
+    leashRadius?: number | null;
     /** Facing of a persisted spawn, preserved when it is moved or overridden. */
     direction?: number;
 }
+
+export type EditModeRegionPack = { regionId: number; data: Uint8Array };
 
 export interface EditModePluginConfig {
     /** Plugin Hub on/off. */
@@ -138,6 +141,12 @@ export interface EditModePluginConfig {
     heightLevel: number;
     /** Show every height level, or heightLevel and everything below it. */
     renderAllHeightLevels: boolean;
+    /** Overrides automatic roof hiding when inspecting upper floors. */
+    floorView?: "up-to" | "one-above" | "all";
+    ghostUi?: boolean;
+    brushTiming?: import("./TerrainBrush").BrushTiming;
+    /** A tile distance for this editor only. Undefined uses the game's default. */
+    renderDistance?: number;
     saveObjectSpawns: boolean;
     /** Draw selectable map-function sprites at their floor tiles. */
     showMapIcons: boolean;
@@ -163,6 +172,7 @@ export interface EditModeSelection extends EditModeTile {
     npcSpawn?: BrowserHostNpcSpawn;
     /** Current wandering range; 0 keeps the NPC anchored. */
     npcWanderRadius?: number;
+    npcLeashRadius?: number | null;
     tileEndX?: number;
     tileEndY?: number;
     planeEnd?: number;
@@ -211,6 +221,8 @@ export interface EditModePluginPersistence {
     save(config: EditModePluginConfig): void;
 }
 
+export type EditModePreviewEdit = EditModeEdit & { previewHeight?: number };
+
 /** Everything the plugin needs from the client, kept structural so tests can fake it. */
 export interface EditModeHost {
     getCanvas(): HTMLCanvasElement | undefined;
@@ -222,12 +234,18 @@ export interface EditModeHost {
     /** Menu entries for the current hover, used to identify the loc being pointed at. */
     getPointerLoc(): { locId: number; locName: string } | undefined;
     /** Selects and visually marks the topmost entity, or the ground tile. */
-    selectPointer?(tile: EditModeTile): EditModeSelection;
+    selectPointer?(tile: EditModeTile, onlyObjects?: boolean): EditModeSelection;
+    /** Position of the object's footprint in CSS viewport pixels. */
+    projectObject?(object: EditModeSelection): { x: number; y: number } | undefined;
     /** One-off transparent PNG of the currently selected loc or NPC. */
     captureSelectionImage?(): Promise<string | undefined>;
+    loadObjectThumbnail?(locId: number): Promise<string | undefined>;
+    loadNpcThumbnail?(npcId: number): Promise<string | undefined>;
+    loadItemThumbnail?(itemId: number): Promise<string | undefined>;
+    setEditorRenderDistance?(distance: number | undefined): void;
     previewPointer?(tile: EditModeTile): void;
-    previewBuilding?(tile: EditModeTile): void;
-    selectBuilding?(tile: EditModeTile): EditModeSelection | undefined;
+    previewBuilding?(tile?: EditModeTile): void;
+    selectBuilding?(tile?: EditModeTile): EditModeSelection | undefined;
     clearPointerPreview?(): void;
     selectTileRange?(start: EditModeTile, end: EditModeTile): EditModeSelection;
     afterNextSceneFrame?(callback: () => void): void;
@@ -241,8 +259,8 @@ export interface EditModeHost {
         shape: number,
         rotation: number,
     ): void;
-    /** Shows a run of identical wall locs without touching map-square state. */
-    setWallPreview?(walls: readonly EditModeEdit[], height?: number): void;
+    /** Shows wall and stamp previews without touching map-square state. */
+    setWallPreview?(walls: readonly EditModePreviewEdit[], height?: number, floors?: readonly EditModePreviewEdit[]): void;
     clearPlacementPreview?(): void;
     onLocAddChange(
         locId: number,
@@ -255,6 +273,59 @@ export interface EditModeHost {
     /** Brings back what onLocDel suppressed in this slot. */
     restoreLoc?(tile: { x: number; y: number }, level: number, shape: number, rotation: number): void;
     getLocPlacementShape?(locId: number): number;
+    getLocPlacementShapes?(locId: number): readonly number[];
+    hasLocAt?(tile: EditModeTile): boolean;
+    getStampObjectInfo?(id: number): import("./AreaStamp").StampObjectInfo | undefined;
+    isEditableMapRegion?(regionId: number): boolean;
+    validateStampRegions?(regionIds: readonly number[]): void | Promise<void>;
+    prepareNewRegion?(regionId: number, underlay: number, cave: boolean, copyFrom?: number): Promise<Uint8Array>;
+    previewNewRegion?(data: Uint8Array): void;
+    showLandscapePreview?(packs: readonly EditModeRegionPack[]): void;
+    frameLandscape?(tile: EditModeTile, span: number): void;
+    removeNewRegion?(regionId: number): void;
+    isRegionOccupied?(id: number): boolean;
+    loadTemplateCatalog?(): Promise<Array<{ name: string; width: number; height: number }>>;
+    loadTemplate?(name: string): Promise<unknown>;
+    loadMapPlans?(): Promise<{
+        presets: Array<{ name: string; about: string }>;
+        styles: Array<{
+            name: string;
+            label: string;
+            about: string;
+            roof: boolean;
+            roles: Array<"wall" | "building" | "ruins">;
+            wall: number;
+            corner: number;
+            diagonal: number | null;
+            diagonalJoin?: number | null;
+            gate: number | null;
+            variants?: number[];
+        }>;
+        generators: Array<{
+            name: string;
+            label: string;
+            about: string;
+            styleRole: "wall" | "building" | "ruins";
+            defaultStyle: string;
+            minSize: number;
+            maxSize: number;
+            defaultWidth: number;
+            defaultHeight: number;
+            seeded?: boolean;
+            storeys?: boolean;
+            entrance?: boolean;
+            crop?: boolean;
+            interior?: string;
+            exterior?: string;
+        }>;
+        interiors: Array<{ name: string; label: string }>;
+        exteriors: Array<{ name: string; label: string }>;
+    }>;
+    previewMapPlan?(query: URLSearchParams): Promise<unknown>;
+    loadTravel?(kind: "game-warps" | "map-warps"): Promise<unknown>;
+    getLocActions?(id: number): readonly (string | undefined)[];
+    loadGroundItems?(): Promise<unknown>;
+    previewGroundItems?(items: readonly import("./EditorGroundItems").GroundItemPlacement[]): void;
     getLocName(locId: number): string;
     getNpcName(npcTypeId: number): string;
     /** Name/id search over the cache; the index is built on first use. */
@@ -265,6 +336,7 @@ export interface EditModeHost {
     /** Cache-backed overlay colours and textures for the terrain palette. */
     isWaterOverlay?(id: number): boolean;
     getOverlaySwatches?(): readonly EditModeOverlaySwatch[];
+    getUnderlaySwatches?(): readonly EditModeOverlaySwatch[];
     getOverlayTexture?(textureId: number): string | undefined;
     loadWorldDefinition?(): Promise<EditModeWorldDefinition>;
     /** Spawns a cache NPC client-side. Returns the synthetic server id used. */
@@ -283,11 +355,17 @@ export interface EditModeHost {
     setTerrainOverlay(tile: EditModeTile, overlay: number, shape: number, rotation: number): void;
     clearTerrainOverride(tile: EditModeTile): void;
     /** Temporary path-tile highlights used by the hover preview. */
-    setTerrainPreview?(edits: readonly EditModeEdit[]): void;
+    setTerrainPreview?(tiles: readonly EditModeTile[], color?: number): void;
     clearTerrainPreview?(): void;
+    setScatterBrushPreview?(tiles: readonly EditModeTile[]): void;
+    previewScatteredLocs?(edits: readonly EditModeEdit[]): void;
     /** Samples terrain at an exact tile vertex; undefined when its map is unavailable. */
     getTerrainOverlay?(tile: EditModeTile): number | undefined;
     getTerrainHeight?(tile: EditModeTile): number | undefined;
+    getTerrainFlags?(tile: EditModeTile): number | undefined;
+    showBlockedTiles?(tiles: readonly EditModeTile[]): void;
+    getBaseRegionFlags?(regionId: number): Uint8Array | undefined;
+    showTravelMarkers?(sources: readonly EditModeTile[], arrivals: readonly EditModeTile[]): void;
     /** Overlay, shape and rotation of every tile in a region with the edits applied; undefined when it is not loaded. */
     getRegionOverlays?(regionId: number, edits: readonly EditModeEdit[]): EditModeRegionOverlays | undefined;
     /** Rebuilds edited map squares from their persisted base data. */
@@ -300,27 +378,33 @@ export interface EditModeHost {
     setHeightLevel?(level: number): void;
     setRenderAllHeightLevels?(enabled: boolean): void;
     isLoggedIn(): boolean;
+    testTile?(tile: EditModeTile): void;
+    reloadSavedRegions?(regionIds: readonly number[]): void;
     /** Moves the camera over a world tile, for navigating while flying. */
     jumpCameraToTile(tile: EditModeTile): void;
     /** Serializes the map square under the camera for data/regions/{regionId}.pack. */
-    markMapEditsSaved?(packs: readonly { regionId: number; data: Uint8Array }[], spawns?: ObjectSpawn[]): void;
-    exportObjectSpawns?(edits: readonly EditModeEdit[]): ObjectSpawn[] | undefined;
+    getLoadedMapData?(id: number): { terrainData: Uint8Array; objectData?: Uint8Array } | undefined;
+    markMapEditsSaved?(packs: readonly EditModeRegionPack[], spawns?: ObjectSpawn[]): void;
+    exportObjectSpawns?(edits: readonly EditModeEdit[], saveToJson: boolean): ObjectSpawn[] | undefined;
     exportRegionPack?(
         tile: EditModeTile,
         edits: readonly EditModeEdit[],
-    ): { regionId: number; data: Uint8Array };
+        saveToJson?: boolean,
+    ): EditModeRegionPack;
     hasWideTerrain?(): boolean;
     copyArea?(
         bounds: { minX: number; maxX: number; minY: number; maxY: number },
         edits: readonly EditModeEdit[],
     ): string;
+    getAreaNpcs?(bounds: { minX: number; maxX: number; minY: number; maxY: number }): readonly BrowserHostNpcSpawn[];
     /** Drops the click the client has queued, so a tool press does not also
      *  walk the player or open a menu. */
     cancelPendingClick(): void;
     /** Re-frames the camera north-up at the editor's working angle. */
     levelCamera(): void;
     /** Opens the editor-owned world map surface. */
-    toggleWorldMap?(): void;
+    toggleWorldMap?(actions?: import("./EditorWorldMap").EditorWorldMapActions): void;
+    closeEditorWorldMap?(): void;
     /** Editor modal surface currently owns keyboard input. */
     isEditorModalOpen?(): boolean;
 }

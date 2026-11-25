@@ -1,6 +1,7 @@
 import { EditModePlugin } from "../game/plugins/editmode/EditModePlugin";
 import assert from "node:assert/strict";
-import { buildAreaClipboard, buildRegionPack } from "../game/plugins/editmode/RegionPack";
+import { buildAreaClipboard, buildRegionPack, createRegionPack, parseRegionPack } from "../game/plugins/editmode/RegionPack";
+import { parseAreaStamp, planAreaStamp, previewAreaStamp } from "../game/plugins/editmode/AreaStamp";
 
 for (const wide of [false, true]) {
     const value = (n: number) => wide ? [n >> 8, n & 255] : [n];
@@ -32,11 +33,58 @@ for (const wide of [false, true]) {
 assert.throws(() => buildAreaClipboard({ minX: 0, maxX: 1, minY: 0, maxY: 1 }, () => {
     throw new Error("Region is not loaded");
 }, false), /not loaded/);
+
+const stamp = parseAreaStamp({
+    source: { x: 4096, y: 4096 },
+    name: "Test house",
+    width: 4,
+    height: 3,
+    objects: [
+        { id: 100, dx: 1, dy: 0, z: 0, type: 10, face: 0 },
+        { id: 101, dx: 1, dy: 1, z: 0, type: 0, face: 1 },
+    ],
+    tiles: [{ dx: 1, dy: 0, z: 1, overlay: { id: 7, shape: 2, rotation: 3 }, height: 30 }],
+});
+const target = { tileX: 100, tileY: 200, plane: 0 };
+const turned = planAreaStamp(stamp, target, { turns: 1, terrain: "floors", interactive: false }, (id) => ({
+    sizeX: 2, sizeY: 1, interactive: id === 101,
+}));
+assert.equal(turned.skipped, 1);
+assert.deepEqual(turned.edits[0], { kind: "place", tileX: 100, tileY: 201, plane: 0, shape: 10, rotation: 1, locId: 100 });
+assert.deepEqual(turned.edits[1], { kind: "terrain", tileX: 100, tileY: 202, plane: 1, shape: 2, rotation: 0, locId: 7 });
+assert.equal(turned.edits[2].tileY, 203, "height turns about the vertex grid");
+assert.throws(() => planAreaStamp(stamp, { ...target, tileY: 16383 }, { turns: 0, terrain: "all", interactive: false },
+    () => undefined), /edge of the world/);
+assert.throws(() => parseAreaStamp({ format: "elvarg-map-area", version: 1, width: 100, height: 100 }), /4096/);
+
+const synthetic = createRegionPack(0x5050, true, 48, true);
+const header = new DataView(synthetic.buffer);
+assert.equal(header.getInt32(4), -1);
+assert.equal(header.getInt32(8), -1);
+const parsed = parseRegionPack(synthetic);
+assert.deepEqual([...parsed.objectData], [0]);
+assert.deepEqual([...parsed.terrainData.slice(0, 5)], [0, 129, 0, 1, 24]);
+assert.deepEqual([...parsed.terrainData.slice(64 * 64 * 5, 64 * 64 * 5 + 2)], [0, 0]);
 console.info("Area clipboard preserves all planes, terrain records, objects and edits across regions");
 
+const stampBase = { tileX: 100, tileY: 200, shape: 0, rotation: 0 };
+const roofHeights = [0, 1].flatMap((dx) => [0, 1].flatMap((dy) => [0, 1].map((plane) => ({
+    ...stampBase, tileX: stampBase.tileX + dx, tileY: stampBase.tileY + dy, plane, kind: "height" as const, locId: 32,
+}))));
+const roofPreview = previewAreaStamp([
+    ...roofHeights,
+    { ...stampBase, plane: 1, kind: "place", locId: 15552, shape: 12 },
+    { ...stampBase, plane: 0, kind: "terrain", locId: 81 },
+    ...Array.from({ length: 200 }, (_, idx) => ({
+        ...stampBase, kind: "place" as const, plane: 0, locId: 1902, tileX: stampBase.tileX + 2 + idx,
+    })),
+], 0, () => -10, () => ({ sizeX: 1, sizeY: 1, interactive: false }));
+assert.equal(roofPreview.objects[0].previewHeight, -4, "preview roofs at the stamp's planned plane height");
+assert.equal(roofPreview.floors[0].previewHeight, -2, "preview paving on the planned foundation");
+assert.equal(roofPreview.objects.at(-1)?.tileX, 301, "preview all models across a town-sized plan");
 assert.equal(typeof (EditModePlugin.prototype as any).pasteArea, "function", "copied areas need a paste action");
 
-import { areaPasteEdits, copyAreaNpcs, parseRegionPack } from "../game/plugins/editmode/RegionPack";
+import { areaPasteEdits, copyAreaNpcs } from "../game/plugins/editmode/RegionPack";
 import { Scene } from "../rs/scene/Scene";
 import { SceneBuilder } from "../rs/scene/SceneBuilder";
 import type { EditModeEdit } from "../game/plugins/editmode/types";

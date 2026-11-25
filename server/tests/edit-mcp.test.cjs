@@ -8,6 +8,7 @@ const { test } = require("node:test");
 const { z } = require("zod");
 
 const registerEditTools = require("../plugins/agent/mcp/Edit.AgentMcp");
+const { commitMapEdit, effectiveFile } = require("../plugins/world/MapEditFiles");
 
 const NAMES = {
   0: "null",
@@ -90,9 +91,8 @@ function fakeCore(live = []) {
   };
 }
 
-function setup(core) {
+function setup(core, dir = fs.mkdtempSync(path.join(os.tmpdir(), "edit-mcp-"))) {
   const tools = new Map();
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "edit-mcp-"));
   process.env.AGENT_MCP_SPAWNS_FILE = path.join(dir, "object-spawns.json");
   fs.writeFileSync(process.env.AGENT_MCP_SPAWNS_FILE, "[]");
   process.env.AGENT_MCP_NPC_SPAWNS_FILE = path.join(dir, "npc-spawns.json");
@@ -374,6 +374,35 @@ test("place_object drops the entry of the object it replaced on the tile", async
   const second = await call("place_object", { id: 3, x: 640, y: 640 });
   assert.equal(second.replaced, 1);
   assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")).map((entry) => entry.id), [3]);
+});
+
+test("place_object saves to the base file and respects an active editor layer", async (t) => {
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), "edit-mcp-layer-"));
+  t.after(() => fs.rmSync(data, { recursive: true, force: true }));
+  const resolve = path.resolve;
+  t.mock.method(path, "resolve", (...segments) =>
+    segments.length === 1 && segments[0] === "data" ? data : resolve(...segments));
+  const definitions = path.join(data, "definitions");
+  fs.mkdirSync(definitions);
+  const { call, file } = setup(fakeCore(), definitions);
+  const first = { id: 1, position: { x: 639, y: 640, z: 0 } };
+  fs.writeFileSync(file, JSON.stringify([first]));
+  const ids = (filename) => JSON.parse(fs.readFileSync(filename, "utf8")).map((entry) => entry.id);
+
+  await call("place_object", { id: 2, x: 640, y: 640 });
+  assert.deepEqual(ids(file), [1, 2]);
+  assert.equal(fs.existsSync(path.join(data, "map-edits")), false);
+  const base = JSON.parse(fs.readFileSync(file, "utf8"));
+  base.push({ id: 99, position: { x: 641, y: 640, z: 0 } });
+  fs.writeFileSync(file, JSON.stringify(base));
+  assert.deepEqual(ids(effectiveFile(file)), [1, 2, 99]);
+
+  const relative = "definitions/object-spawns.json";
+  const editor = commitMapEdit(new Map([[relative, JSON.stringify([first])]]), data);
+  await call("place_object", { id: 3, x: 642, y: 640 });
+  assert.deepEqual(ids(effectiveFile(file)), [1, 3]);
+  assert.deepEqual(ids(path.join(editor, relative)), [1]);
+  assert.deepEqual(ids(file), [1, 2, 99]);
 });
 
 test("clear_area drops a wandering NPC's spawn entry by its spawn tile", async () => {

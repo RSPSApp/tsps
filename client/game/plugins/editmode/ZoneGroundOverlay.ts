@@ -9,6 +9,7 @@ import type {
 
 import type { Overlay, OverlayInitArgs, OverlayUpdateArgs } from "../../../ui/devoverlay/Overlay";
 import { RenderPhase } from "../../../ui/devoverlay/Overlay";
+import { getOverlayShapeTriangles } from "../../../rs/scene/SceneTileModel";
 
 export interface ZoneGroundRect {
     minX: number;
@@ -20,10 +21,22 @@ export interface ZoneGroundRect {
     alpha: number;
     /** A flat editor preview plane instead of sampling the existing terrain. */
     height?: number;
+    shape?: number;
+    rotation?: number;
 }
 
 // World Y is negative-up, so this holds the overlay above the terrain.
 const TERRAIN_CLEARANCE = 0.05;
+const RECT_TRIANGLES: readonly (readonly (readonly [number, number])[])[] = [
+    [[0, 0], [1, 0], [1, 1]], [[0, 0], [1, 1], [0, 1]],
+];
+const SHAPE_TRIANGLES = Array.from({ length: 12 }, (_, shape) =>
+    Array.from({ length: 4 }, (_, rotation) => getOverlayShapeTriangles(shape, rotation)),
+);
+
+function getGroundTriangles(rect: ZoneGroundRect): typeof RECT_TRIANGLES {
+    return rect.shape === undefined ? RECT_TRIANGLES : SHAPE_TRIANGLES[rect.shape]?.[rect.rotation ?? 0] ?? RECT_TRIANGLES;
+}
 
 const VERT_SRC = `#version 300 es
 layout(std140, column_major) uniform;
@@ -73,15 +86,15 @@ export function buildZoneGroundGeometry(
     rects: readonly ZoneGroundRect[],
     sampleHeight: (x: number, y: number, plane: number) => number,
 ): { positions: Float32Array; colors: Float32Array } {
-    const tileCapacity = rects.reduce(
+    const vertexCapacity = rects.reduce(
         (total, rect) =>
             total +
             Math.max(0, rect.maxX - rect.minX + 1) *
-                Math.max(0, rect.maxY - rect.minY + 1),
+                Math.max(0, rect.maxY - rect.minY + 1) * getGroundTriangles(rect).length * 3,
         0,
     );
-    const positions = new Float32Array(tileCapacity * 6 * 3);
-    const colors = new Float32Array(tileCapacity * 6 * 4);
+    const positions = new Float32Array(vertexCapacity * 3);
+    const colors = new Float32Array(vertexCapacity * 4);
     const seen = new Set<string>();
     let positionOffset = 0;
     let colorOffset = 0;
@@ -90,31 +103,27 @@ export function buildZoneGroundGeometry(
         const red = ((rect.colorRgb >> 16) & 0xff) / 255;
         const green = ((rect.colorRgb >> 8) & 0xff) / 255;
         const blue = (rect.colorRgb & 0xff) / 255;
+        const triangles = getGroundTriangles(rect);
         for (let x = rect.minX; x <= rect.maxX; x++) {
             for (let y = rect.minY; y <= rect.maxY; y++) {
                 const key = `${x}:${y}:${rect.plane}:${rect.colorRgb}`;
                 if (seen.has(key)) continue;
                 seen.add(key);
                 const height = rect.height;
-                const a = (height ?? sampleHeight(x, y, rect.plane)) - TERRAIN_CLEARANCE;
-                const b = (height ?? sampleHeight(x + 1, y, rect.plane)) - TERRAIN_CLEARANCE;
-                const c = (height ?? sampleHeight(x + 1, y + 1, rect.plane)) - TERRAIN_CLEARANCE;
-                const d = (height ?? sampleHeight(x, y + 1, rect.plane)) - TERRAIN_CLEARANCE;
-                positions.set(
-                    [
-                        x, a, y,
-                        x + 1, b, y,
-                        x + 1, c, y + 1,
-                        x, a, y,
-                        x + 1, c, y + 1,
-                        x, d, y + 1,
-                    ],
-                    positionOffset,
-                );
-                positionOffset += 18;
-                for (let vertex = 0; vertex < 6; vertex++) {
-                    colors.set([red, green, blue, rect.alpha], colorOffset);
-                    colorOffset += 4;
+                const sw = height ?? sampleHeight(x, y, rect.plane);
+                const se = height ?? sampleHeight(x + 1, y, rect.plane);
+                const ne = height ?? sampleHeight(x + 1, y + 1, rect.plane);
+                const nw = height ?? sampleHeight(x, y + 1, rect.plane);
+                for (const triangle of triangles) {
+                    for (const [dx, dy] of triangle) {
+                        positions[positionOffset++] = x + dx;
+                        positions[positionOffset++] = sw + (se - sw) * dx + (nw - sw) * dy + (ne + sw - se - nw) * dx * dy - TERRAIN_CLEARANCE;
+                        positions[positionOffset++] = y + dy;
+                        colors[colorOffset++] = red;
+                        colors[colorOffset++] = green;
+                        colors[colorOffset++] = blue;
+                        colors[colorOffset++] = rect.alpha;
+                    }
                 }
             }
         }
@@ -154,6 +163,8 @@ export class ZoneGroundOverlay implements Overlay {
                     rect.colorRgb,
                     rect.alpha,
                     rect.height,
+                    rect.shape,
+                    rect.rotation,
                 ].join(":"),
             )
             .join(";");

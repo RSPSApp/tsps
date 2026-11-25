@@ -75,6 +75,7 @@ const SCRIPT = {
   FADE_WHITE: 2308,
   /** Party information: a member's line (slot, text), an applicant's line, the footer. */
   PARTY_MEMBER: 2317,
+  PARTY_ARROWS: 5239,
   PARTY_APPLICANT: 2321,
   PARTY_FOOTER: 2323,
   /** The party list: one row (index, text). */

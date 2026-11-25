@@ -119,7 +119,8 @@ class Fight {
       this.boss.performAnimation(new Common.core.Animation(animations.melee));
       this.boss.performGraphic(new Common.core.Graphic(graphics.meleeNpc));
       const [rowX, rowY] = Common.data.site.boss;
-      Common.areaSound(this.session, Common.data.sounds.melee, [rowX + 3, rowY - 1]);
+      // 1751/1827/1703: the slam sound is on the boss row (3039, 6452), one row north of the slam spotanims.
+      Common.areaSound(this.session, Common.data.sounds.melee, [rowX + 3, rowY]);
       // Normal-world recording 1703: the whole visual row is sent with the attack.
       // It does not establish a seven-tile damaging slam; the current Wiki describes
       // a 3x3 chip followed by an aimed 1x1 main hit.
@@ -164,13 +165,18 @@ class Fight {
     const overlay = Common.data.gazeOverlay;
     this.player.getPacketSender().sendSubInterface((overlay.targetGroup << 16) | overlay.targetComponent, overlay.group, 1);
     this.gazeVisible = true;
+    const gazeId = this.gazeId = (this.gazeId ?? 0) + 1;
     this.boss.performAnimation(new Common.core.Animation(Common.data.animations.gaze));
     const { messages, sounds, timing } = Common.data;
     this.player.sendMessage(messages.gaze);
     Common.sound(this.player, sounds.gazeStart);
+    // The overlay closes six ticks after it opens (1751 7962/7968, 9803/9809; 91, 555, 3285 agree).
+    this.at(timing.gaze, () => {
+      if (this.gazeId === gazeId)
+        this.hideGaze();
+    });
     // The outcome is four ticks after the gaze starts in every recording (91, 555, 1703, 1751, 3285).
     this.at(timing.gazeWarning, () => {
-      this.hideGaze();
       Common.sound(this.player, sounds.gazeResolved);
       if (Model.hidden(Common.source(this.session, this.player.getLocation()))) {
         // Spam, as recorded (226/01703.txt:232438).

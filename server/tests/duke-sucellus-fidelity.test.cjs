@@ -378,10 +378,10 @@ test('awake room resources become inactive and stale preparation clicks cannot c
   assert.equal(event.handled,true);assert.equal(h.p.getInventory().getAmount(i.arder),0);
 });
 
-test('gaze mounts its native overlay and removes it when the warning resolves or the player leaves',t=>{
+test('gaze mounts its native overlay and removes it six ticks later (1751) or when the player leaves',t=>{
   const h=H.harness(t);h.enter();h.move([3035,6451]);h.fight.wake();h.fight.nextAttack=Infinity;h.fight.gaze();
   assert.equal(h.p.getPacketSender().isSubInterfaceOpen(829),true);
-  h.step(4);assert.equal(h.p.getPacketSender().isSubInterfaceOpen(829),false);
+  h.step(5);assert.equal(h.p.getPacketSender().isSubInterfaceOpen(829),true);h.step();assert.equal(h.p.getPacketSender().isSubInterfaceOpen(829),false);
   h.fight.gaze();h.Site.leave(h.p);assert.equal(h.p.getPacketSender().isSubInterfaceOpen(829),false);
 });
 

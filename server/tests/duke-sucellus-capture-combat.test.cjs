@@ -291,6 +291,8 @@ test("combat sends its recorded sounds: magic impact, gas spit and the slam area
   const slam = h.packets.find(([name, id]) => name === "sendAreaSound" && id === 2707);
   assert.ok(slam, "melee slam area sound");
   assert.equal(slam[7], 10, "radius");
+  const row = h.session.tile([3039, 6452]);
+  assert.deepEqual(slam.slice(2, 4), [row.getX(), row.getY()], "1751/1827/1703: on the boss row, not the slam row");
   h.fight.gas();
   assert.ok(h.packets.some(([name, id]) => name === "sendSoundEffect" && id === 5002));
   h.step(2);

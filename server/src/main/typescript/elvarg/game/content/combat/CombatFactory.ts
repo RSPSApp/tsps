@@ -1245,7 +1245,7 @@ export class CombatFactory {
             if (target.isPlayer() && CombatFactory.wearingRecoilRing(target.getAsPlayer())) {
                 CombatFactory.handleRecoil(target.getAsPlayer(), attacker, damage);
             }
-            if (target.hasVengeanceReturn()) {
+            if (target.hasVengeanceReturn() && resolvedHit.triggersVengeance?.() !== false) {
                 CombatFactory.handleVengeance(target, attacker, damage);
             }
         }

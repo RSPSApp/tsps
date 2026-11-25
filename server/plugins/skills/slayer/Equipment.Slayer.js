@@ -71,11 +71,15 @@ function hitRoll(event) {
   if (monster.bypassPrayer) event.bypassProtectionPrayer = true;
 }
 
-/** A landed unprotected hit is the monster's unprotected max (run after prayers). */
+/**
+ * A landed unprotected hit is the monster's unprotected max (run after prayers). It never lowers a
+ * hit already above it: the Leagues VI Echo Thermonuclear smoke devil's shots (48-62, rsprox.net
+ * 1161) would otherwise do less to a bare face than to a masked one.
+ */
 function incomingDamage(victim, hitDamage, context = {}) {
   const monster = unprotectedRule(context.attacker, victim);
   const damage = monster ? unprotectedHit(monster, victim) : 0;
-  if (damage) hitDamage.setDamage(damage);
+  if (damage && damage > (hitDamage.getDamage?.() ?? 0)) hitDamage.setDamage(damage);
 }
 
 /** The damage an unprotected player takes from this monster's hit, 0 when the rule sets none. */

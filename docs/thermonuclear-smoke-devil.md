@@ -148,15 +148,103 @@ delay (2 ticks) reproduces the typical landing.
 - Cannon destruction (live destroys a cannon set up in the room; here setup is refused).
 - Wind-spell 20% weakness (Wiki, 2025) and the walk-under/safespot/redemption methods -
 player-side choices, no server behaviour.
-# Leagues VI Echo placeholder
+# Leagues VI Echo Thermonuclear smoke devil
 
 The matching orb opens an isolated private fight with the normal boss, which
-EchoBosses dresses in the Echo appearance and Wiki profile (1,200 HP, maximum hit 51,
-two-tick attacks) for that instance only ([echo-bosses.md](echo-bosses.md)). It deliberately
-uses the normal boss's smoke projectile, typeless prayer penetration, facemask
-rule and movement. Echo charged attacks and other Echo specials are not implemented;
-this encounter does not claim Echo combat parity. Ordinary public fights keep
-their existing task and diary rules. Echo requires base 93 Slayer but no assignment.
+EchoBosses dresses in the Echo appearance and Wiki profile (1,200 HP) for that instance only
+([echo-bosses.md](echo-bosses.md)). Ordinary public fights keep their existing task and diary
+rules. Echo requires base 93 Slayer but no assignment.
+
+## The fight, as recorded
+
+`plugins/bosses/thermonuclear/EchoFight.ThermonuclearSmokeDevil.js` runs the fight from
+[rsprox.net 1161](https://rsprox.net/download/1161) (rev 237.1, 31 Echo kills); every id, tick and
+number is in `data/thermonuclear-smoke-devil.json` (`echo`). The [Wiki](https://oldschool.runescape.wiki/w/Thermonuclear_smoke_devil_(Echo))
+describes the same fight; where the two differ the recording is followed, and where the recording is
+silent the Wiki is (marked below). The Echo stands on (2362, 9448), in the middle of its pools, and
+never moves, not even to step off a player standing under it (none of the 36 recorded Echoes
+walked); the normal boss's attack turn does nothing for it.
+
+**Entering** (29 recorded entries, ticks from the orb's Yes): the screen fades and "You enter the
+Smokey Cave." is sent at once, the minimap goes a tick later, the player is moved in at 2 (29 of 29),
+the screen fades back in at 3 and the Echo appears at 4. It appeared at 4 in 16 entries, at 5 in 12
+and 6 in 1, with no cause found; the commonest is used. Live also shows that line in a message box
+for a tick; only the chat line is sent here.
+
+**Respawning**: with the player still in the room, the next Echo appears 25 ticks after the last one
+dies (6 of 6 recorded). Each is its own Echo encounter: a new claim (the orb still carried, its own
+kill and timer).
+
+**Aggression**: room-wide. The first shot comes 6 ticks after the Echo appears wherever the player
+stands in the room (34 of 34, one from 10 tiles away).
+
+Ticks below count from its spawn.
+
+| Tick | What happens |
+| --- | --- |
+| 0 | The Echo appears (`leagues_6_lore_dust_devil_spawn_spotanim`, `lore_lust_devil_spawn`, synth 10072) |
+| 3 | Twelve smoke pools appear around it (`leagues_6_vfx_smoke_devil_pool_spawn`, synth 10071 each); from the next tick each live pool's idle loop is sent every tick |
+| 6, 18, 30, 42 | A set of three shots, one every 2 ticks: ranged, magic, ranged, magic (`lore_dust_devil_attack`; projectiles `..._attack_ranged_projanim` / `..._magic_projanim`, starttime 29, endtime 150; synth 272, and 10076 for magic) |
+| 54 | The special charges: the pools go (`..._pool_despawn`), `lore_dust_devil_attack_special_01` every 2 ticks for 8 ticks, head bar 34 filling over 240 cycles |
+| 62 | The blast: `..._attack_special_02`, area sound 5200, projectile `..._attack_special_projanim` |
+| 68 | The pools come back |
+| 72 | The next cycle's first set |
+
+**A shot** lands 5 ticks after it is fired, on the player wherever they stand then. A live pool
+under them is used up:
+
+| Pool | Prayer against the shot's style | Damage | Shown |
+| --- | --- | --- | --- |
+| live | right | none | `..._pool_shield`, spam "The power resonating here protects you from the blast.", synth 10074 |
+| live | wrong | half | the shot's impact (area sound 1418) |
+| none | right | half | the shot's impact |
+| none | wrong | whole | the shot's impact |
+
+That is 816 protected shots of 816, and 22 of 22 halved on a pool with the wrong prayer. A hit is
+48-62 (the Wiki's maximum hit is 51); about one in seven misses, either style alike (12 of the 88
+off-pool shots), so the miss is a flat chance rather than an accuracy roll on the Echo's levels
+(its magic level is 15). Shots still in flight when it dies never land.
+
+**The special** is typeless, its damage and flight fixed when it is cast: 13 a tile of Chebyshev
+distance from the Echo's footprint, 13 x (11 - tiles), at least 9 (recorded at 4-12 tiles: 91, 78,
+39, 26, 13, 9, 9). Nearer, where nothing is recorded, the Wiki's figures: 130 underneath, 117
+adjacent, then 104 and 91. Its flight is 10 cycles a tile, 60 at least; it lands round(cycles / 30)
+ticks later (2 to 4 recorded). Only the special triggers Vengeance (Wiki); the shots are marked not
+to (`PendingHit.setTriggersVengeance`).
+
+**Its prayer**: as the special lands the Echo prays against the style of the last of the player's
+hits to land on it (head icon 1 ranged, 2 magic, 0 melee), and that style does a quarter of its
+damage (recorded: protected magic peaked at 7 against 31 unprotected).
+
+**The enrage**: once the Echo is below 660 HP when a set is decided, 8 ticks before it (when the set
+before it, or the special, fires its last shot), every set alternates, starting with the style it
+would have had: RMR or MRM. This fits 186 of the 187 recorded sets; the Wiki says 50% HP, which
+fits fewer.
+
+The Slayer facemask rule's unprotected hit (15 for this boss) no longer lowers a bigger hit, so a
+bare face takes the Echo's shots whole (`Equipment.Slayer.js`).
+
+## From the Wiki, not the recording
+
+- The special closer than 4 tiles: 130 underneath, 117 adjacent, 13 less a tile.
+- Vengeance: triggered only by the special.
+- Its prayer against melee: the Wiki's rule covers every style; only ranged and magic were recorded
+  against it, and the quarter damage is the recorded magic figure.
+- The fight without a facemask: no capture. [Thermonuclear smoke devil/Strategies](https://oldschool.runescape.wiki/w/Thermonuclear_smoke_devil/Strategies):
+  a facemask, gas mask or Slayer helmet is "mandatory when fighting the boss, or it will deal even more
+  damage and drain stats". The Echo's shots take the Slayer rule's verdict on the hit roll as every boss
+  hit does: a bare face is never missed and takes the maximum (62, then the pool and prayer rule), and
+  its stats drain on landing; the rule's unprotected hit (15) never lowers a bigger one.
+- Not implemented here (nor for the normal boss): the page's damage "from the smoke" itself, apart
+  from the boss's attacks.
+
+## Not verified
+
+- The enrage's one recorded exception: a set decided at 630 HP stayed normal.
+- Why the Echo sometimes appears a tick later on entry.
+- The health overlay at the top may be inaccurate for the Echo. Ours is the generic one: it names the
+  normal boss and shows the Echo's 1,200 HP. In the recording, live never showed it in 31 kills, but
+  that player may have had it turned off.
 
 The central Echo service owns rewards/progression and suppresses normal orb rolls.
 The adapter completes once, never respawns, and clears its actors/pending damage

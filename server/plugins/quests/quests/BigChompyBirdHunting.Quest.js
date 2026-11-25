@@ -1232,8 +1232,8 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   api.onItemAction("Comp ogre bow", { "Check kills": checkKills, Check: checkKills });
   api.onObjectInteraction("Locked Ogre chest", { Unlock: chest.unlock });
   api.onObjectInteraction("Unlocked Ogre chest", { Search: chest.search });
-  api.onNpcInteraction("Rantz", { "Claim-hats": claimHats });
   api.onNpcInteraction(handleNpcInteraction);
+  api.onNpcInteraction("Rantz", { "Claim-hats": claimHats });
   api.onNpcDeath(handleNpcDeath);
   api.onCustomEvent("npc-drops:claim", handleDropClaim);
   api.onCanAttack(handleCanAttack);

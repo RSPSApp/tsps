@@ -49,6 +49,9 @@ function id(kind, name) {
   return ids[key];
 }
 
+/** Recorded projectile heights are wire values; `PacketSender.sendProjectile` multiplies by 4. */
+const engineHeight = (wire) => Math.round(wire / 4);
+
 const tileKey = (x, y) => `${x},${y}`;
 
 /** Chebyshev distance from a tile to the nearest tile of an NPC's footprint. */
@@ -223,7 +226,7 @@ class EchoFight {
     if (!this.playerPresent()) return;
     this.boss.performAnimation(new Animation(id("seq", orbs.attackSeq)));
     const arc = orbs.projectile;
-    Projectile.createProjectile(this.boss, this.player, id("spotanim", orbs[style].projectile), arc.delay, arc.end, arc.startHeight, arc.endHeight)
+    Projectile.createProjectile(this.boss, this.player, id("spotanim", orbs[style].projectile), arc.delay, arc.end, engineHeight(arc.startHeight), engineHeight(arc.endHeight))
       .withAngle(arc.angle)
       .withProgress(arc.progress)
       .sendProjectile();
@@ -306,7 +309,7 @@ class EchoFight {
     const damage = specialDamage(tiles);
     const cycles = specialFlightCycles(tiles);
     const arc = special.projectileArc;
-    Projectile.createProjectile(this.boss, this.player, id("spotanim", special.projectile), arc.delay, cycles, arc.startHeight, arc.endHeight)
+    Projectile.createProjectile(this.boss, this.player, id("spotanim", special.projectile), arc.delay, cycles, engineHeight(arc.startHeight), engineHeight(arc.endHeight))
       .withAngle(arc.angle)
       .withProgress(arc.progress)
       .sendProjectile();

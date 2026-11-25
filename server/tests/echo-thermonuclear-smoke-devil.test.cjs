@@ -74,7 +74,7 @@ function setup({ hp = 1200, playerAt = [2376, 9452], prayer = null } = {}) {
   }
   const projectile = (args) => {
     const shot = { args, angle: null, progress: null };
-    const chain = { withAngle(a) { shot.angle = a; return chain; }, withProgress(p) { shot.progress = p; return chain; }, sendProjectile() { log.push([tick, "proj", args[2], args[3], args[4], shot.angle, shot.progress]); } };
+    const chain = { withAngle(a) { shot.angle = a; return chain; }, withProgress(p) { shot.progress = p; return chain; }, sendProjectile() { log.push([tick, "proj", args[2], args[3], args[4], shot.angle, shot.progress, args[5], args[6]]); } };
     return chain;
   };
   const fakeCore = {
@@ -125,7 +125,7 @@ test("as recorded from the spawn: pools at 3, shots RRR MMM RRR MMM from 6 every
   assert.deepEqual(log.find((e) => e[1] === "headbar"), [54, "headbar", 34, 60, 240], "its charge bar, 0 to 60 over 240 cycles");
   assert.equal(log.filter((e) => e[1] === "map" && e[2] === 3675 && e[0] === 54).length, 12, "the pools go as the charge begins");
   const shot = log.find((e) => e[1] === "proj" && e[2] === 3665);
-  assert.deepEqual(shot.slice(3), [29, 150, 5, 220], "the shot's arc as recorded (starttime 29, endtime 150, angle 5, progress 220)");
+  assert.deepEqual(shot.slice(3), [29, 150, 5, 220, 62, 10], "the shot's arc as recorded (starttime 29, endtime 150, angle 5, progress 220; startheight 246, endheight 40 on the wire, which carries x4)");
 });
 
 test("a shot lands 5 ticks after it is fired: a pool and the right prayer decide what it does", () => {
@@ -182,6 +182,7 @@ test("the special: damage fixed at launch by distance, its flight as recorded, l
   at(2368, 9448); // moves in after the blast is cast: no difference
   const blast = log.find((e) => e[1] === "proj" && e[2] === 3669);
   assert.deepEqual(blast.slice(0, 5), [62, "proj", 3669, 29, 126], "12 tiles: endtime 126");
+  assert.deepEqual(blast.slice(7), [62, 30], "from its head: startheight 246, endheight 120 on the wire (x4)");
   run(65);
   assert.deepEqual(log.filter((e) => e[1] === "hit" && e[0] > 62), [], "not before round(126/30) = 4 ticks");
   run(66);

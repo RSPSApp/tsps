@@ -2,7 +2,15 @@
 
 Vardorvis after Desert Treasure II (https://oldschool.runescape.wiki/w/Vardorvis), solo, normal and awakened, built from rsprox captures (https://rsprox.net/database), the OSRS Wiki and the cache. It is one plugin, `server/plugins/bosses/Vardorvis.plugin.js`, with one unit per part in `server/plugins/bosses/vardorvis/` and its data in `plugins/bosses/data/vardorvis.json`. The quest's own fight (NPC 12224) stays in `DesertTreasureII.Quest.js`.
 
-Captures: recordings 3285 (rev 234, 16 normal kills and an awakened attempt) and 3344 (rev 235, about 73 normal and 33 awakened kills, most too quick for his specials). Both were recorded on Grid Master event worlds, where the player's damage is boosted, so the kills are short. The boss's own packets look like the main game's, but treat the frequencies below with that in mind.
+Captures:
+
+- 3285 (rev 234): 16 normal kills and an awakened attempt.
+- 3344 (rev 235): about 73 normal and 33 awakened kills, most too quick for his specials.
+- 1156 (rev 237, Leagues VI): 21 normal kills, an awakened death and an awakened kill, with the Combat Achievement failure lines and precise timing.
+- 1703 (rev 226, a normal world): the quest's fight (12224, `DesertTreasureII.Quest.js`), 213 ticks of unboosted damage. Its specials follow the same clock and show the dash cadence best.
+- 1754: the Executioner's axe head's inspect text. 1827 and 3168: the vault statue's post-quest text.
+
+3285 and 3344 were recorded on Grid Master event worlds and 1156 on Leagues, where the player's damage is boosted, so those kills are short. The boss's own packets look like the main game's, but treat the frequencies below with that in mind.
 
 ## Layout
 
@@ -28,6 +36,7 @@ The rocks at 1118,3428 are loc 49495, a multiloc on varbit 15125 `dt2_stranglewo
   - Tick 0: "You enter the ritual site." over the fade out (script 948 on overlay 174), without a continue.
   - +1: the minimap off.
   - +2: the move in to 1119,3428. Vardorvis appears on 1128,3417 facing north-west with his rise (10345), and the rocks behind become `vardorvis_exit` (47603, Leave).
+  - With him, an axe prop (`vardorvis_axe_static`, 12229) appears on 1119,3414 facing south. It plays 10335 eight ticks after he rises and goes two ticks after the first hit (every capture).
   - +4: the fade back in, with the message again (to continue).
   - +6: the fade overlay closes.
 - The instance copies 5x5 chunks from chunk 139,425 (the same area the quest uses).
@@ -42,6 +51,7 @@ All ticks below count from the first hit to land on him (a miss counts too).
 | --- | --- |
 | 0 | The barrier rises, the rocks are sealed (`vardorvis_exit_noop`), the fight timer starts, and he runs at the player (2 tiles a tick). |
 | 1, 6, 11, ... | His attack slots, every 5 ticks. |
+| 30 | The first dash at an attack slot from here (awakened: 25), then every 30 (25) from the last dash's first dart. |
 | 14 | The first axe set (awakened: 9), then every 13 ticks (8 once he's at or below a third of his hitpoints, and always when awakened). |
 
 He isn't aggressive. The HUD comes up a tick after he appears.
@@ -88,13 +98,15 @@ With one of his slashes a head (12226) rises on a tile within 3 of him, clear of
 
 - It plays scream spotanim 2550 and sound 3539 (a magic head: 277), with the message "<col=ff289d>Vardorvis' head gazes upon you...</col>".
 - Projectile 2521: start 15, end 90, angle 8, heights 124 to 96. The impact spotanim 2552 goes on the player at once (slot 2, delay 90, height 124).
-- Three ticks later the head goes and the projectile lands with sound 4015, blocked or not. Unless the player has Protect from Missiles on (or he's dead), their protection prayers switch off with "You've been injured and can't use protection prayers!" and 10 Prayer drains (Wiki).
+- Three ticks later the head goes and the projectile lands with sound 4015, blocked or not. Unless the player has Protect from Missiles on (or he's dead), their protection prayers switch off with "<col=ff3045>You've been injured and can't use protection prayers!</col>" (coloured from rev 237, 1156; plain in 1703 and 3285) and 10 Prayer drains (Wiki).
 - For 3 ticks (Wiki) turning a protection prayer back on is refused: "You've been injured and can't use that prayer!".
 - Awakened, it can be magic instead (2520, scream 2549, impact 2551; Protect from Magic). Below half his hitpoints two come, one of each, a tick apart in either order. Both are captured (recording 3285's awakened attempt).
 
 ### The darting spikes
 
-In place of an attack he darts, one dart a tick: one above 500 hitpoints, two above 130, three below (Wiki).
+In place of an attack he darts, one dart a tick: one above 500 hitpoints, two above 130, three below (Wiki). Awakened, the thresholds are 1,000 and 260: 1156's awakened kill darts once at about 1,078 hitpoints and twice at about 742 and 420.
+
+He darts at any hitpoints, not only below 570: 1703 darts at tick 31 with 89% of his hitpoints. It comes at the first attack slot 30 ticks into the fight, then 30 ticks after the last dash started (1703: 31, 62, 93, 125, 157, 189; every 1156 normal kill darts at 31, or 36 when a strangle holds slot 31). Awakened it is 25 (1156: 26, 52, 77).
 
 - Each dart lands him beside the player, on the opposite side each time (west/east or north/south, captured), gliding there with his dash (10341) and area sound 7154.
 - Each dart cracks 3 to 5 tiles round the player (warning spotanim 2510, delays 3/6/9/12 cycles). On the first dart the player's own tile is cracked, at delay 6.
@@ -106,30 +118,32 @@ In place of an attack he darts, one dart a tick: one above 500 hitpoints, two ab
 - He rears up (10342, sound 565). Two ticks later he holds the player (10343, sound 7099) with "<col=ff3045>Vardorvis entangles you in some tendrils!</col>".
 - The player is rooted with spore spotanims (2523, then 2524 per click) and plays 10166 each tick. Overlay 833 opens on 161:1 and script 1816 runs with the spore count.
 - Varp 3942 (varbits `vardorvis_qte_1..6`) holds the standing spores. Spore N is component 12 − N.
-- Clearing them all ends it at once ("<col=229628>You manage to escape from the tendrils.</col>").
+- Clearing them all ends it at once ("<col=229628>You manage to escape from the tendrils.</col>", a filterable message of type 105 in 3285 and 1156).
 - Otherwise, 5 ticks after the overlay opens (3 awakened, Wiki) the tendrils tighten: "<col=ff3045>The tendrils tighten around you, damaging you in the process!</col>", with block anim 424 and heavy damage (Wiki: about 25, 40 awakened; rolled from 60% of that to all of it).
 - Either way script 1823 runs, he lets go (10344, sound 2414) and the overlay closes a tick later.
 - A kill's first strangle has 4 spores, each one after that one more, up to 6 (Wiki). Attack slots that fall during it are skipped.
 
 ### Which special when (inferred)
 
-The timings of each attack are captured. The choice between them isn't, and is fitted to recording 3285's 16 kills:
+The timings of each attack are captured. The choice between them isn't, and is fitted to recording 3285's 16 kills and 1156's 21:
 
 - **Strangle** (chance 0.25 each time, about 44% an axe cycle; never twice in a row; below 570):
   - When an axe set falls due, the strangle may take its place, at his next attack slot.
   - At an attack slot with the axes due within 3 ticks, it may come there and then.
-  - Either way the axes follow 8 ticks after the strangle.
-- **Head gaze:** one per axe set (below 570). It rides with the first slash at least 5 ticks after the axes, or 2 ticks after an axe set that followed a strangle.
-- **Dash:** from 30 ticks into the fight, at most every 15 ticks, at a slot with no head pending (chance 0.6; data `dash.firstTicks`, `dash.chance`).
+  - Either way the axes follow 3 ticks after he lets go (1156: all seven escapes; from the strangle's start that is 8 or 9 ticks, as in 3285).
+- **Head gaze** (below 570): from 5 ticks after an axe set (2 awakened, or after a set that followed a strangle), each slash has a 0.6 chance to bring it, until the next set rises; a set it misses has none. 1156: after the axes at 14 it came at 21 in 8 kills and at 26 in 5, and kill 1's set at 27 had none.
+- **Dash:** see the darting spikes; it isn't held back for a head.
 
-All four kills that lived 31 ticks had: strangle at tick 16, axes at 24, head at 26, dash at 31. The model can reproduce that sequence, but only when its rolls land that way; it isn't forced.
+All four 3285 kills that lived 31 ticks had: strangle at tick 16, axes at 24, head at 26, dash at 31. 1156 shows that sequence five times. The model can reproduce it, but only when its rolls land that way; it isn't forced.
+
+Not explained yet: 1703's last dash comes 17 ticks after the one before it (at about 9% of his hitpoints, one dart), and 1156's tenth kill has a one-dart dash 7 ticks after its first. One awakened head came on the same tick as its axes (1156, tick 67).
 
 ### The kill
 
 - Death anim 10346 (npc-combat-defs).
 - Four ticks later:
   - The kill count: "Your Vardorvis kill count is: N." through Combat Achievements (varp 3970), or awakened "Your Vardorvis (Awakened) kill count is: N." (varp 3971).
-  - "Fight duration: m:ss" against the personal best, timed from the first hit.
+  - "Fight duration: m:ss" against the personal best, timed from the first hit; m:ss.cc for both when the player has precise timing on (`option_precise_timing`, 1156: "0:35.40").
   - Then the Combat Achievement tasks.
   - The loot on his tile (NpcDrops) and the rocks open.
 - A tick later the barrier falls.
@@ -158,7 +172,10 @@ the other DT2 boards do (docs/leviathan-normal-evidence.md): the server's own co
 
 Vardorvis is counted by event (`data/monsters.json` countedByEvent), so the kill-count message comes before the tasks, as live sends it.
 
-- `CombatAchievements.Vardorvis.js` judges the three speed tasks (under 1:15, 1:05, 0:55, off a slayer task) and Vardorvis Sleeper (an awakened kill).
+- `CombatAchievements.Vardorvis.js` judges the three speed tasks (under 1:15, 1:05, 0:55, off a slayer task), Vardorvis Sleeper (an awakened kill), Perfect Vardorvis (five perfect kills in one visit) and Axe Enthusiast (three minutes of the enrage without leaving the middle 5x5).
+- Failures go through `combat-achievements:failed`, once a kill, as the player's settings allow (1156):
+  - "You have failed Perfect Vardorvis: You took damage from Vardorvis." at the first damage that spoils the kill (awakened too).
+  - "You have failed Axe Enthusiast: You left the inner 25 tiles." the first time the player leaves the middle 5x5, at any point of the fight, awakened too (1156 fails it at about 44% of his hitpoints, before the enrage, and again in its awakened kill).
 - Adept and Master finish from the count.
 - "Kill Awakened Vardorvis." no longer reads as a plain kill-count task: "awakened" is now a condition word in `Data.CombatAchievements.js`, which also keeps the other DT2 bosses' Sleeper tasks from completing on a normal kill.
 
@@ -182,8 +199,9 @@ The Ancient blood ornament kit is still not in yet: the Wiki drops it only when 
 ## Not in yet
 
 - **Loot quantities:** the Wiki writes Vardorvis' standard drops as `quantity=130,195`, the normal amount and the perfect kill's. osrsreboxed-db's drop dumper drops the comma, so `npc-drops.json` holds 130195 coal. The same happens for the other three DT2 bosses. It needs fixing in the dumper (`_parse_quantity`), then a fresh dump.
-- **Perfect kills** (50% more standard loot, Perfect Vardorvis), Budget Cutter and Axe Enthusiast.
+- **Budget Cutter.** No capture shows it.
 - **Quick-escape:** has no capture. It takes the same way out as Leave.
+- **The quest's fight** (`DesertTreasureII.Quest.js`) is still its own placeholder and doesn't follow this model; 1703 has the live fight to match it to.
 
 ## Testing
 

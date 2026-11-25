@@ -172,6 +172,20 @@ const SOUND = Object.freeze({
   acidic: Object.freeze([9378, 25]),
 });
 
+/**
+ * Captured hit sounds, as [id, radius]: an area sound on the NPC's tile on every tick it takes a hit
+ * (rsprox 550, 1768, 788, 3280, 3347: Araxxor 9,875 of 9,875 hit ticks, the Mirrorback 772 of 772).
+ * The engine's NpcCombatSounds only sends private synths, so these go out from the plugin.
+ */
+const HIT_SOUND = Object.freeze({
+  boss: Object.freeze([3609, 9]),
+  mirrorback: Object.freeze([4020, 9]),
+});
+/** Captured: "Noxious Awakening" starts with every spawn and again as she becomes the corpse. */
+const FIGHT_MUSIC = 800;
+/** Captured: the corpse's loot (or its decay after a Destroy) comes with this sound. */
+const CORPSE_LOOT_SOUND = 9485;
+
 /** Captured: standing in acid deals a flat 4-5 venom a tick (runs of 16 ticks never ramp). */
 const POOL_DAMAGE_MIN = 4;
 const POOL_DAMAGE_MAX = 5;
@@ -192,9 +206,6 @@ const NID_ITEM_ID = 29836;
 const ELITE_CLUE_ITEM_ID = 12073;
 const DESTROY_PET_RATE = 1500;
 
-const CORPSE_DESTROY_PROMPT =
-  "Destroying the corpse will give no loot, but doubles your chance of receiving Nid (1/1500 instead of 1/3000). Are you sure you want to destroy it?";
-
 /**
  * The captured enrage body: slot 0 (54289) becomes 54288, the venom-coated front legs,
  * while slot 1 (54290) stays (sent, as captured). Sent as an npc model customisation.
@@ -206,6 +217,18 @@ const ENRAGE_MODELS = Object.freeze([
 
 function playSound(player, id, delay = 0) {
   player?.getPacketSender?.()?.sendSoundEffect(id, 1, delay);
+}
+
+/** A hit sound for `npc` to the player of its fight, once a tick. */
+const hitSoundTicks = new WeakMap();
+function playHitSound(core, npc, sound) {
+  const now = core.World.getProcessCycle();
+  if (hitSoundTicks.get(npc) === now) return;
+  hitSoundTicks.set(npc, now);
+  const player = npc.getAttribute?.(ATTR_ENCOUNTER)?.player ?? null;
+  const at = npc.getLocation?.();
+  if (!player?.isRegistered?.() || !at) return;
+  player.getPacketSender?.()?.sendAreaSound(sound[0], at.getX(), at.getY(), at.getZ(), 1, 0, sound[1], 0);
 }
 
 /** A captured [id, delay] sound for the player. */
@@ -415,6 +438,10 @@ module.exports = {
   ACIDIC_EXPLOSION_GFX,
   EXPLODE_ANIMATION,
   SOUND,
+  HIT_SOUND,
+  FIGHT_MUSIC,
+  CORPSE_LOOT_SOUND,
+  playHitSound,
   POOL_DAMAGE_MIN,
   POOL_DAMAGE_MAX,
   VENOM_SPLAT,
@@ -427,7 +454,6 @@ module.exports = {
   NID_ITEM_ID,
   ELITE_CLUE_ITEM_ID,
   DESTROY_PET_RATE,
-  CORPSE_DESTROY_PROMPT,
   ATTR_ATTACKS,
   ATTR_STANDARDS,
   ATTR_NEXT_HATCH,

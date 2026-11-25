@@ -61,19 +61,27 @@ Ticks below count from the action named; the captured gamevals are in brackets.
   - **Attack:** melee 11500, every 6 ticks.
   - **Damage share:** while it lives it takes a fifth of the damage dealt to Araxxor (captured pairs: 9+2, 16+3, 16+4, 17+4).
   - **Death:** 11510 (`npc_araxyte_mirror_back_death`) the tick after it reaches 0, gone two ticks later.
+  - **Hit sound:** area sound 4020 (radius 9) on its tile, every tick it takes a hit (772 of 772 in recordings 550, 1768, 788, 3280 and 3347). The engine's hit sounds are private synths, so the plugin sends it.
 - **Ruptura:**
-  - **Explosion:** walks to the player and explodes with 11504 (`npc_araxyte_explode`) and graphic 2925 (`araxyte_explosive_spider_explosion`).
-  - **Damage:** two ticks later Araxxor takes damage by distance (80 and 48 captured; the Wiki's 80/64/48/33). It's removed two ticks after that.
+  - **Explosion:** walks to the player, stops and stops facing them, and two ticks later explodes with 11504 (`npc_araxyte_explode`) and graphic 2925 (`araxyte_explosive_spider_explosion`). Its options go off the tick before (not done here: the engine has no NPC options mask).
+  - **Damage:** the tick after the explosion the player takes damage by distance; the tick after that, Araxxor (80/64/48/33 captured, as on the Wiki). It's removed two ticks after that.
+  - **Player damage:** 6, 24 and 42 in the seasonal recordings (550, 1768), which is 0.85 of the Wiki's 7/28/49; the Wiki's 70/49/28/7 is used.
 - **Acidic:**
   - **Attack:** ranged 11498 with projectile 1560 (cycles 39 to 39 + 10 per tile, height 32 to 64, angle 16, progress 40) and sound 9378 (delay 25, radius 5) on the player's tile, every 6 ticks.
   - **Death:** 11504 with graphic 2926 and 13 blobs (2924, height 140, angle 35, progress 20, end 90 + 10 per tile) within four tiles, which pool 4-5 ticks later.
 
 ## Death and the corpse
 
-- **Death animation:** 11481. The eggs crumble (11508) the next tick and go two ticks later.
-- **Corpse:** five ticks into the death she turns into the corpse 13669 (Harvest, Destroy).
-- **Kill messages:** on the same tick come "Your Araxxor kill count is: <col=ff0000>N</col>." (varp 4260, `total_araxxor_kills`) and "Fight duration: <col=ff0000>m:ss.cc</col>. Personal best: m:ss.cc". The duration runs from the spawn to three ticks into the death.
-- **Harvest:** the player plays 2282 on the click. The loot comes two ticks later, the corpse sinks (11486) the tick after, and it goes two ticks after that.
+Checked against 490 kills in recordings 1768, 550 (Leagues V), 788, 3280 and 3347 (Grid Master); ticks count from the death animation.
+
+- **Death animation:** 11481. Every living araxyte dies on the same tick, with no acid splash or blast: the Acidic (11504) and the Mirrorback (11510) go two ticks later, the Ruptura (11504) four. The eggs crumble (11508) the next tick and go two ticks later, freeing their tiles then.
+- **Corpse:** at +5 she turns into the 3x3 corpse 13669 (Harvest, Destroy), jumping two tiles north-east onto her middle, and a 3x3 of loc 26209 blocks it until it goes. "Noxious Awakening" (track 800) starts again, as it does with every spawn.
+- **Kill messages:** on the same tick come "Your Araxxor kill count is: <col=ff0000>N</col>." (varp 4260, `total_araxxor_kills`) and "Fight duration: <col=ff0000>m:ss.cc</col>. Personal best: m:ss.cc", or `m:ss` to the second without precise timing (200 of the 490). The duration runs from the spawn to +3.
+- **Health bar:** fades at +9 and clears four ticks later (490 of 490).
+- **Harvest:** the player plays 2282 on the click. The loot comes two ticks later with sound 9485, the corpse sinks (11486) the tick after, and it goes two ticks after that.
+- **Destroy:** a menu, "Destroy regular loot for doubled pet chance?", with Yes., "Yes, and don't ask again." and No. (recording 1094; 4086 destroys with no menu). Then the same 2282, and two ticks later "You root aggressively through the corpse and the body decays before you can harvest any resources." with 9485; it sinks and goes as after a harvest.
+- **Hit sound:** area sound 3609 (radius 9) on her tile, every tick she takes a hit, a 0 included (9,875 of 9,875).
+- **Not done:** the corpse's options go off on the Harvest or Destroy click (the engine has no NPC options mask; a second click does nothing anyway).
 
 ## Combat Achievements
 
@@ -93,6 +101,17 @@ Ticks below count from the action named; the captured gamevals are in brackets.
 
 Where the task text is open (how the speed tasks are timed, whether Betrayal needs one explosion), these are our readings; the Wiki doesn't say.
 
+A task lost in the fight is told once, the tick after, through `combat-achievements:failed` ("You have failed <task>: <reason>", as the player's settings allow). The captured reasons (recordings 550 and 1768):
+
+| Task | Reasons |
+| --- | --- |
+| Perfect Araxxor | "You were hit by Araxxor." / "You were hit by an Acid Pool." / "You were hit by an Acid Ball." / "You were hit by Acidic Araxyte." / "You were hit by an exploding Araxyte." / "You took reflected damage." |
+| Perfect Araxxor 2 | "You hit Araxxor during the enrage phase." |
+| Swimming in Venom | "Araxxor moved." |
+| Let it seep in | "You had poison immunity." |
+
+Ours: "You were hit by Mirrorback Araxyte." for its attack, and the acid blobs' impact told as an Acid Pool; neither is in a recording.
+
 ## Araxyte fang and the Amulet of rancour
 
 `server/plugins/items/EtchedFangs.plugin.js` (shared with the Necklace of rupture). From the Wiki
@@ -110,6 +129,5 @@ missing). Only the plain Amulet of torture is accepted.
 
 ## Not captured yet
 
-- **Destroy:** the clue roll and the corpse's timing after Destroy.
-- **Ruptura player damage:** how much the explosion deals to the player (the Wiki's 70/49/28/7 is used).
+- **Destroy:** the clue roll (none of the 20 captured Destroys dropped one).
 - **Etching and the Amulet of rancour:** the level refusals, and whether the ornamented Amulet of torture is accepted.

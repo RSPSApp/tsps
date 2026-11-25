@@ -12,6 +12,11 @@
  *    do not count (Wiki strategy).
  *  - The speed tasks time N kills in one stay, from the first of them spawning to the last dying.
  *  - Araxyte Betrayal counts hatched araxytes killed by one explosion (not eggs or Araxxor).
+ *
+ * A task lost during the fight is told once, the tick after it is lost ("You have failed <task>:
+ * <reason>", through "combat-achievements:failed"; rsprox recordings 550 and 1768, Leagues V). The
+ * reasons are the captured ones; the Mirrorback's hit and the acid blobs' impact are ours (no
+ * capture has them).
  */
 const Shared = require("./Shared.Araxxor");
 
@@ -26,6 +31,25 @@ const RELAXXOR_EGGS = 6;
 const ARACHNID_LOVER_KILLS = 10;
 const BETRAYAL_KILLS = 3;
 const MONSTER = "Araxxor";
+
+/** Captured failure reasons (rsprox 550, 1768). */
+const FAILURE = Object.freeze({
+  boss: "You were hit by Araxxor.",
+  pool: "You were hit by an Acid Pool.",
+  ball: "You were hit by an Acid Ball.",
+  acidic: "You were hit by Acidic Araxyte.",
+  mirrorback: "You were hit by Mirrorback Araxyte.",
+  ruptura: "You were hit by an exploding Araxyte.",
+  reflected: "You took reflected damage.",
+  enraged: "You hit Araxxor during the enrage phase.",
+  moved: "Araxxor moved.",
+  immune: "You had poison immunity.",
+});
+const MINION_FAILURE = Object.freeze({
+  [Shared.MINION_ID.acidic]: FAILURE.acidic,
+  [Shared.MINION_ID.mirrorback]: FAILURE.mirrorback,
+  [Shared.MINION_ID.ruptura]: FAILURE.ruptura,
+});
 
 const EGG_IDS = new Set(Object.values(Shared.EGG_ID));
 const MINION_IDS = new Set(Object.values(Shared.MINION_ID));
@@ -63,23 +87,55 @@ function spawned(player, boss) {
     immune: immune(player),
     eggsDestroyed: 0,
     moved: false,
+    /** Tasks lost this fight, told the tick after: [task, reason, tick]. */
+    failures: [],
+    failed: new Set(),
   };
+  const fight = stateOf(player).fight;
+  if (fight.immune) fail(player, fight, "Let it seep in", FAILURE.immune);
+}
+
+/** A task is lost: told once per fight, the tick after (as captured). */
+function fail(player, fight, task, reason) {
+  if (!fight || fight.failed.has(task)) return;
+  fight.failed.add(task);
+  fight.failures.push([task, reason, tick()]);
+}
+
+function flushFailures(player, fight) {
+  const now = tick();
+  while (fight.failures.length > 0 && fight.failures[0][2] < now) {
+    const [task, reason] = fight.failures.shift();
+    api.emitCustomEvent("combat-achievements:failed", { player, task, reason });
+  }
 }
 
 /** Each tick in the lair: venom or poison immunity, and whether she has moved. */
 function tickPlayer(player, boss) {
   const fight = fightOf(player);
   if (!fight) return;
-  if (immune(player)) fight.immune = true;
+  flushFailures(player, fight);
+  if (immune(player)) {
+    fight.immune = true;
+    fail(player, fight, "Let it seep in", FAILURE.immune);
+  }
   if (!boss?.isRegistered?.() || boss.getAttribute?.(Shared.ATTR_DYING) === true) return;
   const at = boss.getLocation();
-  if (at.getX() !== fight.bossTile.x || at.getY() !== fight.bossTile.y) fight.moved = true;
+  if (at.getX() !== fight.bossTile.x || at.getY() !== fight.bossTile.y) {
+    fight.moved = true;
+    fail(player, fight, "Swimming in Venom", FAILURE.moved);
+  }
 }
 
-/** Damage Perfect Araxxor forbids: her ranged and magic, unprayed melee, minions, acid. */
-function avoidableDamage(player, amount) {
+/**
+ * Damage Perfect Araxxor forbids: her ranged and magic, unprayed melee, minions, acid. `reason` is
+ * the failure told for it (a FAILURE value; Araxxor's own hit when left out).
+ */
+function avoidableDamage(player, amount, reason = FAILURE.boss) {
   const fight = player ? fightOf(player) : null;
-  if (fight && amount > 0) fight.avoidableDamage += amount;
+  if (!fight || !(amount > 0)) return;
+  fight.avoidableDamage += amount;
+  fail(player, fight, "Perfect Araxxor", reason);
 }
 
 /** One explosion killed `kills` other araxytes. */
@@ -93,7 +149,7 @@ function hitResolved({ attacker, target, hit }) {
   if (attacker?.isNpc?.() && target?.isPlayer?.()) {
     const id = attacker.getId?.();
     if (MINION_IDS.has(id)) {
-      avoidableDamage(target.getAsPlayer(), damage);
+      avoidableDamage(target.getAsPlayer(), damage, MINION_FAILURE[id]);
     } else if (id === Shared.BOSS_ID) {
       const player = target.getAsPlayer();
       const distant = hit.araxxorKind === Shared.Attack.RANGED || hit.araxxorKind === Shared.Attack.MAGIC;
@@ -103,8 +159,12 @@ function hitResolved({ attacker, target, hit }) {
   }
   if (attacker?.isPlayer?.() && target?.getId?.() === Shared.BOSS_ID
     && target.getAttribute?.(Shared.ATTR_ENRAGED) === true) {
-    const fight = fightOf(attacker.getAsPlayer());
-    if (fight) fight.hitEnraged = true;
+    const player = attacker.getAsPlayer();
+    const fight = fightOf(player);
+    if (fight) {
+      fight.hitEnraged = true;
+      fail(player, fight, "Perfect Araxxor 2", FAILURE.enraged);
+    }
   }
 }
 
@@ -196,6 +256,7 @@ module.exports = {
   spawned,
   tick: tickPlayer,
   avoidableDamage,
+  FAILURE,
   betrayal,
   hitResolved,
   npcDeath,

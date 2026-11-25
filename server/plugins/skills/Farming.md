@@ -479,12 +479,11 @@ sounds or interface packet order. Those details remain unverified against live
 OSRS; no claim of complete visual or timing parity is made.
 ## Hespori attacks and vines
 
-[RSProx R3282](https://rsprox.net/download/3282) records one player on a Grid Master
-world (revision 234.1), with 14 farming fights and 121 attacks between ticks 217
-and 1755. [RSProx R1695](https://rsprox.net/download/1695) records the quest
-Hespori on a normal world (revision 226.1). Its vine escape is the only recorded
-escape used here (1 of 1). Timings below are game ticks. Projectile and graphic
-delays are client cycles.
+R3282 records one player on a Grid Master world (revision 234.1), with 14 farming
+fights and 121 attacks between ticks 217 and 1755. R1695 records the quest Hespori
+on a normal world (revision 226.1) and supplies the only recorded escape used here
+(1 of 1). Timings below are game ticks. Projectile and graphic delays are client
+cycles. [RSProx R3282](https://rsprox.net/download/3282) · [RSProx R1695](https://rsprox.net/download/1695)
 
 | Behaviour | Observation and source |
 | --- | --- |
@@ -494,9 +493,9 @@ delays are client cycles.
 | Vine throw | Sequence 8223 sends 1642 with the wave shape and sound 4062 with delay zero. The throw deals no direct damage. R3282 tick 553 (1 of 1). |
 | Vine landing | At +4 the player is held and receives the red game message, spotanim 1643 at height 124 and sound 4065, both with delay zero. R3282 ticks 553→557 and R1695 ticks 10686→10690. The farming recording begins the message with “The Hespori” where the Wiki begins with “Hespori”. |
 | Vine in flight at death | The throw lands after the boss's death sequence. R3282 has death sequence 8225 at 555, the landing at 557 and the kill count at 559 (1 of 1). |
-| Escape | The first five ticks with a move or attack click each produce one loosen message and sound 4057. The sixth frees the player. In R1695, four NPC attack inputs at 10694 and four at 10695 produce one line and sound on each tick, followed by the escape at 10696. This follows the [Wiki mechanics section](https://oldschool.runescape.wiki/w/Special:PermanentLink/15403580). Its strategy section says “7 times”. TSPS retains its existing break-free wording. |
+| Escape | The first five ticks with a move or attack click each produce one loosen message and sound 4057. The sixth frees the player. In R1695, four NPC attack inputs at 10694 and four at 10695 produce one line and sound on each tick, followed by the escape at 10696. The Wiki mechanics section agrees, and its strategy section says “7 times”. TSPS retains its existing break-free wording. [Hespori Wiki](https://oldschool.runescape.wiki/w/Special:PermanentLink/15403580) |
 | Attacks while held | R1695 shows a spore volley at 10692 while the player is held, with both splats at 10694. |
-| Hold duration | Ten ticks without an escape, per the [Hespori Wiki revision 15403580](https://oldschool.runescape.wiki/w/Special:PermanentLink/15403580). The recordings do not show an expiry hit. |
+| Hold duration | The Wiki gives ten ticks without an escape. An expiry impact is unobserved in both recordings. [Hespori Wiki revision 15403580](https://oldschool.runescape.wiki/w/Special:PermanentLink/15403580) |
 | Poison | R3282 ticks 234 and 1045 show the poison message and varp 102 changing from 0 to 16 on the impact tick of a damaging volley. This represents starting damage of four, as in the Wiki infobox. |
 
 **Estimates**

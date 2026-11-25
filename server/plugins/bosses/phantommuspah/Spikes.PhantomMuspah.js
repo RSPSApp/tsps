@@ -8,9 +8,10 @@
  *   group and one under the player; after the shield, every fourth attack, one under the player
  *   and more beside the groups, so they spread.
  * - Homing spikes: two to four standing spikes, never one beside the player or under the Muspah,
- *   sink (muspah_spike_post, spot 2325) and come back as muspah_spike_follow, stepping a tile every
- *   two ticks towards the player, never diagonally and never through a spike; the tile left clears
- *   a tick later. After 34 ticks, or when the shield goes up, they harden where they are.
+ *   sink one a tick (muspah_spike_post, spot 2325) and each comes back two ticks later as
+ *   muspah_spike_follow, stepping a tile every two ticks towards the player, never diagonally and
+ *   never through a spike; the tile left clears on the same tick. After 34 ticks, or when the
+ *   shield goes up, they harden where they are (Wiki, since 22 July 2026; the captures predate it).
  * Tiles here are the lair's own (the template square); the session turns them into the instance.
  */
 const CameraShake = require("../../interface/CameraShake.plugin");
@@ -263,10 +264,15 @@ class SpikeField {
     const sources = Common.shuffle(this.standing()).filter(({ tile }) =>
       Math.max(Math.abs(tile[0] - player[0]), Math.abs(tile[1] - player[1])) > 1 && !this.fight.underBoss(tile));
     const count = Math.min(sources.length, Common.randomInt(homing.min, homing.max));
-    for (const spike of sources.slice(0, count)) {
-      this.sink(spike.tile);
-      this.fight.at(2, () => this.follow(spike.tile));
-    }
+    // One sinks per tick from the tick after seq 9923, each back two ticks after its own sink
+    // (captured: sinks at +1, +2, +3, +4 in 92 of 172 specials; the first follower at +3).
+    sources.slice(0, count).forEach((spike, index) => {
+      this.fight.at(1 + index, () => {
+        if (this.cleared || this.spikes.get(key(spike.tile)) !== spike || spike.state !== "up") return;
+        this.sink(spike.tile);
+        this.fight.at(2, () => this.follow(spike.tile));
+      });
+    });
   }
 
   /** A standing spike sinks (muspah_spike_post, spot 2325) and is gone a tick later. */
@@ -340,10 +346,9 @@ class SpikeField {
     this.showFollower(follower);
     this.block(next, true);
     if (onPlayer && Common.alive(this.player)) this.knock(next);
-    this.fight.at(1, () => {
-      this.remove(oldObject);
-      if (!this.has(old)) this.block(old, false);
-    });
+    // The tile it left clears on the same tick (captured: 9,244 of 9,714 steps).
+    this.remove(oldObject);
+    if (!this.has(old)) this.block(old, false);
   }
 
   /** A homing spike stops and stands where it is (spot 2324, then a spike a tick later). */

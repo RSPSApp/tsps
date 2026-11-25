@@ -4,6 +4,7 @@ const { resolveAccess } = require("./worldadmin/Access.WorldAdmin");
 const { createPageServer, reloadCertificate, watchCertificate } = require("./worldadmin/Tls.WorldAdmin");
 const { createRequestHandler, HttpError, send } = require("./worldadmin/Http.WorldAdmin");
 const { playerRoutes } = require("./worldadmin/Players.WorldAdmin");
+const { PLAYER_TOOLS_CONFIG } = require("./worldadmin/PlayerTools.WorldAdmin");
 const { botRoutes } = require("./worldadmin/Bots.WorldAdmin");
 const { readPluginZip, downloadPluginRelease, savePluginZip, deletePluginZip } = require("./worldadmin/PluginZip.WorldAdmin");
 
@@ -416,6 +417,12 @@ function stopWorldAdmin() {
 module.exports = {
   name: PLUGIN_NAME,
   description: "Local web page for editing world.json settings and plugin switches.",
+  config: {
+    [PLAYER_TOOLS_CONFIG]: {
+      type: "boolean", label: "Player tools", default: true,
+      help: "Show live teleport, item, skill and quest controls in the Players panel. The panel token grants owner access.",
+    },
+  },
   register(api) {
     pluginApi = api;
     api.onServerStartup(startWorldAdmin);

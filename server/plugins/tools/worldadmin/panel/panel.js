@@ -6,8 +6,8 @@ window.LocalPlayers = {
     const rightsLabels = LocalPanelComponents.rightsLabels;
     const skillNames = ["Attack", "Defence", "Strength", "Hitpoints", "Ranged", "Prayer", "Magic", "Cooking", "Woodcutting",
       "Fletching", "Fishing", "Firemaking", "Crafting", "Smithing", "Mining", "Herblore", "Agility", "Thieving",
-      "Slayer", "Farming", "Runecrafting", "Construction", "Hunter"];
-    const skillOrder = [0, 2, 1, 4, 5, 6, 20, 21, 3, 16, 15, 17, 12, 9, 18, 22, 14, 13, 10, 7, 11, 8, 19];
+      "Slayer", "Farming", "Runecrafting", "Construction", "Hunter", "Sailing"];
+    const skillOrder = [0, 2, 1, 4, 5, 6, 20, 21, 3, 16, 15, 17, 12, 9, 18, 22, 14, 13, 10, 7, 11, 8, 19, 23];
     let players = [];
     let selected;
     let detail;
@@ -93,12 +93,16 @@ window.LocalPlayers = {
           skillIcons[index] ? el("img", { src: skillIcons[index], alt: skillNames[index] }) : skillNames[index],
           el("strong", { text: String(levels[index]) }),
         ]))) : null;
+      const tools = window.LocalPlayerTools?.render(detail, running, el, api, flash, async id => {
+        if (selected === id) await refresh();
+      });
       pane.replaceChildren(
         el("div", { className: "local-player-heading" }, [el("strong", { text: player.username }), actions, views]),
         el("div", { className: "local-player-detail" }, [
           view === "json" ? el("pre", { text: JSON.stringify(save, null, 2) }) : el("dl", null, summary),
           view === "preview" ? skills : null,
         ]),
+        ...(tools ? [tools] : []),
       );
     }
 

@@ -242,6 +242,9 @@ bare face takes the Echo's shots whole (`Equipment.Slayer.js`).
 
 - The enrage's one recorded exception: a set decided at 630 HP stayed normal.
 - Why the Echo sometimes appears a tick later on entry.
+- The health overlay at the top may be inaccurate for the Echo. Ours is the generic one: it names the
+  normal boss and shows the Echo's 1,200 HP. In the recording, live never showed it in 31 kills, but
+  that player may have had it turned off.
 
 The central Echo service owns rewards/progression and suppresses normal orb rolls.
 The adapter completes once, never respawns, and clears its actors/pending damage

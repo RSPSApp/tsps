@@ -1049,6 +1049,45 @@ test("a lost task is told once, the tick after, with the captured reason", () =>
   CombatAchievements.left(player);
 });
 
+test("a task lost on the kill tick is still told", () => {
+  const CombatAchievements = require("../plugins/bosses/araxxor/CombatAchievements.Araxxor");
+  const cycle = 200;
+  const failed = [];
+  CombatAchievements.attach({
+    core: { World: { getProcessCycle: () => cycle } },
+    getPrayerHandler: () => ({}),
+    onCombatHitResolved() {},
+    onNpcDeath() {},
+    onCustomEvent() {},
+    emitCustomEvent(name, payload) { if (name === "combat-achievements:failed") failed.push(payload.task); },
+  });
+  const player = { getCombat: () => ({ getPoisonImmunityTimer: () => ({ finished: () => true }) }) };
+  const boss = { isRegistered: () => true, getAttribute: () => false, getLocation: () => ({ getX: () => 3631, getY: () => 9814 }) };
+  CombatAchievements.spawned(player, boss);
+  CombatAchievements.avoidableDamage(player, 4, CombatAchievements.FAILURE.pool);
+  CombatAchievements.killed(player, 1, () => {});
+  assert.deepEqual(failed, ["Perfect Araxxor"]);
+  CombatAchievements.left(player);
+});
+
+test("hit sounds play on the NPC's middle: Araxxor's 7x7 centre, a Mirrorback's own tile", () => {
+  const Shared = require("../plugins/bosses/araxxor/Shared.Araxxor");
+  let cycle = 300;
+  const sent = [];
+  const player = { isRegistered: () => true, getPacketSender: () => ({ sendAreaSound: (...args) => sent.push(args) }) };
+  const npcAt = (x, y, size) => ({
+    getSize: () => size,
+    getLocation: () => ({ getX: () => x, getY: () => y, getZ: () => 0 }),
+    getAttribute: (key) => (key === Shared.ATTR_ENCOUNTER ? { player } : undefined),
+  });
+  const core = { World: { getProcessCycle: () => cycle } };
+  Shared.playHitSound(core, npcAt(3631, 9814, 7), Shared.HIT_SOUND.boss);
+  Shared.playHitSound(core, npcAt(3624, 9816, 7), Shared.HIT_SOUND.boss);
+  cycle++;
+  Shared.playHitSound(core, npcAt(3625, 9810, 1), Shared.HIT_SOUND.mirrorback);
+  assert.deepEqual(sent.map((s) => s.slice(0, 3)), [[3609, 3634, 9817], [3609, 3627, 9819], [4020, 3625, 9810]]);
+});
+
 test("the fight duration is m:ss without precise timing and m:ss.cc with it", () => {
   const Corpse = require("../plugins/bosses/araxxor/Corpse.Araxxor");
   assert.equal(Corpse.formatTicks(176, false), "1:46");

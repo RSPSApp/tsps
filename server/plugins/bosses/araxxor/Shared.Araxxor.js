@@ -228,7 +228,9 @@ function playHitSound(core, npc, sound) {
   const player = npc.getAttribute?.(ATTR_ENCOUNTER)?.player ?? null;
   const at = npc.getLocation?.();
   if (!player?.isRegistered?.() || !at) return;
-  player.getPacketSender?.()?.sendAreaSound(sound[0], at.getX(), at.getY(), at.getZ(), 1, 0, sound[1], 0);
+  // Captured on the NPC's middle: (3634, 9817) for Araxxor at (3631, 9814), the tile for a Mirrorback.
+  const half = Math.floor(Math.max(1, npc.getSize?.() ?? 1) / 2);
+  player.getPacketSender?.()?.sendAreaSound(sound[0], at.getX() + half, at.getY() + half, at.getZ(), 1, 0, sound[1], 0);
 }
 
 /** A captured [id, delay] sound for the player. */

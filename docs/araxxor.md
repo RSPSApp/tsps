@@ -77,10 +77,10 @@ Checked against 490 kills in recordings 1768, 550 (Leagues V), 788, 3280 and 334
 - **Death animation:** 11481. Every living araxyte dies on the same tick, with no acid splash or blast: the Acidic (11504) and the Mirrorback (11510) go two ticks later, the Ruptura (11504) four. The eggs crumble (11508) the next tick and go two ticks later, freeing their tiles then.
 - **Corpse:** at +5 she turns into the 3x3 corpse 13669 (Harvest, Destroy), jumping two tiles north-east onto her middle, and a 3x3 of loc 26209 blocks it until it goes. "Noxious Awakening" (track 800) starts again, as it does with every spawn.
 - **Kill messages:** on the same tick come "Your Araxxor kill count is: <col=ff0000>N</col>." (varp 4260, `total_araxxor_kills`) and "Fight duration: <col=ff0000>m:ss.cc</col>. Personal best: m:ss.cc", or `m:ss` to the second without precise timing (200 of the 490). The duration runs from the spawn to +3.
-- **Health bar:** fades at +9 and clears four ticks later (490 of 490).
+- **Health bar:** fades at +9 and clears four ticks later (+13 in 371 of 388 kills in 550, 1768 and 788; the rest later, at +14 to +20).
 - **Harvest:** the player plays 2282 on the click. The loot comes two ticks later with sound 9485, the corpse sinks (11486) the tick after, and it goes two ticks after that.
 - **Destroy:** a menu, "Destroy regular loot for doubled pet chance?", with Yes., "Yes, and don't ask again." and No. (recording 1094; 4086 destroys with no menu). Then the same 2282, and two ticks later "You root aggressively through the corpse and the body decays before you can harvest any resources." with 9485; it sinks and goes as after a harvest.
-- **Hit sound:** area sound 3609 (radius 9) on her tile, every tick she takes a hit, a 0 included (9,875 of 9,875).
+- **Hit sound:** area sound 3609 (radius 9) on her middle (3 tiles north-east of her south-west tile, and moving with her), every tick she takes a hit, a 0 included (9,875 of 9,875).
 - **Not done:** the corpse's options go off on the Harvest or Destroy click (the engine has no NPC options mask; a second click does nothing anyway).
 
 ## Combat Achievements
@@ -101,7 +101,7 @@ Checked against 490 kills in recordings 1768, 550 (Leagues V), 788, 3280 and 334
 
 Where the task text is open (how the speed tasks are timed, whether Betrayal needs one explosion), these are our readings; the Wiki doesn't say.
 
-A task lost in the fight is told once, the tick after, through `combat-achievements:failed` ("You have failed <task>: <reason>", as the player's settings allow). The captured reasons (recordings 550 and 1768):
+A task lost in the fight is told once, the tick after, through `combat-achievements:failed` ("You have failed <task>: <reason>", as the player's settings allow). The captured reasons (recording 550; 1768 has none):
 
 | Task | Reasons |
 | --- | --- |

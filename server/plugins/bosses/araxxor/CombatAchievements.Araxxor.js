@@ -102,9 +102,9 @@ function fail(player, fight, task, reason) {
   fight.failures.push([task, reason, tick()]);
 }
 
-function flushFailures(player, fight) {
+function flushFailures(player, fight, all = false) {
   const now = tick();
-  while (fight.failures.length > 0 && fight.failures[0][2] < now) {
+  while (fight.failures.length > 0 && (all || fight.failures[0][2] < now)) {
     const [task, reason] = fight.failures.shift();
     api.emitCustomEvent("combat-achievements:failed", { player, task, reason });
   }
@@ -201,6 +201,8 @@ function killed(player, ownKills, announce) {
   const fight = state.fight;
   state.fight = null;
   if (!fight) return total;
+  // A task lost on the kill tick, before this tick's flush, is still told.
+  flushFailures(player, fight, true);
   const now = tick();
   state.kills.push({ spawnedAt: fight.spawnedAt, killedAt: now });
   for (const [task, kills] of SPEED) {

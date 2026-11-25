@@ -162,7 +162,7 @@ test("a group leader's new party takes in the members waiting in Ver Sinhaza; th
   assert.deepEqual(party.applicants, [], 'nobody is left applying');
   for (const member of [ann, bob]) {
     assert.equal(member.varbits.get(Shared.VARBIT.PARTY_STATE), 1, `${member.name}'s HUD shows the party`);
-    assert.equal(member.texts[HUD_NAMES], 'Lead<br>Ann<br>Bob<br>-<br>-<br>', `${member.name}'s HUD lists it`);
+    assert.equal(member.texts[HUD_NAMES], 'Lead<br>Ann<br>Bob<br>-<br>-', `${member.name}'s HUD lists it`);
     assert.deepEqual(member.messages, [], `${member.name} isn't told to apply`);
   }
   assert.equal(footerRights(leader), Parties.RIGHTS.LEADER, 'the leader sees the party');
@@ -240,7 +240,7 @@ test('a group member applying to their leader\'s party is accepted at once, as t
   assert.deepEqual(party.applicants, []);
   assert.equal(footerRights(fay), Parties.RIGHTS.MEMBER, 'her screen shows her in the party');
   assert.equal(fay.varbits.get(Shared.VARBIT.PARTY_STATE), 1, 'and the HUD');
-  assert.equal(leader.texts[HUD_NAMES], 'Lead<br>Fay<br>-<br>-<br>-<br>', "the leader's HUD follows");
+  assert.equal(leader.texts[HUD_NAMES], 'Lead<br>Fay<br>-<br>-<br>-', "the leader's HUD follows");
   assert.equal(footerRights(leader), Parties.RIGHTS.LEADER, "the leader's open screen is redrawn");
 });
 

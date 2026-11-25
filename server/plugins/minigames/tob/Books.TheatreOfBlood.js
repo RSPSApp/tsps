@@ -41,8 +41,8 @@ function roomWon({ room, player }) {
   const id = bookId(name);
   if (owns(player, id)) return;
   const { Item, ItemOnGroundManager } = Shared.core();
-  const tile = FIXED_BOOK_TILES[room.key];
-  const position = tile ? Shared.loc(tile) : player.getLocation().clone();
+  const tile = FIXED_BOOK_TILES[room.key] ?? room.bookDropTile;
+  const position = Shared.loc(tile);
   ItemOnGroundManager.registerLocation(player, new Item(id, 1), position, room.area, {
     goesGlobal: false, despawnDelay: BOOK_DESPAWN_TICKS,
   });

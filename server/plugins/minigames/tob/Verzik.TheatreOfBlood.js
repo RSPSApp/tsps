@@ -1489,6 +1489,12 @@ class VerzikRoom extends Raid.Room {
 
   // -------------------------------------------------------------- the end
 
+  get bookDropTile() {
+    // 237/01163 ticks 1804-1810: the dead form moves before the book lands.
+    const { x, y, z } = this.bookDropOrigin ?? PHASE3_TILE;
+    return { x: x + 1, y: y + 1, z };
+  }
+
   /** Captured: her animation, the dead form 2 ticks on (2 tiles in), the room won 8 ticks on. */
   die() {
     const npc = this.verzik;
@@ -1510,6 +1516,7 @@ class VerzikRoom extends Raid.Room {
       npc.setNpcTransformationId(this.ids.DEAD);
       npc.moveTo(Shared.loc({ x: tile.x + 2, y: tile.y + 2, z: 0 }));
       this.later(6, () => {
+        this.bookDropOrigin = Shared.tileOf(npc);
         this.despawn(npc);
         this.verzik = null;
         this.complete();

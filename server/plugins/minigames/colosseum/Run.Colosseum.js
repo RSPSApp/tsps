@@ -33,8 +33,9 @@ const ATTR_RUN = "colosseum:run";
 const WAVE_START_DELAY = 5;
 const WAVE_RETURN_TICKS = 3;
 const ALL_PRAYERS_ACTIVE = 4101;
-/** Sol Heredit's death animation plays out before the chest appears. */
-const SOL_DEATH_TICKS = 5;
+/** RSProx 237/01150 t25440-25449 and t14991-15002: Minimus comes out a tick before the chest. */
+const SOL_REWARD_TICKS = 8;
+const SOL_VOLATILITY_REWARD_TICKS = 10;
 const SECOND_GREETING_DELAY = 3;
 const MINIMUS_SPAWN_ANIM = 10862;
 const HUMAN_SPAWN_ANIM = 10861;
@@ -130,6 +131,7 @@ class ColosseumRun {
     this.waveDamage = 0;
     /** Wave 12: Sol Heredit's fight, and the gladiators' barricade. */
     this.solFight = null;
+    this.solGib = null;
     this.barricade = [];
     /** The loot so far, this run's Glory, and whether an enemy has hurt the player this wave. */
     this.loot = null;
@@ -191,10 +193,10 @@ class ColosseumRun {
     ObjectManager.register(new GameObject(Shared.OBJECT.SOL_SEAT_BLOCKER, Shared.loc(Shared.SOL_SEAT), 10, 0, this.area), true);
   }
 
-  spawnMinimus(tile) {
+  spawnMinimus(tile, options) {
     const { Animation } = Shared.core();
     this.removeMinimus();
-    this.minimus = this.spawnNpc(Shared.NPC.MINIMUS_ARENA, tile);
+    this.minimus = this.spawnNpc(Shared.NPC.MINIMUS_ARENA, tile, options);
     this.minimus?.performAnimation(new Animation(MINIMUS_SPAWN_ANIM));
   }
 
@@ -381,7 +383,7 @@ class ColosseumRun {
     Scoreboard.waveCompleted(this);
     this.stage = "intermission";
     Rewards.waveCompleted(this);
-    Hazards.waveEnded(this);
+    Hazards.waveEnded(this, { keepSolarflare: this.wave === Shared.FINAL_WAVE && this.modifiers.has("volatility") });
     Effects.waveCompleted(this);
     // `colosseum:wave-completed` { player, wave }: the wave just cleared (a league's "Complete Wave 1 / 12").
     Shared.api().emitCustomEvent("colosseum:wave-completed", { player: this.player, wave: this.wave });
@@ -403,22 +405,28 @@ class ColosseumRun {
     });
   }
 
-  /** Sol Heredit is beaten: once he has fallen, the hazards go and the chest comes out. */
+  /** Record the kill on this tick and schedule the rewards. */
   defeatedSol() {
     Sol.defeated(this);
     CombatAchievements.solDefeated(this);
     Scoreboard.solDefeated(this);
     this.stage = "won";
-    Shared.later(this, SOL_DEATH_TICKS, () => this.finish());
+    const rewardTicks = this.modifiers.has("volatility") ? SOL_VOLATILITY_REWARD_TICKS : SOL_REWARD_TICKS;
+    Shared.later(this, rewardTicks, () => {
+      if (this.stage === "won" && !this.dying) Rewards.announceVictory(this);
+    });
+    Shared.later(this, rewardTicks + 1, () => this.finish());
   }
 
-  /** The run is over with its loot: Glory is kept, and the chest appears with Minimus. */
+  /** Open the reward area after victory or an early forfeit. */
   finish() {
-    if (this.stage === "ended" || this.stage === "finished") return;
+    if (this.dying || (this.stage !== "won" && this.stage !== "intermission")) return;
+    const won = this.stage === "won";
     this.stage = "finished";
     Rewards.keepGlory(this);
     Hazards.cleared(this);
     Rewards.bringOutChest(this);
+    if (!won) Rewards.bringOutMinimus(this);
   }
 
   // ---------------------------------------------------------------- leaving
@@ -467,6 +475,7 @@ class ColosseumRun {
     for (const npc of [...this.npcs]) Shared.api().removeNpc(npc);
     this.npcs.clear();
     Hazards.cleared(this);
+    Hazards.removeSolGib(this);
     Sol.cleared(this);
     Effects.ended(this);
     this.removeMinimus();

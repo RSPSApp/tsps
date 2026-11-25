@@ -110,9 +110,9 @@ function ownRunOnly(event) {
   if (!run) return;
   const other = event.attacker?.__colosseumRun ? event.target : event.attacker;
   if (other?.isPlayer?.() && other !== run.player) event.allow = false;
-  // The seated Sol Heredit and Minimus are scenery here.
+  // The seated Sol Heredit, his gib, and Minimus are scenery here.
   const npc = event.attacker?.__colosseumRun ? event.attacker : event.target;
-  if (npc === run.sol || npc === run.minimus) event.allow = false;
+  if (npc === run.sol || npc === run.minimus || npc === run.solGib) event.allow = false;
 }
 
 module.exports = function registerColosseumArena(api) {

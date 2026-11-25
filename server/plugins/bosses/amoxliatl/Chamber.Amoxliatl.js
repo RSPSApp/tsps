@@ -57,7 +57,7 @@ function areaClass() {
      */
     postLeave(mobile, logout) {
       const player = mobile.isPlayer?.() && this.session?.player === mobile.getAsPlayer() ? mobile.getAsPlayer() : null;
-      if (player && logout) player.setLocation(Common.toLocation(Common.data.door.outside));
+      if (player && logout) player.setLocation(this.session.outside());
       if (player) this.session.end();
       super.postLeave(mobile, logout);
     }
@@ -139,10 +139,18 @@ class Session {
     this.end();
   }
 
+  /** Where a logout is saved: outside the door, or where the quest banishes a player who has already won. */
+  outside() {
+    return Common.toLocation(this.banished ? Common.data.questEnd.outside : Common.data.door.outside);
+  }
+
   end() {
     if (this.ended) return;
     this.ended = true;
     sessions.delete(this.player);
+    // questEnd held the player from the 0 HP tick; give it back unless something else took it since.
+    const movement = this.player.getMovementQueue();
+    if (this.banished && movement.getBlockMovementGeneration() === this.holdGeneration) movement.setBlockMovement(false);
     this.fight?.stop();
     if (this.echoToken) {
       this.player.getCombat().reset();
@@ -221,13 +229,17 @@ function validateEcho(player, token) {
 function logout({ player }) {
   const session = sessionOf(player);
   if (!session) return;
-  if (player.getArea() === session.area) player.setLocation(Common.toLocation(Common.data.door.outside));
+  if (player.getArea() === session.area) player.setLocation(session.outside());
   session.end();
 }
 function playerDeath({ player }) { sessionOf(player)?.end(); }
 function shutdown() { for (const session of [...sessions.values()]) logout({ player: session.player }); }
 
-/** The quest reuses the same chamber and hazards with the cache's 400-HP guardian. */
+/**
+ * The quest reuses the same chamber and hazards with the cache's 400-HP guardian. As captured
+ * (R1140, R1695), her track comes on with the move in and she is there 2 ticks later, as the fade
+ * comes back.
+ */
 function questFight(request) {
   if (sessionOf(request.player)) return;
   const session = new Session(request.player, true);
@@ -236,10 +248,13 @@ function questFight(request) {
   Common.travel(request.player, () => {
     if (session.ended) return;
     session.area.enter(request.player);
+    const { music, spawn } = Common.data;
     request.player.moveTo(session.tile([1371, 4511, 0]));
     request.player.setAttribute(Common.INSIDE_ATTRIBUTE, true);
     session.placeExits();
-    Common.later(Common.data.spawn.afterArrivalTicks, () => session.spawnBoss());
+    Common.api.emitCustomEvent("music:unlock-track", { player: request.player, trackId: music });
+    request.player.getPacketSender().sendSong(music);
+    Common.later(spawn.questAfterArrivalTicks, () => session.spawnBoss());
   });
 }
 

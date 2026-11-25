@@ -327,11 +327,17 @@ module.exports = function ruins(shared) {
     api.emitCustomEvent('amoxliatl:quest-fight', request);
     if (!request.handled) { player.moveTo(new Location(1602, 9631, 0)); player.sendMessage('The guardian is unavailable. Please try again.'); }
   }
+  /** Her 0 HP tick: the quest moves on there, as captured, so a logout before the teleport keeps the win. */
+  function won({ player }) {
+    if (stage(player) === S.FIGHT) advance(player, S.BANISHED);
+  }
   function defeated({ player }) {
-    if (stage(player) !== S.FIGHT) return;
-    advance(player, S.BANISHED);
+    won({ player });
+    if (stage(player) !== S.BANISHED) return;
     player.moveTo(new Location(1615, 3211, 0));
-    play(player, 13686, V.BANISH, steps => steps.filter(step => step.type !== 'action'));
+    // Her "Zema ami miki!" and the teleport were the chamber's (Amoxliatl's questEnd); as captured,
+    // the banishment line comes a tick after the player lands.
+    Scenes.later(player, 1, () => play(player, 13686, V.BANISH, steps => steps.filter(step => step.type !== 'action' && step.presentation !== 'overhead')));
   }
   function cleanupHostiles(player) {
     for (const npc of hostiles.get(player) ?? []) if (npc.isRegistered()) api.removeNpc(npc);
@@ -359,6 +365,7 @@ module.exports = function ruins(shared) {
     api.onObjectInteraction('Chain', { Pull: obstacle, 'Climb-up': obstacle, 'Climb-down': obstacle });
     api.onObjectInteraction('Frozen door', { Inspect: frozenDoor });
     api.onObjectInteraction('Door', { 'Pass-through': frozenDoor });
+    api.onCustomEvent('amoxliatl:quest-won', won);
     api.onCustomEvent('amoxliatl:quest-defeated', defeated);
   }
   return { register, enter, resume, syncVarbits, selectVariant, answerCondition, handleLine, handleAction, logout, reset: player => player.setAttribute(STATE_ATTRIBUTE, null) };

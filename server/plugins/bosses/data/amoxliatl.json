@@ -38,6 +38,7 @@
     "tile": [1362, 4510, 0],
     "direction": "EAST",
     "afterArrivalTicks": 5,
+    "questAfterArrivalTicks": 2,
     "anim": 11527,
     "say": "Euat! You are not welcome here!",
     "firstAttackTicks": 4,
@@ -74,26 +75,28 @@
     "hurtSound": 9711
   },
   "spikes": {
-    "about": "Map animations on tiles around the player, as captured: the player's own tile about 3 in 4, the tiles next to it about 2 in 3, the rest out to 6 about 1 in 4. 3 ticks after the attack they come up: typeless damage to a player still on one (captured 10 and 6; 6-10 as the Wiki gives the pools).",
+    "about": "Map animations on tiles around the player, as captured: the player's own tile about 3 in 4, the tiles next to it about 2 in 3, the rest out to 6 about 1 in 4. 3 ticks after the attack they come up: typeless damage to a player still on one, 6-16 (R1140: 92 spike hits, from 6 to 16).",
     "spotanim": 2942,
     "reach": 6,
     "chance": [0.77, 0.64, 0.28],
     "damageTicks": 3,
-    "damage": [6, 10]
+    "damage": [6, 16]
   },
   "pools": {
-    "about": "An icy pool on the player's tile 3 ticks after each standard attack (captured); standing on one deals 6-10 a tick (Wiki). They stay until she dies, then go with a puff (captured).",
+    "about": "An icy pool on the player's tile 3 ticks after each standard attack (captured); standing on one deals 6-10 a tick (Wiki; R1140's pool hits are 6-10), each with sound 4464 (R1140). They stay until she dies, then go with a puff (captured).",
     "id": 54279,
     "shape": 10,
     "afterTicks": 3,
     "damage": [6, 10],
+    "hurtSound": 4464,
     "sound": { "id": 9726, "delay": 30, "radius": 30, "attenuation": 30 },
     "clearSpotanim": 2938
   },
   "specials": {
-    "about": "After every 2-4 standard attacks a special; the first at random, then in turn (Wiki). From the path she only has room for Icicle Crash.",
+    "about": "After every 2-4 standard attacks a special; the first at random, then in turn (Wiki). From the path she only has room for Icicle Crash. Her next attack comes 9 ticks after Icicle Crash and 7 after Unstable Ice (R1140: 38 of 38 and 40 of 40; R1695 the same).",
     "afterAttacks": [2, 4],
-    "order": ["icicle", "unstableIce"]
+    "order": ["icicle", "unstableIce"],
+    "nextAttackTicks": { "icicle": 9, "unstableIce": 7 }
   },
   "icicle": {
     "anim": 11531,
@@ -114,7 +117,7 @@
       "shatterHealSplat": 6
     },
     "count": [1, 4],
-    "reach": 4,
+    "reach": 5,
     "projectile": { "id": 2936, "start": 50, "end": 90, "startHeight": 112, "endHeight": 0, "angle": 255, "progress": 83 },
     "impactSpotanim": 2935,
     "spawnTicks": 3,
@@ -123,8 +126,25 @@
     "breakAnim": 11035,
     "breakSound": { "id": 9721, "radius": 12, "attenuation": 6 },
     "removeAfterBreakTicks": 1,
+    "shatterWindupAnim": 11534,
+    "shatterWindupTicks": 2,
     "shatterTicks": 15,
     "shatterHeal": [16, 25]
+  },
+  "questEnd": {
+    "about": "The quest's guardian doesn't die (R1140 ticks 7686-7693, R1695 4926-4934): at 0 HP she becomes 13687 with 11531 and 'Zema ami miki!', her pools go, and she throws one last icicle at the player; 3 ticks later the player's teleport (4018, 2754) and her death (11532), the sound and the HP HUD going (hpbar_hud_npc -1) a tick after, and the player is out 6 ticks after the 0 HP. The quest varbit moves on (72 to 74) and the player is held on the 0 HP tick; a logout before the teleport is saved at `outside`, where the quest lands the player (R1140 tick 7692).",
+    "inactive": 13687,
+    "anim": 11531,
+    "say": "Zema ami miki!",
+    "projectile": { "id": 2936, "start": 50, "end": 90, "startHeight": 112, "endHeight": 25, "angle": 100, "progress": 83 },
+    "teleportTicks": 3,
+    "playerAnim": 4018,
+    "playerSpotanim": 2754,
+    "deathAnim": 11532,
+    "soundTicks": 4,
+    "sound": 7928,
+    "outTicks": 6,
+    "outside": [1615, 3211, 0]
   },
   "kill": {
     "about": "As captured: the pools go on the killing blow; 2 ticks later (deathTicks) the kill count, the fight's length and the loot on her middle tile.",

@@ -87,7 +87,7 @@ test("unstable ice lands on free floor near the player: not on them, her, the pa
   assert.ok(tiles.length > 0);
   for (const [x, y] of tiles) {
     assert.ok(onFloor(x, y), `${x},${y} on the floor`);
-    assert.ok(Math.max(Math.abs(x - 1366), Math.abs(y - 4511)) <= 4, `${x},${y} within 4`);
+    assert.ok(Math.max(Math.abs(x - 1366), Math.abs(y - 4511)) <= 5, `${x},${y} within 5`);
     assert.ok(!(x === 1366 && y === 4511), "not the player's tile");
     assert.ok(!(x >= 1362 && x <= 1364 && y >= 4510 && y <= 4512), `${x},${y} not under her`);
     assert.ok(x < 1372, `${x},${y} not on the path`);
@@ -151,7 +151,7 @@ function castIcicle(prayers, session = {}) {
 function trackUnstableIce(t, { px, py, random, session = {} }) {
   const api = Common.api;
   const fight = fightAt(px, py);
-  const messages = [], formed = [], healed = [], splats = [], sounds = [], removed = [];
+  const messages = [], formed = [], healed = [], splats = [], sounds = [], removed = [], bossAnims = [];
   const poolRegistrations = [];
   // Use Fight's actual event queue and pool placement. Record the object and NPC boundaries.
   Object.assign(fight, {
@@ -176,7 +176,7 @@ function trackUnstableIce(t, { px, py, random, session = {} }) {
   t.after(() => Common.init(api));
   Object.assign(fight.boss, {
     getCombat: () => ({ getLastAttack: () => ({ reset() {} }) }),
-    performAnimation() {},
+    performAnimation: (animation) => bossAnims.push(animation.id),
     heal: (amount) => healed.push(amount),
     showHitsplat: (amount, type) => splats.push([amount, type]),
   });
@@ -207,7 +207,7 @@ function trackUnstableIce(t, { px, py, random, session = {} }) {
     for (let tick = 0; tick < ticks; tick++) Fight.prototype.process.call(fight);
   });
   withRandom([random], () => UnstableIce.launch(fight));
-  return { fight, advance, messages, formed, healed, splats, sounds, removed, poolRegistrations };
+  return { fight, advance, messages, formed, healed, splats, sounds, removed, poolRegistrations, bossAnims };
 }
 
 test("Unstable Ice sends the recorded cyan spam line", (t) => {
@@ -216,7 +216,7 @@ test("Unstable Ice sends the recorded cyan spam line", (t) => {
 });
 
 test("intact Unstable Ice shatters at +14 with healing and 3x3 pools, and disappears at +15", (t) => {
-  const { fight, advance, formed, healed, splats, sounds, removed, poolRegistrations } = trackUnstableIce(t, {
+  const { fight, advance, formed, healed, splats, sounds, removed, poolRegistrations, bossAnims } = trackUnstableIce(t, {
     px: 1362, py: 4515, random: 0.4,
   });
   advance(2);
@@ -237,7 +237,13 @@ test("intact Unstable Ice shatters at +14 with healing and 3x3 pools, and disapp
   const iceBefore = fight.pools.get(key(...alreadyIced));
   poolRegistrations.length = 0;
   sounds.length = 0;
-  advance(13);
+  bossAnims.length = 0;
+  advance(11);
+  assert.deepEqual(bossAnims, []);
+  // R1140: her wind-up 2 ticks before the shatter.
+  advance(1);
+  assert.deepEqual(bossAnims, [11534]);
+  advance(1);
   assert.ok(formed.every((block) => block.animation === 11536 && block.registered));
   assert.deepEqual([healed, splats, poolRegistrations, removed], [[], [], [], []]);
   assert.equal(fight.stats.shattered, undefined);
@@ -358,25 +364,120 @@ test("the spikes hurt a player still on one when they come up, not one who stepp
   const spiked = new Set([key(1365, 4511), key(1366, 4511)]);
   Fight.prototype.spikesErupt.call(fightOn(1365, 4511), spiked);
   assert.equal(hits.length, 1);
-  assert.ok(hits[0] >= 6 && hits[0] <= 10, `${hits[0]}`);
+  assert.ok(hits[0] >= 6 && hits[0] <= 16, `${hits[0]}`);
   Fight.prototype.spikesErupt.call(fightOn(1365, 4513), spiked);
   assert.equal(hits.length, 1, "stepped off: no damage");
 });
 
-test('the quest guardian ends its chamber without regular loot, kill counts, personal bests or achievements', () => {
-  assert.deepEqual(require('../data/definitions/npc-drops.json').npcs['13686'].tables, []);
-  let death, ended = false, hidden = false;
-  require('../plugins/bosses/amoxliatl/Kills.Amoxliatl')({
-    persistAttribute() {}, onNpcBeforeDeath() {}, onNpcDeath(handler) { death = handler; },
+test("her next attack comes 9 ticks after Icicle Crash and 7 after Unstable Ice", (t) => {
+  const launch = UnstableIce.launch;
+  t.after(() => { UnstableIce.launch = launch; });
+  UnstableIce.launch = () => {};
+  const delays = [];
+  const fight = {
+    attacks: 3, nextSpecial: "icicle", rollAttacksBeforeSpecial: () => 2,
+    onPath: () => false, playerTile: () => [1365, 4511], icicleCrash() {},
+    boss: { getCombat: () => ({ setAttackDelay: (ticks) => delays.push(ticks) }) },
+  };
+  assert.deepEqual(Fight.prototype.special.call(fight), []);
+  Fight.prototype.special.call(fight);
+  assert.deepEqual(delays, [9, 7]);
+});
+
+test("each tick on an icy pool hurts with the pool's sound", () => {
+  const hits = [], sounds = [];
+  const fight = {
+    pools: new Map([[key(1365, 4511), {}]]), playerTile: () => [1365, 4511],
+    player: { getHitpoints: () => 99, getPacketSender: () => ({ sendSoundEffect: (id) => sounds.push(id) }) },
+    hurtPlayer: (damage) => hits.push(damage),
+  };
+  Fight.prototype.poolDamage.call(fight);
+  assert.equal(hits.length, 1);
+  assert.ok(hits[0] >= 6 && hits[0] <= 10);
+  assert.deepEqual(sounds, [4464]);
+  fight.playerTile = () => [1366, 4511];
+  Fight.prototype.poolDamage.call(fight);
+  assert.deepEqual(sounds, [4464], "off the pool: nothing");
+});
+
+test("the quest's guardian is just there: no rise and no line", (t) => {
+  const api = Common.api;
+  t.after(() => Common.init(api));
+  const shown = [];
+  Common.init({ ...api, emitCustomEvent: (name) => shown.push(name) });
+  const seen = [];
+  const fight = {
+    session: { quest: true }, core: { Animation: TestAnimation, ChatType },
+    player: { getPacketSender: () => ({ sendTypedMessage: () => seen.push("message") }) },
+    boss: {
+      performAnimation: () => seen.push("anim"), forceChat: () => seen.push("say"),
+      getHitpoints: () => 400, getMaxHitpoints: () => 400, getId: () => 13686,
+      getCombat: () => ({ attack() {}, setAttackDelay: (ticks) => seen.push(["delay", ticks]) }),
+    },
+  };
+  Fight.prototype.start.call(fight);
+  assert.deepEqual(seen, [["delay", 4]]);
+  assert.deepEqual(shown, ["boss-hud:show"]);
+  assert.equal(Common.data.spawn.questAfterArrivalTicks, 2);
+});
+
+test("the quest's guardian banishes at 0 HP instead of dying", (t) => {
+  const api = Common.api;
+  const tasks = [];
+  const taskManager = { submit(task) { task.setRunning(true); tasks.push(task); } };
+  const log = [];
+  class TestGraphic { constructor(id) { this.id = id; } }
+  Common.init({
+    ...api,
+    core: { ...Common.core, Task, TaskManager: taskManager, Animation: TestAnimation, Graphic: TestGraphic, Projectile: TestProjectile, ChatType },
+    emitCustomEvent: (name, payload) => log.push([name, payload.player === player]),
+  });
+  t.after(() => Common.init(api));
+  let beforeDeath, death;
+  require("../plugins/bosses/amoxliatl/Kills.Amoxliatl")({
+    persistAttribute() {}, onNpcBeforeDeath(handler) { beforeDeath = handler; }, onNpcDeath(handler) { death = handler; },
     onCustomEvent() {}, onPlayerLogin() {},
   });
-  emitted.length = 0;
-  const actor = {};
-  death({ npc: { __amoxliatlFight: { stopped: false, player: actor,
-    session: { quest: true, end() { ended = true; } }, hideHud() { hidden = true; },
-  } } });
-  assert.ok(ended && hidden);
-  assert.deepEqual(emitted, [{ name: 'amoxliatl:quest-defeated', payload: { player: actor } }]);
+  let tick = 0;
+  const at = (what) => log.push([tick, what]);
+  const combat = (who) => ({ reset: () => at(`${who} combat reset`), getHitQueue: () => ({ clear() {} }) });
+  const player = {
+    isRegistered: () => true, getLocation: () => new Location(1365, 4511, 0), getCombat: () => combat("player"),
+    getMovementQueue() {
+      const queue = { reset: () => queue, setBlockMovement: (blocked) => { at(`held ${blocked}`); return queue; }, getBlockMovementGeneration: () => 1 };
+      return queue;
+    },
+    performAnimation: (a) => at(`player anim ${a.id}`), performGraphic: (g) => at(`player spot ${g.id}`),
+    getPacketSender: () => ({
+      sendTypedMessage: (type, text, from) => at(`${type} ${from}|${text}`),
+      sendSoundEffect: (id) => at(`sound ${id}`),
+    }),
+  };
+  const boss = {
+    getLocation: () => new Location(1362, 4510, 0), getCombat: () => combat("boss"), getDefinition: () => ({ getName: () => "Amoxliatl" }),
+    setHitpointsLocked: (locked) => at(`locked ${locked}`), setNpcTransformationId: (id) => at(`becomes ${id}`),
+    setPositionToFace() {}, performAnimation: (a) => at(`boss anim ${a.id}`), forceChat: (text) => at(`says ${text}`),
+  };
+  const session = { quest: true, ended: false, area: null, end() { this.ended = true; at("chamber ends"); } };
+  const fight = { session, player, boss, over: false, died() { this.over = true; at("ice goes"); }, hideHud: () => at("hud hidden") };
+  boss.__amoxliatlFight = fight;
+  const event = { npc: boss, preventDeath: false };
+  beforeDeath(event);
+  assert.equal(event.preventDeath, true);
+  const again = { npc: boss, preventDeath: false };
+  beforeDeath(again);
+  assert.equal(again.preventDeath, true, "still not dying");
+  death({ npc: boss });
+  for (tick = 1; tick <= 6; tick++) tasks.forEach((task) => task.isRunning() && task.tick());
+  assert.deepEqual(log, [
+    [0, "held true"], ["amoxliatl:quest-won", true],
+    [0, "ice goes"], [0, "locked true"], [0, "boss combat reset"], [0, "player combat reset"], [0, "becomes 13687"],
+    [0, "boss anim 11531"], [0, "says Zema ami miki!"], [0, `${ChatType.NPC_SAY} Amoxliatl|Zema ami miki!`],
+    [3, "player anim 4018"], [3, "player spot 2754"], [3, "boss anim 11532"],
+    [4, "sound 7928"], [4, "hud hidden"],
+    [6, "chamber ends"], ["amoxliatl:quest-defeated", true],
+  ]);
+  assert.equal(session.banished, true);
 });
 
 test('Echo completes once without normal kill, best-time, achievement or respawn credit', () => {

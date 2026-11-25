@@ -70,6 +70,7 @@ function magic(fight) {
   fight.at(spec.projectileTicks, () => {
     if (fight.stopped || !muspah.isRegistered()) return;
     Hits.projectile(fight.session.area, muspah, player, spec.projectile);
+    Common.sound(player, spec.projectileSound);
   });
   fight.at(spec.hitDelay, () => {
     player.performGraphic(Common.graphic(spec.impact.spot, { height: spec.impact.height }));

@@ -60,8 +60,13 @@ function distanceToFootprint(npc, at) {
   return Math.max(dx, dy);
 }
 
-/** The special's damage at `tiles` from the Echo (recorded: 13 a tile from 11, 9 at least; Wiki: 130 at most). */
+/**
+ * The special's damage at `tiles` from the Echo: recorded from 4 tiles out (13 a tile from 11, 9 at
+ * least); nearer, where nothing is recorded, the Wiki's (130 underneath, 117 adjacent, 13 less a tile).
+ */
 function specialDamage(tiles) {
+  const near = ECHO.special.nearDamage[String(tiles)];
+  if (near !== undefined) return near;
   const { perTile, fromTiles, max, min } = ECHO.special.damage;
   return Math.min(max, Math.max(min, perTile * (fromTiles - tiles)));
 }
@@ -245,6 +250,8 @@ class EchoFight {
     this.player.getPacketSender().sendAreaSound(impact.id, at.getX(), at.getY(), at.getZ(), 1, 0, impact.range);
     // Recorded: either style misses about one shot in seven, whatever the Echo's levels; a hit is 48-62.
     const hit = new PendingHit(this.boss, this.player, styleMethod(style), { delay: 0, rollAccuracy: false });
+    // Wiki: only the special triggers Vengeance.
+    hit.setTriggersVengeance?.(false);
     if (this.random() < ECHO.orbs.missChance) {
       hit.markProtectionBypassed();
       for (const part of hit.getHits()) {

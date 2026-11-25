@@ -69,6 +69,7 @@ function setup({ hp = 1200, playerAt = [2376, 9452], prayer = null } = {}) {
     updateTotalDamage() { this.total = this.parts.reduce((a, p) => a + p.damage, 0); }
     setTotalDamage(d) { this.parts[0].damage = d; this.total = d; }
     markProtectionBypassed() { this.bypass = true; }
+    setTriggersVengeance(v) { this.vengeance = v; return this; }
     isAccurate() { return true; }
   }
   const projectile = (args) => {
@@ -151,6 +152,7 @@ test("a shot lands 5 ticks after it is fired: a pool and the right prayer decide
   assert.deepEqual(c.log.filter((e) => e[0] === 11 && e[1] === "hit").map((e) => e.slice(2)), [["ranged", 62]]);
   assert.ok(c.log.some((e) => e[0] === 11 && e[1] === "area-sound" && e[2] === 1418 && e[3] === 4));
   assert.equal(c.hits[0][1].minHit, 48, "a recorded hit is 48 to 62");
+  assert.equal(c.hits[0][1].vengeance, false, "Wiki: only the special triggers Vengeance");
   // About one shot in seven misses, either style (12 of 88 recorded), whatever its levels.
   const d = setup({ playerAt: [2370, 9450], prayer: "magic" });
   d.fight.random = () => 0.1;
@@ -160,7 +162,8 @@ test("a shot lands 5 ticks after it is fired: a pool and the right prayer decide
 });
 
 test("the special: damage fixed at launch by distance, its flight as recorded, lands and the Echo prays against the last style", () => {
-  for (const [tiles, damage, cycles] of [[0, 130, 60], [4, 91, 60], [5, 78, 60], [8, 39, 86], [9, 26, 96], [10, 13, 106], [11, 9, 116], [12, 9, 126]]) {
+  // Recorded from 4 tiles out; nearer, the Wiki's (130 underneath, 117 adjacent, 13 less a tile).
+  for (const [tiles, damage, cycles] of [[0, 130, 60], [1, 117, 60], [2, 104, 60], [3, 91, 60], [4, 91, 60], [5, 78, 60], [8, 39, 86], [9, 26, 96], [10, 13, 106], [11, 9, 116], [12, 9, 126]]) {
     assert.equal(EchoFight.specialDamage(tiles), damage, `damage at ${tiles}`);
     assert.equal(EchoFight.specialFlightCycles(tiles), cycles, `flight at ${tiles}`);
   }

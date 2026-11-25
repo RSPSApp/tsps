@@ -160,9 +160,24 @@ rules. Echo requires base 93 Slayer but no assignment.
 `plugins/bosses/thermonuclear/EchoFight.ThermonuclearSmokeDevil.js` runs the fight from
 [rsprox.net 1161](https://rsprox.net/download/1161) (rev 237.1, 31 Echo kills); every id, tick and
 number is in `data/thermonuclear-smoke-devil.json` (`echo`). The [Wiki](https://oldschool.runescape.wiki/w/Thermonuclear_smoke_devil_(Echo))
-describes the same fight; where the two differ the recording is followed. The Echo stands on
-(2362, 9448), in the middle of its pools, and never moves; the normal boss's attack turn does nothing
-for it. Ticks below count from its spawn.
+describes the same fight; where the two differ the recording is followed, and where the recording is
+silent the Wiki is (marked below). The Echo stands on (2362, 9448), in the middle of its pools, and
+never moves; the normal boss's attack turn does nothing for it.
+
+**Entering** (29 recorded entries, ticks from the orb's Yes): the screen fades and "You enter the
+Smokey Cave." is sent at once, the minimap goes a tick later, the player is moved in at 2 (29 of 29),
+the screen fades back in at 3 and the Echo appears at 4. It appeared at 4 in 16 entries, at 5 in 12
+and 6 in 1, with no cause found; the commonest is used. Live also shows that line in a message box
+for a tick; only the chat line is sent here.
+
+**Respawning**: with the player still in the room, the next Echo appears 25 ticks after the last one
+dies (6 of 6 recorded). Each is its own Echo encounter: a new claim (the orb still carried, its own
+kill and timer).
+
+**Aggression**: room-wide. The first shot comes 6 ticks after the Echo appears wherever the player
+stands in the room (34 of 34, one from 10 tiles away).
+
+Ticks below count from its spawn.
 
 | Tick | What happens |
 | --- | --- |
@@ -190,9 +205,11 @@ off-pool shots), so the miss is a flat chance rather than an accuracy roll on th
 (its magic level is 15). Shots still in flight when it dies never land.
 
 **The special** is typeless, its damage and flight fixed when it is cast: 13 a tile of Chebyshev
-distance from the Echo's footprint, 13 x (11 - tiles), at least 9 and at most 130 (recorded at 4-12
-tiles: 91, 78, 39, 26, 13, 9, 9; the Wiki's 130 underneath). Its flight is 10 cycles a tile, 60 at
-least; it lands round(cycles / 30) ticks later (2 to 4 recorded).
+distance from the Echo's footprint, 13 x (11 - tiles), at least 9 (recorded at 4-12 tiles: 91, 78,
+39, 26, 13, 9, 9). Nearer, where nothing is recorded, the Wiki's figures: 130 underneath, 117
+adjacent, then 104 and 91. Its flight is 10 cycles a tile, 60 at least; it lands round(cycles / 30)
+ticks later (2 to 4 recorded). Only the special triggers Vengeance (Wiki); the shots are marked not
+to (`PendingHit.setTriggersVengeance`).
 
 **Its prayer**: as the special lands the Echo prays against the style of the last of the player's
 hits to land on it (head icon 1 ranged, 2 magic, 0 melee), and that style does a quarter of its
@@ -206,12 +223,19 @@ fits fewer.
 The Slayer facemask rule's unprotected hit (15 for this boss) no longer lowers a bigger hit, so a
 bare face takes the Echo's shots whole (`Equipment.Slayer.js`).
 
+## From the Wiki, not the recording
+
+- The special closer than 4 tiles: 130 underneath, 117 adjacent, 13 less a tile.
+- Vengeance: triggered only by the special.
+- Its prayer against melee: the Wiki's rule covers every style; only ranged and magic were recorded
+  against it, and the quarter damage is the recorded magic figure.
+- The fight without a facemask: no capture. The normal boss's facemask rule (an unprotected hit of 15
+  and stat drains) applies, never lowering a bigger hit.
+
 ## Not verified
 
-- Damage and flight of the special closer than 4 tiles (none recorded; 130 at most, from the Wiki).
-- The fight without a facemask (no capture).
-- Prayer reduction for melee (only ranged and magic were recorded against the Echo's prayer).
-- The enrage's one recorded exception: a set started at 630 HP stayed normal.
+- The enrage's one recorded exception: a set decided at 630 HP stayed normal.
+- Why the Echo sometimes appears a tick later on entry.
 
 The central Echo service owns rewards/progression and suppresses normal orb rolls.
 The adapter completes once, never respawns, and clears its actors/pending damage

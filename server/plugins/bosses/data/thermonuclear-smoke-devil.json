@@ -45,6 +45,17 @@
     "$comment": "Leagues VI Echo Thermonuclear smoke devil (EchoFight.ThermonuclearSmokeDevil.js, docs/thermonuclear-smoke-devil.md). Everything here is from rsprox.net 1161 (rev 237.1, 31 Echo kills): ticks count from the Echo's spawn tick or from the event named, as recorded; spotanims and sequences are gameval names. Damage figures are the recording's; the Wiki's (Thermonuclear smoke devil (Echo)) differ where noted in the doc.",
     "spawnTile": [2362, 9448, 0],
     "spawnSound": 10072,
+    "entry": {
+      "$comment": "Ticks from the orb's Yes (29 recorded entries): the screen fades and the message box opens at once, the minimap goes a tick later, the player is moved in at 2 (29 of 29), the screen fades back in at 3 and the Echo appears at 4 (16 of 29; 5 in 12, 6 in 1, cause not found: the commonest is used).",
+      "message": "You enter the Smokey Cave.",
+      "minimapOffTicks": 1,
+      "moveTicks": 2,
+      "fadeInTicks": 3,
+      "spawnTicks": 4,
+      "overlayCloseTicks": 5
+    },
+    "respawnTicks": 25,
+    "respawn$comment": "With the player still in the room, the next Echo appears 25 ticks after the last one dies (6 of 6 recorded). Its first shot comes 6 ticks after it appears wherever the player is in the room (34 of 34, one from 10 tiles away): it attacks room-wide.",
     "pools": {
       "tiles": [[2368, 9451], [2368, 9448], [2360, 9453], [2362, 9454], [2365, 9454], [2367, 9453], [2360, 9446], [2362, 9445], [2367, 9446], [2365, 9445], [2359, 9448], [2359, 9451]],
       "firstSpawnTicks": 3,
@@ -92,6 +103,9 @@
       "launchAreaSound": { "id": 5200, "range": 15 },
       "landSound": 5288,
       "damage": { "perTile": 13, "fromTiles": 11, "max": 130, "min": 9 },
+      "nearDamage": { "0": 130, "1": 117, "2": 104, "3": 91 },
+      "nearDamage$comment": "Under 4 tiles nothing is recorded: the Wiki's figures (130 underneath, 117 adjacent, 13 less a tile).",
+      "vengeance$comment": "Wiki: Vengeance is triggered only by the special; the shots do not trigger it.",
       "poolsBackTicks": 14,
       "nextSetTicks": 18
     },

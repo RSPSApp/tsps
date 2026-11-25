@@ -492,7 +492,7 @@ test('the blighted teleport sack only pays in the Wilderness and Bounty Hunter (
 // Kalphite's 4 in 227/01864.txt rebounds 3.
 
 let reboundCycle = 1_000_000;
-function reboundFight(npcId, npcIndex) {
+function reboundFight(npcId, npcIndex, { triggersVengeance = true } = {}) {
   const { CombatFactory } = require("../dist/game/content/combat/CombatFactory");
   const { PendingHit } = require("../dist/game/content/combat/hit/PendingHit");
   const { CombatType } = require("../dist/game/content/combat/CombatType");
@@ -514,11 +514,25 @@ function reboundFight(npcId, npcIndex) {
   npc.setHitpoints(500);
   const hit = new PendingHit(npc, player, { type: () => CombatType.MELEE, accuracyDefenceType: () => undefined },
     { damage: 40, rollAccuracy: false, experience: false, handleAfterHitEffects: false });
+  if (!triggersVengeance) hit.setTriggersVengeance(false);
   CombatFactory.executeHit(hit);
   player.getCombat().getHitQueue().process(++reboundCycle);
   npc.getCombat().getHitQueue().process(++reboundCycle);
   return { player, npc, done: () => { player.setRegistered(false); npc.setRegistered(false); } };
 }
+
+test("a hit content marks as not triggering Vengeance lands without spending it (the Echo Thermonuclear smoke devil's shots)", () => {
+  const { NpcIdentifiers } = require("../dist/util/NpcIdentifiers");
+  const { player, npc, done } = reboundFight(NpcIdentifiers.MAN, 3120, { triggersVengeance: false });
+  try {
+    assert.equal(player.getHitpoints(), 99 - 40, "the hit lands");
+    assert.equal(player.hasVengeanceReturn(), true, "vengeance is kept for a hit that triggers it");
+    assert.notEqual(player.getForcedChat(), "Taste vengeance!");
+    assert.equal(npc.getHitpoints(), 500, "nothing rebounds");
+  } finally {
+    done();
+  }
+});
 
 test("vengeance goes off against a monster immune to recoil but deals it nothing; others take 75%", () => {
   // RecoilImmunity alone: the immunity does not depend on the RingOfRecoil plugin being on.

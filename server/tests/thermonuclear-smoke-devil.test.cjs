@@ -364,16 +364,21 @@ test('Echo entry keeps 93 Slayer but does not require a task, isolates players a
     destroy(){this.destroyed=true;}
     postLeave(){}
   }
+  // The entry and the respawn run on tasks: stepped here a tick at a time.
+  const tasks=[];
+  const tick=(n=1)=>{for(let i=0;i<n;i++)for(const task of tasks.splice(0)){if(task.isRunning()&&task.tick()!==false&&task.isRunning())tasks.push(task);}};
   const echoApi={
-    core:{...core,PrivateArea,Projectile:{centreOf:npc=>npc}},
+    core:{...core,PrivateArea,Projectile:{centreOf:npc=>npc},TaskManager:{submit(task){task.setRunning(true);tasks.push(task);}}},
     registerNpcCombatMethodProvider(){assert.fail('Echo uses the normal devil\'s controller');},
-    spawnNpc(options){const combat=makeCombat();const npc={id:options.id,at:[options.x,options.y,options.z],setFlag(){},getCombat:()=>combat,
+    // Its fight is tested in echo-thermonuclear-smoke-devil.test.cjs: at 0 HP here it stops at once.
+    spawnNpc(options){const combat=makeCombat();const npc={id:options.id,at:[options.x,options.y,options.z],setFlag(){},getCombat:()=>combat,getHitpoints:()=>0,isRegistered:()=>true,
       performGraphic(graphic){npc.graphic=graphic.getId?.()??graphic.id;},performAnimation(animation){npc.animation=animation.getId?.()??animation.id;}};
       spawned.push(npc);return npc;},
     emitCustomEvent(name,event){events.push(name);if(name==='echo-boss:configure')event.configured=true;if(name==='echo-boss:claim')event.token='thermy-'+spawned.length;},
   };
-  const makePlayer=level=>{const combat=makeCombat();return {getSkillManager:()=>({getMaxLevel:()=>level}),setAttribute(){},getCombat:()=>combat,moveTo(){},sendMessage(){},
-    getPacketSender:()=>({sendSoundEffect(){}})};};
+  const makePlayer=level=>{const combat=makeCombat();const p={getSkillManager:()=>({getMaxLevel:()=>level}),setAttribute(){},getCombat:()=>combat,moveTo(to){p.to=[to.getX(),to.getY()];},sendMessage(){},
+    getPrivateArea:()=>p.area,getHitpoints:()=>99,isRegistered:()=>true,getLocation:()=>core.Location?new core.Location(2376,9452,0):null,
+    getPacketSender:()=>({sendSoundEffect(){},sendTypedMessage(type,text){p.said=text;}})};return p;};
   Common.init(echoApi);
   try {
     Echo.start({player:makePlayer(92),boss:'thermonuclear-smoke-devil'});
@@ -382,7 +387,15 @@ test('Echo entry keeps 93 Slayer but does not require a task, isolates players a
     Echo.start({player:a,boss:'thermonuclear-smoke-devil'});
     Echo.start({player:a,boss:'thermonuclear-smoke-devil'});
     Echo.start({player:b,boss:'thermonuclear-smoke-devil'});
-    assert.equal(spawned.length,2);
+    // Recorded (rsprox.net 1161, 29 entries): the fade and "You enter the Smokey Cave." at once, the
+    // move in 2 ticks later (29 of 29), the Echo 2 ticks after that (16 of 29; a tick later in 13).
+    assert.equal(a.said,'You enter the Smokey Cave.');
+    assert.equal(spawned.length,0,'no Echo before the player is in');
+    tick(2);
+    assert.deepEqual(a.to,[2376,9452],'moved in at 2');
+    assert.equal(spawned.length,0);
+    tick(2);
+    assert.equal(spawned.length,2,'the Echoes appear at 4');
     assert.deepEqual(spawned.map(npc=>npc.id),[Common.BOSS_ID,Common.BOSS_ID],'the normal Thermonuclear smoke devil');
     assert.equal(spawned[0].graphic,core.CacheDefinitions.getSpotanimId('leagues_6_lore_dust_devil_spawn_spotanim'),'live\'s Echo spawn spotanim');
     assert.equal(spawned[0].animation,core.CacheDefinitions.getSeqId('lore_lust_devil_spawn'),'live\'s Echo spawn sequence');
@@ -396,6 +409,15 @@ test('Echo entry keeps 93 Slayer but does not require a task, isolates players a
     Echo.death({npc:spawned[0]});Echo.death({npc:spawned[0]});
     assert.equal(events.filter(n=>n==='echo-boss:completed').length,1);
     assert.equal(spawned[0].__thermonuclearEchoSession.fight.stopped,true,'its shots go with it');
+    // Recorded: with the player still in the room, the next Echo appears 25 ticks after the death,
+    // as its own encounter (released and claimed again).
+    tick(24);
+    assert.equal(spawned.length,2,'not before 25 ticks');
+    tick(1);
+    assert.equal(spawned.length,3,'the next Echo');
+    assert.equal(spawned[2].__thermonuclearEchoSession,spawned[0].__thermonuclearEchoSession,'in the same room');
+    assert.equal(events.filter(n=>n==='echo-boss:release').length,1,'the last encounter released');
+    assert.equal(spawned[0].__thermonuclearEchoSession.token,'thermy-2','a new claim for it');
     Echo.end(spawned[0].__thermonuclearEchoSession);
     Echo.end(spawned[1].__thermonuclearEchoSession);
     assert.equal(a.getCombat().cleared,true);

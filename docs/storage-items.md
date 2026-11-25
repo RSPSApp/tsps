@@ -156,7 +156,9 @@ Barbarian Gathering's container in the Demonic Pacts League (Wiki: Knapsack;
   fish barrel's lists, without bark; which ores and bars count as metallic is ours.
 - **Fills itself** while open and not full, and then a full inventory keeps gathering. Its gathering
   is heard from the relics plugin after Hotfoot's processing (`Knapsack.gathering`), so Hotfoot's
-  cooked fish and bars go in as they are (Wiki).
+  cooked fish and bars go in as they are (Wiki). Its `storage:room` answer is for the item it will be
+  handed (Hotfoot's `product`), so a full inventory stops when Hotfoot's cooked fish or bar would be a
+  fourth kind, rather than the catch being lost.
 - **Fill, an item used on it, Open and Close** work as for the other containers.
 - **Check** prints chat lines, as the Forager's pouch's recorded Check does (rsprox 237): "You look in
   your knapsack and see:", then "N x Item" per kind, or "Your knapsack is empty.".

@@ -38,7 +38,8 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   StorageItems.register(PluginManager.createApi("StorageItemsTest"));
   // The relics plugin attaches the Knapsack's gathering (after Hotfoot's processing).
-  Knapsack.gathering(PluginManager.createApi("KnapsackGatheringTest"));
+  // `product` stands in for Hotfoot's: a player marked with `hotfoot` (raw id -> processed id) wears the boots.
+  Knapsack.gathering(PluginManager.createApi("KnapsackGatheringTest"), { product: (player, _skill, id) => player.hotfoot?.get(id) ?? null });
   Smithing.register(PluginManager.createApi("SmithingTest"));
   // The SkillCapes plugin's answer, for a player marked as wearing the Smithing cape.
   PluginManager.createApi("SkillCapesTest").onCustomEvent("skillcape:has-perk", (request) => {
@@ -695,4 +696,19 @@ test("its contents only come out at a bank: the Empty containers button banks th
   assert.equal(Storage.total(player, family("knapsack")), 0);
   assert.equal(player.getBank(0).getAmount(Items.LOGS), 12);
   assert.equal(player.messages.at(-1), Knapsack.MESSAGE.EMPTIED_TO_BANK);
+});
+
+test("with Hotfoot's boots, an open Knapsack's room is judged on the cooked fish it will be handed (review of #6799)", () => {
+  const player = createPlayer([new Item(knapsackOpen(), 1), ...items(Items.BRONZE_DAGGER, 27)]);
+  gather(player, Items.RAW_TUNA, 1);
+  gather(player, Items.LOGS, 1);
+  gather(player, Items.COAL, 1);
+  assert.equal(room(player, Items.RAW_TUNA), true, "without the boots, raw tuna is a kind it holds");
+  player.hotfoot = new Map([[Items.RAW_TUNA, Items.TUNA]]);
+  assert.equal(room(player, Items.RAW_TUNA), false, "with them, it gets cooked tuna: a fourth kind, so no room and the full inventory stops");
+  assert.equal(gather(player, Items.TUNA, 1), 0);
+  const roomy = createPlayer([new Item(knapsackOpen(), 1), ...items(Items.BRONZE_DAGGER, 27)]);
+  roomy.hotfoot = player.hotfoot;
+  gather(roomy, Items.TUNA, 2);
+  assert.equal(room(roomy, Items.RAW_TUNA), true, "cooked tuna held: room for more of it");
 });

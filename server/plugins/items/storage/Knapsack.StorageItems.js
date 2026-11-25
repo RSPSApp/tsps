@@ -40,6 +40,8 @@ const MESSAGE = {
 };
 
 let accepted = null;
+/** What a gather will arrive as, when something changes it first (Hotfoot: `gathering`'s `product`). */
+let productOf = null;
 
 function acceptedIds() {
   if (!accepted) {
@@ -172,10 +174,16 @@ function gather(event) {
   event.stored += Storage.store(event.player, family, event.itemId, left);
 }
 
-/** `storage:room`: a full inventory keeps gathering while an open Knapsack has room. */
+/**
+ * `storage:room`: a full inventory keeps gathering while an open Knapsack has room. Asked about the
+ * raw item, it answers for what it will be handed: with Hotfoot's boots on, the cooked fish or bar,
+ * which may be a kind it has no room for even when the raw one is held.
+ */
 function answerRoom(event) {
-  if (!running() || event.room || !family.accepts(event.itemId) || !carriesOpen(event.player)) return;
-  if (room(event.player, event.itemId, Storage.contents(event.player, family)) > 0) event.room = true;
+  if (!running() || event.room || !carriesOpen(event.player)) return;
+  const id = productOf?.(event.player, event.skill, event.itemId) ?? event.itemId;
+  if (!family.accepts(id)) return;
+  if (room(event.player, id, Storage.contents(event.player, family)) > 0) event.room = true;
 }
 
 module.exports = (api) => {
@@ -187,9 +195,11 @@ module.exports = (api) => {
 
 /**
  * The Knapsack's gathering, attached by the relics plugin after Hotfoot's processing and before its
- * delivery, so Hotfoot's cooked fish and bars go in as they are (Wiki: Knapsack).
+ * delivery, so Hotfoot's cooked fish and bars go in as they are (Wiki: Knapsack). `product(player,
+ * skill, itemId)` says what a gather will arrive as (Hotfoot's), for the room it answers.
  */
-module.exports.gathering = (api) => {
+module.exports.gathering = (api, { product = null } = {}) => {
+  productOf = product;
   api.onCustomEvent(Storage.GATHER_EVENT, gather);
   api.onCustomEvent(Storage.ROOM_EVENT, answerRoom);
 };

@@ -376,14 +376,14 @@ function openOverview(player) {
   const sender = player.getPacketSender();
   sender.sendConfig(VARP.CURRENT_PARTY, state.current ? 0 : -1);
   sender.sendInterface(INTERFACE.PARTY_OVERVIEW);
+  sendPartyList(player);
   // The list's buttons and rows are pause buttons (resume_pausebutton), as OSRS sets them;
   // as op1 clicks the script-built rows had nothing to click.
   sender.sendInterfaceFlagsRange(OVERVIEW_BUTTONS_UID, 0, 2, EVENT.CONTINUE);
   sender.sendInterfaceFlagsRange(OVERVIEW_PARTY_LIST_UID, 0, Shared.MAX_LOBBY_PARTIES - 1, EVENT.CONTINUE);
-  sendPartyList(player);
 }
 
-/** One row per recruiting party: leader|members...|size|kc|invocations|level|mode|age. */
+/** Recruiting rows are leader|members...|size|kc|invocations|level|mode|age. A raid holds a blank row. */
 function sendPartyList(player) {
   const state = Parties.stateOf(player);
   const friendsOnly = player.getPacketSender().getVarbit?.(VARBIT.FRIENDS_ONLY) === 1;
@@ -392,7 +392,7 @@ function sendPartyList(player) {
   const parties = Parties.lobbyParties.filter((party) => !friendsOnly || party.players.some((member) => isFriend(player, member)));
   for (let index = 0; index < Shared.MAX_LOBBY_PARTIES; index++) {
     const party = parties[index];
-    if (!party) {
+    if (!party || party.insideRaid()) {
       sender.sendClientScript(SCRIPT.PARTY_LIST_ROW, index, "");
       continue;
     }
@@ -403,7 +403,7 @@ function sendPartyList(player) {
     fields.push(party.players.length, party.settings.kcRequirement, party.settings.activeCount,
       party.settings.raidLevel, party.settings.mode, Shared.cycle() - party.createdAt);
     sender.sendClientScript(SCRIPT.PARTY_LIST_ROW, index, fields.join("|"));
-    state.listed.push(party);
+    state.listed[index] = party;
   }
 }
 
@@ -483,12 +483,13 @@ function selectParty(event) {
   const { player } = event;
   const state = Parties.stateOf(player);
   const party = state.listed[slotOf(event)];
-  if (!party) return;
+  // A raid can start after this viewer opened the list. Its old row no longer opens a panel.
+  if (!party || party.insideRaid()) return;
   if (state.current?.insideRaid()) {
     Shared.statement(player, "You should join your party in the tombs.");
     return;
   }
-  if (!Parties.listed(party) || party.insideRaid()) {
+  if (!Parties.listed(party)) {
     Shared.statement(player, "That party is no longer recruiting.");
     return;
   }

@@ -208,6 +208,8 @@ The recorded handover is one Move up on the second row, from the old leader's cl
 
 Scripts 6722 and 6727 send member and applicant rows with plain names and no trailing pipe. Script 6601 closes the white highlight around the viewer's party leader's name and omits the trailing pipe. Panel openings send preset events on 774:98 to each viewer. The leader alone can use them. [227/1753, ticks 10742–10763](https://rsprox.net/download/1753) · [227/581, ticks 118–166 and 424](https://rsprox.net/download/581) · [227/1759, ticks 12–15 and 5625](https://rsprox.net/download/1759)
 
+Each opening of the Grouping Obelisk's party list (772) sends all 45 rows with script 6601, then enables the pause buttons. Parties are sent newest first, with their age in ticks since creation. A row can become an empty string while the parties below it keep their indices. Script 6606 re-sorts the displayed rows and script 6601 hides empty rows, so the list looks much the same. A click uses the row's original index, including any blanks before it (script 6604). [227/581, ticks 118–233 and 1018–1021](https://rsprox.net/download/581) · [227/1838, ticks 115–132](https://rsprox.net/download/1838) · [223/22, ticks 8–17](https://rsprox.net/download/22)
+
 ### Party panel estimates
 
 - **E1. Move up on rows 2–7** swaps the member with the preceding row immediately. Open panels and member HUDs redraw without a prompt or chat message.
@@ -219,6 +221,12 @@ Scripts 6722 and 6727 send member and applicant rows with plain names and no tra
 - **E7. Other viewers** get their own rights when their open panels redraw. Every member's HUD shows the order. Applicants and the blocked list stay with the party. The handover capture shows only the former leader's client.
 
 The cache labels establish the directions, and the confirmation in 227/1753 establishes the observed first-place move. The broader arrow and cancellation behavior follows the [Theatre of Blood party screen estimates](theatre-of-blood.md#party-screen-estimates), merged in [#6800](https://github.com/RSPSApp/tsps/pull/6800).
+
+Party list estimates
+
+- **E1. A blank row represents a party in its raid.** It keeps its index and sends an empty string. The captures show rows becoming blank, with the reason for the change unobserved.
+- **E2. The blank row goes when the raid is disposed.** Later rows move up on the next opening. In the lobby, a disbanded party leaves immediately. The captures show blanks disappearing between openings, with the removal trigger unobserved.
+- **E3. Blank rows count toward the 45-party limit.** A full list refuses creation while its slots are occupied, including by parties in their raids. The captures never reach that limit.
 
 ### Wardens ready-up
 

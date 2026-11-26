@@ -288,6 +288,8 @@ function partyBoard(groups = [], { grouping = true, viewers } = {}) {
   const Parties = require('../plugins/minigames/toa/Parties.TombsOfAmascut');
   CachePipeline.initialize();
   const buttons = new Map();
+  const objects = [];
+  let cycle = 0;
   const startup = [];
   const closed = [];
   const prompts = new WeakMap();
@@ -313,7 +315,7 @@ function partyBoard(groups = [], { grouping = true, viewers } = {}) {
   const noop = () => {};
   const core = { ...PluginManager.getCoreApi() };
   if (viewers) {
-    core.World = { getPlayers: () => viewers, getProcessCycle: () => 0 };
+    core.World = { getPlayers: () => viewers, getProcessCycle: () => cycle };
     for (const player of viewers) {
       player.closeBoardInterface = (interfaceId) => closed.forEach((handler) => handler({ player, interfaceId }));
     }
@@ -321,6 +323,7 @@ function partyBoard(groups = [], { grouping = true, viewers } = {}) {
   const api = new Proxy({
     core,
     emitCustomEvent,
+    onObjectInteraction: (handler) => objects.push(handler),
     onInterfaceActionButton: (uid, handler) => buttons.set(uid, handler),
     onServerStartup: (handler) => startup.push(handler),
     onCustomEvent: (name, handler) => {
@@ -345,6 +348,18 @@ function partyBoard(groups = [], { grouping = true, viewers } = {}) {
   };
   return {
     Parties, startup, emitted, prompts, openList, viewParty,
+    inspectObelisk(player) {
+      const definition = { getName: () => 'Grouping Obelisk', getInteractions: () => ['Inspect'] };
+      const event = { player, definition, clickType: 1 };
+      for (const handler of objects) handler(event);
+      assert.equal(event.handled, true);
+    },
+    clickListRow(player, row) {
+      list({ player, action: row });
+    },
+    advanceCycle(ticks) {
+      cycle += ticks;
+    },
     makeParty(player) {
       overview({ player, action: 1 });
       return Parties.currentParty(player);
@@ -614,10 +629,203 @@ test('party list closes the highlight around the viewer’s party leader and omi
     board.openList(player);
     const rows = partyScript(player, 6601).map(([, row]) => row).filter(Boolean);
     assert.equal(rows.length, 2);
-    assert.equal(rows[0].split('|')[0], '<col=ffffff>Lead</col>');
-    assert.equal(rows[1].split('|')[0], 'Observer');
+    const leaders = rows.map((row) => row.split('|')[0]);
+    const byName = (name) => leaders.find((leader) => leader.replace(/<[^>]*>/g, '') === name);
+    assert.equal(byName('Lead'), '<col=ffffff>Lead</col>');
+    assert.equal(byName('Observer'), 'Observer');
     assert.ok(rows.every((row) => row.split('|').length === 14 && !row.endsWith('|')));
   }
+});
+
+function partyListFixture(t) {
+  const Raid = require('../plugins/minigames/toa/RaidState.TombsOfAmascut');
+  const viewer = boardPlayer('Viewer');
+  const board = partyBoard([], { viewers: [viewer] });
+  const { Parties } = board;
+  const raids = [];
+  t.after(() => {
+    for (const raid of raids) {
+      raid.dispose();
+      raid.lobby.disband();
+    }
+    disbandAll(Parties);
+  });
+
+  return {
+    ...board, viewer,
+    open() {
+      if (viewer.getInterfaceId() >= 0) viewer.getPacketSender().sendInterfaceRemoval();
+      viewer.sent.length = 0;
+      board.inspectObelisk(viewer);
+      return partyScript(viewer, 6601);
+    },
+    start(leader) {
+      const raid = Raid.begin(leader);
+      assert.ok(raid, 'the party leader starts a raid');
+      raids.push(raid);
+      return raid;
+    },
+    click(row) {
+      board.clickListRow(viewer, row);
+    },
+  };
+}
+
+function listLeaders(rows) {
+  return rows.map(([, row]) => row.split('|')[0]);
+}
+
+function partyListRaider(name) {
+  const inventory = { contains: () => false, getValidItems: () => [] };
+  return Object.assign(boardPlayer(name), {
+    getInventory: () => inventory,
+    getHitpoints: () => 99,
+    getNpcTransformationId: () => -1,
+    setUntargetable() {},
+    setLocation() {},
+    resetAttributes() {},
+  });
+}
+
+test('party list opens before sending all 45 rows, then enables the pause buttons', (t) => {
+  const board = partyListFixture(t);
+  const rows = board.open();
+  assert.equal(board.viewer.getInterfaceId(), 772);
+  assert.deepEqual(rows, Array.from({ length: 45 }, (_, i) => [i, '']));
+  const packets = board.viewer.sent.filter(([packet, id]) =>
+    (packet === 'sendInterface' && id === 772) || (packet === 'sendClientScript' && id === 6601)
+      || (packet === 'sendInterfaceFlagsRange' && (id >>> 16) === 772));
+  assert.deepEqual(packets[0], ['sendInterface', 772]);
+  assert.deepEqual(packets.slice(-2), [
+    ['sendInterfaceFlagsRange', (772 << 16) | 1, 0, 2, 1],
+    ['sendInterfaceFlagsRange', (772 << 16) | 16, 0, 44, 1],
+  ]);
+  assert.deepEqual(packets.slice(1, -2), rows.map((row) => ['sendClientScript', 6601, ...row]));
+});
+
+test('party list is newest first, with ages in ticks since creation', (t) => {
+  const board = partyListFixture(t);
+  const [oldest, second, newest] = ['Oldest', 'Second', 'Newest'].map((name) => boardPlayer(name));
+  board.makeParty(oldest);
+  board.advanceCycle(7);
+  board.makeParty(second);
+  board.advanceCycle(4);
+  board.makeParty(newest);
+
+  const rows = board.open();
+  assert.equal(board.viewer.getInterfaceId(), 772);
+  assert.deepEqual(rows.map(([index]) => index), Array.from({ length: 45 }, (_, i) => i));
+  assert.deepEqual(rows.slice(3).map(([, row]) => row), Array(42).fill(''));
+  assert.deepEqual(listLeaders(rows.slice(0, 3)), ['Newest', 'Second', 'Oldest']);
+  const ages = (rows) => rows.slice(0, 3).map(([, row]) => Number(row.split('|').at(-1)));
+  assert.deepEqual(ages(rows), [0, 4, 11]);
+  board.advanceCycle(11);
+  assert.deepEqual(ages(board.open()), [11, 15, 22]);
+});
+
+test('party list keeps the raid row blank and clicks resolve the displayed row index', (t) => {
+  const board = partyListFixture(t);
+  const [oldest, raider, newest] = ['Oldest', 'Raider', 'Newest'].map((name) => boardPlayer(name));
+  board.makeParty(oldest);
+  board.advanceCycle(1);
+  board.makeParty(raider);
+  board.advanceCycle(1);
+  board.makeParty(newest);
+  const before = board.open();
+  assert.equal(listLeaders([before[1]])[0], 'Raider');
+  board.viewer.sent.length = 0;
+
+  board.start(raider);
+  assert.deepEqual(partyScript(board.viewer, 6601), [], 'the open list is not resent');
+  board.click(1);
+  assert.equal(board.viewer.getInterfaceId(), 772, 'the old row does not open a panel');
+  assert.deepEqual(board.viewer.sent, []);
+  assert.equal(board.viewer.statements, 0);
+  assert.deepEqual(board.viewer.messages, []);
+
+  board.advanceCycle(11);
+  const after = board.open();
+  assert.deepEqual(after[1], [1, '']);
+  assert.deepEqual(listLeaders(after), ['Newest', '', 'Oldest', ...Array(42).fill('')]);
+  assert.equal(Number(after[2][1].split('|').at(-1)), 13);
+
+  board.viewer.sent.length = 0;
+  board.click(1);
+  assert.equal(board.viewer.getInterfaceId(), 772);
+  assert.deepEqual(board.viewer.sent, []);
+  assert.equal(board.viewer.statements, 0);
+  assert.deepEqual(board.viewer.messages, []);
+  board.click(2);
+  assert.equal(board.viewer.getInterfaceId(), 774);
+  assert.equal(partyScript(board.viewer, 6722)[0][1].split('|')[0], 'Oldest');
+});
+
+test('party list puts a new party ahead of a raid blank without filling it', (t) => {
+  const board = partyListFixture(t);
+  const [oldest, raider, newcomer] = ['Oldest', 'Raider', 'Newcomer'].map((name) => boardPlayer(name));
+  const oldParty = board.makeParty(oldest);
+  board.makeParty(raider);
+  board.start(raider);
+  const before = board.open();
+  board.makeParty(newcomer);
+
+  const after = board.open();
+  assert.deepEqual(listLeaders(after.slice(0, 4)), ['Newcomer', '', 'Oldest', '']);
+  assert.deepEqual(listLeaders(before.slice(0, 3)), ['', 'Oldest', '']);
+  board.pressManagement(newcomer, 4);
+  assert.equal(board.Parties.currentParty(newcomer), null, "the new party disbands in the lobby");
+  assert.deepEqual(listLeaders(board.open().slice(0, 3)), ['', 'Oldest', '']);
+  assert.equal(board.Parties.currentParty(oldest), oldParty);
+});
+
+for (const ending of ['last player leaves', 'last player logs out', 'raid fails']) {
+  test(`party list frees the raid row when the ${ending}`, (t) => {
+    const Shared = require('../plugins/minigames/toa/Shared.TombsOfAmascut');
+    const Retrieval = require('../plugins/minigames/toa/Retrieval.TombsOfAmascut');
+    const board = partyListFixture(t);
+    const older = boardPlayer('Older');
+    const raider = partyListRaider('Raider');
+    const teammate = partyListRaider('Teammate');
+    board.makeParty(older);
+    const party = board.makeParty(raider);
+    party.addPlayer(teammate);
+    const raid = board.start(raider);
+
+    // With a logged-out teammate still in the lobby party, the final departure cannot free
+    // the slot through LobbyParty.leave's empty-party path.
+    raid.onAreaLeave(teammate, true);
+    assert.deepEqual(raid.players, [raider]);
+    assert.equal(raid.over, false);
+    const during = board.open();
+    if (ending === 'last player leaves') {
+      raid.onAreaLeave(raider, false);
+    } else if (ending === 'last player logs out') {
+      raid.onAreaLeave(raider, true);
+    } else {
+      // Item retrieval and the delayed movement after defeat are outside the list fixture.
+      t.mock.method(Retrieval, 'storeLost', () => 0);
+      t.mock.method(Shared, 'fadeMove', () => {});
+      raid.fail();
+    }
+    assert.equal(raid.over, true);
+    assert.equal(party.raid, null);
+    assert.ok(party.players.includes(teammate), 'the lobby party did not empty');
+    assert.deepEqual(listLeaders(board.open().slice(0, 3)), ['Older', '', '']);
+    assert.deepEqual(listLeaders(during.slice(0, 3)), ['', 'Older', '']);
+  });
+}
+
+test('party list capacity counts a party in its raid', (t) => {
+  const board = partyListFixture(t);
+  const raider = boardPlayer('Raider');
+  board.makeParty(raider);
+  const raid = board.start(raider);
+  for (let i = 0; i < 44; i++) assert.ok(board.makeParty(boardPlayer(`Leader${i}`)));
+  const newcomer = boardPlayer('Newcomer');
+  assert.equal(board.makeParty(newcomer) === null, true, '45 occupied slots refuse a new party');
+  assert.match(newcomer.messages[0], /^The list of lobby parties is currently full\./);
+  raid.dispose();
+  assert.ok(board.makeParty(newcomer), 'disposing a raid frees room to recruit');
 });
 
 test('party panel sends preset flags to each viewer and refuses a member’s preset click', (t) => {

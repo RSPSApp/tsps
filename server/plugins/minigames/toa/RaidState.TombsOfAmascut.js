@@ -657,7 +657,6 @@ class Raid {
     /** Who left: the raid summary still shows them (Wiki, 28 September 2022). */
     this.departed = [];
     lobby.raid = this;
-    lobby.unlist();
     for (const player of lobby.players) this.add(player);
     this.original = new Set(this.players.map((player) => player.getUsername()));
     for (const player of this.players) recordStat(player, "attempts", this.settings.mode);
@@ -1054,6 +1053,7 @@ class Raid {
     raids.delete(this);
     for (const username of this.absent.keys()) absentees.delete(username);
     this.absent.clear();
+    this.lobby.unlist();
     this.lobby.raid = null;
   }
 

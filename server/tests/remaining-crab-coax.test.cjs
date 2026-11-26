@@ -303,7 +303,7 @@ test('review #6819: a Sit on the real beach coaxes nothing; the hiding places ar
   d.h.tick(10);
   assert.equal(d.h.area, null, 'out of the dream');
   const before = d.h.messages.length;
-  d.h.sit(3047, 2655);
+  d.h.sit(3046, 2655); // the tile main accepted (raw tiles), so main coaxes here
   d.h.tick(30);
   assert.equal(d.h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'no crab on the real beach');
   assert.ok(!d.h.messages.slice(before).includes('And now, you wait...'), 'no wait message');
@@ -412,4 +412,38 @@ test('the shy crab\'s narration is message boxes, and the player steps up to her
     assert.equal(event.text, text);
   }
   assert.ok(!d.h.messages.includes('The crab appears to turn bright red.'), 'not a chat message any more');
+});
+
+test('review #6819: a crab that does not scutter goes back into hiding once the chat closes (Ours)', () => {
+  const d = dreaming();
+  d.setLocation(3039, 2637);
+  d.investigate(62470, 3038, 2637); // the fan crab, south-west palm: its conversation has no scutter
+  appears(d);
+  const crab = d.h.spawned.filter((npc) => npc.definition.id === 16483 && npc.registered).at(-1);
+  assert.deepEqual([crab.definition.x, crab.definition.y], d.at(3039, 2637));
+  d.h.tick(10);
+  assert.equal(crab.registered, true, 'stays while the conversation is open');
+  d.h.player.getDialogueManager().reset();
+  d.h.tick(1);
+  assert.equal(crab.registered, false, 'gone once it closes');
+});
+
+test('review #6819: the kick\'s hold keeps the scene going with the chatbox closed', () => {
+  const d = dreaming();
+  d.setLocation(3048, 2657);
+  d.investigate(62470, 3048, 2658);
+  appears(d, 16485, "A 'crab' appears!");
+  const penguin = d.h.spawned.find((npc) => npc.definition.id === 16485 && npc.registered);
+  const kick = { npcId: 16485, stepId: 'S6fPkj', text: '' };
+  d.h.emit('npc-dialogue:action', kick);
+  d.h.player.getDialogueManager().reset(); // the hold closes the chatbox
+  let resumed = false;
+  kick.wait(() => { resumed = true; });
+  d.h.tick(11);
+  assert.equal(resumed, true);
+  assert.equal(penguin.registered, false, 'removed by the kick, not by the closed chat');
+  assert.equal(d.h.projectiles.at(-1)?.[0], 4022, 'so it still flies off');
+  appears(d);
+  const crab = d.h.spawned.filter((npc) => npc.definition.id === 16483 && npc.registered).at(-1);
+  assert.deepEqual([crab.definition.x, crab.definition.y], d.at(3049, 2658), 'the crab comes out after the hold');
 });

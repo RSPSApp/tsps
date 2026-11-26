@@ -1709,6 +1709,21 @@ module.exports = function registerCrabQuestQuest(api) {
     if (!crab) return;
     player.setPositionToFace(crab.getLocation());
     event.after = () => stepBeside(player, crab);
+    watchRecruit(player, crab);
+  }
+
+  /**
+   * A crab that talks and then stays (the fan crab, the scientist, a failed quiz) or a
+   * conversation closed early: the crab goes back into hiding once the chat closes, as a later
+   * investigate says it is "currently wandering around". Ours: no recording has one. A crab that
+   * scutters is removed by its scutter step instead.
+   */
+  function watchRecruit(player, crab) {
+    Scenes.later(player, 1, () => {
+      if (!crab.isRegistered?.() || Dream.npcFor(player, RECRUIT_NPC_KEY) !== crab) return;
+      if (player.getDialogueManager().isActive() || penguinKicks.has(player)) return watchRecruit(player, crab);
+      Dream.removeNpc(player, RECRUIT_NPC_KEY);
+    });
   }
 
   /**
@@ -1736,8 +1751,12 @@ module.exports = function registerCrabQuestQuest(api) {
   }
 
   /** The penguin's exit (capture ticks 6266-6277), then the conversation carries on with the crab. */
+  // Players whose conversation the kick is holding (the chatbox is closed meanwhile).
+  const penguinKicks = new Set();
+
   function kickPenguin(player, resume) {
     const sender = player.getPacketSender();
+    penguinKicks.add(player);
     player.performAnimation(new Animation(PENGUIN_KICK_ANIMATION));
     sender.sendSound(PENGUIN_KICK_SOUND, 1, 10);
     Scenes.later(player, 1, () => {
@@ -1756,7 +1775,10 @@ module.exports = function registerCrabQuestQuest(api) {
         sender.sendSound(PENGUIN_SPLASH_SOUND, 1, PENGUIN_SPLASH_SOUND_DELAY);
       });
     });
-    Scenes.later(player, PENGUIN_CRAB_DELAY, resume);
+    Scenes.later(player, PENGUIN_CRAB_DELAY, () => {
+      penguinKicks.delete(player);
+      resume();
+    });
   }
 
 
@@ -1882,6 +1904,7 @@ module.exports = function registerCrabQuestQuest(api) {
     netting.delete(player);
     sitWaits.delete(player);
     talkingSpot.delete(player);
+    penguinKicks.delete(player);
     Scenes.cancel(player);
     Scenes.closeFade(player);
   }

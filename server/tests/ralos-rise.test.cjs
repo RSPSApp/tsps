@@ -52,7 +52,10 @@ before(async () => {
   core = {
     ...PluginManager.getCoreApi(),
     World: { getProcessCycle: () => cycle },
-    TaskManager: { submit: (task) => { task.setRunning(true); submitted.push(task); } },
+    TaskManager: {
+      submit: (task) => { task.setRunning(true); submitted.push(task); },
+      cancelTasks: (key) => submitted.filter((task) => task.key === key).forEach((task) => task.stop()),
+    },
   };
   api.core = core;
   RalosRise.register(api);
@@ -614,4 +617,15 @@ test("a real player's inventory: splinters stack, wine becomes sunfire wine in i
   assert.equal(inventory.getAmount(id("sunfiresplinter")), 1);
   runTicks(4);
   assert.equal(inventory.getAmount(id("jug_wine")), 1, "one splinter left");
+});
+
+test("starting sunfire wine stops a chisel loop the player had running", () => {
+  const player = playerWith(["chisel", "blessed_bones", "blessed_bones", "blessed_bones", "pestle_and_mortar", ["sunfiresplinter", 6], "jug_wine", "jug_wine", "jug_wine"]);
+  itemActions.get("Blessed bones")["Break-down"]({ player, itemId: id("blessed_bones") });
+  cycle++;
+  sunfireHook().handler({ player, usedItemId: id("sunfiresplinter"), usedWithItemId: id("jug_wine") });
+  runTicks(8);
+  assert.equal(player.amountOf(id("blessed_bones")), 2, "only the first bone broke");
+  assert.equal(player.amountOf(id("jug_sunfire_wine")), 3);
+  assert.equal(submitted[0].isRunning(), false, "the chisel loop was cancelled");
 });

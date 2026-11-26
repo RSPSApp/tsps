@@ -92,7 +92,9 @@ function splintersOnWine({ player, usedItemId, usedWithItemId }) {
     Common.messageBox(player, Common.text("sunfireWineMissing"));
     return true;
   }
-  stopMaking(player);
+  // A new production loop replaces any other the player had running (a chisel, a grind), as Herblore's do.
+  Common.core().TaskManager.cancelTasks(player.getIndex());
+  sessions.delete(player);
   keepMaking(player);
   if (lastMade.get(player) === Common.core().World.getProcessCycle()) return true;
   if (!makeOne(player)) stopMaking(player);

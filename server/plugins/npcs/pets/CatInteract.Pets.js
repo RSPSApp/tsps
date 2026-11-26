@@ -112,7 +112,9 @@ function stroke(player, npc, entry) {
     if (busyOwners.get(player) !== token) return;
     const stillHere = player.getLocation().equals?.(from) ?? true;
     const stillOut = npc.isRegistered?.() !== false && player.getAttribute?.(services.currentAttribute) === npc;
-    if (!stillHere || !stillOut || player.getDialogueManager().getCurrent?.() || player.busy?.()) {
+    const chatOpen = player.getDialogueManager().getCurrent?.() || api.core.MultiChatboxPrompt?.getPending?.(player)
+      || (player.getPacketSender().getChatboxGroupId?.() ?? -1) >= 0;
+    if (!stillHere || !stillOut || chatOpen || player.busy?.()) {
       clearBusy(player, token);
       return;
     }

@@ -838,6 +838,17 @@ test('a walk or another conversation in the stroke\'s 3 ticks keeps it: no line 
   await f.send({ type: 'move', worldX: 3151, worldY: 3413, modifierFlags: 0, run: false });
   f.step(3);
 
+  // The Interact menu opened again and left open: it stays.
+  await interactMenu(f, kitten);
+  await f.choose(1);
+  f.step();
+  await interactMenu(f, kitten);
+  f.step(3);
+  assert.equal(core.MultiChatboxPrompt.getPending(f.p)?.title, 'Interact with kitten');
+  assert.equal(f.read(), null);
+  await f.send({ type: 'move', worldX: 3151, worldY: 3413, modifierFlags: 0, run: false });
+  f.step(3);
+
   await interactMenu(f, kitten);
   s = f.tick();
   await f.choose(1);

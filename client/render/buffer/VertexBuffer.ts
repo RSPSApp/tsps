@@ -16,12 +16,11 @@ export class VertexBuffer extends DataBuffer {
     // Compress OSRS face priorities (typically 0..11) into 3 bits (0..7)
     // while preserving useful ordering bands. Collapses 4..7 into two bands
     // and 8..11 into the top two bands so overlays remain clearly above base.
-    // OSRS face priorities run 0-11 into 3 bits. 0-6 stay exact: translucent shells such as the
-    // Echo Amoxliatl icicle's (4, 5, 6) are painted in that order (NpcPriorityPass). 7-11 share
-    // the top band; the r241 client interleaves its late priorities (10, 11) by depth anyway.
     private static compressPriority(p: number): number {
         if (p < 0) return 0;
-        return p <= 6 ? p : 7;
+        if (p <= 3) return p; // 0..3 -> 0..3
+        if (p <= 7) return 4 + ((p - 4) >> 1); // 4..5 -> 4, 6..7 -> 5
+        return 6 + ((p - 8) >> 1); // 8..9 -> 6, 10..11 -> 7
     }
 
     addVertex(

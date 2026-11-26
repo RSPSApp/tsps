@@ -227,7 +227,7 @@ export class GfxRenderer {
                     ? this.cache.ensureFrameGeometry(spotId, frameIdx, true, frameCycle)
                     : undefined;
                 const painter = !!painterGeometry &&
-                    hasMixedPriorities(painterGeometry.vertices, painterGeometry.indices);
+                    hasMixedPriorities(painterGeometry.vertices, painterGeometry.indices, painterGeometry.facePriorities);
                 const dc: DrawCall = this.renderer
                     .configureDrawCall(vaoRec.drawCall)
                     .uniformBlock("SceneUniforms", (this.renderer as any).sceneUniformBuffer)
@@ -268,7 +268,7 @@ export class GfxRenderer {
                         if (painter) {
                             const sorted = getPainterIndices(`${key}|a`, painterGeometry!.vertices,
                                 painterGeometry!.indices, (this.renderer as any).osrsClient.camera.viewMatrix,
-                                inst.rotation);
+                                inst.rotation, painterGeometry!.facePriorities);
                             const ib: any = vaoRec.ib;
                             if (ib.painterKey !== sorted.key) {
                                 ib.data(sorted.indices);

@@ -31,45 +31,49 @@ test("museum display opaque faces draw by priority, then back to front", () => {
         [3, 4, 5, 0, 1, 2, 6, 7, 8]);
 });
 
-test("translucent meshes of several priorities are painted lowest priority first, far to near (r241 depthSorted)", async () => {
+test("translucent graphics of several priorities are painted lowest priority first, far to near (r241 depthSorted)", async () => {
     const { CacheSystem } = await import("../rs/cache/CacheSystem");
     const { getCacheLoaderFactory } = await import("../rs/cache/loader/CacheLoaderFactory");
     const { loadCache, loadCacheInfos, loadCacheList } = await import("../scripts/cache/load-util");
-    const { SceneBuffer } = await import("../render/buffer/SceneBuffer");
+    const { SceneBuffer, getModelFacesFiltered } = await import("../render/buffer/SceneBuffer");
     const { getPainterIndices, hasMixedPriorities } = await import("../render/npc/NpcPriorityPass");
     const info = loadCacheList(loadCacheInfos()).latest;
     const factory = getCacheLoaderFactory(info, CacheSystem.fromFiles(info, loadCache(info).files));
     const textureLoader = factory.getTextureLoader();
-    const mesh = (modelId: number) => {
-        const model = factory.getModelLoader().getModel(modelId)!.light(textureLoader, 64, 850, -30, -50, -30);
-        const buffer = new SceneBuffer(textureLoader, new Map(), model.verticesCount + 16, true);
-        buffer.addModelAnimFrame(model, true, new Uint16Array(model.verticesCount));
-        return { model, vertices: new Uint8Array(buffer.vertexBuf.byteArray()), indices: new Int32Array(buffer.indices) };
-    };
+    // Built as GfxCache builds a graphic's translucent frame.
+    const model = factory.getModelLoader().getModel(60153)!.light(textureLoader, 64, 850, -30, -50, -30);
+    const faces = getModelFacesFiltered(model, textureLoader, true);
+    const buffer = new SceneBuffer(textureLoader, new Map(), model.verticesCount + 16, true);
+    buffer.addModel(model, faces, undefined, true, new Uint16Array(model.verticesCount));
+    const vertices = new Uint8Array(buffer.vertexBuf.byteArray());
+    const indices = new Int32Array(buffer.indices);
+    const facePriorities = Uint8Array.from(faces, (face) => face.renderLayer ?? face.priority);
     // Looking straight down -Z, so a more negative Z is farther.
     const view = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    const data = new DataView(vertices.buffer, vertices.byteOffset, vertices.byteLength);
+    const depth = (v: number) => data.getUint32(v * ACTOR_VERTEX_STRIDE + 8, true) >>> 17;
+    const band = (v: number) => (data.getUint32(v * ACTOR_VERTEX_STRIDE + 8, true) >>> 6) & 7;
 
     // Echo Amoxliatl's icicle spikes (spotanim 3712): black (4), dark red (5) and bright red (6)
-    // shells, the black outermost. Live paints the bright red last, over the black.
-    const spike = mesh(60153);
-    assert.ok(hasMixedPriorities(spike.vertices, spike.indices));
-    const sorted = getPainterIndices("spike", spike.vertices, spike.indices, view, 0).indices;
-    const data = new DataView(spike.vertices.buffer, spike.vertices.byteOffset, spike.vertices.byteLength);
-    const priority = (v: number) => (data.getUint32(v * ACTOR_VERTEX_STRIDE + 8, true) >>> 6) & 7;
-    const depth = (v: number) => data.getUint32(v * ACTOR_VERTEX_STRIDE + 8, true) >>> 17;
-    const faces = Array.from({ length: sorted.length / 3 }, (_, f) => sorted.subarray(f * 3, f * 3 + 3));
-    for (let f = 1; f < faces.length; f++) {
-        const [a, b] = [faces[f - 1], faces[f]];
-        assert.ok(priority(a[0]) <= priority(b[0]), "priority groups lowest first");
-        if (priority(a[0]) === priority(b[0])) {
-            assert.ok(depth(a[0]) + depth(a[1]) + depth(a[2]) <= depth(b[0]) + depth(b[1]) + depth(b[2]), "far to near");
-        }
-    }
-    assert.deepEqual([priority(faces[0][0]), priority(faces[faces.length - 1][0])], [4, 6]);
+    // shells, the black outermost. Live paints the bright red last, over the black. The vertex
+    // packing still bands 4 with 5 for the depth bias, so the sort takes the cache priorities.
+    assert.deepEqual([...new Set(faces.map((face) => face.priority))].sort(), [4, 5, 6]);
+    assert.deepEqual([...new Set(Array.from(indices, band))].sort(), [4, 5]);
+    assert.ok(hasMixedPriorities(vertices, indices, facePriorities));
 
-    // The Aberrant spectre's body (0) and shell and eyes (1) mix priorities too.
-    const spectre = mesh(5085);
-    assert.ok(hasMixedPriorities(spectre.vertices, spectre.indices));
+    const sorted = getPainterIndices("spike", vertices, indices, view, 0, facePriorities).indices;
+    const priorityOf = new Map<number, number>();
+    for (let f = 0; f < faces.length; f++) priorityOf.set(indices[f * 3] * 1e6 + indices[f * 3 + 1] * 1e3 + indices[f * 3 + 2], facePriorities[f]);
+    const order = Array.from({ length: sorted.length / 3 }, (_, f) => {
+        const [a, b, c] = sorted.subarray(f * 3, f * 3 + 3);
+        return { priority: priorityOf.get(a * 1e6 + b * 1e3 + c)!, depth: depth(a) + depth(b) + depth(c) };
+    });
+    for (let f = 1; f < order.length; f++) {
+        assert.ok(order[f - 1].priority <= order[f].priority, "priority groups lowest first");
+        if (order[f - 1].priority === order[f].priority) assert.ok(order[f - 1].depth <= order[f].depth, "far to near");
+    }
+    assert.deepEqual([...new Set(order.map((face) => face.priority))], [4, 5, 6]);
+
     // A translucent mesh of one priority keeps the normal pass.
-    assert.ok(!hasMixedPriorities(spectre.vertices, spectre.indices.slice(spectre.indices.length - 3)));
+    assert.ok(!hasMixedPriorities(vertices, indices.slice(0, 3), facePriorities.slice(0, 1)));
 });

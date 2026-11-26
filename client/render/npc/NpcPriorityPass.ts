@@ -17,16 +17,19 @@ const mixedPriorities = new WeakMap<Int32Array, boolean>();
  * Whether an actor mesh's faces span more than one render priority. The OSRS client paints such
  * a model's higher priorities over its lower ones whatever their depth: a translucent mesh like
  * this needs the painter pass, as depth alone keeps an outer shell in front of the layers inside.
+ * `facePriorities` (one per triangle) gives the cache priorities; without it the vertex's banded
+ * priority is read.
  */
-export function hasMixedPriorities(vertices: Uint8Array, indices: Int32Array): boolean {
+export function hasMixedPriorities(vertices: Uint8Array, indices: Int32Array, facePriorities?: Uint8Array): boolean {
     let mixed = mixedPriorities.get(indices);
     if (mixed !== undefined) return mixed;
     mixed = false;
     if (indices.length > 0) {
         const view = new DataView(vertices.buffer, vertices.byteOffset, vertices.byteLength);
-        const first = vertexPriority(view, indices[0]);
-        for (let i = 3; i < indices.length; i += 3) {
-            if (vertexPriority(view, indices[i]) !== first) {
+        const priorityOf = (face: number) => facePriorities?.[face] ?? vertexPriority(view, indices[face * 3]);
+        const first = priorityOf(0);
+        for (let face = 1; face < indices.length / 3; face++) {
+            if (priorityOf(face) !== first) {
                 mixed = true;
                 break;
             }
@@ -57,6 +60,7 @@ export function sortPainterIndices(
     indices: Int32Array,
     viewMatrix: ArrayLike<number>,
     rotation: number,
+    facePriorities?: Uint8Array,
 ): Int32Array {
     const [viewX, viewY, viewZ] = viewDirection(viewMatrix, rotation);
     const view = new DataView(vertices.buffer, vertices.byteOffset, vertices.byteLength);
@@ -75,12 +79,12 @@ export function sortPainterIndices(
         priorities[i] = (z >>> 6) & 7;
     }
 
-    // The display uses priorities 0–7. Draw each group from far to near.
+    // Draw each priority group from far to near.
     const faces = Array.from({ length: indices.length / 3 }, (_, face) => {
         const offset = face * 3;
         return {
             offset,
-            priority: priorities[indices[offset]],
+            priority: facePriorities?.[face] ?? priorities[indices[offset]],
             depth: depths[indices[offset]] + depths[indices[offset + 1]] + depths[indices[offset + 2]],
         };
     });
@@ -107,12 +111,13 @@ export function getPainterIndices(
     indices: Int32Array,
     viewMatrix: ArrayLike<number>,
     rotation: number,
+    facePriorities?: Uint8Array,
 ): { key: string; indices: Int32Array } {
     const [viewX, viewY, viewZ] = viewDirection(viewMatrix, rotation);
     const key = `${baseKey}|priority:${viewX},${viewY},${viewZ}`;
     const cached = sortedIndices.get(indices);
     if (cached?.key === key) return cached;
-    const result = { key, indices: sortPainterIndices(vertices, indices, viewMatrix, rotation) };
+    const result = { key, indices: sortPainterIndices(vertices, indices, viewMatrix, rotation, facePriorities) };
     sortedIndices.set(indices, result);
     return result;
 }

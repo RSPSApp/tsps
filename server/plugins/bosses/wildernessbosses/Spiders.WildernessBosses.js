@@ -156,12 +156,12 @@ function callSpiderlings(npc, spider, target) {
   }
   for (let i = 0; i < SPIDERLINGS && tiles.length > 0; i++) {
     const [[x, y]] = tiles.splice(Common.randomBetween(0, tiles.length - 1), 1);
-    const spiderling = core.NPC.create(spider.spiderling, new core.Location(x, y, from.z));
+    // The plugin spawn API registers the NPC before this attack tick's client update.
+    const spiderling = api.spawnNpc({ id: spider.spiderling, x, y, z: from.z, wanderRadius: 20 });
+    if (!spiderling) continue;
     spiderling.__skipDefaultRespawn = true;
     spiderling.__wildernessBoss = npc;
     spiderling.setMultiCombat(true);
-    spiderling.getMovementCoordinator?.().setRadius?.(20);
-    core.World.getAddNPCQueue().push(spiderling);
     brood.spiderlings.push(spiderling);
     Common.engage(spiderling, target);
   }

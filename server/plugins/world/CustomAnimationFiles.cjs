@@ -261,6 +261,8 @@ function animationRow(checked, id, name, group) {
 /** The players' dataset of custom animations and graphics, and the most one content packet holds. */
 const DATASET = "customAnimations";
 const PACKET_LIMIT = 0xffff;
+/** The most rows one animation is split into (the client refuses more): well past the 1 MiB asset cap. */
+const MAX_PARTS = 64;
 /**
  * Frame groups above the cache's (index 0 has about 13,000): one per custom animation, by its
  * position by id. A frame id is group << 16 | file in a signed 32-bit int (client and server), so
@@ -275,6 +277,33 @@ function fitsPacket(encodeContentData, row) {
   } catch {
     return false;
   }
+}
+
+/**
+ * The rows players get for an animation: animationRow's, when it fits one content packet.
+ * Otherwise that row carries the frames that fit and `parts` (how many rows the animation is), and
+ * "frames" rows `{ kind, id, group, part, frames }` carry the rest, each fitting a packet on its own.
+ * The client installs the animation once every part has arrived.
+ */
+function animationRows(encodeContentData, checked, id, name, group) {
+  const whole = animationRow(checked, id, name, group);
+  if (fitsPacket(encodeContentData, whole)) return [whole];
+  const files = Object.entries(whole.frames);
+  // `parts` is measured at its largest, so the final count never pushes the first row over.
+  const first = { ...whole, frames: {}, parts: MAX_PARTS };
+  const rows = [first];
+  let current = first;
+  for (const [file, data] of files) {
+    current.frames[file] = data;
+    if (fitsPacket(encodeContentData, current)) continue;
+    delete current.frames[file];
+    current = { kind: "frames", id, group, part: rows.length, frames: { [file]: data } };
+    rows.push(current);
+    if (!fitsPacket(encodeContentData, current)) fail(`animation ${id}: frame file ${file} is too big for one content packet`);
+  }
+  if (rows.length > MAX_PARTS) fail(`animation ${id} needs ${rows.length} content packets; the most is ${MAX_PARTS}`);
+  first.parts = rows.length;
+  return rows;
 }
 
 /** The files an animation's asset keeps: the ones animationFiles read, plus info.json for Blender. */
@@ -295,5 +324,6 @@ function animationKeeps(files, checked) {
 module.exports = {
   NAME, fail, readSeq, frameList, framePayload, encodeOps, checkFrame, readSpotanim, setOp, u16, u32,
   readFolder, checkFrameMap, checkFrameMapData, checkSharedFrameMaps, animationFiles, animationKeeps, animationRow,
-  fitsPacket, DATASET, PACKET_LIMIT, FIRST_FRAME_GROUP, FIRST_CUSTOM_FRAME_MAP, LAST_CUSTOM_FRAME_MAP,
+  animationRows, fitsPacket, DATASET, PACKET_LIMIT, MAX_PARTS, FIRST_FRAME_GROUP, FIRST_CUSTOM_FRAME_MAP,
+  LAST_CUSTOM_FRAME_MAP,
 };

@@ -14,10 +14,22 @@ export type CustomAnimationRow =
     | {
         kind: "seq"; id: number; name: string; data: string; group: number; frames: Record<string, string>;
         framemaps?: Record<string, string>;
+        /**
+         * How many rows the animation is, when it is too big for one content packet: this one, then
+         * "frames" rows 1 .. parts - 1 with the rest of its frames.
+         */
+        parts?: number;
     }
+    /** More frames of a split animation: part `part` of its seq row's `parts`. */
+    | { kind: "frames"; id: number; group: number; part: number; frames: Record<string, string> }
     | { kind: "spotanim"; id: number; name: string; data: string; model?: { id: number; data: string } }
     /** Clears every animation and graphic: the first row of the set the server sends at login. */
     | { kind: "reset" };
+
+type SeqRow = Extract<CustomAnimationRow, { kind: "seq" }>;
+
+/** The most rows one animation is split into (the server's MAX_PARTS). */
+const MAX_PARTS = 64;
 
 const seqs = new Map<number, string>();
 const spotanims = new Map<number, string>();
@@ -26,6 +38,15 @@ const frameMaps = new Map<number, Int8Array>();
 const models = new Map<number, Int8Array>();
 /** The registered rows by kind and id, to send the render workers again (rows()). */
 const registered = new Map<string, CustomAnimationRow>();
+/**
+ * Split animations still arriving, by id: the seq row with every frame so far, and the parts seen.
+ * One is installed, as a single row, once all its parts are here.
+ */
+const pending = new Map<number, { row: SeqRow; parts: Set<number> }>();
+
+function frameRecord(frames: unknown): frames is Record<string, string> {
+    return !!frames && typeof frames === "object" && Object.values(frames).every((data) => typeof data === "string");
+}
 
 function bytes(base64: string): Int8Array {
     const decoded = atob(base64);
@@ -47,10 +68,22 @@ export const CustomAnimationRegistry = {
             this.clear();
             return;
         }
+        if (row?.kind === "frames") {
+            this.addFrames(row);
+            return;
+        }
         if (!row || typeof row.data !== "string" || !validId(row.id, 0xfffe)) throw new Error("Invalid custom animation");
         if (row.kind === "seq") {
             // Frame ids are group << 16 | file in a signed int: groups stay below 32768.
             if (!validId(row.group, 0x7fff) || !row.frames || typeof row.frames !== "object") throw new Error("Invalid custom animation frames");
+            if (row.parts !== undefined && row.parts !== 1) {
+                if (!Number.isInteger(row.parts) || row.parts < 1 || row.parts > MAX_PARTS || !frameRecord(row.frames)) {
+                    throw new Error("Invalid custom animation parts");
+                }
+                // Nothing is installed (or invalidated) until the last part arrives.
+                pending.set(row.id, { row: { ...row, frames: { ...row.frames } }, parts: new Set([0]) });
+                return;
+            }
             const files = new Map<number, Int8Array>();
             for (const [file, data] of Object.entries(row.frames)) files.set(Number(file), bytes(data));
             // A frame names its frame map in a u16.
@@ -77,7 +110,23 @@ export const CustomAnimationRegistry = {
         registered.set(`${row.kind}:${row.id}`, row);
         this.revision++;
     },
+    /** One more part of a split animation; the last one installs it as one whole seq row. */
+    addFrames(row: Extract<CustomAnimationRow, { kind: "frames" }>): void {
+        const waiting = pending.get(row?.id);
+        const parts = waiting?.row.parts ?? 0;
+        if (!waiting || row.group !== waiting.row.group || !frameRecord(row.frames)
+            || !Number.isInteger(row.part) || row.part < 1 || row.part >= parts || waiting.parts.has(row.part)) {
+            throw new Error("Invalid custom animation part");
+        }
+        Object.assign(waiting.row.frames, row.frames);
+        waiting.parts.add(row.part);
+        if (waiting.parts.size < parts) return;
+        pending.delete(row.id);
+        const { parts: _parts, ...whole } = waiting.row;
+        this.register(whole);
+    },
     clear(): void {
+        pending.clear();
         seqs.clear();
         spotanims.clear();
         frameGroups.clear();

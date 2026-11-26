@@ -540,6 +540,10 @@ export class PlayerModelLoader {
             }
         }
 
+        // Body type B has no jaw by default: every type B jaw kit is facial hair, so an empty
+        // jaw slot stays empty instead of growing the first beard.
+        if (gender === Gender.FEMALE) defaults[1] = -1;
+
         this.defaultKitsCache.set(key, defaults);
         return defaults;
     }

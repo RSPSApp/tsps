@@ -157,18 +157,19 @@ export class PlayerAppearance {
                 const part: number = kit.bodyPartId ?? kit.bodyPartyId;
                 if (typeof part === "number") {
                     for (let p = 0; p < 7; p++) {
+                        // Body type B starts with no jaw kit: its jaw kits are all facial hair.
+                        if (p === 1) continue;
                         if ((part | 0) === expectedBodyPartId(p) && kits[p] === -1) kits[p] = id;
                     }
                 }
             } catch {}
         }
-        for (let id = 0; id < count && (kits[0] === -1 || kits[1] === -1); id++) {
+        for (let id = 0; id < count && kits[0] === -1; id++) {
             try {
                 const kit = idkLoader.load(id) as any;
                 if (!kit) continue;
                 const part: number = kit.bodyPartId ?? kit.bodyPartyId;
-                if ((part | 0) === expectedBodyPartId(0) && kits[0] === -1) kits[0] = id;
-                if ((part | 0) === expectedBodyPartId(1) && kits[1] === -1) kits[1] = id;
+                if ((part | 0) === expectedBodyPartId(0)) kits[0] = id;
             } catch {}
         }
 

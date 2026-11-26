@@ -48,6 +48,14 @@ test("My Arm's Big Adventure still answers Burntmeat before Making Friends with 
   assert.equal(p.getDialogueManager().isActive(), true, "Burntmeat speaks instead of a swallowed click");
 });
 
+test("before the quest, its own Larrys still fall through to their other dialogue", (t) => {
+  for (const id of [827, 828, 829, 2197]) {
+    const p = actor(t);
+    assert.equal(talk(p, id), true);
+    assert.equal(p.getDialogueManager().isActive(), true, `Larry ${id} speaks for a fresh player`);
+  }
+});
+
 test("a Larry that isn't the quest's Rellekka boatman reaches his own plugin", (t) => {
   const p = actor(t);
   assert.equal(talk(p, 10418), true, "Mahogany Homes' Falador client");

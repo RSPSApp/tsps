@@ -28,14 +28,12 @@ const USED_NOTICE_BOARD_ATTRIBUTE = "tob:used-notice-board";
 
 const uid = (group, component) => (group << 16) | component;
 /**
- * The buttons on both interfaces are pause buttons: scripts 890/2319/2327/2330 resume a child
- * of a parent component, so a click arrives as RESUME_PAUSEBUTTON (an interface action click
- * with the child in `action`), never as a button op.
- * 364: Refresh, My/Make Party and Friends/Clan (components 64, 66, 67) resume children 0-2 of
- * component 3 (enum 1938). The rows are components 18-62 (enum 1937), each with a plain op
- * "View party" (script 5220).
+ * 364: Refresh, My/Make Party and Friends/Clan resume children 0-2 of component 3 (enum 1938).
+ * Scripts 5220 and 1568 give rows 18-62 (enum 1937) their View party option and resume the
+ * original row index on component 17.
  */
 const LIST_BUTTONS_UID = uid(INTERFACE.PARTIES_OVERVIEW, 3);
+const LIST_UID = uid(INTERFACE.PARTIES_OVERVIEW, 17);
 const LIST_ROW_FIRST = 18;
 const LIST_ROW_UIDS = Array.from({ length: Shared.LIST_ROWS }, (_, row) => uid(INTERFACE.PARTIES_OVERVIEW, LIST_ROW_FIRST + row));
 const LIST_BUTTON = { REFRESH: 0, MY_PARTY: 1, FILTER: 2 };
@@ -53,10 +51,12 @@ const INFO_BUTTON = {
 const INFO_ARROW_FIRST = 63;
 const INFO_ARROW_UIDS = Array.from({ length: Shared.MAX_PARTY_SIZE * 2 },
   (_, index) => uid(INTERFACE.PARTY_INFORMATION, INFO_ARROW_FIRST + index));
+const PAUSEBUTTON = 1 << 0;
 const OP1 = 1 << 1;
 const MYSTERIOUS_STRANGER_SHOP = 1240;
 const ATTR = {
   VIEWING: "tob:viewing",
+  LISTED_PARTY_IDS: "tob:listed-party-ids",
   WARNED: "tob:death-warning",
   NO_CRYSTAL_PROMPT: "tob:no-crystal-prompt",
   MET_STRANGER: "tob:met-stranger",
@@ -146,11 +146,19 @@ function openOverview(player) {
   sender.sendConfig(VARP.HAS_PARTY, Parties.partyOf(player) ? 0 : -1);
   sender.sendInterface(INTERFACE.PARTIES_OVERVIEW);
   const listed = Parties.listed();
+  const rowIds = Array(Shared.LIST_ROWS).fill(null);
   for (let index = 0; index < Shared.LIST_ROWS; index++) {
     const party = listed[index];
-    sender.sendClientScript(SCRIPT.PARTY_ROW, index, party ? rowText(party, player) : "");
+    if (!party || party.raid) {
+      sender.sendClientScript(SCRIPT.PARTY_ROW, index, "");
+      continue;
+    }
+    rowIds[index] = party.id;
+    sender.sendClientScript(SCRIPT.PARTY_ROW, index, rowText(party, player));
   }
-  for (const rowUid of LIST_ROW_UIDS) sender.sendInterfaceFlags(rowUid, OP1);
+  player.setAttribute(ATTR.LISTED_PARTY_IDS, rowIds);
+  sender.sendInterfaceFlagsRange(LIST_BUTTONS_UID, 0, 2, PAUSEBUTTON);
+  sender.sendInterfaceFlagsRange(LIST_UID, 0, Shared.LIST_ROWS - 1, PAUSEBUTTON);
 }
 
 function slotOf(event) {
@@ -182,9 +190,13 @@ function clickListButton(event) {
 }
 
 function selectRow(event) {
-  const party = Parties.listed()[(event.buttonId & 0xffff) - LIST_ROW_FIRST];
-  if (party) openInformation(event.player, party);
-  else openOverview(event.player);
+  const { player } = event;
+  if (player.getInterfaceId() !== INTERFACE.PARTIES_OVERVIEW) return;
+
+  const partyId = player.getAttribute(ATTR.LISTED_PARTY_IDS)?.[slotOf(event)];
+  const party = Parties.byId(partyId);
+  if (party && !party.raid) openInformation(player, party);
+  else openOverview(player);
 }
 
 // ---------------------------------------------------------------- 50: a party's information
@@ -496,6 +508,7 @@ function clickPartyArrow(event) {
 /** A pause button on either interface: its parent and the child resumed. */
 function resumeButton(event) {
   if (event.buttonId === LIST_BUTTONS_UID) clickListButton({ player: event.player, slot: event.action });
+  else if (event.buttonId === LIST_UID) selectRow({ player: event.player, slot: event.action });
   else if (event.buttonId === INFO_UID) clickInformation({ player: event.player, slot: event.action });
   else return;
   event.handled = true;
@@ -747,13 +760,12 @@ module.exports = function registerTheatreLobby(api) {
   Shared.onObject(api, Shared.OBJECT.NOTICE_BOARD, readNoticeBoard);
   Shared.onObject(api, Shared.OBJECT.ENTRANCE, useEntrance);
   api.onInterfaceActionClick(resumeButton);
-  api.onInterfaceActionButton(LIST_ROW_UIDS, selectRow);
   api.onInterfaceActionButton(INFO_ARROW_UIDS, clickPartyArrow);
   api.onCustomEvent("interface:closed", partyHandoverClosed);
 };
 
 Object.assign(module.exports, {
-  ATTR, openOverview, openInformation, rowText, memberLine, clickListButton, selectRow, clickInformation, resumeButton,
+  ATTR, openOverview, openInformation, rowText, memberLine, clickListButton, clickInformation, resumeButton,
   LIST_ROW_UIDS, GROUPING_ACTIVITY, announceActivity,
   useEntrance, refreshHud, leaveParty,
 });

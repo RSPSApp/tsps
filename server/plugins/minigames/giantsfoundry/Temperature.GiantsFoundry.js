@@ -18,7 +18,8 @@
 
 const Shared = require("./Shared.GiantsFoundry");
 
-const FAST_STEPS = [27, 30, 33, 37, 41, 45, 49, 53, 57, 62, 67, 72, 77, 83, 89];
+// The 16th dip is 95 (227/96 and 227/101). Repeating it on later dips is an estimate.
+const FAST_STEPS = [27, 30, 33, 37, 41, 45, 49, 53, 57, 62, 67, 72, 77, 83, 89, 95];
 const SLOW_STEPS = FAST_STEPS.map((step) => Math.max(1, Math.round(step / 3)));
 const MAX_TEMPERATURE = 1000;
 const PASSIVE_PERIOD = 2;

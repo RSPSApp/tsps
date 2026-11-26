@@ -29,8 +29,13 @@ const SOURCE = {
 
 function start(player, source, steps) {
   if (!Shared.questComplete(player) || !Shared.wornPreform(player)) return false;
+  const state = Shared.workOf(player);
+  const location = player.getLocation();
+  // A second click on the same option continues the active run (227/101, ticks 239 and 4543).
+  if (state?.kind === "temperature" && state.source === source &&
+      state.steps === steps && location.equals(state.origin)) return true;
   Shared.stopWork(player);
-  Shared.setWork(player, { kind: "temperature", source, steps, step: 0, origin: player.getLocation().clone() });
+  Shared.setWork(player, { kind: "temperature", source, steps, step: 0, origin: location.clone() });
   return true;
 }
 

@@ -76,10 +76,10 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   const KNIGHTS = new Map([
     [N.SIR_LANCELOT, "sir-lancelot"], [N.SIR_LANCELOT_2, "sir-lancelot"],
     [N.SIR_GAWAIN, "sir-gawain"], [N.SIR_GAWAIN_3, "sir-gawain"],
-    [N.SIR_KAY, "sir-kay"], [4352, "sir-kay"],
+    [N.SIR_KAY, "sir-kay"], [N.SIR_KAY_3, "sir-kay"],
     [N.SIR_BEDIVERE, "sir-bedivere"],
     [N.SIR_TRISTRAM, "sir-tristram"],
-    [N.SIR_PELLEAS, "sir-pelleas"], [4350, "sir-pelleas"],
+    [N.SIR_PELLEAS, "sir-pelleas"], [N.SIR_PELLEAS_3, "sir-pelleas"],
     [N.SIR_LUCAN, "sir-lucan"],
     [N.SIR_PALOMEDES, "sir-palomedes"],
   ]);
@@ -94,9 +94,9 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   const BEEHIVE_OBJECT_ID = O.BEEHIVE; // 68 merlin_beehive
   const JEWELLERS_DOOR_OBJECT_ID = O.DOOR_5; // 59 jewellersdoor, Port Sarim 3016,3246
   /** Keep Le Faye's front doors (lefayeunopenabledoorl/r), on 2763,3401-3402 with the keep to the east. */
-  const KEEP_FRONT_DOOR_IDS = new Set([71, 72]);
+  const KEEP_FRONT_DOOR_IDS = new Set([O.LARGE_DOOR, O.LARGE_DOOR_2]); // 71, 72
   const KEEP_FRONT_DOOR_X = 2763;
-  const MERLIN_WORKSHOP_DOOR_OBJECT_ID = 24; // merlinworkshop
+  const MERLIN_WORKSHOP_DOOR_OBJECT_ID = O.DOOR_4; // 24 merlinworkshop
   const MERLIN_WORKSHOP_DOOR_TILE = { x: 2764, y: 3503, z: 1 };
 
   const EXCALIBUR_ITEM_ID = I.EXCALIBUR; // 35
@@ -577,10 +577,9 @@ module.exports = function registerMerlinsCrystalQuest(api) {
       return;
     }
     if (speaker === "Thrantax the Mighty" && text === THRANTAX_DEED_LINE) {
-      event.after = () => {
-        advanceTo(player, STAGE_EXCALIBUR_BOUND);
-        removeThrantax(player);
-      };
+      // varp 14 4 -> 5 the tick before the line shows (1967 -> 1968); he goes once it is continued.
+      advanceTo(player, STAGE_EXCALIBUR_BOUND);
+      event.after = () => removeThrantax(player);
       return;
     }
     if (speaker === "Thrantax the Mighty" && text === THRANTAX_ROAR && rituals.get(player)?.wrong === true) {
@@ -758,8 +757,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   const fights = new Map();
   const morganOf = (player) => fights.get(player)?.morgan ?? null;
 
-  /** The Mordreds whose mother is pleading for them: nobody attacks or is attacked by them meanwhile. */
-  const pleading = new WeakSet();
+  /** Mordred -> the player his mother pleads with: those two don't fight meanwhile (others are not held). */
+  const pleading = new WeakMap();
 
   /**
    * Mordred's last hit leaves him on 0 (headbar fill 0, ticks 1079, 1145, 1215) and Morgan appears
@@ -776,8 +775,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     event.preventDeath = true;
     npc.setHitpointsLocked?.(false);
     npc.hitpoints = 1; // Ours: one hitpoint rather than none, so nothing else treats him as dead
-    // A hit already on its way while she pleads changes nothing.
-    if (pleading.has(npc)) return;
+    // A hit already on its way while she pleads with this player changes nothing.
+    if (pleading.get(npc) === player) return;
     stopFighting(player, npc);
     removeMorgan(player);
     const tile = morganTile(player, npc);
@@ -787,7 +786,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     morgan.setPositionToFace(player.getLocation());
     puff(player, morgan.getLocation(), MORGAN_PUFF_HEIGHT);
     player.setPositionToFace(morgan.getLocation());
-    pleading.add(npc);
+    pleading.set(npc, player);
     fights.set(player, { mordred: npc, morgan, told: false, killing: false });
     startTranscript(api, player, MORGAN_NPC_ID, PAGE, "inside-keep-le-faye-defeating-sir-mordred", null, morgan);
     // Walking away mid-plea: Mordred is whole again and Morgan wanders about (Wiki, Sir Mordred).
@@ -817,9 +816,12 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (registered(npc)) npc.getMovementQueue().setBlockMovement(false);
   }
 
-  /** Nobody fights a Mordred his mother is pleading for. */
+  /** The player Morgan pleads with and her son don't fight while she does. */
   function pleaHoldsTheFight(event) {
-    if (pleading.has(event.attacker) || pleading.has(event.target)) event.allow = false;
+    const { attacker, target } = event;
+    if ((pleading.get(attacker) && pleading.get(attacker) === target) || (pleading.get(target) && pleading.get(target) === attacker)) {
+      event.allow = false;
+    }
   }
 
   /**
@@ -1006,6 +1008,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (event.itemId !== BAT_BONES_ITEM_ID) return;
     const { player } = event;
     if (stageOf(player) !== STAGE_SPOKEN_MORGAN || !onRitualTile(player.getLocation())) return;
+    // While he is there the bones drop as any item (local 1001994 tick 17496, local 1001800 tick 23238).
     if (rituals.has(player)) return;
     if (player.getAttribute(READ_INCANTATION_ATTRIBUTE) !== true) {
       event.handled = true;
@@ -1121,7 +1124,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     });
     if (!merlin) return;
     merlin.__skipDefaultRespawn = true;
-    merlin.setPositionToFace(player.getLocation());
+    merlin.setPositionToFace(GIANT_CRYSTAL_TILE.clone().add(0, -1));
+    TaskManager.submit(new CountdownTask(merlin, 1, () => { if (registered(merlin)) merlin.setPositionToFace(player.getLocation()); }));
     smashScenes.set(player, { merlin });
     // Gone once his box closes, however it closes.
     whenChatCloses(player, () => { if (smashScenes.get(player)?.merlin === merlin) endSmash(player); }, merlin);
@@ -1330,12 +1334,12 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     onReward: grantCompletionXp,
   });
 
-  api.persistAttribute(READ_INCANTATION_ATTRIBUTE);
-  api.persistAttribute(LADY_TEST_ATTRIBUTE);
-  api.persistAttribute(BEGGAR_ASKED_ATTRIBUTE);
-  api.persistAttribute(BEGGAR_DONE_ATTRIBUTE);
-  api.persistAttribute(HIVE_REPELLED_ATTRIBUTE);
-  api.persistAttribute(CANDLE_ASKED_ATTRIBUTE);
+  api.persistAttribute(READ_INCANTATION_ATTRIBUTE, false);
+  api.persistAttribute(LADY_TEST_ATTRIBUTE, false);
+  api.persistAttribute(BEGGAR_ASKED_ATTRIBUTE, false);
+  api.persistAttribute(BEGGAR_DONE_ATTRIBUTE, false);
+  api.persistAttribute(HIVE_REPELLED_ATTRIBUTE, false);
+  api.persistAttribute(CANDLE_ASKED_ATTRIBUTE, false);
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcDialogueCondition(answerCondition);

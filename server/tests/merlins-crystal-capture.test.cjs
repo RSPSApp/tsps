@@ -1059,3 +1059,28 @@ test("the beggar's talk closed after the bread is given: no sword, and another l
   await play(f, () => h.talk(f, beggar), ["Yes, here you go."]);
   assert.equal(count(f, I.EXCALIBUR), 1);
 });
+
+test("t1967: stage 5 as Thrantax's deed line shows, so closing it there keeps the boon", async (t) => {
+  const f = ritualActor(t);
+  await dropItem(f, I.BAT_BONES);
+  h.ticks(f, 3);
+  for (let i = 0; i < 40 && !String(h.shown(f)?.text ?? "").startsWith("The deed is done."); i++) {
+    const line = h.shown(f);
+    if (line?.who === "menu") await h.choose(f, line.text.split("|").includes("Snarthon Candtrick Termanto") ? "Snarthon Candtrick Termanto" : line.text.split("|")[0]);
+    else if (line) await h.continueLine(f);
+    else h.tick(f);
+  }
+  assert.ok(String(h.shown(f)?.text).startsWith("The deed is done."));
+  assert.equal(stage(f), S.BOUND, "before the line is continued");
+  const g = reload(t, f, [2778, 3515, 0]);
+  assert.equal(stage(g), S.BOUND, "a logout on the line keeps it");
+});
+
+test("one player's plea does not hold Mordred for another player", async (t) => {
+  const { f, mordred } = fightActor(t);
+  await beatMordred(f, mordred);
+  const other = actor(t, { stage: S.LANCELOT, tile: [2768, 3403, 2] });
+  assert.notEqual(h.PM.emitCanAttack(other.player, mordred), false, "the other player is not refused");
+  assert.equal(h.PM.emitCanAttack(f.player, mordred), false, "the pleading player and her son don't fight");
+  assert.equal(h.PM.emitCanAttack(mordred, f.player), false);
+});

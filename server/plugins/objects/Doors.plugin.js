@@ -1097,12 +1097,12 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
     // inside, door_open (62); the player walks out and they are back two ticks later. From outside they stay
     // locked (MerlinsCrystal.Quest's door:toggle, tick 1264).
     Object.freeze({
-      closed: [[71, 2763, 3402, 0, 2], [72, 2763, 3401, 0, 2]],
+      closed: [[O.LARGE_DOOR, 2763, 3402, 0, 2], [O.LARGE_DOOR_2, 2763, 3401, 0, 2]],
       opened: [
         [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2763, 3402, 0, 2],
-        [core.CacheDefinitions.getLocId("inaclefayeunopenabledoorl"), 2764, 3402, 0, 1],
+        [O.LARGE_DOOR_3, 2764, 3402, 0, 1], // inaclefayeunopenabledoorl
         [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2763, 3401, 0, 2],
-        [core.CacheDefinitions.getLocId("inaclefayeunopenabledoorr"), 2764, 3401, 0, 3],
+        [O.LARGE_DOOR_4, 2764, 3401, 0, 3], // inaclefayeunopenabledoorr
       ],
       crossX: 2764,
       walkOver: true,

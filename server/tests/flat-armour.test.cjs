@@ -240,3 +240,42 @@ test('6782: the actual Karil follow-up keeps half-primary damage, its own armour
   assert.equal(secondary.rewardsExperience(), false);
   assert.equal(player.getSkillManager().getExperience(core.Skill.RANGED), 0);
 });
+
+test('6782: Ward of Arceuus still takes 10% off a fixed, no-accuracy roll from Duke Sucellus (a demon)', t => {
+  const { player, npc: duke } = actors(t, 12191);
+  assert.equal(duke.getCurrentDefinition().isDemon(), true);
+  player.getSkillManager().setMaxLevel(core.Skill.HITPOINTS, 99, false);
+  player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 99, false);
+  const method = new core.MeleeCombatMethod();
+  method.type = () => core.CombatType.MAGIC;
+  const strike = () => new core.PendingHit(duke, player, method, {
+    delay: 0, damage: 40, bypassProtectionPrayer: true, rollAccuracy: false, experience: false, handleAfterHitEffects: false,
+  }).getTotalDamage();
+  assert.equal(strike(), 40, 'no ward: the full fixed hit');
+  player.setAttribute('arceuus:ward-until', core.World.getProcessCycle() + 100);
+  assert.equal(strike(), 36, 'warded: 40 less floor(40 / 10)');
+});
+
+test('6782: Infernal tecpatl Brand splits the raw roll, then each splat gets its own flat armour (both signs)', t => {
+  let brand;
+  const api = PluginManager.createApi('FlatArmourBrandTest');
+  require('../plugins/combat/specials/InfernalTecpatl.SpecialAttack')(new Proxy(
+    { registerCombatSpecial: definition => { brand = definition; } },
+    { get: (obj, key) => key in obj ? obj[key] : api[key] }));
+  t.mock.method(core.CombatSpecial, 'activeTraitsFor', () => null);
+  t.mock.method(core.AccuracyFormulasDpsCalc, 'rollAccuracy', () => true);
+  const brandOn = (gameval, raw) => {
+    const { player, npc } = actors(t, gameval);
+    npc.setHitpoints(200);
+    const original = core.CombatFactory.getHitDamage;
+    core.CombatFactory.getHitDamage = () => new core.HitDamage(raw, core.HitMask.RED);
+    let hit;
+    try { [hit] = brand.combatMethod.hits(player, npc); } finally { core.CombatFactory.getHitDamage = original; }
+    npc.manipulateHit(hit);
+    return { splats: splats(hit), total: hit.getTotalDamage() };
+  };
+  assert.deepEqual(brandOn('frost_nagua', 20), { splats: [9, 9, 9, 9], total: 36 }, '20 as 5s, each gains 4');
+  assert.deepEqual(brandOn('elite_black_knight_1', 20), { splats: [0, 0, 0, 0], total: 0 }, '20 as 5s, each loses 7');
+  assert.deepEqual(brandOn('elite_black_knight_1', 5), { splats: [0, 0, 0, 0], total: 0 },
+    'the split minimum of 1 comes before the armour, so it does not revive a zeroed splat');
+});

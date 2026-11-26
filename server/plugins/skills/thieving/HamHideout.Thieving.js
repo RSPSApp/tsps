@@ -8,7 +8,7 @@
  * concussion counts up varbit 235 `ham_thief`; the third beats them unconscious: "You're beaten unconscious and
  * bundled out of the HAM Camp." with the stun, the falling animation and a fade two ticks later, and four ticks
  * after that they wake ("You slowly wake up in an unknown place.") in the jail or outside. Climbing down the
- * trapdoor puts the count back to 0 (HamTrapdoor.Thieving.js), as does waking up.
+ * trapdoor puts the count back to 0 (HamTrapdoor.Thieving.js), as do climbing the ladder out and waking up.
  *
  * The jail door (5501) is "very secure": Open answers so, and its lock can only be picked from inside the cell.
  * Each Pick-lock attempt takes seven ticks; a failure numbs the fingers as the trapdoor's do (the Wiki's page says
@@ -39,6 +39,9 @@ const CELL_MIN_X = 3183;
 const JAIL = Object.freeze([3185, 9609, 0]);
 const OUTSIDE = Object.freeze([3186, 3211, 0]);
 const JAIL_SHARE = 0.75;
+/** The hideout's way out (osf_ham_ladder), which also clears the count. */
+const EXIT_LADDER = "LADDER_58";
+const EXIT_LADDER_TILE = Object.freeze([3149, 9653, 0]);
 
 const MESSAGE = Object.freeze({
   CONCUSSED: "You feel slightly concussed from the blow.",
@@ -111,16 +114,23 @@ const setThief = (player, value) => {
   if (thief(player) !== value) player.getPacketSender().sendVarbit(HAM_THIEF_VARBIT, value);
 };
 
-/** One tick-counted sequence for a player; it stops when they leave the game or die. */
-function later(player, steps) {
+/**
+ * One tick-counted sequence for a player; it stops when they leave the game or die, or when `holds()` is false
+ * on a tick before its last. `onStop` runs however it ends.
+ */
+function later(player, steps, { holds = () => true, onStop = () => {} } = {}) {
   const last = Math.max(...steps.keys());
   core.TaskManager.submit(new (class extends core.Task {
     constructor() { super(1, player, false); this.ticksRun = 0; }
     execute() {
       this.ticksRun++;
-      if (!player.isRegistered() || player.getHitpoints() <= 0) return this.stop();
+      if (!player.isRegistered() || player.getHitpoints() <= 0 || !holds(this.ticksRun)) return this.stop();
       steps.get(this.ticksRun)?.();
       if (this.ticksRun >= last) this.stop();
+    }
+    stop() {
+      onStop();
+      super.stop();
     }
   })());
 }
@@ -149,7 +159,18 @@ function bundleOut(player) {
     }],
     [3 + WAKE_TICKS, () => player.getPacketSender().closeSubInterface(FADE_OVERLAY_UID)],
   ]);
-  later(player, steps);
+  // Moved some other way before the move (a teleport): the sequence ends there. However it ends, the
+  // player may move again.
+  later(player, steps, {
+    holds: (tick) => tick > 1 + MOVE_TICKS || player.getLocation().equals(start),
+    onStop: () => movement.setBlockMovement(false),
+  });
+}
+
+/** Climbing out of the hideout clears the count, as entering does. */
+function leftHideout({ player, objectId, location }) {
+  if (objectId === core.ObjectIdentifiers[EXIT_LADDER] && location?.x === EXIT_LADDER_TILE[0] &&
+      location.y === EXIT_LADDER_TILE[1] && location.z === EXIT_LADDER_TILE[2]) setThief(player, 0);
 }
 
 /** `thieving:struck`: a H.A.M. Member's blow in the hideout concusses, or Agility partly avoids it. */
@@ -256,11 +277,12 @@ function cancel({ player }) {
 module.exports = function attach(pluginApi) {
   core = pluginApi.core;
   pluginApi.onCustomEvent("thieving:struck", struck);
+  pluginApi.onCustomEvent("loc-teleports:arrived", leftHideout);
   pluginApi.onCustomEvent("door:toggle", openJailDoor);
   pluginApi.onObjectInteraction("Door", { "Pick-lock": pickJailLock });
   pluginApi.onCustomEvent("player:world-input", cancel);
 };
 module.exports._test = {
-  chartChance, struck, pickJailLock, openJailDoor, LOCK_CHARTS, MESSAGE, JAIL, OUTSIDE,
+  chartChance, struck, pickJailLock, openJailDoor, leftHideout, LOCK_CHARTS, MESSAGE, JAIL, OUTSIDE,
   setRandom(fn) { random = fn ?? Math.random; },
 };

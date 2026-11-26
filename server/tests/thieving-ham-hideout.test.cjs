@@ -252,3 +252,40 @@ test('a new Pick-lock starts the lock from its first chart', (t) => {
   assert.equal(varbits.get(235), 0);
   assert.equal(tasks.filter((task) => task.isRunning()).length, 1, 'the old attempt stopped');
 });
+
+test("climbing the hideout's ladder out clears the concussions, so the trapdoor isn't left open", (t) => {
+  // rsprox 227/01723.txt tick 9203: the ladder's Climb-up, ham_thief 1 -> 0 (at 1 the trapdoor's multiloc shows it open).
+  const { player, varbits } = hamPlayer(t, [3149, 9652, 0]);
+  varbits.set(235, 1);
+  const arrived = { player, objectId: core.ObjectIdentifiers.LADDER_58, location: { x: 3149, y: 9653, z: 0 } };
+  for (const handler of handlers.get('loc-teleports:arrived') ?? []) handler(arrived);
+  assert.equal(varbits.get(235), 0);
+});
+
+test('a bundle-out stops if the player is moved away before it moves them, and frees their movement', (t) => {
+  t.mock.method(Math, 'random', () => 0.999999);
+  const rolls = [0.999999, 0];
+  HamHideout._test.setRandom(() => rolls.shift() ?? 0.999999);
+  t.after(() => HamHideout._test.setRandom());
+  const { player, varbits } = hamPlayer(t);
+  varbits.set(235, 2);
+  failPickpocket(player, 4);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true, 'held while bundled out');
+  player.setLocation(new core.Location(3222, 3218, 0)); // teleported away meanwhile
+  tick(10);
+  assert.ok(ticks.flat().every((line) => !line.startsWith('move') && !line.includes('wake up')), 'no move, no wake-up');
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+});
+
+test('dying during a bundle-out frees the movement it held', (t) => {
+  t.mock.method(Math, 'random', () => 0.999999);
+  HamHideout._test.setRandom(() => 0.999999);
+  t.after(() => HamHideout._test.setRandom());
+  const { player, varbits } = hamPlayer(t);
+  varbits.set(235, 2);
+  failPickpocket(player, 4);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true);
+  t.mock.method(player, 'getHitpoints', () => 0);
+  tick(1);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+});

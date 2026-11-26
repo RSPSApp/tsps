@@ -39,6 +39,44 @@ test('an unbuilt bridge logs the setup command and players get the plain message
  assert.match(adminLog[0],/not built/);
 });
 
+test('a browser-hosted world without a shared bridge says so instead of asking for a build',async()=>{
+ const {instance,logged,spawned}=launcher({env:{BROWSER_HOST:'1'},exists:()=>assert.fail('no build to look for'),findJava:()=>assert.fail('no JDK to look for')});
+ await instance.start();
+ assert.equal(instance.state,'browser-host');assert.equal(spawned.length,0);
+ assert.match(logged[0],/browser-hosted world/);assert.doesNotMatch(logged[0],/yarn bridge:setup/);
+ const adminLog=[];
+ const http=new QuestHelperHttp({launcher:instance,log:line=>adminLog.push(line),fetchImpl:async()=>assert.fail('nothing to ask')});
+ await assert.rejects(http.catalog(),error=>error.message===PLAYER_NOT_ENABLED&&error.questHelperCode===NOT_ENABLED);
+ assert.match(adminLog[0],/QUEST_HELPER_URL/);assert.doesNotMatch(adminLog[0],/yarn bridge:setup/);
+});
+
+test('a browser-hosted world with a token but no bridge URL still says it has no bridge',async()=>{
+ const {instance,spawned}=launcher({env:{BROWSER_HOST:'1',QUEST_HELPER_TOKEN:'x'.repeat(24)}});
+ await instance.start();
+ assert.equal(instance.state,'browser-host');assert.equal(spawned.length,0);
+});
+
+test('the bridge the server starts stays private even when shared-bridge settings are set',async()=>{
+ const env={QUEST_HELPER_BIND:'0.0.0.0',QUEST_HELPER_SHARED:'1',QUEST_HELPER_ALLOWED_ORIGINS:'bad',QUEST_HELPER_TRUST_PROXY:'1',QUEST_HELPER_MAX_SESSIONS:'1',KEEP:'yes'};
+ const {instance,spawned}=launcher({env});
+ assert.equal(await instance.start(),true);
+ const childEnv=spawned[0][2].env;
+ assert.equal(childEnv.QUEST_HELPER_BIND,'127.0.0.1');assert.equal(childEnv.KEEP,'yes');
+ for(const key of ['QUEST_HELPER_SHARED','QUEST_HELPER_ALLOWED_ORIGINS','QUEST_HELPER_TRUST_PROXY','QUEST_HELPER_MAX_SESSIONS'])assert.equal(key in childEnv,false,key);
+ instance.stop();
+});
+
+test('a browser-hosted world given a shared bridge uses it',async()=>{
+ const env={BROWSER_HOST:'1',QUEST_HELPER_URL:'https://quest-helper.example',QUEST_HELPER_TOKEN:'x'.repeat(24)};
+ const {instance,spawned}=launcher({env});
+ await instance.start();
+ assert.equal(instance.state,'external');assert.equal(spawned.length,0);
+ const asked=[];
+ const http=new QuestHelperHttp({launcher:instance,url:env.QUEST_HELPER_URL,token:env.QUEST_HELPER_TOKEN,fetchImpl:async(url,init)=>{asked.push([url,init.headers.Authorization]);return new Response(JSON.stringify({protocol:1,quests:[]}));}});
+ assert.deepEqual(await http.catalog(),{protocol:1,quests:[]});
+ assert.deepEqual(asked,[['https://quest-helper.example/catalog',`Bearer ${'x'.repeat(24)}`]]);
+});
+
 test('no JDK 21 is reported rather than spawning',async()=>{
  const {instance,spawned,logged}=launcher({findJava:()=>null});
  await instance.start();

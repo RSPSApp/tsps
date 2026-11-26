@@ -52,8 +52,44 @@ them. The agent MCP's `quest_helper` tool drives this bridge headless — see
 
 - Start the server with the same `QUEST_HELPER_TOKEN` (and `QUEST_HELPER_PORT`, if you changed it).
 - Without the bridge, players see that Quest Helper isn't enabled on this world, and the server log says why. The native Tutorial Island and Recipe for Disaster routes still work, because the server provides them.
-- The bridge binds only `127.0.0.1`. `GET /health` is public. `GET /catalog`, `POST /evaluate` and `POST /close` need `Authorization: Bearer <secret>`. The browser never sees the secret.
-- Requests are bounded to 4 MiB and 128 sessions.
+- By default the bridge binds only `127.0.0.1` and refuses other callers. `GET /health` is public. `GET /catalog`, `POST /evaluate` and `POST /close` need `Authorization: Bearer <secret>`. The browser never sees the secret.
+- Requests are bounded to 4 MiB and 128 sessions (`QUEST_HELPER_MAX_SESSIONS`). A session nobody has evaluated for 30 minutes (`QUEST_HELPER_SESSION_IDLE_MS`) is stopped, so a world that went away without closing its sessions doesn't keep them.
+
+## Shared bridge
+
+A browser-hosted world (RSPS.app, `BROWSER_HOST=1`) runs its server in a WebContainer, which can't
+run Java. It gets the full Quest Helper from one bridge that many worlds share; without one, its log
+says so and players keep the Tutorial Island and Recipe for Disaster guides.
+
+Run the built install on a host with JDK 21, behind an HTTPS reverse proxy on the same host:
+
+```bash
+export QUEST_HELPER_TOKEN=$(openssl rand -hex 32)   # the same value goes to every world
+export QUEST_HELPER_SHARED=1 QUEST_HELPER_PORT=16471   # stays on 127.0.0.1; the proxy reaches it
+export QUEST_HELPER_ALLOWED_ORIGINS='https://*.webcontainer-api.io'
+export QUEST_HELPER_TRUST_PROXY=1
+build/install/offline-quest-helper-bridge/bin/offline-quest-helper-bridge
+```
+
+Then give each world `QUEST_HELPER_URL=https://<bridge host>` and the same `QUEST_HELPER_TOKEN`.
+For a browser-hosted world, the page that starts its WebContainer puts them in its environment.
+The bridge a game server starts itself ignores these settings and stays private to that server.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `QUEST_HELPER_SHARED` | off | `1` applies the shared limits below while bound to loopback, behind a local proxy. |
+| `QUEST_HELPER_BIND` | `127.0.0.1` | Address to listen on. Any non-loopback address accepts other hosts and implies shared. Prefer loopback plus a proxy; if the port is reachable directly, don't set `QUEST_HELPER_TRUST_PROXY`. |
+| `QUEST_HELPER_ALLOWED_ORIGINS` | none | Comma-separated origins allowed by CORS, exact or `http(s)://*.domain`. A WebContainer's requests come from the browser, so its origin must be here. |
+| `QUEST_HELPER_RATE_PER_MIN` | 6000 shared, off otherwise | Requests per caller address per minute; more get 429. |
+| `QUEST_HELPER_TRUST_PROXY` | off | `1` counts the last `X-Forwarded-For` hop as the caller. Set it only when every request comes through a proxy that appends it. |
+| `QUEST_HELPER_THREADS` | 8 shared, 2 otherwise | HTTP worker threads. Shared bridges also drop requests that take over 30 s to arrive. |
+| `QUEST_HELPER_MAX_SESSIONS` | 128 | Open sessions across every world. |
+| `QUEST_HELPER_MAX_SESSIONS_PER_CALLER` | 32 shared, off otherwise | Open sessions one caller address may hold, so one world can't take every slot. |
+| `QUEST_HELPER_SESSION_IDLE_MS` | 1800000 | Idle time before a session is stopped. |
+
+- **The token isn't secret from hosts.** Every browser host's page can read the token it was given, so treat it as a shared key that stops casual use. The request limit and session caps are what bound the load.
+- **One evaluation at a time.** The engine evaluates one step at a time for every world. If it falls behind, run more bridges behind the proxy, each world kept on one of them (sticky routing by caller address): sessions live in the bridge that opened them.
+- **If the bridge is down,** players see that Quest Helper isn't enabled, the world's log names the bridge it couldn't reach, and the native guides still work.
 
 ## Protocol 1
 

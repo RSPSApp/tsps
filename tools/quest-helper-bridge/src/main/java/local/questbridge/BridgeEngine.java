@@ -19,10 +19,30 @@ import net.runelite.api.events.*;
 public final class BridgeEngine implements AutoCloseable {
   public static final String SOURCE = "06da90f982518a093f2fe1c9cfac5547fa7053d3";
   static final Gson GSON = new Gson();
+  static final int DEFAULT_MAX_SESSIONS = 128;
+  static final long DEFAULT_IDLE_MS = 30 * 60 * 1000L;
   final Map<String, Session> sessions = new HashMap<>();
   final JsonArray routes;
+  final int maxSessions;
+  /** Open sessions one caller may hold (0: no quota), so one caller can't take every slot. */
+  int maxSessionsPerCaller;
+  final long idleMs;
+  final java.util.function.LongSupplier clock;
 
   public BridgeEngine() {
+    this(DEFAULT_MAX_SESSIONS, DEFAULT_IDLE_MS, System::currentTimeMillis);
+  }
+
+  /**
+   * A world that goes away without {@code /close} (a closed browser tab, a killed server) leaves
+   * its sessions behind; they are stopped once idle for {@code idleMs}, so a bridge shared by many
+   * worlds doesn't fill up.
+   */
+  public BridgeEngine(int maxSessions, long idleMs, java.util.function.LongSupplier clock) {
+    if (maxSessions < 1 || idleMs < 1) throw new IllegalArgumentException("Invalid session limits");
+    this.maxSessions = maxSessions;
+    this.idleMs = idleMs;
+    this.clock = clock;
     try (var in = BridgeEngine.class.getResourceAsStream("/catalog.json")) {
       routes =
           JsonParser.parseReader(
@@ -83,7 +103,12 @@ public final class BridgeEngine implements AutoCloseable {
     throw new BridgeFailure("UNKNOWN_QUEST", "questKey", "Unknown quest " + key);
   }
 
-  public synchronized JsonObject evaluate(JsonObject req) {
+  public JsonObject evaluate(JsonObject req) {
+    return evaluate(req, "");
+  }
+
+  /** {@code caller} is the address the request came from, for the per-caller session quota. */
+  public synchronized JsonObject evaluate(JsonObject req, String caller) {
     JsonObject result = new JsonObject();
     Session current = null;
     result.addProperty("protocol", 1);
@@ -99,8 +124,16 @@ public final class BridgeEngine implements AutoCloseable {
         throw new BridgeFailure("PROTOCOL", "protocol", "Expected protocol 1");
       String id = req.get("session").getAsString(), key = req.get("questKey").getAsString();
       long seq = req.get("sequence").getAsLong();
-      if (id.length() > 160 || sessions.size() > 128 && !sessions.containsKey(id))
+      long now = clock.getAsLong();
+      expireIdle(now);
+      if (id.length() > 160 || sessions.size() >= maxSessions && !sessions.containsKey(id))
         throw new BridgeFailure("LIMIT", "session", "Session limit exceeded");
+      if (maxSessionsPerCaller > 0 && !sessions.containsKey(id)) {
+        int held = 0;
+        for (Session other : sessions.values()) if (other.caller.equals(caller)) held++;
+        if (held >= maxSessionsPerCaller)
+          throw new BridgeFailure("LIMIT", "session", "Session limit exceeded for this caller");
+      }
       Session s = sessions.get(id);
       if (s != null && seq <= s.sequence)
         throw new BridgeFailure("STALE_SEQUENCE", "sequence", "Sequence must increase");
@@ -129,9 +162,11 @@ public final class BridgeEngine implements AutoCloseable {
       if (s == null || !s.key.equals(key) || !s.variant.equals(variant)) {
         if (s != null) s.stop();
         s = new Session(key, variant, snapshot);
+        s.caller = caller;
         sessions.put(id, s);
       } else s.snapshot.update(snapshot);
       s.sequence = seq;
+      s.lastUsed = now;
       current = s;
       s.services.applyClientConfig(
           req.has("config") && req.get("config").isJsonObject()
@@ -237,6 +272,19 @@ public final class BridgeEngine implements AutoCloseable {
     return result;
   }
 
+  /** Stops and drops every session nobody has evaluated for {@code idleMs}. */
+  synchronized int expireIdle(long now) {
+    int expired = 0;
+    for (var it = sessions.values().iterator(); it.hasNext(); ) {
+      Session s = it.next();
+      if (now - s.lastUsed < idleMs) continue;
+      it.remove();
+      s.stop();
+      expired++;
+    }
+    return expired;
+  }
+
   public synchronized boolean closeSession(String session) {
     Session s = sessions.remove(session);
     if (s == null) return false;
@@ -256,6 +304,8 @@ public final class BridgeEngine implements AutoCloseable {
     final HeadlessServices services;
     final QuestHelper helper;
     long sequence = -1;
+    long lastUsed;
+    String caller = "";
     boolean started;
     /** useShortestPath as the steps last saw it (QuestHelperPlugin.onConfigChanged's toggle). */
     boolean shortestPath;

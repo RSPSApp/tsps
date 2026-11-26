@@ -53,9 +53,12 @@ server log says how to set it up. Tutorial Island and Recipe for Disaster still 
 server answers those itself. To run one shared bridge instead (`yarn bridge`, several worktrees),
 put the same `QUEST_HELPER_TOKEN` (at least 24 characters) in `.env`; the server then leaves the
 bridge to you. `QUEST_HELPER_AUTOSTART=0` turns the auto-start off. `QUEST_HELPER_URL` can point the
-server at a bridge outside loopback, such as `http://quest-helper:16471`; it must be an HTTP(S)
-URL without credentials, query parameters or a fragment. The default is
-`http://127.0.0.1:${QUEST_HELPER_PORT:-16471}`.
+server at a bridge outside loopback, such as `http://quest-helper:16471` (start that bridge with
+`QUEST_HELPER_BIND=0.0.0.0`); it must be an HTTP(S) URL without credentials, query parameters or a
+fragment. The default is `http://127.0.0.1:${QUEST_HELPER_PORT:-16471}`. A browser-hosted world
+can't run Java, so it gets the full Quest Helper only when it is given a shared bridge's
+`QUEST_HELPER_URL` and `QUEST_HELPER_TOKEN` (see
+[Shared bridge](tools/quest-helper-bridge/README.md#shared-bridge)).
 
 ## Publish your world
 

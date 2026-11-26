@@ -2,7 +2,7 @@
 //
 // Guardian boots follow rsprox capture 2225 (rev 228, ticks 221-229): core used on Bandos boots,
 // a two-item confirmation box, a "Yes." / "No." menu, and one tick after Yes the guardian boots in
-// the core's slot with the absorption box. No experience is given. Everything goes through the
+// the first free slot (the core's, there) with the absorption box. No experience is given. Everything goes through the
 // real PluginManager dispatch, dialogue manager, MultiChatboxPrompt and TaskManager.
 const assert = require("node:assert/strict");
 const path = require("node:path");
@@ -113,7 +113,7 @@ for (const [order, used, target] of [["core on boots", () => CORE, () => BOOTS],
   });
 }
 
-test("Yes makes the boots one tick later in the core's slot, with the captured box and no xp", (t) => {
+test("Yes makes the boots one tick later in the first free slot, with the captured box and no xp", (t) => {
   const { player, animations, xp } = actor(t);
   give(player, CORE, BOOTS);
   itemOnItem(player, CORE, BOOTS);
@@ -123,7 +123,7 @@ test("Yes makes the boots one tick later in the core's slot, with the captured b
   assert.equal(slots(player)[1], BOOTS);
   tick();
   const after = slots(player);
-  assert.equal(after[0], RESULT, "the guardian boots take the core's slot (capture 2225, tick 227)");
+  assert.equal(after[0], RESULT, "the guardian boots take the first free slot, the core's here (capture 2225, tick 227)");
   assert.equal(after[1], -1, "the boots' slot is empty");
   assert.equal(after.filter((id) => id !== -1).length, 1);
   const success = player.getDialogueManager().getCurrent();

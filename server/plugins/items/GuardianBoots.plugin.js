@@ -6,6 +6,8 @@
  * asking for confirmation, then a "Yes." / "No." menu. One tick after Yes the boots and core
  * are replaced by guardian boots and an item box shows them with the absorption text. No
  * animation, graphic, sound or experience is sent. The Wiki transcript has the same three texts.
+ * The boots go to the first free slot; in the capture that was the core's slot, so the capture
+ * can't tell it from "the core's slot".
  * Ours: No. only closes the menu (not captured), and only the core-on-boots order is captured;
  * boots-on-core runs the same flow.
  */

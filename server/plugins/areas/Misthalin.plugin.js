@@ -3,7 +3,9 @@
  *
  * Edgeville
  *  - Ladder at 3097,9867 (dungeon) > Climb-up: surface at 3096,3468.
- *  - Trapdoor at 3097,3468 > Open: dungeon at 3096,9867.
+ *  - Trapdoor at 3097,3468: Open and Close swap the closed and open trapdoor (LocTeleports'
+ *    captured swaps); the open one's Climb-down: "You climb down through the trapdoor...",
+ *    then the dungeon at 3096,9867 (rsprox.net #320, #365, #426).
  *  - Lever at 3090,3475: the Levers plugin (docs/wilderness-levers.md).
  *
  * Varrock
@@ -31,7 +33,7 @@
  *    cave_goblin_markers modal (rsprox.net rec 3182, rev 232).
  */
 let pluginApi;
-let Location, Animation, GameObject, CacheDefinitions, ObjectManager, Objects, Items;
+let Location, Animation, GameObject, CacheDefinitions, ObjectManager, Objects, Items, ChatType;
 let climbDownAnimation;
 
 // Edgeville
@@ -39,6 +41,7 @@ const EDGEVILLE_DUNGEON_LADDER = { x: 3097, y: 9867, z: 0 };
 const EDGEVILLE_SURFACE = { x: 3096, y: 3468, z: 0 };
 const EDGEVILLE_TRAPDOOR = { x: 3097, y: 3468, z: 0 };
 const EDGEVILLE_DUNGEON_LANDING = { x: 3096, y: 9867, z: 0 };
+const EDGEVILLE_TRAPDOOR_CLIMB_MESSAGE = "You climb down through the trapdoor...";
 
 // Varrock
 const VARROCK_MANHOLE = { x: 3237, y: 3458, z: 0 };
@@ -153,7 +156,7 @@ const SWAMP_CAVE_MARKER_RANGE = 10;
 
 function initialize(api) {
   pluginApi = api;
-  ({ Location, Animation, GameObject, CacheDefinitions, ObjectManager, ObjectIdentifiers: Objects, ItemIdentifiers: Items } = api.core);
+  ({ Location, Animation, GameObject, CacheDefinitions, ObjectManager, ObjectIdentifiers: Objects, ItemIdentifiers: Items, ChatType } = api.core);
   climbDownAnimation = new Animation(827);
 }
 
@@ -171,12 +174,14 @@ function edgevilleLadderUp(event) {
   event.handled = true;
 }
 
-// Edgeville: trapdoor down into the dungeon.
-function edgevilleTrapdoorOpen(event) {
-  const { player, location } = event;
-  if (!isAt(location, EDGEVILLE_TRAPDOOR)) return false;
-  pluginApi.emitCustomEvent("ladders:climbDown", { player, destination: toLocation(EDGEVILLE_DUNGEON_LANDING) });
-  event.handled = true;
+// Edgeville: the open trapdoor's Climb-down into the dungeon, claimed before Ladders guesses.
+function claimEdgevilleTrapdoorClimb(request) {
+  if (request.handled || request.objectId !== Objects.TRAPDOOR_6) return;
+  const at = request.object?.getLocation?.();
+  if (!at || !isAt({ x: at.getX(), y: at.getY(), z: at.getZ() }, EDGEVILLE_TRAPDOOR)) return;
+  request.player.getPacketSender().sendTypedMessage(ChatType.SPAM, EDGEVILLE_TRAPDOOR_CLIMB_MESSAGE);
+  pluginApi.emitCustomEvent("ladders:climbDown", { player: request.player, destination: toLocation(EDGEVILLE_DUNGEON_LANDING) });
+  request.handled = true;
 }
 
 function hasClimbDown(definition) {
@@ -401,7 +406,7 @@ module.exports = {
     initialize(api);
     // Edgeville
     api.onObjectInteraction("Ladder", { "Climb-up": edgevilleLadderUp });
-    api.onObjectInteraction("Trapdoor", { Open: edgevilleTrapdoorOpen });
+    api.onCustomEvent("ladders:climb", claimEdgevilleTrapdoorClimb);
     // Varrock
     api.onObjectInteraction("Manhole", {
       Open: varrockManholeOpen,

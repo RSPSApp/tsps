@@ -630,3 +630,36 @@ test("t1561-1574, B9330-9342: a 'perfect' gold bar on the furnace opens crafting
   }
   assert.deepEqual([count(f, I.PERFECT_GOLD_BAR), count(f, I.RUBY)], [0, 0]);
 });
+
+test("t1531-1536: Smelt with a 'perfect' bar, the moulds and a 'perfect' ore still held smelts the ore; the gold menu waits until it is gone", async (t) => {
+  const f = actor(t, { tile: [3271, 3186], value: S.BOOT,
+    items: [[I.PERFECT_GOLD_BAR], [I.PERFECT_GOLD_ORE], [I.RUBY], [I.RUBY], [I.RING_MOULD], [I.NECKLACE_MOULD]] });
+  const menus = [];
+  const sender = f.player.getPacketSender();
+  const send = sender.sendCreationMenu.bind(sender);
+  sender.sendCreationMenu = (menu) => { menus.push(menu); return send(menu); };
+  await h.dispatch(f, { type: "object_option", id: FURNACE, x: FURNACE_AT[0], y: FURNACE_AT[1], clickType: 2 });
+  h.ticks(f, 4);
+  assert.notEqual(f.player.getInterfaceId(), 446, "not the jewellery menu");
+  assert.deepEqual(menus.at(-1)?.getItems(), [I.GOLD_BAR], "the Gold bar, from the 'perfect' ore");
+});
+
+test("the Wiki ('perfect' gold bar): it makes the other gold jewellery too, without the prefix; used on the furnace it makes the 'perfect' ruby ring even with a plain gold bar carried", async (t) => {
+  const f = actor(t, { tile: [3271, 3186], value: S.BOOT, items: [[I.PERFECT_GOLD_BAR], [I.SAPPHIRE], [I.RING_MOULD]] });
+  await h.dispatch(f, { type: "object_option", id: FURNACE, x: FURNACE_AT[0], y: FURNACE_AT[1], clickType: 2 });
+  for (let i = 0; i < 6 && f.player.getInterfaceId() !== 446; i++) h.tick(f);
+  assert.equal(f.player.getInterfaceId(), 446);
+  h.PM.emitInterfaceActionClick({ player: f.player, buttonId: (446 << 16) | 9, action: 1, handled: false });
+  h.ticks(f, 4);
+  assert.deepEqual([count(f, I.SAPPHIRE_RING), count(f, I.PERFECT_GOLD_BAR)], [1, 0]);
+
+  const g = actor(t, { tile: [3271, 3186], value: S.BOOT, items: [[I.GOLD_BAR], [I.PERFECT_GOLD_BAR], [I.RUBY], [I.RING_MOULD]] });
+  h.ticks(g, 2);
+  await g.connection.dispatch([{ type: "item_on_object", itemId: I.PERFECT_GOLD_BAR, slot: slotOf(g, I.PERFECT_GOLD_BAR), widgetId: 149 << 16,
+    objectId: FURNACE, x: FURNACE_AT[0], y: FURNACE_AT[1] }]);
+  for (let i = 0; i < 10 && g.player.getInterfaceId() !== 446; i++) h.tick(g);
+  assert.equal(g.player.getInterfaceId(), 446);
+  h.PM.emitInterfaceActionClick({ player: g.player, buttonId: (446 << 16) | 11, action: 1, handled: false });
+  h.ticks(g, 4);
+  assert.deepEqual([g.player.getInventory().getAmount(I.PERFECT_RING), g.player.getInventory().getAmount(I.RUBY_RING), g.player.getInventory().getAmount(I.GOLD_BAR)], [1, 0, 1]);
+});

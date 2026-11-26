@@ -283,7 +283,8 @@ function useOnFurnace(event) {
     && recipe.ingredients.some(([id]) => id === event.itemId));
   if (recipes.length === 0) return;
   event.handled = true;
-  // 'perfect' gold ore on the furnace smelts one bar at once, whatever else is carried (recording 1002185 ticks 9304, 9318).
+  // 'perfect' gold ore on the furnace smelts one bar at once (recording 1002185 ticks 9304, 9318, holding no other ore;
+  // ours: the same with other ore carried).
   const perfect = perfectGoldRecipe();
   if (perfect && event.itemId === Core.ItemIdentifiers.PERFECT_GOLD_ORE) {
     startSmelting(event.player, perfect, 1, furnaceIdOf(event));

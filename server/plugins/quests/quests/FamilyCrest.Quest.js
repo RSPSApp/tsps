@@ -634,7 +634,8 @@ module.exports = function registerFamilyCrestQuest(api) {
   /** Wiki: Chronozon can only die once each of the four Blast spells has hit him; the hits are tracked per player. */
   function handleNpcHitModify({ npc, hit }) {
     if (npc?.getId?.() !== NpcIdentifiers.CHRONOZON) return;
-    if (hit?.getCombatType?.() !== CombatType.MAGIC || hit.isAccurate?.() !== true || hit.getTotalDamage?.() <= 0) return;
+    // The same accurate hit the message announced (handleHitQueued), a 0 included.
+    if (hit?.getCombatType?.() !== CombatType.MAGIC || hit.isAccurate?.() !== true) return;
     const attacker = hit.getAttacker?.();
     if (attacker?.isPlayer?.() !== true) return;
     const player = attacker.getAsPlayer();

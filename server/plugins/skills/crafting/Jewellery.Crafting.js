@@ -160,7 +160,21 @@ function storeLastItem(player, buttonId) {
   if (Number.isInteger(value) && varbitId != null) player.getPacketSender().sendVarbit(varbitId, value);
 }
 
-function goldProduct(player, component) {
+/**
+ * The gold bar a gold-menu product is made from. Family Crest's 'perfect' gold bar works as a gold bar (Wiki,
+ * 'perfect' gold bar: other jewellery comes out without the prefix): it is used when it opened the menu, or when no
+ * plain gold bar is carried. Ours: no recording holds both bars.
+ */
+function goldBarFor(player, menu) {
+  const { ItemIds: I } = Shared.getCore();
+  const inventory = player.getInventory();
+  if (inventory.contains(I.PERFECT_GOLD_BAR) && (menu?.bar === I.PERFECT_GOLD_BAR || !inventory.contains(I.GOLD_BAR))) {
+    return I.PERFECT_GOLD_BAR;
+  }
+  return I.GOLD_BAR;
+}
+
+function goldProduct(player, component, menu) {
   const { ItemIds: I } = Shared.getCore();
   const { goldTypes, goldGems, slayerRing } = data();
   if (component === slayerRing.component) return slayerRingProduct(player, slayerRing);
@@ -169,15 +183,15 @@ function goldProduct(player, component) {
   const gemIndex = type.components.indexOf(component);
   const [itemId, level, xp] = type.products[gemIndex];
   const gemId = goldGems[gemIndex];
-  // Family Crest: with 'perfect' gold bars and no plain ones, the ruby ring and necklace are the 'perfect'
-  // pieces (rsprox local recordings 1002252 ticks 1561-1574, 1002185 ticks 9330-9342: no message).
-  const inventory = player.getInventory();
-  if (gemId === I.RUBY && !inventory.contains(I.GOLD_BAR) && inventory.contains(I.PERFECT_GOLD_BAR)) {
+  const bar = goldBarFor(player, menu);
+  // From a 'perfect' gold bar the ruby ring and necklace are the 'perfect' pieces (rsprox local recordings 1002252
+  // ticks 1561-1574, 1002185 ticks 9330-9342: no message).
+  if (bar === I.PERFECT_GOLD_BAR && gemId === I.RUBY) {
     const perfect = data().perfect.find((recipe) => recipe.mouldId === type.mouldId);
-    if (perfect) return { itemId: perfect.itemId, level: perfect.level, xp: perfect.xp, bar: I.PERFECT_GOLD_BAR,
+    if (perfect) return { itemId: perfect.itemId, level: perfect.level, xp: perfect.xp, bar,
       mouldId: perfect.mouldId, extra: [I.RUBY], amount: 1 };
   }
-  return { itemId, level, xp, bar: I.GOLD_BAR, mouldId: type.mouldId,
+  return { itemId, level, xp, bar, mouldId: type.mouldId,
     extra: gemId === null ? [] : [gemId], amount: 1 };
 }
 
@@ -225,14 +239,15 @@ function handleJewelleryButton(event) {
     menu.amount = amount;
     player.getPacketSender().sendConfig(MAKE_QUANTITY_VARP, amount === 28 ? 0 : amount);
   } else {
-    const product = group === GOLD_CRAFTING_INTERFACE ? goldProduct(player, component) : silverProduct(component);
+    const product = group === GOLD_CRAFTING_INTERFACE ? goldProduct(player, component, menu) : silverProduct(component);
     if (product) startFurnaceProduct(player, menu, product, buttonId);
   }
 }
 
-function openFurnaceMenu(player, group) {
+/** `bar`: the bar used on the furnace to open it, if any. */
+function openFurnaceMenu(player, group, bar = null) {
   Shared.stopCrafting(player);
-  player.setAttribute(JEWELLERY_MENU_ATTRIBUTE, { amount: 1, location: player.getLocation().clone() });
+  player.setAttribute(JEWELLERY_MENU_ATTRIBUTE, { amount: 1, location: player.getLocation().clone(), bar });
   player.setInterfaceId(group);
   player.getPacketSender().sendConfig(MAKE_QUANTITY_VARP, 1).sendSubInterface(MAIN_MODAL_TARGET_UID, group, 0);
 }
@@ -245,7 +260,10 @@ function furnaceMenuFor(player) {
   if (inventory.contains(I.GOLD_BAR) && goldTypes.some(({ mouldId }) => inventory.contains(mouldId))) {
     return GOLD_CRAFTING_INTERFACE;
   }
-  if (inventory.contains(I.PERFECT_GOLD_BAR) && data().perfect.some(({ mouldId }) => inventory.contains(mouldId))) {
+  // A 'perfect' gold bar is a gold bar here, once the 'perfect' ore is all smelted: live's Smelt with a bar and an ore
+  // still held smelts the ore (recording 1002252 tick 1531), and opens the menu only after (1573).
+  if (inventory.contains(I.PERFECT_GOLD_BAR) && !inventory.contains(I.PERFECT_GOLD_ORE)
+    && goldTypes.some(({ mouldId }) => inventory.contains(mouldId))) {
     return GOLD_CRAFTING_INTERFACE;
   }
   if (inventory.contains(I.SILVER_BAR) && [...silver.values()].some(({ mouldId }) => inventory.contains(mouldId))) {
@@ -268,7 +286,7 @@ function handleBarOnFurnace(event) {
   if (!isFurnace(object)) return;
   if (itemId === I.GOLD_BAR || itemId === I.PERFECT_GOLD_BAR) {
     event.handled = true;
-    openFurnaceMenu(player, GOLD_CRAFTING_INTERFACE);
+    openFurnaceMenu(player, GOLD_CRAFTING_INTERFACE, itemId);
   } else if (itemId === I.SILVER_BAR) {
     event.handled = true;
     openFurnaceMenu(player, SILVER_CRAFTING_INTERFACE);

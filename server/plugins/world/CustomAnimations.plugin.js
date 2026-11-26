@@ -111,11 +111,18 @@ function loadCustomAnimations(core, root = ROOT) {
  * first starts with a reset row, so a client replaces what it had; it then invalidates once.
  */
 function packetsOf(_CacheDefinitions, rows) {
-  const encode = (packetRows) => encodeContentData("server", [{ key: DATASET, rows: packetRows }]);
+  // The encoder throws past a packet's length field rather than returning a longer packet.
+  const fits = (packetRows) => {
+    try {
+      return encodeContentData("server", [{ key: DATASET, rows: packetRows }]).length <= PACKET_LIMIT;
+    } catch {
+      return false;
+    }
+  };
   const packets = [];
   let current = [{ kind: "reset" }];
   for (const row of rows) {
-    if (current.length > 0 && encode([...current, row]).length > PACKET_LIMIT) {
+    if (current.length > 0 && !fits([...current, row])) {
       packets.push(current);
       current = [];
     }

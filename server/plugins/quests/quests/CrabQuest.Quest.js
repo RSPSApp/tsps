@@ -1757,12 +1757,14 @@ module.exports = function registerCrabQuestQuest(api) {
   function kickPenguin(player, resume) {
     const sender = player.getPacketSender();
     penguinKicks.add(player);
+    // The penguin this kick is for: a re-investigate on the next tick spawns a new one it must not take.
+    const penguin = Dream.npcFor(player, RECRUIT_NPC_KEY);
     player.performAnimation(new Animation(PENGUIN_KICK_ANIMATION));
     sender.sendSound(PENGUIN_KICK_SOUND, 1, 10);
     Scenes.later(player, 1, () => {
-      const penguin = Dream.npcFor(player, RECRUIT_NPC_KEY);
-      const from = penguin?.getLocation();
-      Dream.removeNpc(player, RECRUIT_NPC_KEY);
+      const kicked = penguin && Dream.npcFor(player, RECRUIT_NPC_KEY) === penguin;
+      const from = kicked ? penguin.getLocation() : null;
+      if (kicked) Dream.removeNpc(player, RECRUIT_NPC_KEY);
       if (from) {
         const to = new Location(from.getX(), from.getY() + PENGUIN_FLY_TILES, from.getZ());
         sender.sendProjectile(from, to, 0, PENGUIN_FLY_CYCLES, PENGUIN_FLY_PROJECTILE, 0, 0, null, 0, PENGUIN_FLY_ANGLE, 0);

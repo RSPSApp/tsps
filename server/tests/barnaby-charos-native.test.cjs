@@ -16,7 +16,7 @@ const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
 
 const RIMMINGTON = [2916, 3225, 0];
-const ARDOUGNE_LANDING = [2680, 3274, 0];
+const ARDOUGNE_LANDING = [2683, 3263, 1];
 const CHAROS_A = 6465;
 const CHARM = "Or I could pay you nothing at all...";
 let core, barnaby, next = 9980;

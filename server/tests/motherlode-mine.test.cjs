@@ -29,6 +29,7 @@ MotherlodeMine.register({
   onPlayerLogout() {},
   onZoneEnter() {},
   onZoneExit() {},
+  onCanBankItem() {},
   onObjectRoute() {},
   onObjectInteraction: (name, actions) => { hooks.objects[name] = { ...hooks.objects[name], ...actions }; },
   onNpcDialogueCondition: (handler) => hooks.conditions.push(handler),

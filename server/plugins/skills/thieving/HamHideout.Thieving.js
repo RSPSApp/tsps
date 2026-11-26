@@ -154,6 +154,7 @@ function bundleOut(player) {
     [1 + WAKE_TICKS, () => {
       movement.setBlockMovement(false);
       setThief(player, 0);
+      animate(player, null); // up off the floor
       fade(player, false);
       player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, MESSAGE.WAKE)));
     }],

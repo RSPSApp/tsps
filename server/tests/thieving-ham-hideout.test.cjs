@@ -160,12 +160,13 @@ test('the third concussion bundles the player out: the line, the fall and fade, 
   const f = failedAt();
   const without = (lines, prefix) => lines.filter((line) => !line.startsWith(prefix));
   // rsprox 227/01723.txt ticks 8696-8705: failure (F), concussion 2->3 (F+1), the stun's line then the bundling (F+2),
-  // the backwards fall and fade out (F+4), the move to the cell (F+8), ham_thief 3->0, fade in and the message box (F+9).
+  // the backwards fall and fade out (F+4), the move to the cell (F+8), ham_thief 3->0, the fall's animation reset, fade
+  // in and the message box (F+9; the reset on all four wake-ups, ticks 8705, 8858, 8945 and 9032).
   assert.deepEqual(without(ticks[f + 1], 'anim'), ['varbit 235=3', 'spam: You feel slightly concussed from the blow.']);
   assert.deepEqual(ticks[f + 2].filter((line) => line.startsWith('spam')), ["spam: You've been stunned!", "spam: You're beaten unconscious and bundled out of the HAM Camp."]);
   assert.deepEqual(ticks[f + 4], [`anim ${core.CacheDefinitions.getSeqId('human_death_backwards')}`, 'overlay 174 0,255,0,0,50']);
   assert.deepEqual(ticks[f + 8], ['move 3185,9609,0']);
-  assert.deepEqual(ticks[f + 9], ['varbit 235=0', 'overlay 174 0,0,0,255,50', 'mesbox: You slowly wake up in an unknown place.']);
+  assert.deepEqual(ticks[f + 9], ['varbit 235=0', 'anim -1', 'overlay 174 0,0,0,255,50', 'mesbox: You slowly wake up in an unknown place.']);
   assert.deepEqual(ticks[f + 11], ['close overlay']);
   assert.equal(player.getMovementQueue().isMovementBlocked(), false, 'free to move once awake');
   assert.ok(tasks.every((task) => typeof task.tick === 'function'), "no task's own fields shadow Task.tick()");

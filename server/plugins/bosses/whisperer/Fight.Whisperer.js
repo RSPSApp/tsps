@@ -34,6 +34,7 @@ class Fight {
   }
   wake() {
     this.waking = true;
+    this.entrance(Common.data.objects.escape);
     this.nextAttack = this.tick + 7;
     this.boss.setNpcTransformationId(Common.data.npcs.figure);
     this.boss.performAnimation(new Common.core.Animation(Common.data.animations.spawn));
@@ -62,6 +63,13 @@ class Fight {
       this.boss.setNpcTransformationId(Common.data.npcs.boss);
       this.boss.performAnimation(Common.core.Animation.DEFAULT_RESET_ANIMATION);
     });
+  }
+  /** The nine entrance tentacles (2652-2660, 6384): 47584 from the wake, 47585 in the
+   * Shadow Realm and 47586 again on the kill (capture 3281, 2611/2734/2761). */
+  entrance(id, rotation = null) {
+    const offset = this.shadow ? Common.data.site.realmOffset : 0;
+    for (const [x, y, stored] of Common.data.objects.entrance)
+      this.player.getPacketSender().sendObject(new Common.core.GameObject(id, new Common.core.Location(x - offset, y, 0), 10, rotation ?? stored, this.session.area));
   }
   alive() {
     return !this.over && !this.stopped && !this.session.ended && this.session.fight === this;
@@ -115,6 +123,11 @@ class Fight {
       tentacle.targetX += offset;
     }
     this.shadow = shadow;
+    // Capture 3281: the boss swaps slot 0 to 49220 in the Shadow Realm, tentacles add two slots.
+    Common.models(this.boss, shadow ? [Common.data.models.bossShadowSlot0] : null);
+    for (const tentacle of this.tentacles)
+      Common.models(tentacle.npc, shadow ? Common.data.models.tentacleShadow : null);
+    this.entrance(shadow ? Common.data.objects.entranceShadow : Common.data.objects.escape);
     if (shadow)
       this.player.getPacketSender().sendVarbit(Common.data.sanity.visitedVarbit, 1);
     Specials.render(this);
@@ -215,6 +228,7 @@ class Fight {
     })();
     // Start with zero damage so the explicit style roll applies armour
     // reactions once; the constructor still performs the accuracy roll.
+    Common.sound(this.player, Common.data.sounds[style === 'magic' ? 'magicImpact' : 'rangedImpact']);
     const hit = new PendingHit(this.boss, this.player, method, { delay: 0, damage: 0 });
     CombatFactory.applyStyleDamage(hit, Common.data.maxHit[style]);
     if (Common.protectedFrom(this.player, style)) {
@@ -241,6 +255,7 @@ class Fight {
     this.events = this.events.filter(event => event.launched);
     this.nextAttack = this.tick + 5;
     this.boss.performAnimation(new Common.core.Animation(Common.data.animations.melee));
+    Common.sounds(this.player, Common.data.sounds.meleeHit);
     // Provisional lower bound: the Wiki establishes max42, not this28 minimum.
     const damage = Common.random(28, 42);
     const protectedMelee = Common.protectedFrom(this.player, 'melee');
@@ -262,6 +277,7 @@ class Fight {
     this.boss.setNpcTransformationId(Common.data.npcs.melee);
     this.boss.performAnimation(new Common.core.Animation(Common.data.animations.binding));
     this.boss.performGraphic(new Common.core.Graphic(Common.data.graphics.bindingCast, 0, 120));
+    Common.sound(this.player, Common.data.sounds.bindCast);
     const start = Common.core.Projectile.centreOf(this.boss).clone(), target = this.player.getLocation().clone();
     const distance = Math.max(Math.abs(start.getX() - target.getX()), Math.abs(start.getY() - target.getY()));
     // All 22 independently normal casts match these distance choices and
@@ -272,6 +288,7 @@ class Fight {
       if (this.boundUntil > this.tick) {
         this.player.sendMessage(Common.data.messages.bind);
         this.player.performGraphic(new Common.core.Graphic(Common.data.graphics.bindingImpact));
+        Common.sound(this.player, Common.data.sounds.bindImpact);
         // Ordinary footage rules out twelve ticks. Eight remains
         // provisional: attacks/clicks obscure the precise expiry tick.
         Common.core.CombatFactory.freezeTicks(this.player, 8);
@@ -329,8 +346,13 @@ class Fight {
         continue;
       npc.performAnimation(new Common.core.Animation(Common.data.animations.tentacleSpawn));
       npc.performGraphic(new Common.core.Graphic(2452));
+      if (this.shadow)
+        Common.models(npc, Common.data.models.tentacleShadow);
       this.tentacles.push({ npc, x: sx, y: sy, targetX: x, targetY: y, spawned: this.tick, wave });
     }
+    // One spawn sound per wave (41 waves, 108 tentacles in capture 3281).
+    if (this.tentacles.some(t => t.wave === wave))
+      Common.sound(this.player, Common.data.sounds.tentacleSpawn);
   }
   validTentacleTile(x, y) {
     const shift = this.shadow ? Common.data.site.realmOffset : 0, b = this.boss.getLocation();
@@ -346,10 +368,16 @@ class Fight {
         t.attacked = true;
         t.npc.performAnimation(new Common.core.Animation(Common.data.animations.tentacleAttack));
         t.npc.performGraphic(new Common.core.Graphic(2454));
+        if (!t.wave.attackSound) {
+          t.wave.attackSound = true;
+          Common.sounds(this.player, Common.data.sounds.tentacleAttack);
+        }
       }
       const dx = Math.sign(t.targetX - t.x), dy = Math.sign(t.targetY - t.y);
       if (age === 2 && !t.rendered) {
         t.rendered = true;
+        const [area, areaDelay, radius] = Common.data.sounds.tentaclePath;
+        this.player.getPacketSender().sendAreaSound(area, t.x, t.y, 0, 1, areaDelay, radius);
         for (let step = 1; step <= 4; step++)
           this.player.getPacketSender().sendGraphic(Common.core.Graphic.delayed(2446 + step, step * 5), new Common.core.Location(t.x + dx * step, t.y + dy * step, 0));
       }
@@ -420,6 +448,8 @@ function beforeDeath(event) {
     Specials.clear(fight);
     fight.boss.setMaxHitpoints(140);
     fight.boss.setHitpoints(140);
+    // Capture 3281 (2729): the restoration shows as a 140 heal splat.
+    fight.boss.showHitsplat?.(140, { mine: Common.data.healSplat, others: Common.data.healSplat });
     fight.boss.setCombatOverride(null);
     for (const skill of [Common.core.Skill.ATTACK, Common.core.Skill.STRENGTH, Common.core.Skill.DEFENCE, Common.core.Skill.MAGIC, Common.core.Skill.RANGED])
       fight.boss.setCurrentLevels(skill, fight.boss.getMaxLevel(skill));
@@ -496,7 +526,9 @@ function onDeath({ npc }) {
   const duration = value => `${Math.floor(value * .6 / 60)}:${String(Math.floor(value * .6) % 60).padStart(2, '0')}`;
   player.sendMessage(`Fight duration: <col=ff0000>${duration(ticks)}</col>${!best || ticks < best ? ' (new personal best)' : `. Personal best: ${duration(best)}`}`);
   Rewards.complete(fight);
-  Common.later(30, () => {
+  fight.entrance(Common.data.objects.exit, 0);
+  // Wiki: 30 ticks. Recorded kills (3281, 3299) show the Odd Figure again after 15; the Wiki wins.
+  Common.later(Common.data.respawnTicks, () => {
     if (!fight.session.ended && fight.session.fight === fight)
       fight.session.respawn();
   });

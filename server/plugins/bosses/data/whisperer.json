@@ -1,5 +1,5 @@
 {
-  "$comment": "Normal post-quest mechanics from OSRS Wiki The Whisperer/Strategies (2026-10-24); IDs from rev241 gamevals/configs. Authored mechanics data, not a generated definition override. Independently normal level791 actors in Grid Master recording3285 corroborate seed grids/anchors and column coordinates against ordinary Wiki diagrams. Remaining evidence audit: docs/whisperer.md.",
+  "$comment": "Normal post-quest mechanics from OSRS Wiki The Whisperer/Strategies (2026-10-24); IDs from rev241 gamevals/configs. Authored mechanics data, not a generated definition override. Independently normal level791 actors in Grid Master recording3285 corroborate seed grids/anchors and column coordinates against ordinary Wiki diagrams. Remaining evidence audit: docs/whisperer.md. Capture-parity additions (3281/3285/3299): special timer headbar35, column/boss/tentacle realm models, soul/seed/column graphics, Strange Whisper, entrance tentacles and SynthSound ids with their packet delays.",
   "quest": "desert_treasure_ii",
   "npcs": {
     "figure": 12203,
@@ -33,20 +33,79 @@
     "screechBlast": 10252,
     "binding": 10254,
     "soulChant": 10257,
-    "soulResolve": 10259
+    "soulResolve": 10259,
+    "columnSpawn": 10226,
+    "soulSpawn": 9047,
+    "soulChantSay": 5545,
+    "soulFade": 5542,
+    "figureIdle": 10228
   },
   "projectiles": {
     "ranged": 2444,
     "magic": 2445,
     "bind": 2467,
-    "screech": 2471
+    "screech": 2471,
+    "soulSpawn": 668,
+    "soulAbsorb": {
+      "normal": 2457,
+      "shadow": 2458
+    },
+    "leechHatch": 2456
   },
   "objects": {
     "seedLight": 47573,
     "seedDark": 47574,
     "seedReal": 47575,
     "escape": 47584,
-    "exit": 47586
+    "exit": 47586,
+    "entrance": [
+      [
+        2652,
+        6384,
+        0
+      ],
+      [
+        2653,
+        6384,
+        1
+      ],
+      [
+        2654,
+        6384,
+        0
+      ],
+      [
+        2655,
+        6384,
+        2
+      ],
+      [
+        2656,
+        6384,
+        3
+      ],
+      [
+        2657,
+        6384,
+        1
+      ],
+      [
+        2658,
+        6384,
+        2
+      ],
+      [
+        2659,
+        6384,
+        0
+      ],
+      [
+        2660,
+        6384,
+        3
+      ]
+    ],
+    "entranceShadow": 47585
   },
   "site": {
     "outside": [
@@ -220,12 +279,102 @@
     "bindingCast": 177,
     "bindingImpact": 2466,
     "screech": 2470,
-    "screechWater": 2451
+    "screechWater": 2451,
+    "seedSpawn": 2459,
+    "seedStomp": 2463,
+    "seedsVanish": {
+      "normal": 2464,
+      "shadow": 2461
+    },
+    "seedsHatch": {
+      "normal": 2465,
+      "shadow": 2462
+    },
+    "columnSpawn": 2450
   },
   "sounds": {
     "disturb": 3201,
     "pulse": 1664,
-    "teleporter": 4794
+    "teleporter": 4794,
+    "rangedImpact": 7316,
+    "magicImpact": 7343,
+    "tentacleSpawn": 7301,
+    "tentacleAttack": [
+      [
+        7369,
+        2
+      ],
+      [
+        7367,
+        7
+      ],
+      [
+        7319,
+        18
+      ],
+      [
+        7364,
+        21
+      ]
+    ],
+    "tentaclePath": [
+      7321,
+      21,
+      5
+    ],
+    "meleeHit": [
+      [
+        7359,
+        0
+      ],
+      [
+        7444,
+        30
+      ]
+    ],
+    "screechCharge": [
+      [
+        7365,
+        0
+      ],
+      [
+        7308,
+        2
+      ],
+      [
+        7275,
+        3
+      ]
+    ],
+    "screechBlast": [
+      [
+        7437,
+        0
+      ],
+      [
+        7325,
+        0
+      ],
+      [
+        7293,
+        5
+      ],
+      [
+        7415,
+        2
+      ],
+      [
+        7459,
+        15
+      ]
+    ],
+    "seedStomp": 7263,
+    "seedsEnd": {
+      "normal": 7480,
+      "shadow": 7311
+    },
+    "bindCast": 151,
+    "bindImpact": 7461
   },
   "song": 749,
   "timing": {
@@ -522,5 +671,78 @@
         6371
       ]
     ]
+  },
+  "models": {
+    "bossShadowSlot0": 49220,
+    "tentacleShadow": [
+      49250,
+      49247,
+      49253
+    ],
+    "columnNormal": [
+      49310,
+      49312,
+      49313
+    ],
+    "columnShadowByHp": {
+      "20": 49309,
+      "40": 49308,
+      "60": 49311
+    }
+  },
+  "specialTimer": {
+    "headbar": 35,
+    "width": 80,
+    "ticks": {
+      "seeds": 40,
+      "screech": 11,
+      "souls": 17
+    }
+  },
+  "soulProjectiles": {
+    "spawn": {
+      "cycles": 60,
+      "startHeight": 125,
+      "endHeight": 0,
+      "angle": 127,
+      "progress": 128
+    },
+    "absorb": {
+      "cycles": 60,
+      "startHeight": 0,
+      "endHeight": 100,
+      "angle": 127,
+      "progress": 128
+    },
+    "hatch": {
+      "delay": 30,
+      "cycles": 70,
+      "startHeight": 0,
+      "endHeight": 0,
+      "angle": 255,
+      "progress": 0
+    }
+  },
+  "whisper": {
+    "from": "Strange Whisper",
+    "order": [
+      2,
+      3,
+      0,
+      1
+    ],
+    "words": [
+      "Vita",
+      "Oratio",
+      "Sanitas",
+      "Mors"
+    ],
+    "delayTicks": 3
+  },
+  "healSplat": 6,
+  "respawnTicks": 30,
+  "shadowExitTicks": {
+    "seeds": 2,
+    "souls": 7
   }
 }

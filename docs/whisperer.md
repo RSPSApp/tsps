@@ -157,3 +157,36 @@ native staging and local integration results are reported with the PR.
 This fixes the published retaliation behavior, not the unresolved melee damage
 distribution, rounding, recovery, freeze duration or optional-bind RNG. No client,
 Claude content or generated data is changed.
+
+## Capture parity pass (24 November 2026)
+
+A packet-by-packet comparison of [3281](https://rsprox.net/download/3281),
+[3285](https://rsprox.net/download/3285), [3299](https://rsprox.net/download/3299) and
+[1703](https://rsprox.net/download/1703) against this plugin found presentation and timing gaps.
+[1754](https://rsprox.net/download/1754), [1827](https://rsprox.net/download/1827) and
+[3168](https://rsprox.net/download/3168) have no fight: 1754 is the Siren's staff examine (already
+present), 1827/3168 are the Ancient Vault statues after the quest. Ticks below count from the
+teleport sequence 10247; recorded examples are from 3281 unless named.
+
+| Change | Evidence |
+| --- | --- |
+| Special announcements are sent with the appearance (+1), not with the pulse | seeds 2628/2629/2634, screech 2671/2672/2676, souls 2912/2913/2915 |
+| Souls pulse at +3 with 10257 and twelve 668 projectiles; the souls appear a tick later with 9047 | 2915/2916 |
+| The chant result follows the depletion by three ticks, with a type-116 `Strange Whisper| <unfinished sets>.` in Sanitas, Mors, Vita, Oratio order | 2933/2936; 3285 failed chants list all four |
+| Shadow souls chant every three ticks with 5545; at timeout they clear the text, fade (5542), fly into the boss and leave three ticks later. The projectile is 2458 in the Shadow Realm and 2457 in the normal realm | 2922/2925/2928/2931, 2933, 2936; 2457 at 3281 3803/4518/5456/5613, 3285 21476/21921, 3299 15330 |
+| Screech's depletion message is sent at +14 when switching closes | 2685 |
+| The boss shows headbar 35 (80 wide) counting down each special: seeds 40 ticks, screech 11, souls 17 from the soul spawn | 2635-2668, 2677-2687, 2917-2933 |
+| Seeds: 2459 on each seed when it appears, 2463 and sound 7263 per stomp, boss 10252 at the end. Then dark seeds still standing vanish; light seeds still standing at the timeout hatch, and so does the last light seed when its stomp ends the special (no stomp burst). Each hatch sends leech projectile 2456 into the player. Shadow Realm: vanish 2461, hatch 2462, sound 7311. Normal realm: 2464, 2465, 7480 | 2634, 2642-2664, 2668; 3285 20965 (11 vanish, 9 hatch), 21848, 23397 |
+| After seeds the player stays in the Shadow Realm 2 more ticks, after a souls timeout 7, so the end effects play there | 2668 -> 2670, 2933 -> 2940 |
+| Columns rise with 10226 and graphic 2450 on each footprint tile. Shadow columns show HP in their model (49311/49308/49309 for 60/40/20); normal columns keep one of 49310/49312/49313 | 2676/2681, all eight 3281 screeches |
+| Shadow Realm models: boss slot 0 49220, tentacles 49250/49247/49253 | 2639, 2739 |
+| The nine entrance tentacles at 2652-2660, 6384: 47584 from the wake, 47585 in the Shadow Realm, 47586 on the kill | 2611, 2734, 2761 |
+| Server SynthSounds with their recorded delays: ranged/magic impact 7316/7343, tentacle spawn 7301 and attack 7369/7367/7319/7364 (+ area 7321 per path), melee 7359/7444, screech charge 7365/7308/7275 and blast 7437/7325/7293/7415/7459, bind 151 and 7461 | 3281: 53 ranged and 34 magic impacts, 41 tentacle waves, 24 blasts |
+| Enrage shows a 140 heal hitsplat (type 6) | 2729 |
+| The Odd Figure plays 10228 when it returns. The respawn stays at the Wiki's 30 ticks; recordings show 15 (noted, not applied) | 3281 2761->2776, 2971->2986, 3170->3185, 3851->3866; 3299 15366->15381 |
+| Statues past the vault say "The statue is holding a medallion" once given theirs | 1827 tick 495, 3168 ticks 10602/10870/10949 |
+
+Not changed: loc 32545 placed on destroyed column tiles, the exit delay after a full souls
+disturb in the Shadow Realm (no recording; it exits at once), headbar fills within one of the recorded value, the Awakened-only
+"takes advantage of the souls you left behind" line (3285, 23359), and the open numerical
+questions above.

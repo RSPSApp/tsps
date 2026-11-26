@@ -382,6 +382,8 @@ Each of these rows is a plain toggle (`data/settings.json`). The plugin that own
 
 **Reset volume sliders to default** (468, a button row): the master, music, sound effect and area sound volumes (varps 3796, 168, 169, 872) go back to 100, a new account's level, as if each slider had been dragged there, and are sent.
 
+**Mute buttons** (116:96/110/124/138): muting saves the level into its bits of `options_save_sounds` (3109; master: 3797) and sends the whole varp. 3109 also holds an All Settings row, "Make-X for darts and bolts" (316, varbit 10971, bit 31), which the server sets as a varbit. So a mute takes that row's bits from the varp as sent, and the level bits from the audio settings (which the browser transmits). Before this, a mute rewrote bit 31 from the audio copy, turning Make-X off (issue 6797). Tests: `settings-keybinds.test.cjs`.
+
 - **Not done**:
   - **Combat Achievement Tasks - Repeat completion** (160): needs task checks to run for done tasks, and no capture or Wiki text gives the line.
 

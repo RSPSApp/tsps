@@ -1,11 +1,13 @@
 // Inventory creation/recharging: https://oldschool.runescape.wiki/w/Transcript:Blood_shard
 // Check, the 500-hit countdown and the proc graphic: rsprox captures (docs/blood-fury.md).
 let core;
+let pluginApi;
 let CombatType, Equipment, Flag, Misc;
 let AMULET_OF_FURY_ID, AMULET_OF_BLOOD_FURY_ID, BLOOD_SHARD_ID;
 
-function initialize(coreApi) {
-  core = coreApi;
+function initialize(api) {
+  pluginApi = api;
+  core = api.core;
   ({ CombatType, Equipment, Flag, Misc, BonusManager } = core);
   AMULET_OF_FURY_ID = core.ItemIdentifiers.AMULET_OF_FURY;
   AMULET_OF_BLOOD_FURY_ID = core.ItemIdentifiers.AMULET_OF_BLOOD_FURY;
@@ -100,6 +102,9 @@ function createBloodFury(player, furyItem) {
       setBloodFuryCharges(furyItem, BLOOD_FURY_CHARGES_PER_SHARD);
       refresh(player);
       showSuccess(player, "You have successfully created an Amulet of blood fury.");
+      // `blood-fury:created` { player, itemId }: a new amulet made (the league task "Create an Amulet
+      // of Blood Fury"); a recharge is not one. Not "skills:produced": no skill makes it.
+      pluginApi.emitCustomEvent("blood-fury:created", { player, itemId: AMULET_OF_BLOOD_FURY_ID });
     }, [
       "<col=7f0000>Warning!</col> The Amulet of fury will consume your Blood shard to make the Amulet of blood fury and you won't be able to get it back.",
       "The Amulet of blood fury is untradeable.",
@@ -259,7 +264,7 @@ module.exports = {
   description: "Amulet of blood fury: made from a Blood shard and amulet of fury, 30,000 charges, heals from damage dealt with its proc graphic, counts down every 500 hits, with Check and Revert.",
   members: true,
   register(api) {
-    api.onServerStartup(initialize.bind(null, api.core));
+    api.onServerStartup(initialize.bind(null, api));
     api.onItemOnItem("Blood shard", "Amulet of fury", createFromShard, { noted: false });
     api.onItemOnItem("Blood shard", "Amulet of blood fury", chargeFromShard, { noted: false });
     api.onItemAction("Amulet of blood fury", { Check: check, Revert: revert });

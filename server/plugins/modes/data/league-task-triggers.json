@@ -2,6 +2,7 @@
   "$comment": "Hand-maintained award triggers for league tasks, by league type and task id (the ids in the generated league-tasks.json), merged over the triggers the generator derived (this file wins). For a task the generator's name rules cannot map: a kill of an NPC the Wiki names differently, a quest whose task is not called \"Complete <quest>\". The kinds LeagueTasks understands are in docs/leagues.md (Tasks): kill { npcs: [names], count } (the kills of all of them added up), level { skill, level }, any-level { level, excluding }, level-up, total-level { level }, base-level { level }, combat-level { level }, quest { name }. Other plugins can also complete a task directly with the `league:complete-task` event.",
   "4": {
     "craft-a-toxic-blowpipe": {"kind": "produce", "items": ["Toxic blowpipe (empty)"], "count": 1},
+    "create-an-amulet-of-blood-fury": {"kind": "deed", "event": "blood-fury:created", "items": ["Amulet of blood fury"], "count": 1},
     "pick-a-pineapple-on-karamja": {"kind": "deed", "event": "world:picked", "items": ["Pineapple"], "count": 1},
     "cut-a-cactus-in-the-kharidian-desert": {"kind": "deed", "event": "waterskins:cactus-cut", "count": 1},
     "dismantle-a-zulrah-scale-unique": {"kind": "deed", "event": "zulrah:unique-dismantled", "count": 1},
@@ -123,6 +124,7 @@
   },
   "5": {
     "craft-a-toxic-blowpipe": {"kind": "produce", "items": ["Toxic blowpipe (empty)"], "count": 1},
+    "create-an-amulet-of-blood-fury": {"kind": "deed", "event": "blood-fury:created", "items": ["Amulet of blood fury"], "count": 1},
     "pick-a-pineapple-on-karamja": {"kind": "deed", "event": "world:picked", "items": ["Pineapple"], "count": 1},
     "shear-an-alpaca": {"kind": "deed", "event": "alpaca:sheared", "count": 1},
     "dismantle-a-zulrah-scale-unique": {"kind": "deed", "event": "zulrah:unique-dismantled", "count": 1},
@@ -293,6 +295,7 @@
   },
   "6": {
     "craft-a-toxic-blowpipe": {"kind": "produce", "items": ["Toxic blowpipe (empty)"], "count": 1},
+    "create-an-amulet-of-blood-fury": {"kind": "deed", "event": "blood-fury:created", "items": ["Amulet of blood fury"], "count": 1},
     "pick-a-pineapple-on-karamja": {"kind": "deed", "event": "world:picked", "items": ["Pineapple"], "count": 1},
     "shear-an-alpaca": {"kind": "deed", "event": "alpaca:sheared", "count": 1},
     "cut-a-cactus-in-the-kharidian-desert": {"kind": "deed", "event": "waterskins:cactus-cut", "count": 1},

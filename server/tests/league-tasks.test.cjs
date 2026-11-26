@@ -1133,6 +1133,22 @@ test("Defeat Nex Solo: a private fight without anyone's help credits the solo ta
   assert.ok(!completed(death).includes("defeat-nex-solo"));
 });
 
+test("Create an Amulet of Blood Fury: the shard-on-fury creation completes it in every league (#6854)", () => {
+  for (const [league, make] of [["4", (name) => character(name)], ["6", demonicPacts]]) {
+    assert.ok(catalog.leagues[league].tasks.some((entry) => entry.id === "create-an-amulet-of-blood-fury"), `league ${league} has the task`);
+    const maker = make(`blood-fury-${league}`);
+    // Making an Amulet of fury (Crafting) is not the blood fury.
+    emit("skills:produced", { player: maker, itemId: core.ItemIdentifiers.AMULET_OF_FURY, amount: 1 });
+    assert.ok(!completed(maker).includes("create-an-amulet-of-blood-fury"));
+    emit("blood-fury:created", { player: maker, itemId: core.ItemIdentifiers.AMULET_OF_BLOOD_FURY });
+    assert.ok(completed(maker).includes("create-an-amulet-of-blood-fury"), `league ${league}`);
+  }
+  // A main character's amulet completes nothing.
+  const main = character("blood-fury-main", "main");
+  emit("blood-fury:created", { player: main, itemId: core.ItemIdentifiers.AMULET_OF_BLOOD_FURY });
+  assert.deepEqual(completed(main), []);
+});
+
 test("a credited solo trigger counts the encounter's report, not the death-blow condition", () => {
   const { conditionalKill } = require("../plugins/modes/leaguetasks/Triggers.LeagueTasks")._test;
   assert.equal(conditionalKill({ kind: "kill", npcs: ["Royal Titans"], count: 1, credited: true, solo: true }), false);

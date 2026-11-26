@@ -11,14 +11,22 @@ test('recorded roar rubble uses falling-stay graphics and lands seven ticks late
   const sender = new Proxy({}, { get: (_, name) => name === 'sendGraphic' ? (g, at) => graphics.push([g.getId(), g.getDelay(), h.session.sourceTile(at).slice(0, 2)]) : () => sender });
   h.p.getPacketSender = () => sender;
   h.fight.hazards.roar();
-  assert.deepEqual(graphics, [[2479, 50, [2077,6378]], [2479, 50, [2082,6365]], [2479, 50, [2081,6379]]]);
+  const stays = () => graphics.filter(([id]) => id >= 2477 && id <= 2480);
+  assert.deepEqual(stays(), [[2479, 50, [2077,6378]], [2479, 50, [2082,6365]], [2479, 50, [2081,6379]]]);
+  // rsprox 227: 11-30 shattering rocks (2475/2476 at 20/50/80 cycles) fall beside the staying ones.
+  const breaks = graphics.filter(([id]) => id === 2475 || id === 2476);
+  assert.equal(breaks.length, 21);
+  assert.ok(breaks.every(([, delay, at]) => [20, 50, 80].includes(delay) && h.fight.hazards.floor.has(at.join(','))));
+  assert.equal(new Set(breaks.map(([, , at]) => at.join(','))).size, breaks.length, 'one shattering rock a tile');
+  assert.ok(breaks.every(([, , at]) => !['2077,6378', '2082,6365', '2081,6379'].includes(at.join(','))));
   h.move([2076, 6378]);
   h.step(6);
   assert.equal(h.fight.hazards.blockers.size, 0);
   h.step();
   assert.deepEqual([...h.fight.hazards.blockers].sort(), ['2077,6378', '2081,6379', '2082,6365']);
   assert.deepEqual([...h.fight.hazards.objects.values()].map(o => o.getFace()), [2,2,2]);
-  assert.equal(graphics.length, 3, 'the falling-stay graphic already contains the impact');
+  assert.equal(stays().length, 3, 'the falling-stay graphic already contains the impact');
+  assert.equal(graphics.length, 3 + 21, 'nothing more is sent when the rocks land');
 });
 test('the first-roar side tell is not repeated by later volleys or enrage debris', t => {
   const h = H.harness(t);
@@ -40,7 +48,7 @@ test('first-roar lightning tells use the recorded west/east regions and preserve
   const sender = new Proxy({}, { get: (_, name) => name === 'sendGraphic' ? (g, at) => graphics.push([g.getId(), g.getDelay(), h.session.sourceTile(at).slice(0, 2)]) : () => sender });
   h.p.getPacketSender = () => sender;
   h.fight.hazards.roar();
-  assert.deepEqual(graphics, [[2480, 50, [2077,6378]], [2480, 50, [2074,6373]], [2480, 50, [2090,6373]]]);
+  assert.deepEqual(graphics.filter(([id]) => id >= 2477 && id <= 2480), [[2480, 50, [2077,6378]], [2480, 50, [2074,6373]], [2480, 50, [2090,6373]]]);
   h.move([2076, 6378]); h.step(7);
   assert.deepEqual([...h.fight.hazards.objects.values()].map(o => o.getFace()), [3,3,3]);
 });

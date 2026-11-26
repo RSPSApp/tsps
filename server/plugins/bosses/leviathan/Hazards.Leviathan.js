@@ -64,19 +64,38 @@ class Hazards {
     Common.tileGraphic(this.fight.player, this.session.area, target, `roarRubble${rotation}`, Common.data.roar.graphicDelayCycles);
     this.fight.at(Common.data.roar.flightTicks, () => {
       if (!this.fight.alive()) return;
-      if (Model.key(this.playerTile()) === Model.key(target)) Common.damage(this.fight, Common.random(0, Common.data.damage.debris));
+      if (Model.key(this.playerTile()) === Model.key(target))
+        Common.damage(this.fight, Common.random(0, Common.data.damage.debris), true, "You took damage from the falling rubble.");
       this.place(target, rotation);
     });
   }
+  /**
+   * The rocks that shatter as they land, all over the arena: rsprox 227, 11-30 a fall (2475/2476 at
+   * 20, 50 or 80 client cycles) beside the rocks that stay. Only the staying ones block or hurt.
+   */
+  fallingBreaks(skip) {
+    const { min, max, delays } = Common.data.roar.fallingBreaks;
+    const tiles = [...this.floor].filter(key => !skip.has(key));
+    for (let n = Common.random(min, max); n > 0 && tiles.length; n--) {
+      const [key] = tiles.splice(Common.random(0, tiles.length - 1), 1);
+      Common.tileGraphic(this.fight.player, this.session.area, key.split(',').map(Number), `fallingBreak${Common.random(0, 1)}`, Common.pick(delays));
+    }
+  }
   roar() {
     const tile = this.playerTile();
+    const staying = new Set([Model.key(tile)]);
     this.dropRoar(tile);
     if (this.fight.awakened) for (const [dx, dy] of ADJACENT.slice(0, 4)) this.dropRoar([tile[0] + dx, tile[1] + dy]);
     // The first roar's side debris previews which alternating special comes first.
-    if (!this.firstRoar) return;
-    this.firstRoar = false;
-    for (const [west, south, east, north] of Common.data.roar.tellRegions[this.fight.nextSpecial])
-      this.dropRoar([Common.random(west, east), Common.random(south, north)]);
+    if (this.firstRoar) {
+      this.firstRoar = false;
+      for (const [west, south, east, north] of Common.data.roar.tellRegions[this.fight.nextSpecial]) {
+        const tell = [Common.random(west, east), Common.random(south, north)];
+        staying.add(Model.key(tell));
+        this.dropRoar(tell);
+      }
+    }
+    if (!this.fight.awakened) this.fallingBreaks(staying);
   }
   lightning() {
     const fight = this.fight, { inferred } = Common.data;
@@ -159,9 +178,9 @@ class Hazards {
       if (fight.alive() && fight.special === 'smoke') fight.endSpecial();
     });
   }
-  spawnPathfinder() {
+  choosePathCorner() {
     const corners = Common.data.arena.pathCorners;
-    this.pathIndex = corners.findIndex(([cx, cy]) => {
+    let index = corners.findIndex(([cx, cy]) => {
       // The registered normal actor can overlap neighboring rubble. Only its
       // centre tile selects another corner (Wiki test and original packets).
       if (!this.fight.awakened) return this.open([cx, cy]);
@@ -169,7 +188,23 @@ class Hazards {
         if (!this.open([x, y])) return false;
       return true;
     });
-    if (this.pathIndex < 0) this.pathIndex = 0;
+    return index < 0 ? 0 : index;
+  }
+  /**
+   * rsprox 227 (287/287 kills): with the enrage roar, spotanim 2298 at height 124 on the spawn
+   * corner's centre and its four neighbours, at 0/30/60/90 cycles, three ticks before the actor.
+   */
+  telegraphPathfinder() {
+    this.telegraphed = this.choosePathCorner();
+    const [cx, cy] = Common.data.arena.pathCorners[this.telegraphed];
+    const { height, delays } = Common.data.pathfinder.telegraph;
+    for (const delay of delays) for (const [dx, dy] of [[0, 0], [0, 1], [0, -1], [1, 0], [-1, 0]])
+      Common.tileGraphic(this.fight.player, this.session.area, [cx + dx, cy + dy], "aura", delay, height);
+  }
+  spawnPathfinder() {
+    const corners = Common.data.arena.pathCorners;
+    this.pathIndex = this.telegraphed ?? this.choosePathCorner();
+    this.telegraphed = null;
     this.pathCentre = [...corners[this.pathIndex]];
     this.pathfinder = this.session.spawn(Common.ids.npcs.pathfinder, [this.pathCentre[0] - 1, this.pathCentre[1] - 1]);
     this.pathfinder?.setScriptedMovement(true);
@@ -233,12 +268,27 @@ class Hazards {
       this.tornadoHitAt = fight.tick + Common.data.inferred.tornadoStepTicks;
     }
   }
-  clear() {
+  /**
+   * After the kill, every rock crumbles where it lay: rsprox 227 (286/287 kills) swaps each rubble
+   * loc for an invisible one with spotanim 2474 a tick after the boss is gone.
+   */
+  crumble() {
+    const tiles = [...this.objects.keys()].map(key => key.split(',').map(Number));
+    this.clearRubble();
+    for (const at of tiles) Common.tileGraphic(this.fight.player, this.session.area, at, "rubbleCrumble");
+  }
+  clearRubble() {
     for (const [key, object] of this.objects) {
       Common.core.ObjectManager.deregister(object, true);
       this.session.area.setClip(object.getLocation(), this.originalClip.get(key));
     }
     this.objects.clear(); this.originalClip.clear(); this.blockers.clear(); this.smokeCover.clear();
+  }
+  clear() {
+    this.clearRubble();
+    this.clearActors();
+  }
+  clearActors() {
     for (const npc of [this.pathfinder, this.tornado]) if (npc) {
       if (npc.getPrivateArea() === this.session.area) this.session.area.remove(npc);
       Common.api.removeNpc(npc);

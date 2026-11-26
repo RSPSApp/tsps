@@ -47,6 +47,19 @@ class Session {
       }
       return tail;
     }).filter(Boolean);
+    // rsprox 227 (00100 tick 4743, 01751 tick 12491): on arrival the island rowboat is the
+    // Escape/Quick-escape boat (49215); the kill turns it into the Travel boat (49214).
+    Common.replaceLoc(this.area, Common.data.site.islandBoat, Common.ids.locs.boatEscape);
+  }
+  killed() {
+    if (!this.ended) Common.replaceLoc(this.area, Common.data.site.islandBoat, Common.ids.locs.boatLeave);
+  }
+  /**
+   * Wiki (Handholds): "The south-western handholds disintegrate as you use them to enter the arena."
+   * rsprox 01751 ticks 12518/12521: the handholds become wall 49224 once climbed, for the instance.
+   */
+  sealArena() {
+    Common.replaceLoc(this.area, Common.data.site.handholds, Common.ids.locs.handholdsWall);
   }
   tile(tile) { return Common.tile(this.area, tile); }
   sourceTile(tile) { return Common.sourceTile(this.area, tile); }
@@ -100,7 +113,7 @@ function complete(player) {
   return request.complete === true;
 }
 function travel({ player, objectId }) {
-  if (objectId === ISLAND_BOAT) {
+  if (objectId === ISLAND_BOAT || objectId === Common.ids.locs.boatLeave) {
     if (!sessionOf(player)) return false;
     leave(player); return true;
   }
@@ -116,16 +129,38 @@ function climb({ player, objectId }) {
   const session = sessionOf(player);
   if (!session || ![Common.ids.locs.entry, Common.ids.locs.questEntry].includes(objectId)) return false;
   const at = session.sourceTile(player.getLocation());
-  if (at[0] >= Common.data.site.arenaArrival[0]) {
-    player.moveTo(session.tile(Common.data.site.islandArrival));
-    session.fight?.stop(); session.fight = null; session.perfectKills = 0;
-  } else {
-    // Awakened entry stays unavailable until its uncaptured timings and damage bounds are verified.
-    if (player.getInventory().contains(Common.ids.awakenerOrb)) player.sendMessage("This encounter currently supports the normal Leviathan. Your awakener's orb has not been consumed.");
-    player.moveTo(session.tile(Common.data.site.arenaArrival));
-    session.start();
-  }
+  // One way in: the climbed handholds are a wall, so there is no climbing back out.
+  if (at[0] >= Common.data.site.arenaArrival[0]) return true;
+  // Awakened entry stays unavailable until its uncaptured timings and damage bounds are verified.
+  if (player.getInventory().contains(Common.ids.awakenerOrb)) player.sendMessage("This encounter currently supports the normal Leviathan. Your awakener's orb has not been consumed.");
+  player.moveTo(session.tile(Common.data.site.arenaArrival));
+  session.sealArena();
+  session.start();
   return true;
+}
+/** rsprox 227/00100 tick 4749: Escape asks "Are you sure you want to leave?" (Yes./No.); Quick-escape doesn't. */
+function escape({ player, objectId }) {
+  if (objectId !== Common.ids.locs.boatEscape || !sessionOf(player)) return false;
+  Common.api.sendMultiChatboxPrompt(player, "Are you sure you want to leave?", "Yes.", () => leave(player), "No.", () => {});
+  return true;
+}
+function quickEscape({ player, objectId }) {
+  if (objectId !== Common.ids.locs.boatEscape || !sessionOf(player)) return false;
+  leave(player); return true;
+}
+/**
+ * The climbed handholds are a wall, so the arena has no walk back to the island boat. Wiki
+ * (Handholds (The Leviathan)): "Players who wish to leave the Leviathan without teleporting out can
+ * click the rowboat after killing it once." From the arena floor the boat's op runs where the
+ * player stands instead of routing to a loc they can no longer reach.
+ */
+function boatFromArena(event) {
+  if (event.objectId !== Common.ids.locs.boatLeave) return;
+  const session = sessionOf(event.player);
+  if (!session) return;
+  const at = event.player.getLocation();
+  if (session.sourceTile(at)[0] < Common.data.site.arenaArrival[0]) return;
+  event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
 }
 function leave(player) {
   const session = sessionOf(player);
@@ -180,7 +215,8 @@ function readScoreboardParent(event) {
 function attach(api) {
   Records.attach(api);
   api.persistAttribute(Common.INSIDE_ATTRIBUTE, false);
-  api.onObjectInteraction('Rowboat', { Travel: travel });
+  api.onObjectInteraction('Rowboat', { Travel: travel, Escape: escape, 'Quick-escape': quickEscape });
+  api.onObjectRoute(boatFromArena);
   api.onObjectInteraction('Handholds', { Climb: climb });
   api.onObjectInteraction('Stepping Stone', { Cross: cross });
   api.onObjectInteraction('Scoreboard', { Read: readScoreboard });
@@ -190,4 +226,4 @@ function attach(api) {
   api.onPlayerDeath(death);
   api.onCustomEvent('gravestones:grave-location', grave);
 }
-module.exports = { attach, Session, sessionOf, travel, climb, leave, cross };
+module.exports = { attach, Session, sessionOf, travel, climb, leave, cross, escape, quickEscape, boatFromArena };

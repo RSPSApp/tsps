@@ -63,7 +63,9 @@ module.exports = function registerFamilyCrestQuest(api) {
   const CREST_HANDED_ATTRIBUTE = "family-crest:crest-handed";
 
   // The lines and answers that move the quest on, as the transcripts word them.
-  const FISH_LIST_CHOICES = new Set(["Ok, I will get those.", "Why don't you just give me the crest?"]);
+  /** "Ok, I will get those." is stage 2 on the pick (B 7757); the other answer on its echo's continue (364 -> 365). */
+  const FISH_LIST_PICK = "Ok, I will get those.";
+  const CALEB_HEIRLOOM_LINE = /^It's a valuable family heirloom\. I think the least you can do/;
   const CALEB_AVAN_LINE = /^He said he was on some kind of search for treasure/;
   const GEM_TRADER_LAST_LINE = /^Maybe we'll all get lucky and the scorpions will deal with him/;
   const AVAN_BOOT_LINE = /^Unfortunately he has apparently returned to his home, somewhere under Ice Mountain/;
@@ -249,8 +251,9 @@ module.exports = function registerFamilyCrestQuest(api) {
       return null;
     }
 
-    // Boot keeps the quest's menu after telling you where the gold is (tick 816: the gold answer again).
-    if (npcId === NpcIdentifiers.BOOT && stage >= STAGE_SPOKEN_AVAN) {
+    // Boot keeps the quest's menu after telling you where the gold is (tick 816: the gold answer again at 7). No
+    // recording talks to him later: from stage 8 his own page plays again.
+    if (npcId === NpcIdentifiers.BOOT && (stage === STAGE_SPOKEN_AVAN || stage === STAGE_SPOKEN_BOOT)) {
       return page(PAGE, "avan-boot");
     }
 
@@ -329,30 +332,19 @@ module.exports = function registerFamilyCrestQuest(api) {
     return missingSkillRequirements(player).length === 0;
   }
 
-  function notifySkillRequirements(player) {
-    for (const requirement of missingSkillRequirements(player)) {
-      player.sendMessage(
-        `You need a ${requirement.label} level of at least ${requirement.level} to start this quest.`
-      );
-    }
-  }
-
   function handleStartHook({ player, npcId, hook }) {
     if (!DIMINTHEIS_NPC_IDS.has(npcId) || hook !== START_HOOK) return;
+    // Wiki (Requirements): none of the skills is needed to start; below them the transcript's warning box is shown
+    // before the prompt ("If the player lacks one or more requirements..."), and the quest starts.
     if (quest.getStage(player) < STAGE_SPOKEN_DIMINTHEIS) {
-      if (!meetsSkillRequirements(player)) {
-        notifySkillRequirements(player);
-        return;
-      }
       quest.setStage(player, STAGE_SPOKEN_DIMINTHEIS);
       // With the stage, before "Ok, I will help you." (tick 189).
       player.sendMessage(questStartMessage(player, "Family Crest"));
     }
   }
 
-  /** Either answer to Caleb's fish list is stage 2, on the pick (364, B 7757). */
   function handleChoice({ player, npcId, option }) {
-    if (!CALEB_NPC_IDS.has(npcId) || !FISH_LIST_CHOICES.has(String(option ?? ""))) return;
+    if (!CALEB_NPC_IDS.has(npcId) || String(option ?? "") !== FISH_LIST_PICK) return;
     if (quest.getStage(player) === STAGE_SPOKEN_DIMINTHEIS) quest.setStage(player, STAGE_SPOKEN_CALEB);
   }
 
@@ -383,7 +375,9 @@ module.exports = function registerFamilyCrestQuest(api) {
       }
     }
     if (!spoken) return;
-    if (CALEB_NPC_IDS.has(npcId) && CALEB_AVAN_LINE.test(text) && stage === STAGE_CALEB_PIECE) {
+    if (CALEB_NPC_IDS.has(npcId) && CALEB_HEIRLOOM_LINE.test(text) && stage === STAGE_SPOKEN_DIMINTHEIS) {
+      before(event, () => { if (quest.getStage(player) === STAGE_SPOKEN_DIMINTHEIS) quest.setStage(player, STAGE_SPOKEN_CALEB); });
+    } else if (CALEB_NPC_IDS.has(npcId) && CALEB_AVAN_LINE.test(text) && stage === STAGE_CALEB_PIECE) {
       before(event, () => { if (quest.getStage(player) === STAGE_CALEB_PIECE) quest.setStage(player, STAGE_SEEKING_AVAN); });
     } else if (npcId === NpcIdentifiers.GEM_TRADER && GEM_TRADER_LAST_LINE.test(text) && stage === STAGE_SEEKING_AVAN) {
       after(event, () => { if (quest.getStage(player) === STAGE_SEEKING_AVAN) quest.setStage(player, STAGE_SPOKEN_GEM_TRADER); });
@@ -540,7 +534,9 @@ module.exports = function registerFamilyCrestQuest(api) {
           if (!has(player, PERFECT_RING) || !has(player, PERFECT_NECKLACE)) return;
           player.getInventory().deleteNumber(PERFECT_RING, 1);
           player.getInventory().deleteNumber(PERFECT_NECKLACE, 1);
-          if (!has(player, AVAN_CREST)) player.getInventory().adds(AVAN_CREST, 1);
+          // Before the ids were put right Caleb gave 779; a save from then holds 779 as his piece, so Avan's is 780.
+          if (!owns(player, AVAN_CREST)) player.getInventory().adds(AVAN_CREST, 1);
+          else if (!owns(player, CALEB_CREST)) player.getInventory().adds(CALEB_CREST, 1);
           quest.setStage(player, STAGE_AVAN_PIECE);
         };
         return;
@@ -624,11 +620,14 @@ module.exports = function registerFamilyCrestQuest(api) {
     player.setAttribute(GAUNTLETS_ATTRIBUTE, imbue.target);
   }
 
-  /** Live prints "Chronozon weakens..." on every Blast spell cast at him, the cast's own tick (2441-2474, 2864-2893). */
-  function handleCast({ player, spell }) {
-    if (!BLAST_SPELL_ELEMENTS.has(spell?.spellId?.())) return;
-    const target = player?.getCombat?.()?.getTarget?.();
+  /**
+   * Live prints "Chronozon weakens..." on each Blast spell at him, on the cast's own tick, repeats included (2441-2474,
+   * 2864-2893). The Wiki: a Blast that splashes doesn't count, so the hit's roll (made as it is queued) decides.
+   */
+  function handleHitQueued({ player, target, hit }) {
     if (target?.isNpc?.() !== true || target.getId?.() !== NpcIdentifiers.CHRONOZON) return;
+    if (hit?.getCombatType?.() !== CombatType.MAGIC || hit.isAccurate?.() !== true) return;
+    if (!BLAST_SPELL_ELEMENTS.has(hit.getSpell?.()?.spellId?.())) return;
     player.sendMessage("Chronozon weakens...");
   }
 
@@ -711,7 +710,7 @@ module.exports = function registerFamilyCrestQuest(api) {
   api.onNpcInteraction("Johnathon", { Gauntlets: gauntletsOption });
   api.onObjectInteraction(handleObjectInteraction);
   api.onCustomEvent("mining:ore-yield", handleOreYield);
-  api.onCustomEvent("magic:cast-committed", handleCast);
+  api.onCustomEvent("combat:hit-queued", handleHitQueued);
   api.onNpcHitModify(handleNpcHitModify);
   api.onNpcBeforeDeath(keepChronozonUp);
   api.onNpcDeath(handleNpcDeath);

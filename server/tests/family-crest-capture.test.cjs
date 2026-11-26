@@ -182,13 +182,14 @@ test("t328-337: Caleb's chef option and answer are live's words, and his head is
   assert.deepEqual(heads(f), [CALEB]);
 });
 
-test("t347-365 and B7754-7760: either answer to the fish list is stage 2 on the pick", async (t) => {
-  for (const pick of ["Why don't you just give me the crest?", "Ok, I will get those."]) {
+test("B7754-7760, t347-365: 'Ok, I will get those.' is stage 2 on the pick; 'Why don't you just give me the crest?' as its echo is continued", async (t) => {
+  for (const pick of ["Ok, I will get those.", "Why don't you just give me the crest?"]) {
     const f = actor(t, { tile: AT.CALEB, value: S.DIMINTHEIS });
     const { said } = await talk(f, CALEB, AT.CALEB, ["Are you Caleb Fitzharmon?", "So can I have your bit?", pick]);
     assert.equal(lines(said)[4], "PLAYER: I have been sent by your father. He wishes the Fitzharmon Crest to be restored.");
-    const answer = said.find((s) => s.entry === `PLAYER: ${pick}`);
-    assert.equal(answer.stage, S.CALEB, pick);
+    const echo = said.findIndex((s) => s.entry === `PLAYER: ${pick}`);
+    assert.equal(said[echo].stage, pick.startsWith("Ok") ? S.CALEB : S.DIMINTHEIS, pick);
+    assert.equal(said[echo + 1].stage, S.CALEB, pick);
     assert.equal(lines(said).at(-1), pick.startsWith("Ok")
       ? "Caleb: You will? It would help me a lot!"
       : "Caleb: It's a valuable family heirloom. I think the least you can do is prove you're worthy of it before I hand it over.");
@@ -283,6 +284,9 @@ test("t793-823: Boot's 'Hello short person.' ends the talk; stage 7 with the gol
   const again = await play(f, () => h.talk(f, f.npcs[0]), ["Hello. I'm in search of very high quality gold."]);
   assert.equal(again[1].entry, "MENU[Select an option]: Hello. I'm in search of very high quality gold.|Hello short person.|Why are you called boot?");
   assert.equal(stage(f), S.BOOT);
+  // No recording talks to him after stage 7: from 8 on his own page plays (no gold answer).
+  const g = actor(t, { tile: AT.BOOT, value: S.AVAN_PIECE });
+  assert.equal(lines((await talk(g, BOOT, AT.BOOT)).said)[1], "MENU[]: Hello short person.|Why are you called boot?".replace("MENU[]", "MENU[Select an option]"));
 });
 
 test("t1638-1654: the jewellery goes in an objectbox_double; piece 779 and stage 8 as it is continued", async (t) => {
@@ -367,6 +371,14 @@ test("t2441-2478, t2864-2893: every Blast cast at Chronozon says 'Chronozon weak
   f.player.setHitpoints(990);
   const chronozon = h.spawn(f, CHRONOZON, AT.CHRONOZON);
   h.tick(f);
+  // The Wiki: a splashed Blast doesn't count, and says nothing.
+  t.mock.method(h.core.PendingHit.prototype, "isAccurate", () => false);
+  clear(f);
+  await blastCast(f, chronozon, "Fire Blast");
+  f.connection.processTurnPackets();
+  fightTicks(f, chronozon, 6);
+  assert.deepEqual(texts(f).filter((m) => m.startsWith("Chronozon")), [], "a splash");
+  h.core.PendingHit.prototype.isAccurate.mock.restore();
   for (const name of ["Wind Blast", "Water Blast"]) {
     clear(f);
     await blastCast(f, chronozon, name);
@@ -544,11 +556,14 @@ test("the Wiki: a lost first piece comes back from Caleb in an objectbox; one in
   assert.deepEqual(lines((await talk(g, CALEB, AT.CALEB)).said).slice(-2), ["PLAYER: I am still working on it.", "Caleb: Then why are you wasting your time here?"]);
 });
 
-test("the Wiki: below the quest's levels Dimintheis's 'Yes.' says which are missing and the quest does not start", async (t) => {
+test("the Wiki: the skills are not needed to start; below them the warning box comes before the prompt and 'Yes.' starts it", async (t) => {
   const f = actor(t, { level: 30 });
-  await talk(f, DIMINTHEIS, AT.DIMINTHEIS, ["Why would a nobleman live in a dump like this?", "So where is this crest?", "Yes."]);
-  assert.equal(stage(f), S.UNSTARTED);
-  assert.ok(texts(f).includes("You need a Magic level of at least 59 to start this quest."));
+  const { said } = await talk(f, DIMINTHEIS, AT.DIMINTHEIS, ["Why would a nobleman live in a dump like this?", "So where is this crest?", "Yes."]);
+  const warning = said.findIndex((s) => s.entry.startsWith(`BOX ${MESSAGEBOX}: Before starting this quest, be aware`));
+  assert.ok(warning > 0, lines(said).join("\n"));
+  assert.equal(said[warning + 1].entry, "MENU[Start the Family Crest quest?]: Yes.|No.");
+  assert.equal(stage(f), S.DIMINTHEIS);
+  assert.equal(texts(f).some((m) => m.startsWith("You need a")), false);
 });
 
 test("ours: walking away after the crest is handed over (3027) and before the last line: the next talk plays the hand-in again and completes it", async (t) => {
@@ -567,4 +582,11 @@ test("ours: walking away after the crest is handed over (3027) and before the la
   assert.equal(lines(said)[1], `BOX ${OBJECTBOX} ${I.FAMILY_CREST}: You hand the crest over to Dimintheis.`);
   assert.equal(quest().getStage(g.player), S.COMPLETE);
   assert.equal(g.player.getInventory().getAmount(I.STEEL_GAUNTLETS), 1);
+});
+
+test("a save from before the crest ids were put right (Caleb's piece as 779): Avan's jewellery gives 780, so the crest can be made", async (t) => {
+  const f = actor(t, { tile: AT.AVAN, value: S.BOOT, items: [[I.PERFECT_RING], [I.PERFECT_NECKLACE], [I.CREST_PART]] });
+  await play(f, () => h.talk(f, h.spawn(f, AVAN, AT.AVAN)));
+  assert.equal(stage(f), S.AVAN_PIECE);
+  assert.deepEqual([count(f, I.CREST_PART), count(f, I.CREST_PART_2)], [1, 1]);
 });

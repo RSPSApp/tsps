@@ -34,8 +34,8 @@ Every change comes as the player continues the line or box before the one it goe
 
 | Value | Set by (capture tick) |
 | --- | --- |
-| 1 | "Yes." on "Start the Family Crest quest?" (189), with "You've started a new quest: Family Crest" |
-| 2 | either answer to Caleb's fish list: "Ok, I will get those." (B 7757) or "Why don't you just give me the crest?" (364) |
+| 1 | "Yes." on "Start the Family Crest quest?" (189), with "You've started a new quest: Family Crest". The skills are not needed to start (Wiki Requirements): below them the transcript's warning box comes before the prompt |
+| 2 | "Ok, I will get those." on the pick (B 7757); "Why don't you just give me the crest?" as its echo is continued (364 -> 365) |
 | 3 | continuing "You exchange the fish for Caleb's piece of the crest." (374): the five fish go, `caleb_crest` (780) comes |
 | 4 | continuing Caleb's "...I did hear from my brother Avan a while ago though." (392, B 7849) |
 | 5 | continuing the Gem trader's "Maybe we'll all get lucky and the scorpions will deal with him." (B 7980) |
@@ -60,12 +60,14 @@ The family crest leaves as its box is continued (3027), before the last five lin
 - **Caleb after his piece** (385-392): "Hello again. I'm just putting the finishing touches to my masterful
   salad." and a menu "Uh.. what happened to the rest of the crest?" / "Good luck with that then." From stage
   4 he asks where Avan is until you have found him (394).
-- **Boot** keeps the quest's three-option menu from stage 6 on (816: the gold answer again at 7). "Hello short
+- **Boot** keeps the quest's three-option menu at stages 6 and 7 (816: the gold answer again at 7); no recording talks
+  to him later, so from 8 his own page plays. "Hello short
   person." ends the talk during the quest (797-798).
 - **Johnathon's questions** (2037-2052): the first menu has no "I will be on my way now."; each later one
   leaves out the question just asked.
 - **Chronozon** (2441-2474, 2864-2893): every Blast spell cast at him says "Chronozon weakens..." on the
-  cast's own tick, repeats included. Short of all four, the hit that empties his health bar is followed by
+  cast's own tick, repeats included; a Blast that splashes says nothing and doesn't count (Wiki; every recorded
+  cast hit). Short of all four, the hit that empties his health bar is followed by
   "Chronozon regenerates..." the next tick and full health (2477 -> 2478). The Wiki: he dies once each of
   the four Blast spells has hit him.
 - **The Witchaven Dungeon** (1210-1356): "This door is locked." from a door the levers keep shut; a lever pull
@@ -90,7 +92,8 @@ The family crest leaves as its box is continued (3027), before the last five lin
 
 ## Findings
 
-- **fixed** Caleb's and Avan's crest pieces were the wrong way round (Caleb gave 779 `avan_crest`).
+- **fixed** Caleb's and Avan's crest pieces were the wrong way round (Caleb gave 779 `avan_crest`). A save from
+  then holds 779 as Caleb's piece; Avan's jewellery hand-in then gives 780, so the crest can still be made.
 - **fixed** The message boxes were game messages; the stage moved when the lines were built, not shown.
 - **fixed** No "You've started a new quest" message on the start.
 

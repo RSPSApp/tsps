@@ -14,10 +14,14 @@ const Mould = require('../plugins/minigames/giantsfoundry/Mould.GiantsFoundry');
 const Tools = require('../plugins/minigames/giantsfoundry/Tools.GiantsFoundry');
 const Kovac = require('../plugins/minigames/giantsfoundry/Kovac.GiantsFoundry');
 const Preform = require('../plugins/minigames/giantsfoundry/Preform.GiantsFoundry');
+const Temperature = require('../plugins/minigames/giantsfoundry/Temperature.GiantsFoundry');
+
+const temperatureOptions = new Map();
 
 before(() => {
   CachePipeline.initialize();
   Shared.bind({ core: PluginManager.getCoreApi(), emitCustomEvent() {} });
+  Temperature({ onObjectInteraction: (name, options) => temperatureOptions.set(name, options) });
 });
 
 /** Crucible counts, bronze to rune. */
@@ -130,4 +134,174 @@ test('the worn preform is held in the giant two-handed stance', () => {
     ['HUMAN_WEAPON_GIANT01_READY', 'HUMAN_WEAPON_GIANT01_WALK', 'HUMAN_WEAPON_GIANT01_RUN'],
   );
   assert.equal(Preform.STANCE.length, 7);
+});
+
+const fastSteps = [27, 30, 33, 37, 41, 45, 49, 53, 57, 62, 67, 72, 77, 83, 89, 95];
+
+function temperatureRun(t, initial, firstCycle = 1) {
+  const { Equipment, Location } = Shared.core();
+  const attributes = new Map();
+  const varbits = new Map();
+  const temperatures = [];
+  const sequences = [];
+  const sounds = [];
+  const temp = Shared.VARBIT.TEMPERATURE;
+  let location = new Location(3370, 11497, 0);
+  let cycle = firstCycle;
+  const packets = {
+    getVarbit: (id) => varbits.get(id) ?? 0,
+    sendVarbit: (id, value) => {
+      varbits.set(id, value);
+      if (id === temp) temperatures.push(value);
+    },
+    sendSound: (id) => sounds.push(id),
+  };
+  const player = {
+    getAttribute: (key) => attributes.get(key),
+    setAttribute: (key, value) => attributes.set(key, value),
+    getEquipment: () => ({ get: (slot) => slot === Equipment.WEAPON_SLOT ? { getId: () => Shared.ITEM.PREFORM } : null }),
+    getLocation: () => location,
+    getPacketSender: () => packets,
+    performAnimation: (animation) => sequences.push(animation.getId()),
+  };
+  t.mock.method(Shared, 'questComplete', () => true);
+  t.after(() => Shared.stopWork(player));
+  const temperature = () => Shared.get(player, temp);
+  const setTemperature = (value) => Shared.set(player, temp, value);
+  setTemperature(initial);
+  return {
+    lava: (option) => assert.equal(temperatureOptions.get(Shared.OBJECT.LAVA_POOL)[option]({ player }), true),
+    waterfall: (option) => assert.equal(temperatureOptions.get(Shared.OBJECT.WATERFALL)[option]({ player }), true),
+    stop: () => Shared.stopWork(player),
+    move: () => { location = new Location(3370, 11498, 0); },
+    temperature,
+    setTemperature,
+    tick() {
+      const before = temperature();
+      const passive = cycle % 2 === 0 && before > 0 ? 1 : 0;
+      temperatures.length = sequences.length = sounds.length = 0;
+      Shared.runTick(player, cycle++);
+      return {
+        step: temperature() - before + passive,
+        temperatures: [...temperatures],
+        sequences: [...sequences],
+        sounds: [...sounds],
+      };
+    },
+  };
+}
+
+test('the fast temperature table includes the recorded sixteenth step', () => {
+  assert.deepEqual(Temperature.FAST_STEPS, fastSteps);
+});
+
+test('Dunk-preform follows the recorded steps and repeats the last step', (t) => {
+  const run = temperatureRun(t, 0);
+  run.lava('Dunk-preform');
+  for (const [i, step] of fastSteps.entries()) {
+    const dip = run.tick();
+    assert.deepEqual(dip.sequences, [827]);
+    assert.deepEqual(dip.sounds, [1019]);
+    assert.equal(dip.step, step, `dip ${i + 1}`);
+  }
+  // Give the estimated 17th step room to fit below the cap without starting another run.
+  run.setTemperature(900);
+  assert.equal(run.tick().step, 95);
+});
+
+test('Quench-preform follows the same fast steps with the opposite sign', (t) => {
+  const run = temperatureRun(t, 1000);
+  run.waterfall('Quench-preform');
+  for (const [i, step] of fastSteps.entries()) {
+    const dip = run.tick();
+    assert.deepEqual(dip.sequences, [832]);
+    assert.deepEqual(dip.sounds, [1006]);
+    assert.equal(dip.step, -step, `dip ${i + 1}`);
+  }
+});
+
+test('Heat-preform dips before changing heat, then follows the four recorded increases', (t) => {
+  const run = temperatureRun(t, 500);
+  run.lava('Heat-preform');
+  assert.deepEqual(run.tick(), { step: 0, temperatures: [], sequences: [827], sounds: [1019] });
+  assert.equal(run.temperature(), 500);
+  for (const step of [7, 8, 9, 11]) assert.equal(run.tick().step, step);
+});
+
+test('Cool-preform dips before changing heat, then cools by seven', (t) => {
+  const run = temperatureRun(t, 993);
+  run.waterfall('Cool-preform');
+  assert.deepEqual(run.tick(), { step: 0, temperatures: [], sequences: [832], sounds: [1006] });
+  assert.equal(run.temperature(), 993);
+  assert.deepEqual(run.tick(), { step: -7, temperatures: [992, 985], sequences: [832], sounds: [1006] });
+});
+
+test('Dunk-preform keeps its pace when clicked again during a run', (t) => {
+  const run = temperatureRun(t, 500);
+  run.lava('Dunk-preform');
+  for (const step of [27, 30, 33, 37]) assert.equal(run.tick().step, step);
+  run.lava('Dunk-preform');
+  assert.equal(run.tick().step, 41);
+});
+
+test('Dunk-preform starts at 27 after the previous run has stopped', (t) => {
+  const run = temperatureRun(t, 500);
+  run.lava('Dunk-preform');
+  for (const step of [27, 30, 33]) assert.equal(run.tick().step, step);
+  run.stop();
+  run.lava('Dunk-preform');
+  assert.equal(run.tick().step, 27);
+});
+
+test('Heat-preform starts at its first dip after movement stops a run', (t) => {
+  const run = temperatureRun(t, 500);
+  run.lava('Heat-preform');
+  const initial = [run.tick(), run.tick()];
+  assert.deepEqual(initial.map(({ sounds }) => sounds), [[1019], [1019]]);
+  run.move();
+  assert.deepEqual(run.tick().sounds, []);
+  run.lava('Heat-preform');
+  assert.deepEqual([run.tick().step, run.tick().step], initial.map(({ step }) => step));
+});
+
+test('Dunk-preform starts at 27 after two Heat-preform dips', (t) => {
+  const run = temperatureRun(t, 500);
+  run.lava('Heat-preform');
+  assert.deepEqual(run.tick().sounds, [1019]);
+  assert.deepEqual(run.tick().sounds, [1019]);
+  run.lava('Dunk-preform');
+  assert.equal(run.tick().step, 27);
+});
+
+test('the run ends after clamping to 1000, even if the next tick cools the preform', (t) => {
+  const run = temperatureRun(t, 776);
+  run.lava('Dunk-preform');
+  for (const step of [27, 30, 33, 37, 41, 45]) assert.equal(run.tick().step, step);
+  assert.equal(run.temperature(), 986);
+  assert.equal(run.tick().step, 14);
+  assert.equal(run.temperature(), 1000);
+  assert.deepEqual(run.tick().sounds, []);
+  assert.equal(run.temperature(), 999);
+});
+
+test('a same-option click on the clamp tick does not extend the run', (t) => {
+  const run = temperatureRun(t, 808, 2);
+  run.lava('Dunk-preform');
+  for (const step of [27, 30, 33, 37, 41]) assert.equal(run.tick().step, step);
+  assert.equal(run.temperature(), 973);
+
+  run.lava('Dunk-preform');
+  assert.equal(run.tick().step, 27);
+  assert.equal(run.temperature(), 1000);
+  assert.deepEqual(run.tick().sounds, []);
+  assert.equal(run.temperature(), 999);
+  run.lava('Dunk-preform');
+  assert.equal(run.tick().step, 1);
+  assert.equal(run.temperature(), 1000);
+});
+
+test('passive cooling is sent before a fast dip on an even tick', (t) => {
+  const run = temperatureRun(t, 500, 2);
+  run.lava('Dunk-preform');
+  assert.deepEqual(run.tick(), { step: 27, temperatures: [499, 526], sequences: [827], sounds: [1019] });
 });

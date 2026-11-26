@@ -25,6 +25,8 @@ const MAX_BOATS_IN_VIEW = 8;
 const MAX_NEW_BOATS_PER_TICK = 4;
 
 interface ViewerState {
+    /** The session these boats were sent to: a new one (a player taken over) has none of them. */
+    session: unknown;
     /** Boats the client has, in the client's order. */
     order: number[];
     /** The boat sent for each entity index (an index is reused once its boat is gone). */
@@ -48,8 +50,9 @@ export class WorldEntitySync {
     /** The packets to send this tick, before player sync, or none if nothing changed. */
     public static flush(player: Player): Buffer[] {
         let state = WorldEntitySync.viewers.get(player);
-        if (!state) {
-            state = { order: [], boats: new Map(), positions: new Map(), locChanges: new Map(), teleports: new Map() };
+        const session = player.getSession?.();
+        if (!state || state.session !== session) {
+            state = { session, order: [], boats: new Map(), positions: new Map(), locChanges: new Map(), teleports: new Map() };
             WorldEntitySync.viewers.set(player, state);
         }
         const visible = WorldEntitySync.boatsInView(player);

@@ -566,7 +566,7 @@ export class PlayerSession {
 
     // Boats first, so a player on a deck refers to a boat the client already has. Built before
     // the NPC views: an NPC on a deck is sent only once the client has its boat (#6599).
-    const worldEntities = WorldEntitySync.flush(player);
+    const worldEntities = ServerPerf.measurePhase("network.flush.world_entities", () => WorldEntitySync.flush(player));
     const npcViews = ServerPerf.measurePhase("network.flush.build_npc_views", () =>
       player.getLocalNpcs().filter((npc) => WorldEntitySync.showsActor(player, npc)).map((npc) => {
         const location = npc.getLocation();

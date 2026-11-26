@@ -38,17 +38,23 @@ function gurtobsBoat(distance) {
   return { ship, npcs };
 }
 
-/** A real session for a viewer ashore at VIEWER who sees NPCs 64 tiles away (a world setting). */
-function viewer(localNpcs) {
+function viewingPlayer(localNpcs) {
   const player = {
     getIndex: () => 1, getLocation: () => VIEWER,
     getArea: () => null, getPrivateArea: () => null,
     getLocalNpcs: () => localNpcs, getLocalPlayers: () => [],
     getAudioSettings: () => ({ 18: 1 }), getForceMovement: () => null,
     getNpcViewDistance: () => 64,
+    getSession: () => player.session,
   };
+  return player;
+}
+
+/** A real session for a viewer ashore at VIEWER who sees NPCs 64 tiles away (a world setting). */
+function viewer(localNpcs, player = viewingPlayer(localNpcs)) {
   const session = new PlayerSession({ isOpen: true });
   session.setPlayer(player);
+  player.session = session;
   const baseX = (VIEWER.getX() - 48) & ~7, baseY = (VIEWER.getY() - 48) & ~7;
   Object.assign(session, {
     hasReplayedScene: true, replayedSceneBaseX: baseX, replayedSceneBaseY: baseY, replayedSceneLevel: 0,
@@ -66,6 +72,7 @@ function viewer(localNpcs) {
       session.flush(++tick);
       return { opcodes: packets.map((packet) => packet[0]), npcs: [...session.npcSyncState.indices] };
     },
+    player,
   };
 }
 
@@ -99,6 +106,21 @@ test("deck NPCs are sent with their boat, after it, and leave when the boat does
     const gone = client.flush();
     assert.ok(gone.opcodes.indexOf(WORLDENTITY_INFO) < gone.opcodes.indexOf(NPC_INFO));
     assert.deepEqual(gone.npcs, [], "the crew are removed in the tick the boat is");
+  } finally {
+    StaticShips.dispose(ship);
+  }
+});
+
+test("a new session on the same player (control taken over) is sent the boat again before its crew", () => {
+  const { ship, npcs } = gurtobsBoat(10);
+  try {
+    const first = viewer(npcs.slice());
+    assert.ok(first.flush().opcodes.includes(WORLDENTITY_INFO));
+    const second = viewer(npcs.slice(), first.player);
+    const { opcodes, npcs: sent } = second.flush();
+    assert.ok(opcodes.includes(142), "the new client is sent the deck scene (REBUILD_WORLDENTITY)");
+    assert.ok(opcodes.indexOf(WORLDENTITY_INFO) >= 0 && opcodes.indexOf(WORLDENTITY_INFO) < opcodes.indexOf(NPC_INFO));
+    assert.deepEqual(sent.sort(), npcs.map((npc) => npc.getIndex()).sort());
   } finally {
     StaticShips.dispose(ship);
   }

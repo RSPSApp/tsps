@@ -48,6 +48,7 @@ function fakeApiBase() {
       hooks.buttons ??= {};
       for (const uid of [uids].flat()) hooks.buttons[uid] = handler;
     },
+    onInterfaceActionClick: (handler) => (hooks.clicks ??= []).push(handler),
     onZoneEnter() {},
     onZoneExit: (area, handler) => (hooks.zoneExits ??= []).push(handler),
     onPlayerLogout: (handler) => (hooks.logout ??= []).push(handler),
@@ -169,9 +170,9 @@ function fakePlayer(name) {
         closeSubInterface: (uid) => { p.subs.delete(uid); return sender; },
         sendInterfaceRemoval: () => { p.interfaceId = -1; return sender; },
         getChatboxGroupId: () => -1,
-        sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); return sender; },
-        sendInterfaceFlagsRange: (...args) => { p.flags.push(args); return sender; },
-        sendInterfaceFlags: () => sender,
+        sendClientScript: (id, ...args) => { p.scripts.push([id, ...args]); p.opened.push(['script', id, args]); return sender; },
+        sendInterfaceFlagsRange: (...args) => { p.flags.push(args); p.opened.push(['flags', ...args]); return sender; },
+        sendInterfaceFlags: (...args) => { p.flags.push(args); p.opened.push(['flags', ...args]); return sender; },
         sendInventory: (inv, size, items) => { p.inventories.push({ inv, size, items }); return sender; },
         sendString: (text, uid) => { p.texts[uid] = text; return sender; },
         sendEnterAmountPrompt: () => sender,
@@ -419,7 +420,7 @@ test('accepting an application tells its applicant and updates the party HUD on 
   ticks(1);
   assert.equal(accepted.varbits.get(6440), 1);
   Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 22 });
-  assert.deepEqual(declined.messages, ['Your application to the party of Leader Display has been declined.']);
+  assert.deepEqual(declined.messages, ['Your application to the party of Leader\u00a0Display has been declined.']);
 
   const singleNameLeader = fakePlayer('Captain');
   const otherParty = Parties.create(singleNameLeader);
@@ -1084,15 +1085,216 @@ test('the lobby answers the components and pause-button slots the cache scripts 
     'Back, Refresh, Unblock, size, level, Apply/Leave, Mode resume children 0-6 of 50:0');
 });
 
-test('a row\'s View party opens that party\'s information', () => {
-  const leader = fakePlayer('RowLeader');
+const listButtons = (364 << 16) | 3;
+const listComponent = (364 << 16) | 17;
+
+function resumeList(player, action, buttonId = listComponent) {
+  const event = { player, buttonId, action, handled: false };
+  for (const handler of hooks.clicks) {
+    handler(event);
+    if (event.handled) break;
+  }
+  return event.handled;
+}
+
+function resetPartyList(t) {
+  for (const party of Parties.parties.values()) party.dispose();
+  t.after(() => {
+    for (const party of Parties.parties.values()) party.dispose();
+  });
+}
+
+function partyListFixture(t) {
+  resetPartyList(t);
+  let now = 100;
+  t.mock.method(Shared, 'cycle', () => now);
+  const older = Parties.create(fakePlayer('Older'));
+  now = 110;
+  const middle = Parties.create(fakePlayer('Middle'));
+  now = 120;
+  const newer = Parties.create(fakePlayer('Newer'));
+  now = 130;
+  return { older, middle, newer, viewer: fakePlayer('Viewer') };
+}
+
+function listPayloads(viewer) {
+  return viewer.scripts.filter(([id]) => id === 2340).slice(-45).map(([, , payload]) => payload);
+}
+
+function listLeaders(viewer) {
+  return listPayloads(viewer).map((payload) => payload.split('|')[0]);
+}
+
+function beginListRaid(t, party) {
+  const raid = Raid.begin(party.leader);
+  t.after(() => raid.dispose());
+  return raid;
+}
+
+test('the party list opens and refreshes with all 45 rows followed by both pause-button ranges', (t) => {
+  resetPartyList(t);
+  const viewer = fakePlayer('Viewer');
+  const expected = [
+    ['interface', 364],
+    ...Array.from({ length: 45 }, (_, row) => ['script', 2340, [row, '']]),
+    ['flags', listButtons, 0, 2, 1],
+    ['flags', listComponent, 0, 44, 1],
+  ];
+  Lobby.openOverview(viewer);
+  assert.deepEqual(viewer.opened, expected);
+  assert.ok(Lobby.LIST_ROW_UIDS.every((uid) => !hooks.buttons[uid]), 'rows have no server-side button ops');
+  viewer.opened.length = 0;
+  assert.equal(resumeList(viewer, 0, listButtons), true);
+  assert.deepEqual(viewer.opened, expected);
+});
+
+test('the party list sends the newest parties first with their age in ticks', (t) => {
+  const { viewer } = partyListFixture(t);
+  Lobby.openOverview(viewer);
+  const rows = listPayloads(viewer);
+  assert.deepEqual(rows.slice(0, 3).map((row) => [row.split('|')[0], row.split('|').at(-1)]),
+    [['Newer', '10'], ['Middle', '20'], ['Older', '30']]);
+  assert.deepEqual(rows.slice(3), Array(42).fill(''));
+});
+
+test('the party list sends age zero for a party created this tick', (t) => {
+  resetPartyList(t);
+  t.mock.method(Shared, 'cycle', () => 100);
+  Parties.create(fakePlayer('New'));
+  const viewer = fakePlayer('Viewer');
+  Lobby.openOverview(viewer);
+  assert.equal(listPayloads(viewer)[0].split('|').at(-1), '0');
+});
+
+test('the party list keeps a raid as an empty row, including when the list reaches 45 rows', (t) => {
+  const { middle, viewer } = partyListFixture(t);
+  beginListRaid(t, middle);
+  Lobby.openOverview(viewer);
+  assert.deepEqual(listLeaders(viewer).slice(0, 4), ['Newer', '', 'Older', '']);
+  assert.equal(listPayloads(viewer)[2].split('|').at(-1), '30');
+  // These were all created at the same tick. The creation order breaks the tie.
+  for (let i = 0; i < 43; i++) Parties.create(fakePlayer('Extra' + i));
+  Lobby.openOverview(viewer);
+  const leaders = listLeaders(viewer);
+  assert.equal(leaders[0], 'Extra42');
+  assert.equal(leaders[42], 'Extra0');
+  assert.deepEqual(leaders.slice(43), ['Newer', '']);
+});
+
+test('a row\'s View party opens that party\'s information', (t) => {
+  const { older, middle, viewer } = partyListFixture(t);
+  beginListRaid(t, middle);
+  Lobby.openOverview(viewer);
+  assert.equal(resumeList(viewer, 2), true);
+  assert.equal(viewer.getInterfaceId(), 50);
+  assert.equal(viewer.getAttribute(Lobby.ATTR.VIEWING), older.id);
+});
+
+test('a party list click still selects the sent party after a newer party is made', (t) => {
+  resetPartyList(t);
+  const shown = Parties.create(fakePlayer('Shown'));
+  const viewer = fakePlayer('Viewer');
+  Lobby.openOverview(viewer);
+  assert.equal(listLeaders(viewer)[0], 'Shown');
+  Parties.create(fakePlayer('BrandNew'));
+  assert.equal(resumeList(viewer, 0), true);
+  assert.equal(viewer.getInterfaceId(), 50);
+  assert.equal(viewer.getAttribute(Lobby.ATTR.VIEWING), shown.id);
+});
+
+for (const change of ['starts its raid before opening', 'starts its raid after opening', 'disbands after opening']) {
+  test(`the party list reopens silently when the selected party ${change}`, (t) => {
+    resetPartyList(t);
+    const party = Parties.create(fakePlayer('Recruiting'));
+    const viewer = fakePlayer('Viewer');
+    if (change === 'starts its raid before opening') beginListRaid(t, party);
+    Lobby.openOverview(viewer);
+    assert.equal(listLeaders(viewer)[0], change === 'starts its raid before opening' ? '' : 'Recruiting');
+    if (change === 'starts its raid after opening') beginListRaid(t, party);
+    if (change === 'disbands after opening') Lobby.leaveParty(party.leader);
+    assert.equal(resumeList(viewer, 0), true);
+    assert.deepEqual(viewer.interfaces, [364, 364]);
+    assert.equal(viewer.getAttribute(Lobby.ATTR.VIEWING), null);
+    assert.deepEqual(viewer.messages, []);
+    assert.deepEqual(viewer.statements, []);
+  });
+}
+
+for (const ending of ['disposal', 'the last member leaving', 'the last member logging out', 'the last away member being forgotten']) {
+  test(`a party list blank closes up after ${ending}`, (t) => {
+    const { middle, viewer } = partyListFixture(t);
+    const leader = middle.leader;
+    const away = fakePlayer('Away');
+    if (ending === 'the last away member being forgotten') {
+      middle.apply(away);
+      assert.equal(middle.accept(away), true);
+    }
+    const raid = beginListRaid(t, middle);
+    Lobby.openOverview(viewer);
+    const before = listLeaders(viewer).slice(0, 3);
+    if (ending === 'disposal') raid.dispose();
+    if (ending === 'the last member leaving') raid.remove(leader);
+    if (ending === 'the last member logging out') raid.onAreaLeave(leader, true);
+    if (ending === 'the last away member being forgotten') {
+      raid.onAreaLeave(away, true);
+      raid.remove(leader);
+      assert.equal(raid.over, false);
+      assert.equal(Parties.byId(middle.id), middle);
+      raid.forget(away);
+    }
+    assert.equal(raid.over, true);
+    assert.equal(Parties.byId(middle.id), null);
+    Lobby.openOverview(viewer);
+    assert.deepEqual(before, ['Newer', '', 'Older']);
+    assert.deepEqual(listLeaders(viewer).slice(0, 3), ['Newer', 'Older', '']);
+  });
+}
+
+test('a lobby disband removes its party list row immediately', (t) => {
+  const { middle, viewer } = partyListFixture(t);
+  Lobby.openOverview(viewer);
+  const before = listLeaders(viewer).slice(0, 3);
+  Lobby.leaveParty(middle.leader);
+  assert.equal(Parties.byId(middle.id), null);
+  Lobby.openOverview(viewer);
+  assert.deepEqual(before, ['Newer', 'Middle', 'Older']);
+  assert.deepEqual(listLeaders(viewer).slice(0, 3), ['Newer', 'Older', '']);
+});
+
+test('party list names use non-breaking spaces inside and outside the leader highlight', (t) => {
+  resetPartyList(t);
+  const leader = fakePlayer('Ann Lee');
   const party = Parties.create(leader);
-  const viewer = fakePlayer('RowViewer');
-  const row = Parties.listed().indexOf(party);
-  Lobby.selectRow({ player: viewer, buttonId: Lobby.LIST_ROW_UIDS[row] });
-  assert.ok(viewer.interfaces.includes(50));
-  assert.equal(viewer.getAttribute(Lobby.ATTR.VIEWING), party.id);
-  party.dispose();
+  const member = fakePlayer('Bob Ray');
+  party.apply(member);
+  assert.equal(party.accept(member), true);
+  const viewer = fakePlayer('Viewer');
+  Lobby.openOverview(viewer);
+  assert.deepEqual(listPayloads(viewer)[0].split('|').slice(0, 2), ['Ann\u00a0Lee', 'Bob\u00a0Ray']);
+  Lobby.openOverview(member);
+  assert.deepEqual(listPayloads(member)[0].split('|').slice(0, 2), ['<col=ffffff>Ann\u00a0Lee</col>', 'Bob\u00a0Ray']);
+});
+
+test('the party entry message and the barrier refusal use non-breaking spaces in the leader name', (t) => {
+  resetPartyList(t);
+  const { raid, players: [, member] } = startRaid(['Ann Lee', 'Member']);
+  t.after(() => raid.dispose());
+  assert.ok(member.messages.includes('Ann\u00a0Lee has entered the Theatre of Blood (Normal Mode). Step inside to join him...'));
+  member.location = new Location(3186, 4446, 0);
+  raid.room.passBarrier(member, barrierObject(3185, 4446, 0));
+  assert.equal(member.statements.at(-1).getDialogues().get(0).getText(), 'Your leader, Ann\u00a0Lee, must go first.');
+});
+
+test('the already-joined applicant message uses a non-breaking space in the name', (t) => {
+  resetPartyList(t);
+  const leader = fakePlayer('Leader');
+  const applicant = fakePlayer('Bob Ray');
+  const party = Parties.create(leader);
+  party.apply(applicant);
+  Parties.create(applicant);
+  Lobby.openInformation(leader, party);
+  Lobby.resumeButton({ player: leader, buttonId: 50 << 16, action: 12 });
+  assert.equal(leader.statements.at(-1).getDialogues().get(0).getText(), 'Bob\u00a0Ray appears to have joined another party.');
 });
 
 test('every party-information click redraws it, so the client\'s pause button clears', () => {
@@ -1198,7 +1400,7 @@ test('party ordering confirms a hand-over before swapping, then redraws the scre
   assert.equal(member.texts[partyHudNames], leader.texts[partyHudNames]);
   assert.deepEqual(leader.messages, []);
   Lobby.useEntrance({ player: leader });
-  assert.match(leader.statements.at(-1).getDialogues().get(0).getText(), /leader, Ann Lee, must go first/);
+  assert.match(leader.statements.at(-1).getDialogues().get(0).getText(), /leader, Ann\u00a0Lee, must go first/);
 });
 
 test('party ordering can cancel a down-arrow hand-over with No or by closing the menu', (t) => {

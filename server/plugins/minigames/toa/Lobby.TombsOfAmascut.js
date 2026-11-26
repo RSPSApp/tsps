@@ -24,21 +24,25 @@ const MANAGEMENT_REWARD_INFO_UID = (INTERFACE.PARTY_MANAGEMENT << 16) | 96;
 /** The details panel's pause buttons: tabs, members, applicants and invocations (0-97). */
 const MANAGEMENT_PAUSE_LAST = 97;
 const MANAGEMENT_PRESETS_UID = (INTERFACE.PARTY_MANAGEMENT << 16) | 98;
+const CONFIRMATION_MENU = 219;
 const REWARD_POTENTIAL_TEXT_UID = 50724925;
 
 const OVERVIEW = { REFRESH: 0, MAKE_PARTY: 1, FILTER: 2 };
 /**
  * The details panel's pause button numbers, as its cache scripts number them: the 12 fixed
- * buttons (enum 4792), then from 12 members, from 36 applicants' Accept and from 44 their
- * Decline (6746: 12 + 24 (+ 8) + row), and from 52 the invocations in enum 4664's order
+ * buttons (enum 4792), then Kick from 12 (6725), Move up from 20 and Move down from 28
+ * (6722, 5345), applicants' Accept from 36 and Decline from 44 (6746), and the invocations
+ * from 52 in enum 4664's order
  * (6754: 12 + 24 + 16 + grid position).
  */
 const MANAGEMENT = {
   OPEN_LIST: 0, REFRESH: 1, UNBLOCK: 2, SET_COMPLETIONS: 3, MEMBER_OPTION: 4, CLEAR_ALL: 5,
   LOAD_PRESET: 6, SAVE_PRESET: 7, TAB_FIRST: 8, TAB_LAST: 11, MEMBER_FIRST: 12, MEMBER_LAST: 19,
+  MOVE_UP_FIRST: 20, MOVE_UP_LAST: 27, MOVE_DOWN_FIRST: 28, MOVE_DOWN_LAST: 35,
   ACCEPT_FIRST: 36, DECLINE_FIRST: 44, APPLICANT_LAST: 51, INVOCATION_FIRST: 52,
 };
 const VIEW = { NON_MEMBER: 0, MEMBER: 1, LEADER: 2, APPLICANT: 3, DECLINED: 4 };
+const pendingPartyHandover = new WeakMap();
 
 const REWARD_POTENTIAL_INFO = "Reward Potential|"
   + "Before entering a raid, you can customise the difficulty of the challenges you'll face by using <col=ffffff>Invocations</col>. "
@@ -582,9 +586,86 @@ function refreshPartyViewers(party) {
   }
 }
 
+function refreshPartyOrder(party, actor) {
+  refreshManagement(actor);
+  for (const viewer of Shared.core().World.getPlayers()) {
+    if (viewer !== actor) refreshIfViewing(viewer, party);
+  }
+}
+
+function canReorderParty(player, party) {
+  return party?.isLeader(player) && Parties.currentParty(player) === party
+    && viewingManagement(player, party) && !party.insideRaid() && Shared.inLobby(player.getLocation());
+}
+
+function finishPartyHandover(player, request, accepted) {
+  if (pendingPartyHandover.get(player) !== request) return;
+  pendingPartyHandover.delete(player);
+  const { party, players, member } = request;
+  if (!canReorderParty(player, party)) return;
+  // A departure replaces the member array. Decline even if the member subsequently rejoins.
+  if (!accepted || party.players !== players || party.players[1] !== member) {
+    refreshManagement(player);
+    return;
+  }
+
+  party.swap(0, 1);
+  refreshPartyOrder(party, player);
+  // 227/1753 ticks 10750–10751: the management redraw precedes the HUD by one tick.
+  Shared.later(party, 1, () => {
+    if (!party.insideRaid()) party.broadcastMembers();
+  });
+}
+
+function partyHandoverClosed({ player, interfaceId }) {
+  if (interfaceId !== CONFIRMATION_MENU) return;
+  const request = pendingPartyHandover.get(player);
+  if (!request) return;
+  // The prompt closes before its choice callback, so wait to distinguish dismissal.
+  Shared.later(player, 1, () => {
+    if (pendingPartyHandover.get(player) !== request) return;
+    if (player.getInterfaceId() >= 0 || player.getPacketSender().getChatboxGroupId() >= 0) {
+      pendingPartyHandover.delete(player);
+      return;
+    }
+    finishPartyHandover(player, request, false);
+  });
+}
+
+function clickPartyArrow(player, slot) {
+  if (player.getInterfaceId() !== INTERFACE.PARTY_MANAGEMENT) return;
+  const party = Parties.stateOf(player).viewing;
+  if (!canReorderParty(player, party)) return;
+
+  const up = slot <= MANAGEMENT.MOVE_UP_LAST;
+  const from = slot - (up ? MANAGEMENT.MOVE_UP_FIRST : MANAGEMENT.MOVE_DOWN_FIRST);
+  const to = from + (up ? -1 : 1);
+  if (!party.players[from] || !party.players[to]) {
+    refreshManagement(player);
+    return;
+  }
+  if (from === 0 || to === 0) {
+    const member = party.players[1];
+    const request = { party, players: party.players, member };
+    player.getPacketSender().sendInterfaceRemoval();
+    pendingPartyHandover.set(player, request);
+    Shared.options(player, "Are you sure?",
+      `Make ${Shared.displayName(member)} the party leader`, () => finishPartyHandover(player, request, true),
+      "Keep the current leader", () => finishPartyHandover(player, request, false));
+    return;
+  }
+  party.swap(from, to);
+  refreshPartyOrder(party, player);
+  party.broadcastMembers();
+}
+
 function clickManagementButton(event) {
   const { player } = event;
   const slot = slotOf(event);
+  if (slot >= MANAGEMENT.MOVE_UP_FIRST && slot <= MANAGEMENT.MOVE_DOWN_LAST) {
+    clickPartyArrow(player, slot);
+    return;
+  }
   const party = viewingParty(player);
   if (!party) return;
   const leader = party.isLeader(player);
@@ -870,6 +951,7 @@ module.exports = function registerTombsLobby(api) {
   api.onObjectClick(SCOREBOARD.LOC, 1, readScoreboard);
   for (const tab of SCOREBOARD.TABS) api.onInterfaceActionButton(uid(SCOREBOARD.INTERFACE, tab.component), clickScoreboardTab);
   api.onCustomEvent("interface:closed", closeScoreboard);
+  api.onCustomEvent("interface:closed", partyHandoverClosed);
   api.persistAttribute(Raid.ATTR_STATS);
   api.onZoneEnter(Shared.LOBBY, enterLobby);
   api.onZoneExit(Shared.LOBBY, leaveLobby);

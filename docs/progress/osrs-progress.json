@@ -37647,13 +37647,15 @@
           "implementedIn": [
             "server/src/main/typescript/elvarg/game/content/combat/CombatSpecial.ts",
             "server/src/main/typescript/elvarg/game/content/combat/WeaponInterfaces.ts",
-            "server/data/definitions/item-gameplay.json"
+            "server/data/definitions/item-gameplay.json",
+            "server/plugins/items/Hallowfell.plugin.js"
           ],
           "devNotes": [
             "Core-owned: all four godsword specials (Armadyl/Bandos/Saradomin/Zamorak) plus the Ancient godsword are in CombatSpecial.ts with dedicated methods.",
             "TWO_HANDED_SWORD and GODSWORD interfaces exist; two-handed equip conflicts are handled by EquipPacketListener.",
             "Missing: dragon 2h and third-age 2h have no special; the saradomin sword special is a separate CombatSpecial.",
-            "PR #797 (4b572c780): finished the remaining Weapons & equipment tasks, so every task is now done."
+            "PR #797 (4b572c780): finished the remaining Weapons & equipment tasks, so every task is now done.",
+            "2026-11-26, issue #6783: Hallowfell now cleaves up to two additional unique enemies in its five-tile facing arc, with separate accuracy and half-maximum rolls before flat armour, HP caps and XP. Demonic Pacts keeps the weapon's extended primary reach while the cleave remains player-centred. Verified by server/tests/area-attacks-target-zone.test.cjs and documented in docs/weapon-data.md; cache-native engine checks use supplied actors and controlled roll checkpoints, with no rendered client or retail Hallowfell capture. Mechanics: https://oldschool.runescape.wiki/w/Hallowfell and its Cleaving_guide. Existing task statuses are unchanged."
           ],
           "taskDetails": [
             {

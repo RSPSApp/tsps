@@ -80,6 +80,10 @@ One of sounds 518-521 (delay 20) comes with each failure; on a hit live sends a 
 Mod Ash): Crafting only, 24% at level 1 to 59% at 99 (low 60, high 150 of 256); each failure is one of the four
 at 25%.
 
+The fence's unbroken parts (`mcannon_dwarf_railing_fixed`, 15601) answer Inspect with the player's "This part
+of the railing seems fine." (chat_right, chatneu1), and nothing else (1001618 tick 3397, varp 0 = 1, before any
+railing was fixed). The one recording doesn't vary the stage, so every stage gives the same line.
+
 **The remains.** Take plays the player's "I had better take these remains." first; the remains go into the pack,
 and off the floor for that player (a `loc_del`), as the line closes. No chat message.
 

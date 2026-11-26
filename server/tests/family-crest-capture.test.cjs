@@ -380,6 +380,7 @@ test("t2441-2478, t2864-2893: every Blast cast at Chronozon says 'Chronozon weak
   assert.deepEqual(texts(f).filter((m) => m.startsWith("Chronozon")), [], "a splash");
   h.core.PendingHit.prototype.isAccurate.mock.restore();
   // An accurate 0 is no hit either (the Wiki: actual damage).
+  t.mock.method(h.core.PendingHit.prototype, "isAccurate", () => true);
   t.mock.method(h.core.PendingHit.prototype, "getTotalDamage", () => 0);
   clear(f);
   await blastCast(f, chronozon, "Fire Blast");
@@ -387,6 +388,7 @@ test("t2441-2478, t2864-2893: every Blast cast at Chronozon says 'Chronozon weak
   fightTicks(f, chronozon, 6);
   assert.deepEqual(texts(f).filter((m) => m.startsWith("Chronozon")), [], "an accurate 0");
   h.core.PendingHit.prototype.getTotalDamage.mock.restore();
+  h.core.PendingHit.prototype.isAccurate.mock.restore();
   // Two hits that land, for real damage (the rolls are random otherwise).
   t.mock.method(h.core.PendingHit.prototype, "isAccurate", () => true);
   const damage = t.mock.method(h.core.PendingHit.prototype, "getTotalDamage", () => 10);
@@ -682,6 +684,27 @@ test("the Wiki ('perfect' gold bar): it makes the other gold jewellery too, with
   for (let i = 0; i < 6 && k.player.getInterfaceId() !== 446; i++) h.tick(k);
   h.PM.emitInterfaceActionClick({ player: k.player, buttonId: (446 << 16) | require("../plugins/skills/data/crafting.json").gold.slayerRing.component, action: 1, handled: false });
   h.ticks(k, 4);
-  assert.deepEqual([k.player.getInventory().getAmount(I.PERFECT_GOLD_BAR), k.player.getInventory().getAmount(I.ENCHANTED_GEM)], [0, 0], "slayer ring made");
+  assert.deepEqual([k.player.getInventory().getAmount(I.PERFECT_GOLD_BAR), k.player.getInventory().getAmount(I.ENCHANTED_GEM),
+    k.player.getInventory().getAmount(I.SLAYER_RING_8_)], [0, 0, 1], "slayer ring made");
   assert.deepEqual([g.player.getInventory().getAmount(I.PERFECT_RING), g.player.getInventory().getAmount(I.RUBY_RING), g.player.getInventory().getAmount(I.GOLD_BAR)], [1, 0, 1]);
+});
+
+test("the Wiki: four Blasts that hit for 0 don't count; his last hit point off, he still regenerates", async (t) => {
+  const f = actor(t, { tile: [3089, 9938], value: S.CURED, level: 99 });
+  f.player.setHitpoints(990);
+  const chronozon = h.spawn(f, CHRONOZON, AT.CHRONOZON);
+  h.tick(f);
+  t.mock.method(h.core.PendingHit.prototype, "isAccurate", () => true);
+  t.mock.method(h.core.PendingHit.prototype, "getTotalDamage", () => 0);
+  for (const name of ["Wind Blast", "Water Blast", "Earth Blast", "Fire Blast"]) {
+    await blastCast(f, chronozon, name);
+    f.connection.processTurnPackets();
+    fightTicks(f, chronozon, 6);
+  }
+  h.core.PendingHit.prototype.getTotalDamage.mock.restore();
+  h.core.PendingHit.prototype.isAccurate.mock.restore();
+  chronozon.setHitpoints(1);
+  landHit(f.player, chronozon, 5);
+  fightTicks(f, chronozon, 2);
+  assert.equal(chronozon.getHitpoints(), chronozon.getDefinition().getHitpoints(), "back to full");
 });

@@ -196,14 +196,14 @@ function start() {
   })());
 }
 
-/**
- * Wiki (Pay-dirt): "Pay-dirt cannot be deposited in the bank" (Bankable: No). Every bank and
- * deposit box path asks onCanBankItem. No capture has the refusal; the line is the repo's
- * unbankable-item one (Ours). A Deposit-all asks once per pay-dirt, so only the container's first
- * pay-dirt slot sends it (ours: one line per deposit, not one per pay-dirt).
- */
+/** Ours: no capture has the pay-dirt refusal, so it's the repo's unbankable-item line. */
 const UNBANKABLE_TEXT = "A magical force prevents you from banking this item!";
 
+/**
+ * Wiki (Pay-dirt): "Pay-dirt cannot be deposited in the bank" (Bankable: No). Every bank and
+ * deposit box path asks onCanBankItem. A Deposit-all asks once per pay-dirt, so only the
+ * container's first pay-dirt slot sends the line (ours: one line per deposit, not per pay-dirt).
+ */
 function refuseBanking(event) {
   if (event.item?.getId?.() !== Mine.PAY_DIRT) return;
   event.allow = false;

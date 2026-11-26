@@ -73,7 +73,7 @@ test("dragging pay-dirt onto the bank and the deposit box's Deposit-inventory re
   assert.deepEqual(f.messages, [TEXT, TEXT, TEXT]);
 });
 
-test("a quiet ask (presets, servants) refuses pay-dirt without a line", (t) => {
+test("a quiet ask (presets, quest command) refuses pay-dirt without a line", (t) => {
   const f = banker(t, [[PAY_DIRT(), 1]]);
   assert.equal(PM.emitCanBankItem(f.p, f.p.getInventory().getItems()[0], { quiet: true }), false);
   assert.deepEqual(f.messages, []);

@@ -324,6 +324,10 @@ function displayName(player) {
   return player.getDisplayName();
 }
 
+function partyDisplayName(player) {
+  return displayName(player).replaceAll(" ", "\u00a0");
+}
+
 /** "him" or "her", as the theatre's messages about another member say it. */
 function objectPronoun(player) {
   return player.getAppearance?.()?.isMale?.() === false ? "her" : "him";
@@ -564,5 +568,5 @@ module.exports = {
   THEATRE, THEATRE_PLANES, VER_SINHAZA, OUTSIDE, NPC, OBJECT, ITEM, INTERFACE, SCRIPT, VARP, VARBIT,
   HEALTH_BAR, MAX_PARTY_SIZE, MAX_APPLICANTS, LIST_ROWS, OVERLAY_HUD_UID, MODES, ROOMS, ROOM_ORDER,
   loc, tileOf, inBox, inTheatre, inVerSinhaza, cycle, later, repeat, statement, npcSay, options,
-  fade, fadeRed, fadeMove, facing, displayName, objectPronoun, formatTicks, byMode, onObject,
+  fade, fadeRed, fadeMove, facing, displayName, partyDisplayName, objectPronoun, formatTicks, byMode, onObject,
 };

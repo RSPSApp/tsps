@@ -78,7 +78,7 @@ function refreshHud(player) {
   sender.sendSubInterface(Shared.OVERLAY_HUD_UID, INTERFACE.PARTY_HUD, 1);
   sender.sendVarbit(VARBIT.PARTY_STATE, party ? 1 : 0);
   const lines = Array.from({ length: Shared.MAX_PARTY_SIZE }, (_, i) =>
-    (party?.members[i] ? partyDisplayName(party.members[i]) : "-"));
+    (party?.members[i] ? Shared.partyDisplayName(party.members[i]) : "-"));
   sender.sendString(lines.join("<br>"), uid(INTERFACE.PARTY_HUD, 12));
 }
 
@@ -134,7 +134,7 @@ function rowText(party, viewer) {
   const names = Array.from({ length: Shared.MAX_PARTY_SIZE }, (_, i) => {
     const member = party.members[i];
     if (!member) return "";
-    const name = Shared.displayName(member);
+    const name = Shared.partyDisplayName(member);
     return i === 0 && party.has(viewer) ? `<col=ffffff>${name}</col>` : name;
   });
   return `${names.join("|")}|${party.members.length}|${party.preferredSize}|${party.preferredCombat}|${Shared.MODES[party.mode].name}|${party.age()}`;
@@ -201,17 +201,13 @@ function selectRow(event) {
 
 // ---------------------------------------------------------------- 50: a party's information
 
-function partyDisplayName(player) {
-  return Shared.displayName(player).replaceAll(" ", "\u00a0");
-}
-
 /** A member's line: name, combat, attack, strength, ranged, magic, defence, hitpoints, prayer, completions. */
 function memberLine(player) {
   const { Skill } = Shared.core();
   const skills = player.getSkillManager();
   const levels = [Skill.ATTACK, Skill.STRENGTH, Skill.RANGED, Skill.MAGIC, Skill.DEFENCE, Skill.HITPOINTS, Skill.PRAYER]
     .map((skill) => skills.getMaxLevel(skill));
-  return `${partyDisplayName(player)}|${skills.getCombatLevel()}|${levels.join("|")}|${Stats.completionsOf(player, "normal")}`;
+  return `${Shared.partyDisplayName(player)}|${skills.getCombatLevel()}|${levels.join("|")}|${Stats.completionsOf(player, "normal")}`;
 }
 
 function openInformation(player, party) {
@@ -349,12 +345,12 @@ function answerApplicant(player, party, index, accept, { notifyApplicant = true,
     if (Parties.partyOf(applicant)) {
       party.withdraw(applicant);
       player.getPacketSender().sendInterfaceRemoval();
-      Shared.statement(player, `${Shared.displayName(applicant)} appears to have joined another party.`);
+      Shared.statement(player, `${Shared.partyDisplayName(applicant)} appears to have joined another party.`);
       return;
     }
     if (party.accept(applicant)) {
       if (notifyApplicant) {
-        const leaderName = Shared.displayName(party.leader).replaceAll(" ", "\u00a0");
+        const leaderName = Shared.partyDisplayName(party.leader);
         applicant.sendMessage(`Your application to the party of ${leaderName} has been accepted.`);
       }
       if (deferHud) {
@@ -369,7 +365,7 @@ function answerApplicant(player, party, index, accept, { notifyApplicant = true,
     }
   } else {
     party.decline(applicant);
-    applicant.sendMessage(`Your application to the party of ${Shared.displayName(party.leader)} has been declined.`);
+    applicant.sendMessage(`Your application to the party of ${Shared.partyDisplayName(party.leader)} has been declined.`);
   }
   refreshParty(party);
   if (isViewing(applicant, party)) openInformation(applicant, party);
@@ -678,7 +674,7 @@ function useEntrance(event) {
     return true;
   }
   if (!party.isLeader(player) && !party.raid) {
-    Shared.statement(player, `Your leader, ${Shared.displayName(party.leader)}, must go first.`);
+    Shared.statement(player, `Your leader, ${Shared.partyDisplayName(party.leader)}, must go first.`);
     return true;
   }
   if (!player.getAttribute(ATTR.WARNED)) {

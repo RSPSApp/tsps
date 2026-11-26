@@ -1084,3 +1084,18 @@ test("one player's plea does not hold Mordred for another player", async (t) => 
   assert.equal(h.PM.emitCanAttack(f.player, mordred), false, "the pleading player and her son don't fight");
   assert.equal(h.PM.emitCanAttack(mordred, f.player), false);
 });
+
+test("two players' pleas on one Mordred: the first ending leaves the second's hold", async (t) => {
+  const { f, mordred } = fightActor(t);
+  await beatMordred(f, mordred);
+  const b = actor(t, { stage: S.LANCELOT, tile: [2768, 3403, 2] });
+  landHit(b.player, mordred, 5);
+  for (let i = 0; i < 6 && h.shown(b)?.who !== "Morgan Le Faye"; i++) h.tick(b);
+  assert.equal(h.shown(b)?.text, "STOP! Please... spare my son.");
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.getDialogueManager().reset?.();
+  h.ticks(f, 3);
+  assert.equal(mordred.getHitpoints(), 1, "still held for the second player");
+  assert.equal(h.PM.emitCanAttack(b.player, mordred), false);
+  assert.notEqual(h.PM.emitCanAttack(f.player, mordred), false, "the first player's hold is gone");
+});

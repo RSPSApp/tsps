@@ -757,8 +757,9 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   const fights = new Map();
   const morganOf = (player) => fights.get(player)?.morgan ?? null;
 
-  /** Mordred -> the player his mother pleads with: those two don't fight meanwhile (others are not held). */
+  /** Mordred -> the players his mother pleads with: they and he don't fight meanwhile (others are not held). */
   const pleading = new WeakMap();
+  const pleadsWith = (npc, player) => pleading.get(npc)?.has(player) === true;
 
   /**
    * Mordred's last hit leaves him on 0 (headbar fill 0, ticks 1079, 1145, 1215) and Morgan appears
@@ -768,7 +769,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   function mordredFalls(event) {
     const npc = event.npc;
     if (npc?.getId?.() !== MORDRED_NPC_ID) return;
-    const player = npc.getCombat?.().getKiller?.(false);
+    // The player whose hit it was (the death task's last damager), not the top damager of a shared fight.
+    const player = npc.getCombat?.().getLastDamager?.() ?? npc.getCombat?.().getKiller?.(false);
     if (!player?.isPlayer?.() || stageOf(player) !== STAGE_SPOKEN_LANCELOT) return;
     const fight = fights.get(player);
     if (fight?.killing && fight.mordred === npc) return; // "No. He deserves to die."
@@ -776,7 +778,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     npc.setHitpointsLocked?.(false);
     npc.hitpoints = 1; // Ours: one hitpoint rather than none, so nothing else treats him as dead
     // A hit already on its way while she pleads with this player changes nothing.
-    if (pleading.get(npc) === player) return;
+    if (pleadsWith(npc, player)) return;
     stopFighting(player, npc);
     removeMorgan(player);
     const tile = morganTile(player, npc);
@@ -786,15 +788,16 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     morgan.setPositionToFace(player.getLocation());
     puff(player, morgan.getLocation(), MORGAN_PUFF_HEIGHT);
     player.setPositionToFace(morgan.getLocation());
-    pleading.set(npc, player);
+    if (!pleading.has(npc)) pleading.set(npc, new Set());
+    pleading.get(npc).add(player);
     fights.set(player, { mordred: npc, morgan, told: false, killing: false });
     startTranscript(api, player, MORGAN_NPC_ID, PAGE, "inside-keep-le-faye-defeating-sir-mordred", null, morgan);
     // Walking away mid-plea: Mordred is whole again and Morgan wanders about (Wiki, Sir Mordred).
     whenChatCloses(player, () => {
-      releaseMordred(npc);
+      const last = releaseMordred(npc, player);
       const current = fights.get(player);
       if (current?.morgan !== morgan || current.killing) return;
-      healMordred(npc);
+      if (last) healMordred(npc);
       if (registered(morgan)) morgan.getMovementCoordinator().setRadius(3);
     }, morgan);
   }
@@ -811,15 +814,20 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     player.getMovementQueue?.().reset?.();
   }
 
-  function releaseMordred(npc) {
+  /** This player's plea is over; true when it was the last one, and he is free again. */
+  function releaseMordred(npc, player) {
+    const players = pleading.get(npc);
+    players?.delete(player);
+    if (players?.size) return false;
     pleading.delete(npc);
     if (registered(npc)) npc.getMovementQueue().setBlockMovement(false);
+    return true;
   }
 
   /** The player Morgan pleads with and her son don't fight while she does. */
   function pleaHoldsTheFight(event) {
     const { attacker, target } = event;
-    if ((pleading.get(attacker) && pleading.get(attacker) === target) || (pleading.get(target) && pleading.get(target) === attacker)) {
+    if (pleadsWith(attacker, target) || pleadsWith(target, attacker)) {
       event.allow = false;
     }
   }
@@ -855,8 +863,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     const fight = fights.get(player);
     if (!fight) return;
     if (registered(fight.morgan)) puff(player, fight.morgan.getLocation(), MORGAN_PUFF_HEIGHT);
-    healMordred(fight.mordred);
-    releaseMordred(fight.mordred);
+    if (releaseMordred(fight.mordred, player)) healMordred(fight.mordred);
     removeMorgan(player);
   }
 
@@ -866,7 +873,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (!fight) return;
     fight.killing = true;
     const { mordred, morgan } = fight;
-    releaseMordred(mordred);
+    releaseMordred(mordred, player);
     if (registered(mordred) && mordred.isDyingFunction?.() !== true) mordred.setHitpoints(0);
     TaskManager.submit(new CountdownTask(morgan, MORDRED_BODY_TICKS, () => {
       if (fights.get(player) === fight) removeMorgan(player);
@@ -876,8 +883,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   function leftMordredsRoom(player) {
     if (!fights.has(player) || inZone(player.getLocation(), MORDRED_ROOM)) return;
     const fight = fights.get(player);
-    healMordred(fight.mordred);
-    releaseMordred(fight.mordred);
+    if (releaseMordred(fight.mordred, player)) healMordred(fight.mordred);
     removeMorgan(player);
   }
 
@@ -1008,7 +1014,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (event.itemId !== BAT_BONES_ITEM_ID) return;
     const { player } = event;
     if (stageOf(player) !== STAGE_SPOKEN_MORGAN || !onRitualTile(player.getLocation())) return;
-    // While he is there the bones drop as any item (local 1001994 tick 17496, local 1001800 tick 23238).
+    // While he is there the bones drop as any item (Ours: the two recorded drops then, local 1001994 tick 17496
+    // and 1001800 tick 23238, were both off the symbol).
     if (rituals.has(player)) return;
     if (player.getAttribute(READ_INCANTATION_ATTRIBUTE) !== true) {
       event.handled = true;
@@ -1301,8 +1308,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (!player) return;
     const fight = fights.get(player);
     if (fight) {
-      healMordred(fight.mordred);
-      releaseMordred(fight.mordred);
+      if (releaseMordred(fight.mordred, player)) healMordred(fight.mordred);
     }
     removeMorgan(player);
     clearBeggar(player);

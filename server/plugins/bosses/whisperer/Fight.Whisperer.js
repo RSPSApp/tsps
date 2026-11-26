@@ -66,10 +66,10 @@ class Fight {
   }
   /** The nine entrance tentacles (2652-2660, 6384): 47584 from the wake, 47585 in the
    * Shadow Realm and 47586 again on the kill (capture 3281, 2611/2734/2761). */
-  entrance(id) {
+  entrance(id, rotation = null) {
     const offset = this.shadow ? Common.data.site.realmOffset : 0;
-    for (const [x, y, rotation] of Common.data.objects.entrance)
-      this.player.getPacketSender().sendObject(new Common.core.GameObject(id, new Common.core.Location(x - offset, y, 0), 10, rotation, this.session.area));
+    for (const [x, y, stored] of Common.data.objects.entrance)
+      this.player.getPacketSender().sendObject(new Common.core.GameObject(id, new Common.core.Location(x - offset, y, 0), 10, rotation ?? stored, this.session.area));
   }
   alive() {
     return !this.over && !this.stopped && !this.session.ended && this.session.fight === this;
@@ -526,7 +526,7 @@ function onDeath({ npc }) {
   const duration = value => `${Math.floor(value * .6 / 60)}:${String(Math.floor(value * .6) % 60).padStart(2, '0')}`;
   player.sendMessage(`Fight duration: <col=ff0000>${duration(ticks)}</col>${!best || ticks < best ? ' (new personal best)' : `. Personal best: ${duration(best)}`}`);
   Rewards.complete(fight);
-  fight.entrance(Common.data.objects.exit);
+  fight.entrance(Common.data.objects.exit, 0);
   // Wiki: 30 ticks. Recorded kills (3281, 3299) show the Odd Figure again after 15; the Wiki wins.
   Common.later(Common.data.respawnTicks, () => {
     if (!fight.session.ended && fight.session.fight === fight)

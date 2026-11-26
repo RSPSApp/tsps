@@ -131,7 +131,8 @@ for (const accuracy of [[true, false], [false, true], [false, false], [true, tru
 
 // rsprox captures: barrow_torag_crush (2068) on every attack with Torag's hammers (recs 2600/2601,
 // rev 229), Sulphur blades (local 1001301 Slash, 1001302 Block, rev 237) and the Glacial temotli
-// (local 1001302 Pound and Block). The other styles weren't recorded; every recorded one agrees.
+// (local 1001302 Pound). The other styles weren't recorded: 2068 in them is an assumption, as every
+// recorded style agrees and the Wiki is silent.
 // Blades and temotli block with human_sword_def (388), the hammers with human_unarmedblock (424).
 // See docs/weapon-data.md, "Twin weapons swing both weapons".
 const TWIN_SWING = [[29084, 388], [29889, 388], [4747, 424], [4958, 424], [4959, 424], [4960, 424], [4961, 424]];

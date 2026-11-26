@@ -104,7 +104,6 @@ module.exports = function registerGertrudesCatQuest(api) {
   const RECEIVE_KITTEN_ACTION_ID = "hXsla7";
   const FOOD_ACTION_ID = "LPHGJg";
   const COMPLETE_ACTION_ID = "Rf4BAK";
-  const REPLACEMENT_KITTEN_ACTION_ID = "Q44J0B";
 
   // ---------------------------------------------------------------------------------------------
   // Recorded timings (ticks after the player reaches the target), capture GertrudesCat.bin
@@ -169,7 +168,7 @@ module.exports = function registerGertrudesCatQuest(api) {
   const hasItem = (player, itemId) => player.getInventory().getAmount(itemId) > 0;
   /** Fluffs' kitten anywhere the player keeps it: the backpack or a bank tab. */
   const holdsKitten = (player) => hasItem(player, FLUFFS_KITTEN_ITEM_ID)
-    || (player.getBanks?.() ?? []).some((bank) => bank?.contains?.(FLUFFS_KITTEN_ITEM_ID));
+    || (player.getBanks?.() ?? []).some((bank) => bank?.getAmount?.(FLUFFS_KITTEN_ITEM_ID) > 0);
   const variantSteps = (variant) => loadTranscripts(api)?.[PAGE]?.variants?.[variant] ?? [];
   /** A variant's words by kind: the cat's overhead, the player's line, the message box. */
   function variantWords(variant) {
@@ -341,11 +340,14 @@ module.exports = function registerGertrudesCatQuest(api) {
     player.sendMessage(questStartMessage(player, quest.name));
   }
 
-  const onPage = (event) => Array.isArray(event.pages) && event.pages.some((entry) => entry?.page === PAGE);
+  /** The step plays from the quest's page; Gertrude's own page (her kitten sale) is the Gertrude plugin's. */
+  const onPage = (event) => (event.playing?.page
+    ? event.playing.page === PAGE
+    : Array.isArray(event.pages) && event.pages.some((entry) => entry?.page === PAGE));
 
   function handleAction(event) {
     const { player, stepId } = event;
-    if (!onPage(event) || !QUEST_NPC_IDS.has(event.npcId)) return handleGertrudePageAction(event);
+    if (!onPage(event) || !QUEST_NPC_IDS.has(event.npcId)) return;
     const stage = quest.getStage(player);
     // The dump wraps wiki conditionals as `unavailable` steps mid-branch (Gertrude's mDyVfF before
     // the completion action). The shared dialogue runtime closes on them; skip past them instead.
@@ -367,26 +369,6 @@ module.exports = function registerGertrudesCatQuest(api) {
       event.handled = true;
       event.end = true;
     }
-  }
-
-  /** Gertrude's own page (her post-quest kitten sale). */
-  function handleGertrudePageAction(event) {
-    const { player, stepId } = event;
-    if (stepId !== REPLACEMENT_KITTEN_ACTION_ID) return;
-    event.handled = true;
-    if (player.getInventory().getAmount(COINS_ITEM_ID) < COINS_PRICE) {
-      player.sendMessage("You need 100 coins to buy another kitten.");
-      event.end = true;
-      return;
-    }
-    if (player.getInventory().isFull()) {
-      player.sendMessage("You need a free inventory slot.");
-      event.end = true;
-      return;
-    }
-    player.getInventory().deleteNumber(COINS_ITEM_ID, COINS_PRICE);
-    player.getInventory().adds(ItemIdentifiers.PET_KITTEN, 1);
-    player.sendMessage("Gertrude gives you another kitten.");
   }
 
   /**

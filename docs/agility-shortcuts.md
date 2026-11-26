@@ -137,9 +137,12 @@ The "Broken fence (Varrock)" entry follows a revision 242 capture of a whole Ger
   (839), BUSY with it. BUSY clears 3 ticks later.
 - **No message** either way; the entry used to say "You climb over the broken fence.".
 
-The move starts on the fence line, one tile past the player, so the runner's `move` step takes a
-`from` tile. This cache's collision blocks the fence tile itself (clipType 2), which live walks
-onto, so the north crossing starts from 3308,3491 (`unverified` in the entry).
+The move starts one tile past the player, so the runner's `move` step takes a `from` tile. This
+cache's collision blocks the fence tile itself (clipType 2), which live walks onto, so the north
+crossing starts from 3308,3491 (`unverified` in the entry) and keeps live's distances from the
+player's tile: the move runs from the fence (3308,3492) to 3308,3493, where the player lands. With
+live's tiles from 3308,3491 the climb played a tile north of the fence and landed a tile further
+on (issue 6772).
 
 ## Map mismatches found on the way
 

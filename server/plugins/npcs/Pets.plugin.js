@@ -29,6 +29,7 @@ const GiantSquirrel = require("./pets/GiantSquirrel.Pets");
 const Rocky = require("./pets/Rocky.Pets");
 const RockGolem = require("./pets/RockGolem.Pets");
 const Phoenix = require("./pets/Phoenix.Pets");
+const CatInteract = require("./pets/CatInteract.Pets");
 
 const CURRENT_PET_ATTRIBUTE = "pets:current";
 /** The item of the follower the player logged out with; re-summoned on login. */
@@ -1439,7 +1440,6 @@ function shooCat(player, npc) {
   clearCatState(player);
   stopCatTask(player);
   syncFollowerIndex(player, null);
-  player.sendMessage("You shoo your pet away.");
 }
 
 /** The Wiki's kitten food: any raw or cooked fish except the eel family. */
@@ -1511,37 +1511,19 @@ function handleGullFeed(event) {
     : `Gull eats the fish. (${fed}/50)`);
 }
 
+/** The stroke's attention clock (Wiki); CatInteract plays what the player sees. False with no cat record. */
 function strokeCat(player, npc) {
   const pet = getPetByNpcId(npc?.getId?.());
   const info = catInfoOf(pet);
   const state = getCatState(player);
-  if (!info || !state || state.stage !== info.stage) return;
+  if (!info || !state || state.stage !== info.stage) return false;
   const now = Date.now();
   const satiated = state.lastStrokeAt && now - state.lastStrokeAt < 60_000;
   state.lastStrokeAt = now;
   state.attentionAt = now + (satiated ? CAT_STROKE_SATIATED_MS : CAT_STROKE_MS);
   state.attentionStage = 0;
   setCatState(player, state);
-  player.sendMessage(`You stroke the ${catNoun(info)}.`);
-}
-
-function guessCatAge(player) {
-  const state = getCatState(player);
-  if (!state) {
-    player.sendMessage("You don't have a kitten.");
-    return;
-  }
-  if (state.stage === "cat" || state.stage === "hellcat") {
-    const remaining = Math.max(0, CAT_ADULT_GROWTH - (Number(state.growth) || 0));
-    player.sendMessage(`Your cat will become overgrown in about ${Math.ceil(remaining * 1.5)} minutes.`);
-    return;
-  }
-  if (state.stage === "kitten" || state.stage === "hellkitten") {
-    const remaining = Math.max(0, CAT_KITTEN_GROWTH - (Number(state.growth) || 0));
-    player.sendMessage(`Your kitten will grow into a cat in about ${Math.ceil(remaining * 1.5)} minutes.`);
-    return;
-  }
-  player.sendMessage("Your cat is fully grown.");
+  return true;
 }
 
 function findVermin(npc) {
@@ -1606,31 +1588,6 @@ function chaseVermin(player, npc, pet) {
   }
   player.sendMessage(`Your ${catNoun(info)} catches the ${name.toLowerCase()}.`);
   return true;
-}
-
-function openCatInteract(player, npc, pet) {
-  if (!catInfoOf(pet)) return false;
-  if (typeof pluginApi?.sendMultiChatboxPrompt !== "function") return true;
-  // Recall and growth replace the NPC while this non-interrupting prompt stays
-  // open. Keep the logical cat session, then resolve its live follower per choice.
-  const state = getCatState(player);
-  const withCurrentCat = (action) => () => {
-    const current = player.getAttribute?.(CURRENT_PET_ATTRIBUTE);
-    const entry = getPetByNpcId(current?.getId?.());
-    if (!current?.isRegistered?.() || !current.isPet?.() || current.getOwner?.() !== player
-        || World.getRemoveNPCQueue().includes(current) || !catInfoOf(entry)
-        || getCatState(player) !== state || (!state && current !== npc)) return;
-    action(current, entry);
-  };
-  const opened = pluginApi.sendMultiChatboxPrompt(
-    player,
-    "Interact",
-    "Stroke", withCurrentCat(current => strokeCat(player, current)),
-    "Chase vermin", withCurrentCat((current, entry) => chaseVermin(player, current, entry)),
-    "Guess age", withCurrentCat(() => guessCatAge(player)),
-    "Shoo away", withCurrentCat(current => shooCat(player, current))
-  );
-  return opened !== false;
 }
 
 /** Cats are generic pets: they run off on death rather than waiting to catch up. */
@@ -1732,6 +1689,11 @@ function spawnPetNpc(npc) {
     alreadyQueued,
     addNpcQueueSize: addQueue.length,
   };
+}
+
+/** The NPC is queued to leave the world this tick. */
+function isBeingRemoved(npc) {
+  return World.getRemoveNPCQueue().includes(npc);
 }
 
 function despawnPetNpc(npc) {
@@ -2027,9 +1989,9 @@ function interact(player, npc, action = "Interact") {
   pluginApi?.emitCustomEvent?.("pets:interact", request);
   if (request.handled) return true;
 
-  // Cats get the OSRS Interact menu (Stroke / Chase vermin / Guess age / Shoo away).
+  // Cats get the OSRS Interact menu (Stroke / Chase Vermin / Guess age / Shoo away).
   if (catInfoOf(pet)) {
-    return openCatInteract(player, npc, pet);
+    return CatInteract.open(player, npc, pet);
   }
 
   // Missing or ambiguous source variants remain a no-op; never guess a quest,
@@ -2369,6 +2331,7 @@ module.exports = {
     Call.attach(api, {currentAttribute: CURRENT_PET_ATTRIBUTE, getPetByNpcId, canSummonPetHere, replaceFollowerNpc});
     CatchUp.attach(api, {currentAttribute: CURRENT_PET_ATTRIBUTE, getPetByNpcId, canSummonPetHere});
     Dialogue.attach(api, {currentAttribute: CURRENT_PET_ATTRIBUTE, catInfoOf, getPetByNpcId});
+    CatInteract.attach(api, {currentAttribute: CURRENT_PET_ATTRIBUTE, catInfoOf, getPetByNpcId, getCatState, strokeCat, chaseVermin, shooCat, removing: isBeingRemoved, kittenGrowth: CAT_KITTEN_GROWTH});
     TaskClass = api.core?.Task ?? null;
     TaskManagerRef = api.core?.TaskManager ?? null;
     NPCRespawnTaskRef = api.core?.NPCRespawnTask ?? null;
@@ -2463,7 +2426,6 @@ module.exports = {
     handleItemOnCat,
     handleGullFeed,
     strokeCat,
-    guessCatAge,
     chaseVermin,
     shooCat,
     runAwayCat,

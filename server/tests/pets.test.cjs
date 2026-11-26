@@ -600,7 +600,7 @@ test("feeding resets hunger and milk reverts a hell-kitten to its colour", () =>
   assert.equal(player.messages.at(-1), "Your cat returns to its original colour.");
 });
 
-test("the cat Interact menu strokes, guesses age and shoos away", () => {
+test("an adult cat's Interact menu has no Guess age, and Shoo away asks first (rsprox.net 3216, 3219)", () => {
   const player = createPlayer();
   const npc = createPetNpc(player, 1619);
   player.setAttribute("pets:current", npc);
@@ -608,23 +608,23 @@ test("the cat Interact menu strokes, guesses age and shoos away", () => {
 
   assert.equal(Pets.__internals.interact(player, npc), true);
   const prompt = prompts.at(-1);
-  assert.equal(prompt.title, "Interact");
-  assert.deepEqual(prompt.pairs.filter((_, index) => index % 2 === 0), ["Stroke", "Chase vermin", "Guess age", "Shoo away"]);
+  assert.equal(prompt.title, "Interact with cat");
+  assert.deepEqual(prompt.pairs.filter((_, index) => index % 2 === 0), ["Stroke", "Chase Vermin", "Shoo away"]);
 
-  const stroke = prompt.pairs[1];
-  stroke(player);
+  // The stroke's attention clock (what the player sees is CatInteract's, tested natively).
+  assert.equal(Pets.__internals.strokeCat(player, npc), true);
   assert.ok(player.getAttribute("pets:cat").attentionAt > Date.now());
-  assert.match(player.messages.at(-1), /stroke the cat/);
 
-  const guess = prompt.pairs[5];
-  guess(player);
-  assert.match(player.messages.at(-1), /become overgrown in about/);
-
-  const shoo = prompt.pairs[7];
+  const shoo = prompt.pairs[5];
   shoo(player);
+  const confirm = prompts.at(-1);
+  assert.equal(confirm.title, "Are you sure you want to shoo away the cat?");
+  assert.deepEqual(confirm.pairs.filter((_, index) => index % 2 === 0), ["Yes I am.", "No I'm not."]);
+  assert.equal(player.getAttribute("pets:current"), npc, "nothing goes before the answer");
+
+  Pets.__internals.shooCat(player, npc);
   assert.equal(player.getAttribute("pets:current"), null);
   assert.equal(player.getAttribute("pets:cat"), null);
-  assert.equal(player.messages.at(-1), "You shoo your pet away.");
 });
 
 test("chasing vermin catches a rat and a hell-rat makes a hell-kitten", () => {

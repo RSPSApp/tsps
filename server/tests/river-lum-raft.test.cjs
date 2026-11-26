@@ -242,18 +242,23 @@ test("a second crossing keeps the bank rigged until 14 ticks after its own leg",
   assert.deepEqual([ropes(3246, 3251), locAt(WEST_TREE, 10)?.getId()], [[17030, null, 319, null, null, null], 17039]);
 });
 
-test("a player left on the raft (main's old landing) gets off with either option, to the nearer bank", (t) => {
+test("a player left on the raft (main's old landing) or in the water gets off with either option, to the nearer bank", (t) => {
   for (const [tile, objectId, loc, geared, landing] of [
     [[3253, 3179], 17068, RAFT, true, [3259, 3179]],
     [[3252, 3180], 17068, RAFT, true, [3246, 3179]],
     [[3253, 3180], 17069, [3252, 3180], false, [3259, 3179]],
     [[3252, 3180], 17070, [3253, 3180], false, [3246, 3179]],
+    // Mid-swim water tiles (a save during a server stop).
+    [[3248, 3179], 17068, RAFT, true, [3246, 3179]],
+    [[3257, 3179], 17069, [3252, 3180], false, [3259, 3179]],
   ]) {
     const a = actor(t, tile, { geared, agility: 60 });
-    click(a, objectId, loc);
+    if (tile[1] === 3179 && tile[0] !== 3253) new ObjectActionPacketListener().executeAction(a.p, objectId, loc[0], loc[1], 1);
+    else click(a, objectId, loc);
     playTo(a, 25);
     assert.deepEqual(a.tile(), landing, `from ${tile} with ${objectId}`);
     assert.equal(a.p.getMovementQueue().isMovementBlocked(), false);
-    if (geared) assert.deepEqual(of(a.log, "tab").map(([, tab]) => tab), [9, 1], "the tabs close and come back");
+    const onWater = tile[1] === 3179 && tile[0] !== 3253;
+    if (geared && !onWater) assert.deepEqual(of(a.log, "tab").map(([, tab]) => tab), [9, 1], "the tabs close and come back");
   }
 });

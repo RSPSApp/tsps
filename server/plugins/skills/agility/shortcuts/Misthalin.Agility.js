@@ -169,10 +169,16 @@ const BAREHANDED = {
  * 3253,3179): the far half of a crossing, to the nearer bank. Ours: live has no way to stand there between crossings.
  */
 const RAFT_TILES = new Set(["3252,3180", "3253,3179", "3253,3180"]);
+/** The water a swim passes over, blocked, where a save made mid-swim (a server stop) can leave a player. */
+function inWater(pos) {
+  return pos.z === 0 && pos.y === ROPE_Y && ((pos.x >= 3248 && pos.x <= 3251) || (pos.x >= 3254 && pos.x <= 3257));
+}
 function onRaft(pos) {
-  return pos.z === 0 && RAFT_TILES.has(`${pos.x},${pos.y}`);
+  return inWater(pos) || (pos.z === 0 && RAFT_TILES.has(`${pos.x},${pos.y}`));
 }
 function fromRaft(pos, grapple) {
+  // Ours: out of the water onto the nearer bank.
+  if (inWater(pos)) return [{ tele: pos.x <= 3251 ? [3246, 3179] : [3259, 3179] }];
   const way = pos.x >= RAFT_EAST[0] ? "east" : "west";
   const start = way === "east" ? RAFT_EAST : RAFT_WEST;
   const walk = pos.x === start[0] && pos.y === start[1] ? [] : [{ walk: [start], arrive: true }, { wait: 1 }];

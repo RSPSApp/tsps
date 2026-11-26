@@ -27,6 +27,7 @@ type CombatStats = {
     elementalWeaknessPercent?: number;
     attackType?: CombatType;
     attackStyle?: string;
+    meleeAttackStyle?: string;
     slayerLevel?: number;
     attackBonuses?: {
         melee?: number;
@@ -236,6 +237,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         if (["crush", "slash", "stab", "melee", "ranged", "magic", "fire", "water", "earth", "air", "dragonfire"].includes(style)) {
             target.attackType = NpcDefinitionLoader.resolveAttackType([style]);
             target.attackStyle = style;
+            target.meleeAttackStyle = NpcDefinitionLoader.meleeAttackStyle([style]);
             if (ELEMENT_ONLY_ATTACK_TYPES.has(style)) {
                 // Accepted as before, but no combat method reads it: the NPC still attacks in melee.
                 console.warn(`[npc-definitions] custom npc ${id}: attackType "${style}" has no combat style of its own; it attacks in melee (use "magic" or "ranged")`);
@@ -279,6 +281,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
             attackType: NpcDefinitionLoader.resolveAttackType(monster.attack_type),
             attackStyle: Array.isArray(monster.attack_type) && monster.attack_type.length > 0
                 ? String(monster.attack_type[0]).toLowerCase() : undefined,
+            meleeAttackStyle: NpcDefinitionLoader.meleeAttackStyle(monster.attack_type),
             slayerLevel:
                 monster.slayer_monster === true && monster.slayer_level > 0
                     ? monster.slayer_level
@@ -318,6 +321,17 @@ export class NpcDefinitionLoader extends DefinitionLoader {
         if (types.includes("ranged")) return CombatType.RANGED;
         if (types.includes("magic")) return CombatType.MAGIC;
         return CombatType.MELEE;
+    }
+
+    /**
+     * The melee style an NPC's hits roll against: the one of stab, slash and crush anywhere in its
+     * attack types (Yama's "melee, slash, ..."). None, or more than one (Tekton's stab, slash and
+     * crush), gives "", the best of the three.
+     */
+    public static meleeAttackStyle(attackTypes: unknown): string {
+        const types = Array.isArray(attackTypes) ? attackTypes.map((type) => String(type).toLowerCase()) : [];
+        const styles = ["stab", "slash", "crush"].filter((style) => types.includes(style));
+        return styles.length === 1 ? styles[0] : "";
     }
 
     /** Status rules have one canonical source, independent of combat-stat snapshots. */
@@ -535,6 +549,7 @@ export class NpcDefinitionLoader extends DefinitionLoader {
                     members: stat.members ?? definition.isMembers(),
                     attackType: stat.attackType ?? definition.getAttackType(),
                     attackStyle: stat.attackStyle ?? definition.getAttackStyle(),
+                    meleeAttackStyle: stat.meleeAttackStyle ?? definition.getMeleeAttackStyle(),
                     slayerLevel: stat.slayerLevel ?? definition.getSlayerLevel(),
                 });
                 applied++;

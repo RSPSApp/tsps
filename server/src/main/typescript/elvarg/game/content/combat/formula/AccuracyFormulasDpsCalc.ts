@@ -111,12 +111,12 @@ export class AccuracyFormulasDpsCalc {
     }
 
     /**
-     * The player defence bonus an NPC's melee hit rolls against: its own style (the dump's first
-     * attack type, Monster Examine's "Main attack style"). A plain "melee" or unknown style, or an
+     * The player defence bonus an NPC's melee hit rolls against: its one melee style among the dump's
+     * attack types (NpcDefinition.getMeleeAttackStyle). No single stab, slash or crush style, or an
      * NPC without a definition, falls back to 3, the best of stab, slash and crush in defenseMeleeRoll.
      */
     private static npcMeleeBonusIndex(entity: Mobile): number {
-        switch (entity.getAsNpc().getCurrentDefinition?.()?.getAttackStyle?.()) {
+        switch (entity.getAsNpc().getCurrentDefinition?.()?.getMeleeAttackStyle?.()) {
             case "stab":
                 return BonusManager.ATTACK_STAB;
             case "slash":

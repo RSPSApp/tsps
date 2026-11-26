@@ -92,6 +92,8 @@ export class NpcDefinition {
     private slayerLevel: number = 0;
     /** The dump's first attack style ("stab", "crush", "ranged", ...); "" when unknown. */
     private attackStyle: string = "";
+    /** The one melee style among the dump's attack types ("stab", "slash" or "crush"); "" when none or several. */
+    private meleeAttackStyle: string = "";
     /** Retreat/leash max range; the Wiki's "almost always seven tiles". */
     private combatFollowDistance: number = 7;
     /** Where an aggressive NPC searches for a target, from its current south-west tile. */
@@ -321,6 +323,11 @@ export class NpcDefinition {
     /** Monster Examine's "Main attack style". */
     public getAttackStyle(): string {
         return this.attackStyle;
+    }
+
+    /** The player defence bonus this NPC's melee hits roll against; "" means the best of stab, slash and crush. */
+    public getMeleeAttackStyle(): string {
+        return this.meleeAttackStyle;
     }
 
     public getAttackType(): CombatType {

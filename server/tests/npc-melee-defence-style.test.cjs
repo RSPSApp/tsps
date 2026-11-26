@@ -24,6 +24,9 @@ const GOBLIN = 2486; // stab
 const BLACK_KNIGHT = 1545; // slash
 const COW = 2790; // crush
 const BANSHEE = 414; // "melee" (and magic): no single melee style
+const TEKTON = 7542; // slash, crush, stab: no single melee style
+const ENRAGED_TEKTON = 7544;
+const YAMA = 14176; // melee, slash, ranged, magic: slash
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -51,6 +54,11 @@ test("the sample monsters carry the attack styles the cases rely on", () => {
   assert.equal(NpcDefinition.forId(BLACK_KNIGHT).getAttackStyle(), "slash");
   assert.equal(NpcDefinition.forId(COW).getAttackStyle(), "crush");
   assert.equal(NpcDefinition.forId(BANSHEE).getAttackStyle(), "melee");
+  // Monster Examine's "Main attack style" stays the dump's first entry.
+  assert.equal(NpcDefinition.forId(TEKTON).getAttackStyle(), "slash");
+  assert.equal(NpcDefinition.forId(YAMA).getAttackStyle(), "melee");
+  assert.equal(NpcDefinition.forId(TEKTON).getMeleeAttackStyle(), "");
+  assert.equal(NpcDefinition.forId(YAMA).getMeleeAttackStyle(), "slash");
 });
 
 test("stab, slash and crush monsters roll against the player's stab, slash and crush defence", () => {
@@ -62,9 +70,15 @@ test("stab, slash and crush monsters roll against the player's stab, slash and c
   assert.equal(meleeDefenceRoll(GOBLIN, player), stab);
   assert.equal(meleeDefenceRoll(BLACK_KNIGHT, player), slash);
   assert.equal(meleeDefenceRoll(COW, player), crush);
+  // Yama's one melee style comes after a plain "melee" in the dump.
+  assert.equal(meleeDefenceRoll(YAMA, player), slash);
 });
 
 test("a monster with no single melee style still rolls against the best of the three", () => {
   const player = armouredPlayer();
-  assert.equal(meleeDefenceRoll(BANSHEE, player), AccuracyFormulasDpsCalc.defenseMeleeRoll(player, BonusManager.ATTACK_STAB));
+  const best = AccuracyFormulasDpsCalc.defenseMeleeRoll(player, BonusManager.ATTACK_STAB);
+  assert.equal(meleeDefenceRoll(BANSHEE, player), best);
+  // Tekton swings stab, slash or crush, so its first dump entry is no main style.
+  assert.equal(meleeDefenceRoll(TEKTON, player), best);
+  assert.equal(meleeDefenceRoll(ENRAGED_TEKTON, player), best);
 });

@@ -645,6 +645,8 @@ test("manager NPC recolours and damage stay on the new ID, leaving its cache bas
       } finally {
         console.warn = warn;
       }
+      // The melee defence its hits roll against follows the custom style too.
+      assert.equal(customCombat.getMeleeAttackStyle(), style === "crush" ? "crush" : "");
     }
     assert.equal(warnings.length, 1, "a real combat style loads quietly");
     assert.equal(baseCombat.getMaxHit(), originalMaxHit);

@@ -6,34 +6,68 @@ export function usesNpcPriorityPass(npcTypeId: number): boolean {
     return npcTypeId === 6011;
 }
 
-const sortedGeometry = new WeakMap<DynamicNpcFrameGeometry, DynamicNpcFrameGeometry>();
+/** A face's render priority as SceneBuffer packs it into an actor vertex. */
+function vertexPriority(vertices: DataView, vertex: number): number {
+    return (vertices.getUint32(vertex * ACTOR_VERTEX_STRIDE + 8, true) >>> 6) & 7;
+}
 
-export function getNpcPriorityGeometry(
-    geometry: DynamicNpcFrameGeometry,
-    viewMatrix: ArrayLike<number>,
-    rotation: number,
-): DynamicNpcFrameGeometry {
+const mixedPriorities = new WeakMap<Int32Array, boolean>();
+
+/**
+ * Whether an actor mesh's faces span more than one render priority. The OSRS client paints such
+ * a model's higher priorities over its lower ones whatever their depth: a translucent mesh like
+ * this needs the painter pass, as depth alone keeps an outer shell in front of the layers inside.
+ */
+export function hasMixedPriorities(vertices: Uint8Array, indices: Int32Array): boolean {
+    let mixed = mixedPriorities.get(indices);
+    if (mixed !== undefined) return mixed;
+    mixed = false;
+    if (indices.length > 0) {
+        const view = new DataView(vertices.buffer, vertices.byteOffset, vertices.byteLength);
+        const first = vertexPriority(view, indices[0]);
+        for (let i = 3; i < indices.length; i += 3) {
+            if (vertexPriority(view, indices[i]) !== first) {
+                mixed = true;
+                break;
+            }
+        }
+    }
+    mixedPriorities.set(indices, mixed);
+    return mixed;
+}
+
+/** View-space Z direction in model space, after the actor shader's Y rotation. */
+function viewDirection(viewMatrix: ArrayLike<number>, rotation: number): [number, number, number] {
     const angle = rotation * Math.PI / 1024;
     const sin = Math.sin(angle);
     const cos = Math.cos(angle);
-    // View-space Z after the NPC shader's Y rotation. Translation is constant across faces.
-    const viewX = viewMatrix[2] * cos - viewMatrix[10] * sin;
-    const viewY = viewMatrix[6];
-    const viewZ = viewMatrix[2] * sin + viewMatrix[10] * cos;
-    const key = `${geometry.key}|priority:${viewX},${viewY},${viewZ}`;
-    const cached = sortedGeometry.get(geometry);
-    if (cached?.key === key) return cached;
+    return [
+        viewMatrix[2] * cos - viewMatrix[10] * sin,
+        viewMatrix[6],
+        viewMatrix[2] * sin + viewMatrix[10] * cos,
+    ];
+}
 
-    const { opaqueVertices, opaqueIndices } = geometry;
-    const vertices = new DataView(opaqueVertices.buffer, opaqueVertices.byteOffset, opaqueVertices.byteLength);
-    const depths = new Float32Array(opaqueVertices.length / ACTOR_VERTEX_STRIDE);
+/**
+ * The OSRS painter's order for one actor mesh: priority groups lowest first, each drawn from far
+ * to near. Translation is constant across faces, so only the camera's direction matters.
+ */
+export function sortPainterIndices(
+    vertices: Uint8Array,
+    indices: Int32Array,
+    viewMatrix: ArrayLike<number>,
+    rotation: number,
+): Int32Array {
+    const [viewX, viewY, viewZ] = viewDirection(viewMatrix, rotation);
+    const view = new DataView(vertices.buffer, vertices.byteOffset, vertices.byteLength);
+    const depths = new Float32Array(vertices.length / ACTOR_VERTEX_STRIDE);
     const priorities = new Uint8Array(depths.length);
     for (let i = 0; i < depths.length; i++) {
         const offset = i * ACTOR_VERTEX_STRIDE;
-        const x = vertices.getUint32(offset, true);
-        const y = vertices.getUint32(offset + 4, true);
-        const z = vertices.getUint32(offset + 8, true);
-        const fraction = vertices.getUint32(offset + 16, true);
+        const x = view.getUint32(offset, true);
+        const y = view.getUint32(offset + 4, true);
+        const z = view.getUint32(offset + 8, true);
+        const fraction = view.getUint32(offset + 16, true);
         depths[i] =
             viewX * ((x >>> 17) + (fraction & 1023) / 1024) -
             viewY * ((y & 32767) + ((fraction >>> 10) & 1023) / 1024) +
@@ -41,26 +75,59 @@ export function getNpcPriorityGeometry(
         priorities[i] = (z >>> 6) & 7;
     }
 
-    // The display uses priorities 0–3. Draw each group from far to near.
-    const faces = Array.from({ length: opaqueIndices.length / 3 }, (_, face) => {
+    // The display uses priorities 0–7. Draw each group from far to near.
+    const faces = Array.from({ length: indices.length / 3 }, (_, face) => {
         const offset = face * 3;
         return {
             offset,
-            priority: priorities[opaqueIndices[offset]],
-            depth: depths[opaqueIndices[offset]] + depths[opaqueIndices[offset + 1]] +
-                depths[opaqueIndices[offset + 2]],
+            priority: priorities[indices[offset]],
+            depth: depths[indices[offset]] + depths[indices[offset + 1]] + depths[indices[offset + 2]],
         };
     });
     faces.sort((a, b) => a.priority - b.priority || a.depth - b.depth);
-    const indices = new Int32Array(opaqueIndices.length);
+    const sorted = new Int32Array(indices.length);
     for (let i = 0; i < faces.length; i++) {
         const { offset } = faces[i];
-        indices[i * 3] = opaqueIndices[offset];
-        indices[i * 3 + 1] = opaqueIndices[offset + 1];
-        indices[i * 3 + 2] = opaqueIndices[offset + 2];
+        sorted[i * 3] = indices[offset];
+        sorted[i * 3 + 1] = indices[offset + 1];
+        sorted[i * 3 + 2] = indices[offset + 2];
     }
-
-    const sorted = { ...geometry, key, opaqueIndices: indices };
-    sortedGeometry.set(geometry, sorted);
     return sorted;
+}
+
+const sortedIndices = new WeakMap<Int32Array, { key: string; indices: Int32Array }>();
+
+/**
+ * A mesh's painter order for this camera, cached until the camera or the actor turns. `key`
+ * names the result for the GPU geometry cache.
+ */
+export function getPainterIndices(
+    baseKey: string,
+    vertices: Uint8Array,
+    indices: Int32Array,
+    viewMatrix: ArrayLike<number>,
+    rotation: number,
+): { key: string; indices: Int32Array } {
+    const [viewX, viewY, viewZ] = viewDirection(viewMatrix, rotation);
+    const key = `${baseKey}|priority:${viewX},${viewY},${viewZ}`;
+    const cached = sortedIndices.get(indices);
+    if (cached?.key === key) return cached;
+    const result = { key, indices: sortPainterIndices(vertices, indices, viewMatrix, rotation) };
+    sortedIndices.set(indices, result);
+    return result;
+}
+
+const sortedGeometry = new WeakMap<DynamicNpcFrameGeometry, DynamicNpcFrameGeometry>();
+
+export function getNpcPriorityGeometry(
+    geometry: DynamicNpcFrameGeometry,
+    viewMatrix: ArrayLike<number>,
+    rotation: number,
+): DynamicNpcFrameGeometry {
+    const sorted = getPainterIndices(geometry.key, geometry.opaqueVertices, geometry.opaqueIndices, viewMatrix, rotation);
+    const cached = sortedGeometry.get(geometry);
+    if (cached?.key === sorted.key) return cached;
+    const result = { ...geometry, key: sorted.key, opaqueIndices: sorted.indices };
+    sortedGeometry.set(geometry, result);
+    return result;
 }

@@ -56,7 +56,7 @@ import { PlayerPoseGeometry, type PosedActorGeometry } from "./actorPlayers";
 import { NpcPoseGeometry } from "./actorNpcs";
 import { DynamicNpcAnimLoader } from "../../npc/DynamicNpcAnimLoader";
 import { AsyncNpcPoseCache } from "../../npc/AsyncNpcPoseCache";
-import { getNpcPriorityGeometry, usesNpcPriorityPass } from "../../npc/NpcPriorityPass";
+import { getNpcPriorityGeometry, getPainterIndices, hasMixedPriorities, usesNpcPriorityPass } from "../../npc/NpcPriorityPass";
 import { graphicAgeMs, TILE_GFX_LIFT_UNITS, type GfxInstance, type GfxManager } from "../../gfx/GfxManager";
 import type { GfxCache } from "../../gfx/GfxCache";
 
@@ -149,16 +149,22 @@ export class WebGPUActors {
         { extended: GPURenderPipeline; depth?: GPURenderPipeline }
     >();
     private posePipelines = new Set<GPURenderPipeline>();
+    /** NPC type -> whether its translucent faces need the painter pass (npcNeedsAlphaPainter). */
+    private readonly npcAlphaPainter = new Map<number, boolean>();
     /** Base player pipeline -> the same vertex stage writing a coverage mask (Shader Effects aura). */
     private readonly maskPipelines = new Map<GPURenderPipeline, GPURenderPipeline>();
     private maskPipelineLayout?: GPUPipelineLayout;
     /** The base actor shader modules ([opaque, alpha]); they already hold the mask fragment entry. */
     private readonly baseModules: (GPUShaderModule | undefined)[] = [undefined, undefined];
     private maskPipelinesPending = false;
-    private priorityPasses?: {
+    /**
+     * Base pipeline -> its painter-pass twins ([colour without depth writes, depth only]), for
+     * meshes drawn in the OSRS painter's order (r241 Model's depthSorted mode).
+     */
+    private readonly priorityPasses = new Map<GPURenderPipeline, {
         base: [GPURenderPipeline, GPURenderPipeline];
         extended?: [GPURenderPipeline, GPURenderPipeline];
-    };
+    }>();
     /** This frame's GPU actor poses: pose key -> pose texture row, packed into poseUpload. */
     private readonly poseRows = new Map<string, ActorPose>();
     private readonly poseUpload = new Float32Array(POSE_ROWS * POSE_WIDTH * 4);
@@ -210,7 +216,7 @@ export class WebGPUActors {
         });
         this.actorData = new ActorDataTexture(device, this.actorDataLayout, "webgpu actor data");
         this.geometry = new ActorGeometryCache(device, ACTOR_GEOMETRY_CACHE_ENTRIES);
-        this.priorityGeometry = new ActorGeometryCache(device, 16);
+        this.priorityGeometry = new ActorGeometryCache(device, 64);
 
         // GPUBindGroup has no getLayout(); build group-equivalent layouts for the renderer's
         // existing scene and world-texture bind groups instead.
@@ -308,7 +314,7 @@ export class WebGPUActors {
             if (mode === "base" && !priorityPass) this.baseModules[alpha ? 1 : 0] = module;
             const out = new Map<ActorKind, GPURenderPipeline>();
             for (const { kind, stride, cullMode } of KINDS) {
-                if (priorityPass && kind !== "npc") continue;
+                if (priorityPass && kind !== "npc" && kind !== "gfx") continue;
                 const buffers: GPUVertexBufferLayout[] = [
                     {
                         arrayStride: stride,
@@ -381,14 +387,22 @@ export class WebGPUActors {
         // player who never uses the aura pays nothing for them.
         this.maskPipelineLayout = pipelineLayout;
 
-        const createPriorityPasses = (mode: "base" | "extended"): [GPURenderPipeline, GPURenderPipeline] => [
-            createPipelines(false, mode, "color").get("npc")!,
-            createPipelines(false, mode, "depth").get("npc")!,
-        ];
-        this.priorityPasses = {
-            base: createPriorityPasses("base"),
-            extended: extendedPipelineLayout ? createPriorityPasses("extended") : undefined,
-        };
+        this.priorityPasses.clear();
+        for (const alpha of [false, true]) {
+            const passes = (mode: "base" | "extended") => {
+                const color = createPipelines(alpha, mode, "color");
+                const depthOnly = createPipelines(alpha, mode, "depth");
+                return (kind: ActorKind): [GPURenderPipeline, GPURenderPipeline] => [color.get(kind)!, depthOnly.get(kind)!];
+            };
+            const base = passes("base");
+            const extended = extendedPipelineLayout ? passes("extended") : undefined;
+            for (const kind of ["npc", "gfx"] as const) {
+                this.priorityPasses.set(this.pipelines.get(kind)![alpha ? 1 : 0], {
+                    base: base(kind),
+                    extended: extended?.(kind),
+                });
+            }
+        }
 
         const loader = new DynamicNpcAnimLoader(
             client.npcTypeLoader,
@@ -674,9 +688,8 @@ export class WebGPUActors {
                         i++;
                     }
                 }
-                const priorityPasses = !depth && item.priorityPass
-                    ? (extended ? this.priorityPasses?.extended : this.priorityPasses?.base)
-                    : undefined;
+                const painter = !depth && item.priorityPass ? this.priorityPasses.get(item.pipeline) : undefined;
+                const priorityPasses = extended ? painter?.extended : painter?.base;
                 const selected = withSampleCount(priorityPasses?.[0] ?? pipeline, depth ? 1 : world.sampleCount);
                 if (selected !== boundPipeline) {
                     pass.setPipeline(selected);
@@ -825,6 +838,20 @@ export class WebGPUActors {
         return this.gfx?.projectiles;
     }
 
+    /**
+     * Whether an NPC type's translucent faces span several priorities (the Aberrant spectre's body
+     * and shell), so they need the painter pass. Learned from the first mesh built for the type.
+     */
+    private npcNeedsAlphaPainter(npcTypeId: number): boolean {
+        return this.npcAlphaPainter.get(npcTypeId) ?? false;
+    }
+
+    private learnNpcAlphaPainter(npcTypeId: number, mesh: { alphaVertices: Uint8Array; alphaIndices: Int32Array }): void {
+        if (!this.npcAlphaPainter.has(npcTypeId)) {
+            this.npcAlphaPainter.set(npcTypeId, hasMixedPriorities(mesh.alphaVertices, mesh.alphaIndices));
+        }
+    }
+
     /** Custom animations or graphics changed: graphics and NPC poses are built again. */
     invalidateAnimations(): void {
         this.gfx?.clear();
@@ -833,6 +860,7 @@ export class WebGPUActors {
     }
 
     invalidateNpcDefinitions(): void {
+        this.npcAlphaPainter.clear();
         this.asyncNpcPoses?.invalidate();
         this.npcBounds.clear();
         this.npcPose?.clear();
@@ -943,24 +971,41 @@ export class WebGPUActors {
         let alpha: GpuGeometry | null | undefined;
         let poseRow = -1;
         let priorityPass = false;
+        let alphaPriorityPass = false;
+        let cpuMesh = false;
         try {
             request = getNpcGeometryRequest(client, ecsId);
-            if (usesNpcPriorityPass(request[0]) && client.npcEcs.getWorldViewId(ecsId) < 0) {
+            const opaquePainter = usesNpcPriorityPass(request[0]);
+            if ((opaquePainter || this.npcNeedsAlphaPainter(request[0])) && client.npcEcs.getWorldViewId(ecsId) < 0) {
+                // Painter order is sorted on the CPU, so these NPCs take the CPU-posed mesh.
                 const geometry = loader.getFrameGeometry(...request);
                 if (geometry) {
-                    const sorted = getNpcPriorityGeometry(geometry, client.camera.viewMatrix,
-                        client.npcEcs.getRotation(ecsId));
-                    opaque = this.priorityGeometry?.getOrCreate(sorted.key, sorted.opaqueVertices, sorted.opaqueIndices) ?? null;
-                    alpha = this.geometry?.getOrCreate(`${geometry.key}|a`, geometry.alphaVertices, geometry.alphaIndices) ?? null;
-                    priorityPass = !!opaque;
+                    const rotation = client.npcEcs.getRotation(ecsId);
+                    if (opaquePainter) {
+                        const sorted = getNpcPriorityGeometry(geometry, client.camera.viewMatrix, rotation);
+                        opaque = this.priorityGeometry?.getOrCreate(sorted.key, sorted.opaqueVertices, sorted.opaqueIndices) ?? null;
+                        priorityPass = !!opaque;
+                    } else {
+                        opaque = this.geometry?.getOrCreate(`${geometry.key}|o`, geometry.opaqueVertices, geometry.opaqueIndices) ?? null;
+                    }
+                    if (hasMixedPriorities(geometry.alphaVertices, geometry.alphaIndices)) {
+                        const sorted = getPainterIndices(`${geometry.key}|a`, geometry.alphaVertices, geometry.alphaIndices,
+                            client.camera.viewMatrix, rotation);
+                        alpha = this.priorityGeometry?.getOrCreate(sorted.key, geometry.alphaVertices, sorted.indices) ?? null;
+                        alphaPriorityPass = !!alpha;
+                    } else {
+                        alpha = this.geometry?.getOrCreate(`${geometry.key}|a`, geometry.alphaVertices, geometry.alphaIndices) ?? null;
+                    }
+                    cpuMesh = true;
                 }
             }
-            const posed = priorityPass ? undefined : this.npcPose?.resolve(request, !!this.world?.extensionActive);
+            const posed = cpuMesh ? undefined : this.npcPose?.resolve(request, !!this.world?.extensionActive);
             if (posed?.matrices) poseRow = this.poseRowFor(posed.poseKey!, posed.matrices);
+            if (posed) this.learnNpcAlphaPainter(request[0], posed);
             if (posed && poseRow >= 0) {
                 opaque = this.geometry?.getOrCreate(posed.key + "|o", posed.opaqueVertices, posed.opaqueIndices, posed.opaqueLabels) ?? null;
                 alpha = this.geometry?.getOrCreate(posed.key + "|a", posed.alphaVertices, posed.alphaIndices, posed.alphaLabels) ?? null;
-            } else if (!priorityPass) {
+            } else if (!cpuMesh) {
                 const key = this.asyncNpcPoses?.getKey(request, ecsId);
                 if (key) {
                     const bounds = this.npcBounds.get(key);
@@ -985,6 +1030,7 @@ export class WebGPUActors {
             if (!request) return;
             const geometry = this.asyncNpcPoses?.get(request, ecsId);
             if (geometry) {
+                this.learnNpcAlphaPainter(request[0], geometry);
                 if (geometry.bounds) {
                     this.npcBounds.delete(geometry.key);
                     this.npcBounds.set(geometry.key, geometry.bounds);
@@ -1023,6 +1069,7 @@ export class WebGPUActors {
             state.alpha.push({
                 pipeline: this.pipelines.get("npc")![1],
                 geometry: alpha,
+                priorityPass: alphaPriorityPass,
                 entry: entry ??= this.actorEntry(
                     state,
                     map,
@@ -1372,15 +1419,25 @@ export class WebGPUActors {
         }
         const alphaGeometry = cache.ensureFrameGeometry(spotId, frameIdx, true, frameCycle);
         if (alphaGeometry && this.pipelines.get(kind)?.[1]) {
-            const gpu = this.geometry?.getOrCreate(
-                `s:${spotId}|${frameIdx}|${frameCycle}|a`,
-                alphaGeometry.vertices,
-                alphaGeometry.indices,
-            );
+            const alphaKey = `s:${spotId}|${frameIdx}|${frameCycle}|a`;
+            // Translucent layers of several priorities (the Echo Amoxliatl icicle's black, dark red
+            // and bright red shells) are painted in the OSRS painter's order. Projectiles also
+            // pitch and roll, so they keep the static priority order.
+            const painter = kind === "gfx" && hasMixedPriorities(alphaGeometry.vertices, alphaGeometry.indices);
+            let gpu: GpuGeometry | undefined;
+            if (painter) {
+                const rotation = (this.writer.data[dataIndex * 8 + 2] >> 2) & 2047;
+                const sorted = getPainterIndices(alphaKey, alphaGeometry.vertices, alphaGeometry.indices,
+                    this.renderer.osrsClient.camera.viewMatrix, rotation);
+                gpu = this.priorityGeometry?.getOrCreate(sorted.key, alphaGeometry.vertices, sorted.indices);
+            } else {
+                gpu = this.geometry?.getOrCreate(alphaKey, alphaGeometry.vertices, alphaGeometry.indices);
+            }
             if (gpu) {
                 state.alpha.push({
                     pipeline: this.pipelines.get(kind)![1],
                     geometry: gpu,
+                    priorityPass: painter,
                     entry: entry ??= this.actorEntry(
                         state,
                         map,

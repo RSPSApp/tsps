@@ -155,8 +155,7 @@ function quickEscape({ player, objectId }) {
  * player stands instead of routing to a loc they can no longer reach.
  */
 function boatFromArena(event) {
-  const locs = Common.ids.locs;
-  if (![ISLAND_BOAT, locs.boatEscape, locs.boatLeave].includes(event.objectId)) return;
+  if (event.objectId !== Common.ids.locs.boatLeave) return;
   const session = sessionOf(event.player);
   if (!session) return;
   const at = event.player.getLocation();

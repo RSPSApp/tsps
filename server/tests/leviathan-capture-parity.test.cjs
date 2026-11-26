@@ -245,6 +245,17 @@ test('the rowboat is used from the arena floor, where the sealed handholds leave
   assert.notDeepEqual(h.p.getLocation(), from);
 });
 
+test('the pre-kill Escape boat (49215) keeps its normal route from the arena floor', t => {
+  const { h, Site } = site(t);
+  Site.climb({ player: h.p, objectId: 47593 });
+  const pre = { player: h.p, objectId: 49215, destination: null };
+  Site.boatFromArena(pre);
+  assert.equal(pre.destination, null);
+  const post = { player: h.p, objectId: 49214, destination: null };
+  Site.boatFromArena(post);
+  assert.notEqual(post.destination, null);
+});
+
 test('Escape asks "Are you sure you want to leave?" and Quick-escape leaves at once', t => {
   const { h, Site, session } = site(t);
   const prompts = [];

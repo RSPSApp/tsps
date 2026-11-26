@@ -428,9 +428,10 @@ function spiderFight(t, bossId = 6610) {
     player.setLocation(new core.Location(x, npc.getLocation().getY() + 2, npc.getLocation().getZ()));
   }
 
-  function attack() {
+  function attack(beforeStart) {
     cycle += npc.getCombat().getAttackDelay();
     npc.resetUpdating();
+    beforeStart?.();
     combat.start(npc, player);
     return npc.getAnimation().id;
   }
@@ -540,8 +541,7 @@ test('Venenatis keeps both new spiderlings when one from an older call dies that
   registerBrood();
   assert.equal(registered.length, 2);
   for (let slot = 1; slot < 16; slot++) attack();
-  registered[0].setHitpoints(0);
-  attack();
+  attack(() => registered[0].setHitpoints(0));
   assert.equal(registered.length, 4, 'the death does not turn the call into a top-up');
   assert.equal(add.length, 0);
   assert.equal(registered.filter((spider) => spider.getHitpoints() > 0).length, 3);

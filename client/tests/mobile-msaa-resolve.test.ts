@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 
 (globalThis as any).self = globalThis;
+
+// Renderer modules import shader sources and sprite assets as modules.
+require.extensions[".glsl"] = (module: any, file: string) => { module.exports = fs.readFileSync(file, "utf8"); };
+for (const ext of [".png", ".jpg", ".webp"]) require.extensions[ext] = (module: any, file: string) => { module.exports = file; };
 
 type Target = { width: number; height: number; samples: number; deletes: number; delete(): void };
 type Framebuffer = { color: Target; deletes: number; delete(): void };
@@ -17,7 +22,7 @@ async function main(): Promise<void> {
     const { onResize } = await import("../render/render/settings");
     const { cleanUp } = await import("../render/render/session");
 
-    function fixture(samples = 4, scale = 0.6, maxSamples = 4) {
+    function fixture(samples = 4, scale = 0.6, maxSamples = 4, width = 804, height = 390) {
         const copies: { source: Target; destination: Target; filter: number }[] = [];
         let read: Framebuffer;
         let draw: Framebuffer;
@@ -29,8 +34,8 @@ async function main(): Promise<void> {
             getRequestedMsaaSamples: () => samples,
             gl: { getParameter: () => maxSamples, readBuffer: () => {} },
             app: {
-                width: 804,
-                height: 390,
+                width,
+                height,
                 createRenderbuffer: (w: number, h: number, _format: number, s: number) => target(w, h, s),
                 createTexture2D: (w: number, h: number) => target(w, h),
                 createFramebuffer() {
@@ -60,7 +65,11 @@ async function main(): Promise<void> {
         };
         initFramebuffer(host);
         initTextureFramebuffer(host);
-        return { host, copies, setSamples: (value: number) => { samples = value; } };
+        return {
+            host, copies,
+            setSamples: (value: number) => { samples = value; },
+            setScale: (value: number) => { scale = value; },
+        };
     }
 
     const mobile = fixture();
@@ -85,6 +94,72 @@ async function main(): Promise<void> {
         assert.equal(copies.length, 1);
         assert.equal(copies[0].filter, expectedFilter);
     }
+
+    // Desktop at native scene scale: the 1652x982 canvas from the report must render and present
+    // at 1652x982, with no rescaling blit.
+    const desktop = fixture(4, 1, 4, 1652, 982);
+    assert.deepEqual([desktop.host.sceneRenderWidth, desktop.host.sceneRenderHeight], [1652, 982]);
+    assert.equal(desktop.host.sceneResolveFramebuffer, undefined,
+        "native-size MSAA resolves straight into the composited texture");
+    resolveSceneFramebuffer(desktop.host);
+    assert.deepEqual(desktop.copies.map(({ source, destination, filter }) => [
+        source.width, source.height, source.samples, destination.width, destination.height, filter,
+    ]), [
+        [1652, 982, 4, 1652, 982, PicoGL.NEAREST],
+    ], "a native-size scene has one 1:1 blit and no upscale");
+
+    // Changing the scene resolution reallocates the scene target and the matching MSAA resolve.
+    desktop.setScale(0.6);
+    initFramebuffer(desktop.host);
+    assert.deepEqual([desktop.host.sceneRenderWidth, desktop.host.sceneRenderHeight], [991, 589]);
+    assert.deepEqual(
+        [desktop.host.sceneResolveColorTarget.width, desktop.host.sceneResolveColorTarget.height],
+        [991, 589],
+        "the resolve destination matches the scene source",
+    );
+    desktop.copies.length = 0;
+    resolveSceneFramebuffer(desktop.host);
+    assert.deepEqual(desktop.copies.map(({ source, destination, filter }) => [
+        source.width, source.height, source.samples, destination.width, destination.height, filter,
+    ]), [
+        [991, 589, 4, 991, 589, PicoGL.NEAREST],
+        [991, 589, 0, 1652, 982, PicoGL.LINEAR],
+    ], "the old 0.6 path resolves at scene size before stretching to the canvas");
+
+    // A sidebar toggle or window resize reallocates the scene targets, the MSAA resolve and the
+    // full-size composition texture together.
+    desktop.host.app.resize = () => {};
+    desktop.host.canvas = { removeEventListener() {} };
+    desktop.host.computeUiRenderMetrics = (width: number, height: number) => ({
+        layoutW: width, layoutH: height, renderScaleX: 1,
+    });
+    desktop.host.initTextureFramebuffer = (width: number, height: number) =>
+        initTextureFramebuffer(desktop.host, width, height);
+    onResize(desktop.host, 1352, 982);
+    initFramebuffer(desktop.host);
+    assert.deepEqual([desktop.host.sceneRenderWidth, desktop.host.sceneRenderHeight], [811, 589]);
+    assert.deepEqual(
+        [desktop.host.sceneResolveColorTarget.width, desktop.host.sceneResolveColorTarget.height],
+        [811, 589],
+    );
+    assert.deepEqual(
+        [desktop.host.textureColorTarget.width, desktop.host.textureColorTarget.height],
+        [1352, 982],
+        "the composition texture follows the canvas",
+    );
+
+    // Back to native scale on the resized canvas: the intermediate is released and presentation is 1:1.
+    desktop.setScale(1);
+    initFramebuffer(desktop.host);
+    assert.equal(desktop.host.sceneResolveFramebuffer, undefined);
+    assert.deepEqual([desktop.host.sceneRenderWidth, desktop.host.sceneRenderHeight], [1352, 982]);
+    desktop.copies.length = 0;
+    resolveSceneFramebuffer(desktop.host);
+    assert.deepEqual(desktop.copies.map(({ source, destination, filter }) => [
+        source.width, source.height, source.samples, destination.width, destination.height, filter,
+    ]), [
+        [1352, 982, 4, 1352, 982, PicoGL.NEAREST],
+    ]);
 
     const host = mobile.host;
     const originalSceneTargets = [host.framebuffer, host.colorTarget, host.depthTarget];

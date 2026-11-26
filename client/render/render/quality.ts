@@ -482,9 +482,11 @@ export function getActiveQualityProfileLabel(host: WebGLOsrsRendererHost, ): str
 
 export function getSceneResolutionScale(host: WebGLOsrsRendererHost, ): number {
 
-        // A low-end device draws the 3D view at reduced resolution (an iPhone's profile at half):
-        // the GPU budget goes further and the UI stays sharp.
-        if ((isLowEndDevice || lowEndDeviceModeEnabled) && !host.osrsClient.isOnLoginScreen()) {
+        // The platform decides, exactly as it does for the quality profile: a touchscreen laptop on
+        // the desktop layout is a desktop (#358) and must render the scene at native resolution.
+        // Only a handheld/tablet platform, or the user explicitly enabling Low-end Device, draws the
+        // 3D view reduced (an iPhone's profile at half). The UI stays sharp either way.
+        if ((isMobileMode || lowEndDeviceModeEnabled) && !host.osrsClient.isOnLoginScreen()) {
             const scale = Math.min(LOW_END_SCENE_SCALE, host.syncBrowserQualityProfile().defaultSceneScale || 1);
             host.osrsClient.mobileEffectiveResolutionScale = scale;
             return scale;

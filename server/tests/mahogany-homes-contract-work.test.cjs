@@ -145,6 +145,24 @@ test("the homeowner lists unfinished work and the native continues preserve the 
   assert.equal(p.getAttribute("construction:carpenter-points") ?? 0, 0);
 });
 
+// Issue 6834: Making Friends with My Arm also hooks "Larry" and loads first; its bare returns
+// counted as handled, so Falador's Larry (10418) never answered. Every client must reach us.
+test("every client answers Talk-to with or without a contract, Larry included", (t) => {
+  for (const home of Mahogany.HOMES) {
+    const { p } = actor(t);
+    npcClick(p, home.client, "Talk-to");
+    assert.deepEqual(drain(p), ["Hello there. Mahogany Homes looks after my house, you know."], `${name(home)} without a contract`);
+  }
+  // rsprox captures (local 1001580, 1001693, 1001931, 1001943, 1001955, 1002048): Larry's hand-in.
+  const { p } = actor(t), larry = homeFor("Larry");
+  assert.equal(larry.client, 10418);
+  const saved = contract(p, larry, 0);
+  drain(p);
+  seedContract(p, { ...saved, states: Object.fromEntries(Object.keys(saved.states).map(i => [i, 2])) });
+  npcClick(p, larry.client, "Talk-to");
+  assert.equal(p.getDialogueManager().getCurrent().getText(), "I've finished with the work you wanted.");
+});
+
 test("both contractor options preserve an unfinished saved contract, including legacy layouts", (t) => {
   const { p } = actor(t), home = homeFor("Jeff");
   // A legacy individually rolled layout and removed space remain actionable after the update.

@@ -1,0 +1,80 @@
+{
+  "source": "OSRS Wiki: Journal (Making History) interface pictures 1-4 (pages and line breaks) and Transcript:Journal (Making History); The History of the Outpost and The Mysterious Adventurer interface pictures (line breaks, the name filled in) and transcripts; Transcript:Large Display; Shield Display; Transcript:The Times of Lathas. The bookcase prompt and menu are the RuneScape Wiki's Transcript:Bookcase (Outpost) (2005 content, before the games split); the OSRS Wiki has no bookcase transcript. No rsprox capture reads the journal or studies a display (rsprox.net index: no recorded actions on makinghistory_journal, makinghistory_shield_display, makinghistory_large_display1/2 or makinghistory_bookcase; the user's quest capture 20261111T015053-5ab63b4 never opens them).",
+  "journal": {
+    "title": "Drozal's Journal",
+    "spreads": [
+      [
+        ["----------------------", "---1st Bennath", "----------------------", "My life is full of changes at", "the moment. I've met a great", "and powerful follower of", "Zamorak, whom has offered", "me the chance to join him", "and others in the quest for", "ultimate power and desolation", "of others. This is just the", "opportunity I've been looking", "for! I move into the old", "outpost (North of Ardougne)", "at the end of this week."],
+        ["", "I can hardly wait!"]
+      ],
+      [
+        ["----------------------", "---15th Bennath", "----------------------", "Been here a few days now.", "I'm overwhelmed on just how", "evil the other 8 are. I", "suppose this is amplified by", "living in such a small", "building."],
+        ["----------------------", "---20th Bennath", "----------------------", "Started causing havoc to the", "people of Ardougne today.", "We poisoned the water", "supply with a strange", "concoction which caused", "everyone to break out in", "boils! Very funny. The", "others have been stealthily", "setting fire to some people", "and laughing at their", "conclusion of spontaneous", "combustion."]
+      ],
+      [
+        ["", "I think I shall have to come", "up with something more evil", "for tomorrow."],
+        ["----------------------", "---32nd Bennath", "----------------------", "Following my genius plan to", "make all the children invisible,", "the city is now in total chaos", "as the kids test their freedom", "by putting adults into a", "panic.", "", "Honestly, some of the tricks", "the kids play are better than", "anything I could invent."]
+      ],
+      [
+        ["----------------------", "---20th Raktuber", "----------------------", "Sadly things have calmed", "down in the city, and they've", "started to realise that we're", "the cause of all the tragedy.", "Luckily, the people don't have", "enough power to get past our", "defences, and even if they", "did, they would wish they", "hadn't thought of such an", "attack."],
+        ["----------------------", "---28th Raktuber", "----------------------", "We have been told to 'beware", "for your days are numbered'", "by the people of Ardougne. It", "seems the city has asked for", "some external help, which will", "be upon us some time soon.", "I'm sure we will eliminate", "such a threat though."]
+      ]
+    ]
+  },
+  "shieldDisplay": "Inside the case is a giant shield, the plate reads: 'This shield comes from the Fourth age when people were fighting to become more settled and less nomadic'.",
+  "largeDisplays": {
+    "groundFloor": [
+      "Inside the case are three items, the first is a helmet, and its card reads: 'The helm worn by Wally in his defeat of Delrith the Demon 150 years ago'.",
+      "Next is a battle axe, its card reads: 'The axe of Arrav, left behind by accident before he journeyed on his quest for the shield to save the people of Avarrocka'.",
+      "Lastly are a pair of old boots, their card reads: 'These boots were worn by Randas before being corrupted by Zamorak's promises of glory'."
+    ],
+    "firstFloor": [
+      "Inside the case are three items, the first is a flag of Saradomin, and its card reads: 'This flag was held high by an incoming Saradominist force that did battle in this outpost 68 years after the start of the Fifth age. Its good condition is a testament to the importance of such items to warriors of those times'.",
+      "Next is an iron mace and its card reads: 'The mace comes from the Fourth age. A time when people were first mining metals and putting them to use. Historians suspect this was one of the first uses for the metal'.",
+      "The last object is a flag of Zamorak and its card reads: 'The symbol of Zamorak has made its mark on many items, but none so important as the flag borne into battle. This flag was not only carried into battle, but also had pride of place at the top of this outpost in the years known as The Dreaded Years of Tragedy'."
+    ]
+  },
+  "bookcase": {
+    "prompt": "There's a great variety of books. Which shall you choose?",
+    "options": ["The History of the Outpost.", "The Times of Lathas.", "The Mysterious Adventurer."]
+  },
+  "historyOfTheOutpost": {
+    "title": "The History of the Outpost",
+    "spreads": [
+      [
+        ["Approximately 140 years", "after the establishment of the", "outpost, a great traveller,", "known only as [player name]", "unravelled the history of the", "outpost."],
+        ["It transpires that the outpost", "was first established to protect", "the nearby city of Ardougne", "from threats, spotting them", "before they had the chance to", "reach the city. There followed", "a long period without war", "during which the outpost was", "abandoned as a pointless", "project. Various people visited", "the outpost for various", "reasons, but none left any", "particular mark on history.", "The first and most important", "mark wasn't until 65 years"]
+      ],
+      [
+        ["after the establishment of the", "outpost, when a group of", "Zamorak followers moved in."],
+        ["The Zamorakians' only", "purpose seemed to be the", "disruption of the nearby city", "of Ardougne, over the years", "now known as the 'The", "Dreaded Years of Tragedy'."]
+      ],
+      [
+        ["The leader of the Zamorak", "followers had once had a", "great friend. However, when", "they were still young they", "had both fallen apart in a", "disagreement over religion.", "One decided that Saradomin", "was the god for him, and the", "other chose Zamorak. It just", "so happened that when the", "City of Ardougne called for", "help to rid them of these", "Zamorakians, that the", "incoming force were", "Saradominists led by the"],
+        ["other ex-friend. This in-turn", "led to a battle simply known", "as 'The Great Battle', perhaps", "because little was known", "about its activity with it being", "a small battle in terms of", "numbers, (although not in", "power, we suspect)."]
+      ],
+      [
+        ["The battle produced two", "survivors - the two ex-", "friends, both being the most", "powerful mages. It is said", "that they settled their", "differences on the grounds of", "the friendship they had lost,", "as well as the loss of life and", "time."],
+        ["Settling for the neutral god", "Guthix, the two went about", "their ways to spread equality", "among the people. One of the", "friends became king, to listen", "to people's views and ensure", "a fair and equal life for", "everyone, whilst the other", "friend founded the market", "place, allowing people to trade", "their skills and wares under", "equal rights and opportunities."]
+      ]
+    ]
+  },
+  "timesOfLathas": {
+    "before": "You pick up a new looking book: 'The Times of Lathas'. You skim over the heavy book. It talks about the heritage of the line of kings who carry the name Ardignas. They only came into power 68 years ago, but in which time there have been five kings, the current being King Lathas.",
+    "afterSongOfTheElves": "You pick on a new looking book: 'The Times of Ardignas'. You skim over the heavy book, it talks about the heritage of the line of Kings who carry the name Ardignas. They only came into power 68 years ago, but in which time there have been six kings, the current being King Thoros."
+  },
+  "mysteriousAdventurer": {
+    "title": "The Mysterious Adventurer",
+    "pronounPhrases": ["He has", "She has", "They have"],
+    "spreads": [
+      [
+        ["Word is spreading of a brave", "and intelligent adventurer", "who goes by the name", "'[player name]'. [pronoun] talked to", "a great many people, helping", "solve problems and improving", "their lives."],
+        ["The list of achievements", "include:", "", "Confronting the demon", "Delrith with the sword,", "Silverlight ----- Returning the", "skull of a ghost so that he", "may rest in peace -----", "Collecting ingredients for the", "chef in Lumbridge to make a", "cake ----- Helping Dr", "Fenkenstrain create a", "monster ----- Being launched", "from a cannon wearing a", "gold helm just to help an old"]
+      ],
+      [
+        ["dwarf ----- Meddling with", "Mourner's soup in West", "Ardougne ----- Shearing", "many sheep to help Farmer", "Fred ----- Sabotaging the", "plans of the black knights with", "just a cabbage! ----- Turning", "a chicken called Ernest into", "a man ----- Participating in", "the fishing contest at", "Hemenster and winning first", "prize ----- Searching for a", "lost cat and returning its", "kitten"],
+        ["The list goes on, so we can", "see that this [player name] is", "destined for great things for", "which Gielinor should be truly", "grateful!"]
+      ]
+    ]
+  }
+}

@@ -357,6 +357,8 @@ export class Player extends Mobile {
      */
     public onRemove() {
         this.onLogout();
+        // The NPCs and players it fought forget it, so they don't keep it in memory after it leaves.
+        this.getCombat().forgetFights();
     }
 
     public appendDeath() {

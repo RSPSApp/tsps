@@ -58,12 +58,18 @@ const COMBAT_TARGET_PLAYER_VARP = 1075;
 const MAX_ANIMATION_STALL_TICKS = 5;
 const MAX_CONTENT_ANIMATION_STALL_TICKS = 100;
 
+// Past this many recorded fights, those of characters gone from the world are dropped.
+const RECORDED_IN_PRUNE_AT = 64;
+
 /** Owns one character's target, attack deadline, approach route, and delayed hits. */
 export class Combat {
     private readonly hitQueue = new HitQueue(this.character);
     private damageMap: Map<Player, HitDamageCache> | null = null;
     /** The player whose damage `addDamage` recorded last. */
     private lastDamager: Player | null = null;
+    /** The other fights that recorded this player (its damage, or it as their last target), so that leaving
+     * the world takes it out of them instead of it being kept in memory by every NPC it fought. */
+    private recordedIn: Set<Combat> | null = null;
     private readonly lastAttack = new TickStopwatch();
     /** Damage can delay healing without renewing another fighter\'s single-way tag. */
     private readonly lastDamage = new TickStopwatch();
@@ -765,9 +771,33 @@ export class Combat {
         if (amount <= 0 || entity.isNpc()) return;
         const player = entity as Player;
         this.lastDamager = player;
+        player.getCombat?.()?.noteRecordedIn(this);
         const cached = this.damageMap?.get(player);
         if (cached) cached.incrementDamage(amount);
         else (this.damageMap ??= new Map()).set(player, new HitDamageCache(amount));
+    }
+
+    /** `other` now refers to this character (its damage map, last damager or last attack target). */
+    public noteRecordedIn(other: Combat): void {
+        if (other === this) return;
+        const recordedIn = (this.recordedIn ??= new Set());
+        // A long session fights many NPCs: the ones gone from the world no longer need forgetting.
+        if (recordedIn.size >= RECORDED_IN_PRUNE_AT && !recordedIn.has(other)) {
+            for (const gone of recordedIn) if (!gone.character.isRegistered()) recordedIn.delete(gone);
+        }
+        recordedIn.add(other);
+    }
+
+    /** This character leaves the world: every fight that recorded it forgets it. */
+    public forgetFights(): void {
+        const player = this.character;
+        for (const other of this.recordedIn ?? []) {
+            other.damageMap?.delete(player as Player);
+            if (other.damageMap?.size === 0) other.damageMap = null;
+            if (other.lastDamager === player) other.lastDamager = null;
+            if (other.lastAttackTarget === player) other.lastAttackTarget = null;
+        }
+        this.recordedIn = null;
     }
 
     /** The player who damaged this character most recently, while that damage still counts. */
@@ -1141,6 +1171,7 @@ export class Combat {
             }
         }
         this.lastAttackTarget = target;
+        if (target.isPlayer?.()) target.getCombat().noteRecordedIn(this);
 
         // The swing's own animation is what may stall the character; specials override start() and
         // perform it themselves - many through super.start() first - so the arm stays open across

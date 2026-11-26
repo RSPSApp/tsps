@@ -187,7 +187,7 @@ function spiderlingBite({ attacker, target }) {
   const skills = target.getSkillManager();
   const prayer = skills.getCurrentLevel(core.Skill.PRAYER);
   if (prayer > 0) skills.setCurrentLevel(core.Skill.PRAYER, prayer - 1, true);
-  target.sendMessage(SPIDERLING_MESSAGE);
+  target.getPacketSender().sendTypedMessage(core.ChatType.SPAM, SPIDERLING_MESSAGE);
 }
 
 // ------------------------------------------------------------------ webs
@@ -245,7 +245,7 @@ function playerTick(player, lair) {
   }
   if (caught.get(player) !== lair.key) {
     caught.set(player, lair.key);
-    player.sendMessage(WEB_MESSAGE);
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, WEB_MESSAGE);
   }
   player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(WEB_DRAIN.damage, core.HitMask.RED)]);
   const skills = player.getSkillManager();

@@ -43,7 +43,7 @@ test('left-click Feed falls back to mushroom powder after poisons, never raw mus
   assert.equal(s.meter,5);assert.equal(h.p.getInventory().getAmount(i.muscaPowder),39);
   assert.equal(h.p.getInventory().getAmount(i.arder),2);
   h.add(i.poison);h.Prep.feed({player:h.p,npc:s.boss});
-  assert.equal(s.meter,105);assert.equal(h.p.getInventory().getAmount(i.poison),0);
+  assert.equal(s.meter,130);assert.equal(h.p.getInventory().getAmount(i.poison),0);
 });
 
 test('powder is fed at most once each game cycle and cannot be wasted after waking',t=>{
@@ -245,15 +245,15 @@ test('two normal gas spits are three ticks apart and finish before the next auto
 test('the dead body remains until the captured normal respawn boundary',t=>{
   const h=H.harness(t);const s=h.enter();h.fight.wake();h.fight.fell();s.boss.setHitpoints(0);
   const event={npc:s.boss,killer:h.p,remains:null};h.dispatch('onNpcDeath',event);
-  assert.ok(event.remains?.ticks>0);assert.equal(h.fight.respawnAt,24);
-  const old=h.fight;h.step(23);assert.equal(s.fight,old);h.step();assert.notEqual(s.fight,old);
+  assert.ok(event.remains?.ticks>0);assert.equal(h.fight.respawnAt,23);
+  const old=h.fight;h.step(22);assert.equal(s.fight,old);h.step();assert.notEqual(s.fight,old);
 });
 
 test('poison feeding sends the captured green meter instead of changing sleeping hitpoints',t=>{
   const h=H.harness(t),s=h.enter(),i=h.C.data.items;h.move([3039,6451]);h.add(i.poison);
   h.Prep.feed({player:h.p,npc:s.boss});
   assert.equal(s.boss.getHitpoints(),200);
-  assert.deepEqual(s.boss.getDisplayedHealth(),{current:100,max:200,bar:{id:62,width:160}});
+  assert.deepEqual(s.boss.getDisplayedHealth(),{current:125,max:200,bar:{id:62,width:160}});
   assert.equal(s.boss.getTickHits().at(-1).getSplatType(true),65);
 });
 
@@ -378,10 +378,10 @@ test('awake room resources become inactive and stale preparation clicks cannot c
   assert.equal(event.handled,true);assert.equal(h.p.getInventory().getAmount(i.arder),0);
 });
 
-test('gaze mounts its native overlay and removes it when the warning resolves or the player leaves',t=>{
+test('gaze mounts its native overlay and removes it six ticks later (1751) or when the player leaves',t=>{
   const h=H.harness(t);h.enter();h.move([3035,6451]);h.fight.wake();h.fight.nextAttack=Infinity;h.fight.gaze();
   assert.equal(h.p.getPacketSender().isSubInterfaceOpen(829),true);
-  h.step(5);assert.equal(h.p.getPacketSender().isSubInterfaceOpen(829),false);
+  h.step(5);assert.equal(h.p.getPacketSender().isSubInterfaceOpen(829),true);h.step();assert.equal(h.p.getPacketSender().isSubInterfaceOpen(829),false);
   h.fight.gaze();h.Site.leave(h.p);assert.equal(h.p.getPacketSender().isSubInterfaceOpen(829),false);
 });
 

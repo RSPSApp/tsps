@@ -42,6 +42,12 @@ class Party {
     return this.leader === player;
   }
 
+  swap(first, second) {
+    const member = this.members[first];
+    this.members[first] = this.members[second];
+    this.members[second] = member;
+  }
+
   has(player) {
     return this.members.includes(player);
   }

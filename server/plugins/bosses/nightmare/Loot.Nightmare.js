@@ -91,7 +91,6 @@ function reward(fight, players) {
   const { Item, ItemDefinition, ItemIdentifiers } = Common.core;
   const uniques = new Set(UNIQUE_NAMES.map((name) => ItemIdentifiers[name]));
   const manager = Common.api.getItemOnGroundManager();
-  const where = fight.dream.tile(Common.data.arena.lootTile);
   const rollTable = (player) => {
     const request = { player, npcId, drops: [] };
     Common.api.emitCustomEvent("npc-drops:roll-table", request);
@@ -132,6 +131,9 @@ function reward(fight, players) {
     } finally {
       if (fight.boss) rewarding.delete(fight.boss);
     }
+    // Each player's loot lands where they stand (rsprox 3389: three kills, three tiles, each the
+    // player's last walked tile; 3346 686), not on a fixed tile.
+    const where = player.getLocation().clone();
     for (const drop of drops) {
       if (!Number.isInteger(drop.itemId) || drop.amount <= 0) continue;
       const noteId = ItemDefinition.forId(drop.itemId).getNoteId();

@@ -77,8 +77,9 @@ test('each Echo wears its stub\'s whole model list without the normal recolours,
   // No NPC stub: the single Echo model the League Areas panel draws (leagues_echo_bosses struct).
   assert.deepEqual(dressed('king-black-dragon', 'boss', 'king_dragon'),
     { name: 'King Black Dragon (Echo)', combatLevel: 414, models: [60340], recolours: [] });
+  // As live sends her (rsprox.net 1140, 7 of 7): the row's model in place of her body, her 54437, and 60339.
   assert.deepEqual(dressed('amoxliatl', 'boss', 'amoxliatl'),
-    { name: 'Amoxliatl (Echo)', combatLevel: 328, models: [60338], recolours: [] });
+    { name: 'Amoxliatl (Echo)', combatLevel: 328, models: [60338, 54437, 60339], recolours: [] });
 });
 
 test('a form change keeps the damage dealt; an unknown role is refused', () => {
@@ -107,6 +108,24 @@ test('Sessions dresses and marks only its own actors, and completes an encounter
   assert.equal(events.filter(row => row.name === 'echo-boss:credited').length, 1);
   assert.equal(events.find(row => row.name === 'echo-boss:credited').event.killCount, 1);
   Sessions.release({ player, token: claim.token }); assert.equal(Sessions.sessions.has(player), false);
+});
+
+test('an Echo timed from its spawn: timeFromNow restarts the time as it is configured (rsprox.net 1140)', (t) => {
+  const api = pluginApi(); Actors.attach(api); Loot.attach(api); Sessions.attach(api);
+  const { World } = core, real = World.getProcessCycle;
+  let cycle = 1000;
+  World.getProcessCycle = () => cycle;
+  t.after(() => { World.getProcessCycle = real; });
+  const player = leaguePlayer('EchoTimed'), claim = { player, boss: 'amoxliatl', token: null };
+  Sessions.claim(claim); assert.ok(claim.token);
+  // Live's first Echo Amoxliatl rose 7 ticks after the Yes; 99 ticks later its time read 0:59.40.
+  cycle += 7;
+  const npc = spawn('amoxliatl');
+  Sessions.configure({ player, boss: 'amoxliatl', role: 'boss', npc, token: claim.token, configured: false, timeFromNow: true });
+  cycle += 99;
+  Sessions.completed({ player, boss: 'amoxliatl', token: claim.token, npcs: [npc], location: npc.getLocation() });
+  assert.equal(events.find(row => row.name === 'echo-boss:credited').event.ticks, 99);
+  Sessions.release({ player, token: claim.token });
 });
 
 test('Echo equipment: listed rate, guarantee at twice it, boss rare multiplier once, received never re-guaranteed', () => {

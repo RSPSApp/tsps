@@ -969,6 +969,37 @@ test('Short speaker labels take the head of the participant the export resolved 
   assert.deepEqual(heads('This is'), [JATIZSO_GUARD]);
 });
 
+test('The Border Guard\'s "Guard" lines show the clicked guard\'s head (#6762)', () => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { startTranscript } = require('../plugins/quests/QuestRuntime');
+  const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
+  const BORDER_GUARD = 4287, BORDER_GUARD_2 = 4288;
+  // The cache names the guards "Border Guard"; "Guard" is ~170 other NPCs.
+  const names = new Map([[BORDER_GUARD, 'Border Guard'], [BORDER_GUARD_2, 'Border Guard'], [397, 'Guard']]);
+  const forId = id => ({ getId: () => id, getName: () => names.get(id) || 'null' });
+  const original = NpcDefinition.forId;
+  NpcDefinition.forId = forId;
+  try {
+    const api = { core: { ...PluginManager.getCoreApi(), NpcDefinition: { forId } }, emitCustomEvent() {} };
+    for (const clicked of [BORDER_GUARD, BORDER_GUARD_2]) {
+      let chain;
+      const sent = [], sender = new Proxy({}, { get: (_target, key) => (...args) => { sent.push([key, ...args]); return sender; } });
+      const player = { getUsername: () => 'Test', getDisplayName: () => 'Test', getPacketSender: () => sender,
+        getDialogueManager: () => ({ reset() {}, startDialogues: value => { chain = value; } }) };
+      assert.equal(startTranscript(api, player, clicked, 'Border Guard', 'before-completing-prince-ali-rescue-quest'), true);
+      const toll = [...chain.getDialogues().values()].find(e => e.getNpcId && e.getText().includes('pay a toll'));
+      assert.ok(toll, 'the toll line plays');
+      toll.send(player);
+      // rsprox 1001336 t3099: if_setnpchead chat_left:head borderguard1. The name stays the Wiki's
+      // "Guard" (live: "Border Guard", a recorded difference in docs/al-kharid-toll-gate.md).
+      assert.ok(sent.some(row => row[0] === 'sendNpcHeadOnInterface' && row[1] === clicked && row[2] === (231 << 16 | 2)));
+      assert.ok(sent.some(row => row[0] === 'sendString' && row[1] === 'Guard' && row[2] === (231 << 16 | 4)));
+    }
+  } finally {
+    NpcDefinition.forId = original;
+  }
+});
+
 test('A listed speaker the quest or cache names keeps that id; only an unnamed one takes the first', () => {
   const { listedSpeakerId } = require('../plugins/npcs/NpcDialogues.plugin');
   const zorgoth = { speaker: 'Zorgoth', speaker_ids: [8135, 8136, 8167] };

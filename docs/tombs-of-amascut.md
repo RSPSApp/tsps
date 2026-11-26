@@ -155,7 +155,7 @@ The first version was written without access to the Wiki or the cache, so it fol
   - Points had been sent to "varbit" 3586, a farming varbit in this cache. Now only each player's final loot points are sent, to `TOA_PERSONAL_CONTRIBUTION` (varp 3606), as OpenRune does.
   - The crocodile wall openings (`TOA_WALL02_CROCODILES04`, 45434) and Zebak's rock steps (`TOA_ZEBAK_CLIMBING_ROCK`, 45509) are the cache's.
 - **The obelisk's interfaces:** the party list (772) and details panel (774) are built from pause buttons (`resume_pausebutton`), as OpenRune sets them. Ours had set op1 events, and the member rows always got the leader's view value.
-- **The details panel's button numbers** come from its cache scripts: the 12 fixed buttons (enum 4792), members from 12, the applicants' Accept from 36 and Decline from 44 (script 6746), and the invocations from 52 in enum 4664's order (script 6754). Ours had Accept at 20, Decline at 28 and the invocations at 36, so Accept toggled an invocation and the invocation buttons were 16 off. Enum 4664's last two, Blazing Tombs I and II (structs 5892/5893, an event's), aren't offered. Those buttons click through with `.cc_resume_pausebutton` (operand 1: the child found with `cc_find 1` on 774:1). The client used to resume the clicked button itself whatever the operand, so the server never heard those clicks.
+- **The details panel's button numbers** come from its cache scripts: the 12 fixed buttons (enum 4792), Kick at 12–19 (script 6725), Move up at 20–27 and Move down at 28–35 (scripts 6722 and 5345), the applicants' Accept from 36 and Decline from 44 (script 6746), and the invocations from 52 in enum 4664's order (script 6754). Ours had Accept at 20, Decline at 28 and the invocations at 36, so Accept toggled an invocation and the invocation buttons were 16 off. Enum 4664's last two, Blazing Tombs I and II (structs 5892/5893, an event's), aren't offered. Those buttons click through with `.cc_resume_pausebutton` (operand 1: the child found with `cc_find 1` on 774:1). The client used to resume the clicked button itself whatever the operand, so the server never heard those clicks.
 - **Options:** every hooked NPC, item and loc option exists in the cache. The supplies bag's are *Open*, *Withdraw 1*, *Withdraw All* and *Resupply*, and now all work.
 
 **Behaviour, against the Wiki:**
@@ -199,6 +199,40 @@ The first version was written without access to the Wiki or the cache, so it fol
 - **Impact graphics:** a few use generic graphics where the cache has dedicated ToA ones. Zebak's are settled: OpenRune's capture-based volley also lands with `FIREBLAST_IMPACT` / `DARKBOW_SMOKE_ARROW_IMPACT`, and `ZEBAK_MAGE_SPLIT` / `ZEBAK_RANGED_SPLIT` are the bursts.
 - **Sound ids:** RuneLite has no names for them.
 - **Unnamed cache entries:** these keep their numeric constants: Warden charging orb 11769, hidden Warden 11765, departing spirit 11829, blade objects 45748/45749, platform 45606, siphon block 26209.
+
+### Party panel
+
+In the lobby, the leader can use Move up (774:1 children 20–27) and Move down (28–35) to swap adjacent members. A move into first place opens **Are you sure?**. Confirming puts the named member first and loads that player's preferred invocations. The former leader's open panel redraws with member rights immediately. The lobby HUD follows on the next tick, and the swap produces no chat message. [Wiki change](https://oldschool.runescape.wiki/w/Special:PermanentLink/15414756)
+
+The recorded handover is one Move up on the second row, from the old leader's client in Leagues V. The press at 10745 opens a warning box (229) at 10746 and an **Are you sure?** menu (219) at 10748. After confirming at 10749, the panel redraw at 10750 changes the view value from 2 to 1, the active invocations from 22 to 23 and the raid level from 535 to 530. The HUD shows the new order at 10751. The implementation goes directly to the menu and uses original option wording. [227/1753, ticks 10742–10751](https://rsprox.net/download/1753)
+
+Scripts 6722 and 6727 send member and applicant rows with plain names and no trailing pipe. Script 6601 closes the white highlight around the viewer's party leader's name and omits the trailing pipe. Panel openings send preset events on 774:98 to each viewer. The leader alone can use them. [227/1753, ticks 10742–10763](https://rsprox.net/download/1753) · [227/581, ticks 118–166 and 424](https://rsprox.net/download/581) · [227/1759, ticks 12–15 and 5625](https://rsprox.net/download/1759)
+
+### Party panel estimates
+
+- **E1. Move up on rows 2–7** swaps the member with the preceding row immediately. Open panels and member HUDs redraw without a prompt or chat message.
+- **E2. Move down on rows 1–6** swaps the member with the following row immediately, with the same redraws as Move up.
+- **E3. Move down on row 0** offers the same handover to the second member as Move up on row 1.
+- **E4. Invalid moves** leave the party as it was. These include moving above the first row or below the last occupied row, clicking an empty row, pressing an arrow as a member, and pressing an arrow during the raid.
+- **E5. Cancel or closing the menu** reopens the leader's panel without a swap when they are still in the lobby and leading the party.
+- **E6. Completions requirement** comes from the new leader's preferences along with the invocations. The recorded requirement was zero before and after.
+- **E7. Other viewers** get their own rights when their open panels redraw. Every member's HUD shows the order. Applicants and the blocked list stay with the party. The handover capture shows only the former leader's client.
+
+The cache labels establish the directions, and the confirmation in 227/1753 establishes the observed first-place move. The broader arrow and cancellation behavior follows the [Theatre of Blood party screen estimates](theatre-of-blood.md#party-screen-estimates), merged in [#6800](https://github.com/RSPSApp/tsps/pull/6800).
+
+### Wardens ready-up
+
+- Each new readiness before the last sends the room a plain party count. The member who readied then sees the two-minute message box in the same tick, with a line break after "your party is". The other members receive only the count. [227/581, ticks 2892–2897 and 5823](https://rsprox.net/download/581) · [227/1838, ticks 1718–1722](https://rsprox.net/download/1838) · [227/1845, ticks 2513–2525](https://rsprox.net/download/1845) · [227/1852, ticks 19849–19851 and 24280–24292](https://rsprox.net/download/1852)
+- Choosing Begin again opens the short waiting box for that member. The final ready-up starts the challenge with only the start line, as does solo Begin. All cited party captures are from Leagues V. The solo start in 223/14 is from an ordinary members' world. [227/1753, tick 9910](https://rsprox.net/download/1753) · [227/1852, ticks 12370–12375 and 19872–19878](https://rsprox.net/download/1852) · [227/1759, ticks 10774–10777](https://rsprox.net/download/1759) · [223/14, ticks 3585–3586](https://rsprox.net/download/14) · [227/553, tick 10924](https://rsprox.net/download/553) · [227/1779, tick 14838](https://rsprox.net/download/1779)
+
+The captures show both U+00A0 and ASCII spaces inside different player names in the same party overlay. One name retains its ASCII space in the overlay, a party details row and later raid messages. The rules for deciding which spacing to use remain open. [227/1838, ticks 144–145, 1159, 2283 and 2325](https://rsprox.net/download/1838)
+
+### Ready-up estimates
+
+- The fight starts 200 ticks after the first ready-up if anyone is still waiting. The captures show the two-minute notice and parties starting before expiry. The timer keeps the existing implementation.
+- The denominator and the set of eligible readied players use current raid membership. The count goes to the members currently in the Wardens' room. The cited party captures show everyone together.
+
+As before the ready-up count change, Begin starts the fight if every remaining member is ready after someone leaves. This departure case is covered by a server regression test.
 
 ## Verification
 

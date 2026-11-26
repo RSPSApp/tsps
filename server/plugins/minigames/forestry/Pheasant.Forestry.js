@@ -7,14 +7,14 @@
  * - the forester takes it ("I have an egg for you.") for bark and Woodcutting and Thieving XP;
  * - at 181 ticks: "These pheasants will be finding new nesting grounds soon."; at 200 all is gone.
  * - the reach (pickup seq) comes first and the egg, its line and sound 7542 the tick after;
- * - a pheasant landing on the nest an egg was just taken from attacks: the block seq, the stun
+ * - a pheasant landing on the nest attacks the players next to it (Wiki: "stun players who are
+ *   next to the nest when it lands"), whether or not they took its egg: the block seq, the stun
  *   graphic at height 124, sound 2727 twice, "The nest's inhabitant attacks you, causing you to
  *   drop all your pheasant eggs." (no eggs: "The nest's inhabitant attacks you."), then "You've
  *   been stunned!" (spam) the tick after;
  * - clicking while stunned: "You're stunned!" (spam).
- * Inferred: the occupied nest is the nest01 form; reaching into it, or into the nest a pheasant is
- * flying to, brings the attack and a 5-tick stun. Wiki: 8-9 bark an egg, Woodcutting 1.0-1.2 x
- * level and Thieving 0.5 x level.
+ * Inferred: the occupied nest is the nest01 form; reaching into it brings the attack and a
+ * 5-tick stun. Wiki: 8-9 bark an egg, Woodcutting 1.0-1.2 x level and Thieving 0.5 x level.
  */
 const Common = require("./Common.Forestry");
 const Spawns = require("./Spawns.Forestry");
@@ -32,7 +32,7 @@ function start(site) {
   for (let i = 0; i < 4; i++) {
     const at = tiles[i + 1];
     const occupied = i < 3;
-    const nest = { at, object: Common.placeLoc(occupied ? pheasant.nests.occupied : pheasant.nests.empty, at), occupied, incoming: false, takers: new Set() };
+    const nest = { at, object: Common.placeLoc(occupied ? pheasant.nests.occupied : pheasant.nests.empty, at), occupied, incoming: false };
     Common.tileGraphic(at, pheasant.graphics.spawn);
     event.nests.push(nest);
     if (occupied) event.pheasants.push({ npc: Common.spawnNpc(pheasant.npcs.pheasant, at), nest });
@@ -64,8 +64,10 @@ function flight(event) {
     bird.npc.moveTo?.(target.at.clone());
     Common.animate(bird.npc, seqs.land);
     bird.npc.performGraphic?.(new Common.core.Graphic(graphics.land));
-    for (const player of target.takers) attacked(player);
-    target.takers.clear();
+    // Wiki: it lands on players next to the nest, whether or not they took its egg; moving
+    // away before it lands is the way to avoid the stun. `nearbyPlayers` covers the event's
+    // participants and egg takers (they are world players) and stays on the nest's plane.
+    for (const player of Common.nearbyPlayers(target.at, 1)) attacked(player);
   });
 }
 
@@ -169,7 +171,6 @@ function takeEgg(event, nest, player) {
   inventory.add(new Common.core.Item(items.egg, 1), true);
   Common.sound(player, sounds.egg);
   event.eggTakers.add(player);
-  if (nest.incoming) nest.takers.add(player);
   if (Math.random() < featherChance) {
     Common.give(player, items.feathers, 1);
     Common.spam(player, Common.message("eggFeather"));

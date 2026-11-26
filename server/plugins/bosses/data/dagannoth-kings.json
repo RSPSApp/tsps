@@ -1,5 +1,5 @@
 {
-  "$comment": "Dagannoth Kings (plugins/bosses/DagannothKings.plugin.js, docs/dagannoth-kings.md). Ids are the rev 241 cache's; ticks count from the attack, as in the rsprox captures (submissions 89 on rev 227 and 3433 on rev 235) and the OSRS Wiki (Dagannoth Kings, Dagannoth Kings/Strategies and each king's page).",
+  "$comment": "Dagannoth Kings (plugins/bosses/DagannothKings.plugin.js, docs/dagannoth-kings.md). Ids are the rev 241 cache's; ticks count from the attack, as in the rsprox captures (submissions 89 on rev 227 and 3433 on rev 235) and the OSRS Wiki (Dagannoth Kings, Dagannoth Kings/Strategies and each king's page). The exitTile is the Climb-up landing in rsprox_transcripts/227/01856.txt, ticks 3814 and 3821.",
   "npcs": {
     "supreme": 2265,
     "prime": 2266,
@@ -22,6 +22,7 @@
     }
   },
   "outsideTile": [1910, 4367, 0],
+  "exitTile": [1912, 4367, 0],
   "teleportTile": [1908, 4367, 0],
   "entranceTile": [1911, 4367, 0],
   "combat": {

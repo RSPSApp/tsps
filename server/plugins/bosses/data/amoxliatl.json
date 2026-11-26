@@ -38,6 +38,7 @@
     "tile": [1362, 4510, 0],
     "direction": "EAST",
     "afterArrivalTicks": 5,
+    "questAfterArrivalTicks": 2,
     "anim": 11527,
     "say": "Euat! You are not welcome here!",
     "firstAttackTicks": 4,
@@ -74,32 +75,35 @@
     "hurtSound": 9711
   },
   "spikes": {
-    "about": "Map animations on tiles around the player, as captured: the player's own tile about 3 in 4, the tiles next to it about 2 in 3, the rest out to 6 about 1 in 4. 3 ticks after the attack they come up: typeless damage to a player still on one (captured 10 and 6; 6-10 as the Wiki gives the pools).",
+    "about": "Map animations on tiles around the player, as captured: the player's own tile about 3 in 4, the tiles next to it about 2 in 3, the rest out to 6 about 1 in 4. 3 ticks after the attack they come up and hit a player still on one, as her hit: 6-16 (R1140: over 90 spike hits, every value from 6 to 16).",
     "spotanim": 2942,
     "reach": 6,
     "chance": [0.77, 0.64, 0.28],
     "damageTicks": 3,
-    "damage": [6, 10]
+    "damage": [6, 16]
   },
   "pools": {
-    "about": "An icy pool on the player's tile 3 ticks after each standard attack (captured); standing on one deals 6-10 a tick (Wiki). They stay until she dies, then go with a puff (captured).",
+    "about": "An icy pool on the player's tile 3 ticks after each standard attack (captured); standing on one deals 6-10 a tick (Wiki; R1140's pool hits are 6-10), each with sound 4464 (R1140). They stay until she dies, then go with a puff (captured).",
     "id": 54279,
     "shape": 10,
     "afterTicks": 3,
     "damage": [6, 10],
+    "hurtSound": 4464,
     "sound": { "id": 9726, "delay": 30, "radius": 30, "attenuation": 30 },
     "clearSpotanim": 2938
   },
   "specials": {
-    "about": "After every 2-4 standard attacks a special; the first at random, then in turn (Wiki). From the path she only has room for Icicle Crash.",
+    "about": "After every 2-4 standard attacks a special; the first at random, then in turn (Wiki). From the path she only has room for Icicle Crash. Her next attack comes 9 ticks after Icicle Crash and 7 after Unstable Ice (R1140: 38 of 38 and 40 of 40; R1695 the same).",
     "afterAttacks": [2, 4],
-    "order": ["icicle", "unstableIce"]
+    "order": ["icicle", "unstableIce"],
+    "nextAttackTicks": { "icicle": 9, "unstableIce": 7 }
   },
   "icicle": {
+    "about": "Projectile heights here are the engine's: R1140 sends startheight 448 on the wire, which PacketSender.sendProjectile makes from 112 (x4), as for Unstable Ice.",
     "anim": 11531,
     "message": "<col=ff3045>Amoxliatl disables your prayers and launches an icicle attack!</col>",
     "plainMessage": "<col=ff3045>Amoxliatl launches an icicle attack!</col>",
-    "projectile": { "id": 2936, "start": 50, "end": 150, "startHeight": 448, "endHeight": 0, "angle": 128, "progress": 83 },
+    "projectile": { "id": 2936, "start": 50, "end": 150, "startHeight": 112, "endHeight": 0, "angle": 128, "progress": 83 },
     "impactTicks": 5,
     "impactSpotanim": 2935,
     "impactSound": 9720,
@@ -114,7 +118,7 @@
       "shatterHealSplat": 6
     },
     "count": [1, 4],
-    "reach": 4,
+    "reach": 5,
     "projectile": { "id": 2936, "start": 50, "end": 90, "startHeight": 112, "endHeight": 0, "angle": 255, "progress": 83 },
     "impactSpotanim": 2935,
     "spawnTicks": 3,
@@ -123,11 +127,100 @@
     "breakAnim": 11035,
     "breakSound": { "id": 9721, "radius": 12, "attenuation": 6 },
     "removeAfterBreakTicks": 1,
+    "shatterWindupAnim": 11534,
+    "shatterWindupTicks": 2,
     "shatterTicks": 15,
     "shatterHeal": [16, 25]
+  },
+  "questEnd": {
+    "about": "The quest's guardian doesn't die (R1140 ticks 7686-7693, R1695 4926-4934): at 0 HP she becomes 13687 with 11531 and 'Zema ami miki!', her pools go, and she throws one last icicle at the player; 3 ticks later the player's teleport (4018, 2754) and her death (11532), the sound and the HP HUD going (hpbar_hud_npc -1) a tick after, and the player is out 6 ticks after the 0 HP. The quest varbit moves on (72 to 74) and the player is held on the 0 HP tick; a logout before the teleport is saved at `outside`, where the quest lands the player (R1140 tick 7692).",
+    "inactive": 13687,
+    "anim": 11531,
+    "say": "Zema ami miki!",
+    "projectile": { "id": 2936, "start": 50, "end": 90, "startHeight": 112, "endHeight": 25, "angle": 100, "progress": 83 },
+    "teleportTicks": 3,
+    "playerAnim": 4018,
+    "playerSpotanim": 2754,
+    "deathAnim": 11532,
+    "soundTicks": 4,
+    "sound": 7928,
+    "outTicks": 6,
+    "outside": [1615, 3211, 0]
   },
   "kill": {
     "about": "As captured: the pools go on the killing blow; 2 ticks later (deathTicks) the kill count, the fight's length and the loot on her middle tile.",
     "killCountVarp": 4403
+  },
+  "respawnLines": {
+    "about": "As captured (R1140, normal and Echo alike): every rise after the first in a visit says one of these; the first says spawn.say.",
+    "lines": ["Euat! We are not done yet!", "Euat! I am not so easily destroyed!", "Euat! This is not yet over!"]
+  },
+  "echo": {
+    "about": "The Leagues VI Echo (rsprox.net 1140, rev 237.1: 7 Echoes, 6 kills). Ticks count from her turn (A). Ids are gameval names. Projectile heights are as recorded on the wire (4x the engine's).",
+    "turns": {
+      "about": "Her turns run on the fight's own clock: the first 4 ticks after she rises, then every 4; the turn after a phase cast 5 ticks later; in the enrage every 2.",
+      "first": 4,
+      "every": 4,
+      "afterPhase": 5,
+      "enrageEvery": 2
+    },
+    "phases": {
+      "about": "Decided on a turn, on her hitpoints after that tick's damage. Recorded: the first cast at 476-516, never at 538 or more (the Wiki says 500); the second at 220-250, never at 262 or more (the Wiki's 250).",
+      "first": { "hitpoints": 520, "say": "Rani grows within me!" },
+      "second": { "hitpoints": 250, "say": "Let the darkness consume you!" }
+    },
+    "standard": {
+      "about": "Her turn below the enrage: two magic shots that land 3 and 4 ticks later (Protect from Magic blocks them: 160 of 160), and the black icicle the next tick at the tile the player stood on.",
+      "seq": "npc_djinn_01_combo_merge",
+      "sounds": [{ "id": 8655, "delay": 35 }, { "id": 8667, "delay": 70 }, { "id": 8726, "delay": 90 }],
+      "shot": {
+        "spotanim": "leagues_6_vfx_amoxliatl_ice_block_projectile_02",
+        "arcs": [{ "delay": 60, "end": 90 }, { "delay": 90, "end": 120 }],
+        "angle": 128, "progress": 90, "startHeight": 400, "endHeight": 70,
+        "landTicks": [3, 4],
+        "maxHit": 30,
+        "maxHitAbout": "Recorded unprayed: 0, 0, 2, 3, 6, 8, 10, 24, 27 and 30 (10 shots). The Wiki's 93 doesn't fit."
+      }
+    },
+    "enrage": {
+      "about": "From the second phase cast: no magic shots, only the icicle, every 2 ticks.",
+      "seq": "npc_djinn_01_melee",
+      "sound": { "id": 8655, "delay": 48 }
+    },
+    "icicle": {
+      "about": "Sent the tick after her turn from her middle tile to where the player stood on her turn; lands 2 ticks later. A player on its tile or the spikes at the end of the tick before takes 18-26 (stepping off on the landing tick is too late: 19 of 19), through Protect from Magic; a player who isn't hit hears it shatter.",
+      "sendTicks": 1,
+      "landTicks": 2,
+      "projectile": { "spotanim": "leagues_6_vfx_amoxliatl_ice_block_projectile_01", "delay": 0, "end": 60, "angle": 128, "progress": 90, "startHeight": 400, "endHeight": 70 },
+      "impact": { "spotanim": "leagues_6_vfx_amoxliatl_ice_block_projectile_impact_01", "delay": 60 },
+      "shadow": "gargboss_debris_shadow_60",
+      "missSound": 7965,
+      "damage": [18, 26]
+    },
+    "spikes": {
+      "about": "As it lands: its tile and every floor tile 2-4 steps from it, but not the 8 around it (the Wiki's safe tiles), each delayed 2 cycles a step.",
+      "spotanim": "leagues_6_vfx_amoxliatl_ice_floor_attack_01",
+      "reach": 4,
+      "delayPerStep": 2
+    },
+    "phase": {
+      "about": "A phase cast in place of a turn: the spikes on every floor tile within 2 steps of the player at once, prayers turned off the next tick, and 3 ticks later the hit (as the icicle's) and a pool on each tile.",
+      "seq": "amoxliatl_attack",
+      "sound": 6867,
+      "spotanim": "leagues_6_vfx_amoxliatl_ice_floor_combined_01",
+      "reach": 2,
+      "disableTicks": 1,
+      "message": "<col=ff3045>Amoxliatl disables your prayers.</col>",
+      "landTicks": 3
+    },
+    "pools": {
+      "about": "An icy pool where each icicle lands and on each phase tile, unless one is there. A pool hurts from its second tick: 7-15 to a player on it (10 recorded). It goes after 100 ticks (4 recorded) or with her, with a puff.",
+      "loc": "amoxliatl_ice_echo",
+      "shape": 10,
+      "hurtFromTicks": 2,
+      "damage": [7, 15],
+      "lifetimeTicks": 100,
+      "clearSpotanim": "leagues_6_vfx_amoxliatl_ice_disappear_01"
+    }
   }
 }

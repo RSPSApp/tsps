@@ -93,3 +93,25 @@ outside the repo. `server/tests/big-chompy-capture.test.cjs` checks these agains
 - **Checked:** repeat dialogue (Rantz), relog (twice), save history, logout/offline.
 - **Not checked:** No overlay, all-branch or recovery claim; No separate QP reading at stage 60; Later plugin edits and uncovered recovery need rechecks.
 - **PRs:** [#1097](https://github.com/RSPSApp/tsps/pull/1097).
+
+
+### 2026-11-24 · issue #6551
+
+- Rantz's cache post-quest form 14794 exposes Claim-hats as op 4. It now uses the existing bow, kill-count,
+  inventory-space and previously-claimed checks, sharing the same transcript/reward path as showing a bow.
+- Recipe for Disaster's existing "Hey, I wanted to ask about hats..." choice now opens Rantz's ordinary
+  hat conversation, as does the later "Ask about hats..." topic during the boat steps. Its Skrach topic and
+  agreement remain available and keep their original progression.
+- Both bows' post-quest Check actions show the same saved kill counter. The [Ogre bow Wiki page](https://oldschool.runescape.wiki/w/Ogre_bow)
+  supports this mechanic; the completed-count message reuses the existing "scratched up" wording and is ours,
+  with no exact post-quest message capture. The captured pre-quest refusal is unchanged.
+- Bird snares accept walkable scenery through the existing box-trap placement check. The [Hunter Wiki](https://oldschool.runescape.wiki/w/Hunter)
+  permits snares in bird hunting areas. Native Lay succeeds on cached Piscatoris Daisies 1189 at (2324, 3598, 0),
+  while an occupied trap or blocked map tile still refuses and retains the item.
+- Verification: `big-chompy-capture.test.cjs` and `hunter-box-traps.test.cjs`, 45/45 passed. The new tests reproduce
+  the three missing entry points and both silent bow checks before the fix. They exercise raw native NPC packets,
+  ordinary item/menu inputs, full-pack retry, kill/bow requirements, a claimed hat moved to the bank, and Skrach
+  progression after using the hats topic. The existing quest and box-trap regressions also pass.
+- Supplied setup: quest/skill checkpoints, inventory and position; the blocked-tile control deliberately supplies
+  a player standing on a real blocking object. No game client, preview server, new retail capture or rendered
+  audio/visual check was used. No generated game data was edited.

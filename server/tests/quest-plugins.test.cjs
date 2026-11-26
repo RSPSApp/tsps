@@ -7798,6 +7798,17 @@ test('Desert Treasure II enters the cache Ancient Vault and requires the four st
     assert.ok(interfaces.includes(749), 'the plaque opens woodplaque');
     interactions.find((entry) => entry.name === 'Asgarnia Smith').options['Talk-to']({ player, npcId: 1 });
     assert.equal(quest.getStage(player), 2, 'only the four statues and plaque advance the vault step');
+    // rsprox 1827, 3168: a statue holding its medallion says so; one still empty doesn't.
+    const statueText = () => {
+      const box = statements.at(-1).getDialogues().get(0);
+      return box.text ?? box.getText?.() ?? JSON.stringify(box);
+    };
+    attrs.set('desert-treasure-ii:medallions-placed', 1);
+    assert.equal(inspect(49499, 3941, 9635), true);
+    assert.match(statueText(), /The statue is holding a medallion\..*Carnifex Maximus Vardorvis/s);
+    assert.equal(inspect(49501, 3931, 9635), true);
+    assert.match(statueText(), /meant to be holding something\..*The Whisperer/s);
+    assert.equal(quest.getStage(player), 2, 'inspecting after the vault step does not move the quest');
     assert.equal(inspect(O.STEPS_23, 3925, 9630), true, 'the actual entrance steps let the player leave');
     assert.deepEqual([player.location.x, player.location.y, player.location.z], [3510,2971,0]);
     objectInteractions.find(h => h.name === 'handleObjectInteraction')(outerDoor);

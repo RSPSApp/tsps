@@ -368,11 +368,13 @@ test("the worn-items view's Undead and Slayer lines read as live sends them", (t
   const texts = bankTexts(t, p);
   const show = (head, amulet) => {
     p.getEquipment().setItem(E.HEAD_SLOT, new core.Item(head ? C.getObjId(head) : -1, head ? 1 : 0));
-    p.getEquipment().setItem(E.AMULET_SLOT, new core.Item(amulet ? C.getObjId(amulet) : -1, amulet ? 1 : 0));
+    p.getEquipment().setItem(E.AMULET_SLOT, new core.Item(typeof amulet === "number" ? amulet : amulet ? C.getObjId(amulet) : -1, amulet ? 1 : 0));
     p.getBank(p.getCurrentBankTab()).open();
     return [texts.get(99), texts.get(100)];
   };
   assert.deepEqual(show(null, null), ["Undead: 0% ", "Slayer: 0%"]);
+  assert.deepEqual(show(null, core.ItemIdentifiers.SALVE_AMULET_I__5), ["Undead: 15% (all styles)", "Slayer: 0%"]);
+  assert.deepEqual(show(null, core.ItemIdentifiers.SALVE_AMULET_EI__5), ["Undead: 20% (all styles)", "Slayer: 0%"]);
   assert.deepEqual(show("harmless_black_mask", "lotr_crystalshard_necklace_upgrade"), ["Undead: 20% (melee)", "Slayer: 15% (melee)"]);
   assert.deepEqual(show("slayer_helm_i", "nzone_salve_amulet_e"), ["Undead: 20% (all styles)", "Slayer: 15% (all styles)"]);
 });

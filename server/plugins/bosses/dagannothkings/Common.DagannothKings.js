@@ -29,6 +29,7 @@ const PUBLIC_SPAWN = Object.freeze([...DATA.lairs.public.spawnTile]);
 const TASK_SPAWN = Object.freeze([...DATA.lairs.task.spawnTile]);
 /** Dungeon side: the player stands here before climbing down. */
 const OUTSIDE_TILE = Object.freeze([...DATA.outsideTile]);
+const EXIT_TILE = Object.freeze([...DATA.exitTile]);
 /** The ladder's own tile, as clicked in captures 89/3433 (oploc 3831 at 1911, 4367). */
 const ENTRANCE_TILE = Object.freeze([...DATA.entranceTile]);
 /** The ::teleports landing, by the ladder room. */
@@ -150,7 +151,7 @@ function playersAround(npc, at, radius, fetchRadius = radius) {
 module.exports = {
   DATA, SUPREME_ID, PRIME_ID, REX_ID, SPINOLYP_IDS, WATER_IDS, KING_IDS,
   LADDER_ID, EXIT_LADDER_ID, ENTRANCE_TILE,
-  PUBLIC_LAIR, TASK_LAIR, PUBLIC_SPAWN, TASK_SPAWN, OUTSIDE_TILE, TELEPORT_TILE,
+  PUBLIC_LAIR, TASK_LAIR, PUBLIC_SPAWN, TASK_SPAWN, OUTSIDE_TILE, EXIT_TILE, TELEPORT_TILE,
   AGGRO_TILES, ANIM, PROJECTILE, PRIME_CAST_SOUND, SUPREME_IMPACT_SOUND,
   ATTACK_SPEED, PRIME_DISTANCE, SUPREME_DISTANCE,
   PRIME_SPLASH_RADIUS, SUPREME_SPLASH_RADIUS, HIT_DELAY, MAX_HIT,

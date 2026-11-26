@@ -6,8 +6,10 @@
  * under them (Wiki).
  *
  * Phosani's chain (captured): her start animation (delay 12), then a set of portals every 5 ticks,
- * five in all, and her finish animation; it runs with her flowers and spores and through her
- * desperation phase.
+ * five in all with her flowers and six with her spores (rsprox 1148 5031-5061; 46 of 46), and her
+ * finish animation five ticks after the last; it also runs through her desperation phase. Her
+ * claws come up with one sound to the player, not one on each portal (rsprox 1148 4717); The
+ * Nightmare's have one on each portal and one more at her centre (1148 3139).
  */
 const Common = require("./Common.Nightmare");
 
@@ -40,7 +42,8 @@ function clumpedTiles(fight) {
   const near = fight.players().map((player) => fight.dream.arenaTile(player.getLocation()));
   return arenaTiles().filter(([x, y]) => {
     const close = near.some(([px, py]) => Math.max(Math.abs(px - x), Math.abs(py - y)) <= 2);
-    return Math.random() < (close ? 0.5 : 0.12);
+    // Captured: about 40 a set (24-55), some 10 of them within two tiles of the player (826 sets).
+    return Math.random() < (close ? 0.4 : 0.09);
   });
 }
 
@@ -63,15 +66,15 @@ function start(fight) {
 }
 
 /**
- * Phosani's run of claws: five sets 5 ticks apart. `again` keeps it going (her desperation phase);
- * returns the ticks she holds.
+ * Phosani's run of claws: `count` sets 5 ticks apart. `again` keeps it going (her desperation
+ * phase); returns the ticks she holds.
  */
-function chain(fight, again = false) {
+function chain(fight, again = false, count = Common.data.claws.chain.count) {
   const { chain: spec } = Common.data.claws;
   fight.claws = fight.claws ?? [];
   if (fight.clawChain) return spec.every;
-  fight.clawChain = { left: spec.count, next: fight.tick, again };
-  return spec.every * spec.count + 1;
+  fight.clawChain = { left: count, count, next: fight.tick, again };
+  return spec.every * count + 1;
 }
 
 function process(fight) {
@@ -79,7 +82,7 @@ function process(fight) {
   const { claws } = Common.data;
   const run = fight.clawChain;
   if (run && fight.tick >= run.next) {
-    const first = run.left === claws.chain.count;
+    const first = run.left === run.count;
     open(fight, first ? claws.chain.start : claws.chain.idle, first ? claws.chain.startDelay : 0);
     run.left--;
     run.next = fight.tick + claws.chain.every;
@@ -95,9 +98,14 @@ function process(fight) {
   const players = fight.players();
   const body = require("./Attacks.Nightmare").bodyBounds(fight.boss);
   for (const set of due) {
-    for (const key of set.tiles) {
-      const [x, y] = key.split(",").map(Number);
-      Common.areaSound(players, fight.dream.tile([x, y]), claws.hitSound);
+    if (fight.phosani) {
+      for (const player of players) Common.sounds(player, [claws.hitSound[0]]);
+    } else {
+      for (const key of set.tiles) {
+        const [x, y] = key.split(",").map(Number);
+        Common.areaSound(players, fight.dream.tile([x, y]), claws.hitSound);
+      }
+      Common.areaSound(players, fight.boss.getLocation().transform(2, 2), claws.hitSound);
     }
     for (const player of players) {
       const here = player.getLocation();

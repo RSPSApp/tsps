@@ -526,7 +526,7 @@ test("pizza and baked potato eat lines are the recorded ones, sent as spam (rspr
   assert.equal(sac.messages[0], "You eat the Araxyte venom sack, It grants you immunity from venom.");
 });
 
-test("drinks eaten as food: wine, tea and two cocktails heal, apply their Wiki effects and leave the vessel", () => {
+test("drinks eaten as food: wine, tea and four cocktails heal, apply their Wiki effects and leave the vessel", () => {
   const drink = (name, setup = () => {}) => {
     const player = createPlayer({ hp: 40 });
     setup(player);
@@ -557,12 +557,51 @@ test("drinks eaten as food: wine, tea and two cocktails heal, apply their Wiki e
   }
   assert.equal(Food.isFoodItem(id("CUP_OF_TEA_4")), false, "tea with an Empty option is another tea");
 
-  for (const [name, heal] of [["FRUIT_BLAST", 9], ["PINEAPPLE_PUNCH", 9]]) {
+  // Wiki (Fruit blast, Pineapple punch, Premade fr' blast, Premade p' punch): each heals 9 and leaves a
+  // cocktail glass. rsprox captures: fruit blast one spam line (local 20261111T225402-5ab63b4 tick 37),
+  // pineapple punch a second, "You feel slightly reinvigorated." (rsprox 948 tick 18256, at full health).
+  const great = "spam: You drink the cocktail. It tastes great.";
+  const reinvigorated = "spam: You feel slightly reinvigorated.";
+  for (const [name, lines] of [
+    ["FRUIT_BLAST", [great]], ["PREMADE_FR_BLAST", [great]],
+    ["PINEAPPLE_PUNCH", [great, reinvigorated]], ["PREMADE_P_PUNCH", [great, reinvigorated]],
+  ]) {
     const cocktail = drink(name);
-    assert.equal(cocktail.hp, 40 + heal, `${name} heals ${heal} (Wiki)`);
+    assert.equal(cocktail.hp, 49, `${name} heals 9 (Wiki)`);
     assert.equal(cocktail.slots[0].getId(), id("COCKTAIL_GLASS"));
-    assert.deepEqual(cocktail.messages, ["spam: You drink the cocktail. It tastes great."]);
+    assert.deepEqual(cocktail.messages, lines, name);
+
+    const full = createPlayer({ hp: 99 });
+    full.give(0, id(name));
+    full.eat(0);
+    assert.deepEqual(full.messages, lines, `${name} at full health sends the same lines`);
   }
+});
+
+test("a cocktail's glass goes to the first free slot, not the drink's (rsprox captures)", () => {
+  // Local 20261111T225402-5ab63b4 tick 37: the fruit blast in slot 14 empties it and the glass fills
+  // slot 8, the first free one. rsprox 948 tick 18256: the punch's slot 11 was the first free once
+  // drunk, and the glass is there. Beer glasses stay put (mind bomb slot 12, tick 9).
+  for (const name of ["FRUIT_BLAST", "PINEAPPLE_PUNCH", "PREMADE_FR_BLAST", "PREMADE_P_PUNCH"]) {
+    const player = createPlayer({ hp: 40 });
+    for (let slot = 0; slot < 8; slot++) player.give(slot, id("COINS"));
+    player.give(14, id(name));
+    player.eat(14);
+    assert.equal(player.slots[8]?.getId(), id("COCKTAIL_GLASS"), `${name}: the glass fills slot 8`);
+    assert.equal(player.slots[14], null, `${name}: the drink's slot is left empty`);
+
+    const packed = createPlayer({ hp: 40 });
+    for (let slot = 0; slot < 14; slot++) packed.give(slot, id("COINS"));
+    packed.give(14, id(name));
+    packed.eat(14);
+    assert.equal(packed.slots[14]?.getId(), id("COCKTAIL_GLASS"), `${name}: no earlier free slot keeps it in place`);
+  }
+
+  const wine = createPlayer({ hp: 40 });
+  wine.give(5, id("JUG_OF_WINE"));
+  wine.eat(5);
+  assert.equal(wine.slots[5]?.getId(), id("JUG"), "other vessels stay in the drink's slot");
+  assert.equal(wine.slots[0], null);
 });
 
 test("food:container answers a food's leftover dish, and nothing for food that leaves none", () => {

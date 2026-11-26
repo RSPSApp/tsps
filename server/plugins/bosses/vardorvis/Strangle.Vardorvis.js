@@ -5,7 +5,9 @@
  * of varp 3942 say which still stand). Each click on a spore clears its varbit. Clearing them all
  * ends it at once ("You manage to escape from the tendrils."); otherwise, 5 ticks after the overlay
  * opened (3 awakened, Wiki) the tendrils tighten for heavy damage (Wiki: about 25, 40 awakened).
- * Either way the spores fall (script 1823), Vardorvis lets go and the overlay closes a tick later.
+ * Either way the spores fall (script 1823), Vardorvis lets go and the overlay closes a tick later;
+ * his next axes come 3 ticks after he lets go (rsprox 1156, all seven escapes). The escape line is
+ * a filterable one (message type 105, rsprox 3285 and 1156).
  * The first strangle of a kill has 4 spores, each one after one more, up to 6 (Wiki).
  */
 const Common = require("./Common.Vardorvis");
@@ -89,7 +91,7 @@ function resolve(hold, escaped) {
   player.performGraphicInSlot(2, Common.graphic(strangle.spots.despawn));
   sender.sendInterfaceScript(strangle.fadeScript, []);
   if (escaped) {
-    player.sendMessage(strangle.escapeMessage);
+    Common.spam(player, strangle.escapeMessage);
     player.performAnimation(new Common.core.Animation(-1));
   } else {
     player.sendMessage(strangle.tightenMessage);
@@ -104,6 +106,7 @@ function resolve(hold, escaped) {
   }
   Common.later(1, () => player.isRegistered() && sender.closeSubInterface(OVERLAY_ATMOSPHERE_UID));
   release(fight);
+  fight.released?.();
 }
 
 function release(fight) {

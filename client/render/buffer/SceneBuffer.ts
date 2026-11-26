@@ -971,6 +971,14 @@ export function getModelFacesFiltered(
         });
     }
 
+    // Translucent faces write depth, so their buffer order is their draw order. The OSRS
+    // client paints a model's faces lowest priority first: the Aberrant spectre's body
+    // (priority 0) comes before its glow shell and eyes (priority 1), which come first in
+    // the model and would otherwise hide the body behind the shell.
+    if (transparent && faces.some((face) => (face.renderLayer ?? face.priority) !== (faces[0].renderLayer ?? faces[0].priority))) {
+        faces.sort((a, b) => (a.renderLayer ?? a.priority) - (b.renderLayer ?? b.priority));
+    }
+
     return faces;
 }
 

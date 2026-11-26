@@ -14,6 +14,13 @@ const Common = require("./Common.ThermonuclearSmokeDevil");
 
 let ThermonuclearMethod = null;
 
+/**
+ * The Leagues VI Echo attacks from its own fight (EchoFight.ThermonuclearSmokeDevil.js), not this
+ * attack turn, and never moves (rsprox.net 1161): no attack here, and a reach across the room.
+ */
+const isEcho = (character) => Boolean(character?.__thermonuclearEchoSession);
+const ECHO_REACH = 64;
+
 function methodClass() {
   if (ThermonuclearMethod) return ThermonuclearMethod;
   const { Animation, CombatMethod, CombatType, Graphic, GraphicHeight, MagicCombatMethod, PendingHit, Projectile } = Common.core;
@@ -22,8 +29,8 @@ function methodClass() {
       return CombatType.MAGIC;
     }
 
-    attackDistance() {
-      return Common.ATTACK_DISTANCE;
+    attackDistance(character) {
+      return isEcho(character) ? ECHO_REACH : Common.ATTACK_DISTANCE;
     }
 
     attackSpeed() {
@@ -31,6 +38,7 @@ function methodClass() {
     }
 
     start(character, target) {
+      if (isEcho(character)) return;
       character.performAnimation(new Animation(Common.ANIM_ATTACK));
       try {
         target.getPacketSender?.()?.sendSound?.(Common.ATTACK_SOUND, 1, 0);
@@ -41,6 +49,7 @@ function methodClass() {
     }
 
     hits(character, target) {
+      if (isEcho(character)) return [];
       // Lands with the shot, which is sent in the legacy shape and flies 46 + 10 a tile (#1862).
       return [new PendingHit(character, target, this, Projectile.arrivalTicks(character, target, Projectile.LEGACY_MAGIC_END_BASE))];
     }

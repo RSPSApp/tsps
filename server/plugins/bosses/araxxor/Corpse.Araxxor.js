@@ -9,10 +9,14 @@
  * Destroy keeps only elite clues and re-rolls Nid at 1/1500. Either way the corpse sinks
  * (11486) and the fight resets on the lair's respawn timer.
  *
- * As captured: five ticks into the death the kill count goes up ("Your Araxxor kill count is:
- * N.", varp total_araxxor_kills) and the fight's length is told against the personal best,
- * timed from the spawn to three ticks into the death. Harvest (2282) turns the loot out two
- * ticks after the click, the corpse sinks the tick after and goes two ticks later.
+ * As captured (ticks from the death animation; rsprox 550, 1768, 788, 3280, 3347, 490 kills): the
+ * living araxytes die with her (+0), the eggs crumble (+1), and at +5 she becomes the corpse on her
+ * middle, its 3x3 blocked by loc 26209, "Noxious Awakening" starts again and the kill count goes up
+ * ("Your Araxxor kill count is: N.", varp total_araxxor_kills) with the fight's length against the
+ * personal best, timed from the spawn to +3. The health bar fades at +9 and clears four ticks
+ * later. Harvest and Destroy both play 2282; two ticks later the loot (or, after a Destroy, "You
+ * root aggressively...") comes with sound 9485, the corpse sinks the tick after and goes two ticks
+ * later, its locs with it.
  */
 const Shared = require("./Shared.Araxxor");
 const Hud = require("./Hud.Araxxor");
@@ -26,11 +30,26 @@ const BOSS_NAME = "Araxxor";
 /** Cache varp total_araxxor_kills: the kill count the boss log reads. Combat Achievements sends
  * it (its count is the one the boss page shows); this plugin only does when that is not running. */
 const TOTAL_KILLS_VARP = 4260;
-/** Captured: the kill messages five ticks into the death, timed to three ticks into it. */
-const KILL_MESSAGE_TICKS = 5;
+/** Captured, in ticks from the death animation. */
+const CORPSE_AT_DEATH_TICK = 5;
 const DURATION_END_TICKS = 3;
+const HUD_FADE_AT_DEATH_TICK = 9;
+/** Captured, in ticks from the Harvest or Destroy animation. */
 const HARVEST_LOOT_TICKS = 2;
 const HARVEST_SINK_TICKS = 3;
+/** Captured: the 3x3 corpse sits on her middle, two tiles in from her south-west corner. */
+const CORPSE_OFFSET = 2;
+const CORPSE_SIZE = 3;
+const CORPSE_BLOCKING_OBJECT = 26209;
+const DESTROY_MESSAGE = "You root aggressively through the corpse and the body decays before you can harvest any resources.";
+/** Captured (rsprox 1094): the menu Destroy opens, and its options in order. */
+const DESTROY_TITLE = "Destroy regular loot for doubled pet chance?";
+const DESTROY_OPTIONS = Object.freeze(["Yes.", "Yes, and don't ask again.", "No."]);
+/**
+ * Ticks from appendDeath (onNpcBeforeDeath) to the death animation: NPCDeathTask is submitted
+ * there and plays the animation on its first run.
+ */
+const DEATH_ANIMATION_LAG = 1;
 
 let api = null;
 let core = null;
@@ -53,7 +72,25 @@ function sessionOf(npc) {
   return npc?.getAttribute?.(Shared.ATTR_ENCOUNTER) ?? null;
 }
 
-/** The captured death: the 11481 anim, five ticks later the harvestable corpse. */
+/**
+ * Her death starts (the tick before its animation): the fight stops, her brood dies with her and
+ * the health bar's fade is set for +9.
+ */
+function bossDying({ npc }) {
+  if (npc?.getId?.() !== Shared.BOSS_ID || npc.getAttribute?.(Shared.ATTR_DYING) === true) return;
+  const session = sessionOf(npc);
+  if (!session) return;
+  npc.setAttribute?.(Shared.ATTR_DYING, true);
+  session.deathAt = core.World.getProcessCycle() + DEATH_ANIMATION_LAG;
+  Specials.endFight(npc);
+  Minions.dieWithBoss(npc, DEATH_ANIMATION_LAG);
+  Hud.killed(npc, DEATH_ANIMATION_LAG + HUD_FADE_AT_DEATH_TICK);
+}
+
+/**
+ * The death animation has run its definition's death ticks: she stays as the remains, and turns
+ * into the corpse at +5.
+ */
 function bossDied(event) {
   const { npc } = event;
   if (!npc || npc.getId?.() !== Shared.BOSS_ID) return;
@@ -63,31 +100,76 @@ function bossDied(event) {
   event.remains = { ticks: Shared.CORPSE_TICKS };
   npc.setAttribute?.(Shared.ATTR_DYING, true);
   npc.getCombat?.().reset?.();
-  Minions.crumbleAll(npc);
-  Specials.endFight(npc);
-  Hud.killed(npc);
+  const now = core.World.getProcessCycle();
+  const deathAt = session.deathAt ?? now - (npc.getCurrentDefinition?.()?.getDeathTicks?.() ?? 0);
+  session.respawnAt = now + Shared.CORPSE_TICKS + Shared.RESPAWN_TICKS;
+  const ticks = deathAt + DURATION_END_TICKS - (session.spawnedAt ?? deathAt);
+  const wait = deathAt + CORPSE_AT_DEATH_TICK - now;
+  if (wait > 0) later(wait, npc, () => becomeCorpse(npc, session, ticks));
+  else becomeCorpse(npc, session, ticks);
+}
+
+/** +5: the corpse on her middle, its locs, the music again and the kill messages. */
+function becomeCorpse(npc, session, ticks) {
+  if (!npc.isRegistered?.() || session.area?.isDestroyed?.() === true) return;
   npc.setModelCustomisation?.(null);
   npc.setNpcTransformationId(Shared.CORPSE_ID);
+  // Captured as a jump: the 3x3 corpse is drawn where her middle was.
+  npc.moveTo(npc.getLocation().transform(CORPSE_OFFSET, CORPSE_OFFSET, 0));
+  blockCorpse(npc, session);
   // The walk-to validity gate needs HP above 0, so the corpse keeps 1: with 0, clicks
   // from any distance are silently dropped and only adjacent Harvest/Destroy works.
   // Nothing reads this as "alive": combat is id-gated to the boss, and the fight's
-  // own alive() checks below are additionally guarded by ATTR_DYING (set above).
+  // own alive() checks are additionally guarded by ATTR_DYING.
   npc.setHitpoints?.(1);
   session.corpse = npc;
-  session.respawnAt = core.World.getProcessCycle() + Shared.CORPSE_TICKS + Shared.RESPAWN_TICKS;
-  const ticks = core.World.getProcessCycle() + DURATION_END_TICKS - (session.spawnedAt ?? core.World.getProcessCycle());
   const player = session.player;
-  later(KILL_MESSAGE_TICKS, npc, () => {
-    if (player?.isRegistered?.()) recordKill(player, ticks);
-  });
+  if (!player?.isRegistered?.()) return;
+  player.getPacketSender?.()?.sendSong?.(Shared.FIGHT_MUSIC);
+  recordKill(player, ticks);
 }
 
-/** Minutes, seconds and hundredths, as the fight-duration message shows them. */
-function formatTicks(ticks) {
+/** The corpse's 3x3 is blocked by loc 26209 while it lies there (captured). */
+function blockCorpse(npc, session) {
+  const at = npc.getLocation();
+  const area = npc.getPrivateArea?.() ?? null;
+  session.corpseLocs = [];
+  for (let dx = 0; dx < CORPSE_SIZE; dx++) {
+    for (let dy = 0; dy < CORPSE_SIZE; dy++) {
+      const object = new core.GameObject(
+        CORPSE_BLOCKING_OBJECT, new core.Location(at.getX() + dx, at.getY() + dy, at.getZ()), 10, 0, area,
+      );
+      core.ObjectManager.register(object, true);
+      area?.add?.(object);
+      session.corpseLocs.push(object);
+    }
+  }
+}
+
+/** Frees the corpse's tiles: it has gone, or the fight was reset. */
+function unblockCorpse(session) {
+  for (const object of session?.corpseLocs ?? []) core.ObjectManager.deregister(object, true);
+  if (session) session.corpseLocs = [];
+}
+
+/** Whether the player has precise timing on (the "option_precise_timing" varbit). */
+function preciseTiming(player) {
+  const id = core?.CacheDefinitions?.getVarbitId?.("option_precise_timing");
+  return Number.isInteger(id) && player?.getPacketSender?.()?.getVarbit?.(id) === 1;
+}
+
+/**
+ * The fight duration as the message shows it: m:ss.cc with precise timing on, otherwise m:ss to the
+ * nearest second (rsprox 550, 1768, 788, 3280, 3347: 290 kills precise, 200 not).
+ */
+function formatTicks(ticks, precise = true) {
+  const pad = (value) => String(value).padStart(2, "0");
+  if (!precise) {
+    const total = Math.round(ticks * 0.6);
+    return `${Math.floor(total / 60)}:${pad(total % 60)}`;
+  }
   const centis = Math.round(ticks * 60);
-  const minutes = Math.floor(centis / 6000);
-  const seconds = Math.floor((centis % 6000) / 100);
-  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis % 100).padStart(2, "0")}`;
+  return `${Math.floor(centis / 6000)}:${pad(Math.floor((centis % 6000) / 100))}.${pad(centis % 100)}`;
 }
 
 /**
@@ -106,12 +188,13 @@ function recordKill(player, ticks) {
 function announceKill(player, kills, ticks) {
   sendBossKillCount(player, `Your Araxxor kill count is: <col=ff0000>${kills}</col>.`);
   const best = Number(player.getAttribute(Shared.ATTR_BEST_TICKS)) || 0;
+  const precise = preciseTiming(player);
   if (!best || ticks < best) {
     player.setAttribute(Shared.ATTR_BEST_TICKS, ticks);
     api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
-    player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col> (new personal best)`);
+    player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks, precise)}</col> (new personal best)`);
   } else {
-    player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col>. Personal best: ${formatTicks(best)}`);
+    player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks, precise)}</col>. Personal best: ${formatTicks(best, precise)}`);
   }
 }
 
@@ -265,7 +348,10 @@ function spawnDrops(player, session, drops) {
 
 function endCorpse(npc, session, afterTicks) {
   npc.performAnimation(new core.Animation(11486));
-  later(afterTicks, npc, () => core.World.getRemoveNPCQueue().push(npc));
+  later(afterTicks, npc, () => {
+    unblockCorpse(session);
+    core.World.getRemoveNPCQueue().push(npc);
+  });
   session.respawnAt = Math.min(
     session.respawnAt ?? Number.MAX_SAFE_INTEGER,
     core.World.getProcessCycle() + afterTicks + Shared.RESPAWN_TICKS,
@@ -281,6 +367,7 @@ function harvest({ player, npc }) {
   later(HARVEST_LOOT_TICKS, npc, () => {
     if (!npc.isRegistered?.()) return;
     const loot = resolveHalberdPieces(player, session.stash ?? []);
+    Shared.playSound(player, Shared.CORPSE_LOOT_SOUND);
     spawnDrops(player, session, loot);
     // The harvested loot is this roll, so the collection log, the clan loot broadcast and the loot notifications (which
     // read the emptied death roll a microtask later) see it here. The death roll already counted the kill.
@@ -292,30 +379,39 @@ function harvest({ player, npc }) {
   return true;
 }
 
-/** Destroy: forfeit the loot, keep elite clues, and roll Nid at 1/1500 (Wiki). */
+/**
+ * Destroy: forfeit the loot, keep elite clues, and roll Nid at 1/1500 (Wiki). Captured (rsprox 1094,
+ * 4086, 550, 1768): the Harvest animation, two ticks later the decay message with sound 9485, then
+ * the corpse sinks and goes as after a harvest.
+ */
 function destroyConfirmed({ player, npc }) {
   const session = sessionOf(npc);
   if (!validCorpse(npc, session)) return;
   session.destroyed = true;
+  player.performAnimation(new core.Animation(Shared.HARVEST_ANIMATION));
   const clues = (session.stash ?? []).filter((drop) => drop.itemId === Shared.ELITE_CLUE_ITEM_ID);
   const nid = Math.random() < 1 / Shared.DESTROY_PET_RATE
     ? [{ itemId: Shared.NID_ITEM_ID, amount: 1 }]
     : [];
-  later(1, npc, () => {
+  later(HARVEST_LOOT_TICKS, npc, () => {
     if (!npc.isRegistered?.()) return;
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, DESTROY_MESSAGE);
+    Shared.playSound(player, Shared.CORPSE_LOOT_SOUND);
     spawnDrops(player, session, clues);
     logReceived(player, clues);
     if (nid.length > 0) {
       // The death roll already counted the kill; Nid is only extra loot.
       api.emitCustomEvent("npc-drops:roll", { player, npc, npcId: Shared.BOSS_ID, drops: nid, countKill: false });
     }
-    endCorpse(npc, session, 2);
+  });
+  later(HARVEST_SINK_TICKS, npc, () => {
+    if (npc.isRegistered?.()) endCorpse(npc, session, 2);
   });
 }
 
 /**
- * The Wiki's prompt: destroy for the doubled pet chance, with a "don't ask again" that is
- * remembered on the player.
+ * The captured prompt (rsprox 1094): one menu, with a "don't ask again" that is remembered on the
+ * player (rsprox 4086 destroys with no menu).
  */
 function destroy({ player, npc }) {
   const session = sessionOf(npc);
@@ -325,19 +421,14 @@ function destroy({ player, npc }) {
     return true;
   }
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(
-    new core.StatementDialogue(0, Shared.CORPSE_DESTROY_PROMPT),
     new core.OptionDialogue(0, {
       executeOption(option) {
         player.getPacketSender().sendInterfaceRemoval();
         const index = Number(option);
-        if (index === 0) {
-          destroyConfirmed({ player, npc });
-        } else if (index === 2) {
-          player.setAttribute?.(Shared.ATTR_DESTROY_NO_PROMPT, true);
-          destroyConfirmed({ player, npc });
-        }
+        if (index === 1) player.setAttribute?.(Shared.ATTR_DESTROY_NO_PROMPT, true);
+        if (index === 0 || index === 1) destroyConfirmed({ player, npc });
       },
-    }, "Yes, destroy it.", "No, keep it.", "Yes, and don't ask again."),
+    }, ...DESTROY_OPTIONS).setTitle(DESTROY_TITLE),
   ));
   return true;
 }
@@ -353,6 +444,7 @@ function attach(pluginApi) {
   pluginApi.persistAttribute(Shared.ATTR_KILLS);
   pluginApi.persistAttribute(Shared.ATTR_BEST_TICKS);
   pluginApi.persistAttribute(Shared.ATTR_HALBERD_PIECES);
+  pluginApi.onNpcBeforeDeath(bossDying);
   pluginApi.onNpcDeath(bossDied);
   pluginApi.onCustomEvent("npc-drops:roll", stashRoll);
   pluginApi.onCustomEvent("npc-drops:generated", stashGenerated);
@@ -361,7 +453,10 @@ function attach(pluginApi) {
 
 module.exports = {
   attach,
+  bossDying,
   bossDied,
+  becomeCorpse,
+  unblockCorpse,
   harvest,
   destroy,
   destroyConfirmed,

@@ -36,9 +36,21 @@ function protectedFrom(player, prayer) {
   const handler = api.core.PrayerHandler;
   return handler.isActivated(player, handler[prayer]);
 }
-function graphic(session, id, tile, delay = 0) {
+function graphic(session, id, tile, delay = 0, height = 0) {
   const location = tile?.getX ? tile : session.tile(tile);
-  session.player.getPacketSender().sendGraphic(api.core.Graphic.delayed(id, delay), location);
+  session.player.getPacketSender().sendGraphic(api.core.Graphic.delayed(id, delay, height), location);
+}
+/** A positioned sound ({ id, radius }) on a source-room tile, as the recordings send them. */
+function areaSound(session, spec, tile, delay = 0) {
+  const location = tile?.getX ? tile : session.tile(tile);
+  session.player.getPacketSender().sendAreaSound(spec.id, location.getX(), location.getY(), location.getZ(), 1, delay, spec.radius);
+}
+/** Precise timing, m:ss.cc, as the kill messages show it. */
+function formatTicks(ticks) {
+  const centis = Math.round(ticks * 60);
+  const minutes = Math.floor(centis / 6000);
+  const seconds = Math.floor((centis % 6000) / 100);
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centis % 100).padStart(2, "0")}`;
 }
 function messageBox(player, text) {
   const { DialogueChainBuilder, StatementDialogue } = api.core;
@@ -132,7 +144,7 @@ function clearSupplies(player) {
 }
 module.exports = {
   init, data, sessions, sessionOf, random, count, kills, source, protectedFrom,
-  graphic, messageBox, sound, give, hurt, strike, cancelPending, drainPrayer, faceCovered, clearSupplies,
+  graphic, areaSound, formatTicks, messageBox, sound, give, hurt, strike, cancelPending, drainPrayer, faceCovered, clearSupplies,
   INSIDE: INSIDE_ATTRIBUTE, KILLS: KILLS_ATTRIBUTE, BEST: BEST_ATTRIBUTE, DEMONBANE: DEMONBANE_ATTRIBUTE,
   get api() {
     return api;

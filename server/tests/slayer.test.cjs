@@ -1007,6 +1007,10 @@ test("protective gear: a dust devil hits a bare face for 16 and drains", () => {
   let damage = 3;
   Equipment.incomingDamage(player, { setDamage: (value) => { damage = value; } }, { attacker: devil });
   assert.equal(damage, 16);
+  // It never lowers a bigger hit (the Leagues VI Echo Thermonuclear smoke devil's 48-62 shots).
+  let big = 52;
+  Equipment.incomingDamage(player, { getDamage: () => big, setDamage: (value) => { big = value; } }, { attacker: devil });
+  assert.equal(big, 52, "a hit above the unprotected max stands");
 
   const masked = equip(createPlayer(), { 0: 4164 }); // facemask
   const safe = { attacker: devil, target: masked, forceAccurate: false };

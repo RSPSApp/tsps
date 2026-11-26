@@ -11,7 +11,9 @@
  *   a tick after that (every recorded spring had the fox on the trap's tile);
  * - Disarm: "You start disarming the trap..." with synth 2387; 8 ticks on the trap plays its
  *   disarm seq and a poacher grumbles ("Oi, leave those traps alone!"); a tick later "You
- *   successfully disarm the trap." (spam) with synth 2387, and the bark the tick after;
+ *   successfully disarm the trap." (spam) with synth 2387, and the bark the tick after.
+ *   Players click the trap independently, so several can work the same trap; the first to
+ *   finish removes it and the others' actions end with it;
  * - at 200 ticks they leave ("We'll get you next time, fox!", "Let's get out of here!"): sounds 7538
  *   and 2386 at the tree, map_anim 2369 at the fox, synth 7531 with "Well done, you've saved the fox
  *   from the poachers! The fox has left you a gift...", and the bark lump the tick after.
@@ -102,7 +104,7 @@ function placeTrap(event, poacher) {
   const npc = Common.spawnNpc(poachers.npcs.trap, at);
   Common.tileGraphic(at, poachers.graphics.trapSet);
   Common.areaSound(at, poachers.sounds.trapSet, poachers.sounds.trapSetRadius);
-  event.traps.add({ npc, at, foxSince: null, disarming: false });
+  event.traps.add({ npc, at, foxSince: null, disarmers: new Set(), warned: false });
 }
 
 function spring(event, trap) {
@@ -156,12 +158,12 @@ function moveFox(event) {
   queue.addSteps(next);
 }
 
-/** A trap the fox has stood on for `springDelay` ticks springs, unless it's being disarmed. */
+/** A trap the fox has stood on for `springDelay` ticks springs, unless someone is disarming it. */
 function checkSprings(event) {
   const poachers = F();
   const foxAt = event.fox.getLocation();
   for (const trap of [...event.traps]) {
-    if (trap.disarming || !trap.at.equals(foxAt)) {
+    if (trap.disarmers.size > 0 || !trap.at.equals(foxAt)) {
       trap.foxSince = null;
       continue;
     }
@@ -236,14 +238,14 @@ function trapOf(npc) {
   return null;
 }
 
+/** Each player's Disarm starts their own action; any number may work the same trap. */
 function disarm({ player, npc }) {
   const found = trapOf(npc);
   if (!found) return false;
   const { event, trap } = found;
-  if (trap.disarming) return true;
   const previous = sessions.get(player);
-  if (previous) previous.trap.disarming = false;
-  trap.disarming = true;
+  if (previous) previous.trap.disarmers.delete(player);
+  trap.disarmers.add(player);
   const poachers = F();
   Common.spam(player, Common.message("startDisarm"));
   Common.sound(player, poachers.sounds.disarm);
@@ -257,6 +259,8 @@ function disarm({ player, npc }) {
 function trapGives(session) {
   const poachers = F();
   session.warned = true;
+  if (session.trap.warned) return;
+  session.trap.warned = true;
   Common.animate(session.trap.npc, poachers.seqs.trapDisarmed);
   const { event } = session;
   const quietOnes = event.poachers.filter((npc) => quiet(event, npc));
@@ -266,6 +270,7 @@ function trapGives(session) {
 function disarmed(player, session) {
   const { event, trap } = session;
   const poachers = F();
+  trap.disarmers.delete(player);
   event.traps.delete(trap);
   if (!session.warned) trapGives(session);
   Common.animate(player, poachers.seqs.disarmEnd);
@@ -288,11 +293,12 @@ function disarmTick() {
   for (const [player, session] of sessions) {
     const { event, trap } = session;
     if (event.over || !event.traps.has(trap)) {
+      trap.disarmers.delete(player);
       sessions.delete(player);
       continue;
     }
     if (!player.isRegistered?.() || !player.getLocation().equals(session.from)) {
-      trap.disarming = false;
+      trap.disarmers.delete(player);
       sessions.delete(player);
       continue;
     }
@@ -305,7 +311,7 @@ function disarmTick() {
 
 function forget({ player }) {
   const session = sessions.get(player);
-  if (session) session.trap.disarming = false;
+  if (session) session.trap.disarmers.delete(player);
   sessions.delete(player);
 }
 

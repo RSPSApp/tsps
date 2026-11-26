@@ -87,6 +87,8 @@ export class PendingHit {
     private failedAccuracyChecks = 0;
     private handleAfterHitEffects: boolean;
     private experience = true;
+    /** Whether the hit sets off the target's Vengeance (an attack the Wiki says doesn't: the Echo Thermonuclear smoke devil's shots). */
+    private vengeance = true;
     /** The skills the usual combat XP is split across, when not the attacker's fight style. */
     private experienceSkills?: number[];
     private damageBudget?: { remaining: number };
@@ -267,6 +269,16 @@ export class PendingHit {
     /** Whether the attacker gets the usual combat XP for this hit. */
     public rewardsExperience(): boolean {
         return this.experience;
+    }
+
+    /** Whether the hit sets off the target's Vengeance; true unless content says otherwise. */
+    public triggersVengeance(): boolean {
+        return this.vengeance;
+    }
+
+    public setTriggersVengeance(triggers: boolean): this {
+        this.vengeance = triggers;
+        return this;
     }
 
     /** The branch of a first-successful-roll special that landed (0-based), -1 if all rolls missed, undefined if not such a special. */

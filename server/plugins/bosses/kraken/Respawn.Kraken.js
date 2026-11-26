@@ -18,12 +18,15 @@
 
 const Shared = require("./Shared.Kraken");
 
+// Public: Kraken Wiki revision 15383981. Private Leagues VI: RSProx 237/1150 and 237/1151.
+const BOSS_RESPAWN_TICKS = [10, 14];
+
 /** Areas with a joint respawn scheduled: their deaths join it instead of respawning. */
 const simultaneousPending = new Set();
 /** Area -> whirlpools to respawn together: [{ id, at }]. */
 const deadByArea = new Map();
 const privatePending = new Map();
-const privateJointTentacles = new WeakSet();
+const jointTentacles = new WeakSet();
 
 function later(ticks, action, key = null) {
   const { Task, TaskManager } = Shared.core();
@@ -111,7 +114,7 @@ function bossUp(area) {
 function tentacleDied({ npc }) {
   if (!npc || npc.getId?.() !== Shared.ids().TENTACLE) return;
   const area = areaOf(npc);
-  if (privateJointTentacles.has(npc)) {
+  if (jointTentacles.has(npc)) {
     npc.__skipDefaultRespawn = true;
     return;
   }
@@ -123,7 +126,7 @@ function tentacleDied({ npc }) {
     // Mid-fight (or fight cleanup): stay dead, come back with the rest after the fight.
     npc.__skipDefaultRespawn = true;
     if (area?.isKrakenInstance === true) {
-      privateJointTentacles.add(npc);
+      jointTentacles.add(npc);
       deadList(area).push({ id: Shared.ids().TENTACLE_WHIRLPOOL, at: npc.getSpawnPosition(), previous: npc });
     } else {
       deadList(area).push({ id: Shared.ids().TENTACLE_WHIRLPOOL, at: npc.getSpawnPosition() });
@@ -133,9 +136,6 @@ function tentacleDied({ npc }) {
   if (area?.isKrakenInstance === true) {
     npc.__skipDefaultRespawn = true;
     const entries = [{ id: Shared.ids().TENTACLE_WHIRLPOOL, at: npc.getSpawnPosition(), previous: npc }];
-    // Live OSRS respawns the Kraken more slowly in a private instance (Wiki Kraken page:
-    // "respawns more slowly in a private instance than the public arena"), but no figure is
-    // documented, so private rooms use the public delay here (estimate; no invented number).
     const delay = npc.getDefinition?.()?.getRespawn?.() ?? 25;
     schedulePrivate(area, delay, entries);
     return;
@@ -168,29 +168,19 @@ function bossDied({ npc }) {
   npc.__skipDefaultRespawn = true;
   deadList(area).push({ id: Shared.ids().BOSS_WHIRLPOOL, at: npc.getSpawnPosition(),
     ...(area?.isKrakenInstance === true ? { previous: npc } : {}) });
-  // NPCDeathTask emits a death event only when it found a player killer. In a
-  // private room a tentacle killed by the boss cleanup may have no such event,
-  // including one already dying; capture it before scheduling the joint batch.
-  const tentacles = area?.isKrakenInstance === true
-    ? [...Shared.core().World.getNpcs()].filter(other => other?.isNpc?.() && other.isRegistered?.()
-      && other.getId?.() === Shared.ids().TENTACLE && other.getPrivateArea?.() === area)
-    : livingIn(area, Shared.ids().TENTACLE);
-  for (const tentacle of tentacles) {
-    try {
-      if (area?.isKrakenInstance === true && !privateJointTentacles.has(tentacle)) {
-        privateJointTentacles.add(tentacle);
-        tentacle.__skipDefaultRespawn = true;
-        deadList(area).push({ id: Shared.ids().TENTACLE_WHIRLPOOL, at: tentacle.getSpawnPosition(), previous: tentacle });
-      }
-      if ((tentacle.getHitpoints?.() ?? 0) > 0) tentacle.setHitpoints(0);
-    } catch {
-      // Already dying; its death event still joins the respawn.
-    }
+  // NPCDeathTask only emits a death event for a player kill. Own every active
+  // or dying tentacle here so killerless cleanup joins the same batch.
+  const { Misc, World } = Shared.core();
+  const { TENTACLE, TENTACLE_WHIRLPOOL } = Shared.ids();
+  for (const tentacle of World.getNpcs()) {
+    if (tentacle?.getId?.() !== TENTACLE || areaOf(tentacle) !== area || jointTentacles.has(tentacle)) continue;
+    jointTentacles.add(tentacle);
+    tentacle.__skipDefaultRespawn = true;
+    deadList(area).push({ id: TENTACLE_WHIRLPOOL, at: tentacle.getSpawnPosition(),
+      ...(area?.isKrakenInstance === true ? { previous: tentacle } : {}) });
+    if (tentacle.getHitpoints() > 0) tentacle.setHitpoints(0);
   }
-  // Live OSRS respawns the Kraken more slowly in a private instance (Wiki Kraken page:
-  // "respawns more slowly in a private instance than the public arena"), but no figure is
-  // documented, so private rooms use the public delay here (estimate; no invented number).
-  const delay = npc.getDefinition?.()?.getRespawn?.() ?? 25;
+  const delay = Misc.randomInclusive(...BOSS_RESPAWN_TICKS);
   if (area?.isKrakenInstance === true) schedulePrivate(area, delay);
   else later(delay, () => respawnAll(area));
 }
@@ -207,4 +197,4 @@ function attach(api) {
   api.onNpcDeath(bossDied);
 }
 
-module.exports = { attach, tentacleDied, bossDied, bossUp, respawnAll, releaseArea };
+module.exports = { attach, tentacleDied, bossDied, bossUp, respawnAll, releaseArea, BOSS_RESPAWN_TICKS };

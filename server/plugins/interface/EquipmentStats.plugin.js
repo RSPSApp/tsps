@@ -78,6 +78,8 @@ const SALVE_AMULETS = new Map([
   [10588, { percent: 20, shown: 20, meleeOnly: true }],
   [12017, { percent: 100 / 6, shown: 15, meleeOnly: false }],
   [12018, { percent: 20, shown: 20, meleeOnly: false }],
+  [26763, { percent: 100 / 6, shown: 15, meleeOnly: false }],
+  [26782, { percent: 20, shown: 20, meleeOnly: false }],
 ]);
 
 let BonusManager;

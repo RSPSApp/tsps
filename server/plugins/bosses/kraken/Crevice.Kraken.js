@@ -14,6 +14,7 @@
 
 const Shared = require("./Shared.Kraken");
 const Instance = require("./Instance.Kraken");
+const { cancelExplosiveWake } = require("./Disturb.Kraken");
 const PRIVATE_FEE = 25000;
 /**
  * The spam line after the fee (rsprox_transcripts/237/01150.txt t11116, t11119: "Payment has been
@@ -66,6 +67,7 @@ function enter({ player, object }) {
 function use({ player, object }) {
   if (!object || !Shared.alive(player)) return false;
   if (object.getId?.() !== creviceIds().OUT || !at(object, CREVICE_OUT_TILE)) return false;
+  cancelExplosiveWake(player);
   Instance.leave(player);
   return go(player, COVE_SIDE_TILE);
 }

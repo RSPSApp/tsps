@@ -75,6 +75,17 @@ function raisingKitten(player, api) {
   return holdsYoungCatItem(player, api) || followingYoungCat(player, api);
 }
 
+/**
+ * Where the kitten would go: it follows, or with another follower out it goes into the backpack. With
+ * that full it would land on the ground, uncounted, and she could sell another: ours refuses first.
+ */
+const NO_ROOM_TEXT = "You need a free inventory slot for a kitten.";
+function roomForKitten(player, api) {
+  const request = { player, pet: null };
+  api.emitCustomEvent("pets:current", request);
+  return !request.pet || !player.getInventory().isFull();
+}
+
 function kittenQuestComplete(player, api) {
   const request = { player, key: GERTRUDES_CAT_QUEST, complete: false };
   api.emitCustomEvent("quest:is-complete", request);
@@ -99,6 +110,10 @@ function canChooseKitten(player, api) {
     player.sendMessage(`You need ${KITTEN_COST} coins for another kitten.`);
     return false;
   }
+  if (!roomForKitten(player, api)) {
+    player.sendMessage(NO_ROOM_TEXT);
+    return false;
+  }
   return true;
 }
 
@@ -110,13 +125,16 @@ function canChooseKitten(player, api) {
 function sellKitten(api, player, itemId) {
   const inventory = player.getInventory();
   if (inventory.getAmount(api.core.ItemIdentifiers.COINS) < KITTEN_COST) return false;
+  if (!roomForKitten(player, api)) {
+    player.sendMessage(NO_ROOM_TEXT);
+    return false;
+  }
   inventory.deleteNumber(api.core.ItemIdentifiers.COINS, KITTEN_COST);
   const summon = { player, itemId, following: false, pet: null, summoned: false };
   api.emitCustomEvent("pets:summon", summon);
   if (!summon.summoned) {
     // No pet system answered: the kitten still has to reach the player.
-    if (inventory.isFull()) api.core.ItemOnGroundManager?.registerNonGlobal?.(player, new api.core.Item(itemId));
-    else inventory.adds(itemId, 1);
+    inventory.adds(itemId, 1);
   } else if (summon.following && summon.pet) {
     const pet = summon.pet;
     SOLD_KITTEN_LINES.forEach((line, index) => {
@@ -166,7 +184,7 @@ function onGertrudeKitten(api, event) {
     openKittenColourMenu(api, player);
     return true;
   }
-  sellKitten(api, player, randomKitten());
+  if (!sellKitten(api, player, randomKitten())) return true;
   const { DialogueChainBuilder, StatementDialogue } = api.core;
   player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, SOLD_KITTEN_TEXT)));
   return true;
@@ -249,7 +267,7 @@ module.exports = {
   },
   _test: {
     GERTRUDES_CAT_QUEST, KITTEN_COST, RING_OF_CHAROS_A, KITTEN_ITEM_IDS, KITTEN_COLOURS,
-    KITTEN_COLOUR_CHOSEN_EVENT, SOLD_KITTEN_TEXT, STILL_RAISING_TEXT, NO_COINS_TEXT,
+    KITTEN_COLOUR_CHOSEN_EVENT, SOLD_KITTEN_TEXT, STILL_RAISING_TEXT, NO_COINS_TEXT, NO_ROOM_TEXT,
     hasCharosAEquipped, holdsYoungCatItem, followingYoungCat, raisingKitten,
     kittenQuestComplete, canChooseKitten, chooseKittenColour, sellKitten, onGertrudeKitten,
     openKittenColourMenu, onDialogueAction, answerCondition,

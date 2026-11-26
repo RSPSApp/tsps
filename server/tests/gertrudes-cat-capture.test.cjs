@@ -819,3 +819,46 @@ test('a walk away from the stroke\'s line or the age box still clears BUSY', asy
     assert.equal(f.since(s).filter((e) => e[1] === 'sendVarbit' && e[2] === BUSY).map((e) => e[3]).at(-1), 0);
   }
 });
+
+test('a walk or another conversation in the stroke\'s 3 ticks keeps it: no line opens over it and BUSY clears', async (t) => {
+  const f = fixture(t, [3151, 3413, 0]);
+  const gertrude = f.npc(N().GERTRUDE, [3149, 3413, 0]);
+  quest.setStage(f.p, 6);
+  const kitten = kittenFollower(f);
+  await interactMenu(f, kitten);
+  let s = f.tick();
+  await f.choose(1);
+  f.step();
+  await f.clickNpc(gertrude, 1);
+  f.step(4);
+  assert.notDeepEqual(f.read(), ['player', 'player', 'That cat sure loves to be stroked.']);
+  assert.deepEqual(f.read(), ['player', 'player', 'Hello again.'], 'her conversation is still open');
+  assert.equal(f.since(s).filter((e) => e[1] === 'sendVarbit' && e[2] === BUSY).map((e) => e[3]).at(-1), 0);
+  assert.ok(!f.since(s).some((e) => e[1] === 'npc-say' && e[3] === 'Purr...purr...'));
+  await f.send({ type: 'move', worldX: 3151, worldY: 3413, modifierFlags: 0, run: false });
+  f.step(3);
+
+  await interactMenu(f, kitten);
+  s = f.tick();
+  await f.choose(1);
+  await f.send({ type: 'move', worldX: 3151, worldY: 3417, modifierFlags: 0, run: false });
+  f.step(4);
+  assert.equal(f.read(), null);
+  assert.equal(f.since(s).filter((e) => e[1] === 'sendVarbit' && e[2] === BUSY).map((e) => e[3]).at(-1), 0);
+});
+
+test('with another follower out and a full backpack she sells nothing: no kitten lands on the ground uncounted', async (t) => {
+  const f = fixture(t, [3149, 3412, 0]);
+  const gertrude = f.npc(N().GERTRUDE, [3149, 3413, 0]);
+  quest.setStage(f.p, 6);
+  PM.emitCustomEvent('pets:summon', { player: f.p, itemId: I().BABY_MOLE, following: false, pet: null, summoned: false });
+  assert.ok(following(f.p));
+  f.give(I().COINS, 300);
+  f.give(I().BRONZE_AXE, 27);
+  assert.ok(f.p.getInventory().isFull());
+  await f.clickNpc(gertrude, 1);
+  const lines = await f.talk([1, 1]);
+  assert.ok(!lines.some((l) => l[0] === 'box' && l[2] === SOLD), JSON.stringify(lines));
+  assert.equal(f.p.getInventory().getAmount(I().COINS), 300);
+  assert.ok(f.log.some((e) => e[1] === 'sendMessage' && e[2] === 'You need a free inventory slot for a kitten.'));
+});

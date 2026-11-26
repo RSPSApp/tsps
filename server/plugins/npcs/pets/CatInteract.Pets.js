@@ -45,6 +45,8 @@ const RUN_MEW = "Meeeooow!";
 const RAN_AWAY = "The cat has run away.";
 
 const KITTEN_STAGES = new Set(["kitten", "hellkitten"]);
+/** player -> the stroke or line that last set BUSY; only it clears BUSY, and only its line may open. */
+const busyOwners = new WeakMap();
 const isKitten = (info) => KITTEN_STAGES.has(info?.stage);
 
 function attach(pluginApi, petServices) {
@@ -57,15 +59,27 @@ const later = (player, ticks, fn) => api.core.TaskManager.submit(new api.core.Co
   if (player.isRegistered?.() !== false) fn();
 }));
 
+function setBusy(player) {
+  const token = {};
+  busyOwners.set(player, token);
+  player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
+  return token;
+}
+
+function clearBusy(player, token) {
+  if (busyOwners.get(player) !== token) return;
+  busyOwners.delete(player);
+  if (player.isRegistered?.() !== false) player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
+}
+
 /** BUSY while the player watches a stroke or an age guess, cleared when it ends however it ends. */
-function busyChain(player, entries) {
+function busyChain(player, entries, token = setBusy(player)) {
   const { DialogueChainBuilder, ActionDialogue } = api.core;
   const packets = player.getPacketSender();
-  packets.sendVarbit(BUSY_VARBIT, 1);
   const created = entries.map((make, index) => make(index));
   created.push(new ActionDialogue(created.length, { execute: () => {
     packets.sendInterfaceRemoval();
-    packets.sendVarbit(BUSY_VARBIT, 0);
+    clearBusy(player, token);
   } }));
   const chain = new DialogueChainBuilder();
   created.forEach((entry) => chain.add(entry));
@@ -79,7 +93,7 @@ function busyChain(player, entries) {
       if (player.isRegistered?.() === false) return this.stop();
       if (mine.has(manager.getCurrent?.())) return;
       this.stop();
-      packets.sendVarbit(BUSY_VARBIT, 0);
+      clearBusy(player, token);
     }
   })());
 }
@@ -90,16 +104,26 @@ function stroke(player, npc, entry) {
   player.sendMessage(STROKED);
   player.performAnimation(new api.core.Animation(seq(PICKUP_SEQ)));
   npc.performAnimation(new api.core.Animation(seq(ROLL_SEQ)));
-  player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
+  const token = setBusy(player);
+  const from = player.getLocation().clone();
   later(player, STROKE_LINE_TICKS, () => {
-    if (npc.isRegistered?.() !== false) npc.forceChat(PURR);
+    // Live's capture has no input in these ticks. Ours: anything the player did since (a walk, another
+    // conversation or interface, a second stroke, the cat picked up or gone) keeps it and drops the line.
+    if (busyOwners.get(player) !== token) return;
+    const stillHere = player.getLocation().equals?.(from) ?? true;
+    const stillOut = npc.isRegistered?.() !== false && player.getAttribute?.(services.currentAttribute) === npc;
+    if (!stillHere || !stillOut || player.getDialogueManager().getCurrent?.() || player.busy?.()) {
+      clearBusy(player, token);
+      return;
+    }
+    npc.forceChat(PURR);
     player.getPacketSender().sendSoundEffect(PURR_SOUND, 1, 0);
     const { PlayerDialogue, NpcDialogue } = api.core;
     const lines = isKitten(info)
       ? [(index) => new PlayerDialogue(index, KITTEN_STROKE_LINE, HAPPY_HEAD)]
       : [(index) => new PlayerDialogue(index, CAT_STROKE_LINES.player, HAPPY_HEAD),
         (index) => new NpcDialogue(index, npc.getId(), CAT_STROKE_LINES.cat, undefined, HAPPY_HEAD)];
-    busyChain(player, lines);
+    busyChain(player, lines, token);
   });
 }
 

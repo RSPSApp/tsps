@@ -40,14 +40,21 @@ test('Crab coax needs the real Sit emote after the too-scared investigate', () =
     assert.equal(h.attrs.get('quest.crab_quest.met') & spot.bit, 0, `second investigate does not coax ${spot.id}`);
 
     h.sit(spot.sit[0], spot.sit[1], 12);
+    h.tick(30);
     assert.equal(h.attrs.get('quest.crab_quest.met') & spot.bit, 0, 'a different emote does not coax');
 
-    h.sit(spot.sit[0] + 1, spot.sit[1] + 1);
-    assert.equal(h.attrs.get('quest.crab_quest.met') & spot.bit, 0, 'Sit on the wrong tile does not coax');
+    h.sit(spot.x - 3, spot.y - 3);
+    h.tick(30);
+    assert.equal(h.attrs.get('quest.crab_quest.met') & spot.bit, 0, 'Sit away from the hiding place does not coax');
 
+    const wait = spot.id === 62473 ? 24 : 12;
     h.sit(spot.sit[0], spot.sit[1]);
-    assert.ok((h.attrs.get('quest.crab_quest.met') & spot.bit) !== 0, `Sit at ${spot.sit} coaxes ${spot.id}`);
-    assert.ok(h.messages.includes('And now, you wait...'));
+    assert.equal(h.messages.at(-1), 'And now, you wait...');
+    h.tick(wait - 1);
+    assert.equal(h.attrs.get('quest.crab_quest.met') & spot.bit, 0, `${spot.id}: the crab is still hiding`);
+    h.tick(1);
+    assert.ok((h.attrs.get('quest.crab_quest.met') & spot.bit) !== 0, `Sit at ${spot.sit} coaxes ${spot.id} after ${wait} ticks`);
+    assert.ok(h.currentDialogue, 'A crab appears! and its conversation');
   }
   // The captured crab chathead is crab_bandcrab 16483; its join action must count.
   h.emit('npc-dialogue:action', { npcId: 16483, stepId: '5WiO-g' });
@@ -124,9 +131,51 @@ test('Crab tree NW (capture 3036,2644) sits at 3037,2643; the 2x2 tree refuses 3
   h.investigate(62475, 3036, 2644);
   assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 3), 0, 'second investigate does not coax');
   h.sit(3037, 2644);
+  h.tick(12);
   assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 3), 0, 'Sit on the tree tile is refused');
   h.sit(3037, 2643);
-  assert.ok((h.attrs.get('quest.crab_quest.met') & (1 << 3)) !== 0, 'captured Sit tile 3037,2643 coaxes');
+  h.tick(12);
+  assert.ok((h.attrs.get('quest.crab_quest.met') & (1 << 3)) !== 0, 'Sit at 3037,2643 coaxes');
+});
+
+test('issue 6670: any tile beside the hiding place coaxes, as live (3047,2655) and Quest Helper (3038,2644) sit', () => {
+  for (const [x, y, spotX, spotY, id, bit] of [
+    [3047, 2655, 3046, 2656, 62475, 1 << 9], // capture 20261103T014803 tick 6369
+    [3038, 2644, 3036, 2644, 62475, 1 << 3], // QH sitForCrabNine
+    [3041, 2638, 3042, 2637, 62470, 1 << 1], // QH sitForCrabOne, diagonal to the 1x1 palm
+  ]) {
+    const h = setup();
+    h.loadQuest().setStage(h.player, 47);
+    h.setLocation(x, y);
+    h.investigate(id, spotX, spotY);
+    h.sit(x, y);
+    h.tick(12);
+    assert.ok((h.attrs.get('quest.crab_quest.met') & bit) !== 0, `Sit at ${x},${y} coaxes the crab at ${spotX},${spotY}`);
+  }
+});
+
+test('issue 6670: standing up or walking off before the crab appears leaves it hidden', () => {
+  const h = setup();
+  h.loadQuest().setStage(h.player, 47);
+  h.setLocation(3046, 2655);
+  h.investigate(62475, 3046, 2656);
+  h.sit(3046, 2655);
+  h.tick(6);
+  h.emit('player:emote', { slot: 12, sequence: 0 });
+  h.tick(12);
+  assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'another emote stands the player up');
+
+  h.sit(3046, 2655);
+  h.tick(6);
+  h.setLocation(3045, 2654);
+  h.tick(12);
+  assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'walking off cancels the wait');
+
+  h.sit(3046, 2655);
+  h.tick(6);
+  h.sit(3046, 2655); // sitting again keeps the first wait
+  h.tick(6);
+  assert.ok((h.attrs.get('quest.crab_quest.met') & (1 << 9)) !== 0, 'twelve ticks after the first Sit');
 });
 
 test('Crab legacy hand-in count derives colours only when complete and never from pickups', () => {
@@ -196,3 +245,16 @@ test('Crab Sit uses the real cached slot 54 loop', () => {
 
 // Native registered bottle, mooring and spell consumers. The fixture drives the real dialogue
 // manager and scheduled sailing tasks; it does not claim a decoded click or a sailing journey.
+
+test('issue 6670: the recruits\' narration is a message box, as live sends it (capture type=mesbox)', () => {
+  const h = setup();
+  h.loadQuest().setStage(h.player, 47);
+  for (const text of ['A crab appears!', "A 'crab' appears!", 'No crab is coming out of the tree. Maybe they are too scared?']) {
+    const event = { npcId: 16483, stepId: 'probe', kind: 'message', text };
+    h.emit('npc-dialogue:action', event);
+    assert.deepEqual(event.box, { statement: true }, text);
+  }
+  const wait = { npcId: 16483, stepId: 'probe', kind: 'message', text: 'And now, you wait...' };
+  h.emit('npc-dialogue:action', wait);
+  assert.equal(wait.box, undefined, 'the wait is a game message');
+});

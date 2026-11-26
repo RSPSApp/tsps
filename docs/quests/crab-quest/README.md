@@ -23,7 +23,9 @@ collection's own options and the band's practice animations are not done.
 - **The dream** is a `rebuild_region` instance: 12x12 zones copied unturned from 3008,2592,
   the player kept on 3056,2639. Sip, then 2 ticks to "...and immediately black out." and the
   fade, 2 more to the instance, 5 to the fade-in with spotanim 245 (height 124), 4 to
-  `human_death_reverse` 7330, then the first line. `crab_put_back_in_instance` 15868 and
+  `human_death_reverse` 7330, then the first line, with "Urrrrrgh!" and `sequence -1` on the
+  same tick (ticks 5962-5963). 7330 holds its last frame for 669 ticks and blocks the
+  client's movement, so that reset is what lets the player walk. `crab_put_back_in_instance` 15868 and
   `crab_net` 15888 are 1 inside it.
 - **Inside it, for the owner only:** `crab_maincrab` 16469 at 3054,2637 (16470 at 3056,2637 once
   the instrument is in), one floatsam (16478 `crab_floatsam_multi` in the 241 capture; 16820 `crab_flotsam_multi` in cache 242) at 3051,2632, the shell/bass/drum multilocs on the
@@ -36,6 +38,12 @@ collection's own options and the band's practice animations are not done.
 - **The floatsam:** one cast ("You cast out your net...", `human_largenet` 620 two ticks
   later), then the bowstring, barrel and plank 3/6/6 ticks apart, `crab_floatsam_hidden`
   15852 1/2/3, stage 35 to 37 on the plank, and the mesbox "There is nothing left here.".
+- **The Sit coax** (ticks 6369-6381, the avium tree at 3046,2656): after the too-scared
+  mesbox, the Sit emote (216:2 slot 54, `emote_sit_loop` 10061) on 3047,2655 sends the game
+  message "And now, you wait...", and 12 ticks later the mesbox "A crab appears!" opens with
+  a `crab_bandcrab` 16483 on the player's tile. Quest Helper sits one tile west (3046,2655),
+  and at 3038,2644 and 3041,2638 (diagonal to the 1x1 palm) for the others. The Wiki says the
+  magic tree's crab "will take considerably longer"; no recording has that wait.
 - **Recruiting (stage 47)** adds 14 locs with their own ids and rotations (palms 62470/62471/
   62472, magic tree 62473, avium trees 62475/62476, plant 62477, leafless bushes 62478). The
   scutter is a mesbox; the recruit moves to its practice tile. After the sixth,
@@ -49,6 +57,15 @@ collection's own options and the band's practice animations are not done.
   ticks for 368 ticks; a second skybox 61907 near the end. The player wakes at 3056,2639.
 
 ## Findings
+
+- **fixed** (issue 6670) After the first sip the player stood frozen with the camera while the
+  server walked them around the dream: 7330 was never reset. It is now reset on the first
+  line's tick, as live does.
+- **fixed** (issue 6670) The shy crabs never came out in the dream: the Sit check compared the
+  instance tile with source tiles, and accepted one exact tile. A Sit on any tile beside the
+  hiding place now waits 12 ticks (Ours: 24 for the magic tree) and the crab comes out if the
+  player is still there; another emote or a step away cancels it. "A crab appears!", "A 'crab'
+  appears!" and the too-scared line are message boxes, as captured.
 
 - **open** The shell collection's Unpack (seven `crab_shell_reward` 34591-34597 with their own
   op 2) is not implemented.

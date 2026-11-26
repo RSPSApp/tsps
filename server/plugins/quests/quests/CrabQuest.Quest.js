@@ -142,6 +142,20 @@ module.exports = function registerCrabQuestQuest(api) {
   // Interface 216 slot 54 (cache enum 1001 -> sprite 5248) is the real Sit emote;
   // the capture's op=1 plays emote_sit_loop 10061.
   const SIT_EMOTE_SLOT = 54;
+  // The coax (capture 20261103T014803, ticks 6369-6381, the avium tree at 3046,2656): Sit next
+  // to the hiding place sends "And now, you wait..." as a game message, and twelve ticks later
+  // the "A crab appears!" box opens. The Wiki: "the crab in the magic tree will take
+  // considerably longer"; no recording has that wait. Ours: twice the captured one.
+  const SIT_WAIT_TEXT = "And now, you wait...";
+  const SIT_WAIT_TICKS = 12;
+  const MAGIC_TREE_SIT_WAIT_TICKS = 24;
+  // The recruits' narration that live shows as a message box (capture ticks 6215-6519, type=mesbox);
+  // "And now, you wait..." is the one game message among them.
+  const RECRUIT_MESBOX_TEXTS = new Set([
+    "A crab appears!",
+    "A 'crab' appears!",
+    "No crab is coming out of the tree. Maybe they are too scared?",
+  ]);
   // The dream's one floatsam: its multi parent and the forms crab_floatsam_hidden picks.
   // crab_flotsam_multi (crab_floatsam_multi 16478 in the revision 241 capture); its
   // crab_floatsam_hidden varbit picks the form.
@@ -374,7 +388,9 @@ module.exports = function registerCrabQuestQuest(api) {
    * The investigation spots, with the loc live adds there once recruiting starts (capture
    * tick 6215: id, tile and rotation). `first` is the "too scared" line (missing when the crab
    * comes straight out), `variant` is the conversation, and `joinBit` marks a spot whose end
-   * message recruits a band member. The order is the saved SCARED/MET bit order: keep it.
+   * message recruits a band member. `sitTile` marks a crab that needs the Sit coax (Quest
+   * Helper's tile); any tile beside the loc counts (besideSpot). The order is the saved
+   * SCARED/MET bit order: keep it.
    */
   const SPOTS = [
     {
@@ -397,7 +413,7 @@ module.exports = function registerCrabQuestQuest(api) {
     },
     {
       objectId: CRAB_TREE_OBJECT_ID, x: 3036, y: 2644, rotation: 2,
-      sitTile: { x: 3037, y: 2643 }, // capture: player sits south of the 2x2 avium tree
+      sitTile: { x: 3038, y: 2644 }, // QH sitForCrabNine
       first: "crab-hunting-investigating-the-tree-north-west-of-the-magic-tree",
       variant: "crab-hunting-investigating-the-tree-north-west-of-the-magic-tree-sitting-by-the-palm",
       joinBit: 1 << 2,
@@ -845,6 +861,10 @@ module.exports = function registerCrabQuestQuest(api) {
           Scenes.later(player, intoDream ? GET_UP_DELAY : 0, () => {
             if (intoDream) player.performAnimation(new Animation(GET_UP_ANIMATION));
             Scenes.later(player, RESUME_DELAY, () => {
+              // 7330's last frame holds for 669 ticks and blocks movement in the client: the
+              // player stood frozen with the camera while the server walked them (issue 6670).
+              // Live stops it on the first line's tick (capture 20261103T014803, ticks 5962-5963).
+              if (intoDream) player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
               player.getMovementQueue().setBlockMovement(false);
               if (rest.length) playSteps(player, MAIN_CRAB_NPC_ID, rest);
             });
@@ -1396,6 +1416,7 @@ module.exports = function registerCrabQuestQuest(api) {
       return;
     }
     if (!CRAB_NPC_IDS.has(npcId) || !stepId) return;
+    if (event.kind === "message" && RECRUIT_MESBOX_TEXTS.has(event.text)) event.box = { statement: true };
     const joinedBit = JOINED_STEP_BITS.get(stepId);
     if (joinedBit !== undefined) {
       // Live shows the scutter as a message box (capture tick 6519).
@@ -1524,24 +1545,74 @@ module.exports = function registerCrabQuestQuest(api) {
     startTranscript(api, player, chatheadFor(spot), PAGE, spot.variant);
   }
 
-  /** The captured coax: after the too-scared line, Sit on the spot's tile. */
+  /**
+   * Whether a source tile touches the spot's loc (diagonals included) without being on it.
+   * Live coaxed the 2x2 avium tree at 3046,2656 from 3047,2655 (Quest Helper's tile is
+   * 3046,2655), and Quest Helper sits by the 1x1 palm at 3042,2637 from the diagonal 3041,2638.
+   * Ours: any such tile counts; no recording sits further away.
+   */
+  function besideSpot(spot, at) {
+    const definition = api.core.ObjectDefinition?.forId?.(spot.objectId);
+    const turned = spot.rotation === 1 || spot.rotation === 3;
+    const width = (turned ? definition?.getSizeY?.() : definition?.getSizeX?.()) ?? 1;
+    const length = (turned ? definition?.getSizeX?.() : definition?.getSizeY?.()) ?? 1;
+    const inside = at.x >= spot.x && at.x < spot.x + width && at.y >= spot.y && at.y < spot.y + length;
+    return at.z === 0 && !inside
+      && at.x >= spot.x - 1 && at.x <= spot.x + width && at.y >= spot.y - 1 && at.y <= spot.y + length;
+  }
+
+  // A sit waiting for its crab, per player: the spot, the source tile and a token for the timer.
+  const sitWaits = new Map();
+
+  /** The captured coax: after the too-scared line, Sit beside the hiding place and wait. */
   function handleEmote(event) {
     const { player, slot } = event;
-    if (!player || slot !== SIT_EMOTE_SLOT) return;
+    if (!player) return;
+    // Any other emote stands the player up; the crab stays hidden.
+    if (slot !== SIT_EMOTE_SLOT) {
+      sitWaits.delete(player);
+      return;
+    }
+    const spot = coaxableSpot(player);
+    if (!spot) {
+      sitWaits.delete(player);
+      return;
+    }
+    if (sitWaits.get(player)?.spot === spot) return; // already waiting here
+    // The spots are in source coordinates; in the dream the player stands on instance tiles.
+    const here = Dream.toSource(player, player.getLocation());
+    const wait = { spot, x: here.x, y: here.y };
+    sitWaits.set(player, wait);
+    player.sendMessage(SIT_WAIT_TEXT);
+    const ticks = spot.objectId === CRAB_MAGIC_TREE_OBJECT_ID ? MAGIC_TREE_SIT_WAIT_TICKS : SIT_WAIT_TICKS;
+    Scenes.later(player, ticks, () => crabAppears(player, wait));
+  }
+
+  /** The scared, not yet coaxed recruit the player is sitting beside, if any. */
+  function coaxableSpot(player) {
     const stage = quest.getStage(player);
-    if (quest.isComplete(player) || stage < STAGE_RECRUITING || stage >= STAGE_ALL_LEADERS) return;
-    const here = player.getLocation();
+    if (quest.isComplete(player) || stage < STAGE_RECRUITING || stage >= STAGE_ALL_LEADERS) return null;
+    const here = Dream.toSource(player, player.getLocation());
     for (const spot of SPOTS) {
       if (!spot.sitTile || spot.joinBit === undefined) continue;
       if (hasFlag(player, RECRUITED_ATTRIBUTE, spot.joinBit)) continue;
       const bit = spotBit(spot);
       if (hasFlag(player, MET_ATTRIBUTE, bit) || !hasFlag(player, SCARED_ATTRIBUTE, bit)) continue;
-      if (here.getX() !== spot.sitTile.x || here.getY() !== spot.sitTile.y || here.getZ() !== 0) continue;
-      setFlag(player, MET_ATTRIBUTE, bit);
-      player.sendMessage("And now, you wait...");
-      startTranscript(api, player, chatheadFor(spot), PAGE, spot.variant);
-      return;
+      if (besideSpot(spot, here)) return spot;
     }
+    return null;
+  }
+
+  /** The wait is over: the crab comes out if the player is still sitting where they sat. */
+  function crabAppears(player, wait) {
+    if (sitWaits.get(player) !== wait) return;
+    sitWaits.delete(player);
+    const here = Dream.toSource(player, player.getLocation());
+    if (here.x !== wait.x || here.y !== wait.y || coaxableSpot(player) !== wait.spot) return;
+    setFlag(player, MET_ATTRIBUTE, spotBit(wait.spot));
+    const steps = variantSteps(wait.spot.variant);
+    const waitIndex = steps.findIndex((step) => step?.type === "message" && step.text === SIT_WAIT_TEXT);
+    playSteps(player, chatheadFor(wait.spot), steps.slice(waitIndex + 1));
   }
 
   // ==========================================================================
@@ -1664,6 +1735,7 @@ module.exports = function registerCrabQuestQuest(api) {
     // end it: stop it here, or it would build and play for an offline player.
     Ceremony.end(player, true);
     netting.delete(player);
+    sitWaits.delete(player);
     Scenes.cancel(player);
     Scenes.closeFade(player);
   }

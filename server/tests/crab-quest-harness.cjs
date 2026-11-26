@@ -26,6 +26,10 @@ function setup() {
   let area = null;
   let currentDialogue = null;
   let location = { x: 3041, y: 2638, z: 0 };
+  const blocked = new Set(); // "x,y" tiles the player cannot step onto
+  const sounds = [];
+  const graphics = [];
+  const projectiles = [];
   const core = {
     ...PluginManager.getCoreApi(),
     ObjectManager: {
@@ -92,6 +96,9 @@ function setup() {
     sendInterface() { return sender; },
     sendInterfaceScript() { return sender; },
     sendInterfaceRemoval() { return sender; },
+    sendSound(id, volume, delay) { sounds.push([id, delay]); return sender; },
+    sendGraphic(graphic, at) { graphics.push([graphic.id, graphic.delay, at.getX(), at.getY()]); return sender; },
+    sendProjectile(from, to, offset, speed, id) { projectiles.push([id, from.getX(), from.getY(), to.getX(), to.getY(), speed]); return sender; },
   }, { get(target, key) { return target[key] ?? (() => sender); } });
   const player = {
     getAttribute: (key) => attrs.get(key),
@@ -117,7 +124,13 @@ function setup() {
     getArea: () => area,
     setArea: (value) => { area = value; },
     getPrivateArea: () => area instanceof core.PrivateArea ? area : null,
-    getMovementQueue: () => ({ reset() { return this; }, setBlockMovement() { return this; }, addFirstStep() { return true; } }),
+    getMovementQueue: () => ({
+      reset() { return this; },
+      setBlockMovement() { return this; },
+      addFirstStep() { return true; },
+      canWalk(dx, dy) { const at = player.getLocation(); return !blocked.has(`${at.getX() + dx},${at.getY() + dy}`); },
+      walkStep(dx, dy) { const at = player.getLocation(); location = { x: at.getX() + dx, y: at.getY() + dy, z: at.getZ() }; },
+    }),
     setUntargetable() {},
     performGraphic(graphic) { player.graphics = [...(player.graphics ?? []), graphic.getId?.() ?? graphic.id]; },
     performAnimation(animation) { player.animations = [...(player.animations ?? []), animation.getId?.() ?? animation.id]; },
@@ -152,7 +165,7 @@ function setup() {
     player.moveTo({ x, y, z: 0 });
     emit('player:emote', { slot, sequence: SIT_LOOP });
   };
-  return { cameras, mounts, core, hooks, attrs, inventory, messages, persistentKeys, placed, spawned, removed, tasks, xp, varbits, varValues, groundItems, player, loadQuest, emit, investigate, pickup, sit, tick, setLocation(x, y) { location = { x, y, z: 0 }; }, get area() { return area; }, get currentDialogue() { return currentDialogue; } };
+  return { blocked, sounds, graphics, projectiles, cameras, mounts, core, hooks, attrs, inventory, messages, persistentKeys, placed, spawned, removed, tasks, xp, varbits, varValues, groundItems, player, loadQuest, emit, investigate, pickup, sit, tick, setLocation(x, y) { location = { x, y, z: 0 }; }, get area() { return area; }, get currentDialogue() { return currentDialogue; } };
 }
 
 /**

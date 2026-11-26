@@ -194,7 +194,7 @@ test('the shy crab comes out of her palm, blushes and scutters to 3055,2650 only
   const h = setup();
   const offset = dream(h, 47);
   h.investigate(62472, 3044 + offset.dx, 2653 + offset.dy); // crab_palm_update03
-  assert.ok(h.messages.includes('A crab comes out shyly.'));
+  assert.ok(h.currentDialogue, 'A crab comes out shyly. (a message box since #6819)');
   const found = h.spawned.filter((npc) => npc.getId() === 16484).at(-1);
   assert.deepEqual(sourceOf(offset, found.definition.x, found.definition.y), [3045, 2653], 'captured shy spawn tile');
   assert.equal(valueOf(h, 15865), 0, 'finding her does not publish shy progress');

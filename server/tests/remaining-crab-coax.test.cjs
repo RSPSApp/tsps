@@ -308,3 +308,107 @@ test('review #6819: a Sit on the real beach coaxes nothing; the hiding places ar
   assert.equal(d.h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'no crab on the real beach');
   assert.ok(!d.h.messages.slice(before).includes('And now, you wait...'), 'no wait message');
 });
+
+// The crab that comes out (capture 20261103T014803, ticks 6256-6519): added by its hiding place as
+// "A crab appears!" opens, the player steps straight beside it when the box is continued, and it
+// goes when it scutters off to practice.
+const appears = (d, npcId = 16483, text = 'A crab appears!') => {
+  const event = { npcId, stepId: 'probe-appears', kind: 'message', text };
+  d.h.emit('npc-dialogue:action', event);
+  return event;
+};
+const where = (d) => { const at = d.h.player.getLocation(); return [at.getX(), at.getY()]; };
+
+test('the plant\'s crab comes out on its captured tile and the player steps west off it (ticks 6292-6293)', () => {
+  const d = dreaming();
+  d.setLocation(3053, 2656);
+  d.investigate(62477, 3054, 2656);
+  const event = appears(d);
+  const crab = d.h.spawned.find((npc) => npc.definition.id === 16483 && npc.registered
+    && npc.definition.x === d.at(3053, 2656)[0] && npc.definition.y === d.at(3053, 2656)[1]);
+  assert.ok(crab, 'crab_bandcrab added on 3053,2656');
+  assert.deepEqual(event.box, { statement: true });
+  event.after();
+  assert.deepEqual(where(d), d.at(3052, 2656), 'one step west');
+});
+
+test('with its west tile blocked by the palm, the player steps east instead (ticks 6473-6475)', () => {
+  const d = dreaming();
+  d.setLocation(3041, 2649);
+  d.h.blocked.add(d.at(3040, 2649).join());
+  d.investigate(62470, 3040, 2649);
+  const event = appears(d);
+  event.after();
+  assert.deepEqual(where(d), d.at(3042, 2649), 'one step east');
+});
+
+test('a crab no recording reached comes out on the player\'s tile (Ours); its scutter removes it', () => {
+  const d = dreaming();
+  d.setLocation(3051, 2635); // east of the 2x2 western bush at 3049,2635
+  d.h.blocked.add(d.at(3050, 2635).join());
+  d.investigate(62478, 3049, 2635);
+  const event = appears(d);
+  const crab = d.h.spawned.filter((npc) => npc.definition.id === 16483 && npc.registered)
+    .find((npc) => npc.definition.x === d.at(3051, 2635)[0] && npc.definition.y === d.at(3051, 2635)[1]);
+  assert.ok(crab, 'on the player\'s tile');
+  event.after();
+  assert.deepEqual(where(d), d.at(3052, 2635), 'east, the bush being west');
+  const scutter = { npcId: 16483, stepId: 'UtfH3c', kind: 'message', text: 'The crab serenely scutters away to practise.' };
+  d.h.emit('npc-dialogue:action', scutter);
+  assert.deepEqual(scutter.box, { statement: true });
+  assert.equal(crab.registered, false, 'gone when it scutters');
+  assert.ok(d.h.spawned.some((npc) => npc.definition.id === 16483 && npc.registered), 'and practising on the beach');
+});
+
+test('the penguin: kicked into the sea on the captured ticks, then the crab comes out (6256-6277)', () => {
+  const d = dreaming();
+  d.setLocation(3048, 2657);
+  d.h.blocked.add(d.at(3048, 2658).join());
+  d.investigate(62470, 3048, 2658);
+  const shown = appears(d, 16485, "A 'crab' appears!");
+  const penguin = d.h.spawned.find((npc) => npc.definition.id === 16485 && npc.registered);
+  assert.deepEqual([penguin.definition.x, penguin.definition.y], d.at(3049, 2658), "'Crab' on 3049,2658");
+  shown.after();
+  assert.deepEqual(where(d), d.at(3049, 2657), 'from the diagonal to its south');
+
+  const kick = { npcId: 16485, stepId: 'S6fPkj', kind: undefined, text: 'The player kicks the penguin into the ocean.' };
+  d.h.emit('npc-dialogue:action', kick);
+  let resumed = false;
+  kick.wait(() => { resumed = true; });
+  assert.ok(d.h.player.animations.includes(423), 'human_unarmedkick');
+  assert.deepEqual(d.h.sounds.at(-1), [2565, 10]);
+  d.h.tick(1);
+  assert.equal(penguin.registered, false, 'gone the next tick');
+  const [fromX, fromY] = d.at(3049, 2658);
+  assert.deepEqual(d.h.projectiles.at(-1), [4022, fromX, fromY, fromX, fromY + 20, 250]);
+  assert.deepEqual(d.h.graphics.at(-1), [68, 250, fromX, fromY + 20]);
+  d.h.tick(1);
+  assert.equal(d.h.varValues.get(15867), 1, 'crab_kicked_penguin');
+  d.h.tick(8);
+  assert.equal(resumed, false, 'the crab is not out yet');
+  d.h.tick(1);
+  assert.equal(resumed, true, 'the conversation carries on 11 ticks after the kick');
+  appears(d);
+  const crab = d.h.spawned.filter((npc) => npc.definition.id === 16483 && npc.registered).at(-1);
+  assert.deepEqual([crab.definition.x, crab.definition.y], d.at(3049, 2658));
+});
+
+test('the shy crab\'s narration is message boxes, and the player steps up to her (ticks 6228-6250)', () => {
+  const d = dreaming();
+  d.setLocation(3044, 2652);
+  d.h.blocked.add(d.at(3044, 2653).join());
+  const out = { npcId: 16484, stepId: 'shy-crab-out', kind: 'message', text: '' };
+  d.investigate(62472, 3044, 2653);
+  d.h.emit('npc-dialogue:action', out);
+  assert.deepEqual(out.box, { statement: true });
+  assert.equal(out.text, 'A crab comes out shyly.');
+  out.after();
+  assert.deepEqual(where(d), d.at(3045, 2652), 'beside her, south of 3045,2653');
+  for (const [stepId, text] of [['shy-crab-blush', 'The crab appears to turn bright red.'], ['shy-crab-scutter', 'The crab scutters away.']]) {
+    const event = { npcId: 16484, stepId, kind: 'message', text: '' };
+    d.h.emit('npc-dialogue:action', event);
+    assert.deepEqual(event.box, { statement: true }, stepId);
+    assert.equal(event.text, text);
+  }
+  assert.ok(!d.h.messages.includes('The crab appears to turn bright red.'), 'not a chat message any more');
+});

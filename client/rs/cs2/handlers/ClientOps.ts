@@ -300,8 +300,7 @@ export function registerClientOps(handlers: HandlerMap): void {
     // world we are on, which they mark as the current world; 301 while there is no list to say.
     handlers.set(Opcodes.MAP_WORLD, (ctx) => {
         const inWorldSwitcher = (ctx.activeWidget?.groupId ?? -1) === WORLDSWITCHER_GROUP;
-        ctx.pushInt((inWorldSwitcher ? ctx.worldList?.currentWorld() : undefined) ?? 301);
-        ctx.pushInt(LOCAL_WORLD);
+        ctx.pushInt((inWorldSwitcher ? ctx.worldList?.currentWorld() : undefined) ?? LOCAL_WORLD);
     });
 
     handlers.set(Opcodes.MAP_MEMBERS, (ctx) => {

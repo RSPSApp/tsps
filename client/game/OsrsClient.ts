@@ -4640,6 +4640,8 @@ export class OsrsClient {
         if (!this.chatboxQuestion) return;
         this.chatboxQuestion = undefined;
         this.worldSwitcher.questionReplaced();
+    }
+
     private mobilePopoutLayoutQueued = false;
 
     /**

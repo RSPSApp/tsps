@@ -2,7 +2,7 @@ import { markWidgetInteractionDirty } from "../../widgets/WidgetInteraction";
 import { EMOTE_SHORTCUT_SCRIPT_ID, isEmoteShortcut } from "./EmoteShortcuts";
 import { GAMEFRAME_LAYOUT_SETTING, GAMEFRAME_317_OPTION, GAMEFRAME_317_FIXED_OPTION, SETTINGS_GET_SELECTED_SCRIPT, VARP_GAMEFRAME_317 } from "../../common/ui/gameframeLayout";
 import type { FriendsChatAction } from "../../common/social/FriendsChat";
-import type { ClanChannel, ClanSettings } from "./handlers/HandlerTypes";
+import type { ClanChannel, ClanSettings, Cs2WorldList } from "./handlers/HandlerTypes";
 import { loadGroupForCs2Lookup, type WidgetManager, type WidgetNode } from "../../widgets/WidgetManager";
 import type { TypeLoader } from "../config/TypeLoader";
 import type { DbRepository } from "../config/db/DbRepository";
@@ -261,6 +261,8 @@ export interface Cs2Context {
      * Called by `LOGOUT` opcode (5630) when player clicks logout button.
      */
     requestLogout?: () => void;
+    /** The world list behind WORLDLIST_* and MAP_WORLD (the World Switcher); none: no worlds. */
+    worldList?: Cs2WorldList;
     /**
      * Send IF_CLOSE packet to the server.
      * () sends IF_CLOSE when deferred close executes.
@@ -1256,6 +1258,10 @@ export class Cs2Vm {
 
             // Logout request
             requestLogout: vm.context.requestLogout,
+
+            get worldList() {
+                return vm.context.worldList;
+            },
         } as HandlerContext;
     }
 

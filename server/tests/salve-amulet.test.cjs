@@ -116,3 +116,67 @@ test("a salve amulet suppresses the slayer helmet bonus on undead targets", () =
   const living = createPlayer({ amulet: ItemIdentifiers.SALVE_AMULET_E_, head: ItemIdentifiers.SLAYER_HELMET, undead: false });
   assert.equal(modifiers.meleeHit(living, 42), 49, "against living targets the helmet still applies");
 });
+
+test('salve scroll imbues use Arena IDs, consume one scroll, preserve metadata and refund only their own method',()=>{
+ const {Item}=require('../dist/game/model/Item');
+ const I=require('../dist/util/ItemIdentifiers').ItemIdentifiers;
+ let use,yes;const actions=new Map();
+ require('../plugins/items/SalveAmulet.plugin').register({core:{Item,ItemIdentifiers:I},
+  onItemOnItem:h=>use=h,onItemAction:(name,a)=>actions.set(name,a.Uncharge),
+  sendMultiChatboxPrompt:(p,title,y,accept)=>yes=accept});
+ function fixture(base,scrollId=I.SCROLL_OF_IMBUING){
+  const item=new Item(base,1,{sentinel:true}),scroll=new Item(scrollId,2);const items=[item,scroll];let space=true;
+  const inventory={getItems:()=>items,deleteNumber:(id,n)=>{const x=items.find(i=>i.getId()===id);x.setAmount(x.getAmount()-n);},
+   refreshItems:()=>{},getAddableAmount:()=>space?1:0,full:()=>{},add:x=>items.push(x)};
+  return {item,scroll,items,p:{getInventory:()=>inventory,sendMessage:()=>{}},space:v=>space=v};
+ }
+ for(const [base,result] of [[I.SALVE_AMULET,I.SALVE_AMULET_I__5],[I.SALVE_AMULET_E_,I.SALVE_AMULET_EI__5]])
+ for(const reverse of [false,true]) for(const scrollId of [I.SCROLL_OF_IMBUING,I.SCROLL_OF_IMBUING_2]){
+  const f=fixture(base,scrollId);const e={player:f.p,usedItem:reverse?f.item:f.scroll,usedWithItem:reverse?f.scroll:f.item,
+   usedItemId:reverse?base:scrollId,usedWithItemId:reverse?scrollId:base};use(e);
+  assert.equal(e.handled,true);assert.equal(f.item.getId(),result);assert.equal(f.scroll.getAmount(),1);assert.equal(f.item.getMetaValue('sentinel'),true);
+  const uncharge=actions.get(base===I.SALVE_AMULET?'Salve amulet(i)':'Salve amulet(ei)');
+  assert.equal(uncharge({player:f.p,item:f.item}),true);f.space(false);yes();assert.equal(f.item.getId(),result);
+  f.space(true);yes();assert.equal(f.item.getId(),base);assert.equal(f.items.at(-1).getId(),I.SCROLL_OF_IMBUING);
+  const length=f.items.length;yes();assert.equal(f.items.length,length,'stale confirmation cannot refund twice');
+ }
+ for(const id of [I.SALVE_AMULET_I_,I.SALVE_AMULET_EI_,I.SALVE_AMULET_I__3,I.SALVE_AMULET_EI__3]){
+  const f=fixture(id);assert.equal(actions.get('Salve amulet(i)')({player:f.p,item:f.item}),false);
+ }
+ const f=fixture(I.SALVE_AMULET);f.items.splice(1,1);const e={player:f.p,usedItem:f.scroll,usedWithItem:f.item,usedItemId:I.SCROLL_OF_IMBUING,usedWithItemId:I.SALVE_AMULET};
+ use(e);assert.equal(f.item.getId(),I.SALVE_AMULET);assert.notEqual(e.handled,true,'missing scroll cannot imbue');
+});
+
+// Exercise real API registration and dispatch: an invented API method must fail this test.
+test('salve Uncharge registers and dispatches through the real PluginManager API', async (t) => {
+  const { PluginManager: PM } = require('../dist/plugins/PluginManager');
+  const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
+  const { CachePipeline } = require('../dist/game/cache/CachePipeline');
+  const { Item } = require('../dist/game/model/Item');
+  const I = ItemIdentifiers;
+  const api = PM.createApi('SalveAmulet');
+  let confirm;
+  t.mock.method(api, 'sendMultiChatboxPrompt', (player, title, yes, accept) => { confirm = accept; });
+  await CachePipeline.initialize();
+  const actions = PM.itemActionHooks.length, items = PM.itemOnItemHooks.length;
+  t.after(() => { PM.itemActionHooks.length = actions; PM.itemOnItemHooks.length = items; });
+  assert.doesNotThrow(() => require('../plugins/items/SalveAmulet.plugin').register(api));
+  for (const [imbued, base] of [[I.SALVE_AMULET_I__5, I.SALVE_AMULET], [I.SALVE_AMULET_EI__5, I.SALVE_AMULET_E_]]) {
+    const item = new Item(imbued, 1), inventoryItems = [item];
+    const inventory = { getItems: () => inventoryItems, getAmount: () => 1, getAddableAmount: () => 1,
+      add: scroll => inventoryItems.push(scroll), refreshItems() {} };
+    const player = { getInventory: () => inventory };
+    const clickType = CacheDefinitions.getItem(imbued).inventoryActions.indexOf("Uncharge") + 1;
+    assert.ok(clickType > 0, "live cache exposes Uncharge");
+    const event = {player, item, itemId: imbued, slot: 0, clickType, interfaceId: 3214, handled: false};
+    confirm = undefined;
+    assert.equal(PM.emitItemAction(event), true);
+    assert.equal(typeof confirm, 'function', 'real Uncharge dispatch reaches the confirmation');
+    confirm();
+    assert.equal(item.getId(), base);
+    assert.equal(inventoryItems[1].getId(), I.SCROLL_OF_IMBUING);
+    assert.equal(inventoryItems[1].getAmount(), 1);
+    confirm();
+    assert.equal(inventoryItems.length, 2, 'same confirmation cannot refund twice');
+  }
+});

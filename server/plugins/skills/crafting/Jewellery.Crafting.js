@@ -81,8 +81,8 @@ function data() {
     perfect: perfect.recipes.map((recipe) => ({
       ...recipe, itemId: Shared.itemId(recipe.item), mouldId: Shared.itemId(recipe.mould),
     })),
-    strung: new Map(strungAmulets.pairs.map(([unstrung, strung, noun = "amulet", material = "BALL_OF_WOOL"]) =>
-      [`${Shared.itemId(material)}:${Shared.itemId(unstrung)}`, { itemId: Shared.itemId(strung), noun }])),
+    strung: new Map(strungAmulets.pairs.map(([unstrung, strung, noun = "amulet", material = "BALL_OF_WOOL", xp = strungAmulets.xp]) =>
+      [`${Shared.itemId(material)}:${Shared.itemId(unstrung)}`, { itemId: Shared.itemId(strung), noun, xp }])),
     stringXp: strungAmulets.xp,
     animation: new Animation(FURNACE_ANIMATION_ID),
     sound: new Sound(FURNACE_SOUND, 1, 0, 0),
@@ -330,9 +330,9 @@ function stringAmulet(event) {
     inventory.deleteNumber(materialId, 1);
     inventory.deleteNumber(unstrungId, 1);
     inventory.addItem(new Item(strung.itemId, 1));
-    Shared.addCraftingXp(player, data().stringXp);
+    Shared.addCraftingXp(player, strung.xp);
     Shared.spam(player, `You put some string on your ${strung.noun}.`);
-    Shared.produced(player, strung.itemId, 1, data().stringXp, "string", [[unstrungId, 1], [materialId, 1]]);
+    Shared.produced(player, strung.itemId, 1, strung.xp, "string", [[unstrungId, 1], [materialId, 1]]);
   });
 }
 

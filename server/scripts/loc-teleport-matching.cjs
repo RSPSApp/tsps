@@ -42,6 +42,31 @@ const NOISE = new RegExp([
   "^You squeeze", "^You climb over", "^You nimbly", "^and continue", "^You swing your pickaxe", "^Your stamina", "^You feel",
 ].join("|"));
 
+/**
+ * A crossing's lines that are something else going on: notifications the game colours (diary and
+ * Slayer task completions), level-ups, music unlocks, chat channels, food, potions, poison, desert thirst, League
+ * points, and lines with a number in them (the capture export blanks numbers out as `#`).
+ */
+const NOT_THE_CROSSING = new RegExp([
+  "^<col=", "#", "^Congratulations", "^Well done! You have completed", "^You have completed your task",
+  "^You have unlocked a new music track", "^Now talking in", "^To talk, start each line",
+  "^You drink some of", "^You have finished your potion", "^You eat ", "^It heals some health",
+  "^You have been poisoned", "^You have been venomed", "^You start dying of thirst", "^You should get a waterskin",
+  "^As an Ironman", "^Your stamina", "^You have earned", "League Points", "^Oh dear, you are dead",
+].join("|"));
+
+/**
+ * The lines live OSRS sends with a crossing (the capture export's `lines`: text, type, ticks from the
+ * teleport), as an entry's `messages`: `{ text, type: "spam" }` for the filterable channel, `afterMove`
+ * when not on the move's tick. Only a loc with one destination: a staircase's sides may say different things.
+ */
+function crossingLines(entry) {
+  if ((entry.destinations ?? []).length !== 1) return [];
+  return (entry.lines ?? [])
+    .filter(([text, type]) => (type === "spam" || type === "gamemessage") && !NOT_THE_CROSSING.test(text))
+    .map(([text, type, afterMove]) => ({ text, ...(type === "spam" ? { type } : {}), ...(afterMove ? { afterMove } : {}) }));
+}
+
 function refusals(entry) {
   return (entry.failures ?? []).map(([message]) => message).filter((message) => !NOISE.test(message));
 }
@@ -176,6 +201,8 @@ function toEntry(entry, { display, option, sequenceId, gate, asked }) {
   if (entry.fade) out.fade = true;
   if (gate?.requires) out.requires = gate.requires;
   if (gate?.mesbox) out.mesbox = gate.mesbox;
+  const lines = crossingLines(entry);
+  if (lines.length) out.messages = lines;
   if (asked) {
     out.ask = {
       prompt: asked.prompt,
@@ -187,4 +214,4 @@ function toEntry(entry, { display, option, sequenceId, gate, asked }) {
   return out;
 }
 
-module.exports = { dialogueFor, distinctDestinations, requirementFor, KINDS, isNetwork, sharesSide, refusals, skipDecision, choose, keyOf, toEntry };
+module.exports = { crossingLines, dialogueFor, distinctDestinations, requirementFor, KINDS, isNetwork, sharesSide, refusals, skipDecision, choose, keyOf, toEntry };

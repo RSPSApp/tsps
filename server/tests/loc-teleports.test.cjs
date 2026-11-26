@@ -108,6 +108,27 @@ test("an entry keeps the captured move, with whole ticks and a destination per s
   assert.deepEqual(stairs.sides, [{ from: [3, 3, 0], to: [1, 2, 1] }, { from: [9, 9, 0], to: [5, 6, 1] }]);
 });
 
+test("an entry takes the crossing's captured lines, each on its tick from the move, but no notifications", () => {
+  const lines = [
+    ["You climb down through the trapdoor...", "spam", 0, 4],
+    ["... and enter a dimly lit cavern area.", "spam", 1, 3],
+    ["<col=dc#c>Well done! You have completed an easy task in the Lumbridge & Draynor area.</col>", "gamemessage", 1, 3],
+    ["You have unlocked a new music track: <col=ff#>Monster Melee", "gamemessage", 1, 3],
+    ["You board the boat and wave to Mac.", "gamemessage", -2, 3],
+    ["You have # doses of potion left.", "gamemessage", 0, 3],
+  ];
+  const entry = toEntry(captured({ teleport_tick: 0, lines }), { display: "Trapdoor", option: "Climb-down" });
+  assert.deepEqual(entry.messages, [
+    { text: "You climb down through the trapdoor...", type: "spam" },
+    { text: "... and enter a dimly lit cavern area.", type: "spam", afterMove: 1 },
+    { text: "You board the boat and wave to Mac.", afterMove: -2 },
+  ]);
+  // A staircase's two sides may say different things: no lines.
+  const stairs = toEntry(captured({ lines, destinations: [{ x: 1, y: 2, z: 1, from: [[3, 3, 0]] }, { x: 5, y: 6, z: 1, from: [[9, 9, 0]] }] }), { display: "Stairs", option: "Climb" });
+  assert.equal(stairs.messages, undefined);
+  assert.equal(toEntry(captured({}), { display: "Cave", option: "Enter" }).messages, undefined);
+});
+
 // The sync records the first sound a capture heard around the climb, and with a fight nearby that is the fight's
 // (#2595: a hurt sound on stairs). loc-teleport-sync.json's ignoreSounds lists the Wiki-named attack, hit, block and
 // weapon sounds; toEntry skips them and takes the first sound that is not one, or none.
@@ -1204,6 +1225,47 @@ test("the Troll Stronghold's roof ladder says where you clamber, both ways, as c
     ["message game You clamber back inside the Troll Stronghold.", "move 2831,10076,2"],
     [],
   ]);
+});
+
+test("the H.A.M. Hideout's trapdoor and ladder say their captured lines, the second a tick after the move", () => {
+  // Captured (227/1723 ticks 8630-8631, 232/3199): "You climb down through the trapdoor..." with the move,
+  // "... and enter a dimly lit cavern area." a tick later; the ladder's "You climb up the ladder." with the
+  // move and "You leave the HAM Fanatics' Camp." a tick later, all spam.
+  const down = data.locs.find((entry) => entry.name === "ham_multi_trapdoor");
+  const up = data.locs.find((entry) => entry.name === "osf_ham_ladder");
+  assert.deepEqual(down.messages, [
+    { text: "You climb down through the trapdoor...", type: "spam" },
+    { text: "... and enter a dimly lit cavern area.", type: "spam", afterMove: 1 },
+  ]);
+  assert.deepEqual(up.messages, [
+    { text: "You climb up the ladder.", type: "spam" },
+    { text: "You leave the HAM Fanatics' Camp.", type: "spam", afterMove: 1 },
+  ]);
+  const spam = (text) => `message ${core.ChatType.SPAM} ${text}`;
+  const climbed = climbWithMessages(locAt(5493, 3149, 9653, 0), [3149, 9652, 0], 3);
+  const moved = climbed.findIndex((tick) => tick.includes("move 3165,3251,0"));
+  assert.ok(moved >= 0, "climbs up");
+  assert.deepEqual(climbed[moved], [spam("You climb up the ladder."), "move 3165,3251,0"]);
+  assert.deepEqual(climbed[moved + 1], [spam("You leave the HAM Fanatics' Camp.")]);
+  const descended = climbWithMessages(locAt(5492, 3166, 3252, 0), [3166, 3251, 0], 4);
+  const landed = descended.findIndex((tick) => tick.includes("move 3149,9652,0"));
+  assert.ok(landed >= 0, "climbs down");
+  const spamOn = (tick) => descended[tick].filter((line) => line.startsWith(`message ${core.ChatType.SPAM}`));
+  assert.deepEqual(spamOn(landed), [spam("You climb down through the trapdoor...")]);
+  assert.deepEqual(spamOn(landed + 1), [spam("... and enter a dimly lit cavern area.")]);
+});
+
+test("a crossing's lines after the move are not sent when the move didn't land", () => {
+  const visit = explorer([3149, 9652, 0]);
+  const said = [];
+  visit.player.getPacketSender().sendTypedMessage = () => {};
+  const sender = visit.player.getPacketSender();
+  visit.player.getPacketSender = () => new Proxy(sender, { get: (target, key) => (key === "sendTypedMessage" ? (type, text) => (said.push(text), target) : target[key]) });
+  visit.player.moveTo = () => visit.player; // something keeps the player where they are
+  const event = { player: visit.player, object: locAt(5493, 3149, 9653, 0), objectId: 5493, clickType: 1, handled: false };
+  hooks.object(event);
+  runTicks(visit, 3);
+  assert.deepEqual(said, ["You climb up the ladder."]);
 });
 
 test("the Troll Stronghold's roof ladder can't be climbed before My Arm's Big Adventure is started (Wiki)", () => {

@@ -34,8 +34,11 @@
  *
  * Each plays its captured animation, sound and fade, and moves the player (or swaps the loc) on
  * the captured tick. An entry's `message` (with `messageType` "spam" for the filterable channel)
- * (or a list of them, sent in order) is the game message live OSRS sends on a successful crossing, on the move's tick, before it. Ticks in the data count from the player arriving at the loc; the click is
- * handled on the tick after that, as Ladders' climbs are.
+ * (or a list of them, sent in order) is the game message live OSRS sends on a successful crossing, on the move's tick, before it.
+ * `messages` are the captured lines of a crossing, each on its own tick: `{ text, type, afterMove }`, `type`
+ * "spam" for the filterable channel and `afterMove` the ticks from the move (negative: before it; none: on it).
+ * Lines after the move are sent only once the player has landed. Ticks in the data count from the player
+ * arriving at the loc; the click is handled on the tick after that, as Ladders' climbs are.
  *
  * Not members-only: free-to-play ladders are in the data too. On a free-to-play world,
  * FreeToPlay moves anyone who ends up in a members area back to free land.
@@ -182,6 +185,26 @@ function sayCrossed(player, { message, messageType }) {
   }
 }
 
+/** One captured line of a crossing: spam (the chat filter hides it) or a plain game message. */
+function sayLine(player, { text, type }) {
+  if (type === "spam") player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, text);
+  else player.sendMessage(text);
+}
+
+/** The lines after the move, each on its tick; they don't hold the player's movement. */
+function sayAfterMove(player, lines) {
+  const { Task, TaskManager } = core;
+  for (const line of lines) {
+    TaskManager.submit(new (class extends Task {
+      constructor() { super(line.afterMove, player, false); }
+      execute() {
+        if (player.isRegistered()) sayLine(player, line);
+        this.stop();
+      }
+    })());
+  }
+}
+
 /** `soundDelay`: the sound's client delay as captured (synth_sound delay), 0 when not given. */
 function animateAndSound(player, { anim, sound, soundDelay = 0 }) {
   if (anim !== undefined) player.performAnimation(new core.Animation(anim));
@@ -214,12 +237,19 @@ function travel(player, entry, destination, answer = null) {
   });
   if (entry.fade) at(animTick + 1, () => player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_OFF));
   if (entry.message) at(moveTick, () => sayCrossed(player, entry));
+  const lines = entry.messages ?? [];
+  // Lines up to the move: before it on its tick, none before the click is handled.
+  for (const line of lines.filter(({ afterMove = 0 }) => afterMove <= 0)) {
+    at(Math.max(animTick, moveTick + (line.afterMove ?? 0)), () => sayLine(player, line));
+  }
   at(moveTick, () => {
     const landing = new core.Location(destination[0], destination[1], destination[2]);
     player.moveTo(landing);
-    if (player.getLocation().equals(landing)) pluginApi.emitCustomEvent("loc-teleports:arrived", {
+    if (!player.getLocation().equals(landing)) return;
+    pluginApi.emitCustomEvent("loc-teleports:arrived", {
       player, objectId: entry.id, location: { x: entry.x, y: entry.y, z: entry.z },
     });
+    sayAfterMove(player, lines.filter(({ afterMove = 0 }) => afterMove > 0));
   });
   // With `fadeInTicks`, the player may walk again a tick after the fade back in, before the overlay closes
   // (233/03234.txt: the lift's move on 301, fade in 303, the first run step 304, overlay closed 305).

@@ -32,7 +32,7 @@ const OWN_PLUGIN = "LocTeleports";
 /** Ticks a probe waits for the move (the slowest captured loc teleports in 9). */
 const PROBE_TICKS = 15;
 
-const { choose, keyOf, toEntry, requirementFor, dialogueFor } = require("./loc-teleport-matching.cjs");
+const { choose, keyOf, toEntry, requirementFor, dialogueFor, crossingLines } = require("./loc-teleport-matching.cjs");
 
 function argValue(flag) {
   const index = process.argv.indexOf(flag);
@@ -218,7 +218,8 @@ async function main() {
   const captures = JSON.parse(fs.readFileSync(capturesFile, "utf8")).locs.filter((entry) => Number.isInteger(entry.id));
   const decisions = JSON.parse(fs.readFileSync(DECISIONS_FILE, "utf8"));
   const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-  if (format(data) !== fs.readFileSync(DATA_FILE, "utf8")) throw new Error(`${DATA_FILE} isn't in the expected one-loc-per-line format; not touching it`);
+  // A Windows checkout may have CRLF line ends (git converts them back on commit).
+  if (format(data) !== fs.readFileSync(DATA_FILE, "utf8").replace(/\r\n/g, "\n")) throw new Error(`${DATA_FILE} isn't in the expected one-loc-per-line format; not touching it`);
   const existing = new Set(data.locs.map((entry) => keyOf(entry.x, entry.y, entry.z, entry.op)));
 
   const PluginManager = await bootWorld();
@@ -265,17 +266,30 @@ async function main() {
     return { ...rest, ...(requires ? { requires } : {}), ...(mesbox ? { mesbox } : {}), recordings };
   });
 
-  console.log(`Captured locs: ${captures.length}; already in the data: ${existing.size}; to add: ${added.length}; gates changed on existing entries: ${gated}`);
+  // A crossing's lines are captured data: they apply to entries already in the data too. An entry
+  // whose `message` was set by hand keeps it and gets no `messages`.
+  const captured = new Map(captures.map((entry) => [`${entry.name}:${keyOf(entry.x, entry.y, entry.z, entry.op)}`, entry]));
+  let voiced = 0;
+  const locsWithLines = gatedLocs.map((entry) => {
+    const capture = captured.get(`${entry.name}:${keyOf(entry.x, entry.y, entry.z, entry.op)}`);
+    const lines = capture && entry.message === undefined && !entry.sides ? crossingLines(capture) : entry.messages ?? [];
+    if (JSON.stringify(entry.messages ?? []) === JSON.stringify(lines)) return entry;
+    voiced++;
+    const { messages: oldMessages, recordings, ...rest } = entry;
+    return { ...rest, ...(lines.length ? { messages: lines } : {}), recordings };
+  });
+
+  console.log(`Captured locs: ${captures.length}; already in the data: ${existing.size}; to add: ${added.length}; gates changed on existing entries: ${gated}; messages changed on existing entries: ${voiced}`);
   for (const [reason, count] of [...reasons].sort((a, b) => b[1] - a[1])) console.log(`  left out, ${reason}: ${count}`);
   const byKind = new Map();
   for (const entry of added) byKind.set(entry.display, (byKind.get(entry.display) ?? 0) + 1);
   console.log(`  to add by name: ${[...byKind].sort((a, b) => b[1] - a[1]).map(([name, count]) => `${name} ${count}`).join(", ")}`);
   if (reportFile) fs.writeFileSync(reportFile, JSON.stringify({ generated: new Date().toISOString().slice(0, 10), locs: report }));
   if (!write) {
-    console.log(added.length || gated ? "Dry run: add --write to write them." : "Nothing to add.");
+    console.log(added.length || gated || voiced ? "Dry run: add --write to write them." : "Nothing to add.");
     process.exit(0);
   }
-  const locs = [...gatedLocs, ...added].sort((a, b) => a.name.localeCompare(b.name) || a.x - b.x || a.y - b.y || a.z - b.z || a.op - b.op);
+  const locs = [...locsWithLines, ...added].sort((a, b) => a.name.localeCompare(b.name) || a.x - b.x || a.y - b.y || a.z - b.z || a.op - b.op);
   fs.writeFileSync(DATA_FILE, format({ ...data, locs }));
   console.log(`Added ${added.length} loc(s) to ${path.relative(process.cwd(), DATA_FILE)}.`);
   process.exit(0);

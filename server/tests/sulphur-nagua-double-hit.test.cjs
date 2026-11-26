@@ -165,3 +165,24 @@ test('a ticked fight: the special still holds the player, so a second nagua stay
   assert.deepEqual(refusedAfterSpecial.filter(r => !r), [], 'the player stays the first nagua\'s on every tick after the special');
   assert.equal(player.getCombat().getAttacker(), npc);
 });
+
+test('the special renews only its own hold: never one another single-way nagua has, but over an always-multi minion', t => {
+  const { player, npc } = actors(t, NAGUA);
+  const other = PluginManager.spawnNpc({ id: NAGUA, x: 3220, y: 3218, z: 0, wanderRadius: 0 });
+  other.setNeedsPlacement(false);
+  t.after(() => { other.getCombat().getHitQueue().clear(); PluginManager.removeNpc(other); });
+  const Plugin = require('../plugins/npcs/SulphurNagua.plugin');
+  t.mock.method(core.TaskManager, 'submit', () => {});
+  const special = () => {
+    Plugin._test.attacks.set(npc, Plugin._test.ATTACKS_BEFORE_SPECIAL);
+    npc.getCombat().nextAttackCycle = 0;
+    npc.getCombat().executeAttack(core.CombatFactory.getMethod(npc), player, true, 0, false);
+  };
+  player.getCombat().setUnderAttack(other);
+  special();
+  assert.equal(player.getCombat().getAttacker(), other, 'another single-way monster keeps the player');
+  other.setMultiCombat(true);
+  player.getCombat().setUnderAttack(other);
+  special();
+  assert.equal(player.getCombat().getAttacker(), npc, 'an always-multi holder never ties the player up');
+});

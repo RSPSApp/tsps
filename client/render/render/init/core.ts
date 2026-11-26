@@ -207,7 +207,10 @@ export async function init(host: WebGLOsrsRendererHost, ): Promise<void> {
             window.visualViewport?.addEventListener("scroll", host.onMobileLoginViewportChange);
         }
 
-        host.app = PicoGL.createApp(host.canvas);
+        // The default framebuffer only receives the composited frame texture and 2D overlays:
+        // depth is tested only in the offscreen scene target, and canvas MSAA would smooth
+        // nothing the UI does not already draw at native size. Both cost memory/fill rate.
+        host.app = PicoGL.createApp(host.canvas, { antialias: false, depth: false });
         // Ensure app dimensions are initialized from canvas
         (host.app as any).width = host.canvas.width;
         (host.app as any).height = host.canvas.height;

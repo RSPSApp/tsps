@@ -2,7 +2,9 @@
 
 The 2023 Wilderness boss rework: Callisto, Vet'ion and Venenatis in multi-combat lairs joined by the Escape Caves, their weaker variants Artio, Calvar'ion and Spindel in singles-plus lairs, one shared entry fee, and loot split between the players who fought. Scorpia beneath the Scorpion Pit is here too. Built from the [OSRS Wiki](https://oldschool.runescape.wiki/w/Wilderness_bosses) and live rsprox captures (<https://rsprox.net/database>).
 
-**The four captures used for the spider attack cycle** (Venenatis 3376 and 3377, Spindel 3364 and 3372) are revision 235 Grid Master runs with one player fighting each boss. The recordings inform animations, graphics, projectiles, lines, transformations and timings. Damage and loot values come from the Wiki because the captured worlds can modify them. Recordings used: Callisto 3293, 3294, 3332, 3334, 3335; Artio 829, 3286, 3295, 3297, 3300-3302; Vet'ion 3411; Calvar'ion 3403-3409; Venenatis 3376, 3377, 3383; Spindel 3362-3382; the entrances, exits and Escape Caves 829, 3293, 3336-3338. There is no capture of Scorpia's fight or her cave.
+**Every capture of these bosses is from a Leagues V world** (revisions 234-235): the bosses' own animations, graphics, projectiles, lines, transformations and timings carry over, but damage and loot numbers are skewed by relics, so those come from the Wiki. Recordings used: Callisto 3293, 3294, 3332, 3334, 3335; Artio 829, 3286, 3295, 3297, 3300-3302; Vet'ion 3411; Calvar'ion 3403-3409; Venenatis 3376, 3377, 3383; Spindel 3362-3382; the entrances, exits and Escape Caves 829, 3293, 3336-3338. There is no capture of Scorpia's fight or her cave.
+
+The spider attack cycle relies on Venenatis 3376 and 3377 and Spindel 3364 and 3372, revision 235 Grid Master runs with one player fighting each boss.
 
 The plugin is `server/plugins/bosses/WildernessBosses.plugin.js`, with its units in `server/plugins/bosses/wildernessbosses/` and its cave data in `server/plugins/bosses/data/wilderness-bosses.json`.
 

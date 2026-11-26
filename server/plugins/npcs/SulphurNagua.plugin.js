@@ -28,6 +28,11 @@ const SPECIAL_GRAPHIC = { delay: 75, height: 150 };
 /** The recorded prayer-drain hitsplat ([hit] id=59); the recording shows only the target's own view. */
 const DRAIN_SPLAT = { mine: 59, others: 59 };
 
+/** Wiki: the normal Sulphur Nagua gives 5% bonus combat XP; the quest variant does not. */
+function configureExperience({ npc }) {
+  if (npc?.getId?.() === SULPHUR_NAGUA) npc.setCombatXpMultiplier(1.05);
+}
+
 /** npc -> ordinary attacks since its last special, this life. */
 const attacks = new WeakMap();
 
@@ -90,6 +95,7 @@ module.exports = {
       }
     }
     api.registerNpcCombatMethodProvider(SULPHUR_NAGUA, SulphurNaguaMelee);
+    api.onCustomEvent("npc:added", configureExperience);
     api.onNpcDeath(({ npc }) => {
       if (npc?.getId?.() === SULPHUR_NAGUA) attacks.delete(npc);
     });

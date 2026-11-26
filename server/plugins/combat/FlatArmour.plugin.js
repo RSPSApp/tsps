@@ -38,23 +38,18 @@ function flatArmourOf(id) {
   return armourById.get(id) ?? 0;
 }
 
-/** onNpcHitModify: a player's landed melee or ranged splats lose (or gain) the target's flat armour. */
-function applyFlatArmour({ npc, hit }) {
-  const armour = flatArmourOf(npc?.getId?.());
+/** Final rolled splat, before the first HP cap and XP; content hit hooks still run at impact. */
+function applyFlatArmour({ attacker, target, hit, damage }) {
+  if (!target?.isNpc?.()) return;
+  const armour = flatArmourOf(target.getId());
   if (!armour) return;
-  if (!hit?.getAttacker?.()?.isPlayer?.()) return;
+  if (!attacker?.isPlayer?.()) return;
   const { CombatType } = core;
   // The damage type, not the method: the Voidwaker special is a melee swing that deals magic damage.
   const type = hit.getProtectionType?.() ?? hit.getCombatType();
   if (type !== CombatType.MELEE && type !== CombatType.RANGED) return;
-  let changed = false;
-  for (const splat of hit.getHits()) {
-    const damage = splat.getDamage();
-    if (damage <= 0) continue;
-    splat.setDamage(Math.max(0, damage - armour));
-    changed = true;
-  }
-  if (changed) hit.updateTotalDamage();
+  const rolled = damage.getDamage();
+  if (rolled > 0) damage.setDamage(Math.max(0, rolled - armour));
 }
 
 module.exports = {
@@ -64,9 +59,7 @@ module.exports = {
   register(api) {
     core = api.core;
     load(core.CacheDefinitions);
-    // Base stage: before content hooks that read or spend the damage (the Moons' fight health,
-    // Dusk's phase floor, Nex's damage credit).
-    api.onNpcHitModify(applyFlatArmour, { stage: "base" });
+    api.onCustomEvent("combat:hit-finalize", applyFlatArmour);
   },
   flatArmourOf,
   _test: { applyFlatArmour, armourById },

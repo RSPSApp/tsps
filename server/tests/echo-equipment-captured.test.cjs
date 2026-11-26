@@ -249,13 +249,8 @@ test("Brand's split: the first landed roll in whole shares, the remainder on the
   const { share, splitAcrossAccurate } = Brand._test;
   assert.deepEqual([0, 1, 2].map((i) => share(10, i, 3)), [3, 3, 4]);
   const splats = [7, 0, 5, 9].map((value) => new core.HitDamage(value, core.HitMask.RED));
-  const events = splats.map((damage, i) => ({ damage, accurate: i !== 1 }));
-  const target = { getHitpoints: () => 100 };
-  let total = 0;
-  const hit = { getHits: () => splats, getTarget: () => target, updateTotalDamage: () => { total = splats.reduce((sum, s) => sum + s.getDamage(), 0); } };
-  splitAcrossAccurate(hit, events);
+  splitAcrossAccurate(splats, splats.map((_, i) => i !== 1));
   assert.deepEqual(splats.map((s) => s.getDamage()), [2, 0, 2, 3], "7 over three landed hits");
-  assert.equal(total, 7);
 });
 
 // ------------------------------------------------------------------ Lithic sceptre

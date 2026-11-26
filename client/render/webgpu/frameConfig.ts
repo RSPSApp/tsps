@@ -4,21 +4,13 @@
  * frame before drawing the scene.
  */
 import { syncSceneryDetail } from "../SceneryPolicy";
-import { lowEndDeviceModeEnabled } from "../../game/plugins/lowenddevice/LowEndDeviceMode";
+import { getPerformancePolicy } from "../../game/performance/PerformancePolicy";
 import { clamp } from "../../common/utils/MathUtil";
 import { ClientState } from "../../game/ClientState";
 import { MapManager } from "../../game/MapManager";
-import { isIos, isLowEndDevice, isMobileMode, isTouchDevice } from "../../common/utils/DeviceUtil";
 import { computeRoofPlaneLimit } from "../../game/roof/RoofVisibility";
 import { resolveBridgePromotedPlane } from "../../game/scene/PlaneResolver";
 import { Scene } from "../../rs/scene/Scene";
-import {
-    LOW_END_QUALITY_PROFILE,
-    DESKTOP_QUALITY_PROFILE,
-    IOS_SAFARI_QUALITY_PROFILE,
-    MOBILE_TOUCH_QUALITY_PROFILE,
-    type BrowserQualityProfile,
-} from "../render/constants";
 import { getControlledPlayerEcsIndex, getControlledPlayerWorldViewId } from "./camera";
 import { projectDeckToWorld } from "../render/worldEntityMotion";
 import type { WebGPURenderer } from "./WebGPURenderer";
@@ -57,8 +49,7 @@ export function updateWebGPUMapStreaming(renderer: WebGPURenderer, frameCount: n
  * The WebGL version caches per frame id only to avoid re-running
  * syncBrowserQualityProfile's WebGL scene side effects (activeQualityProfile,
  * fxaa). The tile count itself is a pure function of osrsClient.renderDistance
- * and the platform profile, so this port recomputes it with the same inputs
- * resolveBrowserQualityProfile selects from.
+ * and the saved Performance preset / explicit overrides.
  */
 export function resolveWebGPURenderDistance(renderer: WebGPURenderer): number {
     const editorDistance = renderer.osrsClient.editorRenderDistance;
@@ -68,10 +59,13 @@ export function resolveWebGPURenderDistance(renderer: WebGPURenderer): number {
     const gpu = renderer.osrsClient.clientPlugins.gpuSettings();
     const base = clamp((gpu?.drawDistance ?? renderer.osrsClient.renderDistance) | 0, 25,
         renderer.osrsClient.clientPlugins.hdEnabled() ? 160 : 90);
-    const profile = resolveQualityProfile();
-    const capToProfile = !gpu?.overrideDeviceCaps &&
-        (isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled);
-    const target = capToProfile ? Math.min(base, profile.renderDistanceCap | 0) : base;
+    const policy = getPerformancePolicy();
+    if (policy.explicitDrawDistance !== null) {
+        return clamp(policy.explicitDrawDistance, 25,
+            renderer.osrsClient.clientPlugins.hdEnabled() ? 160 : 90);
+    }
+    const capToProfile = gpu ? gpu.overrideDeviceCaps === false : true;
+    const target = capToProfile ? Math.min(base, policy.drawDistanceCap) : base;
     return Math.max(0, target | 0);
 }
 
@@ -83,21 +77,13 @@ export function resolveWebGPULodDistance(renderer: WebGPURenderer): number {
     const gpu = renderer.osrsClient.clientPlugins.gpuSettings();
     const base = clamp(gpu ? gpu.drawDistance - 2 : renderer.osrsClient.lodDistance | 0, 0,
         Math.min(distance, renderer.osrsClient.clientPlugins.hdEnabled() ? 48 : distance));
-    const capToProfile = !gpu?.overrideDeviceCaps &&
-        (isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled);
-    return capToProfile ? Math.min(base, resolveQualityProfile().lodThresholdCap | 0) : base;
-}
-
-function resolveQualityProfile(): BrowserQualityProfile {
-    if (lowEndDeviceModeEnabled) return LOW_END_QUALITY_PROFILE;
-    // Mirrors resolveBrowserQualityProfile (render/render/quality.ts).
-    if (!isMobileMode && !isLowEndDevice) {
-        return DESKTOP_QUALITY_PROFILE;
+    const policy = getPerformancePolicy();
+    if (policy.explicitDrawDistance !== null) {
+        const hdCap = renderer.osrsClient.clientPlugins.hdEnabled() ? 48 : distance;
+        return Math.max(0, Math.min(distance, hdCap, policy.explicitDrawDistance - 2));
     }
-    if (isIos) {
-        return IOS_SAFARI_QUALITY_PROFILE;
-    }
-    return MOBILE_TOUCH_QUALITY_PROFILE;
+    const capToProfile = gpu ? gpu.overrideDeviceCaps === false : true;
+    return capToProfile ? Math.min(base, policy.lodThresholdCap) : base;
 }
 
 /**

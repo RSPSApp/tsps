@@ -6,6 +6,7 @@ import { mat4, vec3 } from "gl-matrix";
 
 import { isWebGPUSupported } from "../../common/utils/DeviceUtil";
 import { GameRenderer } from "../../game/GameRenderer";
+import { getPerformancePolicy, type PerformancePolicy } from "../../game/performance/PerformancePolicy";
 import type {
     HitsplatEventPayload,
     LocChangeOptions,
@@ -242,8 +243,14 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         }
     }
 
+    /** Live part of the Performance preset; worker/cache changes are startup-only. */
+    public applyPerformancePolicy(policy: PerformancePolicy): void {
+        if (policy.fpsLimit !== null) this.fpsLimit = policy.fpsLimit;
+    }
+
     override async init(): Promise<void> {
         await super.init();
+        this.applyPerformancePolicy(getPerformancePolicy());
 
         const adapter = await WebGPURenderer.probeAdapter();
         if (!adapter) {
@@ -884,8 +891,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
 
         const renderDistance = resolveWebGPURenderDistance(this);
         // HD spreads haze over long views, as on WebGL (render/render/frame/render.ts).
+        const policy = getPerformancePolicy();
         const { fogEnd, fogDepth } = resolveFogRange({ renderDistance, ...fogSettings({ osrsClient: this.osrsClient, autoFogDepth: true,
-            autoFogDepthFactor: AUTO_FOG_DEPTH_FACTOR, fogDepth: 0 }), hd: this.osrsClient.clientPlugins.hdEnabled() });
+            autoFogDepthFactor: policy.autoFogDepthFactor, fogDepth: 0 }), hd: this.osrsClient.clientPlugins.hdEnabled() });
 
         const data = this.world.sceneData;
         data.set(camera.viewProjMatrix as Float32Array, 0);
@@ -902,8 +910,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         data[61] = fogDepth;
         data[62] = timeSec;
         data[63] = this.brightness;
-        // colorBanding: the GPU plugin's, else WebGL's default (the shader divides by it).
-        data[64] = this.osrsClient.clientPlugins.gpuSettings()?.colorBanding ?? 255.0;
+        // colorBanding: the GPU plugin's explicit value, else the Performance preset's default.
+        data[64] = this.osrsClient.clientPlugins.gpuSettings()?.colorBanding ?? getPerformancePolicy().colorBanding;
         data[65] = this.osrsClient.isNewTextureAnim ? 1.0 : 0.0;
         this.world.flushSceneUniforms();
     }
@@ -1002,7 +1010,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         // frame, before any map draw.
         const extension = world.extension;
         const gpu = this.osrsClient.clientPlugins.gpuSettings();
-        const sampleCount = gpu && gpu.msaaSamples > 0 ? WEBGPU_MSAA_SAMPLES : 1;
+        const sampleCount = (gpu ? gpu.msaaSamples > 0 : getPerformancePolicy().sceneMsaaSamples > 0)
+            ? WEBGPU_MSAA_SAMPLES
+            : 1;
         world.selectExtension(!!extension?.isActive(), sampleCount);
 
         // Same point the WebGL frame loop flushes queued client packets (render.ts login

@@ -361,8 +361,11 @@ export class IsometricCameraPlugin extends Plugin implements ClientPlugin {
         return Math.pow(Math.pow(framed, ZOOM_LIMIT_EASE) + Math.pow(limit, ZOOM_LIMIT_EASE), 1 / ZOOM_LIMIT_EASE);
     }
 
-    /** How far out the scene is drawn, in tiles: the GPU or Low-end Device setting, else the game's. */
+    /** How far out the scene is drawn, in tiles: the Performance preset / GPU plugin / game. */
     private drawDistance(): number {
+        const renderer = this.client.renderer;
+        const effective = renderer?.resolveEffectiveRenderDistanceTiles?.(renderer.stats.frameCount);
+        if (effective !== undefined) return effective;
         return this.client.clientPlugins.gpuSettings?.()?.drawDistance ?? this.client.renderDistance;
     }
 

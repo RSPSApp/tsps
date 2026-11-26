@@ -152,12 +152,15 @@ export function prefersMobileGameframe(): boolean {
 }
 
 /**
- * Phones, tablets (including one on "desktop site": touch with a coarse main pointer) and iOS:
- * tight tab memory and modest GPUs. They get the lean setup: one render worker, an
- * on-demand-only cache, no 117 HD, a reduced 3D resolution and a capped view distance.
+ * The coarse-pointer hardware fact. A touchscreen laptop with a mouse is fine; a tablet's
+ * main pointer is coarse. Kept separate from the performance tier: hardware facts describe
+ * the device, the Performance setting decides how much work to do.
  */
-export const isLowEndDevice = isMobileMode || isIos ||
-    (isTouchDevice && typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches);
+export const hasCoarsePointer =
+    isTouchDevice && typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+
+/** True on platforms with handheld memory budgets (phones, tablets and iOS). */
+export const isHandheldDevice = isMobileMode || isIos;
 
 // Hover tooltips (and the world mouseover text they feed) are a desktop-mouse feature;
 // mobile opens the menu on tap. Touch hardware alone must not turn them off, or a

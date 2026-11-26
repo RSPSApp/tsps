@@ -6,6 +6,13 @@ import { HD_SCENE_SHADERS } from "../game/plugins/hd/webgpu/hdSceneShaders";
 import { HdBloomPass } from "../game/plugins/hd/webgpu/hd-bloom";
 import { HdTonemapPass } from "../game/plugins/hd/webgpu/hd-tonemap";
 import { resolveWebGPULodDistance, resolveWebGPURenderDistance } from "../render/webgpu/frameConfig";
+import { ConfigManager } from "../runelite/client/config/ConfigManager";
+import { PerformanceConfig, PerformanceMode } from "../game/performance/PerformanceConfig";
+import { initPerformancePolicy } from "../game/performance/PerformancePolicy";
+
+const performanceConfig = new ConfigManager();
+performanceConfig.setConfigValue(PerformanceConfig, "mode", PerformanceMode.HIGH);
+initPerformancePolicy(performanceConfig);
 
 function postProcessGpu() {
     const uploads: Float32Array[] = [];

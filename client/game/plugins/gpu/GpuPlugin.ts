@@ -3,7 +3,7 @@ import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
 import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
 import type { OsrsClient } from "../../OsrsClient";
-import { lowEndDeviceModeExplicit } from "../lowenddevice/LowEndDeviceMode";
+import { getPerformancePolicy } from "../../performance/PerformancePolicy";
 import { AntiAliasingMode, GpuConfig, MAX_DRAW_DISTANCE, MIN_DRAW_DISTANCE } from "./GpuConfig";
 
 /** What the renderers apply while the plugin is on. */
@@ -44,7 +44,7 @@ export function resolveGpuSettings(config: {
     autoFog: boolean;
     fogStart: number;
     manualFogStart: number;
-}): GpuSettings {
+}, overrideDeviceCaps = true): GpuSettings {
     return {
         msaaSamples: MSAA_SAMPLES[config.antiAliasingMode] ?? 0,
         fxaa: config.antiAliasingMode === AntiAliasingMode.FXAA,
@@ -55,7 +55,7 @@ export function resolveGpuSettings(config: {
         autoFogDepth: config.autoFog,
         autoFogDepthFactor: clamp(config.fogStart, 0, 100) / 100,
         fogDepth: clamp(config.manualFogStart, 0, 400),
-        overrideDeviceCaps: true,
+        overrideDeviceCaps,
     };
 }
 
@@ -124,21 +124,38 @@ export class GpuPlugin extends Plugin {
         renderer?.setSkyColor?.((color >>> 16) & 0xff, (color >>> 8) & 0xff, color & 0xff, true);
     }
 
-    /** The settings to apply, or undefined while the plugin is off or an explicit Low-end Device wins. */
+    /** The settings to apply while the GPU plugin is on. Explicit plugin choices win. */
     gpuSettings(): GpuSettings | undefined {
-        return this.isEnabled() && !lowEndDeviceModeExplicit ? this.current : undefined;
+        return this.isEnabled() ? this.current : undefined;
     }
 
     private readConfig(): GpuSettings {
         const config = this.configManager.getConfig(GpuConfig);
+        const policy = getPerformancePolicy();
+        const stored = (key: string) =>
+            this.configManager.getConfiguration(GpuConfig.group, key) !== undefined;
+
+        const antiAliasingMode = stored("antiAliasingMode")
+            ? config.antiAliasingMode()
+            : policy.sceneMsaaSamples > 0
+                ? AntiAliasingMode.MSAA_4
+                : AntiAliasingMode.DISABLED;
+        const drawDistance = policy.explicitDrawDistance
+            ?? (stored("drawDistance") ? config.drawDistance() : policy.drawDistanceCap);
+        const fpsLimit = policy.explicitFpsLimit
+            ?? (stored("fpsLimit") ? config.fpsLimit() : policy.fpsLimit ?? config.fpsLimit());
+        const colorBanding = stored("colorBanding")
+            ? config.colorBanding()
+            : policy.colorBanding === 255 ? 0 : 100;
+        const fogStart = stored("fogStart") ? config.fogStart() : policy.autoFogDepthFactor * 100;
         return resolveGpuSettings({
-            antiAliasingMode: config.antiAliasingMode(),
-            drawDistance: config.drawDistance(),
-            fpsLimit: config.fpsLimit(),
-            colorBanding: config.colorBanding(),
-            autoFog: config.autoFog(),
-            fogStart: config.fogStart(),
+            antiAliasingMode,
+            drawDistance,
+            fpsLimit,
+            colorBanding,
+            autoFog: stored("autoFog") ? config.autoFog() : true,
+            fogStart,
             manualFogStart: config.manualFogStart(),
-        });
+        }, stored("drawDistance") || policy.explicitDrawDistance !== null);
     }
 }

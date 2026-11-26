@@ -189,7 +189,7 @@ import {
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import { RENDER_CONSTANTS, StreamMapBatch } from "./constants";
-import { isLowEndDevice } from "../../common/utils/DeviceUtil";
+import { getPerformancePolicy } from "../../game/performance/PerformancePolicy";
 import { logMapApplied } from "./mapLoadProfile";
 
 export function getPendingStreamMapCount(host: WebGLOsrsRendererHost, ): number {
@@ -361,7 +361,7 @@ export function applyReadyStreamGenerationBatch(host: WebGLOsrsRendererHost): nu
             }
             // Low-end: one square per frame (nearest first, player's chunk first) so
             // GPU uploads don't stall a frame; the rest stay queued for later frames.
-            if (applied > 0 && (isLowEndDevice || performance.now() - startedAt >= 4)) {
+            if (applied > 0 && (getPerformancePolicy().oneMapSquarePerFrame || performance.now() - startedAt >= 4)) {
                 allReady = false;
                 break;
             }

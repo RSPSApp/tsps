@@ -1,5 +1,4 @@
 import { ConfigGroup, ConfigItem } from "@runelite/client/config/ConfigItem";
-import { isLowEndDevice } from "../../../common/utils/DeviceUtil";
 import { SCREEN_BRIGHTNESS_MAX, loadScreenBrightness } from "../../../ui/ScreenBrightness";
 
 /** Anti-aliasing modes, as in RuneLite's GPU plugin. */
@@ -28,7 +27,8 @@ export const GpuConfig = ConfigGroup("gpu", {
         description:
             "Smooths jagged edges in the 3D scene. MSAA is capped at what the graphics card supports; " +
             "the WebGPU renderer only has x4, which every MSAA level uses there. " +
-            "Replaces 117 HD's own anti-aliasing while this plugin is on.",
+            "Replaces 117 HD's own anti-aliasing while this plugin is on. Until changed here, " +
+            "the Performance preset supplies the default.",
         position: 1,
         enum: {
             Disabled: AntiAliasingMode.DISABLED,
@@ -38,7 +38,7 @@ export const GpuConfig = ConfigGroup("gpu", {
             "MSAA x8": AntiAliasingMode.MSAA_8,
             "MSAA x16": AntiAliasingMode.MSAA_16,
         },
-        default: isLowEndDevice ? AntiAliasingMode.DISABLED : AntiAliasingMode.MSAA_4,
+        default: AntiAliasingMode.MSAA_4,
     }),
     drawDistance: ConfigItem({
         name: "Draw distance",

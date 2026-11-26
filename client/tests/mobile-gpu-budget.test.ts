@@ -13,37 +13,60 @@ async function main(): Promise<void> {
     const { GameRenderer } = await import("../game/GameRenderer");
     const { AntiAliasingMode, GpuConfig } = await import("../game/plugins/gpu/GpuConfig");
     const { ConfigManager } = await import("../runelite/client/config/ConfigManager");
-    let gpu: { fpsLimit: number } | undefined = { fpsLimit: 240 };
+    const { PerformanceConfig, PerformanceMode } = await import("../game/performance/PerformanceConfig");
+    const {
+        getPerformancePolicy, initPerformancePolicy, refreshPerformancePolicy,
+    } = await import("../game/performance/PerformancePolicy");
+    const { getCanvasResolutionScale } = await import("../render/render/quality");
+
+    const config = new ConfigManager();
+    initPerformancePolicy(config);
+    assert.equal(getPerformancePolicy().preset, "auto-mobile");
+    assert.equal(getPerformancePolicy().fpsLimit, 30, "Auto keeps the mobile 30 FPS preset");
+    assert.equal(getPerformancePolicy().sceneMsaaSamples, 0, "Auto mobile has no scene MSAA");
+
+    let gpu: { fpsLimit: number } | undefined = undefined;
     const host: any = {
         fpsLimit: 120,
         osrsClient: { targetFps: 20, clientPlugins: { gpuSettings: () => gpu } },
     };
     const limit = () => (GameRenderer.prototype as any).getEffectiveFpsLimit.call(host);
-    assert.equal(limit(), 20, "enabling GPU must preserve the mobile battery limit");
-    gpu.fpsLimit = 10;
-    assert.equal(limit(), 10, "a stricter explicit GPU cap still applies");
+    assert.equal(limit(), 20, "the mobile battery cap still lowers the preset cap");
     host.osrsClient.targetFps = 0;
-    assert.equal(limit(), 10, "no battery cap preserves the selected GPU cap");
-    gpu.fpsLimit = 0;
-    host.osrsClient.targetFps = 30;
-    assert.equal(limit(), 30, "unlimited GPU FPS must still honour the mobile cap");
+    assert.equal(limit(), 30, "without a battery cap the preset's 30 FPS applies");
+    gpu = { fpsLimit: 10 };
+    assert.equal(limit(), 10, "an explicit GPU cap still applies");
     gpu = undefined;
-    assert.equal(limit(), 30, "the same battery setting applies with GPU off");
 
-    const manager = new ConfigManager();
-    const config = manager.getConfig(GpuConfig);
-    assert.equal(config.antiAliasingMode(), AntiAliasingMode.DISABLED);
-    assert.equal(config.fpsLimit(), 240, "handheld defaults must not introduce a 60 FPS ceiling");
-    gpu = { fpsLimit: config.fpsLimit() };
-    host.osrsClient.targetFps = 240;
-    assert.equal(limit(), 240, "fresh handheld GPU settings retain the normal client FPS limit");
-    manager.setConfiguration("gpu", "fpsLimit", 60);
-    gpu.fpsLimit = config.fpsLimit();
-    assert.equal(limit(), 60, "an explicitly saved 60 FPS limit still applies");
-    manager.setConfiguration("gpu", "antiAliasingMode", AntiAliasingMode.MSAA_4);
-    manager.setConfiguration("gpu", "fpsLimit", 120);
-    assert.equal(config.antiAliasingMode(), AntiAliasingMode.MSAA_4, "saved graphics choices stay selected");
-    assert.equal(config.fpsLimit(), 120);
+    config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.HIGH);
+    refreshPerformancePolicy();
+    assert.equal(getPerformancePolicy().fpsLimit, 240);
+    assert.equal(getPerformancePolicy().sceneMsaaSamples, 4);
+    assert.equal(getPerformancePolicy().workerCount, 2, "High on a phone still caps workers at 2");
+    assert.equal(getPerformancePolicy().mapSquareCacheLimit, 64);
+    host.osrsClient.targetFps = 20;
+    assert.equal(limit(), 20, "a phone battery cap also caps High");
+
+    config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.LOW);
+    refreshPerformancePolicy();
+    assert.equal(getPerformancePolicy().fpsLimit, 30);
+    assert.equal(getPerformancePolicy().sceneMsaaSamples, 0);
+    assert.equal(GpuConfig.items.antiAliasingMode.default, AntiAliasingMode.MSAA_4,
+        "the GPU config's desktop default is unchanged");
+    assert.equal(getPerformancePolicy().sceneMsaaSamples, 0,
+        "Low uses the preset default until the GPU plugin's AA is changed");
+
+    // Handheld canvas memory caps stay on High.
+    Object.defineProperty(globalThis, "window", { configurable: true, value: {
+        innerWidth: 1200, innerHeight: 800, devicePixelRatio: 3, location: { search: "" },
+        addEventListener() {},
+    } });
+    const canvasHost: any = { osrsClient: { gameState: 30, isOnLoginScreen: () => false } };
+    assert.equal(getCanvasResolutionScale(canvasHost, 400, 300), 2,
+        "a small phone keeps its 2x DPR cap");
+    const large = getCanvasResolutionScale(canvasHost, 2000, 1500);
+    assert.ok(large < 2 && large >= 1, `a huge phone canvas is pixel-capped (${large})`);
+
     const { getMobileGameplayUiScale } = await import("../render/render/quality");
     const { setPortraitModeEnabled } = await import("../game/plugins/portraitmode/PortraitLayout");
     const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -65,7 +88,6 @@ async function main(): Promise<void> {
         assert.ok(375 * phoneScale >= 503,
             "a landscape phone keeps the native 503px gameframe height instead of squeezing the HUD");
 
-        // The mobile interface scaling slider (device option 27) starts at 400% and can be lowered.
         const { setMobileInterfaceScalingPercent } = await import("../ui/UiScale");
         const tabletWidth = 1180, tabletHeight = 820;
         const atDefault = getMobileGameplayUiScale(

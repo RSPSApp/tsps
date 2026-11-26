@@ -56,9 +56,13 @@ for (const scenario of cases) {
 
         const { getSceneResolutionScale, getSceneRenderSize, resolveBrowserQualityProfile } =
             require("./render/render/quality");
-        const { setLowEndDeviceModeEnabled } =
-            require("./game/plugins/lowenddevice/LowEndDeviceMode");
+        const { ConfigManager } = require("./runelite/client/config/ConfigManager");
+        const { PerformanceConfig, PerformanceMode } = require("./game/performance/PerformanceConfig");
+        const { initPerformancePolicy, refreshPerformancePolicy } =
+            require("./game/performance/PerformancePolicy");
 
+        const config = new ConfigManager();
+        initPerformancePolicy(config);
         const client = {
             clientPlugins: { sceneResolutionScale: () => 1 },
             isOnLoginScreen: () => false,
@@ -73,7 +77,7 @@ for (const scenario of cases) {
         };
 
         assert.equal(getSceneResolutionScale(host), scenario.expectedScale,
-            "default scene scale follows the platform");
+            "default scene scale follows the platform/preset");
         assert.deepEqual(getSceneRenderSize(host), {
             width: Math.round(1652 * scenario.expectedScale),
             height: Math.round(982 * scenario.expectedScale),
@@ -85,11 +89,15 @@ for (const scenario of cases) {
             assert.equal(getSceneResolutionScale(host), 0.75, "debug scene resolution setting still applies");
             host.sceneResolutionScale = 1;
 
-            // The explicit Low-end Device mode keeps its half-resolution scene.
-            setLowEndDeviceModeEnabled(true, true);
+            // The explicit Low preset keeps its half-resolution scene.
+            config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.LOW);
+            refreshPerformancePolicy();
             assert.equal(resolveBrowserQualityProfile(host).key, "low-end");
-            assert.equal(getSceneResolutionScale(host), 0.5, "explicit Low-end Device renders at half");
-            setLowEndDeviceModeEnabled(false, false);
+            assert.equal(getSceneResolutionScale(host), 0.5, "explicit Low renders at half");
+
+            config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.HIGH);
+            refreshPerformancePolicy();
+            assert.equal(getSceneResolutionScale(host), 1, "High renders natively");
         }
 
         client.isOnLoginScreen = () => true;

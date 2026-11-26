@@ -48,7 +48,7 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     api.onItemOnItem(imbue, { noted: false });
-    api.onItemInteraction("Salve amulet(i)", { Uncharge: uncharge });
-    api.onItemInteraction("Salve amulet(ei)", { Uncharge: uncharge });
+    api.onItemAction("Salve amulet(i)", { Uncharge: uncharge });
+    api.onItemAction("Salve amulet(ei)", { Uncharge: uncharge });
   },
 };

@@ -76,7 +76,8 @@ function guardDoor(event) {
   ]);
   if (allowed.get(event.objectId)) return;
   event.handled = true;
-  event.player.sendMessage("The door is locked.");
+  // Live: "This door is locked." (local recording 1002252 ticks 1214, 1244, 1276, 1323).
+  event.player.sendMessage("This door is locked.");
 }
 
 function attach(registry) {

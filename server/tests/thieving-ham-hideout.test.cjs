@@ -218,15 +218,19 @@ test('the jail lock: seven-tick tries, each failure numbing the fingers and rais
   const pick = core.CacheDefinitions.getSeqId('human_lockedchest');
   assert.equal(HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock')), true);
   // rsprox 227/01723.txt ticks 8862-8878: the attempt line, the pick animation and its sound at once.
-  assert.deepEqual(ticks[0], ['spam: You attempt to pick the lock on the door.', `anim ${pick}`, 'sound 2402']);
-  tick(7);
-  // Seven ticks on: the failure's sound, the next try's line, the numb fingers, ham_thief 0->1; the animation again a tick later.
-  assert.deepEqual(ticks[7].slice(0, 4), ['spam: You attempt to pick the lock on the door.', 'sound 2581', 'varbit 235=1',
+  // rsprox 227/01723.txt ticks 8721, 8864, 9074: the attempt line, the pick animation and 2402 twice at once.
+  assert.deepEqual(ticks[0], ['spam: You attempt to pick the lock on the door.', `anim ${pick}`, 'sound 2402', 'sound 2402']);
+  tick(6);
+  // Six ticks on (ticks 8727, 8870): the animation reset, the failure's sound, ham_thief 0->1, the next try's line
+  // and the numb fingers; the animation again a tick later. Later tries are seven ticks apart.
+  assert.deepEqual(ticks[6].slice(0, 5), ['spam: You attempt to pick the lock on the door.', 'anim -1', 'sound 2581', 'varbit 235=1',
     'spam: You fail to pick the lock - your fingers get numb from fumbling with the lock.']);
   assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.THIEVING), 17);
   tick(1);
-  assert.deepEqual(ticks[8], [`anim ${pick}`, 'sound 2402']);
-  tick(20);
+  assert.deepEqual(ticks[7], [`anim ${pick}`, 'sound 2402']);
+  tick(6);
+  assert.equal(varbits.get(235), 2, 'the second try seven ticks after the first');
+  tick(14);
   assert.equal(varbits.get(235), 3, 'the fourth chart is the last');
   tick(7);
   const success = ticks.length - 1;
@@ -246,7 +250,7 @@ test('a new Pick-lock starts the lock from its first chart', (t) => {
   t.after(() => HamHideout._test.setRandom());
   const { player, varbits } = hamPlayer(t, [3183, 9611, 0]);
   HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock'));
-  tick(14);
+  tick(13);
   assert.equal(varbits.get(235), 2);
   HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock'));
   assert.equal(varbits.get(235), 0);

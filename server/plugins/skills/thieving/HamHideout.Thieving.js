@@ -11,7 +11,7 @@
  * trapdoor puts the count back to 0 (HamTrapdoor.Thieving.js), as do climbing the ladder out and waking up.
  *
  * The jail door (5501) is "very secure": Open answers so, and its lock can only be picked from inside the cell.
- * Each Pick-lock attempt takes seven ticks; a failure numbs the fingers as the trapdoor's do (the Wiki's page says
+ * The first try resolves six ticks after its line, each later one seven; a failure numbs the fingers as the trapdoor's do (the Wiki's page says
  * so in the trapdoor's words), and the next try is
  * likelier (the Wiki's four charts, in four equal steps, kept in `ham_thief`). A new Pick-lock starts from the first
  * chart. On success the player is let through the door to the west, with no door swing.
@@ -235,7 +235,8 @@ function pickJailLock({ player, object }) {
     sound(player, PICK_SOUND);
   };
   const task = new (class extends core.Task {
-    constructor() { super(1, player, false); this.elapsed = 0; }
+    // The first try is a tick shorter: its line goes out on the click, as the handler runs.
+    constructor() { super(1, player, false); this.elapsed = 1; }
     execute() {
       if (!player.isRegistered() || player.getHitpoints() <= 0 || !player.getLocation().equals(origin) ||
           player.getMovementQueue().isMovementBlocked()) return this.stop();
@@ -252,6 +253,7 @@ function pickJailLock({ player, object }) {
         later(player, new Map([[1, () => letOut(player)]]));
         return;
       }
+      animate(player, null);
       sound(player, FAILURE_SOUND);
       setThief(player, Math.min(charts.length - 1, thief(player) + 1));
       fumbled(player);
@@ -266,6 +268,7 @@ function pickJailLock({ player, object }) {
   picking.set(player, task);
   spam(player, MESSAGE.ATTEMPT);
   begin();
+  sound(player, PICK_SOUND); // the first try plays it twice
   core.TaskManager.submit(task);
   return true;
 }

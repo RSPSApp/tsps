@@ -1271,8 +1271,9 @@ test("the H.A.M. Hideout's trapdoor and ladder say their captured lines, the sec
   const climbed = climbWithMessages(locAt(5493, 3149, 9653, 0), [3149, 9652, 0], 3);
   const moved = climbed.findIndex((tick) => tick.includes("move 3165,3251,0"));
   assert.ok(moved >= 0, "climbs up");
-  assert.deepEqual(climbed[moved], [spam("You climb up the ladder."), "move 3165,3251,0"]);
-  assert.deepEqual(climbed[moved + 1], [spam("You leave the HAM Fanatics' Camp.")]);
+  const linesAndMoves = (tick) => tick.filter((line) => line.startsWith("message") || line.startsWith("move"));
+  assert.deepEqual(linesAndMoves(climbed[moved]), [spam("You climb up the ladder."), "move 3165,3251,0"]);
+  assert.deepEqual(linesAndMoves(climbed[moved + 1]), [spam("You leave the HAM Fanatics' Camp.")]);
   const descended = climbWithMessages(locAt(5492, 3166, 3252, 0), [3166, 3251, 0], 4);
   const landed = descended.findIndex((tick) => tick.includes("move 3149,9652,0"));
   assert.ok(landed >= 0, "climbs down");

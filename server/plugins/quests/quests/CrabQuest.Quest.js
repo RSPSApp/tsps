@@ -1605,6 +1605,8 @@ module.exports = function registerCrabQuestQuest(api) {
 
   /** The scared, not yet coaxed recruit the player is sitting beside, if any. */
   function coaxableSpot(player) {
+    // The hiding places are the dream's own locs; the real island has none to sit by.
+    if (!Dream.active(player)) return null;
     const stage = quest.getStage(player);
     if (quest.isComplete(player) || stage < STAGE_RECRUITING || stage >= STAGE_ALL_LEADERS) return null;
     const here = Dream.toSource(player, player.getLocation());

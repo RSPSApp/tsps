@@ -16,7 +16,20 @@ before(async () => {
   require('../dist/game/definition/ObjectDefinition').ObjectDefinition.init();
 });
 
-const { setup } = require('./crab-quest-harness.cjs');
+const { setup, enterDream } = require('./crab-quest-harness.cjs');
+
+/** A harness in the dream at `stage`, driven with source tiles (the coax is the dream's). */
+function dreaming(stage = 47) {
+  const h = setup();
+  const d = enterDream(h, stage);
+  return {
+    h, quest: d.quest,
+    at: d.at,
+    setLocation: (x, y) => h.setLocation(...d.at(x, y)),
+    investigate: (id, x, y) => h.investigate(id, ...d.at(x, y)),
+    sit: (x, y, slot) => h.sit(...d.at(x, y), slot),
+  };
+}
 
 // `bit` is the spot-array index bit used by SCARED/MET (join bits differ).
 const SIT_SPOTS = [
@@ -27,28 +40,27 @@ const SIT_SPOTS = [
 ];
 
 test('Crab coax needs the real Sit emote after the too-scared investigate', () => {
-  const h = setup();
-  const quest = h.loadQuest();
-  quest.setStage(h.player, 47);
+  const d = dreaming();
+  const { h } = d;
   for (const spot of SIT_SPOTS) {
-    h.setLocation(spot.sit[0], spot.sit[1]);
-    h.investigate(spot.id, spot.x, spot.y);
+    d.setLocation(spot.sit[0], spot.sit[1]);
+    d.investigate(spot.id, spot.x, spot.y);
     assert.ok((h.attrs.get('quest.crab_quest.scared') & spot.bit) !== 0, `spot ${spot.id} set scared`);
     assert.equal(h.attrs.get('quest.crab_quest.met') & spot.bit, 0, `spot ${spot.id} not coaxed by investigate`);
 
-    h.investigate(spot.id, spot.x, spot.y);
+    d.investigate(spot.id, spot.x, spot.y);
     assert.equal(h.attrs.get('quest.crab_quest.met') & spot.bit, 0, `second investigate does not coax ${spot.id}`);
 
-    h.sit(spot.sit[0], spot.sit[1], 12);
+    d.sit(spot.sit[0], spot.sit[1], 12);
     h.tick(30);
     assert.equal(h.attrs.get('quest.crab_quest.met') & spot.bit, 0, 'a different emote does not coax');
 
-    h.sit(spot.x - 3, spot.y - 3);
+    d.sit(spot.x - 3, spot.y - 3);
     h.tick(30);
     assert.equal(h.attrs.get('quest.crab_quest.met') & spot.bit, 0, 'Sit away from the hiding place does not coax');
 
     const wait = spot.id === 62473 ? 24 : 12;
-    h.sit(spot.sit[0], spot.sit[1]);
+    d.sit(spot.sit[0], spot.sit[1]);
     assert.equal(h.messages.at(-1), 'And now, you wait...');
     h.tick(wait - 1);
     assert.equal(h.attrs.get('quest.crab_quest.met') & spot.bit, 0, `${spot.id}: the crab is still hiding`);
@@ -121,19 +133,18 @@ test('Crab tree NW (capture 3036,2644) sits at 3037,2643; the 2x2 tree refuses 3
   assert.notEqual(RegionManager.getClipping(3037, 2644, 0, null), 0, '3037,2644 is inside the 2x2 tree');
   assert.equal(RegionManager.getClipping(3037, 2643, 0, null), 0, '3037,2643 is walkable');
 
-  const h = setup();
-  const quest = h.loadQuest();
-  quest.setStage(h.player, 47);
-  h.setLocation(3037, 2643);
-  h.investigate(62475, 3036, 2644);
+  const d = dreaming();
+  const { h } = d;
+  d.setLocation(3037, 2643);
+  d.investigate(62475, 3036, 2644);
   assert.ok((h.attrs.get('quest.crab_quest.scared') & (1 << 3)) !== 0, 'tree NW scared bit 3');
   assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 3), 0, 'no auto-coax');
-  h.investigate(62475, 3036, 2644);
+  d.investigate(62475, 3036, 2644);
   assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 3), 0, 'second investigate does not coax');
-  h.sit(3037, 2644);
+  d.sit(3037, 2644);
   h.tick(12);
   assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 3), 0, 'Sit on the tree tile is refused');
-  h.sit(3037, 2643);
+  d.sit(3037, 2643);
   h.tick(12);
   assert.ok((h.attrs.get('quest.crab_quest.met') & (1 << 3)) !== 0, 'Sit at 3037,2643 coaxes');
 });
@@ -144,57 +155,57 @@ test('issue 6670: any tile beside the hiding place coaxes, as live (3047,2655) a
     [3038, 2644, 3036, 2644, 62475, 1 << 3], // QH sitForCrabNine
     [3041, 2638, 3042, 2637, 62470, 1 << 1], // QH sitForCrabOne, diagonal to the 1x1 palm
   ]) {
-    const h = setup();
-    h.loadQuest().setStage(h.player, 47);
-    h.setLocation(x, y);
-    h.investigate(id, spotX, spotY);
-    h.sit(x, y);
+    const d = dreaming();
+    const { h } = d;
+    d.setLocation(x, y);
+    d.investigate(id, spotX, spotY);
+    d.sit(x, y);
     h.tick(12);
     assert.ok((h.attrs.get('quest.crab_quest.met') & bit) !== 0, `Sit at ${x},${y} coaxes the crab at ${spotX},${spotY}`);
   }
 });
 
 test('issue 6670: standing up or walking off before the crab appears leaves it hidden', () => {
-  const h = setup();
-  h.loadQuest().setStage(h.player, 47);
-  h.setLocation(3046, 2655);
-  h.investigate(62475, 3046, 2656);
-  h.sit(3046, 2655);
+  const d = dreaming();
+  const { h } = d;
+  d.setLocation(3046, 2655);
+  d.investigate(62475, 3046, 2656);
+  d.sit(3046, 2655);
   h.tick(6);
   h.emit('player:emote', { slot: 12, sequence: 0 });
   h.tick(12);
   assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'another emote stands the player up');
 
-  h.sit(3046, 2655);
+  d.sit(3046, 2655);
   h.tick(6);
-  h.setLocation(3045, 2654);
+  d.setLocation(3045, 2654);
   h.tick(12);
   assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'walking off cancels the wait');
 
-  h.sit(3046, 2655);
+  d.sit(3046, 2655);
   h.tick(4);
-  h.setLocation(3050, 2650);
+  d.setLocation(3050, 2650);
   h.tick(4);
-  h.setLocation(3046, 2655);
+  d.setLocation(3046, 2655);
   h.tick(12);
   assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'stepping off and back mid-wait still cancels it');
 
-  h.sit(3046, 2655);
+  d.sit(3046, 2655);
   h.tick(6);
-  h.sit(3046, 2655); // sitting again keeps the first wait
+  d.sit(3046, 2655); // sitting again keeps the first wait
   h.tick(6);
   assert.ok((h.attrs.get('quest.crab_quest.met') & (1 << 9)) !== 0, 'twelve ticks after the first Sit');
 });
 
 test('review #6819: a new Sit on another tile beside the same hiding place restarts the wait', () => {
-  const h = setup();
-  h.loadQuest().setStage(h.player, 47);
-  h.setLocation(3046, 2655);
-  h.investigate(62475, 3046, 2656);
-  h.sit(3046, 2655);
+  const d = dreaming();
+  const { h } = d;
+  d.setLocation(3046, 2655);
+  d.investigate(62475, 3046, 2656);
+  d.sit(3046, 2655);
   h.tick(4);
   const waits = h.messages.filter((message) => message === 'And now, you wait...').length;
-  h.sit(3047, 2655);
+  d.sit(3047, 2655);
   assert.equal(h.messages.filter((message) => message === 'And now, you wait...').length, waits + 1, 'a new wait');
   h.tick(11);
   assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'not before twelve ticks on the new tile');
@@ -281,4 +292,19 @@ test('issue 6670: the recruits\' narration is a message box, as live sends it (c
   const wait = { npcId: 16483, stepId: 'probe', kind: 'message', text: 'And now, you wait...' };
   h.emit('npc-dialogue:action', wait);
   assert.equal(wait.box, undefined, 'the wait is a game message');
+});
+
+test('review #6819: a Sit on the real beach coaxes nothing; the hiding places are the dream\'s', () => {
+  const d = dreaming();
+  d.investigate(62475, 3046, 2656);
+  assert.ok((d.h.attrs.get('quest.crab_quest.scared') & (1 << 9)) !== 0, 'scared in the dream');
+  // Woken by the bottle: back on the real island, where the same source tile has no tree.
+  d.h.emit('npc-dialogue:action', { npcId: 16471, stepId: '51SJsJ', kind: 'message' });
+  d.h.tick(10);
+  assert.equal(d.h.area, null, 'out of the dream');
+  const before = d.h.messages.length;
+  d.h.sit(3047, 2655);
+  d.h.tick(30);
+  assert.equal(d.h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'no crab on the real beach');
+  assert.ok(!d.h.messages.slice(before).includes('And now, you wait...'), 'no wait message');
 });

@@ -155,4 +155,20 @@ function setup() {
   return { cameras, mounts, core, hooks, attrs, inventory, messages, persistentKeys, placed, spawned, removed, tasks, xp, varbits, varValues, groundItems, player, loadQuest, emit, investigate, pickup, sit, tick, setLocation(x, y) { location = { x, y, z: 0 }; }, get area() { return area; }, get currentDialogue() { return currentDialogue; } };
 }
 
-module.exports = { setup, SIT_SLOT, SIT_LOOP };
+/**
+ * Sets the stage and blacks out into the dream (the first sip's black-out step), then returns
+ * the quest and `at(x, y)`, which turns a source tile into the dream's instance tile.
+ */
+function enterDream(h, stage) {
+  const quest = h.loadQuest();
+  quest.setStage(h.player, stage);
+  h.emit('npc-dialogue:action', { npcId: 16471, stepId: 'Cc5OQV', kind: 'message' });
+  h.tick(20);
+  const crab = h.spawned.find((npc) => npc.definition.id === 16469 || npc.definition.id === 16470);
+  const [sourceX, sourceY] = crab.definition.id === 16469 ? [3054, 2637] : [3056, 2637];
+  const dx = crab.definition.x - sourceX;
+  const dy = crab.definition.y - sourceY;
+  return { quest, dx, dy, at: (x, y) => [x + dx, y + dy] };
+}
+
+module.exports = { setup, enterDream, SIT_SLOT, SIT_LOOP };

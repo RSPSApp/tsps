@@ -6,21 +6,19 @@
  *
  * rsprox captures (all four recordings):
  * - Dunk-preform / Quench-preform change the temperature every tick by a step that grows the
- *   longer the player holds it there: 27, 30, 33, 37, 41, 45, 49, 53, 57, 62, 67, 72, 77, 83, 89.
- *   Each tick the player dips the preform (human_pickupfloor at the lava with synth 1019,
- *   human_pickuptable at the waterfall with synth 1006).
+ *   longer the player holds it there. Both sixteenth dips are at the lava pool (227/96 and 227/101).
+ * - Heat-preform / Cool-preform first dip with no temperature change (227/96).
+ * - Each dip plays human_pickupfloor at the lava with synth 1019, or human_pickuptable at the
+ *   waterfall with synth 1006.
  * - A worn preform loses a degree every second tick, also while it is being heated or worked.
- *
- * Heat-preform / Cool-preform start slower and speed up too (Wiki); every capture went straight
- * to the fast option, so their steps are a third of the fast ones (an approximation). Clicking
- * either option again starts over at its first step (Wiki: it resets the speed).
  */
 
 const Shared = require("./Shared.GiantsFoundry");
 
 // The 16th dip is 95 (227/96 and 227/101). Repeating it on later dips is an estimate.
 const FAST_STEPS = [27, 30, 33, 37, 41, 45, 49, 53, 57, 62, 67, 72, 77, 83, 89, 95];
-const SLOW_STEPS = FAST_STEPS.map((step) => Math.max(1, Math.round(step / 3)));
+// 227/96 records five Heat-preform steps and two Cool-preform steps. Later steps are estimates.
+const SLOW_STEPS = [0, 7, 8, 9, 11, 12, 13, 15, 16, 17, 18, 20, 21, 23, 25, 26, 28];
 const MAX_TEMPERATURE = 1000;
 const PASSIVE_PERIOD = 2;
 

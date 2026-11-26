@@ -65,9 +65,14 @@ marker, so a new native stage 20/22 is never reinterpreted as old progress.
 
 - The Mort Myre trek still uses the overworld tiles rather than a separate
   instanced temple-trek region; item and object steps are implemented.
-- The mausoleum puzzle uses the real interface/sums/buttons, but the client
-  button graphics are the cache's own; the server tracks the grid in memory,
-  so relogging mid-puzzle regenerates a fresh solvable grid.
+- The mausoleum puzzle uses the real interface/sums/buttons. A click cycles a
+  tile blank -> marked (star) -> flagged -> blank, as cache clientscripts
+  3437/3438 predict, and the server answers each click with
+  `myq5_puzzle_tile_marked` (varp 2715) and `myq5_puzzle_tile_flagged` (varp
+  2716) like live (rsprox captures 102, 1637, local 1000270, 1000414, 1001302).
+  Only marked tiles count toward the sums (issue 6855: a tile clicked three
+  times used to count as marked). The server tracks the grid in memory, so
+  relogging mid-puzzle regenerates a fresh solvable grid.
 - Darkmeyer bank/attack restrictions and the Hallowed Sepulchre/daeyalt
   entrances are outside this quest's mandatory route.
 - Vanstrom uses the real stats, enrage, lightning, pets, darkness and orb

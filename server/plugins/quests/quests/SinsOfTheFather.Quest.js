@@ -651,6 +651,13 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   const TOMB_PUZZLE_COLUMNS = [19, 20, 21, 22, 23];
   const TOMB_PUZZLE_ROWS = [26, 27, 28, 29, 30];
   const TOMB_PUZZLE_SIZE = 5;
+  // Cache clientscripts 3437/3438/3439: a click cycles a tile blank -> marked
+  // (star, varp 2715) -> flagged (varp 2716) -> blank, and only marked tiles
+  // count toward the sums. The client predicts each click locally; live sends
+  // both varps back on the click tick (rsprox captures 102, 1637, local 1000270,
+  // 1000414, 1001302). myq5_puzzle_completed (10365) is bit 30 of varp 2715.
+  const VARP_TOMB_PUZZLE_MARKED = 2715; // myq5_puzzle_tile_marked
+  const VARP_TOMB_PUZZLE_FLAGGED = 2716; // myq5_puzzle_tile_flagged
   const SAFALAAN_WALK_TILE = { x: 3696, y: 3204, z: 0 };
   const HIDEOUT_VERTIDA_TILE = { x: 3599, y: 9611, z: 0 };
   const HIDEOUT_IVAN_TILE = { x: 3598, y: 9613, z: 0 };
@@ -3379,7 +3386,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
       }
       colSums.push(sum);
     }
-    puzzle = { cells: 0, rowSums, colSums };
+    puzzle = { marked: 0, flagged: 0, rowSums, colSums };
     tombPuzzleByPlayer.set(player, puzzle);
     return puzzle;
   }
@@ -3392,20 +3399,40 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
       sender.sendString(String(puzzle.colSums[index]), (TOMB_PUZZLE_GROUP << 16) | component));
     TOMB_PUZZLE_ROWS.forEach((component, index) =>
       sender.sendString(String(puzzle.rowSums[index]), (TOMB_PUZZLE_GROUP << 16) | component));
+    sendTombPuzzleTiles(player, puzzle);
+  }
+
+  function sendTombPuzzleTiles(player, puzzle) {
+    const sender = player.getPacketSender();
+    sender.sendConfig(VARP_TOMB_PUZZLE_MARKED, puzzle.marked);
+    sender.sendConfig(VARP_TOMB_PUZZLE_FLAGGED, puzzle.flagged);
+  }
+
+  /** Clientscript 3437: blank -> marked -> flagged -> blank. */
+  function cycleTombPuzzleTile(puzzle, slot) {
+    const bit = 1 << slot;
+    if (puzzle.marked & bit) {
+      puzzle.marked &= ~bit;
+      puzzle.flagged |= bit;
+    } else if (puzzle.flagged & bit) {
+      puzzle.flagged &= ~bit;
+    } else {
+      puzzle.marked |= bit;
+    }
   }
 
   function tombPuzzleSolved(puzzle) {
     for (let row = 0; row < TOMB_PUZZLE_SIZE; row++) {
       let sum = 0;
       for (let col = 0; col < TOMB_PUZZLE_SIZE; col++) {
-        if (puzzle.cells & (1 << (row * TOMB_PUZZLE_SIZE + col))) sum += col + 1;
+        if (puzzle.marked & (1 << (row * TOMB_PUZZLE_SIZE + col))) sum += col + 1;
       }
       if (sum !== puzzle.rowSums[row]) return false;
     }
     for (let col = 0; col < TOMB_PUZZLE_SIZE; col++) {
       let sum = 0;
       for (let row = 0; row < TOMB_PUZZLE_SIZE; row++) {
-        if (puzzle.cells & (1 << (row * TOMB_PUZZLE_SIZE + col))) sum += row + 1;
+        if (puzzle.marked & (1 << (row * TOMB_PUZZLE_SIZE + col))) sum += row + 1;
       }
       if (sum !== puzzle.colSums[col]) return false;
     }
@@ -3419,12 +3446,13 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     const slot = Number.isInteger(event.slot) ? event.slot : event.childId;
     if (!Number.isInteger(slot) || slot < 0 || slot >= TOMB_PUZZLE_SIZE * TOMB_PUZZLE_SIZE) return;
     event.handled = true;
-    puzzle.cells ^= 1 << slot;
+    cycleTombPuzzleTile(puzzle, slot);
+    sendTombPuzzleTiles(player, puzzle);
     if (!tombPuzzleSolved(puzzle)) return;
     tombPuzzleByPlayer.delete(player);
+    player.getPacketSender().sendVarbit(VARBIT_PUZZLE_COMPLETED, 1);
     player.getPacketSender().closeSubInterface(TOMB_PUZZLE_OVERLAY);
     playCamera(player, CAMERA_MAUSOLEUM);
-    say(player, VANESCULA_ID, "The puzzle shifts under your fingers, and the door swings open.");
     advance(player, STAGE_PUZZLE_DONE);
     syncQuestObjects(player);
     later(player, 1, () => play(player, SAFALAAN_ID, "a-nice-and-simple-plan-the-secret-of-safalaan-hallow-part-2"));

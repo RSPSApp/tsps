@@ -68,7 +68,7 @@
     "pronounPhrases": ["He has", "She has", "They have"],
     "spreads": [
       [
-        ["Word is spreading of a brave", "and intelligent adventurer", "who goes by the name", "'[player name]'. [pronoun] talked to", "a great many people, helping", "solve problems and improving", "their lives."],
+        ["Word is spreading of a brave", "and intelligent adventurer", "who goes by the name", "'[player name]', [pronoun] talked to", "a great many people, helping", "solve problems and improving", "their lives."],
         ["The list of achievements", "include:", "", "Confronting the demon", "Delrith with the sword,", "Silverlight ----- Returning the", "skull of a ghost so that he", "may rest in peace -----", "Collecting ingredients for the", "chef in Lumbridge to make a", "cake ----- Helping Dr", "Fenkenstrain create a", "monster ----- Being launched", "from a cannon wearing a", "gold helm just to help an old"]
       ],
       [

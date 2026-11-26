@@ -119,8 +119,12 @@ test('Study on each Large Display shows its own three cards', (t) => {
 test('before the museum the displays are not there to study', (t) => {
   const { player } = reader(t, { museumBuilt: false });
   for (const multiloc of [SHIELD_MULTILOC, LARGE1_MULTILOC, BOOKCASE_MULTILOC]) {
-    const { definition } = study(player, multiloc);
+    const object = new core.GameObject(multiloc, new core.Location(2436, 3343, 0), 10, 0);
+    const definition = core.ObjectDefinition.forPlayer(multiloc, player);
     assert.ok(!definition?.getInteractions?.()?.includes('Study'), String(multiloc));
+    // A forged Study on the pre-museum loc is not answered by the museum handlers.
+    const event = { player, object, objectId: multiloc, definition, location: { x: 2436, y: 3343, z: 0 }, clickType: 1, option: 'Study', handled: false };
+    PM.emitObjectInteraction(event);
   }
   assert.equal(player.getDialogueManager().isActive(), false);
 });
@@ -162,6 +166,6 @@ test('the bookcase: The Mysterious Adventurer uses the reader\'s name and pronou
     const { player, texts } = reader(t, { name: 'Unshayani', pronouns });
     openBookcase(player).handleResume(core.OptionDialogue.OPTIONS_WIDGET_ID, 3);
     assert.equal(texts.get(uid(6)), 'The Mysterious Adventurer');
-    assert.equal(page(texts, 0)[3], `'Unshayani'. ${phrase} talked to`);
+    assert.equal(page(texts, 0)[3], `'Unshayani', ${phrase} talked to`);
   }
 });

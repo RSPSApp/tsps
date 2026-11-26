@@ -553,6 +553,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     safalaan: { id: 9539, at: [3703, 3188, 0], to: [3703, 3191] }, // myq5_safalaan_cutscene
     vanescula: { id: 9575, at: [3705, 3188, 0], to: [3705, 3191] }, // myq5_vanescula_human_cutscene
     doorway: [3704, 3190], // the one tile into the tomb
+    inside: [3704, 3191], // they step north through the doorway before turning (capture 1637)
     actorsFace: [3704, 3194],
     playerTo: [3704, 3192],
     camera: [[3704, 3195, 790], [3704, 3192, 90]],
@@ -566,6 +567,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
       returnFadeIn: 3, chatGone: 2 },
   };
   const VARBIT_FOV_CLAMP = 4606;
+  const MESSAGEBOX_GROUP = 229; // the scene's held empty chatbox
   const CAMERA_LAB = [
     [9, [3610, 9730, 900], [3610, 9738, 100]],
     [35, null],
@@ -3520,6 +3522,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
           if (!npc) continue;
           TombScenes.later(scene, at - S.ticks.actors, () => {
             TombScenes.walk(npc, S.doorway);
+            TombScenes.walk(npc, S.inside);
             TombScenes.walk(npc, spec.to);
           });
         }
@@ -3558,15 +3561,21 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     scene.finishing = true;
     TombScenes.fade(player, true);
     TombScenes.hold(player);
+    const dialogues = player.getDialogueManager();
+    const held = dialogues.getCurrent?.();
     TombScenes.later(scene, MAUSOLEUM_SCENE.ticks.exit, () => {
       TombScenes.end(player, false);
       teleport(player, { x: MAUSOLEUM_SCENE.exit[0], y: MAUSOLEUM_SCENE.exit[1], z: 0 });
       TombScenes.face(player, MAUSOLEUM_SCENE.faceNorth);
       TombScenes.later(player, MAUSOLEUM_SCENE.ticks.returnFadeIn, () => {
         TombScenes.fade(player, false);
-        // The held empty chatbox closes with the fade in (tick 3755).
-        player.getDialogueManager().reset?.();
-        player.getPacketSender().sendInterfaceRemoval();
+        // The held empty chatbox closes with the fade in (tick 3755), unless the player has
+        // already opened something else there (a talk, a menu) since the controls came back.
+        const sender = player.getPacketSender();
+        if (sender.getChatboxGroupId?.() !== MESSAGEBOX_GROUP) return;
+        if (dialogues.isActive?.() && dialogues.getCurrent?.() !== held) return;
+        dialogues.reset?.();
+        sender.closeInterface(MESSAGEBOX_GROUP);
       });
     });
   }

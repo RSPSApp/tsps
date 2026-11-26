@@ -503,8 +503,9 @@ test('Sins mausoleum cutscene follows capture 1637: fade, cutscene copy, actors,
   last.before();
   assert.equal(h.quest.getStage(p), 54, '54 as "Of course." is continued and this line opens (capture 1637 tick 3749)');
   let removals = 0;
-  const packet = p.getPacketSender(), removal = packet.sendInterfaceRemoval;
-  packet.sendInterfaceRemoval = () => { removals++; return removal(); };
+  const packet = p.getPacketSender();
+  packet.getChatboxGroupId = () => 229;
+  packet.closeInterface = group => { if (group === 229) removals++; return packet; };
   last.after();
   assert.equal(p.varbits.get(542), 1, 'still in the cutscene while the screen fades');
   h.tick(2);
@@ -515,6 +516,30 @@ test('Sins mausoleum cutscene follows capture 1637: fade, cutscene copy, actors,
   assert.equal(removals, 0, 'the empty chatbox stays until the fade in');
   h.tick(3);
   assert.equal(removals, 1, 'the empty chatbox closes with the fade in (tick 3755)');
+});
+
+test('Sins mausoleum fade in leaves a talk the player started after the return alone', () => {
+  const h = harness('SinsOfTheFather', null, { realObjects: true }), { p } = scenePlayer();
+  h.quest.setStage(p, 52);
+  p.moveTo(new core.Location(3704, 3189, 0));
+  h.namedObjects.get('Mausoleum door').Open({ player: p, objectId: 38071, handled: false });
+  h.tick(16);
+  const last = { player: p, step: { type: 'line', speaker: 'Safalaan Hallow' }, text: 'Now, both of you leave. I need some time alone.' };
+  h.emit('npc-dialogue:line', last);
+  last.after();
+  h.tick(2);
+  assert.equal(p.varbits.get(542), 0, 'back on the real map');
+  let closes = 0;
+  const packet = p.getPacketSender();
+  packet.getChatboxGroupId = () => 229;
+  packet.closeInterface = () => { closes++; return packet; };
+  // The player talks to someone as soon as the controls are back.
+  runtime.startDialogue(h.api, p, { npcId: N.SAFALAAN_HALLOW_2 }, [{ npc: ['Hello again.'] }]);
+  const talking = p.manager.getCurrent();
+  assert.ok(talking, 'a new talk is showing');
+  h.tick(3);
+  assert.equal(closes, 0, 'the fade in does not close a talk opened since the return');
+  assert.equal(p.manager.getCurrent(), talking, 'and the talk is still there');
 });
 
 test('Sins mausoleum cutscene ends if its talk is closed early, and the open door plays it again (Ours)', () => {

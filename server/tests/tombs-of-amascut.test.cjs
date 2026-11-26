@@ -679,6 +679,7 @@ function partyListRaider(name) {
   const inventory = { contains: () => false, getValidItems: () => [] };
   return Object.assign(boardPlayer(name), {
     getInventory: () => inventory,
+    getHitpoints: () => 99,
     getNpcTransformationId: () => -1,
     setUntargetable() {},
     setLocation() {},
@@ -818,11 +819,13 @@ test('party list capacity counts a party in its raid', (t) => {
   const board = partyListFixture(t);
   const raider = boardPlayer('Raider');
   board.makeParty(raider);
-  board.start(raider);
+  const raid = board.start(raider);
   for (let i = 0; i < 44; i++) assert.ok(board.makeParty(boardPlayer(`Leader${i}`)));
   const newcomer = boardPlayer('Newcomer');
-  assert.equal(board.makeParty(newcomer), null);
+  assert.equal(board.makeParty(newcomer) === null, true, '45 occupied slots refuse a new party');
   assert.match(newcomer.messages[0], /^The list of lobby parties is currently full\./);
+  raid.dispose();
+  assert.ok(board.makeParty(newcomer), 'disposing a raid frees room to recruit');
 });
 
 test('party panel sends preset flags to each viewer and refuses a member’s preset click', (t) => {

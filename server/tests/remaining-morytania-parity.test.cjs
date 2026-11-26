@@ -377,6 +377,8 @@ test('Sins tomb lock follows the client tile cycle: blank, marked, flagged, blan
   const rowSums = [26, 27, 28, 29, 30].map(c => sums((665 << 16) | c));
   const colSums = [19, 20, 21, 22, 23].map(c => sums((665 << 16) | c));
   assert.ok(rowSums.every(Number.isInteger) && colSums.every(Number.isInteger), 'the lock opened with its sums');
+  assert.ok(p.log.some(row => row[0] === 'sendInterfaceFlagsRange' && row[1] === ((665 << 16) | 32) && row[2] === 0 && row[3] === 24 && row[4] === (1 << 1)),
+    'the tiles get OP1 events (capture 1637), or the real client never sends the clicks');
   const click = slot => tombButton(h)({ player: p, buttonId: (665 << 16) | 32, slot, handled: false });
 
   let solution = -1;

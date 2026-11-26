@@ -3395,6 +3395,9 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     const puzzle = tombPuzzleFor(player);
     const sender = player.getPacketSender();
     sender.sendSubInterface(TOMB_PUZZLE_OVERLAY, TOMB_PUZZLE_GROUP, 0);
+    // Capture 1637: if_setevents 665:32 slots 0-24 OP1. Without it the real
+    // client (RuneLite) toggles tiles locally but never sends the clicks.
+    sender.sendInterfaceFlagsRange(TOMB_PUZZLE_BUTTONS, 0, TOMB_PUZZLE_SIZE * TOMB_PUZZLE_SIZE - 1, 1 << 1);
     TOMB_PUZZLE_COLUMNS.forEach((component, index) =>
       sender.sendString(String(puzzle.colSums[index]), (TOMB_PUZZLE_GROUP << 16) | component));
     TOMB_PUZZLE_ROWS.forEach((component, index) =>

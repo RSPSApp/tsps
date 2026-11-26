@@ -205,7 +205,7 @@ test("Jump-to crosses barehanded at 48 Agility either way, with no grapple fired
   assert.deepEqual(of(low.log, "msg").map(([, m]) => m), ["You need an Agility level of at least 48 to attempt this."]);
 });
 
-test("a crossing cut short by a logout lands the player on the far bank and the ropes still go", (t) => {
+test("a crossing fast-forwarded (as a logout does) lands the player on the far bank and the ropes still go", (t) => {
   const a = actor(t, [3246, 3179]);
   click(a, 17068, RAFT);
   playTo(a, 5);
@@ -240,4 +240,20 @@ test("a second crossing keeps the bank rigged until 14 ticks after its own leg",
   assert.deepEqual(second.tile(), [3259, 3179], "the second player crossed too");
   playTo(first, 50);
   assert.deepEqual([ropes(3246, 3251), locAt(WEST_TREE, 10)?.getId()], [[17030, null, 319, null, null, null], 17039]);
+});
+
+test("a player left on the raft (main's old landing) gets off with either option, to the nearer bank", (t) => {
+  for (const [tile, objectId, loc, geared, landing] of [
+    [[3253, 3179], 17068, RAFT, true, [3259, 3179]],
+    [[3252, 3180], 17068, RAFT, true, [3246, 3179]],
+    [[3253, 3180], 17069, [3252, 3180], false, [3259, 3179]],
+    [[3252, 3180], 17070, [3253, 3180], false, [3246, 3179]],
+  ]) {
+    const a = actor(t, tile, { geared, agility: 60 });
+    click(a, objectId, loc);
+    playTo(a, 25);
+    assert.deepEqual(a.tile(), landing, `from ${tile} with ${objectId}`);
+    assert.equal(a.p.getMovementQueue().isMovementBlocked(), false);
+    if (geared) assert.deepEqual(of(a.log, "tab").map(([, tab]) => tab), [9, 1], "the tabs close and come back");
+  }
 });

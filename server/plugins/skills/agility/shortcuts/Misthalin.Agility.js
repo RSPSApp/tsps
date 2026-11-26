@@ -164,17 +164,45 @@ const BAREHANDED = {
   ],
 };
 
+/**
+ * From the raft itself (a player saved there: before this crossing was scripted, the one from Lumbridge ended on
+ * 3253,3179): the far half of a crossing, to the nearer bank. Ours: live has no way to stand there between crossings.
+ */
+const RAFT_TILES = new Set(["3252,3180", "3253,3179", "3253,3180"]);
+function onRaft(pos) {
+  return pos.z === 0 && RAFT_TILES.has(`${pos.x},${pos.y}`);
+}
+function fromRaft(pos, grapple) {
+  const way = pos.x >= RAFT_EAST[0] ? "east" : "west";
+  const start = way === "east" ? RAFT_EAST : RAFT_WEST;
+  const walk = pos.x === start[0] && pos.y === start[1] ? [] : [{ walk: [start], arrive: true }, { wait: 1 }];
+  if (!grapple) {
+    // The second swim onwards.
+    const steps = BAREHANDED[way];
+    return [...walk, ...steps.slice(steps.findIndex((step, index) => index > 0 && step.tele))];
+  }
+  // The second shot onwards, with the tabs closed as for a whole crossing.
+  const steps = GRAPPLE[way];
+  const secondShot = steps.findIndex((step, index) => step.anim === FIRE_ANIM && index > steps.findIndex((s) => s.anim === FIRE_ANIM));
+  return [...walk, { faceDir: way }, { run: (context) => tabs(context.player, true) }, ...steps.slice(secondShot)];
+}
+
 /** Misthalin shortcut scripts (agility-shortcuts.json). */
 module.exports = {
   /** The Broken Raft across the River Lum, either way, from the bank tile nearer the player (see above). */
-  riverLumRaft: ({ grapple = true }) => ({
-    ...between({
+  riverLumRaft: ({ grapple = true }) => {
+    const crossing = between({
       ends: [[3246, 3179, 0], [3259, 3179, 0]],
       cross: (from, to) => (grapple ? GRAPPLE : BAREHANDED)[to[0] > from[0] ? "east" : "west"],
-    }),
-    // A crossing cut short (a death on the way) gives the side tabs back; a logout rebuilds them on login.
-    ...(grapple ? { onCancel: (player) => tabs(player, false) } : {}),
-  }),
+    });
+    return {
+      ...crossing,
+      route: (context) => (onRaft(context.pos) ? [context.pos.x, context.pos.y, context.pos.z] : crossing.route(context)),
+      steps: (context) => (onRaft(context.pos) ? fromRaft(context.pos, grapple) : crossing.steps(context)),
+      // A crossing cut short (a death on the way) gives the side tabs back; a logout rebuilds them on login.
+      ...(grapple ? { onCancel: (player) => tabs(player, false) } : {}),
+    };
+  },
 
   /** Lumbridge castle basement: crawl through the hole, away from the player's side. */
   lumbridgeBasementHole: () => ({

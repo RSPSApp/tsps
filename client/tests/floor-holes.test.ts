@@ -10,6 +10,9 @@ import { CacheIndexDat2 } from "../../server/src/main/typescript/elvarg/game/cac
 import { OverlayFloorType } from "../rs/config/floortype/OverlayFloorType";
 import { ByteBuffer } from "../rs/io/ByteBuffer";
 import { LocLoadType, SceneBuilder } from "../rs/scene/SceneBuilder";
+import { LocModelType } from "../rs/config/loctype/LocModelType";
+import { getIdFromTag } from "../rs/scene/entity/EntityTag";
+import { LOC_OVERRIDE_REMOVED } from "../rs/scene/LocOverride";
 import { getSceneLocs } from "../render/loc/SceneLocs";
 import { CacheSystem } from "../rs/cache/CacheSystem";
 import { getCacheLoaderFactory } from "../rs/cache/loader/CacheLoaderFactory";
@@ -155,6 +158,70 @@ function nativeShaftGeometry(): void {
     }
     assertPit(castle.tiles[0][31][27]?.tileModel, "full build Castle Wars 2399,3099");
     assertPit(castle.tiles[0][32][36]?.tileModel, "full build Castle Wars 2400,3108");
+    // The server opens closed trapdoor 1579 in place as 1581: a shaft 128 deep with black walls and
+    // no bottom. The pit must stay (no sky through the shaft) but never cover the shaft or share its walls.
+    for (const [worldX, worldY] of [[2399, 3099], [2400, 3108]]) {
+        const closed = castle.tiles[0][worldX - 2368][worldY - 3072]!.floorDecoration!;
+        assert.equal(getIdFromTag(closed.tag), 1579, `closed trapdoor at ${worldX},${worldY}`);
+        const checkOpened = (pit: any, shaft: any, label: string): void => {
+            assert.equal(getIdFromTag(shaft.tag), 1581, `${label}: open trapdoor placed`);
+            const model = shaft.entity as any;
+            const ys = model.contourVerticesY ?? model.verticesY;
+            const shaftX: number[] = [], shaftY: number[] = [], shaftZ: number[] = [];
+            for (let i = 0; i < model.verticesCount; i++) {
+                shaftX.push(shaft.x + model.verticesX[i]);
+                shaftY.push(shaft.height + ys[i]);
+                shaftZ.push(shaft.y + model.verticesZ[i]);
+            }
+            assert.equal(Math.max(...shaftY) - shaft.height, 128, `${label}: 1581 reaches 128 below the floor`);
+            assertPit(pit, `${label}: a pit still closes the shaft from the sky`);
+            const lowest = Math.max(...shaftY);
+            const [minX, maxX, minZ, maxZ] = [Math.min(...shaftX), Math.max(...shaftX), Math.min(...shaftZ), Math.max(...shaftZ)];
+            // Every pit face reaching into the shaft's footprint lies wholly below the shaft.
+            let below = 0;
+            for (const face of pit!.faces) {
+                const xs = face.vertices.map(v => v.x), zs = face.vertices.map(v => v.z);
+                if (Math.max(...xs) <= minX || Math.min(...xs) >= maxX || Math.max(...zs) <= minZ || Math.min(...zs) >= maxZ) continue;
+                const top = Math.min(...face.vertices.map(v => v.y));
+                assert.ok(top > lowest, `${label}: pit face at y ${top} is above the shaft's lowest point ${lowest}`);
+                below++;
+            }
+            assert.equal(below, 4, `${label}: only the pit bottom (both windings) lies under the shaft`);
+            // Planes of the shaft's vertical walls (x = c or z = c) and of the pit's walls.
+            const planes = (faces: number[][][]): Set<string> => {
+                const out = new Set<string>();
+                for (const face of faces) {
+                    if (face.every(v => v[0] === face[0][0]) && new Set(face.map(v => v[1])).size > 1) out.add(`x${face[0][0]}`);
+                    if (face.every(v => v[2] === face[0][2]) && new Set(face.map(v => v[1])).size > 1) out.add(`z${face[0][2]}`);
+                }
+                return out;
+            };
+            const shaftFaces: number[][][] = [];
+            for (let f = 0; f < model.faceCount; f++) {
+                shaftFaces.push([model.indices1[f], model.indices2[f], model.indices3[f]]
+                    .map((i: number) => [shaftX[i], shaftY[i], shaftZ[i]]));
+            }
+            const shaftWalls = planes(shaftFaces);
+            assert.ok(shaftWalls.size >= 4, `${label}: the shaft has its four walls`);
+            for (const wall of planes(pit!.faces.map(face => face.vertices.map(v => [v.x, v.y, v.z])))) {
+                assert.ok(!shaftWalls.has(wall), `${label}: pit wall ${wall} is coplanar with a shaft wall`);
+            }
+        };
+        const rotation = (closed.flags >> 6) & 3;
+        // A full reload: closed 1579 removed by its override, 1581 injected after terrain.
+        builder.setLocOverride(8, 8, 0, 1579, LOC_OVERRIDE_REMOVED);
+        const reloaded = builder.buildScene(worldX - 8, worldY - 8, 16, 16, false, LocLoadType.MODELS);
+        builder.clearLocOverrides();
+        assert.equal(reloaded.tiles[0][8][8]?.floorDecoration, undefined, "closed 1579 removed");
+        builder.addLocToBuiltScene(reloaded, 0, 8, 8, 1581, LocModelType.FLOOR_DECORATION, rotation, LocLoadType.MODELS);
+        const shaft = reloaded.tiles[0][8][8]!.floorDecoration!;
+        checkOpened(reloaded.tiles[0][8][8]!.tileModel, shaft, `reloaded open Castle Wars trapdoor ${worldX},${worldY}`);
+        // Terrain built with the closed trapdoor is kept when the server swaps the loc in place
+        // (loc-only and door-only loads), so that pit must already clear the opened shaft.
+        const kept = builder.buildScene(worldX - 8, worldY - 8, 16, 16, false, LocLoadType.MODELS);
+        assert.equal(getIdFromTag(kept.tiles[0][8][8]!.floorDecoration!.tag), 1579);
+        checkOpened(kept.tiles[0][8][8]!.tileModel, shaft, `in-place open Castle Wars trapdoor ${worldX},${worldY}`);
+    }
     const trapdoorScene = builder.buildScene(2992, 3136, 32, 32, false, LocLoadType.MODELS);
     const trapdoor = getSceneLocs(locTypes, trapdoorScene, 0, 3, 32).locs.find(loc => loc.interactId === 1738 &&
         (loc.sceneX >> 7) === 16 && (loc.sceneZ >> 7) === 14);

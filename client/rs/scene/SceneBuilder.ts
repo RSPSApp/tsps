@@ -60,6 +60,15 @@ type TerrainOverride = {
  */
 const FLOOR_HOLE_DEPTH = 64;
 
+/**
+ * Pit walls stand this far outside the tile edges, beneath the neighbouring floor, so they never
+ * share a plane with a trapdoor or ladder shaft's own walls on those edges (no z-fighting).
+ */
+const FLOOR_HOLE_WALL_OUTSET = 2;
+
+/** How far a pit bottom stays below the lowest vertex of a shaft drawn in it. */
+const FLOOR_HOLE_SHAFT_CLEARANCE = 16;
+
 /** Surface drawn inside floor holes: the pit bottom. */
 const FLOOR_HOLE_HSL = packHsl(0, 0, 0);
 
@@ -809,6 +818,11 @@ export class SceneBuilder {
             seqRandomStartOverride,
             SceneBuilder.mapLevel(scene, tileX, tileY, level),
         );
+        // A trapdoor opened in a reload is injected after terrain: drop the pit below its shaft.
+        const pit = scene.tiles?.[level]?.[tileX]?.[tileY]?.tileModel;
+        if (pit?.floorHoleRimY !== undefined) {
+            this.deepenFloorHole(pit, this.locDepthBelowFloor(id, type, rotation));
+        }
     }
 
     addLoc(
@@ -1616,6 +1630,8 @@ export class SceneBuilder {
                             heightNe,
                             heightNw,
                         );
+                        // A closed trapdoor is flat; the server opens it in place without rebuilding terrain.
+                        this.deepenFloorHole(tileModel, this.openedShaftDepth(scene, level, x, y));
                     } else if (!overlay) {
                         tileModel = new SceneTileModel(
                             0,
@@ -1752,6 +1768,50 @@ export class SceneBuilder {
     }
 
     /**
+     * How far below the floor the open variant of a closed trapdoor on this tile reaches: the
+     * server swaps it in place (1579 to 1581, 2446 to 2445) and the open variant is a same-named
+     * loc next to it in the cache. 0 when the tile has no such loc.
+     */
+    private openedShaftDepth(scene: Scene, level: number, x: number, y: number): number {
+        const tile = scene.tiles[level][x][y];
+        if (!tile) return 0;
+        let depth = 0;
+        for (const loc of [tile.floorDecoration, tile.wall, tile.wallDecoration, ...tile.locs]) {
+            if (!loc) continue;
+            const id = getIdFromTag(loc.tag);
+            const closed = this.locTypeLoader.load(id);
+            if (!closed.actions.some(action => action?.toLowerCase() === "open")) continue;
+            for (let variantId = Math.max(0, id - 2); variantId <= id + 2; variantId++) {
+                if (variantId === id || this.locTypeLoader.load(variantId)?.name !== closed.name) continue;
+                depth = Math.max(depth, this.locDepthBelowFloor(variantId, loc.flags & 0x3f, (loc.flags >> 6) & 3));
+            }
+        }
+        return depth;
+    }
+
+    /** The lowest vertex of a loc's model below its floor (terrain y grows downwards), or 0. */
+    private locDepthBelowFloor(id: number, type: LocModelType, rotation: number): number {
+        const locType = this.locTypeLoader.load(id);
+        const model = locType && this.locModelLoader.getLocModelData(locType, type, rotation);
+        let depth = 0;
+        for (let i = 0; model && i < model.verticesCount; i++) depth = Math.max(depth, model.verticesY[i]);
+        return depth;
+    }
+
+    /** Lowers a pit's bottom so a shaft `shaftDepth` deep stays fully in front of it. */
+    private deepenFloorHole(pit: SceneTileModel, shaftDepth: number): void {
+        if (shaftDepth <= 0 || pit.floorHoleRimY === undefined || pit.floorHoleBottomY === undefined) return;
+        const bottomY = pit.floorHoleRimY + shaftDepth + FLOOR_HOLE_SHAFT_CLEARANCE;
+        if (bottomY <= pit.floorHoleBottomY) return;
+        for (const face of pit.faces) {
+            for (const vertex of face.vertices) {
+                if (vertex.y === pit.floorHoleBottomY) vertex.y = bottomY;
+            }
+        }
+        pit.floorHoleBottomY = bottomY;
+    }
+
+    /**
      * A ladder/trapdoor opening: the tile's top rim sits at the map heights and a black pit
      * drops FLOOR_HOLE_DEPTH below it, with dark walls linking the two so the opening reads
      * as a hole instead of a painted square. Terrain y is stored negated (higher ground is
@@ -1791,9 +1851,15 @@ export class SceneBuilder {
             0,
         );
 
-        const tileX = x * 128;
-        const tileY = y * 128;
-        const bottomY = Math.max(heightSw, heightSe, heightNe, heightNw) + FLOOR_HOLE_DEPTH;
+        const rimY = Math.max(heightSw, heightSe, heightNe, heightNw);
+        const bottomY = rimY + FLOOR_HOLE_DEPTH;
+        model.floorHoleRimY = rimY;
+        model.floorHoleBottomY = bottomY;
+        // The walls stand just outside the tile, beneath the neighbouring floor.
+        const westX = x * 128 - FLOOR_HOLE_WALL_OUTSET;
+        const eastX = x * 128 + 128 + FLOOR_HOLE_WALL_OUTSET;
+        const southZ = y * 128 - FLOOR_HOLE_WALL_OUTSET;
+        const northZ = y * 128 + 128 + FLOOR_HOLE_WALL_OUTSET;
         const vertex = (vx: number, vy: number, vz: number, hsl: number) => ({
             x: vx,
             y: vy,
@@ -1803,14 +1869,14 @@ export class SceneBuilder {
             v: 0,
             textureId: -1,
         });
-        const sw = vertex(tileX, heightSw, tileY, FLOOR_HOLE_WALL_HSL);
-        const se = vertex(tileX + 128, heightSe, tileY, FLOOR_HOLE_WALL_HSL);
-        const ne = vertex(tileX + 128, heightNe, tileY + 128, FLOOR_HOLE_WALL_HSL);
-        const nw = vertex(tileX, heightNw, tileY + 128, FLOOR_HOLE_WALL_HSL);
-        const bsw = vertex(tileX, bottomY, tileY, FLOOR_HOLE_HSL);
-        const bse = vertex(tileX + 128, bottomY, tileY, FLOOR_HOLE_HSL);
-        const bne = vertex(tileX + 128, bottomY, tileY + 128, FLOOR_HOLE_HSL);
-        const bnw = vertex(tileX, bottomY, tileY + 128, FLOOR_HOLE_HSL);
+        const sw = vertex(westX, heightSw, southZ, FLOOR_HOLE_WALL_HSL);
+        const se = vertex(eastX, heightSe, southZ, FLOOR_HOLE_WALL_HSL);
+        const ne = vertex(eastX, heightNe, northZ, FLOOR_HOLE_WALL_HSL);
+        const nw = vertex(westX, heightNw, northZ, FLOOR_HOLE_WALL_HSL);
+        const bsw = vertex(westX, bottomY, southZ, FLOOR_HOLE_HSL);
+        const bse = vertex(eastX, bottomY, southZ, FLOOR_HOLE_HSL);
+        const bne = vertex(eastX, bottomY, northZ, FLOOR_HOLE_HSL);
+        const bnw = vertex(westX, bottomY, northZ, FLOOR_HOLE_HSL);
 
         const addQuad = (a: any, b: any, c: any, d: any): void => {
             model.faces.push({ isOverlay: false, vertices: [a, b, c] });

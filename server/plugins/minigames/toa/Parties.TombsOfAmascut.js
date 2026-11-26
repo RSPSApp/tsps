@@ -87,6 +87,12 @@ class LobbyParty {
     this.broadcastMembers();
   }
 
+  /** Swap adjacent lobby rows, taking the new leader's settings if first place changes. */
+  swap(first, second) {
+    [this.players[first], this.players[second]] = [this.players[second], this.players[first]];
+    if (first === 0 || second === 0) this.settings = settingsOf(this.leader);
+  }
+
   memberList() {
     const names = Array.from({ length: Shared.MAX_PARTY_SIZE }, (_, i) =>
       this.players[i] ? Shared.displayName(this.players[i]) : "-");

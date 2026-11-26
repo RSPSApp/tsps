@@ -342,8 +342,34 @@ function sameTile(left, right) {
   return left && right && left.getX() === right.getX() && left.getY() === right.getY() && left.getZ() === right.getZ();
 }
 
+/**
+ * The fairy teleport holds the player on the ring: walk clicks do nothing until the busy varbit clears. The hold is
+ * taken only when nothing else holds the player, and given back only while it is still the fairy teleport's own.
+ */
+function holdMovement(player, pending) {
+  // A fairy teleport started on the tick busy cleared takes over the last one's hold.
+  const lingering = lingeringHolds.get(player);
+  if (lingering) releaseMovement(player, lingering);
+  const queue = player.getMovementQueue();
+  if (queue.isMovementBlocked()) return;
+  queue.setBlockMovement(true).reset();
+  pending.hold = queue.getBlockMovementGeneration();
+}
+
+/** A finished fairy teleport's hold, given back at the start of the next tick. */
+const lingeringHolds = new WeakMap();
+
+function releaseMovement(player, pending) {
+  if (lingeringHolds.get(player) === pending) lingeringHolds.delete(player);
+  if (pending.hold === undefined) return;
+  const queue = player.getMovementQueue();
+  if (queue.getBlockMovementGeneration() === pending.hold) queue.setBlockMovement(false);
+  pending.hold = undefined;
+}
+
 function cancelPendingTeleport(player, pending = pendingTeleports.get(player)) {
   if (!pending) return false;
+  releaseMovement(player, pending);
   pending.cancelled = true;
   if (pendingTeleports.get(player) !== pending) return false;
   pendingTeleports.delete(player);
@@ -441,6 +467,9 @@ function fairyTeleport(player, ring, from, fromClick) {
   const pending = { cancelled: false };
   cancelPendingTeleport(player);
   pendingTeleports.set(player, pending);
+  holdMovement(player, pending);
+  // Set when busy clears; the hold goes on the next tick.
+  let released = null;
   const stillValid = () => !pending.cancelled && pendingTeleports.get(player) === pending &&
     (pending.landed || (player.isRegistered() && player.getHitpoints?.() > 0 && !player.isDyingReturn?.() &&
       player.getTeleportSerial?.() === teleportSerial &&
@@ -450,8 +479,24 @@ function fairyTeleport(player, ring, from, fromClick) {
       super(1, player, false);
     }
 
+    /** Also stopped from outside (a player-wide cancelTasks): the hold and busy go with it. */
+    stop() {
+      super.stop();
+      if (released) {
+        releaseMovement(player, released);
+      } else if (cancelPendingTeleport(player, pending) && player.isRegistered()) {
+        sender.sendVarbit(BUSY_VARBIT, 0);
+      }
+    }
+
     execute() {
       tick++;
+      if (released) {
+        // Tasks run before the player's input: a walk click on the tick busy clears still does nothing.
+        releaseMovement(player, released);
+        this.stop();
+        return;
+      }
       if (!stillValid()) {
         const ownsPending = cancelPendingTeleport(player, pending);
         if (ownsPending && player.isRegistered()) sender.sendVarbit(BUSY_VARBIT, 0);
@@ -496,8 +541,10 @@ function fairyTeleport(player, ring, from, fromClick) {
       if (tick === delay + 4) {
         sender.sendVarbit(BUSY_VARBIT, 0);
         player.performAnimation(core.Animation.DEFAULT_RESET_ANIMATION);
+        released = { hold: pending.hold };
+        lingeringHolds.set(player, released);
+        pending.hold = undefined;
         cancelPendingTeleport(player, pending);
-        this.stop();
         if (ring.refusal) {
           refusalBox(player, ring.refusal);
         } else if (sameRing) {

@@ -66,7 +66,8 @@ function fight(t, tile, protectMagic) {
 
   const projectiles = [];
   const createProjectile = core.Projectile.createProjectile.bind(core.Projectile);
-  t.mock.method(core.Projectile, "createProjectile", (...args) => { projectiles.push(args[2]); return createProjectile(...args); });
+  const holder = {};
+  t.mock.method(core.Projectile, "createProjectile", (...args) => { projectiles.push(args[2]); return (holder.last = createProjectile(...args)); });
   const graphics = [];
   const performGraphic = p.performGraphic.bind(p);
   t.mock.method(p, "performGraphic", (graphic) => { graphics.push(graphic.getId()); return performGraphic(graphic); });
@@ -74,7 +75,7 @@ function fight(t, tile, protectMagic) {
   const sender = p.getPacketSender();
   const sendAreaSound = sender.sendAreaSound.bind(sender);
   t.mock.method(sender, "sendAreaSound", (id, ...rest) => { sounds.push(id); return sendAreaSound(id, ...rest); });
-  return { p, demon, method: CombatFactory.getMethod(demon), projectiles, graphics, sounds };
+  return { p, demon, method: CombatFactory.getMethod(demon), projectiles, graphics, sounds, get lastProjectile() { return holder.last; } };
 }
 
 const at = (f) => [f.p.getLocation().getX(), f.p.getLocation().getY(), f.p.getLocation().getZ()];
@@ -114,6 +115,56 @@ test("control: out of melee without Protect from Magic he casts Fire Blast, and 
   assert.deepEqual(f.projectiles, [130]);
   ticks(3);
   assert.deepEqual(at(f), OUT_OF_MELEE);
+});
+
+/** Each graphic on the player with its delay, each sound with its delay. */
+function spyLanding(t, f) {
+  const shown = [];
+  t.mock.method(f.p, "performGraphic", (graphic) => { shown.push([graphic.getId(), graphic.getDelay()]); });
+  const heard = [];
+  const sender = f.p.getPacketSender();
+  const sendSoundEffect = sender.sendSoundEffect.bind(sender);
+  t.mock.method(sender, "sendSoundEffect", (id, loops, delay, ...rest) => { heard.push([id, delay]); return sendSoundEffect(id, loops, delay, ...rest); });
+  return { shown, heard };
+}
+
+function rollUntil(f, accurate, spy) {
+  for (let i = 0; i < 80; i++) {
+    spy.shown.length = 0;
+    spy.heard.length = 0;
+    const [pending] = f.method.hits(f.demon, f.p);
+    if (pending.isAccurate() === accurate) return pending;
+  }
+  assert.fail(`control: no ${accurate ? "accurate" : "missed"} roll in 80`);
+}
+
+test("rsprox t2513: a Fire Blast that lands shows firebolt_impact (128) and fireblast_hit (156) as the projectile lands", (t) => {
+  const f = fight(t, OUT_OF_MELEE, false);
+  const onHim = [];
+  t.mock.method(f.demon, "performGraphic", (graphic) => { onHim.push(graphic.getId()); });
+  f.method.start(f.demon, f.p);
+  assert.deepEqual(f.sounds, [155], "t2513: fireblast_cast_and_fire as an area sound on the cast");
+  assert.deepEqual(onHim, [], "no cast graphic on him (none in the capture's 45 casts)");
+  const timing = f.lastProjectile.getTiming();
+  assert.equal(timing.startCycleOffset, 51);
+  const spy = spyLanding(t, f);
+  const hit = rollUntil(f, true, spy);
+  const landing = timing.endCycleOffset;
+  assert.ok(spy.shown.some(([id, delay]) => id === 128 && delay === landing), JSON.stringify(spy.shown));
+  assert.ok(spy.heard.some(([id, delay]) => id === 156 && delay === landing), JSON.stringify(spy.heard));
+  assert.equal(hit.getDelay?.() ?? hit.delay, core.Projectile.ticksToLand(landing));
+});
+
+test("rsprox t2235 (43 splashes): a missed Fire Blast splashes (85, spellfail 227) with no hitsplat", (t) => {
+  const f = fight(t, OUT_OF_MELEE, false);
+  f.method.start(f.demon, f.p);
+  const landing = f.lastProjectile.getTiming().endCycleOffset;
+  const spy = spyLanding(t, f);
+  const miss = rollUntil(f, false, spy);
+  assert.equal(miss.getHits().length, 0, "no hitsplat, not even a 0");
+  assert.ok(spy.shown.some(([id, delay]) => id === 85 && delay === landing), JSON.stringify(spy.shown));
+  assert.ok(spy.heard.some(([id, delay]) => id === 227 && delay === landing), JSON.stringify(spy.heard));
+  assert.ok(!spy.shown.some(([id]) => id === 128));
 });
 
 test("control: in melee there is no pull", (t) => {

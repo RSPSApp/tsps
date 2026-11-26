@@ -18,7 +18,16 @@ export function packageWebRelease(dist, out, version, baseUrl) {
     const outputRelative = relative(dist, out);
     if (!isAbsolute(outputRelative) && outputRelative !== ".." && !outputRelative.startsWith(`..${sep}`)) throw new Error("Release output must be outside the client build");
     if (!statSync(join(dist, "index.html")).isFile()) throw new Error("Client build is missing index.html");
-    const entries = readdirSync(dist).filter(name => !excluded.has(name));
+    const { clientVersion } = JSON.parse(readFileSync(join(dist, "client-release.json"), "utf8"));
+    if (typeof clientVersion !== "string" || !/^[a-f0-9]{64}$/.test(clientVersion)) throw new Error("Missing client build identifier");
+    const cacheMetadata = "caches/caches.json";
+    if (lstatSync(join(dist, "caches")).isSymbolicLink()) throw new Error("Client releases cannot contain links in cache metadata");
+    const cacheList = JSON.parse(readFileSync(join(dist, cacheMetadata), "utf8"));
+    if (!Array.isArray(cacheList) || cacheList.length === 0 || cacheList.some(cache =>
+        typeof cache?.name !== "string" || !/^[A-Za-z0-9_-]+$/.test(cache.name) || !Number.isInteger(cache.revision) || cache.revision <= 0)) {
+        throw new Error("caches.json must pin the release's cache name and revision");
+    }
+    const entries = [...readdirSync(dist).filter(name => !excluded.has(name)), cacheMetadata];
     function checkFile(path) {
         const stat = lstatSync(path);
         if (stat.isDirectory()) for (const name of readdirSync(path)) checkFile(join(path, name));
@@ -35,7 +44,7 @@ export function packageWebRelease(dist, out, version, baseUrl) {
     if (packed.status !== 0) throw new Error(`Could not package client: ${packed.stderr}`);
     const bytes = readFileSync(archive);
     const manifest = {
-        version, createdAt: new Date().toISOString(), minShellVersion: "0.1.1",
+        version, createdAt: new Date().toISOString(), minShellVersion: "0.1.2",
         archive: { url: new URL(archiveName, base).href, sha256: createHash("sha256").update(bytes).digest("hex"), size: bytes.length },
     };
     const manifestPath = join(out, "manifest.json");

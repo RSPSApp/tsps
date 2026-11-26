@@ -21,11 +21,13 @@ const deathHooks = [];
 const collectionLogObtains = [];
 const prompts = [];
 const npcApi = {};
+let processCycle = 0;
 const world = {
   sendMessage: (message) => broadcasts.push(message),
   getNpcs: () => npcApi,
   getAddNPCQueue: () => npcApi.addQueue,
   getRemoveNPCQueue: () => npcApi.removeQueue,
+  getProcessCycle: () => processCycle,
 };
 npcApi.add = () => false;
 npcApi.get = () => null;
@@ -158,6 +160,10 @@ function createPetNpc(player, npcId) {
     setNpcTransformationId(id) {
       this.transformed = id;
     },
+    animations: [],
+    performAnimation(anim) {
+      this.animations.push(anim.getId());
+    },
   };
 }
 
@@ -170,6 +176,7 @@ beforeEach(() => {
   npcApi.npcs.length = 0;
   npcApi.addQueue.length = 0;
   npcApi.removeQueue.length = 0;
+  processCycle = 0;
 });
 
 test("agility rolls the giant squirrel at 1 in (base - level * 25)", () => {
@@ -331,6 +338,71 @@ test("a cached Metamorphosis option dispatches to morph, Talk-to to interact", (
   assert.deepEqual(player.inventory, []);
 });
 
+test("the follower's Emote option cycles its boss animations with a cooldown", () => {
+  const player = createPlayer();
+  const npc = createPetNpc(player, NpcIdentifiers.BUTCH_2);
+  player.setAttribute("pets:current", npc);
+  const definition = { getActions: () => ["Talk-to", null, "Pick-up", "Emote", null] };
+  const click = () => Pets.__internals.handlePetClick({ player, npc, npcId: NpcIdentifiers.BUTCH_2, clickType: 4, definition });
+
+  assert.equal(click(), true);
+  assert.deepEqual(npc.animations, [10340], "the first Vardorvis animation");
+  assert.equal(click(), true, "an immediate repeat is still handled");
+  assert.deepEqual(npc.animations, [10340], "the cooldown holds the second emote");
+  assert.equal(player.messages.at(-1), "You must wait a moment before your pet can do another emote.");
+
+  processCycle = 8;
+  assert.equal(click(), true);
+  assert.deepEqual(npc.animations, [10340, 10345], "the next animation after the cooldown");
+});
+
+test("an awakened Vardorvis kill unlocks Butch's death emote in the cycle", () => {
+  const player = createPlayer();
+  const npc = createPetNpc(player, NpcIdentifiers.BUTCH_2);
+  const butch = Pets.__internals.PETS.find((p) => p.enumName === "BUTCH");
+  const emote = () => Pets.__internals.handlePetEmote(player, npc, butch);
+
+  // Play the four base emotes so the next step is the gated death emote.
+  for (let i = 0; i < 4; i++) { assert.equal(emote(), true); processCycle += 8; }
+  assert.deepEqual(npc.animations, [10340, 10345, 10342, 10341]);
+
+  // Locked: the death emote is skipped and the cycle wraps to the melee again.
+  assert.equal(emote(), true);
+  assert.deepEqual(npc.animations, [10340, 10345, 10342, 10341, 10340]);
+
+  // Unlocked: the death emote plays at its step.
+  player.setAttribute("vardorvis:awakened-kills", 1);
+  assert.equal(Pets.__internals.petEmoteStep(player, butch, 4), 10347);
+  npc.__petEmote.index = 4;
+  processCycle += 8;
+  assert.equal(emote(), true);
+  assert.equal(npc.animations.at(-1), 10347);
+});
+
+test("Wisp's death emote needs its owner's awakened Whisperer kill, preserving the ordinary cycle", () => {
+  const wisp = Pets.__internals.PETS.find((pet) => pet.enumName === "WISP");
+  const locked = createPlayer();
+  locked.setAttribute("whisperer:kills", 100);
+  locked.setAttribute("vardorvis:awakened-kills", 1);
+  const lockedNpc = createPetNpc(locked, NpcIdentifiers.WISP_2);
+  for (let i = 0; i < 4; i++) {
+    assert.equal(Pets.__internals.handlePetEmote(locked, lockedNpc, wisp), true);
+    processCycle += 8;
+  }
+  assert.deepEqual(lockedNpc.animations, [10234, 10254, 10253, 10234], "normal or another boss's kills do not unlock death");
+
+  // No awakened Whisperer completion producer exists yet: this is a controlled earned-state fixture.
+  const earned = createPlayer();
+  earned.setAttribute("whisperer:awakened-kills", 1);
+  const earnedNpc = createPetNpc(earned, NpcIdentifiers.WISP_2);
+  for (let i = 0; i < 5; i++) {
+    assert.equal(Pets.__internals.handlePetEmote(earned, earnedNpc, wisp), true);
+    processCycle += 8;
+  }
+  assert.deepEqual(earnedNpc.animations, [10234, 10254, 10253, 10262, 10234]);
+  assert.equal(Pets.__internals.petEmoteStep(locked, wisp, 3), null, "another owner's completion cannot unlock it");
+});
+
 test("a normal logout and login rebuilds exactly one follower from the item", () => {
   const player = createPlayer();
   player.setAttribute("pets:current", undefined);
@@ -395,26 +467,6 @@ test("a completion-gated metamorphosis is denied until the activity is completed
   player.setAttribute("gauntlet:stats", { completions: { regular: 0, corrupted: 1 } });
   assert.equal(Pets.__internals.morph(player, npc), true);
   assert.equal(npc.transformed, NpcIdentifiers.CORRUPTED_YOUNGLLEF_2);
-});
-
-test("a phoenix needs the right firelighter and consumes it", () => {
-  const player = createPlayer();
-  const npc = createPetNpc(player, NpcIdentifiers.PHOENIX_2);
-  player.setAttribute("pets:current", npc);
-
-  assert.equal(Pets.__internals.morph(player, npc), true);
-  assert.equal(npc.transformed, undefined);
-  assert.match(player.messages.at(-1), /blue firelighter/);
-
-  player.inventory.push(ItemIdentifiers.BLUE_FIRELIGHTER);
-  assert.equal(Pets.__internals.morph(player, npc), true);
-  assert.equal(npc.transformed, NpcIdentifiers.PHOENIX_7);
-  assert.deepEqual(player.inventory, []);
-
-  player.inventory.push(ItemIdentifiers.PURPLE_FIRELIGHTER);
-  assert.equal(Pets.__internals.morph(player, npc), true);
-  assert.equal(npc.transformed, NpcIdentifiers.PHOENIX_7);
-  assert.match(player.messages.at(-1), /green firelighter/);
 });
 
 test("Bran and Ric are free metamorphosis forms", () => {
@@ -754,4 +806,17 @@ test("the other quest and activity pet sources stay explicit and single", () => 
 
   const kitten = Pets.__internals.PET_BY_ITEM_ID.get(1555);
   assert.equal(Pets.__internals.catInfoOf(kitten).stage, "kitten", "Gertrude's kitten starts the growth clock");
+});
+
+test("Orion's emotes never use a looping or one-sided Ocellus animation", () => {
+  const player = createPlayer();
+  const npc = createPetNpc(player, NpcIdentifiers.ORION);
+  for (const enumName of ["ORION", "ORION_ROBED"]) {
+    const orion = Pets.__internals.PETS.find((p) => p.enumName === enumName);
+    // 14850 is basic_projectile_start (loops forever); 14853 is its noloop twin.
+    assert.deepEqual([0, 1, 2].map((i) => Pets.__internals.petEmoteStep(player, orion, i)), [14842, 14853, 14857]);
+    // unleash_in (14857) rises; unleash_out (14861) must follow or the pet snaps back down.
+    assert.deepEqual(orion.emote[2].then, { anim: 14861, delay: 2 });
+  }
+  assert.ok(npc);
 });

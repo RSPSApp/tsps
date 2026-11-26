@@ -399,7 +399,7 @@ test('without a light source the dig is refused with the captured line: no anima
 test('with the Fire of Eternal Light built (my2arm_fire_mole) no light source is needed', t => {
   const s = scene(t);
   const Darkness = require('../plugins/world/Darkness.plugin');
-  Darkness.register({ core, registerArea() {}, log() {}, emitCustomEvent() {} });
+  Darkness.register({ core, registerArea() {}, onItemDropPolicy() {}, log() {}, emitCustomEvent() {} });
   const fire = core.CacheDefinitions.getVarbitId('my2arm_fire_mole');
   assert.equal(fire, 6532);
   let built = 0;

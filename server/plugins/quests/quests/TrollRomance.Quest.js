@@ -632,6 +632,7 @@ module.exports = function registerTrollRomanceQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [ARRG_ATTACKABLE_NPC_ID],
     key: "troll_romance",
     name: "Troll Romance",
     varpId: VARP_TROLL_LOVE,

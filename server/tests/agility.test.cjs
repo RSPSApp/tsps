@@ -407,6 +407,30 @@ test("Karuulm Slayer Dungeon stepover rocks (34544) are shortcuts that cross two
   assert.equal(east.end, "You climb over the rocks.");
 });
 
+test("as captured (rsprox local 1000143, 1000473, 1521): the Alchemical Hydra lair rocks (34548) climb two tiles on the player's column", () => {
+  const rocks = SHORTCUTS.filter((shortcut) => shortcut.object === 34548);
+  assert.equal(rocks.length, 1);
+  const [entry] = rocks;
+  const obj = { id: 34548, x: 1351, y: 10251, z: 0, sizeX: 2, sizeY: 1 };
+  const at = (x, y) => ({ obj, pos: { x, y, z: 0 } });
+  const tile = (value) => [value[0], value[1], value[2]];
+  // Clicked from the south-west, the player walks to the west column's south tile.
+  assert.deepEqual(tile(entry.route(at(1349, 10247))), [1351, 10250, 0]);
+  assert.deepEqual(tile(entry.route(at(1353, 10248))), [1352, 10250, 0]);
+  const north = entry.steps(at(1351, 10250));
+  assert.deepEqual(tile(north[0].move), [1351, 10252, 0]);
+  assert.equal(north[0].anim, 839);
+  assert.deepEqual(north[0].speed, [0, 60]);
+  assert.equal(north[0].ticks, 2);
+  assert.deepEqual(north[1], { anim: -1 });
+  assert.deepEqual(tile(entry.steps(at(1352, 10250))[0].move), [1352, 10252, 0]);
+  // Back out from the lair side.
+  assert.deepEqual(tile(entry.route(at(1352, 10256))), [1352, 10252, 0]);
+  assert.deepEqual(tile(entry.steps(at(1352, 10252))[0].move), [1352, 10250, 0]);
+  assert.equal(entry.end, "You climb over the rocks.");
+  assert.equal(entry.requires, undefined);
+});
+
 /** A real Player whose packet sender records every call as [method, ...args]. */
 function recordingPlayer(x, y, z, agility) {
   const { Player } = require("../dist/game/entity/impl/player/Player");
@@ -523,8 +547,11 @@ test("shortcut audit: current directional Agility gates and captured no-sequence
   assert.equal(entry("Pipe (Brimhaven Dungeon Entrance, toward entrance)", 60841).level, 1);
   assert.equal(entry("Log balance (Brimhaven Dungeon, heading east)", 20882).level, 30);
   assert.equal(entry("Log balance (Brimhaven Dungeon, heading west)", 20884).level, 1);
-  assert.equal(entry("Stepping stones (Western Brimhaven Dungeon)", 21738).level, 12);
-  assert.equal(entry("Stepping stones (Western Brimhaven Dungeon)", 21739).level, 1);
+  // Wiki: 12 heading south (from the north bank), none heading north, from either stone.
+  for (const [id, stone] of [[21738, { x: 2649, y: 9561 }], [21739, { x: 2647, y: 9558 }]]) {
+    const stones = entry("Stepping stones (Western Brimhaven Dungeon)", id);
+    assert.deepEqual([stones.level(context(stone, { x: 2649, y: 9562 })), stones.level(context(stone, { x: 2647, y: 9557 }))], [12, 1]);
+  }
 
   const river = entry("Stepping stones (Eastern Brimhaven Dungeon)", 19040);
   assert.deepEqual([
@@ -625,7 +652,8 @@ test("the cache-backed Varrock broken fence crosses its clipped north-south edge
   const south = createPlayer(3308, 3491, 0, 1);
   assert.notEqual(operate(south, objectId, [3308, 3492, 0]), false);
   assert.deepEqual(tileOf(south), [3308, 3494, 0], "Climb-over lands north of the clipped fence");
-  assert.ok(south.state.messages.includes("You climb over the broken fence."));
+  // Live sends no message for it (Gertrude's Cat capture, revision 242, ticks 375-382).
+  assert.ok(!south.state.messages.some((message) => /climb over/i.test(message)), JSON.stringify(south.state.messages));
   assert.equal(south.getAttribute("agility.obstacle") ?? null, null);
 
   const north = createPlayer(3308, 3494, 0, 1);
@@ -938,6 +966,74 @@ test("the Draynor River Lum stone: two stepping-stone jumps 3 ticks apart, the o
   }
 });
 
+test("Brimhaven Dungeon's lava stepping stones: the captured lines, seven jumps two ticks apart, BUSY, and the way back (rsprox local 1000195, 1000283; 90, 552)", () => {
+  const random = Math.random;
+  try {
+    Math.random = () => 0;
+    const south = [[2649, 9561], [2649, 9560], [2648, 9560], [2647, 9560], [2647, 9559], [2647, 9558], [2647, 9557]];
+    for (const [objectId, objectTile, start, path] of [
+      [21738, [2649, 9561, 0], [2649, 9562, 0], south],
+      [21739, [2647, 9558, 0], [2647, 9557, 0], [...south.slice(0, -1).reverse(), [2649, 9562]]],
+    ]) {
+      const player = createPlayer(...start, 12);
+      const ticks = timeline(player, objectId, objectTile);
+      const jumps = ticksWith(ticks, (entry) => entry.animations.includes(741));
+      assert.deepEqual(jumps, [2, 4, 6, 8, 10, 12, 14], `${objectId}: the first jump two ticks after reaching the stones, then every two ticks`);
+      for (const at of jumps) assert.deepEqual(ticks[at].sounds, [2461], "synth 2461 with each jump");
+      assert.deepEqual(ticks[2].messages, ["You carefully start crossing the stepping stones..."], "the start line with the first jump");
+      assert.deepEqual(ticks[15].messages, ["...You safely cross to the other side."], "the end line the tick after the last jump");
+      assert.equal(ticks[15].xp, 7.5);
+      assert.equal(ticks.length, 16);
+      assert.deepEqual(tileOf(player), path.at(-1).concat(0));
+      assert.deepEqual(player.state.spam, ["You carefully start crossing the stepping stones...", "...You safely cross to the other side."]);
+      assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393), [[12393, 1], [12393, 0]], "BUSY on, then off as it ends");
+    }
+  } finally {
+    Math.random = random;
+  }
+});
+
+test("Brimhaven Dungeon's lava stepping stones need 12 Agility going south from either stone, none going north (Wiki)", () => {
+  for (const [objectId, objectTile] of [[21738, [2649, 9561, 0]], [21739, [2647, 9558, 0]]]) {
+    const low = createPlayer(2649, 9562, 0, 11);
+    operate(low, objectId, objectTile);
+    assert.deepEqual(tileOf(low), [2649, 9562, 0], `${objectId}: refused below 12 from the north`);
+    assert.equal(low.state.xp, 0);
+    assert.match(low.state.messages.at(-1), /12/);
+  }
+});
+
+test("Brimhaven Dungeon's lava stepping stones: a fall after the third jump lands on the north bank, hurt, with no XP (rsprox local 1000433)", () => {
+  const random = Math.random;
+  try {
+    Math.random = () => 0.999;
+    const player = createPlayer(2649, 9562, 0, 12);
+    const ticks = timeline(player, 21738, [2649, 9561, 0]);
+    assert.deepEqual(ticksWith(ticks, (entry) => entry.animations.includes(741)), [2, 4, 6], "three jumps");
+    assert.deepEqual(ticks[8].animations, [764], "the slip two ticks after the third jump");
+    assert.deepEqual(ticks[8].messages, ["...You lose your footing and fall into the lava."]);
+    assert.deepEqual(ticks[8].sounds, [2493]);
+    assert.ok(ticks[10].moved, "landed two ticks after the slip");
+    assert.deepEqual(ticks[10].sounds, [2412]);
+    assert.equal(ticks.length, 11, "BUSY clears with the landing");
+    assert.deepEqual(tileOf(player), [2648, 9562, 0]);
+    assert.equal(player.state.hits, 1);
+    assert.equal(player.state.xp, 0);
+    assert.deepEqual(player.state.varbitLog.filter(([id]) => id === 12393), [[12393, 1], [12393, 0]]);
+    // Going north never falls, from either stone (no capture of a fall that way).
+    for (const [objectId, objectTile] of [[21739, [2647, 9558, 0]], [21738, [2649, 9561, 0]]]) {
+      const back = createPlayer(2647, 9557, 0, 1);
+      timeline(back, objectId, objectTile);
+      assert.deepEqual(tileOf(back), [2649, 9562, 0], `${objectId}: across to the north bank`);
+      assert.equal(back.state.hits, 0);
+      assert.equal(back.state.xp, 7.5);
+      assert.deepEqual(back.state.spam, ["You carefully start crossing the stepping stones...", "...You safely cross to the other side."]);
+    }
+  } finally {
+    Math.random = random;
+  }
+});
+
 test("a crossing's via tiles are walked in travel order, both ways", () => {
   const [crossing] = build({
     name: "Test stones", object: ObjectIds.STILE, level: 1,
@@ -1204,12 +1300,72 @@ test("the Al Kharid broken wall and the Stalker Den cave need their quests", () 
   }
 });
 
-test("diary gates are recorded but not enforced until the diary's tasks can be done", () => {
-  hooks.events.length = 0;
-  const player = createPlayer(2898, 9902, 0);
-  operate(player, ObjectIds.CREVICE_7, [2898, 9901, 0]);
-  assert.ok(!hooks.events.some((event) => event.name === "diary:is-complete"));
-  assert.ok(!player.state.messages.some((message) => message.includes("Diary")));
+/** Runs `body` with the given diary tiers done and (separately) claimed, as "key:tier". */
+function withDiaries({ complete = [], claimed = [] }, body) {
+  hooks.answers["diary:is-complete"] = (request) => { request.complete = complete.includes(`${request.diary}:${request.tier}`); };
+  hooks.answers["diary:is-reward-claimed"] = (request) => { request.claimed = claimed.includes(`${request.diary}:${request.tier}`); };
+  try {
+    body();
+  } finally {
+    delete hooks.answers["diary:is-complete"];
+    delete hooks.answers["diary:is-reward-claimed"];
+  }
+}
+
+// Wiki (Shortcuts; Crevice (Heroes' Guild)): the hard Falador Diary unlocks the crevice (#6420).
+test("a diary shortcut refuses a player without the tier and lets one with it through", () => {
+  withDiaries({}, () => {
+    const player = createPlayer(2898, 9902, 0);
+    operate(player, ObjectIds.CREVICE_7, [2898, 9901, 0]);
+    assert.ok(player.state.messages.includes("You need to complete the hard Falador Diary to use this shortcut."), player.state.messages.join(" | "));
+    assert.equal(player.state.xp, 0, "not crossed");
+  });
+  withDiaries({ complete: ["falador:hard"] }, () => {
+    const player = createPlayer(2898, 9902, 0);
+    operate(player, ObjectIds.CREVICE_7, [2898, 9901, 0]);
+    assert.ok(!player.state.messages.some((message) => message.includes("Diary")), player.state.messages.join(" | "));
+  });
+});
+
+// Wiki (Narrow crevice (Deep Wilderness Dungeon)): "You need to complete the medium tier of the
+// Wilderness achievement diary to use this shortcut" (sic, no period).
+test("the Deep Wilderness Dungeon crevice gives the Wiki's diary refusal", () => {
+  withDiaries({}, () => {
+    const player = createPlayer(3046, 10326, 0);
+    operate(player, 19043, [3046, 10327, 0]);
+    assert.ok(player.state.messages.includes("You need to complete the medium tier of the Wilderness achievement diary to use this shortcut"), player.state.messages.join(" | "));
+    assert.deepEqual(tileOf(player), [3046, 10326, 0]);
+  });
+});
+
+// Wiki (Dark tunnel (Motherlode Mine)): the northern tunnel by the bank needs the medium Falador
+// Diary, and "the reward for the medium diary must be accepted"; the southern one needs no diary.
+test("the Motherlode Mine's eastern dark tunnel needs the medium Falador Diary claimed (#6420)", () => {
+  const refusal = "You need to complete the medium Falador Diary to use this shortcut.";
+  withDiaries({ complete: ["falador:easy", "falador:medium"] }, () => {
+    const player = createPlayer(3759, 5670, 0);
+    operate(player, 10047, [3760, 5670, 0]);
+    assert.ok(player.state.messages.includes(refusal), "done but not claimed: " + player.state.messages.join(" | "));
+    assert.deepEqual(tileOf(player), [3759, 5670, 0]);
+  });
+  withDiaries({ complete: ["falador:easy", "falador:medium"], claimed: ["falador:easy", "falador:medium"] }, () => {
+    const player = createPlayer(3759, 5670, 0);
+    operate(player, 10047, [3760, 5670, 0]);
+    assert.ok(!player.state.messages.includes(refusal), player.state.messages.join(" | "));
+    assert.deepEqual(tileOf(player), [3765, 5671, 0], "through to the bank side");
+  });
+});
+
+test("the Motherlode Mine's southern dark tunnel needs no diary and crosses between its own ends", () => {
+  withDiaries({}, () => {
+    const north = createPlayer(3745, 5646, 0);
+    operate(north, 10047, [3745, 5645, 0]);
+    assert.deepEqual(tileOf(north), [3744, 5641, 0], north.state.messages.join(" | "));
+    const south = createPlayer(3744, 5641, 0);
+    operate(south, 10047, [3744, 5642, 0]);
+    assert.deepEqual(tileOf(south), [3745, 5646, 0], south.state.messages.join(" | "));
+    assert.ok(!south.state.messages.some((message) => message.includes("Diary")));
+  });
 });
 
 test("failures roll the OSRS low/high success chance the Wiki charts", () => {
@@ -2725,6 +2881,34 @@ test("Agility Pyramid: jump gaps and low walls go straight over, never along (rs
       tick();
     }
     assert.deepEqual(tileOf(player), to, `${object} at ${x},${y} from ${from}`);
+  }
+});
+
+test("the ice troll caves' rope bridge: a step onto the end, then a three-tile gap jump, both ways, with no level, XP or message (rsprox 3026 tick 2917)", () => {
+  for (const [objectId, objectTile, from, to] of [
+    [21317, [2385, 10260, 1], [2384, 10259, 1], [2385, 10263]],
+    [21316, [2385, 10263, 1], [2385, 10266, 1], [2385, 10260]],
+  ]) {
+    const player = createPlayer(...from, 1);
+    const moves = [];
+    const setForceMovement = player.setForceMovement;
+    player.setForceMovement = (value) => {
+      if (value) {
+        const end = value.getEnd();
+        moves.push({ to: [player.getLocation().getX() + end.getX(), player.getLocation().getY() + end.getY()], cycles: [value.getSpeed(), value.getReverseSpeed()] });
+      }
+      return setForceMovement(value);
+    };
+    const ticks = timeline(player, objectId, objectTile);
+    assert.deepEqual(moves.map((move) => move.to), [to], `${objectId}: one exact move across the gap`);
+    assert.deepEqual(moves[0].cycles, [53, 85], "exactmove delay1 53, delay2 85");
+    assert.deepEqual(tileOf(player).slice(0, 2), to, `${objectId}: lands on the far end`);
+    const jumps = ticksWith(ticks, (entry) => entry.animations.includes(3067));
+    assert.deepEqual(jumps, [1], `${objectId}: agility_pyramid_gap_jump the tick after stepping onto the bridge end`);
+    assert.deepEqual(ticks[1].sounds, [2465], "synth 2465 with the jump");
+    assert.deepEqual(tileOf(player), to.concat(1));
+    assert.equal(player.state.xp, 0);
+    assert.deepEqual(player.state.messages, []);
   }
 });
 

@@ -239,6 +239,9 @@ export class AccuracyFormulasDpsCalc {
      * `defenceType` is the per-method override used by attacks that roll one
      * style's accuracy against another style's defence (Kree'arra's ranged
      * magic); special traits still win over it when declared.
+     *
+     * Preview keeps the shared gear/prayer/level formulas but skips hit-time plugin hooks.
+     * Those hooks may roll procs, emit chat or consume encounter state even without a hit.
      */
     public static specialRolls(
         entity: any,
@@ -246,7 +249,8 @@ export class AccuracyFormulasDpsCalc {
         style: any,
         defenceType?: CombatType,
         rangedDefenceType?: "light" | "standard" | "heavy",
-        projectedDefenceLevel?: number
+        projectedDefenceLevel?: number,
+        preview = false
     ): { attack: number; defence: number } | null {
         const traits: WeaponSpecialTraits | null = CombatSpecial.activeTraitsFor(entity);
         const attackStyle = resolveSpecialAttackType(traits?.rollAttackType) ?? style;
@@ -256,9 +260,10 @@ export class AccuracyFormulasDpsCalc {
             if (attackStyle === CombatType.MELEE) {
                 return AccuracyFormulasDpsCalc.attackMeleeRoll(entity);
             } else if (attackStyle === CombatType.RANGED) {
-                return PluginManager.modifyRangedAttackRoll(entity, enemy, AccuracyFormulasDpsCalc.attackRangedRoll(entity));
+                const roll = AccuracyFormulasDpsCalc.attackRangedRoll(entity);
+                return preview ? roll : PluginManager.modifyRangedAttackRoll(entity, enemy, roll);
             } else if (attackStyle === CombatType.MAGIC) {
-                return AccuracyFormulasDpsCalc.attackMagicRoll(entity, enemy);
+                return AccuracyFormulasDpsCalc.attackMagicRoll(entity, enemy, preview);
             }
             return null;
         };
@@ -294,12 +299,12 @@ export class AccuracyFormulasDpsCalc {
         if (enemy.isNpc()) {
             defRoll = Math.floor(defRoll * enemy.getAsNpc().getDefenceRollFactor());
         }
-        if (attackStyle === CombatType.MAGIC && defenceStyle === CombatType.MAGIC) {
+        if (!preview && attackStyle === CombatType.MAGIC && defenceStyle === CombatType.MAGIC) {
             defRoll = AccuracyFormulasDpsCalc.magicDefenceRollEvent(entity, enemy, defRoll);
         }
 
         const defenceRequest = { attacker: entity, target: enemy, combatType: defenceStyle, defenceRoll: defRoll };
-        PluginManager.emitCustomEvent("combat:defence-roll", defenceRequest);
+        if (!preview) PluginManager.emitCustomEvent("combat:defence-roll", defenceRequest);
         if (Number.isFinite(defenceRequest.defenceRoll) && defenceRequest.defenceRoll >= 0) {
             defRoll = Math.floor(defenceRequest.defenceRoll);
         }
@@ -699,7 +704,7 @@ export class AccuracyFormulasDpsCalc {
         return cache.defenseMagicRoll;
     }
 
-    public static attackMagicRoll(entity: Mobile, targetOverride?: Mobile): number {
+    public static attackMagicRoll(entity: Mobile, targetOverride?: Mobile, preview = false): number {
         const cache = this.getRollCache(entity);
         let accuracyBonus = (entity.isNpc()
             ? AccuracyFormulasDpsCalc.npcAttackBonus(entity, 7)
@@ -729,6 +734,7 @@ export class AccuracyFormulasDpsCalc {
             attRoll = AccuracyFormulasDpsCalc.scaleSpecial(attRoll, demonbaneMultiplier);
         }
 
+        if (preview) return Math.floor(attRoll);
         const request = { attacker: entity, target: targetOverride ?? entity.getCombat().getTarget(),
             spell: entity.getCombat().getSelectedSpell(), context: Spell.getCalculationContext(entity, entity.getCombat().getSelectedSpell()),
             baseAttackRoll, attackRoll: Math.floor(attRoll) };

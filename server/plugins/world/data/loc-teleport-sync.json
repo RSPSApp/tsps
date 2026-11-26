@@ -72,7 +72,8 @@
     "molch_temple_lizard_dwelling": "The Lizardman Caves' entrance (the northern one, the only one that lets players in).",
     "zeah_cata_exit_giants_den": "The Catacombs of Kourend's vine up to the Giants' Den.",
     "fossil_flora_swamp_bellshroom_return": "The Tar Swamp bellshroom's exit (Fossil Island).",
-    "rc_zmi_dungeon_wall_crack_entrance": "The Ourania Cave's crack into the altar room (no Agility requirement)."
+    "rc_zmi_dungeon_wall_crack_entrance": "The Ourania Cave's crack into the altar room (no Agility requirement).",
+    "sw_dungeon_exit": "The Isle of Souls Dungeon's opening back up to the island (the way in, sw_dungeon_entrance, is already taken)."
   },
   "skip": {
     "locs": [
@@ -94,7 +95,7 @@
       {"pattern": "^kalphite_(burrow|chamber)_entrance", "why": "A rope used on it is used up and sets a varbit that shows the roped version; needs that state kept."},
       {"pattern": "^dungeon_tree_closed$", "why": "The Brimhaven Dungeon's entrance takes a fare through a dialogue."},
       {"pattern": "^freedomfighterentrance", "why": "The Myreque hideout's doors: In Search of the Myreque gates them."},
-      {"pattern": "^xmas\\d*_|^easter\\d*_|^halloween\\d*_", "why": "A holiday event."},
+      {"pattern": "^(?!xmas20_goblin_cave_)(xmas\\d*_|easter\\d*_|halloween\\d*_)", "why": "A holiday event. Scrubfoot's cave (xmas20_goblin_cave_*) stayed after the 2020 Christmas event for Sled Racing (Wiki: Cave entrance (Scrubfoot's cave))."},
       {"pattern": "^dagexp_bossroom", "why": "The Dagannoth Kings' ladder picks a boss instance (Standard or Slayer)."},
       {"pattern": "^fossil_underwater_", "why": "Fossil Island's underwater caves need diving gear."}
     ]
@@ -142,6 +143,10 @@
     {"name": "dorgesh_city_entrance_right", "source": "https://oldschool.runescape.wiki/w/Dorgesh-Kaan (It can only be accessed after completion of the Death to the Dorgeshuun quest); TSPS wording for the refusal",
       "requires": [
         {"quest": "death_to_the_dorgeshuun", "refuse": {"message": "You need to complete Death to the Dorgeshuun to enter Dorgesh-Kaan."}}
+      ]},
+    {"name": "kalphite_hive_wall_update_entrance", "source": "https://oldschool.runescape.wiki/w/Tunnel_(Kalphite_Lair) (Completion of Death to the Dorgeshuun is required to be able to use the tunnel); refusal captured, rsprox local 1001685 t8528",
+      "requires": [
+        {"quest": "death_to_the_dorgeshuun", "refuse": {"message": "It looks like the tunnel is blocked at the other end."}}
       ]},
     {"name": "vmq4_crypt_door_to_moki", "source": "#3828: the multiloc's Pass-through variant shows from The Final Dawn's stage 61 (vmq4, varbit 16663); before it the closed door is the quest's. No refusal: the client shows no Pass-through",
       "requires": [

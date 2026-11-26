@@ -75,6 +75,7 @@ const SCRIPT = {
   FADE_WHITE: 2308,
   /** Party information: a member's line (slot, text), an applicant's line, the footer. */
   PARTY_MEMBER: 2317,
+  PARTY_ARROWS: 5239,
   PARTY_APPLICANT: 2321,
   PARTY_FOOTER: 2323,
   /** The party list: one row (index, text). */
@@ -87,6 +88,8 @@ const VARP = {
 };
 
 const VARBIT = {
+  /** Whether the player has answered the notice board's first-use question. */
+  USED_NOTICE_BOARD: 6573,
   /** 0 no party, 1 in a lobby party, 2 in the theatre. */
   PARTY_STATE: 6440,
   /** The viewer's own slot, 1-5. */

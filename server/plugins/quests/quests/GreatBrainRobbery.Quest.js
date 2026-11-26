@@ -1772,6 +1772,7 @@ module.exports = function registerGreatBrainRobberyQuest(api) {
   api.persistAttribute(PENDING_LAMP_REWARD_ATTRIBUTE, false);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [BARRELCHEST_NPC_ID],
     key: "great_brain_robbery",
     name: "The Great Brain Robbery",
     varpId: VARP_GREAT_BRAIN_ROBBERY,

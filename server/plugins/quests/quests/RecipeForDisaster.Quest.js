@@ -29,11 +29,17 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const DAVE_STEW_ATTRIBUTE = "recipe-for-disaster:evil-dave-stew";
   const SKRACH_STATE_ATTRIBUTE = "recipe-for-disaster:skrach-state";
   const SKRACH_STAGE_ATTRIBUTE = "recipe-for-disaster:skrach-stage";
-  const SKRACH_SPIT_ROAST_OBJECT = ObjectIdentifiers.OGRE_SPIT_ROAST_4; // 3375
-  const SKRACH_SPIT_ROAST_TILE = { x: 2632, y: 2985, z: 0 };
-  const SKRACH_SPIT_ROAST_BY_PLAYER = new WeakMap();
+  /**
+   * Rantz's spit-roast at 2630,2990 is this multiloc (6895, varbit ogre_spit_roaster); a use on it names the
+   * parent, never the 3372-12563 child shown. No generated ObjectIdentifiers entry.
+   */
+  const CHOMPY_SPIT_ROAST_MULTILOC = "multi_chompybird_spitroast_entity";
   const AWOWOGEI_STATE_ATTRIBUTE = "recipe-for-disaster:awowogei-state";
   const AWOWOGEI_STAGE_ATTRIBUTE = "recipe-for-disaster:awowogei-stage";
+  /** Filling already added to the snake corpse: 1 sliced red banana, 2 tchiki nut paste. */
+  const AWOWOGEI_STUFFING_ATTRIBUTE = "recipe-for-disaster:awowogei-stuffing";
+  const STUFFING_RED_BANANA = 1;
+  const STUFFING_NUT_PASTE = 2;
   const AMIK_STATE_ATTRIBUTE = "recipe-for-disaster:amik-state";
   const AMIK_STAGE_ATTRIBUTE = "recipe-for-disaster:amik-stage";
   const AMIK_DRAGON_DROP_ATTRIBUTE = "recipe-for-disaster:amik-dragon-drop";
@@ -95,6 +101,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   const EVIL_CHICKEN_LAIR_BOSS = { x: 2455, y: 4399, z: 0 };
   const EVIL_CHICKEN_LAIR_ZONE = { minX: 2430, maxX: 2492, minY: 4355, maxY: 4407, z: 0 };
   const AWOWOGEI_SNAKE_HOLE = { minX: 3019, maxX: 3028, minY: 5484, maxY: 5492, z: 0 };
+  const AWOWOGEI_HOT_COAL_ROOM = { minX: 3054, maxX: 3069, minY: 5478, maxY: 5491, z: 0 };
   const ACTIVE_FINAL_NPC_BY_PLAYER = new WeakMap();
   const JUBBLY_BY_PLAYER = new WeakMap();
   const LAMP_PENDING = new WeakMap();
@@ -633,7 +640,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (hasFlag(player, flag)) return false;
     setFlag(player, flag);
     syncRescueQuestVarbits(player);
-    syncSkrachSpitRoast(player);
     awardPoint(player);
     spawnCouncil(player);
     return true;
@@ -672,29 +678,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function setSkrachBit(player, bit) {
     player.setAttribute(SKRACH_STATE_ATTRIBUTE, skrachState(player) | bit);
     syncSkrachQuestVarbits(player);
-  }
-  /** The Feldip chompy-grounds spit-roast is missing from the map; show it to this player while Skrach can be rescued. */
-  function syncSkrachSpitRoast(player) {
-    const { GameObject, Location, ObjectManager } = api.core;
-    const existing = SKRACH_SPIT_ROAST_BY_PLAYER.get(player);
-    if (stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 32)) {
-      if (!existing) return;
-      ObjectManager.deregister(existing, true);
-      SKRACH_SPIT_ROAST_BY_PLAYER.delete(player);
-      return;
-    }
-    if (existing) return;
-    const object = new GameObject(SKRACH_SPIT_ROAST_OBJECT,
-      new Location(SKRACH_SPIT_ROAST_TILE.x, SKRACH_SPIT_ROAST_TILE.y, SKRACH_SPIT_ROAST_TILE.z), 10, 0, null)
-      .setOwner(player);
-    ObjectManager.register(object, true);
-    SKRACH_SPIT_ROAST_BY_PLAYER.set(player, object);
-  }
-  function clearSkrachSpitRoast(player) {
-    const object = SKRACH_SPIT_ROAST_BY_PLAYER.get(player);
-    if (!object) return;
-    api.core.ObjectManager.deregister(object, true);
-    SKRACH_SPIT_ROAST_BY_PLAYER.delete(player);
   }
   function completedQuest(player, key) {
     return require("../QuestRuntime").getRegisteredQuests()
@@ -1195,6 +1178,16 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function isItemPair(event, first, second) {
     return (event.usedItemId === first && event.usedWithItemId === second)
       || (event.usedItemId === second && event.usedWithItemId === first);
+  }
+
+  /**
+   * "recipe-for-disaster:breadcrumbs" { player, available }: whether a knife on bread can make
+   * breadcrumbs, which only Pirate Pete's fishcake needs. Below Ice Mountain's steak sandwich
+   * shares the knife and bread and only offers the choice while this is true (rsprox 1636, mid-way
+   * through Pirate Pete, gets the make menu; local 1001343, with no Recipe for Disaster, doesn't).
+   */
+  function handleBreadcrumbsQuery(request) {
+    if (stage(request.player) >= STAGE_OPENING_COMPLETE && !hasFlag(request.player, 4)) request.available = true;
   }
 
   function handlePirateFoodItems(event) {
@@ -2021,8 +2014,8 @@ module.exports = function registerRecipeForDisasterQuest(api) {
         if (!mobile?.isPlayer?.() || mobile.getAsPlayer?.() !== this.owner) return;
         const npc = ACTIVE_FINAL_NPC_BY_PLAYER.get(this.owner);
         if (!npc || npc.getArea?.() !== this) return;
-        // Keep the core's idle-NPC regeneration timer fresh only for the owner
-        // in this encounter. Incoming hits stay on the ordinary combat path.
+        // Keep the NPC's combat stopwatch fresh only for the owner in this
+        // encounter. Incoming hits stay on the ordinary combat path.
         npc.getCombat?.()?.getLastAttack?.()?.reset?.();
         const mother = MOTHER_PHASES.get(npc);
         if (mother) {
@@ -2572,7 +2565,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       ObjectIdentifiers.OGRE_SPIT_ROAST_3, ObjectIdentifiers.OGRE_SPIT_ROAST_4,
       ObjectIdentifiers.OGRE_SPIT_ROAST_5, ObjectIdentifiers.OGRE_SPIT_ROAST_6,
       ObjectIdentifiers.OGRE_SPIT_ROAST_7, ObjectIdentifiers.OGRE_SPIT_ROAST_8,
-      ObjectIdentifiers.OGRE_SPIT_ROAST_9];
+      ObjectIdentifiers.OGRE_SPIT_ROAST_9, api.core.CacheDefinitions.getLocId(CHOMPY_SPIT_ROAST_MULTILOC)];
     if (spitRoasts.includes(objectId) && itemId === ItemIdentifiers.SKEWERED_CHOMPY) {
       event.handled = true;
       player.getInventory().deleteNumber(ItemIdentifiers.SKEWERED_CHOMPY, 1);
@@ -2759,8 +2752,16 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   function handleEvilChickenShrine(event) {
     const { player, objectId, itemId } = event;
     if (objectId !== api.core.ObjectIdentifiers.CHICKEN_SHRINE || itemId !== ItemIdentifiers.RAW_CHICKEN
-      || stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 64)
-      || Number(player.getAttribute(AMIK_STATE_ATTRIBUTE)) !== 1) return;
+      || stage(player) < STAGE_OPENING_COMPLETE) return;
+    // Wiki (Evil Chicken's Lair): the lair is open during and after Freeing Sir Amik Varze. Once he is
+    // freed the Evil Chicken's egg is no longer needed, so the shrine only lets the player in.
+    if (hasFlag(player, 64)) {
+      event.handled = true;
+      player.getInventory().deleteNumber(ItemIdentifiers.RAW_CHICKEN, 1);
+      moveTo(player, EVIL_CHICKEN_LAIR_ENTRY.x, EVIL_CHICKEN_LAIR_ENTRY.y, EVIL_CHICKEN_LAIR_ENTRY.z);
+      return;
+    }
+    if (Number(player.getAttribute(AMIK_STATE_ATTRIBUTE)) !== 1) return;
     event.handled = true;
     let npc = EVIL_CHICKEN_BY_PLAYER.get(player);
     if (npc?.isRegistered?.() === false) {
@@ -2889,6 +2890,10 @@ module.exports = function registerRecipeForDisasterQuest(api) {
 
   function awowogeiState(player) {
     return Number(player.getAttribute(AWOWOGEI_STATE_ATTRIBUTE)) || 0;
+  }
+
+  function stuffingState(player) {
+    return Number(player.getAttribute(AWOWOGEI_STUFFING_ATTRIBUTE)) || 0;
   }
 
   function hasUnmaskedMonkeyRecipe(player) {
@@ -3028,14 +3033,31 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.getInventory().adds(ItemIdentifiers.TCHIKI_NUT_PASTE, 1);
       return;
     }
-    const filling = [ItemIdentifiers.SLICED_RED_BANANA, ItemIdentifiers.TCHIKI_NUT_PASTE];
-    const fillingId = [event.usedItemId, event.usedWithItemId].find((id) => filling.includes(id));
-    if (fillingId && [event.usedItemId, event.usedWithItemId].includes(ItemIdentifiers.SNAKE_CORPSE)) {
+    // Stuffing takes both ingredients: each is consumed on its own use and the
+    // corpse only becomes the raw stuffed snake once the other one follows
+    // (Wiki: Snake corpse's product is 1 corpse + 1 sliced red banana + 1 paste).
+    const fillings = [
+      [ItemIdentifiers.SLICED_RED_BANANA, STUFFING_RED_BANANA, "sliced red banana", "tchiki nut paste"],
+      [ItemIdentifiers.TCHIKI_NUT_PASTE, STUFFING_NUT_PASTE, "tchiki nut paste", "sliced red banana"],
+    ];
+    const used = [event.usedItemId, event.usedWithItemId];
+    const filling = fillings.find(([id]) => used.includes(id));
+    if (filling && used.includes(ItemIdentifiers.SNAKE_CORPSE)) {
       event.handled = true;
-      if (!hasSpace(player)) return player.sendMessage("You need an empty inventory slot to stuff the snake.");
-      player.getInventory().deleteNumber(ItemIdentifiers.SNAKE_CORPSE, 1);
+      if (!has(player, ItemIdentifiers.SNAKE_CORPSE)) return;
+      const [fillingId, bit, name, other] = filling;
+      const state = stuffingState(player);
+      // The live lines are not captured; these two are ours.
+      if (state & bit) return player.sendMessage(`The snake corpse already has ${name} in it.`);
       player.getInventory().deleteNumber(fillingId, 1);
+      const next = state | bit;
+      if (next !== (STUFFING_RED_BANANA | STUFFING_NUT_PASTE)) {
+        player.setAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, next);
+        return player.sendMessage(`You stuff the snake corpse with the ${name}. It still needs ${other}.`);
+      }
+      player.getInventory().deleteNumber(ItemIdentifiers.SNAKE_CORPSE, 1);
       player.getInventory().adds(ItemIdentifiers.RAW_STUFFED_SNAKE, 1);
+      player.setAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, 0);
       setAwowogeiStage(player, 30);
     }
   }
@@ -3480,11 +3502,31 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       player.sendMessage("You squeeze through the crack and cross the hot coals as a zombie monkey.");
       return;
     }
-    if (objectId === 16100 && option === "Enter" && (awowogeiState(player) & 1024)) {
+    if (objectId === ObjectIdentifiers.EXIT_15 && option === "Enter" && (awowogeiState(player) & 1024)) {
       event.handled = true;
+      if (!isAwowogeiDungeonExit(event) || !inZone(player, AWOWOGEI_HOT_COAL_ROOM)) return;
+      if (!equippedMonkey(player, ZOMBIE_GREEGREE_IDS)) {
+        require("../QuestRuntime").startTranscript(api, player, NpcIdentifiers.AWOWOGEI,
+          "Recipe for Disaster/Freeing King Awowogei",
+          "ape-atoll-entering-exiting-the-cave-to-cook-the-snake-standing-on-the-rockets-without-being-a-zombie-monkey");
+        return;
+      }
       moveTo(player, 2808, 9200, 0);
       player.sendMessage("You squeeze back through the crack into the temple dungeon.");
     }
+  }
+
+  function isAwowogeiDungeonExit(event) {
+    const at = event.object?.getLocation();
+    return event.objectId === ObjectIdentifiers.EXIT_15 && at?.getX() === 3069 && at.getY() === 5485 && at.getZ() === 0;
+  }
+
+  function routeAwowogeiDungeonExit(event) {
+    const from = event.sourceLocation;
+    if (!isAwowogeiDungeonExit(event) || !from || from.x > 3062 || !inZone(event.player, AWOWOGEI_HOT_COAL_ROOM)
+      || !(awowogeiState(event.player) & 1024) || !equippedMonkey(event.player, ZOMBIE_GREEGREE_IDS)) return;
+    // Cache inviswalls at x3063 block the coals; walk to their edge, then use the existing scripted exit.
+    event.destination = { x: 3062, y: 5485, z: 0 };
   }
 
   function handleAwowogeiSnakePit(event) {
@@ -3528,6 +3570,9 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (!player || event.npcId !== NpcIdentifiers.BIG_SNAKE || stage(player) < STAGE_OPENING_COMPLETE
       || hasFlag(player, 128)) return;
     player.setAttribute(AWOWOGEI_STATE_ATTRIBUTE, awowogeiState(player) | AWOWOGEI_SNAKE_FOUND);
+    // A spare corpse must not erase filling already consumed by an owned corpse.
+    // Only replacement of a lost corpse starts preparation again.
+    if (!owns(player, ItemIdentifiers.SNAKE_CORPSE)) player.setAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, 0);
     syncAwowogeiQuestVarbits(player);
     if (hasSpace(player)) player.getInventory().adds(ItemIdentifiers.SNAKE_CORPSE, 1);
     else {
@@ -3613,7 +3658,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
 
   function handleStageChanged({ player, key }) {
     if (key === QUEST) {
-      syncSkrachSpitRoast(player);
       syncRescueQuestVarbits(player);
     }
   }
@@ -3622,7 +3666,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     if (player) {
       Feast.end(player, true);
       Feast.cancel(player);
-      clearSkrachSpitRoast(player);
       hideFrozenRoom(player);
     }
   }
@@ -3777,7 +3820,6 @@ module.exports = function registerRecipeForDisasterQuest(api) {
       moveTo(player, DINING_EXIT.x, DINING_EXIT.y, DINING_EXIT.z);
     }
     ensureOgreBoatTalkActions();
-    syncSkrachSpitRoast(player);
     syncRescueQuestVarbits(player);
     player.getPacketSender().sendVarbit(VARBIT_OGRE_BOAT,
       (skrachState(player) & 1) || hasFlag(player, 32) ? 1 : 0);
@@ -3811,6 +3853,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.persistAttribute(SKRACH_STAGE_ATTRIBUTE, 0);
   api.persistAttribute(AWOWOGEI_STATE_ATTRIBUTE);
   api.persistAttribute(AWOWOGEI_STAGE_ATTRIBUTE, 0);
+  api.persistAttribute(AWOWOGEI_STUFFING_ATTRIBUTE, 0);
   api.persistAttribute(AMIK_STATE_ATTRIBUTE);
   api.persistAttribute(AMIK_STAGE_ATTRIBUTE, 0);
   api.persistAttribute(AMIK_DRAGON_DROP_ATTRIBUTE, false);
@@ -3819,6 +3862,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.persistAttribute(FINAL_FIGHT_ATTRIBUTE);
   api.persistAttribute(FINAL_BOSS_DEFEATED_ATTRIBUTE);
   quest = registerQuest(api, {
+    combatNpcIds: () => [...FINAL_NPCS, NpcIdentifiers.JUBBLY_BIRD, NpcIdentifiers.EVIL_CHICKEN],
     key: QUEST,
     name: "Recipe for Disaster",
     varpId: VARP_RFD,
@@ -3838,6 +3882,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleHook);
   api.onCustomEvent("recipe-for-disaster:rescue-status", handleRescueStatusQuery);
+  api.onCustomEvent("recipe-for-disaster:breadcrumbs", handleBreadcrumbsQuery);
   api.onCustomEvent("recipe-for-disaster:complete-rescue", handleCompleteRescue);
   api.onCustomEvent("npc-drops:quest-item", handleAmikQuestItemDrop);
   api.onCustomEvent("npc-dialogue:choice", handlePirateChoice);
@@ -3928,6 +3973,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onObjectInteraction(handleAwowogeiSnakePit);
   api.onCustomEvent("ladders:climb", claimSnakePitRope);
   api.onObjectRoute(routeRedBananaTree);
+  api.onObjectRoute(routeAwowogeiDungeonExit);
   api.onObjectRoute(routeCulinaromancerChest);
   api.onCustomEvent("door:toggle", handleDiningDoors);
   api.onObjectInteraction("Barrier", { "Pass-through": passDiningBarrier });

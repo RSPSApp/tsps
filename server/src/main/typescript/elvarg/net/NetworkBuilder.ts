@@ -2,6 +2,7 @@ import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import { GameConstants } from "../game/GameConstants";
 import { World } from "../game/World";
+import { CrossFloor } from "../game/CrossFloor";
 import { Player } from "../game/entity/impl/player/Player";
 import { PlayerSave } from "../game/entity/impl/player/persistence/PlayerSave";
 import { DisplayNames } from "../game/entity/impl/player/DisplayNames";
@@ -110,6 +111,23 @@ const OBJECT_ACTIONS = new ObjectActionPacketListener();
 const NPC_ACTIONS = new NPCOptionPacketListener();
 const MAGIC_ITEMS = new MagicOnItemPacketListener();
 type ClientMessages = ReturnType<typeof decodeClientPackets>;
+type InventoryTarget = Extract<ClientMessages[number], { type: "widget_target" }>;
+
+function inventoryTargetContext(player: Player, packet: InventoryTarget) {
+  return {
+    teleportStarts: player.getTeleportStarts(),
+    teleportSerial: player.getTeleportSerial(),
+    location: player.getLocation().clone(),
+    privateArea: player.getPrivateArea(),
+    interfaceOpens: player.getInterfaceOpens(),
+    interruptibleOpens: player.getPacketSender().getInterruptibleInterfaceOpens(),
+    item: player.getInventory().getItems()[packet.targetSlot],
+  };
+}
+
+function canTargetInventory(player: Player): boolean {
+  return !player.isDyingReturn() && player.getHitpoints() > 0 && !player.isTeleportingReturn();
+}
 const CONNECTIONS = new WeakMap<Player, ClientConnection>();
 
 /** Runs already-decoded messages through a logged-in player's own dispatch, as if their client sent them. */
@@ -558,6 +576,24 @@ export class ClientConnection {
    * is kept: the last click made during the lock is the one that runs, on the tick it releases.
    */
   private stalledInput: ClientMessages[number] | null = null;
+  private readonly receivedDuringStall = new WeakMap<ClientMessages[number], "interaction" | "other">();
+  private readonly heldInventoryTargets = new WeakMap<InventoryTarget, ReturnType<typeof inventoryTargetContext>>();
+
+  private rememberHeldInventoryTarget(player: Player, packet: InventoryTarget): void {
+    if (!this.heldInventoryTargets.has(packet)) {
+      this.heldInventoryTargets.set(packet, inventoryTargetContext(player, packet));
+    }
+  }
+
+  private heldInventoryTargetIsCurrent(player: Player, packet: InventoryTarget): boolean {
+    const held = this.heldInventoryTargets.get(packet);
+    if (!held) return true;
+    const now = inventoryTargetContext(player, packet);
+    return held.teleportStarts === now.teleportStarts && held.teleportSerial === now.teleportSerial &&
+      held.location.equals(now.location) && held.privateArea === now.privateArea &&
+      held.interfaceOpens === now.interfaceOpens && held.interruptibleOpens === now.interruptibleOpens &&
+      held.item === now.item && now.item?.getId() === packet.targetItemId && now.item.getAmount() > 0;
+  }
 
   constructor(private readonly channel: BinaryChannel) {
     channel.onData((frame) => {
@@ -653,14 +689,23 @@ export class ClientConnection {
    */
   public processTurnPackets(): void {
     if (this.turnPackets.length === 0 && this.stalledInput == null) return;
-    const packets = this.turnPackets;
-    this.turnPackets = [];
-    // Retry a held click ahead of this turn's input, so it runs on the first tick the player is
-    // free; dispatch() puts it back if the stall has not released yet.
-    if (this.stalledInput != null) {
-      packets.unshift(this.stalledInput);
-      this.stalledInput = null;
+    const packets: ClientMessages = [];
+    let heldClick = this.stalledInput;
+    let replayIndex = 0;
+    // Coalesce clicks received during the lock, even on its final interval. A widget
+    // action received before release can open a newer interface or start a teleport.
+    for (const packet of this.turnPackets) {
+      const arrival = this.receivedDuringStall.get(packet);
+      if (arrival === "interaction") {
+        heldClick = packet;
+      } else {
+        packets.push(packet);
+      }
+      if (arrival) replayIndex = packets.length;
     }
+    this.turnPackets = [];
+    this.stalledInput = null;
+    if (heldClick) packets.splice(replayIndex, 0, heldClick);
     // None of these await, so they all run now, inside the player's turn.
     this.dispatch(packets, true).catch((error) => {
       console.warn("[network] client packet rejected", error);
@@ -676,6 +721,10 @@ export class ClientConnection {
     for (const packet of packets) {
       if ((dispatchedPlayer && this.player !== dispatchedPlayer) || (this.closed && !turn)) return;
       if (this.control?.readOnly && !["ping", "hello", "logout"].includes(packet.type)) continue;
+      // A spell selected on the inventory uses the same action and interface rules as an inventory click.
+      const inventoryTarget = packet.type === "widget_target" && (packet.targetWidgetId >>> 16) === MAIN_INVENTORY_GROUP_ID;
+      const worldInteraction = inventoryTarget || WORLD_INTERACTIONS.has(packet.type);
+      if (this.player && inventoryTarget && !canTargetInventory(this.player)) continue;
       if (!turn && this.player && !IMMEDIATE_PACKETS.has(packet.type)) {
         if (this.turnPackets.length >= NetworkConstants.PACKET_QUEUE_LIMIT) {
           console.warn("[network] client turn packet limit exceeded", { queued: this.turnPackets.length });
@@ -683,19 +732,28 @@ export class ClientConnection {
           this.channel.close(1008, "input limit");
           return;
         }
+        if (this.player.getCombat().isAnimationStalled()) {
+          if (worldInteraction && this.player.getCombat().isHeldStall()) continue;
+          this.receivedDuringStall.set(packet, worldInteraction ? "interaction" : "other");
+          if (inventoryTarget) this.rememberHeldInventoryTarget(this.player, packet);
+        }
         this.turnPackets.push(packet);
         continue;
       }
       if (this.player) LunarSpells.expireSpellbookSwap(this.player);
       if (this.player && !NON_INPUT_PACKETS.has(packet.type)) this.player.lastInputCycle = World.getProcessCycle();
-      if (this.player && WORLD_INTERACTIONS.has(packet.type)) {
+      if (this.player && worldInteraction) {
+        if (inventoryTarget && !this.heldInventoryTargetIsCurrent(this.player, packet)) continue;
         if (this.player.getCombat().isAnimationStalled()) {
           // Wiki: Animation stall. A full stall does not let the player perform actions, so the
           // click is held rather than dropped and runs on the tick the animation ends. The last
           // one made during the lock is the one kept, as the client only ever has one queued.
           // A content-held stall (an agility obstacle) drops it instead, as live does (rsprox
           // 241/1001438 ticks 19815-19828).
-          if (!this.player.getCombat().isHeldStall()) this.stalledInput = packet;
+          if (!this.player.getCombat().isHeldStall()) {
+            if (inventoryTarget) this.rememberHeldInventoryTarget(this.player, packet);
+            this.stalledInput = packet;
+          }
           continue;
         }
         if (this.player.getStatus() === PlayerStatus.TRADING) continue;
@@ -737,6 +795,15 @@ export class ClientConnection {
             this.pluginMessageCount = 0;
           }
           if (++this.pluginMessageCount > 64) continue;
+          if (packet.channel === "entity-examine") {
+            const { type, probeId, kind, id, index } = packet.data;
+            if (type === "probe" && Number.isSafeInteger(probeId)) {
+              this.player.getSession().sendClientPacket(encodePluginMessage(packet.channel, { type: "supported", probeId }));
+            } else if (kind === "npc" && Number.isInteger(id) && Number.isInteger(index)) {
+              this.examineNpc(Number(id), Number(index));
+            }
+            continue;
+          }
           const event = { player: this.player, channel: packet.channel, data: packet.data, handled: false };
           PluginManager.emitCustomEvent("network:plugin-message", event);
           if (!event.handled) this.player.getSession().sendClientPacket(encodePluginMessage(packet.channel, { type: "unavailable" }));
@@ -882,7 +949,7 @@ export class ClientConnection {
         case "bank_move":
           if (this.player && Bank.isOpen(this.player)) {
             const from = Bank.resolveDisplaySlot(this.player, packet.from);
-            const to = Bank.resolveDisplaySlot(this.player, packet.to);
+            const to = Bank.resolveDropSlot(this.player, packet.to);
             if (from && to && from.tab === to.tab) {
               this.player.setInsertMode(packet.mode === "insert");
               Bank.rearrange(this.player, this.player.getBank(from.tab), from.slot, to.slot);
@@ -1188,16 +1255,9 @@ export class ClientConnection {
           if (this.player && packet.action === "close") this.player.getPacketSender().closeInterface(packet.groupId);
           continue;
         case "widget_target": {
-          // A spell cast on an inventory item (High Alchemy, Plank Make) is an inventory interaction: it closes the
-          // dialogue and any amount prompt, as an inventory click does. With the dialogue left open, an item a
-          // dialogue had just checked could be alched before its action ran, and the action still paid.
           // The spell-on-item routes below act on the inventory's slot, whatever the target names, so they only run
           // for a target in the inventory: another group (a bank or dialogue widget) can't alch past an open dialogue.
-          const onInventory = (packet.targetWidgetId >>> 16) === MAIN_INVENTORY_GROUP_ID;
-          if (this.player && onInventory) {
-            this.player.closeInterruptibleInterfaces();
-          }
-          if (this.player && !(onInventory && (LunarSpells.handleItemTarget(
+          if (this.player && !(inventoryTarget && (LunarSpells.handleItemTarget(
             this.player,
             packet.targetItemId,
             packet.targetSlot,
@@ -1299,11 +1359,7 @@ export class ClientConnection {
         case "item_spawner_search":
           continue;
         case "examine_npc":
-          if (this.player) {
-            const definition = NpcDefinition.forId(packet.id);
-            // rsprox: examines have their own chat types (npc_examine, e.g. 237/01098.txt).
-            this.player.getPacketSender().sendTypedMessage(ChatType.NPC_EXAMINE, definition.getExamine());
-          }
+          this.examineNpc(packet.id);
           continue;
         case "examine_object":
           if (this.player) {
@@ -1398,6 +1454,25 @@ export class ClientConnection {
           continue;
       }
     }
+  }
+
+  /** Native examines still work; contextual transport additionally identifies a live NPC. */
+  private examineNpc(id: number, index?: number): void {
+    const player = this.player;
+    if (!player || !Number.isInteger(id) || id < 0 || id >= CacheDefinitions.getCounts().npcs) return;
+    let npc;
+    if (index !== undefined) {
+      if (!player.isRegistered() || !Number.isInteger(index) || index < 0) return;
+      npc = World.getNpcs().get(index);
+      if (!npc || !player.getLocalNpcs().includes(npc) || !npc.isRegistered() || !npc.isVisible()
+        || BoatManager.syncArea(npc) !== BoatManager.syncArea(player) || npc.getContentId(player) !== id
+        || !CrossFloor.visible(BoatManager.rootLocation(player), BoatManager.rootLocation(npc), player.getNpcViewDistance())
+        || !BoatManager.canSeeAboard(player, npc) || (npc.isOwnerOnly() && npc.getOwner() !== player)) return;
+    }
+    const event = { player, npcId: id, npc, handled: false };
+    PluginManager.emitCustomEvent("world:npc-examine", event);
+    if (!event.handled) player.getPacketSender().sendTypedMessage(ChatType.NPC_EXAMINE,
+      (npc?.getCurrentDefinition(player) ?? NpcDefinition.forId(id)).getExamine());
   }
 
   private rejectLoginExtension(error: unknown): void {

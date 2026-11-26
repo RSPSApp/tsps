@@ -34,7 +34,14 @@ function toOsrsKeyCode(domKeyCode: number): number {
 /** Finger travel equivalent to one mouse-wheel notch (CSS px). */
 const PINCH_PX_PER_WHEEL_NOTCH = 20;
 /** A mouse wheel notch's deltaY (pixel mode). */
-const WHEEL_NOTCH_DELTA = 100;
+/** The wheel delta browsers report for one notch. */
+export const WHEEL_NOTCH_DELTA = 100;
+
+/** A wheel delta as whole notches, the unit OSRS scripts and scroll lists count in (at least one). */
+export function wheelNotches(delta: number): number {
+    if (delta === 0) return 0;
+    return Math.sign(delta) * Math.max(1, Math.round(Math.abs(delta) / WHEEL_NOTCH_DELTA));
+}
 
 /**
  * Forced-landscape portrait mode (useSafariLandscapeLock) rotates the root 90deg clockwise.
@@ -48,7 +55,8 @@ export function isIosLandscapeRotated(): boolean {
     );
 }
 
-export function getMousePos(container: HTMLElement, event: MouseEvent | Touch): vec2 {
+/** `clamp: false` keeps a position past the canvas edge, for drags that go on outside it. */
+export function getMousePos(container: HTMLElement, event: MouseEvent | Touch, clamp = true): vec2 {
     const rect = container.getBoundingClientRect();
 
     // When rotated, use clientWidth/clientHeight for the unrotated layout dimensions.
@@ -86,8 +94,10 @@ export function getMousePos(container: HTMLElement, event: MouseEvent | Touch): 
         cssY = rotatedY;
     }
 
-    cssX = Math.max(0, Math.min(baseW, cssX));
-    cssY = Math.max(0, Math.min(baseH, cssY));
+    if (clamp) {
+        cssX = Math.max(0, Math.min(baseW, cssX));
+        cssY = Math.max(0, Math.min(baseH, cssY));
+    }
 
     // Scale from CSS coordinates to canvas internal coordinates
     // This handles cases where canvas is CSS-scaled (displayed size != internal resolution)
@@ -850,12 +860,14 @@ export class InputManager {
             this.mouseY = y;
             this.isTouch = false;
             event.preventDefault();
-            if (!this.mouseCamEnabled) return;
-            this.mouseWheelDown = true;
-            this.mouseWheelX = x;
-            this.mouseWheelY = y;
-            this.installDocumentGrab();
-            return;
+            if (this.mouseCamEnabled) {
+                this.mouseWheelDown = true;
+                this.mouseWheelX = x;
+                this.mouseWheelY = y;
+                this.installDocumentGrab();
+                return;
+            }
+            // With the camera option off, OSRS reads the middle button as a left click.
         }
 
         // Right drag turns the camera (Camera plugin): hold the press until it moves or lifts.
@@ -875,7 +887,7 @@ export class InputManager {
             this.clickMode2 = ClickMode.RIGHT;
         }
         // Left click
-        else if (event.button === 0) {
+        else if (event.button === 0 || event.button === 1) {
             this.clickMode1 = ClickMode.LEFT;
             this.clickMode2 = ClickMode.LEFT;
             this._dragStartX = x;
@@ -968,6 +980,25 @@ export class InputManager {
         return true;
     }
 
+    /**
+     * A move with a camera button held (OSRS: mouseDragged). It runs for moves outside the canvas
+     * too, so a drag keeps turning the camera when the cursor leaves it, as AWT's grab does. The
+     * position isn't clamped to the canvas, or the camera would stop at its edge.
+     */
+    private dragCamera(event: MouseEvent): void {
+        if (!this.element || (!this.mouseWheelDown && !this.pendingRightPress)) return;
+        const [x, y] = getMousePos(this.element, event, false);
+        this.startRightCameraDrag(x, y);
+        if (!this.mouseWheelDown) return;
+        const deltaX = this.mouseWheelX - x;
+        const deltaY = this.mouseWheelY - y;
+        this._cameraDragDeltaX += deltaX;
+        this._cameraDragDeltaY += deltaY;
+        this.mouseWheelDragged(deltaX, -deltaY);
+        this.mouseWheelX = x;
+        this.mouseWheelY = y;
+    }
+
     /** True while the right button is held to turn the camera, or might be about to. */
     isRightCameraDrag(): boolean {
         return this.rightCameraDragging || this.pendingRightPress !== undefined;
@@ -1002,17 +1033,7 @@ export class InputManager {
         }
 
         this.checkRightButtonHeld(event);
-        this.startRightCameraDrag(x, y);
-        // Update camera drag position while middle-dragging (OSRS: mouseDragged) - Fixed
-        if (this.mouseWheelDown) {
-            const deltaX = this.mouseWheelX - x;
-            const deltaY = this.mouseWheelY - y;
-            this._cameraDragDeltaX += deltaX;
-            this._cameraDragDeltaY += deltaY;
-            this.mouseWheelDragged(deltaX, -deltaY);
-            this.mouseWheelX = x;
-            this.mouseWheelY = y;
-        }
+        this.dragCamera(event);
 
         this.isTouch = false;
         for (const handler of this.mouseHandlers) handler.onMouseMove?.(event);
@@ -1053,7 +1074,7 @@ export class InputManager {
         document.removeEventListener("mouseup", this.onDocGrabUp, true);
     }
 
-    /** Document-level mousemove — only updates coords when cursor is outside the canvas. */
+    /** Document-level mousemove: the cursor is outside the canvas, but a held button still drags. */
     private onDocGrabMove = (event: MouseEvent) => {
         if (!this.element) return;
         // If the event target is within our element, the element's own onMouseMove handles it.
@@ -1065,6 +1086,7 @@ export class InputManager {
         this.mouseX = x;
         this.mouseY = y;
         this.checkRightButtonHeld(event);
+        this.dragCamera(event);
     };
 
     /** Document-level mouseup — catches releases that occur outside the canvas. */
@@ -1488,10 +1510,8 @@ export class InputManager {
             this._dragStartX = this.mouseX;
             this._dragStartY = this.mouseY;
         }
-        if (this.isCameraDragging()) {
-            this.mouseWheelX = this.mouseX;
-            this.mouseWheelY = this.mouseY;
-        }
+        // The camera drag origin isn't reset here: every move sets it (dragCamera, the touch drag),
+        // and mouseX is clamped to the canvas or -1 once the cursor leaves it.
 
         // Clear per-frame deltas
         this.deltaMouseX = 0;

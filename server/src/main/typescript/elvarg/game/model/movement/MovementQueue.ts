@@ -113,6 +113,8 @@ export class MovementQueue {
     private alternativeRoute = false;
     /** The next queued step may ignore a spell freeze, but no other movement lock. */
     private forceOneStepThroughFreeze = false;
+    /** A scripted step taken while held (stepWhileHeld), from wherever the player then stands; a reset does not drop it. */
+    private heldStep: { dx: number; dy: number } | null = null;
     /** Pre-step check of the current walk-to (re-pathing to an NPC, re-validating a loc). */
     private entityPursuit: (() => void) | null = null;
     /**
@@ -164,7 +166,7 @@ export class MovementQueue {
         }
         // Owner noclip (#5630): a flagged player's own step ignores collision; everyone else is checked below.
         if (isNoclip(this.character)) return true;
-        return RegionManager.canMovestart(this.character.getLocation(), this.character.getLocation().transform(deltaX, deltaY), this.character.getSize(), this.character.getSize(), this.character.getPrivateArea());
+        return RegionManager.canMovestart(this.character.getLocation(), this.character.getLocation().transform(deltaX, deltaY), this.character.getSize(), this.character.getSize(), this.character.getWalkClipArea());
     }
 
     /**
@@ -252,6 +254,18 @@ export class MovementQueue {
         this.reset();
         this.forceOneStepThroughFreeze = true;
         this.points.push(new Point(destination, Direction.fromDeltas(x, y)));
+        return true;
+    }
+
+    /**
+     * One walked tile a script takes for a player it holds still (a quest's walk round a mast): the
+     * next movement pass takes this tile alone, as a walk, whatever blocks ordinary movement, and
+     * drops whatever a click queued in the meantime. The hold stays on, so no click moves the
+     * player between steps. Collision still applies.
+     */
+    public stepWhileHeld(x: number, y: number): boolean {
+        if (Math.max(Math.abs(x), Math.abs(y)) !== 1) return false;
+        this.heldStep = { dx: x, dy: y };
         return true;
     }
 
@@ -545,7 +559,7 @@ export class MovementQueue {
 
     public hasPendingWork(): boolean {
         if (this.externalMovementUntil > Date.now()) return true;
-        if (this.points.length > 0 || this.isMoving) {
+        if (this.heldStep || this.points.length > 0 || this.isMoving) {
             return true;
         }
         if (this.character.getFollowing() != null) {
@@ -556,6 +570,13 @@ export class MovementQueue {
 
     public process() {
         this.movedThisCycle = false;
+        const heldStep = this.heldStep;
+        this.heldStep = null;
+        if (heldStep) {
+            this.points.clear();
+            this.points.push(new Point(this.character.getLocation().transform(heldStep.dx, heldStep.dy),
+                Direction.fromDeltas(heldStep.dx, heldStep.dy)));
+        }
         if (this.externalMovementUntil > Date.now()) {
             this.isMoving = this.getMobility().canMove();
             this.movedThisCycle = this.isMoving;
@@ -564,6 +585,7 @@ export class MovementQueue {
         }
         const ownerLabel = this.ownerLabel();
         if (
+            !heldStep &&
             this.points.length === 0 &&
             !this.isMoving &&
             this.character.getFollowing() == null
@@ -573,14 +595,14 @@ export class MovementQueue {
 
         const forceOneStepThroughFreeze = this.forceOneStepThroughFreeze;
         this.forceOneStepThroughFreeze = false;
-        if (!(forceOneStepThroughFreeze
+        if (!heldStep && !(forceOneStepThroughFreeze
             ? this.getMobilityIgnoringFreeze()
             : this.getMobility()).canMove()) {
             this.isMoving = false;
             return;
         }
 
-        if (this.character.getFollowing() != null) {
+        if (!heldStep && this.character.getFollowing() != null) {
             ServerPerf.measurePhase(
                 "movement.process.follow",
                 () => this.processFollowing()
@@ -594,7 +616,7 @@ export class MovementQueue {
         const start = this.character.getLocation();
         let current = start;
         let previous = start;
-        let steps = forceOneStepThroughFreeze ? 1 : this.isRunToggled() ? 2 : 1;
+        let steps = heldStep || forceOneStepThroughFreeze ? 1 : this.isRunToggled() ? 2 : 1;
         let moved = false;
         let stepsMoved = 0;
         this.stepBlocked = false;
@@ -712,7 +734,7 @@ export class MovementQueue {
                     next,
                     this.character.getSize(),
                     this.character.getSize(),
-                    this.character.getPrivateArea()
+                    this.character.getWalkClipArea()
                 ))
         ) {
             return false;
@@ -799,7 +821,7 @@ export class MovementQueue {
                 next,
                 this.character.getSize(),
                 this.character.getSize(),
-                this.character.getPrivateArea()
+                this.character.getWalkClipArea()
             ) && this.isDynamicallyOccupied(next, source)) {
                 this.blockedByDynamicOccupancy = true;
             }
@@ -1033,7 +1055,7 @@ export class MovementQueue {
         // do not re-route; this avoids jittering too close/too far while idle.
         if (followerDistance <= 1 && !leaderMoving && followerDistance !== 0) {
             if (!RegionManager.canMovestart(this.character.getLocation(), following.getLocation(),
-                this.character.getSize(), this.character.getSize(), this.character.getPrivateArea())) {
+                this.character.getSize(), this.character.getSize(), this.character.getWalkClipArea())) {
                 this.notifyFollowBlocked(following, "blocked-adjacent");
             }
             return;
@@ -1181,6 +1203,7 @@ export class MovementQueue {
     }
 
     public isRunToggled(): boolean {
+        if (this.character.isPlayer() && (this.character as Player).isWalkOnly?.()) return false;
         return this.character.isPlayer()
             ? this.runOverride ?? this.clickRunOverride ?? (this.character as Player).isRunningReturn()
             : this.character.getAsNpc().getMovementSteps() > 1;
@@ -1303,7 +1326,7 @@ export class MovementQueue {
         pos: Location,
         action: () => void,
         reached: (entity: Mobile, destination: Location) => boolean = PathFinder.reachedTile,
-        options: { failWhenUnreachable?: boolean } = {}
+        options: { failWhenUnreachable?: boolean; approach?: () => boolean } = {}
     ) {
         // Call time, not tick time: only an exact tile match may skip the walk.
         // Anything looser would let an adjacent click resolve without stepping.
@@ -1328,7 +1351,9 @@ export class MovementQueue {
 
         this.walkToReset();
 
-        PathFinder.calculateGroundItemRoute(this.player, pos);
+        // Already in approach range: no step, the action runs as it would on arrival.
+        const inRange = options.approach?.() === true;
+        if (!inRange) PathFinder.calculateGroundItemRoute(this.player, pos);
         let lastRouteCycle = World.getProcessCycle();
         let reachedDestination = false;
 
@@ -1344,6 +1369,12 @@ export class MovementQueue {
 
             if (reached(this.player, pos)) {
                 // The interaction resolves on the cycle after arrival.
+                reachedDestination = true;
+                return;
+            }
+            if (options.approach?.() === true) {
+                // In range: the walk stops here, and the action follows as on arrival.
+                this.player.getMovementQueue().reset();
                 reachedDestination = true;
                 return;
             }
@@ -1819,15 +1850,24 @@ export class MovementQueue {
         };
         // All object users share route overrides and reach restrictions, including items and bots.
         PluginManager.emitObjectRoute(routeEvent);
+        const approachRange = Math.max(0, routeEvent.approachRange ?? 0);
         if (routeEvent.destination) {
             const { x, y, z } = routeEvent.destination;
-            this.walkToTile(new Location(x, y, z), () => action.execute());
+            // With an approach range too, the op also runs once the loc is within it and in sight,
+            // checked at the click and after each step, short of the destination (the Ghosts Ahoy
+            // rocks: rsprox captures 20261112T092603-5ab63b4 ticks 937-1005).
+            const spec = approachRange > 0 ? this.buildObjectRouteSpec(object, routeEvent.blockAccessFlags) : null;
+            const approach = spec ? () => this.withinApproachRange(spec, approachRange) : undefined;
+            this.walkToTile(new Location(x, y, z), () => action.execute(), PathFinder.reachedTile, { approach });
             return;
         }
 
         const routeSpec = this.buildObjectRouteSpec(object, routeEvent.blockAccessFlags);
-        const approachRange = Math.max(0, routeEvent.approachRange ?? 0);
         const operateBeforeMovement = routeEvent.operateBeforeMovement === true && approachRange === 0;
+        const operateBeforeMovementApproachDelay = operateBeforeMovement
+            ? Math.max(0, Math.floor(routeEvent.operateBeforeMovementApproachDelay ?? 0)) : 0;
+        const deferInitialFace = operateBeforeMovementApproachDelay > 0 &&
+            routeEvent.deferInitialFaceUntilApproachDelay === true;
         // A frozen player still operates what they reach from where they stand (a ladder, a
         // cave entrance: Wiki, Freeze); anything further is "I can't reach that!" as live.
         // Another lock (a stun) still stops a frozen player.
@@ -1878,6 +1918,9 @@ export class MovementQueue {
         if (!frozen) {
             queueObjectRoute();
         }
+        // A few captured doors resolve an approached click an extra pre-movement pass after arrival.
+        // An in-reach click has no approach and remains on its input pass.
+        let approachDelayRemaining = this.reachesObject(object, routeSpec) ? 0 : operateBeforeMovementApproachDelay;
 
         const finalDestinationX = this.player.getMovementQueue().pathX;
         const finalDestinationY = this.player.getMovementQueue().pathY;
@@ -1887,7 +1930,8 @@ export class MovementQueue {
 
         //System.err.println("RequestedX=" + objectX + " requestedY=" + objectY + " givenX=" + finalDestinationX + " givenY=" + finalDestinationY);
 
-        this.player.setPositionToFace(new Location(objectX, objectY));
+        if (deferInitialFace) this.player.setPositionToFace(null);
+        else this.player.setPositionToFace(new Location(objectX, objectY));
         const interactionArea = this.player.getPrivateArea();
         const interactionTeleportSerial = this.player.getTeleportSerial();
         const stoodAtClick = this.character.isPlayer() && MapObjects.stillStands(this.player, id, object.getLocation(), object, true);
@@ -1997,6 +2041,11 @@ export class MovementQueue {
             }
             if (invalidTarget) {
                 this.reset(); // the task's own check ends the interaction after this cycle
+                return;
+            }
+            if (operateBeforeMovement && approachDelayRemaining > 0 && this.reachesObject(object, routeSpec)) {
+                approachDelayRemaining--;
+                this.player.forcePositionToFace(new Location(objectX, objectY, this.player.getLocation().getZ()));
                 return;
             }
             if (operateBeforeMovement && this.points.length === 0 && this.reachesObject(object, routeSpec)) {

@@ -1,225 +1,104 @@
 "use strict";
 
-const { deployRoutineBots, deployRegisteredBots, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS } = require("../runtime/Deploy.PlayerBots");
-const { collectActivityLaunchers } = require("../runtime/LauncherCatalog.PlayerBots");
+const { deployRoutineBots, managedBotCount, MAX_MANAGED_BOTS, DEFAULT_LOCATION } = require("../runtime/Deploy.PlayerBots");
+const { ROSTER_MODES, deployRoster } = require("../runtime/Roster.PlayerBots");
+const { matchRoutineIds } = require("../runtime/RoutineCatalog.PlayerBots");
+const { listRoutineDeployments, groupRoutines, defaultRoutineId } = require("../runtime/RoutineDeployments.PlayerBots");
+const { validateRoutineOverrides } = require("../runtime/DeploymentOverrides.PlayerBots");
+const { readAvailablePlans, planMode, planOverrideFields, applyPlanOverrides, savePlan } = require("../runtime/DeploymentPlans.PlayerBots");
+const { createPlanSetup, planSetupView, changePlanCount, changePlanRoutine, launchPlan, currentRow } = require("./PlanSetup.PlayerBots");
+const { ownerSkillOverrides, prompts, parseSetupOverride, overrideValue } = require("./RoutineSetup.PlayerBots");
+const { savedSetupName, nextSetupId, readRoutineSetups, saveRoutineSetup } = require("../runtime/SavedRoutineSetups.PlayerBots");
 const Layout = require("./Layout.Bots.PlayerBots");
 
 const {
-  GROUP_ID, SETUP_GROUP_ID, MAIN_MODAL_UID, BROWSER_COMPONENT, SETUP_COMPONENT,
-  BROWSER_BUTTONS, SETUP_BUTTONS, TAB_UIDS, rowUids, uid, setupUid,
+  GROUP_ID, SETUP_GROUP_ID, PLAN_GROUP_ID, MAIN_MODAL_UID, BROWSER_COMPONENT, SETUP_COMPONENT, PLAN_COMPONENT,
+  BROWSER_BUTTONS, SETUP_BUTTONS, PLAN_BUTTONS, PLAN_ROW_HEIGHT, planRows, TAB_UIDS, ROUTINES_TAB, rowUids, uid, setupUid, planUid,
 } = Layout;
 const sessions = new WeakMap();
 const BROWSER_INTERFACE = Layout.buildBrowserInterface();
 const SETUP_INTERFACE = Layout.buildSetupInterface();
-function view(player) {
-  const groupId = player.getInterfaceId?.();
-  return groupId === GROUP_ID ? "browser" : groupId === SETUP_GROUP_ID ? "setup" : null;
-}
-function currentLocation(player) {
-  const location = player.getLocation?.();
-  if (!location) return null;
-  const x = typeof location.getX === "function" ? location.getX() : location.x;
-  const y = typeof location.getY === "function" ? location.getY() : location.y;
-  const z = typeof location.getZ === "function" ? location.getZ() : location.z;
-  return [x, y, z].every(Number.isInteger) ? { x, y, z } : null;
-}
-function managedBotCount(runtime) {
-  return [...(runtime?.entriesByUsername?.values?.() ?? [])]
-    .filter(entry => typeof entry.adminDeployedActivityId === "string").length;
-}
-function ownerSkillOverrides(player, core) {
-  const manager = player?.getSkillManager?.();
-  const levels = {};
-  for (const skill of core?.Skill?.values?.() ?? []) {
-    const name = String(skill.getName?.() ?? "").toLowerCase().replace(/[ -]+/g, "_");
-    const level = manager?.getMaxLevel?.(skill) ?? manager?.getCurrentLevel?.(skill);
-    if (name && Number.isInteger(level) && level >= 1 && level <= 99) levels[name] = level;
-  }
-  return Object.keys(levels).length ? levels : null;
-}
-function eligibleActivities(brainRegistry) {
-  return (brainRegistry?.activities ?? [])
-    .filter(activity => activity.manual === true && activity.id?.startsWith("custom_"))
-    .sort((left, right) => left.id.localeCompare(right.id));
-}
-function displayName(id) {
-  const label = String(id).replace(/^custom_/, "").replace(/[_-]+/g, " ").trim();
-  return label ? label.replace(/\b\w/g, letter => letter.toUpperCase()) : String(id);
-}
-function brief(value, max = 140) {
-  const text = String(value ?? "").trim();
-  return text.length <= max ? text : `${text.slice(0, max - 3).trimEnd()}...`;
-}
-function setupSummary(activity) {
-  const setup = activity.spawnSetup ?? {};
-  const skills = Object.keys(setup.skills ?? {}).length;
-  const inventory = Array.isArray(setup.inventory) ? setup.inventory.length : 0;
-  const equipment = Array.isArray(setup.equipment) ? setup.equipment.length : 0;
-  const setupItems = [];
-  if (skills) setupItems.push(`${skills} skill override${skills === 1 ? "" : "s"}`);
-  if (inventory) setupItems.push(`${inventory} inventory slot${inventory === 1 ? "" : "s"}`);
-  if (equipment) setupItems.push(`${equipment} equipment slot${equipment === 1 ? "" : "s"}`);
-  return setupItems.length ? `Routine start kit: ${setupItems.join(", ")}.` : "Routine start kit: default bot setup.";
-}
-function eligibleLaunchers(api, brainRegistry) {
-  const routines = eligibleActivities(brainRegistry).map(activity => ({
-    key: `routine:${activity.id}`, kind: "routine", activityId: activity.id, activity,
-    name: displayName(activity.id), detail: activity.repeat === true ? "Repeating routine" : "One-shot routine",
-  }));
-  const activities = collectActivityLaunchers(api).map(launcher => ({
-    ...launcher,
-    panel: {
-      title: launcher.name,
-      subtitle: `${launcher.detail} · activity plugin`,
-      description: brief(`${launcher.description} ${launcher.setupSummary}`),
-    },
-  }));
-  return { routines, activities };
-}
-function routineRow(activity, id) {
-  const repeat = activity.repeat === true;
-  const name = displayName(activity.id);
-  const subtitle = `${repeat ? "Repeating" : "One-shot"} routine${activity.usesAiAgent ? " · AI required" : ""}`;
-  const description = brief(`${setupSummary(activity)}${activity.usesAiAgent ? " This routine also requires an enabled AI provider." : ""}`);
-  return {
-    id, name, detail: repeat ? "Repeating" : "One-shot",
-    terms: `${activity.id} ${activity.usesAiAgent ? "AI agent" : ""} ${subtitle}`,
-    panel: { title: name, subtitle, description },
-  };
-}
-function activityRow(launcher, id) {
-  return {
-    id, name: launcher.name, detail: launcher.detail,
-    terms: `${launcher.id} ${launcher.description} ${launcher.setupSummary}`,
-    panel: launcher.panel,
-  };
-}
+const PLAN_INTERFACE = Layout.buildPlanInterface();
+const planRowActions = planRows.flatMap((row, index) => [
+  ...row.routine.map(component => [planUid(component), { index, change: changePlanRoutine }]),
+  ...row.minus.map(component => [planUid(component), { index, change: state => changePlanCount(state, index, Math.max(0, currentRow(state, index).count - 1)) }]),
+  ...row.plus.map(component => [planUid(component), { index, change: state => changePlanCount(state, index, Math.min(Number.MAX_SAFE_INTEGER, currentRow(state, index).count + 1)) }]),
+  [planUid(row.count), { index, enterCount: true }],
+]);
+const planActionsByUid = new Map(planRowActions);
+const brief = (value, max = 140) => value.length <= max ? value : `${value.slice(0, max - 3).trimEnd()}...`;
+
 function sendBrowserString(player, value, component) {
   player.getPacketSender().sendString(String(value ?? ""), uid(component));
 }
 function sendSetupString(player, value, component) {
   player.getPacketSender().sendString(String(value ?? ""), setupUid(component));
 }
-function setSetupOptionVisible(player, component, visible) {
-  player.getPacketSender().sendInterfaceDisplayState?.(setupUid(component), !visible);
+function sendPlanString(player, value, component) {
+  player.getPacketSender().sendString(String(value ?? ""), planUid(component));
 }
-function setBrowserConfigureVisible(player, visible) {
-  player.getPacketSender().sendInterfaceDisplayState?.(uid(BROWSER_COMPONENT.CONFIGURE_BUTTON), !visible);
-  player.getPacketSender().sendInterfaceDisplayState?.(uid(BROWSER_COMPONENT.CONFIGURE_LABEL), !visible);
+function setBrowserActionsVisible(player, visible) {
+  for (const component of [...BROWSER_BUTTONS.configure, ...BROWSER_BUTTONS.deploy]) player.getPacketSender().sendInterfaceDisplayState?.(uid(component), !visible);
 }
-function activitySetup(launcher, state) {
-  const fields = launcher?.setupFields ?? [];
-  let values = state.activitySetupByLauncher.get(launcher?.key);
-  if (!values) {
-    values = Object.fromEntries(fields.map(field => [field.id, field.defaultValue]));
-    if (launcher) state.activitySetupByLauncher.set(launcher.key, values);
-  }
-  return Object.fromEntries(fields.map(field => [field.id, values[field.id] ?? field.defaultValue]));
+function showBrowserPanel(player, panel) {
+  sendBrowserString(player, panel?.title ?? "Choose a routine or plan", BROWSER_COMPONENT.PANEL_TITLE);
+  sendBrowserString(player, panel?.subtitle ?? "Bot deployment", BROWSER_COMPONENT.PANEL_SUBTITLE);
+  sendBrowserString(player, panel?.description ?? "Select a row. Choose Deploy for defaults or Configure to make changes.", BROWSER_COMPONENT.PANEL_DESCRIPTION);
+  setBrowserActionsVisible(player, !!panel);
 }
-function selectedLauncher(state) {
-  return state?.launchers?.find(launcher => launcher.key === state.selectedLauncherKey) ?? null;
+function setupSummary(activity) {
+  const setup = activity.setup;
+  const skills = Object.keys(setup.skills ?? {}).length;
+  const inventory = setup.inventory?.length ?? 0;
+  const equipment = setup.equipment?.length ?? 0;
+  const details = [skills && `${skills} starting skill levels`, inventory && `${inventory} inventory slots`, equipment && `${equipment} equipment slots`].filter(Boolean);
+  return details.length ? `Starting setup: ${details.join(", ")}.` : "Uses the routine's default starting setup.";
 }
-function selectedActivity(brainRegistry, state) {
-  const launcher = selectedLauncher(state);
-  return launcher?.kind === "routine" ? launcher.activity ?? brainRegistry?.byId?.get(launcher.activityId) ?? null : null;
-}
-function selectedLocation(player, launcher, state) {
-  if (state.usePlayerLocation) return currentLocation(player);
-  if (launcher?.kind === "routine") return launcher.activity?.spawnSetup?.location ?? currentLocation(player);
-  return launcher?.spawnLocation ?? currentLocation(player);
-}
-function showEmptyPanel(player, message = "Choose a saved routine or an activity launcher contributed by a server plugin.") {
-  sendBrowserString(player, "Choose a launcher", BROWSER_COMPONENT.PANEL_TITLE);
-  sendBrowserString(player, "Routine or activity", BROWSER_COMPONENT.PANEL_SUBTITLE);
-  sendBrowserString(player, message, BROWSER_COMPONENT.PANEL_DESCRIPTION);
-  setBrowserConfigureVisible(player, false);
-}
-function showSelectedPanel(player, launcher) {
-  const activity = launcher.kind === "routine" ? launcher.activity : null;
-  const panel = launcher.kind === "routine"
-    ? routineRow(activity, 0).panel
-    : launcher.panel;
-  sendBrowserString(player, panel.title, BROWSER_COMPONENT.PANEL_TITLE);
-  sendBrowserString(player, panel.subtitle, BROWSER_COMPONENT.PANEL_SUBTITLE);
-  sendBrowserString(player, panel.description, BROWSER_COMPONENT.PANEL_DESCRIPTION);
-  setBrowserConfigureVisible(player, true);
-}
-function updateActivitySetupControls(player, launcher, state) {
-  const fields = launcher?.kind === "activity" ? launcher.setupFields ?? [] : [];
-  const values = activitySetup(launcher, state);
-  for (const [index, [buttonComponent, labelComponent]] of SETUP_BUTTONS.setupOptions.entries()) {
-    const field = fields[index];
-    setSetupOptionVisible(player, buttonComponent, !!field);
-    setSetupOptionVisible(player, labelComponent, !!field);
-    if (!field) {
-      sendSetupString(player, "", labelComponent);
-      continue;
-    }
-    const selected = field.choices.find(choice => choice.value === values[field.id]) ?? field.choices[0];
-    sendSetupString(player, `${field.label}: ${selected.label}  >`, labelComponent);
-  }
-}
-function updateSetupControls({ runtime }, player, state) {
-  const launcher = selectedLauncher(state);
-  const activity = selectedActivity(state.deps.brainRegistry, state);
-  if (launcher) {
-    sendSetupString(player, launcher.name ?? displayName(launcher.activityId), SETUP_COMPONENT.TITLE);
-    sendSetupString(player, launcher.kind === "routine"
-      ? `${activity?.repeat === true ? "Repeating" : "One-shot"} routine`
-      : `${launcher.detail} · activity plugin`, SETUP_COMPONENT.SUBTITLE);
-    sendSetupString(player, launcher.kind === "routine"
-      ? brief(`${setupSummary(activity)}${activity?.usesAiAgent ? " AI provider must be enabled before spawning." : ""}`, 110)
-      : brief(`${launcher.description} ${launcher.setupSummary}`, 110), SETUP_COMPONENT.DESCRIPTION);
-  } else {
-    sendSetupString(player, "Configure bot deployment", SETUP_COMPONENT.TITLE);
-    sendSetupString(player, "No launcher selected", SETUP_COMPONENT.SUBTITLE);
-    sendSetupString(player, "Go back and choose a routine or activity.", SETUP_COMPONENT.DESCRIPTION);
-  }
-
-  sendSetupString(player, state.count, SETUP_COMPONENT.COUNT_VALUE);
-  sendSetupString(player, state.usePlayerLocation ? "Use saved location" : "Spawn at my current tile", SETUP_COMPONENT.LOCATION_LABEL);
-  const location = selectedLocation(player, launcher, state);
-  sendSetupString(player, location
-    ? `Spawn tile: ${location.x}, ${location.y}, plane ${location.z}`
-    : "No valid spawn tile is available.", SETUP_COMPONENT.LOCATION_INFO);
-  sendSetupString(player, `Copy my levels: ${state.copyOwnerSkills ? "On" : "Off"}`, SETUP_COMPONENT.COPY_LEVELS_LABEL);
-  sendSetupString(player, `${MAX_DEPLOY_COUNT}/deploy · ${managedBotCount(runtime)}/${MAX_MANAGED_BOTS} managed`, SETUP_COMPONENT.SETUP_NOTE);
-  updateActivitySetupControls(player, launcher, state);
-}
-function setFeedback(player, message) {
-  sendSetupString(player, message, SETUP_COMPONENT.FEEDBACK);
-}
-function sendRows(player, deps, state) {
-  const { routines, activities } = eligibleLaunchers(deps.api, deps.brainRegistry);
-  const rows = [];
-  const routineIds = [];
-  const activityIds = [];
-  state.launchers = [];
+function sendRows(player, state) {
+  const registry = state.deps.brainRegistry;
+  const activities = listRoutineDeployments(registry);
+  state.activities = new Map(activities.map(activity => [activity.id, activity]));
   state.launchersByRowId = new Map();
-  let nextId = 1;
-  for (const launcher of routines) {
-    const id = nextId++;
-    rows.push(routineRow(launcher.activity, id));
-    state.launchers.push(launcher);
-    state.launchersByRowId.set(id, launcher.key);
-    routineIds.push(id);
+  const rows = [], routineRows = [], savedRows = [], planRows = [];
+  function add(key, launcher, detail, terms, panel) {
+    const id = rows.length + 1;
+    rows.push({ id, name: launcher.name, detail, terms });
+    state.launchersByRowId.set(id, { ...launcher, key, panel });
+    return id;
   }
-  for (const launcher of activities) {
-    const id = nextId++;
-    rows.push(activityRow(launcher, id));
-    state.launchers.push(launcher);
-    state.launchersByRowId.set(id, launcher.key);
-    activityIds.push(id);
+  for (const group of groupRoutines(activities)) {
+    const activity = state.activities.get(defaultRoutineId(group));
+    const name = group.label;
+    const detail = activity.repeat ? "Repeating" : "One-shot";
+    const variant = activity.deploymentOverrides.find(field => field.type === "routineChoice");
+    const description = variant ? `Default: ${variant.choices.find(choice => choice.id === activity.id)?.label ?? activity.name}. Change ${variant.label.toLowerCase()} in Deployment overrides.` : setupSummary(activity);
+    const id = add(`routine:${activity.id}`, { kind: "routine", name, activityId: activity.id }, detail,
+      group.profiles.map(profile => `${profile.id} ${profile.label}`).join(" "), { title: name, subtitle: `${detail} routine`, description });
+    routineRows.push(id);
+    if (registry.byId?.get(activity.id)?.codeDefined) savedRows.push(id);
   }
-  const allIds = [
-    ...(routineIds.length ? [{ header: "Saved routines" }, ...routineIds] : []),
-    ...(activityIds.length ? [{ header: "Activity launchers" }, ...activityIds] : []),
-  ];
+  try {
+    for (const saved of state.deps.storage.readRoutineSetups()) {
+      const activity = state.activities.get(saved.activityId);
+      if (!activity) continue;
+      savedRows.push(add(`setup:${saved.id}`, { kind: "routine", name: saved.name, activityId: saved.activityId, saved }, `${saved.count} bots`, activity.name, {
+        title: saved.name, subtitle: "Saved routine setup", description: `${saved.count} bots using ${activity.name}.`,
+      }));
+    }
+  } catch (error) { player.sendMessage(`Saved routine setups could not load: ${error.message}`); }
+  let plans = [];
+  try { plans = state.deps.storage.readAvailablePlans(registry.deploymentPlans); }
+  catch (error) { player.sendMessage(`Deployment plans could not load: ${error.message}`); }
+  for (const plan of plans) {
+    const detail = `${plan.rows.reduce((sum, row) => sum + row.count, 0)} bots`;
+    const editable = planOverrideFields(plan).some(rule => rule.count || rule.routines.length);
+    planRows.push(add(`plan:${plan.id}`, { kind: "plan", name: plan.name, plan }, detail, `${plan.id} ${planMode(plan)}`, {
+      title: plan.name, subtitle: `${detail} · Deployment plan`,
+      description: editable ? "Review the plan and its available launch overrides." : "Review the plan before deploying. No launch overrides.",
+    }));
+  }
   state.rows = rows;
-  state.tabLayouts = [allIds, routineIds, activityIds];
-  state.selectedLauncherKey = null;
-  sendBrowserString(player, JSON.stringify(rows), BROWSER_COMPONENT.DATA);
-  sendBrowserString(player, JSON.stringify({ active: state.activeTab, tabs: state.tabLayouts }), BROWSER_COMPONENT.LAYOUT);
+  state.tabLayouts = [savedRows, routineRows, planRows];
 }
 function sendSubInterface(player, groupId, title) {
   player.setInterfaceId(groupId);
@@ -227,220 +106,323 @@ function sendSubInterface(player, groupId, title) {
     postScripts: [{ scriptId: 227, args: [((groupId << 16) | 1), title] }],
   });
 }
-function openBrowser(player, state, query = "", keepSelection = false) {
-  state.view = "browser";
-  sendSubInterface(player, GROUP_ID, "Bot Routines & Activities");
-  if (!keepSelection) {
-    sendRows(player, state.deps, state);
-    showEmptyPanel(player);
-  } else {
-    sendBrowserString(player, JSON.stringify(state.rows), BROWSER_COMPONENT.DATA);
-    sendBrowserString(player, JSON.stringify({ active: state.activeTab, tabs: state.tabLayouts }), BROWSER_COMPONENT.LAYOUT);
-    const launcher = selectedLauncher(state);
-    if (launcher) showSelectedPanel(player, launcher);
-    else showEmptyPanel(player);
-  }
+function openBrowser(player, state, query = "") {
+  sendSubInterface(player, GROUP_ID, "Bot deployments");
+  sendBrowserString(player, JSON.stringify(state.rows), BROWSER_COMPONENT.DATA);
+  sendBrowserString(player, JSON.stringify({ active: state.activeTab, tabs: state.tabLayouts }), BROWSER_COMPONENT.LAYOUT);
+  showBrowserPanel(player, state.selected?.panel);
   sendBrowserString(player, query, BROWSER_COMPONENT.SEARCH_INPUT);
 }
-function openSetup(player, state) {
-  state.view = "setup";
+function routineSetupView(state) {
+  const activity = state.activities.get(state.activityId);
+  const fields = activity.deploymentOverrides;
+  const location = state.overrides.location ?? activity.setup.location ?? DEFAULT_LOCATION;
+  return {
+    title: state.selected.name, subtitle: activity.repeat ? "Repeating routine" : "One-shot routine",
+    description: `Spawn tile: ${location.x}, ${location.y}, plane ${location.z}.`,
+    count: state.count, editableCount: true,
+    overridesLabel: fields.length ? "Deployment overrides" : "No deployment overrides",
+    options: fields.map(field => {
+      const value = field.type === "routineChoice"
+        ? field.choices.find(choice => choice.id === activity.id)?.label ?? activity.name
+        : overrideValue(field.key, state.overrides);
+      return { text: `${field.label}: ${value}  >` };
+    }),
+  };
+}
+function renderSetup(player, state) {
+  const view = routineSetupView(state);
+  sendSetupString(player, view.title, SETUP_COMPONENT.TITLE);
+  sendSetupString(player, view.subtitle, SETUP_COMPONENT.SUBTITLE);
+  sendSetupString(player, view.description, SETUP_COMPONENT.DESCRIPTION);
+  sendSetupString(player, view.count, SETUP_COMPONENT.COUNT_VALUE);
+  sendSetupString(player, view.overridesLabel, SETUP_COMPONENT.OVERRIDES_LABEL);
+  sendSetupString(player, `${managedBotCount(state.deps.runtime)}${MAX_MANAGED_BOTS === null ? "" : `/${MAX_MANAGED_BOTS}`} managed bots`, SETUP_COMPONENT.SETUP_NOTE);
+  const sender = player.getPacketSender();
+  for (const component of [...SETUP_BUTTONS.countMinus, ...SETUP_BUTTONS.countPlus]) {
+    sender.sendInterfaceDisplayState?.(setupUid(component), !view.editableCount);
+  }
+  for (const [index, [button, label]] of SETUP_BUTTONS.setupOptions.entries()) {
+    const option = view.options[index];
+    for (const component of [button, label]) sender.sendInterfaceDisplayState?.(setupUid(component), !option);
+    sendSetupString(player, option?.text, label);
+  }
+}
+function setFeedback(player, message) {
+  sendSetupString(player, brief(message, 85), SETUP_COMPONENT.FEEDBACK);
+}
+function renderPlanSetup(player, state) {
+  const view = planSetupView(state.planSetup, state.deps.brainRegistry);
+  const sender = player.getPacketSender();
+  const show = (components, visible) => {
+    for (const component of components) sender.sendInterfaceDisplayState?.(planUid(component), !visible);
+  };
+  sendPlanString(player, view.title, PLAN_COMPONENT.TITLE);
+  sendPlanString(player, view.summary, PLAN_COMPONENT.SUMMARY);
+  sendPlanString(player, view.rows.length * PLAN_ROW_HEIGHT, PLAN_COMPONENT.CONTENT_HEIGHT);
+  for (const [index, components] of planRows.entries()) {
+    const row = view.rows[index];
+    show([components.root], !!row);
+    if (!row) continue;
+    show([components.name], !row.editableRoutine);
+    show(components.routine, row.editableRoutine);
+    show([...components.minus, ...components.plus], row.editableCount);
+    sendPlanString(player, brief(row.name, 42), components.name);
+    sendPlanString(player, `${brief(row.name, 40)}  >`, components.routine[1]);
+    sendPlanString(player, row.count, components.count);
+  }
+}
+function openDeploymentSetup(player, state) {
+  if (!state.selected) return;
+  if (state.selected.kind === "plan") {
+    state.planSetup = createPlanSetup(state.selected.plan);
+    sendSubInterface(player, PLAN_GROUP_ID, "Configure Deployment Plan");
+    renderPlanSetup(player, state);
+    sendPlanString(player, "Click an editable count to type a value.", PLAN_COMPONENT.FEEDBACK);
+    return;
+  }
+  state.activityId = state.selected.activityId;
+  state.overrides = structuredClone(state.selected.saved?.overrides ?? {});
+  state.count = state.selected.saved?.count ?? 1;
   sendSubInterface(player, SETUP_GROUP_ID, "Configure Bot Deployment");
-  updateSetupControls(state.deps, player, state);
-  setFeedback(player, "Review the setup, then spawn the bots.");
+  renderSetup(player, state);
+  setFeedback(player, "Click the count to type a value, or use - and +.");
 }
 function openBots({ player, parts = [] }, deps) {
-  const { runtime, brainRegistry } = deps;
-  if (!runtime || !brainRegistry) {
-    player.sendMessage?.("The bot runtime is not ready.");
+  const mode = parts[1]?.toLowerCase();
+  if (Object.hasOwn(ROSTER_MODES, mode)) {
+    const [first, second] = ROSTER_MODES[mode];
+    if (parts.length !== 6 || ![parts[3], parts[5]].every(count => /^\d+$/.test(count))) {
+      player.sendMessage(`Usage: ::bots ${mode} <${first} routine|${matchRoutineIds[mode]}> <count> <${second} routine|${matchRoutineIds[mode]}> <count>`);
+      return true;
+    }
+    const result = deployRoster(deps, mode, {
+      [first]: { routine: parts[2], count: Number(parts[3]) }, [second]: { routine: parts[4], count: Number(parts[5]) },
+    });
+    player.sendMessage(result.ok ? `Roster deployed: ${result.spawned[first].length} ${first}, ${result.spawned[second].length} ${second}.` : result.error);
     return true;
   }
-  const state = {
-    deps, view: "browser", activeTab: 0, count: 1, usePlayerLocation: false, copyOwnerSkills: false,
-    selectedLauncherKey: null, launchers: [], launchersByRowId: new Map(), rows: [], tabLayouts: [],
-    activitySetupByLauncher: new Map(),
-  };
+  if (!deps.runtime || !deps.brainRegistry) {
+    player.sendMessage("The bot runtime is not ready.");
+    return true;
+  }
+  const state = { deps, activeTab: ROUTINES_TAB, selected: null, overridePrompt: null };
   sessions.set(player, state);
+  sendRows(player, state);
   openBrowser(player, state, parts.slice(1).join(" ").slice(0, 60));
   return true;
 }
 function clickTab({ player, buttonId }) {
-  if (view(player) !== "browser") return false;
+  if (player.getInterfaceId() !== GROUP_ID) return false;
   const state = sessions.get(player);
-  if (!state) return true;
   const index = TAB_UIDS.indexOf(buttonId);
-  if (index < 0) return false;
+  if (!state || index < 0) return false;
   state.activeTab = index;
-  state.selectedLauncherKey = null;
+  state.selected = null;
   player.getFrameUpdater?.()?.clear?.(uid(BROWSER_COMPONENT.SEARCH_INPUT));
   sendBrowserString(player, "", BROWSER_COMPONENT.SEARCH_INPUT);
-  const message = index === 1
-    ? "Choose one of your saved routines."
-    : index === 2
-      ? "Choose an activity provided by a server plugin."
-      : undefined;
-  showEmptyPanel(player, message);
+  showBrowserPanel(player);
   return true;
 }
-function clickRow({ player, slot, opId }) {
-  if (view(player) !== "browser") return false;
+function clickRow({ player, slot }) {
+  if (player.getInterfaceId() !== GROUP_ID) return false;
   const state = sessions.get(player);
   if (!state) return true;
-  const launcherKey = state.launchersByRowId.get(slot | 0);
-  const launcher = state.launchers.find(item => item.key === launcherKey);
-  if (!launcher) return true;
-  state.selectedLauncherKey = launcherKey;
-  setBrowserConfigureVisible(player, true);
-  if (opId !== 1) showSelectedPanel(player, launcher);
+  const id = slot | 0;
+  if (!state.tabLayouts[state.activeTab].includes(id)) {
+    showBrowserPanel(player, state.selected?.panel);
+    return true;
+  }
+  state.selected = state.launchersByRowId.get(id);
+  showBrowserPanel(player, state.selected?.panel);
   return true;
 }
-function openDeploymentSetup(player, state) {
-  const launcher = selectedLauncher(state);
-  if (!launcher) {
-    showEmptyPanel(player, "Select a routine or activity launcher before configuring a deployment.");
-    return;
-  }
-  state.rows = state.rows ?? [];
-  openSetup(player, state);
+function close(player) {
+  player.getPacketSender().sendInterfaceRemoval();
+  sessions.delete(player);
+}
+function matchesButton(components, buttonId, toUid) {
+  return components.some(component => toUid(component) === buttonId);
 }
 function clickBrowserButton({ player, buttonId }) {
-  if (view(player) !== "browser") return false;
+  if (player.getInterfaceId() !== GROUP_ID) return false;
   const state = sessions.get(player);
   if (!state) return true;
-  if (BROWSER_BUTTONS.configure.map(uid).includes(buttonId)) {
-    openDeploymentSetup(player, state);
-  } else if (BROWSER_BUTTONS.close.map(uid).includes(buttonId)) {
-    player.getPacketSender().sendInterfaceRemoval();
-    sessions.delete(player);
+  if (matchesButton(BROWSER_BUTTONS.configure, buttonId, uid)) openDeploymentSetup(player, state);
+  else if (matchesButton(BROWSER_BUTTONS.deploy, buttonId, uid)) {
+    const launcher = state.selected;
+    if (launcher) {
+      const result = launcher.kind === "plan"
+        ? launchPlan(state.deps, createPlanSetup(launcher.plan))
+        : launchRoutine(state, launcher.activityId, launcher.saved?.count ?? 1, launcher.saved?.overrides ?? {});
+      finishDeploy(player, result, error => sendBrowserString(player, error, BROWSER_COMPONENT.PANEL_DESCRIPTION));
+    } else {
+      showBrowserPanel(player);
+      player.sendMessage("Select a routine or deployment plan before deploying.");
+    }
   } else return false;
   return true;
 }
-function deploy({ player, state, deps }) {
-  const launcher = selectedLauncher(state);
-  if (!launcher) {
-    setFeedback(player, "Go back and choose a routine or activity before deploying.");
-    return;
-  }
-  const activity = selectedActivity(deps.brainRegistry, state);
-  const playerLocation = currentLocation(player);
-  const spawnLocation = selectedLocation(player, launcher, state);
-  if (state.usePlayerLocation && !playerLocation) {
-    setFeedback(player, "Your current tile is unavailable; choose the saved location or try again.");
-    return;
-  }
-  const overrides = state.usePlayerLocation ? { location: playerLocation } : {};
-  if (state.copyOwnerSkills) {
-    const skills = ownerSkillOverrides(player, deps.api.core);
-    if (!skills) {
-      setFeedback(player, "Your base skill levels are unavailable; turn off the skill override or try again.");
-      return;
-    }
-    overrides.skills = skills;
-  }
-  const result = launcher.kind === "routine"
-    ? deployRoutineBots({
-      runtime: deps.runtime,
-      brainRegistry: deps.brainRegistry,
-      core: deps.api.core,
-      activityId: launcher.activityId,
-      count: state.count,
-      overrides,
-      fallbackLocation: playerLocation,
-    })
-    : deployRegisteredBots({
-      runtime: deps.runtime,
-      launcher,
-      count: state.count,
-      location: spawnLocation,
-      context: {
-        api: deps.api, runtime: deps.runtime, brainRegistry: deps.brainRegistry, core: deps.api.core,
-        player, skillOverrides: overrides.skills ?? null, setup: activitySetup(launcher, state),
-      },
-    });
-  if (!result.ok) {
-    setFeedback(player, result.error);
-    return;
-  }
-  const suffix = result.failures?.length ? ` ${result.failures.length} failed.` : "";
-  const label = launcher.kind === "routine" ? displayName(activity?.id ?? result.activityId) : launcher.name;
-  const message = `Spawned ${result.spawned.length}/${result.requested} ${label} bot(s).${suffix}`;
-  setFeedback(player, message);
-  player.sendMessage?.(message);
-  updateSetupControls(deps, player, state);
+function promptSetupInput(player, state, group, label, apply, feedback) {
+  const token = state.overridePrompt = {};
+  player.setEnteredSyntaxAction({ execute(text) {
+    if (sessions.get(player) !== state || state.overridePrompt !== token || player.getInterfaceId() !== group) return;
+    state.overridePrompt = null;
+    try { apply(text); }
+    catch (error) { feedback(error.message); }
+  } });
+  player.getPacketSender().sendEnterInputPrompt(label);
 }
-function buttonIndex(buttons, buttonId, groupUid) {
-  return buttons.findIndex(components => components.map(groupUid).includes(buttonId));
+
+function enteredCount(text, minimum) {
+  const count = Number(text);
+  if (!/^\d+$/.test(text.trim()) || !Number.isSafeInteger(count) || count < minimum) throw new Error(`Enter a whole number of at least ${minimum}.`);
+  return count;
+}
+
+function saveConfiguration(player, state, group) {
+  const isPlan = group === PLAN_GROUP_ID;
+  const feedback = message => isPlan ? sendPlanString(player, brief(message, 85), PLAN_COMPONENT.FEEDBACK) : setFeedback(player, message);
+  promptSetupInput(player, state, group, isPlan ? "Name the deployment plan" : "Name the saved routine setup", text => {
+    const name = savedSetupName(text);
+    if (isPlan) {
+      const { plan, overrides } = state.planSetup;
+      const draft = applyPlanOverrides(plan, overrides);
+      const id = nextSetupId(name, state.deps.storage.readAvailablePlans(state.deps.brainRegistry.deploymentPlans));
+      state.deps.storage.savePlan({ ...draft, id, name });
+    } else {
+      validateRoutineOverrides(state.deps.brainRegistry.byId?.get(state.activityId), state.overrides);
+      state.deps.storage.saveRoutineSetup({ name, activityId: state.activityId, count: state.count, overrides: state.overrides });
+    }
+    sendRows(player, state);
+    feedback(`Saved ${name}.`);
+  }, feedback);
+}
+
+function editOverride(player, state, field, activity) {
+  if (field.type === "routineChoice") {
+    const index = field.choices.findIndex(choice => choice.id === activity.id);
+    const choice = field.choices[(index + 1) % field.choices.length];
+    if (!choice || !state.activities.has(choice.id) || choice.id === state.activityId) return;
+    state.activityId = choice.id;
+    state.overrides = {};
+    renderSetup(player, state);
+    setFeedback(player, `${field.label}: ${choice.label}. Other overrides reset.`);
+    return;
+  }
+  const prompt = prompts[field.key];
+  if (!prompt) return;
+  const token = state.overridePrompt = {};
+  player.setEnteredSyntaxAction({ execute(text) {
+    if (sessions.get(player) !== state || state.overridePrompt !== token || player.getInterfaceId() !== SETUP_GROUP_ID || state.activityId !== activity.id) return;
+    state.overridePrompt = null;
+    try {
+      state.overrides = parseSetupOverride(field.key, text, activity, state.overrides, player, state.deps.api.core);
+      setFeedback(player, `${field.label}: ${overrideValue(field.key, state.overrides)}.`);
+    } catch (error) { setFeedback(player, error.message); }
+    renderSetup(player, state);
+  } });
+  player.getPacketSender().sendEnterInputPrompt(prompt);
+}
+function launchRoutine(state, activityId, count, overrides) {
+  const { runtime, brainRegistry, api } = state.deps;
+  let validated;
+  try { validated = validateRoutineOverrides(brainRegistry.byId?.get(activityId), overrides); }
+  catch (error) { return { ok: false, error: error.message }; }
+  const result = deployRoutineBots({ runtime, brainRegistry, core: api.core, activityId, count, overrides: validated });
+  if (!result.ok) return result;
+  const name = state.activities.get(activityId).name;
+  const suffix = result.failures?.length ? ` ${result.failures.length} failed.` : "";
+  const tile = validated.location ?? state.activities.get(activityId).setup.location ?? DEFAULT_LOCATION;
+  return { ok: true, message: `Spawned ${result.spawned.length}/${result.requested} ${name} bot(s) at ${tile.x}, ${tile.y}, plane ${tile.z}.${suffix}` };
+}
+function finishDeploy(player, result, showError) {
+  if (!result.ok) {
+    showError(result.error);
+    player.sendMessage(result.error);
+    return;
+  }
+  close(player);
+  player.sendMessage(result.message);
 }
 function clickSetupButton({ player, buttonId }) {
-  if (view(player) !== "setup") return false;
+  if (player.getInterfaceId() !== SETUP_GROUP_ID) return false;
   const state = sessions.get(player);
   if (!state) return true;
-  const deps = state.deps;
-  if (SETUP_BUTTONS.countMinus.map(setupUid).includes(buttonId)) {
-    state.count = Math.max(1, state.count - 1);
-    updateSetupControls(deps, player, state);
-    setFeedback(player, `Deployment quantity: ${state.count}.`);
-  } else if (SETUP_BUTTONS.countPlus.map(setupUid).includes(buttonId)) {
-    state.count = Math.min(MAX_DEPLOY_COUNT, state.count + 1);
-    updateSetupControls(deps, player, state);
-    setFeedback(player, `Deployment quantity: ${state.count}.`);
-  } else if (SETUP_BUTTONS.location.map(setupUid).includes(buttonId)) {
-    state.usePlayerLocation = !state.usePlayerLocation;
-    updateSetupControls(deps, player, state);
-    setFeedback(player, state.usePlayerLocation
-      ? "Bots will spawn at your current tile."
-      : "Bots will use the routine or activity spawn location (or your tile if none is set).");
-  } else if (SETUP_BUTTONS.copyLevels.map(setupUid).includes(buttonId)) {
-    state.copyOwnerSkills = !state.copyOwnerSkills;
-    updateSetupControls(deps, player, state);
-    setFeedback(player, state.copyOwnerSkills
-      ? "Your base skill levels will be passed to the selected bot implementation."
-      : "The selected routine or activity will use its configured skill setup.");
+  state.overridePrompt = null;
+  const buttons = SETUP_BUTTONS;
+  const is = key => matchesButton(buttons[key], buttonId, setupUid);
+  const row = buttons.setupOptions.findIndex(components => matchesButton(components, buttonId, setupUid));
+  if (is("back")) { openBrowser(player, state); return true; }
+  if (is("save")) saveConfiguration(player, state, SETUP_GROUP_ID);
+  else if (is("setCount")) {
+    promptSetupInput(player, state, SETUP_GROUP_ID, "How many bots?", text => {
+      state.count = enteredCount(text, 1);
+      renderSetup(player, state);
+      setFeedback(player, "");
+    }, error => setFeedback(player, error));
+  } else if (row >= 0) {
+    const activity = state.activities.get(state.activityId);
+    const field = activity.deploymentOverrides[row];
+    if (field) editOverride(player, state, field, activity);
+  } else if (is("spawn")) {
+    finishDeploy(player, launchRoutine(state, state.activityId, state.count, state.overrides), error => setFeedback(player, error));
+  } else if (is("countMinus") || is("countPlus")) {
+    state.count = Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, state.count + (is("countPlus") ? 1 : -1)));
+    renderSetup(player, state);
+  } else return false;
+  return true;
+}
+
+function clickPlanButton({ player, buttonId }) {
+  if (player.getInterfaceId() !== PLAN_GROUP_ID) return false;
+  const state = sessions.get(player);
+  if (!state?.planSetup) return true;
+  state.overridePrompt = null;
+  const is = key => matchesButton(PLAN_BUTTONS[key], buttonId, planUid);
+  if (is("back")) openBrowser(player, state);
+  else if (is("save")) saveConfiguration(player, state, PLAN_GROUP_ID);
+  else if (is("deploy")) {
+    finishDeploy(player, launchPlan(state.deps, state.planSetup), error => sendPlanString(player, brief(error, 85), PLAN_COMPONENT.FEEDBACK));
   } else {
-    const setupOptionIndex = buttonIndex(SETUP_BUTTONS.setupOptions, buttonId, setupUid);
-    if (setupOptionIndex >= 0) {
-      const launcher = selectedLauncher(state);
-      const field = launcher?.kind === "activity" ? launcher.setupFields?.[setupOptionIndex] : null;
-      if (!field) return true;
-      const values = activitySetup(launcher, state);
-      const currentIndex = field.choices.findIndex(choice => choice.value === values[field.id]);
-      const selected = field.choices[(currentIndex + 1) % field.choices.length];
-      values[field.id] = selected.value;
-      state.activitySetupByLauncher.set(launcher.key, values);
-      updateSetupControls(deps, player, state);
-      setFeedback(player, `${field.label}: ${selected.label}.`);
-    } else if (SETUP_BUTTONS.spawn.map(setupUid).includes(buttonId)) {
-      deploy({ player, state, deps });
-    } else if (SETUP_BUTTONS.back.map(setupUid).includes(buttonId)) {
-      openBrowser(player, state, "", true);
-    } else if (SETUP_BUTTONS.close.map(setupUid).includes(buttonId)) {
-      player.getPacketSender().sendInterfaceRemoval();
-      sessions.delete(player);
-    } else return false;
+    const action = planActionsByUid.get(buttonId);
+    if (!action) return false;
+    if (action.enterCount) {
+      if (!state.planSetup.rules[action.index]?.count) return true;
+      promptSetupInput(player, state, PLAN_GROUP_ID, "How many bots in this row?", text => {
+        changePlanCount(state.planSetup, action.index, enteredCount(text, 0));
+        renderPlanSetup(player, state);
+        sendPlanString(player, "", PLAN_COMPONENT.FEEDBACK);
+      }, error => sendPlanString(player, brief(error, 85), PLAN_COMPONENT.FEEDBACK));
+      return true;
+    }
+    action.change(state.planSetup, action.index);
+    renderPlanSetup(player, state);
+    sendPlanString(player, "", PLAN_COMPONENT.FEEDBACK);
   }
   return true;
 }
 
-function registerBotsInterface({ api, runtime, brainRegistry }) {
-  const deps = { api, runtime, brainRegistry };
+function openStandalone(deps, event) {
+  event.handled = openBots(event, deps);
+}
+
+function registerBotsInterface({ api, runtime, brainRegistry, storage = { readAvailablePlans, readRoutineSetups, savePlan, saveRoutineSetup } }) {
+  const deps = { api, runtime, brainRegistry, storage };
   api.registerCustomInterface(BROWSER_INTERFACE);
   api.registerCustomInterface(SETUP_INTERFACE);
-  api.registerCommand("bots", command => openBots(command, deps), api.core.PlayerRights.DEVELOPER,
-    "Open the bot routine and activity deployment interface");
-  api.onInterfaceActionButton(TAB_UIDS, event => clickTab(event));
-  api.onInterfaceActionButton(rowUids, event => clickRow(event));
-  api.onInterfaceActionButton([...BROWSER_BUTTONS.configure, ...BROWSER_BUTTONS.close].map(uid), event => clickBrowserButton(event));
-  api.onInterfaceActionButton(Object.values(SETUP_BUTTONS).flat(Infinity).map(setupUid), event => clickSetupButton(event));
+  api.registerCustomInterface(PLAN_INTERFACE);
+  api.onCustomEvent("bots:open-standalone", openStandalone.bind(null, deps));
+  api.onInterfaceActionButton(TAB_UIDS, clickTab);
+  api.onInterfaceActionButton(rowUids, clickRow);
+  api.onInterfaceActionButton(Object.values(BROWSER_BUTTONS).flat().map(uid), clickBrowserButton);
+  api.onInterfaceActionButton(Object.values(SETUP_BUTTONS).flat(Infinity).map(setupUid), clickSetupButton);
+  api.onInterfaceActionButton([...Object.values(PLAN_BUTTONS).flat().map(planUid), ...planActionsByUid.keys()], clickPlanButton);
 }
 
 module.exports = {
   name: "BotRoutinesInterface",
-  description: "Adds the developer-only ::bots routine and activity launcher interface.",
+  description: "Adds the developer-only ::bots routine and deployment plan interface.",
   registerBotsInterface,
-  _test: {
-    GROUP_ID, SETUP_GROUP_ID, BROWSER_COMPONENT, SETUP_COMPONENT, BROWSER_BUTTONS, SETUP_BUTTONS,
-    TAB_UIDS, rowUids, uid, setupUid, eligibleActivities, eligibleLaunchers, routineRow, activityRow, activitySetup,
-    setupSummary, managedBotCount, ownerSkillOverrides, currentLocation, openBots, clickRow,
-    clickBrowserButton, clickSetupButton, sessions, BROWSER_INTERFACE, SETUP_INTERFACE,
-    MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS,
-  },
+  _test: { sessions, ownerSkillOverrides },
 };

@@ -15,7 +15,8 @@
  * (this plugin off) carries on as if warned.
  *
  * As captured: Shantay Pass (docs/shantay-pass.md), the Lumbridge cellar hole and the Observatory
- * stairs count their varbit up to 6; the fairy ring's warning sets its varbit on Confirm.
+ * stairs count their varbit up to 6; the fairy ring's warning sets its varbit on Confirm. Loc teleports
+ * show theirs from an entry's `warningScreen` (the Waterbirth cave, docs/loc-teleports.md).
  */
 const Shared = require("./Shared.WarningScreens");
 

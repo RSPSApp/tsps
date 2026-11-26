@@ -8,6 +8,7 @@ export class NPCMovementCoordinator {
     private npc: NPC;
     private coordinateState: CoordinateState;
     private radius: number;
+    private leashRadius?: number;
     private nextRetreatRepathCycle: number;
 
 
@@ -19,7 +20,7 @@ export class NPCMovementCoordinator {
     }
 
     public process() {
-        if (this.radius == 0) {
+        if (this.radius == 0 && this.leashRadius === undefined) {
             if (this.coordinateState == CoordinateState.HOME) {
                 return;
             }
@@ -83,13 +84,23 @@ export class NPCMovementCoordinator {
             return;
         }
         this.nextRetreatRepathCycle = cycle + NPCMovementCoordinator.RETREAT_REPATH_COOLDOWN_TICKS;
-        PathFinder.calculateWalkRoute(this.npc, spawn.getX(), spawn.getY());
+        PathFinder.calculateWalkRoute(this.npc, spawn.getX(), spawn.getY(), true);
     }
 
     public updateCoordinator() {
         if (CombatFactory.inCombat(this.npc)) {
+            // Walking home after a fight ended is not a retreat: one attacked on the way fights
+            // back (#6297). A retreat (shouldRetreat) is still walked out to the spawn.
+            if (this.leashRadius !== undefined) {
+                const home = this.npc.getSpawnPosition();
+                const at = this.npc.getLocation();
+                const distance = Math.max(Math.abs(at.getX() - home.getX()), Math.abs(at.getY() - home.getY()));
+                if (home.getZ() !== at.getZ() || distance > this.leashRadius) {
+                    this.coordinateState = CoordinateState.RETREATING;
+                }
+            }
             if (this.coordinateState == CoordinateState.AWAY) {
-                this.coordinateState = CoordinateState.RETREATING;
+                this.coordinateState = CoordinateState.HOME;
             }
             if (this.coordinateState == CoordinateState.RETREATING) {
                 if (this.npc.getLocation().equals(this.npc.getSpawnPosition())) {
@@ -148,6 +159,14 @@ export class NPCMovementCoordinator {
 
     public setRadius(radius: number) {
         this.radius = radius;
+    }
+
+    public getLeashRadius(): number | undefined {
+        return this.leashRadius;
+    }
+
+    public setLeashRadius(radius: number | undefined): void {
+        this.leashRadius = radius;
     }
 }
 export enum CoordinateState {

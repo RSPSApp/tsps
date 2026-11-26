@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchContent, getContentApiBase } from "../../network/serverConnection/contentApi";
+import { loadFromPayload } from "../../common/gamemode/GamemodeContentStore";
 import type { OsrsClient } from "../../game/OsrsClient";
 import { buildModelRecolorPairs, createPreviewRenderer, previewModels, previewSpec, scanModelColors, sequenceFrameCount, type ModelColorScan, type PreviewRenderer } from "./CacheEditorPreview";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
 import "./CacheEditor.css";
+import { CacheEditorTools } from "./CacheEditorTools";
 import {
     type AssetKind, type AssetListing, type AssetRow,
     type CacheDefinition, type CacheField, type CacheKind, type CacheLink,
+    type AnimationBodies, type ExtractDetails, type LibraryEntry, type NpcAnimations, type AnimationRow,
     formatFieldValue, parseFieldValue, initialOverrides, assetsPath, authoringBase, draftProblems, fieldsPath, inspectPath, kindsPath, labelRef, linksByField, searchPath,
     hexToPackedHsl, packedHslToHex, supportsModelRecolor,
+    isFolderKind, definitionKindOf, folderUpload, canExtract, extractPath, libraryPath, npcAnimationsPath, animationBodiesPath, folderNameOf,
 } from "./CacheEditorModel";
 
 /**
@@ -19,7 +23,7 @@ import {
  * type and an optional matching base, then edited cell by cell and saved as an overlay row.
  */
 
-type Tab = "values" | "recolors" | "preview" | "links" | "used" | "transforms";
+type Tab = "values" | "recolors" | "preview" | "extract" | "animations" | "links" | "used" | "transforms";
 type CacheSearchHit = { kind: string; id: number; name: string | null; custom?: boolean };
 
 type Editing = {
@@ -52,6 +56,14 @@ const styles = {
 
 const label = (value: unknown) => (typeof value === "object" && value !== null ? JSON.stringify(value) : String(value));
 
+/** A picked file as base64, the way the authoring service takes uploads. */
+const readBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
+    reader.readAsDataURL(file);
+});
+
 export function CacheEditor({ client }: { client?: OsrsClient }) {
     const [kinds, setKinds] = useState<CacheKind[]>([]);
     // Two axes: definitions (config archives) and assets (cache indices: models, sprites, textures).
@@ -60,6 +72,17 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const [assets, setAssets] = useState<AssetListing | null>(null);
     const [uploadName, setUploadName] = useState("");
     const fileRef = useRef<HTMLInputElement | null>(null);
+    const folderRef = useRef<HTMLInputElement | null>(null);
+    // The asset library: the Blender add-ons' exports under data/models, and which upload an import replaces.
+    const [library, setLibrary] = useState<{ kind: AssetKind; entries: LibraryEntry[] } | null>(null);
+    const [replaceTarget, setReplaceTarget] = useState<number | null>(null);
+    // The Model Extractor, an NPC's animations, and the bodies an animation is previewed on.
+    const [extractInfo, setExtractInfo] = useState<ExtractDetails | null>(null);
+    const [extractFolder, setExtractFolder] = useState("");
+    const [npcAnimations, setNpcAnimations] = useState<NpcAnimations | null>(null);
+    const [previewSeq, setPreviewSeq] = useState<number | null>(null);
+    const [bodies, setBodies] = useState<AnimationBodies | null>(null);
+    const [bodyId, setBodyId] = useState<number | null>(null);
     const [kind, setKind] = useState("loc");
     const [text, setText] = useState("");
     const [hits, setHits] = useState<CacheSearchHit[]>([]);
@@ -77,6 +100,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     });
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [frame, setFrame] = useState(0);
+    const [playing, setPlaying] = useState(true);
     const [shape, setShape] = useState<LocModelType>(LocModelType.NORMAL);
     const [rotation, setRotation] = useState(0);
     const [shapes, setShapes] = useState<Array<{ type: LocModelType; label: string }>>([]);
@@ -150,6 +174,38 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
         return () => window.clearInterval(timer);
     }, [client, clientReady]);
 
+    /**
+     * Custom animations, graphics and models reach a player at login; this page never logs in, so it
+     * reads the same rows from the world's content endpoints and loads them as a login would, then
+     * drops the client's cached animations and models so previews pick them up.
+     */
+    const [customContent, setCustomContent] = useState(0);
+    useEffect(() => {
+        if (!contentBase || !clientReady || !client) return;
+        let cancelled = false;
+        void (async () => {
+            const [animations, models] = await Promise.all([
+                fetchContent("/api/custom-animations-data").catch(() => null),
+                fetchContent("/api/cache-custom-models").catch(() => null),
+            ]);
+            if (cancelled) return;
+            const datasets = [
+                ...(Array.isArray(models?.rows) ? [{ key: "customModels", rows: models.rows }] : []),
+                ...(Array.isArray(animations?.rows) ? [{ key: "customAnimations", rows: animations.rows }] : []),
+            ];
+            if (!datasets.length) return;
+            try {
+                loadFromPayload({ gamemodeId: "server", datasets });
+                const loaders = client as unknown as Record<string, { clearCache?: () => void } | undefined>;
+                for (const name of ["seqTypeLoader", "seqFrameLoader", "spotAnimTypeLoader", "objTypeLoader", "objModelLoader", "modelLoader"]) loaders[name]?.clearCache?.();
+                setCustomContent((current) => current + 1);
+            } catch (failure) {
+                setError(`Custom content did not load: ${String((failure as Error).message ?? failure)}`);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [client, clientReady, contentBase]);
+
     /** The element on screen: a cache definition, or the one being edited with its overrides applied. */
     const shown = useMemo<CacheDefinition | null>(() => {
         if (!editing) return definition;
@@ -195,6 +251,11 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
         setUsed(null);
         setTab("values");
         setEditing(null);
+        setExtractInfo(null);
+        setNpcAnimations(null);
+        setPreviewSeq(null);
+        setBodies(null);
+        setBodyId(null);
         const body = await load(inspectPath(nextKind, id));
         if (!body) return;
         if (push && definition) setHistory((entries) => [...entries, { kind: definition.kind, id: definition.id }].slice(-20));
@@ -205,35 +266,157 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const loadAssets = useCallback(async (forKind: AssetKind = assetKind, offset = 0) => {
         if (!contentBase) return;
         const body = await load(assetsPath(forKind, offset));
-        if (body) setAssets(body as AssetListing);
+        if (body) {
+            setAssets(body as AssetListing);
+            setError(null);
+        }
     }, [assetKind, contentBase, load]);
 
-    /** Upload lives here, with the assets, because an asset is what an upload creates. */
-    const upload = useCallback(async (file: File) => {
-        if (assetKind !== "model") { setError("Only model uploads are supported; sprites and textures can be browsed"); return; }
-        if (!authoring) { setError("Uploading needs the local authoring service; start the server with CACHE_EDITOR_ENABLED=1"); return; }
-        const data = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
-            reader.onerror = () => reject(new Error("Could not read the file"));
-            reader.readAsDataURL(file);
+    /**
+     * The local authoring service: uploads, the asset library and the Model Extractor all read or
+     * write files on this machine, so they live there and not on the world's content endpoints.
+     */
+    const callAuthoring = useCallback(async (path: string, body?: unknown) => {
+        if (!authoring) throw new Error("This needs the local authoring service; start the server with CACHE_EDITOR_ENABLED=1");
+        const response = await fetch(`${authoring}${path}`, body === undefined ? undefined : {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
         });
+        const answer = await response.json().catch(() => null);
+        if (!response.ok) throw Object.assign(new Error(answer?.error ?? `${path} failed: ${response.status}`), { code: answer?.code, status: response.status });
+        return answer;
+    }, [authoring]);
+
+    /** Stores an upload (or an import from the library), replacing `replaceTarget` when one is chosen. */
+    const storeAsset = useCallback(async (payload: Record<string, unknown>) => {
         try {
-            const response = await fetch(`${authoring}/assets`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ kind: assetKind, name: uploadName || file.name, data }),
-            });
-            const body = await response.json();
-            if (!response.ok) throw new Error(body?.error ?? `upload failed: ${response.status}`);
-            setStatus(`${body.reused ? "already stored" : "uploaded"} ${body.asset.kind} ${body.asset.id} — ${body.asset.name}`);
+            const body = await callAuthoring("/assets", { kind: assetKind, ...(replaceTarget !== null ? { replace: replaceTarget } : {}), ...payload });
+            const parts = (body.parts ?? []).map((part: AssetRow) => `${part.kind} ${part.id}`).join(", ");
+            const verb = body.replaced ? "replaced" : body.reused ? "already stored" : "uploaded";
+            setStatus(`${verb} ${body.asset.kind} ${body.asset.id} — ${body.asset.name}${parts ? ` (with ${parts})` : ""}${body.reused ? "" : " — restart the server to apply it"}`);
+            setError(null);
             setUploadName("");
+            setReplaceTarget(null);
             await loadAssets();
             await load(`/api/cache-kinds`).then((kindsBody) => kindsBody?.kinds && setKinds(kindsBody.kinds.filter((entry: CacheKind) => entry.usable !== false)));
         } catch (failure) {
             setError(String((failure as Error).message ?? failure));
         }
-    }, [assetKind, authoring, load, loadAssets, uploadName]);
+    }, [assetKind, callAuthoring, load, loadAssets, replaceTarget]);
+
+    /** Upload lives here, with the assets, because an asset is what an upload creates. */
+    const upload = useCallback(async (file: File) => {
+        if (assetKind !== "model") { setError("Pick a folder for an animation or a graphic"); return; }
+        try {
+            const data = await readBase64(file);
+            await storeAsset({ name: uploadName || file.name, data });
+        } catch (failure) {
+            setError(String((failure as Error).message ?? failure));
+        }
+    }, [assetKind, storeAsset, uploadName]);
+
+    /** An animation's or a graphic's folder, as the Blender add-ons export it. */
+    const uploadFolder = useCallback(async (list: FileList) => {
+        const picked = Array.from(list);
+        if (!picked.length) return;
+        try {
+            const files = await Promise.all(picked.map(async (file) => ({
+                path: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
+                data: await readBase64(file),
+            })));
+            const top = files[0].path.split(/[\\/]/)[0];
+            await storeAsset({ name: uploadName || top, files: folderUpload(files) });
+        } catch (failure) {
+            setError(String((failure as Error).message ?? failure));
+        }
+    }, [storeAsset, uploadName]);
+
+    const loadLibrary = useCallback(async (forKind: AssetKind = assetKind) => {
+        try {
+            const body = await callAuthoring(libraryPath(forKind));
+            setLibrary({ kind: forKind, entries: body.entries ?? [] });
+            setError(null);
+        } catch (failure) {
+            setError(String((failure as Error).message ?? failure));
+        }
+    }, [assetKind, callAuthoring]);
+
+    /** Writes an asset back into data/models/<folder>/ for Blender. */
+    const exportAsset = useCallback(async (asset: AssetRow) => {
+        const folder = window.prompt("Export to data/models/ — folder name", folderNameOf(asset.name));
+        if (!folder) return;
+        const send = (overwrite: boolean) => callAuthoring("/assets/export", { kind: asset.kind, id: asset.id, folder, overwrite });
+        try {
+            let body;
+            try {
+                body = await send(false);
+            } catch (failure) {
+                if ((failure as { code?: string }).code !== "EXISTS" || !window.confirm(`data/models/${folder} already exists. Overwrite its files?`)) throw failure;
+                body = await send(true);
+            }
+            setStatus(`exported ${asset.kind} ${asset.id} to data/models/${body.folder} (${body.written.length} files) — edit it in Blender, then import it again with "Replace"`);
+            setError(null);
+        } catch (failure) {
+            setError(String((failure as Error).message ?? failure));
+        }
+    }, [callAuthoring]);
+
+    /** What extracting the shown definition would write, read when its Extract tab opens. */
+    const loadExtract = useCallback(async (forKind: string, id: number) => {
+        setExtractInfo(null);
+        try {
+            const body = await callAuthoring(extractPath(forKind, id)) as ExtractDetails;
+            setExtractInfo(body);
+            setExtractFolder(body.folder ?? folderNameOf(`${forKind}-${id}`));
+            setError(null);
+        } catch (failure) {
+            setError(String((failure as Error).message ?? failure));
+        }
+    }, [callAuthoring]);
+
+    const runExtract = useCallback(async () => {
+        if (!extractInfo) return;
+        const send = (overwrite: boolean) => callAuthoring("/extract", { kind: extractInfo.kind, id: extractInfo.id, folder: extractFolder, overwrite });
+        try {
+            let body;
+            try {
+                body = await send(false);
+            } catch (failure) {
+                if ((failure as { code?: string }).code !== "EXISTS" || !window.confirm(`data/models/${extractFolder} already exists. Overwrite its files?`)) throw failure;
+                body = await send(true);
+            }
+            setStatus(`extracted ${body.written.length} files into data/models/${body.folder}`);
+            setError(null);
+        } catch (failure) {
+            setError(String((failure as Error).message ?? failure));
+        }
+    }, [callAuthoring, extractFolder, extractInfo]);
+
+    const loadNpcAnimations = useCallback(async (id: number) => {
+        setNpcAnimations(null);
+        try {
+            setStatus("reading animations (the first time indexes every animation's skeleton, about 20 s)…");
+            setNpcAnimations(await callAuthoring(npcAnimationsPath(id)) as NpcAnimations);
+            setStatus("ready");
+            setError(null);
+        } catch (failure) {
+            setStatus("ready");
+            setError(String((failure as Error).message ?? failure));
+        }
+    }, [callAuthoring]);
+
+    /** The NPCs an animation can be shown on; the first is drawn until another is picked. */
+    const loadBodies = useCallback(async (id: number) => {
+        try {
+            const body = await callAuthoring(animationBodiesPath(id)) as AnimationBodies;
+            setBodies(body);
+            setBodyId((current) => (current !== null && body.bodies.some((entry) => entry.id === current) ? current : body.bodies[0]?.id ?? null));
+        } catch (failure) {
+            setBodies({ id, skeleton: null, playerSkeleton: false, bodies: [] });
+            setPreviewError(String((failure as Error).message ?? failure));
+        }
+    }, [callAuthoring]);
 
     const rename = useCallback(async (asset: AssetRow, name: string) => {
         if (!authoring) { setError("Renaming needs the local authoring service"); return; }
@@ -478,9 +661,14 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
     const recolorFrom = recolorPairs.map((pair) => pair.from);
     const recolorTo = recolorPairs.map((pair) => pair.to);
     const recolorCount = recolorPairs.length;
+    // Extract (the Model Extractor) for anything with model or animation files, and an NPC's animations.
+    const cacheTabs: Tab[] = shown?.exists && !editing ? [
+        ...(canExtract(shown.kind) ? ["extract" as Tab] : []),
+        ...(shown.kind === "npc" ? ["animations" as Tab] : []),
+    ] : [];
     const detailTabs: Tab[] = editing && supportsModelRecolor(editing.kind)
         ? ["values", "recolors", "preview", "links", "used", "transforms"]
-        : ["values", "preview", "links", "used", "transforms"];
+        : ["values", "preview", ...cacheTabs, "links", "used", "transforms"];
     const updateRecolorPair = (index: number, side: "from" | "to", value: number) => {
         if (!Number.isInteger(value) || value < 0 || value > 65535) { setError("Packed HSL colors must be whole numbers from 0 to 65535"); return; }
         const count = Math.max(recolorCount, index + 1);
@@ -502,8 +690,20 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
         setValue("recolorTo", Array.from({ length: recolorCount }, (_, entry) => recolorTo[entry] ?? 0).filter((_, entry) => entry !== index));
         setError(null);
     };
-    const spec = useMemo(() => shown ? previewSpec(shown, shown.kind, frame) : null, [shown, frame]);
-    const frames = useMemo(() => sequenceFrameCount(client as OsrsClient, spec?.sequenceId), [client, spec?.sequenceId]);
+    /**
+     * What the preview draws. An animation is drawn on a body (an NPC built on its skeleton), and an
+     * NPC plays the animation picked in its Animations tab instead of its stand.
+     */
+    const spec = useMemo(() => {
+        if (!shown) return null;
+        if (shown.kind === "seq") return bodyId === null ? null : { modelIds: [], sequenceId: shown.id, sequenceFrame: frame };
+        const own = previewSpec(shown, shown.kind, frame);
+        return own && shown.kind === "npc" && previewSeq !== null ? { ...own, sequenceId: previewSeq, sequenceFrame: frame } : own;
+    }, [bodyId, shown, frame, previewSeq]);
+    const drawKind = shown?.kind === "seq" ? "npc" : shown?.kind ?? "";
+    const drawId = shown?.kind === "seq" ? bodyId ?? 0 : shown?.id ?? 0;
+    // customContent: a custom animation counts its frames once its rows are loaded.
+    const frames = useMemo(() => sequenceFrameCount(client as OsrsClient, spec?.sequenceId), [client, spec?.sequenceId, customContent]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (tab !== "preview" || !canvasRef.current) return;
@@ -515,17 +715,28 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
             setShapes(available);
             if (available.length && !available.some((entry) => entry.type === shape)) setShape(available[0].type);
         } else setShapes([]);
+        if (shown?.kind === "seq" && !spec) {
+            setPreviewError(bodies ? (bodies.bodies.length ? null : "No NPC is built on this animation's skeleton, so there is nothing to play it on") : authoring ? "Finding NPCs to play it on…" : "Previewing an animation needs the local authoring service (CACHE_EDITOR_ENABLED=1)");
+            canvasRef.current.getContext("2d")?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+            return;
+        }
         setPreviewError(rendererRef.current.draw(canvasRef.current, {
-            kind: shown?.kind ?? "", id: shown?.id ?? 0, spec, shape, rotation,
+            kind: drawKind, id: drawId, spec, shape, rotation,
             yaw: view.yaw, pitch: view.pitch, zoom: view.zoom,
         }));
-    }, [client, clientReady, rotation, shape, shown, spec, tab, view]);
+    }, [authoring, bodies, client, clientReady, customContent, drawId, drawKind, rotation, shape, shown, spec, tab, view]);
+
+    // An animation's bodies, read once its preview opens.
+    useEffect(() => {
+        if (tab !== "preview" || shown?.kind !== "seq" || !authoring || bodies?.id === shown.id) return;
+        void loadBodies(shown.id);
+    }, [authoring, bodies, loadBodies, shown, tab]);
 
     useEffect(() => {
-        if (tab !== "preview" || frames <= 1) return;
+        if (tab !== "preview" || !playing || frames <= 1) return;
         const timer = window.setInterval(() => setFrame((current) => (current + 1) % frames), 120);
         return () => window.clearInterval(timer);
-    }, [frames, tab]);
+    }, [frames, playing, tab]);
 
     /** One editable row of the values table. */
     const commitCell = (field: CacheField, text: string) => {
@@ -577,6 +788,7 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                     <strong>Cache editor</strong>
                 </div>
                 <p className="cache-editor-header-copy">Inspect, preview, and author cache definitions.</p>
+                <CacheEditorTools contentBase={contentBase} selection={shown} onReturn={(next) => { setMode(next); if (next === "assets") void loadAssets(); }} />
                 <div className={`cache-editor-connection ${contentBase ? "is-configured" : "is-waiting"}`} aria-live="polite">
                     <span className="cache-editor-connection-dot" />
                     {contentBase ? "Client endpoint configured" : "Waiting for client"}
@@ -592,33 +804,43 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                         <div className="cache-editor-section-heading">
                             <span className="cache-editor-eyebrow">BROWSE</span>
                             <strong>Cache assets</strong>
-                            <span>Models, sprites, and textures in this cache.</span>
+                            <span>Models, sprites and textures in this cache, and your own models, animations and graphics.</span>
                         </div>
                         <div className="cache-editor-control-group">
                             <label htmlFor="cache-editor-asset-kind">Asset type</label>
                             <div className="cache-editor-inline-control">
-                                <select id="cache-editor-asset-kind" style={{ ...styles.input, flex: 1 }} value={assetKind} onChange={(event) => { const next = event.target.value as AssetKind; setAssetKind(next); void loadAssets(next); }}>
+                                <select id="cache-editor-asset-kind" style={{ ...styles.input, flex: 1 }} value={assetKind} onChange={(event) => { const next = event.target.value as AssetKind; setAssetKind(next); setReplaceTarget(null); setLibrary(null); void loadAssets(next); }}>
                                     <option value="model">Models (index 7)</option>
                                     <option value="sprite">Sprites (index 8)</option>
                                     <option value="texture">Textures (index 9)</option>
+                                    <option value="animation">Animations (yours)</option>
+                                    <option value="graphic">Graphics (yours)</option>
                                 </select>
                                 {assets ? <span className="cache-editor-count">{assets.total} items</span> : null}
                             </div>
                         </div>
                         <div className="cache-editor-control-group cache-editor-upload">
-                            <label htmlFor="cache-editor-upload-name">Upload a model</label>
+                            <label htmlFor="cache-editor-upload-name">{assetKind === "animation" ? "Add an animation" : assetKind === "graphic" ? "Add a graphic" : "Upload a model"}</label>
                             <div className="cache-editor-inline-control">
                                 <input
                                     id="cache-editor-upload-name"
                                     style={{ ...styles.input, flex: 1 }}
-                                    placeholder="e.g. my_loc.dat"
+                                    placeholder={isFolderKind(assetKind) ? "name, e.g. my_special_swing" : "e.g. my_loc.dat"}
                                     value={uploadName}
                                     onChange={(event) => setUploadName(event.target.value)}
                                 />
                             </div>
+                            {(assets?.mine?.length ?? 0) > 0 && (assetKind === "model" || isFolderKind(assetKind)) ? (
+                                <div className="cache-editor-inline-control">
+                                    <select aria-label="Import as a new asset or replace one" style={{ ...styles.input, flex: 1 }} value={replaceTarget ?? ""} onChange={(event) => setReplaceTarget(event.target.value === "" ? null : Number(event.target.value))}>
+                                        <option value="">Import as a new {assetKind}</option>
+                                        {(assets?.mine ?? []).map((asset) => <option key={asset.id} value={asset.id}>Replace {asset.kind} {asset.id} ({asset.name}), keeping its id and name</option>)}
+                                    </select>
+                                </div>
+                            ) : null}
                             <div className="cache-editor-import-actions">
-                                <button type="button" className="cache-editor-secondary-button" style={styles.input} disabled={assetKind !== "model"} title={assetKind === "model" ? "Import a local DAT model" : "Only model uploads are supported"} onClick={() => fileRef.current?.click()}>Import local</button>
-                                <button type="button" className="cache-editor-library-button" style={styles.input} disabled title="The asset library is not implemented yet.">Import from asset library</button>
+                                <button type="button" className="cache-editor-secondary-button" style={styles.input} disabled={assetKind !== "model" && !isFolderKind(assetKind)} title={assetKind === "model" ? "Import a local DAT model" : isFolderKind(assetKind) ? "Pick the folder the Blender add-on exported" : "Sprites and textures can only be browsed"} onClick={() => (isFolderKind(assetKind) ? folderRef.current : fileRef.current)?.click()}>{isFolderKind(assetKind) ? "Import local folder" : "Import local"}</button>
+                                <button type="button" className="cache-editor-secondary-button cache-editor-library-button" style={styles.input} disabled={assetKind !== "model" && !isFolderKind(assetKind)} title="The Blender add-ons' exports under server/data/models" onClick={() => (library?.kind === assetKind ? setLibrary(null) : void loadLibrary(assetKind))}>{library?.kind === assetKind ? "Hide asset library" : "Import from asset library"}</button>
                                 <input
                                     ref={fileRef}
                                     type="file"
@@ -626,9 +848,41 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                     aria-label="Choose a local DAT model"
                                     onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.target.value = ""; }}
                                 />
+                                <input
+                                    ref={folderRef}
+                                    type="file"
+                                    multiple
+                                    {...{ webkitdirectory: "", directory: "" }}
+                                    style={{ display: "none" }}
+                                    aria-label="Choose an exported animation or graphic folder"
+                                    onChange={(event) => { if (event.target.files) void uploadFolder(event.target.files); event.target.value = ""; }}
+                                />
                             </div>
-                            <span className="cache-editor-help">Only DAT model uploads are supported. Asset library import will be available in a future update.</span>
+                            <span className="cache-editor-help">
+                                {assetKind === "animation" ? "An animation is the folder io_osrs_anim exports: seq.dat, frames/ and its frame maps. It is checked against the cache's skeletons and stored under server/data/assets." :
+                                    assetKind === "graphic" ? "A graphic is the folder io_osrs_gfx exports: spotanim.dat, model.dat and anim/. Its model and animation are stored as their own assets." :
+                                        assetKind === "model" ? "A DAT model, from your computer or from server/data/models." : "Sprites and textures can be browsed; uploads are models, animations and graphics."}
+                                {" "}New and replaced assets are applied when the server restarts.
+                            </span>
                         </div>
+                        {library?.kind === assetKind ? (
+                            <div className="cache-editor-library" style={{ ...styles.list, maxHeight: 260, flex: "none", borderTop: "1px solid #caa95e24" }} aria-label="Asset library">
+                                <div className="cache-editor-list-heading">Asset library: server/data/models <span>{library.entries.length}</span></div>
+                                {library.entries.map((entry) => (
+                                    <div key={entry.path} className="cache-editor-asset-row" style={styles.row(false)}>
+                                        <div className="cache-editor-mono" style={{ wordBreak: "break-all" }}>{entry.path}</div>
+                                        <div className="cache-editor-asset-meta" style={{ color: "#5d6675", fontSize: 11 }}>
+                                            {entry.size !== undefined ? `${entry.size} B` : entry.files !== undefined ? `${entry.files} files` : [entry.model ? "model" : null, entry.animation ? "anim/" : null].filter(Boolean).join(" + ") || "spotanim only"}
+                                            {entry.stored !== undefined && entry.stored !== null ? ` · stored as ${assetKind} ${entry.stored}` : ""}
+                                            <button type="button" className="cache-editor-rename-button" style={{ ...styles.input, marginLeft: 6, padding: "0 8px" }} onClick={() => void storeAsset({ library: entry.path, ...(uploadName ? { name: uploadName } : {}) })}>
+                                                {replaceTarget !== null ? `Replace ${replaceTarget}` : "Import"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {library.entries.length === 0 ? <div className="cache-editor-empty-list">No {assetKind} exports under server/data/models.</div> : null}
+                            </div>
+                        ) : null}
                         <div className="cache-editor-assets-list" style={styles.list}>
                             {(assets?.mine?.length ?? 0) > 0 ? <div className="cache-editor-list-heading">Your uploads <span>{assets!.mine.length}</span></div> : null}
                             {(assets?.mine ?? []).map((asset) => (
@@ -638,10 +892,16 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                     </div>
                                     <div className="cache-editor-asset-meta" style={{ color: "#5d6675", fontSize: 11 }}>
                                         {asset.size} B · {asset.hash.slice(0, 8)}
+                                        {asset.frames !== undefined ? ` · ${asset.frames} frames` : ""}
+                                        {asset.kind === "graphic" ? ` · model ${asset.model ?? "none"} · animation ${asset.animation ?? "its own"}` : ""}
                                         <button type="button" className="cache-editor-rename-button" style={{ ...styles.input, marginLeft: 6, padding: "0 8px" }} onClick={() => {
                                             const next = window.prompt("Rename asset", asset.name);
                                             if (next) void rename(asset, next);
                                         }}>Rename</button>
+                                        <button type="button" className="cache-editor-rename-button" style={{ ...styles.input, marginLeft: 6, padding: "0 8px" }} title="Write its files into data/models for Blender" onClick={() => void exportAsset(asset)}>Export</button>
+                                        {definitionKindOf(asset.kind) ? (
+                                            <button type="button" className="cache-editor-rename-button" style={{ ...styles.input, marginLeft: 6, padding: "0 8px" }} title="Inspect and preview it (after a restart, once the server has loaded it)" onClick={() => { setMode("definitions"); void inspect(definitionKindOf(asset.kind)!, asset.id); }}>Inspect</button>
+                                        ) : null}
                                     </div>
                                 </div>
                             ))}
@@ -825,7 +1085,12 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
 
                 <div className="cache-editor-detail-tabs" role="tablist" aria-label="Definition details" style={styles.tabs}>
                     {detailTabs.map((entry) => (
-                        <button type="button" role="tab" aria-selected={tab === entry} aria-controls="cache-editor-tab-panel" key={entry} className="cache-editor-detail-tab" style={styles.tab(tab === entry)} onClick={() => { setTab(entry); if (entry === "used") void loadUsedBy(); }}>
+                        <button type="button" role="tab" aria-selected={tab === entry} aria-controls="cache-editor-tab-panel" key={entry} className="cache-editor-detail-tab" style={styles.tab(tab === entry)} onClick={() => {
+                            setTab(entry);
+                            if (entry === "used") void loadUsedBy();
+                            if (entry === "extract" && shown && extractInfo?.id !== shown.id) void loadExtract(shown.kind, shown.id);
+                            if (entry === "animations" && shown && npcAnimations?.id !== shown.id) void loadNpcAnimations(shown.id);
+                        }}>
                             {entry === "used" ? "Used by" : entry === "values" ? "Values" : entry === "recolors" ? "Model recolors" : entry === "transforms" ? "Transforms" : entry[0].toUpperCase() + entry.slice(1)}
                         </button>
                     ))}
@@ -939,6 +1204,22 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                 }}
                                 onDoubleClick={() => setView({ yaw: 0, pitch: 0, zoom: 1 })}
                             />
+                            {shown.kind === "seq" && bodies && bodies.bodies.length > 0 ? (
+                                <div className="cache-editor-body-chips" aria-label="Bodies to play the animation on">
+                                    <span className="cache-editor-help">Playing on{bodies.playerSkeleton ? " (a player animation, shown on NPCs built on the player skeleton)" : ""}:</span>
+                                    {bodies.bodies.map((body) => (
+                                        <button type="button" key={body.id} className={`cache-editor-chip ${bodyId === body.id ? "is-selected" : ""}`} style={styles.tab(bodyId === body.id)} title={body.why} onClick={() => setBodyId(body.id)}>
+                                            {body.name} <span className="cache-editor-mono">{body.id}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            ) : null}
+                            {shown.kind === "npc" && previewSeq !== null ? (
+                                <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", color: "#9aa3b2" }}>
+                                    <span>Playing animation {previewSeq}{npcAnimations ? ` (${[...npcAnimations.used, ...npcAnimations.related].find((row) => row.id === previewSeq)?.name ?? "custom"})` : ""}</span>
+                                    <button type="button" style={styles.input} onClick={() => setPreviewSeq(null)}>back to its stand</button>
+                                </div>
+                            ) : null}
                             {shown.kind === "loc" && shapes.length > 0 ? (
                                 <div style={{ marginTop: 6, display: "flex", gap: 6, alignItems: "center" }}>
                                     <select style={styles.input} value={shape} onChange={(event) => setShape(Number(event.target.value) as LocModelType)}>
@@ -949,15 +1230,90 @@ export function CacheEditor({ client }: { client?: OsrsClient }) {
                                     <span style={{ color: "#7f8899" }}>{rotation * 90}°</span>
                                 </div>
                             ) : null}
-                            <div style={{ marginTop: 6, display: "flex", gap: 8, alignItems: "center", color: "#7f8899" }}>
+                            <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", color: "#7f8899" }}>
+                                {frames > 1 ? <button type="button" className="cache-editor-secondary-button" style={styles.input} onClick={() => setPlaying((current) => !current)}>{playing ? "Pause" : "Play"}</button> : null}
                                 <span>drag to orbit · wheel to zoom · double-click to reset</span>
                                 <button style={styles.input} onClick={() => setView({ yaw: 0, pitch: 0, zoom: 1 })}>reset view</button>
                                 <span>{Math.round(view.yaw)}° / {Math.round(view.pitch)}° · {view.zoom.toFixed(2)}×</span>
                             </div>
                             <div style={{ marginTop: 8, color: "#9aa3b2" }}>
-                                {spec ? <>models {spec.modelIds.join(", ")}{spec.sequenceId !== undefined ? ` · sequence ${spec.sequenceId}${frames > 1 ? ` (${frames} frames)` : ""}` : ""}</> : "Nothing to draw for this kind."}
+                                {spec ? <>{shown.kind === "seq" ? `npc ${drawId}` : `models ${spec.modelIds.join(", ")}`}{spec.sequenceId !== undefined ? ` · sequence ${spec.sequenceId}${frames > 1 ? ` (${frames} frames)` : ""}` : ""}</> : shown.kind === "seq" ? "" : "Nothing to draw for this kind."}
                             </div>
                         </div>
+                    ) : null}
+
+                    {shown && tab === "extract" ? (
+                        <section className="cache-editor-extract" aria-label="Extract for Blender">
+                            <p className="cache-editor-help">Writes this {shown.kind}'s raw cache files into <span className="cache-editor-mono">server/data/models/&lt;folder&gt;/</span>, with a README, for the Blender add-ons. Edited files come back in from the Assets tab's asset library.</p>
+                            {!authoring ? <p className="cache-editor-preview-warning">Extracting needs the local authoring service; start the server with CACHE_EDITOR_ENABLED=1.</p> : null}
+                            {authoring && !extractInfo ? <p style={{ color: "#7f8899" }}>Reading its files…</p> : null}
+                            {extractInfo ? (
+                                <>
+                                    {extractInfo.unsupported ? <p className="cache-editor-preview-warning">{extractInfo.unsupported}</p> : null}
+                                    {extractInfo.rows.length ? (
+                                        <table className="cache-editor-table" style={styles.table}>
+                                            <thead>
+                                                <tr>
+                                                    <th style={styles.cell}>File</th><th style={styles.cell}>Model</th><th style={styles.cell}>What</th><th style={styles.cell}>Format</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {extractInfo.rows.map((row) => (
+                                                    <tr key={row.file}>
+                                                        <td className="cache-editor-mono" style={styles.cell}>{row.file}</td>
+                                                        <td style={styles.cell}>{row.model ?? ""}</td>
+                                                        <td style={styles.cell}>{row.role}</td>
+                                                        <td style={{ ...styles.cell, color: row.format === "not in the cache" ? "#e08a8a" : undefined }}>{row.format}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    ) : null}
+                                    {extractInfo.notes.length ? <ul className="cache-editor-extract-notes">{extractInfo.notes.map((note) => <li key={note}>{note}</li>)}</ul> : null}
+                                    {extractInfo.recolours.length ? <p className="cache-editor-help">{extractInfo.recolours.length} recolour pair{extractInfo.recolours.length === 1 ? "" : "s"} in game; the files keep the original colours (see the README).</p> : null}
+                                    {!extractInfo.unsupported ? (
+                                        <div className="cache-editor-inline-control" style={{ marginTop: 10 }}>
+                                            <label htmlFor="cache-editor-extract-folder">data/models/</label>
+                                            <input id="cache-editor-extract-folder" style={{ ...styles.input, flex: 1 }} value={extractFolder} onChange={(event) => setExtractFolder(folderNameOf(event.target.value) || event.target.value.toLowerCase())} />
+                                            <button type="button" className="cache-editor-create-button" style={styles.input} disabled={!extractFolder} onClick={() => void runExtract()}>Extract</button>
+                                        </div>
+                                    ) : null}
+                                </>
+                            ) : null}
+                        </section>
+                    ) : null}
+
+                    {shown && tab === "animations" ? (
+                        npcAnimations ? (
+                            <section className="cache-editor-animations" aria-label="This NPC's animations">
+                                <p className="cache-editor-help">
+                                    {npcAnimations.playerSkeleton ? "Built on the player skeleton, so it can play player animations too." : npcAnimations.skeleton !== null ? `Skeleton ${npcAnimations.skeleton}.` : "Its skeleton is unknown."} Movement comes from the cache; attack, block, death and spawn from the server.
+                                </p>
+                                {([["Plays", npcAnimations.used], [`Same skeleton${npcAnimations.relatedTotal > npcAnimations.related.length ? ` (first ${npcAnimations.related.length} of ${npcAnimations.relatedTotal})` : ""}`, npcAnimations.related]] as Array<[string, AnimationRow[]]>).map(([title, rows]) => rows.length ? (
+                                    <div key={title}>
+                                        <div className="cache-editor-list-heading">{title} <span>{rows.length}</span></div>
+                                        <table className="cache-editor-table" style={styles.table}>
+                                            <tbody>
+                                                {rows.map((row) => (
+                                                    <tr key={row.id}>
+                                                        <td className="cache-editor-mono" style={{ ...styles.cell, width: 70 }}>{row.id}</td>
+                                                        <td style={styles.cell}>{row.name}{row.roles?.length ? <span className="cache-editor-field-note"> · {row.roles.join(", ")}</span> : null}</td>
+                                                        <td style={{ ...styles.cell, whiteSpace: "nowrap", textAlign: "right" }}>
+                                                            {row.skeletal ? <span className="cache-editor-source-badge">skeletal</span> : null}
+                                                            {row.sources?.includes("server") ? <span className="cache-editor-source-badge">server</span> : null}
+                                                            {row.fits === false ? <span className="cache-editor-source-badge" title="Made for another skeleton">other skeleton</span> : null}
+                                                            <button type="button" className="cache-editor-secondary-button" style={{ ...styles.input, marginLeft: 6 }} onClick={() => { setPreviewSeq(row.id); setFrame(0); setTab("preview"); }}>Play</button>
+                                                            <button type="button" className="cache-editor-secondary-button" style={{ ...styles.input, marginLeft: 6 }} onClick={() => void inspect("seq", row.id)}>Open</button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : null)}
+                                {!npcAnimations.used.length && !npcAnimations.related.length ? <p style={{ color: "#7f8899" }}>No animations are known for this NPC.</p> : null}
+                            </section>
+                        ) : <p style={{ color: "#7f8899" }}>{authoring ? "Reading its animations…" : "The animation list needs the local authoring service (CACHE_EDITOR_ENABLED=1)."}</p>
                     ) : null}
 
                     {shown && tab === "links" ? (

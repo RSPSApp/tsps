@@ -23,6 +23,7 @@ let processCycle = 0;
 const fakeApi = new Proxy({
   core: {
     CacheDefinitions, Task, ItemIdentifiers,
+    NpcDefinition: require("../dist/game/definition/NpcDefinition").NpcDefinition,
     Item: class { constructor(id, amount) { this.id = id; this.amount = amount; } getId() { return this.id; } },
     World: { getProcessCycle: () => processCycle },
     Equipment: { WEAPON_SLOT: 3 },
@@ -47,13 +48,21 @@ function createPlayer({ freeSlots = 28 } = {}) {
   const attributes = new Map();
   const varbits = new Map();
   const added = [];
+  let busyModal = false;
+  let busyHeld = false;
   const sender = {
+    // As PacketSender: varbit 12393 on a change; a close ends it unless held for a screen swap.
+    setBusyModal: (open) => {
+      if (busyModal === open || (!open && busyHeld)) return sender;
+      busyModal = open; varbits.set(12393, open ? 1 : 0); log.push(`varbit 12393=${open ? 1 : 0}`); return sender;
+    },
+    holdBusyModal: (swap) => { busyHeld = true; try { swap(); } finally { busyHeld = false; } return sender; },
     sendConfig: (id, value) => { log.push(`varp ${id}=${value}`); return sender; },
     sendVarbit: (id, value) => { varbits.set(id, value); log.push(`varbit ${id}=${value}`); return sender; },
     getVarbit: (id) => varbits.get(id) ?? 0,
     sendSubInterface: (target, group, type) => { log.push(`open ${target >>> 16}:${target & 0xffff} ${group} ${type}`); return sender; },
     closeSubInterface: (target) => { log.push(`close ${target >>> 16}:${target & 0xffff}`); return sender; },
-    closeInterface: (group) => { log.push(`close ${group}`); return sender; },
+    closeInterface: (group) => { sender.setBusyModal(false); log.push(`close ${group}`); return sender; },
     sendInterfaceScript: (id, args = []) => { log.push(`script ${id} [${args}]`); return sender; },
     sendInterfaceFlagsRange: (uid, from, to, flags) => { log.push(`events ${uid >>> 16}:${uid & 0xffff} ${from}-${to} ${flags}`); return sender; },
     sendJingle: (id, length) => { log.push(`jingle ${id} ${length}`); return sender; },
@@ -246,6 +255,7 @@ test("as captured: the account summary row reopens the last screen; the burger m
   Interface.open(player);
   assert.deepEqual(player.log, [
     "varbit 17940=0",
+    "varbit 12393=1",
     "script 2524 [-1,-1]",
     "open 161:16 717 0",
     "events 717:17 12-16 2",
@@ -592,5 +602,74 @@ test("a task's team size comes from its own words; a team cap leaves bigger-team
     assert.ok(Progress.thresholdFor(player, grandmaster) > grandmaster.threshold - excused, "a group of five does more");
   } finally {
     customEvents.delete("combat-achievements:team-size");
+  }
+});
+
+test("Not So Great After All: the actual finishing hit, across cache greater-demon variants and demonbane weapons", () => {
+  const Greater = require("../plugins/achievements/combatachievements/tasks/GreaterDemons.CombatAchievements");
+  const { HitDamage } = require("../dist/game/content/combat/hit/HitDamage");
+  const { HitMask } = require("../dist/game/content/combat/hit/HitMask");
+  const task = named("Not So Great After All");
+  assert.equal(task.description, "Finish off a Greater Demon with a demonbane weapon.");
+  const weapons = ["SILVERLIGHT", "SILVERLIGHT_2", "DARKLIGHT", "ARCLIGHT", "EMBERLIGHT", "BURNING_CLAWS", "SCORCHING_BOW", "HOLY_WATER", "PURGING_STAFF"];
+  for (const npcId of [2025, 7244, 7871, 12387, 3129, 3130, 7286]) {
+    for (const weapon of weapons) {
+      const player = fighter();
+      let equipped = ItemIdentifiers[weapon], hp = 1;
+      assert.ok(equipped > 0, weapon);
+      player.getEquipment = () => ({ getItems: () => [null, null, null, { getId: () => equipped }] });
+      const npc = { ...fightNpc(fakeApi.core.NpcDefinition.forId(npcId).getName()), getId: () => npcId, getHitpoints: () => hp };
+      const damage = new HitDamage(1, HitMask.RED);
+      Greater.dealt({ player, target: npc, hit: { getHits: () => [damage], getCombatType: () => fakeApi.core.CombatType.MELEE } });
+      assert.equal(Progress.isComplete(player, task.id), false, "queuing does not finish the task");
+      equipped = ItemIdentifiers.BRONZE_SWORD;
+      hp = 0;
+      damage.notifyApplied(1);
+      assert.equal(Progress.isComplete(player, task.id), false, "wait for the actual death");
+      Greater.died({ npc, killer: player });
+      assert.equal(Progress.isComplete(player, task.id), true, `${npcId}/${weapon}: finishing attack survives a gear swap`);
+    }
+  }
+});
+
+test("Not So Great After All: nonlethal, wrong weapon/monster/killer, zero damage and cancelled deaths give no credit", () => {
+  const Greater = require("../plugins/achievements/combatachievements/tasks/GreaterDemons.CombatAchievements");
+  const { HitDamage } = require("../dist/game/content/combat/hit/HitDamage");
+  const { HitMask } = require("../dist/game/content/combat/hit/HitMask");
+  const task = named("Not So Great After All");
+  for (const scenario of ["nonlethal", "weapon", "monster", "killer", "zero", "cancelled", "echo"]) {
+    const player = fighter();
+    player.getEquipment = () => ({ getItems: () => [null, null, null, { getId: () => scenario === "weapon" ? ItemIdentifiers.BRONZE_SWORD : ItemIdentifiers.DARKLIGHT }] });
+    let hp = 10;
+    const npc = { ...fightNpc("Greater demon"), getId: () => scenario === "monster" ? 1 : 2025, getHitpoints: () => hp,
+      getAttribute: (key) => key === "echo-boss:encounter" && scenario === "echo" };
+    const damage = new HitDamage(10, HitMask.RED);
+    Greater.dealt({ player, target: npc, hit: { getHits: () => [damage], getCombatType: () => fakeApi.core.CombatType.MELEE } });
+    hp = scenario === "nonlethal" ? 1 : 0;
+    damage.notifyApplied(scenario === "zero" ? 0 : 10);
+    Greater.died({ npc, killer: scenario === "killer" ? fighter() : player, preventDeath: scenario === "cancelled" });
+    assert.equal(Progress.isComplete(player, task.id), false, scenario);
+    Greater.died({ npc, killer: player });
+    assert.equal(Progress.isComplete(player, task.id), false, `${scenario}: stale state is cleared`);
+  }
+});
+
+test("Not So Great After All: genuine demonbane magic qualifies; a stale selected spell on a melee hit does not", () => {
+  const Greater = require("../plugins/achievements/combatachievements/tasks/GreaterDemons.CombatAchievements");
+  const { HitDamage } = require("../dist/game/content/combat/hit/HitDamage");
+  const { HitMask } = require("../dist/game/content/combat/hit/HitMask");
+  const task = named("Not So Great After All");
+  for (const type of [fakeApi.core.CombatType.MAGIC, fakeApi.core.CombatType.MELEE]) {
+    const player = fighter();
+    let hp = 1, spell = { demonbane: true };
+    player.getCombat = () => ({ getSelectedSpell: () => spell });
+    const npc = { ...fightNpc("Greater demon"), getId: () => 2025, getHitpoints: () => hp };
+    const damage = new HitDamage(1, HitMask.RED);
+    Greater.dealt({ player, target: npc, hit: { getHits: () => [damage], getCombatType: () => type } });
+    spell = null;
+    hp = 0;
+    damage.notifyApplied(1);
+    Greater.died({ npc, killer: player });
+    assert.equal(Progress.isComplete(player, task.id), type === fakeApi.core.CombatType.MAGIC);
   }
 });

@@ -851,8 +851,15 @@ function attackObelisk(event) {
   return true;
 }
 
+/** Actual combat forms; cinematic actors and projectile/scenery helpers stay excluded. */
+function describeEncounters({ npcIds }) {
+  const N = Shared.core().NpcIdentifiers;
+  for (const id of [N.SCARAB]) npcIds.add(id);
+}
+
 module.exports = function registerScabarasPuzzle(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("SCABARAS_PUZZLE", ScabarasPuzzleRoom);
   Shared.onObject(api, "Pressure plate", flipLightPlate);
   Shared.onObject(api, "Ancient tablet", readSumTablet);

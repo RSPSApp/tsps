@@ -1,4 +1,5 @@
 import { BuildSteps } from "../../common/utils/BuildSteps";
+import { customMapElement } from "../../custom/sprites/CustomMapElement";
 import { nextSequenceFrame } from "../../rs/model/seq/FrameInterpolation";
 import { ConfigType } from "../../rs/cache/ConfigType";
 import { IndexType } from "../../rs/cache/IndexType";
@@ -30,7 +31,8 @@ import { RenderDataLoader, RenderDataResult } from "../../game/worker/RenderData
 import { WorkerState } from "../../game/worker/RenderDataWorker";
 import { AnimationFrames } from "../AnimationFrames";
 import { DrawRange, NULL_DRAW_RANGE, newDrawRange } from "../DrawRange";
-import { ModelHashBuffer, getModelHash } from "../buffer/ModelHashBuffer";
+import { ModelHashBuffer, getModelHash, getModelSignature } from "../buffer/ModelHashBuffer";
+import { SceneChunkCache } from "./SceneChunkCache";
 import { buildActorNormals } from "../buffer/ActorNormals";
 import { HD_OBJECT_LIGHTS_BY_ID } from "../../game/plugins/hd/hdObjectLightData";
 import { EXCLUDED_SEQUENCES } from "../../game/plugins/animationsmoothing/exclusions";
@@ -40,6 +42,7 @@ import {
     ModelFace,
     ModelMergeGroup,
     SceneBuffer,
+    SceneFragment,
     SceneModel,
     createModelInfoTextureData,
     getModelFaces,
@@ -60,6 +63,7 @@ import { NpcGeometryData } from "./NpcGeometryData";
 import { type LocGeometryData, type MinimapIcon, SdMapData } from "./SdMapData";
 import { SdMapLoaderInput } from "./SdMapLoaderInput";
 import { simplifyFarModel } from "./FarScene";
+import { compactFarMap, mapTransferables } from "./FarMapData";
 
 function loadHeightMapTextureData(scene: Scene): Int16Array {
     const heightMapTextureData = new Int16Array(Scene.MAX_LEVELS * scene.sizeX * scene.sizeY);
@@ -564,6 +568,8 @@ function createMapFunctionResolver(
             const melLoader = new ArchiveMapElementTypeLoader(cacheInfo, mapElementArchive);
             const spriteCache = new Map<number, MapElementMetadata | undefined>();
             return (mapFuncId: number) => {
+                const custom = customMapElement(mapFuncId);
+                if (custom) return custom;
                 if (!spriteCache.has(mapFuncId)) {
                     let sprite: MapElementMetadata | undefined = undefined;
                     try {
@@ -654,14 +660,19 @@ function onlySingleCopyGroups(models: SceneModel[]): boolean {
     return true;
 }
 
-function* addSceneModels(
+export function* addSceneModels(
     modelHashBuf: ModelHashBuffer,
     textureLoader: TextureLoader,
     sceneBuf: SceneBuffer,
     sceneModels: SceneModel[],
     minimizeDrawCalls: boolean,
     far: boolean = false,
+    farOnly: boolean = false,
 ): Generator<void> {
+    if (farOnly) {
+        yield* appendFarSceneModels(modelHashBuf, textureLoader, sceneBuf, sceneModels);
+        return;
+    }
     const groupedModels = new Map<string, SceneModel[]>();
     for (const sceneModel of sceneModels) {
         const model = sceneModel.model;
@@ -842,19 +853,71 @@ function* addSceneModels(
         yield;
         sceneBuf.addModelGroup(group);
     }
-    if (!far) {
-        const simplified = new Map<Model, Model>();
-        const farModels = sceneModels.filter(model => !model.lowDetail).map(model => {
-            if (model.groundConforming || model.priority === 3 || model.contourGround === ContourGroundType.VERTEX)
-                return { ...model, forceMerge: true };
-            let mesh = simplified.get(model.model);
-            if (!mesh) { mesh = simplifyFarModel(model.model); simplified.set(model.model, mesh); }
-            return { ...model, model: mesh, forceMerge: true };
-        });
-        const farBuffer = new SceneBuffer(textureLoader, sceneBuf.textureIdIndexMap, 1024);
-        yield* addSceneModels(modelHashBuf, textureLoader, farBuffer, farModels, true, true);
-        sceneBuf.appendFarScenery(farBuffer);
+    if (!far) yield* appendFarSceneModels(modelHashBuf, textureLoader, sceneBuf, sceneModels);
+}
+
+/** Scenery chunks packed by loc-only builds, per worker state (a new cache gets an empty one). */
+const sceneChunkCaches = new WeakMap<object, SceneChunkCache>();
+
+/**
+ * addSceneModels for a loc-only rebuild, chunk by chunk (the 8x8 tiles its models are already
+ * grouped by): a chunk whose models and positions match the last build of this square reuses
+ * its packed fragment, so felling one tree packs one chunk and not the whole square.
+ */
+export function* addSceneModelsByChunk(
+    modelHashBuf: ModelHashBuffer,
+    textureLoader: TextureLoader,
+    sceneBuf: SceneBuffer,
+    sceneModels: SceneModel[],
+    minimizeDrawCalls: boolean,
+    cache: SceneChunkCache,
+    squareId: number,
+): Generator<void> {
+    // Chunk output also depends on the texture slots the buffer packs into.
+    let textureSlots = sceneBuf.textureIdIndexMap.size;
+    for (const [id, index] of sceneBuf.textureIdIndexMap) textureSlots = (Math.imul(textureSlots, 31) + id * 4099 + index) | 0;
+    const context = `${minimizeDrawCalls ? 1 : 0}:${textureSlots}`;
+
+    const byChunk = new Map<number, SceneModel[]>();
+    for (const sceneModel of sceneModels) {
+        const key = (Math.floor(sceneModel.sceneX / 1024) + 16) * 64 + Math.floor(sceneModel.sceneZ / 1024) + 16;
+        const models = byChunk.get(key);
+        if (models) models.push(sceneModel);
+        else byChunk.set(key, [sceneModel]);
     }
+
+    const modelSignatures = new Map<Model, number>();
+    const previous = cache.chunksOf(squareId);
+    const next = new Map<number, { signature: string; fragment: SceneFragment }>();
+    for (const [key, models] of byChunk) {
+        yield;
+        const parts: string[] = [context];
+        for (const sm of models) {
+            const model = sm.model;
+            let hash = modelSignatures.get(model);
+            if (hash === undefined) {
+                hash = getModelSignature(modelHashBuf, model);
+                modelSignatures.set(model, hash);
+            }
+            parts.push(
+                `${hash},${model.faceCount},${model.verticesCount},${sm.interactId},${sm.interactType},${sm.level},` +
+                `${sm.planeCullLevel ?? sm.level},${sm.priority},${sm.sceneX},${sm.sceneZ},${sm.sceneHeight},` +
+                `${sm.heightOffset},${sm.doubleSided ? 1 : 0},${sm.lowDetail ? 1 : 0},${sm.forceMerge ? 1 : 0},` +
+                `${sm.groundConforming ? 1 : 0},${sm.contourGround}`,
+            );
+        }
+        const signature = parts.join(";");
+        const stored = previous?.get(key);
+        let fragment = stored?.signature === signature ? stored.fragment : undefined;
+        if (!fragment) {
+            const chunkBuf = new SceneBuffer(textureLoader, sceneBuf.textureIdIndexMap, 1024);
+            yield* addSceneModels(modelHashBuf, textureLoader, chunkBuf, models, minimizeDrawCalls);
+            fragment = chunkBuf.toFragment();
+        }
+        next.set(key, { signature, fragment });
+        sceneBuf.appendFragment(fragment);
+    }
+    cache.store(squareId, next);
 }
 
 export function buildLocGeometryData(sceneBuf: SceneBuffer): LocGeometryData {
@@ -913,6 +976,21 @@ const SMOOTHED_STEPS_PER_FRAME = 4;
  * it]: evenly spaced through its length, one per client cycle up to SMOOTHED_STEPS_PER_FRAME.
  * A final keyframe blends only when the object has a valid loop target.
  */
+function* appendFarSceneModels(modelHashBuf: ModelHashBuffer, textureLoader: TextureLoader,
+    sceneBuf: SceneBuffer, sceneModels: SceneModel[]): Generator<void> {
+    const simplified = new Map<Model, Model>();
+    const farModels = sceneModels.filter(model => !model.lowDetail).map(model => {
+        if (model.groundConforming || model.priority === 3 || model.contourGround === ContourGroundType.VERTEX)
+            return { ...model, forceMerge: true };
+        let mesh = simplified.get(model.model);
+        if (!mesh) { mesh = simplifyFarModel(model.model); simplified.set(model.model, mesh); }
+        return { ...model, model: mesh, forceMerge: true };
+    });
+    const farBuffer = new SceneBuffer(textureLoader, sceneBuf.textureIdIndexMap, 1024);
+    yield* addSceneModels(modelHashBuf, textureLoader, farBuffer, farModels, true, true);
+    sceneBuf.appendFarScenery(farBuffer);
+}
+
 function smoothedFrameRuns(
     locModelLoader: LocModelLoader,
     seqType: SeqType,
@@ -1011,6 +1089,11 @@ function addLocAnimationFrames(
     };
 }
 
+/** A loc type's own default sequence: its seq, else the first of its random ones, else -1. */
+function defaultLocSequence(locType: LocType): number {
+    return locType.seqId !== -1 ? locType.seqId : locType.randomSeqIds?.[0] ?? -1;
+}
+
 export function addLocEntities(
     centerLocHeightWithSize: boolean,
     locModelLoader: LocModelLoader,
@@ -1022,6 +1105,7 @@ export function addLocEntities(
     locEntities: SceneLocEntity[],
     smoothAnimations: boolean = false,
     maxSteps: number = SMOOTHED_STEPS_PER_FRAME,
+    staticOnly: boolean = false,
 ): Iterable<LocAnimatedGroup> {
     const locAnimatedGroupMap = new Map<string, LocAnimatedGroup>();
 
@@ -1045,19 +1129,25 @@ export function addLocEntities(
 
         let animatedEntity = entity;
         if (locType.transforms) {
+            const parent = locType;
             const transformed = locType.transform(varManager, locModelLoader.locTypeLoader);
             if (!transformed) {
                 continue;
             }
             locType = transformed;
-            // The selected variant owns the default animation, not the map's parent.
+            // The selected variant's own default animation plays when it has one (the Tree Gnome
+            // orbs' completed form); a variant without one plays the map parent's, as the
+            // OSRS client animates a multiloc with its parent's sequence. Every Runecrafting
+            // ruins keeps its pulsing glow (seq 2714) on the parent only, as do 2,300 other
+            // variants (fireplaces, fire pits, braziers, torches, barriers, portals): taking the
+            // variant's alone left the ruins' dome solid and banded and their flames still.
             // A LOC_ANIM override (including -1) remains authoritative even when its
             // numeric id happens to equal that parent's default.
-            const defaultSequence = locType.seqId !== -1
-                ? locType.seqId : locType.randomSeqIds?.[0] ?? -1;
+            const variantSequence = defaultLocSequence(locType);
+            const ownSequence = variantSequence !== -1;
             animatedEntity = new LocEntity(id, type, rotation, entity.level, tileX, tileY,
-                entity.seqOverride ?? defaultSequence,
-                entity.seqRandomStartOverride ?? locType.seqRandomStart,
+                entity.seqOverride ?? (ownSequence ? variantSequence : defaultLocSequence(parent)),
+                entity.seqRandomStartOverride ?? (ownSequence ? locType : parent).seqRandomStart,
                 entity.seqOverride, entity.seqRandomStartOverride);
         }
 
@@ -1111,7 +1201,7 @@ export function addLocEntities(
         if (preparedSequence !== undefined) {
             animatedEntity = new LocEntity(id, type, rotation, entity.level, tileX, tileY, preparedSequence, false);
         }
-        if (animatedEntity.seqId !== -1) {
+        if (animatedEntity.seqId !== -1 && !staticOnly) {
             if (isDoor) {
                 const model = locModelLoader.getModelAnimated(
                     locType,
@@ -1414,6 +1504,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         state: WorkerState,
         {
             mapProfileEnabled = false,
+            farOnly: requestedFarOnly = false,
             mapX,
             mapY,
             maxLevel,
@@ -1460,6 +1551,8 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         const shouldLoadDoorOnly = doorOnly;
         const shouldLoadLocOnly = locOnly && !shouldLoadDoorOnly;
         const shouldLoadPartial = shouldLoadDoorOnly || shouldLoadLocOnly;
+        // Partial updates must preserve interaction metadata on an existing full square.
+        const farOnly = requestedFarOnly && !shouldLoadPartial && !minimapOnly && !isInstance && !overrideRenderPos;
         const CHUNK_SIZE = 8;
         const INSTANCE_SIZE = 13 * CHUNK_SIZE; // 104
 
@@ -1768,6 +1861,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             locEntities,
             smoothLocAnimations,
             smoothLocAnimationSteps,
+            farOnly,
         );
 
         // Npcs
@@ -1809,19 +1903,34 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         }
 
         if (!shouldLoadPartial) {
-            await build.run(sceneBuf.addTerrainSteps(scene, usedBorderSize, maxLevel, coreSize, usedBorderSize));
+            await build.run(sceneBuf.addTerrainSteps(scene, usedBorderSize, maxLevel, coreSize, usedBorderSize, farOnly));
         }
 
         if (!shouldLoadDoorOnly) {
-            await build.run(addSceneModels(
-                this.modelHashBuf!,
-                textureLoader,
-                locSceneBuf,
-                sceneModels,
-                minimizeDrawCalls,
-            ));
+            // A loc-only rebuild keeps the chunks it packed, for the next change in this square.
+            let chunkCache = sceneChunkCaches.get(state);
+            if (!chunkCache) sceneChunkCaches.set(state, chunkCache = new SceneChunkCache());
+            await build.run(shouldLoadLocOnly && !isInstance && !farOnly
+                ? addSceneModelsByChunk(
+                    this.modelHashBuf!,
+                    textureLoader,
+                    locSceneBuf,
+                    sceneModels,
+                    minimizeDrawCalls,
+                    chunkCache,
+                    getMapSquareId(mapX, mapY),
+                )
+                : addSceneModels(
+                    this.modelHashBuf!,
+                    textureLoader,
+                    locSceneBuf,
+                    sceneModels,
+                    minimizeDrawCalls,
+                    false,
+                    farOnly,
+                ));
         }
-        if (!shouldLoadLocOnly) {
+        if (!shouldLoadLocOnly && !farOnly) {
             await build.run(addSceneModels(
                 this.modelHashBuf!,
                 textureLoader,
@@ -2126,7 +2235,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         const waterMaskTextureData = shouldLoadPartial
             ? new Uint8Array(0)
             : loadWaterMaskTextureData(scene);
-        const terrainPickData = shouldLoadPartial
+        const terrainPickData = shouldLoadPartial || farOnly
             ? {
                   tileOffsets: new Uint32Array(0),
                   vertices: new Float32Array(0),
@@ -2142,7 +2251,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
         const npcIndices = new Int32Array(npcSceneBuf.indices);
 
         const minimapBlobs: Blob[] = shouldLoadPartial ? [] : new Array(Scene.MAX_LEVELS);
-        if (!shouldLoadPartial) {
+        if (!shouldLoadPartial && !farOnly) {
             const levels = minimapLevel === undefined || isInstance || overrideRenderPos
                 ? [0, 1, 2, 3] : [Math.max(0, Math.min(Scene.MAX_LEVELS - 1, minimapLevel | 0))];
             if (typeof OffscreenCanvas !== "undefined") {
@@ -2345,8 +2454,7 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
             loadedTextures.size,
         );
 
-        return {
-            data: {
+        const data: SdMapData = {
                 mapX,
                 mapY,
 
@@ -2463,9 +2571,9 @@ export class SdMapDataLoader implements RenderDataLoader<SdMapLoaderInput, SdMap
                 tileLocOffsetsByLevel,
                 tileLocIdsByLevel,
                 tileLocTypeRotByLevel,
-            },
-            transferables,
         };
+        if (farOnly) compactFarMap(data);
+        return { data, transferables: farOnly ? mapTransferables(data) : transferables };
     }
 
     async loadNpcGeometry(

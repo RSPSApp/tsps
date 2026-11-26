@@ -2,16 +2,18 @@
  * The fight with Amoxliatl, as captured (docs/amoxliatl.md) with the Wiki's rules
  * (https://oldschool.runescape.wiki/w/Amoxliatl/Strategies):
  * - She rises (11527) facing east with "Euat! You are not welcome here!", the HP HUD comes up in
- *   her colours, and 4 ticks later she attacks; then every 8 ticks. She follows the player to
+ *   her colours, and 4 ticks later she attacks; then every 8 ticks. The quest's guardian is just
+ *   there as the fade comes back, with no rise and no line (R1140, R1695). She follows the player to
  *   melee distance (the Wiki's "drag").
  * - Her standard attack (11530) is a magic hit of up to 22 on the same tick, which Protect from
  *   Magic blocks, with ice spikes across the floor around the player. 3 ticks later the spikes
- *   come up, 6-10 to a player still on one, and an icy pool forms on the tile the player stood on;
+ *   come up, 6-16 to a player still on one (R1140), and an icy pool forms on the tile the player stood on;
  *   it deals 6-10 a tick to anyone on it (Wiki) and stays until she dies.
  * - After every 2-4 standard attacks (Wiki) a special, the first at random and then in turn:
  *   Icicle Crash (Fight here) and Unstable Ice (UnstableIce.Amoxliatl). With the player on the
- *   path to her platform she has no room for Unstable Ice and only uses Icicle Crash.
- * - Icicle Crash (11531): every prayer off and the red message, then an icicle that lands 5 ticks
+ *   path to her platform she has no room for Unstable Ice and only uses Icicle Crash. Her next
+ *   attack comes 9 ticks after Icicle Crash and 7 after Unstable Ice (R1140, R1695).
+ * - Icicle Crash (11531): turn active prayers off and announce the attack, then an icicle that lands 5 ticks
  *   later for up to 34; Protect from Magic turned back on in time negates it (Wiki).
  */
 const Common = require("./Common.Amoxliatl");
@@ -69,6 +71,8 @@ class Fight {
     /** key(x, y) on the cache map -> the pool's GameObject. */
     this.pools = new Map();
     this.blocks = new Set();
+    // Keep post-quest shatters available to cleanup until next-tick removal.
+    this.shatteringBlocks = new Set();
     this.hudShown = false;
     this.shownHp = -1;
     this.stats = { damageTaken: 0, prayerLost: false, shattered: false, usedTemotli: false, otherWeapon: false };
@@ -96,12 +100,15 @@ class Fight {
   }
 
   start() {
-    const { spawn, hud } = Common.data;
+    const { spawn, hud, respawnLines } = Common.data;
     const { Animation } = this.core;
-    this.boss.performAnimation(new Animation(spawn.anim));
-    this.boss.forceChat(spawn.say);
-    // As captured, the line goes to the chatbox too, as her npc_say message.
-    this.player.getPacketSender().sendTypedMessage(this.core.ChatType.NPC_SAY, spawn.say, this.boss.getDefinition().getName());
+    if (!this.session.quest) {
+      this.boss.performAnimation(new Animation(spawn.anim));
+      // As captured, she rises with "You are not welcome here!" the first time in a visit, then one
+      // of the others.
+      const lines = respawnLines.lines;
+      this.say(this.session.rises++ > 0 ? lines[Common.randomInt(0, lines.length - 1)] : spawn.say);
+    }
     this.hudShown = true;
     this.shownHp = this.boss.getHitpoints();
     Common.api.emitCustomEvent("boss-hud:show", {
@@ -111,12 +118,19 @@ class Fight {
     this.boss.getCombat().setAttackDelay(spawn.firstAttackTicks);
   }
 
+  /** Over her head, and as captured in the chatbox as her npc_say message, under her shown name. */
+  say(line) {
+    this.boss.forceChat(line);
+    const name = this.boss.getTypeCustomisationForUpdate?.()?.name ?? this.boss.getDefinition().getName();
+    this.player.getPacketSender().sendTypedMessage(this.core.ChatType.NPC_SAY, line, name);
+  }
+
   /** Every tick: due events, the pools under the player, the prayer the task watches, the HUD. */
   process() {
     if (this.stopped) return;
     this.tick++;
-    // Her specials aren't combat-engine attacks, which would count her out of combat and
-    // regenerate her (a tenth of her hitpoints a tick).
+    // Her specials aren't combat-engine attacks: refresh the combat stopwatch so she counts as
+    // fighting.
     if (!this.over) this.boss.getCombat().getLastAttack().reset();
     const due = this.events.filter((event) => event.tick <= this.tick);
     this.events = this.events.filter((event) => event.tick > this.tick);
@@ -148,12 +162,18 @@ class Fight {
     return x >= Common.data.arena.pathFromX;
   }
 
-  /** Typeless damage on the player now (pools, her heal-free hazards). */
+  /**
+   * Her hazards' damage on the player now (her spikes and pools): a hit from her, through prayer and
+   * never missing. Live counts them as her hits: with a shield, Thorns answered every pool and spike
+   * hit the next tick (R1140: 106 of 106 and 86 of 86). Nagua Negation counts it as it resolves.
+   */
   hurtPlayer(amount) {
-    const { HitDamage, HitMask } = this.core;
+    if (this.player.getHitpoints() <= 0) return;
+    const { PendingHit, World } = this.core;
     const damage = Math.max(0, Math.floor(amount));
-    if (damage > 0) this.stats.damageTaken += damage;
-    this.player.getCombat().getHitQueue().addPendingDamage([new HitDamage(damage, damage > 0 ? HitMask.RED : HitMask.BLUE)]);
+    const hit = new PendingHit(this.boss, this.player, magicStyle(),
+      { delay: 0, damage, rollAccuracy: false, bypassProtectionPrayer: true, experience: false });
+    this.player.getCombat().getHitQueue().addPendingHit(hit, World.getProcessCycle());
   }
 
   // ------------------------------------------------------------------ the attack slot
@@ -214,6 +234,8 @@ class Fight {
     this.nextSpecial = this.nextSpecial === ICICLE ? UNSTABLE_ICE : ICICLE;
     if (kind === ICICLE) this.icicleCrash();
     else UnstableIce.launch(this);
+    // The engine has already set her usual 8 ticks; the specials take their own (R1140).
+    this.boss.getCombat().setAttackDelay(Common.data.specials.nextAttackTicks[kind]);
     return [];
   }
 
@@ -222,8 +244,9 @@ class Fight {
   icicleCrash() {
     const { Animation, PrayerHandler, Projectile } = this.core;
     const { icicle } = Common.data;
-    PrayerHandler.deactivatePrayers(this.player);
-    this.player.sendMessage(icicle.message);
+    const disablePrayers = !Common.isPostQuestFight(this.session) || this.player.getPrayerActive().some(Boolean);
+    if (disablePrayers) PrayerHandler.deactivatePrayers(this.player);
+    this.player.sendMessage(disablePrayers ? icicle.message : icicle.plainMessage);
     this.boss.performAnimation(new Animation(icicle.anim));
     const spec = icicle.projectile;
     new Projectile(Projectile.centreOf(this.boss), this.player.getLocation(), this.player, spec.id, spec.start, spec.end,
@@ -252,24 +275,26 @@ class Fight {
   // ------------------------------------------------------------------ the icy pools
 
   /** A pool on a floor tile (cache map), unless one is there already. */
-  placePool(x, y) {
-    if (this.stopped || this.over || !onFloor(x, y) || this.pools.has(key(x, y))) return;
+  placePool(x, y, playSound = true) {
+    if (this.stopped || this.over || !onFloor(x, y) || this.pools.has(key(x, y))) return false;
     const { GameObject, ObjectManager } = this.core;
     const { pools, arena } = Common.data;
     const tile = this.session.tile([x, y, 0]);
-    if (this.core.RegionManager.blocked(tile, this.session.area)) return;
+    if (this.core.RegionManager.blocked(tile, this.session.area)) return false;
     const pool = new GameObject(pools.id, tile, pools.shape, Common.randomInt(0, 3), this.session.area);
     ObjectManager.register(pool, true);
     this.pools.set(key(x, y), pool);
     // As captured, the sound comes from the middle of the platform, not the pool.
-    Common.areaSound(this.player, pools.sound, this.session.tile(arena.centre));
+    if (playSound) Common.areaSound(this.player, pools.sound, this.session.tile(arena.centre));
+    return true;
   }
 
   poolDamage() {
     const [x, y] = this.playerTile();
     if (!this.pools.has(key(x, y)) || this.player.getHitpoints() <= 0) return;
-    const [min, max] = Common.data.pools.damage;
+    const { damage: [min, max], hurtSound } = Common.data.pools;
     this.hurtPlayer(Common.randomInt(min, max));
+    this.player.getPacketSender().sendSoundEffect(hurtSound, 1, 0);
   }
 
   /** Her death takes every pool with it, each with a puff (captured). */
@@ -316,9 +341,9 @@ class Fight {
   }
 }
 
-/** She rises: a fight for the session, run on its own tick task. */
-function begin(session, boss) {
-  const fight = new Fight(session, boss);
+/** She rises: a fight for the session, run on its own tick task (the Echo's own: EchoFight.Amoxliatl). */
+function begin(session, boss, FightClass = Fight) {
+  const fight = new FightClass(session, boss);
   session.fight = fight;
   boss.__amoxliatlFight = fight;
   const { Task, TaskManager } = Common.core;
@@ -395,4 +420,4 @@ function attachFight(api) {
   api.onCombatHitResolved(playerHurt);
 }
 
-module.exports = { attachFight, begin, Fight, onFloor, floorTiles, key };
+module.exports = { attachFight, begin, Fight, onFloor, floorTiles, key, magicStyle };

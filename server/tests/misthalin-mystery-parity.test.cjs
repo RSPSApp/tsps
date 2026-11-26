@@ -79,7 +79,7 @@ function player() {
     sendInterfaceRemoval() { p.manager.reset(); p.prompt = null; return packet; },
   }, { get: (t, key) => t[key] ?? ((...args) => { log.push([key, ...args]); return packet; }) });
   const p = { attrs, items, configs, varbits, log, xp, messages: [], animations: [], prompt: null, text: '', index: nextIndex++,
-    getHitpoints: () => 10, getForceMovement: () => null, setSkillAnimation: noop,
+    getHitpoints: () => 10, getForceMovement: () => null, getSkillAnimation: () => null, setSkillAnimation: noop,
     getAttribute: key => attrs.get(key), setAttribute: (key, value) => attrs.set(key, value), getInventory: () => inv,
     getBanks: () => [{ getAmount: id => p.bank?.get(id) ?? 0 }], getEquipment: () => ({ get: () => p.weapon ? { getId: () => p.weapon } : null, deleteNumber: () => { p.weapon = null; } }),
     getPacketSender: () => packet, getDialogueManager: () => p.manager, getUpdateFlag: () => ({ flag: noop }),

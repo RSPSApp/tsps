@@ -9,12 +9,17 @@ const Combat = require("./cerberus/Combat.Cerberus");
 const Kills = require("./cerberus/Kills.Cerberus");
 const FireWall = require("./cerberus/FireWall.Cerberus");
 
+function describeEncounters({ npcIds }) {
+  npcIds.add(Common.ids.npcs.attacking);
+}
+
 module.exports = {
   name: "Cerberus",
   description: "Cerberus in her lair: the winches, arenas, fire wall and exits, the triple attack with souls and lava, and the kill.",
   members: true,
   register(api) {
     Common.init(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Lair.attach(api);
     Combat.attach(api);
     Kills.attach(api);

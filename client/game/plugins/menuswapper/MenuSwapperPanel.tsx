@@ -31,7 +31,8 @@ export function MenuSwapperPanel({ plugin }: { plugin: MenuSwapperPlugin }): JSX
         <div className="rl-sidebar-panel-content rl-sidebar-scrollable">
             <p className="rl-sidebar-panel-copy">
                 Hold Shift and right-click an NPC, object or item, then pick "Swap left click" or
-                "Swap shift click".
+                "Swap shift click". With a shop open, you can set an item's shift-click to a sell
+                option such as Sell 50.
             </p>
 
             {PRESET_LABELS.map(([preset, label]) => (

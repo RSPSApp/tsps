@@ -39,7 +39,11 @@ function actor(t, stage) {
   players.push(player);
   const messages = [];
   t.mock.method(player.getPacketSender(), "sendMessage", (message) => { messages.push(message); return player.getPacketSender(); });
-  return { player, messages };
+  const boxes = [];
+  t.mock.method(player.getDialogueManager(), "startDialogues", (chain) => {
+    for (const entry of chain.getDialogues().values()) if (typeof entry.getText === "function") boxes.push(entry.getText());
+  });
+  return { player, messages, boxes };
 }
 
 // A wall door swings onto the neighbouring tile, so look within one tile of the doorway.
@@ -66,15 +70,16 @@ function tick(count) {
 }
 
 test("a player who is not admitted is turned away and the door stays shut", (t) => {
-  const { player, messages } = actor(t, 0);
+  const { player, boxes } = actor(t, 0);
   new ObjectActionPacketListener().executeAction(player, DOOR, X, Y, 1);
   tick(4);
-  assert.ok(messages.some((message) => message.startsWith("Only builders")), JSON.stringify(messages));
+  // RSProx capture TowerOfLife.bin tick 294: a message box.
+  assert.deepEqual(boxes, ["You're going to need permission to enter this building."]);
   assert.ok(locAt(DOOR) && !locAt(OPEN_LEAF), "the door never opened");
 });
 
 test("after the quest the door lets the player out through the doorway and shuts, instead of teleporting", (t) => {
-  const { player } = actor(t, 16);
+  const { player } = actor(t, 18); // tol_prog complete
   new ObjectActionPacketListener().executeAction(player, DOOR, X, Y, 1);
   tick(1);
   for (let i = 0; i < 6 && player.getLocation().getY() !== Y; i++) tick(1);

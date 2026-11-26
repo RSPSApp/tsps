@@ -11,7 +11,7 @@
 # The main checkout keeps the defaults (3000, 43594, 49700, 43595, 49600) and has no slot.
 set -euo pipefail
 
-MAIN=$(git rev-parse --path-format=absolute --git-common-dir | xargs dirname)
+MAIN=$(dirname -- "$(git rev-parse --path-format=absolute --git-common-dir)")
 BEGIN="# >>> wt slot"
 END="# <<< wt slot"
 
@@ -50,7 +50,7 @@ running_ports() {
 
 free_slot() {
   local used
-  used=$(for dir in $(worktrees); do slot_of "$dir"; done)
+  used=$(while IFS= read -r dir; do slot_of "$dir"; done < <(worktrees))
   for n in $(seq 1 99); do
     grep -qx "$n" <<<"$used" || { echo "$n"; return; }
   done
@@ -122,10 +122,10 @@ case "${1:-ls}" in
     ;;
   ls)
     printf '%-4s %-36s %-24s %-6s %-6s %-7s %-6s %s\n' SLOT BRANCH CLIENT GAME MCP GATEWAY ADMIN STATE
-    games=$(for dir in $(worktrees); do g=$(env_of "$dir" WEBSOCKET_PORT); echo "${g:-43594}"; done | sort -u)
+    games=$(while IFS= read -r dir; do g=$(env_of "$dir" WEBSOCKET_PORT); echo "${g:-43594}"; done < <(worktrees) | sort -u)
     # shellcheck disable=SC2086 # one port per word
     running=" $(running_ports $games) "
-    for dir in $(worktrees); do
+    while IFS= read -r dir; do
       n=$(slot_of "$dir")
       client=$(env_of "$dir" PORT) game=$(env_of "$dir" WEBSOCKET_PORT) mcp=$(env_of "$dir" AGENT_MCP_PORT)
       gateway=$(env_of "$dir" GATEWAY_PORT) admin=$(env_of "$dir" WORLD_ADMIN_PORT)
@@ -138,7 +138,7 @@ case "${1:-ls}" in
       fi
       printf '%-4s %-36s %-24s %-6s %-6s %-7s %-6s %s\n' "${n:-main}" "${branch:-detached}" \
         "http://localhost:$client" "$game" "$mcp" "$gateway" "$admin" "$state"
-    done
+    done < <(worktrees)
     ;;
   rm)
     target=${2:?usage: wt rm <path|branch>}

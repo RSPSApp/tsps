@@ -144,8 +144,8 @@ class Fight {
   process() {
     if (this.stopped) return;
     this.tick++;
-    // His attacks aren't the combat engine's, which would count him out of combat and
-    // regenerate him (a tenth of his hitpoints a tick).
+    // His attacks aren't the combat engine's: refresh the combat stopwatch so he counts as
+    // fighting.
     if (this.yama?.isRegistered()) this.yama.getCombat().getLastAttack().reset();
     const due = this.events.filter((event) => event.tick <= this.tick);
     this.events = this.events.filter((event) => event.tick > this.tick);

@@ -28,5 +28,8 @@ module.exports = {
     require("./storage/HuntsmansKit.StorageItems")(api);
     require("./storage/HunterPouches.StorageItems")(api);
     require("./storage/ReagentPouch.StorageItems")(api);
+    require("./storage/FlamtaerBag.StorageItems")(api);
+    require("./storage/Coffin.StorageItems")(api);
+    require("./storage/Knapsack.StorageItems")(api);
   },
 };

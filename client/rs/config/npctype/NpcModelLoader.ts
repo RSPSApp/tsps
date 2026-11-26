@@ -1,3 +1,4 @@
+import { SampledAnimationRegistry } from "../../../custom/animations/SampledAnimationRegistry";
 import { applyInterpolatedFrames, interpolationFrame, type ActorInterpolation } from "../../model/seq/FrameInterpolation";
 import { Model } from "../../model/Model";
 import { ModelData } from "../../model/ModelData";
@@ -8,11 +9,12 @@ import { TextureLoader } from "../../texture/TextureLoader";
 import { SeqType } from "../seqtype/SeqType";
 import { SeqTypeLoader } from "../seqtype/SeqTypeLoader";
 import { VarManager } from "../vartype/VarManager";
-import { NpcType } from "./NpcType";
+import { NpcType, npcTypeHasModel } from "./NpcType";
 import { NpcTypeLoader } from "./NpcTypeLoader";
 
 export class NpcModelLoader {
     modelCache: Map<number, Model>;
+    private sampledRevision = SampledAnimationRegistry.revision;
 
     constructor(
         readonly npcTypeLoader: NpcTypeLoader,
@@ -22,6 +24,7 @@ export class NpcModelLoader {
         readonly seqFrameLoader: SeqFrameLoader,
         readonly skeletalSeqLoader: SkeletalSeqLoader | undefined,
         readonly varManager: VarManager,
+        readonly maxCacheEntries = 0,
     ) {
         this.modelCache = new Map();
     }
@@ -49,12 +52,19 @@ export class NpcModelLoader {
             );
         }
 
-        // NPC has no model IDs defined (opcode 1 was never decoded)
-        if (!npcType.modelIds || npcType.modelIds.length === 0) {
+        // NPC has no model IDs defined (opcode 1 was never decoded), or one of them is -1
+        if (!npcTypeHasModel(npcType)) {
             return undefined;
         }
 
+        if (this.sampledRevision !== SampledAnimationRegistry.revision) {
+            this.clearCache();
+        }
         let model = this.modelCache.get(npcType.id);
+        if (model && this.maxCacheEntries > 0) {
+            this.modelCache.delete(npcType.id);
+            this.modelCache.set(npcType.id, model);
+        }
         if (!model) {
             const missesBefore = this.modelLoader.missCount ?? 0;
             const models = new Array<ModelData>(npcType.modelIds.length);
@@ -69,7 +79,10 @@ export class NpcModelLoader {
                 return undefined;
             }
 
-            const merged = ModelData.merge(models, models.length);
+            // A sampled model owns its exact vertex order, including coincident vertices.
+            const merged = models.length === 1 && models[0] && SampledAnimationRegistry.hasModel(npcType.modelIds[0])
+                ? models[0]
+                : ModelData.merge(models, models.length);
 
             if (npcType.recolorFrom) {
                 const retexture =
@@ -98,6 +111,9 @@ export class NpcModelLoader {
             );
 
             this.modelCache.set(npcType.id, model);
+            while (this.maxCacheEntries > 0 && this.modelCache.size > this.maxCacheEntries) {
+                this.modelCache.delete(this.modelCache.keys().next().value!);
+            }
         }
 
         const hasScale = npcType.widthScale !== 128 || npcType.heightScale !== 128;
@@ -110,16 +126,30 @@ export class NpcModelLoader {
 
         if (actionSeqType || movementSeqType) {
             model = Model.copyAnimated(model, false, true);
-            this.applyNpcSequenceTransformations(
-                model,
-                actionSeqType,
-                seqId | 0,
-                frame | 0,
-                movementSeqType,
-                movementSeqId | 0,
-                movementFrame | 0,
-                interpolation,
-            );
+            const sampledAction = SampledAnimationRegistry.isSampledSequence(actionSeqType);
+            const sampledMovement = SampledAnimationRegistry.isSampledSequence(movementSeqType);
+            const sampled = sampledAction || !actionSeqType && sampledMovement;
+            if (sampled) {
+                if (npcType.modelIds.length === 1) {
+                    const id = sampledAction ? seqId : movementSeqId;
+                    const sampleFrame = sampledAction ? frame : movementFrame;
+                    const blend = sampledAction ? interpolation?.base : interpolation?.overlay;
+                    SampledAnimationRegistry.apply(
+                        model, npcType.modelIds[0], id, sampleFrame, blend?.next ?? sampleFrame, blend?.alpha ?? 0,
+                    );
+                }
+            } else {
+                this.applyNpcSequenceTransformations(
+                    model,
+                    actionSeqType,
+                    seqId | 0,
+                    frame | 0,
+                    sampledMovement ? undefined : movementSeqType,
+                    movementSeqId | 0,
+                    movementFrame | 0,
+                    interpolation,
+                );
+            }
         } else if (hasScale) {
             model = Model.copyAnimated(model, true, true);
         }
@@ -377,5 +407,6 @@ export class NpcModelLoader {
 
     clearCache(): void {
         this.modelCache.clear();
+        this.sampledRevision = SampledAnimationRegistry.revision;
     }
 }

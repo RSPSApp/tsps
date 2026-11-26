@@ -1,6 +1,6 @@
 # Below Ice Mountain
 
-Quest behavior comes from the [OSRS Wiki quest guide](https://oldschool.runescape.wiki/w/Below_Ice_Mountain), its [transcript](https://oldschool.runescape.wiki/w/Transcript:Below_Ice_Mountain), the [structural pillar page](https://oldschool.runescape.wiki/w/Structural_pillar), and RSProx recording **1636** linked by issue #600. IDs were checked against this repository's revision 241 cache. Raw recordings and account details are not included.
+Quest behavior comes from the [OSRS Wiki quest guide](https://oldschool.runescape.wiki/w/Below_Ice_Mountain), its [transcript](https://oldschool.runescape.wiki/w/Transcript:Below_Ice_Mountain), the [structural pillar page](https://oldschool.runescape.wiki/w/Structural_pillar), and RSProx recordings **1636** (linked by issue #600) and **local 1001343** (revision 240, a second whole run that mines the pillars). IDs were checked against this repository's revision 241 cache. Raw recordings and account details are not included.
 
 ## Captured state
 
@@ -31,9 +31,9 @@ The workout runs in a private template scene, using the recorded 206-cycle span 
 
 Burntof accepts regular beer, Asgarnian ale, dwarven stout and wizard's mind bomb. Using a drink directly on him works, as does the dialogue hand-in. His upstairs scene plays the hand animations, five-cycle round reveals, third-round cheat and Tina's arrival. The cheat beats the sign actually displayed in the third round. Each of the player's three choices leads to recruitment.
 
-The sandwich recipe unlocks when the cook explains the bread/meat combination. Knife-on-bread opens the cache creation menu with breadcrumbs and steak sandwich; knife-on-meat can make the sandwich directly. It consumes one bread and one cooked meat, retains the knife, plays sequence8938 and works after completion. Using a sandwich on Marley starts the hand-in dialogue.
+The sandwich recipe unlocks when the cook explains the bread/meat combination. Knife on bread or on cooked meat makes the sandwich at once (local 1001343, tick 1435). The creation menu with breadcrumbs and steak sandwich appears only while Freeing Pirate Pete's breadcrumbs are available (rsprox 1636, whose account had Recipe for Disaster started). It consumes one bread and one cooked meat, retains the knife, plays sequence8938 and works after completion. Using a sandwich on Marley starts the hand-in dialogue.
 
-The entrance scene creates a private crew, explosion and rubble replacements, the Marley disguise/tripwires, indoor crew, earthquake and awakening. The combat Guardian and its four mineable pillars occupy a separate private instance. Pillars require a usable pickaxe and boosted Mining10, award10 MiningXP each and damage the40HP Guardian by10. A broken pillar cannot be mined repeatedly. The Guardian attacks after the cutscene and on re-entry. Its death starts the finishing dialogue automatically.
+The entrance scene creates a private crew, explosion and rubble replacements, the Marley disguise/tripwires, indoor crew, earthquake and awakening. The combat Guardian and its four mineable pillars occupy a separate private instance. Pillars need a usable pickaxe and Mining 10 (boostable) and give 10 Mining XP each (Wiki). A broken pillar can't be mined again. The Guardian attacks after the cutscene and on re-entry. Its death, by combat or by the fourth pillar, starts the finishing dialogue.
 
 The Guardian's hit reaction no longer falls back to human block 424. Cache NPC 10654 uses model
 42128 and guardian animation base 1955; human block 424 uses base 0 and deforms that model's
@@ -64,7 +64,7 @@ live server and WebGPU verification described below; this does not claim packet-
 
 An earlier live agent MCP check (port 49802 at the time) verified the16-point refusal, main35/sides50, cache entrance interaction, a private Guardian arena with one40HP Guardian, all four pillars and the mapped exit.
 
-Recording 1636 uses combat rather than pillar mining. Recordings 332 and 333 (revision 230) only cover the crew's post-quest desert dialogue, which matches; no decoded recording mines a pillar. The eight-cycle mining delay is based on the Wiki speedrun description and needs a mining-route recording to confirm its timer interaction. Player running uses key segments rather than every captured step; actor facing microsteps, lighting/environment scripts and temporary HUD/sidebar suppression are not fully reproduced. Quest journal prose is the existing implementation because this recording does not open its journal. These limits prevent claiming full visual or packet-for-packet parity.
+Recording 1636 takes the combat route; local 1001343 (revision 240) mines the pillars, and both open the journal only in 1001343. Player running uses key segments rather than every captured step; actor facing microsteps and lighting/environment scripts are not fully reproduced. These limits prevent claiming full visual or packet-for-packet parity.
 
 Known small differences kept on purpose: the recruit, main 35 and Ramarno move varbits change 2, 2 and 1 ticks before the recording (606/841, 2160, 2285), and returning from the workout has no 563 fade-out, because the scene and its save state resolve as the line is continued. The player's lines in 2059–2103 show "Click here to continue" at once, since only NPC boxes have a held form.
 
@@ -130,3 +130,57 @@ completion scroll were inspected in the WebGPU recording.
 The 23 related tests and server build pass. Two extractor runs produced identical canonical
 timeline and template files. This validation uses declared quest/combat setup; it is not
 a fresh account's complete quest from its 16 Quest point requirement quest playthrough or a pixel-for-pixel comparison.
+
+## Second whole-quest recording: local 1001343 (revision 240, 2026-11-24)
+
+A private recording of the whole quest by a female account at Strength 1, mining the pillars rather than
+fighting. The quest starts at tick 639 and completes at 2942. Its dialogue, variable sequences and scene
+packets were compared with 1636's.
+
+**Unchanged from 1636.** The main varbit runs 0, 5, 7, 10, 15, 20, 25, 30, 35, 40, 120, and the three recruit
+varbits take the same values in the same order. The workout's camera track has the same packets on the same
+ticks; the other scenes send the same packets in the same order, with gaps that follow the player's reading
+speed. Apart from the lines below, the dialogue is word for word the same, including Willow's "No." at the
+start prompt ("Seems like you're in a bit of a pickle. Have fun with that."), which only this recording picks.
+The completion scroll and jingle 152 are the same.
+
+**Structural pillars** (ticks 2785-2877, four pillars and five swings walked away from or clicked again):
+
+| After the click | What live sends |
+| --- | --- |
+| 0 | "You swing your pick at the pillar." (spam), the pickaxe animation |
+| 1-3 | the pillar falls: the swing stops, the pillar becomes `bim_boss_rock_mined` (41459) facing as before, Mining XP, rockfall 60 (delay 20, height 10) on the Guardian, area sound 1384 (delay 35, range 10) at the Guardian, a camera shake on axes 0-2 (random 5-8) |
+| fall + 1 | the Guardian says "Grrr!" |
+| fall + 2 | the rocks hit it as another's damage (splat 17), area sound 4971 at the Guardian |
+| fall + 6 | camera reset |
+
+The pillars dealt 12, 12 and 10, and the fourth the Guardian's last 6. The Wiki only says the pillars damage the
+Guardian and that the fourth defeats it, so ours deals 10-12 per pillar and the rest on the fourth. The pillars
+came down 1, 2, 3 and 2 ticks after the swing, and one swing went three ticks without; ours rolls even odds each
+tick. Both are "Ours" in the code.
+
+The fourth pillar kills the Guardian through its ordinary death, as combat does in 1636: death animation 8943 and
+sound 4985 on the next tick, the body gone 5 ticks later (main varbit 40 on that tick), the fade a tick after.
+Its attack is 8942 with no block animation. These are in `npc-combat-defs.json` (10654); the miner is credited
+with the rocks' damage so the death reaches the quest. Its attack sound (4989) and hit sound (4971, from
+1636's combat) are not in the mined `npc-combat-sounds.json` and are not sent in combat.
+
+**Journal.** Opened at main varbit 10, three times at 15 (Checkal recruited with Marley waiting for his
+sandwich; Checkal and Marley recruited; Burntof waiting for his drink), at 20 and after completion. The quest
+sends those lines exactly as captured, including which wrapped lines open on the navy tag. No recording opens
+it with Checkal mid-errand, Burntof after his drink, Marley before the cook, or inside the ruins; those keep
+the nearest recorded paragraph, or the struck story so far inside the ruins.
+
+**Cutscenes.** Live puts the client in a cutscene for the workout (837-1068), rock-paper-scissors (2038-2174),
+the entrance through the crew fleeing (2335-2782) and the finish (2876-2939): cutscene_status, the minimap off,
+the gravestone marker, NPC and item menus hidden and the side tabs closed, all back as each one ends. The quest
+now does this with the shared quest-scene helper. Live also sets `fov_clamp`, the area-sound and draw-distance
+overrides and hides loc menus, which the shared helper doesn't send for any quest.
+
+**Steak sandwich.** Knife on bread made the sandwich on the same tick with no menu (1435: message, sequence 8938). 1636's make menu with breadcrumbs came from its account being part-way through Pirate Pete, so the menu is now offered only while Recipe for Disaster says breadcrumbs can be made.
+
+**Recorded differences kept from the Wiki.** The female account hears "madam" where the Wiki writes
+"[sir/miss]" (Checkal twice, Marley once), and "strongman" where it writes "[strongman/strongwoman]"
+(Willow once, Atlas five times). The Cook opens with the menu directly in revision 240, without the Wiki's
+"What do you want? I'm busy!" that 1636 still has.
+

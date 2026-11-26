@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 
 import { createBrowserEditModePluginPersistence } from "../game/plugins/editmode/BrowserEditModePluginPersistence";
 import { EditModePlugin } from "../game/plugins/editmode/EditModePlugin";
-import { detectRectangularBuilding } from "../game/plugins/editmode/BuildingDetector";
+import { buildingWallKey, detectRectangularBuilding } from "../game/plugins/editmode/BuildingDetector";
 import { generateBuildingEdits } from "../game/plugins/editmode/BuildingGenerator";
 import {
     parseBrowserHostWorldDefinition,
@@ -275,6 +275,9 @@ assert.ok(
 {
     const regionId = (48 << 8) | 55;
     const terrain = new Uint8Array(4 * 64 * 64 * 2);
+    const terrainOnly = buildRegionPack(regionId, -1, 39999, Uint8Array.of(0), terrain, [], true);
+    assert.equal(new DataView(terrainOnly.buffer).getInt32(4), -1, "a cache square can have terrain without a loc archive");
+    assert.deepEqual(parseRegionPack(terrainOnly).objectData, Uint8Array.of(0));
     const objects = Uint8Array.of(101, 67, 40, 0, 0);
     const pack = buildRegionPack(
         regionId,
@@ -530,6 +533,50 @@ assert.equal(
     detectRectangularBuilding(5, 1, (x, y) => bridgeRoofLocs.get(`${x}:${y}`) ?? []),
     undefined,
 );
+
+// Inset ground walls and a complete upper cycle are two floors of the same building.
+{
+    const upper = new Map<string, Array<{ id: number; level: number; typeRot: number }>>();
+    const put = (x: number, y: number, id: number, level: number, typeRot: number) => {
+        const key = `${x}:${y}`;
+        const locs = upper.get(key) ?? [];
+        locs.push({ id, level, typeRot });
+        upper.set(key, locs);
+    };
+    for (let x = 0; x < 4; x++) {
+        for (let y = 0; y < 4; y++) put(x, y, 500, 2, 17);
+        put(x, 0, 101, 1, 3 << 6);
+        put(x, 3, 101, 1, 1 << 6);
+    }
+    for (let y = 0; y < 4; y++) {
+        put(-1, y, 101, 1, 2 << 6);
+        put(3, y, 101, 1, 2 << 6);
+        put(1, y, 100, 0, 0);
+    }
+    put(-1, 1, 300, 0, 0); // Outside fence facing away from the building.
+    const selection = detectRectangularBuilding(1, 1, (x, y) => upper.get(`${x}:${y}`) ?? []);
+    assert.equal(selection?.minPlane, 0);
+    assert.equal(selection?.maxPlane, 2);
+    assert.ok(selection?.boundaryWalls.has(buildingWallKey(-1, 1, { id: 101, level: 1, typeRot: 2 << 6 })));
+    assert.ok(!selection?.boundaryWalls.has(buildingWallKey(-1, 1, { id: 300, level: 0, typeRot: 0 })));
+}
+
+// A terrain ceiling can cover a building that has no loc roof pieces.
+{
+    const isIndoor = (x: number, y: number, level: number) => x >= 0 && x < 3 && y >= 0 && y < 3 && level === 0;
+    const getLocs = (x: number, y: number) => {
+        if (!isIndoor(x, y, 0)) return [];
+        const rotations = [
+            ...(x === 0 ? [0] : []), ...(x === 2 ? [2] : []),
+            ...(y === 0 ? [3] : []), ...(y === 2 ? [1] : []),
+        ];
+        return rotations.map((rotation) => ({ id: 100, level: 0, typeRot: rotation << 6 }));
+    };
+    const selection = detectRectangularBuilding(1, 1, getLocs, undefined, { isIndoor });
+    assert.equal(selection?.terrainRoofPlane, 1);
+    assert.equal(selection?.tiles.length, 9);
+    assert.equal(detectRectangularBuilding(1, 1, () => [], undefined, { isIndoor }), undefined);
+}
 
 const normalLocFilter = () => false;
 let raycastOptions: { basePlane?: number; maxDistance?: number } | undefined;
@@ -1043,10 +1090,11 @@ const windowListeners: Array<[string, (...args: any[]) => void, unknown]> = [];
 const fakeCanvas = { focus: () => {} } as unknown as HTMLCanvasElement;
 let previewPointer = { tileX: 3200, tileY: 3201, plane: 0 };
 let sceneFrameCallback: (() => void) | undefined;
+let hasGroundUnderPointer = true;
 const previewPlugin = new EditModePlugin();
 previewPlugin.attach({
     getCanvas: () => fakeCanvas,
-    getPointerTile: () => previewPointer,
+    getPointerTile: () => hasGroundUnderPointer ? previewPointer : undefined,
     getPointerLoc: () => undefined,
     selectPointer: (tile) => {
         previewCalls.push(["selectPointer", tile]);
@@ -1177,7 +1225,7 @@ emitWindow("mousedown", {
 });
 previewPointer = { tileX: 3202, tileY: 3203, plane: 0 };
 emitWindow("mousemove", { target: fakeCanvas, clientX: 20, clientY: 20 });
-emitWindow("mouseup", { button: 0 });
+emitWindow("mouseup", { button: 0, target: fakeCanvas });
 assert.equal(previewCalls.at(-1)?.[0], "selectTileRange");
 assert.equal(previewPlugin.getState().selection?.tileEndX, 3202);
 assert.equal(previewPlugin.getState().selection?.tileEndY, 3203);
@@ -1190,7 +1238,7 @@ emitWindow("mousedown", {
     preventDefault: () => {},
 });
 emitWindow("mousemove", { target: fakeCanvas, clientX: 24, clientY: 17 });
-emitWindow("mouseup", { button: 2 });
+emitWindow("mouseup", { button: 2, target: fakeCanvas });
 assert.deepEqual(previewCalls.at(-1), ["rotateCamera", 4, -3]);
 sceneFrameCallback?.();
 assert.equal(previewCalls.at(-1)?.[0], "previewPointer");
@@ -1201,7 +1249,11 @@ emitWindow("mousedown", {
     clientX: 24,
     clientY: 17,
 });
-emitWindow("mouseup", { button: 0 });
+emitWindow("mouseup", { button: 0, target: {} });
+sceneFrameCallback?.();
+assert.equal(previewCalls.at(-1)?.[0], "previewPointer", "releasing over editor UI never selects a stale scene pick");
+emitWindow("mousedown", { button: 0, target: fakeCanvas, clientX: 24, clientY: 17 });
+emitWindow("mouseup", { button: 0, target: fakeCanvas });
 assert.notEqual(previewCalls.at(-1)?.[0], "selectPointer");
 sceneFrameCallback?.();
 assert.equal(previewCalls.at(-1)?.[0], "selectPointer");
@@ -1213,13 +1265,23 @@ emitWindow("mousedown", {
     clientX: 24,
     clientY: 17,
 });
-emitWindow("mouseup", { button: 0 });
+emitWindow("mouseup", { button: 0, target: fakeCanvas });
 emitWindow("keyup", { key: "Shift", target: null });
 assert.equal(previewCalls.at(-1)?.[0], "previewPointer");
 sceneFrameCallback?.();
 assert.equal(previewCalls.at(-1)?.[0], "selectBuilding");
 assert.equal(previewPlugin.getState().selection?.kind, "building");
 assert.equal(previewPlugin.getState().selection?.buildingTileCount, 40);
+previewPlugin.setSelectionMode("building");
+hasGroundUnderPointer = false;
+emitWindow("mousemove", { target: fakeCanvas, clientX: 24, clientY: 17, shiftKey: false });
+assert.deepEqual(previewCalls.at(-1), ["previewBuilding", undefined], "a model can be picked without a terrain tile");
+emitWindow("mousedown", { button: 0, target: fakeCanvas, clientX: 24, clientY: 17, shiftKey: false });
+emitWindow("mousemove", { target: fakeCanvas, clientX: 29, clientY: 17, shiftKey: false });
+emitWindow("mouseup", { button: 0, target: fakeCanvas, shiftKey: false });
+sceneFrameCallback?.();
+assert.deepEqual(previewCalls.at(-1), ["selectBuilding", undefined], "pointer movement does not turn building selection into an area");
+assert.equal(previewPlugin.getState().selection?.kind, "building");
 emitWindow("mousemove", { target: {}, clientX: 25, clientY: 18 });
 assert.equal(previewCalls.at(-1)?.[0], "clearPointerPreview");
 delete (globalThis as any).window;

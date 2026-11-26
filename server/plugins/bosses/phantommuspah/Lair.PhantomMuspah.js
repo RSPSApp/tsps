@@ -12,6 +12,18 @@ const Corruption = require("./Corruption.PhantomMuspah");
 const Scoreboard = require("./Scoreboard.PhantomMuspah");
 
 const SECRETS_OF_THE_NORTH = "secrets_of_the_north";
+const RAYMOND = "Sergeant Raymond";
+const RAYMOND_SPAWN = 11970; // sotn_khazard_muspah_soldier
+const RAYMOND_VISIBLE = 12071; // sotn_khazard_muspah_soldier_vis
+const WARNING_DIALOGUE = "standard-dialogue";
+const LATER_DIALOGUE = "standard-dialogue-subsequent-dialogue";
+const WARNING_LAST_LINE = "I'll keep that in mind. Thanks for the information.";
+const INTRO_VARBIT = 14748; // muspah_intro
+const SKIP_PROMPT_VARBIT = 14751; // muspah_warning
+const INTRO_ATTRIBUTE = "phantom-muspah:raymond-introduced";
+const SKIP_PROMPT_ATTRIBUTE = "phantom-muspah:skip-entry-prompt";
+// RSProx 227/00091 ticks 8082–8095 and 234/03282 ticks 5358–5371, in dialogue order.
+const WARNING_EXPRESSIONS = [589, 575, 589, 554, 590, 575, 591, 589, 554, 589, 588];
 
 /** Per player: their lair while they are in it. */
 const sessions = new Map();
@@ -30,6 +42,12 @@ function areaClass() {
 
     getName() {
       return "Phantom Muspah's lair";
+    }
+
+    /** Secrets of the North, and More Than Meets the Eye while the Muspah is fought. */
+    getMusicTrack() {
+      const { arrival, fight } = Common.data.lair.music;
+      return this.session?.fight ? fight : arrival;
     }
 
     /** Leaving ends the lair. Logging out puts the player by the crevice before they're saved. */
@@ -125,6 +143,58 @@ function questComplete(player) {
   return request.complete === true;
 }
 
+function spawnRaymond() {
+  // The cache shows his Talk-to form when the player's quest varbit sotn is 90.
+  Common.api.spawnNpc({
+    id: RAYMOND_SPAWN, x: 2910, y: 10315, z: 0, wanderRadius: 0,
+    face: Common.core.Direction.NORTH.getId(), unique: "phantom-muspah:raymond",
+  });
+}
+
+function warningExpressions(steps) {
+  return steps.map((step, index) => ({ ...step, expression: WARNING_EXPRESSIONS[index] }));
+}
+
+function raymondDialogue(player, variant, npc) {
+  const request = { player, npc, npcId: RAYMOND_VISIBLE, variant, exact: true, handled: false };
+  if (variant === WARNING_DIALOGUE) request.select = warningExpressions;
+  Common.api.emitCustomEvent("npc-dialogue:start", request);
+  return request.handled;
+}
+
+function talkToRaymond({ player, npc }) {
+  if (!questComplete(player)) return false;
+  return raymondDialogue(player, player.getAttribute(INTRO_ATTRIBUTE) ? LATER_DIALOGUE : WARNING_DIALOGUE, npc);
+}
+
+function onRaymondLine(event) {
+  if (event.npcId !== RAYMOND_VISIBLE || event.playing?.page !== RAYMOND) return;
+  if (typeof event.step?.npc === "string") {
+    event.speakerId = RAYMOND_SPAWN;
+    event.speakerName = RAYMOND;
+  }
+  if (event.playing.variant === WARNING_DIALOGUE && event.text === WARNING_LAST_LINE) {
+    // The flag is sent immediately before the last player line, not when the line is closed.
+    const { player } = event;
+    event.before = () => {
+      if (player.getAttribute(INTRO_ATTRIBUTE)) return;
+      player.setAttribute(INTRO_ATTRIBUTE, true);
+      player.getPacketSender().sendVarbit(INTRO_VARBIT, 1);
+    };
+  }
+}
+
+function confirmEntry(player) {
+  return Common.api.sendMultiChatboxPrompt(player, "Are you sure you wish to enter?",
+    "Yes.", () => enter(player),
+    "Yes, and don't ask again.", () => {
+      player.setAttribute(SKIP_PROMPT_ATTRIBUTE, true);
+      player.getPacketSender().sendVarbit(SKIP_PROMPT_VARBIT, 1);
+      enter(player);
+    },
+    "No.", () => {});
+}
+
 /** Builds the player's lair and moves them in behind the captured fade. */
 function enter(player) {
   if (sessionOf(player)) return;
@@ -139,7 +209,6 @@ function enter(player) {
     player.moveTo(session.tile(lair.arrival));
     player.setPositionToFace(session.tile(lair.arrival).clone().add(-1, 0));
     player.setAttribute(Common.INSIDE_ATTRIBUTE, true);
-    Common.playMusic(player, lair.music.arrival);
     session.spawnMuspah(lair.spawnTicks);
   });
 }
@@ -154,8 +223,13 @@ function leave(player) {
 function enterCrevice({ player, objectId }) {
   if (objectId !== Common.data.locs.entry) return false;
   if (!questComplete(player)) return false;
-  enter(player);
-  return true;
+  if (sessionOf(player)) return true;
+  if (player.getAttribute(SKIP_PROMPT_ATTRIBUTE)) {
+    enter(player);
+    return true;
+  }
+  if (!player.getAttribute(INTRO_ATTRIBUTE)) return raymondDialogue(player, WARNING_DIALOGUE);
+  return confirmEntry(player);
 }
 
 /** The escape crevice (46599): out through the same fade. */
@@ -173,7 +247,10 @@ function quickEscape({ player }) {
 }
 
 /** A player saved inside (the server stopped, or they logged out there) comes back by the crevice. */
-function recoverOnLogin({ player }) {
+function onLogin({ player }) {
+  const sender = player.getPacketSender();
+  if (player.getAttribute(INTRO_ATTRIBUTE)) sender.sendVarbit(INTRO_VARBIT, 1);
+  if (player.getAttribute(SKIP_PROMPT_ATTRIBUTE)) sender.sendVarbit(SKIP_PROMPT_VARBIT, 1);
   if (!player.getAttribute(Common.INSIDE_ATTRIBUTE) || sessionOf(player)) return;
   player.setAttribute(Common.INSIDE_ATTRIBUTE, false);
   player.moveTo(exitLocation());
@@ -219,8 +296,13 @@ function graveOutside(request) {
 
 function attachLair(api) {
   api.persistAttribute(Common.INSIDE_ATTRIBUTE, false);
-  api.onPlayerLogin(recoverOnLogin);
+  api.persistAttribute(INTRO_ATTRIBUTE, false);
+  api.persistAttribute(SKIP_PROMPT_ATTRIBUTE, false);
+  api.onServerStartup(spawnRaymond);
+  api.onPlayerLogin(onLogin);
   api.onObjectInteraction("Crevice", { Enter: enterCrevice, Escape: escape, "Quick-escape": quickEscape });
+  api.onNpcInteraction(RAYMOND, { "Talk-to": talkToRaymond });
+  api.onCustomEvent("npc-dialogue:line", onRaymondLine);
   api.onCustomEvent("gravestones:grave-location", graveOutside);
   api.onPlayerDefeated(diedInLair);
   api.onPlayerDeath(endOnDeath);

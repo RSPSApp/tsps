@@ -9,11 +9,17 @@ const Roof = require("./grotesqueguardians/Roof.GrotesqueGuardians");
 const Combat = require("./grotesqueguardians/Combat.GrotesqueGuardians");
 const Kills = require("./grotesqueguardians/Kills.GrotesqueGuardians");
 
+
+function describeEncounters({ npcIds }) {
+  for (const id of Object.values(Common.ids.npcs).flat()) npcIds.add(id);
+}
+
 module.exports = {
   name: "GrotesqueGuardians",
   description: "Dusk and Dawn on the Slayer Tower roof: the key, bell and exit, the four-phase fight and the kill.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Common.init(api);
     Roof.attach(api);
     Combat.attach(api);

@@ -233,6 +233,21 @@ function talkToContractor(event) {
   return true;
 }
 
+/** "mahogany-homes:joined" { player, joined }: whether Amy has taken the player on (Daddy's Home words Marlo by it). */
+function joinedRequest(request) {
+  if (request?.player) request.joined = request.player.getAttribute(DISCUSSED_ATTRIBUTE) === true;
+}
+
+/**
+ * "mahogany-homes:contract" { player, npcId, handled }: a contractor's "What's my current construction contract?" from
+ * another conversation (Daddy's Home's Marlo menus), answered as the contractor's own Contract option is.
+ */
+function contractRequest(request) {
+  if (!request?.player || request.handled) return;
+  request.handled = true;
+  contractOption({ player: request.player, npcId: request.npcId, npc: { getId: () => request.npcId } });
+}
+
 function contractOption(event) {
   if (!event.player.getAttribute(DISCUSSED_ATTRIBUTE)) return talkToContractor(event);
   chooseTier(event.player, event.npcId);
@@ -533,6 +548,8 @@ function attachMahoganyHomes(api) {
   api.onInterfaceActionClick(shopClick);
   api.onItemAction("Supply crate", { Open: openCrate });
   api.onPlayerLogin(({ player }) => sendHotspots(player));
+  api.onCustomEvent("mahogany-homes:joined", joinedRequest);
+  api.onCustomEvent("mahogany-homes:contract", contractRequest);
   for (const home of HOMES) api.onZoneEnter(home.area, enterHome);
   for (const home of HOMES) api.onZoneExit(home.area, leaveHome);
 }

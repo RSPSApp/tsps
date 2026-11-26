@@ -36,7 +36,7 @@ function player() {
   p.setRegistered(true);
   p.setLocation(new Location(3000, 3000, 0));
   p.inventory = new Inventory(p);
-  p.getPacketSender = () => ({ sendSound: () => {}, sendSoundEffect: () => {}, sendClientScript: () => {}, sendTypedMessage: () => {}, sendItemContainer: () => {}, sendMessage: () => {} });
+  p.getPacketSender = () => ({ sendSound: () => {}, sendSoundEffect: () => {}, sendClientScript: () => {}, sendTypedMessage: () => {}, sendItemContainer: () => {}, sendRunEnergy: () => {}, sendMessage: () => {} });
   p.getSkillManager = () => ({ getCurrentLevel: () => 99, addExperiences: () => {} });
   p.getMovementQueue = () => ({ size: () => 0 });
   p.getDialogueManager = () => ({ startDialogues: () => {} });

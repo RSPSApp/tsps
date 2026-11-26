@@ -414,6 +414,51 @@ test('a shop split into versions opens the version a plugin picks, else its Defa
   assert.deepEqual(opened, [1249, 1250]);
 });
 
+test('a pub dialogue whose step names the shops dump key still opens its shop (#6654)', () => {
+  // "Auburn Pub shop opens." and "Atlazora's Rest shop opens." were open_interface steps that did nothing;
+  // the dumper now retags them open_shop. The Auburn step's target is the dump key "Auburn Pub", while
+  // shops.json shows the recorded title "The Auburn Pub".
+  const shops = JSON.parse(fs.readFileSync(path.join(__dirname, '../data/definitions/shops.json'), 'utf8'));
+  const find = (nodes) => {
+    for (const node of nodes ?? []) {
+      if (node.action === 'open_shop') return node;
+      const nested = find(node.steps) ?? find((node.options ?? []).flatMap((option) => option.steps ?? []));
+      if (nested) return nested;
+    }
+    return undefined;
+  };
+  const { ShopDefinition } = require('../dist/game/definition/ShopDefinition');
+  const { ShopManager } = require('../dist/game/model/container/shop/ShopManager');
+  const all = ShopDefinition.all;
+  const open = ShopManager.open;
+  const opened = [];
+  ShopDefinition.all = () => shops.map((shop) => ({ getName: () => shop.name, getId: () => shop.id, getSource: () => 'core' }));
+  ShopManager.open = (player, id) => { opened.push(id); return true; };
+  try {
+    const player = {
+      getDialogueManager: () => ({ reset() {}, startDialogues(chain) { for (const entry of chain.getDialogues().values()) try { entry.send(player); } catch { /* unwired */ } } }),
+      getPacketSender: () => ({ sendInterfaceRemoval() {} }),
+      sendMessage() {},
+    };
+    const expected = [
+      ['Bartender (Auburn Pub)', 'Auburn Pub', "The Auburn Pub"],
+      ["Bartender (Atlazora's Rest)", "Atlazora's Rest", "Atlazora's Rest"],
+      ['Spike', "Spike's Spikes", "Spike's Spikes"],
+    ];
+    for (const [page, target, shopName] of expected) {
+      const step = find(talk(page));
+      assert.equal(step?.target, target, page);
+      const definition = { getName: () => 'Bartender', getId: () => 14660 };
+      const event = { player, npc: { getId: () => 14660 }, npcId: 14660, definition };
+      startDialogue({ emitCustomEvent() {} }, event, [step], {}, { player, npc: event.npc, npcId: 14660, definition, pages: [] });
+      assert.deepEqual(opened.splice(0), [shops.find((shop) => shop.name === shopName).id], page);
+    }
+  } finally {
+    ShopDefinition.all = all;
+    ShopManager.open = open;
+  }
+});
+
 test('"previous" on the first menu replays it instead of ending the dialogue', () => {
   // Ulsquire's "What did you find out about the remains?" ends in {{tact|previous}}:
   // the player must land back on the question menu, not have the chat closed.
@@ -922,6 +967,37 @@ test('Short speaker labels take the head of the participant the export resolved 
   assert.deepEqual(heads('Behave Hrafn!'), [KING]);
   // The Jatizso guard, not whichever NPC the cache lists first under that name.
   assert.deepEqual(heads('This is'), [JATIZSO_GUARD]);
+});
+
+test('The Border Guard\'s "Guard" lines show the clicked guard\'s head (#6762)', () => {
+  const { PluginManager } = require('../dist/plugins/PluginManager');
+  const { startTranscript } = require('../plugins/quests/QuestRuntime');
+  const { NpcDefinition } = require('../dist/game/definition/NpcDefinition');
+  const BORDER_GUARD = 4287, BORDER_GUARD_2 = 4288;
+  // The cache names the guards "Border Guard"; "Guard" is ~170 other NPCs.
+  const names = new Map([[BORDER_GUARD, 'Border Guard'], [BORDER_GUARD_2, 'Border Guard'], [397, 'Guard']]);
+  const forId = id => ({ getId: () => id, getName: () => names.get(id) || 'null' });
+  const original = NpcDefinition.forId;
+  NpcDefinition.forId = forId;
+  try {
+    const api = { core: { ...PluginManager.getCoreApi(), NpcDefinition: { forId } }, emitCustomEvent() {} };
+    for (const clicked of [BORDER_GUARD, BORDER_GUARD_2]) {
+      let chain;
+      const sent = [], sender = new Proxy({}, { get: (_target, key) => (...args) => { sent.push([key, ...args]); return sender; } });
+      const player = { getUsername: () => 'Test', getDisplayName: () => 'Test', getPacketSender: () => sender,
+        getDialogueManager: () => ({ reset() {}, startDialogues: value => { chain = value; } }) };
+      assert.equal(startTranscript(api, player, clicked, 'Border Guard', 'before-completing-prince-ali-rescue-quest'), true);
+      const toll = [...chain.getDialogues().values()].find(e => e.getNpcId && e.getText().includes('pay a toll'));
+      assert.ok(toll, 'the toll line plays');
+      toll.send(player);
+      // rsprox 1001336 t3099: if_setnpchead chat_left:head borderguard1. The name stays the Wiki's
+      // "Guard" (live: "Border Guard", a recorded difference in docs/al-kharid-toll-gate.md).
+      assert.ok(sent.some(row => row[0] === 'sendNpcHeadOnInterface' && row[1] === clicked && row[2] === (231 << 16 | 2)));
+      assert.ok(sent.some(row => row[0] === 'sendString' && row[1] === 'Guard' && row[2] === (231 << 16 | 4)));
+    }
+  } finally {
+    NpcDefinition.forId = original;
+  }
 });
 
 test('A listed speaker the quest or cache names keeps that id; only an unnamed one takes the first', () => {

@@ -339,7 +339,10 @@ export class LocUpdates {
             terrainData: Int8Array.from(payload.terrainData),
             objectData: payload.objectData?.length ? Int8Array.from(payload.objectData) : undefined,
         });
-        if (payload.allowReload) this.scheduleReload(regionId >> 8, regionId & 0xff);
+        const mapX = regionId >> 8;
+        const mapY = regionId & 0xff;
+        this.r.mapManager.invalidMapIds.delete(getMapSquareId(mapX, mapY));
+        if (payload.allowReload) this.scheduleReload(mapX, mapY);
     }
 
     /**

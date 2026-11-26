@@ -8,8 +8,7 @@ const { createInteractObjectAction } = require("./actions/InteractObject.PlayerB
 const { createDropItemsAction } = require("./actions/DropItems.PlayerBots");
 const { createChooseAction } = require("./actions/Choose.PlayerBots");
 const { createIfAction } = require("./actions/If.PlayerBots");
-const { createGraphAction } = require("./Graph.PlayerBots");
-const { createAiAgentAction } = require("./actions/AiAgent.PlayerBots");
+const { collectCodeDefinitions } = require("../runtime/CodeDefinitions.PlayerBots");
 const { createSellItemsAction } = require("./actions/SellItems.PlayerBots");
 const { createEquipToolAction } = require("./actions/EquipTool.PlayerBots");
 const { createBankAction } = require("./actions/Bank.PlayerBots");
@@ -264,9 +263,7 @@ function compileActivity(definition, templates, world, options = {}) {
     mode: merged.mode ?? null,
     capacity: Number.isFinite(merged.capacity) ? Math.max(1, Math.floor(merged.capacity)) : 1,
     repeat: merged.repeat === true,
-    spawnSetup: merged.graph?.nodes?.find(node => node.kind === "start")?.setup ?? null,
-    usesAiAgent: merged.graph?.nodes?.some(node => node.kind === "agent") === true,
-    oneShot: !!merged.graph && merged.repeat !== true,
+    usesPvpEngine: (merged.actions ?? []).some(action => action.type === "pvpCombat"),
     ephemeral: merged.ephemeral === true,
     manual: merged.manual === true,
     failureCooldownMs: Math.max(
@@ -275,7 +272,7 @@ function compileActivity(definition, templates, world, options = {}) {
     ),
     requires: (merged.requires ?? []).map(createCondition),
     setup: (merged.setup ?? []).map(createCondition),
-    actions: merged.graph ? [createGraphAction(merged.graph, action => createAction(action, world), createCondition, node => createAiAgentAction(node, world))] : (merged.actions ?? []).map((action) => createAction(action, world)),
+    actions: (merged.actions ?? []).map(action => createAction(action, world)),
     produces: merged.produces ?? [],
     site: merged.site ?? null,
   };
@@ -324,8 +321,7 @@ function createBotActivityRegistry(options = {}) {
   const resolvers = [];
   const byId = new Map();
   const fieldsById = new Map();
-  const { readActivities } = require("./Editor.PlayerBots");
-  for (const definition of [...(raw.activities ?? []), ...readActivities(options.editorPath)]) {
+  for (const definition of raw.activities ?? []) {
     if (!definition?.id || byId.has(definition.id)) {
       throw new Error("[bot activities] activity ids must be unique");
     }
@@ -357,6 +353,19 @@ function createBotActivityRegistry(options = {}) {
     resolvers.push(resolver);
     byId.set(resolver.id, resolver);
   }
+  const deploymentPlans = [];
+  let codeInstalled = false;
+  function installCodeDefinitions() {
+    if (codeInstalled) return;
+    codeInstalled = true;
+    const { routines, plans } = collectCodeDefinitions(api, world, byId, spec => createAction(spec, world), createCondition);
+    for (const routine of routines) {
+      activities.push(routine);
+      byId.set(routine.id, routine);
+    }
+    deploymentPlans.push(...plans);
+  }
+  if (!options.deferCodeDefinitions) installCodeDefinitions();
   // A tier picks one activity per mode: the highest-level activity its
   // weakest bot can do (a 60 woodcutter chops yews, not normal trees).
   const siteCandidates = activities.filter(
@@ -467,6 +476,8 @@ function createBotActivityRegistry(options = {}) {
     activities,
     resolvers,
     byId,
+    deploymentPlans,
+    installCodeDefinitions,
     sites,
     hasRoom(activityId) {
       const activity = byId.get(activityId);

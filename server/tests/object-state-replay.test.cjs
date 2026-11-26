@@ -15,13 +15,18 @@ const { RegionManager } = require("../dist/game/collision/RegionManager");
 const { MapObjects } = require("../dist/game/entity/impl/object/MapObjects");
 const { ObjectManager } = require("../dist/game/entity/impl/object/ObjectManager");
 const { GameObject } = require("../dist/game/entity/impl/object/GameObject");
+const { Player } = require("../dist/game/entity/impl/player/Player");
 const { Location } = require("../dist/game/model/Location");
 const { World } = require("../dist/game/World");
+const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
 const { Task } = require("../dist/game/task/Task");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { PluginContext } = require("../dist/plugins/PluginContext");
+const { ClientConnection } = require("../dist/net/NetworkBuilder");
+const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ObjectActionPacketListener } = require("../dist/net/packet/impl/ObjectActionPacketListener");
+const { encodeLocAddChange, encodeLocDel, encodeSound } = require("../dist/net/protocol/ClientProtocol");
 
 // Lumbridge's staircase (56230) is a solid map object; 3200,3226 is open ground nearby.
 const STAIRS = 56230;
@@ -210,7 +215,6 @@ test("two registrations of one shared object on a tile leave one", () => {
 
 
 test("generic chest Open, Search and Shut use shared object state", () => {
-  const { CacheDefinitions } = require("../dist/game/cache/CacheDefinitions");
   const closedId = CacheDefinitions.getLocId("chestclosed");
   const openId = CacheDefinitions.getLocId("chestopen");
   const at = new Location(3200, 3226, 0);
@@ -239,10 +243,115 @@ test("generic chest Open, Search and Shut use shared object state", () => {
   }
 });
 
+test("mapped doors send private synths to the actor on the loc swap tick", async (t) => {
+  require("../plugins/objects/Doors.plugin").register(PluginManager.createApi("Doors"));
+  const cases = [
+    // rsprox 3050 ticks 381 and 383, rsprox 3053 ticks 481 and 483.
+    { closed: "darkm_middle_door_closed", open: "darkm_middle_door_open", x: 3605, y: 3358, dy: 1, sounds: [36, 35] },
+    { closed: "darkm_poor_door_closed", open: "darkm_poor_door_open", x: 3599, y: 3323, dy: -1, sounds: [36, 35] },
+    { closed: "hundred_lumbridge_door", open: 1544, x: 3207, y: 3217, dy: 1, sounds: [62, 60] },
+  ];
+  const soundOpcode = encodeSound(0)[0];
+  for (const { closed, open, x, y, dy, sounds } of cases) {
+    await t.test(closed, async (t) => {
+      RegionManager.loadMapFiles(x, y);
+      const closedId = CacheDefinitions.getLocId(closed);
+      const openId = typeof open === "string" ? CacheDefinitions.getLocId(open) : open;
+      function connect(name, tileY) {
+        const channel = {
+          kind: "test", binaryTransport: true, remoteAddress: "127.0.0.1",
+          isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {},
+        };
+        const session = new PlayerSession(channel);
+        const player = new Player(session);
+        const connection = new ClientConnection(channel);
+        connection.player = player;
+        session.setPlayer(player);
+        session.setTurnPacketProcessor(() => connection.processTurnPackets());
+        player.setUsername(name);
+        player.setAttribute("bot-skip-persistence", true);
+        assert.ok(World.getPlayers().add(player));
+        player.moveTo(new Location(x, tileY, 0));
+        t.after(() => {
+          TaskManager.cancelTasks(player.getIndex());
+          World.getPlayers().remove(player);
+        });
+        const frames = [];
+        const sendClientPacket = session.sendClientPacket.bind(session);
+        t.mock.method(session, "sendClientPacket", (frame) => {
+          frames.push({ tick: World.getProcessCycle(), frame });
+          return sendClientPacket(frame);
+        });
+        return { player, connection, frames };
+      }
+
+      const actor = connect("doorsound", y);
+      const observer = connect("doorwatch", y - dy);
+      const advance = () => {
+        for (let tick = 0; tick < 5; tick++) World.process();
+      };
+      advance();
+      assert.equal(actor.player.isNeedsPlacement(), false);
+      assert.equal(observer.player.isNeedsPlacement(), false);
+
+      const click = async (id, tileY) => {
+        actor.frames.length = 0;
+        observer.frames.length = 0;
+        await actor.connection.dispatch([{ type: "object_option", id, x, y: tileY, clickType: 1 }]);
+        advance();
+      };
+      const locFrames = (frames, expected) => frames.filter(({ frame }) =>
+        expected.some((locPacket) => frame.equals(locPacket)));
+      const soundFrames = (frames) => frames.filter(({ frame }) => frame[0] === soundOpcode);
+      const checkSwap = (removal, addition, sound) => {
+        const locPackets = [removal, addition];
+        const actorLocs = locFrames(actor.frames, locPackets);
+        assert.deepEqual(actorLocs.map(({ frame }) => frame), locPackets);
+        const tick = actorLocs[0].tick;
+        assert.equal(actorLocs[1].tick, tick);
+        assert.deepEqual(locFrames(observer.frames, locPackets), actorLocs);
+        assert.deepEqual(soundFrames(actor.frames), [{ tick, frame: encodeSound(sound) }]);
+        assert.deepEqual(soundFrames(observer.frames), []);
+      };
+      const checkStaleClick = async (id, tileY, locPackets) => {
+        await click(id, tileY);
+        for (const { frames } of [actor, observer]) {
+          assert.deepEqual(locFrames(frames, locPackets), []);
+          assert.deepEqual(soundFrames(frames), []);
+        }
+      };
+      const at = (id, tileY) => MapObjects.get(id, new Location(x, tileY, 0), null);
+      const original = at(closedId, y);
+      assert.ok(original?.isMapOriginal(), "use the cache's map door");
+      const face = original.getFace();
+      const shape = original.getType();
+      const openY = y + dy;
+      const openFace = (face + 1) & 3;
+      const removeClosed = encodeLocDel(x, y, 0, shape, face);
+      const addOpen = encodeLocAddChange(openId, x, openY, 0, shape, openFace);
+      const removeOpen = encodeLocDel(x, openY, 0, shape, openFace);
+      const addClosed = encodeLocAddChange(closedId, x, y, 0, shape, face);
+      const locPackets = [removeClosed, addOpen, removeOpen, addClosed];
+
+      await click(closedId, y);
+      assert.equal(at(openId, openY)?.getFace(), openFace);
+      assert.equal(at(closedId, y), null);
+      checkSwap(removeClosed, addOpen, sounds[0]);
+      await checkStaleClick(closedId, y, locPackets);
+
+      await actor.connection.dispatch([{ type: "move", worldX: x, worldY: openY, modifierFlags: 0 }]);
+      advance();
+      assert.ok(actor.player.getLocation().equals(new Location(x, openY, 0)));
+      await click(openId, openY);
+      assert.equal(at(closedId, y)?.getFace(), face);
+      assert.equal(at(openId, openY), null);
+      checkSwap(removeOpen, addClosed, sounds[1]);
+      await checkStaleClick(openId, openY, locPackets);
+    });
+  }
+});
+
 test("logging in beside the open Varrock manhole replaces its closed cache placement", () => {
-  const { Player } = require("../dist/game/entity/impl/player/Player");
-  const { PlayerSession } = require("../dist/net/PlayerSession");
-  const { encodeLocAddChange, encodeLocDel } = require("../dist/net/protocol/ClientProtocol");
   const [x, y, z] = [3237, 3458, 0];
   const tile = new Location(x, y, z);
   const closedId = 881;

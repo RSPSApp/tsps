@@ -13,7 +13,7 @@ It covers the lobby, the entry, the five floors with their obstacles and traps, 
 | `hallowedsepulchre/Run.HallowedSepulchre.js` | The run: one `TemplatedInstanceArea` per floor and its layout, the timer, crediting a floor, leaving, logout and login recovery, and the floor 5 barriers. |
 | `hallowedsepulchre/Lobby.HallowedSepulchre.js` | The Mausoleum Door in and the lobby's stairs out, the lobby stairs, the warning box and "don't ask again", the Mysterious Stranger's tutorial and shards, the crystal shard, the Hallowed token, and the obelisks and return stairs. |
 | `hallowedsepulchre/Obstacles.HallowedSepulchre.js` | Drops, middle stairs, platforms, the F4 gate, the F5 stepping stones, the F2 stones and the floor stairs. Also the route hook that walks to each obstacle's start tile. |
-| `hallowedsepulchre/Skills.HallowedSepulchre.js` | The grapple pillars, the bridge, the portal and the brazier. |
+| `hallowedsepulchre/Skills.HallowedSepulchre.js` | The grapple pillars, the bridge, the portal, the brazier and its Holy barrier. |
 | `hallowedsepulchre/Coffins.HallowedSepulchre.js` | The coffins and the Grand Hallowed Coffin, with the Wiki loot. |
 | `hallowedsepulchre/Tools.HallowedSepulchre.js` | The Mysterious Stranger's tool storage (Exchange). |
 | `hallowedsepulchre/Traps.HallowedSepulchre.js` | The traps: fire, crossbow, sword and lightning statues, the strange tiles, hits and respawns. |
@@ -58,12 +58,20 @@ The shop ("Mysterious Hallowed Goods", 1455) is generated data, and `Shopkeepers
 - **Drops and middle stairs.** All seven recorded drops land by their face: f0 at +1,-3; f1 at -3,+1; f2 at +1,+3; f3 at +3,+1. The unrecorded floor 4 north drop uses the same rule. The three recorded middle stairs are as recorded. Floor 1's east stairs mirror the west ones about x 2272. Floor 2's north and south stairs can't be derived, and no recorded layout uses them.
 - **Platforms.** Two hops of two tiles, 2 ticks apart, each with `human_jump_stones` and 12/27 cycles. Coming from the far side: "You don't see any reason to go back that way.".
 - **Pillars.** Pairs two tiles apart. The swing crosses them from five tiles out on one side to five on the other, starting from the end the player can walk to (a breadth-first search over the instance's collision). This reproduces the recorded F3 swing, 2413 → 2408 → 2403.
-- **Bridge.** Repair it (Construction 56, 2 planks, 5 nails, a saw and a hammer), then cross from a tile past one end to a tile past the other. Recorded: 5981 → 5975.
+- **Bridge.** Repair it (Construction 56, 2 planks, 5 nails, a saw and a hammer), then cross from a tile past one end to a tile past the other. Recorded: 5981 → 5975. Floor 5's bridge over the pool is its own loc, `hallowed_construction_pool_multi` (39528), on the same `hallowed_construction_state` (rsprox captures, local 1000598: refused with "The magic of the Hallowed Sepulchre prevents you from building this bridge." once the floor was sealed). Its crossing isn't recorded; ours: the same end-to-end rule, 5864 → 5858 at x 2244.
 - **Portal.** Power it with the best Enchant spell the player can cast, then pass through the middle tile of the five-wide frame. Recorded: x 2386, 5839 → 5843.
-- **Brazier.** Recorded only refusing ("You need to bring a suitable offering…"). Lighting it uses the Wiki's 2 vampyre dust (1 with the Hallowed symbol) and gives 200 Prayer XP.
+- **Brazier.** The Saradomin Brazier on floors 2-4 has two halves, `hallowed_prayer_multi` (39525) and `hallowed_prayer_multi_mirror` (39526). Both are multilocs on `hallowed_prayer_state`, with Sacrifice at 1, and a click on either half does the same thing. Lighting it takes the Wiki's 2 vampyre dust (1 with the Hallowed symbol worn; carried in the pack it saves nothing) and gives 200 Prayer XP. Recorded (rsprox captures, local 1000598): `hallowed_prayer_ashes_offered` 1, the state 2, "You see the flame change as your offerings are accepted." as spam, `human_bone_sacrifice` and sound 958. Without the dust it shows the "You need to bring a suitable offering…" box.
+- **Holy barrier.** `hallowed_treasure_prayer_barrier_multi` (39534) is the tile between the brazier's halves, with Pass-through once the state is 2. Recorded (local 1000598: 2519 → 2521 and 2529 → 2527 at y 5960 on floor 2, 2413 → 2415 at y 5828 on floor 3):
+  - the player arrives on the tile beside the barrier, faces it the next tick, and the tick after that walks to the far side, two tiles in one tick;
+  - on that tick `hallowed_prayer_xp_earned` goes up and the busy varbit is set, and busy clears two ticks later;
+  - there is no message.
+  Agility XP is the Wiki's 50 on floor 2 and 75 on floors 3 and 4, for the first crossing and the return only (recorded 800/16 and 1,200/16).
+  The recording is without the Hallowed symbol: 5 ticks from arrival. The [Wiki](https://oldschool.runescape.wiki/w/Hallowed_symbol) gives 4 with the symbol worn; ours: the busy hold is the tick it saves (busy clears one tick after the walk), as no recording has the symbol worn.
+- **Floor varbits.** Each floor start clears the four `*_xp_earned` varbits and `hallowed_prayer_ashes_offered` along with the state varbits, as recorded.
 - **Coffins.**
   - +2 the picklock; +5 "You successfully disarm the trap on the coffin!" and 200 Thieving XP; +6 "You push the coffin lid aside."; +8 the loot, with one "received a drop" line per item.
   - The loot is the Wiki's: marks by floor, a low/mid/high tier, and the strange old lockpick.
+  - Each coffin is a multiloc on its own looted varbit. Floor 5 has two more, past its grapple pillars and past its portal: `hallowed_f5_grapple_coffin` (39536, `hallowed_floor5_grapple_looted`) and `hallowed_f5_portal_coffin` (39537, `hallowed_floor5_portal_looted`). Recorded (rsprox captures, local 1000598 ticks 24086-24095 and 24296-24304): they open with the same picklock, disarm, lid and loot ticks, the loot sets their varbit and `hallowed_normal_chest_count`, and both varbits go back to 0 when the run ends.
   - The [Jagex update](https://secure.runescape.com/m=news/summer-sweep-up---agility--chambers-of-xeric-changes?oldschool=1) gives the Grand Hallowed Coffin requirements as 84 Thieving or 92 Agility, boostable. Its loot is 8-10 marks, the high table, and Ring of endurance at 1/200.
 - **The floor 5 barriers.** `hallowed_final_chest_barrier` (39540) is a multiloc on the timer varbit. Both its variants are solid in the cache, so the floor lifts their collision until the timer runs out.
 
@@ -107,7 +115,7 @@ Exchange on the Mysterious Stranger opens Hallowed Sepulchre Equipment Storage. 
 - the Mausoleum Door in and the lobby stairs out, tick by tick, and the passage given up on a death, a teleport, a newer fade or a logout;
 - the entry and its menu; the layouts and the timer;
 - every obstacle kind;
-- the recorded pillar, bridge and portal crossings, and the drop face rule;
+- the recorded pillar, bridge, portal and Holy barrier crossings, the brazier from either half, and the drop face rule;
 - the pillar start found by walking;
 - the coffins and loot tables;
 - the obelisk, the shard, the token and logout;

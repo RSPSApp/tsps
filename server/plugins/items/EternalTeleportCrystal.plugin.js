@@ -71,6 +71,11 @@ function login({ player }) {
   if (player) sendToggle(player);
 }
 
+function describeTeleports({ list }) {
+  list.push({ path: ["Items", ITEM_NAME], key: "lletya", name: "Lletya", tile: [LLETYA.x, LLETYA.y, LLETYA.z] },
+    { path: ["Items", ITEM_NAME], key: "prifddinas", name: "Prifddinas (landing area centre)", tile: [PRIFDDINAS.x, PRIFDDINAS.y, PRIFDDINAS.z] });
+}
+
 module.exports = {
   name: "EternalTeleportCrystal",
   description: "Eternal teleport crystal: unlimited Lletya and Prifddinas teleports, with Toggle swapping the left-click destination.",
@@ -82,5 +87,6 @@ module.exports = {
     api.persistAttribute(TOGGLE_ATTRIBUTE, false);
     api.onItemAction(ITEM_NAME, { Lletya: teleport, Prifddinas: teleport, Toggle: toggle });
     api.onPlayerLogin(login);
+    pluginApi.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   },
 };

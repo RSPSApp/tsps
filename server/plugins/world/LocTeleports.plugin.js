@@ -24,13 +24,17 @@
  * options; the options that lead on move the player, and a ladder direction the captures never
  * saw goes to Ladders (ladders:climbUp / ladders:climbDown), which finds it on the map.
  *
+ * A loc with a warning screen (`warningScreen`: the cws_warning_<n> number, the Waterbirth cave's 1)
+ * shows it through WarningScreens ("warning-screen:show") and goes on when Yes is clicked, or at
+ * once with the warning turned off.
+ *
  * A loc with a warning (`warn`: Cavey Davey at the Mos Le'Harmless cave) plays the captured
  * conversation and its question until the player turns the warning off; its other option
  * (`toggle`: Toggle-warning) asks first, then flips the warning, which is kept across logins.
  *
  * Each plays its captured animation, sound and fade, and moves the player (or swaps the loc) on
  * the captured tick. An entry's `message` (with `messageType` "spam" for the filterable channel)
- * is the game message live OSRS sends on a successful crossing, on the move's tick, before it. Ticks in the data count from the player arriving at the loc; the click is
+ * (or a list of them, sent in order) is the game message live OSRS sends on a successful crossing, on the move's tick, before it. Ticks in the data count from the player arriving at the loc; the click is
  * handled on the tick after that, as Ladders' climbs are.
  *
  * Not members-only: free-to-play ladders are in the data too. On a free-to-play world,
@@ -38,6 +42,7 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { listWarps, warpForObject, warpMenuActions, warpArrival } = require("./MapWarps");
 
 const MINIMAP_STATE_VARBIT = 6719;
 const MINIMAP_OFF = 2;
@@ -51,6 +56,11 @@ const TIED_ATTRIBUTE = "loc-teleports:tied";
 const WARNINGS_OFF_ATTRIBUTE = "loc-teleports:warnings-off";
 /** Toggled trapdoor varbits a player has changed, by varbit name -> value; sent again at login. */
 const TOGGLED_ATTRIBUTE = "loc-teleports:toggled";
+/**
+ * A warning screen's Yes: the move on the click's own tick (rsprox 91, local 1000243/1000283), for a loc
+ * with no animation or fade. An entry with either gives its captured `warningAnswer` ticks instead.
+ */
+const WARNING_SCREEN_ANSWER = Object.freeze({ animTick: 0, tick: 0 });
 /** The handler runs one tick after the arrival the captured ticks count from. */
 const HANDLER_TICK = 1;
 
@@ -166,14 +176,21 @@ function schedule() {
 
 /** The game message of a successful crossing: a plain game message, or spam the chat filter hides. */
 function sayCrossed(player, { message, messageType }) {
-  if (messageType === "spam") player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, message);
-  else player.sendMessage(message);
+  for (const line of [].concat(message)) {
+    if (messageType === "spam") player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, line);
+    else player.sendMessage(line);
+  }
 }
 
 /** `soundDelay`: the sound's client delay as captured (synth_sound delay), 0 when not given. */
 function animateAndSound(player, { anim, sound, soundDelay = 0 }) {
   if (anim !== undefined) player.performAnimation(new core.Animation(anim));
   if (sound !== undefined) player.getPacketSender().sendSound(sound, 1, soundDelay);
+}
+
+/** No animation, sound, fade or message box before the move, so the move needn't wait a tick for them. */
+function playsNothingFirst({ anim, sound, fade, mesbox }) {
+  return anim === undefined && sound === undefined && !fade && !mesbox;
 }
 
 /**
@@ -185,7 +202,11 @@ function travel(player, entry, destination, answer = null) {
   const { steps, at } = schedule();
   // After a question, the captured ticks count from the answer, which is handled on its own tick.
   const animTick = answer ? answer.animTick : fromClick(entry.animTick ?? entry.tick);
-  const moveTick = answer ? Math.max(animTick + 1, answer.tick) : Math.max(animTick + 1, fromClick(entry.tick));
+  // An answer's move can share its tick (a warning screen's Yes: the move on the click, captures 91, 1000243).
+  // So does an entry that plays nothing before the move (no animation, sound, fade or message box): the
+  // move is on its captured tick (the Sorcerer's Tower Portal on the tick after arriving, local 1001616).
+  const sharesTick = answer ? true : playsNothingFirst(entry);
+  const moveTick = Math.max(sharesTick ? animTick : animTick + 1, answer ? answer.tick : fromClick(entry.tick));
   at(animTick, () => {
     animateAndSound(player, entry);
     if (entry.fade) fade(player, true);
@@ -430,6 +451,23 @@ function play(player, object, clickType) {
       refuse(player, gate.refuse);
       return true;
     }
+    if (entry.warningScreen !== undefined) {
+      // The cache's warning screen (WarningScreens: counted, toggled off after enough showings, the Doomsayer);
+      // Yes leads on as it is clicked. With that plugin off, the player goes straight on.
+      const start = player.getLocation().clone();
+      const proceed = (answered) => {
+        if (!player.getLocation().equals(start)) return;
+        travel(player, entry, destination, answered ? entry.warningAnswer ?? WARNING_SCREEN_ANSWER : null);
+      };
+      const screen = { player, warning: entry.warningScreen, handled: false };
+      // Turned off, the screen proceeds at once, inside the event: the entry's own timing then.
+      let showing = true;
+      screen.proceed = () => proceed(!showing);
+      pluginApi.emitCustomEvent("warning-screen:show", screen);
+      showing = false;
+      if (!screen.handled) travel(player, entry, destination);
+      return true;
+    }
     if (entry.warn && !warningOff(player, entry.warn.varbit)) {
       warn(player, object, entry, destination);
       return true;
@@ -471,6 +509,64 @@ function useLoc(event) {
   if (play(event.player, event.object, event.clickType)) event.handled = true;
 }
 
+function sendWarpMenuActions({ player }) {
+  if (!player.getSession?.() || !player.getPacketSender()?.sendContentData) return;
+  const rows = warpMenuActions();
+  // Content packets have a 65,535-byte frame. Publish the list in bounded batches.
+  for (let start = 0; start < Math.max(rows.length, 1); start += 250) {
+    player.getPacketSender().sendContentData("server", [{
+      key: start === 0 ? "mapWarpActions" : "mapWarpActionsAppend",
+      rows: rows.slice(start, start + 250),
+    }]);
+  }
+}
+
+function refreshWarpMenuActions() {
+  for (const player of core.World.getPlayers()) if (player) sendWarpMenuActions({ player });
+}
+
+function onLogin(event) {
+  restoreVarbits(event);
+  sendWarpMenuActions(event);
+}
+
+function resolveWarpMenuActions({ player, object, options }) {
+  if (player.getPrivateArea() || object.getPrivateArea?.()) return;
+  for (let op = 1; op <= 5; op++) {
+    const label = warpForObject(core, object, op)?.actionLabel;
+    if (label) options[op - 1] = label;
+  }
+}
+
+/** Placement-specific editor links run before generic doors, stairs and ladders. */
+function useMapWarp(event) {
+  const { player, object, clickType } = event;
+  if (event.handled || player.getPrivateArea() || object.getPrivateArea?.()) return;
+  const location = object.getLocation();
+  const from = [location.getX(), location.getY(), location.getZ()];
+  const warp = warpForObject(core, object, clickType);
+  if (!warp) return;
+  event.handled = true;
+  const vanilla = entryFor(object, clickType);
+  const entry = { id: warp.id, x: from[0], y: from[1], z: from[2], tick: 2, ...vanilla };
+  const gate = failedGate(player, entry);
+  if (gate) return refuse(player, gate.refuse);
+  const start = player.getLocation().clone();
+  const cross = (destination) => {
+    if (!player.getLocation().equals(start) || player.getPrivateArea()) return;
+    const arrival = warpArrival(core, destination, from);
+    if (!arrival) return player.sendMessage("There is no clear arrival tile beside that object.");
+    const landing = new core.Location(...arrival);
+    if (!core.TeleportHandler.destinationAllowed(player, landing)) return;
+    if (entry.warn && !warningOff(player, entry.warn.varbit)) warn(player, object, entry, arrival);
+    else if (entry.ask) ask(player, object, entry, arrival);
+    else travel(player, entry, arrival);
+  };
+  if (warp.destinations.length === 1) cross(warp.destinations[0]);
+  else pluginApi.sendMultiChatboxPrompt(player, "Where would you like to go?",
+    ...warp.destinations.flatMap((destination) => [destination.label, () => cross(destination)]));
+}
+
 /** Ladders' "does anyone own this ladder?": captured ladders and staircases answer it. */
 function claimLadder(request) {
   if (request.handled) return;
@@ -504,13 +600,17 @@ module.exports = {
     entries = loadEntries();
     swaps = loadSwaps();
     toggles = loadToggles();
+    listWarps();
     api.persistAttribute(TIED_ATTRIBUTE);
     api.persistAttribute(WARNINGS_OFF_ATTRIBUTE);
     api.persistAttribute(TOGGLED_ATTRIBUTE);
-    api.onPlayerLogin(restoreVarbits);
+    api.onPlayerLogin(onLogin);
     api.onObjectInteraction(useLoc);
+    api.onBeforeObjectInteraction(useMapWarp);
     api.onObjectRoute(routeToLoc);
     api.onItemOnObject(useItemOnLoc);
+    api.onCustomEvent("map-warps:changed", refreshWarpMenuActions);
+    api.onCustomEvent("object:menu-options", resolveWarpMenuActions);
     api.onCustomEvent("ladders:climb", claimLadder);
     api.onCustomEvent("loc-teleports:captured", answerCaptured);
     api.onCustomEvent("door:toggle", claimDoorToggle);

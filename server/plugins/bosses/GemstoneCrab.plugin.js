@@ -477,12 +477,18 @@ function forceBurrow({ player }) {
   player.sendMessage("The gemstone crab will burrow.");
 }
 
+
+function describeEncounters({ npcIds }) {
+  npcIds.add(CRAB);
+}
+
 module.exports = {
   name: "GemstoneCrab",
   description: "The Gemstone Crab world boss in the Tlati Rainforest: a ten-minute timer that burrows between three mines and leaves a shell to mine for gems.",
   members: true,
   _test: { state, tick, attack, inReach, rollGem, spawnCrab, startBurrow, topDealers, recordDamage, locate, pickSpot, SPOTS },
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     pluginApi = api;
     ItemOnGroundManager = api.getItemOnGroundManager();
     api.onServerStartup(start);

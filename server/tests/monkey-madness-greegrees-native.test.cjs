@@ -3,7 +3,7 @@
 // rendered client, retail cadence or paid-exchange capture claim.
 process.env.DISABLE_PLAYER_BOTS = '1';
 const assert = require('node:assert/strict'), path = require('node:path'), fs = require('node:fs');
-const { before, after, test } = require('node:test');
+const { before, after, test, mock } = require('node:test');
 require('../dist/Server').Server.installProductionPathResolver();
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { PluginManager: PM } = require('../dist/plugins/PluginManager');
@@ -24,12 +24,18 @@ before(async () => {
   originalError = console.error;
   console.error = (...args) => { errors.push(args.map(String).join(' ')); originalError(...args); };
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  const worldConfig = require('../dist/game/definition/WorldDefinition'), readConfig = worldConfig.readWorldConfig;
+  const config = mock.method(worldConfig, 'readWorldConfig', (...args) => {
+    const actual = readConfig(...args);
+    return { ...actual, plugins: { ...actual.plugins, WorldAdmin: false } };
+  });
   PM.loadFromDirectory(path.resolve(__dirname, '../plugins')); core = PM.getCoreApi();
   originalSubmit = core.TaskManager.submit;
   core.TaskManager.submit = function(task, ...args) { tasks.add(task); return originalSubmit.call(this,task,...args); };
   core.RegionManager.init();
-  for (const [x,y] of [[2804,9145],[2383,3509]]) core.RegionManager.loadMapFiles(x,y);
+  for (const [x,y] of [[2804,9145],[2383,3509],[2808,9200],[3055,5484]]) core.RegionManager.loadMapFiles(x,y);
   PM.emitServerStartup({});
+  config.mock.restore();
   const observation = PM.createApi('GreegreeNativeDialogueObservation');
   observation.onCustomEvent('npc-dialogue:action', observePostquestAction);
   const quests = require('../plugins/quests/QuestRuntime').getRegisteredQuests();
@@ -303,4 +309,44 @@ test('initial MM1 tunnel amulet materials use ordinary 7170 input and return the
   assert.equal(amount(f,I.MAMULET_MOULD),1);
   assert.equal(amount(f,I.KARAMJAN_MONKEY_GREEGREE),0);
   assert.equal(mm1.getStage(f.p),7);
+});
+
+for (const greegree of [4029,4030]) test(`RFD hot-coal crack retains zombie ${greegree} through cooking, bootstrap and exit`,async t=>{
+  const f=actor(t),I=core.ItemIdentifiers;
+  const rfd=require('../plugins/quests/QuestRuntime').getRegisteredQuests().find(q=>q.key==='recipe_for_disaster');
+  rfd.setStage(f.p,4);f.p.setAttribute('recipe-for-disaster:awowogei-stage',30);
+  f.p.getSkillManager().setMaxLevels(core.Skill.COOKING,99);f.p.getSkillManager().setCurrentLevel(core.Skill.COOKING,99,false);
+  f.p.moveTo(new core.Location(2804,9199));settlePlacement(f.p);f.c.sendPlayerBootstrap();
+  add(f,greegree);add(f,I.RAW_STUFFED_SNAKE);
+  const slot=f.p.getInventory().getSlotForItemId(greegree),wear=core.CacheDefinitions.getItem(greegree).inventoryActions.indexOf('Hold');assert.ok(wear>=0);
+  await input(f,{type:'widget_action',widgetId:149<<16,groupId:149,childId:0,slot,itemId:greegree,buttonNum:[2,3,4,6,7][wear]});
+  const form=greegree===4029?'small-zombie-monkey':'large-zombie-monkey';
+  assert.equal(f.p.getAttribute('greegrees:form'),form);
+  await input(f,{type:'object_option',id:16061,x:2805,y:9199,clickType:1});
+  for(let n=0;n<10 && position(f)[0]!==3055;n++)turn();
+  assert.deepEqual(position(f),[3055,5484,0],'native crack entry reaches the actual RFD room');
+  assert.equal(f.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(),greegree,'area exit must not wrench off the greegree');
+  assert.equal(f.p.getAttribute('greegrees:form'),form);assert.equal(f.p.getArea()?.constructor.name,'GreegreeArea');
+  f.p.setRunning(true);turn();assert.equal(f.p.isRunningReturn(),false,'zombie stays walk-only');
+  await input(f,{type:'item_on_object',widgetId:149<<16,objectId:26175,x:3056,y:5484,itemId:I.RAW_STUFFED_SNAKE,slot:f.p.getInventory().getSlotForItemId(I.RAW_STUFFED_SNAKE)});
+  assert.equal(amount(f,I.RAW_STUFFED_SNAKE),0);assert.equal(amount(f,I.STUFFED_SNAKE),1);
+  assert.equal(f.p.getAttribute('recipe-for-disaster:awowogei-stage'),40);
+  const saved=PlayerSave.fromPlayer(f.p);PM.emitPlayerLogout({player:f.p,username:f.p.getUsername()});
+  saved.applyToPlayer(f.p);f.p.onLogin();PM.emitPlayerLogin({player:f.p,username:f.p.getUsername(),isNewAccount:false});
+  if(f.p.isNeedsPlacement())settlePlacement(f.p);f.c.sendPlayerBootstrap();
+  assert.equal(f.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(),greegree);
+  assert.equal(f.p.getAttribute('greegrees:form'),form,'bootstrap restores saved zombie form inside room');
+  const approaches=[],emit=PM.emitObjectInteraction;
+  t.mock.method(PM,'emitObjectInteraction',function(event){
+    if(event.player===f.p && event.objectId===16100)approaches.push(position(f));
+    return emit.call(this,event);
+  });
+  await input(f,{type:'object_option',id:16100,x:3069,y:5485,clickType:1});
+  for(let n=0;n<15 && position(f)[0]!==2808;n++)turn();
+  assert.deepEqual(position(f),[2808,9200,0],'ordinary exit returns to temple dungeon');
+  assert.deepEqual(approaches,[[3062,5485,0]],'ordinary walking reaches the coal edge before the scripted crossing');
+  assert.equal(f.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(),greegree);
+  f.p.moveTo(new core.Location(3222,3218));settlePlacement(f.p);
+  assert.equal(f.p.getEquipment().getItems()[core.Equipment.WEAPON_SLOT].getId(),-1,'off-island exit still wrenches weapon off');
+  assert.equal(amount(f,greegree),1);assert.equal(f.p.getAttribute('greegrees:form'),null);
 });

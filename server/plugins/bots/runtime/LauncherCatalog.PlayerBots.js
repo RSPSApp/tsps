@@ -68,7 +68,7 @@ function validateSetupValues(fields, values = {}) {
 function normalizeLauncher(definition) {
   if (!definition || typeof definition !== "object" || Array.isArray(definition)) throw new TypeError("Launcher definition must be an object.");
   const id = text(definition.id, 48, "Launcher id");
-  if (!LAUNCHER_ID.test(id) || id.startsWith("custom_")) throw new TypeError("Launcher id must be a lowercase plugin id, not a custom routine id.");
+  if (!LAUNCHER_ID.test(id)) throw new TypeError("Launcher id must be a lowercase plugin id.");
   if (typeof definition.deploy !== "function") throw new TypeError("Launcher needs a deploy function.");
   return Object.freeze({
     kind: "activity",

@@ -1,7 +1,7 @@
 /**
  * Scurrius, the Rat King, in the Varrock Sewers (Wiki: Scurrius; docs/scurrius.md): his lair
  * with its public room and private instances, the fight, the food piles, the kill count and loot,
- * Historian Aldo's lamps for his spines, and his Combat Achievements.
+ * Historian Aldo's spine trades, the sewer rat patrol, and Combat Achievements.
  */
 const Common = require("./scurrius/Common.Scurrius");
 const Fight = require("./scurrius/Fight.Scurrius");
@@ -9,7 +9,13 @@ const Lair = require("./scurrius/Lair.Scurrius");
 const FoodPile = require("./scurrius/FoodPile.Scurrius");
 const Kills = require("./scurrius/Kills.Scurrius");
 const Aldo = require("./scurrius/Aldo.Scurrius");
+const Patrol = require("./scurrius/Patrol.Scurrius");
 const CombatAchievements = require("./scurrius/CombatAchievements.Scurrius");
+
+function describeEncounters({ npcIds }) {
+  npcIds.add(Common.PUBLIC_ID);
+  npcIds.add(Common.SOLO_ID);
+}
 
 module.exports = {
   name: "Scurrius",
@@ -17,11 +23,13 @@ module.exports = {
   members: true,
   register(api) {
     Common.init(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Fight.attach(api);
     Lair.attach(api);
     FoodPile.attach(api);
     Kills.attach(api);
     Aldo.attach(api);
+    Patrol.attach(api);
     CombatAchievements.attach(api);
   },
 };

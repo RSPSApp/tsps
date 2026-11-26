@@ -121,6 +121,7 @@ test('Last Light lighthouse doorway: captured scripted threshold Open60018 cross
   p.getHitpoints = () => 99;
   p.setLocation = loc => p.moveTo(loc);
   p.setWalkingDirection = () => {};
+  p.getSkillAnimation = () => null;
   p.setSkillAnimation = () => {};
   p.getForceMovement = () => null;
   const movementQueue = p.getMovementQueue();

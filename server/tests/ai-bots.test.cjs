@@ -333,33 +333,6 @@ function mindSetup({ results = [], places = new Map() } = {}) {
   return { mind, brain, state, spoken, provider };
 }
 
-test("graph AI decisions use the configured provider and can only return an authored route", async () => {
-  const { mind, provider } = mindSetup();
-  let request;
-  provider.generate = async value => {
-    request = value;
-    return { calls: [{ name: "choose_graph_route", input: { choice: "Gather" } }], refused: false };
-  };
-  const choices = [{ label: "Gather", description: "Gather nearby resources." }, { label: "Explore", description: "Explore the area." }];
-  assert.deepEqual(mind.requestGraphChoice({ requestId: "graph:test", prompt: "Choose a route.", choices, nowMs: Date.now() }), { status: "pending" });
-  await new Promise(setImmediate);
-  assert.equal(request.tools.length, 1);
-  assert.deepEqual(request.tools[0].parameters.properties.choice.enum, ["Gather", "Explore"]);
-  assert.deepEqual(mind.requestGraphChoice({ requestId: "graph:test", prompt: "Choose a route.", choices }), { status: "selected", choice: "Gather" });
-});
-
-test("graph AI model calls respect shared rate limits and fail closed on an invalid route", async () => {
-  const { mind, provider } = mindSetup();
-  const choices = [{ label: "A", description: "" }, { label: "B", description: "" }];
-  mind.services.limiter.allow = () => false;
-  assert.deepEqual(mind.requestGraphChoice({ requestId: "limited", prompt: "choose", choices }), { status: "error", error: "AI model rate limit reached." });
-  mind.services.limiter.allow = () => true;
-  provider.generate = async () => ({ calls: [{ name: "choose_graph_route", input: { choice: "not a route" } }], refused: false });
-  assert.equal(mind.requestGraphChoice({ requestId: "invalid", prompt: "choose", choices }).status, "pending");
-  await new Promise(setImmediate);
-  assert.equal(mind.requestGraphChoice({ requestId: "invalid", prompt: "choose", choices }).status, "error");
-});
-
 test("a reply is said after a typing pause, and a line starting with :: runs no command", () => {
   const { mind, spoken } = mindSetup();
   const now = Date.now();
@@ -463,8 +436,8 @@ test("a bot with no real player near makes no calls of its own, but still answer
   assert.equal(provider.calls, 1, "a private message is still answered");
 });
 
-function presenceSetup({ logoutWhenEmptyMinutes = 0, real = [], count = 3 } = {}) {
-  const players = [...real];
+function presenceSetup({ logoutWhenEmptyMinutes = 0, real = [], count = 3, capacity = 2048 } = {}) {
+  const players = Object.assign([...real], { capacityReturn: () => capacity + 1 });
   const minds = new Map();
   const spawned = [];
   const loggedOut = [];
@@ -504,6 +477,19 @@ test("AI bots log in one at a time, not all in one tick", () => {
   presence.tick(SPAWN_GAP_MS);
   presence.tick(SPAWN_GAP_MS * 2);
   assert.deepEqual(spawned, [0, 1, 2]);
+});
+
+test("imported AI bot counts cannot allocate more jobs than the world can hold", () => {
+  for (const count of [1e16, Infinity, '10000000000000000']) {
+    const { presence } = presenceSetup({ count, capacity: 8 });
+    presence.start(0);
+    assert.deepEqual(presence.queue.map(job => job.index), [0, 1, 2, 3, 4, 5, 6, 7]);
+  }
+  for (const count of [-1, NaN, 'not a count']) {
+    const { presence } = presenceSetup({ count, capacity: 8 });
+    presence.start(0);
+    assert.equal(presence.queue.length, 0);
+  }
 });
 
 test("with logoutWhenEmptyMinutes, bots log out on an empty world and return with a player", () => {

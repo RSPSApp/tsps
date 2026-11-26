@@ -8,6 +8,8 @@
 //   [--clip-secs 5 --clip-fps 10 --clip-out clip.mp4]
 //   [--animation-smoothing on|off] [--check-animation-smoothing 1]
 //   [--check-mobile-keyboard 1] (use --url with ?mobile=1)
+//   [--check-world-map-zoom 1 --world-map-zoom-rounds 3 --world-map-zoom-start-out 0 --world-map-zoom-burst 0 --world-map-pan 0 --world-map-pan-step 15 --world-map-view x,y;x,y] (opens the world map, wheels in/out;
+//     samples the zoom drawn and the share of solid-black 8x8 blocks over the map)
 //   [--check-mobile-combat-hud 1] (mobile client in Wilderness; checks rotation and captures each layout)
 //   [--check-responsive-gameframe 1] (desktop login, narrow/portrait windows keep the desktop layout)
 //   [--check-responsive-mobile-start 1] (phone-emulated login, disable emulation, then repeat resize switches)
@@ -122,6 +124,10 @@ function killBrowser(proc) {
   }
   // Sweep any of ours that outlived the tree kill (re-parented children).
   killOurBrowserProcesses();
+  if (proc?.visionProfile) {
+    try { fs.rmSync(proc.visionProfile, { recursive: true, force: true }); } catch {}
+    delete proc.visionProfile;
+  }
 }
 
 function createCdp(url) {
@@ -193,6 +199,7 @@ async function tryBrowser(bin, viewport, budgetMs, targetHref) {
     `--user-data-dir=${profile}`,
     "about:blank",
   ], { stdio: process.env.VISION_DEBUG ? ["ignore", "ignore", "inherit"] : "ignore", detached: true });
+  proc.visionProfile = profile;
   proc.unref();
   let cdp = null;
   const cleanup = () => {
@@ -742,6 +749,399 @@ async function main() {
       }
     }
 
+    if (arg("check-world-map-zoom", "0") === "1") {
+      // Opens the world map from its orb, then zooms in and out a step at a time with the wheel,
+      // sampling the map between steps: the zoom drawn (it eases between levels) and how much of
+      // the map shows as solid black 8x8 blocks (squares with no tile drawn).
+      // Where the map was last drawn (canvas pixels), in CSS pixels for the screenshot clip.
+      const mapRect = async () => cdp.evaluate(`(() => {
+        const c = ${CLIENT_JS}, view = c.worldMap.worldMapViewport, canvas = c.renderer.canvas;
+        if (!view || !(view.width > 0) || !(view.height > 0) || !c.widgetManager.getGroup(595)) return null;
+        const rect = canvas.getBoundingClientRect();
+        const sx = rect.width / canvas.width, sy = rect.height / canvas.height;
+        return { x: rect.left + view.x * sx, y: rect.top + view.y * sy, width: view.width * sx, height: view.height * sy };
+      })()`);
+      // Time every world map tile load (request to reply) and count tiles actually rendered.
+      await cdp.evaluate(`(() => {
+        const pool = (${CLIENT_JS}).workerPool;
+        const log = globalThis.__wmTileLog = [];
+        const load = pool.loadWorldMapTile.bind(pool);
+        pool.loadWorldMapTile = (input) => {
+          const t0 = performance.now();
+          return load(input).then((reply) => { log.push({ t0, ms: performance.now() - t0, tile: !!reply?.tile }); return reply; });
+        };
+        return 0;
+      })()`);
+      const opened = await cdp.evaluate(`(() => {
+        const c = ${CLIENT_JS}, wm = c.widgetManager;
+        for (const w of wm.getGroup(160)?.widgetsByUid?.values() ?? []) {
+          if (wm.isEffectivelyHidden(w.uid)) continue;
+          const ops = Array.from(w.actions ?? w.ops ?? [], (op) => String(op ?? ""));
+          // "Floating World Map" (op 2), the windowed map the server opens; not Fullscreen.
+          const opIndex = ops.findIndex((op) => /^floating world map$/i.test(op.replace(/<[^>]*>/g, "").trim()));
+          if (opIndex < 0) continue;
+          c.handleWidgetAction({ widget: w, option: ops[opIndex], opIndex: opIndex + 1, source: "primary" });
+          return ops[opIndex];
+        }
+        return null;
+      })()`);
+      if (!opened) {
+        const orbs = await cdp.evaluate(`(() => {
+          const wm = (${CLIENT_JS}).widgetManager;
+          return [...(wm.getGroup(160)?.widgetsByUid?.values() ?? [])]
+            .map((w) => ({ uid: w.uid, ops: Array.from(w.actions ?? [], (op) => String(op ?? "")) }))
+            .filter((w) => w.ops.some((op) => /map/i.test(op)));
+        })()`);
+        throw new Error("world map orb not found: " + JSON.stringify(orbs));
+      }
+      // Every square on screen at the target zoom has its own tile, and the zoom has stopped easing.
+      const settled = () => cdp.evaluate(`(() => {
+        const c = ${CLIENT_JS}, wm = c.worldMap, s = c.worldMapState;
+        if ((s.getTargetZoomScale?.() ?? s.getZoomScale()) !== s.getZoomScale() || wm.retainedWorldMapImageIds.size === 0) return false;
+        for (const id of wm.retainedWorldMapImageIds) if (!wm.worldMapImageTiles.has(id)) return false;
+        return true;
+      })()`);
+      const waitSettled = async () => {
+        const t0 = Date.now();
+        for (let i = 0; i < 300 && !(await settled()); i++) await sleep(50);
+        if (!(await settled())) {
+          // Timed out: name the squares on screen still without a tile.
+          (summary.worldMapStuck ??= []).push(await cdp.evaluate(`(() => {
+            const wm = (${CLIENT_JS}).worldMap;
+            return [...wm.retainedWorldMapImageIds].filter((id) => !wm.worldMapImageTiles.has(id))
+              .map((id) => ({ x: (id >>> 8) & 0xff, y: id & 0xff, ppt: (id >>> 18) & 0xf,
+                pending: wm.pendingWorldMapImageIds.has(id), failed: wm.failedWorldMapImageIds.has(id) }));
+          })()`));
+        }
+        return Date.now() - t0;
+      };
+      let rect = null;
+      for (let i = 0; i < 80 && !rect; i++) { await sleep(250); rect = await mapRect(); }
+      if (!rect) {
+        const state = await cdp.evaluate(`(() => {
+          const c = ${CLIENT_JS}, wm = c.widgetManager, group = wm.getGroup(595);
+          return { root: wm.rootInterface, group: !!group, widgets: group ? group.widgetsByUid.size : 0,
+            maps: [...(group?.widgetsByUid?.values() ?? [])].filter((w) => (w.contentType | 0) === 1400)
+              .map((w) => ({ uid: w.uid, hidden: wm.isEffectivelyHidden(w.uid), w: w.width, h: w.height })) };
+        })()`);
+        throw new Error("world map did not open: " + JSON.stringify({ opened, state }));
+      }
+      const openFillMs = await waitSettled();
+      // Sample the middle of the map, away from its frame and the edge arrows.
+      const clip = { x: rect.x + rect.width * 0.2, y: rect.y + rect.height * 0.2, width: rect.width * 0.6, height: rect.height * 0.6, scale: 1 };
+      const sample = async (label) => {
+        const shot = await cdp.send("Page.captureScreenshot", { format: "png", clip });
+        if (!shot?.result?.data) throw new Error("world map screenshot failed: " + JSON.stringify(shot).slice(0, 300) + " clip " + JSON.stringify(clip));
+        return cdp.evaluate(`(async () => {
+          const c = ${CLIENT_JS};
+          const bytes = Uint8Array.from(atob(${JSON.stringify(shot.result.data)}), (ch) => ch.charCodeAt(0));
+          const image = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+          const canvas = new OffscreenCanvas(image.width, image.height);
+          const g = canvas.getContext("2d");
+          g.drawImage(image, 0, 0);
+          const { data, width, height } = g.getImageData(0, 0, image.width, image.height);
+          let blocks = 0, black = 0;
+          for (let by = 0; by + 8 <= height; by += 8) for (let bx = 0; bx + 8 <= width; bx += 8) {
+            blocks++;
+            let solid = true;
+            for (let y = by; y < by + 8 && solid; y++) for (let x = bx; x < bx + 8; x++) {
+              const o = (y * width + x) * 4;
+              if (data[o] > 4 || data[o + 1] > 4 || data[o + 2] > 4) { solid = false; break; }
+            }
+            if (solid) black++;
+          }
+          const s = c.worldMapState;
+          return { label: ${JSON.stringify(label)}, t: Math.round(performance.now()), zoom: s.getZoomScale(),
+            target: s.zoomPercentage, blackBlocks: black, blocks, blackFraction: black / Math.max(1, blocks) };
+        })()`);
+      };
+      const wheel = (deltaY) => cdp.send("Input.dispatchMouseEvent", {
+        type: "mouseWheel", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2, deltaX: 0, deltaY,
+      });
+      // --world-map-zoom-start-out N: wheel out N steps first (each settled; negative zooms in),
+      // to test the far or near zoom levels.
+      const startOut = Number(arg("world-map-zoom-start-out", "0")) | 0;
+      const startFillMs = [];
+      for (let i = 0; i < Math.abs(startOut); i++) {
+        await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+        await wheel(startOut > 0 ? 120 : -120);
+        startFillMs.push(await waitSettled());
+      }
+      // --world-map-view "x,y;x,y": centre the map on each world coordinate, wait until every
+      // square on screen has its tile, save the map as <out>-view-<i>.png and count its pure-black
+      // pixels (r, g and b all under 4).
+      const views = arg("world-map-view", null);
+      if (views) {
+        summary.worldMapViews = [];
+        let i = 0;
+        for (const view of views.split(";")) {
+          const [vx, vy] = view.split(",").map(Number);
+          await cdp.evaluate(`(() => { const s = (${CLIENT_JS}).worldMapState; s.jumpToSourceCoordInstant(0, ${vx | 0}, ${vy | 0}); return 0; })()`);
+          await sleep(200);
+          const fillMs = await waitSettled();
+          await sleep(300);
+          const shot = await cdp.send("Page.captureScreenshot", { format: "png", clip: { ...rect, scale: 1 } });
+          const file = out.replace(/\.png$/, "") + `-view-${i++}.png`;
+          fs.writeFileSync(file, Buffer.from(shot.result.data, "base64"));
+          const black = await cdp.evaluate(`(async () => {
+            const bytes = Uint8Array.from(atob(${JSON.stringify(shot.result.data)}), (ch) => ch.charCodeAt(0));
+            const image = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+            const g = new OffscreenCanvas(image.width, image.height).getContext("2d");
+            g.drawImage(image, 0, 0);
+            const d = g.getImageData(0, 0, image.width, image.height).data;
+            let n = 0;
+            for (let p = 0; p < d.length; p += 4) if (d[p] < 4 && d[p + 1] < 4 && d[p + 2] < 4) n++;
+            return n;
+          })()`);
+          summary.worldMapViews.push({ view, file, fillMs, blackPixels: black });
+        }
+      }
+
+      // --world-map-tile-bench N: render N squares around the view one at a time on the page,
+      // with the client's own (fallback) world map renderer, under the CPU profiler.
+      const bench = Number(arg("world-map-tile-bench", "0")) | 0;
+      if (bench > 0) {
+        await cdp.send("Profiler.enable");
+        await cdp.send("Profiler.setSamplingInterval", { interval: 100 });
+        await cdp.send("Profiler.start");
+        summary.worldMapTileBench = await cdp.evaluate(`(async () => {
+          const c = ${CLIENT_JS}, wm = c.worldMap, s = c.worldMapState, area = s.currentArea;
+          const r = wm.createFallbackRenderer();
+          if (${arg("world-map-tile-bench-wait", "0") === "1"} && c.js5) r.options.waitForGroup = (i, a) => c.js5.requestGroup(i, a, true);
+          // Time the steps a cold square awaits: ground sprite decode and cache group reads.
+          const stepMs = { decode: 0, decodes: 0, geography: 0 };
+          const decode = r.decodeWorldMapSprite.bind(r);
+          r.decodeWorldMapSprite = async (...args) => {
+            const t = performance.now();
+            try { return await decode(...args); } finally { stepMs.decode += performance.now() - t; stepMs.decodes++; }
+          };
+          const cx = (s.displayX >> 6), cy = (s.displayY >> 6);
+          const out = { pixelsPerTile: Math.ceil(s.getTargetZoomScale()), times: [] };
+
+          for (let i = 0; i < ${bench}; i++) {
+            const x = cx - 8 + (i % 16), y = cy - 1 + Math.floor(i / 16);
+            const t0 = performance.now();
+            const tile = await r.loadTile(area, x, y, out.pixelsPerTile);
+            out.times.push([x, y, Math.round(performance.now() - t0), !!tile]);
+          }
+          out.stepMs = stepMs;
+          // After the renders (their ground groups are local now): the renderer's ground sprite decode against the browser's, pixel for pixel.
+          const compare = { sprites: 0, mismatched: 0 };
+          for (const id of out.times.map(([x, y]) => (x << 8) | y)) {
+            let archive;
+            try { archive = r.groundIndex.getArchive(id); } catch { continue; }
+            for (const f of archive.files) {
+              const ours = await decode(f.data);
+              const bytes = new Uint8Array(f.data.byteLength);
+              bytes.set(new Uint8Array(f.data.buffer, f.data.byteOffset, f.data.byteLength));
+              const bmp = await createImageBitmap(new Blob([bytes], { type: "image/png" }));
+              const g = new OffscreenCanvas(bmp.width, bmp.height).getContext("2d", { willReadFrequently: true });
+              g.drawImage(bmp, 0, 0);
+              const px = g.getImageData(0, 0, bmp.width, bmp.height).data;
+              compare.sprites++;
+              for (let i = 0; i < bmp.width * bmp.height; i++) {
+                const want = (px[i * 4] << 16) | (px[i * 4 + 1] << 8) | px[i * 4 + 2];
+                if (ours?.[(Math.floor(i / bmp.width)) * 64 + (i % bmp.width)] !== want) { compare.mismatched++; break; }
+              }
+            }
+          }
+          out.compare = compare;
+          return out;
+        })()`);
+        const { result } = await cdp.send("Profiler.stop");
+        const byId = new Map(result.profile.nodes.map((n) => [n.id, n]));
+        const parent = new Map();
+        for (const n of result.profile.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
+        const self = new Map(), incl = new Map();
+        result.profile.samples.forEach((id, i) => {
+          const dt = (result.profile.timeDeltas[i] ?? 0) / 1000;
+          const name = (n) => `${n.callFrame.functionName || "(anon)"}:${n.callFrame.lineNumber + 1}`;
+          self.set(name(byId.get(id)), (self.get(name(byId.get(id))) ?? 0) + dt);
+          const seen = new Set();
+          for (let cur = id; cur !== undefined; cur = parent.get(cur)) {
+            const k = name(byId.get(cur));
+            if (seen.has(k)) continue;
+            seen.add(k);
+            incl.set(k, (incl.get(k) ?? 0) + dt);
+          }
+        });
+        summary.worldMapTileBenchSelf = [...self].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([k, v]) => `${Math.round(v)}ms ${k}`);
+        summary.worldMapTileBenchIncl = [...incl].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, v]) => `${Math.round(v)}ms ${k}`);
+      }
+
+      // --world-map-zoom-burst N: spin the wheel N steps in quickly, then N out, recording frame
+      // gaps (requestAnimationFrame) and a CPU profile summarised by self time.
+      const burst = Number(arg("world-map-zoom-burst", "0")) | 0;
+      if (burst > 0) {
+        await cdp.evaluate(`(() => {
+          const frames = globalThis.__wmFrames = [];
+          const tick = (t) => { frames.push(t); if (!globalThis.__wmFramesStop) requestAnimationFrame(tick); };
+          requestAnimationFrame(tick);
+          return 0;
+        })()`);
+        await cdp.send("Profiler.enable");
+        await cdp.send("Profiler.setSamplingInterval", { interval: 200 });
+        await cdp.send("Profiler.start");
+        const start = await cdp.evaluate("performance.now()");
+        await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+        const wheelTimes = [];
+        for (const deltaY of [-120, 120]) {
+          for (let i = 0; i < burst; i++) {
+            wheelTimes.push(`${deltaY < 0 ? "in" : "out"}@${Math.round((await cdp.evaluate("performance.now()")) - start)}`);
+            await wheel(deltaY);
+            await sleep(40);
+          }
+          await sleep(2500);
+        }
+        const { result } = await cdp.send("Profiler.stop");
+        const frames = await cdp.evaluate(`(() => { globalThis.__wmFramesStop = true; return globalThis.__wmFrames; })()`);
+        const gaps = frames.slice(1).map((t, i) => t - frames[i]);
+        const byId = new Map(result.profile.nodes.map((n) => [n.id, n]));
+        const self = new Map();
+        result.profile.samples.forEach((id, i) => {
+          const n = byId.get(id);
+          const f = n.callFrame;
+          const key = `${f.functionName || "(anonymous)"} ${String(f.url).split("/").pop()}:${f.lineNumber + 1}`;
+          self.set(key, (self.get(key) ?? 0) + (result.profile.timeDeltas[i] ?? 0) / 1000);
+        });
+        // Callers (three frames up) of the hottest functions, by self time.
+        const parent = new Map();
+        for (const n of result.profile.nodes) for (const c of n.children ?? []) parent.set(c, n.id);
+        const frameName = (n) => `${n.callFrame.functionName || "(anonymous)"} ${String(n.callFrame.url).split("/").pop()}:${n.callFrame.lineNumber + 1}`;
+        const callers = new Map();
+        result.profile.samples.forEach((id, i) => {
+          const chain = [];
+          for (let cur = id; cur !== undefined && chain.length < 4; cur = parent.get(cur)) chain.push(frameName(byId.get(cur)));
+          const key = chain.join(" <- ");
+          callers.set(key, (callers.get(key) ?? 0) + (result.profile.timeDeltas[i] ?? 0) / 1000);
+        });
+        // Inclusive time of world map functions (a sample counts once per function on its stack).
+        const inclusive = new Map();
+        result.profile.samples.forEach((id, i) => {
+          const seen = new Set();
+          for (let cur = id; cur !== undefined; cur = parent.get(cur)) {
+            const name = byId.get(cur).callFrame.functionName;
+            if (!/worldmap|prune|retain|standin|bestcached|composite|drawnode/i.test(name) || seen.has(name)) continue;
+            seen.add(name);
+            inclusive.set(name, (inclusive.get(name) ?? 0) + (result.profile.timeDeltas[i] ?? 0) / 1000);
+          }
+        });
+        summary.worldMapZoomBurstInclusive = [...inclusive.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25)
+          .map(([k, ms]) => `${Math.round(ms)}ms ${k}`);
+        summary.worldMapZoomBurstStacks = [...callers.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12)
+          .map(([k, ms]) => `${Math.round(ms)}ms ${k}`);
+        summary.worldMapZoomBurst = {
+          durationMs: Math.round(frames[frames.length - 1] - start),
+          frames: frames.length,
+          maxFrameGapMs: Math.round(Math.max(0, ...gaps)),
+          gapsOver100ms: gaps.map((g, i) => [g, frames[i] - start]).filter(([g]) => g > 100).map(([g, at]) => `${Math.round(g)}ms@${Math.round(at)}`),
+          wheelTimes,
+          fpsPer500ms: (() => {
+            const out = [];
+            for (let t = start; t < frames[frames.length - 1]; t += 500) out.push(frames.filter((f) => f >= t && f < t + 500).length * 2);
+            return out;
+          })(),
+          topSelfMs: [...self.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30).map(([k, ms]) => `${Math.round(ms)}ms ${k}`),
+        };
+      }
+      // --world-map-pan N: drag the map (600px or 70% of its width) N times one way, then N times back
+      // (--world-map-pan-step px, default 15, every 16ms), counting at each step the on-screen squares
+      // still drawn without their own tile.
+      const pans = Number(arg("world-map-pan", "0")) | 0;
+      if (pans > 0) {
+        const missing = () => cdp.evaluate(`(() => {
+          const wm = (${CLIENT_JS}).worldMap;
+          let n = 0;
+          for (const id of wm.retainedWorldMapImageIds) if (!wm.worldMapImageTiles.has(id)) n++;
+          return { x: (${CLIENT_JS}).worldMapState.displayX, missing: n, onScreen: wm.retainedWorldMapImageIds.size, cached: wm.worldMapImageTiles.size,
+            pending: wm.pendingWorldMapImageIds.size };
+        })()`);
+        // Off centre: the "You are here" marker over the middle would take the press.
+        const cy = rect.y + rect.height * 0.3;
+        const span = Math.min(600, rect.width * 0.7);
+        const steps = [];
+        const startX = await cdp.evaluate(`(${CLIENT_JS}).worldMapState.displayX`);
+        for (const dir of [-1, 1]) {
+          for (let pan = 0; pan < pans; pan++) {
+            // Hover, press and hold a moment first: the client reads input once per 20ms cycle.
+            const cx = rect.x + rect.width * (dir < 0 ? 0.85 : 0.15);
+            await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: cx, y: cy });
+            await sleep(120);
+            await cdp.send("Input.dispatchMouseEvent", { type: "mousePressed", x: cx, y: cy, button: "left", buttons: 1, clickCount: 1 });
+            await sleep(120);
+            const stepPx = Math.max(1, Number(arg("world-map-pan-step", "15")) || 15);
+            for (let dx = stepPx; dx <= span; dx += stepPx) {
+              await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: cx + dir * dx, y: cy, button: "left", buttons: 1 });
+              await sleep(16);
+              steps.push(await missing());
+            }
+            await cdp.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: cx + dir * span, y: cy, button: "left", clickCount: 1 });
+            await sleep(300);
+          }
+        }
+        summary.worldMapPan = {
+          tileLoads: await cdp.evaluate(`(() => {
+            const log = globalThis.__wmTileLog, ms = log.filter((l) => l.tile).map((l) => l.ms).sort((a, b) => a - b);
+            const q = (f) => Math.round(ms[Math.min(ms.length - 1, Math.floor(ms.length * f))] ?? 0);
+            return { requests: log.length, rendered: ms.length, empty: log.length - ms.length, p50: q(0.5), p90: q(0.9), max: q(1) };
+          })()`),
+          openFillMs,
+          startFillMs,
+          zoom: await cdp.evaluate(`(${CLIENT_JS}).worldMapState.zoomPercentage`),
+          steps: steps.length,
+          startX,
+          xRange: [Math.min(...steps.map((s) => s.x)), Math.max(...steps.map((s) => s.x))],
+          stepsWithMissing: steps.filter((s) => s.missing > 0).length,
+          maxMissing: Math.max(0, ...steps.map((s) => s.missing)),
+          missingAt: steps.map((s, i) => [i, s.missing, s.pending]).filter(([, m]) => m > 0).map(([i, m, p]) => `${i}:${m}/${p}`),
+          missingSquareSteps: steps.reduce((sum, s) => sum + s.missing, 0),
+          onScreen: Math.max(0, ...steps.map((s) => s.onScreen)),
+          cachedAtEnd: steps[steps.length - 1]?.cached,
+        };
+      }
+      const samples = [await sample("settled")];
+      const zoomTraces = [];
+      const rendered = [];
+      const rounds = Number(arg("world-map-zoom-rounds", "3")) | 0;
+      for (let round = 0; round < rounds; round++) {
+        for (const [deltaY, label] of [[-120, "in"], [120, "out"]]) {
+          await cdp.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+          // The area's composite fills squares whose tile isn't rendered, so black alone can't show
+          // a re-render: count the tiles that enter the cache during the step (each is a render).
+          // Tile objects, not ids: a square evicted and rendered again keeps its id.
+          await cdp.evaluate(`globalThis.__wmTilesBefore = new Set((${CLIENT_JS}).worldMap.worldMapImageTiles.values()); 0`);
+          await wheel(deltaY);
+          // The zoom drawn, read every few ms while it eases (screenshots are too slow for this).
+          const trace = [];
+          const traceUntil = Date.now() + 500;
+          while (Date.now() < traceUntil) {
+            trace.push(await cdp.evaluate(`Math.round((${CLIENT_JS}).worldMapState.getZoomScale() * 1000) / 1000`));
+            await sleep(10);
+          }
+          zoomTraces.push({ step: `${label}${round}`, zooms: trace.filter((z, i) => i === 0 || z !== trace[i - 1]) });
+          const until = Date.now() + 1500;
+          while (Date.now() < until) samples.push(await sample(`${label}${round}`));
+          rendered.push({ step: `${label}${round}`, round, tiles: await cdp.evaluate(`(() => {
+            let n = 0;
+            for (const tile of (${CLIENT_JS}).worldMap.worldMapImageTiles.values()) if (!globalThis.__wmTilesBefore.has(tile)) n++;
+            return n;
+          })()`) });
+        }
+      }
+      const worst = samples.reduce((max, s) => (s.blackFraction > max.blackFraction ? s : max), samples[0]);
+      summary.worldMapZoom = {
+        opened,
+        samples,
+        zoomTraces,
+        worstBlackFraction: worst.blackFraction,
+        worstSample: worst.label,
+        rendered,
+        // Tiles rendered after the first round, when every zoom level has been viewed once.
+        revisitRenders: rendered.filter((r) => r.round > 0).reduce((sum, r) => sum + r.tiles, 0),
+        zoomsSeen: [...new Set(samples.map((s) => Math.round(s.zoom * 100) / 100))],
+      };
+    }
+
     if (arg("check-animation-smoothing", "0") === "1") {
       summary.animationSmoothing = await cdp.evaluate(`(async () => {
         const c = ${CLIENT_JS}, r = c.renderer;
@@ -813,6 +1213,56 @@ async function main() {
           fs.writeFileSync(scenePath, Buffer.from(scene.png, "base64"));
           summary.sceneScreenshot = scenePath;
         }
+      }
+    }
+
+    if (arg("admin-bots-fixtures", null)) {
+      const directory = path.resolve(arg("admin-bots-fixtures"));
+      summary.adminBots = [];
+      await waitFor(cdp, deadline, () => cdp.evaluate(`(${CLIENT_JS}).gameState`), value => value === 10);
+      for (const name of ["browse", "setup", "active", "manage", "self"]) {
+        const snapshot = JSON.parse(fs.readFileSync(path.join(directory, `${name}.json`), "utf8"));
+        await cdp.evaluate(`(async () => {
+          const c = ${CLIENT_JS}, data=${JSON.stringify(snapshot)};
+          const originalFetch=window.fetch.bind(window);
+          window.fetch=(input,init)=>String(input).includes("/interfaces/30022")
+            ? Promise.resolve(new Response(JSON.stringify(data.definition),{status:200,headers:{"content-type":"application/json"}}))
+            : originalFetch(input,init);
+          c.stateMachine.transition(30, true);
+          c.handleWidgetPayload({action:"set_root",groupId:${Number(arg("admin-bots-root","164"))}});
+          c.handleWidgetPayload({action:"open_sub",groupId:30022,targetUid:(161<<16)|16,type:0,
+            postScripts:[{scriptId:917,args:[-1,-3]},{scriptId:227,args:[(30022<<16)|1,"Admin tools"]}]});
+          for(let i=0;i<300&&!c.widgetManager.getWidgetByUid(30022<<16);i++)await new Promise(requestAnimationFrame);
+          if(!c.widgetManager.getWidgetByUid(30022<<16))throw new Error("Admin widgets did not mount");
+          if(${Number(arg("admin-bots-root","164"))} !== 161) {
+            // Render the native group as a top-level fixture so a logged-out
+            // gameframe's fixed viewport cannot clip its resizable modal.
+            c.widgetManager.setRootInterface(30022);
+            c.widgetManager.fixtureParentLookup ??= c.widgetManager.getInterfaceParentContainerUid.bind(c.widgetManager);
+            c.widgetManager.getInterfaceParentContainerUid = group => group === 30022 ? 0 : c.widgetManager.fixtureParentLookup(group);
+            c.customInterfaces.onInterfaceOpened(30022);
+            c.runWidgetScopedClientScript((30022<<16)|1,227,[(30022<<16)|1,"Admin tools"],"post");
+          }
+          for(const [uid,text] of data.texts) {
+            if(!c.customInterfaces.handleSetText(uid,text)) {
+              const widget=c.widgetManager.getWidgetByUid(uid);
+              if(widget){widget.text=text;c.widgetManager.invalidateWidgetRender(widget);}
+            }
+          }
+          for(const [uid,hidden] of data.hidden)c.handleWidgetPayload({action:"set_hidden",uid,hidden});
+          for(const [uid,actions] of data.actions)c.handleWidgetPayload({action:"set_actions",uid,actions});
+          for(let i=0;i<30;i++)await new Promise(requestAnimationFrame);
+          c.customInterfaces.tick();
+          const layout=JSON.parse(data.texts.find(([id])=>id===((30022<<16)|16))[1]);
+          if(layout.tabs[6].length && !c.customInterfaces.rows.length)throw new Error("Admin browser fixture has no rendered rows");
+          window.fetch=originalFetch;
+          if(!c.isLoggedIn() || !c.widgetManager.getWidgetByUid(30022<<16))throw new Error("Admin fixture is not visible in the game UI");
+        })()`);
+        const targetPath = path.join(directory, `${name}.png`);
+        const shot = await cdp.send("Page.captureScreenshot", {format:"png"});
+        if(!shot.result?.data)throw new Error("Admin screenshot returned no pixels");
+        fs.writeFileSync(targetPath, Buffer.from(shot.result.data,"base64"));
+        summary.adminBots.push(targetPath);
       }
     }
 

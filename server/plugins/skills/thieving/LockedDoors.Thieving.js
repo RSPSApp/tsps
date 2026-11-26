@@ -10,6 +10,7 @@
  * | East Ardougne house, north wall (2674,3305) | 11719 | 1 | 3.8 | no |
  * | East Ardougne house, south wall (2674,3304) | 11720 | 16 | 15 | no |
  * | Chaos Druid Tower (2565,3356) | 11723 | 46 | 37.5 | no |
+ * | Ardougne Sewers gate (2655,9714 and 2655,9715), from the west | 11722, 11721 | 31 | 25 | no |
  *
  * The cache also places the East Ardougne pair at 3378,5929 and 3378,5928, with the same rotations; they are kept alike.
  *
@@ -27,7 +28,16 @@
  * Plunder's and the Forthos door's Pick-lock use), the unlock resolving on the click, the level being the current
  * (boostable) one, and Open from outside answering "The door is locked." (Yanille's door says the same).
  *
- * Not done: the Ardougne Sewers gates (11721/11722), Ross' House (40178), the H.A.M. Hideout jail door (5501) and the
+ * The Ardougne Sewers gate (https://oldschool.runescape.wiki/w/Gate_(Ardougne_Sewers), "Gate" with Open and
+ * Pick-lock; chart 16 at level 1 and 100 at 99) is locked going east, towards the Rat Pits. rsprox capture 1625
+ * (rev 226) has it: Open from the west plays synth 2402 with "The door is locked." (tick 1999); Pick-lock plays 2402,
+ * "You attempt to pick the lock." (spam) and "You manage to pick the lock." with 25 XP in the same tick and no
+ * animation, then the gate lets the player through (tick 2003); Open from the east says "You go through the door."
+ * (spam) as it opens (tick 2512). The gate's swap and crossing are objects/Doors.plugin.js's pass-through gates.
+ * Ours: the failure line and the inside Pick-lock reply are the doors' ones, and a failed pick plays 2402 too
+ * (only a success is captured).
+ *
+ * Not done: Ross' House (40178), the H.A.M. Hideout jail door (5501) and the
  * Monkey Madness II door (28783). The wiki pages give their charts but not which side is "inside" (or the retry ramp the
  * jail door uses), and the last has no page.
  */
@@ -54,6 +64,11 @@ const DRUID_TOWER = Object.freeze({
   level: 46, xp: 37.5, lockpick: false, chance: chart(1, 9, 99, 76),
   trap: Object.freeze({ disarm: chart(1, 221, 58, 256), damage: 0.06 }),
 });
+/** Wiki level, XP and chart; rsprox 1625: the lock sound, the attempt and inside lines, no pick animation. */
+const SEWER_GATE = Object.freeze({
+  level: 31, xp: 25, lockpick: false, chance: chart(1, 16, 99, 100),
+  sound: 2402, animation: false, attempt: "You attempt to pick the lock.", through: "You go through the door.",
+});
 
 /**
  * One row a placement ("id,x,y,z"): the Wiki door, and the two tiles either side of its wall. A player closer to
@@ -70,6 +85,8 @@ const DOORS = new Map([
   ["11719,3378,5929,0", { door: ARDOUGNE_NORTH, inside: [3378, 5929], outside: [3378, 5930] }],
   ["11720,3378,5928,0", { door: ARDOUGNE_SOUTH, inside: [3378, 5928], outside: [3378, 5927] }],
   ["11723,2565,3356,0", { door: DRUID_TOWER, inside: [2565, 3356], outside: [2564, 3356] }],
+  ["11722,2655,9714,0", { door: SEWER_GATE, inside: [2656, 9714], outside: [2655, 9714] }],
+  ["11721,2655,9715,0", { door: SEWER_GATE, inside: [2656, 9715], outside: [2655, 9715] }],
 ]);
 
 let api;
@@ -95,6 +112,14 @@ function isInside(player, placement) {
 function rollAt(level, { lowLevel, lowRoll, highLevel, highRoll }) {
   const along = (Math.max(lowLevel, Math.min(highLevel, level)) - lowLevel) / (highLevel - lowLevel);
   return lowRoll + (highRoll - lowRoll) * along;
+}
+
+function spam(player, text) {
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, text);
+}
+
+function lockSound(player, door) {
+  if (door.sound != null) core.Sounds.sendSound(player, new core.Sound(door.sound, 1, 0, 0));
 }
 
 function successChance(door, level) {
@@ -140,7 +165,9 @@ function pickLock({ player, object }) {
     player.sendMessage(MESSAGE.LOCKPICK);
     return true;
   }
-  const sequence = core.CacheDefinitions.getSeqId(PICK_ANIMATION);
+  lockSound(player, door);
+  if (door.attempt) spam(player, door.attempt);
+  const sequence = door.animation === false ? null : core.CacheDefinitions.getSeqId(PICK_ANIMATION);
   if (sequence != null) player.performAnimation(new core.Animation(sequence));
   springTrap(player, door, level);
   if (random() >= successChance(door, level)) {
@@ -159,9 +186,14 @@ function openLocked(event) {
   const placement = object && DOORS.get(keyOf(object));
   if (!placement || event.handled || OPENERS.has(player)) return;
   const option = event.definition?.getInteractions?.()?.[event.clickType - 1]?.toLowerCase();
-  if (option !== "open" || isInside(player, placement)) return;
+  if (option !== "open") return;
+  if (isInside(player, placement)) {
+    if (placement.door.through) spam(player, placement.door.through);
+    return;
+  }
   event.handled = true;
   player.setPositionToFace(object.getLocation());
+  lockSound(player, placement.door);
   player.sendMessage(MESSAGE.LOCKED);
 }
 
@@ -169,10 +201,11 @@ module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = pluginApi.core;
   pluginApi.onObjectInteraction("Door", { "Pick-lock": pickLock });
+  pluginApi.onObjectInteraction("Gate", { "Pick-lock": pickLock });
   pluginApi.onCustomEvent("door:toggle", openLocked);
 };
 
 module.exports._test = {
-  DOORS, HUT, HIDEOUT, ARDOUGNE_NORTH, ARDOUGNE_SOUTH, DRUID_TOWER, MESSAGE, successChance, rollAt, pickLock, openLocked,
+  DOORS, HUT, HIDEOUT, ARDOUGNE_NORTH, ARDOUGNE_SOUTH, DRUID_TOWER, SEWER_GATE, MESSAGE, successChance, rollAt, pickLock, openLocked,
   isInside, setRandom(fn) { random = fn ?? Math.random; },
 };

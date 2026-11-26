@@ -17,7 +17,7 @@ function fixture() {
   const messages = [], drops = [], obtains = [];
   const player = { getUsername: () => 'RewardTest', getLocation: () => new Location(3222, 3218),
     sendMessage: text => messages.push(text), isPlayerBot: () => false,
-    getPacketSender: () => ({ sendItemContainer() {} }) };
+    getPacketSender: () => ({ sendItemContainer() {}, sendRunEnergy() {} }) };
   const inventory = new Inventory(player); player.getInventory = () => inventory;
   const api = { core: { Item }, getItemOnGroundManager: () => ({
     registerLocation(owner, item, position, privateArea, options) { drops.push({ item, options }); } }),

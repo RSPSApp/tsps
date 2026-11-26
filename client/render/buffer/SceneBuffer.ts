@@ -67,6 +67,28 @@ export type ModelMergeGroup = {
     models: SceneModel[];
 };
 
+/** Every draw command list of a SceneBuffer, in the order a SceneFragment stores them. */
+const SCENE_COMMAND_LISTS = [
+    "drawCommands",
+    "drawCommandsAlpha",
+    "drawCommandsLod",
+    "drawCommandsLodAlpha",
+    "drawCommandsInteract",
+    "drawCommandsInteractAlpha",
+    "drawCommandsInteractLod",
+    "drawCommandsInteractLodAlpha",
+] as const;
+
+export type SceneFragment = {
+    vertexBytes: Uint8Array;
+    vertexCount: number;
+    indices: Int32Array;
+    usedTextureIds: number[];
+    /** One list per SCENE_COMMAND_LISTS entry. */
+    commands: DrawCommand[][];
+    byteLength: number;
+};
+
 export class SceneBuffer {
     vertexBuf: VertexBuffer;
     indices: number[] = [];
@@ -253,6 +275,57 @@ export class SceneBuffer {
         return bounds.every(Number.isFinite) ? bounds : undefined;
     }
 
+    /**
+     * A finished buffer kept apart from the one it was built in: its packed vertices, indices and
+     * draw commands (offsets relative to the fragment), ready for appendFragment to rebase.
+     * Draw commands carry their bounds, so a re-used fragment skips the geometry scan.
+     */
+    toFragment(): SceneFragment {
+        const vertexBytes = this.vertexBuf.byteArray().slice();
+        const indices = Int32Array.from(this.indices);
+        const bounded = new Map<DrawCommand, DrawCommand>();
+        const commands = SCENE_COMMAND_LISTS.map((list) => this[list].map((command) => {
+            let copy = bounded.get(command);
+            if (!copy) {
+                copy = { ...command, bounds: command.bounds ?? (command.elements > 0
+                    ? this.geometryBounds(command.offset, command.elements) : undefined) };
+                bounded.set(command, copy);
+            }
+            return copy;
+        }));
+        return {
+            vertexBytes,
+            vertexCount: this.vertexCount(),
+            indices,
+            usedTextureIds: Array.from(this.usedTextureIds),
+            commands,
+            byteLength: vertexBytes.byteLength + indices.byteLength,
+        };
+    }
+
+    /** Adds a fragment after what this buffer holds, rebasing its indices and draw commands. */
+    appendFragment(fragment: SceneFragment): void {
+        const vertexOffset = this.vertexCount(), indexOffset = this.indexByteOffset();
+        this.vertexBuf.ensureSize(fragment.vertexCount);
+        this.vertexBuf.bytes.set(fragment.vertexBytes, this.vertexBuf.byteOffset());
+        this.vertexBuf.offset += fragment.vertexCount;
+        const indices = this.indices, source = fragment.indices;
+        for (let i = 0; i < source.length; i++) indices.push(source[i] + vertexOffset);
+        for (const texture of fragment.usedTextureIds) this.usedTextureIds.add(texture);
+        // A command shared by two lists (merged and interact) stays one object, as when built.
+        const rebased = new Map<DrawCommand, DrawCommand>();
+        SCENE_COMMAND_LISTS.forEach((list, i) => {
+            for (const command of fragment.commands[i]) {
+                let copy = rebased.get(command);
+                if (!copy) {
+                    copy = { ...command, offset: command.offset + indexOffset };
+                    rebased.set(command, copy);
+                }
+                this[list].push(copy);
+            }
+        });
+    }
+
     appendFarScenery(far: SceneBuffer): void {
         const vertexOffset = this.vertexCount(), indexOffset = this.indexByteOffset();
         this.vertexBuf.ensureSize(far.vertexCount());
@@ -269,7 +342,7 @@ export class SceneBuffer {
         return finishBuild(this.addTerrainSteps(scene, borderSize, maxLevel, coreSize, worldTileOffset));
     }
 
-    *addTerrainSteps(scene: Scene, borderSize: number, maxLevel: number, coreSize: number = Scene.MAP_SQUARE_SIZE, worldTileOffset: number = borderSize): Generator<void, number> {
+    *addTerrainSteps(scene: Scene, borderSize: number, maxLevel: number, coreSize: number = Scene.MAP_SQUARE_SIZE, worldTileOffset: number = borderSize, farOnly = false): Generator<void, number> {
         this.setHeightBounds(scene);
         // The grid covers the whole scene (border included), not just the meshed core, so
         // fragments at the edge of the visible core can still sample their border neighbours.
@@ -277,7 +350,7 @@ export class SceneBuffer {
         this.groundColors = buildGroundColorGrid(scene);
         const before = this.vertexCount(), offset = -worldTileOffset * 128;
         const endX = borderSize + coreSize, endY = borderSize + coreSize;
-        for (let level = 0; level < scene.levels; level++) for (let detail = 0; detail < 2; detail++) {
+        for (let level = 0; level < scene.levels; level++) for (let detail = farOnly ? 1 : 0; detail < 2; detail++) {
             for (let cx = borderSize; cx < endX; cx += SCENERY_CHUNK_SIZE) for (let cy = borderSize; cy < endY; cy += SCENERY_CHUNK_SIZE) {
                 yield;
                 const ex = Math.min(cx + SCENERY_CHUNK_SIZE, endX), ey = Math.min(cy + SCENERY_CHUNK_SIZE, endY);
@@ -896,6 +969,14 @@ export function getModelFacesFiltered(
             renderLayer: renderLayers?.[index],
             textureId,
         });
+    }
+
+    // Translucent faces write depth, so their buffer order is their draw order. The OSRS
+    // client paints a model's faces lowest priority first: the Aberrant spectre's body
+    // (priority 0) comes before its glow shell and eyes (priority 1), which come first in
+    // the model and would otherwise hide the body behind the shell.
+    if (transparent && faces.some((face) => (face.renderLayer ?? face.priority) !== (faces[0].renderLayer ?? faces[0].priority))) {
+        faces.sort((a, b) => (a.renderLayer ?? a.priority) - (b.renderLayer ?? b.priority));
     }
 
     return faces;

@@ -16,7 +16,8 @@ function special(name, options = {}) {
 function attacker() {
   const xp = [];
   const value = { xp, isPlayer: () => true, isNpc: () => false, getAsPlayer: () => value,
-    getCombatSpecial: () => null, isSpecialActivated: () => false,
+    getCombatSpecial: () => null, isSpecialActivated: () => false, getWeapon: () => null,
+    getEquipment: () => ({ getItems: () => Array.from({ length: 14 }, () => ({ getId: () => -1 })) }),
     getSkillManager: () => ({ addExperience: (...args) => xp.push(args) }) };
   return value;
 }
@@ -93,13 +94,13 @@ test('Corruption is ToA-only, successful hits mark for ten ticks, refreshing wit
   World.getProcessCycle = () => cycle;
   try {
     const messages = [];
-    assert.equal(special('KerisPartisanOfCorruption').combatMethod.canAttack({ sendMessage: (text) => messages.push(text) }, target()), false);
+    assert.equal(special('KerisPartisanOfCorruption').combatMethod.canAttack(Object.assign(attacker(), { sendMessage: (text) => messages.push(text) }), target()), false);
     assert.match(messages[0], /only be used within the Tombs/);
     const options = { inside: true };
     const value = special('KerisPartisanOfCorruption', options), victim = target();
     victim.getHitpoints = () => 100;
     assert.equal(value.traits.attackSpeedTicks, 8);
-    assert.equal(value.combatMethod.canAttack({}, victim), true);
+    assert.equal(value.combatMethod.canAttack(attacker(), victim), true);
     const hit = (accurate) => ({ isAccurate: () => accurate, getTarget: () => victim });
     const damage = () => {
       const splat = new core.HitDamage(20, core.HitMask.RED);

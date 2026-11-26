@@ -54,7 +54,7 @@ Otherwise the player gets the first alternative's refusal.
 | `equipped` | `[{ "slot": "weapon", "name": "crossbow", "message": ... }, { "slot": "ammunition", "ids": [9419], "message": ... }]` |
 | `items` | `[{ "ids": [...], "message": ... }]`, carried |
 | `quest` | `{ "key": "regicide", "stage": "complete" \| "started", "message": ... }`, or a list; asked through `quest:is-complete` / `quest:is-started`. A quest no plugin answers for is no bar |
-| `diary` | `{ "key": "falador", "tier": "medium", "enforce": false, "message": ... }`; checked through `diary:is-complete` only once `enforce` is true, when that tier's tasks can all be done here |
+| `diary` | `{ "key": "falador", "tier": "medium", "message": ... }`, asked through `diary:is-complete`; with `"claimed": true` the tier's reward must have been claimed too (`diary:is-reward-claimed`). A diary no plugin answers for is no bar |
 
 ### Failing
 
@@ -65,7 +65,9 @@ With `low` and `high`, success is the OSRS skilling roll the Wiki's success char
 
 The runner's steps (see the top of `ObstacleRunner.Agility.js`): `anim`, `render`, `walk`, `move`, `tele`,
 `wait`, `face`, `faceDir`, `hit`, `msg`, `sound`, `areaSound`, `gfx`, `objAnim`, `varbit`, `fade` (`"out"` or `"in"`: the screen fade, closed as the crossing ends), `complete`. A `msg`,
-and an obstacle's `start` and `end`, is a game message, or `{ "spam": text }` or `{ "mesbox": text }`. In the data:
+and an obstacle's `start` and `end`, is a game message, or `{ "spam": text }` or `{ "mesbox": text }`. A requirement's
+`message` may also be `{ "npc": { "id": npc, "name": text, "text": text, "expression": seq, "then": message } }`: a line
+said by that NPC's chathead (Gu'Tanoth's guards), with `then` sent once the player continues it. In the data:
 
 - **Animations by name**, from `Constants.Agility.js` (`Anim`) and `shortcuts/Builders.Agility.js` (`ShortcutAnim`):
   `{ "anim": "CLIMB_ROCKS" }`; `-1` resets.

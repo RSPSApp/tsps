@@ -1166,6 +1166,7 @@ module.exports = function registerCurseOfArravQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [GOLEM_GUARD_NPC_ID],
     key: "curse_of_arrav",
     name: "The Curse of Arrav",
     varpId: VARP_COA,

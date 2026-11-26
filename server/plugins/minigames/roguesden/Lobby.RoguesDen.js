@@ -177,10 +177,7 @@ function spawnItems() {
     [Common.itemIds.flashPowder, 2970, 5000, 5],
     [Common.itemIds.flashPowder, 3009, 5063, 5],
     [Common.itemIds.flashPowder, 3009, 5070, 5],
-    [Common.itemIds.tile, 3018, 5080, 1],
-    [Common.itemIds.tile, 3018, 5086, 1],
-    [Common.itemIds.tile, 3011, 5082, 1],
-    [Common.itemIds.tile, 3013, 5090, 1],
+    ...require("./Puzzles.RoguesDen").tileSpawns(),
   ];
   for (const [id, x, y, amount] of spots) {
     manager.register(new core.ItemOnGround(

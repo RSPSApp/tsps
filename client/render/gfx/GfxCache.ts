@@ -4,6 +4,9 @@ import type { TextureLoader } from "../../rs/texture/TextureLoader";
 import { getModelFacesFiltered, SceneBuffer } from "../buffer/SceneBuffer";
 import type { WebGLOsrsRenderer } from "../WebGLOsrsRenderer";
 
+/** One graphic frame's mesh. `facePriorities` holds each triangle's cache face priority (0-11). */
+export type GfxFrameGeometry = { vertices: Uint8Array; indices: Int32Array; facePriorities: Uint8Array };
+
 type FrameKey = string; // `${spotId}|${frameIdx}|${pass}|${version}` where pass is 0=opaque,1=alpha
 const FRAME_GEOMETRY_VERSION = 3;
 const FISHING_CAPE_SPOT_ANIMATION = 819;
@@ -30,8 +33,14 @@ const MAX_FRAME_GEOMETRIES = 1024;
 
 export class GfxCache {
     private baseBySpot = new Map<number, Model>();
-    private frameGeom = new Map<FrameKey, { vertices: Uint8Array; indices: Int32Array }>();
+    private frameGeom = new Map<FrameKey, GfxFrameGeometry>();
     constructor(private renderer: WebGLOsrsRenderer) {}
+
+    /** Drops every graphic's model and frame geometry (custom graphics changed). */
+    clear(): void {
+        this.baseBySpot.clear();
+        this.frameGeom.clear();
+    }
 
     private getSpotType(spotId: number): any | undefined {
         try {
@@ -168,7 +177,7 @@ export class GfxCache {
         frameIdx: number,
         transparent: boolean,
         frameCycle: number = 0,
-    ): { vertices: Uint8Array; indices: Int32Array } | undefined {
+    ): GfxFrameGeometry | undefined {
         const pass = transparent ? 1 : 0;
         const cycleKey = frameCycle > 0 ? `~${frameCycle | 0}` : "";
         const frame = `${frameIdx | 0}${cycleKey}`;
@@ -222,9 +231,11 @@ export class GfxCache {
         );
         const faces = getModelFacesFiltered(model, textureLoader, transparent);
         if (faces.length > 0) sceneBuf.addModel(model, faces, undefined, true, new Uint16Array(model.verticesCount));
-        const out = {
+        const out: GfxFrameGeometry = {
             vertices: sceneBuf.vertexBuf.byteArray(),
             indices: new Int32Array(sceneBuf.indices),
+            // One triangle per face, in order: the cache priorities the vertex packing bands.
+            facePriorities: Uint8Array.from(faces, (face) => face.renderLayer ?? face.priority),
         };
         this.frameGeom.set(key, out);
         // Smoothed frames add an entry per cycle: keep the oldest from piling up.

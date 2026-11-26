@@ -656,7 +656,7 @@ function tickBelt() {
     }
     ore.load.tiles++;
     if (ore.load.tiles <= BELT_TILES) {
-      ore.npc?.moveTo(new core.Location(BELT_START[0], BELT_START[1] - ore.load.tiles, 0));
+      ore.npc?.teleportInView(new core.Location(BELT_START[0], BELT_START[1] - ore.load.tiles, 0));
       if (ore.load.tiles === BELT_TILES) ore.npc?.performAnimation(new core.Animation(ORE_FALL_ANIMATION));
       continue;
     }

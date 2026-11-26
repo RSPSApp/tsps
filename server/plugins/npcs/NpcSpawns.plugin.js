@@ -1,12 +1,13 @@
 const fs = require("fs");
 const path = require("path");
+const { effectiveFile } = require("../world/MapEditFiles");
 
 const CUSTOM_NPC_SPAWNS_FILE = "data/definitions/npc-spawns-custom.json";
 
 /** The map editor's spawn patch; absent until the editor has exported one. */
 function loadCustomNpcSpawns() {
-  const file = path.resolve(process.cwd(), CUSTOM_NPC_SPAWNS_FILE);
-  return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : [];
+  const file = effectiveFile(path.resolve(process.cwd(), CUSTOM_NPC_SPAWNS_FILE));
+  return file && fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : [];
 }
 
 module.exports = {

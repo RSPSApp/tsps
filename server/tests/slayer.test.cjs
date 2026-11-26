@@ -148,6 +148,49 @@ function giveTask(player, masterId, name, amount) {
   setVarbit(player, "slayer_master", masterId);
 }
 
+test("Slieve protects upper Taverley adults and babies using real Slayer assignments (#6293)", () => {
+  const { createBlackDragonArea } = require("../plugins/areas/TaverleyDungeon.plugin")._test;
+  const area = createBlackDragonArea({ core, emitCustomEvent: (name, event) => {
+    for (const fn of handlers.events.get(name) ?? []) fn(event);
+  } });
+  const spawns = require("../data/definitions/npc-spawns.json");
+  const all = spawns.spawns ?? spawns;
+  const covered = all.filter(s => ["Black dragon", "Baby black dragon"].includes(s.name)
+    && area.getBoundaries().some(b => b.inside(new core.Location(s.x, s.y, s.level))));
+  assert.equal(covered.filter(s => s.name === "Baby black dragon").length, 5);
+  assert.equal(covered.filter(s => s.name === "Black dragon").length, 12);
+  assert.ok(!area.getBoundaries()[0].inside(new core.Location(2829, 9826, 0)), "public ground floor is excluded");
+  assert.ok(!area.getBoundaries()[0].inside(new core.Location(1888, 9003, 1)), "Myths' Guild baby is excluded");
+  const player = createPlayer();
+  let target = null, retaliating = false;
+  const chains = [];
+  player.getCombat = () => ({ getTarget: () => target, isAutoRetaliating: () => retaliating });
+  player.getDialogueManager = () => ({ startDialogues: chain => chains.push(chain) });
+  for (const spawn of covered) {
+    const dragon = npc(spawn.id, new core.Location(spawn.x, spawn.y, spawn.level));
+    target = dragon;
+    giveTask(player, 5, "Blue Dragons", 10);
+    assert.equal(area.canAttack(player, dragon), false, "wrong task is denied");
+    const line = chains.at(-1).getDialogues().get(0);
+    assert.equal(line.getNpcId(), core.NpcIdentifiers.SLIEVE);
+    assert.match(line.getText(), /go and train somewhere else/);
+    giveTask(player, 5, "Black Dragons", 10);
+    assert.equal(area.canAttack(player, dragon), null, "matching task is allowed");
+    player.getPacketSender().sendConfig(CacheDefinitions.getVarpId("slayer_count"), 0);
+    assert.equal(area.canAttack(player, dragon), false, "completed task is denied");
+    const count = chains.length;
+    target = null;
+    assert.equal(area.canAttack(player, dragon), false, "permission probe is denied silently");
+    target = dragon; retaliating = true;
+    assert.equal(area.canAttack(player, dragon), false, "auto-retaliation is denied silently");
+    assert.equal(chains.length, count);
+    retaliating = false;
+  }
+  assert.equal(area.canAttack(player, npcNamed("Giant bat")), null);
+  assert.equal(area.canAttack(player, npcNamed("Black dragon", new core.Location(2829, 9826, 0))), null,
+    "an attacker inside cannot restrict a dragon outside the task-only lair");
+});
+
 test("the masters' task lists come from the cache's slayer_master_task table", () => {
   const counts = Object.fromEntries([...Data.get().masters.values()].map((entry) => [entry.names[0], entry.tasks.length]));
   assert.deepEqual(counts, {
@@ -240,6 +283,37 @@ test("demonic gorillas count for Black Demons as well as Monkeys", () => {
     assert.ok(Data.npcCountsFor(blackDemons, id, name), "variant " + id + " counts for Black Demons");
     assert.ok(Data.npcCountsFor(monkeys, id, name), "variant " + id + " still counts for Monkeys");
   }
+});
+
+test("the Royal Titans count for Fire and Ice Giants as they died, though their death turns them into corpses", () => {
+  const arena = { getX: () => 2951, getY: () => 9574, getZ: () => 0 };
+  const titans = [
+    ["Fire Giants", core.NpcIdentifiers.BRANDA_THE_FIRE_QUEEN, core.NpcIdentifiers.BRANDA_THE_FIRE_QUEEN_2],
+    ["Ice Giants", core.NpcIdentifiers.ELDRIC_THE_ICE_KING, core.NpcIdentifiers.ELDRIC_THE_ICE_KING_2],
+  ];
+  // The Royal Titans' own Slayer XP hook (Corpse.RoyalTitans.js), as the plugin registers it.
+  const titanXp = require("../plugins/bosses/royaltitans/Corpse.RoyalTitans").slayerXp;
+  const taskKill = handlers.events.get("slayer:task-kill") ?? [];
+  handlers.events.set("slayer:task-kill", [...taskKill, titanXp]);
+  try {
+    for (const [task, titanId, corpseId] of titans) {
+      const player = createPlayer();
+      giveTask(player, 5, task, 10);
+      // Royal Titans' death handler runs first (plugins/bosses sorts before plugins/skills) and
+      // transforms the titan into its corpse; the death event keeps the id it died as.
+      const titan = npc(corpseId, arena);
+      handlers.death.forEach((fn) => fn({ killer: player, npc: titan, npcId: titanId }));
+      assert.equal(varp(player, "slayer_count"), 9, task + ": the titan counts down the task");
+      // Wiki infobox: 735 Slayer XP per titan (its hitpoints are 600, its corpse's 500).
+      assert.deepEqual(player.xp, [[Skill.SLAYER, 735]], task + ": the titan's own Slayer XP");
+    }
+  } finally {
+    handlers.events.set("slayer:task-kill", taskKill);
+  }
+  const wrong = createPlayer();
+  giveTask(wrong, 5, "Ice Giants", 10);
+  handlers.death.forEach((fn) => fn({ killer: wrong, npc: npc(core.NpcIdentifiers.BRANDA_THE_FIRE_QUEEN_2, arena), npcId: core.NpcIdentifiers.BRANDA_THE_FIRE_QUEEN }));
+  assert.equal(varp(wrong, "slayer_count"), 10, "Branda is not an ice giant");
 });
 
 test("a Black Demons assignment credits demonic gorilla kills with Slayer XP", () => {
@@ -933,6 +1007,10 @@ test("protective gear: a dust devil hits a bare face for 16 and drains", () => {
   let damage = 3;
   Equipment.incomingDamage(player, { setDamage: (value) => { damage = value; } }, { attacker: devil });
   assert.equal(damage, 16);
+  // It never lowers a bigger hit (the Leagues VI Echo Thermonuclear smoke devil's 48-62 shots).
+  let big = 52;
+  Equipment.incomingDamage(player, { getDamage: () => big, setDamage: (value) => { big = value; } }, { attacker: devil });
+  assert.equal(big, 52, "a hit above the unprotected max stands");
 
   const masked = equip(createPlayer(), { 0: 4164 }); // facemask
   const safe = { attacker: devil, target: masked, forceAccurate: false };

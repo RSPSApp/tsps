@@ -6,6 +6,21 @@ const ChaosElementalAttackType = {
 
 const SPECIAL_HIT_DELAY = 2;
 
+/**
+ * The players it has done these to in its life (its respawn is a new NPC without them), for its
+ * Combat Achievements: Madness unequipped something of theirs (Hoarder), one of its attacks
+ * damaged them (The Flincher).
+ */
+const DISARMED_ATTRIBUTE = "chaos-elemental:disarmed-players";
+const DAMAGED_ATTRIBUTE = "chaos-elemental:damaged-players";
+
+function markPlayer(npc, attribute, player) {
+  if (!npc?.setAttribute) return;
+  const players = npc.getAttribute(attribute) ?? new Set();
+  players.add(player);
+  npc.setAttribute(attribute, players);
+}
+
 /** Core classes, from api.core when the combat method is built. */
 let Animation, CombatType, Equipment, Flag, Graphic, Item, Misc, PendingHit, Projectile, WeaponInterfaceManager;
 let BonusManager;
@@ -107,6 +122,7 @@ function combatClass(api) {
         return;
       }
       const target = hit.getTarget();
+      if (target.isPlayer?.() && Number(hit.getTotalDamage?.() ?? 0) > 0) markPlayer(hit.getAttacker?.(), DAMAGED_ATTRIBUTE, target.getAsPlayer());
       switch (this.currentCombatType) {
         case CombatType.MELEE:
           target.performGraphic(ChaosElementalCombatMethod.MELEE_COMBAT_GFX);
@@ -134,7 +150,7 @@ function applyChaosElementalSpecial(attackType, character, target) {
 
   const player = target.getAsPlayer();
   if (attackType === ChaosElementalAttackType.DISARM) {
-    disarmChaosElemental(player);
+    if (disarmChaosElemental(player)) markPlayer(character, DISARMED_ATTRIBUTE, player);
     return;
   }
 
@@ -148,6 +164,7 @@ function applyChaosElementalSpecial(attackType, character, target) {
   }
 }
 
+/** Madness: up to four worn items into the inventory, the weapon first. Whether it took any. */
 function disarmChaosElemental(player) {
   const inventory = player.getInventory();
   const equipment = player.getEquipment();
@@ -170,7 +187,7 @@ function disarmChaosElemental(player) {
   }
 
   if (removedItems <= 0) {
-    return;
+    return false;
   }
 
   equipment.refreshItems();
@@ -179,6 +196,7 @@ function disarmChaosElemental(player) {
   BonusManager.update(player);
   player.getUpdateFlag().flag(Flag.APPEARANCE);
   player.sendMessage("The Chaos elemental disarms you.");
+  return true;
 }
 
 function getChaosDisarmSlots(player) {
@@ -254,6 +272,8 @@ function shuffleInPlace(values) {
 }
 
 module.exports = {
+  DISARMED_ATTRIBUTE,
+  DAMAGED_ATTRIBUTE,
   name: "ChaosElemental",
   description: "The Chaos Elemental's special attacks: discord, disarm and teleport.",
   members: true,
@@ -270,4 +290,5 @@ module.exports = {
       { singleton: false }
     );
   },
+  _test: { combatClass, applyChaosElementalSpecial, ChaosElementalAttackType },
 };

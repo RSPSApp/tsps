@@ -1,3 +1,4 @@
+import { wheelNotches } from "../../InputManager";
 import type { ScriptEvent } from "../../../rs/cs2/Cs2Vm";
 import { isVisibleWidgetSurfaceAt } from "../../../widgets/menu/utils";
 import type { WidgetInputControllerDeps, WidgetInputFrame } from "./widgetInputTypes";
@@ -75,7 +76,10 @@ export function processWidgetScrollWheelInput(
                 }
                 continue;
             }
-            const wheelStep = (pinchZoom ? input.getCameraZoomDelta() : wheelDelta) > 0 ? 1 : -1;
+            // A script gets the number of notches turned, not just the direction.
+            const wheelStep = pinchZoom
+                ? (input.getCameraZoomDelta() > 0 ? 1 : -1)
+                : wheelNotches(wheelDelta);
             const scrollCtx: Partial<ScriptEvent> = {
                 mouseX: mx - (w._absX ?? w.x ?? 0),
                 mouseY: wheelStep,
@@ -119,7 +123,9 @@ export function processWidgetScrollWheelInput(
             // HD applies its follow-camera feel after UI dispatch; settings/list listeners
             // must never contribute to that separate camera path.
             if (isViewportZoom) input.viewportWheelDeltaY = input.getCameraZoomDelta();
-            break;
+            // OSRS runs every scroll listener under the cursor down to the first component that
+            // stops the wheel (noscrollthrough); the viewport's zoom listener is always the last.
+            if (isViewportZoom || (w.noScrollThrough && w.isIf3 !== false)) break;
         }
 
         // Block camera zoom if scroll was consumed or the pointer is over a zoom-blocking widget.

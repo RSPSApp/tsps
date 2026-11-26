@@ -12,7 +12,7 @@ module.exports = function registerGraniteMaulSpecialAttack(api) {
       CombatSpecial.drain(character, STANDARD_DRAIN);
       return;
     }
-    const weaponId = character.getAsPlayer().getEquipment().get(Equipment.WEAPON_SLOT).getId();
+    const weaponId = CombatSpecial.weaponIdFor(character.getAsPlayer());
     CombatSpecial.drain(character, weaponId === ItemIdentifiers.GRANITE_MAUL_5 || weaponId === ItemIdentifiers.GRANITE_MAUL_7 ? ORNATE_DRAIN : STANDARD_DRAIN);
   }
 

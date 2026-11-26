@@ -1,3 +1,4 @@
+import { ActorPresentation } from '../../model/ActorPresentation';
 import { CrossFloor } from "../../CrossFloor";
 import { CombatPosition } from "./CombatPosition";
 import { NpcCombatSounds } from "../../definition/NpcCombatSounds";
@@ -155,7 +156,7 @@ export class CombatFactory {
             for (const resolver of PluginManager.getCombatMethodResolvers()) {
                 const resolved = resolver.resolve(attacker);
                 if (resolved) {
-                    return resolved;
+                    return player.isSpecialActivated()?getPlayerCombatSpecial(player)?.resolveProvidedMethod(resolved)??resolved:resolved;
                 }
             }
 
@@ -1079,6 +1080,7 @@ export class CombatFactory {
     }
 
     public static executeHit(qHit: PendingHit) {
+        if(qHit&&!ActorPresentation.inScope(qHit))return ActorPresentation.run(qHit,()=>CombatFactory.executeHit(qHit));
         if (!qHit) {
             return;
         }
@@ -1146,7 +1148,7 @@ export class CombatFactory {
             const sender = playerTarget.getPacketSender();
             if (playerTarget.getRights() != PlayerRights.DEVELOPER && (playerTarget.busy()
                 || sender.hasInterruptibleInterface() || sender.hasInputPrompt())) {
-                sender.sendInterfaceRemoval();
+                sender.sendInterfaceRemoval(true);
             }
 
             // Prayer effects.
@@ -1243,7 +1245,7 @@ export class CombatFactory {
             if (target.isPlayer() && CombatFactory.wearingRecoilRing(target.getAsPlayer())) {
                 CombatFactory.handleRecoil(target.getAsPlayer(), attacker, damage);
             }
-            if (target.hasVengeanceReturn()) {
+            if (target.hasVengeanceReturn() && resolvedHit.triggersVengeance?.() !== false) {
                 CombatFactory.handleVengeance(target, attacker, damage);
             }
         }
@@ -1339,6 +1341,23 @@ export class CombatFactory {
         return CombatFactory.isAttacking(character) || CombatFactory.isBeingAttacked(character);
     }
 
+    /**
+     * In combat: the character's target or its attacker (an attacker lasts the PJ window after its
+     * last hit) is registered with hitpoints left, or an NPC it was fighting is still dying. Live's
+     * worn-items screens refuse on this through the opponent's death animation and open on the
+     * tick it is removed (rsprox 227/01885 t20818-20821, 240/1001355 t1962-1969).
+     * docs/interface-interruption.md.
+     */
+    public static inLiveCombat(character: Mobile): boolean {
+        const combat = character.getCombat();
+        const registered = (other: Mobile) => typeof other.isRegistered !== "function" || other.isRegistered();
+        // A killed NPC still counts until its death ends and it is removed (or respawns).
+        const dying = combat.getDyingOpponent();
+        if (dying?.isNpc() && dying.getAsNpc().isDyingFunction() && registered(dying)) return true;
+        return [combat.getTarget(), combat.getAttacker()].some((other) =>
+            other != null && other.getHitpoints() > 0 && registered(other));
+    }
+
     public static poisonEntity(entity: Mobile, poisonSeverity: number, poisonOrbType: number = 1) {
         if (poisonSeverity <= 0) {
             return;
@@ -1400,14 +1419,14 @@ export class CombatFactory {
         }
     }
 
-    public static disableProtectionPrayers(player: Player) {
+    public static disableProtectionPrayers(player: Player, durationSeconds = 5) {
         // Player has already been prayer-disabled
         if (!player.getCombat().getPrayerBlockTimer().finished()) {
             return;
         }
         // OSRS: the dragon scimitar's Sever blocks protection prayers for 8
         // ticks (4.8s). The shared timer counts whole seconds, so use 5.
-        player.getCombat().getPrayerBlockTimer().start(5);
+        player.getCombat().getPrayerBlockTimer().start(Math.max(1, Math.ceil(durationSeconds)));
         PrayerHandler.resetPrayers(player, PrayerHandler.PROTECTION_PRAYERS);
         player.sendMessage("You have been disabled and can no longer use protection prayers.");
     }
@@ -1677,7 +1696,8 @@ export class CombatFactory {
                     target.hasFlag?.("combat:no-retaliate") !== true;
             } else if (target.isNpc()) {
                 auto_ret = target.hasFlag?.("combat:no-retaliate") !== true
-                    && target.getAsNpc().getMovementCoordinator().getCoordinateState() == CoordinateState.HOME;
+                    // One walking home (AWAY) still fights back; only a retreat ignores hits.
+                    && target.getAsNpc().getMovementCoordinator().getCoordinateState() != CoordinateState.RETREATING;
             }
 
             if (!auto_ret) {

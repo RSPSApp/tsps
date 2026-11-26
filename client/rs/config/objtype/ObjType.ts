@@ -1,3 +1,4 @@
+import { EntityOps } from "../EntityOps";
 import { CacheInfo } from "../../cache/CacheInfo";
 import { ByteBuffer } from "../../io/ByteBuffer";
 import { ParamsMap, Type } from "../Type";
@@ -42,6 +43,8 @@ export class ObjType extends Type {
     isMembers: boolean;
 
     groundActions: (string | null)[];
+    /** Sub-options and conditional option names (EntityOps). */
+    entityOps: EntityOps;
     inventoryActions: (string | null)[];
     // subops[opIndex][subIndex] = nested "Choose Option" submenu text per inventory op
     subops: ((string | null)[] | null)[] | null;
@@ -120,6 +123,7 @@ export class ObjType extends Type {
         this.wearPos2 = -1;
         this.isMembers = false;
         this.groundActions = [null, null, "Take", null, null];
+        this.entityOps = new EntityOps();
         this.inventoryActions = [null, null, null, null, "Drop"];
         this.subops = null;
         this.shiftClickIndex = -2;
@@ -482,22 +486,22 @@ export class ObjType extends Type {
         } else if (opcode === 200) {
             const index = buffer.readUnsignedByte();
             const subId = buffer.readUnsignedByte();
-            this.readString(buffer);
+            this.entityOps.addSubOp(index, subId, this.readString(buffer));
         } else if (opcode === 201) {
             const index = buffer.readUnsignedByte();
-            const varp = buffer.readUnsignedShort();
-            const varb = buffer.readUnsignedShort();
+            const varpId = buffer.readUnsignedShort();
+            const varbitId = buffer.readUnsignedShort();
             const min = buffer.readInt();
             const max = buffer.readInt();
-            this.readString(buffer);
+            this.entityOps.addConditionalOp(index, { varpId, varbitId, min, max, name: this.readString(buffer) });
         } else if (opcode === 202) {
             const index = buffer.readUnsignedByte();
             const subId = buffer.readUnsignedShort();
-            const varp = buffer.readUnsignedShort();
-            const varb = buffer.readUnsignedShort();
+            const varpId = buffer.readUnsignedShort();
+            const varbitId = buffer.readUnsignedShort();
             const min = buffer.readInt();
             const max = buffer.readInt();
-            this.readString(buffer);
+            this.entityOps.addConditionalSubOp(index, subId, { varpId, varbitId, min, max, name: this.readString(buffer) });
         } else if (opcode === 249) {
             this.params = Type.readParamsMap(buffer, this.params);
         } else {
@@ -583,6 +587,7 @@ export class ObjType extends Type {
         this.femaleHeadModel2 = original.femaleHeadModel2;
         this.team = original.team;
         this.groundActions = original.groundActions;
+        this.entityOps = original.entityOps;
         this.weight = original.weight;
         this.inventoryActions = new Array(5);
         if (original.inventoryActions) {

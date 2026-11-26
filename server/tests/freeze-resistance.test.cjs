@@ -126,10 +126,25 @@ test("the exported data reaches real definitions: Wiki infobox values by NPC id"
     [12077, 33, "Phantom Muspah, ranged"], [12079, 33, "Phantom Muspah, shielded"],
     [12377, 50, "Scarred imp"], [12335, 50, "Wighted Leech"],
     [14017, 100, "Hueycoatl body"], [13011, 100, "Blood Moon"], [13013, 100, "Blue Moon"],
+    [13685, 100, "Amoxliatl"], [13686, 100, "Amoxliatl (quest)"],
     [3129, 0, "K'ril Tsutsaroth (no resistance on the Wiki)"],
   ]) assert.equal(resistance(id), expected, what);
 });
 
+
+test("Amoxliatl's loaded definition prevents the freeze timer, movement reset and frozen event", () => {
+  const events = [];
+  PluginManager.createApi("AmoxliatlFreezeProbe").onCustomEvent("combat:frozen", (event) => events.push(event.target));
+  const amoxliatl = Object.assign(target(), { getCurrentDefinition: () => NpcDefinition.forId(13685) });
+  const susceptible = target();
+  CombatFactory.freezeTicks(amoxliatl, 20);
+  CombatFactory.freezeTicks(susceptible, 20);
+  assert.deepEqual(amoxliatl.registered, []);
+  assert.equal(amoxliatl.effects.movement, 0);
+  assert.ok(!events.includes(amoxliatl));
+  assert.equal(susceptible.ticks(), 20);
+  assert.ok(events.includes(susceptible));
+});
 
 // F: actual factory boundary with supplied Mobile surfaces, not native attacks.
 test('F only literal false from the target area prevents all new freeze side effects',()=>{

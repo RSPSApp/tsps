@@ -1207,7 +1207,7 @@ test('Paterdomus fight is reached through the captured side trapdoor, cellar lad
       }
     },
     onRegionLoaded: noop, onObjectRoute: noop, onServerStartup: noop, onPlayerProcess: noop,
-    onPlayerLogin: noop,
+    onPlayerLogin: noop, onPlayerLogout: noop, onPlayerDeath: noop,
     onItemOnObject: noop, persistAttribute: noop, registerArea: noop, sendMultiChatboxPrompt: () => true,
   };
   delete require.cache[require.resolve('../plugins/objects/Doors.plugin')];

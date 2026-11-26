@@ -94,13 +94,20 @@ module.exports = function registerEditNpcTools(ctx) {
       y: z.number().int().describe("World tile y"),
       z: z.number().int().min(0).max(3).default(0).describe("Plane, 0 is ground level"),
       wanderRadius: z.number().int().min(0).max(MAX_WANDER).default(5),
+      leashRadius: z.number().int().min(0).max(255).optional().describe("Maximum chase distance from the spawn"),
     },
-    async ({ id, x, y, z = 0, wanderRadius = 5 }) => {
+    async ({ id, x, y, z = 0, wanderRadius = 5, leashRadius }) => {
       checkTile(x, y, z);
       if (id >= npcCount()) throw new Error(`Unknown NPC id ${id}; search_npcs finds valid ids`);
       const definition = NpcDefinition.forId(id);
       const npc = NPC.create(id, new Location(x, y, z));
       npc.getMovementCoordinator().setRadius(wanderRadius);
+      if (leashRadius !== undefined) {
+        if (!Number.isInteger(leashRadius) || leashRadius < wanderRadius || leashRadius > 255) {
+          throw new Error("leashRadius must be at least wanderRadius and at most 255");
+        }
+        npc.getMovementCoordinator().setLeashRadius(leashRadius);
+      }
       World.getAddNPCQueue().push(npc);
       // Registration runs on the next tick; wait so observe-style reads see it.
       await sleepTicks(1);
@@ -108,11 +115,12 @@ module.exports = function registerEditNpcTools(ctx) {
       const already = store().find(spawns, id, x, y, z) !== undefined;
       if (!already) {
         spawns.push({
-          level: z, name: definition.getName(), x, y, id, wanderRadius, source: "agent-mcp",
+          level: z, name: definition.getName(), x, y, id, wanderRadius,
+          ...(leashRadius === undefined ? {} : { leashRadius }), source: "agent-mcp",
         });
         writeSpawns(spawns);
       }
-      return { spawned: { id, name: definition.getName(), x, y, z, wanderRadius }, persisted: !already };
+      return { spawned: { id, name: definition.getName(), x, y, z, wanderRadius, ...(leashRadius === undefined ? {} : { leashRadius }) }, persisted: !already };
     }
   );
 

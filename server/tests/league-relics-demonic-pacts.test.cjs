@@ -894,6 +894,28 @@ test("Eternal Sustenance: the food eaten is back in its slot", () => {
   for (const player of others(who)) assert.notEqual(player.getInventory().getItems()[3]?.getId(), I.SHARK);
 });
 
+test("Eternal Sustenance: a cocktail's glass left in an earlier free slot is undone with the drink", () => {
+  const who = cases(ETERNAL_SUSTENANCE);
+  for (const player of [who.relic, ...others(who)]) {
+    const inventory = player.getInventory();
+    inventory.setItem(0, new core.Item(I.COINS, 1));
+    inventory.setItem(6, new core.Item(I.FRUIT_BLAST, 1));
+    const snapshot = inventory.getItems().map((item) => item?.getId?.() ?? -1);
+    hooks.onCanEat({ player, itemId: I.FRUIT_BLAST, allow: null });
+    // Food: the drink leaves slot 6 and its glass takes slot 1, the first free one (leavesInFreeSlot).
+    inventory.deleteAtSlot(6, 1, false);
+    inventory.setItem(1, new core.Item(I.COCKTAIL_GLASS, 1));
+    emit("food:eaten", { player, itemId: I.FRUIT_BLAST, heal: 9 });
+    player.snapshot = snapshot;
+  }
+  const ids = (player) => player.getInventory().getItems().map((item) => item?.getId?.() ?? -1);
+  assert.deepEqual(ids(who.relic), who.relic.snapshot, "the drink is back and no glass is left");
+  for (const player of others(who)) {
+    assert.equal(ids(player)[1], I.COCKTAIL_GLASS, "without the relic the glass stays");
+    assert.equal(ids(player)[6], -1);
+  }
+});
+
 test("Eternal Sustenance: a preset food eaten comes back as a preset copy, not a plain one", () => {
   const who = cases(ETERNAL_SUSTENANCE);
   const player = who.relic;
@@ -1203,7 +1225,12 @@ test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording
   const rival = victim("rival", new Location(here.getX(), here.getY() - 2, 0), true);
   const bystander = victim("bystander", new Location(here.getX(), here.getY() + 1, 0), true);
   wilderness.add(rival);
-  who.relic.getLocalNpcs = () => [goblin, far, yama];
+  const immune = ["Blood Moon", "Blue Moon", "Eclipse Moon", "Enraged Blood Moon", "Fragment of Seren"].map((name) => {
+    const npc = victim("null", new Location(here.getX() + 1, here.getY() + 1, 0));
+    npc.getCurrentDefinition = () => ({ isAttackable: () => true, getName: () => name });
+    return npc;
+  });
+  who.relic.getLocalNpcs = () => [goblin, far, yama, ...immune];
   who.relic.getLocalPlayers = () => [who.relic, rival, bystander];
   const graphics = [];
   const sender = who.relic.getPacketSender();
@@ -1217,6 +1244,7 @@ test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording
   for (const task of explosions) task.execute();
   assert.deepEqual([goblin.pending, rival.pending], [[59, 59, 59], [29, 29, 29]]);
   assert.deepEqual([far.pending, yama.pending, bystander.pending], [[], [], []], "out of reach, spared, not in PvP");
+  assert.deepEqual(immune.map((npc) => npc.pending), [[], [], [], [], []], "the Moons of Peril and the Fragment of Seren are spared too");
   const impact = core.CacheDefinitions.getSpotanimId("leagues_6_sigil_of_life_impact");
   assert.equal(graphics.length, 72, "8 lines of 3, three times");
   const first = graphics.slice(0, 24);
@@ -1225,6 +1253,102 @@ test("Flask of Fervour: three explosions 1, 3 and 5 ticks on, with the recording
   assert.deepEqual(first.filter(([, , dx, dy]) => dx === -2 && dy === 0).map(([, delay]) => delay), [30]);
   assert.deepEqual(first.filter(([, , dx, dy]) => dx === 0 && dy === -3).map(([, delay]) => delay), [40]);
   who.relic.getPacketSender = () => sender;
+});
+
+test("Flask of Fervour: a level boosted above its maximum is kept, not lowered", () => {
+  const who = cases(FLASK_OF_FERVOUR);
+  const skills = who.relic.getSkillManager();
+  skills.setMaxLevels(Skill.HITPOINTS, 99, false);
+  skills.setMaxLevels(Skill.PRAYER, 70, false);
+  who.relic.setHitpoints(188);
+  skills.setCurrentLevel(Skill.PRAYER, 80, false);
+  itemActions.get("Flask of fervour").Activate({ player: who.relic, handled: false });
+  assert.equal(who.relic.getHitpoints(), 188);
+  assert.equal(skills.getCurrentLevel(Skill.PRAYER), 80);
+  const low = cases(FLASK_OF_FERVOUR).relic;
+  low.getSkillManager().setMaxLevels(Skill.HITPOINTS, 99, false);
+  low.getSkillManager().setMaxLevels(Skill.PRAYER, 70, false);
+  low.setHitpoints(5);
+  low.getSkillManager().setCurrentLevel(Skill.PRAYER, 1, false);
+  itemActions.get("Flask of fervour").Activate({ player: low, handled: false });
+  assert.equal(low.getHitpoints(), 99);
+  assert.equal(low.getSkillManager().getCurrentLevel(Skill.PRAYER), 70);
+});
+
+test("Flask of Fervour: the shield lasts exactly four game ticks, whatever the wall clock says", (t) => {
+  const who = cases(FLASK_OF_FERVOUR);
+  let cycle = 1000;
+  t.mock.method(core.World, "getProcessCycle", () => cycle);
+  t.mock.method(core.TaskManager, "submit", () => {});
+  itemActions.get("Flask of fervour").Activate({ player: who.relic, handled: false });
+  const zeroed = (at) => {
+    cycle = at;
+    const hit = new core.HitDamage(25, core.HitMask.RED);
+    emit("combat:damage-apply", { target: who.relic, hit });
+    return hit.getDamage() === 0;
+  };
+  assert.deepEqual([1000, 1001, 1002, 1003].map(zeroed), [true, true, true, true]);
+  assert.equal(zeroed(1004), false, "over after four ticks");
+});
+
+test("Flask of Fervour: a large NPC is hit when any tile of it is within three tiles", (t) => {
+  const who = cases(FLASK_OF_FERVOUR);
+  const flask = itemActions.get("Flask of fervour");
+  const tasks = [];
+  t.mock.method(core.TaskManager, "submit", (task) => tasks.push(task));
+  t.mock.method(core.CombatFactory, "validTarget", () => true);
+  t.mock.method(core.CombatFactory, "canAttackByPolicy", () => core.CanAttackResponse.CAN_ATTACK);
+  const here = who.relic.getLocation();
+  const giant = (size, dx) => {
+    const pending = [];
+    return {
+      pending, isPlayer: () => false, getHitpoints: () => 50, getSize: () => size,
+      getLocation: () => new Location(here.getX() - dx, here.getY(), 0),
+      getDefinition: () => ({ getName: () => "Araxxor" }), getCurrentDefinition: () => ({ isAttackable: () => true }),
+      getTimers: () => ({ has: () => false }),
+      getCombat: () => ({ getHitQueue: () => ({ addPendingDamage: (hits) => pending.push(...hits.map((hit) => hit.getDamage())) }) }),
+    };
+  };
+  // A 5x5 NPC whose south-west tile is 6 west spans 6..2 tiles west of the player: its far edge is 2 away.
+  const big = giant(5, 6);
+  const farBig = giant(5, 8);
+  const small = giant(1, 6);
+  who.relic.getLocalNpcs = () => [big, farBig, small];
+  who.relic.getSkillManager().setMaxLevels(Skill.PRAYER, 99, false);
+  flask.Activate({ player: who.relic, handled: false });
+  for (const task of tasks.filter((task) => task.getDelay() < 10)) task.execute();
+  assert.deepEqual(big.pending, [59, 59, 59]);
+  assert.deepEqual([farBig.pending, small.pending], [[], []], "5x5 with its edge 4 away, and a 1x1 6 away");
+});
+
+test("Flask of Fervour: a real Moon of Peril (nameless parent id 13016, named only by its variant) and the Nightmare Husk, Parasite and Sleepwalker are spared; a Goblin is not", (t) => {
+  const { NPC } = require("../dist/game/entity/impl/npc/NPC");
+  const who = cases(FLASK_OF_FERVOUR);
+  const tasks = [];
+  t.mock.method(core.TaskManager, "submit", (task) => tasks.push(task));
+  t.mock.method(core.CombatFactory, "validTarget", () => true);
+  t.mock.method(core.CombatFactory, "canAttackByPolicy", () => core.CanAttackResponse.CAN_ATTACK);
+  const here = who.relic.getLocation();
+  const at = new Location(here.getX() + 1, here.getY(), here.getZ());
+  const moon = new NPC(13016, at);
+  const goblin = new NPC(core.NpcIdentifiers.GOBLIN, at);
+  const nightmare = [9454, 9452, 9446, 9468].map((id) => new NPC(id, at));
+  assert.notEqual(moon.getDefinition().getName(), "Blood Moon", "the parent itself carries no Moon name");
+  for (const npc of [moon, goblin, ...nightmare]) {
+    npc.setHitpoints(50);
+    npc.getCombat().getHitQueue().addPendingDamage = (hits) => (npc.taken = (npc.taken ?? []).concat(hits.map((hit) => hit.getDamage())));
+  }
+  who.relic.getLocalNpcs = () => [moon, goblin, ...nightmare];
+  who.relic.getSkillManager().setMaxLevels(Skill.PRAYER, 99, false);
+  itemActions.get("Flask of fervour").Activate({ player: who.relic, handled: false });
+  const sender = who.relic.getPacketSender();
+  // The transform reads the player's varbits through the packet sender: a fresh player has them all at 0.
+  who.relic.getPacketSender = () => new Proxy(sender, { get: (target, key) => (key === "getVarbit" || key === "getVarp" ? () => 0 : target[key]) });
+  for (const task of tasks.filter((task) => task.getDelay() < 10)) task.execute();
+  who.relic.getPacketSender = () => sender;
+  assert.equal(moon.taken, undefined);
+  assert.deepEqual(nightmare.map((npc) => npc.taken), [undefined, undefined, undefined, undefined], "the Nightmare Husk, Parasite and Sleepwalker (and Phosani Parasite)");
+  assert.ok(goblin.taken?.length > 0, "an ordinary NPC is struck");
 });
 
 /** The Agility plugin, attached to a test api: its ground-item taken hook and the marks it lays kept for the test. */
@@ -2052,6 +2176,7 @@ function dialogues(t, player) {
       if (entry instanceof core.ActionDialogue) return ["action", null, entry];
       return [entry.constructor.name, entry.text ?? entry.getText?.() ?? null, entry];
     })),
+    startDialogue: () => {},
   }));
   return shown;
 }
@@ -2137,10 +2262,123 @@ test("Butler's Bell: Talk-to, as the transcript: a new job from the cache's five
   Butler().talk({ player, npc });
   assert.deepEqual(shown[4][1][1], ["I have a new job for you.", "Show me what you've collected so far.", "Nothing."]);
   shown[4][1][2].execute(1);
-  assert.equal(shown[5].length, 3, "said, the butler's apology, then the collection");
+  assert.equal(shown[5].length, 3, "said, the butler's apology, the collection — as the transcript, the conversation ends there");
+  assert.equal(player.getAttribute(Butler().JOB_ATTRIBUTE).paused, undefined, "still working until the collection");
   shown[5][2][2].send(player);
   assert.equal(banked(player, I.RAW_SHARK), 3);
+  assert.equal(player.getAttribute(Butler().JOB_ATTRIBUTE).paused, true, "his work stops at the collection");
+  Butler().talk({ player, npc });
+  assert.deepEqual(shown[6][1][1], ["I have a new job for you.", "Nothing."], "nothing owed while stopped");
+  shown[6][1][2].execute(1);
+  assert.deepEqual(shown[7][1][1], ["Logs", "Ore", "Fish", "Herbs", "Flax"], "the new job, on the re-talk");
   assert.equal(Butler().talk({ player: cases(BUTLERS_BELL).without, npc }), false, "not their butler");
+  Butler().butlers.delete(player);
+});
+
+test("Butler's Bell: the change's collection stops his work until a new job is assigned: nothing accrues while stopped, offline too, then the new job starts fresh", (t) => {
+  const player = cases(BUTLERS_BELL).relic;
+  const npc = { getId: () => 15636 };
+  Butler().butlers.set(player, npc);
+  const now = Date.now();
+  player.setAttribute(Butler().STORE_ATTRIBUTE, null);
+  player.setAttribute(Butler().JOB_ATTRIBUTE, { action: 5, processing: false, since: now - 20 * 60_000, xp: 0 });
+  Math.random = () => 0;
+  const shown = dialogues(t, player);
+  assert.equal(Butler().talk({ player, npc }), true);
+  shown[0][1][2].execute(1);
+  const change = shown[1];
+  assert.equal(change.length, 3, "said, apology, collection — the transcript ends there");
+  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [["FLAX", 1000]], "20 minutes at 50 a minute");
+  assert.equal(player.getAttribute(Butler().JOB_ATTRIBUTE).paused, undefined, "still working until the collection");
+  // The player walks the chain; the collection banks exactly what the request owed and stops him.
+  change[2][2].send(player);
+  assert.equal(banked(player, I.FLAX), 1000, "nothing else accrued while the change was walked");
+  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), []);
+  assert.equal(player.getAttribute(Butler().JOB_ATTRIBUTE).paused, true, "stopped at the collection");
+  Butler().catchUp(player, now + 20 * 60_000);
+  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [], "stopped work accrues nothing, offline too");
+  // The transcript ends the conversation: the new job is taken on the re-talk.
+  Butler().talk({ player, npc });
+  assert.deepEqual(shown[2][1][1], ["I have a new job for you.", "Nothing."], "nothing owed while stopped");
+  shown[2][1][2].execute(1);
+  const jobs = shown[3][1];
+  assert.deepEqual(jobs[1], ["Logs", "Ore", "Fish", "Herbs", "Flax"]);
+  jobs[2].execute(2);
+  const choice = shown[4][0];
+  assert.deepEqual(choice[1], ["Yes, process them. <col=3366ff>(4/Minute)</col>", "No, just give me the raw materials. <col=3366ff>(8/Minute)</col>"]);
+  choice[2].execute(2);
+  const fresh = player.getAttribute(Butler().JOB_ATTRIBUTE);
+  assert.deepEqual({ ...fresh, since: 0 }, { action: 2, processing: false, since: 0, xp: 0 }, "the new job, a fresh clock");
+  Math.random = () => 0.99;
+  Butler().catchUp(player, fresh.since + 70_000);
+  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [["RUNITE_ORE", 9]], "the clock runs again");
+  Butler().butlers.delete(player);
+});
+
+test("Butler's Bell: a change left half-done keeps the old job running, and re-asking walks the same flow", (t) => {
+  const player = cases(BUTLERS_BELL).relic;
+  const npc = { getId: () => 15636 };
+  Butler().butlers.set(player, npc);
+  const now = Date.now();
+  player.setAttribute(Butler().STORE_ATTRIBUTE, null);
+  player.setAttribute(Butler().JOB_ATTRIBUTE, { action: 5, processing: false, since: now - 10 * 60_000, xp: 0 });
+  Math.random = () => 0;
+  const shown = dialogues(t, player);
+  assert.equal(Butler().talk({ player, npc }), true);
+  shown[0][1][2].execute(1);
+  assert.equal(shown[1].length, 3, "said, apology, collection");
+  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [["FLAX", 500]], "10 minutes at 50 a minute");
+  // The player closes the dialogue without collecting: the old job carries on, as live.
+  const job = player.getAttribute(Butler().JOB_ATTRIBUTE);
+  assert.equal(job.paused, undefined, "no pause without a collection");
+  Butler().catchUp(player, job.since + 20 * 60_000);
+  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [["FLAX", 1500]], "still working");
+  // Re-asking walks the same flow: apology, collection, done.
+  Butler().talk({ player, npc });
+  assert.deepEqual(shown[2][1][1], ["I have a new job for you.", "Show me what you've collected so far.", "Nothing."]);
+  shown[2][1][2].execute(1);
+  assert.equal(shown[3].length, 3, "collect first, again");
+  shown[3][2][2].send(player);
+  assert.equal(banked(player, I.FLAX), 1500, "everything owed, then stopped at the collection");
+  assert.equal(player.getAttribute(Butler().JOB_ATTRIBUTE).paused, true);
+  // Then the new job, on the re-talk.
+  Butler().talk({ player, npc });
+  assert.deepEqual(shown[4][1][1], ["I have a new job for you.", "Nothing."]);
+  shown[4][1][2].execute(1);
+  const jobs = shown[5][1];
+  jobs[2].execute(1);
+  const choice = shown[6][0];
+  choice[2].execute(2);
+  const fresh = player.getAttribute(Butler().JOB_ATTRIBUTE);
+  assert.deepEqual({ ...fresh, since: 0 }, { action: 1, processing: false, since: 0, xp: 0 }, "the new job, a fresh clock");
+  Butler().butlers.delete(player);
+});
+
+test("Butler's Bell: a request closed with nothing held leaves the job running, and re-asking walks the apology-collection flow", (t) => {
+  const player = cases(BUTLERS_BELL).relic;
+  const npc = { getId: () => 15636 };
+  Butler().butlers.set(player, npc);
+  const now = Date.now();
+  player.setAttribute(Butler().STORE_ATTRIBUTE, null);
+  player.setAttribute(Butler().JOB_ATTRIBUTE, { action: 5, processing: false, since: now, xp: 0 });
+  Math.random = () => 0;
+  const shown = dialogues(t, player);
+  assert.equal(Butler().talk({ player, npc }), true);
+  shown[0][1][2].execute(1);
+  assert.equal(shown[1].length, 2, "said, then the job menu — nothing to collect");
+  const job = player.getAttribute(Butler().JOB_ATTRIBUTE);
+  assert.equal(job.paused, undefined, "no pause without a collection");
+  // The player closes the menu without choosing: the old job carries on, as live.
+  Butler().catchUp(player, job.since + 60_000);
+  assert.deepEqual(player.getAttribute(Butler().STORE_ATTRIBUTE), [["FLAX", 50]], "still working");
+  // Re-asking now walks the apology-collection flow.
+  Butler().talk({ player, npc });
+  assert.deepEqual(shown[2][1][1], ["I have a new job for you.", "Show me what you've collected so far.", "Nothing."]);
+  shown[2][1][2].execute(1);
+  assert.equal(shown[3].length, 3, "apology, collection");
+  shown[3][2][2].send(player);
+  assert.equal(banked(player, I.FLAX), 50, "then stopped at the collection");
+  assert.equal(player.getAttribute(Butler().JOB_ATTRIBUTE).paused, true);
   Butler().butlers.delete(player);
 });
 
@@ -2581,4 +2819,27 @@ test("Transmute capped bank falls back to a separate plain stack without merging
   assert.equal(inventory.get(0).getId(), I.CHAOS_RUNE);
   assert.equal(inventory.get(0).getAmount(), 10);
   assert.equal(inventory.get(0).getMeta(), null);
+});
+
+test("Gauntlet carried Flask of Fervour: selected relic retains one flask, resets cooldown and cancels its old ready task", t => {
+  const who = cases(FLASK_OF_FERVOUR), tasks = [];
+  t.mock.method(core.TaskManager, "submit", task => tasks.push(task));
+  const flask = itemActions.get("Flask of fervour"), key = require("../plugins/modes/leaguerelics/FlaskOfFervour.LeagueRelics").READY_AT_ATTRIBUTE;
+  flask.Activate({ player: who.relic, handled: false });
+  const ready = tasks.at(-1);
+  assert.ok(who.relic.getAttribute(key) > Date.now());
+  const id = I.FLASK_OF_FERVOUR, count = who.relic.getInventory().getAmount(id);
+  emit("gauntlet:starting-kit", { player: who.relic, carried: [{ id, amount: 1 }] });
+  assert.equal(who.relic.getInventory().getAmount(id), count + 1);
+  assert.equal(who.relic.getAttribute(key), 0);
+  assert.equal(ready.isRunning(), false, "the previous ready notification cannot fire in the run");
+  const cooldownVarp = core.CacheDefinitions.getVarpId("league_relic_flask_of_fervour_cooldown");
+  assert.equal(who.relic.sent.configs.get(cooldownVarp), 0);
+  for (const p of others(who)) {
+    const before = p.getInventory().getAmount(id);
+    emit("gauntlet:starting-kit", { player: p, carried: [{ id, amount: 1 }] });
+    assert.equal(p.getInventory().getAmount(id), before, "carrying a flask does not grant its unselected relic");
+  }
+  emit("gauntlet:starting-kit", { player: who.relic, carried: [{ id: 995, amount: 1 }] });
+  assert.equal(who.relic.getInventory().getAmount(id), count + 1, "no flask is manufactured when none was carried");
 });

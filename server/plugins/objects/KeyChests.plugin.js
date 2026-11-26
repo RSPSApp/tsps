@@ -16,7 +16,7 @@ const UNITS = [
 
 module.exports = {
   name: "KeyChests",
-  description: "Key-opened chests: Taverley crystal chest, Mount Karuulm brimstone chest, Larran's Wilderness chests, Prifddinas' Elven chest, Forthos' Grubby Chest and the Zombie Pirate's Locker, plus crystal key crafting.",
+  description: "Key-opened chests: Taverley crystal chest, Mount Karuulm brimstone chest, Larran's Wilderness chests, Prifddinas' Elven chest, Forthos' Grubby Chest, the Zombie Pirate's Locker and the Ruins of Tapoyauik moon key chest, plus crystal and moon key crafting.",
   members: true,
   register(api) {
     for (const unit of UNITS) unit.init?.(api);

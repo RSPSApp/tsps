@@ -5,8 +5,14 @@ import type { RenderedWorldMapPoint } from "@runelite/client/ui/overlay/worldmap
 export const WORLD_MAP_ELEMENT_TOOLTIP_SCRIPT_ID = 7325;
 export const WORLD_MAP_ELEMENT_TOOLTIP_CLEAR_SCRIPT_ID = 7326;
 
-export const MAX_WORLDMAP_URLS = 96;
-export const MAX_WORLDMAP_URLS_MOBILE = 32;
+/**
+ * Rendered tile images kept, in bytes of RGBA texture. The client's region sprite cache holds
+ * 37748736 bytes (WorldMapRegion.regionSpriteCache, each sprite charged 4 bytes a pixel), so a
+ * few zoom levels of the area being browsed stay cached: zooming back shows them at once.
+ */
+export const MAX_WORLDMAP_IMAGE_BYTES = 37748736;
+/** Ours: a phone's GPU budget is smaller, so it keeps a third of that. */
+export const MAX_WORLDMAP_IMAGE_BYTES_MOBILE = 12582912;
 export const BASE_PENDING_WORLDMAP_TILE_LOADS = 8;
 export const BASE_PENDING_WORLDMAP_TILE_LOADS_MOBILE = 4;
 export const MAX_PENDING_WORLDMAP_TILE_LOADS = 128;
@@ -43,6 +49,8 @@ export type WorldMapImageTile = {
     pixels?: Uint8Array;
     width: number;
     height: number;
+    /** The texture's size in bytes, charged against MAX_WORLDMAP_IMAGE_BYTES. */
+    bytes: number;
 };
 
 export type WorldMapRetainTile = {
@@ -71,7 +79,12 @@ export type WorldMapStateHolder = {
     renderedWorldMapPoints: RenderedWorldMapPoint[];
     hoveredWorldMapIcons: Map<string, WorldMapRenderedIcon>;
     worldMapImageTiles: Map<number, WorldMapImageTile>;
+    /** Sum of worldMapImageTiles' bytes. */
+    worldMapImageBytes: number;
+    /** LRU order for eviction: the last draw time plus that draw's priority. */
     worldMapImageAccess: Map<number, number>;
+    /** When each tile was last drawn (performance.now(), no priority): what "stale" means. */
+    worldMapImageDrawnAt: Map<number, number>;
     pendingWorldMapImageIds: Set<number>;
     failedWorldMapImageIds: Map<number, number>;
     retainedWorldMapImageIds: Set<number>;

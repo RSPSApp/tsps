@@ -307,15 +307,16 @@ test('the gates: the challenge before it first, then TzKal-Zuk for the third and
   assert.deepEqual(message.box, { statement: true });
 });
 
-test("a challenge's Jads: as many as its number, on its recorded tiles and facing, first attacks staggered", () => {
+const tileAndFace = (entries) => entries.map(([x, y, face]) => [x, y, face]);
+
+test("a challenge's Jads: as many as its number, on its recorded tiles and facing", () => {
   const player = fakePlayer();
   setCompleted(player, 1, 2, 3, 4, 5);
   player.attributes['inferno:completions'] = 1;
   const challenge = begin(player, 6);
   assert.equal(challenge.jads.length, 6);
   assert.ok(spawned.every((npc) => npc.getId() === Common.ids.npcs.jad && npc.target === player));
-  assert.deepEqual(spawned.map((npc) => npc.attackDelay), [4, 7, 10, 13, 16, 19]);
-  assert.deepEqual(spawned.map((npc) => [npc.getLocation().getX(), npc.getLocation().getY(), npc.face]), Common.data.arena.layouts[5]);
+  assert.deepEqual(spawned.map((npc) => [npc.getLocation().getX(), npc.getLocation().getY(), npc.face]), tileAndFace(Common.data.arena.layouts[5]));
   assert.deepEqual(Common.data.arena.layouts.map((layout) => layout.length), [1, 2, 3, 4, 5, 6]);
   assert.ok(Common.inBox(player.getLocation(), [2257, 2285, 5329, 5358]), 'on the arena floor');
   for (const npc of spawned) {
@@ -741,12 +742,43 @@ test('the Infinite Challenge: listed as option 7 only once the Sixth is complete
   Challenge.end(player);
 });
 
+// rsprox (126 challenge starts in 21 recordings, rev 227 and 237, all alike): the Jads first
+// attack clockwise round the arena from the northernmost, each on its own tick after their arrival.
+const RECORDED_FIRST_ATTACKS = [
+  [[2269, 5349, 4]],
+  [[2269, 5349, 4], [2269, 5334, 8]],
+  [[2269, 5349, 4], [2276, 5338, 7], [2262, 5338, 10]],
+  [[2264, 5347, 4], [2274, 5347, 6], [2274, 5336, 8], [2264, 5336, 10]],
+  [[2269, 5349, 4], [2276, 5343, 6], [2273, 5336, 7], [2265, 5336, 9], [2262, 5343, 11]],
+  [[2269, 5349, 4], [2276, 5345, 5], [2276, 5338, 6], [2269, 5334, 7], [2262, 5338, 8], [2262, 5345, 9]],
+];
+
+test('every challenge: its Jads first attack clockwise from the northernmost, on their recorded ticks (#6696)', () => {
+  const centre = [2271.5, 5341.5];
+  for (let number = 1; number <= Common.SIX; number++) {
+    spawned = [];
+    const player = fakePlayer({ zuk: true });
+    for (let previous = 1; previous < number; previous++) setCompleted(player, previous);
+    begin(player, number);
+    const firsts = spawned
+      .map((npc) => [npc.getLocation().getX(), npc.getLocation().getY(), npc.attackDelay])
+      .sort((a, b) => a[2] - b[2]);
+    assert.deepEqual(firsts, RECORDED_FIRST_ATTACKS[number - 1], `challenge ${number}`);
+    assert.equal(new Set(firsts.map(([, , tick]) => tick % 8)).size, number, `challenge ${number}: each on its own tick of the 8-tick cycle`);
+    // Clockwise: the bearing from the arena's middle (north 0, east 90) only grows.
+    const bearings = firsts.map(([x, y]) => (Math.atan2(x + 2 - centre[0], y + 2 - centre[1]) * 180 / Math.PI + 360) % 360);
+    const fromFirst = bearings.map((bearing) => (bearing - bearings[0] + 360) % 360);
+    assert.deepEqual([...fromFirst].sort((a, b) => a - b), fromFirst, `challenge ${number}: clockwise`);
+    Challenge.end(player);
+  }
+});
+
 test('the Infinite Challenge: the Sixth six Jads, each killed one back on its tile 11 ticks later, until death', () => {
   const player = fakePlayer({ zuk: true });
   setCompleted(player, 1, 2, 3, 4, 5, 6);
   const deathsBefore = Scoreboard.worldRecords().deaths[Common.INFINITE];
   const challenge = atCycle(1000, () => begin(player, Common.INFINITE));
-  assert.deepEqual(spawned.map((npc) => [npc.getLocation().getX(), npc.getLocation().getY(), npc.face]), Common.data.arena.layouts[5]);
+  assert.deepEqual(spawned.map((npc) => [npc.getLocation().getX(), npc.getLocation().getY(), npc.face]), tileAndFace(Common.data.arena.layouts[5]));
   const fallen = spawned[3];
   fallen.hp = 0;
   atCycle(1020, () => tick(challenge));
@@ -757,7 +789,7 @@ test('the Infinite Challenge: the Sixth six Jads, each killed one back on its ti
   atCycle(1031, () => tick(challenge));
   assert.equal(spawned.length, 7, 'eleven ticks after it fell (rsprox 227/00227)');
   const back = spawned[6];
-  assert.deepEqual([back.getLocation().getX(), back.getLocation().getY(), back.face], Common.data.arena.layouts[5][3], 'on its tile');
+  assert.deepEqual([back.getLocation().getX(), back.getLocation().getY(), back.face], tileAndFace(Common.data.arena.layouts[5])[3], 'on its tile');
   assert.equal(back.target, player);
   assert.equal(back.attackDelay, 6, "its first attack 6 ticks after it appears (rsprox 227/00229)");
 

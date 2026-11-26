@@ -72,8 +72,10 @@
  *   Safalaan power/escape dialogue still uses NPC chatheads rather than a
  *   fully instanced cutscene. Vanstrom uses his real stats (9569), enrage
  *   (9571), lightning, pets, darkness and blood-orb mechanics.
- * - Damien's fires and the medallion's destination UI belong to A Taste of
- *   Hope; this plugin only answers the medallion once this quest is complete.
+ * - Damien's magical fires (cast, Stamp-out, damage reduction) are
+ *   Fires.SinsOfTheFather.js. The medallion's destination UI belongs to A
+ *   Taste of Hope; this plugin only answers the medallion once this quest is
+ *   complete.
  */
 module.exports = function registerSinsOfTheFatherQuest(api) {
   const {
@@ -671,6 +673,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
 
   let quest;
   const spawnedByPlayer = new Map();
+  const damienFires = require("./Fires.SinsOfTheFather")(api);
   const tombPuzzleByPlayer = new WeakMap();
   const valveMenus = new WeakMap();
   const vanstromFights = new WeakMap();
@@ -1289,9 +1292,12 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
       despawnKey(player, "bloodveld");
     }
     if (stage >= STAGE_DISGUISE_READY && stage < STAGE_DAMIEN_DONE && hasBit(player, BIT_DAMIEN)) {
-      spawnKey(player, "damien_fight", DAMIEN_FIGHT_ID, DAMIEN_MANOR_TILE);
+      const damien = spawnKey(player, "damien_fight", DAMIEN_FIGHT_ID, DAMIEN_MANOR_TILE)
+        ?? spawnedByPlayer.get(player)?.get("damien_fight");
+      if (damien) damienFires.start(player, damien);
     } else {
       despawnKey(player, "damien_fight");
+      damienFires.stop(player);
     }
     if (stage >= STAGE_ESCORT && stage < STAGE_ESCORT_DONE) {
       spawnKey(player, "ivan_trek", IVAN_ESCORT_ID, TREK_START);
@@ -2969,6 +2975,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     }
     if (event.npcId === DAMIEN_FIGHT_ID && stage >= STAGE_DISGUISE_READY && stage < STAGE_DAMIEN_DONE) {
       despawnKey(player, "damien_fight");
+      damienFires.stop(player);
       play(player, DAMIEN_FIGHT_ID, "a-vyre-ry-noble-disguise-going-back-to-slepe-death-of-damien");
       return;
     }
@@ -3686,6 +3693,11 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   }
 
   /** Darkmeyer joins the medallion's destinations once the quest is done (Wiki: Drakan's medallion). */
+  // A separate read-only catalogue includes the canonical landing without quest/player checks.
+  function describeDarkmeyerMedallionDestination({ destinations }) {
+    destinations.push({ label: "Darkmeyer", tile: { ...DARKMEYER_MEDALLION_TILE } });
+  }
+
   function addDarkmeyerMedallionDestination(event) {
     if (!event?.player || !Array.isArray(event.destinations) || !quest.isComplete(event.player)) return;
     event.destinations.push({ label: "Darkmeyer", tile: DARKMEYER_MEDALLION_TILE });
@@ -3741,6 +3753,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     valveMenus.delete(player);
     resetCamera(player);
     cleanupVanstromFight(player);
+    damienFires.stop(player);
     clearPersonalObjects(player);
     removeCarlFollow(player);
     for (const npc of carlFailureActors.get(player) ?? []) api.removeNpc(npc);
@@ -3761,6 +3774,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   api.persistAttribute(CARL_PROGRESS_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [KROY_FIGHT_ID, DAMIEN_FIGHT_ID, VANSTROM_FIGHT_ID, VANSTROM_ENRAGE_ID, BLOODVELD_ID, ACIDIC_BLOODVELD_ID, ...NAIL_BEAST_IDS, ...JUVI_IDS, ZOMBIE_NPC_ID],
     key: "sins_of_the_father",
     name: "Sins of the Father",
     varpId: 2712, // myq5
@@ -3815,6 +3829,8 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   api.onObjectInteraction("Shelves", { Search: searchArboretumShelves });
   api.onObjectInteraction("Valve", { Turn: turnValve });
   api.onObjectInteraction("Lab table", { Destroy: destroyLabTable });
+  api.onObjectInteraction("Magical Fire", { "Stamp-out": damienFires.stampOut });
+  api.onCombatHitDamage(damienFires.reduceDamage);
   api.onObjectInteraction("Mausoleum door", { Unlock: unlockMausoleum, Open: openMausoleum });
   api.onObjectInteraction([MAUSOLEUM_DOOR_BASE_OBJECT_ID, MAUSOLEUM_DOOR_UNLOCK_OBJECT_ID,
     MAUSOLEUM_DOOR_OPEN_OBJECT_ID, MAUSOLEUM_DOOR_UNLOCKED_OBJECT_ID],
@@ -3829,6 +3845,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   api.onItemAction("Tome of Experience", { Read: readTome });
   api.onItemAction("Old note", { Read: readOldNote });
   api.onCustomEvent("drakan-medallion:destinations", addDarkmeyerMedallionDestination);
+  api.onCustomEvent("drakan-medallion:catalogue", describeDarkmeyerMedallionDestination);
   api.onNpcDeath(handleNpcDeath);
   api.onNpcBeforeDeath(handleVanstromBeforeDeath);
   api.registerArea(new CarlFollowArea());

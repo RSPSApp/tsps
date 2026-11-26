@@ -2085,6 +2085,7 @@
         "stagnant-water-talking-to-captain-braindeath-after-using-blindweed-on-the-hopper",
         "stagnant-water-talking-to-captain-braindeath-again-before-getting-stagnant-water",
         "stagnant-water-talking-to-captain-braindeath-before-pouring-in-the-stagnant-in-the-hopper",
+        "stagnant-water-talking-to-captain-braindeath-before-pouring-in-the-stagnant-in-the-hopper-using-the-bucket-of-stagnant-water-on-captain-braindeath",
         "sluglings-talking-to-captain-braindeath-after-using-the-water-on-the-hopper",
         "sluglings-talking-to-captain-braindeath-again-before-catching-the-sluglings",
         "sluglings-using-karamthultu-on-captain-braindeath",
@@ -26519,7 +26520,10 @@
       "page": "Transcript:Gertrude's Cat",
       "variants": [
         "talking-to-shilop-and-wilough",
-        "finding-fluffs-talking-to-shilop-and-wilough-again"
+        "talking-to-shilop-and-wilough-talking-to-wilough",
+        "talking-to-shilop-and-wilough-talking-to-them-again",
+        "finding-fluffs-talking-to-shilop-and-wilough-again",
+        "finding-fluffs-talking-to-wilough-again"
       ]
     }
   ],
@@ -26544,9 +26548,10 @@
     {
       "page": "Transcript:Gertrude's Cat",
       "variants": [
-        "talking-to-shilop-and-wilough",
-        "talking-to-shilop-and-wilough-talking-to-them-again",
-        "finding-fluffs-talking-to-shilop-and-wilough-again"
+        "talking-to-shilop-and-wilough-talking-to-wilough",
+        "talking-to-shilop-and-wilough-talking-to-wilough-again",
+        "finding-fluffs-talking-to-shilop-and-wilough-again",
+        "finding-fluffs-talking-to-wilough-again"
       ]
     }
   ],
@@ -38192,7 +38197,8 @@
         "getting-started-talking-to-the-guard-after-starting-the-quest",
         "presenting-the-evidence-talking-to-the-guard-with-some-but-not-all-evidence",
         "presenting-the-evidence-talking-to-the-guard-with-all-evidence",
-        "post-quest-talking-to-the-guard-after-the-quest"
+        "post-quest-talking-to-the-guard-after-the-quest",
+        "post-quest-talking-to-the-guard-outside-the-mansion-after-the-quest"
       ]
     }
   ],
@@ -38355,6 +38361,8 @@
       "variants": [
         "visiting-the-poison-salesman-talking-to-the-poison-salesman",
         "visiting-the-poison-salesman-talking-to-the-poison-salesman-if-the-player-also-has-progress-in-fremennik-trials",
+        "visiting-the-poison-salesman-talking-to-the-poison-salesman-after-learning-who-bought-the-poison",
+        "visiting-the-poison-salesman-talking-to-the-poison-salesman-after-learning-who-bought-the-poison-if-the-player-also-has-progress-in-fremennik-trials",
         "post-quest-talking-to-the-poison-salesman-after-the-quest",
         "post-quest-talking-to-the-poison-salesman-after-the-quest-if-the-player-has-progress-in-fremennik-trials"
       ]
@@ -41396,7 +41404,8 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
-        "ogre-investigations-grew-facing-gorad"
+        "ogre-investigations-grew-facing-gorad",
+        "ogre-investigations-grew-talking-to-gorad-after-getting-his-tooth"
       ]
     }
   ],
@@ -41411,7 +41420,11 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-gu-tanoth-east-gate-guard",
         "entering-gu-tanoth-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again",
+        "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic",
         "entering-gu-tanoth-ogre-guard",
         "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again",
         "entering-gu-tanoth-talking-to-the-southern-ogre-guard",
@@ -41430,7 +41443,11 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-gu-tanoth-east-gate-guard",
         "entering-gu-tanoth-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again",
+        "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic",
         "entering-gu-tanoth-ogre-guard",
         "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again",
         "entering-gu-tanoth-talking-to-the-southern-ogre-guard",
@@ -41449,7 +41466,11 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-gu-tanoth-east-gate-guard",
         "entering-gu-tanoth-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again",
+        "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic",
         "entering-gu-tanoth-ogre-guard",
         "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again",
         "entering-gu-tanoth-talking-to-the-southern-ogre-guard",
@@ -41468,7 +41489,11 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-gu-tanoth-east-gate-guard",
         "entering-gu-tanoth-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again",
+        "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic",
         "entering-gu-tanoth-ogre-guard",
         "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again",
         "entering-gu-tanoth-talking-to-the-southern-ogre-guard",
@@ -41487,7 +41512,11 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-gu-tanoth-east-gate-guard",
         "entering-gu-tanoth-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-again",
+        "entering-gu-tanoth-city-guard-using-another-item-on-the-city-guard",
+        "entering-gu-tanoth-city-guard-talking-to-the-city-guard-after-giving-him-the-relic",
         "entering-gu-tanoth-ogre-guard",
         "entering-gu-tanoth-ogre-guard-talking-to-the-ogre-guard-again",
         "entering-gu-tanoth-talking-to-the-southern-ogre-guard",
@@ -41510,7 +41539,7 @@
         "entering-gu-tanoth-seeking-passage",
         "entering-gu-tanoth-seeking-passage-talking-to-the-city-guard-again",
         "entering-gu-tanoth-seeking-passage-using-the-wrong-item-on-the-guard",
-        "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard",
+        "entering-gu-tanoth-seeking-passage-using-the-death-rune-on-the-guard-or-talking-to-him-with-it",
         "entering-gu-tanoth-seeking-passage-talking-to-him-after-having-given-him-the-rune"
       ]
     }
@@ -41544,9 +41573,12 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "skavid-search-learning-skavid",
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-talking-to-a-skavid-again",
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41554,9 +41586,12 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "skavid-search-learning-skavid",
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-talking-to-a-skavid-again",
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41564,9 +41599,12 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "skavid-search-learning-skavid",
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-talking-to-a-skavid-again",
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41574,9 +41612,12 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "skavid-search-learning-skavid",
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-talking-to-a-skavid-again",
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41584,9 +41625,12 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "skavid-search-learning-skavid",
         "skavid-search-learning-skavid-skavid-1",
         "skavid-search-learning-skavid-skavid-2",
-        "skavid-search-learning-skavid-skavid-3"
+        "skavid-search-learning-skavid-talking-to-a-skavid-again",
+        "skavid-search-learning-skavid-skavid-3",
+        "skavid-search-learning-skavid-skavid-4"
       ]
     }
   ],
@@ -41600,6 +41644,7 @@
     {
       "page": "Transcript:Watchtower",
       "variants": [
+        "entering-the-enclave-talking-to-an-enclave-guard-before-getting-the-mad-skavid-s-crystal",
         "entering-the-enclave-attempting-to-enter-the-ogre-enclave-before-distracting-the-guards",
         "entering-the-enclave-talking-to-an-enclave-guard",
         "entering-the-enclave-using-cave-nightshade-on-an-enclave-guard"
@@ -41612,7 +41657,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41622,7 +41668,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41632,7 +41679,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41642,7 +41690,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41652,7 +41701,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41662,7 +41712,8 @@
       "variants": [
         "skavid-search-scared-skavid",
         "entering-the-enclave-inside-the-enclave",
-        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman"
+        "entering-the-enclave-inside-the-enclave-talking-to-an-ogre-shaman",
+        "entering-the-enclave-inside-the-enclave-attacking-an-ogre-shaman"
       ]
     }
   ],
@@ -41682,8 +41733,10 @@
       "variants": [
         "getting-started-speaking-to-the-watchtower-wizard",
         "searching-for-evidence-talking-to-the-watchtower-wizard",
+        "searching-for-evidence-using-evidence-other-than-the-fingernails-on-the-watchtower-wizard",
         "ogre-investigations-talking-to-the-watchtower-wizard",
         "ogre-investigations-assembling-the-relic",
+        "ogre-investigations-using-a-crystal-on-the-watchtower-wizard",
         "ogre-investigations-talking-to-the-watchtower-wizard-again",
         "entering-gu-tanoth-talking-to-the-watchtower-wizard-after-gaining-access-to-the-city",
         "skavid-search-talking-to-the-watchtower-wizard-after-getting-the-skavid-map",
@@ -41691,6 +41744,7 @@
         "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible",
         "entering-the-enclave-talking-to-the-watchtower-wizard-after-discovering-the-shamans-are-invincible-talking-to-the-watchtower-wizard-again",
         "entering-the-enclave-talking-to-the-watchtower-wizard-after-making-the-potion",
+        "entering-the-enclave-talking-to-the-watchtower-wizard-before-killing-the-shamans",
         "entering-the-enclave-returning-to-the-watchtower-wizard-after-killing-the-shamans-without-mining-the-rock",
         "reviving-the-watchtower-talking-to-the-watchtower-wizard-with-all-the-crystals",
         "reviving-the-watchtower-talking-to-the-watchtower-wizard-again",
@@ -45896,6 +45950,7 @@
         "second-experiment",
         "talking-to-him-after-the-second-experiment",
         "preparing-for-the-expedition",
+        "preparing-for-the-expedition-talking-to-him-before-planting-his-sapling-but-after-delivering-all-the-required-materials",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling-and-handing-in-all-the-ingredients",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling-and-handing-in-all-the-ingredients-using-a-willow-branch-on-auguste",
@@ -45935,6 +45990,7 @@
         "second-experiment",
         "talking-to-him-after-the-second-experiment",
         "preparing-for-the-expedition",
+        "preparing-for-the-expedition-talking-to-him-before-planting-his-sapling-but-after-delivering-all-the-required-materials",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling-and-handing-in-all-the-ingredients",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling-and-handing-in-all-the-ingredients-using-a-willow-branch-on-auguste",
@@ -45974,6 +46030,7 @@
         "second-experiment",
         "talking-to-him-after-the-second-experiment",
         "preparing-for-the-expedition",
+        "preparing-for-the-expedition-talking-to-him-before-planting-his-sapling-but-after-delivering-all-the-required-materials",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling-and-handing-in-all-the-ingredients",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling-and-handing-in-all-the-ingredients-using-a-willow-branch-on-auguste",
@@ -46013,6 +46070,7 @@
         "second-experiment",
         "talking-to-him-after-the-second-experiment",
         "preparing-for-the-expedition",
+        "preparing-for-the-expedition-talking-to-him-before-planting-his-sapling-but-after-delivering-all-the-required-materials",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling-and-handing-in-all-the-ingredients",
         "preparing-for-the-expedition-talking-to-him-after-planting-his-sapling-and-handing-in-all-the-ingredients-using-a-willow-branch-on-auguste",
@@ -46724,9 +46782,10 @@
       "page": "Transcript:The Slug Menace",
       "variants": [
         "witchaven-talking-to-col-o-niall",
+        "witchaven-talking-to-col-o-niall-again-before-getting-any-information",
         "witchaven-talking-to-col-o-niall-before-getting-all-the-information",
         "witchaven-talking-to-col-o-niall-after-talking-to-mayor-hobb",
-        "the-pages-talking-to-col-o-niall-after-learning-abotu-mother-mallum",
+        "the-pages-talking-to-col-o-niall-after-learning-about-mother-mallum",
         "the-pages-talking-to-col-o-niall-again",
         "the-pages-talking-to-col-o-niall-while-looking-for-the-final-page",
         "crafting-the-runes-talking-to-col-o-niall-after-losing-the-commorb"
@@ -46738,9 +46797,10 @@
       "page": "Transcript:The Slug Menace",
       "variants": [
         "witchaven-talking-to-col-o-niall",
+        "witchaven-talking-to-col-o-niall-again-before-getting-any-information",
         "witchaven-talking-to-col-o-niall-before-getting-all-the-information",
         "witchaven-talking-to-col-o-niall-after-talking-to-mayor-hobb",
-        "the-pages-talking-to-col-o-niall-after-learning-abotu-mother-mallum",
+        "the-pages-talking-to-col-o-niall-after-learning-about-mother-mallum",
         "the-pages-talking-to-col-o-niall-again",
         "the-pages-talking-to-col-o-niall-while-looking-for-the-final-page",
         "crafting-the-runes-talking-to-col-o-niall-after-losing-the-commorb"
@@ -46754,7 +46814,7 @@
         "witchaven-talking-to-mayor-hobb",
         "witchaven-talking-to-mayor-hobb-2",
         "witchaven-talking-to-mayor-hobb-again",
-        "the-pages-mayor-hobb-leaving-the-church",
+        "the-pages-during-the-cutscene-where-maledict-is-possessed",
         "the-imposing-door-opening-the-door-with-the-runes-and-commorb",
         "the-imposing-door-reentering-the-fight",
         "the-imposing-door-after-killing-the-slug-prince"
@@ -46768,7 +46828,7 @@
         "witchaven-talking-to-mayor-hobb",
         "witchaven-talking-to-mayor-hobb-2",
         "witchaven-talking-to-mayor-hobb-again",
-        "the-pages-mayor-hobb-leaving-the-church",
+        "the-pages-during-the-cutscene-where-maledict-is-possessed",
         "the-imposing-door-opening-the-door-with-the-runes-and-commorb",
         "the-imposing-door-reentering-the-fight",
         "the-imposing-door-after-killing-the-slug-prince"
@@ -48105,14 +48165,14 @@
       "page": "Transcript:The Slug Menace",
       "variants": [
         "starting-off-contact-with-commorb-v2",
+        "witchaven-contacting-savant-after-talking-to-col-o-niall",
+        "witchaven-scanning-mayor-hobb",
         "witchaven-savant-asking-to-scan-the-mayor",
-        "witchaven-scanning-the-mayor",
-        "witchaven-contacting-the-commorb-while-investigating-witchaven",
         "the-shrine-contacting-commorb-before-scanning-the-shrine",
         "the-shrine-scanning-the-commorb-near-the-door",
         "the-shrine-scanning-commorb-near-the-door",
-        "the-shrine-contacting-the-commorb-after-scanning-the-doors",
         "the-shrine-picking-up-the-dead-sea-slug",
+        "the-shrine-contacting-the-commorb-after-scanning-the-doors",
         "the-pages-talking-to-jorral",
         "the-pages-after-talking-to-jorral",
         "the-pages-contacting-the-commorb-after-learning-about-mother-mallum",
@@ -49419,6 +49479,7 @@
       "page": "Transcript:The Slug Menace",
       "variants": [
         "witchaven-talking-to-bailey-at-the-fishing-platform",
+        "the-pages-talking-to-bailey-before-learning-about-the-glue",
         "the-pages-talking-to-bailey-after-learning-about-the-glue"
       ]
     }

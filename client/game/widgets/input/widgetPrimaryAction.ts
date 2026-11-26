@@ -3,7 +3,7 @@ import type { WidgetInputControllerDeps } from "./widgetInputTypes";
 import type { WidgetInteractionController } from "../WidgetInteractionController";
 import type { WidgetManager } from "../../../widgets/WidgetManager";
 import { ClientState } from "../../ClientState";
-import { chooseDefaultMenuEntry, type DefaultChoiceState } from "../../../ui/menu/MenuEngine";
+import { chooseDefaultMenuEntry, shouldLeftClickOpenMenu, type DefaultChoiceState } from "../../../ui/menu/MenuEngine";
 import {
     deriveMenuEntriesForWidget,
     getWidgetTargetLabelForMenu,
@@ -19,6 +19,11 @@ export type PrimaryWidgetAction = {
     opIndex?: number;
     /** 1-based sub-op of opIndex, when the left-click is a submenu row a plugin pinned. */
     opSubIndex?: number;
+    /**
+     * The left click opens the Choose Option menu instead of acting, as OSRS does when the top
+     * entry is a low-priority op (opcode 1007) or one-button mode is on with a choice to offer.
+     */
+    opensMenu?: boolean;
 };
 
 export type PrimaryWidgetActionResolver = (w: any) => PrimaryWidgetAction;
@@ -69,6 +74,7 @@ export function createPrimaryWidgetActionResolver(
         let entryTarget: string | undefined;
         let entryOpIndex: number | undefined;
         let entryOpSubIndex: number | undefined;
+        let opensMenu = false;
         const getWidgetByUidLocal = (uid: number) => widgetManager?.getWidgetByUid(uid);
         try {
             const derived = deriveMenuEntriesForWidget(
@@ -108,11 +114,19 @@ export function createPrimaryWidgetActionResolver(
                 hasSelectedSpell: ClientState.isSpellSelected,
                 hasSelectedItem: ClientState.isItemSelected === 1,
             };
-            const chosen = chooseDefaultMenuEntry(normalized, state);
+            const chosen = menuWidget.examineAsOperation === true
+                ? normalized.find(e => hasNativeWidgetOperation(e) && String(e.option).toLowerCase() === "examine") ?? chooseDefaultMenuEntry(normalized, state)
+                : chooseDefaultMenuEntry(normalized, state);
+            opensMenu =
+                !state.hasSelectedSpell &&
+                !state.hasSelectedItem &&
+                // A plugin's pinned row or a shift-click op is the left click, not the top row.
+                (chosen === undefined || chosen === normalized[0]) &&
+                shouldLeftClickOpenMenu(normalized, deps.getLeftClickOpensMenu?.() === true);
             const lower = String(chosen?.option || "").toLowerCase();
             const isNonAction =
                 lower === "cancel" ||
-                lower === "examine" ||
+                (lower === "examine" && menuWidget.examineAsOperation !== true) ||
                 (lower === "inspect" && !hasNativeWidgetOperation(chosen)) ||
                 lower === "walk here";
             if (chosen && !isNonAction) {
@@ -153,7 +167,7 @@ export function createPrimaryWidgetActionResolver(
             "";
         const slot = typeof w?.childIndex === "number" ? w.childIndex | 0 : undefined;
         const itemId = typeof w?.itemId === "number" && w.itemId >= 0 ? w.itemId | 0 : undefined;
-        return { option, target, slot, itemId, opIndex: entryOpIndex, opSubIndex: entryOpSubIndex };
+        return { option, target, slot, itemId, opIndex: entryOpIndex, opSubIndex: entryOpSubIndex, ...(opensMenu && { opensMenu }) };
     };
     return getPrimaryWidgetAction;
 }

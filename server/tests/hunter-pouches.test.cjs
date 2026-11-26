@@ -287,3 +287,70 @@ test("a sewn pouch takes the first free slot, not the fur's (captured)", (t) => 
   assert.equal(player.getInventory().getItems()[0]?.getId(), I.SMALL_MEAT_POUCH);
   assert.equal(player.getInventory().getAmount(I.FOX_FUR), 0);
 });
+
+
+// OSRS Wiki: Razor-backed kebbit / Hunter training: east of AKQ, immediately west of Falconry.
+// RuneLite razor-backed-kebbits 11eccb3: END_LOCATIONS and trail varbits 2974..2993 pin this northern network.
+test("Piscatoris tracking assigns the Falconry-side burrows to razor-backed kebbits and the southern burrows to common kebbits", (t) => {
+  const Tracking = require("../plugins/skills/hunter/Tracking.Hunter");
+  const expected = [
+    { creature: "razor_backed_kebbit", starts: [[2354,3594,0],[2354,3595,0],[2357,3624,0],[2360,3611,0],[2360,3612,0],[2361,3611,0]],
+      finals: [[2349,3604,0],[2351,3619,0],[2354,3609,0],[2355,3601,0],[2357,3607,0],[2358,3620,0],[2360,3602,0],[2362,3615,0]],
+      level: 49, loot: I.LONG_KEBBIT_SPIKE, absent: I.COMMON_KEBBIT_FUR },
+    { creature: "common_kebbit", starts: [[2322,3576,0],[2331,3562,0],[2341,3577,0]],
+      finals: [[2322,3570,0],[2323,3563,0],[2327,3573,0],[2332,3568,0],[2332,3578,0],[2336,3571,0],[2337,3565,0],[2343,3568,0]],
+      level: 3, loot: I.COMMON_KEBBIT_FUR, absent: I.LONG_KEBBIT_SPIKE },
+  ];
+  const sorted = points => points.map(point => point.join(",")).sort();
+  t.mock.method(Math, "random", () => 0.25);
+  for (const row of expected) {
+    const segments = Tracking.data.segments.filter(segment => segment.kebbit === row.creature);
+    const starts = [...new Map(segments.filter(segment => segment.burrow).map(segment => [segment.start.join(","), segment.start])).values()];
+    assert.deepEqual(sorted(starts), sorted(row.starts), row.creature + " starting burrows");
+    assert.deepEqual(sorted(Tracking.data.creatures[row.creature].finals), sorted(row.finals), row.creature + " hiding bushes");
+    for (const start of row.starts) {
+      const { player, messages } = actor(t, [[I.NOOSE_WAND, 1]], new core.Location(...start));
+      player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, row.level).setMaxLevel(core.Skill.HUNTER, row.level);
+      const updates = [];
+      t.mock.method(player.getPacketSender(), "sendVarbit", (id, value) => { if (value) updates.push({ id, value }); return player.getPacketSender(); });
+      const objectAt = tile => ({ getLocation: () => new core.Location(...tile), getPrivateArea: () => null });
+      assert.equal(Tracking.inspect({ player, object: objectAt(start), definition: { getName: () => "Burrow" } }), true);
+      assert.ok(updates.length > 0, "the burrow starts a real trail");
+      let endpoint;
+      for (let step = 0; step < 20; step++) {
+        const update = updates.at(-1);
+        const original = segments.find(candidate => candidate.varbit === update.id);
+        assert.ok(original, "every emitted segment belongs to " + row.creature);
+        const reversed = (update.value === 5) !== !!original.inverted;
+        const segment = reversed ? { ...original, start: original.end, end: original.start } : original;
+        const spot = segment.trigger ?? segment.end;
+        player.setLocation(new core.Location(...spot));
+        const before = updates.length;
+        Tracking.inspect({ player, object: objectAt(spot), definition: { getName: () => "Plant" } });
+        if (updates.length === before) { endpoint = segment.end; break; }
+      }
+      assert.ok(endpoint, "trail reaches a hiding bush");
+      player.setLocation(new core.Location(...endpoint));
+      assert.equal(Tracking.catchPrey({ player, object: objectAt(endpoint) }), true);
+      assert.ok(C.H.actions.has(player), "capture action starts: " + JSON.stringify({start,endpoint,messages}));
+      C.H.tick += 2;
+      C.processActions();
+      assert.equal(player.getInventory().getAmount(row.loot), 1, "correct species loot");
+      assert.equal(player.getInventory().getAmount(row.absent), 0, "no other species loot");
+      assert.ok(messages.includes("You catch a " + row.creature.replaceAll("_", " ") + "!"));
+      Tracking.clear({ player });
+      C.H.players.delete(player);
+    }
+  }
+});
+
+test("the Falconry-side razor-backed kebbit burrow refuses Hunter below 49", (t) => {
+  const Tracking = require("../plugins/skills/hunter/Tracking.Hunter");
+  const { player, messages } = actor(t, [[I.NOOSE_WAND, 1]], new core.Location(2361, 3611, 0));
+  player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, 48).setMaxLevel(core.Skill.HUNTER, 48);
+  const updates = [];
+  t.mock.method(player.getPacketSender(), "sendVarbit", (...args) => { updates.push(args); });
+  Tracking.inspect({ player, object: { getLocation: () => player.getLocation(), getPrivateArea: () => null }, definition: { getName: () => "Burrow" } });
+  assert.deepEqual(updates, []);
+  assert.ok(messages.some(message => message.includes("level 49")));
+});

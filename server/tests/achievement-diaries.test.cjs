@@ -64,13 +64,16 @@ function createPlayer({ freeSlots = 28, levels = {} } = {}) {
   const inventory = [];
   let availableSlots = freeSlots;
   let interfaceId = -1;
+  let busyModal = false;
   const sender = {
+    // As PacketSender.setBusyModal: varbit 12393 on a change, and every close ends it.
+    setBusyModal: (open) => { if (busyModal !== open) log.push(`varbit 12393=${open ? 1 : 0}`); busyModal = open; return sender; },
     sendVarbit: (id, value) => { log.push(`varbit ${id}=${value}`); return sender; },
     sendConfig: (id, value) => { log.push(`varp ${id}=${value}`); return sender; },
     sendInterfaceScript: (id, args = []) => { log.push(`script ${id} [${args}]`); return sender; },
     sendString: (text, uid) => { log.push(`text ${uid >> 16}:${uid & 0xffff} ${text}`); return sender; },
     sendSubInterface: (_target, group) => { log.push(`open ${group}`); return sender; },
-    sendInterfaceRemoval: () => { log.push(`close ${interfaceId}`); return sender; },
+    sendInterfaceRemoval: () => { sender.setBusyModal(false); log.push(`close ${interfaceId}`); return sender; },
   };
   return {
     log,
@@ -387,8 +390,7 @@ test("as captured: clicking a diary opens its list in the journal scroll; closin
   assert.deepEqual(player.log.slice(-3), ["script 2524 [-1,-1]", "open 741", `script 6845 [1,${lines.length}]`]);
   player.log.length = 0;
   Journal.click({ player, buttonId: (741 << 16) | 205, opId: 1 });
-  Journal.closed({ player, interfaceId: 741 });
-  assert.deepEqual(player.log, ["close 741", "varbit 12393=0"]);
+  assert.deepEqual(player.log, ["varbit 12393=0", "close 741"]);
 });
 
 test("as captured (Two-pints): the claim conversation, the cloak and lamp after \"Yes please!\", then the reward varbit", () => {

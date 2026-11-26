@@ -139,8 +139,13 @@
       "name": "Broken fence (Varrock)",
       "object": 2618,
       "level": 1,
-      "end": "You climb over the broken fence.",
-      "stile": {"axis":"y"}
+      "busy": true,
+      "note": "rsprox captures local GertrudesCat (rev 242) ticks 375-382 and 694-701, 3222 ticks 10828-10833 and 11368-11370, 3225 ticks 55-57",
+      "unverified": "the south approach: live walks onto the fence tile (3308,3492), which this cache's collision (clipType 2) blocks, so the climb starts from 3308,3491",
+      "between": {"ends":[[3308,3491,0],[3308,3493,0]],"cross":{
+        "forward":[{"wait":2},{"move":[3308,3494],"from":[3308,3493],"anim":"WALK_FENCE_NORTH","speed":[0,104],"ticks":3}],
+        "back":[{"move":[3308,3491],"from":[3308,3492],"anim":"CLIMB_OVER","speed":[0,60],"ticks":3}]
+      }}
     },
     {
       "name": "Stepping stone (Lumbridge Swamp)",
@@ -577,7 +582,6 @@
           "diary": {
             "key": "falador",
             "tier": "easy",
-            "enforce": false,
             "message": "You need to complete the easy Falador Diary to use this shortcut."
           }
         }
@@ -601,7 +605,6 @@
           "diary": {
             "key": "falador",
             "tier": "easy",
-            "enforce": false,
             "message": "You need to complete the easy Falador Diary to use this shortcut."
           }
         }
@@ -666,7 +669,6 @@
           "diary": {
             "key": "falador",
             "tier": "hard",
-            "enforce": false,
             "message": "You need to complete the hard Falador Diary to use this shortcut."
           }
         }
@@ -680,22 +682,34 @@
       }
     },
     {
-      "name": "Dark tunnel (Motherlode Mine)",
+      "name": "Dark tunnel (Motherlode Mine, eastern)",
       "object": 10047,
+      "at": [[3760,5670,0],[3764,5671,0]],
       "level": 54,
       "end": "You climb your way through the dark tunnel.",
+      "note": "Wiki (Dark tunnel (Motherlode Mine)): the northern tunnel needs the medium Falador Diary's reward claimed",
+      "unverified": "the diary refusal's wording (no capture, not on the Wiki)",
       "requires": [
         {
           "skills": {"agility":54},
           "diary": {
             "key": "falador",
             "tier": "medium",
-            "enforce": false,
+            "claimed": true,
             "message": "You need to complete the medium Falador Diary to use this shortcut."
           }
         }
       ],
       "between": {"ends":[[3759,5670,0],[3765,5671,0]],"cross":[{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
+    },
+    {
+      "name": "Dark tunnel (Motherlode Mine, southern)",
+      "object": 10047,
+      "at": [[3744,5642,0],[3745,5645,0]],
+      "level": 54,
+      "end": "You climb your way through the dark tunnel.",
+      "note": "Wiki (Dark tunnel (Motherlode Mine)): no diary needed; ends from the loc rotations, as the eastern tunnel's",
+      "between": {"ends":[[3744,5641,0],[3745,5646,0]],"cross":[{"anim":"DARK_TUNNEL"},{"wait":1},{"tele":"to"}]}
     },
     {"name":"Stile (Kandarin)","object":993,"level":1,"stile":{}},
     {"name":"Stile (Piscatoris falconry)","object":19222,"level":1,"stile":{}},
@@ -1079,31 +1093,21 @@
     },
     {
       "name": "Stepping stones (Western Brimhaven Dungeon)",
-      "object": 21738,
-      "at": [2649,9561,0],
+      "object": [21738,21739],
+      "at": [[2649,9561,0],[2647,9558,0]],
       "level": 12,
       "xp": 7.5,
-      "between": {
+      "busy": true,
+      "fail": {"low":235,"high":255},
+      "unverified": "the fall's chance (the Wiki's \"quite rare\" only) and damage (a tenth of current hitpoints: the captured 7); the way back from the south mirrors the captured way and never falls",
+      "script": "brimhavenLavaStones",
+      "params": {
         "ends": [[2649,9562,0],[2647,9557,0]],
         "via": [[2649,9561],[2649,9560],[2648,9560],[2647,9560],[2647,9559],[2647,9558]],
-        "cross": [
-          {"use":"hops","args":["...via","to"]}
-        ]
-      }
-    },
-    {
-      "name": "Stepping stones (Western Brimhaven Dungeon)",
-      "object": 21739,
-      "at": [2647,9558,0],
-      "level": 1,
-      "xp": 7.5,
-      "between": {
-        "ends": [[2649,9562,0],[2647,9557,0]],
-        "via": [[2649,9561],[2649,9560],[2648,9560],[2647,9560],[2647,9559],[2647,9558]],
-        "cross": [
-          {"use":"hops","args":["...via","to"]}
-        ]
-      }
+        "landing": [2648,9562,0],
+        "southLevel": 12
+      },
+      "note": "rsprox captures local 1000195, 1000283, 1000433 (fall), 90, 91, 552"
     },
     {
       "name": "Stepping stones (Eastern Brimhaven Dungeon)",
@@ -1318,7 +1322,6 @@
           "diary": {
             "key": "desert",
             "tier": "elite",
-            "enforce": false,
             "message": "You need to complete the elite Desert Diary to use this shortcut."
           }
         }
@@ -1890,6 +1893,27 @@
       "render": "BALANCE_WALK",
       "script": "neitiznotRopeBridge",
       "params": {"length":9}
+    },
+    {
+      "name": "Rope bridge (Ice troll caves, Fremennik Isles)",
+      "object": [21316,21317],
+      "level": 1,
+      "note": "rsprox capture 3026 tick 2917: no Agility level, XP or message; a step onto the bridge end, then a three-tile Agility Pyramid gap jump, the same as the cave's other rope bridge (21318/21319, ticks 2291, 2440, 2449). Both ends (2385,10260 and 2385,10263) are blocked in the map's collision, so the player is routed beside them and stepped on",
+      "between": {
+        "ends": [[2385,10259,1],[2385,10264,1]],
+        "cross": {
+          "forward": [
+            {"walk":[[2385,10260]]},
+            {"sound":2465,"delay":20},
+            {"move":[2385,10263],"anim":"PYRAMID_JUMP","delay":20,"speed":[53,85],"ticks":3}
+          ],
+          "back": [
+            {"walk":[[2385,10263]]},
+            {"sound":2465,"delay":20},
+            {"move":[2385,10260],"anim":"PYRAMID_JUMP","delay":20,"speed":[53,85],"ticks":3}
+          ]
+        }
+      }
     },
     {
       "name": "Stepping stone (Miscellania)",
@@ -2563,6 +2587,15 @@
       "between": {"ends":[{"object":[0,-1,0]},{"object":[0,1,0]}],"cross":[{"use":"climbOver","args":["to","CLIMB_OVER",2]},{"anim":-1}]}
     },
     {
+      "name": "Rocks (Alchemical Hydra's lair, Karuulm Slayer Dungeon)",
+      "object": 34548,
+      "level": 1,
+      "end": "You climb over the rocks.",
+      "script": "karuulmHydraRocks",
+      "note": "rsprox local 1000143, 1000471, 1000473, 1000480, 1000497 and 1521 (rev 224-227): no requirement (the Wiki gives none either); the player faces the rocks, live moves them into the lair's instance the next tick, and the tick after that comes an exact move two tiles north on their own column (cycle 0 to 60, climb-over 839), and the message and the animation reset come 2 ticks after the move starts, as the other Karuulm rocks. Here there is no instance teleport tick between the face and the move (recorded difference); the lair stays in the world and the Alchemical door makes the private chamber (bosses/alchemicalhydra/Lair.AlchemicalHydra.js).",
+      "unverified": "the climb back south was not captured; it mirrors the climb in."
+    },
+    {
       "name": "Tunnel (Stronghold Slayer Cave)",
       "object": [30174,30175],
       "level": 72,
@@ -2598,8 +2631,7 @@
           "diary": {
             "key": "wilderness",
             "tier": "medium",
-            "enforce": false,
-            "message": "You need to complete the medium Wilderness Diary to use this shortcut."
+            "message": "You need to complete the medium tier of the Wilderness achievement diary to use this shortcut"
           }
         }
       ],
@@ -3227,14 +3259,18 @@
       "object": [57278,57279],
       "at": [[1324,9766,0],[1324,3364,0]],
       "level": 59,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
+      "unverified": "animation timing has no retail capture; both standing tiles are walkable in the cache map",
       "requires": [
         {
           "skills": {"agility":59},
           "quest": {"key":"shadows_of_custodia","message":"You need to complete Shadows of Custodia to use this shortcut."}
         }
       ],
-      "between": {"ends":[[1323,9766,0],[1324,3363,0]],"cross":[{"use":"tunnel","args":["to"]}]}
+      "note": "The cave changes map: teleport while hidden, never exact-move across the 6403-tile separation.",
+      "between": {"ends":[[1323,9766,0],[1324,3363,0]],"cross":[
+        {"anim":"DUCK"}, {"wait":1}, {"anim":"INVISIBLE"}, {"wait":4},
+        {"tele":"to"}, {"anim":"EMERGE"}, {"wait":1}
+      ]}
     },
     {
       "name": "Gap (Wintertodt) (1)",
@@ -3514,22 +3550,82 @@
     },
     {
       "name": "Crumbling wall (Gu'Tanoth)",
-      "object": [40355,40356],
-      "at": [[2546,3031,0],[2548,3031,0]],
+      "object": 40355,
+      "at": [2546,3031,0],
       "level": 71,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
+      "busy": true,
+      "keepAnimation": true,
+      "unverified": "this side's crossing (east, onto the rocks): the capture crosses west only, so it is the recorded crossing reversed; the climbing walk's render (the capture's appearance updates carry no ids; ours is human_climbing, as crawlUp's)",
+      "note": "Watchtower capture: before the quest the City guard's line, then on its continue the game message (t2713-2718); the crossing as Rocks (Gu'Tanoth)",
       "requires": [
         {
           "skills": {"agility":71},
-          "quest": {"key":"watchtower","message":"You need to complete Watchtower to use this shortcut."}
+          "quest": {"key":"watchtower","message":{"npc":{"id":4373,"name":"City guard","text":"Hey, you can't go climbing all over the city! Use the path!","expression":615,"then":"You will need to complete the Watchtower quest before you can use this shortcut."}}}
         }
       ],
       "between": {
         "ends": [[2545,3031,0],[2549,3031,0]],
-        "cross": [
-          {"move":"to","anim":"CLIMB_ROCKS","speed":[0,120],"ticks":4},
-          {"anim":-1}
-        ]
+        "cross": {
+          "forward": [
+            {"wait":2},
+            {"sound":2453,"delay":40},
+            {"move":[2546,3031,0],"anim":"CRUMBLED_WALL","delay":30,"speed":[30,100],"dir":"east","ticks":3},
+            {"sound":2454,"loops":4},
+            {"render":"CRAWL_UP_ROCKS"},
+            {"walk":[[2547,3031],[2548,3031],[2549,3031]],"arrive":true},
+            {"render":null}
+          ],
+          "back": [
+            {"wait":2},
+            {"sound":2454,"loops":4},
+            {"render":"CRAWL_UP_ROCKS"},
+            {"walk":[[2548,3031],[2547,3031],[2546,3031]],"arrive":true},
+            {"render":null},
+            {"wait":1},
+            {"sound":2453,"delay":40},
+            {"move":[2545,3031,0],"anim":"CRUMBLED_WALL","delay":30,"speed":[30,100],"dir":"west","ticks":3}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Rocks (Gu'Tanoth)",
+      "object": 40356,
+      "at": [2548,3031,0],
+      "level": 71,
+      "busy": true,
+      "keepAnimation": true,
+      "unverified": "the climbing walk's render (the capture's appearance updates carry no ids; ours is human_climbing, as crawlUp's); the eastward crossing (Crumbling wall (Gu'Tanoth)) is this one reversed",
+      "note": "Watchtower capture: before the quest the Ogre guard's line, then on its continue the game message (t3280-3283); after it (t6209-6217) busy a tick after arrival, then a walk west over the rocks to 2546,3031 with climbing_loop x4 and the movement render changed and back, an exact move onto 2545,3031 (cycles 30-100, west) with human_walk_crumbledwall (delay 30) and climb_wall (delay 40), free 3 ticks later; no message, no XP (Wiki: 0)",
+      "requires": [
+        {
+          "skills": {"agility":71},
+          "quest": {"key":"watchtower","message":{"npc":{"id":4369,"name":"Ogre guard","text":"Hey, you can't go climbing all over the city! Use the path!","expression":615,"then":"You will need to complete the Watchtower quest before you can use this shortcut."}}}
+        }
+      ],
+      "between": {
+        "ends": [[2545,3031,0],[2549,3031,0]],
+        "cross": {
+          "forward": [
+            {"wait":2},
+            {"sound":2453,"delay":40},
+            {"move":[2546,3031,0],"anim":"CRUMBLED_WALL","delay":30,"speed":[30,100],"dir":"east","ticks":3},
+            {"sound":2454,"loops":4},
+            {"render":"CRAWL_UP_ROCKS"},
+            {"walk":[[2547,3031],[2548,3031],[2549,3031]],"arrive":true},
+            {"render":null}
+          ],
+          "back": [
+            {"wait":2},
+            {"sound":2454,"loops":4},
+            {"render":"CRAWL_UP_ROCKS"},
+            {"walk":[[2548,3031],[2547,3031],[2546,3031]],"arrive":true},
+            {"render":null},
+            {"wait":1},
+            {"sound":2453,"delay":40},
+            {"move":[2545,3031,0],"anim":"CRUMBLED_WALL","delay":30,"speed":[30,100],"dir":"west","ticks":3}
+          ]
+        }
       }
     },
     {

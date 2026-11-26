@@ -156,6 +156,9 @@ module.exports = {
     require("./combatachievements/tasks/Cerberus.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/CrazyArchaeologist.CombatAchievements")(api, Fights);
     require("./combatachievements/tasks/Brutus.CombatAchievements")(api, Fights);
+    require("./combatachievements/tasks/ChaosElemental.CombatAchievements")(api, Fights);
+    require("./combatachievements/tasks/ChaosFanatic.CombatAchievements")(api, Fights);
+    require("./combatachievements/tasks/GreaterDemons.CombatAchievements")(api);
     api.onPlayerLogin(restore);
     api.onCustomEvent("combat-achievements:complete", onComplete);
     api.onCustomEvent("combat-achievements:has-task", onHasTask);

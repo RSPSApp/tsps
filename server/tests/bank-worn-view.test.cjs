@@ -42,6 +42,77 @@ const click = (p, buttonNum, slot, itemId) => Bank.handleWidgetAction(p, {
   groupId: Bank.SIDE_INTERFACE_ID, childId: Bank.SIDE_WORN_CHILD, buttonNum, slot, itemId,
 });
 
+test("partially charged jewellery shares its cache placeholder separately from full and depleted pieces", t => {
+  const { JEWELLERY } = require("../plugins/items/Teleports.Jewellery");
+  for (const piece of JEWELLERY) {
+    const maximum = Math.max(...piece.charged.map(([, charges]) => charges));
+    const partial = piece.charged.filter(([, charges]) => charges < maximum);
+    const representative = partial.find(([id]) => core.ItemDefinition.forId(id).getPlaceholderId() >= 0)?.[0];
+    assert.ok(representative, `${piece.key}: cache defines the partial-charge representative`);
+    for (const [id] of partial) {
+      const { p } = banker(t);
+      p.setPlaceholders(true);
+      p.getBank(1).add(new core.Item(id, 1, { "test:origin": "kept" }), false);
+      p.setCurrentBankTab(1);
+      Bank.withdraw(p, id, 0, 1, 1);
+      assert.equal(p.getInventory().getAmount(id), 1, `${piece.key}/${id}: charge count retained`);
+      const placeholder = p.getBank(1).getItems()[0];
+      assert.equal(placeholder.getAmount(), 0);
+      assert.equal(Bank.displayItemId(placeholder), core.ItemDefinition.forId(representative).getPlaceholderId());
+      assert.equal(Bank.sharesPlaceholder(id, piece.charged[0][0]), false, "full charges stay separate");
+      if (piece.spent != null) assert.equal(Bank.sharesPlaceholder(id, piece.spent), false, "depleted stays separate");
+      const returned = partial.find(([other]) => other !== id)?.[0] ?? id;
+      p.getInventory().getItems()[p.getInventory().getSlotForItemId(id)].setId(returned);
+      Bank.deposits(p, returned, p.getInventory().getSlotForItemId(returned), 1);
+      assert.equal(p.getInventory().getAmount(returned), 0);
+      assert.equal(p.getBank(1).getItems()[0].getId(), returned, "another partial charge reuses the same tab/slot");
+      assert.equal(p.getBank(1).getItems()[0].getMetaValue("test:origin"), "kept");
+      assert.equal(Bank.layout(p).length, 1);
+    }
+    const { p } = banker(t);
+    p.setPlaceholders(true);
+    const full = piece.charged.find(([, charges]) => charges === maximum)[0];
+    for (const id of [full, ...(piece.spent == null ? [] : [piece.spent])]) {
+      p.getBank(0).resetItems();
+      p.getBank(0).add(new core.Item(id), false);
+      Bank.withdraw(p, id, 0, 1, 0);
+      assert.equal(Bank.displayItemId(p.getBank(0).getItems()[0]), core.ItemDefinition.forId(id).getPlaceholderId());
+    }
+  }
+});
+
+test("wealth rings, Void seals, Castle Wars and abyssal bracelets also reuse partial-charge placeholders", t => {
+  const I = core.ItemIdentifiers;
+  const { CHARGED_RINGS } = require("../plugins/items/RingOfWealth.plugin")._test;
+  const wealth = imbued => [...CHARGED_RINGS].filter(([id, state]) => Boolean(state.imbued) === imbued
+    && core.CacheDefinitions.getItem(id).placeholderTemplate === -1).map(([id]) => id);
+  const families = [wealth(false), wealth(true),
+    require("../plugins/minigames/pestcontrol/VoidSeal.PestControl")._test.SEALS.map(name => I[name]).reverse(),
+    [I.CASTLE_WARS_BRACELET_3_, I.CASTLE_WARS_BRACELET_2_, I.CASTLE_WARS_BRACELET_1_],
+    [I.ABYSSAL_BRACELET_5_, I.ABYSSAL_BRACELET_4_, I.ABYSSAL_BRACELET_3_, I.ABYSSAL_BRACELET_2_, I.ABYSSAL_BRACELET_1_]];
+  for (const family of families) {
+    for (const id of family) {
+      const { p } = banker(t);
+      p.setPlaceholders(true);
+      p.getBank(0).add(new core.Item(id), false);
+      Bank.withdraw(p, id, 0, 1, 0);
+      const representative = id === family[0] ? id : family.at(-1);
+      assert.ok(core.ItemDefinition.forId(representative).getPlaceholderId() >= 0);
+      assert.equal(p.getInventory().getAmount(id), 1);
+      assert.equal(p.getBank(0).getItems()[0].getAmount(), 0);
+      assert.equal(Bank.displayItemId(p.getBank(0).getItems()[0]), core.ItemDefinition.forId(representative).getPlaceholderId());
+      if (id !== family[0]) {
+        assert.equal(Bank.sharesPlaceholder(id, family[0]), false);
+        const returned = family.at(-1);
+        p.getInventory().getItems()[p.getInventory().getSlotForItemId(id)].setId(returned);
+        Bank.deposits(p, returned, p.getInventory().getSlotForItemId(returned), 1);
+        assert.equal(p.getBank(0).getItems()[0].getId(), returned);
+        assert.equal(Bank.layout(p).length, 1);
+      }
+    }
+  }
+});
+
 test("op 1 wields the backpack item and keeps the worn one out of the bank", (t) => {
   const { p } = banker(t);
   const I = core.ItemIdentifiers, E = core.Equipment;
@@ -235,8 +306,56 @@ test("depositing into a full bank plays no move sound; with room it does", (t) =
   slots = 3;
   press(Bank.DEPOSIT_WORN_CHILD);
   assert.equal(p.getEquipment().getItems()[E.WEAPON_SLOT].getId(), -1);
-  assert.deepEqual(sounds, [require("../dist/game/Sound").Sound.EQUIPMENT_OFF.getId()], "with room it is banked with the sound");
+  const { EquipmentSounds } = require("../dist/game/definition/EquipmentSounds");
+  assert.deepEqual(sounds, [EquipmentSounds.soundIdFor(core.ItemDefinition.forId(I.RUNE_SCIMITAR))], "with room it is banked with its sound");
   slots = 1;
+});
+
+// Live (rsprox captures local 1002085 tick 20276, local 1002011 tick 19297; bankmain:depositworn and
+// bank_depositbox:deposit_worn alike): Deposit worn items plays each banked item's own equip sound, in slot order
+// (rune full helm equip_helmet, obsidian cape and glory equip_fun, scimitar equip_sword, ...), and Deposit inventory
+// plays none (8,056 attempts of bankmain:depositinv in 572 recordings send no synth_sound). We played one
+// equipment-off sound (376) for the lot, and the drop sound for the inventory.
+test("Deposit worn items plays each item's equip sound in slot order; Deposit inventory plays none", (t) => {
+  const { p } = banker(t);
+  const I = core.ItemIdentifiers, E = core.Equipment;
+  const { EquipmentSounds } = require("../dist/game/definition/EquipmentSounds");
+  const worn = [
+    [E.HEAD_SLOT, I.RUNE_FULL_HELM], [E.AMULET_SLOT, I.AMULET_OF_GLORY_4_], [E.WEAPON_SLOT, I.ADAMANT_SCIMITAR],
+    [E.LEG_SLOT, I.RUNE_PLATELEGS], [E.FEET_SLOT, I.RUNE_BOOTS],
+  ];
+  for (const [slot, id] of worn) p.getEquipment().setItem(slot, new core.Item(id, 1));
+  p.getInventory().setItem(0, new core.Item(I.LOBSTER, 5)).setItem(1, new core.Item(I.RUNE_SCIMITAR, 1));
+  const sounds = [];
+  const sender = p.getPacketSender(), sendSoundEffect = sender.sendSoundEffect.bind(sender);
+  t.mock.method(sender, "sendSoundEffect", (id, ...rest) => { sounds.push(id); return sendSoundEffect(id, ...rest); });
+  const press = (child) => Bank.handleWidgetAction(p, { groupId: Bank.MAIN_INTERFACE_ID, childId: child, buttonNum: 1, slot: -1, itemId: -1 });
+
+  press(Bank.DEPOSIT_WORN_CHILD);
+  assert.equal(p.getEquipment().getValidItems().length, 0, "everything worn is banked");
+  const expected = worn.sort(([a], [b]) => a - b).map(([, id]) => EquipmentSounds.soundIdFor(core.ItemDefinition.forId(id)));
+  assert.deepEqual(sounds, expected, "one sound per item, in slot order");
+  assert.equal(sounds[1], 2238, "the glory plays equip_fun, as recorded");
+  assert.ok(!sounds.includes(376), "no generic equipment-off sound");
+
+  sounds.length = 0;
+  press(Bank.DEPOSIT_INVENTORY_CHILD);
+  assert.equal(p.getInventory().getValidItems().length, 0, "the inventory is banked");
+  assert.deepEqual(sounds, [], "Deposit inventory plays no sound");
+
+  // The deposit box's buttons (bank_depositbox:deposit_worn 192:30, deposit_inv 192:31) do the same.
+  p.setInterfaceId(192);
+  for (const [slot, id] of worn) p.getEquipment().setItem(slot, new core.Item(id, 1));
+  p.getInventory().setItem(0, new core.Item(I.LOBSTER, 5));
+  sounds.length = 0;
+  const box = (child) => PM.emitInterfaceActionClick({ player: p, buttonId: (192 << 16) | child, groupId: 192, childId: child, action: 1 });
+  box(30);
+  assert.equal(p.getEquipment().getValidItems().length, 0, "the deposit box banks everything worn");
+  assert.deepEqual(sounds, expected, "the deposit box plays the same per-item sounds");
+  sounds.length = 0;
+  box(31);
+  assert.equal(p.getInventory().getValidItems().length, 0, "the deposit box banks the inventory");
+  assert.deepEqual(sounds, [], "and its Deposit inventory plays no sound");
 });
 
 // Live (rsprox_transcripts/242/900150.txt, 241/911517.txt, 241/900101.txt): "Undead: 0% " (with its trailing space)
@@ -249,11 +368,13 @@ test("the worn-items view's Undead and Slayer lines read as live sends them", (t
   const texts = bankTexts(t, p);
   const show = (head, amulet) => {
     p.getEquipment().setItem(E.HEAD_SLOT, new core.Item(head ? C.getObjId(head) : -1, head ? 1 : 0));
-    p.getEquipment().setItem(E.AMULET_SLOT, new core.Item(amulet ? C.getObjId(amulet) : -1, amulet ? 1 : 0));
+    p.getEquipment().setItem(E.AMULET_SLOT, new core.Item(typeof amulet === "number" ? amulet : amulet ? C.getObjId(amulet) : -1, amulet ? 1 : 0));
     p.getBank(p.getCurrentBankTab()).open();
     return [texts.get(99), texts.get(100)];
   };
   assert.deepEqual(show(null, null), ["Undead: 0% ", "Slayer: 0%"]);
+  assert.deepEqual(show(null, core.ItemIdentifiers.SALVE_AMULET_I__5), ["Undead: 15% (all styles)", "Slayer: 0%"]);
+  assert.deepEqual(show(null, core.ItemIdentifiers.SALVE_AMULET_EI__5), ["Undead: 20% (all styles)", "Slayer: 0%"]);
   assert.deepEqual(show("harmless_black_mask", "lotr_crystalshard_necklace_upgrade"), ["Undead: 20% (melee)", "Slayer: 15% (melee)"]);
   assert.deepEqual(show("slayer_helm_i", "nzone_salve_amulet_e"), ["Undead: 20% (all styles)", "Slayer: 15% (all styles)"]);
 });

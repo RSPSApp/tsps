@@ -11,6 +11,7 @@
   },
   "menus": {
     "make": { "title": "What would you like to make?" },
+    "acheyLogs": { "title": "How many logs do you wish to fletch?" },
     "string": { "title": "How many would you like to string?", "mode": 10 },
     "feather": { "title": "How many sets of 15 do you wish to feather?", "mode": 3 },
     "complete": { "title": "How many sets of 15 do you wish to complete?", "mode": 3 },
@@ -86,8 +87,8 @@
     { "group": "shields", "output": "REDWOOD_SHIELD", "level": 92, "xp": 216, "materials": [["REDWOOD_LOGS", 2]] },
     { "group": "logs", "output": "REDWOOD_HIKING_STAFF", "level": 90, "xp": 10.5, "firstTick": 1, "materials": [["REDWOOD_LOGS", 1]] },
 
-    { "group": "logs", "output": "OGRE_ARROW_SHAFT", "amount": 2, "amountMax": 6, "level": 5, "xp": 6.4, "xpEach": 1.6, "firstTick": 1, "quest": ["big_chompy_bird_hunting", "started"], "materials": [["ACHEY_TREE_LOGS", 1]] },
-    { "group": "logs", "output": "UNSTRUNG_COMP_BOW", "level": 30, "xp": 45, "firstTick": 1, "quest": ["zogre_flesh_eaters", "complete"], "materials": [["ACHEY_TREE_LOGS", 1], ["WOLF_BONES", 1]] },
+    { "group": "logs", "output": "OGRE_ARROW_SHAFT", "amount": 2, "amountMax": 6, "level": 5, "xp": 6.4, "xpEach": 1.6, "firstTick": 1, "menu": "acheyLogs", "label": "Ogre arrow shafts", "quest": ["big_chompy_bird_hunting", "started"], "materials": [["ACHEY_TREE_LOGS", 1]] },
+    { "group": "logs", "output": "UNSTRUNG_COMP_BOW", "level": 30, "xp": 45, "menu": "acheyLogs", "label": "Unstrung composite bow", "message": "You carefully cut the wood into a composite ogre bow.", "missingMessage": "You need wolf bones and achey tree logs to make the composite ogre bow.", "missingItems": ["ACHEY_TREE_LOGS", "WOLF_BONES"], "quest": ["zogre_flesh_eaters", "started"], "taught": "comp_ogre_bow", "materials": [["ACHEY_TREE_LOGS", 1], ["WOLF_BONES", 1]] },
     { "group": "logs", "output": "BATTLESTAFF", "level": 40, "xp": 80, "ticks": 4, "firstTick": 1, "materials": [["CELASTRUS_BARK", 1]] },
     { "group": "logs", "output": "ATLATL_DART_SHAFT", "amount": 100, "level": 74, "xp": 30, "firstTick": 1, "materials": [["ENT_BRANCH", 1]] },
     { "group": "logs", "output": "GREENMAN_STATUE", "level": 53, "xp": 55, "ticks": 4, "firstTick": 1, "materials": [["ENT_BRANCH", 5], ["GREENMAN_MASK", 1], ["MAPLE_LOGS", 1]] },
@@ -221,13 +222,13 @@
 
     { "group": "ogre", "output": "FLIGHTED_OGRE_ARROW", "amount": 6, "level": 5, "xp": 5.4, "quest": ["big_chompy_bird_hunting", "started"], "materials": [["OGRE_ARROW_SHAFT", 6], ["@feathers", 24]] },
     { "group": "ogre", "output": "OGRE_ARROW", "amount": 6, "level": 5, "xp": 6, "quest": ["big_chompy_bird_hunting", "started"], "materials": [["FLIGHTED_OGRE_ARROW", 6], ["WOLFBONE_ARROWTIPS", 6]] },
-    { "group": "ogre", "output": "BRONZE_BRUTAL", "amount": 6, "level": 7, "xp": 8.4, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "materials": [["FLIGHTED_OGRE_ARROW", 6], ["BRONZE_NAILS", 6]] },
-    { "group": "ogre", "output": "IRON_BRUTAL", "amount": 6, "level": 18, "xp": 15.6, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "materials": [["FLIGHTED_OGRE_ARROW", 6], ["IRON_NAILS", 6]] },
-    { "group": "ogre", "output": "STEEL_BRUTAL", "amount": 6, "level": 33, "xp": 30.6, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "materials": [["FLIGHTED_OGRE_ARROW", 6], ["STEEL_NAILS", 6]] },
-    { "group": "ogre", "output": "BLACK_BRUTAL", "amount": 6, "level": 38, "xp": 39, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "materials": [["FLIGHTED_OGRE_ARROW", 6], ["BLACK_NAILS", 6]] },
-    { "group": "ogre", "output": "MITHRIL_BRUTAL", "amount": 6, "level": 49, "xp": 45, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "materials": [["FLIGHTED_OGRE_ARROW", 6], ["MITHRIL_NAILS", 6]] },
-    { "group": "ogre", "output": "ADAMANT_BRUTAL", "amount": 6, "level": 62, "xp": 61.2, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "materials": [["FLIGHTED_OGRE_ARROW", 6], ["ADAMANTITE_NAILS", 6]] },
-    { "group": "ogre", "output": "RUNE_BRUTAL", "amount": 6, "level": 77, "xp": 75, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "materials": [["FLIGHTED_OGRE_ARROW", 6], ["RUNE_NAILS", 6]] },
+    { "group": "ogre", "output": "BRONZE_BRUTAL", "amount": 6, "level": 7, "xp": 8.4, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "taught": "brutal_arrows", "materials": [["FLIGHTED_OGRE_ARROW", 6], ["BRONZE_NAILS", 6]] },
+    { "group": "ogre", "output": "IRON_BRUTAL", "amount": 6, "level": 18, "xp": 15.6, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "taught": "brutal_arrows", "materials": [["FLIGHTED_OGRE_ARROW", 6], ["IRON_NAILS", 6]] },
+    { "group": "ogre", "output": "STEEL_BRUTAL", "amount": 6, "level": 33, "xp": 30.6, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "taught": "brutal_arrows", "materials": [["FLIGHTED_OGRE_ARROW", 6], ["STEEL_NAILS", 6]] },
+    { "group": "ogre", "output": "BLACK_BRUTAL", "amount": 6, "level": 38, "xp": 39, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "taught": "brutal_arrows", "materials": [["FLIGHTED_OGRE_ARROW", 6], ["BLACK_NAILS", 6]] },
+    { "group": "ogre", "output": "MITHRIL_BRUTAL", "amount": 6, "level": 49, "xp": 45, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "taught": "brutal_arrows", "materials": [["FLIGHTED_OGRE_ARROW", 6], ["MITHRIL_NAILS", 6]] },
+    { "group": "ogre", "output": "ADAMANT_BRUTAL", "amount": 6, "level": 62, "xp": 61.2, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "taught": "brutal_arrows", "materials": [["FLIGHTED_OGRE_ARROW", 6], ["ADAMANTITE_NAILS", 6]] },
+    { "group": "ogre", "output": "RUNE_BRUTAL", "amount": 6, "level": 77, "xp": 75, "held": ["hammer"], "quest": ["zogre_flesh_eaters", "started"], "taught": "brutal_arrows", "materials": [["FLIGHTED_OGRE_ARROW", 6], ["RUNE_NAILS", 6]] },
 
     { "group": "javelins", "output": "HEADLESS_ATLATL_DART", "amount": 20, "level": 74, "xp": 20, "ticks": 2, "animation": "human_fletching_add_feather", "materials": [["ATLATL_DART_SHAFT", 20], ["@feathers", 20]] },
     { "group": "javelins", "output": "ATLATL_DART", "amount": 20, "level": 74, "xp": 30, "ticks": 2, "materials": [["HEADLESS_ATLATL_DART", 20], ["ATLATL_DART_TIPS", 20]] }

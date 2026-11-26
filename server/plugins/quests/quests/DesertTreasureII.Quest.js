@@ -2412,7 +2412,7 @@ module.exports = function registerDesertTreasureII(api) {
     // inferred playable cadence and should be calibrated against a live capture.
     const boss = spawned.get(player)?.finalWight;
     if (!boss?.isRegistered?.() || boss.getHitpoints?.() <= 0 || boss.getOwner?.() !== player || boss.getArea?.() !== area) return;
-    // Wight healing is scripted; keep generic idle regeneration out of the active trial.
+    // Wight healing is scripted; keep the combat stopwatch fresh during the active trial.
     boss.getCombat?.().getLastAttack?.().reset?.();
     boss.__dt2FinalWightTicks = (boss.__dt2FinalWightTicks ?? 0) + 1;
     boss.__dt2FinalWightPending ??= [];
@@ -6516,6 +6516,16 @@ module.exports = function registerDesertTreasureII(api) {
       syncNativeProgress(p);
       if (index === undefined) openVaultPlaque(p);
       else statement(p, `The statue looks like it's meant to be holding something. A plaque on it reads: '${STATUE_TITLES[index]}'`);
+      return true;
+    }
+    // Once its medallion is back, and for all four after the quest (rsprox 1827, 3168 at the
+    // vault's statues 49499 and 49501): "The statue is holding a medallion."
+    if (STATUES.has(objectId)) {
+      const index = STATUES.get(objectId);
+      const holding = s >= S.COMPLETE || (placedMask(p) & (1 << index)) !== 0;
+      statement(p, holding
+        ? `The statue is holding a medallion. A plaque on it reads: '${STATUE_TITLES[index]}'`
+        : `The statue looks like it's meant to be holding something. A plaque on it reads: '${STATUE_TITLES[index]}'`);
       return true;
     }
     if (vaultTile && ([O.VAULT_DOOR, O.VAULT_DOOR_2, O.VAULT_DOOR_3].includes(objectId)

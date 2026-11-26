@@ -288,8 +288,12 @@ function questListAction({ player, slot, opId, action }) {
  * a line already opening on navy gets no second one: live never doubles it ("<col=000080><col=000080>"
  * is in no RSProx journal; 235/3344's Mage Arena charge lines open on one navy tag).
  */
-function journalText(line) {
+function journalText(line, quest = null) {
   const text = String(line ?? "");
+  // A quest whose lines were copied from a capture sends them as live wrote each one: a wrapped
+  // line that opens on a highlight sometimes carries the navy tag first and sometimes doesn't
+  // (local 1001343's Below Ice Mountain journal has both).
+  if (quest?.journalAsSent) return text;
   if (!text || text.startsWith("<str>") || text.includes("<col=ff0000>")) return text;
   const opening = text.startsWith(JOURNAL_TEXT_COLOUR) ? "" : JOURNAL_TEXT_COLOUR;
   return opening + text.replace(/<\/col>/g, JOURNAL_TEXT_COLOUR);
@@ -313,7 +317,7 @@ function journalWidgets(quest, player) {
       id: (JOURNAL_GROUP << 16) | JOURNAL_TEXTLAYER_CHILD,
       staticChildren: journalLines(quest, player).map((line, index) => ({
         id: (JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index),
-        text: journalText(line),
+        text: journalText(line, quest),
       })),
     },
   ];
@@ -397,7 +401,7 @@ function openJournal(player, quest, row = questMetadata(quest, coreApi?.CacheDef
   packet.sendInterfaceScript(SCRIPT_QJ_RESET, []);
   setText((JOURNAL_GROUP << 16) | JOURNAL_TITLE_CHILD, `<col=7f0000>${row?.displayname?.[0] ?? quest.name}</col>`);
   lines.forEach((line, index) => {
-    setText((JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index), journalText(line));
+    setText((JOURNAL_GROUP << 16) | (JOURNAL_FIRST_LINE_CHILD + index), journalText(line, quest));
   });
   packet.sendInterfaceScript(SCRIPT_QJ_SCROLL, [0, lines.length]);
 }
@@ -405,7 +409,7 @@ function openJournal(player, quest, row = questMetadata(quest, coreApi?.CacheDef
 /** The scroll's reward groups after the quest points, in live's usual order unless a quest sets its own. */
 const DEFAULT_REWARD_ORDER = ["xp", "item", "other"];
 
-function rewardLines(quest) {
+function rewardLines(quest, player) {
   const lines = ["You are awarded:"];
   // A quest whose scroll live words its own way (The Fremennik Trials: "2,800 XP each in ...").
   if (Array.isArray(quest.rewardText)) return [...lines, ...quest.rewardText].slice(0, COMPLETED_LINE_COUNT);
@@ -414,7 +418,8 @@ function rewardLines(quest) {
   const groups = {
     xp: (quest.xpRewards ?? []).map((reward) => `${reward.amount.toLocaleString("en-US")} ${reward.label} XP`),
     item: quest.rewardItemLabel ? [quest.rewardItemLabel] : [],
-    other: quest.otherRewards ?? [],
+    // A function of the player for a scroll that names what this player got (Daddy's Home: a house, or 1,000 coins).
+    other: (typeof quest.otherRewards === "function" ? quest.otherRewards(player) : quest.otherRewards) ?? [],
   };
   for (const group of quest.rewardOrder ?? DEFAULT_REWARD_ORDER) lines.push(...(groups[group] ?? []));
   return lines.slice(0, COMPLETED_LINE_COUNT);
@@ -435,15 +440,19 @@ function openCompletedScroll(player, quest, questPoints) {
   packet.sendInterface(COMPLETED_GROUP);
   packet.sendInterfaceFlagsRange((COMPLETED_GROUP << 16) | COMPLETED_CLOSE_CHILD, -1, -1, 1 << 1);
   setText((COMPLETED_GROUP << 16) | COMPLETED_TITLE_CHILD, "Congratulations!");
-  setText((COMPLETED_GROUP << 16) | COMPLETED_NAME_CHILD, `You have completed ${quest.name}!`);
+  // `scrollTitle`: the quest's own words where live has them ("You have solved the Murder Mystery!").
+  setText((COMPLETED_GROUP << 16) | COMPLETED_NAME_CHILD, quest.scrollTitle ?? `You have completed ${quest.name}!`);
   const scrollItemId = typeof quest.scrollItemId === "function"
     ? quest.scrollItemId(player)
     : quest.scrollItemId ?? quest.rewardItemId;
   if (scrollItemId !== undefined) {
     packet.sendItemOnInterfaces((COMPLETED_GROUP << 16) | COMPLETED_REWARD_ITEM_CHILD, scrollItemId, 1);
+    // `scrollItemPosition`: where live places the model for this quest (if_setposition), when captured.
+    const position = quest.scrollItemPosition;
+    if (position) packet.sendInterfacePosition?.((COMPLETED_GROUP << 16) | COMPLETED_REWARD_ITEM_CHILD, position[0], position[1]);
   }
   setText((COMPLETED_GROUP << 16) | COMPLETED_POINTS_CHILD, `Quest points: ${questPoints}`);
-  const lines = rewardLines(quest);
+  const lines = rewardLines(quest, player);
   for (let i = 0; i < COMPLETED_LINE_COUNT; i++) {
     setText((COMPLETED_GROUP << 16) | (COMPLETED_FIRST_LINE_CHILD + i), lines[i] ?? "");
   }
@@ -549,6 +558,12 @@ function questShopVersionApplies(name, player) {
 function pickQuestShopVersion(request) {
   if (request.shop || !request.player) return;
   request.shop = request.shops.find((name) => questShopVersionApplies(name, request.player)) ?? null;
+}
+
+/** A quest declares only its actual combat opponents, never all its scene actors. */
+function describeEncounters(quest, { npcIds }) {
+  const ids = typeof quest.combatNpcIds === "function" ? quest.combatNpcIds() : quest.combatNpcIds ?? [];
+  for (const id of ids) npcIds.add(id);
 }
 
 function registerQuestWidgets(api) {
@@ -814,7 +829,7 @@ function sendQuestVarps({ player }) {
  *
  * @param api  the plugin api
  * @param def  { key, name, varpId, varbitId, varbitValue, startedValue, completionValue, questPoints,
- *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards?, rewardText? (the scroll's lines after
+ *               xpRewards?, rewardItemId?, rewardItemLabel?, otherRewards? (lines, or a function of player), rewardText? (the scroll's lines after
  *               "You are awarded:", in place of the generated ones),
  *               rewardOrder? (the scroll's groups after the points: "xp", "item", "other"),
  *               scrollItemId? (item id or function of player),
@@ -824,6 +839,7 @@ function sendQuestVarps({ player }) {
 function registerQuest(api, def) {
   if (!def || !def.key || !def.name) throw new Error("registerQuest requires a key and name");
   registerQuestWidgets(api);
+  if (def.combatNpcIds) api.onCustomEvent("bestiary:encounters", describeEncounters.bind(null, def));
   api.persistAttribute(stageAttribute(def.key), 0);
   api.persistAttribute(QUEST_POINTS_ATTRIBUTE, 0);
   api.persistAttribute(EXPERIENCE_WITHHELD_ATTRIBUTE, []);

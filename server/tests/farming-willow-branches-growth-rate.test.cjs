@@ -25,14 +25,19 @@ function willow(t, rate, sinceCut, savedRate = rate) {
     t.after(() => Model.setGrowthMultiplier(1));
     t.mock.method(Date, 'now', () => now);
     const player = new Player(null), messages = [];
-    const sender = new Proxy({}, { get: () => () => sender });
+    const sender = new Proxy({}, { get: (_, name) => ['getVarbit', 'getVarp'].includes(name) ? () => 0 : () => sender });
     player.getPacketSender = () => sender; player.sendMessage = (text) => messages.push(text);
     player.getInventory().add(new core.Item(Data.itemId('Secateurs'), 1), false);
     const farm = { offset: 0, tools: {}, autoWeed: false, growthMultiplier: savedRate === 1 ? undefined : savedRate, patches: {
         [Data.patchKey(tree)]: { crop: 'WILLOW', status: 'grown', checked: true, stage: 7, lives: 1, nextAt: Infinity,
             branches: 0, branchAt: now - sinceCut } } };
     player.setAttribute(Patches.FARM_ATTRIBUTE, farm);
-    const cut = () => Patches.cure(player, tree, true, Data.itemId('Secateurs'));
+    // The branch comes three farming ticks after the secateurs are used (rsprox local 1000402 ticks 31153-31156).
+    const cut = () => {
+        const cutting = Patches.cure(player, tree, true, Data.itemId('Secateurs'));
+        for (let i = 0; i < 3; i++) Patches.tick();
+        return cutting;
+    };
     const branches = () => player.getInventory().getAmount(Data.itemId('Willow branch'));
     return { messages, cut, branches };
 }

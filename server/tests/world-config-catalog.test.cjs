@@ -26,7 +26,7 @@ const layers = (shipped = {}, local = {}, localHash = 'h') => ({ shipped, local,
 
 test('a plugin switched off still appears, disabled, with its option owner disabled', () => {
   const dir = fixture({
-    'skills/On.plugin.js': plugin('On'),
+    'skills/On.plugin.js': plugin('On', "category: '@ Ghost Plugins @',"),
     'skills/Off.plugin.js': plugin('Off'),
     'quests/Dependent.plugin.js': plugin('Dependent', "dependsOn: ['Off'],"),
     'quests/Members.plugin.js': plugin('Members', 'members: true,'),
@@ -39,6 +39,8 @@ test('a plugin switched off still appears, disabled, with its option owner disab
     assert.equal(byName.On.enabled, true);
     assert.equal(byName.On.loaded, true);
     assert.equal(byName.On.area, 'skills');
+    assert.equal(byName.On.category, '@ Ghost Plugins @');
+    assert.equal(byName.Off.category, undefined);
     assert.equal(byName.On.description, 'About On.');
     assert.equal(byName.Off.enabled, false);
     assert.equal(byName.Off.loaded, false);
@@ -110,7 +112,7 @@ test('an imported manifest exposes settings before the runtime loads its source'
   const dir = fixture({
     [entry]: plugin('Welcome'),
     'imported/welcome/plugin.json': JSON.stringify({
-      format: 1, id: 'welcome', name: 'Welcome', version: '1.0.0', description: 'Uploaded welcome message.',
+      category: '@ Ghost Plugins @', format: 1, id: 'welcome', name: 'Welcome', version: '1.0.0', description: 'Uploaded welcome message.',
       config: { 'Welcome:opt': { ...OPT, default: false }, 'Welcome:broken': { type: 'enum' } },
     }),
   });
@@ -118,6 +120,7 @@ test('an imported manifest exposes settings before the runtime loads its source'
   try {
     const first = WorldConfigCatalog.build(dir, layers());
     assert.equal(first.plugins[0].description, 'Uploaded welcome message.');
+    assert.equal(first.plugins[0].category, '@ Ghost Plugins @');
     assert.equal(first.plugins[0].awaitingLoad, true);
     assert.equal(first.plugins[0].packageId, 'welcome');
     assert.equal(first.plugins[0].loaded, false);

@@ -34,7 +34,7 @@ assert.ok(legendsQuest, "Legends' Quest registers with QuestRuntime");
 
 function setup({ questStage = 70, usedId = ItemIdentifiers.SKILLS_NECKLACE_3_, equipment = [], objectId = ObjectIdentifiers.TOTEM_POLE_5 } = {}) {
   const attributes = new Map();
-  const sent = { updates: 0, flags: 0, messages: [] };
+  const sent = { updates: 0, flags: 0, messages: [], spam: [], anims: [], sounds: [], boxes: [], tasks: [] };
   const makeItem = (id) => ({ getId: () => id, setId(next) { id = next; }, id: () => id });
   const inventoryItems = [makeItem(usedId)];
   const equipmentItems = equipment.map(makeItem);
@@ -46,7 +46,9 @@ function setup({ questStage = 70, usedId = ItemIdentifiers.SKILLS_NECKLACE_3_, e
     getUpdateFlag: () => ({ flag: () => sent.flags++ }),
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
-    getPacketSender: () => ({ sendVarbit() {} }),
+    getPacketSender: () => ({ sendVarbit() {}, sendTypedMessage: (type, text) => sent.spam.push(text), sendSound: (id) => sent.sounds.push(id) }),
+    performAnimation: (animation) => sent.anims.push(animation.id),
+    getDialogueManager: () => ({ startDialogues: (chain) => sent.boxes.push(chain.entries[0]) }),
     isRegistered: () => true,
   };
   player.setAttribute("quest.legends_quest.stage", questStage);
@@ -54,6 +56,13 @@ function setup({ questStage = 70, usedId = ItemIdentifiers.SKILLS_NECKLACE_3_, e
     ItemIdentifiers,
     ObjectIdentifiers,
     Flag: { APPEARANCE: 1 },
+    ChatType: { SPAM: "spam" },
+    Animation: class { constructor(id) { this.id = id; } },
+    CountdownTask: class { constructor(player, ticks, run) { this.ticks = ticks; this.run = run; } },
+    TaskManager: { submit: (task) => sent.tasks.push(task) },
+    DialogueChainBuilder: class { constructor() { this.entries = []; } add(entry) { this.entries.push(entry); return this; } },
+    ItemStatementDialogue: class { constructor(index, itemId, text) { this.itemId = itemId; this.text = text; } },
+    EndDialogue: class {},
     ObjectDefinition: { forPlayer: (id) => ({ id, getName: () => "Totem Pole" }) },
     ItemDefinition: { forId: () => ({ isNoted: () => false }) },
   };
@@ -84,15 +93,35 @@ test("Legends' Guild totem recharges jewellery and records the hard diary task",
     assert.equal(state.taskEvents[0].task, TASK);
     const diary = DIARIES.find(({ key }) => key === "ardougne");
     assert.equal(Progress.tierCount(state.player, diary, "hard"), 1);
+    // RSProx 20261121T080414 ticks 250-254: the touch line and anim 827 now, the item box two ticks on,
+    // for the last piece charged (the bracelet here).
+    assert.deepEqual(state.sent.spam, ["You touch the jewellery against the totem pole..."]);
+    assert.deepEqual(state.sent.anims, [827]);
+    assert.equal(state.sent.tasks.length, 1);
+    assert.equal(state.sent.tasks[0].ticks, 2);
+    state.sent.tasks[0].run();
+    assert.equal(state.sent.boxes[0].itemId, ItemIdentifiers.COMBAT_BRACELET_4_);
+    assert.match(state.sent.boxes[0].text, /^You feel a power emanating from the totem pole as it recharges your bracelet\./);
 
     state.event.item = { getId: () => ItemIdentifiers.SKILLS_NECKLACE_4_ };
     state.event.objectId = ObjectIdentifiers.TOTEM_POLE_7;
     state.api.handler(state.event);
     assert.equal(state.taskEvents.length, 1, "a full recharge does not emit another task event");
+    assert.equal(state.sent.messages.at(-1), "You don't have any jewellery that the totem can recharge.");
     assert.equal(Progress.tierCount(state.player, diary, "hard"), 1);
   } finally {
     state.restore();
   }
+});
+
+test("any other item on the totem: the captured line, then sound 2238 two ticks later", () => {
+  const state = setup({ usedId: ItemIdentifiers.LOGS });
+  state.api.handler(state.event);
+  assert.equal(state.event.handled, true);
+  assert.deepEqual(state.sent.spam, ["You touch the item against the totem pole... but nothing interesting happens."]);
+  assert.equal(state.sent.tasks[0].ticks, 2);
+  state.sent.tasks[0].run();
+  assert.deepEqual(state.sent.sounds, [2238]);
 });
 
 test("a full used necklace does not block recharging eligible equipped jewellery", () => {

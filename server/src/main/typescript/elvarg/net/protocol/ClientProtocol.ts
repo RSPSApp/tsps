@@ -214,6 +214,8 @@ export type NpcView = Tile & ActorUpdateView & {
   exactMove?: ForcedMovementView;
   /** A tile to turn to once (OSRS npc face coord). */
   faceTile?: { x: number; y: number };
+  /** A held facing (OSRS npc face angle): instant snaps to it, else it turns at its turn speed. */
+  faceAngle?: { angle: number; instant: boolean };
   /** Body-model slot overrides (OSRS npc model customisation); an empty list resets them. */
   modelCustomisation?: { slot: number; modelId: number }[];
   /** Stand / walk / turn sequence overrides (0 idle, 1 walk, 2 turn left, 3 turn right); an empty list resets them. */
@@ -230,6 +232,8 @@ export type NpcView = Tile & ActorUpdateView & {
   tint?: { startCycle: number; endCycle: number; hue: number; saturation: number; lightness: number; weight: number };
   /** Its walk step is sent as a crawl (half walking speed on the client). */
   crawl?: boolean;
+  /** false: a move this tick is re-added without the jump flag, so clients walk it (NPC.teleportInView). */
+  jump?: boolean;
   /** The boat/static ship this NPC stands on (its deck) rather than the main world. */
   worldView?: number;
   rotation: number;
@@ -2366,6 +2370,15 @@ export function encodeWidgetSetText(uid: number, text: string, serverOwned?: boo
   ]));
 }
 
+/** Replace all native operation labels. Empty entries retain their operation index. */
+export function encodeWidgetSetActions(uid: number, actions: ReadonlyArray<string | null | undefined>): Buffer {
+  const labels = (actions ?? []).slice(0, 32).map(action => String(action ?? "").replace(/\0/g, "").slice(0, 1024));
+  const header = Buffer.alloc(5);
+  header.writeInt32BE(uid | 0);
+  header[4] = labels.length;
+  return encodeServerPacket(ServerPacketId.WIDGET_SET_ACTIONS, Buffer.concat([header, ...labels.map(string)]));
+}
+
 export function encodeWidgetSetHidden(uid: number, hidden: boolean): Buffer {
   const payload = Buffer.alloc(5);
   payload.writeInt32BE(uid | 0);
@@ -2531,16 +2544,37 @@ export function encodeWidgetRunScript(
   );
 }
 
-export function encodeRunClientScript(scriptId: number, args: (number | string)[] = []): Buffer {
+export function encodeRunClientScript(scriptId: number, args: ScriptArg[] = []): Buffer {
   const id = Buffer.alloc(2);
   id.writeUInt16BE(scriptId & 0xffff);
   return encodeServerPacket(ServerPacketId.RUN_CLIENT_SCRIPT, Buffer.concat([id, scriptArgs(args)]));
 }
 
-function scriptArgs(args: (number | string | bigint)[]): Buffer {
+/**
+ * A clientscript argument. An array is one of the cache's array arguments (stringarray,
+ * intarray): it goes as type 3 (ints) or 4 (strings), a u16 length and the values. An empty
+ * array goes as an int array.
+ */
+export type ScriptArg = number | string | bigint | number[] | string[];
+
+function scriptArgs(args: ScriptArg[]): Buffer {
   const parts: Buffer[] = [Buffer.from([args.length])];
   for (const arg of args) {
-    if (typeof arg === "bigint") {
+    if (Array.isArray(arg)) {
+      const strings = arg.length > 0 && typeof arg[0] === "string";
+      const head = Buffer.alloc(3);
+      head[0] = strings ? 4 : 3;
+      head.writeUInt16BE(arg.length, 1);
+      parts.push(head);
+      for (const value of arg as (number | string)[]) {
+        if (strings) parts.push(string(String(value)));
+        else {
+          const int = Buffer.alloc(4);
+          int.writeInt32BE(Number(value) | 0);
+          parts.push(int);
+        }
+      }
+    } else if (typeof arg === "bigint") {
       const value = Buffer.alloc(9);
       value[0] = 2;
       value.writeBigInt64BE(arg, 1);
@@ -2718,6 +2752,22 @@ export function resolveGameframeRoot(
 
 // Minimap orbs: desktop `orbs`, and the mobile toplevel's own `orbs_osm`, laid out for the
 // mobile orb art (live's Android client mounts it at toplevel_osm:orbs).
+export const POPOUT_GROUP_ID = 728;
+// popout:buttons (728:6), the desktop buttons: live enables op1 on its three right after the mount
+// (every rsprox capture, 227/02137.txt:3010). popout:osm_buttons (728:37) holds the mobile toplevel's,
+// each the even child before its icon (toplevel_osm_setup_popout_buttons), so op1 on 0-4.
+// plugins/interface/PopoutPanel.plugin.js answers the clicks.
+const POPOUT_BUTTONS_UID = (POPOUT_GROUP_ID << 16) | 6;
+const POPOUT_BUTTONS_LAST_SLOT = 2;
+const POPOUT_OSM_BUTTONS_UID = (POPOUT_GROUP_ID << 16) | 37;
+const POPOUT_OSM_BUTTONS_LAST_SLOT = 4;
+
+function encodePopoutButtonEvents(): Buffer[] {
+  return [
+    encodeWidgetSetFlagsRange(POPOUT_BUTTONS_UID, 0, POPOUT_BUTTONS_LAST_SLOT, FIRST_OPTION_FLAG),
+    encodeWidgetSetFlagsRange(POPOUT_OSM_BUTTONS_UID, 0, POPOUT_OSM_BUTTONS_LAST_SLOT, FIRST_OPTION_FLAG),
+  ];
+}
 export const ORBS_GROUP_ID = 160;
 export const MOBILE_ORBS_GROUP_ID = 897;
 
@@ -2752,6 +2802,10 @@ export function encodeGameframeBootstrap(playerName: string, root: number = 161,
     [88, 216], [89, 239],
     // The boss HP bar HUD (hpbar_hud), as OSRS opens it at login (164:2 resizable).
     [2, 303],
+    // The popout panel (popout -> toplevel_osrs_stretch:popout, 35): live opens it on every
+    // login (all rsprox captures). The mobile toplevel is the one that shows it, as 601:131
+    // (enum 1745); desktop uses the web sidebar, so the cache's popout reservation stays off.
+    ...(root === MOBILE_GAMEFRAME_ROOT ? [[35, POPOUT_GROUP_ID]] : []),
   ];
   const cameraScript = Buffer.concat([Buffer.alloc(2), scriptArgs([])]);
   cameraScript.writeUInt16BE(626, 0);
@@ -2764,7 +2818,9 @@ export function encodeGameframeBootstrap(playerName: string, root: number = 161,
     packet(ServerPacket.WIDGET_SET_ROOT, rootPayload, 0),
     // Mounts are addressed by the OSRS-stretch (161) child for every layout;
     // the client maps them onto the active root's components (pane redirects).
-    ...mounts.map(([child, group, postScript]) => encodeOpenSub(161, child, group, postScript)),
+    ...mounts.flatMap(([child, group, postScript]) => group === POPOUT_GROUP_ID
+      ? [encodeOpenSub(161, child, group, postScript), ...encodePopoutButtonEvents()]
+      : [encodeOpenSub(161, child, group, postScript)]),
     encodeOpenSub(SIDE_JOURNAL_GROUP_ID, SIDE_JOURNAL_TAB_CONTAINER_CHILD_ID, INTERFACE_CHARACTER_SUMMARY_ID),
     encodeOpenSub(SIDE_CHANNELS_GROUP_ID, SIDE_CHANNELS_CONTENT_CHILD_ID, CHAT_CHANNEL_GROUP_ID),
     ...encodeGameframeFlags(root),
@@ -3128,6 +3184,7 @@ const NPC_MASK = {
   SPOT_ANIM: 0x20000,
   TINT: 0x100,
   TYPE_CUSTOMISATION: 0x40000,
+  FACE_ANGLE: 0x80000,
 } as const;
 
 /** TYPE_CUSTOMISATION's leading flags: which fields follow. None resets the customisation. */
@@ -3264,7 +3321,8 @@ function npcUpdateMask(view: NpcView, writeInteraction: boolean, writeHeadIcon =
     (view.baseAnimations ? NPC_MASK.BASE_ANIMATIONS : 0) |
     (view.transparency ? NPC_MASK.TRANSPARENCY : 0) |
     (view.graphics?.length ? NPC_MASK.SPOT_ANIM : 0) |
-    (view.typeCustomisation ? NPC_MASK.TYPE_CUSTOMISATION : 0);
+    (view.typeCustomisation ? NPC_MASK.TYPE_CUSTOMISATION : 0) |
+    (view.faceAngle ? NPC_MASK.FACE_ANGLE : 0);
 }
 
 /** A flags byte, then the flagged fields: model ids, recolour pairs, a name, a combat level. */
@@ -3417,6 +3475,10 @@ function writeNpcUpdateBlock(view: NpcView, writeInteraction: boolean, writeHead
     bytes.push(view.transparency.to & 0xff);
   }
   if (view.typeCustomisation) writeTypeCustomisation(bytes, view.typeCustomisation);
+  if (view.faceAngle) {
+    shortBE(bytes, view.faceAngle.angle & 2047);
+    bytes.push(view.faceAngle.instant ? 1 : 0);
+  }
   return Buffer.from(bytes);
 }
 
@@ -3770,7 +3832,7 @@ export function encodeNpcSync(
     const worldView = view.worldView;
     writer.writeBits(1, worldView != null ? 1 : 0);
     if (worldView != null) writer.writeBits(32, worldView & 0xffff);
-    writer.writeBits(1, readd.has(view.index) ? 1 : 0);
+    writer.writeBits(1, readd.has(view.index) && view.jump !== false ? 1 : 0);
     writer.writeBits(large ? 8 : 5, signed(view.y - base.y, large ? 8 : 5));
     writer.writeBits(large ? 8 : 5, signed(view.x - base.x, large ? 8 : 5));
     writer.writeBits(3, view.rotation & 7);

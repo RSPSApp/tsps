@@ -189,13 +189,48 @@ test('bull release is private, uses the captured bull and cleans up pending or a
   assert.equal(h.npcs[0].getArea(), arena); assert.equal(h.npcs[0].xpMultiplier, 2); assert.equal(other.getArea(), null);
   assert.deepEqual(h.objects.map(object => object.getId()), [60762, 60761, 60764, 60765]);
   assert.ok(h.objects.every(object => object.getArea() === arena));
-  new h.api.combat().start(h.npcs[0], p);
-  assert.equal(h.eventCounts.get('ides-of-milk:brutus-attack'), 1, 'the attack start counts even when its hit misses');
+  const npc = h.npcs[0], method = new h.api.combat();
+  npc.moveTo(new core.Location(3260, 3290, 0));
+  p.moveTo(new core.Location(3260, 3289, 0));
+  arena.meleeRemaining = 0; arena.nextSpecial = 'charge';
+  method.start(npc, p);
+  assert.equal(arena.special, 'charge');
+  assert.equal(h.eventCounts.get('ides-of-milk:brutus-hit') ?? 0, 0, 'a special attack start does not count as a hit');
+  p.moveTo(new core.Location(3258, 3289, 0));
+  h.tick(4);
+  assert.equal(p.damage.length, 0, 'the charge footprint misses this player');
+  assert.equal(h.eventCounts.get('ides-of-milk:brutus-hit') ?? 0, 0, 'a dodged special does not fail the achievement');
   h.hooks.onPlayerLogout[0]({ player: p }); assert.equal(p.getArea(), null); assert.equal(h.npcs[0].removed, true);
   const pending = player(); h.quest.setStage(pending, 18); h.action(pending, N.BULL, 'mKQNRL');
   h.hooks.onPlayerLogout[0]({ player: pending }); h.tick(4); assert.equal(h.npcs.length, 1);
   assert.deepEqual(pending.objectsRemoved, [], 'cancelled entry never hides world gates');
   assert.deepEqual(pending.objectsSent, [], 'cancelled entry has no gate view to restore');
+});
+
+test('Brutus marks an accurate melee hit even when it deals zero damage', () => {
+  const { h, p, npc, method, arena } = fight();
+  npc.moveTo(new core.Location(3261, 3287, 0));
+  p.moveTo(new core.Location(3263, 3288, 0));
+  method.start(npc, p);
+  assert.equal(arena.special, null, 'the bull is using an ordinary melee attack');
+  assert.equal(h.eventCounts.get('ides-of-milk:brutus-hit') ?? 0, 0, 'the attack animation alone does not count');
+  method.handleAfterHitEffects({ getAttacker: () => npc, getTarget: () => p, isAccurate: () => false });
+  assert.equal(h.eventCounts.get('ides-of-milk:brutus-hit') ?? 0, 0, 'an inaccurate melee roll does not count');
+  method.handleAfterHitEffects({ getAttacker: () => npc, getTarget: () => p, isAccurate: () => true });
+  assert.equal(h.eventCounts.get('ides-of-milk:brutus-hit'), 1, 'an accurate hit counts even if prayer or a damage cap reduces it to zero');
+});
+
+test('Brutus marks a special only when its impact footprint hits the player', () => {
+  const { h, p, npc, method, arena } = fight();
+  npc.moveTo(new core.Location(3260, 3290, 0));
+  p.moveTo(new core.Location(3260, 3289, 0));
+  arena.meleeRemaining = 0; arena.nextSpecial = 'charge';
+  method.start(npc, p);
+  assert.equal(arena.special, 'charge');
+  assert.equal(h.eventCounts.get('ides-of-milk:brutus-hit') ?? 0, 0, 'charge windup is not yet a hit');
+  h.tick(4);
+  assert.equal(p.damage.length, 1, 'the player is in the charge footprint');
+  assert.equal(h.eventCounts.get('ides-of-milk:brutus-hit'), 1);
 });
 
 test('leaving a post-quest fight restores the cow-field gates so Brutus can be released again', () => {

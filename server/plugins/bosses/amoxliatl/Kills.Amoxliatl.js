@@ -3,8 +3,15 @@
  * npc-combat-defs) and every icy pool goes with a puff. 2 ticks later (`deathTicks`) she is gone:
  * "Your Amoxliatl kill count is: N." (varp 4403, through Combat Achievements), the fight's
  * length against the personal best, and the loot on her middle tile (NpcDrops). The HUD fades 4
- * ticks after that. She rises again on her platform 29 ticks later (Wiki: respawn) for as long as
+ * ticks after that. She rises again on her platform 28 ticks later (R1140 ticks 7945-7973) for as long as
  * the player stays.
+ *
+ * The quest's guardian doesn't die (R1140 ticks 7686-7693, R1695 4926-4934): at 0 HP she becomes
+ * amoxliatl_quest_inactive (13687) with 11531 and "Zema ami miki!", her pools go with a puff, and she
+ * throws a last icicle at the player. The quest moves on that tick ("amoxliatl:quest-won") and the
+ * player is held. 3 ticks later the player teleports (4018, 2754) as she plays her death (11532),
+ * the sound 7928 and the HUD going a tick after, and 6 ticks after the 0 HP the player is out: the
+ * quest plugin's banishment ("amoxliatl:quest-defeated").
  */
 const Common = require("./Common.Amoxliatl");
 const CombatAchievements = require("./CombatAchievements.Amoxliatl");
@@ -16,8 +23,60 @@ const BOSS_NAME = "Amoxliatl";
 
 function bossBeforeDeath(event) {
   const fight = event.npc?.__amoxliatlFight;
-  if (!fight || event.preventDeath || fight.over) return;
+  if (!fight || event.preventDeath) return;
+  if (fight.session.quest) {
+    event.preventDeath = true;
+    if (!fight.over) questEnd(fight);
+    return;
+  }
+  if (fight.over) return;
   fight.died();
+}
+
+/** The quest's guardian at 0 HP: she banishes the player instead of dying. */
+function questEnd(fight) {
+  const { Animation, ChatType, Graphic, Projectile } = Common.core;
+  const { session, player, boss } = fight;
+  const end = Common.data.questEnd;
+  // As captured, the quest moves on (varbit 72 to 74) and the player is held on the 0 HP tick, so a
+  // logout or death before the teleport keeps the won fight (Chamber saves them at `outside`).
+  session.banished = true;
+  session.holdGeneration = player.getMovementQueue().reset().setBlockMovement(true).getBlockMovementGeneration();
+  Common.api.emitCustomEvent('amoxliatl:quest-won', { player });
+  fight.died();
+  boss.setHitpointsLocked(true);
+  boss.getCombat().reset();
+  boss.getCombat().getHitQueue().clear();
+  player.getCombat().reset();
+  boss.setNpcTransformationId(end.inactive);
+  boss.setPositionToFace(player.getLocation());
+  boss.performAnimation(new Animation(end.anim));
+  boss.forceChat(end.say);
+  player.getPacketSender().sendTypedMessage(ChatType.NPC_SAY, end.say, boss.getDefinition().getName());
+  const spec = end.projectile;
+  new Projectile(Projectile.centreOf(boss), player.getLocation(), null, spec.id, spec.start, spec.end,
+    spec.startHeight, spec.endHeight, session.area)
+    .withAngle(spec.angle)
+    .withProgress(spec.progress)
+    .sendProjectile();
+  const live = () => !session.ended && player.isRegistered();
+  Common.later(end.teleportTicks, () => {
+    if (!live()) return;
+    player.performAnimation(new Animation(end.playerAnim));
+    player.performGraphic(new Graphic(end.playerSpotanim));
+    boss.performAnimation(new Animation(end.deathAnim));
+  });
+  // Both recordings hide her HP bar with the sound (R1140 7690, R1695 4931), 2 ticks before the player is out.
+  Common.later(end.soundTicks, () => {
+    if (!live()) return;
+    player.getPacketSender().sendSoundEffect(end.sound, 1, 0);
+    fight.hideHud();
+  });
+  Common.later(end.outTicks, () => {
+    if (!live()) return;
+    session.end();
+    Common.api.emitCustomEvent('amoxliatl:quest-defeated', { player });
+  });
 }
 
 function bossDeath(event) {
@@ -28,17 +87,21 @@ function bossDeath(event) {
     if (session.echoCompleted) return;
     session.echoCompleted = true;
     Common.api.emitCustomEvent("echo-boss:completed", { player, boss: "amoxliatl", token: session.echoToken, npcs: [event.npc], location: Common.core.Projectile.centreOf(event.npc) });
-    fight.hideHud();
-    fight.stop();
-    // Keep the exit available, but never respawn a second boss in this session.
+    // Recorded (R1140, 6 of 6): after the Echo's own lines, the normal boss's duration line,
+    // against the normal personal best; the normal kill count is left alone (varp 4403 unsent).
+    const best = Number(player.getAttribute(Common.BEST_TICKS_ATTRIBUTE)) || 0;
+    if (best) player.sendMessage(`Fight duration: <col=ff0000>${Common.formatTicks(fight.duration())}</col>. Personal best: ${Common.formatTicks(best)}`);
+    // As the normal boss: the HUD fades, and the next Echo rises if the player stays.
+    Common.later(HUD_FADE_AFTER_REMOVAL_TICKS, () => {
+      fight.hideHud();
+      fight.stop();
+    });
+    session.boss = null;
+    Common.later(Common.data.spawn.respawnTicks, () => session.respawnEcho());
     return;
   }
-  if (session.quest) {
-    fight.hideHud();
-    session.end();
-    Common.api.emitCustomEvent('amoxliatl:quest-defeated', { player });
-    return;
-  }
+  // The quest's guardian never dies (questEnd); nothing here is hers.
+  if (session.quest) return;
   const ticks = fight.duration();
   const best = Number(player.getAttribute(Common.BEST_TICKS_ATTRIBUTE)) || 0;
   if (!best || ticks < best) player.setAttribute(Common.BEST_TICKS_ATTRIBUTE, ticks);

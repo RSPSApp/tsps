@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
+const vm = require('node:vm');
 const { Server } = require('../dist/Server');
 Server.installProductionPathResolver();
 const { PluginManager } = require('../dist/plugins/PluginManager');
@@ -51,6 +52,27 @@ test('an empty list refuses every bot; a value that is not a list is ignored', (
 test('without "world" in the list the bot sites are not started', (t) => {
   allowed(t, ['bounty-hunter']);
   assert.equal(startBotSites({ get runtime() { assert.fail('the sites must not be set up'); } }), null);
+});
+
+test('extreme bot site counts queue at most the world capacity, shared across sites', (t) => {
+  const { SPAWN_BATCH_DELAY_MS } = require('../plugins/bots/runtime/SpawnPacing.PlayerBots');
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const capacity = 25;
+  const spawnedAt = [];
+  const spawner = startBotSites({
+    api: { core: { World: { getPlayers: () => ({ capacityReturn: () => capacity + 1 }) } } },
+    runtime: { spawnPvpBot: at => { spawnedAt.push(at.getX()); return null; } },
+    registry: {
+      hasRoom: () => true,
+      sites: [3200, 3300].map(x => ({ enabled: true, count: 1e16, anchor: { x, y: 3200 },
+        activities: [{ id: 'woodcutting', mode: 'woodcutting' }] })),
+    },
+  });
+  vm.runInNewContext('start()', { start: spawner.start }, { timeout: 100 });
+  for (let batch = 0; batch < 5; batch++) t.mock.timers.tick(SPAWN_BATCH_DELAY_MS);
+  assert.equal(spawnedAt.length, capacity);
+  assert.equal(spawnedAt.filter(x => x < 3250).length, 13);
+  assert.equal(spawnedAt.filter(x => x > 3250).length, 12);
 });
 
 test('every bot spawn names one of the documented activities', () => {

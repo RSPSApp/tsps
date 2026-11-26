@@ -73,7 +73,8 @@ cannon, the landing and the first thoughts), `Schematics.BetweenARock.js` (the p
   the two messages, the helmet in the first bar's slot and 30 Smithing XP (2343-2362, 5114-5123).
 - **Stage 70:** Talk-to asks "So you want to... fire me into the rock?" again (2079); at stage 80 with
   no helmet and parts missing it is "What did you want me to find again?" (2140, 2174).
-- **The puzzle:** Assemble opens `dwarf_rock_schematics` (113) and its control panel (114) in the side
+- **The puzzle:** Assemble runs script 917 `toplevel_mainmodal_background` (0, 0), then opens
+  `dwarf_rock_schematics` (113) and its control panel (114) in the side
   modal; varps 261-263 select pieces (1 to start), 264-266 show them; moves are 5 pixels (paper_move;
   the right presses were silent), rotate steps rot1-rot4 (paper_turn). Start: piece 1 at 371,137 rot4,
   2 at 24,202 rot2, 3 at 182,199 rot2. Solved: pieces snap to 239,171 / 236,173 / 239,174, the borders
@@ -82,7 +83,7 @@ cannon, the landing and the first thoughts), `Schematics.BetweenARock.js` (the p
 - **The cannon:** fade, the player in the cannon at 2057,4978 plane 3 (+3) with
   `dwarfrock_fake_dondakan` (+7), `dwarfrock_cannon_incannon` and the fade back (+8); held lines at
   +14, +19, +23, +32, +37, overhead and (Dondakan's) as game messages; the zoomed heads
-  (`dwarf_rock_cannon`, 112) at +44, +51, +60; `dwarf_rock_fade_out` and sound 1411 at +66; fade at
+  (`dwarf_rock_cannon`, 112, just after script 2524 `toplevel_mainmodal_open` (0, 0)) at +44, +51, +60; `dwarf_rock_fade_out` and sound 1411 at +66; fade at
   +69; the landing at +73 (3209-3282).
 - **Landing:** on 2426,4965 (flying to 2420,4965) or 2323,4939 (to 2329,4939); the flight 3 ticks
   after arriving (`dwarfrock_cannon_flying`, sound 1409, camera above at rate 232), the screen back the

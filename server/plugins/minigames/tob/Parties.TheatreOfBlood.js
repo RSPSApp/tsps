@@ -14,6 +14,7 @@ const Shared = require("./Shared.TheatreOfBlood");
 /** Party rights as the information screen's footer script takes them (estimate). */
 const RIGHTS = { CAN_APPLY: 0, MEMBER: 1, LEADER: 2, APPLICANT: 3, BLOCKED: 4 };
 const DEFAULT_COMBAT = 3;
+const DEFAULT_MODE_ATTRIBUTE = "tob:default-party-mode";
 
 const parties = new Map();
 let nextId = 1;
@@ -26,8 +27,8 @@ class Party {
     this.blocked = new Set();
     this.preferredSize = 0;
     this.preferredCombat = DEFAULT_COMBAT;
-    /** The party's mode (Shared.MODES); the leader picks it on the party's screen. */
-    this.mode = "normal";
+    /** The leader can change this on the party information screen. */
+    this.mode = leader.getAttribute(DEFAULT_MODE_ATTRIBUTE) ?? "normal";
     this.createdCycle = Shared.cycle();
     this.raid = null;
     parties.set(this.id, this);
@@ -39,6 +40,12 @@ class Party {
 
   isLeader(player) {
     return this.leader === player;
+  }
+
+  swap(first, second) {
+    const member = this.members[first];
+    this.members[first] = this.members[second];
+    this.members[second] = member;
   }
 
   has(player) {
@@ -122,4 +129,4 @@ function byId(id) {
   return parties.get(id) ?? null;
 }
 
-module.exports = { RIGHTS, Party, create, partyOf, applicationOf, listed, byId, parties };
+module.exports = { RIGHTS, DEFAULT_MODE_ATTRIBUTE, Party, create, partyOf, applicationOf, listed, byId, parties };

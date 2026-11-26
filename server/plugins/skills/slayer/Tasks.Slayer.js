@@ -421,15 +421,31 @@ function npcName(npc) {
   return (npc.getCurrentDefinition?.() ?? npc.getDefinition?.())?.getName?.() ?? "";
 }
 
-/** Whether a kill of this NPC (where it died) counts for the player's task. */
-function countsFor(task, npc, player = null) {
+/**
+ * What a dying NPC was killed as: the id the death event read before any death handler ran, with
+ * its definition. A handler may already have transformed the NPC (the Royal Titans become their
+ * corpses, which no task counts and which have less hitpoints); without an event id, the NPC as it is.
+ */
+function killedAs(npc, npcId) {
+  if (Number.isInteger(npcId) && npcId >= 0 && npcId !== npc.getId()) {
+    const definition = core.NpcDefinition.forId(npcId);
+    if (definition) return { id: npcId, name: definition.getName?.() ?? npcName(npc), definition };
+  }
+  return { id: npc.getId(), name: npcName(npc), definition: npc.getCurrentDefinition?.() ?? npc.getDefinition() };
+}
+
+/**
+ * Whether a kill of this NPC (where it died) counts for the player's task; `as` is what it was
+ * killed as (killedAs), when that is not the NPC as it is now.
+ */
+function countsFor(task, npc, player = null, as = null) {
   if (!task || !npc) return false;
   // An encounter can exclude this exact NPC instance (for example an alternate mode)
   // from task credit and all equipment bonuses that ask slayer:on-task.
   const query = { player, npc, eligible: true };
   api.emitCustomEvent("slayer:target-eligible", query);
   if (query.eligible === false) return false;
-  return countsForTarget(task, { id: npc.getId(), name: npcName(npc), location: npc.getLocation(), npc, player });
+  return countsForTarget(task, { id: as?.id ?? npc.getId(), name: as?.name ?? npcName(npc), location: npc.getLocation(), npc, player });
 }
 
 /**
@@ -494,21 +510,23 @@ function onTaskEvent(request) {
     || (!!request.npc && alwaysOnTask(request.player, request.npc, request.npc.getId(), npcName(request.npc)));
 }
 
-function npcKilled({ killer, npc }) {
+function npcKilled({ killer, npc, npcId }) {
   if (!killer?.isPlayer?.() || !npc) return;
   const player = killer;
   const task = current(player);
-  if (!countsFor(task, npc, player)) {
-    offTaskKill(player, npc);
+  const killed = killedAs(npc, npcId);
+  if (!countsFor(task, npc, player, killed)) {
+    offTaskKill(player, npc, killed);
     return;
   }
-  const hitpoints = (npc.getCurrentDefinition?.() ?? npc.getDefinition()).getHitpoints();
-  // Superiors.Slayer.js may spawn a superior, or zero this for a superior's own XP.
-  const kill = { player, npc, xp: hitpoints };
+  const hitpoints = killed.definition.getHitpoints();
+  // Superiors.Slayer.js may spawn a superior, or zero this for a superior's own XP. A boss with its own
+  // Slayer XP sets it here; `npcId` is the id it died as (`npc` may have turned into its corpse since).
+  const kill = { player, npc, npcId: killed.id, xp: hitpoints };
   api.emitCustomEvent("slayer:task-kill", kill);
   // `slayer:on-task-kill` { player, npcName }: a kill that counts for the player's own task (not an always-on-task
   // kill without one), the NPC's name flat for triggers ("Slay 250 creatures", "Kill an Abyssal Demon on task").
-  api.emitCustomEvent("slayer:on-task-kill", { player, npcName: npcName(npc) });
+  api.emitCustomEvent("slayer:on-task-kill", { player, npcName: killed.name });
   // Mortimer's Slayer XP modifier counts superiors too (Wiki).
   // The Morytania Diary adds to a kill in the Slayer Tower (MorytaniaDiary.Slayer.js).
   const boost = modifierBoost(task, MODIFIER.XP) * MorytaniaDiary.boost(player, npc);
@@ -536,10 +554,10 @@ function unlockKills(player, npc) {
 }
 
 /** A kill counted as on task with no task covering it ("slayer:always-on-task"): its XP and superior, no count. */
-function offTaskKill(player, npc) {
-  if (!alwaysOnTask(player, npc, npc.getId(), npcName(npc))) return;
-  const hitpoints = (npc.getCurrentDefinition?.() ?? npc.getDefinition()).getHitpoints();
-  const kill = { player, npc, xp: hitpoints, offTask: true };
+function offTaskKill(player, npc, killed = killedAs(npc)) {
+  if (!alwaysOnTask(player, npc, killed.id, killed.name)) return;
+  const hitpoints = killed.definition.getHitpoints();
+  const kill = { player, npc, npcId: killed.id, xp: hitpoints, offTask: true };
   api.emitCustomEvent("slayer:task-kill", kill);
   // The Morytania Diary counts it too (not Mortimer's modifier: there is no task).
   const xp = kill.xp * MorytaniaDiary.boost(player, npc);

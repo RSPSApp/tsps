@@ -1,8 +1,9 @@
+import { getMapWarpActions } from "../../common/gamemode/GamemodeContentStore";
 import { mat4, vec3 } from "gl-matrix";
 
 import { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
 import { LocModelType } from "../../rs/config/loctype/LocModelType";
-import type { NpcType } from "../../rs/config/npctype/NpcType";
+import { type NpcType, npcTypeHasModel } from "../../rs/config/npctype/NpcType";
 import type { LocType } from "../../rs/config/loctype/LocType";
 import type { Model } from "../../rs/model/Model";
 import { Scene } from "../../rs/scene/Scene";
@@ -53,6 +54,8 @@ export interface SceneRaycastHit {
     mapId: number;
     tileX?: number;
     tileY?: number;
+    locLevel?: number;
+    locTypeRot?: number;
     /** For NPC hits: server ID for direct lookup (avoids iterating all NPCs) */
     npcServerId?: number;
     /** For NPC hits: ECS ID for direct access to NPC data */
@@ -68,6 +71,8 @@ export interface SceneRaycastOptions {
      * Restrict world interactions (LOC/OBJ/NPC/PLAYER) to the current client plane.
      */
     basePlane?: number;
+    /** If set, only pick locs on visible planes, with no actor or item hits. */
+    locPlaneLimit?: number;
 }
 
 export class SceneRaycaster {
@@ -269,6 +274,8 @@ export class SceneRaycaster {
                 ? Math.max(0, Math.min(Scene.MAX_LEVELS - 1, options.basePlane | 0))
                 : undefined;
 
+        const locPlaneLimit = options?.locPlaneLimit;
+
         // interact buffers disable picking when full fog is reached.
         // Match that by filtering out hits beyond the fog boundary: a rounded
         // square of half-extent u_renderDistance (see shaders/includes/fog.glsl).
@@ -318,7 +325,7 @@ export class SceneRaycaster {
 
         for (let i = 0; i < visibleCount; i++) {
             const map = visibleMaps[i] as WebGLMapSquare | undefined;
-            if (!map) continue;
+            if (!map || map.farOnly) continue;
 
             // For world entity maps (ships), transform the ray to account for the
             // bobbing/rotation animation so loc hit-testing matches the rendered position.
@@ -347,17 +354,17 @@ export class SceneRaycaster {
             // Ground/OBJ hits via tile traversal in this map along the ray segment [tEnter, tExit]
             // Collect ground items and LOCs via efficient DDA tile traversal
             // (only visits tiles the ray actually passes through)
-            this.traverseMapTiles(map, effectiveRay, tEnter, tExit, maxDistance, hits, basePlane);
+            this.traverseMapTiles(map, effectiveRay, tEnter, tExit, maxDistance, hits, basePlane, locPlaneLimit);
 
             // NPC hits for this map (3D AABB in world space)
-            this.collectNpcHitsForMap(map, effectiveRay, maxDistance, hits, basePlane);
+            if (locPlaneLimit === undefined) this.collectNpcHitsForMap(map, effectiveRay, maxDistance, hits, basePlane);
         }
 
         // NPCs aboard a boat stand in deck coordinates, which no map square holds.
-        this.collectDeckNpcHits(ray, maxDistance, hits, basePlane);
+        if (locPlaneLimit === undefined) this.collectDeckNpcHits(ray, maxDistance, hits, basePlane);
 
         // Player hits (global, then bucketed per map)
-        if (hasPlanarDir) {
+        if (hasPlanarDir && locPlaneLimit === undefined) {
             this.collectPlayerHits(ray, maxDistance, hits, basePlane);
         }
 
@@ -425,6 +432,7 @@ export class SceneRaycaster {
         maxDistance: number,
         hits: SceneRaycastHit[],
         basePlane?: number,
+        locPlaneLimit?: number,
     ): void {
         const baseX = map.getRenderBaseTileX();
         const baseY = map.getRenderBaseTileY();
@@ -474,6 +482,7 @@ export class SceneRaycaster {
                 visitedAnchors,
                 resolvedLocTypes,
                 basePlane,
+                locPlaneLimit,
             );
             if (tileX === endTileX && tileY === endTileY) break;
             if (nextX < nextY) {
@@ -497,6 +506,7 @@ export class SceneRaycaster {
         visitedAnchors?: Uint8Array,
         resolvedLocTypes?: Map<number, LocType>,
         basePlane?: number,
+        locPlaneLimit?: number,
     ): void {
         const local = this.getMapLocalTile(map, worldTileX, worldTileY);
         if (!local) {
@@ -523,8 +533,9 @@ export class SceneRaycaster {
         // over the full tile footprint using bridge-aware ground height. This matches
         // the debug AABB overlay for dropped items.
         const groundItemStartPlane = typeof groundItemPlane === "number" ? groundItemPlane : 0;
-        const groundItemEndPlane =
-            typeof groundItemPlane === "number" ? groundItemPlane + 1 : Scene.MAX_LEVELS;
+        const groundItemEndPlane = locPlaneLimit === undefined
+            ? (groundItemPlane ?? (Scene.MAX_LEVELS - 1)) + 1
+            : 0;
         for (let level = groundItemStartPlane; level < groundItemEndPlane; level++) {
             const stacks = groundItems.getStacksAt(worldTileX, worldTileY, level);
             if (!stacks || stacks.length === 0) continue;
@@ -575,8 +586,9 @@ export class SceneRaycaster {
         const LOC_SEARCH_RANGE = 6;
         const mapTileSpan = map.getLocalTileSpan();
         const startPlane = typeof interactionLevel === "number" ? interactionLevel : 0;
-        const endPlane =
-            typeof interactionLevel === "number" ? interactionLevel + 1 : Scene.MAX_LEVELS;
+        const endPlane = locPlaneLimit === undefined
+            ? (interactionLevel ?? (Scene.MAX_LEVELS - 1)) + 1
+            : Math.min(Scene.MAX_LEVELS, locPlaneLimit + 1);
 
         for (let level = startPlane; level < endPlane; level++) {
             for (let anchorDx = -LOC_SEARCH_RANGE; anchorDx <= LOC_SEARCH_RANGE; anchorDx++) {
@@ -614,7 +626,8 @@ export class SceneRaycaster {
                         // Loc id 0 is a real loc (Dwarf Cannon's remains multiloc).
                         if (!(locId >= 0)) continue;
                         const locType = this.getResolvedLocType(locId, resolvedLocTypes);
-                        if (!locType || !this.isLocTypeInteractive(locType)) continue;
+                        if (!locType || (!this.isLocTypeInteractive(locType) &&
+                            !getMapWarpActions(locId, anchorWorldX, anchorWorldY, level))) continue;
 
                         const packedTypeRot =
                             locIndex < locTypeRots.length
@@ -684,6 +697,8 @@ export class SceneRaycaster {
                             mapId,
                             tileX: anchorWorldX,
                             tileY: anchorWorldY,
+                            locLevel: level,
+                            locTypeRot: packedTypeRot,
                         });
                     }
                 }
@@ -723,13 +738,15 @@ export class SceneRaycaster {
             if (interactId < 0) continue;
             const npcPlane = npcEcs.getLevel(ecsId) | 0;
             let heightTiles = 0;
+            let isFishingSpot = false;
             try {
                 let npcType: NpcType | undefined = this.osrsClient.npcTypeLoader.load(interactId);
                 while (npcType?.transforms) {
                     npcType = npcType.transform(this.osrsClient.varManager, this.osrsClient.npcTypeLoader);
                 }
                 // Model-less NPC spawns must not intercept objects behind their bounding box.
-                if (!npcType?.modelIds?.length) continue;
+                if (!npcTypeHasModel(npcType)) continue;
+                isFishingSpot = String(npcType.name ?? "").toLowerCase().includes("fishing spot");
                 // The scaled model's height; size is already the scaled footprint in tiles.
                 heightTiles = (this.npcHeightProvider?.(npcType.id) ?? 200) / 128;
             } catch {
@@ -748,20 +765,32 @@ export class SceneRaycaster {
             if (!coarse || coarse.tMin > maxDistance) continue;
 
             const serverId = npcEcs.getServerId(ecsId) | 0;
-            const triangles = this.npcTrianglesProvider?.(ecsId, serverId);
             let tHit: number | undefined;
-            if (triangles && triangles.length >= 3) {
-                tHit = this.intersectNpcModel(ray, maxDistance, triangles, size === 1);
-            } else {
-                // Model still streaming: its footprint up to its height.
-                const half = Math.max(0.32, size * 0.42);
-                const height = Math.max(0.5, heightTiles);
-                const boxHit = rayIntersectsBox(
+            if (isFishingSpot) {
+                tHit = this.intersectFishingSpot(
                     ray,
-                    [worldX - half, groundY - height, worldZ - half],
-                    [worldX + half, groundY - 0.05, worldZ + half],
+                    maxDistance,
+                    worldX,
+                    worldZ,
+                    groundY,
+                    heightTiles,
+                    size,
                 );
-                if (boxHit && boxHit.tMin <= maxDistance) tHit = Math.max(boxHit.tMin, 0);
+            } else {
+                const triangles = this.npcTrianglesProvider?.(ecsId, serverId);
+                if (triangles && triangles.length >= 3) {
+                    tHit = this.intersectNpcModel(ray, maxDistance, triangles, size === 1);
+                } else {
+                    // Model still streaming: its footprint up to its height.
+                    const half = Math.max(0.32, size * 0.42);
+                    const height = Math.max(0.5, heightTiles);
+                    const boxHit = rayIntersectsBox(
+                        ray,
+                        [worldX - half, groundY - height, worldZ - half],
+                        [worldX + half, groundY - 0.05, worldZ + half],
+                    );
+                    if (boxHit && boxHit.tMin <= maxDistance) tHit = Math.max(boxHit.tMin, 0);
+                }
             }
             if (tHit === undefined) continue;
 
@@ -777,6 +806,35 @@ export class SceneRaycaster {
                 npcEcsId: ecsId,
             });
         }
+    }
+
+    /**
+     * Fishing spot models animate within their spawn footprint. Using the posed model's bounds
+     * makes the NPC hitbox move with those animations, which can toggle its menu action against
+     * "Walk here" under a stationary pointer. Keep a size-based interaction area centered on
+     * the NPC for the whole animation instead.
+     */
+    private intersectFishingSpot(
+        ray: Ray,
+        maxDistance: number,
+        worldX: number,
+        worldZ: number,
+        groundY: number,
+        heightTiles: number,
+        size: number,
+    ): number | undefined {
+        const centerX = worldX;
+        const centerZ = worldZ;
+        const halfSize = Math.max(0.5, size * 0.5);
+        const height = Math.max(0.5, heightTiles);
+        const hit = rayIntersectsBox(
+            ray,
+            [centerX - halfSize, groundY - height, centerZ - halfSize],
+            [centerX + halfSize, groundY + 0.05, centerZ + halfSize],
+        );
+        if (!hit) return undefined;
+        const tHit = Math.max(hit.tMin, 0);
+        return tHit <= maxDistance ? tHit : undefined;
     }
 
     /**
@@ -806,7 +864,7 @@ export class SceneRaycaster {
                 while (npcType?.transforms) {
                     npcType = npcType.transform(this.osrsClient.varManager, this.osrsClient.npcTypeLoader);
                 }
-                if (!npcType?.modelIds?.length) return;
+                if (!npcTypeHasModel(npcType)) return;
                 heightTiles = (this.npcHeightProvider?.(npcType.id) ?? 200) / 128;
             } catch {
                 return;

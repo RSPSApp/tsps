@@ -4,6 +4,7 @@ const Patches = require("./Patches.Farming");
 const Guild = require("./Guild.Farming");
 const Tithe = require("./Tithe.Farming");
 const SHOP = "tithe_shop_data";
+const REDRAW_VARP = "omnishop_redraw";
 const WATER_ATTRIBUTE = "farming:water";
 const SESSION = new WeakMap();
 const descriptions = {
@@ -149,7 +150,7 @@ function reward(player, stock) {
 function ownedFamily(player, names) {
     const ids = new Set(names.map(Data.itemId));
     return [player.getInventory(), player.getEquipment(), ...player.getBanks()].some((container) =>
-        container?.getValidItems().some((item) => ids.has(item.getId())),
+        container?.getValidItems().some((item) => item.getAmount() > 0 && ids.has(item.getId())),
     );
 }
 function canBuy(request) {
@@ -208,6 +209,17 @@ function canBuy(request) {
     request.unlock = true;
     request.cancel = false;
 }
+const AUTOWEED_ROWS = ["tithe_shop_autoweed", "tithe_shop_autoweed_toggle"];
+/**
+ * The client builds the shop's list when it opens and again when varp omnishop_redraw changes. The
+ * unlock row shows while farming_blockweeds is 0 and the toggle row once it is not (client script
+ * 4203), so after either purchase the varbit is already sent and the list has to be told to redraw.
+ */
+function redrawList(player) {
+    const sender = player.getPacketSender(),
+        id = core.CacheDefinitions.getVarpId(REDRAW_VARP);
+    sender.sendConfig(id, (sender.getVarp(id) + 1) | 0);
+}
 function purchase(request) {
     if (request.shop !== SHOP) return;
     request.handled = true;
@@ -241,6 +253,7 @@ function purchase(request) {
     }
     player.getInventory().refreshItems();
     sync(player);
+    if (AUTOWEED_ROWS.includes(stock)) redrawList(player);
 }
 function login({ player }) {
     sync(player);

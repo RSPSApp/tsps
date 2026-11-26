@@ -5,7 +5,8 @@ const MINUTE = 60_000;
 /** world.json's Farming:growthMultiplier: 1 is OSRS's speed, 10 grows crops ten times as fast. */
 let growthRate = 1;
 function setGrowthMultiplier(rate) {
-    growthRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+    // Keep a growth minute at least one millisecond so timestamps can always advance.
+    growthRate = Number.isFinite(rate) && rate > 0 ? Math.min(rate, MINUTE) : 1;
 }
 /** How long `minutes` of the Wiki's crop growth takes at the world's growth rate, in ms. */
 function growthDuration(minutes) {
@@ -16,7 +17,7 @@ function growthDuration(minutes) {
  * growth it has already done, and the rest of its current stage runs at the new speed. A crop
  * already overdue keeps the growth its overdue time was worth too: that time is rescaled the same
  * way, so the stages advanceFarm replays from it come out as they would have at the old rate.
- * A willow's branch regrowth (Patches.cure, growthDuration) keeps the progress since its saved
+ * A willow's branch regrowth (willowBranches, growthDuration) keeps the progress since its saved
  * `branchAt` the same way. Redwood branches regrow in fixed ticks (Redwood.REGROW_TICKS), so
  * their timestamps are left alone.
  */
@@ -31,6 +32,41 @@ function applyGrowthRate(farm, now) {
     }
     if (growthRate === 1) delete farm.growthMultiplier;
     else farm.growthMultiplier = growthRate;
+}
+/**
+ * A farmed willow's branches (Wiki: Willow branch, Willow tree (Farming)): none until its health is checked, then one
+ * every 5 minutes up to 6, at the world's growth rate as the crops are; chopped to a stump it has none, and they start
+ * again from none when it grows back. `branchAt` is when the count was last brought up to date (the next branch is
+ * one regrowth after it); a full tree keeps it at `now`, so a cut starts the next regrowth then (ours).
+ * Saves from before the count existed (a checked willow without `branches`) keep the old reading: all six.
+ */
+const WILLOW_BRANCH_MINUTES = 5;
+const WILLOW_BRANCHES = 6;
+function branching(state) {
+    return state.crop === "WILLOW" && state.status === "grown" && state.checked && !state.stump;
+}
+function willowBranches(state, now) {
+    if (!branching(state)) return 0;
+    state.branches ??= WILLOW_BRANCHES;
+    state.branchAt ??= now;
+    if (state.branches >= WILLOW_BRANCHES) { state.branchAt = now; return state.branches; }
+    const regrow = growthDuration(WILLOW_BRANCH_MINUTES);
+    const grown = Math.floor((now - state.branchAt) / regrow);
+    if (grown > 0) {
+        state.branches = Math.min(WILLOW_BRANCHES, state.branches + grown);
+        state.branchAt = state.branches >= WILLOW_BRANCHES ? now : state.branchAt + grown * regrow;
+    }
+    return state.branches;
+}
+/** When the willow's next branch grows, or Infinity while it can't. */
+function nextWillowBranch(state) {
+    if (!branching(state) || (state.branches ?? WILLOW_BRANCHES) >= WILLOW_BRANCHES || !Number.isFinite(state.branchAt)) return Infinity;
+    return state.branchAt + growthDuration(WILLOW_BRANCH_MINUTES);
+}
+/** The willow's branches start from none: at the health check, and as its stump grows back. */
+function resetWillowBranches(state, at) {
+    state.branches = 0;
+    state.branchAt = at;
 }
 function advanceTithe(plant, now) {
     while (!plant.dead && plant.stage < 3 && plant.nextAt <= now) {
@@ -204,6 +240,7 @@ function nextDue(farm) {
     let due = Infinity;
     for (const { patch, state } of patchStates(farm)) {
         if (state.crop === "REDWOOD") due = Math.min(due, Redwood.nextDue(state));
+        if (state.crop === "WILLOW") due = Math.min(due, nextWillowBranch(state));
         if (growing(state) || weeding(farm, patch, state)) due = Math.min(due, state.nextAt);
     }
     return due;
@@ -228,7 +265,11 @@ function advanceFarm(farm, now, random = Math.random, onMature = null) {
         const crop = Data.CROPS.get(state.crop);
         const at = state.nextAt;
         if (state.status === "grown") {
-            if (state.stump) { state.stump = false; continue; }
+            if (state.stump) {
+                state.stump = false;
+                if (crop.key === "WILLOW" && state.checked) resetWillowBranches(state, at);
+                continue;
+            }
             const maximum = startingLives(crop, state.compost);
             // Partial patches need chronological rolls, including anima planting and expiry.
             // Once full, skip empty work in bulk; at most the produce cap needs individual ticks.
@@ -269,6 +310,7 @@ function advanceFarm(farm, now, random = Math.random, onMature = null) {
             state.nextAt = nextGrowth(now, Data.FORMULAS.growth.tickMinutes, farm.offset, 1);
         }
     }
+    for (const { state } of patchStates(farm)) if (state?.crop === "WILLOW") willowBranches(state, now);
     for (const entry of matured) onMature(entry.patch, entry.state, entry.at);
 }
 
@@ -285,6 +327,9 @@ function patchValue(patch, state) {
     if (crop.type === "SPIRIT_TREE" && state.status === "grown") return state.checked ? 20 : 44;
     if (crop.type === "GRAPES" && state.status === "grown" && state.checked) return 15 - Math.max(1, Math.min(5, state.lives));
     if (crop.type === "REDWOOD" && state.status === "grown" && state.checked) return Redwood.value(state);
+    // rsprox local 1000402: 22 after Check-health (tick 883), then 197 down to 192 as the 1st to 6th branch grows
+    // (970-1470), and back up a step for each cut (31156, 31165); the cache's tree patch shows a willow for all seven.
+    if (branching(state)) { const branches = state.branches ?? WILLOW_BRANCHES; return branches > 0 ? 198 - branches : 22; }
     if (state.stump) return visual.STUMP?.[0] ?? visual.HARVESTABLE?.[0];
     if (crop.type === "GRAPES" && state.status === "dead") return 15;
     if (state.status === "dead") return (visual.DEAD ?? states.ANYHERB?.DEAD)?.[Math.max(1, state.stage)] ?? visual.GROWING[crop.stages];
@@ -298,4 +343,4 @@ function patchValue(patch, state) {
     return (state.watered ? visual.WATERED?.[state.stage] : undefined) ?? visual.GROWING[state.stage];
 }
 
-Object.assign(module.exports, { MINUTE, setGrowthMultiplier, growthDuration, applyGrowthRate, advanceTithe, titheDeposit, nextGrowth, tickIndex, stageAt, emptyPatch, startingLives, diseaseChance, saveLifeChance, activeAnima, advanceFarm, diseaseFree, nextDue, patchValue });
+Object.assign(module.exports, { MINUTE, setGrowthMultiplier, growthDuration, applyGrowthRate, advanceTithe, titheDeposit, nextGrowth, tickIndex, stageAt, emptyPatch, startingLives, diseaseChance, saveLifeChance, activeAnima, advanceFarm, diseaseFree, nextDue, patchValue, willowBranches, resetWillowBranches });

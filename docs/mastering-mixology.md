@@ -114,3 +114,33 @@ What happens when every stored potion is refused was not captured; no swig, soun
 - **Never saved:** crystal dust (divine potions). Serum 207 has no recipe here yet.
 - **Not captured:** the live recordings that wear the goggles (rev 237, Leagues) only show the equip itself; the saving is server-side and silent, so its rules come from the Wiki page alone.
 - **Assumed:** the goggles page names weapon poison++ only; weapon poison and weapon poison+ count here as any other secondary ("most potions").
+
+## Outfit styles (Change)
+
+`Outfit.Mixology.js`, data in `outfitStyles` of `plugins/minigames/data/mastering-mixology.json`. The prescription goggles, Alchemist labcoat and Alchemist pants each have a second look (the goggles focused or unfocused, the labcoat and pants with an apron: Wiki, Alchemist's outfit). The gloves have no Change option in the cache.
+
+- **Captured** (rsprox recording 4210, rev 238, Leagues world): inventory Change swaps the piece for its other look in the same slot (`mm_alchemist_hat` <-> `mm_alchemist_hat_alt`, tick 1995; labcoat ticks 2387 and 2400; pants ticks 2402 and 2404), with the game message "You adjust the style of your <name>." and synth sound 2238 (equip_fun), on the click's tick. Nothing else changes.
+- **Inventory only:** the cache gives no worn Change option, and the Wiki's goggles page says the change is made in the inventory.
+- Both goggle looks keep the secondary saving (see Prescription goggles above).
+
+## Alchemist's signet chest
+
+The chest by the basement stairs (loc `alchemist_signet_chest` at 1386, 9315), `SignetChest.Mixology.js`.
+Wiki ([Chest (alchemist's signet)](https://oldschool.runescape.wiki/w/Chest_(alchemist%27s_signet))): Open uses
+up one alchemist's signet and gives four stacks: a noted aldarium, one roll of the secondaries and seeds table
+(out of 25), one noted grimy herb of the useful herb table and two noted grimy herbs of the combat herb table
+(each out of 16: the Wiki's 1/3.2, 1/4, 1/4, 1/5.3).
+
+rsprox captures (recording 4185, rev 238, Leagues VI; 8 clicks: 3 opens, 5 refusals), ticks from the first response:
+
+- 0: `human_openchest` and sound 52 (delay 10), "The alchemist's signet fits perfectly into an indent on the
+  chest, causing it to open...", varbit `busy` 1.
+- 1: the loot line, the chest open (`alchemist_signet_chest_open`), the signet gone and the loot.
+- 2: sound 51 (delay 15). 3: the chest closed, `busy` 0.
+- No signet: sound 2402 and a message box, "The chest appears tightly locked, but it has a ring shaped indent
+  on the front of it...". Signets but under four free slots: a message box, "You need at least four free
+  inventory spaces to take anything from this chest." Both set `busy` 1 with the box and `busy` 0 when it is
+  dismissed (ticks 34/36, 101/105, 1081/1084, 1122/1124).
+
+Ours: the signet is checked before the free slots (no capture has neither); a refusal box closed by walking
+away also clears `busy`.

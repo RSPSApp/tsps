@@ -15,6 +15,8 @@ export type SimpleMenuEntry = {
     mapY?: number;
     playerServerId?: number;
     npcServerId?: number;
+    /** Presentation-only identity. Never an NPC type, ECS slot or server index. */
+    cosmeticNpcKey?: string;
     actionIndex?: number; // 0-based option index for LOC/OBJ/NPC/PLAYER actions
     opcode?: number; // precomputed OSRS client opcode when known
     identifier?: number;
@@ -37,6 +39,17 @@ export type MenuClickContext = {
     // When true, handlers should run visual/UX side effects only and avoid re-sending packets.
     worldMenuStateDispatch?: boolean;
 };
+
+/**
+ * An entry a plugin or setting moved to the top to be the left click (a menu swap, shift-click
+ * drop). A low-priority widget op (1007) would make that click open the menu instead, so it
+ * becomes a normal op (57); both run the same op.
+ */
+export function asLeftClickEntry<T extends object>(entry: T): T {
+    return (entry as { opcode?: number }).opcode === MenuOpcode.CC_OP_LowPriority
+        ? { ...entry, opcode: MenuOpcode.CC_OP }
+        : entry;
+}
 
 /**
  * shouldLeftClickOpenMenu
@@ -276,6 +289,14 @@ export function normalizeMenuEntries(entries: SimpleMenuEntry[]): SimpleMenuEntr
     return low.concat(high);
 }
 
+/**
+ * A loc's fifth option has opcode 1001. OSRS sorts every opcode of 1000 and above under
+ * "Walk here", so that option is in the menu but a left click walks.
+ */
+function sortsBelowWalkHere(e: SimpleMenuEntry): boolean {
+    return e.targetType === MenuTargetType.LOC && e.actionIndex === 4;
+}
+
 export type DefaultChoiceState = {
     hasSelectedSpell?: boolean;
     hasSelectedItem?: boolean;
@@ -362,7 +383,8 @@ export function chooseDefaultMenuEntry(
     const actionableEntry = entries.find((e) => {
         const lower = String(e.option || "").toLowerCase();
         const action = e.action ?? inferMenuAction(e.option, e.targetType);
-        return !e.deprioritized && !skippedOptions.has(lower) && action !== MenuAction.Examine;
+        return !e.deprioritized && !skippedOptions.has(lower) && action !== MenuAction.Examine &&
+            !sortsBelowWalkHere(e);
     });
     if (actionableEntry) {
         if (!actionableEntry.action)

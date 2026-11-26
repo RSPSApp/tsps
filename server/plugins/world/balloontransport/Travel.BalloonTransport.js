@@ -5,10 +5,13 @@
  *   "Do you want to use the balloon?" opens the balloon map (zep_balloon_map);
  * - a trip to an opened station costs one log of its type ("You need 1 [type] logs to make this
  *   trip.") and needs its Firemaking level; Entrana searches carried and worn items using its
- *   shared admission policy;
+ *   shared admission policy: the first time with the balloonist's line and the message box "You
+ *   are quickly searched." (zep_already_searched set as it is continued), after that only the
+ *   chat line (rsprox local enlightened-journey, rev 242, ticks 2241-2246 and 2967);
  * - from Entrana a station not yet opened is opened by flying the balloon controls there with
  *   10 of its logs (3 magic), for 2,000 Firemaking XP (Controls.BalloonTransport.js; rsprox
- *   226/01702 boards with "You board the balloon."); from anywhere else it is refused;
+ *   226/01702 boards with "You board the balloon."); from anywhere else it is refused with the
+ *   message box "You can only open new locations from Entrana." (rev 242 recording, tick 2223);
  * - no more than 40kg carried, the log aside, and no pet out (the quest's lines);
  * - the flight as recorded (rsprox 3225, rev 232; balloon-transport.json `flight`): the jingle,
  *   the map again with the balloon flying the route, the teleport to the recorded landing tile
@@ -29,6 +32,9 @@ const ENTRANA = "entrana";
 const GRAMS_PER_KG = 1000;
 /** The Pets plugin's follower, readable by other plugins. */
 const PET_ATTRIBUTE = "pets:current";
+/** Entrana's first search is done (zep_already_searched, varbit 1833). */
+const SEARCHED_ATTRIBUTE = "balloon-transport:searched";
+const SEARCHED_VARBIT = "zep_already_searched";
 
 /** Players with the map open -> { from, npcId }. */
 const openMaps = new WeakMap();
@@ -43,6 +49,15 @@ function flying(player) {
 
 function isPassengerArrival(event) {
   return passengerArrivals.has(event);
+}
+
+function searchedVarbit() {
+  return Common.core.CacheDefinitions.getVarbitId(SEARCHED_VARBIT);
+}
+
+function sendSearched(player) {
+  const id = searchedVarbit();
+  if (id != null) player.getPacketSender().sendVarbit(id, player.getAttribute?.(SEARCHED_ATTRIBUTE) ? 1 : 0);
 }
 
 function say(player, npcId, text, then = null) {
@@ -140,7 +155,7 @@ function travel(player, from, to, npcId = null) {
   }
   const opening = !Common.opened(player, to);
   if (opening && from.key !== ENTRANA) {
-    say(player, npcId, messages.locked);
+    say(player, null, messages.locked);
     return false;
   }
   if (firemaking(player) < to.level) {
@@ -185,13 +200,22 @@ function travel(player, from, to, npcId = null) {
   if (controls) return say(player, null, messages.boardControls, go);
   if (to.key !== ENTRANA) return go();
   // Entrana: searched first (the assistants' transcript); the trip is checked again after it.
-  say(player, npcId, messages.entranaSearch, () => {
-    player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, messages.searched);
+  const searched = () => {
     if (carriesEntranaContraband(player)) return say(player, npcId, messages.entranaRefused);
     const after = refusal();
     if (after) return say(player, npcId, after);
     go();
-  });
+  };
+  if (player.getAttribute?.(SEARCHED_ATTRIBUTE)) {
+    player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, messages.searched);
+    searched();
+    return true;
+  }
+  say(player, npcId, messages.entranaSearch, () => say(player, null, messages.searched, () => {
+    player.setAttribute(SEARCHED_ATTRIBUTE, 1);
+    sendSearched(player);
+    searched();
+  }));
   return true;
 }
 
@@ -293,6 +317,12 @@ function logout({ player }) {
 
 function login({ player }) {
   Common.sendRoutes(player);
+  sendSearched(player);
+}
+
+/** Another plugin's "Yes." to "Do you want to use the balloon?" (Taverley's Auguste after the quest): the map. */
+function openMapFor({ player, npcId }) {
+  Common.later(1, () => openMap(player, Common.stationAt(player.getLocation()), npcId ?? null));
 }
 
 /** Any close of the map: its pick is gone. */
@@ -302,6 +332,8 @@ function mapClosed({ player, interfaceId }) {
 
 function attach(api) {
   api.persistAttribute(Common.ROUTES_ATTRIBUTE, 0);
+  api.persistAttribute(SEARCHED_ATTRIBUTE, 0);
+  api.onCustomEvent("balloon-transport:open-map", openMapFor);
   api.onNpcsInteraction(BALLOONISTS, { Fly: flyNpc });
   api.onObjectInteraction(BASKET, { Use: useBasket });
   api.onCustomEvent("npc-dialogue:action", onAction);

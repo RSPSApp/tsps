@@ -37,6 +37,7 @@ module.exports = function registerWhileGuthixSleeps(api) {
     });
   }
   const quest = registerQuest(api, {
+    combatNpcIds: () => ASSASSINS,
     key:'while_guthix_sleeps',name:PAGE,varpId:4092,varbitId:9653,startedValue:1,completionValue:900,questPoints:5,
     rewardLines:['80,000 Thieving XP','75,000 Farming and Herblore XP','50,000 Hunter XP','Access to the Ancient Guthixian Temple'],
     onReward: reward,

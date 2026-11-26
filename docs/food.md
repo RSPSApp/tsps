@@ -64,6 +64,7 @@ The full-plugin decoded Eat tests for same-name cabbage variants, energy restora
 | `eatDelay` | Ticks until the next bite, per bite or for all (default 3). |
 | `combo` | A combo food. |
 | `leaves` | The item left after the last bite (`Pie dish`, `Bowl`). |
+| `leavesInFreeSlot` | `true`: that item goes to the first free slot once the food is gone, rather than its slot (the fruit blast and pineapple punch's cocktail glass). |
 | `boost`, `drain`, `restore` | Skills by name and amount: a boost to base + amount, a drain from it, a restore up to base. Boost and restore amounts may be `{ "flat", "percent" }` of the base level; percent is a fraction (for example, `0.02` for 2%). |
 | `refusedIn` | `{ "<area name>": "<message>" }`: refused with that message while the eater is in an area of that name (purple sweets in the Doom of Mokhaiotl, Fortis Colosseum and the Inferno; Wiki: Purple sweets, Inferno line from rsprox 227/00200). |
 | `stamina`, `area`, `option` | Apply the shared stamina effect, require a `food:area` scene check (its owner may set the refusal `message`), or consume via a cache action other than Eat. |
@@ -114,6 +115,7 @@ separate audits; this correction does not establish complete food/potion parity.
 | `fullHealthMessage` | The line sent in place of the heal line when the bite heals nothing (cooked mystery meat). |
 | `messageType` | `"game"`: the eat line and the lines after it are game messages, not spam (the Araxyte venom sac; the Bottle of wine, rec 20261111T225402-5ab63b4 tick 26). |
 | `say` | A line the player says overhead as they eat it, on the same tick as the (spam) eat line (the cup of tea). |
+| `countsEaten` | `false`: eating it leaves the `tracking_food_eaten` varp alone (the Halloween 2020 candies). |
 | `refuse` | The item can't be eaten; this is the message. |
 
 ## Ours, not live
@@ -154,8 +156,10 @@ leave their vessel. Checked 7 November 2026 against the Wiki pages
 [Jug of wine](https://oldschool.runescape.wiki/w/Jug_of_wine),
 [Half full wine jug](https://oldschool.runescape.wiki/w/Half_full_wine_jug),
 [Cup of tea](https://oldschool.runescape.wiki/w/Cup_of_tea),
-[Fruit blast](https://oldschool.runescape.wiki/w/Fruit_blast) and
-[Pineapple punch](https://oldschool.runescape.wiki/w/Pineapple_punch):
+[Fruit blast](https://oldschool.runescape.wiki/w/Fruit_blast),
+[Pineapple punch](https://oldschool.runescape.wiki/w/Pineapple_punch),
+[Premade fr' blast](https://oldschool.runescape.wiki/w/Premade_fr%27_blast) and
+[Premade p' punch](https://oldschool.runescape.wiki/w/Premade_p%27_punch):
 
 - A jug of wine heals 11 and lowers Attack by 2; a half full wine jug heals 7 and lowers Attack
   by 2. Both leave a jug (the Wiki states the leftover only for the cocktails and the tea, so the
@@ -166,8 +170,21 @@ leave their vessel. Checked 7 November 2026 against the Wiki pages
   sends "You drink the tea." as a spam message and the player says "Aaah, nothing like a nice
   cuppa tea!" overhead, on the same tick (rsprox 237/01104.txt tick 1286, 237/04101.txt:114871;
   the Wiki quotes the exclamation).
-- Fruit blast and pineapple punch heal 9, leave a cocktail glass and print "You drink the
-  cocktail. It tastes great.".
+- The Halloween 2020 candies (black, blue, brown, green, orange, pink, purple, red and white candy)
+  heal nothing (Wiki: Blue candy, Purple candy). Eating one sends "You eat the candy. Yum!" as a spam
+  message, the player says "Ooh piece of candy." overhead (the Wiki quotes it), with human_eat and
+  sound 2393 on the same tick, and the `tracking_food_eaten` varp doesn't change (rsprox 229/00245,
+  blue, pink and purple at ticks 510, 603 and 607; 229/02530). Ours: the other six colours follow
+  the three recorded ones, and the eat delay is the default 3 ticks (no source gives one).
+- Fruit blast, pineapple punch and their Blurberry Bar premades (premade fr' blast, premade p'
+  punch) heal 9, leave a cocktail glass and print "You drink the cocktail. It tastes great." (Wiki
+  pages of each). rsprox captures: the line is spam, with sound 2401 and human_eat; a pineapple
+  punch adds a second spam line, "You feel slightly reinvigorated.", even at full health (rsprox
+  948 tick 18256), and a fruit blast sends none (local 20261111T225402-5ab63b4 tick 37). The glass
+  goes to the first free slot once the drink is gone (`leavesInFreeSlot`): the fruit blast drunk
+  from slot 14 left the glass in slot 8, the first free one, and the punch's glass took its own
+  slot 11, the first free once drunk. Ours: the premades follow their cocktails' captured lines and
+  glass slot (no capture drinks a premade).
 
 The dizzy gnome cocktails and their Blurberry Bar premades are drinks in
 `plugins/items/Potions.plugin.js` (tests: `server/tests/alcohol-drinks.test.cjs`). From the Wiki
@@ -374,11 +391,12 @@ the same two-line pattern.
 | Imperial rosé | 16 | Slayer +1 | Attack -5, Agility -1 | "You find yourself captivated by the complex flavours." |
 | Sunbeam ale | 1 | Agility, Strength +1 | Attack -(1 + 5% of current) | "It tastes wonderful and leaves you feeling energised." |
 | Steamforge brew | 1 | Mining, Magic +1 | Attack, Defence -(2 + 5% of current) | "It has an odd metallic taste to it." |
+| Trapper's tipple | 1 | Hunter +2 | Strength -1, Attack -2 | "You feel less able to fight said creatures." (first line "You drink the Trapper's Tipple and feel ready to catch some creatures.") |
 | Moon-lite | 5 | Strength +(1 + 5%) | Attack -(1 + 5% of current) | "It's very strong and leaves you feeling a bit dizzy." (first line "You drink the Moonlite.") |
 | Sun-shine | 5 | Strength +(1 + 5%) | Attack -4 | "It's got quite the kick to it!" (first line "You drink the Sunshine.") |
 
 Ours:
-- The ales, Moon-lite and Sun-shine aren't captured. Their Wiki line is split into two spam messages, as the
+- The ales (Trapper's tipple included), Moon-lite and Sun-shine aren't captured. Their Wiki line is split into two spam messages, as the
   wines' are.
 - The ales, Moon-lite and Sun-shine leave nothing, as the captured wines do.
 - Principum red, Fortis ash white and Xochipaltic rosé have a Drink op but no documented effect.

@@ -176,3 +176,78 @@ test("quiet mipmap regeneration does not wait for off-screen preload or retry ba
     assert.equal(host.textureMipmapsDirty, false);
     assert.equal(host.textureMipmapsDirtyUpdates, 0);
 });
+
+test("visible gear uploads mip levels without rebuilding the world atlas", async (t) => {
+    const { GearTextureLoader } = await import("../custom/items/GearTextureLoader");
+    const { GearVisualRegistry, GEAR_TEXTURE_START } = await import("../custom/items/GearVisualRegistry");
+    const { drawWithRoofPlaneFilter } = await import("../render/render/draw2");
+    const { newTexture } = await import("../custom/items/GearVisualMath.mjs");
+    const { maybeRegenerateTextureMipmaps, updateTextureArray } = await import("../render/render/textures/array");
+    const { TextureFilterMode } = await import("../render/render/constants");
+    const { newDrawRange } = await import("../render/DrawRange");
+
+    const material = { ...newTexture("gear"), id: "flame", faceIndices: [0] };
+    GearVisualRegistry.register(50000, {
+        version: 1,
+        models: [{ modelId: 1000000, vertexCount: 3, faceCount: 1, textures: [material], particles: [], models: [] }],
+    });
+    t.after(() => GearVisualRegistry.clear());
+
+    let time = 0;
+    let regenerations = 0;
+    const uploads: { level: number; width: number; height: number; layer: number }[] = [];
+    t.mock.method(performance, "now", () => time);
+    const host: any = {
+        osrsClient: { textureLoader: new GearTextureLoader(textureLoader) },
+        textureArray: { bind() {} },
+        textureFilterMode: TextureFilterMode.BILINEAR,
+        loadedTextureIds: new Set<number>(),
+        textureIdIndexMap: new Map([[GEAR_TEXTURE_START, 1], [fireTextureId, 2]]),
+        frameRoofFilteredRangeCount: 0,
+        frameRoofTotalRangeCount: 0,
+        roofFilteredDrawIndices: [],
+        draw() {},
+        textureMipmapsDirty: false,
+        textureMipmapsDirtyAtMs: 0,
+        textureMipmapsLastGenAtMs: 0,
+        textureMipmapsDirtyUpdates: 0,
+        mapManager: { isSceneReady: () => true },
+        stats: { frameCount: 0 },
+        gl: {
+            texSubImage3D(_target: number, level: number, _x: number, _y: number, layer: number, width: number, height: number) {
+                uploads.push({ level, width, height, layer });
+            },
+            generateMipmap() { regenerations++; },
+        },
+        updateTextureArray(textures: Map<number, Int32Array>) { updateTextureArray(this, textures); },
+    };
+
+    const texturesByOffset = new Map([[0, [GEAR_TEXTURE_START]]]);
+    const range = [newDrawRange(0, 3, 1)];
+    const planes = Uint8Array.of(1);
+    const draw = (roofPlaneLimit: number) => {
+        GearVisualRegistry.setTime(time);
+        drawWithRoofPlaneFilter(host, {} as any, range, planes, roofPlaneLimit, undefined, false, texturesByOffset);
+    };
+    for (; time < 10000; time += 16) {
+        draw(1);
+        maybeRegenerateTextureMipmaps(host, time);
+    }
+    assert.equal(regenerations, 0);
+    assert.equal(uploads.filter(({ level }) => level === 0).length, 200);
+    assert.deepEqual(uploads.slice(0, 8), Array.from({ length: 8 }, (_, level) => ({
+        level, width: 128 >> level, height: 128 >> level, layer: 1,
+    })));
+    const visibleUploads = uploads.length;
+    for (; time < 20000; time += 16) {
+        draw(0);
+        maybeRegenerateTextureMipmaps(host, time);
+    }
+    assert.equal(uploads.length, visibleUploads);
+    draw(1);
+    assert.equal(uploads.length, visibleUploads + 8);
+
+    host.updateTextureArray(new Map([[fireTextureId, new Int32Array(128 * 128)]]));
+    maybeRegenerateTextureMipmaps(host, time + 300);
+    assert.equal(regenerations, 1, "native texture streaming still rebuilds world mipmaps");
+});

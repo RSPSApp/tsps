@@ -57,7 +57,7 @@ function areaClass() {
      */
     postLeave(mobile, logout) {
       const player = mobile.isPlayer?.() && this.session?.player === mobile.getAsPlayer() ? mobile.getAsPlayer() : null;
-      if (player && logout) player.setLocation(Common.toLocation(Common.data.door.outside));
+      if (player && logout) player.setLocation(this.session.outside());
       if (player) this.session.end();
       super.postLeave(mobile, logout);
     }
@@ -69,8 +69,7 @@ class Session {
   constructor(player, quest = false, echoToken = null) {
     this.player = player;
     this.quest = quest;
-    // Echo deliberately reuses the normal fight, ice and attack ordering. Echo specials
-    // are not implemented until their mechanics have been captured.
+    // The Echo fights its own way (EchoFight.Amoxliatl) in the same chamber.
     this.variant = echoToken ? "echo" : "normal";
     this.echoToken = echoToken;
     this.area = new (areaClass())();
@@ -81,6 +80,8 @@ class Session {
     this.fight = null;
     /** Kills since the player came in (Kemo Makti). */
     this.kills = 0;
+    /** Times she has risen this visit: her line differs after the first. */
+    this.rises = 0;
     this.ended = false;
   }
 
@@ -126,12 +127,29 @@ class Session {
     if (this.echoToken) {
       // The normal Amoxliatl, given the Echo profile by EchoBosses (the Wiki's Echo is an
       // override of her own id, with no separate appearance).
-      const configure = { player: this.player, boss: "amoxliatl", role: "boss", npc: boss, token: this.echoToken, configured: false };
+      // Live times each Echo from her rise (R1140: 99 ticks from the rise to the kill count read 0:59.40).
+      const configure = { player: this.player, boss: "amoxliatl", role: "boss", npc: boss, token: this.echoToken, configured: false, timeFromNow: true };
       Common.api.emitCustomEvent("echo-boss:configure", configure);
       if (!configure.configured) { this.failEntry(); return; }
     }
     this.boss = boss;
-    require("./Fight.Amoxliatl").begin(this, boss);
+    if (this.echoToken) require("./EchoFight.Amoxliatl").begin(this, boss);
+    else require("./Fight.Amoxliatl").begin(this, boss);
+  }
+
+  /**
+   * Live: with the player still in the chamber, the next Echo rises after a kill, as the normal
+   * boss does. Each is its own Echo encounter, claimed again, so the orb must still be carried;
+   * without it none rises.
+   */
+  respawnEcho() {
+    if (this.ended || this.player.getArea() !== this.area || this.player.getHitpoints() <= 0) return;
+    Common.api.emitCustomEvent("echo-boss:release", { player: this.player, token: this.echoToken });
+    const claim = { player: this.player, boss: "amoxliatl", token: null };
+    Common.api.emitCustomEvent("echo-boss:claim", claim);
+    this.echoToken = claim.token;
+    this.echoCompleted = false;
+    if (this.echoToken) this.spawnBoss();
   }
 
   failEntry() {
@@ -139,10 +157,18 @@ class Session {
     this.end();
   }
 
+  /** Where a logout is saved: outside the door, or where the quest banishes a player who has already won. */
+  outside() {
+    return Common.toLocation(this.banished ? Common.data.questEnd.outside : Common.data.door.outside);
+  }
+
   end() {
     if (this.ended) return;
     this.ended = true;
     sessions.delete(this.player);
+    // questEnd held the player from the 0 HP tick; give it back unless something else took it since.
+    const movement = this.player.getMovementQueue();
+    if (this.banished && movement.getBlockMovementGeneration() === this.holdGeneration) movement.setBlockMovement(false);
     this.fight?.stop();
     if (this.echoToken) {
       this.player.getCombat().reset();
@@ -221,13 +247,17 @@ function validateEcho(player, token) {
 function logout({ player }) {
   const session = sessionOf(player);
   if (!session) return;
-  if (player.getArea() === session.area) player.setLocation(Common.toLocation(Common.data.door.outside));
+  if (player.getArea() === session.area) player.setLocation(session.outside());
   session.end();
 }
 function playerDeath({ player }) { sessionOf(player)?.end(); }
 function shutdown() { for (const session of [...sessions.values()]) logout({ player: session.player }); }
 
-/** The quest reuses the same chamber and hazards with the cache's 400-HP guardian. */
+/**
+ * The quest reuses the same chamber and hazards with the cache's 400-HP guardian. As captured
+ * (R1140, R1695), her track comes on with the move in and she is there 2 ticks later, as the fade
+ * comes back.
+ */
 function questFight(request) {
   if (sessionOf(request.player)) return;
   const session = new Session(request.player, true);
@@ -236,10 +266,13 @@ function questFight(request) {
   Common.travel(request.player, () => {
     if (session.ended) return;
     session.area.enter(request.player);
+    const { music, spawn } = Common.data;
     request.player.moveTo(session.tile([1371, 4511, 0]));
     request.player.setAttribute(Common.INSIDE_ATTRIBUTE, true);
     session.placeExits();
-    Common.later(Common.data.spawn.afterArrivalTicks, () => session.spawnBoss());
+    Common.api.emitCustomEvent("music:unlock-track", { player: request.player, trackId: music });
+    request.player.getPacketSender().sendSong(music);
+    Common.later(spawn.questAfterArrivalTicks, () => session.spawnBoss());
   });
 }
 

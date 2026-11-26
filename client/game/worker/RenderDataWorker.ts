@@ -1,3 +1,4 @@
+import { SampledAnimationRegistry } from "../../custom/animations/SampledAnimationRegistry";
 import { WorkerInputUpdates } from "./WorkerInputUpdates";
 import { BuildSteps } from "../../common/utils/BuildSteps";
 import JSZip from "jszip";
@@ -356,8 +357,11 @@ const worker = {
         // Payloads can update different datasets: preserve them all, in arrival order.
         return inputUpdates.update(Symbol(), () => {
             if (statePromise !== workerStatePromise) return;
+            const sampledRevision = SampledAnimationRegistry.revision;
             loadFromPayload(payload);
-            state?.objTypeLoader.clearCache();
+            if (payload.datasets.some(dataset => dataset.key !== "customSampledAnimations")) {
+                state?.objTypeLoader.clearCache();
+            }
             if (state && payload.datasets.some(isDefinitionDataset)) {
                 state.locTypeLoader.clearCache();
                 state.npcTypeLoader.clearCache();
@@ -365,6 +369,16 @@ const worker = {
                 state.locModelLoader.clearCache();
                 state.npcModelLoader.clearCache();
                 state.worldMapTiles?.invalidate();
+                state.npcPoses?.invalidate();
+            }
+            if (state && payload.datasets.some(dataset => dataset.key === "customAnimations")) {
+                state.seqTypeLoader.clearCache();
+                state.seqFrameLoader.clearCache();
+                state.npcPoses?.invalidate();
+            }
+            if (state && SampledAnimationRegistry.revision !== sampledRevision) {
+                state.seqTypeLoader.clearCache();
+                state.npcModelLoader.clearCache();
                 state.npcPoses?.invalidate();
             }
         });
@@ -449,7 +463,10 @@ const worker = {
                     );
                 } finally {
                     workerState.sceneJobs--;
-                    if (dataLoader.shouldClearWorkerCacheAfterLoad?.(input) ?? true) clearCache(workerState);
+                    // A loc-only rebuild repeats the models of the square it changes: its decoded
+                    // models stay for the next one. The next whole build clears them again.
+                    const repeatsSquare = sdInput.locOnly === true && !sdInput.instance;
+                    if (!repeatsSquare && (dataLoader.shouldClearWorkerCacheAfterLoad?.(input) ?? true)) clearCache(workerState);
                 }
             };
             const { result: built, reads } = cacheable

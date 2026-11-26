@@ -39,6 +39,26 @@ test('show sends what the Mad Angel capture does, then fades the bar in from 254
   ]);
 });
 
+test('Sol opens the boss bar directly and empties its container when it clears', () => {
+  const player = fakePlayer();
+  emit('boss-hud:show', { player, npcId: 12821, current: 1500, maximum: 1500, fadeIn: false });
+  assert.deepEqual(player.log, [
+    ['varp', 1683, 12821], ['varbit', 6099, 1500], ['varbit', 6100, 1500], ['varbit', 12401, 1],
+    ['colour', 14, 25600], ['colour', 15, 576], ['colour', 16, 800],
+    ['script', 2376, (303 << 16) | 3],
+  ]);
+  emit('boss-hud:update', { player, current: 0 });
+  player.log.length = 0;
+  emit('boss-hud:hide', { player, clearContainer: true });
+  ticks(3);
+  assert.deepEqual(player.log, [['script', 2889, 0]]);
+  ticks(1);
+  assert.deepEqual(player.log.slice(1), [
+    ['varp', 1683, -1], ['varbit', 6099, 0], ['varbit', 6100, 0], ['varbit', 12401, 0],
+    ['hide', 5, true], ['script', 2249, (303 << 16) | 1],
+  ]);
+});
+
 test('update sends only what changed, and new colours are redrawn', () => {
   const player = fakePlayer();
   emit('boss-hud:show', { player, npcId: 14707, current: 525, maximum: 525 });

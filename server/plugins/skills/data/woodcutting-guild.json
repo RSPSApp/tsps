@@ -23,7 +23,7 @@
   "ents": {
     "npcs": {
       "7234": { "where": "Woodcutting Guild", "logsPerSuccess": 1, "respawnTicks": 50 },
-      "6594": { "where": "Wilderness", "logsPerSuccess": 2, "respawnTicks": 15 }
+      "6594": { "where": "Wilderness", "logsPerSuccess": 2, "respawnTicks": 15, "diaryChance": { "diary": "wilderness", "tier": "medium", "multiplier": 1.15 } }
     },
     "trunk": 9474,
     "transformTicks": 4,

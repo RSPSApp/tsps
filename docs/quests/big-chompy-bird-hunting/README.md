@@ -70,6 +70,12 @@ outside the repo. `server/tests/big-chompy-capture.test.cjs` checks these agains
   "Nothing interesting happens."; using bellows on the bubbles keeps its old two lines.
 - The demonstration moves on to 40 eight ticks after Rantz's miss if the bird never reaches the bait.
 - The hunting hint arrow is cleared if the bird flies off unkilled.
+- A bird lands only on a tile a walk out from the bait reaches inside the 3-10 tile landing square, never on
+  water (#6281). The sea east of Rantz is water overlay with no collision, so a blocked-tile check alone put
+  birds on it. Both captured landings (ticks 992, 1323) are on land; no source states the rule.
+- Rantz's spit-roast is the map's one multiloc (multi_chompybird_spitroast_entity 6895 at 2630,2990, varbit
+  ogre_spit_roaster; the capture's use at 1472 names 6895). Freeing Skrach's raw jubbly and skewered chompy cook
+  on it too; Recipe for Disaster no longer spawns a second roast at 2632,2985 (#6281).
 - A bait bursting next to the player says "You're hit by bits of exploding toad!" (the Wiki transcript's line; no
   capture stood beside a burst).
 - An escaped bloated toad's swamp toad leaves again after 100 ticks; inflating with a full pack (and fewer than
@@ -87,3 +93,25 @@ outside the repo. `server/tests/big-chompy-capture.test.cjs` checks these agains
 - **Checked:** repeat dialogue (Rantz), relog (twice), save history, logout/offline.
 - **Not checked:** No overlay, all-branch or recovery claim; No separate QP reading at stage 60; Later plugin edits and uncovered recovery need rechecks.
 - **PRs:** [#1097](https://github.com/RSPSApp/tsps/pull/1097).
+
+
+### 2026-11-24 · issue #6551
+
+- Rantz's cache post-quest form 14794 exposes Claim-hats as op 4. It now uses the existing bow, kill-count,
+  inventory-space and previously-claimed checks, sharing the same transcript/reward path as showing a bow.
+- Recipe for Disaster's existing "Hey, I wanted to ask about hats..." choice now opens Rantz's ordinary
+  hat conversation, as does the later "Ask about hats..." topic during the boat steps. Its Skrach topic and
+  agreement remain available and keep their original progression.
+- Both bows' post-quest Check actions show the same saved kill counter. The [Ogre bow Wiki page](https://oldschool.runescape.wiki/w/Ogre_bow)
+  supports this mechanic; the completed-count message reuses the existing "scratched up" wording and is ours,
+  with no exact post-quest message capture. The captured pre-quest refusal is unchanged.
+- Bird snares accept walkable scenery through the existing box-trap placement check. The [Hunter Wiki](https://oldschool.runescape.wiki/w/Hunter)
+  permits snares in bird hunting areas. Native Lay succeeds on cached Piscatoris Daisies 1189 at (2324, 3598, 0),
+  while an occupied trap or blocked map tile still refuses and retains the item.
+- Verification: `big-chompy-capture.test.cjs` and `hunter-box-traps.test.cjs`, 45/45 passed. The new tests reproduce
+  the three missing entry points and both silent bow checks before the fix. They exercise raw native NPC packets,
+  ordinary item/menu inputs, full-pack retry, kill/bow requirements, a claimed hat moved to the bank, and Skrach
+  progression after using the hats topic. The existing quest and box-trap regressions also pass.
+- Supplied setup: quest/skill checkpoints, inventory and position; the blocked-tile control deliberately supplies
+  a player standing on a real blocking object. No game client, preview server, new retail capture or rendered
+  audio/visual check was used. No generated game data was edited.

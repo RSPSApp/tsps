@@ -110,6 +110,8 @@ function restoreSelectedJournal({ player }) {
   const tabIndex = player.getPacketSender().getVarbit(VARBIT_SIDE_JOURNAL_SELECTED_TAB);
   const groupId = DEFAULT_CONTENT_GROUP_BY_TAB[tabIndex];
   if (groupId !== undefined) mountSideJournalContent(player, groupId, tabIndex);
+  // A tab another plugin owns (the Leagues tab) mounts its own panel, as its click does.
+  else pluginApi?.emitCustomEvent("side-journal:restore-tab", { player, tabIndex });
 }
 
 function gameframeTabMounted({ player, group }) {

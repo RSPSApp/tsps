@@ -144,6 +144,28 @@ projectile (`spells_thammaron01_travel01`, 2340), with no impact graphic.
 
 It plays `human_special_accursed` (9961) with the built-in spell's projectile. Not captured.
 
+## Sanguinesti staff
+
+Two blood runes a charge, up to 20,000 (Wiki, since the 22 July 2026 update; before it a charge
+took three). Uncharging returns every rune.
+
+Charging (rsprox, the user's recordings local 1001250 tick 724 and local 1001295 tick 4817):
+- Blood runes on the staff ask "How many charges do you want to apply? (Up to N)", N being what
+  the runes in the inventory pay for, capped at the room left. Nothing is spent before the amount
+  is entered.
+- An amount above N applies N (local 1001295: 435,567 typed applied 17,728).
+- The result is an objectbox with the charged staff: "You apply N charges to your Sanguinesti
+  staff." Its text also goes to the chat.
+- The Charge option (both versions) isn't recorded. Ours asks the same, as Tonalztics of Ralos'
+  recorded Charge asks as its material does.
+
+Wield on the uncharged staff is refused, nothing equipped, with the game message "Your Sanguinesti
+staff (uncharged) has no charges! You can use blood runes to power the staff." (local 1001250
+tick 721, op3, rev 231). The Wiki doesn't mention it. Ours: the Holy sanguinesti staff (uncharged)
+refuses the same way with its own name; that isn't recorded.
+
+Check: "Your Sanguinesti staff has N charges remaining." (rsprox 4151 tick 101, 4288 tick 26539).
+
 ## Magic specials' damage
 
 `DamageFormulas.sourceHitBounds` applies a magic special's `damageMultiplier` (or its stages) to

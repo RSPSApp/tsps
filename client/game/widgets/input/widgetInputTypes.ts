@@ -53,6 +53,10 @@ export type WidgetInputControllerDeps = {
     getCustomInterfaces: () => CustomInterfaceRuntime;
     getPlayerDesign: () => PlayerDesignController;
     getObjTypeLoader: () => ObjTypeLoader | undefined;
+    /** "Mouse buttons: one" (varp 170): a left click opens the menu when it has a choice to offer. */
+    getLeftClickOpensMenu?: () => boolean;
+    /** Opens the Choose Option menu at a canvas point, as a right click there does. */
+    openWidgetMenuAt?: (canvasX: number, canvasY: number) => void;
     getInventory: () => Inventory;
     getMinimapZoomEnabled: () => boolean;
     getMenuOpen: () => boolean;

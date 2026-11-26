@@ -17,6 +17,8 @@ class ActorBlock {
     var appearance: AppearanceBlock? = null
     var exactMove: ExactMove? = null
     var resetPath = false
+    /** A temporary move speed for this tick's step (1 walk, 2 run; tsps's `temporaryMovementType`). */
+    var temporaryMoveSpeed: Int? = null
     val spotAnims = ArrayList<SpotAnim>()
     var tint: Tint? = null
     var faceTile: Pair<Int, Int>? = null
@@ -25,6 +27,9 @@ class ActorBlock {
     var baseAnimations: List<Pair<Int, Int>>? = null
     var transparency: Transparency? = null
     var typeCustomisation: TypeCustomisation? = null
+
+    /** A held NPC facing (OSRS npc face angle): the angle, and whether to snap to it. */
+    var faceAngle: Pair<Int, Boolean>? = null
 
     class Hit(val type: Int, val damage: Int, val delay: Int)
 
@@ -81,6 +86,7 @@ object ActorBlocks {
     private const val PLAYER_FORCE_MOVEMENT = 0x400
     private const val PLAYER_MOVEMENT_TYPE = 0x1000
     private const val PLAYER_MOVEMENT_FLAG = 0x2000
+    private const val TELEPORT_MOVE_SPEED = 127
     private const val PLAYER_SPOT_ANIM = 0x10000
 
     private const val NPC_FACE_ENTITY = 0x08
@@ -96,6 +102,7 @@ object ActorBlocks {
     private const val NPC_TRANSPARENCY = 0x8000
     private const val NPC_SPOT_ANIM = 0x20000
     private const val NPC_TYPE_CUSTOMISATION = 0x40000
+    private const val NPC_FACE_ANGLE = 0x80000
 
     /** NPC_TYPE_CUSTOMISATION's leading flags: which fields follow. */
     private const val TYPE_MODELS = 0x1
@@ -125,8 +132,10 @@ object ActorBlocks {
         }
         if (mask and PLAYER_FORCE_MOVEMENT != 0) block.exactMove = exactMove(reader)
         if (mask and PLAYER_MOVEMENT_FLAG != 0) {
-            reader.u8s()
-            block.resetPath = true
+            // tsps writes 127 for a placement (resetPath) and 1 or 2 for a step forced to walk or run
+            // (an agility line walked two tiles at a time, Darkness of Hallowvale's washing line).
+            val speed = reader.u8s()
+            if (speed == TELEPORT_MOVE_SPEED) block.resetPath = true else block.temporaryMoveSpeed = speed
         }
         if (mask and PLAYER_SPOT_ANIM != 0) {
             repeat(reader.u8a()) {
@@ -174,6 +183,8 @@ object ActorBlocks {
             block.transparency = ActorBlock.Transparency(reader.u16(), reader.u16(), reader.u16().noneAsMinusOne(), reader.u8())
         }
         if (mask and NPC_TYPE_CUSTOMISATION != 0) block.typeCustomisation = typeCustomisation(reader)
+        // A short angle, then whether the client snaps to it (written after the type customisation).
+        if (mask and NPC_FACE_ANGLE != 0) block.faceAngle = reader.u16() to (reader.u8() != 0)
         return block
     }
 

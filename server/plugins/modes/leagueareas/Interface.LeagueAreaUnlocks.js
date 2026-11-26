@@ -8,6 +8,7 @@
 const Common = require("./Common.LeagueAreaUnlocks");
 const Unlock = require("./Unlock.LeagueAreaUnlocks");
 const Teleport = require("./Teleport.LeagueAreaUnlocks");
+const WorldMapLocate = require("../../interface/WorldMapLocate");
 
 /** if_setevents OP1 (as SideJournalDefaults sends it). */
 const FLAGS_OP1 = 1 << 1;
@@ -87,6 +88,28 @@ function teleportClicked({ player }) {
   return Teleport.cast(player, type, area);
 }
 
+/** The packed coord of the Echo boss whose `leagues_echo_bosses` row has this area as its region, or null. */
+function echoBossCoord(area) {
+  const { CacheDefinitions } = Common.api.core;
+  const { table, regionColumn, structColumn, coordParam } = Common.data.echoBoss;
+  const tableId = CacheDefinitions.getDbTableId(table);
+  const region = tableId === null ? null : CacheDefinitions.getDbColumn(tableId, regionColumn);
+  const column = tableId === null ? null : CacheDefinitions.getDbColumn(tableId, structColumn);
+  if (region === null || column === null) return null;
+  const row = CacheDefinitions.getDbTableRows(tableId).find((candidate) => candidate.int(region, -1) === area);
+  const struct = row?.int(column, -1) ?? -1;
+  if (struct < 0) return null;
+  const coord = Number(CacheDefinitions.getStructParams(struct).get(coordParam));
+  return Number.isFinite(coord) ? coord : null;
+}
+
+/** The Echo boss tab's Locate: the world map, centred on the boss of the area being viewed. */
+function echoBossLocateClicked({ player }) {
+  if (Common.leagueOf(player) === null || !viewing.has(player)) return false;
+  const coord = echoBossCoord(viewing.get(player));
+  return coord !== null && WorldMapLocate.locate(player, coord);
+}
+
 function confirmClicked({ player }) {
   if (!viewing.has(player)) return false;
   const area = viewing.get(player);
@@ -99,7 +122,7 @@ function confirmClicked({ player }) {
 }
 
 module.exports = function attach(api) {
-  const { group, openButton, nameHeader, teleportButton, confirm } = ui();
+  const { group, openButton, nameHeader, teleportButton, echoBossButton, confirm } = ui();
   // A locked player (mid-teleport, on an obstacle) is told to finish first, and nothing opens.
   api.refuseWhileBusy(Common.uid(openButton[0], openButton[1]));
   api.onInterfaceActionButton(Common.uid(openButton[0], openButton[1]), open);
@@ -107,6 +130,7 @@ module.exports = function attach(api) {
   api.onInterfaceActionButton(Common.uid(group, nameHeader), headerClicked);
   api.onInterfaceActionButton(Common.uid(group, teleportButton), teleportClicked);
   api.onInterfaceActionButton(Common.uid(group, confirm), confirmClicked);
+  api.onInterfaceActionButton(Common.uid(group, echoBossButton), echoBossLocateClicked);
   api.onCustomEvent("league:teleport-cast", Teleport.answerTeleportCast);
 };
 

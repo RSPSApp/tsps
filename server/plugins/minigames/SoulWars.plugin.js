@@ -29,6 +29,12 @@ const Rewards = require("./soulwars/Rewards.SoulWars");
 const Tutorial = require("./soulwars/Tutorial.SoulWars");
 const Scoreboard = require("./soulwars/Scoreboard.SoulWars");
 
+/** Playable opponents from the same tables that start each encounter. */
+function describeEncounters({ npcIds }) {
+  for (const avatar of Object.values(Common.data.avatars)) npcIds.add(avatar.npc);
+  for (const creature of Object.values(Common.data.creatures)) for (const id of creature.npcs) npcIds.add(id);
+}
+
 module.exports = {
   name: "Soul Wars",
   description: "Adds Soul Wars: the lobby and queue, the instanced arena, team avatars, graveyards, souls and fragments, and the obelisk.",
@@ -38,12 +44,14 @@ module.exports = {
       help: "Development aid: fills the lobby with bots. Leave off so production lobbies are players only.",
     },
     "SoulWars:minPlayers": {
-      type: "number", label: "Players needed to start", defaultText: "20, as on the Wiki", integer: true, min: 2,
+      // The world has 2048 usable player slots; the lobby also reads its capacity at runtime.
+      type: "number", label: "Players needed to start", defaultText: "20, as on the Wiki", integer: true, min: 2, max: 2048,
       help: "Lowest number of players a game needs. Never under 2, since both teams need a player.",
     },
   },
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Common.init(api);
     Stats.attachStats(api);
     Lobby.attachLobby(api);

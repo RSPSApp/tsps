@@ -1,4 +1,5 @@
 import type { CacheSystem } from "../../rs/cache/CacheSystem";
+import { resolveMapElement } from "../../custom/sprites/CustomMapElement";
 import type { CacheLoaderFactory } from "../../rs/cache/loader/CacheLoaderFactory";
 import type { LocTypeLoader } from "../../rs/config/loctype/LocTypeLoader";
 import type { MapElementTypeLoader } from "../../rs/config/meltype/MapElementTypeLoader";
@@ -25,12 +26,14 @@ import {
     getWorldMapImageSource,
     getWorldMapImageTile,
     markWorldMapImageTextureUploaded as markTextureUploaded,
+    prefetchWorldMapImageTiles as prefetchTiles,
     retainWorldMapImageTiles as retainTiles,
     scheduleWorldMapImageRepaint,
     type WorldMapImageDeps,
 } from "./WorldMapImageCache";
 import { getWorldMapIcons as getIcons } from "./WorldMapTileIcons";
 import { findWorldMapWidgetForRepaint } from "./WorldMapRepaint";
+import { WorldMapCompositeTextures, type WorldMapCompositeTexture } from "./WorldMapCompositeTexture";
 import {
     clearWorldMapRenderCaches,
     getWorldMapMenuEntriesAt as getMenuEntriesAt,
@@ -78,7 +81,9 @@ export class WorldMapController {
     private worldMapArchiveRenderer?: Pick<WorldMapArchiveRenderer, "loadTile">;
     private fallbackArchiveRenderer?: WorldMapArchiveRenderer;
     worldMapImageTiles: Map<number, WorldMapImageTile> = new Map();
+    worldMapImageBytes: number = 0;
     worldMapImageAccess: Map<number, number> = new Map();
+    worldMapImageDrawnAt: Map<number, number> = new Map();
     pendingWorldMapImageIds: Set<number> = new Set();
     failedWorldMapImageIds: Map<number, number> = new Map();
     retainedWorldMapImageIds: Set<number> = new Set();
@@ -97,11 +102,13 @@ export class WorldMapController {
 
     private readonly iconDeps: WorldMapIconDeps;
     private readonly imageDeps: WorldMapImageDeps;
+    private readonly compositeTextures: WorldMapCompositeTextures;
 
     constructor(private readonly deps: WorldMapControllerDeps) {
         this.iconDeps = {
             loadClientScriptIfExists: (scriptId) => this.deps.loadClientScriptIfExists(scriptId),
-            loadMapElement: (elementId) => this.deps.getMapElementTypeLoader()?.load?.(elementId | 0),
+            loadMapElement: (elementId) =>
+                resolveMapElement(elementId, (id) => this.deps.getMapElementTypeLoader()?.load?.(id)),
             runCs2Script: (script, intArgs) => {
                 this.deps.getCs2Vm()?.run(script, intArgs);
             },
@@ -120,7 +127,8 @@ export class WorldMapController {
                 if (clearCache) this.fallbackArchiveRenderer?.clear();
                 else this.fallbackArchiveRenderer?.cancelLoads();
             },
-            loadMapElement: (elementId) => this.deps.getMapElementTypeLoader()?.load?.(elementId | 0),
+            loadMapElement: (elementId) =>
+                resolveMapElement(elementId, (id) => this.deps.getMapElementTypeLoader()?.load?.(id)),
             getWidgetManager: () => this.deps.getWidgetManager(),
             evictTextureKey: (key) => {
                 const textureCache = this.deps.getRenderer()?.canvas?.__textureCache;
@@ -132,13 +140,27 @@ export class WorldMapController {
             },
             scheduleRepaint: () => this.scheduleRepaint(),
         };
+        this.compositeTextures = new WorldMapCompositeTextures(
+            () => {
+                try {
+                    return this.deps.getCacheSystem();
+                } catch {
+                    return undefined;
+                }
+            },
+            () => this.scheduleRepaint(),
+            (key) => this.imageDeps.evictTextureKey(key),
+        );
     }
 
     setWorldMapState(state: WorldMapState): void {
         this.clearWorldMapImages();
+        this.compositeTextures.clear();
         state.setElementMetadataResolver((elementId) => {
             try {
-                const element = this.deps.getMapElementTypeLoader()?.load?.(elementId | 0);
+                const element = resolveMapElement(elementId, (id) =>
+                    this.deps.getMapElementTypeLoader()?.load?.(id),
+                );
                 return element ? { category: element.category | 0 } : undefined;
             } catch {
                 return undefined;
@@ -287,12 +309,20 @@ export class WorldMapController {
         markTextureUploaded(this, key);
     }
 
+    getWorldMapCompositeTexture(): WorldMapCompositeTexture | undefined {
+        return this.compositeTextures.get(this.worldMapState?.currentArea);
+    }
+
     getWorldMapIcons(mapX: number, mapY: number, level: number = 0): MinimapIcon[] | undefined {
         return getIcons(this, this.imageDeps, mapX, mapY, level);
     }
 
     retainWorldMapImageTiles(tiles: WorldMapRetainTile[]): void {
         retainTiles(this, this.imageDeps, tiles);
+    }
+
+    prefetchWorldMapImageTiles(tiles: WorldMapRetainTile[]): void {
+        prefetchTiles(this, this.imageDeps, tiles);
     }
 
     clearWorldMapImages(): void {

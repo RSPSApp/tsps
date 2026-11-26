@@ -1,4 +1,5 @@
 import { IdkTypeLoader } from "../idktype/IdkTypeLoader";
+import { GearVisualRegistry } from "../../../custom/items/GearVisualRegistry";
 
 export enum Gender {
     MALE = 0,
@@ -44,6 +45,7 @@ export class PlayerAppearance {
         headIcons?: { prayer?: number; skull?: number },
         npcTransformationId?: number,
         firstPersonArmsOnly: boolean = false,
+        public readonly visualClockKey: object = {},
     ) {
         this.gender = gender;
         this.pronouns = gender;
@@ -104,7 +106,7 @@ export class PlayerAppearance {
 
     getCacheKey(): string {
         const [lo, hi] = this.getHashLanes(HASH_SCRATCH);
-        return `${hi.toString(36)}.${lo.toString(36)}|${this.getEquipKey()}|${this.firstPersonArmsOnly ? "first-person" : "full"}`;
+        return `${hi.toString(36)}.${lo.toString(36)}|${this.getEquipKey()}|${this.firstPersonArmsOnly ? "first-person" : "full"}${this.npcTransformationId<0?GearVisualRegistry.appearanceKey(this.equip,this.visualClockKey):''}`;
     }
 
     static defaultMale(idkLoader: IdkTypeLoader): PlayerAppearance {

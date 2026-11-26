@@ -12,8 +12,8 @@ function compare(a, b) {
 }
 
 export function nextClientVersion(tags, requested = "") {
-    const versions = tags.filter(tag => tag.startsWith("client-v"))
-        .map(tag => tag.slice("client-v".length)).filter(version => stableVersion.test(version));
+    const versions = tags.filter(tag => /^(client-v|Web client )/.test(tag))
+        .map(tag => tag.replace(/^(client-v|Web client )/, "")).filter(version => stableVersion.test(version));
     const latest = versions.sort(compare).at(-1);
     if (requested) {
         if (!stableVersion.test(requested)) throw new Error("Use a stable version such as 1.2.3");

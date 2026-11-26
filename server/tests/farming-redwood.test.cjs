@@ -157,6 +157,7 @@ test('the Woodcutting request uses per-log farmed depletion while wild redwoods 
     const axe = new core.Item(core.ItemIdentifiers.BRONZE_AXE);
     const inventory = new core.Inventory(p);
     p.getPacketSender().sendItemContainer = function () { return this; };
+    p.getPacketSender().sendRunEnergy = function () { return this; };
     p.getPacketSender().sendTypedMessage = function () { return this; };
     p.getPacketSender().sendConfig = function () { return this; };
     inventory.add(axe, false);

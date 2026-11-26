@@ -11,7 +11,9 @@ const FoodPlugin = require("../../items/Food.plugin");
 const { createBotPlayer } = require("../../bots/behaviours/spawn/PlayerFactory.PlayerBots");
 const { ATTR_SKIP_PERSISTENCE } = require("../../bots/runtime/PersistenceConstants.PlayerBots");
 const RewardShop = require("./RewardShop.CastleWars");
+const { attachRoster } = require("./Roster.CastleWars");
 const SEED_BOTS_CONFIG_KEY = "CastleWars:seedBots";
+const LEGACY_BOT_PROMPT_CONFIG_KEY = "CastleWars:legacyBotPrompt";
 const BOT_ROLE_ATTRIBUTE = "castlewars:bot-role";
 const BOT_TIER_ATTRIBUTE = "castlewars:bot-tier";
 const PRACTICE_MAXED_ATTRIBUTE = "castlewars:practice-maxed";
@@ -51,7 +53,7 @@ function moveToWaitingRoom(player, teamId) {
   player.smartMove(game.getTeamData(teamId).waitingRoom, 8);
 }
 
-function spawnCastleWarsBot(teamId, role = "attacker", username = `CWBot${++botSerial}`, tier = null, maxed = false) {
+function createCastleWarsBot(role, username = `CWBot${++botSerial}`, tier = null, maxed = false) {
   const bot = createBotPlayer(username, data.LOBBY_TELEPORT, { api, activity: "castle-wars", loadPersistence: false, saveRandomizedAppearance: false });
   if (!bot) {
     return;
@@ -65,7 +67,12 @@ function spawnCastleWarsBot(teamId, role = "attacker", username = `CWBot${++botS
   }
   if (maxed) bot.setAttribute(PRACTICE_MAXED_ATTRIBUTE, true);
   api.emitPlayerLogin({ player: bot, username });
-  moveToWaitingRoom(bot, teamId);
+  return bot;
+}
+
+function spawnCastleWarsBot(teamId, role = "attacker", username, tier = null, maxed = false) {
+  const bot = createCastleWarsBot(role, username, tier, maxed);
+  if (bot) moveToWaitingRoom(bot, teamId);
 }
 
 /** Stable names per team slot, so a repeated populate skips bots that are already in. */
@@ -127,20 +134,26 @@ function refuseEntry(player, reason) {
   player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, ENTRY_REFUSED)));
 }
 
+function portalLoadoutRefusal(player) {
+  if (player.getEquipment().getSlot(core.Equipment.CAPE_SLOT) > 0) return "You can't wear capes in the arena.";
+  // Recorded (rsprox 03233): food and tools use the same non-combat items message.
+  if (player.getInventory().getItems().some(isNonCombatItem)) return "You can't take non-combat items into the arena.";
+  return null;
+}
+
+function createRosterBot(index) {
+  return createCastleWarsBot(BOT_ROLE_MIX[index % BOT_ROLE_MIX.length]);
+}
+
 function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod = requestedTeam ?? "guthix", maxed = false, practice = false) {
   const phase = game.getPhase();
   if (phase === game.PHASE.ACTIVE || phase === game.PHASE.ENDING) {
     player.sendMessage("There's already a Castle Wars game running. Please wait.");
     return;
   }
-  if (player.getEquipment().getSlot(core.Equipment.CAPE_SLOT) > 0) {
-    refuseEntry(player, "You can't wear capes in the arena.");
-    return;
-  }
-  if (player.getInventory().getItems().some(isNonCombatItem)) {
-    // Wiki: food cannot be brought in. Recorded (rsprox 03233, rev 232): an inventory with manta rays, a hammer,
-    // rope and other tools gets the non-combat items line; there is no food-specific refusal.
-    refuseEntry(player, "You can't take non-combat items into the arena.");
+  const refusal = portalLoadoutRefusal(player);
+  if (refusal) {
+    refuseEntry(player, refusal);
     return;
   }
 
@@ -163,10 +176,9 @@ function joinWaitingRoom(player, requestedTeam, botTier = undefined, portalGod =
 
   const isBot = player.isPlayerBot() === true;
   const lobbyEmpty = counts[data.TEAM.SARADOMIN] === 0 && counts[data.TEAM.ZAMORAK] === 0;
-  // The empty-lobby prompt replaces the dev seeding path, and returning after it means the
-  // config seeding below can never double up on bots. The chosen tier sets the spawned
-  // bots' combat level band and gear; None leaves the game player-only.
-  if (!isBot && lobbyEmpty && !seedsBots()) {
+  // Real portals join directly. An explicit Lanthus practice tier still sets up that
+  // match, and old private worlds can opt into their former empty-lobby chooser.
+  if (!isBot && lobbyEmpty && !seedsBots() && (botTier !== undefined || api.getPluginConfig(LEGACY_BOT_PROMPT_CONFIG_KEY, false) === true)) {
     if (botTier !== undefined) {
       if (botTier !== null) populateCastleWarsBots(teamId, botTier, maxed);
       game.prepareWaitingForm?.(player, portalGod);
@@ -254,9 +266,10 @@ module.exports = function attachCastleWarsLobby(registry, castleWars) {
   game.BOT_TIER_KEY = BOT_TIER_ATTRIBUTE;
   game.PRACTICE_MAXED_KEY = PRACTICE_MAXED_ATTRIBUTE;
   game.joinFromLobby = joinWaitingRoom;
+  attachRoster(registry, game, { chooseTeam, loadoutRefusal: portalLoadoutRefusal, createBuiltin: createRosterBot, admit: moveToWaitingRoom });
   registry.onObjectInteraction(useCastleWarsPortal);
   registry.persistAttribute?.(data.COMBAT_XP_DISABLED_ATTRIBUTE, false);
   registry.onNpcInteraction("Lanthus", { Trade: RewardShop.open, "Disable-XP": toggleCombatExperience });
 };
 
-module.exports._test = { chooseTeam, seedsBots, SEED_BOTS_CONFIG_KEY, BOT_TIER_OPTIONS };
+module.exports._test = { chooseTeam, seedsBots, SEED_BOTS_CONFIG_KEY, LEGACY_BOT_PROMPT_CONFIG_KEY, BOT_TIER_OPTIONS };

@@ -306,3 +306,30 @@ test("the Crombwick deed writes all twelve handwritten lines before the scroll o
   assert.deepEqual(state.order, [["script", 2524, [-1, -1]], ["open", 95]]);
   assert.deepEqual(state.animations, []);
 });
+
+test("The Grand Tree and The Hand in the Sand documents have a Read option with the Wiki's text (#6544, #6542)", () => {
+  const scrolls = {
+    "Hazelmere's scroll": /^Es lemanto meso pro eis prit ta Cinqo mond\.<br>Mi lovos te lemanto Daconia arpos<br>et Daconia arpos eto meriz ta priwl!$/,
+    "Invasion plans": /Troops board three fleets of battleships at Karamja\..*Take no prisoners!/,
+    "Lumber order": /^Karamja shipyard<br><br>Order<br>Order for 30 Karamja battleships<br>Lumber required: 2000<br>Troop capacity: 300$/,
+    "Bert's rota": /Bert's Rota - Copy<br><br>(Week \d - 6am-10pm - 50gps<br>){5}Week 6 - 6am-10pm - 50gps$/,
+    "Sandy's rota": /Bert's Rota - Original<br><br>(Week \d - 9am-6pm - 50gps<br>){5}Week 6 - 6am-10pm - 50gps$/,
+  };
+  for (const [name, text] of Object.entries(scrolls)) {
+    const { player, state } = reader();
+    assert.deepEqual(Object.keys(itemActions.get(name)), ["Read"], name);
+    itemActions.get(name).Read({ player });
+    assert.equal(state.open, 625, name);
+    assert.match(state.scripts[0][2], text, name);
+    for (const handler of events.get("interface:closed") ?? []) handler({ player, interfaceId: 625 });
+  }
+  for (const [name, title, spreads] of [["Translation book", "Gnome-English Translation", 3], ["Glough's journal", "Glough's Journal", 2]]) {
+    const { player, state } = reader();
+    itemActions.get(name).Read({ player });
+    assert.equal(state.open, BOOK, name);
+    assert.equal(state.texts.get(uid(6)), title);
+    for (let spread = 1; spread < spreads; spread++) press(player, 77);
+    assert.equal(state.hidden.get(uid(77)), true, `${name}: no spread after ${spreads}`);
+    press(player, 7);
+  }
+});

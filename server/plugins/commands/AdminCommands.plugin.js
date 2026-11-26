@@ -49,8 +49,16 @@ const MAX_NPC_COMMAND_SPAWNS = 20;
 const MAX_NPC_TYPE_ID = 0xffff; // NPC updates encode the definition id in 16 bits.
 const INFINITE_HEALTH_ATTRIBUTE = "admin:infinite-health";
 const INFINITE_RUN_ENERGY_ATTRIBUTE = "admin:infinite-run-energy";
+const INFINITE_PRAYER_ATTRIBUTE = "admin:infinite-prayer";
+const INFINITE_RUNES_ATTRIBUTE = "admin:infinite-runes";
+const INFINITE_SPECIAL_ATTRIBUTE = "admin:infinite-special";
+const INVISIBLE_ATTRIBUTE = "admin:invisible";
+const hiddenBeforeGodmode = new WeakMap();
 const RUNE_IDS = [554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 9075, 21880, 28929];
 const FULL_RUN_ENERGY = 100;
+const MAX_PANEL_TEST_NPCS = 100;
+const panelTestNpcs = new WeakMap();
+const PanelSpawns = require("./Spawns.AdminCommands");
 // Short forms ::setlevel takes that aren't the start of the skill's name (att, str, pray are).
 const SKILL_ALIASES = new Map([
   ["hp", "hitpoints"],
@@ -311,7 +319,7 @@ function validateNpcSpawn(player, id) {
   return true;
 }
 
-function spawnNpcs(player, id, amount = 1, onSpawn = null, xOffset = 0, yOffset = 0) {
+function spawnNpcs(player, id, amount = 1, onSpawn = null, xOffset = 0, yOffset = 0, locations = null) {
   if (!validateNpcSpawn(player, id)) return 0;
   const origin = player.getLocation().clone();
   origin.add(xOffset, yOffset);
@@ -319,8 +327,8 @@ function spawnNpcs(player, id, amount = 1, onSpawn = null, xOffset = 0, yOffset 
   let spawned = 0;
 
   for (let i = 0; i < spawnCount; i++) {
-    const spawn = origin.clone();
-    if (i > 0) {
+    const spawn = locations ? locations[i].clone() : origin.clone();
+    if (!locations && i > 0) {
       const offsetX = (i % 3) - 1;
       const offsetY = ((Math.floor(i / 3)) % 3) - 1;
       spawn.setX(origin.getX() + offsetX);
@@ -538,6 +546,164 @@ function keepRunEnergyFull({ player }) {
     player.setRunEnergy(FULL_RUN_ENERGY);
     player.getPacketSender().sendRunEnergy();
   }
+}
+
+/** Read/set the existing session testing modes without impersonating a command. */
+function testingModes(event) {
+  const { actor, player } = event;
+  if (!actor || !player) return;
+  const { PlayerRights, PluginManager } = pluginApi.core;
+  const owner = actor.getRights().getId() >= PlayerRights.OWNER.getId();
+  event.allowed = {
+    health: owner && PluginManager.playerHasCommandRights(actor, "infhp"),
+    run: owner && PluginManager.playerHasCommandRights(actor, "infrun"),
+    noclip: owner && PluginManager.playerHasCommandRights(actor, "noclip"),
+    ...Object.fromEntries(["prayer", "runes", "invisible", "special"].map(key => [key, owner && PluginManager.playerHasCommandRights(actor, "admin")])),
+  };
+  event.health = player.getAttribute(INFINITE_HEALTH_ATTRIBUTE) === true;
+  event.run = player.getAttribute(INFINITE_RUN_ENERGY_ATTRIBUTE) === true;
+  event.noclip = player.getAttribute(NOCLIP_ATTRIBUTE) === true;
+  event.prayer = player.getAttribute(INFINITE_PRAYER_ATTRIBUTE) === true;
+  event.runes = player.getAttribute(INFINITE_RUNES_ATTRIBUTE) === true;
+  event.invisible = player.getAttribute(INVISIBLE_ATTRIBUTE) === true;
+  event.special = player.getAttribute(INFINITE_SPECIAL_ATTRIBUTE) === true;
+  if (event.action !== "set") return;
+  if (!Object.hasOwn(event.allowed, event.mode) || !event.allowed[event.mode] || typeof event.enabled !== "boolean") {
+    event.error = "Only an owner with the corresponding command permission can change this testing mode.";
+    return;
+  }
+  const key = { health: INFINITE_HEALTH_ATTRIBUTE, run: INFINITE_RUN_ENERGY_ATTRIBUTE, noclip: NOCLIP_ATTRIBUTE,
+    prayer: INFINITE_PRAYER_ATTRIBUTE, runes: INFINITE_RUNES_ATTRIBUTE, invisible: INVISIBLE_ATTRIBUTE, special: INFINITE_SPECIAL_ATTRIBUTE }[event.mode];
+  player.setAttribute(key, event.enabled ? true : null);
+  if (event.mode === "run") keepRunEnergyFull({ player });
+  if (event.mode === "invisible") {
+    if (event.enabled && !hiddenBeforeGodmode.has(player)) hiddenBeforeGodmode.set(player, player.isAppearanceHidden());
+    player.setAppearanceHidden(event.enabled || hiddenBeforeGodmode.get(player) === true);
+    if (!event.enabled) hiddenBeforeGodmode.delete(player);
+  }
+  if (event.mode === "health" && event.enabled) {
+    const skills = player.getSkillManager();
+    skills.setCurrentLevels(pluginApi.core.Skill.HITPOINTS, skills.getMaxLevel(pluginApi.core.Skill.HITPOINTS));
+  }
+  if (event.mode === "runes") pluginApi.emitCustomEvent("magic:sync-rune-display", { player });
+  keepTestingResourcesFull({ player });
+  event.handled = true;
+}
+
+function bypassTestingRunes(event) {
+  if (event.player.getAttribute(INFINITE_RUNES_ATTRIBUTE) === true) event.bypass = true;
+}
+
+function infiniteRuneDisplay(event) {
+  if (event.player.getAttribute(INFINITE_RUNES_ATTRIBUTE) === true) event.active = true;
+}
+
+function testingPrayerDrain(player, amount) {
+  return player.getAttribute?.(INFINITE_PRAYER_ATTRIBUTE) === true ? 0 : amount;
+}
+
+function testingSpecialCost(player, amount) {
+  return player.getAttribute?.(INFINITE_SPECIAL_ATTRIBUTE) === true ? 0 : amount;
+}
+
+function keepTestingResourcesFull({ player }) {
+  if (player.getAttribute(INFINITE_PRAYER_ATTRIBUTE) === true) {
+    const skills = player.getSkillManager(), prayer = pluginApi.core.Skill.PRAYER;
+    if (skills.getCurrentLevel(prayer) < skills.getMaxLevel(prayer)) skills.setCurrentLevels(prayer, skills.getMaxLevel(prayer));
+  }
+  if (player.getAttribute(INFINITE_SPECIAL_ATTRIBUTE) === true && player.getSpecialPercentage() < 100) {
+    player.setSpecialPercentage(100);
+    pluginApi.core.CombatSpecial.updateBar(player);
+  }
+  if (player.getAttribute(INVISIBLE_ATTRIBUTE) === true) player.setAppearanceHidden(true);
+}
+
+function resetTestingModes({ player }) {
+  for (const key of [INFINITE_HEALTH_ATTRIBUTE, INFINITE_RUN_ENERGY_ATTRIBUTE, NOCLIP_ATTRIBUTE,
+    INFINITE_PRAYER_ATTRIBUTE, INFINITE_RUNES_ATTRIBUTE, INFINITE_SPECIAL_ATTRIBUTE, INVISIBLE_ATTRIBUTE]) player.setAttribute(key, null);
+  if (hiddenBeforeGodmode.has(player)) player.setAppearanceHidden(hiddenBeforeGodmode.get(player));
+  hiddenBeforeGodmode.delete(player);
+}
+
+function activePanelNpcs(player) {
+  const spawned = panelTestNpcs.get(player);
+  if (spawned) for (const npc of spawned) if (!npc.isRegistered()) spawned.delete(npc);
+  return spawned;
+}
+
+function removePanelNpcs({ player }) {
+  const spawned = panelTestNpcs.get(player);
+  const queue = pluginApi.core.World.getRemoveNPCQueue();
+  let removed = 0;
+  if (spawned) for (const npc of spawned) if (npc.isRegistered() && !queue.includes(npc)) {
+    npc.getCombat().reset();
+    queue.push(npc);
+    removed++;
+  }
+  panelTestNpcs.delete(player);
+  return removed;
+}
+
+/** NPCs created here are temporary, bounded, and tracked by their admin, never by an index. */
+function testingTools(event) {
+  const { actor, player } = event;
+  if (!actor || !player) return;
+  const { PlayerRights, PluginManager } = pluginApi.core;
+  const owner = actor.getRights().getId() >= PlayerRights.OWNER.getId();
+  event.allowed = { npc: owner && PluginManager.playerHasCommandRights(actor, "npc"),
+    item: PlayerRights.hasAdminRights(actor) && PluginManager.playerHasCommandRights(actor, "item") };
+  event.spawned = activePanelNpcs(actor)?.size ?? 0;
+  if (!event.action) return;
+  const itemSpawn = event.action === "spawn-items";
+  if (!event.allowed[itemSpawn ? "item" : "npc"]) {
+    event.error = itemSpawn ? "Admin rank and ::item permission are required." : "Owner rank and ::npc permission are required."; return;
+  }
+  // Planned panel spawns always originate from the authenticated actor. No client
+  // coordinates or selected-player location can supply their placement.
+  let locations = null;
+  if (event.placement != null || itemSpawn) {
+    const core = pluginApi.core;
+    if (player !== actor || !actor.isRegistered() || core.World.getPlayerByName(actor.getUsername()) !== actor
+      || !PlayerRights.hasAdminRights(actor) || !PluginManager.playerHasCommandRights(actor, "admin")) {
+      event.error = "Reopen Admin from your own live player session."; return;
+    }
+    if (core.Server.isShuttingDown() || actor.isDyingReturn() || actor.getHitpoints() <= 0 || actor.isTeleportingReturn()) {
+      event.error = "Wait until you are alive, have finished teleporting and the world is running."; return;
+    }
+    if (actor.getProfile() !== (core.GameConstants.WORLD_PROFILE ?? "main")) { event.error = "Your player is on a different world profile."; return; }
+    if (!["near-actor", "under-actor"].includes(event.placement)) { event.error = "Choose Spawn 1 under me or Spawn X."; return; }
+    if (!Number.isInteger(event.id) || event.id < 0 || event.id > MAX_NPC_TYPE_ID
+      || (itemSpawn ? !core.CacheDefinitions.hasItem(event.id) || core.CacheDefinitions.getItem(event.id).placeholderTemplate >= 0
+        : core.CacheDefinitions.hasDefinition("npc", event.id) !== true)) {
+      event.error = `Choose a loaded ${itemSpawn ? "item" : "NPC"}.`; return;
+    }
+    try {
+      locations = PanelSpawns.planLocations(core, actor, { size: itemSpawn ? 1 : core.NpcDefinition.forId(event.id).getSize(),
+        count: event.amount, random: event.placement === "near-actor" });
+    } catch (error) { event.error = error.message; return; }
+  }
+  if (event.action === "remove-npcs") event.message = `Queued ${removePanelNpcs({ player: actor })} panel test NPCs for removal.`;
+  else if (itemSpawn) {
+    for (const location of locations) pluginApi.core.ItemOnGroundManager.registerLocation(actor, new pluginApi.core.Item(event.id, 1), location);
+    event.count = locations.length;
+    event.message = `Spawned ${event.count} x ${pluginApi.core.ItemDefinition.forId(event.id).getName()} ${event.placement === "under-actor" ? "under you" : "on distinct reachable tiles within 10 tiles of you"}.`;
+  }
+  else if (event.action === "spawn-npcs") {
+    if (!Number.isInteger(event.id) || !Number.isInteger(event.amount) || event.amount < 1 || event.amount > MAX_NPC_COMMAND_SPAWNS || !validateNpcSpawn(actor, event.id)) {
+      event.error = `Choose a loaded NPC ID and a count from 1 to ${MAX_NPC_COMMAND_SPAWNS}.`; return;
+    }
+    if (event.spawned + event.amount > MAX_PANEL_TEST_NPCS) { event.error = `Remove your panel test NPCs before exceeding ${MAX_PANEL_TEST_NPCS}.`; return; }
+    const spawned = activePanelNpcs(actor) ?? new Set();
+    panelTestNpcs.set(actor, spawned);
+    const count = spawnNpcs(player, event.id, event.amount, npc => {
+      npc.__skipDefaultRespawn = true;
+      spawned.add(npc);
+    }, 0, 0, locations);
+    event.count = count;
+    event.message = locations ? `Spawned ${count}/${event.amount} test NPCs ${event.placement === "under-actor" ? "under you" : "on distinct reachable tiles within 10 tiles of you"}. Clear my NPCs removes only your panel spawns.`
+      : `Spawned ${count}/${event.amount} test NPCs at ${player.getUsername()}'s location. Remove test NPCs clears only your panel spawns.`;
+  } else { event.error = "Choose an available testing tool."; return; }
+  event.handled = true;
 }
 
 /** ::give id [amount] player - puts items in an online player's inventory, as ::item does in yours. */
@@ -1434,6 +1600,16 @@ module.exports = {
 
     api.registerCommand("infrun", infiniteRunEnergyCommand, PlayerRights.OWNER, "Toggle infinite run energy");
     api.onPlayerProcess(keepRunEnergyFull);
+    api.onPlayerProcess(keepTestingResourcesFull);
+    api.onCustomEvent("admin:testing-modes", testingModes);
+    api.onCustomEvent("admin:testing-tools", testingTools);
+    api.onCustomEvent("magic:infinite-rune-display", infiniteRuneDisplay);
+    api.onSpellRuneBypass(bypassTestingRunes);
+    api.registerPrayerDrainModifier(testingPrayerDrain);
+    api.registerPrayerDrainRateModifier(testingPrayerDrain);
+    api.registerSpecialEnergyCostModifier(testingSpecialCost);
+    api.onPlayerLogout(removePanelNpcs);
+    api.onPlayerLogout(resetTestingModes);
 
     api.registerCommand("poisonme", ({ player, parts }) => {
       const typeToken = String(parts?.[1] ?? "super").trim().toLowerCase();

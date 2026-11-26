@@ -35,6 +35,11 @@ function areaClass() {
       return this.dream?.phosani ? "Phosani's Nightmare" : "The Nightmare";
     }
 
+    /** The dream is silent except while the Nightmare is fought, which plays The Bane of Ashihama. */
+    getMusicTrack() {
+      return this.dream?.fight?.state === "fighting" ? Common.data.music.fight : Common.core.Music.SILENCE_TRACK;
+    }
+
     isMulti() {
       return true;
     }
@@ -201,7 +206,6 @@ function pullIn(player, dream) {
       sender.sendVarbit(varbits.minimap, 0);
       Common.sounds(player, [entry.wakeSound]);
       Common.fade(player, entry.fadeIn);
-      Common.api.emitCustomEvent("music:unlock-track", { player, trackId: Common.data.music.fight });
       const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = Common.core;
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
         new StatementDialogue(0, message),
@@ -276,7 +280,6 @@ function leave(player) {
     dream.removePlayer(player);
     player.performAnimation(Common.animation(Common.data.entry.wakeAnim));
     sender.sendVarbit(varbits.minimap, 0);
-    sender.sendSong(Common.data.music.lobby);
     Common.later(1, () => {
       if (!player.isRegistered()) return;
       sender.sendClientScript(out.portalRemoveScript, (out.portalOverlay << 16) | 1, (out.portalOverlay << 16) | 2, ...out.portalRemoveArgs);
@@ -293,6 +296,7 @@ function disturb(event) {
   const { player, npc } = event;
   if (npc?.__nightmareFight) return require("./Fight.Nightmare").disturbBody(event);
   if (dreamOf(player)) return true;
+  if (require("./Sanctuary.Nightmare").shuraStopsPlayer(player)) return true;
   if (refusesPet(player)) return true;
   if (shared && !shared.joinable()) {
     player.sendMessage(Common.data.entry.inProgress);
@@ -312,6 +316,25 @@ function disturb(event) {
     }
     pullIn(player, shared);
   });
+  return true;
+}
+
+/** How many are in the shared dream and how far the fight is, as captured (Common.data.entry.inspect). */
+function inspectText() {
+  const { inspect } = Common.data.entry;
+  const count = shared ? shared.present().length : 0;
+  if (count === 0) return inspect.empty;
+  const who = count === 1 ? inspect.one : inspect.many.replace("[n]", count);
+  const started = shared.fight && shared.fight.state !== "sleeping" && shared.fight.state !== "waiting";
+  return (started ? inspect.started : inspect.waiting).replace("[count]", who);
+}
+
+/** Inspect on her sleeping body: who is in the dream (Shura stops a player who hasn't talked to her). */
+function inspect({ player, npc }) {
+  if (npc?.__nightmareFight) return false;
+  if (require("./Sanctuary.Nightmare").shuraStopsPlayer(player)) return true;
+  const { DialogueChainBuilder, StatementDialogue } = Common.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, inspectText())));
   return true;
 }
 
@@ -373,7 +396,7 @@ function attachDream(api) {
   api.persistAttribute(Common.PHOSANI_SKIP_WARNING_ATTRIBUTE);
   api.persistAttribute(Common.SKIP_LEAVE_WARNING_ATTRIBUTE);
   api.onPlayerLogin(recoverOnLogin);
-  api.onNpcInteraction("The Nightmare", { Disturb: disturb });
+  api.onNpcInteraction("The Nightmare", { Disturb: disturb, Inspect: inspect });
   api.onObjectInteraction("Energy Barrier", { "Pass-through": passBarrier, Escape: passBarrier });
   api.onPlayerDeath(wakeByPool);
 }

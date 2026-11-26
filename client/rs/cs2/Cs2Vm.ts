@@ -18,6 +18,7 @@ import type { Inventory } from "../inventory/Inventory";
 import type { WorldMapState } from "../map/WorldMapArea";
 import { Opcodes } from "./Opcodes";
 import { Script } from "./Script";
+import { ScriptEndSignal, endScript } from "./ScriptEnd";
 import {
     ExecutionState,
     type HandlerContext,
@@ -433,6 +434,15 @@ export interface Cs2Context {
     ) => void;
 }
 
+/**
+ * The component a script-created child reports as event_com: its static component, also when
+ * the child sits inside a script-created layer (the child is then found with cc_find by index).
+ */
+function dynamicComponentId(w: any): number {
+    const id = w?.id;
+    return typeof id === "number" && id > 0 ? id : (w?.parentUid ?? -1);
+}
+
 export class Cs2Vm {
     readonly scriptCallbackListeners = new Set<(script: Script, eventName: string) => void>();
     readonly scriptPreListeners = new Set<(id: number, event: ScriptEvent | null) => void>();
@@ -528,7 +538,7 @@ export class Cs2Vm {
         // Dynamic children (CC_CREATE) report the PARENT's UID for event_com; scripts
         // use event_comsubid (child index) to find the dynamic child via cc_find.
         if (w?.fileId === -1 && (w as any).parentUid != null) {
-            this.eventContext.componentId = ((w as any).parentUid as number) | 0;
+            this.eventContext.componentId = dynamicComponentId(w) | 0;
         } else {
             this.eventContext.componentId = (w?.uid ?? -1) | 0;
         }
@@ -1372,7 +1382,17 @@ export class Cs2Vm {
         }
     }
 
+    /**
+     * cc_callonresize / if_callonresize: queues the component's onResize listener. A component
+     * without one ends the calling script there and then (quietly, callers included), so a loop
+     * over children stops at the first child that has no listener.
+     */
     queueResize(widget: WidgetNode): void {
+        const listener = widget.eventHandlers?.onResize;
+        const raw = (widget as any).onResize;
+        if (!(listener && listener.scriptId > 0) && !(Array.isArray(raw) && raw.length > 0)) {
+            endScript();
+        }
         // queueing resize from script depth 10+ throws.
         if (this.eventDepth >= 10) {
             throw new Error("RuntimeException");
@@ -1414,6 +1434,27 @@ export class Cs2Vm {
                 this.context.widgetManager.meslayerContinueWidget,
             );
             this.context.widgetManager.meslayerContinueWidget = null;
+        }
+    }
+
+    /**
+     * A script that stops on an error still has its deferred work done: the ops it triggered are
+     * clicked, a close it asked for happens and the resizes it queued run. Only what follows the
+     * failing instruction is lost. The run itself stays aborted.
+     */
+    private flushDeferredActionsAfterError(): void {
+        if (
+            this.pendingResizeQueue.length === 0 &&
+            this.pendingTriggerOpQueue.length === 0 &&
+            !this.pendingIfClose
+        ) {
+            return;
+        }
+        this.executionState = ExecutionState.RUNNING;
+        try {
+            this.flushDeferredActionsIfTopLevel();
+        } finally {
+            this.executionState = ExecutionState.ABORTED;
         }
     }
 
@@ -1900,6 +1941,13 @@ export class Cs2Vm {
                     }
                 }
             } catch (err) {
+                if (err instanceof ScriptEndSignal) {
+                    // The instruction ended the script: its callers stop with it, quietly, and
+                    // the run finishes as a normal one does.
+                    while (restoreCallerFrame()) {}
+                    this.executionState = ExecutionState.FINISHED;
+                    break;
+                }
                 const error = this.createError(
                     err instanceof Error ? err.message : String(err),
                     currentScript,
@@ -1924,13 +1972,17 @@ export class Cs2Vm {
         if (this.executionState === ExecutionState.FINISHED) {
             finalizeSuccessfulTopLevel();
         }
-        if (this.executionState === ExecutionState.ABORTED) {
+        const aborted = this.executionState === ExecutionState.ABORTED;
+        if (aborted) {
             for (const listener of this.scriptPostListeners) listener(currentScript.id);
             for (let i = this.callStackDepth - 1; i >= 0; i--) {
                 for (const listener of this.scriptPostListeners) listener(this.callStack[i].script.id);
             }
         }
         cleanupFrames();
+        if (aborted) {
+            this.flushDeferredActionsAfterError();
+        }
     }
 
     /** Public execute method for backward compatibility */
@@ -2228,7 +2280,7 @@ export class Cs2Vm {
                         const w = event.widget;
                         // Dynamic children have fileId === -1 and parentUid set
                         if (w?.fileId === -1 && (w as any).parentUid != null) {
-                            substitutedInts[i] = (w as any).parentUid;
+                            substitutedInts[i] = dynamicComponentId(w);
                         } else {
                             substitutedInts[i] = w?.uid ?? -1;
                         }
@@ -2244,7 +2296,7 @@ export class Cs2Vm {
                         // Dynamic drag targets use the same (parent id, child index)
                         // identity as the source widget, not the renderer's runtime UID.
                         substitutedInts[i] = event.dragTarget?.fileId === -1
-                            ? (event.dragTarget.parentUid ?? -1)
+                            ? dynamicComponentId(event.dragTarget)
                             : (event.dragTarget?.uid ?? -1);
                         break;
                     case ScriptArgMagic.DRAG_TARGET_CHILD_INDEX:

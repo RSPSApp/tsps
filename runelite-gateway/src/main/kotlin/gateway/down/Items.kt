@@ -29,6 +29,7 @@ class Items(
 ) {
     private val inventories = HashMap<Int, Array<Pair<Int, Int>?>>()
     private var weight = Int.MIN_VALUE
+    private var shopInventory: Int? = null
 
     /** tsps sends native sessions worn equipment itself, with quantities; then appearance isn't needed. */
     private var equipmentFromServer = false
@@ -62,10 +63,17 @@ class Items(
                         repeat(3) { reader.i32() } // default stock and prices: the client works prices out itself
                         Slot(slot, item, quantity)
                     }
-                full(SHOP, SHOP_SIZE, stock)
+                // shop_main_init watches this native inventory; older servers omit the trailer.
+                val inventory = if (reader.remaining >= 2) reader.u16() else SHOP
+                shopInventory?.takeIf { it != inventory }?.let(::stop)
+                shopInventory = inventory
+                full(inventory, SHOP_SIZE, stock)
             }
             TspsServerPacket.INVENTORY_STOP_TRANSMIT -> stop(reader.u16())
-            TspsServerPacket.SHOP_CLOSE -> stop(SHOP)
+            TspsServerPacket.SHOP_CLOSE -> {
+                stop(shopInventory ?: SHOP)
+                shopInventory = null
+            }
             else -> return false
         }
         return true

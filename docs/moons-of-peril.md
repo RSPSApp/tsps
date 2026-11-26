@@ -10,8 +10,9 @@ It is one plugin, `server/plugins/bosses/MoonsOfPeril.plugin.js`, with one unit 
 `server/plugins/bosses/moonsofperil/` and its data in `server/plugins/bosses/data/moons-of-peril.json`.
 The Perilous Moons quest lets the player through the statues during its fight stages
 (`moons-of-peril:can-enter`), counts each kill (`moons-of-peril:killed`, re-sent at login for a
-kill whose landing a logout cut short), and opens the camps from the ritual stage on
-(`moons-of-peril:camps-open`).
+kill whose landing a logout cut short), and opens the camps from the camp stage (10) on
+(`moons-of-peril:camps-open`): crates, stoves, saplings and river spots are this plugin's from
+there, not the quest's own copies (#6552).
 
 ## Layout
 
@@ -339,16 +340,18 @@ Perilous Moons (`PerilousMoons.Quest.js`) builds the camps in copies of Neypotzl
 ## Camps and supplies
 
 `Camps.MoonsOfPeril.js` and `River.MoonsOfPeril.js`, data `supplies`, `river` and `neypotzli`.
-The quest keeps the crates, saplings and river for its own steps until the player reaches the
-Moons (stage 27); from then on, and after the quest, they are this plugin's. Moss lizards and
-moonlight moths stay with the Hunter plugin.
+The quest opens them (`moons-of-peril:camps-open`) from its camp stage (10) on, so a player gathering
+for Eyatlalli's ritual (stage 23) gets the same crates, grubs and bream as at the Moons and after the
+quest; before the camps Jessamine only warns the player off. The quest's own steps are the lizard traps
+(two rocks, then the bushes) and the knife recipes, whose scales line, cutting animation and sounds are
+from capture 1693 tick 2095. Moonlight moths stay with the Hunter plugin.
 
 | Thing | What happens | Source |
 | --- | --- | --- |
 | Cooking stove (`pmoon_range`, 51362) Cook, or raw bream / moss lizard used on it | One action a tick until none are left: `human_cooking_walkmerge_norestart`, sound 2577. 30 Cooking; bream 45 xp and never burns, "Your cooking knowledge allows you to cook two fish at once!" for a second; a lizard 60 xp and up to two extra cuts ("Your cooking knowledge allows you to cut extra meat from the lizard!": estimate). "You haven't got anything to cook." | capture (90 attempts); Wiki |
 | Cooking stove, Make-cuppa | `human_eat` (829), sound 2401, "You drink the tea and find yourself feeling energised!" (spam), full run energy. | capture (10 attempts) |
 | Supply crates (`pmoon_supply_crate`, 51371) | The Fishing, Hunting and Herblore kits hand over the tools the player lacks, and two vials of water every time, in an object box: "You take a knife and a big net from the crates.", "You take some rope and a butterfly net from the crates.", "You take a pestle and mortar and some vials of water from the crates."; `human_pickuptable_walkmerge`, sound 2582. Take-from asks which kit (estimate: no response was captured). | capture |
-| Grubby sapling (`pmoon_grub_sapling`, 51365) Collect-from | Two ticks after arriving: sound 7925, a moonlight grub; sometimes two, "Your hunting knowledge allows you to find an extra grub."; "Your inventory is too full to hold any more grubs." | capture |
+| Grubby sapling (`pmoon_grub_sapling`, 51365) Collect-from | Two ticks after arriving: animation 10792, sound 7925, a moonlight grub; sometimes two (a sound each), "Your hunting knowledge allows you to find an extra grub."; 0.05 Hunter xp per level for each grub; any number of grubs may be held. "Your inventory is too full to hold any more grubs." | capture 1693 tick 2062; Wiki (xp) |
 | Pestle and mortar on a grub | `human_herbing_grind_restart`, sound 2608 (delay 25), paste; sometimes two grubs at once, "Your herblore knowledge allows you to crush an extra grub." | capture |
 | Paste on a vial of water | 38 Herblore: `human_herbing_vial` (363), sound 2608, a Moonlight potion of 2 doses, or 3 / 4 with "Your potion making knowledge allows you to squeeze out an extra dose!" / "...two extra doses!" (no xp, Wiki). | capture (11 makes) |
 | River fishing (`river_fishing_spot` 62193 at (1501, 9698) and (1521, 9689)) | 20 Fishing and a big fishing net. Fish sets `river_fishing_is_fishing` (15454), `river_fishing_dir` (15453) to the middle lane and plays `human_largenet_looping`; the spot and the stream's click zones (`river_fishing_clickzone` 62191) turn into "Stream" tiles to Align-net in, which sets the lane without walking. Fish (`pmoon_fish`, spotanim 2799) swim down a random lane every 2 ticks in two legs (90 and 80 cycles); one reaching the net's lane is a raw bream (3 xp), a second on a skilling roll (7-35 xp by level, Wiki) with "You manage to catch an additional fish!". Walking, a full inventory or 30 seconds without a click stop it. | capture (rev 237's click zones); Wiki; the rev 241 locs and varbits; lane timing and the roll's odds: estimates |
@@ -431,7 +434,21 @@ Bloodrager: the dual macuahuitl rolls two splats with the maximum divided betwee
 
 Frostweaver (Blue Moon set effect) is documented in `blue-moon-spear.md`.
 
+## Perilous Moons: Locate
+
+The infused earth (28967) and water (28966) talismans' Locate, from capture 1693 (ticks 1840-1921), in
+`PerilousMoons.Quest.js`. Away from the target the earth talisman prints "The talisman pulls you
+north." or "south" (the north-south axis) and the water one "east" or "west", whichever floor the
+player stands on, with one of the pull sounds 4043-4046. Next to the target the click starts
+Eyatlalli's scene instead. Fitting every click of the capture gives a 3x3 around (1485, 9694) or
+(1485, 9695): found from 1484,9694, a pull from 1484,9692 and 1487,9695. The server uses the first.
+Not captured: a click level with the target on the talisman's axis (the first direction is
+used), the pushback and Eyatlalli's spawn animation on success (ExactMove of 2, 3 tiles, NPC
+animation 10996, sound 3201), and whether the target differs per player (the Wiki says it does).
+
 ## Open questions
+
+- The Locate target: whether it is fixed or per player, and its exact row (see Locate above).
 
 - Hitsplat 44 on the player four ticks after a kill (129-161): find out what it shows.
 - Why the focus sometimes steps and steps back on the same tick (modelled as those glyphs lasting longer).

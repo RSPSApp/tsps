@@ -81,6 +81,10 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
 
     registerMinimapSource(data: SdMapData): void {
         const input = data.minimapInput;
+        if (data.farOnly) {
+            this.minimapSources.delete(getMapSquareId(data.mapX, data.mapY));
+            return;
+        }
         if (!input || data.doorOnly || data.locOnly || input.instance || input.overrideRenderPos) return;
         this.minimapSources.set(getMapSquareId(data.mapX, data.mapY), { ...input, loadedTextureIds: new Set() });
         for (let level = 0; level < 4; level++) this.osrsClient.setMinimapImageUrl(data.mapX, data.mapY, undefined, level);
@@ -341,6 +345,12 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
     clearMaps(): void {
         this.mapManager.cleanUp();
     }
+
+    /**
+     * Custom animations or graphics changed (seq, frame and spotanim loaders already cleared). They
+     * are only played by actors and graphics, never baked into the map, so the map is kept.
+     */
+    invalidateAnimationCaches(): void {}
 
     /** Content definitions changed without replacing the cache or renderer. */
     invalidateDefinitionCaches(): void {

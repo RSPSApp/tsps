@@ -44,13 +44,17 @@ rewards. Plugin: `plugins/minigames/RoguesDen.plugin.js`; data:
 | Lobby safes | Four 7236 safes, 50 Thieving, 70 XP, 33.2%/62.9% success at 50/99 (41%/75.4% with a stethoscope). Loot is coins 10/20/40 or uncut sapphire/emerald/ruby/diamond at the Wiki's 128ths. Failure spawns a temporary floor trap and deals 2-6. |
 | Rewards | The crate's Search menu offers one equipment piece or a kit; choosing a piece feeds the collection log and sets varbit 12012 when all five are owned. The kit's Build menu makes a spade, chisel, rope or tinderbox. |
 | Cleanup | Trap disarm state is per player and re-arms on leaving the tile or ending the run; temporary lobby traps deregister after 30 ticks; the run's jewel and temporary state are removed. |
+| Mosaic door | Four different tiles lie on the floor: Tile 5568 at 3018,5080 and Tiles 5569 at 3011,5082, 5570 at 3013,5090, 5571 at 3018,5086 (rsprox captures local 1001704 tick 5271). Open on door 7234 opens the cache's roguesden_mosaic (688) modal; clientscript 4119 shows each Select (688:5-8) only while its tile is held. Only Tile 5568 fits (Wiki: Tiles (Rogues' Den)). On its Select, busy (varbit 12393) is set; the next tick sends "A perfect match!", animation 2243 (roguesden_player_enchant_door), the door's loc animation 2205 (rogue_magic_door), the tile is taken, the modal closes and synth 1235 plays; two ticks later busy clears and the player steps from the door tile 3023,5082 to 3024,5082 (local 1001658 ticks 19511-19523, local 1001704 ticks 5300-5311). |
 
 ## Known gaps / follow-ups
 
 - The exact partial-experience fraction on a failed run is not published; the three transcript
   cases are used. A capture of a partial run would settle it.
-- The gear door (7232) and mosaic door (7234) use a small chat-menu stand-in rather than the
-  cache's puzzle interface; both are optional side rooms.
+- The gear door (7232) uses a small chat-menu stand-in rather than the cache's puzzle
+  interface; it is an optional side room.
+- Mosaic door: no recording places a wrong tile or opens the door without one, so "The tile
+  does not fit the mosaic." (tile kept) and "You need a tile to repair the mosaic." are ours.
+  The step through the door is the module's one-tile move, not a walk packet.
 - Wall-trap trigger orientation is derived from the object's rotation (`0 south, 1 west, 2 north,
   3 east`). The cache and Wiki agree on the trap tiles, but a maze recording would confirm the
   exact facing for every 2x1 wall.

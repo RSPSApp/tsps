@@ -894,7 +894,8 @@ test('Perilous Moons completes naturally from Attala to the Moons on the real st
   h.talk(p, N.ATTALA); finish();
   assert.equal(stage(), 18);
 
-  p.moveTo(new core.Location(1483, 9692, 0));
+  // Rec 1693: Locate finds Eyatlalli from 1484,9694 (the target's 3x3 is around 1485,9694).
+  p.moveTo(new core.Location(1484, 9694, 0));
   h.itemAction(p, I.INFUSED_WATER_TALISMAN, 'Locate');
   h.finish(p);
   assert.equal(stage(), 19);
@@ -902,9 +903,13 @@ test('Perilous Moons completes naturally from Attala to the Moons on the real st
   assert.equal(stage(), 23);
   assert.ok(p.log.some(row => row[0] === 'sendCameraShake' && row[1] === 0 && row[2] === 8), 'Eyatlalli earthquake shake');
 
-  h.object(p, O.SUPPLY_CRATES, { x: 1511, y: 9695, z: 0 }, 1, ['Take-from']);
-  h.object(p, O.GRUBBY_SAPLING, { x: 1517, y: 9690, z: 0 }, 1, ['Collect-from']);
-  h.object(p, 62193, { x: 1521, y: 9689, z: 0 }, 1, ['Fish']);
+  // The crates, saplings and river spots are the MoonsOfPeril plugin's from the camps on (its own
+  // tests: perilous-moons-camp-instance, moons-of-peril-river); the quest's harness holds what they give.
+  for (const [x, y, id, option] of [[1511, 9695, O.SUPPLY_CRATES, 'Take-from'], [1517, 9690, O.GRUBBY_SAPLING, 'Collect-from'], [1521, 9689, 62193, 'Fish']]) {
+    assert.ok(!h.object(p, id, { x, y, z: 0 }, 1, [option]).handled, `${option} at ${x},${y} is left to the plugin`);
+  }
+  p.items.set(I.ROPE, 1);
+  p.items.set(I.RAW_BREAM, 1);
   h.itemOnItem(p, I.KNIFE, I.RAW_BREAM);
   h.object(p, O.ROCK_167, { x: 1377, y: 9682, z: 0 }, 1, ['Trap']);
   h.object(p, O.ROCK_167, { x: 1379, y: 9682, z: 0 }, 1, ['Trap']);
@@ -1554,14 +1559,17 @@ test('Perilous Moons river fishing acts only at Neypotzli: a Fish click at a Vam
   }
 });
 
-test('Perilous Moons river fishing still gives the quest bream at each Neypotzli spot at stage 10', () => {
+test('Perilous Moons river fishing at each Neypotzli spot belongs to the Moons plugin from stage 10, with the Jessamine guard before it', () => {
   for (const [x, y] of NEYPOTZLI_SPOTS) {
     const h = harness('PerilousMoons'), p = player();
     h.quest.setStage(p, 10);
     p.items.set(I.BIG_FISHING_NET, 1);
     const event = h.object(p, 62193, { x, y, z: 0 }, 1, ['Fish']);
-    assert.ok(event.handled, `${x},${y} is handled by the quest`);
-    assert.ok(p.messages.includes('You catch a raw bream.'), p.messages.join('|'));
-    assert.equal(p.items.get(I.RAW_BREAM), 1);
+    assert.ok(!event.handled, `${x},${y} is left to the MoonsOfPeril river fishing`);
+    assert.deepEqual(p.messages, [], 'the quest no longer hands out a bream itself');
+    assert.equal(p.items.get(I.RAW_BREAM) ?? 0, 0);
+    const early = harness('PerilousMoons'), q = player();
+    early.quest.setStage(q, 9);
+    assert.ok(early.object(q, 62193, { x, y, z: 0 }, 1, ['Fish']).handled, 'before the camps the guard answers');
   }
 });

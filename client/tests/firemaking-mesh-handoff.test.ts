@@ -24,6 +24,7 @@ async function setup() {
     const client = Object.assign(Object.create(OsrsClient.prototype), {
         groundItems: new GroundItemStore(),
         burningLogMeshes: new Map(),
+        editorGroundItemPreview: [],
         locOpFlags: new Map(),
         objTypeLoader: { load: () => ({ groundActions: ["Light"] }) },
         sceneGeometry: { locsAtTile: (_x: number, _y: number, level: number) => built.get(level) ?? [] },

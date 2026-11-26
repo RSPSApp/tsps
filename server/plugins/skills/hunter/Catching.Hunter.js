@@ -30,6 +30,23 @@ const RELEASE_SOUND = 7870;
 const RELEASE_DELAY = 45;
 const RELEASE_HEIGHT = 190;
 const RELEASED_TICKS = 1;
+// The falcon's own graphics (cache gamevals falcon_launch_anim, falcon_travel_anim, falcon_hit_anim) with
+// the numbers rsprox capture 3414 records for the Falconry grounds' falconers: spotanim 918 at height 150
+// on the sender, then falcon_travel_anim 922 starting at client cycle 24 and flying 8 cycles per tile
+// (start height 150, angle 10, progress 64) locked on to the kebbit. On a kebbit the hit is spotanim 923 on
+// the kebbit, delayed to the projectile's end. The falconers use 918 and 927 whichever way the kebbit lies, so there is no
+// direction-picked graphic here.
+const FALCON_LAUNCH_GRAPHIC = 918;
+const FALCON_TRAVEL_PROJECTILE = 922;
+const FALCON_HIT_GRAPHIC = 923;
+const FALCON_LAUNCH_CYCLES = 24;
+const FALCON_CYCLES_PER_TILE = 8;
+// falcon_hit (seq 5200) is 26 client cycles long.
+const FALCON_HIT_CYCLES = 26;
+const FALCON_START_HEIGHT = 150;
+const FALCON_END_HEIGHT = 5;
+const FALCON_ANGLE = 10;
+const FALCON_PROGRESS = 64;
 
 function gloves(player, id) {
   if (id > 0) gloved.add(player);
@@ -90,7 +107,14 @@ function catchFalcon(player, npc, def) {
   const reservation = { player };
   H.reserved.set(npc, reservation);
   const cancel = () => { if (H.reserved.get(npc) === reservation) H.reserved.delete(npc); if (hasFalcon(player)) gloves(player, I.FALCONERS_GLOVE_2); };
-  if (!begin(player, 2, ANIM.FALCON, () => {
+  // The farther the kebbit, the longer the falcon flies (Wiki: running up to it shortens the travel). The catch
+  // resolves on the last tick that starts before the projectile lands; the hit graphic covers the rest.
+  const from = player.getLocation().clone(), to = npc.getLocation().clone();
+  const arrival = H.core.Projectile.arrivalCycles(from, npc, FALCON_LAUNCH_CYCLES, FALCON_CYCLES_PER_TILE);
+  const ticks = Math.max(1, Math.floor(arrival / 30));
+  const hitDelay = Math.max(0, arrival - ticks * 30);
+  const hitTicks = Math.ceil((hitDelay + FALCON_HIT_CYCLES) / 30);
+  if (!begin(player, ticks, ANIM.FALCON, () => {
     H.reserved.delete(npc);
     if (!hasFalcon(player) || !available(npc) || !nearby(player, npc, 8) || !requireLevel(player, def.level)) { cancel(); return; }
     if (!chance(player, def)) {
@@ -102,12 +126,20 @@ function catchFalcon(player, npc, def) {
     if (player.getPrivateArea()) falcon.setArea(player.getPrivateArea());
     falcon.getMovementQueue().setBlockMovement(true);
     falcon.untargetable = true;
-    const state = { falcon, player, def, due: H.tick + 100 };
+    // The falcon strikes first (its hit graphic), then settles on the prey and can be retrieved.
+    falcon.setVisible(false);
+    const state = { falcon, player, def, due: H.tick + 100, appearAt: H.tick + hitTicks };
     falcons.set(player, state); caught.set(falcon, state);
-    hide(npc);
+    npc.performGraphic(H.core.Graphic.delayed(FALCON_HIT_GRAPHIC, hitDelay));
+    hide(npc, 10, hitTicks);
     player.sendMessage("Your falcon catches the kebbit. Retrieve it to collect the catch.");
   }, cancel)) cancel();
-  else gloves(player, I.FALCONERS_GLOVE);
+  else {
+    gloves(player, I.FALCONERS_GLOVE);
+    player.performGraphic(H.core.Graphic.delayed(FALCON_LAUNCH_GRAPHIC, 0, FALCON_START_HEIGHT));
+    new H.core.Projectile(from, to, npc, FALCON_TRAVEL_PROJECTILE, FALCON_LAUNCH_CYCLES, arrival,
+      FALCON_START_HEIGHT, FALCON_END_HEIGHT, player.getPrivateArea()).withAngle(FALCON_ANGLE).withProgress(FALCON_PROGRESS).sendProjectile();
+  }
 }
 
 /** Wiki (Falconry): bones and fur always, plus a raw dashing kebbit from the dashing kebbit. */
@@ -130,7 +162,7 @@ function retrieve({ player, npc }) {
   const state = caught.get(npc);
   if (!state) return false;
   if (state.player !== player) { player.sendMessage("This isn't your falcon."); return true; }
-  if (!nearby(player, npc)) return true;
+  if (!npc.isVisible() || !nearby(player, npc)) return true;
   begin(player, 1, ANIM.PICKUP, () => {
     if (caught.get(npc) !== state) return;
     collect(player, npc, state.def);
@@ -348,6 +380,10 @@ function registerMixes() {
   }
 }
 
+/** The crystal impling's elven signet: its row on a league's Boosted drops page, and its 1-in-n. */
+const SIGNET_SOURCE = "Crystal impling";
+const SIGNET_CHANCE = 128;
+
 function rewards(player, def) {
   const I = H.core.ItemIdentifiers;
   let result;
@@ -363,7 +399,8 @@ function rewards(player, def) {
     const base = I[row[0]], id = row[4] ? H.core.ItemDefinition.forId(base).getNoteId() : base;
     result = row[0] === null ? [] : [[id, roll(row[2], row[3])]];
     if (def.key === "GOURMET" && roll(1, 500) === 1) result.push([I.GRUBBY_KEY, 1]);
-    if (def.key === "CRYSTAL" && roll(1, 128) === 1) result.push([I.ELVEN_SIGNET, 1]);
+    // The elven signet is 1 in 128 (a league's boosted drops: "drops:chance", source "Crystal impling").
+    if (def.key === "CRYSTAL" && roll(1, SIGNET_CHANCE) <= C.dropMultiplier(player, SIGNET_SOURCE, I.ELVEN_SIGNET)) result.push([I.ELVEN_SIGNET, 1]);
   }
   // Content may change the jar's loot before its clue rolls ("hunter:impling-loot", a league relic's doubled notes).
   const request = { player, impling: def.key, rewards: result };
@@ -419,6 +456,10 @@ function login({ player }) {
 
 function process() {
   for (const state of caught.values()) {
+    if (state.appearAt !== undefined && H.tick >= state.appearAt && state.falcon.isRegistered()) {
+      state.falcon.setVisible(true);
+      state.appearAt = undefined;
+    }
     if (H.tick < state.due && state.falcon.isRegistered()) continue;
     if (H.tick >= state.due) state.player.sendMessage(LOST_PREY_MESSAGE);
     removeFalcon(state);

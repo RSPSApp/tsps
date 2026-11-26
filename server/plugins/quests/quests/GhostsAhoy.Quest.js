@@ -25,6 +25,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
   const Shipwreck = require("../ghostsahoy/Shipwreck.GhostsAhoy");
   const Voyage = require("../ghostsahoy/Voyage.GhostsAhoy");
   const Tomb = require("../ghostsahoy/Tomb.GhostsAhoy");
+  const Bedsheet = require("../ghostsahoy/Bedsheet.GhostsAhoy");
 
   const PAGE = "Ghosts Ahoy";
   const NPC = Object.freeze({
@@ -83,10 +84,6 @@ module.exports = function registerGhostsAhoyQuest(api) {
     KNIFE: I.KNIFE,
     SPADE: I.SPADE,
     COINS: I.COINS,
-    NETTLES: I.NETTLES,
-    BOWL: I.BOWL,
-    BOWL_OF_WATER: I.BOWL_OF_WATER,
-    NETTLE_WATER: I.NETTLE_WATER, // 4237
     BOWL_TEA: I.NETTLE_TEA, // 4239 bowl_nettletea
     BOWL_TEA_MILKY: I.NETTLE_TEA_2, // 4240
     CUP_TEA: I.CUP_OF_TEA_4, // 4242 an ordinary cup of nettle tea
@@ -119,8 +116,13 @@ module.exports = function registerGhostsAhoyQuest(api) {
   const RUNEDRAW_WINS_ATTRIBUTE = "ghosts-ahoy:runedraw-wins";
   const RUNEDRAW_FEE = 25;
 
-  /** Ghost villagers each player has asked, by NPC (live: "You only just asked me the same thing!"). */
-  const asked = new WeakMap();
+  /**
+   * The ghost villager each player asked last. Only that one answers "You only just asked me the
+   * same thing!"; asking another in between lets the first answer again (rsprox captures,
+   * 20261112T092603-5ab63b4 ticks 1541-1570; Wiki, Ghosts Ahoy: "As long as the ghost is not
+   * spoken to twice in a row").
+   */
+  const lastAsked = new WeakMap();
 
   let quest;
 
@@ -589,9 +591,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
     const npc = request.npc;
     if (!npc || typeof request.step?.speaker !== "string" || text.startsWith(LINE.ONLY_JUST_ASKED)) return;
     // Every answer counts as having asked that ghost (Transcript: "regardless if they support or deny").
-    let seen = asked.get(player);
-    if (!seen) asked.set(player, (seen = new WeakSet()));
-    seen.add(npc);
+    lastAsked.set(player, npc);
   }
 
   // ==========================================================================
@@ -796,7 +796,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
         // Gravingas's form (tick 1523): counter 1, on the continue after his line.
         if (!held(player, ids.PETITION_FORM)) player.getInventory().adds(ids.PETITION_FORM, 1);
         State.set(player, State.VARBIT.SIGNATURES, State.SIGNATURES_FORM);
-        asked.delete(player);
+        lastAsked.delete(player);
         event.handled = true;
         return;
       case "ELEZLT":
@@ -1057,7 +1057,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
 
   const VILLAGER_VARIANT = "robes-of-necrovarus-talking-to-the-ghost-villagers";
 
-  /** A ghost already asked answers "You only just asked me..." (ticks 1541, 1544, 1570). */
+  /** The ghost asked last answers "You only just asked me..." (ticks 1541, 1544, 1570). */
   function talkToVillager(event) {
     const { player, npc } = event;
     if (selectVariant({ npcId: NPC.GHOST_VILLAGER, player }) !== VILLAGER_VARIANT || !wearingAmulet(player)) return false;
@@ -1067,7 +1067,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
       startTranscript(api, player, NPC.GHOST_VILLAGER, PAGE, VILLAGER_VARIANT, () => findNode(steps, "r1mXym")?.steps ?? [], npc);
       return true;
     }
-    if (!asked.get(player)?.has(npc)) return false;
+    if (lastAsked.get(player) !== npc) return false;
     startTranscript(api, player, NPC.GHOST_VILLAGER, PAGE, VILLAGER_VARIANT,
       () => [{ player: LINE.ASK_SIGNATURE }, ...(findNode(steps, "HQkg-C")?.steps ?? [])], npc);
     return true;
@@ -1123,41 +1123,14 @@ module.exports = function registerGhostsAhoyQuest(api) {
   }
 
   // ==========================================================================
-  // Items: the nettle tea, the spade, the map
+  // Items: the spade, the map (nettle tea is made by skills/cooking: NettleTea.Cooking.js and cooking.json)
   // ==========================================================================
-
-  /** The brew, as the capture makes it (ticks 373-383): no message, sound 2401. */
-  const POURS = [
-    [ids.BOWL_TEA, ids.SPECIAL_CUP, ids.BOWL, ids.SPECIAL_CUP_TEA],
-    [ids.BOWL_TEA_MILKY, ids.SPECIAL_CUP, ids.BOWL, ids.SPECIAL_CUP_TEA_MILKY],
-    [ids.BUCKET_OF_MILK, ids.SPECIAL_CUP_TEA, ids.BUCKET, ids.SPECIAL_CUP_TEA_MILKY],
-    [ids.BUCKET_OF_MILK, ids.BOWL_TEA, ids.BUCKET, ids.BOWL_TEA_MILKY],
-  ];
-  const LIQUID_SOUND = 2401;
 
   function handleItemOnItem(event) {
     const { player } = event;
     const a = event.usedItemId;
     const b = event.usedWithItemId;
     const pair = new Set([a, b]);
-    if (pair.has(ids.NETTLES) && pair.has(ids.BOWL_OF_WATER)) {
-      player.getInventory().deleteNumber(ids.NETTLES, 1);
-      player.getInventory().deleteNumber(ids.BOWL_OF_WATER, 1);
-      player.getInventory().adds(ids.NETTLE_WATER, 1);
-      player.sendMessage("You place the nettles into the bowl of water.");
-      event.handled = true;
-      return;
-    }
-    const pour = POURS.find(([from, into]) => pair.has(from) && pair.has(into) && from !== into);
-    if (pour) {
-      const [from, into, emptied, made] = pour;
-      // The brew stays in the cup's (or bowl's) slot; the emptied container takes the other's (tick 374).
-      swapInSlot(player, into, made);
-      swapInSlot(player, from, emptied);
-      api.core.Sounds.sendSound(player, new api.core.Sound(LIQUID_SOUND, 1, 0, 0));
-      event.handled = true;
-      return;
-    }
     // The bedsheet in the ectoplasm (tick 1498): spam line, the empty bucket back.
     if (pair.has(ids.BEDSHEET) && pair.has(I.BUCKET_OF_SLIME)) {
       const inventory = player.getInventory();
@@ -1176,26 +1149,6 @@ module.exports = function registerGhostsAhoyQuest(api) {
     }
     Shipwreck.combineScraps(event);
     if (!event.handled) Shipwreck.useOnToyBoat(event);
-  }
-
-  /** Nettle-water on a range or fire (Transcript: "You boil the water and make nettle tea.", 52 XP). */
-  function boilNettleWater(event) {
-    const { player, itemId } = event;
-    if (itemId !== ids.NETTLE_WATER) return;
-    const definition = event.object?.getDefinition?.();
-    const name = definition?.getName?.() ?? "";
-    const cooks = ["Cooking range", "Range", "Stove", "Fire", "Forester's Campfire"].includes(name)
-      || (definition?.getInteractions?.() ?? []).includes("Cook");
-    if (!cooks) return;
-    event.handled = true;
-    if (player.getSkillManager().getCurrentLevel(Skill.COOKING) < 20) {
-      player.sendMessage("You need a Cooking level of at least 20 to cook this.");
-      return;
-    }
-    player.getInventory().deleteNumber(ids.NETTLE_WATER, 1);
-    player.getInventory().adds(ids.BOWL_TEA, 1);
-    player.getSkillManager().addExperiences(Skill.COOKING, 52);
-    player.sendMessage("You boil the water and make nettle tea.");
   }
 
   const DIG = Object.freeze({ x: 3803, y: 3530, z: 0 });
@@ -1254,8 +1207,6 @@ module.exports = function registerGhostsAhoyQuest(api) {
 
   function handleItemOnObject(event) {
     if (event.handled) return;
-    boilNettleWater(event);
-    if (event.handled) return;
     Shipwreck.keyOnChest(event);
     if (event.handled) return;
     Tomb.keyOnDoor(event);
@@ -1303,6 +1254,7 @@ module.exports = function registerGhostsAhoyQuest(api) {
   Shipwreck.attach(api, shared);
   Voyage.attach(api, shared);
   Tomb.attach(api, shared);
+  Bedsheet.attach(api, shared);
   State.persist(api);
 
   api.onNpcDialogueVariant(selectVariant);
@@ -1327,9 +1279,15 @@ module.exports = function registerGhostsAhoyQuest(api) {
   api.onObjectInteraction("Mast", { Search: onlyId(ids.MAST, Shipwreck.searchMast) });
   api.onObjectInteraction("Gangplank", { Cross: onlyIds(ids.GANGPLANKS, Shipwreck.crossGangplank) });
   api.onObjectInteraction("Rock", { "Jump-To": onlyId(ids.ROCK, Shipwreck.jumpToRock) });
+  api.onObjectRoute(Shipwreck.routeToRock);
   api.onObjectInteraction("Coffin", { Open: Tomb.openCoffin, Search: Tomb.searchCoffin, Close: Tomb.closeCoffin });
   api.onZoneEnter(Shipwreck.TOP_DECK, Shipwreck.deckEntered);
   api.onZoneExit(Shipwreck.TOP_DECK, Shipwreck.deckLeft);
+  api.onCustomEvent("equipment:changed", Bedsheet.sync);
+  api.onCustomEvent("player:bootstrap-complete", Bedsheet.sync);
+  api.onCanEquip(Bedsheet.canWear);
+  api.onZoneEnter(Bedsheet.TOWN, Bedsheet.sync);
+  api.onZoneExit(Bedsheet.TOWN, Bedsheet.sync);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
 

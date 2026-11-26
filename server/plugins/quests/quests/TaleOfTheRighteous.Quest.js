@@ -676,6 +676,7 @@ module.exports = function registerTaleOfTheRighteousQuest(api) {
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [CORRUPT_LIZARDMAN_NPC_ID],
     key: "tale_of_the_righteous",
     name: "Tale of the Righteous",
     varpId: VARP_SHAYZIEN_QUEST,

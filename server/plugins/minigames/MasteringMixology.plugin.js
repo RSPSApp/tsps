@@ -15,6 +15,7 @@ module.exports = {
     require("./mixology/State.Mixology")(api);
     require("./mixology/Area.Mixology")(api);
     require("./mixology/Stairs.Mixology")(api);
+    require("./mixology/SignetChest.Mixology")(api);
     require("./mixology/Supervisor.Mixology")(api);
     require("./mixology/Refiner.Mixology")(api);
     require("./mixology/Mixer.Mixology")(api);
@@ -24,6 +25,7 @@ module.exports = {
     require("./mixology/LabNotes.Mixology")(api);
     require("./mixology/RewardShop.Mixology")(api);
     require("./mixology/Goggles.Mixology")(api);
+    require("./mixology/Outfit.Mixology")(api);
     require("./mixology/Commands.Mixology")(api);
   },
 };

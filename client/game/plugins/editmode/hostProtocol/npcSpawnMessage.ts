@@ -9,6 +9,7 @@ export type BrowserHostNpcSpawn = {
     direction?: number;
     /** Wandering range; 0 anchors the NPC. Omitted means the server default. */
     wanderRadius?: number;
+    leashRadius?: number | null;
     /** Marks a persisted game spawn as removed rather than added. */
     remove?: boolean;
 };
@@ -24,6 +25,7 @@ export type EditedNpcSpawn = {
     level: number;
     direction?: number;
     wanderRadius?: number;
+    leashRadius?: number | null;
     remove?: boolean;
 };
 
@@ -48,6 +50,7 @@ export type NpcSpawnRecord = {
     plane: number;
     direction?: number;
     wanderRadius?: number;
+    leashRadius?: number | null;
     remove?: boolean;
 };
 
@@ -164,6 +167,7 @@ export function parseNpcSpawnRecords(contents: string): NpcSpawnRecord[] {
         || (!integer(spawn.id, 0x7fffffff) && typeof spawn.key !== "string")
         || (spawn.direction !== undefined && !integer(spawn.direction, 7))
         || (spawn.wanderRadius !== undefined && !integer(spawn.wanderRadius, 255))
+        || (spawn.leashRadius != null && !integer(spawn.leashRadius, 255))
         || (spawn.remove !== undefined && typeof spawn.remove !== "boolean")
     )) throw new Error("Invalid npc-spawns.json");
     return parsed.flatMap((spawn): NpcSpawnRecord[] => {
@@ -175,6 +179,7 @@ export function parseNpcSpawnRecords(contents: string): NpcSpawnRecord[] {
             plane: spawn.level,
             ...(Number.isInteger(spawn.direction) ? { direction: spawn.direction } : {}),
             ...(Number.isInteger(spawn.wanderRadius) ? { wanderRadius: spawn.wanderRadius } : {}),
+            ...(spawn.leashRadius === undefined ? {} : { leashRadius: spawn.leashRadius }),
             ...(spawn.remove === true ? { remove: true } : {}),
         }];
     });
@@ -191,6 +196,7 @@ export function parseNpcSpawns(contents: string): BrowserHostNpcSpawn[] {
             plane: record.plane,
             ...(record.direction === undefined ? {} : { direction: record.direction }),
             ...(record.wanderRadius === undefined ? {} : { wanderRadius: record.wanderRadius }),
+            ...(record.leashRadius === undefined ? {} : { leashRadius: record.leashRadius }),
         }];
     });
 }

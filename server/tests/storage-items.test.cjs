@@ -26,6 +26,7 @@ const FishBarrel = require("../plugins/items/storage/FishBarrel.StorageItems");
 const LogBasket = require("../plugins/items/storage/LogBasket.StorageItems");
 const TackleBox = require("../plugins/items/storage/TackleBox.StorageItems");
 const ForestryKit = require("../plugins/items/storage/ForestryKit.StorageItems");
+const Knapsack = require("../plugins/items/storage/Knapsack.StorageItems");
 const Smithing = require("../plugins/skills/Smithing.plugin");
 const Superheat = require("../plugins/skills/smithing/Superheat.Smithing");
 
@@ -36,6 +37,9 @@ before(async () => {
   const { CachePipeline } = require("../dist/game/cache/CachePipeline");
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   StorageItems.register(PluginManager.createApi("StorageItemsTest"));
+  // The relics plugin attaches the Knapsack's gathering (after Hotfoot's processing).
+  // `product` stands in for Hotfoot's: a player marked with `hotfoot` (raw id -> processed id) wears the boots.
+  Knapsack.gathering(PluginManager.createApi("KnapsackGatheringTest"), { product: (player, _skill, id) => player.hotfoot?.get(id) ?? null });
   Smithing.register(PluginManager.createApi("SmithingTest"));
   // The SkillCapes plugin's answer, for a player marked as wearing the Smithing cape.
   PluginManager.createApi("SkillCapesTest").onCustomEvent("skillcape:has-perk", (request) => {
@@ -47,7 +51,8 @@ function createContainer(capacity, initial = [], bank = false) {
   const items = initial;
   const container = {
     getItems: () => items,
-    getValidItems: () => items.filter((item) => item.getId() > 0 && item.getAmount() > 0),
+    // As ItemContainer.getValidItems: a bank also keeps amount-0 entries, which are placeholders.
+    getValidItems: () => items.filter((item) => item.getId() > 0 && (item.getAmount() > 0 || (bank && item.getAmount() === 0))),
     getAmount: (id) => items.filter((item) => item.getId() === id).reduce((total, item) => total + item.getAmount(), 0),
     contains: (id) => items.some((item) => item.getId() === id && item.getAmount() > 0),
     getFreeSlots: () => capacity - container.getValidItems().length,
@@ -501,6 +506,18 @@ test("destroying the last container of a family loses its contents", () => {
   assert.equal(Storage.total(player, family("tackle-box")), 0);
 });
 
+test("a banked placeholder of a container is not a copy still owned (issue 6601)", () => {
+  const player = createPlayer([]);
+  player.getBank(0).getItems().push(new Item(Items.TACKLE_BOX, 0));
+  assert.equal(player.getBank(0).getValidItems().length, 1, "the bank keeps the placeholder as a valid item");
+  assert.equal(Storage.owns(player, family("tackle-box")), false);
+  Storage.store(player, family("tackle-box"), Items.FISHING_BAIT, 5);
+  PluginManager.emitCustomEvent("destroy-item:destroyed", { player, itemId: Items.TACKLE_BOX, amount: 1 });
+  assert.equal(Storage.total(player, family("tackle-box")), 0, "the contents go with the destroyed box");
+  player.getBank(0).getItems()[0].setAmount(1);
+  assert.equal(Storage.owns(player, family("tackle-box")), true, "a real banked box is still owned");
+});
+
 test("the tackle box takes lit lanterns but not unlit ones, and swaps dragged slots", () => {
   const lit = CacheDefinitions.getObjId("oil_lantern_lit");
   const unlit = CacheDefinitions.getObjId("oil_lantern_unlit");
@@ -582,4 +599,116 @@ test("coal saved by the old CoalBag plugin moves into the bag on login", () => {
   PluginManager.emitPlayerLogin({ player, username: "storetest" });
   assert.equal(Storage.total(player, family("coal-bag")), 12);
   assert.equal(player.getAttribute("coal-bag:coal"), 0);
+});
+
+// ------------------------------------------------------------------ the Knapsack (Barbarian Gathering)
+
+const knapsackOpen = () => CacheDefinitions.getObjId("barbarian_knapsack");
+const knapsackClosed = () => CacheDefinitions.getObjId("barbarian_knapsack_closed");
+const idOf = (name) => CacheDefinitions.getObjId(name);
+
+test("the Knapsack takes the Wiki's kinds: logs (not bark), raw and cooked fish, metallic ore, coal, clay, bars, pure essence", () => {
+  const knapsack = family("knapsack");
+  for (const name of ["logs", "yew_logs", "raw_shark", "shark", "iron_ore", "coal", "clay", "steel_bar", "blankrune_high"]) {
+    assert.ok(knapsack.accepts(idOf(name)), name);
+  }
+  for (const name of ["forestry_bark", "uncut_sapphire", "bones", "blankrune"]) assert.equal(knapsack.accepts(idOf(name)), false, name);
+});
+
+test("open, the Knapsack takes what is gathered: three kinds at most, 140 in all; closed, nothing", () => {
+  const bag = new Item(knapsackOpen(), 1);
+  const player = createPlayer([bag]);
+  assert.equal(gather(player, Items.LOGS, 100), 100);
+  assert.equal(gather(player, Items.RAW_SHRIMPS, 30), 30);
+  assert.equal(gather(player, Items.COAL, 30), 10, "140 in all");
+  assert.equal(gather(player, Items.IRON_ORE, 1), 0, "a fourth kind never goes in");
+  assert.equal(Storage.total(player, family("knapsack")), 140);
+  const closed = createPlayer([new Item(knapsackClosed(), 1)]);
+  assert.equal(gather(closed, Items.LOGS, 1), 0);
+});
+
+test("a full inventory keeps gathering while an open Knapsack has room", () => {
+  const player = createPlayer([new Item(knapsackOpen(), 1), ...items(Items.BRONZE_DAGGER, 27)]);
+  assert.equal(room(player, Items.LOGS), true);
+  gather(player, Items.LOGS, 140);
+  assert.equal(room(player, Items.LOGS), false, "full");
+  assert.equal(room(createPlayer([new Item(knapsackClosed(), 1), ...items(Items.BRONZE_DAGGER, 27)]), Items.LOGS), false);
+});
+
+test("Fill takes what it can from the inventory, an item used on it that item; Check lists it in the chatbox", () => {
+  const bag = new Item(knapsackClosed(), 1);
+  const player = createPlayer([bag, ...items(Items.LOGS, 5), ...items(Items.RAW_TROUT, 3), new Item(Items.BRONZE_DAGGER, 1)]);
+  option(player, bag, "Fill");
+  assert.equal(player.getInventory().getAmount(Items.LOGS), 0);
+  assert.equal(player.getInventory().getAmount(Items.RAW_TROUT), 0);
+  assert.equal(player.getInventory().getAmount(Items.BRONZE_DAGGER), 1, "not a kind it holds");
+  option(player, bag, "Check");
+  // As the Forager's pouch's recorded Check: a header, then one line per kind; no box.
+  assert.deepEqual(player.messages.slice(-3), [Knapsack.MESSAGE.CONTAINS, "5 x Logs", "3 x Raw trout"]);
+  assert.equal(player.boxes.length, 0);
+  const empty = createPlayer([new Item(knapsackClosed(), 1)]);
+  option(empty, empty.getInventory().getItems()[0], "Check");
+  assert.deepEqual(empty.messages, [Knapsack.MESSAGE.CONTAINS, Knapsack.MESSAGE.CHECKED_EMPTY]);
+  const ore = new Item(Items.IRON_ORE, 1);
+  player.getInventory().getItems().push(ore);
+  PluginManager.emitItemOnItem({ player, usedItem: ore, usedWithItem: bag, handled: false });
+  assert.equal(Storage.amountOf(player, family("knapsack"), Items.IRON_ORE), 1);
+  const dagger = player.getInventory().getItems().find((item) => item.getId() === Items.BRONZE_DAGGER);
+  PluginManager.emitItemOnItem({ player, usedItem: dagger, usedWithItem: bag, handled: false });
+  assert.equal(player.messages.at(-1), Knapsack.MESSAGE.CANNOT);
+});
+
+test("Open and Close swap the Knapsack in place, by id (both are named Knapsack)", () => {
+  const bag = new Item(knapsackClosed(), 1);
+  const player = createPlayer([bag]);
+  option(player, bag, "Open");
+  assert.equal(bag.getId(), knapsackOpen());
+  assert.equal(gather(player, Items.LOGS, 1), 1);
+  option(player, bag, "Close");
+  assert.equal(bag.getId(), knapsackClosed());
+});
+
+test("Dispose asks which kind to delete (Wiki: Relics) and deletes only that one", () => {
+  const bag = new Item(knapsackOpen(), 1);
+  const player = createPlayer([bag]);
+  gather(player, Items.LOGS, 10);
+  gather(player, Items.COAL, 4);
+  let dialogue;
+  player.getDialogueManager = () => ({ startDialogues: (builder) => { dialogue = [...builder.getDialogues().values()][0]; } });
+  option(player, bag, "Dispose");
+  assert.equal(dialogue.getTitle(), Knapsack.MESSAGE.DISPOSE_TITLE);
+  assert.deepEqual(dialogue.getOptions(), ["Logs", "Coal", "Nothing."]);
+  player.getPacketSender().sendInterfaceRemoval = () => {};
+  dialogue.action.executeOption(2);
+  assert.deepEqual(Storage.contents(player, family("knapsack")), [{ id: Items.LOGS, amount: 10 }]);
+  assert.equal(player.messages.at(-1), "You dispose of the Coal in your knapsack.");
+});
+
+test("its contents only come out at a bank: the Empty containers button banks them", () => {
+  const bag = new Item(knapsackOpen(), 1);
+  const player = createPlayer([bag]);
+  gather(player, Items.LOGS, 12);
+  PluginManager.emitCustomEvent("bank:empty-containers", { player });
+  assert.equal(Storage.total(player, family("knapsack")), 12, "no bank open: nothing moves");
+  player.interfaceId = Bank.MAIN_INTERFACE_ID;
+  player.status = PlayerStatus.BANKING;
+  PluginManager.emitCustomEvent("bank:empty-containers", { player });
+  assert.equal(Storage.total(player, family("knapsack")), 0);
+  assert.equal(player.getBank(0).getAmount(Items.LOGS), 12);
+  assert.equal(player.messages.at(-1), Knapsack.MESSAGE.EMPTIED_TO_BANK);
+});
+
+test("with Hotfoot's boots, an open Knapsack's room is judged on the cooked fish it will be handed (review of #6799)", () => {
+  const player = createPlayer([new Item(knapsackOpen(), 1), ...items(Items.BRONZE_DAGGER, 27)]);
+  gather(player, Items.RAW_TUNA, 1);
+  gather(player, Items.LOGS, 1);
+  gather(player, Items.COAL, 1);
+  assert.equal(room(player, Items.RAW_TUNA), true, "without the boots, raw tuna is a kind it holds");
+  player.hotfoot = new Map([[Items.RAW_TUNA, Items.TUNA]]);
+  assert.equal(room(player, Items.RAW_TUNA), false, "with them, it gets cooked tuna: a fourth kind, so no room and the full inventory stops");
+  assert.equal(gather(player, Items.TUNA, 1), 0);
+  const roomy = createPlayer([new Item(knapsackOpen(), 1), ...items(Items.BRONZE_DAGGER, 27)]);
+  roomy.hotfoot = player.hotfoot;
+  gather(roomy, Items.TUNA, 2);
+  assert.equal(room(roomy, Items.RAW_TUNA), true, "cooked tuna held: room for more of it");
 });

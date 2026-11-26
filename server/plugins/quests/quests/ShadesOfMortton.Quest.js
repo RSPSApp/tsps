@@ -321,6 +321,8 @@ module.exports = function registerShadesOfMorttonQuest(api) {
   const BRACELET_CHARGES_ATTRIBUTE = "shades-of-mortton:flamtaer-bracelet-charges";
   // A running build or sanctify loop, so a new click or a step away ends the old one.
   const ACTION_ATTRIBUTE = "shades-of-mortton:action";
+  const ACTION_REPAIR = "repair";
+  const ACTION_SANCTIFY = "sanctify";
   const PERM_ULSQUIRE_ATTRIBUTE = "shades-of-mortton:perm-ulsquire";
   const PERM_RAZMIRE_ATTRIBUTE = "shades-of-mortton:perm-razmire";
   const MULTI_ATTRIBUTE = "shades-of-mortton:multi";
@@ -1247,15 +1249,15 @@ module.exports = function registerShadesOfMorttonQuest(api) {
 
   /**
    * Runs `step` every `ticks` until it returns false, the player walks away or logs out, or
-   * another loop replaces it.
+   * another loop replaces it. The token records the action, so a wall click can tell an
+   * already-running repair from a fresh one.
    */
-  function repeatAction(player, ticks, step) {
-    const token = {};
+  function repeatAction(player, ticks, step, kind) {
+    const token = { kind, start: player.getLocation().clone() };
     player.setAttribute(ACTION_ATTRIBUTE, token);
-    const start = player.getLocation().clone();
     const run = () => {
       if (!isOnline(player) || player.getAttribute(ACTION_ATTRIBUTE) !== token) return;
-      if (!player.getLocation().equals(start)) {
+      if (!player.getLocation().equals(token.start)) {
         player.setAttribute(ACTION_ATTRIBUTE, null);
         return;
       }
@@ -1293,13 +1295,34 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     player.sendMessage("Your Flamtaer bracelet crumbles to dust.");
   }
 
+  function materialAmount(player, itemId) {
+    const request = { player, itemId, amount: player.getInventory().getAmount(itemId) };
+    api.emitCustomEvent("storage:amount", request);
+    return request.amount;
+  }
+
+  /** Takes the inventory's share first, then a carried Flamtaer bag's (Wiki: used in place). */
+  function takeMaterial(player, itemId, amount, containers = true) {
+    const inventory = player.getInventory();
+    const fromInventory = Math.min(amount, inventory.getAmount(itemId));
+    if (fromInventory > 0) inventory.deleteNumber(itemId, fromInventory);
+    const left = amount - fromInventory;
+    if (left <= 0) return true;
+    if (!containers) return false;
+    const request = { player, itemId, amount: left, taken: 0 };
+    api.emitCustomEvent("storage:take", request);
+    return request.taken >= left;
+  }
+
   function setsInInventory(player) {
-    const timber = player.getInventory().getAmount(ItemIdentifiers.TIMBER_BEAM) +
+    // Only the bag stores building materials; planks count from the inventory (Wiki: the bag
+    // takes timber beams, not planks).
+    const timber = materialAmount(player, ItemIdentifiers.TIMBER_BEAM) +
       player.getInventory().getAmount(ItemIdentifiers.PLANK);
     return Math.min(
-      player.getInventory().getAmount(ItemIdentifiers.LIMESTONE_BRICK),
+      materialAmount(player, ItemIdentifiers.LIMESTONE_BRICK),
       timber,
-      Math.floor(player.getInventory().getAmount(ItemIdentifiers.SWAMP_PASTE) / 5)
+      Math.floor(materialAmount(player, ItemIdentifiers.SWAMP_PASTE) / 5)
     );
   }
 
@@ -1308,12 +1331,15 @@ module.exports = function registerShadesOfMorttonQuest(api) {
     let resources = resourcesOf(player);
     let added = 0;
     while (resources + RESOURCES_PER_SET <= 100 && setsInInventory(player) > 0) {
-      const timberId = held(player, ItemIdentifiers.TIMBER_BEAM)
+      const inventory = player.getInventory();
+      const timberId = inventory.getAmount(ItemIdentifiers.TIMBER_BEAM) > 0
         ? ItemIdentifiers.TIMBER_BEAM
-        : ItemIdentifiers.PLANK;
-      player.getInventory().deleteNumber(ItemIdentifiers.LIMESTONE_BRICK, 1);
-      player.getInventory().deleteNumber(timberId, 1);
-      player.getInventory().deleteNumber(ItemIdentifiers.SWAMP_PASTE, 5);
+        : inventory.getAmount(ItemIdentifiers.PLANK) > 0
+          ? ItemIdentifiers.PLANK
+          : ItemIdentifiers.TIMBER_BEAM;
+      if (!takeMaterial(player, ItemIdentifiers.LIMESTONE_BRICK, 1)
+        || !takeMaterial(player, timberId, 1, timberId !== ItemIdentifiers.PLANK)
+        || !takeMaterial(player, ItemIdentifiers.SWAMP_PASTE, 5)) break;
       resources += RESOURCES_PER_SET;
       added++;
     }
@@ -1340,6 +1366,11 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       player.sendMessage("You're not sure how you would go about fixing this.");
       return;
     }
+    // A wall click while this build is still running must not roll again: live keeps one
+    // attempt per interval. An empty pool is the exception, so a fresh set continues at once.
+    const active = player.getAttribute(ACTION_ATTRIBUTE);
+    if (active?.kind === ACTION_REPAIR && player.getLocation().equals(active.start)
+        && resourcesOf(player) > 0) return;
     if (hammerBoost(player) === null) {
       player.sendMessage("You need a hammer to repair this temple.");
       return;
@@ -1388,7 +1419,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       });
       checkAltarUnlock(player);
       return true;
-    });
+    }, ACTION_REPAIR);
   }
 
   function sanctifyGate(player, item) {
@@ -1460,7 +1491,7 @@ module.exports = function registerShadesOfMorttonQuest(api) {
       }
       if (made === 0) player.sendMessage("You have nothing to sanctify.");
       return false;
-    });
+    }, ACTION_SANCTIFY);
   }
 
   function sanctifySerum(player) {

@@ -1,6 +1,8 @@
 // Run after `yarn build`: node --test tests/trident.test.cjs
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
+process.env.BROWSER_HOST = "1";
+process.env.DISABLE_PLAYER_BOTS = "1";
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
@@ -146,10 +148,72 @@ const core = PluginManager.getCoreApi();
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   Trident.register(PluginManager.createApi("TridentFullIdRegression"));
+  require("../plugins/items/MagicFang.plugin").register(PluginManager.createApi("MagicFangRegression"));
+  require("../plugins/items/ToxicStaffOfTheDead.plugin").register(PluginManager.createApi("ToxicStaffDismantleRegression"));
   require("../plugins/persistence/JsonPlayerPersistence.plugin").register(PluginManager.createApi("TridentPersistenceRegression"));
   PluginManager.createApi("TridentChargePreservation").onCustomEvent("combat:consume-charge", event => {
     if (event.player.getAttribute("test:spare-trident-charge") === true) event.skip = true;
   });
+});
+
+test("magic fangs upgrade only eligible uncharged weapons with a chisel and 59 Crafting", t => {
+  const { UseItemPacketListener } = require("../dist/net/packet/impl/UseItemPacketListener");
+  const I = core.ItemIdentifiers, p = realActor(t), inventory = p.getInventory();
+  const level = n => p.getSkillManager().setCurrentLevels(core.Skill.CRAFTING, n, false);
+  const seed = (weaponId, chisel = I.CHISEL, meta = null) => {
+    inventory.resetItems();
+    inventory.setItem(0, new Item(I.MAGIC_FANG, 1, meta));
+    inventory.setItem(1, new Item(weaponId, 1, { "test:origin": "kept" }));
+    if (chisel) inventory.setItem(2, new Item(chisel));
+  };
+  for (const [input, output] of [
+    [I.STAFF_OF_THE_DEAD, I.TOXIC_STAFF_UNCHARGED_],
+    [I.UNCHARGED_TRIDENT, I.UNCHARGED_TOXIC_TRIDENT],
+    [I.UNCHARGED_TRIDENT_E_, I.UNCHARGED_TOXIC_TRIDENT_E_],
+  ]) {
+    assert.ok(core.CacheDefinitions.getItem(input));
+    assert.ok(core.CacheDefinitions.getItem(output));
+    for (const reverse of [false, true]) {
+      seed(input, reverse ? I.JEWELLERS_CHISEL : I.CHISEL);
+      for (let slot = 3; slot < 28; slot++) inventory.setItem(slot, new Item(I.SHARK));
+      level(59);
+      const xp = p.getSkillManager().getExperience(core.Skill.CRAFTING);
+      UseItemPacketListener.itemOnItem(p, reverse ? 1 : 0, reverse ? 0 : 1);
+      assert.equal(inventory.getAmount(I.MAGIC_FANG), 0);
+      assert.equal(inventory.get(1).getId(), output);
+      assert.equal(inventory.get(1).getMetaValue("test:origin"), "kept");
+      assert.equal(inventory.getAmount(reverse ? I.JEWELLERS_CHISEL : I.CHISEL), 1);
+      assert.equal(p.getSkillManager().getExperience(core.Skill.CRAFTING), xp);
+      assert.equal(inventory.getAmount(I.SHARK), 25);
+    }
+  }
+  for (const [weapon, crafting, chisel, meta] of [
+    [I.UNCHARGED_TRIDENT, 58, I.CHISEL, null],
+    [I.UNCHARGED_TRIDENT, 59, null, null],
+    [I.TRIDENT_OF_THE_SEAS_FULL_, 99, I.CHISEL, null],
+    [I.TRIDENT_OF_THE_SEAS, 99, I.CHISEL, null],
+    [I.UNCHARGED_TRIDENT, 99, I.CHISEL, { preset: true }],
+    [I.UNCHARGED_TRIDENT, 99, I.CHISEL, { untradeable: true }],
+    [I.UNCHARGED_TRIDENT, 99, I.CHISEL, { unbankable: true }],
+  ]) {
+    seed(weapon, chisel, meta); level(crafting);
+    const before = inventory.getItems().map(item => [item.getId(), item.getAmount(), item.getMeta()]);
+    UseItemPacketListener.itemOnItem(p, 0, 1);
+    assert.deepEqual(inventory.getItems().map(item => [item.getId(), item.getAmount(), item.getMeta()]), before);
+  }
+  seed(I.UNCHARGED_TRIDENT); level(99);
+  inventory.setItem(0, new Item(I.MAGIC_FANG_2));
+  UseItemPacketListener.itemOnItem(p, 0, 1);
+  assert.equal(inventory.getAmount(I.MAGIC_FANG_2), 1, "noted fangs cannot convert");
+  assert.equal(inventory.getAmount(I.UNCHARGED_TRIDENT), 1);
+  for (const key of [Item.PRESET_META, Item.UNTRADEABLE_META, Item.UNBANKABLE_META]) {
+    seed(I.STAFF_OF_THE_DEAD); level(99);
+    inventory.get(1).setMetaValue(key, true);
+    UseItemPacketListener.itemOnItem(p, 0, 1);
+    assert.equal(inventory.getAmount(I.MAGIC_FANG), 1);
+    assert.equal(inventory.get(1).getId(), I.STAFF_OF_THE_DEAD);
+    assert.equal(inventory.get(1).getMetaValue(key), true);
+  }
 });
 
 function realActor(t) {
@@ -163,6 +227,109 @@ function realActor(t) {
   t.after(() => { core.TaskManager.cancelTasks(p); core.World.getPlayers().removes(p); });
   return p;
 }
+
+function staffDismantle(p) {
+  const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
+  const { Inventory } = require("../dist/game/model/container/impl/Inventory");
+  const staff = p.getInventory().get(5);
+  const actions = core.CacheDefinitions.getItem(staff.getId()).inventoryActions;
+  const option = actions.findIndex(action => action?.toLowerCase() === "dismantle");
+  assert.ok(option >= 0, "the real cache exposes Dismantle");
+  assert.equal(ItemActionPacketListener.handleAction(p, Inventory.INTERFACE_ID, staff.getId(), 5, option + 1, actions[option]), true);
+  const dialogue = p.getDialogueManager().getCurrent();
+  assert.ok(dialogue instanceof core.OptionDialogue, "the actual item action opens confirmation");
+  return dialogue;
+}
+
+function attachStaff(t) {
+  const p = realActor(t), inventory = p.getInventory(), I = core.ItemIdentifiers;
+  inventory.setItem(0, new Item(I.MAGIC_FANG));
+  inventory.setItem(1, new Item(I.MAGIC_FANG));
+  inventory.setItem(2, new Item(I.CHISEL));
+  inventory.setItem(5, new Item(I.STAFF_OF_THE_DEAD, 1, { "test:selected": "preserved" }));
+  inventory.setItem(7, new Item(I.STAFF_OF_THE_DEAD, 1, { "test:spare": true }));
+  p.getSkillManager().setCurrentLevels(core.Skill.CRAFTING, 59, false);
+  const staff = inventory.get(5), spare = inventory.get(7);
+  require("../dist/net/packet/impl/UseItemPacketListener").UseItemPacketListener.itemOnItem(p, 0, 5);
+  assert.equal(staff.getId(), I.TOXIC_STAFF_UNCHARGED_);
+  assert.equal(inventory.get(5), staff);
+  return { p, inventory, staff, spare, I };
+}
+
+const resumeStaff = p => p.getDialogueManager().handleResume(core.OptionDialogue.OPTIONS_WIDGET_ID, 1);
+const contents = inventory => inventory.getItems().map(item => [item.getId(), item.getAmount(), JSON.stringify(item.getMeta())]);
+
+test("newly attached toxic staff dismantles through its real action and confirmation without losing metadata", t => {
+  const { p, inventory, staff, spare, I } = attachStaff(t);
+  const prompt = staffDismantle(p);
+  assert.equal(staff.getId(), I.TOXIC_STAFF_UNCHARGED_, "opening alone consumes nothing");
+  assert.equal(resumeStaff(p), true);
+  assert.equal(inventory.get(5), staff, "selected object and slot survive");
+  assert.equal(staff.getId(), I.STAFF_OF_THE_DEAD);
+  assert.equal(staff.getMetaValue("test:selected"), "preserved");
+  assert.equal(inventory.get(7), spare);
+  assert.equal(spare.getId(), I.STAFF_OF_THE_DEAD);
+  assert.equal(inventory.getAmount(I.MAGIC_FANG), 2, "one spare plus exactly one refunded fang");
+  const after = contents(inventory);
+  prompt.execute(1); resumeStaff(p);
+  assert.deepEqual(contents(inventory), after, "repeated resumes cannot refund again");
+});
+
+test("staff dismantle cancellation, closed prompts and replaced dialogues cannot resume", t => {
+  for (const cancel of ["No", "close", "replace"]) {
+    const { p, inventory } = attachStaff(t), prompt = staffDismantle(p), before = contents(inventory);
+    if (cancel === "No") p.getDialogueManager().handleResume(core.OptionDialogue.OPTIONS_WIDGET_ID, 2);
+    else if (cancel === "close") p.getPacketSender().sendInterfaceRemoval();
+    else staffDismantle(p);
+    prompt.execute(1);
+    assert.deepEqual(contents(inventory), before, cancel);
+    p.getPacketSender().sendInterfaceRemoval();
+  }
+});
+
+test("staff confirmation rechecks selected identity, slot, charges and restrictions", t => {
+  for (const change of ["replace", "move", "charged-id", "charged-meta", Item.PRESET_META, Item.UNTRADEABLE_META, Item.UNBANKABLE_META]) {
+    const { p, inventory, staff, I } = attachStaff(t);
+    staffDismantle(p);
+    if (change === "replace") inventory.setItem(5, new Item(I.TOXIC_STAFF_UNCHARGED_));
+    else if (change === "move") { inventory.setItem(6, staff); inventory.setItem(5, new Item(-1, 0)); }
+    else if (change === "charged-id") staff.setId(I.TOXIC_STAFF_OF_THE_DEAD);
+    else if (change === "charged-meta") staff.setMetaValue("toxic-staff-charges", 1);
+    else staff.setMetaValue(change, true);
+    const before = contents(inventory);
+    resumeStaff(p);
+    assert.deepEqual(contents(inventory), before, change);
+  }
+});
+
+test("staff dismantle requires refund room at confirmation and can be retried after room is made", t => {
+  const { p, inventory, staff, I } = attachStaff(t);
+  staffDismantle(p);
+  for (let slot = 0; slot < 28; slot++) if (inventory.get(slot).getId() < 0) inventory.setItem(slot, new Item(I.SHARK));
+  const before = contents(inventory);
+  resumeStaff(p);
+  assert.deepEqual(contents(inventory), before, "no refund room cannot consume or convert the staff");
+  inventory.setItem(27, new Item(-1, 0));
+  staffDismantle(p); resumeStaff(p);
+  assert.equal(staff.getId(), I.STAFF_OF_THE_DEAD);
+  assert.equal(inventory.getAmount(I.MAGIC_FANG), 2);
+});
+
+test("charged and restricted toxic staves refuse forged dismantle actions before a prompt", t => {
+  const { ItemActionPacketListener } = require("../dist/net/packet/impl/ItemActionPacketListener");
+  const { Inventory } = require("../dist/game/model/container/impl/Inventory");
+  for (const state of ["charged", "charged-alt", "charged-meta", Item.PRESET_META, Item.UNTRADEABLE_META, Item.UNBANKABLE_META]) {
+    const { p, inventory, staff, I } = attachStaff(t);
+    if (state === "charged") staff.setId(I.TOXIC_STAFF_OF_THE_DEAD);
+    else if (state === "charged-alt") staff.setId(I.TOXIC_STAFF_OF_THE_DEAD_2);
+    else if (state === "charged-meta") staff.setMetaValue("toxic-staff-charges", 1);
+    else staff.setMetaValue(state, true);
+    const before = contents(inventory);
+    ItemActionPacketListener.handleAction(p, Inventory.INTERFACE_ID, staff.getId(), 5, 2, "Dismantle");
+    assert.equal(p.getDialogueManager().getCurrent(), undefined, state);
+    assert.deepEqual(contents(inventory), before, state);
+  }
+});
 
 function saveLoad(t, p) {
   const codec = new JsonPlayerPersistence();

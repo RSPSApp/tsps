@@ -13,7 +13,7 @@
  * diary credits chewed bones on magic logs, Barbarian Training any chewed-bones ship. Mangled bones
  * spawn a ferocious barbarian spirit after the pyre begins to float (Wiki: Elite pyre clue and
  * Ferocious barbarian spirit); it expires after roughly 3 minutes.
- * The item reward from the peaceful spirit is not modelled here.
+ * Chewed bones also roll the peaceful spirit's item reward.
  */
 
 const PYRE_SITE = 25286;
@@ -27,6 +27,34 @@ const CHEWED_BONES = 11338;
 const MANGLED_BONES = 11337;
 const TINDERBOX = 590;
 const FEROCIOUS_SPIRIT_LIFETIME_TICKS = 300;
+const PEACEFUL_SPIRIT_RARE_CHANCE = 256;
+
+/** Chewed-bones peaceful spirit table (Wiki). Amount bounds are inclusive. */
+const PEACEFUL_SPIRIT_REWARDS = Object.freeze([
+  { id: 100, weight: 8, amount: [2, 2] }, // Ranarr potion (unf), noted
+  { id: 11473, weight: 4 }, // Anti-poison supermix(2)
+  { id: 11507, weight: 4 }, // Antifire mix(1)
+  { id: 11505, weight: 4 }, // Antifire mix(2)
+  { id: 11477, weight: 4 }, // Fishing mix(2)
+  { id: 11467, weight: 4 }, // Prayer mix(1)
+  { id: 11465, weight: 4 }, // Prayer mix(2)
+  { id: 11471, weight: 4 }, // Superattack mix(1)
+  { id: 11469, weight: 4 }, // Superattack mix(2)
+  { id: 11487, weight: 4 }, // Super str. mix(1)
+  { id: 11485, weight: 4 }, // Super str. mix(2)
+  { id: 11499, weight: 4 }, // Super def. mix(1)
+  { id: 11497, weight: 4 }, // Super def. mix(2)
+  { id: 560, weight: 18, amount: [8, 15] }, // Death runes
+  { id: 565, weight: 10, amount: [4, 7] }, // Blood runes
+  { id: 9145, weight: 6, amount: [5, 5] }, // Silver bolts
+  { id: 892, weight: 6, amount: [10, 10] }, // Rune arrows
+  { id: 9144, weight: 6, amount: [10, 10] }, // Runite bolts
+  { id: 1602, weight: 8, amount: [2, 2] }, // Diamonds, noted
+  { id: 9418, weight: 6, amount: [2, 2] }, // Mith grapple
+  { id: 816, weight: 6, amount: [20, 20] }, // Adamant darts (p)
+  { id: 867, weight: 6, amount: [20, 20] }, // Adamant knives
+]);
+const PEACEFUL_SPIRIT_REWARD_WEIGHT = PEACEFUL_SPIRIT_REWARDS.reduce((sum, row) => sum + row.weight, 0);
 
 /** Wiki Table/Pyre ships: logs -> { craft, firemaking, craftXp, firemakingXp }. */
 const PYRE_LOGS = new Map([
@@ -88,6 +116,33 @@ function carriedLog(inventory) {
     if (inventory.contains(id)) return id;
   }
   return null;
+}
+
+function rollPeacefulReward(random = Math.random) {
+  if (Math.floor(random() * PEACEFUL_SPIRIT_RARE_CHANCE) === 0) {
+    return { id: 11335, amount: 1 }; // Dragon full helm, 1/256 pre-roll
+  }
+
+  let roll = Math.floor(random() * PEACEFUL_SPIRIT_REWARD_WEIGHT);
+  for (const row of PEACEFUL_SPIRIT_REWARDS) {
+    roll -= row.weight;
+    if (roll < 0) {
+      const [min, max] = row.amount ?? [1, 1];
+      return { id: row.id, amount: min + Math.floor(random() * (max - min + 1)) };
+    }
+  }
+  return { id: 11335, amount: 1 };
+}
+
+function rewardPeacefulSpirit(player, object, random = Math.random) {
+  const reward = rollPeacefulReward(random);
+  core.ItemOnGroundManager.registerNonGlobals(
+    player,
+    new core.Item(reward.id, reward.amount),
+    object.getLocation().clone(),
+  );
+  player.sendMessage(`A peaceful spirit leaves you ${itemName(reward.id)}.`);
+  return reward;
 }
 
 function swap(object, id) {
@@ -224,6 +279,7 @@ function itemOnPyre(event) {
     player.getSkillManager().addExperiences(core.Skill.FIREMAKING, row.firemakingXp);
     use.object = swap(object, PYRE_LIT);
     player.sendMessage("You light the pyre.");
+    if (use.bonesId === CHEWED_BONES) rewardPeacefulSpirit(player, use.object);
     // `barbarian-pyre:lit` { player, logsId } (a league's "Light a Barbarian Pyre Ship").
     api.emitCustomEvent("barbarian-pyre:lit", { player, logsId: use.logsId });
     event.handled = true;
@@ -263,5 +319,9 @@ module.exports = {
   description: "Barbarian funeral pyres by Otto's Grotto: carve a pyre ship, load bones, light it, with the elite clue and ferocious barbarian spirit.",
   members: true,
   register: attach,
-  _test: { PYRE_SITE, PYRE_BOAT, PYRE_BOAT_BONES, PYRE_LIT, PYRE_LOGS, construct, itemOnSite, itemOnPyre, pyres, isAxe, isBow },
+  _test: {
+    PYRE_SITE, PYRE_BOAT, PYRE_BOAT_BONES, PYRE_LIT, PYRE_LOGS,
+    PEACEFUL_SPIRIT_REWARDS, PEACEFUL_SPIRIT_REWARD_WEIGHT,
+    construct, itemOnSite, itemOnPyre, pyres, isAxe, isBow, rollPeacefulReward, rewardPeacefulSpirit,
+  },
 };

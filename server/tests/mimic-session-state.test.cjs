@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
 const { test } = require("node:test");
+// Plugins load engine classes through src/main/typescript paths, which this maps to dist.
+require("../dist/Server").Server.installProductionPathResolver();
 const Shared = require("../plugins/bosses/mimic/Shared.Mimic");
 const State = require("../plugins/bosses/mimic/State.Mimic");
 const Lair = require("../plugins/bosses/mimic/Lair.Mimic");

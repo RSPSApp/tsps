@@ -65,12 +65,10 @@ function release(fight) {
       { delay: Math.max(0, distance * 3 - (bright ? 1 : 6)) });
   }
   const at = spikes.playerTile();
-  if (!Common.onArena(at) || spikes.shelters(boss.centre, at)) return;
-  fight.at(wave.hitTicks, () => {
-    if (fight.stopped || !Common.alive(player)) return;
-    Hits.damage(player, Common.randomInt(0, wave.maxHit));
-    Corruption.corrupt(player, Common.data.corruption.shockwaveBase);
-  });
+  if (!Common.onArena(at) || spikes.shelters(boss.centre, at) || !Common.alive(player)) return;
+  // The hit and the corruption land on the release tick itself (captured: 90 of 95 hits).
+  Hits.damage(player, Common.randomInt(0, wave.maxHit));
+  Corruption.corrupt(player, Common.data.corruption.shockwaveBase);
 }
 
 /** The shielded form: the shield on the HUD and head bar, homing spikes hardened. */
@@ -95,6 +93,7 @@ function skip(fight) {
   Common.overlayFade(fight.player, Common.data.overlay.clear);
   fight.spikes.hardenAll();
   fight.setForm("final");
+  Common.sound(fight.player, Common.data.shield.breakSound);
   fight.spikes.growthWave();
   fight.hold(false);
 }
@@ -119,9 +118,9 @@ function hitShield(fight, hit) {
   }
 }
 
-/** Drains the shield (its own attacks, Smite), breaking it at 0. */
+/** Drains the shield (its own attacks, Smite or Clear Mind), breaking it at 0. */
 function drain(fight, amount) {
-  if (fight.form !== "shielded" || amount <= 0) return;
+  if (fight.form !== "shielded" || fight.shield <= 0 || amount <= 0) return;
   const { shield } = Common.data;
   const drained = Math.min(fight.shield, amount);
   fight.shield -= drained;
@@ -136,6 +135,7 @@ function breakShield(fight) {
   fight.shieldDone = true;
   fight.muspah.setHealthBar(Common.data.boss.healthBar);
   fight.setForm("final");
+  Common.sound(fight.player, Common.data.shield.breakSound);
   fight.showHitpoints();
   fight.attacksSinceGrowth = 0;
   fight.spikes.growthWave();

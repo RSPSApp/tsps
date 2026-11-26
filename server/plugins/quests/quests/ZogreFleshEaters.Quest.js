@@ -23,6 +23,8 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   const { Skill, Item, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
   const { VARBITS, STAGES, ATTRIBUTES } = require("../zogreflesheaters/State.ZogreFleshEaters");
+  const { createWizardsGuildBell } = require("../WizardsGuildBell");
+  const bell = createWizardsGuildBell(api);
 
   const PAGE = "Zogre Flesh Eaters";
 
@@ -45,6 +47,8 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   const ZOMBIE_NPC_ID = NpcIdentifiers.ZOMBIE_44;
   const ZAVISTIC_RARVE_NPC_ID = NpcIdentifiers.ZAVISTIC_RARVE;
   const SITHIK_NPC_ID = NpcIdentifiers.SITHIK_INTS;
+  /** zogre_sithik_ogre: his chathead once the potion has worked. */
+  const SITHIK_OGRE_NPC_ID = NpcIdentifiers.SITHIK_INTS_2;
   const SITHIK_NPC_IDS = new Set([NpcIdentifiers.SITHIK_INTS, NpcIdentifiers.SITHIK_INTS_2]);
   const IRWIN_FEASELBAUM_NPC_ID = NpcIdentifiers.IRWIN_FEASELBAUM;
   const DRAGON_INN_BARTENDER_NPC_ID = NpcIdentifiers.BARTENDER_9; // Dragon Inn (Yanille)
@@ -121,6 +125,9 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   const INNKEEPER_MUG_ATTRIBUTE = "zogre-flesh-eaters:innkeeper-mug-shown";
   const INNKEEPER_PORTRAIT_ATTRIBUTE = "zogre-flesh-eaters:innkeeper-portrait-shown";
   const MAKE_BOW_ATTRIBUTE = "zogre-flesh-eaters:make-composite-bow";
+  /** The Herblore and Fletching recipes the quest teaches (skills/data/herblore.json, fletching.json). */
+  const HERBLORE_BALM_UNLOCK = "relicyms_balm";
+  const FLETCHING_TAUGHT = Object.freeze({ brutal_arrows: MAKE_BRUTAL_ATTRIBUTE, comp_ogre_bow: MAKE_BOW_ATTRIBUTE });
   const SOLD_BALM_ATTRIBUTE = "quest.zogre_flesh_eaters.sold_balm";
   const SKELETON_ATTRIBUTE = "quest.zogre_flesh_eaters.skeleton";
   const TRANSFORMED_ATTRIBUTE = "quest.zogre_flesh_eaters.transformed";
@@ -180,6 +187,35 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   function transformedValue(player) {
     if (!flag(player, TRANSFORMED_ATTRIBUTE)) return 0;
     return quest.getStage(player) >= STAGE_GIVEN_KEY ? 2 : 1;
+  }
+
+  /**
+   * Who speaks Sithik's lines: his ogre chathead (884) while 495 is 1, the man (883) otherwise
+   * (capture ticks 1567-1611 for the ogre; 1057-1544 before the tea).
+   */
+  function sithikSpeakerId(player) {
+    return transformedValue(player) === 1 ? SITHIK_OGRE_NPC_ID : SITHIK_NPC_ID;
+  }
+
+  /**
+   * "herblore:unlocked" { unlock: "relicyms_balm" }: Relicym's balm once Sithik has told the player
+   * how to cure the disease (Wiki, Relicym's balm: "Partial completion of Zogre Flesh Eaters ... to
+   * the point where Sithik Ints tells the player how to cure the Zogre disease"), and after the quest.
+   */
+  function answerHerbloreUnlock(request) {
+    if (request?.unlock !== HERBLORE_BALM_UNLOCK || !request.player) return;
+    request.allowed = flag(request.player, MAKE_CURE_ATTRIBUTE) || quest.getStage(request.player) >= STAGE_COMPLETE;
+  }
+
+  /**
+   * "fletching:taught" { name }: brutal arrows once Sithik has explained them (Wiki, Brutal arrows:
+   * "Sithik Ints teaches you how to make them"; 499 at capture tick 1600) and the composite ogre bow
+   * once Grish has (500 at capture tick 2246); either after the quest.
+   */
+  function answerFletchingTaught(request) {
+    const attribute = FLETCHING_TAUGHT[request?.name];
+    if (!attribute || !request.player) return;
+    request.taught = flag(request.player, attribute) || quest.getStage(request.player) >= STAGE_COMPLETE;
   }
 
   function syncAuxiliaryState(player) {
@@ -285,6 +321,7 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   const jiggig = require("../zogreflesheaters/Jiggig.ZogreFleshEaters")(api, ctx);
   const tomb = require("../zogreflesheaters/Tomb.ZogreFleshEaters")(api, ctx);
   const journal = require("../zogreflesheaters/Journal.ZogreFleshEaters")(ctx);
+  require("../zogreflesheaters/SlashBash.ZogreFleshEaters")(api);
 
   /** The corpse once the zombie is dead (tick 495); Ours: a backpack again if both it and the tankard are gone. */
   function skeletonSearched(player) {
@@ -916,7 +953,7 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     }
     if (SITHIK_BED_IDS.has(objectId) && itemId === PAPYRUS) {
       event.handled = true;
-      startTranscript(api, player, SITHIK_NPC_ID, PAGE, "investigating-b-vahn-use-papyrus-on-sithik-ints");
+      startTranscript(api, player, sithikSpeakerId(player), PAGE, "investigating-b-vahn-use-papyrus-on-sithik-ints");
       return;
     }
     if (objectId === CUP_OF_TEA_OBJECT_ID && itemId === STRANGE_POTION) {
@@ -1100,10 +1137,10 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     const { player } = event;
     event.handled = true;
     if (quest.getStage(player) >= STAGE_SITHIK) {
-      startTranscript(api, player, SITHIK_NPC_ID, PAGE, "investigating-b-vahn-searching-the-drawers-wardrobe-or-cupboard-after-convincing-zavistic-rarve");
+      startTranscript(api, player, sithikSpeakerId(player), PAGE, "investigating-b-vahn-searching-the-drawers-wardrobe-or-cupboard-after-convincing-zavistic-rarve");
       return;
     }
-    startTranscript(api, player, SITHIK_NPC_ID, PAGE, searchVariant);
+    startTranscript(api, player, sithikSpeakerId(player), PAGE, searchVariant);
   }
 
   function handleObjectInteraction(event) {
@@ -1147,7 +1184,9 @@ module.exports = function registerZogreFleshEatersQuest(api) {
     if (objectId === OUTDOOR_BELL_ID) {
       if (op !== "ring") return;
       event.handled = true;
-      startTranscript(api, player, ZAVISTIC_RARVE_NPC_ID, PAGE, "investigating-b-vahn-ringing-the-bell-outside-the-wizards-guild");
+      // The bell swings and Zavistic comes out to it before he speaks (WizardsGuildBell).
+      bell.ring(player, event.object, (zavistic) =>
+        startTranscript(api, player, ZAVISTIC_RARVE_NPC_ID, PAGE, "investigating-b-vahn-ringing-the-bell-outside-the-wizards-guild", undefined, zavistic));
       return;
     }
 
@@ -1156,11 +1195,11 @@ module.exports = function registerZogreFleshEatersQuest(api) {
       event.handled = true;
       const variant = sithikVariant(player);
       if (variant) {
-        startTranscript(api, player, SITHIK_NPC_ID, PAGE, variant);
+        startTranscript(api, player, sithikSpeakerId(player), PAGE, variant);
       } else if (quest.getStage(player) >= STAGE_COMPLETE) {
-        startTranscript(api, player, SITHIK_NPC_ID, "Sithik Ints", "standard-dialogue-after-completion-of-zogre-flesh-eaters");
+        startTranscript(api, player, sithikSpeakerId(player), "Sithik Ints", "standard-dialogue-after-completion-of-zogre-flesh-eaters");
       } else {
-        startTranscript(api, player, SITHIK_NPC_ID, "Sithik Ints", "standard-dialogue-before-starting-zogre-flesh-eaters");
+        startTranscript(api, player, sithikSpeakerId(player), "Sithik Ints", "standard-dialogue-before-starting-zogre-flesh-eaters");
       }
     }
   }
@@ -1228,6 +1267,8 @@ module.exports = function registerZogreFleshEatersQuest(api) {
   api.onCustomEvent("ladders:climb", climbDownFromSithik);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("herblore:unlocked", answerHerbloreUnlock);
+  api.onCustomEvent("fletching:taught", answerFletchingTaught);
   api.onItemAction(handleItemAction);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemOnObject(handleItemOnObject, { noted: false });

@@ -378,7 +378,14 @@ function redirectToMirrorback(boss, hit) {
   player.getCombat().getHitQueue().addPendingDamage(
     recoils.filter((recoil) => recoil != null).map((recoil) => new core.HitDamage(recoil, core.HitMask.RED)),
   );
-  CombatAchievements.avoidableDamage(player, total);
+  CombatAchievements.avoidableDamage(player, total, CombatAchievements.FAILURE.reflected);
+}
+
+/** Captured: every tick she takes a hit (a 0 too) has area sound 3609 on her tile. */
+function bossHitSound({ target }) {
+  if (!target?.isNpc?.() || target.getId?.() !== Shared.BOSS_ID) return;
+  if (target.getAttribute?.(Shared.ATTR_DYING) === true) return;
+  Shared.playHitSound(core, target, Shared.HIT_SOUND.boss);
 }
 
 function attach(pluginApi) {
@@ -386,6 +393,7 @@ function attach(pluginApi) {
   core = pluginApi.core;
   PrayerHandler = pluginApi.getPrayerHandler();
   pluginApi.onNpcHitModify(modifyHit);
+  pluginApi.onCustomEvent("combat:damage-apply", bossHitSound);
   pluginApi.registerNpcCombatMethodProvider(
     [core.NpcIdentifiers.ARAXXOR],
     combatClass(),
@@ -402,6 +410,7 @@ module.exports = {
   chooseDistantAttack,
   checkEnrage,
   startCleave,
+  bossHitSound,
   drainSkill,
   _test: { isAdjacent, protections, chooseDistantAttack, shotTicks, araneaNegates, wearsAraneaBoots, redirectToMirrorback },
 };

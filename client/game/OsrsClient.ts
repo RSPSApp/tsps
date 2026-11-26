@@ -1,3 +1,7 @@
+import { ObjStackability } from "../rs/config/objtype/ObjStackability";
+import { GearTextureLoader } from "../custom/items/GearTextureLoader";
+import { subscribePluginMessages } from '../network/serverConnection/domain/pluginMessages';
+import { receiveActorVisual } from '../render/gfx/ActorVisuals';
 import { AGILITY_HELPER_HIGHLIGHT_OBSTACLES_ENABLED, HELPER_AGILITY_HIGHLIGHTED_COURSE } from "@runelite/api/gameval/VarbitID";
 import { retainedInventory, stopInventoryTransmit } from "./sync/InventoryStopTransmit";
 import { openClientUrl } from "../common/openUrl";
@@ -207,14 +211,16 @@ import type { SeqSoundEffect, SeqType } from "../rs/config/seqtype/SeqType";
 import { SeqTypeLoader } from "../rs/config/seqtype/SeqTypeLoader";
 import { SpotAnimTypeLoader } from "../rs/config/spotanimtype/SpotAnimTypeLoader";
 import { VarManager } from "../rs/config/vartype/VarManager";
-import { chatHistory } from "../rs/cs2/ChatHistory";
+import { chatHistory, isOverheadChatFiltered } from "../rs/cs2/ChatHistory";
 import { addExaminePriceLine, EXAMINE_PRICE_ALCH_VARBIT, EXAMINE_PRICE_GE_VARBIT } from "./examinePrice";
 import { alchemyValues, guidePrice, itemPricesPending } from "../network/serverConnection/domain/itemPrices";
 import { FriendLoginUpdates, friendLoginNoticesShown } from "./chat/FriendLoginUpdates";
 import { Cs2Vm, ScriptArgMagic, type ScriptEvent, createScriptEvent } from "../rs/cs2/Cs2Vm";
+import { orderSocialSnapshot } from "../rs/cs2/SocialSort";
 import { setSpawnSearch } from "../rs/cs2/spawnSearch";
 import { Opcodes as Cs2Opcodes } from "../rs/cs2/Opcodes";
 import { BitmapFont } from "../rs/font/BitmapFont";
+import { breakTextLines } from "../rs/font/breakTextLines";
 import { resolveTextTemplates } from "../rs/font/textTemplates";
 import { encodeInteractionIndex } from "../rs/interaction/InteractionIndex";
 import { Inventory, InventorySlotInput } from "../rs/inventory/Inventory";
@@ -391,7 +397,7 @@ import { WidgetTransmitProcessor } from "./widgets/WidgetTransmitProcessor";
 import { CustomInterfaceRuntime } from "../widgets/custom/CustomInterfaceRuntime";
 import { PendingInterfaceUpdates } from "../widgets/custom/PendingInterfaceUpdates";
 import { HeldWidgetProperties } from "../widgets/HeldWidgetProperties";
-import { setCustomInterface } from "../common/gamemode/GamemodeContentStore";
+import { getCustomInterface, setCustomInterface } from "../common/gamemode/GamemodeContentStore";
 import {
     fetchInterfaceDefinition,
     fetchContent,
@@ -427,7 +433,7 @@ const ESC_POPUP_DISMISS_SCRIPT = 1205;
 const FLOATER_CHILD = 18;
 /** Server-set widget properties held while their cache interface is not loaded. */
 const HELD_WIDGET_ACTIONS: ReadonlySet<string> = new Set([
-    "set_text", "set_hidden", "set_model", "set_angle", "set_colour", "set_position", "set_item",
+    "set_text", "set_actions", "set_hidden", "set_model", "set_angle", "set_colour", "set_position", "set_item",
     "set_npc_head", "set_animation", "set_player_head", "set_rotate_speed",
 ]);
 const DEFAULT_ROOT_INTERFACE = 161;
@@ -472,6 +478,13 @@ const DEFAULT_LOD_DISTANCE = deriveLodDistanceFromRenderDistance(DEFAULT_RENDER_
 const VARBIT_ACCOUNT_TYPE = 1777;
 const VARBIT_POPOUT_OPEN = 13090;
 const VARBIT_POPOUT_PANEL_DESKTOP_DISABLED = 13982;
+/** The varp holding popout_panel_mobile_enabled (13981) and popout_panel_desktop_disabled (13982). */
+const VARP_POPOUT_PANEL_SETTINGS = 3417;
+/** Cache script 3938 lays the popout panel out for the mobile toplevel (via 909 and 5355). */
+const SCRIPT_MOBILE_POPOUT_LAYOUT = 3938;
+/** The popout interface (728) root, mounted at toplevel_osm:popout (601:131). */
+const POPOUT_ROOT_UID = (728 << 16) | 0;
+const MOBILE_ROOT_INTERFACE_ID = 601;
 const VARC_CHATBOX_SELECTED_TAB = 41;
 /** VarClientID.OSM_CHATBOX_DISABLED: the mobile chatbox is toggled off. */
 const VARC_OSM_CHATBOX_DISABLED = 1220;const ACCOUNT_TYPE_MAIN = 0;
@@ -698,6 +711,7 @@ export class OsrsClient {
 
     // Browser scenery budget in tiles; HD supports up to 160, standard rendering 90.
     renderDistance: number = DEFAULT_RENDER_DISTANCE;
+    editorRenderDistance?: number;
     // Map square radius around player to keep loaded (0 = 1 map, 1 = 3x3 grid, 2 = 5x5 grid)
     mapRadius: number = DEFAULT_MAP_RADIUS;
     // OSRS top-level map loader expanded loading level (0..5), 8-tile steps.
@@ -1224,11 +1238,22 @@ export class OsrsClient {
         if (this.pruneBurningLogMeshes()) this.refreshGroundItemMeshes();
     }
 
+    private editorGroundItemPreview: ClientGroundItemStack[] = [];
+
+    setEditorGroundItemPreview(stacks: ClientGroundItemStack[]): void {
+        this.editorGroundItemPreview = stacks;
+        this.refreshGroundItemMeshes();
+    }
+
     /** Mesh input only. Menus, labels and plugins continue to read the ground item store. */
     getGroundItemMeshStacks(): ClientGroundItemStack[] {
         this.pruneBurningLogMeshes();
         const stacks = this.groundItems.getAllStacks();
         for (const { stack } of this.burningLogMeshes.values()) stacks.push(stack);
+        for (const preview of this.editorGroundItemPreview) {
+            if (!this.groundItems.getStacksAt(preview.tile.x, preview.tile.y, preview.tile.level)
+                .some((stack) => stack.itemId === preview.itemId)) stacks.push(preview);
+        }
         return stacks;
     }
 
@@ -1502,7 +1527,8 @@ export class OsrsClient {
         }
     }
 
-    private resolveNpcExamineTypeId(serverId: number): number | undefined {
+    /** Visible cache type for an NPC examine, including transforms and custom type aliases. */
+    resolveNpcExamineTypeId(serverId: number): number | undefined {
         const normalizedServerId = serverId | 0;
         if (normalizedServerId < 0) {
             return undefined;
@@ -1643,13 +1669,18 @@ export class OsrsClient {
         return isCloseOnOutsideClickModalTarget(standardTargetUid, type);
     }
 
-    /** True while a main or side modal is open, so a world click should close it. */
+    /** Whether a click outside a modal should send the global IF_CLOSE. */
     public hasCloseOnOutsideClickModal(): boolean {
         if (!this.widgetManager) return false;
+        let close = false;
         for (const parent of this.widgetManager.interfaceParents.values()) {
-            if (parent.closeOnOutsideClick) return true;
+            if (!parent.closeOnOutsideClick) continue;
+            // The server's world-action path closes transient modals alongside a persistent panel.
+            const definition = getCustomInterface(parent.group);
+            if (definition?.lifecycle?.persistOnWorldInteraction === true) return false;
+            close = true;
         }
-        return false;
+        return close;
     }
 
     /**
@@ -1735,7 +1766,11 @@ export class OsrsClient {
     private initCustomInterfaces(): void {
         this.customInterfaces = new CustomInterfaceRuntime({
             widgetManager: this.widgetManager,
+            getPointer: () => this.menuOpen || this.inputManager.mouseX < 0 || this.inputManager.mouseY < 0
+                ? undefined : { x: this.inputManager.mouseX, y: this.inputManager.mouseY },
             getCacheSystem: () => this.cacheSystem,
+            examineItem: (itemId) => { this.examineWidgetItem({ itemId, itemQuantity: 1 }); },
+            showInfo: (text) => this.addGameMessage(text),
             runWidgetScopedClientScript: (widgetUid, scriptId, args, phase) =>
                 this.runWidgetScopedClientScript(widgetUid, scriptId, args, phase),
             fetchContent,
@@ -1787,6 +1822,9 @@ export class OsrsClient {
             getCustomInterfaces: () => this.customInterfaces,
             getPlayerDesign: () => this.playerDesign,
             getObjTypeLoader: () => this.objTypeLoader,
+            getLeftClickOpensMenu: () => this.settings.leftClickOpensMenu,
+            openWidgetMenuAt: (canvasX, canvasY) =>
+                (this.renderer?.canvas as any)?.__inputBridge?.openMenuAt?.(canvasX, canvasY),
             getInventory: () => this.inventory,
             getMinimapZoomEnabled: () => this.minimapZoomEnabled,
             getMenuOpen: () => this.menuOpen,
@@ -2155,40 +2193,14 @@ export class OsrsClient {
                     }
                 }
                 const font = this.fontCache.get(fontId);
-                const measure = (s: string) =>
-                    this.chatTextMetrics.measureTextWidthOsrsMarkup(s, font);
-
-                // Handle <br> tags and newlines first
-                const normalized = resolveTextTemplates(text).replace(/<br\s*\/?>/gi, "\n");
-                const paragraphs = normalized.split(/\n/);
-                const lines: string[] = [];
-
-                const effectiveWidth = maxWidth;
-
-                for (const para of paragraphs) {
-                    if (!para.trim()) {
-                        lines.push("");
-                        continue;
-                    }
-                    const words = para.split(/\s+/);
-                    let currentLine = "";
-
-                    for (const word of words) {
-                        if (!word) continue;
-                        const testLine = currentLine ? `${currentLine} ${word}` : word;
-                        if (measure(testLine) <= effectiveWidth || !currentLine) {
-                            currentLine = testLine;
-                        } else {
-                            lines.push(currentLine);
-                            currentLine = word;
-                        }
-                    }
-                    if (currentLine) {
-                        lines.push(currentLine);
-                    }
-                }
-
-                return lines.length > 0 ? lines : [""];
+                // OSRS's own line breaking (see breakTextLines). A newline character never
+                // occurs in the game's text; ours may carry one, and it reads as <br>.
+                return breakTextLines(resolveTextTemplates(text).replace(/\n/g, "<br>"), maxWidth, {
+                    advance: (ch) => (font ? font.advances[ch] || font.widths[ch] || 0 : 6),
+                    kerning: (prev, ch) => font?.kerning?.[(prev << 8) + ch] || 0,
+                    iconWidth: (id) =>
+                        id >= 0 ? this.chatTextMetrics.measureTextWidthOsrsMarkup(`<img=${id}>`, font) : undefined,
+                });
             },
             // Local player name - accessed dynamically as it arrives via handshake after cs2Vm creation
             get localPlayerName() {
@@ -2461,6 +2473,9 @@ export class OsrsClient {
             setDeviceOption: (optionId: number, value: number) => {
                 const storedValue = value;
                 self.deviceOptions.set(optionId, storedValue);
+                // The mobile client saves its interface scale separately from the desktop one.
+                const mobileClient = isMobileClient(self.widgetManager?.rootInterface) ||
+                    self.varManager?.getVarbit(6352) === 1;
                 // Handle specific device options
                 switch (optionId) {
                     case 19: // Master volume (enhanced client, 0-100 from enum_981)
@@ -2471,7 +2486,7 @@ export class OsrsClient {
                         self.audioVarp.applyMasterVolume();
                         break;
                     case DEVICE_OPTION_INTERFACE_SCALING:
-                        self.audioVarp.applyInterfaceScalingPercentDeviceOption(storedValue);
+                        self.audioVarp.applyInterfaceScalingPercentDeviceOption(storedValue, mobileClient);
                         break;
                     case DEVICE_OPTION_SCREEN_BRIGHTNESS:
                         self.applyScreenBrightness(storedValue);
@@ -2821,6 +2836,9 @@ export class OsrsClient {
                 } catch {}
             },
             overheadChatText: (serverId, text) => {
+                const isLocal = (serverId | 0) === (this.controlledPlayerServerId | 0);
+                // No text means nothing is drawn over the player.
+                if (isOverheadChatFiltered(this.cs2Vm?.messageFilter, text, isLocal)) return "";
                 const ecsIndex = this.playerEcs.getIndexForServerId(serverId | 0);
                 const name = ecsIndex === undefined ? "" : (this.playerEcs.getName(ecsIndex) ?? "");
                 return this.clientPlugins.overheadChatText(name, text);
@@ -3104,9 +3122,17 @@ export class OsrsClient {
                         this.widgetManager.invalidateWidgetRender(w);
                     }
                 }
+            } else if (payload?.action === "set_actions") {
+                const w = this.widgetManager?.getWidgetByUid(Number(payload.uid) | 0);
+                if (w && Array.isArray(payload.actions)) {
+                    w.actions = payload.actions.slice(0, 32).map((action: unknown) => String(action ?? ""));
+                    markWidgetInteractionDirty(w);
+                    this.widgetManager.invalidateWidgetRender(w);
+                }
             } else if (payload?.action === "set_hidden") {
                 const uid = Number(payload.uid) | 0;
                 const hidden = !!payload.hidden;
+                if (this.customInterfaces.handleSetHidden?.(uid, hidden)) return;
                 const w = this.widgetManager?.getWidgetByUid(uid);
                 if (w && this.widgetManager && (w.hidden !== hidden || w.isHidden !== hidden)) {
                     w.isHidden = hidden;
@@ -3145,7 +3171,7 @@ export class OsrsClient {
                 // IF_SETROTATESPEED: yaw speed in the high short, x speed in the low, per cycle.
                 const w = this.widgetManager?.getWidgetByUid(Number(payload.uid) | 0);
                 if (w) {
-                    w.modelRotationSpeed = ((Number(payload.speedY) | 0) & 0xffff) << 16 | ((Number(payload.speedX) | 0) & 0xffff);
+                    w.modelRotationSpeed = (((Number(payload.speedY) | 0) & 0xffff) << 16) | ((Number(payload.speedX) | 0) & 0xffff);
                     this.widgetManager.invalidateWidgetRender(w, "server-set-rotate-speed");
                 }
             } else if (payload?.action === "set_colour") {
@@ -3445,6 +3471,10 @@ export class OsrsClient {
         });
         // Subscribe to server-side GFX (spot) messages and forward to renderer
         try {
+            const unsubVisual=subscribePluginMessages(message => {
+                const renderer=this.renderer as any;
+                receiveActorVisual(message,renderer?.gfxManager??renderer?.actors?.getActorGfxManager?.());
+            });
             const unsubSpot = subscribeSpot((payload: SpotAnimationPayload) => {
                 try {
                     // spot animation delay is in client cycles (Client.cycle units).
@@ -3488,7 +3518,7 @@ export class OsrsClient {
                     }
                 } catch {}
             });
-            this.unsubscribeSpot = unsubSpot;
+            this.unsubscribeSpot = () => { unsubSpot(); unsubVisual(); };
         } catch {}
         // Subscribe to server-side sound messages and play them
         try {
@@ -3635,10 +3665,15 @@ export class OsrsClient {
             this.unsubscribeFriendsChat = subscribeFriendsChat((snapshot) => {
                 this.friendLoginUpdates.update(snapshot.friends);
                 const channel = snapshot.channel;
-                this.cs2Vm.context.friendList = snapshot.friends.map((friend) => ({ ...friend }));
-                this.cs2Vm.context.ignoreList = snapshot.ignores.map((ignored) => ({ ...ignored }));
-                this.cs2Vm.context.clanMembers =
-                    channel?.members.map((member) => ({ ...member })) ?? [];
+                // The lists arrive in server order; keep the order the sort scripts asked for.
+                const ordered = orderSocialSnapshot(
+                    snapshot.friends.map((friend) => ({ ...friend })),
+                    snapshot.ignores.map((ignored) => ({ ...ignored })),
+                    channel ? channel.members.map((member) => ({ ...member })) : null,
+                );
+                this.cs2Vm.context.friendList = ordered.friends;
+                this.cs2Vm.context.ignoreList = ordered.ignores;
+                this.cs2Vm.context.clanMembers = ordered.members;
                 this.cs2Vm.context.clanName = channel?.name ?? "";
                 this.cs2Vm.context.clanOwner = channel?.owner ?? "";
                 this.cs2Vm.context.clanRank = channel?.localRank ?? 0;
@@ -4605,6 +4640,24 @@ export class OsrsClient {
         if (!this.chatboxQuestion) return;
         this.chatboxQuestion = undefined;
         this.worldSwitcher.questionReplaced();
+    private mobilePopoutLayoutQueued = false;
+
+    /**
+     * The cache lays the mobile popout panel out only at login and on layout passes; its own
+     * listener watches varp 1021 (which popout is open), not the Popout panel (mobile) setting
+     * (3417), so toggling the setting showed or hid nothing until a relog. Re-run the cache's
+     * layout script once, after whatever script changed the varbit has finished.
+     */
+    private scheduleMobilePopoutLayout(): void {
+        if (this.mobilePopoutLayoutQueued) return;
+        this.mobilePopoutLayoutQueued = true;
+        setTimeout(() => {
+            this.mobilePopoutLayoutQueued = false;
+            const widgets = this.widgetManager;
+            if (!widgets || widgets.rootInterface !== MOBILE_ROOT_INTERFACE_ID) return;
+            if (!widgets.getWidgetByUid(POPOUT_ROOT_UID)) return;
+            this.runClientScriptWithInts(SCRIPT_MOBILE_POPOUT_LAYOUT, []);
+        }, 0);
     }
 
     runClientScriptWithInts(scriptId: number, args: number[]): void {
@@ -4720,7 +4773,7 @@ export class OsrsClient {
     private runWidgetScopedClientScript(
         widgetUid: number,
         scriptId: number,
-        args: (number | string)[],
+        args: unknown[],
         phase: "pre" | "post" | "run_script",
     ): void {
         if (!this.cs2Vm || !this.widgetManager) return;
@@ -4728,10 +4781,12 @@ export class OsrsClient {
         if (!script) return;
 
         const intArgs: number[] = [];
-        const strArgs: string[] = [];
+        // Strings and array arguments (Cs2ArrayObject) both go on the object stack.
+        const strArgs: any[] = [];
         for (const arg of args ?? []) {
             if (typeof arg === "number") intArgs.push(arg | 0);
             else if (typeof arg === "string") strArgs.push(arg);
+            else if (arg !== null && typeof arg === "object") strArgs.push(arg);
         }
 
         const prevActiveWidget = this.cs2Vm.activeWidget;
@@ -7134,7 +7189,7 @@ export class OsrsClient {
             initPlayerSyncHuffman(this.cacheSystem);
             this.loaderFactory = getCacheLoaderFactory(cache.info, this.cacheSystem);
 
-            this.textureLoader = this.loaderFactory.getTextureLoader();
+            this.textureLoader = new GearTextureLoader(this.loaderFactory.getTextureLoader());
             this.modelLoader = this.loaderFactory.getModelLoader();
             this.seqTypeLoader = this.loaderFactory.getSeqTypeLoader();
             this.seqFrameLoader = this.loaderFactory.getSeqFrameLoader();
@@ -7179,6 +7234,8 @@ export class OsrsClient {
                         gePrice,
                         haPrice,
                         tradeable: obj?.isTradable === true,
+                        cost: obj?.price ?? 0,
+                        stackable: obj?.stackability === ObjStackability.ALWAYS,
                     };
                 } catch {
                     return {
@@ -7243,6 +7300,7 @@ export class OsrsClient {
                     markVarTransmit(varpId);
                 }
                 this.applyAudioVarpChange(varpId, newValue);
+                if (varpId === VARP_POPOUT_PANEL_SETTINGS) this.scheduleMobilePopoutLayout();
                 this.renderer?.onVarpChange(varpId);
                 if (!this._serverVarpSync && TRANSMIT_VARPS.has(varpId) && isServerConnected()) {
                     try {
@@ -7337,8 +7395,9 @@ export class OsrsClient {
             // Phase 9: Preparing interface
             await showPhase(90, "Preparing interface...");
             this.widgetManager = new WidgetManager(this.cacheSystem);
+            // The cache scripts test this varc for exactly 1; it reads -1 until the toggle is first used.
             this.widgetManager.isMobileChatDisabled = () =>
-                (this.varManager.getVarcInt(VARC_OSM_CHATBOX_DISABLED) ?? 0) !== 0;
+                this.varManager.getVarcInt(VARC_OSM_CHATBOX_DISABLED) === 1;
             try {
                 const initialMinimapState = this.varManager.getVarbit(MINIMAP_STATE);
                 if (initialMinimapState !== undefined) {
@@ -8425,6 +8484,11 @@ export class OsrsClient {
             if (block.faceTile) {
                 applyNpcFaceTile(this.npcEcs, ecsId, block.faceTile);
             }
+            if (block.faceAngle) {
+                // Instant sets the drawn angle too: the only way to turn an NPC whose turn speed is 0.
+                this.npcEcs.setTargetRot(ecsId, block.faceAngle.angle);
+                if (block.faceAngle.instant) this.npcEcs.setRotation(ecsId, block.faceAngle.angle);
+            }
             if (typeof block.faceEntity === "number") {
                 this.npcEcs.setInteractionIndex(ecsId, block.faceEntity | 0);
             }
@@ -8874,7 +8938,23 @@ export class OsrsClient {
         this.worldMap.markWorldMapImageTextureUploaded(key);
     }
 
+    /** The current area's whole-map picture, drawn under its tiles. */
+    getWorldMapCompositeTexture(): { key: string; pixels: Uint8Array; width: number; height: number } | undefined {
+        return this.worldMap.getWorldMapCompositeTexture();
+    }
+
     getWorldMapIcons(mapX: number, mapY: number, level: number = 0): MinimapIcon[] | undefined {
+        // Edited regions draw their minimap picture on the world map; use its icons too.
+        if (
+            this.worldMap.worldMapState.getCurrentMapAreaId() === 0 &&
+            (this.renderer as any)?.mapRegionReplacements?.has(((mapX & 0xff) << 8) | (mapY & 0xff))
+        ) {
+            const icons = (this.renderer as any)?.getMinimapIcons?.(mapX, mapY, level) as MinimapIcon[] | undefined;
+            if (icons) return icons;
+            // Its minimap picture is loaded, so no icons means the edit has none (the renderer
+            // drops empty icon sets); don't bring back the archive's stale ones.
+            if (this.minimapImageUrls.has(this.getMinimapImageKey(mapX, mapY, level))) return undefined;
+        }
         return this.worldMap.getWorldMapIcons(mapX, mapY, level);
     }
 
@@ -8887,6 +8967,12 @@ export class OsrsClient {
         }>,
     ): void {
         this.worldMap.retainWorldMapImageTiles(tiles);
+    }
+
+    prefetchWorldMapImageTiles(
+        tiles: Array<{ mapX: number; mapY: number; level?: number; sourceTile?: { mapX: number; mapY: number; level?: number } }>,
+    ): void {
+        this.worldMap.prefetchWorldMapImageTiles(tiles);
     }
 
     clearWorldMapImages(): void {
@@ -9138,6 +9224,7 @@ export class OsrsClient {
         } catch (err) {
             console.warn("[OsrsClient] WidgetManager clear error:", err);
         }
+        this.customInterfaces?.resetSession();
         this.serverSubInterfaces.clear();
         this.logoutTabMount = undefined;
         this.forgetChatboxQuestion();

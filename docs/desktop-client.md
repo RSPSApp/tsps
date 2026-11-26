@@ -1,0 +1,54 @@
+# Desktop integration in shared web-client releases
+
+The native wrapper injects `window.__RSPS_DESKTOP_PROFILE__` before loading the
+web client. The profile uses the existing `ConfiguredServer` shape: name, address,
+secure, maxPlayers and optional WebRTC transport/signalUrl/worldId/iceServers.
+The desktop client starts on that configured world every launch; players can
+still switch worlds within the session. Browser clients without a profile keep
+restoring their saved world and existing deep links.
+
+After cache and renderer initialization, the desktop client acknowledges startup
+through `plugin:hot-update|notify_app_ready`. Failed initialization is not
+acknowledged. The wrapper owns activation/rollback and the desktop skips browser
+service-worker registration. Browser registration stays unchanged.
+
+## Cache data and release pinning
+
+There is one cache loader. Desktop clients use the same range requests, full-load
+fallback, persistence and progress UI as browser clients. Desktop cache data comes
+from `https://rsps.app/play/caches/`, while each signed release contains its own
+`caches/caches.json` naming the matching immutable cache directory/revision. A
+rollback restores that older cache selection. Cache data is not bundled in web
+releases. Missing hosted data produces the existing startup failure, rather than
+silently selecting the latest cache.
+
+`REACT_APP_CACHE_BASE_URL` overrides the data location at web-client build time,
+so a CDN change can ship as a web release without a native-wrapper update.
+Desktop still reads the release's local `caches.json`. Browser cache URLs,
+metadata selection and on-demand loading remain unchanged. On custom-scheme
+WebKit origins, the existing IndexedDB fallback replaces unsupported CacheStorage.
+
+This PR contains the TSPS/web-client side only. Native installers must inject the
+profile and implement the acknowledgement command; installer generation, signing
+and `/host` download controls are separate.
+
+## Required client version
+
+`/api/world-info` advertises one `clientVersion` identifier. Server builds and web
+releases derive it from the same workflow inputs using `scripts/client-version.mjs`.
+Server-only changes keep the same identifier. The generated server module is
+compiled into the runtime, including browser-host snapshots, so older running
+worlds keep their own requirement without consulting a global latest pointer.
+
+The wrapper reads the build ID from the world's `/api/world-info`. For a relayed
+world it uses the relay's `/worlds?worldId=<id>` HTTP lookup. The browser host
+registers the ID from the running snapshot's `dist/client-release.json`; a
+standalone TSPS server sends its compiled ID when registering directly.
+The wrapper uses the exact signed release and reports an error when the running
+world does not advertise a build.
+
+The wrapper verifies the installed bundle's `client-release.json` against the
+selected release. TSPS registers `DesktopPlugin` only in a Tauri window with a
+launch profile. It acknowledges startup on the next frame after initialization.
+Login uses the existing wire-protocol and cache revision checks. The minimum
+wrapper version is 0.1.2.

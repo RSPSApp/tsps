@@ -62,12 +62,14 @@ class ItemStatementDialogue {
 const respawnPoints = new Map();
 Jewellery.register({
   getBonusManager: () => ({ update() {} }),
-  core: { ObjectIdentifiers, ItemIdentifiers, ItemDefinition, ObjectDefinition, Flag: require("../dist/game/model/Flag").Flag, DialogueChainBuilder, StatementDialogue, ItemStatementDialogue },
+  core: { ChatType: require('../dist/net/protocol/ClientProtocol').ChatType, Animation: require('../dist/game/model/Animation').Animation, TaskManager: { submit() {} }, CountdownTask: class {}, EndDialogue: class {}, ObjectIdentifiers, ItemIdentifiers, ItemDefinition, ObjectDefinition, Flag: require("../dist/game/model/Flag").Flag, DialogueChainBuilder, StatementDialogue, ItemStatementDialogue },
   persistAttribute() {},
+  onCustomEvent() {},
   onItemAction: (handler) => { itemAction = handler; },
   onItemOnObject: (handler) => { itemOnObjectHandlers.push(handler); },
   onPlayerLogin: (handler) => { loginHandler = handler; },
   onSpellCast() {},
+  onCustomEvent() {},
   emitCustomEvent: (name, payload) => {
     customEvents.push([name, payload]);
     if (name === "colosseum:has-rank" && payload.rank === "Hero") payload.reached = colosseumHeroes.has(payload.player);
@@ -114,8 +116,9 @@ function createPlayer({ farming = 1, clientType = 0, visitedKourend = true } = {
     sendMessage: (message) => messages.push(message),
     getUpdateFlag: () => ({ flag() {} }),
     getPacketSender: () => ({ getVarbit: (id) => (id === ZEAH_VISITED_VARBIT ? Number(visitedKourend) : clientType), getVarp: () => 0,
-      sendVarbit: (id, value) => varbits.set(id, value) }),
+      sendVarbit: (id, value) => varbits.set(id, value), sendTypedMessage() {} }),
     getSkillManager: () => ({ getMaxLevel: () => farming }),
+    performAnimation() {},
   };
 }
 

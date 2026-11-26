@@ -15,7 +15,7 @@ const Superheat = require("../plugins/skills/smithing/Superheat.Smithing");
 const buttons = new Map(), objects = new Map(), itemActions = new Map(), events = new Map(), tasks = [], players = [];
 const successEvents = [];
 let disconnect, itemOnObject, CacheDefinitions;
-const extraItemOnObject = [], startups = [];
+const extraItemOnObject = [], startups = [], beforeObject = [];
 let denyAnvil = false;
 function registerSmithing() {
   Smithing.register({
@@ -36,6 +36,7 @@ function registerSmithing() {
     onItemOnObject: (handler) => { if (!itemOnObject) itemOnObject = handler; else extraItemOnObject.push(handler); },
     onItemOnItem() {}, onSpellOnItem() {}, log() {},
     onObjectInteraction: (name, actions) => objects.set(name, actions),
+    onBeforeObjectInteraction: handler => beforeObject.push(handler),
     onInterfaceActionButton: (ids, handler) => { for (const id of ids) buttons.set(id, handler); },
   });
 }
@@ -420,9 +421,9 @@ test("too low a level is a message box; impure iron is lost", (t) => {
   assert.equal(player.xp, 0);
 });
 
-// Wiki (Furnace, Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace): furnaces under other names.
-test("the Clay forge, Volcanic Furnace, Lava forge and Ancient Furnace smelt like any furnace", () => {
-  for (const name of ["Clay forge", "Volcanic Furnace", "Lava forge", "Ancient Furnace"]) {
+// Wiki (Furnace, Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace, Forge (Cam Torum)): furnaces under other names.
+test("the Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace and Cam Torum's Forge smelt like any furnace", () => {
+  for (const name of ["Clay forge", "Volcanic Furnace", "Lava forge", "Ancient Furnace", "Forge"]) {
     assert.equal(typeof objects.get(name)?.Smelt, "function", `${name} has Smelt`);
     const player = furnaceWith([[I.COPPER_ORE, 1], [I.TIN_ORE, 1]]);
     objects.get(name).Smelt({ player });

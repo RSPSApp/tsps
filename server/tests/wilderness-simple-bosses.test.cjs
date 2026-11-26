@@ -48,6 +48,7 @@ function stubApi(core = {}) {
   return {
     core: base,
     getTaskManager: () => ({}),
+    onServerStartup() {},
     getBonusManager: () => ({}),
   };
 }

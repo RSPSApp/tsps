@@ -5746,6 +5746,11 @@ module.exports = function registerTheBloodMoonRises(api) {
     return true;
   }
 
+  // A separate read-only catalogue includes the canonical landing without quest/player checks.
+  function describeCastleMedallionDestination({ destinations }) {
+    destinations.push({ label: "Castle Drakan", tile: { ...CASTLE_TELEPORT_TILE } });
+  }
+
   function addCastleMedallionDestination(event) {
     const player = event?.player;
     // The medallion's Castle Drakan option is unlocked by inspecting the
@@ -8834,6 +8839,7 @@ module.exports = function registerTheBloodMoonRises(api) {
   api.onObjectInteraction(handleFinalDrakanSupplyChest);
   api.onObjectInteraction(handleFinalDrakanRoofDoor);
   api.onCustomEvent("drakan-medallion:destinations", addCastleMedallionDestination);
+  api.onCustomEvent("drakan-medallion:catalogue", describeCastleMedallionDestination);
   api.onCustomEvent("world:object-examine", inspectHideoutShrine);
   // The shipped loc 61177 exposes Inspect (not Examine): use the named object hook.
   api.onObjectInteraction("Makeshift shrine", { Inspect: inspectHideoutShrine });

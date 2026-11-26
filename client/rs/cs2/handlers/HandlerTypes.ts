@@ -206,7 +206,10 @@ export interface Cs2VmLike {
 /** One searchable item: its id and lower-cased name (ConfigOps oc_find). */
 export interface ItemNameIndexEntry {
     id: number;
+    /** Lower case, for matching. */
     name: string;
+    /** As the cache spells it, for sorting. */
+    displayName: string;
     tradable: boolean;
 }
 

@@ -6,6 +6,8 @@ import type { TextureLoader } from "../../../rs/texture/TextureLoader";
 
 /** Widget model type 8 (cc_setmodel_loc): the widget's model id is a loc id. */
 export const WIDGET_MODEL_TYPE_LOC = 8;
+/** A widget showing an NPC's body model (cc_setnpcmodel): its modelId is the NPC id. */
+export const WIDGET_MODEL_TYPE_NPC = 9;
 
 /** The model a loc shows in a widget: its centrepiece (shape 10), unrotated. */
 export function widgetLocModel(

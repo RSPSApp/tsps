@@ -311,9 +311,11 @@ test("multiloc defaults: static, random-sequence and random-start variants prese
     const fixture = new LocModelLoader(fixtureTypes, loader.modelLoader, loader.textureLoader,
         loader.seqTypeLoader, loader.seqFrameLoader, loader.skeletalSeqLoader);
     vars.setVarp(42, 0);
-    const staticVariant = submitTreeScene(fixture, vars, spiritTreeScene(fixture, info, [undefined], parent.id));
-    assert.equal(staticVariant.groups.length, 0); assert.equal(staticVariant.models.length, 1,
-        "an unanimated selected variant does not inherit the parent's sequence");
+    // A variant with no sequence of its own plays the parent's (see the Runecrafting ruins below).
+    const unanimatedVariant = submitTreeScene(fixture, vars, spiritTreeScene(fixture, info, [undefined], parent.id));
+    assert.equal(unanimatedVariant.models.length, 0);
+    assert.equal(unanimatedVariant.submitted[0].seqId, 332, "an unanimated selected variant plays the parent's sequence");
+    assert.equal(unanimatedVariant.submitted[0].randomStart, true, "with the parent's random-start policy");
     variant.randomSeqIds = [333, 332];
     const random = submitTreeScene(fixture, vars, spiritTreeScene(fixture, info, [undefined], parent.id));
     assert.equal(random.submitted[0].seqId, 333, "selected random-sequence list follows existing first-entry policy");
@@ -325,6 +327,59 @@ test("multiloc defaults: static, random-sequence and random-start variants prese
     assert.equal(stoppedRandom.locs[0].entity.seqId, -1, "explicit stop suppresses parent random fallback too");
     const submittedStop = submitTreeScene(fixture, vars, stoppedRandom);
     assert.equal(submittedStop.groups.length, 0); assert.equal(submittedStop.models.length, 1);
+});
+
+// The Runecrafting ruins (server/plugins/skills/data/runecrafting-ruins.json) keep their
+// pulsing glow on the map's parent; the forms their varbit picks have no sequence. Drawn without
+// it, the fire ruins' dome stood solid in orange, red and white bands instead of glowing.
+const RUNECRAFTING_RUINS = [34813, 34814, 34815, 34816, 34817, 34818, 34819, 34820, 34821, 34822, 34823, 25380, 34824];
+
+test("Runecrafting ruins: every shown form plays its parent's pulsing glow", () => {
+    const { info, loader, vars } = nativeLocLoaders();
+    let parentOnly = 0;
+    for (const id of RUNECRAFTING_RUINS) {
+        const parent = loader.locTypeLoader.load(id);
+        assert.ok(parent.transforms, `${id} is a multiloc`);
+        assert.notEqual(parent.seqId, -1, `${id} owns the glow`);
+        let shown = 0;
+        for (let value = 0; value < parent.transforms!.length; value++) {
+            if (parent.transformVarbit !== -1) vars.setVarbit(parent.transformVarbit, value);
+            else vars.setVarp(parent.transformVarp, value);
+            const variant = parent.transform(vars, loader.locTypeLoader);
+            const built = submitTreeScene(loader, vars, spiritTreeScene(loader, info, [undefined], id));
+            if (!variant) {
+                assert.equal(built.groups.length + built.models.length, 0, `${id}=${value} is hidden`);
+                continue;
+            }
+            shown++;
+            if (variant.seqId === -1) parentOnly++;
+            assert.equal(built.models.length, 0, `${id}=${value} is not drawn still`);
+            assert.equal(built.submitted[0].seqId, parent.seqId, `${id}=${value} (${variant.id}) plays ${parent.seqId}`);
+            assert.equal(built.groups[0].locs[0].interactId, variant.id);
+        }
+        assert.ok(shown >= 2, `${id} has its plain and enterable forms`);
+    }
+    assert.ok(parentOnly >= 22, `most forms have no glow of their own (${parentOnly})`);
+});
+
+test("Fire ruins: the glowing dome is never baked solid", () => {
+    const { info, loader, vars } = nativeLocLoaders();
+    const parent = loader.locTypeLoader.load(34817);
+    vars.setVarbit(parent.transformVarbit, 1);
+    const variant = parent.transform(vars, loader.locTypeLoader)!;
+    assert.equal(variant.id, 30372);
+    const built = submitTreeScene(loader, vars, spiritTreeScene(loader, info, [undefined], 34817));
+    const anim = built.groups[0].anim;
+    assert.equal(built.submitted[0].seqId, 2714);
+    assert.ok(anim.framesAlpha, "the dome is baked see-through");
+    const still = loader.getModelAnimated(variant, 10, 0, -1, 0)!;
+    const solidStill = built.buffer.addModelAnimFrame(still, false)[1];
+    for (let frame = 0; frame < anim.frames.length; frame++) {
+        assert.ok(anim.frames[frame][1] < solidStill, `frame ${frame} leaves the dome out of the solid faces`);
+        assert.ok(anim.framesAlpha[frame][1] > 0, `frame ${frame} draws the dome`);
+    }
+    const alphas = [0, 3].map(frame => [...loader.getModelAnimated(variant, 10, 0, 2714, frame)!.faceAlphas].join());
+    assert.notEqual(alphas[0], alphas[1], "the glow pulses: its transparency changes between frames");
 });
 
 test("prepared ropes: SceneBuilder keeps an explicit stop static while the default remains prepared", () => {

@@ -20,6 +20,7 @@
  * 99), 32 Mining xp per success (16 on free-to-play worlds), any star size.
  */
 
+const { modalPause } = require("../SkillActions");
 const Common = require("./Common.ShootingStars");
 const Star = require("./Star.ShootingStars");
 const Rewards = require("./Rewards.ShootingStars");
@@ -120,9 +121,12 @@ function startMining(player, star) {
 /** The tick after the click: the swing line and animation, then the first attempt one interval on. */
 function swing(player, session) {
   session.swingTick = undefined;
-  player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, SWING_MESSAGE);
+  // A restart after a busy modal swings without the line or the size/time varbit (rsprox 227/00562 t179).
+  const silent = session.silentSwing === true;
+  session.silentSwing = false;
+  if (!silent) player.getPacketSender().sendTypedMessage(Common.core.ChatType.SPAM, SWING_MESSAGE);
   player.performAnimation(swingAnimation(session.pickaxe));
-  Common.sendTimeSinceLanded(player, session.star);
+  if (!silent) Common.sendTimeSinceLanded(player, session.star);
   session.nextAttemptTick = world.tick + Common.rollInterval(session.pickaxe);
 }
 
@@ -199,6 +203,16 @@ function tick(random = Math.random) {
     if (inventory.isFull() && inventory.getAmount(Common.core.ItemIdentifiers.STARDUST) <= 0) {
       inventory.full();
       stop(player);
+      continue;
+    }
+    // A busy modal holds the mining, then it starts over: the swing animation next tick (no line),
+    // the first roll an interval after (rsprox 227/00562 t153-182; SkillActions.modalPause).
+    const pause = modalPause(session, player);
+    if (pause === "paused") continue;
+    if (pause === "restart") {
+      session.swingTick = world.tick + 1;
+      session.silentSwing = true;
+      session.nextAttemptTick = Infinity;
       continue;
     }
     if (session.swingTick !== undefined) {

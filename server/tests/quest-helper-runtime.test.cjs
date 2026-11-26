@@ -19,9 +19,12 @@ test('Quest Helper bridge accepts a configured service URL and rejects unsafe UR
     assert.throws(()=>new QuestHelperHttp({url,token:'x'.repeat(24)}),/Invalid Quest Helper URL/);
   assert.throws(()=>new QuestHelperHttp({port:0,token:'x'.repeat(24)}),/Invalid helper port/);
 });
-test('Quest Helper reports missing server credentials without requiring a local launcher',async()=>{
-  const {QuestHelperHttp}=require('../plugins/quests/questhelper/Http.QuestHelper');
-  await assert.rejects(new QuestHelperHttp({token:undefined}).catalog(),/set QUEST_HELPER_TOKEN for the server and bridge/);
+test('Quest Helper tells the player it is off and the admin why, once, when no token is configured',async()=>{
+  const {QuestHelperHttp,NOT_ENABLED,PLAYER_NOT_ENABLED}=require('../plugins/quests/questhelper/Http.QuestHelper');
+  const logged=[];
+  const bridge=new QuestHelperHttp({token:undefined,log:line=>logged.push(line),fetchImpl:async()=>assert.fail('no request without a token')});
+  for(let i=0;i<2;i++)await assert.rejects(bridge.catalog(),error=>error.message===PLAYER_NOT_ENABLED&&error.questHelperCode===NOT_ENABLED&&!/QUEST_HELPER_TOKEN/.test(error.message));
+  assert.equal(logged.length,1);assert.match(logged[0],/QUEST_HELPER_TOKEN is not set/);assert.match(logged[0],/yarn bridge:setup/);
 });
 test('helper plugin exposes the loader register contract',()=>{
  const plugin=require('../plugins/quests/QuestHelper.plugin');

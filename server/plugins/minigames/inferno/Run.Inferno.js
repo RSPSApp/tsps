@@ -76,7 +76,9 @@ const JAD_MIN_HEAL = 15;
 const JAD_MAX_HEAL = 24;
 const JAD_HEALERS_SINGLE = 5;
 const JAD_HEALERS_EACH = 3;
-const HEALER_COMBAT_REACH = 4;
+// Wiki (Yt-HurKot): "Inferno healers will restore their Jad's health when in melee distance of
+// them", and "can still heal if within the trigger range and in combat with the player".
+const HEALER_REACH = 1;
 const HEAL_GRAPHIC = 444; // TZHAAR_HEAL
 const HEALER_HEAL_ANIM = 2639;
 const MELEER_DIG_AFTER_TICKS = 15;
@@ -492,8 +494,12 @@ function addJad(session, jad, firstAttackTicks, healerCount, healerSpots = null)
   return entry;
 }
 
-// Yt-HurKot come when a Jad drops to half health and heal it until drawn off. If they bring
-// it back to full, a fresh set comes the next time it drops.
+// Yt-HurKot come once, when a Jad first drops to half health, and heal it until drawn off. Unlike
+// the Fight Caves, Inferno healers do not respawn when Jad heals to full (Wiki: Yt-HurKot).
+// One drawn off still heals from melee distance of its Jad, and only there (Wiki); farther out it
+// fights, and once its fight lapses it walks back. rsprox (rev 227, local 1000602, 1000603,
+// 1000557, 1000608): 24 drawn-off healers made 129 attacks, all from 2 or more tiles off a living
+// Jad, and none healed; no recording has one fighting from melee distance, which follows the Wiki.
 function tendJads(session) {
   const { Animation, Graphic, NpcIdentifiers: Npcs, PathFinder } = core;
   const now = cycle();
@@ -506,7 +512,6 @@ function tendJads(session) {
       continue;
     }
     const max = jad.getDefinition().getHitpoints();
-    if (jad.getHitpoints() >= max) entry.called = false;
     if (!entry.called && jad.getHitpoints() <= max / 2) {
       entry.called = true;
       const healerId = jad.getId() === Npcs.JALTOK_JAD_2 ? Npcs.YT_HURKOT_3 : Npcs.YT_HURKOT_2;
@@ -519,7 +524,7 @@ function tendJads(session) {
     for (const healer of entry.healers) {
       const fighting = healer.getCombat().getTarget() != null;
       const distance = healer.calculateDistance(jad);
-      if (distance <= 1 || (fighting && distance <= HEALER_COMBAT_REACH)) {
+      if (distance <= HEALER_REACH) {
         if (now % JAD_HEAL_TICKS === 0 && jad.getHitpoints() < max) {
           healer.setMobileInteraction(jad);
           healer.performAnimation(new Animation(HEALER_HEAL_ANIM));
@@ -800,9 +805,16 @@ function completions(player) {
   return Number(player.getAttribute(ATTR_COMPLETIONS) ?? 0);
 }
 
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  for (const id of Object.values(ids())) npcIds.add(id);
+  const N = core.NpcIdentifiers;
+  for (const id of [N.JAL_AKREK_MEJ, N.JAL_AKREK_XIL, N.JAL_AKREK_KET, N.YT_HURKOT_2, N.YT_HURKOT_3]) npcIds.add(id);
+}
+
 module.exports = {
   ATTR_WAVE, ATTR_SUPPORTS, ATTR_COMPLETIONS, TZHAAR_KET_KEH,
-  init, spawn, say, tile, cycle, addJad, sessionOf,
+  init, spawn, say, tile, cycle, addJad, sessionOf, describeEncounters,
   enter, leave, completions, setNextWave, processRun, defeatedLine, runDeath, keepItemsInRun, noTeleportOut, guardPassives, supportsCollapse, resumeRun, runLogout,
   tryRevive, failedRunTokkul, monsterHitpoints, createArea,
 };

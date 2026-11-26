@@ -58,11 +58,27 @@ async function main(): Promise<void> {
             (globalThis as any).window.innerWidth = width;
             const canvasWidth = width - 36;
             const fit = getMobileGameplayUiScale({} as never, canvasWidth, 864, canvasWidth, 864);
-            assert.ok(Math.round(canvasWidth * fit) >= 765, "landscape keeps room for the native safezone and edge padding at " + width);
+            assert.ok(Math.round(canvasWidth * fit) >= 816, "landscape keeps room for the native safezone, the side panel and edge padding at " + width);
         }
         Object.assign((globalThis as any).window, { innerWidth: 667, innerHeight: 375 });
-        assert.equal(getMobileGameplayUiScale({} as never, 631, 375, 631, 375), 1.25,
-            "normal landscape phones keep their existing UI scale");
+        const phoneScale = getMobileGameplayUiScale({} as never, 631, 375, 631, 375);
+        assert.ok(375 * phoneScale >= 503,
+            "a landscape phone keeps the native 503px gameframe height instead of squeezing the HUD");
+
+        // The mobile interface scaling slider (device option 27) starts at 400% and can be lowered.
+        const { setMobileInterfaceScalingPercent } = await import("../ui/UiScale");
+        const tabletWidth = 1180, tabletHeight = 820;
+        const atDefault = getMobileGameplayUiScale(
+            {} as never, tabletWidth, tabletHeight, tabletWidth, tabletHeight);
+        setMobileInterfaceScalingPercent(175);
+        const atSmall = getMobileGameplayUiScale(
+            {} as never, tabletWidth, tabletHeight, tabletWidth, tabletHeight);
+        assert.ok(atSmall > atDefault,
+            "175% spreads the interface over more layout pixels than the 400% default");
+        assert.equal(Math.round(tabletWidth * atSmall) > Math.round(tabletWidth * atDefault), true,
+            "lowering the mobile scale makes the interface smaller, not larger");
+        assert.ok(tabletHeight * atDefault >= 503, "the default tablet layout keeps the 503px height");
+        setMobileInterfaceScalingPercent(400);
     } finally {
         if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
         else delete (globalThis as any).window;

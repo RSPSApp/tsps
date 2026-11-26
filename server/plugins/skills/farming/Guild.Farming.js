@@ -78,16 +78,46 @@ function roll(table) {
     const row = table.find(r => (chance -= r[3]) < 0);
     return { id: Data.itemId(row[0]), count: row[1] + Math.floor(Math.random() * (row[2] - row[1] + 1)) };
 }
-function contents(tier, tithe) {
+/** The seed pack's row on a league's Boosted drops page (the Hespori seed). */
+const DROP_SOURCE = "Seed pack";
+/**
+ * What content makes each seed likelier: "drops:chance" { player, source, rules } (a league's
+ * boosted drops) answers rules on the seeds' names; a table without a boosted row is null.
+ */
+function boosts(player, table) {
+    const rules = [];
+    if (player) core.PluginManager.emitCustomEvent("drops:chance", { player, source: DROP_SOURCE, rules });
+    if (!rules.length) return null;
+    const multipliers = table.map(r => rules.reduce((value, rule) => (rule.pattern.test(r[0]) ? value * rule.multiplier : value), 1));
+    return multipliers.some(m => m !== 1) ? multipliers : null;
+}
+/**
+ * One roll on `table`, each boosted row's chance that many times its own (at most certain) and
+ * the other rows sharing what is left in their proportions.
+ */
+function boostedRoll(table, multipliers) {
+    if (!multipliers) return roll(table);
+    const total = table.reduce((sum, r) => sum + r[3], 0);
+    const boosted = table.map((r, i) => multipliers[i] !== 1 ? r[3] / total * multipliers[i] : 0);
+    const boostedSum = boosted.reduce((a, b) => a + b, 0);
+    const restSum = table.reduce((sum, r, i) => multipliers[i] !== 1 ? sum : sum + r[3] / total, 0);
+    const rest = boostedSum >= 1 || restSum === 0 ? 0 : (1 - boostedSum) / restSum;
+    const chances = table.map((r, i) => multipliers[i] !== 1 ? boosted[i] : r[3] / total * rest);
+    let chance = Math.random() * chances.reduce((a, b) => a + b, 0);
+    const row = table.find((r, i) => (chance -= chances[i]) < 0) ?? table[table.length - 1];
+    return { id: Data.itemId(row[0]), count: row[1] + Math.floor(Math.random() * (row[2] - row[1] + 1)) };
+}
+function contents(tier, tithe, player = null) {
+    const high = boosts(player, HIGH);
     const medium = tier === 1 ? 1 + Math.floor(Math.random() * 3) : tier === 2 ? 2 + Math.floor(Math.random() * 2) : tier - 1 + Math.floor(Math.random() * 3);
-    const high = tier === 1 ? 0 : tier === 2 ? (Math.random() < 1 / 11 ? 1 : 0) : tier === 3 ? Math.floor(Math.random() * 2) : 1 + Math.floor(Math.random() * (tier - 2));
-    return Array.from({ length: tier + 5 }, (_, i) => i < high ? roll(HIGH) : i < high + medium
+    const highRolls = tier === 1 ? 0 : tier === 2 ? (Math.random() < 1 / 11 ? 1 : 0) : tier === 3 ? Math.floor(Math.random() * 2) : 1 + Math.floor(Math.random() * (tier - 2));
+    return Array.from({ length: tier + 5 }, (_, i) => i < highRolls ? boostedRoll(HIGH, high) : i < highRolls + medium
         ? tithe && Math.random() < 1 / 90 ? { id: Data.itemId("White lily seed"), count: 1 } : roll(MEDIUM) : roll(LOW));
 }
 function giveSeedPack(player, tier = 3, tithe = false) {
     if (player.getInventory().isFull()) { player.getInventory().full(); return false; }
     const pack = new core.Item(Data.itemId("Seed pack"));
-    pack.setMetaValue("farming:rewards", contents(tier, tithe));
+    pack.setMetaValue("farming:rewards", contents(tier, tithe, player));
     player.getInventory().addItem(pack);
     return true;
 }
@@ -108,7 +138,7 @@ function rewardItem(event) {
     if (!["take", "take-all", "take-one", "bank-all", "check"].includes(action)) return;
     event.handled = true;
     let rewards = item.getMetaValue("farming:rewards");
-    if (!rewards) { rewards = name === "Seed pack" ? contents(3, false) : Array.from({ length: 7 }, () => roll(HERBS)); item.setMetaValue("farming:rewards", rewards); }
+    if (!rewards) { rewards = name === "Seed pack" ? contents(3, false, event.player) : Array.from({ length: 7 }, () => roll(HERBS)); item.setMetaValue("farming:rewards", rewards); }
     if (action === "check") { event.player.sendMessage(`There are ${rewards.length} rewards remaining.`); return; }
     const initialCount = rewards.length;
     do {
@@ -501,6 +531,55 @@ function guardGuildDoor(event) {
     event.handled = true;
     player.sendMessage(`You need a Farming level of ${GUILD_ENTRY_LEVEL} to enter the Farming Guild.`);
 }
+/**
+ * Wiki (Farming Guild): the west wing needs 65 Farming and the north wing 85 ("boosts may be used for all tiers";
+ * dropping below once inside never expels). Since 17 January 2019 their gates stay open (kebos_farming_guild_gate_t2/t3,
+ * the cache map places the open leaves) and the guild gates them by position, not a click. rsprox 242/911689.txt: a
+ * player under level who runs onto the west gate tiles (x 1243-1244, y 3729-3730) or the north ones (y 3744-3745,
+ * x 1248-1249) finishes that tick's run, then is walked two tiles back from where the run ended (1246,3730 run to 1244,
+ * walked to 1246; 1245,3729 to 1243, back to 1245; 1248,3743 to 3745, back to 3743) while Guildmaster Jane says the
+ * line below, angry (chatang2, 615). Going out is never stopped.
+ */
+const GUILD_TIERS = [
+    { level: 65, x: [1243, 1244], y: [3729, 3730], dx: 1, dy: 0 },
+    { level: 85, x: [1248, 1249], y: [3744, 3745], dx: 0, dy: -1 },
+];
+const JANE_ANGRY = 615; // DialogueExpression.ANGRY_2
+const turningBack = new Set();
+const inRange = (value, [low, high]) => value >= low && value <= high;
+const tierAt = (location) => GUILD_TIERS.find(({ x, y }) => inRange(location.getX(), x) && inRange(location.getY(), y));
+function guardGuildTier(event) {
+    const { player, previous, location } = event;
+    if (!previous || previous.getZ() !== 0 || location.getZ() !== 0 || turningBack.has(player)) return;
+    const tier = tierAt(location);
+    // One tile inward along the lane's own axis, straight or diagonal: a teleport or a spirit tree arrival is not a step.
+    if (!tier || (tier.dx ? previous.getX() !== location.getX() + tier.dx : previous.getY() !== location.getY() + tier.dy)
+        || player.getSkillManager().getCurrentLevel(core.Skill.FARMING) >= tier.level) return;
+    // The rest of this tick's run goes on; the turn back is from wherever it ended.
+    turningBack.add(player);
+    core.TaskManager.submit(new (class extends core.Task {
+        constructor() { super(1, player, false); }
+        execute() {
+            this.stop();
+            turningBack.delete(player);
+            const end = player.getLocation(), at = tierAt(end);
+            if (!at || at.level !== tier.level) return;
+            const queue = player.getMovementQueue();
+            queue.reset();
+            queue.addSteps(end.transform(2 * at.dx, 2 * at.dy));
+            // Jane speaks a tick after the walk-back (rsprox 242/911689.txt ticks 18431 then 18432: the chat line and the
+            // dialogue interface arrive together).
+            core.TaskManager.submit(new (class extends core.Task {
+                constructor() { super(1, player, false); }
+                execute() {
+                    this.stop();
+                    player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.NpcDialogue(0, core.NpcIdentifiers.GUILDMASTER_JANE,
+                        `Hey! You need a Farming level of at least ${at.level} to enter that area of the Farming Guild.`, undefined, JANE_ANGRY)));
+                }
+            })());
+        }
+    })());
+}
 function guildObject(event) {
     if (event.definition?.getName()?.toLowerCase() !== "seed vault") return;
     event.handled = true;
@@ -513,4 +592,4 @@ function openSeedVault(event) {
     Vault.open({ player: event.player, object: null, anywhere: true });
 }
 
-Object.assign(module.exports, { deathContainers, seedBoxGather, herbSackGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, openSeedVault });
+Object.assign(module.exports, { seedPackContents: contents, deathContainers, seedBoxGather, herbSackGather, seedBoxPickup, openHerbSack, CONTRACTS, guildNpc, completeContract, harvestContract, giveSeedPack, guildItemOnNpc, rewardItem, storeCrop, splitForOpenSack, pickup, storagePair, storageAction, bankStorageOp, guildObject, guardGuildDoor, guardGuildTier, openSeedVault });

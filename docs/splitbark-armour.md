@@ -36,10 +36,15 @@ From the Wiki (Wizard Jalarast and her transcript, `npc-dialogues.json` "Wizard 
 
 - Only unnoted bark and fine cloth count; no recording shows a purchase or noted materials.
 - The materials and coins go before the piece is added, so it always has room.
-- Talk-to's "Can you make me some armour please?" should carry on into the same menu ("Continues
-  with shop dialogue."); the plugin handles that action. The Wiki transcript writes the
-  non-members branch before it as an option (`{{topt|If the player is on a non-members world:}}`),
-  so the generated transcript shows it as a menu option and the action is not reached until the
-  dumper (osrsreboxed-db) reads it as a condition. Live goes from "Certainly, what would you
-  like me to make?" straight into the same skillmulti on the tick after the continue (rsprox.net
-  recording 3202, ticks 2377-2381), which is the target for that fix.
+- Talk-to's "Can you make me some armour please?" carries on into the same menu ("Continues
+  with shop dialogue."), and the plugin handles that action. The Wiki transcript writes the
+  non-members branch before it as an option (`{{topt|If the player is on a non-members world:}}`);
+  the dumper (osrsreboxed-db) reads a lone `{{topt|If the player ...}}` as a condition, so the
+  branch is answered like the shop dialogue's and no option shows it (#6292). Live goes from
+  "Certainly, what would you like me to make?" straight into the same skillmulti on the tick after
+  the continue (rsprox.net recording 3202, ticks 2377-2381).
+
+## Crafting it yourself
+
+Players at Crafting 60-62 sew the pieces themselves with a needle and thread or a costume needle
+(Leather.Crafting.js; values in docs/crafting.md, Wiki-only).

@@ -198,3 +198,13 @@ void nativePlugin.stop();
 void nativeOverlay.stop();
 
 console.log("Mouse Tooltips plugin tests passed");
+
+// Custom-interface explanations opt into wrapping instead of drawing past the canvas.
+const boundedTips = new TooltipManager();
+boundedTips.add(() => ({ text: 'A recorded condition with several words that wraps inside the game canvas.', maxWidth: 180 }));
+const boundedOverlay = new TooltipOverlay(boundedTips, () => ({ x: 210, y: 10 }));
+const boundedRects = boundedOverlay.draw({ renderer: { canvas: { width: 220, height: 300 }, drawRect() {} },
+    fontLoader: () => undefined } as any);
+assert.equal(boundedRects.length, 1);
+assert.ok(boundedRects[0].w <= 180 && boundedRects[0].x + boundedRects[0].w <= 220);
+assert.ok(boundedRects[0].h > 20, 'a long explanation wraps onto multiple lines');

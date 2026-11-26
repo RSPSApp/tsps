@@ -219,6 +219,8 @@ function spawnEncounter(session) {
   Specials.initFight(boss);
   Minions.spawnEggs(session);
   Hud.show(boss, session.player);
+  // Captured: "Noxious Awakening" starts with every spawn.
+  session.player?.getPacketSender?.()?.sendSong?.(Shared.FIGHT_MUSIC);
   CombatAchievements.spawned(session.player, boss);
   core.TaskManager.submit(new (class extends core.Task {
     constructor() {
@@ -245,6 +247,8 @@ function ensureEncounter(player, area) {
     // A dying boss stays registered through its corpse (remains), so only removal counts.
     if (session.npc.isRegistered?.() || core.World.getAddNPCQueue().includes(session.npc)) return;
     if (session.respawnAt && now < session.respawnAt) return;
+    // The corpse's blocking locs go with it (Corpse.Araxxor.js); a corpse that timed out leaves them here.
+    for (const object of session.corpseLocs ?? []) core.ObjectManager.deregister(object, true);
     sessions.delete(player);
     spawnEncounter(createSession(player, area));
     return;

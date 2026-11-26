@@ -46,6 +46,7 @@ import {
   encodePlaySong,
   encodeProjectiles,
   encodeRunClientScript,
+  type ScriptArg,
   encodeCameraShake,
   encodeCameraMoveTo,
   encodeCameraLookAt,
@@ -95,6 +96,7 @@ import {
   encodeWidgetSetPlayerHead,
   encodeWidgetSetRoot,
   encodeWidgetSetText,
+  encodeWidgetSetActions,
   type ScriptInventorySnapshot,
   MAIN_INVENTORY_GROUP_ID,
   MAIN_INVENTORY_SLOT_FLAGS,
@@ -230,9 +232,13 @@ export class PacketSender {
   /** The spell unlock states go out with the session's first spellbook mount only. */
   private spellUnlocksSent = false;
   private subInterfaceTargets = new Map<number, SubInterfaceMount>();
+  private interruptibleInterfaceOpens = 0;
   /** Last interface owning each transmitted client container; never authoritative contents. */
   private inventoryOwners = new Map<number, number>();
   private chatboxGroupId = -1;
+  /** A main modal that live marks busy (varbit 12393) is open; cleared with the interface. */
+  private busyModal = false;
+  private busyModalHeld = false;
   private chatboxUnclamped = false;
   private chatboxOwner: object | undefined;
   private presentingChatboxOwner: object | undefined;
@@ -458,10 +464,12 @@ export class PacketSender {
   // opens the numeric "enter amount" prompt (resolved via resume_countdialog), runClientScript(110,
   // title, mode) opens the free-text prompt (resolved via resume_namedialog/resume_stringdialog).
   public sendEnterAmountPrompt(title: string): PacketSender {
+    this.interruptibleInterfaceOpens++;
     return this.sendClientScript(108, title);
   }
 
   public sendEnterInputPrompt(title: string): PacketSender {
+    this.interruptibleInterfaceOpens++;
     return this.sendClientScript(110, title, 0);
   }
 
@@ -701,13 +709,7 @@ export class PacketSender {
     id: number,
     actions: Array<string | null | undefined>
   ): PacketSender {
-    const out = new PacketBuilder(125, PacketType.VARIABLE);
-    out.putInt(id);
-    out.put(Math.max(0, Math.min(255, actions?.length ?? 0)));
-    for (const action of actions ?? []) {
-      out.putString(String(action ?? ""));
-    }
-    this.player.getSession().write(out);
+    this.player.getSession().sendClientPacket(encodeWidgetSetActions(id, actions));
     return this;
   }
 
@@ -885,12 +887,42 @@ export class PacketSender {
     return this;
   }
 
-  private resetInterfaceState(): number {
+  /**
+   * Opens or ends a busy main modal: varbit 12393 ("busy"), which live sets while the diary
+   * journal, the CA overview or the equipment screen is open, and the server state it stands
+   * for: a repeating gathering action waits while it is open and starts over after it closes
+   * (rsprox 227/00555 t24898-24920, 227/00562 t153-182; SkillActions.modalPause;
+   * docs/busy-modals.md). Every close route ends it (resetInterfaceState).
+   * Cutscenes and teleports send 12393 themselves and do not pause anything.
+   */
+  setBusyModal(open: boolean): this {
+    if (this.busyModal === open || (!open && this.busyModalHeld)) return this;
+    this.busyModal = open;
+    return this.sendVarbit(12393, open ? 1 : 0);
+  }
+
+  isBusyModal(): boolean {
+    return this.busyModal;
+  }
+
+  /**
+   * Runs `swap` (closing one busy modal to open the next, as the CA screens do) without ending
+   * busy in between: live keeps 12393 at 1 across them (rsprox 237/1001305 t5413-5434).
+   */
+  holdBusyModal(swap: () => void): this {
+    const held = this.busyModalHeld;
+    this.busyModalHeld = true;
+    try { swap(); } finally { this.busyModalHeld = held; }
+    return this;
+  }
+
+  private resetInterfaceState(preserveMainInterface = false): number {
     const interfaceId = this.player.getInterfaceId?.() ?? -1;
-    this.releaseInterfaceInventories(interfaceId);
-    if (interfaceId === 12) {
-      this.sendConfig(548, 0).sendVarbit(12393, 0);
+    if (!preserveMainInterface) {
+      this.releaseInterfaceInventories(interfaceId);
+      if (interfaceId === 12) this.sendConfig(548, 0).sendVarbit(12393, 0);
     }
+    this.setBusyModal(false);
     getShopManager().close(this.player);
     // Keep client/server interface state aligned with Java behavior.
     // A no-op here can leave stale inventory context active client-side, which
@@ -899,7 +931,7 @@ export class PacketSender {
     this.abortInputPrompt();
     this.player.getDialogueManager?.()?.reset?.();
     this.player.setAttribute?.("destroy-item:pending", -1);
-    this.player.setInterfaceId?.(-1);
+    if (!preserveMainInterface) this.player.setInterfaceId?.(-1);
     this.player.setCreationMenu?.(null);
     this.player.setSearchingBank?.(false);
     this.player.setTeleportInterfaceOpen?.(false);
@@ -924,20 +956,24 @@ export class PacketSender {
     PluginManager.emitCustomEvent("interface:closed", { player: this.player, interfaceId });
   }
 
-  private closeTrackedInterfaces(): boolean {
-    const closable = [...this.subInterfaceTargets.entries()]
-      .filter(([, entry]) => entry.type === 0 || entry.type === 3);
-    const targets = new Set(closable.map(([, entry]) => entry.targetUid));
-    const chatbox = this.chatboxGroupId;
-    const hadChatbox = chatbox >= 0;
-    if (hadChatbox) {
-      targets.add(CHATBOX_MODAL_TARGET_UID);
-      this.chatboxGroupId = -1;
+  private closeTrackedInterfaces(preservedGroupId?: number): boolean {
+    const targets = new Set<number>();
+    for (const [groupId, entry] of this.subInterfaceTargets) {
+      if (groupId !== preservedGroupId && (entry.type === 0 || entry.type === 3)) targets.add(entry.targetUid);
     }
+    const chatbox = this.chatboxGroupId;
+    if (chatbox >= 0 && chatbox !== preservedGroupId) targets.add(CHATBOX_MODAL_TARGET_UID);
     if (targets.size === 0) return false;
+    const closesChatbox = targets.has(CHATBOX_MODAL_TARGET_UID);
+    if (closesChatbox) {
+      this.chatboxGroupId = -1;
+      this.chatboxOwner = undefined;
+    }
     for (const target of targets) this.closeSubInterface(target);
-    if (hadChatbox) this.player.getSession().sendClientPacket(encodeWidgetSetHidden(CHATBOX_MODAL_TARGET_UID, true));
-    if (hadChatbox) this.emitInterfaceClosed(chatbox);
+    if (closesChatbox) {
+      this.player.getSession().sendClientPacket(encodeWidgetSetHidden(CHATBOX_MODAL_TARGET_UID, true));
+      this.emitInterfaceClosed(chatbox);
+    }
     return true;
   }
 
@@ -982,23 +1018,20 @@ export class PacketSender {
   }
 
   public hasInterruptibleInterface(): boolean {
-    return this.chatboxGroupId >= 0 || [...this.subInterfaceTargets.values()]
-      .some((entry) => entry.type === 0 || entry.type === 3);
+    return this.hasModalInterface();
   }
 
-  closeInterruptibleInterfaces(): this {
-    const interfaceId = this.resetInterfaceState();
-    const closed = this.closeTrackedInterfaces();
-    this.endBankSearch(interfaceId);
-    this.emitInterfaceClosed(interfaceId);
-    if (closed) {
-      if (interfaceId === 300 || interfaceId === 334 || interfaceId === 335) {
-        this.sendSubInterface((161 << 16) | 79, MAIN_INVENTORY_GROUP_ID, 1);
-      }
-      return this;
-    }
-    if (interfaceId >= 0) this.player.getSession().sendClientPacket(encodeWidgetClose(interfaceId));
-    return this;
+  public hasModalInterface(ignoredMainGroupId?: number): boolean {
+    return this.chatboxGroupId >= 0 || [...this.subInterfaceTargets]
+      .some(([groupId, entry]) => groupId !== ignoredMainGroupId && (entry.type === 0 || entry.type === 3));
+  }
+
+  public getInterruptibleInterfaceOpens(): number {
+    return this.interruptibleInterfaceOpens;
+  }
+
+  closeInterruptibleInterfaces(worldInteraction = false): this {
+    return this.sendInterfaceRemoval(worldInteraction);
   }
 
   closeInterface(groupId: number): this {
@@ -1016,7 +1049,17 @@ export class PacketSender {
     return this;
   }
 
-  sendInterfaceRemoval(): this {
+  /** World interactions preserve an opted-in main panel while closing transient interfaces. */
+  sendInterfaceRemoval(worldInteraction = false): this {
+    if (worldInteraction) {
+      const { CustomInterfaceRegistry } = require("../../game/interfaces/CustomInterfaceRegistry") as typeof import("../../game/interfaces/CustomInterfaceRegistry");
+      const groupId = this.player.getInterfaceId?.() ?? -1;
+      if (CustomInterfaceRegistry.get(groupId)?.lifecycle?.persistOnWorldInteraction === true) {
+        this.resetInterfaceState(true);
+        this.closeTrackedInterfaces(groupId);
+        return this;
+      }
+    }
     const interfaceId = this.resetInterfaceState();
     const closed = this.closeTrackedInterfaces();
     this.endBankSearch(interfaceId);
@@ -1584,6 +1627,7 @@ export class PacketSender {
    * mounted at another is closed there first.
    */
   private rememberSubInterface(targetUid: number, groupId: number, type: number): SubInterfaceMount {
+    if (type === 0 || type === 3) this.interruptibleInterfaceOpens++;
     const existing = this.subInterfaceTargets.get(groupId);
     if (existing && existing.targetUid !== targetUid) {
       this.player.getSession().sendClientPacket(encodeWidgetCloseSub(existing.targetUid));
@@ -1759,7 +1803,8 @@ export class PacketSender {
     }
   }
 
-  sendClientScript(scriptId: number, ...args: (number | string)[]): this {
+  /** RUNCLIENTSCRIPT. A number[] or string[] argument is one of the cache's array arguments. */
+  sendClientScript(scriptId: number, ...args: ScriptArg[]): this {
     this.player.getSession().sendClientPacket(encodeRunClientScript(scriptId, args));
     return this;
   }

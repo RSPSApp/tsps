@@ -45,10 +45,10 @@ const SCROLLS = [
 
 /** Destinations (Wiki): a tile, or a random tile in an area. */
 const HOMES = new Map([
-  ["lumbridge home teleport", { x: 3222, y: 3218, members: false }],
-  ["edgeville home teleport", { x: 3087, y: 3501, width: 4, height: 4 }],
-  ["lunar home teleport", { x: 2094, y: 3913 }],
-  ["arceuus home teleport", { x: 1698, y: 3880, width: 5, height: 5 }],
+  ["lumbridge home teleport", { book: "Standard spellbook", x: 3222, y: 3218, members: false }],
+  ["edgeville home teleport", { book: "Ancient spellbook", x: 3087, y: 3501, width: 4, height: 4 }],
+  ["lunar home teleport", { book: "Lunar spellbook", x: 2094, y: 3913 }],
+  ["arceuus home teleport", { book: "Arceuus spellbook", x: 1698, y: 3880, width: 5, height: 5 }],
 ]);
 
 let core;
@@ -192,6 +192,13 @@ function sendLastHomeTeleport({ player }) {
   }
 }
 
+function describeTeleports({ list }) {
+  for (const [key, home] of HOMES) {
+    list.push({ path: ["Spellbooks", home.book], key,
+      name: home.width || home.height ? `${key} (landing area origin)` : key, tile: [home.x, home.y, 0] });
+  }
+}
+
 module.exports = {
   name: "HomeTeleports",
   description: "The free home teleport of the standard, Ancient, Lunar and Arceuus spellbooks, with the long cast and one shared 30-minute cooldown.",
@@ -213,6 +220,7 @@ module.exports = {
     api.onItemAction("Trailblazer teleport scroll", { Read: readScroll });
     api.onItemAction("Shattered teleport scroll", { Read: readScroll });
     api.onPlayerLogin(sendLastHomeTeleport);
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   },
 };
 

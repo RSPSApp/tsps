@@ -20,6 +20,7 @@ const prompts = [];
 const api = {
   core,
   persistAttribute() {},
+  onCustomEvent: (name, handler) => { handlers[name] = handler; },
   onServerStartup: (handler) => { handlers.startup = handler; },
   onPlayerLogin: (handler) => { handlers.login = handler; },
   onItemAction: (handler) => { handlers.action = handler; },

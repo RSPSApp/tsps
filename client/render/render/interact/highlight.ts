@@ -195,6 +195,7 @@ import {
 
 import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
 import { locHighlightKey } from "../../../game/highlights/ModelHighlightManager";
+import { buildCosmeticNpcModelHighlightTriangles, isCosmeticNpcHighlightTargetStillPresent } from "./highlightCosmeticNpc";
 import type { LocOutline, NpcOutline } from "../../../game/plugins/ClientPluginManager";
 import { packWorldMapCoord } from "../../../rs/map/WorldMapArea";
 
@@ -430,6 +431,11 @@ export function resolveInteractHighlightTargetFromLocalInteraction(host: WebGLOs
 export function maybeExpireInteractHighlightTarget(host: WebGLOsrsRendererHost, ): void {
 
         if (!host.interactHighlightActiveTarget) return;
+        if (host.interactHighlightActiveTarget.kind === "cosmetic-npc"
+            && !isCosmeticNpcHighlightTargetStillPresent(host, host.interactHighlightActiveTarget)) {
+            host.clearInteractHighlightActiveTarget();
+            return;
+        }
         if (host.interactHighlightActiveTarget.kind === "loc") {
             if (!host.isLocHighlightTargetStillPresent(host.interactHighlightActiveTarget)) {
                 host.clearInteractHighlightActiveTarget();
@@ -485,6 +491,9 @@ export function isSameInteractHighlightTarget(host: WebGLOsrsRendererHost,
 
         if (!a || !b) return false;
         if (a.kind !== b.kind) return false;
+        if (a.kind === "cosmetic-npc" && b.kind === "cosmetic-npc") {
+            return a.key === b.key && a.plane === b.plane;
+        }
         if (a.kind === "loc" && b.kind === "loc") {
             return (
                 (a.locId | 0) === (b.locId | 0) &&
@@ -512,6 +521,9 @@ export function buildHighlightTrianglePoints(host: WebGLOsrsRendererHost,
         target: InteractHighlightTarget,
     ): ReadonlyArray<readonly [number, number, number]> | undefined {
 
+        if (target.kind === "cosmetic-npc") {
+            return buildCosmeticNpcModelHighlightTriangles(host, target);
+        }
         if (target.kind === "loc") {
             return host.buildLocModelHighlightTriangles(target);
         }
@@ -568,6 +580,7 @@ export function getInteractNpcModelLoader(host: WebGLOsrsRendererHost, ): NpcMod
             seqFrameLoader,
             host.osrsClient.skeletalSeqLoader,
             host.osrsClient.varManager,
+            128, // Interaction and widget previews should not retain an entire NPC catalogue.
         );
         return host.interactNpcModelLoader;
     

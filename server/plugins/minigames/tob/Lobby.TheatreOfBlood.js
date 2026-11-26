@@ -5,10 +5,8 @@
  * (28) while there, and the theatre's entrance.
  *
  * Captured: the interfaces (364 the list, 50 the party, 28 the HUD) and the scripts that fill
- * them (2340 a list row, 2317/2321 member and applicant lines, 2323 the footer), "Your
- * leader, <name>, must go first.". Estimates: the interfaces' buttons, the rest of the
- * entrance's warnings and questions, and leaving Ver Sinhaza taking a player out of their
- * party or application.
+ * them (2340 a list row, 2317/2321 member and applicant lines, 2323 the footer), the board's
+ * introduction and the messages for accepted applicants, lobby departures and stale parties.
  * The cache confirms each script's arguments. Wiki: escape crystals are the only way out of
  * the theatre and the Mysterious Stranger sells them, so the entrance offers his shop.
  *
@@ -24,6 +22,9 @@ const Stats = require("./Stats.TheatreOfBlood");
 
 const { INTERFACE, SCRIPT, VARP, VARBIT } = Shared;
 const { RIGHTS } = Parties;
+const MESSAGE_BOX = 229;
+const CONFIRMATION_MENU = 219;
+const USED_NOTICE_BOARD_ATTRIBUTE = "tob:used-notice-board";
 
 const uid = (group, component) => (group << 16) | component;
 /**
@@ -48,6 +49,10 @@ const INFO_BUTTON = {
   BACK: 0, REFRESH: 1, UNBLOCK: 2, SIZE: 3, COMBAT: 4, PRIMARY: 5, MODE: 6,
   MEMBER_FIRST: 7, ACCEPT_FIRST: 12, DECLINE_FIRST: 22,
 };
+// 237/1162 tick 15849: an up and down button for each of the five member rows.
+const INFO_ARROW_FIRST = 63;
+const INFO_ARROW_UIDS = Array.from({ length: Shared.MAX_PARTY_SIZE * 2 },
+  (_, index) => uid(INTERFACE.PARTY_INFORMATION, INFO_ARROW_FIRST + index));
 const OP1 = 1 << 1;
 const MYSTERIOUS_STRANGER_SHOP = 1240;
 const ATTR = {
@@ -60,24 +65,27 @@ const ESCAPE_CRYSTALS = [Shared.ITEM.ESCAPE_CRYSTAL];
 const HARD_LOCKED = "Everyone in your party must have completed the Theatre of Blood in Normal Mode to attempt Hard Mode.";
 /** The name the Grouping plugin knows the theatre by. */
 const GROUPING_ACTIVITY = "Theatre of Blood";
+const pendingApplicantHud = new WeakMap();
+const pendingPartyHandover = new WeakMap();
 
 // ---------------------------------------------------------------- the HUD in Ver Sinhaza
 
 /** The HUD lists the party's names (component 12) and varbit 6440 (tob_client_partystatus) says 1. */
 function refreshHud(player) {
   const party = Parties.partyOf(player);
+  if (party && pendingApplicantHud.get(player) === party) return;
   const sender = player.getPacketSender();
   sender.sendSubInterface(Shared.OVERLAY_HUD_UID, INTERFACE.PARTY_HUD, 1);
   sender.sendVarbit(VARBIT.PARTY_STATE, party ? 1 : 0);
   const lines = Array.from({ length: Shared.MAX_PARTY_SIZE }, (_, i) =>
-    (party?.members[i] ? Shared.displayName(party.members[i]) : "-"));
-  sender.sendString(`${lines.join("<br>")}<br>`, uid(INTERFACE.PARTY_HUD, 12));
+    (party?.members[i] ? partyDisplayName(party.members[i]) : "-"));
+  sender.sendString(lines.join("<br>"), uid(INTERFACE.PARTY_HUD, 12));
 }
 
-function refreshParty(party) {
+function refreshParty(party, deferHudFor = null) {
   if (!party) return;
   for (const member of party.members) {
-    refreshHud(member);
+    if (member !== deferHudFor) refreshHud(member);
     if (isViewing(member, party)) openInformation(member, party);
   }
   for (const applicant of party.applicants) {
@@ -94,9 +102,9 @@ function enterVerSinhaza({ player }) {
 /** Leaving Ver Sinhaza (other than into the theatre) leaves a party or withdraws an application. */
 function leaveVerSinhaza({ player }) {
   if (Raid.raidOf(player)) return;
+  leaveParty(player, { leftLobby: true });
   player.getPacketSender().closeSubInterface(Shared.OVERLAY_HUD_UID);
   player.getPacketSender().sendVarbit(VARBIT.PARTY_STATE, 0);
-  leaveParty(player);
   const applied = Parties.applicationOf(player);
   if (applied) {
     applied.withdraw(player);
@@ -104,12 +112,15 @@ function leaveVerSinhaza({ player }) {
   }
 }
 
-function leaveParty(player) {
+function leaveParty(player, { leftLobby = false } = {}) {
   const party = Parties.partyOf(player);
   if (!party || party.raid) return;
   party.remove(player);
+  pendingApplicantHud.delete(player);
+  // 227/01779 tick 13028 and 234/03299 tick 10627.
+  if (leftLobby) player.sendMessage("You have left the lobby, so you have been removed from your party.");
   refreshParty(party);
-  refreshHud(player);
+  if (!leftLobby) refreshHud(player);
 }
 
 // ---------------------------------------------------------------- 364: the party list
@@ -178,13 +189,17 @@ function selectRow(event) {
 
 // ---------------------------------------------------------------- 50: a party's information
 
+function partyDisplayName(player) {
+  return Shared.displayName(player).replaceAll(" ", "\u00a0");
+}
+
 /** A member's line: name, combat, attack, strength, ranged, magic, defence, hitpoints, prayer, completions. */
 function memberLine(player) {
   const { Skill } = Shared.core();
   const skills = player.getSkillManager();
   const levels = [Skill.ATTACK, Skill.STRENGTH, Skill.RANGED, Skill.MAGIC, Skill.DEFENCE, Skill.HITPOINTS, Skill.PRAYER]
     .map((skill) => skills.getMaxLevel(skill));
-  return `${Shared.displayName(player)}|${skills.getCombatLevel()}|${levels.join("|")}|${Stats.completionsOf(player, "normal")}`;
+  return `${partyDisplayName(player)}|${skills.getCombatLevel()}|${levels.join("|")}|${Stats.completionsOf(player, "normal")}`;
 }
 
 function openInformation(player, party) {
@@ -192,14 +207,17 @@ function openInformation(player, party) {
   const sender = player.getPacketSender();
   player.setAttribute(ATTR.VIEWING, party.id);
   sender.sendInterface(INTERFACE.PARTY_INFORMATION);
+  sender.sendClientScript(SCRIPT.PARTY_ARROWS);
+  for (const arrow of INFO_ARROW_UIDS) sender.sendInterfaceFlagsRange(arrow, -1, -1, OP1);
+  const rights = party.rightsOf(player);
   for (let index = 0; index < Shared.MAX_PARTY_SIZE; index++) {
     const member = party.members[index];
-    sender.sendClientScript(SCRIPT.PARTY_MEMBER, 2, member ? memberLine(member) : "");
+    sender.sendClientScript(SCRIPT.PARTY_MEMBER, rights, member ? memberLine(member) : "");
   }
   if (party.has(player) || party.applicants.includes(player)) {
     for (const applicant of party.applicants) sender.sendClientScript(SCRIPT.PARTY_APPLICANT, memberLine(applicant));
   }
-  sender.sendClientScript(SCRIPT.PARTY_FOOTER, party.rightsOf(player), party.preferredSize, party.preferredCombat, Shared.MODES[party.mode].index);
+  sender.sendClientScript(SCRIPT.PARTY_FOOTER, rights, party.preferredSize, party.preferredCombat, Shared.MODES[party.mode].index);
 }
 
 /**
@@ -209,10 +227,12 @@ function openInformation(player, party) {
  */
 function chooseMode(player, party) {
   const set = (mode) => {
+    if (!party.isLeader(player) || party.raid) return;
     if (mode === "hard" && !party.members.every(Stats.canPlayHard)) {
       player.sendMessage(HARD_LOCKED);
     } else {
       party.mode = mode;
+      player.setAttribute(Parties.DEFAULT_MODE_ATTRIBUTE, mode);
     }
     refreshParty(party);
     openInformation(player, party);
@@ -298,11 +318,11 @@ function enlist(party, player) {
 }
 
 /** The leader's Accept for one of the party's applicants. */
-function acceptAsLeader(party, applicant) {
-  answerApplicant(party.leader, party, party.applicants.indexOf(applicant), true);
+function acceptAsLeader(party, applicant, notifyApplicant = true) {
+  answerApplicant(party.leader, party, party.applicants.indexOf(applicant), true, { notifyApplicant, deferHud: false });
 }
 
-function answerApplicant(player, party, index, accept) {
+function answerApplicant(player, party, index, accept, { notifyApplicant = true, deferHud = true } = {}) {
   const applicant = party.applicants[index];
   if (!applicant) {
     openInformation(player, party);
@@ -320,7 +340,21 @@ function answerApplicant(player, party, index, accept) {
       Shared.statement(player, `${Shared.displayName(applicant)} appears to have joined another party.`);
       return;
     }
-    party.accept(applicant);
+    if (party.accept(applicant)) {
+      if (notifyApplicant) {
+        const leaderName = Shared.displayName(party.leader).replaceAll(" ", "\u00a0");
+        applicant.sendMessage(`Your application to the party of ${leaderName} has been accepted.`);
+      }
+      if (deferHud) {
+        // 227/00553 ticks 11915–11916: the message arrives one tick before party status 6440.
+        pendingApplicantHud.set(applicant, party);
+        Shared.later(applicant, 1, () => {
+          if (pendingApplicantHud.get(applicant) !== party) return;
+          pendingApplicantHud.delete(applicant);
+          if (party.has(applicant) && !party.raid) refreshHud(applicant);
+        });
+      }
+    }
   } else {
     party.decline(applicant);
     applicant.sendMessage(`Your application to the party of ${Shared.displayName(party.leader)} has been declined.`);
@@ -333,6 +367,15 @@ function clickInformation(event) {
   const { player } = event;
   const slot = slotOf(event);
   const party = viewedParty(player);
+  if (slot === INFO_BUTTON.REFRESH && (!party || party.raid)) {
+    if (player.getInterfaceId() === INTERFACE.PARTY_INFORMATION) {
+      // 227/01833 ticks 3480–3482. Retire the details modal while keeping the new chatbox.
+      statementThenOverview(player, "That party is no longer recruiting.");
+      player.setInterfaceId(-1);
+      player.getPacketSender().closeInterface(INTERFACE.PARTY_INFORMATION);
+    }
+    return;
+  }
   if (slot === INFO_BUTTON.BACK || !party) {
     openOverview(player);
     return;
@@ -378,6 +421,76 @@ function clickInformation(event) {
     // The client waits on a pause button until the interface is redrawn.
     openInformation(player, party);
   }
+}
+
+function refreshPartyOrder(party, deferHudFor = null) {
+  refreshParty(party, deferHudFor);
+  for (const viewer of Shared.core().World.getPlayers()) {
+    if (viewer.getInterfaceId() === INTERFACE.PARTY_INFORMATION && isViewing(viewer, party)
+      && !party.has(viewer) && !party.applicants.includes(viewer)) {
+      openInformation(viewer, party);
+    }
+  }
+}
+
+function finishPartyHandover(player, request, accepted) {
+  if (pendingPartyHandover.get(player) !== request) return;
+  pendingPartyHandover.delete(player);
+  const { party, member } = request;
+  if (viewedParty(player) !== party || !party.isLeader(player) || !Shared.inVerSinhaza(player.getLocation())) return;
+  if (!accepted || party.raid || party.members[1] !== member) {
+    openInformation(player, party);
+    return;
+  }
+
+  party.swap(0, 1);
+  refreshPartyOrder(party, player);
+  // 237/1162 ticks 15860–15861: the old leader's details redraw before their lobby HUD.
+  Shared.later(player, 1, () => {
+    if (Parties.partyOf(player) === party && !party.raid) refreshHud(player);
+  });
+}
+
+function partyHandoverClosed({ player, interfaceId }) {
+  if (interfaceId !== CONFIRMATION_MENU) return;
+  const request = pendingPartyHandover.get(player);
+  if (!request) return;
+  // The prompt closes before its choice callback. Handle dismissal only if no choice consumed it.
+  Shared.later(player, 1, () => {
+    if (pendingPartyHandover.get(player) !== request) return;
+    if (player.getInterfaceId() >= 0 || player.getPacketSender().getChatboxGroupId() >= 0) {
+      pendingPartyHandover.delete(player);
+      return;
+    }
+    finishPartyHandover(player, request, false);
+  });
+}
+
+function clickPartyArrow(event) {
+  const { player, buttonId } = event;
+  if (player.getInterfaceId() !== INTERFACE.PARTY_INFORMATION || (event.opId ?? event.action) !== 1) return;
+  const party = viewedParty(player);
+  if (!party) return;
+  event.handled = true;
+
+  const arrow = (buttonId & 0xffff) - INFO_ARROW_FIRST;
+  const from = Math.floor(arrow / 2);
+  const to = from + (arrow % 2 === 0 ? -1 : 1);
+  if (!party.isLeader(player) || party.raid || !party.members[from] || !party.members[to]) {
+    openInformation(player, party);
+    return;
+  }
+  if (from === 0 || to === 0) {
+    const request = { party, member: party.members[1] };
+    player.getPacketSender().sendInterfaceRemoval();
+    pendingPartyHandover.set(player, request);
+    Shared.options(player, "Continue?",
+      "Yes", () => finishPartyHandover(player, request, true),
+      "No", () => finishPartyHandover(player, request, false));
+    return;
+  }
+  party.swap(from, to);
+  refreshPartyOrder(party);
 }
 
 /** A pause button on either interface: its parent and the child resumed. */
@@ -436,7 +549,8 @@ function bringGroup(leader, party) {
     if (member === leader) continue;
     if (canBring(party, member)) {
       enlist(party, member);
-      acceptAsLeader(party, member);
+      // Grouping creates this application on the member's behalf.
+      acceptAsLeader(party, member, false);
     } else {
       member.sendMessage(`${Shared.displayName(leader)} has made a Theatre of Blood party for your group. Apply at the notice board and you'll be let straight in.`);
     }
@@ -460,12 +574,59 @@ function callOver(player) {
   Shared.npcSay(player, Shared.NPC.MYSTERIOUS_STRANGER, "Hey. Over here.");
 }
 
+/** Open the list behind the message box, then close the chatbox without removing the list. */
+function statementThenOverview(player, text) {
+  const { DialogueChainBuilder, StatementDialogue, ActionDialogue } = Shared.core();
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new StatementDialogue(0, text),
+    new ActionDialogue(1, { execute: () => {
+      openOverview(player);
+      player.getPacketSender().closeInterface(MESSAGE_BOX);
+    } }),
+  ));
+}
+
+function syncNoticeBoardFlag({ player }) {
+  if (player.getAttribute(USED_NOTICE_BOARD_ATTRIBUTE)) {
+    player.getPacketSender().sendVarbit(VARBIT.USED_NOTICE_BOARD, 1);
+  }
+}
+
+/** Captured in 227/00101 ticks 25574–25608, 234/03285 ticks 23940–23950 and 237/01162 ticks 12855–12866. */
+function introduceNoticeBoard(player) {
+  const { DialogueChainBuilder, StatementDialogue, OptionDialogue } = Shared.core();
+  const introduction = [
+    "From this notice board, you can form or join a Theatre of Blood",
+    "raiding party. The raid has three difficulty modes to select from. If",
+    "you're forming your own party, you can pick what mode you want.",
+    "If you have limited raiding experience, you'll likely want to start with",
+    "Entry Mode. Otherwise, you might prefer Normal Mode.",
+  ].join("<br>");
+  const experience = new OptionDialogue(1, { executeOption: (option) => {
+    const mode = option === 1 ? "entry" : "normal";
+    player.setAttribute(Parties.DEFAULT_MODE_ATTRIBUTE, mode);
+    player.setAttribute(USED_NOTICE_BOARD_ATTRIBUTE, true);
+    syncNoticeBoardFlag({ player });
+    statementThenOverview(player,
+      `When you form a raiding party, it will be set to ${Shared.MODES[mode].name} Mode. If<br>`
+      + "you wish to pick a different difficulty mode, you can do so at any<br>"
+      + "time from this notice board.");
+  } }, "Not very experienced. I'll start with Entry Mode.", "Quite experienced. I'll start with Normal Mode.")
+    .setTitle("How experienced are you with raids?");
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(
+    new StatementDialogue(0, introduction),
+    experience,
+  ));
+}
+
 function readNoticeBoard({ player }) {
   if (!hasMetStranger(player)) {
     callOver(player);
-    return true;
+  } else if (player.getAttribute(USED_NOTICE_BOARD_ATTRIBUTE)) {
+    openOverview(player);
+  } else {
+    introduceNoticeBoard(player);
   }
-  openOverview(player);
   return true;
 }
 
@@ -575,15 +736,20 @@ module.exports = function registerTheatreLobby(api) {
   api.persistAttribute(ATTR.WARNED);
   api.persistAttribute(ATTR.NO_CRYSTAL_PROMPT);
   api.persistAttribute(ATTR.MET_STRANGER);
+  api.persistAttribute(USED_NOTICE_BOARD_ATTRIBUTE, false);
+  api.persistAttribute(Parties.DEFAULT_MODE_ATTRIBUTE, "normal");
   api.onNpcInteraction("Mysterious Stranger", { "Talk-to": talkToStranger });
   api.onZoneEnter(Shared.VER_SINHAZA, enterVerSinhaza);
   api.onZoneExit(Shared.VER_SINHAZA, leaveVerSinhaza);
   api.onPlayerLogout(logoutFromLobby);
+  api.onPlayerLogin(syncNoticeBoardFlag);
   api.onServerStartup(announceActivity);
   Shared.onObject(api, Shared.OBJECT.NOTICE_BOARD, readNoticeBoard);
   Shared.onObject(api, Shared.OBJECT.ENTRANCE, useEntrance);
   api.onInterfaceActionClick(resumeButton);
   api.onInterfaceActionButton(LIST_ROW_UIDS, selectRow);
+  api.onInterfaceActionButton(INFO_ARROW_UIDS, clickPartyArrow);
+  api.onCustomEvent("interface:closed", partyHandoverClosed);
 };
 
 Object.assign(module.exports, {

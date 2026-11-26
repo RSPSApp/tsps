@@ -9,25 +9,26 @@
  *
  * Stages (varp 387): 5 agreed, 10 refused delivery, 15 persuaded boatman,
  * 20 gave planks, 25 reached Hollows, 52 questioned by Curpile, 55 answered,
- * 60 entered hideout, 65 met Veliaf, 67 weapons accepted, 70 delivered weapons
- * (cutscene), 80 hellhound summoned, 85 killed hellhound, 90 shown way out,
+ * 60 entered hideout, 65 met Veliaf, 67 weapons handed over, 70 cutscene,
+ * 80 hellhound summoned, 85 killed hellhound, 90 shown way out,
  * 95 in inn basement, 97 escaped to Canifis, 105 complete.
  *
- * Source: https://github.com/GregHib/void/blob/2b8e267836a8469757c73694ea4d57f2f1c28458/game/src/main/kotlin/content/quest/member/myreque/SearchMyreque.kt
- * (+ the same folder's quest varps/varbits data, pinned in issue #196).
+ * Sources: an rsprox capture of a whole live playthrough (revision 242; docs/in-search-of-the-myreque.md has the facts,
+ * by tick) for what happens between the words: stage changes, varbits, animations, sounds, tiles, timings and the
+ * cutscene; the OSRS Wiki and the transcript for the words and the rules. Where the two disagree the Wiki's value is
+ * kept and the doc lists the recorded difference.
  *
- * Gaps: the quest NPCs themselves are not spawned by this file (central
- * registration/world spawns own them); only the Skeleton Hellhound is spawned
- * owner-only. Curpile's quiz is a counted random in the regenerated Myreque record (RSPSApp/osrsreboxed-db#108: three of six
- * questions, no repeats, then the four count conditions): the plugin resets a per-attempt counter on draw 1, scores each
- * answer against the drawn question's text and answers the count conditions by their ids. Curpile's 3-damage punch (the
- * refusal option) is applied by its action step.
- * Per-player bridge rungs live in a persisted attribute mirrored to varbits
- * 176-178/3928; the world clipping is not edited.
+ * Units: ../insearchofthemyreque/Bridge (the rope bridge) and Hideout (Vanstrom's cutscene and the hellhound fight).
+ * The quest NPCs are world spawns (their multinpcs follow varp 387 and varbits 396/10367); only the cutscene cast and
+ * the Skeleton Hellhound are spawned, owner-only. Curpile's quiz is a counted random in the regenerated Myreque record
+ * (RSPSApp/osrsreboxed-db#108: three of six questions, no repeats, then the four count conditions): the plugin resets a
+ * per-attempt counter on draw 1, scores each answer against the drawn question's text and answers the count conditions
+ * by their ids, mirroring the counts to varbits 173/174 as live does.
  */
 module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const { Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers } = api.core;
   const { registerQuest, refreshQuestList, loadTranscripts } = require("../QuestRuntime");
+  const { createQuestScenes } = require("../QuestScenes");
 
   const VARP_IN_SEARCH_OF_THE_MYREQUE = 387;
 
@@ -60,29 +61,33 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     15879, // Veliaf Hurtz (cache id, no identifier)
     15885, // Veliaf Hurtz (cache id, no identifier)
   ]);
+  const HAROLD_NPC_IDS = new Set([NpcIdentifiers.HAROLD_EVANS, 9803]); // 9803: route_harold_evans, the spawn that shows 9624
   const HELLHOUND_NPC_IDS = new Set([
     NpcIdentifiers.SKELETON_HELLHOUND, // 5054
     NpcIdentifiers.SKELETON_HELLHOUND_2, // 6387
   ]);
 
-  /** npc id -> member slug (page variant stem) and met flag. */
+  /**
+   * npc id -> member slug (page variant stem), met flag and its bit of thsfm_spoken_allmyreque (varbit 2496): live sets
+   * Harold 2, Radigad 4, Sani 1, Polmafi 8, Ivan 16 on each first talk (capture ticks 1135, 1166, 1188, 1211, 1236).
+   */
   const MEMBERS = new Map([
-    [NpcIdentifiers.SANI_PILIU, { name: "Sani Piliu", slug: "sani-piliu", flag: "met_sani", after: null }],
-    [NpcIdentifiers.SANI_PILIU_2, { name: "Sani Piliu", slug: "sani-piliu", flag: "met_sani", after: null }],
-    [NpcIdentifiers.HAROLD_EVANS, { name: "Harold Evans", slug: "harold-evans", flag: "met_harold", after: null }],
-    [NpcIdentifiers.HAROLD_EVANS_2, { name: "Harold Evans", slug: "harold-evans", flag: "met_harold", after: null }],
-    [NpcIdentifiers.RADIGAD_PONFIT, { name: "Radigad Ponfit", slug: "radigad-ponfit", flag: "met_radigad", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-radigad-ponfit" }],
-    [NpcIdentifiers.POLMAFI_FERDYGRIS, { name: "Polmafi Ferdygris", slug: "polmafi-ferdygris", flag: "met_polmafi", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-polmafi-ferdygris" }],
-    [NpcIdentifiers.IVAN_STROM, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
-    [NpcIdentifiers.IVAN_STROM_2, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
-    [NpcIdentifiers.IVAN_STROM_3, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
-    [NpcIdentifiers.IVAN_STROM_5, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
-    [NpcIdentifiers.IVAN_STROM_6, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
-    [NpcIdentifiers.IVAN_STROM_7, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
-    [NpcIdentifiers.IVAN_STROM_8, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
-    [NpcIdentifiers.IVAN_STROM_9, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
-    [NpcIdentifiers.IVAN_STROM_10, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
-    [NpcIdentifiers.IVAN_STROM_11, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
+    [NpcIdentifiers.SANI_PILIU, { name: "Sani Piliu", slug: "sani-piliu", flag: "met_sani", bit: 1, after: null }],
+    [NpcIdentifiers.SANI_PILIU_2, { name: "Sani Piliu", slug: "sani-piliu", flag: "met_sani", bit: 1, after: null }],
+    [NpcIdentifiers.HAROLD_EVANS, { name: "Harold Evans", slug: "harold-evans", flag: "met_harold", bit: 2, after: null }],
+    [NpcIdentifiers.HAROLD_EVANS_2, { name: "Harold Evans", slug: "harold-evans", flag: "met_harold", bit: 2, after: null }],
+    [NpcIdentifiers.RADIGAD_PONFIT, { name: "Radigad Ponfit", slug: "radigad-ponfit", flag: "met_radigad", bit: 4, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-radigad-ponfit" }],
+    [NpcIdentifiers.POLMAFI_FERDYGRIS, { name: "Polmafi Ferdygris", slug: "polmafi-ferdygris", flag: "met_polmafi", bit: 8, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-polmafi-ferdygris" }],
+    [NpcIdentifiers.IVAN_STROM, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", bit: 16, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
+    [NpcIdentifiers.IVAN_STROM_2, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", bit: 16, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
+    [NpcIdentifiers.IVAN_STROM_3, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", bit: 16, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
+    [NpcIdentifiers.IVAN_STROM_5, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", bit: 16, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
+    [NpcIdentifiers.IVAN_STROM_6, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", bit: 16, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
+    [NpcIdentifiers.IVAN_STROM_7, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", bit: 16, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
+    [NpcIdentifiers.IVAN_STROM_8, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", bit: 16, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
+    [NpcIdentifiers.IVAN_STROM_9, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", bit: 16, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
+    [NpcIdentifiers.IVAN_STROM_10, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", bit: 16, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
+    [NpcIdentifiers.IVAN_STROM_11, { name: "Ivan Strom", slug: "ivan-strom", flag: "met_ivan", bit: 16, after: "myreque-hideout-after-defeating-the-skeleton-hellhound-ivan-strom" }],
   ]);
 
   const STEEL_LONGSWORD_ITEM_ID = ItemIdentifiers.STEEL_LONGSWORD;
@@ -91,8 +96,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const STEEL_MACE_ITEM_ID = ItemIdentifiers.STEEL_MACE;
   const STEEL_WARHAMMER_ITEM_ID = ItemIdentifiers.STEEL_WARHAMMER;
   const PLANK_ITEM_ID = ItemIdentifiers.PLANK;
-  const STEEL_NAILS_ITEM_ID = ItemIdentifiers.STEEL_NAILS;
-  const HAMMER_ITEM_ID = ItemIdentifiers.HAMMER;
   const COINS_ITEM_ID = ItemIdentifiers.COINS;
   const RING_OF_CHAROS_A_ITEM_IDS = [
     ItemIdentifiers.RING_OF_CHAROS_A_, // 6465
@@ -121,46 +124,47 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   ];
 
   const ROPE_BRIDGE_ID = ObjectIdentifiers.ROPE_BRIDGE; // 5002, Cross
-  const BRIDGE_TREE_PARENT_ID = 5003; // multi-loc resolved to 26248/26249 by varbit 3928
-  const SURFACE_DOOR_IDS = new Set([ObjectIdentifiers.WOODEN_DOORS_7, ObjectIdentifiers.WOODEN_DOORS_8]);
-  const CAVE_ENTRANCE_ID = ObjectIdentifiers.CAVE_ENTRANCE_27; // 5046, hidden cave entrance
+  const BRIDGE_TREE_PARENT_ID = 5003; // spooky_tree_base_forbridge, shown by varbit 3928 as 50787 (Climb) or 50788 (Cross-bridge)
+  const BRIDGE_TREE_IDS = new Set([ObjectIdentifiers.TREE_117, ObjectIdentifiers.TREE_118]); // 26248, 26249
   const BROKEN_BRIDGE_IDS = new Set([
     ObjectIdentifiers.BROKEN_ROPE_BRIDGE_2, // 26244
-    26245, // broken rope bridge rung, varbit 176
-    26246, // broken rope bridge rung, varbit 177
-    26247, // broken rope bridge rung, varbit 178
+    26245, // route_swampbridge_1, varbit 176
+    26246, // route_swampbridge_2, varbit 177
+    26247, // route_swampbridge_3, varbit 178
   ]);
-  const BRIDGE_RUNG_VARBITS = { 26245: 176, 26246: 177, 26247: 178 };
-  const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
+  const SURFACE_DOOR_IDS = new Set([ObjectIdentifiers.WOODEN_DOORS_7, ObjectIdentifiers.WOODEN_DOORS_8]);
   /**
-   * How long the rung step ignores clipping: tasks run before movement in a tick, so 1 would end it before the
-   * step is taken (Brimhaven's vines use 2 for the same reason).
+   * Open on the doors in the earth (freedomfighterentrancer 5061 at (3509,3447), size 2): the open pair 5062/5063 in
+   * their place, iron_door_open (71) and the fade on the tick after human_pickuptable (832), the move into the cave two
+   * ticks on (capture ticks 1081-1086).
    */
-  const RUNG_STEP_TICKS = 2;
-  const rungSteps = new WeakMap();
-  const BRIDGE_TREE_IDS = new Set([ObjectIdentifiers.TREE_117, ObjectIdentifiers.TREE_118]); // 26248, 26249
+  const SURFACE_DOOR_OPEN = { left: ObjectIdentifiers.WOODEN_DOORS_9, right: ObjectIdentifiers.WOODEN_DOORS_10 }; // 5062, 5063
+  const SURFACE_DOOR_ANIMATION = 832; // human_pickuptable
+  const SURFACE_DOOR_SOUND = 71; // iron_door_open
+  const CAVE_LANDING = { x: 3500, y: 9811 };
+  /** The hideout's arrival tile from the main cave's tunnel (loc-teleports: route_cavewalltunnel at (3492,9823)). */
+  const HIDEOUT_TUNNEL = { x: 3492, y: 9823 };
   const STALAGMITE_ID = ObjectIdentifiers.STALAGMITE_3; // 5050
-  const FAKE_WALL_ID = ObjectIdentifiers.WALL_17; // 5052
+  const FAKE_WALL_ID = ObjectIdentifiers.WALL_17; // 5052, thrttavernbasementfalsewall
   /**
    * The hidden wall at the end of the tunnel: loc 5052 "Wall" (op Search) at (3480,9837), type 0, rotation 3, a straight
-   * wall on that tile's SOUTH edge (rotation 0 west, 1 north, 2 east, 3 south), so it separates (3480,9837) on the north
-   * from (3480,9836) on the south. Cache-derived (the #5488 probe, main 73e6d6b51), no capture.
+   * wall on that tile's south edge between (3480,9836) and (3480,9837). Searching it from (3480,9836) (capture tick
+   * 1574): the wall becomes an invisible one (inviswall 38848) and the inactive wall (5053) stands open on (3480,9836),
+   * rotation 0; door_open (62); the player walks one tile north; two ticks on the wall is back and the open leaf gone.
    */
   const WALL_NORTH_SIDE = { x: 3480, y: 9837 };
   const WALL_SOUTH_SIDE = { x: 3480, y: 9836 };
-  const WALK_ANIMATION = 819; // the walk the repo's other door passes use (CooksGuild.plugin.js)
-  /**
-   * The two bridge trees (loc 5003, shown as 50787 "Tree", op Climb; cache-derived, probe) and the bridge's tiles, all
-   * Wiki/void-based with no capture (void SearchMyreque.kt: NORTH_TREE 3431 :410, BRIDGE_LANDING 3427 :412, BRIDGE_TOP
-   * 3430 :414, NORTH_BANK (3503,3431) and SOUTH_BANK (3502,3425) :416-417).
-   */
-  const SOUTH_TREE_Y = 3426;
-  const NORTH_TREE_Y = 3431;
-  const BRIDGE_LANDING_Y = 3427;
-  const BRIDGE_TOP_Y = 3430;
-  const NORTH_BANK = { x: 3503, y: 3431 };
-  const SOUTH_BANK = { x: 3502, y: 3425 };
+  const INVISIBLE_WALL_ID = 38848; // inviswall
+  const OPEN_WALL_ID = ObjectIdentifiers.WALL_18; // 5053, thrttavernbasementfalsewall_inactive
+  const WALL_OPEN_SOUND = 62; // door_open
+  const WALL_OPEN_TICKS = 2;
+  const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
+  const WALL_PASS_ATTRIBUTE = "in-search-of-the-myreque:wall-pass-prior-clipping";
+  const wallPasses = new WeakMap();
   const TAVERN_LADDER_ID = ObjectIdentifiers.LADDER_54; // 5054
+  /** Climb-up: human_reachforladder (828), the move to (3495,3465) the next tick (capture ticks 1581-1582). */
+  const LADDER_ANIMATION = 828;
+  const LADDER_TOP = { x: 3495, y: 3465 };
   const TAVERN_TRAPDOOR_ID = ObjectIdentifiers.TRAPDOOR_23; // 5055
   const HIDEOUT_EXIT_DOOR_IDS = new Set([
     ObjectIdentifiers.WOODEN_DOORS_3, // 5056
@@ -169,6 +173,18 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const MORT_TON_BOAT_ID = ObjectIdentifiers.SWAMP_BOATY_2; // 6969
   const HOLLOWS_BOAT_ID = ObjectIdentifiers.SWAMP_BOATY_3; // 6970
   const HOLLOWS_SIGN_ID = ObjectIdentifiers.SIGN_35; // 26255
+  /**
+   * The boat ride to the Hollows (Cyreg's Travel, capture ticks 621-641; the Mort'ton boat's Board, 898-916): the fare and
+   * the fade on the click, then the side tabs close, the "morytania boatride" jingle (137), swamp_boatjourney (321) and
+   * the box "You board the boat and journey to the Hollows." (no continue) the next tick; the move to (3498,3380) fourteen
+   * ticks on, and a tick later the box "You arrive at the Hollows.", the tabs back, 321 shut and the fade back in.
+   */
+  const BOAT_JOURNEY_INTERFACE = 321;
+  const BOAT_JINGLE = 137;
+  const BOAT_RIDE_TICKS = 15;
+  const HOLLOWS_LANDING = { x: 3498, y: 3380 };
+  const MORT_TON_LANDING = { x: 3522, y: 3285 };
+  const BOAT_FARE = 10;
 
   const START_HOOK = "quest:in-search-of-the-myreque:start";
   // Ids of the record imported from RSPSApp/osrsreboxed-db c971f8ee2 (#108 there, docs/npc-dialogues.json): Curpile's quiz is a counted
@@ -184,8 +200,7 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const QUIZ_PASS_CONDITION_ID = "p493oV";
   const SHOW_POUCH_MESSAGE_ID = "BKpf08";
   const PLANKS_MESSAGE_ID = "DsO5TF";
-  const GIVE_WEAPONS_CONDITION_ID = "VLPyT3";
-  const CUTSCENE_START_ACTION_ID = "bLWS_j";
+  const HAND_IN_MESSAGE_ID = "OVBQEv"; // "You give the weapons to Veliaf."
   const SUMMON_HOUND_ACTION_ID = "OFmcmp";
   // "Curpile knocks you out and takes you back to Mort'ton." after one, two or three wrong answers.
   const KNOCKOUT_MESSAGE_IDS = new Set(["HQfMkY", "XmM1Px", "k1iShr"]); // zero, one, two correct (RSPSApp/osrsreboxed-db#108 record)
@@ -207,13 +222,31 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     ["What vampyre family rules over Morytania?", "Drakan."],
   ]);
   const QUIZ_QUESTION_PREFIX = "Okay, [first/second/third and final] question. ";
+  /** routequestionscorrect / routequestionsanswered: live counts each attempt's answers (reset as an attempt starts). */
+  const QUIZ_CORRECT_VARBIT = 173;
+  const QUIZ_ANSWERED_VARBIT = 174;
+  /**
+   * The knock-out (capture ticks 778-791, 882-895): with the box up (no continue), Curpile's human_sword_slash (390) and
+   * hacksword_slash (2500); a tick later the player's human_staff_block (415), stunned_thieving (245, height 124) and
+   * stunned (2727); a tick later human_death_backwards (837) and the fade; the minimap off a tick after that; the move
+   * to Mort'ton seven ticks after the box; three ticks on the fade back in and the box again, now with continue.
+   */
+  const KNOCKOUT = {
+    curpileAnimation: 390, curpileSound: 2500,
+    blockAnimation: 415, stunSpotanim: 245, stunHeight: 124, stunSound: 2727,
+    fallAnimation: 837, moveTicks: 7, wakeTicks: 10,
+    text: "Curpile knocks you out and takes you back to Mort'ton.",
+  };
+  /** The refusal punch (capture tick 698): "Curpile punches you.", the 3 damage and human_unarmedpunch (422) on the player. */
+  const PUNCH_MESSAGE = "Curpile punches you.";
+  const PUNCH_ANIMATION = 422;
 
   /**
-   * The Hair of the Dog's stranger is one spawn (cache NPC 6269) that shows Vanstrom Klause (5056) while varbit 396 is 0 and
-   * the plain Stranger (5055) when it is 1. Wiki/void-based, no capture: void sets `thsfm_vanstrom_hide` (varbit 396,
-   * persist, boolean; in_search_of_the_myreque.varbits.toml) when the weapons are handed over (VeliafHurtz.kt:177-180). It
-   * stays 1 once set (ours: no source shows it going back). Like the bridge varbits it is re-sent at login, here derived
-   * from the persisted stage.
+   * The Hair of the Dog's stranger is one spawn (cache NPC 6269) that shows Vanstrom Klause (5056) while varbit 396
+   * (thsfm_vanstrom_hide) is 0 and the plain Stranger (5055) when it is 1. Live sets it as the cutscene starts, with
+   * stage 70 (capture tick 1301). It stays 1 after completion (Wiki, Stranger: "only upon completing In Search of the
+   * Myreque will the stranger replace Vanstrom"), though live's completion clears varp 388 with it (tick 1617; a
+   * recorded difference). Re-derived from the stage at every change and login.
    */
   const VANSTROM_HIDE_VARBIT = 396;
   /** Flags of the members whose first-time branch has already played in the conversation in progress. */
@@ -222,10 +255,34 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   const QUIZ_CORRECT_ATTRIBUTE = "quest.in_search_of_the_myreque.quiz.correct";
   /** The question each player is being asked right now (set by the draw event, cleared by the answer). */
   const askedQuestion = new WeakMap();
-  const HELLHOUND_SPOT = { x: 3507, y: 9838, z: 0 };
+  /** Answers given in the attempt in progress (varbit 174). */
+  const quizAnswered = new WeakMap();
+  const knockedOut = new WeakSet();
+  /** Where the hound waits for a player who left the fight and came back (Wiki: "close to the entrance"). Ours: the tile. */
+  const HELLHOUND_SPOT = { x: 3505, y: 9834, z: 0 };
+  const SPOKEN_ALL_MYREQUE_VARBIT = 2496;
+  const SCENE_EXIT_ATTRIBUTE = "quest.in_search_of_the_myreque.scene_exit";
 
   let quest;
   const houndByPlayer = new Map();
+  /** The quest handle for the units, which are built before registerQuest returns it. */
+  const questRef = {
+    getStage: (player) => quest.getStage(player),
+    setStage: (player, stage) => quest.setStage(player, stage),
+    isComplete: (player) => quest.isComplete(player),
+  };
+  const Scenes = createQuestScenes(api, { onEnd: sceneEnded, recoveryAttribute: SCENE_EXIT_ATTRIBUTE });
+  const Bridge = require("../insearchofthemyreque/Bridge.InSearchOfTheMyreque")(api, {
+    quest: questRef, attribute: BRIDGE_ATTRIBUTE, stageReachedHollows: STAGE_REACHED_HOLLOWS,
+  });
+  const Hideout = require("../insearchofthemyreque/Hideout.InSearchOfTheMyreque")(api, {
+    Scenes,
+    quest: questRef,
+    stages: {
+      MET_VELIAF: STAGE_MET_VELIAF, DELIVERED_WEAPONS: STAGE_DELIVERED_WEAPONS, HELLHOUND_SUMMONED: STAGE_HELLHOUND_SUMMONED,
+    },
+    onKilled: veliafAfterTheHound,
+  });
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
 
@@ -248,6 +305,14 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   function setMetFlag(player, flag) {
     player.setAttribute(`quest.in_search_of_the_myreque.${flag}`, true);
+    sendSpokenMembers(player);
+  }
+
+  /** thsfm_spoken_allmyreque (varbit 2496): one bit per member met; 0 once the quest is complete (capture tick 1617). */
+  function sendSpokenMembers(player) {
+    const value = quest.isComplete(player) ? 0
+      : JOURNAL_MEMBERS.reduce((sum, member) => sum | (metFlag(player, member.flag) ? member.bit : 0), 0);
+    player.getPacketSender().sendVarbit(SPOKEN_ALL_MYREQUE_VARBIT, value);
   }
 
   function allMembersMet(player) {
@@ -256,30 +321,6 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
 
   function quizCorrect(player) {
     return Number(player.getAttribute(QUIZ_CORRECT_ATTRIBUTE)) || 0;
-  }
-
-  // ---- Rope bridge rungs (persisted per player, mirrored to varbits) ----
-
-  function rungRepaired(player, varbit) {
-    const value = Number(player.getAttribute(BRIDGE_ATTRIBUTE)) || 0;
-    return (value & (1 << (varbit - 176))) !== 0;
-  }
-
-  function markRungRepaired(player, varbit) {
-    const value = Number(player.getAttribute(BRIDGE_ATTRIBUTE)) || 0;
-    player.setAttribute(BRIDGE_ATTRIBUTE, value | (1 << (varbit - 176)));
-  }
-
-  function bridgeRepaired(player) {
-    return [176, 177, 178].every((varbit) => rungRepaired(player, varbit));
-  }
-
-  function firstBrokenRung(player) {
-    return [176, 177, 178].find((varbit) => !rungRepaired(player, varbit));
-  }
-
-  function hasBridgeMaterials(player) {
-    return held(player, PLANK_ITEM_ID, 1) && held(player, STEEL_NAILS_ITEM_ID, 75) && held(player, HAMMER_ITEM_ID, 1);
   }
 
   // ---- Journal ----
@@ -337,9 +378,10 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
         lines.push(metFlag(player, member.flag) ? `<str>${member.name}</str>` : `<col=800000>${member.name}</col>`);
       }
     }
-    if (stage >= STAGE_WEAPONS_ACCEPTED && stage < STAGE_DELIVERED_WEAPONS) {
+    if (stage >= STAGE_MET_VELIAF && stage < STAGE_WEAPONS_ACCEPTED && allMembersMet(player)) {
       lines.push("I should hand the weapons over to Veliaf.");
     }
+    if (stage === STAGE_WEAPONS_ACCEPTED) lines.push("I gave the weapons to Veliaf.");
     if (stage >= STAGE_HELLHOUND_SUMMONED && stage < STAGE_KILLED_HELLHOUND) {
       lines.push("Vanstrom summoned a Skeleton Hellhound! I must kill it.");
     }
@@ -515,8 +557,10 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       }
       return metFlag(player, flag);
     }
-    if (value.includes("does not have the weapons")) return !hasAllWeapons(player);
-    if (value.includes("does have the weapons")) return hasAllWeapons(player);
+    // Once handed over (stage 67) Veliaf has them: a hand-in whose chat was closed at the item box still reaches the cutscene.
+    const handedOver = quest.getStage(player) >= STAGE_WEAPONS_ACCEPTED;
+    if (value.includes("does not have the weapons")) return !handedOver && !hasAllWeapons(player);
+    if (value.includes("does have the weapons")) return handedOver || hasAllWeapons(player);
     return null;
   }
 
@@ -565,20 +609,23 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     }
   }
 
-  function handInWeapons(player) {
+  /**
+   * "You give the weapons to Veliaf." (capture tick 1295): the weapons go, stage 67, and the box shows the longsword and
+   * the mace; stage 70 comes with the cutscene three ticks after Veliaf's thanks.
+   */
+  function handInWeapons(event) {
+    const { player } = event;
     const stage = quest.getStage(player);
-    if (stage < STAGE_MET_VELIAF || stage >= STAGE_DELIVERED_WEAPONS) return;
-    if (!hasAllWeapons(player)) return;
+    if (stage < STAGE_MET_VELIAF || stage >= STAGE_WEAPONS_ACCEPTED || !hasAllWeapons(player)) return;
     for (const weapon of WEAPONS) player.getInventory().deleteNumber(weapon.itemId, weapon.amount);
-    quest.setStage(player, STAGE_DELIVERED_WEAPONS);
+    quest.setStage(player, STAGE_WEAPONS_ACCEPTED);
+    event.box = { items: [STEEL_LONGSWORD_ITEM_ID, STEEL_MACE_ITEM_ID] };
   }
 
   /**
-   * Shows the plain Stranger instead of Vanstrom in the pub from the weapons hand-over (stage 70) on. Derived from the
-   * persisted stage at every stage change (the runtime's quest:stage-changed) and at login, so a jump or a reset leaves
-   * the pub consistent; void sets the varbit at the hand-over and clears it only on a quest reset (VeliafHurtz.kt:179).
-   * The stage is persisted by the player save, so no attribute of its own is needed (the bridge varbits use an
-   * attribute because they are not derivable from the stage).
+   * Shows the plain Stranger instead of Vanstrom in the pub from the cutscene (stage 70) on, derived from the persisted
+   * stage at every stage change (the runtime's quest:stage-changed) and at login, so a jump or a reset leaves the pub
+   * consistent.
    */
   function sendStrangerSwap(player) {
     player.getPacketSender().sendVarbit(VANSTROM_HIDE_VARBIT, quest.getStage(player) >= STAGE_DELIVERED_WEAPONS ? 1 : 0);
@@ -600,22 +647,9 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       }
       return;
     }
-    if (stepId === GIVE_WEAPONS_CONDITION_ID) {
-      handInWeapons(player);
-      return;
-    }
     const flag = FIRST_SPEAKING_STEP_FLAGS.get(stepId);
     if (!flag) return;
     setMetFlag(player, flag);
-    if (flag === "veliaf_after") {
-      // The first-time page already describes the wall and ladder; release the exit leg.
-      if (quest.getStage(player) === STAGE_KILLED_HELLHOUND) quest.setStage(player, STAGE_SHOWN_WAY_OUT);
-    } else if (allMembersMet(player)) {
-      const stage = quest.getStage(player);
-      if (stage >= STAGE_MET_VELIAF && stage < STAGE_WEAPONS_ACCEPTED) {
-        quest.setStage(player, STAGE_WEAPONS_ACCEPTED);
-      }
-    }
     // After the stage moves above: a stage change drops the note, and this conversation's tail judgement still needs it.
     if (!metThisConversation.has(player)) metThisConversation.set(player, new Set());
     metThisConversation.get(player).add(flag);
@@ -630,6 +664,8 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (asked !== undefined && npcId === CURPILE_NPC_ID) {
       askedQuestion.delete(player);
       if (QUIZ_ANSWERS.get(asked) === text) player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, quizCorrect(player) + 1);
+      quizAnswered.set(player, (quizAnswered.get(player) ?? 0) + 1);
+      player.getPacketSender().sendVarbit(QUIZ_CORRECT_VARBIT, quizCorrect(player)).sendVarbit(QUIZ_ANSWERED_VARBIT, quizAnswered.get(player));
       return;
     }
     const stage = quest.getStage(player);
@@ -655,7 +691,11 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   function handleDraw(event) {
     const { player, npcId } = event;
     if (!player || npcId !== CURPILE_NPC_ID) return;
-    if (event.draw === 1) player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, 0);
+    if (event.draw === 1) {
+      player.setAttribute(QUIZ_CORRECT_ATTRIBUTE, 0);
+      quizAnswered.set(player, 0);
+      player.getPacketSender().sendVarbit(QUIZ_CORRECT_VARBIT, 0).sendVarbit(QUIZ_ANSWERED_VARBIT, 0);
+    }
     const line = String(event.question ?? "");
     const question = line.startsWith(QUIZ_QUESTION_PREFIX) ? line.slice(QUIZ_QUESTION_PREFIX.length) : line;
     if (!QUIZ_ANSWERS.has(question)) console.warn(`[InSearchOfTheMyreque] Curpile drew a question with no known answer, it will score as wrong: ${JSON.stringify(question)}`);
@@ -663,11 +703,10 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   /**
-   * "I don't have to answer to you!": the transcript's action step says "Curpile hits the player for 3 damage." (void
-   * CurpileFyod.kt sendPunch: curpile_punch, one tick, damage). Matched by the step's text so a re-export that renames the
-   * step id does not drop it; the amount is the text's number (3, as the Wiki). void stores Constitution in tenths (Levels.kt:
-   * 154, 157), so sendPunch's damage(30) is 3 hit points. The punch animation and its one-tick delay are not reproduced, and
-   * the hit has no death protection (void has none either).
+   * "I don't have to answer to you!": the transcript's action step says "Curpile hits the player for 3 damage.", matched by
+   * its text so a re-export that renames the step id does not drop it; the amount is the text's number (3, as the Wiki).
+   * Live (capture tick 698) shows "Curpile punches you." with the hit and human_unarmedpunch (422) on the player. Ours:
+   * the hit has no death protection.
    */
   const CURPILE_PUNCH_TEXT = /^Curpile hits the player for (\d+) damage\.$/;
 
@@ -676,6 +715,8 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (!player) return;
     const punch = event.npcId === CURPILE_NPC_ID ? CURPILE_PUNCH_TEXT.exec(String(event.text ?? "")) : null;
     if (punch) {
+      player.sendMessage(PUNCH_MESSAGE);
+      player.performAnimation(new api.core.Animation(PUNCH_ANIMATION));
       player.getCombat().getHitQueue().addPendingDamage([new api.core.HitDamage(Number(punch[1]), api.core.HitMask.RED)]);
       return;
     }
@@ -695,29 +736,89 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       }
       player.getInventory().deleteNumber(PLANK_ITEM_ID, 3);
       if (quest.getStage(player) === STAGE_PERSUADED_BOATMAN) quest.setStage(player, STAGE_GAVE_PLANKS);
+      // Live shows it as an item box with a plank (capture tick 601).
+      event.box = { items: [PLANK_ITEM_ID] };
+      return;
+    }
+    if (stepId === HAND_IN_MESSAGE_ID) {
+      handInWeapons(event);
       return;
     }
     if (KNOCKOUT_MESSAGE_IDS.has(stepId)) {
-      player.moveTo(new api.core.Location(3522, 3285, 0));
+      knockOut(event);
       return;
     }
-    if (stepId === CUTSCENE_START_ACTION_ID || stepId === SUMMON_HOUND_ACTION_ID) {
-      summonHellhound(player);
+    // The transcript's "Cutscene ends": the hound fights. Without the scene (a test, or a jump) it waits in the hideout.
+    if (stepId === SUMMON_HOUND_ACTION_ID) {
+      if (Hideout.inScene(player)) Hideout.finish(player);
+      else summonHellhound(player);
     }
   }
 
+  /** The knock-out after a failed quiz, as live plays it (see KNOCKOUT); the box holds its continue meanwhile. */
+  function knockOut(event) {
+    const { player, npc } = event;
+    if (knockedOut.has(player)) return;
+    const { Animation, Graphic, Location } = api.core;
+    knockedOut.add(player);
+    event.box = { statement: true, holdTicks: KNOCKOUT.wakeTicks };
+    player.getMovementQueue().reset().setBlockMovement(true);
+    npc?.performAnimation?.(new Animation(KNOCKOUT.curpileAnimation));
+    player.getPacketSender().sendSound(KNOCKOUT.curpileSound, 1, 0);
+    Scenes.later(player, 1, () => {
+      player.performAnimation(new Animation(KNOCKOUT.blockAnimation));
+      player.performGraphic(Graphic.atHeight(KNOCKOUT.stunSpotanim, KNOCKOUT.stunHeight));
+      player.getPacketSender().sendSound(KNOCKOUT.stunSound, 1, 0);
+    });
+    Scenes.later(player, 2, () => {
+      player.performAnimation(new Animation(KNOCKOUT.fallAnimation));
+      Scenes.fade(player, true);
+    });
+    Scenes.later(player, 3, () => Scenes.controls(player, true));
+    Scenes.later(player, KNOCKOUT.moveTicks, () => {
+      player.moveTo(new Location(MORT_TON_LANDING.x, MORT_TON_LANDING.y, 0));
+      player.performAnimation(new Animation(-1));
+    });
+    Scenes.later(player, KNOCKOUT.wakeTicks, () => {
+      knockedOut.delete(player);
+      Scenes.controls(player, false);
+      Scenes.fade(player, false);
+    });
+  }
+
+  /** Veliaf's first after-the-hound words end with the way out: stage 90 on the player's thanks (capture tick 1502). */
+  const SHOWN_WAY_OUT_LINE = "That's very useful. Thanks.";
+
   function handleLine(event) {
-    if (event.npcId !== STRANGER_NPC_ID || event.text !== "I definitely have!") return;
-    const stage = quest.getStage(event.player);
-    if (stage >= STAGE_ESCAPED_TO_CANIFIS && !quest.isComplete(event.player)) {
-      quest.complete(event.player);
+    if (Hideout.line(event)) return;
+    // Line events come as the runner builds a stretch of the conversation, so both of these wait for the player to
+    // continue past their line (`after`).
+    const { player } = event;
+    if (event.text === SHOWN_WAY_OUT_LINE && VELIAF_NPC_IDS.has(event.npcId)) {
+      event.after = () => {
+        if (quest.getStage(player) !== STAGE_KILLED_HELLHOUND) return;
+        // Inside the first-time branch: its "If speaking again" tail is still to be judged, so the note outlives the stage change.
+        const note = metThisConversation.get(player);
+        quest.setStage(player, STAGE_SHOWN_WAY_OUT);
+        if (note) metThisConversation.set(player, note);
+      };
+      return;
     }
+    if (event.npcId !== STRANGER_NPC_ID || event.text !== "I definitely have!") return;
+    event.after = () => {
+      if (quest.getStage(player) >= STAGE_ESCAPED_TO_CANIFIS && !quest.isComplete(player)) quest.complete(player);
+    };
   }
 
   // ---- Skeleton Hellhound ----
 
+  /**
+   * The hound for a player who left the fight (Wiki: "You may leave the chamber during the fight, which will cause the
+   * hellhound to respawn close to the entrance once you re-enter"): owner-only, in the hideout itself. Ours: the tile,
+   * and that it attacks on sight.
+   */
   function ensureHellhound(player) {
-    if (quest.getStage(player) !== STAGE_HELLHOUND_SUMMONED || houndByPlayer.has(player)) return;
+    if (quest.getStage(player) !== STAGE_HELLHOUND_SUMMONED || houndByPlayer.has(player) || Hideout.inScene(player)) return;
     const npc = api.spawnNpc({
       id: NpcIdentifiers.SKELETON_HELLHOUND,
       x: HELLHOUND_SPOT.x,
@@ -727,7 +828,9 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       owner: player,
       ownerOnly: true,
     });
-    if (npc) houndByPlayer.set(player, npc);
+    if (!npc) return;
+    houndByPlayer.set(player, npc);
+    npc.getCombat?.()?.attack?.(player);
   }
 
   function removeHellhound(player) {
@@ -736,118 +839,73 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     houndByPlayer.delete(player);
   }
 
+  /** The cutscene's end without the scene (it was left, or the stage was set): the hound waits in the hideout. */
   function summonHellhound(player) {
     const stage = quest.getStage(player);
-    if (stage < STAGE_DELIVERED_WEAPONS) return;
+    if (stage < STAGE_WEAPONS_ACCEPTED) return;
     if (stage < STAGE_HELLHOUND_SUMMONED) quest.setStage(player, STAGE_HELLHOUND_SUMMONED);
     ensureHellhound(player);
   }
 
+  /** The cutscene ended early (a logout or a walk out before the hound appeared): the fight waits for the return. */
+  function sceneEnded(player, scene) {
+    if (scene?.name !== Hideout.SCENE) return;
+    const stage = quest.getStage(player);
+    if (stage >= STAGE_DELIVERED_WEAPONS && stage < STAGE_HELLHOUND_SUMMONED) quest.setStage(player, STAGE_HELLHOUND_SUMMONED);
+  }
+
+  /** Stage 85 a tick after the kill (capture tick 1459); no message. */
   function handleNpcDeath(event) {
     const player = event.killer ?? event.player;
     if (!player || !HELLHOUND_NPC_IDS.has(event.npcId)) return;
     if (quest.getStage(player) !== STAGE_HELLHOUND_SUMMONED) return;
     removeHellhound(player);
     quest.setStage(player, STAGE_KILLED_HELLHOUND);
-    player.sendMessage("You have defeated the Skeleton Hellhound.");
+    Hideout.killed(player);
+  }
+
+  /** Live starts Veliaf's after-the-hound words by itself, as the screen comes back (capture tick 1465). */
+  function veliafAfterTheHound(player) {
+    if (quest.getStage(player) !== STAGE_KILLED_HELLHOUND || player.getDialogueManager?.()?.isActive?.()) return;
+    const npc = nearbyNpc(player, VELIAF_NPC_IDS);
+    api.emitCustomEvent("npc-dialogue:start", {
+      player, npc, npcId: NpcIdentifiers.VELIAF_HURTZ_2,
+      variant: { page: CURPILE_PAGE, variant: "myreque-hideout-after-defeating-the-skeleton-hellhound-veliaf-hurtz" },
+      exact: true,
+    });
+  }
+
+  /** A world NPC of one of `ids` (raw or shown for this player) within 15 tiles. */
+  function nearbyNpc(player, ids) {
+    const here = player.getLocation();
+    for (const npc of api.core.World.getNpcs?.() ?? []) {
+      if (!npc || !npc.getLocation) continue;
+      const id = npc.getId?.();
+      const shown = npc.getCurrentDefinition?.(player)?.getId?.() ?? id;
+      if (!ids.has(id) && !ids.has(shown)) continue;
+      if (npc.getLocation().getZ() === here.getZ() && npc.getLocation().isWithinDistance?.(here, 15)) return npc;
+    }
+    return undefined;
   }
 
   // ---- Object interactions ----
 
-  /**
-   * Wiki "Mending the bridge": "Climb up to see a damaged rope bridge. Mend the bridge as you walk along ... and then
-   * climb down the other side of the bridge." Wiki/void-based, no capture (void SearchMyreque.kt:186-203 climbTree): the
-   * north tree needs the top rung repaired, else "This bridge run looks broken; you would have nowhere to stand. The
-   * southern side of the rope bridge looks much less damaged."; "You climb the tree."; from the bank side the climb goes
-   * up onto the bridge, from the bridge it goes down to the bank. DEVIATION (ours): void gates on the top rung alone
-   * because walking onto an unrepaired rung breaks it (SearchMyreque.kt:55-71) and we do not implement that, so a player
-   * could repair only the top rung and descend; until the break exists we require all three rungs, with void's statement.
-   * The no-reason gate below is ours (the existing one).
-   */
-  function climbTree(event) {
-    const { player, location } = event;
-    event.handled = true;
-    if (quest.getStage(player) < STAGE_REACHED_HOLLOWS) {
-      player.sendMessage("You have no reason to cross here.");
-      return;
-    }
-    const tree = location ?? player.getLocation();
-    const north = tree.y === NORTH_TREE_Y;
-    if (north && !bridgeRepaired(player)) {
-      player.sendMessage("This bridge run looks broken; you would have nowhere to stand. The southern side of the rope bridge looks much less damaged.");
-      return;
-    }
-    const y = player.getLocation().getY();
-    const up = north ? y >= tree.y : y <= tree.y;
-    let landing;
-    if (north) landing = up ? { x: tree.x, y: BRIDGE_TOP_Y } : NORTH_BANK;
-    else landing = up ? { x: tree.x, y: BRIDGE_LANDING_Y } : SOUTH_BANK;
-    player.sendMessage("You climb the tree.");
-    player.moveTo(new api.core.Location(landing.x, landing.y, tree.z ?? 0));
-  }
-
+  /** Ours: Cross on the landing walks nowhere; it crosses a repaired bridge from bank to bank. No capture uses it. */
   function crossBridge(event) {
     const { player, location } = event;
     const stage = quest.getStage(player);
     event.handled = true;
-    if (stage < STAGE_REACHED_HOLLOWS) {
+    if (stage < STAGE_REACHED_HOLLOWS && !quest.isComplete(player)) {
       player.sendMessage("You have no reason to cross here.");
       return;
     }
-    if (!bridgeRepaired(player)) {
+    if (!Bridge.repaired(player)) {
       player.sendMessage("This bridge looks pretty old. The wooden boards break apart beneath your feet.");
       return;
     }
     const north = player.getLocation().getY() >= 3430;
-    player.moveTo(new api.core.Location(north ? 3502 : 3503, north ? 3425 : 3431, location?.z ?? 0));
-  }
-
-  /**
-   * One walk step onto an adjacent rung; a rung that is not next to the player is left alone. The rung keeps its
-   * broken loc's clipping on the server (the repaired look is the client's varbit multiloc), so the step ignores
-   * clipping for the one tick it takes, as Brimhaven's vines do.
-   */
-  function stepOnto(player, location) {
-    const here = player.getLocation();
-    const dx = location.x - here.getX(), dy = location.y - here.getY();
-    if ((location.z ?? 0) !== here.getZ() || Math.abs(dx) > 1 || Math.abs(dy) > 1 || (dx === 0 && dy === 0)) return;
-    const pass = {};
-    rungSteps.set(player, pass);
-    player.setFlag(IGNORE_CLIPPING_FLAG, true);
-    player.getMovementQueue().walkStep(dx, dy);
-    api.core.TaskManager.submit(new api.core.CountdownTask(pass, RUNG_STEP_TICKS, () => {
-      if (rungSteps.get(player) !== pass) return;
-      rungSteps.delete(player);
-      player.removeFlag(IGNORE_CLIPPING_FLAG);
-    }));
-  }
-
-  function repairBridgeRung(event) {
-    const { player, objectId } = event;
-    event.handled = true;
-    if (quest.getStage(player) < STAGE_REACHED_HOLLOWS) return;
-    const varbit = BRIDGE_RUNG_VARBITS[objectId] ?? firstBrokenRung(player);
-    if (varbit === undefined || rungRepaired(player, varbit)) {
-      player.sendMessage("This bridge run already looks fixed, that's why you're able to stand on it.");
-      return;
-    }
-    if (!hasBridgeMaterials(player)) {
-      player.sendMessage("You don't have the required materials to fix this part of the bridge.");
-      return;
-    }
-    player.getInventory().deleteNumber(PLANK_ITEM_ID, 1);
-    player.getInventory().deleteNumber(STEEL_NAILS_ITEM_ID, 75);
-    markRungRepaired(player, varbit);
-    player.getPacketSender().sendVarbit(varbit, 1);
-    player.sendMessage("You repair this part of the rope bridge.");
-    if (bridgeRepaired(player)) {
-      player.getPacketSender().sendVarbit(3928, 7);
-      player.sendMessage("The rope bridge is now fully repaired.");
-    }
-    // The player then walks onto the repaired rung, which puts the next rung within reach ("Mend the bridge as you
-    // walk along", Wiki). rsprox_transcripts/231/00366.txt tick 6822: the rung's op and a one-tile walk step (not a
-    // teleport) on the same tick.
-    if (event.location) stepOnto(player, event.location);
+    player.moveTo(new api.core.Location(3502, north ? 3425 : 3432, location?.z ?? 0));
+    Bridge.leaveBridge(player);
   }
 
   function useStalagmite(event) {
@@ -861,57 +919,215 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
     if (quest.getStage(player) === STAGE_HELLHOUND_SUMMONED) ensureHellhound(player);
   }
 
+  /**
+   * Open on the doors in the earth: stage 60, the doors' own open look, and the cave two ticks on (see SURFACE_DOOR_OPEN).
+   * Ours: the refusal before the quiz keeps its old text (no capture tries it).
+   */
   function enterSurfaceDoors(event) {
     const { player } = event;
     event.handled = true;
-    if (quest.getStage(player) < STAGE_ANSWERED_QUESTIONS) {
+    const stage = quest.getStage(player);
+    if (stage < STAGE_ANSWERED_QUESTIONS && !quest.isComplete(player)) {
       player.sendMessage("There seems to be a strange combination on the door. It would take ages to work it out.");
       return;
     }
-    player.moveTo(new api.core.Location(3500, 9811, 0));
-    player.sendMessage("You push open the doors and descend into the cave.");
-  }
-
-  function enterHiddenCave(event) {
-    const { player } = event;
-    event.handled = true;
-    if (quest.getStage(player) < STAGE_ANSWERED_QUESTIONS) return;
-    const inside = player.getLocation().getX() >= 3502 && player.getLocation().getY() >= 9829;
-    if (inside) {
-      player.moveTo(new api.core.Location(3500, 9812, 0));
-      player.sendMessage("You squeeze back out into the main cave.");
-      return;
-    }
-    if (quest.getStage(player) === STAGE_ANSWERED_QUESTIONS) quest.setStage(player, STAGE_ENTERED_HIDEOUT);
-    player.moveTo(new api.core.Location(3505, 9832, 0));
-    player.sendMessage("You squeeze through the hidden entrance into the Myreque hideout.");
+    if (stage === STAGE_ANSWERED_QUESTIONS) quest.setStage(player, STAGE_ENTERED_HIDEOUT);
+    const { Animation, GameObject, Location } = api.core;
+    const doors = event.object;
+    player.getMovementQueue().reset().setBlockMovement(true);
+    player.performAnimation(new Animation(SURFACE_DOOR_ANIMATION));
+    Scenes.later(player, 1, () => {
+      if (doors?.getLocation) {
+        const at = doors.getLocation();
+        const sender = player.getPacketSender();
+        sender.sendObject(new GameObject(SURFACE_DOOR_OPEN.left, new Location(at.getX() + 1, at.getY(), at.getZ()), doors.getType(), doors.getFace(), null));
+        sender.sendObject(new GameObject(SURFACE_DOOR_OPEN.right, at.clone(), doors.getType(), doors.getFace(), null));
+      }
+      player.getPacketSender().sendSound(SURFACE_DOOR_SOUND, 1, 0);
+      Scenes.fade(player, true);
+    });
+    Scenes.later(player, 3, () => {
+      player.getMovementQueue().setBlockMovement(false);
+      player.moveTo(new Location(CAVE_LANDING.x, CAVE_LANDING.y, 0));
+      Scenes.fade(player, false);
+    });
   }
 
   /**
-   * Passes through the hidden wall to the side the player is NOT on, from either side. Wiki/void-based, no capture: void
-   * SearchMyreque.kt:135-145 ends the Search with enterDoor(target) and "You walk through."; the two sides are the
-   * cache-derived tiles above. Like the repo's other door passes (CooksGuild.plugin.js walkThrough): movement is blocked,
-   * the player is put on the near tile if needed, and a one-tile forced walk crosses the edge. No door-open sound or
-   * graphic (ours: void's enterDoor internals were not read).
+   * The hideout's tunnel from the main cave (loc-teleports' crawl): Harold's words two ticks after the arrival while it
+   * is stage 60 (capture ticks 1103-1105), and the hound back while the fight is unfinished.
+   */
+  function arrivedThroughTunnel(event) {
+    const { player, objectId, location } = event;
+    if (objectId !== ObjectIdentifiers.CAVE_ENTRANCE_27 || location?.x !== HIDEOUT_TUNNEL.x || location?.y !== HIDEOUT_TUNNEL.y) return;
+    let stage = quest.getStage(player);
+    if (stage === STAGE_HELLHOUND_SUMMONED) {
+      ensureHellhound(player);
+      return;
+    }
+    // A save made in the cave at 55 before the doors set 60 (they did not, before): this is still the first arrival.
+    if (stage === STAGE_ANSWERED_QUESTIONS) {
+      quest.setStage(player, STAGE_ENTERED_HIDEOUT);
+      stage = STAGE_ENTERED_HIDEOUT;
+    }
+    if (stage !== STAGE_ENTERED_HIDEOUT) return;
+    Scenes.later(player, 2, () => {
+      if (quest.getStage(player) !== STAGE_ENTERED_HIDEOUT || player.getDialogueManager?.()?.isActive?.()) return;
+      api.emitCustomEvent("npc-dialogue:start", {
+        player,
+        npc: nearbyNpc(player, HAROLD_NPC_IDS),
+        npcId: NpcIdentifiers.HAROLD_EVANS,
+        variant: { page: CURPILE_PAGE, variant: "myreque-hideout-when-first-entering-the-hideout" },
+        exact: true,
+      });
+    });
+  }
+
+  /**
+   * Search on the hidden wall, from either side (see WALL_NORTH_SIDE): the open wall for two ticks and one walk step
+   * through. Ours: the pass from the north side mirrors the captured one; the walk ignores clipping for the step.
    */
   function passThroughWall(player) {
-    const { Location, ForceMovement, ForceMovementTask, TaskManager, Task } = api.core;
+    finishWallPass(player);
+    const { GameObject, Location } = api.core;
     const here = player.getLocation();
     const goingNorth = here.getY() <= WALL_SOUTH_SIDE.y;
     const from = goingNorth ? WALL_SOUTH_SIDE : WALL_NORTH_SIDE;
-    const start = new Location(from.x, from.y, here.getZ());
-    player.getMovementQueue().setBlockMovement(true).reset();
-    if (!here.equals(start)) player.moveTo(start.clone());
-    TaskManager.submit(new ForceMovementTask(player, 1,
-      new ForceMovement(start.clone(), new Location(0, goingNorth ? 1 : -1), 0, 30, goingNorth ? 0 : 2, WALK_ANIMATION)));
-    TaskManager.submit(new (class extends Task {
-      constructor() { super(3, player, false); }
-      execute() {
-        this.stop();
-        player.getMovementQueue().setBlockMovement(false);
-        player.sendMessage("You walk through.");
+    if (here.getX() !== from.x || here.getY() !== from.y) player.moveTo(new Location(from.x, from.y, here.getZ()));
+    const sender = player.getPacketSender();
+    const wall = new GameObject(FAKE_WALL_ID, new Location(WALL_NORTH_SIDE.x, WALL_NORTH_SIDE.y, 0), 0, 3, null);
+    const leaf = new GameObject(OPEN_WALL_ID, new Location(WALL_SOUTH_SIDE.x, WALL_SOUTH_SIDE.y, 0), 0, 0, null);
+    sender.sendObject(new GameObject(INVISIBLE_WALL_ID, wall.getLocation().clone(), 0, 3, null));
+    sender.sendObject(leaf);
+    sender.sendSound(WALL_OPEN_SOUND, 1, 0);
+    player.getMovementQueue().reset();
+    const pass = { wall, leaf };
+    wallPasses.set(player, pass);
+    // An autosave in these two ticks can be restored without mistaking an unrelated flag for ours.
+    player.setAttribute(WALL_PASS_ATTRIBUTE, player.hasFlag(IGNORE_CLIPPING_FLAG));
+    player.setFlag(IGNORE_CLIPPING_FLAG, true);
+    player.getMovementQueue().walkStep(0, goingNorth ? 1 : -1);
+    // Cleanup must also run for an unregistered player, unlike an ordinary player-keyed scene callback.
+    Scenes.later(pass, WALL_OPEN_TICKS, () => {
+      if (wallPasses.get(player) === pass) finishWallPass(player);
+    });
+  }
+
+  function finishWallPass(player) {
+    if (!player) return;
+    const pass = wallPasses.get(player);
+    const priorClipping = player.getAttribute(WALL_PASS_ATTRIBUTE);
+    if (!pass && typeof priorClipping !== "boolean") return;
+    wallPasses.delete(player);
+    if (pass) api.core.TaskManager.cancelTasks(pass);
+    player.setAttribute(WALL_PASS_ATTRIBUTE, null);
+    if (priorClipping === false) player.removeFlag(IGNORE_CLIPPING_FLAG);
+    if (pass && player.isRegistered()) {
+      player.getPacketSender().sendObject(pass.wall).sendObjectRemoval(pass.leaf);
+    }
+  }
+
+  function handleWallPassDeath({ player }) {
+    finishWallPass(player);
+  }
+
+  /** Climb-up on the basement ladder (see LADDER_TOP). Ours: no message, as live sends none. */
+  function climbTavernLadder(event) {
+    const { player } = event;
+    event.handled = true;
+    player.getMovementQueue().reset().setBlockMovement(true);
+    player.performAnimation(new api.core.Animation(LADDER_ANIMATION));
+    Scenes.later(player, 1, () => {
+      player.getMovementQueue().setBlockMovement(false);
+      if (quest.getStage(player) === STAGE_IN_INN_BASEMENT) quest.setStage(player, STAGE_ESCAPED_TO_CANIFIS);
+      player.moveTo(new api.core.Location(LADDER_TOP.x, LADDER_TOP.y, 0));
+    });
+  }
+
+  const wearsCharos = (player) => RING_OF_CHAROS_A_ITEM_IDS.includes(player.getEquipment().get(api.core.Equipment.RING_SLOT)?.getId?.());
+
+  /** The fare, or the ring that waives it (Wiki: a Ring of Charos(a) avoids paying). Ours: the refusal's text. */
+  function payFare(player) {
+    if (wearsCharos(player)) return true;
+    if (!held(player, COINS_ITEM_ID, BOAT_FARE)) {
+      player.sendMessage("You need 10 coins to rent the boat.");
+      return false;
+    }
+    player.getInventory().deleteNumber(COINS_ITEM_ID, BOAT_FARE);
+    return true;
+  }
+
+  /** The ride to the Hollows (see BOAT_JOURNEY_INTERFACE); the fare is already paid. */
+  function rideToHollows(player) {
+    const { Location, StatementDialogue } = api.core;
+    const sender = player.getPacketSender();
+    Scenes.controls(player, true);
+    Scenes.fade(player, true);
+    Scenes.later(player, 1, () => {
+      Scenes.hideTabs(player);
+      sender.sendJingle(BOAT_JINGLE, 0);
+      sender.sendInterface(BOAT_JOURNEY_INTERFACE);
+      StatementDialogue.send(player, "You board the boat and journey to the Hollows.", false);
+    });
+    Scenes.later(player, BOAT_RIDE_TICKS, () => {
+      player.moveTo(new Location(HOLLOWS_LANDING.x, HOLLOWS_LANDING.y, 0));
+      if (quest.getStage(player) === STAGE_GAVE_PLANKS) quest.setStage(player, STAGE_REACHED_HOLLOWS);
+      api.emitCustomEvent("transport:swamp-boaty", { player, from: "mortton", to: "hollows" });
+    });
+    Scenes.later(player, BOAT_RIDE_TICKS + 1, () => {
+      sender.sendInterfaceRemoval();
+      Scenes.restoreTabs(player);
+      Scenes.controls(player, false);
+      Scenes.fade(player, false);
+      player.getDialogueManager().startDialogues(new api.core.DialogueChainBuilder().add(
+        new StatementDialogue(0, "You arrive at the Hollows.")));
+    });
+  }
+
+  function mayUseBoat(player) {
+    if (quest.getStage(player) >= STAGE_GAVE_PLANKS || quest.isComplete(player)) return true;
+    player.sendMessage("You don't have the boatman's permission to use his boat.");
+    return false;
+  }
+
+  /** Cyreg's Travel (op 3): the fare on the click and the ride (capture tick 621). */
+  function travelWithCyreg(event) {
+    const { player } = event;
+    if (!mayUseBoat(player) || !payFare(player)) return true;
+    rideToHollows(player);
+    return true;
+  }
+
+  /**
+   * Board on the Mort'ton boat: Cyreg asks for the fare first (capture ticks 895-898: "I'll have to charge you ten gold
+   * to cover the loan of the boat. Is that okay?", then "Yes, I'll pay the ten gold." / "No, I won't use the boat."), the
+   * fare goes with the answer and the ride starts. Ours: Quick-board, and a worn Ring of Charos(a), skip the question.
+   */
+  function boardMortonBoat(event) {
+    const { player } = event;
+    event.handled = true;
+    if (!mayUseBoat(player)) return;
+    if (event.clickType === 2 || wearsCharos(player)) {
+      if (payFare(player)) rideToHollows(player);
+      return;
+    }
+    const { DialogueChainBuilder, NpcDialogue, OptionDialogue, PlayerDialogue, ActionDialogue } = api.core;
+    const chain = new DialogueChainBuilder();
+    chain.add(new NpcDialogue(0, CYREG_NPC_ID, "I'll have to charge you ten gold to cover the loan of the boat. Is that okay?"));
+    // The menu's options are numbered from 1.
+    chain.add(new OptionDialogue(1, { executeOption: (option) => {
+      if (option !== 1) {
+        player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new PlayerDialogue(0, "No, I won't use the boat.")));
+        return;
       }
-    })());
+      player.getDialogueManager().startDialogues(new DialogueChainBuilder()
+        .add(new PlayerDialogue(0, "Yes, I'll pay the ten gold."))
+        .add(new ActionDialogue(1, { execute: () => {
+          player.getPacketSender().sendInterfaceRemoval();
+          if (payFare(player)) rideToHollows(player);
+        } })));
+    } }, "Yes, I'll pay the ten gold.", "No, I won't use the boat."));
+    player.getDialogueManager().startDialogues(chain);
   }
 
   function handleObjectInteraction(event) {
@@ -922,12 +1138,8 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       enterSurfaceDoors(event);
       return;
     }
-    if (objectId === CAVE_ENTRANCE_ID) {
-      enterHiddenCave(event);
-      return;
-    }
     if (objectId === BRIDGE_TREE_PARENT_ID || BRIDGE_TREE_IDS.has(objectId)) {
-      climbTree(event);
+      Bridge.climbTree(event);
       return;
     }
     if (objectId === ROPE_BRIDGE_ID) {
@@ -935,7 +1147,11 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       return;
     }
     if (BROKEN_BRIDGE_IDS.has(objectId)) {
-      repairBridgeRung(event);
+      Bridge.repairRung(event);
+      return;
+    }
+    if (objectId === Hideout.ESCAPE_LOC_ID) {
+      Hideout.escape(event);
       return;
     }
     if (objectId === STALAGMITE_ID) {
@@ -948,17 +1164,12 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
         player.sendMessage("You see nothing interesting with this wall.");
         return;
       }
-      player.sendMessage("You search the wall and find the door which Veliaf told you about.");
       if (stage === STAGE_SHOWN_WAY_OUT) quest.setStage(player, STAGE_IN_INN_BASEMENT);
       passThroughWall(player);
       return;
     }
     if (objectId === TAVERN_LADDER_ID) {
-      event.handled = true;
-      player.sendMessage("You climb the ladder out into the outside.");
-      if (stage === STAGE_IN_INN_BASEMENT) quest.setStage(player, STAGE_ESCAPED_TO_CANIFIS);
-      player.moveTo(new api.core.Location(3495, 3466, 0));
-      player.sendMessage("You emerge to the south of the 'Hair of the Dog' tavern in Canifis.");
+      climbTavernLadder(event);
       return;
     }
     if (objectId === TAVERN_TRAPDOOR_ID) {
@@ -982,29 +1193,12 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       return;
     }
     if (objectId === MORT_TON_BOAT_ID) {
-      event.handled = true;
-      if (stage < STAGE_GAVE_PLANKS) {
-        player.sendMessage("You don't have the boatman's permission to use his boat.");
-        return;
-      }
-      const wornRing = player.getEquipment().get(api.core.Equipment.RING_SLOT)?.getId?.();
-      const hasCharos = RING_OF_CHAROS_A_ITEM_IDS.includes(wornRing);
-      if (!hasCharos) {
-        if (!held(player, COINS_ITEM_ID, 10)) {
-          player.sendMessage("You need 10 coins to rent the boat.");
-          return;
-        }
-        player.getInventory().deleteNumber(COINS_ITEM_ID, 10);
-      }
-      if (stage === STAGE_GAVE_PLANKS) quest.setStage(player, STAGE_REACHED_HOLLOWS);
-      player.moveTo(new api.core.Location(3498, 3380, 0));
-      player.sendMessage("You board the boat and journey to the Hollows.");
-      api.emitCustomEvent("transport:swamp-boaty", { player, from: "mortton", to: "hollows" });
+      boardMortonBoat(event);
       return;
     }
     if (objectId === HOLLOWS_BOAT_ID) {
       event.handled = true;
-      player.moveTo(new api.core.Location(3522, 3285, 0));
+      player.moveTo(new api.core.Location(MORT_TON_LANDING.x, MORT_TON_LANDING.y, 0));
       player.sendMessage("You board the boat and journey back to Mort'ton.");
       api.emitCustomEvent("transport:swamp-boaty", { player, from: "hollows", to: "mortton" });
       return;
@@ -1016,31 +1210,40 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   }
 
   function handleLogin({ player }) {
+    finishWallPass(player);
     metThisConversation.delete(player);
     sendStrangerSwap(player);
+    sendSpokenMembers(player);
     refreshQuestList(player);
-    if (bridgeRepaired(player)) {
-      for (const varbit of [176, 177, 178]) player.getPacketSender().sendVarbit(varbit, 1);
-      player.getPacketSender().sendVarbit(3928, 7);
-    } else {
-      for (const varbit of [176, 177, 178]) {
-        if (rungRepaired(player, varbit)) player.getPacketSender().sendVarbit(varbit, 1);
-      }
-    }
+    Bridge.login(player);
     ensureHellhound(player);
   }
 
   function handleLogout({ player }) {
-    if (player) removeHellhound(player);
+    if (player) {
+      finishWallPass(player);
+      removeHellhound(player);
+    }
+  }
+
+  /** Completing the quest repairs the whole bridge for good (capture tick 1617). */
+  function handleQuestCompleted(event) {
+    if (event?.key !== "in_search_of_the_myreque" || !event.player) return;
+    // Live clears routequestmulti (varp 388) and sets the bridge again (tick 1617); varbit 396 is kept (see VANSTROM_HIDE_VARBIT).
+    event.player.getPacketSender().sendVarbit(QUIZ_CORRECT_VARBIT, 0).sendVarbit(QUIZ_ANSWERED_VARBIT, 0)
+      .sendVarbit(SPOKEN_ALL_MYREQUE_VARBIT, 0);
+    Bridge.send(event.player);
   }
 
   api.persistAttribute(BRIDGE_ATTRIBUTE);
   api.persistAttribute(QUIZ_CORRECT_ATTRIBUTE);
+  api.persistAttribute(WALL_PASS_ATTRIBUTE, null);
   for (const flag of ["met_sani", "met_harold", "met_radigad", "met_polmafi", "met_ivan", "veliaf_after"]) {
     api.persistAttribute(`quest.in_search_of_the_myreque.${flag}`);
   }
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [NpcIdentifiers.SKELETON_HELLHOUND],
     key: "in_search_of_the_myreque",
     name: "In Search of the Myreque",
     varpId: VARP_IN_SEARCH_OF_THE_MYREQUE,
@@ -1055,12 +1258,15 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
       { skillId: Skill.CRAFTING.getIndex(), amount: 600, label: "Crafting" },
     ],
     otherRewards: ["Access to the Hollows", "A boat shortcut between Mort'ton and the Hollows"],
+    // The reward scroll's model (capture tick 1617: questscroll:quest_model shows steel_sword 1281).
+    scrollItemId: STEEL_SWORD_ITEM_ID,
     buildJournal,
     onReward: grantReward,
   });
 
   api.onNpcDialogueVariant(selectVariant);
   api.onNpcInteraction("Curpile Fyod", { "Talk-to": talkToCurpile });
+  api.onNpcInteraction("Cyreg Paddlehorn", { Travel: travelWithCyreg });
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:condition", handleCondition);
@@ -1069,8 +1275,11 @@ module.exports = function registerInSearchOfTheMyrequeQuest(api) {
   api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onCustomEvent("npc-dialogue:action", handleAction);
   api.onCustomEvent("npc-dialogue:line", handleLine);
+  api.onCustomEvent("loc-teleports:arrived", arrivedThroughTunnel);
+  api.onCustomEvent("quest:completed", handleQuestCompleted);
   api.onNpcDeath(handleNpcDeath);
   api.onObjectInteraction(handleObjectInteraction);
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  api.onPlayerDeath(handleWallPassDeath);
 };

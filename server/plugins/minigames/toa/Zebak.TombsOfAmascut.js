@@ -1262,8 +1262,15 @@ function climbRockSteps(event) {
   return true;
 }
 
+/** Actual combat forms; cinematic actors and projectile/scenery helpers stay excluded. */
+function describeEncounters({ npcIds }) {
+  const N = Shared.core().NpcIdentifiers;
+  for (const id of [N.ZEBAK_2, N.ZEBAK_3, N.CROCODILE_7]) npcIds.add(id);
+}
+
 module.exports = function registerZebak(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("CRONDIS_BOSS", ZebakRoom);
   api.onPlayerDealtDamage(afterZebakHit);
   api.onNpcBeforeDeath(zebakDowned);

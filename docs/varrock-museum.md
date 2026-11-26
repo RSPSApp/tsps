@@ -1,5 +1,31 @@
 # Varrock Museum: Historian Minas's reports
 
+## Cleaning-area entrance
+
+`server/plugins/areas/MuseumEntrance.plugin.js` guards the cleaning-area gate at
+(3261,3446). A members-world player who has completed The Dig Site receives the
+canonical Museum guard Welcome and Yes/No choice on their first admission after
+login. Yes opens the gate and walks them through; subsequent entries in that login
+are direct. Leaving is free. The guard remains loaded on free worlds to refuse entry
+even when the members-only Museum activity is filtered out.
+
+The words and first-login distinction come from the [Museum guard
+transcript](https://oldschool.runescape.wiki/w/Transcript:Museum_guard), already imported
+without generated-data changes. RSProx recordings [1702](https://rsprox.net/download/1702)
+(revision 226, normal world, ticks 4066–4069) and [1704](https://rsprox.net/download/1704)
+(revision 227, Leagues, ticks 450–453) show the shared world swap: closed gate
+24536 at (3261,3446), shape 0/face 1, becomes actionless barrier 24564 there and
+the same gate at (3261,3447), shape 0/face 0, then restores three ticks later.
+The active revision-242 cache gamevals are `vm_barrier_guard_gate` and `vm_invisbarrier`.
+
+Those recordings observe someone else's gate opening from a distance: they establish
+the scenery and restore time, not the opener's dialogue, crossing, or audio. Crossing
+uses the existing checked-player-only pass-through gate movement and default gate
+sound; its exact retail movement/audio timing remains unverified.
+`server/tests/museum-entrance-native.test.cjs` exercises real map clipping, native
+object/dialogue packets and World turns for entry, No, repeat entry, logout reset,
+incomplete/free-world refusals, free exit, stale choices and a blocked bystander.
+
 Historian Minas pays Kudos for completed quests. Choose "I have some information which might be
 of use in your displays." and he hears every unreported quest in one conversation: 5 Kudos each,
 10 for Curse of the Empty Lord, and an antique lamp for five of them.
@@ -144,3 +170,76 @@ Arrowheads used on the crate (`vm_crate`, 24534):
 - Several finds at once give one spam line and one thanks; only one find was recorded.
 - The thanks always comes from Tinse Torpe, the recorded speaker.
 - A stackable reward goes onto a stack already carried; otherwise it takes the find's slot.
+
+# Fossil displays
+
+The 36 displays on the museum's lowest floor (around 1606-1654, 4950-4984), filled with cleaned
+Fossil Island fossils. `server/plugins/world/museum/FossilDisplays.Museum.js`, data in
+`server/plugins/world/data/fossil-displays.json`.
+
+## From rsprox captures (local 1000338, local 1000342, 1843; revision 227)
+
+- Each display is a multiloc on its own varbit `fossil_vm_display_<n>_state` (5876-5911), states
+  0-5. Its unfinished states are named Small/Medium/Large/Plant Fossil Display (or Large Fossil
+  Support) with the one option "Add to"; state 5 is the finished creature with no options.
+  Displays 27-30 are clicked on their `b` half; 25 has two halves on one varbit.
+- Add to with the next piece carried: `human_pickuptable` (832) and synth sound 2739 on the
+  click tick, then on the next tick the fossil leaves the pack and the state rises by one
+  (local 1000338 ticks 6623-6632, display 6). Each click adds one piece.
+- The pieces go in a fixed order: state 0 limbs (plant: roots), 1 spine, 2 ribs, 3 pelvis,
+  4 skull, which is the cache's `fossil_<size>_1`-`_5` order. Without the next piece the
+  game message is "You're missing part of the display:  Small fossilised ribs." (two spaces
+  after the colon, on every recording) and nothing changes (local 1000338 tick 4940,
+  display 10 at state 2; 1843 tick 7310, display 3 at state 1).
+- The fifth piece: `vm_kudos` +2, spam "You have earned Kudos with the Museum!", the lamp in the
+  pack, sound 3653, and an objectbox with the lamp and "Congratulations, you have completed this
+  display!" (local 1000338 tick 4916, display 34; tick 6632, display 6). A small display gives
+  `fossil_display_reward_lamp_small`, a plant display (34) the large lamp.
+- The Kudos HUD stays up in the hall and is re-opened at each completion.
+- Rub on a display lamp: xpreward titled "Choose the stat you wish to be advanced!", then
+  "Your wish has been granted! You have been awarded 5,000 Runecraft experience!" (local
+  1000338 tick 4971).
+
+## From the Wiki (Kudos, Antique lamp (fossil display))
+
+- 14 small, 12 medium, 5 large and 5 plant displays, 2 Kudos each.
+- Lamps: small 2,000 XP (level 20), medium 3,500 XP (level 30), large/plant 5,000 XP (level 35),
+  any skill.
+
+## Ours
+
+- The plant order past the roots follows the same `fossil_plant_1`-`_5` numbering; only the
+  roots were recorded as missing.
+- Using a fossil on a display does nothing special; no recording uses one.
+- The busy varbit (12393) set around the completion box is not sent.
+
+# Museum wall maps
+
+The three wall maps (`vm_museum_wallmounted_map_01`-`_03`, "Map") open the museum map,
+`vm_museum_map` (527), on Look-at. Code: `server/plugins/world/museum/Map.Museum.js`.
+
+## From rsprox captures (1757, 1723, local 1000153, local 1000808; revision 227-228)
+
+- **Open** (the tick the player arrives, 1757 tick 10075): busy (12393) 1, sequence
+  `vm_display_case_ponder` (6383), the floor layers basement hidden, Dig Site shown, first and
+  second floor hidden (the Dig Site floor even when read upstairs, 1000153 tick 1995), then
+  `Empty<br>display` on each exhibit not yet filled, `toplevel_mainmodal_open` (2524)
+  `[12632226, 150]` and the modal.
+- **Empty exhibits:** in all four recordings an exhibit is marked empty exactly when its display
+  varbit is 0: the Saranthium and Senntisten coins, both Saradomin symbols, the Zaros tablet,
+  the ancient talisman (`vm_digsite_*`), the staff of Armadyl, the seven knights' helms
+  (`vm_salveknights`), the observatory, Robert the Strong, Surok's tomb and Excalibur. The
+  terracotta statue is empty while The Golem's statuette is out of its case
+  (`golem_retrieved_statuette` 1, 1000808). Pottery, the Shield of Arrav, Silverlight, the
+  runes, the glider, the Ardougne map and the king's painting were never marked, even at 0.
+- **Stairs:** a stairs button shows its floor on the next tick (1757 tick 10085 -> 10086,
+  1000153 tick 2005), hiding Dig Site, first floor, second floor, basement in that order.
+- **Close** (1757 tick 10082): busy 0, sequence -1, the modal closed, and the Kudos HUD
+  (`vm_kudos`) opened again. The Close button closes it the tick after the click (1723 tick
+  14968).
+
+## Ours
+
+- The basement stairs (to the Natural History floor) were never clicked; they follow the same
+  pattern. Its exhibits (the Natural History displays) were never marked empty, so none are.
+- The Museum map item's Look-at and the wall map's Take were not recorded and aren't handled.

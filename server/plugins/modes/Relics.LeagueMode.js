@@ -74,6 +74,8 @@ module.exports = {
     require("./leaguerelics/Minion.LeagueRelics")(api);
     require("./leaguerelics/EvilEye.LeagueRelics")(api);
     require("./leaguerelics/MapOfAlacrity.LeagueRelics")(api);
+    // The Knapsack hears gathering after Hotfoot's processing (attached above) and before its delivery.
+    require("../items/storage/Knapsack.StorageItems").gathering(api, { product: require("./leaguerelics/Hotfoot.LeagueRelics").product });
     require("./leaguerelics/Hotfoot.LeagueRelics").late(api);
   },
 };

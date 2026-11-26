@@ -16,6 +16,10 @@ function areaClass() {
     getName() {
       return "Duke Sucellus asylum";
     }
+    /** The asylum plays Eye See You from arrival; the copied map has no track of its own. */
+    getMusicTrack() {
+      return Common.data.music.asylum;
+    }
     allowSummonPet() {
       return false;
     }
@@ -108,7 +112,8 @@ class Session {
     const object = new Common.core.GameObject(active ? site.escape : site.leave, this.tile(site.gate), 0, 3, this.area);
     Common.core.ObjectManager.register(object, true);
   }
-  reset() {
+  /** Spawns the sleeping Duke: on entry, and `respawn` after a kill. */
+  reset(respawn = false) {
     if (this.ended)
       return;
     this.fight?.stop();
@@ -139,6 +144,16 @@ class Session {
     this.boss.__dukeSucellusFight = this.fight;
     this.setExit(false);
     Preparation.refresh(this);
+    if (respawn) {
+      // 1751/91/3285: Duke falls back asleep (10182), the dead extremities return to their sleeping
+      // locs and Eye See You replaces the kill's Prison Break.
+      this.fight.placeEyes(0);
+      this.fight.sleepEyes();
+      this.boss.performAnimation(new Common.core.Animation(Common.data.animations.respawn));
+      this.player.getPacketSender().sendSong(Common.data.music.asylum);
+    }
+    // The health HUD shows the sleeping Duke's poison meter from his spawn (varp 1683 = 12167).
+    Common.api.emitCustomEvent("boss-hud:show", { player: this.player, npcId: Common.data.npcs.asleep, current: this.meter, maximum: Common.data.normal.meter });
   }
   process() {
     if (this.ended)

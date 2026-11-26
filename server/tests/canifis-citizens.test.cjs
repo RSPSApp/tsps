@@ -154,7 +154,7 @@ test("eligibility queries, status damage, zero-hit and utility specials do not t
   empty.prepareHits(0, false);
   assert.equal(npc.getId(), npc.getRealId(), "zero-hit producer is not an attack");
   p.setSpecialActivated(true);
-  p.getCombatSpecial = () => ({ getTraits: () => ({ skipAttack: true }) });
+  p.getCombatSpecial = () => ({ getId: () => -1, getTraits: () => ({ skipAttack: true }) });
   new PendingHit(p, npc, method, { experience: false });
   assert.equal(npc.getId(), npc.getRealId(), "utility special is not an attack");
 });

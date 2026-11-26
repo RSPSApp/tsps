@@ -15,6 +15,8 @@ Plugin: `server/plugins/skills/sailing/BarracudaTrials.Sailing.js`, with its uni
 - rsprox captures from https://rsprox.net/database (rev 235). Tempor Tantrum: recordings 856,
   3457, 3461, 3467 (intro), 3578, 3579 and 3834. Jubbly Jive: 907 (intro) and 908. Gwenith Glide:
   936 (intro), 948, 1030, 1031 and 1032.
+- The Wiki's chest pages (Chest (Pandemonium Cave), Chest (Anglers' Retreat), Chest (Laguna
+  Aurorae)) and key pages (Stormy key, Fetid key, Serrated key) for the key chests.
 - The cache. DB table 143, rows 7243 to 7245, gives each rank's time limit, objectives, crate
   count, XP and first-rank bonus (column 22) and the rewards (columns 23 to 25). The map gives
   the crates (collectable locs, objective k = the trial's first collectable + k), the rapids, the
@@ -40,6 +42,7 @@ Plugin: `server/plugins/skills/sailing/BarracudaTrials.Sailing.js`, with its uni
 | `Jubbly` | Balloon toads, outcrops and the jubblies' hops. |
 | `Gwenith` | Portals, crystals and crystal motes. |
 | `Resonance` | Resonance crystals and the crystallised helm. |
+| `Chests` | The three key chests (Pandemonium Cave, Anglers' Retreat, Laguna Aurorae): the Swordfish key opens its trial's chest once; after that it opens without one. |
 | `Scoreboard` | Server-wide statistics in `data/saves/barracuda-trials.json`, shown on 933. |
 | `Dev` | `::bt start <trial> <rank>`, `::bt complete`, `::bt intro <trial>`, `::bt go <trial>`, `::bt npcs` (developers). |
 
@@ -95,7 +98,26 @@ varbits and interface packets. In short:
 - **Intros**: on the first talk the course lines play over a camera tour of the course, with the
   demo's crates, outcrops or crystals and the HUD. The master's Start-trial form follows the tour.
 
+- **Key chests** (rsprox 3461, 936): Open on a trial's chest with its key: human_openchest (delay 10) and sounds 2419 and 52 (delay 10), the key taken; a tick later sound
+  51 (delay 45), the open chest (`locked_chest_*_open`), the outfit and the noted gems, varbit
+  `sailing_bt_<key>_key_used` 1 and "You unlock the chest with the key you're carrying and find
+  some treasure inside." between the hat and the top (objectbox_double); two ticks later the chest
+  closes. Without the key: sound 2402 and "The chest is securely locked. It looks like it needs a
+  key to open it." in a message box. The used key is saved with the trial's progress and its varbit
+  sent at login, and the master no longer hands it back once used (its transcript: "If the player
+  lost the stormy key before opening its chest:").
+
 ## Ours (not captured)
+
+- Key chests: a reopen's box (the first piece given, in an objectbox), and the full-inventory line
+  "You don't have enough inventory space." (the Wiki says only that the key isn't used up then).
+  "Room" means the whole loot fits: a carried stack that can't take its full amount counts as no
+  room; the check runs again on the loot tick, and if the bag filled up nothing happens.
+  The anim and sounds of a reopen are the first open's. Timing: the unlock plays on the
+  interaction's tick and the loot a tick later, as the other key chests do; 3461 has them 2 and 3
+  ticks after the last step. The key is taken with the loot, a tick after 3461 takes it, so a save
+  or logout in between never holds one without the other. The ownership check counts worn,
+  carried and banked pieces; a bank placeholder isn't owned.
 
 - Level, Regicide and skiff refusals, and the boat-part requirements: Tempor needs storm resistance
   (sails) and an oak helm's rapid resistance, Jubbly a mahogany helm's, Gwenith the keel's
@@ -128,8 +150,6 @@ varbits and interface packets. In short:
 - The Gwenith Glide's out-of-bounds area isn't the rectangle used here: live warned at spots well
   inside it (near (2064, 3532), (2073, 3456), (2114, 3300), (2207, 3611)). Seven warnings aren't
   enough to draw its edge.
-- The Stormy key handed out again after a Swordfish run when it was used (varbit
-  `sailing_bt_stormy_key_used`): there's no stormy chest to use it on yet.
 - The whirlpool surprise shown in an `objectbox_double` with the two glasses (the message plays as
   a plain box).
 - Projectile ends on the boats' deck tiles (the rum, the toads): they go from and to the boats'
@@ -137,6 +157,12 @@ varbits and interface packets. In short:
 - The interaction mode and hidden ops during the intro tours.
 
 ## Wiki and capture differences
+
+- Key chests: the Wiki's chest pages add coins to the first open (10,000, 20,000 and 35,000) and
+  give 8 noted uncut emeralds (Anglers' Retreat) and 8 noted uncut rubies (Laguna Aurorae); rsprox
+  3461 (rev 235) gave the outfit and 10 noted uncut sapphires with no coins. The Wiki's coins are
+  given. The Wiki's later opens (no key, the missing pieces, "You open the chest and find some
+  treasure inside." / "You open the chest, but find nothing of note inside.") aren't recorded.
 
 - The Gwenith Glide's Marlin XP changed between builds (14,800 in 936, 16,050 later); the cache's
   value is used.

@@ -272,8 +272,7 @@ export function finishRenderFrame(host: WebGLOsrsRendererHost,
 
         let geoBytes = 0;
         for (const map of host.mapManager.mapSquares.values()) {
-            geoBytes += (map.interleavedBuffer as any)?.byteLength ?? 0;
-            geoBytes += (map.indexBuffer as any)?.byteLength ?? 0;
+            geoBytes += map.geometryGpuBytes ?? ((map.interleavedBuffer?.byteLength ?? 0) + (map.indexBuffer?.byteLength ?? 0));
         }
         try {
             const pr: any = host.playerRenderer as any;
@@ -335,6 +334,13 @@ export function onResize(host: WebGLOsrsRendererHost, width: number, height: num
                 return;
             }
 
+            // A mobile Interface scaling change reaches here with the same canvas buffer:
+            // only the logical widget layout changed. Deleting and rebuilding the scene
+            // texture for that would run mid-CS2 and churn GPU memory for no reason.
+            const app = host.app as unknown as { width?: number; height?: number };
+            const bufferSizeChanged =
+                app.width !== width || app.height !== height || !host.textureFramebuffer;
+
             host.app.resize(width, height);
 
             // Explicitly update app dimensions in case PicoGL doesn't
@@ -343,7 +349,7 @@ export function onResize(host: WebGLOsrsRendererHost, width: number, height: num
 
             // Sync widgetManager dimensions with the current UI layout space.
             const uiMetrics = host.computeUiRenderMetrics(width, height);
-            host.osrsClient?.widgetManager?.resize(uiMetrics.layoutW, uiMetrics.layoutH);
+            host.osrsClient?.widgetManager?.resize(uiMetrics.layoutW, uiMetrics.layoutH, uiMetrics.renderScaleX);
 
             // All in-world overlays render in buffer pixel space, so their scale must match
             // renderScaleX (uiScale × DPR) so sprites/text appear the correct physical size.
@@ -360,10 +366,12 @@ export function onResize(host: WebGLOsrsRendererHost, width: number, height: num
             if (host.groundItemOverlay) host.groundItemOverlay.scale = overlayScale;
             (host.canvas as any).__uiRenderScale = overlayScale;
 
-            // Trigger framebuffer recreation
-            host.needsFramebufferUpdate = true;
+            if (bufferSizeChanged) {
+                // Trigger framebuffer recreation
+                host.needsFramebufferUpdate = true;
 
-            host.initTextureFramebuffer(width, height);
+                host.initTextureFramebuffer(width, height);
+            }
         } catch (e) {
             console.warn("[webgl] onResize error", e);
         }

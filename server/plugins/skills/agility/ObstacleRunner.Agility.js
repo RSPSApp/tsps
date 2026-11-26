@@ -18,9 +18,11 @@
  *                                     two tiles a tick, sent as a run step (Seers' tightrope)
  *   { walk: [[x, y], ...], traversalType: 1 | 2 }
  *                                     this movement's traversal, independent of tile count
- *   { move: [x, y, z?], anim?, speed?, dir?, ticks? }
+ *   { move: [x, y, z?], from?, anim?, speed?, dir?, ticks? }
  *                                     exact-move to a tile, landing after `ticks` ticks;
- *                                     `ticks: 0` starts the move and leaves landing to a `tele`
+ *                                     `ticks: 0` starts the move and leaves landing to a `tele`;
+ *                                     `from` starts it on another tile than the player's
+ *                                     (the Varrock broken fence's move starts on the fence line)
  *   { tele: [x, y, z?] }              place the player on a tile (plane changes)
  *   { wait: ticks }                   continue after this many ticks
  *   { face: [x, y] } | { faceDir: "north" | ... }
@@ -78,6 +80,8 @@ let ChatType;
 let Sounds;
 let StatementDialogue;
 let ItemStatementDialogue;
+let NpcDialogue;
+let ActionDialogue;
 let DialogueChainBuilder;
 let Location;
 let Animation;
@@ -93,7 +97,7 @@ let ObstacleTask = null;
 function init(api) {
   TaskManager = api.getTaskManager();
   ({ Location, Animation, Graphic, Direction, Flag, ForceMovement, HitDamage, HitMask } = api.core);
-  ({ ChatType, Sounds, StatementDialogue, ItemStatementDialogue, DialogueChainBuilder } = api.core);
+  ({ ChatType, Sounds, StatementDialogue, ItemStatementDialogue, NpcDialogue, ActionDialogue, DialogueChainBuilder } = api.core);
   ObstacleTask = createObstacleTask(api.core.Task);
 }
 
@@ -129,8 +133,10 @@ function animate(player, id, delay = 0) {
 /**
  * An obstacle's message: a string is a game message, `{ spam: text }` goes to the filterable spam
  * channel, `{ mesbox: text }` is a message box (live sends most obstacle lines as spam), and
- * `{ itembox: { item, text } }` is a message box showing an item, its text logged as live does.
- * A list sends each in turn (a spam line, then a game message).
+ * `{ itembox: { item, text } }` is a message box showing an item, its text logged as live does, and
+ * `{ npc: { id, name?, text, expression?, then? } }` is a line said by that NPC's chathead, with `then`
+ * (any of these) sent once the player continues it. A list sends each in turn (a spam line, then a
+ * game message).
  */
 function sendMessage(player, message) {
   if (Array.isArray(message)) {
@@ -144,6 +150,15 @@ function sendMessage(player, message) {
   } else if (message?.itembox) {
     const { item, text } = message.itembox;
     player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, item, text)));
+  } else if (message?.npc) {
+    const { id, name, text, expression, then } = message.npc;
+    const chain = new DialogueChainBuilder().add(new NpcDialogue(0, id, text, name, expression));
+    // On the continue the line closes and `then` follows on the same tick (Gu'Tanoth's guards, Watchtower capture t2718).
+    if (then != null) chain.add(new ActionDialogue(1, { execute: () => {
+      player.getPacketSender().sendInterfaceRemoval();
+      sendMessage(player, then);
+    } }));
+    player.getDialogueManager().startDialogues(chain);
   }
 }
 
@@ -346,13 +361,13 @@ function createObstacleTask(Task) {
 
     startMove(step) {
       const player = this.player;
-      const current = player.getLocation().clone();
+      const current = step.from ? toLocation(player, step.from) : player.getLocation().clone();
       const target = toLocation(player, step.move);
       const [startCycle, endCycle] = step.speed ?? [0, DEFAULT_MOVE_CYCLES];
       const direction = step.dir
         ?? directionBetween(current.getX(), current.getY(), target.getX(), target.getY());
-      // PlayerSession sends the start relative to the current tile and the end as an
-      // offset; starting on the current tile keeps both relative to the same origin.
+      // PlayerSession sends the start relative to the player's tile and the end as an
+      // offset from the start, so both stay right whichever tile the move starts on.
       const forceMovement = new ForceMovement(
         current,
         new Location(target.getX() - current.getX(), target.getY() - current.getY()),
@@ -403,10 +418,16 @@ function createObstacleTask(Task) {
       this.complete(completed);
     }
 
-    /** Anything that cancels this task (teleports, logout sweeps) must still unlock the player. */
+    /**
+     * Anything that cancels this task (teleports, logout sweeps) must still unlock the player. A sweep
+     * during logout (another plugin's hook or the core's cancel, which can run before Agility's own
+     * logout hook) lands the player as the logout hook would, so they are never saved mid-obstacle on
+     * a tile they can't walk off (Gu'Tanoth's rocks).
+     */
     stop() {
       if (!this.finished) {
-        this.finish(false);
+        if (this.player.isLoggingOut?.()) this.fastForward();
+        else this.finish(false);
         return;
       }
       super.stop();

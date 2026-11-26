@@ -2033,6 +2033,7 @@ module.exports = function registerMonkeyMadnessIQuest(api) {
   api.persistAttribute(ZOOKNOCK_HELPER_ATTRIBUTE, 0);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [JUNGLE_DEMON_NPC_ID],
     key: "monkey_madness_i",
     name: "Monkey Madness I",
     varpId: VARP_MM_MAIN,

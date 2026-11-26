@@ -22,7 +22,7 @@ module.exports = function registerMagicLongbowSpecialAttack(api) {
   }
 
   function isMagicCompBow(player) {
-    const weaponId = player.getEquipment().get(Equipment.WEAPON_SLOT).getId();
+    const weaponId = CombatSpecial.weaponIdFor(player);
     return (
       weaponId === ItemIdentifiers.MAGIC_COMP_BOW ||
       weaponId === ItemIdentifiers.MAGIC_COMP_BOW_2 ||

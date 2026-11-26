@@ -9,6 +9,9 @@
  *   Wilderness).
  * The log type depends on base Woodcutting level and the axe (Wiki); the weights and the success
  * chart are estimates from the capture, kept in woodcutting-guild.json.
+ * Wiki (Ent): "Completing the medium Wilderness Diary increases the chance of successfully chopping
+ * ents in the Wilderness by 15%" (Mod Ash: "Around 15% higher chance of a 'successful' roll"), so
+ * the Wilderness Ent's `diaryChance` multiplies each attempt's chance by 1.15.
  */
 const GuildData = require("./GuildData.Woodcutting");
 
@@ -81,6 +84,15 @@ function rollLog(baseLevel, axe, random = Math.random) {
   return choices[choices.length - 1]?.log ?? null;
 }
 
+/** The Ent's diary bonus to the chop chance (Wilderness medium for the Wilderness Ent), or 1. */
+function diaryChanceMultiplier(player, ent) {
+  const bonus = ent.diaryChance;
+  if (!bonus) return 1;
+  const request = { player, diary: bonus.diary, tier: bonus.tier, complete: false };
+  api.emitCustomEvent("diary:is-complete", request);
+  return request.complete ? bonus.multiplier : 1;
+}
+
 function chopTrunk(event) {
   const { player, npc } = event;
   const trunk = trunks.get(npc);
@@ -96,7 +108,8 @@ function chopTrunk(event) {
   }
   player.sendMessage(ENTS.messages.swing);
   player.performAnimation(new core.Animation(axe.animationId));
-  startSession(player, { npc, axe, next: now() + ENTS.chopTicks, from: player.getLocation().clone() });
+  const chanceMultiplier = diaryChanceMultiplier(player, trunk.ent);
+  startSession(player, { npc, axe, chanceMultiplier, next: now() + ENTS.chopTicks, from: player.getLocation().clone() });
   return true;
 }
 
@@ -132,7 +145,8 @@ function tick() {
     session.next = cycle + ENTS.chopTicks;
     player.performAnimation(new core.Animation(session.axe.animationId));
     const level = player.getSkillManager().getCurrentLevel(core.Skill.WOODCUTTING);
-    if (Math.random() >= helpers.calculateCutChance(level, { cutChance: ENTS.cutChance }, session.axe)) continue;
+    const chance = Math.min(1, helpers.calculateCutChance(level, { cutChance: ENTS.cutChance }, session.axe) * session.chanceMultiplier);
+    if (Math.random() >= chance) continue;
     if (!giveLogs(player, trunk, session.axe)) endSession(player);
   }
 }

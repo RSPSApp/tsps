@@ -139,6 +139,7 @@ Added with the command above: 84 spawns on the island and in the Wyrmscraig Cave
 The existing Mad Angel matched and wasn't doubled. All of them that fight have drop tables and stats.
 
 - **Standing still:** the fishing spots (as existing ones) and the broken golem (no walk animation).
+- **Sandy looking out of the window (6537):** a revision 242 run of The Hand in the Sand (rsprox local 1002235, tick 8266) adds him on the desk Sandy's own tile, 2788,3176, when `handsand_sandy_multi` turns them; the row stood a tile west.
 - **Mortimer:** live spawns the parent `slayer_master_mortimer` (4462), which transforms on `ffg` into the post-quest version with Assignment and Trade (16175), and wanders one tile around 2590, 8614 (rsprox captures). The client animates an NPC from its parent: 4462 has `mortimer_idle` and a walk animation, while 16175 has none, so spawned as 16175 he stood in the default pose and couldn't walk.
 - **Mountain trolls:** the Wiki lists 936–942 and 16330–16332 under one version, identical in the cache; the script used 936, which existing spawns use.
 - **Not covered by spawns:** dialogue, the two shops, Mortimer's Slayer assignments, goat hunting and golem crafting.
@@ -190,6 +191,7 @@ yarn sync:npc-spawns --box 1216,9344,1727,9855 --tag Neypotzli --write
 The fix to the version pairing above, on the 60 spawns it affected (32 Wiki pages). Every page was checked: which version belongs in the world after its quests, where, with which id.
 - **The id corrected** (the place was right, the version wasn't): Azzanadra (730, ghostly), Maisa in Sophanem (11474), a gnome traveller, Zanaris's grey and light-grey sheep (swapped), Queen Zyanyi Arkan on her throne (14296), four of the Knights of Varlamore, Furia Tullus (the royal servant), Primio in Civitas (12889), the Darkfrost workers and seers (swapped), Ikniu, the chameleons, two Aranei scouts (swapped), Forebearer Janus at his home (the civilian, 14241).
 - **The Hunter Guild:** the *Injured hunter* (12931) is the quest's version; Guild Hunter Fox (13426) stands there after *At First Light*. In live OSRS he walks within about 2 tiles (13 recordings), so `wanderRadius` 2.
+- **Elemental rocks (Elemental Workshop):** the 47 *Elemental rock* (1368) rows have `wanderRadius` 0. A mined one becomes the earth elemental in place (ElementalWorkshopI.Quest.js), and in the user's rev 242 Elemental Workshop I recording the rocks are added 75 times and never walk.
 - **Quest stages removed:** Attala and the builder at the Ralos' Rise camp (in Cam Torum after *Perilous Moons*, where they already are); Antos, Shas and Etz injured; the injured Guild Hunter Fox in the Avium Savannah; Forebearer Janus as a cultist, captured and bound; Furia Tullus as a cultist; Junior Jim's "limbo".
 - **Achilka:** one per boat stop, each with that stop's id (14727 Kastori, 14728 Tal Teklan, 14729 the Gloomthorn Trail); there had been two or three per stop with the wrong ids.
 - **Added:** Primio's Varrock end (12888), lost when the Civitas one took its id.

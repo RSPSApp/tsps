@@ -6,6 +6,8 @@ layout(std140, column_major) uniform;
 
 #include "./includes/scene-uniforms.glsl";
 #include "./includes/brightness.glsl";
+#include "./includes/hue-shift.glsl";
+uniform float u_visualHueShift;
 
 uniform highp sampler2DArray u_textures;
 uniform highp isampler2D u_textureMaterials;
@@ -345,6 +347,7 @@ void main() {
         surface = applyBrightness(textureColor.rgb, paletteColor);
     }
 
+    surface = shiftVisualHue(surface, u_visualHueShift);
     float fog = clamp(v_fogAmount, 0.0, 1.0);
     fog = smoothstep(0.0, 1.0, fog);
 

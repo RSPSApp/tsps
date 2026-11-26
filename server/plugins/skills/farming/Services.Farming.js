@@ -3,6 +3,7 @@ const Data = require("./Data.Farming");
 const Model = require("./Model.Farming");
 const Patches = require("./Patches.Farming");
 const Tools = require("./Tools.Farming");
+const Gardeners = require("./Gardeners.Farming");
 
 // Every gardener stands within 7 tiles of its patch; Ceto (drift nets, 20 tiles from the
 // underwater seaweed) and Cap'n Izzy No-Beard (agility arena, 12) also advertise Pay.
@@ -405,20 +406,47 @@ function seedlingLevelBox(crop) {
     return player => player.getDialogueManager().startDialogues(new core.DialogueChainBuilder()
         .add(new core.StatementDialogue(0, `You need level ${crop.level} Farming to plant that.`)));
 }
+// Any other spear (poisoned bronze ones too) is refused: Wiki, Scarecrow (trivia).
+const SPEAR_NAME = /\bspear\b(?!\s*tips)/i; // not Hunter spear tips, a component
+/**
+ * Hay sack + Bronze spear, then + Watermelon: rsprox captures (local 1000341 t12836-12849,
+ * 1846; rev 227 Leagues). Level 23 and 25 XP on the scarecrow: Wiki, Scarecrow.
+ */
+function scarecrowStep(event, names) {
+    const { player, usedItemId: a, usedWithItemId: b } = event;
+    const inventory = player.getInventory();
+    const ids = [a, b];
+    let finished;
+    if (ids.includes(core.ItemIdentifiers.HAY_SACK) && names.includes("Bronze spear")) finished = false;
+    else if (ids.includes(core.ItemIdentifiers.HAY_SACK_2) && names.includes("Watermelon")) finished = true;
+    else if (ids.includes(core.ItemIdentifiers.HAY_SACK) && names.some(name => SPEAR_NAME.test(name))) {
+        event.handled = true;
+        player.sendMessage("Waste this spear on a scarecrow? I think not - maybe I should find a bronze spear instead.");
+        return true;
+    } else return false;
+    event.handled = true;
+    // Ours: the Wiki gives the level but no refusal text, so hasLevel's generic line is used.
+    if (!Patches.hasLevel(player, Patches.SCARECROW_LEVEL, "scarecrow")) return true;
+    // Live took the first of each ingredient, not the clicked one, and put the result in the
+    // first free slot (1846 t11682: spear 18 on sack 17 -> 16; t11685: watermelon 13 -> 11).
+    inventory.deleteNumber(a, 1); inventory.deleteNumber(b, 1);
+    inventory.addItem(new core.Item(finished ? core.ItemIdentifiers.SCARECROW : core.ItemIdentifiers.HAY_SACK_2));
+    if (!finished) {
+        Patches.sound(player, Patches.SCARECROW_SOUND);
+        Patches.spam(player, "You stick the bronze spear through the hay sack.");
+        return true;
+    }
+    Patches.spam(player, "You stick a watermelon on top of the hay sack.");
+    player.sendMessage("This would be ideal for scaring birds!");
+    Patches.award(player, 25);
+    return true;
+}
 function farmingItemPair(event) {
     const { player, usedItemId: a, usedWithItemId: b } = event;
     const inventory = player.getInventory();
     if (!inventory.contains(a) || !inventory.contains(b)) return;
     const names = [core.CacheDefinitions.getItem(a).name, core.CacheDefinitions.getItem(b).name];
-    if (([a, b].includes(core.ItemIdentifiers.HAY_SACK) && names.includes("Bronze spear")) || ([a, b].includes(core.ItemIdentifiers.HAY_SACK_2) && names.includes("Watermelon"))) {
-        event.handled = true;
-        if (!Patches.hasLevel(player, Patches.SCARECROW_LEVEL, "scarecrow")) return;
-        inventory.deleteNumber(a, 1); inventory.deleteNumber(b, 1);
-        const finished = names.includes("Watermelon");
-        inventory.addItem(new core.Item(finished ? Data.itemId("Scarecrow") : core.ItemIdentifiers.HAY_SACK_2));
-        if (finished) Patches.award(player, 25);
-        return;
-    }
+    if (scarecrowStep(event, names)) return;
     const crop = [...Data.CROPS.values()].find(c => c.sapling && (c.seed === a || c.seed === b));
     if (crop && (a === Data.itemId("Filled plant pot") || b === Data.itemId("Filled plant pot"))) {
         event.handled = true;
@@ -662,7 +690,7 @@ function farmingNpc(event) {
     // (Brimhaven entrance) and the Blast Furnace foreman all advertise Pay. A gardener only
     // exists where a patch does, so never claim an NPC with no patch nearby.
     if (!patches.length) return;
-    const relevant = patches.filter(p => {
+    const relevant = gardenedPatches(player, npc, definition).filter(p => {
         const s = Patches.farmFor(player).patches[Data.patchKey(p)];
         const c = s?.crop && Data.CROPS.get(s.crop);
         return c && (c.payment.length || Data.WOOD_TREES.has(c.type) || c.type === "FRUIT_TREE");
@@ -670,6 +698,13 @@ function farmingNpc(event) {
     // Gardener NPCs advertise Pay; never hijack unrelated NPC conversations near a patch.
     if (!definition?.getActions()?.some(isGardenerPayment)) return;
     event.handled = true;
+    if (action === "talk-to") {
+        // Talk-to is the gardener's menu (Gardeners.Farming); its questions come back to gardenerTalkAction.
+        const mine = gardenedPatches(player, npc, definition);
+        const grown = mine.filter(p => grownTree(player, p));
+        Gardeners.talk(player, npc, definition, { chop: grown.length > 0, lookAfter: grown.length < mine.length });
+        return;
+    }
     if (!relevant.length) {
         // Captured from the tree gardeners; the others keep the server's own line.
         if (patches.some(p => ["TREE", "FRUIT_TREE", "HARDWOOD_TREE", "SPIRIT_TREE", "CALQUAT"].includes(p.type)))
@@ -685,6 +720,147 @@ function farmingNpc(event) {
     if (entries.length === 1) entries[0][1]();
     else Patches.choose(player, entries);
 }
+// Planted as saplings, so an empty one is "You don't have a sapling planted" (Wiki: Fayeth, Alexandra).
+const TREE_PATCHES = ["TREE", "FRUIT_TREE", "HARDWOOD_TREE", "SPIRIT_TREE", "CALQUAT", "REDWOOD", "CELASTRUS"];
+/** The patch types a gardener looks after: those with a protection payment, and the trees they fell. */
+let gardenedTypes = null;
+function isGardened(type) {
+    gardenedTypes ??= new Set([...Data.CROPS.values()].filter(c => c.payment.length || Data.WOOD_TREES.has(c.type) || c.type === "FRUIT_TREE").map(c => c.type));
+    return gardenedTypes.has(type);
+}
+/** A Pay option that names its patch (Farming Guild: "Pay (Redwood tree)", "Pay (tree patch)") binds it to that type. */
+const PAY_PATCH_TYPES = { "tree patch": "TREE", "fruit tree": "FRUIT_TREE", "redwood tree": "REDWOOD", "celastrus tree": "CELASTRUS", "spirit tree": "SPIRIT_TREE" };
+const actionsOf = (npc, definition) => (definition ?? npc.getDefinition?.())?.getActions?.() ?? [];
+function namedPatchTypes(npc, definition) {
+    return actionsOf(npc, definition)
+        .map(action => PAY_PATCH_TYPES[/^pay \((.+)\)$/i.exec(action ?? "")?.[1]?.toLowerCase()]).filter(Boolean);
+}
+const withinRange = (npc, p) => {
+    const pos = npc.getLocation();
+    return p.z === pos.getZ() && Math.abs(p.x - pos.getX()) <= GARDENER_RANGE && Math.abs(p.y - pos.getY()) <= GARDENER_RANGE;
+};
+/** Could `npc` look after `p`: a gardener (a Pay option) near it, whose named patch types (if any) include it. */
+function couldGarden(npc, p, definition) {
+    if (!actionsOf(npc, definition).some(isGardenerPayment) || !withinRange(npc, p)) return false;
+    const named = namedPatchTypes(npc, definition);
+    return !named.length || named.includes(p.type);
+}
+const distance = (npc, p) => Math.hypot(p.x - npc.getLocation().getX(), p.y - npc.getLocation().getY());
+/**
+ * The patches `npc` looks after. The Farming Guild and Fossil Island gardeners stand within reach of each other's
+ * patches, so a patch is the gardener's only if its Pay option names that patch type or, with none named, no other
+ * gardener that could look after it stands nearer (Alexandra's redwood, Taylor's celastrus, one squirrel's
+ * hardwood patch).
+ */
+function gardenedPatches(player, npc, definition) {
+    const near = Data.CACHE.patches.filter(p => isGardened(p.type) && couldGarden(npc, p, definition));
+    if (namedPatchTypes(npc, definition).length) return near;
+    const others = [];
+    for (const other of core.World.getNpcs()) if (other && other !== npc && other.getId?.() !== npc.getId() && other.getHitpoints?.() > 0) others.push(other);
+    return near.filter(p => !others.some(other => couldGarden(other, p) && distance(other, p) < distance(npc, p)));
+}
+function grownTree(player, p) {
+    const state = Patches.stateFor(player, p);
+    const crop = state.crop && Data.CROPS.get(state.crop);
+    return !!crop && state.status === "grown" && (Data.WOOD_TREES.has(crop.type) || crop.type === "FRUIT_TREE");
+}
+const COMPASS = { north: "northern", south: "southern", east: "eastern", west: "western",
+    "north-west": "northwestern", "north-east": "northeastern", "south-west": "southwestern", "south-east": "southeastern" };
+/**
+ * "The northern allotment|The southern allotment" (rsprox captures: Dantaera, 1000296 tick 384215), "The
+ * northeastern allotment" (Wiki, Marisi): each patch named by the direction its Pay option gives, north the higher
+ * one. Ours: a patch other than an allotment is "the <type> patch", and one with no Pay direction is named by type.
+ */
+function patchLabels(npc, patches, definition) {
+    const directions = actionsOf(npc, definition)
+        .map(action => /^pay \((.+)\)$/i.exec(action ?? "")?.[1]?.toLowerCase()).filter(Boolean);
+    const noun = p => p.type === "ALLOTMENT" ? "allotment" : `${p.type.toLowerCase().replace(/_/g, " ")} patch`;
+    if (directions.length !== patches.length || directions.some(d => !COMPASS[d])) return patches.map(p => [`The ${noun(p)}`, p]);
+    const left = [...patches];
+    return directions.map(direction => {
+        const score = p => (direction.includes("north") ? p.y : direction.includes("south") ? -p.y : 0) * 1000
+            + (direction.includes("east") ? p.x : direction.includes("west") ? -p.x : 0);
+        left.sort((a, b) => score(b) - score(a));
+        const p = left.shift();
+        return [`The ${COMPASS[direction]} ${noun(p)}`, p];
+    });
+}
+const LOOK_AFTER_ACTION = "farming:gardener-look-after";
+const CHOP_ACTION = "farming:gardener-chop";
+const DEAL_ACTION = "farming:gardener-deal";
+const NOT_FOR_FREE = "Well, I'm not wasting my time for free.";
+const niceLine = player => `That'll do nicely, ${player.getAppearance().isMale() ? "sir" : "madam"}. Leave it with me - I'll make sure that patch grows for you.`;
+/**
+ * Talk-to's "Would you look after my crops for me?" (rsprox captures: Aub 1001562, Dantaera 1000296; Wiki,
+ * Transcript:Kragen and Transcript:Fayeth). A gardener with more than one patch asks "I might - which one were you
+ * thinking of?" first. Then the patch's answer, or "If you like, but I want <payment> for that." and "Okay, it's a
+ * deal.|No, that's too much.|Okay, it's a deal and don't ask again."; the deal pays as Pay does.
+ */
+function lookAfterSteps(player, npc, p) {
+    const state = Patches.stateFor(player, p);
+    const crop = state.crop && Data.CROPS.get(state.crop);
+    if (!crop) return [{ npc: TREE_PATCHES.includes(p.type)
+        ? "You don't have a sapling planted in that patch. Plant one and I might agree to look after it for you."
+        : "You don't have any seeds planted in that patch. Plant some and I might agree to look after it for you." }];
+    if (state.protected) return [{ npc: "I don't know what you're talking about - I'm already looking after that patch for you." }, { player: "Oh sorry, I forgot." }];
+    if (state.status === "grown") return [{ npc: "That patch is already fully grown! I don't know what you want me to do with it!" }];
+    if (state.status === "dead") return [{ npc: "That patch is dead - it's too late for me to do anything about it now." }];
+    if (state.status === "diseased") return [{ npc: "That patch is diseased - you should cure it before asking me to be responsible for it!" }];
+    // Ours: a crop no gardener protects (no Wiki line covers it).
+    if (!crop.payment.length) return [{ npc: "That crop does not need my protection." }];
+    const ask = { npc: `If you like, but I want ${paymentText(crop.payment)} for that.` };
+    if (!canPay(player, crop.payment)) {
+        const some = crop.payment.some(([id]) => player.getInventory().getAmount(id) > 0);
+        return [ask, { player: `I'm afraid I don't have ${some ? "enough" : "any"} of those at the moment.` }, { npc: NOT_FOR_FREE }];
+    }
+    const key = Data.patchKey(p);
+    const deal = [{ player: "Okay, it's a deal." }, { type: "action", action: DEAL_ACTION, target: key }];
+    // Ours: after "don't ask again" the deal is taken without the menu, as Pay takes it without its confirmation.
+    if (skipsProtectionConfirmation(player)) return [ask, { type: "action", action: DEAL_ACTION, target: key }];
+    return [ask, { type: "choice", options: [
+        { text: "Okay, it's a deal.", steps: deal },
+        { text: "No, that's too much.", steps: [{ player: "No, that's too much." }, { npc: NOT_FOR_FREE }] },
+        { text: "Okay, it's a deal and don't ask again.", steps: [{ player: "Okay, it's a deal." }, { type: "action", action: DEAL_ACTION, target: `${key}|no-ask` }] },
+    ] }];
+}
+/** npc-dialogue:action for the Talk-to menu's questions. */
+function gardenerTalkAction(event) {
+    const { player, npc } = event;
+    if (!npc || ![LOOK_AFTER_ACTION, CHOP_ACTION, DEAL_ACTION].includes(event.action)) return;
+    event.handled = true;
+    const mine = gardenedPatches(player, npc, event.definition);
+    if (event.action === CHOP_ACTION) {
+        const tree = mine.find(p => grownTree(player, p));
+        if (tree) askGardener(player, npc, tree);
+        return;
+    }
+    if (event.action === DEAL_ACTION) {
+        const [key, noAsk] = String(event.target ?? "").split("|");
+        const p = mine.find(patch => Data.patchKey(patch) === key);
+        if (p && protect(player, npc, p)) {
+            // The setting sticks only once the deal is done.
+            if (noAsk) setSkipProtectionConfirmation(player);
+            Gardeners.play(player, npc, event.definition, [{ npc: niceLine(player) }]);
+            return;
+        }
+        // The payment left the inventory while the menu was open: the Wiki's answer to having none.
+        const crop = p && Data.CROPS.get(Patches.stateFor(player, p).crop);
+        if (crop?.payment.length && !canPay(player, crop.payment) && Patches.nearPatch(player, p))
+            Gardeners.play(player, npc, event.definition, [{ player: "I'm afraid I don't have any of those at the moment." }, { npc: NOT_FOR_FREE }]);
+        else player.getPacketSender().sendInterfaceRemoval();
+        return;
+    }
+    if (event.target) {
+        const chosen = mine.find(patch => Data.patchKey(patch) === event.target);
+        if (chosen) Gardeners.play(player, npc, event.definition, lookAfterSteps(player, npc, chosen));
+        return;
+    }
+    const ask = mine.filter(p => !grownTree(player, p) || mine.length === 1);
+    if (!ask.length) return;
+    if (ask.length === 1) { Gardeners.play(player, npc, event.definition, lookAfterSteps(player, npc, ask[0])); return; }
+    Gardeners.play(player, npc, event.definition, [{ npc: "I might - which one were you thinking of?" }, { type: "choice",
+        options: patchLabels(npc, ask, event.definition).map(([text, p]) => ({ text, steps: [{ type: "action", action: LOOK_AFTER_ACTION, target: Data.patchKey(p) }] })) }]);
+}
 function gardenerProtection(event) {
     if (event.action !== "farming:gardener-protect" || !event.npc) return;
     const pay = event.definition?.getActions()?.findIndex(isGardenerPayment);
@@ -696,19 +872,23 @@ function gardenerProtection(event) {
 function gardenerSays(player, npc, text) {
     player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.NpcDialogue(0, npc.getId(), text)));
 }
-/** "25 coconuts", "3 baskets of strawberries", as the gardeners name a payment. */
+/**
+ * "25 coconuts", "3 baskets of strawberries", "one sack of onions", as the gardeners name a payment (rsprox captures:
+ * Elstan's and Lyra's "I want one sack of onions for that.", "You pay the gardener one basket of tomatoes ...").
+ */
 function paymentText(payment) {
     return payment.map(([id, count]) => {
         const name = core.CacheDefinitions.getItem(id).name.toLowerCase();
         const filled = name.match(/^(.+)\((\d+)\)$/);
-        if (filled) return `${count} ${+filled[2] === 10 ? "sack" : "basket"}${count === 1 ? "" : "s"} of ${filled[1]}`;
-        return count === 1 || name.endsWith("s") ? `${count} ${name}` : `${count} ${name}s`;
+        const number = count === 1 ? "one" : String(count);
+        if (filled) return `${number} ${+filled[2] === 10 ? "sack" : "basket"}${count === 1 ? "" : "s"} of ${filled[1]}`;
+        return count === 1 || name.endsWith("s") ? `${number} ${name}` : `${number} ${name}s`;
     }).join(" and ");
 }
 /**
  * Captures (gardeners Fayeth, Treznor, the fruit and farming guild gardeners): a grown tree is chopped
  * for coins after "Pay 200 Coins to have your tree chopped down?"; protection asks "Pay <payment>?"
- * (Yes./No./Yes and don't ask again.), or the gardener says "I want <payment> for that." without it.
+ * (Yes./No./Yes, and don't ask again.), or the gardener says "I want <payment> for that." without it.
  */
 function askGardener(player, npc, p) {
     if (!Patches.nearPatch(player, p)) return;
@@ -728,19 +908,26 @@ function askGardener(player, npc, p) {
     if (state.status === "grown") { gardenerSays(player, npc, "That patch is already fully grown! I don't know what you want me to do with it!"); return; }
     if (state.protected || state.status === "dead" || !crop.payment.length) { gardenerSays(player, npc, "That crop does not need my protection."); return; }
     if (!canPay(player, crop.payment)) { gardenerSays(player, npc, `I want ${paymentText(crop.payment)} for that.`); return; }
-    const farm = Patches.farmFor(player);
     const accept = () => {
-        if (!Patches.nearPatch(player, p) || Patches.stateFor(player, p) !== state || (state.status === "grown" || state.status === "dead") || state.protected || !canPay(player, crop.payment)) return;
-        pay(player, crop.payment);
-        state.protected = true;
-        if (state.status === "diseased") { state.status = "growing"; state.nextAt = Model.nextGrowth(Date.now(), Data.stageMinutes(crop, state.stage), farm.offset); }
-        core.PluginManager.emitCustomEvent("farming:protected", { player, npc, patch: p, crop: crop.key });
-        Patches.spam(player, `You pay the gardener ${paymentText(crop.payment)} to protect the patch.`);
-        gardenerSays(player, npc, `That'll do nicely, ${player.getAppearance().isMale() ? "sir" : "madam"}. Leave it with me - I'll make sure that patch grows for you.`);
+        if (Patches.stateFor(player, p) !== state || !protect(player, npc, p)) return;
+        gardenerSays(player, npc, niceLine(player));
     };
     if (skipsProtectionConfirmation(player)) { accept(); return; }
-    Patches.choose(player, [["Yes.", accept], ["No.", () => {}], ["Yes and don't ask again.", () => { setSkipProtectionConfirmation(player); accept(); }]],
+    Patches.choose(player, [["Yes.", accept], ["No.", () => {}], ["Yes, and don't ask again.", () => { setSkipProtectionConfirmation(player); accept(); }]],
         0, `Pay ${paymentText(crop.payment)}?`);
+}
+/** Takes the payment and protects the patch, if it still can be: true when it was. */
+function protect(player, npc, p) {
+    const state = Patches.stateFor(player, p);
+    const crop = state.crop && Data.CROPS.get(state.crop);
+    if (!crop || !Patches.nearPatch(player, p) || state.status === "grown" || state.status === "dead" || state.protected
+        || !crop.payment.length || !canPay(player, crop.payment)) return false;
+    pay(player, crop.payment);
+    state.protected = true;
+    if (state.status === "diseased") { state.status = "growing"; state.nextAt = Model.nextGrowth(Date.now(), Data.stageMinutes(crop, state.stage), Patches.farmFor(player).offset); }
+    core.PluginManager.emitCustomEvent("farming:protected", { player, npc, patch: p, crop: crop.key });
+    Patches.spam(player, `You pay the gardener ${paymentText(crop.payment)} to protect the patch.`);
+    return true;
 }
 function skipsProtectionConfirmation(player) {
     return player.getPacketSender().getVarbit(PROTECTION_NO_ASK_VARBIT) === 1;
@@ -928,4 +1115,4 @@ function removeOneProduce(player, event, item, name) {
     return true;
 }
 
-Object.assign(module.exports, { cropRewards, binValue, binAction, useBottomless, farmingItemPair, growSeedlings, waterContainers, humidified, farmingItemOnNpc, farmingNpc, gardenerProtection, farmingItemAction, storeTool, takeBinStep, settingClicked, settingsLogin });
+Object.assign(module.exports, { gardenerTalkAction, cropRewards, binValue, binAction, useBottomless, farmingItemPair, growSeedlings, waterContainers, humidified, farmingItemOnNpc, farmingNpc, gardenerProtection, farmingItemAction, storeTool, takeBinStep, settingClicked, settingsLogin });

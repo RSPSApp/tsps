@@ -706,6 +706,7 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         map: WebGLMapSquare;
         ecsId: number;
         dataOffset: number;
+        cosmetic?: import("../game/plugins/ScenePresentation").CosmeticNpc;
     }> = [];
     // mirror sceneDrawCycleMarker/tileDrawCycleMarkers submission dedupe
     // for tile-centered single-tile actors.
@@ -1460,6 +1461,11 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         return render.initCache(this);
     }
 
+    override invalidateAnimationCaches(): void {
+        this.gfxRenderer?.clear();
+        this.clearDynamicNpcAnimRuntimeState();
+    }
+
     override invalidateDefinitionCaches(): void {
         this.definitionContentEpoch++;
         this.worldEntityLoadTokens.clear();
@@ -2089,7 +2095,7 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     }
 
     public resolveNpcHighlightTargetFromEntry(
-        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId"> | undefined,
+        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId" | "cosmeticNpcKey"> | undefined,
         fallbackTile?: { tileX: number; tileY: number; plane?: number },
     ): NpcHighlightTarget | undefined {
         return render.resolveNpcHighlightTargetFromEntry(this, entry, fallbackTile);
@@ -2102,7 +2108,7 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     }
 
     public resolveInteractHighlightTargetFromEntry(
-        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId"> | undefined,
+        entry: Pick<SimpleMenuEntry, "targetType" | "targetId" | "mapX" | "mapY" | "npcServerId" | "cosmeticNpcKey"> | undefined,
         fallbackTile?: { tileX: number; tileY: number; plane?: number },
     ): InteractHighlightTarget | undefined {
         return render.resolveInteractHighlightTargetFromEntry(this, entry, fallbackTile);
@@ -2420,8 +2426,9 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
         roofPlaneLimit: number,
         map?: WebGLMapSquare,
         lod: boolean = false,
+        gearTexturesByOffset?: ReadonlyMap<number, readonly number[]>,
     ): void {
-        return render.drawWithRoofPlaneFilter(this, drawCall, drawRanges, drawRangePlanes, roofPlaneLimit, map, lod);
+        return render.drawWithRoofPlaneFilter(this, drawCall, drawRanges, drawRangePlanes, roofPlaneLimit, map, lod, gearTexturesByOffset);
     }
 
     public getMapTileDistanceFromPoint(map: WebGLMapSquare, tileX: number, tileY: number): number {
@@ -2583,9 +2590,10 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
             terrainData: Int8Array.from(payload.terrainData),
             objectData: payload.objectData?.length ? Int8Array.from(payload.objectData) : undefined,
         });
-        if (!payload.allowReload) return;
         const mapX = regionId >> 8;
         const mapY = regionId & 0xff;
+        this.mapManager.invalidMapIds.delete(getMapSquareId(mapX, mapY));
+        if (!payload.allowReload) return;
         if (!this.mapManager.getMap(mapX, mapY)) return;
         this.pendingLocUpdates.add(getMapSquareId(mapX, mapY));
         this.scheduleLocReload(mapX, mapY);

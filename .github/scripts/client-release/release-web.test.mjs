@@ -13,8 +13,10 @@ test("shared releases contain game files and omit installed profile, launcher an
         const dist = join(root, "build"), out = join(root, "release");
         mkdirSync(join(dist, "static"), { recursive: true });
         mkdirSync(join(dist, "caches"));
+        writeFileSync(join(dist, "client-release.json"), JSON.stringify({ clientVersion: "a".repeat(64) }));
         writeFileSync(join(dist, "index.html"), "<html>Shared client</html>");
         writeFileSync(join(dist, "static/game.js"), "console.log('client');");
+        writeFileSync(join(dist, "caches/caches.json"), JSON.stringify([{ name: "osrs-test", revision: 242 }]));
         writeFileSync(join(dist, "caches/big.dat"), "installed game cache");
         writeFileSync(join(dist, "desktop-startup.html"), "owner branding");
         writeFileSync(join(dist, "desktop-icon.png"), "owner icon");
@@ -22,7 +24,10 @@ test("shared releases contain game files and omit installed profile, launcher an
         const entries = spawnSync("tar", ["-tzf", release.archive], { encoding: "utf8" });
         assert.equal(entries.status, 0);
         assert.match(entries.stdout, /static\/game.js/);
-        assert.doesNotMatch(entries.stdout, /caches|desktop-startup|desktop-icon/);
+        assert.match(entries.stdout, /caches\/caches.json/);
+        assert.doesNotMatch(entries.stdout, /big.dat|desktop-startup|desktop-icon/);
+        const metadata = spawnSync("tar", ["-xOzf", release.archive, "caches/caches.json"], { encoding: "utf8" });
+        assert.equal(JSON.parse(metadata.stdout)[0].name, "osrs-test");
         const bytes = readFileSync(release.archive);
         assert.equal(release.manifest.archive.sha256, createHash("sha256").update(bytes).digest("hex"));
         assert.equal(release.manifest.archive.size, bytes.length);

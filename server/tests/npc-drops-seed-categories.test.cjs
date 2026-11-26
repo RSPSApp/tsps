@@ -71,6 +71,21 @@ test('an unknown combat level rolls the lowest category instead of a rarer one',
     }
 });
 
+test('read-only category probabilities match every possible selector roll without RNG', () => {
+    for (const level of [21, 49, 100]) {
+        const counts = new Map();
+        const bound = level * seed.combat_level_multiplier;
+        for (let roll = 0; roll < bound; roll++) {
+            const category = Seed.select(seed.categories, seed.combat_level_multiplier, level, () => roll);
+            counts.set(category, (counts.get(category) ?? 0) + 1);
+        }
+        const distribution = Seed.distribution(seed.categories, seed.combat_level_multiplier, level);
+        assert.equal(distribution.length, counts.size);
+        for (const { category, probability } of distribution) assert.equal(probability, counts.get(category) / bound);
+    }
+    assert.deepEqual(Seed.distribution(seed.categories, 10, null), [{ category: seed.categories[0], probability: 1 }]);
+});
+
 test('malformed category data is rejected, so the flat rows keep rolling', () => {
     const bad = [
         { ...seed, categories: [] },

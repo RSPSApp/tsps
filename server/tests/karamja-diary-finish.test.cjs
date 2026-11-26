@@ -130,6 +130,18 @@ test("Musa Point ferry credits the Port Sarim task on arrival only", () => {
   assert.ok(done(player).has(F.TASK.musaFerry));
 });
 
+test("Seaman Morris's Pandemonium boat to Port Sarim credits the same task once, not the Musa Point leg", () => {
+  const api = diaryBus();
+  const player = playerAt(3680, 2950);
+  api.emitCustomEvent("ferries:arrived", { player, route: "pandemonium-musa-point" });
+  assert.equal(done(player).size, 0);
+  api.emitCustomEvent("ferries:arrived", { player, route: "pandemonium-port-sarim" });
+  assert.ok(done(player).has(F.TASK.musaFerry));
+  assert.equal(done(player).size, 1);
+  api.emitCustomEvent("ferries:arrived", { player, route: "pandemonium-port-sarim" });
+  assert.equal(done(player).size, 1);
+});
+
 test("the Crandor wall and surface route are separate credits", () => {
   const api = diaryBus();
   const player = playerAt(2836, 9600);

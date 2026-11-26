@@ -23,7 +23,7 @@ const item = {
     actions: ["Wear", null, "Rub", null, "Drop"],
     submenuActions: [null, null, ["First row", "Second row"], null, null],
 };
-const manager = { getWidgetFlags: () => -1, getWidgetOpMask: () => 0, getWidgetByUid: () => undefined };
+const manager = { getWidgetFlags: () => ~1, getWidgetOpMask: () => 0, getWidgetByUid: () => undefined };
 const primaryAction = createPrimaryWidgetActionResolver(
     {
         getSpellSelection: () => ({ getWidgetTargetMask: () => 0 }),
@@ -136,7 +136,7 @@ assert.equal(built.at(-1)?.opSubIndex, SECOND_ROW, "the transmitted payload is b
 // and sub-op as the left-click, and the row is a plain row, not a second copy of the submenu.
 setMenuTransform((entries) => pinSecondRow(entries));
 try {
-    const menuEntries = deriveMenuEntriesForWidget(item, false, () => -1, () => undefined, () => 0) as any[];
+    const menuEntries = deriveMenuEntriesForWidget(item, false, () => ~1, () => undefined, () => 0) as any[];
     assert.equal(menuEntries[0]?.opSubIndex, SECOND_ROW, "the plugin pinned the row");
     const chosen: any[] = [];
     const menu = widgetEntriesToSimple(menuEntries, {

@@ -1040,3 +1040,101 @@ test("the overlay's Combat Achievement monsters are enum 3970's names", () => {
     }
   }
 });
+
+/** A Demonic Pacts character (league 6), logged in as new. */
+function demonicPacts(name) {
+  worldLeague = 6;
+  try {
+    return character(name);
+  } finally {
+    worldLeague = 4;
+  }
+}
+
+test("Defeat the Royal Titans solo: a fight no one else joins credits the solo task (#6561)", () => {
+  const RoyalTitans = require("../plugins/bosses/royaltitans/CombatAchievements.RoyalTitans");
+  RoyalTitans.attach(api);
+  const task = catalog.leagues["6"].tasks.find((entry) => entry.id === "defeat-the-royal-titans-solo");
+  assert.equal(task.description, "Defeat the Royal Titans without any other player joining the encounter", "the cache's text");
+
+  // Alone through the tunnel (Area.RoyalTitans: joined, then the encounter spawns), alone at the kill.
+  const alone = demonicPacts("titans-solo");
+  const session = { players: [alone] };
+  RoyalTitans.joined(alone, session);
+  RoyalTitans.spawned(alone, session);
+  RoyalTitans.killed(alone, session, 1, () => {});
+  assert.ok(completed(alone).includes("defeat-the-royal-titans"));
+  assert.ok(completed(alone).includes("defeat-the-royal-titans-solo"), "alone the whole fight");
+
+  // A duo: both credit the plain kill, neither the solo task.
+  const [a, b] = [demonicPacts("titans-duo-a"), demonicPacts("titans-duo-b")];
+  const duo = { players: [a, b] };
+  for (const player of duo.players) RoyalTitans.spawned(player, duo);
+  for (const player of duo.players) RoyalTitans.killed(player, duo, 1, () => {});
+  for (const player of duo.players) {
+    assert.ok(completed(player).includes("defeat-the-royal-titans"), "the plain kill still counts");
+    assert.ok(!completed(player).includes("defeat-the-royal-titans-solo"), "a duo is not solo");
+  }
+
+  // A partner joins mid-fight and leaves before the kill: the host kills alone, but someone joined.
+  const host = demonicPacts("titans-joined");
+  const guest = demonicPacts("titans-guest");
+  const shared = { players: [host] };
+  RoyalTitans.spawned(host, shared);
+  shared.players.push(guest);
+  RoyalTitans.joined(guest, shared);
+  RoyalTitans.left(guest, shared);
+  shared.players = [host];
+  RoyalTitans.killed(host, shared, 1, () => {});
+  assert.ok(completed(host).includes("defeat-the-royal-titans"));
+  assert.ok(!completed(host).includes("defeat-the-royal-titans-solo"), "someone joined the encounter");
+
+  // The instance's next fight, alone from its spawn, is solo.
+  RoyalTitans.spawned(host, shared);
+  RoyalTitans.killed(host, shared, 2, () => {});
+  assert.ok(completed(host).includes("defeat-the-royal-titans-solo"));
+});
+
+test("Defeat Nex Solo: a private fight without anyone's help credits the solo task; a duo only the plain kill", () => {
+  const NexCommon = require("../plugins/bosses/nex/Common.Nex");
+  NexCommon.init(api);
+  const { Fight } = require("../plugins/bosses/nex/Fight.Nex");
+  const task = catalog.leagues["6"].tasks.find((entry) => entry.id === "defeat-nex-solo");
+  assert.equal(task.description, "Defeat Nex in a private instance without help from any other player", "the cache's text");
+  const fightIn = (arena, startPlayers, contribution) =>
+    Object.assign(Object.create(Fight.prototype), { arena, startPlayers, contribution: new Map(contribution) });
+
+  const alone = demonicPacts("nex-solo");
+  fightIn({ private: true }, 1, [[alone, 3400]]).count(alone, 500, 1);
+  assert.ok(completed(alone).includes("defeat-nex"));
+  assert.ok(completed(alone).includes("defeat-nex-solo"), "private, alone, nobody else's damage");
+
+  const [a, b] = [demonicPacts("nex-duo-a"), demonicPacts("nex-duo-b")];
+  const duo = fightIn({ private: true }, 2, [[a, 1700], [b, 1700]]);
+  for (const player of [a, b]) duo.count(player, 500, 2);
+  for (const player of [a, b]) {
+    assert.ok(completed(player).includes("defeat-nex"), "the plain kill still counts");
+    assert.ok(!completed(player).includes("defeat-nex-solo"), "a duo is not solo");
+  }
+
+  // A helper who hit her and was gone by the kill; a kill in the public chamber.
+  const helped = demonicPacts("nex-helped");
+  fightIn({ private: true }, 1, [[helped, 3000], [demonicPacts("nex-helper"), 400]]).count(helped, 500, 1);
+  assert.ok(!completed(helped).includes("defeat-nex-solo"), "another player's damage is help");
+  const open = demonicPacts("nex-public");
+  fightIn({}, 1, [[open, 3400]]).count(open, 500, 1);
+  assert.ok(completed(open).includes("defeat-nex"));
+  assert.ok(!completed(open).includes("defeat-nex-solo"), "the public chamber is not a private instance");
+
+  // Her death alone (no credited report) never completes the solo task.
+  const death = demonicPacts("nex-death");
+  killReal(death, core.NpcIdentifiers.NEX);
+  assert.ok(completed(death).includes("defeat-nex"));
+  assert.ok(!completed(death).includes("defeat-nex-solo"));
+});
+
+test("a credited solo trigger counts the encounter's report, not the death-blow condition", () => {
+  const { conditionalKill } = require("../plugins/modes/leaguetasks/Triggers.LeagueTasks")._test;
+  assert.equal(conditionalKill({ kind: "kill", npcs: ["Royal Titans"], count: 1, credited: true, solo: true }), false);
+  assert.equal(conditionalKill({ kind: "kill", npcs: ["Callisto"], count: 1, solo: true }), true, "a death's solo stays a blow condition");
+});

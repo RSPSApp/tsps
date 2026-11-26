@@ -60,10 +60,10 @@ console.log("Hover raycast walks the tiles the ray crosses");
 // Large models can reach six tiles away from their anchor. Neighbourhood deduplication must
 // retain every anchor on each interaction plane, including bridge changes and 104-tile scenes.
 const { mat4 } = require("gl-matrix");
-for (const [span, bridge, deck, plane] of [
+for (const [span, bridge, deck, plane, locPlaneLimit] of [
     [64, false, false, 0], [64, true, false, 0],
     [104, false, false, undefined], [104, true, false, 0],
-    [64, false, true, 0],
+    [64, false, true, 0], [64, false, false, undefined, 2],
 ] as const) {
     const baseX = deck ? 9600 : BASE_X + 8;
     const baseY = deck ? 9600 : BASE_Y + 24;
@@ -90,7 +90,10 @@ for (const [span, bridge, deck, plane] of [
         worldEntityMapIds: new Set(deck ? [fixture.id] : []),
     }, {
         renderDistance: 100, clientPlugins: { gpuSettings: () => undefined },
-        groundItems: { getStacksAt: () => [] }, npcEcs: { queryByMap: () => [] },
+        groundItems: { getStacksAt: () => {
+            assert.equal(locPlaneLimit, undefined, "building picks skip ground items");
+            return [];
+        } }, npcEcs: { queryByMap: () => [] },
         playerEcs: { getIndexForServerId: () => undefined, size: () => 0 },
         camera: { viewMatrix: mat4.create() },
     });
@@ -110,11 +113,13 @@ for (const [span, bridge, deck, plane] of [
     const localX = span === 104 ? 90.5 : 24.5;
     const origin = [baseX + localX - (deck ? 6400 : 0), -1, baseY + 30.5 - (deck ? 6400 : 0)];
     const pickRay = new Ray(origin, [1, 0, 0.3]);
-    const hits = picker.raycast(pickRay, { maxDistance: 24, basePlane: plane });
+    const options = { maxDistance: 24, basePlane: plane, locPlaneLimit };
+    const hits = picker.raycast(pickRay, options);
     assert.ok(crossed.length > 5, "the normal or transformed ray actually crosses the scene");
     const expected = new Set<string>();
     for (const [x, y] of crossed) {
-        const levels = plane === undefined ? [0, 1, 2, 3] : [bridgeAt(x) ? 1 : plane];
+        const levels = locPlaneLimit !== undefined ? [0, 1, 2]
+            : plane === undefined ? [0, 1, 2, 3] : [bridgeAt(x) ? 1 : plane];
         for (const level of levels) for (let dx = -6; dx <= 6; dx++) for (let dy = -6; dy <= 6; dy++) {
             if (x + dx >= 0 && y + dy >= 0 && x + dx < span && y + dy < span) {
                 expected.add(`${level}:${x + dx}:${y + dy}`);
@@ -123,11 +128,29 @@ for (const [span, bridge, deck, plane] of [
     }
     assert.deepEqual(anchors, expected, `all neighbourhood anchors: span=${span}, bridge=${bridge}, deck=${deck}`);
     assert.equal(hits.length, expected.size, "every unique synthetic loc remains selectable");
+    for (const hit of hits) {
+        assert.equal(hit.locLevel, Math.floor((hit.interactId - 1) / (span * span)));
+        assert.equal(hit.locTypeRot, 10);
+    }
     assert.equal(new Set(hits.map((hit: any) => hit.interactId)).size, hits.length, "no duplicate menu hits");
     for (let i = 1; i < hits.length; i++) assert.ok(hits[i - 1].t <= hits[i].t, "hit priority stays front to back");
     anchors.clear(); crossed.length = 0;
-    assert.deepEqual(picker.raycast(pickRay, { maxDistance: 24, basePlane: plane }), hits,
+    assert.deepEqual(picker.raycast(pickRay, options), hits,
         "each new ray starts with fresh visited anchors");
+
+    if (span === 64 && !bridge && !deck && plane === 0) {
+        const { loadFromPayload, clearWorldOverlays } = require("../common/gamemode/GamemodeContentStore");
+        const scenery = hits[0];
+        picker.getResolvedLocType = (id: number) => ({ id, actions: id === scenery.interactId ? [] : ["Use"], sizeX: 1, sizeY: 1 });
+        anchors.clear();
+        assert.equal(picker.raycast(pickRay, options).length, hits.length - 1, "ordinary scenery has no game hover");
+        loadFromPayload({ gamemodeId: "world", datasets: [{ key: "mapWarpActions", rows: [
+            { id: scenery.interactId, op: 1, from: [scenery.tileX, scenery.tileY, scenery.locLevel], actionLabel: "Enter" },
+        ] }] });
+        anchors.clear();
+        assert.deepEqual(picker.raycast(pickRay, options), hits, "a warp makes the exact scenery placement pickable");
+        clearWorldOverlays();
+    }
 }
 
 console.log("Hover neighbourhoods preserve bridge, house and transformed boat loc hits");

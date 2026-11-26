@@ -66,6 +66,8 @@ export class EditorToolbar {
             zIndex: "10001",
             display: "flex",
             flexDirection: "column",
+            maxHeight: "calc(100dvh - 75px)",
+            overflowY: "auto",
             gap: "4px",
             padding: "5px",
             border: "1px solid rgba(255, 255, 255, 0.14)",
@@ -89,6 +91,7 @@ export class EditorToolbar {
             button.setAttribute("aria-label", tool.label);
             button.appendChild(tool.icon());
             Object.assign(button.style, {
+                flexShrink: "0",
                 width: "34px",
                 height: "34px",
                 display: "grid",
@@ -110,6 +113,7 @@ export class EditorToolbar {
             });
             button.addEventListener("click", (event) => {
                 event.stopPropagation();
+                this.hideTooltip();
                 if (tool.action) {
                     tool.action();
                     return;
@@ -139,6 +143,11 @@ export class EditorToolbar {
         button.disabled = disabled;
         button.style.cursor = disabled ? "wait" : "pointer";
         button.style.opacity = disabled ? "0.5" : "1";
+    }
+
+    public setVisible(visible: boolean): void {
+        this.element.style.display = visible ? "flex" : "none";
+        if (!visible) this.hideTooltip();
     }
 
     public setIcon(toolId: string, icon: () => SVGElement) {
@@ -228,6 +237,9 @@ export const createConfigIcon = (): SVGElement =>
     );
 
 export const createCloseIcon = (): SVGElement => createActionIcon("M6 6l12 12M18 6 6 18");
+
+export const createBrushSettingsIcon = (): SVGElement =>
+    createActionIcon("M4 7h6m4 0h6M4 17h10m4 0h2M10 4v6m4 4v6");
 
 export const createWorldMapIcon = (): SVGElement =>
     createActionIcon(
@@ -352,3 +364,9 @@ export const createOverlayIcon = (colorRgb = 0x64748b, texture?: string): SVGEle
 export const createPathIcon = (): SVGElement => createActionIcon("M5 19c2.5-6 5-9 9-9 2.2 0 3.8-1.7 5-5M5 19h5m-5 0v-5M19 5h-5m5 0v5");
 
 export const createTrashIcon = (): SVGElement => createActionIcon("M5 7h14M10 11v6m4-6v6M9 7V4h6v3m-9 0 1 14h10l1-14", "none");
+
+export const createSearchIcon = (): SVGElement =>
+    createActionIcon("M16 16l5 5M17.5 10a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z");
+
+export const createReviewIcon = (): SVGElement =>
+    createActionIcon("M7 3h7l5 5v13H5V3h2m7 0v5h5M8 12h8m-8 4h8");

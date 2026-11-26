@@ -255,9 +255,9 @@ function strike(session, state) {
     Projectile.createProjectile(zuk, glyph, ZUK_PROJECTILE, 40, Projectile.arrivalCycles(zuk, glyph), 43, 31).sendProjectile();
     monsters.later(zuk, Projectile.arrivalTicks(zuk, glyph), () => {
       if (!alive(glyph)) return;
+      // Wiki (Ancestral Glyph): it "can sustain TzKal-Zuk's attacks indefinitely"; its 600
+      // hitpoints are only worn down by the Jal-Xil, Jal-Zek and JalTok-Jad he summons.
       glyph.performAnimation(new Animation(GLYPH_BLOCK_ANIM));
-      // Wiki: the shield is destroyed after taking 600 damage; Zuk's own hits count.
-      glyph.setHitpoints(Math.max(0, glyph.getHitpoints() - damage));
     });
     return;
   }
@@ -379,4 +379,10 @@ function clearArena(session) {
   state.healers = [];
 }
 
-module.exports = { init, begin, tend, provoke, closeHud, claimZukDrops };
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  const N = core.NpcIdentifiers;
+  for (const id of [N.TZKAL_ZUK, N.JAL_XIL_2, N.JAL_ZEK_2, N.JALTOK_JAD_2, N.JAL_MEJJAK]) npcIds.add(id);
+}
+
+module.exports = { init, begin, tend, provoke, closeHud, claimZukDrops, describeEncounters };

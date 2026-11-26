@@ -52,9 +52,15 @@ function createTraversalAssist(api, options = {}) {
   let indexInitialized = false;
   let nextInitAttemptAtMs = 0;
   const INIT_RETRY_BACKOFF_MS = 5000;
+  // The tracked dump is a read-only seed: a rebuild goes to the untracked runtime file, so a live
+  // checkout never has local edits to a tracked file (they block the deploy's fast-forward).
   const persistentIndexPath =
     options.cachePath ??
-    path.join(__dirname, "..", "data", "object-index.json");
+    path.join(__dirname, "..", "..", "..", "data", "saves", "bot-object-index.json");
+  const seedIndexPath =
+    options.seedPath === undefined
+      ? path.join(__dirname, "..", "data", "object-index.json")
+      : options.seedPath;
 
   /** Sorted id list: a dump built for a different set of tracked kinds is rejected. */
   function trackedIdsFingerprint() {
@@ -180,13 +186,31 @@ function createTraversalAssist(api, options = {}) {
     };
   }
 
-  function loadPersistentIndexFromFile() {
-    if (!fs.existsSync(persistentIndexPath)) {
+  function loadIndexFile(filePath) {
+    if (!filePath || !fs.existsSync(filePath)) {
       return null;
     }
-    const raw = fs.readFileSync(persistentIndexPath, "utf8");
+    const raw = fs.readFileSync(filePath, "utf8");
     const parsed = JSON.parse(raw);
     return loadIndexData(parsed);
+  }
+
+  /** The runtime rebuild first, then the tracked seed; null when neither is valid for this world. */
+  function loadPersistentIndexFromFile() {
+    for (const [source, filePath] of [["cache", persistentIndexPath], ["seed", seedIndexPath]]) {
+      try {
+        const loaded = loadIndexFile(filePath);
+        if (loaded && loaded.objectCount > 0) {
+          return { ...loaded, source, path: filePath };
+        }
+      } catch (error) {
+        api?.log?.("object_index_load_failed", {
+          path: filePath,
+          message: error?.message ?? String(error),
+        });
+      }
+    }
+    return null;
   }
 
   /** Indexes a region that is already loaded; appends to whatever is there. */
@@ -305,26 +329,19 @@ function createTraversalAssist(api, options = {}) {
     // The dump needs no regions, so load it before core has initialized them; a
     // missing or stale dump falls through to the post-startup scan below.
     if (!forceRescan) {
-      try {
-        const loaded = loadPersistentIndexFromFile();
-        if (loaded && loaded.objectCount > 0) {
-          indexInitialized = true;
-          nextInitAttemptAtMs = 0;
-          api?.log?.("object_index_loaded", {
-            source: "cache",
-            path: persistentIndexPath,
-            regionCount: loaded.regionCount,
-            objectCount: loaded.objectCount,
-            trackedObjectIds: trackedObjectIds.size,
-            durationMs: Date.now() - startedAt,
-          });
-          return true;
-        }
-      } catch (error) {
-        api?.log?.("object_index_load_failed", {
-          path: persistentIndexPath,
-          message: error?.message ?? String(error),
+      const loaded = loadPersistentIndexFromFile();
+      if (loaded) {
+        indexInitialized = true;
+        nextInitAttemptAtMs = 0;
+        api?.log?.("object_index_loaded", {
+          source: loaded.source,
+          path: loaded.path,
+          regionCount: loaded.regionCount,
+          objectCount: loaded.objectCount,
+          trackedObjectIds: trackedObjectIds.size,
+          durationMs: Date.now() - startedAt,
         });
+        return true;
       }
     }
 

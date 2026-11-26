@@ -5,7 +5,7 @@
 - `Common.Cooking.js` – the data, level and cape checks, message helpers and the keyed step runner.
 - `Cookers.Cooking.js` – fires, ranges and ovens: one loop for every cooker.
 - `Recipes.Cooking.js` – one item used on another: doughs, pie shells, pie fillings, the pizza
-  steps and toppings, and the baked potato toppings.
+  steps and toppings, the baked potato toppings and the bowl foods chopped with a knife.
 - `Wine.Cooking.js` – unfermented wine and its fermenting.
 - `Churn.Cooking.js` – dairy churns: cream, butter and cheese.
 
@@ -84,6 +84,18 @@ highest). Every charted food stops burning by 150 on every cooker.
   `human_firecooking`; every other range and oven (`range`, `cooksquestrange`, `fortis_stove`
   "Oven") plays `human_cooking`. Each food plays `synth_sound 2577`. Pies and pizzas bake the
   same way, on a range only.
+- **Fireplaces.** A lit fireplace cooks as a fire (Wiki: Fireplace: "carries the same burn rate
+  as a regular fire", and no range food). rsprox capture 1001621 (rev 241) uses raw shrimps on
+  the Draynor Village fireplace (`fireplace` 24969, 3100,3256) at tick 627: the how-many menu,
+  then `human_firecooking`, sound 2577 and the usual shrimp lines and burn. The ids are the
+  Wiki infobox's lit ones (4618, 4650, 5165, 7185, 8712, 10058, 10824, 17640-17643, 21795,
+  24969, 24970, 26179, 30138); Misthalin Mystery's riddle fireplace (30136/30137) is not one.
+  Other locs named "Fireplace" (unlit, quest props, house fireplaces) are not cookers. The
+  op-less "Cooking pot" over the Lumbridge farmhouse fireplace (`fireplacecookingpot` 26180,
+  3225,3290) is a fire too: rsprox captures 911358 (tick 1197-1201) and local 1001342 (rev 240,
+  tick 1197-1231) show the menu, `human_firecooking`, "You cook some chicken.", and one raw beef
+  cooking at once with no Sinew choice. The other op-less pots (12969, 7483) are not captured and
+  are not cookers.
 - **Lines** (spam channel). "You successfully cook a shark." / "an anglerfish" / "some shrimps"
   for most fish; "You cook a bass.", "You manage to cook a tuna.", "You cook the rabbit.", "You
   cook a piece of meat.", "You cook the thin snail.", "You successfully bake some bread.", and for
@@ -166,6 +178,35 @@ Leagues worlds:
   the empty bucket a free one. The XP was 486, which is the Wiki's 40.5 under the Leagues
   multiplier.
 
+### Nettle tea
+
+rsprox capture 1001702 (rev 242, the user's own recording, Edgeville house stove
+`100_dave_stove`), the Ghosts Ahoy capture 20261112T092603 (ticks 373-383, the porcelain cup) and
+the Wiki ([Nettle tea](https://oldschool.runescape.wiki/w/Nettle_tea),
+[Nettle-water](https://oldschool.runescape.wiki/w/Nettle-water),
+[Cup of tea (nettle)](https://oldschool.runescape.wiki/w/Cup_of_tea_(nettle)),
+[Porcelain cup](https://oldschool.runescape.wiki/w/Porcelain_cup)):
+
+- A bowl of water used on nettles (or the other way round): a tick later "You place the nettles
+  into the bowl of water." (spam), the nettles' slot empties and the bowl's slot holds the
+  nettle-water (1001702, ticks 15606-15607). No XP; 20 Cooking (Wiki); it is a `cooking.json`
+  recipe (`productSlot` keeps the bowl's slot), so more than one opens the make menu.
+- Nettle-water on the stove: `human_cooking`, `synth_sound fry` (2577), "You boil the water and make
+  nettle tea." (spam), the tea in the first free slot, 52 Cooking XP and `cooking_success_count` up one,
+  two ticks after the player arrived (1001702, ticks 15648-15651). It is a `cooking.json` cookable,
+  so fires, ranges and the cook menu all take it.
+- The water can boil over, leaving the empty bowl, on the Wiki's "Nettle tea cooking chance"
+  chart (fire or range 78/412, the Hosidius Kitchen's +12 as for other food): certain from 53.
+  The Wiki's prose says it stops at 54; the chart's values give 53. Ours: the line "The water
+  boils over." (no capture or Wiki text for a boil-over).
+- The tea (plain or milky) into an empty cup or a porcelain cup, and a bucket of milk into the tea
+  in a bowl or either cup: a tick after the use, no line, no XP, sound 2401, the brew in the cup's
+  slot (the tea's, for milk) and the emptied bowl or bucket in the other slot (Ghosts Ahoy capture
+  20261112T092603: tea into the porcelain cup at 373, response 374; milk at 382, response 383; no
+  Cooking stat update). The Wiki: the porcelain cup "works like a normal teacup", so the plain
+  cup pours the same. The Wiki's Cup of tea (nettle) recipe box lists 20 Cooking and 52 XP, the
+  boiling's values; the recording shows neither for a pour (recorded difference).
+
 ## From the Wiki only
 
 - Ordinary wine production stops at 60,000 unfermented jugs across the inventory and real
@@ -188,6 +229,38 @@ Leagues worlds:
   on a baked potato at 39 (40 XP), then on the potato with butter cheese at 47 (40), chilli con
   carne at 41 (15), egg and tomato at 51 (45), mushroom & onion at 64 (55) or tuna and corn at
   68 (10). Every step is 2 ticks. The chilli and tuna bowls come back empty.
+- Bowl foods, from each item's recipe box ([Chopped onion](https://oldschool.runescape.wiki/w/Chopped_onion),
+  [Sliced mushrooms](https://oldschool.runescape.wiki/w/Sliced_mushrooms),
+  [Chopped tomato](https://oldschool.runescape.wiki/w/Chopped_tomato),
+  [Chopped garlic](https://oldschool.runescape.wiki/w/Chopped_garlic),
+  [Chopped tuna](https://oldschool.runescape.wiki/w/Chopped_tuna),
+  [Minced meat](https://oldschool.runescape.wiki/w/Minced_meat),
+  [Chopped ugthanki](https://oldschool.runescape.wiki/w/Chopped_ugthanki),
+  [Sweetcorn (bowl)](https://oldschool.runescape.wiki/w/Sweetcorn_(bowl)),
+  [Spicy sauce](https://oldschool.runescape.wiki/w/Spicy_sauce),
+  [Chilli con carne](https://oldschool.runescape.wiki/w/Chilli_con_carne),
+  [Egg and tomato](https://oldschool.runescape.wiki/w/Egg_and_tomato),
+  [Mushroom & onion](https://oldschool.runescape.wiki/w/Mushroom_%26_onion),
+  [Tuna and corn](https://oldschool.runescape.wiki/w/Tuna_and_corn),
+  [Onion & tomato](https://oldschool.runescape.wiki/w/Onion_%26_tomato),
+  [Ugthanki & onion](https://oldschool.runescape.wiki/w/Ugthanki_%26_onion),
+  [Ugthanki & tomato](https://oldschool.runescape.wiki/w/Ugthanki_%26_tomato),
+  [Kebab mix](https://oldschool.runescape.wiki/w/Kebab_mix)), all members-only, 2 ticks each
+  unless noted:
+  - with a knife carried (a recipe's `tools`), an onion, mushroom, tomato, garlic, tuna, cooked
+    meat or ugthanki meat goes into an empty bowl: no level, no XP, the knife stays. Cooked
+    sweetcorn goes into a bowl without one;
+  - with a knife, onion, tomato and ugthanki meat combine two at a time into onion & tomato,
+    ugthanki & onion and ugthanki & tomato, and the third makes kebab mix (all level 1, no XP);
+  - spicy sauce: chopped garlic and gnome spice, 9 (25 XP). Chilli con carne at 11: spicy sauce
+    and cooked meat with a knife, or spicy sauce and minced meat (one bowl back), 1 tick each.
+    Egg and tomato at 23: scrambled egg and a tomato, no knife. Mushroom & onion at 57: fried
+    mushrooms and fried onions. Tuna and corn at 67: a bowl of sweetcorn and tuna with a knife,
+    a bowl of sweetcorn and chopped tuna (one bowl back), or cooked sweetcorn and chopped tuna.
+    None of these mixes gives XP but spicy sauce;
+  - without the knife the pair does nothing and says nothing (item-on-item has no fallback line
+    here; live presumably says "Nothing interesting happens."). The Wiki quotes no line
+    for any of them, so they are made silently.
 - Leaping fish (`server/plugins/skills/cooking/LeapingFish.Cooking.js`), the only source of roe
   and caviar for Barbarian Herblore, cut with a knife at any Cooking level, Mod Ash's rates:
   - every cut uses one fish. A successful cut gives roe (caviar from sturgeon), the static
@@ -251,15 +324,16 @@ Leagues worlds:
 
 - Where Sinew sits in a range's menu among other foods (ours: after them all); no capture mixes
   them. Sinew on a player-owned house range plays its `human_firecooking`, unconfirmed.
-- Making chopped onions and sliced mushrooms (a knife and a bowl): the recipes have no tools, so
-  only the cooking of them is here. The other potato topping bowls (chilli con carne, egg and
-  tomato, mushroom & onion, tuna and corn) are not made here either; they come from drops and
-  trade.
+- The bowl foods' lines: the Wiki gives none and nothing is captured, so they are made silently.
+  Ours: mushroom & onion gives one of its two bowls back (the Wiki's text uses two bowls, its
+  recipe box lists none back). A Fletching knife worn does not count as the knife (Tuna and corn
+  page); only the plain knives carried do.
+- The ugthanki kebab (kebab mix on pitta bread, 40 XP): its failure chance to a bad kebab is from
+  a Discord answer, not stated by the Wiki, so it is not made here.
 - The potato topping lines other than butter's: no capture or Wiki text gives them, so cheese,
   chilli, egg, mushroom and tuna potatoes are made without a line. The egg and mushroom bowls
   come back like the chilli and tuna ones (ours: their Wiki recipes list no bowl). The toppings'
   2-tick first item follows the captured butter.
-- Nettle tea: Ghosts Ahoy makes nettle-water and boils it, without a burn chance.
 - Roast rabbit and the skewered chompy (iron spit); the Ogre spit-roast for jubbly and chompy,
   which cook on a fire here.
 - Gnome cuisine beyond the tutorial products (worm hole, veg ball, tangled toad's legs, the other

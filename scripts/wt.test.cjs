@@ -8,6 +8,37 @@ const { test } = require("node:test");
 const copyDeps = fs.readFileSync(path.join(__dirname, "wt"), "utf8")
     .match(/^copy_deps\(\) \{[\s\S]*?^\}/m)[0];
 
+test("worktree listing and slot allocation accept paths with spaces", () => {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "wt-paths-"));
+    try {
+        const main = path.join(fixture, "Current (2026scape)", "tsps");
+        const first = path.join(fixture, "Current (2026scape)", "first tree");
+        const second = path.join(fixture, "Current (2026scape)", "second tree");
+        const bin = path.join(fixture, "bin");
+        fs.mkdirSync(main, { recursive: true });
+        fs.mkdirSync(bin);
+        fs.writeFileSync(path.join(bin, "claude"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+        const git = args => execFileSync("git", args, { cwd: main, stdio: "pipe" });
+        git(["init", "-q", "-b", "main"]);
+        git(["-c", "user.name=Worktree test", "-c", "user.email=worktree@example.invalid", "commit", "-q", "--allow-empty", "-m", "Fixture"]);
+        git(["worktree", "add", "-q", "-b", "feature/first", first]);
+        git(["worktree", "add", "-q", "-b", "feature/second", second]);
+        fs.writeFileSync(path.join(main, ".env"), "WEBSOCKET_PORT=65001\n");
+        fs.writeFileSync(path.join(first, ".env"), "WT_SLOT=1\nPORT=3101\nWEBSOCKET_PORT=65002\n");
+        const run = (args, cwd = first) => execFileSync("bash", [path.join(__dirname, "wt"), ...args], {
+            cwd, encoding: "utf8", env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH }
+        });
+        const listed = run(["ls"]);
+        assert.match(listed, /feature\/first\s+http:\/\/localhost:3101/);
+        assert.match(listed, /main\s+http:\/\/localhost:3000/);
+        run(["slot", second]);
+        assert.match(fs.readFileSync(path.join(second, ".env"), "utf8"), /^WT_SLOT=2$/m);
+        assert.match(run(["ls"], second), /feature\/second\s+http:\/\/localhost:3102/);
+    } finally {
+        fs.rmSync(fixture, { recursive: true, force: true });
+    }
+});
+
 test("dependency copies omit only source-root self-links", () => {
     const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "wt-copy-"));
     try {

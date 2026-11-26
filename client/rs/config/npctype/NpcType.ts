@@ -1,3 +1,4 @@
+import { EntityOps } from "../EntityOps";
 import { CacheInfo } from "../../cache/CacheInfo";
 import { ByteBuffer } from "../../io/ByteBuffer";
 import { ParamsMap, Type } from "../Type";
@@ -21,6 +22,15 @@ export enum NpcDrawPriority {
     DRAW_PRIORITY_FIRST = 0,
     DRAW_PRIORITY_DEFAULT = 1,
     DRAW_PRIORITY_LAST = 2,
+}
+
+/**
+ * Whether the type has a model to draw. A model id of -1 (the server's body customisation, e.g.
+ * the Hueycoatl's sunk tail) loads nothing, so the whole NPC is drawn as nothing and can't be clicked.
+ */
+export function npcTypeHasModel<T extends { modelIds?: number[] }>(type: T | undefined): type is T {
+    const ids = type?.modelIds;
+    return !!ids && ids.length > 0 && ids.every((id) => id >= 0);
 }
 
 export class NpcType extends Type {
@@ -47,6 +57,8 @@ export class NpcType extends Type {
     retextureTo!: number[];
 
     actions: string[];
+    /** Sub-options and conditional option names (EntityOps). */
+    entityOps: EntityOps;
 
     drawMapDot: boolean;
 
@@ -90,6 +102,8 @@ export class NpcType extends Type {
     isClickable: boolean;
     isClipped: boolean;
     isFollower: boolean;
+    /** Opcode 123: the "Follower options lower down" setting applies to this NPC. */
+    lowPriorityFollowerOps: boolean;
 
     runSeqId: number;
     runBackSeqId: number;
@@ -125,6 +139,7 @@ export class NpcType extends Type {
         this.walkLeftSeqId = -1;
         this.walkRightSeqId = -1;
         this.actions = new Array<string>(5);
+        this.entityOps = new EntityOps();
         this.drawMapDot = true;
         this.combatLevel = -1;
         this.attackLevel = -1;
@@ -150,6 +165,7 @@ export class NpcType extends Type {
         this.isClickable = true;
         this.isClipped = true;
         this.isFollower = false;
+        this.lowPriorityFollowerOps = false;
         this.runSeqId = -1;
         this.runBackSeqId = -1;
         this.runLeftSeqId = -1;
@@ -420,7 +436,7 @@ export class NpcType extends Type {
             }
         } else if (opcode === 123) {
             if (this.cacheInfo.game === "oldschool") {
-                // lowPriorityFollowerOps = true;
+                this.lowPriorityFollowerOps = true;
             } else {
                 const iconHeight = buffer.readUnsignedShort();
             }
@@ -519,22 +535,22 @@ export class NpcType extends Type {
         } else if (opcode === 251) {
             const index = buffer.readUnsignedByte();
             const subId = buffer.readUnsignedByte();
-            this.readString(buffer);
+            this.entityOps.addSubOp(index, subId, this.readString(buffer));
         } else if (opcode === 252) {
             const index = buffer.readUnsignedByte();
-            const varp = buffer.readUnsignedShort();
-            const varb = buffer.readUnsignedShort();
+            const varpId = buffer.readUnsignedShort();
+            const varbitId = buffer.readUnsignedShort();
             const min = buffer.readInt();
             const max = buffer.readInt();
-            this.readString(buffer);
+            this.entityOps.addConditionalOp(index, { varpId, varbitId, min, max, name: this.readString(buffer) });
         } else if (opcode === 253) {
             const index = buffer.readUnsignedByte();
             const subId = buffer.readUnsignedShort();
-            const varp = buffer.readUnsignedShort();
-            const varb = buffer.readUnsignedShort();
+            const varpId = buffer.readUnsignedShort();
+            const varbitId = buffer.readUnsignedShort();
             const min = buffer.readInt();
             const max = buffer.readInt();
-            this.readString(buffer);
+            this.entityOps.addConditionalSubOp(index, subId, { varpId, varbitId, min, max, name: this.readString(buffer) });
         } else if (opcode === 249) {
             this.params = Type.readParamsMap(buffer, this.params);
         } else {

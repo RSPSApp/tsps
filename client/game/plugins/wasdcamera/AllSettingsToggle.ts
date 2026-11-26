@@ -88,7 +88,11 @@ export class AllSettingsToggle {
         const others = childrenOf(rows).filter((child) => !this.row || !Object.values(this.row).includes(child));
         const native = this.template(others);
         // A search only this row matches: it is the result, not the cache's "Could not find" text.
-        if (!native) for (const child of others) if (child.type === WidgetType.TEXT && !child.hidden) setHidden(widgets, child, true);
+        // That text stands alone; any row background means the cache built real rows (a mobile
+        // client's have no hover handlers, so none of them need be a template), so keep them.
+        if (!native && !others.some((child) => child.type === WidgetType.RECTANGLE)) {
+            for (const child of others) if (child.type === WidgetType.TEXT && !child.hidden) setHidden(widgets, child, true);
+        }
         const template = native ?? DEFAULT_ROW;
         const shown = others.filter((child) => !child.hidden);
         const top = Math.max(LIST_MARGIN, ...shown.map((child) => (child.y ?? child.rawY ?? 0) + (child.height ?? child.rawHeight ?? 0)));
@@ -136,8 +140,8 @@ export class AllSettingsToggle {
     private template(children: WidgetNode[]): Template | undefined {
         for (let i = 0; i + 3 < children.length; i++) {
             const [background, name, toggle, description] = children.slice(i, i + 4);
-            const hover = (background as any).eventHandlers;
-            if (background.type === WidgetType.RECTANGLE && hover?.onMouseOver && hover?.onMouseLeave &&
+            // The mobile client's rows have no hover handlers (script 3849 skips them), so those are optional.
+            if (background.type === WidgetType.RECTANGLE &&
                 name.type === WidgetType.TEXT && toggle.type === WidgetType.GRAPHIC &&
                 (toggle.spriteId === TOGGLE_ON_SPRITE || toggle.spriteId === TOGGLE_OFF_SPRITE) &&
                 description.type === WidgetType.TEXT) return { background, name, toggle, description };
@@ -155,7 +159,11 @@ export class AllSettingsToggle {
         const TEXT = [...LAYOUT, "fontId", "textColor", "color", "textShadowed", "textShadow", "xTextAlignment", "yTextAlignment", "lineHeight"];
         const hover = (template.background as any).eventHandlers;
         const background = copy(rows, template.background, [...LAYOUT, "color", "filled", "transparency"], {
-            rawHeight: ROW_HEIGHT, eventHandlers: { onMouseOver: { ...hover.onMouseOver }, onMouseLeave: { ...hover.onMouseLeave } },
+            rawHeight: ROW_HEIGHT,
+            // Only a row that lightens on hover gets the same; a mobile client's rows do not.
+            ...(hover?.onMouseOver && hover?.onMouseLeave
+                ? { eventHandlers: { onMouseOver: { ...hover.onMouseOver }, onMouseLeave: { ...hover.onMouseLeave } } }
+                : {}),
         });
         const name = copy(rows, template.name, TEXT, { text: NAME });
         const toggle = copy(rows, template.toggle, LAYOUT, {});

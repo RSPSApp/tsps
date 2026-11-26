@@ -509,8 +509,16 @@ function drainStats(player, damage) {
   player.sendMessage("Your stats are drained.");
 }
 
+/** Combat forms only; presentation forms and room scenery do not qualify. */
+function describeEncounters({ npcIds }) {
+  for (const ids of Object.values(NPCS)) {
+    for (const id of [...ids.FORMS, ids.MATOMENOS, ids.BLOOD_SPAWN]) npcIds.add(id);
+  }
+}
+
 module.exports = function registerMaiden(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("MAIDEN", MaidenRoom);
 };
 

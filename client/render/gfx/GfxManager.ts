@@ -16,6 +16,11 @@ export type GfxAnchor = "ground" | "offset";
 export interface GfxInstance {
     id: number;
     spotId: number;
+    playbackSpeed?: number;
+    hueShift?: number;
+    repeatVisual?: boolean;
+    sourceDurationMs?: number;
+    visualToken?: string;
     /** OSRS spot animation slot (0..255). When set, newer instances replace older ones for the same anchor. */
     slot?: number;
     // Attach by server id; resolve pid each frame
@@ -109,10 +114,20 @@ export class GfxManager {
         if (npc !== undefined) notifyActorGraphic({ type: "npc", serverId: npc, graphic: this.getActorGraphic("npc", npc) });
     }
 
+    clearVisualToken(token:string):void { for(const [id,inst] of this.instances)if(inst.visualToken===token)this.removeInstance(id); }
+    playVisual(kind:'player'|'npc',serverId:number,clip:{id:number;speed:number;durationMs:number;loop:boolean;height:number;hueShift?:number;delayMs?:number},token:string):void {
+        const instances=[...this.getActorInstances(kind,serverId)].filter(i=>i.visualToken);
+        if(instances.length>=48)this.removeInstance(instances[0].id);
+        const id=kind==='player'?this.spawnAttachedToPlayer(clip.id,serverId,'offset',clip.height/128):this.spawnAttachedToNpc(clip.id,serverId,'offset',clip.height/128);
+        const inst=this.instances.get(id)!;
+        inst.sourceDurationMs=inst.durationMs ?? 1000;
+        inst.hueShift=clip.hueShift??0;inst.playbackSpeed=clip.speed;inst.repeatVisual=clip.loop;inst.visualToken=token;
+        inst.durationMs=Math.min(120000-(clip.delayMs??0),clip.durationMs||inst.sourceDurationMs/clip.speed);
+    }
     getActorGraphic(kind: "player" | "npc", serverId: number): number {
         const instances = this.actorInstances[kind].get(serverId);
         if (instances) for (const instance of instances) {
-            if ((instance.slot ?? 0) === 0) return instance.spotId;
+            if (!instance.visualToken && (instance.slot ?? 0) === 0) return instance.spotId;
         }
         return -1;
     }
@@ -124,7 +139,7 @@ export class GfxManager {
     getActorFrame(instance:GfxInstance):{frame:number;cycle:number} {
         if(instance.startTimeMs===undefined)return {frame:-1,cycle:0};
         const cache=this.renderer.gfxRenderer?.getCache(),lengths=cache?.getFrameLengths(instance.spotId);
-        const cycles=Math.max(0,Math.floor((performance.now()-instance.startTimeMs)/20));
+        const cycles=Math.max(0,Math.floor(graphicAgeMs(instance,performance.now())/20));
         const total=lengths?.reduce((sum,value)=>sum+Math.max(1,value),0) ?? Math.max(1,cache?.getFrameCount(instance.spotId) ?? 1);
         let remaining=cycles%total;
         if(lengths){for(let frame=0;frame<lengths.length;frame++){const length=Math.max(1,lengths[frame]);if(remaining<length)return {frame,cycle:remaining};remaining-=length;}}
@@ -134,7 +149,7 @@ export class GfxManager {
         if(frame<0){instance.startTimeMs=undefined;instance.endTimeMs=undefined;return;}
         const lengths=this.renderer.gfxRenderer?.getCache()?.getFrameLengths(instance.spotId);
         const elapsed=(lengths ? lengths.slice(0,Math.max(0,frame)).reduce((sum,value)=>sum+Math.max(1,value),0):Math.max(0,frame))+Math.max(0,cycle);
-        instance.startTimeMs=performance.now()-elapsed*20;
+        instance.startTimeMs=performance.now()-elapsed*20/(instance.playbackSpeed??1);
         if(instance.durationMs!==undefined)instance.endTimeMs=instance.startTimeMs+instance.durationMs;
     }
 
@@ -142,6 +157,8 @@ export class GfxManager {
         const nowCycle = getClientCycle() | 0;
         const nowMs = (performance?.now?.() as number) || Date.now();
         for (const [id, inst] of this.instances) {
+            const pe=this.renderer.osrsClient?.playerEcs;
+            if(inst.visualToken&&inst.attachPlayerServerId!==undefined&&pe?.getIndexForServerId&&pe.getIndexForServerId(inst.attachPlayerServerId)===undefined){this.removeInstance(id);continue;}
             // Activate when the scheduled start tick has passed
             if (inst.startCycle <= nowCycle && inst.startTimeMs == null) {
                 inst.startTimeMs = nowMs;
@@ -149,7 +166,7 @@ export class GfxManager {
                     inst.endTimeMs = inst.startTimeMs + inst.durationMs;
                 }
             }
-            if (!inst.loop && typeof inst.endTimeMs === "number" && nowMs >= (inst.endTimeMs | 0)) {
+            if (!inst.loop && typeof inst.endTimeMs === "number" && nowMs >= inst.endTimeMs) {
                 if (inst.chained && inst.graceUntilMs === undefined) {
                     inst.graceUntilMs = nowMs + CHAIN_GRACE_MS;
                     if (inst.chainKey !== undefined) this.graceByChainKey.set(inst.chainKey, id);
@@ -185,14 +202,14 @@ export class GfxManager {
     clearAttachedSlotPlayer(serverId: number, slotArg?: number): void {
         const slot = typeof slotArg === "number" ? (slotArg | 0) & 0xff : 0;
         for (const inst of this.getActorInstances("player", serverId | 0)) {
-            if ((inst.slot ?? 0) === slot) this.removeInstance(inst.id);
+            if (!inst.visualToken && (inst.slot ?? 0) === slot) this.removeInstance(inst.id);
         }
     }
 
     clearAttachedSlotNpc(serverId: number, slotArg?: number): void {
         const slot = typeof slotArg === "number" ? (slotArg | 0) & 0xff : 0;
         for (const inst of this.getActorInstances("npc", serverId | 0)) {
-            if ((inst.slot ?? 0) === slot) this.removeInstance(inst.id);
+            if (!inst.visualToken && (inst.slot ?? 0) === slot) this.removeInstance(inst.id);
         }
     }
 
@@ -494,4 +511,10 @@ export class GfxManager {
         out.length = idx; // Truncate to actual size
         return out;
     }
+}
+
+/** Native sequence age; extended non-looping clips hold the final frame. */
+export function graphicAgeMs(instance:GfxInstance,now:number):number {
+    const age=Math.max(0,now-(instance.startTimeMs??now))*(instance.playbackSpeed??1);
+    return instance.visualToken&&!instance.repeatVisual?Math.min(age,Math.max(0,(instance.sourceDurationMs??1000)-1)):age;
 }

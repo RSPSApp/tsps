@@ -82,7 +82,7 @@ function fakeCacheDefinitions() {
     if (!ids.has(name)) ids.set(name, 1000 + ids.size);
     return ids.get(name);
   };
-  return { getNpcId: id, getLocId: id, getSeqId: id, getSpotanimId: id };
+  return { getNpcId: id, getObjId: id, getLocId: id, getSeqId: id, getSpotanimId: id };
 }
 
 class Location {
@@ -145,6 +145,7 @@ function hydraAt(x, y) {
 function player() {
   const self = { messages: [] };
   self.sendMessage = (text) => self.messages.push(text);
+  self.getPacketSender = () => ({});
   return self;
 }
 
@@ -156,12 +157,12 @@ test("the wrong vent empowers the serpentine Hydra to the Wiki's 26 (17x2 -> 26x
   const fight = new Fight.Fight(lair, npc);
   const watcher = player();
   assert.equal(fight.shielded, true);
-  assert.equal(fight.maxHit(), 17);
-  assert.equal(fight.hitCount(), 2);
+  assert.equal(fight.hitsOf("ranged").max, 17);
+  assert.equal(fight.hitsOf("ranged").hits, 2);
   fight.eruptVents([watcher]);
   assert.equal(fight.empowered, true);
-  assert.equal(fight.maxHit(), 26);
-  assert.equal(fight.hitCount(), 2);
+  assert.equal(fight.hitsOf("ranged").max, 26);
+  assert.equal(fight.hitsOf("ranged").hits, 2);
   assert.equal(fight.shielded, true, "a wrong vent does not drop the damage reduction");
   assert.ok(watcher.messages.some((text) => text.includes("empowering")));
 });
@@ -173,7 +174,7 @@ test("the right vent drops the shield and roars; a phase change clears the empow
   fight.eruptVents([watcher]);
   assert.equal(fight.shielded, false);
   assert.equal(fight.empowered, false);
-  assert.equal(fight.maxHit(), 17);
+  assert.equal(fight.hitsOf("ranged").max, 17);
   assert.deepEqual(npc.chats, ["Roaaaaaaaaaaar!"]);
   assert.ok(watcher.messages.some((text) => text.includes("neutralise")));
 
@@ -182,13 +183,13 @@ test("the right vent drops the shield and roars; a phase change clears the empow
   assert.equal(fight.phase, 1);
   assert.equal(fight.shielded, true, "each phase reapplies the reduction");
   assert.equal(fight.empowered, false);
-  assert.equal(fight.maxHit(), 35, "the electric phase's default");
-  assert.equal(fight.hitCount(), 1);
+  assert.equal(fight.hitsOf("ranged").max, 35, "the electric phase's default");
+  assert.equal(fight.hitsOf("ranged").hits, 1);
 });
 
 test("enraged takes the max hit to 55 whatever the vents did", () => {
   const fight = new Fight.Fight(lair, hydraAt(1371, 10263));
   fight.empowered = true;
   fight.phase = 3;
-  assert.equal(fight.maxHit(), 55);
+  assert.equal(fight.hitsOf("ranged").max, 55);
 });

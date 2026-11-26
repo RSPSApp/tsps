@@ -10,6 +10,7 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { ClientConnection } = require("../dist/net/NetworkBuilder");
 const { SkillManager } = require("../dist/game/content/skill/SkillManager");
 const { PlayerStatus } = require("../dist/game/model/PlayerStatus");
+const { MultiChatboxPrompt } = require("../dist/game/model/menu/MultiChatboxPrompt");
 const ROOT = path.resolve(__dirname, "..");
 let core, spell, Data, Patches;
 let actorIndex = 100;
@@ -72,8 +73,7 @@ function shopper(t, { points = 500, female = false } = {}) {
                 player: p,
                 npc,
                 definition: npc.getDefinition(),
-                option: "Rewards",
-                optionSlot: 3,
+                clickType: 3,
                 handled: false,
             }),
     };
@@ -107,6 +107,54 @@ test("Gricoller opens the native cache-defined reward shop and points", (t) => {
         500,
     );
 });
+// #6474: Talk-to used to open the reward shop too. It plays his dialogue now, and "Have you any
+// rewards?" in it opens the shop. Decoded npc_option and dialogue packets on a world NPC.
+test("Talk-to plays Gricoller's dialogue; his rewards line and the Rewards option open the shop", async (t) => {
+    const f = shopper(t);
+    core.World.getNpcs().add(f.npc);
+    t.after(() => core.World.getNpcs().remove(f.npc));
+    const shop = core.CacheDefinitions.getInterfaceId("omnishop_main");
+    const tick = () => {
+        core.TaskManager.processWalkTo(f.p.getIndex());
+        f.p.getMovementQueue().process();
+        core.TaskManager.process();
+        f.connection.processTurnPackets();
+    };
+    const send = async (packet) => {
+        await f.connection.dispatch([packet]);
+        for (let i = 0; i < 3; i++) tick();
+    };
+    const group = () => f.p.getPacketSender().getChatboxGroupId();
+    async function menu() {
+        for (let i = 0; i < 20; i++) {
+            const current = f.p.getDialogueManager().getCurrent();
+            if (typeof current?.getOptions === "function") return current.getOptions();
+            const pending = MultiChatboxPrompt.getPending(f.p);
+            if (pending) return pending.options;
+            if (!f.p.getDialogueManager().isActive()) return null;
+            await send({ type: "dialogue_continue", widgetId: (group() << 16) | (group() === 229 ? 4 : 5), childIndex: -1 });
+        }
+        return null;
+    }
+    assert.deepEqual(f.npc.getDefinition().getActions().slice(0, 3), ["Talk-to", undefined, "Rewards"]);
+
+    await send({ type: "npc_option", index: f.npc.getIndex(), clickType: 1 });
+    assert.notEqual(f.p.getInterfaceId(), shop, "Talk-to does not open the shop");
+    const options = await menu();
+    assert.ok(options?.includes("Have you any rewards?"), JSON.stringify(options));
+    assert.notEqual(f.p.getInterfaceId(), shop);
+    await send({ type: "dialogue_continue", widgetId: (219 << 16) | 1, childIndex: options.indexOf("Have you any rewards?") + 1 });
+    // The player says the line, then the dialogue's action opens the shop.
+    for (let i = 0; i < 5 && f.p.getInterfaceId() !== shop && f.p.getDialogueManager().isActive(); i++)
+        await send({ type: "dialogue_continue", widgetId: (group() << 16) | (group() === 229 ? 4 : 5), childIndex: -1 });
+    assert.equal(f.p.getInterfaceId(), shop, "his rewards line opens the shop");
+
+    f.p.getPacketSender().sendInterfaceRemoval();
+    f.p.getDialogueManager().interrupt?.();
+    await send({ type: "npc_option", index: f.npc.getIndex(), clickType: 3 });
+    assert.equal(f.p.getInterfaceId(), shop, "the Rewards option opens it directly");
+});
+
 test("native outfit purchases use current body type and deduct exact prices", async (t) => {
     for (const female of [false, true]) {
         const f = shopper(t, { points: 150, female });
@@ -209,6 +257,24 @@ test("auto-weed unlock costs once and both free toggles work even with a full in
     await purchase(f, 14);
     assert.equal(f.score().points, 0);
 });
+// Issue 6474 item 6: the client builds the list on open and again when varp omnishop_redraw changes
+// (client script 7140), and script 4203 swaps the unlock row for the toggle row on farming_blockweeds.
+test("auto-weed purchases redraw the shop list after the varbit changes; others do not", async (t) => {
+    const f = shopper(t, { points: 100 });
+    const sender = () => f.p.getPacketSender();
+    const redraw = () => sender().getVarp(core.CacheDefinitions.getVarpId("omnishop_redraw"));
+    const blockweeds = () => sender().getVarbit(core.CacheDefinitions.getVarbitId("farming_blockweeds"));
+    f.open();
+    const start = redraw();
+    await purchase(f, 4, 3);
+    assert.equal(redraw(), start, "a compost purchase does not redraw");
+    await purchase(f, 14);
+    assert.deepEqual([blockweeds(), redraw()], [2, start + 1], "unlocking: on, and the list told to redraw");
+    await purchase(f, 15);
+    assert.deepEqual([blockweeds(), redraw()], [1, start + 2], "toggled off");
+    await purchase(f, 15);
+    assert.deepEqual([blockweeds(), redraw()], [2, start + 3], "toggled on");
+});
 test("stale, remote, mid-trade, dead and relogged native purchases cannot grant items", async (t) => {
     for (const mode of ["closed", "remote", "trade", "dead", "state"]) {
         const f = shopper(t);
@@ -232,6 +298,20 @@ test("Herb sack base level and existing open seed boxes are checked", async (t) 
     f.p.getInventory().add(new core.Item(Data.itemId("Open seed box")), false);
     await purchase(f, 10);
     assert.equal(f.score().points, 500);
+});
+
+test("a banked seed box placeholder (amount 0) does not block buying one (issue 6601)", async (t) => {
+    const f = shopper(t);
+    f.open();
+    f.p.getBank(0).setItem(0, new core.Item(Data.itemId("Seed box"), 0));
+    assert.equal(f.p.getBank(0).getValidItems().length, 1, "the bank keeps the placeholder as a valid item");
+    await purchase(f, 10);
+    assert.notEqual(f.score().points, 500, "the purchase went through");
+    assert.equal(f.p.getInventory().getAmount(Data.itemId("Seed box")), 1);
+    f.p.getBank(0).setItem(0, new core.Item(Data.itemId("Seed box"), 1));
+    const points = f.score().points;
+    await purchase(f, 10);
+    assert.equal(f.score().points, points, "a real banked seed box still blocks a second");
 });
 
 test("both body types can return every purchased outfit piece through the native refund dialogue", async (t) => {

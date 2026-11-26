@@ -255,10 +255,13 @@ test('quests take one use: holds/spend events, Gertrude\'s Cat on Fluffs', () =>
   }
   const fluffs = core.NpcIdentifiers.GERTRUDES_CAT_2;
   const event = { player: p, npcId: fluffs, target: { getId: () => fluffs }, item: bucketIn(p), itemId: FILLED, slot: slotOf(p, FILLED), handled: false };
+  const queued = hooks.tasks.length;
   quests.onNpc(event);
   assert.equal(event.handled, true);
   assert.equal(uses(p), 1, 'one use, not the whole bucket');
-  assert.equal(p.messages.at(-1), 'Fluffs laps up the milk.');
+  // Live sends no message and moves the stage a tick later (Gertrude's Cat capture, ticks 449-450).
+  for (const task of hooks.tasks.splice(queued)) task.execute();
+  assert.equal(p.messages.length, 0);
   assert.equal(stages.get(p), 3);
   assert.equal(p.getInventory().getAmount(I.BUCKET), 0, 'no empty bucket comes back');
 });

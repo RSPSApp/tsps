@@ -10,39 +10,10 @@ const Rewards = require("./Rewards.Gauntlet");
 const Items = require("./Items.Gauntlet");
 const Map = require("./Map.Gauntlet");
 const { HunllefFight } = require("./Hunllef.Gauntlet");
-const ESCROW_ATTRIBUTE = "gauntlet:echo-equipment-escrow";
+const Equipment = require("./Equipment.Gauntlet");
+const { snapshot, decode, recover, ESCROW_ATTRIBUTE } = Equipment;
 const BOSS = "corrupted-hunllef";
 
-function save(player) {
-  const persistence = Shared.core().GameConstants.PLAYER_PERSISTENCE;
-  if (persistence) persistence.save(player, "echo-hunllef-equipment");
-}
-function snapshot(container) {
-  return container.getItems().map(item => item && item.getId() >= 0 ? { id: item.getId(), amount: item.getAmount(), meta: item.getMeta?.() ?? null } : null);
-}
-function decode(rows, count) {
-  if (!Array.isArray(rows) || rows.length !== count) return null;
-  const { Item } = Shared.core();
-  if (rows.some(row => row && (!Number.isInteger(row.id) || row.id < 0 || !Number.isSafeInteger(row.amount) || row.amount <= 0 || row.amount > 2147483647))) return null;
-  return rows.map(row => row ? new Item(row.id, row.amount, row.meta) : new Item(-1, 0));
-}
-function recover(player) {
-  const escrow = player.getAttribute(ESCROW_ATTRIBUTE);
-  if (!escrow) return false;
-  const inventory = decode(escrow.inventory, player.getInventory().getItems().length);
-  const equipment = decode(escrow.equipment, player.getEquipment().getItems().length);
-  if (escrow.version !== 1 || !inventory || !equipment) {
-    player.sendMessage("Your Echo Hunllef equipment recovery needs assistance. Your saved items have been preserved.");
-    return true;
-  }
-  player.getInventory().setItems(inventory).refreshItems();
-  player.getEquipment().setItems(equipment).refreshItems();
-  player.setAttribute(ESCROW_ATTRIBUTE, null);
-  player.setAttribute(Run.ATTR_RUN, null);
-  player.moveTo(Shared.loc(Shared.LOBBY));
-  save(player);
-  return true;
-}
 function giveKit(player) {
   const { Equipment, Item, ItemIdentifiers: I } = Shared.core();
   const kit = Items.MODES.corrupted;
@@ -55,7 +26,7 @@ function giveKit(player) {
   inventory.refreshItems(); equipment.refreshItems();
 }
 function ready(player) {
-  if (Run.runOf(player) || Rewards.waitingReward(player) || player.getAttribute(ESCROW_ATTRIBUTE)) return false;
+  if (Run.runOf(player) || Rewards.waitingReward(player) || Equipment.has(player)) return false;
   const quest = { player, key: "song_of_the_elves", complete: false };
   Shared.api().emitCustomEvent("quest:is-complete", quest);
   if (!quest.complete) { player.sendMessage("You need to complete Song of the Elves to enter the Gauntlet."); return false; }
@@ -81,30 +52,29 @@ function start(event) {
 }
 function startRun(run) {
   const { player } = run;
-  player.setAttribute(ESCROW_ATTRIBUTE, { version: 1, inventory: snapshot(player.getInventory()), equipment: snapshot(player.getEquipment()) });
-  // Synchronous save before changing either carried container: a crash can always recover originals.
-  save(player);
   player.setAttribute(Run.ATTR_RUN, "echo");
-  Shared.fadeMove(player, () => {
+  Equipment.begin(run, () => Shared.fadeMove(player, () => {
     if (run.stage === "ended" || player.isRegistered?.() === false) return;
     try {
+    Equipment.replace(run);
     giveKit(player);
     player.resetAttributes();
     run.map.enter(player);
+    run.stage = "prep";
     run.hunllef = new HunllefFight(run);
     player.moveTo(run.map.roomTile(run.map.room(Map.CENTRE, Map.CENTRE), 4, 4));
     run.startCycle = Shared.core().World.getProcessCycle();
     run.sendMazeVarbits();
     player.getPacketSender().sendSubInterface(Shared.OVERLAY_HUD_UID, Shared.INTERFACE.TIMER, 1);
     run.startBossPhase();
-    save(player);
+    Equipment.entered(run);
     } catch (error) {
       endRun(run, "entry-failed");
-      throw error;
+      console.warn("[gauntlet] Echo entry failed", player.getUsername(), error);
     }
-  });
+  }));
 }
-function endRun(run, reason, { fromArea = false } = {}) {
+function endRun(run, reason, { fromArea = false, restore = true } = {}) {
   if (run.stage === "ended") return;
   run.stage = "ended";
   run.timer?.stop(); run.hunllef?.stop();
@@ -124,8 +94,7 @@ function endRun(run, reason, { fromArea = false } = {}) {
   Run.forgetRun(run);
   if (!fromArea && player.getArea() === run.map) run.map.leave(player, reason === "logout");
   run.map.destroy();
-  player.resetAttributes();
-  recover(player);
+  if (restore) recover(player);
   const sender = player.getPacketSender();
   sender.closeSubInterface(Shared.OVERLAY_HUD_UID);
   sender.sendVarbit(Shared.VARBIT.BOSS_PHASE, 0); sender.sendVarbit(Shared.VARBIT.MAZE_MAP, 0);
@@ -138,7 +107,6 @@ function logout({ player }) {
   if (run?.echo) endRun(run, "logout");
 }
 module.exports = function attach(api) {
-  api.persistAttribute(ESCROW_ATTRIBUTE, null);
   api.onCustomEvent("echo-boss:start", start);
   api.onPlayerLogout(logout);
   api.onPlayerDisconnect(logout);

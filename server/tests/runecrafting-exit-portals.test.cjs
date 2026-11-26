@@ -196,6 +196,7 @@ function runecrafter(headId = -1) {
     sendSound: (id) => player.log.push(`sound ${id}`),
     sendTypedMessage: (_type, text) => player.log.push(`spam ${text}`),
     sendItemContainer() {},
+    sendRunEnergy() {},
   });
   return player;
 }

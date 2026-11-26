@@ -282,11 +282,43 @@ function capeRenameBoat(request) {
   renameBoat(request.player);
 }
 
+/** Reads a moored boat's current public landing. Never calls landingOf, which clears busy on failure. */
+function catalogueBoatTile(slot, player) {
+  const boat = player.getSailing().boats.find(candidate => candidate.slot === slot);
+  if (!boat || boat.location.kind !== "docked" || !hasGreaterFocus(boat)) return [];
+  const dock = core.Sailing.getDock(boat.location.dock);
+  return dock ? [dock.landing.x, dock.landing.y, dock.landing.z] : [];
+}
+
+function describeCapeTeleports({ player, list }) {
+  const pandemonium = core.Sailing.getDock(PANDEMONIUM_DOCK);
+  if (pandemonium) list.push({ key: "pandemonium", name: "The Pandemonium",
+    tile: [pandemonium.landing.x, pandemonium.landing.y, pandemonium.landing.z] });
+  for (const boat of reachableBoats(player)) {
+    const tile = catalogueBoatTile(boat.slot, player);
+    if (!tile.length) continue;
+    const dock = core.Sailing.getDock(boat.location.dock);
+    list.push({ key: `boat:${boat.slot}`, name: `Boat ${boat.slot + 1}: ${dock.name ?? boat.location.dock}`,
+      tile, resolve: catalogueBoatTile.bind(null, boat.slot) });
+  }
+}
+
+function describeTeleports({ player, list }) {
+  const request = { player, list: [] };
+  describeCapeTeleports(request);
+  for (const place of request.list) if (place.key !== "pandemonium") {
+    list.push({ path: ["Spellbooks", "Standard spellbook"], ...place, name: `Teleport to boat: ${place.name}` },
+      { path: ["Items", "Teleport to boat"], ...place, tile: [...place.tile] });
+  }
+}
+
 module.exports = {
   register(pluginApi) {
     api = pluginApi;
     core = pluginApi.core;
     content();
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
+    api.onCustomEvent("skillcapes:travel-destinations", describeCapeTeleports);
     api.persistAttribute(LAST_TELEPORTED_ATTRIBUTE);
     api.onItemAction("Teleport to boat", { Break: breakTablet });
     api.onSpellCast(castSpell);

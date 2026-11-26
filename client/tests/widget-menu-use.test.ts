@@ -52,7 +52,8 @@ assert.equal(use.menuStateIndex, undefined, "widget actions must not run through
 // (inv op1..5 -> slots 2,3,4,6,7, i.e. action indices 1,2,3,5,6).
 // Pot of flour's only ops are Empty (op4 -> index 5) and Drop, so "Use" is the
 // default action. A weapon keeps its op2 Wield (index 2) as primary.
-const allOpsVisible = () => -1;
+// Every op and target bit, but not bit 0: that one marks a pause button, which lists Continue first.
+const allOpsVisible = () => ~1;
 const noWidgetLookup = () => undefined;
 const entriesFor = (itemId: number, actions: (string | null)[]) =>
     deriveMenuEntriesForWidget(
@@ -97,11 +98,12 @@ assert.equal(
     deriveMenuEntriesForWidget(logs, false, allOpsVisible, noWidgetLookup)[0]?.target,
     "<col=00ff00>High Level Alchemy</col> -> <col=ff9040>Logs",
 );
-// A spell that cannot land on items leaves the item's own menu alone.
+// A spell that cannot land on items: the item is no target, and like every component while
+// something is selected it lists none of its own ops (OSRS), only Cancel.
 selectFor("Cast", "<col=00ff00>Wind Strike</col>", 0x06);
 assert.deepEqual(
     deriveMenuEntriesForWidget(logs, false, allOpsVisible, noWidgetLookup).map((entry) => entry.option),
-    ["Use", "Drop", "Cancel"],
+    ["Cancel"],
 );
 ClientState.clearSpellSelection();
 
@@ -220,12 +222,14 @@ console.log('native Inspect submenu dispatch passed');
     assert.equal(shiftChanges, 1, "Shift going down asks for the inventory to be redrawn");
     assert.deepEqual(options(shark), ["Drop", "Eat", "Use", "Cancel"], "Shift held: Drop is the top entry");
     assert.deepEqual([primary(shark).option, primary(shark).opIndex], ["Drop", 7], "and the left click");
+    // Drop is a low-priority op (1007); moved up as the shift click it must not open the menu (#6735).
+    assert.equal(primary(shark).opensMenu, undefined, "the shift click drops instead of opening the menu");
     assert.deepEqual(options(whip), ["Wield", "Use", "Drop", "Cancel"], "an item with no shift-click op keeps its order");
     const notInventory = { ...shark, uid: 15 << 16, parentUid: 15 << 16 };
     assert.equal(options(notInventory)[0], "Eat", "shift-click drop is the inventory's only");
     ClientState.selectedItemId = 1511;
     ClientState.isItemSelected = 1;
-    assert.equal(options(shark)[0], "Eat", "not while an item is selected");
+    assert.notEqual(options(shark)[0], "Drop", "not while an item is selected");
     ClientState.clearItemSelection();
     setShiftClickDrop(0);
     assert.deepEqual(options(shark), ["Eat", "Use", "Drop", "Cancel"], "setting off: Shift changes nothing");
@@ -315,3 +319,19 @@ console.log("inventory shift-click drop passed");
     setPacketSocket(undefined as any);
 }
 console.log('configured itemless dynamic Examine routes through real flagged packet owner');
+
+// A server-owned creature card explicitly owns its Examine operation.
+{
+    const widget = { uid: (30023 << 16) | 40, groupId: 30023, fileId: 40, childIndex: -1,
+        itemId: -1, actions: ['Examine', 'Find'], flags: 6, examineAsOperation: true };
+    const sent: any[] = []; let local = 0;
+    const entries = deriveMenuEntriesForWidget(widget, false, () => 6, noWidgetLookup);
+    const mapped = widgetEntriesToSimple(entries, { chosenWidget: widget, scheduleRender() {},
+        ui: { onWidgetAction: (event: any) => sent.push(event), onWidgetExamine: () => local++ } });
+    mapped.find(entry => entry.option === 'Examine')!.onClick?.();
+    assert.equal(sent.length, 1, 'right-click creature Examine must reach its server operation');
+    assert.equal(sent[0].opIndex, 1); assert.equal(local, 0);
+    const resolve = createPrimaryWidgetActionResolver({ getSpellSelection: () => ({ getWidgetTargetMask: () => 0 }) } as any,
+        {} as any, { getWidgetFlags: () => 6, getWidgetOpMask: () => 0, getWidgetByUid: noWidgetLookup } as any, {} as any);
+    assert.equal(resolve(widget).option, 'Examine', 'the creature card primary action must not turn into Find');
+}

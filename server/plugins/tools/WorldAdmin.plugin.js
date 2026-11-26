@@ -4,8 +4,8 @@ const { resolveAccess } = require("./worldadmin/Access.WorldAdmin");
 const { createPageServer, reloadCertificate, watchCertificate } = require("./worldadmin/Tls.WorldAdmin");
 const { createRequestHandler, HttpError, send } = require("./worldadmin/Http.WorldAdmin");
 const { playerRoutes } = require("./worldadmin/Players.WorldAdmin");
+const { PLAYER_TOOLS_CONFIG } = require("./worldadmin/PlayerTools.WorldAdmin");
 const { botRoutes } = require("./worldadmin/Bots.WorldAdmin");
-const { botEditorRoutes } = require("./worldadmin/BotEditor.WorldAdmin");
 const { readPluginZip, downloadPluginRelease, savePluginZip, deletePluginZip } = require("./worldadmin/PluginZip.WorldAdmin");
 
 // The world config page's own HTTP listener (spec "Saving", "Restart", "Access").
@@ -114,6 +114,24 @@ function clientToolUrl(flag) {
   return `http://localhost:${port}/?${flag}=1`;
 }
 
+/** Plugins contribute query parameters; this host owns the local client origin. */
+function pluginTools() {
+  const event = { tools: [] };
+  pluginApi.emitCustomEvent("WorldAdmin:tools", event);
+  const seen = new Set();
+  return (Array.isArray(event.tools) ? event.tools : []).filter(tool => tool && /^[a-z][a-z0-9-]{0,63}$/.test(tool.id) &&
+    typeof tool.label === "string" && tool.label.trim().length > 0 && tool.label.length <= 60 &&
+    tool.params && typeof tool.params === "object" && !Array.isArray(tool.params) &&
+    Object.entries(tool.params).every(([key, value]) => /^[a-z][a-z0-9-]{0,39}$/.test(key) && typeof value === "string" && value.length <= 100) &&
+    !seen.has(tool.id) && seen.add(tool.id)).slice(0, 20).flatMap(tool => {
+      const base = clientToolUrl("cache");
+      if (!base) return [];
+      const url = new URL(base);
+      for (const [key, value] of Object.entries(tool.params)) url.searchParams.set(key, value);
+      return [{ id: tool.id, label: tool.label, url: url.href }];
+    });
+}
+
 function catalogAction() {
   const layers = readLayers();
   const status = gameUpdateStatus();
@@ -127,6 +145,7 @@ function catalogAction() {
       layers: layerSummary(layers),
       cacheEditorUrl: clientToolUrl("cache"),
       mapEditorUrl: clientToolUrl("edit"),
+      toolLinks: pluginTools(),
       mode: restartMode(),
       onlinePlayers: onlinePlayers(),
       playerCount: players.length - bots,
@@ -320,7 +339,6 @@ const actions = {
       send(response, 302, "", { Location: "/?view=bots&edit=1" });
       return true;
     }
-    if (await botEditorRoutes(request, response, url)) return true;
     if (await botRoutes(request, response, url, pluginApi)) return true;
     return playerRoutes(request, response, url, pluginApi);
   },
@@ -399,6 +417,12 @@ function stopWorldAdmin() {
 module.exports = {
   name: PLUGIN_NAME,
   description: "Local web page for editing world.json settings and plugin switches.",
+  config: {
+    [PLAYER_TOOLS_CONFIG]: {
+      type: "boolean", label: "Player tools", default: true,
+      help: "Show live teleport, item, skill and quest controls in the Players panel. The panel token grants owner access.",
+    },
+  },
   register(api) {
     pluginApi = api;
     api.onServerStartup(startWorldAdmin);

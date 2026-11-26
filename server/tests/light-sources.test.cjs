@@ -7,9 +7,10 @@
 // OilLights.plugin.js and the black candle through Merlin's Crystal; they are controls here.
 // Captured (rsprox 70 tick 1626 and 75 tick 11666, rev 227): the torch is lit by the tinderbox (590) on the
 // unlit torch (596) with the game message "You light your torch.", the slot becoming 594 in the same tick,
-// and no sequence or sound. NO capture of any other item was found (rsprox 1694, 1633, 392 and 2902 decoded:
-// braziers and fires only), so the others get no message and no animation, and the level refusal's wording is
-// OilLights' (uncaptured).
+// and no sequence or sound. NO capture of any other LightSources item was found (rsprox 1694, 1633, 392 and
+// 2902 decoded: braziers and fires only), so the others get no message and no animation, and the level refusal's
+// wording is OilLights' (uncaptured). The oil, bullseye and sapphire lanterns' light and Extinguish lines are
+// captured; their tests are at the end of this file.
 // Native fixture: the click goes through ClientConnection.dispatch as the decoded "inventory_use_on" packet.
 // Native plugin loading excludes PlayerBots and its dependent BountyHunter.
 const assert = require("node:assert/strict");
@@ -164,6 +165,40 @@ test("as captured (rsprox 70, 75): the torch says 'You light your torch.' and pl
   assert.deepEqual(carried(f), [I.LIT_TORCH, I.TINDERBOX]);
   assert.deepEqual(f.messages, ["You light your torch."]);
   assert.deepEqual(f.animations, [], "no sequence in the capture");
+});
+
+// rsprox local 1000134 t438/t585/t780/t1144, 1000135 t221, 1000140 t763 (rev 226): tinderbox on the unlit
+// white candle lantern (4529) -> slot becomes 4531, spam "You light the lantern." and synth 3226, same tick.
+test("as captured: a candle lantern says 'You light the lantern.' as spam and plays synth 3226", async (t) => {
+  // White as captured; black (not captured) is lit the same way.
+  for (const [unlit, lit] of [[I.CANDLE_LANTERN, I.CANDLE_LANTERN_3], [I.CANDLE_LANTERN_4, I.CANDLE_LANTERN_6]]) {
+    const f = actor(t, 4);
+    const typed = [];
+    const sounds = [];
+    const sender = f.p.getPacketSender();
+    t.mock.method(sender, "sendTypedMessage", (type, message) => { typed.push([type, message]); return sender; });
+    t.mock.method(sender, "sendSound", (id) => { sounds.push(id); return sender; });
+    f.inv.setItem(0, item(unlit));
+    f.inv.setItem(1, item(I.TINDERBOX));
+    await useOn(f, 1, 0);
+    assert.deepEqual(carried(f), [lit, I.TINDERBOX]);
+    assert.deepEqual(typed, [[core.ChatType.SPAM, "You light the lantern."]]);
+    assert.deepEqual(sounds, [3226]);
+    assert.deepEqual(f.animations, [], "no sequence in the capture");
+  }
+
+  // Below 4 Firemaking it stays unlit: no line, no sound.
+  const low = actor(t, 3);
+  const lowTyped = [];
+  const lowSounds = [];
+  const lowSender = low.p.getPacketSender();
+  t.mock.method(lowSender, "sendTypedMessage", (type, message) => { lowTyped.push(message); return lowSender; });
+  t.mock.method(lowSender, "sendSound", (id) => { lowSounds.push(id); return lowSender; });
+  low.inv.setItem(0, item(I.CANDLE_LANTERN));
+  low.inv.setItem(1, item(I.TINDERBOX));
+  await useOn(low, 1, 0);
+  assert.deepEqual(carried(low), [I.CANDLE_LANTERN, I.TINDERBOX]);
+  assert.deepEqual([lowTyped, lowSounds], [[], []]);
 });
 
 test("the other new lights play no animation either (none captured, none invented)", async (t) => {
@@ -562,4 +597,200 @@ test('assembly uses the selected later lantern and candle in a full inventory', 
     assert.equal(idAt(f, 27), -1);
     assert.equal(carried(f).length, 27);
   }
+});
+
+/** Typed chat lines and synth sounds the actor was sent, as [chatType, text] and sound ids. */
+function watchLanternPackets(t, f) {
+  const typed = [];
+  const sounds = [];
+  t.mock.method(f.p.getPacketSender(), "sendTypedMessage", (type, text) => { typed.push([type, text]); return f.p.getPacketSender(); });
+  t.mock.method(f.p.getPacketSender(), "sendSound", (id) => { sounds.push(id); return f.p.getPacketSender(); });
+  return { typed, sounds };
+}
+
+// rsprox captures: local 1000195 ticks 17050 and 17056 (bullseye, oil lantern; rev 227), index 1698, 3015 and
+// 3016 (sapphire lantern; rev 226-231): "You light the lantern." as a spam line and synth 3226 in the click
+// tick, with no player sequence.
+for (const [label, unlit, lit, level] of CONTROLS.filter(([label]) => label !== "oil lamp")) {
+  test(`${label}: lighting it says 'You light the lantern.' as spam, plays sound 3226 and no animation`, async (t) => {
+    const f = actor(t, level);
+    const seen = watchLanternPackets(t, f);
+    f.inv.setItem(0, item(unlit));
+    f.inv.setItem(1, item(I.TINDERBOX));
+    await useOn(f, 1, 0);
+    assert.deepEqual(carried(f), [lit, I.TINDERBOX]);
+    assert.deepEqual(seen.typed, [[core.ChatType.SPAM, "You light the lantern."]]);
+    assert.deepEqual(seen.sounds, [3226]);
+    assert.deepEqual(f.animations, []);
+  });
+}
+
+// rsprox captures: bullseye lantern as a game message (95, 1754, local 1000448 tick 17210), oil lantern and
+// sapphire lantern as spam (local 1000195 tick 17060, local 1000448 tick 17214).
+for (const [label, unlit, lit, type] of [
+  ["oil lantern", I.OIL_LANTERN, I.OIL_LANTERN_3, "SPAM"],
+  ["bullseye lantern", I.BULLSEYE_LANTERN, I.BULLSEYE_LANTERN_3, "GAME"],
+  ["sapphire lantern", I.SAPPHIRE_LANTERN_2, I.SAPPHIRE_LANTERN_3, "SPAM"],
+]) {
+  test(`${label}: Extinguish says 'You extinguish the lantern.' (${type})`, async (t) => {
+    const f = actor(t, 99);
+    const seen = watchLanternPackets(t, f);
+    f.inv.setItem(0, item(lit));
+    await extinguish(f, 0);
+    assert.deepEqual(carried(f), [unlit]);
+    assert.deepEqual(seen.typed, [[core.ChatType[type], "You extinguish the lantern."]]);
+  });
+}
+
+test("the oil lamp, whose lighting was not captured, keeps its sequence and gets no lantern line", async (t) => {
+  const f = actor(t, 12);
+  const seen = watchLanternPackets(t, f);
+  f.inv.setItem(0, item(I.OIL_LAMP));
+  f.inv.setItem(1, item(I.TINDERBOX));
+  await useOn(f, 1, 0);
+  assert.deepEqual(carried(f), [I.OIL_LAMP_3, I.TINDERBOX]);
+  assert.deepEqual(seen.typed, []);
+  assert.deepEqual(f.animations.map((a) => a.getId()), [733]);
+});
+
+// rsprox captures, local 1000134 (rev 226, Lumbridge Swamp Caves): with nothing else lit, Extinguish on the candle
+// lantern (ticks 341, 347, 354) and on the lit black candle (tick 370) keeps it lit with a game message, and Drop on
+// the candle (tick 372) keeps it with another. With a second light, the lantern goes out with a spam line (tick 365).
+const { DropItemPacketListener } = require("../dist/net/packet/impl/DropItemPacketListener");
+const LANTERN_REFUSAL = "Extinguishing the lantern would leave you without a light source.";
+const CANDLE_REFUSAL = "Extinguishing the candle would leave you without a light source.";
+const DROP_REFUSAL = "Dropping that would leave you without a light source.";
+
+for (const [label, lit, unlit, name] of [
+  ["white candle", I.CANDLE_LANTERN_3, I.CANDLE_LANTERN, "Candle lantern"],
+  ["black candle", I.CANDLE_LANTERN_6, I.CANDLE_LANTERN_4, "Candle lantern"],
+  ["emerald", I.EMERALD_LANTERN_2, I.EMERALD_LANTERN, "Emerald lantern"],
+]) {
+  test(`${label} lantern: Extinguish makes the unlit lantern in its slot, 'You extinguish the lantern.' as spam`, async (t) => {
+    const f = actor(t);
+    const seen = watchLanternPackets(t, f);
+    const selected = item(lit).setMetaValue(core.Item.PRESET_META, true);
+    f.inv.setItem(0, item(I.TINDERBOX)); f.inv.setItem(1, selected);
+    assert.equal(core.CacheDefinitions.getItem(lit).name, name);
+    await extinguish(f, 1);
+    assert.deepEqual(carried(f), [I.TINDERBOX, unlit]);
+    assert.equal(f.inv.getItems()[1], selected, "the same instance, so its marks stay");
+    assert.deepEqual(seen.typed, [[core.ChatType.SPAM, "You extinguish the lantern."]]);
+    assert.deepEqual(f.messages, []);
+  });
+}
+
+test("in the cave the only lit candle lantern stays lit, with the captured refusal", async (t) => {
+  const f = actor(t, 99, DARK_CAVE);
+  const seen = watchLanternPackets(t, f);
+  f.inv.setItem(0, item(I.CANDLE_LANTERN_3));
+  assertInModelledDarkness(f);
+  await extinguish(f, 0);
+  assert.deepEqual(carried(f), [I.CANDLE_LANTERN_3]);
+  assert.deepEqual(f.messages, [LANTERN_REFUSAL]);
+  assert.deepEqual(seen.typed, []);
+});
+
+test("in the cave the candle lantern goes out while a lit candle is still carried", async (t) => {
+  const f = actor(t, 99, DARK_CAVE);
+  const seen = watchLanternPackets(t, f);
+  f.inv.setItem(0, item(I.CANDLE_LANTERN_3)); f.inv.setItem(1, item(I.LIT_BLACK_CANDLE));
+  await extinguish(f, 0);
+  assert.deepEqual(carried(f), [I.CANDLE_LANTERN, I.LIT_BLACK_CANDLE]);
+  assert.deepEqual(seen.typed, [[core.ChatType.SPAM, "You extinguish the lantern."]]);
+  assert.deepEqual(f.messages, []);
+  // Now the candle is the last light: it stays lit and says why.
+  await extinguish(f, 1);
+  assert.deepEqual(carried(f), [I.CANDLE_LANTERN, I.LIT_BLACK_CANDLE]);
+  assert.deepEqual(f.messages, [CANDLE_REFUSAL]);
+});
+
+for (const [label, lit] of [["lit candle", I.LIT_CANDLE], ["lit black candle", I.LIT_BLACK_CANDLE]]) {
+  test(`in the cave the only ${label} stays lit with the captured refusal`, async (t) => {
+    const f = actor(t, 99, DARK_CAVE);
+    const seen = watchLanternPackets(t, f);
+    f.inv.setItem(0, item(lit));
+    await extinguish(f, 0);
+    assert.deepEqual(carried(f), [lit]);
+    assert.deepEqual(f.messages, [CANDLE_REFUSAL]);
+    assert.deepEqual(seen.typed, [], "no 'You extinguish the candle.'");
+  });
+}
+
+for (const [label, lit, filled] of [
+  ["emerald lantern", I.EMERALD_LANTERN_2, I.EMERALD_LANTERN],
+  ["oil lantern", I.OIL_LANTERN_3, I.OIL_LANTERN],
+  ["bullseye lantern", I.BULLSEYE_LANTERN_3, I.BULLSEYE_LANTERN],
+  ["sapphire lantern", I.SAPPHIRE_LANTERN_3, I.SAPPHIRE_LANTERN_2],
+]) {
+  test(`in the cave the only lit ${label} stays lit with the lantern refusal; with a candle too it goes out`, async (t) => {
+    const f = actor(t, 99, DARK_CAVE);
+    f.inv.setItem(0, item(lit));
+    await extinguish(f, 0);
+    assert.deepEqual(carried(f), [lit]);
+    assert.deepEqual(f.messages, [LANTERN_REFUSAL]);
+    f.inv.setItem(1, item(I.LIT_CANDLE));
+    await extinguish(f, 0);
+    assert.deepEqual(carried(f), [filled, I.LIT_CANDLE]);
+  });
+}
+
+test("in the cave the only lit oil lamp stays lit, silently (its line was not captured)", async (t) => {
+  const f = actor(t, 99, DARK_CAVE);
+  f.inv.setItem(0, item(I.OIL_LAMP_3));
+  await extinguish(f, 0);
+  assert.deepEqual(carried(f), [I.OIL_LAMP_3]);
+  assert.deepEqual(f.messages, []);
+});
+
+/** Drop through the packet listener, as the client's Drop does. Returns the drop sounds sent. */
+function drop(t, f, slot) {
+  const sounds = [];
+  t.mock.method(f.p.getPacketSender(), "sendSound", (id) => { sounds.push(id); return f.p.getPacketSender(); });
+  DropItemPacketListener.drop(f.p, f.inv.getItems()[slot].getId(), 3214, slot);
+  return sounds;
+}
+
+for (const [label, lit] of [
+  ["lit black candle", I.LIT_BLACK_CANDLE],
+  ["lit candle", I.LIT_CANDLE],
+  ["lit candle lantern", I.CANDLE_LANTERN_3],
+  ["lit torch", I.LIT_TORCH],
+  ["lit bullseye lantern", I.BULLSEYE_LANTERN_3],
+]) {
+  test(`in the cave the only ${label} cannot be dropped: it stays, with the captured message and no drop sound`, async (t) => {
+    const f = actor(t, 99, DARK_CAVE);
+    const selected = item(lit);
+    f.inv.setItem(0, selected);
+    assertInModelledDarkness(f);
+    const sounds = drop(t, f, 0);
+    assert.equal(f.inv.getItems()[0], selected);
+    assert.deepEqual(f.messages, [DROP_REFUSAL]);
+    assert.deepEqual(sounds, []);
+  });
+}
+
+test("in the cave a light can be dropped while another is carried or worn, and anything else drops as before", async (t) => {
+  const f = actor(t, 99, DARK_CAVE);
+  f.inv.setItem(0, item(I.LIT_CANDLE)); f.inv.setItem(1, item(I.LIT_CANDLE)); f.inv.setItem(2, item(I.TINDERBOX));
+  drop(t, f, 0);
+  assert.deepEqual(carried(f), [I.LIT_CANDLE, I.TINDERBOX], "the first of two candles drops");
+  f.p.getEquipment().setItem(core.Equipment.HEAD_SLOT, item(I.MINING_HELMET));
+  drop(t, f, 1);
+  assert.deepEqual(carried(f), [I.TINDERBOX], "the last candle drops under a lit, worn mining helmet");
+  drop(t, f, 2);
+  assert.deepEqual(carried(f), [], "a tinderbox is not a light");
+  assert.deepEqual(f.messages.filter((m) => m === DROP_REFUSAL), []);
+});
+
+test("a player already in the dark drops anything, and outside the caves the last light drops", async (t) => {
+  const dark = actor(t, 99, DARK_CAVE);
+  dark.inv.setItem(0, item(I.CANDLE));
+  drop(t, dark, 0);
+  assert.deepEqual(carried(dark), [], "an unlit candle is not a light");
+  const outside = actor(t);
+  outside.inv.setItem(0, item(I.LIT_CANDLE));
+  drop(t, outside, 0);
+  assert.deepEqual(carried(outside), []);
+  assert.deepEqual(outside.messages.filter((m) => m === DROP_REFUSAL), []);
 });

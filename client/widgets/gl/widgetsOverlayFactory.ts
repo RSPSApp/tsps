@@ -8,7 +8,7 @@ import type { LocModelLoader } from "../../rs/config/loctype/LocModelLoader";
 import type { NpcModelLoader } from "../../rs/config/npctype/NpcModelLoader";
 import { ChatheadFactory } from "../../render/ChatheadFactory";
 import { PlayerChatheadFactory } from "../../render/PlayerChatheadFactory";
-import { WIDGET_MODEL_TYPE_LOC, widgetLocModel } from "../../render/render/init/widgetLocModel";
+import { WIDGET_MODEL_TYPE_LOC, WIDGET_MODEL_TYPE_NPC, widgetLocModel } from "../../render/render/init/widgetLocModel";
 import { ItemIconRenderer } from "../../ui/item/ItemIconRenderer";
 import { WidgetsOverlay, WidgetsContext } from "../../ui/devoverlay/WidgetsOverlay";
 import { Model2DRenderer } from "../../ui/model/Model2DRenderer";
@@ -125,7 +125,7 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
 
                             // Keep CS2 IF_GETCANVASSIZE / widget manager dimensions aligned with the active
                             // widget layout space.
-                            manager?.resize(layoutW, layoutH);
+                            manager?.resize(layoutW, layoutH, widgetRenderScaleX);
                             host.osrsClient.clientPlugins.updateWidgetLayout();
 
                             // Get the current root interface (set by server via IF_OPENTOPLEVEL)
@@ -248,6 +248,8 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                         outline?: number,
                                         shadow?: number,
                                         quantityMode?: number,
+                                        width?: number,
+                                        height?: number,
                                     ) => {
                                         // Use ItemIconRenderer to render item icons. Create it lazily:
                                         // loaders can become ready after the overlay is built (WebGPU
@@ -270,6 +272,8 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                                 outline,
                                                 shadow,
                                                 quantityMode,
+                                                width,
+                                                height,
                                             });
                                         }
                                         return undefined;
@@ -415,6 +419,20 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                                     host.osrsClient.npcTypeLoader,
                                                 ) ?? baseNpcType;
                                             const portrait = params.widget.npcPortraitFit === true;
+                                            // Server-defined type-6 widgets can opt into a fitted,
+                                            // animated NPC body using the existing model/sequence loaders.
+                                            if (params.widget.npcFullBody === true) {
+                                                const body = npcType ? host.getInteractNpcModelLoader?.()?.getModel(
+                                                    npcType, params.sequenceId ?? -1, params.sequenceFrame ?? -1,
+                                                ) : undefined;
+                                                return body ? host.model2DRenderer.renderModelInstanceToCanvasExtents(
+                                                    body, { ...fitPortraitParams(body, params),
+                                                        // NpcModelLoader has already applied the idle pose.
+                                                        sequenceId: undefined, sequenceFrame: undefined,
+                                                        fitToWidget: { width: params.widget.width, height: params.widget.height, padding: 8 },
+                                                    },
+                                                ) : undefined;
+                                            }
                                             if (
                                                 npcType &&
                                                 npcType.chatheadModelIds &&
@@ -515,6 +533,23 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                         }
                                     }
 
+                                    // Model type 9 is an NPC's body (cc_setnpcmodel): modelId is the NPC id.
+                                    if (((params.widget?.modelType ?? 0) | 0) === WIDGET_MODEL_TYPE_NPC) {
+                                        const baseNpcType = host.osrsClient.npcTypeLoader.load(modelId);
+                                        const npcType =
+                                            baseNpcType?.transform?.(
+                                                host.osrsClient.varManager,
+                                                host.osrsClient.npcTypeLoader,
+                                            ) ?? baseNpcType;
+                                        const bodyModel = npcType
+                                            ? host.getInteractNpcModelLoader?.()?.getModel(npcType, -1, -1)
+                                            : undefined;
+                                        // Never the raw model that happens to share the NPC's number.
+                                        return bodyModel
+                                            ? host.model2DRenderer.renderModelInstanceToCanvasExtents(bodyModel, params)
+                                            : undefined;
+                                    }
+
                                     if (((params.widget?.modelType ?? 0) | 0) === WIDGET_MODEL_TYPE_LOC) {
                                         const locModel = widgetLocModel(
                                             modelId,
@@ -539,7 +574,7 @@ export function createWidgetsOverlay(host: WidgetsOverlayHost): WidgetsOverlay {
                                             return host.model2DRenderer.renderItemToCanvasExtents(
                                                 itemId | 0,
                                                 qty,
-                                                params,
+                                                widgetAny.fitModel ? { ...params, fitToWidget: { width, height, padding: 8 } } : params,
                                                 width,
                                                 height,
                                             );

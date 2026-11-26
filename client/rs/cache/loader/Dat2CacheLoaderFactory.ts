@@ -1,3 +1,4 @@
+import { CustomSeqTypeLoader } from "../../../custom/animations/CustomSeqTypeLoader";
 import { CustomDefinitionLoader } from "../../../custom/definitions/CustomDefinitionStore";
 import { CustomObjTypeLoader } from "../../../custom/items/CustomObjTypeLoader";
 import { CustomNpcTypeLoader } from "../../../custom/npcs/CustomNpcTypeLoader";
@@ -7,6 +8,8 @@ import { LocType } from "../../config/loctype/LocType";
 import { NpcType } from "../../config/npctype/NpcType";
 import { ObjType } from "../../config/objtype/ObjType";
 import { SeqType } from "../../config/seqtype/SeqType";
+import { SpotAnimType } from "../../config/spotanimtype/SpotAnimType";
+import { CustomAnimationRegistry, withCustomTypes } from "../../../custom/animations/CustomAnimationRegistry";
 import {
     ArchiveBasTypeLoader,
     BasTypeLoader,
@@ -97,7 +100,10 @@ import { IndexType } from "../IndexType";
 import { CacheLoaderFactory } from "./CacheLoaderFactory";
 
 export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
-    private archivedLoaders?: { npc: NpcTypeLoader; loc: LocTypeLoader; obj: ObjTypeLoader; seq: SeqTypeLoader };
+    private archivedLoaders?: {
+        npc: NpcTypeLoader; loc: LocTypeLoader; obj: ObjTypeLoader; seq: SeqTypeLoader;
+        hasSequence: (id: number) => boolean;
+    };
 
     private getArchivedLoaders() {
         if (this.archivedLoaders) return this.archivedLoaders;
@@ -133,6 +139,8 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
             // (this loader runs per animated actor per frame).
             seq: new ArchivedTypeLoader(native.seq, SeqType,
                 id => id < nativeSeqCount ? undefined : view().getSource("seq", id), () => view().getCount("seq")),
+            hasSequence: (id) => id < nativeSeqCount || native.seq.archive.getFile(id) !== undefined ||
+                view().getSource("seq", id) !== undefined,
         };
     }
     private invTypeLoader?: InvTypeLoader;
@@ -276,15 +284,18 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
     getSeqTypeLoader(): SeqTypeLoader {
         if (this.seqTypeLoader) return this.seqTypeLoader;
         if (this.cacheInfo.game === "oldschool") {
-            return this.seqTypeLoader = this.getArchivedLoaders().seq;
+            const archived = this.getArchivedLoaders();
+            const base = withCustomTypes(archived.seq, SeqType, this.cacheInfo, id => CustomAnimationRegistry.seq(id));
+            return this.seqTypeLoader = new CustomSeqTypeLoader(base, this.cacheInfo,
+                id => CustomAnimationRegistry.seq(id) !== undefined || archived.hasSequence(id));
         }
         if (this.isIndexConfigs()) {
             const seqIndex = this.cacheSystem.getIndex(IndexType.RS2.seqs);
-            return (this.seqTypeLoader = new IndexSeqTypeLoader(this.cacheInfo, seqIndex));
+            return (this.seqTypeLoader = new CustomSeqTypeLoader(new IndexSeqTypeLoader(this.cacheInfo, seqIndex),this.cacheInfo));
         } else {
             const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
             const seqsArchive = configIndex.getArchive(ConfigType.DAT2.seqs);
-            return (this.seqTypeLoader = new ArchiveSeqTypeLoader(this.cacheInfo, seqsArchive));
+            return (this.seqTypeLoader = new CustomSeqTypeLoader(new ArchiveSeqTypeLoader(this.cacheInfo, seqsArchive),this.cacheInfo));
         }
     }
 
@@ -299,9 +310,12 @@ export class Dat2CacheLoaderFactory implements CacheLoaderFactory {
         } else {
             const configIndex = this.cacheSystem.getIndex(IndexType.DAT2.configs);
             const spotArchive = configIndex.getArchive(ConfigType.DAT2.spotAnims);
-            return (this.spotAnimTypeLoader = new ArchiveSpotAnimTypeLoader(
+            // Custom graphics (CustomAnimationRegistry) answer their ids first.
+            return (this.spotAnimTypeLoader = withCustomTypes(
+                new ArchiveSpotAnimTypeLoader(this.cacheInfo, spotArchive),
+                SpotAnimType,
                 this.cacheInfo,
-                spotArchive,
+                id => CustomAnimationRegistry.spotanim(id),
             ));
         }
     }

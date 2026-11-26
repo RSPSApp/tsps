@@ -2,7 +2,9 @@
  * Husks, as captured: her trance animation, two ticks later a projectile at the player, and two
  * after that the trance message, the player held in place and two husks rising beside them - a
  * magic one and a ranged one. The magic husk first attacks three ticks after rising, the ranged
- * one five, then every 4 ticks. When the last of a player's husks dies they are free again.
+ * one five, then every 4 ticks (Phosani's every 6: rsprox 559 21995, 1148 5206, 1764 11419). They
+ * rise on the tiles straight beside the player, never diagonally (130 of 130 captured). When the
+ * last of a player's husks dies they are free again.
  * The right protection stops their hits in full (Wiki, since November 2020).
  */
 const Common = require("./Common.Nightmare");
@@ -19,7 +21,7 @@ function besideTiles(fight, player) {
   const [px, py] = fight.dream.arenaTile(player.getLocation());
   const { minX, maxX, minY, maxY } = Common.data.arena;
   const Claws = require("./Claws.Nightmare");
-  const around = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]
+  const around = [[1, 0], [-1, 0], [0, 1], [0, -1]]
     .map(([dx, dy]) => [px + dx, py + dy])
     .filter(([x, y]) => x >= minX && x <= maxX && y >= minY && y <= maxY && !Claws.isTotemTile(x, y));
   return Common.shuffled(around).slice(0, 2);
@@ -76,7 +78,7 @@ function process(fight) {
     for (const npc of raised) {
       const husk = npc.__nightmareHusk;
       if (!npc.isRegistered() || npc.getHitpoints() <= 0 || fight.tick < husk.next) continue;
-      husk.next = fight.tick + husks.speed;
+      husk.next = fight.tick + (fight.phosani ? husks.phosaniSpeed : husks.speed);
       const spec = husks[husk.style];
       npc.performAnimation(Common.animation(spec.anim));
       npc.setPositionToFace(player.getLocation());

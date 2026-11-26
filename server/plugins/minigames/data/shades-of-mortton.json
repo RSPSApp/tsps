@@ -24,6 +24,8 @@
     "entranceDoors": ["shadelairentrancel", "shadelairentrancer"],
     "openDoors": {"shadelairentrancel": "shadelairdooropenl", "shadelairentrancer": "shadelairdooropenr"},
     "inside": [3493, 9725, 0],
+    "_exit": "Cache revision 242: only shadelair_bronzedoor at 3493,9726 is the surface exit. Outside 3485,3322 is clear of both wooden-door footprints and walkable back to Mort'ton; precise retail timing/landing is not captured.",
+    "exit": {"loc": "shadelair_bronzedoor", "at": [3493, 9726, 0], "outside": [3485, 3322, 0]},
     "unlockAnimation": 832,
     "sounds": {"locked": 2402, "door": 69, "chest": 52},
     "doors": {

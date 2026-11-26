@@ -2,7 +2,7 @@
   "$comment": "Crafting recipes for plugins/skills/crafting/. Items are ItemIdentifiers names (generated from the cache). Levels, XP and materials: OSRS Wiki (Crafting and each item's page). Menus, timings, messages and the silver components: rsprox captures and cache scripts, see docs/crafting.md.",
   "source": "https://oldschool.runescape.wiki/w/Crafting",
   "leather": {
-    "$comment": "Material -> items a needle makes from it, in menu order. `made` completes 'You make ...'.",
+    "$comment": "Material -> items a needle makes from it, in menu order. `made` completes 'You make ...'. `materials` is what else one item takes ([name, amount]); a needle on any of them opens the same menu. BARK is splitbark: OSRS Wiki (Splitbark armour and each piece's Creation table), in the order of Wizard Jalarast's menu (rsprox.net recording 3202, tick 2370).",
     "LEATHER": [
       {
         "item": "LEATHER_GLOVES",
@@ -279,6 +279,78 @@
         "level": 78,
         "xp": 285,
         "made": "a Hueycoatl hide body",
+        "members": true
+      }
+    ],
+    "BARK": [
+      {
+        "item": "SPLITBARK_HELM",
+        "leather": 2,
+        "materials": [
+          [
+            "FINE_CLOTH",
+            2
+          ]
+        ],
+        "level": 61,
+        "xp": 124,
+        "made": "a splitbark helm",
+        "members": true
+      },
+      {
+        "item": "SPLITBARK_BODY",
+        "leather": 4,
+        "materials": [
+          [
+            "FINE_CLOTH",
+            4
+          ]
+        ],
+        "level": 62,
+        "xp": 248,
+        "made": "a splitbark body",
+        "members": true
+      },
+      {
+        "item": "SPLITBARK_LEGS",
+        "leather": 3,
+        "materials": [
+          [
+            "FINE_CLOTH",
+            3
+          ]
+        ],
+        "level": 62,
+        "xp": 186,
+        "made": "a pair of splitbark legs",
+        "members": true
+      },
+      {
+        "item": "SPLITBARK_GAUNTLETS",
+        "leather": 1,
+        "materials": [
+          [
+            "FINE_CLOTH",
+            1
+          ]
+        ],
+        "level": 60,
+        "xp": 62,
+        "made": "a pair of splitbark gauntlets",
+        "members": true
+      },
+      {
+        "item": "SPLITBARK_BOOTS",
+        "leather": 1,
+        "materials": [
+          [
+            "FINE_CLOTH",
+            1
+          ]
+        ],
+        "level": 60,
+        "xp": 62,
+        "made": "a pair of splitbark boots",
         "members": true
       }
     ]
@@ -1576,7 +1648,8 @@
       [
         "TOPAZ_AMULET_U_",
         "TOPAZ_AMULET"
-      ]
+      ],
+      ["SALVE_SHARD", "SALVE_AMULET", "amulet", "BALL_OF_WOOL", 0]
     ]
   },
   "battlestaves": {

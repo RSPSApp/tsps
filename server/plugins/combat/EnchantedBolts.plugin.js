@@ -123,7 +123,9 @@ const EFFECTS = {
       const { player, target } = shot;
       if (!shot.pvp) {
         // A tenth of the monster's Ranged level is drained; the shooter gets an eighth of it.
-        restorePrayer(player, Math.floor(Math.floor(target.getAsNpc().getBaseAttack(core.CombatType.RANGED) / 10) / 8));
+        const npc = target.getAsNpc();
+        pluginApi.emitCustomEvent("combat:clear-mind", { player, npc });
+        restorePrayer(player, Math.floor(Math.floor(npc.getBaseAttack(core.CombatType.RANGED) / 10) / 8));
         return;
       }
       // A twentieth of the shooter's Ranged level, at most the target's remaining hitpoints.

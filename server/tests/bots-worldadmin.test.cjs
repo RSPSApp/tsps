@@ -24,18 +24,21 @@ const coreSkills = [
   'Firemaking', 'Crafting', 'Smithing', 'Mining', 'Herblore', 'Agility', 'Thieving', 'Slayer', 'Farming', 'Runecrafting', 'Hunter', 'Construction', 'Sailing',
 ].map(name => ({ getName: () => name }));
 
-test('activity list keeps only deployable custom graphs and advertises bounded AI routing', () => {
+test('activity list includes unscheduled built-ins and saved routines but not internal overlays', () => {
   const registry = { activities: [
-    { id: 'custom_a', manual: true, spawnSetup: {}, repeat: true, usesAiAgent: true },
-    { id: 'custom_b', manual: true, spawnSetup: null },
+    { id: 'custom_a', manual: true, codeDefined: true, spawnSetup: {}, repeat: true },
+    { id: 'custom_b', manual: true, codeDefined: true, spawnSetup: null },
+    { id: 'normal_trees', manual: false, spawnSetup: {} },
     { id: 'roam', manual: false, spawnSetup: {} },
+    { id: 'pvp_engage', ephemeral: true, manual: false },
+    { id: 'roam_step' }, { id: 'cut_trees' }, { id: 'castle_wars_match' }, { id: 'castle-wars' }, { id: 'pest-control-novice' },
   ] };
-  assert.deepEqual(_test.activityList(registry), [
-    { id: 'custom_a', repeat: true, setup: {}, usesAiAgent: true },
-    { id: 'custom_b', repeat: undefined, setup: { location: null, skills: {}, inventory: [], equipment: [] }, usesAiAgent: false },
+  assert.deepEqual(_test.activityList(registry).map(({ deploymentOverrides, ...entry }) => entry), [
+    { id: 'custom_a', name: 'custom_a', repeat: true, setup: {} },
+    { id: 'custom_b', name: 'custom_b', repeat: undefined, setup: { location: null, skills: {}, inventory: [], equipment: [] } },
+    { id: 'normal_trees', name: 'Woodcutting — Normal trees', repeat: undefined, setup: {} },
   ]);
-  assert.equal(_test.MAX_DEPLOY_COUNT, 20);
-  assert.equal(_test.MAX_MANAGED_BOTS, 50);
+  assert.deepEqual(_test.activityList({ activities: [] }), []);
 });
 
 test('viewer enumeration returns online real-player clients and excludes bots', () => {
@@ -49,8 +52,8 @@ test('viewer enumeration returns online real-player clients and excludes bots', 
   assert.deepEqual(viewers.map(viewer => [viewer.username, viewer.displayName]), [['AdminDev', 'Developer'], ['Regular', 'Regular']]);
 });
 
-test('deployment validates and applies setup to managed graph bots with hard count limits', async () => {
-  const activity = { id: 'custom_routine', manual: true, mode: 'custom_routine', repeat: false, spawnSetup: { location: null, skills: {}, inventory: [], equipment: [] }, usesAiAgent: false };
+test('deployment validates and applies setup to managed bots without a hard local count limit', async () => {
+  const activity = { id: 'custom_routine', manual: true, codeDefined: true, deploymentOverrides: ['location', 'skills'], mode: 'custom_routine', repeat: false, spawnSetup: { location: null, skills: {}, inventory: [], equipment: [] } };
   const byId = new Map([[activity.id, activity]]);
   const entriesByUsername = new Map();
   let next = 0, attached = [];
@@ -79,7 +82,7 @@ test('deployment validates and applies setup to managed graph bots with hard cou
   const handlerPath = require.resolve('../plugins/bots/brain/BrainActivities.PlayerBots');
   const previous = require.cache[handlerPath];
   require.cache[handlerPath] = { id: handlerPath, filename: handlerPath, loaded: true, exports: { startActivity(bot, id, options) { attached.push([bot.getUsername(), id, options.home]); return true; } } };
-  setActiveBotRuntime(runtime, {}, { byId, activities: [], aiAgentAvailable: false });
+  setActiveBotRuntime(runtime, {}, { byId, activities: [] });
   try {
     const res = response();
     assert.equal(await botRoutes(request('/api/bots/deploy', { activityId: activity.id, count: 2, overrides: { location: { x: 3200, y: 3201, z: 0 }, skills: { attack: 30 } } }), res, new URL('http://localhost/api/bots/deploy'), { core }), true);
@@ -90,6 +93,11 @@ test('deployment validates and applies setup to managed graph bots with hard cou
     assert.deepEqual([attached[0][2].x, attached[0][2].y, attached[0][2].z], [3200, 3201, 0]);
     assert.equal(entriesByUsername.get('PanelBot1').adminDeployedActivityId, activity.id);
 
+    const restricted = { ...activity, id: 'plugin_restricted', codeDefined: true, deploymentOverrides: ['skills'] };
+    byId.set(restricted.id, restricted);
+    for (const body of [{ overrides: { location: { x: 3200, y: 3200, z: 0 } } }, { location: { x: 3200, y: 3200, z: 0 } }]) {
+      await assert.rejects(botRoutes(request('/api/bots/deploy', { activityId: restricted.id, count: 1, ...body }), response(), new URL('http://localhost/api/bots/deploy'), { core }), error => error.status === 400);
+    }
     const defaultActivity = { ...activity, id: 'custom_default', spawnSetup: null };
     byId.set(defaultActivity.id, defaultActivity);
     const defaultResponse = response();
@@ -97,14 +105,12 @@ test('deployment validates and applies setup to managed graph bots with hard cou
     assert.equal(defaultResponse.status, 200);
     assert.deepEqual([attached[2][2].x, attached[2][2].y, attached[2][2].z], [3222, 3218, 0]);
 
-    await assert.rejects(botRoutes(request('/api/bots/deploy', { activityId: activity.id, count: 21, overrides: {} }), response(), new URL('http://localhost/api/bots/deploy'), { core }), error => error.status === 400);
-    const aiActivity = { ...activity, id: 'custom_ai', usesAiAgent: true };
-    byId.set(aiActivity.id, aiActivity);
-    await assert.rejects(botRoutes(request('/api/bots/deploy', { activityId: aiActivity.id, count: 1, overrides: {} }), response(), new URL('http://localhost/api/bots/deploy'), { core }), error => error.status === 409);
-    // Fill the managed cap synchronously and verify another deployment is rejected before spawn.
-    for (let index = 4; index <= _test.MAX_MANAGED_BOTS; index++) entriesByUsername.set(`PanelBot${index}`, { adminDeployedActivityId: activity.id, player: { isPlayerBot: () => true } });
-    await assert.rejects(botRoutes(request('/api/bots/deploy', { activityId: activity.id, count: 1, overrides: {} }), response(), new URL('http://localhost/api/bots/deploy'), { core }), error => error.status === 409);
-    assert.equal(next, 3, 'failed preflight checks do not spawn extra bots');
+    const batch = response();
+    await botRoutes(request('/api/bots/deploy', { activityId: activity.id, count: 55 }), batch, new URL('http://localhost/api/bots/deploy'), { core });
+    assert.equal(batch.body.spawned.length, 55);
+    core.World = { getPlayers: () => ({ characters: Array(60), sizeReturn: () => 58 }), getAddPlayerQueue: () => [1] };
+    await assert.rejects(botRoutes(request('/api/bots/deploy', { activityId: activity.id, count: 1 }), response(), new URL('http://localhost/api/bots/deploy'), { core }), /player slots/);
+    assert.equal(next, 58, 'a rejected request did not allocate a player');
   } finally {
     if (previous) require.cache[handlerPath] = previous; else delete require.cache[handlerPath];
     setActiveBotRuntime(null, null, null);
@@ -149,11 +155,15 @@ test('live bot snapshot carries inventory, equipment and bot-brain activity', ()
     getSkillManager: () => skills, getCombat: () => ({ getTarget: () => null, getAttacker: () => null }), getHitpoints: () => 20, getRunEnergy: () => 75,
     getInventory: () => ({ getItems: () => [item(1511, 12, 'Logs')] }), getEquipment: () => ({ getItems: () => [item(1351, 1, 'Bronze axe')] }),
   };
-  const frame = { action: () => ({ id: 'graph', describe: () => 'gather: chopping oak' }), actionIndex: 0, behaviour: { actions: [{}, {}] }, state: 'running' };
+  const frame = { action: () => ({ id: 'interactObject', describe: () => 'gather: chopping oak' }), actionIndex: 0, behaviour: { actions: [{}, {}] }, state: 'running' };
   const entry = { player: bot, state: { mode: 'custom_routine' }, adminDeployedActivityId: 'custom_routine', brain: { rootActivityId: 'custom_routine', frames: [frame] } };
   const runtime = { entriesByUsername: new Map([['ManagedBot', entry]]) };
-  const [snapshot] = _test.monitoredBots(runtime, { Skill: { values: () => coreSkills } });
+  const world = { getPlayers: () => [bot], getRemovePlayerQueue: () => [] };
+  const brainRegistry = { byId: new Map([['custom_routine', { name: 'Oak gatherer' }]]) };
+  const [snapshot] = _test.monitoredBots(runtime, { Skill: { values: () => coreSkills } }, world, brainRegistry);
   assert.equal(snapshot.activityId, 'custom_routine');
+  assert.equal(snapshot.routineName, 'Oak gatherer');
+  assert.equal(snapshot.watchable, true);
   assert.equal(snapshot.managed, true);
   assert.equal(snapshot.action.description, 'gather: chopping oak');
   assert.deepEqual(snapshot.inventory, [{ slot: 0, id: 1511, name: 'Logs', amount: 12 }]);
@@ -162,7 +172,22 @@ test('live bot snapshot carries inventory, equipment and bot-brain activity', ()
   assert.equal(snapshot.totalLevel, 240);
 });
 
-test('browser bot bridge authenticates requests and shares graph validation', async () => {
+test('online bots include native minigame bots, not real players, pending spawns or queued logouts', () => {
+  const { ACTIVATION_ATTRIBUTE } = require('../plugins/bots/runtime/Activation.PlayerBots');
+  const bot = name => ({ isPlayerBot: () => true, getUsername: () => name });
+  const native = { ...bot('MatchBot'), getAttribute: key => key === ACTIVATION_ATTRIBUTE ? 'soul-wars' : null };
+  const pending = bot('PendingBot');
+  const leaving = bot('LeavingBot');
+  const human = { ...bot('Human'), isPlayerBot: () => false };
+  const runtime = { entriesByUsername: new Map([['PendingBot', { player: pending }], ['LeavingBot', { player: leaving }]]) };
+  const world = { getPlayers: () => [native, leaving, human], getRemovePlayerQueue: () => [leaving] };
+  const bots = _test.monitoredBots(runtime, { Skill: { values: () => [] } }, world);
+  assert.deepEqual(bots.map(({ username, routineName, status, watchable }) => ({ username, routineName, status, watchable })), [
+    { username: 'MatchBot', routineName: 'Soul Wars bots', status: 'online', watchable: false },
+  ]);
+});
+
+test('browser bot bridge authenticates requests and retires visual authoring', async () => {
   const http = require('node:http');
   const { browserBotHandler } = require('../plugins/tools/worldadmin/Bots.WorldAdmin');
   const token = 'test-browser-bots-token';
@@ -176,12 +201,8 @@ test('browser bot bridge authenticates requests and shares graph validation', as
     assert.equal((await validate({ 'Content-Type': 'application/json' }, { activities: [] })).status, 401);
 
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-    assert.equal((await validate({ ...headers, Origin: 'https://example.com' }, { activities: [] })).status, 403);
-    assert.equal((await validate(headers, { activities: [{}] })).status, 400);
-    const accepted = await validate(headers, { activities: [] });
-    assert.equal(accepted.status, 200);
-    assert.deepEqual(await accepted.json(), { activities: [] });
-    assert.equal((await fetch(base + '/api/bot-editor', { headers })).status, 404);
+    assert.equal((await validate(headers, { activities: [] })).status, 410);
+    assert.equal((await fetch(base + '/api/bot-editor', { headers })).status, 410);
     assert.equal((await fetch(base + '/api/bots', { headers })).status, 503);
   } finally {
     await new Promise(resolve => server.close(resolve));

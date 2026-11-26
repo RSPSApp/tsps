@@ -1,23 +1,28 @@
 "use strict";
 
 const { validateSpawnSetup, applySpawnSetup } = require("./SpawnSetup.PlayerBots");
+const { isDeployableRoutine } = require("./RoutineCatalog.PlayerBots");
+const { canSpawn } = require("./Activation.PlayerBots");
 const { validateSetupValues } = require("./LauncherCatalog.PlayerBots");
 
-const MAX_DEPLOY_COUNT = 20;
-const MAX_MANAGED_BOTS = 50;
+function optionalLimit(key) {
+  const raw = process.env[key]?.trim();
+  if (!raw || raw === "0") return null;
+  const value = Number(raw);
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(value) || value < 1) throw new Error(`${key} must be a positive whole number or 0 (disabled).`);
+  return value;
+}
+const MAX_DEPLOY_COUNT = optionalLimit("BOT_MAX_DEPLOY_COUNT");
+const MAX_MANAGED_BOTS = optionalLimit("BOT_MAX_MANAGED_BOTS");
+const nativeDeployments = new WeakMap();
 const DEFAULT_LOCATION = Object.freeze({ x: 3222, y: 3218, z: 0 });
 const DEFAULT_SPAWN_SETUP = Object.freeze({ location: null, skills: Object.freeze({}), inventory: Object.freeze([]), equipment: Object.freeze([]) });
 
 function deployRegisteredBots({ runtime, launcher, count, location, context = {} }) {
   if (!runtime || typeof launcher?.deploy !== "function") return { ok: false, status: 503, error: "The activity bot launcher is not available." };
-  if (!Number.isInteger(count) || count < 1 || count > MAX_DEPLOY_COUNT) {
-    return { ok: false, status: 400, error: `Choose between 1 and ${MAX_DEPLOY_COUNT} bots per deployment.` };
-  }
-  const entries = runtime.entriesByUsername?.values?.() ?? [];
-  const managedCount = [...entries].filter(entry => typeof entry.adminDeployedActivityId === "string").length;
-  if (managedCount + count > MAX_MANAGED_BOTS) {
-    return { ok: false, status: 409, error: `The panel limit is ${MAX_MANAGED_BOTS} managed bots; ${Math.max(0, MAX_MANAGED_BOTS - managedCount)} slots remain.` };
-  }
+  if (!Number.isSafeInteger(count) || count < 1) return { ok: false, status: 400, error: "Enter a positive whole number of bots." };
+  const limit = checkDeploymentLimits(runtime, count);
+  if (limit) return limit;
   if (!location || ![location.x, location.y, location.z].every(Number.isInteger) ||
       location.x < 0 || location.x > 16383 || location.y < 0 || location.y > 16383 || location.z < 0 || location.z > 3) {
     return { ok: false, status: 400, error: "Spawn location must use valid world coordinates and plane." };
@@ -71,25 +76,51 @@ function deployRegisteredBots({ runtime, launcher, count, location, context = {}
   return { ok: true, activityId: launcher.id, requested: count, spawned, failures };
 }
 
-function deployRoutineBots({ runtime, brainRegistry, core, activityId, count, overrides = {}, fallbackLocation = DEFAULT_LOCATION }) {
+function trackNativeDeployment(runtime, bot, world) {
+  const record = nativeDeployments.get(runtime) ?? { bots: new Set(), world };
+  record.bots.add(bot);
+  nativeDeployments.set(runtime, record);
+}
+
+function managedBotCount(runtime) {
+  const record = nativeDeployments.get(runtime);
+  if (record) {
+    const pending = new Set(record.world.getAddPlayerQueue());
+    for (const bot of record.bots) if (!bot.isRegistered() && !pending.has(bot)) record.bots.delete(bot);
+  }
+  return (record?.bots.size ?? 0) + [...(runtime?.entriesByUsername?.values?.() ?? [])].filter(entry => typeof entry.adminDeployedActivityId === "string").length;
+}
+
+function checkDeploymentLimits(runtime, count, world) {
+  if (MAX_DEPLOY_COUNT !== null && count > MAX_DEPLOY_COUNT) {
+    return { ok: false, status: 400, error: `This world allows ${MAX_DEPLOY_COUNT} bots per deployment.` };
+  }
+  if (MAX_MANAGED_BOTS !== null) {
+    const remaining = Math.max(0, MAX_MANAGED_BOTS - managedBotCount(runtime));
+    if (count > remaining) return { ok: false, status: 409, error: `This world has ${remaining} managed bot slots available (limit ${MAX_MANAGED_BOTS}).` };
+  }
+  return checkWorldCapacity(world, count);
+}
+
+function checkWorldCapacity(world, count) {
+  const players = world?.getPlayers?.();
+  const slots = players?.characters?.length;
+  if (!slots) return null;
+  const available = Math.max(0, slots - 1 - players.sizeReturn() - world.getAddPlayerQueue().length);
+  return count > available ? { ok: false, status: 409, error: `The world has ${available} player slots available.` } : null;
+}
+
+function prepareRoutineDeployment({ runtime, brainRegistry, core, activityId, count, overrides = {}, fallbackLocation = DEFAULT_LOCATION }) {
   if (!runtime || !brainRegistry) return { ok: false, status: 503, error: "The bot runtime is not ready." };
   if (typeof activityId !== "string") return { ok: false, status: 400, error: "Choose a bot routine." };
+  if (!canSpawn(activityId)) return { ok: false, status: 409, error: "This routine is disabled. Enable it from Bot deployments first." };
   const activity = brainRegistry.byId?.get(activityId);
-  if (!activity || activity.manual !== true || !activityId.startsWith("custom_")) {
+  if (!isDeployableRoutine(activity)) {
     return { ok: false, status: 404, error: "That bot routine is not available for deployment." };
   }
-  if (!Number.isInteger(count) || count < 1 || count > MAX_DEPLOY_COUNT) {
-    return { ok: false, status: 400, error: `Choose between 1 and ${MAX_DEPLOY_COUNT} bots per deployment.` };
-  }
-  const entries = runtime.entriesByUsername?.values?.() ?? [];
-  const managedCount = [...entries].filter(entry => typeof entry.adminDeployedActivityId === "string").length;
-  if (managedCount + count > MAX_MANAGED_BOTS) {
-    return { ok: false, status: 409, error: `The panel limit is ${MAX_MANAGED_BOTS} managed bots; ${Math.max(0, MAX_MANAGED_BOTS - managedCount)} slots remain.` };
-  }
-  if (activity.usesAiAgent && brainRegistry.aiAgentAvailable !== true) {
-    return { ok: false, status: 409, error: "This bot routine uses an AI Agent block; enable PlayerBots AI and configure a provider first." };
-  }
-
+  if (!Number.isSafeInteger(count) || count < 1) return { ok: false, status: 400, error: "Enter a positive whole number of bots." };
+  const capacityError = checkDeploymentLimits(runtime, count, core.World);
+  if (capacityError) return capacityError;
   const base = activity.spawnSetup ?? DEFAULT_SPAWN_SETUP;
   const spawnAt = overrides.location ?? base.location ?? fallbackLocation ?? DEFAULT_LOCATION;
   if (!spawnAt || ![spawnAt.x, spawnAt.y, spawnAt.z].every(Number.isInteger) ||
@@ -106,26 +137,47 @@ function deployRoutineBots({ runtime, brainRegistry, core, activityId, count, ov
   const setupError = validateSpawnSetup(setup, core);
   if (setupError) return { ok: false, status: 400, error: `Start setup: ${setupError}.` };
 
-  const spawnLocation = new core.Location(location.x, location.y, location.z);
+  return { ok: true, activity, setup, spawnLocation: new core.Location(location.x, location.y, location.z) };
+}
+
+function spawnPreparedBot({ runtime, core, plan, location, source = "developer", deferStart = false, launcherId }) {
+  const { activity, setup } = plan ?? {};
+  const spawnLocation = location ?? plan?.spawnLocation;
+  const bot = runtime.spawnPvpBot(spawnLocation, { mode: activity?.usesPvpEngine ? "pvp" : activity?.mode ?? launcherId, activity: source, activationId: activity?.id ?? launcherId });
+  if (!bot) throw new Error("spawn capacity or name allocation failed");
+  try {
+    if (setup) applySpawnSetup(bot, setup, core);
+    const entry = runtime.entriesByUsername.get(bot.getUsername());
+    if (!entry) throw new Error("could not register the bot");
+    entry.adminDeployedActivityId = activity?.id ?? launcherId;
+    entry.adminDeployedAt = Date.now();
+    if (launcherId) entry.adminDeployedLauncherId = launcherId;
+    const start = activity && ((home = spawnLocation) => {
+      const { startActivity } = require("../brain/BrainActivities.PlayerBots");
+      if (!startActivity(bot, activity.id, { home })) return false;
+      entry.behaviorPaused = false;
+      return true;
+    });
+    if (deferStart || !start) entry.behaviorPaused = true;
+    else if (!start()) throw new Error("could not start the bot routine");
+    return { bot, start };
+  } catch (error) {
+    bot.requestLogout?.();
+    throw error;
+  }
+}
+
+function deployRoutineBots(options) {
+  const { runtime, core, activityId, count } = options;
+  const plan = prepareRoutineDeployment(options);
+  if (!plan.ok) return plan;
   const spawned = [];
   const failures = [];
   for (let index = 0; index < count; index += 1) {
-    const bot = runtime.spawnPvpBot(spawnLocation, { mode: activity.mode, activity: "developer" });
-    if (!bot) {
-      failures.push(`Bot ${index + 1}: spawn capacity or name allocation failed.`);
-      continue;
-    }
     try {
-      applySpawnSetup(bot, setup, core);
-      const { startActivity } = require("../brain/BrainActivities.PlayerBots");
-      const attached = startActivity(bot, activity.id, { home: spawnLocation });
-      const entry = runtime.entriesByUsername.get(bot.getUsername());
-      if (!attached || !entry) throw new Error("could not start the bot routine");
-      entry.adminDeployedActivityId = activity.id;
-      entry.adminDeployedAt = Date.now();
+      const { bot } = spawnPreparedBot({ runtime, core, plan });
       spawned.push(bot.getUsername());
     } catch (error) {
-      bot.requestLogout?.();
       failures.push(`Bot ${index + 1}: ${String(error?.message ?? error).slice(0, 160)}.`);
     }
   }
@@ -133,4 +185,4 @@ function deployRoutineBots({ runtime, brainRegistry, core, activityId, count, ov
   return { ok: true, activityId, requested: count, spawned, failures };
 }
 
-module.exports = { deployRoutineBots, deployRegisteredBots, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS, DEFAULT_LOCATION, DEFAULT_SPAWN_SETUP };
+module.exports = { deployRoutineBots, deployRegisteredBots, prepareRoutineDeployment, spawnPreparedBot, managedBotCount, trackNativeDeployment, checkDeploymentLimits, MAX_DEPLOY_COUNT, MAX_MANAGED_BOTS, DEFAULT_LOCATION, DEFAULT_SPAWN_SETUP };

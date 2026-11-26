@@ -113,17 +113,18 @@ export function registerVarOps(handlers: HandlerMap): void {
         primary.sortAllWith(secondaryArray);
     });
 
-    // array_randomise(array, seed1, seed2): Collections.shuffle with a java.util.Random seeded
-    // (seed1 << 32) | seed2; both 0 means an unseeded (random) shuffle.
+    // array_randomise(array, seed1, seed2): a shuffle with a java.util.Random seeded
+    // (seed1 << 32) | seed2, where seed2 is sign-extended first (a negative seed2 sets every
+    // high bit). Both 0 means two random seeds.
     handlers.set(Opcodes.ARRAY_RANDOMISE, (ctx) => {
-        const seed2 = ctx.intStack[--ctx.intStackSize];
-        const seed1 = ctx.intStack[--ctx.intStackSize];
+        let seed2 = ctx.intStack[--ctx.intStackSize] | 0;
+        let seed1 = ctx.intStack[--ctx.intStackSize] | 0;
         const arrayObj = requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
-        const seed =
-            seed1 === 0 && seed2 === 0
-                ? BigInt(Math.floor(Math.random() * 2 ** 48))
-                : (BigInt(seed1) << 32n) | BigInt(seed2 >>> 0);
-        arrayObj.shuffle(javaRandom(seed));
+        if (seed1 === 0 && seed2 === 0) {
+            seed1 = Math.trunc(Math.random() * 2147483647);
+            seed2 = Math.trunc(Math.random() * 2147483647);
+        }
+        arrayObj.shuffle(javaRandom((BigInt(seed1) << 32n) | BigInt(seed2)));
     });
 
     handlers.set(Opcodes.ARRAY_IS_NULL, (ctx) => {
@@ -179,17 +180,20 @@ export function registerVarOps(handlers: HandlerMap): void {
         const srcPos = ctx.intStack[--ctx.intStackSize];
         const dst = requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
         const src = requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]);
-        if (length < 0) throw new Error("RuntimeException");
+        // A negative length copies the rest of the source, as a negative bound means the array's
+        // edge elsewhere: rev 242's killcounts (9525) copies its names whole with length -1.
+        const count = length < 0 ? src.length - srcPos : length;
         const values = [];
-        for (let i = 0; i < length; i++) values.push(src.getRaw(srcPos + i));
+        for (let i = 0; i < count; i++) values.push(src.getRaw(srcPos + i));
         values.forEach((value, i) => dst.setAt(dstPos + i, value));
     });
 
+    // array_generaterange(array, first, start, count) (8011).
     handlers.set(Opcodes.ARRAY_FILL_SEQUENCE, (ctx) => {
-        const end = ctx.intStack[--ctx.intStackSize];
+        const count = ctx.intStack[--ctx.intStackSize];
         const start = ctx.intStack[--ctx.intStackSize];
         const first = ctx.intStack[--ctx.intStackSize];
-        requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]).fillSequence(first, start, end);
+        requireCs2ArrayObject(ctx.stringStack[--ctx.stringStackSize]).fillSequence(first, start, count);
     });
 
     handlers.set(Opcodes.ARRAY_MAX_VALUE, (ctx) => {
@@ -258,7 +262,7 @@ export function registerVarOps(handlers: HandlerMap): void {
         popArray(ctx).insertAt(index, value);
     });
 
-    // array_indexof / array_fill(array, value, start, end, type) (8005 / 8010).
+    // array_indexof(array, value, start, end, type) (8005).
     handlers.set(Opcodes.ARRAY_INDEXOF, (ctx) => {
         const valueType = ctx.intStack[--ctx.intStackSize];
         const end = ctx.intStack[--ctx.intStackSize];
@@ -266,12 +270,13 @@ export function registerVarOps(handlers: HandlerMap): void {
         const value = popValue(ctx, valueType);
         ctx.pushInt(popArray(ctx).indexOf(value, start, end));
     });
+    // array_fill(array, value, start, count, type) (8010).
     handlers.set(Opcodes.ARRAY_FILL, (ctx) => {
         const valueType = ctx.intStack[--ctx.intStackSize];
-        const end = ctx.intStack[--ctx.intStackSize];
+        const count = ctx.intStack[--ctx.intStackSize];
         const start = ctx.intStack[--ctx.intStackSize];
         const value = popValue(ctx, valueType);
-        popArray(ctx).fill(value, start, end);
+        popArray(ctx).fill(value, start, count);
     });
 
     handlers.set(Opcodes.ARRAY_REVERSE, (ctx) => {

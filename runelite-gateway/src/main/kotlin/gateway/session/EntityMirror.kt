@@ -195,6 +195,7 @@ class EntityMirror(
             }
         }
         block.movementType?.let(info::setMoveSpeed)
+        block.temporaryMoveSpeed?.let(info::setTempMoveSpeed)
         if (block.resetPath) info.setTempMoveSpeed(TELEPORT_MOVE_SPEED)
         // Relative to the end tile the player was just placed on (see applyPlayers).
         block.exactMove?.let { info.setExactMove(it.startX - it.endX, it.startZ - it.endZ, it.startCycle, 0, 0, it.endCycle, it.direction) }
@@ -212,6 +213,7 @@ class EntityMirror(
         block.forcedChat?.let(info::setSay)
         block.faceEntity?.let(info::setFacePathingEntity)
         block.faceTile?.let { (x, z) -> info.setFaceCoordGrid(x, z, instant = false, walkMode = 0) }
+        block.faceAngle?.let { (angle, instant) -> info.setFaceAngle(angle, instant) }
         block.animation?.let { (id, delay) -> info.setSequence(id, delay) }
         for (hit in block.hits) info.addHitMark(-1, hit.type, hit.type, hit.damage, hit.delay)
         for (bar in block.headbars) {

@@ -3,7 +3,6 @@ import { HIGHLIGHT_COMPOSE_WGSL, HIGHLIGHT_MASK_WGSL } from "../shaders/overlay.
 import type { OverlayHost } from "./OverlayHost";
 
 const SHADER_STAGES = GPU_SHADER_STAGE.VERTEX | GPU_SHADER_STAGE.FRAGMENT;
-const MAX_TRI_POINTS = 131072;
 const DEFAULT_OUTLINE_RADIUS = 1.9;
 const IDENTITY_MAT4 = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 
@@ -351,7 +350,7 @@ export class InteractHighlightLayer {
             const maskView = this.maskViews[targetIndex];
             if (!maskView) continue;
 
-            const pointCount = Math.min(target.points.length, MAX_TRI_POINTS);
+            const pointCount = Math.floor(target.points.length / 3) * 3;
             const vertexData = new Float32Array(pointCount * 3);
             for (let i = 0; i < pointCount; i++) {
                 const point = target.points[i];

@@ -12,7 +12,8 @@ configuration.
 
 ## Build
 
-You need Java 21 and a checkout of Quest Helper at the pinned commit:
+From the repository root, `yarn bridge:setup` does all of this. It needs Java 21 and git, then
+clones Quest Helper at the pinned commit and runs `installDist`. By hand:
 
 ```bash
 git clone https://github.com/Zoinkwiz/quest-helper tools/quest-helper-bridge/quest-helper-upstream
@@ -26,8 +27,12 @@ cd tools/quest-helper-bridge && ./gradlew test installDist
 
 ## Run
 
-The bridge and the game server share a secret of at least 24 characters. From the repository
-root, `yarn bridge` reads `QUEST_HELPER_TOKEN` from `.env`, finds a JDK 21 and starts the built
+Once built, `yarn start` starts the bridge with the server. The server makes a token and picks a
+free loopback port, and the bridge exits when the server does. It does this only when
+`QUEST_HELPER_TOKEN` and `QUEST_HELPER_URL` are unset; `QUEST_HELPER_AUTOSTART=0` turns it off.
+
+To run one bridge yourself, the bridge and the game server share a secret of at least 24
+characters. From the repository root, `yarn bridge` reads `QUEST_HELPER_TOKEN` from `.env`, finds a JDK 21 and starts the built
 install, so nothing has to be exported by hand:
 
 ```bash
@@ -46,7 +51,7 @@ them. The agent MCP's `quest_helper` tool drives this bridge headless — see
 [server/docs/agents/quest-helper-testing.md](../../server/docs/agents/quest-helper-testing.md).
 
 - Start the server with the same `QUEST_HELPER_TOKEN` (and `QUEST_HELPER_PORT`, if you changed it).
-- Without the bridge, Quest Helper says its engine hasn't been started. The native Tutorial Island and Recipe for Disaster routes still work, because the server provides them.
+- Without the bridge, players see that Quest Helper isn't enabled on this world, and the server log says why. The native Tutorial Island and Recipe for Disaster routes still work, because the server provides them.
 - The bridge binds only `127.0.0.1`. `GET /health` is public. `GET /catalog`, `POST /evaluate` and `POST /close` need `Authorization: Bearer <secret>`. The browser never sees the secret.
 - Requests are bounded to 4 MiB and 128 sessions.
 

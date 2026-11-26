@@ -198,6 +198,8 @@ export function isSupported(): boolean{
 }
 
 export function resolveEffectiveLodThresholdTiles(host: WebGLOsrsRendererHost, frameId: number): number {
+        const scenery = host.osrsClient.clientPlugins.scenerySettings?.();
+        if (scenery) return Math.min(host.getFrameRenderDistanceTiles(), scenery.detailDistance);
 
         const renderDistance = host.getFrameRenderDistanceTiles() | 0;
         // The GPU plugin's draw distance keeps everything but its last 2 tiles in full detail.

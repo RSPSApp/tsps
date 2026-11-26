@@ -185,7 +185,7 @@ function realInventoryCook({ rejectOutput = false } = {}) {
   const location = new core.Location(3200, 3201, 0);
   const player = {
     getUsername: () => "cooking-test",
-    getPacketSender: () => ({ sendItemContainer() {}, sendVarbit() {}, sendTypedMessage() {} }),
+    getPacketSender: () => ({ sendItemContainer() {}, sendRunEnergy() {}, sendVarbit() {}, sendTypedMessage() {} }),
     getInterfaceId: () => -1,
     getSkillManager: () => ({ getCurrentLevel: () => 99, addExperiences() {} }),
     getAttribute: () => undefined,

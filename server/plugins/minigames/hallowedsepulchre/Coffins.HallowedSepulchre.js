@@ -1,7 +1,9 @@
 /**
  * The coffins and the floor 5 Grand Hallowed Coffin. The opening is recorded (rsprox 1862, three
  * coffins): +2 the picklock, +5 the trap disarmed with the push and the Thieving XP, +6 the lid
- * pushed aside, +8 the loot with one "received a drop" line per item and the floor's looted varbit.
+ * pushed aside, +8 the loot with one "received a drop" line per item and the coffin's looted varbit.
+ * Floor 5's two extra coffins, past its grapple pillars and its portal, open the same way with their
+ * own looted varbits (local 1000598, rev 227).
  * The loot (Hallowed marks by floor, a low/mid/high tier, the strange old lockpick), the Thieving
  * requirements and the success chart are the Wiki's; the recorded loot is a Leagues world's.
  */
@@ -131,19 +133,26 @@ function open(event) {
         ? grandLoot(findMultiplier(player, "ring-of-endurance"))
         : coffinLoot(run.floorNumber, findMultiplier(player, "strange-lockpick"));
       give(player, boostMarks(player, drops));
-      if (which === "a") Common.varbit(player, "hallowed_current_floor_looted", 1);
-      if (which === "b") Common.varbit(player, "hallowed_current_floor_looted_b", 1);
+      if (which) Common.varbit(player, which, 1);
       if (grand) Common.varbit(player, "hallowed_final_chest_looted", 1);
-      const count = (player.getAttribute(Common.data.attributes.chests) ?? 0) + 1;
-      player.setAttribute(Common.data.attributes.chests, count);
-      Common.varbit(player, "hallowed_normal_chest_count", count);
+      const attribute = grand ? Common.data.attributes.grandChests : Common.data.attributes.chests;
+      const count = (player.getAttribute(attribute) ?? 0) + 1;
+      player.setAttribute(attribute, count);
+      Common.varbit(player, grand ? "hallowed_final_chest_count" : "hallowed_normal_chest_count", count);
     });
   });
   return true;
 }
 
-function attachCoffins(api) {
-  api.onObjectClick([...Object.keys(Common.data.coffins).map(Number), Common.data.finalChest], 1, open);
+/** The collection log's Hallowed Sepulchre page counts grand coffins opened (cache script 2735). */
+function collectionLogCount(request) {
+  if (!request?.player || request.category !== "Hallowed Sepulchre" || request.count != null) return;
+  request.count = Math.max(0, Number(request.player.getAttribute(Common.data.attributes.grandChests)) || 0);
 }
 
-module.exports = { attachCoffins, coffinLoot, grandLoot, successChance, give };
+function attachCoffins(api) {
+  api.onObjectClick([...Object.keys(Common.data.coffins).map(Number), Common.data.finalChest], 1, open);
+  api.onCustomEvent("collection-log:category-count", collectionLogCount);
+}
+
+module.exports = { attachCoffins, coffinLoot, grandLoot, successChance, give, collectionLogCount };

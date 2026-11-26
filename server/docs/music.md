@@ -42,6 +42,19 @@ plays it beside any active crop circle).
 A private area's `getMusicTrack` hook names its track instead: a player-owned house, whose rooms
 sit at allocated tiles outside every map area, plays Home Sweet Home ("inside a Player-owned house.").
 
+Content in an instance or private area gives its music through `getMusicTrack`, not `sendSong`.
+On entry, the session plays the music area of the tile under the player (the copied tile in an
+instance), and that replaces any song a plugin sent the same tick. Only a tile with no music area
+keeps the song. The hook is asked every tick, so it can follow the content's state. When the track
+it returns changes, the session plays the new one and unlocks it, and when it ends Area mode goes on
+as for any area track (Area shuffle below). For a boss, return the arrival track or silence (`Music.SILENCE_TRACK`)
+until the fight starts and the fight's track while it lasts, and send no song from the fight
+itself. Examples: the Nightmare Zone dream, Chambers of Xeric's floors, Phantom Muspah's lair, the
+Leviathan's island, Duke Sucellus's asylum, the Nightmare's dream and the Grotesque Guardians' roof.
+Like any area track, these play only in Area mode. Shuffle and Single keep the player's own music,
+and entering still unlocks the track. Ours: every capture of these areas is in Area mode, and the
+Wiki doesn't say whether boss music overrides Shuffle or Single.
+
 Regenerate with `yarn build` then `node scripts/import-music-areas.mjs`; `--check` reports whether
 both files (Modern and Classic) still match. Both read the Wiki response cached outside the repo
 (`<tmpdir>/tsps-wiki-music`, or `--cache <dir>`) and fetch it, in four paged requests, only when

@@ -104,14 +104,56 @@ test('a catch shows one catching loc on the south-west tile, then the full trap 
   assert.deepEqual(trap.objects.map(o => [name(o), ...xy(o.getLocation())]), [['hunting_sapling_full_green', 3548, 3437]]);
 });
 
-test('a miss on a west-facing net shows the failing then failed loc on the net tile', t => {
+test('a miss on a west-facing net shows the failing loc, then the reset tree and net', t => {
   // Face 3: the net is west of the tree, so the net's tile is the south-west one.
   const { trap } = setTrap(t, 3, 1479, 3099, 29);
   spring(t, trap, false);
   assert.deepEqual(trap.objects.map(o => [name(o), ...xy(o.getLocation())]), [['hunting_sapling_failing_swamp', 1478, 3099]]);
   tick(); tick();
   assert.equal(trap.state, 'failed');
-  assert.deepEqual(trap.objects.map(o => [name(o), ...xy(o.getLocation())]), [['hunting_sapling_failed_swamp', 1478, 3099]]);
+  assert.deepEqual(trap.objects.map(o => [name(o), ...xy(o.getLocation())]),
+    [['hunting_sapling_up_reset_swamp', 1479, 3099], ['hunting_sapling_net_reset_swamp', 1478, 3099]]);
+});
+
+test('Dismantle on a failed net trap hands back the rope and net (issue 6669)', t => {
+  const { p, trap, spam } = setTrap(t, 3, 1479, 3099, 29);
+  spring(t, trap, false);
+  tick(); tick();
+  tick(); tick();
+  assert.equal(H.traps.size, 1, 'the failed trap waits to be cleared');
+  assert.equal(p.getInventory().contains(core.ItemIdentifiers.ROPE), false);
+  assert.equal(Traps.dismantle({ player: p, object: trap.objects[0] }), true);
+  tick(); tick(); tick();
+  assert.equal(H.traps.size, 0);
+  assert.equal(p.getInventory().contains(core.ItemIdentifiers.ROPE), true, 'rope back');
+  assert.equal(p.getInventory().contains(core.ItemIdentifiers.SMALL_FISHING_NET), true, 'net back');
+  assert.deepEqual(spam.slice(1), ['You dismantle the trap.'], 'only the dismantle line, no catch');
+  assert.deepEqual(drops, []);
+});
+
+test('Reset on a failed net trap sets the trap again from the same rope and net (issue 6669)', t => {
+  const { p, trap } = setTrap(t, 3, 1479, 3099, 29);
+  spring(t, trap, false);
+  tick(); tick();
+  assert.equal(Traps.reset({ player: p, object: trap.objects.at(-1) }), true);
+  for (let i = 0; i < 12 && ![...H.traps].some(entry => entry !== trap && entry.state === 'idle'); i++) tick();
+  const again = [...H.traps].find(entry => entry !== trap);
+  assert.ok(again, 'a new trap stands');
+  assert.equal(again.state, 'idle');
+  assert.equal(p.getInventory().contains(core.ItemIdentifiers.ROPE), false, 'rope used by the new trap');
+});
+
+test('a failed net trap nobody clears collapses after its minute, leaving the rope and net on the net tile', t => {
+  const { trap, tree } = setTrap(t, 3, 1479, 3099, 29);
+  spring(t, trap, false);
+  tick(); tick();
+  assert.equal(trap.expires - H.tick, 100);
+  H.tick = trap.expires;
+  Traps.process();
+  assert.equal(H.traps.size, 0);
+  assert.deepEqual(drops.map(([id, at]) => [id, ...xy(at)]),
+    [[core.ItemIdentifiers.ROPE, 1478, 3099], [core.ItemIdentifiers.SMALL_FISHING_NET, 1478, 3099]]);
+  assert.deepEqual(objects, [tree], 'the young tree is back');
 });
 
 test('a catch plays 739 then 2652 at the net tile; a miss plays 2652 on the failing loc and the net tile', t => {

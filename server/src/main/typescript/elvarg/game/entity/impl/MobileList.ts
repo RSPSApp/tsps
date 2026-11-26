@@ -67,6 +67,12 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
      * change) takes as the old mobile changing, so it kept the old one's state (issue 6113).
      */
     private heldSlots: number[] | null;
+    /**
+     * The highest occupied slot, or 0. Slots are handed out lowest-free-first, so the live
+     * mobiles sit in a short prefix of a capacity-sized array (a few thousand of the 65,535 NPC
+     * slots); traversals stop here instead of stepping through every empty slot (issue 6036).
+     */
+    private highestSlot = 0;
 
     constructor(capacity: number, onAdded?: (mobile: E) => void, onRemoved?: (mobile: E) => void, { holdFreedSlots = false } = {}) {
         this.capacity = ++capacity;
@@ -103,6 +109,7 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
                 e.setRegistered(true);
                 e.setIndex(index);
                 this.characters[index] = e;
+                if (index > this.highestSlot) this.highestSlot = index;
                 try {
                     e.onAdd();
                     this.size++;
@@ -115,6 +122,7 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
                     const rollbackErrors: unknown[] = [];
                     if (this.characters[index] === e) {
                         this.characters[index] = null as any;
+                        this.lowerHighestSlot();
                         this.slotQueue.push(index);
                         if (counted) this.size--;
                         e.setRegistered(false);
@@ -144,6 +152,7 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
         if (e.isRegistered() && this.characters[e.getIndex()] != null) {
             e.setRegistered(false);
             this.characters[e.getIndex()] = null;
+            this.lowerHighestSlot();
             this.freeSlot(e.getIndex());
             try {
                 this.onRemoved?.(e);
@@ -185,32 +194,41 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
         return this.characters[e.getIndex()] != null;
     }
 
+    /** Drops the high-water mark past slots that are now empty. */
+    private lowerHighestSlot(): void {
+        const characters = this.characters;
+        let high = this.highestSlot;
+        while (high > 0 && !characters[high]) high--;
+        this.highestSlot = high;
+    }
+
+    /** The highest slot a traversal has to visit; live, so additions made during a traversal are seen. */
+    public highestOccupiedSlot(): number {
+        return this.highestSlot;
+    }
+
+    // forEach, search and the iterator visit slots in index order and read each slot when they
+    // reach it, as the full-array loops they replace did: a mobile added at a higher slot during
+    // the traversal is visited, one removed before its slot is reached is not.
     public forEach(action: (e: E) => void): void {
-        for (let e of this.characters) {
-            if (!e) {
-                continue;
-            }
-            action(e);
+        const characters = this.characters;
+        for (let i = 0; i <= this.highestSlot; i++) {
+            const e = characters[i];
+            if (e) action(e);
         }
     }
 
     public search(filter: (e: E) => boolean): E | null {
-        for (let e of this.characters) {
-            if (e === null)
-                continue;
-            if (filter(e))
-                return e;
+        const characters = this.characters;
+        for (let i = 0; i <= this.highestSlot; i++) {
+            const e = characters[i];
+            if (e && filter(e)) return e;
         }
         return null;
     }
 
-    public * [Symbol.iterator](): IterableIterator<E> {
-        for (let e of this.characters) {
-            if (e === null) {
-                continue;
-            }
-            yield e;
-        }
+    public [Symbol.iterator](): IterableIterator<E> {
+        return new MobileListIterator(this);
     }
 
     public get(slot: number): E {
@@ -240,6 +258,7 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
     public clear(): void {
         this.characters.forEach(this.remove);
         this.characters = [] as E[];
+        this.highestSlot = 0;
         this.size = 0;
     }
 
@@ -250,6 +269,7 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
         if (item.isRegistered() && this.characters[item.getIndex()] != null) {
             item.setRegistered(false);
             this.characters[item.getIndex()] = null as any;
+            this.lowerHighestSlot();
             this.freeSlot(item.getIndex());
             try {
                 this.onRemoved?.(item);
@@ -259,6 +279,41 @@ export class MobileList<E extends Mobile> implements Iterable<E> {
                 this.size--;
             }
         }
+    }
+}
+
+/**
+ * `for (const npc of World.getNpcs())`. It replaced a generator, which allocated a generator and
+ * a fresh `{ value, done }` per mobile and stepped through every empty slot; with a few thousand
+ * NPCs that was about half the server's garbage (issue 6036). This one steps only to the list's
+ * high-water mark and returns the same result object from every `next()`. `for...of`, spread,
+ * `Array.from` and destructuring read `value` before the next step, which is all the language
+ * asks of a result; code that calls `next()` itself must not keep a result across calls.
+ */
+class MobileListIterator<E extends Mobile> implements IterableIterator<E> {
+    private slot = -1;
+    private readonly result: IteratorResult<E> = { value: undefined as any, done: false };
+
+    constructor(private readonly list: MobileList<E>) {}
+
+    public next(): IteratorResult<E> {
+        const result = this.result;
+        if (result.done) return result;
+        const characters = this.list.characters;
+        while (++this.slot <= this.list.highestOccupiedSlot()) {
+            const e = characters[this.slot];
+            if (e) {
+                result.value = e;
+                return result;
+            }
+        }
+        result.value = undefined as any;
+        result.done = true;
+        return result;
+    }
+
+    public [Symbol.iterator](): IterableIterator<E> {
+        return this;
     }
 }
 

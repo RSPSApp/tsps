@@ -1,3 +1,4 @@
+import { mapEditFiles } from "../../util/MapEditFiles";
 import { ObjectDefinition } from '../definition/ObjectDefinition'
 import type { Mobile } from '../entity/impl/Mobile'
 import { GameObject } from '../entity/impl/object/GameObject'
@@ -10,7 +11,6 @@ import { PrivateArea } from '../model/areas/impl/PrivateArea'
 import { Buffer } from './Buffer'
 import { Region } from './Region'
 import * as fs from "fs";
-import * as path from "path";
 import { PluginManager } from "../../plugins/PluginManager";
 import { MapRegionReplacementManager } from "./MapRegionReplacementManager";
 import { CacheMaps } from "../cache/CacheMaps";
@@ -50,17 +50,16 @@ export class RegionManager {
             const files = CacheMaps.getArchiveIds(regionId)!;
             RegionManager.regions.set(regionId, new Region(regionId, files.terrainFile, files.objectFile));
         }
-        const replacementDir = path.resolve(process.cwd(), "data", "regions");
-        if (fs.existsSync(replacementDir)) {
-            const names = fs.readdirSync(replacementDir);
+        {
+            const files = mapEditFiles.regionFiles();
             // A region may only carry one replacement file. A full .pack carries objects,
             // a .terrain.dat does not, and applying both would leave the last one's view:
             // a .terrain.dat after a .pack would drop the pack's replaced objects. The
             // .pack wins, matching how the editor writes them.
             const packRegions = new Set(
-                names.map((name) => /^(\d+)\.pack$/.exec(name)).filter(Boolean).map((m) => Number(m![1]))
+                files.map(({ name }) => /^(\d+)\.pack$/.exec(name)).filter(Boolean).map((m) => Number(m![1]))
             );
-            for (const name of names.sort()) {
+            for (const { name, file: filePath } of files) {
                 const packMatch = /^(\d+)\.pack$/.exec(name);
                 const terrainMatch = /^(\d+)\.terrain\.dat$/.exec(name);
                 if (!packMatch && !terrainMatch) continue;
@@ -70,10 +69,11 @@ export class RegionManager {
                     );
                     continue;
                 }
-                const filePath = path.join(replacementDir, name);
                 try {
                     if (packMatch) {
-                        MapRegionReplacementManager.replaceMapRegion(Number(packMatch[1]), filePath);
+                        const regionId = Number(packMatch[1]);
+                        MapRegionReplacementManager.replaceMapRegion(regionId, filePath);
+                        RegionManager.registerReplacementRegion(regionId);
                     } else {
                         MapRegionReplacementManager.replaceMapRegionTerrain(
                             Number(terrainMatch![1]), new Uint8Array(fs.readFileSync(filePath)), filePath);
@@ -91,6 +91,20 @@ export class RegionManager {
 
     public static getRegionid(regionId: number): Region | undefined {
         return this.regions.get(regionId);
+    }
+
+    public static registerReplacementRegion(regionId: number): void {
+        if (this.regions.has(regionId) || !MapRegionReplacementManager.getReplacementMapData(regionId)) return;
+        const archive = CacheMaps.getArchiveIds(regionId);
+        this.regions.set(regionId, new Region(regionId, archive?.terrainFile ?? -1, archive?.objectFile ?? -1));
+    }
+
+    /** Discard the collision index for an unused square whose replacement was removed. */
+    public static unregisterEmptyReplacementRegion(regionId: number): void {
+        if (MapRegionReplacementManager.getReplacementMapData(regionId) || CacheMaps.getArchiveIds(regionId)) return;
+        this.clearRegionMapObjects(regionId);
+        this.loadingRegions.delete(regionId);
+        this.regions.delete(regionId);
     }
 
     public static regionIdForTile(x: number, y: number): number {

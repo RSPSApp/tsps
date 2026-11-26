@@ -28,7 +28,7 @@ const GAMES = new WeakMap();
 function scoreFor(player) { return Patches.farmFor(player).tithe ??= { points: 0, score: 0 }; }
 function inField(player) {
     const p = player.getLocation();
-    return p.getX() > 1805 && p.getX() <= 1840 && p.getY() >= 3485 && p.getY() <= 3518 && p.getZ() === 0;
+    return p.getX() >= 1805 && p.getX() <= 1840 && p.getY() >= 3485 && p.getY() <= 3518 && p.getZ() === 0;
 }
 function sync(player) {
     const score = scoreFor(player);
@@ -95,6 +95,30 @@ function titheProcess({ player }) {
     if (!inField(player) || player.getArea() !== game.area) { leave(player); return; }
     for (const plot of game.plots.values()) if (plot.plant) { Model.advanceTithe(plot.plant, Date.now()); redraw(game, plot); }
 }
+const SEED_TABLE_RANGE = 4;
+const MAX_SEEDS = 10000;
+const holdsTithe = (player, crop) => player.getInventory().contains(Data.itemId(crop.name + " seed"))
+    || player.getInventory().contains(Data.itemId(crop.name + " fruit"));
+/** Whether the seed table refuses `crop` now (the chat line is sent); used when the type is picked and again when the amount is confirmed. */
+function seedTableRefused(player, crop, table) {
+    if (!player.getLocation().isWithinDistance(table.getLocation(), SEED_TABLE_RANGE)) return true;
+    if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < crop.level) { player.sendMessage(`You need level ${crop.level} Farming.`); return true; }
+    if (CROPS.some(other => other !== crop && holdsTithe(player, other))) { player.sendMessage("You can only use one type of seed at a time."); return true; }
+    return false;
+}
+/** The amount prompt: anything over what fits under the 10,000 cap is trimmed to it. */
+function askSeedAmount(player, crop, table) {
+    const action = { execute(amount) {
+        if (player.getEnteredAmountAction() !== action) return;
+        player.setEnteredAmountAction(null);
+        if (seedTableRefused(player, crop, table)) return;
+        const seed = Data.itemId(crop.name + " seed");
+        const count = Math.min(Math.floor(Number(amount)) || 0, MAX_SEEDS - player.getInventory().getAmount(seed));
+        if (count > 0) Patches.give(player, seed, count);
+    } };
+    player.setEnteredAmountAction(action);
+    player.getPacketSender().sendEnterAmountPrompt("Enter amount:");
+}
 function titheObject(event) {
     const { player, object } = event;
     const id = object.getId();
@@ -116,20 +140,8 @@ function titheObject(event) {
     if (id === core.ObjectIdentifiers.SEED_TABLE) {
         event.handled = true;
         Patches.choose(player, CROPS.map(c => [`${c.name} seeds (level ${c.level})`, () => {
-            if (!player.getLocation().isWithinDistance(object.getLocation(), 4)) return;
-            if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < c.level) { player.sendMessage(`You need level ${c.level} Farming.`); return; }
-            if (CROPS.some(other => other !== c && (player.getInventory().contains(Data.itemId(other.name + " seed")) || player.getInventory().contains(Data.itemId(other.name + " fruit"))))) {
-                player.sendMessage("You can only use one type of seed at a time."); return;
-            }
-            Patches.choose(player, [100, 1000, 10000].map(amount => [`Take ${amount}`, () => {
-                if (!player.getLocation().isWithinDistance(object.getLocation(), 4)) return;
-                if (player.getSkillManager().getCurrentLevel(core.Skill.FARMING) < c.level) { player.sendMessage(`You need level ${c.level} Farming.`); return; }
-                if (CROPS.some(other => other !== c && (player.getInventory().contains(Data.itemId(other.name + " seed")) || player.getInventory().contains(Data.itemId(other.name + " fruit"))))) {
-                    player.sendMessage("You can only use one type of seed at a time."); return;
-                }
-                const count = Math.min(amount, 10000 - player.getInventory().getAmount(Data.itemId(c.name + " seed")));
-                if (count > 0) Patches.give(player, Data.itemId(c.name + " seed"), count);
-            }]));
+            if (seedTableRefused(player, c, object)) return;
+            askSeedAmount(player, c, object);
         }]));
         return;
     }
@@ -236,9 +248,17 @@ function titheNpc(event) {
         }]]);
         return;
     }
-    if (event.definition?.getName() !== "Farmer Gricoller") return;
+    // Talk-to is his transcript dialogue (NpcDialogues); only the Rewards option opens the shop here.
+    if (event.definition?.getName() !== "Farmer Gricoller"
+        || event.definition.getActions()?.[event.clickType - 1]?.toLowerCase() !== "rewards") return;
     event.handled = true;
     Rewards.open(event);
 }
+/** "Have you any rewards?" in his dialogue: the chatbox closes and the same shop as Rewards takes over. */
+function titheDialogueAction(event) {
+    if (event.definition?.getName() !== "Farmer Gricoller" || event.action !== "open_interface" || !event.npc) return;
+    event.handled = true;
+    event.wait = () => Rewards.open(event);
+}
 
-Object.assign(module.exports, { scoreFor, titheLogin, titheLogout, titheProcess, titheObject, titheItem, titheItemOnNpc, titheNpc });
+Object.assign(module.exports, { scoreFor, titheLogin, titheLogout, titheProcess, titheObject, titheItem, titheItemOnNpc, titheNpc, titheDialogueAction });

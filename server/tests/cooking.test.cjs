@@ -48,6 +48,7 @@ function player(cooking, carried) {
     getAttribute: (key) => attributes.get(key),
     setAttribute: (key, value) => attributes.set(key, value),
     getInventory: () => inventory,
+    getStatus: () => null,
     getPacketSender: () => packet,
     getEquipment: () => ({ getItems: () => [] }),
     getSkillManager: () => ({ getCurrentLevel: () => cooking }),
@@ -107,9 +108,15 @@ test("burnt items are the captured and Wiki ones", () => {
 });
 
 test("fires and the house's stoves play human_firecooking, other ranges and ovens human_cooking", () => {
-  const seq = (name) => Cooking._test.cookAnimationFor(name).getId();
-  for (const name of ["Fire", "Firepit with hook", "Small oven"]) assert.equal(seq(name), core.CacheDefinitions.getSeqId("human_firecooking"), name);
-  for (const name of ["Range", "Cooking range", "Oven"]) assert.equal(seq(name), core.CacheDefinitions.getSeqId("human_cooking"), name);
+  core.ObjectDefinition.init();
+  const locId = (name) => core.CacheDefinitions.getLocId(name);
+  const { FIREPIT_WITH_HOOK, SMALL_OVEN } = core.ObjectIdentifiers;
+  const fires = [[locId("fire"), "Fire"], [FIREPIT_WITH_HOOK, "Firepit with hook"], [SMALL_OVEN, "Small oven"]];
+  const ranges = [[locId("fai_varrock_range"), "Range"], [locId("cooksquestrange"), "Cooking range"], [locId("fortis_stove"), "Oven"]];
+  const seq = (id) => Cooking._test.cookAnimationFor(core.ObjectDefinition.forId(id)).getId();
+  for (const [id, name] of [...fires, ...ranges]) assert.equal(core.ObjectDefinition.forId(id).getName(), name, String(id));
+  for (const [id, name] of fires) assert.equal(seq(id), core.CacheDefinitions.getSeqId("human_firecooking"), name);
+  for (const [id, name] of ranges) assert.equal(seq(id), core.CacheDefinitions.getSeqId("human_cooking"), name);
 });
 
 test("one raw food opens the how-many menu on the raw item; several open the what menu on the cooked ones", () => {
@@ -231,6 +238,60 @@ test("pies and pizzas bake on a range with the captured lines, never on a fire",
   assert.deepEqual(onRange.sent.menu.getItems(), [obj("uncooked_apple_pie")]);
 });
 
+test("a lit fireplace cooks like a fire (Wiki: Fireplace; rsprox capture 1001621 tick 627)", () => {
+  core.ObjectDefinition.init();
+  core.RegionManager.init();
+  const id = core.CacheDefinitions.getLocId("fireplace");
+  assert.equal(id, 24969);
+  // The Draynor Village fireplace the capture cooks raw shrimps on.
+  const placed = core.MapObjects.get(id, new core.Location(3100, 3256, 0), null);
+  assert.ok(placed, "fireplace 24969 at 3100,3256");
+  const definition = placed.getDefinition();
+  assert.equal(definition.getName(), "Fireplace");
+  assert.equal(Cooking.isCooker(definition), true);
+  const fireplace = {
+    getId: () => id, getType: () => 10, getFace: () => 0, getDefinition: () => definition,
+    getLocation: () => new core.Location(3100, 3256, 0), getPrivateArea: () => null,
+  };
+  const use = hooks.itemOnObject.find(({ filter }) => !filter.fallback).handler;
+
+  const shrimps = player(18, [[ItemIds.RAW_SHRIMPS, 9]]);
+  const event = { player: shrimps, object: fireplace, itemId: ItemIds.RAW_SHRIMPS, handled: false };
+  use(event);
+  assert.equal(event.handled, true);
+  assert.equal(shrimps.sent.menu.getTitle(), "How many would you like to cook?");
+  assert.deepEqual(shrimps.sent.menu.getItems(), [ItemIds.RAW_SHRIMPS]);
+  assert.equal(Cooking._test.cookAnimationFor(definition).getId(), core.CacheDefinitions.getSeqId("human_firecooking"));
+  // A fire's burn rates, not a range's.
+  const trout = Cooking.COOKABLE_BY_RAW.get(ItemIds.RAW_TROUT);
+  assert.equal(Cooking._test.stopBurnLevel({}, trout, id), Cooking._test.stopBurnLevel({}, trout, undefined, "fire"));
+
+  // No range food (Wiki: no bread, stews, cakes, pies or pizzas), and no sinew from meat.
+  const pie = player(99, [[obj("uncooked_apple_pie"), 1]]);
+  const pieEvent = { player: pie, object: fireplace, itemId: obj("uncooked_apple_pie"), handled: false };
+  use(pieEvent);
+  assert.equal(pieEvent.handled, false, "left to the fallback's \"You can't cook that.\"");
+  const beef = player(99, [[obj("raw_beef"), 1]]);
+  use({ player: beef, object: fireplace, itemId: obj("raw_beef"), handled: false });
+  assert.equal(beef.sent.menu, null, "one raw beef cooks straight away, without the range's Sinew choice");
+  Cooking._test.activeSessions.clear();
+
+  // The op-less pot over the Lumbridge farmhouse fireplace cooks as a fire too (captures 911358, 1001342).
+  const pot = core.ObjectDefinition.forId(core.CacheDefinitions.getLocId("fireplacecookingpot"));
+  assert.equal(pot.getName(), "Cooking pot");
+  assert.equal(Cooking.isCooker(pot), true);
+  assert.equal(Cooking.isFire(pot), true);
+  assert.equal(Cooking.isCooker(core.ObjectDefinition.forId(core.CacheDefinitions.getLocId("fai_varrock_shanty_cookingpot"))), false);
+
+  // Every listed gameval resolves, to a "Fireplace" or the pot.
+  for (const name of Cooking._test.FIRE_LOC_GAMEVALS) {
+    assert.match(core.ObjectDefinition.forId(core.CacheDefinitions.getLocId(name)).getName(), /^(Fireplace|Cooking pot)$/, name);
+  }
+
+  // Misthalin Mystery's riddle fireplace and the unlit ones stay out.
+  for (const other of [30136, 30137, 9441, 61732]) assert.equal(Cooking.isCooker(core.ObjectDefinition.forId(other)), false, String(other));
+});
+
 /** A player whose inventory really changes, for the item-on-item recipes. */
 function maker(cooking, carried) {
   const p = player(cooking, []);
@@ -262,6 +323,7 @@ function maker(cooking, carried) {
     getLocation: () => new core.Location(3221, 3218, 0),
     getPrivateArea: () => null,
     getInventory: () => inventory,
+    getStatus: () => null,
     getBanks: () => [],
     getSkillManager: () => ({ getCurrentLevel: () => cooking, addExperiences: (_skill, gained) => xp.push(gained) }),
     performAnimation: (animation) => effects.push(["seq", animation.getId()]),
@@ -493,6 +555,99 @@ test("potato toppings: the Wiki's levels and XP; the bowl toppings give the bowl
     assert.equal(p.getInventory().getAmount(obj("bowl_empty")), bowl ? 1 : 0, `${product} bowl`);
     assert.deepEqual(p.xp, [xp], product);
   }
+});
+
+const KNIFE = ItemIds.KNIFE;
+
+test("a knife chops onion, mushroom, tomato, garlic, tuna, meat and ugthanki into a bowl: no level, no XP, knife kept", () => {
+  const chops = [
+    ["onion", "bowl_onion"], ["bittercap_mushroom", "bowl_mushroom_raw"], ["tomato", "bowl_tomato"],
+    ["garlic", "bowl_garlic"], ["tuna", "bowl_tuna"], ["cooked_meat", "bowl_carne"], ["cooked_ugthanki_meat", "bowl_ugthanki"],
+  ];
+  for (const [food, product] of chops) {
+    const p = maker(1, [[KNIFE, 1], [obj(food), 1], [obj("bowl_empty"), 1]]);
+    assert.equal(useItems(p, "bowl_empty", food).handled, true, product);
+    assert.equal(p.sent.menu, null, "one bowl makes without a menu");
+    ticks(1);
+    assert.equal(p.getInventory().getAmount(obj(product)), 1, product);
+    assert.equal(p.getInventory().getAmount(obj(food)), 0, food);
+    assert.equal(p.getInventory().getAmount(obj("bowl_empty")), 0, `${product} uses the bowl`);
+    assert.equal(p.getInventory().getAmount(KNIFE), 1, "the knife stays");
+    assert.deepEqual(p.xp, [], product);
+    assert.deepEqual(p.sent.spam, [], `${product}: no Wiki line`);
+  }
+});
+
+test("without a knife a bowl and an onion do nothing here", () => {
+  const p = maker(99, [[obj("onion"), 1], [obj("bowl_empty"), 1]]);
+  assert.equal(useItems(p, "onion", "bowl_empty").handled, false);
+  ticks(2);
+  assert.equal(p.getInventory().getAmount(obj("bowl_onion")), 0);
+  assert.equal(p.getInventory().getAmount(obj("onion")), 1);
+  const sauce = maker(99, [[obj("bowl_chilli"), 1], [obj("cooked_meat"), 1]]);
+  assert.equal(useItems(sauce, "bowl_chilli", "cooked_meat").handled, false, "cooked meat needs a knife for chilli");
+});
+
+test("potato topping bowls and kebab mix: the Wiki's levels, XP, knives and returned bowls", () => {
+  // [used, used with, product, level, xp, knife, bowl back]
+  const mixes = [
+    ["bowl_garlic", "gnome_spice", "bowl_chilli", 9, 25, false, false],
+    ["bowl_chilli", "cooked_meat", "bowl_chilli+carne", 11, 0, true, false],
+    ["bowl_chilli", "bowl_carne", "bowl_chilli+carne", 11, 0, false, true],
+    ["tomato", "bowl_egg_scrambled", "bowl_egg+tomato", 23, 0, false, false],
+    ["bowl_mushroom_fried", "bowl_onion_fried", "bowl_mushroom+onion", 57, 0, false, true],
+    ["bowl_sweetcorn", "tuna", "bowl_tuna+sweetcorn", 67, 0, true, false],
+    ["bowl_sweetcorn", "bowl_tuna", "bowl_tuna+sweetcorn", 67, 0, false, true],
+    ["sweetcorn_cooked", "bowl_tuna", "bowl_tuna+sweetcorn", 67, 0, false, false],
+    ["sweetcorn_cooked", "bowl_empty", "bowl_sweetcorn", 1, 0, false, false],
+    ["bowl_onion", "tomato", "bowl_oniontomato", 1, 0, true, false],
+    ["bowl_tomato", "onion", "bowl_oniontomato", 1, 0, true, false],
+    ["bowl_onion", "cooked_ugthanki_meat", "bowl_ugthankionion", 1, 0, true, false],
+    ["bowl_ugthanki", "onion", "bowl_ugthankionion", 1, 0, true, false],
+    ["bowl_tomato", "cooked_ugthanki_meat", "bowl_ugthankitomato", 1, 0, true, false],
+    ["bowl_ugthanki", "tomato", "bowl_ugthankitomato", 1, 0, true, false],
+    ["bowl_oniontomato", "cooked_ugthanki_meat", "bowl_oniontomugthanki", 1, 0, true, false],
+    ["bowl_ugthankionion", "tomato", "bowl_oniontomugthanki", 1, 0, true, false],
+    ["bowl_ugthankitomato", "onion", "bowl_oniontomugthanki", 1, 0, true, false],
+  ];
+  for (const [used, usedWith, product, level, xp, knife, bowl] of mixes) {
+    const carried = (lvl) => maker(lvl, [...(knife ? [[KNIFE, 1]] : []), [obj(used), 1], [obj(usedWith), 1]]);
+    if (level > 1) {
+      const low = carried(level - 1);
+      useItems(low, used, usedWith); ticks(2);
+      assert.equal(low.getInventory().getAmount(obj(product)), 0, `${product} needs ${level}`);
+      assert.match(statementText(low.sent.statements[0]), new RegExp(`Cooking level of ${level} `));
+    }
+    const p = carried(level);
+    assert.equal(useItems(p, usedWith, used).handled, true, `${usedWith} on ${used}`);
+    ticks(1);
+    assert.equal(p.getInventory().getAmount(obj(product)), 1, product);
+    assert.equal(p.getInventory().getAmount(obj(used)), 0, used);
+    assert.equal(p.getInventory().getAmount(obj(usedWith)), 0, usedWith);
+    assert.equal(p.getInventory().getAmount(obj("bowl_empty")), bowl ? 1 : 0, `${product} from ${usedWith}: bowl`);
+    assert.deepEqual(p.xp, xp ? [xp] : [], product);
+  }
+});
+
+test("chilli con carne goes every tick (Wiki: 1 tick); chopping every 2 and stops when the knife goes", () => {
+  const chilli = maker(11, [[obj("bowl_chilli"), 3], [obj("bowl_carne"), 3]]);
+  useItems(chilli, "bowl_chilli", "bowl_carne");
+  chilli.sent.menu.execute(obj("bowl_chilli+carne"), 3);
+  const made = () => chilli.getInventory().getAmount(obj("bowl_chilli+carne"));
+  ticks(1); assert.equal(made(), 1);
+  ticks(1); assert.equal(made(), 2);
+  ticks(1); assert.equal(made(), 3);
+  const p = maker(1, [[KNIFE, 1], [obj("onion"), 3], [obj("bowl_empty"), 3]]);
+  useItems(p, "onion", "bowl_empty");
+  assert.deepEqual(p.sent.menu.getItems(), [obj("bowl_onion")]);
+  p.sent.menu.execute(obj("bowl_onion"), 3);
+  const chopped = () => p.getInventory().getAmount(obj("bowl_onion"));
+  ticks(1); assert.equal(chopped(), 1);
+  ticks(1); assert.equal(chopped(), 1);
+  p.getInventory().deleteNumber(KNIFE, 1);
+  ticks(1); assert.equal(chopped(), 1, "no knife, no more chopping");
+  ticks(4); assert.equal(chopped(), 1);
+  assert.equal(p.getInventory().getAmount(obj("onion")), 2);
 });
 
 test("wine: a jug every 2 ticks with the captured animation, graphic and sound; the line on the last", () => {

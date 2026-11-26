@@ -25,6 +25,20 @@ export class PathFinder {
         lastEmittedAtMs: number;
     }>();
     private static readonly rsmodRouteFinding = new RsmodRouteFinding();
+    // Preserve native reach/shape rules without collision detours for noclip
+    // interaction routes as well as explicit ground walk clicks.
+    private static readonly unclippedRouteFinding = new RsmodRouteFinding(() => 0);
+    private static routeFinder(entity: Mobile): RsmodRouteFinding {
+        return isNoclip(entity) ? PathFinder.unclippedRouteFinding : PathFinder.rsmodRouteFinding;
+    }
+
+    /**
+     * The area an entity's routes read clipping from. Content checks a tile with a stand-in (a ladder's
+     * landing tile in ClimbLinks) that has only a private area, not a Mobile's walk clip area.
+     */
+    private static clipAreaOf(entity: Mobile): any {
+        return typeof entity.getWalkClipArea === "function" ? entity.getWalkClipArea() : entity.getPrivateArea?.() ?? null;
+    }
 
     private static log(line: string) {
         if (!PathFinder.LOG_ENABLED) {
@@ -166,6 +180,7 @@ export class PathFinder {
             moveNear?: boolean;
             blockAccessFlags?: number;
             maxWaypoints?: number;
+            allowPartialRoute?: boolean;
             requestedSize?: number;
             xLength?: number;
             yLength?: number;
@@ -183,7 +198,7 @@ export class PathFinder {
         const srcY = entity.getLocation().getY();
         const regionBaseX = entity.getLocation().getRegionX() << 3;
         const regionBaseY = entity.getLocation().getRegionY() << 3;
-        const route = PathFinder.rsmodRouteFinding.findRoute({
+        const route = PathFinder.routeFinder(entity).findRoute({
             level: height,
             srcX,
             srcY,
@@ -198,7 +213,8 @@ export class PathFinder {
             blockAccessFlags: options.blockAccessFlags ?? 0,
             // Matches OSRS's 25-checkpoint path cap (see RsmodRouteFinding's default).
             maxWaypoints: options.maxWaypoints ?? 25,
-            privateArea: entity.getPrivateArea(),
+            allowPartialRoute: options.allowPartialRoute ?? false,
+            privateArea: PathFinder.clipAreaOf(entity),
         });
 
         if (!route.success) {
@@ -241,7 +257,7 @@ export class PathFinder {
     }
 
     public static reachedEntity(entity: Mobile, target: Mobile): boolean {
-        return PathFinder.rsmodRouteFinding.reachedAbsolute({
+        return PathFinder.routeFinder(entity).reachedAbsolute({
             level: entity.getLocation().getZ(),
             srcX: entity.getLocation().getX(),
             srcY: entity.getLocation().getY(),
@@ -251,7 +267,7 @@ export class PathFinder {
             destWidth: Math.max(target.getSize(), 1),
             destLength: Math.max(target.getSize(), 1),
             locShape: -2,
-            privateArea: entity.getPrivateArea(),
+            privateArea: PathFinder.clipAreaOf(entity),
         });
     }
 
@@ -265,7 +281,7 @@ export class PathFinder {
         locShape: number,
         blockAccessFlags: number
     ): boolean {
-        return PathFinder.rsmodRouteFinding.reachedAbsolute({
+        return PathFinder.routeFinder(entity).reachedAbsolute({
             level: entity.getLocation().getZ(),
             srcX: entity.getLocation().getX(),
             srcY: entity.getLocation().getY(),
@@ -277,7 +293,7 @@ export class PathFinder {
             locAngle,
             locShape,
             blockAccessFlags,
-            privateArea: entity.getPrivateArea(),
+            privateArea: PathFinder.clipAreaOf(entity),
         });
     }
 
@@ -316,7 +332,7 @@ export class PathFinder {
     static isOnEntityRouteEnd(player: Mobile, target: Mobile, range = 1): boolean {
         const { destX, destY, destinationSize } = PathFinder.entityRouteArea(target, range);
         const location = player.getLocation();
-        const route = PathFinder.rsmodRouteFinding.findRoute({
+        const route = PathFinder.routeFinder(player).findRoute({
             level: location.getZ(),
             srcX: location.getX(),
             srcY: location.getY(),
@@ -330,7 +346,7 @@ export class PathFinder {
             moveNear: true,
             blockAccessFlags: 0,
             maxWaypoints: 25,
-            privateArea: player.getPrivateArea(),
+            privateArea: PathFinder.clipAreaOf(player),
         });
         return route.success && route.waypoints.length === 0;
     }
@@ -356,7 +372,7 @@ export class PathFinder {
 
         for (const destination of destinations) {
             if (destination.getZ() !== level) continue;
-            const route = PathFinder.rsmodRouteFinding.findRoute({
+            const route = PathFinder.routeFinder(player).findRoute({
                 level,
                 srcX,
                 srcY,
@@ -367,7 +383,7 @@ export class PathFinder {
                 destLength: 1,
                 locShape: -1,
                 moveNear: false,
-                privateArea: player.getPrivateArea(),
+                privateArea: PathFinder.clipAreaOf(player),
             });
             if (!route.success) continue;
 
@@ -438,7 +454,7 @@ export class PathFinder {
         );
     }
 
-    static calculateWalkRoute(player: Mobile, destX: number, destY: number) {
+    static calculateWalkRoute(player: Mobile, destX: number, destY: number, allowPartialRoute = false) {
         if (player.isPlayer()) {
             PathFinder.log(
                 `calculateWalkRoute entity=player:${player.getAsPlayer().getUsername()} from=${player.getLocation().getX()},${player.getLocation().getY()},${player.getLocation().getZ()} to=${destX},${destY}`
@@ -449,6 +465,7 @@ export class PathFinder {
         return PathFinder.applyRsmodRoute(player, destX, destY, {
             locShape: -1,
             moveNear: true,
+            allowPartialRoute,
         });
     }
 
@@ -475,7 +492,7 @@ export class PathFinder {
         if (PathFinder.reachedTile(entity, destination)) {
             return true;
         }
-        return PathFinder.rsmodRouteFinding.reachedAbsolute({
+        return PathFinder.routeFinder(entity).reachedAbsolute({
             level: entity.getLocation().getZ(),
             srcX: entity.getLocation().getX(),
             srcY: entity.getLocation().getY(),
@@ -485,7 +502,7 @@ export class PathFinder {
             destWidth: 1,
             destLength: 1,
             locShape: -2,
-            privateArea: entity.getPrivateArea(),
+            privateArea: PathFinder.clipAreaOf(entity),
         });
     }
 

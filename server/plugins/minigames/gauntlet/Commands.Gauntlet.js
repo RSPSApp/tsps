@@ -24,15 +24,11 @@ function buildMap({ player, parts }) {
   return true;
 }
 
-/** ::gauntletstart [corrupted] - starts a run without Bryn's checks; your hands must be empty. */
+/** ::gauntletstart [corrupted] - starts a run without Bryn's checks, storing carried items normally. */
 function startRun({ player, parts }) {
   const corrupted = (parts?.slice(1) ?? []).some((arg) => arg.toLowerCase() === "corrupted");
   if (Run.runOf(player)) {
     player.sendMessage("You are already in a Gauntlet run.");
-    return true;
-  }
-  if (!Shared.isEmptyHanded(player)) {
-    player.sendMessage("Bank your inventory and equipment first: a run takes everything you carry when it ends.");
     return true;
   }
   Run.startRun(player, { corrupted });
@@ -41,7 +37,7 @@ function startRun({ player, parts }) {
 
 /** ::gauntletboss - ends the preparation now and takes you to the Hunllef. */
 function skipToBoss({ player }) {
-  const run = Run.runOf(player);
+  const run = Run.runInside(player);
   if (!run || run.stage !== "prep") {
     player.sendMessage("Start a Gauntlet run before using ::gauntletboss.");
     return true;
@@ -52,7 +48,7 @@ function skipToBoss({ player }) {
 
 /** ::gauntlettime <seconds> - sets the preparation time left. */
 function setPrepTime({ player, parts }) {
-  const run = Run.runOf(player);
+  const run = Run.runInside(player);
   const seconds = Number(parts?.[1]);
   if (!run || run.stage !== "prep" || !Number.isFinite(seconds) || seconds < 0) {
     player.sendMessage("Use ::gauntlettime <seconds> during a run's preparation.");
@@ -72,8 +68,8 @@ const EGNIOL_4 = 23885;
  * the halberd, four Egniol potions, four crystal paddlefish and paddlefish in the rest.
  */
 function gearUp({ player, parts }) {
-  const run = Run.runOf(player);
-  if (!run) {
+  const run = Run.runInside(player);
+  if (!run || (run.stage !== "prep" && run.stage !== "boss")) {
     player.sendMessage("Start a Gauntlet run before using ::gauntletgear.");
     return true;
   }

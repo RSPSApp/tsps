@@ -72,6 +72,9 @@ const COMBAT_LEVEL_ATTRIBUTE = "level-up:combat-level";
 // The combat level the queued combat pop-up started from, or undefined when none is queued.
 const COMBAT_POPUP_FROM_ATTRIBUTE = "level-up:combat-popup-from";
 const POPUP_OPENED_EVENT = "level-up:popup-opened";
+// { player, skill, oldLevel, newLevel, unlocks }: a skill level-up is being announced (after any
+// conversation); unlocks is whether the levels gained unlock anything.
+const ANNOUNCED_EVENT = "level-up:announced";
 
 // What the game tells the player they just unlocked, per skill and level, as the OSRS Wiki
 // records it (see the file's _source). A nested entry carries the transcript's own qualifier.
@@ -326,6 +329,9 @@ function awaitDialogueEnd(event) {
 function announceLevelUp({ player, skill, oldLevel, newLevel }) {
   const skills = player.getSkillManager();
   const name = skill.getName();
+  // Before the message, as live sends the skill guide's levelup_list varbit (SkillGuide).
+  const unlocks = unlockEntries(player, skill, oldLevel, newLevel).length > 0;
+  pluginApi.emitCustomEvent(ANNOUNCED_EVENT, { player, skill, oldLevel, newLevel, unlocks });
   if (newLevel >= MAX_LEVEL) {
     celebrate(player, `Congratulations, you've reached the highest possible ${name} level of ${MAX_LEVEL}.`, LEVELUP_99_ANIM);
     pluginApi.core.World.sendMessage(`<shad=15536940>News: ${player.getDisplayName()} has just achieved the highest possible level in ${name}!`);

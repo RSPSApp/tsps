@@ -222,7 +222,9 @@ function handleRingAction(event, action) {
   } else if (action.type === "coin-collection") {
     toggleAutoCollect(event.player);
   } else {
-    event.player.sendMessage("Boss log is not available yet.");
+    const open = { player: event.player, log: "boss", handled: false };
+    pluginApi.emitCustomEvent("kill-log:open", open);
+    if (!open.handled) event.player.sendMessage("Boss log is not available yet.");
   }
   return true;
 }
@@ -315,6 +317,8 @@ module.exports = {
 
     api.onPlayerDeathItemDrop((event) => removeImbueOnDeath(event, itemOnGroundManager));
     api.onCustomEvent("items:lost-to-pvp-killer", answerLostToPvpKiller);
+    require("./JewelleryPlaceholders")(api, [false, true].map(imbued =>
+      [...CHARGED_RINGS].filter(([, state]) => Boolean(state.imbued) === imbued).map(([id]) => id)));
   },
   isWearingRingOfWealth,
   isWearingImbuedRingOfWealth,

@@ -78,7 +78,7 @@ function boxTrapsUnlocked(player) {
 function groundTileOccupied(player, kind, location) {
   const area = player.getPrivateArea();
   if (H.core.RegionManager.blocked(location, area)) return true;
-  if (kind === "box") {
+  if (kind === "box" || kind === "bird") {
     return H.core.ObjectManager.objectsAt(location).some(object => object.getPrivateArea() === area
       && !object.getOwner() && (object.getType() === 10 || object.getType() === 22));
   }
@@ -160,11 +160,13 @@ function setState(trap, state, creature = null, animatedId = null) {
   const def = H.data.traps[trap.kind];
   const id = animatedId ?? (state === "caught" ? creature.caught : state === "failed" ? def.fail : def.idle);
   const base = trap.base;
-  if (def.tree && state === "idle") {
-    spawn(trap, def.idleTree, base.getLocation(), base.getType(), base.getFace());
+  if (def.tree && (state === "idle" || state === "failed")) {
+    // A set net trap stands as the set tree and its net. Since the 7 October 2026 update a missed one stands as the reset
+    // tree and net (Dismantle, Reset) for the same minute, then collapses: rsprox 241/911545, 242/911710, 242/912180.
+    spawn(trap, state === "idle" ? def.idleTree : def.failTree, base.getLocation(), base.getType(), base.getFace());
     spawn(trap, id, netTile(trap), base.getType(), base.getFace());
   } else if (def.tree) {
-    // The closing, caught and failed nets are one 1x2 loc over the tree and net tiles, placed on the south-west one.
+    // The closing and caught nets are one 1x2 loc over the tree and net tiles, placed on the south-west one.
     const tree = base.getLocation(), net = netTile(trap);
     const loc = new H.core.Location(Math.min(tree.getX(), net.getX()), Math.min(tree.getY(), net.getY()), tree.getZ());
     spawn(trap, id, loc, base.getType(), base.getFace());
@@ -537,10 +539,15 @@ function lureInterval(trap) {
   return Math.max(1, request.ticks | 0);
 }
 
+/** The adult tecu salamander's row on a league's Boosted drops page, and its 1-in-n. */
+const TECU_SOURCE = "Hunting";
+const TECU_CHANCE = 1000;
+
 function catchRewards(trap) {
   const I = H.core.ItemIdentifiers, N = H.core.NpcIdentifiers;
   const items = rewardItems(trap.creature.loot);
-  if (trap.kind === "tecu" && roll(1, 1000) === 1) items[0][0] = I.TECU_SALAMANDER;
+  // A tecu salamander is 1 in 1,000 (a league's boosted drops: "drops:chance", source "Hunting").
+  if (trap.kind === "tecu" && roll(1, TECU_CHANCE) <= C.dropMultiplier(trap.player, TECU_SOURCE, I.TECU_SALAMANDER)) items[0][0] = I.TECU_SALAMANDER;
   if (trap.kind === "monkey" && roll(1, 5000) === 1) items[0][0] = I.MONKEY_TAIL;
   const furs = { [N.SPINED_LARUPIA]: [I.LARUPIA_FUR, I.TATTY_LARUPIA_FUR, I.RAW_LARUPIA],
     [N.HORNED_GRAAHK]: [I.GRAAHK_FUR, I.TATTY_GRAAHK_FUR, I.RAW_GRAAHK],
@@ -563,4 +570,4 @@ function cleanup({ player }) {
 }
 
 module.exports = { activate, groundActivate, build, check, dismantle, reset, investigate, bait, process, cleanup,
-  find, owned, limit, materials, remove, lay, setState, setPitState, returnedItems };
+  find, owned, limit, materials, remove, lay, setState, setPitState, returnedItems, catchRewards };

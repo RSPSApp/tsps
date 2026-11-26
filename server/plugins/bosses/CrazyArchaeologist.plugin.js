@@ -28,10 +28,14 @@ const Attack = {
 const SPECIAL_IMPACT_TICKS = 4;
 /** One book splits and its two books explode "after a delay" (Wiki); the length is an approximation. */
 const BURST_IMPACT_TICKS = 2;
+/** Do not start another attack until the split books have exploded. */
+const SPECIAL_SEQUENCE_TICKS = SPECIAL_IMPACT_TICKS + BURST_IMPACT_TICKS;
 /** The two other books land beside the player's tile (the Wiki gives no radius). */
 const SPECIAL_SCATTER_RADIUS = 1;
 /** "24 (special)" (Wiki infobox); the standard attack's 14 comes from the NPC's definition. */
 const SPECIAL_MAX_HIT = 24;
+/** The Wiki lists a 15-tick (9-second) respawn. */
+const RESPAWN_TICKS = 15;
 
 let TaskManager;
 let core;
@@ -178,7 +182,7 @@ function combatClass(api) {
           () => {
             this.explodeBooks(character, target, opened, z);
             const burst = burstSpecialTiles(centre, opened, (max) => Misc.getRandom(max));
-            this.throwBooks(character, burst, z);
+            this.throwBooks(character, burst, z, new Location(centre.x, centre.y, z));
             TaskManager.submit(
               new CrazyTask(
                 BURST_IMPACT_TICKS,
@@ -192,13 +196,13 @@ function combatClass(api) {
           false
         )
       );
-      character.getCombat().setAttackDelay(5);
+      character.getCombat().setAttackDelay(SPECIAL_SEQUENCE_TICKS);
     }
 
-    throwBooks(character, tiles, z) {
+    throwBooks(character, tiles, z, start = character.getLocation()) {
       for (const book of tiles) {
         new Projectile(
-          character.getLocation(),
+          start,
           new Location(book.x, book.y, z),
           null,
           1260,
@@ -267,6 +271,10 @@ function crazyDeath({ npc }) {
   npc.forceChat(DEATH_LINE);
 }
 
+function setRespawn({ NpcDefinition, NpcIdentifiers }) {
+  NpcDefinition.forId(NpcIdentifiers.CRAZY_ARCHAEOLOGIST).setRespawn(RESPAWN_TICKS);
+}
+
 function attachCombat(api) {
   core = api.core;
   api.registerNpcCombatMethodProvider(
@@ -282,6 +290,7 @@ module.exports = {
   members: true,
   register(api) {
     attachCombat(api);
+    api.onServerStartup(setRespawn.bind(null, api.core));
     api.onNpcBeforeDeath(crazyDeath);
   },
   _test: {

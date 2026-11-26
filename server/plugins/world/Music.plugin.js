@@ -6,6 +6,7 @@ const Playlists = require("./Playlists.Music");
 
 const COINS = 995;
 const CAPE_PRICE = 99000;
+const CAPE_TELEPORT = [2689, 3550, 0];
 const AIR_GUITAR_VARBIT = 4673;
 const MUSIC_GROUP_ID = 239;
 const MUSIC_JUKEBOX_CHILD_ID = 11;
@@ -16,6 +17,8 @@ const MUSIC_NOW_PLAYING_REFRESH_SCRIPT = 3936;
 const MUSIC_JUKEBOX_ROW_FLAGS = 62;
 const MUSIC_NOW_PLAYING_FLAGS = 60;
 const WELCOME_PLAY_BUTTON_UID = (378 << 16) | 72;
+// Cache Music DB rows 2956/2957: the two songs a Church organ can play (Wiki: Church organ).
+const CHURCH_ORGAN_TRACKS = [39, 40];
 /** The Music tab's Area, Shuffle and Single mode buttons and Skip Track, by the mode each sets. */
 const MODE_BUTTONS = new Map([[14, 0], [15, 1], [16, 2]].map(([child, mode]) => [(MUSIC_GROUP_ID << 16) | child, mode]));
 const SKIP_BUTTON_UID = (MUSIC_GROUP_ID << 16) | 17;
@@ -264,7 +267,7 @@ function capeAction(event) {
     }
     // The usual teleport checks, as the other skill capes make (Common.SkillCapes teleport): Wilderness level,
     // teleblock, busy, and the area's and plugins' own refusals (jail, instances, duels).
-    const destination = new core.Location(2689, 3550, 0);
+    const destination = new core.Location(...CAPE_TELEPORT);
     if (!core.TeleportHandler.checkReqs(player, destination)) return;
     core.TeleportHandler.confirm(player, destination, () => core.TeleportHandler.teleport(player, destination, core.TeleportType.NORMAL, false));
   } else if (option === (itemId === core.ItemIdentifiers.MUSIC_CAPE ? "trim" : "untrim")) {
@@ -335,6 +338,14 @@ function selectMusicTrack(event) {
   player.getSession().setCurrentMusicTrack(track.id);
   // The real sender also announces audio:play-song, including to Treasure Trails' Cecilia listener.
   player.getPacketSender().sendSong(track.id);
+}
+
+/** Church organs use normal music volume, without changing the player's music mode or playlists. */
+function playChurchOrgan({ player }) {
+  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId("human_use_chapel_organ")));
+  const track = CHURCH_ORGAN_TRACKS[Math.floor(Math.random() * CHURCH_ORGAN_TRACKS.length)];
+  player.getPacketSender().sendSong(track);
+  return true;
 }
 
 function onMusicLogin({ player }) {
@@ -641,12 +652,17 @@ function buildSelectableTracks(tracks) {
     .map(row => ({ ...tracksByRow.get(row.id), released: row.int(13, 1) === 1 }));
 }
 
+function describeTeleports({ list }) {
+  list.push({ path: ["Skillcapes", "Music cape"], key: "falo", name: "Falo the Bard", tile: [...CAPE_TELEPORT] });
+}
+
 module.exports = {
   name: "Music",
   description: "The music tab: track unlocking, jukebox selection, now-playing, the music cape from Olaf the Bard and air guitar unlock.",
   register(api) {
     core = api.core;
     pluginApi = api;
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     const tracks = core.Music.tracks();
     selectableTracks = buildSelectableTracks(tracks);
     trackNames = Object.fromEntries(tracks.map(({ id, name }) => [id, name]));
@@ -682,6 +698,7 @@ module.exports = {
     api.persistAttribute(SELECTED_TRACK_ATTRIBUTE, -1);
     api.persistAttribute(Playlists.PLAYLISTS_ATTRIBUTE, []);
     api.onPlayerLogin(onMusicLogin);
+    api.onObjectInteraction("Church organ", { Play: playChurchOrgan });
     api.onInterfaceActionButton(WELCOME_PLAY_BUTTON_UID, onMusicWelcomeAction);
     api.onCustomEvent("gameframe:ready", onMusicWelcomeAction);
     api.onInterfaceActionButton((MUSIC_GROUP_ID << 16) | MUSIC_JUKEBOX_CHILD_ID, selectMusicTrack);

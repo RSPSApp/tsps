@@ -673,11 +673,13 @@ function unmet(player, requirement, levelMessage) {
     pluginApi.emitCustomEvent(stage === "started" ? "quest:is-started" : "quest:is-complete", request);
     if ((stage === "started" ? request.started : request.complete) === false) return message;
   }
-  if (requirement.diary?.enforce) {
-    const { key, tier, message } = requirement.diary;
-    const request = { player, diary: key, tier, complete: null };
-    pluginApi.emitCustomEvent("diary:is-complete", request);
-    if (request.complete === false) return message;
+  if (requirement.diary) {
+    // A diary no plugin answers for is no bar, as with quests. `claimed`: the tier's reward must
+    // have been taken too, not only its tasks done.
+    const { key, tier, claimed, message } = requirement.diary;
+    const request = { player, diary: key, tier, complete: null, claimed: null };
+    pluginApi.emitCustomEvent(claimed ? "diary:is-reward-claimed" : "diary:is-complete", request);
+    if ((claimed ? request.claimed : request.complete) === false) return message;
   }
   if (requirement.slayerTask) {
     const request = { player, task: null };
@@ -733,7 +735,9 @@ function attemptObstacle(player, context, entry) {
   const forced = obstacle.forceFail?.(context) ?? null;
   const fail = forced ?? obstacle.fail;
   // Content may make the roll succeed ("agility:roll", a league relic); a forced failure stays one.
-  const roll = { player, objectId, success: !forced && rollSuccess(player, obstacle, level) };
+  // `canFail` (a scripted shortcut's) says whether this way across can fail at all (Brimhaven's lava stones: only southwards).
+  const safe = !forced && obstacle.canFail?.(context) === false;
+  const roll = { player, objectId, success: !forced && (safe || rollSuccess(player, obstacle, level)) };
   if (!forced) pluginApi.emitCustomEvent("agility:roll", roll);
   const success = roll.success;
   const resolved = resolve(success ? obstacle.steps : fail.steps, context);
@@ -770,7 +774,7 @@ function attemptObstacle(player, context, entry) {
             actionStart?.[0] === start[0] && actionStart?.[1] === start[1] && actionStart?.[2] === start[2] &&
             location.getX() === landing[0] && location.getY() === landing[1] && location.getZ() === landing[2]) &&
           actionPrivateArea == null && (player.getPrivateArea?.() ?? null) == null &&
-          player.getHitpoints() > 0 && !logoutObstacleCompletions.has(player)
+          player.getHitpoints() > 0 && !logoutObstacleCompletions.has(player) && !player.isLoggingOut?.()
         ) {
           pluginApi.emitCustomEvent("agility:yanille-grapple", {
             player,

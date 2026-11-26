@@ -43,6 +43,9 @@ function later(ticks, action) {
   })());
 }
 
+/** The ordinary post-quest boss, whose later mechanics are captured in R1140. */
+const isPostQuestFight = (session) => !session.quest && session.variant !== "echo";
+
 const toLocation = ([x, y, z]) => new core.Location(x, y, z ?? 0);
 
 const randomInt = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
@@ -100,7 +103,7 @@ function formatTicks(ticks) {
 }
 
 module.exports = {
-  init, later, toLocation, randomInt, travel, areaSound, tileGraphic, formatTicks,
+  init, later, isPostQuestFight, toLocation, randomInt, travel, areaSound, tileGraphic, formatTicks,
   KILLS_ATTRIBUTE, BEST_TICKS_ATTRIBUTE, INSIDE_ATTRIBUTE,
   get api() { return api; },
   get core() { return core; },

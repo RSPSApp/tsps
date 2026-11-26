@@ -170,7 +170,7 @@ relics are the first askers; nothing changes when nobody answers):
 | `shop:can-sell`, `shop:sell-price` (extended) | core `ShopManager` | the existing payloads now carry `player` (when a player is selling) and `currency` |
 | `magic:alchemy-policy` (extended) | core `MagicOnItemPacketListener` | asked before the level check (the zone rules still follow it), now with `requiredLevel`, `freeRunes`, `keepItem` and `recast` (cast again on the slot once this cast ends while it holds the same item); a plugin that turns the cast into something else (Mage Training Arena, While Guthix Sleeps) clears `confirm`, `keepItem` and `recast` |
 | `bone-altars:offering` | BoneAltars | `{ player, itemId, boneItemId, cost, anyAltar }`: an item that is not a bone offered as `boneItemId`, `cost` of it an offering, and with `anyAltar` on any altar one prays at (the bone's burying XP; a private area's altars, a house's, stay its own) |
-| `farming:plant-rules` | Farming, as a seed or sapling is planted | `{ player, crop, seedId, patch, keepSeed, grown, diseaseFree, undying, message }`: a line said after the planting's own; keep the seed, grow the crop at once (not anima plants), keep it from disease, or keep a diseased crop from dying (it waits for a cure); the last two are kept on the patch's state |
+| `farming:plant-rules` | Farming, as a seed or sapling is planted | `{ player, crop, seedId, patch, keepSeed, grown, diseaseFree, undying, line, message }`: `line` words the planting's own spam line (empty for none; Enlightened Journey's sapling), `message` a line said after it; keep the seed, grow the crop at once (not anima plants), keep it from disease, or keep a diseased crop from dying (it waits for a cure); the last two are kept on the patch's state |
 | `farming:level-rules` | Farming, as a seed or sapling is planted, a seedling made or a scarecrow made or placed without the level | `{ player, kind, required, waived }`: `kind` is `plant`, `seedling` or `scarecrow`; set `waived` to let the player do it anyway |
 | `farming:check-health` | Farming, after a grown crop's health check | `{ player, crop, type, patch, experience }`: `experience` is the check's Farming XP |
 | `runecrafting:essence` | Runecrafting, at an altar that binds pure essence (the Ourania Altar and the combination runes too) or Kourend's dark essence fragments | `{ player, dark, pure }`: push item ids that bind there as pure essence would, or with `dark` as the fragments would |
@@ -827,7 +827,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | Tier | Relic | State |
 | --- | --- | --- |
 | 1 | Endless Harvest | done (Trailblazer Reloaded's unit; banking by toggle, resources never deplete) |
-| 1 | Barbarian Gathering | partial: second chance, Strength/Agility XP, bare hands that fish without bait (`fishing:tool`) and chop and mine as the crystal axe and pickaxe (`woodcutting:tool`, `mining:tool`); not the Knapsack's storage: its Fill, Check, Open/Close and Dispose (and the bank's Empty) have no recording and no line in the Wiki, and no Leagues VI recording carries the knapsack |
+| 1 | Barbarian Gathering | partial: second chance, Strength/Agility XP, bare hands that fish without bait (`fishing:tool`) and chop and mine as the crystal axe and pickaxe (`woodcutting:tool`, `mining:tool`); the Knapsack's storage, a StorageItems container (3 kinds, 140 in all; Fill, Check, Open/Close, Dispose asking which kind, banked by the bank's Empty containers and Empty; Hotfoot's products go in: docs/storage-items.md). Not the Leagues Tutor's replacement of a lost Knapsack. No recording has the Knapsack, so its lines are ours |
 | 1 | Abundance | done: the +10 is a visible, permanent boost of every non-combat skill's current level with the resting level raised to match, as the Defence pact's (233/246 Leagues VI recordings: base + 10, Slayer and Sailing too, combat skills unboosted, kept through level-ups) |
 | 2 | Hotfoot | partial: cooked fish, smelted ore, running XP in the boots (10 + floor(Agility x 2/3) every 10 ticks of 2-tile moves, Wiki: Searing boots), laps counted twice with +25% XP, no failures, a 33% mark chance on the nine rooftop courses (`agility:mark-chance`; the mark cooldown still runs), a picked-up course mark or Colossal Wyrm termites finishing the lap with 10,000 coins (`agility:mark-taken`, `agility:course-find-taken`), Prifddinas's portal shards tenfold and the Wyrm courses' termites twofold (`agility:course-item`; the portal's own shard and line, 237/01149, are new to the course), the Brimhaven arena's tickets and vouchers twofold (`minigame:points`) |
 | 2 | Friendly Forager | partial: Raging Echoes' unit, plus Herblore at once and 100 of each herb (Wiki, 15 April 2026); the recorded lines, the Withdraw menu and the bank's Empty. Not the worn Withdraw-all and Withdraw-last (their behaviour is in no source), nor the herb sack's shared store (Wiki: it shares the silklined herb sack's) |
@@ -837,7 +837,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 3 | Map of Alacrity | partial: 73 of the Wiki map's 141 shortcuts, those the server has with a side the pin and the data agree on, or that the shortcut's Wiki page names (`league-map-of-alacrity.json`, which lists the rest and why), no Agility level to teleport (Wiki: the shortcut keeps its own), the Wiki's "to use the teleport" quest notes, interface 187's menus as Evil Eye's; its own cast (hotfoot_grace_teleport, leagues_6_hotfoot; inferred, unrecorded) |
 | 4 | Transmute | done: Alchemic Divergence and Convergence (218:199, 218:200) move up to 10 of an item a tier along the cache's `transmutation` table, 10 Magic XP each, no level or runes, every 5 ticks, a stack cast on again while its slot holds it, noted stays noted, to the bank by toggle, loose items in place, 10 or fewer held with no free slot, more held only with a slot for each of the 10 (237/01102, 01106, 238/04211); the alchemy spell while toggled off; the ledger's endless nature runes and its scroll for an item used on it; not Divergence on a top tier (unrecorded), the ledger's Read (nothing says what it shows), or which skilling pauses the casts |
 | 4 | Conniving Clues | done |
-| 4 | Butler's Bell | done but for the bell's Check (its line is in no source): Ring summons the Demon butler beside its owner (not in an instance; in view, he asks to be spoken to), one job of the cache's butlers_bell_actions at its rate a minute or half that processed, rolled on the Wiki's weighted tables, reckoned from the clock (offline too), 10 XP a processed item in the row's skill; Talk-to and Collect as the Wiki transcript, the collection shown on 954. Ours, unsourced: the job menu (the cache's nouns), where he stands and when he leaves, the collection banked (`league-butlers-bell.json` `_ours`) |
+| 4 | Butler's Bell | done but for the bell's Check (its line is in no source): Ring summons the Demon butler beside its owner (not in an instance; in view, he asks to be spoken to), one job of the cache's butlers_bell_actions at its rate a minute or half that processed, rolled on the Wiki's weighted tables, reckoned from the clock (offline too), 10 XP a processed item in the row's skill; Talk-to and Collect as the Wiki transcript, the collection shown on 954. Ours, unsourced: the job menu (the cache's nouns), where he stands and when he leaves, the collection banked, and the stop at the change's collection (his work stops until a new job is assigned — nothing accrues while the player is away or re-talks, offline too; a request left half-done leaves the old job running, as live); the new-job flow itself (apology, collection, conversation ended; the player re-talks for the new job) is the live transcript's (`league-butlers-bell.json` `_ours`) |
 | 5 | Nature's Accord | partial: noted yields, undying crops, kept seeds, the Fairy mushroom, no Farming level to plant, make a seedling or a scarecrow (`farming:level-rules`); not the spirit tree count, the Tithe Farm's seeds, or Tree Gnome Village on unlock |
 | 5 | Larcenist | partial: sure pickpockets, tenfold pouches and noted loot, repeats, stalls that stay stocked and guards that never catch you (`thieving:stall-watch`); a repeating pickpocket follows the NPC as it wanders (1104-1106: the player steps with it, no clicks, an attempt every 2 ticks until a click or the pouch limit); not the Varlamore house valuables: house thieving (stealing valuables) is not on the server, a minigame of its own |
 | 5 | Soul Harvest | partial: shards from bones, ashes (our 0.8 x XP; the Wiki gives none), crops and health checks (`farming:check-health`), bound as pure essence, at the Ourania Altar and for combination runes too, and as dark essence fragments at Kourend's Blood Altar (`runecrafting:essence`), and sacrificed at the Teomat's libation bowl (550 Prayer XP a 100, no wine; the pace and lines are ours); not the minigame altars |
@@ -1294,7 +1294,10 @@ Tier 1 counts once the character chose its first relic.
   casket's Open and the Mimic's reward share `Rolls.uniqueMultiplier`). Kills whose
   table NpcDrops rolls are covered as they are, Araxxor's and Zalcano's included (their plugins
   roll through NpcDrops with the NPC named); the giant lairs' chests pass `source` (Obor,
-  Bryophyta). Revenant kills (the revenant's name; the Revenant maledictus's two rolls too) ask
+  Bryophyta). The Desert Treasure II bosses' uniques and Awakener's orb are stages of an ordered reward
+  chain ([docs/npc-drops-ordered.md](npc-drops-ordered.md)): the rule scales the stage by its rows, so
+  each boosted row that many times as likely (at 5x the Whisperer's 1/512 bellator vestige is 1/102; the
+  chromium ingot in the same stage is Trailblazer Reloaded's row alone, so in Demonic Pacts it keeps its rate). Revenant kills (the revenant's name; the Revenant maledictus's two rolls too) ask
   `drops:chance` for their own table's unique and ancient artefact rolls, and the Barrows chest
   asks with `Barrows` for its equipment roll: a boosted row's weight grows and its table's
   chance with it, as NpcDrops does. The raids' unique rolls ask per raider with `Chambers of
@@ -1311,12 +1314,33 @@ Tier 1 counts once the character chose its first relic.
   Pyramid Plunder's sceptre (`Pyramid plunder`), the Grand Hallowed Coffin's ring of endurance,
   Fishing Trawler's angler pieces, Tai Bwo Wannai's gout tuber and, in Raging Echoes and Demonic
   Pacts, aerial fishing's golden tench (the coffins' strange lockpick is not on the pages).
-  Sources rolled by their own plugins are in the data but inert until that plugin asks
-  `drops:chance` with the source's name: the Grotesque Guardians, Corporeal Beast's sigils (not
-  on its table here), the Gauntlet, Moons of Peril, the Colosseum, Hunter rumours, the Shrine,
-  the seed pack, the Fountain of Rune, Larran's and the brimstone chest, the Zombie Pirate's
-  Locker, chewed bones, the Volcanic Mine ore pack, Shades of Mort'ton, and the pickpocketed
-  blood shards (vyres) and teleport seeds (elves).
+  The Gauntlet's reward chest (`The Gauntlet`, `The Corrupted Gauntlet`) boosts the crystal
+  seeds' own 1-in-n rolls (not the clue or Youngllef); the Lunar Chest (`Moons of Peril`) each
+  Moon's 1/56 unique roll (not the standard table or Eyatlalli); each Fortis Colosseum wave
+  (`Fortis Colosseum`) the echo crystal (the page's echo boots row), sunfire fanatic and
+  Tonalztics rows, multiplied in the wave's table while the other rows share what is left (not
+  the pet); a Doom of Mokhaiotl delve (`Doom of Mokhaiotl`, Demonic Pacts) its unique roll (not
+  Dom); and a pickpocket target's `dropSource` (pickpocketing.json) its `first` rolls: vyres'
+  blood shard (`Vyre`) and Prifddinas elves' teleport seed (`Elf (Thieving)`).
+  The key chests ask `drops:chance` with the chest's name for their pre-rolls: Larran's big
+  chest, the brimstone chest, the Zombie Pirate's Locker and the Elven Crystal Chest (the page's
+  Enhanced crystal chest; the dragonstone armour, not the onyx). The Grotesque Guardians roll
+  their own table through NpcDrops with Dusk named, and Corporeal Beast's sigils are a pre-roll
+  group of its table. Item names are matched whole, as the tables name them: Hueycoatl's
+  `Tooth half of key (moon key)` and the frost nagua's `Pendant of Ates (inert)` take a
+  `/^.../` pattern, and Araxxor's row names the `Araxyte fang` its table drops for the amulet of
+  rancour (`tests/league-boosted-drops-data.test.cjs` checks every NPC row against its tables).
+  Hunter's own rares ask with their rows' names (`dropMultiplier` in `Context.Hunter.js`): the
+  loot sacks' four 1/50 rares (`Hunter rumours`), the adult tecu salamander's 1/1,000 (`Hunting`)
+  and the crystal impling's 1/128 elven signet (`Crystal impling`).
+  The other own rolls ask with their rows' names too: the Warriors' Guild cyclopes' defender
+  (`Cyclops`; 1/50 upstairs, 1/100 for the dragon defender), Vale offerings' unique pre-roll
+  (`Vale offerings`; 1/100 times the uniques' boosts averaged by their weights, so each keeps its
+  share), each high-tier seed pack roll's Hespori seed (`Seed pack`; its own chance that many
+  times, the other seeds sharing the rest), a silver chest's runescroll roll (`Shades of
+  Mort'ton`) and a glory's 1/25,000 at the Fountain of Rune (`Fountain of Rune`).
+  Sources in the data that nothing asks for yet: the Shrine, chewed bones (no dragon full helm
+  from them here) and the Volcanic Mine ore pack.
 - **Minigame points** (Trailblazer Reloaded 3x/5x/8x from tiers 2/5/7; Raging Echoes and Demonic
   Pacts 4x/8x from tiers 1/4): a minigame asks `minigame:points { player, minigame, points }` as it awards and
   the league multiplies `points` (floored) when the passive's `minigames` (leagues.json) lists it. Other
@@ -1346,6 +1370,22 @@ Demonic Pacts' passives are Raging Echoes' but for the combat XP, from the tier 
 this cache (struct 6436's tier enum, param 1020). Its boosted drops rest on the drop tables this
 server has: the Wiki's "every Desert Treasure II boss drops every Soulreaper axe piece" is a boost
 on the pieces each boss already drops here, not a new drop.
+
+Its combo boss drops, as Raging Echoes' ([Wiki](https://oldschool.runescape.wiki/w/Demonic_Pacts_League#Combo_boss_drops),
+[Raging Echoes](https://oldschool.runescape.wiki/w/Raging_Echoes_League#Combo_boss_drops)): a part that
+needs other regions to become usable drops as the finished item, for every character of either league
+(relics or not); Doom's cloth is Demonic Pacts' only, the adamant and rune dragons' slice and lump
+(as the dragon kiteshield and platebody) Raging Echoes' only, and the hydra tail is finished from the
+Alchemical Hydra only (ordinary hydras drop it too). `league/ComboDrops.LeagueMode.js` swaps them by
+`data/league-combo-drops.json` (cache gamevals) on the rollers' loot before it is kept: NPC kills
+and the bosses rolling through NpcDrops (`npc-drops:roll`: the Grotesque Guardians' core, Araxxor's
+fang, the Alchemical Hydra's claw, leather and tail, Cerberus's eternal crystal, Phantom Muspah's
+icon, Zulrah's magic fang, the four Desert Treasure II vestiges) and Doom of Mokhaiotl's cloth (its
+descent then asks nothing: the warning is for the delve's own uniques), and
+the rollers that emit `drops:rolled { player, source, drops }` (the Theatre of Blood's avernic hilt,
+the Chambers of Xeric's kodai insignia, the Colosseum's echo crystal, the brimstone chest's broken
+hasta, a Frozen Cache's ancient icon). A finished item is one, unnoted, whatever the part's stack (ours: the Colosseum's 2-3 echo
+crystals give one pair of echo boots). Boosted drops still match the parts' names, as they roll.
 
 Left out, with why: Raging Echoes' and Demonic Pacts' clue-step progress saved between clues (the trail runtime has
 no per-step save to carry across scrolls); their one-minute farming ticks (Farming's
@@ -1465,7 +1505,7 @@ Each boss's own entrance emits `echo-boss:entry` `{ player, boss, enter, handled
 it lets the player in: the Iron Winch's Turn (after its task check), the Queen's roped tunnel,
 the Kings' ladder (Standard and Slayer), the smoke devil's crevice going in, the Roof Entrance
 (after its key and task checks), the Corrupted Gauntlet's entrance (before its checks, as live
-asks with a full pack), the King Black Dragon's ladder down, Hespori's cave in the Farming Guild
+asks with a full pack), the King Black Dragon's lever in the spider room, Hespori's cave in the Farming Guild
 and Amoxliatl's door. A league character carrying that boss's orb (Wiki: in the inventory; not
 used up) gets the captured menu, "Fight the Echo of the Thermonuclear Smoke Devil?" /
 "Fight the Echo of the Hunllef?" with "Yes." and "No.": No goes in as without the orb, Yes calls
@@ -1802,7 +1842,7 @@ is `select_button` 512:84 and the unlock `confirm_button` 512:62 (rev 227's echo
   names is open to everyone: instances, Death's Office, the POH, random events, the essence mine,
   Tutorial Island (the Wiki's accommodations). The surface-offset fallback remains an
   approximation of entrance ownership, not an authoritative dungeon map. Known approximations
-  of the remaining grid: Catherby's beach east of x 2816 falls with Asgarnia, the River Salve's east bank at Paterdomus with Misthalin, the Citharede Abbey and the
+  of the remaining grid: map square 44,53 (Catherby's beach and Harry's Fishing Shop) is wholly Kandarin, including White Wolf Mountain's southern slopes and the white wolves there, since the Wiki puts the mountain on the Kandarin/Asgarnia border and gives no tile outline (Asgarnia's rect starts at 44,54), the River Salve's east bank at Paterdomus with Misthalin, the Citharede Abbey and the
   Giants' Plateau east of Al Kharid (the map square holding the abbey's own cabbage field) with the
   desert while the Abandoned Mine in the square below stays Morytania, Tutorial Island's eastern
   tip with the desert. `league:area-at { x, y }` answers for any tile.
@@ -2198,8 +2238,12 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
     Surge spells) and "Hit 150 damage or more with the Keris Partisan" (25979, as "Defeat a Kalphite
     with the Keris Partisan" names it).
   - `ca-boss { monsters }`: the Wiki task rows' groups of Combat Achievement monsters (below).
-  Not yet: the solo kills ("Royal Titans without any other player joining", "Nex in a private
-  instance"), the timed runs (Prifddinas lap 1:10, Corrupted Gauntlet 4:30, Sepulchre 6:30) and "Vorkath
+  - Solo encounters: a `credited` kill that is also `solo` counts only a `combat-achievements:kill`
+    whose `solo` is true, the encounter's own word (overlay). "Defeat the Royal Titans solo" ("without
+    any other player joining"): the player spawned the fight alone and nobody joined before the kill.
+    "Defeat Nex Solo" ("in a private instance without help from any other player"): a private
+    chamber, the player alone at the start and at the kill, and no other player's damage.
+  Not yet: the timed runs (Prifddinas lap 1:10, Corrupted Gauntlet 4:30, Sepulchre 6:30) and "Vorkath
   15 times without leaving". Each needs its encounter's own event first.
 - **Places from location lines** (`generate-league-tasks.ts`, `PLACE_DEFS` with `locLines`): a task
   whose place is where its subject stands takes the subject pages' own location lines for bounds. The
@@ -2502,7 +2546,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   Mithril Spear"), a spell (`spells`, "with an earth spell"), a combat style (`style`, "with
   melee"), equipment worn at the death (`worn`, "while dressed like it"), a single blow of at
   least the target's hitpoints (`oneHit`, "in one hit"), a target that never hurt a player
-  (`noDamage`, "without taking any damage from it"), or no other player's damage (`solo`); a count
+  (`noDamage`, "without taking any damage from it"), or no other player's damage (`solo`; on a
+  `credited` kill it is the encounter's report instead, above); a count
   within a time window (`window { count, ticks }`, "3 chickens in 6 seconds", "8 penguins within 5
   seconds") keeps the ticks of its kills for the session (not persisted). `kill-any-with { items,
   count }` is any attackable NPC killed with one of the items as the final blow ("5 creatures with a
@@ -2537,9 +2582,8 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   `combat-achievements:completed` and at login. "Within the areas you have unlocked" is not
   checked.
 - **Not mapped yet:** deeds with a condition (a streak), boss kills whose wording is about the
-  encounter rather than the fight ("Defeat Nex Solo" and "Defeat the Royal Titans solo" want a
-  private fight with no one else ever joining, not the `solo` fight condition; "Defeat Vorkath 15
-  Times Without Leaving" wants a 15th no-leave signal the encounter does not keep), the Echo bosses
+  encounter rather than the fight ("Defeat Vorkath 15 Times Without Leaving" wants a 15th no-leave
+  signal the encounter does not keep), the Echo bosses
   and the awakened variants no plugin completes (no content), a kill that is really a Slayer task's
   own condition, and kills whose NPC is never attackable (the Port Sarim prisoner); places with no
   sourced bounds (open towns, regions), open groups ("any Dragon weapon"), transport without an

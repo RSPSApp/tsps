@@ -1,6 +1,10 @@
 {
-  "$comment": "Authored Duke encounter configuration. IDs/actions and map placements verified in cache revision 241; current normal mechanics from OSRS Wiki Duke Sucellus/Strategies and resource pages. Normal-world recording 1703 establishes visual packet details; quest-specific damage and preparation amounts are not substituted for current repeatable normal mode.",
+  "$comment": "Authored Duke encounter configuration. IDs/actions and map placements verified in cache revision 241; current normal mechanics from OSRS Wiki Duke Sucellus/Strategies and resource pages. Normal-world recording 1703 establishes visual packet details; quest-specific damage and preparation amounts are not substituted for current repeatable normal mode. Postquest normal-variant recordings 91/1751/1827 (rev227) and 3285 (rev234, after the June 2025 update) supply the poison splats, gaze timing, extremity loc changes, sounds, music and messages below.",
   "quest": "desert_treasure_ii",
+  "music": {
+    "asylum": 763,
+    "kill": 759
+  },
   "instance": {
     "sourceChunkX": 378,
     "sourceChunkY": 803,
@@ -71,7 +75,7 @@
       310
     ],
     "meter": 200,
-    "poison": 100,
+    "poison": 125,
     "attackTicks": 5,
     "enrageHp": 121,
     "enrageTicks": 4,
@@ -113,7 +117,9 @@
     "inactiveVat": 47537,
     "inactivePestle": 47567,
     "inactivePickaxe": 47568,
-    "scoreboardParent": 46091
+    "scoreboardParent": 46091,
+    "eyeAwakeOffset": 3,
+    "eyeDeadOffset": 6
   },
   "resources": {
     "musca": [
@@ -309,7 +315,9 @@
       10188,
       10189
     ],
-    "gas": 10178
+    "gas": 10178,
+    "eyeDeath": 10190,
+    "respawn": 10182
   },
   "graphics": {
     "gasSpawn": 2431,
@@ -334,7 +342,12 @@
     "iceFreeze": 369,
     "meleeBody": 2439,
     "iceWarning": 1447,
-    "iceImpact": 538
+    "iceImpact": 538,
+    "gazeFail": 369,
+    "loot": {
+      "id": 85,
+      "height": 16
+    }
   },
   "magic": {
     "startCycle": 50,
@@ -394,7 +407,7 @@
     "chip": 0,
     "slam": 2,
     "magic": 4,
-    "gazeWarning": 5,
+    "gazeWarning": 4,
     "gaze": 6,
     "gasWarning": 6,
     "gasDuration": 5,
@@ -408,10 +421,12 @@
     "eyeReset": 5,
     "eyeWarning": 2,
     "iceWarning": 4,
-    "respawn": 24,
+    "respawn": 23,
     "gasSpitInterval": 3,
     "combatGasMinTicks": 12,
-    "combatGasMaxTicks": 14
+    "combatGasMaxTicks": 14,
+    "gazeFreeze": 5,
+    "eyeDeadSwap": 2
   },
   "killCountVarp": 3967,
   "meters": {
@@ -429,5 +444,48 @@
     "group": 829,
     "targetGroup": 161,
     "targetComponent": 1
+  },
+  "sounds": {
+    "gazeStart": 7215,
+    "gazeResolved": 168,
+    "magic": {
+      "id": 7197,
+      "delay": 120
+    },
+    "gasSpit": 5002,
+    "saltMined": 3600,
+    "eyeFreeze": 2727,
+    "iceFreeze": [
+      7200,
+      171
+    ],
+    "melee": {
+      "id": 2707,
+      "radius": 10
+    },
+    "ventSpawn": {
+      "id": 2041,
+      "radius": 3
+    },
+    "ventIdle": {
+      "id": 3052,
+      "radius": 3
+    },
+    "iceImpact": {
+      "id": 7170,
+      "radius": 2
+    }
+  },
+  "messages": {
+    "awakens": "<col=ff289d>Duke Sucellus awakens...",
+    "wakingUp": "Duke is waking up.",
+    "gaze": "<col=a53fff>Duke Sucellus turns his gaze upon you...",
+    "gazeAvoided": "<col=229628>You manage to avoid Duke Sucellus' gaze.",
+    "gazeFailed": "<col=ff3045>You failed to avoid Duke Sucellus' gaze.",
+    "gazeFrozen": "<col=ef1020>You have been frozen!</col>",
+    "frozen": "<col=ff3045>You've been frozen in place!",
+    "vatReady": "<col=229628>A fermentation vat is ready to be emptied.</col>",
+    "noIngredients": "No ingredients you're holding can fit into the vat.",
+    "mushroomsFull": "You don't have enough inventory space for any more mushrooms."
   }
 }

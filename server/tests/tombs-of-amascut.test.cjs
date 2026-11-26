@@ -281,13 +281,16 @@ const GROUP_TOLD = (leader) => `${leader} has made a Tombs of Amascut party for 
  * `groups` (each a list of players, leader first; `online: false` members count but aren't sent).
  * `grouping` false leaves emitCustomEvent answering nothing, as without the Grouping plugin.
  */
-function partyBoard(groups = [], { grouping = true } = {}) {
+function partyBoard(groups = [], { grouping = true, viewers } = {}) {
+  const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const Lobby = require('../plugins/minigames/toa/Lobby.TombsOfAmascut');
   const Parties = require('../plugins/minigames/toa/Parties.TombsOfAmascut');
   CachePipeline.initialize();
   const buttons = new Map();
   const startup = [];
+  const closed = [];
+  const prompts = new WeakMap();
   const emitted = [];
   const groupOf = (player) => groups.find((group) => group.includes(player));
   const emitCustomEvent = (name, request) => {
@@ -308,29 +311,65 @@ function partyBoard(groups = [], { grouping = true } = {}) {
     }
   };
   const noop = () => {};
-  const api = new Proxy({ core: PluginManager.getCoreApi(), emitCustomEvent }, {
-    get: (target, key) => key in target ? target[key]
-      : key === 'onInterfaceActionButton' ? (uid, handler) => buttons.set(uid, handler)
-        : key === 'onServerStartup' ? (handler) => startup.push(handler) : noop,
-  });
+  const core = { ...PluginManager.getCoreApi() };
+  if (viewers) {
+    core.World = { getPlayers: () => viewers, getProcessCycle: () => 0 };
+    for (const player of viewers) {
+      player.closeBoardInterface = (interfaceId) => closed.forEach((handler) => handler({ player, interfaceId }));
+    }
+  }
+  const api = new Proxy({
+    core,
+    emitCustomEvent,
+    onInterfaceActionButton: (uid, handler) => buttons.set(uid, handler),
+    onServerStartup: (handler) => startup.push(handler),
+    onCustomEvent: (name, handler) => {
+      if (name === 'interface:closed') closed.push(handler);
+    },
+    sendMultiChatboxPrompt: (player, title, ...pairs) => {
+      prompts.set(player, {
+        texts: pairs.filter((_, i) => i % 2 === 0),
+        callbacks: pairs.filter((_, i) => i % 2 === 1),
+      });
+      return MultiChatboxPrompt.showPrompt('TombsOfAmascut', player, title, pairs);
+    },
+  }, { get: (target, key) => target[key] ?? noop });
   Lobby(api);
   const overview = buttons.get((772 << 16) | 1);
   const list = buttons.get((772 << 16) | 16);
   const management = buttons.get((774 << 16) | 1);
+  const openList = (player) => overview({ player, action: 0 });
+  const viewParty = (player, party) => {
+    openList(player);
+    list({ player, action: Parties.stateOf(player).listed.indexOf(party) });
+  };
   return {
-    Parties, startup, emitted,
+    Parties, startup, emitted, prompts, openList, viewParty,
     makeParty(player) {
-      overview({ player, slot: 1 });
+      overview({ player, action: 1 });
       return Parties.currentParty(player);
     },
     /** Opens the party from the list and presses the panel's context button (Apply for a non-member). */
     applyTo(player, party) {
-      overview({ player, slot: 0 });
-      list({ player, slot: Parties.stateOf(player).listed.indexOf(party) });
-      management({ player, slot: 4 });
+      viewParty(player, party);
+      management({ player, action: 4 });
     },
     pressMemberOption(player) {
-      management({ player, slot: 4 });
+      management({ player, action: 4 });
+    },
+    pressManagement(player, action) {
+      management({ player, action });
+    },
+    pressPreset(player, slot) {
+      buttons.get((774 << 16) | 98)({ player, slot, opId: 1 });
+    },
+    choose(player, action) {
+      return MultiChatboxPrompt.handleInterfaceActionClick({
+        player, buttonId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, action,
+      });
+    },
+    tick() {
+      core.TaskManager.process();
     },
   };
 }
@@ -338,8 +377,26 @@ function partyBoard(groups = [], { grouping = true } = {}) {
 function boardPlayer(name, where = IN_LOBBY) {
   const attributes = new Map();
   const sent = [];
-  const sender = new Proxy({}, {
-    get: (_, key) => key === 'getVarbit' ? () => 0 : (...args) => { sent.push([key, ...args]); return sender; },
+  let main = -1;
+  let chatbox = -1;
+  const sender = new Proxy({
+    getVarbit: () => 0,
+    getChatboxGroupId: () => chatbox,
+    isChatboxInterface: (id) => chatbox === id,
+  }, {
+    get: (target, key) => target[key] ?? ((...args) => {
+      sent.push([key, ...args]);
+      if (player.closeBoardInterface) {
+        if (key === 'sendInterface') main = args[0];
+        if (key === 'sendChatboxInterface') chatbox = args[0];
+        if (key === 'sendInterfaceRemoval') {
+          const closed = [chatbox, main];
+          main = chatbox = -1;
+          for (const interfaceId of closed) if (interfaceId >= 0) player.closeBoardInterface(interfaceId);
+        }
+      }
+      return sender;
+    }),
   });
   const player = {
     name, messages: [], statements: 0, sent, where,
@@ -350,7 +407,7 @@ function boardPlayer(name, where = IN_LOBBY) {
     getPacketSender: () => sender,
     getDialogueManager: () => ({ startDialogues: () => { player.statements++; } }),
     getSkillManager: () => ({ getMaxLevel: () => 99, getCombatLevel: () => 126 }),
-    getInterfaceId: () => -1,
+    getInterfaceId: () => main,
     getLocation: () => ({ getX: () => player.where.x, getY: () => player.where.y, getZ: () => 0 }),
   };
   return player;
@@ -359,6 +416,223 @@ function boardPlayer(name, where = IN_LOBBY) {
 function disbandAll(Parties) {
   for (const party of [...Parties.lobbyParties]) party.disband();
 }
+
+function partyOrderFixture(t) {
+  const [lead, ann, bo, cy, applicant, blocked, observer] =
+    ['Lead', 'Ann', 'Bo', 'Cy', 'Applicant', 'Blocked', 'Observer'].map((name) => boardPlayer(name));
+  const viewers = [lead, ann, bo, cy, applicant, blocked, observer];
+  const board = partyBoard([], { viewers });
+  const { Parties } = board;
+  t.after(() => disbandAll(Parties));
+
+  const party = board.makeParty(lead);
+  for (const member of [ann, bo, cy]) {
+    board.applyTo(member, party);
+    board.pressManagement(lead, 36);
+    board.makeParty(member);
+  }
+  board.applyTo(blocked, party);
+  board.pressManagement(lead, 44);
+  board.applyTo(applicant, party);
+  board.viewParty(observer, party);
+  board.pressManagement(lead, 52);
+  const incomingSettings = Parties.settingsOf(ann);
+  assert.equal(incomingSettings.toggle('WALK_THE_PATH'), null);
+  assert.equal(incomingSettings.toggle('ON_A_DIET'), null);
+  incomingSettings.kcRequirement = 7;
+
+  assert.deepEqual(party.players, [lead, ann, bo, cy]);
+  assert.deepEqual(party.applicants, [applicant]);
+  assert.deepEqual(party.blocked, [blocked]);
+  assert.notEqual(party.settings.raidLevel, incomingSettings.raidLevel);
+  assert.notEqual(party.settings.activeCount, incomingSettings.activeCount);
+  for (const player of viewers) {
+    player.sent.length = 0;
+    player.messages.length = 0;
+  }
+  return { board, party, lead, ann, bo, cy, applicant, blocked, observer, viewers, incomingSettings };
+}
+
+function partyScript(player, id) {
+  return player.sent.filter(([key, script]) => key === 'sendClientScript' && script === id)
+    .map(([, , ...args]) => args);
+}
+
+function partyHud(player) {
+  return player.sent.filter(([key, , widget]) => key === 'sendString' && widget === ((773 << 16) | 5))
+    .map(([, text]) => text);
+}
+
+function openHandover(board, lead, slot = 21) {
+  board.pressManagement(lead, slot);
+  const prompt = board.prompts.get(lead);
+  assert.ok(prompt, 'arrow opens the leadership confirmation');
+  return prompt;
+}
+
+test.skip('retail leadership message box (mechanics-only handover goes directly to the menu)');
+test.skip('retail leadership menu option text (mechanics-only handover uses original wording)');
+
+for (const slot of [21, 28]) {
+  test(`party panel arrow ${slot} confirms the handover, redraws views, then updates every member HUD`, (t) => {
+    const { board, party, lead, ann, bo, cy, applicant, blocked, observer, viewers, incomingSettings } =
+      partyOrderFixture(t);
+    const oldSettings = party.settings;
+    const oldBitmaps = [...oldSettings.bitmaps];
+    const prompt = openHandover(board, lead, slot);
+
+    assert.deepEqual(party.players, [lead, ann, bo, cy], 'waiting for confirmation preserves the order');
+    assert.equal(party.settings, oldSettings);
+    assert.deepEqual(prompt.texts, ['Make Ann the party leader', 'Keep the current leader']);
+    assert.deepEqual(partyScript(lead, 58), [['Are you sure?', prompt.texts.join('|')]]);
+    assert.equal(lead.getInterfaceId(), -1, 'the menu replaces the panel');
+    assert.equal(board.choose(lead, 1), true);
+
+    assert.deepEqual(party.players, [ann, lead, bo, cy]);
+    assert.deepEqual(party.applicants, [applicant]);
+    assert.deepEqual(party.blocked, [blocked]);
+    assert.equal(party.settings, incomingSettings);
+    assert.deepEqual(oldSettings.bitmaps, oldBitmaps);
+    for (const [player, rights] of [[lead, 1], [ann, 2], [bo, 1], [cy, 1], [applicant, 3], [blocked, 4], [observer, 0]]) {
+      const rows = partyScript(player, 6722);
+      assert.equal(rows.length, 8);
+      assert.ok(rows.every(([view]) => view === rights));
+      assert.deepEqual(rows.map(([, row]) => row.split('|')[0]), ['Ann', 'Lead', 'Bo', 'Cy', '', '', '', '']);
+      const [view, kc, count, level, , ...bitmaps] = partyScript(player, 6729).at(-1);
+      assert.deepEqual([view, kc, count, level, bitmaps],
+        [rights, 7, incomingSettings.activeCount, incomingSettings.raidLevel, incomingSettings.bitmaps]);
+    }
+    assert.equal(lead.getInterfaceId(), 774, 'the former leader sees the member panel immediately');
+    for (const member of party.players) assert.deepEqual(partyHud(member), [], 'HUD waits until the next tick');
+
+    board.tick();
+    for (const member of party.players) {
+      assert.deepEqual(partyHud(member), ['Ann<br>Lead<br>Bo<br>Cy<br>-<br>-<br>-<br>-']);
+    }
+    assert.ok(viewers.every((player) => player.messages.length === 0), 'the swap is silent');
+  });
+}
+
+test('party panel applies two deeper arrows once each in the order received in one tick', (t) => {
+  const { board, party, lead, ann, bo, cy, viewers } = partyOrderFixture(t);
+  const settings = party.settings;
+  bo.getPacketSender().sendInterfaceRemoval();
+
+  board.pressManagement(lead, 23);
+  assert.deepEqual(party.players, [lead, ann, cy, bo], 'Move up on row 3 swaps with row 2');
+  board.pressManagement(lead, 29);
+  assert.deepEqual(party.players, [lead, cy, ann, bo], 'Move down on row 1 uses the new order');
+
+  assert.equal(party.settings, settings);
+  assert.equal(lead.statements, 0);
+  for (const player of viewers) {
+    assert.equal(board.prompts.has(player), false);
+    assert.equal(player.messages.length, 0);
+    const secondRows = partyScript(player, 6722).filter((_, i) => i % 8 === 1);
+    assert.deepEqual(secondRows.map(([, row]) => row.split('|')[0]), player === bo ? [] : ['Ann', 'Cy']);
+  }
+  for (const member of party.players) {
+    assert.deepEqual(partyHud(member), ['Lead<br>Ann<br>Cy<br>Bo<br>-<br>-<br>-<br>-',
+      'Lead<br>Cy<br>Ann<br>Bo<br>-<br>-<br>-<br>-']);
+  }
+});
+
+test('party panel ignores boundary, empty, member and in-raid arrow presses', (t) => {
+  const { board, party, lead, ann, viewers } = partyOrderFixture(t);
+  const order = [...party.players];
+  const settings = party.settings;
+  for (const slot of [20, 31, 26, 34]) board.pressManagement(lead, slot);
+  board.pressManagement(ann, 21);
+  lead.where = IN_NECROPOLIS;
+  board.pressManagement(lead, 21);
+  lead.where = IN_LOBBY;
+  party.raid = {};
+  board.pressManagement(lead, 21);
+  board.pressManagement(lead, 23);
+  assert.deepEqual(party.players, order);
+  assert.equal(party.settings, settings);
+  assert.ok(viewers.every((player) => !board.prompts.has(player) && !player.statements && !partyHud(player).length));
+});
+
+for (const dismiss of ['Cancel', 'close']) {
+  test(`party panel ${dismiss} returns to the leadership panel without changing the party`, (t) => {
+    const { board, party, lead, viewers } = partyOrderFixture(t);
+    const order = [...party.players];
+    const settings = party.settings;
+    openHandover(board, lead);
+
+    if (dismiss === 'Cancel') assert.equal(board.choose(lead, 2), true);
+    else lead.getPacketSender().sendInterfaceRemoval();
+    board.tick();
+
+    assert.deepEqual(party.players, order);
+    assert.equal(party.settings, settings);
+    assert.equal(lead.getInterfaceId(), 774);
+    assert.equal(partyScript(lead, 6729).at(-1)[0], 2);
+    assert.ok(viewers.every((player) => !player.messages.length && !partyHud(player).length));
+  });
+}
+
+for (const change of ['leaves', 'is kicked', 'disbands', 'starts the raid']) {
+  test(`party panel confirmation cannot swap after the chosen member or party ${change}`, (t) => {
+    const { board, party, lead, ann, viewers } = partyOrderFixture(t);
+    const prompt = openHandover(board, lead);
+    if (change === 'leaves') board.pressMemberOption(ann);
+    if (change === 'is kicked') board.pressManagement(lead, 13);
+    if (change === 'disbands') party.disband();
+    if (change === 'starts the raid') party.raid = {};
+
+    const order = [...party.players];
+    const settings = party.settings;
+    const messages = viewers.map((player) => player.messages.length);
+    const huds = viewers.map((player) => partyHud(player).length);
+    // Exercise the completion guard even when the intervening action also closed the prompt.
+    if (!board.choose(lead, 1)) prompt.callbacks[0]();
+    board.tick();
+
+    assert.deepEqual(party.players, order);
+    assert.equal(party.settings, settings);
+    assert.deepEqual(viewers.map((player) => player.messages.length), messages);
+    assert.deepEqual(viewers.map((player) => partyHud(player).length), huds);
+  });
+}
+
+test('party member and applicant rows use uncoloured names and no trailing separator', (t) => {
+  const { board, party, lead, applicant } = partyOrderFixture(t);
+  board.makeParty(lead);
+  board.viewParty(applicant, party);
+  assert.deepEqual(partyScript(lead, 6722)[0], [2, 'Lead|126|99|99|99|99|99|99|99|0 / 0 / 0']);
+  const row = ['Applicant|126|99|99|99|99|99|99|99|0 / 0 / 0'];
+  assert.deepEqual(partyScript(lead, 6727), [row]);
+  assert.deepEqual(partyScript(applicant, 6727), [row]);
+});
+
+test('party list closes the highlight around the viewer’s party leader and omits the final separator', (t) => {
+  const { board, lead, ann, observer } = partyOrderFixture(t);
+  board.makeParty(observer);
+  for (const player of [lead, ann]) {
+    board.openList(player);
+    const rows = partyScript(player, 6601).map(([, row]) => row).filter(Boolean);
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0].split('|')[0], '<col=ffffff>Lead</col>');
+    assert.equal(rows[1].split('|')[0], 'Observer');
+    assert.ok(rows.every((row) => row.split('|').length === 14 && !row.endsWith('|')));
+  }
+});
+
+test('party panel sends preset flags to each viewer and refuses a member’s preset click', (t) => {
+  const { board, party, lead, ann, applicant, blocked, observer } = partyOrderFixture(t);
+  for (const viewer of [lead, ann, applicant, blocked, observer]) {
+    board.viewParty(viewer, party);
+    assert.ok(viewer.sent.some(([name, widget, first, last, flags]) =>
+      name === 'sendInterfaceFlagsRange' && widget === ((774 << 16) | 98) && first === 0 && last === 5 && flags === 6),
+      `${viewer.name} receives the preset events`);
+  }
+  ann.sent.length = 0;
+  board.pressPreset(ann, 0);
+  assert.deepEqual(ann.sent, []);
+  assert.equal(board.prompts.has(ann), false);
+});
 
 test('the Tombs of Amascut tell Grouping at startup that a raid takes 8', () => {
   const board = partyBoard();
@@ -1105,4 +1379,140 @@ test('active encounter logout distinguishes a crystal eject from a death and rej
     raid.dispose();
     party.disband();
   }
+});
+
+function recordStatement(player) {
+  player.getDialogueManager = () => ({
+    startDialogues: (chain) => chain.getDialogues().get(0).send(player),
+  });
+}
+
+function wardensReadyUp(t, size) {
+  CachePipeline.initialize();
+  const Shared = toaApi();
+  const Raid = require('../plugins/minigames/toa/RaidState.TombsOfAmascut');
+  const Parties = require('../plugins/minigames/toa/Parties.TombsOfAmascut');
+  const rooms = new Map();
+  t.mock.method(Raid, 'registerRoom', (key, RoomClass) => rooms.set(key, RoomClass));
+  t.mock.method(Raid, 'onRaidArea', () => {});
+  const { api, calls } = recordingApi();
+  require('../plugins/minigames/toa/Wardens.TombsOfAmascut')(api);
+  const begin = calls.find(({ name, args }) => name === 'onNpcInteraction' && args[0] === 'Osmumten').args[1].Begin;
+  let tick = 100;
+  Shared.bind({ core: { ...api.core, World: { getProcessCycle: () => tick } } });
+
+  const players = Array.from({ length: size }, (_, i) => boardPlayer(`Member${i + 1}`));
+  for (const player of players) {
+    player.sendMessage = (text) => player.sent.push(['game', text]);
+    recordStatement(player);
+  }
+  const party = Parties.createParty(players[0]);
+  for (const player of players.slice(1)) party.addPlayer(player);
+  const raid = new Raid.Raid(party, players[0]);
+  const room = new (rooms.get('WARDENS_P1'))(raid, Shared.ROOMS.WARDENS_P1);
+  // The preceding paths and combat scenery are outside this fixture. Begin still runs the
+  // registered interaction, real room start and timer, and statement packet calls.
+  Object.assign(room, { ready: new Set(), readyDeadline: -1, wardens: { elidinis: {}, tumeken: {} } });
+  raid.rooms.set(room.key, room);
+  raid.roomKey = room.key;
+  for (const player of players) raid.member(player).roomKey = room.key;
+  t.after(() => {
+    raid.dispose();
+    party.disband();
+    toaApi();
+  });
+
+  return {
+    room, raid, players,
+    click(player) { assert.equal(begin({ player }), true); },
+    at(cycle) { tick = cycle; room.tick(); },
+    results() {
+      return players.map((player) => player.sent.splice(0).filter(([kind, , uid]) =>
+        kind === 'game' || kind === 'sendTypedMessage' || (kind === 'sendString' && uid === (229 << 16 | 3))));
+    },
+  };
+}
+
+const WARDENS_START = ['game', 'Challenge started: The Wardens.'];
+const WARDENS_BOX = 'The challenge will either begin once everyone else in your party is<br>ready or after 2 minutes have passed from the first ready up.';
+const WARDENS_WAIT = 'The challenge will begin once everyone else in your party is ready.';
+const readyCount = (count, total) => ['game', `${count}/${total} party members are now ready.`];
+const readyStatement = (text) => [
+  ['sendTypedMessage', 115, text.replaceAll('<br>', ' ')], // mesbox
+  ['sendString', text, 229 << 16 | 3],
+];
+
+test('Osmumten Begin immediately starts a solo Wardens fight with only the start line', (t) => {
+  const wardens = wardensReadyUp(t, 1);
+  wardens.click(wardens.players[0]);
+  assert.equal(wardens.room.isStarted(), true);
+  assert.deepEqual(wardens.results(), [[WARDENS_START]]);
+});
+
+test('Wardens party ready-ups announce the count before the new member’s message box', (t) => {
+  const wardens = wardensReadyUp(t, 3);
+  const [first, second, last] = wardens.players;
+  const expected = (i) => wardens.players.map((_, member) =>
+    [readyCount(i + 1, 3), ...(member === i ? readyStatement(WARDENS_BOX) : [])]);
+  wardens.click(first);
+  assert.equal(wardens.room.isStarted(), false);
+  const firstResult = wardens.results();
+
+  wardens.click(second);
+  assert.equal(wardens.room.isStarted(), false);
+  const secondResult = wardens.results();
+
+  wardens.click(first);
+  assert.deepEqual([...wardens.room.ready], [first, second], 'Begin again preserves the ready set');
+  assert.deepEqual(wardens.results(), [readyStatement(WARDENS_WAIT), [], []]);
+
+  wardens.click(last);
+  assert.equal(wardens.room.isStarted(), true);
+  assert.deepEqual(wardens.results(), [[WARDENS_START], [WARDENS_START], [WARDENS_START]]);
+  assert.deepEqual({ firstResult, secondResult }, { firstResult: expected(0), secondResult: expected(1) });
+});
+
+test('Wardens count uses current raid membership and only reaches the Wardens room', (t) => {
+  const wardens = wardensReadyUp(t, 4);
+  const [left, first, unready, elsewhere] = wardens.players;
+  wardens.click(left);
+  wardens.results();
+  // The earlier readier has since left and the fourth member is still in the Nexus.
+  wardens.raid.players = [first, unready, elsewhere];
+  wardens.raid.member(elsewhere).roomKey = 'MAIN_HALL';
+  wardens.click(first);
+  assert.equal(wardens.room.isStarted(), false);
+  assert.deepEqual(wardens.results(), [
+    [], [readyCount(1, 3), ...readyStatement(WARDENS_BOX)], [readyCount(1, 3)], [],
+  ]);
+});
+
+test('repeating Osmumten Begin starts the Wardens when the unready member has left', (t) => {
+  const wardens = wardensReadyUp(t, 2);
+  const [ready, unready] = wardens.players;
+  wardens.click(ready);
+  assert.equal(wardens.room.isStarted(), false);
+  assert.deepEqual(wardens.results(), [[readyCount(1, 2), ...readyStatement(WARDENS_BOX)], [readyCount(1, 2)]]);
+
+  // The raid's leave handler has removed the unready member from the roster.
+  wardens.raid.players = wardens.raid.players.filter((player) => player !== unready);
+  wardens.click(ready);
+  assert.equal(wardens.room.isStarted(), true);
+  assert.deepEqual(wardens.results(), [[WARDENS_START], []]);
+});
+
+test('the Wardens ready-up timer starts the fight 200 ticks after the first Begin', (t) => {
+  const wardens = wardensReadyUp(t, 3);
+  const [first, second] = wardens.players;
+  wardens.click(first);
+  wardens.at(150);
+  wardens.click(second);
+  wardens.click(first);
+  wardens.results();
+  wardens.at(299);
+  assert.equal(wardens.room.isStarted(), false);
+  assert.deepEqual(wardens.results(), [[], [], []]);
+  wardens.at(300);
+  assert.equal(wardens.room.isStarted(), true);
+  assert.deepEqual(wardens.results(), [[WARDENS_START], [WARDENS_START], [WARDENS_START]]);
 });

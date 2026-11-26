@@ -17,6 +17,15 @@
     font: inherit;
 }
 
+.cache-editor select {
+    appearance: none;
+    padding-right: 34px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='m1 1 4 4 4-4' fill='none' stroke='%23c4bfb2' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: right 12px center !important;
+    background-size: 10px 6px !important;
+}
+
 .cache-editor button {
     cursor: pointer;
     transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
@@ -125,15 +134,22 @@
 }
 
 .cache-editor-mode-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px !important;
+    align-items: stretch !important;
     padding: 12px 14px !important;
 }
 
 .cache-editor-mode-tabs button {
-    flex: 1;
+    width: 100%;
+    min-width: 0;
+    height: 36px;
     min-height: 36px;
     font-size: 13px;
     font-weight: 500;
     text-transform: none;
+    white-space: nowrap;
 }
 
 .cache-editor-section-heading {
@@ -217,11 +233,15 @@
     flex: 1 1 auto;
 }
 
+/* Styled like its neighbour, Import local; only greyed out where it can't import (sprites, textures). */
 .cache-editor-library-button {
+    font-size: 12px !important;
+}
+
+.cache-editor-library-button:disabled {
     border-color: #77705d66 !important;
     background: #222326 !important;
     color: #8f8a80 !important;
-    font-size: 12px !important;
 }
 
 .cache-editor-count {
@@ -279,6 +299,8 @@
 }
 
 .cache-editor-result {
+    border: 0;
+    border-radius: 0;
     display: grid;
     grid-template-columns: auto auto minmax(0, 1fr) auto;
     align-items: center;

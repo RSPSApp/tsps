@@ -56,6 +56,7 @@ set or timing.
 | Rocks (Trollheim, Crandor, Waterbirth Island) | 1148 over 120 cycles facing the cliff, sound 2454 |
 | Dry stone wall (Barrows) | two steps back (820), a step's run-up (1995), then the hurdle (1603, cycles 8-50) over the wall; sound 1936; "You jump over the wall." a tick after the hurdle starts |
 | Stepping stones (Necropolis, Wilderness Chaos Temple) | a jump (741) a stone every 2 ticks, sound 2461; Necropolis says "You attempt to cross using the stepping stone(s)..." and "You successfully make it to the other side." |
+| Stepping stones (Western Brimhaven Dungeon) | rsprox captures local 1000195, 1000283, 1000323, 1000433 and 90, 91, 552 (rev 227), all north to south: two ticks after reaching 2649,9562, "You carefully start crossing the stepping stones..." (spam) and BUSY with the first jump; seven jumps (741, cycles 15-30, sound 2461 each) two ticks apart; "...You safely cross to the other side." and the XP the tick after the last. One fall (1000433, tick 17786): two ticks after the third jump, 764 facing north, "...You lose your footing and fall into the lava." and sound 2493 (ten loops); two ticks later the player is on 2648,9562, hit (7 at 77 hitpoints), sound 2412, BUSY off, no XP. Ours: the fall's chance (235-255 of 256, about 1 in 13 at level 12: the Wiki says only "quite rare") and damage (a tenth of current hitpoints); BUSY goes on at the click, as every shortcut's does. Either stone crosses whichever way the player is going; heading south needs 12 Agility and can fall, heading north needs none and never falls (the Wiki's levels; no capture of that way) |
 | Stepping stones (Lumbridge Swamp Caves) | two leaps with 769 (`human_steppingstonejump`), cycles 58-70, "You leap across with a mighty leap!" |
 | Tunnels (Asgarnian Ice Dungeon) | the long crawl (2796) and a teleport; the wyvern tunnel shows four messages over 8 ticks |
 | Crevices (Waterbirth, Shaman Caves), hole (Fossil Island), cave (Meiyerditch) | the crawl animation, a tick, the message and a teleport |
@@ -70,6 +71,7 @@ set or timing.
 | Stepping stone (Pollnivneach) | onto the stone and a diagonal jump to the far bank, a jump every 2 ticks (741), sound 2461 |
 | Obstacles, tunnel, plant door and holes (Fossil Island sea floor) | a face, then a 60-cycle exact move past it the tick after with 7702 (`human_swim_cavewall`) or 7704 (`human_swim_shipwall`), no message; holes: a step onto the hole, 7705 (`human_swim_hole_enter`), and two ticks later a teleport to its paired hole with 7706 (`human_swim_hole_leave`). The `loc_merge` the obstacles send is not done |
 | Rocks (Shilo Village) | rock tile to rock tile, 1148 over 90 cycles facing south |
+| Rope bridge (ice troll caves, Fremennik Isles) | rsprox capture 3026 (rev 231, after The Fremennik Isles): the bridge north of the cave entrance (21317 at 2385,10260, 21316 at 2385,10263) is a gap jump, not a walk. The player walks onto the bridge end (from 2385,10259 going north); the next tick 3067 (`agility_pyramid_gap_jump`, delay 20) with sound 2465 (delay 20) and a 3-tile exact move (cycles 53-85) to the other end; no level, XP or message. Both end tiles are blocked in our map collision, so the entry routes to the tile beside the end (2385,10259 or 2385,10264) and steps the player onto it. Live moves the player's tile to the landing at once; here it lands 3 ticks later, as the Agility Pyramid gaps do (recorded difference). The cave's other rope bridge (21318/21319, the Ice Troll King's lair, ticks 2291, 2440, 2449) jumps the same way; it stays in the quest plugin. Only northward recorded; south mirrors it |
 | Rock slide (Cairn Isle) | 740 over 120 cycles, delay 15, facing west (only eastward recorded) |
 | Climbing rocks (Yanille, Taverley) | only the sound and messages: walks and their animations are not in the recordings, so the movement stays a guess |
 | Log balance (Coal Trucks) | rsprox captures 353, local 1001512, 1001582 (rev 241), 1002239 and 1002251 (rev 242): the filterable line "You walk carefully across the slippery log..." and BUSY on, then sound 2470 (2 loops) a tick later, sound 2470 again at +4, and "... and make it safely to the other side." and BUSY off at +5. The Wiki gives 20 Agility and 8.5 XP. Recording `230/00353` shows five one-tile walk steps in each direction: west from 2603,3477 to 2598,3477 on ticks 690-694, and east back to 2603,3477 on ticks 1040-1044. |
@@ -79,6 +81,7 @@ set or timing.
 | Gaps (Chasm of Fire) | two gaps (event-world recordings): the west one a 6-tile jump (12196, sound 2461) from 1440,10098 to 1446,10097; the east one two hops a tick apart, onto 1453 then 1456. The exact moves are drawn a tile or two short of the server position; the entries land where the server puts the player. The way back mirrors it |
 | Zip line (Fossil Island) | one way north off the House on the Hill (rsprox captures 3156, 3157, rev 232): 2586 on arrival (delay 10); a tick later 1602 with sounds 1933 and 1934 (delay 15) and a 2-3 tile exact move north each tick to 3765,3897 (the last in 15 cycles, sound 2462); a tick later 2588 on the ground, 3765,3898,0. The first leg is drawn to 3884 while the server places the player on 3885; the entry lands where the server does |
 | Mysterious pipe (Karuulm Slayer Dungeon) | rsprox captures 1521, 2952, 4001 (rev 224-237), all west to east, the player arriving on 1316,10213 south of the pipe: +1 faces it; +2 reach animation 833 (delay 10), BUSY on, the screen fades out (948, 50 cycles) and "You start the mediocre lengthed journey of clambering into the pipe..." in a message box with no continue; +3 the minimap off (6719 = 2) and "You push your body down further into the pipe..."; +5 on 1346,10232, same facing, minimap on; +6 the fade in and "You see light from above, and start to climb upwards and out of the pipe system." with a continue, which closes the box and the overlay and clears BUSY. No XP (Wiki). East to west mirrors it (not recorded). Script `karuulmPipe` (KaruulmPipe.Agility.js) |
+| Rocks (Alchemical Hydra's lair, Karuulm Slayer Dungeon) | rsprox captures 1521 (rev 224) and local 1000143, 1000471, 1000473, 1000480, 1000497 (rev 227), all south to north: no requirement. The player faces the rocks (34548, two tiles wide on 1351-1352,10251); the next tick live teleports them into the lair's instance (`rebuild_region`); the tick after that comes climb-over 839 and an exact move two tiles north on the player's own column (1351 or 1352, cycle 0 to 60); 2 ticks after the move "You climb over the rocks." (spam) and the animation reset. Counted from the arrival that is +0/+1/+2/+4 when the player clicks beside the rocks (local 1000143, 1000471, 1000473, 1000497) and a tick later after a walk (1521, 1000480). Here there is no instance teleport tick between the face and the move (recorded difference). Live also moves the player into an instance of the lair as they climb; here the lair stays in the world and the Alchemical door makes the private chamber. North to south mirrors it (not recorded). Script `karuulmHydraRocks` (Kourend.Agility.js) |
 
 ## Below the level: the captured refusals
 
@@ -119,6 +122,24 @@ The successful Zanaris squeeze's "You try to squeeze past." is spam too (5 of 5 
   player stands needs another look. Not added.
 - **No usable recording:** Crevices (Wilderness Slayer Cave) (5)-(8), Rocks (Trollheim hard and
   advanced).
+
+## Varrock broken fence (the lumber yard)
+
+The "Broken fence (Varrock)" entry follows a revision 242 capture of a whole Gertrude's Cat run
+(the user's own recording, ticks 375-382 north and 694-701 south) and rsprox.net recordings 3222
+(revision 232, ticks 10828-10833 north and 11368-11370 south) and 3225 (ticks 55-57), which agree:
+
+- **North (into the yard):** the player walks onto the fence tile 3308,3492, BUSY goes to 1, and
+  two ticks later the exact move `to1` 3308,3493 (cycle 0) to `to2` 3308,3494 (cycle 104) plays
+  with `human_walk_fence_north` (882). BUSY clears 3 ticks later.
+- **South (out):** the player reaches 3308,3493, faces the fence a tick later, and two ticks after
+  arriving the exact move 3308,3492 (cycle 0) to 3308,3491 (cycle 60) plays with `human_walk_style`
+  (839), BUSY with it. BUSY clears 3 ticks later.
+- **No message** either way; the entry used to say "You climb over the broken fence.".
+
+The move starts on the fence line, one tile past the player, so the runner's `move` step takes a
+`from` tile. This cache's collision blocks the fence tile itself (clipType 2), which live walks
+onto, so the north crossing starts from 3308,3491 (`unverified` in the entry).
 
 ## Map mismatches found on the way
 

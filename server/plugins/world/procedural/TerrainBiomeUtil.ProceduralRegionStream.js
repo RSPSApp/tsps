@@ -2,9 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const { ObjectType } = require("./ObjectType.ProceduralRegionStream");
-const { decodeRegionObjects, decodeRegionTerrainData } = require("./RegionBuildingAnalysisUtil.ProceduralRegionStream");
 const { PROCEDURAL_DATA_DIRECTORY } = require("./ProceduralDataPaths.ProceduralRegionStream");
-const { isWaterOverlayId } = require("../../../src/main/typescript/elvarg/game/cache/TerrainWater");
 
 const TERRAIN_BIOME_DIRECTORY = path.join(PROCEDURAL_DATA_DIRECTORY, "terrain-biomes");
 
@@ -111,6 +109,8 @@ function buildIdDensityStats(ids, tileSetById, landTileCount) {
 }
 
 function sampleRegionTerrainForBiome(regionX, regionY) {
+  const { decodeRegionObjects, decodeRegionTerrainData } = require("./RegionBuildingAnalysisUtil.ProceduralRegionStream");
+  const { isWaterOverlayId } = require("../../../src/main/typescript/elvarg/game/cache/TerrainWater");
   const mapRegionId = regionId(regionX, regionY);
   const terrainData = decodeRegionTerrainData(mapRegionId);
   if (!terrainData) {
@@ -490,7 +490,7 @@ function dumpTerrainBiome(player, biomeArg) {
   };
 }
 
-function loadTerrainBiome(biomeArg) {
+function loadTerrainBiome(biomeArg, { optional = false } = {}) {
   const biome = sanitizeBiomeName(biomeArg);
   if (!biome) {
     throw new Error("Usage: ::genterrain <biome> [seed]");
@@ -498,11 +498,13 @@ function loadTerrainBiome(biomeArg) {
 
   const inputPath = path.join(TERRAIN_BIOME_DIRECTORY, `${biome}.json`);
   if (!fs.existsSync(inputPath)) {
+    if (optional) return undefined;
     throw new Error(`No terrain biome dump found for '${biome}'. Use ::dumpterrain ${biome} first.`);
   }
 
   const doc = readBiomeDocument(inputPath, biome);
   if (!Array.isArray(doc.samples) || doc.samples.length === 0) {
+    if (optional) return undefined;
     throw new Error(`Terrain biome '${biome}' has no samples. Use ::dumpterrain ${biome} first.`);
   }
 

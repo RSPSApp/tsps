@@ -53,6 +53,11 @@ From the [rsprox.net capture database](https://rsprox.net/database). For every i
 
 All world types count, since an item's sound doesn't change with the world type. An item gets the sound most of its recordings show: one sound, or a most common one seen in at least two recordings. Ties are left to the rules (one item: the Wintertodt torch).
 
-## Not changed
+## Banking worn items
 
-- **Depositing worn items at a bank** still plays the generic removal sound (376); no capture covers it.
+**Deposit worn items** (the bank's `bankmain:depositworn` and the deposit box's `bank_depositbox:deposit_worn`)
+plays each banked item's own sound from these rules, one per item, in equipment slot order: head, cape, neck,
+weapon, body, shield, legs, hands, feet, ring, ammo (rsprox captures local 1002085 tick 20276, local 1002011
+tick 19297; 1,076 attempts in 412 recordings). An item a full bank refuses stays worn and plays nothing.
+**Deposit inventory** plays no sound at all (8,056 attempts of `bankmain:depositinv` in 572 recordings, 639 of
+`bank_depositbox:deposit_inv`).

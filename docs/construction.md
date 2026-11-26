@@ -22,7 +22,7 @@ covers something, this page says so.
 | `Bookcase`, `TipJar`, `Scrying`, `CapeHanger`, `Trophies` | Bookcases, tip jars, the scrying pool, the cape hanger, skill hall trophy displays |
 | `CombatRings` | Boxing, fencing and combat rings, ranging pedestals, racks, the balance beam |
 | `GamesRoom` with `Prizes`, `RangingGames`, `Hangman`, `ElementalBalance`, `AttackStone`, `Jester`, `TreasureHunt` | The games room |
-| `Menagerie` | Pet houses, the pet list, roaming pets |
+| `Menagerie` | Pet houses, the pet list, roaming pets, the desert habitat's cactus |
 | `Dungeon`, `ThroneRoom` | Guards, traps, doors, treasure, oubliette; the throne room lever, trapdoors and cages, challenge mode |
 | `MahoganyHomes` | Contractors, contracts, the clients' homes, the reward shop |
 | `Menu`, `Commands` | The generic option menu (script 217); `::hotspots` |
@@ -223,6 +223,14 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   telescope's accuracy (Wiki: oak 24, teak 9, mahogany 2 minutes), via
   `shooting-stars:forecast`. Which regions take "the" is inferred beyond the captured
   "the Kharidian Desert".
+- **S.T.A.S.H chart:** the wall chart space's fourth chart (furniture row 5790,
+  `poh_wallchart_4`): Construction 40, a bolt of cloth and a S.T.A.S.H blueprint, 16 experience,
+  `human_poh_build_wall` and synth 938 (rsprox.net rec 2804, rev 229, ticks 4949 and 5330). View
+  opens the same STASH units chart as Watson's noticeboard (ticks 5337-5338; see
+  [treasure-trails.md](treasure-trails.md)). The blueprint is Watson's (500 coins, rec 2804
+  tick 5098); his sale is not wired yet.
+- **Build menu names:** the furniture row's name, sentence-cased ("Spice Rack" is sent as
+  "Spice rack", "Oak Telescope" as "Oak telescope"; recs 271 and 2804).
 - **Crystal ball, elemental sphere, crystal of power:** change an elemental staff's element;
   battlestaffs cost 100 and mystic staffs 1,000 runes of the new element (Wiki).
 - **Bookcases:** `poh_bookcase` (910) lists enum 5210's books and shows the found ones from
@@ -265,6 +273,21 @@ the generic Ladders plugin's `ladders:climb`, which otherwise claims every Climb
   water in order to plant garden plants." The menagerie's habitats water in too but give no
   Farming experience (Wiki: Pet house). The hammer and saw are still asked for; the captures
   don't show a planting without them.
+- **Topiary bush:** Clip, on the plain bush or any shape, needs secateurs or magic secateurs
+  (carried; magic secateurs also wielded): without them "You'll need some secateurs to clip the
+  topiary bush." (rsprox.net recs 2581 tick 295, 2884 tick 10243). With them it opens menu 187
+  "Choose a shape" (None, Kraken, Zulrah, Kalphite Queen, Cerberus, Abyssal Sire, Skotizo,
+  Vorkath, Alchemical Hydra, The Nightmare). A pick plays `pruning_all` and synth 2440, and three
+  ticks later the animation resets and the bush becomes that shape's `poh_topiary_*` loc, saved
+  with the house (rec 2884, rev 230, ticks 12577-12725). No message or experience. Picking the
+  shape the bush already has opens a mesbox, "It's already in that form.", and prunes nothing
+  (rec 2884 tick 12537, None on the plain bush). Each shape
+  needs that boss killed once (Wiki: Topiary bush), read from Combat Achievements' kill counts,
+  so Phosani's Nightmare doesn't unlock The Nightmare. The Wiki asks for the post-quest Vorkath;
+  Combat Achievements also counts the Dragon Slayer II one (npc `vorkath_quest`), so the shape
+  needs a recorded death of npc `vorkath` (`construction:topiary-vorkath-killed`); a kill count
+  alone can't tell them apart. Ours: the refusal "You need to have killed <boss> to clip that shape.",
+  owner-only reshaping, and None giving the plain bush back.
 - **Cape hanger:** cape and hood mount as their `poh_mounted_*` loc; Take, Admire and, for the
   owner, the cape's options through `skillcape:operate` in the SkillCapes plugin. Untrimmed
   skillcapes show trimmed once the owner has two 99s (Wiki).
@@ -321,12 +344,68 @@ Using a pet on menagerie furniture stores it; the pet house's View lists the sto
 2013) lets them roam the menagerie outside building mode. Stored pets count as owned
 (`pets:held-elsewhere`).
 
+**Extras** (pet rocks, cats, dogs, fishbowls, toy cats, broavs, spooky chairs, Humphrey Dumphrey,
+the Mayor of Catherby and Archibald; `data/menagerie-extras.json` maps each item to the `poh_*`
+NPC that roams for it) live in inventory `poh_menagerie_pets` (517), which script 641 draws after
+enum 985's slots, so list child `enum size + inv slot` is that slot. From rsprox captures 2779
+and 2782 (rev 229):
+
+- Using the pet rock on an oak house takes it on the tick with no message and its `poh_rock` starts
+  roaming (2779 tick 1019, 2782 tick 27).
+- View sends the inventory in full before it opens interface 211, which opens list children 0
+  to `enum size + 12` (0-75 with that revision's 63 slots). Taking an extra back empties only its
+  slot (2779 tick 2090, child 63).
+- A kitten is turned away: "Kittens need more personal care and attention than the pet house can
+  provide." (2779 ticks 911, 987).
+- Extras count toward a pet house's limit. In 2779 (tick 1050) a supreme, a K'ril and the rock
+  filled an oak house, so the chompy chick got "The pet house is full. Only 3 creatures can live in
+  this kind of pet house."
+
+The limits are oak 3, teak 5, mahogany 7, consecrated 9 and desecrated 12, taken from the best pet
+house in the house; the nature house takes every unique pet plus 12 extras (Wiki: Menagerie).
+Puppies aren't extras (Wiki: Dog), so nothing happens when one is used. Pick-up on the roaming
+rock emits `construction:menagerie-pet-picked-up`, which completes the Fremennik Diary's "Pick up
+your Pet Rock from your POH Menagerie" (Wiki: "use your pet rock on a pet house, then retrieve it
+off the ground").
+
+With no pet house built, a pet used on other menagerie furniture gets "There does not appear to
+be a pet house to store pets in this house." (2777 ticks 3172-3173). Ours: "Your menagerie can't
+hold more than 12 of those pets." for a 13th extra in a nature house; no recording or Wiki line
+covers it.
+
+The Pet list's Read opens `poh_petlist` (210) as rsprox captures 2581, 2777, 2782, 2793 and
+3121 send it: script 2524 (-1, -1), the modal, Examine (op10) on list slots 0 to the last slot
+of enum 985, and script 647 with one green "Owned" or red "Not owned" cell per slot, each
+followed by `|`. A slot is Owned when the reader owns that pet (`pets:owns`, the insurance
+record): recording 2581's nine Owned slots are exactly its nine `pet_insurance_*` bits, with
+nothing stored in the menagerie. Examine sends the pet's examine for owned and unowned slots
+alike (2581: "A tiny frost nagua." on the unowned Moxi, slot 61).
+
+Pick-up on a roaming pet takes it back as Take does (rsprox captures 2779-2784, rev 229,
+on Dagannoth Supreme Jr., K'ril Tsutsaroth Jr., the phoenix, Lil' Zik, the rift guardian and
+others): on the tick the owner reaches it the NPC goes, the pet item arrives and its stored bit
+and form varbit clear, with no animation or sound. Only that pet goes; the others keep roaming.
+Ours: a full backpack gets "You don't have enough inventory space." (as Take), a guest's
+Pick-up does nothing, and an account with a bank PIN is asked for it first (as Take).
+
+The desert habitat's cactus (`poh_menagerie_habitat_feature_3`) has Touch. In rsprox capture
+2792 (ticks 768-890) the player walks up, faces it and plays `human_pickuptable` (832); the
+next tick sends "That was unwise." as a spam message and a 2-damage hitsplat, and held clicks
+touch every other tick. The Wiki (Desert habitat) gives the same 2 damage and message.
+It never kills: at 1 hitpoint (2792 ticks 993-998) each touch still sends the message but hits
+a blue 0. Ours: at 2 hitpoints it takes 1, as no recording touches at 2.
+
 ### Dungeon and throne room
 
 - **Guards and guardians** stand in for their furniture as NPCs outside building mode and come
   back when the house next loads; in challenge mode they attack guests nearby.
 - **Doors and cages** open and close; in challenge mode they are locked to guests, who pick or
   force them at the Wiki's odds.
+- **Oubliette cage Build-in:** the floor sits inside the cage, so the cage's Build-in (op4) opens
+  the floor space's build menu (Spikes, Tentacle pool, Flame pit, Rocnar). With a floor built it
+  asks "Select an option" / "Remove the contents of the oubliette|Never mind", then the usual
+  "Really remove it?" Yes/No, and Yes removes it like any Remove (rsprox captures 2872 ticks 176
+  and 196, 2873, 2877; rev 230). Outside building mode it does nothing (ours: not captured).
 - **Traps** (challenge mode, Agility dodges) and oubliette floors hurt guests; damage the Wiki
   doesn't give is ours.
 - **Treasure chests** hold the owner's coins up to the chest's limit, added every 5 minutes;
@@ -472,6 +551,17 @@ oubliette's ladder), "... the basement level." for a ground floor room with stai
 shows the basement-level warning on a study, which holds no stairs; Remove on stair furniture,
 which on live goes on to removing the room at the other end (recordings 251, 2551, 2864).
 
+Remove-room on stair furniture (staircases, the oubliette's ladder, the throne room's trapdoors)
+removes the room at its other end (rsprox captures: recordings 2551, 2608, 2611, 2613, 2617, 2620,
+2621, 2632, 3897 and one of the user's own, rev 229-235): stairs up take the room above, stairs
+down the room below, and a spiral staircase asks "Remove which room?" with Room above / Room
+below. That room then goes as through its door: its floor warning, "Remove the skill hall?",
+"Room deleted!". Message boxes refuse: "You can only do that in building mode.", "There is no
+room above to remove." and, on the upper floor's stairs down, "The room below is supporting this
+room!". Ours: "There is no room below to remove." mirrors the captured line for the room above;
+the garden's dungeon entrance (loc 4529, with the same Remove-room option) removes the dungeon
+stairs room below it like the other stairs down, which no recording shows.
+
 ### Building furniture
 
 Captures of the build menu (`poh_furniture_creation`, 542 picks in 123 recordings, rev 226-239):
@@ -507,6 +597,14 @@ there!", or "Hmph. Come back when you have 5,000 coins.". Twisted theme first sa
 let me borrow your blueprints ..."; leaving it shows "The Estate agent returns your blueprints."
 (message box). The Wilderness theme is only listed once it can be used (the captures show it
 rarely, so when it shows otherwise isn't known).
+
+The exit portal's Lock and Remove board advert (rsprox captures local 1001005, local 1001008 and
+248, rev 229): Lock answers on the click's tick in a message box, "Your house is now locked to all
+visitors." or "Visitors can now enter your house.", and sets `poh_house_locked`; a guest gets "You
+can only lock your own house." (message box). Remove board advert asks the board's "Remove your
+advert?" (Yes. / No.); Yes says "Your house is no longer being advertised.". A guest gets "This is
+not your portal to configure." and an owner with no advert up "You are not currently advertising
+your house." (both game messages).
 
 A new house's save lists its garden's exit portal by hotspot only; loading a house now places
 such furniture, so the portal shows, and you arrive in front of it.
@@ -591,6 +689,38 @@ Wiki:
 Not covered by either source: the Maid's and Cook's in-house greeting and "You rang", the
 wage demand of Rick, the Maid and the Cook, a full-inventory line other than the Demon
 butler's, guests' conversations with the servant, and the Butler's guest greeting.
+
+### Boss lair display
+
+`BossLair.Construction.js`, with the jars in `Storage.Construction.js` (rsprox captures 2909,
+rev 230; 3897, rev 235; local 1001171, a guest):
+
+- **Jars** opens the costume-room storage on enum 3300 (one row per jar, 16 in rev 242):
+  `poh_costumes_init` gets 3300, whether the viewer may change it (owner only), and the reset
+  flag. Ours: removing the display is refused while it holds a jar, like the costume room;
+  live asks "Really remove it?" with a jar inside (2909 tick 2481) and what Yes does with the
+  jar is unrecorded.
+- **Configure** opens the list menu (`menu`, script 217) titled "Choose a lair": `Empty`, then
+  each lair in enum 3300's order, struck through (`<str>`) unless its jar is stored. A stored
+  lair or Empty: the player does `human_pickuptable` (832) with area sound 2942 (delay 10,
+  range 7) and the display becomes that lair's loc (`poh_display_*`, saved as the furniture's
+  `displayObjectId`) a tick later. A lair without its jar opens a message box, "The display
+  does not contain the jar of that creature.", and the menu again after it (2909 tick 5214).
+  Picking what the display already shows (a lair, or Empty when blank) opens a message box,
+  "It's already in that state.", with no reach (2909 tick 4739).
+- A guest's Configure: "You can only configure the display in your own house." Their Jars
+  opens the storage to look at only.
+- Taking out the shown lair's jar closes the storage, the player reaches in with the same
+  animation and sound, and the display is blank a tick later (3897 tick 1092).
+- The boss must also have been killed once (Wiki), by Combat Achievements' kill count; for
+  Vorkath a kill of the post-quest form (8061), which the display records on its death, since
+  that count also counts every quest-form (8060) kill; a player Dragon Slayer II never marked has
+  only met 8061, so their count still answers.
+  Phosani's Nightmare's kills count for The Nightmare. Ours: the refusal, a message box "You
+  haven't killed that creature yet." with the menu after it, like the missing jar's; no capture
+  shows one.
+- Ours: the Shellbane Gryphon and Mad Angel menu labels (the Wiki's names; no capture lists
+  them).
 
 ## Not done yet
 

@@ -211,7 +211,10 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     player.getInventory().getAddableAmount(new Item(ItemIdentifiers.FEATHER, FYCIE_FEATHER_AMOUNT)) === FYCIE_FEATHER_AMOUNT;
   const hasEquipped = (player, itemId) =>
     (player.getEquipment?.()?.getItems?.() ?? []).some((item) => item?.getId?.() === itemId);
+  /** The quest's own bow: the one Rantz lends and reclaims. The comp ogre bow only exists after the quest. */
   const hasBow = (player) => has(player, OGRE_BOW) || hasEquipped(player, OGRE_BOW);
+  /** Wiki (Rantz, history): the ogre composite bow shows Rantz the kill marks as the standard bow does. */
+  const hasChompyBow = (player) => [...CHOMPY_BOWS].some((id) => has(player, id) || hasEquipped(player, id));
   const chompyKills = (player) => Number(player.getAttribute(CHOMPY_KILLS_ATTRIBUTE)) || 0;
   const hatsClaimed = (player) => Number(player.getAttribute(HATS_CLAIMED_ATTRIBUTE)) || 0;
   const hatClaimed = (player, index) => (hatsClaimed(player) & (1 << index)) !== 0;
@@ -366,8 +369,11 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
         || skills.getMaxLevel(Skill.COOKING) < 30
         || skills.getMaxLevel(Skill.FLETCHING) < 5;
     }
-    if (value.includes("does not have the bow")) return !hasBow(player);
-    if (value.includes("has an ogre bow")) return hasBow(player);
+    if (value.includes("does not have the bow")) {
+      // After the quest this is the hat claim, where either chompy bow counts; before it, the lost-bow page.
+      return !(quest.getStage(player) >= STAGE_COMPLETE ? hasChompyBow(player) : hasBow(player));
+    }
+    if (value.includes("has an ogre bow")) return hasChompyBow(player);
     if (value.includes("already claimed all newly claimable hats")) {
       return chompyKills(player) >= 30 && claimableHat(player) < 0;
     }
@@ -758,7 +764,7 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   }
 
   function grantHat(player, text) {
-    if (quest.getStage(player) < STAGE_COMPLETE || !hasBow(player) || freeSlots(player) <= 0) return;
+    if (quest.getStage(player) < STAGE_COMPLETE || !hasChompyBow(player) || freeSlots(player) <= 0) return;
     const hat = hatForText(text);
     if (!hat) return;
     const index = CHOMPY_HATS.indexOf(hat);
@@ -885,8 +891,23 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   function hatClaimSteps(steps) {
     const menu = steps.find((step) => step.type === "choice");
     const ask = menu?.options?.find((option) => option.text === "Can I have a hat please?");
-    const shown = ask?.steps?.find((step) => step.type === "condition" && /has an ogre bow/i.test(step.text));
-    return shown ? [shown] : null;
+    return ask?.steps?.filter((step) => step.type === "condition") ?? null;
+  }
+
+  /** The cache's Claim-hats option uses the same bow/kill/space checks as showing him a bow. */
+  function claimHats({ player, npc, npcId }) {
+    if (!quest.isComplete(player)) return false;
+    const request = { player, npc, npcId, variant: page(RANTZ_PAGE, "after-big-chompy-bird-hunting"), select: hatClaimSteps };
+    api.emitCustomEvent("npc-dialogue:start", request);
+    return request.handled === true;
+  }
+
+  /** RFD already offers this topic; its transcript leaves the continuation to the main quest. */
+  function hatTopicChoice(choice) {
+    if (!RANTZ_NPC_IDS.has(choice.npcId) || !quest.isComplete(choice.player)
+      || !["Hey, I wanted to ask about hats...", "Ask about hats..."].includes(choice.option)) return;
+    choice.end = true;
+    startTranscript(api, choice.player, choice.npcId, RANTZ_PAGE, "after-big-chompy-bird-hunting");
   }
 
   /** Items used on Rantz: arrows, the bloated toad, the ogre bow, the raw and cooked chompy. */
@@ -909,13 +930,10 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
       play("giving-rantz-a-cooked-chompy", RANTZ_PAGE);
       return;
     }
-    if (event.itemId === OGRE_BOW) {
+    if (event.itemId === OGRE_BOW || (CHOMPY_BOWS.has(event.itemId) && quest.isComplete(player))) {
       if (quest.isComplete(player)) {
         // The capture's bow on Rantz after the quest (tick 1643): straight to "You show Rantz the marks on your bow.".
-        const request = { player, npc: event.target, npcId, variant: page(RANTZ_PAGE, "after-big-chompy-bird-hunting"),
-          select: hatClaimSteps };
-        api.emitCustomEvent("npc-dialogue:start", request);
-        if (request.handled) event.handled = true;
+        if (claimHats({ player, npc: event.target, npcId })) event.handled = true;
       } else if (stage >= STAGE_RANTZ_MISSED && stage < STAGE_KILLED_CHOMPY) {
         play("talking-to-rantz-after-he-failed-using-the-ogre-bow-on-rantz");
       }
@@ -1136,9 +1154,13 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
     }
   }
 
-  /** Before the quest, the ogre bow's Check kills (Wiki: Ogre bow; capture ticks 1089, 1358). */
+  /** Both bows show the shared kill marks; the pre-quest refusal is captured at ticks 1089, 1358. */
   function checkKills(event) {
-    if (quest.isComplete(event.player)) return false;
+    if (quest.isComplete(event.player)) {
+      // shortcut: completed-count wording is unrecorded; replace it when a post-quest Check capture is available.
+      event.player.sendMessage(`You've scratched up ${chompyKills(event.player)} kills!`);
+      return true;
+    }
     // The capture breaks the line between the two sentences (ticks 1089, 1358).
     event.player.sendMessage("You've scratched up no kills yet!<br>You've got to complete the quest first!");
     return true;
@@ -1202,13 +1224,16 @@ module.exports = function registerBigChompyBirdHuntingQuest(api) {
   api.onCustomEvent("npc-dialogue:line", handleDialogueLine);
   api.onCustomEvent("npc-dialogue:random", handleRandom);
   api.onCustomEvent("npc-dialogue:menu", handleMenu);
+  api.onCustomEvent("npc-dialogue:choice", hatTopicChoice);
   api.onItemOnObject(handleItemOnObject);
   api.onItemOnNpc(handleItemOnNpc);
   api.onItemAction(handleItemAction);
   api.onItemAction("Ogre bow", { "Check kills": checkKills, Check: checkKills });
+  api.onItemAction("Comp ogre bow", { "Check kills": checkKills, Check: checkKills });
   api.onObjectInteraction("Locked Ogre chest", { Unlock: chest.unlock });
   api.onObjectInteraction("Unlocked Ogre chest", { Search: chest.search });
   api.onNpcInteraction(handleNpcInteraction);
+  api.onNpcInteraction("Rantz", { "Claim-hats": claimHats });
   api.onNpcDeath(handleNpcDeath);
   api.onCustomEvent("npc-drops:claim", handleDropClaim);
   api.onCanAttack(handleCanAttack);

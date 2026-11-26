@@ -1,7 +1,8 @@
 // Run after `yarn build`: node --test tests/enlightened-journey-second-experiment.test.cjs
 // Enlightened Journey's second experiment (issue #4308), played from the generated transcript with
-// native dialogue input: Auguste takes the two papyrus and the sack of potatoes and the quest moves
-// on, so he does not ask for them again.
+// native dialogue input: "Commendable..." continued plays the flash-mob scene, and 24 ticks later
+// (rev 242 recording, ticks 568-592) Auguste has taken the two papyrus and the sack of potatoes and
+// zep_quest is 60 as "Well, that went down like a lead balloon." shows, so he does not ask again.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { before, after, test } = require('node:test');
@@ -14,8 +15,8 @@ const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const { MultiChatboxPrompt } = require('../dist/game/model/menu/MultiChatboxPrompt');
 
 const STAGE_KEY = 'quest.enlightened_journey.stage';
-const FIRST_EXPERIMENT_DONE = 2;
-const SECOND_EXPERIMENT_DONE = 3;
+const FIRST_EXPERIMENT_DONE = 40;
+const SECOND_EXPERIMENT_DONE = 60;
 let core, next = 2600;
 
 before(async () => {
@@ -32,6 +33,7 @@ function actor(t, items) {
   const c = new ClientConnection(channel); c.player = p;
   for (const [id, amount] of items) p.getInventory().add(new core.Item(id, amount), true);
   p.setAttribute(STAGE_KEY, FIRST_EXPERIMENT_DONE);
+  p.setAttribute('quest.enlightened_journey.numbering', 2);
   t.after(() => { p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
   return { p, c };
 }
@@ -46,8 +48,11 @@ async function handOver(f) {
   assert.deepEqual(MultiChatboxPrompt.getPending(f.p)?.options, ["Yes, I have them here.", "Oh, I've misplaced them."]);
   await input(f, { type: 'dialogue_continue', widgetId: (219 << 16) | 1, childIndex: 1 });
   const seen = [];
-  for (let i = 0; i < 10 && f.p.getDialogueManager().isActive(); i++) {
-    seen.push(text(f));
+  for (let i = 0; i < 40 && f.p.getDialogueManager().isActive(); i++) {
+    const line = text(f);
+    if (!line) { core.TaskManager.process(); continue; } // the scene's pause: no chatbox, the ticks run
+    seen.push(line);
+    if (line === 'Well, that went down like a lead balloon.') f.ticksToLastLine = i;
     await input(f, { type: 'dialogue_continue', widgetId: (231 << 16) | 5, childIndex: -1 });
     if (f.p.getDialogueManager().isActive()) await input(f, { type: 'dialogue_continue', widgetId: (217 << 16) | 5, childIndex: -1 });
   }
@@ -59,6 +64,8 @@ test('handing over two papyrus and a sack of potatoes takes them and completes t
   const f = actor(t, [[I.PAPYRUS, 1], [I.PAPYRUS, 1], [I.POTATOES_10_, 1]]);
   const seen = await handOver(f);
   assert.ok(seen.includes('Commendable. If I may have those, I will construct this experiment.'), seen.join(' | '));
+  assert.ok(seen.includes('Well, that went down like a lead balloon.'), seen.join(' | '));
+  assert.equal(seen.includes('Destroy the floating thing!'), false, "the peasant's shout is overhead, not a chat line");
   assert.equal(f.p.getInventory().getAmount(I.PAPYRUS), 0);
   assert.equal(f.p.getInventory().getAmount(I.POTATOES_10_), 0);
   assert.equal(f.p.getAttribute(STAGE_KEY), SECOND_EXPERIMENT_DONE);

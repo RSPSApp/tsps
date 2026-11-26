@@ -18,7 +18,7 @@ const Shrine = require("./woodcutting/Shrine.Woodcutting");
 const SplitLogs = require("./woodcutting/SplitLogs.Woodcutting");
 const KandarinHeadgear = require("./woodcutting/KandarinHeadgear.Woodcutting");
 const FarmedRedwood = require("./farming/Redwood.Farming");
-const { pauseForLevelUp, actionInterval } = require("./SkillActions");
+const { pauseForLevelUp, modalPause, actionInterval } = require("./SkillActions");
 
 const DEFAULT_TREE_STUMP_ID = ObjectIds.TREE_STUMP_2;
 // Older trees share models but not stumps, and some sit next to an unrelated stump id; key their
@@ -110,9 +110,12 @@ const BIRD_NESTS = Object.freeze({
   LEGACY_SEED_NEST: ItemIds.BIRD_NEST_4,
   RING_NEST: ItemIds.BIRD_NEST_5,
   EMPTY_NEST: ItemIds.BIRD_NEST_6,
+  // bird_nest_decentseeds_jan2019: Wyson the gardener's seed nest (plugins/npcs/Wyson.plugin.js),
+  // its own seed table (rsprox capture local 1000323).
+  WYSON_SEED_NEST: ItemIds.BIRD_NEST_12,
 });
 
-const SEED_NEST_IDS = new Set([BIRD_NESTS.SEED_NEST, BIRD_NESTS.LEGACY_SEED_NEST]);
+const SEED_NEST_IDS = new Set([BIRD_NESTS.SEED_NEST, BIRD_NESTS.LEGACY_SEED_NEST, BIRD_NESTS.WYSON_SEED_NEST]);
 
 const SEARCHABLE_NEST_IDS = new Set([
   BIRD_NESTS.RED_EGG_NEST,
@@ -146,8 +149,8 @@ const LUMBERJACK_SET_TEXT = 17;
 const SEERS_VILLAGE = { minX: 2700, maxX: 2780, minY: 3430, maxY: 3530, z: 0 };
 
 // OSRS Wiki seed nest table (1,011 slots). `text` is the seed as the search line names it (rsprox
-// captures 549, 552, 1723 and others); magic, mahogany and redwood are unrecorded and follow the
-// yew and teak lines.
+// captures 549, 552, 1723 and others; the magic seed's capital letters are rsprox capture 1002026
+// tick 31877); mahogany and redwood are unrecorded and follow the teak and yew lines.
 const NEST_SEEDS = [
   { id: ItemIds.ACORN, text: "an acorn", weight: 214 },
   { id: ItemIds.APPLE_TREE_SEED, text: "an apple tree seed", weight: 170 },
@@ -163,11 +166,46 @@ const NEST_SEEDS = [
   { id: ItemIds.CALQUAT_TREE_SEED, text: "a calquat tree seed", weight: 17 },
   { id: ItemIds.SPIRIT_SEED, text: "a Spirit Tree seed", weight: 11 },
   { id: ItemIds.DRAGONFRUIT_TREE_SEED, text: "a dragonfruit tree seed", weight: 6 },
-  { id: ItemIds.MAGIC_SEED, text: "a magic tree seed", weight: 5 },
+  { id: ItemIds.MAGIC_SEED, text: "a Magic Tree seed", weight: 5 },
   { id: ItemIds.TEAK_SEED, text: "a teak seed", weight: 4 },
   { id: ItemIds.MAHOGANY_SEED, text: "a mahogany seed", weight: 4 },
   { id: ItemIds.CELASTRUS_SEED, text: "a celastrus tree seed", weight: 3 },
   { id: ItemIds.REDWOOD_TREE_SEED, text: "a redwood tree seed", weight: 2 },
+];
+
+const seedText = (table, itemId) => table.find((seed) => seed.id === itemId).text;
+
+// OSRS Wiki "Bird nest (Wyson)" seed table (684 slots), with its quantities. The sweetcorn and
+// cadantine lines are rsprox capture local 1000323; the tree seeds read as in the nest above.
+// Ours: the other allotment and herb seed lines are unrecorded and follow the sweetcorn and
+// cadantine lines.
+const WYSON_NEST_SEEDS = [
+  { id: ItemIds.ACORN, amount: 1, text: seedText(NEST_SEEDS, ItemIds.ACORN), weight: 80 },
+  { id: ItemIds.SWEETCORN_SEED, amount: 6, text: "6 sweetcorn seeds", weight: 102 },
+  { id: ItemIds.STRAWBERRY_SEED, amount: 6, text: "6 strawberry seeds", weight: 100 },
+  { id: ItemIds.LIMPWURT_SEED, amount: 2, text: "2 limpwurt seeds", weight: 80 },
+  { id: ItemIds.WATERMELON_SEED, amount: 2, text: "2 watermelon seeds", weight: 70 },
+  { id: ItemIds.SNAPE_GRASS_SEED, amount: 2, text: "2 snape grass seeds", weight: 40 },
+  { id: ItemIds.WILLOW_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.WILLOW_SEED), weight: 16 },
+  { id: ItemIds.MAPLE_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.MAPLE_SEED), weight: 6 },
+  { id: ItemIds.PINEAPPLE_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.PINEAPPLE_SEED), weight: 16 },
+  { id: ItemIds.CADANTINE_SEED, amount: 1, text: "a cadantine seed", weight: 24 },
+  { id: ItemIds.LANTADYME_SEED, amount: 1, text: "a lantadyme seed", weight: 30 },
+  { id: ItemIds.DWARF_WEED_SEED, amount: 1, text: "a dwarf weed seed", weight: 30 },
+  { id: ItemIds.TEAK_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.TEAK_SEED), weight: 20 },
+  { id: ItemIds.MAHOGANY_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.MAHOGANY_SEED), weight: 20 },
+  { id: ItemIds.TORSTOL_SEED, amount: 1, text: "a torstol seed", weight: 4 },
+  { id: ItemIds.CALQUAT_TREE_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.CALQUAT_TREE_SEED), weight: 12 },
+  { id: ItemIds.PAPAYA_TREE_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.PAPAYA_TREE_SEED), weight: 10 },
+  { id: ItemIds.PALM_TREE_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.PALM_TREE_SEED), weight: 2 },
+  { id: ItemIds.DRAGONFRUIT_TREE_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.DRAGONFRUIT_TREE_SEED), weight: 2 },
+  { id: ItemIds.RANARR_SEED, amount: 1, text: "a ranarr seed", weight: 4 },
+  { id: ItemIds.SNAPDRAGON_SEED, amount: 1, text: "a snapdragon seed", weight: 4 },
+  { id: ItemIds.YEW_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.YEW_SEED), weight: 4 },
+  { id: ItemIds.MAGIC_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.MAGIC_SEED), weight: 2 },
+  { id: ItemIds.SPIRIT_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.SPIRIT_SEED), weight: 4 },
+  { id: ItemIds.CELASTRUS_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.CELASTRUS_SEED), weight: 1 },
+  { id: ItemIds.REDWOOD_TREE_SEED, amount: 1, text: seedText(NEST_SEEDS, ItemIds.REDWOOD_TREE_SEED), weight: 1 },
 ];
 
 // OSRS Wiki ring nest table.
@@ -270,7 +308,9 @@ const TREES = [
   },
   {
     name: "normal tree",
-    objectNames: ["Tree", "Dead tree", "Evergreen tree", "Dying tree"],
+    // "Jungle tree" is the Feldip, Ape Atoll and Crash Island kind with a Chop-down option. The decorative
+    // ones have no option, and Trouble Brewing's (Cut-Down) is handled by its own minigame plugin.
+    objectNames: ["Tree", "Dead tree", "Evergreen tree", "Dying tree", "Jungle tree"],
     action: ["Chop down", "Chop-down"],
     requiredLevel: 1,
     xpReward: 25,
@@ -669,6 +709,10 @@ const PEST_CONTROL_TREE = Object.freeze({
   respawnTimer: false,
 });
 const TREES_BY_OBJECT_ID = new Map(PEST_CONTROL_TREE.objectIds.map((id) => [id, PEST_CONTROL_TREE]));
+// The Kharazi Jungle's wall of trees (every placement of these two ids, in a line at y 2935-2942) is not a regular
+// chop: rsprox 230/02951 ticks 985-1005 walk the player through the tree for 100 xp and a 7 tick respawn. Left out
+// of the "Jungle tree" name hook until that passage exists (Legends' Quest).
+const KHARAZI_WALL_TREE_IDS = new Set([ObjectIds.JUNGLE_TREE_2, ObjectIds.JUNGLE_TREE_3]);
 // Farmed sailing hardwoods chop like the wild trees but regrow on farming's own patch timer.
 const FARMED_HARDWOODS = ["camphor", "ironwood", "rosewood"].map((name) => ({
   ...TREES.find((tree) => tree.name === name),
@@ -787,8 +831,8 @@ function groupBonus(player, state, sessions = activeSessionsRef) {
     if (session.requested || session.objectId !== state.objectId || session.privateArea !== state.privateArea) continue;
     if (!session.location?.equals?.(state.location)) continue;
     if (other.isRegistered?.() === false) continue;
-    // A level-up dialogue holds the session without chopping (SkillActions.pauseForLevelUp): not a chopper meanwhile.
-    if (session.levelUpPaused && other !== player) continue;
+    // A level-up dialogue or a busy modal holds the session without chopping: not a chopper meanwhile.
+    if ((session.levelUpPaused || other.inBusyModal?.() === true) && other !== player) continue;
     chopping++;
   }
   return Math.min(GROUP_BONUS_MAX, chopping);
@@ -1086,8 +1130,8 @@ function maybeDropBirdNest(player) {
   return true;
 }
 
-function rollNestSeed() {
-  return rollWeighted(NEST_SEEDS);
+function rollNestSeed(nestId) {
+  return rollWeighted(nestId === BIRD_NESTS.WYSON_SEED_NEST ? WYSON_NEST_SEEDS : NEST_SEEDS);
 }
 
 function rollNestRing() {
@@ -1102,8 +1146,9 @@ function searchBirdNest(player, nestId) {
 
   const inventory = player.getInventory();
   const freeSlots = inventory.getFreeSlots();
-  const seed = freeSlots > 0 && SEED_NEST_IDS.has(nestId) ? rollNestSeed() : null;
-  if (freeSlots <= 0 || (seed && inventory.getAddableAmount(new Item(seed.id, 1)) < 1)) {
+  const seed = freeSlots > 0 && SEED_NEST_IDS.has(nestId) ? rollNestSeed(nestId) : null;
+  const amount = seed?.amount ?? 1;
+  if (freeSlots <= 0 || (seed && inventory.getAddableAmount(new Item(seed.id, amount)) < amount)) {
     player.getDialogueManager().startDialogues(
       new pluginApi.core.DialogueChainBuilder().add(new pluginApi.core.StatementDialogue(0, NEST_FULL_MESSAGE))
     );
@@ -1114,7 +1159,7 @@ function searchBirdNest(player, nestId) {
   inventory.adds(BIRD_NESTS.EMPTY_NEST, 1);
 
   if (seed) {
-    inventory.adds(seed.id, 1);
+    inventory.adds(seed.id, amount);
     // "woodcutting:nest-search" { player, itemId }: the seed taken from the nest, for a league's
     // "Obtain a High level tree seed from a birds nest".
     pluginApi.emitCustomEvent("woodcutting:nest-search", { player, itemId: seed.id });
@@ -1345,7 +1390,8 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       stopWoodcutting(activeSessions, player);
       continue;
     }
-    if (state.levelUpPaused) continue;
+    const pause = modalPause(state, player);
+    if (pause === "paused") continue;
 
     const activeTree = treeAt(
       state.objectId,
@@ -1398,6 +1444,17 @@ function processWoodcuttingTick(activeSessions, currentTick) {
       // Live keeps the last chop animation running.
       sendInventoryFull(player, state.tree.logId);
       stopWoodcutting(activeSessions, player, false);
+      continue;
+    }
+
+    if (pause === "restart") {
+      // After a busy modal, with the tree still standing, in reach and an axe held: start over as
+      // a click on the tree does (startWoodcutting): the swing message and animation, then the
+      // first roll (SkillActions.modalPause).
+      state.nextActionTick = currentTick + FIRST_ROLL_DELAY_TICKS;
+      state.nextAnimationTick = currentTick + FIRST_ROLL_DELAY_TICKS;
+      sendSpam(player, SWING_MESSAGE);
+      player.performAnimation(new Animation(state.axe.animationId));
       continue;
     }
 
@@ -1507,7 +1564,7 @@ let ItemOnGroundManager;
 
 function handleChop(event) {
   const tree = TREES_BY_OBJECT_ID.get(event.object?.getId?.()) ?? TREES_BY_NAME.get(event.definition.getName());
-  if (!tree) {
+  if (!tree || KHARAZI_WALL_TREE_IDS.has(event.object?.getId?.())) {
     return;
   }
 
@@ -1619,5 +1676,5 @@ module.exports = {
   calculateCutChance,
   /** Stops the player's chopping (a Forestry event spawning beside them). */
   stopWoodcutting: (player) => activeSessionsRef && stopWoodcutting(activeSessionsRef, player),
-  _test: { addLumberjackSetText, maybeDropBirdNest, groupBonus, answerGroupBonus, sessions: () => activeSessionsRef, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
+  _test: { addLumberjackSetText, maybeDropBirdNest, searchBirdNest, WYSON_NEST_SEEDS, groupBonus, answerGroupBonus, sessions: () => activeSessionsRef, setApi: (api) => { pluginApi = api; ItemOnGroundManager = api.getItemOnGroundManager(); } },
 };

@@ -200,12 +200,18 @@ function blockTeleports(event) {
  */
 function recoverOnLogin({ player }) {
   Run.sendCompletionVarp(player);
-  if (require("./Echo.Gauntlet").recover(player)) return;
+  if (require("./Equipment.Gauntlet").recover(player)) return;
   if (!player.getAttribute(Run.ATTR_RUN) || Run.runOf(player)) return;
   player.setAttribute(Run.ATTR_RUN, null);
   Shared.clearItems(player);
   player.moveTo(Shared.loc(Shared.LOBBY));
   player.sendMessage("Your Gauntlet run is no longer available. You have been returned to the lobby.");
+}
+
+/** Entry fades happen in the lobby, before Map.postLeave can own disconnect cleanup. */
+function logout({ player }) {
+  const run = Run.runOf(player);
+  if (run && !run.echo) run.end("logout", { fade: false });
 }
 
 module.exports = function registerGauntletRun(api) {
@@ -230,4 +236,6 @@ module.exports = function registerGauntletRun(api) {
   api.onNpcHitModify(hitHunllef);
   api.onNpcDeath(hunllefDied);
   api.onPlayerLogin(recoverOnLogin);
+  api.onPlayerLogout(logout);
+  api.onPlayerDisconnect(logout);
 };

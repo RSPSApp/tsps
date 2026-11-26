@@ -23,6 +23,7 @@ import { NPC } from "../npc/NPC";
 import { NpcAggression } from "../npc/NpcAggression";
 import { AggressionTolerance } from "../npc/AggressionTolerance";
 import { Animation } from "../../../model/Animation";
+import { Graphic } from "../../../model/Graphic";
 import { Appearance } from "../../../model/Appearance";
 import { EnteredAmountAction } from "../../../model/EnteredAmountAction";
 import { EnteredSyntaxAction } from "../../../model/EnteredSyntaxAction";
@@ -144,6 +145,8 @@ export class Player extends Mobile {
     private disconnectSource: string | null = null;
     /** Cycle a removal in combat started waiting, -1 when not waiting. */
     private logoutHoldCycle = -1;
+    /** True from the start of onLogout: a task stopped by a logout sweep can tell it apart from a cancel. */
+    private loggingOut = false;
     // Trading
     private trading = new Trading(this);
     // Owned boats and where they are
@@ -165,6 +168,7 @@ export class Player extends Mobile {
     public interfaceId: number = -1
     /** Counts modal opens (a change to a mounted id), so a held id can be told from the same id mounted again. */
     private interfaceOpens = 0
+    private teleportStarts = 0;
     /** The process cycle of the player's last click or key press (0 before any since login). */
     public lastInputCycle = 0;
     private multiIcon: number;
@@ -503,12 +507,13 @@ export class Player extends Mobile {
             return;
         }
         this.arrivalAnimation = null;
+        const previousGeneration = this.getAnimationGeneration();
         super.performAnimation(animation);
         // Wiki: Animation stall. A swing's animation is measured here, the one place every
-        // source of one (styles, specials, spells) arrives. A seq turned away by priority was
-        // never started, so it must not be measured.
-        if (animation != null && this.getAnimation() === animation) {
-            this.getCombat().onAnimationStarted(animation.getId());
+        // source of one (styles, specials, spells) arrives. Measure the accepted sequence,
+        // including any presentation replacement.
+        if (this.getAnimationGeneration() !== previousGeneration) {
+            this.getCombat().onAnimationStarted(this.getAnimation().getId());
         }
     }
 
@@ -781,7 +786,13 @@ export class Player extends Mobile {
         }
     }
 
+    /** Whether onLogout is running (its hooks and task sweeps), so a stopped task can finish rather than abort. */
+    public isLoggingOut(): boolean {
+        return this.loggingOut;
+    }
+
     onLogout() {
+        this.loggingOut = true;
         // Notify us
         if (!this.isPlayerBot()) {
             console.log("[World] Deregistering player - [username, host] : [" + this.getUsername() + ", " + this.getHostAddress() + "]");
@@ -881,7 +892,7 @@ export class Player extends Mobile {
             (this.status !== PlayerStatus.NONE || this.interfaceId >= 0 || this.dialogueManager.isActive() ||
                 this.packetSender.hasInterruptibleInterface() || this.packetSender.hasInputPrompt())
         ) {
-            this.packetSender.closeInterruptibleInterfaces();
+            this.packetSender.closeInterruptibleInterfaces(true);
         }
     }
 
@@ -893,10 +904,27 @@ export class Player extends Mobile {
         return this.isTeleportingReturn() || this.getAttribute("agility.obstacle") != null;
     }
 
+    /** A busy main modal is open (PacketSender.setBusyModal): repeating gathering actions wait. */
+    inBusyModal(): boolean {
+        return this.packetSender.isBusyModal();
+    }
+
+    private mainInterfaceAllowsGameplay(groupId: number): boolean {
+        const { CustomInterfaceRegistry } = require("../../../interfaces/CustomInterfaceRegistry") as typeof import("../../../interfaces/CustomInterfaceRegistry");
+        return CustomInterfaceRegistry.get(groupId)?.lifecycle?.blocksGameplay === false;
+    }
+
+    /** Whether a main modal, dialogue or side modal is blocking gameplay. */
+    hasBlockingInterface(): boolean {
+        const groupId = this.getInterfaceId();
+        if (this.dialogueManager.isActive()) return true;
+        if (groupId <= 0) return this.packetSender.hasInterruptibleInterface();
+        if (!this.mainInterfaceAllowsGameplay(groupId)) return true;
+        return this.packetSender.hasModalInterface(groupId);
+    }
+
     busy(): boolean {
-        if (this.interfaceId > 0) {
-            return true;
-        }
+        if (this.interfaceId > 0 && !this.mainInterfaceAllowsGameplay(this.interfaceId)) return true;
         if (this.getHitpoints() <= 0) {
             return true;
         }
@@ -936,12 +964,36 @@ export class Player extends Mobile {
     }
 
     /**
+     * A full stop, as an interface button that halts the player does on live (View equipment
+     * stats): on the click's tick the walk is cleared (it does not resume when the interface
+     * closes), a pending object/NPC route and the combat interaction end, the face target and the
+     * animation reset, and a repeating skilling action stops (tsps also ends a make-X loop, which
+     * live leaves unrecorded). rsprox captures 227/1000433 t11626,
+     * 227/01751 t3614-3620 (walk), 227/1000561 t12352 (route), 227/1000296 t5356 (face cleared),
+     * 227/1000507 t226 (mining animation reset). docs/interface-interruption.md.
+     */
+    stopAction(): void {
+        this.getCombat().clearInteraction();
+        // As a walk click (MovementQueue.walkToReset): every task keyed to the player ends, the
+        // walk-to route and a make-X loop (fletching, herblore) with it.
+        TaskManager.cancelTasks(this.getIndex());
+        this.getMovementQueue().reset();
+        this.getMovementQueue().resetFollow();
+        this.getSkillManager().stopSkillable();
+        this.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
+        // Live clears the spotanim with the sequence (rsprox 227/01885 t20821: spotanim -1).
+        this.performGraphic(new Graphic(-1));
+        this.interactionCleared("interface");
+    }
+
+    /**
      * `player:interaction-cleared` { player, reason }: the player's interaction was replaced, so a
      * repeating action held outside the task keys (a chop, a fire, a smelt) ends. `reason` is "item"
-     * (an inventory or equipment action) or "attack" (an Attack click, a spell on a target, or
-     * auto-retaliate). osrs-docs: Entity Interactions - Interruptions.
+     * (an inventory or equipment action), "attack" (an Attack click, a spell on a target, or
+     * auto-retaliate) or "interface" (a full stop from an interface button, `stopAction`).
+     * osrs-docs: Entity Interactions - Interruptions.
      */
-    interactionCleared(reason: "item" | "attack"): void {
+    interactionCleared(reason: "item" | "attack" | "interface"): void {
         PluginManager.emitCustomEvent("player:interaction-cleared", { player: this, reason });
     }
 
@@ -1217,6 +1269,15 @@ export class Player extends Mobile {
         return this.interfaceOpens;
     }
 
+    public getTeleportStarts(): number {
+        return this.teleportStarts;
+    }
+
+    public override setTeleporting(teleporting: boolean): void {
+        if (teleporting && !this.isTeleportingReturn()) this.teleportStarts++;
+        super.setTeleporting(teleporting);
+    }
+
     public setInterfaceId(interfaceId: number): this {
         const previousId = this.interfaceId;
         if (this.interfaceId >= 0 && interfaceId >= 0 && this.interfaceId !== interfaceId) {
@@ -1241,6 +1302,24 @@ export class Player extends Mobile {
     public setRunning(isRunning: boolean): this {
         this.isRunning = isRunning;
         return this;
+    }
+
+    /** Content that makes the player walk, by its own key (not saved: content sets it again on login). */
+    private readonly walkOnlySources = new Set<string>();
+
+    /**
+     * Walk only while any source holds it: every step is a walk, but the run setting (the orb,
+     * varp 173) stays as the player left it, as live does with the bedsheet worn (rsprox
+     * captures, 20261112T092603-5ab63b4 ticks 1503-1504).
+     */
+    public setWalkOnly(source: string, walkOnly: boolean): this {
+        if (walkOnly) this.walkOnlySources.add(source);
+        else this.walkOnlySources.delete(source);
+        return this;
+    }
+
+    public isWalkOnly(): boolean {
+        return this.walkOnlySources.size > 0;
     }
 
     /** A transformed appearance carries no items, so the equipment tab gets the worn inventory. */

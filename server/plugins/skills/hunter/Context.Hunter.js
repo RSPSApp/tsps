@@ -56,6 +56,18 @@ function roll(min, max = min) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+/**
+ * How many times likelier content makes `itemId` from `source`: "drops:chance" { player, source,
+ * rules } (a league's boosted drops) answers rules { pattern, multiplier } on the item's name. A
+ * 1-in-n roll hits on `roll(1, n) <= dropMultiplier(...)`.
+ */
+function dropMultiplier(player, source, itemId) {
+  const rules = [];
+  H.api?.emitCustomEvent?.("drops:chance", { player, source, rules });
+  const name = String(H.core.ItemDefinition.forId(itemId)?.getName?.() ?? "");
+  return rules.reduce((value, rule) => (rule.pattern.test(name) ? value * rule.multiplier : value), 1);
+}
+
 function rewardItems(loot) {
   return loot.map(([id, min, max]) => [id, roll(min, max ?? min)]);
 }
@@ -304,5 +316,5 @@ function questStage(player, key) {
   return Number.isFinite(value) ? value : 0;
 }
 
-module.exports = { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, rewardItems,
+module.exports = { H, ANIM, level, requireLevel, hasTool, distance, nearby, active, available, roll, dropMultiplier, rewardItems,
   footprintDistance, exchange, catchExchange, catchRefusal, drop, xp, probability, outfit, addOutfitSetText, outfitCatchBonus, chance, choose, cancel, begin, processActions, hide, reveal, processHidden, removeObject, questComplete, questStage, ownsClue };

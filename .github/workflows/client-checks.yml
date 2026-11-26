@@ -19,7 +19,8 @@ jobs:
             - run: corepack enable
             - run: yarn install --immutable
               working-directory: client
+            - run: node scripts/client-version.mjs
             - run: yarn typecheck
               working-directory: client
-            - run: yarn test custom-interface-first-open edit-mode-custom-content engine-event-hooks widget-action-dispatch widget-primary-op widget-script-inventory widget-menu-use menu-click menu-swapper widget-drag map-square-cache runelite item-stats-plugin item-prices-plugin first-person-reticle-input combat-level game-container-sidebar-lifecycle bank-value firemaking-mesh-handoff
+            - run: yarn test desktop- cache-manifest-sparse cache-browser-policy custom-interface-first-open edit-mode-custom-content engine-event-hooks widget-action-dispatch widget-primary-op widget-script-inventory widget-menu-use menu-click menu-swapper widget-drag map-square-cache runelite item-stats-plugin item-prices-plugin first-person-reticle-input combat-level game-container-sidebar-lifecycle bank-value firemaking-mesh-handoff
               working-directory: client

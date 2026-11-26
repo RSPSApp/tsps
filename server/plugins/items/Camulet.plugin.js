@@ -136,6 +136,11 @@ function onItemAction(event) {
   rub(event.player, event.subOption ?? null);
 }
 
+function describeTeleports({ list }) {
+  list.push({ path: ["Items", "Camulet"], key: "temple", name: "Enakhra's Temple", tile: [...TEMPLE] },
+    { path: ["Items", "Camulet"], key: "entrance", name: "Enakhra's Temple Entrance", tile: [...ENTRANCE] });
+}
+
 module.exports = {
   name: "Camulet",
   description: "Camulet: teleports to Enakhra's Temple or the quarry entrance using charges, recharged with ugthanki dung.",
@@ -145,6 +150,7 @@ module.exports = {
     core = pluginApi.core;
     api.persistAttribute(CHARGES_ATTRIBUTE, DEFAULT_CHARGES);
     api.onItemAction(onItemAction);
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
     api.onItemOnItem("Ugthanki dung", "Camulet", rechargeWithDung, { noted: false });
   },
   _test: { charges, setCharges, unlimited, teleport, onItemAction, rechargeWithDung, TEMPLE, ENTRANCE, TEMPLE_TASK },

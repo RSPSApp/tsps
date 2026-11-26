@@ -85,9 +85,12 @@ async function begin(f) {
   await input(f, { type: 'widget_action', widgetId, groupId: widgetId >>> 16, childId: widgetId & 0xffff, slot: -1, buttonNum: 1 });
   assert.ok(f.p.getDialogueManager().getCurrent(), 'real search dialogue is active');
 }
+/** The first trip's search: its line, then the "You are quickly searched." box (rev 242 ticks 2241-2246), each continued. */
 async function continueSearch(f) {
-  const group = f.p.getPacketSender().getChatboxGroupId(); assert.equal(group, 229);
-  await input(f, { type: 'dialogue_continue', widgetId: (group << 16) | 4, childIndex: -1 });
+  for (let box = 0; box < 2; box++) {
+    const group = f.p.getPacketSender().getChatboxGroupId(); assert.equal(group, 229);
+    await input(f, { type: 'dialogue_continue', widgetId: (group << 16) | 4, childIndex: -1 });
+  }
 }
 function tick(n = 8) { for (let i = 0; i < n; i++) core.TaskManager.process(); }
 const coords = p => [p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()];
@@ -127,7 +130,7 @@ test('noted rune scimitar remains allowed by the shared policy', async t => {
 test('contraband added after search but before source choice refuses and conserves both fares', async t => {
   const f = actor(t, { ask: true }); await begin(f); await continueSearch(f);
   const pending = core.MultiChatboxPrompt.getPending(f.p); assert.ok(pending);
-  assert.match(pending.title, /which logs/i); assert.equal(f.p.getPacketSender().isChatboxInterface(219), true);
+  assert.equal(pending.title, 'Select an option'); assert.equal(f.p.getPacketSender().isChatboxInterface(219), true);
   f.p.getInventory().add(new core.Item(core.ItemIdentifiers.RUNE_SCIMITAR, 1), false);
   assert.equal(f.p.getInventory().getAmount(core.ItemIdentifiers.RUNE_SCIMITAR), 1);
   const denied = { player: f.p, allowed: false, reason: null, handled: false };

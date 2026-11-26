@@ -56,6 +56,17 @@ const COLLECTIONS = [518, 519, 520, 521, 522, 523, 539, 540];
 const SOUND_OFFER_PLACED = 3925;
 const SOUND_COLLECT_COINS = 3924;
 const SOUND_COLLECT_ITEMS = 3928;
+// Modify offer (465:23, dynamic child 1), as recorded (rsprox local 1001438, 1001441: 33 modifies of
+// buy and sell offers): popuploading (916) over ge_offers:contents for two ticks, then the offer's
+// input back in the inventory and the setup screen holding its item, quantity and price.
+const OFFER_CONTENTS = uid(1);
+const LOADING_POPUP = 916;
+const loadingUid = (child) => (LOADING_POPUP << 16) | child;
+const LOADING_POPUP_SCRIPT = 7882;
+const LOADING_ICON_SCRIPT = 4217;
+const LOADING_ICON_ENUM = 3787;
+const LOADING_TEXT = "Please wait...";
+const MODIFY_TICKS = 2;
 // Collect-all (465:6, 402:3/4) sends one sound of each kind however many offers it empties, and its coins sound
 // is delayed 5 (rsprox 226/01671, 224/01445); a single offer's collect plays both at delay 0.
 const COLLECT_ALL_COINS_DELAY = 5;
@@ -167,6 +178,30 @@ const usableSlots = () => (pluginApi.core.WorldDefinition.isMembersWorld() ? 8 :
 const offers = new WeakMap();
 const completionTimers = new WeakMap();
 const viewing = new WeakMap();
+/**
+ * Each player's pending Modify countdown. It belongs to the exchange view that started it: anything that
+ * changes that view (home, a new setup, an offer's details, closing the exchange) drops it, so a countdown
+ * from an earlier view can't collect or replace what the player is doing now.
+ */
+const modifying = new WeakMap();
+/**
+ * Drops the pending Modify, if any; the stopped offer stays in its slot's collection, as Abort leaves it.
+ * `popup: false` when the exchange itself is closing (its sub-interfaces go with it).
+ */
+function dropModify(player, popup = true) {
+  const task = modifying.get(player);
+  if (!task) return;
+  modifying.delete(player);
+  task.stop();
+  if (popup && player.getInterfaceId() === GE) player.getPacketSender().closeSubInterface(OFFER_CONTENTS);
+}
+/** The countdown's task key, one object per player, so a player-wide task cancel can't strand the popup. */
+const modifyKeys = new WeakMap();
+const modifyKey = (player) => {
+  let key = modifyKeys.get(player);
+  if (!key) modifyKeys.set(player, key = {});
+  return key;
+};
 const searching = new WeakSet();
 const historyOpen = new WeakSet();
 let pluginApi;
@@ -556,6 +591,10 @@ function collectFromObject(event) {
   const options = event.definition?.getInteractions?.();
   if (event.handled || options?.[event.clickType - 1] !== "Collect") return;
   if (!offersBanking(options, event.definition?.getName?.()) && !banksOnUse(options)) return;
+  // A booth nobody serves yet (BankBooths' "bank:booth-closed") is left to the content that owns it.
+  const closed = { player: event.player, object: event.object, objectId: event.objectId, closed: false };
+  pluginApi?.emitCustomEvent?.("bank:booth-closed", closed);
+  if (closed.closed) return;
   event.handled = true;
   openCollectionBox(event);
 }
@@ -670,6 +709,7 @@ function examine(itemId) {
 }
 
 function home(player) {
+  dropModify(player);
   closeSearch(player);
   offers.delete(player);
   viewing.delete(player);
@@ -729,6 +769,7 @@ function closeSearch(player) {
 
 function showCompleted(player, slot) {
   if (!Object.hasOwn(completedOffers(player), slot)) return;
+  dropModify(player);
   offers.delete(player);
   viewing.set(player, slot);
   player.getPacketSender()
@@ -763,6 +804,7 @@ function chooseItem(player, offer) {
 }
 
 function start(player, sell, slot = 0, itemId = -1) {
+  dropModify(player);
   if (slot >= usableSlots()) {
     player.sendMessage("You need to be on a members' world to use this slot.");
     return;
@@ -1077,7 +1119,11 @@ function collectionOutputId(baseId, amount, action, forceNotes = false) {
  * (rsprox_transcripts/236/03950.txt: 465:24 sub 2 takes the item, sub 3 later the refunded coins).
  */
 /** `heard`, when given, collects the sounds instead of playing them (collect-all plays the union once). */
-function collect(player, action, slot = viewing.get(player), forceNotes = false, part = null, heard = null) {
+/**
+ * `messages: false` hands it over without the "Collected ..." lines (a modified offer's input, as recorded).
+ * Returns true when something was handed over, false only when bank access refused it (Collect-all stops there).
+ */
+function collect(player, action, slot = viewing.get(player), forceNotes = false, part = null, heard = null, messages = true) {
   const offer = completedOffers(player)[slot];
   if (!offer?.finished) return;
   const taken = collectedParts(offer);
@@ -1137,38 +1183,87 @@ function collect(player, action, slot = viewing.get(player), forceNotes = false,
   if (remaining > 0) {
     sender.sendInterfaceScript(786, [], marketVarps(slot, offer), undefined,
       { [COLLECTIONS[slot]]: collection(offer) });
-    refreshCollectionBox(player);
-    for (const { outputId, amount } of parts) {
-      sender.sendMessage(`Collected ${amount.toLocaleString("en-US")} x ${ItemDefinition.forId(outputId).getName()}.`);
-    }
-    return;
+  } else {
+    sender.sendInterfaceScript(786, [], marketVarps(slot), undefined,
+      { [COLLECTIONS[slot]]: collection() });
+    if (player.getInterfaceId() === GE) home(player);
   }
-  sender.sendInterfaceScript(786, [], marketVarps(slot), undefined,
-    { [COLLECTIONS[slot]]: collection() });
-  if (player.getInterfaceId() === GE) home(player);
   refreshCollectionBox(player);
+  if (!messages) return true;
   for (const { outputId, amount } of parts) {
     sender.sendMessage(`Collected ${amount.toLocaleString("en-US")} x ${ItemDefinition.forId(outputId).getName()}.`);
   }
+  return true;
 }
 
 /** Abort offer (465:23, dynamic child 0): an offer still trading stops; its input waits in the collection. */
 function abort(player, slot = viewing.get(player)) {
+  const offer = stopOffer(player, slot);
+  if (!offer) return;
+  player.getPacketSender().sendVarbit(SELECTED_SLOT, 0).sendVarbit(SELECTED_SLOT, slot + 1)
+    .sendMessage("Abort request acknowledged. Please be aware that your offer may have already been completed.");
+}
+
+/** Stops an offer still trading: its input waits in the slot's collection. Null when it has already completed. */
+function stopOffer(player, slot) {
   const offer = completedOffers(player)[slot];
   if (!offer || offer.finished) {
     player.sendMessage("That offer has already completed.");
-    return;
+    return null;
   }
   offer.finished = true;
   offer.aborted = true;
   if (!offer.sell) releaseLimit(player, offer);
   saveOffers(player);
-  const sender = player.getPacketSender();
-  sender.sendInterfaceScript(786, [], marketVarps(slot, offer), undefined,
+  player.getPacketSender().sendInterfaceScript(786, [], marketVarps(slot, offer), undefined,
     { [COLLECTIONS[slot]]: collection(offer) });
   refreshCollectionBox(player);
-  sender.sendVarbit(SELECTED_SLOT, 0).sendVarbit(SELECTED_SLOT, slot + 1);
-  sender.sendMessage("Abort request acknowledged. Please be aware that your offer may have already been completed.");
+  return offer;
+}
+
+/**
+ * Modify offer (465:23, dynamic child 1). Recorded (rsprox local 1001438 ticks 10289-16394, local
+ * 1001441 ticks 3620-7230): the "Please wait..." popup covers the offer screen; two ticks later the
+ * offer's input is back in the inventory (a sell's items noted from two up, a buy's coins, with the
+ * collect sound and no message) and the setup screen opens on the same slot with the offer's item,
+ * quantity and price, ready to change and confirm again.
+ */
+function modify(player, slot = viewing.get(player)) {
+  if (modifying.has(player)) return;
+  // A members' slot on a free world: start() would refuse the new setup after the abort.
+  if (slot >= usableSlots()) {
+    player.sendMessage("You need to be on a members' world to use this slot.");
+    return;
+  }
+  const stopped = stopOffer(player, slot);
+  if (!stopped) return;
+  const task = new pluginApi.core.CountdownTask(modifyKey(player), MODIFY_TICKS, () => {
+    // Dropped (another view, the exchange closed or reopened): the stopped offer waits in its collection.
+    if (modifying.get(player) !== task) return;
+    modifying.delete(player);
+    reopenModified(player, slot, stopped);
+  });
+  modifying.set(player, task);
+  pluginApi.core.TaskManager.submit(task);
+  player.getPacketSender()
+    .sendSubInterface(OFFER_CONTENTS, LOADING_POPUP, 1)
+    .sendClientScript(LOADING_POPUP_SCRIPT, loadingUid(1), loadingUid(2), loadingUid(4))
+    .sendClientScript(LOADING_ICON_SCRIPT, loadingUid(6), loadingUid(7), LOADING_ICON_ENUM, 10, 1000, 3000, 512, 1024, 0, 3, LOADING_TEXT);
+}
+
+// Ours: an exchange closed or left during the wait (see dropModify), or an inventory without room,
+// leaves the stopped offer in its collection slot, as Abort would.
+function reopenModified(player, slot, stopped) {
+  if (!player.isRegistered() || player.getInterfaceId() !== GE || historyOpen.has(player)) return;
+  player.getPacketSender().closeSubInterface(OFFER_CONTENTS);
+  if (completedOffers(player)[slot] !== stopped) return;
+  if (collect(player, 1, slot, true, null, null, false) !== true || Object.hasOwn(completedOffers(player), slot)) return;
+  start(player, stopped.sell, slot, stopped.itemId);
+  const offer = offers.get(player);
+  if (!offer) return;
+  offer.quantity = stopped.quantity;
+  offer.price = offerPrice(stopped);
+  refresh(player, offer);
 }
 
 /** The Collect button (465:6, dynamic child 0): op 1 to the inventory (a slot of two or more as notes, a single item as the item), op 2 to the bank. */
@@ -1326,7 +1421,7 @@ function handleExchangeButton({ player, buttonId, slot, action }) {
   if (buttonId === uid(6) && slot === 0 && (action === 1 || action === 2)) { collectAll(player, action); return true; }
   if (buttonId === uid(23) && action === 1) {
     if (slot === 0) abort(player);
-    else player.sendMessage("To change an offer, abort it, collect, and place a new one.");
+    else if (slot === 1) modify(player);
     return true;
   }
   if (action !== 1) return true;
@@ -1429,6 +1524,7 @@ module.exports = {
     confirm,
     setApi: (api) => { pluginApi = api; },
     setOffer: (player, offer) => offers.set(player, offer),
+    getOffer: (player) => offers.get(player),
     price,
     sellPrice,
     changePrice,
@@ -1478,6 +1574,7 @@ module.exports = {
     api.onPlayerLogout(({ player }) => {
       searching.delete(player);
       historyOpen.delete(player);
+      dropModify(player, false);
       for (const timer of completionTimers.get(player) ?? []) clearTimeout(timer);
       completionTimers.delete(player);
     });
@@ -1504,6 +1601,7 @@ module.exports = {
     api.onInterfaceActionButton(HISTORY_BUTTONS, handleHistoryButton);
     api.onCustomEvent("interface:closed", ({ player, interfaceId }) => {
       if (interfaceId === GE_HISTORY) historyOpen.delete(player);
+      if (interfaceId === GE) dropModify(player, false);
     });
   },
 };

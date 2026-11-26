@@ -1919,7 +1919,7 @@ test('bots are given tools, never resources: inputs come from gathering or the b
   assert.ok(followOns(raw.templates.mine_rocks).includes('smelt'), 'miners can smelt their ore');
 });
 
-test('editor activities compile in the real registry without becoming site activities', () => {
+test('old local activity files are not loaded or rewritten by the real registry', () => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const { createBotActivityRegistry } = require('../plugins/bots/brain/ActivityRegistry.PlayerBots');
   const os = require('node:os');
@@ -1927,66 +1927,30 @@ test('editor activities compile in the real registry without becoming site activ
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-editor-registry-'));
   try {
     const editorPath = path.join(dir, 'activities.json');
-    fs.writeFileSync(editorPath, JSON.stringify([{ id: 'custom_walk', repeat: false, actions: [{ type: 'walkTo', x: 3222, y: 3218, z: 0, radius: 3 }, { type: 'if', condition: { hasItem: { id: 1511, min: 1 } }, then: { type: 'dropItems', itemIds: [1511] }, else: null }] }]));
+    const source = JSON.stringify([
+      { id: 'custom_walk', repeat: false, actions: [{ type: 'walkTo', x: 3222, y: 3218, z: 0, radius: 3 }] },
+      { id: 'custom_graph', repeat: false, graph: { nodes: [], edges: [] } },
+    ]);
+    fs.writeFileSync(editorPath, source);
     const registry = createBotActivityRegistry({ editorPath, world: { core: PluginManager.getCoreApi() } });
-    const activity = registry.byId.get('custom_walk');
-    assert.equal(activity.manual, true);
-    assert.equal(activity.actions[0].id, 'walkTo');
-    assert.equal(activity.actions[1].id, 'if');
-    fs.writeFileSync(editorPath, JSON.stringify([{ id: 'custom_graph', repeat: false, graph: { nodes: [{ id: 'start', kind: 'start', x: 0, y: 0 }, { id: 'check', kind: 'if', x: 200, y: 0, condition: { hasItem: { id: 1511, min: 1 } } }, { id: 'drop', kind: 'action', x: 400, y: 0, action: { type: 'dropItems', itemIds: [1511] } }, { id: 'end', kind: 'end', x: 600, y: 0 }], edges: [{ from: 'start', port: 'next', to: 'check' }, { from: 'check', port: 'true', to: 'drop' }, { from: 'check', port: 'false', to: 'end' }, { from: 'drop', port: 'next', to: 'end' }] } }]));
-    const graphRegistry = createBotActivityRegistry({ editorPath, world: { core: PluginManager.getCoreApi() } });
-    const graphActivity = graphRegistry.byId.get('custom_graph');
-    assert.equal(graphActivity.actions[0].id, 'graph');
-    assert.equal(graphActivity.oneShot, true);
-    assert.deepEqual(graphActivity.spawnSetup, { location: null, skills: {}, inventory: [], equipment: [] });
-    const presenceGraph = present => ({
-      nodes: [
-        { id: 'start', kind: 'start', x: 0, y: 0 },
-        { id: 'check', kind: 'if', x: 100, y: 0, condition: { hasItem: { id: 1511, present } } },
-        { id: 'match', kind: 'end', x: 200, y: 0 },
-        { id: 'no_match', kind: 'end', x: 200, y: 100 },
-      ],
-      edges: [
-        { from: 'start', port: 'next', to: 'check' },
-        { from: 'check', port: 'true', to: 'match' },
-        { from: 'check', port: 'false', to: 'no_match' },
-      ],
-    });
-    fs.writeFileSync(editorPath, JSON.stringify([
-      { id: 'custom_has_logs', repeat: false, graph: presenceGraph(true) },
-      { id: 'custom_no_logs', repeat: false, graph: presenceGraph(false) },
-    ]));
-    const presenceRegistry = createBotActivityRegistry({ editorPath, world: { core: PluginManager.getCoreApi() } });
-    const routeFor = (id, amount) => {
-      const action = presenceRegistry.byId.get(id).actions[0];
-      const ctx = { player: { getInventory: () => ({ getAmount: () => amount }) }, brain: {} };
-      assert.equal(action.update(ctx), 'running');
-      assert.equal(action.update(ctx), 'running');
-      return action.describe(ctx);
-    };
-    assert.equal(routeFor('custom_has_logs', 2), 'end: match');
-    assert.equal(routeFor('custom_has_logs', 0), 'end: no_match');
-    assert.equal(routeFor('custom_no_logs', 0), 'end: match');
-    assert.equal(routeFor('custom_no_logs', 1), 'end: no_match');
-    assert.ok(registry.sites.every(site => !site.activities.some(entry => entry.id === 'custom_walk')));
+    assert.equal(registry.byId.has('custom_walk'), false);
+    assert.equal(registry.byId.has('custom_graph'), false);
+    assert.equal(fs.readFileSync(editorPath, 'utf8'), source);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('combat-training preset and editor overrides compile against the real plugin core API', () => {
+test('combat-training preset and a plugin variant compile against the real core API', () => {
   const { PluginManager } = require('../dist/plugins/PluginManager');
   const { createBotActivityRegistry } = require('../plugins/bots/brain/ActivityRegistry.PlayerBots');
-  const os = require('node:os'), path = require('node:path');
   const core = PluginManager.getCoreApi();
-  const registry = createBotActivityRegistry({ world: { core } });
+  const api = { emitCustomEvent(_, { registerRoutine }) {
+    registerRoutine({ id: 'magic_training', name: 'Magic training', createActions: ({ action }) => [
+      action({ type: 'trainCombat', preset: 'default', styles: ['magic'], durationSeconds: { min: 30, max: 90 }, food: 'LOBSTER', foodAmount: 12, maxFailedTargets: 9, spreadDistance: 240 }),
+    ] });
+  } };
+  const registry = createBotActivityRegistry({ world: { core }, api });
   assert.equal(registry.byId.get('combat_training').actions[0].id, 'trainCombat');
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bot-train-editor-'));
-  try {
-    const editorPath = path.join(dir, 'activities.json');
-    fs.writeFileSync(editorPath, JSON.stringify([{ id: 'custom_train_options', repeat: true, actions: [{ type: 'trainCombat', preset: 'default', styles: ['magic'], durationSeconds: { min: 30, max: 90 }, food: 'LOBSTER', foodAmount: 12, maxFailedTargets: 9, spreadDistance: 240 }] }]));
-    const edited = createBotActivityRegistry({ editorPath, world: { core } }).byId.get('custom_train_options');
-    assert.equal(edited.manual, true);
-    assert.equal(edited.actions[0].id, 'trainCombat');
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  assert.equal(registry.byId.get('magic_training').actions[0].id, 'trainCombat');
 });
 
 test('a rotation switches activity after its time, never mid-fight or under an overlay', () => {
@@ -2947,42 +2911,6 @@ test('wait begins a fresh interval after an interrupted action resumes', (t) => 
   assert.equal(wait.update({ player, nowMs: 10000 }), 'success');
 });
 
-test('a repeating BotBrain graph gives each Wait visit its full duration', (t) => {
-  const { createWaitAction } = require('../plugins/bots/brain/actions/Wait.PlayerBots');
-  const { createGraphAction } = require('../plugins/bots/brain/Graph.PlayerBots');
-  const player = nativeFollowCombatPlayer(t, 'wait-loop', new Location(3200, 3200));
-  const graph = { nodes: [
-    { id: 'start', kind: 'start' },
-    { id: 'wait_five', kind: 'action', action: { type: 'wait', seconds: 5 } },
-    { id: 'wait_ten', kind: 'action', action: { type: 'wait', seconds: 10 } },
-    { id: 'end', kind: 'end' },
-  ], edges: [
-    { from: 'start', port: 'next', to: 'wait_five' },
-    { from: 'wait_five', port: 'next', to: 'wait_ten' },
-    { from: 'wait_ten', port: 'next', to: 'end' },
-  ] };
-  let waitFiveVisits = 0, repeatedWaitResult = null;
-  const run = createGraphAction(graph, spec => {
-    const wait = createWaitAction(spec);
-    if (spec.seconds !== 5) return wait;
-    return { ...wait, update(ctx) {
-      const result = wait.update(ctx);
-      if (++waitFiveVisits >= 3) repeatedWaitResult = result;
-      return result;
-    }, stop: ctx => wait.stop(ctx) };
-  }, () => ({ check: () => false }));
-  const brain = new BotBrain({ player, registry: fakeRegistry(), activity: { id: 'custom_wait_loop', repeat: true, actions: [run] }, nowMs: 0 });
-  t.after(() => brain.reset());
-  brain.tick(0); brain.tick(1); brain.tick(2); brain.tick(5002);
-  brain.tick(5003); brain.tick(15003); brain.tick(15004);
-  brain.tick(15005); brain.tick(15006);
-  assert.equal(repeatedWaitResult, 'running', 'the second visit must not inherit elapsed time from the other graph node');
-  brain.tick(20005);
-  assert.equal(repeatedWaitResult, 'running');
-  brain.tick(20006);
-  assert.equal(repeatedWaitResult, 'success');
-});
-
 test('a teleblocked recruit walks a segmented route after a distant owner teleport', (t) => {
   const { createFollowOwnerAction } = require('../plugins/bots/brain/actions/FollowOwner.PlayerBots');
   const { ATTR_RECRUIT_OWNER_USERNAME } = require('../plugins/bots/runtime/RecruitConstants.PlayerBots');
@@ -3473,7 +3401,7 @@ test('bh manual stops AI and movement without logging out; another bh assignment
       controlPlayer(_owner, _bot, released) { releaseControl = released; return true; },
       releasePlayerControl() { releaseControl(); return true; },
     }, registerCommand: (name, handler) => commands.set(name, handler),
-      registerCustomInterface() {}, onInterfaceActionButton() {},
+      registerCustomInterface() {}, onInterfaceActionButton() {}, onCustomEvent() {},
       onPlayerProcess() {}, onPlayerLogout() {}, onPlayerDisconnect() {} },
     runtime, brainRegistry, resetMovementState, botApi: { log() {} },
     taskManager: { submit() {} }, flashHintArrowTaskFactory() {},
@@ -3995,4 +3923,52 @@ test('a name only a league character is saved under is taken for a new AI bot', 
   assert.ok(real.PLAYER_PROFILES.includes(real.LEAGUE_PROFILE), 'PRE: the league profile is one of the profiles');
   for (const name of ['mainonly', 'leagueonly', 'online', 'rostered']) assert.equal(nameHeld(core, roster, name), true, name);
   assert.equal(nameHeld(core, roster, 'free'), false);
+});
+
+
+test('admin bot deployment works without registering or calling the standalone bots UI',t=>{
+  const {registerBotCommands}=require('../plugins/bots/runtime/RegisterBotCommands.PlayerBots');
+  const {configureBrainActivities}=require('../plugins/bots/brain/BrainActivities.PlayerBots');
+  const {collectActivityLaunchers}=require('../plugins/bots/runtime/LauncherCatalog.PlayerBots');
+  const core=require('../dist/plugins/PluginManager').PluginManager.getCoreApi();
+  const owner=nativeFollowCombatPlayer(t,'launch-owner',new Location(3200,3200));
+  owner.setPlayerBot(false);owner.setRights(core.PlayerRights.DEVELOPER);
+  const runtime={entriesByUsername:new Map(),botStatesByName:new Map(),playerBotUsernames:new Set(),hasControllerForPlayer:()=>false};
+  runtime.hasControllerForUsername=name=>runtime.entriesByUsername.has(name);
+  runtime.resolveControlledPlayer=name=>runtime.entriesByUsername.get(name)?.player;
+  runtime.spawnPvpBot=location=>{
+    const name=`launcher${runtime.entriesByUsername.size}`;
+    const player=nativeFollowCombatPlayer(t,name,location.clone());
+    const state={mode:'pvp',autonomy:{},home:{x:location.getX(),y:location.getY(),z:location.getZ()}};
+    runtime.entriesByUsername.set(name,{player,state});runtime.botStatesByName.set(name,state);runtime.playerBotUsernames.add(name);
+    return player;
+  };
+  const activities=[{id:'pvp',mode:'pvp',actions:[]},{id:'follow_owner',mode:'follow_owner',actions:[]},{id:'roam',mode:'roaming',actions:[]}];
+  const brainRegistry={activities,byId:new Map(activities.map(a=>[a.id,a]))};
+  configureBrainActivities({runtime,registry:brainRegistry,world:{},resetMovementState(){}});
+  const hooks=new Map();let interfaceRegistrations=0;
+  const api={core,registerCommand(){},registerCustomInterface(){interfaceRegistrations++;},onInterfaceActionButton(){},onPlayerProcess(){},onPlayerLogout(){},onPlayerDisconnect(){},
+    onCustomEvent(name,handler){hooks.set(name,handler);},emitCustomEvent(name,event){hooks.get(name)?.(event);}};
+  registerBotCommands({api,runtime,brainRegistry,behaviorMode:{PVP:'pvp'},botApi:{log(){}},resetMovementState(){},taskManager:{submit(){}},flashHintArrowTaskFactory(){}});
+  assert.equal(interfaceRegistrations,0,'runtime does not register either standalone interface');
+  assert.equal(hooks.has('bots:open-standalone'),false,'no standalone UI handler is installed');
+  const Bots=require('../plugins/tools/adminpanel/Bots.AdminPanel');
+  const adminState={};
+  assert.ok(Bots.rows(api,owner,adminState).some(row=>row.name==='Autonomous bot'));
+  const launchers=collectActivityLaunchers(api);
+  assert.ok(launchers.some(l=>l.name==='Autonomous bot'));
+  for(const [id,brain] of [['player-bot.pvp','pvp'],['player-bot.recruit','follow_owner']]){
+    const launcher=launchers.find(l=>l.id===id);assert.ok(launcher);
+    owner.moveTo(new Location(2884,9798,2));
+    Bots.act(api,owner,adminState,launcher.key);
+    const before=runtime.entriesByUsername.size;
+    assert.match(Bots.act(api,owner,adminState,'deploy'),/Spawned 1\/1/);
+    const entry=runtime.entriesByUsername.get(`launcher${before}`);
+    assert.ok(entry.brain.isRunningActivity(brain));
+    assert.equal(entry.player.getLocation().getZ(),2);
+    if(brain==='follow_owner')assert.equal(entry.player.getAttribute(require('../plugins/bots/runtime/RecruitConstants.PlayerBots').ATTR_RECRUIT_OWNER_USERNAME),owner.getUsername());
+  }
+  const bot=runtime.entriesByUsername.values().next().value.player;
+  const request={actor:owner,action:'apply',operation:'behavior',mode:'manual',username:bot.getUsername()};
+  hooks.get('admin:bot-controls')(request);assert.equal(request.error,undefined);assert.equal(runtime.entriesByUsername.get(bot.getUsername()).behaviorPaused,true);
 });

@@ -10,8 +10,8 @@
  *   tick 2370).
  * - Talk-to's "Can you make me some armour please?" ends in the transcript's "Continues with shop
  *   dialogue." (npc-dialogues.json "Wizard Jalarast"); that action opens the same menu. The
- *   generated transcript does not reach it yet: it shows the non-members branch as a menu
- *   option (docs/splitbark-armour.md).
+ *   Wiki writes the non-members branch before it as a lone option; the dumper reads it as a
+ *   condition, answered below (docs/splitbark-armour.md).
  * - A pick plays the transcript's shop-dialogue line for that piece: "There you go, enjoy your new
  *   armour!" when the bark, fine cloth and coins are carried (they go and the piece comes), else
  *   "You need ... for a splitbark helm." with the chatsad2 head (recording 3202, tick 2736). The amounts and prices are those lines' (Wiki, Wizard

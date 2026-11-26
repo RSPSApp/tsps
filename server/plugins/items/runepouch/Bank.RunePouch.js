@@ -162,7 +162,6 @@ function bankItemOp(event) {
     // The carried pouch is a withdrawal destination; retain normal bank placeholder semantics.
     bank.deleteItemContainer(new Item(runeId, moved), slot, false, player.getInventory());
     if (player.isSearchingBank()) Bank.removeFromBankSearch(player, new Item(runeId, moved), false);
-    bank.sortItems();
     Pouch.refreshBank(player);
   }
   if (!valid()) return;

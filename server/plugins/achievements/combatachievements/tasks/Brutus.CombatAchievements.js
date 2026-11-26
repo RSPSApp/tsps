@@ -8,7 +8,7 @@ function spawn({ player }) {
   encounters.set(player, { geared: hasGear(player), consumed: false, attacked: false });
 }
 
-function attack({ player }) {
+function hit({ player }) {
   const encounter = encounters.get(player);
   if (encounter) encounter.attacked = true;
 }
@@ -25,7 +25,7 @@ function equipmentChanged({ player }) {
 
 module.exports = function attachBrutusTasks(api, Fights) {
   api.onCustomEvent("ides-of-milk:brutus-spawn", spawn);
-  api.onCustomEvent("ides-of-milk:brutus-attack", attack);
+  api.onCustomEvent("ides-of-milk:brutus-hit", hit);
   api.onCustomEvent("food:eaten", consume);
   api.onCustomEvent("potions:drunk", consume);
   api.onCustomEvent("equipment:changed", equipmentChanged);

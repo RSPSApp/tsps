@@ -58,8 +58,15 @@ function tombDoor({ player, object }) {
   const metal = cat().doors[name];
   if (!metal) return false;
   const door = object.getLocation();
-  const [dx, dy] = THROUGH[object.getFace() & 3];
   const here = player.getLocation();
+  const exit = cat().exit;
+  if (object.getId() === Common.locId(exit.loc) && door.equals(new Common.core.Location(...exit.at))) {
+    // The north door leaves the map; the other bronze doors connect rooms.
+    if (!here.isWithinDistance(door, 1) || here.getY() > door.getY()) return true;
+    player.moveTo(new Common.core.Location(...exit.outside));
+    return true;
+  }
+  const [dx, dy] = THROUGH[object.getFace() & 3];
   const beyond = here.getX() === door.getX() + dx && here.getY() === door.getY() + dy;
   if (beyond) {
     // Coming back the other way needs no key.

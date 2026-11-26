@@ -414,8 +414,20 @@ function disassembleOnUse(event) {
   ]);
 }
 
+function describeTeleports({ player, list }) {
+  const destinations = new Map(TELEPORT_CHOICES.map(Teleports.catalogueDestination).filter(Boolean).map(place => [place.key, place]));
+  const travel = { player, list: [] };
+  api.emitCustomEvent("skillcapes:travel-destinations", travel);
+  for (const place of travel.list) if (place.key === "pandemonium") destinations.set(place.key, place);
+  const sources = new Set([Capes.MAX.cape, ...Capes.COMBINED_BY_CAPE.keys()].map(id => Capes.core.CacheDefinitions.getItem(id)?.name).filter(Boolean));
+  for (const source of sources) for (const place of destinations.values()) {
+    list.push({ path: ["Skillcapes", source], ...place, tile: [...place.tile] });
+  }
+}
+
 module.exports = function attachMaxCape(pluginApi) {
   api = pluginApi;
+  api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   api.onNpcDialogueVariant(macVariant);
   api.onNpcDialogueCondition(macCondition);
   api.onCustomEvent("npc-dialogue:line", macLine);

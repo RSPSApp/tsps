@@ -23,6 +23,7 @@
  * xp of one per level when building with a house, and 25% less decoration xp per wrong animal.
  */
 const Shared = require("./Shared.ValeTotems");
+const Trails = require("./Trails.ValeTotems");
 const State = require("./State.ValeTotems");
 
 const { DATA } = Shared;
@@ -188,7 +189,7 @@ function erect(player, site, { wood, index }) {
   Shared.sound(player, Shared.SOUND.BUILD);
   State.erect(player, site, index);
   State.count(player, "totems-built");
-  Shared.addXp(player, "FLETCHING", wood.carveXp);
+  Trails.grantFletchingXp(player, wood.carveXp);
   if (Shared.ownsHouse(player)) Shared.addXp(player, "CONSTRUCTION", player.getSkillManager().getMaxLevel(Shared.core().Skill.CONSTRUCTION));
   player.setRunEnergy(player.getRunEnergy() + DATA.runEnergyRestore);
   player.getPacketSender().sendRunEnergy();
@@ -240,7 +241,7 @@ function carveAnimal(player, site, animal) {
   Shared.animate(player, Shared.SEQ.CARVE);
   Shared.sound(player, Shared.SOUND.CARVE, Shared.SOUND_DELAY.CARVE);
   const last = State.carve(player, site, animal, wood.durability);
-  Shared.addXp(player, "FLETCHING", wood.carveXp);
+  Trails.grantFletchingXp(player, wood.carveXp);
   const quest = questActive(player) && site === QUEST_SITE;
   const carved = `You carve ${article(DATA.animals[animal - 1].name)} into the totem.`;
   if (last) {

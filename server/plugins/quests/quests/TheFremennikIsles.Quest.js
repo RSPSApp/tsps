@@ -389,6 +389,12 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     return player.getInventory().getAmount(itemId) >= amount;
   }
 
+  /** Carried in the inventory or worn (Mawnis counts either). */
+  function carriedOrWorn(player, itemId) {
+    if (hasItem(player, itemId)) return true;
+    return (player.getEquipment().getItems() || []).some((item) => item && item.getId?.() === itemId);
+  }
+
   function isFull(player) {
     return player.getInventory().isFull?.() === true;
   }
@@ -882,18 +888,18 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     if (stage >= STAGE_HEAD_TAKEN) return play(player, npcId, "returning-victorious-returning-to-mawnis-victorious");
     if (stage >= STAGE_CHAMPION) return play(player, npcId, "gear-of-a-champion-swearing-your-oaths-talking-to-mawnis");
     if (stage === STAGE_ARMOUR_DONE) {
-      if (hasItem(player, NEITIZNOT_SHIELD)) {
+      if (carriedOrWorn(player, NEITIZNOT_SHIELD)) {
         setStage(player, STAGE_CHAMPION);
         return play(player, npcId, "gear-of-a-champion-swearing-your-oaths-talking-to-mawnis");
       }
       return play(player, npcId, "gear-of-a-champion-making-the-neitiznot-shield-talking-to-mawnis-before-making-the-shield");
     }
     if (stage === STAGE_DECREE_DELIVERED) {
-      if (hasItem(player, YAK_HIDE_BODY) && hasItem(player, YAK_HIDE_LEGS)) {
+      if (carriedOrWorn(player, YAK_HIDE_BODY) && carriedOrWorn(player, YAK_HIDE_LEGS)) {
         setStage(player, STAGE_ARMOUR_DONE);
         return play(player, npcId, "gear-of-a-champion-making-yak-hide-armor-talking-to-mawnis-after-making-a-full-set-of-yak-hide");
       }
-      if (hasItem(player, YAK_HIDE_BODY) || hasItem(player, YAK_HIDE_LEGS)) {
+      if (carriedOrWorn(player, YAK_HIDE_BODY) || carriedOrWorn(player, YAK_HIDE_LEGS)) {
         return play(player, npcId, "gear-of-a-champion-making-yak-hide-armor-talking-to-mawnis-after-having-made-one-piece-of-yak-hide-armour");
       }
       return play(player, npcId, "gear-of-a-champion-learning-about-the-gear-talking-to-mawnis-again");
@@ -1961,7 +1967,8 @@ module.exports = function registerTheFremennikIslesQuest(api) {
     skills.addExperiences(Skill.CRAFTING, 5000);
     skills.addExperiences(Skill.WOODCUTTING, 10000);
     // A completion without experience (a league's quest pack) offers no combat XP either.
-    if (options.experience === false) return;
+    // `prompts: false` (::quest all): no choice pop-ups, so no combat XP either.
+    if (options.experience === false || options.prompts === false) return;
     // NpcDialogues sends sendInterfaceRemoval right after the final action, which
     // would wipe a prompt opened now: open it on the next tick instead.
     const { CountdownTask, TaskManager } = api.core;
@@ -1996,6 +2003,7 @@ module.exports = function registerTheFremennikIslesQuest(api) {
   api.persistAttribute(TROLL_KILLS_ATTRIBUTE);
 
   quest = registerQuest(api, {
+    combatNpcIds: () => [ICE_TROLL_KING],
     key: "the_fremennik_isles",
     name: "The Fremennik Isles",
     varpId: VARP_FREMENNIK_ISLES,

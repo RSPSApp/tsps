@@ -7,6 +7,7 @@
  *
  * Menu construction follows the same priority and structure as the Java client.
  */
+import type { OpVarReader } from "../../rs/config/EntityOps";
 import {
     type MenuEntry,
     MenuTargetType,
@@ -138,8 +139,13 @@ const MORPHABLE_PET_NPC_IDS = new Set([
 
 const CASTLE_WARS_BARRICADE_IDS = new Set([5722, 5724, 15582, 15584]);
 
-export function getNpcMenuActions(npcType: NpcType): string[] {
+export function getNpcMenuActions(npcType: NpcType, vars?: OpVarReader): string[] {
     const actions = [...(npcType.actions ?? [])];
+    // A varp/varbit condition can rename an option, or blank it (the option is then not offered).
+    const ops = npcType.entityOps;
+    if (ops && !ops.isEmpty && vars) {
+        for (let i = 0; i < actions.length; i++) actions[i] = ops.opName(i, actions[i], vars) as string;
+    }
     if (CASTLE_WARS_BARRICADE_IDS.has(npcType.id)) {
         return actions.map((action) => action === "Burn" ? "" : action);
     }
@@ -385,7 +391,7 @@ export function buildNpcMenuEntries(
 ): { actions: OsrsMenuEntry[]; examine: OsrsMenuEntry | null } {
     const actions: OsrsMenuEntry[] = [];
 
-    if (npcType.name === "null" && !ctx.debugId) {
+    if ((npcType.name === "null" || npcType.isInteractable === false) && !ctx.debugId) {
         return { actions: [], examine: null };
     }
 
@@ -397,7 +403,7 @@ export function buildNpcMenuEntries(
         return { actions: [], examine: null };
     }
 
-    const isFollowerLowPriority = npcType.isFollower && ctx.followerOpsLowPriority;
+    const isFollowerLowPriority = npcType.lowPriorityFollowerOps === true && ctx.followerOpsLowPriority;
 
     // OSRS: When follower has low priority, Examine is added FIRST (appears at top of menu)
     // This ensures left-click doesn't trigger follower actions
@@ -473,7 +479,7 @@ export function buildNpcMenuEntries(
             // npcAttackOption === 2: Left-click where available, never deprioritize
         }
         // Follower low priority: deprioritize ALL options on followers
-        if (npcType.isFollower && ctx.followerOpsLowPriority) {
+        if (isFollowerLowPriority) {
             deprioritized = true;
         }
 
@@ -610,52 +616,20 @@ export function buildPlayerMenuEntries(
 }
 
 /**
- * Check if mouse position is in a UI region (chatbox, minimap, sidebar)
- * The Java client uses dynamic region checks based on frame dimensions
+ * Check if mouse position is in a UI region (minimap) of the resizable layouts.
+ *
+ * The side panel, its tab stones and the chatbox are not hardcoded here: which of them take a
+ * click is decided by the widgets drawn there (isPointOverWidget), so the gaps around them stay
+ * click-through to the world in every layout, panel arrangement and screen size.
  */
 export function isMouseInUIRegion(
     mx: number,
     my: number,
     canvasWidth: number,
-    canvasHeight: number,
+    _canvasHeight: number,
 ): boolean {
     const fw = canvasWidth;
-    const fh = canvasHeight;
-
-    // Java: Bottom-right buttons area (adjusts based on screen width)
-    const bottomRightX = fw - (fw <= 1000 ? 240 : 420);
-    const bottomRightY = fh - (fw <= 1000 ? 90 : 37);
-    if (mx >= bottomRightX && mx <= fw && my >= bottomRightY && my <= fh) {
-        return true;
-    }
-
-    // Chatbox region: NOT hardcoded here.
-    // chatbox click-blocking is driven entirely by the widget system.
-    // CS2 script toplevel_chatbox_background calls if_setnoclickthrough(true/false, chatbox:chat_background)
-    // depending on transparency and blockclick settings. isPointOverWidget (noClickThrough flag) is
-    // the authoritative gate — hardcoding this region would break transparent/hidden click-through.
 
     // Minimap/orbs region: top-right area
-    if (mx >= fw - 216 && mx <= fw && my >= 0 && my <= 172) {
-        return true;
-    }
-
-    // Sidebar/tab area (right side)
-    if (fw > 1000) {
-        // Wide screen: tabs at bottom-right
-        const inTabButtons = mx >= fw - 420 && mx <= fw && my >= fh - 37 && my <= fh;
-        const inTabPanel = mx >= fw - 225 && mx <= fw && my >= fh - 37 - 274 && my <= fh;
-        if (inTabButtons || inTabPanel) {
-            return true;
-        }
-    } else {
-        // Narrower screen: tabs stacked
-        const inTabButtons = mx >= fw - 210 && mx <= fw && my >= fh - 74 && my <= fh;
-        const inTabPanel = mx >= fw - 225 && mx <= fw && my >= fh - 74 - 274 && my <= fh;
-        if (inTabButtons || inTabPanel) {
-            return true;
-        }
-    }
-
-    return false;
+    return mx >= fw - 216 && mx <= fw && my >= 0 && my <= 172;
 }

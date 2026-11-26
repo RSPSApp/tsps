@@ -19,9 +19,9 @@
  * Slayer-area box) so the boss and its tentacles can pile one player. Loot lands on
  * a fixed verified shore tile (Loot.Kraken.js), not under the body.
  *
- * Estimates (no capture yet): BOSS_WAKE_RADIUS and DISTURB_RANGE, the early-Disurb
- * "Nothing happens." message, explosive consumption, the throw animation (783) and
- * the 6-tick throw-to-wake delay. The boss-side crevice landing is RSPS-cross-checked
+ * Estimates (no capture yet): BOSS_WAKE_RADIUS and DISTURB_RANGE, the early-Disturb
+ * "Nothing happens." message. See docs/kraken.md for the explosive and respawn
+ * evidence and estimates. The boss-side crevice landing is RSPS-cross-checked
  * (see Crevice.Kraken.js). The cove refuses attacks off-task (Area.Kraken.js); the 25k
  * private room is owned and cleaned up by Instance.Kraken.js. The Combat Achievements the
  * fight decides are CombatAchievements.Kraken.js's.
@@ -39,12 +39,18 @@ const Loot = require("./kraken/Loot.Kraken");
 const Instance = require("./kraken/Instance.Kraken");
 const CombatAchievements = require("./kraken/CombatAchievements.Kraken");
 
+function describeEncounters({ npcIds }) {
+  const { BOSS, CAVE_KRAKEN, TENTACLE } = Shared.ids();
+  for (const id of [BOSS, CAVE_KRAKEN, TENTACLE]) npcIds.add(id);
+}
+
 module.exports = {
   name: "Kraken",
   description: "The Kraken and cave krakens in Kraken Cove: disturb the whirlpool to surface them, four tentacles beside the boss, and Magic-only damage.",
   members: true,
   register(api) {
     Shared.bind(api);
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     Disturb.attach(api);
     MagicOnly.attach(api);
     Typeless.attach(api);

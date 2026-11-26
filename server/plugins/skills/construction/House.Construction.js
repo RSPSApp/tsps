@@ -10,6 +10,7 @@ const EstateAgent = require("./EstateAgent.Construction");
 const Servants = require("./Servants.Construction");
 const Estate = require("./Estate.Construction");
 const Storage = require("./Storage.Construction");
+const BossLair = require("./BossLair.Construction");
 const Portals = require("./Portals.Construction");
 const Altars = require("./Altars.Construction");
 const Data = require("./Data.Construction");
@@ -34,6 +35,7 @@ const Decorations = require("./Decorations.Construction");
 const GamesRoom = require("./GamesRoom.Construction");
 const CombatRings = require("./CombatRings.Construction");
 const Tea = require("./Tea.Construction");
+const Topiary = require("./Topiary.Construction");
 const TipJar = require("./TipJar.Construction");
 const Bookcase = require("./Bookcase.Construction");
 const Scrying = require("./Scrying.Construction");
@@ -221,9 +223,12 @@ function releaseHouse(player, restoreLocation) {
   if (restoreLocation && Instance.PlayerHouseInstance.isAllocationLocation(player.getLocation())) player.moveTo(Estate.houseExit(houseStateFor(player)));
 }
 
-/** "construction:owns-house" { player, owns }: whether the player has bought a house. */
+/** "construction:owns-house" { player, owns, location }: whether the player has bought a house, and its town's name. */
 function ownsHouse(request) {
-  if (request?.player) request.owns = houseStateFor(request.player).owned !== false;
+  if (!request?.player) return;
+  const house = houseStateFor(request.player);
+  request.owns = house.owned !== false;
+  if (request.owns) request.location = Estate.houseLocation(house).name;
 }
 
 /**
@@ -599,9 +604,22 @@ function placeAdvert(player) {
   Menu.refuse(player, Menu.messageBox(`Your house is now being advertised on the noticeboard for the next ${ADVERT_MINUTES} minutes. If your house is closed or you log off, your advert will be removed.`));
 }
 
-/** The exit portal's advert option. Ours: nothing is said when there was no advert. */
+/** Takes the player's advert down after Yes on "Remove your advert?" (board or exit portal). */
 function removeAdvertisement({ player }) {
   if (endAdvert(player)) player.sendMessage("Your house is no longer being advertised.");
+  return true;
+}
+
+/**
+ * The exit portal's Remove board advert: only in your own house, and only with an advert up, then
+ * the board's "Remove your advert?" question (rsprox local 1001005 ticks 4693 and 4841; 248 for a guest).
+ */
+function removeAdvertisementAtPortal({ player }) {
+  const house = houseFor(player);
+  if (!house) return false;
+  if (house.owner !== player) { player.sendMessage("This is not your portal to configure."); return true; }
+  if (!isAdvertised(player)) { player.sendMessage("You are not currently advertising your house."); return true; }
+  askYesNo(player, "Remove your advert?", () => removeAdvertisement({ player }));
   return true;
 }
 
@@ -986,11 +1004,12 @@ function toggleHouseLock(event) {
   const player = event.player;
   const house = houseFor(player);
   if (!house) return false;
-  if (house.owner !== player) { player.sendMessage("Only the owner can lock this portal."); return true; }
+  // Each answer is a message box on the click's tick (rsprox local 1001005, local 1001008; 248 for a guest).
+  if (house.owner !== player) { Menu.refuse(player, Menu.messageBox("You can only lock your own house.")); return true; }
   house.save.locked = !house.save.locked;
   for (const occupant of house.getPlayers()) occupant.getPacketSender().sendVarbit(HOUSE_LOCKED_VARBIT, house.save.locked ? 1 : 0);
   player.setAttribute(HOUSE_ATTRIBUTE, house.save);
-  player.sendMessage(house.save.locked ? "You lock the house portal." : "You unlock the house portal.");
+  Menu.refuse(player, Menu.messageBox(house.save.locked ? "Your house is now locked to all visitors." : "Visitors can now enter your house."));
   return true;
 }
 
@@ -1583,8 +1602,11 @@ function materialName(material) {
 }
 
 function furnitureCreationText(buildable) {
-  // The build menu shows the cache's own name ("Crude wooden chair|Plank: 2<br>Nails: 2<br><br>").
-  const name = buildable.name ?? formatBuildable(buildable);
+  // The build menu shows the cache's own name ("Crude wooden chair|Plank: 2<br>Nails: 2<br><br>"),
+  // sentence-cased: rows "Spice Rack", "Oak Telescope" and "S.T.A.S.H chart" are sent as "Spice rack",
+  // "Oak telescope" and "S.t.a.s.h chart" (rsprox.net recs 271 and 2804, rev 229).
+  const full = buildable.name ?? formatBuildable(buildable);
+  const name = full.charAt(0).toUpperCase() + full.slice(1).toLowerCase();
   const materials = buildable.materials.slice(0, 4).map((material) => `${materialName(material)}: ${material.amount.toLocaleString()}`);
   // Four lines whatever the count: "Oak chair|Oak plank: 2<br><br><br>" (rsprox captures, rev 229).
   return `${name}|${[...materials, "", "", "", ""].slice(0, 4).join("<br>")}`;
@@ -1661,7 +1683,12 @@ function tryRemoveFurniture(event) {
   const house = houseFor(player);
   const type = event.object?.getType?.() ?? 10;
   if (!house || !isBuildingMode(player) || !house.getFurnitureAt(event.location, event.objectId, type)) return false;
-  const problem = house.canRemoveFurniture(event.location, event.objectId, type);
+  return removeFurniturePrompt(player, house, event.location, event.objectId, type);
+}
+
+/** "Really remove it?" for the building-mode owner, then the piece at `location` comes out. */
+function removeFurniturePrompt(player, house, location, objectId, type) {
+  const problem = house.canRemoveFurniture(location, objectId, type);
   if (problem) {
     Menu.refuse(player, problem);
     return true;
@@ -1669,16 +1696,16 @@ function tryRemoveFurniture(event) {
   // rsprox captures ("Remove" on poh_chair1, rev 229): "Really remove it?", and the Yes is silent.
   const confirm = () => api.sendMultiChatboxPrompt(player, "Really remove it?", "Yes", () => {
     if (houseFor(player) !== house || !isBuildingMode(player)) return;
-    const currentProblem = house.canRemoveFurniture(event.location, event.objectId, type);
+    const currentProblem = house.canRemoveFurniture(location, objectId, type);
     if (currentProblem) return Menu.refuse(player, currentProblem);
-    const furniture = house.removeFurniture(event.location, event.objectId, type);
+    const furniture = house.removeFurniture(location, objectId, type);
     if (!furniture) return;
     player.performAnimation(new Animation(REMOVE_ANIMATION));
     rebuildHouse(player, house);
     api.emitCustomEvent("construction:furniture-removed", { player, house, furniture });
   }, "No", () => {});
   // A piece whose removal costs the player something warns first (rsprox captures: the portal nexus).
-  const removal = { player, house, furniture: house.getFurnitureAt(event.location, event.objectId, type), warning: null };
+  const removal = { player, house, furniture: house.getFurnitureAt(location, objectId, type), warning: null };
   api.emitCustomEvent("construction:furniture-removing", removal);
   if (removal.warning) Menu.warn(player, removal.warning, confirm);
   else confirm();
@@ -1715,7 +1742,7 @@ function handleFurnitureAction(event) {
     || (["light", "re-light"].includes(action ?? "") && Altars.lightHouseBurner(event))
     || (action === "open" && Storage.openHouseFurniture(event))
     || (action === "close" && Storage.closeHouseFurniture(event))
-    || (["search", "view"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
+    || (["search", "view", "jars"].includes(action ?? "") && Storage.openHouseStorage(event))) event.handled = true;
 }
 
 // Cache-native ready poses for the seven parlour chairs, in furniture-menu order.
@@ -2065,9 +2092,11 @@ function attach(api) {
   GamesRoom.attachGamesRoom(api);
   CombatRings.attachCombatRings(api);
   Tea.attachTea(api);
+  Topiary.attachTopiary(api);
   TipJar.attachTipJar(api);
   Bookcase.attachBookcase(api);
   Storage.attachStorage(api);
+  BossLair.attachBossLair(api);
   Scrying.attachScrying(api);
   CapeHanger.attachCapeHanger(api);
   Trophies.attachTrophies(api);
@@ -2083,7 +2112,7 @@ function attach(api) {
   api.onObjectInteraction("House Advertisement", { View: showAdvertisements, "Add-House": offerAdvert, "Visit-Last": visitLastHouse });
   api.onObjectFirstClick(EXIT_PORTAL_ID, leaveHouse);
   api.onObjectSecondClick(EXIT_PORTAL_ID, toggleHouseLock);
-  api.onObjectThirdClick(EXIT_PORTAL_ID, removeAdvertisement);
+  api.onObjectThirdClick(EXIT_PORTAL_ID, removeAdvertisementAtPortal);
   api.registerCommand("house", houseCommand, PlayerRights.NONE, "Open your house options");
   api.registerCommand("hotspots", Commands.listHotspots, PlayerRights.DEVELOPER, "List the Construction hotspots in the room you stand in");
   api.registerCommand("housemats", Commands.houseMaterials, PlayerRights.DEVELOPER, "Spawn the materials to build a piece of furniture or a room");
@@ -2125,4 +2154,4 @@ function attach(api) {
   api.onPlayerLogout(logoutHouse);
 }
 
-Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, furnitureLevel, hasHammer, hasSaw, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, furnitureCreationText, processOccupant, leftHouse, attach });
+Object.assign(module.exports, { completeFurniture, enterHouse, visitHouse, storedAmount, houseStateFor, releaseHouse, canVisitHouse, syncHouseOptions, isSeatedForDinner, houseFor, saveHouse, rebuildHouse, removeRoomPrompt, isBuildingMode, constructionLevel, furnitureLevel, hasHammer, hasSaw, getBuildMaterials, useMaterial, useMaterials, hammer, hammerNails, nailsOf, hotspotChoices, chooseFurniture, removeFurniturePrompt, furnitureCreationText, processOccupant, leftHouse, attach });

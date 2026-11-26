@@ -11,6 +11,7 @@
 
 const Shared = require("./Shared.Colosseum");
 const Run = require("./Run.Colosseum");
+const Hud = require("./Hud.Colosseum");
 const Scoreboard = require("./Scoreboard.Colosseum");
 
 const MOD_BUTTONS = Shared.COMPONENT.MOD_BUTTONS.map((component) => (Shared.INTERFACE.INTERMISSION << 16) | component);
@@ -31,14 +32,14 @@ function reachMinimus(event) {
 
 function startWave(event) {
   const run = ownRun(event);
-  if (!run) return false;
+  if (!run || event.npc !== run.minimus) return false;
   run.openIntermission();
   return true;
 }
 
 function leave(event) {
   const run = ownRun(event);
-  if (!run) return false;
+  if (!run || event.npc !== run.minimus) return false;
   run.askToLeave();
   return true;
 }
@@ -90,7 +91,9 @@ function dieInRun(event) {
  */
 function dyingInRun({ player }) {
   const run = Run.runOf(player);
-  if (run) run.dying = true;
+  if (!run) return;
+  run.dying = true;
+  Hud.drop(run);
 }
 
 /** Logged out inside (a crash, or the server stopping mid-run): the run is gone, back to the lobby. */
@@ -107,9 +110,9 @@ function ownRunOnly(event) {
   if (!run) return;
   const other = event.attacker?.__colosseumRun ? event.target : event.attacker;
   if (other?.isPlayer?.() && other !== run.player) event.allow = false;
-  // The seated Sol Heredit and Minimus are scenery here.
+  // The seated Sol Heredit, his gib, and Minimus are scenery here.
   const npc = event.attacker?.__colosseumRun ? event.attacker : event.target;
-  if (npc === run.sol || npc === run.minimus) event.allow = false;
+  if (npc === run.sol || npc === run.minimus || npc === run.solGib) event.allow = false;
 }
 
 module.exports = function registerColosseumArena(api) {

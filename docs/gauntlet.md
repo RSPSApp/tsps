@@ -10,6 +10,7 @@ Status: done so far are the maze, the lobby, the run (entry, timer, exits, death
 | --- | --- |
 | `Shared.Gauntlet.js` | Ids, varbits, tiles and helpers such as fades and dialogues. |
 | `Map.Gauntlet.js` | The maze: its layout, the room templates and turns, and lighting rooms. |
+| `Equipment.Gauntlet.js` | Durable storage and exact-slot recovery of original inventory/equipment; transfer guards while saves are pending. |
 | `RunState.Gauntlet.js` | One player's run: the starting kit, the preparation timer, the boss phase, ending a run, and stats. |
 | `Lobby.*` | The Gauntlet Portal in Prifddinas, the lobby's teleport platform, Bryn and the entrance. |
 | `Run.*` | Nodes, the exit platform, the teleport crystal, the barrier, death, teleports and login recovery. |
@@ -61,7 +62,9 @@ The Corrupted Gauntlet uses the same layout 8 chunks east. Rim and corner rooms 
 - have a pet out;
 - have a reward waiting (varbit 9179).
 
-His lines come from the Wiki transcript. You must also have an empty inventory and equipment, because nothing can be taken in or out.
+His lines come from the Wiki transcript. Carried inventory and equipment are automatically stored for the run and returned in their original slots, with quantities and metadata intact, including for Ultimate Ironmen ([Wiki: minigames](https://oldschool.runescape.wiki/w/Ultimate_Ironman_Guide/Minigames)). Entry waits for the storage save to finish before replacing either container. Exit, death, logout and interrupted-server recovery restore the originals; temporary Gauntlet items never leave with them. Recovery also waits for its save before allowing item transfers. Failed writes retain the recovery record and keep transfers blocked until a reconnect can retry; malformed records require assistance rather than discarding items.
+
+A Demonic Pacts character who selected Flask of Fervour and carries its flask retains a temporary copy in the run. Entry resets its cooldown and cancels the old ready notification; activation does not consume it. The original returns with the rest of the stored equipment. This uses the [Wiki's Gauntlet flask rules](https://oldschool.runescape.wiki/w/Flask_of_fervour_(item)); automatic supply when no flask was carried is not asserted.
 
 **Starting kit** (Wiki): a crystal sceptre (wielded), then an axe, pickaxe, harpoon, pestle and mortar, and a teleport crystal. The Corrupted kit uses the corrupted versions. Near-Reality also gave a weapon frame and 50 shards; that isn't on the Wiki, so it's left out.
 
@@ -281,7 +284,7 @@ The lobby Scoreboard (36060) opens interface 639, which has your numbers next to
 | --- | --- |
 | `::gauntlet` | Teleports to the lobby. |
 | `::gauntletmap [corrupted] [all]` | A maze without a run, to inspect; `all` lights every room. |
-| `::gauntletstart [corrupted]` | Starts a run without Bryn's checks; your hands must be empty. |
+| `::gauntletstart [corrupted]` | Starts a run without Bryn's checks; carried items are stored normally. |
 | `::gauntletboss` | Ends preparation and takes you to the Hunllef. |
 | `::gauntlettime <seconds>` | Sets the preparation time left. |
 | `::gauntletgear [basic\|attuned\|perfected]` | During a run: a Hunllef loadout of that tier (default perfected): the armour worn, the bow wielded, the staff, the halberd, 4 Egniol potions, 4 crystal paddlefish and paddlefish in the rest. |

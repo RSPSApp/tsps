@@ -86,6 +86,7 @@ function playerWith(entries = []) {
     getPacketSender: () => sender, sendMessage: text => log.push(['message',text]),
     performAnimation: anim => log.push(['animation',anim.getId()]),
     performGraphic: gfx => log.push(['graphic',gfx.getId(),gfx.getHeight()]),
+    hasBlockingInterface: () => player.interfaceId !== -1,
     getInterfaceId: () => player.interfaceId, setInterfaceId: id => { player.interfaceId = id; },
     setEnteredAmountAction: action => { player.amountAction = action; },
     getUsername: () => 'JewelleryTest', getIndex: () => 1, isPlayerBot: () => false,
@@ -289,8 +290,8 @@ test('furnace uses group 446 and make-X, producing 2 ticks after the choice then
   const lastType = core.CacheDefinitions.getVarbitId('crafting_gold_item_lasttype');
   assert.ok(player.log.some(row => row[0] === 'varbit' && row[1] === lastType && row[2] === 1));
 });
-test('a gold or silver bar on the Clay forge, Volcanic Furnace, Lava forge or Ancient Furnace opens its jewellery menu', () => {
-  for (const name of ['Clay forge','Volcanic Furnace','Lava forge','Ancient Furnace']) {
+test('a gold or silver bar on the Clay forge, Volcanic Furnace, Lava forge, Ancient Furnace or the Cam Torum Forge opens its jewellery menu', () => {
+  for (const name of ['Clay forge','Volcanic Furnace','Lava forge','Ancient Furnace','Forge']) {
     for (const [bar,group] of [[2357,446],[2355,6]]) {
       const player = playerWith([[bar,1]]);
       const event = {player,itemId:bar,object:{getDefinition:() => ({getName:() => name})}};
@@ -328,6 +329,26 @@ test('moving, lost ingredients and insufficient levels stop furnace production s
     assert.equal(player.amounts.get(2357),1); assert.equal(player.amounts.get(1635),undefined);
   }
 });
+
+test('salve shard strings in either order after one tick without Crafting XP', () => {
+  for (const reverse of [false,true]) {
+    const player=playerWith([[1759,1],[4082,1]]);
+    crafting.stringAmulet({player,usedItemId:reverse?4082:1759,usedWithItemId:reverse?1759:4082});
+    assert.equal(player.amounts.get(4081),undefined);
+    tick(tasks.at(-1),1);
+    assert.equal(player.amounts.get(4081),1);
+    assert.equal(player.amounts.get(4082),0);
+    assert.equal(player.amounts.get(1759),0);
+    assert.ok(!player.log.some(row=>row[0]==='xp' && row[2]>0));
+  }
+});
+test('salve stringing rechecks materials before the delayed craft',()=>{
+  const player=playerWith([[1759,1],[4082,1]]);
+  crafting.stringAmulet({player,usedItemId:1759,usedWithItemId:4082});
+  player.amounts.set(1759,0);tick(tasks.at(-1),1);
+  assert.equal(player.amounts.get(4082),1);assert.equal(player.amounts.get(4081),undefined);
+});
+
 test('all eight amulets string in either order on the next tick with real identifiers and the live message', () => {
   for (const [input,output] of [[1673,1692],[1675,1694],[1677,1696],[1679,1698],[1681,1700],[1683,1702],[6579,6581],[19501,19541]]) for (const reverse of [false,true]) {
     const player = playerWith([[1759,1],[input,1]]);

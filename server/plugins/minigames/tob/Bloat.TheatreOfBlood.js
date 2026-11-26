@@ -153,12 +153,19 @@ class BloatRoom extends Raid.Room {
     if (!state.asleep && --state.walkLeft <= 0 && state.sinceTurn >= WALK.afterTurn) this.fallAsleep();
   }
 
+  get bookDropTile() {
+    // A developer skip can finish the room without a death.
+    const { x, y, z } = this.bookDropOrigin ?? START;
+    return { x: x + CENTRE_OFFSET, y: y + CENTRE_OFFSET, z };
+  }
+
   die() {
     const { Animation } = Shared.core();
     const bloat = this.bloat;
     this.state.dying = true;
     bloat.getMovementQueue().reset();
     bloat.getMovementQueue().setBlockMovement(true);
+    this.bookDropOrigin = Shared.tileOf(bloat);
     bloat.performAnimation(new Animation(ANIMATION.DYING));
     this.later(DEATH_TICKS, () => {
       this.despawn(bloat);
@@ -345,8 +352,14 @@ class BloatRoom extends Raid.Room {
   }
 }
 
+/** Combat forms only; presentation forms and room scenery do not qualify. */
+function describeEncounters({ npcIds }) {
+  for (const id of Object.values(BLOATS)) npcIds.add(id);
+}
+
 module.exports = function registerBloat(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("BLOAT", BloatRoom);
 };
 

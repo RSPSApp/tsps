@@ -1,0 +1,295 @@
+{
+  "boss": {
+    "title": "Boss Kill Log",
+    "rows": [
+      {
+        "name": "Abyssal Sire",
+        "varp": "total_abyssalsire_kills"
+      },
+      {
+        "name": "Alchemical Hydra",
+        "varp": "total_hydraboss_kills"
+      },
+      {
+        "name": "Amoxliatl",
+        "varp": "total_amoxliatl_kills"
+      },
+      {
+        "name": "Araxxor",
+        "varp": "total_araxxor_kills"
+      },
+      {
+        "name": "Artio",
+        "varp": "total_artio_kills"
+      },
+      {
+        "name": "Barrows Chests",
+        "varp": "total_barrows_chests"
+      },
+      {
+        "name": "Bryophyta",
+        "varp": "total_bryophyta_kills"
+      },
+      {
+        "name": "Callisto",
+        "varp": "total_callisto_kills"
+      },
+      {
+        "name": "Calvar'ion",
+        "varp": "total_calvarion_kills"
+      },
+      {
+        "name": "Cerberus",
+        "varp": "total_cerberus_kills"
+      },
+      {
+        "name": "Chambers of Xeric",
+        "varp": "total_completed_xericchambers"
+      },
+      {
+        "name": "Chambers of Xeric: Challenge Mode",
+        "varp": "total_completed_xericchambers_challenge"
+      },
+      {
+        "name": "Chaos Elemental",
+        "varp": "total_chaosele_kills"
+      },
+      {
+        "name": "Chaos Fanatic",
+        "varp": "total_chaosfanatic_kills"
+      },
+      {
+        "name": "Commander Zilyana",
+        "varp": "total_saradomin_kills"
+      },
+      {
+        "name": "Corporeal Beast",
+        "varp": "total_corp_kills"
+      },
+      {
+        "name": "Crazy Archaeologist",
+        "varp": "total_crazyarchaeologist_kills"
+      },
+      {
+        "name": "Dagannoth Prime",
+        "varp": "total_prime_kills"
+      },
+      {
+        "name": "Dagannoth Rex",
+        "varp": "total_rex_kills"
+      },
+      {
+        "name": "Dagannoth Supreme",
+        "varp": "total_supreme_kills"
+      },
+      {
+        "name": "Deranged Archaeologist",
+        "varp": "total_derangedarchaeologist_kills"
+      },
+      {
+        "name": "Duke Sucellus",
+        "varp": "total_duke_sucellus_kills"
+      },
+      {
+        "name": "Duke Sucellus (Awakened)",
+        "varp": "total_duke_sucellus_awakened_kills",
+        "streakOf": "Duke Sucellus"
+      },
+      {
+        "name": "General Graardor",
+        "varp": "total_bandos_kills"
+      },
+      {
+        "name": "Giant Mole",
+        "varp": "total_mole_kills"
+      },
+      {
+        "name": "Grotesque Guardians",
+        "varp": "total_gargboss_kills"
+      },
+      {
+        "name": "Hespori",
+        "varp": "total_hespori_kills"
+      },
+      {
+        "name": "The Hueycoatl",
+        "varp": "total_huey_kills"
+      },
+      {
+        "name": "K'ril Tsutsaroth",
+        "varp": "total_zamorak_kills"
+      },
+      {
+        "name": "Kalphite Queen",
+        "varp": "total_kalphite_kills"
+      },
+      {
+        "name": "King Black Dragon",
+        "varp": "total_kbd_kills"
+      },
+      {
+        "name": "Kraken",
+        "varp": "total_kraken_boss_kills"
+      },
+      {
+        "name": "Kree'Arra",
+        "varp": "total_armadyl_kills"
+      },
+      {
+        "name": "The Leviathan",
+        "varp": "total_leviathan_kills"
+      },
+      {
+        "name": "The Leviathan (Awakened)",
+        "varp": "total_leviathan_awakened_kills",
+        "streakOf": "The Leviathan"
+      },
+      {
+        "name": "Mimic",
+        "varp": "total_mimic_kills"
+      },
+      {
+        "name": "Moons of Peril Chests",
+        "varp": "total_pmoon_chests"
+      },
+      {
+        "name": "Nex",
+        "varp": "total_nex_kills"
+      },
+      {
+        "name": "Obor",
+        "varp": "total_hillgiant_boss_kills"
+      },
+      {
+        "name": "Phantom Muspah",
+        "varp": "total_muspah_kills"
+      },
+      {
+        "name": "Phosani's Nightmare",
+        "varp": "total_nightmare_challenge_kills"
+      },
+      {
+        "name": "Scurrius",
+        "varp": "total_rat_boss_kills"
+      },
+      {
+        "name": "Sarachnis",
+        "varp": "total_sarachnis_kills"
+      },
+      {
+        "name": "Scorpia",
+        "varp": "total_scorpia_kills"
+      },
+      {
+        "name": "Skotizo",
+        "varp": "total_cata_boss_kills"
+      },
+      {
+        "name": "Sol Heredit",
+        "varp": "total_sol_kills"
+      },
+      {
+        "name": "Spindel",
+        "varp": "total_spindel_kills"
+      },
+      {
+        "name": "Tempoross",
+        "varp": "total_tempoross_kills"
+      },
+      {
+        "name": "The Corrupted Gauntlet",
+        "varp": "total_completed_gauntlet_hm"
+      },
+      {
+        "name": "The Gauntlet",
+        "varp": "total_completed_gauntlet"
+      },
+      {
+        "name": "The Nightmare",
+        "varp": "total_nightmare_kills"
+      },
+      {
+        "name": "The Royal Titans",
+        "varp": "total_royal_titan_kills"
+      },
+      {
+        "name": "Theatre of Blood",
+        "varp": "total_completed_theatreofblood"
+      },
+      {
+        "name": "Theatre of Blood: Entry Mode",
+        "varp": "total_completed_theatreofblood_story"
+      },
+      {
+        "name": "Theatre of Blood: Hard Mode",
+        "varp": "total_completed_theatreofblood_hard"
+      },
+      {
+        "name": "Thermonuclear Smoke Devil",
+        "varp": "total_thermy_kills"
+      },
+      {
+        "name": "Tombs of Amascut",
+        "varp": "total_completed_tombsofamascut"
+      },
+      {
+        "name": "Tombs of Amascut: Entry Mode",
+        "varp": "total_completed_tombsofamascut_entry"
+      },
+      {
+        "name": "Tombs of Amascut: Expert Mode",
+        "varp": "total_completed_tombsofamascut_expert"
+      },
+      {
+        "name": "TzKal-Zuk",
+        "varp": "total_zuk_kills"
+      },
+      {
+        "name": "TzTok-Jad",
+        "varp": "total_jad_kills"
+      },
+      {
+        "name": "Vardorvis",
+        "varp": "total_vardorvis_kills"
+      },
+      {
+        "name": "Vardorvis (Awakened)",
+        "varp": "total_vardorvis_awakened_kills",
+        "streakOf": "Vardorvis"
+      },
+      {
+        "name": "Venenatis",
+        "varp": "total_venenatis_kills"
+      },
+      {
+        "name": "Vet'ion",
+        "varp": "total_vetion_kills"
+      },
+      {
+        "name": "Vorkath",
+        "varp": "total_vorkath_kills"
+      },
+      {
+        "name": "The Whisperer",
+        "varp": "total_whisperer_kills"
+      },
+      {
+        "name": "The Whisperer (Awakened)",
+        "varp": "total_whisperer_awakened_kills",
+        "streakOf": "The Whisperer"
+      },
+      {
+        "name": "Wintertodt",
+        "varp": "total_wintertodt_kills"
+      },
+      {
+        "name": "Zalcano",
+        "varp": "total_zalcano_kills"
+      },
+      {
+        "name": "Zulrah",
+        "varp": "total_snakeboss_kills"
+      }
+    ]
+  }
+}

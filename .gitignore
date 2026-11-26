@@ -96,6 +96,8 @@ client/tests/artifacts/
 
 # Per-deployment world overrides (WorldDefinition.readWorldConfig)
 server/data/definitions/world.local.json
+server/data/map-editor-backups/
+server/data/map-edits/
 # The world config page token (WorldAdmin), when WORLD_ADMIN_TOKEN is unset
 server/data/definitions/world-admin.token
 server/data/definitions/bot-activities.local.json
@@ -110,3 +112,6 @@ server/data/definitions/bot-activities.local.json.tmp
 # Shared web client release build outputs
 .github/scripts/client-release/node_modules/
 .github/scripts/client-release/releases/
+
+# Shared client compatibility identifier, generated before server builds
+server/src/main/typescript/elvarg/ClientVersion.generated.ts

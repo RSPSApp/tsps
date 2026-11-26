@@ -1,4 +1,5 @@
 import { menuCooldownBlocksPass } from "./menuCooldown";
+import { wrapExamineWithClickCross } from "./checkExamineCross";
 import { isGroundItemOperationEnabled } from "../../../game/data/ground/GroundItemStore";
 import { buildPlayerActionEntries } from "./playerMenu";
 import Denque from "denque";
@@ -38,6 +39,7 @@ import { baseNpcTypeId } from "../../../custom/npcs/NpcModelOverrideRegistry";
 import { CollisionFlag } from "../../../common/CollisionFlag";
 import { VARBIT_IN_WILDERNESS, VARBIT_TRADE_OPTION_DISABLED } from "../../../common/vars";
 import {
+    getMapWarpActions,
     getWorldLocChanges,
     getWorldLocSpawns,
     getWorldTerrainOverrides,
@@ -201,6 +203,9 @@ import type { WebGLOsrsRendererHost } from "../hostInterface";
 import { RENDER_CONSTANTS, formatPlayerCombatLabel } from "../constants";
 import { chatLineMenuEntriesAt } from "../../../game/widgets/interaction/chatLineMenu";
 
+/** OSRS adds no further player or NPC once the menu holds this many entries. */
+const MAX_ACTOR_MENU_ENTRIES = 400;
+
 /** What the last world interaction pass saw, per renderer host. */
 type InteractionPassInputs = {
     mouseX: number;
@@ -274,20 +279,6 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
         host.lastInteractionRaycastHitCount = 0;
         host.lastInteractionMenuOptionCount = 0;
         let raycastHitCount = 0;
-
-        // If the click is inside the bottom-right UI tabs region, consume it (don't interact with world).
-        if (leftClicked) {
-            const contW = 241;
-            const contH = 37 + 261 + 37; // strip + panel + strip
-            const contX = host.app.width - 8 - contW; // right margin 8
-            const contY = host.app.height - 8 - contH; // bottom margin 8
-            const mx = inputManager.leftClickX;
-            const my = inputManager.leftClickY;
-            if (mx >= contX && mx <= contX + contW && my >= contY && my <= contY + contH) {
-                host.clearInteractHighlightHoverTarget();
-                return;
-            }
-        }
 
         const menuCooldown = isTouchDevice ? 50 : 10;
 
@@ -527,6 +518,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 return normalized.length > 0 && clanMemberNames.has(normalized);
             };
 
+            let deferredCombatTarget: { ecsIndex: number; worldTileX: number; worldTileY: number } | undefined;
             const addPlayerMenuEntries = (
                 ecsIndex: number,
                 worldTileX: number,
@@ -534,8 +526,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
             ): void => {
                 const idx = ecsIndex | 0;
                 if (idx < 0) return;
-                if (playerIds.has(idx)) return;
-                playerIds.add(idx);
+                // OSRS stops adding actors at 400 entries, and lists a stacked actor once for
+                // every actor under the cursor it shares a tile with.
+                if (menuEntries.length >= MAX_ACTOR_MENU_ENTRIES) return;
 
                 const sidRaw = playerEcs.getServerIdForIndex?.(idx);
                 if (typeof sidRaw !== "number") return;
@@ -677,8 +670,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 const sid = npcServerId | 0;
                 const ecsId = npcEcsId | 0;
                 if (sid <= 0 || ecsId <= 0) return;
-                if (npcIds.has(sid)) return;
-                npcIds.add(sid);
+                if (menuEntries.length >= MAX_ACTOR_MENU_ENTRIES) return;
 
                 // The pick carries the cache type; a server type customisation (an Echo boss's
                 // name and level) lives on the NPC's synthetic ECS type for that same base. The
@@ -699,6 +691,8 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     if (transformed) npcType = transformed;
                 }
                 if (npcType.name === "null" && !host.osrsClient.debugId) return;
+                // A non-interactable NPC adds nothing to the menu, not even Examine.
+                if (npcType.isInteractable === false && !host.osrsClient.debugId) return;
                 if (npcType.isFollower && (ClientState.followerIndex | 0) !== (sid | 0)) {
                     return;
                 }
@@ -707,7 +701,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 const localY = (worldTileY - baseY) | 0;
                 const npcPlane = npcEcs.getLevel(ecsId) | 0;
                 const isFollowerLowPriority =
-                    npcType.isFollower && ClientState.followerOpsLowPriority;
+                    npcType.lowPriorityFollowerOps === true && ClientState.followerOpsLowPriority;
 
                 // OSRS: For followers with low priority, insert Examine first (opcode 1003).
                 if (isFollowerLowPriority) {
@@ -795,7 +789,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     return;
                 }
 
-                const actions = getNpcMenuActions(npcType);
+                const actions = getNpcMenuActions(npcType, host.osrsClient.varManager);
+                // The NPC 'Attack' options setting moves only Attack: a higher-level NPC's other
+                // options (Pickpocket, Talk-to) stay the left click.
                 const followerDeprioritized = isFollowerLowPriority;
 
                 // OSRS: Non-attack options first (4..0).
@@ -918,12 +914,17 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                             resolvedLocType = transformed;
                         }
                     }
-                    if (resolvedLocType.name === "null" && !host.osrsClient.debugId) continue;
-
                     const worldTileX = (hit.tileX ?? 0) | 0;
                     const worldTileY = (hit.tileY ?? 0) | 0;
                     const localX = (worldTileX - baseX) | 0;
                     const localY = (worldTileY - baseY) | 0;
+                    const weIndex = (host as any).getWorldEntityIndexForMapId?.(hit.mapId);
+                    const currentWorldView = host.getControlledPlayerWorldViewId?.() ?? -1;
+                    const warpActions = !host.instanceActive && currentWorldView < 0 && (weIndex === undefined || weIndex < 0)
+                        ? getMapWarpActions(interactId, worldTileX, worldTileY, hit.locLevel ?? interactionPlane)
+                        : undefined;
+                    if (resolvedLocType.name === "null" && !host.osrsClient.debugId && !warpActions?.size) continue;
+                    const targetName = resolvedLocType.name === "null" && warpActions?.size ? "Scenery" : resolvedLocType.name;
 
                     const dedupeKey = `${interactId | 0}|${localX | 0}|${localY | 0}`;
                     if (locIds.has(dedupeKey)) continue;
@@ -931,8 +932,6 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
 
                     // A loc hit on a static ship's deck scene offers the world entity's own
                     // actions (Board/Attack) instead, unless the player is already on it.
-                    const weIndex = (host as any).getWorldEntityIndexForMapId?.(hit.mapId);
-                    const currentWorldView = (host as any).getControlledPlayerWorldViewId?.() ?? -1;
                     if (typeof weIndex === "number" && weIndex >= 0 && !worldEntityIds.has(weIndex)) {
                         worldEntityIds.add(weIndex);
                         const overlay = (host as any).worldEntityOverlays?.get(weIndex);
@@ -1014,14 +1013,17 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     // LOC actions inserted 4..0, then Examine; op flags from the server hide ops.
                     const opFlags = host.osrsClient.locOpFlagsAt?.(worldTileX, worldTileY, interactId);
                     for (let actionIdx = 4; actionIdx >= 0; actionIdx--) {
-                        const option = resolvedLocType.actions?.[actionIdx];
+                        const customAction = warpActions?.get(actionIdx);
+                        const option = customAction ?? (resolvedLocType.entityOps
+                            ? resolvedLocType.entityOps.opName(actionIdx, resolvedLocType.actions?.[actionIdx], host.osrsClient.varManager)
+                            : resolvedLocType.actions?.[actionIdx]);
                         if (!option) continue;
-                        if (opFlags !== undefined && (opFlags & (1 << actionIdx)) === 0) continue;
+                        if (!customAction && opFlags !== undefined && (opFlags & (1 << actionIdx)) === 0) continue;
                         menuEntries.push({
                             option,
                             targetId: interactId,
                             targetType: MenuTargetType.LOC,
-                            targetName: resolvedLocType.name,
+                            targetName,
                             targetLevel: -1,
                             mapX: localX,
                             mapY: localY,
@@ -1036,7 +1038,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         option: "Examine",
                         targetId: interactId,
                         targetType: MenuTargetType.LOC,
-                        targetName: resolvedLocType.name,
+                        targetName,
                         targetLevel: -1,
                         mapX: localX,
                         mapY: localY,
@@ -1050,11 +1052,11 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
 
                     // Ground items stay indexed by the raw client plane; bridge promotion is render-only.
                     const plane = resolveGroundItemStackPlane(host.getPlayerRawPlane() | 0);
-                    const stacks = host.osrsClient.groundItems.getStacksAt(
-                        worldTileX,
-                        worldTileY,
-                        plane,
-                    );
+                    // Entries added later sit higher, so the pile is walked from its back: the
+                    // most valuable item ends on top and takes the left click.
+                    const stacks = host.osrsClient.groundItems
+                        .getPileAt(worldTileX, worldTileY, plane)
+                        .reverse();
                     if (!stacks || stacks.length === 0) continue;
                     const plugins = host.osrsClient.clientPlugins;
 
@@ -1165,7 +1167,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         const actions = objType.groundActions ?? [];
                         for (let actionIdx = 4; actionIdx >= 0; actionIdx--) {
                             if (!isGroundItemOperationEnabled(stack, actionIdx)) continue;
-                            const option = actions[actionIdx];
+                            const option = objType.entityOps
+                                ? objType.entityOps.opName(actionIdx, actions[actionIdx], host.osrsClient.varManager)
+                                : actions[actionIdx];
                             if (option) {
                                 const capturedStack = stack;
                                 menuEntries.push({
@@ -1220,6 +1224,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                     if (hit.playerEcsIndex != null) {
                         const ecsIndex = hit.playerEcsIndex;
                         if (ecsIndex == null) continue;
+                        // One pass per actor under the cursor, however many of its faces the ray met.
+                        if (playerIds.has(ecsIndex | 0)) continue;
+                        playerIds.add(ecsIndex | 0);
                         const firstNpcs: number[] = [];
 
                         const playerSubX = playerEcs.getX(ecsIndex) | 0;
@@ -1272,7 +1279,14 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                             }
                         }
 
-                        addPlayerMenuEntries(ecsIndex, worldTileX, worldTileY);
+                        // The player you are fighting is added after everything else, so their
+                        // options are on top of a stack.
+                        const combatTarget = ClientState.combatTargetPlayerIndex | 0;
+                        if (combatTarget !== -1 && ((playerEcs.getServerIdForIndex?.(ecsIndex | 0) ?? -2) | 0) === combatTarget) {
+                            deferredCombatTarget = { ecsIndex: ecsIndex | 0, worldTileX, worldTileY };
+                        } else {
+                            addPlayerMenuEntries(ecsIndex, worldTileX, worldTileY);
+                        }
                         // Later entries win the menu order, including when the ray hit the player first.
                         for (const npc of firstNpcs) {
                             addNpcMenuEntries(
@@ -1287,6 +1301,9 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                         const npcServerId = hit.npcServerId;
                         const npcEcsId = hit.npcEcsId;
                         if (npcServerId == null || npcEcsId == null) continue;
+                        if (npcIds.has(npcServerId | 0)) continue;
+                        npcIds.add(npcServerId | 0);
+                        let selfAdded = false;
 
                         const worldTileX = (hit.tileX ?? 0) | 0;
                         const worldTileY = (hit.tileY ?? 0) | 0;
@@ -1324,6 +1341,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                             const npcType = host.getEffectiveNpcType(interactId);
                             if (npcType?.drawPriority !== NpcDrawPriority.DRAW_PRIORITY_FIRST) {
                                 addNpcMenuEntries(interactId, npcServerId, npcEcsId, worldTileX, worldTileY);
+                                selfAdded = true;
                             }
                             // Players on the same coords
                             const hitMapId = hit.mapId | 0;
@@ -1340,28 +1358,39 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                             }
                         }
 
-                        addNpcMenuEntries(
-                            interactId | 0,
-                            npcServerId | 0,
-                            npcEcsId | 0,
-                            worldTileX,
-                            worldTileY,
-                        );
+                        if (!selfAdded) {
+                            addNpcMenuEntries(
+                                interactId | 0,
+                                npcServerId | 0,
+                                npcEcsId | 0,
+                                worldTileX,
+                                worldTileY,
+                            );
+                        }
                     }
                 }
+            }
+
+            if (deferredCombatTarget) {
+                addPlayerMenuEntries(
+                    deferredCombatTarget.ecsIndex,
+                    deferredCombatTarget.worldTileX,
+                    deferredCombatTarget.worldTileY,
+                );
             }
 
             // Wrap NPC/LOC/PLAYER/OBJ entries to spawn a red cross when selected
             try {
                 const tileForMenu = host.osrsClient.menuTile ?? hoveredTile;
                 for (const e of menuEntries) {
-                    if (
-                        (e.targetType === MenuTargetType.NPC ||
-                            e.targetType === MenuTargetType.LOC ||
-                            e.targetType === MenuTargetType.PLAYER ||
-                            e.targetType === MenuTargetType.OBJ) &&
-                        e.option !== "Examine"
-                    ) {
+                    const onEntity =
+                        e.targetType === MenuTargetType.NPC ||
+                        e.targetType === MenuTargetType.LOC ||
+                        e.targetType === MenuTargetType.PLAYER ||
+                        e.targetType === MenuTargetType.OBJ;
+                    if (onEntity && e.option === "Examine") {
+                        wrapExamineWithClickCross(host, e, tileForMenu);
+                    } else if (onEntity) {
                         const orig = e.onClick;
                         e.onClick = (entry, evt?: MouseEvent, ctx?: unknown) =>
                             host.performWorldEntryAction(

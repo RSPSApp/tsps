@@ -26,7 +26,13 @@ const VARBIT_ROASTER = 1770;
 
 let I, N, core;
 before(async () => {
-  await h.setup([[2630, 2980], [2645, 9390], [2600, 2965], [2636, 2966]]);
+  const worldConfig = require('../dist/game/definition/WorldDefinition'), readConfig = worldConfig.readWorldConfig;
+  const config = require('node:test').mock.method(worldConfig, 'readWorldConfig', (...args) => {
+    const actual = readConfig(...args);
+    return { ...actual, plugins: { ...actual.plugins, WorldAdmin: false, AgentMcp: false, OfflineQuestHelper: false, CacheEditorAuthoring: false } };
+  });
+  try { await h.setup([[2630, 2980], [2645, 9390], [2600, 2965], [2636, 2966], [2324, 3598]]); }
+  finally { config.mock.restore(); }
   core = h.core;
   I = core.ItemIdentifiers;
   N = core.NpcIdentifiers;
@@ -537,3 +543,169 @@ for (const loggingOut of [false, true]) {
     else assert.equal(onGround(), 1, "on the player's tile");
   });
 }
+
+// Wiki (Rantz, history): the ogre composite bow shows Rantz the kill marks as the standard bow does.
+const OGRE_BOWMAN_HAT = 2978;
+for (const where of ["carried", "wielded"]) {
+  test(`a player with only a comp ogre bow ${where} claims a chompy hat from Rantz (#6551)`, async (t) => {
+    const f = actor(t, { stage: 65, attributes: { "big-chompy-bird-hunting:chompy-kills": 30 } });
+    if (where === "carried") f.player.getInventory().add(new core.Item(I.COMP_OGRE_BOW, 1), false);
+    else f.player.getEquipment().set(3, new core.Item(I.COMP_OGRE_BOW, 1));
+    const npc = h.spawn(f, RANTZ_PARENT, RANTZ_AT);
+    await h.talk(f, npc);
+    for (let i = 0; i < 6 && h.shown(f)?.who !== "menu"; i++) await h.continueLine(f);
+    await h.choose(f, "Can I have a hat please?");
+    for (let i = 0; i < 12 && amount(f, OGRE_BOWMAN_HAT) === 0; i++) await h.continueLine(f);
+    assert.equal(amount(f, OGRE_BOWMAN_HAT), 1);
+  });
+}
+
+test("showing the comp ogre bow to Rantz after the quest starts the hat dialogue (#6551)", async (t) => {
+  const f = actor(t, { stage: 65, items: [[I.COMP_OGRE_BOW, 1]], attributes: { "big-chompy-bird-hunting:chompy-kills": 30 } });
+  const npc = h.spawn(f, RANTZ_PARENT, RANTZ_AT);
+  await itemOnNpc(f, I.COMP_OGRE_BOW, npc);
+  for (let i = 0; i < 12 && amount(f, OGRE_BOWMAN_HAT) === 0; i++) await h.continueLine(f);
+  assert.equal(amount(f, OGRE_BOWMAN_HAT), 1);
+});
+
+// The comp ogre bow only exists after the quest, so the quest's own lost-bow reclaim stays keyed to the ogre bow.
+test("a comp ogre bow does not stand in for a lost ogre bow mid-quest: Rantz still sells the ogre bow (#6551)", async (t) => {
+  const f = actor(t, { stage: 45, items: [[I.COMP_OGRE_BOW, 1], [I.COINS, 600]] });
+  assert.equal(amount(f, I.OGRE_BOW), 0);
+  const lines = await talk(f, RANTZ_PARENT, RANTZ_AT, ["Yes, I'll buy the bow."]);
+  assert.ok(lines.some((line) => line.includes("I've lost the 'stabbie chucker'")), "the lost-bow page plays");
+  assert.equal(amount(f, I.OGRE_BOW), 1);
+  assert.ok(amount(f, I.COINS) < 600);
+});
+
+
+// #6551: native inputs at supplied quest/skill checkpoints; all production plugins and real map clipping.
+async function nativeRantzOp(f, npc, option) {
+  for (let i = 0; i < 10 && f.player.busy(); i++) h.tick(f);
+  assert.equal(f.player.busy(), false, 'ordinary input guard has settled');
+  const actions = npc.getCurrentDefinition(f.player).getActions(), op = actions.indexOf(option) + 1;
+  assert.ok(op === 1 || op === 4, `cache Rantz action ${option}`);
+  const index = npc.getIndex();
+  const raw = op === 1 ? [76, 0, index >>> 8, (index + 128) & 255] : [70, 0, index & 255, index >>> 8];
+  const packets = require('../dist/net/protocol/ClientProtocol').decodeClientPackets(Buffer.from(raw));
+  assert.deepEqual(packets, [{ type: 'npc_option', index, clickType: op }]);
+  await f.connection.dispatch(packets);
+  for (let i = 0; i < 20 && !h.shown(f); i++) h.tick(f);
+}
+async function hatMenu(f) {
+  for (let i = 0; i < 15 && h.shown(f)?.who !== 'menu'; i++) await h.continueLine(f);
+  assert.equal(h.shown(f)?.who, 'menu', JSON.stringify(f.said.slice(-5)));
+}
+async function finishHatLines(f) {
+  for (let i = 0; i < 80 && h.shown(f) && h.shown(f).who !== 'menu'; i++) await h.continueLine(f);
+}
+
+test('6551 native: a bird snare stands on actual walkable Piscatoris daisies', async t => {
+  const f = actor(t, { stage: 65, items: [[I.BIRD_SNARE, 1]], tile: [2324, 3598, 0] });
+  const loc = f.player.getLocation(), scenery = core.MapObjects.getType(loc, 10, null);
+  assert.ok(scenery); assert.equal(scenery.getId(), 1189);
+  assert.equal(core.CacheDefinitions.getObject(1189).clipType, 0);
+  assert.equal(core.RegionManager.blocked(loc, null), false);
+  f.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, 99).setMaxLevel(core.Skill.HUNTER, 99);
+  await itemOp(f, I.BIRD_SNARE, 'Lay'); h.ticks(f, 5);
+  const { H } = require('../plugins/skills/hunter/Context.Hunter');
+  const trap = [...H.traps].find(trap => trap.player === f.player);
+  assert.ok(trap, `native Lay must create a snare, got ${JSON.stringify(messages(f))}`);
+  assert.equal(trap.kind, 'bird'); assert.ok(trap.location.equals(loc));
+  assert.equal(amount(f, I.BIRD_SNARE), 0);
+  const other = actor(t, { stage: 65, items: [[I.BIRD_SNARE, 1]], tile: [2324, 3598, 0] });
+  other.player.getSkillManager().setCurrentLevels(core.Skill.HUNTER, 99).setMaxLevel(core.Skill.HUNTER, 99);
+  await itemOp(other, I.BIRD_SNARE, 'Lay'); h.ticks(other, 5);
+  assert.equal([...H.traps].filter(entry => entry.player === other.player).length, 0, 'another player cannot stack a trap here');
+  assert.equal(amount(other, I.BIRD_SNARE), 1, 'refused placement keeps the item');
+  assert.ok(messages(other).includes("You can't set up a trap here."));
+  const blocking = [...core.MapObjects.mapObjects.values()].flat().find(object => {
+    const at = object.getLocation();
+    return at.getX() >= 2300 && at.getX() <= 2390 && at.getY() >= 3540 && at.getY() <= 3630 && at.getZ() === 0
+      && object.getType() === 10 && core.CacheDefinitions.getObject(object.getId()).clipType > 0
+      && core.RegionManager.blocked(at, null);
+  });
+  assert.ok(blocking, 'real blocking hunting-area scenery control');
+  other.player.moveTo(blocking.getLocation().clone()); h.ticks(other, 4);
+  await itemOp(other, I.BIRD_SNARE, 'Lay'); h.ticks(other, 5);
+  assert.equal([...H.traps].filter(entry => entry.player === other.player).length, 0);
+  assert.equal(amount(other, I.BIRD_SNARE), 1, 'blocked terrain keeps the item');
+});
+
+test('6551 native: postquest Claim-hats reaches the existing award branch', async t => {
+  const f = actor(t, { stage: 65, items: [[I.COMP_OGRE_BOW, 1]], attributes: { 'big-chompy-bird-hunting:chompy-kills': 30 } });
+  const npc = h.spawn(f, RANTZ_PARENT, RANTZ_AT);
+  assert.equal(npc.getContentId(f.player), 14794);
+  await nativeRantzOp(f, npc, 'Claim-hats'); await finishHatLines(f);
+  assert.equal(amount(f, OGRE_BOWMAN_HAT), 1, JSON.stringify(f.said.slice(-8)));
+  const claimed = f.player.getAttribute('big-chompy-bird-hunting:hats-claimed');
+  assert.ok(claimed > 0);
+  f.player.closeInterruptibleInterfaces();
+  f.player.getInventory().deleteNumber(OGRE_BOWMAN_HAT, 1);
+  f.player.getBank(0).add(new core.Item(OGRE_BOWMAN_HAT, 1), false);
+  await nativeRantzOp(f, npc, 'Claim-hats'); await finishHatLines(f);
+  assert.equal(amount(f, OGRE_BOWMAN_HAT), 0, 'a claimed hat stored in the bank is not given again');
+  assert.equal(f.player.getBank(0).getAmount(OGRE_BOWMAN_HAT), 1);
+  assert.equal(f.player.getAttribute('big-chompy-bird-hunting:hats-claimed'), claimed);
+});
+
+test('6551 native: RFD dialogue keeps its existing hats topic and Skrach progression', async t => {
+  const f = actor(t, { stage: 65, items: [[I.OGRE_BOW, 1]], attributes: { 'big-chompy-bird-hunting:chompy-kills': 30 } });
+  const rfd = h.quest('recipe_for_disaster'); rfd.setStage(f.player, 4);
+  const npc = h.spawn(f, RANTZ_PARENT, RANTZ_AT);
+  await nativeRantzOp(f, npc, 'Talk-to'); await hatMenu(f);
+  await h.choose(f, 'Hey, I wanted to ask about hats...'); await hatMenu(f);
+  await h.choose(f, 'Can I have a hat please?'); await finishHatLines(f);
+  assert.equal(amount(f, OGRE_BOWMAN_HAT), 1);
+  assert.equal(rfd.getStage(f.player), 4);
+  assert.equal(f.player.getAttribute('recipe-for-disaster:skrach-state') ?? 0, 0, 'hat talk does not start Skrach');
+  f.player.closeInterruptibleInterfaces();
+  await nativeRantzOp(f, npc, 'Talk-to'); await hatMenu(f);
+  await h.choose(f, "I'm trying to free Skrach, can you help?"); await hatMenu(f);
+  await h.choose(f, "Ok, I'll do it."); await finishHatLines(f);
+  assert.equal(f.player.getAttribute('recipe-for-disaster:skrach-state') & 1, 1, 'the existing Skrach agreement still advances');
+  assert.equal(f.player.getAttribute('recipe-for-disaster:skrach-stage'), 20);
+  f.player.closeInterruptibleInterfaces();
+  await nativeRantzOp(f, npc, 'Claim-hats'); await finishHatLines(f);
+  assert.equal(amount(f, OGRE_BOWMAN_HAT), 1, 'claiming again does not duplicate the first hat');
+  assert.equal(f.player.getAttribute('recipe-for-disaster:skrach-stage'), 20, 'hat claims preserve active RFD progression');
+  for (const [state, topic] of [[1, 'Hey, I wanted to ask about hats...'], [3, 'Ask about hats...'], [7, 'Ask about hats...'], [15, 'Ask about hats...']]) {
+    f.player.closeInterruptibleInterfaces(); f.player.setAttribute('recipe-for-disaster:skrach-state', state);
+    await nativeRantzOp(f, npc, 'Talk-to'); await hatMenu(f);
+    await h.choose(f, topic); await hatMenu(f);
+    assert.ok(h.shown(f).text.includes('Can I have a hat please?'), `hat menu during Skrach state ${state}`);
+    assert.equal(f.player.getAttribute('recipe-for-disaster:skrach-state'), state);
+    assert.equal(f.player.getAttribute('recipe-for-disaster:skrach-stage'), 20);
+  }
+});
+
+for (const bow of ['OGRE_BOW', 'COMP_OGRE_BOW']) {
+  test(`6551 native: ${bow} Check reports the postquest kill counter`, async t => {
+    const f = actor(t, { stage: 65, items: [[I[bow], 1]], attributes: { 'big-chompy-bird-hunting:chompy-kills': 125 } });
+    const option = [2, 3, 4, 5, 6, 7].map(op => ItemActionPacketListener.resolveInventoryWidgetAction(I[bow], op)?.option)
+      .find(option => option === 'Check' || option === 'Check kills');
+    assert.ok(option);
+    await itemOp(f, I[bow], option);
+    assert.ok(messages(f).some(text => /125/.test(text) && /kills/.test(text)), JSON.stringify(messages(f)));
+    assert.equal(amount(f, I[bow]), 1); assert.equal(stage(f), 65);
+  });
+}
+
+
+test('6551 native: hat thresholds, missing bows and full packs keep items and unclaimed rewards', async t => {
+  for (const [kills, hasBow, full] of [[29, true, false], [30, false, false], [30, true, true]]) {
+    const f = actor(t, { stage: 65, items: hasBow ? [[I.OGRE_BOW, 1]] : [], attributes: { 'big-chompy-bird-hunting:chompy-kills': kills } });
+    if (full) while (f.player.getInventory().getFreeSlots() > 0) f.player.getInventory().add(new core.Item(I.LOGS, 1), false);
+    const before = f.player.getInventory().getItems().map(item => [item.getId(), item.getAmount()]);
+    const npc = h.spawn(f, RANTZ_PARENT, RANTZ_AT);
+    await nativeRantzOp(f, npc, 'Claim-hats'); await finishHatLines(f);
+    assert.equal(amount(f, OGRE_BOWMAN_HAT), 0, `${kills} kills, bow=${hasBow}, full=${full}`);
+    assert.equal(f.player.getAttribute('big-chompy-bird-hunting:hats-claimed') ?? 0, 0);
+    assert.deepEqual(f.player.getInventory().getItems().map(item => [item.getId(), item.getAmount()]), before);
+    if (full) {
+      f.player.closeInterruptibleInterfaces(); f.player.getInventory().deleteNumber(I.LOGS, 1);
+      await nativeRantzOp(f, npc, 'Claim-hats'); await finishHatLines(f);
+      assert.equal(amount(f, OGRE_BOWMAN_HAT), 1, 'the refused hat can be claimed once there is room');
+    }
+  }
+});

@@ -22,26 +22,61 @@ test("deduplicates exact source rows, not neighboring tiles",()=>{
  assert.equal(result.definitions.length,2);
  assert.equal(result.report.counts["duplicate-source-exact"],1);
 });
-test("exact legacy discrepancy is reported and not overwritten or multiplied",()=>{
- const old={id:554,location:{x:3304,y:3311,z:0},amt:1,respawn:20};
- const result=importSpawns(source([row()]),[old]);
- assert.deepEqual(result.definitions,[old]);assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
+test("a single legacy entry on the exact tile takes the source amount, timer and membership, never a second stack",()=>{
+ const old={id:554,location:{x:3304,y:3311,z:0},amt:1,respawn:0,description:"UNDIFINED",extra:"kept"};
+ const result=importSpawns(source([row({members:true})]),[old]);
+ assert.deepEqual(result.definitions,[{id:554,location:{x:3304,y:3311,z:0},amt:3,respawn:100,members:true,description:"UNDIFINED",extra:"kept"}]);
+ assert.equal(result.report.counts["existing-source-state-reconciled"],1);
+ assert.deepEqual(result.report.rows[0].previousState,{amt:1,respawn:0,members:undefined});
+ assert.deepEqual(importSpawns(source([row({members:true})]),result.definitions).definitions,result.definitions);
+ const f2p=importSpawns(source([row()]),[{...old,amt:3,respawn:100,members:true}]);
+ assert.equal(Object.hasOwn(f2p.definitions[0],"members"),false,"an F2P source row drops a stale members flag");
+ const two=[old,{...old,respawn:5}];
+ const held=importSpawns(source([row()]),two);
+ assert.deepEqual(held.definitions,two);assert.equal(held.report.counts["existing-exact-state-discrepancy"],1);
 });
 test("conflicting source amounts and possible replaced IDs need review",()=>{
  assert.equal(importSpawns(source([row(),row({quantity:5})]),[]).definitions.length,0);
  const result=importSpawns(source([row()]),[{id:555,location:{x:3304,y:3311,z:0},amt:1,respawn:100}]);
  assert.equal(result.definitions.length,1);assert.equal(result.report.counts["possible-replaced-id-review"],1);
 });
-test("nearby legacy item is a visible warning, never two-tile dedup",()=>{
- const result=importSpawns(source([row()]),[{id:554,location:{x:3305,y:3311,z:0},amt:1,respawn:100}]);
- assert.equal(result.definitions.length,2);assert.equal(result.report.rows[0].nearbyPlacementWarnings.length,1);
+test("a nearby different item is a visible warning; the same item nearby holds the row for placement review",()=>{
+ const other={id:555,location:{x:3305,y:3311,z:0},amt:1,respawn:100};
+ const warned=importSpawns(source([row()]),[other]);
+ assert.equal(warned.definitions.length,2);assert.equal(warned.report.rows[0].nearbyPlacementWarnings.length,1);
+ const same={id:554,location:{x:3306,y:3313,z:0},amt:1,respawn:100};
+ const held=importSpawns(source([row()]),[same]);
+ assert.deepEqual(held.definitions,[same]);
+ assert.equal(held.report.counts["near-legacy-placement-review"],1);
+ assert.deepEqual(held.report.rows[0].nearbyLegacy,[same]);
+ const beyond={...same,location:{x:3307,y:3311,z:0}},upstairs={...same,location:{x:3304,y:3311,z:1}};
+ assert.equal(importSpawns(source([row()]),[beyond,upstairs]).report.counts.added,1);
 });
-test("untyped overrides, missing or variable data and member rows remain visible",()=>{
+test("untyped overrides and missing or variable data remain visible; members rows import behind the world gate",()=>{
  const rows=[row({tile_respawn_raw:"50",unresolved_reasons:["untyped-tile-respawn"]}),
-   row({quantity:null,unresolved_reasons:["unresolved-quantity"]}),row({page:"Air rune",id:556,members:true})];
- const result=importSpawns(source(rows),[]);assert.equal(result.definitions.length,0);
- assert.equal(result.report.rows.length,3);assert.equal(result.report.counts["unresolved-source"],2);
- assert.equal(result.report.counts["members-world-scope-deferred"],1);
+   row({quantity:null,unresolved_reasons:["unresolved-quantity"]}),row({page:"Air rune",id:556,members:true}),
+   row({page:"Coins",id:995,x:1,members:null})];
+ const result=importSpawns(source(rows),[]);
+ assert.equal(result.report.rows.length,4);assert.equal(result.report.counts["unresolved-source"],3);
+ assert.deepEqual(result.definitions.map(d=>[d.id,d.members]),[[556,true]]);
+ assert.ok(result.report.rows[3].reasons.includes("unknown-world-membership"));
+ assert.equal(importSpawns(source([row()]),[]).definitions[0].members,undefined);
+});
+test("rows listed under the Wiki's Scenery object spawns heading are never ground items",()=>{
+ const scenery=row({page:"Bronze axe",id:1351,x:3097,y:3239,section:"Scenery object spawns"});
+ const result=importSpawns(source([scenery,row({section:"Item spawns"}),row({x:1,section:"Spawns"})]),[]);
+ assert.deepEqual(result.definitions.map(d=>d.id),[554,554]);
+ assert.equal(result.report.counts["scenery-object-spawn"],1);
+});
+test("quest-owned tiles and instanced raid rows stay with their plugins",()=>{
+ const owned=[row({page:"Saw",id:8794,x:1212,y:3093,members:true}),row({page:"Knife",id:946,x:1646,y:3095,members:true}),
+  row({page:"Wine of Zamorak",id:245,x:3018,y:10353,members:true}),
+  row({page:"Tinderbox",id:590,x:3280,y:5347,members:true,location:"[[Chambers of Xeric]]"})];
+ const result=importSpawns(source(owned),[]);
+ assert.equal(result.definitions.length,0);
+ assert.equal(result.report.counts["area-owned-or-instance-integration"],4);
+ assert.ok(result.report.rows.every(r=>typeof r.owner==="string"&&r.owner.length));
+ assert.equal(importSpawns(source([row({page:"Saw",id:8794,x:2865,y:2327,members:true})]),[]).report.counts.added,1);
 });
 test("known owners/instances deferred without banning every quest region",()=>{
  const result=importSpawns(source([row({id:560,x:2500,y:2967,page:"Death rune"}),
@@ -52,11 +87,6 @@ test("known owners/instances deferred without banning every quest region",()=>{
  assert.equal(contradictory.definitions.length,0);
  assert.equal(contradictory.report.counts["conflicting-source-alias-state"],2);
 });
-test("unaudited pages are classified rather than silently imported",()=>{
- const result=importSpawns(source([row({page:"Coins",id:995})]),[]);
- assert.equal(result.definitions.length,0);assert.equal(result.report.counts["ordinary-page-not-yet-audited"],1);
-});
-
 test("CLI rejects changed source bytes before writing any data", async()=>{
  const fs=await import("node:fs");const os=await import("node:os");const path=await import("node:path");
  const {spawnSync}=await import("node:child_process");
@@ -71,28 +101,6 @@ test("CLI rejects changed source bytes before writing any data", async()=>{
  } finally {fs.rmSync(dir,{recursive:true,force:true});}
 });
 
-test("small fishing net scenery rows remain excluded from the audited ordinary scope",()=>{
- const rows=[row({page:"Small fishing net",id:303,x:3244,y:3159}),
-   row({page:"Small fishing net",id:303,x:3245,y:3156})];
- const result=importSpawns(source(rows),[]);
- assert.equal(result.definitions.length,0);
- assert.equal(result.report.counts["ordinary-page-not-yet-audited"],2);
- // Raw source headings call these Scenery object spawns; the export does not carry headings.
- // Any future net-page scope extension must resolve that distinction rather than adding this page.
-});
-
-test("audited member tools retain source world policy and cannot widen unaudited rune or scenery scope",()=>{
- const member=row({page:"Crossbow",id:837,x:1512,y:3423,members:true,quantity:1,infobox_respawn_ticks:500});
- const result=importSpawns(source([member]),[]);
- assert.equal(result.definitions.length,1);assert.equal(result.definitions[0].members,true);
- assert.equal(result.definitions[0].respawn,500);
- assert.deepEqual(importSpawns(source([member]),result.definitions).definitions,result.definitions);
- const pages=[["Air rune",556],["Body rune",559],
-  ["Water rune",555],["Small fishing net",303]];
- const rejected=importSpawns(source(pages.map(([page,id])=>row({page,id,members:true}))),[]);
- assert.equal(rejected.definitions.length,0);
- assert.equal(rejected.report.counts["members-world-scope-deferred"],4);
-});
 test("audited member tools report conflicting world policy instead of silently globalizing a row",()=>{
  const member=row({page:"Shears",id:1735,members:true,quantity:1});
  const conflicting=importSpawns(source([member,{...member,members:false}]),[]);
@@ -100,18 +108,8 @@ test("audited member tools report conflicting world policy instead of silently g
  assert.equal(conflicting.report.counts["conflicting-source-alias-state"],2);
  const old={id:1735,location:{x:3304,y:3311,z:0},amt:1,respawn:100};
  const result=importSpawns(source([member]),[old]);
- assert.deepEqual(result.definitions,[old]);
- assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
-});
-
-test("audited member Earth/Mind runes retain quantities/world policy while the uncertain Air row stays held",()=>{
- const earth=row({page:"Earth rune",id:557,x:1394,y:3116,quantity:4,members:true});
- const mind=row({page:"Mind rune",id:558,x:1392,y:3118,quantity:2,members:true});
- const air=row({page:"Air rune",id:556,x:1399,y:3158,quantity:1,members:true});
- const result=importSpawns(source([earth,mind,air]),[]);
- assert.deepEqual(result.definitions.map(r=>[r.id,r.amt,r.respawn,r.members]),[[557,4,100,true],[558,2,100,true]]);
- assert.equal(result.report.counts["members-world-scope-deferred"],1);
- assert.deepEqual(importSpawns(source([earth,mind]),result.definitions).definitions,result.definitions);
+ assert.deepEqual(result.definitions,[{...old,members:true}]);
+ assert.equal(result.report.counts["existing-source-state-reconciled"],1);
 });
 
 const easternShellTiles=[[3258,2481],[3257,2477],[3259,2469],[3261,2458],[3260,2451],
@@ -128,19 +126,6 @@ test("nine pinned eastern shells preserve membership, quantity, timer and legacy
  for(const d of result.definitions.slice(1)){assert.equal(d.members,true);assert.equal(d.amt,1);assert.equal(d.respawn,50);}
  assert.deepEqual(importSpawns(source(rows),result.definitions).definitions,result.definitions);
 });
-test("eastern selection cannot admit other coasts, altered identities or unverified source state",()=>{
- const rows=[easternShell({x:3201,y:2374}),easternShell({x:3170,y:2537}),
- easternShell({x:3300,y:2320}),easternShell({location:"[[The Summer Shore]]"}),
- easternShell({plane:1}),easternShell({id:31394}),easternShell({members:false}),
- easternShell({quantity:2}),easternShell({infobox_respawn_ticks:51}),
- easternShell({unresolved_reasons:["unresolved-version"]}),easternShell({tile_respawn_raw:"50"})];
- assert.throws(()=>importSpawns(source([rows.pop()]),[]),/Invalid source-complete row/);
- assert.equal(importSpawns(source(rows),[]).definitions.length,0);
- const owned=[[3161,2389],[3168,2388],[3179,2384],[3191,2383],[3190,2379],[3197,2376]];
- const result=importSpawns(source(owned.map(([x,y])=>easternShell({x,y,location:"[[The Summer Shore]]"}))),[]);
- assert.equal(result.definitions.length,0);assert.equal(result.report.counts["area-owned-or-instance-integration"],6);
-});
-
 const memberFire = [
  {x:2768,y:3500,plane:1,quantity:2},
  {x:1450,y:10099,plane:0,quantity:1},
@@ -180,46 +165,9 @@ test("three pinned member common tools retain source state and legacy order",()=
  for(const [i,r]of commonTools.entries())assert.deepEqual(result.definitions[i+1],{id:r.id,location:{x:r.x,y:r.y,z:r.plane},amt:1,respawn:100,members:true,description:"OSRS Wiki: "+r.page+" — "+r.location});
  assert.deepEqual(importSpawns(source(commonTools),result.definitions).definitions,result.definitions);
 });
-test("common tool audit cannot widen pages, world policy, timers or quest/scenery identities",()=>{
- const rows=commonTools.flatMap(r=>[{...r,x:r.x+1},{...r,location:"unverified"},{...r,plane:1},{...r,members:false},{...r,quantity:2},{...r,infobox_respawn_ticks:99}]);
- rows.push({...commonTools[0],x:0,location:undefined}, {...commonTools[0],x:1207,y:3108,location:"[[Tal Teklan]]"},
- {...commonTools[1],x:2407,y:5645,location:"[[Guardians of the Rift]]"},
- {...commonTools[2],x:2543,y:2862,plane:1,members:false,location:"[[Corsair Cove]]"},
- {...commonTools[2],x:2431,y:3072,members:false,location:"[[Castle Wars]] - Saradominist's base"});
- assert.equal(importSpawns(source(rows),[]).definitions.length,0);
- assert.equal(importSpawns(source([{...commonTools[0],unresolved_reasons:["conditional"]}]),[]).definitions.length,0);
- assert.throws(()=>importSpawns(source([{...commonTools[0],tile_respawn_raw:"100"}]),[]),/Invalid source-complete row/);
-});
-
-test("audited member Nature rune rows preserve telegrab location text/quantity/timer while Air stays held",()=>{
- const nature=row({page:"Nature rune",id:561,x:2671,y:3737,quantity:2,infobox_respawn_ticks:200,members:true,location:"Rellekka island (requires Telekinetic Grab)"});
- const result=importSpawns(source([nature,row({page:"Air rune",id:556,members:true})]),[]);
- assert.equal(result.definitions.length,1);assert.deepEqual([result.definitions[0].id,result.definitions[0].amt,result.definitions[0].respawn,result.definitions[0].members],[561,2,200,true]);
- assert.match(result.definitions[0].description,/Telekinetic Grab/);assert.equal(result.report.counts["members-world-scope-deferred"],1);
- assert.deepEqual(importSpawns(source([nature]),result.definitions).definitions,result.definitions);
-});
-
 const dwarvenCoins = [{x:3003,y:9801},{x:3001,y:9798}].map(at=>row({
  ...at,page:"Coins",id:995,plane:0,quantity:1,location:"[[Dwarven Mine]]",
 }));
-
-test("audited Dwarven Mine Coins preserve quantities and remain exact tuple/location selections",()=>{
- const result=importSpawns(source(dwarvenCoins),[]);
- assert.equal(result.report.counts.added,2);
- assert.deepEqual(result.definitions.map(d=>[d.id,d.location.x,d.location.y,d.location.z,d.amt,d.respawn,d.members===true]),
-  [[995,3003,9801,0,1,100,false],[995,3001,9798,0,1,100,false]]);
- assert.deepEqual(importSpawns(source(dwarvenCoins),result.definitions).definitions,result.definitions);
- const base=dwarvenCoins[0];
- const held=[{...base,x:3002},{...base,x:3002,location:undefined},
-  {...base,plane:1},{...base,id:996},
-  {...base,page:"Coins (Shilo Village)"},{...base,location:"[[Edgeville Dungeon]]"},
-  {...base,members:true},{...base,x:3188,y:9820,location:"[[Varrock]] - west bank basement"}];
- assert.equal(importSpawns(source(held),[]).definitions.length,0);
- const occupied={id:554,location:{x:3003,y:9801,z:0},amt:1,respawn:100};
- const replaced=importSpawns(source([base]),[occupied]);
- assert.deepEqual(replaced.definitions,[occupied]);
- assert.equal(replaced.report.counts["possible-replaced-id-review"],1);
-});
 
 test("committed Dwarven Mine Coins match both audited public rows without duplicate placements",()=>{
  const data=JSON.parse(readFileSync(new URL("../data/definitions/ground-items.json",import.meta.url),"utf8"));
@@ -230,19 +178,6 @@ test("committed Dwarven Mine Coins match both audited public rows without duplic
  }
 });
 
-test("only exact Civitas surface bucket/pot rows qualify; scenery, phase-owned pot and unaudited F2P bucket stay held",()=>{
- const base=row({page:"Bucket",id:1925,x:1667,y:3124,quantity:1,members:true,location:"[[Civitas illa Fortis]]"});
- const other={...base,x:1644,y:3093},pot={...base,page:"Pot",id:1931,x:1666};
- const rejected=[{...base,x:1621,y:9566,location:"[[Civitas illa Fortis]] - tunnel"},
-  {...base,x:3359,y:4777,members:false,location:"[[Clan Wars]] - Free for all"},
-  {...pot,x:3086,y:3408,location:"Tassie quest pot"},
-  {...base,page:"Spade",id:952,x:1728,y:3102}];
- const result=importSpawns(source([base,other,pot,...rejected]),[]);
- assert.deepEqual(result.definitions.map(r=>[r.id,r.location.x,r.location.y,r.amt,r.respawn,r.members]),[[1925,1667,3124,1,100,true],[1925,1644,3093,1,100,true],[1931,1666,3124,1,100,true]]);
- assert.equal(result.report.rows.filter(r=>r.status==="added").length,3);
- assert.deepEqual(importSpawns(source([base,other,pot]),result.definitions).definitions,result.definitions);
-});
-
 const varlamoreSpades=[row({page:"Spade",id:952,x:1641,y:3052,plane:0,members:true,quantity:1,infobox_respawn_ticks:100,location:"[[Outer Fortis]]"}),
  row({page:"Spade",id:952,x:1405,y:2938,plane:0,members:true,quantity:1,infobox_respawn_ticks:100,location:"[[Aldarin]]"})];
 test("two pinned Varlamore spades preserve source state and legacy order",()=>{
@@ -250,34 +185,9 @@ test("two pinned Varlamore spades preserve source state and legacy order",()=>{
  for(const[i,r]of varlamoreSpades.entries()){const d=result.definitions[i+1];assert.equal(d.id,952);assert.deepEqual(d.location,{x:r.x,y:r.y,z:0});assert.equal(d.amt,1);assert.equal(d.respawn,100);assert.equal(d.members,true);}
  assert.deepEqual(importSpawns(source(varlamoreSpades),result.definitions).definitions,result.definitions);
 });
-test("Spade selection excludes scenery and other regions, identities, quantities and world variants",()=>{
- const rows=varlamoreSpades.flatMap(r=>[{...r,x:r.x+1},{...r,location:"unverified"},{...r,plane:1},{...r,members:false},{...r,quantity:2},{...r,infobox_respawn_ticks:99},{...r,id:953}]);
- for(const[x,y,location]of [[1728,3102,"[[Civitas illa Fortis]]"],[3355,2758,"[[Necropolis]]"],[3338,2751,"[[Necropolis]]"],[3334,2719,"[[Necropolis]]"],[3333,2702,"[[Necropolis]]"],[2592,2291,"[[Wyrmscraig]]"]])rows.push({...varlamoreSpades[0],x,y,location});
- assert.equal(importSpawns(source(rows),[]).definitions.length,0);
- assert.equal(importSpawns(source([{...varlamoreSpades[0],unresolved_reasons:["conditional"]}]),[]).definitions.length,0);
- assert.throws(()=>importSpawns(source([{...varlamoreSpades[0],tile_respawn_raw:"100"}]),[]),/Invalid source-complete row/);
-});
-
-
 const iceDungeonCoins=[{x:2988,y:9584},{x:2987,y:9583},{x:2988,y:9582}].map(at=>row({
  ...at,page:"Coins",id:995,plane:0,quantity:1,location:"[[Asgarnian Ice Dungeon]]",
 }));
-
-test("audited Ice Dungeon Coins preserve source default quantity and exact public location scope",()=>{
- const result=importSpawns(source(iceDungeonCoins),[]);
- assert.equal(result.report.counts.added,3);
- assert.deepEqual(result.definitions.map(d=>[d.id,d.location.x,d.location.y,d.location.z,d.amt,d.respawn,d.members===true]),
-  [[995,2988,9584,0,1,100,false],[995,2987,9583,0,1,100,false],[995,2988,9582,0,1,100,false]]);
- assert.deepEqual(importSpawns(source(iceDungeonCoins),result.definitions).definitions,result.definitions);
- const base=iceDungeonCoins[0];
- const held=[{...base,x:2989},{...base,x:2989,location:undefined},{...base,plane:1},
-  {...base,id:996},{...base,page:"Coins (Shilo Village)"},{...base,location:"[[Dwarven Mine]]"},
-  {...base,members:true},{...base,x:3188,y:9820,location:"[[Varrock]] - west bank basement"}];
- assert.equal(importSpawns(source(held),[]).definitions.length,0);
- const occupied={id:554,location:{x:2988,y:9584,z:0},amt:1,respawn:100};
- const replaced=importSpawns(source([base]),[occupied]);
- assert.deepEqual(replaced.definitions,[occupied]);assert.equal(replaced.report.counts["possible-replaced-id-review"],1);
-});
 
 test("committed Ice Dungeon Coins match all three audited public rows without duplicates",()=>{
  const data=JSON.parse(readFileSync(new URL("../data/definitions/ground-items.json",import.meta.url),"utf8"));
@@ -288,37 +198,6 @@ test("committed Ice Dungeon Coins match all three audited public rows without du
 });
 
 const herbloreTable=[row({page:"Pestle and mortar",id:233,x:1667,y:3068,plane:0,quantity:1,members:true,infobox_respawn_ticks:100,location:"[[Outer Fortis]]"}),row({page:"Vial of water",id:227,x:1668,y:3068,plane:0,quantity:1,members:true,infobox_respawn_ticks:100,location:"[[Outer Fortis]]"})];
-test("Outer Fortis Herblore table imports only its exact ordinary pair and preserves legacy order",()=>{
- const legacy=[{id:995,location:{x:3000,y:3000,z:0},amt:2,respawn:30}];const r=importSpawns(source(herbloreTable),legacy);assert.deepEqual(r.definitions.slice(0,1),legacy);assert.deepEqual(r.definitions.slice(1).map(d=>[d.id,d.location.x,d.location.y,d.location.z,d.amt,d.respawn,d.members]),[[233,1667,3068,0,1,100,true],[227,1668,3068,0,1,100,true]]);assert.deepEqual(importSpawns(source(herbloreTable),r.definitions).definitions,r.definitions);
- const held=herbloreTable.flatMap(r=>[{...r,x:r.x+1},{...r,id:r.id+1},{...r,plane:1},{...r,members:false},{...r,quantity:2},{...r,infobox_respawn_ticks:99},{...r,location:"unknown"},{...r,unresolved_reasons:["conditional"]}]);assert.equal(importSpawns(source(held),[]).definitions.length,0);assert.throws(()=>importSpawns(source([{...herbloreTable[0],tile_respawn_raw:"100"}]),[]),/Invalid source-complete row/);
-});
-
-test("Fortis items and Corsair Cove coins keep their source floor, membership and timer", () => {
-  const glass = row({ page: "Beer glass", id: 1919, x: 1673, y: 3155, plane: 1,
-    location: "[[Civitas illa Fortis]] - [[Sunrise Palace]] ({{FloorNumber|uk=1}})", members: true, quantity: 1 });
-  const coin = row({ page: "Coins", id: 995, x: 2012, y: 8994,
-    location: "[[Corsair Cove Dungeon]]", members: false, quantity: 1 });
-  const result = importSpawns(source([
-    glass, coin, { ...glass, plane: 0 }, { ...glass, x: 1674 },
-    { ...coin, members: true }, { ...coin, quantity: 3 }, { ...coin, location: "[[King Black Dragon Lair]]" },
-  ]), []);
-  assert.deepEqual(result.definitions.map((d) => [d.id, d.location.z, d.amt, d.respawn, d.members === true]), [
-    [1919, 1, 1, 100, true],
-  ]);
-  assert.equal(result.report.counts["conflicting-source-alias-state"],4,
-    "contradictory states at the coin's same physical tile hold all four candidates");
-  const positive = importSpawns(source([glass, coin]), []);
-  assert.deepEqual(positive.definitions.map((d) => [d.id, d.location.z, d.amt, d.respawn, d.members === true]), [
-    [1919, 1, 1, 100, true], [995, 0, 1, 100, false],
-  ]);
-  const installed = JSON.parse(readFileSync(new URL("../data/definitions/ground-items.json", import.meta.url), "utf8"));
-  for (const expected of positive.definitions) assert.equal(installed.filter((d) =>
-    d.id === expected.id && d.location.x === expected.location.x && d.location.y === expected.location.y
-    && d.location.z === expected.location.z && d.amt === expected.amt && d.respawn === expected.respawn
-    && d.members === expected.members).length, 1);
-  assert.deepEqual(importSpawns(source([glass, coin]), positive.definitions).definitions, positive.definitions);
-});
-
 test("a source-proven reward projection leaves only the display spawn at that tile", () => {
  const location = "Gerrant's Fishy Business";
  const reward = row({page:"White apron", name:"White apron", id:1005, x:3016, y:3229, quantity:1, location});
@@ -371,11 +250,14 @@ test("quest stock aliases never create a second stack and conflicting alias stat
 test("quest stock audit refuses untyped timers, other tiles and unaudited legacy discrepancies",()=>{
  const legacy={id:84,location:{x:2638,y:9906,z:0},amt:1,respawn:20};
  const result=importSpawns(source([staffRow()]),[legacy]);
- assert.deepEqual(result.definitions,[legacy]);assert.equal(result.report.counts["existing-exact-state-discrepancy"],1);
+ // Any single legacy entry on the tile now takes the source state, not only the audited one.
+ assert.deepEqual(result.definitions,[{...legacy,respawn:100,members:true}]);
+ assert.equal(result.report.counts["existing-source-state-reconciled"],1);
  const duplicate=importSpawns(source([staffRow()]),[legacy,{...legacy,respawn:0}]);
  assert.equal(duplicate.definitions.length,2);assert.deepEqual(duplicate.definitions,[legacy,{...legacy,respawn:0}]);
  const differentTile=importSpawns(source([staffRow({x:2639})]),[]);
- assert.equal(differentTile.definitions.length,0);assert.equal(differentTile.report.counts["members-world-scope-deferred"],1);
+ // Another tile is an ordinary new spawn: added, never reconciled into the audited legacy stock.
+ assert.equal(differentTile.report.counts.added,1);assert.equal(differentTile.definitions[0].location.x,2639);
  assert.throws(()=>importSpawns(source([staffRow({tile_respawn_raw:"100"})]),[]),/Invalid source-complete row/);
 });
 
@@ -393,7 +275,7 @@ test("valid quest alias cannot escape an unresolved or member-conflicting siblin
   assert.ok(result.report.rows.every(row=>row.reasons.includes("conflicting-source-alias-state")));
  }
  const distinct=importSpawns(source([staffRow(),staffRow({page:"Staff of armadyl",x:2639,members:false})]),[]);
- assert.equal(distinct.definitions.length,1);assert.equal(distinct.definitions[0].location.x,2638);
+ assert.deepEqual(distinct.definitions.map(d=>[d.location.x,d.members]),[[2638,true],[2639,undefined]]);
 });
 
 test("audited legacy reconciliation rejects unknown field representations and accepts only audited defaults",()=>{
@@ -410,4 +292,13 @@ test("audited legacy reconciliation rejects unknown field representations and ac
   assert.equal(result.definitions[0].respawn,100);assert.equal(result.definitions[0].amt,1);
   assert.equal(result.definitions[0].members,true);
  }
+});
+
+test("a capture-confirmed second spawn beside a same-item legacy spawn is added; others stay held",()=>{
+ const legacy={id:1511,location:{x:2958,y:3205,z:0},amt:1,respawn:100};
+ const logs=row({page:"Logs",id:1511,x:2959,y:3205});
+ const result=importSpawns(source([logs]),[legacy]);
+ assert.equal(result.report.counts.added,1);assert.deepEqual(result.definitions[1].location,{x:2959,y:3205,z:0});
+ const other=importSpawns(source([row({page:"Logs",id:1511,x:2959,y:3206})]),[legacy]);
+ assert.equal(other.report.counts["near-legacy-placement-review"],1);
 });

@@ -3,8 +3,8 @@
  * - Five ticks into its death (captured): "Your Phantom Muspah kill count is: N." (varp
  *   total_muspah_kills), the fight's length against the personal best, and the loot (its Wiki
  *   table in npc-drops.json) on its centre tile.
- * - Charged ice, for a kill under 3:00 when the player has none (Wiki), with the untradeable-drop
- *   message (captured).
+ * - Charged ice, for a kill under 3:00 when the player has none (Wiki); its untradeable-drop
+ *   message is the loot drop notification's (captured after the drop lines).
  * - A Venator shard comes with no other main-table loot (Wiki).
  * - The frozen cache opens into its own Wiki table (pre-roll 1/50: another cache, an Ancient icon
  *   or a Venator shard).
@@ -16,13 +16,25 @@ const Scoreboard = require("./Scoreboard.PhantomMuspah");
 const { sendBossKillCount } = require("../../interface/BossKillCount.plugin");
 const BOSS_NAME = "Phantom Muspah";
 
-const UNTRADEABLE_DROP = (name) => `<col=ef1020>Untradeable drop: ${name}</col>`;
 
-/** A fight's length as the Muspah's messages print it: m:ss.SS. */
-function formatTicks(ticks) {
+/**
+ * A fight's length as the Muspah's messages print it: m:ss.SS with precise timing on, else m:ss
+ * to the nearest second (captured: Grid Master's "0:35" for 58 ticks).
+ */
+function formatTicks(ticks, precise = true) {
+  if (!precise) {
+    const total = Math.round(ticks * 0.6);
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+  }
   const seconds = ticks * 0.6;
   const minutes = Math.floor(seconds / 60);
   return `${minutes}:${(seconds % 60).toFixed(2).padStart(5, "0")}`;
+}
+
+/** Whether the player has precise timing on (the "option_precise_timing" varbit). */
+function preciseTiming(player) {
+  const id = Common.core?.CacheDefinitions?.getVarbitId?.("option_precise_timing");
+  return Number.isInteger(id) && player?.getPacketSender?.()?.getVarbit?.(id) === 1;
 }
 
 function onMuspahDeath({ npc, killer }) {
@@ -40,12 +52,13 @@ function onMuspahDeath({ npc, killer }) {
   // From its appearance to this moment, five ticks into its death (captured: 108 ticks, 1:04.80).
   const ticks = Common.core.World.getProcessCycle() - fight.startCycle;
   const best = Common.count(player, Common.BEST_TICKS_ATTRIBUTE);
+  const precise = preciseTiming(player);
   if (!best || ticks < best) {
     player.setAttribute(Common.BEST_TICKS_ATTRIBUTE, ticks);
     Common.api.emitCustomEvent("boss:personal-best", { player, boss: BOSS_NAME, ticks });
-    player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col> (new personal best)`);
+    player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks, precise)}</col> (new personal best)`);
   } else {
-    player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks)}</col>. Personal best: ${formatTicks(best)}`);
+    player.sendMessage(`Fight duration: <col=ff0000>${formatTicks(ticks, precise)}</col>. Personal best: ${formatTicks(best, precise)}`);
   }
   Scoreboard.won(ticks);
   fight.lootTicks = ticks;
@@ -94,8 +107,8 @@ function editDrops(event) {
   }
   const ticks = fight.lootTicks ?? Infinity;
   if (ticks < Common.data.kill.chargedIceTicks && !owns(player, ItemIdentifiers.CHARGED_ICE)) {
+    // Its "Untradeable drop: Charged ice" is the loot drop notification's (ValueWarnings), as captured.
     event.drops.push({ itemId: ItemIdentifiers.CHARGED_ICE, amount: 1, noted: false });
-    player.sendMessage(UNTRADEABLE_DROP("Charged ice"));
   }
 }
 
@@ -110,6 +123,9 @@ function weighted(entries) {
   }
   return entries[entries.length - 1];
 }
+
+/** The source the cache's reward names on "drops:rolled". */
+const CACHE_SOURCE = "Phantom Muspah";
 
 /** One of the cache's rewards: [itemId, amount]. */
 function rollCache() {
@@ -138,6 +154,11 @@ function openCache({ player, itemId }) {
   if (!inventory.contains(ItemIdentifiers.FROZEN_CACHE)) return true;
   inventory.delete(ItemIdentifiers.FROZEN_CACHE, 1);
   const reward = rollCache();
+  // "drops:rolled" { player, source, drops }: content may change the reward before it is given (a
+  // league drops the ancient icon as the ancient sceptre).
+  const drops = [reward];
+  Common.api.emitCustomEvent("drops:rolled", { player, source: CACHE_SOURCE, drops });
+  Object.assign(reward, drops[0] ?? {});
   let rewardId = reward.itemId;
   if (reward.noted) {
     const noteId = ItemDefinition.forId(rewardId).getNoteId();
@@ -175,4 +196,4 @@ function attachLoot(api) {
   api.onItemAction("Frozen cache", { Open: openCache });
 }
 
-module.exports = { attachLoot, formatTicks, rollCache };
+module.exports = { attachLoot, formatTicks, rollCache, openCache };

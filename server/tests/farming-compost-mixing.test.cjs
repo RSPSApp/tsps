@@ -1,7 +1,7 @@
 // Real map objects, players, containers, Farming work and native object packets; network only is stubbed.
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const { before, test } = require('node:test');
+const { after, before, test } = require('node:test');
 process.env.DISABLE_PLAYER_BOTS = '1';
 require('../dist/Server').Server.installProductionPathResolver();
 const { PluginManager: PM } = require('../dist/plugins/PluginManager');
@@ -16,6 +16,8 @@ before(async () => {
   Data = require('../plugins/skills/farming/Data.Farming');
   Patches = require('../plugins/skills/farming/Patches.Farming');
   PM.emitServerStartup({});
+  realProcessCycle = core.World.getProcessCycle;
+  core.World.getProcessCycle = () => cycle;
   core.RegionManager.loadMapFiles(3056,3312); core.RegionManager.loadMapFiles(1272,3729);
 });
 function fixture(t, type = 'COMPOST', count = 3, tier = 4) {
@@ -47,11 +49,15 @@ function setup(t,type='COMPOST',superFirst=true,count=3){
 }
 async function use(f){await input(f,{type:'item_on_object',widgetId:core.Inventory.INTERFACE_ID,objectId:f.patch.id,itemId:f.id,slot:0,x:f.patch.x,y:f.patch.y});}
 async function answer(f,n=1){await input(f,{type:'dialogue_continue',widgetId:core.OptionDialogue.OPTIONS_WIDGET_ID,childIndex:n});}
-function ticks(n){while(n--)Patches.tick();}
+// Each tick is a new world cycle, as World.process runs farming before client input.
+let cycle = 0, realProcessCycle;
+after(() => { if (realProcessCycle) core.World.getProcessCycle = realProcessCycle; });
+function ticks(n) { while (n--) { cycle++; Patches.tick(); } }
 test('both mixing directions and bin sizes require confirmation before any input; Yes fills one automatic batch',async t=>{
  for(const type of ['COMPOST','BIG_COMPOST'])for(const direction of [true,false]){
  const f=setup(t,type,direction);await use(f);assert.ok(f.p.getDialogueManager().getCurrent() instanceof core.OptionDialogue);ticks(8);assert.equal(f.bin.count,3);assert.equal(f.inv.getAmount(f.id),3);
- await answer(f);ticks(2);assert.equal(f.bin.count,3);ticks(1);assert.equal(f.bin.count,4);ticks(12);assert.equal(f.bin.count,6);assert.equal(f.bin.super,3);assert.equal(f.bin.tier,1);assert.equal(f.inv.getAmount(f.id),0);
+ // Weeds all go in together two ticks after the animation (#6539); pineapples one a tick after it.
+ await answer(f);ticks(2);assert.equal(f.bin.count,3);ticks(1);assert.equal(f.bin.count,direction?3:4);ticks(12);assert.equal(f.bin.count,6);assert.equal(f.bin.super,3);assert.equal(f.bin.tier,1);assert.equal(f.inv.getAmount(f.id),0);
  }
 });
 test('No and stale answers preserve inventory and bin',async t=>{

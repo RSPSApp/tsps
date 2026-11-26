@@ -6,8 +6,9 @@
  * cast. It is charged with blood runes, two runes a charge, up to 20,000, and
  * uncharging returns every rune. A successful hit has a 1/5 chance to deal 8
  * extra damage and heal the caster for half the damage dealt. Uncharged, it
- * cannot cast. Charging, checking and uncharging mirror Tumeken's shadow
- * (plugins/items/TumekensShadow.plugin.js).
+ * cannot cast, nor be wielded: Wield on the uncharged staff refuses with a game message naming the item
+ * (local 1001250 tick 721, op3 on Sanguinesti staff (uncharged), rev 231). Charging, checking and uncharging
+ * mirror Tumeken's shadow (plugins/items/TumekensShadow.plugin.js).
  *
  * The cast (rsprox 1696 ticks 640, 774, 778, 1063, 1073, 1413; 1698 ticks 4177, 4181, 4238, 4265): anim 1167,
  * casting spotanim 1540 (cache sanguinesti_staff_casting) at height 92 and a private shadow_cast (178); the
@@ -147,47 +148,116 @@ function setCharges(player, item, value) {
   player.getInventory?.().refreshItems?.();
 }
 
-/** Two blood runes a charge, as many as the inventory affords (Wiki). */
+/** Charge requests awaiting the amount typed into the prompt. */
+const pendingCharges = new WeakMap();
+
+/** How many charges the plain (unrestricted) blood runes in the inventory pay for, up to a full staff. */
+function chargesAfforded(player, held) {
+  return Math.min(
+    Math.floor(plainAmount(player.getInventory(), ids().BLOOD_RUNE) / BLOOD_RUNES_PER_CHARGE),
+    MAX_CHARGES - chargesOf(held),
+  );
+}
+
+/** The staff is still the clicked item, in its slot, with the charges it had when asked. */
+function ownsClickedStaff(player, request) {
+  return player.getInventory().getItems?.()[request.slot] === request.item
+    && request.item.getId() === request.itemId
+    && chargesOf(request.item) === request.charges;
+}
+
+/**
+ * Blood runes on the staff, or its Charge option, ask how many charges to apply, offering as many
+ * as the inventory affords (rsprox local 1001250 tick 724 "(Up to 1,000)", local 1001295 tick 4817
+ * "(Up to 17,728)"). Two blood runes a charge, up to 20,000 (Wiki, since 22 July 2026; the
+ * recordings predate it and took three).
+ */
+function promptCharges(player, held, slot) {
+  if (!Number.isInteger(slot) || player.getInventory().getItems?.()[slot] !== held) return false;
+  if (chargesOf(held) >= MAX_CHARGES) {
+    player.sendMessage("Your Sanguinesti staff is already fully charged.");
+    return true;
+  }
+  const affordable = chargesAfforded(player, held);
+  if (affordable < 1) {
+    player.sendMessage("You need two blood runes for each charge.");
+    return true;
+  }
+  const request = { player, item: held, itemId: held.getId(), slot, charges: chargesOf(held) };
+  request.action = { acceptsZero: true, execute: (amount) => submitCharges(request, amount) };
+  pendingCharges.set(player, request);
+  player.setEnteredAmountAction(request.action);
+  player.getPacketSender().sendEnterAmountPrompt(
+    `How many charges do you want to apply? (Up to ${affordable.toLocaleString("en-US")})`);
+  return true;
+}
+
+/**
+ * The typed amount, clamped to what the runes still pay for (local 1001295 tick 4821: 435,567
+ * typed applied the offered 17,728), shown in an objectbox with the charged staff (local 1001250
+ * tick 727, local 1001295 tick 4821).
+ */
+function submitCharges(request, amount) {
+  const { player, item } = request;
+  if (pendingCharges.get(player) !== request || player.getEnteredAmountAction() !== request.action) return;
+  pendingCharges.delete(player);
+  if (!ownsClickedStaff(player, request) || !Number.isInteger(amount) || amount <= 0) return;
+  const applied = Math.min(amount, chargesAfforded(player, item));
+  if (applied < 1) return;
+  takePlain(player.getInventory(), ids().BLOOD_RUNE, applied * BLOOD_RUNES_PER_CHARGE);
+  setCharges(player, item, chargesOf(item) + applied);
+  const { DialogueChainBuilder, ItemStatementDialogue } = core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, item.getId(),
+    `You apply ${applied.toLocaleString("en-US")} charge${applied === 1 ? "" : "s"} to your Sanguinesti staff.`)));
+}
+
 function chargeStaff(event) {
   const { player, usedItem, usedWithItem, usedItemId, usedWithItemId } = event;
   const held = isStaffId(usedItemId) ? usedItem : isStaffId(usedWithItemId) ? usedWithItem : null;
   if (!held) {
     return;
   }
-  const otherId = Number(held === usedItem ? usedWithItemId : usedItemId);
-  if (otherId !== ids().BLOOD_RUNE) {
+  const runes = held === usedItem ? usedWithItem : usedItem;
+  if (Number(runes?.getId?.()) !== ids().BLOOD_RUNE) {
     return;
   }
-  const inventory = player.getInventory();
-  if (restricted(held === usedItem ? usedWithItem : usedItem)) {
+  if (restricted(runes)) {
     player.sendMessage(PRESET_TEXT);
     event.handled = true;
     return;
   }
-  const current = chargesOf(held);
-  if (current >= MAX_CHARGES) {
-    player.sendMessage("Your Sanguinesti staff is already fully charged.");
-    event.handled = true;
-    return;
-  }
-  const affordable = Math.min(
-    Math.floor(plainAmount(inventory, ids().BLOOD_RUNE) / BLOOD_RUNES_PER_CHARGE),
-    MAX_CHARGES - current,
-  );
-  if (affordable < 1) {
-    player.sendMessage("You need two blood runes for each charge.");
-    event.handled = true;
-    return;
-  }
-  takePlain(inventory, ids().BLOOD_RUNE, affordable * BLOOD_RUNES_PER_CHARGE);
-  setCharges(player, held, current + affordable);
-  player.sendMessage(`You apply ${affordable.toLocaleString()} charge${affordable === 1 ? "" : "s"} to your Sanguinesti staff.`);
-  event.handled = true;
+  const slot = held === usedItem ? event.usedItemSlot : event.usedWithItemSlot;
+  if (promptCharges(player, held, slot)) event.handled = true;
 }
 
+/**
+ * The Charge option, on either version. Ours: Charge isn't recorded (local 1001250 tick 721 is op3,
+ * Wield on the uncharged staff); it asks as using the runes does, as Tonalztics of Ralos' recorded
+ * Charge does.
+ */
+function chargeOption({ player, item, slot }) {
+  return promptCharges(player, item, slot);
+}
+
+/** rsprox 4151 tick 101, 4288 tick 26539. */
 function checkCharges({ player, item }) {
-  player.sendMessage(`Your Sanguinesti staff has ${chargesOf(item).toLocaleString("en-US")} charges left.`);
+  player.sendMessage(`Your Sanguinesti staff has ${chargesOf(item).toLocaleString("en-US")} charges remaining.`);
   return true;
+}
+
+/**
+ * Live refuses to wield the uncharged staff (local 1001250 tick 721). Ours: the Holy staff's refusal names its own
+ * item the same way; it is not captured.
+ */
+function refuseUnchargedWield(event) {
+  const I = ids();
+  const name = {
+    [I.SANGUINESTI_STAFF_UNCHARGED_]: "Sanguinesti staff (uncharged)",
+    [I.HOLY_SANGUINESTI_STAFF_UNCHARGED_]: "Holy sanguinesti staff (uncharged)",
+  }[Number(event?.item?.getId?.())];
+  if (!name) return;
+  event.allow = false;
+  event.player.sendMessage(`Your ${name} has no charges! You can use blood runes to power the staff.`);
 }
 
 /** Wiki: uncharging returns every blood rune spent. */
@@ -222,9 +292,12 @@ module.exports = {
     core = api.core;
     staff = defineStaff();
 
-    api.onItemAction("Sanguinesti staff", { Check: checkCharges, Uncharge: uncharge });
-    api.onItemAction("Holy sanguinesti staff", { Check: checkCharges, Uncharge: uncharge });
+    api.onItemAction("Sanguinesti staff", { Check: checkCharges, Charge: chargeOption, Uncharge: uncharge });
+    api.onItemAction("Sanguinesti staff (uncharged)", { Charge: chargeOption });
+    api.onItemAction("Holy sanguinesti staff", { Check: checkCharges, Charge: chargeOption, Uncharge: uncharge });
+    api.onItemAction("Holy sanguinesti staff (uncharged)", { Charge: chargeOption });
     api.onItemOnItem(chargeStaff, { noted: false });
+    api.onCanEquip(refuseUnchargedWield);
     api.onCombatHitResolved(onHitResolved);
     api.registerCombatMethodResolver(staff.resolver);
     api.onCustomEvent("item:fill-charges", staff.fillCharges);
@@ -236,8 +309,11 @@ module.exports = {
     onHitResolved,
     useCharge: (player) => staff.useCharge(player),
     chargeStaff,
+    chargeOption,
+    pendingCharges,
     checkCharges,
     uncharge,
+    refuseUnchargedWield,
     baseMaxHit,
     MAX_CHARGES,
     BLOOD_RUNES_PER_CHARGE,

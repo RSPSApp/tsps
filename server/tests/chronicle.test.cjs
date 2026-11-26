@@ -16,7 +16,9 @@ let wilderness = false;
 let reqsPass = true;
 let nextRandom = () => 0;
 let blocked = () => false;
+const catalogueHandlers = new Map();
 Chronicle.register({
+  onCustomEvent: (name, handler) => catalogueHandlers.set(name, handler),
   core: {
     ItemIdentifiers,
     Location: class { constructor(x, y, z) { Object.assign(this, { x, y, z }); } },
@@ -158,4 +160,14 @@ test("the Wilderness, no charges and a refused teleport all spend nothing", () =
   reqsPass = true;
   assert.equal(charges(refused), 5);
   assert.equal(teleports.length, 0);
+});
+
+
+test("the destination provider reads canonical landing data without RNG or player access", t => {
+  t.mock.method(Math, "random", () => { throw new Error("catalogue must not roll a landing"); });
+  const player = new Proxy({}, { get(_target, key) { throw new Error(`catalogue read player.${String(key)}`); } });
+  const request = { player, list: [] };
+  catalogueHandlers.get("adminpanel:teleport-destinations")(request);
+  assert.deepEqual(request.list, [{ path: ["Items", "Chronicle"], key: "champions-guild",
+    name: "Champions' Guild (landing area centre)", tile: [LANDING_CENTRE.x, LANDING_CENTRE.y, 0] }]);
 });

@@ -534,13 +534,6 @@ export class PlayerSession {
       );
       if (!this.isBinaryChannelOpen()) return;
     }
-    // xrsps replays the initial scene during login; later scene replays follow
-    // the authoritative player-sync base below.
-    if (initialSync && sceneChanged) {
-      ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY);
-      if (!this.isBinaryChannelOpen()) return;
-    }
-
     let playerSync: Buffer;
     let observerViews: PlayerView[] | undefined;
     if (initialSync) {
@@ -597,7 +590,9 @@ export class PlayerSession {
           faceTile: npc.getFaceTile?.() ?? (positionToFace
             ? { x: positionToFace.getX(), y: positionToFace.getY() }
             : undefined),
+          faceAngle: npc.getFaceAngle?.() ?? undefined,
           crawl: npc.isCrawling?.() || undefined,
+          jump: npc.isTeleportingWithoutJump?.() ? false : undefined,
           modelCustomisation: npc.getModelCustomisationForUpdate?.() ?? undefined,
           typeCustomisation: npc.getTypeCustomisationForUpdate?.() ?? undefined,
           baseAnimations: npc.getBaseAnimationsForUpdate?.() ?? undefined,
@@ -675,7 +670,8 @@ export class PlayerSession {
       player, tick, npcs: [...visibleNpcs].filter(npc => sentIndices.has(npc.getIndex()) && npc.isRegistered()),
     });
 
-    if (!initialSync && sceneChanged) {
+    // The gateway initializes its login scene from player sync; earlier loc overrides are out of scene and lost.
+    if (sceneChanged) {
       ObjectManager.onRegionChange(player, this.sceneBaseX, this.sceneBaseY);
       if (!this.isBinaryChannelOpen()) return;
     }

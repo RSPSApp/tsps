@@ -68,6 +68,7 @@ function bootPlayerBotsRuntime(options = {}) {
   const traversalAssist = createTraversalAssist(botApi, {
     objectIds: [config.wildernessDitchObjectId],
     cachePath: config.objectIndexCachePath,
+    seedPath: config.objectIndexSeedPath,
   });
 
   const faceTarget = (event) => {
@@ -133,15 +134,9 @@ function bootPlayerBotsRuntime(options = {}) {
     pvpController.tickSupport({ player, state, nowMs });
   // Every bot runs on the brain, so a broken bot-activities.json must fail boot
   // loudly rather than leave the whole population standing still.
-  const brainRegistry = createBotActivityRegistry({ api: botApi, world: brainWorld });
+  const brainRegistry = createBotActivityRegistry({ api: botApi, world: brainWorld, deferCodeDefinitions: true });
 
-  const { readActivities } = require("../brain/Editor.PlayerBots");
-  const editorObjectIds = readActivities().flatMap(activity => [
-    ...activity.actions.flatMap(action => action.objectIds ?? []),
-    ...(activity.graph?.nodes ?? []).flatMap(node => node.action?.objectIds ?? []),
-  ]);
   traversalAssist.trackObjectIds([
-    ...editorObjectIds,
     config.wildernessDitchObjectId,
     ...listCatalogObjectIds(),
     ...BANK_BOOTH_IDS,

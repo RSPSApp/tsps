@@ -1,7 +1,8 @@
 // Inspect object boxes, from rsprox.net index recordings (rev 235): stormy key 856/3461/3457,
 // fetid key 908, serrated key 936, barrel stand 3457/3461, bottled storm 937, captured wind mote and
 // Gurtob's fabric roll 908, Gwyna's fabric roll and Heart of Ithell 936, Ralph's fabric roll 3461;
-// rev 226: the unscented vyre noble top, legs and shoes 1637. A real Player and cache.
+// rev 226: the unscented vyre noble top, legs and shoes 1637; rev 229: Vorkath's head 2628; rev 235:
+// the inert sailors' amulet 3837. A real Player and cache.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { before, test } = require("node:test");
@@ -57,6 +58,8 @@ const CAPTURED = {
   vyrelord_torso_unf: "The top of a vyre noble disguise. It needs to be<br>scented with vampyre blood before it can be used.",
   vyrelord_legs_unf: "The legs of a vyre noble disguise. They need to be<br>scented with vampyre blood before they can be used.",
   vyrelord_shoes_unf: "The shoes of a vyre noble disguise. They need to be<br>scented with vampyre blood before they can be used.",
+  vorkath_head: "Perhaps Ava would like to see this?",
+  sailors_amulet_empty: "The amulet is inert. A tiny inscription on its rim reads:<br>'Invoke the Law of the Sea.'",
 };
 
 test("each item's cache name is hooked with Inspect", () => {

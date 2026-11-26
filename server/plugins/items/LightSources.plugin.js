@@ -14,15 +14,18 @@
  * wording, not Wiki text or recorded dialogue.
  *
  * Captured (rsprox 70 tick 1626, 75 tick 11666): lighting a torch says "You light your torch." and plays
- * no sequence and no sound. Nothing else was captured, so no other item gets a message or an animation, and
- * the level refusal reuses OilLights' wording. The lit item replaces the unlit one in its slot (setId), so a
+ * no sequence and no sound. The white candle lantern says "You light the lantern." as a spam (filterable)
+ * line and plays synth 3226, with no sequence (rsprox local 1000134, 1000135, 1000140: 6 of 6 lightings);
+ * the black candle lantern does the same (Ours, as its Extinguish). Nothing else was captured, so no other
+ * item gets a message, sound or animation, and the level refusal reuses OilLights' wording. The lit item replaces the unlit one in its slot (setId), so a
  * preset, untradeable or unbankable copy stays one, and the current level counts, so a boost lights what it
  * should (Wiki).
  *
  * The lit mining helmet can be put out again (Wiki: "You can extinguish it if you want it unlit"): the
  * old click that turned it unlit was the only way back, so a helmet lit outside the Lumbridge basement
- * could never be lit there for the diary. A lit torch can also be extinguished except when it is
- * the player's only light in the currently modelled dark area (Wiki: Light sources).
+ * could never be lit there for the diary. A lit torch, candle or candle lantern can also be extinguished except when
+ * it is the player's only light in the currently modelled dark area (Wiki: Light sources); the candle and candle
+ * lantern say why, as captured (Darkness.refuseLastLight).
  *
  * The torch used on a fire or range lights it (Wiki: "may be used with a tinderbox or dry sticks, or
  * used on a fire or range"). It needs a handler of its own because Cooking registers a `fallback`
@@ -36,15 +39,19 @@ const { isCooker } = require("../skills/Cooking.plugin");
 const Darkness = require("../world/Darkness.plugin");
 
 let core;
-/** Unlit item id -> { lit, level, message? }. */
+/** Synth played when a lantern is lit (the oil, bullseye and sapphire lanterns in OilLights use it too). */
+const LANTERN_LIGHT_SOUND = 3226;
+/** Unlit item id -> { lit, level, message?, spam?, sound? }. */
 let lights;
 
 function build(I) {
   return new Map([
     [I.UNLIT_TORCH, { lit: I.LIT_TORCH, level: 1, message: "You light your torch." }],
     [I.CANDLE, { lit: I.LIT_CANDLE, level: 1 }],
-    [I.CANDLE_LANTERN, { lit: I.CANDLE_LANTERN_3, level: 4 }], // white
-    [I.CANDLE_LANTERN_4, { lit: I.CANDLE_LANTERN_6, level: 4 }], // black
+    // White: the spam line and synth 3226 on the click tick (rsprox local 1000134 t438/t585/t780/t1144,
+    // 1000135 t221, 1000140 t763). Ours: the black one (not captured) is lit the same way, as it is put out.
+    [I.CANDLE_LANTERN, { lit: I.CANDLE_LANTERN_3, level: 4, spam: "You light the lantern.", sound: LANTERN_LIGHT_SOUND }],
+    [I.CANDLE_LANTERN_4, { lit: I.CANDLE_LANTERN_6, level: 4, spam: "You light the lantern.", sound: LANTERN_LIGHT_SOUND }],
     [I.UNLIT_BUG_LANTERN, { lit: I.LIT_BUG_LANTERN, level: 33 }],
     [I.EMERALD_LANTERN, { lit: I.EMERALD_LANTERN_2, level: 49 }],
   ]);
@@ -98,6 +105,8 @@ function applyLight(player, item, source) {
   item.setId(source.lit);
   player.getInventory().refreshItems();
   if (source.message) player.sendMessage(source.message);
+  if (source.spam) player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, source.spam);
+  if (source.sound) player.getPacketSender().sendSound(source.sound, 100, 0);
   // `light-sources:lit` { player, itemId }: the lit item, on its tick (the league's "Light a Torch",
   // rsprox 237/1098 tick 16024, the tick the tinderbox was used).
   core.PluginManager?.emitCustomEvent?.("light-sources:lit", { player, itemId: source.lit });
@@ -143,9 +152,45 @@ function extinguishHelmet({ player, item }) {
 /** Extinguish only the clicked torch, unless it is the last light in the dark. */
 function extinguishTorch({ player, item }) {
   if (item?.getId() !== core.ItemIdentifiers.LIT_TORCH) return false;
-  if (!Darkness.canSeeAt(player, player.getLocation(), item)) return true;
+  // The torch's refusal line was not captured, so it stays silent (Ours).
+  if (Darkness.wouldLeaveInDark(player, item)) return true;
   item.setId(core.ItemIdentifiers.UNLIT_TORCH);
   player.getInventory().refreshItems();
+  return true;
+}
+
+/**
+ * Extinguish on a lit candle: the unlit one in its slot and "You extinguish the candle." in the filterable chat (rsprox
+ * local enlightened-journey, rev 242, tick 2533). The last light in the dark stays lit, with the captured refusal
+ * (local 1000134 tick 370).
+ */
+function extinguishCandle({ player, item }) {
+  const I = core.ItemIdentifiers;
+  const unlit = item?.getId() === I.LIT_CANDLE ? I.CANDLE : item?.getId() === I.LIT_BLACK_CANDLE ? I.BLACK_CANDLE : null;
+  if (unlit === null) return false;
+  if (Darkness.refuseLastLight(player, item, "Extinguishing the candle would leave you without a light source.")) return true;
+  item.setId(unlit);
+  player.getInventory().refreshItems();
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You extinguish the candle.");
+  return true;
+}
+
+/**
+ * Extinguish on a lit candle lantern (white 4531, black 4534): the unlit lantern in its slot and "You extinguish the
+ * lantern." in the filterable chat (rsprox captures, local 1000134 ticks 365 and 575, 1000135, 1000140; the black one
+ * was not captured and is put out the same way). The last light in the dark stays lit, with the captured refusal
+ * (local 1000134 ticks 341, 347, 354). The lit emerald lantern (9065 -> 9064) is put out here too, with the same
+ * lines: its own were not captured (Ours).
+ */
+function extinguishCandleLantern({ player, item }) {
+  const I = core.ItemIdentifiers;
+  const unlit = item?.getId() === I.CANDLE_LANTERN_3 ? I.CANDLE_LANTERN : item?.getId() === I.CANDLE_LANTERN_6 ? I.CANDLE_LANTERN_4
+    : item?.getId() === I.EMERALD_LANTERN_2 ? I.EMERALD_LANTERN : null;
+  if (unlit === null) return false;
+  if (Darkness.refuseLastLight(player, item, "Extinguishing the lantern would leave you without a light source.")) return true;
+  item.setId(unlit);
+  player.getInventory().refreshItems();
+  player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, "You extinguish the lantern.");
   return true;
 }
 
@@ -194,7 +239,7 @@ function extinguishAll(player) {
 
 module.exports = {
   name: "LightSources",
-  description: "Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches and mining helmets be put out again.",
+  description: "Lets a tinderbox light unlit torches, candles and lanterns at the right Firemaking level, and lets lit torches, candles, candle and emerald lanterns and mining helmets be put out again (not your last light in the dark).",
   members: true,
   register(api) {
     core = api.core;
@@ -204,7 +249,11 @@ module.exports = {
     api.onItemOnObject(lightOnObject, { noted: false });
     api.onItemAction("Mining helmet", { Extinguish: extinguishHelmet });
     api.onItemAction("Lit torch", { Extinguish: extinguishTorch });
+    api.onItemAction("Lit candle", { Extinguish: extinguishCandle });
+    api.onItemAction("Lit black candle", { Extinguish: extinguishCandle });
+    api.onItemAction("Candle lantern", { Extinguish: extinguishCandleLantern });
+    api.onItemAction("Emerald lantern", { Extinguish: extinguishCandleLantern });
   },
   extinguishAll,
-  _test: { build, lightOnObject, putOutForms },
+  _test: { build, lightOnObject, putOutForms, extinguishCandle, extinguishCandleLantern },
 };

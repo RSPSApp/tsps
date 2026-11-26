@@ -534,6 +534,107 @@ test("boosted drops: Wintertodt's cart, Tempoross's reward pool and the Rewards 
   }
 });
 
+test("boosted drops: the Gauntlet, Moons of Peril, Fortis Colosseum, Doom of Mokhaiotl and vyre/elf pickpockets", () => {
+  const leagueApi = { core, emitCustomEvent: (name, payload) => ask(name, payload) };
+  const I = core.ItemIdentifiers;
+  const PACTS = 6;
+  const main = character("bdmain", "main");
+  const dp4 = character("bd4", "league", 4, PACTS);
+
+  // The Gauntlet: a draw of 0.02 is 2.4 in 120 on each crystal seed, a hit only at 5x.
+  require("../plugins/minigames/gauntlet/Shared.Gauntlet").bind(leagueApi);
+  const Gauntlet = require("../plugins/minigames/gauntlet/Rewards.Gauntlet");
+  const seeds = (boost, mode = "regular") => Gauntlet.rollReward({ kind: "completed", mode }, true, () => 0.02, boost)
+    .map((item) => item.id).filter((id) => [Gauntlet.ID.WEAPON_SEED, Gauntlet.ID.ARMOUR_SEED, Gauntlet.ID.ENHANCED_SEED].includes(id));
+  assert.equal(Gauntlet.dropBoost(main, "regular"), null, "a main character: nothing boosted");
+  assert.deepEqual(seeds(null), [], "unboosted: no seed");
+  const gauntlet = Gauntlet.dropBoost(dp4, "regular");
+  assert.deepEqual(seeds(gauntlet), [Gauntlet.ID.WEAPON_SEED, Gauntlet.ID.ARMOUR_SEED], "boosted 5x: both seeds");
+  assert.equal(gauntlet(Gauntlet.ID.YOUNGLLEF), 1, "the pet is not on the page");
+  assert.equal(gauntlet(Gauntlet.ID.CLUE_ELITE), 1, "nor the clue");
+  assert.equal(Gauntlet.dropBoost(dp4, "corrupted")(Gauntlet.ID.ENHANCED_SEED), 5, "The Corrupted Gauntlet's own row");
+
+  // Moons of Peril: a draw of 0.05 is 2.8 in 56 on the Moon's unique roll, a piece only at 5x.
+  const Moons = require("../plugins/bosses/moonsofperil/Common.MoonsOfPeril");
+  Moons.init(leagueApi);
+  const Chest = require("../plugins/bosses/moonsofperil/Chest.MoonsOfPeril");
+  const bloodSet = Moons.data.chest.sets.blood.map((key) => I[key]);
+  const moonPieces = (player) => {
+    Math.random = () => 0.05;
+    try {
+      return Chest.roll(player, ["blood"]).filter((entry) => bloodSet.includes(entry.id)).length;
+    } finally {
+      Math.random = realRandom;
+    }
+  };
+  assert.equal(moonPieces(main), 0, "unboosted: the standard table");
+  assert.equal(moonPieces(dp4), 1, "boosted 5x: a blood moon piece");
+  assert.equal(moonPieces(character("bd4e", "league", 4, ECHOES)), 1, "a Raging Echoes row too");
+  assert.equal(moonPieces(character("bd4t", "league", 8)), 0, "not on Trailblazer Reloaded's page");
+
+  // Fortis Colosseum wave 12: echo crystals, fanatic pieces and Tonalztics are 400 of 4,800; at 5x 2,000.
+  require("../plugins/minigames/colosseum/Shared.Colosseum").bind(leagueApi);
+  const Colosseum = require("../plugins/minigames/colosseum/Loot.Colosseum");
+  const colosseum = Colosseum.dropBoost(dp4);
+  assert.equal(Colosseum.dropBoost(main), null);
+  assert.equal(colosseum(28942), 5, "the echo crystal (the page's echo boots row)");
+  assert.equal(colosseum(Colosseum.FANATIC), 5, "any sunfire fanatic piece");
+  assert.equal(colosseum(28919), 5, "Tonalztics of ralos (uncharged)");
+  assert.equal(colosseum(I.UNCUT_ONYX), 1, "the common rows are not boosted");
+  // Demonic Pacts drops the echo crystal as echo boots (its combo boss drops), so either counts.
+  const rares = new Set([28942, core.CacheDefinitions.getObjId("echo_boots"), 28919, ...Colosseum.FANATIC_PIECES]);
+  const wave12 = (player) => {
+    let count = 0;
+    for (let k = 0; k < 4800; k++) {
+      const draw = (k + 0.5) / 4800;
+      if (rares.has(Colosseum.roll(12, player, () => draw)[0].id)) count++;
+    }
+    return count;
+  };
+  assert.equal(wave12(main), 400, "unboosted: 1 in 12");
+  assert.equal(wave12(dp4), 2000, "boosted 5x: 5 in 12");
+
+  // Doom of Mokhaiotl, a deep delve: 1/180 for a unique; a draw of 0.01 is one only at 5x.
+  require("../plugins/bosses/doom/Shared.DoomOfMokhaiotl").bind(leagueApi);
+  const Doom = require("../plugins/bosses/doom/Loot.DoomOfMokhaiotl");
+  const doom = Doom.dropBoost(dp4);
+  assert.equal(Doom.dropBoost(main), null);
+  for (const id of [Doom.ITEM.MOKHAIOTL_CLOTH, Doom.ITEM.EYE_OF_AYAK, Doom.ITEM.AVERNIC_TREADS]) assert.equal(doom(id), 5, `unique ${id}`);
+  assert.equal(doom(Doom.ITEM.DOM), 1, "the pet is not on the page");
+  assert.equal(Doom.rollUnique(9, () => 0.01, null), null, "unboosted: no unique");
+  assert.ok(Doom.UNIQUES.some(([id]) => id === Doom.rollUnique(9, () => 0.01, doom)), "boosted 5x: a unique");
+  assert.equal(Doom.rollUnique(9, () => 0.0054, null), Doom.ITEM.MOKHAIOTL_CLOTH, "unboosted rolls as before");
+  assert.equal(Doom.dropBoost(character("bd4e2", "league", 4, ECHOES)), null, "a Demonic Pacts row only");
+
+  // Pickpocketing: a vyre's blood shard is 1/5000, a Prifddinas elf's teleport seed 1/1024.
+  const Pickpocket = require("../plugins/skills/thieving/Pickpocket.Thieving");
+  Pickpocket.register(new Proxy({ core, emitCustomEvent: (name, payload) => ask(name, payload) }, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  const vyre = Pickpocket.TARGETS.find((target) => target.key === "vyre");
+  const elf = Pickpocket.TARGETS.find((target) => target.key === "elf_prifddinas");
+  const has = (loot, id) => loot.some((entry) => entry.id === id);
+  assert.equal(has(Pickpocket._test.rollLoot(main, vyre, () => 0.0005), 24777), false, "unboosted: no blood shard");
+  assert.equal(has(Pickpocket._test.rollLoot(dp4, vyre, () => 0.0005), 24777), true, "boosted 5x: the blood shard");
+  const elfDraws = () => { const sequence = [0.5, 0.002]; let n = 0; return () => sequence[n++] ?? 0.5; };
+  assert.equal(has(Pickpocket._test.rollLoot(main, elf, elfDraws()), 23959), false, "unboosted: no teleport seed");
+  assert.equal(has(Pickpocket._test.rollLoot(dp4, elf, elfDraws()), 23959), true, "boosted 5x: the teleport seed");
+  assert.equal(Pickpocket._test.dropBoost(dp4, elf)("Crystal shard"), 1, "the crystal shard is not on the page");
+  const man = Pickpocket.TARGETS.find((target) => target.key === "man");
+  assert.equal(Pickpocket._test.dropBoost(dp4, man), null, "a target without a row asks nothing");
+
+  // A world without the league mode: nobody answers "drops:chance", so every roll is as before.
+  const plainApi = { core, emitCustomEvent() {} };
+  require("../plugins/minigames/gauntlet/Shared.Gauntlet").bind(plainApi);
+  Moons.init(plainApi);
+  require("../plugins/minigames/colosseum/Shared.Colosseum").bind(plainApi);
+  require("../plugins/bosses/doom/Shared.DoomOfMokhaiotl").bind(plainApi);
+  Pickpocket.register(new Proxy(plainApi, { get: (target, key) => (key in target ? target[key] : () => {}) }));
+  assert.equal(Gauntlet.dropBoost(dp4, "regular"), null);
+  assert.equal(moonPieces(dp4), 0);
+  assert.equal(wave12(dp4), 400);
+  assert.equal(Doom.dropBoost(dp4), null);
+  assert.equal(has(Pickpocket._test.rollLoot(dp4, vyre, () => 0.0005), 24777), false);
+});
+
 test("boosted drops: the minigames' own rare finds (minigame:chance), by their Boosted drops rows", () => {
   const chance = (player, minigame, kind, multiplier = 1) => ask("minigame:chance", { player, minigame, kind, multiplier }).multiplier;
   const tr8 = character("mc8", "league", 8);
@@ -572,4 +673,185 @@ test("Demonic Pacts master access bypasses only the master's levels", () => {
     ordinary.getSkillManager().setLevel(core.Skill.SLAYER, 50);
     assert.equal(Tasks.meetsMaster(ordinary, master), true, "meeting both requirements still works");
   }
+});
+
+test("boosted drops: a Desert Treasure II boss's unique and orb stages, by their rows' names", () => {
+  const dump = require("../data/definitions/npc-drops.json");
+  const PACTS = 6;
+  const main = character("dt2main", "main");
+  const dp4 = character("dt2dp4", "league", 4, PACTS); // 5x
+  // The ordered chain's state, as ForgottenFourRewards provides it: a fresh one for each roll.
+  (custom["npc-drops:reward-state"] ??= []).push((event) => { if (!event.handled) { event.state = {}; event.handled = true; } });
+  (custom["npc-drops:reward-state-commit"] ??= []).push((event) => { event.committed = true; });
+  const GOLD_RING = 1635; // the vestige's first hit
+  const ORB = 28334; // Awakener's orb
+  for (const [boss, tableId] of [["The Whisperer", "the_whisperer"], ["Duke Sucellus", "duke_sucellus"], ["The Leviathan", "the_leviathan"], ["Vardorvis", "vardorvis"]]) {
+    const table = dump.tables[tableId];
+    const unique = table.reward_chain.stages.find((stage) => stage.key === "tradeable_uniques");
+    // A draw halfway to the boosted chance: a hit at 5x, a miss at 1x.
+    const draw = 2.5 * unique.weight / unique.out_of;
+    const plain = dropsAt(table, main, draw, boss);
+    const boosted = dropsAt(table, dp4, draw, boss);
+    const uniqueIds = new Set([GOLD_RING, ...unique.entries.map((entry) => entry.item_id)]);
+    assert.equal(plain.some((id) => uniqueIds.has(id)), false, `${boss} unboosted: no unique`);
+    assert.equal(boosted.some((id) => uniqueIds.has(id)), true, `${boss} boosted 5x: the unique stage hits`);
+  }
+  // The orb stage on its own (the Whisperer's 1/34), so the unique stage before it can't take the draw.
+  const whisperer = dump.tables.the_whisperer;
+  const orbStage = whisperer.reward_chain.stages.find((stage) => stage.key === "orb");
+  const orbOnly = { ...whisperer, reward_chain: { ...whisperer.reward_chain, stages: [orbStage] } };
+  assert.equal(dropsAt(orbOnly, main, 2.5 / 34, "The Whisperer").includes(ORB), false, "the orb unboosted: 1/34");
+  assert.equal(dropsAt(orbOnly, dp4, 2.5 / 34, "The Whisperer").includes(ORB), true, "the orb boosted 5x: 5/34");
+});
+
+test("an ordered reward stage with only some rows boosted grows by their share, and picks them by their boosted weight", () => {
+  const dp4 = character("partial", "league", 4, 6);
+  (custom["npc-drops:reward-state"] ??= []).push((event) => { if (!event.handled) { event.state = {}; event.handled = true; } });
+  (custom["npc-drops:reward-state-commit"] ??= []).push((event) => { event.committed = true; });
+  const table = {
+    table_id: "partial_stage", wiki_page: "Abyssal demon", entries: [],
+    reward_chain: { type: "ordered_exclusive", state_domain: "partial_stage", stages: [{
+      key: "rare", weight: 1, out_of: 100, main_max_roll: 2,
+      entries: [{ item_id: 4151, name: "Abyssal whip", quantity: [1, 1], weight: 1 }, { item_id: 995, name: "Coins", quantity: [1, 1], weight: 1 }],
+    }] },
+  };
+  // One of two equal rows at 5x: the stage is (5 + 1) / 2 = 3 times as likely, 3/100, and the whip 5 of the 6.
+  assert.deepEqual(dropsAt(table, dp4, 0.029), [4151], "inside 3/100, at the start of the stage: the whip");
+  assert.deepEqual(dropsAt(table, dp4, 0.031), [], "past 3/100: nothing");
+  const main = character("partialmain", "main");
+  assert.deepEqual(dropsAt(table, main, 0.009), [4151], "unboosted: 1/100, the rows half and half");
+  assert.deepEqual(dropsAt(table, main, 0.011), []);
+});
+
+test("boosted drops: Hunter's own rares (the loot sacks' rares, the tecu salamander, the crystal impling's elven signet)", () => {
+  const C = require("../plugins/skills/hunter/Context.Hunter");
+  const previous = { api: C.H.api, core: C.H.core };
+  C.H.api = { core, emitCustomEvent: (name, payload) => ask(name, payload) };
+  C.H.core = core;
+  const I = core.ItemIdentifiers;
+  const main = character("hmain", "main");
+  const dp4 = character("hdp4", "league", 4, 6); // 5x
+  const at = (value, body) => {
+    Math.random = () => value;
+    try { return body(); } finally { Math.random = realRandom; }
+  };
+  try {
+    // A loot sack's rare rolls are each 1/50: a draw of 0.05 is 2.5 in 50, inside 5 in 50 only.
+    const Rumours = require("../plugins/skills/hunter/Rumours.Hunter");
+    const rares = [I.ENHANCED_QUETZAL_WHISTLE_BLUEPRINT, I.HUNTSMANS_KIT, I.GUILD_HUNTER_HEADWEAR];
+    const sackRares = (player) => at(0.05, () => Rumours.sackRewards(player, "adept")).map(([id]) => id).filter((id) => rares.includes(id));
+    assert.deepEqual(sackRares(main), [], "unboosted: no rare at 2.5 in 50");
+    assert.deepEqual(sackRares(dp4), rares, "boosted 5x: the blueprint, the kit and the outfit piece");
+
+    // The tecu salamander: 1/1,000; a draw of 0.0025 is 2.5 in 1,000.
+    const Traps = require("../plugins/skills/hunter/Traps.Hunter");
+    const tecu = (player) => at(0.0025, () => Traps.catchRewards({ kind: "tecu", player, creature: { loot: [[I.IMMATURE_TECU_SALAMANDER, 1]], npc: -1 } }))[0][0];
+    assert.equal(tecu(main), I.IMMATURE_TECU_SALAMANDER, "unboosted: the immature one");
+    assert.equal(tecu(dp4), I.TECU_SALAMANDER, "boosted 5x: an adult tecu salamander");
+
+    // The elven signet: 1/128; a draw of 0.02 is 2.56 in 128.
+    const Catching = require("../plugins/skills/hunter/Catching.Hunter");
+    const signet = (player) => at(0.02, () => Catching.rewards(player, { key: "CRYSTAL" })).some(([id]) => id === I.ELVEN_SIGNET);
+    assert.equal(signet(main), false, "unboosted: no signet at 2.56 in 128");
+    assert.equal(signet(dp4), true, "boosted 5x: the elven signet");
+    assert.equal(signet(character("hre4", "league", 4, ECHOES)), true, "Raging Echoes' page lists it too");
+  } finally {
+    Object.assign(C.H, previous);
+  }
+});
+
+test("combo boss drops: Raging Echoes and Demonic Pacts drop each part as its finished item, for their characters only", () => {
+  const DATA = require("../plugins/modes/data/league-combo-drops.json");
+  const id = (gameval) => core.CacheDefinitions.getObjId(gameval);
+  // No relic yet: the swap is the league's, not a tier's.
+  const players = { 4: character("combo4", "league", 0, TRAILBLAZER), 5: character("combo5", "league", 0, ECHOES), 6: character("combo6", "league", 0, 6) };
+  const main = character("combomain", "main");
+  const npcNamed = (name) => ({ getDefinition: () => ({ getName: () => name }) });
+  assert.equal(DATA.items.length, 19);
+  for (const { source, part, finished, leagues, npcs } of DATA.items) {
+    assert.ok(id(part) > 0 && id(finished) > 0, `${source}: ${part} and ${finished} are in the cache`);
+    const npc = npcs ? npcNamed(npcs[0]) : undefined;
+    const roll = (player) => ask("npc-drops:roll", { player, npc, drops: [{ itemId: id(part), amount: 3, noted: true }] }).drops[0];
+    for (const league of [4, 5, 6]) {
+      const expected = leagues.includes(league) ? { itemId: id(finished), amount: 1, noted: false } : { itemId: id(part), amount: 3, noted: true };
+      assert.deepEqual(roll(players[league]), expected, `${source} in league ${league}`);
+    }
+    if (!npcs) {
+      const league = players[leagues.at(-1)];
+      assert.deepEqual(ask("drops:rolled", { player: league, source, drops: [{ id: id(part), amount: 1 }] }).drops[0], { id: id(finished), amount: 1 }, `${source} on "drops:rolled"`);
+    }
+    assert.equal(roll(main).itemId, id(part), `${source}: a main character keeps the part`);
+  }
+  // The hydra tail is finished from the Alchemical Hydra only, not an ordinary hydra's 1/5,001.
+  const tail = (name) => ask("npc-drops:roll", { player: players[6], npc: npcNamed(name), drops: [{ itemId: id("hydra_tail"), amount: 1 }] }).drops[0].itemId;
+  assert.equal(tail("Alchemical Hydra"), id("bonecrusher_necklace"));
+  assert.equal(tail("Hydra"), id("hydra_tail"));
+  assert.deepEqual(ask("npc-drops:roll", { player: players[6], drops: [{ itemId: core.ItemIdentifiers.COINS, amount: 500 }] }).drops[0], { itemId: core.ItemIdentifiers.COINS, amount: 500 }, "other loot is untouched");
+});
+
+test("combo boss drops through the rollers: the Theatre of Blood's avernic defender, the Colosseum's echo boots, the Chambers' kodai wand", () => {
+  const leagueApi = { core, emitCustomEvent: (name, payload) => ask(name, payload) };
+  const I = core.ItemIdentifiers;
+  const dp = () => character(`roller${Math.floor(realRandom() * 1e6)}`, "league", 0, 6);
+  const main = () => character(`rollermain${Math.floor(realRandom() * 1e6)}`, "main");
+
+  // The Theatre of Blood: a draw of 0 is a unique, the first of the table (the avernic defender hilt).
+  const TobShared = require("../plugins/minigames/tob/Shared.TheatreOfBlood");
+  const Tob = require("../plugins/minigames/tob/Rewards.TheatreOfBlood");
+  TobShared.bind(leagueApi);
+  const tobRaid = (player) => ({ players: [player], mode: "normal", size: 1, overallTicks: 1e9, member: () => ({ deaths: 0, rooms: { MAIDEN: { damage: 500 } } }) });
+  const tob = (player) => {
+    const { loot, uniqueId } = Tob.rollRaid(tobRaid(player), () => 0);
+    return [uniqueId, loot.get(player)[0].id];
+  };
+  assert.deepEqual(tob(main()), [I.AVERNIC_DEFENDER_HILT, I.AVERNIC_DEFENDER_HILT]);
+  assert.deepEqual(tob(dp()), [I.AVERNIC_DEFENDER, I.AVERNIC_DEFENDER], "the avernic defender, in the loot and the announcement");
+
+  // Fortis Colosseum wave 12: the first draw that lands on an echo crystal for a main character lands on it
+  // for an unboosted league character too (no relic: the same weights), and is the echo boots there.
+  require("../plugins/minigames/colosseum/Shared.Colosseum").bind(leagueApi);
+  const Colosseum = require("../plugins/minigames/colosseum/Loot.Colosseum");
+  const ECHO_CRYSTAL = core.CacheDefinitions.getObjId("echo_crystal");
+  const ECHO_BOOTS = core.CacheDefinitions.getObjId("echo_boots");
+  const plain = main();
+  let draw = null;
+  for (let k = 0; k < 4800 && draw === null; k++) {
+    const at = (k + 0.5) / 4800;
+    const [first] = Colosseum.roll(12, plain, () => at);
+    if (first.id === ECHO_CRYSTAL && first.amount > 1) draw = at;
+  }
+  assert.ok(draw !== null, "wave 12 drops a stack of echo crystals somewhere");
+  assert.deepEqual(Colosseum.roll(12, dp(), () => draw)[0], { id: ECHO_BOOTS, amount: 1 }, "one pair of echo boots for the stack");
+
+  // The Chambers of Xeric: a raid whose points make one unique roll; a draw of 0 gives the first unique, then
+  // the kodai insignia is forced by its weight's place.
+  const CoxShared = require("../plugins/minigames/cox/Shared.ChambersOfXeric");
+  const Cox = require("../plugins/minigames/cox/Rewards.ChambersOfXeric");
+  CoxShared.bind(leagueApi);
+  const kodaiAt = (() => {
+    const total = Cox.UNIQUES.reduce((sum, entry) => sum + entry.weight[0], 0);
+    let before = 0;
+    for (const entry of Cox.UNIQUES) {
+      if (entry.id === I.KODAI_INSIGNIA) return (before + entry.weight[0] / 2) / total;
+      before += entry.weight[0];
+    }
+    return null;
+  })();
+  assert.ok(kodaiAt !== null);
+  const cox = (player) => {
+    const name = player.getUsername();
+    const raid = { players: [player], original: [name], challenge: false, points: new Map([[name, 8676]]), totalPoints: 8676, pointsOf: () => 8676 };
+    // uniqueRolls' draw, the receiver's, then the item's; 0.99 for everything after.
+    const draws = [0, 0, kodaiAt];
+    Math.random = () => (draws.length ? draws.shift() : 0.99);
+    try {
+      Cox.generate(raid, false);
+    } finally {
+      Math.random = realRandom;
+    }
+    return raid.rewards.get(name).map((entry) => entry.id);
+  };
+  assert.ok(cox(main()).includes(I.KODAI_INSIGNIA), "a main character: the insignia");
+  const wand = cox(dp());
+  assert.ok(wand.includes(I.KODAI_WAND) && !wand.includes(I.KODAI_INSIGNIA), "Demonic Pacts: the kodai wand");
 });

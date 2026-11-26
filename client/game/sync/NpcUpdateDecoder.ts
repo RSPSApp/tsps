@@ -46,6 +46,8 @@ export type NpcUpdateBlock = {
     exactMove?: ForcedMovementUpdate;
     /** A world tile to turn to once (OSRS npc face coord). */
     faceTile?: { x: number; y: number };
+    /** A held facing (OSRS npc face angle); instant snaps to it, even an NPC that never turns. */
+    faceAngle?: { angle: number; instant: boolean };
     /** Body-model slot overrides (OSRS npc model customisation); an empty list resets them. */
     modelCustomisation?: Array<{ slot: number; modelId: number }>;
     /**
@@ -465,7 +467,11 @@ export class NpcUpdateDecoder {
                 if ((flags & TYPE_MODELS) !== 0) {
                     const count = stream.readUnsignedByte() | 0;
                     custom.models = [];
-                    for (let i = 0; i < count; i++) custom.models.push(stream.readUnsignedShortBE() | 0);
+                    for (let i = 0; i < count; i++) {
+                        // 0xffff is -1: no model, so the NPC is drawn as nothing (the Hueycoatl's sunk tail).
+                        const model = stream.readUnsignedShortBE() | 0;
+                        custom.models.push(model === 0xffff ? -1 : model);
+                    }
                 }
                 if ((flags & TYPE_RECOLOURS) !== 0) {
                     const count = stream.readUnsignedByte() | 0;
@@ -479,6 +485,12 @@ export class NpcUpdateDecoder {
                 if ((flags & TYPE_NAME) !== 0) custom.name = stream.readStringCp1252NullTerminated();
                 if ((flags & TYPE_COMBAT_LEVEL) !== 0) custom.combatLevel = stream.readUnsignedShortBE() | 0;
                 block.typeCustomisation = custom;
+            }
+
+            // FACE_ANGLE (0x80000): an angle (0 south, 512 west, 1024 north, 1536 east) and whether to snap to it.
+            if ((mask & 0x80000) !== 0) {
+                const angle = stream.readUnsignedShortBE() & 2047;
+                block.faceAngle = { angle, instant: (stream.readUnsignedByte() | 0) !== 0 };
             }
 
             if (Object.keys(block).length > 0) {

@@ -8,7 +8,7 @@ const Common = require("./ectofuntus/Common.Ectofuntus");
 
 module.exports = {
   name: "Ectofuntus",
-  description: "The Ectofuntus in Port Phasmatys: slime, bonemeal, worship, ghost disciple tokens, the ectophial teleport and bonecrusher.",
+  description: "The Ectofuntus in Port Phasmatys: slime, bonemeal (grinding and emptying the pots), worship, ghost disciple tokens, the ectophial teleport and bonecrusher.",
   members: true,
   register(api) {
     Common.init(api);
@@ -21,5 +21,6 @@ module.exports = {
     require("./ectofuntus/Grinder.Ectofuntus")(api);
     require("./ectofuntus/Worship.Ectofuntus")(api);
     require("./ectofuntus/Disciples.Ectofuntus")(api);
+    require("./ectofuntus/Bonemeal.Ectofuntus")(api);
   },
 };

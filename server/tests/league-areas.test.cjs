@@ -89,7 +89,7 @@ function character(name, profile = "league", { login = true, restore = null, ses
   player.setUsername(name);
   player.setProfile(profile);
   if (restore) restore.applyToPlayer(player);
-  const sent = { messages: [], varbits: new Map(), scripts: [], subs: [], flags: [], sounds: [], content: [], destinations: [], removals: 0 };
+  const sent = { messages: [], varbits: new Map(), scripts: [], subs: [], flags: [], sounds: [], content: [], destinations: [], removals: 0, mapOpen: false, mapToggles: 0 };
   const sender = new Proxy({}, {
     get: (target, key) => {
       switch (key) {
@@ -101,6 +101,8 @@ function character(name, profile = "league", { login = true, restore = null, ses
         case "sendInterfaceFlagsRange": return (...args) => (sent.flags.push(args), sender);
         case "sendSound": return (...args) => (sent.sounds.push(args), sender);
         case "sendContentData": return (source, datasets) => (sent.content.push(datasets), sender);
+        case "isWorldMapOpen": return () => sent.mapOpen;
+        case "toggleWorldMap": return () => ((sent.mapOpen = !sent.mapOpen), sent.mapToggles++, sender);
         case "sendInterfaceRemoval": return () => (sent.removals++, sender);
         default: return () => sender;
       }
@@ -230,7 +232,7 @@ test("the map squares follow the Wiki's areas; instances and the places open to 
     ["Brimhaven", 2777, 3173, KARAMJA], ["Crandor", 2840, 3260, KARAMJA], ["Mor Ul Rek", 2480, 5100, KARAMJA],
     ["Falador", 2965, 3380, ASGARNIA], ["Entrana", 2830, 3350, ASGARNIA], ["Port Sarim", 3025, 3215, ASGARNIA],
     ["Taverley Dungeon", 2900, 9800, ASGARNIA], ["Burthorpe", 2900, 3540, ASGARNIA], ["the Monastery", 3052, 3490, ASGARNIA],
-    ["Ardougne", 2662, 3305, KANDARIN], ["Catherby", 2810, 3440, KANDARIN], ["Ape Atoll", 2760, 2760, KANDARIN],
+    ["Ardougne", 2662, 3305, KANDARIN], ["Catherby", 2810, 3440, KANDARIN], ["Harry's Fishing Shop in Catherby (#5386)", 2834, 3445, KANDARIN], ["White wolf slope (2864,3453)", 2864, 3453, KANDARIN], ["White Wolf Mountain (#5386)", 2845, 3483, ASGARNIA], ["Taverley (#5386)", 2900, 3430, ASGARNIA], ["Ape Atoll", 2760, 2760, KANDARIN],
     ["Castle Wars", 2440, 3090, KANDARIN], ["Piscatoris", 2340, 3690, KANDARIN], ["Yanille", 2600, 3090, KANDARIN],
     ["Canifis", 3495, 3491, MORYTANIA], ["Mos Le'Harmless", 3680, 2970, MORYTANIA], ["Burgh de Rott", 3500, 3180, MORYTANIA],
     ["Al Kharid", 3290, 3180, DESERT], ["Nardah", 3430, 2900, DESERT], ["the Duel Arena", 3360, 3230, DESERT],
@@ -1499,4 +1501,39 @@ test("Demonic Pacts still excludes Slayer monsters in locked areas", () => {
   }).available;
   assert.equal(available(-624201, core.NpcIdentifiers.ABYSSAL_DEMON_3), false, "locked-area monsters stay unavailable");
   assert.equal(available(-624202, core.NpcIdentifiers.IMP_2), true, "starting-area monsters stay available");
+});
+
+test("the Echo boss tab's Locate (512:82) opens the world map on the viewed area's boss (#6422)", () => {
+  const ECHO_BUTTON = uid(AREAS, 82);
+  const LOCATE_SCRIPT = 3331, MAP_NOCLICK = (595 << 16) | 3;
+  const player = character("echolocate", "league");
+  openAreas(player);
+  const located = () => player.sent.scripts.filter(([id]) => id === LOCATE_SCRIPT);
+
+  // Cerberus (struct 3568, region 3), then Hespori (region 20); an area without an Echo boss does nothing.
+  viewArea(player, ASGARNIA);
+  assert.equal(player.sent.varbits.get(LAST_VIEWED), ASGARNIA);
+  assert.equal(hooks[`button:${ECHO_BUTTON}`]({ player }), true);
+  assert.equal(player.sent.mapToggles, 1, "the closed map opens");
+  assert.equal(located().length, 1);
+  assert.equal(located()[0][1][0], MAP_NOCLICK);
+  const cerberus = located()[0][1][1];
+  assert.equal(cerberus, core.CacheDefinitions.getStructParams(3568).get(1317), "struct_3568's coord");
+  assert.equal(located()[0][1][2], -1);
+
+  // An open map is not toggled shut; the next area's boss is centred.
+  viewArea(player, KOUREND);
+  assert.equal(hooks[`button:${ECHO_BUTTON}`]({ player }), true);
+  assert.equal(player.sent.mapToggles, 1, "an open map stays open");
+  assert.equal(located().length, 2);
+  assert.notEqual(located()[1][1][1], cerberus, "Hespori, not Cerberus");
+
+  viewArea(player, MISTHALIN);
+  assert.equal(hooks[`button:${ECHO_BUTTON}`]({ player }), false, "no Echo boss in Misthalin");
+  assert.equal(located().length, 2);
+
+  // Without View Areas having opened the interface: nothing.
+  const stranger = character("echostranger", "league");
+  assert.equal(hooks[`button:${ECHO_BUTTON}`]({ player: stranger }), false);
+  assert.equal(stranger.sent.mapToggles, 0);
 });

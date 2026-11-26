@@ -1,3 +1,4 @@
+import { ActorPresentation } from '../../../model/ActorPresentation';
 import { CombatFactory } from "../CombatFactory";
 import { HitDamage } from "./HitDamage";
 import { CombatType } from "../CombatType";
@@ -73,6 +74,7 @@ type PendingHitConfig = {
 };
 
 export class PendingHit {
+    public static readonly ROLL_CONTEXT_VERSION = 1;
     private attacker: Mobile;
     private target: Mobile;
     private method: CombatMethod;
@@ -85,6 +87,8 @@ export class PendingHit {
     private failedAccuracyChecks = 0;
     private handleAfterHitEffects: boolean;
     private experience = true;
+    /** Whether the hit sets off the target's Vengeance (an attack the Wiki says doesn't: the Echo Thermonuclear smoke devil's shots). */
+    private vengeance = true;
     /** The skills the usual combat XP is split across, when not the attacker's fight style. */
     private experienceSkills?: number[];
     private damageBudget?: { remaining: number };
@@ -113,6 +117,7 @@ export class PendingHit {
 
     constructor(attacker: Mobile, target: Mobile, method: CombatMethod, delayOrConfig?: number | PendingHitConfig, handleAfterHitEffects?: boolean,
         private readonly spellContext: SpellCastContext | null = null) {
+        ActorPresentation.capture(this);
         this.attacker = attacker;
         this.target = target;
         this.method = method;
@@ -178,6 +183,8 @@ export class PendingHit {
             }
         }
 
+        this.handleAfterHitEffects = resolvedHandleAfterHitEffects;
+
         // An ordinary hit is rolled as if no special were armed: every formula reads the armed
         // special through isSpecialActivated (CombatSpecial.activeTraitsFor, the accuracy and damage
         // formulas), so the flag is lowered for the rolls and put back after.
@@ -208,7 +215,6 @@ export class PendingHit {
             }
         }
         this.delay = Math.max(0, resolvedDelay);
-        this.handleAfterHitEffects = resolvedHandleAfterHitEffects;
     }
 
     /** A player's ranged shot as it was fired (see FiredRangedShot), or null. */
@@ -263,6 +269,16 @@ export class PendingHit {
     /** Whether the attacker gets the usual combat XP for this hit. */
     public rewardsExperience(): boolean {
         return this.experience;
+    }
+
+    /** Whether the hit sets off the target's Vengeance; true unless content says otherwise. */
+    public triggersVengeance(): boolean {
+        return this.vengeance;
+    }
+
+    public setTriggersVengeance(triggers: boolean): this {
+        this.vengeance = triggers;
+        return this;
     }
 
     /** The branch of a first-successful-roll special that landed (0-based), -1 if all rolls missed, undefined if not such a special. */

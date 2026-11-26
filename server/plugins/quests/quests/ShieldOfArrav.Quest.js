@@ -82,9 +82,6 @@ module.exports = function registerShieldOfArravQuest(api) {
 
   const TAIL_OF_TWO_CATS_QUEST_KEY = "a_tail_of_two_cats";
   const TAIL_OF_TWO_CATS_RELDO_STAGES = new Set([4, 5]);
-  const THE_GOLEM_QUEST_KEY = "the_golem";
-  const THE_GOLEM_CURATOR_MIN_STAGE = 1;
-  const THE_GOLEM_CURATOR_LAST_STAGE = 3;
 
   const PAGE = "Shield of Arrav";
   const START_HOOK = "quest:shield-of-arrav:start";
@@ -141,9 +138,11 @@ module.exports = function registerShieldOfArravQuest(api) {
   };
   const tailOfTwoCatsOwnsReldo = (player) =>
     TAIL_OF_TWO_CATS_RELDO_STAGES.has(questStage(player, TAIL_OF_TWO_CATS_QUEST_KEY));
+  /** The Golem's statuette conversation owns the curator while it runs (the-golem:curator-step). */
   const theGolemOwnsCurator = (player) => {
-    const stage = questStage(player, THE_GOLEM_QUEST_KEY);
-    return stage !== null && stage >= THE_GOLEM_CURATOR_MIN_STAGE && stage <= THE_GOLEM_CURATOR_LAST_STAGE;
+    const request = { player, active: false };
+    api.emitCustomEvent("the-golem:curator-step", request);
+    return request.active === true;
   };
   const charliePaid = (player) => {
     const value = player.getAttribute(CHARLIE_PAID_ATTRIBUTE);

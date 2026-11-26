@@ -5,7 +5,7 @@
  * line, animation, graphic and sound; for the next 2.4 seconds (four ticks) every hit on the
  * player is 0 (`combat:damage-apply`), and three explosions (1, 3 and 5 ticks after, 237/01158)
  * each deal 60% of the base Prayer level as a typeless hit to every attackable NPC within three
- * tiles, Yama spared, and 30% of it to every player there the area lets the owner fight (PvP),
+ * tiles, spared the NPCs the Wiki says take no damage (Yama, the Moons of Peril, the Fragment of Seren, the Nightmare's Sleepwalkers, Parasites and Husks), and 30% of it to every player there the area lets the owner fight (PvP),
  * each with the recording's impact graphics on the 8 lines out to three tiles. Then three minutes
  * of cooldown, a tick (0.6 seconds) shorter for every 10 damage one of the player's hits deals;
  * Activate or Check meanwhile says how long is left ("on cooldown for another N seconds!",
@@ -26,7 +26,7 @@ let api;
 let core;
 let effect;
 
-/** Players untouchable until (ms since the epoch). */
+/** Players untouchable until (the game tick the shield ends on). */
 const shielded = new WeakMap();
 /** The pending "ready" task, per player, so a shortened cooldown restarts it. */
 const readyTasks = new WeakMap();
@@ -75,15 +75,29 @@ function scheduleReady(player) {
   core.TaskManager.submit(task);
 }
 
+/** Within the radius of the nearest tile of the other's footprint (a large NPC counts from its far edge, not its south-west tile). */
 function near(player, other) {
   const here = player.getLocation();
-  return other.getLocation().getZ() === here.getZ() && other.getLocation().isWithinDistance(here, effect.radius);
+  const base = other.getLocation();
+  if (base.getZ() !== here.getZ()) return false;
+  const size = Math.max(1, other.getSize?.() ?? 1);
+  const dx = here.getX() < base.getX() ? base.getX() - here.getX() : Math.max(0, here.getX() - (base.getX() + size - 1));
+  const dy = here.getY() < base.getY() ? base.getY() - here.getY() : Math.max(0, here.getY() - (base.getY() + size - 1));
+  return Math.max(dx, dy) <= effect.radius;
+}
+
+/** Spared by name or id: the Moons of Peril are nameless multi-NPC parents, so the variant the player sees counts as well. */
+function isSpared(player, npc) {
+  return effect.spared.includes(npc.getDefinition?.()?.getName?.())
+    || effect.spared.includes(npc.getCurrentDefinition?.(player)?.getName?.())
+    || effect.sparedIds.includes(npc.getId?.())
+    || effect.sparedIds.includes(npc.getCurrentDefinition?.(player)?.getId?.());
 }
 
 function enemiesAround(player) {
   const { CombatFactory, CanAttackResponse, TimerKey } = core;
   return player.getLocalNpcs().filter((npc) => npc.getHitpoints() > 0 && near(player, npc)
-    && !effect.spared.includes(npc.getDefinition?.()?.getName?.())
+    && !isSpared(player, npc)
     && CombatFactory.validTarget(player, npc)
     && npc.getCurrentDefinition().isAttackable()
     && !npc.getTimers().has(TimerKey.ATTACK_IMMUNITY)
@@ -133,8 +147,9 @@ function activate(event) {
   if (coolingDown(player)) return true;
   const { Skill, Animation, Graphic } = core;
   const skills = player.getSkillManager();
-  player.setHitpoints(skills.getMaxLevel(Skill.HITPOINTS));
-  skills.setCurrentLevel(Skill.PRAYER, skills.getMaxLevel(Skill.PRAYER), true);
+  // Restored to the base maximum, never lowered: a level boosted above it is kept (Wiki).
+  player.setHitpoints(Math.max(player.getHitpoints(), skills.getMaxLevel(Skill.HITPOINTS)));
+  skills.setCurrentLevel(Skill.PRAYER, Math.max(skills.getCurrentLevel(Skill.PRAYER), skills.getMaxLevel(Skill.PRAYER)), true);
   Common.restoreSpecial(player, 100);
   player.setPoisonDamage?.(0);
   player.performAnimation(new Animation(core.CacheDefinitions.getSeqId(effect.animation)));
@@ -142,7 +157,7 @@ function activate(event) {
   player.getPacketSender().sendSound(effect.sound, 1, 0);
   player.sendMessage(text("used"));
   const now = Date.now();
-  shielded.set(player, now + effect.immuneTicks * TICK_MS);
+  shielded.set(player, core.World.getProcessCycle() + effect.immuneTicks);
   for (const delay of effect.explosionTicks) {
     if (delay === 0) explode(player);
     else core.TaskManager.submit(new core.CountdownTask(player, delay, () => explode(player)));
@@ -166,7 +181,7 @@ function check(event) {
 function damageApply({ target, hit }) {
   const until = target?.isPlayer?.() ? shielded.get(target) : undefined;
   if (until === undefined) return;
-  if (Date.now() >= until) {
+  if (core.World.getProcessCycle() >= until) {
     shielded.delete(target);
     return;
   }
@@ -187,6 +202,18 @@ function dealtDamage({ player, hit }) {
   }
 }
 
+/** The Wiki permits the carried flask in the Gauntlet and resets its cooldown on entry. */
+function gauntletKit({ player, carried }) {
+  const id = core.ItemIdentifiers[effect.tool];
+  if (!active(player) || !carried.some(item => item.id === id)) return;
+  player.getInventory().adds(id, 1);
+  player.getInventory().refreshItems();
+  readyTasks.get(player)?.stop?.();
+  readyTasks.delete(player);
+  player.setAttribute(READY_AT_ATTRIBUTE, 0);
+  sendCooldown(player);
+}
+
 module.exports = function attach(pluginApi) {
   api = pluginApi;
   core = api.core;
@@ -196,6 +223,7 @@ module.exports = function attach(pluginApi) {
   api.onCustomEvent("combat:damage-apply", damageApply);
   api.onPlayerDealtDamage(dealtDamage);
   api.onCustomEvent("league:login", login);
+  api.onCustomEvent("gauntlet:starting-kit", gauntletKit);
 };
 
 module.exports.READY_AT_ATTRIBUTE = READY_AT_ATTRIBUTE;

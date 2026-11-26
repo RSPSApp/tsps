@@ -213,3 +213,73 @@ assert.deepEqual(previewModels({ ...loc, values: { models: [[15402, 15403], [154
 assert.ok(previewSpec({ ...loc, values: { models: [[15402]], seqId: 3206 } }));
 
 assert.equal(sequenceFrameCount({ seqTypeLoader: { load: () => ({ isSkeletalSeq: () => true, getSkeletalDuration: () => 42 }) } } as any, 1), 42);
+
+// The Model Extractor and the asset library live on the authoring service, by these paths.
+import {
+    animationBodiesPath, canExtract, definitionKindOf, extractPath, folderNameOf, folderUpload, isFolderKind, libraryPath, npcAnimationsPath,
+} from "../custom/cache-editor/CacheEditorModel";
+
+assert.equal(extractPath("item", 4151), "/extract?kind=item&id=4151");
+assert.equal(libraryPath("animation"), "/library?kind=animation");
+assert.equal(npcAnimationsPath(3127), "/npc-animations?id=3127");
+assert.equal(animationBodiesPath(808), "/animation-bodies?id=808");
+assert.ok(canExtract("loc") && canExtract("seq") && canExtract("spotanim") && !canExtract("varbit"));
+assert.ok(isFolderKind("animation") && isFolderKind("graphic") && !isFolderKind("model"));
+assert.equal(definitionKindOf("animation"), "seq");
+assert.equal(definitionKindOf("graphic"), "spotanim");
+assert.equal(definitionKindOf("model"), null);
+assert.equal(folderNameOf("<col=ff0000>Abyssal whip</col>"), "abyssal-whip");
+
+// A picked folder arrives as "player-anim/frames/1-2.dat"; the service wants paths inside it.
+assert.deepEqual(folderUpload([
+    { path: "player-anim/seq.dat", data: "AA==" },
+    { path: "player-anim/frames/1-2.dat", data: "AQ==" },
+]), { "seq.dat": "AA==", "frames/1-2.dat": "AQ==" });
+assert.deepEqual(folderUpload([{ path: "graphic/spotanim.dat", data: "AA==" }, { path: "graphic/anim/seq.dat", data: "AQ==" }]), { "spotanim.dat": "AA==", "anim/seq.dat": "AQ==" });
+assert.deepEqual(folderUpload([{ path: "seq.dat", data: "AA==" }]), { "seq.dat": "AA==" }, "loose files keep their names");
+
+// Fit once per view and project geometry at display resolution, without tracking each frame's bounds.
+import { createPreviewRenderer } from "../custom/cache-editor/CacheEditorPreview";
+import { Model2DRenderer } from "../ui/model/Model2DRenderer";
+const originalDraw = Model2DRenderer.prototype.renderModelInstanceToCanvasWidget;
+const projections: Array<{ params: any; width: number }> = [];
+let boundsReads = 0;
+let emptyPreview = false;
+try {
+    Model2DRenderer.prototype.renderModelInstanceToCanvasWidget = function (_model, params, width, height) {
+        projections.push({ params, width });
+        return { canvas: {
+            width, height,
+            getContext: () => ({ getImageData: () => {
+                boundsReads++;
+                const data = new Uint8ClampedArray(width * height * 4);
+                if (!emptyPreview) {
+                    for (let y = 200; y < 260; y++) for (let x = 280; x < 380; x++) data[(y * width + x) * 4 + 3] = 255;
+                }
+                return { data };
+            } }),
+        } as any, offsetX: 0, offsetY: 0 };
+    };
+    const preview = createPreviewRenderer({ objTypeLoader: {}, modelLoader: { getModel: () => ({}) } } as any);
+    const canvas = { getContext: () => ({ clearRect() {}, drawImage() {} }), style: {} } as any;
+    const request = { kind: "model", id: 1, spec: { modelIds: [1], sequenceId: 3206, sequenceFrame: 0 } };
+    assert.equal(preview.draw(canvas, request), null);
+    const camera = projections[1].params;
+    assert.ok(camera.zoom3d > 512, "small models gain real projected detail before rasterisation");
+    assert.equal(canvas.width, 640, "320px previews supersample at twice the display resolution");
+    assert.equal(preview.draw(canvas, { ...request, spec: { ...request.spec, sequenceFrame: 1 } }), null);
+    assert.equal(boundsReads, 1, "animation frames cannot recrop or resize the camera");
+    assert.equal(projections[2].params.centerX, camera.centerX);
+    assert.equal(projections[2].params.centerY, camera.centerY);
+    assert.equal(projections[2].params.zoom3d, camera.zoom3d);
+    preview.draw(canvas, { ...request, zoom: 2 });
+    assert.equal(boundsReads, 1, "zoom retains the reference centre");
+    assert.equal(projections[3].params.zoom3d, camera.zoom3d * 2);
+    preview.draw(canvas, { ...request, yaw: 90 });
+    assert.equal(boundsReads, 2, "orbiting recalibrates the view");
+    emptyPreview = true;
+    assert.equal(preview.draw(canvas, { ...request, id: 2 }), "The model drew nothing");
+} finally {
+    Model2DRenderer.prototype.renderModelInstanceToCanvasWidget = originalDraw;
+}
+console.log("cache-editor stable camera and projection resolution ok");

@@ -222,6 +222,12 @@ const PEST_COMBAT_LEVELS = {
   splatter: [22, 33, 44], shifter: [36, 57, 76], ravager: [36, 53, 71],
   spinner: [37, 55, 74], torcher: [33, 49, 67], defiler: [33, 50, 66], brawler: [51, 76, 101],
 };
+// The Wiki's hit points for each pest at those levels. Set outright: a floor of twice the level gave
+// Novice pests two to three times theirs, and it read the shared definition a Veteran game had raised.
+const PEST_HITPOINTS = {
+  splatter: [13, 23, 33], shifter: [23, 38, 53], ravager: [23, 38, 53],
+  spinner: [33, 53, 73], torcher: [18, 30, 45], defiler: [27, 45, 62], brawler: [53, 83, 113],
+};
 const SPINNER_IDS = new Set(PEST_IDS.spinner.flat());
 const TORCHER_IDS = PEST_IDS.torcher.flat();
 const DEFILER_IDS = PEST_IDS.defiler.flat();
@@ -263,7 +269,7 @@ function applyPestStats(npc, type, tier) {
   stats[0] = level;
   stats[1] = level;
   stats[2] = level;
-  definition.setMaxHitpoints(Math.max(definition.getHitpoints(), level * 2));
+  definition.setMaxHitpoints(PEST_HITPOINTS[type]?.[tier] ?? Math.max(definition.getHitpoints(), level * 2));
   npc.setHitpoints(definition.getHitpoints());
 }
 
@@ -1074,6 +1080,31 @@ class PestControlOutpostArea extends Area {
   getName() { return "Void Knights' Outpost"; }
 }
 
+function deployLanderBots(world, state, count, create, track) {
+  const leaving = new Set(world.getRemovePlayerQueue());
+  const waiting = new Set(state.queue);
+  const includePending = bot => {
+    if (bot?.getAttribute?.(ATTR_WAITING_BOAT) === state.boat.key) waiting.add(bot);
+  };
+  world.getAddPlayerQueue().forEach(includePending);
+  world.getPlayers().forEach(includePending);
+  for (const player of leaving) waiting.delete(player);
+  if (waiting.size + count > MAX_PLAYERS) return { ok: false, status: 409, error: "Not enough space on the novice lander." };
+  const bots = [];
+  for (let i = 0; i < count; i++) {
+    // The same native gear sampler can roll a level below novice admission.
+    let bot;
+    for (let attempt = 0; !bot && attempt < 5; attempt++) bot = create(state, true);
+    if (!bot) {
+      for (const created of bots) created.requestLogout();
+      return { ok: false, status: 409, error: "Could not create an eligible novice lander roster." };
+    }
+    bots.push(bot);
+  }
+  for (const bot of bots) track(bot);
+  return { ok: true, spawned: bots.map(bot => bot.getUsername()) };
+}
+
 function createPestControl(api) {
   const matches = new Set();
   const stateByBoat = new Map();
@@ -1115,7 +1146,7 @@ function createPestControl(api) {
   const outpostArea = new PestControlOutpostArea();
   AreaManager.areas.push(...[...stateByBoat.values()].map((state) => state.area), outpostArea);
 
-  function spawnLanderBot(state) {
+  function spawnLanderBot(state, checkAdmission = false) {
     const username = `PCBot${++botSerial}`;
     const bot = createBotPlayer(username, state.boat.waitingLocation, {
       api,
@@ -1133,8 +1164,19 @@ function createPestControl(api) {
       { pvp: buildRoamingPvpMetadata({ excludeF2p: true }) },
       { api }
     );
+    if (checkAdmission && (bot.getSkillManager().getCombatLevel() < state.boat.level || bot.getAttribute?.(CURRENT_PET_ATTRIBUTE))) {
+      const queue = World.getAddPlayerQueue();
+      const index = queue.indexOf(bot);
+      if (index >= 0) queue.splice(index, 1);
+      return null;
+    }
     api.emitPlayerLogin({ player: bot, username });
+    return bot;
   }
+
+  api.onCustomEvent("bots:deploy-pest-control-plan", request => {
+    request.result = deployLanderBots(World, stateByBoat.get("novice"), request.count, spawnLanderBot, request.track);
+  });
 
   function joinBoat(player, boat) {
     const combatLevel = player.getSkillManager().getCombatLevel();
@@ -1314,11 +1356,18 @@ function escapeCrystal(request) {
   request.escaped = true;
 }
 
+/** Playable encounter IDs, read without starting a run or rolling rewards. */
+function describeEncounters({ npcIds }) {
+  for (const id of Object.values(PEST_IDS).flat(2)) npcIds.add(id);
+  for (const boat of BOATS) for (const id of boat.unshieldedIds) npcIds.add(id);
+}
+
 module.exports = {
   name: "PestControl",
   description: "Adds Pest Control: novice, intermediate and veteran boats, portals, void knight defence, commendation points, the Squire's shop, the outpost's score board of wins per lander and the Void seal's Rub.",
   members: true,
   register(api) {
+    api.onCustomEvent("bestiary:encounters", describeEncounters);
     AreaManager = api.getAreaManager();
     ObjectManager = api.getObjectManager();
     RegionManager = api.getRegionManager();
@@ -1336,6 +1385,7 @@ module.exports = {
     BOATS,
     commendationsFor,
     PEST_IDS,
+    applyPestStats,
     PORTAL_ORDERS,
     choosePortalOrder,
     clampActivity,
@@ -1343,6 +1393,7 @@ module.exports = {
     boardingParty,
     moveBetweenAreas,
     adoptPendingBots,
+    deployLanderBots,
     chooseDefenceTarget: Bots.chooseDefenceTarget,
     DefilerCombatMethod,
     TorcherCombatMethod,

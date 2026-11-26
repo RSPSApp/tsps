@@ -72,7 +72,7 @@ Each raid has one `PrivateArea` over the theatre's map squares, x 3136–3391 an
 
 | What | Where | Notes |
 | --- | --- | --- |
-| Notice board (32655, Read) | (3662, 3218) | Opens the party list. |
+| Notice board (32655, Read) | (3662, 3218) | Introduces the raid modes on first use, then opens the party list. |
 | Theatre of Blood (32653, Enter) | (3678, 3216) | The entrance. |
 | Chest (32656, Claim) | (3657, 3215), (3657, 3223) | Item retrieval. |
 | Scoreboard (32987, Read) | (3676, 3223) | Statistics. |
@@ -80,12 +80,26 @@ Each raid has one `PrivateArea` over the theatre's map squares, x 3136–3391 an
 
 **First conversation:** someone who hasn't spoken to the Mysterious Stranger is called over at the notice board and the entrance: "Hey. Over here." (captured 234/03285 tick 23906). A completion also counts as having met him. Someone without A Taste of Hope hears the Wiki's initial lines; the quest's unit plays the rest.
 
+**First Read after meeting the Stranger:** the board opens a message box (229) about forming or
+joining a party and choosing a difficulty. Walking away before continuing leaves the introduction
+available on the next Read. Continue asks "How experienced are you with raids?" in interface 219
+with Entry Mode first and Normal Mode second. On either answer, varbit 6573
+(`tobquest_used_notice_board`, bit 26 of `tobquest_main`) changes to 1 before the message box
+confirming the default mode. Continue opens the list (364) and closes the box. The flag and mode
+are saved, and later Reads go straight to the list.
+
+The introductions are captured in [227/101](https://rsprox.net/download/101) ticks 25574–25608
+(Entry, with the first box dismissed), [234/3285](https://rsprox.net/download/3285) ticks
+23940–23950 (Normal), and [237/1162](https://rsprox.net/download/1162) ticks 12855–12866 (Normal).
+227/101 ticks 25611–25674 show the first party staying in Entry through the entrance prompt.
+227/553 ticks 11905–11906 and 237/1162 tick 15846 show later Reads opening the list directly.
+
 **The party list (364).**
 - Script 2340 fills rows 0–44 with `name|name|name|name|name|size|preferred size|preferred combat|mode|age`, as captured: no trailing bar.
 - The buttons are pause buttons. Refresh, My/Make party and Friends/Clan (varbit 12988) are children 0, 1 and 2 of component 3 (enum 1938), so a click arrives as RESUME_PAUSEBUTTON, handled in `onInterfaceActionClick`. Rows are components 18–62, with a plain "View party" op.
 - Varp 1740 (`tob_mycontroller` in the symbols) is 0 for someone in a party, -1 otherwise, as captured.
 
-**A party's information (50).** Every button resumes a child of component 0:
+**A party's information (50).** The controls under component 0 each resume their own slot.
 
 | Slot | Button |
 | --- | --- |
@@ -100,7 +114,23 @@ Each raid has one `PrivateArea` over the theatre's map squares, x 3136–3391 an
 | 12–21 | Accept applicants |
 | 22–31 | Decline applicants |
 
-Script 2323's footer takes the viewer's rights and the mode (0 Normal, 1 Entry, 2 Hard; captured). Script 2317's members and 2321's applicants are `name|combat|attack|strength|ranged|magic|defence|hitpoints|prayer|completions`. Leaving Ver Sinhaza (other than into the theatre) or logging out leaves the party or withdraws the application.
+Each opening runs script 5239 without arguments, then enables op 1 on the up and down arrows at components 63–72. The member script (2317) and footer (2323) both receive the viewer's rights. The footer also receives the mode (0 Normal, 1 Entry, 2 Hard). Member and applicant rows (2317 and 2321) are `name|combat|attack|strength|ranged|magic|defence|hitpoints|prayer|completions`. The rows and lobby HUD use U+00A0 in names with spaces. The HUD joins its five slots with `<br>`, with a dash for each empty slot.
+[237/1162](https://rsprox.net/download/1162) ticks 12869–12875 and 15849–15861, [237/1163](https://rsprox.net/download/1163) ticks 61, 79 and 176
+
+The leader can use the arrows to swap neighboring party members. A swap involving first place opens **Continue?** directly in this implementation. **Yes** swaps the members and makes the new first member leader. The one recorded hand-over, on a Leagues VI world, shows a message box before the confirmation. [Wiki change](https://oldschool.runescape.wiki/w/Theatre_of_Blood?oldid=15393349) · [237/1162](https://rsprox.net/download/1162) ticks 15849–15861
+
+Leaving Ver Sinhaza (other than into the theatre) or logging out leaves the party or withdraws the application.
+
+| Lobby event | Player feedback | Recordings |
+| --- | --- | --- |
+| An application is accepted | On a leader's Accept, the applicant gets "Your application to the party of \<leader's name\> has been accepted." as a game message. Party status 6440 changes from 0 to 1 on the following tick, as in recordings 553 and 582. Recordings 554 and 1162 show the same order within one tick. | [227/553](https://rsprox.net/download/553) ticks 11915–11916, [227/554](https://rsprox.net/download/554) tick 101, [227/582](https://rsprox.net/download/582) ticks 313–314, [237/1162](https://rsprox.net/download/1162) tick 12874 |
+| The leader confirms a first-place swap | The former leader sees the reordered party details with member rights. Their lobby HUD follows on the next tick. The entrance requires the new leader to go first. | [237/1162](https://rsprox.net/download/1162) ticks 15859–15861; entrance refusal in [237/1163](https://rsprox.net/download/1163) ticks 93–105 |
+| A member leaves the lobby | "You have left the lobby, so you have been removed from your party." appears as a game message with the departure. | [227/1779](https://rsprox.net/download/1779) tick 13028, [234/3299](https://rsprox.net/download/3299) tick 10627 |
+| A player refreshes a party that has disbanded | "That party is no longer recruiting." opens as a message box (229) and the details (50) close. Continue opens the list. | [227/1833](https://rsprox.net/download/1833) ticks 3474–3482 |
+
+The recordings are from Leagues or Grid Master. With TSPS Grouping, a player's own
+auto-accepted application gets the message and the existing immediate party status update. Group members brought in
+automatically when their leader creates a party keep the existing silent join.
 
 **The entrance:**
 1. Without a party: "You are not in a party..." with "Form or join a party", "Observe a specific party", "Observe recent party" and "Cancel" (captured).
@@ -108,6 +138,38 @@ Script 2323's footer takes the viewer's rights and the mode (0 Normal, 1 Entry, 
 3. The first time, the death warning (captured), then "Accept the warning and proceed?".
 4. Without a crystal: the captured prompt, in the crystal's current name.
 5. The leader confirms "Is your party ready? Members: N. Mode: X." (captured).
+
+**The residents** (`tob/Residents.TheatreOfBlood.js`) play their own transcript variants
+(npc-dialogues.json, Wiki transcripts) instead of the page's first "standard" one:
+
+| Who | Variant |
+| --- | --- |
+| Meiyerditch citizens (`tob_citizen_1`-`4`) | "Theatre of Blood"; after The Blood Moon Rises its after-quest Theatre lines; in a vyre disguise the apology for talking to a noble |
+| Vyrelords and Vyreladies (`tob_noble_1`-`4`) | "not disguised", or "disguised, or completed The Blood Moon Rises" |
+| Vampyre Juvenile at the gate | `tob_door_guard` outside, `tob_door_guard_inner` inside |
+
+rsprox captures: the citizens' Theatre lines (local 1000270-1000318, rev 227), the inner guard's
+"Can I go through here?" (409, 4266), both Vyrelord variants (409 and the local Leagues runs).
+Before this the citizens said "That conversation isn't available right now." (Meiyerditch's
+variant is an unavailable marker). Ours: "disguised" is a scented vyre noble piece in each of the
+body, legs and feet slots (the Wiki names no pieces); the clothing line beats the after-quest one.
+
+### Notice board estimates
+
+- Later parties start in the last mode the player chose, including a successful change on the
+  party screen. The captures show the first choice and party, with no second formation after
+  a mode change.
+- A pending applicant who leaves the lobby has their application quietly withdrawn. The
+  departure messages in the captures are for members.
+- Refreshing a party that has entered the Theatre uses the same message as a disbanded party.
+  The recorded stale refresh was after the viewer lost party membership.
+
+### Party screen estimates
+
+- Arrows below first place swap the two adjacent members immediately and redraw the details and lobby HUD. The recording only shows a swap involving first place.
+- The down arrow on row one asks for the same confirmation as the up arrow on row two. The recording shows the up arrow.
+- Choosing **No** or dismissing the confirmation keeps the order and reopens the details. The recorded answer was **Yes**.
+- Arrows from viewers other than the leader, arrows with no adjacent member, and arrows after raid entry leave the order as it was. The server redraws the details when the screen is available. The captured click was from the leader in the lobby.
 
 ## The raid
 
@@ -199,10 +261,25 @@ All 50 tasks have a mode in `CombatAchievements.*` and a condition somewhere. Ca
 | Holy and Sanguine ornament kits | New rows in `ornament-kits.json`, charged and uncharged, refunded on Dismantle (Wiki). Holy rapier played. |
 | Scythe of Vitur | Existing plugin read against the Wiki: hits, max-hit halving, the well, charges. No change. |
 | Sanguinesti staff | Existing plugin read against the Wiki: max hit, leech, charges. No change. |
-| Books | `Books.*`: each boss leaves its book for someone without it, and the bookshelves give the first one missing. Their text isn't transcribed, so reading says the writing's too faded. |
+| Books | `Books.*`: the boss's book lands in the completion tick at the tile below and stays owner-only for 200 ticks. The bookshelves give the first one missing. |
 | Sanguine dust | Drops from Hard Mode. Lil' Zik's forms are `Dust.Pets.js`'s. |
 | Sinhaza shrouds | `Stats.*`: tiers 1-5 at 100, 500, 1000, 1500 and 2000 Normal or Hard completions, from the Mysterious Stranger's "What do you have for me?"; Change moves between earned tiers (Wiki; Transcript:Mysterious Stranger). The refusal of a tier not earned yet is our wording. Unit tested, not played: no account here has 100 completions. |
 | Dawnbringer | Its special, and every other, now says "You don't have enough power left." when energy is short, as 24 captures do (`Combat.ts`, `CombatSpecial.ts`). It can also be dropped in Verzik's room during phase 1 and picked up by a teammate (the Wiki's way of passing it), drops on death, and is removed when phase 1 ends or when its holder leaves. |
+
+All 233 room wins across 16 recordings placed one book for the recording player in the completion tick, after the wave message. Verzik's book followed the final recorded completion lines. The captures are from Leagues V, Grid Master and Leagues VI, and the sample includes Entry, Normal and Hard Mode. [Entry, ticks 25754–27274](https://rsprox.net/download/101) · [Normal, ticks 368–1810](https://rsprox.net/download/1163) · [Hard, ticks 879–4390](https://rsprox.net/download/1852)
+
+| Boss | Book ID | Drop tile | Example |
+| --- | --- | --- | --- |
+| Maiden | 22504 | (3168, 4447, 0) | [227/101, tick 25754](https://rsprox.net/download/101) |
+| Bloat | 22506 | South-west tile when the death animation begins, plus (2, 2) | [237/1162, ticks 13464–13467](https://rsprox.net/download/1162) |
+| Nylocas Vasilias | 22508 | (3295, 4248, 0) | [227/554, tick 942](https://rsprox.net/download/554) |
+| Sotetseg | 22510 | (3279, 4328, 0) | [227/554, ticks 1140–1158](https://rsprox.net/download/554) |
+| Xarpus | 22512 | (3170, 4387, 1) | [227/1837, ticks 3417–3616](https://rsprox.net/download/1837) |
+| Verzik | 22514 | Death form's south-west tile plus (1, 1) after it moves | [237/1163, ticks 1804–1810](https://rsprox.net/download/1163) |
+
+Bloat's three-tick delay starts at the death animation. In one win it last moved at tick 2330, began the animation at 2331 and dropped its book at 2334. In another it last moved at 4130, began the animation at 4151 and dropped its book at 4154. [227/554, ticks 2330–2334 and 4130–4154](https://rsprox.net/download/554)
+
+The drops carry `despawn=200`, `ownership=self` and `neverturnpublic=true`. Xarpus' book is added at tick 3417 and removed at 3616 with the player still in the room. When an area reload sends a book again, it reports the original stack's remaining time. Sotetseg's book appears at tick 1140 with 200 ticks and is sent again at 1158 with 181. [227/1837, ticks 3417–3616](https://rsprox.net/download/1837) · [227/554, ticks 1140–1158](https://rsprox.net/download/554)
 
 Xarpus' splat also poisons, starting at 2 (Wiki, Strategies; "You have been poisoned!" captured).
 
@@ -212,6 +289,8 @@ Over the agent MCP (2026-11-02). No fight was played at full length: every boss 
 - **Solo, Normal:** party through the notice board, the Stranger's gate, the entrance and its prompts, then every room through its real barriers and passages. That includes both of Sotetseg's mazes run to the portal, the Xarpus north barrier, the skeleton and the door, all three of Verzik's phases to her death, the vault's chest, strategy table, bookshelf and crystal, and leaving. The Nylocas room was skipped with `::tobcomplete`. Verzik was finished for real once and skipped once to test the vault.
 - **Two players, Normal, Hard and Entry:** the Maiden fought; the Bloat finished with `::tobcomplete`, because a script can't time going in as a player does and its flies kill in about 8 ticks; the Nylocas skipped; Sotetseg's mazes run, then `::tobcomplete`; Xarpus fought; Verzik not reached in these.
 - **Scenarios:** a death, the jail and release when the room is won; a team wipe, the retrieval chest refusing without coins, taking the fee, giving back, then empty; logging out mid-fight and rejoining into the jail; a crystal carried at logout; teleports refused; a crystal used on a teammate; auto-afk firing on a hit; two parties at once, each with its own Maiden, unseen and unattackable by the other; spectating the most recent party and teleporting out; the scoreboard; the Avernic defender and a Holy kit.
+- **Boss books (2026-11-25):** agent MCP in Normal Mode. The solo run checked all six drops and took the Maiden's diary. Bloat's death animation began at tick 1228 on (3288, 4444, 0), and its book appeared at (3290, 4446, 0) at 1231. Verzik's death form appeared at (3168, 4315, 0) at 1139, and her book appeared at (3169, 4316, 0) at 1145. The two-player run took one diary per player. A was unable to take B's diary after the normal public-reveal threshold. A stationary check saw the Xarpus book on plane 1 at completion tick 992 and at 1190, then saw it gone at 1191. The runs used the developer room commands, reduced boss hitpoints, and a headless client.
+- On 2026-11-25, two headless agent MCP accounts formed a party through the notice board. The packet sender emitted script 5239, the ten op 1 flags and the viewer's rights. The spaced name used U+00A0 in the details and lobby HUD. After **Yes**, the former leader's details redrew with member rights, followed by their reordered HUD on the next tick. The former leader's arrow left the order intact. **No** and Escape reopened the details for the new leader. The entrance named the new leader to the former leader, then the new leader entered with the two-member party.
 - **Unit tests (2026-11-03):** a wipe with one member who never entered; unclaimed vault loot lost on entering another raid and on logging out (Lil' Zik still delivered); a seven-item roll showing six, with Discard-all and Take-all leaving the seventh and showing it; the loot interface feeding the collection log and the category's kill count; Verzik's auto-attacks, green ball, yellow strikes and webs doing nothing after `die()`; the Dawnbringer dropped, visible to a teammate, and dropped on death; Hard's supply chest a band lower.
 
 ## What isn't verified
@@ -223,6 +302,7 @@ Over the agent MCP (2026-11-02). No fight was played at full length: every boss 
 - **Estimates with no source:** the jail's stance (RuneLite's name), the retrieval lot's second-wipe timing, Sotetseg's tornado damage, the Hard realm's sections for three runners, Hard's dots' 80 per strike, Hard Matomenos' blast, each death costing a fifth of a player's standing (unique chance, weighting, commons, tertiaries), the MVP's formula, supply grading.
 - **Checked against the Wiki or the cache and left as they are:** the pillars have the cache's 185 hitpoints (NPC 8379) and collapse on phase 2 damaging and stunning adjacent players (Wiki, Supporting Pillar); urnbombs check Protect from Missiles when they land while the blood spell checks Protect from Magic during her animation (Wiki, Verzik Vitur); Sotetseg has no maze immunity in the Wiki (the players who stay in the arena can still attack him); the between-room heal is in captures outside Entry; and a second team wipe before reclaiming replaces the retrieval lot (Wiki, Death mechanics).
 - **Our wording, not captured:** the Vyre Orator's lines, "Are you ready to proceed?", the crystal's, the Avernic defender's, Hard's refusal, Entry's retry line, the supply chest's Open line.
+- **Book-drop estimates:** a player who already owns the book, including a banked copy, receives none. The captures show repeat drops. No pickup was observed, so ownership at a later kill is unestablished. Jailed party members qualify under the existing raid rule, with no recorded room win observed from jail. Taking a book uses the ordinary Take action with no extra message, since no pickup was captured.
 - **Not built, for want of a source:**
   - Varbit 6400 `tob_verzik_throne_visible`: no capture changes it, and its values are unknown.
   - The books' text: the Wiki's transcripts are the books' whole text, too much to copy in.
@@ -235,7 +315,7 @@ Over the agent MCP (2026-11-02). No fight was played at full length: every boss 
 | Command | What it does |
 | --- | --- |
 | `::tob` | To Ver Sinhaza, by the notice board. |
-| `::tobcomplete` | Completes the room your party has reached, removing its NPCs. |
+| `::tobcomplete` | Completes the room your party has reached, removing its NPCs. Without a boss death, Bloat uses its spawn plus (2, 2) and Verzik uses her phase-three start plus (1, 1). |
 | `::tobroom <room>` | Moves your party to a room (`MAIDEN`, `BLOAT`, `NYLOCAS`, `SOTETSEG`, `XARPUS`, `VERZIK`, `REWARDS`). |
 
 The Theatre of Blood is also in `::teleports` under Minigames.

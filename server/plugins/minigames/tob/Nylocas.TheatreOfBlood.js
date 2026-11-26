@@ -777,8 +777,18 @@ function combatMethods({ CombatMethod, CombatType }) {
 
 const allIds = (key) => Object.values(IDS_BY_MODE).flatMap((table) => Object.values(table[key] ?? {}));
 
+/** Combat forms only; presentation forms and room scenery do not qualify. */
+function describeEncounters({ npcIds }) {
+  for (const ids of Object.values(IDS_BY_MODE)) {
+    for (const key of ["smallAggressive", "bigAggressive", "vasilias", "prinkipas"]) {
+      for (const [form, id] of Object.entries(ids[key] ?? {})) if (form !== "spawning") npcIds.add(id);
+    }
+  }
+}
+
 module.exports = function registerNylocas(api) {
   Shared.bind(api);
+  api.onCustomEvent("bestiary:encounters", describeEncounters);
   Raid.registerRoom("NYLOCAS", NylocasRoom);
   const { NyloMethod, BossMethod } = combatMethods(api.core);
   api.registerNpcCombatMethodProvider([...allIds("smallAggressive"), ...allIds("bigAggressive")], NyloMethod, { singleton: false });

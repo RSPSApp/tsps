@@ -18,6 +18,8 @@ const {
   HOUSE_DUMP_DIRECTORY,
   initRegionBuildingAnalysisCoreAccess,
 } = require("./procedural/RegionBuildingAnalysisUtil.ProceduralRegionStream");
+const Landscape = require("./LandscapePlans");
+const { proceduralTerrainHeight, tileNoise, smoothedNoise } = require("./TerrainHeight");
 const { dumpTerrainBiome, loadTerrainBiome } = require("./procedural/TerrainBiomeUtil.ProceduralRegionStream");
 
 const PROCEDURAL_REGION_OPCODE = 12;
@@ -311,102 +313,6 @@ function clearProceduralClippingForPlayer(player) {
   return cleared;
 }
 
-function tileNoise(x, y, seed) {
-  let n =
-    (Math.imul(x | 0, 374761393) +
-      Math.imul(y | 0, 668265263) +
-      Math.imul(seed | 0, 2147483647)) |
-    0;
-  n = Math.imul(n ^ (n >>> 13), 1274126177);
-  n = n ^ (n >>> 16);
-  return n & 0xff;
-}
-
-function smoothedNoise(x, y, seed) {
-  const corners =
-    tileNoise(x - 1, y - 1, seed) +
-    tileNoise(x + 1, y - 1, seed) +
-    tileNoise(x - 1, y + 1, seed) +
-    tileNoise(x + 1, y + 1, seed);
-  const sides =
-    tileNoise(x - 1, y, seed) +
-    tileNoise(x + 1, y, seed) +
-    tileNoise(x, y - 1, seed) +
-    tileNoise(x, y + 1, seed);
-  const center = tileNoise(x, y, seed);
-  return ((corners >> 4) + (sides >> 3) + (center >> 2)) & 0xff;
-}
-
-function legacyNoise(x, y) {
-  let n = x + y * 57;
-  n = (n << 13) ^ n;
-  const nn = Math.imul(n, Math.imul(Math.imul(n, n), 15731) + 789221) + 1376312589;
-  const raw = nn & 0x7fffffff;
-  return (raw >> 19) & 0xff;
-}
-
-function legacySmoothNoise(x, y) {
-  const corners =
-    legacyNoise(x - 1, y - 1) +
-    legacyNoise(x + 1, y - 1) +
-    legacyNoise(x - 1, y + 1) +
-    legacyNoise(x + 1, y + 1);
-  const sides =
-    legacyNoise(x - 1, y) +
-    legacyNoise(x + 1, y) +
-    legacyNoise(x, y - 1) +
-    legacyNoise(x, y + 1);
-  const center = legacyNoise(x, y);
-  return ((corners >> 4) + (sides >> 3) + (center >> 2)) | 0;
-}
-
-function legacyInterpolate(a, b, angle, frequencyReciprocal) {
-  const theta = (angle * Math.PI) / frequencyReciprocal;
-  const cosine = (65536 - ((Math.cos(theta) * 65536) | 0)) >> 1;
-  return ((a * (65536 - cosine)) >> 16) + ((b * cosine) >> 16);
-}
-
-function legacyInterpolatedNoise(x, y, frequencyReciprocal) {
-  const l = Math.floor(x / frequencyReciprocal);
-  const i1 = x & (frequencyReciprocal - 1);
-  const j1 = Math.floor(y / frequencyReciprocal);
-  const k1 = y & (frequencyReciprocal - 1);
-  const l1 = legacySmoothNoise(l, j1);
-  const i2 = legacySmoothNoise(l + 1, j1);
-  const j2 = legacySmoothNoise(l, j1 + 1);
-  const k2 = legacySmoothNoise(l + 1, j1 + 1);
-  const l2 = legacyInterpolate(l1, i2, i1, frequencyReciprocal);
-  const i3 = legacyInterpolate(j2, k2, i1, frequencyReciprocal);
-  return legacyInterpolate(l2, i3, k1, frequencyReciprocal);
-}
-
-function legacyVertexHeight(worldX, worldY) {
-  let mapHeight =
-    legacyInterpolatedNoise(worldX + 45365, worldY + 91923, 4) -
-    128 +
-    ((legacyInterpolatedNoise(worldX + 10294, worldY + 37821, 2) - 128) >> 1) +
-    ((legacyInterpolatedNoise(worldX, worldY, 1) - 128) >> 2);
-  mapHeight = (mapHeight * 0.3 + 35) | 0;
-  if (mapHeight < 10) {
-    mapHeight = 10;
-  } else if (mapHeight > 60) {
-    mapHeight = 60;
-  }
-  return mapHeight;
-}
-
-function proceduralTerrainHeight(worldX, worldY, plane, seed) {
-  // Match classic RS317 terrain amplitude (10..60) and plane offset behavior.
-  // Seed shifts the sampled domain to keep deterministic but varied outputs.
-  const seedShiftX = ((seed >>> 8) & 0x3ff) - 512;
-  const seedShiftY = ((seed >>> 18) & 0x3ff) - 512;
-  const baseHeight = legacyVertexHeight(worldX + seedShiftX, worldY + seedShiftY);
-  const detailNoise = smoothedNoise(worldX, worldY, seed) - 128;
-  const detailed = baseHeight + Math.round(detailNoise / 24);
-  const planePenalty = plane * 30;
-  return Math.max(4, Math.min(120, detailed - planePenalty));
-}
-
 function flattenHeightsAroundRect(heights, rect, size) {
   const outerMinX = Math.max(0, rect.x - 2);
   const outerMinY = Math.max(0, rect.y - 2);
@@ -442,6 +348,7 @@ function generateRegionPayload(regionX, regionY, seed, options = null) {
   const terrainUnderlayIds = Array.isArray(options?.terrainUnderlayIds)
     ? options.terrainUnderlayIds.filter((id) => Number.isInteger(id) && id > 0).map((id) => id | 0)
     : [];
+  const terrainSample = options?.terrainSample;
   const tileCount = REGION_PLANES * REGION_SIZE * REGION_SIZE;
   const heights = Buffer.allocUnsafe(tileCount * 2);
   const overlays = Buffer.allocUnsafe(tileCount);
@@ -453,7 +360,9 @@ function generateRegionPayload(regionX, regionY, seed, options = null) {
     for (let localY = 0; localY < REGION_SIZE; localY++) {
       const worldX = regionX * REGION_SIZE + localX;
       const worldY = regionY * REGION_SIZE + localY;
-      baseHeights[localX][localY] = proceduralTerrainHeight(worldX, worldY, 0, seed);
+      baseHeights[localX][localY] = terrainSample
+        ? terrainSample(worldX, worldY).elevation
+        : proceduralTerrainHeight(worldX, worldY, 0, seed);
     }
   }
 
@@ -505,9 +414,10 @@ function generateRegionPayload(regionX, regionY, seed, options = null) {
           overlay = 0;
         }
 
-        overlays[tileIndex] = overlay;
-        underlays[tileIndex] = underlay;
-        flags[tileIndex] = 0;
+        const sample = plane === 0 && terrainSample ? terrainSample(worldX, worldY) : undefined;
+        overlays[tileIndex] = sample?.overlay ?? overlay;
+        underlays[tileIndex] = sample?.underlay ?? underlay;
+        flags[tileIndex] = sample?.blocked ? 1 : 0;
         tileIndex++;
       }
     }
@@ -1369,11 +1279,25 @@ function buildStreetPayloadAtPlayer(player, styleTag, seed, houseType = "SHOP") 
   };
 }
 
-function buildGeneratedTerrainPayloadAtPlayer(player, biomeArg, seed) {
+function buildGeneratedTerrainPayloadAtPlayer(core, player, biomeArg, seed) {
   const location = player.getLocation();
   const regionX = (location.getX() / REGION_SIZE) | 0;
   const regionY = (location.getY() / REGION_SIZE) | 0;
   const normalizedSeed = seed >>> 0;
+  // Keep the staff-only streaming transport, and use the authoring plan for its overlapping presets.
+  const biomeName = String(biomeArg).trim().toLowerCase();
+  if (Landscape.catalog().biomes.some(({ id }) => id === biomeName)) {
+    const plan = Landscape.planLandscape(core, {
+      x: regionX * REGION_SIZE, y: regionY * REGION_SIZE, biome: biomeName, seed: normalizedSeed,
+    });
+    const placements = (plan.locs.get(regionId(regionX, regionY)) ?? []).map(([id, packed, attributes]) => ({
+      id, x: (packed >> 6) & 63, y: packed & 63, z: packed >> 12, type: attributes >> 2, orientation: attributes & 3,
+    }));
+    const payload = generateRegionPayload(regionX, regionY, normalizedSeed, {
+      buildingPlacements: placements, terrainSample: plan.tileAt,
+    });
+    return { payload, biome: biomeName, sceneryCount: placements.length, seed: normalizedSeed };
+  }
   const biome = loadTerrainBiome(biomeArg);
 
   const treeIds = biome.treeIds;
@@ -1780,10 +1704,10 @@ module.exports = {
       const seed = explicitSeed === null ? normalizeSeed(undefined) : explicitSeed >>> 0;
 
       try {
-        const result = buildGeneratedTerrainPayloadAtPlayer(player, biome, seed);
+        const result = buildGeneratedTerrainPayloadAtPlayer(api.core, player, biome, seed);
         streamProceduralPayload(player, result.payload, "[proc-region] generated terrain region");
         player.sendMessage(
-          `[proc-region] genterrain biome=${result.biome} trees=${result.treeCount} groundDecor=${result.groundDecorationCount} treeIds=${result.treeIds} underlays=${result.underlayIds} groundDecorIds=${result.groundDecorationIds} samples=${result.sampleCount} seed=${result.seed}`
+          `[proc-region] genterrain biome=${result.biome} scenery=${result.sceneryCount ?? result.treeCount + result.groundDecorationCount} seed=${result.seed}`
         );
       } catch (error) {
         const reason = error?.message ?? String(error);

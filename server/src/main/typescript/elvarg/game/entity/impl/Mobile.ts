@@ -1,3 +1,4 @@
+import { ActorPresentation } from '../../model/ActorPresentation';
 import { lazyRequire } from "../../../util/LazyRequire";
 import { Entity } from "../Entity";
 import { getSequenceForcedPriority } from "../../cache/NpcAnimationScanner";
@@ -56,6 +57,12 @@ class MobileTask extends Task {
 /** An actor tint: cycles from now, HSL (-1 keeps the model's own) and how strongly (0-255). */
 /** Set (true) on a developer who takes damage and loses items on death after all; ::mortal toggles it. Not saved. */
 export const MORTAL_DEVELOPER_ATTRIBUTE = "dev:mortal";
+
+/** A mobile's own clipping on some tiles (see Mobile.setClipOverlay). */
+export interface ClipOverlay {
+    hasClip(location: Location): boolean;
+    getClip(location: Location): number;
+}
 
 export type ActorTint = {
     startCycle: number;
@@ -153,6 +160,35 @@ export abstract class Mobile extends Entity {
     public abstract onRemove(): void;
 
     public abstract manipulateHit(hit: PendingHit): PendingHit;
+
+    /**
+     * Clipping this mobile alone walks by, over its private area's (or the map's) on the tiles the overlay claims: a
+     * quest bridge whose repaired rungs only this player may stand on. Only movement and route finding read it;
+     * visibility, drops and areas are untouched.
+     */
+    private clipOverlay: ClipOverlay | null = null;
+
+    public setClipOverlay(overlay: ClipOverlay | null): void {
+        this.clipOverlay = overlay;
+    }
+
+    public getClipOverlay(): ClipOverlay | null {
+        return this.clipOverlay;
+    }
+
+    /**
+     * What movement and route finding look clipping up in: the private area, with the clip overlay over it when there is
+     * one. RegionManager.getClipping reads only hasClip/getClip from it.
+     */
+    public getWalkClipArea(): any {
+        const area = this.getPrivateArea();
+        const overlay = this.clipOverlay;
+        if (!overlay) return area;
+        return {
+            hasClip: (location: Location) => overlay.hasClip(location) || (area?.hasClip?.(location) ?? false),
+            getClip: (location: Location) => overlay.hasClip(location) ? overlay.getClip(location) : area?.getClip?.(location) ?? 0,
+        };
+    }
 
     public override setArea(area: Area): void {
         const previousPrivateArea = this.getPrivateArea();
@@ -379,6 +415,14 @@ export abstract class Mobile extends Entity {
         if (animation == null) {
             return;
         }
+        if (animation.getId() >= 0 && animation.getId() !== Animation.DEFAULT_RESET_ANIMATION.getId()) {
+            const replacementId = ActorPresentation.for(this)?.animation;
+            if (replacementId !== undefined) {
+                const replacement = new Animation(replacementId, animation.getPriority());
+                replacement.delay = animation.getDelay();
+                animation = replacement;
+            }
+        }
         if (this.animation != null && animation != null) {
             if (this.animation.getPriority() > animation.getPriority()) {
                 return;
@@ -401,6 +445,7 @@ export abstract class Mobile extends Entity {
     }
 
     performGraphic(graphic: Graphic) {
+        if (this.isGraphicHandledByPresentation(graphic, 0)) return;
         if (this.graphic != null && graphic != null) {
             if (this.graphic.getPriority() > graphic.getPriority()) {
                 return;
@@ -425,8 +470,15 @@ export abstract class Mobile extends Entity {
             if (graphic) this.performGraphic(graphic);
             return;
         }
+        if (this.isGraphicHandledByPresentation(graphic, slot)) return;
         (this.slotGraphics ??= new Map()).set(index, graphic);
         this.getUpdateFlag().flag(Flag.GRAPHIC);
+    }
+
+    private isGraphicHandledByPresentation(graphic: Graphic | null, slot: number): boolean {
+        const look = ActorPresentation.for(this);
+        if (!look || graphic == null || graphic.getId() < 0) return false;
+        return Boolean(look.onGraphic?.(graphic, slot) || look.suppressGraphics);
     }
 
     /**

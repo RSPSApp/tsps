@@ -11,6 +11,9 @@
  *   count with the loot).
  * - Larran's chests: the pick-up animation and sound 1227; a tick later sound 52, the key goes
  *   and the chest opens; then sound 51, the loot, the count, and the chest closes.
+ * - The moon key chest (Ruins of Tapoyauik): the open-chest animation, sound 77 and the unlock
+ *   line; a tick later sound 76, the key goes, the loot and its line, and the chest shows open
+ *   for everyone for two ticks.
  * - The Zombie Pirate's Locker: the open-chest animation and sound 58; a tick later the key goes
  *   and the locker shows open for everyone; a tick after that the animation again; then sound 51,
  *   the loot with its line, the count and any valuable-drop line, and the locker closes. It needs
@@ -64,8 +67,8 @@ function countMessage(chest, player) {
   return chest.count.message.replace("{count}", count === 1 ? text : `${text} times`);
 }
 
-function animate(player, seq) {
-  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId(seq)));
+function animate(player, seq, delay = 0) {
+  player.performAnimation(new core.Animation(core.CacheDefinitions.getSeqId(seq), delay));
 }
 
 function setOpen(chest, player, object, open) {
@@ -95,9 +98,14 @@ function reward(chest, player) {
   // "drops:chance" { player, source, rules }: a league's boosted drops for this chest's pre-rolls.
   if (chest.loot.preRolls.length) api.emitCustomEvent("drops:chance", { player, source: chest.name, rules });
   const drops = Loot.roll(chest, player.getSkillManager().getMaxLevel(core.Skill.FISHING), Math.random, rules);
+  // "drops:rolled" { player, source, drops }: content may change the loot before it is given (a league's finished items).
+  api.emitCustomEvent("drops:rolled", { player, source: chest.name, drops });
   if (chest.avariceNotes && wearsAvarice(player)) for (const entry of drops) if (!entry.preRoll) entry.noted = true;
   Loot.give(player, drops);
-  for (const { itemId, amount } of drops) api.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
+  // `noLog`: items this chest gives that don't count towards the collection log (moon chest's splinters and huasca seeds).
+  for (const { itemId, amount } of drops) {
+    if (!chest.noLogIds?.has(itemId)) api.emitCustomEvent("collection-log:obtain", { player, itemId, amount });
+  }
   if (chest.count) player.setAttribute(OPENED_ATTRIBUTES[chest.key], opened(chest, player) + 1);
   if (chest.diaryTask) api.emitCustomEvent("diary:task", { player, ...chest.diaryTask });
   // "chests:opened" { player, chest }: a key chest opened, by its name (a league's "Open the Crystal Chest").
@@ -169,18 +177,24 @@ function warnLowSpace(chest, player, object) {
   );
 }
 
+/** [sound, delay]: a chest's own open and loot sounds (the moon key chest's), else sound 2402 on opening. */
+function playSound(player, sound) {
+  if (sound) player.getPacketSender().sendSound(sound[0], 1, sound[1] ?? 0);
+}
+
 function openTreasureChest(chest, player, object) {
-  animate(player, "human_openchest");
-  player.getPacketSender().sendSound(OPEN_CHEST_SOUND, 1, 0);
+  animate(player, "human_openchest", chest.animDelay ?? 0);
+  playSound(player, chest.sounds ? chest.sounds.open : [OPEN_CHEST_SOUND, 0]);
   if (!chest.itemBox) player.sendMessage("You unlock the chest with your key.");
   later(1, () => {
     const drops = unlock(chest, player);
     if (!drops) return finish(player);
+    playSound(player, chest.sounds?.loot);
     if (chest.itemBox) showItemBox(chest, player, drops);
     else player.sendMessage("You find some treasure in the chest!");
     if (chest.count && chest.countWithLoot) player.sendMessage(countMessage(chest, player));
     setOpen(chest, player, object, true);
-    later(1, () => {
+    later(chest.openTicks ?? 1, () => {
       setOpen(chest, player, object, false);
       if (chest.count && !chest.countWithLoot) player.sendMessage(countMessage(chest, player));
       finish(player);
@@ -233,10 +247,14 @@ function openLocker(chest, player, object) {
   });
 }
 
-/** The chest this interaction is on (the Taverley chest shares its name, "Closed chest"). */
+/**
+ * The chest this interaction is on: by loc id first (the Taverley chest is a "Closed chest", the
+ * moon key chest a plain "Chest"), then by name (the varbit chests' multilocs).
+ */
 function chestFor(event) {
   const name = (event.definition ?? core.ObjectDefinition.forPlayer(event.objectId, event.player))?.getName?.();
-  return Data.get().chests.find((chest) => chest.name === name || chest.locId === event.objectId) ?? null;
+  const { chests } = Data.get();
+  return chests.find((chest) => chest.locId === event.objectId) ?? chests.find((chest) => chest.name === name) ?? null;
 }
 
 function open(event) {
@@ -267,6 +285,7 @@ const CHEST_OPTIONS = [
   ["Elven Crystal Chest", "Open"],
   ["Grubby Chest", "Open"],
   ["Zombie Pirate's Locker", "Open"],
+  ["Chest", "Open"],
 ];
 const KEYS = [
   ["Crystal key", "Closed chest"],
@@ -276,6 +295,7 @@ const KEYS = [
   ["Enhanced crystal key", "Elven Crystal Chest"],
   ["Grubby key", "Grubby Chest"],
   ["Zombie pirate key", "Zombie Pirate's Locker"],
+  ["Moon key", "Chest"],
 ];
 
 function attach(pluginApi) {

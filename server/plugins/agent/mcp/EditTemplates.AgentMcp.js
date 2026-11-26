@@ -1,6 +1,6 @@
 const fs = require("fs");
-const path = require("path");
 const geometry = require("./EditGeometry.AgentMcp");
+const { templatesDir, templateFile, readTemplate, listTemplates } = require("./MapTemplateFiles");
 
 // Templates: copy a structure that already stands in the world (a Varrock house, a
 // Falador tower) and paste it anywhere, turned in quarter turns.
@@ -17,7 +17,6 @@ const geometry = require("./EditGeometry.AgentMcp");
 // Templates are data in plugins/agent/data/templates/<name>.json, one file each, so a good
 // capture can be committed and reused like a preset.
 
-const NAME = /^[a-z0-9][a-z0-9_-]{0,47}$/;
 const MAX_TILES = 4096;
 // Tile flags kept in a pasted floor. 1 marks the tile blocked and 2 links it to the plane
 // below (bridges); both describe the place it was captured from, not the new one.
@@ -36,20 +35,6 @@ function serialize(template) {
 module.exports = function registerEditTemplateTools(ctx, { build, terrain }) {
   const { core, tool, z } = ctx;
   const { MapObjects, ObjectDefinition, RegionManager } = core;
-
-  const templatesDir = () =>
-    process.env.AGENT_MCP_TEMPLATES_DIR ?? path.resolve(__dirname, "..", "data", "templates");
-  const templateFile = (name) => {
-    if (!NAME.test(name)) throw new Error(`Template name "${name}" must be lowercase letters, digits, - or _`);
-    return path.join(templatesDir(), `${name}.json`);
-  };
-  const readTemplate = (name) => {
-    const file = templateFile(name);
-    if (!fs.existsSync(file)) {
-      throw new Error(`No template "${name}"; list_templates shows what exists`);
-    }
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  };
 
   const definitionOf = (id) => {
     try {
@@ -228,15 +213,7 @@ module.exports = function registerEditTemplateTools(ctx, { build, terrain }) {
     "Templates captured with capture_template: name, about, size, and how many locs and terrain tiles each holds.",
     {},
     () => {
-      const dir = templatesDir();
-      if (!fs.existsSync(dir)) return { count: 0, templates: [] };
-      const templates = fs.readdirSync(dir).filter((file) => file.endsWith(".json")).sort().map((file) => {
-        const template = JSON.parse(fs.readFileSync(path.join(dir, file), "utf8"));
-        return {
-          name: template.name, about: template.about, width: template.width, height: template.height,
-          objects: template.objects.length, tiles: template.tiles.length, source: template.source,
-        };
-      });
+      const templates = listTemplates();
       return { count: templates.length, templates };
     }
   );
@@ -328,7 +305,7 @@ module.exports = function registerEditTemplateTools(ctx, { build, terrain }) {
       let level = null;
       if (flatten && terrainMode !== "all") {
         const { x1, y1, x2, y2 } = plan.bounds;
-        const levelling = terrain.levelEdits(x1, y1, x2, y2, { blend: 2 });
+        const levelling = terrain.levelEdits(x1, y1, x2, y2, { blend: 2, plane });
         plan.edits.unshift(...levelling.edits);
         level = { level: levelling.level, tilesChanged: levelling.moved, spread: levelling.spread };
         if (levelling.level === null) level.note = "No stored heights under the footprint; left as it is";

@@ -31,7 +31,8 @@ The two NPCs are new spawns: the cathedral's angel at 2532,2215 facing east, and
 | +3 | The fade back in |
 | +5 | The overlay closes |
 
-Not captured, and not built: the golem's "Investigate" and the stairs up to the boss.
+The golem's "Investigate" and the stairs up to the cathedral during the quest are Fallen From
+Grace's ([its doc](quests/fallen-from-grace/README.md)).
 
 ## The shortcuts
 
@@ -105,7 +106,8 @@ Not captured, and not built: the golem's "Investigate" and the stairs up to the 
 - **The death animation** (14448) plays for 7 ticks (`deathTicks` in `npc-combat-defs.json`). Whatever special it was in is called off at its last hitpoint.
 - **Then, together:** "Your Mad Angel kill count is: N." (varp 5712), "Fight duration: … Personal best: …" (or "(new personal best)"), the drop, and the corpse (16308). 4 ticks later the HUD fades out, and 4 after that it is cleared, as captured.
 - **The drop** is the Wiki's table (`npc-drops.json`), with four corrections in `NpcDrops`:
-  - the sunstone crystal is Fallen From Grace's, so it's left out;
+  - the sunstone crystal stays on its 100% table but only drops when owed: no bank chest built and
+    none owned (Wiki; Fallen From Grace answers `npc-drops:quest-item`);
   - the Ardeaglais teleport's pre-roll is 1/25;
   - a supply batch (16/150) is sharks or yellowfins, each with a prayer potion(2) and a super combat potion(1).
   - the super combat potions(3), raw monkfish, emeralds and sapphires are noted, as the Wiki marks them (the export lost every "(noted)").
@@ -148,3 +150,17 @@ The blast's shadow (graphic 1448) lies on a floor covered in flat decorations: m
 - **`tests/agility.test.cjs`:** every shortcut's object id is checked against the cache, so nameless multilocs count too.
 - **`::madangelhp <hitpoints>`** (developer): sets your angel's hitpoints, to see the enrage (360) or finish it off.
 - **`::madangelspecial <sweep|blast|smite>`** (developer): has your woken angel use that special now (enraged if it is).
+
+## Fallen From Grace's angel
+
+As recorded on the quest (Fallen From Grace P2, ticks 314-469; the quest doc has the full table):
+
+- The pew asks "Climb over the pew?" (Yes./No.) while the quest is at stage 16-19
+  (`madangel:pew-climb`).
+- The cathedral uses the quest variant (`madangel:instance-variant`): the dormant angel (16306)
+  wakes by itself 3 ticks after the move, as 16311 and then 16309 (565 hitpoints). It enrages at
+  255 hitpoints (Wiki walkthrough) instead of 350.
+- Its death: the kill count and the drop as usual, but no fight-duration line; the corpse (16312)
+  stays and no angel comes back, and the pew becomes the climbable one (62250), which takes the
+  player straight out.
+- Back in at stages 18-19 (ours, not recorded): the corpse and the climbable pew, nothing to wake.

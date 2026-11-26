@@ -222,16 +222,16 @@ function createContext(core, server) {
       const at = object.getLocation();
       return `${at.getX()},${at.getY()},${at.getZ()},${object.getType()}`;
     };
-    const loadedRegions = new Set();
     const loadRegions = (center) => {
-      for (let x = center.getX() - radius; x <= center.getX() + radius; x++) {
-        const regionX = Math.floor(x / 64);
-        for (let y = center.getY() - radius; y <= center.getY() + radius; y++) {
-          const regionY = Math.floor(y / 64);
-          const regionKey = `${regionX},${regionY}`;
-          if (loadedRegions.has(regionKey)) continue;
-          RegionManager?.loadMapFiles?.(x, y, false);
-          loadedRegions.add(regionKey);
+      const minX = center.getX() - radius;
+      const maxX = center.getX() + radius;
+      const minY = center.getY() - radius;
+      const maxY = center.getY() + radius;
+      for (let regionX = Math.floor(minX / 64); regionX <= Math.floor(maxX / 64); regionX++) {
+        const firstX = Math.max(minX, regionX * 64);
+        for (let regionY = Math.floor(minY / 64); regionY <= Math.floor(maxY / 64); regionY++) {
+          const firstY = Math.max(minY, regionY * 64);
+          RegionManager?.loadMapFiles?.(firstX, firstY, false);
         }
       }
     };
@@ -239,14 +239,17 @@ function createContext(core, server) {
       loadRegions(center);
       for (let x = center.getX() - radius; x <= center.getX() + radius; x++) {
         for (let y = center.getY() - radius; y <= center.getY() + radius; y++) {
-          const tile = new core.Location(x, y, center.getZ());
-          const candidates = [
-            ...(MapObjects.mapObjects.get(MapObjects.getHash(x, y, center.getZ())) ?? []),
-            ...(viewedArea?.getTemplateObjects?.(tile) ?? []),
-          ];
-          for (const object of candidates) {
+          const objects = MapObjects.mapObjects.get(MapObjects.getHash(x, y, center.getZ()));
+          for (const object of objects ?? []) {
             const at = object.getLocation();
             if (at.getX() === x && at.getY() === y && at.getZ() === center.getZ()) sceneObjects.set(keyOf(object), object);
+          }
+          if (viewedArea) {
+            const tile = new core.Location(x, y, center.getZ());
+            for (const object of viewedArea.getTemplateObjects?.(tile) ?? []) {
+              const at = object.getLocation();
+              if (at.getX() === x && at.getY() === y && at.getZ() === center.getZ()) sceneObjects.set(keyOf(object), object);
+            }
           }
         }
       }
@@ -261,13 +264,15 @@ function createContext(core, server) {
     // deck locs/NPCs around the player's local deck tile. Ordinary worlds and templated
     // instances keep their single here/viewedArea space.
     addWorldObjects(root);
+    const deckObjects = deckArea?.getObjects?.() ?? [];
+    const deckObjectSet = deckArea ? new Set(deckObjects) : null;
+    const viewedObjectSet = viewedArea ? new Set(viewedArea.getObjects?.() ?? []) : null;
     if (isDeck) {
-      for (const object of deckArea.getObjects()) {
+      for (const object of deckObjects) {
         if (near(object.getLocation(), here)) sceneObjects.set(keyOf(object), object);
       }
     } else {
-      const privateObjects = new Set(viewedArea?.getObjects() ?? []);
-      for (const object of privateObjects) {
+      for (const object of viewedObjectSet ?? []) {
         if (near(object.getLocation(), here)) sceneObjects.set(keyOf(object), object);
       }
     }
@@ -284,8 +289,9 @@ function createContext(core, server) {
       const options = definition?.getInteractions()?.filter(Boolean);
       const at = object.getLocation();
       const name = definition?.getName?.();
-      const isDeckObject = deckArea?.getObjects?.().includes(object);
-      if (options?.length || isDeckObject || viewedArea?.getObjects()?.includes(object) || (name && name !== "null")) {
+      const isDeckObject = deckObjectSet?.has(object) ?? false;
+      const isViewedAreaObject = viewedObjectSet?.has(object) ?? false;
+      if (options?.length || isDeckObject || isViewedAreaObject || (name && name !== "null")) {
         const spawnedBy = object.getSpawnedBy?.();
         objects.push({ id: object.getId(), displayId: definition?.id ?? object.getId(), name, options: options ?? [], type: object.getType(), x: at.getX(), y: at.getY(), z: at.getZ(), ...(spawnedBy ? { spawnedBy } : {}) });
       }
@@ -300,10 +306,11 @@ function createContext(core, server) {
     };
     addNpcs(root, isDeck ? null : viewedArea);
     if (isDeck) addNpcs(here, deckArea);
-    const npcs = Array.from(npcsByIndex.values()).map((npc) => {
+    const npcs = [];
+    for (const npc of npcsByIndex.values()) {
       const definition = npc.getCurrentDefinition(p);
       const animation = lastNpcAnimation(npc, World);
-      return {
+      npcs.push({
         index: npc.getIndex(), id: npc.getContentId?.(p) ?? definition?.getId?.() ?? npc.getId(), name: definition?.getName(),
         hitpoints: npc.getHitpoints(), maxHitpoints: npc.getMaxHitpoints(), headIcon: npc.getHeadIcon?.() ?? -1,
         combatLevel: definition?.getCombatLevel?.() ?? 0, interactingIndex: npc.getInteractingMobile?.()?.getIndex?.() ?? -1,
@@ -311,8 +318,8 @@ function createContext(core, server) {
         chat: animation.chat, chatTick: animation.chatTick,
         options: (definition?.getActions() ?? []).filter(Boolean), ...tile(npc.getLocation()),
         spawnedBy: npc.getSpawnLineage?.()?.owner ?? null,
-      };
-    });
+      });
+    }
 
     const groundByKey = new Map();
     for (const item of World.getItems()) {

@@ -1,6 +1,7 @@
 import { ClientState } from "../../game/ClientState";
 import { MenuTargetType } from "../../rs/MenuEntry";
-import { getShiftClickActionIndex } from "../../ui/menu/MenuEngine";
+import { SHOPSIDE } from "../../runelite/api/gameval/InterfaceID";
+import { asLeftClickEntry, getShiftClickActionIndex } from "../../ui/menu/MenuEngine";
 import { applyMenuTransform } from "../../ui/menu/menuTransforms";
 import { isDropTarget, isPauseButton, shouldShowMenuOption } from "../WidgetFlags";
 
@@ -43,11 +44,10 @@ function getWidgetSubOptions(w: any, actionIndex: number): string[] | undefined 
     }
     const ops = submenus[actionIndex];
     if (!Array.isArray(ops)) return undefined;
-    const out: string[] = [];
-    for (const text of ops) {
-        if (typeof text === "string" && text.length > 0) out.push(text);
-    }
-    return out.length ? out : undefined;
+    // An empty sub-op keeps its place ("" here, not listed in the menu), so each row still
+    // sends its own 1-based sub-op index.
+    const out: string[] = ops.map((text: unknown) => (typeof text === "string" ? text : ""));
+    return out.some((text) => text.length > 0) ? out : undefined;
 }
 
 function buildWidgetOpEntry(w: any, actionIndex: number, option: string, target?: string) {
@@ -256,6 +256,7 @@ export function isPauseButtonWidget(
 // 1. The transmit flag for that action is set (bits 1-10), OR
 // 2. The widget has an onOp handler
 const INVENTORY_GROUP_ID = 149;
+const SHOP_SELL_OPTION = /^sell(?:\s+\d+)?$/i;
 /** Cache script 7779 (enum 4303) puts inventory ops 1-5 in widget ops 2, 3, 4, 6 and 7. */
 const INVENTORY_OBJ_OP_WIDGET_OPS = [2, 3, 4, 6, 7];
 
@@ -286,12 +287,13 @@ function applyShiftClickDrop<T extends { option: string; opIndex?: number }>(ite
     const widgetOp = INVENTORY_OBJ_OP_WIDGET_OPS[index];
     const at = entries.findIndex((e) => e.opIndex === widgetOp);
     if (at <= 0) return entries;
-    return [entries[at], ...entries.slice(0, at), ...entries.slice(at + 1)];
+    return [asLeftClickEntry(entries[at]), ...entries.slice(0, at), ...entries.slice(at + 1)];
 }
 
 /**
- * An inventory item's menu as the client plugins order it (e.g. a swapped left-click). `menu`
- * is true for the opened right-click menu, which plugins may extend.
+ * An inventory item's menu as the client plugins order it (e.g. a swapped left-click), including
+ * Sell menus on the shop's inventory side. `menu` is true for the opened right-click menu, which
+ * plugins may extend.
  */
 export function transformWidgetMenuEntries<T extends { option: string; opIndex?: number }>(
     w: any,
@@ -300,11 +302,16 @@ export function transformWidgetMenuEntries<T extends { option: string; opIndex?:
 ): T[] {
     const itemId = typeof w?.itemId === "number" ? w.itemId | 0 : -1;
     const uid = typeof w?.uid === "number" ? w.uid | 0 : 0;
-    if (itemId < 0 || uid >>> 16 !== INVENTORY_GROUP_ID) {
+    const inventoryItem = itemId >= 0 && (uid >>> 16) === INVENTORY_GROUP_ID;
+    const shopSellItem =
+        itemId >= 0 &&
+        (uid >>> 16) === SHOPSIDE &&
+        entries.some((entry) => SHOP_SELL_OPTION.test(entry.option.trim()));
+    if (!inventoryItem && !shopSellItem) {
         return applyMenuTransform(entries as any, { surface: "widget", menu, widgetId: uid,
             childIndex: w?.childIndex ?? -1, itemId }) as unknown as T[];
     }
-    entries = applyShiftClickDrop(itemId, entries);
+    if (inventoryItem) entries = applyShiftClickDrop(itemId, entries);
     return applyMenuTransform(entries as any, {
         surface: "inventory",
         menu,
@@ -321,6 +328,11 @@ const SELECTION_TARGETS_ITEM_MASK = 0x30;
  * entry - "Use Knife -> Logs", "Cast High Level Alchemy -> Logs" - and Cancel, in place of its
  * own ops. Undefined when nothing is selected or the widget is not a target.
  */
+/** An item ("Use") or a spell is selected and waiting for its target. */
+export function isSelectionActive(): boolean {
+    return ClientState.isSpellSelected || ClientState.isItemSelected === 1;
+}
+
 export function getSelectionTargetEntries(w: any): SimpleMenuEntry[] | undefined {
     if (!ClientState.isSpellSelected) return undefined;
     if (typeof w?.itemId !== "number" || w.itemId < 0) return undefined;
@@ -347,9 +359,22 @@ export function deriveMenuEntriesForWidget(
     if (!onlyBasic) {
         const selectionEntries = getSelectionTargetEntries(w);
         if (selectionEntries) return selectionEntries;
+        // OSRS lists none of a component's own ops while an item or spell is selected: a
+        // component that is not a target offers only Cancel, and a click on it ends the selection.
+        if (isSelectionActive()) return [{ option: "Cancel" }];
     }
     const entries = deriveRawMenuEntriesForWidget(w, onlyBasic, getWidgetFlags, getWidgetByUid, getWidgetOpMask);
     return onlyBasic ? entries : transformWidgetMenuEntries(w, entries);
+}
+
+/**
+ * OSRS lists a component's target verb after its ops up to the target priority (default: the
+ * fifth op) and before the later, low-priority ones.
+ */
+function insertTargetVerb(w: any, ops: Array<{ text: string; index: number }>, verb: string): void {
+    const priority = getWidgetTargetPriority(w);
+    const after = ops.findIndex((op) => op.index > priority);
+    ops.splice(after < 0 ? ops.length : after, 0, { text: verb, index: -1 });
 }
 
 /** A widget's menu entries as its ops define them (safe to cache). */
@@ -404,16 +429,8 @@ export function deriveRawMenuEntriesForWidget(
         if (verb) {
             const verbLower = verb.toLowerCase();
             const alreadyHasVerb = ops.some((o) => String(o.text).toLowerCase() === verbLower);
-            if (!alreadyHasVerb) {
-                // Only inventory ops 1-2 are primary. The cache's inventory script
-                // stores op1..5 in widget slots 2,3,4,6,7 (enum 4303), so widget
-                // action indices 1-2 are the primaries; anything first visible
-                // later (pot of flour's Empty is op4 -> index 5) has no primary
-                // op, making "Use" the default action.
-                const primary = ops[0];
-                const insertAt = primary && primary.index <= 2 ? 1 : 0;
-                ops.splice(insertAt, 0, { text: verb, index: -1 }); // -1 = targetVerb, not an action index
-            }
+            // -1 = targetVerb, not an action index
+            if (!alreadyHasVerb) insertTargetVerb(w, ops, verb);
         }
 
         for (const op of ops) {
@@ -425,24 +442,19 @@ export function deriveRawMenuEntriesForWidget(
         }
     } else if (actions.length) {
         const ops: Array<{ text: string; index: number }> = [];
+        let blankOpSlot = false;
         for (let i = 0; i < actions.length; i++) {
             const p = sanitizeText(actions[i]);
             // Only include action if transmit flag is set OR widget has onOp handler
             if (shouldShowMenuOption(flags, i, hasOnOpHandler, opMask)) {
                 if (p) ops.push({ text: p, index: i });
-                else if (verb) ops.push({ text: verb, index: -1 });
+                else if (verb) blankOpSlot = true;
             }
         }
-        // spell action (buttonType=2 / spellActionName) is an explicit menu entry,
-        // not just a placeholder for empty op slots.
-        if (ops.length === 0 && verb) {
-            ops.push({ text: verb, index: -1 });
-        } else if (verb && targetMask > 0 && !ops.some((op) => op.index < 0)) {
-            // OSRS lists a target component's verb between op5 and op6, so a spell with
-            // later ops (High Level Alchemy's Animation, Warnings) still left-clicks "Cast".
-            const after = ops.findIndex((op) => op.index >= 5);
-            ops.splice(after < 0 ? ops.length : after, 0, { text: verb, index: -1 });
-        }
+        // The target verb (a spell's "Cast") is one entry of its own, listed once, after the
+        // ops up to the component's target priority: a spell with later ops (High Level
+        // Alchemy's Animation, Warnings) still left-clicks "Cast".
+        if (verb && (ops.length === 0 || targetMask > 0 || blankOpSlot)) insertTargetVerb(w, ops, verb);
         for (const op of ops) {
             if (op.index >= 0) {
                 entries.push(buildWidgetOpEntry(w, op.index, op.text, target));
@@ -458,11 +470,8 @@ export function deriveRawMenuEntriesForWidget(
     // Pause button widgets (flags & 1) show "Continue" with empty target
 
     // This is added after ops are checked, only if no other actionable entries exist
-    const hasActionableEntry = entries.some(
-        (e) =>
-            e.option && e.option.toLowerCase() !== "cancel" && e.option.toLowerCase() !== "examine",
-    );
-    if (!hasActionableEntry && isPauseButtonWidget(w, getWidgetFlags, getWidgetByUid)) {
+    // OSRS adds it last, so it is the top entry and the left click, whatever ops the widget has.
+    if (isPauseButtonWidget(w, getWidgetFlags, getWidgetByUid)) {
         entries.unshift({ option: "Continue", target: "" });
     }
     entries.push({ option: "Cancel" });

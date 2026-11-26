@@ -48,6 +48,15 @@ export class UIInputBridge {
         this.menuHandler = fn;
     }
 
+    /**
+     * Opens the Choose Option menu for what lies at a canvas point, as a right click there does.
+     * A left click does this when the top option is a low-priority one or one-button mode is on.
+     */
+    openMenuAt(canvasX: number, canvasY: number): void {
+        const point = this.transformPoint(canvasX, canvasY);
+        this.menuHandler?.(point.x, point.y);
+    }
+
     private transformPoint(x: number, y: number): { x: number; y: number } {
         const canvasAny = this.canvas as any;
         const scaleXRaw = Number(canvasAny?.__uiInputScaleX ?? 1);

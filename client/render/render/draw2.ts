@@ -1,3 +1,4 @@
+import { updateGearVisuals } from "../../custom/items/GearVisualRuntime";
 import { lowEndDeviceModeEnabled } from "../../game/plugins/lowenddevice/LowEndDeviceMode";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
@@ -314,6 +315,7 @@ export function drawWithRoofPlaneFilter(host: WebGLOsrsRendererHost,
         roofPlaneLimit: number,
         map?: WebGLMapSquare,
         lod: boolean = false,
+        gearTexturesByOffset?: ReadonlyMap<number, readonly number[]>,
     ): void {
 
         const totalRanges = drawRanges.length | 0;
@@ -350,6 +352,12 @@ export function drawWithRoofPlaneFilter(host: WebGLOsrsRendererHost,
         host.frameRoofFilteredRangeCount += Math.max(0, totalRanges - visibleRanges);
         if (visibleRanges <= 0) {
             return;
+        }
+        if (gearTexturesByOffset) {
+            for (const i of filtered) {
+                const textures = gearTexturesByOffset.get(drawRanges[i][0]);
+                if (textures) updateGearVisuals(host, host.osrsClient.textureLoader, textures);
+            }
         }
         if (visibleRanges >= totalRanges) {
             host.draw(drawCall, drawRanges);
@@ -433,6 +441,16 @@ export function isMapWithinRenderDistance(host: WebGLOsrsRendererHost,
 }
 
 export function resolveEffectiveRenderDistanceTiles(host: WebGLOsrsRendererHost, frameId: number): number {
+        const editorDistance = host.osrsClient.editorRenderDistance;
+        if (editorDistance !== undefined) {
+            host.syncBrowserQualityProfile();
+            return editorDistance;
+        }
+        const scenery = host.osrsClient.clientPlugins.scenerySettings?.();
+        if (scenery) {
+            host.syncBrowserQualityProfile();
+            return clamp(scenery.drawDistance | 0, 25, 1024);
+        }
 
         const gpu = host.osrsClient.clientPlugins.gpuSettings();
         const base = clamp((gpu?.drawDistance ?? host.osrsClient.renderDistance) | 0, 25, host.osrsClient.clientPlugins.hdEnabled() ? 160 : 90);

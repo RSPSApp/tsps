@@ -53,6 +53,57 @@ export type LocPlacementPreviewClient = {
     varManager: VarManager;
 };
 
+export function groupLocPreviews(previews: readonly LocPlacementPreview[]): Map<string, LocPlacementPreview[]> {
+    const groups = new Map<string, LocPlacementPreview[]>();
+    for (const entry of previews) {
+        const key = `${entry.locId}:${entry.shape}:${entry.rotation}`;
+        let entries = groups.get(key);
+        if (!entries) groups.set(key, entries = []);
+        entries.push(entry);
+    }
+    return groups;
+}
+
+/** Groups map-editor previews that use different cache models. */
+export class ScatterPlacementPreviewOverlay implements Overlay {
+    private readonly layers = new Map<string, LocPlacementPreviewOverlay>();
+    private readonly programs = new Map<boolean, Program>();
+    private args?: OverlayInitArgs;
+
+    init(args: OverlayInitArgs): void { this.args = args; }
+    update(_args: OverlayUpdateArgs): void {}
+
+    setPreviews(client: LocPlacementPreviewClient, renderer: LocPlacementPreviewRenderer, previews: readonly LocPlacementPreview[]): void {
+        if (!this.args) return;
+        const groups = groupLocPreviews(previews);
+        for (const [key, layer] of this.layers) {
+            if (groups.has(key)) continue;
+            layer.dispose();
+            this.layers.delete(key);
+        }
+        for (const [key, entries] of groups) {
+            let layer = this.layers.get(key);
+            if (!layer) {
+                layer = new LocPlacementPreviewOverlay(this.programs);
+                layer.init(this.args);
+                this.layers.set(key, layer);
+            }
+            layer.setPreviews(client, renderer, entries);
+        }
+    }
+
+    draw(phase: RenderPhase): void {
+        for (const layer of this.layers.values()) layer.draw(phase);
+    }
+
+    dispose(): void {
+        for (const layer of this.layers.values()) layer.dispose();
+        this.layers.clear();
+        for (const program of this.programs.values()) program.delete();
+        this.programs.clear();
+    }
+}
+
 type Batch = {
     vertexBuffer: ReturnType<PicoApp["createInterleavedBuffer"]>;
     indexBuffer: ReturnType<PicoApp["createIndexBuffer"]>;
@@ -78,6 +129,8 @@ export class LocPlacementPreviewOverlay implements Overlay {
     private sizeX = 1;
     private sizeY = 1;
     private readonly position = new Float32Array(3);
+
+    constructor(private readonly sharedPrograms?: Map<boolean, Program>) {}
 
     init({ app, sceneUniforms }: OverlayInitArgs): void {
         this.app = app;
@@ -266,12 +319,14 @@ export class LocPlacementPreviewOverlay implements Overlay {
                 integer: true as never,
             })
             .indexBuffer(indexBuffer);
-        const program = this.app.createProgram(
-            alpha
-                ? prependDefines(this.previewVertShader, ["DISCARD_ALPHA"])
-                : this.previewVertShader,
-            alpha ? prependDefines(this.mainFragShader, ["DISCARD_ALPHA"]) : this.mainFragShader,
-        );
+        let program = this.sharedPrograms?.get(alpha);
+        if (!program) {
+            program = this.app.createProgram(
+                alpha ? prependDefines(this.previewVertShader, ["DISCARD_ALPHA"]) : this.previewVertShader,
+                alpha ? prependDefines(this.mainFragShader, ["DISCARD_ALPHA"]) : this.mainFragShader,
+            );
+            this.sharedPrograms?.set(alpha, program);
+        }
         const drawCall = this.app
             .createDrawCall(program, array)
             .uniformBlock("SceneUniforms", this.sceneUniforms)
@@ -307,7 +362,7 @@ export class LocPlacementPreviewOverlay implements Overlay {
             batch?.indexBuffer.delete?.();
             batch?.array.delete?.();
             batch?.drawCall.delete?.();
-            batch?.program.delete?.();
+            if (!this.sharedPrograms) batch?.program.delete?.();
         }
         this.opaque = undefined;
         this.alpha = undefined;

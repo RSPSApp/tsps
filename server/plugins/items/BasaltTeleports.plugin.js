@@ -165,6 +165,12 @@ function attach(api) {
   api.onPlayerLogin(({ player }) => player && sendStrongholdToggle(core, player));
 }
 
+function describeTeleports({ list }) {
+  list.push({ path: ["Items", BASALT_NAME], key: "weiss", name: "Weiss", tile: [...DESTINATION] },
+    { path: ["Items", STONY_BASALT_NAME], key: "entrance", name: "Troll Stronghold entrance", tile: [...STRONGHOLD_ENTRANCE] },
+    { path: ["Items", STONY_BASALT_NAME], key: "roof", name: "Troll Stronghold roof", tile: [...STRONGHOLD_ROOF] });
+}
+
 module.exports = {
   name: "BasaltTeleports",
   description: "Icy basalt teleports to Weiss, and stony basalt to the Troll Stronghold entrance or roof, after Making Friends with My Arm, as live.",
@@ -172,6 +178,7 @@ module.exports = {
   register(api) {
     api.persistAttribute(STRONGHOLD_TOGGLE_ATTRIBUTE, false);
     attach(api);
+    api.onCustomEvent("adminpanel:teleport-destinations", describeTeleports);
   },
   attach,
   basaltTeleport,

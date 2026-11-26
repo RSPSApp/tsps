@@ -140,7 +140,7 @@ test('refresh sends changed inventory and worn item variants and marks appearanc
   const player = {
     getUsername: () => 'tome-state-test',
     getUpdateFlag: () => updates,
-    getPacketSender: () => ({ sendItemContainer: (container, interfaceId) => {
+    getPacketSender: () => ({ sendRunEnergy() {}, sendItemContainer: (container, interfaceId) => {
       packets.push({interfaceId, ids:container.getItems().map(item => item.getId())});
     } }),
     getInventory: () => inventory,

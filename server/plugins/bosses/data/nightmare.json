@@ -15,8 +15,7 @@
     "maxY": 9961,
     "plane": 3,
     "centre": [3870, 9949, 3],
-    "arrival": [3873, 9948, 3],
-    "lootTile": [3870, 9954, 3]
+    "arrival": [3873, 9948, 3]
   },
   "lobby": {
     "about": "Where the sleeping Nightmare lies, where the dream lets the player go, and where a death in it wakes them (by the Pool of Nightmares since August 2025, Wiki).",
@@ -61,6 +60,7 @@
   "varbits": {
     "about": "busy and minimap_state as every trip captured; nightmare_first_entry turns Shura into her Collect variant, nightmare_challenge_first_entry Sister Senga; nightmare_challenge_enabled shows the Pool of Nightmares' options (multiloc 29710); parasite turns the hitpoints orb pink.",
     "busy": 12393,
+    "intro": 10136,
     "minimap": 6719,
     "multiway": 4605,
     "firstEntry": 10137,
@@ -73,7 +73,7 @@
     "parasite": 10151
   },
   "varps": { "kills": 2664, "phosaniKills": 2671, "run": 173 },
-  "music": { "fight": 2941, "lobby": 664 },
+  "music": { "fight": 663, "lobby": 664 },
   "entry": {
     "warning": "You are about to begin an encounter with the Nightmare. Dying during this encounter will not be considered a safe death. Are you sure you wish to begin?",
     "phosaniWarning": "You are about to begin an encounter with Phosani's Nightmare. Dying during this encounter will not be considered a safe death. Are you sure you wish to begin?",
@@ -83,6 +83,20 @@
     "phosaniPulled": "The Nightmare pulls you into Phosani's dream as you drink from the pool.",
     "inProgress": "The Nightmare is already fighting someone. You'll have to wait for the fight to end.",
     "petRefused": "This doesn't seem like a suitable place to take a pet.",
+    "inspect": {
+      "about": "Inspect (op 3) on the sleeping Nightmare, captured: rsprox 3284 1383 and 1148 2945 (empty dream), 554 14571 (another player's fight). The other states' wording isn't captured.",
+      "empty": "There are no adventurers in the dream. The fight has not yet started.",
+      "waiting": "[count] in the dream. The fight has not yet started.",
+      "started": "[count] in the dream. The fight has started and the Nightmare has taken some damage.",
+      "one": "There is 1 adventurer",
+      "many": "There are [n] adventurers"
+    },
+    "shura": {
+      "about": "Before Shura's introduction, interacting with the sleeping Nightmare plays her 'Come talk to me first' line, which runs on into the introduction (rsprox 1148 2905-2938, Transcript:Shura); its end sets nightmare_intro (varp 2647 bit 0).",
+      "npc": 9413,
+      "gateVariant": "standard-dialogue-when-trying-to-interact-with-the-nightmare-before-talking-to-her",
+      "firstVariant": "standard-dialogue-first-time-talking-to-her"
+    },
     "sleepAnim": 8584,
     "wakeAnim": 8583,
     "sleepSound": 4311,
@@ -104,9 +118,12 @@
     "portalRemoveArgs": [0, 200]
   },
   "countdown": {
-    "about": "Ticks before she wakes that each 'will awaken in' message is sent (30s, 20s, 10s, 5s); Phosani's starts at 10s, and her next kill reawakens on the same 10s.",
-    "normal": [[50, 30], [33, 20], [17, 10], [8, 5]],
-    "phosani": [[17, 10], [8, 5]],
+    "about": "Ticks before she wakes that each 'will awaken in' message is sent (30s, 20s, 10s, 5s), the first `lead` ticks after the player's fade-in (rsprox 3346: fade-in 346, 30s at 348, 20s 365, 10s 381, 5s 390, awoken 397; Phosani's 3350 fade-in 22, 10s 24, awoken 40). A restart: Disturb on her body, the player's animation, 'begins to wake...' a tick later and the 10s count a tick after that (3346 714-733, 3350 307-326).",
+    "lead": 2,
+    "normal": [[49, 30], [32, 20], [16, 10], [7, 5]],
+    "phosani": [[16, 10], [7, 5]],
+    "disturbAnim": 1634,
+    "disturbAnimDelay": 2,
     "message": "The Nightmare will awaken in [n] seconds!",
     "awoken": "<col=ff3045>The Nightmare has awoken!</col>",
     "reawaken": "The Nightmare will reawaken in [n] seconds!",
@@ -165,7 +182,7 @@
     "magic": {
       "anim": 8595,
       "sounds": [[4334, 10], [4239, 32], [4286, 35], [4333, 50], [4258, 84]],
-      "projectile": { "id": 1764, "start": 0, "end": 33, "angle": 14, "progress": 96, "startHeight": 86, "endHeight": 31 },
+      "projectile": { "id": 1764, "start": 0, "base": 30, "angle": 14, "progress": 96, "startHeight": 86, "endHeight": 31 },
       "projectileTicks": 3,
       "hitTicks": 4,
       "impact": { "id": 1765, "height": 124 },
@@ -174,7 +191,7 @@
     "ranged": {
       "anim": 8596,
       "sounds": [[4221, 2], [4251, 26], [4340, 56], [4237, 86], [4270, 90], [4323, 93]],
-      "projectile": { "id": 1766, "start": 0, "end": 25, "angle": 14, "progress": 96, "startHeight": 86, "endHeight": 31 },
+      "projectile": { "id": 1766, "start": 0, "base": 20, "angle": 14, "progress": 96, "startHeight": 86, "endHeight": 31 },
       "projectileTicks": 3,
       "hitTicks": 4,
       "impactSound": 4219
@@ -187,14 +204,28 @@
     },
     "maxHits": { "melee": 50, "magic": 33, "ranged": 33 },
     "phosaniMaxHits": { "melee": 73, "magic": 80, "ranged": 80 },
+    "meleeChance": {
+      "about": "Share of her attacks that were melee while the target stood in her reach (rsprox 1148/1156/1764, solo): 19 of 234 in The Nightmare's fight, 4 of 88 in Phosani's first phases, 10 of 29 in her last.",
+      "normal": 0.08,
+      "phosaniLast": 0.34
+    },
     "wrongPrayer": 1.2,
     "rightPrayer": 0.2,
     "areaSound": [4281, 7]
   },
   "specials": {
-    "about": "As captured: how many of her standard attacks (1 to 5, most often) fall between specials, and the ticks each special holds her before her next attack.",
+    "about": "As captured: the ticks each special holds her before her next attack. Phosani's: 1 to 5 standard attacks between specials (gap). The Nightmare's (cycle; rsprox, 77 fights): her first special in a phase after 1-6 standard attacks, then 7-9 turns from one phase special to the next (150 of 151), one of them her claws 79% of the time.",
     "gap": [1, 5],
-    "after": { "claws": 9, "husks": 6, "flowers": 10, "curse": 6, "parasite": 6, "spores": 6, "surge": 6 },
+    "cycle": { "first": [1, 6], "turns": [7, 9], "noClaws": 0.11, "twoClaws": 0.1 },
+    "phosaniCycle": [1, 4, 3, 2],
+    "phosaniOrder": {
+      "about": "Each Phosani form uses its three specials in this order, from a random start (captured in 70+ phases: 9416 Pa-Fl-Su, 9417 Sp-Hu-Cu, 9418 Pa-Fl-Cu, 11153 Su-Hu-Sp).",
+      "1": ["parasite", "flowers", "surge"],
+      "2": ["spores", "husks", "curse"],
+      "3": ["parasite", "flowers", "curse"],
+      "4": ["surge", "husks", "spores"]
+    },
+    "after": { "claws": 9, "husks": 6, "flowers": 10, "curse": 6, "parasite": 6, "spores": 6, "surge": 5 },
     "normal": { "1": ["husks", "flowers"], "2": ["curse", "parasite"], "3": ["spores", "surge"] },
     "phosaniSets": {
       "about": "What each of Phosani's phase forms uses (captured): a spawn, a special paired with the claws, and curse or surge.",
@@ -219,6 +250,7 @@
       "idle": 9103,
       "finish": 9104,
       "count": 5,
+      "sporesCount": 6,
       "every": 5
     }
   },
@@ -236,6 +268,7 @@
     "ranged": { "anim": 8564, "firstTicks": 5, "projectile": { "id": 1778, "start": 46, "end": 60, "angle": 0, "progress": 20, "startHeight": 23, "endHeight": 26 }, "sound": 4278 },
     "maxHit": 14,
     "speed": 4,
+    "phosaniSpeed": 6,
     "deathAnim": 8566,
     "deathSound": 4252,
     "despawnTicks": 2
@@ -274,12 +307,14 @@
     "messageTicks": 2,
     "messageSound": 4232,
     "message": "<col=a53fff>The Nightmare has cursed you, shuffling your prayers!</col>",
-    "attacks": 5,
+    "actions": 5,
+    "endTicks": 5,
+    "blastTicks": 3,
     "endSound": 4260,
     "end": "<col=229628>You feel the effects of the Nightmare's curse wear off.</col>",
-    "about": "In every capture the prayer the player clicks is the one that turns on, so the shuffle is what each protection blocks: (Wiki) Magic stops missiles, Missiles melee and Melee magic; Phosani's the other way round.",
+    "about": "In every capture the prayer the player clicks is the one that turns on, so the shuffle is what each protection blocks: Magic stops missiles, Missiles melee and Melee magic, in both fights (Phosani's cursed hits: magic into Protect from Melee 0 damage 92 of 92, ranged into Protect from Magic 114 of 114, rsprox 559/564/1148/1156/3350). It wears off 35 ticks after her animation, 5 ticks after her fifth action, specials included, or at a totem blast.",
     "normal": { "magic": "ranged", "ranged": "melee", "melee": "magic" },
-    "phosani": { "melee": "ranged", "magic": "melee", "ranged": "magic" }
+    "phosani": { "magic": "ranged", "ranged": "melee", "melee": "magic" }
   },
   "parasite": {
     "anim": 8606,
@@ -289,6 +324,10 @@
     "projectileSound": [3308, 90],
     "infectTicks": 5,
     "burstTicks": 20,
+    "weakBurstTicks": 21,
+    "burstAnim": 8557,
+    "firstTicks": 3,
+    "phosaniFirstTicks": 6,
     "infected": "<col=ff289d>The Nightmare has impregnated you with a deadly parasite!</col>",
     "weakened": "<col=229628>The parasite within you has been weakened.</col>",
     "nothing": "You haven't got anything capable of weakening the parasite.",
@@ -310,7 +349,7 @@
   },
   "spores": {
     "anim": 8600,
-    "sounds": [[4310, 3], [4225, 34], [4331, 62], [4325, 68], [4330, 78], [2607, 0]],
+    "sounds": [[4310, 3], [4225, 34], [4331, 62], [4325, 68], [4330, 78]],
     "initialTicks": 1,
     "initialSound": [4272, 33],
     "messageTicks": 2,
@@ -322,6 +361,7 @@
     "locs": { "initial": 37738, "armed": 37739 },
     "message": "<col=a53fff>The Nightmare summons some infectious spores!</col>",
     "infected": "<col=ff289d>The Nightmare's spores have infected you, making you feel drowsy!</col>",
+    "reinfected": "<col=ff289d>The Nightmare's spores have reinfected you, making you feel drowsy!</col>",
     "tooDrowsy": "You're too drowsy to run!",
     "worn": "<col=229628>The Nightmare's infection has worn off.</col>",
     "drowsyTicks": 25,
@@ -329,7 +369,7 @@
     "yawn": "*yawn*",
     "attackDelay": 1,
     "phosaniAttackDelay": 2,
-    "phosaniPrayerDrain": 6,
+    "phosaniPrayerDrain": { "about": "Per yawn in Phosani's dream, estimated from rsprox 559 19538 and 1148 5180/6206 (83 to 74, 59 to 52, 33 to 27): base + prayer / per.", "base": 5, "per": 20 },
     "layouts": [
       [[3863, 9951], [3866, 9948], [3866, 9954], [3869, 9945], [3869, 9957], [3870, 9949], [3870, 9953], [3872, 9942], [3872, 9960], [3874, 9949], [3874, 9953], [3875, 9945], [3875, 9957], [3878, 9948], [3878, 9954], [3881, 9951]],
       [[3864, 9951], [3867, 9946], [3867, 9956], [3869, 9951], [3872, 9943], [3872, 9948], [3872, 9954], [3872, 9959], [3875, 9951], [3877, 9946], [3877, 9956], [3880, 9951]],
@@ -359,11 +399,12 @@
     "hitTicks": 3,
     "leaveTicks": 4,
     "blastFormTicks": 6,
+    "lastSporeBlastTicks": 4,
     "blastFormAnim": 8610,
     "blastFormSound": [4262, 4]
   },
   "sleepwalkers": {
-    "about": "Captured: two ticks after she takes her blast form, sleepwalkers rise beside the totems and walk to her from the fourth tick; she blasts 11 ticks after they rise and the blast lands on the player two ticks after its graphic. The Wiki's numbers: 5 damage with none absorbed, rising to a kill with all of them; Phosani's 5 + 144 x absorbed / spawned (149 with none killed).",
+    "about": "Captured: two ticks after she takes her blast form, sleepwalkers rise beside the totems and walk to her from the fourth tick; she blasts a tick after the last one's death animation or three after the last absorb (9-16 ticks after they rise) and the blast lands on the player two ticks after its graphic. The Wiki's numbers: 5 damage with none absorbed, rising to a kill with all of them; Phosani's 5 + 144 x absorbed / spawned (149 with none killed).",
     "spawnTicks": 2,
     "spawnAnim": 8572,
     "spawnSound": 4248,
@@ -373,7 +414,8 @@
     "absorbAnim": 8571,
     "hitSound": 4263,
     "tiles": [[3863, 9945], [3863, 9957], [3866, 9942], [3866, 9960], [3878, 9942], [3878, 9960], [3881, 9945], [3881, 9957]],
-    "blastTicks": 11,
+    "absorbBlastTicks": 3,
+    "latestBlastTicks": 16,
     "blastAnim": 8604,
     "blastSounds": [[4328, 54], [4293, 59], [4297, 62], [4259, 74]],
     "impactTicks": 4,
@@ -384,7 +426,7 @@
     "minDamage": 5,
     "fullDamage": 144,
     "phosaniCounts": [2, 3, 4],
-    "desperation": { "damage": 15, "every": 20 }
+    "desperation": { "damage": 15, "every": 8 }
   },
   "kill": {
     "deathTicks": 6,
@@ -401,9 +443,7 @@
     "about": "Wiki: a death in the dream leaves the player's items with Shura (Sister Senga for Phosani's), returned for a flat 60,000 coins.",
     "fee": 60000,
     "held": "[holder] has retrieved some of your items. You can collect them from her in the Sisterhood Sanctuary.",
-    "noFee": "You need [fee] coins to collect your items.",
     "lost": "Your items left with [holder] have been lost.",
-    "collected": "[holder] returns your items.",
-    "partial": "[holder] returns what you have room for."
+    "service": "Collect opens the shared Item Retrieval Service (602; rsprox 1148 5366-5368) and the fee is paid through the gravestones fee contract."
   }
 }

@@ -490,6 +490,22 @@ export class WidgetsOverlay implements Overlay {
         );
     }
 
+    private lastHoverVisualWidgets: WidgetNode[] = [];
+
+    private invalidateHoverVisuals(widgetManager: WidgetManager): void {
+        const target = (this.glRenderer?.canvas as any)?.__clicks?.getHoverTarget?.();
+        const widget = typeof target?.widgetUid === 'number' ? widgetManager.getWidgetByUid(target.widgetUid) : undefined;
+        const owner = typeof widget?.hoverOwnerUid === 'number' ? widgetManager.getWidgetByUid(widget.hoverOwnerUid) : undefined;
+        const next = [widget, owner].filter((entry): entry is WidgetNode => !!entry);
+        if (next.length === this.lastHoverVisualWidgets.length && next.every((entry, i) => entry === this.lastHoverVisualWidgets[i])) return;
+        for (const entry of new Set([...this.lastHoverVisualWidgets, ...next])) {
+            if (entry.mouseOverColor !== undefined || entry.mouseOverColor2 !== undefined || entry.text2) {
+                widgetManager.invalidateWidgetRender(entry, 'widget-hover');
+            }
+        }
+        this.lastHoverVisualWidgets = next;
+    }
+
     private getWidgetDirtyRect(widget: any): DirtyRect | undefined {
         const x = Number(widget?._absX);
         const y = Number(widget?._absY);
@@ -903,6 +919,7 @@ export class WidgetsOverlay implements Overlay {
                     widgetManager.updateMinimap();
                 }
 
+                this.invalidateHoverVisuals(widgetManager);
                 // Rebuilt widgets only need a redraw if they came out different.
                 widgetManager.flushChildRebuilds?.();
                 // Check if any root widget region needs redraw

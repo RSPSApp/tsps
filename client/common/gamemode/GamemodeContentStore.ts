@@ -1,3 +1,5 @@
+import { GearVisualRegistry } from "../../custom/items/GearVisualRegistry";
+import { SampledAnimationRegistry, type SampledAnimationRow } from "../../custom/animations/SampledAnimationRegistry";
 import type {
     LeagueMasteryChallengeRow,
     LeagueMasteryNodeRow,
@@ -96,6 +98,14 @@ let dynamicWidgetGroups: Map<number, { root: any; widgets: Map<number, any> }> |
 // Behaviour declarations for server-defined interfaces, keyed by group id. See
 // widgets/custom/CustomInterfaceRuntime for what the client does with them.
 let customInterfaces: Map<number, any> | null = null;
+type MapWarpAction = { id: number; op: number; from: [number, number, number]; actionLabel: string };
+const mapWarpActions = new Map<string, Map<number, string>>();
+const warpObjectKey = (id: number, x: number, y: number, plane: number) => `${id}:${x}:${y}:${plane}`;
+
+export function getMapWarpActions(id: number, x: number, y: number, plane: number): ReadonlyMap<number, string> | undefined {
+    return mapWarpActions.size ? mapWarpActions.get(warpObjectKey(id, x, y, plane)) : undefined;
+}
+
 let worldLocChanges: WorldLocChangeRow[] = [];
 let worldLocSpawns: WorldLocSpawnRow[] = [];
 let worldTerrainOverrides: WorldTerrainOverrideRow[] = [];
@@ -106,8 +116,53 @@ export function isReady(): boolean {
     return ready;
 }
 
+type ContentDataset = { key: string; rows: unknown[] };
+const MAX_CUSTOM_ITEMS = 65022 - 50000 + 1;
+let pendingCustomItems: { count: number; rows: unknown[] } | undefined;
+
+/** Short login packets carry one registry. Publish its rows only after the final batch. */
+export function assembleCustomItemBatches(datasets: ContentDataset[]): ContentDataset[] {
+    if (!datasets.some(({ key }) => key === "customItemsBatch")) {
+        if (datasets.some(({ key }) => key === "customItems")) pendingCustomItems = undefined;
+        return datasets;
+    }
+    const assembled: ContentDataset[] = [];
+    for (const dataset of datasets) {
+        if (dataset.key !== "customItemsBatch") {
+            if (dataset.key === "customItems") pendingCustomItems = undefined;
+            assembled.push(dataset);
+            continue;
+        }
+        if (!Array.isArray(dataset.rows)) {
+            pendingCustomItems = undefined;
+            continue;
+        }
+        const [count] = dataset.rows;
+        if (dataset.rows.length === 1 && typeof count === "number") {
+            pendingCustomItems = Number.isInteger(count) && count > 0 && count <= MAX_CUSTOM_ITEMS
+                ? { count, rows: [] }
+                : undefined;
+        } else if (pendingCustomItems && dataset.rows.length) {
+            const pending = pendingCustomItems;
+            if (pending.rows.length + dataset.rows.length > pending.count) {
+                pendingCustomItems = undefined;
+                continue;
+            }
+            pending.rows.push(...dataset.rows);
+            if (pending.rows.length === pending.count) {
+                assembled.push({ key: "customItems", rows: pending.rows });
+                pendingCustomItems = undefined;
+            }
+        }
+    }
+    return assembled;
+}
+
 /** A new connection clears the old world's overlays, including legacy worlds without datasets. */
 export function clearWorldOverlays(): void {
+    mapWarpActions.clear();
+    pendingCustomItems = undefined;
+    GearVisualRegistry.clear();
     worldLocChanges = [];
     worldLocSpawns = [];
     worldTerrainOverrides = [];
@@ -117,12 +172,29 @@ export function isDefinitionDataset({ key }: { key: string }): boolean {
     return key === "definitionArchives" || key === "customDefinitions" || key === "customDefinitionsAppend";
 }
 
+export type SampledAnimationDataset = { key: "customSampledAnimations"; rows: SampledAnimationRow[] };
+
 export function loadFromPayload(payload: {
     gamemodeId: string;
     datasets: Array<{ key: string; rows: unknown[] }>;
-}): void {
+}): SampledAnimationDataset[] {
+    const sampledChanges: SampledAnimationDataset[] = [];
     for (const dataset of payload.datasets) {
         switch (dataset.key) {
+            case "mapWarpActions":
+            case "mapWarpActionsAppend": {
+                if (dataset.key === "mapWarpActions") mapWarpActions.clear();
+                for (const row of dataset.rows as MapWarpAction[]) {
+                    if (!row || !Array.isArray(row.from) || row.from.length !== 3 ||
+                        !Number.isInteger(row.id) || !Number.isInteger(row.op) || row.op < 1 || row.op > 5 ||
+                        typeof row.actionLabel !== "string" || !row.actionLabel) continue;
+                    const key = warpObjectKey(row.id, ...row.from);
+                    let options = mapWarpActions.get(key);
+                    if (!options) mapWarpActions.set(key, options = new Map());
+                    options.set(row.op - 1, row.actionLabel);
+                }
+                break;
+            }
             case "customDefinitions": {
                 const { replaceCustomDefinitions } = require("../../custom/definitions/CustomDefinitionStore");
                 replaceCustomDefinitions(dataset.rows);
@@ -276,10 +348,7 @@ export function loadFromPayload(payload: {
             case "customItems":
                 try {
                     const { CustomItemRegistry } = require("../../custom/items/CustomItemRegistry");
-                    CustomItemRegistry.clear();
-                    for (const def of dataset.rows as any[]) {
-                        CustomItemRegistry.register(def, def.objType?.name);
-                    }
+                    CustomItemRegistry.replaceAll(dataset.rows as any[]);
                     console.log(
                         `[GamemodeContentStore] registered ${dataset.rows.length} custom item(s)`,
                     );
@@ -287,6 +356,39 @@ export function loadFromPayload(payload: {
                     console.log("[GamemodeContentStore] failed to register custom items", err);
                 }
                 break;
+            case "customSampledAnimations": {
+                if (!dataset.rows.length) {
+                    const revision = SampledAnimationRegistry.revision;
+                    SampledAnimationRegistry.clear();
+                    if (SampledAnimationRegistry.revision !== revision) {
+                        sampledChanges.push({ key: dataset.key, rows: [] });
+                    }
+                    break;
+                }
+                const installed: SampledAnimationRow[] = [];
+                for (const row of dataset.rows as SampledAnimationRow[]) {
+                    try {
+                        const completed = SampledAnimationRegistry.accept(row);
+                        if (completed) installed.push(...completed);
+                    } catch (err) {
+                        console.log("[GamemodeContentStore] bad sampled animation", row?.id, row?.part, err);
+                    }
+                }
+                if (installed.length) sampledChanges.push({ key: dataset.key, rows: installed });
+                break;
+            }
+            case "customAnimations": {
+                const { CustomAnimationRegistry } = require("../../custom/animations/CustomAnimationRegistry");
+                if (dataset.rows.length === 0) CustomAnimationRegistry.clear();
+                for (const row of dataset.rows as any[]) {
+                    try {
+                        CustomAnimationRegistry.register(row);
+                    } catch (err) {
+                        console.log("[GamemodeContentStore] bad custom animation", row?.kind, row?.id, err);
+                    }
+                }
+                break;
+            }
             case "customModels": {
                 const { CustomModelRegistry } = require("../../custom/items/CustomModelRegistry");
                 if (dataset.rows.length === 0) CustomModelRegistry.clear();
@@ -332,6 +434,7 @@ export function loadFromPayload(payload: {
             customTasksByStructId?.size ?? 0
         } custom tasks`,
     );
+    return sampledChanges;
 }
 
 /** A server-sent struct param, or undefined to read the cache. */

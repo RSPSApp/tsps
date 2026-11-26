@@ -41,8 +41,17 @@ function findWorldMapClickHit(
     return null;
 }
 
-function getWorldMapWidgetPixelsPerTile(state: WorldMapStateHolder, widget: any): { x: number; y: number } {
-    const logicalPixelsPerTile = state.worldMapState.getZoomScale();
+// A click reads the zoom drawn now (RenderOverview's worldMapZoom); a drag the zoom it is easing
+// toward (zoomTarget), so a drag started mid-zoom ends up under the cursor.
+function getWorldMapWidgetPixelsPerTile(
+    state: WorldMapStateHolder,
+    widget: any,
+    zoom: "current" | "target" = "current",
+): { x: number; y: number } {
+    const logicalPixelsPerTile =
+        zoom === "target"
+            ? state.worldMapState.getTargetZoomScale?.() ?? state.worldMapState.getZoomScale()
+            : state.worldMapState.getZoomScale();
     const logicalWidth = Math.max(
         1,
         (widget?.width ?? state.worldMapState.getDisplayPixelWidth() ?? 1) | 0,
@@ -65,7 +74,7 @@ function getWorldMapWidgetPixelsPerTile(state: WorldMapStateHolder, widget: any)
     };
 }
 
-function resolveWorldMapClickCoord(
+export function resolveWorldMapClickCoord(
     state: WorldMapStateHolder,
     widget: any,
     mouseX: number,
@@ -157,10 +166,10 @@ export function handleWorldMapDragInput(
             if (
                 clickHit &&
                 Date.now() - state.worldMapClickStartTimeMs <= 500 &&
-                deltaX >= -25 &&
-                deltaX <= 25 &&
-                deltaY >= -25 &&
-                deltaY <= 25
+                deltaX >= -5 &&
+                deltaX <= 5 &&
+                deltaY >= -5 &&
+                deltaY <= 5
             ) {
                 if (!jumpToWorldMapPoint(state, mouseX | 0, mouseY | 0)) {
                     const coord = resolveWorldMapClickCoord(state, clickHit, mouseX | 0, mouseY | 0);
@@ -186,7 +195,7 @@ export function handleWorldMapDragInput(
         state.worldMapDragStartMouseY = mouseY | 0;
         state.worldMapDragStartDisplayX = state.worldMapState.displayX | 0;
         state.worldMapDragStartDisplayY = state.worldMapState.displayY | 0;
-        const pixelsPerTile = getWorldMapWidgetPixelsPerTile(state, worldMapHit);
+        const pixelsPerTile = getWorldMapWidgetPixelsPerTile(state, worldMapHit, "target");
         state.worldMapDragPixelsPerTileX = pixelsPerTile.x;
         state.worldMapDragPixelsPerTileY = pixelsPerTile.y;
     }
@@ -197,6 +206,8 @@ export function handleWorldMapDragInput(
 
     const deltaX = (mouseX | 0) - state.worldMapDragStartMouseX;
     const deltaY = (mouseY | 0) - state.worldMapDragStartMouseY;
+    // A pan is never a teleport click, even if the pointer returns to its starting tile.
+    if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) resetWorldMapClick(state);
     // Until the mouse moves there is nothing to drag: leave the view to anything else moving it.
     if (deltaX === 0 && deltaY === 0) return true;
     const nextX =

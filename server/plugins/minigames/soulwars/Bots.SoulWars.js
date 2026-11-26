@@ -23,6 +23,7 @@ const { ATTR_SKIP_PERSISTENCE } = require("../../bots/runtime/PersistenceConstan
 const { applyGeneratedPvpLoadout } = require("../../bots/behaviours/policies/PvpLoadoutPolicy.PlayerBots");
 const { buildRoamingPvpMetadata } = require("../../bots/behaviours/pvp/PvpAssignment.PlayerBots");
 const { isFoodItem } = require("../../items/Food.plugin");
+const Roster = require("./Roster.SoulWars");
 const { planRoute } = require("../../bots/behaviours/navigation/LongRoutePlanner.PlayerBots");
 
 const SEED_BOTS_CONFIG = "SoulWars:seedBots";
@@ -117,27 +118,28 @@ function stripFood(bot) {
   }
 }
 
+function spot() {
+  const [x0, y0, x1, y1] = Common.data.lobby.waiting;
+  // The room's corners and pillars are solid: a few tries for open floor, as a bot can't walk out of a pillar.
+  const regions = Common.core.RegionManager;
+  for (let tries = 0; tries < SPOT_TRIES; tries++) {
+    const at = new Common.core.Location(Common.randomInt(x0, x1), Common.randomInt(y0, y1), 0);
+    if (!regions?.blocked || !regions.blocked(at, null)) return at;
+  }
+  // The barrier's inner tile, where players are let in.
+  const [bx, by] = Common.data.lobby.barrier;
+  return new Common.core.Location(bx - 1, by, 0);
+}
+
 /** Called by the lobby each tick: fill the waiting area to `min` while a real player waits. */
 function seed(queued, min, lobbyPlayers) {
   // A new bot counts as waiting until the lobby sees it there (or it never arrives).
   for (const [bot, at] of spawned) if (queued.includes(bot) || clock - at > PENDING_TICKS) spawned.delete(bot);
   if (!seeding() || queued.length + spawned.size >= min || !queued.some((player) => !isBot(player))) return;
-  const [x0, y0, x1, y1] = Common.data.lobby.waiting;
-  // The room's corners and pillars are solid: a few tries for open floor, as a bot can't walk out of a pillar.
-  const spot = () => {
-    const regions = Common.core.RegionManager;
-    for (let tries = 0; tries < SPOT_TRIES; tries++) {
-      const at = new Common.core.Location(Common.randomInt(x0, x1), Common.randomInt(y0, y1), 0);
-      if (!regions?.blocked || !regions.blocked(at, null)) return at;
-    }
-    // The barrier's inner tile, where players are let in.
-    const [bx, by] = Common.data.lobby.barrier;
-    return new Common.core.Location(bx - 1, by, 0);
-  };
   let missing = min - queued.length - spawned.size;
   for (const player of lobbyPlayers) {
     if (missing <= 0) return;
-    if (isBot(player) && !queued.includes(player)) {
+    if (isBot(player) && !Roster.teamOf(player) && !queued.includes(player)) {
       player.moveTo(spot());
       missing--;
     }
@@ -299,13 +301,13 @@ function tick() {
   clock++;
   const game = Match.current;
   if (!game || game.over) return;
-  for (const player of game.players()) if (isBot(player)) act(game, player);
+  for (const player of game.players()) if (isBot(player) && !Roster.usesRoutine(player)) act(game, player);
 }
 
 /** A bot's kill: the fragments (or bones) go straight into its pack. */
 function pocketDrops(event) {
   const player = event.player;
-  if (!isBot(player)) return;
+  if (!isBot(player) || Roster.usesRoutine(player)) return;
   for (const { itemId, amount } of event.drops) player.getInventory().add(new Common.core.Item(itemId, amount), true);
   event.drops.length = 0;
 }
@@ -313,7 +315,7 @@ function pocketDrops(event) {
 /** What a player would take from their base's table first (bots never click it). */
 function supply(game) {
   for (const player of game.players()) {
-    if (!isBot(player)) continue;
+    if (!isBot(player) || Roster.usesRoutine(player)) continue;
     const inventory = player.getInventory();
     const count = Math.min(START_BANDAGES, inventory.getFreeSlots());
     for (let i = 0; i < count; i++) inventory.add(new Common.core.Item(Common.data.items.bandages, 1), false);
@@ -331,6 +333,9 @@ function attachBots(api) {
   Souls.onDrops(pocketDrops);
   Match.onStart(supply);
   api.onPlayerLogout(forget);
+  if (api.onCustomEvent) Roster.attachRoster(api, {
+    spawnBuiltin: spawnBot, spot, markCustom: bot => bot.setAttribute(BOT_ATTRIBUTE, true),
+  });
   Common.every(tick);
 }
 

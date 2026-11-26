@@ -1,4 +1,5 @@
 import { PingGrapherPlugin } from "../../../game/plugins/pinggrapher/PingGrapherPlugin";
+import { DistantWorldPlugin } from "../../../game/plugins/distantworld/DistantWorldPlugin";
 import { CharactersPlugin } from "../../../game/plugins/characters/CharactersPlugin";
 import { AnimationSmoothingConfig } from "../../../game/plugins/animationsmoothing/AnimationSmoothingConfig";
 import { BugReportPlugin } from "../../../game/plugins/bugreport/BugReportPlugin";
@@ -10,6 +11,7 @@ import { ClueScrollPlugin } from "../../../game/plugins/cluescrolls/ClueScrollPl
 import { BoostsPlugin } from "../../../game/plugins/boosts/BoostsPlugin";
 import { ChatNotificationsPlugin } from "../../../game/plugins/chatnotifications/ChatNotificationsPlugin";
 import { ChatPastePlugin } from "../../../game/plugins/chatpaste/ChatPastePlugin";
+import { ExitGuardPlugin } from "../../../game/plugins/exitguard/ExitGuardPlugin";
 import { ChatFilterPlugin } from "../../../game/plugins/chatfilter/ChatFilterPlugin";
 import { MouseHighlightPlugin } from "../../../game/plugins/mousehighlight/MouseHighlightPlugin";
 import { RegenMeterPlugin } from "../../../game/plugins/regenmeter/RegenMeterPlugin";
@@ -44,11 +46,13 @@ import { ItemPricesPlugin } from "../../../game/plugins/itemprices/ItemPricesPlu
 import { ItemRarityPlugin } from "../../../game/plugins/itemrarity/ItemRarityPlugin";
 import { MenuSwapperPlugin } from "../../../game/plugins/menuswapper/MenuSwapperPlugin";
 import { DoorKickerPlugin } from "../../../game/plugins/doorkicker/DoorKickerPlugin";
+import { MonsterExaminePlugin } from "../../../game/plugins/monsterexamine/MonsterExaminePlugin";
 import { InventorySetupsPlugin } from "../../../game/plugins/inventorysetups/InventorySetupsPlugin";
 import { LootTrackerPlugin } from "../../../game/plugins/loottracker/LootTrackerPlugin";
 import { NotesConfig } from "../../../game/plugins/notes/NotesPlugin";
 import { ObjectIndicatorsPlugin } from "../../../game/plugins/objectindicators/ObjectIndicatorsPlugin";
 import { NpcIndicatorsPlugin } from "../../../game/plugins/npcindicators/NpcIndicatorsPlugin";
+import { PlayerIndicatorsPlugin } from "../../../game/plugins/playerindicators/PlayerIndicatorsPlugin";
 import { NotesPlugin } from "../../../game/plugins/notes/NotesPlugin";
 import { StatusBarsPlugin } from "../../../game/plugins/statusbars/StatusBarsPlugin";
 import { StretchedModePlugin } from "../../../game/plugins/stretchedmode/StretchedModePlugin";
@@ -109,12 +113,16 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     // After Bank Tags: it registers its "clue" tags with Bank Tags' TagManager.
     ClueScrollPlugin,
     CombatLevelPlugin,
+    MonsterExaminePlugin,
     NotesPlugin,
     NpcIndicatorsPlugin,
+    PlayerIndicatorsPlugin,
     ImplingsPlugin,
     ObjectIndicatorsPlugin,
     ChatNotificationsPlugin,
     ChatPastePlugin,
+    // Not order-sensitive; it only ever intercepts the browser's own navigation.
+    ExitGuardPlugin,
     TimestampPlugin,
     ChatFilterPlugin,
     // Rewrites drawn text only; after the chat plugins, whose chatbox callbacks it shares.
@@ -137,6 +145,7 @@ export const CORE_PLUGINS: ReadonlyArray<PluginClass> = [
     PuzzleSolverPlugin,
     StretchedModePlugin,
     GpuPlugin,
+    DistantWorldPlugin,
     ShaderFxPlugin,
     LowEndDevicePlugin,
     CameraPlugin,

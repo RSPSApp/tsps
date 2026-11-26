@@ -1,4 +1,5 @@
 import Denque from "denque";
+import { sceneryBuildOptions } from "../SceneryPolicy";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
 import { Schema } from "leva/dist/declarations/src/types";
@@ -232,6 +233,7 @@ export async function queueLoadMap(host: WebGLOsrsRendererHost,
                       regionY: host.instanceRegionY,
                   }
                 : undefined;
+        const scenery = sceneryBuildOptions(host.osrsClient, mapX, mapY);
         const input: SdMapLoaderInput = snapshotMapInput({
             mapProfileEnabled: isMapProfileEnabled(),
             persistentCache: true,
@@ -239,7 +241,8 @@ export async function queueLoadMap(host: WebGLOsrsRendererHost,
             mapX,
             mapY,
             maxLevel: Math.max(0, Math.min(Scene.MAX_LEVELS - 1, host.maxLevel | 0)),
-            loadNpcs: host.loadNpcs,
+            ...scenery,
+            loadNpcs: host.loadNpcs && !scenery.farOnly,
             smoothTerrain: host.smoothTerrain,
             ...host.osrsClient.clientPlugins.objectSettings(),
             minimizeDrawCalls: !host.hasMultiDraw,
@@ -297,6 +300,7 @@ export async function queueLoadMap(host: WebGLOsrsRendererHost,
 
         if (mapData && host.isValidMapData(mapData)) {
             mapData.minimapInput = input;
+            mapData.locReloadVersion = locReloadVersion;
             markMapWorkerReady(mapData, queuedAt);
             if (typeof locReloadBatchId === "number") {
                 host.resolveLocReloadBatchMap(locReloadBatchId, mapId, mapData);

@@ -146,6 +146,11 @@ export interface CustomItemDefinition {
      * the cost in percent; without it, `from`'s own cost.
      */
     specialAttack?: { from?: number; energy?: number };
+
+    /** Borrow these animation poses without replacing this item's worn model. Empty-hand cues still apply. */
+    retainWornModelForAnimations?: number[];
+    /** Compiled surface, particle and independent model layers, indexed by custom model. */
+    visuals?: {version:1;models:any[]};
 }
 
 /**

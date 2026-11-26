@@ -23,11 +23,13 @@ import { DbRowType } from "./codec/rs/config/dbrow/DbRowType";
 import { Gamevals, GamevalKind } from "./Gamevals";
 import { ByteBuffer } from "./codec/rs/io/ByteBuffer";
 import { Type } from "./codec/rs/config/Type";
-import { ArchivedTypeLoader } from "./codec/rs/config/ArchivedTypeLoader";
+import { ArchivedTypeLoader, decodeArchivedType } from "./codec/rs/config/ArchivedTypeLoader";
 import { ArchiveTypeLoader } from "./codec/rs/config/TypeLoader";
 import { SeqType } from "./codec/rs/config/seqtype/SeqType";
 import { ArchivedDefinitionRegistry, ArchivedDefinitionBundle, ArchivedDefinitionKind, ArchivedDefinitionContext } from "./codec/rs/config/ArchivedDefinitionRegistry";
+import { MAX_GAME_MESSAGE_BYTES } from "../../net/BinaryChannel";
 import { encodeContentData } from "../../net/protocol/ClientProtocol";
+import { customAnimation, customAnimationRows, registerSampledAnimations, sampledAnimationPackets, type SampledAnimationRow } from "./CustomAnimations";
 
 const STRUCT_PARAMS_OPCODE = 249;
 const CACHE_EDITOR_SOURCE = "cache-editor";
@@ -55,9 +57,54 @@ export interface ServerCustomItem {
     models?: Record<string, string>;
     /** A special attack bar: `from`, another item whose special it uses; `energy`, its cost in percent. */
     specialAttack?: { from?: number; energy?: number };
+    /** Keep this item's worn model for these poses, while respecting empty-hand cues. */
+    retainWornModelForAnimations?: number[];
+    /** Item-owned client visuals. Source models and selections are checked by the client registry. */
+    visuals?: {version:1;models:unknown[]};
+}
+
+type CustomItemDataset = { key: "customItems" | "customItemsBatch"; rows: unknown[] };
+
+function customItemPacketFits(dataset: CustomItemDataset): boolean {
+    try {
+        return encodeContentData("server", [dataset]).length <= MAX_GAME_MESSAGE_BYTES;
+    } catch (error) {
+        if (error instanceof Error && error.message.endsWith("exceeds short length")) return false;
+        throw error;
+    }
+}
+
+function customItemPackets(rows: ServerCustomItem[]): CustomItemDataset[] {
+    const complete: CustomItemDataset = { key: "customItems", rows };
+    if (customItemPacketFits(complete)) return [complete];
+
+    // An initial count lets the client validate and install the complete registry once.
+    const packets: CustomItemDataset[] = [{ key: "customItemsBatch", rows: [rows.length] }];
+    function split(batch: ServerCustomItem[]): void {
+        const dataset: CustomItemDataset = { key: "customItemsBatch", rows: batch };
+        if (customItemPacketFits(dataset)) {
+            packets.push(dataset);
+        } else if (batch.length === 1) {
+            throw new Error(`[custom-items] item ${batch[0].id} exceeds the compressed login packet limit. Reduce its visual data.`);
+        } else {
+            const middle = Math.floor(batch.length / 2);
+            split(batch.slice(0, middle));
+            split(batch.slice(middle));
+        }
+    }
+    split(rows);
+    return packets;
+}
+
+/** A custom animation or graphic definition: base64 bytes in this cache's encoding. */
+export interface CustomDefinitionBytes {
+    id: number;
+    name: string;
+    data: string;
 }
 
 export class CacheDefinitions {
+    static readonly ITEM_VISUALS_VERSION=1;
     private static readonly SPELL_WIDGET_PARAM_ID = 596;
     private static readonly SPELL_NAME_PARAM_ID = 601;
     private static readonly SPELL_LEVEL_PARAM_ID = 604;
@@ -80,6 +127,7 @@ export class CacheDefinitions {
         info: CacheInfo;
     };
     private static customItems = new Map<number, ServerCustomItem>();
+    private static customItemLoginPackets: CustomItemDataset[] = [{ key: "customItems", rows: [] }];
     /**
      * Decoded definition overlays: a base definition from the cache plus the fields this project
      * overrides. Kept apart from `customItems`, which is the item loader's own JSON pipeline, so a
@@ -91,6 +139,11 @@ export class CacheDefinitions {
     private static customDefinitionCache = new Map<string, unknown>();
     private static customItemTypes = new Map<number, ObjType>();
     private static customModels?: Array<{ id: number; data: string }>;
+    /** Animations and graphics added on top of the cache (the cache editor's assets), by id. */
+    private static customSequences = new Map<number, { name: string; value: SeqType }>();
+    private static customSpotanims = new Map<number, { name: string; value: SpotAnimType }>();
+    /** Each custom animation's definition bytes, for decoders that read the raw seq config. */
+    private static customSequenceData = new Map<number, Int8Array>();
     private static dbArchive?: Archive;
     private static dbRowIdsByTable?: Map<number, number[]>;
     private static readonly dbRows = new Map<number, DbRowType>();
@@ -104,8 +157,15 @@ export class CacheDefinitions {
     private static spriteIndex?: CacheIndexDat2;
 
     private static getState() {
-        if (this.state) return this.state;
+        return this.state ?? this.loadState();
+    }
 
+    /**
+     * Kept out of getState: this body makes closures, so V8 gives it a context object on every
+     * entry, before any early return. Inside getState that was 48 bytes of garbage per definition
+     * lookup, several per NPC per tick (issue 6036).
+     */
+    private static loadState(): NonNullable<typeof CacheDefinitions.state> {
         const active = CachePipeline.getActive();
         const info: CacheInfo = {
             name: active.name,
@@ -170,6 +230,7 @@ export class CacheDefinitions {
         const state = this.getState(), registry = state.archives;
         const candidate = new ArchivedDefinitionRegistry(state.archiveContext);
         candidate.replace(bundles);
+        this.checkArchivedSampledAnimationIds(candidate);
         for (const kind of ["npc", "loc", "obj"] as const) {
             for (const id of candidate.ids(kind)) {
                 if (this.hasCustomDefinition(kind === "obj" ? "item" : kind, id) || kind === "obj" && this.customItems.has(id)) {
@@ -208,12 +269,19 @@ export class CacheDefinitions {
         const state = this.getState();
         const candidate = new ArchivedDefinitionRegistry(state.archiveContext);
         candidate.replace(bundles);
+        this.checkArchivedSampledAnimationIds(candidate);
         const changed = (kind: ArchivedDefinitionKind) =>
             [...new Set([...state.archives.ids(kind), ...candidate.ids(kind)])].filter(id =>
                 JSON.stringify(state.archives.getSource(kind, id)) !== JSON.stringify(candidate.getSource(kind, id)));
         const result = { npc: changed("npc"), loc: changed("loc"), obj: changed("obj"), seq: changed("seq") };
         this.includeDependentCustomDefinitions(result);
         return result;
+    }
+
+    private static checkArchivedSampledAnimationIds(candidate: ArchivedDefinitionRegistry): void {
+        for (const id of candidate.ids("seq")) {
+            if (customAnimation(id)) throw new Error(`Archived sequence ${id} is already a sampled animation`);
+        }
     }
 
     /** Hydrated gameplay definitions derived from an archive must be invalidated with their base. */
@@ -326,12 +394,22 @@ export class CacheDefinitions {
 
     /** An animation's id by its gameval name (`human_pickupfloor`), or null. */
     static getSeqId(name: string): number | null {
-        return this.idByName(GamevalKind.SEQ).get(name) ?? null;
+        return this.idByName(GamevalKind.SEQ).get(name) ?? this.customIdByName(this.customSequences, name);
     }
 
     /** An animation's gameval name (`human_pickupfloor`), or null when the cache has none for it. */
     static getSeqName(id: number): string | null {
-        return this.getGamevals().namesOf(GamevalKind.SEQ).get(id) ?? null;
+        return this.customSequences.get(id)?.name ?? this.getGamevals().namesOf(GamevalKind.SEQ).get(id) ?? null;
+    }
+
+    /** A custom graphic's id by its name (a cache editor graphic asset), or null. */
+    static getCustomSpotanimId(name: string): number | null {
+        return this.customIdByName(this.customSpotanims, name);
+    }
+
+    private static customIdByName(map: ReadonlyMap<number, { name: string }>, name: string): number | null {
+        for (const [id, row] of map) if (row.name === name) return id;
+        return null;
     }
 
     /** Every named animation: id -> gameval name. */
@@ -525,7 +603,36 @@ export class CacheDefinitions {
     }
 
     static getSeq(id: number): SeqType {
-        return this.getState().sequences.load(id);
+        const row = customAnimation(id);
+        if (row) {
+            const type = new SeqType(id, this.getState().info);
+            type.frameLengths = [...row.frameLengths];
+            type.frameIds = row.frameLengths.map(() => 0);
+            type.frameStep = row.loop ? row.frameLengths.length : -1;
+            type.maxLoops = row.loop ? 99 : 1;
+            type.looping = row.loop;
+            type.priority = 0;
+            type.precedenceAnimating = 0;
+            return type;
+        }
+        return this.customSequences.get(id)?.value ?? this.getState().sequences.load(id);
+    }
+
+    static registerSampledAnimations(rows: SampledAnimationRow[], source: string): void {
+        const nativeCount = this.getState().archiveContext.counts.seq ?? 0;
+        registerSampledAnimations(rows, source, nativeCount, id => this.customSequences.has(id) || this.isCacheSeq(id));
+    }
+
+    static hasSampledAnimation(id: number): boolean {
+        return customAnimation(id) !== undefined;
+    }
+
+    static getCustomAnimations(): SampledAnimationRow[] {
+        return customAnimationRows();
+    }
+
+    static getSampledAnimationPackets(): ReturnType<typeof sampledAnimationPackets> {
+        return sampledAnimationPackets();
     }
 
     static getSeqCount(): number {
@@ -555,9 +662,9 @@ export class CacheDefinitions {
             case "varbit":
                 return state.varbits.archive.getFile(id) !== undefined;
             case "seq":
-                return state.archives.ids("seq").includes(id) || state.archiveContext.currentDefinition("seq", id).data !== undefined;
+                return this.customSequences.has(id) || this.isCacheSeq(id);
             case "spotanim":
-                return state.spotAnims.archive.getFile(id) !== undefined;
+                return this.customSpotanims.has(id) || this.isCacheSpotanim(id);
             case "dbro":
                 return this.getDbRow(id) !== undefined;
             default:
@@ -568,7 +675,71 @@ export class CacheDefinitions {
     }
 
     static getSpotanim(id: number): SpotAnimType {
-        return this.getState().spotAnims.load(id);
+        return this.customSpotanims.get(id)?.value ?? this.getState().spotAnims.load(id);
+    }
+
+    private static isCacheSeq(id: number): boolean {
+        const state = this.getState();
+        return state.archives.ids("seq").includes(id) || state.archiveContext.currentDefinition("seq", id).data !== undefined;
+    }
+
+    private static isCacheSpotanim(id: number): boolean {
+        return this.getState().spotAnims.archive.getFile(id) !== undefined;
+    }
+
+    /**
+     * Registers custom animations and graphics, replacing any previous set. Each is decoded here,
+     * so a broken definition fails at startup; ids must be free in the cache and fit a packet (u16).
+     */
+    static registerCustomAnimations(sequences: readonly CustomDefinitionBytes[], spotanims: readonly CustomDefinitionBytes[]): void {
+        const info = this.getState().info;
+        const decode = <T extends Type>(
+            kind: string,
+            rows: readonly CustomDefinitionBytes[],
+            constructor: new (id: number, cacheInfo: CacheInfo) => T,
+            inCache: (id: number) => boolean,
+            names: GamevalKind,
+        ): Map<number, { name: string; value: T }> => {
+            const out = new Map<number, { name: string; value: T }>();
+            for (const row of rows) {
+                if (!Number.isInteger(row.id) || row.id < 0 || row.id > 0xfffe) throw new Error(`Custom ${kind} id ${row.id} must be 0..65534`);
+                if (out.has(row.id)) throw new Error(`Custom ${kind} ${row.id} is listed twice`);
+                if (inCache(row.id)) throw new Error(`Custom ${kind} ${row.id} is already a cache ${kind}`);
+                if (typeof row.name !== "string" || !row.name) throw new Error(`Custom ${kind} ${row.id} needs a name`);
+                if (this.idByName(names).has(row.name)) throw new Error(`Custom ${kind} name ${row.name} is already a cache ${kind}'s name`);
+                out.set(row.id, { name: row.name, value: decodeArchivedType(constructor, row.id, { cacheInfo: info, dataBase64: row.data }) });
+            }
+            return out;
+        };
+        const sequenceMap = decode("animation", sequences, SeqType, (id) => {
+            if (customAnimation(id)) throw new Error(`Custom animation ${id} is already a sampled animation`);
+            return this.isCacheSeq(id);
+        }, GamevalKind.SEQ);
+        const spotanimMap = decode("graphic", spotanims, SpotAnimType, (id) => this.isCacheSpotanim(id), GamevalKind.SPOTANIM);
+        this.customSequences = sequenceMap;
+        this.customSpotanims = spotanimMap;
+        this.customSequenceData = new Map(sequences.map((row) => {
+            const bytes = Buffer.from(row.data, "base64");
+            return [row.id, new Int8Array(bytes.buffer, bytes.byteOffset, bytes.length)];
+        }));
+    }
+
+    /**
+     * A custom animation's seq config bytes (as the cache's file data), or undefined for a cache
+     * animation. NpcAnimationScanner reads its length and priorities from them.
+     */
+    static getCustomSeqData(id: number): Int8Array | undefined {
+        return this.customSequenceData.get(id);
+    }
+
+    /** A frame map (an animation's skeleton: index 1, file 0 of its group) as bytes, or undefined. */
+    static getFrameMapData(id: number): Uint8Array | undefined {
+        try {
+            const file = CacheIndexDat2.fromStore(IndexType.DAT2.skeletons, CachePipeline.getStore()).getFile(id, 0);
+            return file ? Uint8Array.from(file.data, (byte) => byte & 0xff) : undefined;
+        } catch {
+            return undefined;
+        }
     }
 
     static resolveNpc(id: number, vars: Pick<VarManager, "getVarp" | "getVarbit">): NpcType | undefined {
@@ -597,7 +768,24 @@ export class CacheDefinitions {
         return Boolean(item?.name && item.name !== "null");
     }
 
+    static validateItemVisualBudget(rows: unknown[]): void {
+        let slots=0;
+        for(const raw of rows as any[]){
+            if(raw?.visuals===undefined)continue;
+            const visuals=raw.visuals;
+            if(!visuals||visuals.version!==1||!Array.isArray(visuals.models)||visuals.models.length>5||Buffer.byteLength(JSON.stringify(visuals))>2*1024*1024)throw new Error(`[custom-items] ${raw.id} has invalid visuals`);
+            const materials=new Set<string>();
+            for(const model of visuals.models){
+                if(!model||!Array.isArray(model.textures)||model.textures.length>16)throw new Error(`[custom-items] ${raw.id} has invalid surface layers`);
+                for(const layer of model.textures){if(typeof layer?.id!=='string'||layer.id.length>80)throw new Error(`[custom-items] ${raw.id} has invalid surface identity`);materials.add(layer.id);}
+            }
+            slots+=materials.size;
+        }
+        if(slots>32)throw new Error('[custom-items] Loaded gear exceeds the 32 custom texture atlas slots. Reduce surface layers before enabling these packages together.');
+    }
+
     static registerCustomItems(rows: unknown[]): void {
+        this.validateItemVisualBudget(rows);
         const state = this.getState();
         const items = new Map<number, ServerCustomItem>();
         const types = new Map<number, ObjType>();
@@ -635,6 +823,18 @@ export class CacheDefinitions {
             // Validated by the item loader; kept so the server and the client (sent this row) see it.
             if (raw.specialAttack && typeof raw.specialAttack === "object") {
                 item.specialAttack = raw.specialAttack as ServerCustomItem["specialAttack"];
+            }
+            if (raw.retainWornModelForAnimations !== undefined) {
+                const animations = raw.retainWornModelForAnimations;
+                if (!Array.isArray(animations) || animations.length > 1024 || animations.some(id => !Number.isInteger(id) || id < 0 || id > 65534)) {
+                    throw new Error(`[custom-items] ${id} has invalid retainWornModelForAnimations`);
+                }
+                item.retainWornModelForAnimations = [...new Set<number>(animations)];
+            }
+            if(raw.visuals!==undefined){
+                const visuals=raw.visuals as ServerCustomItem['visuals'];
+                if(!visuals||visuals.version!==1||!Array.isArray(visuals.models)||visuals.models.length>5||Buffer.byteLength(JSON.stringify(visuals))>2*1024*1024)throw new Error(`[custom-items] ${id} has invalid visuals`);
+                item.visuals=structuredClone(visuals);
             }
             for (const rawModelId of Object.keys(item.models ?? {})) {
                 const modelId = Number(rawModelId);
@@ -680,13 +880,19 @@ export class CacheDefinitions {
             items.set(id, item);
             types.set(id, type);
         }
+        const packets = customItemPackets([...items.values()]);
         this.customItems = items;
+        this.customItemLoginPackets = packets;
         this.customItemTypes = types;
         this.customModels = [];
     }
 
     static getCustomItems(): ServerCustomItem[] {
         return [...this.customItems.values()];
+    }
+
+    static getCustomItemPackets(): readonly CustomItemDataset[] {
+        return this.customItemLoginPackets;
     }
 
     static setCustomModels(models: Array<{ id: number; data: string }>): void {
@@ -730,6 +936,7 @@ export class CacheDefinitions {
         }
         this.customDefinitionSources.set(source, next);
         this.customDefinitions = new Map([...this.customDefinitionSources.values()].flatMap((defined) => [...defined]));
+        this.customCountFloor = null;
         this.customDefinitionCache = new Map();
         return next.size;
     }
@@ -810,14 +1017,38 @@ export class CacheDefinitions {
             ?? this.getState().objects.load(id);
     }
 
-    static getCounts(): { npcs: number; items: number; objects: number; seqs: number } {
-        const counts = this.getBaseCounts();
+    /**
+     * Definition counts, custom definitions included. Every NPC asks several times a tick (through
+     * NpcDefinition.forId and NPC.getSize), so the custom definitions' share is worked out once per
+     * change of them, and the same frozen object comes back until a count changes (issue 6036: a
+     * fresh object and a split of every custom key per call were ~14% of the server's garbage).
+     */
+    static getCounts(): Readonly<{ npcs: number; items: number; objects: number; seqs: number }> {
+        const state = this.getState();
+        const floor = this.customCountFloor ??= this.customDefinitionCounts();
+        const npcs = Math.max(state.npcs.getCount(), floor.npcs);
+        const items = Math.max(state.items.getCount(), floor.items);
+        const objects = Math.max(state.objects.getCount(), floor.objects);
+        const seqs = state.archives.getCount("seq");
+        const cached = this.countsCache;
+        if (cached && cached.npcs === npcs && cached.items === items && cached.objects === objects && cached.seqs === seqs) {
+            return cached;
+        }
+        return this.countsCache = Object.freeze({ npcs, items, objects, seqs });
+    }
+
+    private static customCountFloor: { npcs: number; items: number; objects: number } | null = null;
+    private static countsCache: Readonly<{ npcs: number; items: number; objects: number; seqs: number }> | null = null;
+
+    /** Highest custom id + 1 per kind: the floor custom definitions put under each count. */
+    private static customDefinitionCounts(): { npcs: number; items: number; objects: number } {
+        const floor = { npcs: 0, items: 0, objects: 0 };
         for (const key of this.customDefinitions.keys()) {
             const [kind, id] = key.split(":");
             const field = kind === "npc" ? "npcs" : kind === "loc" ? "objects" : "items";
-            counts[field] = Math.max(counts[field], Number(id) + 1);
+            floor[field] = Math.max(floor[field], Number(id) + 1);
         }
-        return counts;
+        return floor;
     }
 
     static getBaseCounts(): { npcs: number; items: number; objects: number; seqs: number } {

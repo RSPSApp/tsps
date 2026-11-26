@@ -164,3 +164,44 @@ test('The close button (max 32-bit int, proc lockpicking_button_op_close) closes
   action.execute(153);
   assert.equal(h.solved(), 0, 'a stale count after closing is ignored');
 });
+
+test('A drawn combination: each fresh opening draws anew, a wrong guess keeps it (FFG P2 sessions 2306 then 7152)', () => {
+  const codes = [2306, 7152];
+  const h = harness(5, () => codes.shift());
+  h.lockpick.open(h.player);
+  // The first captured session: 4555 against 2306 feeds back 496.
+  h.player.amountAction.execute(4555);
+  h.tick();
+  assert.deepEqual(h.scripts.at(-1).args.slice(6), [5, 1, 4555, 496], 'the reopen keeps the session\'s code');
+  assert.equal(codes.length, 1, 'no new draw on a wrong guess');
+  // Walking away and opening it again (P2 tick 579) is a new combination.
+  h.lockpick.open(h.player);
+  h.player.amountAction.execute(2306);
+  assert.equal(h.solved(), 0, 'the old combination no longer opens it');
+  h.tick();
+  h.player.amountAction.execute(7152);
+  assert.equal(h.solved(), 1);
+});
+
+test('A drawn combination outside the pins is refused when the lock opens', () => {
+  const h = harness(5, () => 6 ** 5);
+  assert.throws(() => h.lockpick.open(h.player), /outside the active pin range/);
+});
+
+test('maxAttempts: the 7th wrong guess closes the lock and hands over, with no reopen (FFG P2 tick 566)', () => {
+  let exhausted = 0;
+  const h = harness(5, 2306);
+  const lock = require('../plugins/quests/QuestLockpicking').createQuestLockpicking(h.api, {
+    activePins: 5, target: 2306, onSolved() {}, maxAttempts: 7, onExhausted: () => exhausted++,
+  });
+  lock.open(h.player);
+  for (let i = 0; i < 6; i++) { h.player.amountAction.execute(0); h.tick(); }
+  assert.deepEqual(h.scripts.at(-1).args.slice(6, 8), [5, 6], 'six wrong guesses, attempt 6 open');
+  const messages = h.messages.length;
+  h.player.amountAction.execute(0);
+  h.tick();
+  assert.equal(exhausted, 1);
+  assert.equal(h.player.amountAction, null, 'the session is over');
+  assert.equal(h.messages.length, messages, 'no "didn\'t seem to work" on the last one');
+  assert.deepEqual(h.scripts.at(-1).args.slice(6, 8), [5, 6], 'no reopen');
+});

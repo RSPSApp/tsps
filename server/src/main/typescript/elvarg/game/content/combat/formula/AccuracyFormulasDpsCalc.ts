@@ -110,6 +110,24 @@ export class AccuracyFormulasDpsCalc {
         return entity.getAsNpc().getCurrentDefinition().getStats()[slot] ?? 0;
     }
 
+    /**
+     * The player defence bonus an NPC's melee hit rolls against: its one melee style among the dump's
+     * attack types (NpcDefinition.getMeleeAttackStyle). No single stab, slash or crush style, or an
+     * NPC without a definition, falls back to 3, the best of stab, slash and crush in defenseMeleeRoll.
+     */
+    private static npcMeleeBonusIndex(entity: Mobile): number {
+        switch (entity.getAsNpc().getCurrentDefinition?.()?.getMeleeAttackStyle?.()) {
+            case "stab":
+                return BonusManager.ATTACK_STAB;
+            case "slash":
+                return BonusManager.ATTACK_SLASH;
+            case "crush":
+                return BonusManager.ATTACK_CRUSH;
+            default:
+                return 3;
+        }
+    }
+
     private static meleeAttackPrayerPercent(player: Player): number {
         if (PrayerHandler.isActivated(player, PrayerHandler.CLARITY_OF_THOUGHT)) {
             return 105;
@@ -277,7 +295,7 @@ export class AccuracyFormulasDpsCalc {
         let defRoll: number;
         if (defenceStyle === CombatType.MELEE) {
             const meleeIndex = traits?.meleeAttackBonusIndex
-                ?? (entity.isNpc() ? 3 : entity.getAsPlayer().getFightType().getBonusType());
+                ?? (entity.isNpc() ? AccuracyFormulasDpsCalc.npcMeleeBonusIndex(entity) : entity.getAsPlayer().getFightType().getBonusType());
             const defenceIndex = traits?.meleeDefenceBonusIndex ?? meleeIndex;
             defRoll = AccuracyFormulasDpsCalc.defenseMeleeRoll(enemy, defenceIndex);
         } else if (defenceStyle === CombatType.RANGED) {

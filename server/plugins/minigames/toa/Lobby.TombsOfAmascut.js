@@ -379,7 +379,7 @@ function openOverview(player) {
   sendPartyList(player);
 }
 
-/** One row per recruiting party: leader|members...|size|kc|invocations|level|mode|age|. */
+/** One row per recruiting party: leader|members...|size|kc|invocations|level|mode|age. */
 function sendPartyList(player) {
   const state = Parties.stateOf(player);
   const friendsOnly = player.getPacketSender().getVarbit?.(VARBIT.FRIENDS_ONLY) === 1;
@@ -393,12 +393,12 @@ function sendPartyList(player) {
       continue;
     }
     let leaderName = party.leaderName;
-    if (party.players.includes(player)) leaderName = `<col=FFFFFF>${leaderName}`;
+    if (party.players.includes(player)) leaderName = `<col=ffffff>${leaderName}</col>`;
     const fields = [leaderName];
     for (let i = 1; i < Shared.MAX_PARTY_SIZE; i++) fields.push(party.players[i] ? Shared.displayName(party.players[i]) : "");
     fields.push(party.players.length, party.settings.kcRequirement, party.settings.activeCount,
       party.settings.raidLevel, party.settings.mode, Shared.cycle() - party.createdAt);
-    sender.sendClientScript(SCRIPT.PARTY_LIST_ROW, index, `${fields.join("|")}|`);
+    sender.sendClientScript(SCRIPT.PARTY_LIST_ROW, index, fields.join("|"));
     state.listed.push(party);
   }
 }
@@ -543,28 +543,26 @@ function drawManagement(player) {
           : VIEW.NON_MEMBER;
   for (let index = 0; index < Shared.MAX_PARTY_SIZE; index++) {
     const member = party.players[index];
-    sender.sendClientScript(SCRIPT.PARTY_MEMBER_ROW, state.viewingValue, member ? statLine(member, member === player) : "");
+    sender.sendClientScript(SCRIPT.PARTY_MEMBER_ROW, state.viewingValue, member ? statLine(member) : "");
   }
   for (const applicant of party.applicants) {
-    sender.sendClientScript(SCRIPT.PARTY_APPLICANT_ROW, statLine(applicant, applicant === player));
+    sender.sendClientScript(SCRIPT.PARTY_APPLICANT_ROW, statLine(applicant));
   }
   const { settings } = party;
   sender.sendClientScript(SCRIPT.PARTY_MANAGEMENT_INIT, state.viewingValue, settings.kcRequirement,
     settings.activeCount, settings.raidLevel, state.tab, settings.bitmaps[0], settings.bitmaps[1], settings.bitmaps[2]);
   sender.sendInterfaceFlagsRange(MANAGEMENT_BUTTONS_UID, 0, MANAGEMENT_PAUSE_LAST, EVENT.CONTINUE);
   sender.sendInterfaceFlags(MANAGEMENT_REWARD_INFO_UID, EVENT.OP1);
-  if (party.isLeader(player)) {
-    sender.sendInterfaceFlagsRange(MANAGEMENT_PRESETS_UID, 0, Parties.PRESET_COUNT, EVENT.OP1 | EVENT.OP2);
-  }
+  sender.sendInterfaceFlagsRange(MANAGEMENT_PRESETS_UID, 0, Parties.PRESET_COUNT, EVENT.OP1 | EVENT.OP2);
 }
 
-/** name|combat|attack|strength|ranged|magic|defence|hitpoints|prayer|entry / normal / expert| */
-function statLine(player, self) {
+/** name|combat|attack|strength|ranged|magic|defence|hitpoints|prayer|entry / normal / expert */
+function statLine(player) {
   const { Skill } = Shared.core();
   const skills = player.getSkillManager();
   const counts = Raid.killCounts(player);
   const fields = [
-    `${self ? "<col=FFFFFF>" : ""}${Shared.displayName(player)}`,
+    Shared.displayName(player),
     player.getSkillManager().getCombatLevel?.() ?? 3,
     skills.getMaxLevel(Skill.ATTACK),
     skills.getMaxLevel(Skill.STRENGTH),
@@ -575,7 +573,7 @@ function statLine(player, self) {
     skills.getMaxLevel(Skill.PRAYER),
     `${counts.entry} / ${counts.normal} / ${counts.expert}`,
   ];
-  return `${fields.join("|")}|`;
+  return fields.join("|");
 }
 
 function refreshPartyViewers(party) {

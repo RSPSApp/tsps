@@ -1,5 +1,6 @@
 const { Anim } = require("../Constants.Agility");
 const { ShortcutAnim, between } = require("./Builders.Agility");
+const { hideSideTabs, restoreSideTabs } = require("../../../quests/QuestScenes");
 
 /**
  * The River Lum's broken raft, between Lumbridge and Al Kharid (Wiki: Broken Raft). As captured, both ways
@@ -89,17 +90,19 @@ function splash(context, [x, y]) {
 }
 
 function tabs(player, hidden) {
-  const { hideSideTabs, restoreSideTabs } = require("../../../quests/QuestScenes");
   if (hidden) hideSideTabs(player);
   else restoreSideTabs(player);
   player.getPacketSender().sendClientScript(SIDEBUTTON_SWITCH_SCRIPT, hidden ? TABS_HIDDEN_TAB : TABS_BACK_TAB);
 }
 
-/** A swim from `from` onto `to`: placed there at once, drawn moving from `from` over `cycles`, as captured. */
-function swim(from, to, anim, cycles, dir, splashAt) {
+/**
+ * A swim from `from` onto `to`: placed there at once, drawn moving from `from` over `cycles`, as captured. `drawnTo`:
+ * where the drawing ends when it isn't `to` (the first swim east is drawn to 3251,3180, one short of the raft tile).
+ */
+function swim(from, to, anim, cycles, dir, splashAt, drawnTo = to) {
   return [
     { tele: to },
-    { move: to, from, anim, speed: [0, cycles], dir, ticks: 0 },
+    { move: drawnTo, from, anim, speed: [0, cycles], dir, ticks: 0 },
     { run: (context) => splash(context, splashAt) },
     { sound: SWIM_SOUND, delay: 3 },
   ];
@@ -110,12 +113,14 @@ function shot() {
 }
 
 const GRAPPLE = {
+  // Two ticks after arriving on the bank tile (rsprox 347 tick 1943), the tabs close with the first shot.
   east: [
+    { wait: 1 },
     { faceDir: "east" }, ...shot(), { run: (context) => tabs(context.player, true) }, { wait: 3 },
     { msg: { spam: "You successfully grapple the raft and tie the rope to a tree." } },
     { run: (context) => rig(context, "west", BANKS.west.tied) },
     { walk: [[3247, 3179]], arrive: true }, { wait: 1 },
-    ...swim([3247, 3179], RAFT_WEST, NEAR_WEST_SWIM, 120, "east", [3249, 3179]), { wait: 1 },
+    ...swim([3247, 3179], RAFT_WEST, NEAR_WEST_SWIM, 120, "east", [3249, 3179], [3251, 3180]), { wait: 1 },
     { walk: [[3253, 3180], RAFT_EAST], arrive: true }, { wait: 2 },
     { faceDir: "east" }, { wait: 2 },
     ...shot(), { wait: 3 },
@@ -125,8 +130,11 @@ const GRAPPLE = {
     { walk: [[3259, 3179]], arrive: true }, { wait: 3 },
     { run: (context) => tabs(context.player, false) },
   ],
+  // The tabs close two ticks after arriving (rsprox 347 tick 4055), the first shot four ticks later.
   west: [
-    { faceDir: "west" }, ...shot(), { run: (context) => tabs(context.player, true) }, { wait: 3 },
+    { wait: 1 },
+    { faceDir: "west" }, { run: (context) => tabs(context.player, true) }, { wait: 4 },
+    ...shot(), { wait: 3 },
     { msg: { spam: "You successfully grapple the raft and tie the rope to a tree." } },
     { run: (context) => rig(context, "east", BANKS.east.tied) },
     { walk: [[3258, 3179]], arrive: true }, { wait: 2 },
@@ -142,16 +150,17 @@ const GRAPPLE = {
   ],
 };
 
+// Each ends a tick after its last swim: the run ending on that tick would clear the exact move before it is sent.
 const BAREHANDED = {
   east: [
     ...swim([3246, 3179], RAFT_WEST, NEAR_WEST_SWIM, 120, "east", [3249, 3179]), { wait: 1 },
     { walk: [[3253, 3180], RAFT_EAST], arrive: true }, { wait: 1 },
-    ...swim(RAFT_EAST, [3259, 3179], NEAR_EAST_SWIM, 160, "east", [3254, 3179]),
+    ...swim(RAFT_EAST, [3259, 3179], NEAR_EAST_SWIM, 160, "east", [3254, 3179]), { wait: 1 },
   ],
   west: [
     ...swim([3259, 3179], RAFT_EAST, NEAR_EAST_SWIM, 160, "west", [3257, 3179]), { wait: 1 },
     { walk: [[3253, 3180], RAFT_WEST], arrive: true }, { wait: 1 },
-    ...swim(RAFT_WEST, [3246, 3179], NEAR_WEST_SWIM, 120, "west", [3251, 3179]),
+    ...swim(RAFT_WEST, [3246, 3179], NEAR_WEST_SWIM, 120, "west", [3251, 3179]), { wait: 1 },
   ],
 };
 

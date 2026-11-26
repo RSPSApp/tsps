@@ -71,10 +71,12 @@ function actor(t, tile, { geared = true, agility = 99 } = {}) {
     p.getAttribute("agility.obstacle")?.stop?.();
     if (p.isRegistered()) core.World.getPlayers().removes(p);
   });
+  // Whether a forced movement is still set when each tick's update has been built (a run ending on that tick clears it).
+  const moving = {};
   return {
-    p, log,
+    p, log, moving,
     tile: () => [p.getLocation().getX(), p.getLocation().getY()],
-    process() { core.World.process(); tick++; },
+    process() { core.World.process(); moving[tick] = p.getForceMovement() != null; tick++; },
     get tick() { return tick; },
     set tick(value) { tick = value; },
   };
@@ -83,11 +85,13 @@ function actor(t, tile, { geared = true, agility = 99 } = {}) {
 /** Clicks `option` on the loc at `tile` and plays ticks until the crossing has started; the first shot is tick 0. */
 function click(a, objectId, tile, option = 1) {
   new ObjectActionPacketListener().executeAction(a.p, objectId, tile[0], tile[1], option);
-  for (let i = 0; i < 20 && !a.log.some(([, kind]) => kind === "anim" || kind === "move"); i++) a.process();
+  a.trail = [];
+  for (let i = 0; i < 20 && !a.log.some(([, kind]) => kind === "anim" || kind === "move"); i++) { a.process(); a.trail.push(a.tile()); }
   const first = a.log.find(([, kind]) => kind === "anim" || kind === "move");
   assert.ok(first, `the crossing started (${JSON.stringify(a.log)})`);
   const shift = first[0];
   for (const entry of a.log) entry[0] -= shift;
+  for (const [tick, value] of Object.entries(a.moving)) { delete a.moving[tick]; a.moving[tick - shift] = value; }
   a.tick -= shift;
 }
 
@@ -110,6 +114,8 @@ test("grappling west to east plays the captured crossing and lands on the Al Kha
   const a = actor(t, [3243, 3183]);
   click(a, 17068, RAFT);
   assert.deepEqual(a.tile(), [3246, 3179], "fires from the west bank tile");
+  assert.deepEqual(a.trail.slice(-4).map(String), ["3246,3180", "3246,3179", "3246,3179", "3246,3179"],
+    "the first shot two ticks after arriving (rsprox 347 1943-1945)");
   assert.deepEqual(of(a.log, "anim")[0], [0, 4230]);
   assert.ok(of(a.log, "close").length >= 9 && of(a.log, "tab")[0][0] === 0, "the side tabs close with the first shot");
   const tiles = playTo(a, 30);
@@ -121,7 +127,7 @@ test("grappling west to east plays the captured crossing and lands on the Al Kha
   assert.deepEqual(of(a.log, "sound"), [[0, 2928, 0], [4, 2929, 3], [10, 2928, 0], [14, 2929, 3]]);
   assert.deepEqual(of(a.log, "splash"), [[4, 68, 3249, 3179], [14, 68, 3254, 3179]]);
   assert.deepEqual(of(a.log, "move").map(([tick, sx, sy, dx, dy]) => [tick, sx, sy, sx + dx, sy + dy]),
-    [[4, 3247, 3179, 3252, 3180], [14, 3253, 3179, 3258, 3179]], "each swim is drawn from the bank or raft tile it starts on");
+    [[4, 3247, 3179, 3251, 3180], [14, 3253, 3179, 3258, 3179]], "each swim is drawn from the bank or raft tile it starts on");
   assert.deepEqual([tiles[3], tiles[4], tiles[5], tiles[6], tiles[14], tiles[15]],
     [[3247, 3179], [3252, 3180], [3253, 3180], [3253, 3179], [3258, 3179], [3259, 3179]]);
   assert.deepEqual(of(a.log, "tab").map(([tick, tab]) => [tick, tab]), [[0, 9], [18, 1]], "tabs back at tick 18");
@@ -164,7 +170,7 @@ test("grappling east to west plays the captured crossing and lands on the Lumbri
   assert.deepEqual(of(a.log, "splash"), [[5, 68, 3257, 3179], [12, 68, 3251, 3179]]);
   assert.deepEqual([tiles[3], tiles[5], tiles[6], tiles[7], tiles[12], tiles[13], tiles[14]],
     [[3258, 3179], [3253, 3179], [3253, 3180], [3252, 3180], [3248, 3179], [3247, 3179], [3246, 3179]]);
-  assert.deepEqual(of(a.log, "tab").map(([tick, tab]) => [tick, tab]), [[0, 9], [16, 1]]);
+  assert.deepEqual(of(a.log, "tab").map(([tick, tab]) => [tick, tab]), [[-4, 9], [16, 1]], "tabs close 4 ticks before the shot");
   assert.equal(locAt(EAST_TREE, 10)?.getId(), 17036, "the east tree is back at tick 17");
   assert.equal(locAt(WEST_TREE, 10)?.getId(), 17041, "the yew still holds the grapple");
   assert.equal(done(a.p), true);
@@ -186,6 +192,9 @@ test("Jump-to crosses barehanded at 48 Agility either way, with no grapple fired
     click(a, loc[0], [loc[1], loc[2]]);
     playTo(a, 15);
     assert.deepEqual(a.tile(), landing);
+    const swims = of(a.log, "move").map(([tick]) => tick);
+    assert.equal(swims.length, 2);
+    assert.deepEqual(swims.map((tick) => a.moving[tick]), [true, true], "both swims are still drawing when their tick is sent");
     assert.equal(of(a.log, "anim").some(([, id]) => id === 4230), false, "no shot");
     assert.deepEqual(of(a.log, "msg"), []);
     assert.equal(done(a.p), false, "only the grapple counts for the diary (Wiki)");

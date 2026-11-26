@@ -133,7 +133,7 @@ function exactKeys(value, keys) {
  * A row whose loc has moved on the map: newFrom/newTo replace its origin and destination. The
  * moved row must not already exist, so a source that catches up shows up as a stale correction.
  */
-function moveCorrection(transports, correction, seen, validTile) {
+function moveCorrection(transports, correction, seen, targets, validTile) {
   if (!exactKeys(correction, ["table", "from", "to", "menu", "id", "newFrom", "newTo"])
       || !FILES.includes(`${correction.table}.tsv`)
       || ![correction.from, correction.to, correction.newFrom, correction.newTo].every(validTile)
@@ -153,7 +153,10 @@ function moveCorrection(transports, correction, seen, validTile) {
   if (matching(correction.newFrom, correction.newTo).length) {
     throw new Error("Stale transport correction: the moved row already exists");
   }
-  return [[matches[0], COLUMNS.indexOf("from"), correction.newFrom], [matches[0], COLUMNS.indexOf("to"), correction.newTo]];
+  const target = `${correction.table}:${key(correction.newFrom, correction.newTo)}`;
+  if (targets.has(target)) throw new Error("Duplicate transport correction");
+  targets.add(target);
+  return [[matches[0], COLUMNS.indexOf("from"), [...correction.newFrom]], [matches[0], COLUMNS.indexOf("to"), [...correction.newTo]]];
 }
 
 function applyCorrections(transports, input) {
@@ -161,7 +164,10 @@ function applyCorrections(transports, input) {
       || !Array.isArray(input.corrections) || !input.corrections.length) {
     throw new Error("Malformed transport correction input");
   }
+  // A row takes at most one correction of each kind; moves also may not share a target.
   const seen = new Set();
+  const moved = new Set();
+  const targets = new Set();
   const updates = [];
   const validTile = (value) => Array.isArray(value) && value.length === 3 && value.every(Number.isInteger);
   for (const correction of input.corrections) {
@@ -169,7 +175,7 @@ function applyCorrections(transports, input) {
       throw new Error("Malformed transport correction");
     }
     if (Object.hasOwn(correction, "newFrom")) {
-      updates.push(...moveCorrection(transports, correction, seen, validTile));
+      updates.push(...moveCorrection(transports, correction, moved, targets, validTile));
       continue;
     }
     const duration = Object.hasOwn(correction, "ticks");

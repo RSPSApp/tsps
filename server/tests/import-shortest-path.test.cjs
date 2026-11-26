@@ -210,3 +210,28 @@ test('the production planner crosses the East Ardougne gangplanks from their map
     assert.equal(route.steps[1].via.id, correction.id);
   }
 });
+
+test('a moved row owns its tiles, takes a quest correction too, and two moves may not share a target', () => {
+  const data = moveRows();
+  const own = clone(moveInput);
+  applyCorrections(data, own);
+  data.transports[0][0][1]++;
+  assert.deepEqual(own.corrections[0].newFrom, moveInput.corrections[0].newFrom);
+
+  const c = moveInput.corrections[0];
+  const both = { ...moveInput, corrections: [clone(c), { table: c.table, from: c.from, to: c.to, menu: c.menu, id: c.id, expectedQuest: null, quest: 'A quest' }] };
+  const row = moveRows();
+  applyCorrections(row, both);
+  assert.deepEqual(row.transports[0].slice(0, 2), [c.newFrom, c.newTo]);
+  assert.equal(row.transports[0][6], 'A quest');
+
+  const shared = clone(moveInput);
+  shared.corrections[1].newFrom = c.newFrom;
+  shared.corrections[1].newTo = c.newTo;
+  shared.corrections[1].id = c.id;
+  const rows = moveRows();
+  rows.transports[1][3] = c.id;
+  const before = clone(rows);
+  assert.throws(() => applyCorrections(rows, shared), /Duplicate/);
+  assert.deepEqual(rows, before);
+});

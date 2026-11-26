@@ -1,5 +1,5 @@
 // From server/: node --test tests/edgeville-trapdoor.test.cjs (after yarn build).
-// Live (rsprox.net #320, #365, #426): Open on the closed trapdoor only swaps it for the open one
+// Live (rsprox.net #320, #426): Open on the closed trapdoor only swaps it for the open one
 // ("The trapdoor opens..."); Climb-down on the open one sends "You climb down through the
 // trapdoor..." and lands the player at 3096,9867.
 const assert = require("node:assert/strict");
@@ -21,13 +21,14 @@ function harness() {
   }, { get: (target, key) => target[key] ?? (() => {}) });
   require("../plugins/areas/Misthalin.plugin").register(api);
   const messages = [];
-  const player = { getPacketSender: () => ({ sendTypedMessage: (type, text) => messages.push([type, text]) }) };
+  const movement = { blocked: false, isMovementBlocked: () => movement.blocked };
+  const player = { getPacketSender: () => ({ sendTypedMessage: (type, text) => messages.push([type, text]) }), getMovementQueue: () => movement };
   const climb = (objectId, x, y) => {
     const request = { player, objectId, object: { getLocation: () => new core.Location(x, y, 0) }, handled: false };
     for (const handler of custom.get("ladders:climb") ?? []) handler(request);
     return request.handled;
   };
-  return { objectHandlers, custom, messages, climb };
+  return { objectHandlers, custom, messages, climb, movement };
 }
 
 test("Open on the Edgeville trapdoor is left to the captured loc swap", () => {
@@ -54,5 +55,13 @@ test("other trapdoors and the closed one are not claimed", () => {
   h.custom.set("ladders:climbDown", [() => assert.fail("no climb")]);
   assert.equal(h.climb(O.TRAPDOOR_4, 3097, 3468), false, "the closed trapdoor has no Climb-down");
   assert.equal(h.climb(O.TRAPDOOR_6, 3405, 3507), false, "Paterdomus' open trapdoor is Priest in Peril's");
+  assert.deepEqual(h.messages, []);
+});
+
+test("a refused climb (movement blocked) sends no message and doesn't fall through to Ladders", () => {
+  const h = harness();
+  h.custom.set("ladders:climbDown", [() => assert.fail("no climb")]);
+  h.movement.blocked = true;
+  assert.equal(h.climb(O.TRAPDOOR_6, 3097, 3468), true);
   assert.deepEqual(h.messages, []);
 });

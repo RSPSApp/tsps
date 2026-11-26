@@ -5,7 +5,7 @@
  *  - Ladder at 3097,9867 (dungeon) > Climb-up: surface at 3096,3468.
  *  - Trapdoor at 3097,3468: Open and Close swap the closed and open trapdoor (LocTeleports'
  *    captured swaps); the open one's Climb-down: "You climb down through the trapdoor...",
- *    then the dungeon at 3096,9867 (rsprox.net #320, #365, #426).
+ *    then the dungeon at 3096,9867 (rsprox.net #320, #426).
  *  - Lever at 3090,3475: the Levers plugin (docs/wilderness-levers.md).
  *
  * Varrock
@@ -179,9 +179,10 @@ function claimEdgevilleTrapdoorClimb(request) {
   if (request.handled || request.objectId !== Objects.TRAPDOOR_6) return;
   const at = request.object?.getLocation?.();
   if (!at || !isAt({ x: at.getX(), y: at.getY(), z: at.getZ() }, EDGEVILLE_TRAPDOOR)) return;
+  request.handled = true;
+  if (request.player.getMovementQueue().isMovementBlocked()) return;
   request.player.getPacketSender().sendTypedMessage(ChatType.SPAM, EDGEVILLE_TRAPDOOR_CLIMB_MESSAGE);
   pluginApi.emitCustomEvent("ladders:climbDown", { player: request.player, destination: toLocation(EDGEVILLE_DUNGEON_LANDING) });
-  request.handled = true;
 }
 
 function hasClimbDown(definition) {

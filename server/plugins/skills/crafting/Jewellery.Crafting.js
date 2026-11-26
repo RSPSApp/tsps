@@ -1,5 +1,5 @@
 /**
- * Gold and silver jewellery at a furnace, Family Crest's 'perfect' jewellery, and stringing
+ * Gold and silver jewellery at a furnace (Family Crest's 'perfect' ruby ring and necklace through the gold menu), and stringing
  * amulets.
  *
  * Wiki (Crafting#Jewellery): a gold bar used on a furnace with a ring, necklace, amulet or
@@ -169,6 +169,14 @@ function goldProduct(player, component) {
   const gemIndex = type.components.indexOf(component);
   const [itemId, level, xp] = type.products[gemIndex];
   const gemId = goldGems[gemIndex];
+  // Family Crest: with 'perfect' gold bars and no plain ones, the ruby ring and necklace are the 'perfect'
+  // pieces (rsprox local recordings 1002252 ticks 1561-1574, 1002185 ticks 9330-9342: no message).
+  const inventory = player.getInventory();
+  if (gemId === I.RUBY && !inventory.contains(I.GOLD_BAR) && inventory.contains(I.PERFECT_GOLD_BAR)) {
+    const perfect = data().perfect.find((recipe) => recipe.mouldId === type.mouldId);
+    if (perfect) return { itemId: perfect.itemId, level: perfect.level, xp: perfect.xp, bar: I.PERFECT_GOLD_BAR,
+      mouldId: perfect.mouldId, extra: [I.RUBY], amount: 1 };
+  }
   return { itemId, level, xp, bar: I.GOLD_BAR, mouldId: type.mouldId,
     extra: gemId === null ? [] : [gemId], amount: 1 };
 }
@@ -237,6 +245,9 @@ function furnaceMenuFor(player) {
   if (inventory.contains(I.GOLD_BAR) && goldTypes.some(({ mouldId }) => inventory.contains(mouldId))) {
     return GOLD_CRAFTING_INTERFACE;
   }
+  if (inventory.contains(I.PERFECT_GOLD_BAR) && data().perfect.some(({ mouldId }) => inventory.contains(mouldId))) {
+    return GOLD_CRAFTING_INTERFACE;
+  }
   if (inventory.contains(I.SILVER_BAR) && [...silver.values()].some(({ mouldId }) => inventory.contains(mouldId))) {
     return SILVER_CRAFTING_INTERFACE;
   }
@@ -255,58 +266,13 @@ function handleBarOnFurnace(event) {
   const { player, object, itemId } = event;
   const I = Shared.getCore().ItemIds;
   if (!isFurnace(object)) return;
-  if (itemId === I.GOLD_BAR) {
+  if (itemId === I.GOLD_BAR || itemId === I.PERFECT_GOLD_BAR) {
     event.handled = true;
     openFurnaceMenu(player, GOLD_CRAFTING_INTERFACE);
   } else if (itemId === I.SILVER_BAR) {
     event.handled = true;
     openFurnaceMenu(player, SILVER_CRAFTING_INTERFACE);
   }
-}
-
-function craftPerfectJewellery(player, recipe) {
-  const { ItemIds: I, Item } = Shared.getCore();
-  const inventory = player.getInventory();
-  if (Shared.craftingLevel(player) < recipe.level) {
-    player.sendMessage(`You need a Crafting level of at least ${recipe.level} to craft this.`);
-    return;
-  }
-  if (!inventory.contains(I.PERFECT_GOLD_BAR) || !inventory.contains(I.RUBY) || !inventory.contains(recipe.mouldId)) {
-    return;
-  }
-  inventory.deleteNumber(I.PERFECT_GOLD_BAR, 1);
-  inventory.deleteNumber(I.RUBY, 1);
-  inventory.addItem(new Item(recipe.itemId, 1));
-  Shared.addCraftingXp(player, recipe.xp);
-  player.sendMessage(`You craft a ${recipe.name}.`);
-}
-
-/** Using a 'perfect' gold bar on a furnace, with a ruby and a mould, makes the jewellery. */
-function handlePerfectJewellery(event) {
-  const { player, object, itemId } = event;
-  const I = Shared.getCore().ItemIds;
-  if (itemId !== I.PERFECT_GOLD_BAR || !isFurnace(object)) return;
-
-  const inventory = player.getInventory();
-  const recipes = data().perfect.filter(
-    (recipe) => inventory.contains(recipe.mouldId) && inventory.contains(I.RUBY)
-  );
-  if (recipes.length === 0) return;
-
-  event.handled = true;
-  if (recipes.length === 1) {
-    craftPerfectJewellery(player, recipes[0]);
-    return;
-  }
-  // Both moulds carried: let the player choose, as the OSRS jewellery interface does.
-  Shared.getApi().sendMultiChatboxPrompt(
-    player,
-    "What would you like to make?",
-    recipes[0].name,
-    () => craftPerfectJewellery(player, recipes[0]),
-    recipes[1].name,
-    () => craftPerfectJewellery(player, recipes[1])
-  );
 }
 
 /** A selected string material used on unstrung jewellery, in either order. */
@@ -338,7 +304,6 @@ function stringAmulet(event) {
 
 module.exports = function attach(api) {
   for (const name of FURNACE_NAMES) api.onObjectInteraction(name, { Smelt: smeltAtFurnace });
-  api.onItemOnObject(handlePerfectJewellery, { noted: false });
   api.onItemOnObject(handleBarOnFurnace, { noted: false });
   api.onInterfaceActionClick(handleJewelleryButton);
   api.onItemOnItem(stringAmulet, { noted: false });

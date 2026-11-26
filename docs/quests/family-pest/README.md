@@ -74,6 +74,14 @@ and map).
 
 ## Runs
 
+### 2026-11-26 · agent · claude-opus-5-5 (natural playthrough)
+
+- **Start:** the same account straight after Family Crest.
+- **Route:** Dimintheis, Johnathon, Avan (his goldsmith imbue), Caleb, Dimintheis (refused once, then paid), then extra
+  steel and chaos gauntlets through "How many would you like to take?".
+- **Result:** varbits 5347 0 -> 3, 5348-5350 1, miniquest count +1; no quest point, XP, message or scroll; 500,000
+  coins taken once; relog kept everything. Every talk matched the capture.
+
 ### 2026-11-26 · agent · claude-opus-5-5
 
 - **Tests:** `family-pest.test.cjs` plays each captured conversation through packets; the completion through

@@ -69,7 +69,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Fairytale I - Growing Pains](fairytale-i-growing-pains/README.md) | ⚠️ passed with issues | 2026-11-16 | agent | claude-opus-5-5 |  |
 | [Fairytale II - Cure a Queen](fairytale-ii-cure-a-queen/README.md) | ⚠️ passed with issues | 2026-11-16 | agent | claude-opus-5-5 |  |
 | [Fallen From Grace](fallen-from-grace/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 8 |
-| [Family Crest](family-crest/README.md) | 🔄 in progress | 2026-11-26 | agent | claude-opus-5-5 |  |
+| [Family Crest](family-crest/README.md) | 🔄 in progress | 2026-11-26 | agent | claude-opus-5-5 | 1 |
 | [Family Pest](family-pest/README.md) | 🔄 in progress | 2026-11-26 | agent | claude-opus-5-5 |  |
 | [Fight Arena](fight-arena/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | [Fishing Contest](fishing-contest/README.md) | ✅ passed |  | agent |  |  |

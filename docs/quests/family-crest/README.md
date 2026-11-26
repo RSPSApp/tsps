@@ -75,6 +75,11 @@ The family crest leaves as its box is continued (3027), before the last five lin
   An open door swaps to `inviswall` on the doorway and its leaf one tile on, turned a quarter
   (`inactiveposhdoor`; `famcrest_doori2h1_open` for the gold room's door), plays door_open (62), lets the
   player walk over and is back two ticks later.
+- **Perfect gold** (1518-1574, B 9304-9342): Smelt with only 'perfect' gold ore held offers just the Gold bar (as
+  many as there is ore); the ore used on the furnace smelts one at once. Each is "You smelt the gold in the
+  furnace." and, with the bar four ticks later, an empty spam line. A 'perfect' gold bar (Smelt, or used on the
+  furnace) opens crafting_gold (446); its ruby necklace (446:26) and ruby ring (446:11) make the 'perfect' pieces,
+  with no message.
 - **Chat lines** break after a hyphen as well as at a space ("much in-<br>fighting", 168), so a page holds what
   live's holds (`ChatTextLayout`).
 
@@ -92,12 +97,29 @@ The family crest leaves as its box is continued (3027), before the last five lin
 
 ## Findings
 
+- **open** An item used on Dimintheis (crest parts, 2161-2164) says nothing; live says "Nothing interesting
+  happens.". Server-wide: an unhandled item on any NPC is silent.
+- **fixed** 'perfect' gold smelting listed every bar and had its own messages; the 'perfect' jewellery was a chat
+  menu with a message, not crafting_gold (found in the playthrough).
+
 - **fixed** Caleb's and Avan's crest pieces were the wrong way round (Caleb gave 779 `avan_crest`). A save from
   then holds 779 as Caleb's piece; Avan's jewellery hand-in then gives 780, so the crest can still be made.
 - **fixed** The message boxes were game messages; the stage moved when the lines were built, not shown.
 - **fixed** No "You've started a new quest" message on the start.
 
 ## Runs
+
+### 2026-11-26 · agent · claude-opus-5-5 (natural playthrough)
+
+- **Start:** fresh account, declared setup (all skills 99, the fish, pickaxe, rubies, moulds, Blast runes, antipoison,
+  coins, travel items; Plague City completed for Ardougne Teleport), one `::tele` to Dimintheis.
+- **Route:** Catherby (Caleb), Al Kharid (Gem trader, Avan), the Falador trapdoor (Boot), the Witchaven Dungeon (the
+  lever doors in the Wiki's order, the gold-room door, two 'perfect' ores), the Al Kharid furnace, the Jolly Boar
+  (Johnathon), the Edgeville Dungeon (Chronozon with the four Blasts, `::infhp` declared), Dimintheis. Then Family Pest.
+- **Result:** varp 148 0 -> 11 at the recorded moments; 1 quest point, 2,000 Mining, Smithing and Crafting XP and steel
+  gauntlets, once; the scroll's lines as live; relog twice; post-quest talks as recorded. Differences found: the
+  'perfect' gold furnace steps (fixed) and the silent item-on-NPC (open).
+- **Not checked:** the sons' chatheads on screen (asserted in tests).
 
 ### 2026-11-26 · agent · claude-opus-5-5
 

@@ -24,7 +24,7 @@ const MESSAGEBOX = 229, OBJECTBOX = 193, OBJECTBOX_DOUBLE = 11;
 let I, codec;
 before(async () => {
   h.key = KEY;
-  await h.setup([[3280, 3403], [2818, 3448], [3300, 3279], [3286, 3213], [2980, 9808], [3280, 3502], [2722, 9690], [3089, 9934]]);
+  await h.setup([[3280, 3403], [2818, 3448], [3300, 3279], [3286, 3213], [2980, 9808], [3280, 3502], [2722, 9690], [3089, 9934], [3272, 3185]]);
   I = h.core.ItemIdentifiers;
   JsonPersistence.register({
     getSkillManager: () => require("../dist/game/content/skill/SkillManager").SkillManager,
@@ -589,4 +589,44 @@ test("a save from before the crest ids were put right (Caleb's piece as 779): Av
   await play(f, () => h.talk(f, h.spawn(f, AVAN, AT.AVAN)));
   assert.equal(stage(f), S.AVAN_PIECE);
   assert.deepEqual([count(f, I.CREST_PART), count(f, I.CREST_PART_2)], [1, 1]);
+});
+
+// --- The perfect gold at a furnace -----------------------------------------------------------------------
+
+const FURNACE = 24009, FURNACE_AT = [3272, 3185];
+
+test("t1518-1536: Smelt with only 'perfect' gold ore offers the Gold bar alone; each bar is 'You smelt the gold in the furnace.' and an empty line", async (t) => {
+  const f = actor(t, { tile: [3271, 3186], value: S.BOOT, items: [[I.PERFECT_GOLD_ORE], [I.PERFECT_GOLD_ORE]] });
+  const menus = [];
+  const sender = f.player.getPacketSender();
+  const send = sender.sendCreationMenu.bind(sender);
+  sender.sendCreationMenu = (menu) => { menus.push(menu); return send(menu); };
+  await h.dispatch(f, { type: "object_option", id: FURNACE, x: FURNACE_AT[0], y: FURNACE_AT[1], clickType: 2 });
+  for (let i = 0; i < 10 && !menus.length; i++) h.tick(f);
+  assert.equal(menus.length, 1);
+  assert.deepEqual(menus[0].getItems(), [I.GOLD_BAR]);
+  assert.equal(menus[0].getOptions().maxAmount, 2);
+  menus[0].execute(I.GOLD_BAR, 2);
+  h.ticks(f, 14);
+  assert.equal(count(f, I.PERFECT_GOLD_BAR), 2);
+  assert.deepEqual(f.messages.map((m) => String(m.text)).filter((m) => m === "" || m.includes("smelt")),
+    ["You smelt the gold in the furnace.", "", "You smelt the gold in the furnace.", ""]);
+});
+
+test("t1561-1574, B9330-9342: a 'perfect' gold bar on the furnace opens crafting_gold; its ruby necklace and ring are the 'perfect' pieces, no message", async (t) => {
+  const f = actor(t, { tile: [3271, 3186], value: S.BOOT,
+    items: [[I.PERFECT_GOLD_BAR], [I.PERFECT_GOLD_BAR], [I.RUBY], [I.RUBY], [I.RING_MOULD], [I.NECKLACE_MOULD]] });
+  for (const [component, made, open] of [[26, I.PERFECT_NECKLACE, "smelt"], [11, I.PERFECT_RING, "use"]]) {
+    if (open === "smelt") await h.dispatch(f, { type: "object_option", id: FURNACE, x: FURNACE_AT[0], y: FURNACE_AT[1], clickType: 2 });
+    else await f.connection.dispatch([{ type: "item_on_object", itemId: I.PERFECT_GOLD_BAR, slot: slotOf(f, I.PERFECT_GOLD_BAR), widgetId: 149 << 16,
+      objectId: FURNACE, x: FURNACE_AT[0], y: FURNACE_AT[1] }]);
+    for (let i = 0; i < 10 && f.player.getInterfaceId() !== 446; i++) h.tick(f);
+    assert.equal(f.player.getInterfaceId(), 446, `crafting_gold (${open})`);
+    clear(f);
+    h.PM.emitInterfaceActionClick({ player: f.player, buttonId: (446 << 16) | component, action: 1, handled: false });
+    h.ticks(f, 4);
+    assert.equal(count(f, made), 1, String(made));
+    assert.deepEqual(texts(f), []);
+  }
+  assert.deepEqual([count(f, I.PERFECT_GOLD_BAR), count(f, I.RUBY)], [0, 0]);
 });

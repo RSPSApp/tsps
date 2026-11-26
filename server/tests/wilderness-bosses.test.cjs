@@ -377,6 +377,8 @@ function spiderFight(t, bossId = 6610) {
   const remove = [];
   const projectiles = [];
   const tasks = [];
+  const registered = [];
+  let deferRegistration = false;
   let Combat;
   let beforeDeath;
   let combatHitResolved;
@@ -385,6 +387,11 @@ function spiderFight(t, bossId = 6610) {
   t.mock.method(World, 'getAddNPCQueue', () => add);
   t.mock.method(World, 'getRemoveNPCQueue', () => remove);
   t.mock.method(World, 'getProcessCycle', () => cycle);
+  t.mock.method(World.getNpcs(), 'add', (added) => {
+    if (deferRegistration) return false;
+    registerSpiderling(added);
+    return true;
+  });
   t.mock.method(core.CombatFactory, 'addPendingHit', () => {});
   t.mock.method(Caves, 'playersIn', () => []);
   t.mock.method(core.Projectile.prototype, 'sendProjectile', function () {
@@ -404,6 +411,7 @@ function spiderFight(t, bossId = 6610) {
     core,
     getPrayerHandler: () => PrayerHandler,
     getObjectManager: () => ({ register() {}, deregister() {} }),
+    spawnNpc: (definition) => PluginManager.spawnNpc(definition),
     registerNpcCombatMethodProvider(ids, method) {
       assert.ok(ids.includes(bossId), 'the boss uses the registered method');
       Combat = method;
@@ -427,13 +435,14 @@ function spiderFight(t, bossId = 6610) {
     return npc.getAnimation().id;
   }
 
-  const registered = [];
+  function registerSpiderling(added) {
+    assert.equal(added.getRealId(), spiderling);
+    added.setRegistered(true);
+    registered.push(added);
+  }
+
   function registerBrood() {
-    for (const added of add.splice(0)) {
-      assert.equal(added.getRealId(), spiderling);
-      added.setRegistered(true);
-      registered.push(added);
-    }
+    for (const added of add.splice(0)) registerSpiderling(added);
   }
   t.after(() => {
     try {
@@ -454,19 +463,23 @@ function spiderFight(t, bossId = 6610) {
   }
 
   place(true);
-  return { npc, player, key, fight, add, remove, registered, projectiles, beforeDeath, combatHitResolved, place, attack, registerBrood, tickTasks };
+  return {
+    npc, player, key, fight, add, remove, registered, projectiles, beforeDeath, combatHitResolved,
+    place, attack, registerBrood, tickTasks,
+    deferAdds: () => { deferRegistration = true; },
+  };
 }
 
 for (const [name, bossId] of [['Venenatis', 6610], ['Spindel', 11998]]) {
   test(`${name} calls two spiderlings on her opening bite`, (t) => {
-    const { npc, add, attack, registerBrood } = spiderFight(t, bossId);
+    const { npc, add, attack, registered } = spiderFight(t, bossId);
     assert.equal(npc.getAnimation().id, 9993);
     assert.equal(npc.getCombat().getAttackDelay(), 7);
     assert.equal(attack(), 9991);
-    assert.equal(add.length, 2, 'the same attack queues both spiderlings');
-    assert.notDeepEqual(add[0].getLocation(), add[1].getLocation(), 'the two use separate spawn tiles');
+    assert.equal(registered.length, 2, 'both spiderlings are in the world on the attack tick');
+    assert.equal(add.length, 0);
+    assert.notDeepEqual(registered[0].getLocation(), registered[1].getLocation(), 'the two use separate spawn tiles');
     assert.equal(npc.getAttribute(SPIDER_CYCLE), 1);
-    registerBrood();
   });
 
   test(`${name} throws the sticky web on attack 11 even when she bites`, (t) => {
@@ -513,8 +526,8 @@ for (const [name, adjacent, sequence] of [['bites', true, 9991], ['shots', false
     for (let slot = 1; slot < 16; slot++) attack();
     assert.equal(add.length, 0, 'no extra calls before the cycle wraps');
     assert.equal(attack(), sequence);
-    assert.equal(add.length, 2);
-    registerBrood();
+    assert.equal(registered.length, 4, 'the second pair registers on the same attack');
+    assert.equal(add.length, 0);
     assert.equal(registered.filter((spider) => spider.getHitpoints() > 0).length, 4);
     assert.equal(npc.getAttribute(SPIDER_CYCLE), 1);
   });
@@ -529,21 +542,24 @@ test('Venenatis keeps both new spiderlings when one from an older call dies that
   for (let slot = 1; slot < 16; slot++) attack();
   registered[0].setHitpoints(0);
   attack();
-  assert.equal(add.length, 2, 'the death does not turn the call into a top-up');
-  registerBrood();
+  assert.equal(registered.length, 4, 'the death does not turn the call into a top-up');
+  assert.equal(add.length, 0);
   assert.equal(registered.filter((spider) => spider.getHitpoints() > 0).length, 3);
 });
 
 for (const reason of ['reset', 'death (estimated five-tick delay)']) {
   test(`Venenatis dismisses all eight spiderlings, including a pending call, on ${reason}`, (t) => {
-    const { npc, fight, add, remove, registered, beforeDeath, attack, place, registerBrood, tickTasks } = spiderFight(t);
+    const { npc, fight, add, remove, registered, beforeDeath, attack, place, registerBrood, tickTasks, deferAdds } = spiderFight(t);
     place(false);
-    for (let slot = 0; slot <= 48; slot++) {
+    for (let slot = 0; slot < 48; slot++) {
       attack();
-      if (slot < 48) registerBrood();
+      registerBrood();
     }
+    deferAdds();
+    attack();
+    assert.equal(registered.length, 6);
+    assert.equal(add.length, 2);
     const spiders = [...registered, ...add];
-    assert.equal(spiders.length, 8);
     assert.ok(spiders.every((spider) => spider.getHitpoints() > 0));
     if (reason === 'reset') {
       fight.reset(npc);

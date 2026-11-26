@@ -11,8 +11,8 @@
  *   arriving. Each showing counts up varbit 3860 to 6; from then on it offers "Don't ask me
  *   this again", which sets 7: no more warnings. The WarningScreens plugin shows it, and the
  *   Doomsayer turns it back on.
- * - A tick after arriving (or after "Proceed regardless") the player steps onto the gate, a
- *   tile a tick until they are through it, and a tick later faces the way they went. Coming
+ * - A tick after arriving (or at once on "Proceed regardless") the player steps onto the gate,
+ *   a tile a tick until they are through it, and a tick later faces the way they went. Coming
  *   back is free.
  * - The main gate guard's "Pass" does the same from wherever the player stands north of it.
  * - "Look-at" reads the gate's billboard poster.
@@ -21,25 +21,23 @@ const Common = require("./Common.ShantayPass");
 
 const PASS_TAKEN_MESSAGE = "The guard takes your Shantay Pass as you go through the gate.";
 
+const POSTER = [
+  "<col=800000>The Desert is a VERY Dangerous place. Do not enter if you are<br><col=800000>afraid of dying. Beware of high temperatures, sand storms, robbers,<br><col=800000>and slavers. No responsibility is taken by Shantay if anything bad<br><col=800000>should happen to you in any circumstances whatsoever.",
+  "Despite this warning lots of people seem to pass through the gate.",
+];
+
 /** `desert` is the side the desert is on; `guard` names the NPC that turns players back. */
 const MAIN_GATE = {
   minX: 3302, maxX: 3305, minY: 3116, maxY: 3116, desert: "south",
   guard: "SHANTAY_GUARD_2",
   noPassLine: "You need a Shantay pass to get through this gate. See Shantay, he will sell you one for a very reasonable price.",
-  billboard: [
-    "You look at the huge stone gate.<br>Near the gate is a large billboard poster, it reads:",
-    "<col=800000>The Desert is a VERY Dangerous place. Do not enter if you are<br><col=800000>afraid of dying. Beware of high temperatures, sand storms, robbers,<br><col=800000>and slavers. No responsibility is taken by Shantay if anything bad<br><col=800000>should happen to you in any circumstances whatsoever.",
-    "Despite this warning lots of people seem to pass through the gate.",
-  ],
+  billboard: ["You look at the huge stone gate.<br>Near the gate is a large billboard poster, it reads:", ...POSTER],
 };
 /** The Ruins of Unkah's gates are kept by the guards there who sell passes. */
 const UNKAH_GATE = {
   guard: "SHANTAY_GUARD_3",
   noPassLine: "You need a Shantay pass to get through this gate. I'll sell you one for a very reasonable price.",
-  billboard: [
-    "You look at the huge dilapidated gate.<br>Near the gate is a large billboard poster, it reads:",
-    "Despite this warning lots of people seem to pass through the gate.",
-  ],
+  billboard: ["You look at the huge dilapidated gate.<br>Near the gate is a large billboard poster, it reads:", ...POSTER],
 };
 const GATES = [
   MAIN_GATE,

@@ -221,14 +221,15 @@ test("Look-at reads each gate's own billboard", () => {
     }
     return texts;
   };
-  assert.deepEqual(read({ x: 3194, y: 2841, z: 0 }), [
-    "You look at the huge dilapidated gate.<br>Near the gate is a large billboard poster, it reads:",
-    "Despite this warning lots of people seem to pass through the gate.",
-  ]);
-  assert.equal(read({ x: 3166, y: 2817, z: 0 }).length, 2);
+  const east = read({ x: 3194, y: 2841, z: 0 });
+  assert.equal(east[0], "You look at the huge dilapidated gate.<br>Near the gate is a large billboard poster, it reads:");
+  assert.equal(east.length, 3);
+  assert.match(east[1], /The Desert is a VERY Dangerous place/);
+  assert.equal(east[2], "Despite this warning lots of people seem to pass through the gate.");
+  assert.deepEqual(read({ x: 3166, y: 2817, z: 0 }), east);
   const main = read({ x: 3302, y: 3116, z: 0 });
-  assert.equal(main.length, 3);
   assert.match(main[0], /huge stone gate/);
+  assert.deepEqual(main.slice(1), east.slice(1));
 });
 
 test("Shantay's conditions follow the player's coins, bank, visits and escapes", () => {

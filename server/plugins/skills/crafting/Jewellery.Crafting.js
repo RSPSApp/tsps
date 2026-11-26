@@ -177,7 +177,7 @@ function goldBarFor(player, menu) {
 function goldProduct(player, component, menu) {
   const { ItemIds: I } = Shared.getCore();
   const { goldTypes, goldGems, slayerRing } = data();
-  if (component === slayerRing.component) return slayerRingProduct(player, slayerRing);
+  if (component === slayerRing.component) return slayerRingProduct(player, slayerRing, menu);
   const type = goldTypes.find(({ components }) => components.includes(component));
   if (!type) return null;
   const gemIndex = type.components.indexOf(component);
@@ -199,7 +199,7 @@ function goldProduct(player, component, menu) {
 const SLAYER_RING_LOCKED = "You need to unlock the ability to craft slayer rings from a Slayer master.";
 
 /** 446:16: the eternal ring when an eternal gem is carried, else the enchanted-gem ring; needs Ring bling. */
-function slayerRingProduct(player, slayerRing) {
+function slayerRingProduct(player, slayerRing, menu) {
   const { ItemIds: I, CacheDefinitions } = Shared.getCore();
   const varbit = CacheDefinitions.getVarbitId(slayerRing.unlockVarbit);
   if (varbit == null || player.getPacketSender().getVarbit(varbit) !== 1) {
@@ -208,7 +208,7 @@ function slayerRingProduct(player, slayerRing) {
   }
   const inventory = player.getInventory();
   const [gemId, itemId] = slayerRing.products.find(([gem]) => inventory.contains(gem)) ?? slayerRing.products.at(-1);
-  return { itemId, level: slayerRing.level, xp: slayerRing.xp, bar: I.GOLD_BAR, mouldId: slayerRing.mouldId,
+  return { itemId, level: slayerRing.level, xp: slayerRing.xp, bar: goldBarFor(player, menu), mouldId: slayerRing.mouldId,
     extra: [gemId], amount: 1 };
 }
 

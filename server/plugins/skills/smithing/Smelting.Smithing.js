@@ -260,6 +260,8 @@ function smelt({ player, objectId }) {
   const otherOre = Data.SMELTING_RECIPES.some((recipe) => recipe !== perfect && !recipe.skill && !recipe.furnace
     && recipe.ingredients.some(([id]) => id !== Core.ItemIdentifiers.COAL && available(player, id) > 0));
   if (perfect && !otherOre && extras.length === 0 && hasIngredients(player, perfect)) {
+    // One ore left smelts at once: live's Smelt at 1531 smelted the second ore one tick later, no menu (1532-1536).
+    if (available(player, Core.ItemIdentifiers.PERFECT_GOLD_ORE) === 1) return void startSmelting(player, perfect, 1, objectId);
     const gold = Data.smeltMenuRecipes().filter((recipe) => recipe.barId === Core.ItemIdentifiers.GOLD_BAR);
     if (gold.length) return openMenu(player, recipeEntries(player, gold, objectId));
   }

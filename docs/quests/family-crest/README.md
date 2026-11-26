@@ -66,8 +66,8 @@ The family crest leaves as its box is continued (3027), before the last five lin
 - **Johnathon's questions** (2037-2052): the first menu has no "I will be on my way now."; each later one
   leaves out the question just asked.
 - **Chronozon** (2441-2474, 2864-2893): every Blast spell cast at him says "Chronozon weakens..." on the
-  cast's own tick, repeats included; a Blast that splashes says nothing and doesn't count (Wiki; every recorded
-  cast hit). Short of all four, the hit that empties his health bar is followed by
+  cast's own tick, repeats included; a Blast that splashes or hits 0 says nothing and doesn't count (Wiki: he
+  has to be hit for actual damage; every recorded cast did damage). Short of all four, the hit that empties his health bar is followed by
   "Chronozon regenerates..." the next tick and full health (2477 -> 2478). The Wiki: he dies once each of
   the four Blast spells has hit him.
 - **The Witchaven Dungeon** (1210-1356): "This door is locked." from a door the levers keep shut; a lever pull
@@ -76,10 +76,13 @@ The family crest leaves as its box is continued (3027), before the last five lin
   (`inactiveposhdoor`; `famcrest_doori2h1_open` for the gold room's door), plays door_open (62), lets the
   player walk over and is back two ticks later.
 - **Perfect gold** (1518-1574, B 9304-9342): Smelt with only 'perfect' gold ore held offers just the Gold bar (as
-  many as there is ore); the ore used on the furnace smelts one at once. Each is "You smelt the gold in the
-  furnace." and, with the bar four ticks later, an empty spam line. A 'perfect' gold bar (Smelt, or used on the
-  furnace) opens crafting_gold (446); its ruby necklace (446:26) and ruby ring (446:11) make the 'perfect' pieces,
-  with no message.
+  many as there is ore), or with one ore left smelts it at once (1531-1536, no menu); the ore used on the furnace
+  smelts one at once. Each is "You smelt the gold in the furnace." and, with the bar four ticks later, an empty
+  spam line. A 'perfect' gold bar (Smelt once no 'perfect' ore is left, or the bar used on the furnace) opens
+  crafting_gold (446); its ruby necklace (446:26) and ruby ring (446:11) make the 'perfect' pieces, with no
+  message. Every other product, the slayer ring included, comes out plain from it (Wiki, 'perfect' gold bar).
+  **Ours:** with a plain and a 'perfect' gold bar carried, the bar used on the furnace decides; Smelt uses the
+  plain one (no recording holds both).
 - **Chat lines** break after a hyphen as well as at a space ("much in-<br>fighting", 168), so a page holds what
   live's holds (`ChatTextLayout`).
 

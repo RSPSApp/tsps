@@ -379,6 +379,17 @@ test("t2441-2478, t2864-2893: every Blast cast at Chronozon says 'Chronozon weak
   fightTicks(f, chronozon, 6);
   assert.deepEqual(texts(f).filter((m) => m.startsWith("Chronozon")), [], "a splash");
   h.core.PendingHit.prototype.isAccurate.mock.restore();
+  // An accurate 0 is no hit either (the Wiki: actual damage).
+  t.mock.method(h.core.PendingHit.prototype, "getTotalDamage", () => 0);
+  clear(f);
+  await blastCast(f, chronozon, "Fire Blast");
+  f.connection.processTurnPackets();
+  fightTicks(f, chronozon, 6);
+  assert.deepEqual(texts(f).filter((m) => m.startsWith("Chronozon")), [], "an accurate 0");
+  h.core.PendingHit.prototype.getTotalDamage.mock.restore();
+  // Two hits that land, for real damage (the rolls are random otherwise).
+  t.mock.method(h.core.PendingHit.prototype, "isAccurate", () => true);
+  const damage = t.mock.method(h.core.PendingHit.prototype, "getTotalDamage", () => 10);
   for (const name of ["Wind Blast", "Water Blast"]) {
     clear(f);
     await blastCast(f, chronozon, name);
@@ -387,6 +398,8 @@ test("t2441-2478, t2864-2893: every Blast cast at Chronozon says 'Chronozon weak
     assert.deepEqual(texts(f).filter((m) => m.startsWith("Chronozon")), ["Chronozon weakens..."], name);
     fightTicks(f, chronozon, 4);
   }
+  h.core.PendingHit.prototype.isAccurate.mock.restore();
+  damage.mock.restore();
   clear(f);
   chronozon.setHitpoints(1);
   landHit(f.player, chronozon, 5);
@@ -631,7 +644,7 @@ test("t1561-1574, B9330-9342: a 'perfect' gold bar on the furnace opens crafting
   assert.deepEqual([count(f, I.PERFECT_GOLD_BAR), count(f, I.RUBY)], [0, 0]);
 });
 
-test("t1531-1536: Smelt with a 'perfect' bar, the moulds and a 'perfect' ore still held smelts the ore; the gold menu waits until it is gone", async (t) => {
+test("t1531-1536: Smelt with a 'perfect' bar, the moulds and one 'perfect' ore still held smelts the ore at once; the gold menu waits until it is gone", async (t) => {
   const f = actor(t, { tile: [3271, 3186], value: S.BOOT,
     items: [[I.PERFECT_GOLD_BAR], [I.PERFECT_GOLD_ORE], [I.RUBY], [I.RUBY], [I.RING_MOULD], [I.NECKLACE_MOULD]] });
   const menus = [];
@@ -639,9 +652,10 @@ test("t1531-1536: Smelt with a 'perfect' bar, the moulds and a 'perfect' ore sti
   const send = sender.sendCreationMenu.bind(sender);
   sender.sendCreationMenu = (menu) => { menus.push(menu); return send(menu); };
   await h.dispatch(f, { type: "object_option", id: FURNACE, x: FURNACE_AT[0], y: FURNACE_AT[1], clickType: 2 });
-  h.ticks(f, 4);
+  h.ticks(f, 8);
   assert.notEqual(f.player.getInterfaceId(), 446, "not the jewellery menu");
-  assert.deepEqual(menus.at(-1)?.getItems(), [I.GOLD_BAR], "the Gold bar, from the 'perfect' ore");
+  assert.equal(menus.length, 0, "one ore left: no menu (1531-1536)");
+  assert.deepEqual([count(f, I.PERFECT_GOLD_BAR), count(f, I.PERFECT_GOLD_ORE)], [2, 0]);
 });
 
 test("the Wiki ('perfect' gold bar): it makes the other gold jewellery too, without the prefix; used on the furnace it makes the 'perfect' ruby ring even with a plain gold bar carried", async (t) => {
@@ -661,5 +675,13 @@ test("the Wiki ('perfect' gold bar): it makes the other gold jewellery too, with
   assert.equal(g.player.getInterfaceId(), 446);
   h.PM.emitInterfaceActionClick({ player: g.player, buttonId: (446 << 16) | 11, action: 1, handled: false });
   h.ticks(g, 4);
+  // The slayer ring too, from a 'perfect' bar (Ring bling unlocked).
+  const k = actor(t, { tile: [3271, 3186], value: S.BOOT, level: 80, items: [[I.PERFECT_GOLD_BAR], [I.ENCHANTED_GEM], [I.RING_MOULD]] });
+  k.player.getPacketSender().sendVarbit(h.core.CacheDefinitions.getVarbitId(require("../plugins/skills/data/crafting.json").gold.slayerRing.unlockVarbit), 1);
+  await h.dispatch(k, { type: "object_option", id: FURNACE, x: FURNACE_AT[0], y: FURNACE_AT[1], clickType: 2 });
+  for (let i = 0; i < 6 && k.player.getInterfaceId() !== 446; i++) h.tick(k);
+  h.PM.emitInterfaceActionClick({ player: k.player, buttonId: (446 << 16) | require("../plugins/skills/data/crafting.json").gold.slayerRing.component, action: 1, handled: false });
+  h.ticks(k, 4);
+  assert.deepEqual([k.player.getInventory().getAmount(I.PERFECT_GOLD_BAR), k.player.getInventory().getAmount(I.ENCHANTED_GEM)], [0, 0], "slayer ring made");
   assert.deepEqual([g.player.getInventory().getAmount(I.PERFECT_RING), g.player.getInventory().getAmount(I.RUBY_RING), g.player.getInventory().getAmount(I.GOLD_BAR)], [1, 0, 1]);
 });

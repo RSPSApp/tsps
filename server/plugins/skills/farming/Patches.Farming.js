@@ -1593,6 +1593,7 @@ function attach(api) {
     api.onCustomEvent("hespori:quest-leave", Hespori.hesporiLogout);
     api.onNpcDeath(Hespori.questHesporiDeath);
     api.onCombatHitRoll(Hespori.hesporiHitRoll);
+    api.onCustomEvent("combat:npc-poison", Hespori.hesporiNpcPoison);
     api.onCombatHitResolved(Hespori.hesporiHit);
     api.onPlayerDealtDamage(Hespori.hesporiDamage);
     api.onPlayerDeathItemDrop(Hespori.hesporiDeathDrop);

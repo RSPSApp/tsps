@@ -22,7 +22,7 @@ const { PlayerSession } = require("../dist/net/PlayerSession");
 const { encodeSound } = require("../dist/net/protocol/ClientProtocol");
 const npcSpawns = require("../data/definitions/npc-spawns.json");
 
-const { choose, isNetwork, refusals, toEntry, requirementFor } = require("../scripts/loc-teleport-matching.cjs");
+const { choose, isNetwork, refusals, toEntry, requirementFor, linesForExisting } = require("../scripts/loc-teleport-matching.cjs");
 const LocTeleports = require("../plugins/world/LocTeleports.plugin");
 const data = require("../plugins/world/data/loc-teleports.json");
 const decisions = require("../plugins/world/data/loc-teleport-sync.json");
@@ -127,6 +127,32 @@ test("an entry takes the crossing's captured lines, each on its tick from the mo
   const stairs = toEntry(captured({ lines, destinations: [{ x: 1, y: 2, z: 1, from: [[3, 3, 0]] }, { x: 5, y: 6, z: 1, from: [[9, 9, 0]] }] }), { display: "Stairs", option: "Climb" });
   assert.equal(stairs.messages, undefined);
   assert.equal(toEntry(captured({}), { display: "Cave", option: "Enter" }).messages, undefined);
+});
+
+test("the sync keeps an entry's lines when the export has none to give, and never over a hand-set message", () => {
+  const kept = [{ text: "You climb up the ladder.", type: "spam" }];
+  const entry = { name: "osf_ham_ladder", messages: kept };
+  // An export from before the `lines` field: nothing to say either way, so the lines stay.
+  assert.deepEqual(linesForExisting(entry, captured({})), kept);
+  assert.deepEqual(linesForExisting(entry, undefined), kept);
+  // A current export rewrites them, to none if none qualify.
+  assert.deepEqual(linesForExisting(entry, captured({ lines: [["You climb up the ladder.", "spam", 0, 2], ["You leave the HAM Fanatics' Camp.", "spam", 1, 2]] })),
+    [...kept, { text: "You leave the HAM Fanatics' Camp.", type: "spam", afterMove: 1 }]);
+  assert.deepEqual(linesForExisting(entry, captured({ lines: [] })), []);
+  // A hand-set `message` or a staircase's sides: untouched.
+  assert.deepEqual(linesForExisting({ message: "x" }, captured({ lines: [["y", "spam", 0, 2]] })), []);
+  assert.deepEqual(linesForExisting({ sides: [], messages: kept }, captured({ lines: [["y", "spam", 0, 2]] })), kept);
+});
+
+test("a crossing's line captured before the move is sent that many ticks before it, as early as the click's tick", () => {
+  // lost_tribe_cellar_wall: the squeeze animation two ticks after arriving, the move on tick 3, and "You squeeze
+  // through the hole." two ticks before the move (the click's own tick).
+  const entry = data.locs.find((loc) => loc.name === "lost_tribe_cellar_wall");
+  assert.deepEqual(entry.messages, [{ text: "You squeeze through the hole.", afterMove: -2 }]);
+  const ticks = climbWithMessages(locAt(entry.id, entry.x, entry.y, entry.z), [entry.x - 1, entry.y, entry.z], 3);
+  const moved = ticks.findIndex((tick) => tick.some((line) => line.startsWith("move ")));
+  const said = ticks.findIndex((tick) => tick.includes("message game You squeeze through the hole."));
+  assert.equal(moved - said, 2);
 });
 
 // The sync records the first sound a capture heard around the climb, and with a fight nearby that is the fight's

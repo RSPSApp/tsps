@@ -238,9 +238,9 @@ function travel(player, entry, destination, answer = null) {
   if (entry.fade) at(animTick + 1, () => player.getPacketSender().sendVarbit(MINIMAP_STATE_VARBIT, MINIMAP_OFF));
   if (entry.message) at(moveTick, () => sayCrossed(player, entry));
   const lines = entry.messages ?? [];
-  // Lines up to the move: before it on its tick, none before the click is handled.
+  // Lines up to the move: before it on its tick, none before the click is handled (tick 0).
   for (const line of lines.filter(({ afterMove = 0 }) => afterMove <= 0)) {
-    at(Math.max(animTick, moveTick + (line.afterMove ?? 0)), () => sayLine(player, line));
+    at(Math.max(0, moveTick + (line.afterMove ?? 0)), () => sayLine(player, line));
   }
   at(moveTick, () => {
     const landing = new core.Location(destination[0], destination[1], destination[2]);

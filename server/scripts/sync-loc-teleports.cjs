@@ -32,7 +32,7 @@ const OWN_PLUGIN = "LocTeleports";
 /** Ticks a probe waits for the move (the slowest captured loc teleports in 9). */
 const PROBE_TICKS = 15;
 
-const { choose, keyOf, toEntry, requirementFor, dialogueFor, crossingLines } = require("./loc-teleport-matching.cjs");
+const { choose, keyOf, toEntry, requirementFor, dialogueFor, linesForExisting } = require("./loc-teleport-matching.cjs");
 
 function argValue(flag) {
   const index = process.argv.indexOf(flag);
@@ -266,13 +266,13 @@ async function main() {
     return { ...rest, ...(requires ? { requires } : {}), ...(mesbox ? { mesbox } : {}), recordings };
   });
 
-  // A crossing's lines are captured data: they apply to entries already in the data too. An entry
-  // whose `message` was set by hand keeps it and gets no `messages`.
+  // A crossing's lines are captured data: they apply to entries already in the data too
+  // (linesForExisting: not over a hand-set `message`, and not from an export without `lines`).
   const captured = new Map(captures.map((entry) => [`${entry.name}:${keyOf(entry.x, entry.y, entry.z, entry.op)}`, entry]));
   let voiced = 0;
   const locsWithLines = gatedLocs.map((entry) => {
     const capture = captured.get(`${entry.name}:${keyOf(entry.x, entry.y, entry.z, entry.op)}`);
-    const lines = capture && entry.message === undefined && !entry.sides ? crossingLines(capture) : entry.messages ?? [];
+    const lines = linesForExisting(entry, capture);
     if (JSON.stringify(entry.messages ?? []) === JSON.stringify(lines)) return entry;
     voiced++;
     const { messages: oldMessages, recordings, ...rest } = entry;

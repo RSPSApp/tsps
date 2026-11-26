@@ -67,6 +67,15 @@ function crossingLines(entry) {
     .map(([text, type, afterMove]) => ({ text, ...(type === "spam" ? { type } : {}), ...(afterMove ? { afterMove } : {}) }));
 }
 
+/**
+ * An entry already in the data: its `messages` from its capture. Unchanged when its `message` was set by hand,
+ * it has a destination per side, or the export has no `lines` (older than the field).
+ */
+function linesForExisting(entry, capture) {
+  if (capture?.lines === undefined || entry.message !== undefined || entry.sides) return entry.messages ?? [];
+  return crossingLines(capture);
+}
+
 function refusals(entry) {
   return (entry.failures ?? []).map(([message]) => message).filter((message) => !NOISE.test(message));
 }
@@ -214,4 +223,4 @@ function toEntry(entry, { display, option, sequenceId, gate, asked }) {
   return out;
 }
 
-module.exports = { crossingLines, dialogueFor, distinctDestinations, requirementFor, KINDS, isNetwork, sharesSide, refusals, skipDecision, choose, keyOf, toEntry };
+module.exports = { crossingLines, linesForExisting, dialogueFor, distinctDestinations, requirementFor, KINDS, isNetwork, sharesSide, refusals, skipDecision, choose, keyOf, toEntry };

@@ -3983,13 +3983,22 @@ export class OsrsClient {
                             // Set varbit 8119 (has_displayname_transmitter) to 1 so chat scripts know we have a name
                             this.varManager.setVarbit(8119, 1);
                         }
-                        this.localChatNameIcons = Array.isArray(chatIcons)
+                        const nextChatIcons = Array.isArray(chatIcons)
                             ? chatIcons
                                   .map((icon) => Number(icon))
                                   .filter((icon) => Number.isFinite(icon) && icon >= 0)
                                   .map((icon) => icon | 0)
                             : [];
-                        this.localChatNamePrefix = typeof chatPrefix === "string" ? chatPrefix : "";
+                        const nextChatPrefix = typeof chatPrefix === "string" ? chatPrefix : "";
+                        const chatIdentityChanged =
+                            nextChatPrefix !== this.localChatNamePrefix ||
+                            nextChatIcons.length !== this.localChatNameIcons.length ||
+                            nextChatIcons.some((icon, idx) => icon !== this.localChatNameIcons[idx]);
+                        this.localChatNameIcons = nextChatIcons;
+                        this.localChatNamePrefix = nextChatPrefix;
+                        if (chatIdentityChanged) {
+                            markChatTransmit();
+                        }
                         this.localPlayerIsAdmin =
                             typeof isAdmin === "boolean"
                                 ? isAdmin

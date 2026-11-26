@@ -145,26 +145,39 @@ function bundleOut(player) {
   const start = player.getLocation().clone();
   const landing = random() < JAIL_SHARE ? JAIL : OUTSIDE;
   const movement = player.getMovementQueue();
+  let faded = false;
+  let awake = false;
+  const closeFade = () => {
+    if (faded) player.getPacketSender().closeSubInterface(FADE_OVERLAY_UID);
+    faded = false;
+  };
   const steps = new Map([
     [1, () => { spam(player, MESSAGE.BUNDLED); movement.setBlockMovement(true).reset(); }],
-    [1 + FALL_TICKS, () => { animate(player, FALL_ANIMATION); fade(player, true); }],
+    [1 + FALL_TICKS, () => { animate(player, FALL_ANIMATION); fade(player, true); faded = true; }],
     [1 + MOVE_TICKS, () => {
       if (player.getLocation().equals(start)) player.moveTo(new core.Location(...landing));
     }],
     [1 + WAKE_TICKS, () => {
+      awake = true;
       movement.setBlockMovement(false);
       setThief(player, 0);
       animate(player, null); // up off the floor
       fade(player, false);
       player.getDialogueManager().startDialogues(new core.DialogueChainBuilder().add(new core.StatementDialogue(0, MESSAGE.WAKE)));
     }],
-    [3 + WAKE_TICKS, () => player.getPacketSender().closeSubInterface(FADE_OVERLAY_UID)],
+    [3 + WAKE_TICKS, closeFade],
   ]);
-  // Moved some other way before the move (a teleport): the sequence ends there. However it ends, the
-  // player may move again.
+  // Moved some other way before the move (a teleport), or dead: the sequence ends there. However it ends, the
+  // player may move again, the screen comes back and the count is cleared.
   later(player, steps, {
     holds: (tick) => tick > 1 + MOVE_TICKS || player.getLocation().equals(start),
-    onStop: () => movement.setBlockMovement(false),
+    onStop: () => {
+      movement.setBlockMovement(false);
+      if (awake) return closeFade();
+      setThief(player, 0);
+      if (faded) fade(player, false);
+      closeFade();
+    },
   });
 }
 

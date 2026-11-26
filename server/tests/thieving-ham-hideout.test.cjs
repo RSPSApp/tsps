@@ -280,6 +280,7 @@ test('a bundle-out stops if the player is moved away before it moves them, and f
   tick(10);
   assert.ok(ticks.flat().every((line) => !line.startsWith('move') && !line.includes('wake up')), 'no move, no wake-up');
   assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+  assert.equal(varbits.get(235), 0, 'the count cleared');
 });
 
 test('dying during a bundle-out frees the movement it held', (t) => {
@@ -292,5 +293,22 @@ test('dying during a bundle-out frees the movement it held', (t) => {
   assert.equal(player.getMovementQueue().isMovementBlocked(), true);
   t.mock.method(player, 'getHitpoints', () => 0);
   tick(1);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+});
+
+test('dying after the fade-out brings the screen back and clears the count', (t) => {
+  t.mock.method(Math, 'random', () => 0.999999);
+  HamHideout._test.setRandom(() => 0.999999);
+  t.after(() => HamHideout._test.setRandom());
+  const { player, varbits } = hamPlayer(t);
+  varbits.set(235, 2);
+  failPickpocket(player, 3);
+  tick(failedAt() + 6 - (ticks.length - 1)); // to F+6: faded out, not yet moved
+  assert.ok(ticks.flat().includes('overlay 174 0,255,0,0,50'), 'faded out');
+  t.mock.method(player, 'getHitpoints', () => 0); // poison, or another attacker
+  tick(1);
+  assert.deepEqual(ticks[ticks.length - 1], ['varbit 235=0', 'overlay 174 0,0,0,255,50', 'close overlay']);
+  tick(6);
+  assert.ok(ticks.slice(-6).flat().length === 0, 'nothing after it ended');
   assert.equal(player.getMovementQueue().isMovementBlocked(), false);
 });

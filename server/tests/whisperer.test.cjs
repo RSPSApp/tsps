@@ -1764,9 +1764,14 @@ test('capture 3281: realm changes swap the boss model and the entrance tentacles
     assert.deepEqual(f.objects.map(([id,x])=>[id,x+256]),Common.data.objects.entrance.map(([x])=>[47585,x]));
     f.fight.setShadow(false);
     assert.deepEqual(f.boss.getModelCustomisationForUpdate(),[]);
-    f.objects.length=0;
-    f.fight.entrance(Common.data.objects.exit,0);
-    assert.deepEqual(f.objects.map(([id,,,rot])=>[id,rot]),Array(9).fill([47586,0]),'capture 3281: every kill sends all nine exit tentacles with rotation 0');
+});
+test('capture 3281: a real kill sends all nine exit tentacles with rotation 0', t => {
+    const f=achievementFixture(t), sent=[];
+    f.player.getPacketSender=()=>new Proxy({}, {get:(_,name)=>(...args)=>{
+        if(name==='sendObject')sent.push([args[0].getId(),args[0].getFace()]);
+    }});
+    f.kill();
+    assert.deepEqual(sent.filter(([id])=>id===47586),Array(9).fill([47586,0]));
 });
 test('capture 3281: volley impacts, melee and binding send their recorded sounds', () => {
     const f=recordingFixture();

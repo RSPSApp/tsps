@@ -292,7 +292,7 @@ Reported: Lock-pick did nothing at the Wilderness pirates' hideout and magic axe
 - **Doors.plugin:** 11726, 11727 and 11723 have no open loc in the cache, so they swing in place (`SELF_OPENING_DOOR_IDS`); the East Ardougne pair opens by the existing same-model rule.
 - **Ours (nothing captured; no recording touches these doors):** every message but the inside one, the pick animation (`human_pickuptable`, as Pyramid Plunder and the Forthos door), the unlock resolving on the click, the current (boostable) level, and Open from outside saying "The door is locked.".
 - **Ardougne Sewers gate** (rsprox capture 1625, rev 226): locked going east, towards the Rat Pits (Wiki), chart 16 at level 1 and 100 at 99. Open from the west plays synth 2402 and "The door is locked." (tick 1999). Pick-lock plays 2402, "You attempt to pick the lock." (spam) and, on the same tick, "You manage to pick the lock." with 25 XP and no animation (tick 2003). Open from the east says "You go through the door." (spam, tick 2512). Either way the clicked leaf alone swaps for inviswall 38848 and its open leaf (inacmetalgateopenr, 1574) the tile east with sound 71, the player walks across, and the leaf is back two ticks later: a pass-through gate in `Doors.plugin.js`. Ours: the north leaf (11721, never captured) opens as inacmetalgateopenl (1573) turned the other way, like the Observatory kitchen gate's pair; the failure line and the inside Pick-lock reply are the doors' ones, and a failed pick plays the same 2402 as a successful one (only a success is captured).
-- **Not done:** Ross' House (40178, 13 Thieving, 15 XP, a Hitpoints loss, a Mahogany Homes bypass), the H.A.M. Hideout jail door (5501, a retry ramp) and the Monkey Madness II door (28783, no Wiki page). Their pages give charts but not which side is "inside".
+- **Not done:** Ross' House (40178, 13 Thieving, 15 XP, a Hitpoints loss, a Mahogany Homes bypass) and the Monkey Madness II door (28783, no Wiki page). Their pages give charts but not which side is "inside". The H.A.M. Hideout jail door has its own section below.
 
 ### Chests
 
@@ -369,12 +369,21 @@ urchin aren't called. The notice radius is 6 tiles: one capture got it at 7 and 
 sweaty line and an ordinary attempt: the Wiki's "much slower" automatic pickpocketing for 15 seconds has no rate. A
 clue rolled at the cap keeps the clue, and the key waits for the next success.
 
+## The H.A.M. Hideout's concussions and jail
+
+`skills/thieving/HamHideout.Thieving.js`, from the [H.A.M. Member](https://oldschool.runescape.wiki/w/H.A.M._Member#Getting_thrown_out) and [Door (H.A.M. Hideout Jail)](https://oldschool.runescape.wiki/w/Door_(H.A.M._Hideout_Jail)) pages and rsprox 1723 (rev 227, Leagues V; four bundle-outs, three into the jail).
+
+- **The blow:** caught pickpocketing a H.A.M. Member in the hideout, the NPC's blow (Pickpocket's `thieving:struck`) either concusses ("You feel slightly concussed from the blow.") or the player's Agility partly avoids it ("Your agility helps you partially avoid the blow.", chart 0/254). It comes with the strike, a tick after the failure line. Each concussion counts up varbit 235 `ham_thief`, which the trapdoor's multiloc also reads. Climbing down the trapdoor and waking up put it back to 0.
+- **Bundled out:** the third concussion sends "You're beaten unconscious and bundled out of the HAM Camp." after the stun's line. Two ticks later come the backwards fall (`human_death_backwards`) and a fade out, four after that the move, and a tick later `ham_thief` 0, the fade back in and the message box "You slowly wake up in an unknown place." The player wakes in the jail cell (3185, 9609) or outside (3186, 3211). Ours: three in four go to the jail (the recorded share; the Wiki gives no odds). The fade overlay closes two ticks after the fade in, where live closes it with the message box.
+- **The jail door** (5501 at 3183, 9611, on that tile's west edge): Open says "This door seems very secure." and never opens. Pick-lock works only from inside the cell (from outside it answers as Open does, ours). Each try takes seven ticks: "You attempt to pick the lock on the door." with `human_lockedchest` and sound 2402, then the roll. A failure plays sound 2581, numbs the fingers as the trapdoor does (−1 Thieving, 0.5 XP) and moves to the next of the Wiki's four charts (10/252, 30/273, 50/294, 70/315; 60/300 to 120/360 with a lockpick or hair clip), kept in `ham_thief`. A new Pick-lock starts from the first chart. Success says "You pick the lock on the prison door.", and a tick later the player steps west through the door with sounds 52 and 71 and 3.8 XP, with no door swing.
+- **Recorded difference:** the recording drains Thieving on 2 of 8 failed tries; the Wiki's page says every time (in the trapdoor page's words), which is followed. Its seven-tick tries are from a Leagues world.
+- **Not done:** H.A.M. robes making the boot less likely (the Wiki's "about 4%" a piece doesn't say of what).
+
 ## Not modelled
 
 - **Villagers after The Feud:** the quest retains its own tutorial lure and knockout; generic post-quest villagers are not implemented.
 - **The Ardougne diary:** no diary system exists yet. Its effects would be +10% success (medium: in Ardougne; hard: everywhere), the gloves of silence becoming ineffective, and coin pouch limits of 56, 84 and 140.
 - **Location- or quest-only loot:** the Pirate's medallion fragment (The Onyx Crest only), the Pirate's very rare medium clue (no rate given), and the H.A.M. robe table during Death to the Dorgeshuun.
-- **The H.A.M. camp's failures:** "You feel slightly concussed from the blow.", "Your agility helps you partially avoid the blow." and "You're beaten unconscious and bundled out of the HAM Camp." (1723, Leagues V, and the Wiki). A failure here is the ordinary stun.
 - **The in-game loot tracker beyond the baker's stall:** the Ardougne silk, fur, spice, gem and silver stalls aren't tracked: no capture since the tracker was added shows whether they are.
 
 ## Cache NPCs with a Pickpocket option that this doesn't cover

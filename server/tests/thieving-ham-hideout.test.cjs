@@ -1,0 +1,254 @@
+// Run after `yarn build`: node --test tests/thieving-ham-hideout.test.cjs
+// The H.A.M. Hideout's concussions and jail door (plugins/skills/thieving/HamHideout.Thieving.js), through the real
+// pickpocket's failure and the door hooks. Expected lines and ticks: rsprox 227/01723.txt (Leagues V) and the Wiki
+// pages H.A.M. Member and Door (H.A.M. Hideout Jail).
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { test, before, beforeEach } = require('node:test');
+const { Server } = require('../dist/Server');
+Server.installProductionPathResolver();
+const { PluginManager } = require('../dist/plugins/PluginManager');
+const { Player } = require('../dist/game/entity/impl/player/Player');
+const { Sounds } = require('../dist/game/Sounds');
+const Thieving = require('../plugins/skills/Thieving.plugin');
+const HamHideout = require('../plugins/skills/thieving/HamHideout.Thieving');
+
+const core = PluginManager.getCoreApi();
+const tasks = [];
+const handlers = new Map();
+const objectHooks = new Map();
+Thieving.register({
+  core: {
+    ...core,
+    CombatFactory: { inCombat: () => false, stunTicks: () => {} },
+    TaskManager: { submit: (task) => { task.setRunning(true); tasks.push(task); } },
+  },
+  onCustomEvent: (name, handler) => handlers.set(name, [...(handlers.get(name) ?? []), handler]),
+  emitCustomEvent: (name, request) => (handlers.get(name) ?? []).forEach((handler) => handler(request)),
+  onObjectInteraction: (name, actions) => objectHooks.set(name, [...(objectHooks.get(name) ?? []), actions]),
+  persistAttribute() {}, onPlayerLogin() {}, onPlayerLogout() {}, onServerStartup() {},
+  onNpcDialogueVariant() {}, onNpcDialogueCondition() {}, onItemOnNpc() {},
+  onNpcsInteraction() {}, onNpcInteraction() {}, onBeforeObjectInteraction() {}, onItemAction() {},
+  log: () => {},
+});
+Sounds.sendSound = () => {};
+
+/** What each tick sent the player, from the click (tick 0) on. */
+let ticks = [];
+const say = (line) => ticks[ticks.length - 1].push(line);
+function tick(count = 1) {
+  for (let i = 0; i < count; i++) {
+    ticks.push([]);
+    for (const task of [...tasks]) if (task.isRunning()) task.execute();
+  }
+}
+
+/** A real player in the hideout, its packets and varbits recorded. */
+function hamPlayer(t, at = [3165, 9634, 0], { thieving = 50, agility = 1 } = {}) {
+  const player = new Player(null);
+  t.mock.method(player, 'getSession', () => ({ sendClientPacket: () => true, write: () => true }));
+  t.mock.method(player, 'isRegistered', () => true);
+  player.setLocation(new core.Location(...at));
+  const skills = player.getSkillManager();
+  skills.setCurrentLevels(core.Skill.THIEVING, thieving, false);
+  skills.setCurrentLevels(core.Skill.AGILITY, agility, false);
+  const varbits = new Map();
+  const sender = player.getPacketSender();
+  t.mock.method(sender, 'getVarbit', (id) => varbits.get(id) ?? 0);
+  t.mock.method(sender, 'sendVarbit', (id, value) => { varbits.set(id, value); say(`varbit ${id}=${value}`); return sender; });
+  t.mock.method(sender, 'sendTypedMessage', (type, text) => { say(`${type === core.ChatType.SPAM ? 'spam' : type}: ${text}`); return sender; });
+  t.mock.method(sender, 'sendSound', (id) => { say(`sound ${id}`); return sender; });
+  t.mock.method(sender, 'sendSubInterface', (_uid, id, _type, { postScripts }) => { say(`overlay ${id} ${postScripts[0].args.join(',')}`); return sender; });
+  t.mock.method(sender, 'closeSubInterface', () => { say('close overlay'); return sender; });
+  t.mock.method(player, 'sendMessage', (text) => say(`game: ${text}`));
+  t.mock.method(player, 'performAnimation', (animation) => say(`anim ${animation.getId()}`));
+  t.mock.method(player.getDialogueManager(), 'startDialogues', (chain) => say(`mesbox: ${chain.dialogues.get(0).getText()}`));
+  t.mock.method(player, 'moveTo', (location) => { say(`move ${location.getX()},${location.getY()},${location.getZ()}`); player.setLocation(location); return player; });
+  return { player, varbits };
+}
+
+function hamMember(at = [3166, 9634, 0]) {
+  return {
+    getId: () => core.NpcIdentifiers.H_A_M_MEMBER,
+    getTimers: () => ({ registers: () => {} }),
+    isRegistered: () => true,
+    getLocation: () => new core.Location(...at),
+    setPositionToFace: () => {},
+    forceChat: () => {},
+    performAnimation: () => {},
+    getAttackAnim: () => 422,
+  };
+}
+
+/** One failed pickpocket of a H.A.M. Member, through Pickpocket's own task, then `count` more ticks. */
+function failPickpocket(player, count) {
+  // `repeat`: a follow-up attempt, past the click's cooldown, as a fresh player's first click is.
+  const event = { player, npc: hamMember(), npcId: core.NpcIdentifiers.H_A_M_MEMBER, definition: { getName: () => 'H.A.M. Member' }, repeat: true };
+  Thieving._test.pickpocket(event);
+  ticks = [[]];
+  tick(count);
+}
+
+const failedAt = () => ticks.findIndex((lines) => lines.some((line) => line.includes("You fail to pick the man's pocket.")));
+
+before(async () => {
+  await require('../dist/game/cache/CachePipeline').CachePipeline.initialize(path.resolve(__dirname, '..'));
+});
+
+beforeEach(() => {
+  tasks.length = 0;
+  ticks = [[]];
+});
+
+test('the Wiki charts: the Agility avoid and the jail lock, try by try, with and without a lockpick', () => {
+  const { chartChance, LOCK_CHARTS } = HamHideout._test;
+  const percent = (level, chart) => +(chartChance(level, chart) * 100).toFixed(6);
+  // H.A.M. Member: "Avoiding concussions using Agility" 0/254, about 0.39% at level 1 and 99.6% at 99.
+  assert.equal(percent(1, [0, 254]), 0.390625);
+  assert.equal(percent(99, [0, 254]), 99.609375);
+  // Door (H.A.M. Hideout Jail): 4.296875% to 27.734375% at level 1 bare-handed, 23.828125% to 47.265625% with a lockpick.
+  assert.deepEqual(LOCK_CHARTS.bare.map((chart) => percent(1, chart)), [4.296875, 12.109375, 19.921875, 27.734375]);
+  assert.deepEqual(LOCK_CHARTS.lockpick.map((chart) => percent(1, chart)), [23.828125, 31.640625, 39.453125, 47.265625]);
+  assert.equal(percent(99, LOCK_CHARTS.bare[0]), 98.828125);
+  // The 2nd to 4th bare tries reach certainty at 92, 84 and 75 (the page's chart).
+  assert.deepEqual([[92, 1], [84, 2], [75, 3]].map(([level, at]) => chartChance(level, LOCK_CHARTS.bare[at])), [1, 1, 1]);
+  assert.ok(chartChance(91, LOCK_CHARTS.bare[1]) < 1);
+});
+
+test("a H.A.M. Member's blow concusses a tick after the failure, counting up ham_thief", (t) => {
+  t.mock.method(Math, 'random', () => 0.999999); // the pick fails
+  HamHideout._test.setRandom(() => 0.999999); // no Agility avoid
+  t.after(() => HamHideout._test.setRandom());
+  const { player, varbits } = hamPlayer(t);
+  failPickpocket(player, 4);
+  const failed = failedAt();
+  assert.ok(failed >= 0, `the pick failed: ${JSON.stringify(ticks)}`);
+  // rsprox 227/01723.txt tick 8655-8657: the failure, the concussion a tick later, "You've been stunned!" after it.
+  assert.deepEqual(ticks[failed + 1].filter((line) => !line.startsWith('anim')), ['varbit 235=1', 'spam: You feel slightly concussed from the blow.']);
+  assert.ok(ticks[failed + 2].includes("spam: You've been stunned!"));
+  assert.equal(varbits.get(235), 1);
+});
+
+test('Agility partly avoids the blow: no concussion counted (Wiki: H.A.M. Member)', (t) => {
+  t.mock.method(Math, 'random', () => 0.999999);
+  HamHideout._test.setRandom(() => 0);
+  t.after(() => HamHideout._test.setRandom());
+  const { player, varbits } = hamPlayer(t);
+  failPickpocket(player, 3);
+  assert.ok(ticks[failedAt() + 1].includes('spam: Your agility helps you partially avoid the blow.'));
+  assert.equal(varbits.get(235), undefined, 'the count is untouched');
+});
+
+test('outside the hideout a H.A.M. Member\'s blow is only the stun', (t) => {
+  t.mock.method(Math, 'random', () => 0.999999);
+  HamHideout._test.setRandom(() => 0.999999);
+  t.after(() => HamHideout._test.setRandom());
+  const { player, varbits } = hamPlayer(t, [3166, 3250, 0]);
+  failPickpocket(player, 3);
+  assert.ok(ticks.flat().every((line) => !line.includes('concussed') && !line.includes('avoid the blow')));
+  assert.equal(varbits.get(235), undefined);
+});
+
+test('the third concussion bundles the player out: the line, the fall and fade, the jail and the wake-up, as recorded', (t) => {
+  t.mock.method(Math, 'random', () => 0.999999);
+  let rolls = [0.999999, 0]; // no Agility avoid, then the jail
+  HamHideout._test.setRandom(() => rolls.shift() ?? 0.999999);
+  t.after(() => HamHideout._test.setRandom());
+  const { player, varbits } = hamPlayer(t);
+  varbits.set(235, 2);
+  failPickpocket(player, 14);
+  const f = failedAt();
+  const without = (lines, prefix) => lines.filter((line) => !line.startsWith(prefix));
+  // rsprox 227/01723.txt ticks 8696-8705: failure (F), concussion 2->3 (F+1), the stun's line then the bundling (F+2),
+  // the backwards fall and fade out (F+4), the move to the cell (F+8), ham_thief 3->0, fade in and the message box (F+9).
+  assert.deepEqual(without(ticks[f + 1], 'anim'), ['varbit 235=3', 'spam: You feel slightly concussed from the blow.']);
+  assert.deepEqual(ticks[f + 2].filter((line) => line.startsWith('spam')), ["spam: You've been stunned!", "spam: You're beaten unconscious and bundled out of the HAM Camp."]);
+  assert.deepEqual(ticks[f + 4], [`anim ${core.CacheDefinitions.getSeqId('human_death_backwards')}`, 'overlay 174 0,255,0,0,50']);
+  assert.deepEqual(ticks[f + 8], ['move 3185,9609,0']);
+  assert.deepEqual(ticks[f + 9], ['varbit 235=0', 'overlay 174 0,0,0,255,50', 'mesbox: You slowly wake up in an unknown place.']);
+  assert.deepEqual(ticks[f + 11], ['close overlay']);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false, 'free to move once awake');
+  assert.ok(tasks.every((task) => typeof task.tick === 'function'), "no task's own fields shadow Task.tick()");
+});
+
+test('bundled out the other way, the player wakes outside the hideout', (t) => {
+  t.mock.method(Math, 'random', () => 0.999999);
+  HamHideout._test.setRandom(() => 0.999999);
+  t.after(() => HamHideout._test.setRandom());
+  const { player, varbits } = hamPlayer(t);
+  varbits.set(235, 2);
+  failPickpocket(player, 12);
+  assert.deepEqual([player.getLocation().getX(), player.getLocation().getY(), player.getLocation().getZ()], [3186, 3211, 0]);
+});
+
+const jailDoor = () => ({ getId: () => core.ObjectIdentifiers.DOOR_148, getLocation: () => new core.Location(3183, 9611, 0) });
+const doorEvent = (player, option) => ({
+  player, object: jailDoor(), clickType: option === 'Open' ? 1 : 5, handled: false,
+  definition: { getInteractions: () => ['Open', null, null, null, 'Pick-lock'] },
+});
+
+test('the jail door never opens: Open says it is very secure, from either side', (t) => {
+  for (const at of [[3183, 9610, 0], [3182, 9611, 0]]) {
+    const { player } = hamPlayer(t, at);
+    const event = doorEvent(player, 'Open');
+    for (const handler of handlers.get('door:toggle')) handler(event);
+    assert.equal(event.handled, true);
+    assert.deepEqual(ticks[0], ['game: This door seems very secure.']);
+    ticks = [[]];
+  }
+  // Pick-lock is left to its own hook.
+  const { player } = hamPlayer(t, [3183, 9611, 0]);
+  const pick = doorEvent(player, 'Pick-lock');
+  for (const handler of handlers.get('door:toggle')) handler(pick);
+  assert.equal(pick.handled, false);
+});
+
+test('Pick-lock from outside the cell does nothing but say how secure the door is (Wiki: not from outside)', (t) => {
+  const { player } = hamPlayer(t, [3182, 9611, 0]);
+  assert.equal(HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock')), true);
+  assert.deepEqual(ticks[0], ['game: This door seems very secure.']);
+  assert.equal(tasks.length, 0);
+});
+
+test('the jail lock: seven-tick tries, each failure numbing the fingers and raising the chart, then out through the door', (t) => {
+  const rolls = [0.999999, 0.999999, 0.999999, 0.999999, 0]; // four failures, then the lock gives
+  HamHideout._test.setRandom(() => rolls.shift());
+  t.after(() => HamHideout._test.setRandom());
+  const { player, varbits } = hamPlayer(t, [3183, 9611, 0], { thieving: 18 });
+  const pick = core.CacheDefinitions.getSeqId('human_lockedchest');
+  assert.equal(HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock')), true);
+  // rsprox 227/01723.txt ticks 8862-8878: the attempt line, the pick animation and its sound at once.
+  assert.deepEqual(ticks[0], ['spam: You attempt to pick the lock on the door.', `anim ${pick}`, 'sound 2402']);
+  tick(7);
+  // Seven ticks on: the failure's sound, the next try's line, the numb fingers, ham_thief 0->1; the animation again a tick later.
+  assert.deepEqual(ticks[7].slice(0, 4), ['spam: You attempt to pick the lock on the door.', 'sound 2581', 'varbit 235=1',
+    'spam: You fail to pick the lock - your fingers get numb from fumbling with the lock.']);
+  assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.THIEVING), 17);
+  tick(1);
+  assert.deepEqual(ticks[8], [`anim ${pick}`, 'sound 2402']);
+  tick(20);
+  assert.equal(varbits.get(235), 3, 'the fourth chart is the last');
+  tick(7);
+  const success = ticks.length - 1;
+  assert.deepEqual(ticks[success], ['spam: You attempt to pick the lock on the door.', 'sound 2402', 'spam: You pick the lock on the prison door.', 'anim -1']);
+  tick(1);
+  assert.deepEqual(ticks[success + 1].filter((line) => !line.startsWith('spam')), ['varbit 235=0', 'sound 52', 'sound 71']);
+  const step = tasks.find((task) => task instanceof core.ForceMovementTask);
+  assert.ok(step, 'stepped through the door');
+  // rsprox 227/01723.txt tick 8878: one walked step west, 3183,9611 to 3182,9611, through the door's wall.
+  assert.deepEqual([step.forceMovement.getEnd().getX(), step.forceMovement.getEnd().getY()], [-1, 0]);
+  assert.ok(player.getSkillManager().getExperience(core.Skill.THIEVING) >= 3, 'the unlock\'s 3.8 XP');
+  assert.ok(tasks.every((task) => typeof task.tick === 'function'), "no task's own fields shadow Task.tick()");
+});
+
+test('a new Pick-lock starts the lock from its first chart', (t) => {
+  HamHideout._test.setRandom(() => 0.999999);
+  t.after(() => HamHideout._test.setRandom());
+  const { player, varbits } = hamPlayer(t, [3183, 9611, 0]);
+  HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock'));
+  tick(14);
+  assert.equal(varbits.get(235), 2);
+  HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock'));
+  assert.equal(varbits.get(235), 0);
+  assert.equal(tasks.filter((task) => task.isRunning()).length, 1, 'the old attempt stopped');
+});

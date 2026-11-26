@@ -46,6 +46,20 @@ test("an NPC a player damaged forgets that player when the player leaves the wor
   assert.equal(npc.combat.getLastDamager(), null);
 });
 
+test("damage that lands after a player left (a burn tick) does not record that player again", () => {
+  const npc = fakeNpc();
+  const player = fakePlayer("burner");
+  npc.combat.addDamage(player, 4);
+  player.registered = false;
+  player.combat.forgetFights();
+
+  npc.combat.addDamage(player, 1);
+
+  assert.equal(damageMapOf(npc.combat), null, "the departed player is not added back");
+  assert.equal(npc.combat.lastDamager, null);
+  assert.equal(player.combat.recordedIn, null, "the departed player's own fights stay forgotten");
+});
+
 test("an NPC whose last attack went at a player forgets that player when the player leaves", () => {
   const npc = fakeNpc();
   const player = fakePlayer("target");

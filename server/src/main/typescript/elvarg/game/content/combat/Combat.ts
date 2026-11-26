@@ -70,6 +70,8 @@ export class Combat {
     /** The other fights that recorded this player (its damage, or it as their last target), so that leaving
      * the world takes it out of them instead of it being kept in memory by every NPC it fought. */
     private recordedIn: Set<Combat> | null = null;
+    /** Set when this character leaves the world (forgetFights); damage it still deals is no longer recorded. */
+    private leftWorld = false;
     private readonly lastAttack = new TickStopwatch();
     /** Damage can delay healing without renewing another fighter\'s single-way tag. */
     private readonly lastDamage = new TickStopwatch();
@@ -770,11 +772,21 @@ export class Combat {
     public addDamage(entity: Mobile, amount: number): void {
         if (amount <= 0 || entity.isNpc()) return;
         const player = entity as Player;
+        const damagerCombat = Combat.of(player);
+        // A player that left the world earns nothing more (a burn or a delayed hit landing after logout),
+        // and recording it again would keep it in memory.
+        if (damagerCombat?.leftWorld && !player.isRegistered()) return;
         this.lastDamager = player;
-        player.getCombat?.()?.noteRecordedIn(this);
+        damagerCombat?.noteRecordedIn(this);
         const cached = this.damageMap?.get(player);
         if (cached) cached.incrementDamage(amount);
         else (this.damageMap ??= new Map()).set(player, new HitDamageCache(amount));
+    }
+
+    /** A character's own fight state; null for stand-ins without one. */
+    private static of(character: Mobile): Combat | null {
+        const combat = character.getCombat?.();
+        return combat instanceof Combat ? combat : null;
     }
 
     /** `other` now refers to this character (its damage map, last damager or last attack target). */
@@ -798,6 +810,7 @@ export class Combat {
             if (other.lastAttackTarget === player) other.lastAttackTarget = null;
         }
         this.recordedIn = null;
+        this.leftWorld = true;
     }
 
     /** The player who damaged this character most recently, while that damage still counts. */
@@ -1171,7 +1184,7 @@ export class Combat {
             }
         }
         this.lastAttackTarget = target;
-        if (target.isPlayer?.()) target.getCombat().noteRecordedIn(this);
+        if (target.isPlayer?.()) Combat.of(target)?.noteRecordedIn(this);
 
         // The swing's own animation is what may stall the character; specials override start() and
         // perform it themselves - many through super.start() first - so the arm stays open across

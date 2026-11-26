@@ -67,7 +67,7 @@ function harness(name, page = null, options = {}) {
         isNpc: () => true, isPlayer: () => false,
         getAsNpc: () => npc, isRegistered: () => !npc.removed, getOwner: () => definition.owner,
         setPositionToFace: noop, forceChat: noop, performAnimation: noop, performGraphic: noop,
-        getMovementQueue: () => ({ reset() { return this; }, hasPendingWork: () => false, addFirstStep: to => { location = to; }, addSteps: to => { npc.walkingTo = to; } }),
+        getMovementQueue: () => ({ reset() { return this; }, hasPendingWork: () => false, addFirstStep: to => { location = to; }, addSteps: to => { npc.walkingTo = to; }, addCheckpoint: to => { npc.walkingTo = to; } }),
         setNpcTransformationId: id => { npc.transformedId = id; }, setCombatXpMultiplier: noop,
         setHitpoints: hp => { npc.hitpoints = hp; return npc; }, getHitpoints: () => npc.hitpoints ?? 2000,
         getCombat: () => ({ reset: noop }),
@@ -361,8 +361,11 @@ test('Sins escort → boat → mausoleum advances through native myq5 checkpoint
   click(0); click(0); // cycle the probe tile through flagged back to blank
   for (let i = 0; i < 25; i++) if (solution & (1 << i)) click(i);
   assert.equal(h.quest.getStage(p), 52, 'solving the grid opens the mausoleum at 52');
-  h.emit('npc-dialogue:line', { player: p, npcId: N.SAFALAAN_HALLOW_2, text: "Please, inform the others for me." });
-  assert.equal(h.quest.getStage(p), 54, 'Safalaan asking for the others starts convincing at 54');
+  const inform = { player: p, npcId: N.SAFALAAN_HALLOW_2, text: "Please, inform the others for me." };
+  h.emit('npc-dialogue:line', inform);
+  assert.equal(h.quest.getStage(p), 52, 'the line alone (built ahead in the chain) does not advance');
+  inform.after();
+  assert.equal(h.quest.getStage(p), 54, 'continuing Safalaan asking for the others starts convincing at 54');
   assert.equal(p.varbits.get(7255), 54);
 });
 
@@ -418,6 +421,86 @@ test('Sins tomb lock follows the client tile cycle: blank, marked, flagged, blan
   assert.equal(p.configs.get(2715), solution, 'myq5_puzzle_tile_marked holds the stars');
   assert.equal(h.quest.getStage(p), 52, 'the solved lock opens the mausoleum even with a flagged tile left');
   assert.equal(p.varbits.get(10365), 1, 'myq5_puzzle_completed is set');
+});
+
+test('Sins mausoleum cutscene follows capture 1637: fade, cutscene copy, actors, Well?, back at 3704,3188', () => {
+  const h = harness('SinsOfTheFather', null, { realObjects: true }), p = player();
+  // The scene's real calls the shared stub player has no use for elsewhere.
+  Object.assign(p, {
+    setUntargetable: noop, getSpellbook: () => ({ getInterfaceId: () => 218 }), setLocation: to => p.moveTo(to),
+  });
+  const inventory = p.getInventory(), equipment = p.getEquipment();
+  inventory.refreshItems = noop;
+  const walks = [];
+  const queue = { reset() { return queue; }, setBlockMovement() { return queue; }, addCheckpoint: (...args) => walks.push(args), addStep: noop,
+    requestWalk: (to, run) => walks.push([to, run]) };
+  p.getMovementQueue = () => queue;
+  p.getEquipment = () => Object.assign(equipment, { refreshItems: noop });
+  h.quest.setStage(p, 48);
+  p.moveTo(new core.Location(3704, 3189, 0));
+  const unlock = h.namedObjects.get('Mausoleum door').Unlock;
+  unlock({ player: p, objectId: 39519 });
+  unlock({ player: p, objectId: 39519 });
+  const sums = uid => Number(p.log.filter(row => row[0] === 'text' && row[1] === uid).at(-1)?.[2]);
+  const rowSums = [26, 27, 28, 29, 30].map(c => sums((665 << 16) | c));
+  const colSums = [19, 20, 21, 22, 23].map(c => sums((665 << 16) | c));
+  let solution = -1;
+  const search = (row, mask) => {
+    if (solution >= 0) return;
+    if (row === 5) {
+      const cols = [0, 1, 2, 3, 4].map(c => [0, 1, 2, 3, 4].filter(r => mask & (1 << (r * 5 + c))).reduce((t, r) => t + r + 1, 0));
+      if (cols.every((v, i) => v === colSums[i])) solution = mask;
+      return;
+    }
+    for (let pattern = 0; pattern < 32; pattern++) {
+      const value = [0, 1, 2, 3, 4].filter(c => pattern & (1 << c)).reduce((t, c) => t + c + 1, 0);
+      if (value === rowSums[row]) search(row + 1, mask | (pattern << (row * 5)));
+    }
+  };
+  search(0, 0);
+  const lines = [];
+  (h.events['npc-dialogue:start'] ??= []).push(() => {});
+  const click = slot => tombButton(h)({ player: p, buttonId: (665 << 16) | 32, slot, handled: false });
+  p.log.length = 0;
+  for (let i = 0; i < 25; i++) if (solution & (1 << i)) click(i);
+  assert.equal(h.quest.getStage(p), 52);
+  assert.ok(p.log.some(row => row[0] === 'sendSound' && row[1] === 2419), 'solve sound 2419');
+  assert.notEqual(p.varbits.get(542), 1, 'cutscene_status waits two ticks');
+  h.tick(2);
+  assert.equal(p.varbits.get(542), 1, '+2: cutscene_status');
+  assert.equal(p.varbits.get(4606), 1, '+2: fov_clamp');
+  assert.ok(p.log.some(row => row[0] === 'sendSong' && row[1] === 665), '+2: Lament for the Hallowed');
+  const before = p.getLocation();
+  h.tick(1);
+  const copy = p.getLocation();
+  assert.ok(copy.getX() !== before.getX() || copy.getY() !== before.getY(), '+3: the player is in the graveyard copy');
+  h.tick(1);
+  const ids = h.npcs.filter(npc => !npc.removed).map(npc => npc.getId?.() ?? npc.id);
+  assert.ok(ids.includes(9539) && ids.includes(9575), '+4: Safalaan and Vanescula cutscene actors');
+  assert.ok(p.log.some(row => row[0] === 'sendCameraMoveTo'), '+4: camera');
+  h.tick(1);
+  assert.ok(walks.some(([to, run]) => run === false && to.getY() - copy.getY() === 4), '+5: the player walks (not runs) four tiles into the tomb');
+  h.tick(10);
+  assert.notEqual(p.text, 'Well?', 'not yet at +15');
+  h.tick(1);
+  assert.equal(p.text, 'Well?', '+16: Safalaan asks "Well?"');
+
+  const line = (speaker, text) => { const event = { player: p, step: { type: 'line', speaker, text }, text }; h.emit('npc-dialogue:line', event); return event; };
+  assert.equal(line('Safalaan Hallow', 'Well?').speakerId, 9539, 'Safalaan speaks with his cutscene head');
+  assert.equal(line('Vanescula Drakan', 'The powers of an icyene, yes.').speakerId, 9575);
+  const inform = line('Safalaan Hallow', 'Blurite Rock, I need some time to think over what we have discovered here. Please, inform the others for me.');
+  assert.equal(h.quest.getStage(p), 52, 'still 52 until that line is continued');
+  inform.after();
+  assert.equal(h.quest.getStage(p), 54, 'informing the others is 54 (capture 1637 tick 3749)');
+  const last = line('Safalaan Hallow', 'Now, both of you leave. I need some time alone.');
+  assert.equal(typeof last.after, 'function');
+  last.after();
+  assert.equal(p.varbits.get(542), 1, 'still in the cutscene while the screen fades');
+  h.tick(2);
+  assert.equal(p.varbits.get(542), 0, 'cutscene_status off');
+  assert.equal(p.varbits.get(4606), 0, 'fov_clamp off');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3704, 3188, 0], 'back on the real map at 3704,3188');
+  assert.ok(h.npcs.filter(npc => [9539, 9575].includes(npc.getId?.() ?? npc.id)).every(npc => npc.removed), 'the actors go with the copy');
 });
 
 test('Sins finale reaches 138 and grants the experience tome once', () => {

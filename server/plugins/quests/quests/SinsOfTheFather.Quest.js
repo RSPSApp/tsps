@@ -95,6 +95,9 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   const { registerQuest, startTranscript, startDialogue, refreshQuestList } = require("../QuestRuntime");
   const { createQuestScenes } = require("../QuestScenes");
   const Scenes = createQuestScenes(api);
+  // The mausoleum cutscene plays in a copy of the graveyard; a server stop inside it comes back at
+  // its exit. Its own factory, made after the quest's login hook (see the end of this file).
+  let TombScenes = null;
 
   const PAGE = "Sins of the Father";
   const START_HOOK = "quest:sins-of-the-father:start";
@@ -532,10 +535,34 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     [15, [3699, 3187, 500], [3686, 3187, 200]],
     [44, null],
   ];
-  const CAMERA_MAUSOLEUM = [
-    [0, [3704, 3195, 790], [3704, 3192, 90]],
-    [58, null],
-  ];
+  /**
+   * The cutscene after the mausoleum lock (rsprox capture 1637, ticks 3690-3752; tick 0 here is
+   * the solving click's response): fade out, cutscene state at +2, a copy of the graveyard
+   * (13 x 13 chunks from 3656,3144) at +3 with the door open, Safalaan and Vanescula's
+   * cutscene NPCs and the camera at +4, fade in and the walk into the tomb at +5, "Well?" at
+   * +16. Two ticks after the last line's fade out the player is back on the real map at 3704,3188.
+   */
+  const MAUSOLEUM_SCENE = {
+    name: "mausoleum",
+    instance: { sourceChunk: [457, 393], size: 13 },
+    bounds: [[3656, 3759, 3144, 3247, 0]],
+    at: [3704, 3188, 0],
+    exit: [3704, 3188, 0],
+    faceNorth: [3704, 3189],
+    door: { id: 38072, x: 3704, y: 3190, type: 0, face: 3 }, // ig_mausoleum_door_unlocked
+    safalaan: { id: 9539, at: [3703, 3188, 0], to: [3703, 3191] }, // myq5_safalaan_cutscene
+    vanescula: { id: 9575, at: [3705, 3188, 0], to: [3705, 3191] }, // myq5_vanescula_human_cutscene
+    doorway: [3704, 3190], // the one tile into the tomb
+    actorsFace: [3704, 3194],
+    playerTo: [3704, 3192],
+    camera: [[3704, 3195, 790], [3704, 3192, 90]],
+    sound: 2419,
+    song: 665, // Lament for the Hallowed
+    // walkSteps: 3704,3188 to 3704,3192, one tile a tick (camera target t+5..t+8).
+    // exit: fade out (3750) to the real map (3752); fadeIn: the real map to its fade in (3755).
+    ticks: { cutscene: 2, copy: 3, actors: 4, walk: 5, walkSteps: 4, talk: 16, exit: 2, fadeIn: 3 },
+  };
+  const VARBIT_FOV_CLAMP = 4606;
   const CAMERA_LAB = [
     [9, [3610, 9730, 900], [3610, 9738, 100]],
     [35, null],
@@ -851,11 +878,17 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   function handleNpcLine(event) {
     const { player, npcId } = event;
     if (!player) return;
+    // Live sets 54 as this line is continued (capture 1637, tick 3749); the runtime emits a
+    // transcript's line events as it builds the chain, so the advance waits for the line itself.
     if (
       quest.getStage(player) === STAGE_PUZZLE_DONE &&
       /inform the others/i.test(String(event.text ?? ""))
     ) {
-      advance(player, STAGE_CONVINCING);
+      const previous = event.after;
+      event.after = () => {
+        previous?.();
+        if (quest.getStage(player) === STAGE_PUZZLE_DONE) advance(player, STAGE_CONVINCING);
+      };
     }
     if (npcId !== TRADER_SVEN_ID) return;
     if (quest.getStage(player) < STAGE_DISGUISE_BRIEF) return;
@@ -3455,18 +3488,99 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
     tombPuzzleByPlayer.delete(player);
     player.getPacketSender().sendVarbit(VARBIT_PUZZLE_COMPLETED, 1);
     player.getPacketSender().closeSubInterface(TOMB_PUZZLE_OVERLAY);
-    playCamera(player, CAMERA_MAUSOLEUM);
     advance(player, STAGE_PUZZLE_DONE);
     syncQuestObjects(player);
-    later(player, 1, () => play(player, SAFALAAN_ID, "a-nice-and-simple-plan-the-secret-of-safalaan-hallow-part-2"));
+    playMausoleumScene(player);
+  }
+
+  function playMausoleumScene(player) {
+    const S = MAUSOLEUM_SCENE;
+    const sender = player.getPacketSender();
+    TombScenes.cancel(player);
+    sender.sendSound(S.sound, 255, 0);
+    TombScenes.fade(player, true);
+    TombScenes.hold(player);
+    player.getMovementQueue().reset().setBlockMovement(true);
+    TombScenes.later(player, S.ticks.cutscene, () => {
+      TombScenes.controls(player, true, true);
+      sender.sendVarbit(VARBIT_FOV_CLAMP, 1);
+      TombScenes.hideTabs(player);
+      sender.sendSong(S.song);
+    });
+    TombScenes.later(player, S.ticks.copy, () => {
+      const scene = TombScenes.open(player, S.name, S.bounds, { canTeleport: () => false, beforeEnd: leaveMausoleumScene },
+        { instance: S.instance, at: S.at, exit: S.exit });
+      TombScenes.face(player, S.faceNorth);
+      // The copy's closed door (39519) blocks the way in; live swaps it for the open one (loc_add_change).
+      const closed = scene.area?.getTemplateObject?.(TombScenes.tileFor(scene, [S.door.x, S.door.y, 0]), S.door.type);
+      if (closed) ObjectManager.deregister(closed, true);
+      TombScenes.loc(scene, S.door);
+      TombScenes.later(scene, S.ticks.actors - S.ticks.copy, () => {
+        const safalaan = TombScenes.actor(scene, S.safalaan.id, S.safalaan.at, S.actorsFace);
+        const vanescula = TombScenes.actor(scene, S.vanescula.id, S.vanescula.at, S.actorsFace);
+        TombScenes.camera(player, ...S.camera);
+        TombScenes.later(scene, S.ticks.walk - S.ticks.actors, () => {
+          TombScenes.fade(player, false);
+          // The scene holds the player still; the walk in is its own, so it lets go for those steps.
+          // A walk, not a run, whatever the player's toggle (one tile a tick in the capture).
+          player.getMovementQueue().reset().setBlockMovement(false)
+            .requestWalk(TombScenes.tileFor(scene, [S.playerTo[0], S.playerTo[1], 0]), false);
+          TombScenes.later(scene, S.ticks.walkSteps, () => player.getMovementQueue().reset().setBlockMovement(true));
+          // They follow through the doorway a tick behind.
+          TombScenes.later(scene, 1, () => {
+            for (const [npc, spec] of [[safalaan, S.safalaan], [vanescula, S.vanescula]]) {
+              if (!npc) continue;
+              TombScenes.walk(npc, S.doorway);
+              TombScenes.walk(npc, spec.to);
+            }
+          });
+        });
+      });
+      TombScenes.later(scene, S.ticks.talk - S.ticks.copy, () =>
+        play(player, SAFALAAN_ID, "a-nice-and-simple-plan-the-secret-of-safalaan-hallow-part-2"));
+    });
+  }
+
+  /** The scene's end, however it ends: the camera, controls and tabs come back. */
+  function leaveMausoleumScene(player) {
+    player.getPacketSender().sendVarbit(VARBIT_FOV_CLAMP, 0);
+    TombScenes.restoreTabs(player);
+  }
+
+  /** After the last line: fade out, back on the real map two ticks later, fade in three after that (capture 1637). */
+  function finishMausoleumScene(player) {
+    const scene = TombScenes.get(player);
+    if (scene?.name !== MAUSOLEUM_SCENE.name) return;
+    TombScenes.fade(player, true);
+    TombScenes.hold(player);
+    TombScenes.later(scene, MAUSOLEUM_SCENE.ticks.exit, () => {
+      TombScenes.end(player, false);
+      player.getDialogueManager().reset?.();
+      teleport(player, { x: MAUSOLEUM_SCENE.exit[0], y: MAUSOLEUM_SCENE.exit[1], z: 0 });
+      TombScenes.face(player, MAUSOLEUM_SCENE.faceNorth);
+      TombScenes.later(player, MAUSOLEUM_SCENE.ticks.fadeIn, () => TombScenes.fade(player, false));
+    });
+  }
+
+  /** Lines inside the tomb use the cutscene NPCs' heads, as live does (capture 1637). */
+  function mausoleumSceneLine(event) {
+    const { player } = event;
+    if (TombScenes.get(player)?.name !== MAUSOLEUM_SCENE.name) return;
+    const speaker = String(event.step?.speaker ?? "");
+    if (speaker === "Safalaan Hallow") event.speakerId = MAUSOLEUM_SCENE.safalaan.id;
+    else if (speaker === "Vanescula Drakan") event.speakerId = MAUSOLEUM_SCENE.vanescula.id;
+    if (/both of you leave/i.test(String(event.text ?? ""))) event.after = () => finishMausoleumScene(player);
   }
 
   function openMausoleum(event) {
     const { player } = event;
     if (!near(player, MAUSOLEUM_DOOR_TILE, 6)) return false;
-    if (quest.getStage(player) < STAGE_PUZZLE_DONE) return false;
+    const stage = quest.getStage(player);
+    if (stage < STAGE_PUZZLE_DONE) return false;
     event.handled = true;
-    teleport(player, MAUSOLEUM_INSIDE);
+    // Ours: a cutscene cut short (a logout) is played again from the open door; no capture shows it.
+    if (stage === STAGE_PUZZLE_DONE) playMausoleumScene(player);
+    else teleport(player, MAUSOLEUM_INSIDE);
     return true;
   }
 
@@ -3832,6 +3946,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   api.onCustomEvent("npc-dialogue:choice", handleDialogueChoice);
   api.onCustomEvent("npc-dialogue:line", fillTranscriptText);
   api.onCustomEvent("npc-dialogue:line", handleNpcLine);
+  api.onCustomEvent("npc-dialogue:line", mausoleumSceneLine);
   api.onCustomEvent("quest:stage-changed", handleStageChanged);
   api.onCustomEvent("ladders:climb", handleClimbRequest);
   api.onCustomEvent("door:toggle", handleDoorToggle);
@@ -3883,6 +3998,7 @@ module.exports = function registerSinsOfTheFatherQuest(api) {
   api.registerArea(new VanstromArena());
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
+  TombScenes = createQuestScenes(api, { recoveryAttribute: "quest.sins_of_the_father.scene-exit" });
   api.onPlayerDisconnect(handleLogout);
   api.onRegionLoaded(handleRegionLoaded);
 };

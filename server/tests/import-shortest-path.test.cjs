@@ -140,3 +140,73 @@ test('the production planner charges four ticks for both generated GE crossings'
     assert.equal(route.steps[1].via.id, correction.id);
   }
 });
+
+const moveInput = { ...allInput, corrections: allInput.corrections.filter((c) => 'newFrom' in c) };
+function moveRows() {
+  return { transports: moveInput.corrections.map((c) => [c.from, c.to, c.menu, c.id, null, null, null, null, null, 3]) };
+}
+
+test('move corrections replace only the origin and destination of the matched rows', () => {
+  const data = moveRows();
+  const expected = clone(data);
+  expected.transports.forEach((row, i) => {
+    row[0] = moveInput.corrections[i].newFrom;
+    row[1] = moveInput.corrections[i].newTo;
+  });
+  applyCorrections(data, moveInput);
+  assert.deepEqual(data, expected);
+});
+
+test('move corrections reject missing, ambiguous, already moved and invalid inputs atomically', () => {
+  for (const mutate of [
+    (data) => data.transports.pop(),
+    (data) => data.transports.push(clone(data.transports[1])),
+    (data) => { data.transports[1][3]++; },
+  ]) {
+    const data = moveRows();
+    mutate(data);
+    const before = clone(data);
+    assert.throws(() => applyCorrections(data, moveInput), /exactly one match/);
+    assert.deepEqual(data, before);
+  }
+  const caughtUp = moveRows();
+  const c = moveInput.corrections[1];
+  caughtUp.transports.push([c.newFrom, c.newTo, c.menu, c.id, null, null, null, null, null, 3]);
+  const before = clone(caughtUp);
+  assert.throws(() => applyCorrections(caughtUp, moveInput), /Stale/);
+  assert.deepEqual(caughtUp, before);
+  for (const mutation of [
+    (c) => { c.newTo = c.to; c.newFrom = c.from; },
+    (c) => { c.newFrom = [2683, 3266]; },
+    (c) => { c.newTo = null; },
+    (c) => { delete c.newTo; },
+    (c) => { c.quest = 'A quest'; },
+    (c) => { c.table = 'unknown'; },
+  ]) {
+    const invalid = clone(moveInput);
+    mutation(invalid.corrections[1]);
+    assert.throws(() => applyCorrections(moveRows(), invalid), /Malformed/);
+  }
+  const duplicate = clone(moveInput);
+  duplicate.corrections.push(clone(duplicate.corrections[0]));
+  assert.throws(() => applyCorrections(moveRows(), duplicate), /Duplicate/);
+});
+
+test('the production planner crosses the East Ardougne gangplanks from their map tiles', () => {
+  const { planTravel, indexTransports, key, BLOCKED } = require('../plugins/agent/mcp/TravelRoutes.AgentMcp');
+  const generated = require('../plugins/agent/data/transports.json');
+  const byOrigin = indexTransports(generated);
+  for (const correction of moveInput.corrections) {
+    assert.ok(!(byOrigin.get(key(...correction.from)) ?? []).some((t) => t.id === correction.id));
+    const [x, y, z] = correction.newFrom;
+    const [tx, ty, tz] = correction.newTo;
+    const route = planTravel({
+      from: { x, y, z }, to: { x: tx, y: ty, z: tz }, goalReach: 0,
+      getFlag: () => BLOCKED,
+      transportsAt: (x, y, z) => byOrigin.get(key(x, y, z)) ?? [],
+      usable: (transport) => transport.id === correction.id,
+    });
+    assert.ok(route);
+    assert.equal(route.steps[1].via.id, correction.id);
+  }
+});

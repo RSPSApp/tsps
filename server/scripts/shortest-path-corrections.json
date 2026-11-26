@@ -36,6 +36,24 @@
       "id": 16529,
       "expectedTicks": 7,
       "ticks": 4
+    },
+    {
+      "table": "transports",
+      "from": [2683, 3271, 0],
+      "to": [2683, 3268, 1],
+      "menu": "Cross Gangplank",
+      "id": 2085,
+      "newFrom": [2683, 3266, 0],
+      "newTo": [2683, 3263, 1]
+    },
+    {
+      "table": "transports",
+      "from": [2683, 3268, 1],
+      "to": [2683, 3271, 0],
+      "menu": "Cross Gangplank",
+      "id": 2086,
+      "newFrom": [2683, 3263, 1],
+      "newTo": [2683, 3266, 0]
     }
   ]
 }

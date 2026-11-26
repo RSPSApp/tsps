@@ -287,7 +287,9 @@ Only the frame list (seq opcode 1) is moved to the animation's own frame group. 
 those frames in Blender doesn't show in game.
 
 Animations use the cache's skeletons (frame maps). The add-ons never change them, and the editor
-refuses a `framemap-<id>.dat` that differs from the cache's.
+refuses a `framemap-<id>.dat` that differs from the cache's. A model of your own can have a
+skeleton of its own: a frame map whose id the cache doesn't have, from 30000 to 65535, written as
+`framemap-<id>.dat` next to the frames that use it. The editor sends it with the animation.
 
 Use them like any other id: `new Animation(50000)`, `new Graphic(50001)`, or in game
 `::anim 50000` and `::gfx 50001`.

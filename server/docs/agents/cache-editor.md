@@ -209,8 +209,13 @@ next start (`Assets.CacheEditor.cjs`).
 Files are content-addressed: the same upload twice is one file and one row. An animation's or a
 graphic's **name** is what plugins look it up by (`getSeqId`, `getCustomSpotanimId`), so it is
 lower_case, unique and not a cache name. An animation is checked on upload as the client decodes it:
-every frame its `seq.dat` names, against the cache's own frame map. A graphic's `anim/` folder
-becomes an animation asset and its `model.dat` a model asset, and its row points at both.
+every frame its `seq.dat` names, against its frame map. That is the cache's own, or a **custom
+frame map** (a skeleton for a model of your own): an id the cache doesn't have, from 30,000 to
+65,535, with its `framemap-<id>.dat` in the folder. A custom frame map travels with every animation
+that uses it, so all of them must have the same bytes under that id; an upload that differs is
+refused. A cache frame map can't be edited in place: give the edited one its own id. A graphic's
+`anim/` folder becomes an animation asset and its `model.dat` a model asset, and its row points at
+both.
 
 Where an upload comes from:
 

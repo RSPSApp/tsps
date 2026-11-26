@@ -146,23 +146,75 @@ function readFolder(dir) {
 }
 
 /**
- * Frames use the cache's frame maps (skeletons); an edited frame map isn't supported yet. Returns
- * the frame map's slot count (its first byte).
+ * Frame maps (skeletons) of the animation's own, which the cache doesn't have: from this id, so a
+ * cache revision that adds frame maps (about 2,800 today) never meets one. A frame names its frame
+ * map in a u16, so they end at 65535.
  */
-function checkFrameMap(files, id, what, CacheDefinitions) {
+const FIRST_CUSTOM_FRAME_MAP = 30000;
+const LAST_CUSTOM_FRAME_MAP = 0xffff;
+
+/**
+ * A frame map decodes as the client decodes it (rs/model/seq/SeqBase.ts, Dat2SeqBase): slot count
+ * (u8), a transform type a slot (u8), a label count a slot (u8), then each slot's labels (u8), and
+ * optionally a u16 bone count, which must be 0: a skeletal frame map isn't a frame animation's.
+ * Returns the slot count.
+ */
+function checkFrameMapData(data, what) {
+  if (data.length < 1 || data[0] === 0) fail(`${what} has no slots`);
+  const count = data[0];
+  let o = 1 + count;
+  if (o + count > data.length) fail(`${what} is truncated`);
+  let labels = 0;
+  for (let i = 0; i < count; i++) labels += data[o + i];
+  o += count + labels;
+  if (o > data.length) fail(`${what} is truncated`);
+  if (o === data.length) return count;
+  if (o + 2 !== data.length) fail(`${what} has ${data.length - o} byte(s) after its labels`);
+  if (data[o] !== 0 || data[o + 1] !== 0) fail(`${what} is a skeletal frame map; only frame animations are supported`);
+  return count;
+}
+
+/**
+ * The frame map `id` that an animation's frames use, returning its slot count. A cache frame map
+ * is the cache's: a framemap-<id>.dat next to the frames must be the same bytes. Any other id is a
+ * custom frame map, from FIRST_CUSTOM_FRAME_MAP, whose framemap-<id>.dat is checked and added to
+ * `custom` (id -> bytes), so it ships with the animation.
+ */
+function checkFrameMap(files, id, what, CacheDefinitions, custom = new Map()) {
   const cached = CacheDefinitions.getFrameMapData(id);
-  if (!cached || cached.length < 1) fail(`${what} uses frame map ${id}, which the cache doesn't have`);
   const own = files.get(`framemap-${id}.dat`);
-  if (own && !Buffer.from(cached).equals(own)) {
-    fail(`${what}: framemap-${id}.dat differs from the cache's; custom frame maps aren't supported yet`);
+  if (cached && cached.length >= 1) {
+    if (own && !Buffer.from(cached).equals(own)) {
+      fail(`${what}: framemap-${id}.dat differs from the cache's; give an edited frame map its own id, from ${FIRST_CUSTOM_FRAME_MAP}`);
+    }
+    return cached[0] & 0xff;
   }
-  return cached[0] & 0xff;
+  if (id < FIRST_CUSTOM_FRAME_MAP || id > LAST_CUSTOM_FRAME_MAP) {
+    fail(`${what} uses frame map ${id}, which the cache doesn't have (custom frame maps are ${FIRST_CUSTOM_FRAME_MAP}..${LAST_CUSTOM_FRAME_MAP})`);
+  }
+  if (!own) fail(`${what} uses custom frame map ${id} but has no framemap-${id}.dat`);
+  const slots = checkFrameMapData(own, `${what} framemap-${id}.dat`);
+  custom.set(id, own);
+  return slots;
+}
+
+/** Every custom frame map id must name the same bytes in every animation that ships it. */
+function checkSharedFrameMaps(rows) {
+  const seen = new Map();
+  for (const row of rows) {
+    for (const [id, data] of Object.entries(row.framemaps ?? {})) {
+      const first = seen.get(id);
+      if (first && first.data !== data) fail(`animations ${first.id} and ${row.id} use different frame maps under id ${id}`);
+      if (!first) seen.set(id, { id: row.id, data });
+    }
+  }
 }
 
 /**
  * Reads and checks an animation's files: seq.dat, every frame it names (frames/<group>-<file>.dat)
  * and the frame maps they use. Returns its opcodes, its frame list, each distinct frame's bytes (by
- * its original frame id, in order of first use) and the frame maps (skeletons) it moves.
+ * its original frame id, in order of first use), the frame maps (skeletons) it moves and, of
+ * those, the custom ones' bytes (customFrameMaps, id -> bytes).
  */
 function animationFiles(files, what, CacheDefinitions) {
   const seq = files.get("seq.dat");
@@ -173,31 +225,37 @@ function animationFiles(files, what, CacheDefinitions) {
   const { lengths, ids } = frameList(frameOp.payload);
   const frames = new Map();
   const framemaps = [];
+  const customFrameMaps = new Map();
   for (const id of ids) {
     if (frames.has(id)) continue;
     const name = `frames/${Math.floor(id / 65536)}-${id & 0xffff}.dat`;
     const data = files.get(name);
     if (!data) fail(`${what} is missing ${name}`);
     const framemap = (data[0] << 8) | data[1];
-    const slots = checkFrameMap(files, framemap, what, CacheDefinitions);
+    const slots = checkFrameMap(files, framemap, what, CacheDefinitions, customFrameMaps);
     checkFrame(data, slots, `${what} ${name}`);
     if (!framemaps.includes(framemap)) framemaps.push(framemap);
     frames.set(id, data);
   }
-  return { ops, frameOp, lengths, ids, frames, framemaps };
+  return { ops, frameOp, lengths, ids, frames, framemaps, customFrameMaps };
 }
 
 /**
  * The row players get for an animation (dataset customAnimations): its frames renumbered into its
- * own frame group, and its seq.dat pointed at them. `checked` is animationFiles' result.
+ * own frame group, its seq.dat pointed at them and, when it has any, its custom frame maps
+ * (framemaps, id -> base64). `checked` is animationFiles' result.
  */
 function animationRow(checked, id, name, group) {
-  const { ops, frameOp, lengths, ids, frames: bytes } = checked;
+  const { ops, frameOp, lengths, ids, frames: bytes, customFrameMaps } = checked;
   const fileOf = new Map([...bytes.keys()].map((frameId, file) => [frameId, file]));
   const frames = {};
   for (const [frameId, data] of bytes) frames[fileOf.get(frameId)] = data.toString("base64");
   frameOp.payload = framePayload(lengths, ids.map((frameId) => group * 65536 + fileOf.get(frameId)));
-  return { kind: "seq", id, name, data: encodeOps(ops).toString("base64"), group, frames };
+  const row = { kind: "seq", id, name, data: encodeOps(ops).toString("base64"), group, frames };
+  if (customFrameMaps?.size) {
+    row.framemaps = Object.fromEntries([...customFrameMaps].map(([framemap, data]) => [framemap, data.toString("base64")]));
+  }
+  return row;
 }
 
 /** The players' dataset of custom animations and graphics, and the most one content packet holds. */
@@ -236,6 +294,6 @@ function animationKeeps(files, checked) {
 
 module.exports = {
   NAME, fail, readSeq, frameList, framePayload, encodeOps, checkFrame, readSpotanim, setOp, u16, u32,
-  readFolder, checkFrameMap, animationFiles, animationKeeps, animationRow, fitsPacket, DATASET, PACKET_LIMIT,
-    FIRST_FRAME_GROUP,
+  readFolder, checkFrameMap, checkFrameMapData, checkSharedFrameMaps, animationFiles, animationKeeps, animationRow,
+  fitsPacket, DATASET, PACKET_LIMIT, FIRST_FRAME_GROUP, FIRST_CUSTOM_FRAME_MAP, LAST_CUSTOM_FRAME_MAP,
 };

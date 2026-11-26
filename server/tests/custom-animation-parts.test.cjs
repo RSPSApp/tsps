@@ -75,6 +75,31 @@ test("an animation that fits one packet is one row, as before", () => {
   assert.equal(Object.keys(mine[0].frames).length, 4);
 });
 
+test("a set of animations that each fit, but not together, is spread over packets", () => {
+  // Two animations of about 40 KB compressed each: every row fits, the set needs two packets.
+  const set = fs.mkdtempSync(path.join(os.tmpdir(), "custom-animation-set-"));
+  try {
+    for (const [k, name] of ["test_set_a", "test_set_b"].entries()) {
+      Assets.addAsset(set, {
+        kind: "animation", name,
+        files: Object.fromEntries([...animationFolder(45, 10 + k)].map(([file, bytes]) => [file, bytes.toString("base64")])),
+      }, core);
+    }
+    let login;
+    CustomAnimations.register({
+      core, root: set, log: () => {}, onServerStartup: () => {}, registerContentEndpoint: () => {},
+      onPlayerLogin: (fn) => { login = fn; },
+    });
+    const sent = [];
+    login({ player: { getPacketSender: () => ({ sendContentData: (_source, datasets) => sent.push(datasets) }) } });
+    assert.equal(sent.length, 2, "two packets");
+    for (const datasets of sent) assert.ok(encodeContentData("server", datasets).length <= 0xffff);
+    assert.deepEqual(sent.flatMap((datasets) => datasets[0].rows.map((row) => row.kind)), ["reset", "seq", "seq"]);
+  } finally {
+    fs.rmSync(set, { recursive: true, force: true });
+  }
+});
+
 test("an animation too big for one packet is stored, not refused", () => {
   const files = animationFolder(160);
   const whole = Files.animationRow(Files.animationFiles(files, "animation test", CacheDefinitions), 50001, "test_long", Files.FIRST_FRAME_GROUP + 1);

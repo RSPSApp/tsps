@@ -130,3 +130,38 @@ test('the drain still lands on a nagua that died meanwhile, with the recorded hi
   assert.equal(player.getSkillManager().getCurrentLevel(core.Skill.PRAYER), 0);
   assert.deepEqual(splats, [[3, { mine: 59, others: 59 }, false]], 'the splat shows the 3 points there were, not 5');
 });
+
+test('a ticked fight: the special still holds the player, so a second nagua stays refused through it (issue 6811, Wiki: PJ timer)', t => {
+  const { player, npc } = actors(t, NAGUA);
+  const other = PluginManager.spawnNpc({ id: NAGUA, x: 3220, y: 3218, z: 0, wanderRadius: 0 });
+  other.setNeedsPlacement(false);
+  t.after(() => { other.getCombat().getHitQueue().clear(); PluginManager.removeNpc(other); });
+  const Plugin = require('../plugins/npcs/SulphurNagua.plugin');
+  player.setAutoRetaliate?.(false);
+  player.getSkillManager().setMaxLevel(core.Skill.PRAYER, 70);
+  player.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 70);
+  const originalCycle = core.World.processCycle;
+  t.after(() => { core.World.processCycle = originalCycle; });
+  core.World.processCycle = 9000;
+  // Its last ordinary attack is due: the next one it makes is the special.
+  Plugin._test.attacks.set(npc, Plugin._test.ATTACKS_BEFORE_SPECIAL - 1);
+  npc.getCombat().attack(player);
+  const permission = () => core.CombatFactory.canAttackPermission(other, player, true);
+  const specialSeq = core.CacheDefinitions.getSeqId('npc_djinn_01_magic');
+  let specialAt = null;
+  const original = npc.performAnimation.bind(npc);
+  t.mock.method(npc, 'performAnimation', a => { if (a.getId() === specialSeq) specialAt = core.World.getProcessCycle(); return original(a); });
+  const refusedAfterSpecial = [];
+  for (let tick = 0; tick < 24; tick++) {
+    core.World.processCycle++;
+    npc.getCombat().preMovementProcess();
+    player.getCombat().preMovementProcess();
+    npc.getCombat().postMovementProcess();
+    player.getCombat().getHitQueue().process(core.World.getProcessCycle());
+    if (specialAt != null) refusedAfterSpecial.push(permission() === core.CanAttackResponse.TARGET_IN_COMBAT);
+  }
+  assert.ok(specialAt != null, 'the special was made');
+  assert.ok(refusedAfterSpecial.length > Plugin._test.NEXT_ATTACK_AFTER_SPECIAL + 2);
+  assert.deepEqual(refusedAfterSpecial.filter(r => !r), [], 'the player stays the first nagua\'s on every tick after the special');
+  assert.equal(player.getCombat().getAttacker(), npc);
+});

@@ -361,12 +361,7 @@ test('Sins escort → boat → mausoleum advances through native myq5 checkpoint
   click(0); click(0); // cycle the probe tile through flagged back to blank
   for (let i = 0; i < 25; i++) if (solution & (1 << i)) click(i);
   assert.equal(h.quest.getStage(p), 52, 'solving the grid opens the mausoleum at 52');
-  const inform = { player: p, npcId: N.SAFALAAN_HALLOW_2, text: "Please, inform the others for me." };
-  h.emit('npc-dialogue:line', inform);
-  assert.equal(h.quest.getStage(p), 52, 'the line alone (built ahead in the chain) does not advance');
-  inform.after();
-  assert.equal(h.quest.getStage(p), 54, 'continuing Safalaan asking for the others starts convincing at 54');
-  assert.equal(p.varbits.get(7255), 54);
+  assert.equal(p.varbits.get(7255), 52, 'the solve is native myq5=52; 54 comes in the cutscene (next test)');
 });
 
 test('Sins tomb lock follows the client tile cycle: blank, marked, flagged, blank (issue 6855)', () => {
@@ -423,9 +418,9 @@ test('Sins tomb lock follows the client tile cycle: blank, marked, flagged, blan
   assert.equal(p.varbits.get(10365), 1, 'myq5_puzzle_completed is set');
 });
 
-test('Sins mausoleum cutscene follows capture 1637: fade, cutscene copy, actors, Well?, back at 3704,3188', () => {
-  const h = harness('SinsOfTheFather', null, { realObjects: true }), p = player();
-  // The scene's real calls the shared stub player has no use for elsewhere.
+/** A stub player with the calls a QuestScenes cutscene makes; `walks` records its walk requests. */
+function scenePlayer() {
+  const p = player();
   Object.assign(p, {
     setUntargetable: noop, getSpellbook: () => ({ getInterfaceId: () => 218 }), setLocation: to => p.moveTo(to),
   });
@@ -436,6 +431,11 @@ test('Sins mausoleum cutscene follows capture 1637: fade, cutscene copy, actors,
     requestWalk: (to, run) => walks.push([to, run]) };
   p.getMovementQueue = () => queue;
   p.getEquipment = () => Object.assign(equipment, { refreshItems: noop });
+  return { p, walks };
+}
+
+test('Sins mausoleum cutscene follows capture 1637: fade, cutscene copy, actors, Well?, back at 3704,3188', () => {
+  const h = harness('SinsOfTheFather', null, { realObjects: true }), { p, walks } = scenePlayer();
   h.quest.setStage(p, 48);
   p.moveTo(new core.Location(3704, 3189, 0));
   const unlock = h.namedObjects.get('Mausoleum door').Unlock;
@@ -478,9 +478,17 @@ test('Sins mausoleum cutscene follows capture 1637: fade, cutscene copy, actors,
   const ids = h.npcs.filter(npc => !npc.removed).map(npc => npc.getId?.() ?? npc.id);
   assert.ok(ids.includes(9539) && ids.includes(9575), '+4: Safalaan and Vanescula cutscene actors');
   assert.ok(p.log.some(row => row[0] === 'sendCameraMoveTo'), '+4: camera');
+  assert.ok(walks.some(([to, run]) => run === false && to.getY() - copy.getY() === 4), '+4: the player walks (not runs) four tiles into the tomb');
+  const actor = id => h.npcs.find(npc => (npc.getId?.() ?? npc.id) === id);
   h.tick(1);
-  assert.ok(walks.some(([to, run]) => run === false && to.getY() - copy.getY() === 4), '+5: the player walks (not runs) four tiles into the tomb');
-  h.tick(10);
+  h.tick(1);
+  assert.equal(actor(9539).walkingTo, undefined, 'Safalaan waits until +7');
+  h.tick(1);
+  assert.ok(actor(9539).walkingTo, '+7: Safalaan walks in');
+  assert.equal(actor(9575).walkingTo, undefined, 'Vanescula waits until +9');
+  h.tick(2);
+  assert.ok(actor(9575).walkingTo, '+9: Vanescula follows');
+  h.tick(6);
   assert.notEqual(p.text, 'Well?', 'not yet at +15');
   h.tick(1);
   assert.equal(p.text, 'Well?', '+16: Safalaan asks "Well?"');
@@ -489,11 +497,14 @@ test('Sins mausoleum cutscene follows capture 1637: fade, cutscene copy, actors,
   assert.equal(line('Safalaan Hallow', 'Well?').speakerId, 9539, 'Safalaan speaks with his cutscene head');
   assert.equal(line('Vanescula Drakan', 'The powers of an icyene, yes.').speakerId, 9575);
   const inform = line('Safalaan Hallow', 'Blurite Rock, I need some time to think over what we have discovered here. Please, inform the others for me.');
-  assert.equal(h.quest.getStage(p), 52, 'still 52 until that line is continued');
-  inform.after();
-  assert.equal(h.quest.getStage(p), 54, 'informing the others is 54 (capture 1637 tick 3749)');
+  assert.equal(inform.after, undefined, 'informing the others is not yet 54');
   const last = line('Safalaan Hallow', 'Now, both of you leave. I need some time alone.');
-  assert.equal(typeof last.after, 'function');
+  assert.equal(h.quest.getStage(p), 52, 'still 52 while the chain is built');
+  last.before();
+  assert.equal(h.quest.getStage(p), 54, '54 as "Of course." is continued and this line opens (capture 1637 tick 3749)');
+  let removals = 0;
+  const packet = p.getPacketSender(), removal = packet.sendInterfaceRemoval;
+  packet.sendInterfaceRemoval = () => { removals++; return removal(); };
   last.after();
   assert.equal(p.varbits.get(542), 1, 'still in the cutscene while the screen fades');
   h.tick(2);
@@ -501,6 +512,30 @@ test('Sins mausoleum cutscene follows capture 1637: fade, cutscene copy, actors,
   assert.equal(p.varbits.get(4606), 0, 'fov_clamp off');
   assert.deepEqual([p.getLocation().getX(), p.getLocation().getY(), p.getLocation().getZ()], [3704, 3188, 0], 'back on the real map at 3704,3188');
   assert.ok(h.npcs.filter(npc => [9539, 9575].includes(npc.getId?.() ?? npc.id)).every(npc => npc.removed), 'the actors go with the copy');
+  assert.equal(removals, 0, 'the empty chatbox stays until the fade in');
+  h.tick(3);
+  assert.equal(removals, 1, 'the empty chatbox closes with the fade in (tick 3755)');
+});
+
+test('Sins mausoleum cutscene ends if its talk is closed early, and the open door plays it again (Ours)', () => {
+  const h = harness('SinsOfTheFather', null, { realObjects: true }), { p } = scenePlayer();
+  h.quest.setStage(p, 52);
+  p.moveTo(new core.Location(3704, 3189, 0));
+  const open = () => h.namedObjects.get('Mausoleum door').Open({ player: p, objectId: 38071, handled: false });
+  assert.equal(open(), true, 'stage 52: the open door plays the cutscene');
+  h.tick(16);
+  assert.equal(p.text, 'Well?');
+  assert.equal(p.varbits.get(542), 1);
+  p.manager.reset(); // Esc on the chat modal
+  h.tick(2);
+  assert.equal(p.varbits.get(542), 1, 'the scene fades out first');
+  h.tick(2);
+  assert.equal(p.varbits.get(542), 0, 'the scene ends instead of holding the player in the copy');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [3704, 3188]);
+  assert.equal(h.quest.getStage(p), 52, 'the talk was not finished: still 52');
+  assert.equal(open(), true, 'and the door plays it again');
+  h.tick(3);
+  assert.equal(p.varbits.get(542), 1);
 });
 
 test('Sins finale reaches 138 and grants the experience tome once', () => {

@@ -73,16 +73,17 @@ marker, so a new native stage 20/22 is never reinterpreted as old progress.
   Only marked tiles count toward the sums (issue 6855: a tile clicked three
   times used to count as marked). The server tracks the grid in memory, so
   relogging mid-puzzle regenerates a fresh solvable grid.
-- The mausoleum cutscene follows rsprox capture 1637 (ticks 3690-3752), counting from the
+- The mausoleum cutscene follows rsprox capture 1637 (ticks 3690-3757), counting from the
   solving click: sound 2419 and fade out at once, cutscene state, `fov_clamp` and Lament for the
   Hallowed at +2, a 13 x 13-chunk copy of the graveyard (from 3656,3144) with the open door 38072
-  at +3, the cutscene NPCs (Safalaan 9539 at 3703,3188, Vanescula 9575 at 3705,3188) and the
-  camera at +4, fade in and the walk to 3704,3192 at +5 (the NPCs follow through the doorway to
-  3703,3191 and 3705,3191), and "Well?" at +16 with the cutscene chatheads. Stage 54 is set as
-  "Please, inform the others" is continued (tick 3749). After "Now, both of you leave" the
-  screen fades out, the player is back on the real map at 3704,3188 two ticks later, and the
-  screen fades in three ticks after that. A logout inside the scene leaves stage 52, so the open
-  door plays it again (Ours: no capture shows a logout there).
+  at +3, the cutscene NPCs (Safalaan 9539 at 3703,3188, Vanescula 9575 at 3705,3188), the camera
+  and the player's walk to 3704,3192 at +4 (one tile a tick), fade in at +5, Safalaan through the
+  doorway to 3703,3191 at +7 and Vanescula to 3705,3191 at +9, and "Well?" at +16 with the
+  cutscene chatheads. Stage 54 is set as "Of course." is continued (tick 3749). After "Now, both
+  of you leave" the screen fades out, the player is back on the real map at 3704,3188 two ticks
+  later, and three ticks after that the screen fades in and the empty chatbox closes.
+  Ours: a talk closed early (Esc) ends the scene the same way at stage 52, and at stage 52 the
+  open door plays the scene again (also after a logout inside it); no capture shows either.
 - Darkmeyer bank/attack restrictions and the Hallowed Sepulchre/daeyalt
   entrances are outside this quest's mandatory route.
 - Vanstrom uses the real stats, enrage, lightning, pets, darkness and orb

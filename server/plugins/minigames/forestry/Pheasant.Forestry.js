@@ -65,13 +65,9 @@ function flight(event) {
     Common.animate(bird.npc, seqs.land);
     bird.npc.performGraphic?.(new Common.core.Graphic(graphics.land));
     // Wiki: it lands on players next to the nest, whether or not they took its egg; moving
-    // away before it lands is the way to avoid the stun.
-    const beside = new Set([
-      ...[...event.site.participants, ...event.eggTakers].filter((player) =>
-        player?.isRegistered?.() && Common.distance(player.getLocation(), target.at) <= 1),
-      ...Common.nearbyPlayers(target.at, 1),
-    ]);
-    for (const player of beside) attacked(player);
+    // away before it lands is the way to avoid the stun. `nearbyPlayers` covers the event's
+    // participants and egg takers (they are world players) and stays on the nest's plane.
+    for (const player of Common.nearbyPlayers(target.at, 1)) attacked(player);
   });
 }
 

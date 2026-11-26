@@ -167,11 +167,18 @@ test('the occupied nest attacks the tick after the reach: block, stun graphic, s
   assert.equal(p.inventory.getAmount(28661), 0, 'nothing while stunned');
 });
 
-test('a pheasant flies to the empty nest every 8 or 12 ticks; it stuns only players next to the nest it lands on', () => {
+test('a pheasant flies to the empty nest every 8 or 12 ticks; it stuns only players next to the nest it lands on', (t) => {
   const p = fakePlayer();
   const q = fakePlayer();
-  const event = startEvent('pheasant', [p, q]);
+  // Beside the nests in x/y but a floor up: the landing must not reach across planes.
+  const above = fakePlayer();
+  const event = startEvent('pheasant', [p, q, above]);
+  // The landing takes its targets from the world's players; the fixtures are not registered.
+  t.mock.method(core.World, 'getPlayers', () => [p, q, above]);
+
   const empty = event.nests.find((n) => !n.occupied);
+  above.location = new Location(empty.at.getX() + 1, empty.at.getY(), 1);
+  q.location = new Location(empty.at.getX() + 10, empty.at.getY(), 0);
   ticks(8);
   assert.equal(empty.incoming, true, 'a pheasant is on its way');
   p.location = new Location(empty.at.getX() + 1, empty.at.getY(), 0);
@@ -183,12 +190,14 @@ test('a pheasant flies to the empty nest every 8 or 12 ticks; it stuns only play
   assert.equal(p.messages.at(-1), "The nest's inhabitant attacks you, causing you to drop all your pheasant eggs.");
   assert.equal(p.inventory.getAmount(28661), 0);
   assert.equal(event.nests.filter((n) => n.occupied).length, 3);
+  assert.equal(above.messages.length, 0, 'a player on another plane is not stunned');
+  assert.equal(q.messages.length, 0, 'a player away from the nest is not stunned');
 
   // Moving on to the next nest before it lands keeps the egg: Wiki, the stun is for players
   // next to the nest, not for whoever reached into it.
   ticks(10); // the next flight, at tick 20
-  const next = event.nests.find((n) => !n.occupied);
-  assert.equal(next.incoming, true);
+  const next = event.nests.find((n) => n.incoming);
+  assert.ok(next, 'the next flight has a target nest');
   q.location = new Location(next.at.getX() + 1, next.at.getY(), 0);
   retrieve(q, next);
   ticks(1);

@@ -266,3 +266,25 @@ text transcript filters omit them.
 These are canonical `item-gameplay.json` stances. `sync-weapon-types` preserves non-default
 stances through `hasHumanStance`, so rerunning it does not replace these sets with category
 majorities. Wearable variants are checked against the active cache in `weapon-data` tests.
+
+## Hallowfell cleave
+
+[Hallowfell](https://oldschool.runescape.wiki/w/Hallowfell) uses its cached two-handed sword
+styles, six-tick speed and ordinary melee reach. `Hallowfell.plugin.js` adds up to two other
+unique enemies whose footprints touch the five adjacent tiles around the attacker's current
+facing. A large primary receives one hit; a large secondary is selected once. The primary's
+multicombat zone determines whether the attack spreads, and every secondary must pass the
+shared attack, ownership, private-area and multicombat checks. Cleaves can reach over fences
+without requiring a separate walking route, as the Wiki describes.
+
+Every hit rolls its own accuracy. Each secondary rolls up to half its own target-specific
+maximum, rounded down, using `PendingHit`'s integer maximum splitting before flat armour, HP
+caps and combat XP. It is not half the primary's damage. A primary miss does not cancel the
+secondary rolls. Demonic Pacts still changes the primary's ordinary two-handed reach; the
+secondary arc stays adjacent to the player.
+
+`server/tests/area-attacks-target-zone.test.cjs` exercises the real cache, complete plugin
+resolver registry and native hit queue. Its supplied actors, forced accuracy and maximum-roll
+checkpoints cover geometry, independent misses, damage/XP, protection, flat armour and the
+Leagues range hook. No rendered game client or retail Hallowfell capture was used; the
+mechanics follow the Wiki and [cleaving guide](https://oldschool.runescape.wiki/w/Hallowfell/Cleaving_guide).

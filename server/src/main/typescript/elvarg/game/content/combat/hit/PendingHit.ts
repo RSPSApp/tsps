@@ -40,7 +40,7 @@ type PendingHitConfig = {
     hitAmount?: number;
     /** Per-splat reveal offsets, in ticks. */
     hitDelays?: readonly number[];
-    /** Split the final maximum across this many splats using integer arithmetic. */
+    /** Split the final maximum into this many integer shares; a single hit takes the first share. */
     hitMaximumSplitCount?: number;
     /** Later splats cannot roll accuracy when the first splat missed. */
     requireFirstAccurate?: boolean;
@@ -470,6 +470,9 @@ export class PendingHit {
             this.accurate = false;
             for (let attempt = fixedDamage === undefined ? this.bestOf : 1; attempt > 0; attempt--) {
                 const resolved = PendingHit.withForcedMax(this.rollSpecialTraits(traits, roll.forceAccurate, rollAccuracy, 0), roll.forceMaxHit);
+                if (this.hitMaximumSplitCount > 1) {
+                    resolved.bounds = { ...resolved.bounds, maximumSplit: { index: 0, count: this.hitMaximumSplitCount } };
+                }
                 const rolled: HitDamage = resolved.accurate
                     ? ServerPerf.measurePhase(
                         "combat.process.method_hits.damage",

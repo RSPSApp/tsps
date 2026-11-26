@@ -14,7 +14,9 @@ const AREAS = {
   alKharidFishing: { minX: 3250, maxX: 3288, minY: 3128, maxY: 3160, z: 0 },
   // Down to the mine's southern iron rocks (cache 11364 at 3302,3285 and 3303,3284).
   alKharidMine: { minX: 3284, maxX: 3312, minY: 3275, maxY: 3330, z: 0 },
-  fireAltar: { minX: 3295, maxX: 3320, minY: 3240, maxY: 3268, z: 0 },
+  // The Fire Altar's own map, where its altar (cache loc 34764) stands at 2584,4837; the ruins outside
+  // Al Kharid (3310,3252) are only the way in.
+  fireAltar: { minX: 2560, maxX: 2623, minY: 4800, maxY: 4863, z: 0 },
   alKharidPalace: { minX: 3275, maxX: 3312, minY: 3158, maxY: 3195, z: 0 },
   lumbridgeKitchen: { minX: 3204, maxX: 3222, minY: 3208, maxY: 3225, z: 0 },
   cowPen: { minX: 3234, maxX: 3272, minY: 3244, maxY: 3285, z: 0 },
@@ -110,7 +112,7 @@ function runecrafted(event) {
     complete(player, TASKS.waterRunes);
     if (amountCrafted >= 140) complete(player, TASKS.waterRunesElite);
   }
-  if (runeId === item.LAVA_RUNE && objectId === core.ObjectIdentifiers.FIRE_ALTAR
+  if (runeId === item.LAVA_RUNE && objectId === core.ObjectIdentifiers.ALTAR_37
     && inside(player.getLocation?.(), AREAS.fireAltar)) complete(player, TASKS.lava);
   if (runeId === item.COSMIC_RUNE && amountCrafted >= 56) complete(player, TASKS.cosmic);
 }

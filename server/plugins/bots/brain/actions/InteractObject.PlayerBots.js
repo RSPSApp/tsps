@@ -49,15 +49,18 @@ const ARRIVED_TILES = 20;
 // is dropped in seconds instead of being retried every tick.
 const WALK_STALL_MS = 15000;
 const CLAIMS = new Map();
-// Past this many claims, expired ones are swept (they hold players, which would keep
-// logged-out bots in memory on a long-running server).
+// Claims hold players, so expired ones are swept at least once per claim lifetime (and
+// whenever the map passes this size): a claim never keeps a logged-out bot in memory.
 const MAX_CLAIMS = 2000;
-function claim(key, player, nowMs) {
-  if (CLAIMS.size > MAX_CLAIMS) {
-    for (const [stale, entry] of CLAIMS) {
-      if (entry.until <= nowMs || entry.player.isRegistered?.() === false) CLAIMS.delete(stale);
-    }
+let nextClaimSweepAt = 0;
+function sweepClaims(nowMs) {
+  nextClaimSweepAt = nowMs + CLAIM_MS;
+  for (const [stale, entry] of CLAIMS) {
+    if (entry.until <= nowMs || entry.player.isRegistered?.() === false) CLAIMS.delete(stale);
   }
+}
+function claim(key, player, nowMs) {
+  if (CLAIMS.size > MAX_CLAIMS || nowMs >= nextClaimSweepAt) sweepClaims(nowMs);
   CLAIMS.set(key, { player, until: nowMs + CLAIM_MS });
 }
 function claimedByOther(key, player, nowMs) {
@@ -483,5 +486,6 @@ function createInteractObjectAction(spec, world) {
 
 module.exports = {
   CLAIMS,
+  claim,
   createInteractObjectAction,
 };

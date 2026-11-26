@@ -95,9 +95,23 @@ The introductions are captured in [227/101](https://rsprox.net/download/101) tic
 227/553 ticks 11905–11906 and 237/1162 tick 15846 show later Reads opening the list directly.
 
 **The party list (364).**
-- Script 2340 fills rows 0–44 with `name|name|name|name|name|size|preferred size|preferred combat|mode|age`, as captured: no trailing bar.
-- The buttons are pause buttons. Refresh, My/Make party and Friends/Clan (varbit 12988) are children 0, 1 and 2 of component 3 (enum 1938), so a click arrives as RESUME_PAUSEBUTTON, handled in `onInterfaceActionClick`. Rows are components 18–62, with a plain "View party" op.
+- Each opening sends all 45 rows through script 2340, in index order. Filled rows use
+  `name|name|name|name|name|size|preferred size|preferred combat|mode|age` with no trailing bar.
+  Age is ticks since creation. Names use U+00A0 in place of spaces, including in the leader
+  highlight, the entrance refusal and the message sent to members when their leader enters.
+- After the rows, the server enables `PAUSEBUTTON` on 364:3 children 0–2 and 364:17 children
+  0–44. Refresh, My/Make party and Friends/Clan (varbit 12988) resume children of component 3
+  (enum 1938). Script 5220 adds the row's View party option on the client. Script 1568 resumes
+  component 17 with the row's original index. The server uses the last list sent to that viewer.
 - Varp 1740 (`tob_mycontroller` in the symbols) is 0 for someone in a party, -1 otherwise, as captured.
+
+The newest party is sent first. A party in its raid has an empty row, so the rows after it
+keep their indices until the raid ends and the list is opened again. The client hides empty
+rows and sorts the visible ones through script 2341. The openings and clicks are visible in
+[237/1163](https://rsprox.net/download/1163) ticks 31–172,
+[227/1764](https://rsprox.net/download/1764) ticks 25754–25811 and 33583–33817,
+[227/1852](https://rsprox.net/download/1852) ticks 399–437, and
+[227/1779](https://rsprox.net/download/1779) ticks 6014–6029.
 
 **A party's information (50).** The controls under component 0 each resume their own slot.
 
@@ -163,6 +177,20 @@ body, legs and feet slots (the Wiki names no pieces); the clothing line beats th
   departure messages in the captures are for members.
 - Refreshing a party that has entered the Theatre uses the same message as a disbanded party.
   The recorded stale refresh was after the viewer lost party membership.
+
+- A party occupies an empty row as soon as its raid starts. A party disbanded in the lobby
+  leaves the list immediately. The transition into a raid is visible in 237/1163, and the
+  captures leave the effect of a lobby disband on a non-trailing row uncertain.
+- The raid releases its row when TSPS disposes it. In 237/1163 the blank is still present at
+  tick 170 and gone at tick 172. The event that removed it in the recording is uncertain.
+- A click on an empty row, or on a party that disbanded or entered a raid since the list was
+  sent, reopens the list silently. The cache removes the option from an already empty row,
+  and the captures provide no example of a click on a stale row.
+- If there are more than 45 parties, the list sends the newest 45, with blank rows counting
+  toward that limit. The largest recorded opening uses seven rows.
+- The application declined and applicant already joined messages use U+00A0 in names,
+  matching the spacing of the recorded party messages. The captures provide no example of
+  either message.
 
 ### Party screen estimates
 

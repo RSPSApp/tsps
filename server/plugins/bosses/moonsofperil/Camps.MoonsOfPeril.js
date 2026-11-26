@@ -15,8 +15,9 @@
  * - Pestle and mortar on a grub: paste, sometimes from two grubs ("Your herblore knowledge allows
  *   you to crush an extra grub."). Paste on a vial of water: a moonlight potion of 2-4 doses by
  *   Herblore (38 needed), with the captured lines for the extra doses.
- * - Leaving Neypotzli: its foods, grubs, paste and sulphurous essence fizzle away and its potions turn back into vials
- *   of water - "The resources from Neypotzli fizzle to dust as they are severed from its magic."
+ * - Leaving Neypotzli: its foods, grubs, paste and sulphurous essence fizzle away and its
+ *   potions turn back into vials of water - "The resources from Neypotzli fizzle to dust as they
+ *   are severed from its magic."
  * The quest opens all of this (moons-of-peril:camps-open) from its camp stage on: the crates hold the
  * tools the quest asks for, and nothing here is kept back for the Moons.
  */

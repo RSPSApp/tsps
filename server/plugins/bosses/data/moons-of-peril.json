@@ -57,7 +57,7 @@
     "fizzle": "The resources from Neypotzli fizzle to dust as they are severed from its magic.",
     "resources": ["RAW_BREAM", "COOKED_BREAM", "RAW_MOSS_LIZARD", "COOKED_MOSS_LIZARD", "MOONLIGHT_GRUB", "MOONLIGHT_GRUB_PASTE", "SULPHUROUS_ESSENCE"],
     "potions": ["MOONLIGHT_POTION_4_", "MOONLIGHT_POTION_3_", "MOONLIGHT_POTION_2_", "MOONLIGHT_POTION_1_"],
-    "$fizzle": "wiki: the foods, grubs and paste go; a potion turns back into a vial of water. capture local 1001301 tick 2048 (rev 237): sulphurous essence goes too, with the same message"
+    "$fizzle": "wiki: the foods, grubs and paste go; a potion turns back into a vial of water. wiki (Sulphurous essence) and capture local 1001301 tick 2048 (rev 237): sulphurous essence goes too, with the same message"
   },
 
   "supplies": {

@@ -1061,7 +1061,8 @@ function toggleMute({ player, buttonId }) {
   const volume = settings[mute.volumeVarp] ?? 0;
   if (volume > 0) {
     // The varp also holds All Settings rows (3109 bit 31: "Make-X for darts and bolts"), which the
-    // server sets as varbits without touching the audio copy: their bits come from the varp as sent.
+    // server sets as varbits without touching the audio copy: their bits come from the varp as sent,
+    // the levels from the audio copy (only this button writes them; no client transmits 3109).
     const rows = settingRowBits(mute.savedVarp);
     const current = (packed & ~rows) | (player.getPacketSender().getVarp(mute.savedVarp) & rows);
     player.setAudioSetting(mute.savedVarp, (current & ~mask) | (volume << mute.shift));

@@ -226,13 +226,16 @@ function animationFiles(files, what, CacheDefinitions) {
   const frames = new Map();
   const framemaps = [];
   const customFrameMaps = new Map();
+  // A frame map is read (and decompressed) from the cache once per animation, not once per frame.
+  const slotsOf = new Map();
   for (const id of ids) {
     if (frames.has(id)) continue;
     const name = `frames/${Math.floor(id / 65536)}-${id & 0xffff}.dat`;
     const data = files.get(name);
     if (!data) fail(`${what} is missing ${name}`);
     const framemap = (data[0] << 8) | data[1];
-    const slots = checkFrameMap(files, framemap, what, CacheDefinitions, customFrameMaps);
+    if (!slotsOf.has(framemap)) slotsOf.set(framemap, checkFrameMap(files, framemap, what, CacheDefinitions, customFrameMaps));
+    const slots = slotsOf.get(framemap);
     checkFrame(data, slots, `${what} ${name}`);
     if (!framemaps.includes(framemap)) framemaps.push(framemap);
     frames.set(id, data);
@@ -291,19 +294,42 @@ function animationRows(encodeContentData, checked, id, name, group) {
   const files = Object.entries(whole.frames);
   // `parts` is measured at its largest, so the final count never pushes the first row over.
   const first = { ...whole, frames: {}, parts: MAX_PARTS };
-  const rows = [first];
-  let current = first;
-  for (const [file, data] of files) {
-    current.frames[file] = data;
-    if (fitsPacket(encodeContentData, current)) continue;
-    delete current.frames[file];
-    current = { kind: "frames", id, group, part: rows.length, frames: { [file]: data } };
-    rows.push(current);
-    if (!fitsPacket(encodeContentData, current)) fail(`animation ${id}: frame file ${file} is too big for one content packet`);
+  const rows = [];
+  let next = 0;
+  while (rows.length === 0 || next < files.length) {
+    if (rows.length === MAX_PARTS) fail(`animation ${id} needs more than ${MAX_PARTS} content packets`);
+    const shell = rows.length === 0 ? first : { kind: "frames", id, group, part: rows.length, frames: {} };
+    const withFrames = (count) => ({ ...shell, frames: Object.fromEntries(files.slice(next, next + count)) });
+    const fits = (count) => fitsPacket(encodeContentData, withFrames(count));
+    const count = mostThatFit(fits, files.length - next);
+    if (count === 0 && (rows.length > 0 || !fits(0))) {
+      fail(`animation ${id}: ${rows.length > 0 ? `frame file ${files[next][0]}` : "its definition"} is too big for one content packet`);
+    }
+    rows.push(withFrames(count));
+    next += count;
   }
-  if (rows.length > MAX_PARTS) fail(`animation ${id} needs ${rows.length} content packets; the most is ${MAX_PARTS}`);
-  first.parts = rows.length;
+  rows[0].parts = rows.length;
   return rows;
+}
+
+/**
+ * The largest count up to `limit` for which `fits(count)` holds, `fits` being true up to some count
+ * and false after it. It doubles, then halves, so a row costs a few encodings rather than one a frame.
+ */
+function mostThatFit(fits, limit) {
+  let low = 0;
+  let high = 1;
+  while (high <= limit && fits(high)) {
+    low = high;
+    high *= 2;
+  }
+  high = Math.min(high - 1, limit);
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (fits(mid)) low = mid;
+    else high = mid - 1;
+  }
+  return low;
 }
 
 /** The files an animation's asset keeps: the ones animationFiles read, plus info.json for Blender. */

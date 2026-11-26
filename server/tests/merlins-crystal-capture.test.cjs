@@ -1099,3 +1099,16 @@ test("two players' pleas on one Mordred: the first ending leaves the second's ho
   assert.equal(h.PM.emitCanAttack(b.player, mordred), false);
   assert.notEqual(h.PM.emitCanAttack(f.player, mordred), false, "the first player's hold is gone");
 });
+
+test("'No. He deserves to die.' kills him even while another player's plea is up", async (t) => {
+  const { f, mordred } = fightActor(t);
+  await beatMordred(f, mordred);
+  const b = actor(t, { stage: S.LANCELOT, tile: [2768, 3403, 2] });
+  landHit(b.player, mordred, 5);
+  for (let i = 0; i < 6 && h.shown(b)?.who !== "Morgan Le Faye"; i++) h.tick(b);
+  const dying = [];
+  const animate = mordred.performAnimation.bind(mordred);
+  mordred.performAnimation = (animation) => { dying.push(animation.getId()); return animate(animation); };
+  await play(f, null, ["No. He deserves to die."]);
+  assert.ok(dying.includes(6490), `he dies: ${dying}`);
+});

@@ -760,6 +760,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   /** Mordred -> the players his mother pleads with: they and he don't fight meanwhile (others are not held). */
   const pleading = new WeakMap();
   const pleadsWith = (npc, player) => pleading.get(npc)?.has(player) === true;
+  /** The Mordreds a player has chosen to kill. */
+  const beingKilled = new WeakSet();
 
   /**
    * Mordred's last hit leaves him on 0 (headbar fill 0, ticks 1079, 1145, 1215) and Morgan appears
@@ -772,8 +774,9 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     // The player whose hit it was (the death task's last damager), not the top damager of a shared fight.
     const player = npc.getCombat?.().getLastDamager?.() ?? npc.getCombat?.().getKiller?.(false);
     if (!player?.isPlayer?.() || stageOf(player) !== STAGE_SPOKEN_LANCELOT) return;
+    // "No. He deserves to die.": his death goes through, whoever else is mid-plea.
+    if (beingKilled.has(npc)) return;
     const fight = fights.get(player);
-    if (fight?.killing && fight.mordred === npc) return; // "No. He deserves to die."
     event.preventDeath = true;
     npc.setHitpointsLocked?.(false);
     npc.hitpoints = 1; // Ours: one hitpoint rather than none, so nothing else treats him as dead
@@ -874,7 +877,10 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     fight.killing = true;
     const { mordred, morgan } = fight;
     releaseMordred(mordred, player);
+    // The death starts at once (appendDeath); the flag goes with it, as the same Mordred respawns.
+    beingKilled.add(mordred);
     if (registered(mordred) && mordred.isDyingFunction?.() !== true) mordred.setHitpoints(0);
+    beingKilled.delete(mordred);
     TaskManager.submit(new CountdownTask(morgan, MORDRED_BODY_TICKS, () => {
       if (fights.get(player) === fight) removeMorgan(player);
     }));

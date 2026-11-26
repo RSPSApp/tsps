@@ -410,8 +410,8 @@ module.exports = function registerDwarfCannonQuest(api) {
   }
 
   /**
-   * Inspect on the fence's unbroken railing (local 1001618 tick 3397, before the quest's railings
-   * were fixed): the player's line, chatneu1, with no stage condition in the capture.
+   * Inspect on the fence's unbroken railing (local 1001618 tick 3397, while railing 1 was
+   * still broken): the player's line, chatneu1, with no stage condition in the capture.
    */
   function inspectIntactRailing(player) {
     const { DialogueChainBuilder, PlayerDialogue, EndDialogue } = api.core;

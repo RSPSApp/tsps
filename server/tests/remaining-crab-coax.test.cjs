@@ -172,10 +172,34 @@ test('issue 6670: standing up or walking off before the crab appears leaves it h
   assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'walking off cancels the wait');
 
   h.sit(3046, 2655);
+  h.tick(4);
+  h.setLocation(3050, 2650);
+  h.tick(4);
+  h.setLocation(3046, 2655);
+  h.tick(12);
+  assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'stepping off and back mid-wait still cancels it');
+
+  h.sit(3046, 2655);
   h.tick(6);
   h.sit(3046, 2655); // sitting again keeps the first wait
   h.tick(6);
   assert.ok((h.attrs.get('quest.crab_quest.met') & (1 << 9)) !== 0, 'twelve ticks after the first Sit');
+});
+
+test('review #6819: a new Sit on another tile beside the same hiding place restarts the wait', () => {
+  const h = setup();
+  h.loadQuest().setStage(h.player, 47);
+  h.setLocation(3046, 2655);
+  h.investigate(62475, 3046, 2656);
+  h.sit(3046, 2655);
+  h.tick(4);
+  const waits = h.messages.filter((message) => message === 'And now, you wait...').length;
+  h.sit(3047, 2655);
+  assert.equal(h.messages.filter((message) => message === 'And now, you wait...').length, waits + 1, 'a new wait');
+  h.tick(11);
+  assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'not before twelve ticks on the new tile');
+  h.tick(1);
+  assert.ok((h.attrs.get('quest.crab_quest.met') & (1 << 9)) !== 0, 'twelve ticks after the second Sit');
 });
 
 test('Crab legacy hand-in count derives colours only when complete and never from pickups', () => {

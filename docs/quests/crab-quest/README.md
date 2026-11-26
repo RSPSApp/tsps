@@ -64,7 +64,9 @@ collection's own options and the band's practice animations are not done.
 - **fixed** (issue 6670) The shy crabs never came out in the dream: the Sit check compared the
   instance tile with source tiles, and accepted one exact tile. A Sit on any tile beside the
   hiding place now waits 12 ticks (Ours: 24 for the magic tree) and the crab comes out if the
-  player is still there; another emote or a step away cancels it. "A crab appears!", "A 'crab'
+  player has not left the tile; another emote or a step off the tile cancels it. Ours: an
+  Investigate during the wait shows the too-scared box, which the crab's box then replaces (no
+  recording covers it). "A crab appears!", "A 'crab'
   appears!" and the too-scared line are message boxes, as captured.
 
 - **open** The shell collection's Unpack (seven `crab_shell_reward` 34591-34597 with their own

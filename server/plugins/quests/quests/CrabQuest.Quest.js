@@ -1578,14 +1578,29 @@ module.exports = function registerCrabQuestQuest(api) {
       sitWaits.delete(player);
       return;
     }
-    if (sitWaits.get(player)?.spot === spot) return; // already waiting here
     // The spots are in source coordinates; in the dream the player stands on instance tiles.
     const here = Dream.toSource(player, player.getLocation());
-    const wait = { spot, x: here.x, y: here.y };
+    const current = sitWaits.get(player);
+    if (current?.spot === spot && current.x === here.x && current.y === here.y) return; // still sitting here
+    const ticks = spot.objectId === CRAB_MAGIC_TREE_OBJECT_ID ? MAGIC_TREE_SIT_WAIT_TICKS : SIT_WAIT_TICKS;
+    const wait = { spot, x: here.x, y: here.y, ticks };
     sitWaits.set(player, wait);
     player.sendMessage(SIT_WAIT_TEXT);
-    const ticks = spot.objectId === CRAB_MAGIC_TREE_OBJECT_ID ? MAGIC_TREE_SIT_WAIT_TICKS : SIT_WAIT_TICKS;
-    Scenes.later(player, ticks, () => crabAppears(player, wait));
+    waitForCrab(player, wait);
+  }
+
+  /** One tick of the wait: a step off the tile stands the player up and ends it. */
+  function waitForCrab(player, wait) {
+    Scenes.later(player, 1, () => {
+      if (sitWaits.get(player) !== wait) return;
+      const here = Dream.toSource(player, player.getLocation());
+      if (here.x !== wait.x || here.y !== wait.y) {
+        sitWaits.delete(player);
+        return;
+      }
+      if (--wait.ticks > 0) waitForCrab(player, wait);
+      else crabAppears(player, wait);
+    });
   }
 
   /** The scared, not yet coaxed recruit the player is sitting beside, if any. */
@@ -1603,12 +1618,10 @@ module.exports = function registerCrabQuestQuest(api) {
     return null;
   }
 
-  /** The wait is over: the crab comes out if the player is still sitting where they sat. */
+  /** The wait is over: the crab comes out if it is still waiting to be coaxed. */
   function crabAppears(player, wait) {
-    if (sitWaits.get(player) !== wait) return;
     sitWaits.delete(player);
-    const here = Dream.toSource(player, player.getLocation());
-    if (here.x !== wait.x || here.y !== wait.y || coaxableSpot(player) !== wait.spot) return;
+    if (coaxableSpot(player) !== wait.spot) return;
     setFlag(player, MET_ATTRIBUTE, spotBit(wait.spot));
     const steps = variantSteps(wait.spot.variant);
     const waitIndex = steps.findIndex((step) => step?.type === "message" && step.text === SIT_WAIT_TEXT);

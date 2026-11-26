@@ -103,7 +103,8 @@ The introductions are captured in [227/101](https://rsprox.net/download/101) tic
   0–44. Refresh, My/Make party and Friends/Clan (varbit 12988) resume children of component 3
   (enum 1938). Script 5220 adds the row's View party option on the client. Script 1568 resumes
   component 17 with the row's original index. The server uses the last list sent to that viewer.
-- Varp 1740 (`tob_mycontroller` in the symbols) is 0 for someone in a party, -1 otherwise, as captured.
+- TSPS sends varp 1740 (`tob_mycontroller`) as 0 for party members and -1 otherwise.
+  The recordings contain positive values and -1. The meaning of the positive values is uncertain.
 
 The newest party is sent first. A party in its raid has an empty row, so the rows after it
 keep their indices until the raid ends and the list is opened again. The client hides empty
@@ -187,7 +188,9 @@ body, legs and feet slots (the Wiki names no pieces); the clothing line beats th
   sent, reopens the list silently. The cache removes the option from an already empty row,
   and the captures provide no example of a click on a stale row.
 - If there are more than 45 parties, the list sends the newest 45, with blank rows counting
-  toward that limit. The largest recorded opening uses seven rows.
+  toward that limit. Parties created on the same tick are ordered by creation sequence, most
+  recent first. The largest recorded opening uses seven rows, and the recorded filled rows
+  within an opening have distinct ages.
 - The application declined and applicant already joined messages use U+00A0 in names,
   matching the spacing of the recorded party messages. The captures provide no example of
   either message.

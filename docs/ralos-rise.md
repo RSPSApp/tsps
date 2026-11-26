@@ -77,8 +77,21 @@ The Prayer loops pause for a level-up pop-up, as the bone altars' loop does (doc
 
 Virilis at the foot of the altar unnotes the bones for 10 coins each (docs/note-exchange.md).
 
+## Sunfire wine
+
+`ralosrise/SunfireWine.RalosRise.js`, data `sunfireWine` in `ralos-rise.json`. Sources: the Wiki ([Jug of sunfire wine](https://oldschool.runescape.wiki/w/Jug_of_sunfire_wine)) and rsprox captures 4054, local 1001303 and local 1001310 (rev 237, Leagues VI, 158 attempts).
+
+| | |
+| --- | --- |
+| Starting | Sunfire splinters used on a jug of wine, or the jug on the splinters, with a pestle and mortar carried |
+| Each jug | 2 splinters and the jug of wine become a jug of sunfire wine in the wine's slot, on the click's tick. `human_herbing_grind_restart` with sound 2608 (delay 25). No experience (Wiki) |
+| Pace | One at once, then one every 4 ticks while the parts last (Wiki: "1, then 4 ticks"; 4054 tick 3954: +0, +4). Each click makes one at once, at most one a tick |
+| Missing a part | Message box: "You need two sunfire splinters, a jug of wine, and a pestle and mortar to create sunfire wine." (4054 tick 3939, local 1001303 tick 5967) |
+| Other jugs | Splinters on a jug of sunfire wine or a jug of blessed wine: "Nothing interesting happens." (the default) |
+
+Not followed: the recordings often show two jugs a click (4 splinters). That is a Leagues relic. Ours: the loop stops silently when a part runs out; no recording shows that moment.
+
 ## Not here
 
-- Making sunfire wine (two sunfire splinters on a jug of wine with a pestle and mortar). Recording 1141 has its refusal: "You need two sunfire splinters, a jug of wine, and a pestle and mortar to create sunfire wine."
 - Blessed wine being unbankable.
 - Soul Harvest's Soul shards (Leagues) in the bowl. There is no capture of their rate (see `SoulHarvest.LeagueRelics.js`).

@@ -376,11 +376,11 @@ function openOverview(player) {
   const sender = player.getPacketSender();
   sender.sendConfig(VARP.CURRENT_PARTY, state.current ? 0 : -1);
   sender.sendInterface(INTERFACE.PARTY_OVERVIEW);
+  sendPartyList(player);
   // The list's buttons and rows are pause buttons (resume_pausebutton), as OSRS sets them;
   // as op1 clicks the script-built rows had nothing to click.
   sender.sendInterfaceFlagsRange(OVERVIEW_BUTTONS_UID, 0, 2, EVENT.CONTINUE);
   sender.sendInterfaceFlagsRange(OVERVIEW_PARTY_LIST_UID, 0, Shared.MAX_LOBBY_PARTIES - 1, EVENT.CONTINUE);
-  sendPartyList(player);
 }
 
 /** One row per recruiting party: leader|members...|size|kc|invocations|level|mode|age. */

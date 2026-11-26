@@ -184,7 +184,7 @@ function sendEmptyPartyOverlay(player) {
 
 function createParty(leader) {
   const party = new LobbyParty(leader);
-  lobbyParties.push(party);
+  lobbyParties.unshift(party);
   return party;
 }
 

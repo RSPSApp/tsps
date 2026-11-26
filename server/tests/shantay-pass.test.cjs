@@ -147,6 +147,90 @@ test("going north is free, and the elite Desert Diary needs no pass", () => {
   answers.diaries.delete("elite");
 });
 
+/** The tiles a player stands on, one per forced step, through the gate from `at`. */
+function goThroughFrom(at, items = {}) {
+  const player = createPlayer({ at, items });
+  const steps = [];
+  const setLocation = player.setLocation;
+  player.setLocation = (to) => {
+    steps.push([to.getX(), to.getY()]);
+    setLocation(to);
+  };
+  hooks.gate["Go-through"]({ player });
+  runTasks();
+  return { player, steps };
+}
+
+test("the Ruins of Unkah's east gate takes a pass out into the desert, three steps through", () => {
+  const { player, steps } = goThroughFrom([3193, 2843], { [SHANTAY_PASS]: 1 });
+  assert.ok(player.log.includes(`sendInterface ${WARNING}`), "the desert warning first");
+  assert.deepEqual(steps, []);
+  proceed(player);
+  runTasks();
+  assert.deepEqual(steps, [[3194, 2843], [3195, 2843], [3196, 2843]]);
+  assert.equal(player.amount(SHANTAY_PASS), 0);
+  assert.ok(player.log.includes("message The guard takes your Shantay Pass as you go through the gate."));
+
+  const back = goThroughFrom([3196, 2843]);
+  assert.deepEqual(back.steps, [[3195, 2843], [3194, 2843], [3193, 2843]]);
+  assert.ok(!back.player.log.some((line) => line.startsWith("message")), "coming back is free");
+});
+
+test("the Ruins of Unkah's south gate leads south, from any of its four columns", () => {
+  const out = createPlayer({ at: [3169, 2819], items: { [SHANTAY_PASS]: 1 } });
+  out.setAttribute("warning-screens:warning-10", 7);
+  hooks.gate["Go-through"]({ player: out });
+  runTasks();
+  assert.deepEqual([out.getLocation().getX(), out.getLocation().getY()], [3169, 2816]);
+  assert.equal(out.amount(SHANTAY_PASS), 0);
+
+  const back = goThroughFrom([3167, 2816]);
+  assert.deepEqual(back.steps, [[3167, 2817], [3167, 2818], [3167, 2819]]);
+  assert.equal(goThroughFrom([3170, 2819]).steps.length, 0, "beside the gate, not at it");
+});
+
+test("without a pass, the Unkah guard turns the player back in their own words", (t) => {
+  const lines = t.mock.method(Common, "npcLine", () => {});
+  const { player, steps } = goThroughFrom([3193, 2842]);
+  assert.deepEqual(steps, []);
+  assert.ok(!player.log.includes(`sendInterface ${WARNING}`));
+  assert.deepEqual(lines.mock.calls[0].arguments.slice(1), [
+    10634,
+    "You need a Shantay pass to get through this gate. I'll sell you one for a very reasonable price.",
+  ]);
+  goThroughFrom([3303, 3117]);
+  assert.equal(lines.mock.calls[1].arguments[1], 4648, "the main gate keeps its own guard");
+});
+
+test("Look-at reads each gate's own billboard", () => {
+  const read = (location) => {
+    const texts = [];
+    const original = core.StatementDialogue;
+    core.StatementDialogue = class extends original {
+      constructor(index, text) {
+        super(index, text);
+        texts.push(text);
+      }
+    };
+    try {
+      const player = createPlayer();
+      player.getDialogueManager = () => ({ startDialogues() {} });
+      hooks.gate["Look-at"]({ player, location });
+    } finally {
+      core.StatementDialogue = original;
+    }
+    return texts;
+  };
+  assert.deepEqual(read({ x: 3194, y: 2841, z: 0 }), [
+    "You look at the huge dilapidated gate.<br>Near the gate is a large billboard poster, it reads:",
+    "Despite this warning lots of people seem to pass through the gate.",
+  ]);
+  assert.equal(read({ x: 3166, y: 2817, z: 0 }).length, 2);
+  const main = read({ x: 3302, y: 3116, z: 0 });
+  assert.equal(main.length, 3);
+  assert.match(main[0], /huge stone gate/);
+});
+
 test("Shantay's conditions follow the player's coins, bank, visits and escapes", () => {
   const player = createPlayer({ items: { [COINS]: 3 }, bank: 100 });
   let answered = Shantay.conditions(player);

@@ -88,7 +88,8 @@ collection's own options and the band's practice animations are not done.
 - **fixed** (#6819) A recruit is now shown by its hiding place while it talks, the penguin is
   kicked into the sea as captured, and the recruits' and the shy crab's narration are message
   boxes. Ours: the seven spots no recording reached add their crab on the player's tile, and
-  their narration lines are message boxes like the captured ones.
+  their narration lines are message boxes like the captured ones; the western bush, whose
+  conversation never says "A crab appears!", shows its crab with its first box.
 
 - **open** The shell collection's Unpack (seven `crab_shell_reward` 34591-34597 with their own
   op 2) is not implemented.

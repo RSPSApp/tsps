@@ -69,15 +69,18 @@ function change(player, delta) {
 
 function tick(player, now) {
   if (!Shared.wornPreform(player)) return;
-  if (now % PASSIVE_PERIOD === 0) change(player, -1);
   const state = Shared.workOf(player);
+  // A finished lava run stays finished when the next tick passively cools its preform.
+  const reachedMax = state?.source === SOURCE.LAVA && state.step > 0 &&
+    Shared.get(player, Shared.VARBIT.TEMPERATURE) >= MAX_TEMPERATURE;
+  if (now % PASSIVE_PERIOD === 0) change(player, -1);
   if (state?.kind !== "temperature") return;
   if (!player.getLocation().equals(state.origin)) {
     stop(player);
     return;
   }
   const temperature = Shared.get(player, Shared.VARBIT.TEMPERATURE);
-  const done = state.source.direction > 0 ? temperature >= MAX_TEMPERATURE : temperature <= 0;
+  const done = state.source.direction > 0 ? reachedMax || temperature >= MAX_TEMPERATURE : temperature <= 0;
   if (done) {
     stop(player);
     return;

@@ -49,8 +49,9 @@ const ARRIVED_TILES = 20;
 // is dropped in seconds instead of being retried every tick.
 const WALK_STALL_MS = 15000;
 const CLAIMS = new Map();
-// Claims hold players, so expired ones are swept at least once per claim lifetime (and
-// whenever the map passes this size): a claim never keeps a logged-out bot in memory.
+// Claims hold players, so while bots keep claiming, expired ones are swept at least once per
+// claim lifetime (and whenever the map passes this size). Once claiming stops, the last claims
+// stay until the next one.
 const MAX_CLAIMS = 2000;
 let nextClaimSweepAt = 0;
 function sweepClaims(nowMs) {

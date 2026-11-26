@@ -70,6 +70,9 @@ export class Combat {
     /** The other fights that recorded this player (its damage, or it as their last target), so that leaving
      * the world takes it out of them instead of it being kept in memory by every NPC it fought. */
     private recordedIn: Set<Combat> | null = null;
+    /** The players whose `recordedIn` holds this fight (the mirror of `recordedIn`), so that leaving the world
+     * also takes this character out of theirs: a player it fought doesn't keep it in memory either. */
+    private records: Set<Combat> | null = null;
     /** Set when this character leaves the world (forgetFights); damage it still deals is no longer recorded. */
     private leftWorld = false;
     private readonly lastAttack = new TickStopwatch();
@@ -795,9 +798,14 @@ export class Combat {
         const recordedIn = (this.recordedIn ??= new Set());
         // A long session fights many NPCs: the ones gone from the world no longer need forgetting.
         if (recordedIn.size >= RECORDED_IN_PRUNE_AT && !recordedIn.has(other)) {
-            for (const gone of recordedIn) if (!gone.character.isRegistered()) recordedIn.delete(gone);
+            for (const gone of recordedIn) {
+                if (gone.character.isRegistered()) continue;
+                recordedIn.delete(gone);
+                gone.records?.delete(this);
+            }
         }
         recordedIn.add(other);
+        (other.records ??= new Set()).add(this);
     }
 
     /** This character leaves the world: every fight that recorded it forgets it. */
@@ -808,7 +816,11 @@ export class Combat {
             if (other.damageMap?.size === 0) other.damageMap = null;
             if (other.lastDamager === player) other.lastDamager = null;
             if (other.lastAttackTarget === player) other.lastAttackTarget = null;
+            other.records?.delete(this);
         }
+        // The players this character recorded (hit, or last attacked) let go of it too.
+        for (const fighter of this.records ?? []) fighter.recordedIn?.delete(this);
+        this.records = null;
         this.recordedIn = null;
         this.leftWorld = true;
     }

@@ -78,3 +78,20 @@ test("a long session drops the fights of NPCs that are gone from the world", () 
   }
   assert.ok(player.combat.recordedIn.size <= 64, `recorded ${player.combat.recordedIn.size} fights`);
 });
+
+test("a player who fought another player is not kept by that opponent after leaving", () => {
+  const leaver = fakePlayer("leaver");
+  const stayer = fakePlayer("stayer");
+  stayer.combat.addDamage(leaver, 3); // the leaver hit the stayer
+  leaver.combat.addDamage(stayer, 2); // the stayer hit back
+  leaver.combat.lastAttackTarget = stayer;
+  stayer.combat.noteRecordedIn(leaver.combat); // as the attack path does for a player target
+
+  leaver.registered = false;
+  leaver.combat.forgetFights();
+
+  const held = [...(stayer.combat.recordedIn ?? [])].filter((combat) => combat.character === leaver);
+  assert.equal(held.length, 0, "the stayer's recorded fights no longer hold the leaver");
+  assert.equal(stayer.combat.damageMap, null, "the leaver's damage on the stayer is forgotten");
+  assert.equal(stayer.combat.records?.has(leaver.combat) ?? false, false, "the stayer no longer lists the leaver");
+});

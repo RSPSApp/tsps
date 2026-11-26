@@ -121,6 +121,26 @@ test('duration corrections reject stale, missing, ambiguous and invalid inputs a
   }
 });
 
+test('travel plans through a closed door that blocks its whole tile (a diagonal door), opening it from the tile before', () => {
+  const { planTravel } = require('../plugins/agent/mcp/TravelRoutes.AgentMcp');
+  const LOC = 0x100, BLOCK_WALK = 0x200000;
+  // A one-tile corridor at x=158, y=120..160, with a closed diagonal door on (158, 140).
+  const getFlag = (x, y) => (x !== 158 || y < 120 || y > 160 ? BLOCK_WALK : y === 140 ? LOC : 0);
+  const door = { type: 'map-door', menu: 'Open Door', id: 1535, object: { x: 158, y: 140, z: 0 } };
+  const plan = (doorAt) => planTravel({
+    from: { x: 158, y: 152, z: 0 }, to: { x: 158, y: 125, z: 0 }, goalReach: 0,
+    getFlag, transportsAt: () => [], doorAt,
+  });
+  const route = plan((x, y) => (x === 158 && y === 140 ? door : null));
+  assert.ok(route, 'a route through the door');
+  const crossing = route.steps.find((step) => step.via);
+  assert.deepEqual([crossing.x, crossing.y], [158, 140]);
+  assert.deepEqual(crossing.via.from, [158, 141, 0]);
+  assert.equal(crossing.via.id, 1535);
+  // No door there: the blocked tile stays blocked.
+  assert.equal(plan(() => null), null);
+});
+
 test('the production planner charges four ticks for both generated GE crossings', () => {
   const { planTravel, indexTransports, key, BLOCKED } = require('../plugins/agent/mcp/TravelRoutes.AgentMcp');
   const generated = require('../plugins/agent/data/transports.json');

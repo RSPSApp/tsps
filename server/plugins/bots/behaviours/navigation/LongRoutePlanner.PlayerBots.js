@@ -96,7 +96,8 @@ class Heap {
  * @param from {x, y, z}
  * @param to {x, y}
  * @param getFlag (x, y, z) => collision flags
- * @param isDoor (x, y, z) => true when a closed door/gate stands on that tile
+ * @param isDoor (x, y, z) => true when a closed door/gate stands on that tile (in one of its
+ *   walls, or blocking the whole tile)
  * @param exactOnly true: no near-goal fallback (a yes/no reachability question)
  * @param goalReach maximum distance from the target; 0 requires its exact tile
  * @returns {{ waypoints: {x, y, z}[], tiles: number } | null}
@@ -178,9 +179,14 @@ function planInBox({ from, to, getFlag, isDoor = () => false, goalReach = GOAL_R
         const next = cell(nx, ny);
         if (closed[next]) continue;
         const flag = getFlag(nx, ny, z);
-        if (flag & (LOC | FLOOR_BLOCKED)) continue;
+        if (flag & FLOOR_BLOCKED) continue;
         let cost = 1;
-        if (flag & move.wall) {
+        if (flag & LOC) {
+          // A closed door standing on the tile itself (a diagonal door, a gate loc) blocks the
+          // whole tile; it is passable like a door in a wall.
+          if (!doorAt(nx, ny)) continue;
+          cost = DOOR_COST;
+        } else if (flag & move.wall) {
           // Only a door or gate on either side of the wall makes it passable.
           if (!doorAt(nx, ny) && !doorAt(x, y)) continue;
           cost = DOOR_COST;
@@ -218,7 +224,8 @@ function planInBox({ from, to, getFlag, isDoor = () => false, goalReach = GOAL_R
 /**
  * Every WAYPOINT_SPACING tiles, plus the tiles either side of each door crossing
  * (so the walk reaches the door, the brain opens it, and continues), plus the end.
- * A crossing is a step through a wall: A* only allows that at a door.
+ * A crossing is a step through a wall, or onto a tile a closed door blocks whole:
+ * A* only allows either at a door.
  */
 function toWaypoints(tiles, z, getFlag) {
   const waypoints = [];
@@ -228,7 +235,8 @@ function toWaypoints(tiles, z, getFlag) {
     const tile = tiles[index];
     sinceLast += 1;
     const move = MOVES.find((entry) => entry.dx === tile.x - previous.x && entry.dy === tile.y - previous.y);
-    const crossesDoor = !!move && (getFlag(tile.x, tile.y, z) & move.wall) !== 0;
+    const flag = getFlag(tile.x, tile.y, z);
+    const crossesDoor = !!move && (flag & (move.wall | LOC)) !== 0;
     if (crossesDoor) {
       // The far side is marked `door`: the walker must stand on it, so the gate
       // is actually crossed instead of being "reached" from the wrong side.

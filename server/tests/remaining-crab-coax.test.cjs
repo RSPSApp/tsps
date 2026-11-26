@@ -347,7 +347,8 @@ test('a crab no recording reached comes out on the player\'s tile (Ours); its sc
   d.setLocation(3051, 2635); // east of the 2x2 western bush at 3049,2635
   d.h.blocked.add(d.at(3050, 2635).join());
   d.investigate(62478, 3049, 2635);
-  const event = appears(d);
+  // The western bush's conversation never says "A crab appears!": its first box shows the crab (Ours).
+  const event = appears(d, 16483, 'The crab stares past you serenely.');
   const crab = d.h.spawned.filter((npc) => npc.definition.id === 16483 && npc.registered)
     .find((npc) => npc.definition.x === d.at(3051, 2635)[0] && npc.definition.y === d.at(3051, 2635)[1]);
   assert.ok(crab, 'on the player\'s tile');

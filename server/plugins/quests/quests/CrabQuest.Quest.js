@@ -496,6 +496,8 @@ module.exports = function registerCrabQuestQuest(api) {
     {
       objectId: CRAB_BUSH_OBJECT_ID, x: 3049, y: 2635, rotation: 3,
       variant: "crab-hunting-investigating-the-western-bush",
+      // Its conversation never says "A crab appears!". Ours: the crab shows with its first box.
+      appearsOn: "The crab stares past you serenely.",
       joinBit: 1 << 9,
     },
     {
@@ -1460,7 +1462,10 @@ module.exports = function registerCrabQuestQuest(api) {
     if (!CRAB_NPC_IDS.has(npcId) || !stepId) return;
     if (event.kind === "message" && RECRUIT_CHATHEADS.has(npcId) && event.text !== SIT_WAIT_TEXT) {
       event.box = { statement: true };
-      if (event.text === RECRUIT_APPEARS_TEXT || event.text === PENGUIN_APPEARS_TEXT) showRecruit(player, event);
+      const appearsOn = talkingSpot.get(player)?.appearsOn;
+      if (event.text === RECRUIT_APPEARS_TEXT || event.text === PENGUIN_APPEARS_TEXT || (appearsOn && event.text === appearsOn)) {
+        showRecruit(player, event);
+      }
     }
     if (stepId === PENGUIN_KICK_STEP) {
       event.handled = true;

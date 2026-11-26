@@ -147,7 +147,7 @@ class LobbyParty {
       inherited.kcRequirement = this.settings.kcRequirement;
       this.settings = inherited;
     }
-    if (this.players.length === 0) this.unlist();
+    if (this.players.length === 0 && !this.insideRaid()) this.unlist();
     if (clearOverlay) sendEmptyPartyOverlay(player);
     return true;
   }

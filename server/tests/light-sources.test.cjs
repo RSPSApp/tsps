@@ -211,13 +211,14 @@ test("the other new lights play no animation either (none captured, none invente
   }
 });
 
-test("the black candle is lit by Merlin's Crystal's own handler: one candle, one lit candle, its message", async (t) => {
+// Merlin's Crystal capture MerlinsCrystal.bin tick 1937: the lit candle in the unlit one's slot, no message.
+test("the black candle is lit by Merlin's Crystal's own handler: one candle, one lit candle, in its slot, no message", async (t) => {
   const f = actor(t);
   f.inv.setItem(0, item(I.BLACK_CANDLE));
   f.inv.setItem(1, item(I.TINDERBOX));
   await useOn(f, 1, 0);
   assert.deepEqual(carried(f), [I.LIT_BLACK_CANDLE, I.TINDERBOX]);
-  assert.ok(f.messages.includes("You light the black candle."));
+  assert.equal(f.messages.some((text) => /black candle/i.test(String(text))), false);
 });
 
 test("the same instance is lit, so a preset torch stays preset", async (t) => {

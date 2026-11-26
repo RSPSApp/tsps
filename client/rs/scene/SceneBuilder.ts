@@ -22,6 +22,7 @@ import { ByteBuffer } from "../io/ByteBuffer";
 import { getMapSquareId } from "../map/MapFileIndex";
 import { MapFileLoader } from "../map/MapFileLoader";
 import { Model } from "../model/Model";
+import { ModelData } from "../model/ModelData";
 import { HSL_RGB_MAP, adjustOverlayLight, adjustUnderlayLight, packHsl } from "../util/ColorUtil";
 import { generateHeight } from "../util/HeightCalc";
 import { CollisionMap } from "./CollisionMap";
@@ -58,6 +59,15 @@ type TerrainOverride = {
  * no floor, so without pit geometry the sky clear colour shows through the opening.
  */
 const FLOOR_HOLE_DEPTH = 64;
+
+/**
+ * Pit walls stand this far outside the tile edges, beneath the neighbouring floor, so they never
+ * share a plane with a trapdoor or ladder shaft's own walls on those edges (no z-fighting).
+ */
+const FLOOR_HOLE_WALL_OUTSET = 2;
+
+/** How far a pit bottom stays below the lowest vertex of a shaft drawn in it. */
+const FLOOR_HOLE_SHAFT_CLEARANCE = 16;
 
 /** Surface drawn inside floor holes: the pit bottom. */
 const FLOOR_HOLE_HSL = packHsl(0, 0, 0);
@@ -808,6 +818,11 @@ export class SceneBuilder {
             seqRandomStartOverride,
             SceneBuilder.mapLevel(scene, tileX, tileY, level),
         );
+        // A trapdoor opened in a reload is injected after terrain: drop the pit below its shaft.
+        const pit = scene.tiles?.[level]?.[tileX]?.[tileY]?.tileModel;
+        if (pit?.floorHoleRimY !== undefined) {
+            this.deepenFloorHole(pit, this.locDepthBelowFloor(id, type, rotation));
+        }
     }
 
     addLoc(
@@ -1558,11 +1573,14 @@ export class SceneBuilder {
                     // Overlay id can have the high bit set with extra flags; mask to 15 bits like RuneLite
                     const overlayId = (overlayIds[level][x][y] & 0x7fff) - 1;
 
-                    if (underlayId === -1 && overlayId === -1) {
-                        if (!this.isEnclosedFloorHole(scene, level, x, y)) {
-                            continue;
-                        }
-                    }
+                    const overlay = overlayId === -1 ? undefined : this.overlayTypeLoader.load(overlayId);
+                    // A full, untextured magenta overlay cuts out the floor even when an underlay exists.
+                    const cutout = tileShapes[level][x][y] === 0 &&
+                        overlay?.textureId === -1 && overlay.primaryRgb === 0xff00ff;
+                    const floorHole = ((underlayId === -1 && !overlay) || cutout) &&
+                        this.isEnclosedFloorHole(scene, level, x, y, cutout) &&
+                        (!cutout || !this.hasBelowFloorLoc(scene, level, x, y));
+                    if (underlayId === -1 && !overlay && !floorHole) continue;
 
                     const heightSw = heights[level][x][y];
                     const heightSe = heights[level][x + 1][y];
@@ -1603,7 +1621,7 @@ export class SceneBuilder {
                     }
 
                     let tileModel: SceneTileModel;
-                    if (underlayId === -1 && overlayId === -1) {
+                    if (floorHole) {
                         tileModel = this.buildFloorHoleModel(
                             x,
                             y,
@@ -1612,7 +1630,9 @@ export class SceneBuilder {
                             heightNe,
                             heightNw,
                         );
-                    } else if (overlayId === -1) {
+                        // A closed trapdoor is flat; the server opens it in place without rebuilding terrain.
+                        this.deepenFloorHole(tileModel, this.openedShaftDepth(scene, level, x, y));
+                    } else if (!overlay) {
                         tileModel = new SceneTileModel(
                             0,
                             0,
@@ -1639,8 +1659,6 @@ export class SceneBuilder {
                     } else {
                         const shape = tileShapes[level][x][y] + 1;
                         const rotation = tileRotations[level][x][y];
-
-                        const overlay = this.overlayTypeLoader.load(overlayId);
 
                         let overlayHsl: number;
                         let overlayMinimapHsl: number;
@@ -1704,8 +1722,11 @@ export class SceneBuilder {
                         );
                     }
 
-                    tileModel.underlayId = underlayIds[level][x][y];
-                    tileModel.overlayId = overlayIds[level][x][y] & 0x7fff;
+                    // Pit faces stay untextured in HD too, independent of the cutout's ground materials.
+                    if (!floorHole) {
+                        tileModel.underlayId = underlayIds[level][x][y];
+                        tileModel.overlayId = overlayIds[level][x][y] & 0x7fff;
+                    }
                     scene.newTileModel(level, x, y, tileModel);
                 }
             }
@@ -1717,17 +1738,77 @@ export class SceneBuilder {
      * trapdoor opening inside a building) rather than an unloaded map edge. Those holes
      * get a pit model so the sky is not visible through them.
      */
-    private isEnclosedFloorHole(scene: Scene, level: number, x: number, y: number): boolean {
-        const sizeX = scene.sizeX;
-        const sizeY = scene.sizeY;
-        const floored = (tileX: number, tileY: number): boolean =>
-            tileX >= 0 &&
-            tileY >= 0 &&
-            tileX < sizeX &&
-            tileY < sizeY &&
-            (scene.tileUnderlays[level][tileX][tileY] > 0 ||
-                (scene.tileOverlays[level][tileX][tileY] & 0x7fff) > 0);
+    private isEnclosedFloorHole(scene: Scene, level: number, x: number, y: number, visibleFloorOnly = false): boolean {
+        const floored = (tileX: number, tileY: number): boolean => {
+            if (tileX < 0 || tileY < 0 || tileX >= scene.sizeX || tileY >= scene.sizeY) return false;
+            const underlay = scene.tileUnderlays[level][tileX][tileY] > 0;
+            const overlayId = (scene.tileOverlays[level][tileX][tileY] & 0x7fff) - 1;
+            if (!visibleFloorOnly || overlayId === -1) return underlay || overlayId !== -1;
+            const overlay = this.overlayTypeLoader.load(overlayId);
+            // Full transparent overlays hide their underlay too: adjacent cutouts cannot enclose a new pit.
+            return overlay.textureId !== -1 || overlay.primaryRgb !== 0xff00ff ||
+                (scene.tileShapes[level][tileX][tileY] !== 0 && underlay);
+        };
         return floored(x - 1, y) && floored(x + 1, y) && floored(x, y - 1) && floored(x, y + 1);
+    }
+
+    /** A new cutout pit must not cover a shaft already supplied by scenery. */
+    private hasBelowFloorLoc(scene: Scene, level: number, x: number, y: number): boolean {
+        const tile = scene.tiles[level][x][y];
+        if (!tile) return false;
+        const entities = [tile.floorDecoration?.entity, tile.wall?.entity0, tile.wall?.entity1,
+            tile.wallDecoration?.entity0, tile.wallDecoration?.entity1, ...tile.locs.map(loc => loc.entity)];
+        return entities.some(entity => {
+            if (!entity) return false;
+            if (entity instanceof Model) return (entity.contourVerticesY ?? entity.verticesY).some(height => height > 0);
+            if (entity instanceof ModelData) return entity.verticesY.some(height => height > 0);
+            // Animated/multiloc geometry is deferred: do not put an opaque floor through an unknown model.
+            return true;
+        });
+    }
+
+    /**
+     * How far below the floor the open variant of a closed trapdoor on this tile reaches: the
+     * server swaps it in place (1579 to 1581, 2446 to 2445) and the open variant is a same-named
+     * loc next to it in the cache. 0 when the tile has no such loc.
+     */
+    private openedShaftDepth(scene: Scene, level: number, x: number, y: number): number {
+        const tile = scene.tiles[level][x][y];
+        if (!tile) return 0;
+        let depth = 0;
+        for (const loc of [tile.floorDecoration, tile.wall, tile.wallDecoration, ...tile.locs]) {
+            if (!loc) continue;
+            const id = getIdFromTag(loc.tag);
+            const closed = this.locTypeLoader.load(id);
+            if (!closed.actions.some(action => action?.toLowerCase() === "open")) continue;
+            for (let variantId = Math.max(0, id - 2); variantId <= id + 2; variantId++) {
+                if (variantId === id || this.locTypeLoader.load(variantId)?.name !== closed.name) continue;
+                depth = Math.max(depth, this.locDepthBelowFloor(variantId, loc.flags & 0x3f, (loc.flags >> 6) & 3));
+            }
+        }
+        return depth;
+    }
+
+    /** The lowest vertex of a loc's model below its floor (terrain y grows downwards), or 0. */
+    private locDepthBelowFloor(id: number, type: LocModelType, rotation: number): number {
+        const locType = this.locTypeLoader.load(id);
+        const model = locType && this.locModelLoader.getLocModelData(locType, type, rotation);
+        let depth = 0;
+        for (let i = 0; model && i < model.verticesCount; i++) depth = Math.max(depth, model.verticesY[i]);
+        return depth;
+    }
+
+    /** Lowers a pit's bottom so a shaft `shaftDepth` deep stays fully in front of it. */
+    private deepenFloorHole(pit: SceneTileModel, shaftDepth: number): void {
+        if (shaftDepth <= 0 || pit.floorHoleRimY === undefined || pit.floorHoleBottomY === undefined) return;
+        const bottomY = pit.floorHoleRimY + shaftDepth + FLOOR_HOLE_SHAFT_CLEARANCE;
+        if (bottomY <= pit.floorHoleBottomY) return;
+        for (const face of pit.faces) {
+            for (const vertex of face.vertices) {
+                if (vertex.y === pit.floorHoleBottomY) vertex.y = bottomY;
+            }
+        }
+        pit.floorHoleBottomY = bottomY;
     }
 
     /**
@@ -1770,9 +1851,15 @@ export class SceneBuilder {
             0,
         );
 
-        const tileX = x * 128;
-        const tileY = y * 128;
-        const bottomY = Math.max(heightSw, heightSe, heightNe, heightNw) + FLOOR_HOLE_DEPTH;
+        const rimY = Math.max(heightSw, heightSe, heightNe, heightNw);
+        const bottomY = rimY + FLOOR_HOLE_DEPTH;
+        model.floorHoleRimY = rimY;
+        model.floorHoleBottomY = bottomY;
+        // The walls stand just outside the tile, beneath the neighbouring floor.
+        const westX = x * 128 - FLOOR_HOLE_WALL_OUTSET;
+        const eastX = x * 128 + 128 + FLOOR_HOLE_WALL_OUTSET;
+        const southZ = y * 128 - FLOOR_HOLE_WALL_OUTSET;
+        const northZ = y * 128 + 128 + FLOOR_HOLE_WALL_OUTSET;
         const vertex = (vx: number, vy: number, vz: number, hsl: number) => ({
             x: vx,
             y: vy,
@@ -1782,14 +1869,14 @@ export class SceneBuilder {
             v: 0,
             textureId: -1,
         });
-        const sw = vertex(tileX, heightSw, tileY, FLOOR_HOLE_WALL_HSL);
-        const se = vertex(tileX + 128, heightSe, tileY, FLOOR_HOLE_WALL_HSL);
-        const ne = vertex(tileX + 128, heightNe, tileY + 128, FLOOR_HOLE_WALL_HSL);
-        const nw = vertex(tileX, heightNw, tileY + 128, FLOOR_HOLE_WALL_HSL);
-        const bsw = vertex(tileX, bottomY, tileY, FLOOR_HOLE_HSL);
-        const bse = vertex(tileX + 128, bottomY, tileY, FLOOR_HOLE_HSL);
-        const bne = vertex(tileX + 128, bottomY, tileY + 128, FLOOR_HOLE_HSL);
-        const bnw = vertex(tileX, bottomY, tileY + 128, FLOOR_HOLE_HSL);
+        const sw = vertex(westX, heightSw, southZ, FLOOR_HOLE_WALL_HSL);
+        const se = vertex(eastX, heightSe, southZ, FLOOR_HOLE_WALL_HSL);
+        const ne = vertex(eastX, heightNe, northZ, FLOOR_HOLE_WALL_HSL);
+        const nw = vertex(westX, heightNw, northZ, FLOOR_HOLE_WALL_HSL);
+        const bsw = vertex(westX, bottomY, southZ, FLOOR_HOLE_HSL);
+        const bse = vertex(eastX, bottomY, southZ, FLOOR_HOLE_HSL);
+        const bne = vertex(eastX, bottomY, northZ, FLOOR_HOLE_HSL);
+        const bnw = vertex(westX, bottomY, northZ, FLOOR_HOLE_HSL);
 
         const addQuad = (a: any, b: any, c: any, d: any): void => {
             model.faces.push({ isOverlay: false, vertices: [a, b, c] });

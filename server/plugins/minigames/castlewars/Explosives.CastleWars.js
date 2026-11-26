@@ -11,7 +11,7 @@ function dropExplosive(event) {
   player.getInventory().deleteAtSlot(slot, 1);
   event.dropToGround = false;
   event.handled = true;
-  const graphic = core.CacheDefinitions.getSpotanimId("explodingvial");
+  const graphic = core.CacheDefinitions.getSpotanimId("explode");
   player.getPacketSender().sendGlobalGraphic(new core.Graphic(graphic), player.getLocation());
   player.forceChat("Ow!");
   player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(DROP_DAMAGE, core.HitMask.RED).setSource(player)]);

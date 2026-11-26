@@ -61,6 +61,9 @@ type SceneTileVertex = {
 export class SceneTileModel {
     underlayId = 0;
     overlayId = 0;
+    /** On a floor-hole pit: the rim height and the pit bottom (terrain y grows downwards). */
+    floorHoleRimY?: number;
+    floorHoleBottomY?: number;
     underlayHslSw: number;
     underlayHslSe: number;
     underlayHslNe: number;

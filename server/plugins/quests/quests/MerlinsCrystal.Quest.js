@@ -93,9 +93,11 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   const CHAOS_ALTAR_OBJECT_ID = O.CHAOS_ALTAR; // 61 thrantaxaltar
   const BEEHIVE_OBJECT_ID = O.BEEHIVE; // 68 merlin_beehive
   const JEWELLERS_DOOR_OBJECT_ID = O.DOOR_5; // 59 jewellersdoor, Port Sarim 3016,3246
-  /** Keep Le Faye's front doors (lefayeunopenabledoorl/r): locked from both sides. */
+  /** Keep Le Faye's front doors (lefayeunopenabledoorl/r), on 2763,3401-3402 with the keep to the east. */
   const KEEP_FRONT_DOOR_IDS = new Set([71, 72]);
-  const MERLIN_WORKSHOP_DOOR_OBJECT_ID = 24; // merlinworkshop, Camelot 2764,3503,1
+  const KEEP_FRONT_DOOR_X = 2763;
+  const MERLIN_WORKSHOP_DOOR_OBJECT_ID = 24; // merlinworkshop
+  const MERLIN_WORKSHOP_DOOR_TILE = { x: 2764, y: 3503, z: 1 };
 
   const EXCALIBUR_ITEM_ID = I.EXCALIBUR; // 35
   const COINS_ITEM_ID = I.COINS;
@@ -212,8 +214,15 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   const wielded = (player, itemId) => player.getEquipment().get(Equipment.WEAPON_SLOT)?.getId?.() === itemId;
   /** Excalibur in the inventory, the weapon slot or the bank. */
   const ownsExcalibur = (player) => has(player, EXCALIBUR_ITEM_ID) || wielded(player, EXCALIBUR_ITEM_ID) || banked(player, EXCALIBUR_ITEM_ID);
-  /** The sword in hand: the crystal is smashed with it (wielded at tick 2047), a banked sword does not count. */
+  /** The sword on the player (inventory or weapon slot); a banked sword does not count. */
   const carriesExcalibur = (player) => has(player, EXCALIBUR_ITEM_ID) || wielded(player, EXCALIBUR_ITEM_ID);
+  /**
+   * The sword the crystal is struck with: Smash swings the wielded weapon (the capture wields Excalibur
+   * first, tick 2047; the page's "...but your weapon didn't do any damage at all."), Excalibur used on the
+   * crystal (the Wiki's walkthrough) is the sword itself.
+   */
+  const smashingWith = new WeakMap();
+  const strikesWithExcalibur = (player) => smashingWith.get(player) === "use" ? carriesExcalibur(player) : wielded(player, EXCALIBUR_ITEM_ID);
   const stageOf = (player) => quest.getStage(player);
   /** A door event's tile is a Location or a plain { x, y, z }. */
   const coords = (at) => (typeof at?.getX === "function" ? { x: at.getX(), y: at.getY(), z: at.getZ() } : at ?? null);
@@ -469,11 +478,11 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (value.includes("has excalibur in their bank or inventory")) return ownsExcalibur(player);
     if (value.includes("does not have at least 500 coins")) return inventory(player).getAmount(COINS_ITEM_ID) < 500;
     if (value.includes("has at least 500 coins")) return inventory(player).getAmount(COINS_ITEM_ID) >= 500;
-    if (value.includes("doesn't have excalibur but has a hammer")) return !carriesExcalibur(player) && has(player, HAMMER_ITEM_ID);
+    if (value.includes("doesn't have excalibur but has a hammer")) return !strikesWithExcalibur(player) && has(player, HAMMER_ITEM_ID);
     // The page lists the plain branch first; keep it from swallowing the hammer one.
-    if (value.includes("doesn't have excalibur")) return !carriesExcalibur(player) && !has(player, HAMMER_ITEM_ID);
-    if (value.includes("excalibur but doesn't have thrantax")) return carriesExcalibur(player) && stage < STAGE_EXCALIBUR_BOUND;
-    if (value.includes("excalibur and thrantax")) return carriesExcalibur(player) && stage >= STAGE_EXCALIBUR_BOUND;
+    if (value.includes("doesn't have excalibur")) return !strikesWithExcalibur(player) && !has(player, HAMMER_ITEM_ID);
+    if (value.includes("excalibur but doesn't have thrantax")) return strikesWithExcalibur(player) && stage < STAGE_EXCALIBUR_BOUND;
+    if (value.includes("excalibur and thrantax")) return strikesWithExcalibur(player) && stage >= STAGE_EXCALIBUR_BOUND;
     return null;
   }
 
@@ -749,6 +758,9 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   const fights = new Map();
   const morganOf = (player) => fights.get(player)?.morgan ?? null;
 
+  /** The Mordreds whose mother is pleading for them: nobody attacks or is attacked by them meanwhile. */
+  const pleading = new WeakSet();
+
   /**
    * Mordred's last hit leaves him on 0 (headbar fill 0, ticks 1079, 1145, 1215) and Morgan appears
    * beside him, the player turning to her. Only for a player who came for Morgan (stage 3); otherwise
@@ -760,30 +772,68 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     const player = npc.getCombat?.().getKiller?.(false);
     if (!player?.isPlayer?.() || stageOf(player) !== STAGE_SPOKEN_LANCELOT) return;
     const fight = fights.get(player);
-    if (fight?.killing) return; // "No. He deserves to die."
+    if (fight?.killing && fight.mordred === npc) return; // "No. He deserves to die."
     event.preventDeath = true;
-    if (fight && fight.mordred === npc) return;
     npc.setHitpointsLocked?.(false);
     npc.hitpoints = 1; // Ours: one hitpoint rather than none, so nothing else treats him as dead
-    npc.getCombat().reset();
-    if (player.getCombat?.().getTarget?.() === npc) player.getCombat().reset();
-    npc.setPositionToFace(null);
+    // A hit already on its way while she pleads changes nothing.
+    if (pleading.has(npc)) return;
+    stopFighting(player, npc);
     removeMorgan(player);
-    const morgan = api.spawnNpc({ ...MORGAN_TILE, id: MORGAN_NPC_ID, owner: player, ownerOnly: true, wanderRadius: 0 });
+    const tile = morganTile(player, npc);
+    const morgan = api.spawnNpc({ ...tile, id: MORGAN_NPC_ID, owner: player, ownerOnly: true, wanderRadius: 0 });
     if (!morgan) return;
     morgan.__skipDefaultRespawn = true;
     morgan.setPositionToFace(player.getLocation());
     puff(player, morgan.getLocation(), MORGAN_PUFF_HEIGHT);
     player.setPositionToFace(morgan.getLocation());
+    pleading.add(npc);
     fights.set(player, { mordred: npc, morgan, told: false, killing: false });
     startTranscript(api, player, MORGAN_NPC_ID, PAGE, "inside-keep-le-faye-defeating-sir-mordred", null, morgan);
     // Walking away mid-plea: Mordred is whole again and Morgan wanders about (Wiki, Sir Mordred).
     whenChatCloses(player, () => {
+      releaseMordred(npc);
       const current = fights.get(player);
       if (current?.morgan !== morgan || current.killing) return;
       healMordred(npc);
       if (registered(morgan)) morgan.getMovementCoordinator().setRadius(3);
     }, morgan);
+  }
+
+  /** The fight stops both ways as she appears: his swings in the air and the player's attack (Ours: live's hold). */
+  function stopFighting(player, npc) {
+    api.core.HitQueue?.dropHitsFrom?.(npc);
+    npc.getCombat().reset();
+    npc.getCombat().setUnderAttack?.(null);
+    npc.setMobileInteraction?.(null);
+    npc.getMovementQueue().reset().setBlockMovement(true);
+    npc.setPositionToFace(null);
+    if (player.getCombat?.().getTarget?.() === npc) player.getCombat().reset();
+    player.getMovementQueue?.().reset?.();
+  }
+
+  function releaseMordred(npc) {
+    pleading.delete(npc);
+    if (registered(npc)) npc.getMovementQueue().setBlockMovement(false);
+  }
+
+  /** Nobody fights a Mordred his mother is pleading for. */
+  function pleaHoldsTheFight(event) {
+    if (pleading.has(event.attacker) || pleading.has(event.target)) event.allow = false;
+  }
+
+  /**
+   * Beside him on 2770,3403 (ticks 1080, 1146, 1208, the player each time on 2769,3402); Ours: the next
+   * tile round him when the player stands there.
+   */
+  function morganTile(player, mordred) {
+    const here = player.getLocation();
+    const m = mordred.getLocation();
+    const candidates = [[MORGAN_TILE.x, MORGAN_TILE.y], [m.getX() + 1, m.getY()], [m.getX() - 1, m.getY()],
+      [m.getX(), m.getY() + 1], [m.getX() + 1, m.getY() + 1], [m.getX() - 1, m.getY() + 1]];
+    const [x, y] = candidates.find(([cx, cy]) => !(cx === here.getX() && cy === here.getY())
+      && !(cx === m.getX() && cy === m.getY())) ?? candidates[0];
+    return { x, y, z: MORGAN_TILE.z };
   }
 
   function healMordred(mordred) {
@@ -804,6 +854,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (!fight) return;
     if (registered(fight.morgan)) puff(player, fight.morgan.getLocation(), MORGAN_PUFF_HEIGHT);
     healMordred(fight.mordred);
+    releaseMordred(fight.mordred);
     removeMorgan(player);
   }
 
@@ -813,6 +864,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (!fight) return;
     fight.killing = true;
     const { mordred, morgan } = fight;
+    releaseMordred(mordred);
     if (registered(mordred) && mordred.isDyingFunction?.() !== true) mordred.setHitpoints(0);
     TaskManager.submit(new CountdownTask(morgan, MORDRED_BODY_TICKS, () => {
       if (fights.get(player) === fight) removeMorgan(player);
@@ -823,6 +875,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (!fights.has(player) || inZone(player.getLocation(), MORDRED_ROOM)) return;
     const fight = fights.get(player);
     healMordred(fight.mordred);
+    releaseMordred(fight.mordred);
     removeMorgan(player);
   }
 
@@ -864,11 +917,14 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (!at || !atTile(at, JEWELLERS_DOOR_TILE)) return;
     const { player } = request;
     if (!player || !beggarTestPending(player)) return;
+    request.handled = true;
     if (player.getAttribute(BEGGAR_ASKED_ATTRIBUTE) === true) {
-      spawnBeggar(player);
+      // Live opens the door and the player stays on its tile with the beggar beside them (tick 1617);
+      // Ours: the door stays shut, so he can't end up on the other side of it from the player.
+      const waiting = spawnBeggar(player);
+      if (waiting) player.setPositionToFace(waiting.getLocation());
       return;
     }
-    request.handled = true;
     const beggar = spawnBeggar(player);
     if (!beggar) return;
     player.setAttribute(BEGGAR_ASKED_ATTRIBUTE, true);
@@ -1029,7 +1085,8 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   /** player -> { merlin } while the freed Merlin thanks the player. */
   const smashScenes = new Map();
 
-  function smashCrystal(player) {
+  function smashCrystal(player, how = "smash") {
+    smashingWith.set(player, how);
     if (quest.isComplete(player)) {
       player.sendMessage(CRYSTAL_ALREADY_FREED);
       return;
@@ -1046,7 +1103,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
 
   function excaliburOnCrystal(event) {
     if (event.objectId !== undefined && event.objectId !== GIANT_CRYSTAL_OBJECT_ID) return false;
-    smashCrystal(event.player);
+    smashCrystal(event.player, "use");
     return true;
   }
 
@@ -1096,13 +1153,17 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   // Doors, the beehive and the candle
   // ==================================================================================================
 
-  /** Keep Le Faye's front doors stay shut (tick 1264): the way in is the Catherby crates. */
+  /**
+   * Keep Le Faye's front doors: from outside they stay shut (tick 1264), the way in is the Catherby
+   * crates; from inside they open (tick 1254, Doors.plugin's pass-through doors).
+   */
   function keepFrontDoor(request) {
     if (request.handled) return;
     const objectId = request.objectId ?? request.object?.getId?.();
     if (!KEEP_FRONT_DOOR_IDS.has(objectId)) return;
     const at = coords(request.location ?? request.object?.getLocation?.());
-    if (!at || at.x < 2760 || at.x > 2766 || at.y < 3398 || at.y > 3405 || at.z !== 0) return;
+    if (!at || at.x !== KEEP_FRONT_DOOR_X || at.y < 3401 || at.y > 3402 || at.z !== 0) return;
+    if (request.player.getLocation().getX() > KEEP_FRONT_DOOR_X) return;
     request.handled = true;
     messageBox(request.player, KEEP_DOOR_LOCKED);
   }
@@ -1112,6 +1173,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     if (request.handled) return;
     const objectId = request.objectId ?? request.object?.getId?.();
     if (objectId !== MERLIN_WORKSHOP_DOOR_OBJECT_ID) return;
+    if (!atTile(request.location ?? request.object?.getLocation?.(), MERLIN_WORKSHOP_DOOR_TILE)) return;
     const holyGrail = getRegisteredQuests().findLast((entry) => entry.key === "holy_grail");
     if (holyGrail?.isStarted(request.player)) return;
     request.handled = true;
@@ -1167,9 +1229,12 @@ module.exports = function registerMerlinsCrystalQuest(api) {
     return true;
   }
 
+  /** The wax in the bucket's own slot. */
   function fillBucket(player) {
-    inventory(player).deleteNumber(BUCKET_ITEM_ID, 1);
-    inventory(player).adds(BUCKET_OF_WAX_ITEM_ID, 1);
+    const slot = inventory(player).getItems().findIndex((item) => item?.getId?.() === BUCKET_ITEM_ID);
+    if (slot < 0) return;
+    inventory(player).setItem(slot, new api.core.Item(BUCKET_OF_WAX_ITEM_ID, 1));
+    inventory(player).refreshItems?.();
   }
 
   /** The repellent is not used up (Wiki, Insect repellent: it must be used on the hive each time). */
@@ -1231,7 +1296,10 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   function handleLogout({ player }) {
     if (!player) return;
     const fight = fights.get(player);
-    if (fight) healMordred(fight.mordred);
+    if (fight) {
+      healMordred(fight.mordred);
+      releaseMordred(fight.mordred);
+    }
     removeMorgan(player);
     clearBeggar(player);
     removeThrantax(player);
@@ -1291,6 +1359,7 @@ module.exports = function registerMerlinsCrystalQuest(api) {
   api.onItemOnItem("Tinderbox", "Black candle", lightBlackCandle, { noted: false });
   api.onItemDropPolicy(batBonesOnCircle);
   api.onNpcBeforeDeath(mordredFalls);
+  api.onCanAttack(pleaHoldsTheFight);
   api.onZoneEnter(CAMELOT_TOWER_ZONE, handleTowerEnter);
   api.onZoneExit(SARIM_SHOP_ZONE, handleShopZoneLeave);
   api.onZoneExit(MORDRED_ROOM, ({ player }) => leftMordredsRoom(player));

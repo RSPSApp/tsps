@@ -1092,6 +1092,23 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
       closeTicks: 2,
       openSoundId: 62,
     }),
+    // Keep Le Faye's large front doors (lefayeunopenabledoorl/r), Merlin's Crystal capture MerlinsCrystal.bin
+    // (rev 242) tick 1254: from inside, inviswall in both doorways and the inactive leaves (73/74) on the tiles
+    // inside, door_open (62); the player walks out and they are back two ticks later. From outside they stay
+    // locked (MerlinsCrystal.Quest's door:toggle, tick 1264).
+    Object.freeze({
+      closed: [[71, 2763, 3402, 0, 2], [72, 2763, 3401, 0, 2]],
+      opened: [
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2763, 3402, 0, 2],
+        [core.CacheDefinitions.getLocId("inaclefayeunopenabledoorl"), 2764, 3402, 0, 1],
+        [NAMELESS_DOOR_LEAF_IDS.INVISWALL, 2763, 3401, 0, 2],
+        [core.CacheDefinitions.getLocId("inaclefayeunopenabledoorr"), 2764, 3401, 0, 3],
+      ],
+      crossX: 2764,
+      walkOver: true,
+      closeTicks: 2,
+      openSoundId: 62,
+    }),
     // Grum's Gold Exchange, Port Sarim (capture 465 ticks 9416-9421 in, 9476-9479 out): DOOR_5 has
     // no Close partner. Open puts the open leaf on the north edge of the tile inside, the player
     // steps through and the door shuts two ticks later. Live also puts loc 38848 on the door's

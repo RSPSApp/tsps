@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-198 quests · ✅ passed: 24 · ⚠️ passed with issues: 21 · 🔄 in progress: 15 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 89
+198 quests · ✅ passed: 24 · ⚠️ passed with issues: 22 · 🔄 in progress: 15 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 88
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -102,7 +102,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | Making Friends with My Arm | untested |  |  |  |  |
 | [Making History](making-history/README.md) | ⚠️ passed with issues | 2026-11-11 | agent | claude-opus-5-5 |  |
 | [Meat and Greet](meat-and-greet/README.md) | ✅ passed |  | agent |  |  |
-| [Merlin's Crystal](merlins-crystal/README.md) | untested |  |  |  |  |
+| [Merlin's Crystal](merlins-crystal/README.md) | ⚠️ passed with issues | 2026-11-26 | agent | claude-opus-5-5 | 2 |
 | [Misthalin Mystery](misthalin-mystery/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 1 |
 | [Monk's Friend](monks-friend/README.md) | ✅ passed |  | agent |  |  |
 | [Monkey Madness I](monkey-madness-i/README.md) | 🔁 needs recheck | 2026-10-31 | agent | claude-opus-5-5 | 5 |

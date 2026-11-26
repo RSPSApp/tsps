@@ -1,8 +1,8 @@
 ---
 quest: Merlin's Crystal
 key: merlins_crystal
-status: in-progress
-tested:
+status: passed-with-issues
+tested: 2026-11-26
 tester: agent
 model: claude-opus-5-5
 commit:
@@ -43,11 +43,12 @@ guarded by `{{tcond}}`).
   (2778,3401,0) a tick later, and five ticks after the Yes the box "You climb out of the crate." with
   the minimap, camera, tabs and fade back.
 - **The keep:** stairs land on 2769,3407,1 / 2769,3401,2 up and 2769,3397,1 / 2769,3403,0 down
-  (1029-1252). The large front doors (71/72) give "The door is securely locked. You will have to
-  find another way in." (1264).
+  (1029-1252). The large front doors (71/72) open from inside: inviswall in both doorways, the
+  inactive leaves 73/74 on the tiles inside, door_open (62), shut again two ticks later (1254). From
+  outside they give "The door is securely locked. You will have to find another way in." (1264).
 - **Sir Mordred (1046-1229):** his last hit leaves him on 0 (headbar fill 0) and Morgan Le Faye
   appears beside him at 2770,3403,2 in a puff of smoke (86, height 124), facing the player, who
-  turns to her. "No. He deserves to die.": "You kill Mordred." (game message), his death
+  turns to her (the player on 2769,3402 each time). "No. He deserves to die.": "You kill Mordred." (game message), his death
   (fai_varrock_guard_death 6490), Morgan gone with his body two ticks later. "Ok then." and the
   end of her information: "Morgan Le Faye vanishes." (box, a puff), Mordred whole again. Her three
   questions are one menu, the option just asked left out each time it comes back (1216-1229).
@@ -67,7 +68,7 @@ guarded by `{{tcond}}`).
   three incantations come in a new order each time (1953; 1001994). The wrong words (1001994
   17478-17522): his roar continued, the lit candle goes and he attacks (ghost tendril 5540), gone
   about 32 ticks later. A box closed by a second drop (1001800 23238) leaves him there a while.
-- **The crystal (2052-2059):** Smash with Excalibur wielded: the two game messages, the swing (390)
+- **The crystal (2052-2059):** Smash with Excalibur wielded (tick 2047): the two game messages, the swing (390)
   and sound 2656, the crystal gone (loc_del) and Merlin on its tile facing the player, his three
   lines, the box, Merlin gone as it closes. After the quest the crystal is back: "You have already
   freed Merlin from the giant crystal." (2263).
@@ -88,6 +89,13 @@ guarded by `{{tcond}}`).
 
 ## Ours
 
+- Smash swings the wielded weapon, so it needs Excalibur wielded; Excalibur used on the crystal works
+  from the bag (the Wiki's walkthrough).
+- While Morgan pleads nobody fights Mordred, his swings in the air are dropped and he stands still;
+  she takes the next tile round him when the player stands on hers.
+- On the visits after the beggar's first plea the jeweller's door stays shut and he waits beside the
+  player; live opens it (tick 1617), but our door would carry the player inside and away from him.
+
 - The unstruck bat bones journal line; the completed journal; the start sentence.
 - A crate ride whose chat is closed puts the player back by the crates; a logout in it does too.
 - Mordred's plea only at stage 3; at other stages he dies as anyone does.
@@ -95,10 +103,33 @@ guarded by `{{tcond}}`).
 
 ## Findings
 
+- **open** The keep's jetty crate (64, Hide-in) does nothing; no source says what it does.
+- **open** Shared gaps, not this quest's: QuestRuntime sends none of the quest-list bookkeeping
+  varbits and no quest rating; QuestScenes sends no fov clamp, area-sound or draw-distance overrides,
+  hidelocops or minimap_toggle; there is no title system for "Honorary Knight of the Round Table".
+- **fixed** In the playthrough: the front doors were locked from inside too; the Lady's "Who are
+  you?" ended the talk (osrsreboxed-db shared binding); the plea could close under combat and a
+  second one never came; Morgan could stand on the player; the beggar could end up behind the
+  door; Smash worked with Excalibur in the bag; the wax didn't keep the bucket's slot.
 - **fixed** The old plugin played the Wiki transcript with the crate as one long talk, Morgan after
   Mordred's death, the knights' Excalibur lines from stage 3 and a black candle message live doesn't
   send; this rework aligns them with the capture.
 
 ## Runs
 
-No natural playthrough recorded yet on this rework.
+### 2026-11-26 · agent · claude-opus-5-5
+
+- **Start:** fresh account placed at Camelot with `::tele` (the only teleport command); declared
+  combat levels 50, rune gear, food, bread, bat bones, a bucket, a tinderbox, coins and teleport
+  tablets.
+- **Route:** Quest Helper's route through the agent MCP: Arthur, Gawain, Lancelot upstairs, the
+  repellent and the beehive, the crate ride (with a "No." first), the keep's stairs, Mordred fought
+  for real then lowered with `set_npc_hitpoints`, Morgan ("Ok then." once, then the right answers),
+  the candle maker, the Lady, the beggar (declined once), the altar, the ritual, the tower ladders,
+  the smash, Arthur. Travel by tablets and walking; out of the keep by tablet (the front-door bug).
+- **Result:** varp 14 0 → 7; 6 quest points and 1,000 Firemaking XP once; the scroll; repeat talk,
+  relog and the offline save checked; post-quest Arthur, Gawain, Kay, the Lady and the crystal.
+- **Found:** the seven bugs fixed above (each now in the capture test); the vision clip of the crate
+  ride showed the fade, the crate view, the minimap and tabs gone and back, the camera on the player.
+- **Not checked:** "No. He deserves to die." and the wrong words in game (tests only); the smash
+  clip; Morgan's vanish on the right answer on film.

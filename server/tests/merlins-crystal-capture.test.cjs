@@ -94,6 +94,12 @@ const npcsNear = (f, id, tile) => {
 function actor(t, { tile = [2765, 3512, 0], stage: value = 0, items = [], attributes = {}, done = [] } = {}) {
   const f = h.actor(t, { at: tile, stage: value, done, attributes });
   for (const [id, amount] of items) f.player.getInventory().add(new h.core.Item(id, amount ?? 1), false);
+  const sender = f.player.getPacketSender();
+  for (const name of ["mountSubInterface", "closeSubInterface", "closeSubInterfaceMount", "sendCameraReset", "sendTabInterface", "sendHideNpcOps", "sendHideObjOps"]) {
+    if (typeof sender[name] !== "function") continue;
+    const original = sender[name].bind(sender);
+    sender[name] = (...args) => { f.calls.push({ tick: f.tick, name, args }); return original(...args); };
+  }
   clear(f);
   return f;
 }
@@ -337,7 +343,12 @@ test("t854-971: the crate ride: the fade, the copy with no minimap or tabs, the 
   await h.choose(f, "Yes.");
   assert.equal(h.shown(f)?.text, "You climb inside the crate and wait.");
   assert.deepEqual(f.animations.map((a) => a.id), [827]);
+  const fades = () => f.calls.filter((c) => c.name === "mountSubInterface" && c.args[1] === 174)
+    .map((c) => c.args[3]?.postScripts?.[0]?.args);
+  assert.deepEqual(fades(), [[0, 255, 0, 0, 50]], "the fade out with Yes (tick 926)");
   h.ticks(f, 2);
+  assert.deepEqual(fades().at(-1), [0, 0, 0, 255, 50], "the fade in with the copy (928)");
+  assert.ok(f.calls.some((c) => c.name === "sendHideNpcOps" && c.args[0] === true), "NPC menus hidden (928)");
   // The copy of 2776,9848, the minimap off and cutscene_status on.
   const inside = f.player.getLocation();
   assert.ok(inside.getX() > 6400, `in a copy: ${at(f)}`);
@@ -352,6 +363,9 @@ test("t854-971: the crate ride: the fade, the copy with no minimap or tabs, the 
   assert.ok(said.includes("StatementDialogue: You wait."), said.join("\n"));
   assert.equal(said.at(-1), "StatementDialogue: You climb out of the crate.");
   assert.deepEqual(at(f), [2778, 3401, 0]);
+  assert.deepEqual(fades().slice(-2), [[0, 255, 0, 0, 15], [0, 0, 0, 255, 50]], "the quick fade out, then in with the box (965, 971)");
+  assert.ok(f.calls.some((c) => c.name === "sendCameraReset"), "the camera back (971)");
+  assert.ok(f.calls.some((c) => c.name === "sendTabInterface"), "the tabs back (971)");
   assert.equal(varbit(f, MINIMAP_STATE), 0);
   assert.equal(varbit(f, CUTSCENE_STATUS), 0);
   assert.equal(f.player.getMovementQueue().isMovementBlocked?.() ?? false, false);
@@ -394,10 +408,17 @@ test("t1027-1252: the keep's stairs land where live put the player, both ways", 
   assert.deepEqual(at(f), [2769, 3403, 0]);
 });
 
-test("t1254-1264: the keep's large front doors are locked", async (t) => {
+test("t1254-1264: the keep's large front doors open from inside and are locked from outside", async (t) => {
   const f = actor(t, { stage: S.MORGAN, tile: [2764, 3402, 0] });
+  h.ticks(f, 2);
   await click(f, LOC.KEEP_DOOR_L, [2763, 3402, 0]);
-  assert.equal(h.shown(f)?.text, "The door is securely locked. You will have to find another way in.");
+  h.ticks(f, 3);
+  assert.deepEqual(at(f), [2763, 3402, 0], "walked out through the doorway (t1254)");
+  assert.notEqual(h.shown(f)?.text, "The door is securely locked. You will have to find another way in.");
+  h.ticks(f, 3);
+  await click(f, LOC.KEEP_DOOR_L, [2763, 3402, 0]);
+  assert.equal(h.shown(f)?.text, "The door is securely locked. You will have to find another way in.", "from outside (t1264)");
+  assert.deepEqual(at(f), [2763, 3402, 0]);
 });
 
 /** Mordred beaten to his last hit: his hitpoints lowered, then a real hit through his HitQueue. */
@@ -529,6 +550,8 @@ test("t1458-1504, 1733: the Lady's test; with the sword on the player she keeps 
   f.player.getInventory().add(new h.core.Item(I.EXCALIBUR, 1), false);
   const held = await play(f, () => h.talk(f, lady), ["Who are you?"]);
   assert.equal(held[1], "MENU[Select an option]: Who are you?|Good day.");
+  // Her own page's answer (t1461).
+  assert.deepEqual(held.slice(2), ["PLAYER: Who are you?", "The Lady of the Lake: I am the Lady of the Lake."]);
 });
 
 test("t1597-1642: the jeweller's door brings the beggar; bread on the second visit turns him into the Lady and wins Excalibur", async (t) => {
@@ -552,12 +575,8 @@ test("t1597-1642: the jeweller's door brings the beggar; bread on the second vis
   await click(f, LOC.JEWELLERS_DOOR, [3016, 3246, 0]);
   h.ticks(f, 3);
   const [waiting] = npcsNear(f, NPC.BEGGAR);
-  assert.ok(waiting, "the door opens and he waits (t1617)");
-  if (f.player.getLocation().getX() < 3016) {
-    // Our door takes the player through (Doors.plugin, Grum's door); back out to him.
-    await click(f, LOC.JEWELLERS_DOOR, [3016, 3246, 0]);
-    h.ticks(f, 3);
-  }
+  assert.ok(waiting, "he waits by the door (t1617)");
+  assert.ok(f.player.getLocation().getX() >= 3016, `the player stays outside with him: ${at(f)}`);
   const breadSlot = slotOf(f, I.BREAD);
   const said = await play(f, () => h.talk(f, waiting), ["Yes, here you go."]);
   assert.deepEqual(said, [
@@ -691,10 +710,24 @@ test("t2052-2059: Smash with Excalibur wielded: the messages, stage 6, the swing
   assert.equal(npcsNear(f, NPC.MERLIN, [2767, 3493, 2]).length, 0);
 });
 
+test("Excalibur used on the crystal from the bag shatters it (the Wiki's walkthrough)", async (t) => {
+  const f = towerActor(t, S.BOUND, [[I.EXCALIBUR, 1]]);
+  h.ticks(f, 2);
+  await useOnObject(f, LOC.CRYSTAL, [2767, 3493], I.EXCALIBUR);
+  assert.ok(texts(f).includes("... and it shatters under the force of Excalibur!"), JSON.stringify(texts(f)));
+  assert.equal(stage(f), S.FREED);
+});
+
 test("the crystal without the boon, without the sword, with a hammer (Wiki); after the quest 'already freed' (t2263)", async (t) => {
-  const f = towerActor(t, S.MORGAN, [[I.EXCALIBUR, 1]]);
+  const f = towerActor(t, S.MORGAN);
+  f.player.getEquipment().setItem(h.core.Equipment.WEAPON_SLOT, new h.core.Item(I.EXCALIBUR, 1));
   await click(f, LOC.CRYSTAL, [2767, 3493, 2]);
   assert.deepEqual(texts(f), ["You attempt to smash the crystal...", "...but it seems to be protected by a dark force"]);
+  // Smash swings the wielded weapon: Excalibur in the bag is not it.
+  const bagged = towerActor(t, S.BOUND, [[I.EXCALIBUR, 1]]);
+  await click(bagged, LOC.CRYSTAL, [2767, 3493, 2]);
+  assert.deepEqual(texts(bagged), ["You attempt to smash the crystal...", "...but your weapon didn't do any damage at all."]);
+  assert.equal(stage(bagged), S.BOUND);
   const bare = towerActor(t, S.BOUND);
   await click(bare, LOC.CRYSTAL, [2767, 3493, 2]);
   assert.deepEqual(texts(bare), ["You attempt to smash the crystal...", "...but your weapon didn't do any damage at all."]);
@@ -742,10 +775,12 @@ test("the beehive: stung without repellent; repellent then the bucket fills it, 
   await useOnObject(f, LOC.HIVE, [2762, 3443], I.INSECT_REPELLENT);
   assert.equal(h.shown(f)?.text, "You pour insect repellent on the beehive. You see bees leaving the hive.");
   await h.continueLine(f);
+  const bucketSlot = slotOf(f, I.BUCKET);
   const said = await play(f, () => useOnObject(f, LOC.HIVE, [2762, 3443], I.BUCKET));
   assert.deepEqual(said, ["ItemStatementDialogue: You try to get some wax from the beehive...",
     "ItemStatementDialogue: You succeed in filling your bucket! Meanwhile, the bees fly back to the hive as the repellent wears off."]);
   assert.equal(count(f, I.BUCKET_OF_WAX), 1);
+  assert.equal(slotOf(f, I.BUCKET_OF_WAX), bucketSlot, "the wax in the bucket's slot");
   assert.equal(count(f, I.INSECT_REPELLENT), 1);
 });
 
@@ -837,4 +872,190 @@ test("the captured head animations: Morgan's plea chatsad1, Merlin's thanks chat
   gSender.sendInterfaceAnimation = (uid, animation) => { merlinAnims.push(animation); return gOriginal(uid, animation); };
   await click(g, LOC.CRYSTAL, [2767, 3493, 2]);
   assert.equal(merlinAnims.at(-1), 567);
+});
+
+// --- More of the page, and the ways out of each delay -------------------------------------------
+
+test("t452, 583, 593: Lucan, Bedivere and Lancelot at stage 1", async (t) => {
+  const f = actor(t, { stage: S.STARTED, tile: [2760, 3513, 1] });
+  const lucan = h.spawn(f, NPC.LUCAN, [2761, 3513, 1]);
+  assert.deepEqual((await play(f, () => h.talk(f, lucan))).slice(-2), [
+    "Sir Lucan: The Lady of the Lake is looking after it I believe... but I know not where she resides currently.",
+    "PLAYER: Thanks. I'll try and find someone who does.",
+  ]);
+  const bedivere = h.spawn(f, NPC.BEDIVERE, [2759, 3513, 1]);
+  assert.equal((await play(f, () => h.talk(f, bedivere)))[1], "PLAYER: Merlin's in a crystal. Little help?");
+  const lancelot = h.spawn(f, NPC.LANCELOT, [2760, 3514, 1]);
+  const said = await play(f, () => h.talk(f, lancelot), ["I want to get Merlin out of the crystal."]);
+  assert.equal(said.at(-1), "Sir Lancelot: Well, if the Knights of the Round Table can't manage it, I can't see how a commoner like you could succeed where we have failed.");
+  assert.equal(stage(f), S.STARTED);
+});
+
+test("Talk-to Sir Mordred at stage 3 (Wiki): his challenge, then he attacks", async (t) => {
+  const { f, mordred } = fightActor(t);
+  const said = await play(f, () => h.talk(f, mordred));
+  assert.deepEqual(said, ["Sir Mordred: You DARE to invade MY stronghold?!?! Have at thee knave!!!"]);
+  h.ticks(f, 2);
+  assert.equal(mordred.getCombat().getTarget?.(), f.player);
+  assert.ok(!texts(f).includes("Sir Mordred attacks."), "the Wiki's stage direction is not a message");
+});
+
+test("a crate ride whose chat is closed puts the player back by the crates, everything restored (Ours)", async (t) => {
+  const f = actor(t, { stage: S.LANCELOT, tile: [2801, 3443, 0] });
+  await click(f, LOC.CRATE, [2801, 3442, 0], 2);
+  await h.continueLine(f);
+  await h.choose(f, "Yes.");
+  h.ticks(f, 3);
+  assert.ok(f.player.getLocation().getX() > 6400);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.getDialogueManager().reset?.();
+  h.ticks(f, 4);
+  assert.deepEqual(at(f), [2801, 3443, 0]);
+  assert.equal(varbit(f, MINIMAP_STATE), 0);
+  assert.equal(varbit(f, CUTSCENE_STATUS), 0);
+  assert.equal(stage(f), S.LANCELOT);
+});
+
+test("a summoning walked out of: Thrantax leaves after a while and the quest stays at 4", async (t) => {
+  const f = ritualActor(t);
+  await dropItem(f, I.BAT_BONES);
+  h.ticks(f, 4);
+  assert.equal(npcsNear(f, NPC.THRANTAX).length, 1);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.getDialogueManager().reset?.();
+  h.ticks(f, 36);
+  assert.equal(npcsNear(f, NPC.THRANTAX).length, 0);
+  assert.equal(stage(f), S.MORGAN);
+  assert.equal(count(f, I.LIT_BLACK_CANDLE), 1, "the candle is kept");
+  // He can be summoned again, from the symbol (the step back left the player two tiles west of it).
+  f.player.moveTo(new h.core.Location(2780, 3515, 0));
+  h.ticks(f, 2);
+  await dropItem(f, I.BAT_BONES);
+  h.ticks(f, 4);
+  assert.equal(npcsNear(f, NPC.THRANTAX).length, 1);
+});
+
+test("Merlin goes when his box is closed early; the stage is already 6", async (t) => {
+  const f = towerActor(t, S.BOUND);
+  f.player.getEquipment().setItem(h.core.Equipment.WEAPON_SLOT, new h.core.Item(I.EXCALIBUR, 1));
+  await click(f, LOC.CRYSTAL, [2767, 3493, 2]);
+  assert.equal(npcsNear(f, NPC.MERLIN, [2767, 3493, 2]).length, 1);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.getDialogueManager().reset?.();
+  h.ticks(f, 3);
+  assert.equal(npcsNear(f, NPC.MERLIN, [2767, 3493, 2]).length, 0);
+  assert.equal(stage(f), S.FREED);
+  const g = reload(t, f, [2767, 3492, 2]);
+  assert.equal(stage(g), S.FREED);
+});
+
+test("the beggar's gift with an otherwise full inventory: Excalibur takes the bread's slot", async (t) => {
+  const f = actor(t, { stage: S.MORGAN, tile: [3016, 3247, 0], attributes: { [A.TEST]: true }, items: [[I.BREAD, 1]] });
+  while (f.player.getInventory().getFreeSlots() > 0) f.player.getInventory().add(new h.core.Item(I.LOGS, 1), false);
+  const slot = slotOf(f, I.BREAD);
+  await play(f, () => click(f, LOC.JEWELLERS_DOOR, [3016, 3246, 0]), ["Yes certainly."]);
+  assert.equal(slotOf(f, I.EXCALIBUR), slot);
+  assert.equal(f.player.getInventory().getFreeSlots(), 0);
+});
+
+/** A climb: the click, then ticks until the plane changes (the walk to the ladder comes first). */
+async function climb(f, id, tile) {
+  const z = f.player.getLocation().getZ();
+  await f.connection.dispatch([{ type: "object_option", id, x: tile[0], y: tile[1], clickType: 1 }]);
+  for (let i = 0; i < 25 && f.player.getLocation().getZ() === z; i++) h.tick(f);
+  h.ticks(f, 2);
+}
+
+test("t495-621, 2046-2075: Camelot's tower ladders and great-hall stairs land as live", async (t) => {
+  const f = actor(t, { stage: S.STARTED, tile: [2748, 3493, 0] });
+  h.ticks(f, 2);
+  const legs = [
+    [26107, [2747, 3493, 0], [2748, 3493, 1]], [26107, [2749, 3491, 1], [2749, 3492, 2]],
+    [25606, [2749, 3491, 2], [2749, 3492, 1]], [25606, [2747, 3493, 1], [2748, 3493, 0]],
+  ];
+  for (const [id, loc, landing] of legs) {
+    await climb(f, id, loc);
+    assert.deepEqual(at(f), landing, `${id} at ${loc}`);
+  }
+  f.player.moveTo(new h.core.Location(2751, 3508, 0));
+  h.ticks(f, 2);
+  await climb(f, 26106, [2750, 3509, 0]);
+  assert.deepEqual(at(f), [2751, 3513, 1]);
+  await climb(f, 25604, [2750, 3511, 1]);
+  assert.deepEqual(at(f), [2751, 3508, 0]);
+  f.player.moveTo(new h.core.Location(2768, 3493, 0));
+  h.ticks(f, 2);
+  for (const [id, loc, landing] of [[26107, [2769, 3493, 0], [2768, 3493, 1]], [26107, [2767, 3491, 1], [2767, 3492, 2]],
+    [25606, [2767, 3491, 2], [2767, 3492, 1]], [25606, [2769, 3493, 1], [2768, 3493, 0]]]) {
+    await climb(f, id, loc);
+    assert.deepEqual(at(f), landing, `${id} at ${loc}`);
+  }
+});
+
+test("the branches no recording took (Wiki): each answers something", async (t) => {
+  const f = actor(t, { stage: S.STARTED, tile: [2760, 3513, 1] });
+  const lancelot = h.spawn(f, NPC.LANCELOT, [2761, 3513, 1]);
+  const full = await play(f, () => h.talk(f, lancelot), ["You're a little full of yourself aren't you?"]);
+  assert.ok(full.length > 3 && full[2] === "PLAYER: You're a little full of yourself aren't you?", full.join("\n"));
+  f.player.getPacketSender().sendInterfaceRemoval();
+  h.ticks(f, 2);
+  const g = actor(t, { stage: S.STARTED });
+  const gawain = h.spawn(g, NPC.GAWAIN, [2766, 3513, 0]);
+  const thanks = await play(g, () => h.talk(g, gawain), ["Do you know how Merlin got trapped?", "Thank you for the information."]);
+  assert.deepEqual(thanks.slice(-2), ["PLAYER: Thank you for the information.", "Sir Gawain: It is the least I can do."]);
+  const asked = await play(g, () => h.talk(g, gawain), ["Any idea how to get into Morgan Le Faye's stronghold?"]);
+  assert.deepEqual(asked.slice(-2), ["PLAYER: Any idea how to get into Morgan Le Faye's stronghold?", "Sir Gawain: No, you've got me stumped there..."]);
+  const m = actor(t, { stage: S.MORGAN, tile: [2799, 3441, 0] });
+  const maker = h.spawn(m, NPC.CANDLE_MAKER, [2798, 3441, 0]);
+  assert.deepEqual((await play(m, () => h.talk(m, maker), ["No thank you."])).slice(-1), ["PLAYER: No thank you."]);
+  const b = actor(t, { stage: S.MORGAN, tile: [3016, 3247, 0], attributes: { [A.TEST]: true } });
+  const none = await play(b, () => click(b, LOC.JEWELLERS_DOOR, [3016, 3246, 0]), ["Yes certainly."]);
+  assert.deepEqual(none.slice(-3), ["PLAYER: Yes, certainly.", "PLAYER: ... except I don't have any bread on me at the moment...",
+    "Beggar: Well, if you get some, you know where to come."]);
+  assert.equal(count(b, I.EXCALIBUR), 0);
+});
+
+test("a second plea after a spared Mordred is beaten again; Morgan never on the player's tile; no fighting meanwhile", async (t) => {
+  const { f, mordred } = fightActor(t);
+  await beatMordred(f, mordred);
+  await play(f, null, ["Ok then."]);
+  assert.equal(mordred.getHitpoints(), mordred.getMaxHitpoints());
+  f.player.moveTo(new h.core.Location(2770, 3403, 2));
+  h.ticks(f, 2);
+  clear(f);
+  await beatMordred(f, mordred);
+  const [morgan] = npcsNear(f, NPC.MORGAN);
+  assert.ok(morgan, "she pleads again");
+  assert.ok(!(morgan.getLocation().getX() === 2770 && morgan.getLocation().getY() === 3403), "not on the player's tile");
+  assert.equal(mordred.getHitpoints(), 1);
+  // A hit already in the air while she pleads changes nothing; the plea stays up.
+  landHit(f.player, mordred, 5);
+  h.ticks(f, 3);
+  assert.equal(h.shown(f)?.text, "STOP! Please... spare my son.");
+  assert.equal(mordred.getHitpoints(), 1);
+});
+
+test("the beggar's talk closed after the bread is given: no sword, and another loaf is needed (Wiki)", async (t) => {
+  const f = actor(t, { stage: S.MORGAN, tile: [3016, 3247, 0], attributes: { [A.TEST]: true }, items: [[I.BREAD, 1]] });
+  await click(f, LOC.JEWELLERS_DOOR, [3016, 3246, 0]);
+  for (let i = 0; i < 30 && h.shown(f)?.text !== "Thank you very much!"; i++) {
+    const line = h.shown(f);
+    if (line?.who === "menu") await h.choose(f, "Yes certainly.");
+    else if (line) await h.continueLine(f);
+    else h.tick(f);
+  }
+  assert.equal(h.shown(f)?.text, "Thank you very much!");
+  assert.equal(count(f, I.BREAD), 0, "the bread is gone");
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.getDialogueManager().reset?.();
+  h.ticks(f, 3);
+  assert.equal(count(f, I.EXCALIBUR), 0);
+  assert.equal(npcsNear(f, NPC.BEGGAR).length + npcsNear(f, NPC.LADY, [3016, 3247, 0]).length, 0);
+  // Back at the door: he asks again, and a new loaf wins the sword.
+  f.player.getInventory().add(new h.core.Item(I.BREAD, 1), false);
+  await click(f, LOC.JEWELLERS_DOOR, [3016, 3246, 0]);
+  const [beggar] = npcsNear(f, NPC.BEGGAR);
+  assert.ok(beggar);
+  await play(f, () => h.talk(f, beggar), ["Yes, here you go."]);
+  assert.equal(count(f, I.EXCALIBUR), 1);
 });

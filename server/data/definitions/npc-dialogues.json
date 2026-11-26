@@ -814665,7 +814665,20 @@
           "type": "choice",
           "options": [
             {
-              "text": "Who are you?"
+              "text": "Who are you?",
+              "steps": [
+                {
+                  "player": "Who are you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "The Lady of the Lake",
+                  "text": "I am the Lady of the Lake.",
+                  "speaker_ids": [
+                    3530
+                  ]
+                }
+              ]
             },
             {
               "text": "Good day.",

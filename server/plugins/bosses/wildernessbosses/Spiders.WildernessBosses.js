@@ -3,13 +3,12 @@
  * https://oldschool.runescape.wiki/w/Spindel/Strategies), as captured
  * (docs/wilderness-bosses.md):
  *
- * - Next to a player she only bites (npc_venenatis_melee_01). Otherwise she works through a cycle
- *   of 8 ranged spits then 8 magic webs, every 4 ticks, moving a few tiles every fourth attack.
- *   Both fly 25 + 2 per tile cycles and land with their impact (fx_venenatis_ranged/magic_impact).
- * - The cycle's first spit calls two spiderlings; while any live she hits through protection
- *   prayers. Each spiderling's bite drains a Prayer point: "You feel yourself drained by the
- *   spiderling." They die with her.
- * - The cycle's third web also throws a sticky web at the player's tile (fx_venenatis_web,
+ * - Every attack takes a slot in a cycle of 16. Next to a player she bites (npc_venenatis_melee_01).
+ *   From farther away she uses ranged spits in the first eight slots and magic webs in the last eight.
+ *   The shots fly 25 + 2 per tile cycles and land with their impact (fx_venenatis_ranged/magic_impact).
+ * - The first attack of each cycle calls two more spiderlings. While any live, her attacks hit through
+ *   protection prayers. Each spiderling's resolved bite drains a Prayer point.
+ * - The eleventh attack also throws a sticky web at the player's tile (fx_venenatis_web,
  *   4 ticks in the air): it spreads into a 7x7 web (its corners cut) for 39 ticks. Each tick a
  *   player stands in it costs 3 hitpoints, 3 Prayer and 10% run energy: "You feel yourself drained
  *   by the webs!"
@@ -45,6 +44,7 @@ const MOVE_EVERY = 4;
 const MOVE_RANGE = 3;
 const SPIDERLINGS = 2;
 const SPIDERLING_RANGE = 6;
+const SPIDERLING_DEATH_DELAY = 5;
 
 /**
  * The web as captured around the tile it lands on: [dx, dy, loc, rotation]. A 5x5 of centre
@@ -85,7 +85,9 @@ function broodOf(npc) {
     brood = { spiderlings: [] };
     broods.set(npc, brood);
   }
-  brood.spiderlings = brood.spiderlings.filter(Common.alive);
+  const pending = core.World.getAddNPCQueue();
+  brood.spiderlings = brood.spiderlings.filter((spiderling) =>
+    spiderling.getHitpoints() > 0 && (spiderling.isRegistered() || pending.includes(spiderling)));
   return brood;
 }
 
@@ -142,32 +144,39 @@ function shuffle(npc) {
 
 // ------------------------------------------------------------------ spiderlings
 
-/** Up to two at a time: a call only tops the brood up (the Wiki gives no larger number). */
+/** Each call adds a pair. Their choice of open tiles is an estimate (docs/wilderness-bosses.md). */
 function callSpiderlings(npc, spider, target) {
   const brood = broodOf(npc);
   const from = centre(npc);
-  const wanted = SPIDERLINGS - brood.spiderlings.length;
-  for (let i = 0, tries = 0; i < wanted && tries < 100; tries++) {
-    const x = from.x + Common.randomBetween(-SPIDERLING_RANGE, SPIDERLING_RANGE);
-    const y = from.y + Common.randomBetween(-SPIDERLING_RANGE, SPIDERLING_RANGE);
-    if (!Common.open(x, y, from.z) || Common.edgeDistance(npc, x, y) < 1) continue;
-    const spiderling = core.NPC.create(spider.spiderling, new core.Location(x, y, from.z));
+  const tiles = [];
+  for (let x = from.x - SPIDERLING_RANGE; x <= from.x + SPIDERLING_RANGE; x++) {
+    for (let y = from.y - SPIDERLING_RANGE; y <= from.y + SPIDERLING_RANGE; y++) {
+      if (Common.edgeDistance(npc, x, y) >= 1 && Common.open(x, y, from.z)) tiles.push([x, y]);
+    }
+  }
+  for (let i = 0; i < SPIDERLINGS && tiles.length > 0; i++) {
+    const [[x, y]] = tiles.splice(Common.randomBetween(0, tiles.length - 1), 1);
+    // The plugin spawn API registers the NPC before this attack tick's client update.
+    const spiderling = api.spawnNpc({ id: spider.spiderling, x, y, z: from.z, wanderRadius: 20 });
+    if (!spiderling) continue;
     spiderling.__skipDefaultRespawn = true;
     spiderling.__wildernessBoss = npc;
     spiderling.setMultiCombat(true);
-    spiderling.getMovementCoordinator?.().setRadius?.(20);
-    core.World.getAddNPCQueue().push(spiderling);
     brood.spiderlings.push(spiderling);
     Common.engage(spiderling, target);
-    i++;
   }
 }
 
-/** With her, the spiderlings die; an abandoned fight just takes them away. */
-function dismissBrood(npc, die = true) {
-  for (const spiderling of broodOf(npc).spiderlings) {
-    if (die) spiderling.setHitpoints(0);
-    else core.World.getRemoveNPCQueue().push(spiderling);
+/** Death dismisses the surviving brood with its animations. An abandoned fight removes it directly. */
+function dismissBrood(spiderlings, die) {
+  const pending = core.World.getAddNPCQueue();
+  for (const spiderling of spiderlings) {
+    const queued = pending.indexOf(spiderling);
+    if (queued !== -1) pending.splice(queued, 1);
+    else if (Common.alive(spiderling)) {
+      if (die) spiderling.setHitpoints(0);
+      else core.World.getRemoveNPCQueue().push(spiderling);
+    }
   }
 }
 
@@ -178,7 +187,7 @@ function spiderlingBite({ attacker, target }) {
   const skills = target.getSkillManager();
   const prayer = skills.getCurrentLevel(core.Skill.PRAYER);
   if (prayer > 0) skills.setCurrentLevel(core.Skill.PRAYER, prayer - 1, true);
-  target.sendMessage(SPIDERLING_MESSAGE);
+  target.getPacketSender().sendTypedMessage(core.ChatType.SPAM, SPIDERLING_MESSAGE);
 }
 
 // ------------------------------------------------------------------ webs
@@ -236,7 +245,7 @@ function playerTick(player, lair) {
   }
   if (caught.get(player) !== lair.key) {
     caught.set(player, lair.key);
-    player.sendMessage(WEB_MESSAGE);
+    player.getPacketSender().sendTypedMessage(core.ChatType.SPAM, WEB_MESSAGE);
   }
   player.getCombat().getHitQueue().addPendingDamage([new core.HitDamage(WEB_DRAIN.damage, core.HitMask.RED)]);
   const skills = player.getSkillManager();
@@ -265,15 +274,14 @@ function combatClass() {
       npc.setPositionToFace(target.getLocation());
       character.getCombat().setAttackDelay(SPEED);
       const at = target.getLocation();
-      if (Common.edgeDistance(npc, at.getX(), at.getY()) === 1) {
-        bite(npc, this, spider, target);
-        return;
-      }
+      const adjacent = Common.edgeDistance(npc, at.getX(), at.getY()) === 1;
       const cycle = Number(npc.getAttribute(CYCLE_ATTRIBUTE)) || 0;
       npc.setAttribute(CYCLE_ATTRIBUTE, (cycle + 1) % CYCLE);
-      shoot(npc, this, spider, target, cycle < RANGED_ATTACKS ? "ranged" : "magic");
+      if (adjacent) bite(npc, this, spider, target);
+      else shoot(npc, this, spider, target, cycle < RANGED_ATTACKS ? "ranged" : "magic");
       if (cycle === 0) callSpiderlings(npc, spider, target);
       if (cycle === WEB_AT) throwWeb(npc, spider, target);
+      if (adjacent) return;
       const attacks = (Number(npc.getAttribute(ATTACKS_ATTRIBUTE)) || 0) + 1;
       npc.setAttribute(ATTACKS_ATTRIBUTE, attacks);
       if (attacks % MOVE_EVERY === 0) shuffle(npc);
@@ -300,7 +308,8 @@ function combatClass() {
 function reset(npc) {
   const spider = spiderOf(npc);
   if (!spider) return;
-  dismissBrood(npc, false);
+  dismissBrood(broodOf(npc).spiderlings, false);
+  broods.delete(npc);
   clearWebs(spider.key);
   npc.setAttribute(CYCLE_ATTRIBUTE, 0);
   npc.setAttribute(ATTACKS_ATTRIBUTE, 0);
@@ -320,7 +329,9 @@ function spawned(npc) {
 function beforeDeath({ npc, preventDeath }) {
   const spider = spiderOf(npc);
   if (!spider || preventDeath) return;
-  dismissBrood(npc);
+  const spiderlings = broodOf(npc).spiderlings;
+  // Their death animations most often start five ticks after hers (rsprox 235/3376).
+  if (spiderlings.length > 0) Common.later(SPIDERLING_DEATH_DELAY, () => dismissBrood(spiderlings, true));
 }
 
 function attach(pluginApi) {

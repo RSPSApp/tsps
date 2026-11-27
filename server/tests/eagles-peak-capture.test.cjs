@@ -661,12 +661,26 @@ test("a walk click during Walk-past or the door step does not leave the player i
   const f = eagles(t, { stage: 20, varbits: { TRACKING: 6, DOOR: 3, CHAT: 5 }, at: [2007, 4953, 3], worn: [ITEM.CAPE, ITEM.BEAK] });
   const eagle = spawnOnce(f, 1490, [2007, 4954, 3]);
   await f.connection.dispatch([{ type: "npc_option", index: eagle.getIndex(), clickType: 1 }]);
-  H.tick(f);
-  H.tick(f);
-  f.player.getMovementQueue().reset();
-  f.player.getMovementQueue().addSteps(new H.core.Location(2010, 4950, 3));
-  H.ticks(f, 8);
-  assert.deepEqual(H.xy(f.player.getLocation()), [2007, 4957, 3], "the crossing finishes");
+  for (let i = 0; i < 3; i++) {
+    // A walk packet every tick of the crossing, as a player clicking away would send.
+    await f.connection.dispatch([{ type: "move", worldX: 2010, worldY: 4950, modifierFlags: 0, run: false }]);
+    H.tick(f);
+  }
+  H.ticks(f, 2);
+  assert.deepEqual(H.xy(f.player.getLocation()), [2007, 4957, 3], "the crossing finishes: " + JSON.stringify(H.xy(f.player.getLocation())));
   assert.equal(f.player.hasFlag?.("movement:ignore-clipping") === true, false);
   assert.equal(varbit(f, 12393), 0, "busy cleared");
+});
+
+test("a teleport in the middle of Walk-past ends the crossing where the player now is, with collision back", async (t) => {
+  const f = eagles(t, { stage: 20, varbits: { TRACKING: 6, DOOR: 3, CHAT: 5 }, at: [2007, 4953, 3], worn: [ITEM.CAPE, ITEM.BEAK] });
+  const eagle = spawnOnce(f, 1490, [2007, 4954, 3]);
+  await f.connection.dispatch([{ type: "npc_option", index: eagle.getIndex(), clickType: 1 }]);
+  H.tick(f);
+  H.tick(f);
+  f.player.moveTo(new H.core.Location(3222, 3218, 0)); // a teleport
+  f.player.needsPlacement = false;
+  H.ticks(f, 6);
+  assert.deepEqual(H.xy(f.player.getLocation()), [3222, 3218, 0], "not walked back toward the eagle");
+  assert.equal(f.player.hasFlag?.("movement:ignore-clipping") === true, false);
 });

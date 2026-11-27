@@ -246,6 +246,16 @@ module.exports = function attachEaglesPeakNest(api, ep) {
     player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
   }
 
+  /** Still on the crossing: same plane, within its four tiles (a teleport or a death ends it). */
+  function onCrossing(now, to) {
+    return now.getZ() === to.getZ() && Math.max(Math.abs(now.getX() - to.getX()), Math.abs(now.getY() - to.getY())) <= 4;
+  }
+
+  /** Clicks in the world are dropped while crossing, as live's busy state holds the player (t2001-2007). */
+  function holdInput(input) {
+    if (input?.player && crossings.has(input.player)) input.handled = true;
+  }
+
   function endCrossing(player) {
     if (!crossings.has(player)) return;
     if (!crossings.get(player)) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
@@ -274,6 +284,12 @@ module.exports = function attachEaglesPeakNest(api, ep) {
     task.execute = () => {
       const now = player.getLocation();
       const arrived = now.getX() === to.getX() && now.getY() === to.getY();
+      if (!arrived && !onCrossing(now, to)) {
+        task.stop();
+        queue.reset();
+        endCrossing(player);
+        return;
+      }
       if (!arrived && --limit > 0 && player.isRegistered?.() !== false) {
         // The crossing holds the player (live's busy varbit, t2001-2007): a click cannot leave them in the eagle.
         queue.reset();
@@ -369,7 +385,8 @@ module.exports = function attachEaglesPeakNest(api, ep) {
     const task = new Task(1, false);
     task.execute = () => {
       const now = player.getLocation();
-      if ((now.getX() === destination.getX() && now.getY() === destination.getY()) || --ticks <= 0 || player.isRegistered?.() === false) {
+      if ((now.getX() === destination.getX() && now.getY() === destination.getY()) || --ticks <= 0 || player.isRegistered?.() === false
+        || !onCrossing(now, destination)) {
         task.stop();
         endCrossing(player);
         return;
@@ -460,6 +477,7 @@ module.exports = function attachEaglesPeakNest(api, ep) {
   api.onItemOnObject("Eagle feather", "Stone door", eagleFeatherOnDoor);
   api.onItemAction("Feathered journal", { Read: readJournal });
   api.onPlayerLogout(({ player }) => endCrossing(player));
+  api.onCustomEvent("player:world-input", holdInput);
 
   return { LOC, JOURNAL, doorUnlocked, walkPastEagle, swipe, sidestep, startMeeting, routeShout };
 };

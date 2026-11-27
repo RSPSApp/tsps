@@ -459,4 +459,4 @@ function createQuestScenes(api, { onEnd, recoveryAttribute } = {}) {
   };
 }
 
-module.exports = { createQuestScenes, CAMERA_RATES, setCutsceneInterface };
+module.exports = { createQuestScenes, CAMERA_RATES, setCutsceneInterface, hideSideTabs, restoreSideTabs };

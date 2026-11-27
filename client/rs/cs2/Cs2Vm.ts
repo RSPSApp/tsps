@@ -1126,6 +1126,7 @@ export class Cs2Vm {
                 return vm.context.localPlayerName;
             },
             resolveChatPlayerName: vm.context.resolveChatPlayerName,
+            sendPlayerOption: vm.context.sendPlayerOption,
 
             // Chat filter state
             get publicChatMode() {

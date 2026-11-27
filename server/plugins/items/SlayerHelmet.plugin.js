@@ -16,7 +16,7 @@
  * Assembling needs the Malevolent masquerade unlock (varbit slayer_helm_unlocked, bought
  * in the Slayer Rewards interface). Reinforced goggles join the components once A Porcine of
  * Interest is complete (Wiki, Slayer helmet: mat7, "only required after completion of the
- * quest"), and are absorbed into the helmet, given back by Disassemble. Completing the quest
+ * quest"), and Disassemble gives a pair back. Completing the quest
  * gives every Slayer helmet the pair's protection from sourhogs (Wiki, A Porcine of Interest:
  * "Existing slayer helmets will have reinforced goggles added to them"), which is why that check
  * reads the quest itself: live objects carry no per-item state to record it.
@@ -319,7 +319,7 @@ function imbuedHelmFor(maskItemId) {
 /**
  * Whether the goggles are a component yet: from A Porcine of Interest's completion on they are
  * (Wiki, Slayer helmet: "Reinforced goggles are additionally required only if the quest ... is
- * completed"), and the helmet keeps them once absorbed (GOGGLES_META).
+ * completed"). The helmet records nothing about them; the quest is the whole rule.
  */
 function gogglesRequired(player) {
   const request = { player, key: GOGGLES_QUEST, complete: false };

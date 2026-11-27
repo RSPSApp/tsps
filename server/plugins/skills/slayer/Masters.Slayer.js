@@ -582,7 +582,7 @@ function dialogueVariant({ npcId, definition }) {
   return STEVE_MASTER_VARIANT;
 }
 
-/** "Slayer Equipment (shop)": matched by id, since the goggles copy shares its name. */
+/** "Slayer Equipment (shop)", looked up by id: the page key carries the wiki's "(shop)" suffix. */
 const EQUIPMENT_SHOP_ID = 1324;
 
 /** Trade (op4): the equipment shop, for forms the shops.json binding misses (Nieve 1455). */

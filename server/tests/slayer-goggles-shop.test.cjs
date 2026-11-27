@@ -1,85 +1,81 @@
 // Run after `yarn build`: node --test tests/slayer-goggles-shop.test.cjs
-// Reinforced goggles in the Slayer Equipment shop (Wiki, Reinforced goggles: sold by any Slayer
-// master for 100 coins after A Porcine of Interest; before the quest the row is not there).
+//
+// Reinforced goggles in the Slayer Equipment shop. Wiki, Reinforced goggles: sold by any Slayer
+// master for 100 coins, with "additional pairs can be purchased after the quest", and the change
+// note "Player can no longer purchase reinforced goggles without meeting any requirements".
+//
+// The row is in the shop dump itself: osrsreboxed-db merges the page's "===A Porcine of Interest==="
+// store table into the shop (its dumper, not a hand edit), so tsps imports it like any other row,
+// and plugins/quests/data/quest-shops.json hides it until the quest is done. This checks both
+// halves: the imported row, and what a player is shown.
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const { test, before } = require("node:test");
 
 const { Server } = require("../dist/Server");
 Server.installProductionPathResolver();
+
 const { CachePipeline } = require("../dist/game/cache/CachePipeline");
-const { RegionManager } = require("../dist/game/collision/RegionManager");
-const { NpcDefinitionLoader } = require("../dist/game/definition/loader/impl/NpcDefinitionLoader");
+const { Player } = require("../dist/game/entity/impl/player/Player");
+const { ShopDefinition } = require("../dist/game/definition/ShopDefinition");
+const { ShopDefinitionLoader } = require("../dist/game/definition/loader/impl/ShopDefinitionLoader");
+const { ShopManager } = require("../dist/game/model/container/shop/ShopManager");
 const { PluginManager } = require("../dist/plugins/PluginManager");
-const { Location } = require("../dist/game/model/Location");
+const { decodeShopOpen } = require("./helpers/shop-open-packet.cjs");
 
-const BASE_SHOP = 1324;
-const GOGGLES_COPY = 1700;
+const SHOP = "Slayer Equipment (shop)";
 const GOGGLES = 24942;
-const QUEST = "a_porcine_of_interest";
+const QUEST = "A Porcine of Interest";
 
-let core;
-let ShopManager;
 let questComplete = false;
-const opened = [];
-let nextIndex = 2600;
 
-before(() => {
-  CachePipeline.initialize();
-  RegionManager.init();
-  new NpcDefinitionLoader().load();
-  core = PluginManager.getCoreApi();
-  // The Slayer plugin registers the goggles shop as a definition source, which the loader reads
-  // when it loads — so the plugin comes first, then the shops.
-  require("../plugins/skills/Slayer.plugin").register(PluginManager.createApi("Slayer"));
-  // The quest's answer, as QuestRuntime gives it: the shop unit only asks.
-  PluginManager.createApi("QuestProbe").onCustomEvent("quest:is-complete", (request) => {
-    if (request?.key === QUEST && questComplete) request.complete = true;
-  });
-  PluginManager.createApi("ShopProbe").onCustomEvent("shop:opened", (event) => opened.push(event));
-  const { ShopDefinitionLoader } = require("../dist/game/definition/loader/impl/ShopDefinitionLoader");
-  new ShopDefinitionLoader().load();
-  ShopManager = require("../dist/game/model/container/shop/ShopManager").ShopManager;
+before(async () => {
+  await CachePipeline.initialize(path.resolve(__dirname, ".."));
+  require("../plugins/items/ItemDefinitionLoader.plugin").register({ log() {}, onPlayerLogin() {}, registerContentEndpoint() {} });
+  assert.equal(new ShopDefinitionLoader().load(), true, "the server's shops");
   ShopManager.initialize();
+  // The quest's answer, as QuestRuntime gives it. quest-shops.json treats no answer as "this
+  // server hasn't got that quest, so let it through"; here the answer is explicit.
+  PluginManager.createApi("QuestProbe").onCustomEvent("quest:is-complete", (request) => {
+    if (request?.name === QUEST) request.complete = questComplete;
+  });
+  require("../plugins/quests/Shops.Quests")(PluginManager.createApi("QuestShops"));
 });
 
-/** A real player, since opening a shop writes to the client. */
-function createPlayer() {
-  const { Player } = require("../dist/game/entity/impl/player/Player");
-  const { PlayerSession } = require("../dist/net/PlayerSession");
-  const channel = { kind: "test", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
-  const session = new PlayerSession(channel);
-  const player = new Player(session, new Location(3089, 3524, 0));
-  session.setPlayer(player);
-  player.setIndex(nextIndex++);
-  player.setUsername(`gogglesshop${nextIndex}`);
-  player.setRegistered(true);
-  return player;
+/** Opens a shop for a real player and decodes the SHOP_OPEN packet the client would draw. */
+function openShop(id) {
+  const player = new Player(null);
+  player.setUsername(`gogglesshop${Math.floor(Math.random() * 1e6)}`);
+  const packets = [];
+  const sender = new Proxy({}, { get: () => () => sender });
+  player.getPacketSender = () => sender;
+  player.getSession = () => ({ sendClientPacket: (packet) => (packets.push(Buffer.from(packet)), true) });
+  assert.equal(ShopManager.open(player, id), true, "the shop opens");
+  return { player, shop: decodeShopOpen(packets.at(-1)) };
 }
 
-function stock(player) {
-  const shop = ShopManager.getOpenShop(player);
-  assert.ok(shop, "a shop is open");
-  return shop.stock;
-}
+test("the imported shop carries the goggles row from the wiki's quest section", () => {
+  const definition = ShopDefinition.all().find((entry) => entry.getName() === SHOP);
+  assert.ok(definition, "the shop is in shops.json");
+  const row = definition.getOriginalStock().find((entry) => entry.id === GOGGLES);
+  assert.ok(row, "shop 1324 stocks reinforced goggles");
+  assert.equal(row.amount, 50, "Wiki: 50 in stock");
+  assert.equal(row.restockTicks, 1, "Wiki: restock 1");
+});
 
-test("the Slayer Equipment shop carries the goggles only after A Porcine of Interest", () => {
-  const fresh = createPlayer();
-  opened.length = 0;
-  assert.equal(ShopManager.open(fresh, BASE_SHOP), true);
-  assert.equal(opened.at(-1).shopId, BASE_SHOP, "an unfinished player gets the shop itself");
-  assert.equal(stock(fresh).some((entry) => entry.itemId === GOGGLES), false, "no goggles row");
+test("a player without the quest is not shown the row, and one who finished it is", () => {
+  const definition = ShopDefinition.all().find((entry) => entry.getName() === SHOP);
 
-  const done = createPlayer();
+  questComplete = false;
+  const unfinished = openShop(definition.getId());
+  assert.equal(unfinished.shop.id, String(definition.getId()), "the shop itself, not a copy");
+  assert.equal(unfinished.shop.stock.some((row) => row.itemId === GOGGLES), false, "no goggles row before the quest");
+
   questComplete = true;
-  try {
-    opened.length = 0;
-    assert.equal(ShopManager.open(done, BASE_SHOP), true);
-    assert.equal(opened.at(-1).shopId, GOGGLES_COPY, "a finished player gets the copy");
-    const row = stock(done).find((entry) => entry.itemId === GOGGLES);
-    assert.ok(row, "the goggles row is stocked");
-    assert.equal(row.price, 100, "Wiki: sold for 100 coins");
-    assert.equal(row.amount, 50, "Wiki: 50 in stock");
-  } finally {
-    questComplete = false;
-  }
+  const finished = openShop(definition.getId());
+  const row = finished.shop.stock.find((entry) => entry.itemId === GOGGLES);
+  assert.ok(row, "the row appears after the quest");
+  assert.equal(row.priceEach, 100, "Wiki: 100 coins");
+  assert.equal(row.quantity, 50, "Wiki: 50 in stock");
+  questComplete = false;
 });

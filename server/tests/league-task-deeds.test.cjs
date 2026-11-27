@@ -92,6 +92,71 @@ async function send(f, packet, count = 10) {
   await ticks(f, count);
 }
 
+test("League Yama return greetings play one rank-appropriate line and reopen all four topics", async (t) => {
+  const spawn = [1500, 5609, 0];
+  const f = pactsCharacter(t, [1503, 5608, 0]);
+  f.player.setAttribute("league:type", 6);
+  const npcId = core.NpcIdentifiers.YAMA_4;
+  const npc = core.NPC.create(npcId, new core.Location(...spawn));
+  const talk = () => assert.ok(PM.emitNpcInteraction({ player: f.player, npc, npcId, action: "Talk-to", clickType: 1, handled: false }));
+  const options = () => core.MultiChatboxPrompt.getPending(f.player)?.options ?? [];
+  const resume = async (choice) => {
+    const group = f.player.getPacketSender().getChatboxGroupId();
+    const widgetId = choice == null ? (group << 16) | ([231, 217].includes(group) ? 5 : 0) : core.OptionDialogue.OPTIONS_WIDGET_ID;
+    await send(f, { type: "dialogue_continue", widgetId, childIndex: choice ?? -1 }, 0);
+  };
+  const readLines = async () => {
+    const lines = [];
+    for (let i = 0; i < 20 && f.player.getDialogueManager().getCurrent() && !options().length; i++) {
+      const text = f.player.getDialogueManager().getCurrent().getText?.();
+      if (text) lines.push(text);
+      await resume();
+    }
+    return lines;
+  };
+
+  const prefix = "standard-dialogue-demonic-pacts-league-";
+  const variants = require("../data/definitions/npc-dialogues.json").Yama.variants;
+  const expectedTopics = variants[prefix + "initial-dialogue"][1].options.map(option => option.text);
+  const choose = async (topic) => {
+    const index = options().indexOf(topic);
+    assert.ok(index >= 0, "Expected topic " + topic);
+    await resume(index + 1);
+  };
+  // A new account's character designer opens on a microtask after login; let it open and close first.
+  await ticks(f, 1);
+  f.player.getPacketSender().sendInterfaceRemoval();
+  talk();
+  const firstLines = await readLines();
+  assert.match(firstLines.join(" "), /^Make it quick,/);
+  assert.deepEqual(options(), expectedTopics, "initial greeting must open the topics");
+  await choose("Goodbye.");
+  await readLines();
+
+  let roll = 0;
+  t.mock.method(Math, "random", () => roll);
+  const thresholds = require("../plugins/modes/data/league-ranks.json").leagues[6].wiki;
+  for (const [rank, suffix] of [[2, "subsequent-dialogue-at-iron-or-lower-rank"], [3, "subsequent-dialogue-at-steel-or-higher-rank"]]) {
+    f.player.setAttribute("league:tasks", { "test-yama-rank": thresholds[rank - 1] });
+    const alternatives = variants[prefix + suffix][0].options;
+    for (const [index, alternative] of alternatives.entries()) {
+      roll = (index + 0.5) / alternatives.length;
+      talk();
+      const expectedGreeting = alternative.steps[0].npc.replace("[player name]", f.player.getDisplayName());
+      assert.deepEqual((await readLines()).map(line => line.replace(/<br>/g, " ")), [expectedGreeting]);
+      assert.deepEqual(options(), expectedTopics, "return greeting must leave all four topics available");
+      if (index === 0) {
+        await choose("What have you done to the Sage?");
+        assert.ok((await readLines()).length > 0);
+        assert.deepEqual(options(), expectedTopics, "lore topics return to the menu");
+      }
+      await choose("Goodbye.");
+      await readLines();
+      assert.deepEqual(options(), []);
+    }
+  }
+});
+
 function completed(f) {
   const query = { player: f.player, ids: [] };
   PM.emitCustomEvent("league:completed-tasks", query);

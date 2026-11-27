@@ -16,6 +16,14 @@ page and value, keyed by NPC gameval.
   poison and venom, burns and recoil. Hits from NPCs (thralls included) are never changed, and
   status damage and directly queued poison, burns and recoil skip the rolled-splat path.
 
+## Max hit hitsplats
+
+The armour moves the hit's whole damage range, so `FlatArmour` moves the hit's rolled maximum
+with it (issue #6848). With a 30 max, the max hit hitsplat shows on 34 against -4 armour and on 28
+against 2. A max of the armour value or less can only deal 0, which is never a max hit splat. The
+Wiki's Hitsplat and Flat armour pages don't cover this case, and no capture records a max hit
+splat on a flat-armour monster. The behaviour follows the issue report.
+
 ## Ordering
 
 FlatArmour listens to the generic `combat:hit-finalize` event. `PendingHit` emits it once for

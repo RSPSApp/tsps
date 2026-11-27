@@ -12,6 +12,8 @@
  * - Voyages.Ferries.js: the five travel styles and landing on logout or shutdown;
  * - Routes.Ferries.js: what starts each route, the Entrana search and `ferries:travel`;
  * - Andras.Ferries.js: Andras's Port Phasmatys - Slepe boat, its fare and permanent access;
+ * - Kathy.Ferries.js: Kathy Corkat's boat between the Tree Gnome Stronghold and the Piscatoris
+ *   Fishing Colony, its fare until Swan Song's start and her Ring of Charos(a) option;
  * - Morytania.Ferries.js: the boats between Burgh de Rott, Meiyerditch, the Icyene Graveyard and
  *   Slepe after Sins of the Father.
  *
@@ -23,19 +25,21 @@ const Common = require("./ferries/Common.Ferries");
 const Voyages = require("./ferries/Voyages.Ferries");
 const Routes = require("./ferries/Routes.Ferries");
 const Andras = require("./ferries/Andras.Ferries");
+const Kathy = require("./ferries/Kathy.Ferries");
 const Morytania = require("./ferries/Morytania.Ferries");
 
 module.exports = {
   name: "Ferries",
-  description: "NPC ferries without another home: Entrana monks, Void Knight squires, Veos, Rellekka boats, Captain Bentley, Jeb, Achilka's riverboat, Andras's Slepe boat, the Morytania boats after Sins of the Father and others.",
+  description: "NPC ferries without another home: Entrana monks, Void Knight squires, Veos, Rellekka boats, Captain Bentley, Jeb, Achilka's riverboat, Andras's Slepe boat, Kathy Corkat's Piscatoris boat, the Morytania boats after Sins of the Father and others.",
   members: true,
-  _test: { Common, Voyages, Routes, Andras, Morytania },
+  _test: { Common, Voyages, Routes, Andras, Kathy, Morytania },
   register(api) {
     Common.init(api);
     api.onPlayerLogout(Voyages.landNow);
     api.onServerShutdown(Voyages.landEveryone);
     Routes.attach(api);
     Andras.attach(api);
+    Kathy.attach(api);
     Morytania.attach(api);
   },
 };

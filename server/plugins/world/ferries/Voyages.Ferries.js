@@ -15,7 +15,9 @@
  *   barge's Quick-Travel 239/4263, Andras's Slepe boat 231/372, the Morytania boats 231/392):
  *   fade_overlay out, the move a few ticks later (facing the route's `face` tile, if it has one),
  *   back in. A route may add song 147 with its own `jingle`, an empty `messageBox` held until the
- *   fade back in, and its `message` on any tick of the trip.
+ *   fade back in, and its `message` on any tick of the trip. A `box` (Kathy Corkat's boat, from a
+ *   video) is a message box with its text and no continue from the click; it gains its continue on
+ *   tick `box.continue`.
  * - rowing (Jeb, 224/1434; Holgart in Sea Slug, 20261110T112750): fade out, then seaslug_boat_travel
  *   (461) over the platform with the route's layer, jingle 172 and the minimap off; six ticks later
  *   (the route's `arriveTick` from the click, when its leg is longer) the message box and fade in.
@@ -116,6 +118,21 @@ function message(player, text, spam = false) {
 
 function messageBox(player, text) {
   if (text) Common.core.StatementDialogue.send(player, text);
+}
+
+/**
+ * A route's `box`: its text without a continue as a conversation of its own (so a transcript that
+ * started the trip leaves it open), then the same box with its continue. Returns what gives it the
+ * continue, which does nothing once the player has closed it.
+ */
+function heldBox(player, box) {
+  const { ActionDialogue, DialogueChainBuilder, StatementDialogue } = Common.core;
+  const manager = player.getDialogueManager();
+  const held = new ActionDialogue(0, { execute: () => StatementDialogue.send(player, box.text, false) }, true);
+  manager.startDialogues(new DialogueChainBuilder().add(held).add(new StatementDialogue(1, box.text)));
+  return () => {
+    if (manager.getCurrent?.() === held) manager.advance();
+  };
 }
 
 function seaSounds(player, jingle) {
@@ -240,6 +257,7 @@ function fadeTrip(player, trip) {
   if (trip.message?.at === 0) message(player, trip.message.text, trip.message.spam);
   fade(player, true);
   if (box) out.withChatboxOwner(box, () => Common.core.StatementDialogue.send(player, trip.messageBox, false));
+  const allowContinue = trip.box ? heldBox(player, trip.box) : null;
   Common.begin(player, pending);
   const finish = () => {
     if (!isCurrent()) return;
@@ -271,6 +289,10 @@ function fadeTrip(player, trip) {
       previous?.();
       if (isCurrent()) message(player, trip.message.text, trip.message.spam);
     };
+  }
+  if (allowContinue) {
+    const previous = steps[trip.box.continue];
+    steps[trip.box.continue] = () => { previous?.(); allowContinue(); };
   }
   if (minimapOff != null) {
     const previous = steps[minimapOff];

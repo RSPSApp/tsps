@@ -128,3 +128,24 @@ for (const accuracy of [[true, false], [false, true], [false, false], [true, tru
       'real Barrows resolved-hit listener drains once on any successful roll, never on two misses');
   });
 }
+
+// rsprox captures: barrow_torag_crush (2068) on every attack with Torag's hammers (recs 2600/2601,
+// rev 229), Sulphur blades (local 1001301 Slash, 1001302 Block, rev 237) and the Glacial temotli
+// (local 1001302 Pound). The other styles weren't recorded: 2068 in them is an assumption, as every
+// recorded style agrees and the Wiki is silent.
+// Blades and temotli block with human_sword_def (388), the hammers with human_unarmedblock (424).
+// See docs/weapon-data.md, "Twin weapons swing both weapons".
+const TWIN_SWING = [[29084, 388], [29889, 388], [4747, 424], [4958, 424], [4959, 424], [4960, 424], [4961, 424]];
+test('twin weapons swing both weapons in every style and block as recorded', t => {
+  for (const [id, block] of TWIN_SWING) {
+    const { player, npc } = actors(t, id), victim = actors(t, 4151).player;
+    core.WeaponInterfaceManager.assign(player);
+    assert.notEqual(player.getWeapon(), core.WeaponInterfaces.MACE, 'weapon ' + id + ' takes its own type');
+    for (const fightType of player.getWeapon().getFightType()) {
+      player.setFightType(fightType);
+      assert.equal(player.getAttackAnim(npc), 2068, 'weapon ' + id + ' ' + fightType.name + ' on an NPC');
+      assert.equal(player.getAttackAnim(victim), 2068, 'weapon ' + id + ' ' + fightType.name + ' on a player');
+    }
+    assert.equal(player.getBlockAnim(), block, 'weapon ' + id + ' block');
+  }
+});

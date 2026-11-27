@@ -743,6 +743,21 @@ test("crystal grinding can reuse the consumed shard slot or an existing dust sta
   }
 });
 
+test("grinding keeps going in a full inventory that already holds the product (issue 6895)", () => {
+  const who = player([
+    ["pestle_and_mortar"], ["chocolate_bar"], ["chocolate_bar"], ["chocolate_dust"],
+    ...Array(24).fill(["unicorn_horn"]),
+  ]);
+  assert.equal(who.inv.getFreeSlots(), 0);
+  use(who, "pestle_and_mortar", "chocolate_bar");
+  assert.equal(who.inv.count("chocolate_dust"), 2);
+  assert.equal(who.inv.count("chocolate_bar"), 1);
+  ticks(2);
+  assert.equal(who.inv.count("chocolate_dust"), 3);
+  assert.equal(who.inv.count("chocolate_bar"), 0);
+  core.TaskManager.cancelTasks(who.getIndex());
+});
+
 test("grinding does not spend shards when the dust would overflow its stack", () => {
   const who = player([["pestle_and_mortar"], ["prif_crystal_shard", 5], ["prif_crystal_shard_crushed", 2 ** 31 - 6]]);
   use(who, "pestle_and_mortar", "prif_crystal_shard");

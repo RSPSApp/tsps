@@ -225,8 +225,11 @@ test("choosing a kitten colour needs Gertrude's Cat, the worn Ring of Charos(a),
   equipRing(full.player);
   add(full.player, core.ItemIdentifiers.COINS, 100);
   add(full.player, core.ItemIdentifiers.BRONZE_AXE, 28);
-  assert.equal(G.chooseKittenColour(full.api, full.player, 0), false);
-  assert.match(full.messages.at(-1), /free inventory slot/);
+  // The kitten follows the player (Pets' pets:summon), so a full backpack doesn't stop her (issue 6772).
+  const emit = full.api.emitCustomEvent;
+  full.api.emitCustomEvent = (name, event) => (name === "pets:summon" ? (event.summoned = true) : emit(name, event));
+  assert.equal(G.chooseKittenColour(full.api, full.player, 0), true);
+  assert.equal(full.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 0);
 });
 
 test("Gertrude's colour interface action opens the colour menu and is claimed", (t) => {

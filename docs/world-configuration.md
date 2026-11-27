@@ -910,7 +910,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Entrana` | Entrana | npcs | yes | Enforces Entrana's item restrictions on ferry and balloon travel: the monks search for armour, weapons, jars and supplies, with the Wiki's exceptions. (members only) |
 | `ForgottenFourRewards` | ForgottenFourRewards | npcs | yes | Saves each player's Forgotten Four reward state, using combat-achievement kill counts, for the ordered boss drop tables. (members only) |
 | `GeDecanters` | GeDecanters | npcs | yes | Adds the Grand Exchange decanting service, which swaps potion doses between vials in a player's inventory for a fee. (members only) |
-| `Gertrude` | Gertrude | npcs | yes | Lets players buy another kitten from Gertrude after her quest for 100 coins and pick its colour, if wearing an activated Ring of Charos. (members only) |
+| `Gertrude` | Gertrude | npcs | yes | Lets players buy another kitten from Gertrude after her quest for 100 coins, of a random colour, or of their choice while wearing an activated Ring of Charos. (members only) |
 | `Hans` | Hans | npcs | yes | Lets Hans in Lumbridge tell players how long they have played, completing the Lumbridge diary task for it. |
 | `HoopSnake` | HoopSnake | npcs | yes | Fossil Island's Hoop Snakes: stun one with a blunt attack, pick it up, then roll or release it. (members only) |
 | `Hydras` | Hydras | npcs | yes | Karuulm Slayer Dungeon hydras: magic and ranged attacks that switch style every three attacks, and a poison spit every twelfth that leaves pools on three tiles, with the captured animations, projectiles and sounds. (members only) |

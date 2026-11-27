@@ -16107,6 +16107,8 @@ test('Gertrude sells a replacement kitten for 100 coins after her quest', () => 
   });
   delete require.cache[require.resolve('../plugins/quests/quests/GertrudesCat.Quest')];
   require('../plugins/quests/quests/GertrudesCat.Quest')(api);
+  // The sale itself is the Gertrude plugin's (issue 6772: the quest's copy never ran from her page).
+  require('../plugins/npcs/Gertrude.plugin').register(api);
   const attrs = new Map([['quest.gertrudes_cat.stage', 6]]);
   const inventory = new Map([[api.core.ItemIdentifiers.COINS, 123]]);
   const player = {
@@ -16126,7 +16128,9 @@ test('Gertrude sells a replacement kitten for 100 coins after her quest', () => 
   for (const handler of handlers.custom.get('npc-dialogue:action') ?? []) handler(event);
   assert.equal(event.handled, true);
   assert.equal(inventory.get(api.core.ItemIdentifiers.COINS), 23);
-  assert.equal(inventory.get(api.core.ItemIdentifiers.PET_KITTEN), 1);
+  // A random colour without the Ring of Charos(a) (Wiki, Gertrude).
+  const kittens = [1555, 1556, 1557, 1558, 1559, 1560].reduce((sum, id) => sum + (inventory.get(id) ?? 0), 0);
+  assert.equal(kittens, 1);
 });
 
 

@@ -377,17 +377,24 @@ test('crates: "You search the crate.", 4 ticks, then nothing or the kitten (give
   assert.equal(f.dialogueText(), 'You find a kitten! You carefully place it in your backpack.');
 });
 
-test('the broken fence: north with human_walk_fence_north to 3308,3494, south with 839 to 3308,3491, no message (ticks 375-382, 694-701)', async (t) => {
+test('the broken fence: north with human_walk_fence_north over the fence to 3308,3493, south with 839 to 3308,3491, no message (ticks 375-382, 694-701)', async (t) => {
   const f = fixture(t, [3308, 3490, 0]);
   const fence = core.CacheDefinitions.getLocId('gertrudefence');
   const s = f.tick();
   await f.send({ type: 'object_option', id: fence, x: 3308, y: 3492, clickType: 1 });
-  let landed = null, beside = null;
+  let landed = null, beside = null, move = null;
   for (let i = 0; i < 14 && !landed; i++) {
     f.step();
     if (beside === null && f.p.getLocation().getY() === 3491) beside = f.tick();
-    if (f.p.getLocation().getY() === 3494) landed = f.tick();
+    const force = f.p.getForceMovement?.();
+    if (!move && force) move = { from: [force.getStart().getX(), force.getStart().getY()], at: [f.p.getLocation().getX(), f.p.getLocation().getY()],
+      to: [force.getStart().getX() + force.getEnd().getX(), force.getStart().getY() + force.getEnd().getY()] };
+    if (f.p.getLocation().getY() === 3493) landed = f.tick();
   }
+  // Live climbs from the fence tile itself, the move one tile on from it (3493 to 3494). This cache
+  // blocks the fence tile, so from 3308,3491 the move keeps that distance: it starts on the fence
+  // (issue 6772: one tile further north, and one tile further on, than the fence it crosses).
+  assert.deepEqual(move, { at: [3308, 3491], from: [3308, 3492], to: [3308, 3493] });
   // North: four ticks after reaching 3308,3491, as 3222 walks 3491 (t+1), the fence tile (t+3) and climbs (t+5).
   const north = f.since(s).find((e) => e[1] === 'player-anim' && e[2] === seq('human_walk_fence_north'));
   assert.equal(north?.[0] - beside, 4);
@@ -617,4 +624,252 @@ test('paying Shilop: the coins and the stage go as the coins box shows; Shilop g
     [N().SHILOP, "Well, you'll have to find the broken fence to get in. I'm sure you can manage that."],
   ]);
   assert.equal(f.p.getInventory().getAmount(I().COINS), 50, 'once');
+});
+
+// ---------------------------------------------------------------------------------------------
+// After the quest: Gertrude's kittens and the kitten's Interact menu (issue 6772)
+// ---------------------------------------------------------------------------------------------
+
+const following = (p) => { const request = { player: p, pet: null }; PM.emitCustomEvent('pets:current', request); return request.pet; };
+const SOLD = 'Gertrude gives you another kitten.';
+const RAISING = "Aren't you still raising that other kitten? Only once it's fully grown and it no longer needs your attention will I let you have another kitten.";
+const kittenOp = (npc, p, name) => npc.getCurrentDefinition(p).getActions().findIndex((action) => action === name) + 1;
+
+test('"Yes please." sells a kitten through her real page: the coins go and a kitten follows (issue 6772 item 6)', async (t) => {
+  const f = fixture(t, [3149, 3412, 0]);
+  const gertrude = f.npc(N().GERTRUDE, [3149, 3413, 0]);
+  quest.setStage(f.p, 6);
+  f.give(I().COINS, 150);
+  await f.clickNpc(gertrude, 1);
+  const lines = await f.talk([1, 1]);
+  // No Ring of Charos(a): her [Charm] option is not offered.
+  const menus = lines.filter((l) => l[0] === 'options').map((l) => l[1]);
+  assert.deepEqual(menus[1], ['Yes please.', 'No thanks.'], JSON.stringify(menus));
+  assert.deepEqual(lines.filter((l) => l[0] === 'box').map((l) => l[2]), [SOLD]);
+  assert.equal(f.p.getInventory().getAmount(I().COINS), 50);
+  assert.equal(following(f.p)?.getDefinition?.()?.getName?.(), 'Kitten', 'the kitten follows');
+  // Raising it now, she won't sell another.
+  await f.clickNpc(gertrude, 1);
+  assert.ok(texts(await f.talk([1])).includes(RAISING));
+  assert.equal(f.p.getInventory().getAmount(I().COINS), 50);
+});
+
+test('with the Ring of Charos(a) worn her [Charm] option is offered', async (t) => {
+  const f = fixture(t, [3149, 3412, 0]);
+  const gertrude = f.npc(N().GERTRUDE, [3149, 3413, 0]);
+  quest.setStage(f.p, 6);
+  f.give(I().COINS, 150);
+  f.p.getEquipment().set(core.Equipment.RING_SLOT, new core.Item(I().RING_OF_CHAROS_A_, 1));
+  await f.clickNpc(gertrude, 1);
+  const lines = await f.talk([1], { stop: (l) => l[0] === 'options' && l[1].includes('Yes please.') });
+  assert.deepEqual(lines.at(-1)[1], ['Yes please.', 'No thanks.', "[Charm] I'm quite fussy over cats - can I pick my own?"]);
+});
+
+test('a kitten placeholder in the bank is no kitten; a banked kitten or cat still is (issue 6772 item 5)', async (t) => {
+  const f = fixture(t, [3149, 3412, 0]);
+  const gertrude = f.npc(N().GERTRUDE, [3149, 3413, 0]);
+  quest.setStage(f.p, 6);
+  f.give(I().COINS, 300);
+  const bank = f.p.getBank(0);
+  bank.add(new core.Item(I().PET_KITTEN_3, 1));
+  bank.delete?.(new core.Item(I().PET_KITTEN_3, 1), true);
+  bank.set(0, new core.Item(I().PET_KITTEN_3, 0));
+  assert.ok(bank.contains(I().PET_KITTEN_3) && bank.getAmount(I().PET_KITTEN_3) === 0, 'a placeholder');
+  await f.clickNpc(gertrude, 1);
+  assert.deepEqual((await f.talk([1, 1])).filter((l) => l[0] === 'box').map((l) => l[2]), [SOLD]);
+  assert.ok(following(f.p));
+
+  // A banked normal cat counts (Wiki, Gertrude); an overgrown one does not.
+  const g = fixture(t, [3149, 3412, 0]);
+  const other = g.npc(N().GERTRUDE, [3149, 3413, 0]);
+  quest.setStage(g.p, 6);
+  g.give(I().COINS, 300);
+  g.p.getBank(0).add(new core.Item(I().PET_CAT_2, 1));
+  await g.clickNpc(other, 1);
+  assert.ok(texts(await g.talk([1])).includes(RAISING));
+  g.p.getBank(0).set(0, new core.Item(core.CacheDefinitions.getObjId('overgrown_cat_white') ?? 1568, 1));
+  await g.clickNpc(other, 1);
+  assert.deepEqual((await g.talk([1, 1])).filter((l) => l[0] === 'box').map((l) => l[2]), [SOLD]);
+});
+
+test('her right-click Kitten option sells one without the ring, and refuses without coins or while raising one', async (t) => {
+  const f = fixture(t, [3149, 3412, 0]);
+  // The world's Gertrude (3500), shown after the quest as 7723 with "Kitten".
+  const gertrude = f.npc(core.CacheDefinitions.getNpcId('gertrude') ?? 3500, [3149, 3413, 0]);
+  quest.setStage(f.p, 6);
+  const op = kittenOp(gertrude, f.p, 'Kitten');
+  assert.ok(op > 0);
+  f.give(I().COINS, 99);
+  await f.clickNpc(gertrude, op);
+  assert.deepEqual(await f.talk(), [['npc', N().GERTRUDE, "I'll want 100 coins for a kitten."]], 'with her own head and name');
+  assert.equal(following(f.p), null);
+  f.give(I().COINS, 1);
+  await f.clickNpc(gertrude, op);
+  assert.deepEqual((await f.talk()).map((l) => [l[0], l[2]]), [['box', SOLD]]);
+  assert.equal(f.p.getInventory().getAmount(I().COINS), 0);
+  assert.equal(following(f.p)?.getDefinition?.()?.getName?.(), 'Kitten');
+  f.give(I().COINS, 100);
+  await f.clickNpc(gertrude, op);
+  assert.deepEqual((await f.talk()).map((l) => [l[0], l[2]]), [['npc', RAISING]]);
+  assert.equal(f.p.getInventory().getAmount(I().COINS), 100);
+});
+
+/** A kitten following the player, as Gertrude hands it over. */
+function kittenFollower(f) {
+  PM.emitCustomEvent('pets:summon', { player: f.p, itemId: I().PET_KITTEN_2, following: false, pet: null, summoned: false });
+  const kitten = following(f.p);
+  assert.ok(kitten);
+  kitten.setLocation(f.p.getLocation().clone().add(1, 0));
+  if (!kitten.__watched) { kitten.__watched = true; }
+  const say = kitten.forceChat.bind(kitten);
+  kitten.forceChat = (text) => { f.log.push([f.tick(), 'npc-say', kitten.getId(), text]); return say(text); };
+  const act = kitten.performAnimation.bind(kitten);
+  kitten.performAnimation = (a) => { f.log.push([f.tick(), 'npc-anim', kitten.getId(), a?.getId?.()]); return act(a); };
+  return kitten;
+}
+
+async function interactMenu(f, kitten) {
+  await f.clickNpc(kitten, kittenOp(kitten, f.p, 'Interact'));
+  for (let i = 0; i < 4 && !core.MultiChatboxPrompt.getPending(f.p); i++) f.step();
+  return core.MultiChatboxPrompt.getPending(f.p);
+}
+
+test('Stroke: the message, both animations, then 3 ticks on the purr and the player\'s line (capture ticks 918-924; issue 6772 item 3)', async (t) => {
+  const f = fixture(t, [3151, 3413, 0]);
+  const kitten = kittenFollower(f);
+  const sounds = [];
+  const sound = f.p.getPacketSender().sendSoundEffect.bind(f.p.getPacketSender());
+  t.mock.method(f.p.getPacketSender(), 'sendSoundEffect', (id, ...rest) => { sounds.push([f.tick(), id]); return sound(id, ...rest); });
+  const menu = await interactMenu(f, kitten);
+  assert.deepEqual(menu, { title: 'Interact with kitten', options: ['Stroke', 'Chase Vermin', 'Guess age', 'Shoo away'] });
+  const s = f.tick();
+  await f.choose(1);
+  const now = f.since(s);
+  assert.ok(now.some((e) => e[1] === 'sendMessage' && e[2] === 'You softly stroke your cat.'));
+  assert.ok(now.some((e) => e[1] === 'player-anim' && e[2] === seq('human_pickupfloor')));
+  assert.ok(now.some((e) => e[1] === 'npc-anim' && e[3] === seq('cat_rollingover')));
+  assert.ok(now.some((e) => e[1] === 'sendVarbit' && e[2] === BUSY && e[3] === 1));
+  assert.ok(f.p.getAttribute('pets:cat').attentionAt > Date.now(), 'the stroke still counts as attention');
+  f.step(3);
+  const purr = f.since(s).find((e) => e[1] === 'npc-say' && e[3] === 'Purr...purr...');
+  assert.equal(purr?.[0] - s, 3);
+  assert.deepEqual(sounds.map(([tick, id]) => [tick - s, id]), [[3, 340]]);
+  assert.deepEqual(f.read(), ['player', 'player', 'That cat sure loves to be stroked.']);
+  await f.cont();
+  f.step();
+  assert.equal(f.read(), null);
+  assert.deepEqual(f.since(s).filter((e) => e[1] === 'sendVarbit' && e[2] === BUSY).map((e) => e[3]).at(-1), 0);
+});
+
+test('Guess age: the player wonders, then the age in a message box (capture tick 943-946; issue 6772 item 2)', async (t) => {
+  const f = fixture(t, [3151, 3413, 0]);
+  const kitten = kittenFollower(f);
+  await interactMenu(f, kitten);
+  await f.choose(3);
+  assert.deepEqual(f.read(), ['player', 'player', 'I wonder how old you are...']);
+  await f.cont();
+  assert.deepEqual(f.read(), ['box', null, 'After taking a good look at your kitten you guess that its age is: 0 minutes. And approximate time until fully adult: 3 hours  00 minutes, assuming you look after it.']);
+  await f.cont();
+  f.step();
+  assert.equal(f.read(), null);
+  // rsprox.net 3219's later guesses: one minute in, and 1 hour 13 minutes in.
+  const { ageText } = require('../plugins/npcs/pets/CatInteract.Pets')._test;
+  assert.match(ageText({ growth: 1 }), /its age is: 1 minute\. And approximate time until fully adult: 2 hours 58 minutes,/);
+  assert.match(ageText({ growth: 49 }), /its age is: 1 hour 13 minutes\. And approximate time until fully adult: 1 hour 46 minutes,/);
+});
+
+test('Shoo away asks first: "No I\'m not." keeps the kitten, "Yes I am." shoos it off a tick later (capture tick 952-956, 3219 tick 23993-24008; issue 6772 item 4)', async (t) => {
+  const f = fixture(t, [3151, 3413, 0]);
+  const kitten = kittenFollower(f);
+  await interactMenu(f, kitten);
+  await f.choose(4);
+  assert.deepEqual(core.MultiChatboxPrompt.getPending(f.p), { title: 'Are you sure you want to shoo away the cat?', options: ['Yes I am.', "No I'm not."] });
+  assert.equal(following(f.p), kitten, 'still following while it asks');
+  const s = f.tick();
+  await f.choose(2);
+  assert.ok(f.since(s).some((e) => e[1] === 'sendTypedMessage' && e[2] === core.ChatType.SPAM && e[3] === 'You choose not to shoo away the cat.'));
+  assert.equal(following(f.p), kitten);
+
+  await interactMenu(f, kitten);
+  await f.choose(4);
+  const y = f.tick();
+  await f.choose(1);
+  assert.ok(f.since(y).some((e) => e[1] === 'player-say' && e[2] === 'Shoo cat!'));
+  assert.equal(following(f.p), kitten, 'gone a tick later');
+  f.step();
+  const ran = f.since(y).find((e) => e[1] === 'sendMessage' && e[2] === 'The cat has run away.');
+  assert.equal(ran?.[0] - y, 1);
+  assert.ok(f.since(y).some((e) => e[1] === 'npc-say' && e[3] === 'Meeeooow!'));
+  assert.equal(following(f.p), null);
+  assert.equal(f.p.getAttribute('pets:cat'), null);
+});
+
+test('a walk away from the stroke\'s line or the age box still clears BUSY', async (t) => {
+  const f = fixture(t, [3151, 3413, 0]);
+  const kitten = kittenFollower(f);
+  for (const option of [1, 3]) {
+    await interactMenu(f, kitten);
+    const s = f.tick();
+    await f.choose(option);
+    f.step(option === 1 ? 3 : 0);
+    assert.ok(f.read(), 'a line is open');
+    await f.send({ type: 'move', worldX: 3151, worldY: 3416, modifierFlags: 0, run: false });
+    assert.equal(f.read(), null, 'the walk closes it');
+    f.step(2);
+    assert.equal(f.since(s).filter((e) => e[1] === 'sendVarbit' && e[2] === BUSY).map((e) => e[3]).at(-1), 0);
+  }
+});
+
+test('a walk or another conversation in the stroke\'s 3 ticks keeps it: no line opens over it and BUSY clears', async (t) => {
+  const f = fixture(t, [3151, 3413, 0]);
+  const gertrude = f.npc(N().GERTRUDE, [3149, 3413, 0]);
+  quest.setStage(f.p, 6);
+  const kitten = kittenFollower(f);
+  await interactMenu(f, kitten);
+  let s = f.tick();
+  await f.choose(1);
+  f.step();
+  await f.clickNpc(gertrude, 1);
+  f.step(4);
+  assert.notDeepEqual(f.read(), ['player', 'player', 'That cat sure loves to be stroked.']);
+  assert.deepEqual(f.read(), ['player', 'player', 'Hello again.'], 'her conversation is still open');
+  assert.equal(f.since(s).filter((e) => e[1] === 'sendVarbit' && e[2] === BUSY).map((e) => e[3]).at(-1), 0);
+  assert.ok(!f.since(s).some((e) => e[1] === 'npc-say' && e[3] === 'Purr...purr...'));
+  await f.send({ type: 'move', worldX: 3151, worldY: 3413, modifierFlags: 0, run: false });
+  f.step(3);
+
+  // The Interact menu opened again and left open: it stays.
+  await interactMenu(f, kitten);
+  await f.choose(1);
+  f.step();
+  await interactMenu(f, kitten);
+  f.step(3);
+  assert.equal(core.MultiChatboxPrompt.getPending(f.p)?.title, 'Interact with kitten');
+  assert.equal(f.read(), null);
+  await f.send({ type: 'move', worldX: 3151, worldY: 3413, modifierFlags: 0, run: false });
+  f.step(3);
+
+  await interactMenu(f, kitten);
+  s = f.tick();
+  await f.choose(1);
+  await f.send({ type: 'move', worldX: 3151, worldY: 3417, modifierFlags: 0, run: false });
+  f.step(4);
+  assert.equal(f.read(), null);
+  assert.equal(f.since(s).filter((e) => e[1] === 'sendVarbit' && e[2] === BUSY).map((e) => e[3]).at(-1), 0);
+});
+
+test('with another follower out and a full backpack she sells nothing: no kitten lands on the ground uncounted', async (t) => {
+  const f = fixture(t, [3149, 3412, 0]);
+  const gertrude = f.npc(N().GERTRUDE, [3149, 3413, 0]);
+  quest.setStage(f.p, 6);
+  PM.emitCustomEvent('pets:summon', { player: f.p, itemId: I().BABY_MOLE, following: false, pet: null, summoned: false });
+  assert.ok(following(f.p));
+  f.give(I().COINS, 300);
+  f.give(I().BRONZE_AXE, 27);
+  assert.ok(f.p.getInventory().isFull());
+  await f.clickNpc(gertrude, 1);
+  const lines = await f.talk([1, 1]);
+  assert.ok(!lines.some((l) => l[0] === 'box' && l[2] === SOLD), JSON.stringify(lines));
+  assert.equal(f.p.getInventory().getAmount(I().COINS), 300);
+  assert.ok(f.log.some((e) => e[1] === 'sendMessage' && e[2] === 'You need a free inventory slot for a kitten.'));
 });

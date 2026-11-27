@@ -226,11 +226,6 @@ module.exports = function registerBiohazardQuest(api) {
   const CAMP_GATE_TILES = new Set(["2517,3356", "2518,3356"]);
   /** The imported message text of the camp's locked gate (ulBzsB). */
   const CAMP_LOCKED_MESSAGE = "The gates are locked.";
-  /**
-   * Eagles' Peak stages where its eagle costume (or a spare) is still
-   * outstanding: met Nikolaus (4) and disguise made (5). Asyff is shared.
-   */
-  const EAGLES_PEAK_COSTUME_STAGES = new Set([4, 5]);
   const GUARD_NPC_ID = NpcIdentifiers.GUARD_19; // 1147, Guard (East Varrock)
   /** The sickest mourner upstairs (spawned 9230, content id 9008); drops the key. */
   const SICKEST_MOURNER_NPC_ID = NpcIdentifiers.MOURNER_14; // 9008
@@ -291,13 +286,13 @@ module.exports = function registerBiohazardQuest(api) {
   }
 
   /**
-   * Eagles' Peak's internal stage, asked through the shared quest registry so
-   * the other quest keeps ownership of its own progress values.
+   * Whether Asyff's eagle costumes are Eagles' Peak's business right now (asked for and not yet handed
+   * over); that quest answers "eagles-peak:asyff-costume", so its stages stay its own.
    */
-  function eaglesPeakStage(player) {
-    const request = { player, key: "eagles_peak", stage: null };
-    api.emitCustomEvent("quest:get-stage", request);
-    return Number(request.stage) || 0;
+  function eaglesPeakOwnsAsyff(player) {
+    const request = { player, owns: false };
+    api.emitCustomEvent("eagles-peak:asyff-costume", request);
+    return request.owns === true;
   }
 
   function hasElenaLoan(player) {
@@ -763,7 +758,7 @@ module.exports = function registerBiohazardQuest(api) {
       // Asyff is shared with Eagles' Peak. While its eagle costume (or a
       // spare) is still outstanding, that quest's own conversation answers so
       // the other route is not blocked.
-      if (EAGLES_PEAK_COSTUME_STAGES.has(eaglesPeakStage(player))) return null;
+      if (eaglesPeakOwnsAsyff(player)) return null;
       return Number(player.getAttribute(FREE_GOWN_ATTRIBUTE)) === 1
         ? null
         : "visiting-south-east-varrock-talking-to-asyff";

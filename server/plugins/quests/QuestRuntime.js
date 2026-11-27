@@ -730,9 +730,13 @@ function showIndexedBookPage(player) {
     for (let line = 0; line < INDEXED_BOOK_LINES; line++) {
       const entry = lines[line];
       const index = typeof entry === "object" && entry ? entry.index : null;
-      packet.sendInterfaceDisplayState(indexedUid(side.model + line), true);
+      // `{ model: objId, zoom? }`: the line's slot shows that item's model, as live draws the bird book's birds
+      // (Eagles' Peak capture t247: if_setobject on page_*_model_4, zoom 200).
+      const model = typeof entry === "object" && entry && Number.isInteger(entry.model) ? entry.model : null;
+      packet.sendInterfaceDisplayState(indexedUid(side.model + line), model === null);
+      if (model !== null) packet.sendItemOnInterfaces(indexedUid(side.model + line), model, entry.zoom ?? 200);
       packet.sendInterfaceDisplayState(indexedUid(side.index + line), !index);
-      packet.sendString(index ? "" : (entry ?? ""), indexedUid(side.text + line));
+      packet.sendString(index || model !== null ? "" : (entry ?? ""), indexedUid(side.text + line));
       if (index) packet.sendString(index, indexedUid(side.index + line));
     }
   }

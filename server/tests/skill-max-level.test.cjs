@@ -67,7 +67,13 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
   const originalChoose = C.choose;
   const startups = [];
   const hooks = [];
-  const api = new Proxy({ core, emitCustomEvent() {}, spawnNpc() { return null; }, onServerStartup(handler) { startups.push(handler); } }, {
+  // Eagles' Peak answers whether box traps are unlocked (the ferret lesson, native stage 35).
+  const answerBoxTraps = (name, event) => {
+    if (name !== 'eagles-peak:box-traps') return;
+    const stage = event.player.attrs?.get?.('quest.eagles_peak.stage') ?? event.player.getAttribute?.('quest.eagles_peak.stage');
+    event.unlocked = Number(stage) >= 35;
+  };
+  const api = new Proxy({ core, emitCustomEvent: answerBoxTraps, spawnNpc() { return null; }, onServerStartup(handler) { startups.push(handler); } }, {
     get(target, name) { return target[name] ?? ((...args) => hooks.push([name, ...args])); },
   });
   require("../plugins/skills/Hunter.plugin").register(api);
@@ -199,7 +205,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     p.counts.clear(); p.counts.set(I.BOX_TRAP, 1); p.counts.set(I.SPICY_TOMATO, 1); p.counts.set(I.SPICY_MINCED_MEAT, 1);
     Traps.activate({ player: p, itemId: I.BOX_TRAP }); advance(3);
     assert.equal(H.traps.size, 0, "box traps wait for Nickolaus's lesson in Eagles' Peak");
-    p.attrs.set("quest.eagles_peak.stage", 6);
+    p.attrs.set("quest.eagles_peak.stage", 35);
     Traps.activate({ player: p, itemId: I.BOX_TRAP }); advance(3);
     const boxTrap = [...H.traps][0]; assert.ok(boxTrap);
     Traps.bait({ player: p, object: boxTrap.objects[0], itemId: I.RAW_BEEF });
@@ -313,7 +319,7 @@ test("Hunter cache data, trap ownership, transactions, cancellation and persiste
     const Rabbits = require("../plugins/skills/hunter/Rabbits.Hunter"), Aerial = require("../plugins/skills/hunter/Aerial.Hunter");
     const Pitfalls = require("../plugins/skills/hunter/Pitfalls.Hunter");
     const successEvents=[];
-    api.emitCustomEvent=(name,event)=>{if(name==='hunter:success'){successEvents.push(event);Rumours.success(event);}};
+    api.emitCustomEvent=(name,event)=>{answerBoxTraps(name,event);if(name==='hunter:success'){successEvents.push(event);Rumours.success(event);}};
     const spawned=[];
     function prey(id,location,privateArea=null) {
       let visible=true,registered=true,blocked=false,where=location.clone(),area=privateArea,following=null;

@@ -501,8 +501,11 @@ test("Curse of Arrav: the chest's code key waits for room and comes back", async
 
 test("Eagles' Peak: what doesn't fit of the costumes goes to the ground", async (t) => {
   const start = () => {
-    const f = actor(t, "eagles_peak", 4);
-    f.p.setAttribute("quest.eagles_peak.bits", 1 << 11);
+    // eaglepeak_quest 15 with eaglepeak_nickolaus_chat 4: Asyff has been asked for the costumes.
+    const f = actor(t, "eagles_peak", 15);
+    f.p.setAttribute("eagles-peak:stage-format", 1);
+    f.p.setAttribute("eagles-peak:varbits", { 3110: 4 });
+    f.p.getPacketSender().sendVarbit(3110, 4);
     put(f, I.EAGLE_FEATHER, 0, 10);
     put(f, I.SWAMP_TAR, 1);
     put(f, I.YELLOW_DYE, 2);

@@ -387,7 +387,7 @@ test('ground box Lay refuses before Eagles Peak lesson and preserves the item', 
 });
 
 test('ground box Lay succeeds after the Eagles Peak lesson', async t => {
-  const f = await groundBoxFixture(t, 6);
+  const f = await groundBoxFixture(t, 35); // eaglepeak_quest 35: the ferret lesson is over
   const traps = [...f.H.traps].filter(trap => trap.player === f.player);
   assert.equal(traps.length, 1);
   assert.equal(traps[0].kind, 'box');

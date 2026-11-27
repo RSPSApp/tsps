@@ -16,7 +16,10 @@ before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
   core = PluginManager.getCoreApi();
   H.data = require('../plugins/skills/hunter/Data.Hunter').build(core);
-  H.api = { emitCustomEvent() {} };
+  // Eagles' Peak answers whether box traps are unlocked (its ferret lesson, native stage 35); here, from the stage.
+  H.api = { emitCustomEvent(name, request) {
+    if (name === 'eagles-peak:box-traps') request.unlocked = Number(request.player.getAttribute('quest.eagles_peak.stage')) >= 35;
+  } };
   // Isolate placement physics and the world's NPC/sound fan-out; actor, inventory, timers and trap logic are real.
   H.core = { ...core,
     MapObjects: { getType: () => null }, RegionManager: { blocked: () => false },
@@ -38,7 +41,7 @@ function actor(t, level = 99) {
   p.setIndex(index++); p.setUsername('boxtrap' + p.getIndex()); p.setRegistered(true);
   p.setLocation(new core.Location(3200, 3200, 0)); p.needsPlacement = false;
   p.getSkillManager().setCurrentLevels(core.Skill.HUNTER, level).setMaxLevel(core.Skill.HUNTER, level);
-  p.setAttribute('quest.eagles_peak.stage', 8);
+  p.setAttribute('quest.eagles_peak.stage', 40);
   const messages = [], spam = [], sounds = [];
   const sender = p.getPacketSender();
   t.mock.method(sender, 'sendMessage', text => { messages.push(text); return sender; });

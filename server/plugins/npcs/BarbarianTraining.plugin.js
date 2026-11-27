@@ -46,6 +46,8 @@ const VARBITS = { harpoon: 3757, fishingRod: 3758, firemaking: 3759, herblore: 3
 const TASKED = 1;
 const DONE = 2;
 const TOLD = 3;
+/** The shop whose page lists the pearl barbarian rod under "===With Barbarian Training===". */
+const ALCHEMY_SHOP = "Alry the Angler's Angling Accessories";
 // TaiBwoWannaiTrio.Quest owns this reward state: claimTamayuSpear sets 5 when combat training is claimed.
 const TAMAYU_TRAINING_ATTRIBUTE = "quest.tai_bwo_wannai_trio.tamayu";
 const TAMAYU_TRAINING_CLAIMED = 5;
@@ -165,6 +167,21 @@ function answerFishingUnlock(request) {
 function answerBarehand(request) {
   if (!request?.player) return;
   request.allowed = state(request.player).harpoon >= TASKED;
+}
+
+/**
+ * "shop:stock-visible": the pearl barbarian rod waits for the rod-fishing section. Wiki, Pearl
+ * barbarian rod: it "can only be purchased if the relevant part of the Barbarian Training
+ * miniquest is completed with Otto Godblessed". osrsreboxed-db merges the store table Alry's page
+ * keeps under "===With Barbarian Training===" (its shop parser reads every table a quest or
+ * requirement section adds), so the row is in shops.json and this hides it until the section is
+ * done — TOLD, i.e. after Otto hears of the catch, which is when this plugin completes it.
+ * Unlike using the rod (answerFishingUnlock, from TASKED), the purchase waits for the whole section.
+ */
+function stockVisible(event) {
+  if (!event?.player || event.shopName !== ALCHEMY_SHOP) return;
+  if (event.itemId !== core.ItemIdentifiers.PEARL_BARBARIAN_ROD || event.player.isPlayerBot?.()) return;
+  if (state(event.player).fishingRod !== TOLD) event.visible = false;
 }
 
 function finishedFishing(player) {
@@ -644,6 +661,7 @@ function attach(pluginApi) {
   api.onObjectInteraction(BED, { Search: searchBed });
   api.onCustomEvent("fishing:success", caughtFish);
   api.onCustomEvent("fishing:unlocked", answerFishingUnlock);
+  api.onCustomEvent("shop:stock-visible", stockVisible);
   api.onCustomEvent("herblore:made", madePotion);
   api.onCustomEvent("herblore:unlocked", answerUnlock);
   api.onCustomEvent("fishing:barehand-unlocked", answerBarehand);
@@ -659,6 +677,6 @@ module.exports = {
   // medium anagram and hard cipher), which this Talk-to must not take over.
   dependsOn: ["NpcDialogues", "Farming", "TreasureTrails"],
   register: attach,
-  _test: { hastae: () => hastae, STATE_ATTRIBUTE, VARBITS, TOPIC, LEARNED, ROD_TAKEN, ROD_NO_SPACE, state, topics, topicLines, answerUnlock, answerBarehand, talkToOtto,
-    searchBed, caughtFish, madePotion, setStage, builtPyre },
+  _test: { hastae: () => hastae, STATE_ATTRIBUTE, VARBITS, TOPIC, TASKED, DONE, TOLD, LEARNED, ROD_TAKEN, ROD_NO_SPACE, state, topics, topicLines, answerUnlock, answerBarehand, talkToOtto,
+    searchBed, caughtFish, madePotion, setStage, builtPyre, stockVisible, ALCHEMY_SHOP },
 };

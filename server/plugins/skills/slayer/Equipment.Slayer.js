@@ -15,6 +15,9 @@ let core = null;
 let api = null;
 /** The protection every Slayer helmet gives (data/slayer-gear.json). */
 const HELMET = "Slayer helmet";
+/** The goggles' own protection; a helmet carries it once A Porcine of Interest is complete. */
+const GOGGLES = "Reinforced goggles";
+const GOGGLES_QUEST = "a_porcine_of_interest";
 const byName = new Map();
 const immuneNames = new Set(GEAR.immune.names);
 const thrallImmuneNames = new Set(GEAR.thrallImmune);
@@ -43,10 +46,27 @@ function isSlayerHelmet(name) {
   return name.toLowerCase().includes("slayer helmet");
 }
 
+/**
+ * Whether the player is protected from `monster`. A helmet counts for the goggles' protection once
+ * A Porcine of Interest is done: the Wiki has every existing helmet gain the pair at completion
+ * (A Porcine of Interest: "Existing slayer helmets will have reinforced goggles added to them";
+ * Sourhog: "It requires reinforced goggles to kill, or a Slayer helmet after the quest"), and live
+ * objects carry no per-item state to record it — the cache has no goggles varbit — so quest
+ * completion is the only state there is. Before the quest a helmet gives no such protection.
+ */
 function protectedFrom(player, monster) {
   const names = equippedNames(player);
-  if (monster.protection.some((prefix) => names.some((name) => (prefix === HELMET ? isSlayerHelmet(name) : name.startsWith(prefix))))) return true;
-  return monster.protection.includes(HELMET) && helmetGiven(player);
+  const helmetCounts = !monster.protection.includes(GOGGLES) || gogglesGiven(player);
+  const covered = monster.protection.some((prefix) => names.some((name) =>
+    prefix === HELMET ? helmetCounts && isSlayerHelmet(name) : name.startsWith(prefix)));
+  return covered || (helmetCounts && monster.protection.includes(HELMET) && helmetGiven(player));
+}
+
+/** Whether A Porcine of Interest is complete ("quest:is-complete", QuestRuntime). */
+function gogglesGiven(player) {
+  const request = { player, key: GOGGLES_QUEST, complete: false };
+  api?.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
 }
 
 /** Whether content gives the player a Slayer helmet's effects without one ("slayer:helmet", a league relic). */

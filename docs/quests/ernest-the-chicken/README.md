@@ -20,6 +20,8 @@ checked against it.
 ## Findings
 
 - **fixed** Added Professor Oddenstein's captured post-quest chat-head animations from 3209.
+- **fixed** The reward's access to the Killerwatt plane: the portal machine's portal never appeared after the
+  quest, and neither it nor the plane's Portal Home could be entered. See [killerwatt-plane.md](../../killerwatt-plane.md).
 - **open** The 14 January 2026 quest-journal rewrite has no capture in the archive, so the
   journal text is still the pre-rewrite wording. Needs a post-update journal capture.
 

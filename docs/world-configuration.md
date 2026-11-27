@@ -470,6 +470,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Karamja` | Karamja | areas | yes | Karamja volcano access: the rocks, cave entrance and climbing rope between the surface and the TzHaar city. |
 | `KaruulmSlayerDungeon` | KaruulmSlayerDungeon | areas | yes | The Karuulm Slayer Dungeon's extreme heat: 4 damage a tick beyond the entrance chamber without boots of stone, brimstone or granite boots, or the elite Kourend & Kebos Diary reward. (members only) |
 | `Keldagrim` | Keldagrim | areas | yes | Keldagrim access: the cave exit to Rellekka, the cave-to-city passage, the house stairs and the ferrymen across the river. (members only) |
+| `KillerwattPlane` | KillerwattPlane | areas | yes | Opens Professor Oddenstein's portal to the Killerwatt plane after Ernest the Chicken, with his warning for players without insulated boots, and the plane's Portal Home back. (members only) |
 | `KourendWoodland` | KourendWoodland | areas | yes | The Old Memorial in the Kourend Woodland: Inspect shows King Kharedst IV's inscription, then offers book recharging. (members only) |
 | `McGruborsWood` | McGruborsWood | areas | yes | Keeps McGrubor's Wood's main gate locked, so the wood is entered by the loose railing or a fairy ring. |
 | `MiningGuild` | MiningGuild | areas | yes | Mining Guild entry needs 60 Mining; its members' area gives an invisible +7 Mining level, halves rock respawn times and rolls unidentified minerals; Belona combines mining gloves into Expert mining gloves. |

@@ -481,7 +481,7 @@ export function getSceneResolutionScale(host: WebGLOsrsRendererHost, ): number {
             host.osrsClient.mobileEffectiveResolutionScale = 1;
             return 1;
         }
-        // The Performance preset owns the base scale (Auto mobile 0.6/0.5, Low 0.5,
+        // The Performance preset owns the base scale (Auto mobile 0.5, Low 0.5,
         // Medium/High 1.0). Stretched Mode and the debug slider remain explicit reductions,
         // and an explicit Performance scene-resolution override feeds the base value.
         const policy = getPerformancePolicy();

@@ -70,8 +70,7 @@ export const PerformanceConfig = ConfigGroup("performance", {
         name: "FPS limit",
         description:
             "Override the preset's frame-rate cap. -1 follows the preset, 0 removes the preset cap " +
-            "(the game's FPS setting and hidden-tab cap still apply). Handheld battery limits from " +
-            "the game scripts also apply.",
+            "(the game's FPS setting and hidden-tab cap still apply).",
         position: 4,
         units: " fps",
         range: { min: -1, max: 1000 },

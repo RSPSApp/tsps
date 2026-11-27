@@ -1600,6 +1600,13 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   lands: the current melee style's skills and Hitpoints, or Attack with a weapon that is no melee
   weapon or while autocasting, whatever style came before (rsprox captures, Leagues VI: 237/01104,
   237/04057, 237/04099, 238/04142); its second hit pays too (ours, not captured).
+  How they show, as live does (238/04190: Thorns, its double hit, shield reflect and the block
+  heal): a reflected hit is hitsplat 18 on the player (its pair 19 for others) with
+  `leagues_6_fire_shield`; Thorns and the reflected hit are the player's max hits (43: fixed damage
+  is its own maximum, within the max hit settings; 1140 shows Thorns as 43 too); a block heal is a
+  heal splat (6) of what it healed with `leagues_6_health_regen` (the ring alone at full or capped hitpoints: 237/04092), never for a reflected hit's 0 (29 of 29
+  reflects alone; no cooldown: block heals come on consecutive ticks). Not matched yet: 04190's hitsplat
+  67 (always 3, beside a 0 or a heal), the distance heal's splat, and `leagues_6_sigil_of_life`.
 - **Readings of ours** (the units' heads list every one): an off-hand is any shield-slot item,
   shields included (the Wiki's Off-hand page is the shield slot table); shields go by name for
   Thorns and reflect, and Dinh's bulwark by its bulwark weapon interface, so the "Crate of

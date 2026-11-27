@@ -8,6 +8,7 @@ import { GfxCache, graphicFrameCycle } from "./GfxCache";
 import { GfxManager, TILE_GFX_LIFT_UNITS } from "./GfxManager";
 import type { GfxInstance } from "./GfxManager";
 import { SpotAnimGpuCache } from "./SpotAnimGpuCache";
+import { dispatchGfxFrameSounds } from "./GfxFrameSounds";
 import { getPainterIndices, hasMixedPriorities } from "../npc/NpcPriorityPass";
 
 type Pass = "opaque" | "alpha";
@@ -126,62 +127,8 @@ export class GfxRenderer {
                 const ageMs = graphicAgeMs(inst,nowMs);
                 const frameIdx = this.computeSpotFrameIdxByMs(inst.spotId, Math.floor(ageMs));
 
-                // Dispatch frame-sounds once per frame change for this instance
-                if (inst.lastSoundFrame !== frameIdx) {
-                    try {
-                        const mv: any = this.renderer.osrsClient as any;
-                        const spot = mv.spotAnimTypeLoader?.load?.(inst.spotId | 0);
-                        const seqId: number =
-                            typeof spot?.sequenceId === "number" ? spot.sequenceId | 0 : -1;
-                        if (seqId >= 0) {
-                            const seqType = mv.seqTypeLoader?.load?.(seqId | 0);
-                            if (seqType && seqType.frameSounds?.size) {
-                                // Resolve world position and local-player flag
-                                let px: number | undefined;
-                                let py: number | undefined;
-                                let pz: number | undefined;
-                                let isLocal = false;
-
-                                const anyEntry: any = entry as any;
-                                if (typeof anyEntry.pid === "number") {
-                                    const pid = anyEntry.pid | 0;
-                                    px = mv.playerEcs?.getX?.(pid) | 0;
-                                    py = mv.playerEcs?.getY?.(pid) | 0;
-                                    const lvl = mv.playerEcs?.getLevel?.(pid) | 0;
-                                    pz = (lvl | 0) * 128;
-                                    const sid = mv.playerEcs?.getServerIdForIndex?.(pid);
-                                    isLocal =
-                                        typeof sid === "number" &&
-                                        (sid | 0) === (mv.controlledPlayerServerId | 0);
-                                } else if (typeof anyEntry.ecsId === "number") {
-                                    const eid = anyEntry.ecsId | 0;
-                                    px = mv.npcEcs?.getX?.(eid) | 0;
-                                    py = mv.npcEcs?.getY?.(eid) | 0;
-                                    const lvl = mv.npcEcs?.getLevel?.(eid) | 0;
-                                    pz = (lvl | 0) * 128;
-                                    isLocal = false;
-                                } else if (inst.world) {
-                                    px = (inst.world.tileX | 0) * 128 + 64;
-                                    py = (inst.world.tileY | 0) * 128 + 64;
-                                    pz = (inst.world.level | 0) * 128;
-                                    isLocal = false;
-                                }
-
-                                const pos =
-                                    px !== undefined && py !== undefined
-                                        ? { x: px, y: py, z: pz }
-                                        : undefined;
-                                mv.handleSeqFrameSounds(seqType, frameIdx | 0, {
-                                    position: pos,
-                                    isLocalPlayer: isLocal,
-                                    debugSeqId: seqId | 0,
-                                    debugFrame: frameIdx | 0,
-                                });
-                            }
-                        }
-                    } catch {}
-                    inst.lastSoundFrame = frameIdx | 0;
-                }
+                // The graphic's frame sounds, once per frame change (shared with the WebGPU renderer).
+                dispatchGfxFrameSounds(this.renderer.osrsClient, inst, frameIdx, entry as any);
                 const frameCycle = this.cache.smoothingCycle(
                     inst.spotId,
                     frameIdx,

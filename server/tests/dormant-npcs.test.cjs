@@ -12,7 +12,7 @@ const { Location } = require("../dist/game/model/Location");
 const { PluginManager } = require("../dist/plugins/PluginManager");
 const { TaskManager } = require("../dist/game/task/TaskManager");
 const Crabs = require("../plugins/npcs/DormantNpcs.plugin");
-const { start, track, wake, killed, onAttack, watched, awake, crabSquares, dormantIds } = Crabs._test;
+const { start, track, wake, killed, onAttack, pick, watched, awake, picking, crabSquares, dormantIds } = Crabs._test;
 
 const core = PluginManager.getCoreApi();
 const events = [];
@@ -37,6 +37,7 @@ beforeEach(() => {
   inCombat.clear();
   watched.clear();
   awake.clear();
+  picking.clear();
 });
 
 function createCrab(id, x, y) {
@@ -57,7 +58,8 @@ function createCrab(id, x, y) {
     setHitpoints: (value) => { hitpoints = value; },
     getHitpoints: () => hitpoints,
     performAnimation: (animation) => crab.log.push(`anim ${animation.getId()}`),
-    getCombat: () => ({ attack: (target) => crab.attacked.push(target) }),
+    damageCleared: 0,
+    getCombat: () => ({ attack: (target) => crab.attacked.push(target), clearDamageMap: () => { crab.damageCleared++; } }),
     getLocation: () => location,
     getSpawnPosition: () => spawn,
     blocked: false,
@@ -73,7 +75,12 @@ function createCrab(id, x, y) {
 
 function createPlayer(x, y, { tolerant = false, npcs = [] } = {}) {
   const attributes = new Map();
+  const log = [];
   return {
+    log,
+    performAnimation: (animation) => log.push(`anim ${animation.getId()}`),
+    getPacketSender: () => ({ sendSound: (id, volume, delay) => log.push(`sound ${id} ${delay}`) }),
+    sendMessage: (text) => log.push(`message ${text}`),
     isPlayer: () => true,
     isRegistered: () => true,
     getHitpoints: () => 99,
@@ -97,10 +104,31 @@ test("the data: every crab pair as the cache names it", () => {
   }
 });
 
-test("disguises don't wander: every one spawns with wanderRadius 0", () => {
-  const spawns = JSON.parse(require("node:fs").readFileSync(path.resolve(__dirname, "../data/definitions/npc-spawns.json"), "utf8"));
-  const roaming = spawns.filter((spawn) => dormantIds.get(spawn.id)?.family.trigger === "approach" && spawn.wanderRadius !== 0);
+const readSpawns = () => JSON.parse(require("node:fs").readFileSync(path.resolve(__dirname, "../data/definitions/npc-spawns.json"), "utf8"));
+
+test("disguises don't wander: every crab and zygomite cap spawns with wanderRadius 0 (wyrms slither)", () => {
+  const still = new Set(["approach", "picked"]);
+  const roaming = readSpawns().filter((spawn) => still.has(dormantIds.get(spawn.id)?.family.trigger) && spawn.wanderRadius !== 0);
   assert.deepEqual(roaming, []);
+});
+
+test("zygomites: Zanaris spawns only the Fungi, five of each kind on the captured tiles (issue 6867)", () => {
+  const spawns = readSpawns();
+  const at = (id) => spawns.filter((spawn) => spawn.id === id).map((spawn) => `${spawn.x},${spawn.y},${spawn.level}`).sort();
+  assert.deepEqual(at(1023), ["2412,4370,0", "2416,4376,0", "2419,4374,0", "2420,4377,0", "2421,4370,0"], "rev 243 capture");
+  assert.equal(at(536).length, 5);
+  assert.deepEqual([...at(537), ...at(1024)], [], "the combat forms only come out of a picked cap");
+});
+
+test("zygomites: each placeholder shows a Fungi with Pick and rises as the Zygomite of its level", () => {
+  const pairs = [...dormantIds].filter(([, { family }]) => family.trigger === "picked").map(([dormant, { awakeId }]) => [dormant, awakeId]);
+  assert.deepEqual(pairs, [[536, 537], [1023, 1024]]);
+  for (const [dormant, awakeId] of pairs) {
+    const shown = CacheDefinitions.getNpc(dormant).transforms.map((id) => CacheDefinitions.getNpc(id));
+    assert.ok(shown.some((type) => type.name === "Fungi" && type.actions[0] === "Pick"), `${dormant}`);
+    assert.equal(CacheDefinitions.getNpc(awakeId).name, "Zygomite");
+    assert.equal(CacheDefinitions.getNpc(awakeId).combatLevel, CacheDefinitions.getNpc(dormant).combatLevel);
+  }
 });
 
 test("crab squares come from the spawns, and players are watched only inside them", () => {
@@ -253,4 +281,109 @@ test("a dormant crab is not woken by an attack, and a wyrm not by walking past i
   track({ player });
   runTicks();
   assert.equal(wyrm.getId(), 16297);
+});
+
+test("zygomites: the pick plays the tick after arrival, the cap leaps out the next, can't be attacked while rising, then attacks", () => {
+  const cap = createCrab(1023, 2412, 4370);
+  const player = createPlayer(2413, 4370);
+  assert.equal(pick({ player, npc: cap }), true);
+  assert.deepEqual(player.log, [], "nothing on the arrival tick (capture: arrival t33, pick t34)");
+  runTicks();
+  assert.deepEqual(player.log, ["anim 3335", "sound 2581 0"], "human_fungicide_pick_zygomite and pick");
+  assert.equal(cap.getId(), 1023, "still a cap on the pick's own tick");
+  runTicks();
+  assert.equal(cap.getId(), 1024);
+  assert.equal(cap.getHitpoints(), core.NpcDefinition.forId(1024).getHitpoints());
+  assert.deepEqual(cap.log, ["anim 12340"], "zygomite_leap_out_npc");
+  assert.deepEqual(player.log.slice(2), ["sound 1963 0"], "zygo_grow");
+  const early = { attacker: player, target: cap, allow: null };
+  onAttack(early);
+  assert.equal(early.allow, false, "its options are off until it has risen");
+  assert.equal(cap.blocked, true);
+  runTicks();
+  assert.deepEqual(cap.attacked, []);
+  runTicks();
+  assert.deepEqual(cap.attacked, [player], "risen 2 ticks after the leap (56 client cycles)");
+  const later = { attacker: player, target: cap, allow: null };
+  onAttack(later);
+  assert.equal(later.allow, null);
+});
+
+test("zygomites: picking while fighting is refused with the captured line", () => {
+  const cap = createCrab(536, 2414, 4467);
+  const player = createPlayer(2414, 4466);
+  inCombat.add(player);
+  assert.equal(pick({ player, npc: cap }), true);
+  assert.deepEqual(player.log, ["message You should probably concentrate on the monster you're fighting!"]);
+  runTicks(3);
+  assert.equal(cap.getId(), 536);
+});
+
+test("zygomites: a cap rises once, for its first picker, and not if it is gone by then", () => {
+  const cap = createCrab(1023, 2416, 4376);
+  const first = createPlayer(2416, 4375);
+  const second = createPlayer(2417, 4376);
+  pick({ player: first, npc: cap });
+  pick({ player: second, npc: cap });
+  runTicks();
+  assert.deepEqual(second.log, [], "ours: the second pick does nothing");
+  runTicks(3);
+  assert.deepEqual(cap.attacked, [first]);
+  const gone = createCrab(1023, 2419, 4374);
+  pick({ player: first, npc: gone });
+  runTicks();
+  gone.setHitpoints(0);
+  runTicks(3);
+  assert.equal(gone.getId(), 1023);
+  assert.equal(picking.size, 0);
+});
+
+test("zygomites: ours, a picker who walks off before the pick doesn't pick", () => {
+  const cap = createCrab(1023, 2420, 4377);
+  let x = 2420;
+  const player = Object.assign(createPlayer(2420, 4376), { getLocation: () => new Location(x, 4376, 0) });
+  pick({ player, npc: cap });
+  x = 2422;
+  runTicks(3);
+  assert.deepEqual(player.log, []);
+  assert.equal(cap.getId(), 1023);
+  assert.equal(picking.size, 0);
+});
+
+test("zygomites: one left on 0 hitpoints, waiting for its fungicide, still turns back into its cap, healed", () => {
+  const cap = createCrab(1023, 2421, 4370);
+  cap.isRegistered = () => true;
+  cap.isDyingFunction = () => false;
+  wake(cap, createPlayer(2421, 4371));
+  runTicks(2);
+  cap.setHitpoints(0);
+  runTicks(21);
+  assert.equal(cap.getId(), 1023);
+  assert.equal(cap.getHitpoints(), cap.getMaxHitpoints());
+  assert.deepEqual(events.filter((event) => event.name === "dormant-npcs:slept").map((event) => event.npc), [cap]);
+  assert.equal(cap.damageCleared, 1, "its next kill goes to whoever fights it next, not the one who left it");
+  const dying = createCrab(1023, 2412, 4370);
+  dying.isRegistered = () => true;
+  dying.isDyingFunction = () => true;
+  wake(dying, createPlayer(2412, 4371));
+  runTicks(3);
+  assert.equal(awake.has(dying), false, "a dying one is let go");
+});
+
+test("zygomites: Pick on another Fungi is left to other plugins", () => {
+  const other = createCrab(533, 2400, 4400);
+  assert.equal(pick({ player: createPlayer(2400, 4401), npc: other }), false);
+});
+
+test("zygomites: out of combat it walks home and is a cap again, healed, with no sink animation (ours)", () => {
+  const cap = createCrab(536, 2419, 4467);
+  wake(cap, createPlayer(2419, 4466));
+  runTicks(2);
+  cap.setHitpoints(10);
+  cap.log.length = 0;
+  runTicks(20);
+  assert.deepEqual(cap.log, []);
+  runTicks();
+  assert.equal(cap.getId(), 536);
+  assert.equal(cap.getHitpoints(), cap.getMaxHitpoints());
 });

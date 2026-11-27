@@ -393,7 +393,9 @@ test("Konar's Taverley Dungeon hellhounds count Cerberus in her lair, the task's
 });
 
 test("every Konar task has spawns inside each of its areas", () => {
-  const spawns = require("../data/definitions/npc-spawns.json");
+  // A dormant spawn (a zygomite's Fungi, a crab's rocks) is fought as its awake form.
+  const awakeIds = Object.assign({}, ...require("../data/definitions/dormant-npcs.json").families.map((family) => family.awake));
+  const spawns = require("../data/definitions/npc-spawns.json").map((spawn) => ({ ...spawn, id: Number(awakeIds[spawn.id] ?? spawn.id) }));
   const missing = [];
   for (const entry of master(8).tasks) {
     const own = spawns.filter((spawn) => Data.npcCountsFor(entry.task.id, spawn.id, CacheDefinitions.getNpc(spawn.id)?.name));
@@ -652,6 +654,26 @@ test("monsters with a Slayer level can't be attacked below it", () => {
   assert.equal(event.message, "You need a higher Slayer level to know how to wound this monster.");
   assert.deepEqual(player.messages, [], "the core says it on the player's own attack, not the check (cannons, scanners)");
   const able = { attacker: createPlayer({ slayer: 85 }), target: npcNamed("Abyssal demon"), allow: null };
+  Combat.canAttack(able);
+  assert.equal(able.allow, null);
+});
+
+test("a zygomite turned back into its Fungi forgets its last-legs line (issue 6867)", () => {
+  const attributes = new Map([[Finishers.LAST_LEGS_ATTRIBUTE, true]]);
+  const zygomite = { getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value) };
+  assert.ok((handlers.events.get("dormant-npcs:slept") ?? []).length > 0, "Finishers listens for it");
+  handlers.events.get("dormant-npcs:slept").forEach((fn) => fn({ npc: zygomite }));
+  assert.equal(attributes.get(Finishers.LAST_LEGS_ATTRIBUTE), false);
+});
+
+test("a zygomite's refusal names its Slayer level (rsprox captures, issue 6867)", () => {
+  for (const id of [537, 1024]) {
+    const event = { attacker: createPlayer({ slayer: 56 }), target: npc(id), allow: null };
+    Combat.canAttack(event);
+    assert.equal(event.allow, false, `${id}`);
+    assert.equal(event.message, "You need a Slayer level of 57 to know how to wound this monster.");
+  }
+  const able = { attacker: createPlayer({ slayer: 57 }), target: npc(1024), allow: null };
   Combat.canAttack(able);
   assert.equal(able.allow, null);
 });

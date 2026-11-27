@@ -18,6 +18,8 @@ const AMOUNT_EVENT = "storage:amount";
 const TAKE_EVENT = "storage:take";
 /** `storage:empty-to-bank` `{ player, key, moved, left }`: a carried or worn container of family `key` empties into the bank. */
 const BANK_EMPTY_EVENT = "storage:empty-to-bank";
+/** `storage:owned` `{ player, itemId, owned }`: whether the player owns a container of the item's family in any form (open or closed), carried, worn or banked. */
+const OWNED_EVENT = "storage:owned";
 
 const DATA = require("../data/storage-items.json");
 
@@ -371,6 +373,12 @@ function destroyed({ player, itemId }) {
   if (family && !owns(player, family)) setContents(player, family, []);
 }
 
+/** `storage:owned`: another form of the container (the Knapsack closed for the open one) is the same container. */
+function answerOwned(event) {
+  const family = familyOf(new core.Item(event.itemId, 1));
+  if (family && owns(event.player, family)) event.owned = true;
+}
+
 /** `storage:empty-to-bank`: what a carried or worn container of the family holds goes into the bank, as far as it fits. */
 function answerBankEmpty(event) {
   const family = FAMILIES.get(event.key);
@@ -393,6 +401,7 @@ module.exports = {
   AMOUNT_EVENT,
   TAKE_EVENT,
   BANK_EMPTY_EVENT,
+  OWNED_EVENT,
   DATA,
   FAMILIES,
   init,
@@ -432,6 +441,7 @@ module.exports = {
   pickupInto,
   answerContents,
   answerBankEmpty,
+  answerOwned,
   answerRoom,
   answerGather,
   answerAmount,

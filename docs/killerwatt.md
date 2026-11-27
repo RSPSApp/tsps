@@ -2,6 +2,7 @@
 
 Killerwatts (ids 469 and 470) hit much harder against a
 player without insulated boots (Wiki, <https://oldschool.runescape.wiki/w/Killerwatt>).
+They live on the Killerwatt plane; the way there is in [killerwatt-plane.md](killerwatt-plane.md).
 
 | Attack | With insulated boots | Without |
 | --- | --- | --- |

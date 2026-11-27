@@ -32,6 +32,15 @@ const PERSISTED_VARPS = [
   "slayer_league_relic_culling_spree",
 ];
 
+/**
+ * Varps Slayer shares with other content, with the Slayer varbits on them: login restores only those
+ * bits from the snapshot and keeps the rest as their owners set them. slayer_killerwatt_var also holds
+ * the Killerwatt plane's portal (bit 0) and the POH menagerie's closed flag (bit 23).
+ */
+const SHARED_VARPS = Object.freeze({
+  slayer_killerwatt_var: ["slayer_master", "slayer_points", "slayer_blocked_1_old"],
+});
+
 /** Slayer varbits on varps that aren't Slayer's own (millcheck_multi): saved one by one. */
 const PERSISTED_VARBITS = [
   "slayer_toggleoff_longerrevenants", "slayer_toggleoff_fossilwyvernblock", "slayer_toggleoff_superiormobs",
@@ -40,6 +49,8 @@ const PERSISTED_VARBITS = [
 let core = null;
 let pluginApi = null;
 let persistedIds = null;
+/** Varp id -> the mask of Slayer's bits on it, for SHARED_VARPS. */
+let sharedMasks = null;
 
 function init(api) {
   core = api.core;
@@ -107,6 +118,19 @@ function save(player) {
   player.setAttribute(VARPS_ATTRIBUTE, snapshot);
 }
 
+function bitMask({ startBit, endBit }) {
+  const width = endBit - startBit + 1;
+  return width >= 32 ? -1 : ((1 << width) - 1) << startBit;
+}
+
+function sharedMask(id) {
+  sharedMasks ??= new Map(Object.entries(SHARED_VARPS).map(([varp, names]) => [
+    varpId(varp),
+    names.reduce((mask, name) => mask | bitMask(core.CacheDefinitions.getVarbit(varbitId(name))), 0),
+  ]));
+  return sharedMasks.get(id);
+}
+
 /** On login: the saved Slayer varps go back to the client; the old plugin's attributes go. */
 function restore({ player }) {
   if (!player || player.isPlayerBot?.() === true) return;
@@ -116,8 +140,11 @@ function restore({ player }) {
   const snapshot = player.getAttribute(VARPS_ATTRIBUTE);
   if (!snapshot || typeof snapshot !== "object") return;
   const sender = player.getPacketSender();
-  for (const [id, value] of Object.entries(snapshot)) {
-    if (Number.isInteger(value)) sender.sendConfig(Number(id), value);
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (!Number.isInteger(value)) continue;
+    const id = Number(key);
+    const mask = sharedMask(id);
+    sender.sendConfig(id, mask === undefined ? value : (value & mask) | (sender.getVarp(id) & ~mask));
   }
   for (const [name, value] of Object.entries(snapshot.varbits ?? {})) {
     const id = core.CacheDefinitions.getVarbitId(name);

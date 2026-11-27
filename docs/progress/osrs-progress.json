@@ -4715,7 +4715,9 @@
           "implementedIn": [
             "server/plugins/quests/quests/ErnestTheChicken.Quest.js",
             "server/plugins/quests/QuestRuntime.js",
-            "docs/quests/ernest-the-chicken/README.md"
+            "docs/quests/ernest-the-chicken/README.md",
+            "server/plugins/areas/KillerwattPlane.plugin.js",
+            "docs/killerwatt-plane.md"
           ],
           "devNotes": [
             "Fully implemented in ErnestTheChicken.plugin.js: registerQuest key ernest_the_chicken, varp 32, lever attribute synced to varp 33, item-on-item fish-food poison.",
@@ -4724,7 +4726,8 @@
             "Main 0a219d100 (2026-11-03): #1937 verifies captured Oddenstein post-quest dialogue/chatheads and the existing lever puzzle. The complete route and the 2026 journal wording still lack a matching recording.",
             "Main 3b61a15a8 (6 November 2026): #2285 Cross Ernest's oil room doors through their wall; #2411 Add Ernest's oil room lever sounds and messages; #2514 Add Ernest's oil room door sound. Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #3076 Quests: completion rewards that do not fit land under the player instead of vanishing (20 quests).",
-            "2026-11-24, main 74609edfe: Completion gives the 3 November 2026 antique lamp (https://github.com/RSPSApp/tsps/pull/4728), the machine's stun graphic plays at height 124 without the late delay (https://github.com/RSPSApp/tsps/pull/4591) and the start link follows the chatbox background (https://github.com/RSPSApp/tsps/pull/5647). Verified by server/tests/quest-xp-rewards-f2p-2026-11.test.cjs and server/tests/ernest-machine-graphic.test.cjs. All tasks were already done; no status change."
+            "2026-11-24, main 74609edfe: Completion gives the 3 November 2026 antique lamp (https://github.com/RSPSApp/tsps/pull/4728), the machine's stun graphic plays at height 124 without the late delay (https://github.com/RSPSApp/tsps/pull/4591) and the start link follows the chatbox background (https://github.com/RSPSApp/tsps/pull/5647). Verified by server/tests/quest-xp-rewards-f2p-2026-11.test.cjs and server/tests/ernest-machine-graphic.test.cjs. All tasks were already done; no status change.",
+            "2026-11-27: the reward's access to the Killerwatt plane works on members worlds. Completing the quest shows the portal between Professor Oddenstein's machines (varbit 1766, sent at login and on every stage change); Enter goes to the plane with insulated boots worn, and otherwise after his warning transcript; the plane's Portal Home goes back. Verified by server/tests/killerwatt-plane.test.cjs (15 pass; 11 fail with the plugin disabled) and docs/killerwatt-plane.md. No recording shows the crossing, so its landing tiles come from the Shortest Path transports and it plays no animation or sound. All tasks were already done; no status change."
           ],
           "taskDetails": [
             {

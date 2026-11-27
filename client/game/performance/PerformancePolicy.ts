@@ -71,7 +71,7 @@ const AUTO_KEY = "osrs.performance.autoTier";
 const LOW_END_PLUGIN_KEY = "lowenddeviceplugin";
 
 const handheldCaps = {
-    workerCount: 2,
+    workerCount: 1,
     mapSquareCacheLimit: 64,
     sceneChunkMaxSquares: 1,
     sceneChunkMaxBytes: 24 << 20,
@@ -98,7 +98,7 @@ export function getPerformanceFacts(): PerformanceFacts {
         cores,
         coresKnown,
         deviceMemoryGb: memory,
-        signature: `v2:${isHandheldDevice ? "handheld" : "desktop"}:${isIos ? "ios" : "web"}:${coresKnown ? cores : "?"}:${memory ?? "?"}:${ua}`,
+        signature: `v3:${isHandheldDevice ? "handheld" : "desktop"}:${isIos ? "ios" : "web"}:${coresKnown ? cores : "?"}:${memory ?? "?"}:${ua}`,
     };
 }
 
@@ -123,6 +123,34 @@ export function resolveAutoTier(
     if (probeMs > 8) return "low";
     if (probeMs > 3) return "medium";
     return "high";
+}
+
+/** Default request for the offscreen scene: no GPU choice, debug off/on, preset samples. */
+export function requestedMsaaSamples(
+    gpuSamples: number | undefined,
+    msaaEnabled: boolean,
+    performanceSamples: number,
+): number {
+    if (gpuSamples !== undefined) return gpuSamples;
+    if (!msaaEnabled) return 0;
+    return performanceSamples > 0 ? performanceSamples : 4;
+}
+
+/** WebGPU has one MSAA level today: 4. Medium's preset default is no MSAA. */
+export function webgpuSampleCount(
+    gpuSamples: number | undefined,
+    performanceSamples: number,
+): number {
+    if (gpuSamples !== undefined) return gpuSamples > 0 ? 4 : 1;
+    return performanceSamples > 0 ? 4 : 1;
+}
+
+/** Drops the warm-up/first measured batch and returns the median of the rest. */
+export function summarizeProbeSamples(samples: readonly number[]): number {
+    if (samples.length === 0) return 0;
+    const measured = samples.length > 1 ? samples.slice(1) : samples;
+    const sorted = [...measured].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
 }
 
 /**
@@ -174,16 +202,29 @@ export function runPerformanceProbe(): number | undefined {
         gl.enableVertexAttribArray(0);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
         gl.viewport(0, 0, 512, 512);
-        const batches = 16;
-        const start = performance.now();
-        for (let i = 0; i < batches; i++) gl.drawArrays(gl.TRIANGLES, 0, 3);
-        gl.finish();
-        // finish() can return before the compositor's GPU work drains on some Chromium
-        // builds; a one-pixel readback is a real fence.
-        gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
-        const elapsed = performance.now() - start;
+        const fence = () => {
+            gl.finish();
+            // finish() can return before the compositor's GPU work drains on some Chromium
+            // builds; a one-pixel readback is a real fence.
+            gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+        };
+        const drawBatch = (count: number) => {
+            for (let i = 0; i < count; i++) gl.drawArrays(gl.TRIANGLES, 0, 3);
+        };
+        // First-draw startup (shader/pipeline warm-up, driver caches) is not representative.
+        drawBatch(2);
+        fence();
+        const samples: number[] = [];
+        for (let round = 0; round < 4; round++) {
+            const start = performance.now();
+            drawBatch(4);
+            fence();
+            samples.push((performance.now() - start) / 4);
+        }
+        const msPerBatch = summarizeProbeSamples(samples);
+        console.info("[performance] Auto GPU probe", { samples, msPerBatch, tier: resolveAutoTier(getPerformanceFacts(), msPerBatch) });
         gl.getExtension("WEBGL_lose_context")?.loseContext();
-        return elapsed / batches;
+        return msPerBatch;
     } catch {
         return undefined;
     }
@@ -218,6 +259,10 @@ function clearAutoCache(): void {
     try {
         if (typeof localStorage !== "undefined") localStorage.removeItem(AUTO_KEY);
     } catch {}
+}
+
+export function clearAutoProbeCache(): void {
+    clearAutoCache();
 }
 
 function resolveAutoTierCached(facts: PerformanceFacts): { tier: PerformanceTier; probeMs?: number } {
@@ -288,7 +333,7 @@ function presetValues(preset: PerformancePreset, facts: PerformanceFacts) {
                 drawDistanceCap: 20,
                 lodThresholdCap: 20,
                 fpsLimit: 60,
-                sceneMsaaSamples: 4,
+                sceneMsaaSamples: 0,
                 workerCount: twoCoreSafe,
                 mapSquareCacheLimit: 128,
                 sceneChunkMaxSquares: 2,

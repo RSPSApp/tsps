@@ -42,7 +42,7 @@ async function main(): Promise<void> {
     refreshPerformancePolicy();
     assert.equal(getPerformancePolicy().fpsLimit, 240);
     assert.equal(getPerformancePolicy().sceneMsaaSamples, 4);
-    assert.equal(getPerformancePolicy().workerCount, 2, "High on a phone still caps workers at 2");
+    assert.equal(getPerformancePolicy().workerCount, 1, "High on a phone still caps workers at 1");
     assert.equal(getPerformancePolicy().mapSquareCacheLimit, 64);
     host.osrsClient.targetFps = 20;
     assert.equal(limit(), 20, "a phone battery cap also caps High");

@@ -6,8 +6,9 @@ import type { OsrsClient } from "../OsrsClient";
 import { MapManager } from "../MapManager";
 import { setMapSquareCacheLimit } from "../worker/MapSquareCache";
 import { setSceneChunkCacheLimits } from "../../render/loader/SceneChunkCache";
-import { PerformanceConfig } from "./PerformanceConfig";
+import { PerformanceConfig, PerformanceMode } from "./PerformanceConfig";
 import {
+    clearAutoProbeCache,
     getPerformancePolicy,
     initPerformancePolicy,
     refreshPerformancePolicy,
@@ -71,6 +72,10 @@ export class PerformancePlugin extends Plugin {
 
     onConfigChanged(event: ConfigChanged): void {
         if (event.getGroup() !== PerformanceConfig.group) return;
+        if (event.getKey() === "mode" && this.configManager.getConfig(PerformanceConfig).mode() === PerformanceMode.AUTO) {
+            // Selecting Auto is the user's "re-detect" action: do not reuse an older probe tier.
+            clearAutoProbeCache();
+        }
         refreshPerformancePolicy();
         applyPolicyToClient(this.client, getPerformancePolicy());
     }

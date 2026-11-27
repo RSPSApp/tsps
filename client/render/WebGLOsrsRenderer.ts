@@ -622,6 +622,8 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     cullBackFace: boolean = true;
 
     msaaEnabled: boolean = false;
+    /** Exact sample count the Performance preset asks for when the GPU plugin is off. */
+    performanceMsaaSamples: number = 0;
     /** MSAA samples the scene framebuffer was last built for, before the GPU's cap. */
     msaaSamplesRequested: number = 0;
     fxaaEnabled: boolean = false;
@@ -1342,6 +1344,7 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     /** Live part of the Performance preset; worker/cache changes are startup-only. */
     public applyPerformancePolicy(policy: PerformancePolicy): void {
         this.msaaEnabled = policy.sceneMsaaSamples > 0;
+        this.performanceMsaaSamples = policy.sceneMsaaSamples;
         if (policy.fpsLimit !== null) this.fpsLimit = policy.fpsLimit;
         this.autoFogDepthFactor = policy.autoFogDepthFactor;
         this.colorBanding = policy.colorBanding;

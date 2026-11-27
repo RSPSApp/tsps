@@ -159,8 +159,8 @@ export function prefersMobileGameframe(): boolean {
 export const hasCoarsePointer =
     isTouchDevice && typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 
-/** True on platforms with handheld memory budgets (phones, tablets and iOS). */
-export const isHandheldDevice = isMobileMode || isIos;
+/** True on handheld-memory platforms: phones, tablets, iOS and coarse-pointer touch devices. */
+export const isHandheldDevice = isMobileMode || isIos || hasCoarsePointer;
 
 // Hover tooltips (and the world mouseover text they feed) are a desktop-mouse feature;
 // mobile opens the menu on tap. Touch hardware alone must not turn them off, or a

@@ -7921,10 +7921,6 @@ export class OsrsClient {
 
     private applyDisplayDefaults(): void {
         this.renderDistance = clampRenderDistance(this.renderDistance);
-        // CS2 mobile_setfps can leave targetFps stuck at ~20; desktop must not keep that.
-        if (!isMobileMode && this.targetFps > 0 && this.targetFps < 60) {
-            this.targetFps = DEFAULT_FPS_LIMIT;
-        }
         try {
             if (this.renderer) {
                 this.renderer.fpsLimit = this.targetFps;
@@ -7944,11 +7940,7 @@ export class OsrsClient {
     }
 
     setTargetFps(limit: number): void {
-        let next = Number.isFinite(limit) ? Math.max(0, limit | 0) : 0;
-        // Ignore CS2/mobile battery caps on desktop (values like 20 pin the limiter).
-        if (!isMobileMode && next > 0 && next < 60) {
-            next = DEFAULT_FPS_LIMIT;
-        }
+        const next = Number.isFinite(limit) ? Math.max(0, limit | 0) : 0;
         this.targetFps = next;
         try {
             if (this.renderer) {

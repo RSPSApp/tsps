@@ -68,7 +68,7 @@ async function main(): Promise<void> {
     };
     const phonePolicy = computePerformancePolicy(config, { facts: phoneFacts, probe: false });
     assert.equal(phonePolicy.explicitDrawDistance, 70);
-    assert.equal(phonePolicy.workerCount, 2, "phone worker memory cap remains");
+    assert.equal(phonePolicy.workerCount, 1, "phone worker memory cap remains");
     assert.equal(phonePolicy.cacheFullDat2, false, "phone full-cache cap remains");
 
     console.log("mobile render settings: tier caps, explicit overrides, shared WebGPU behavior");

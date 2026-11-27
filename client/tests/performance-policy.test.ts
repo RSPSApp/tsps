@@ -47,7 +47,7 @@ assert.equal(medium.sceneResolution, 1);
 assert.equal(medium.drawDistanceCap, 20);
 assert.equal(medium.lodThresholdCap, 20);
 assert.equal(medium.fpsLimit, 60);
-assert.equal(medium.sceneMsaaSamples, 4);
+assert.equal(medium.sceneMsaaSamples, 0);
 assert.equal(medium.workerCount, 2);
 assert.equal(medium.mapSquareCacheLimit, 128);
 assert.equal(medium.sceneChunkMaxSquares, 2);

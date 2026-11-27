@@ -3,7 +3,10 @@ import { ConfigManager } from "@runelite/client/config/ConfigManager";
 import { Plugin, type PluginDescriptor } from "@runelite/client/plugins/Plugin";
 import { CLIENT_TOKEN, inject } from "@runelite/client/plugins/PluginInjector";
 import type { OsrsClient } from "../../OsrsClient";
-import { getPerformancePolicy } from "../../performance/PerformancePolicy";
+import {
+    getPerformancePolicy,
+    subscribePerformancePolicy,
+} from "../../performance/PerformancePolicy";
 import { AntiAliasingMode, GpuConfig, MAX_DRAW_DISTANCE, MIN_DRAW_DISTANCE } from "./GpuConfig";
 
 /** What the renderers apply while the plugin is on. */
@@ -79,6 +82,7 @@ export class GpuPlugin extends Plugin {
     private readonly configManager = inject(ConfigManager);
     private readonly client = inject<OsrsClient>(CLIENT_TOKEN);
     private current: GpuSettings;
+    private unsubscribePolicy?: () => void;
 
     constructor() {
         super();
@@ -88,6 +92,11 @@ export class GpuPlugin extends Plugin {
     /** Config events only reach a started plugin, so pick up changes made while it was off. */
     protected override async startUp(): Promise<void> {
         this.current = this.readConfig();
+        // Preset changes alter the GPU defaults (AA, draw distance, FPS, banding, fog).
+        this.unsubscribePolicy?.();
+        this.unsubscribePolicy = subscribePerformancePolicy(() => {
+            this.current = this.readConfig();
+        });
         // Brightness is one setting: the Settings slider's value wins, and this option follows it.
         this.mirrorBrightness(this.client.getScreenBrightness());
         this.client.screenBrightnessListener = (value) => this.mirrorBrightness(value);
@@ -95,6 +104,8 @@ export class GpuPlugin extends Plugin {
     }
 
     protected override async shutDown(): Promise<void> {
+        this.unsubscribePolicy?.();
+        this.unsubscribePolicy = undefined;
         this.client.screenBrightnessListener = undefined;
     }
 
@@ -141,7 +152,7 @@ export class GpuPlugin extends Plugin {
                 ? AntiAliasingMode.MSAA_4
                 : AntiAliasingMode.DISABLED;
         const drawDistance = policy.explicitDrawDistance
-            ?? (stored("drawDistance") ? config.drawDistance() : policy.drawDistanceCap);
+            ?? (stored("drawDistance") ? config.drawDistance() : this.client.renderDistance);
         const fpsLimit = policy.explicitFpsLimit
             ?? (stored("fpsLimit") ? config.fpsLimit() : policy.fpsLimit ?? config.fpsLimit());
         const colorBanding = stored("colorBanding")
@@ -156,6 +167,7 @@ export class GpuPlugin extends Plugin {
             autoFog: stored("autoFog") ? config.autoFog() : true,
             fogStart,
             manualFogStart: config.manualFogStart(),
-        }, stored("drawDistance") || policy.explicitDrawDistance !== null);
+        }, stored("drawDistance") || policy.explicitDrawDistance !== null ||
+            this.client.renderDistance > MIN_DRAW_DISTANCE);
     }
 }

@@ -50,7 +50,7 @@ export const GpuConfig = ConfigGroup("gpu", {
     }),
     fpsLimit: ConfigItem({
         name: "FPS limit",
-        description: "Caps the frame rate. 0 draws as fast as the display allows.",
+        description: "Caps the frame rate. 0 removes the GPU cap; the game's FPS setting and the hidden-tab cap still apply.",
         position: 3,
         units: " fps",
         range: { min: 0, max: 1000 },

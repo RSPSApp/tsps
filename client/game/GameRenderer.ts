@@ -2,7 +2,6 @@ import { Schema } from "leva/dist/declarations/src/types";
 
 import { Renderer } from "./render/Renderer";
 import { SceneBuilder } from "../rs/scene/SceneBuilder";
-import { isMobileMode } from "../common/utils/DeviceUtil";
 import { getPerformancePolicy } from "./performance/PerformancePolicy";
 import { clamp } from "../common/utils/MathUtil";
 import { ProjectionType } from "./Camera";
@@ -271,9 +270,9 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
     }
 
     protected override getEffectiveFpsLimit(): number {
-        // The GPU cap still honours the handheld's selected battery limit. The Performance
-        // preset supplies the default cap; an explicit Performance override is already folded
-        // into policy.fpsLimit, and an enabled GPU plugin remains the explicit cap.
+        // The preset supplies the default cap; explicit Performance/GPU choices are already
+        // folded into the values below. The renderer/target FPS control is an upper cap on every
+        // platform (the hidden-tab cap still wins at 30).
         const policy = getPerformancePolicy();
         const gpu = this.osrsClient.clientPlugins.gpuSettings();
         let limit = gpu
@@ -281,17 +280,7 @@ export abstract class GameRenderer<T extends MapSquare = MapSquare> extends Rend
             : policy.fpsLimit === null
                 ? super.getEffectiveFpsLimit()
                 : policy.fpsLimit;
-        let target = (!isMobileMode && (gpu || policy.fpsLimit !== null))
-            ? 0
-            : Number(this.osrsClient.targetFps) | 0;
-        // Never honor CS2 mobile battery caps (~20) on desktop.
-        if (!isMobileMode && target > 0 && target < 60) {
-            target = 0;
-            this.osrsClient.targetFps = 0;
-            if (this.fpsLimit > 0 && this.fpsLimit < 60) {
-                this.fpsLimit = 0;
-            }
-        }
+        const target = Number(this.osrsClient.targetFps) | 0;
         if (target > 0) {
             limit = limit > 0 ? Math.min(limit, target) : target;
         }

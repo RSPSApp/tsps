@@ -7,11 +7,11 @@ import { spawnSync } from "node:child_process";
 // 991x589 and the final blit stretched it back with LINEAR filtering.
 const cases = [
     {
-        name: "touchscreen Windows laptop on the desktop layout",
+        name: "coarse-pointer touch device on the desktop layout",
         agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:160.0) Gecko/20100101 Firefox/160.0",
         touch: 10,
         coarse: true,
-        expectedScale: 1,
+        expectedScale: 0.6,
     },
     {
         name: "desktop without touch",

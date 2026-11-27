@@ -105,7 +105,7 @@ const handheldFacts = {
 };
 const mobileHigh = computePerformancePolicy(config, { facts: handheldFacts, probe: false });
 assert.equal(mobileHigh.tier, "high");
-assert.equal(mobileHigh.workerCount, 2, "handheld worker cap");
+assert.equal(mobileHigh.workerCount, 1, "handheld worker cap");
 assert.equal(mobileHigh.mapSquareCacheLimit, 64, "handheld map cache cap");
 assert.equal(mobileHigh.sceneChunkMaxSquares, 1, "handheld chunk square cap");
 assert.equal(mobileHigh.sceneChunkMaxBytes, 24 << 20, "handheld chunk byte cap");

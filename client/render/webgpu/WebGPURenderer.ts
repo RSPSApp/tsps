@@ -6,7 +6,7 @@ import { mat4, vec3 } from "gl-matrix";
 
 import { isWebGPUSupported } from "../../common/utils/DeviceUtil";
 import { GameRenderer } from "../../game/GameRenderer";
-import { getPerformancePolicy, type PerformancePolicy } from "../../game/performance/PerformancePolicy";
+import { getPerformancePolicy, webgpuSampleCount, type PerformancePolicy } from "../../game/performance/PerformancePolicy";
 import type {
     HitsplatEventPayload,
     LocChangeOptions,
@@ -58,7 +58,6 @@ import { FxaaPass } from "./fxaa";
 import { ShaderFxPass } from "./shaderFxPass";
 import { PlayerMaskTarget } from "./playerMask";
 import { SceneMsaaTargets } from "./msaaTargets";
-import { WEBGPU_MSAA_SAMPLES } from "./multisample";
 import { EditorOverlays } from "./overlays/EditorOverlays";
 import { OverlayHost } from "./overlays/OverlayHost";
 import { WebGPUOverlays } from "./overlays/WebGPUOverlays";
@@ -129,6 +128,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     private sceneColorHeight: number = 0;
     /** The GPU plugin's anti-aliasing: multisampled world-pass targets, or FXAA on the base path. */
     private msaaTargets?: SceneMsaaTargets;
+    /** Exact MSAA level the Performance preset asks for when the GPU plugin is off. */
+    private performanceMsaaSamples = 0;
     private fxaa?: FxaaPass;
     /** The Shader Effects plugin's pass on the base path (117 HD runs its own in the HDR chain). */
     private shaderFxPass?: ShaderFxPass;
@@ -245,6 +246,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
 
     /** Live part of the Performance preset; worker/cache changes are startup-only. */
     public applyPerformancePolicy(policy: PerformancePolicy): void {
+        this.performanceMsaaSamples = policy.sceneMsaaSamples;
         if (policy.fpsLimit !== null) this.fpsLimit = policy.fpsLimit;
     }
 
@@ -1010,9 +1012,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         // frame, before any map draw.
         const extension = world.extension;
         const gpu = this.osrsClient.clientPlugins.gpuSettings();
-        const sampleCount = (gpu ? gpu.msaaSamples > 0 : getPerformancePolicy().sceneMsaaSamples > 0)
-            ? WEBGPU_MSAA_SAMPLES
-            : 1;
+        const sampleCount = webgpuSampleCount(gpu?.msaaSamples, this.performanceMsaaSamples);
         world.selectExtension(!!extension?.isActive(), sampleCount);
 
         // Same point the WebGL frame loop flushes queued client packets (render.ts login

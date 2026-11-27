@@ -758,6 +758,20 @@ test("grinding keeps going in a full inventory that already holds the product (i
   core.TaskManager.cancelTasks(who.getIndex());
 });
 
+test("a whole-stack grind beside a near-full product stack keeps the ingredient", () => {
+  const cases = [
+    { ingredient: "prif_crystal_shard", product: "prif_crystal_shard_crushed", stack: 5, existing: 2 ** 31 - 3, request: 5 },
+    { ingredient: "nihil_shard", product: "nihil_dust", stack: 1, existing: 2 ** 31 - 1 },
+  ];
+  for (const { ingredient, product, stack, existing, request } of cases) {
+    const who = player([["pestle_and_mortar"], [ingredient, stack], [product, existing]]);
+    use(who, "pestle_and_mortar", ingredient);
+    who.sent.amountAction?.execute(request ?? stack);
+    assert.equal(who.inv.count(ingredient), stack, `${ingredient} kept`);
+    assert.equal(who.inv.count(product), existing, `${product} unchanged`);
+  }
+});
+
 test("grinding does not spend shards when the dust would overflow its stack", () => {
   const who = player([["pestle_and_mortar"], ["prif_crystal_shard", 5], ["prif_crystal_shard_crushed", 2 ** 31 - 6]]);
   use(who, "pestle_and_mortar", "prif_crystal_shard");

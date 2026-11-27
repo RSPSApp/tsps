@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 
-// The scene resolution must follow the platform, not touch hardware: a Windows laptop with a
-// touchscreen still reports a coarse pointer, which used to put it on the low-end scene scale
-// (0.6) even though it was laid out as a desktop. A 1652x982 canvas then rendered the scene at
-// 991x589 and the final blit stretched it back with LINEAR filtering.
+// A coarse-pointer touch device is a handheld for the Performance preset, so Auto keeps the
+// mobile scene scale (0.6). A fine-pointer desktop stays native. This makes the previous hidden
+// 0.6 explicit: the desktop that reported coarse touch now gets the mobile preset by design.
 const cases = [
     {
         name: "coarse-pointer touch device on the desktop layout",
@@ -106,4 +105,4 @@ for (const scenario of cases) {
     assert.equal(result.status, 0, `${scenario.name}: ${result.stderr || result.stdout}`);
 }
 
-console.log("scene resolution: desktop stays at 1.0, mobile keeps its performance scale");
+console.log("scene resolution: fine-pointer desktop 1.0, handheld/coarse touch keeps its performance scale");

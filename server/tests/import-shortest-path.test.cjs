@@ -140,3 +140,113 @@ test('the production planner charges four ticks for both generated GE crossings'
     assert.equal(route.steps[1].via.id, correction.id);
   }
 });
+
+const moveInput = { ...allInput, corrections: allInput.corrections.filter((c) => 'newFrom' in c) };
+const gangplanks = moveInput.corrections.filter((c) => c.table === 'transports');
+const ferries = moveInput.corrections.filter((c) => c.table === 'ships');
+function moveRows() {
+  return {
+    transports: gangplanks.map((c) => [c.from, c.to, c.menu, c.id, null, null, null, null, null, 3]),
+    ships: ferries.map((c) => [c.from, c.to, c.menu, c.id, null, 'COINS=30', null, null, null, 6, c.menu.split(' ')[0]]),
+  };
+}
+const rowOf = (data, correction) => data[correction.table][(correction.table === 'ships' ? ferries : gangplanks).indexOf(correction)];
+
+test('move corrections replace only the origin and destination of the matched rows', () => {
+  const data = moveRows();
+  const expected = clone(data);
+  for (const c of moveInput.corrections) {
+    rowOf(expected, c)[0] = c.newFrom;
+    rowOf(expected, c)[1] = c.newTo;
+  }
+  applyCorrections(data, moveInput);
+  assert.deepEqual(data, expected);
+});
+
+test('move corrections reject missing, ambiguous, already moved and invalid inputs atomically', () => {
+  for (const mutate of [
+    (data) => data.transports.pop(),
+    (data) => data.transports.push(clone(data.transports[1])),
+    (data) => { data.transports[1][3]++; },
+  ]) {
+    const data = moveRows();
+    mutate(data);
+    const before = clone(data);
+    assert.throws(() => applyCorrections(data, moveInput), /exactly one match/);
+    assert.deepEqual(data, before);
+  }
+  const caughtUp = moveRows();
+  const c = moveInput.corrections[1];
+  caughtUp.transports.push([c.newFrom, c.newTo, c.menu, c.id, null, null, null, null, null, 3]);
+  const before = clone(caughtUp);
+  assert.throws(() => applyCorrections(caughtUp, moveInput), /Stale/);
+  assert.deepEqual(caughtUp, before);
+  for (const mutation of [
+    (c) => { c.newTo = c.to; c.newFrom = c.from; },
+    (c) => { c.newFrom = [2683, 3266]; },
+    (c) => { c.newTo = null; },
+    (c) => { delete c.newTo; },
+    (c) => { c.quest = 'A quest'; },
+    (c) => { c.table = 'unknown'; },
+  ]) {
+    const invalid = clone(moveInput);
+    mutation(invalid.corrections[1]);
+    assert.throws(() => applyCorrections(moveRows(), invalid), /Malformed/);
+  }
+  const duplicate = clone(moveInput);
+  duplicate.corrections.push(clone(duplicate.corrections[0]));
+  assert.throws(() => applyCorrections(moveRows(), duplicate), /Duplicate/);
+});
+
+test('the production planner crosses the East Ardougne gangplanks from their map tiles', () => {
+  const { planTravel, indexTransports, key, BLOCKED } = require('../plugins/agent/mcp/TravelRoutes.AgentMcp');
+  const generated = require('../plugins/agent/data/transports.json');
+  const byOrigin = indexTransports(generated);
+  for (const correction of gangplanks) {
+    assert.ok(!(byOrigin.get(key(...correction.from)) ?? []).some((t) => t.id === correction.id));
+    const [x, y, z] = correction.newFrom;
+    const [tx, ty, tz] = correction.newTo;
+    const route = planTravel({
+      from: { x, y, z }, to: { x: tx, y: ty, z: tz }, goalReach: 0,
+      getFlag: () => BLOCKED,
+      transportsAt: (x, y, z) => byOrigin.get(key(x, y, z)) ?? [],
+      usable: (transport) => transport.id === correction.id,
+    });
+    assert.ok(route);
+    assert.equal(route.steps[1].via.id, correction.id);
+  }
+});
+
+test('a moved row owns its tiles, takes a quest correction too, and two moves may not share a target', () => {
+  const data = moveRows();
+  const own = clone(moveInput);
+  applyCorrections(data, own);
+  data.transports[0][0][1]++;
+  assert.deepEqual(own.corrections[0].newFrom, moveInput.corrections[0].newFrom);
+
+  const c = moveInput.corrections[0];
+  const both = { ...moveInput, corrections: [clone(c), { table: c.table, from: c.from, to: c.to, menu: c.menu, id: c.id, expectedQuest: null, quest: 'A quest' }] };
+  const row = moveRows();
+  applyCorrections(row, both);
+  assert.deepEqual(row.transports[0].slice(0, 2), [c.newFrom, c.newTo]);
+  assert.equal(row.transports[0][6], 'A quest');
+
+  const shared = clone(moveInput);
+  shared.corrections[1].newFrom = c.newFrom;
+  shared.corrections[1].newTo = c.newTo;
+  shared.corrections[1].id = c.id;
+  const rows = moveRows();
+  rows.transports[1][3] = c.id;
+  const before = clone(rows);
+  assert.throws(() => applyCorrections(rows, shared), /Duplicate/);
+  assert.deepEqual(rows, before);
+});
+
+test("Captain Barnaby's East Ardougne rows start and end at the dock end of the ship's gangplank", () => {
+  const generated = require('../plugins/agent/data/transports.json');
+  const dock = gangplanks.find((c) => c.newFrom[2] === 0).newFrom;
+  const ardougne = generated.transports.ships.filter((row) => row[2].endsWith('Captain Barnaby')
+    && (row[2].startsWith('Ardougne') || row[3] === 9250));
+  assert.equal(ardougne.length, 4);
+  for (const row of ardougne) assert.deepEqual(row[2].startsWith('Ardougne') ? row[1] : row[0], dock);
+});

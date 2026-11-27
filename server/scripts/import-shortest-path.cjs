@@ -129,17 +129,54 @@ function exactKeys(value, keys) {
     && JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
 }
 
+/**
+ * A row whose loc has moved on the map: newFrom/newTo replace its origin and destination. The
+ * moved row must not already exist, so a source that catches up shows up as a stale correction.
+ */
+function moveCorrection(transports, correction, seen, targets, validTile) {
+  if (!exactKeys(correction, ["table", "from", "to", "menu", "id", "newFrom", "newTo"])
+      || !FILES.includes(`${correction.table}.tsv`)
+      || ![correction.from, correction.to, correction.newFrom, correction.newTo].every(validTile)
+      || typeof correction.menu !== "string" || !correction.menu.trim()
+      || !Number.isInteger(correction.id)
+      || JSON.stringify([correction.newFrom, correction.newTo]) === JSON.stringify([correction.from, correction.to])) {
+    throw new Error("Malformed transport correction");
+  }
+  const rows = transports[correction.table] || [];
+  const key = (from, to) => JSON.stringify([from, to, correction.menu, correction.id]);
+  const selection = JSON.stringify([correction.table, correction.from, correction.to, correction.menu, correction.id]);
+  if (seen.has(selection)) throw new Error("Duplicate transport correction");
+  seen.add(selection);
+  const matching = (from, to) => rows.filter((row) => JSON.stringify(row.slice(0, 4)) === key(from, to));
+  const matches = matching(correction.from, correction.to);
+  if (matches.length !== 1) throw new Error(`Transport correction requires exactly one match; found ${matches.length}`);
+  if (matching(correction.newFrom, correction.newTo).length) {
+    throw new Error("Stale transport correction: the moved row already exists");
+  }
+  const target = `${correction.table}:${key(correction.newFrom, correction.newTo)}`;
+  if (targets.has(target)) throw new Error("Duplicate transport correction");
+  targets.add(target);
+  return [[matches[0], COLUMNS.indexOf("from"), [...correction.newFrom]], [matches[0], COLUMNS.indexOf("to"), [...correction.newTo]]];
+}
+
 function applyCorrections(transports, input) {
   if (!exactKeys(input, ["version", "corrections"]) || input.version !== 1
       || !Array.isArray(input.corrections) || !input.corrections.length) {
     throw new Error("Malformed transport correction input");
   }
+  // A row takes at most one correction of each kind; moves also may not share a target.
   const seen = new Set();
+  const moved = new Set();
+  const targets = new Set();
   const updates = [];
   const validTile = (value) => Array.isArray(value) && value.length === 3 && value.every(Number.isInteger);
   for (const correction of input.corrections) {
     if (correction === null || typeof correction !== "object" || Array.isArray(correction)) {
       throw new Error("Malformed transport correction");
+    }
+    if (Object.hasOwn(correction, "newFrom")) {
+      updates.push(...moveCorrection(transports, correction, moved, targets, validTile));
+      continue;
     }
     const duration = Object.hasOwn(correction, "ticks");
     const field = duration ? "ticks" : "quests";

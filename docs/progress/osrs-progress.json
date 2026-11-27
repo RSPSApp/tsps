@@ -29866,7 +29866,8 @@
             "Main 281766303 (2 November 2026): #1682 supplies the full plugin-owned drop table, correct coin placement/integer roll weights and the Noon tertiary.",
             "Main 3b61a15a8 (6 November 2026): #2615 Combat achievements: cover RSProx capture gaps. Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4226 Settings: dialogues, messages and switches follow their All Settings rows. #3623 Grotesque Guardians: a Dusk kill counts once in the collection log.",
-            "2026-11-24, main 74609edfe: An idle roof warns, then closes after five minutes (https://github.com/RSPSApp/tsps/pull/5606), and live's arrival and fight music play (https://github.com/RSPSApp/tsps/pull/6583). Verified by server/tests/grotesque-guardians.test.cjs. Existing task statuses are unchanged."
+            "2026-11-24, main 74609edfe: An idle roof warns, then closes after five minutes (https://github.com/RSPSApp/tsps/pull/5606), and live's arrival and fight music play (https://github.com/RSPSApp/tsps/pull/6583). Verified by server/tests/grotesque-guardians.test.cjs. Existing task statuses are unchanged.",
+            "2026-11-26, issue #6853: the black tourmaline core can be used on Bandos boots to make guardian boots, with live's confirmation box, Yes./No. menu and absorption text (rsprox capture 2225, server/plugins/items/GuardianBoots.plugin.js). Verified by server/tests/guardian-boots.test.cjs and an agent MCP run. Existing task statuses are unchanged."
           ],
           "taskDetails": [
             {

@@ -64,11 +64,35 @@ module.exports = function attachEaglesPeakFerret(api, ep) {
       sceneLoc(scene, TRAP.EMPTY);
       Scenes.camera(player, [2313, 3506, 400], [TRAP.x, TRAP.y, 25], { rate: 0, rate2: 100 });
       Scenes.fade(player, false, 50);
+      watch(player, scene);
       Scenes.later(scene, 2, () => {
         const look = Scenes.tileFor(scene, [2317, 3511, 0]);
         player.getPacketSender().sendCameraLookAt(look.getX(), look.getY(), 25, { rate: 1, rate2: 15 });
       });
     });
+  }
+
+  /**
+   * The lesson's talk is what moves the scene on. Closed early (Escape, another interface), nothing would: the scene ends
+   * there and gives the player back the camp, nothing given, and the lesson can be asked for again (Ours: the capture
+   * played it through).
+   */
+  function watch(player, scene) {
+    Scenes.later(scene, 1, () => {
+      if (!inScene(player) || scene.finishing) return;
+      if (!Scenes.chatOpen(player)) {
+        abort(player);
+        return;
+      }
+      watch(player, scene);
+    });
+  }
+
+  function abort(player) {
+    Scenes.end(player, false);
+    player.moveTo(new Location(...CAMP.exit));
+    Scenes.restoreTabs(player);
+    Scenes.closeFade(player);
   }
 
   function ferretComes(player) {
@@ -99,6 +123,7 @@ module.exports = function attachEaglesPeakFerret(api, ep) {
   function finish(player) {
     const scene = Scenes.get(player);
     if (!inScene(player)) return;
+    scene.finishing = true;
     Scenes.walk(player, [2314, 3510, 0]);
     Scenes.later(scene, 6, () => {
       Scenes.face(player, [TRAP.x, TRAP.y]);

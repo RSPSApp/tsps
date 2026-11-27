@@ -27,6 +27,9 @@ module.exports = function attachEaglesPeakNpcs(api, ep) {
   const START_LINE = "Well the northern ferret is mostly found around the mountains";
   const NICKOLAUS_AGREED_LINE = "That's a good idea. There are plenty of feathers around here. I'll see what I can do.";
   const ASYFF_ASKED_LINE = "I'll see what I can do.";
+  const ANOTHER_COSTUME_LINE = "Certainly, if you can supply the materials.";
+  const ANOTHER_FEATHERS = 5;
+  const ANOTHER_COINS = 25;
 
   const V = Object.freeze({
     CHARLIE_START: "starting-out-before-starting-eagle-s-peak",
@@ -179,6 +182,11 @@ module.exports = function attachEaglesPeakNpcs(api, ep) {
       request.before = () => { if (chat(player) < CHAT.AGREED) state.set(player, VARBIT.NICKOLAUS_CHAT, CHAT.AGREED); };
       return;
     }
+    if (npcId === NPC.ASYFF && request.playing?.variant === V.ASYFF_ANOTHER && typeof text === "string"
+      && text.startsWith(ANOTHER_COSTUME_LINE)) {
+      request.after = () => makeAnotherCostume(player);
+      return;
+    }
     if (npcId === NPC.ASYFF && text === ASYFF_ASKED_LINE && chat(player) === CHAT.AGREED
       && request.playing?.variant === V.ASYFF_COSTUME) {
       request.before = () => { if (chat(player) === CHAT.AGREED) state.set(player, VARBIT.NICKOLAUS_CHAT, CHAT.ASKED_ASYFF); };
@@ -208,6 +216,23 @@ module.exports = function attachEaglesPeakNpcs(api, ep) {
       inventory.forceAdd(player, new Item(itemId, 1));
     }
     state.set(player, VARBIT.NICKOLAUS_CHAT, CHAT.COSTUMES_MADE);
+  }
+
+  /**
+   * Another costume (the Wiki's Eagle cape and Fake beak pages: 5 eagle feathers, swamp tar, yellow dye and 25 coins): made
+   * once Asyff has named the price, if the player carries it. Ours: the capture asked without the materials, so when
+   * and how it is handed over is not recorded; without this a lost disguise would end the quest.
+   */
+  function makeAnotherCostume(player) {
+    if (chat(player) < CHAT.COSTUMES_MADE) return;
+    if (!held(player, ITEM.EAGLE_FEATHER, ANOTHER_FEATHERS) || !held(player, ITEM.SWAMP_TAR) || !held(player, ITEM.YELLOW_DYE)
+      || !held(player, ITEM.COINS, ANOTHER_COINS)) return;
+    const inventory = player.getInventory();
+    inventory.deleteNumber(ITEM.EAGLE_FEATHER, ANOTHER_FEATHERS);
+    inventory.deleteNumber(ITEM.SWAMP_TAR, 1);
+    inventory.deleteNumber(ITEM.YELLOW_DYE, 1);
+    inventory.deleteNumber(ITEM.COINS, ANOTHER_COINS);
+    for (const itemId of [ITEM.EAGLE_CAPE, ITEM.FAKE_BEAK]) inventory.forceAdd(player, new Item(itemId, 1));
   }
 
   /** The cape and beak over to Nickolaus: on the box's continue, the spare goes and the stage is 25 (t2025). */

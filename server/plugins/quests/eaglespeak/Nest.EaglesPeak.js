@@ -230,14 +230,34 @@ module.exports = function attachEaglesPeakNest(api, ep) {
     return true;
   }
 
+  /**
+   * A crossing that walks over collision (the eagle, the door's wall): the flag the player had before is kept here and
+   * put back when the walk ends or the player logs out, so a save never holds the crossing's flag (player flags are saved).
+   */
+  const crossings = new WeakMap();
+  const WALK_ONLY_SOURCE = "eagles-peak:sidestep";
+
+  function beginCrossing(player) {
+    if (!crossings.has(player)) crossings.set(player, player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true);
+    player.setFlag?.(IGNORE_CLIPPING_FLAG, true);
+  }
+
+  function endCrossing(player) {
+    if (!crossings.has(player)) return;
+    if (!crossings.get(player)) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
+    crossings.delete(player);
+    player.setWalkOnly?.(WALK_ONLY_SOURCE, false);
+  }
+
   /** Four tiles through the eagle, one a tick, its line and the step out on arrival (t2002-2006, t2047-2051). */
   function sidestep(player) {
     const here = player.getLocation();
     const north = here.getY() < EAGLE_SOUTH + 2;
     const from = new Location(EAGLE_COLUMN, north ? EAGLE_SOUTH : EAGLE_NORTH, here.getZ());
     const to = new Location(EAGLE_COLUMN, north ? EAGLE_NORTH : EAGLE_SOUTH, here.getZ());
-    const hadFlag = player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true;
-    player.setFlag?.(IGNORE_CLIPPING_FLAG, true);
+    beginCrossing(player);
+    // A tile a tick whatever the run setting (t2002-2005).
+    player.setWalkOnly?.(WALK_ONLY_SOURCE, true);
     const queue = player.getMovementQueue();
     queue.reset();
     if (!here.equals(from)) queue.addSteps(from);
@@ -251,7 +271,7 @@ module.exports = function attachEaglesPeakNest(api, ep) {
       const arrived = now.getX() === to.getX() && now.getY() === to.getY();
       if (!arrived && --limit > 0 && player.isRegistered?.() !== false && (queue.size?.() ?? 1) > 0) return;
       task.stop();
-      if (!hadFlag) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
+      endCrossing(player);
       if (!arrived) return;
       ep.animate(player, north ? SEQ.SIDESTEP_OUT : SEQ.SIDESTEP_OUT_LEFT);
       player.sendMessage(TEXT.EAGLE_PASSED);
@@ -263,8 +283,10 @@ module.exports = function attachEaglesPeakNest(api, ep) {
     const sender = player.getPacketSender();
     ep.animate(eagle, SWIPE.eagleSeq);
     player.performAnimation(new Animation(SWIPE.playerSeq, SWIPE.playerSeqDelay));
+    // Back away from the eagle on the player's own side (both recordings were from the south: t1993, t2804).
+    const north = player.getLocation().getY() >= EAGLE_NORTH;
     TaskManager.submit(new ForceMovementTask(player, 2,
-      new ForceMovement(player.getLocation().clone(), new Location(0, -SWIPE.back), 0, SWIPE.endCycle, 0, -1)));
+      new ForceMovement(player.getLocation().clone(), new Location(0, north ? SWIPE.back : -SWIPE.back), 0, SWIPE.endCycle, north ? 2 : 0, -1)));
     sender.sendSound(SOUND.EAGLE_ATTACK, 1, 0);
     sender.sendSound(SOUND.FALL_LAND, 1, 5);
     TaskManager.submit(new (class extends Task {
@@ -329,8 +351,7 @@ module.exports = function attachEaglesPeakNest(api, ep) {
     }
     const here = player.getLocation();
     const destination = new Location(here.getX() >= DOOR_X ? DOOR_X - 1 : DOOR_X, y, z);
-    const hadFlag = player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true;
-    player.setFlag?.(IGNORE_CLIPPING_FLAG, true);
+    beginCrossing(player);
     const queue = player.getMovementQueue();
     queue.reset();
     queue.addSteps(destination);
@@ -340,7 +361,7 @@ module.exports = function attachEaglesPeakNest(api, ep) {
       const now = player.getLocation();
       if ((now.getX() === destination.getX() && now.getY() === destination.getY()) || --ticks <= 0 || player.isRegistered?.() === false) {
         task.stop();
-        if (!hadFlag) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
+        endCrossing(player);
       }
     };
     TaskManager.submit(task);
@@ -424,6 +445,7 @@ module.exports = function attachEaglesPeakNest(api, ep) {
   api.onItemOnObject("Metal feather", "Stone door", metalFeatherOnDoor);
   api.onItemOnObject("Eagle feather", "Stone door", eagleFeatherOnDoor);
   api.onItemAction("Feathered journal", { Read: readJournal });
+  api.onPlayerLogout(({ player }) => endCrossing(player));
 
   return { LOC, JOURNAL, doorUnlocked, walkPastEagle, swipe, sidestep, startMeeting, routeShout };
 };

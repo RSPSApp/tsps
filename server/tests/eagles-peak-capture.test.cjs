@@ -598,3 +598,61 @@ test("the kebbit killed: the trail moves on to 5 and the plugin drops nothing of
   void before;
   assert.equal(messages(f).includes("A feather drops from the kebbit's mouth as it escapes."), false, "that line is the taunt's");
 });
+
+test("Asyff makes another costume for 5 feathers, tar, dye and 25 coins (Wiki), so a lost disguise does not end the quest", async (t) => {
+  const f = eagles(t, { stage: 20, varbits: { CHAT: 5, TRACKING: 6, DOOR: 3 }, at: [3277, 3397, 0],
+    items: [[ITEM.EAGLE_FEATHER, 5], ITEM.TAR, ITEM.DYE, [ITEM.COINS, 30]] });
+  const asyff = spawnOnce(f, 2887, [3278, 3397, 0]);
+  await H.talk(f, asyff);
+  await H.until(f, "Could you make another eagle costume for me?");
+  await H.choose(f, "Could you make another eagle costume for me?");
+  await H.until(f, "I'll see what I can do.");
+  assert.deepEqual([amount(f, ITEM.CAPE), amount(f, ITEM.BEAK), amount(f, ITEM.EAGLE_FEATHER), amount(f, ITEM.COINS)], [1, 1, 0, 5]);
+  await H.finishChat(f);
+});
+
+test("Walk-past: a tile a tick even when running, and a logout mid-way saves no walk-through-walls flag", async (t) => {
+  const f = eagles(t, { stage: 20, varbits: { TRACKING: 6, DOOR: 3, CHAT: 5 }, at: [2007, 4953, 3], worn: [ITEM.CAPE, ITEM.BEAK] });
+  f.player.setRunning(true);
+  const eagle = spawnOnce(f, 1490, [2007, 4954, 3]);
+  await f.connection.dispatch([{ type: "npc_option", index: eagle.getIndex(), clickType: 1 }]);
+  const ys = [];
+  for (let i = 0; i < 6; i++) { H.tick(f); ys.push(f.player.getLocation().getY()); }
+  for (let i = 1; i < ys.length; i++) assert.ok(ys[i] - ys[i - 1] <= 1, `one tile a tick: ${ys}`);
+  assert.equal(ys.at(-1), 4957);
+  const g = eagles(t, { stage: 20, varbits: { TRACKING: 6, DOOR: 3, CHAT: 5 }, at: [2007, 4953, 3], worn: [ITEM.CAPE, ITEM.BEAK] });
+  await g.connection.dispatch([{ type: "npc_option", index: eagle.getIndex(), clickType: 1 }]);
+  H.tick(g);
+  H.tick(g);
+  H.PM.emitPlayerLogout({ player: g.player, username: g.player.getUsername() });
+  assert.equal(g.player.hasFlag?.("movement:ignore-clipping") === true, false, "the crossing's flag is gone at logout");
+});
+
+test("the swipe from the nest side pushes the player back north, out of the eagle", async (t) => {
+  const f = eagles(t, { stage: 25, at: [2007, 4957, 3] });
+  const eagle = spawnOnce(f, 1490, [2007, 4954, 3]);
+  await H.talk(f, eagle);
+  H.ticks(f, 6);
+  assert.ok(f.player.getLocation().getY() >= 4957, `north of the eagle: ${H.xy(f.player.getLocation())}`);
+});
+
+test("Escape in the ferret lesson ends it on the real camp, controls back, nothing given; the lesson can be asked again", async (t) => {
+  const f = eagles(t, { stage: 30, at: [2318, 3501, 0] });
+  const nickolaus = spawnOnce(f, 2024, [2317, 3500, 0]);
+  await H.talk(f, nickolaus);
+  await H.until(f, "Well I was originally sent to find you because of a ferret.");
+  await H.choose(f, "Well I was originally sent to find you because of a ferret.");
+  await H.until(f, "That sounds good to me.");
+  await H.choose(f, "That sounds good to me.");
+  await H.until(f, "Come with me and I'll show you.");
+  await H.continueLine(f);
+  H.ticks(f, 12);
+  assert.equal(varbit(f, 542), 1);
+  await f.connection.dispatch([{ type: "interface_close" }]);
+  H.ticks(f, 4);
+  assert.equal(varbit(f, 542), 0, "cutscene_status off");
+  assert.deepEqual(H.xy(f.player.getLocation()), [2314, 3510, 0]);
+  assert.equal(f.player.getMovementQueue().isMovementBlocked?.() === true, false);
+  assert.equal(QUEST().getStage(f.player), 30);
+  assert.equal(amount(f, ITEM.FERRET), 0);
+});

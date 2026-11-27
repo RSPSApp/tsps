@@ -62,6 +62,8 @@ const DIARY_FOUND_VARBIT_GAMEVAL = "slayer_found_diary";
 const DIARY_FOUND_TEXT = "You search the corpse and find a book.";
 const DIARY_ALREADY_HELD = "You have already taken his diary.";
 const DIARY_NO_SPACE = "You need more inventory space to take his diary.";
+/** The recorded varbit is a client flag only; the durable copy is this attribute (restored on login). */
+const DIARY_FOUND_ATTRIBUTE = "kalphite-cave:found-diary";
 
 /** Already holding a copy, in the inventory or the bank — searching again must not duplicate it. */
 function holdsDiary(player, diaryId) {
@@ -90,9 +92,17 @@ function searchBuggie({ player }) {
     return;
   }
   inventory.adds(diaryId, 1);
+  player.setAttribute(DIARY_FOUND_ATTRIBUTE, 1);
   const foundVarbit = CacheDefinitions.getVarbitId(DIARY_FOUND_VARBIT_GAMEVAL);
   if (foundVarbit != null) player.getPacketSender().sendVarbit(foundVarbit, 1);
   objectBox(player, diaryId, DIARY_FOUND_TEXT);
+}
+
+/** Login: a player who has already found the diary gets the recorded varbit back. */
+function restoreFoundDiary({ player }) {
+  if (!player.getAttribute?.(DIARY_FOUND_ATTRIBUTE)) return;
+  const foundVarbit = api.core.CacheDefinitions.getVarbitId(DIARY_FOUND_VARBIT_GAMEVAL);
+  if (foundVarbit != null) player.getPacketSender().sendVarbit(foundVarbit, 1);
 }
 
 function createCave(pluginApi) {
@@ -125,7 +135,9 @@ function registerCave(pluginApi) {
   api = pluginApi;
   pluginApi.registerArea(createCave(pluginApi));
   // Wiki (Entomologist's diary): the diary is reclaimed by searching Buggie, his only Search option.
+  pluginApi.persistAttribute(DIARY_FOUND_ATTRIBUTE, 0);
   pluginApi.onNpcInteraction("Entomologist", { Search: searchBuggie });
+  pluginApi.onPlayerLogin(restoreFoundDiary);
 }
 
 module.exports = {

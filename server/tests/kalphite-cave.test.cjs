@@ -21,6 +21,8 @@ let area;
 const dialogues = [];
 const npcActions = new Map();
 const boxes = [];
+const loginHandlers = [];
+const persisted = new Map();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -37,6 +39,8 @@ before(async () => {
     },
     registerArea: (registered) => { area = registered; },
     onNpcInteraction: (name, actions) => npcActions.set(name, actions),
+    persistAttribute: (key, value) => persisted.set(key, value),
+    onPlayerLogin: (handler) => loginHandlers.push(handler),
   };
   KalphiteCave.register(api);
 });
@@ -180,6 +184,9 @@ function searcher({ items = [], banks = [], freeSlots = 28 } = {}) {
   player.getBanks = () => banks;
   player.added = added;
   player.varbits = [];
+  const attributes = new Map();
+  player.setAttribute = (key, value) => attributes.set(key, value);
+  player.getAttribute = (key) => attributes.get(key);
   player.getPacketSender = () => ({ sendVarbit: (id, value) => player.varbits.push([id, value]) });
   player.getDialogueManager = () => ({ startDialogues: (chain) => boxes.push(chain) });
   return player;
@@ -223,4 +230,18 @@ test("a banked diary is not handed out again, and a full inventory keeps it in t
   assert.deepEqual(full.added, []);
   assert.deepEqual(full.messages, [T.DIARY_NO_SPACE]);
   assert.deepEqual(full.varbits, [], "nothing recorded when there is no room");
+});
+
+test("the recorded varbit comes back on login for a player who found the diary", () => {
+  assert.equal(persisted.get("kalphite-cave:found-diary"), 0, "persisted, so it survives a save");
+
+  const player = searcher();
+  npcActions.get("Entomologist").Search({ player });
+  player.varbits.length = 0;
+  for (const handler of loginHandlers) handler({ player });
+  assert.deepEqual(player.varbits, [[4093, 1]], "restored from the attribute on login");
+
+  const fresh = searcher();
+  for (const handler of loginHandlers) handler({ player: fresh });
+  assert.deepEqual(fresh.varbits, [], "nothing to restore for someone who never searched");
 });

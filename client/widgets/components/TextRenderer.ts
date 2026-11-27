@@ -71,9 +71,16 @@ export function parseOsrsMarkup(
         if (text[i] === "<") {
             const tagEnd = text.indexOf(">", i);
             if (tagEnd === -1) {
-                // No closing >, treat as regular text
-                segments.push(makeSegment(text[i]));
-                i++;
+                // A "<" that is never closed hides everything after it, as in the OSRS client
+                // (and BitmapFont / breakTextLines here). Live's sailing navigator login tip
+                // ends in a cut-off "</col" that must not show (issue 6808).
+                break;
+            }
+            // A tag starts at the last "<" before its ">": an earlier "<" opens nothing and
+            // hides what follows it, so "them.</col</col>" draws "them." (issue 6808).
+            const nextOpen = text.indexOf("<", i + 1);
+            if (nextOpen !== -1 && nextOpen < tagEnd) {
+                i = nextOpen;
                 continue;
             }
 
@@ -231,11 +238,12 @@ export function parseWrappedOsrsMarkup(
     return lines.map((line) => parseOsrsMarkup(line, defaultColor, state));
 }
 
-/** Check if text contains OSRS markup tags */
-function hasOsrsMarkup(text: string): boolean {
-    return /<col=|<\/col>|<color=|<\/color>|<shad|<\/shad>|<br>|<img=|<u>|<u=|<\/u>|<str>|<\/str>|<gt>|<lt>/i.test(
-        text,
-    );
+/**
+ * Check if text needs the markup parser: any "<" does, since even one that opens no known tag
+ * changes what shows (an unclosed one hides the rest of the text).
+ */
+export function hasOsrsMarkup(text: string): boolean {
+    return text.includes("<");
 }
 
 type QuadBuffer = {

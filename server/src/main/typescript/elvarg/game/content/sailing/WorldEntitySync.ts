@@ -1,4 +1,5 @@
 import { CachePipeline } from "../../cache/CachePipeline";
+import type { Mobile } from "../../entity/impl/Mobile";
 import type { Player } from "../../entity/impl/player/Player";
 import { packTemplateChunk } from "../../model/areas/impl/TemplatedInstanceArea";
 import {
@@ -24,6 +25,8 @@ const MAX_BOATS_IN_VIEW = 8;
 const MAX_NEW_BOATS_PER_TICK = 4;
 
 interface ViewerState {
+    /** The session these boats were sent to: a new one (a player taken over) has none of them. */
+    session: unknown;
     /** Boats the client has, in the client's order. */
     order: number[];
     /** The boat sent for each entity index (an index is reused once its boat is gone). */
@@ -47,8 +50,9 @@ export class WorldEntitySync {
     /** The packets to send this tick, before player sync, or none if nothing changed. */
     public static flush(player: Player): Buffer[] {
         let state = WorldEntitySync.viewers.get(player);
-        if (!state) {
-            state = { order: [], boats: new Map(), positions: new Map(), locChanges: new Map(), teleports: new Map() };
+        const session = player.getSession?.();
+        if (!state || state.session !== session) {
+            state = { session, order: [], boats: new Map(), positions: new Map(), locChanges: new Map(), teleports: new Map() };
             WorldEntitySync.viewers.set(player, state);
         }
         const visible = WorldEntitySync.boatsInView(player);
@@ -123,6 +127,17 @@ export class WorldEntitySync {
         if (!changed) return [...packets, ...changedLocs];
         packets.push(encodeWorldEntityInfo(updates, spawns), ...locs, ...changedLocs);
         return packets;
+    }
+
+    /**
+     * Whether a viewer's client can be sent an actor: one on a boat's deck only once the client
+     * has that boat. The client places a deck actor from its boat's deck, so without the boat it
+     * has nowhere to put it (the gateway put it beside the viewer: Gurtob and Ros ashore at the
+     * chompy hunting grounds, #6599, seen from further than BOAT_VIEW_DISTANCE).
+     */
+    public static showsActor(player: Player, actor: Mobile): boolean {
+        const boat = BoatManager.getBoatAboard(actor);
+        return !boat || WorldEntitySync.viewers.get(player)?.boats.get(boat.entityIndex) === boat;
     }
 
     /** Boats near the player's root tile, nearest first, with the one they're on always shown. */

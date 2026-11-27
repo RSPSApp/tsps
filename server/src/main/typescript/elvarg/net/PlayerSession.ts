@@ -564,8 +564,11 @@ export class PlayerSession {
       );
     }
 
+    // Boats first, so a player on a deck refers to a boat the client already has. Built before
+    // the NPC views: an NPC on a deck is sent only once the client has its boat (#6599).
+    const worldEntities = ServerPerf.measurePhase("network.flush.world_entities", () => WorldEntitySync.flush(player));
     const npcViews = ServerPerf.measurePhase("network.flush.build_npc_views", () =>
-      player.getLocalNpcs().map((npc) => {
+      player.getLocalNpcs().filter((npc) => WorldEntitySync.showsActor(player, npc)).map((npc) => {
         const location = npc.getLocation();
         const npcBoat = BoatManager.getBoatAboard(npc);
         const face = npc.getFace()?.getDirection?.();
@@ -637,8 +640,6 @@ export class PlayerSession {
 
     const syncSent = ServerPerf.measurePhase("network.flush.socket_send", () => {
       const tickFrame = encodeTick(tick, Date.now());
-      // Boats first, so a player on a deck refers to a boat the client already has.
-      const worldEntities = WorldEntitySync.flush(player);
       if (!this.sendClientPacket(tickFrame)
         || !worldEntities.every((packet) => this.sendClientPacket(packet))
         || !this.sendClientPacket(playerSync)

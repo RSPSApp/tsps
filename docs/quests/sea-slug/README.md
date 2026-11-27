@@ -78,6 +78,21 @@ the kick and both cutscenes now play as the capture does
 - **fixed** Kent's grab, the kick animation, the boat repair and the crane cutscenes were missing;
   the paste went on the condition, before Holgart's lines; the glass was consumed; the transcript
   repeated Kennith's lines and lacked the torch box (RSPSApp/osrsreboxed-db Sea Slug capture source).
+- **fixed** The arrival message box ("You arrive at the fishing platform." and the other legs')
+  stayed on "Please wait..." after its continue: it is sent without a dialogue chain, and nothing
+  answered it. Live closes it on the continue (tick 88: `resume_pausebutton` on
+  `messagebox:continue`, then `if_closesub chatbox:chatmodal`); the dialogue manager now closes
+  any lone chatbox box the same way ([#6879](https://github.com/RSPSApp/tsps/issues/6879)).
+- **fixed** Holgart's Talk-to ignored where he was: at stage 3 the platform Holgart offered the
+  trip to the platform, and from stage 7 Witchaven's offered the way back to Witchaven. His lines
+  now follow the transcript's sections by place: Witchaven "after fixing the boat", the platform
+  "at the Fishing Platform" (stage 4 the island leg, 11 the trip home), the island "Where are we?"
+  then the return ([#6879](https://github.com/RSPSApp/tsps/issues/6879)).
+- **open** Ours: Witchaven's Holgart at stages 4-11 and the platform Holgart at stage 5 (and his
+  Travel there) have no transcript or capture line; they use the after-repair talk and the island
+  leg.
+- **open** Issue 6879 point 2 (the upper platform missing after the ladder) did not reproduce in
+  the web client (WebGL, fresh login and after the boat, pitch 150 and 400).
 - **open** Ours: the platform Holgart's Travel at stage 4 takes the island leg (the capture only
   shows the Talk-to there); climbing the ladder without a lit torch at stages 6-10 plays the Wiki's
   smack lines (not captured); the whole north row of the crane counts as its controls.

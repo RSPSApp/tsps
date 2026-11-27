@@ -216,15 +216,30 @@ module.exports = function registerSeaSlugQuest(api) {
         ? "talking-to-holgart"
         : "talking-to-holgart-talking-to-holgart-again";
     }
-    if (stage === STAGE_BOAT_REPAIRED) return "talking-to-holgart-talking-to-holgart-after-fixing-the-boat";
-    if (stage === STAGE_SPOKEN_TO_KENNITH) return "talking-to-holgart-after-talking-to-kennith";
-    if (stage === STAGE_SAILED_TO_KENT) return "at-the-shipwreck-island-talking-to-holgart";
-    if (stage === STAGE_SPOKEN_TO_KENT) {
-      return "at-the-shipwreck-island-talking-to-holgart-again-before-returning-to-the-fishing-platform";
+    // From the repair on, his words follow where he is, as the transcript's sections do
+    // (Witchaven, the Fishing Platform, the shipwreck island): each one rows from there.
+    const place = holgartPlace(player);
+    if (place === "island") {
+      return stage === STAGE_SAILED_TO_KENT
+        ? "at-the-shipwreck-island-talking-to-holgart"
+        : "at-the-shipwreck-island-talking-to-holgart-again-before-returning-to-the-fishing-platform";
     }
-    if (stage >= STAGE_SAVED_KENNITH) return "freeing-kennith-talking-to-holgart";
-    if (stage >= STAGE_LIT_TORCH) return "at-the-fishing-platform-talking-to-holgart-at-the-fishing-platform";
-    return "at-the-shipwreck-island-talking-to-holgart";
+    if (place === "platform") {
+      // Ours: stage 5 back on the platform before meeting Kent rows to the island again.
+      if (stage === STAGE_SPOKEN_TO_KENNITH || stage === STAGE_SAILED_TO_KENT) return "talking-to-holgart-after-talking-to-kennith";
+      if (stage >= STAGE_SAVED_KENNITH) return "freeing-kennith-talking-to-holgart";
+      return "at-the-fishing-platform-talking-to-holgart-at-the-fishing-platform";
+    }
+    // Ours for stages 4-11: the transcript gives Witchaven's Holgart only the after-repair talk.
+    return "talking-to-holgart-talking-to-holgart-after-fixing-the-boat";
+  }
+
+  /** Where the player talks to Holgart: the shipwreck island, the Fishing Platform or Witchaven. */
+  function holgartPlace(player) {
+    const position = player.getLocation();
+    if (within(position, ISLAND_TILE, 16)) return "island";
+    if (within(position, PLATFORM_TILE, 16)) return "platform";
+    return "shore";
   }
 
   function kennithVariant(stage) {
@@ -462,17 +477,18 @@ module.exports = function registerSeaSlugQuest(api) {
     const boat = { player, lost: false };
     api.emitCustomEvent("sea-slug:holgart-boat", boat);
     if (boat.lost) return false;
-    const position = player.getLocation();
-    if (within(position, ISLAND_TILE, 16)) return row(player, ROUTE_ISLAND_RETURN, PLATFORM_TILE);
-    if (within(position, PLATFORM_TILE, 16)) {
-      // Ours: the stage 4 Talk-to is the only captured way to the island.
-      if (stage === STAGE_SPOKEN_TO_KENNITH) {
+    const place = holgartPlace(player);
+    if (place === "island") return row(player, ROUTE_ISLAND_RETURN, PLATFORM_TILE);
+    if (place === "platform") {
+      // Ours: the stage 4 Talk-to is the only captured way to the island; Travel follows it
+      // (and stage 5, as Talk-to does).
+      if (stage === STAGE_SPOKEN_TO_KENNITH || stage === STAGE_SAILED_TO_KENT) {
         advance(player, STAGE_SPOKEN_TO_KENNITH, STAGE_SAILED_TO_KENT);
         return row(player, ROUTE_ISLAND, ISLAND_TILE);
       }
       return row(player, ROUTE_WITCHAVEN, SHORE_TILE);
     }
-    if (within(position, SHORE_TILE, 16)) return row(player, ROUTE_PLATFORM, PLATFORM_TILE);
+    if (within(player.getLocation(), SHORE_TILE, 16)) return row(player, ROUTE_PLATFORM, PLATFORM_TILE);
     return false;
   }
 

@@ -113,6 +113,8 @@ export class Player extends Mobile {
     public static readonly STAT_RESTORE_LEFT_ATTRIBUTE = "stats:restore-ticks-left";
     /** Cycle the next drained-stat restore is due on (-1: not started). */
     private statRestoreDue = -1;
+    /** Until this world cycle the player is delayed (delayFor). */
+    private delayedUntil = -1;
     /** Cycle Rapid Restore's own restore is due on; it starts when the prayer is switched on. */
     private rapidRestoreDue = -1;
     /** Cycle the Hitpoints countdown started on; switching Rapid Heal on or off restarts it. */
@@ -618,7 +620,8 @@ export class Player extends Mobile {
         this.processSkullTimer();
 
         // Increase run energy every tick not spent running (Wiki: Recovery).
-        if (!isBot && this.runEnergy < GameConstants.RUN_ENERGY_MAX_UNITS
+        const delayed = this.isDelayed();
+        if (!isBot && !delayed && this.runEnergy < GameConstants.RUN_ENERGY_MAX_UNITS
             && !this.getMovementQueue().didRunThisCycle()) {
             const restored = MovementQueue.runEnergyRestoreUnits(this);
             if (restored > 0) {
@@ -636,6 +639,25 @@ export class Player extends Mobile {
         if (this.getHitpoints() > 0) {
             timed("stats", () => this.processStatRestoration(World.getProcessCycle()));
         }
+    }
+
+    /**
+     * Delays the player for `ticks` ticks from now (isDelayed): run energy does not recover (an
+     * inference from Wiki: Energy and osrs-docs: Delays), and poison, venom and disease halt at 0
+     * (osrs-docs: Timers).
+     * Content that delays a player also holds their clicks and hits itself.
+     */
+    public delayFor(ticks: number): void {
+        this.delayedUntil = World.getProcessCycle() + Math.max(0, ticks | 0);
+    }
+
+    /** Ends a delay from delayFor early. */
+    public endDelay(): void {
+        this.delayedUntil = -1;
+    }
+
+    public isDelayed(): boolean {
+        return World.getProcessCycle() < this.delayedUntil;
     }
 
     /**

@@ -104,9 +104,11 @@ export class PlayerDeathTask extends Task {
                     // the rest of a multi-hit special) and the player's own pending damage (a poison
                     // tick) belong to the life that just ended: dropped, they can't land after the
                     // respawn. clearIncoming also cancels deferred hits by bumping the queue generation.
+                    // A hold on the hits coming in ends with that life too.
                     const hitQueue = this.player.getCombat?.()?.getHitQueue?.();
                     hitQueue?.clearIncoming();
                     hitQueue?.clear();
+                    hitQueue?.releaseIncomingHold();
 
                     // If the player lost items, the ones a death keeps come back.
                     if (this.loseItems) {

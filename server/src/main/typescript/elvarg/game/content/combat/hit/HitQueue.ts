@@ -19,6 +19,8 @@ export class HitQueue {
     private incomingGeneration = 0;
     /** Until this world cycle, hits coming in wait rather than land (holdIncomingFor). */
     private heldUntil = -1;
+    /** Until this world cycle, the owner's own damage waits too (holdIncomingFor). */
+    private ownHeldUntil = -1;
 
     constructor(private readonly character: Mobile) {}
 
@@ -26,10 +28,20 @@ export class HitQueue {
      * Holds the hits coming in to the owner for `ticks` ticks from now, then lands them together,
      * as an animation stall does for a player. For content where a target briefly can't be hit but
      * what is already on its way still lands later (Zulrah diving: rsprox, they land 6 ticks after).
+     * `ownDamage` holds the owner's own damage as well, as a delay holds a player's
+     * queues (osrs-docs: Queues).
      */
-    holdIncomingFor(ticks: number): void {
-        this.heldUntil = Math.max(this.heldUntil, World.getProcessCycle() + Math.max(0, ticks | 0));
+    holdIncomingFor(ticks: number, { ownDamage = false }: { ownDamage?: boolean } = {}): void {
+        const until = World.getProcessCycle() + Math.max(0, ticks | 0);
+        this.heldUntil = Math.max(this.heldUntil, until);
+        if (ownDamage) this.ownHeldUntil = Math.max(this.ownHeldUntil, until);
         if (this.hasPendingWork()) HitQueue.active.add(this);
+    }
+
+    /** Ends a hold from holdIncomingFor early. */
+    releaseIncomingHold(): void {
+        this.heldUntil = -1;
+        this.ownHeldUntil = -1;
     }
 
     /**
@@ -110,16 +122,18 @@ export class HitQueue {
         // list (dragon claws' Slice and Dice lands two, then two more a tick later), so the stall
         // holds them too - Wiki: Animation stall queues the hits coming in to the player.
         //
-        // Only what is coming in waits. Damage the owner took on itself - a recoil ring, a bolt's
+        // Only what is coming in waits, unless the hold covers the owner's own damage too
+        // (holdIncomingFor's ownDamage). Damage the owner took on itself - a recoil ring, a bolt's
         // cost, its poison - is not an incoming hit, so it still lands on its own tick wherever it
         // sits in the list; breaking the drain at the first held splat would hand the owner a free
         // tick of self-damage every time a proc queued up behind a delayed special. The held
         // entries are put back as a block, so the chain keeps the order the client shows it in.
         const held: HitDamage[] = [];
         const generation = this.incomingGeneration;
+        const ownHeld = this.ownHeldUntil > currentCycle;
         while (this.pendingDamage.length > 0) {
             const damage = this.pendingDamage.shift()!;
-            if (stalled && HitQueue.incomingFromOther(damage, character)) {
+            if (ownHeld || (stalled && HitQueue.incomingFromOther(damage, character))) {
                 held.push(damage);
                 continue;
             }

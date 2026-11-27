@@ -11,6 +11,8 @@
  * Wiki: the drained skill is any but Hitpoints and Prayer, all equally likely; one already at 1
  * takes the damage on Hitpoints instead (so disease can kill). Reapplying resets it to the source's
  * value. An inoculation bracelet stops the drain and the damage, but does not cure. Death cures it.
+ * A delay (Player.delayFor) halts the clock and a drain due at 0 until it ends; the step then runs and
+ * the period starts again (osrs-docs: Timers, toxins are a normal timer).
  *
  *   "disease:inflict" { player, value }               diseases a player who isn't immune
  *   "disease:cure"    { player, amount?, immunity? }   takes `amount` off (all when absent); once
@@ -50,6 +52,11 @@ function restart(player, value) {
       super(STEP_TICKS, player, false);
     }
     execute() {
+      if (player.isDelayed?.()) {
+        this.setDelay(1);
+        return;
+      }
+      this.setDelay(STEP_TICKS);
       step(player, this);
     }
   })();
@@ -84,6 +91,7 @@ function later(player, ticks, action) {
       super(ticks, player, false);
     }
     execute() {
+      if (player.isDelayed?.()) return;
       this.stop();
       if (player.isRegistered?.() && player.getHitpoints() > 0) action();
     }

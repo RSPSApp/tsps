@@ -31,6 +31,8 @@ function player(items = []) {
     sendString() { return packet; }, sendSubInterface() { return packet; }, sendInterfaceFlagsRange() { return packet; },
     sendInterfaceScript() { return packet; }, sendItemOnInterfaces() { return packet; }, sendChatboxInterface() { return packet; },
     sendClientScript() { return packet; }, closeSubInterface() { return packet; }, sendInterfaceRemoval() { return packet; },
+    sendCameraShake() { return packet; },
+    sendTypedMessage: (type, message) => { messages.push(message); return packet; },
   };
   const dialogueManager = { reset() {}, startDialogues(builder) { this.builder = builder; }, isActive: () => false };
   let p;
@@ -42,7 +44,11 @@ function player(items = []) {
     getLocation: () => new core.Location(2544, 3570, 0),
     dialogueManager,
     getDialogueManager: () => dialogueManager,
-    getSkillManager: () => ({ getMaxLevel: () => 1, getCurrentLevel: () => 1 }),
+    getSkillManager: () => ({ getMaxLevel: () => 1, getCurrentLevel: () => 1, decreaseCurrentLevel() {} }),
+    getCombat: () => ({ getHitQueue: () => ({ addPendingDamage() {}, holdIncomingFor() {} }), holdFullStall() {}, releaseFullStall() {} }),
+    delayFor() {},
+    endDelay() {},
+    forceChat() {},
     isRegistered: () => true, getUsername: () => 'BarcrawlTester', getDisplayName: () => 'BarcrawlTester',
   };
   return p;
@@ -102,6 +108,11 @@ test('guard start needs a free slot and grants the card with native progress var
   assert.equal(p.varbits.get(13714), 1);
 });
 
+/** A drink plays out over its ticks and signs the card on its way. */
+function drinkThrough() {
+  for (let tick = 0; tick < 15; tick++) core.TaskManager.process();
+}
+
 test('all ten bars charge their canonical price, sign once, and completion hands the card in', () => {
   const { quest, internals } = setup();
   const p = player([[core.ItemIdentifiers.COINS, 208]]);
@@ -111,6 +122,7 @@ test('all ten bars charge their canonical price, sign once, and completion hands
     const event = { player: p, action: 'barcrawl:drink', stepId: `barcrawl:drink:${bar.key}`, handled: false };
     internals.handleAction(event);
     assert.equal(event.handled, true, bar.key);
+    drinkThrough();
     assert.equal(internals.isSigned(p, bar), true, bar.key);
   }
   assert.equal(internals.signedCount(p), 10);
@@ -136,6 +148,7 @@ test('losing the card restarts bar progress only when the guard can hand one bac
   internals.startCrawl(p);
   const blueMoon = internals.BARS.find((bar) => bar.key === 'blue-moon');
   internals.drinkAt(p, blueMoon);
+  drinkThrough();
   assert.equal(internals.isSigned(p, blueMoon), true);
   p.inventoryItems.delete(core.ItemIdentifiers.BARCRAWL_CARD);
 
@@ -170,7 +183,10 @@ test('the outpost gate refuses an outsider until the card is handed in', () => {
   internals.handleGateToggle(leaving);
   assert.equal(leaving.handled, false);
 
-  for (const bar of internals.BARS) internals.drinkAt(p, bar);
+  for (const bar of internals.BARS) {
+    internals.drinkAt(p, bar);
+    drinkThrough();
+  }
   internals.completeCrawl(p);
   assert.equal(quest.getStage(p), 2);
   const after = { player: p, objectId: 2115, location: new core.Location(2545, 3570, 0), handled: false };

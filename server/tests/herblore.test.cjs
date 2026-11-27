@@ -62,7 +62,7 @@ function inventory(contents) {
       const held = self.getAmount(item.getId());
       return held > 0 && core.ItemDefinition.forId(item.getId()).isStackable()
         ? Math.min(item.getAmount(), 2 ** 31 - 1 - held)
-        : self.getFreeSlots() > 0 ? item.getAmount() : 0;
+        : self.getFreeSlots() > 0 ? Math.min(item.getAmount(), 2 ** 31 - 1) : 0;
     },
     full() { return self; },
     getItems: () => slots.map((item) => item ?? new core.Item(-1, 0)),
@@ -74,8 +74,10 @@ function inventory(contents) {
     addItem(item) {
       const stack = core.ItemDefinition.forId(item.getId()).isStackable();
       const existing = stack && slots.find((slot) => slot?.getId() === item.getId());
-      if (existing) existing.setAmount(existing.getAmount() + item.getAmount());
-      else for (let n = 0; n < (stack ? 1 : item.getAmount()); n++) slots[slots.indexOf(null)] = new core.Item(item.getId(), stack ? item.getAmount() : 1);
+      // Trim like ItemContainer.add: a stack caps at 2^31-1 and a non-stackable item takes one slot.
+      if (existing) existing.setAmount(Math.min(2 ** 31 - 1, existing.getAmount() + item.getAmount()));
+      else if (stack && slots.includes(null)) slots[slots.indexOf(null)] = new core.Item(item.getId(), Math.min(item.getAmount(), 2 ** 31 - 1));
+      else for (let n = 0; n < item.getAmount() && slots.includes(null); n++) slots[slots.indexOf(null)] = new core.Item(item.getId(), 1);
       return self;
     },
     deleteNumber(id, amount) {
@@ -770,6 +772,15 @@ test("a whole-stack grind beside a near-full product stack keeps the ingredient"
     assert.equal(who.inv.count(ingredient), stack, `${ingredient} kept`);
     assert.equal(who.inv.count(product), existing, `${product} unchanged`);
   }
+});
+
+test("an over-max whole-stack grind is refused even with a free slot", () => {
+  const who = player([["pestle_and_mortar"], ["prif_crystal_shard", 214748365]]);
+  assert.ok(who.inv.getFreeSlots() > 0);
+  use(who, "pestle_and_mortar", "prif_crystal_shard");
+  who.sent.amountAction.execute(214748365);
+  assert.equal(who.inv.count("prif_crystal_shard"), 214748365);
+  assert.equal(who.inv.count("prif_crystal_shard_crushed"), 0);
 });
 
 test("grinding does not spend shards when the dust would overflow its stack", () => {

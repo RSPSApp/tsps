@@ -245,6 +245,9 @@ test('the jail lock: seven-tick tries, each failure numbing the fingers and rais
   // rsprox 227/01723.txt tick 8878: one walked step west, 3183,9611 to 3182,9611, through the door's wall.
   assert.deepEqual([step.forceMovement.getEnd().getX(), step.forceMovement.getEnd().getY()], [-1, 0]);
   assert.ok(player.getSkillManager().getExperience(core.Skill.THIEVING) >= 3, 'the unlock\'s 3.8 XP');
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true, 'held until the step is made');
+  tick(1);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
   assert.ok(tasks.every((task) => typeof task.tick === 'function'), "no task's own fields shadow Task.tick()");
 });
 
@@ -252,6 +255,21 @@ const leaveLock = (player, to) => {
   for (const handler of handlers.get('player:world-input')) handler({ player });
   player.setLocation(new core.Location(...to));
 };
+
+test('a walk click on the success tick is held, and a player moved off the spot is not stepped through the wall', (t) => {
+  HamHideout._test.setRandom(() => 0);
+  t.after(() => HamHideout._test.setRandom());
+  const { player } = hamPlayer(t, [3183, 9611, 0]);
+  HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock'));
+  tick(6);
+  assert.ok(ticks[6].includes('spam: You pick the lock on the prison door.'));
+  assert.equal(player.getMovementQueue().isMovementBlocked(), true, 'held from the success');
+  player.setLocation(new core.Location(3183, 9610, 0)); // moved some other way, west wall behind
+  tick(1);
+  assert.ok(!tasks.some((task) => task instanceof core.ForceMovementTask), 'no step from another tile');
+  tick(1);
+  assert.equal(player.getMovementQueue().isMovementBlocked(), false);
+});
 
 test('stepping off the lock and picking it again keeps its chart and its seven-tick timing', (t) => {
   HamHideout._test.setRandom(() => 0.999999);

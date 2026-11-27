@@ -14,8 +14,8 @@
  * The first try resolves six ticks after its line, each later one seven; a failure numbs the fingers as the trapdoor's do (the Wiki's page says
  * so in the trapdoor's words), and the next try is
  * likelier (the Wiki's four charts, in four equal steps, kept in `ham_thief`). Leaving the lock and picking it again
- * before the try is up carries on with the same chart and timing. On success the player is let through the door to
- * the west, with no door swing.
+ * before the try is up carries on with the same chart and timing. On success the player is held, then let through the
+ * door to the west, with no door swing.
  *
  * Ours: which of the jail or outside the player wakes in (three in four the jail, the recorded share; the Wiki gives
  * no odds), the outside tile (the one recorded), and Open and Pick-lock from outside the cell answering as Open
@@ -225,11 +225,12 @@ function hasLockpick(player) {
 }
 
 /** Through the door on success: one walked step west out of the cell, across the door's wall, as it unlocks. */
-function letOut(player) {
+function letOut(player, at) {
   setThief(player, 0);
   for (const id of UNLOCK_SOUNDS) sound(player, id);
   player.getSkillManager().addExperiences(core.Skill.THIEVING, SUCCESS_XP);
   const from = player.getLocation().clone();
+  if (!from.equals(at)) return; // moved some other way meanwhile (a teleport): no step through the wall
   core.TaskManager.submit(new core.ForceMovementTask(player, 1, new core.ForceMovement(from, new core.Location(-1, 0, 0), 0, 30,
     WEST, core.CacheDefinitions.getSeqId(WALK_ANIMATION))));
 }
@@ -277,7 +278,11 @@ function pickJailLock({ player, object }) {
         spam(player, MESSAGE.PICKED);
         animate(player, null);
         this.stop();
-        later(player, new Map([[1, () => letOut(player)]]));
+        // Held where the lock was picked until the step through has been made.
+        const movement = player.getMovementQueue();
+        movement.setBlockMovement(true).reset();
+        const at = this.origin;
+        later(player, new Map([[1, () => letOut(player, at)], [2, () => {}]]), { onStop: () => movement.setBlockMovement(false) });
         return;
       }
       animate(player, null);

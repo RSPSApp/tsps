@@ -729,6 +729,46 @@ test("Demonic Pacts: Varlamore to start, Misthalin shut but Zanaris and the Abys
   pacts.setRegistered(false);
 });
 
+test("League Yama selects the exported introduction and rank greetings only at his League actor", () => {
+  const player = character("yamadialogue", "league", { login: false });
+  player.setAttribute("league:type", 6);
+  const npcId = core.NpcIdentifiers.YAMA_4;
+  const event = { player, npcId };
+  const variants = require("../data/definitions/npc-dialogues.json").Yama.variants;
+  let rank = 0;
+  custom["league:rank"] ??= [];
+  const setRank = query => { if (query.player === player) query.rank = rank; };
+  custom["league:rank"].push(setRank);
+  try {
+    const intro = hooks.onNpcDialogueVariant(event);
+    assert.equal(intro.page, "Yama");
+    assert.match(intro.variant, /initial-dialogue$/);
+    assert.ok(variants[intro.variant]);
+    assert.equal(hooks.onNpcDialogueVariant({ ...event, npcId: core.NpcIdentifiers.YAMA }), null);
+    assert.equal(hooks.onNpcDialogueVariant({ ...event, npcId: core.NpcIdentifiers.YAMA_2 }), null);
+    assert.equal(hooks.onNpcDialogueCondition({ ...event, playing: intro, text: "Unknown condition - seen when unranked" }), true);
+    for (const option of ["Why am I here?", "Goodbye."]) {
+      for (const handler of custom["npc-dialogue:choice"]) handler({ ...event, playing: intro, option });
+      if (option !== "Goodbye.") assert.deepEqual(hooks.onNpcDialogueVariant(event), intro);
+    }
+    const lower = hooks.onNpcDialogueVariant(event);
+    assert.match(lower.variant, /iron-or-lower-rank$/);
+    rank = 2;
+    assert.deepEqual(hooks.onNpcDialogueVariant(event), lower);
+    rank = 3;
+    const higher = hooks.onNpcDialogueVariant(event);
+    assert.match(higher.variant, /steel-or-higher-rank$/);
+    assert.ok(variants[lower.variant] && variants[higher.variant]);
+    player.setAttribute("league:type", 5);
+    assert.equal(hooks.onNpcDialogueVariant(event), null);
+    player.setProfile("main");
+    player.setAttribute("league:type", 6);
+    assert.equal(hooks.onNpcDialogueVariant(event), null);
+  } finally {
+    custom["league:rank"].pop();
+  }
+});
+
 test("Yama's Lair's Glowing portal leads to Civitas through the recorded fade", () => {
   worldLeague = 6;
   const leaver = character("pactsleaver");

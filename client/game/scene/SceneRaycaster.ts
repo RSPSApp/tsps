@@ -686,6 +686,7 @@ export class SceneRaycaster {
                                 level,
                                 entityX - (baseX << 7),
                                 entityZ - (baseY << 7),
+                                locType.id | 0,
                             ),
                         );
                         if (tHit === undefined) continue;
@@ -1079,6 +1080,7 @@ export class SceneRaycaster {
         level: number,
         sceneX: number,
         sceneZ: number,
+        drawnId: number = locId,
     ): LocAnimated | undefined {
         const animated = map.locsAnimated;
         if (!animated || animated.length === 0) return undefined;
@@ -1093,7 +1095,10 @@ export class SceneRaycaster {
             }
             this.animatedLocIndex.set(animated, index);
         }
-        const matches = index.get(`${locId | 0}|${sceneX | 0}|${sceneZ | 0}`);
+        // The scene animates a multiloc under the form it draws: the Interdimensional rift is 11355 on
+        // the map and animates as 11354.
+        const matches = index.get(`${locId | 0}|${sceneX | 0}|${sceneZ | 0}`)
+            ?? index.get(`${drawnId | 0}|${sceneX | 0}|${sceneZ | 0}`);
         return matches?.find((entry) => (entry.level | 0) === (level | 0)) ?? matches?.[0];
     }
 

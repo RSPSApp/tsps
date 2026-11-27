@@ -31,6 +31,10 @@ there, reachable only with `::tele`.
   shows it as `draynor_killerwatt_portal` (11354, "Interdimensional rift", Enter) at 1 and hides it at 0. The plugin
   sends 1 once Ernest the Chicken is complete and 0 before, at login and on every stage change of the quest, so
   `::quest ernest reset` hides it again.
+- **Clicking it** (`client/game/scene/SceneRaycaster.ts`): the rift's swirl (seq 3174, as the house portal's) starts
+  from a frame shrunk to one point. The scene animates the rift under the form it draws (11354), and the raycaster
+  looked its animation up under the map's id (11355), so it click-tested that first frame and the drawn rift had no
+  Enter. It now also looks under the drawn form's id.
 - **Enter, insulated boots worn** (by item name, as in [killerwatt.md](killerwatt.md)): the player moves to
   (2677, 5214, 2), beside Portal Home.
 - **Enter without them:** Professor Oddenstein's warning, the generated transcript's
@@ -62,3 +66,7 @@ plugin loaded: the portal hidden before the quest, shown on completion and after
 reset, also with a saved Slayer snapshot of varp 661; Enter with the boots worn, with them only carried, each of the warning's four endings, a reset during the
 warning, and Portal Home's Enter. With the plugin's `register` emptied, 11 of its 15 tests fail. The other four pass
 either way: the click on the hidden portal, and three checks of the data and the export.
+
+`yarn test multiloc-animation-pick` (in `client/`) builds Draynor Manor's map square with the portal open and checks
+that the raycaster finds the rift's animation from the map's id, and that a click through its middle hits on a later
+frame and misses on the first. It fails without the raycaster change.

@@ -356,7 +356,13 @@ export class Player extends Mobile {
      * Actions that should be done when this character is removed from the world.
      */
     public onRemove() {
-        this.onLogout();
+        try {
+            this.onLogout();
+        } finally {
+            // The NPCs and players it fought forget it, so they don't keep it in memory after it leaves,
+            // even when a logout step fails.
+            this.getCombat().forgetFights();
+        }
     }
 
     public appendDeath() {

@@ -479,5 +479,5 @@ Konar's lines are the Wiki's.
   Disassemble gives none back); the Tztok, Vampyric and Tzkal recolours (Ghommal, Laidee Gnonock);
   making, reverting and disassembling the Radiant helmet.
 - **Slayer helper:** the slayer ring's and helmet's Check (no rev 242 capture of them) don't open it.
-- **Equipment and monsters:** the gem's and helmet's Partner and Log, killerwatts, fever spiders,
-  harpie bug swarms and mogres. Zygomites don't regenerate.
+- **Equipment and monsters:** the gem's, ring's and helmet's Partner and Log, the ring's Contact
+  Master, killerwatts, fever spiders, harpie bug swarms and mogres. Zygomites don't regenerate.

@@ -86,7 +86,10 @@ Other sources (sink, gold sink, pump and drain, pump and tub) are not captured: 
 - **Open:** `human_push` + 2429 and spam "You open the compost bin.", the bin opening a tick later.
 - **Take compost:** `human_pickuptable` + 2436, the bucket filled a tick later, every four ticks. It starts
   two ticks after arriving, or a tick after the click when already standing at the bin (local 1000451 t317, t385;
-  1000105 t441).
+  1000105 t441). A bucket used again while the take runs scoops a tick after that click too, so
+  re-clicking every two ticks fills a bucket every two ticks (the reporter's live video on issue 6815,
+  https://youtu.be/vC6WvpjA9UM). Ours: a click on the tick between a scoop and its bucket keeps that
+  bucket's tick, so clicking every tick is also one bucket per two ticks.
 
 ## Bottomless compost bucket (rsprox captures, local recordings 1001537, 1001562, 1001663, 1001664, 1001928)
 

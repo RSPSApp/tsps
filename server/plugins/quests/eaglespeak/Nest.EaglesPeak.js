@@ -237,9 +237,13 @@ module.exports = function attachEaglesPeakNest(api, ep) {
   const crossings = new WeakMap();
   const WALK_ONLY_SOURCE = "eagles-peak:sidestep";
 
+  /** busy (12393): live sets it for the crossing (t2001-2007, t2046-2052). */
+  const BUSY_VARBIT = 12393;
+
   function beginCrossing(player) {
     if (!crossings.has(player)) crossings.set(player, player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true);
     player.setFlag?.(IGNORE_CLIPPING_FLAG, true);
+    player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
   }
 
   function endCrossing(player) {
@@ -247,6 +251,7 @@ module.exports = function attachEaglesPeakNest(api, ep) {
     if (!crossings.get(player)) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
     crossings.delete(player);
     player.setWalkOnly?.(WALK_ONLY_SOURCE, false);
+    player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
   }
 
   /** Four tiles through the eagle, one a tick, its line and the step out on arrival (t2002-2006, t2047-2051). */
@@ -269,7 +274,12 @@ module.exports = function attachEaglesPeakNest(api, ep) {
     task.execute = () => {
       const now = player.getLocation();
       const arrived = now.getX() === to.getX() && now.getY() === to.getY();
-      if (!arrived && --limit > 0 && player.isRegistered?.() !== false && (queue.size?.() ?? 1) > 0) return;
+      if (!arrived && --limit > 0 && player.isRegistered?.() !== false) {
+        // The crossing holds the player (live's busy varbit, t2001-2007): a click cannot leave them in the eagle.
+        queue.reset();
+        queue.addSteps(to);
+        return;
+      }
       task.stop();
       endCrossing(player);
       if (!arrived) return;
@@ -362,7 +372,11 @@ module.exports = function attachEaglesPeakNest(api, ep) {
       if ((now.getX() === destination.getX() && now.getY() === destination.getY()) || --ticks <= 0 || player.isRegistered?.() === false) {
         task.stop();
         endCrossing(player);
+        return;
       }
+      // Only the step across is walked without collision; a click in between does not take that with it.
+      queue.reset();
+      queue.addSteps(destination);
     };
     TaskManager.submit(task);
   }

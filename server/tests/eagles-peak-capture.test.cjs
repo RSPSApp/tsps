@@ -656,3 +656,17 @@ test("Escape in the ferret lesson ends it on the real camp, controls back, nothi
   assert.equal(QUEST().getStage(f.player), 30);
   assert.equal(amount(f, ITEM.FERRET), 0);
 });
+
+test("a walk click during Walk-past or the door step does not leave the player in the eagle or through a wall", async (t) => {
+  const f = eagles(t, { stage: 20, varbits: { TRACKING: 6, DOOR: 3, CHAT: 5 }, at: [2007, 4953, 3], worn: [ITEM.CAPE, ITEM.BEAK] });
+  const eagle = spawnOnce(f, 1490, [2007, 4954, 3]);
+  await f.connection.dispatch([{ type: "npc_option", index: eagle.getIndex(), clickType: 1 }]);
+  H.tick(f);
+  H.tick(f);
+  f.player.getMovementQueue().reset();
+  f.player.getMovementQueue().addSteps(new H.core.Location(2010, 4950, 3));
+  H.ticks(f, 8);
+  assert.deepEqual(H.xy(f.player.getLocation()), [2007, 4957, 3], "the crossing finishes");
+  assert.equal(f.player.hasFlag?.("movement:ignore-clipping") === true, false);
+  assert.equal(varbit(f, 12393), 0, "busy cleared");
+});

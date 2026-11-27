@@ -384,6 +384,7 @@ test("Nickolaus in the nest: the disguise's box, 25 on its continue, the spare g
   const nickolaus = spawnOnce(f, 2023, [2008, 4957, 3]);
   await H.talk(f, nickolaus);
   await H.until(f, "What's this, a young hatchling?");
+  assert.equal(H.shown(f).npcId, 1485, "his head is eaglepeak_nickolaus_normal (t2010)");
   await H.until(f, "Yes, I have one right here.");
   await H.continueLine(f);
   assert.match(boxes(f).at(-1), /You give Nickolaus a fake beak and an eagle feather cape/);
@@ -391,6 +392,8 @@ test("Nickolaus in the nest: the disguise's box, 25 on its continue, the spare g
   await H.continueLine(f);
   assert.equal(QUEST().getStage(f.player), 25);
   assert.deepEqual([amount(f, ITEM.CAPE), amount(f, ITEM.BEAK)], [0, 0], "the spare goes; the worn one stays");
+  await H.until(f, "Excellent, now there is no way the eagle will be able to tell me from one of its own.");
+  assert.equal(H.shown(f).npcId, 1486, "disguised from here on (t2025)");
   await H.finishChat(f);
   place(f, [1994, 4983, 3]);
   await H.objectOption(f, 19891, [1993, 4983]);
@@ -403,6 +406,8 @@ test("the ferret lesson: a copy of the camp, the trap catches a ferret, 35 with 
   const f = eagles(t, { stage: 30, varbits: { TRACKING: 6, DOOR: 3, CHAT: 5 }, at: [2318, 3501, 0] });
   const nickolaus = spawnOnce(f, 2024, [2317, 3500, 0]);
   await H.talk(f, nickolaus);
+  await H.until(f, "Ah, hello again.");
+  assert.equal(H.shown(f).npcId, 2024, "the camp-site Nickolaus's own head (t2169)");
   await H.until(f, "Well I was originally sent to find you because of a ferret.");
   await H.choose(f, "Well I was originally sent to find you because of a ferret.");
   await H.until(f, "That sounds good to me.");
@@ -413,6 +418,7 @@ test("the ferret lesson: a copy of the camp, the trap catches a ferret, 35 with 
   assert.equal(varbit(f, 542), 1, "cutscene_status");
   assert.notDeepEqual(H.xy(f.player.getLocation()), [2319, 3510, 0], "in the copy");
   await H.until(f, "Shhh, here comes something.");
+  assert.equal(H.shown(f).npcId, 1485, "in the lesson's copy, 1485 (t2222)");
   await H.continueLine(f);
   H.ticks(f, 14);
   await H.until(f, "Ha ha, there you go!");
@@ -488,4 +494,45 @@ test("the ferret offer across the chasm answers as live (t464-479, osrsreboxed-d
     assert.equal(H.shown(f).who, "menu", `chat ${chat}: back on the trapped branch's menu`);
     f.player.getPacketSender().sendInterfaceRemoval();
   }
+});
+
+test("the reset lever outside the gold room: its box, the question, Yes puts 3089 back to 0 (t1443-1453)", async (t) => {
+  const f = eagles(t, { stage: 15, varbits: { GOLD: 443 }, at: [2022, 4982, 3] });
+  await H.objectOption(f, 19945, [2022, 4981]);
+  H.ticks(f, 2);
+  assert.match(boxes(f).at(-1), /the word 'reset' engraved into the handle/);
+  await H.until(f, "Yes, pull the reset lever.");
+  assert.equal(H.shown(f).title, "Are you sure you wish to pull this lever?");
+  await H.choose(f, "On second thoughts, not just yet.");
+  assert.equal(varbit(f, VARBIT.GOLD), 443);
+  await H.objectOption(f, 19945, [2022, 4981]);
+  H.ticks(f, 2);
+  await H.until(f, "Yes, pull the reset lever.");
+  await H.choose(f, "Yes, pull the reset lever.");
+  assert.equal(varbit(f, VARBIT.GOLD), 0);
+  assert.ok(messages(f).includes("As you move the lever you hear a low grinding elsewhere in the caves."));
+});
+
+test("the journal as live sends it: at 15 before the meeting, 20 lines with the cliff section active (t292)", (t) => {
+  const f = eagles(t, { stage: 15 });
+  const lines = QUEST().buildJournal(f.player, QUEST());
+  assert.equal(lines.length, 20);
+  assert.equal(lines[1], "<str>I spoke to Charlie, who deals with new deliveries at the zoo in");
+  assert.equal(lines[15], "<col=000080>I found a part of the cliff that looked out of place compared");
+  QUEST().setStage(f.player, 40);
+  assert.equal(QUEST().buildJournal(f.player, QUEST()).at(-1), "<col=ff0000>QUEST COMPLETE!</col>");
+});
+
+test("a relog sends the saved side state again: the room bits come back from the attribute alone", (t) => {
+  const f = eagles(t, { stage: 15, varbits: { TRACKING: 3, WINCHES: 5, GOLD: 260, CHAT: 4, DOOR: 2 } });
+  const saved = JSON.parse(JSON.stringify(f.player.getAttribute(STATE_ATTRIBUTE)));
+  const g = H.actor(t, {});
+  g.player.setAttribute("eagles-peak:stage-format", 1);
+  g.player.setAttribute("quest.eagles_peak.stage", 15);
+  g.player.setAttribute(STATE_ATTRIBUTE, saved);
+  H.PM.emitPlayerLogin({ player: g.player, username: g.player.getUsername() });
+  for (const [key, value] of [["TRACKING", 3], ["WINCHES", 5], ["GOLD", 260], ["CHAT", 4], ["DOOR", 2]]) {
+    assert.equal(g.player.getPacketSender().getVarbit(VARBIT[key]), value, key);
+  }
+  assert.equal(QUEST().getStage(g.player), 15, "a native stage is not converted again");
 });

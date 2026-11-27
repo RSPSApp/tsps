@@ -151,7 +151,25 @@ module.exports = function attachEaglesPeakNpcs(api, ep) {
     player.sendMessage(ep.questStartMessage(player, ep.PAGE));
   }
 
+  /**
+   * Nickolaus's head as live sends it (if_setnpchead): in the eyrie eaglepeak_nickolaus_normal (1485) across the chasm
+   * and on the nest side, eaglepeak_nickolaus_disguise (1486) once he has the disguise (t334-491, t2010-2028); at the
+   * camp-site eaglepeak_nickolaus_campsite (2024), 1485 in the lesson's copy (t2169-2255). The transcript lists
+   * 1484-1486 for every line, so without this the first, the Shout-to one, would show.
+   */
+  function nickolausHead(request) {
+    if (request.speakerId != null || !isNickolaus(request.npcId)) return;
+    if (request.step?.player !== undefined || request.step?.speaker !== "Nickolaus") return;
+    const { player } = request;
+    if (inEyrie(request.npc, player)) {
+      request.speakerId = stage(player) >= STAGE.DISGUISE_GIVEN ? NPC.NICKOLAUS_DISGUISE : NPC.NICKOLAUS_NORMAL;
+      return;
+    }
+    request.speakerId = ep.Scenes.get(player) ? NPC.NICKOLAUS_NORMAL : NPC.NICKOLAUS_CAMP;
+  }
+
   function handleLine(request) {
+    nickolausHead(request);
     const { npcId, player, text } = request;
     if (npcId === NPC.CHARLIE && typeof text === "string" && text.startsWith(START_LINE)) {
       request.before = () => startQuest(player);

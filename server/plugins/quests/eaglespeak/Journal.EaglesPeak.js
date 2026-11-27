@@ -129,7 +129,7 @@ function buildJournal(player, state) {
   // The last section has no blank line after it (t252: 20 lines, the cliff's last on qj20).
   const finish = () => {
     while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
-    return finish();
+    return lines;
   };
   const section = (key, active) => {
     const entry = SECTIONS[key];

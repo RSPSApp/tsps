@@ -90,6 +90,7 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
   const BED_MULTI_ID = 55374;
   const TOWER_STAIRS_ID = 54369;
   const RUINS_STAIRS_ID = 54525;
+  const RUINS_STAIRS_UP_ID = 54526;
 
   const V = {
     START: "starting-the-quest-talking-to-prince-itzla-arkan",
@@ -911,6 +912,22 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     return true;
   }
 
+  /**
+   * The ruins' Climb-up stairs (54526) open only south (the object's clip mask), and the whole
+   * south row is walled: no z2 floor tile can route to the open face, so every approach dies
+   * with "I can't reach that!" and the floor becomes a trap. The walkable tiles sit to the
+   * north and the sides, within three tiles of the stairs' root. Operate from where the player
+   * already stands (the engine's route-destination contract; the Pandemonium tutorial hook is
+   * routed the same way past its boat hook's clip mask 15).
+   */
+  function routeRuinsStairsUp(event) {
+    if (event.objectId !== RUINS_STAIRS_UP_ID) return;
+    const at = event.player.getLocation();
+    const stairs = event.object.getLocation();
+    if (Math.max(Math.abs(stairs.getX() - at.getX()), Math.abs(stairs.getY() - at.getY())) > 3) return;
+    event.destination = { x: at.getX(), y: at.getY(), z: at.getZ() };
+  }
+
   function talkToServius(event) {
     if (event.npcId !== NPC.SERVIUS || stage(event.player) !== S.BANISHED) return false;
     event.handled = true;
@@ -1069,6 +1086,7 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
   api.onCustomEvent("ladders:climb", claimClimb);
   api.onObjectInteraction("Staircase", { "Climb-up": climbTower });
   api.onObjectInteraction("Stairs", { "Climb-down": descendRuins });
+  api.onObjectRoute(routeRuinsStairsUp);
   api.onObjectInteraction("Chest", { Open: openRobesChest });
   api.onNpcInteraction("Forebearer Fides", { "Talk-to": talkToFides });
   api.onNpcInteraction("Servius, Teokan of Ralos", { "Talk-to": talkToServius });

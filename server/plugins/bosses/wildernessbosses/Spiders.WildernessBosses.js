@@ -6,6 +6,8 @@
  * - Every attack takes a slot in a cycle of 16. Next to a player she bites (npc_venenatis_melee_01).
  *   From farther away she uses ranged spits in the first eight slots and magic webs in the last eight.
  *   The shots fly 25 + 2 per tile cycles and land with their impact (fx_venenatis_ranged/magic_impact).
+ * - Every fourth attack, bites included, starts a two-tile-per-tick run on that tick. The next
+ *   attack follows floor(distance / 2) + 2 ticks later (rsprox 235/3376, 3377, 3364, 3366, 3372).
  * - The first attack of each cycle calls two more spiderlings. While any live, her attacks hit through
  *   protection prayers. Each spiderling's resolved bite drains a Prayer point.
  * - The eleventh attack also throws a sticky web at the player's tile (fx_venenatis_web,
@@ -41,7 +43,9 @@ const CYCLE = 16;
 const RANGED_ATTACKS = 8;
 const WEB_AT = RANGED_ATTACKS + 2;
 const MOVE_EVERY = 4;
-const MOVE_RANGE = 3;
+const RUN_STEPS = 2;
+const MAX_RUN_DISTANCE = 13;
+const MOVE_BOX = Object.freeze({ minDx: -6, maxDx: 7, minDy: -7, maxDy: 8 });
 const SPIDERLINGS = 2;
 const SPIDERLING_RANGE = 6;
 const SPIDERLING_DEATH_DELAY = 5;
@@ -63,7 +67,6 @@ const WEB_PATTERN = Object.freeze([
 ]);
 
 const CYCLE_ATTRIBUTE = "wilderness-bosses:spider-cycle";
-const ATTACKS_ATTRIBUTE = "wilderness-bosses:spider-attacks";
 
 let api = null;
 let core = null;
@@ -74,6 +77,8 @@ const broods = new WeakMap();
 const webs = new Map();
 /** player -> lair key whose web drained them last tick (one message a visit) */
 const caught = new WeakMap();
+/** boss npc -> active run task */
+const runs = new Map();
 
 function spiderOf(npc) {
   return SPIDERS[npc?.getRealId?.()] ?? null;
@@ -130,15 +135,110 @@ function bite(npc, method, spider, target) {
   Common.bossHit(npc, method, target, damage, 0);
 }
 
-/** A few tiles to one side, every fourth attack (Wiki). */
-function shuffle(npc) {
-  const base = npc.getLocation();
+function moveDelay(distance) {
+  return Math.floor(distance / RUN_STEPS) + 2;
+}
+
+function runDistance(from, to) {
+  return Math.max(Math.abs(to.getX() - from.getX()), Math.abs(to.getY() - from.getY()));
+}
+
+function openFootprint(tile, size) {
+  for (let x = 0; x < size; x++) {
+    for (let y = 0; y < size; y++) {
+      if (!Common.open(tile.getX() + x, tile.getY() + y, tile.getZ())) return false;
+    }
+  }
+  return true;
+}
+
+function canRunTo(queue, from, to) {
+  // Check the same diagonal-first steps addFirstStep queues. An open landing tile alone
+  // does not tell us whether a 4x4 NPC can reach it along that line.
+  while (!from.equals(to)) {
+    const next = from.transform(Math.sign(to.getX() - from.getX()), Math.sign(to.getY() - from.getY()));
+    if (!queue.canWalkTo(next, from)) return false;
+    from = next;
+  }
+  return true;
+}
+
+/** Destination estimate: sample an open footprint in the observed box around her spawn. */
+function runDestination(npc, from, queue) {
+  const spawn = npc.getSpawnPosition();
+  if (from.getZ() !== spawn.getZ()) return null;
+  const { minDx, maxDx, minDy, maxDy } = MOVE_BOX;
   for (let tries = 0; tries < 10; tries++) {
-    const x = base.getX() + Common.randomBetween(-MOVE_RANGE, MOVE_RANGE);
-    const y = base.getY() + Common.randomBetween(-MOVE_RANGE, MOVE_RANGE);
-    if ((x === base.getX() && y === base.getY()) || !Common.open(x, y, base.getZ())) continue;
-    npc.getMovementQueue().addFirstStep(new core.Location(x, y, base.getZ()));
+    const tile = spawn.transform(Common.randomBetween(minDx, maxDx), Common.randomBetween(minDy, maxDy));
+    const distance = runDistance(from, tile);
+    if (distance < 1 || distance > MAX_RUN_DISTANCE || !openFootprint(tile, npc.getSize())) continue;
+    if (canRunTo(queue, from, tile)) return tile;
+  }
+  return null;
+}
+
+function endRun(npc) {
+  const run = runs.get(npc);
+  if (!run) return;
+  run.stop();
+  runs.delete(npc);
+  npc.setScriptedMovement(false);
+  npc.getMovementQueue().reset();
+}
+
+function runOnAttack(npc, target) {
+  const queue = npc.getMovementQueue();
+  if (!queue.getMobility().canMove()) return;
+  const origin = npc.getLocation();
+  const destination = runDestination(npc, origin, queue);
+  if (!destination) return;
+  const distance = runDistance(origin, destination);
+  queue.addFirstStep(destination);
+  // Combat attacks after the NPC's normal movement pass. Process these first steps now so
+  // the attack still uses the old tile and its animation is sent with this tick's movement.
+  queue.process();
+  if (!Common.alive(npc) || !Common.alive(target) || !queue.didMoveThisCycle()) {
+    queue.reset();
     return;
+  }
+  if (queue.isStepBlocked()) {
+    queue.reset();
+    npc.getCombat().setAttackDelay(moveDelay(runDistance(origin, npc.getLocation())));
+    return;
+  }
+  npc.getCombat().setAttackDelay(moveDelay(distance));
+  if (queue.size() === 0) return;
+
+  // While the remaining steps run, combat would otherwise clear or replace the queue.
+  npc.setScriptedMovement(true);
+  const started = core.World.getProcessCycle();
+  const run = new (class extends core.Task {
+    constructor() {
+      super(1);
+      this.target = target;
+    }
+
+    execute() {
+      if (!Common.alive(npc) || !Common.alive(target) || queue.size() === 0) {
+        endRun(npc);
+        return;
+      }
+      const elapsed = core.World.getProcessCycle() - started;
+      if (queue.isStepBlocked() || !queue.getMobility().canMove() || elapsed >= Math.ceil(distance / RUN_STEPS)) {
+        const ran = runDistance(origin, npc.getLocation());
+        npc.getCombat().setAttackDelay(moveDelay(ran) - elapsed);
+        endRun(npc);
+      }
+    }
+  })();
+  runs.set(npc, run);
+  core.TaskManager.submit(run);
+}
+
+function beforeTargetDeath({ player, preventDeath }) {
+  if (preventDeath) return;
+  for (const [npc, run] of runs) {
+    if (run.target === player) endRun(npc);
   }
 }
 
@@ -281,10 +381,11 @@ function combatClass() {
       else shoot(npc, this, spider, target, cycle < RANGED_ATTACKS ? "ranged" : "magic");
       if (cycle === 0) callSpiderlings(npc, spider, target);
       if (cycle === WEB_AT) throwWeb(npc, spider, target);
-      if (adjacent) return;
-      const attacks = (Number(npc.getAttribute(ATTACKS_ATTRIBUTE)) || 0) + 1;
-      npc.setAttribute(ATTACKS_ATTRIBUTE, attacks);
-      if (attacks % MOVE_EVERY === 0) shuffle(npc);
+      if (cycle % MOVE_EVERY === MOVE_EVERY - 1 && Common.alive(npc) && Common.alive(target)) runOnAttack(npc, target);
+    }
+
+    onCombatEnded(character) {
+      endRun(character.getAsNpc());
     }
 
     hits() {
@@ -312,14 +413,15 @@ function reset(npc) {
   broods.delete(npc);
   clearWebs(spider.key);
   npc.setAttribute(CYCLE_ATTRIBUTE, 0);
-  npc.setAttribute(ATTACKS_ATTRIBUTE, 0);
+  endRun(npc);
 }
 
 function spawned(npc) {
   const spider = spiderOf(npc);
   if (!spider) return;
   npc.setAttribute(CYCLE_ATTRIBUTE, 0);
-  npc.setAttribute(ATTACKS_ATTRIBUTE, 0);
+  endRun(npc);
+  npc.setMovementSteps(RUN_STEPS);
   npc.setFlag("combat:no-regen");
   npc.performAnimation(new core.Animation(ANIMATION.spawn));
   npc.getCombat().setAttackDelay(FIRST_ATTACK_TICKS);
@@ -329,6 +431,7 @@ function spawned(npc) {
 function beforeDeath({ npc, preventDeath }) {
   const spider = spiderOf(npc);
   if (!spider || preventDeath) return;
+  endRun(npc);
   const spiderlings = broodOf(npc).spiderlings;
   // Their death animations most often start five ticks after hers (rsprox 235/3376).
   if (spiderlings.length > 0) Common.later(SPIDERLING_DEATH_DELAY, () => dismissBrood(spiderlings, true));
@@ -340,6 +443,7 @@ function attach(pluginApi) {
   PrayerHandler = pluginApi.getPrayerHandler();
   pluginApi.registerNpcCombatMethodProvider(Object.keys(SPIDERS).map(Number), combatClass(), { singleton: false });
   pluginApi.onNpcBeforeDeath(beforeDeath);
+  pluginApi.onPlayerBeforeDeath(beforeTargetDeath);
   pluginApi.onCombatHitResolved(spiderlingBite);
   for (const spider of Object.values(SPIDERS)) Common.FIGHTS.set(spider.key, { spawned, reset, playerTick });
 }

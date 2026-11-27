@@ -1,4 +1,5 @@
 import { colourIdToHex } from "../../../common/chat/chatFormatting";
+import { getCustomModIconCanvas, getCustomModIconsRevision } from "../../../common/gamemode/GamemodeContentStore";
 import type { CacheIndex } from "../../../rs/cache/CacheIndex";
 import { IndexType } from "../../../rs/cache/IndexType";
 import { BitmapFont } from "../../../rs/font/BitmapFont";
@@ -402,7 +403,7 @@ export class OverheadTextLayer {
         color: number,
         segments: Array<{ type: "icon"; iconIndex: number } | { type: "text"; text: string }>,
     ): string {
-        let key = `${color >>> 0}`;
+        let key = `${color >>> 0}|m${getCustomModIconsRevision()}`;
         for (let i = 0; i < segments.length; i++) {
             const seg = segments[i];
             if (seg.type === "icon") key += `|icon:${seg.iconIndex}`;
@@ -567,6 +568,10 @@ export class OverheadTextLayer {
 
     private getIconCanvas(iconIndex: number): IconCanvas | undefined {
         if (iconIndex < 0) return undefined;
+        const customCanvas = getCustomModIconCanvas(iconIndex);
+        if (customCanvas) {
+            return { canvas: customCanvas, w: customCanvas.width, h: customCanvas.height };
+        }
         const cached = this.iconCache.get(iconIndex);
         if (cached) return cached;
         this.ensureSpriteIndex();
@@ -576,7 +581,7 @@ export class OverheadTextLayer {
                 this.spriteIndex,
                 this.modIconArchiveId,
             );
-            const sprite = sprites?.[iconIndex] ?? sprites?.[0];
+            const sprite = sprites?.[iconIndex];
             if (!sprite) return undefined;
             const canvas = indexedSpriteToCanvas(sprite as IndexedSprite);
             const icon = { canvas, w: canvas.width, h: canvas.height };

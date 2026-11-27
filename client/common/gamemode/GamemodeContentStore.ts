@@ -158,9 +158,65 @@ export function assembleCustomItemBatches(datasets: ContentDataset[]): ContentDa
     return assembled;
 }
 
+export type CustomModIconRow = {
+    frame: number;
+    width: number;
+    height: number;
+    rgba: string;
+};
+
+type CustomModIconEntry = { width: number; height: number; pixels: Uint8ClampedArray; canvas?: HTMLCanvasElement };
+const customModIcons = new Map<number, CustomModIconEntry>();
+let customModIconsRevision = 0;
+
+export function getCustomModIconsRevision(): number {
+    return customModIconsRevision;
+}
+
+function decodeBase64Rgba(base64: string, expectedBytes: number): Uint8ClampedArray | null {
+    try {
+        if (typeof atob === "function") {
+            const bin = atob(base64);
+            if (bin.length !== expectedBytes) return null;
+            const out = new Uint8ClampedArray(expectedBytes);
+            for (let i = 0; i < expectedBytes; i++) out[i] = bin.charCodeAt(i);
+            return out;
+        }
+        const buf = Buffer.from(base64, "base64");
+        return buf.length === expectedBytes ? new Uint8ClampedArray(buf.buffer, buf.byteOffset, buf.byteLength) : null;
+    } catch {
+        return null;
+    }
+}
+
+export function getCustomModIconWidth(frame: number): number | undefined {
+    return customModIcons.get(frame | 0)?.width;
+}
+
+export function getCustomModIconCanvas(frame: number): HTMLCanvasElement | undefined {
+    const entry = customModIcons.get(frame | 0);
+    if (!entry) return undefined;
+    if (entry.canvas) return entry.canvas;
+    if (typeof document === "undefined") return undefined;
+    const canvas = document.createElement("canvas");
+    canvas.width = entry.width;
+    canvas.height = entry.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return undefined;
+    const imageData = ctx.createImageData(entry.width, entry.height);
+    imageData.data.set(entry.pixels);
+    ctx.putImageData(imageData, 0, 0);
+    entry.canvas = canvas;
+    return canvas;
+}
+
 /** A new connection clears the old world's overlays, including legacy worlds without datasets. */
 export function clearWorldOverlays(): void {
     mapWarpActions.clear();
+    if (customModIcons.size > 0) {
+        customModIcons.clear();
+        customModIconsRevision++;
+    }
     pendingCustomItems = undefined;
     GearVisualRegistry.clear();
     worldLocChanges = [];
@@ -344,6 +400,21 @@ export function loadFromPayload(payload: {
                 } catch (err) {
                     console.log("[GamemodeContentStore] failed to load custom interfaces", err);
                 }
+                break;
+            case "customModIcons":
+                customModIcons.clear();
+                for (const row of dataset.rows as CustomModIconRow[]) {
+                    const frame = Number(row?.frame);
+                    const width = Number(row?.width);
+                    const height = Number(row?.height);
+                    if (!Number.isInteger(frame) || frame < 0 || frame > 255 ||
+                        !Number.isInteger(width) || width <= 0 || width > 32 ||
+                        !Number.isInteger(height) || height <= 0 || height > 32 ||
+                        typeof row?.rgba !== "string") continue;
+                    const pixels = decodeBase64Rgba(row.rgba, width * height * 4);
+                    if (pixels) customModIcons.set(frame, { width, height, pixels });
+                }
+                customModIconsRevision++;
                 break;
             case "customItems":
                 try {

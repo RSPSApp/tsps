@@ -9,6 +9,7 @@ import {
 } from "picogl";
 
 import { colourIdToHex } from "../../common/chat/chatFormatting";
+import { getCustomModIconCanvas, getCustomModIconsRevision } from "../../common/gamemode/GamemodeContentStore";
 import { CacheIndex } from "../../rs/cache/CacheIndex";
 import type { CacheSystem } from "../../rs/cache/CacheSystem";
 import { IndexType } from "../../rs/cache/IndexType";
@@ -584,7 +585,7 @@ export class OverheadTextOverlay implements Overlay {
         segments: Array<{ type: "icon"; iconIndex: number } | { type: "text"; text: string }>,
     ): string {
         // PERF: Build key without intermediate array allocation
-        let key = `${color >>> 0}`;
+        let key = `${color >>> 0}|m${getCustomModIconsRevision()}`;
         for (let i = 0; i < segments.length; i++) {
             const seg = segments[i];
             if (seg.type === "icon") key += `|icon:${seg.iconIndex}`;
@@ -770,6 +771,10 @@ export class OverheadTextOverlay implements Overlay {
 
     private getIconCanvas(iconIndex: number): IconCanvas | undefined {
         if (iconIndex < 0) return undefined;
+        const customCanvas = getCustomModIconCanvas(iconIndex);
+        if (customCanvas) {
+            return { canvas: customCanvas, w: customCanvas.width, h: customCanvas.height };
+        }
         const cached = this.iconCache.get(iconIndex);
         if (cached) return cached;
         this.ensureSpriteIndex();
@@ -779,7 +784,7 @@ export class OverheadTextOverlay implements Overlay {
                 this.spriteIndex,
                 this.modIconArchiveId,
             );
-            const sprite = sprites?.[iconIndex] ?? sprites?.[0];
+            const sprite = sprites?.[iconIndex];
             if (!sprite) return undefined;
             const canvas = spriteToCanvas(sprite);
             const icon = { canvas, w: canvas.width, h: canvas.height };

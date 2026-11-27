@@ -8,6 +8,7 @@ import { getDefinitionArchiveKey } from "../../custom/archives/ArchivedDefinitio
 import { CustomItemRegistry } from "../../custom/items/CustomItemRegistry";
 import { CustomModelRegistry } from "../../custom/items/CustomModelRegistry";
 import { requestServerSprite } from "../../custom/sprites/ServerSprites";
+import { getCustomModIconCanvas } from "../../common/gamemode/GamemodeContentStore";
 
 type Texture = { tex: WebGLTexture; w: number; h: number };
 
@@ -501,6 +502,10 @@ export class TextureCache {
      * @returns HTMLCanvasElement if loaded, undefined otherwise
      */
     getSpriteCanvas(archiveName: string, frameIndex: number = 0): HTMLCanvasElement | undefined {
+        if (archiveName === "mod_icons") {
+            const custom = getCustomModIconCanvas(frameIndex);
+            if (custom) return custom;
+        }
         const key = `sprcan:${archiveName}:${frameIndex}`;
         // Check cache
         const cached = (this as any).__spriteCanvasCache?.get(key);

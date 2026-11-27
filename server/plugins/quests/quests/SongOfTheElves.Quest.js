@@ -217,6 +217,7 @@ module.exports = function registerSongOfTheElves(api) {
     [Equipment.FEET_SLOT, ItemIdentifiers.MOURNER_BOOTS],
     [Equipment.CAPE_SLOT, ItemIdentifiers.MOURNER_CLOAK],
   ];
+  const FLYING_HORSE_BARTENDER = 1319;
   const CITIZEN_SUPPORT = {
     "Priest": 6, "Nurse Sarah": 6, Chadwell: 4,
     "Silk merchant": 2, "Western baker": 4, "Eastern baker": 4,
@@ -1603,7 +1604,10 @@ module.exports = function registerSongOfTheElves(api) {
       (Number(player.getAttribute(WEST_BATTLE_KILLS)) || 0) >= 21) {
       return startTranscript(api, player, event.npcId, PAGE, "battle-of-two-ardougnes-west-ardougne-returning-to-base");
     }
-    if (currentChapter(player) === 4 && Object.keys(CITIZEN_SUPPORT).some((name) => name.toLowerCase() === npcName)) {
+    // The bar taxed is East Ardougne's, the Flying Horse Inn's (npc:east:bartender); every other bar's bartender keeps
+    // their own talk.
+    if (currentChapter(player) === 4 && Object.keys(CITIZEN_SUPPORT).some((name) => name.toLowerCase() === npcName)
+      && (npcName !== "bartender" || event.npcId === FLYING_HORSE_BARTENDER)) {
       const aliases = {
         "nurse sarah": "retraining-nurse-sarah",
         chadwell: "taxing-chadwell-the-general-store-owner",

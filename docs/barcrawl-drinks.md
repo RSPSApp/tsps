@@ -31,12 +31,16 @@ Wiki's Barcrawl transcript shows the three options together. After that step the
 option (the same recordings), so the Barcrawl menu keeps it last; it plays the quest's "again" talk (Wiki: the
 quest's transcript; that it plays after the step is an inference).
 
+During Song of the Elves' insurrection step, the Flying Horse Inn bartender's Talk-to is that quest's tax talk. The
+tax talk has no menu (Wiki: the quest's transcript, "Taxing the bar"), and his own talk reaches its menu only after
+"What do you serve?", so the Barcrawl option does not show there.
+
 Using the card on the Flying Horse Inn's bartender while the bar offers the drink starts the Barcrawl at once
-(Wiki: his transcript, "Same as above"). The other bartenders do the same; at the Rising Sun the barmaid's menu
-comes without the greeting, and the Blurberry Bar's barman points to Blurberry. When the bar does not offer the
-drink, the Rising Sun's barmaids answer "No thanks, I don't need that.", their transcripts' answer to any other
-item. At every other bartender and the barman, the player gets the game message "Nothing interesting happens.", the
-standard message for an item with no use (Wiki: Choose Option).
+(Wiki: his transcript, "Same as above"), during Song of the Elves too. The other bartenders do the same; at the
+Rising Sun the barmaid's menu comes without the greeting, and the Blurberry Bar's barman points to Blurberry. When
+the bar does not offer the drink, the Rising Sun's barmaids answer "No thanks, I don't need that.", their
+transcripts' answer to any other item. At every other bartender and the barman, the player gets the game message
+"Nothing interesting happens.", the standard message for an item with no use (Wiki: Choose Option).
 
 Zembo's transcript has an empty box (`{{tbox|}}`) after his greeting. Bandit-HaxUnit's local rsprox recording
 1002303 (revision 242) shows his greeting followed straight by his menu, so the imported dialogue data leaves the box
@@ -157,6 +161,7 @@ Trawler's and the Barrows chest's shakes, so the Barcrawl's is outside it (an in
   [Emily (revision 15091019)](https://oldschool.runescape.wiki/w/Transcript:Emily?oldid=15091019) and
   [Kaylee (revision 14961759)](https://oldschool.runescape.wiki/w/Transcript:Kaylee?oldid=14961759);
   [Transcript:Recipe for Disaster/Freeing the Mountain Dwarf (revision 15315379)](https://oldschool.runescape.wiki/w/Transcript:Recipe_for_Disaster/Freeing_the_Mountain_Dwarf?oldid=15315379);
+  [Transcript:Song of the Elves (revision 15346107)](https://oldschool.runescape.wiki/w/Transcript:Song_of_the_Elves?oldid=15346107);
   [Choose Option (revision 15347794)](https://oldschool.runescape.wiki/w/Choose_Option?oldid=15347794);
   [Barcrawl card (revision 15360753)](https://oldschool.runescape.wiki/w/Barcrawl_card?oldid=15360753), whose
   trivia says "It is possible to redo the miniquest by going to one of the bars with the card in the player's
@@ -234,5 +239,7 @@ Ours:
 - During Recipe for Disaster's Golden Nectar step, using the card on a Rising Sun barmaid opens the Barcrawl's
   menu ("What ales are you serving?" and the Barcrawl option), without that quest's dwarves option. No source
   covers card use in that step.
+- During Song of the Elves' insurrection step, the tax talk takes the Flying Horse Inn bartender's Talk-to for a
+  player who is also on the Barcrawl. No source covers a player who is in both.
 
 `server/tests/barcrawl-drinks.test.cjs` plays every bar with the real engine, tick by tick.

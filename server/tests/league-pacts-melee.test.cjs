@@ -777,12 +777,14 @@ test("as live shows them (rsprox 238/04190): a reflect is hitsplat 18 (19 for ot
   assert.equal(reflected[0].getDamage(), 12);
   assert.equal(reflected[0].isMaxHit(), true, "the reflected hit shows as the player's max hit (43)");
 
-  hooks.onCombatHitResolved({ attacker, target: holder, hit: landed(core.CombatType.MELEE, [splat(0)]) });
-  const thorns = reflected[1];
-  assert.equal(thorns.getDamage(), 3);
-  assert.equal(thorns.isMaxHit(), true, "Thorns too (1140: every Thorns hit was 43)");
-
   holder.setHitpoints(80);
+  hooks.onCombatHitResolved({ attacker, target: holder, hit });
+  const thorns = reflected[1];
+  assert.equal(thorns.getDamage(), 3, "Thorns answers the reflected hit too (4190: 13 and 6 beside each reflect)");
+  assert.equal(thorns.isMaxHit(), true, "Thorns too (1140: every Thorns hit was 43)");
+  assert.equal(holder.getHitpoints(), 80, "a reflected hit is no block: no heal (4190: 29 of 29 reflects alone)");
+  assert.equal(holder.getGraphic()?.getId(), spotanim("leagues_6_fire_shield"), "so the fire shield stays");
+
   hooks.onCombatHitResolved({ attacker, target: holder, hit: landed(core.CombatType.MELEE, [splat(0)]) });
   const healSplat = holder.getTickHits().find((each) => each.getSplatType(true) === 6);
   assert.ok(healSplat, "a heal splat for the block heal");

@@ -71,7 +71,7 @@
  * - 75 talent_shield_block_heal: an attack dealing 0 with Dinh's bulwark (a two-handed shield) or
  *   an off-hand (any shield-slot item, shields included: the Wiki's off-hand page is the shield
  *   slot table) heals 2 (`league:pact-heal`), shown as a heal splat with `leagues_6_health_regen`,
- *   and restores 2 Prayer. A shield is recognised by name
+ *   and restores 2 Prayer; a reflected hit's 0 doesn't count (238/04190). A shield is recognised by name
  *   for Thorns/reflect, and Dinh's by its bulwark weapon interface, so the "Crate of shields" prop
  *   is not one.
  */
@@ -148,6 +148,8 @@ const chains = new WeakMap();
 const specials = new WeakSet();
 /** Thorns hits (their recoil scaling is already in them). */
 const thornsHits = new WeakSet();
+/** NPC hits the shield reflected (their 0 is no block for the block heal). */
+const reflectedHits = new WeakSet();
 /** The cycle of each player's last attack that rolled the once-per-attack effects. */
 const lastAttack = new WeakMap();
 /** The derived hit being built, read by the roll hooks: { player, kind, uniques }. */
@@ -484,7 +486,8 @@ function thorns(player, attacker, hit) {
 /** 75: an attack that dealt 0 with a two-handed shield or an off-hand: heal 2, restore 2 Prayer. */
 function blockHeal(player, hit) {
   const points = value(player, "shieldBlockHeal");
-  if (!points || hit.getTotalDamage() > 0 || !hasTwoHandedShieldOrOffhand(player)) return;
+  // A reflected hit's 0 is no block: on live it never heals (238/04190: 29 of 29 reflects alone).
+  if (!points || hit.getTotalDamage() > 0 || reflectedHits.has(hit) || !hasTwoHandedShieldOrOffhand(player)) return;
   const healed = heal(player, BLOCK_HEAL * points);
   if (healed > 0) {
     player.showHitsplat(healed, HEAL_SPLAT);
@@ -542,6 +545,7 @@ function hitModify({ player, hit }) {
     each.setSplatTypes(REFLECT_SPLAT.mine, REFLECT_SPLAT.others);
   }
   hit.updateTotalDamage();
+  reflectedHits.add(hit);
   graphic(player, REFLECT_SPOTANIM);
   if (core.CombatFactory.canReceiveRecoil(attacker)) reflect(player, attacker, damage);
 }

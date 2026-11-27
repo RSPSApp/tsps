@@ -185671,108 +185671,99 @@
                 "id": "OYjQdU"
               }
             ]
-          }
-        ]
-      },
-      {
-        "type": "condition",
-        "text": "If the player is on a Deadman Mode world:",
-        "steps": [
+          },
           {
-            "type": "choice",
-            "options": [
+            "text": "Let's talk about where I respawn when I die.",
+            "steps": [
               {
-                "text": "Let's talk about where I respawn when I die.",
+                "player": "Let's talk about where I respawn when I die."
+              },
+              {
+                "type": "condition",
+                "text": "If the player's respawn location is not at the Grand Exchange:",
                 "steps": [
                   {
-                    "player": "Let's talk about where I respawn when I die."
+                    "npc": "You're currently due to respawn somewhere else. Would you rather respawn here, at the Grand Exchange, instead."
                   },
                   {
-                    "type": "condition",
-                    "text": "If the player's respawn location is not at the Grand Exchange:",
-                    "steps": [
+                    "type": "choice",
+                    "options": [
                       {
-                        "npc": "You're currently due to respawn somewhere else. Would you rather respawn here, at the Grand Exchange, instead."
-                      },
-                      {
-                        "type": "choice",
-                        "options": [
+                        "text": "Yes, I'd like to respawn at the Grand Exchange.",
+                        "steps": [
                           {
-                            "text": "Yes, I'd like to respawn at the Grand Exchange.",
-                            "steps": [
-                              {
-                                "player": "Yes, I'd like to respawn at the Grand Exchange."
-                              },
-                              {
-                                "npc": "Okay, you can respawn here when you die. Let me know if you change your mind."
-                              },
-                              {
-                                "type": "end"
-                              }
-                            ]
+                            "player": "Yes, I'd like to respawn at the Grand Exchange."
                           },
                           {
-                            "text": "No thanks, leave me alone.",
-                            "steps": [
-                              {
-                                "player": "No thanks, leave me alone."
-                              },
-                              {
-                                "type": "end"
-                              }
-                            ]
+                            "npc": "Okay, you can respawn here when you die. Let me know if you change your mind."
+                          },
+                          {
+                            "type": "end"
+                          }
+                        ]
+                      },
+                      {
+                        "text": "No thanks, leave me alone.",
+                        "steps": [
+                          {
+                            "player": "No thanks, leave me alone."
+                          },
+                          {
+                            "type": "end"
                           }
                         ]
                       }
-                    ],
-                    "id": "9sbF_i"
-                  },
-                  {
-                    "type": "condition",
-                    "text": "If the player's respawn location is at the Grand Exchange:",
-                    "steps": [
-                      {
-                        "npc": "You're currently due to respawn here, at the Grand Exchange."
-                      },
-                      {
-                        "type": "choice",
-                        "options": [
-                          {
-                            "text": "I'd rather respawn in Lumbridge.",
-                            "steps": [
-                              {
-                                "player": "I'd rather respawn in Lumbridge."
-                              },
-                              {
-                                "npc": "Please yourself. You will now respawn in Lumbridge when you die. Let me know if you change your mind."
-                              },
-                              {
-                                "type": "end"
-                              }
-                            ]
-                          },
-                          {
-                            "text": "Okay, respawning here sounds great.",
-                            "steps": [
-                              {
-                                "player": "Okay, respawning here sounds great."
-                              },
-                              {
-                                "type": "end"
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    ],
-                    "id": "eKDWRT"
+                    ]
                   }
-                ]
+                ],
+                "id": "9sbF_i"
+              },
+              {
+                "type": "condition",
+                "text": "If the player's respawn location is at the Grand Exchange:",
+                "steps": [
+                  {
+                    "npc": "You're currently due to respawn here, at the Grand Exchange."
+                  },
+                  {
+                    "type": "choice",
+                    "options": [
+                      {
+                        "text": "I'd rather respawn in Lumbridge.",
+                        "steps": [
+                          {
+                            "player": "I'd rather respawn in Lumbridge."
+                          },
+                          {
+                            "npc": "Please yourself. You will now respawn in Lumbridge when you die. Let me know if you change your mind."
+                          },
+                          {
+                            "type": "end"
+                          }
+                        ]
+                      },
+                      {
+                        "text": "Okay, respawning here sounds great.",
+                        "steps": [
+                          {
+                            "player": "Okay, respawning here sounds great."
+                          },
+                          {
+                            "type": "end"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                "id": "eKDWRT"
               }
-            ]
+            ],
+            "id": "31HhC1",
+            "condition": "If the player is on a Deadman Mode world:",
+            "condition_id": "l_rAR3"
           }
-        ],
-        "id": "l_rAR3"
+        ]
       },
       {
         "type": "choice",
@@ -620556,9 +620547,6 @@
                   "type": "message",
                   "text": "Sir Galahad gives you a cup of tea.",
                   "id": "UM_Nt9"
-                },
-                {
-                  "type": "end"
                 }
               ]
             },
@@ -620632,9 +620620,6 @@
                           "speaker_ids": [
                             4064
                           ]
-                        },
-                        {
-                          "type": "end"
                         }
                       ]
                     },
@@ -620662,9 +620647,6 @@
                           "action": "receive",
                           "text": "a cup of tea",
                           "id": "7SPxqF"
-                        },
-                        {
-                          "type": "end"
                         }
                       ]
                     },
@@ -620754,55 +620736,43 @@
                   "type": "message",
                   "text": "Sir Galahad gives you a cup of tea.",
                   "id": "lIuD4R"
+                }
+              ]
+            },
+            {
+              "text": "I seek an item from the realm of the Fisher King.",
+              "steps": [
+                {
+                  "player": "I seek an item from the realm of the Fisher King."
                 },
                 {
-                  "type": "end"
+                  "type": "line",
+                  "speaker": "Galahad",
+                  "text": "Funny you should mention that, but when I left there I took this small cloth from the table as a keepsake.",
+                  "speaker_ids": [
+                    4064
+                  ]
+                },
+                {
+                  "player": "I don't suppose I could borrow that? It could come in useful on my quest."
+                },
+                {
+                  "type": "message",
+                  "text": "Galahad reluctantly passes you a small cloth.",
+                  "id": "TCOaoy"
+                },
+                {
+                  "type": "action",
+                  "action": "receive",
+                  "text": "a Holy table napkin",
+                  "id": "IWEKeT"
                 }
-              ]
+              ],
+              "id": "PpNsXe",
+              "condition": "If the player talked to the High Priest of Entrana first:",
+              "condition_id": "4-e5Br"
             }
           ]
-        },
-        {
-          "type": "condition",
-          "text": "If the player talked to the High Priest of Entrana first:",
-          "steps": [
-            {
-              "type": "choice",
-              "options": [
-                {
-                  "text": "I seek an item from the realm of the Fisher King.",
-                  "steps": [
-                    {
-                      "player": "I seek an item from the realm of the Fisher King."
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Galahad",
-                      "text": "Funny you should mention that, but when I left there I took this small cloth from the table as a keepsake.",
-                      "speaker_ids": [
-                        4064
-                      ]
-                    },
-                    {
-                      "player": "I don't suppose I could borrow that? It could come in useful on my quest."
-                    },
-                    {
-                      "type": "message",
-                      "text": "Galahad reluctantly passes you a small cloth.",
-                      "id": "TCOaoy"
-                    },
-                    {
-                      "type": "action",
-                      "action": "receive",
-                      "text": "a Holy table napkin",
-                      "id": "IWEKeT"
-                    }
-                  ]
-                }
-              ]
-            }
-          ],
-          "id": "4-e5Br"
         }
       ],
       "talking-to-sir-galahad-blowing-on-the-magic-whistle": [
@@ -814107,6 +814077,17 @@
         {
           "type": "line",
           "speaker": "Sir Kay",
+          "text": "'Tis a magick most powerful and foul.",
+          "speaker_ids": [
+            3521,
+            4349,
+            4352,
+            4355
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Sir Kay",
           "text": "The only person I know of who would possibly have been of help is Merlin...",
           "speaker_ids": [
             3521,
@@ -814290,7 +814271,17 @@
         {
           "type": "line",
           "speaker": "Sir Tristram",
-          "text": "Funnily enough...absolutely nothing.",
+          "text": "Funnily enough...",
+          "speaker_ids": [
+            3523,
+            4346,
+            4359
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Sir Tristram",
+          "text": "Absolutely nothing.",
           "speaker_ids": [
             3523,
             4346,
@@ -814381,18 +814372,8 @@
                       "text": "Any idea how to get into Morgan Le Faye's stronghold?",
                       "steps": [
                         {
-                          "player": "Any idea how to get into Morgan Le Faye's stronghold?"
-                        },
-                        {
-                          "type": "line",
-                          "speaker": "Sir Gawain",
-                          "text": "No, you've got me stumped there...",
-                          "speaker_ids": [
-                            3520,
-                            4348,
-                            4351,
-                            4356
-                          ]
+                          "type": "call",
+                          "branch": "Hu5XBH"
                         }
                       ]
                     },
@@ -814609,6 +814590,41 @@
             3523,
             4346,
             4359
+          ]
+        }
+      ],
+      "investigating-keep-le-faye-sir-gawain": [
+        {
+          "type": "line",
+          "speaker": "Sir Gawain",
+          "text": "Good day to you!",
+          "speaker_ids": [
+            3520,
+            4348,
+            4351,
+            4356
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Any idea how to get into Morgan Le Faye's stronghold?",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "Hu5XBH"
+                }
+              ]
+            },
+            {
+              "text": "Hello again.",
+              "steps": [
+                {
+                  "player": "Hello again."
+                }
+              ]
+            }
           ]
         }
       ],
@@ -815182,12 +815198,7 @@
                           "id": "kOxDPU"
                         }
                       ]
-                    }
-                  ]
-                },
-                {
-                  "type": "choice",
-                  "options": [
+                    },
                     {
                       "text": "OK I will do all that.",
                       "steps": [
@@ -815197,7 +815208,7 @@
                         {
                           "type": "message",
                           "text": "Morgan Le Faye vanishes.",
-                          "id": "N1Z186"
+                          "id": "62Y8K5"
                         }
                       ]
                     },
@@ -815228,7 +815239,7 @@
                         {
                           "type": "jump",
                           "reference": "other",
-                          "id": "TLmhNn"
+                          "id": "Pwa7Rx"
                         }
                       ]
                     }
@@ -815314,6 +815325,14 @@
                   "type": "line",
                   "speaker": "Candle maker",
                   "text": "I still dunno...",
+                  "speaker_ids": [
+                    3199
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Candle maker",
+                  "text": "Tell you what. I'll supply you with a black candle...",
                   "speaker_ids": [
                     3199
                   ]
@@ -815613,7 +815632,20 @@
           "type": "choice",
           "options": [
             {
-              "text": "Who are you?"
+              "text": "Who are you?",
+              "steps": [
+                {
+                  "player": "Who are you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "The Lady of the Lake",
+                  "text": "I am the Lady of the Lake.",
+                  "speaker_ids": [
+                    3530
+                  ]
+                }
+              ]
             },
             {
               "text": "Good day.",
@@ -815701,84 +815733,78 @@
           "type": "choice",
           "options": [
             {
-              "text": "Yes certainly."
-            }
-          ]
-        },
-        {
-          "type": "condition",
-          "text": "If the player has bread in their inventory:",
-          "steps": [
-            {
-              "player": "Yes, certainly."
-            },
-            {
-              "type": "message",
-              "text": "You give the bread to the beggar.",
-              "id": "emEYqa"
-            },
-            {
-              "type": "line",
-              "speaker": "Beggar",
-              "text": "Thank you very much!",
-              "speaker_ids": [
-                3532
+              "text": "Yes certainly.",
+              "steps": [
+                {
+                  "type": "condition",
+                  "text": "If the player has bread in their inventory:",
+                  "steps": [
+                    {
+                      "player": "Yes, certainly."
+                    },
+                    {
+                      "type": "message",
+                      "text": "You give the bread to the beggar.",
+                      "id": "nwLfk0"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Beggar",
+                      "text": "Thank you very much!",
+                      "speaker_ids": [
+                        3532
+                      ]
+                    },
+                    {
+                      "type": "message",
+                      "text": "The beggar has turned into the Lady of the Lake!",
+                      "id": "BVKMHf"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "The Lady of the Lake",
+                      "text": "Well done. You have passed my test.",
+                      "speaker_ids": [
+                        3530
+                      ]
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "The Lady of the Lake",
+                      "text": "Here is Excalibur, guard it well.",
+                      "speaker_ids": [
+                        3530
+                      ]
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "f2nU4m"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has no bread in their inventory:",
+                  "steps": [
+                    {
+                      "player": "Yes, certainly."
+                    },
+                    {
+                      "player": "... except I don't have any bread on me at the moment..."
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Beggar",
+                      "text": "Well, if you get some, you know where to come.",
+                      "speaker_ids": [
+                        3532
+                      ]
+                    }
+                  ],
+                  "id": "TTqIpl"
+                }
               ]
             },
-            {
-              "type": "message",
-              "text": "The beggar has turned into the Lady of the Lake!",
-              "id": "4DJqdx"
-            },
-            {
-              "type": "line",
-              "speaker": "The Lady of the Lake",
-              "text": "Well done. You have passed my test.",
-              "speaker_ids": [
-                3530
-              ]
-            },
-            {
-              "type": "line",
-              "speaker": "The Lady of the Lake",
-              "text": "Here is Excalibur, guard it well.",
-              "speaker_ids": [
-                3530
-              ]
-            },
-            {
-              "type": "end"
-            }
-          ],
-          "id": "Ab4k10"
-        },
-        {
-          "type": "condition",
-          "text": "If the player has no bread in their inventory:",
-          "steps": [
-            {
-              "player": "Yes, certainly."
-            },
-            {
-              "player": "... except I don't have any bread on me at the moment..."
-            },
-            {
-              "type": "line",
-              "speaker": "Beggar",
-              "text": "Well, if you get some, you know where to come.",
-              "speaker_ids": [
-                3532
-              ]
-            },
-            {
-              "type": "end"
-            }
-          ],
-          "id": "yXizE3"
-        },
-        {
-          "type": "choice",
-          "options": [
             {
               "text": "No I don't have any bread with me.",
               "steps": [
@@ -815811,76 +815837,70 @@
           "type": "choice",
           "options": [
             {
-              "text": "Yes, here you go."
-            }
-          ]
-        },
-        {
-          "type": "condition",
-          "text": "If the player has bread in their inventory:",
-          "steps": [
-            {
-              "player": "Yes, here you go."
-            },
-            {
-              "type": "message",
-              "text": "You give the bread to the beggar.",
-              "id": "aS5Xkw"
-            },
-            {
-              "type": "line",
-              "speaker": "Beggar",
-              "text": "Thank you very much!",
-              "speaker_ids": [
-                3532
+              "text": "Yes, here you go.",
+              "steps": [
+                {
+                  "type": "condition",
+                  "text": "If the player has bread in their inventory:",
+                  "steps": [
+                    {
+                      "player": "Yes, here you go."
+                    },
+                    {
+                      "type": "message",
+                      "text": "You give the bread to the beggar.",
+                      "id": "l56X2t"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "Beggar",
+                      "text": "Thank you very much!",
+                      "speaker_ids": [
+                        3532
+                      ]
+                    },
+                    {
+                      "type": "message",
+                      "text": "The beggar has turned into the Lady of the Lake!",
+                      "id": "UTsfYc"
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "The Lady of the Lake",
+                      "text": "Well done. You have passed my test.",
+                      "speaker_ids": [
+                        3530
+                      ]
+                    },
+                    {
+                      "type": "line",
+                      "speaker": "The Lady of the Lake",
+                      "text": "Here is Excalibur, guard it well.",
+                      "speaker_ids": [
+                        3530
+                      ]
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "Z5t9Wk"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has no bread in their inventory:",
+                  "steps": [
+                    {
+                      "player": "Yes, here you go."
+                    },
+                    {
+                      "player": "Actually, I'm wrong. I still don't have any bread. Sorry."
+                    }
+                  ],
+                  "id": "5CjN_l"
+                }
               ]
             },
-            {
-              "type": "message",
-              "text": "The beggar has turned into the Lady of the Lake!",
-              "id": "IgIzfo"
-            },
-            {
-              "type": "line",
-              "speaker": "The Lady of the Lake",
-              "text": "Well done. You have passed my test.",
-              "speaker_ids": [
-                3530
-              ]
-            },
-            {
-              "type": "line",
-              "speaker": "The Lady of the Lake",
-              "text": "Here is Excalibur, guard it well.",
-              "speaker_ids": [
-                3530
-              ]
-            },
-            {
-              "type": "end"
-            }
-          ],
-          "id": "nxaoXZ"
-        },
-        {
-          "type": "condition",
-          "text": "If the player has no bread in their inventory:",
-          "steps": [
-            {
-              "player": "Yes, here you go."
-            },
-            {
-              "player": "Actually, I'm wrong. I still don't have any bread. Sorry."
-            },
-            {
-              "type": "end"
-            }
-          ],
-          "id": "m_1ATt"
-        },
-        {
-          "type": "choice",
-          "options": [
             {
               "text": "No, I still have none.",
               "steps": [
@@ -816244,6 +816264,22 @@
             3519,
             4344,
             4354
+          ]
+        }
+      ],
+      "Hu5XBH": [
+        {
+          "player": "Any idea how to get into Morgan Le Faye's stronghold?"
+        },
+        {
+          "type": "line",
+          "speaker": "Sir Gawain",
+          "text": "No, you've got me stumped there...",
+          "speaker_ids": [
+            3520,
+            4348,
+            4351,
+            4356
           ]
         }
       ]
@@ -949589,9 +949625,6 @@
                                         }
                                       ],
                                       "id": "wpVFFv"
-                                    },
-                                    {
-                                      "type": "end"
                                     }
                                   ]
                                 },
@@ -949600,9 +949633,6 @@
                                   "steps": [
                                     {
                                       "player": "Oh, I'll not bother then."
-                                    },
-                                    {
-                                      "type": "end"
                                     }
                                   ]
                                 }
@@ -949627,42 +949657,30 @@
                             14984,
                             14985
                           ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "(Charm) You don't need to look through my things.",
+                      "steps": [
+                        {
+                          "player": "You don't need to look through my things."
                         },
                         {
-                          "type": "end"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "condition",
-                  "text": "If the player is wearing the Ring of Charos(a):",
-                  "steps": [
-                    {
-                      "type": "choice",
-                      "options": [
-                        {
-                          "text": "(Charm) You don't need to look through my things.",
-                          "steps": [
-                            {
-                              "player": "You don't need to look through my things."
-                            },
-                            {
-                              "type": "line",
-                              "speaker": "Customs officer",
-                              "text": "Oh, I think I do. If you don't want to let me search your possessions, then you're not coming aboard this ship.",
-                              "speaker_ids": [
-                                14984,
-                                14985
-                              ]
-                            }
+                          "type": "line",
+                          "speaker": "Customs officer",
+                          "text": "Oh, I think I do. If you don't want to let me search your possessions, then you're not coming aboard this ship.",
+                          "speaker_ids": [
+                            14984,
+                            14985
                           ]
                         }
-                      ]
+                      ],
+                      "id": "DDoK7v",
+                      "condition": "If the player is wearing the Ring of Charos(a):",
+                      "condition_id": "Ytnuk6"
                     }
-                  ],
-                  "id": "Ytnuk6"
+                  ]
                 }
               ]
             },
@@ -1031242,125 +1031260,116 @@
                   ]
                 }
               ]
-            }
-          ]
-        },
-        {
-          "type": "condition",
-          "text": "If the player has a message for him:",
-          "steps": [
+            },
             {
-              "type": "choice",
-              "options": [
+              "text": "The Wise Old Man of Draynor Village sent you this message.",
+              "steps": [
                 {
-                  "text": "The Wise Old Man of Draynor Village sent you this message.",
+                  "player": "The Wise Old Man of Draynor Village sent you this message."
+                },
+                {
+                  "npc": "Ah, I am always delighted to hear from him. You would not imagine the depths of his wisdom!"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has no inventory space for a reward:",
                   "steps": [
                     {
-                      "player": "The Wise Old Man of Draynor Village sent you this message."
+                      "npc": "I'd give you a reward, but you don't seem to have any space for it. Come back when you do."
                     },
                     {
-                      "npc": "Ah, I am always delighted to hear from him. You would not imagine the depths of his wisdom!"
-                    },
+                      "type": "end"
+                    }
+                  ],
+                  "id": "8-sbDP"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has at least one inventory space for a reward:",
+                  "steps": [
                     {
-                      "type": "condition",
-                      "text": "If the player has no inventory space for a reward:",
-                      "steps": [
+                      "type": "random",
+                      "options": [
                         {
-                          "npc": "I'd give you a reward, but you don't seem to have any space for it. Come back when you do."
+                          "text": "If the player receives coins:",
+                          "steps": [
+                            {
+                              "type": "message",
+                              "text": "Reldo gives you some coins.",
+                              "styled": "<col=000080>Reldo gives you some coins</col>.",
+                              "id": "BfjLdv"
+                            },
+                            {
+                              "type": "action",
+                              "action": "receive",
+                              "text": "some coins",
+                              "id": "f5CkYf"
+                            },
+                            {
+                              "npc": "King Roald has been very generous with my salary, so I can spare you some coins for your trouble."
+                            },
+                            {
+                              "type": "end"
+                            }
+                          ]
                         },
                         {
-                          "type": "end"
-                        }
-                      ],
-                      "id": "8-sbDP"
-                    },
-                    {
-                      "type": "condition",
-                      "text": "If the player has at least one inventory space for a reward:",
-                      "steps": [
+                          "text": "If the player receives seeds:",
+                          "steps": [
+                            {
+                              "type": "message",
+                              "text": "Reldo gives you some seeds.",
+                              "styled": "<col=000080>Reldo gives you some seeds.</col>",
+                              "id": "dUlBWy"
+                            },
+                            {
+                              "type": "action",
+                              "action": "receive",
+                              "text": "assorted seeds",
+                              "id": "FMeJg4"
+                            },
+                            {
+                              "npc": "These little things seem to be everywhere these days! Perhaps you'd like them?"
+                            },
+                            {
+                              "type": "end"
+                            }
+                          ]
+                        },
                         {
-                          "type": "random",
-                          "options": [
+                          "text": "If the player receives runes:",
+                          "steps": [
                             {
-                              "text": "If the player receives coins:",
-                              "steps": [
-                                {
-                                  "type": "message",
-                                  "text": "Reldo gives you some coins.",
-                                  "styled": "<col=000080>Reldo gives you some coins</col>.",
-                                  "id": "BfjLdv"
-                                },
-                                {
-                                  "type": "action",
-                                  "action": "receive",
-                                  "text": "some coins",
-                                  "id": "f5CkYf"
-                                },
-                                {
-                                  "npc": "King Roald has been very generous with my salary, so I can spare you some coins for your trouble."
-                                },
-                                {
-                                  "type": "end"
-                                }
-                              ]
+                              "type": "message",
+                              "text": "Reldo gives you some runes.",
+                              "styled": "<col=000080>Reldo gives you some runes.</col>",
+                              "id": "SzA69R"
                             },
                             {
-                              "text": "If the player receives seeds:",
-                              "steps": [
-                                {
-                                  "type": "message",
-                                  "text": "Reldo gives you some seeds.",
-                                  "styled": "<col=000080>Reldo gives you some seeds.</col>",
-                                  "id": "dUlBWy"
-                                },
-                                {
-                                  "type": "action",
-                                  "action": "receive",
-                                  "text": "assorted seeds",
-                                  "id": "FMeJg4"
-                                },
-                                {
-                                  "npc": "These little things seem to be everywhere these days! Perhaps you'd like them?"
-                                },
-                                {
-                                  "type": "end"
-                                }
-                              ]
+                              "type": "action",
+                              "action": "receive",
+                              "text": "assorted runes",
+                              "id": "nTuSuc"
                             },
                             {
-                              "text": "If the player receives runes:",
-                              "steps": [
-                                {
-                                  "type": "message",
-                                  "text": "Reldo gives you some runes.",
-                                  "styled": "<col=000080>Reldo gives you some runes.</col>",
-                                  "id": "SzA69R"
-                                },
-                                {
-                                  "type": "action",
-                                  "action": "receive",
-                                  "text": "assorted runes",
-                                  "id": "nTuSuc"
-                                },
-                                {
-                                  "npc": "My old friend Aubury sent me some runes in return for some books he wanted. Perhaps you'd like them?"
-                                },
-                                {
-                                  "type": "end"
-                                }
-                              ]
+                              "npc": "My old friend Aubury sent me some runes in return for some books he wanted. Perhaps you'd like them?"
+                            },
+                            {
+                              "type": "end"
                             }
                           ]
                         }
-                      ],
-                      "id": "s8c04w"
+                      ]
                     }
-                  ]
+                  ],
+                  "id": "s8c04w"
                 }
-              ]
+              ],
+              "id": "b6-VeS",
+              "condition": "If the player has a message for him:",
+              "condition_id": "FeOKl3"
             }
-          ],
-          "id": "FeOKl3"
+          ]
         },
         {
           "type": "choice",
@@ -1411669,9 +1411678,6 @@
                       "branch": "jump-1378b4bf47817c03"
                     }
                   ]
-                },
-                {
-                  "type": "end"
                 }
               ]
             },
@@ -1411689,81 +1411695,72 @@
                   ]
                 }
               ]
-            }
-          ]
-        },
-        {
-          "type": "condition",
-          "text": "If the player does not have Excalibur in their bank or inventory:",
-          "steps": [
+            },
             {
-              "type": "choice",
-              "options": [
+              "text": "I seek the sword Excalibur.",
+              "steps": [
                 {
-                  "text": "I seek the sword Excalibur.",
+                  "player": "I seek the sword Excalibur."
+                },
+                {
+                  "npc": "Aye, I have that artefact in my possession."
+                },
+                {
+                  "npc": "'Tis very valuable, and not an artefact to be given away lightly."
+                },
+                {
+                  "npc": "...But you have already proved thyself to be worthy of wielding it once already. I shall return it to you if you can prove yourself to still be worthy."
+                },
+                {
+                  "player": "...And how can I do that?"
+                },
+                {
+                  "npc": "Why, by proving yourself to be above material goods."
+                },
+                {
+                  "npc": "500 gold coins ought to do it."
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player has at least 500 coins in their inventory:",
                   "steps": [
                     {
-                      "player": "I seek the sword Excalibur."
+                      "player": "Ok, here you go."
                     },
                     {
-                      "npc": "Aye, I have that artefact in my possession."
+                      "npc": "You are still worthy to wield Excalibur! And thanks for the cash! I felt like getting a new haircut!"
                     },
                     {
-                      "npc": "'Tis very valuable, and not an artefact to be given away lightly."
+                      "type": "action",
+                      "action": "receive",
+                      "text": "Excalibur",
+                      "id": "eytHdp"
                     },
                     {
-                      "npc": "...But you have already proved thyself to be worthy of wielding it once already. I shall return it to you if you can prove yourself to still be worthy."
-                    },
-                    {
-                      "player": "...And how can I do that?"
-                    },
-                    {
-                      "npc": "Why, by proving yourself to be above material goods."
-                    },
-                    {
-                      "npc": "500 gold coins ought to do it."
-                    },
-                    {
-                      "type": "condition",
-                      "text": "If the player has at least 500 coins in their inventory:",
-                      "steps": [
-                        {
-                          "player": "Ok, here you go."
-                        },
-                        {
-                          "npc": "You are still worthy to wield Excalibur! And thanks for the cash! I felt like getting a new haircut!"
-                        },
-                        {
-                          "type": "action",
-                          "action": "receive",
-                          "text": "Excalibur",
-                          "id": "eytHdp"
-                        },
-                        {
-                          "type": "end"
-                        }
-                      ],
-                      "id": "7SJ4CH"
-                    },
-                    {
-                      "type": "condition",
-                      "text": "If the player does not have at least 500 coins in their inventory:",
-                      "steps": [
-                        {
-                          "player": "I don't have that kind of money..."
-                        },
-                        {
-                          "npc": "Well, come back when you do."
-                        }
-                      ],
-                      "id": "Q9DcHQ"
+                      "type": "end"
                     }
-                  ]
+                  ],
+                  "id": "7SJ4CH"
+                },
+                {
+                  "type": "condition",
+                  "text": "If the player does not have at least 500 coins in their inventory:",
+                  "steps": [
+                    {
+                      "player": "I don't have that kind of money..."
+                    },
+                    {
+                      "npc": "Well, come back when you do."
+                    }
+                  ],
+                  "id": "Q9DcHQ"
                 }
-              ]
+              ],
+              "id": "kJpG5a",
+              "condition": "If the player does not have Excalibur in their bank or inventory:",
+              "condition_id": "59whJB"
             }
-          ],
-          "id": "59whJB"
+          ]
         }
       ],
       "treasure-trails-easy": [

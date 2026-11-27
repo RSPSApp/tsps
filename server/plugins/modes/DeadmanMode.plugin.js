@@ -12,6 +12,7 @@ module.exports = {
     },
   },
   register(api) {
+    require("./deadman/WorldType.DeadmanMode")(api);
     require("./deadman/Preparation.DeadmanMode")(api);
   },
 };

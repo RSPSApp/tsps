@@ -196,11 +196,28 @@ function start() {
   })());
 }
 
+/** Ours: no capture has the pay-dirt refusal, so it's the repo's unbankable-item line. */
+const UNBANKABLE_TEXT = "A magical force prevents you from banking this item!";
+
+/**
+ * Wiki (Pay-dirt): "Pay-dirt cannot be deposited in the bank" (Bankable: No). Every bank and
+ * deposit box path asks onCanBankItem. A Deposit-all asks once per pay-dirt, so only the
+ * container's first pay-dirt slot sends the line (ours: one line per deposit, not per pay-dirt).
+ */
+function refuseBanking(event) {
+  if (event.item?.getId?.() !== Mine.PAY_DIRT) return;
+  event.allow = false;
+  if (event.quiet) return;
+  const items = event.bulk && Number.isInteger(event.slot) ? event.container?.getItems?.() : null;
+  if (items?.slice(0, event.slot).some((item) => item?.getId?.() === Mine.PAY_DIRT)) return;
+  event.player?.sendMessage?.(UNBANKABLE_TEXT);
+}
+
 module.exports = {
   name: "MotherlodeMine",
   description: "Motherlode Mine: mining pay-dirt, washing it in Prospector Percy's machine and collecting ore from the sack, with its HUD.",
   members: true,
-  _test: { tick, start, crawl, climb, percyCondition, percyPays, enterMine },
+  _test: { tick, start, crawl, climb, percyCondition, percyPays, enterMine, refuseBanking, UNBANKABLE_TEXT },
   register(api) {
     Machine.init(api);
     Crates.init(api);
@@ -210,6 +227,7 @@ module.exports = {
     api.onPlayerLogin(login);
     api.onPlayerLogout(logout);
     api.onCustomEvent("player:interaction-cleared", interruptMining);
+    api.onCanBankItem(refuseBanking);
     api.onZoneEnter(MINE_ZONE, enterMine);
     api.onZoneExit(MINE_ZONE, leaveMine);
     api.onObjectInteraction("Cave", { Enter: crawl });

@@ -467,6 +467,8 @@ function caughtTask(player, npc, target) { return new (class extends core.Task {
       this.stop();
       return;
     }
+    // `thieving:struck` { player, npc, target }: the NPC's blow lands (the H.A.M. Hideout's concussions).
+    pluginApi.emitCustomEvent("thieving:struck", { player, npc, target });
     player.performAnimation(new core.Animation(player.getBlockAnim()));
     core.Sounds.sendSound(player, core.Sound.THIEVING_STUNNED);
     core.CombatFactory.stunTicks(player, PICKPOCKET_STUN_TICKS, true, { graphic: new core.Graphic(STUN_GRAPHIC_ID, 0, 124), message: false });

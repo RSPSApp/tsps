@@ -37,9 +37,8 @@
  * Ours: the failure line and the inside Pick-lock reply are the doors' ones, and a failed pick plays 2402 too
  * (only a success is captured).
  *
- * Not done: Ross' House (40178), the H.A.M. Hideout jail door (5501) and the
- * Monkey Madness II door (28783). The wiki pages give their charts but not which side is "inside" (or the retry ramp the
- * jail door uses), and the last has no page.
+ * Not done: Ross' House (40178) and the Monkey Madness II door (28783). The wiki pages give their charts but not
+ * which side is "inside", and the last has no page. The H.A.M. Hideout jail door (5501) is HamHideout.Thieving.js's.
  */
 const LOCKPICK_ITEM = "LOCKPICK";
 const PICK_ANIMATION = "human_pickuptable";

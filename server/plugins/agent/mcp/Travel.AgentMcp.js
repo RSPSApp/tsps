@@ -383,9 +383,11 @@ module.exports = function registerTravelTools(ctx, { areas }) {
     }
     const here = tile(find(username).getLocation());
     const from = asTile(transport.from);
-    // A door opens and leaves the player in front of it: step through.
-    if (outcome.result === "stopped" && arrive.z === from.z && chebyshev(arrive, from) <= 1
-      && here.x === from.x && here.y === from.y && here.z === from.z) {
+    // A door opens and leaves the player in front of it: step through. A door blocking its whole tile (a diagonal
+    // door) is opened from whichever tile beside it the click reached, not always the planned one.
+    const beside = here.x === from.x && here.y === from.y && here.z === from.z
+      || transport.type === "map-door" && here.z === arrive.z && chebyshev(here, arrive) <= 1;
+    if (outcome.result === "stopped" && arrive.z === from.z && chebyshev(arrive, from) <= 1 && beside) {
       const left = deadline - World.getProcessCycle();
       if (left < 1) return { result: "budget", ticks: outcome.ticks, clicked };
       send(find(username), { type: "move", worldX: arrive.x, worldY: arrive.y, modifierFlags: 0 });

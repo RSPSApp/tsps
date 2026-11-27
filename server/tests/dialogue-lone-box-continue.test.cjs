@@ -15,6 +15,7 @@ const { PluginManager } = require('../dist/plugins/PluginManager');
 const { CachePipeline } = require('../dist/game/cache/CachePipeline');
 const { Player } = require('../dist/game/entity/impl/player/Player');
 const { PlayerSession } = require('../dist/net/PlayerSession');
+const { ClientConnection } = require('../dist/net/NetworkBuilder');
 const core = PluginManager.getCoreApi();
 
 const MESSAGEBOX = 229;
@@ -24,6 +25,8 @@ const OBJECTBOX_CONTINUE = (OBJECTBOX << 16) | 0;
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, '..'));
+  PluginManager.loadFromDirectory(path.resolve(__dirname, '..', 'plugins'));
+  core.RegionManager.init();
 });
 
 let index = 3100;
@@ -35,6 +38,22 @@ function player() {
   p.setLocation(new core.Location(2782, 3273, 0));
   p.setRegistered(true);
   return p;
+}
+
+/** A player behind a real ClientConnection, so continues go through the packet dispatch. */
+function connected(x, y) {
+  const p = player();
+  p.setLocation(new core.Location(x, y, 0));
+  p.needsPlacement = false;
+  p.setAttribute('tutorial-island:progress', 1000);
+  const connection = new ClientConnection(p.getSession().getChannel());
+  connection.player = p;
+  return { p, connection };
+}
+
+async function continuePacket({ connection }, widgetId) {
+  await connection.dispatch([{ type: 'dialogue_continue', widgetId, childIndex: -1 }]);
+  connection.processTurnPackets();
 }
 
 const chatbox = (p) => p.getPacketSender().getChatboxGroupId();
@@ -75,4 +94,26 @@ test('a chain still advances through its boxes rather than closing', () => {
   assert.equal(chatbox(p), MESSAGEBOX);
   assert.equal(p.getDialogueManager().handleResume(MESSAGEBOX_CONTINUE, -1), true);
   assert.equal(chatbox(p), -1, 'the chain ends and closes');
+});
+
+test("Holgart's rowing arrival box closes on the continue packet (capture tick 88)", async () => {
+  const actor = connected(2720, 3305);
+  const request = { player: actor.p, route: 'sea-slug-platform', handled: false };
+  PluginManager.emitCustomEvent('ferries:travel', request);
+  assert.equal(request.handled, true);
+  for (let tick = 0; tick < 12; tick++) core.TaskManager.process();
+  assert.deepEqual([actor.p.getLocation().getX(), actor.p.getLocation().getY()], [2782, 3273]);
+  assert.equal(chatbox(actor.p), MESSAGEBOX, '"You arrive at the fishing platform."');
+  await continuePacket(actor, MESSAGEBOX_CONTINUE);
+  assert.equal(chatbox(actor.p), -1);
+});
+
+test('a held box (sent without its continue) stays for its scene', async () => {
+  const actor = connected(3222, 3222);
+  core.StatementDialogue.send(actor.p, 'Kennith scrambles through the broken wall...', false);
+  await continuePacket(actor, MESSAGEBOX_CONTINUE);
+  assert.equal(chatbox(actor.p), MESSAGEBOX, 'live ignores a resume on a box with no continue');
+  core.StatementDialogue.send(actor.p, 'Down below, you see Holgart collect the boy from the crane and lead him away to safety.');
+  await continuePacket(actor, MESSAGEBOX_CONTINUE);
+  assert.equal(chatbox(actor.p), -1, 'the next box, with its continue, closes');
 });

@@ -94,7 +94,8 @@ export class DialogueManager {
     private closeUnownedBox(widgetId: number): boolean {
         const sender = this.player.getPacketSender();
         const groupId = widgetId >>> 16;
-        if (!sender.isChatboxInterface(groupId)) return false;
+        // A held box (sent without its continue) waits for its scene, as live ignores the resume.
+        if (!sender.isChatboxInterface(groupId) || sender.isChatboxPauseOff(widgetId)) return false;
         sender.closeInterface(groupId);
         return true;
     }

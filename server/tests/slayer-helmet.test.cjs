@@ -43,6 +43,10 @@ const OBJ_NAMES = new Map([...OBJS].map(([name, id]) => [id, name]));
 const HELM_UNLOCKED_VARBIT = 3202;
 const BLACK_UNLOCKED_VARBIT = 5080;
 const VARBITS = new Map([["slayer_helm_unlocked", HELM_UNLOCKED_VARBIT], ["slayer_unlock_helm_black", BLACK_UNLOCKED_VARBIT]]);
+/** Quests the fake "quest:is-complete" answers yes for. */
+const completedQuests = new Set();
+/** Hooks registered through onCustomEvent, so a test can fire one. */
+const customHooks = new Map();
 const prompts = [];
 const events = [];
 const modifiers = {};
@@ -68,12 +72,22 @@ SlayerHelmet.register({
     DialogueChainBuilder: class { add(dialogue) { this.dialogue = dialogue; return this; } },
     StatementDialogue: class { constructor(index, text) { this.text = text; } },
     ItemStatementDialogue: class { constructor(index, itemId, text) { this.itemId = itemId; this.text = text; } },
+    Item: class {
+      constructor(id, amount = 1, meta = null) { this.id = id; this.amount = amount; this.meta = meta ?? {}; }
+      getId() { return this.id; }
+      getAmount() { return this.amount; }
+      getMeta() { return this.meta; }
+      getMetaValue(key) { return this.meta[key]; }
+      setMetaValue(key, value) { this.meta[key] = value; }
+    },
   },
   sendMultiChatboxPrompt: (player, title, ...options) => prompts.push({ player, title, options }),
   emitCustomEvent: (name, request) => {
     events.push([name, request]);
     if (name === "slayer:on-task") request.onTask = onTask;
     if (name === "nightmare-zone:refund-imbue" && refundPoints != null) request.refunded = refundPoints;
+    if (name === "quest:is-complete") request.complete = completedQuests.has(request.key);
+    for (const hook of customHooks.get(name) ?? []) hook(request);
   },
   registerMeleeAttackAccuracyModifier: (fn) => { modifiers.meleeAccuracy = fn; },
   registerMeleeHitModifier: (fn) => { modifiers.meleeHit = fn; },
@@ -85,10 +99,10 @@ SlayerHelmet.register({
   onItemAction: (name, actions) => itemActions.set(name, actions),
   onPlayerDeathItemDrop() {},
   onPlayerDeathDrops() {},
-  onCustomEvent() {},
+  onCustomEvent: (name, hook) => customHooks.set(name, [...(customHooks.get(name) ?? []), hook]),
 });
 
-const { assemble, imbue, recolour, disassemble, HELMET_NAMES } = SlayerHelmet._test;
+const { assemble, imbue, recolour, disassemble, HELMET_NAMES, attachGoggles, addGogglesToOwnedHelmets, GOGGLES_META } = SlayerHelmet._test;
 
 const EquipmentStats = require("../plugins/interface/EquipmentStats.plugin");
 EquipmentStats.register({
@@ -99,12 +113,18 @@ EquipmentStats.register({
 });
 const { formatTargetBonus, getTargetBonuses } = EquipmentStats._test;
 
-function item(id) {
+function item(id, meta = {}) {
+  // `.map(item)` passes the index as the second argument, so only a real object is a meta bag.
+  const marks = meta && typeof meta === "object" ? meta : {};
   return {
     id,
+    meta: marks,
     getId() { return this.id; },
     setId(next) { this.id = next; },
     getDefinition: () => ({ getName: () => NAMES.get(id) ?? "" }),
+    getMetaValue(key) { return this.meta[key]; },
+    setMetaValue(key, value) { this.meta[key] = value; },
+    getMeta() { return this.meta; },
   };
 }
 
@@ -148,9 +168,16 @@ function createPlayer({ head = -1, crafting = 99, inventory = [], helmUnlocked =
         if (slot < 0) items.push(item(id));
         else items[slot] = item(id);
       },
+      add: (entry) => {
+        const slot = items.findIndex((existing) => existing.getId() < 0);
+        if (slot < 0) items.push(entry);
+        else items[slot] = entry;
+      },
       getFreeSlots: () => 28 - items.filter((entry) => entry.getId() > 0).length,
+      getValidItems: () => items.filter((entry) => entry.getId() > 0),
       refreshItems() {},
     }),
+    getBanks: () => [],
   };
   return player;
 }
@@ -204,6 +231,55 @@ test("mask-on-mask retains the existing first-owned fallback", () => {
   assemble({ player, usedItem: player.items[1], usedItemId: ItemIdentifiers.BLACK_MASK_I_, usedItemSlot: 1,
     usedWithItem: player.items[0], usedWithItemId: ItemIdentifiers.BLACK_MASK, usedWithItemSlot: 0, handled: false });
   assert.deepEqual(player.items.map((entry) => entry.getId()), [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.BLACK_MASK_I_, ...Array(5).fill(-1)]);
+});
+
+test("after A Porcine of Interest the goggles are a component, and the helmet keeps them", () => {
+  completedQuests.add("a_porcine_of_interest");
+  try {
+    const missing = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK, ...PARTS] });
+    const refused = { player: missing, usedItem: missing.items[1], usedItemId: ItemIdentifiers.EARMUFFS, usedItemSlot: 1,
+      usedWithItem: missing.items[0], usedWithItemId: ItemIdentifiers.BLACK_MASK, usedWithItemSlot: 0, handled: false };
+    assemble(refused);
+    assert.equal(refused.handled, false, "no assembly without the goggles");
+    assert.ok(missing.items.some((entry) => entry.getId() === ItemIdentifiers.BLACK_MASK), "nothing consumed");
+
+    const ready = createPlayer({ inventory: [ItemIdentifiers.BLACK_MASK, ItemIdentifiers.REINFORCED_GOGGLES, ...PARTS] });
+    const event = { player: ready, usedItem: ready.items[1], usedItemId: ItemIdentifiers.REINFORCED_GOGGLES, usedItemSlot: 1,
+      usedWithItem: ready.items[0], usedWithItemId: ItemIdentifiers.BLACK_MASK, usedWithItemSlot: 0, handled: false };
+    assemble(event);
+    assert.equal(event.handled, true);
+    const helm = ready.items.find((entry) => entry.getId() === ItemIdentifiers.SLAYER_HELMET);
+    assert.ok(helm, "helmet made");
+    assert.equal(helm.getMetaValue(GOGGLES_META), true, "the helmet keeps the goggles");
+    assert.equal(ready.items.some((entry) => entry.getId() === ItemIdentifiers.REINFORCED_GOGGLES), false, "goggles absorbed");
+  } finally {
+    completedQuests.delete("a_porcine_of_interest");
+  }
+});
+
+test("goggles attach to a helmet that has none, and Disassemble gives them back", () => {
+  completedQuests.add("a_porcine_of_interest");
+  try {
+    const player = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.REINFORCED_GOGGLES] });
+    const event = { player, usedItem: player.items[1], usedItemId: ItemIdentifiers.REINFORCED_GOGGLES, usedItemSlot: 1,
+      usedWithItem: player.items[0], usedWithItemId: ItemIdentifiers.SLAYER_HELMET, usedWithItemSlot: 0, handled: false };
+    attachGoggles(event);
+    assert.equal(event.handled, true);
+    assert.equal(player.items[0].getMetaValue(GOGGLES_META), true);
+    assert.equal(player.items[1].getId(), -1, "goggles consumed");
+
+    disassemble({ player, item: player.items[0] });
+    assert.ok(player.items.some((entry) => entry.getId() === ItemIdentifiers.REINFORCED_GOGGLES), "goggles returned");
+  } finally {
+    completedQuests.delete("a_porcine_of_interest");
+  }
+});
+
+test("finishing the quest adds the goggles' benefits to helmets already owned", () => {
+  const player = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.BLACK_MASK] });
+  addGogglesToOwnedHelmets({ player, key: "a_porcine_of_interest" });
+  assert.equal(player.items[0].getMetaValue(GOGGLES_META), true);
+  assert.equal(player.items[1].getMetaValue(GOGGLES_META), undefined, "a black mask is not a helmet");
 });
 
 test("scroll on an already imbued mask retains the existing first-owned fallback", () => {
@@ -541,8 +617,8 @@ test("native explicit mask selection preserves an unrelated normal/imbued mask",
   PluginManager.emitServerStartup({});
   // The old prefix uses private fake APIs only; native registration replaces module API state.
   const slayerHooks = PluginManager.itemOnItemHooks.filter(h => h.pluginName === "SlayerHelmet");
-  assert.equal(slayerHooks.length, 3, "real imbue, assembly and recolour registrations must be loaded");
-  assert.deepEqual(slayerHooks.map(h => h.handlerName), ["imbue", "assemble", "recolour"]);
+  assert.equal(slayerHooks.length, 4, "real imbue, assembly, goggles attach and recolour registrations must be loaded");
+  assert.deepEqual(slayerHooks.map(h => h.handlerName), ["imbue", "assemble", "attachGoggles", "recolour"]);
   const porcine = require("../plugins/quests/QuestRuntime").questNamed("A Porcine of Interest");
   assert.ok(porcine, "real quest registered");
   const parts = [I.EARMUFFS, I.FACEMASK, I.NOSE_PEG, I.SPINY_HELMET, I.ENCHANTED_GEM];

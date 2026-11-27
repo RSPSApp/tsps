@@ -60,6 +60,8 @@ Slayer.register({
   onItemOnNpc() {},
   onItemOnItem() {},
   registerCommand: (name, fn) => { commands[name] = fn; },
+  registerDefinitionSource() {},
+  onCanShop() {},
   spawnNpc: (definition) => { spawned.push(definition); return { getCombat: () => ({ attack() {} }) }; },
   onCustomEvent: (name, fn) => handlers.events.set(name, [...(handlers.events.get(name) ?? []), fn]),
   emitCustomEvent: (name, payload) => {
@@ -1040,6 +1042,20 @@ test("protective gear: a dust devil hits a bare face for 16 and drains", () => {
   assert.equal(safe.forceAccurate, false);
   const helmet = equip(createPlayer(), { 0: core.ItemIdentifiers.SLAYER_HELMET });
   assert.equal(Equipment.protectedFrom(helmet, Equipment.GEAR.monsters[0]), true, "a Slayer helmet covers earmuffs");
+});
+
+test("a Slayer helmet shields from sourhogs only once it carries the goggles", () => {
+  const sourhog = Equipment.GEAR.monsters.find((monster) => monster.names.includes("Sourhog"));
+  assert.ok(sourhog, "the Sourhog protection rule is loaded");
+  let carries = false;
+  handlers.events.set("slayer:helmet-goggles", [(request) => { request.goggles = carries; }]);
+  const helmeted = equip(createPlayer(), { 0: core.ItemIdentifiers.SLAYER_HELMET });
+  assert.equal(Equipment.protectedFrom(helmeted, sourhog), false, "a helmet made before the quest has none");
+  carries = true;
+  assert.equal(Equipment.protectedFrom(helmeted, sourhog), true, "after the goggles are absorbed");
+  // The goggles themselves protect whether or not a helmet is worn.
+  const goggled = equip(createPlayer(), { 0: core.ItemIdentifiers.REINFORCED_GOGGLES });
+  assert.equal(Equipment.protectedFrom(goggled, sourhog), true);
 });
 
 test("every recolour of the Slayer helmet protects like the plain one", () => {

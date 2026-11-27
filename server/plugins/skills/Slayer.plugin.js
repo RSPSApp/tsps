@@ -15,6 +15,7 @@ const UNITS = [
   require("./slayer/Storage.Slayer"),
   require("./slayer/Rewards.Slayer"),
   require("./slayer/Equipment.Slayer"),
+  require("./slayer/Goggles.Slayer"),
   require("./slayer/CaveHorror.Slayer"),
   require("./slayer/WallBeast.Slayer"),
   require("./slayer/SlaughterBracelet.Slayer"),

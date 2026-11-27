@@ -15,6 +15,8 @@ let core = null;
 let api = null;
 /** The protection every Slayer helmet gives (data/slayer-gear.json). */
 const HELMET = "Slayer helmet";
+/** The goggles' own protection; a helmet only carries it once they are absorbed into it. */
+const GOGGLES = "Reinforced goggles";
 const byName = new Map();
 const immuneNames = new Set(GEAR.immune.names);
 const thrallImmuneNames = new Set(GEAR.thrallImmune);
@@ -43,10 +45,25 @@ function isSlayerHelmet(name) {
   return name.toLowerCase().includes("slayer helmet");
 }
 
+/**
+ * Whether the player is protected from `monster`. A helmet counts for the goggles' protection only
+ * when it carries a pair (Wiki, Slayer helmet: the goggles are a component after A Porcine of
+ * Interest, and attaching them is what gives the helmet their benefits), so a helmet made before
+ * the quest does not shield from sourhogs until it absorbs one.
+ */
 function protectedFrom(player, monster) {
   const names = equippedNames(player);
-  if (monster.protection.some((prefix) => names.some((name) => (prefix === HELMET ? isSlayerHelmet(name) : name.startsWith(prefix))))) return true;
-  return monster.protection.includes(HELMET) && helmetGiven(player);
+  const helmetCounts = !monster.protection.includes(GOGGLES) || wornHelmetHasGoggles(player);
+  const covered = monster.protection.some((prefix) => names.some((name) =>
+    prefix === HELMET ? helmetCounts && isSlayerHelmet(name) : name.startsWith(prefix)));
+  return covered || (helmetCounts && monster.protection.includes(HELMET) && helmetGiven(player));
+}
+
+/** "slayer:helmet-goggles": whether the worn helmet absorbed a pair of goggles (SlayerHelmet). */
+function wornHelmetHasGoggles(player) {
+  const request = { player, goggles: false };
+  api?.emitCustomEvent("slayer:helmet-goggles", request);
+  return request.goggles === true;
 }
 
 /** Whether content gives the player a Slayer helmet's effects without one ("slayer:helmet", a league relic). */

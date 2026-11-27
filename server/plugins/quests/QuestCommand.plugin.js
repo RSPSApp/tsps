@@ -163,6 +163,7 @@ function resetAllQuests(player, quests) {
   for (const quest of quests) {
     if (quest.getStage(player) === 0) continue;
     try {
+      quest.onReset?.(player);
       setStage(player, quest, 0);
       reset++;
     } catch (error) {
@@ -199,6 +200,13 @@ function questCommand({ player, parts }) {
   if (action === "complete") {
     if (!quest.complete(player)) player.sendMessage(`${quest.name} is already complete.`);
   } else if (action === "reset") {
+    // A quest that hands something out (a port task's crate) clears it here, so the reset leaves
+    // nothing behind that its own flow can no longer reach.
+    try {
+      quest.onReset?.(player);
+    } catch (error) {
+      console.error(`[quest command] resetting ${quest.name} (${quest.key}) failed:`, error);
+    }
     setStage(player, quest, 0);
   } else if (action !== null) {
     setStage(player, quest, Number(action));

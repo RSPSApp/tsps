@@ -336,3 +336,18 @@ test("a write-off never undoes a delivery already credited, and a shipwright's r
   hooks.custom["sailing:cargo-lost"]({ player, boat: { slot: 0, cargo: [] }, crates: [{ id: task.crate, amount: 2 }] });
   assert.equal(common.slots(player)[0].taken, 0);
 });
+
+// `::quest <key> reset` releases the slot the quest took, so an already-wedged save can hand its
+// crate in and take a replacement instead of being stuck (#6878).
+test("a released task slot keeps only what it delivered, and only that task", () => {
+  const player = createPlayer();
+  player.setAttribute(common.SLOTS_ATTRIBUTE, [
+    { id: JEWELLERY_TASK, taken: 3, delivered: 1 },
+    { id: 1, taken: 1, delivered: 0 },
+  ]);
+
+  common.releaseTask(player, JEWELLERY_TASK);
+
+  assert.equal(common.slots(player)[0].taken, 1, "taken drops to delivered");
+  assert.equal(common.slots(player)[1].taken, 1, "another task keeps its cargo out");
+});

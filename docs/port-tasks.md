@@ -431,6 +431,11 @@ same categories itself and reports them as `sailing:cargo-lost`, which takes the
 accounting. Neither path can charge a task twice. The quest stage does not advance on a
 sink, so the leg is simply started again with the replacement crate.
 
+`::quest <key> reset` clears what the quest handed out as well: a quest's `onReset` hook runs
+before the stage goes back to 0 (Pandemonium releases its own task slot and removes its crate
+from the hand or a hold). A save wedged before the sink write-off existed needs one reset;
+after it the cargo port hands the crate out again instead of refusing.
+
 Outside port, the player first receives "You're leaving port with some cargo. If you do
 not return it, it will be confiscated by the shipwright wizard's autonomous tracking unit."
 After 22 more ticks outside, "Your cargo has been confiscated by the S.W.A.T. team." is

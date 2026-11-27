@@ -89,6 +89,21 @@ function setSlots(player, value) {
   core.PluginManager.emitCustomEvent("port-tasks:slots-changed", { player });
 }
 
+/**
+ * Gives back everything a task still has out: the slot keeps what was delivered, nothing more.
+ * For a task a quest hands out, which has nothing left to hand in once the quest is reset.
+ */
+function releaseTask(player, taskId) {
+  const current = slots(player);
+  let changed = false;
+  for (const [index, slot] of current.entries()) {
+    if (slot?.id !== taskId || slot.taken <= slot.delivered) continue;
+    current[index] = { ...slot, taken: slot.delivered };
+    changed = true;
+  }
+  if (changed) setSlots(player, current);
+}
+
 /** Every slot's id, cargo taken and cargo delivered varbits, and the unlocked extra slots. */
 function sendSlots(player) {
   const sender = player.getPacketSender();
@@ -210,6 +225,7 @@ module.exports = {
   slotLimit,
   slots,
   setSlots,
+  releaseTask,
   sendSlots,
   crewCargo,
   crewAmount,

@@ -349,6 +349,20 @@ module.exports = function registerPandemoniumQuest(api) {
     return player.getSailing?.()?.boats.find((boat) => boat.type === "raft");
   }
 
+  /**
+   * `::quest pandemonium reset` starts the quest over, so the crate it handed out and the task
+   * slot it took go with it. Otherwise the slot keeps a crate counted as taken that no longer
+   * exists, and the cargo port refuses to hand out a replacement (#6878).
+   */
+  function resetCargo(player) {
+    PortTasks.releaseTask(player, QUEST_PORT_TASK_ID);
+    if (PortTasks.heldCrate(player) === CRATE_OF_SHIP_PARTS_ITEM_ID) PortTasks.putDown(player);
+    for (const boat of player.getSailing?.()?.boats ?? []) {
+      if (!(boat.cargo ?? []).some((slot) => slot?.id === CRATE_OF_SHIP_PARTS_ITEM_ID)) continue;
+      boat.cargo = boat.cargo.map((slot) => (slot?.id === CRATE_OF_SHIP_PARTS_ITEM_ID ? null : slot));
+    }
+  }
+
   /** Live words the warning for Jim's crate itself, with two answers (rsprox 242, tick 3941). */
   function questCargoWarning(prompt) {
     const raft = questRaft(prompt.player);
@@ -1951,6 +1965,7 @@ module.exports = function registerPandemoniumQuest(api) {
     otherRewards: ["Access to the Sailing skill", "Access to The Pandemonium", "A raft"],
     buildJournal,
     onReward: grantReward,
+    onReset: resetCargo,
   });
 
   StaticShips.attach(api);

@@ -5,7 +5,10 @@
  *   log, Sandy Boulder). A player who steps next to one wakes it, unless the crab has become
  *   tolerant of them (crabs can only be fought while they are aggressive, Wiki);
  * - "attacked": wyrms and wyrmlings slithering on the ground rise when a player attacks them
- *   (Wiki).
+ *   (Wiki);
+ * - "picked": Zanaris' zygomites stand as Fungi until a player picks one (rsprox captures,
+ *   docs/dormant-npcs.md): the player plays the pick animation, and on the next tick the cap
+ *   leaps out as the zygomite, which can't be attacked until it has risen.
  * Woken, it rises as its awake form, with that form's hitpoints, standing still and not
  * attacking until the rise is over, then attacks whoever woke it. Out of combat for a while it
  * walks back to where it lay, sinks and is dormant again, healed.
@@ -29,6 +32,8 @@ const crabSquares = new Set();
 const watched = new Set();
 /** Awake NPCs -> { family, idle, hiding (ticks left), rising (ticks left), target }. */
 const awake = new Map();
+/** Picked caps, not yet risen -> { player, ticks (left until it rises) }. */
+const picking = new Map();
 
 const squareKey = (location) => `${location.getX() >> 6},${location.getY() >> 6},${location.getZ()}`;
 
@@ -99,6 +104,7 @@ function wake(npc, player) {
   npc.setMaxHitpoints(definition.getHitpoints());
   npc.setHitpoints(definition.getHitpoints());
   npc.performAnimation(new core.Animation(family.revealAnim));
+  if (family.revealSound != null) player.getPacketSender?.().sendSound(family.revealSound, 1, 0);
   // It stays put while it rises: walking (to a side tile, say) would cut the rise short.
   npc.getMovementQueue().reset();
   npc.getMovementQueue().setBlockMovement(true);
@@ -106,12 +112,45 @@ function wake(npc, player) {
 }
 
 /**
- * A player attacking a dormant "attacked" NPC wakes it; and nothing that is still rising
- * attacks back.
+ * Pick on a dormant "picked" NPC (a zygomite's Fungi): the pick animation and sound now, and
+ * the NPC rises on the next tick (rsprox captures). Not while the player is fighting something.
+ */
+function pick({ player, npc }) {
+  const entry = dormantIds.get(npc.getId());
+  if (entry?.family.trigger !== "picked") return false;
+  const { family } = entry;
+  if (core.CombatFactory.inCombat(player)) {
+    player.sendMessage(family.inCombatMessage);
+    return true;
+  }
+  // Ours: a cap someone has just picked is theirs until it rises; a second pick does nothing.
+  if (picking.has(npc) || npc.getHitpoints() <= 0) return true;
+  player.performAnimation(new core.Animation(family.pickAnim));
+  player.getPacketSender().sendSound(family.pickSound, 1, 0);
+  picking.set(npc, { player, ticks: family.pickTicks });
+  return true;
+}
+
+/** A picked cap rises for its picker once the pick is done, if they are still there to fight. */
+function pickTick(npc, state) {
+  if (--state.ticks > 0) return;
+  picking.delete(npc);
+  if (!npc.isRegistered() || npc.getHitpoints() <= 0 || awake.has(npc) || !canBeWokenBy(state.player)) return;
+  wake(npc, state.player);
+}
+
+/**
+ * A player attacking a dormant "attacked" NPC wakes it; nothing that is still rising attacks
+ * back; and a picked one can't be attacked until it has risen (live disables its options).
  */
 function onAttack(event) {
   const { attacker, target } = event;
   if (attacker?.isNpc?.() && (awake.get(attacker)?.rising ?? 0) > 0) {
+    event.allow = false;
+    return;
+  }
+  const rising = awake.get(target);
+  if (attacker?.isPlayer?.() && rising?.rising > 0 && rising.family.trigger === "picked") {
     event.allow = false;
     return;
   }
@@ -164,7 +203,7 @@ function restTick(npc, state) {
   }
   npc.getMovementQueue().reset();
   npc.setMobileInteraction?.(null);
-  npc.performAnimation(new core.Animation(state.family.hideAnim));
+  if (state.family.hideAnim != null) npc.performAnimation(new core.Animation(state.family.hideAnim));
   state.hiding = state.family.hideTicks;
 }
 
@@ -174,6 +213,8 @@ function tick() {
     else wakeNear(player);
   }
   for (const [npc, state] of awake) restTick(npc, state);
+  // After the awake ones, so a cap that rises now starts its rise next tick.
+  for (const [npc, state] of picking) pickTick(npc, state);
 }
 
 /** Whether a task's optional bounding boxes contain the NPC's tile. */
@@ -188,6 +229,7 @@ function inTaskArea(task, location) {
 /** Kourend easy "Kill a Sandcrab" (not in Varlamore) and Fremennik easy "Kill 5 Rock crabs". */
 function killed({ killer, npc }) {
   awake.delete(npc);
+  picking.delete(npc);
   if (!killer?.isPlayer?.()) return;
   const name = npc.getCurrentDefinition?.()?.getName?.();
   for (const task of DATA?.diary ?? []) {
@@ -205,7 +247,7 @@ function describeEncounters({ npcIds }) {
 
 module.exports = {
   name: "DormantNpcs",
-  description: "Makes disguised crabs and wyrms lie dormant as scenery, rising and sinking when a player steps near or attacks them.",
+  description: "Makes disguised crabs, wyrms and Zanaris' zygomites lie dormant as scenery, rising and sinking when a player steps near, attacks or picks them.",
   members: true,
   register(pluginApi) {
     pluginApi.persistAttribute(ROCK_CRAB_KILLS_ATTRIBUTE);
@@ -217,6 +259,7 @@ module.exports = {
     pluginApi.onNpcDeath(killed);
     pluginApi.onCustomEvent("bestiary:encounters", describeEncounters);
     pluginApi.onCanAttack(onAttack);
+    pluginApi.onNpcInteraction("Fungi", { Pick: pick });
   },
-  _test: { start, track, tick, wake, sleep, killed, onAttack, inTaskArea, watched, awake, crabSquares, dormantIds },
+  _test: { start, track, tick, wake, sleep, killed, onAttack, pick, inTaskArea, watched, awake, picking, crabSquares, dormantIds },
 };

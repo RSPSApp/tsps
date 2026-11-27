@@ -1,0 +1,6 @@
+{
+  "_description": "Monsters whose too-low-Slayer refusal names the level, keyed by NPC name; '#' is the monster's Slayer level. Every other Slayer monster refuses with Combat.Slayer's generic line. Zygomite: rsprox captures (rev 243, Zanaris, the level 86 zygomite, 57 Slayer).",
+  "byName": {
+    "Zygomite": "You need a Slayer level of # to know how to wound this monster."
+  }
+}

@@ -900,7 +900,7 @@ This table lists bundled plugins that have a description. The world config page 
 | `Catablepon` | Catablepon | npcs | yes | Catablepons cast their weakening glare (Weaken) on players until 8% + 3 of their Strength is drained. |
 | `CivilianCats` | CivilianCats | npcs | yes | West Ardougne civilians buy adult, overgrown, wily, lazy and hell cats for 100 Death runes (200 after the Ardougne easy diary) when the cat is used on them; Talk-to offers the price. (members only) |
 | `DemonicGorillas` | DemonicGorillas | npcs | yes | Adds the Crash Site Cavern's demonic and tortured gorillas: style changes after misses, protection prayers, boulders and anti-safespot rules. (members only) |
-| `DormantNpcs` | DormantNpcs | npcs | yes | Makes disguised crabs and wyrms lie dormant as scenery, rising and sinking when a player steps near or attacks them. (members only) |
+| `DormantNpcs` | DormantNpcs | npcs | yes | Makes disguised crabs, wyrms and Zanaris' zygomites lie dormant as scenery, rising and sinking when a player steps near, attacks or picks them. (members only) |
 | `DrJekyll` | DrJekyll | npcs | yes | Adds Dr Jekyll, the random-event NPC, with Talk-to and Dismiss options. (members only) |
 | `Dragons` | Dragons | npcs | yes | Gives standard, brutal and metallic dragons their melee and dragonfire attacks, with long range for brutal and metallic ones. |
 | `Drakes` | Drakes | npcs | yes | Drake combat: a ranged shot from range, a ranged shot or a 'ranged melee' swing beside the player (diagonals too), the shot blocked by Protect from Missiles and the swing by Protect from Melee, with the captured animations, projectile and sounds. (members only) |

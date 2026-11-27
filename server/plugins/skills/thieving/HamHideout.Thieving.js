@@ -13,12 +13,13 @@
  * The jail door (5501) is "very secure": Open answers so, and its lock can only be picked from inside the cell.
  * The first try resolves six ticks after its line, each later one seven; a failure numbs the fingers as the trapdoor's do (the Wiki's page says
  * so in the trapdoor's words), and the next try is
- * likelier (the Wiki's four charts, in four equal steps, kept in `ham_thief`). A new Pick-lock starts from the first
- * chart. On success the player is let through the door to the west, with no door swing.
+ * likelier (the Wiki's four charts, in four equal steps, kept in `ham_thief`). Leaving the lock and picking it again
+ * before the try is up carries on with the same chart and timing. On success the player is let through the door to
+ * the west, with no door swing.
  *
  * Ours: which of the jail or outside the player wakes in (three in four the jail, the recorded share; the Wiki gives
  * no odds), the outside tile (the one recorded), and Open and Pick-lock from outside the cell answering as Open
- * does inside. Not done: H.A.M. robes making the boot less likely (the Wiki's "about 4%" a piece doesn't say of
+ * does inside, and a Pick-lock after the try is up starting a new try from the chart reached. Not done: H.A.M. robes making the boot less likely (the Wiki's "about 4%" a piece doesn't say of
  * what).
  */
 const { fumbled } = require("./HamTrapdoor.Thieving");
@@ -241,21 +242,33 @@ function pickJailLock({ player, object }) {
     player.sendMessage(MESSAGE.SECURE);
     return true;
   }
-  picking.get(player)?.stop();
-  setThief(player, 0);
-  const origin = player.getLocation().clone();
+  spam(player, MESSAGE.ATTEMPT);
+  const running = picking.get(player);
+  if (running) {
+    // Back at the lock within the try: it carries on, on its own timing and chart, without the animation.
+    sound(player, PICK_SOUND);
+    running.resume();
+    return true;
+  }
   const begin = () => {
     animate(player, PICK_ANIMATION);
     sound(player, PICK_SOUND);
   };
   const task = new (class extends core.Task {
     // The first try is a tick shorter: its line goes out on the click, as the handler runs.
-    constructor() { super(1, player, false); this.elapsed = 1; }
+    constructor() { super(1, player, false); this.elapsed = 1; this.resume(); }
+    resume() {
+      this.origin = player.getLocation().clone();
+      this.active = true;
+    }
+    pause() { this.active = false; }
     execute() {
-      if (!player.isRegistered() || player.getHitpoints() <= 0 || !player.getLocation().equals(origin) ||
-          player.getMovementQueue().isMovementBlocked()) return this.stop();
-      if (++this.elapsed === 1 && this.retried) begin();
+      if (!player.isRegistered() || player.getHitpoints() <= 0) return this.stop();
+      if (!player.getLocation().equals(this.origin) || player.getMovementQueue().isMovementBlocked()) this.pause();
+      if (++this.elapsed === 1 && this.retried && this.active) begin();
       if (this.elapsed < ATTEMPT_TICKS) return;
+      if (!this.active) return this.stop(); // not back in time: the next Pick-lock starts a new try
+
       const level = player.getSkillManager().getCurrentLevel(core.Skill.THIEVING);
       const charts = hasLockpick(player) ? LOCK_CHARTS.lockpick : LOCK_CHARTS.bare;
       spam(player, MESSAGE.ATTEMPT);
@@ -280,15 +293,15 @@ function pickJailLock({ player, object }) {
     }
   })();
   picking.set(player, task);
-  spam(player, MESSAGE.ATTEMPT);
   begin();
-  sound(player, PICK_SOUND); // the first try plays it twice
+  sound(player, PICK_SOUND); // a new try plays it twice
   core.TaskManager.submit(task);
   return true;
 }
 
+/** Another click leaves the lock; a Pick-lock before the try is up picks it up again. */
 function cancel({ player }) {
-  picking.get(player)?.stop();
+  picking.get(player)?.pause();
 }
 
 module.exports = function attach(pluginApi) {

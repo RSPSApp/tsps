@@ -36,9 +36,11 @@ Sounds.sendSound = () => {};
 /** What each tick sent the player, from the click (tick 0) on. */
 let ticks = [];
 const say = (line) => ticks[ticks.length - 1].push(line);
-function tick(count = 1) {
+/** `count` ticks; `click` runs at the start of the first, as a click handled that tick. */
+function tick(count = 1, click = () => {}) {
   for (let i = 0; i < count; i++) {
     ticks.push([]);
+    if (i === 0) click();
     for (const task of [...tasks]) if (task.isRunning()) task.execute();
   }
 }
@@ -246,16 +248,48 @@ test('the jail lock: seven-tick tries, each failure numbing the fingers and rais
   assert.ok(tasks.every((task) => typeof task.tick === 'function'), "no task's own fields shadow Task.tick()");
 });
 
-test('a new Pick-lock starts the lock from its first chart', (t) => {
+const leaveLock = (player, to) => {
+  for (const handler of handlers.get('player:world-input')) handler({ player });
+  player.setLocation(new core.Location(...to));
+};
+
+test('stepping off the lock and picking it again keeps its chart and its seven-tick timing', (t) => {
   HamHideout._test.setRandom(() => 0.999999);
   t.after(() => HamHideout._test.setRandom());
   const { player, varbits } = hamPlayer(t, [3183, 9611, 0]);
   HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock'));
-  tick(13);
-  assert.equal(varbits.get(235), 2);
+  tick(6);
+  assert.equal(varbits.get(235), 1, 'the first try failed');
+  const failure = ticks.length - 1;
+  // Local 1000359 (rev 227) ticks 25929-25936: the failure, a walk click and a step to (3183, 9612), Open, Pick-lock,
+  // its line with one 2402 and no animation, and the outcome seven ticks after the failure, ham_thief 1 -> 2.
+  tick(1);
+  tick(1, () => leaveLock(player, [3183, 9612, 0])); // F+2
+  tick(2);
+  tick(1, () => HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock'))); // F+5
+  assert.deepEqual(ticks[failure + 5], ['spam: You attempt to pick the lock on the door.', 'sound 2402']);
+  tick(1);
+  assert.equal(varbits.get(235), 1);
+  tick(1); // F+7
+  assert.ok(ticks[failure + 7].includes('varbit 235=2'), 'the next outcome seven ticks after the failure, on the next chart');
+  assert.equal(tasks.filter((task) => task.isRunning()).length, 1, 'one attempt');
+});
+
+test('away from the lock past the try, the next Pick-lock starts a new try from the chart reached', (t) => {
+  HamHideout._test.setRandom(() => 0.999999);
+  t.after(() => HamHideout._test.setRandom());
+  const { player, varbits } = hamPlayer(t, [3183, 9611, 0]);
   HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock'));
-  assert.equal(varbits.get(235), 0);
-  assert.equal(tasks.filter((task) => task.isRunning()).length, 1, 'the old attempt stopped');
+  tick(6);
+  leaveLock(player, [3184, 9611, 0]);
+  tick(7);
+  assert.equal(varbits.get(235), 1, 'no outcome while away');
+  assert.equal(tasks.filter((task) => task.isRunning()).length, 0, 'the try lapsed');
+  ticks = [[]];
+  HamHideout._test.pickJailLock(doorEvent(player, 'Pick-lock'));
+  assert.deepEqual(ticks[0], ['spam: You attempt to pick the lock on the door.', `anim ${core.CacheDefinitions.getSeqId('human_lockedchest')}`, 'sound 2402', 'sound 2402']);
+  tick(6);
+  assert.equal(varbits.get(235), 2);
 });
 
 test("climbing the hideout's ladder out clears the concussions, so the trapdoor isn't left open", (t) => {

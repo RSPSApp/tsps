@@ -249,6 +249,47 @@ test("as captured: three carvings - each sets its piece to 9 + the animal; the l
   assert.equal(player.menu(), null, "nothing left to carve");
 });
 
+test("issue 6841: a carving doesn't move the space key of the other make-x menus (enum 3623: mode 34 -> 0)", async () => {
+  const { Player } = require("../dist/game/entity/impl/player/Player");
+  const { PlayerSession } = require("../dist/net/PlayerSession");
+  const { ClientConnection } = require("../dist/net/NetworkBuilder");
+  const { CreationMenu } = require("../dist/game/model/menu/CreationMenu");
+  const carver = createPlayer({ items: [item("knife")] });
+  State.erect(carver, SITE, 1);
+  click(carver, "Oak totem", "Carve");
+  const carveMenu = carver.menu();
+  assert.equal(carveMenu.getOptions().mode, 34);
+
+  const channel = { kind: "test", isOpen: () => true, send: () => true, close() {}, onData() {}, onError() {}, onClose() {} };
+  const player = new Player(new PlayerSession(channel));
+  player.setIndex(124); player.setUsername("issue6841"); player.setRegistered(true);
+  const connection = new ClientConnection(channel); connection.player = player;
+  const sender = player.getPacketSender(), varps = [];
+  sender.sendInterfaceScript = () => sender;
+  const sendConfig = sender.sendConfig.bind(sender);
+  sender.sendConfig = (id, value) => { if (id === 2673) varps.push(value); return sendConfig(id, value); };
+  const pick = async (slot) => {
+    await connection.dispatch([{ type: "dialogue_continue", widgetId: (270 << 16) | (15 + slot), childIndex: 1 }]);
+    connection.processTurnPackets();
+  };
+  // Knife on logs: arrow shafts, shortbow (u), longbow (u), crossbow stock - a mode 0 menu.
+  const knifeOnLogs = () => new CreationMenu("What would you like to make?", [52, 50, 48, 9440], { execute() {} });
+  try {
+    sender.sendCreationMenu(knifeOnLogs());
+    await pick(1);
+    sender.sendCreationMenu(carveMenu);
+    await pick(3);
+    assert.equal(site(carver, "low"), 13, "the carve went through (a snake)");
+    varps.length = 0;
+    sender.sendCreationMenu(knifeOnLogs());
+    assert.deepEqual(varps, [1], "space is still on the shortbow, as live");
+    await pick(3);
+    varps.length = 0;
+    sender.sendCreationMenu(knifeOnLogs());
+    assert.deepEqual(varps, [3], "a pick in a mode 0 menu still moves it");
+  } finally { player.setRegistered(false); }
+});
+
 test("the carve menu doesn't come back once the player walks off", () => {
   const player = createPlayer({ items: [item("knife")] });
   State.erect(player, SITE, 1);

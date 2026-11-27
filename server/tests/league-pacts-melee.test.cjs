@@ -791,6 +791,14 @@ test("as live shows them (rsprox 238/04190): a reflect is hitsplat 18 (19 for ot
   assert.equal(healSplat.getDamage(), 2);
   assert.equal(holder.getHitpoints(), 82, "the heal itself still lands, once");
   assert.equal(holder.getGraphic()?.getId(), spotanim("leagues_6_health_regen"));
+
+  // At full hitpoints nothing heals: no heal splat, but the ring still plays (237/04092; review of #6909).
+  const full = character("pact-visuals-full", { pacts: { [effect("shield_block_heal")]: 1 } });
+  shield(full, ITEMS.runeKiteshield);
+  hooks.onCombatHitResolved({ attacker, target: full, hit: landed(core.CombatType.MELEE, [splat(0)]) });
+  assert.equal(full.getHitpoints(), 99);
+  assert.equal(full.getTickHits().filter((each) => each.getSplatType(true) === 6).length, 0, "nothing healed: no heal splat");
+  assert.equal(full.getGraphic()?.getId(), spotanim("leagues_6_health_regen"), "but the ring, as live");
 });
 
 test("the two-handed Crate of shields prop is no shield; Dinh's bulwark is", () => {

@@ -70,8 +70,8 @@
  *   against players, as Thorns.
  * - 75 talent_shield_block_heal: an attack dealing 0 with Dinh's bulwark (a two-handed shield) or
  *   an off-hand (any shield-slot item, shields included: the Wiki's off-hand page is the shield
- *   slot table) heals 2 (`league:pact-heal`), shown as a heal splat with `leagues_6_health_regen`,
- *   and restores 2 Prayer; a reflected hit's 0 doesn't count (238/04190). A shield is recognised by name
+ *   slot table) heals 2 (`league:pact-heal`), shown with `leagues_6_health_regen` (and a heal splat when
+ *   it healed: at full or capped hitpoints, the ring alone), and restores 2 Prayer; a reflected hit's 0 doesn't count (238/04190). A shield is recognised by name
  *   for Thorns/reflect, and Dinh's by its bulwark weapon interface, so the "Crate of shields" prop
  *   is not one.
  */
@@ -489,10 +489,10 @@ function blockHeal(player, hit) {
   // A reflected hit's 0 is no block: on live it never heals (238/04190: 29 of 29 reflects alone).
   if (!points || hit.getTotalDamage() > 0 || reflectedHits.has(hit) || !hasTwoHandedShieldOrOffhand(player)) return;
   const healed = heal(player, BLOCK_HEAL * points);
-  if (healed > 0) {
-    player.showHitsplat(healed, HEAL_SPLAT);
-    graphic(player, HEAL_SPOTANIM);
-  }
+  // The splat only when something healed; the ring every time, at full or capped hitpoints too
+  // (237/04092: the ring with no heal splat on a full bar; review of #6909).
+  if (healed > 0) player.showHitsplat(healed, HEAL_SPLAT);
+  graphic(player, HEAL_SPOTANIM);
   const skills = player.getSkillManager();
   const { PRAYER } = core.Skill;
   const current = skills.getCurrentLevel(PRAYER);

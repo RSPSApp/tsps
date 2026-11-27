@@ -1604,7 +1604,7 @@ and `league:pact-effect` { player, effect } (an effect varbit's gameval name -> 
   heal): a reflected hit is hitsplat 18 on the player (its pair 19 for others) with
   `leagues_6_fire_shield`; Thorns and the reflected hit are the player's max hits (43: fixed damage
   is its own maximum, within the max hit settings; 1140 shows Thorns as 43 too); a block heal is a
-  heal splat (6) of what it healed with `leagues_6_health_regen`, never for a reflected hit's 0 (29 of 29
+  heal splat (6) of what it healed with `leagues_6_health_regen` (the ring alone at full or capped hitpoints: 237/04092), never for a reflected hit's 0 (29 of 29
   reflects alone; no cooldown: block heals come on consecutive ticks). Not matched yet: 04190's hitsplat
   67 (always 3, beside a 0 or a heal), the distance heal's splat, and `leagues_6_sigil_of_life`.
 - **Readings of ours** (the units' heads list every one): an off-hand is any shield-slot item,

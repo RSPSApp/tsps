@@ -45,7 +45,9 @@ const { ownsStoredKey } = require("../../items/KeyAvailability");
  *
  * Gaps: the requirements (Priest in Peril and The Restless Ghost) are checked
  * through public quest queries; post-quest treasures are attached in
- * makinghistory/EnchantedKey.MakingHistory; the master-clue condition is
+ * makinghistory/EnchantedKey.MakingHistory; reading the journal and studying the
+ * museum's displays and bookcase are makinghistory/Museum.MakingHistory (Wiki text,
+ * no capture); the master-clue condition is
  * answered false; Dron's "North West side of town" wrong answer is a transcript
  * "unavailable" marker and closes silently; the hot/cold Feel messages and a key
  * lost before the journal are not in the capture (transcript and Quest Helper);
@@ -1544,4 +1546,5 @@ module.exports = function registerMakingHistoryQuest(api) {
   api.onPlayerLogin(handleLogin);
   api.onPlayerLogout(handleLogout);
   require("../makinghistory/EnchantedKey.MakingHistory")(api, quest);
+  require("../makinghistory/Museum.MakingHistory")(api);
 };

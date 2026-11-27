@@ -374,7 +374,10 @@ function spiderFight(t, bossId = 6610) {
   const spawn = bossId === 6610 ? [3421, 10202, 2] : [1629, 11546, 2];
   const npc = new core.NPC(bossId, new core.Location(...spawn));
   npc.setRegistered(true);
-  t.after(() => npc.setRegistered(false));
+  t.after(() => {
+    World.unregisterNpcPosition(npc);
+    npc.setRegistered(false);
+  });
   const { key, spiderling } = Spiders._test.SPIDERS[bossId];
   const add = [];
   const remove = [];
@@ -633,6 +636,7 @@ for (const [name, bossId] of [['Venenatis', 6610], ['Spindel', 11998]]) {
       respawn.setRegistered(true);
       t.after(() => {
         fight.reset(respawn);
+        World.unregisterNpcPosition(respawn);
         respawn.setRegistered(false);
       });
       fight.spawned(respawn);

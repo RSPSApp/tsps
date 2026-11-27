@@ -7,6 +7,49 @@ They are part of the miniquest's plugin, `server/plugins/quests/quests/AlfredGri
 
 Before this, a drink took the coins and signed the card, and its lines all came at once.
 
+## Where the drink is offered
+
+A bar offers its drink only while the player carries the Barcrawl card and has not had that bar signed. The Wiki's
+Flying Horse transcript has this condition ("If the player has a barcrawl card in their inventory without Flying
+Horse Inn completed"). Zembo's and the Blurberry Bar barman's transcripts say "During Alfred Grimhand's
+Barcrawl", the Rusty Anchor's "If the player has started but not finished". After the crawl, a card taken to any bar
+starts it over (Wiki: Barcrawl card): the drink clears the other signatures, and the guard keeps the course shut
+until the card is handed in again. Vial smashing stays as it was, and its settings row stays open then only once
+Scorpion Catcher is done, as the cache's lock for the row has it.
+
+The bartender's usual conversation plays, and its menu gets the option "I'm doing Alfred Grimhand's Barcrawl." in the
+wording and place of the Wiki's Barcrawl transcript. Bandit-HaxUnit's local rsprox recording 1002001 (revision 242)
+shows it so in the Blue Moon Inn's, the Jolly Boar Inn's and, before Recipe for Disaster, Kaylee's menus. Blurberry goes
+straight to it, and the Blurberry Bar's barman offers "I'm trying to do Alfred Grimhand's barcrawl.", which sends the
+player to Blurberry, under the same condition.
+
+The Rising Sun's barmaids open with "Heya! What can I get you?" and a menu of "What ales are you serving?", which
+plays the barmaid's own ales talk, and the Barcrawl option (Wiki: the Barcrawl transcript; rsprox recordings 3241
+and 1636 for the greeting and the ales talk). During Recipe for Disaster's Golden Nectar step, their Talk-to is that
+quest's talk, and the Barcrawl option joins its menu before "What can you tell me about dwarves and ale?", as the
+Wiki's Barcrawl transcript shows the three options together. After that step the barmaids still offer the dwarves
+option (the same recordings), so the Barcrawl menu keeps it last; it plays the quest's "again" talk (Wiki: the
+quest's transcript; that it plays after the step is an inference).
+
+Using the card on the Flying Horse Inn's bartender while the bar offers the drink starts the Barcrawl at once
+(Wiki: his transcript, "Same as above"). The other bartenders do the same; at the Rising Sun the barmaid's menu
+comes without the greeting, and the Blurberry Bar's barman points to Blurberry. When the bar does not offer the
+drink, the Rising Sun's barmaids answer "No thanks, I don't need that.", their transcripts' answer to any other
+item. At every other bartender and the barman, the player gets the game message "Nothing interesting happens.", the
+standard message for an item with no use (Wiki: Choose Option).
+
+Zembo's transcript has an empty box (`{{tbox|}}`) after his greeting. Bandit-HaxUnit's local rsprox recording
+1002303 (revision 242) shows his greeting followed straight by his menu, so the imported dialogue data leaves the box
+out (RSPSApp/osrsreboxed-db#157). The Rising Sun's Barcrawl transcript has two empty boxes too; rsprox
+recordings 3241 and 1636 show the barmaids' greeting with no box before it, and their Barcrawl menu has none.
+
+The coins are checked after the price line (Wiki: the Barcrawl transcript): without them, the player says the bar's
+line ("I don't have 50 coins.") and the conversation ends.
+
+Before this, the plugin skipped the greeting and the menu at every bar and started with the player's line, and
+using the card on a bartender did nothing. Outside an unsigned bar, the Rusty Anchor's Barcrawl option still showed
+to every player, Zembo's during the crawl and the Blurberry Bar barman's to everyone; none played a drink.
+
 ## What happens
 
 Once the player continues past the bartender's price line, the box closes and the coins go. The drink then plays
@@ -109,6 +152,15 @@ Trawler's and the Barrows chest's shakes, so the Barcrawl's is outside it (an in
   and right"); rsprox recording 1723 (revision 227, ticks 10414-10436), where live OSRS stops a shake with a zero
   one, as the drink does on tick 10; the settings under the cache's atmospheric toggle (structs 349-351, whose
   `param_1080` is `enum_5198`, in osrs-dumps 853150e3).
+- **Menus and card use**: the Wiki's [Transcript:Bartender (Flying Horse Inn) (revision 14289090)](https://oldschool.runescape.wiki/w/Transcript:Bartender_%28Flying_Horse_Inn%29?oldid=14289090);
+  the barmaids' transcripts, [Tina (revision 14961761)](https://oldschool.runescape.wiki/w/Transcript:Tina?oldid=14961761),
+  [Emily (revision 15091019)](https://oldschool.runescape.wiki/w/Transcript:Emily?oldid=15091019) and
+  [Kaylee (revision 14961759)](https://oldschool.runescape.wiki/w/Transcript:Kaylee?oldid=14961759);
+  [Transcript:Recipe for Disaster/Freeing the Mountain Dwarf (revision 15315379)](https://oldschool.runescape.wiki/w/Transcript:Recipe_for_Disaster/Freeing_the_Mountain_Dwarf?oldid=15315379);
+  [Choose Option (revision 15347794)](https://oldschool.runescape.wiki/w/Choose_Option?oldid=15347794);
+  [Barcrawl card (revision 15360753)](https://oldschool.runescape.wiki/w/Barcrawl_card?oldid=15360753), whose
+  trivia says "It is possible to redo the miniquest by going to one of the bars with the card in the player's
+  inventory"; rsprox recordings 3241 (revision 233) and 1636 (revision 226) for the barmaids' greeting and menus.
 - **Recorded drinks**: Bandit-HaxUnit's local rsprox recording 1002001 (revision 242, as he reported it in #6935;
   not on rsprox.net) has the Blue Moon Inn's and the Jolly Boar Inn's drinks. At both, the price line's continue
   takes the coins and closes the box on the tick of the first line, and the other lines follow 3, 6, 9 and 12 ticks
@@ -149,6 +201,9 @@ From Lost City (its bar scripts and its engine, Engine-TS):
 - The tick the card is signed, except at those two bars. The Rising Sun's signature comes with OSRS's single line on
   tick 10; Lost City signs with its second line, on tick 14.
 - The price line's continue closes the box and takes the coins, except at those two bars.
+- The offer condition at every bar but the Flying Horse Inn.
+- Using the card on a bartender other than the Flying Horse Inn's starts the drink. At the Rising Sun the menu then
+  comes without the greeting, and the Blurberry Bar's barman points to Blurberry.
 - Which clicks are dropped beyond those on the world: every click on the inventory and worn items (an engine
   check), with an inventory drag put back, and every button whose script needs the player (prayers, spells, emotes,
   combat options). The settings, music, quest list and Skills tab buttons, the friends, ignore, chat and report
@@ -174,5 +229,10 @@ Ours:
 - OSRS's buttons that Lost City does not have are held, except the clan chat, the chat channel setup, the world map
   and its orb, and the quick-prayer setup. The quick-prayer orb is held as the prayers are, and the special attack
   orb works as the special attack bar.
+- While the Rising Sun offers the drink, its barmaids open the Barcrawl's menu without their own talk's beer glass
+  and party room options. Recording 1002001 shows that menu, but not whether those options' conditions held.
+- During Recipe for Disaster's Golden Nectar step, using the card on a Rising Sun barmaid opens the Barcrawl's
+  menu ("What ales are you serving?" and the Barcrawl option), without that quest's dwarves option. No source
+  covers card use in that step.
 
 `server/tests/barcrawl-drinks.test.cjs` plays every bar with the real engine, tick by tick.

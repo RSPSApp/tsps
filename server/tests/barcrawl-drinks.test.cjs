@@ -237,25 +237,49 @@ function talk(f, npcId) {
 
 const coins = (f) => f.p.getInventory().getAmount(COINS);
 
+const menu = (f) => core.MultiChatboxPrompt.getPending(f.p)?.options ?? null;
+
 /**
- * Clicks through the conversation to its end, without a tick. The continue that takes the coins (the price line's)
- * must close the box by itself.
+ * Clicks through the conversation to its end, without a tick, taking the Barcrawl option in a menu. The continue
+ * that takes the coins (the price line's) must close the box by itself.
  */
 async function finish(f) {
   const manager = f.p.getDialogueManager();
   const before = coins(f);
-  for (let i = 0; i < 10 && manager.getCurrent(); i++) {
+  for (let i = 0; i < 12 && (manager.getCurrent() || menu(f)); i++) {
+    const shown = menu(f);
     const group = f.p.getPacketSender().getChatboxGroupId();
-    const widgetId = (group << 16) | ([231, 217].includes(group) ? 5 : group === 229 ? 4 : 0);
-    await f.connection.dispatch([{ type: "dialogue_continue", widgetId, childIndex: -1 }]);
+    // The drink's timeline starts with the price line's continue; what the conversation sent before is its own.
+    const noted = f.seen.length;
+    if (shown) {
+      const index = shown.findIndex((text) => /barcrawl/i.test(text));
+      assert.ok(index >= 0, `a Barcrawl option in ${shown}`);
+      await f.connection.dispatch([{ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: index + 1 }]);
+    } else {
+      const widgetId = (group << 16) | ([231, 217].includes(group) ? 5 : group === 229 ? 4 : 0);
+      await f.connection.dispatch([{ type: "dialogue_continue", widgetId, childIndex: -1 }]);
+    }
     f.connection.processTurnPackets();
     if (coins(f) !== before) {
+      f.seen.splice(0, noted);
       assert.ok(!manager.getCurrent(), "the price line's continue closes the conversation");
       assert.equal(f.p.getPacketSender().getChatboxGroupId(), -1, "and the box");
       return;
     }
   }
-  assert.ok(!manager.getCurrent(), "the conversation ends");
+  assert.ok(!manager.getCurrent() && !menu(f), "the conversation ends");
+}
+
+/** Talks to the bar and clicks through to its first menu; returns the menu's options. */
+async function firstMenu(f, npcId) {
+  talk(f, npcId);
+  for (let i = 0; i < 6 && !menu(f) && f.p.getDialogueManager().getCurrent(); i++) {
+    const group = f.p.getPacketSender().getChatboxGroupId();
+    const widgetId = (group << 16) | ([231, 217].includes(group) ? 5 : group === 229 ? 4 : 0);
+    await f.connection.dispatch([{ type: "dialogue_continue", widgetId, childIndex: -1 }]);
+    f.connection.processTurnPackets();
+  }
+  return menu(f);
 }
 
 /** Buys the bar's drink (tick 0 is the price line's continue) and plays `ticks` ticks of it. */
@@ -328,23 +352,18 @@ test("without the coins, or at a signed bar, there is no drink", async (t) => {
   const poor = actor(t, { coins: 10 });
   talk(poor, 1312);
   poor.seen.length = 0;
-  for (let i = 0; i < 6; i++) {
-    const group = poor.p.getPacketSender().getChatboxGroupId();
-    if (group < 0) break;
-    const widgetId = (group << 16) | ([231, 217].includes(group) ? 5 : group === 229 ? 4 : 0);
-    await poor.connection.dispatch([{ type: "dialogue_continue", widgetId, childIndex: -1 }]);
-    poor.connection.processTurnPackets();
-  }
+  await finish(poor);
   for (let i = 0; i < 14; i++) tick(poor);
   assert.equal(signed(poor), 0);
   assert.deepEqual(poor.seen, []);
 
   const f = actor(t);
   await drink(f, 1320);
-  await drink(f, 1320);
-  assert.deepEqual(f.seen, [], "the second visit has no drink");
+  f.p.getDialogueManager().reset?.();
+  const again = await firstMenu(f, 1320);
+  assert.ok(again && !again.some((option) => /barcrawl/i.test(option)), `the second visit offers no drink: ${again}`);
   assert.equal(level(f, "ATTACK"), TEN, "one Fire Brandy");
-  assert.equal(f.p.getInventory().getAmount(COINS), 208 - 12);
+  assert.equal(coins(f), 208 - 12);
 });
 
 test("the sway is sent whatever the atmospheric camera shake setting", async (t) => {
@@ -888,6 +907,254 @@ test("a stat drop is a share of the level on its own tick", async (t) => {
   f.p.getSkillManager().setCurrentLevels(Skill.ATTACK, 40);
   for (let i = 0; i < 7; i++) tick(f);
   assert.equal(level(f, "ATTACK"), 40 - 5 - 4);
+});
+
+
+/** Each bar's menu while it offers the drink: the option's words and place, as the Wiki's transcript has them. */
+const MENUS = {
+  1312: [4, "I'm doing Alfred Grimhand's Barcrawl."],
+  1314: [4, "I'm doing Alfred Grimhand's Barcrawl."],
+  1320: [4, "I'm doing Alfred Grimhand's Barcrawl."],
+  1319: [3, "I'm doing Alfred Grimhand's Barcrawl."],
+  1318: [3, "I'm doing Alfred Grimhand's Barcrawl."],
+  1310: [4, "I'm doing Alfred Grimhands Barcrawl."],
+  13655: [3, "I'm doing Alfred Grimhand's barcrawl."],
+  1317: [2, "I'm doing Alfred Grimhand's barcrawl."],
+  1313: [3, "I'm doing Alfred Grimhand's Barcrawl."],
+};
+
+for (const [npcId, [place, text]] of Object.entries(MENUS)) {
+  test(`bar NPC ${npcId}: the menu offers the Barcrawl only while the bar is unsigned with the card held`, async (t) => {
+    const f = actor(t);
+    const shown = await firstMenu(f, Number(npcId));
+    assert.equal(shown?.[place - 1], text, `option ${place} of ${shown}`);
+    assert.equal(shown.filter((option) => /barcrawl/i.test(option)).length, 1);
+
+    if (Number(npcId) === 1317) return; // the Rising Sun's own menu: see its tests
+    const rest = shown.filter((option) => !/barcrawl/i.test(option));
+    const done = actor(t);
+    done.p.setAttribute("alfred-grimhands-barcrawl:bars", 1023);
+    assert.deepEqual(await firstMenu(done, Number(npcId)), rest, "signed: the usual menu without it");
+
+    const cardless = actor(t);
+    cardless.p.getInventory().setItem(0, new core.Item(-1, 0));
+    assert.deepEqual(await firstMenu(cardless, Number(npcId)), rest, "no card: the usual menu without it");
+  });
+}
+
+test("Zembo's greeting goes straight to his menu, without an empty line", async (t) => {
+  const f = actor(t);
+  f.seen.length = 0;
+  const shown = await firstMenu(f, 13655);
+  assert.ok(shown?.length, "his menu");
+  assert.deepEqual(f.seen.filter((line) => line.split(" ")[1] === "game"), [], "no game message before it");
+});
+
+test("the Blurberry Bar's barman points to Blurberry only while Blurberry offers the drink", async (t) => {
+  const option = "I'm trying to do Alfred Grimhand's barcrawl.";
+  const f = actor(t);
+  assert.ok((await firstMenu(f, 6532))?.includes(option), "card held, Blurberry unsigned");
+  const done = actor(t);
+  done.p.setAttribute("alfred-grimhands-barcrawl:bars", 2);
+  const signedMenu = await firstMenu(done, 6532);
+  assert.ok(signedMenu?.length && !signedMenu.includes(option), `Blurberry signed: ${signedMenu}`);
+  const cardless = actor(t);
+  cardless.p.getInventory().setItem(0, new core.Item(-1, 0));
+  const cardlessMenu = await firstMenu(cardless, 6532);
+  assert.ok(cardlessMenu?.length && !cardlessMenu.includes(option), `no card: ${cardlessMenu}`);
+});
+
+test("Blurberry and the Rising Sun go straight to the Barcrawl only while they offer the drink", async (t) => {
+  const f = actor(t);
+  talk(f, 6531);
+  assert.equal(shownText(f), "I'm doing Alfred Grimhand's Barcrawl.");
+  const sun = actor(t);
+  talk(sun, 1317);
+  assert.equal(shownText(sun), "Heya! What can I get you?");
+  for (const npcId of [6531, 1317]) {
+    const done = actor(t);
+    done.p.setAttribute("alfred-grimhands-barcrawl:bars", 1023);
+    const cardless = actor(t);
+    cardless.p.getInventory().setItem(0, new core.Item(-1, 0));
+    for (const [who, g] of [["signed", done], ["no card", cardless]]) {
+      const shown = await firstMenu(g, npcId);
+      assert.ok(shown, `${npcId} ${who}: the usual talk's menu`);
+      assert.ok(!shown?.some((option) => /barcrawl/i.test(option)), `${npcId} ${who}: no Barcrawl option in ${shown}`);
+    }
+  }
+});
+
+test("without the coins, the price line's continue gets the bar's decline", async (t) => {
+  const f = actor(t, { coins: 10 });
+  await firstMenu(f, 1312);
+  const index = menu(f).findIndex((text) => /barcrawl/i.test(text));
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: index + 1 }]);
+  f.connection.processTurnPackets();
+  const said = [];
+  for (let i = 0; i < 6 && f.p.getDialogueManager().getCurrent(); i++) {
+    said.push(shownText(f));
+    const group = f.p.getPacketSender().getChatboxGroupId();
+    const widgetId = (group << 16) | ([231, 217].includes(group) ? 5 : group === 229 ? 4 : 0);
+    await f.connection.dispatch([{ type: "dialogue_continue", widgetId, childIndex: -1 }]);
+    f.connection.processTurnPackets();
+  }
+  assert.equal(said.at(-1), "I don't have 50 coins.");
+  assert.equal(coins(f), 10);
+});
+
+test("the Rising Sun's 'What ales are you serving?' plays the barmaid's ales talk", async (t) => {
+  for (const npcId of [1317, 1315, 1316]) {
+    const f = actor(t);
+    const shown = await firstMenu(f, npcId);
+    assert.deepEqual(shown, ["What ales are you serving?", "I'm doing Alfred Grimhand's barcrawl."], `NPC ${npcId}`);
+    await f.connection.dispatch([{ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 1 }]);
+    f.connection.processTurnPackets();
+    const said = [];
+    for (let i = 0; i < 3 && !menu(f); i++) {
+      said.push(shownText(f));
+      const group = f.p.getPacketSender().getChatboxGroupId();
+      const widgetId = (group << 16) | ([231, 217].includes(group) ? 5 : group === 229 ? 4 : 0);
+      await f.connection.dispatch([{ type: "dialogue_continue", widgetId, childIndex: -1 }]);
+      f.connection.processTurnPackets();
+    }
+    assert.deepEqual(said.slice(0, 2), ["What ales are you serving?", "Well, we've got Asgarnian Ale, Wizard's Mind Bomb and Dwarven Stout, all for only 3 coins."], `NPC ${npcId}`);
+    assert.ok(menu(f)?.includes("One Asgarnian Ale, please."), `NPC ${npcId}: the ales menu`);
+  }
+});
+
+/** Uses the Barcrawl card on the NPC; returns whether a plugin took it. */
+function useCard(f, npcId) {
+  const npc = core.NPC.create(npcId, new core.Location(3225, 3399, 0));
+  return PM.emitItemOnNpc({
+    player: f.p, target: npc, npcId, targetIndex: 0, item: new core.Item(CARD, 1), definition: npc.getCurrentDefinition(f.p),
+  });
+}
+
+test("using the card on a bartender starts the Barcrawl while the bar offers it", async (t) => {
+  const f = actor(t);
+  assert.equal(useCard(f, 1312), true);
+  assert.equal(shownText(f), "I'm doing Alfred Grimhand's Barcrawl.");
+  await finish(f);
+  assert.equal(coins(f), 208 - 50, "and buys the drink");
+
+  const done = actor(t);
+  done.p.setAttribute("alfred-grimhands-barcrawl:bars", 1023);
+  assert.equal(useCard(done, 1312), true, "a signed bar");
+  assert.deepEqual(done.seen, ["0 game Nothing interesting happens."], "answers as for an item with no use (Wiki)");
+  assert.equal(shownText(done), "", "and no conversation starts");
+  assert.equal(useCard(done, 1317), true, "a Rising Sun barmaid");
+  assert.equal(shownText(done), "No thanks, I don't need that.", "answers as her transcripts do for any other item");
+});
+
+test("after the crawl, a card taken to a bar starts it over", async (t) => {
+  const barcrawl = QuestRuntime.questNamed("Alfred Grimhand's Barcrawl");
+  const f = actor(t);
+  barcrawl.setStage(f.p, 2);
+  f.p.setAttribute("alfred-grimhands-barcrawl:bars", 1023);
+  const shown = await firstMenu(f, 1312);
+  assert.ok(shown?.includes("I'm doing Alfred Grimhand's Barcrawl."), `the Barcrawl option: ${shown}`);
+  talk(f, 1312);
+  await finish(f);
+  assert.equal(barcrawl.getStage(f.p), 1, "the crawl starts over");
+  for (let i = 0; i < 13; i++) tick(f);
+  assert.equal(signed(f), 1, "with only this bar signed");
+  const cardless = actor(t);
+  barcrawl.setStage(cardless.p, 2);
+  cardless.p.getInventory().setItem(0, new core.Item(-1, 0));
+  assert.ok(!(await firstMenu(cardless, 1312))?.some((option) => /barcrawl/i.test(option)), "no card, no option");
+});
+
+test("after a restart, the vial smashing setting stays open only once Scorpion Catcher is done, as the cache's lock", async (t) => {
+  const barcrawl = QuestRuntime.questNamed("Alfred Grimhand's Barcrawl");
+  const scorpion = QuestRuntime.questNamed("Scorpion Catcher");
+  const AUTO_SMASH = "alfred-grimhands-barcrawl:auto-smash";
+  const click = (f) => {
+    const request = { player: f.p, settingId: 380, handled: false };
+    PM.emitCustomEvent("settings:setting-clicked", request);
+    return request.handled;
+  };
+  for (const scorpionDone of [false, true]) {
+    const f = actor(t);
+    barcrawl.setStage(f.p, 2);
+    if (scorpionDone) scorpion.setStage(f.p, 4);
+    f.p.setAttribute(AUTO_SMASH, true);
+    talk(f, 1312);
+    await finish(f);
+    assert.equal(barcrawl.getStage(f.p), 1, "the crawl starts over");
+    for (let i = 0; i < 13; i++) tick(f);
+    f.seen.length = 0;
+    assert.equal(click(f), true);
+    if (scorpionDone) {
+      assert.equal(f.p.getAttribute(AUTO_SMASH), false, "with Scorpion Catcher done the row turns smashing off");
+      assert.deepEqual(f.seen, []);
+    } else {
+      assert.equal(f.p.getAttribute(AUTO_SMASH), true, "without it the row stays locked");
+      assert.deepEqual(f.seen, ["13 game You must have completed the Alfred Grimhand's Barcrawl miniquest to access this setting."]);
+    }
+  }
+});
+
+test("using the card on a Rising Sun barmaid opens her menu without the greeting", async (t) => {
+  const f = actor(t);
+  assert.equal(useCard(f, 1316), true);
+  assert.deepEqual(menu(f), ["What ales are you serving?", "I'm doing Alfred Grimhand's barcrawl."]);
+});
+
+test("using the card on the Blurberry Bar's barman points to Blurberry", async (t) => {
+  const f = actor(t);
+  assert.equal(useCard(f, 6532), true);
+  assert.equal(shownText(f), "I'm trying to do Alfred Grimhand's barcrawl.");
+
+  const done = actor(t);
+  done.p.setAttribute("alfred-grimhands-barcrawl:bars", 1 << 1); // Blurberry signed
+  assert.equal(useCard(done, 6532), true);
+  assert.equal(shownText(done), "", "signed: no pointer");
+  assert.deepEqual(done.seen, ["0 game Nothing interesting happens."]);
+});
+
+test("during Recipe for Disaster's Golden Nectar, the barmaid's menu has all three options", async (t) => {
+  const rfd = QuestRuntime.questNamed("Recipe for Disaster");
+  const f = actor(t);
+  rfd.setStage(f.p, 4);
+  assert.deepEqual(await firstMenu(f, 1317),
+    ["What ales are you serving?", "I'm doing Alfred Grimhand's barcrawl.", "What can you tell me about dwarves and ale?"]);
+  const cardless = actor(t);
+  rfd.setStage(cardless.p, 4);
+  cardless.p.getInventory().setItem(0, new core.Item(-1, 0));
+  assert.deepEqual(await firstMenu(cardless, 1317), ["What ales are you serving?", "What can you tell me about dwarves and ale?"]);
+  const carded = actor(t);
+  rfd.setStage(carded.p, 4);
+  assert.equal(useCard(carded, 1317), true);
+  assert.deepEqual(menu(carded), ["What ales are you serving?", "I'm doing Alfred Grimhand's barcrawl."],
+    "the card opens the Barcrawl's menu (ours: no source covers card use in that step)");
+  const three = ["What ales are you serving?", "I'm doing Alfred Grimhand's barcrawl.", "What can you tell me about dwarves and ale?"];
+  // The Mountain Dwarf freed, after asking a barmaid about the secret (16) or without asking (0).
+  for (const state of [16, 0]) {
+    const freed = actor(t);
+    rfd.setStage(freed.p, 4);
+    freed.p.setAttribute("recipe-for-disaster:rescues", 1); // the Golden Nectar is over
+    freed.p.setAttribute("recipe-for-disaster:dwarf-state", state);
+    assert.deepEqual(await firstMenu(freed, 1317), three, "after the dwarf step the option stays (rsprox 3241, 1636)");
+    await freed.connection.dispatch([{ type: "dialogue_continue", widgetId: core.MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 3 }]);
+    freed.connection.processTurnPackets();
+    for (let i = 0; i < 3 && !/again/.test(shownText(freed)); i++) {
+      const group = freed.p.getPacketSender().getChatboxGroupId();
+      await freed.connection.dispatch([{ type: "dialogue_continue", widgetId: (group << 16) | ([231, 217].includes(group) ? 5 : group === 229 ? 4 : 0), childIndex: -1 }]);
+      freed.connection.processTurnPackets();
+    }
+    assert.match(shownText(freed), /Oh it's you again\. Forgotten the secret already\?/, `dwarf-state ${state}: the "again" talk`);
+    for (let i = 0; i < 6 && freed.p.getDialogueManager().getCurrent(); i++) {
+      assert.equal(menu(freed), null, `dwarf-state ${state}: no offer to buy the secret`);
+      const group = freed.p.getPacketSender().getChatboxGroupId();
+      await freed.connection.dispatch([{ type: "dialogue_continue", widgetId: (group << 16) | ([231, 217].includes(group) ? 5 : group === 229 ? 4 : 0), childIndex: -1 }]);
+      freed.connection.processTurnPackets();
+    }
+    assert.ok(!freed.p.getDialogueManager().getCurrent() && !menu(freed), `dwarf-state ${state}: the talk ends`);
+    assert.equal(coins(freed), 208, `dwarf-state ${state}: no coins taken`);
+  }
+  const before = actor(t);
+  assert.deepEqual(await firstMenu(before, 1317), ["What ales are you serving?", "I'm doing Alfred Grimhand's barcrawl."],
+    "before Recipe for Disaster's dwarf step, two options");
 });
 
 // Last: it fires every plugin's shutdown hooks.

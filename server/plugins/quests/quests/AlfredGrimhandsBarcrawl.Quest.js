@@ -9,10 +9,17 @@
  *
  * The guard, the ten drinks and the card are played here because the imported
  * transcripts have no executable hand-out for the card and several bar pages
- * omit the Barcrawl option. Normal bar conversations are untouched: a bar is
- * intercepted only while the player carries the card, is mid-crawl and has not
- * yet been signed there. Per-bar signatures are a persisted attribute; varp 77
- * and varbit 13714 are the native client/quest surfaces and are re-sent on login.
+ * omit the Barcrawl option. A bar offers its drink only while the player carries
+ * the card and has not yet been signed there (the Wiki's Flying Horse transcript;
+ * Lost City at every bar), or after the crawl, which the drink then starts over
+ * (Wiki: Barcrawl card). The bartender's usual menu gets the Barcrawl option,
+ * worded and placed as the Wiki's Barcrawl transcript has it; Blurberry goes
+ * straight to it and the Rising Sun's barmaids open with that transcript's menu
+ * (Recipe for Disaster's Golden Nectar menu, when that talk applies, gets the
+ * option instead). Using the card on the bartender starts it too (the Wiki's
+ * Flying Horse transcript; Lost City at the other bars). Per-bar signatures are a
+ * persisted attribute; varp 77 and varbit 13714 are the native client/quest
+ * surfaces and are re-sent on login.
  *
  * Stages: 0 unstarted, 1 card held, 2 handed in (cache DB row 4 endstate 2).
  *
@@ -48,7 +55,7 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     CountdownTask,
   } = api.core;
   const { lowerSkillByCurrent } = require("../../items/ConsumableEffects");
-  const { registerQuest } = require("../QuestRuntime");
+  const { registerQuest, questNamed } = require("../QuestRuntime");
   const { startDialogue } = require("../../npcs/NpcDialogues.plugin.js");
 
   const CARD = ItemIdentifiers.BARCRAWL_CARD;
@@ -70,6 +77,11 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
   const ACTION_AUTO_SMASH_ON = "barcrawl:auto-smash-on";
   const ACTION_AUTO_SMASH_OFF = "barcrawl:auto-smash-off";
   const DRINK_PREFIX = `${ACTION_DRINK}:`;
+  const ACTION_ALES = "barcrawl:ales";
+  const ACTION_DWARVES = "barcrawl:dwarves";
+  const ALES_OPTION = "What ales are you serving?";
+  const DWARVES_OPTION = "What can you tell me about dwarves and ale?";
+  const BLURBERRY_BARMAN = 6532;
   /** Wiki: a drained stat drops by 5 plus a share of its current level. */
   const DRAIN_FLAT = 5;
   const DRAIN_SHARE = 0.05;
@@ -114,12 +126,16 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
    * Each bar's drink after the price line, by tick from the box closing: `text` a game message (`filtered`: one the
    * chat's Game: Filtered hides), `sign` the card's signature, `drain` the stat drops, `damage` the hit, `overhead`
    * the player's shout, `player` the player's chatbox line, `shake` the sway on or off.
-   * `signed(name)` words the line from the NPC's name.
+   * `signed(name)` words the line from the NPC's name. `option` is the bartender's menu option (Wiki transcript) and
+   * `menu` the usual conversation's menu it joins (`in`: one of its options; `before`: the option it precedes, else it
+   * goes last or where the transcript has it); Blurberry has none and the Rising Sun's barmaids get their own.
    */
   const BARS = [
     {
       key: "blue-moon", bit: 1 << 0, name: "Blue Moon Inn", npcs: [1312],
       drink: "Uncle Humphrey's Gutrot", cost: 50,
+      option: "I'm doing Alfred Grimhand's Barcrawl.",
+      menu: { in: "A glass of your finest ale please." },
       effects: { drains: [Skill.ATTACK, Skill.DEFENCE, Skill.STRENGTH, Skill.SMITHING], damage: 0.03 },
       offer: [
         { npc: "Oh no not another of you guys. These barbarian barcrawls cause too much damage to my bar." },
@@ -153,6 +169,8 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     {
       key: "dead-mans-chest", bit: 1 << 2, name: "Dead Man's Chest", npcs: [1314],
       drink: "Supergrog", cost: 15,
+      option: "I'm doing Alfred Grimhand's Barcrawl.",
+      menu: { in: "Nothing, thank you." },
       effects: { drains: [Skill.ATTACK, Skill.DEFENCE, Skill.COOKING, Skill.HERBLORE, Skill.PRAYER] },
       offer: [
         { npc: "Haha time to be breaking out the old Supergrog. That'll be 15 coins please." },
@@ -168,11 +186,13 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     {
       key: "dragon-inn", bit: 1 << 3, name: "Dragon Inn", npcs: [1320],
       drink: "Fire Brandy", cost: 12,
+      option: "I'm doing Alfred Grimhand's Barcrawl.",
+      menu: { in: "I'll give it a miss I think.", before: "One cheap beer please!" },
       effects: { drains: [Skill.ATTACK, Skill.DEFENCE], share: 0.1 },
       offer: [
         { npc: "I suppose you'll be wanting some Fire Brandy. That'll cost you 12 coins." },
       ],
-      decline: "Sorry, I don't have 12 coins.",
+      decline: "Sorry I don't have 12 coins.",
       drinking: [
         { tick: 0, text: "The bartender hands you a small glass and sets light to the contents." },
         { tick: 3, text: "You blow out the flame and drink it.", filtered: true },
@@ -183,6 +203,8 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     {
       key: "flying-horse", bit: 1 << 4, name: "Flying Horse Inn", npcs: [1319],
       drink: "Heart Stopper", cost: 8,
+      option: "I'm doing Alfred Grimhand's Barcrawl.",
+      menu: { in: "I'll have a beer then." },
       effects: { damage: 0.25 },
       offer: [
         { npc: "Fancy a bit of Heart Stopper then do you? It'll only be 8 coins." },
@@ -199,6 +221,8 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     {
       key: "foresters-arms", bit: 1 << 5, name: "Forester's Arms", npcs: [1318],
       drink: "Liverbane Ale", cost: 18,
+      option: "I'm doing Alfred Grimhand's Barcrawl.",
+      menu: { in: "What do you have?", before: "I don't really want anything thanks." },
       effects: { drains: [Skill.ATTACK, Skill.DEFENCE, Skill.FIREMAKING, Skill.FLETCHING, Skill.WOODCUTTING] },
       offer: [
         { npc: "Oh you're a barbarian then. Now which of these barrels contained the Liverbane Ale? That'll be 18 coins please." },
@@ -214,6 +238,8 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     {
       key: "jolly-boar", bit: 1 << 6, name: "Jolly Boar Inn", npcs: [1310],
       drink: "Olde Suspiciouse", cost: 10,
+      option: "I'm doing Alfred Grimhands Barcrawl.",
+      menu: { in: "I'll have a beer please." },
       effects: { drains: [Skill.ATTACK, Skill.DEFENCE, Skill.CRAFTING, Skill.MINING, Skill.MAGIC] },
       offer: [
         { npc: "Ah, there seems to be a fair few doing that one these days. My supply of Olde Suspiciouse is starting to run low, it'll cost you 10 coins." },
@@ -230,6 +256,8 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     {
       key: "karamja", bit: 1 << 7, name: "Karamja Spirits Bar", npcs: [13655],
       drink: "Ape Bite Liqueur", cost: 7,
+      option: "I'm doing Alfred Grimhand's barcrawl.",
+      menu: { in: "Yes please." },
       offer: [
         { npc: "Ah, you'll be wanting some Ape Bite Liqueur then. It's got a lovely banana taste, and it'll only cost you 7 coins." },
       ],
@@ -244,6 +272,9 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     {
       key: "rising-sun", bit: 1 << 8, name: "Rising Sun", npcs: [1317, 10668, 1315, 1316],
       drink: "Hand of Death Cocktail", cost: 70,
+      option: "I'm doing Alfred Grimhand's barcrawl.",
+      ownMenu: true,
+      menu: { in: DWARVES_OPTION, before: DWARVES_OPTION },
       effects: { drains: [Skill.ATTACK, Skill.DEFENCE, Skill.FISHING, Skill.RANGED], damage: 0.03 },
       offer: [
         { npc: "Heehee, this'll be fun!" },
@@ -260,6 +291,8 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     {
       key: "rusty-anchor", bit: 1 << 9, name: "Rusty Anchor", npcs: [1313],
       drink: "Black Skull Ale", cost: 8,
+      option: "I'm doing Alfred Grimhand's Barcrawl.",
+      menu: { in: "Could I buy a beer please?" },
       offer: [
         { npc: "Are you sure? You look a bit skinny for that." },
         { player: "Just give me whatever I need to drink here." },
@@ -332,13 +365,23 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
 
   /** Takes the coins, then plays the drink (`name`: the serving NPC's, for its line), which signs the card. */
   function drinkAt(player, bar, name = "") {
-    if (!bar || quest.getStage(player) !== 1 || !has(player, CARD) || isSigned(player, bar) || drinking.has(player)) return false;
+    if (!bar || !offers(player, bar)) return false;
     if (inventory(player).getAmount(COINS) < bar.cost) return false;
     inventory(player).deleteNumber(COINS, bar.cost);
+    if (quest.getStage(player) >= 2) redo(player);
     playDrink(player, bar, name);
     return true;
   }
 
+  /**
+   * Wiki (Barcrawl card, revision 15360753, trivia): a card taken to a bar after the crawl starts it over, so the
+   * guard keeps the course shut until it is handed in again.
+   */
+  function redo(player) {
+    player.setAttribute(BARS_ATTRIBUTE, 0);
+    quest.setStage(player, 1);
+    sendVar(player, 1);
+  }
 
   function sign(player, bar) {
     player.setAttribute(BARS_ATTRIBUTE, barMask(player) | bar.bit);
@@ -530,12 +573,16 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     player.getPacketSender().sendVarbit(VARBIT_AUTO_SMASH, on === true ? 1 : 0);
   }
 
-  /** The row's lock text is the cache's own (the setting's locked message). */
+  /**
+   * The row's lock text is the cache's own (the setting's locked message). The cache unlocks the row while the crawl
+   * is done or Scorpion Catcher is ([proc,settings_custom_dependency], setting 380), so a crawl started over keeps it
+   * open after Scorpion Catcher.
+   */
   function autoSmashSettingClicked(request) {
     if (request.settingId !== AUTO_SMASH_SETTING) return;
     request.handled = true;
     const { player } = request;
-    if (quest.getStage(player) < 2) {
+    if (quest.getStage(player) < 2 && !questNamed("Scorpion Catcher")?.isComplete(player)) {
       player.sendMessage(AUTO_SMASH_LOCKED);
       return;
     }
@@ -719,23 +766,146 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
     startDialogue(api, event, steps);
   }
 
-  function talkBar(event, bar) {
-    if (!bar || !event.player) return;
-    // A drink in progress counts as signed (its clicks are dropped anyway).
-    if (quest.getStage(event.player) !== 1 || !has(event.player, CARD) || isSigned(event.player, bar) || drinking.has(event.player)) return;
-    event.handled = true;
-    const player = event.player;
-    const steps = [
+  /**
+   * Whether the bar offers its drink: with the card held, mid-crawl at a bar not yet signed (the Wiki's Flying Horse
+   * transcript; Lost City at every bar), or at any bar after the crawl (see redo).
+   */
+  function offers(player, bar) {
+    if (!has(player, CARD) || drinking.has(player)) return false;
+    const stage = quest.getStage(player);
+    return stage >= 2 || (stage === 1 && !isSigned(player, bar));
+  }
+
+  /** The Barcrawl option's conversation; the price line's continue buys the drink, or gets the bar's decline. */
+  function drinkSteps(bar) {
+    return [
       { player: "I'm doing Alfred Grimhand's Barcrawl." },
       ...bar.offer,
+      { type: "action", action: ACTION_DRINK, id: `${DRINK_PREFIX}${bar.key}` },
+      { type: "end" },
     ];
-    if (inventory(player).getAmount(COINS) >= bar.cost) {
-      // The drink closes the box and plays out by itself.
-      steps.push({ type: "action", action: ACTION_DRINK, id: `${DRINK_PREFIX}${bar.key}` });
-    } else {
-      steps.push({ player: bar.decline });
+  }
+
+  /**
+   * The Rising Sun's menu (`greeting`: "Heya! What can I get you?" before it, with no box, rsprox 3241 and 1636;
+   * `dwarves`: Recipe for Disaster's "What can you tell me about dwarves and ale?", which the barmaids keep after its
+   * dwarf step, rsprox 3241 and 1636, and which follows the Barcrawl option as in the Wiki's Barcrawl transcript).
+   */
+  function risingSunSteps(bar, greeting, dwarves) {
+    return [
+      ...(greeting ? [{ npc: "Heya! What can I get you?" }] : []),
+      {
+        type: "choice",
+        options: [
+          { text: ALES_OPTION, steps: [{ type: "action", action: ACTION_ALES, id: ACTION_ALES }] },
+          { text: bar.option, steps: drinkSteps(bar) },
+          ...(dwarves ? [{ text: DWARVES_OPTION, steps: [{ type: "action", action: ACTION_DWARVES, id: ACTION_DWARVES }] }] : []),
+        ],
+      },
+    ];
+  }
+
+  /**
+   * Recipe for Disaster's answer for a barmaid: `applies` while its Golden Nectar talk is her Talk-to (its menu then
+   * gets the Barcrawl option), `again` (a function playing its "again" dwarves talk) once that step is done.
+   */
+  function dwarfTalk(player, npcId) {
+    const query = { player, npcId, applies: false, again: null };
+    api.emitCustomEvent("recipe-for-disaster:dwarf-talk", query);
+    return query;
+  }
+
+  /**
+   * Blurberry goes straight to the Barcrawl (Wiki transcript); the Rising Sun's barmaids open with the Wiki
+   * transcript's menu, whose "What ales are you serving?" plays the barmaid's own ales talk, unless Recipe for
+   * Disaster's Golden Nectar talk takes Talk-to (barMenu adds the option there); after that step the menu keeps the
+   * quest's dwarves option (risingSunSteps). Every other bar keeps its usual conversation, whose menu gets the
+   * Barcrawl option (barMenu).
+   */
+  function talkBar(event, bar) {
+    if (!bar || !event.player || (bar.menu && !bar.ownMenu) || !offers(event.player, bar)) return;
+    const rfd = bar.ownMenu ? dwarfTalk(event.player, event.npcId) : null;
+    if (rfd?.applies) return;
+    event.handled = true;
+    startDialogue(api, event, bar.ownMenu ? risingSunSteps(bar, true, !!rfd.again) : drinkSteps(bar));
+  }
+
+  /**
+   * Using the card on a bartender while the bar offers the drink: the Barcrawl at once (the Wiki's Flying Horse
+   * transcript; Lost City at the other bars), the Rising Sun's menu without its greeting (Lost City; ours during the
+   * Golden Nectar step, where it has no dwarves option), and the Blurberry Bar's barman's pointer to Blurberry (Lost
+   * City). Otherwise the barmaids answer "No thanks, I don't need that." (their Wiki transcripts, for any other item)
+   * and at the others the player gets the game message "Nothing interesting happens." (Wiki: Choose Option).
+   */
+  function cardOnBartender(event) {
+    const { player, npcId } = event;
+    if (event.item?.getId?.() !== CARD || !player) return;
+    const conversation = { player, npc: event.target, npcId, definition: event.definition };
+    const bar = BAR_BY_NPC_ID.get(npcId);
+    if (npcId === BLURBERRY_BARMAN && offers(player, BAR_BY_KEY.get("blurberry"))) {
+      event.handled = true;
+      api.emitCustomEvent("npc-dialogue:start", { ...conversation, select: barmanSteps });
+    } else if (bar && offers(player, bar)) {
+      event.handled = true;
+      const again = bar.ownMenu && !!dwarfTalk(player, npcId).again;
+      startDialogue(api, conversation, bar.ownMenu ? risingSunSteps(bar, false, again) : drinkSteps(bar));
+    } else if (bar?.ownMenu) {
+      event.handled = true;
+      startDialogue(api, conversation, [{ npc: "No thanks, I don't need that." }]);
+    } else if (bar || npcId === BLURBERRY_BARMAN) {
+      event.handled = true;
+      player.sendMessage("Nothing interesting happens.");
     }
-    startDialogue(api, event, steps);
+  }
+
+  /** The Blurberry Bar's barman's Barcrawl talk, from his transcript. */
+  function barmanSteps(steps) {
+    for (const step of steps ?? []) {
+      const option = step?.type === "choice" && step.options?.find(isBarcrawlOption);
+      if (option) return option.steps;
+    }
+    return null;
+  }
+
+  const isBarcrawlOption = (option) => /alfred grimhand'?s barcrawl/i.test(String(option?.text ?? ""));
+
+  /**
+   * The bar's usual menu: its Barcrawl option shows only while the bar offers the drink, worded and placed as the
+   * Wiki's Barcrawl transcript has it, and leads into the drink. The imported transcripts' own Barcrawl options
+   * (Flying Horse, Rusty Anchor, Zembo) are replaced by it.
+   */
+  function barMenu(notice) {
+    const bar = BAR_BY_NPC_ID.get(notice.npcId);
+    if (!bar?.menu || !notice.player) return;
+    const options = notice.options ?? [];
+    if (!options.some((option) => option.text === bar.menu.in)) return;
+    const at = options.findIndex(isBarcrawlOption);
+    const kept = options.filter((option) => !isBarcrawlOption(option));
+    if (!offers(notice.player, bar)) {
+      if (at >= 0) notice.options = kept;
+      return;
+    }
+    const before = bar.menu.before ? kept.findIndex((option) => option.text === bar.menu.before) : -1;
+    const index = at >= 0 ? at : before >= 0 ? before : kept.length;
+    notice.options = [...kept.slice(0, index), { text: bar.option, steps: drinkSteps(bar) }, ...kept.slice(index)];
+  }
+
+  /** The Blurberry Bar's barman points the player to Blurberry, while Blurberry offers the drink (Lost City). */
+  function barmanCondition(event) {
+    if (event.npcId !== BLURBERRY_BARMAN || event.text !== "During Alfred Grimhand's Barcrawl") return null;
+    return offers(event.player, BAR_BY_KEY.get("blurberry"));
+  }
+
+  /** The barmaid's own ales talk, from her transcript: the option, or the branch that starts with its line. */
+  function alesSteps(steps) {
+    for (const step of steps ?? []) {
+      if (step?.type === "choice") {
+        const option = step.options?.find((candidate) => candidate.text === ALES_OPTION);
+        if (option) return option.steps;
+      }
+      if (step?.type === "condition" && step.steps?.[0]?.player === ALES_OPTION) return step.steps;
+    }
+    return null;
   }
 
   function npcOption(event) {
@@ -776,7 +946,16 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
       restartCrawl(player);
     } else if (event.action === ACTION_DRINK) {
       event.handled = true;
-      drinkAt(player, BAR_BY_KEY.get(String(event.stepId ?? "").slice(DRINK_PREFIX.length)), event.definition?.getName?.() ?? "");
+      const bar = BAR_BY_KEY.get(String(event.stepId ?? "").slice(DRINK_PREFIX.length));
+      // The Wiki's transcripts check the coins after the price line.
+      if (bar && offers(player, bar) && inventory(player).getAmount(COINS) < bar.cost) event.steps = [{ player: bar.decline }];
+      else drinkAt(player, bar, event.definition?.getName?.() ?? "");
+    } else if (event.action === ACTION_ALES) {
+      event.handled = true;
+      api.emitCustomEvent("npc-dialogue:start", { player, npc: event.npc, npcId: event.npcId, select: alesSteps });
+    } else if (event.action === ACTION_DWARVES) {
+      event.handled = true;
+      dwarfTalk(player, event.npcId).again?.();
     } else if (event.action === ACTION_COMPLETE) {
       event.handled = true;
       completeCrawl(player);
@@ -832,6 +1011,9 @@ module.exports = function registerAlfredGrimhandsBarcrawlQuest(api) {
 
   api.onNpcInteraction(handleNpcInteraction);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:menu", barMenu);
+  api.onNpcDialogueCondition(barmanCondition);
+  api.onItemOnNpc(cardOnBartender);
   api.onItemAction("Barcrawl card", { Read: readCard });
   api.onCustomEvent("door:toggle", handleGateToggle);
   api.onPlayerLogin(syncVars);

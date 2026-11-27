@@ -2392,6 +2392,34 @@ module.exports = function registerRecipeForDisasterQuest(api) {
     return fill(steps);
   }
 
+  /**
+   * The barmaid's answer to "What can you tell me about dwarves and ale?", from her Golden Nectar talk's "again"
+   * variant.
+   */
+  function startDwarvesTalk(player, npcId) {
+    const { startTranscript } = require("../QuestRuntime");
+    const first = dwarfNpcVariant(player, npcId);
+    const variant = first.endsWith("-again") ? first : `${first}-again`;
+    const speaker = api.core.NpcDefinition.forId(npcId)?.getName?.();
+    return startTranscript(api, player, npcId, DWARF_PAGE, variant, (steps) => {
+      const filled = fillDwarfBartenderJump(steps, npcId, variant, speaker);
+      const menu = filled?.find((step) => step?.type === "choice");
+      return menu?.options?.find((option) => option.text === "What can you tell me about dwarves and ale?")?.steps ?? null;
+    });
+  }
+
+  /**
+   * Whether the barmaid's Talk-to is the Golden Nectar talk: Alfred Grimhand's Barcrawl then adds its option to that
+   * menu, as the Wiki's Barcrawl transcript shows the two together. Once the Mountain Dwarf is freed the barmaids
+   * still offer "What can you tell me about dwarves and ale?" (rsprox 3241, 1636); `again` plays the talk's "again"
+   * variant for the Barcrawl's menu.
+   */
+  function answerDwarfTalk(query) {
+    if (!DWARF_NPCS.has(query.npcId) || stage(query.player) < STAGE_OPENING_COMPLETE) return;
+    if (!hasFlag(query.player, 1)) query.applies = true;
+    else query.again = () => startDwarvesTalk(query.player, query.npcId);
+  }
+
   function handleDwarfNpc(event) {
     const { player, npcId } = event;
     if (!DWARF_NPCS.has(npcId) || stage(player) < STAGE_OPENING_COMPLETE || hasFlag(player, 1)) return false;
@@ -3952,6 +3980,7 @@ module.exports = function registerRecipeForDisasterQuest(api) {
   api.onNpcInteraction("Emily", { "Talk-to": handleDwarfNpc });
   api.onNpcInteraction("Kaylee", { "Talk-to": handleDwarfNpc });
   api.onNpcInteraction("Tina", { "Talk-to": handleDwarfNpc });
+  api.onCustomEvent("recipe-for-disaster:dwarf-talk", answerDwarfTalk);
   api.onNpcInteraction("Rantz", { "Talk-to": handleRantzTalk });
   api.onNpcInteraction(handleOgreBoatTalk);
   api.onNpcRoute(routeOgreBoat);

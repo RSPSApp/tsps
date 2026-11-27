@@ -12341,14 +12341,17 @@
           "wiki": "https://oldschool.runescape.wiki/w/Observatory_Quest",
           "implementedIn": [
             "server/plugins/quests/quests/ObservatoryQuest.Quest.js",
-            "server/plugins/quests/QuestRuntime.js"
+            "server/plugins/quests/QuestRuntime.js",
+            "server/plugins/quests/observatory/Scorpius.ObservatoryQuest.js",
+            "docs/quests/observatory-quest/README.md"
           ],
           "devNotes": [
             "Ported in server/plugins/quests/quests/ObservatoryQuest.Quest.js (transcript-driven variant selection, conditions and hand-ins); see the file header for documented gaps.",
             "The 'Observatory Quest' page in npc-dialogues.json carries 49 variants ('inspecting-the-goblin-stove'); source ids/slugs from npc-dialogues.json + npc-dialogue-index.json / osrsreboxed.",
             "The goblin-kitchen gate is an object puzzle ('unlocking-the-kitchen-gate' with/without waking the guard).",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4165 Observatory Quest: sleeping guard, kitchen gate, cutscene and telescope as live (#4118).",
-            "2026-11-24, main 74609edfe: A wrong sign gets the professor's reply before the chat ends (https://github.com/RSPSApp/tsps/pull/5986) and \"~ previous ~\" in his sign menu goes back a page (https://github.com/RSPSApp/tsps/pull/5990). Verified by server/tests/npc-dialogue-same-as-condition-loops.test.cjs. Existing task statuses are unchanged."
+            "2026-11-24, main 74609edfe: A wrong sign gets the professor's reply before the chat ends (https://github.com/RSPSApp/tsps/pull/5986) and \"~ previous ~\" in his sign menu goes back a page (https://github.com/RSPSApp/tsps/pull/5990). Verified by server/tests/npc-dialogue-same-as-condition-loops.test.cjs. Existing task statuses are unchanged.",
+            "2026-11-27: the post-quest reward from the Spirit of Scorpius works. The first conversation after the quest gives the unholy mould; later ones bless an unpowered symbol into an unholy symbol and replace a lost mould. Before the quest he says only his opening line and RuneScape Classic's \"How dare you disturb me!\". Verified by server/tests/spirit-of-scorpius.test.cjs (17 pass; 15 fail with the unit detached) and docs/quests/observatory-quest/README.md. No packet recording shows the conversation; the pre-quest lines, the blessing order, the pause after it, the chat-head moods and the grave's inscription come from Lost City's 2004 scripts, as that README says. All tasks were already done; no status change."
           ],
           "taskDetails": [
             {

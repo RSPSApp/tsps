@@ -1224,6 +1224,7 @@ export class Combat {
             target.performAnimation(new Animation(target.getBlockAnim()));
         }
         for (const hit of hits) CombatFactory.addPendingHit(hit);
+        if (hits.length === 0) this.holdTargetWithoutHit(target);
 
         // Area/footprint specials strike additional targets with the same method.
         const targeting = CombatSpecial.activeTargetingFor(this.character);
@@ -1257,6 +1258,23 @@ export class Combat {
             else this.cancelIfCurrent(target, generation);
         }
         return true;
+    }
+
+    /**
+     * A monster's attack that strikes nothing itself (a Sulphur Nagua raising its weapon for the
+     * prayer drain) is still an attack: Wiki (PJ timer) has the 8-tick single-way hold refreshed
+     * by each one, so the player stays this monster's and another can't take them over while the
+     * hit-less attack plays out (issue 6811). It only renews a hold this monster has or a free
+     * target, or one an always-multi NPC holds (which never ties a player up, as the single-way
+     * check says); a bystander never engages, as with its hits.
+     */
+    private holdTargetWithoutHit(target: Mobile): void {
+        if (!this.character.isNpc() || !target.isPlayer()) return;
+        if (this.character.hasFlag?.(CombatFactory.BYSTANDER_FLAG) === true) return;
+        const holder = target.getCombat().getAttacker();
+        const holds = holder != null && holder !== this.character && !(holder.isNpc() && holder.getAsNpc().isMultiCombat());
+        if (holds) return;
+        target.getCombat().setUnderAttack(this.character);
     }
 
     private renewInteraction(target: Mobile, generation: number): void {

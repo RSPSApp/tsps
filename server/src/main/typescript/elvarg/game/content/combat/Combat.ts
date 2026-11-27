@@ -795,31 +795,37 @@ export class Combat {
     /** `other` now refers to this character (its damage map, last damager or last attack target). */
     public noteRecordedIn(other: Combat): void {
         if (other === this) return;
+        // A character that left the world is not recorded again (an attack still landing on it after logout).
+        if (this.leftWorld && !this.character.isRegistered()) {
+            this.forgetIn(other);
+            return;
+        }
         const recordedIn = (this.recordedIn ??= new Set());
-        // A long session fights many NPCs: the ones gone from the world no longer need forgetting.
+        // A long session fights many NPCs: the ones gone from the world are dropped, and forget this character
+        // first, so another player still holding a dead NPC's fight doesn't keep this one through it.
         if (recordedIn.size >= RECORDED_IN_PRUNE_AT && !recordedIn.has(other)) {
-            for (const gone of recordedIn) {
-                if (gone.character.isRegistered()) continue;
-                recordedIn.delete(gone);
-                gone.records?.delete(this);
-            }
+            for (const gone of recordedIn) if (!gone.character.isRegistered()) this.forgetIn(gone);
         }
         recordedIn.add(other);
         (other.records ??= new Set()).add(this);
     }
 
+    /** `other` no longer refers to this character, and the two sets that link them drop each other.
+     * Every path that drops a fight from `recordedIn` goes through here. */
+    private forgetIn(other: Combat): void {
+        const character = this.character;
+        if (other.damageMap?.delete(character as Player) && other.damageMap.size === 0) other.damageMap = null;
+        if (other.lastDamager === character) other.lastDamager = null;
+        if (other.lastAttackTarget === character) other.lastAttackTarget = null;
+        this.recordedIn?.delete(other);
+        other.records?.delete(this);
+    }
+
     /** This character leaves the world: every fight that recorded it forgets it. */
     public forgetFights(): void {
-        const player = this.character;
-        for (const other of this.recordedIn ?? []) {
-            other.damageMap?.delete(player as Player);
-            if (other.damageMap?.size === 0) other.damageMap = null;
-            if (other.lastDamager === player) other.lastDamager = null;
-            if (other.lastAttackTarget === player) other.lastAttackTarget = null;
-            other.records?.delete(this);
-        }
+        for (const other of this.recordedIn ?? []) this.forgetIn(other);
         // The players this character recorded (hit, or last attacked) let go of it too.
-        for (const fighter of this.records ?? []) fighter.recordedIn?.delete(this);
+        for (const fighter of this.records ?? []) fighter.forgetIn(this);
         this.records = null;
         this.recordedIn = null;
         this.leftWorld = true;

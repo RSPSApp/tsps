@@ -95,3 +95,34 @@ test("a player who fought another player is not kept by that opponent after leav
   assert.equal(stayer.combat.damageMap, null, "the leaver's damage on the stayer is forgotten");
   assert.equal(stayer.combat.records?.has(leaver.combat) ?? false, false, "the stayer no longer lists the leaver");
 });
+
+test("a dead NPC another player still holds does not keep a player whose long session dropped it", () => {
+  const grinder = fakePlayer("grinder");
+  const helper = fakePlayer("helper");
+  const boss = fakeNpc();
+  boss.combat.addDamage(helper, 5);
+  boss.combat.addDamage(grinder, 5);
+  boss.combat.getKiller(true);
+  boss.registered = false; // killed and despawned
+  for (let i = 0; i < 70; i++) fakeNpc().combat.addDamage(grinder, 1); // the boss is dropped from the grinder's fights
+
+  grinder.registered = false;
+  grinder.combat.forgetFights();
+
+  assert.ok(helper.combat.recordedIn.has(boss.combat), "the helper still lists the dead boss");
+  assert.notEqual(boss.combat.lastDamager, grinder, "but the boss no longer points at the departed grinder");
+});
+
+test("an attack that still lands on a player after it left does not record it again", () => {
+  const npc = fakeNpc();
+  const player = fakePlayer("target");
+  player.registered = false;
+  player.combat.forgetFights();
+
+  npc.combat.lastAttackTarget = player;
+  player.combat.noteRecordedIn(npc.combat); // as the attack path does for a player target
+
+  assert.equal(npc.combat.lastAttackTarget, null);
+  assert.equal(player.combat.recordedIn, null);
+  assert.equal(npc.combat.records?.has(player.combat) ?? false, false);
+});

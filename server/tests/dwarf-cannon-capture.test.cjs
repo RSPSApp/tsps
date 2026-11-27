@@ -12,6 +12,7 @@ const KEY = "dwarf_cannon";
 const LAWGOF_TILE = [2567, 3460, 0];
 const BY_LAWGOF = [2567, 3459, 0];
 const RAILING_1 = { id: 15590, tile: [2555, 3479], stand: [2555, 3480, 0] };
+const INTACT_RAILING = { id: 15601, tile: [2555, 3480], stand: [2554, 3480, 0] };
 const RAILING_6 = { id: 15595, tile: [2577, 3457], stand: [2577, 3458, 0] };
 const TOWER_LADDER = { id: 11, tile: [2570, 3443], stand: [2571, 3443, 1] };
 const REMAINS = { id: 0, tile: [2567, 3444], stand: [2568, 3444, 2] };
@@ -191,6 +192,23 @@ test("the success chance follows Crafting: 61/256 at level 1, 151/256 at 99 (Wik
       withRandom(() => rolls.length ? rolls.shift() : 0.3, () => h.ticks(f, 4));
       assert.equal(varbit(f, RAILING_VARBITS[0]), fixed, `level ${level}, roll ${roll}`);
     }
+  }
+});
+
+test("Inspect on the fence's intact railing: the player's line in chatneu1 (local 1001618 tick 3397)", async (t) => {
+  for (const value of [0, 1, 11]) {
+    const f = actor(t, { stage: value, at: INTACT_RAILING.stand });
+    const sender = f.player.getPacketSender();
+    const heads = [];
+    const sendAnim = sender.sendInterfaceAnimation.bind(sender);
+    sender.sendInterfaceAnimation = (uid, anim) => { heads.push([uid, anim]); return sendAnim(uid, anim); };
+    await click(f, INTACT_RAILING);
+    for (let i = 0; i < 4 && !h.shown(f); i++) h.tick(f);
+    assert.deepEqual(h.shown(f), { who: "PLAYER", text: "This part of the railing seems fine.", npcId: undefined }, `stage ${value}`);
+    assert.deepEqual(heads, [[(217 << 16) | 2, 588]], "chat_right:head, chatneu1");
+    assert.equal(stage(f), value);
+    await h.continueLine(f);
+    assert.equal(h.shown(f), null);
   }
 });
 

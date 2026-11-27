@@ -85,6 +85,7 @@ module.exports = function registerDwarfCannonQuest(api) {
 
   // Locs (cache osrs-242).
   const RAILING_OBJECT_IDS = [15590, 15591, 15592, 15593, 15594, 15595]; // mcannon_railing<n>_multiloc
+  const INTACT_RAILING_OBJECT_ID = 15601; // mcannon_dwarf_railing_fixed: the camp fence's unbroken parts
   const REMAINS_OBJECT_ID = 0; // mcannonremains_multiloc: Dwarf remains (15596) while varp 0 is 3
   const REMAINS_TILE = { x: 2567, y: 3444, z: 2 };
   const CRATE_OBJECT_ID = 1; // mcannoncrateboy
@@ -98,6 +99,7 @@ module.exports = function registerDwarfCannonQuest(api) {
 
   // Captured timings and ids.
   const LADDER_ANIMATION = 828; // human_reachforladder
+  const CHATNEU1 = 588; // the intact railing's player head
   const MUDPILE_ANIMATION_TICKS = 2; // from arrival
   const MUDPILE_MOVE_TICKS = 3;
   const SEARCH_ANIMATION = 827; // human_pickupfloor
@@ -407,6 +409,18 @@ module.exports = function registerDwarfCannonQuest(api) {
     brokenRailingBox(player, current === STAGE_FIX_RAILINGS ? () => attemptRailing(player, railingIndex) : null);
   }
 
+  /**
+   * Inspect on the fence's unbroken railing (local 1001618 tick 3397, while railing 1 was
+   * still broken): the player's line, chatneu1, with no stage condition in the capture.
+   */
+  function inspectIntactRailing(player) {
+    const { DialogueChainBuilder, PlayerDialogue, EndDialogue } = api.core;
+    const chain = new DialogueChainBuilder()
+      .add(new PlayerDialogue(0, "This part of the railing seems fine.", CHATNEU1))
+      .add(new EndDialogue(1));
+    player.getDialogueManager().startDialogues(chain);
+  }
+
   function sayFixedAll(player) {
     startTranscript(api, player, LAWGOF, PAGE, "fixing-the-railings-inspecting-a-fixed-railing-or-using-a-railing-on-a-fixed-railing");
   }
@@ -697,6 +711,9 @@ module.exports = function registerDwarfCannonQuest(api) {
     const railingIndex = RAILING_OBJECT_IDS.indexOf(objectId);
     if (railingIndex >= 0 && action === "inspect") {
       inspectRailing(player, railingIndex);
+      event.handled = true;
+    } else if (objectId === INTACT_RAILING_OBJECT_ID && action === "inspect") {
+      inspectIntactRailing(player);
       event.handled = true;
     } else if (objectId === REMAINS_OBJECT_ID && at(event.location, REMAINS_TILE) && action === "take") {
       pickUpRemains(player);

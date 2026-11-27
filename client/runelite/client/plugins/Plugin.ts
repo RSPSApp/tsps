@@ -8,6 +8,8 @@ export interface PluginDescriptor {
     description?: string;
     tags?: string[];
     enabledByDefault?: boolean;
+    /** False for always-on settings plugins: the hub hides the switch and ignores stored false. */
+    toggleable?: boolean;
     hidden?: boolean;
     developerPlugin?: boolean;
     conflicts?: string[];

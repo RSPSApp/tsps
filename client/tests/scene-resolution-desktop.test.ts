@@ -10,7 +10,7 @@ const cases = [
         agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:160.0) Gecko/20100101 Firefox/160.0",
         touch: 10,
         coarse: true,
-        expectedScale: 0.6,
+        expectedScale: 0.5,
     },
     {
         name: "desktop without touch",
@@ -24,7 +24,7 @@ const cases = [
         agent: "Mozilla/5.0 (Linux; Android 14) Chrome/156.0 Mobile Safari/537.36",
         touch: 5,
         coarse: true,
-        expectedScale: 0.6,
+        expectedScale: 0.5,
     },
     {
         name: "iPhone",

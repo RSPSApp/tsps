@@ -78,9 +78,9 @@ assert.equal(high.maxPlayersPerMap, Number.POSITIVE_INFINITY);
 const autoMobile = computePerformancePolicy(new ConfigManager(), { facts: phone, probe: false });
 assert.equal(autoMobile.mode, PerformanceMode.AUTO);
 assert.equal(autoMobile.preset, "auto-mobile");
-assert.equal(autoMobile.sceneResolution, 0.6);
-assert.equal(autoMobile.drawDistanceCap, 20);
-assert.equal(autoMobile.lodThresholdCap, 10, "today's mobile low-end LOD cap is preserved");
+assert.equal(autoMobile.sceneResolution, 0.5);
+assert.equal(autoMobile.drawDistanceCap, 12);
+assert.equal(autoMobile.lodThresholdCap, 6, "today's mobile low-end LOD cap is preserved");
 assert.equal(autoMobile.fpsLimit, 30);
 assert.equal(autoMobile.workerCount, 1);
 

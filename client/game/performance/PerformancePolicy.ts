@@ -281,9 +281,11 @@ function presetValues(preset: PerformancePreset, facts: PerformanceFacts) {
     switch (preset) {
         case "auto-mobile":
             return {
-                sceneResolution: facts.ios ? 0.5 : 0.6,
-                drawDistanceCap: facts.ios ? 18 : 20,
-                lodThresholdCap: 10,
+                // Main's mobile default: Low-end Device was enabled by default on phones/tablets
+                // and iPhones, so Auto must keep 0.5 / 12 tiles / LOD 6, not the opt-out profile.
+                sceneResolution: 0.5,
+                drawDistanceCap: 12,
+                lodThresholdCap: 6,
                 fpsLimit: 30,
                 sceneMsaaSamples: 0,
                 workerCount: 1,
@@ -459,7 +461,7 @@ function readConfig(configManager: ConfigManager) {
     };
 }
 
-function migrateLowEndPlugin(configManager: ConfigManager): PerformanceMode {
+function migrateLowEndPlugin(configManager: ConfigManager, facts: PerformanceFacts): PerformanceMode {
     const savedMode = configManager.getConfiguration(PerformanceConfig.group, "mode");
     if (savedMode !== undefined) return configManager.getConfig(PerformanceConfig).mode() as PerformanceMode;
     // Only an explicitly stored plugin choice migrates. A mobile default must stay Auto.
@@ -467,6 +469,12 @@ function migrateLowEndPlugin(configManager: ConfigManager): PerformanceMode {
     if (legacy === "true") {
         configManager.setConfigValue(PerformanceConfig, "mode", PerformanceMode.LOW);
         return PerformanceMode.LOW;
+    }
+    if (legacy === "false" && facts.handheld) {
+        // A handheld user who explicitly turned the old low-end preset off keeps that opt-out:
+        // the high preset still enforces every handheld worker/cache/canvas cap.
+        configManager.setConfigValue(PerformanceConfig, "mode", PerformanceMode.HIGH);
+        return PerformanceMode.HIGH;
     }
     return PerformanceMode.AUTO;
 }
@@ -477,7 +485,7 @@ export function computePerformancePolicy(
 ): PerformancePolicy {
     const facts = options.facts ?? getPerformanceFacts();
     const overrides = readConfig(configManager);
-    const mode = migrateLowEndPlugin(configManager);
+    const mode = migrateLowEndPlugin(configManager, facts);
     let resolvedAutoTier: PerformanceTier | undefined;
     if (mode === PerformanceMode.AUTO && !facts.handheld) {
         if (options.probe === false) {

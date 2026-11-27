@@ -59,7 +59,7 @@ async function setupPlugins(mode: PerformanceMode, renderDistance = 25) {
     await manager.setPluginEnabled(GpuPlugin, true);
     const clientPlugins = new ClientPluginManager();
     for (const plugin of manager.getPlugins()) clientPlugins.add(plugin);
-    return { config, client, clientPlugins };
+    return { config, client, clientPlugins, manager };
 }
 
 test("1. Medium has no scene MSAA; High asks for exactly four samples on WebGL and WebGPU", async () => {
@@ -121,6 +121,14 @@ test("3. GpuPlugin re-reads after a Performance policy change", async () => {
     assert.ok(gpu);
     assert.equal(gpu.msaaSamples, 0, "Low turns scene AA off");
     assert.equal(gpu.fpsLimit, 30, "Low's FPS cap applies");
+});
+
+test("3b. The Performance settings plugin is not toggleable", async () => {
+    assert.equal(PerformancePlugin.descriptor.toggleable, false);
+    const { manager } = await setupPlugins(PerformanceMode.MEDIUM);
+    await manager.setPluginEnabled(PerformancePlugin, false);
+    assert.equal(manager.isEnabled(PerformancePlugin), true,
+        "stored/attempted disable is ignored so config changes keep applying");
 });
 
 test("4. Untouched GPU draw distance keeps the client's longer choice", async () => {

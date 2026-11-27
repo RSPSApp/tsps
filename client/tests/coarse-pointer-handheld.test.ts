@@ -29,7 +29,9 @@ const result = spawnSync(process.execPath, ["--import", require.resolve("tsx"), 
     const { getPerformancePolicy } = require("./game/performance/PerformancePolicy");
     const policy = getPerformancePolicy();
     assert.equal(policy.preset, "auto-mobile");
-    assert.equal(policy.sceneResolution, 0.6);
+    assert.equal(policy.sceneResolution, 0.5);
+    assert.equal(policy.drawDistanceCap, 12);
+    assert.equal(policy.lodThresholdCap, 6);
     assert.equal(policy.workerCount, 1);
     assert.equal(policy.mapSquareCacheLimit, 64);
     assert.equal(policy.sceneChunkMaxSquares, 1);

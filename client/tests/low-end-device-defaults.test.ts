@@ -28,7 +28,9 @@ assert.equal(PerformancePlugin.descriptor.enabledByDefault, true);
     const policy = computePerformancePolicy(config, { facts: mobileFacts, probe: false });
     assert.equal(policy.mode, PerformanceMode.AUTO);
     assert.equal(policy.preset, "auto-mobile");
-    assert.equal(policy.sceneResolution, 0.6);
+    assert.equal(policy.sceneResolution, 0.5);
+    assert.equal(policy.drawDistanceCap, 12);
+    assert.equal(policy.lodThresholdCap, 6);
     assert.equal(policy.workerCount, 1);
 }
 
@@ -43,12 +45,18 @@ assert.equal(PerformancePlugin.descriptor.enabledByDefault, true);
     assert.equal(config.getConfiguration("performance", "mode"), "Low", "the migration is saved");
 }
 
-// Explicitly turning the old plugin off is not an explicit Low choice.
+// Explicitly turning the old plugin off keeps the opt-out.
 {
     const config = new ConfigManager();
     config.setConfiguration("runelite", "lowenddeviceplugin", "false");
-    const policy = computePerformancePolicy(config, { facts: desktopFacts, probe: false });
-    assert.equal(policy.mode, PerformanceMode.AUTO);
+    const desktop = computePerformancePolicy(config, { facts: desktopFacts, probe: false });
+    assert.equal(desktop.mode, PerformanceMode.AUTO, "desktop stays on hardware Auto");
+
+    const mobileConfig = new ConfigManager();
+    mobileConfig.setConfiguration("runelite", "lowenddeviceplugin", "false");
+    const mobile = computePerformancePolicy(mobileConfig, { facts: mobileFacts, probe: false });
+    assert.equal(mobile.mode, PerformanceMode.HIGH, "a handheld opt-out maps to High");
+    assert.equal(mobile.workerCount, 1, "handheld memory caps still apply");
 }
 
 // A saved new preset always wins over the old key.

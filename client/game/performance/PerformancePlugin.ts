@@ -39,6 +39,7 @@ export class PerformancePlugin extends Plugin {
             "draw-distance and FPS overrides. Mobile memory limits still apply on High.",
         tags: ["graphics", "performance", "fps", "low detail", "mobile"],
         enabledByDefault: true,
+        toggleable: false,
         configKey: "performanceplugin",
     };
 

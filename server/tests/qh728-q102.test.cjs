@@ -20,6 +20,7 @@ const runtime = require('../plugins/quests/QuestRuntime');
 const dialogues = require('../data/definitions/npc-dialogues.json');
 const dialogueIndex = require('../data/definitions/npc-dialogue-index.json');
 const groundItemDefinitions = require('../data/definitions/ground-items.json');
+const FERRY_ROUTES = require('../plugins/world/data/ferries.json').routes;
 const { pickVariant, flatten } = require('../plugins/npcs/NpcDialogues.plugin');
 const core = PluginManager.getCoreApi();
 const noop = () => {};
@@ -173,9 +174,12 @@ function harness() {
     }),
     onCustomEvent: (key, handler) => (events[key] ??= []).push(handler),
     emitCustomEvent: (key, event) => {
-      // The Ferries plugin takes Holgart's crossings (ferries:travel): recorded, not sailed.
+      // The Ferries plugin takes Holgart's crossings (ferries:travel): recorded, and the player
+      // lands where the route's ferries.json row puts them (no trip is sailed).
       if (key === 'ferries:travel') {
         trips.push(event.route);
+        const to = FERRY_ROUTES[event.route]?.to;
+        if (to) event.player.moveTo(new core.Location(...to));
         event.handled = true;
       }
       (events[key] ??= []).forEach(handler => handler(event));
@@ -683,6 +687,43 @@ test("Holgart's Travel rows the leg the stage and dock give, from the boat repai
   // Ours: the stage 4 platform Travel takes the Talk-to's island leg.
   assert.equal(go(4, 2781, 3274), 'sea-slug-island');
   assert.equal(h.quest.getStage(p), 5);
+  // Ours: stage 5 back on the platform before meeting Kent, Travel goes to the island too.
+  assert.equal(go(5, 2781, 3274), 'sea-slug-island');
+  assert.equal(go(3, 2781, 3274), 'sea-slug-witchaven');
+});
+
+test("Holgart's words follow where he is: the platform Holgart rows back, Witchaven's rows out (issue 6879)", () => {
+  const h = harness();
+  const p = makePlayer('sea-slug-places');
+  const at = (stage, x, y) => {
+    h.quest.setStage(p, stage);
+    p.setLocation(x, y, 0);
+    return variant(h, p, N.HOLGART);
+  };
+  const SHORE = 'talking-to-holgart-talking-to-holgart-after-fixing-the-boat';
+  const PLATFORM = 'at-the-fishing-platform-talking-to-holgart-at-the-fishing-platform';
+  const ISLAND_RETURN = 'at-the-shipwreck-island-talking-to-holgart-again-before-returning-to-the-fishing-platform';
+  // Stage 3 off the boat (2782,3273): the platform Holgart offers the way back, not the platform.
+  assert.equal(at(3, 2782, 3273), PLATFORM);
+  assert.equal(at(3, 2721, 3305), SHORE);
+  assert.equal(at(4, 2782, 3273), 'talking-to-holgart-after-talking-to-kennith');
+  assert.equal(at(5, 2782, 3273), 'talking-to-holgart-after-talking-to-kennith', 'Ours: back to the island before Kent');
+  assert.equal(at(5, 2800, 3320), 'at-the-shipwreck-island-talking-to-holgart');
+  assert.equal(at(6, 2800, 3320), ISLAND_RETURN);
+  for (const stage of [6, 7, 8, 9, 10]) {
+    assert.equal(at(stage, 2782, 3273), PLATFORM, `stage ${stage} on the platform`);
+    assert.equal(at(stage, 2721, 3305), SHORE, `stage ${stage} at Witchaven`);
+  }
+  assert.equal(at(11, 2782, 3273), 'freeing-kennith-talking-to-holgart');
+  assert.equal(at(11, 2721, 3305), SHORE, 'Ours: Witchaven never rows to Witchaven');
+
+  // The platform talk's "Okay, let's go back." rows to Witchaven and lands there.
+  h.quest.setStage(p, 3);
+  p.setLocation(2782, 3273, 0);
+  action(h, p, N.HOLGART, 'w8c3IN');
+  assert.equal(h.trips.at(-1), 'sea-slug-witchaven');
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [2722, 3305]);
+  assert.equal(variant(h, p, N.HOLGART), SHORE);
 });
 
 test("Holgart's Travel yields once The Slug Menace has his boat (its capture, ticks 1441, 5164)", () => {
@@ -706,8 +747,9 @@ test('a completed player gets the canonical Holgart page, not the Sea Slug lines
   const h = harness();
   const p = makePlayer('sea-slug-post');
 
-  // Before the completion the Sea Slug page owns the return home.
+  // Before the completion the Sea Slug page owns the return home, from the platform.
   h.quest.setStage(p, 11);
+  p.setLocation(2782, 3273, 0);
   const before = runTranscript(h, p, MAINLAND_HOLGART);
   assert.equal(before.page, 'Sea Slug');
   assert.equal(variant(h, p, MAINLAND_HOLGART), 'freeing-kennith-talking-to-holgart');

@@ -890,12 +890,18 @@ module.exports = function registerTheHeartOfDarknessQuest(api) {
     if (id !== RUINS_STAIRS_ID) return false;
     const { player } = event;
     const current = stage(player);
-    if (current < S.BELOW) return false;
-    event.handled = true;
-    if (current >= S.BANISHED) {
-      play(player, NPC.SERVIUS, V.RUINS_AGAIN);
+    if (current < S.BELOW) {
+      // The Wiki: prior to quest completion the ruins are not accessible. The captured
+      // "RUINS_AGAIN" line is the quest scene's, not a generic refusal, so seal the
+      // entrance with a message instead (ours: not captured).
+      event.handled = true;
+      player.sendMessage("You can't enter the Ruins of Tapoyauik until you complete The Heart of Darkness.");
       return true;
     }
+    // After the quest the entrance stays open (the Tower of Ascension lift is only a
+    // shortcut), so the declared climb link (data/climb-links.json) carries the player in.
+    if (current >= S.BANISHED) return false;
+    event.handled = true;
     if (current === S.BELOW && !follower(player)) {
       play(player, NPC.RUINS_GUARDS[0], V.RUINS_GUARD_ALONE);
       return true;

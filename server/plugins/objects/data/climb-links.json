@@ -90,6 +90,13 @@
       "up": { "id": 61190, "x": 3417, "y": 3484, "z": 0 },
       "down": { "id": 62173, "x": 3417, "y": 3484, "z": 1 },
       "downLanding": { "x": 3417, "y": 3483, "z": 0 }
+    },
+    {
+      "name": "Ruins of Tapoyauik entrance stairs (cache rev 242: surface 54525 offers Climb-down at 1693,3230,0 and the ruins 54526 offers Climb-up at 1693,9630,2 — the ruins' +6400 underground plane is at height z2, which the generic plane-0 underground search cannot see, so the pair is declared. Landings: down on 1692,9630,2 and up on 1692,3230,0, both verified walkable next to the destination stairs (clip 0x1008 / 0x10080); the north row of the ruins is walled (0x20100). Post-quest re-entry per the Wiki's entrance map pin; the pre-quest seal is the Heart of Darkness quest's)",
+      "up": { "id": 54526, "x": 1693, "y": 9630, "z": 2 },
+      "down": { "id": 54525, "x": 1693, "y": 3230, "z": 0 },
+      "landing": { "x": 1692, "y": 3230, "z": 0 },
+      "downLanding": { "x": 1692, "y": 9630, "z": 2 }
     }
   ],
   "messages": {

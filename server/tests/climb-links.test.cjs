@@ -71,6 +71,16 @@ test("the Kebos Lowlands spiral staircase lands up on its north-east tile, as ca
     assert.deepEqual(lands(mapObject(1239, 3685, 1, 34503), ClimbLinks.DOWN, new Location(1240, 3687, 1)), [1240, 3684, 0]);
 });
 
+test("the Ruins of Tapoyauik entrance stairs link both ways (the ruins pair sits at height z2, beyond the generic plane-0 underground search)", () => {
+    // Surface 54525 offers Climb-down at 1693,3230,0; the ruins 54526 offers Climb-up at
+    // 1693,9630,2 (+6400 underground plane, height z2). Declared landings: down on
+    // 1692,9630,2, up on 1692,3230,0 — both walkable, the north row of the ruins walled.
+    assert.deepEqual(lands(mapObject(1693, 3230, 0, 54525), ClimbLinks.DOWN, new Location(1693, 3231, 0)), [1692, 9630, 2]);
+    assert.deepEqual(lands(mapObject(1693, 9630, 2, 54526), ClimbLinks.UP, new Location(1694, 9630, 2)), [1692, 3230, 0]);
+    assert.equal(RegionManager.blocked(new Location(1692, 9630, 2), null), false, "the down landing is walkable");
+    assert.equal(RegionManager.blocked(new Location(1692, 3230, 0), null), false, "the up landing is walkable");
+});
+
 test("the Kualti underground staircase in Civitas illa Fortis lands on one tile each way, from either side", () => {
     // rsprox 1098: down from 1641,3164,0 and 1640,3164,0 both land on 1640,9567,0; up from
     // 1641,9567,0 and 1640,9567,0 both on 1640,3164,0.

@@ -23861,7 +23861,7 @@
   {"level":0,"name":"Kalphite Soldier","x":3301,"y":9528,"id":958},
   {"level":0,"name":"Kalphite Soldier","x":3305,"y":9516,"id":958},
   {"level":0,"name":"Kalphite Soldier","x":3305,"y":9522,"id":958},
-  {"level":0,"name":"Entomologist","x":3307,"y":9506,"id":491},
+  {"level":0,"name":"Entomologist","x":3307,"y":9506,"id":491,"wanderRadius":0},
   {"level":0,"name":"Kalphite Soldier","x":3309,"y":9480,"id":958},
   {"level":0,"name":"Kalphite Soldier","x":3309,"y":9529,"id":958},
   {"level":0,"name":"Kalphite Soldier","x":3311,"y":9521,"id":958},

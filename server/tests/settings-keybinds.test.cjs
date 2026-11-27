@@ -753,7 +753,7 @@ test('the mute buttons save the volume and restore it, as live does', () => {
     getAudioSettings: () => audio,
     setAudioSetting: (varp, value) => { audio[varp] = value; return true; },
     applyAudioSettingFromClient: (varp, value) => { audio[varp] = value; return true; },
-    getPacketSender: () => ({ sendConfig: (varp, value) => sent.push([varp, value]) }),
+    getPacketSender: () => ({ getVarp: () => 0, sendConfig: (varp, value) => sent.push([varp, value]) }),
   };
   const click = (component) => {
     const buttonId = (116 << 16) | component;
@@ -783,7 +783,8 @@ test('the saved-levels varp keeps its high bits: a live negative 3109 survives t
   const LIVE = -2146989505;
   const player = new Player(null);
   const sent = [];
-  player.getPacketSender = () => ({ sendConfig: (varp, value) => sent.push([varp, value]) });
+  // The server sent the same high bits (bit 31 is the Make-X row, set at login).
+  player.getPacketSender = () => ({ getVarp: (varp) => (varp === 3109 ? LIVE : 0), sendConfig: (varp, value) => sent.push([varp, value]) });
   assert.equal(player.applyAudioSettingFromClient(3109, LIVE), true);
   assert.equal(player.getAudioSettings()[3109], LIVE, 'the client value is kept, not clamped to 0');
   player.applyAudioSettingFromClient(3109, -2147483643);
@@ -805,6 +806,44 @@ test('the saved-levels varp keeps its high bits: a live negative 3109 survives t
   loaded.applyAudioSettingFromClient(168, 0);
   assert.equal(buttons.get(mute)({ player: loaded, buttonId: mute }), true);
   assert.equal(loaded.getAudioSettings()[168], 50);
+});
+
+test('a mute keeps the All Settings rows on its varp: "Make-X for darts and bolts" is 3109 bit 31 (issue 6797)', () => {
+  const { buttons, logins } = registered();
+  const MAKE_X = CacheDefinitions.getVarbitId('option_fletch_dart_or_bolt_makex');
+  assert.deepEqual([CacheDefinitions.getVarbit(MAKE_X).baseVar, CacheDefinitions.getVarbit(MAKE_X).startBit], [3109, 31]);
+  const player = varpPlayer();
+  const audio = { 168: 40, 169: 65, 872: 100, 3796: 100, 3109: 0, 3797: 0 };
+  Object.assign(player, {
+    getAudioSettings: () => audio,
+    setAudioSetting: (varp, value) => { audio[varp] = value | 0; return true; },
+    applyAudioSettingFromClient: (varp, value) => { audio[varp] = value | 0; return true; },
+  });
+  const makeX = () => player.getPacketSender().getVarbit(MAKE_X);
+  player.getPacketSender().getVarbit = (id) => {
+    const { baseVar, startBit } = CacheDefinitions.getVarbit(id);
+    return (player.getPacketSender().getVarp(baseVar) >>> startBit) & 1;
+  };
+  // Login: the audio copy goes out first (Player.onLogin), then the row's default (on).
+  player.getPacketSender().sendConfig(3109, audio[3109]);
+  for (const login of logins) { try { login({ player }); } catch {} }
+  assert.equal(makeX(), 1, 'Make-X is on by default');
+  const mute = (component) => {
+    const buttonId = (116 << 16) | component;
+    assert.equal(buttons.get(buttonId)({ player, buttonId }), true);
+  };
+  mute(110); // music
+  assert.equal(makeX(), 1, 'muting music keeps Make-X on');
+  assert.equal(player.getPacketSender().getVarp(3109) & 0xff, 40, 'and saves the music level');
+  mute(124); // sound effects
+  assert.equal(makeX(), 1);
+  assert.equal((player.getPacketSender().getVarp(3109) >>> 8) & 0x7f, 65);
+  // Turned off in All Settings, a mute leaves it off.
+  player.getPacketSender().sendVarbit(MAKE_X, 0);
+  mute(110); // unmute music
+  mute(138); // mute area sounds
+  assert.equal(makeX(), 0, 'muting keeps Make-X off');
+  assert.equal((player.getPacketSender().getVarp(3109) >>> 15) & 0x7f, 100);
 });
 
 test('the volume sliders get the transmit-trigger event at login, so the client sends their triggers', async () => {

@@ -881,6 +881,8 @@ export class Player extends Mobile {
         }
         CombatPoisonEffect.resume(this);
         ArceuusSpells.syncDeathCharge(this);
+        // 3109 also holds All Settings row 316 (bit 31), which this copy may hold stale: the Settings
+        // plugin's login restore sends the row after this, so nothing may resend 3109 from here later.
         for (const [varpId, value] of Object.entries(this.audioSettings)) {
             const id = Number(varpId);
             // The music settings share varp 19 with bits the server owns.

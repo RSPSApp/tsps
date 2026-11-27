@@ -1036,6 +1036,22 @@ function releaseVolumeSlider({ player, buttonId, argsData, scriptTrigger }) {
   return true;
 }
 
+const settingRowMasks = new Map();
+
+/** The bits of a varp that settings.json rows keep as varbits. */
+function settingRowBits(varp) {
+  if (!settingRowMasks.has(varp)) {
+    let mask = 0;
+    for (const row of Object.values(SETTINGS)) {
+      if (row.varbit === undefined) continue;
+      const { baseVar, startBit, endBit } = CacheDefinitions.getVarbit(row.varbit);
+      if (baseVar === varp) mask |= (endBit - startBit >= 31 ? -1 : ((1 << (endBit - startBit + 1)) - 1)) << startBit;
+    }
+    settingRowMasks.set(varp, mask);
+  }
+  return settingRowMasks.get(varp);
+}
+
 function toggleMute({ player, buttonId }) {
   const mute = VOLUME_MUTE_BUTTONS.get(buttonId);
   const settings = player.getAudioSettings?.();
@@ -1044,7 +1060,12 @@ function toggleMute({ player, buttonId }) {
   const packed = settings[mute.savedVarp] ?? 0;
   const volume = settings[mute.volumeVarp] ?? 0;
   if (volume > 0) {
-    player.setAudioSetting(mute.savedVarp, (packed & ~mask) | (volume << mute.shift));
+    // The varp also holds All Settings rows (3109 bit 31: "Make-X for darts and bolts"), which the
+    // server sets as varbits without touching the audio copy: their bits come from the varp as sent,
+    // the levels from the audio copy (only this button writes them; no client transmits 3109).
+    const rows = settingRowBits(mute.savedVarp);
+    const current = (packed & ~rows) | (player.getPacketSender().getVarp(mute.savedVarp) & rows);
+    player.setAudioSetting(mute.savedVarp, (current & ~mask) | (volume << mute.shift));
     player.getPacketSender().sendConfig(mute.savedVarp, player.getAudioSettings()[mute.savedVarp]);
     player.applyAudioSettingFromClient(mute.volumeVarp, 0);
   } else {

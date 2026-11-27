@@ -279,7 +279,9 @@ animation in place too, so every id and name a plugin uses stays the same.
 Restart the server after adding or replacing assets. At startup `plugins/world/CustomAnimations`
 checks every stored folder again, gives each animation's frames a frame group of their own
 (30000, 30001, ... in id order), points each graphic at its model and animation, and sends them all
-to players when they log in, in one packet unless they are too many for one. A broken asset turns
+to players when they log in, in one packet unless they are too many for one. An animation too big
+for one packet (64 KiB compressed) goes in several, and the client plays it once all have arrived;
+the asset cap of 1 MiB still applies. A broken asset turns
 custom animations off with a message saying what is wrong; the server keeps running.
 
 Only the frame list (seq opcode 1) is moved to the animation's own frame group. Chat-head frames

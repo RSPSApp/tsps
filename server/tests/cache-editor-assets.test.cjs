@@ -85,7 +85,7 @@ test("a frame with bytes after its last value is refused, as the client refuses 
   assert.equal(Assets.assetsOf(root).length, 0, "nothing was stored");
 });
 
-test("an animation too big for one content packet is refused before it is stored", () => {
+test("an animation too big for one content packet is stored and loads in parts", () => {
   const root = rootWith({ "zamorak-godsword-special/player-anim": "zgs" });
   const folder = path.join(root, "data/models/zgs");
   const sample = fs.readFileSync(path.join(folder, "frames", fs.readdirSync(path.join(folder, "frames"))[0]));
@@ -113,9 +113,15 @@ test("an animation too big for one content packet is refused before it is stored
   const ops = Files.readSeq(new Uint8Array(fs.readFileSync(path.join(folder, "seq.dat"))), "seq.dat");
   ops.find(({ op }) => op === 1).payload = Files.framePayload(ids.map(() => 1), ids);
   fs.writeFileSync(path.join(folder, "seq.dat"), Files.encodeOps(ops.filter(({ op }) => op !== 12 && op !== 13)));
-  assert.throws(() => Assets.addAsset(root, { kind: "animation", library: "zgs" }, core), (failure) => failure.status === 413 && /one content packet/.test(failure.message));
-  assert.equal(Assets.assetsOf(root).length, 0, "nothing was stored");
-  assert.equal(fs.existsSync(path.join(root, "data", "assets")), false, "no files either");
+  const { asset } = Assets.addAsset(root, { kind: "animation", library: "zgs" }, core);
+  assert.equal(asset.frames, count, "stored, with every frame");
+  const loaded = CustomAnimations._test.loadCustomAnimations({ CacheDefinitions, encodeContentData }, root);
+  const [first, ...rest] = loaded.rows;
+  assert.equal(first.kind, "seq");
+  assert.ok(first.parts > 1 && rest.length === first.parts - 1, `split into ${first.parts} parts`);
+  assert.ok(rest.every((row) => row.kind === "frames" && row.id === asset.id && row.group === first.group));
+  assert.equal(loaded.rows.reduce((sum, row) => sum + Object.keys(row.frames).length, 0), count, "each frame once");
+  for (const row of loaded.rows) assert.ok(Files.fitsPacket(encodeContentData, row), `part ${row.part ?? 0} fits a packet`);
 });
 
 test("an animation's packet size is checked with its real id, name and frame group", () => {
@@ -133,8 +139,16 @@ test("an animation's packet size is checked with its real id, name and frame gro
     ["framemap-0.dat", source.get("framemap-0.dat")],
     ["frames/12146-1.dat", Buffer.concat([Buffer.from([0, 0, 0]), noise.subarray(0, padding)])],
   ]);
-  const fits = (padding, id, name, group) => Files.fitsPacket(encodeContentData,
-    Files.animationRow(Files.animationFiles(filesOf(padding), "fixture", CacheDefinitions), id, name, group));
+  // An animation is sent in parts when it needs several packets, so what can still be too big is
+  // one frame: whether the rows the server builds (Files.animationRows) all fit a packet.
+  const fits = (padding, id, name, group) => {
+    try {
+      Files.animationRows(encodeContentData, Files.animationFiles(filesOf(padding), "fixture", CacheDefinitions), id, name, group);
+      return true;
+    } catch {
+      return false;
+    }
+  };
   const largest = (id, name, group) => {
     let low = 0;
     let high = noise.length;
@@ -149,9 +163,10 @@ test("an animation's packet size is checked with its real id, name and frame gro
   assert.equal(name.length, 64, "the longest name an animation keeps");
   const upload = (padding) => ({ kind: "animation", name, files: Object.fromEntries([...filesOf(padding)].map(([file, bytes]) => [file, bytes.toString("base64")])) });
 
-  // The largest upload whose row fits with a placeholder id and name is too big as id 50000 with
-  // this name: the row the server builds at startup is the one that has to fit.
-  const placeholder = largest(0, "animation", 0x7fff);
+  // The largest upload whose rows fit with a placeholder id and frame group is too big as id 50000
+  // in group 30000: the rows the server builds at startup are the ones that have to fit. (The one
+  // frame goes in a "frames" row of its own, which carries the id and group but not the name.)
+  const placeholder = largest(0, name, 0);
   assert.equal(fits(placeholder, 50000, name, CustomAnimations._test.FIRST_FRAME_GROUP), false, "the real row is bigger");
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "cache-editor-assets-"));
   assert.throws(() => Assets.addAsset(root, upload(placeholder), core), (failure) => failure.status === 413 && /one content packet/.test(failure.message));
@@ -165,7 +180,7 @@ test("an animation's packet size is checked with its real id, name and frame gro
   assert.equal(added.asset.id, 50000, "the refused upload used no id");
   assert.equal(added.asset.name, name);
   const loaded = CustomAnimations._test.loadCustomAnimations({ CacheDefinitions, encodeContentData }, root);
-  assert.deepEqual(loaded.rows.map((row) => row.id), [50000]);
+  assert.deepEqual(loaded.rows.filter((row) => row.kind === "seq").map((row) => row.id), [50000]);
 });
 
 test("a graphic's animation link is checked, and a refused graphic leaves no parts behind", () => {

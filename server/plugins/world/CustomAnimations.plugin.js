@@ -30,14 +30,17 @@ function folderOf(root, entry, what) {
   return path.join(Assets.assetRoot(root), ...entry.file.split("/"));
 }
 
-/** One animation: its frames moved to their own group, and seq.dat pointed at them. */
-function loadAnimation(entry, index, root, CacheDefinitions) {
+/**
+ * One animation: its frames moved to their own group, and seq.dat pointed at them. Its rows: one,
+ * or several when it is too big for one content packet (Files.animationRows).
+ */
+function loadAnimation(entry, index, root, CacheDefinitions, encodeContentData) {
   const what = `animation ${entry.id} (${entry.name})`;
   const files = Files.readFolder(folderOf(root, entry, what));
   const checked = Files.animationFiles(files, what, CacheDefinitions);
   const group = FIRST_FRAME_GROUP + index;
   if (group > LAST_FRAME_GROUP) fail(`too many custom animations (frame groups end at ${LAST_FRAME_GROUP})`);
-  return Files.animationRow(checked, entry.id, entry.name, group);
+  return Files.animationRows(encodeContentData, checked, entry.id, entry.name, group);
 }
 
 /** One graphic: pointed at its model asset and its animation (custom or cache). */
@@ -85,15 +88,15 @@ function loadCustomAnimations(core, root = ROOT) {
   animations.forEach((entry) => validEntry(entry, "animation", seenAnimations));
   graphics.forEach((entry) => validEntry(entry, "graphic", seenGraphics));
   const rows = [
-    ...animations.map((entry, index) => loadAnimation(entry, index, root, CacheDefinitions)),
+    ...animations.flatMap((entry, index) => loadAnimation(entry, index, root, CacheDefinitions, encodeContentData)),
     ...graphics.map((entry) => loadGraphic(entry, animations, models, root, CacheDefinitions)),
   ];
   // A custom frame map ships with every animation that uses it, so they must agree on its bytes.
   Files.checkSharedFrameMaps(rows);
   for (const row of rows) {
-    // One packet per animation or graphic; a bigger one needs chunked delivery.
+    // Every row fits a packet: a big animation is already split into parts (Files.animationRows).
     if (!Files.fitsPacket(encodeContentData, row)) {
-      fail(`${row.kind === "seq" ? "animation" : "graphic"} ${row.id} is too big for one content packet`);
+      fail(`${row.kind === "spotanim" ? "graphic" : "animation"} ${row.id} is too big for one content packet`);
     }
   }
   const definition = (row) => ({ id: row.id, name: row.name, data: row.data });
@@ -108,11 +111,18 @@ function loadCustomAnimations(core, root = ROOT) {
  * first starts with a reset row, so a client replaces what it had; it then invalidates once.
  */
 function packetsOf(_CacheDefinitions, rows) {
-  const encode = (packetRows) => encodeContentData("server", [{ key: DATASET, rows: packetRows }]);
+  // The encoder throws past a packet's length field rather than returning a longer packet.
+  const fits = (packetRows) => {
+    try {
+      return encodeContentData("server", [{ key: DATASET, rows: packetRows }]).length <= PACKET_LIMIT;
+    } catch {
+      return false;
+    }
+  };
   const packets = [];
   let current = [{ kind: "reset" }];
   for (const row of rows) {
-    if (current.length > 0 && encode([...current, row]).length > PACKET_LIMIT) {
+    if (current.length > 0 && !fits([...current, row])) {
       packets.push(current);
       current = [];
     }
@@ -129,7 +139,7 @@ function sendCustomAnimations({ player }) {
 
 function customAnimationsResource() {
   const models = new Map(content.graphics.map((entry) => [entry.id, entry.model ?? undefined]));
-  return content.rows.map(({ kind, id, name, group }) => ({ kind: kind === "seq" ? "animation" : "graphic", id, name, frameGroup: group, model: kind === "seq" ? undefined : models.get(id) }));
+  return content.rows.filter((row) => row.kind !== "frames").map(({ kind, id, name, group }) => ({ kind: kind === "seq" ? "animation" : "graphic", id, name, frameGroup: group, model: kind === "seq" ? undefined : models.get(id) }));
 }
 
 function loadInto(api) {

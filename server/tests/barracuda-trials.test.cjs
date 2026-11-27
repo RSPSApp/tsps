@@ -728,16 +728,29 @@ test("Gwenith Glide portals outside a run: they teleport, imbue nothing; each re
   }
 });
 
-test("the masters on their ships' decks are processed and sent to players near the ship", () => {
+test("the masters stand on their ships' hulls and are processed for players near the boat", () => {
   const ships = require("../plugins/skills/sailing/barracudatrials/Ships.BarracudaTrials");
   if (!ships.masterOf(TEMPOR())) ships.spawnAll();
   const ralph = ships.masterOf(TEMPOR());
   assert.ok(ralph, "Ralph on his ship");
+  const boat = ships.shipOf(TEMPOR().master.ship).boat;
+  const at = ralph.getSpawnPosition?.() ?? ralph.getLocation();
+  assert.ok(
+    Math.abs(at.getX() - boat.tileX) <= 8 && Math.abs(at.getY() - boat.tileY) <= 8,
+    "the master stands on the hull itself, not in the ship's deck region 1,200 tiles away (issue 6667)",
+  );
+  if (boat.angle !== 0) {
+    assert.notDeepEqual(
+      [at.getX(), at.getY()],
+      [boat.tileX + 3, boat.tileY + 4],
+      "the deck offset is rotated with the boat, not added straight onto the hull tile",
+    );
+  }
   const { Location } = require("../dist/game/model/Location");
   const nearby = { getLocation: () => new Location(3035, 2920, 0) };
   World.activeRegionIndex.update([nearby], () => true, World.processCycle, Date.now());
   const active = World.collectActiveNpcsForUpdate();
-  assert.ok(active.includes(ralph), "a deck's crew counts where its boat is");
+  assert.ok(active.includes(ralph), "a hull's crew counts where its boat is");
 });
 
 test("intro: lines that move the camera hold their continue back 3 ticks (rsprox 3467)", () => {

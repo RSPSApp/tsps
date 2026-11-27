@@ -12,6 +12,30 @@ const ROS_STEP_TICKS = 8;
 /** Spawned ships by data id: the ship and the NPCs on it. */
 const spawned = new Map();
 
+/**
+ * Where a trial master or assistant stands: on the boat's own hull, in the main world, instead of
+ * in the ship's synthetic deck region. The trial ships are `"boardable": false`, so a deck-region
+ * NPC (StaticShips.addDeckNpc, `deckBaseX + x` — entity 3000 is at 1200,1200) can never be reached
+ * from the water, which is what issue 6667 reports: the boat renders and the master does not.
+ *
+ * The deck-local tile is mapped through `Boat.deckTileToWorld`, which applies the deck base, the
+ * deck centre and the boat's angle — the ships are spawned rotated (Ralph's is at 1536 = 270°), so
+ * adding the offset straight onto the hull tile puts the NPC off the deck rather than on it.
+ */
+function hullLocation(ship, x, y) {
+  const deck = StaticShips.deckLocation(ship, x, y);
+  const world = ship.boat.deckTileToWorld(deck.getX(), deck.getY());
+  return new (common.core().Location)(world.x, world.y, ship.boat.level);
+}
+
+/** A public world NPC standing on the hull at the boat's tile + the deck-local offset. */
+function spawnOnHull(ship, npcId, x, y) {
+  const location = hullLocation(ship, x, y);
+  return common.core().PluginManager.spawnNpc({
+    id: npcId, x: location.getX(), y: location.getY(), z: location.getZ(),
+  });
+}
+
 function spawnShip(entry) {
   const ship = StaticShips.spawn(entry.id, { fineX: entry.fineX, fineY: entry.fineY, angle: entry.angle });
   if (!ship) return undefined;
@@ -28,10 +52,10 @@ function spawnAll() {
       if (!record) continue;
       if (entry.id === trial.master.ship) {
         const [x, y] = trial.master.tile;
-        record.master = StaticShips.addDeckNpc(record.ship, trial.master.npc, x, y, undefined, { shared: true });
+        record.master = spawnOnHull(record.ship, trial.master.npc, x, y);
         if (trial.assistant) {
           const [ax, ay] = trial.assistant.tiles[0];
-          record.assistant = StaticShips.addDeckNpc(record.ship, trial.assistant.npc, ax, ay, undefined, { shared: true });
+          record.assistant = spawnOnHull(record.ship, trial.assistant.npc, ax, ay);
           pace(record, trial.assistant.tiles);
         }
       }
@@ -49,7 +73,7 @@ function pace(record, tiles) {
       const npc = record.assistant;
       if (!npc?.isRegistered?.()) return this.stop();
       const [x, y] = tiles[next];
-      const to = StaticShips.deckLocation(record.ship, x, y);
+      const to = hullLocation(record.ship, x, y);
       npc.setSpawnPosition?.(to);
       PathFinder.calculateWalkRoute(npc, to.getX(), to.getY());
       next = (next + 1) % tiles.length;

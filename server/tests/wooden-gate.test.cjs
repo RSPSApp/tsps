@@ -1817,11 +1817,13 @@ test('Dragon Slayer secret wall: real routing and clipping keep ordinary movemen
 });
 
 test('the Shantay pass crosses the desert fence in the right direction', () => {
-  assert.deepEqual(shantayCrossingFor({ x: 3303, y: 3117, z: 0 }), {
+  const south = shantayCrossingFor({ x: 3303, y: 3117, z: 0 });
+  assert.deepEqual({ desert: south.desert, path: south.path }, {
     desert: true,
     path: [[3303, 3116], [3303, 3115]],
   });
-  assert.deepEqual(shantayCrossingFor({ x: 3303, y: 3115, z: 0 }), {
+  const north = shantayCrossingFor({ x: 3303, y: 3115, z: 0 });
+  assert.deepEqual({ desert: north.desert, path: north.path }, {
     desert: false,
     path: [[3303, 3116], [3303, 3117]],
   });

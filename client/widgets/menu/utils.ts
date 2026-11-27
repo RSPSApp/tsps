@@ -39,15 +39,33 @@ function getWidgetTargetPriority(w: any): number {
 
 function getWidgetSubOptions(w: any, actionIndex: number): string[] | undefined {
     const submenus = w?.submenuActions;
-    if (!Array.isArray(submenus) || actionIndex < 0 || actionIndex >= submenus.length) {
-        return undefined;
-    }
-    const ops = submenus[actionIndex];
+    const scriptRows = Array.isArray(submenus) && actionIndex >= 0 && actionIndex < submenus.length
+        ? submenus[actionIndex]
+        : undefined;
+    // A script's widget.submenuActions win; an item widget falls back to the item's own cache
+    // sub-ops (a slayer ring's Rub > Contact Master / Partner / Open Log and Teleport > its
+    // destinations, any jewellery's Rub > destination). The item's inventory option `actionIndex`
+    // is the same index the client sends back as the sub-op's parent op.
+    const ops = Array.isArray(scriptRows) ? scriptRows : itemSubOps(w, actionIndex);
     if (!Array.isArray(ops)) return undefined;
     // An empty sub-op keeps its place ("" here, not listed in the menu), so each row still
     // sends its own 1-based sub-op index.
     const out: string[] = ops.map((text: unknown) => (typeof text === "string" ? text : ""));
     return out.some((text) => text.length > 0) ? out : undefined;
+}
+
+/** An item widget's cache sub-ops for one inventory option (ObjType.subops[option]). */
+function itemSubOps(w: any, actionIndex: number): (string | null)[] | undefined {
+    const itemId = typeof w?.itemId === "number" ? w.itemId | 0 : -1;
+    if (itemId < 0 || actionIndex < 0) return undefined;
+    let obj: any;
+    try {
+        obj = lookupObjType?.(itemId);
+    } catch {
+        return undefined;
+    }
+    const rows = obj?.subops;
+    return Array.isArray(rows) ? rows[actionIndex] : undefined;
 }
 
 function buildWidgetOpEntry(w: any, actionIndex: number, option: string, target?: string) {

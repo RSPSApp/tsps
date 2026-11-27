@@ -309,16 +309,19 @@ const JEWELLERY = [
     rubMessage: "You rub the ring...",
     emptyMessage: "Your ring hasn't got any charges left.",
     lastChargeMessage: "Your Slayer ring has worn out.",
-    teleportOptions: ["Rub", "Teleport"],
-    // Rub's submenu is actions, not destinations (item params 451-455); Teleport picks one.
-    subOps: ["check", "teleport", "master", "partner", "log"],
+    // The cache gives this ring two submenus, and they are different kinds of thing: Rub's rows
+    // are actions (Contact Master, Partner, Open Log) and Teleport's are the destinations below.
+    // A bare Teleport click still offers the list, which a client without the flyout needs.
+    teleportOptions: ["Teleport"],
+    actionRows: ["Contact Master", "Partner", "Open Log"],
     destinations: [
       // Wiki (Slayer ring, Teleports): Slayer Tower needs Priest in Peril, Tarn's Lair Haunted Mine, Dark Beasts
       // Mourning's End Part II, Wyrmscraig Cavern (added 29 July 2026, near Mortimer) Fallen From Grace.
+      // `aliases` are the rows' own names in the cache's Teleport submenu ("Stronghold", "Fremennik Dungeon").
       { label: "Slayer Tower", tile: [3429, 3538, 0], quest: { key: "priest_in_peril", name: "Priest in Peril" } },
-      { label: "Fremennik Slayer Dungeon", tile: [2807, 10002, 0] },
+      { label: "Fremennik Slayer Dungeon", aliases: ["Fremennik Dungeon"], tile: [2807, 10002, 0] },
       { label: "Tarn's Lair", tile: [3185, 4601, 0], quest: { key: "haunted_mine", name: "Haunted Mine" } },
-      { label: "Stronghold Slayer Cave", tile: [2431, 3424, 0] },
+      { label: "Stronghold Slayer Cave", aliases: ["Stronghold"], tile: [2431, 3424, 0] },
       { label: "Dark Beasts", tile: [2027, 4637, 0], quest: { key: "mournings_end_part_ii", name: "Mourning's End Part II" } },
       { label: "Wyrmscraig Cavern", tile: [2581, 8633, 0], quest: { key: "fallen_from_grace", name: "Fallen From Grace" } },
     ],

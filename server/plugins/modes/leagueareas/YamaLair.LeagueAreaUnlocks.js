@@ -28,10 +28,47 @@ function rankOf(player) {
   return query.rank;
 }
 
+function returnVariant(player) {
+  return rankOf(player) >= STEEL_RANK ? VARIANTS.higher : VARIANTS.lower;
+}
+
+function talkAgain({ player, npc, npcId }) {
+  if (!isLeagueYama({ player, npcId }) || !player.getAttribute(INTRODUCED_ATTRIBUTE)) return false;
+
+  const request = { player, npc, npcId, exact: true, handled: false };
+  let greetings;
+  dialogueApi.emitCustomEvent("npc-dialogue:start", {
+    ...request,
+    variant: { page: TRANSCRIPT, variant: returnVariant(player) },
+    select(steps) {
+      greetings = steps.find(step => step.type === "random");
+      return [];
+    },
+  });
+  if (!greetings?.options?.length) return false;
+
+  // The transcript's "above" refers to the shared introduction menu. Keep each
+  // greeting's line, removing the jump that the random runner would resolve as
+  // another alternative's speech. Then play the existing menu and its branches.
+  const greeting = {
+    ...greetings,
+    options: greetings.options.map(option => ({
+      ...option, steps: option.steps.filter(step => step.type !== "jump"),
+    })),
+  };
+  request.variant = { page: TRANSCRIPT, variant: VARIANTS.initial };
+  request.select = steps => {
+    const menu = steps.find(step => step.type === "choice");
+    return menu ? [greeting, menu] : [];
+  };
+  dialogueApi.emitCustomEvent("npc-dialogue:start", request);
+  return request.handled;
+}
+
 function dialogueVariant(event) {
   if (!isLeagueYama(event)) return null;
   const variant = !event.player.getAttribute(INTRODUCED_ATTRIBUTE) ? VARIANTS.initial
-    : rankOf(event.player) >= STEEL_RANK ? VARIANTS.higher : VARIANTS.lower;
+    : returnVariant(event.player);
   return { page: TRANSCRIPT, variant };
 }
 
@@ -82,6 +119,7 @@ module.exports = function attach(api) {
   dialogueApi = api;
   api.registerArea(createLair(api));
   api.persistAttribute(INTRODUCED_ATTRIBUTE, false);
+  api.onNpcInteraction("Yama", { "Talk-to": talkAgain });
   api.onNpcDialogueVariant(dialogueVariant);
   api.onNpcDialogueCondition(dialogueCondition);
   api.onCustomEvent("npc-dialogue:choice", finishIntroduction);

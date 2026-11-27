@@ -18,6 +18,9 @@ function fold(value: number): void {
 
 // Minimal OSRS-like appearance representation for Phase A
 export class PlayerAppearance {
+    /** Body type B's clean-shaven jaw: a plain chin, no facial hair. Type B head models need a jaw kit to close the chin. */
+    static readonly TYPE_B_CLEAN_SHAVEN_JAW_KIT = 296;
+
     readonly colorTextureOverrides: Array<{colors:number[]|null;textures:number[]|null}|undefined> = [];
     /** Item replacements in body-kit-only composition slots (arms, hair and jaw). */
     readonly compositionItems = new Map<number,number>();
@@ -157,20 +160,23 @@ export class PlayerAppearance {
                 const part: number = kit.bodyPartId ?? kit.bodyPartyId;
                 if (typeof part === "number") {
                     for (let p = 0; p < 7; p++) {
+                        // Body type B starts clean-shaven (set below), not with the first jaw kit.
+                        if (p === 1) continue;
                         if ((part | 0) === expectedBodyPartId(p) && kits[p] === -1) kits[p] = id;
                     }
                 }
             } catch {}
         }
-        for (let id = 0; id < count && (kits[0] === -1 || kits[1] === -1); id++) {
+        for (let id = 0; id < count && kits[0] === -1; id++) {
             try {
                 const kit = idkLoader.load(id) as any;
                 if (!kit) continue;
                 const part: number = kit.bodyPartId ?? kit.bodyPartyId;
-                if ((part | 0) === expectedBodyPartId(0) && kits[0] === -1) kits[0] = id;
-                if ((part | 0) === expectedBodyPartId(1) && kits[1] === -1) kits[1] = id;
+                if ((part | 0) === expectedBodyPartId(0)) kits[0] = id;
             } catch {}
         }
+
+        kits[1] = PlayerAppearance.TYPE_B_CLEAN_SHAVEN_JAW_KIT;
 
         return new PlayerAppearance(gender, colors, kits, new Array(14).fill(-1), { prayer: -1 });
     }

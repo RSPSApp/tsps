@@ -540,6 +540,9 @@ export class PlayerModelLoader {
             }
         }
 
+        // An empty body type B jaw is drawn clean-shaven, not with the first jaw kit (a beard).
+        if (gender === Gender.FEMALE) defaults[1] = PlayerAppearance.TYPE_B_CLEAN_SHAVEN_JAW_KIT;
+
         this.defaultKitsCache.set(key, defaults);
         return defaults;
     }

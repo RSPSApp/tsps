@@ -500,3 +500,16 @@ added by hand from RSProx 233/739, with a `source` on each entry:
 
 Neither attempt was refused; the captures don't show whether the roof needs My Arm's Big Adventure,
 so neither entry has a gate.
+
+## Fremennik Slayer Dungeon exit
+
+The dungeon's [Tunnel](https://oldschool.runescape.wiki/w/Tunnel_(Fremennik_Slayer_Dungeon))
+(`slayer_dungeon_exit`, 2141, 2x3 tiles at 2809,10001) had no handler, so Enter did nothing and there
+was no way out on foot. The Wiki says it leaves the dungeon at its entrance. The way in, the Cave
+Entrance (`slayer_dungeon_entrance`, 2123, 2x3 tiles at 2797,3614), is captured: the player stands on
+2796,3615 west of it and lands on 2808,10002, west of the Tunnel, one tick after arriving, with no
+animation, sound or fade.
+
+The way out isn't captured: none of the recordings in the dungeon leaves through the Tunnel. The Tunnel lands on
+2796,3615, the tile the agent `transports.json` gives and the one captured players stood on to enter,
+and it takes the entrance's one-tick move with nothing played (ours).

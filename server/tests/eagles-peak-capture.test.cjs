@@ -536,3 +536,65 @@ test("a relog sends the saved side state again: the room bits come back from the
   }
   assert.equal(QUEST().getStage(g.player), 15, "a native stage is not converted again");
 });
+
+test("interruption: a logout in a feather room saves the player at the room's tunnel, and the trap state stays", async (t) => {
+  const f = eagles(t, { stage: 15, at: [1987, 4949, 3] });
+  const at = await intoRoom(f, 19909, [1986, 4949], [1974, 4908]);
+  await H.objectOption(f, 19980, at(1973, 4914));
+  H.ticks(f, 10);
+  assert.equal(varbit(f, VARBIT.NET_TRAP), 1);
+  assert.deepEqual(f.player.getAttribute("eagles-peak:scene-exit"), [1987, 4949, 3], "the room's way out is saved while inside");
+  f.player.getArea().leave(f.player, true); // as the world's logout takes a player out of their area
+  assert.deepEqual(H.xy(f.player.getLocation()), [1987, 4949, 3], "saved at the room's tunnel, not in a copy that is gone");
+  assert.equal(f.player.getAttribute(STATE_ATTRIBUTE)[VARBIT.NET_TRAP], 1, "the sprung trap is saved");
+});
+
+test("interruption: a logout in the ferret lesson gives nothing and leaves 30, saved at the camp; the lesson plays again", async (t) => {
+  const f = eagles(t, { stage: 30, at: [2318, 3501, 0] });
+  const nickolaus = spawnOnce(f, 2024, [2317, 3500, 0]);
+  await H.talk(f, nickolaus);
+  await H.until(f, "Well I was originally sent to find you because of a ferret.");
+  await H.choose(f, "Well I was originally sent to find you because of a ferret.");
+  await H.until(f, "That sounds good to me.");
+  await H.choose(f, "That sounds good to me.");
+  await H.until(f, "Come with me and I'll show you.");
+  await H.continueLine(f);
+  H.ticks(f, 4);
+  assert.deepEqual(f.player.getAttribute("eagles-peak:scene-exit"), [2314, 3510, 0]);
+  f.player.getArea().leave(f.player, true);
+  assert.equal(QUEST().getStage(f.player), 30);
+  assert.deepEqual([amount(f, ITEM.FERRET), amount(f, ITEM.BOX_TRAP)], [0, 0]);
+  assert.deepEqual(H.xy(f.player.getLocation()), [2314, 3510, 0]);
+});
+
+test("gating: before the quest nothing moves on; the ferret before the lesson does not finish it; the door stays shut", async (t) => {
+  const f = eagles(t, { stage: 5, at: [2602, 3264, 0], items: [ITEM.FERRET] });
+  const charlie = spawnOnce(f, 1495, [2602, 3263, 0]);
+  await H.useOnNpc(f, ITEM.FERRET, charlie);
+  await H.finishChat(f);
+  assert.equal(QUEST().getStage(f.player), 5);
+  assert.equal(amount(f, ITEM.FERRET), 1);
+  QUEST().setStage(f.player, 15);
+  place(f, [2002, 4948, 3]);
+  await H.objectOption(f, 19991, [2003, 4948]);
+  H.ticks(f, 3);
+  assert.deepEqual(H.xy(f.player.getLocation()), [2002, 4948, 3], "locked without the three feathers");
+});
+
+test("the kebbit killed: the trail moves on to 5 and the plugin drops nothing of its own (its drop table has the feather)", async (t) => {
+  const f = eagles(t, { stage: 15, varbits: { TRACKING: 3 }, at: [1987, 4972, 3] });
+  const at = await intoRoom(f, 19903, [1986, 4972], [1947, 4868]);
+  await H.objectOption(f, 19456, at(1971, 4886));
+  H.ticks(f, 45);
+  const kebbit = [...H.core.World.getNpcs()].find((npc) => npc?.getId?.() === 1494 && npc.getOwner?.() === f.player);
+  assert.ok(kebbit);
+  const before = H.core.ItemOnGroundManager.ownedBy?.(f.player.getUsername())?.length ?? 0;
+  const tile = kebbit.getLocation();
+  H.PM.emitNpcDeath({ npc: kebbit, killer: f.player, location: { x: tile.getX(), y: tile.getY(), z: tile.getZ() } });
+  assert.equal(varbit(f, VARBIT.TRACKING), 5);
+  const feathers = (H.core.ItemOnGroundManager.ownedBy?.(f.player.getUsername()) ?? [])
+    .filter((item) => item.getItem().getId() === ITEM.SILVER).length;
+  assert.equal(feathers, 1, "the drop table's feather only, not a second");
+  void before;
+  assert.equal(messages(f).includes("A feather drops from the kebbit's mouth as it escapes."), false, "that line is the taunt's");
+});

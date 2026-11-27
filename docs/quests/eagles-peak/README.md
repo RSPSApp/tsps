@@ -1,13 +1,13 @@
 ---
 quest: Eagles' Peak
 key: eagles_peak
-status: in-progress
+status: passed-with-issues
 tested: 2026-11-27
 tester: agent
 model: claude-opus-5-5
 commit: d6618ab39
 cache: osrs-242_2026-11-03
-start: checkpoint
+start: fresh
 travel: travel_to
 ---
 
@@ -75,5 +75,9 @@ levers and the silver room's footprints itself. Ticks below are that recording's
 
 ### 2026-11-27 · agent · claude-opus-5-5
 
-- **Start:** targeted tests from saved stages (`server/tests/eagles-peak-capture.test.cjs`); natural playthrough pending.
-- **Not checked:** see the PR.
+- **Start:** a fresh account (all skills 99 from `::master`, coins, tar, dye, rope, runes), placed at Charlie with the only `::tele`.
+- **Route:** `travel_to` (walks skipped) and Varrock Teleport between legs; every climb, cave, tunnel, door, room puzzle and the kebbit fight with normal clicks; the gold room by Quest Helper.
+- **Result:** eaglepeak_quest 0, 5, 10, 15, 20, 25, 35, 40; 2 QP and 2,500 Hunter XP once; the repeat hand-in gave nothing; a relog kept stage, points, XP and the worn disguise. The ferret lesson's box trap caught a second ferret. A Desert eagle flight with a rope landed in the desert eyrie.
+- **Found:** a kill's feather was dropped twice (the drop table's and the plugin's, the plugin's at a plain tile that broke `observe`). Fixed: the kill only moves the trail on.
+- **Clips:** the meeting, net trap, kebbit, door, walk-past and lesson looked right (no black screen, camera back). A gold room bird's flight was not visible in its clip.
+- **Not checked:** Threaten/Taunt in that run (tested), Asyff's spare costume, a full inventory, sounds and animations by eye.

@@ -248,7 +248,10 @@ module.exports = function attachEaglesPeakSilver(api, ep) {
     player.sendMessage(TEXT.FEATHER_DROPS);
   }
 
-  /** Killed: the feather drops where it died (Wiki drops: bones always, the feather during the quest). */
+  /**
+   * Killed: its own drop table (npc-drops kebbit_eagles_peak: bones and the silver feather, Wiki) drops the feather;
+   * here only the trail moves on, as after a taunt.
+   */
   function handleDeath(event) {
     const npc = event.npc;
     const player = npc?.__questSceneOwner;
@@ -256,8 +259,7 @@ module.exports = function attachEaglesPeakSilver(api, ep) {
     const scene = Scenes.get(player);
     if (!scene || scene.name !== SCENE || scene.kebbit !== npc) return;
     scene.kebbit = null;
-    if (tracking(player) !== TRACK.KEBBIT_OUT) return;
-    dropFeather(player, scene, event.location ?? npc.getLocation());
+    if (tracking(player) === TRACK.KEBBIT_OUT) state.set(player, VARBIT.TRACKING, TRACK.FEATHER_DROPPED);
   }
 
   api.onObjectInteraction("Tunnel", { Enter: enter });

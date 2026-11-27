@@ -286,64 +286,70 @@ test("the world is a league world and the characters are Demonic Pacts", () => {
   assert.equal(rows.length, FIXTURE.taskCount);
 });
 
-test("a task is offered exactly when a counting tile is reachable and unsealed", () => {
+test("a task is offered exactly when a counting tile is reachable and unsealed", async (t) => {
   // The plugin (Slayer.LeagueAreaUnlocks.entered + sealOpen): a counting tile is reachable when
   // its square is named by the league and the character unlocked that area, or the league
   // opens the square to everyone (area: null override). A square no area names is reachable by
   // no one. A tile in a sealed location (a quest-sealed entrance, or no entrance in the world
   // data) is reachable only once the quest is done - and the suite's characters have done no
   // quests. A task with no counting tile at all is left to the master's own logic (always offered).
+  // One subtest per task row: a row that fails is reported on its own, and the other rows
+  // still run.
   let checked = 0;
   for (const row of rows) {
     if (row.isBoss) continue;
     const master = Data.get().masters.get(row.masterId);
-    const name = row.entry.task.displayName;
-    const effectiveTiles = row.placed.filter(effective);
-    // Krystilia only counts her Wilderness placements: the plugin filters her tiles to the
-    // Wilderness area before the reachability check, so her open-to-all tiles never help.
-    const countingTiles = master.id === KRYSTILIA
-      ? effectiveTiles.filter((t) => t.areaId === WILDERNESS)
-      : effectiveTiles;
-    // The suite's characters have done no quests, so a sealed tile is never reachable.
-    const openTiles = countingTiles.filter((t) => !sealed(t));
-    const named = [...new Set(openTiles.map((t) => t.areaId).filter((a) => a !== null))];
-    const open = openTiles.some((t) => t.areaId === null);
-    const holder = character(`holder-${checked}`, { areas: named.length ? named : [VARLAMORE] });
-    const stranger = character(`stranger-${checked}`, { areas: ALL_AREAS.filter((a) => !named.includes(a)) });
-    // nonArea(row): the task must first pass the gates the area gate does not control
-    // (levels, stats, quests, task-unlock rows).
-    const expectedHolder = nonArea(row) && (row.placed.length === 0 || openTiles.length > 0);
-    const expectedStranger = nonArea(row) && (row.placed.length === 0 || open);
-    const holderNames = eligibleNames(holder, master);
-    const strangerNames = eligibleNames(stranger, master);
-    assert.equal(holderNames.includes(name), expectedHolder,
-      `holder of [${named.join(",")}] offered "${name}": expected ${expectedHolder}`);
-    assert.equal(strangerNames.includes(name), expectedStranger,
-      `stranger (holds none of [${named.join(",")}]) offered "${name}": expected ${expectedStranger}`);
+    await t.test(`${row.fixture.master}: ${row.entry.task.displayName}`, () => {
+      const name = row.entry.task.displayName;
+      const effectiveTiles = row.placed.filter(effective);
+      // Krystilia only counts her Wilderness placements: the plugin filters her tiles to the
+      // Wilderness area before the reachability check, so her open-to-all tiles never help.
+      const countingTiles = master.id === KRYSTILIA
+        ? effectiveTiles.filter((t2) => t2.areaId === WILDERNESS)
+        : effectiveTiles;
+      // The suite's characters have done no quests, so a sealed tile is never reachable.
+      const openTiles = countingTiles.filter((t2) => !sealed(t2));
+      const named = [...new Set(openTiles.map((t2) => t2.areaId).filter((a) => a !== null))];
+      const open = openTiles.some((t2) => t2.areaId === null);
+      const holder = character(`holder-${checked}`, { areas: named.length ? named : [VARLAMORE] });
+      const stranger = character(`stranger-${checked}`, { areas: ALL_AREAS.filter((a) => !named.includes(a)) });
+      // nonArea(row): the task must first pass the gates the area gate does not control
+      // (levels, stats, quests, task-unlock rows).
+      const expectedHolder = nonArea(row) && (row.placed.length === 0 || openTiles.length > 0);
+      const expectedStranger = nonArea(row) && (row.placed.length === 0 || open);
+      const holderNames = eligibleNames(holder, master);
+      const strangerNames = eligibleNames(stranger, master);
+      assert.equal(holderNames.includes(name), expectedHolder,
+        `holder of [${named.join(",")}] offered "${name}": expected ${expectedHolder}`);
+      assert.equal(strangerNames.includes(name), expectedStranger,
+        `stranger (holds none of [${named.join(",")}]) offered "${name}": expected ${expectedStranger}`);
+    });
     checked += 1;
   }
 });
 
-test("a fresh Demonic Pacts character is offered exactly the tasks reachable from Varlamore", () => {
+test("a fresh Demonic Pacts character is offered exactly the tasks reachable from Varlamore", async (t) => {
   const fresh = character("fresh");
-  const offered = new Set();
-  const expected = new Set();
+  // One subtest per task row (the fresh character is shared): each row's offer is asserted on
+  // its own, so a mismatch names the row and the other rows still run.
   for (const row of rows) {
     if (row.isBoss) continue;
     const master = Data.get().masters.get(row.masterId);
-    const name = row.entry.task.displayName;
-    if (Tasks.eligible(fresh, master, row.entry, new Set())) offered.add(name);
-    // No counting tile: left to the master. Otherwise reachable iff a counting tile sits in
-    // Varlamore or on a square the league opens to everyone - and is not sealed (the fresh
-    // character has done no quests); for Krystilia only her Wilderness placements count.
-    const countingTiles = master.id === KRYSTILIA
-      ? row.placed.filter((t) => effective(t) && t.areaId === WILDERNESS)
-      : row.placed.filter(effective);
-    const reachable = row.placed.length === 0 || countingTiles.some(
-      (t) => (t.areaId === VARLAMORE || t.areaId === null) && !sealed(t));
-    if (nonArea(row) && reachable) expected.add(name);
+    await t.test(`${row.fixture.master}: ${row.entry.task.displayName}`, () => {
+      const name = row.entry.task.displayName;
+      const offered = Tasks.eligible(fresh, master, row.entry, new Set());
+      // No counting tile: left to the master. Otherwise reachable iff a counting tile sits in
+      // Varlamore or on a square the league opens to everyone - and is not sealed (the fresh
+      // character has done no quests); for Krystilia only her Wilderness placements count.
+      const countingTiles = master.id === KRYSTILIA
+        ? row.placed.filter((t2) => effective(t2) && t2.areaId === WILDERNESS)
+        : row.placed.filter(effective);
+      const reachable = row.placed.length === 0 || countingTiles.some(
+        (t2) => (t2.areaId === VARLAMORE || t2.areaId === null) && !sealed(t2));
+      const expected = nonArea(row) && reachable;
+      assert.equal(offered, expected, `fresh character offered "${name}": expected ${expected}`);
+    });
   }
-  assert.deepEqual([...offered].sort(), [...expected].sort());
 });
 
 /** The Blue Dragons row (a counting task, not a boss). */

@@ -6,6 +6,8 @@
 import assert from "node:assert/strict";
 
 import { ClientState } from "../game/ClientState";
+import { EVENT_OPBASE, ScriptArgMagic } from "../rs/cs2/Cs2Vm";
+import { createCacheVm } from "../scripts/cache/cs2-sweep";
 import { chatRequestOption, chatRequestSlot, isChatRequestLine } from "../game/chatRequests";
 
 assert.equal(chatRequestOption(101, "wishes to trade with you."), "Trade");
@@ -27,5 +29,20 @@ assert.equal(chatRequestSlot("Load-outs"), 4);
 ClientState.playerOptions.delete(1);
 assert.equal(chatRequestSlot("Challenge"), undefined, "no Challenge option, nothing to send");
 ClientState.playerOptions.clear();
+
+// The cache's chat renderer binds script 86 with the selected op, the formatted
+// player name, and the chat type (rev 242). Exercise its actual OPPLAYER path.
+const { vm } = createCacheVm();
+const playerOptions: Array<[string, number]> = [];
+vm.context.sendPlayerOption = (playerName, option) => playerOptions.push([playerName, option]);
+const tradeRow = {
+    onOp: [86, ScriptArgMagic.OP_INDEX, EVENT_OPBASE, 101],
+};
+assert.equal(vm.invokeEventHandler(tradeRow as any, "onOp", {
+    opIndex: 1,
+    targetName: "<col=ffffff>Trade Partner</col>",
+}), true);
+assert.deepEqual(playerOptions, [["Trade Partner", 4]],
+    "Accept trade must reach the client player-option dispatcher");
 
 console.log("chat-requests: ok");

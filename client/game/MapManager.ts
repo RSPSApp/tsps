@@ -1,4 +1,3 @@
-import { isLowEndDevice } from "../common/utils/DeviceUtil";
 import { CHUNK_SIZE } from "../common/instance/InstanceTypes";
 import { MapFileIndex, getMapSquareId } from "../rs/map/MapFileIndex";
 import { Scene } from "../rs/scene/Scene";
@@ -61,8 +60,8 @@ export class MapManager<T extends MapSquare> {
         );
     }
 
-    /** Low-end devices only build squares within render distance + margin (tests flip this). */
-    static lowEnd: boolean = isLowEndDevice;
+    /** The Low preset only builds squares within render distance + margin (tests flip this). */
+    static lowEnd: boolean = false;
     static readonly LOW_END_RANGE_MARGIN_TILES = 16;
     // Re-evaluate the in-range set once the player has walked this far since the last grid build.
     static readonly LOW_END_REBUILD_MOVE_TILES = 8;

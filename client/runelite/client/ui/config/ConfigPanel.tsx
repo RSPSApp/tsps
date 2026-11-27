@@ -82,11 +82,15 @@ function ConfigField({
     const raw = configManager.getConfiguration(descriptor.group, key);
     const value = parseConfigValue(item, raw ?? null);
     const update = (next: unknown) => configManager.setConfigValue(descriptor, property, next);
+    const disabled = item.disabled?.() === true;
     const label = (
         <span className="rl-config-label">
             <span>{item.name}</span>
             {item.description ? (
                 <span className="rl-config-description">{item.description}</span>
+            ) : null}
+            {disabled && item.disabledReason ? (
+                <span className="rl-config-warning">{item.disabledReason}</span>
             ) : null}
             {item.warning ? <span className="rl-config-warning">{item.warning}</span> : null}
         </span>
@@ -104,6 +108,7 @@ function ConfigField({
                 {label}
                 <select
                     value={selectedName}
+                    disabled={disabled}
                     onChange={(event) => {
                         const entry = enumEntries.find(([name]) => name === event.target.value);
                         update(entry ? entry[1] : event.target.value);
@@ -203,6 +208,7 @@ function ConfigField({
                     max={item.range?.max}
                     step={item.step}
                     value={Number(value)}
+                    disabled={disabled}
                     onChange={(event) => {
                         const numeric = Number(event.target.value);
                         update(Number.isFinite(numeric) ? numeric : item.default);

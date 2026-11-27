@@ -201,6 +201,7 @@ import {
 import { KNOWN_WATER_TEXTURE_IDS } from "./water/WaterTextureIds";
 
 import * as render from "./render";
+import { getPerformancePolicy, type PerformancePolicy } from "../game/performance/PerformancePolicy";
 import { RENDER_CONSTANTS, TextureFilterMode, HD_SKY_COLOR_VEC4, HD_AUTO_FOG_DEPTH_FACTOR } from "./render/constants";
 import type {
     BrowserQualityProfile,
@@ -621,6 +622,8 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     cullBackFace: boolean = true;
 
     msaaEnabled: boolean = false;
+    /** Exact sample count the Performance preset asks for when the GPU plugin is off. */
+    performanceMsaaSamples: number = 0;
     /** MSAA samples the scene framebuffer was last built for, before the GPU's cap. */
     msaaSamplesRequested: number = 0;
     fxaaEnabled: boolean = false;
@@ -1334,7 +1337,17 @@ export class WebGLOsrsRenderer extends GameRenderer<WebGLMapSquare> {
     }
 
     async init(): Promise<void> {
+        this.applyPerformancePolicy(getPerformancePolicy());
         return render.init(this);
+    }
+
+    /** Live part of the Performance preset; worker/cache changes are startup-only. */
+    public applyPerformancePolicy(policy: PerformancePolicy): void {
+        this.msaaEnabled = policy.sceneMsaaSamples > 0;
+        this.performanceMsaaSamples = policy.sceneMsaaSamples;
+        if (policy.fpsLimit !== null) this.fpsLimit = policy.fpsLimit;
+        this.autoFogDepthFactor = policy.autoFogDepthFactor;
+        this.colorBanding = policy.colorBanding;
     }
 
     public clearDynamicNpcAnimRuntimeState(): void {

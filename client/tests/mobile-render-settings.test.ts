@@ -1,64 +1,77 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
-import fs from "node:fs";
+import { ConfigManager } from "../runelite/client/config/ConfigManager";
+import { PerformanceConfig, PerformanceMode } from "../game/performance/PerformanceConfig";
+import {
+    computePerformancePolicy,
+    initPerformancePolicy,
+    refreshPerformancePolicy,
+} from "../game/performance/PerformancePolicy";
 
-// The GPU plugin's settings must be read before Low-end Device's fixed defaults.
-const plugins = fs.readFileSync(new URL("../runelite/client/plugins/index.ts", import.meta.url), "utf8");
-const gpu = plugins.indexOf("    GpuPlugin,");
-const lowEnd = plugins.indexOf("    LowEndDevicePlugin,");
-assert.ok(gpu >= 0 && lowEnd >= 0 && gpu < lowEnd,
-    "an enabled GPU plugin must outrank Low-end Device's gpuSettings()");
+(globalThis as any).self = globalThis;
 
-const result = spawnSync(process.execPath, ["--import", require.resolve("tsx"), "-e", `
-    const assert = require("node:assert/strict");
-    Object.defineProperty(globalThis, "navigator", { configurable: true, value: {
-        userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)",
-        maxTouchPoints: 5,
-    } });
-    globalThis.window = { innerWidth: 390, location: { search: "" }, addEventListener() {} };
-    globalThis.self = globalThis;
+async function main(): Promise<void> {
+    const { resolveEffectiveRenderDistanceTiles } = await import("../render/render/draw2");
+    const { resolveEffectiveLodThresholdTiles } = await import("../render/render/misc");
+    const { resolveBrowserQualityProfile } = await import("../render/render/quality");
+    const { resolveWebGPURenderDistance, resolveWebGPULodDistance } = await import("../render/webgpu/frameConfig");
 
-    const { isTouchDevice } = require("./common/utils/DeviceUtil");
-    assert.equal(isTouchDevice, true);
-    const { resolveEffectiveRenderDistanceTiles } = require("./render/render/draw2");
-    const { resolveEffectiveLodThresholdTiles } = require("./render/render/misc");
-    const { resolveWebGPURenderDistance, resolveWebGPULodDistance } = require("./render/webgpu/frameConfig");
-    const { setLowEndDeviceModeEnabled } = require("./game/plugins/lowenddevice/LowEndDeviceMode");
-
-    let frame = 0;
-    const host = (gpu, renderDistanceCap = 18, lodThresholdCap = 12) => {
-        const settings = {
-            osrsClient: {
-                renderDistance: 25, lodDistance: 23, isOnLoginScreen: () => false,
-                clientPlugins: { gpuSettings: () => gpu, hdEnabled: () => false, sceneResolutionScale: () => 1 },
-            },
-            syncBrowserQualityProfile: () => ({ renderDistanceCap, lodThresholdCap }),
-        };
-        settings.getFrameRenderDistanceTiles = () => resolveEffectiveRenderDistanceTiles(settings, ++frame);
-        return settings;
+    const config = new ConfigManager();
+    const host: any = {
+        osrsClient: {
+            renderDistance: 25,
+            lodDistance: 23,
+            isOnLoginScreen: () => false,
+            clientPlugins: { gpuSettings: () => undefined, hdEnabled: () => false, sceneResolutionScale: () => 1 },
+        },
+        syncBrowserQualityProfile: () => resolveBrowserQualityProfile(host),
     };
+    let frame = 0;
+    const distance = () => resolveEffectiveRenderDistanceTiles(host, ++frame);
+    host.getFrameRenderDistanceTiles = distance;
+    const lod = () => resolveEffectiveLodThresholdTiles(host, ++frame);
 
-    setLowEndDeviceModeEnabled(true);
-    const lowEnd = host({ drawDistance: 12, overrideDeviceCaps: false }, 12, 6);
-    assert.equal(resolveEffectiveRenderDistanceTiles(lowEnd, ++frame), 12, "the low-end mode keeps its 12-tile view");
-    assert.equal(resolveEffectiveLodThresholdTiles(lowEnd, ++frame), 6, "the low-end mode keeps its 6-tile detail cut");
-    assert.equal(resolveWebGPURenderDistance(lowEnd), 12);
-    assert.equal(resolveWebGPULodDistance(lowEnd), 6);
-    setLowEndDeviceModeEnabled(false);
+    config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.LOW);
+    initPerformancePolicy(config);
+    assert.equal(resolveBrowserQualityProfile(host).key, "low-end");
+    assert.equal(distance(), 12, "Low cap");
+    assert.equal(lod(), 6, "Low detail cap");
+    assert.equal(resolveWebGPURenderDistance(host), 12);
+    assert.equal(resolveWebGPULodDistance(host), 6);
 
-    const explicit = host({ drawDistance: 70, overrideDeviceCaps: true });
-    assert.equal(resolveEffectiveRenderDistanceTiles(explicit, ++frame), 70,
-        "an explicit draw distance must not be cut to the iPhone profile cap");
-    assert.equal(resolveEffectiveLodThresholdTiles(explicit, ++frame), 68,
-        "detail must follow the explicit draw distance on a phone");
-    assert.equal(resolveWebGPURenderDistance(explicit), 70);
-    assert.equal(resolveWebGPULodDistance(explicit), 68);
+    config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.MEDIUM);
+    refreshPerformancePolicy();
+    assert.equal(resolveBrowserQualityProfile(host).key, "medium");
+    assert.equal(distance(), 20, "Medium cap");
+    assert.equal(lod(), 20, "Medium detail cap");
+    assert.equal(resolveWebGPURenderDistance(host), 20);
 
-    const automatic = host(undefined);
-    assert.equal(resolveEffectiveRenderDistanceTiles(automatic, ++frame), 18,
-        "without a GPU choice the handheld profile still caps the view");
-    assert.equal(resolveWebGPURenderDistance(automatic), 18);
-`], { encoding: "utf8" });
+    config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.HIGH);
+    refreshPerformancePolicy();
+    assert.equal(resolveBrowserQualityProfile(host).key, "desktop");
+    assert.equal(distance(), 25, "High keeps the client default draw distance unless the user raises it");
+    assert.equal(lod(), 23);
+    assert.equal(resolveWebGPURenderDistance(host), 25);
 
-assert.equal(result.status, 0, result.stderr || result.stdout);
-console.log("mobile render settings: explicit GPU choices override the handheld caps");
+    // An explicit draw distance beats every preset cap and is shared by both renderers.
+    config.setConfigValue(PerformanceConfig, "drawDistance", 70);
+    refreshPerformancePolicy();
+    assert.equal(distance(), 70, "an explicit draw distance beats the High cap");
+    assert.equal(lod(), 68, "detail follows the explicit draw distance");
+    assert.equal(resolveWebGPURenderDistance(host), 70);
+    assert.equal(resolveWebGPULodDistance(host), 68);
+
+    // The same override on a phone still beats the Auto mobile cap, even though handheld memory
+    // budgets stay in force for workers/caches.
+    const phoneFacts = {
+        handheld: true, ios: true, phone: true, coarsePointer: true,
+        cores: 8, coresKnown: true, deviceMemoryGb: 8, signature: "phone-explicit",
+    };
+    const phonePolicy = computePerformancePolicy(config, { facts: phoneFacts, probe: false });
+    assert.equal(phonePolicy.explicitDrawDistance, 70);
+    assert.equal(phonePolicy.workerCount, 1, "phone worker memory cap remains");
+    assert.equal(phonePolicy.cacheFullDat2, false, "phone full-cache cap remains");
+
+    console.log("mobile render settings: tier caps, explicit overrides, shared WebGPU behavior");
+}
+
+void main();

@@ -1,17 +1,16 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 
-// The scene resolution must follow the platform, not touch hardware: a Windows laptop with a
-// touchscreen still reports a coarse pointer, which used to put it on the low-end scene scale
-// (0.6) even though it was laid out as a desktop. A 1652x982 canvas then rendered the scene at
-// 991x589 and the final blit stretched it back with LINEAR filtering.
+// A coarse-pointer touch device is a handheld for the Performance preset, so Auto keeps the
+// mobile scene scale (0.6). A fine-pointer desktop stays native. This makes the previous hidden
+// 0.6 explicit: the desktop that reported coarse touch now gets the mobile preset by design.
 const cases = [
     {
-        name: "touchscreen Windows laptop on the desktop layout",
+        name: "coarse-pointer touch device on the desktop layout",
         agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:160.0) Gecko/20100101 Firefox/160.0",
         touch: 10,
         coarse: true,
-        expectedScale: 1,
+        expectedScale: 0.5,
     },
     {
         name: "desktop without touch",
@@ -25,7 +24,7 @@ const cases = [
         agent: "Mozilla/5.0 (Linux; Android 14) Chrome/156.0 Mobile Safari/537.36",
         touch: 5,
         coarse: true,
-        expectedScale: 0.6,
+        expectedScale: 0.5,
     },
     {
         name: "iPhone",
@@ -56,9 +55,13 @@ for (const scenario of cases) {
 
         const { getSceneResolutionScale, getSceneRenderSize, resolveBrowserQualityProfile } =
             require("./render/render/quality");
-        const { setLowEndDeviceModeEnabled } =
-            require("./game/plugins/lowenddevice/LowEndDeviceMode");
+        const { ConfigManager } = require("./runelite/client/config/ConfigManager");
+        const { PerformanceConfig, PerformanceMode } = require("./game/performance/PerformanceConfig");
+        const { initPerformancePolicy, refreshPerformancePolicy } =
+            require("./game/performance/PerformancePolicy");
 
+        const config = new ConfigManager();
+        initPerformancePolicy(config);
         const client = {
             clientPlugins: { sceneResolutionScale: () => 1 },
             isOnLoginScreen: () => false,
@@ -73,7 +76,7 @@ for (const scenario of cases) {
         };
 
         assert.equal(getSceneResolutionScale(host), scenario.expectedScale,
-            "default scene scale follows the platform");
+            "default scene scale follows the platform/preset");
         assert.deepEqual(getSceneRenderSize(host), {
             width: Math.round(1652 * scenario.expectedScale),
             height: Math.round(982 * scenario.expectedScale),
@@ -85,11 +88,15 @@ for (const scenario of cases) {
             assert.equal(getSceneResolutionScale(host), 0.75, "debug scene resolution setting still applies");
             host.sceneResolutionScale = 1;
 
-            // The explicit Low-end Device mode keeps its half-resolution scene.
-            setLowEndDeviceModeEnabled(true, true);
+            // The explicit Low preset keeps its half-resolution scene.
+            config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.LOW);
+            refreshPerformancePolicy();
             assert.equal(resolveBrowserQualityProfile(host).key, "low-end");
-            assert.equal(getSceneResolutionScale(host), 0.5, "explicit Low-end Device renders at half");
-            setLowEndDeviceModeEnabled(false, false);
+            assert.equal(getSceneResolutionScale(host), 0.5, "explicit Low renders at half");
+
+            config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.HIGH);
+            refreshPerformancePolicy();
+            assert.equal(getSceneResolutionScale(host), 1, "High renders natively");
         }
 
         client.isOnLoginScreen = () => true;
@@ -98,4 +105,4 @@ for (const scenario of cases) {
     assert.equal(result.status, 0, `${scenario.name}: ${result.stderr || result.stdout}`);
 }
 
-console.log("scene resolution: desktop stays at 1.0, mobile keeps its performance scale");
+console.log("scene resolution: fine-pointer desktop 1.0, handheld/coarse touch keeps its performance scale");

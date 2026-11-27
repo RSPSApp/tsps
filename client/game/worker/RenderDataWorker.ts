@@ -10,11 +10,13 @@ import {
     isCacheable,
     readSquare,
     recordVarReads,
+    setMapSquareCacheLimit,
     shouldStore,
     trackVarReads,
     varReadsMatch,
     writeSquare,
 } from "./MapSquareCache";
+import { setSceneChunkCacheLimits } from "../../render/loader/SceneChunkCache";
 import { isDefinitionDataset, loadFromPayload } from "../../common/gamemode/GamemodeContentStore";
 import { getDefinitionArchiveKey, replaceDefinitionArchives } from "../../custom/archives/ArchivedDefinitionStore";
 import type { ArchivedDefinitionBundle } from "../../rs/config/ArchivedDefinitionRegistry";
@@ -341,6 +343,14 @@ const mapBuilds = new Map<number, AbortController>();
 const inputUpdates = new WorkerInputUpdates();
 
 const worker = {
+    setPerformancePolicy(policy: {
+        mapSquareCacheLimit: number;
+        sceneChunkMaxSquares: number;
+        sceneChunkMaxBytes: number;
+    }): void {
+        setMapSquareCacheLimit(policy.mapSquareCacheLimit);
+        setSceneChunkCacheLimits(policy.sceneChunkMaxSquares, policy.sceneChunkMaxBytes);
+    },
     cancelLoad(id: number): void { mapBuilds.get(id)?.abort(); },
     addCacheChunk(index: number, chunk: ArrayBuffer): void {
         if (!sparseDat2) {

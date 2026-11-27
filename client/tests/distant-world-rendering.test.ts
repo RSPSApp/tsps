@@ -6,6 +6,14 @@ import { MapManager } from "../game/MapManager";
 import { ClientState } from "../game/ClientState";
 import { sceneryBuildOptions, syncSceneryDetail } from "../render/SceneryPolicy";
 (globalThis as any).self = globalThis;
+{
+    const { ConfigManager } = require("../runelite/client/config/ConfigManager");
+    const { PerformanceConfig, PerformanceMode } = require("../game/performance/PerformanceConfig");
+    const { initPerformancePolicy } = require("../game/performance/PerformancePolicy");
+    const config = new ConfigManager();
+    config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.HIGH);
+    initPerformancePolicy(config);
+}
 const { WebGPUActors } = require("../render/webgpu/actors/WebGPUActors");
 const { addUnbatchedNpcRenderData } = require("../render/render/draw");
 const highlight = require("../render/render/interact/highlight");
@@ -61,7 +69,7 @@ test("GPU and 117 HD own scenery settings while cosmetic NPCs remain available",
     hd = false;
     assert.equal(plugins.scenerySettings().drawDistance, 384, 'disabling graphics plugins restores the standalone scenery setting');
     const host: any = { osrsClient: { clientPlugins: plugins, renderDistance: 120, lodDistance: 35 },
-        syncBrowserQualityProfile: () => ({ renderDistanceCap: 90, lodThresholdCap: 90 }) };
+        syncBrowserQualityProfile: () => ({ renderDistanceCap: 160, lodThresholdCap: 160 }) };
     let frame = 0;
     host.getFrameRenderDistanceTiles = () => resolveEffectiveRenderDistanceTiles(host, ++frame);
     for (const settings of [{ gpu: { drawDistance: 60, overrideDeviceCaps: true }, hd: false, distance: 60, lod: 58 },

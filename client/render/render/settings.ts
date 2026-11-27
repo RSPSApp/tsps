@@ -188,6 +188,7 @@ import {
 import { KNOWN_WATER_TEXTURE_IDS } from "../water/WaterTextureIds";
 import type { WebGLOsrsRendererHost } from "./hostInterface";
 import { RENDER_CONSTANTS } from "./constants";
+import { requestedMsaaSamples } from "../../game/performance/PerformancePolicy";
 
 export function setSkyColor(host: WebGLOsrsRendererHost, r: number, g: number, b: number, explicit = false) {
 
@@ -251,8 +252,7 @@ export function setMsaa(host: WebGLOsrsRendererHost, enabled: boolean): void {
 /** The GPU plugin's MSAA samples while it is on, else every sample the GPU has when MSAA is. */
 export function getRequestedMsaaSamples(host: WebGLOsrsRendererHost): number {
     const gpu = host.osrsClient.clientPlugins.gpuSettings();
-    if (gpu) return gpu.msaaSamples;
-    return host.msaaEnabled ? Number.MAX_SAFE_INTEGER : 0;
+    return requestedMsaaSamples(gpu?.msaaSamples, host.msaaEnabled, host.performanceMsaaSamples ?? 0);
 }
 
 export function setFxaa(host: WebGLOsrsRendererHost, enabled: boolean): void {

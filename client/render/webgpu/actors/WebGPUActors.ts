@@ -29,6 +29,7 @@ import {
     type ActorKind,
 } from "../shaders/actor.wgsl";
 import { ActorGfxRuntime } from "./actorGfx";
+import { dispatchGfxFrameSounds, type GfxSoundOwner } from "../../gfx/GfxFrameSounds";
 import {
     ACTOR_MAX,
     ActorDataTexture,
@@ -1274,7 +1275,7 @@ export class WebGPUActors {
             const dataIndex = packWorldGfxActorData(this.writer, map, world);
             if (dataIndex < 0) continue;
             // Drawn over the floor's flat decorations, as the WebGL renderer does (GfxRenderer).
-            this.pushInstanceGeometry(state, map, inst, dataIndex, TILE_GFX_LIFT_UNITS);
+            this.pushInstanceGeometry(state, map, inst, dataIndex, TILE_GFX_LIFT_UNITS, {});
         }
     }
 
@@ -1288,7 +1289,7 @@ export class WebGPUActors {
             for (const entry of entries) {
                 const dataIndex = state.npcByEcsId.get(entry.ecsId);
                 if (dataIndex === undefined) continue;
-                this.pushInstanceGeometry(state, map, entry.inst, dataIndex);
+                this.pushInstanceGeometry(state, map, entry.inst, dataIndex, 0, { ecsId: entry.ecsId });
             }
         }
         const playerEntries = runtime.manager.getAttachedPlayersForMap(
@@ -1297,7 +1298,7 @@ export class WebGPUActors {
         for (const entry of playerEntries) {
             const dataIndex = state.playerByPid.get(entry.pid);
             if (dataIndex === undefined) continue;
-            this.pushInstanceGeometry(state, map, entry.inst, dataIndex);
+            this.pushInstanceGeometry(state, map, entry.inst, dataIndex, 0, { pid: entry.pid });
         }
     }
 
@@ -1307,12 +1308,15 @@ export class WebGPUActors {
         inst: GfxInstance,
         dataIndex: number,
         liftUnits = 0,
+        owner: GfxSoundOwner = {},
     ): void {
         const runtime = this.gfx;
         if (!runtime || inst.startTimeMs == null) return;
         const nowMs = (performance?.now?.() as number) || Date.now();
         const ageMs = graphicAgeMs(inst,nowMs);
         const frameIdx = runtime.frameIndexByAge(inst.spotId, Math.floor(ageMs));
+        // Its frame sounds, as the WebGL renderer plays them (11428 on the Demonic Pacts reflect).
+        dispatchGfxFrameSounds(this.renderer.osrsClient, inst, frameIdx, owner);
         const frameCycle = runtime.frameCycleFor(inst.spotId, frameIdx, ageMs);
         const tiles =
             inst.anchor === "offset"

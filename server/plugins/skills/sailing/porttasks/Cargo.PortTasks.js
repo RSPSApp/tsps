@@ -144,18 +144,20 @@ function writeOffLostCrates(player, crates) {
 }
 
 /**
- * The boat went down with cargo aboard: the hold empties here, not at a later recovery, which is
- * where live loses it (Wiki, Sailing → Death & Capsizing: a death at sea, a capsize or a teleport
- * from the boat loses courier crates, bounty items, salvage and trawling fish, and keeps
- * supplies). Without the write-off a required crate stayed counted as taken and the cargo port
+ * The boat went down with cargo aboard. Live loses it at that moment, not at a later recovery
+ * (Wiki, Sailing → Death & Capsizing: a death at sea, a capsize or a teleport from the boat
+ * loses courier crates, bounty items, salvage and trawling fish, and keeps supplies), so the drop
+ * and the task-slot write-off both ride on `Cargo.loseCargo`, the routine every other loss path
+ * uses too. Without the write-off a required crate stayed counted as taken and the cargo port
  * refused to hand out another (#6878).
  */
 function boatLost({ player, boat }) {
   if (!player || !boat) return;
-  writeOffLostCrates(player, Cargo.dropLostOnRecovery(boat));
+  Cargo.loseCargo(player, boat);
 }
 
-/** A shipwright's recovery drops the same categories (a boat left at another port). */
+/** Whatever dropped a hold's crates (a sink, capsize, Summon Boat, the cape, a recovery) reports
+ *  them as `sailing:cargo-lost`; each one goes back to its task slot. */
 function cargoLost({ player, crates }) {
   writeOffLostCrates(player, crates);
 }

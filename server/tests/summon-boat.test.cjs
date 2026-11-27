@@ -20,6 +20,7 @@ const { Dialogue } = require("../dist/game/model/dialogues/entries/Dialogue");
 
 const areaSounds = [];
 const prompts = [];
+const lostCargo = [];
 let actions;
 let castSpell;
 let plugin;
@@ -51,6 +52,8 @@ before(async () => {
       StatementDialogue: class { constructor(index, text) { this.text = text; } },
       ActionDialogue: class { constructor(index, action) { this.action = action; } },
       Sounds: { playAreaSound: (sound) => areaSounds.push(sound) },
+      // A summon drops what the hold carried; the crates it reports are what port tasks write off.
+      PluginManager: { emitCustomEvent: (name, payload) => { if (name === "sailing:cargo-lost") lostCargo.push(payload); } },
     },
     onItemAction: (name, handlers) => { if (name === "Summon boat") actions = handlers; },
     onSpellCast: (handler) => { castSpell = handler; },
@@ -182,6 +185,7 @@ test("only a boat with a teleport focus can be summoned; Last boat summons the l
 });
 
 const SALVAGE = 32851; // sailing_barracuda_shipwreck_salvage, lost on a summon
+const COURIER_CRATE = 32682; // port task 20's crate of jewellery: a courier crate, also lost
 
 function cast(player, opId = 1) {
   castSpell({ player, spellName: "Summon Boat", opId, handled: false });
@@ -315,4 +319,27 @@ test("without the level or runes the spell refuses at the choice, before any car
   player.castable = false;
   plugin._test.summon(player, plugin._test.spellCast(), plugin._test.nearbyDock(player), 1);
   assert.equal(player.dialogues.length, 0);
+});
+
+// A summon that takes crates reports them, so a lost courier crate's task slot is given back
+// rather than wedging the cargo port for good (#6878 review, finding 1).
+test("a summon reports the courier crates it takes, so their task slots can be given back", () => {
+  clearTasks();
+  prompts.length = 0;
+  lostCargo.length = 0;
+  const summoned = boat(3, "port_sarim");
+  summoned.cargo = [{ id: COURIER_CRATE, amount: 1 }, { id: 1511, amount: 2 }];
+  const player = createPlayer(3059, 2974, [summoned]);
+  plugin._test.summon(player, plugin._test.spellCast(), plugin._test.nearbyDock(player), 3);
+  assert.equal(summoned.location.dock, "port_sarim", "the warning comes first");
+  const [chain] = player.dialogues;
+  chain.entries[1].action.execute();
+  const [{ options }] = prompts;
+  options[1]();                       // Yes: summon it, losing the cargo
+  assert.equal(summoned.location.dock, "the_pandemonium");
+  assert.equal(lostCargo.length, 1, "one report for the summon");
+  assert.deepEqual(lostCargo[0].crates, [{ id: COURIER_CRATE, amount: 1 }], "the crate, not the logs");
+  assert.deepEqual(summoned.cargo, [null, { id: 1511, amount: 2 }], "everything else stays");
+  clearTasks();
+  lostCargo.length = 0;
 });

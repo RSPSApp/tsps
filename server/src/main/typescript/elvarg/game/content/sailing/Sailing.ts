@@ -448,8 +448,10 @@ export class Sailing {
         Sailing.leave(player, instance, "sunk");
         // What the hold carried goes down with it (Wiki, Sailing → Death & Capsizing: a death at
         // sea, a capsize or a teleport from the boat loses courier crates, bounty items, salvage
-        // and trawling fish and keeps supplies). The sailing cargo and port-task plugins answer
-        // this, so a lost courier crate stops being counted as taken and can be collected again.
+        // and trawling fish and keeps supplies). The cargo plugin owns that drop and tells port
+        // tasks what left, so a lost courier crate stops being counted as taken and can be
+        // collected again — the same routine every other loss path (capsize, Summon Boat, the
+        // cape, a shipwright's recovery) calls.
         if (boat) emit("sailing:boat-sunk", { player, boat });
     }
 

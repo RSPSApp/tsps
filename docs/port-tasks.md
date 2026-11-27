@@ -421,15 +421,15 @@ boat's hold are unchanged by this handler.
 
 A boat that goes down takes its hold with it. Live loses courier crates, bounty items,
 salvage and trawling fish on the death at sea, the capsize or the teleport that sinks a
-boat, and keeps supplies (Wiki, Sailing -> Death & Capsizing). `Sailing.sink` reports the
-sink as `sailing:boat-sunk` with the boat's own record; there the sailing cargo and
-port-task plugins drop those categories from the hold and give each lost courier crate back
-to its task slot, `taken` down by one and never below `delivered`. The cargo port then hands
-out a replacement, so a required crate can no longer be lost for good (#6878). A shipwright's
-later recovery finds that hold already empty; for a boat left at another port it drops the
-same categories itself and reports them as `sailing:cargo-lost`, which takes the same
-accounting. Neither path can charge a task twice. The quest stage does not advance on a
-sink, so the leg is simply started again with the replacement crate.
+boat, and keeps supplies (Wiki, Sailing -> Death & Capsizing). One routine owns that:
+`Cargo.loseCargo(player, boat)` drops those categories and reports the courier crates as
+`sailing:cargo-lost`, and every loss path calls it — `Sailing.sink` through the
+`sailing:boat-sunk` event (teleport, Escape, a death at sea), a combat capsize in
+`ShipCombat`, Summon Boat, the cape's boat teleport, and a shipwright's recovery. Here the
+port-task plugin answers that report by giving each lost crate back to its task slot,
+`taken` down by one and never below `delivered`, so the cargo port hands out a replacement and
+a required crate can no longer be lost for good (#6878). No path can charge a task twice: the
+hold is emptied by the first one to run, and a recovery after a sink finds it empty.
 
 `::quest <key> reset` clears what the quest handed out as well: a quest's `onReset` hook runs
 before the stage goes back to 0 (Pandemonium releases its own task slot and removes its crate

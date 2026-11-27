@@ -284,3 +284,46 @@ test("admin bulk quest actions preserve command completion and registered quest 
   assert.equal(miniquestComplete, true);
   assert.match(request("reset-all").message, /0 reset, 0 errors/);
 });
+
+// `::quest <key> reset` clears what the quest handed out too: a quest's own onReset runs before
+// the stage goes back to 0, so plugin-owned state (Pandemonium's port-task crate) goes with it
+// (#6878 review, note 3).
+test("a reset runs the quest's onReset before the stage changes, and a throwing hook still resets", () => {
+  const seen = [];
+  QuestRuntime.registerQuest(api, {
+    key: "reset_hook_probe",
+    name: "Reset Hook Probe",
+    varpId: 7001,
+    completionValue: 5,
+    onReset: (player) => seen.push(player.getAttribute("quest.reset_hook_probe.stage")),
+  });
+  const probe = QuestRuntime.getRegisteredQuests().find((quest) => quest.key === "reset_hook_probe");
+  const player = createPlayer();
+  probe.setStage(player, 3);
+
+  run(player, "quest reset hook probe reset");
+
+  assert.equal(probe.getStage(player), 0, "the stage still resets");
+  assert.deepEqual(seen, [3], "onReset saw the stage it was leaving");
+
+  QuestRuntime.registerQuest(api, {
+    key: "reset_boom_probe",
+    name: "Reset Boom Probe",
+    varpId: 7002,
+    completionValue: 5,
+    onReset: () => { throw new Error("boom"); },
+  });
+  const boom = QuestRuntime.getRegisteredQuests().find((quest) => quest.key === "reset_boom_probe");
+  const victim = createPlayer();
+  boom.setStage(victim, 2);
+  const errors = [];
+  const realError = console.error;
+  console.error = (...args) => errors.push(args.join(" "));
+  try {
+    run(victim, "quest reset boom probe reset");
+  } finally {
+    console.error = realError;
+  }
+  assert.equal(boom.getStage(victim), 0, "a throwing onReset does not keep the stage");
+  assert.match(errors.join("\n"), /Reset Boom Probe/, "and the failure is logged");
+});

@@ -7,6 +7,15 @@ const { content } = require("./SailingContent.Sailing");
 const { cargoCapacityOf } = require("./BoatFacilities.Sailing");
 
 const REPAIR_KIT = 31964;
+
+/** The plugin api, for the one event this module emits (`init`, as Common.PortTasks does). */
+let core = null;
+let warnedNoCore = false;
+
+function init(pluginApi) {
+  core = pluginApi.core;
+}
+
 /**
  * Each repair kit and the hitpoints it repairs (Wiki: Repair kits). The sidepanel counts the
  * hold's kits by what they repair: 5 per (wooden) repair kit, as captured.
@@ -185,9 +194,34 @@ function dropLostOnRecovery(boat) {
   return dropped;
 }
 
+/**
+ * The one way a boat loses hold cargo. Live loses courier crates, bounty items, salvage and
+ * trawling fish whenever the boat goes down or is moved with the hold full - a death at sea, a
+ * capsize, a teleport off it, Summon Boat, a shipwright's recovery (Wiki: Sailing -> Death &
+ * Capsizing; Cargo hold) - and keeps supplies. Every one of those paths calls this, so a lost
+ * courier crate's task slot takes the crate back and the source ledger can hand out another
+ * (#6878); the port-task plugin does that accounting off `sailing:cargo-lost`.
+ */
+function loseCargo(player, boat) {
+  const crates = dropLostOnRecovery(boat);
+  if (crates.length === 0) return crates;
+  const emit = core?.PluginManager?.emitCustomEvent;
+  if (typeof emit !== "function" || !player) {
+    if (!warnedNoCore) {
+      warnedNoCore = true;
+      console.warn("[sailing cargo] a lost crate was not reported: no plugin api (init) or player, so its task slot still counts it");
+    }
+    return crates;
+  }
+  emit.call(core.PluginManager, "sailing:cargo-lost", { player, boat, crates });
+  return crates;
+}
+
 module.exports = {
   REPAIR_KIT,
   REPAIR_KITS,
+  init,
+  loseCargo,
   TOOLS_UNLOCKED_ATTRIBUTE,
   sendToolUnlocks,
   categoryOf,

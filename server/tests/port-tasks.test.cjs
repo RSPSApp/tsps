@@ -16,7 +16,14 @@ let master;
 
 before(async () => {
   await CachePipeline.initialize();
-  const core = { ...PluginManager.getCoreApi(), WeaponInterfaceManager: { assign() {} } };
+  // Plugin-emitted custom events reach this file's hooks the way they reach a listener on the
+  // live server (Cargo.loseCargo -> port-tasks:cargo-lost, below), instead of vanishing into the
+  // real dispatcher, which has no plugin registered on it here.
+  const core = {
+    ...PluginManager.getCoreApi(),
+    PluginManager: { emitCustomEvent: (name, payload) => hooks.custom[name]?.(payload) },
+    WeaponInterfaceManager: { assign() {} },
+  };
   const api = {
     core,
     persistAttribute() {},
@@ -350,4 +357,37 @@ test("a released task slot keeps only what it delivered, and only that task", ()
 
   assert.equal(common.slots(player)[0].taken, 1, "taken drops to delivered");
   assert.equal(common.slots(player)[1].taken, 1, "another task keeps its cargo out");
+});
+
+// Every cargo-loss path goes through Cargo.loseCargo, so a capsize - which empties the hold with
+// BoatHp before the escape sinks the boat - still gives the crate back (#6878 review, finding 1).
+test("a capsize writes the crate off before the sink, and the sink then charges nothing", () => {
+  const Cargo = require("../plugins/skills/sailing/Cargo.Sailing");
+  const BoatHp = require("../plugins/skills/sailing/seacombat/BoatHp.SeaCombat");
+  const player = createPlayer();
+  player.setAttribute(common.SLOTS_ATTRIBUTE, [{ id: JEWELLERY_TASK, taken: 1, delivered: 0 }]);
+  const task = common.taskById(JEWELLERY_TASK);
+  const boat = { slot: 0, type: "raft", cargo: [{ id: task.crate, amount: 1 }] };
+
+  BoatHp.loseCargo(player, boat);              // the capsize: hold emptied, slot given back
+  assert.equal(common.slots(player)[0].taken, 0, "the capsize's loss is written off");
+  assert.equal(boat.cargo[0], null);
+
+  hooks.custom["sailing:boat-sunk"]({ player, boat });  // ...and the escape that follows charges nothing
+  assert.equal(common.slots(player)[0].taken, 0, "the sink after a capsize must not write off twice");
+  assert.deepEqual(Cargo.dropLostOnRecovery(boat), [], "and finds nothing left to drop");
+});
+
+// Summon Boat and the cape's boat teleport take the same routine with the player in hand.
+test("one loss routine covers every path that empties a hold", () => {
+  const Cargo = require("../plugins/skills/sailing/Cargo.Sailing");
+  const player = createPlayer();
+  player.setAttribute(common.SLOTS_ATTRIBUTE, [{ id: JEWELLERY_TASK, taken: 1, delivered: 0 }]);
+  const task = common.taskById(JEWELLERY_TASK);
+  const boat = { slot: 0, type: "raft", cargo: [{ id: task.crate, amount: 1 }, { id: Cargo.REPAIR_KIT, amount: 1 }] };
+
+  Cargo.loseCargo(player, boat);
+
+  assert.equal(common.slots(player)[0].taken, 0, "the slot takes the crate back");
+  assert.deepEqual(boat.cargo[1], { id: Cargo.REPAIR_KIT, amount: 1 }, "supplies stay in the hold");
 });

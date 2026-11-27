@@ -65,10 +65,13 @@
  * - 23 talent_shield_reflect: with a shield, 0.1% per Defence level (current, with
  *   talent_defence_boost's visible boost) that an NPC's hit is
  *   reflected whole: the player takes 0 and the attacker the damage (`onPlayerHitModify`, after
- *   protection prayers). Ours: not against players, as Thorns.
+ *   protection prayers), shown as live does: hitsplat 18 (19 for others) and `leagues_6_fire_shield`
+ *   on the player, and the reflected hit, like Thorns, as the player's max hit (43). Ours: not
+ *   against players, as Thorns.
  * - 75 talent_shield_block_heal: an attack dealing 0 with Dinh's bulwark (a two-handed shield) or
  *   an off-hand (any shield-slot item, shields included: the Wiki's off-hand page is the shield
- *   slot table) heals 2 (`league:pact-heal`) and restores 2 Prayer. A shield is recognised by name
+ *   slot table) heals 2 (`league:pact-heal`), shown as a heal splat with `leagues_6_health_regen`,
+ *   and restores 2 Prayer. A shield is recognised by name
  *   for Thorns/reflect, and Dinh's by its bulwark weapon interface, so the "Crate of shields" prop
  *   is not one.
  */
@@ -119,6 +122,16 @@ const REFLECT_CHANCE_PER_LEVEL = 0.001;
 const THORNS_SECOND_FRACTION = 0.5;
 const BLOCK_HEAL = 2;
 const BLOCK_PRAYER = 2;
+/**
+ * What live shows (rsprox 238/04190, a player with Thorns, its double hit, shield reflect and the
+ * block heal): a reflected hit is hitsplat 18 on the player (its pair 19 for everyone else) with
+ * the `leagues_6_fire_shield` spotanim, 57 of 57; a block heal is a heal splat (6) of what it
+ * healed with `leagues_6_health_regen`, as hitsplat 6 has no pair for others.
+ */
+const REFLECT_SPLAT = Object.freeze({ mine: 18, others: 19 });
+const HEAL_SPLAT = Object.freeze({ mine: 6, others: 6 });
+const REFLECT_SPOTANIM = "leagues_6_fire_shield";
+const HEAL_SPOTANIM = "leagues_6_health_regen";
 /** Heavy melee weapons that are no Blindbag weapon (Wiki, 6 May 2026). */
 const NOT_BLINDBAG_WEAPONS = new Set(["Dramen staff"]);
 const RECOIL_RING_NAME = /recoil|suffering/i;
@@ -187,8 +200,18 @@ const isMelee = (combatType) => combatType === core.CombatType.MELEE;
 const isPlayerTarget = (target) => target?.isPlayer?.() === true;
 const chance = (percent) => percent > 0 && Math.random() < percent / 100;
 
+/** A pact's heal (`league:pact-heal`); what it healed. */
 function heal(player, amount) {
-  if (amount > 0) api.emitCustomEvent(PACT_HEAL_EVENT, { player, amount });
+  if (!(amount > 0)) return 0;
+  const request = { player, amount, healed: 0 };
+  api.emitCustomEvent(PACT_HEAL_EVENT, request);
+  return Number(request.healed) || 0;
+}
+
+/** A spotanim on the player, by gameval name (none if the cache lacks it). */
+function graphic(player, name) {
+  const id = core.CacheDefinitions.getSpotanimId(name);
+  if (Number.isInteger(id)) player.performGraphic(new core.Graphic(id));
 }
 
 /** 26: an N% chance to heal the tiles between the player and the target. */
@@ -424,7 +447,9 @@ function thornsExperience(player, attacker, damage) {
  * recoil alone drops nothing (Wiki: Ring of recoil). So only Thorns' caller asks for the credit.
  */
 function reflect(player, attacker, damage, credits = false) {
-  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected();
+  // Fixed damage is its own maximum: live shows Thorns and the reflected hit as the reflecting
+  // player's max hit (hitsplat 43: 1140 and 4190, every one), within their max hit settings.
+  const hit = new core.HitDamage(damage, core.HitMask.RED).markReflected().setRolledMaximum(damage);
   if (credits) hit.markCreditsSource();
   hit.setSource(player);
   attacker.getCombat().getHitQueue().addPendingDamage([hit]);
@@ -460,7 +485,11 @@ function thorns(player, attacker, hit) {
 function blockHeal(player, hit) {
   const points = value(player, "shieldBlockHeal");
   if (!points || hit.getTotalDamage() > 0 || !hasTwoHandedShieldOrOffhand(player)) return;
-  heal(player, BLOCK_HEAL * points);
+  const healed = heal(player, BLOCK_HEAL * points);
+  if (healed > 0) {
+    player.showHitsplat(healed, HEAL_SPLAT);
+    graphic(player, HEAL_SPOTANIM);
+  }
   const skills = player.getSkillManager();
   const { PRAYER } = core.Skill;
   const current = skills.getCurrentLevel(PRAYER);
@@ -510,8 +539,10 @@ function hitModify({ player, hit }) {
   for (const each of hit.getHits()) {
     each.setDamage(0);
     each.setHitmask(core.HitMask.BLUE);
+    each.setSplatTypes(REFLECT_SPLAT.mine, REFLECT_SPLAT.others);
   }
   hit.updateTotalDamage();
+  graphic(player, REFLECT_SPOTANIM);
   if (core.CombatFactory.canReceiveRecoil(attacker)) reflect(player, attacker, damage);
 }
 

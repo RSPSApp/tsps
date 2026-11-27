@@ -756,6 +756,41 @@ test("0 damage taken with a two-handed shield or an off-hand heals 2 and restore
   assert.deepEqual(heals(), [2, 2, 2]);
 });
 
+test("as live shows them (rsprox 238/04190): a reflect is hitsplat 18 (19 for others) with leagues_6_fire_shield, Thorns and the reflected hit are max hits, a block heal is a heal splat with leagues_6_health_regen", () => {
+  const { holder } = cast("pact-visuals", {
+    [effect("shield_reflect")]: 1, [effect("thorns_damage")]: 1, [effect("shield_block_heal")]: 1,
+  });
+  shield(holder, ITEMS.runeKiteshield);
+  const spotanim = (name) => core.CacheDefinitions.getSpotanimId(name);
+  const attacker = new NPC(HILL_GIANT, new Location(3200, 3201, 0));
+  attacker.getHitpoints = () => 1000;
+  const reflected = [];
+  attacker.getCombat().getHitQueue().addPendingDamage = (hits) => reflected.push(...hits);
+
+  const hit = Object.assign(landed(core.CombatType.MELEE, [splat(12)]), { getAttacker: () => attacker, updateTotalDamage() {} });
+  randoms([0]);
+  hooks.onPlayerHitModify({ player: holder, hit });
+  const [part] = hit.getHits();
+  assert.equal(part.getDamage(), 0);
+  assert.deepEqual([part.getSplatType(true), part.getSplatType(false)], [18, 19], "the player's 0 is the reflect splat, 57 of 57");
+  assert.equal(holder.getGraphic()?.getId(), spotanim("leagues_6_fire_shield"));
+  assert.equal(reflected[0].getDamage(), 12);
+  assert.equal(reflected[0].isMaxHit(), true, "the reflected hit shows as the player's max hit (43)");
+
+  hooks.onCombatHitResolved({ attacker, target: holder, hit: landed(core.CombatType.MELEE, [splat(0)]) });
+  const thorns = reflected[1];
+  assert.equal(thorns.getDamage(), 3);
+  assert.equal(thorns.isMaxHit(), true, "Thorns too (1140: every Thorns hit was 43)");
+
+  holder.setHitpoints(80);
+  hooks.onCombatHitResolved({ attacker, target: holder, hit: landed(core.CombatType.MELEE, [splat(0)]) });
+  const healSplat = holder.getTickHits().find((each) => each.getSplatType(true) === 6);
+  assert.ok(healSplat, "a heal splat for the block heal");
+  assert.equal(healSplat.getDamage(), 2);
+  assert.equal(holder.getHitpoints(), 82, "the heal itself still lands, once");
+  assert.equal(holder.getGraphic()?.getId(), spotanim("leagues_6_health_regen"));
+});
+
 test("the two-handed Crate of shields prop is no shield; Dinh's bulwark is", () => {
   const holder = character("pact-crate-of-shields");
   holder.getEquipment().setItem(core.Equipment.SHIELD_SLOT, new core.Item(-1, 0));

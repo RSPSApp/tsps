@@ -2,6 +2,8 @@
 // Demonic Pacts League (type 6) slayer, verified against the OSRS Wiki's task table
 // (Demonic_Pacts_League/Guide/Slayer; local copy: the fixture's `source`, fetched 2026-11-26):
 // - a task is offered exactly while an area its counting monsters spawn in is unlocked,
+//   and a sealed location (a quest-sealed entrance, or no entrance in the world data)
+//   counts only once its quest is done,
 // - every task's counting monsters are placed in the world so the task can be completed
 //   (the documented dumper-data gaps are asserted as a known list, not silently passed),
 // - a completed kill pays Slayer XP of the monster's hitpoints at the world's experience
@@ -27,6 +29,7 @@ const FIXTURE = require("./data/demonic-pacts-slayer-tasks.json");
 const SPAWNS = require("../data/definitions/npc-spawns.json");
 const LEAGUE_AREAS_FILE = require("../plugins/modes/data/league-areas.json");
 const REGIONS = require("../plugins/modes/leagueareas/Regions.LeagueAreaUnlocks");
+const SEALED_LOCATIONS = require("../plugins/modes/leagueareas/Slayer.LeagueAreaUnlocks").sealedLocations;
 
 const DP = 6;
 /** The areas the Demonic Pacts league offers; a character's unlock set is drawn from these. */
@@ -34,10 +37,15 @@ const ALL_AREAS = LEAGUE_AREAS_FILE.leagues[DP].areas.slice();
 const areaIdByKey = new Map(Object.entries(LEAGUE_AREAS_FILE.areas).map(([id, area]) => [area.key.toLowerCase(), Number(id)]));
 const VARLAMORE = areaIdByKey.get("varlamore");
 const WILDERNESS = areaIdByKey.get("wilderness");
+const KANDARIN = areaIdByKey.get("kandarin");
 assert.ok(VARLAMORE, "Varlamore has an area id in league-areas.json");
 assert.ok(WILDERNESS, "Wilderness has an area id in league-areas.json");
+assert.ok(KANDARIN, "Kandarin has an area id in league-areas.json");
 /** The wilderness master (keys.slayer): her tasks only count monsters placed in the Wilderness. */
 const KRYSTILIA = 7;
+/** The balance master: his tasks carry Konar's areas (slayer_master_task.areas). */
+const KONAR = masterIdOf("Konar quo Maten");
+assert.ok(KONAR, "Konar quo Maten is a master in slayer-masters.json");
 /**
  * Tasks the world currently has no counting spawns for (gap report §1.2: the Poison Waste
  * spawns do not exist in the dumper's data yet). Asserted as a known list: when the spawn
@@ -108,6 +116,17 @@ before(async () => {
   require("../plugins/modes/Relics.LeagueMode").register(api);
   require("../plugins/modes/AreaUnlocks.LeagueMode").register(api);
   require("../plugins/skills/Slayer.plugin").register(api);
+  /**
+   * `quest:is-complete` (real server: QuestRuntime.answerIsComplete, the quest's stage
+   * attribute reaching its completion value). The harness answers for the two quests the
+   * slayer area gate can ask about: The Heart of Darkness (76, S.COMPLETE) and Watchtower
+   * (13, STAGES.COMPLETE).
+   */
+  custom["quest:is-complete"] = (custom["quest:is-complete"] ?? []).concat((request) => {
+    const completionStage = { the_heart_of_darkness: 76, watchtower: 13 }[request.key];
+    if (completionStage === undefined) return;
+    request.complete = Number(request.player.getAttribute(`quest.${request.key}.stage`) ?? 0) >= completionStage;
+  });
   Data = require("../plugins/skills/slayer/Data.Slayer");
   Tasks = require("../plugins/skills/slayer/Tasks.Slayer");
   rows = buildRows();
@@ -249,6 +268,14 @@ const nonArea = (row) => {
 };
 /** A counting tile grants reachability only inside a square the league names (incl. null overrides). */
 const effective = (tile) => tile.areaId !== null || (tile.areaId === null && tile.inIndex);
+/**
+ * A counting tile the gate names but that sits in a sealed location (Slayer.LeagueAreaUnlocks
+ * sealedLocations). The suite's characters have done no quests, so a sealed tile is never
+ * reachable: a quest-sealed entrance stays sealed, and a pocket with no entrance in the world
+ * data never opens.
+ */
+const sealed = (tile) => SEALED_LOCATIONS.some(
+  (loc) => tile.x >= loc.minX && tile.x <= loc.maxX && tile.y >= loc.minY && tile.y <= loc.maxY);
 
 test("the world is a league world and the characters are Demonic Pacts", () => {
   assert.equal(GameConstants.WORLD_PROFILE, "league");
@@ -259,11 +286,13 @@ test("the world is a league world and the characters are Demonic Pacts", () => {
   assert.equal(rows.length, FIXTURE.taskCount);
 });
 
-test("a task is offered exactly when a counting tile is reachable from the character's areas", () => {
-  // The plugin (Slayer.LeagueAreaUnlocks.entered): a counting tile is reachable when its square
-  // is named by the league and the character unlocked that area, or the league opens the square
-  // to everyone (area: null override). A square no area names is reachable by no one. A task
-  // with no counting tile at all is left to the master's own logic (always offered).
+test("a task is offered exactly when a counting tile is reachable and unsealed", () => {
+  // The plugin (Slayer.LeagueAreaUnlocks.entered + sealOpen): a counting tile is reachable when
+  // its square is named by the league and the character unlocked that area, or the league
+  // opens the square to everyone (area: null override). A square no area names is reachable by
+  // no one. A tile in a sealed location (a quest-sealed entrance, or no entrance in the world
+  // data) is reachable only once the quest is done - and the suite's characters have done no
+  // quests. A task with no counting tile at all is left to the master's own logic (always offered).
   let checked = 0;
   for (const row of rows) {
     if (row.isBoss) continue;
@@ -275,13 +304,15 @@ test("a task is offered exactly when a counting tile is reachable from the chara
     const countingTiles = master.id === KRYSTILIA
       ? effectiveTiles.filter((t) => t.areaId === WILDERNESS)
       : effectiveTiles;
-    const named = [...new Set(countingTiles.map((t) => t.areaId).filter((a) => a !== null))];
-    const open = countingTiles.some((t) => t.areaId === null);
+    // The suite's characters have done no quests, so a sealed tile is never reachable.
+    const openTiles = countingTiles.filter((t) => !sealed(t));
+    const named = [...new Set(openTiles.map((t) => t.areaId).filter((a) => a !== null))];
+    const open = openTiles.some((t) => t.areaId === null);
     const holder = character(`holder-${checked}`, { areas: named.length ? named : [VARLAMORE] });
     const stranger = character(`stranger-${checked}`, { areas: ALL_AREAS.filter((a) => !named.includes(a)) });
     // nonArea(row): the task must first pass the gates the area gate does not control
     // (levels, stats, quests, task-unlock rows).
-    const expectedHolder = nonArea(row) && (row.placed.length === 0 || countingTiles.length > 0);
+    const expectedHolder = nonArea(row) && (row.placed.length === 0 || openTiles.length > 0);
     const expectedStranger = nonArea(row) && (row.placed.length === 0 || open);
     const holderNames = eligibleNames(holder, master);
     const strangerNames = eligibleNames(stranger, master);
@@ -303,16 +334,88 @@ test("a fresh Demonic Pacts character is offered exactly the tasks reachable fro
     const name = row.entry.task.displayName;
     if (Tasks.eligible(fresh, master, row.entry, new Set())) offered.add(name);
     // No counting tile: left to the master. Otherwise reachable iff a counting tile sits in
-    // Varlamore or on a square the league opens to everyone; for Krystilia only her
-    // Wilderness placements count.
+    // Varlamore or on a square the league opens to everyone - and is not sealed (the fresh
+    // character has done no quests); for Krystilia only her Wilderness placements count.
     const countingTiles = master.id === KRYSTILIA
       ? row.placed.filter((t) => effective(t) && t.areaId === WILDERNESS)
       : row.placed.filter(effective);
     const reachable = row.placed.length === 0 || countingTiles.some(
-      (t) => t.areaId === VARLAMORE || t.areaId === null);
+      (t) => (t.areaId === VARLAMORE || t.areaId === null) && !sealed(t));
     if (nonArea(row) && reachable) expected.add(name);
   }
   assert.deepEqual([...offered].sort(), [...expected].sort());
+});
+
+/** The Blue Dragons row (a counting task, not a boss). */
+const blueRow = () => rows.find((r) => !r.isBoss && norm(r.fixture.monster) === "bluedragon" && r.placed.length > 0);
+
+test("Blue Dragons: not offered while every counted spawn sits in a sealed location", () => {
+  const row = blueRow();
+  const master = Data.get().masters.get(row.masterId);
+  const name = row.entry.task.displayName;
+  // A fresh character's only Varlamore counted spawns: the Ruins complex (sealed until The
+  // Heart of Darkness) and the Dragon Nest pocket (no entrance in the world data).
+  const fresh = character("sealed-fresh");
+  assert.ok(!eligibleNames(fresh, master).includes(name), "fresh character: not offered");
+  // Unlocking Kandarin adds the Ogre Enclave - sealed until Watchtower.
+  const enclave = character("sealed-enclave", { areas: [VARLAMORE, KANDARIN] });
+  assert.ok(!eligibleNames(enclave, master).includes(name), "Kandarin without Watchtower: not offered");
+});
+
+test("Blue Dragons: The Heart of Darkness lifts the Ruins' seal", () => {
+  const row = blueRow();
+  const master = Data.get().masters.get(row.masterId);
+  const name = row.entry.task.displayName;
+  const done = character("hod-done");
+  done.setAttribute("quest.the_heart_of_darkness.stage", 76); // S.COMPLETE
+  assert.ok(eligibleNames(done, master).includes(name), "quest complete: offered");
+  const mid = character("hod-mid");
+  mid.setAttribute("quest.the_heart_of_darkness.stage", 72); // FIGHT: Amoxliatl, before the banish
+  assert.ok(!eligibleNames(mid, master).includes(name), "mid-quest: still sealed");
+});
+
+test("Blue Dragons: Watchtower lifts the Ogre Enclave's seal (Kandarin unlocked)", () => {
+  const row = blueRow();
+  const master = Data.get().masters.get(row.masterId);
+  const name = row.entry.task.displayName;
+  const done = character("watch-done", { areas: [VARLAMORE, KANDARIN] });
+  done.setAttribute("quest.watchtower.stage", 13); // STAGES.COMPLETE
+  assert.ok(eligibleNames(done, master).includes(name), "Watchtower complete: offered via the Ogre Enclave");
+});
+
+test("Konar's sealed areas stay closed until their quest completes", () => {
+  // Konar's Blue Dragons task carries the Tapoyauik and Ogre Enclave areas (slayer_area); the
+  // area gate must not open them (or hand them out through pickArea) while the location's
+  // entrance is still quest-sealed. The plugin's contract, as Tasks.Slayer.available asks it:
+  // the area must be entered by the same rule the counting tiles use.
+  const row = rows.find((r) => !r.isBoss && r.masterId === KONAR && /^bluedragon(s)?$/.test(norm(r.fixture.monster)));
+  assert.ok(row, "Konar has a Blue Dragons row");
+  const konar = Data.get().masters.get(KONAR);
+  const areaOf = (name) => {
+    const area = row.entry.areaRows.map((id) => Data.get().areas.get(id)).find((a) => a?.name === name);
+    assert.ok(area, `Konar's Blue Dragons row carries the ${name} area`);
+    return area;
+  };
+  const askArea = (player, area) => {
+    const request = {
+      player, master: konar.id, task: row.entry.task, bossId: null, area, wilderness: false,
+      counts: (npcId, name) => Data.npcCountsFor(row.entry.task.id, npcId, name),
+      available: true,
+    };
+    for (const handler of custom["slayer:task-available"] ?? []) handler(request);
+    return request.available !== false;
+  };
+  const tapoyauik = areaOf("Tapoyauik");
+  const enclave = areaOf("Ogre Enclave");
+  assert.ok(!askArea(character("area-fresh"), tapoyauik), "fresh character (no HoD): Tapoyauik stays closed");
+  const hod = character("area-hod");
+  hod.setAttribute("quest.the_heart_of_darkness.stage", 76); // S.COMPLETE
+  assert.ok(askArea(hod, tapoyauik), "HoD complete: Tapoyauik opens");
+  const kandarin = character("area-kandarin", { areas: [VARLAMORE, KANDARIN] });
+  assert.ok(!askArea(kandarin, enclave), "Kandarin without Watchtower: the Enclave stays closed");
+  const watch = character("area-watch", { areas: [VARLAMORE, KANDARIN] });
+  watch.setAttribute("quest.watchtower.stage", 13); // STAGES.COMPLETE
+  assert.ok(askArea(watch, enclave), "Watchtower complete: the Enclave opens");
 });
 
 test("every task's counting monsters are placed in the world (known gaps asserted as a list)", () => {

@@ -48,6 +48,63 @@ function refuse(player) {
   });
 }
 
+/**
+ * Buggie's corpse. rsprox 2922 (rev 230) records the live search: the diary comes out in an
+ * objectbox (193) beside the line below, `+slayer_cave_diary`, and varbit `slayer_found_diary`
+ * goes 0 -> 1. The Wiki (Entomologist's diary) adds that it is "reclaimed by searching Buggie",
+ * which is the only source in the game. The refusal lines are not in that capture, so those two
+ * stay derived. The POH bookcase follows on its own: the diary is slot 68 of the 5210 book enum,
+ * and Bookcase.Construction records every book the player acquires.
+ */
+const ENTOMOLOGIST_DIARY_GAMEVAL = "slayer_cave_diary";
+const DIARY_FOUND_VARBIT_GAMEVAL = "slayer_found_diary";
+/** rsprox 2922, the objectbox line verbatim. */
+const DIARY_FOUND_TEXT = "You search the corpse and find a book.";
+const DIARY_ALREADY_HELD = "You have already taken his diary.";
+const DIARY_NO_SPACE = "You need more inventory space to take his diary.";
+/** The recorded varbit is a client flag only; the durable copy is this attribute (restored on login). */
+const DIARY_FOUND_ATTRIBUTE = "kalphite-cave:found-diary";
+
+/** Already holding a copy, in the inventory or the bank — searching again must not duplicate it. */
+function holdsDiary(player, diaryId) {
+  if (player.getInventory().getAmount(diaryId) > 0) return true;
+  return (player.getBanks?.() ?? []).some((bank) => (bank?.getAmount?.(diaryId) ?? 0) > 0);
+}
+
+/** The objectbox (193) with an item beside its text, as live shows the diary (rsprox 2922). */
+function objectBox(player, itemId, text) {
+  const { DialogueChainBuilder, ItemStatementDialogue } = api.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
+}
+
+/** Search on the Entomologist: hand over the diary once, and say why when it cannot be taken. */
+function searchBuggie({ player }) {
+  const { CacheDefinitions } = api.core;
+  const diaryId = CacheDefinitions.getObjId(ENTOMOLOGIST_DIARY_GAMEVAL);
+  if (diaryId == null) return;
+  const inventory = player.getInventory();
+  if (holdsDiary(player, diaryId)) {
+    player.sendMessage(DIARY_ALREADY_HELD);
+    return;
+  }
+  if (inventory.getFreeSlots() < 1) {
+    player.sendMessage(DIARY_NO_SPACE);
+    return;
+  }
+  inventory.adds(diaryId, 1);
+  player.setAttribute(DIARY_FOUND_ATTRIBUTE, 1);
+  const foundVarbit = CacheDefinitions.getVarbitId(DIARY_FOUND_VARBIT_GAMEVAL);
+  if (foundVarbit != null) player.getPacketSender().sendVarbit(foundVarbit, 1);
+  objectBox(player, diaryId, DIARY_FOUND_TEXT);
+}
+
+/** Login: a player who has already found the diary gets the recorded varbit back. */
+function restoreFoundDiary({ player }) {
+  if (!player.getAttribute?.(DIARY_FOUND_ATTRIBUTE)) return;
+  const foundVarbit = api.core.CacheDefinitions.getVarbitId(DIARY_FOUND_VARBIT_GAMEVAL);
+  if (foundVarbit != null) player.getPacketSender().sendVarbit(foundVarbit, 1);
+}
+
 function createCave(pluginApi) {
   const { Area, Boundary } = pluginApi.core;
   class KalphiteCave extends Area {
@@ -77,6 +134,10 @@ function createCave(pluginApi) {
 function registerCave(pluginApi) {
   api = pluginApi;
   pluginApi.registerArea(createCave(pluginApi));
+  // Wiki (Entomologist's diary): the diary is reclaimed by searching Buggie, his only Search option.
+  pluginApi.persistAttribute(DIARY_FOUND_ATTRIBUTE, 0);
+  pluginApi.onNpcInteraction("Entomologist", { Search: searchBuggie });
+  pluginApi.onPlayerLogin(restoreFoundDiary);
 }
 
 module.exports = {
@@ -86,5 +147,5 @@ module.exports = {
   register(pluginApi) {
     registerCave(pluginApi);
   },
-  _test: { createCave, refuse, onTask, wearsGhostspeak, CAVE, BUGGIE_MESSAGE, BUGGIE_VARIANTS },
+  _test: { createCave, refuse, onTask, wearsGhostspeak, CAVE, BUGGIE_MESSAGE, BUGGIE_VARIANTS, searchBuggie, holdsDiary, DIARY_FOUND_TEXT, DIARY_ALREADY_HELD, DIARY_NO_SPACE },
 };

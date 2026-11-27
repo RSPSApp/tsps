@@ -7,6 +7,7 @@ const common = require("./seacombat/Common.SeaCombat");
 module.exports = {
   register(api) {
     common.init(api);
+    require("./Cargo.Sailing").init(api);
     require("./seacombat/BoatHp.SeaCombat")(api);
     require("./seacombat/Cannon.SeaCombat")(api);
     require("./seacombat/Creatures.SeaCombat")(api);

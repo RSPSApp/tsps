@@ -219,7 +219,6 @@ messages, jingle and counter remain as above. See
 
 ## Not done
 
-- Confiscating crates on a teleport, or when leaving port with one in hand.
 - Trim being refused while carrying cargo.
 
 ## Port coin bag safety
@@ -419,6 +418,23 @@ tick, its owning task's `taken` count decreases by one (never below `delivered`)
 can be collected again at the cargo port. A refusal or requirements probe changes nothing.
 No task is cancelled, completed or rewarded by confiscation. Other task slots and the
 boat's hold are unchanged by this handler.
+
+A boat that goes down takes its hold with it. Live loses courier crates, bounty items,
+salvage and trawling fish on the death at sea, the capsize or the teleport that sinks a
+boat, and keeps supplies (Wiki, Sailing -> Death & Capsizing). One routine owns that:
+`Cargo.loseCargo(player, boat)` drops those categories and reports the courier crates as
+`sailing:cargo-lost`, and every loss path calls it — `Sailing.sink` through the
+`sailing:boat-sunk` event (teleport, Escape, a death at sea), a combat capsize in
+`ShipCombat`, Summon Boat, the cape's boat teleport, and a shipwright's recovery. Here the
+port-task plugin answers that report by giving each lost crate back to its task slot,
+`taken` down by one and never below `delivered`, so the cargo port hands out a replacement and
+a required crate can no longer be lost for good (#6878). No path can charge a task twice: the
+hold is emptied by the first one to run, and a recovery after a sink finds it empty.
+
+`::quest <key> reset` clears what the quest handed out as well: a quest's `onReset` hook runs
+before the stage goes back to 0 (Pandemonium releases its own task slot and removes its crate
+from the hand or a hold). A save wedged before the sink write-off existed needs one reset;
+after it the cargo port hands the crate out again instead of refusing.
 
 Outside port, the player first receives "You're leaving port with some cargo. If you do
 not return it, it will be confiscated by the shipwright wizard's autonomous tracking unit."

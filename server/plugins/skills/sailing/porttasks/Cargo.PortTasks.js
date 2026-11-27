@@ -2,6 +2,7 @@
 // and no manual removal/helm/Trim while carrying. See docs/port-tasks.md for sources
 // and the explicitly approximate TSPS port envelope.
 const common = require("./Common.PortTasks");
+const Cargo = require("../Cargo.Sailing");
 
 const GRACE_TICKS = 22;
 const LEAVING = "You're leaving port with some cargo. If you do not return it, it will be confiscated by the shipwright wizard's autonomous tracking unit.";
@@ -120,6 +121,47 @@ function canBankCargo(event) {
   if (!event.quiet) event.player.sendMessage(CANNOT_REMOVE);
 }
 
+/**
+ * Courier crates gone with the boat: their task slots take the crate back (`taken` drops, never
+ * below `delivered`), so the source ledger can hand out a replacement. Same accounting as the
+ * hand crate's confiscation above.
+ */
+function writeOffLostCrates(player, crates) {
+  if (!player || !Array.isArray(crates) || crates.length === 0) return;
+  const slots = common.slots(player);
+  let changed = false;
+  for (const crate of crates) {
+    const index = slots.findIndex((slot) => {
+      const task = slot && common.taskById(slot.id);
+      return task?.crate === crate.id && slot.taken > slot.delivered;
+    });
+    if (index < 0) continue;
+    const amount = Math.max(1, Math.trunc(Number(crate.amount)) || 1);
+    slots[index] = { ...slots[index], taken: Math.max(slots[index].delivered, slots[index].taken - amount) };
+    changed = true;
+  }
+  if (changed) common.setSlots(player, slots);
+}
+
+/**
+ * The boat went down with cargo aboard. Live loses it at that moment, not at a later recovery
+ * (Wiki, Sailing → Death & Capsizing: a death at sea, a capsize or a teleport from the boat
+ * loses courier crates, bounty items, salvage and trawling fish, and keeps supplies), so the drop
+ * and the task-slot write-off both ride on `Cargo.loseCargo`, the routine every other loss path
+ * uses too. Without the write-off a required crate stayed counted as taken and the cargo port
+ * refused to hand out another (#6878).
+ */
+function boatLost({ player, boat }) {
+  if (!player || !boat) return;
+  Cargo.loseCargo(player, boat);
+}
+
+/** Whatever dropped a hold's crates (a sink, capsize, Summon Boat, the cape, a recovery) reports
+ *  them as `sailing:cargo-lost`; each one goes back to its task slot. */
+function cargoLost({ player, crates }) {
+  writeOffLostCrates(player, crates);
+}
+
 /** Required task cargo must remain recoverable through the hold and source ledger. */
 function canDestroyBoat(event) {
   const required = common.slots(event.player).some(slot => {
@@ -137,6 +179,8 @@ function attach(api) {
   api.persistAttribute(common.CARRIED_SLOT_ATTRIBUTE, -1);
   api.onCustomEvent("port-tasks:cargo-carried", start);
   api.onCustomEvent("port-tasks:cargo-released", forget);
+  api.onCustomEvent("sailing:boat-sunk", boatLost);
+  api.onCustomEvent("sailing:cargo-lost", cargoLost);
   api.onCustomEvent("teleport:landed", landed);
   api.onCustomEvent("sailing:can-use-hands", canUseHands);
   api.onCustomEvent("sailing:can-destroy-boat", canDestroyBoat);

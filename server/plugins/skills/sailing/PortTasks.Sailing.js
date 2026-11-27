@@ -18,6 +18,7 @@ function answerOpenSlot(request) {
 module.exports = {
   register(api) {
     common.init(api);
+    require("./Cargo.Sailing").init(api);
     api.persistAttribute(common.SLOTS_ATTRIBUTE);
     api.onCustomEvent("sailing:has-port-task-slot", answerOpenSlot);
     api.onPlayerLogin(sendState);

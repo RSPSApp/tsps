@@ -23,7 +23,7 @@ const { Sailing } = require("../../../src/main/typescript/elvarg/game/content/sa
 const { content, dockNear } = require("./SailingContent.Sailing");
 const { teleportFocusOf } = require("./BoatFacilities.Sailing");
 const { openBoatSelection, MODE } = require("./BoatSelection.Sailing");
-const { dropLostOnRecovery, holdsLostOnRecovery } = require("./Cargo.Sailing");
+const Cargo = require("./Cargo.Sailing");
 const { sendBoatVarbits } = require("./BoatVarbits.Sailing");
 
 const LAST_SUMMONED_ATTRIBUTE = "sailing:last-summoned-boat";
@@ -140,7 +140,7 @@ function spellCast() {
 function summon(player, by, dock, slot) {
   const boat = player.getSailing().boats.find((owned) => owned.slot === slot);
   if (refused(player, by, boat, dock)) return;
-  if (holdsLostOnRecovery(boat)) {
+  if (Cargo.holdsLostOnRecovery(boat)) {
     warnCargo(player, dock, () => summonNow(player, by, dock, slot));
     return;
   }
@@ -184,7 +184,7 @@ function summonNow(player, by, dock, slot) {
     return;
   }
   Sailing.recover(player, slot, dock.id);
-  dropLostOnRecovery(boat);
+  Cargo.loseCargo(player, boat);
   sendBoatVarbits(player);
   player.setAttribute(LAST_SUMMONED_ATTRIBUTE, slot);
   by.cast(player);
@@ -292,6 +292,7 @@ module.exports = {
   register(pluginApi) {
     api = pluginApi;
     core = api.core;
+    Cargo.init(api);
     content();
     api.persistAttribute(LAST_SUMMONED_ATTRIBUTE);
     api.onItemAction("Summon boat", { Break: breakTablet, "Last boat": lastBoat });

@@ -951,10 +951,13 @@ test("a boat leaving the sea puts its guests ashore where it last docked", () =>
         if (leave === "disembark") assert.equal(Sailing.disembark(owner, ELSEWHERE.id), null);
         else if (leave === "escape") Sailing.escape(owner);
         else Sailing.onLogout(owner);
-        assert.deepEqual(emitted.map(([name, payload]) => [name, payload.player, payload.reason]), [
+        const expected = [
           ["sailing:guest-left", guest, "evicted"],
           ["sailing:left", owner, leave === "escape" ? "sunk" : leave],
-        ], leave);
+        ];
+        // A boat that goes down also tells the cargo plugins its hold went with it.
+        if (leave === "escape") expected.push(["sailing:boat-sunk", owner, undefined]);
+        assert.deepEqual(emitted.map(([name, payload]) => [name, payload.player, payload.reason]), expected, leave);
       });
       assert.equal(BoatManager.getBoat(instance.entityIndex), undefined, leave);
       assert.equal(guest.getArea() ?? null, null, leave);

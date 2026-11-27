@@ -6,7 +6,7 @@
 // - At 0 HP the boat is lost to the sea: the recovery-loss cargo categories go, and the player (and crew) are
 //   sent back to their return point; the boat stays sunk until a shipwright recovers it.
 const common = require("./Common.SeaCombat");
-const { dropLostOnRecovery } = require("../Cargo.Sailing");
+const Cargo = require("../Cargo.Sailing");
 const { removeDeckNpc } = require("../SailingContent.Sailing");
 
 /** Each boat type's HP-bar NPC (boat_hp_npc_tiny, _small, _medium), its deck tile and health bar. */
@@ -74,8 +74,8 @@ function heal(player, owned, amount) {
 }
 
 /** Combat capsize loses the same cargo categories as recovery (Wiki: Sailing / Boat). */
-function loseCargo(owned) {
-  dropLostOnRecovery(owned);
+function loseCargo(player, owned) {
+  Cargo.loseCargo(player, owned);
 }
 
 /** The boat's HP-bar NPC comes aboard a tick after the player, with the crew (as Deck.Crew.js). */

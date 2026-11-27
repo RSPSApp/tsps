@@ -102,7 +102,7 @@ SlayerHelmet.register({
   onCustomEvent: (name, hook) => customHooks.set(name, [...(customHooks.get(name) ?? []), hook]),
 });
 
-const { assemble, imbue, recolour, disassemble, HELMET_NAMES, attachGoggles, addGogglesToOwnedHelmets, GOGGLES_META } = SlayerHelmet._test;
+const { assemble, imbue, recolour, disassemble, HELMET_NAMES } = SlayerHelmet._test;
 
 const EquipmentStats = require("../plugins/interface/EquipmentStats.plugin");
 EquipmentStats.register({
@@ -250,36 +250,25 @@ test("after A Porcine of Interest the goggles are a component, and the helmet ke
     assert.equal(event.handled, true);
     const helm = ready.items.find((entry) => entry.getId() === ItemIdentifiers.SLAYER_HELMET);
     assert.ok(helm, "helmet made");
-    assert.equal(helm.getMetaValue(GOGGLES_META), true, "the helmet keeps the goggles");
     assert.equal(ready.items.some((entry) => entry.getId() === ItemIdentifiers.REINFORCED_GOGGLES), false, "goggles absorbed");
   } finally {
     completedQuests.delete("a_porcine_of_interest");
   }
 });
 
-test("goggles attach to a helmet that has none, and Disassemble gives them back", () => {
+test("after the quest Disassemble gives the goggles back, before it there are none to give", () => {
+  const withQuest = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET] });
   completedQuests.add("a_porcine_of_interest");
   try {
-    const player = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.REINFORCED_GOGGLES] });
-    const event = { player, usedItem: player.items[1], usedItemId: ItemIdentifiers.REINFORCED_GOGGLES, usedItemSlot: 1,
-      usedWithItem: player.items[0], usedWithItemId: ItemIdentifiers.SLAYER_HELMET, usedWithItemSlot: 0, handled: false };
-    attachGoggles(event);
-    assert.equal(event.handled, true);
-    assert.equal(player.items[0].getMetaValue(GOGGLES_META), true);
-    assert.equal(player.items[1].getId(), -1, "goggles consumed");
-
-    disassemble({ player, item: player.items[0] });
-    assert.ok(player.items.some((entry) => entry.getId() === ItemIdentifiers.REINFORCED_GOGGLES), "goggles returned");
+    disassemble({ player: withQuest, item: withQuest.items[0] });
+    assert.ok(withQuest.items.some((entry) => entry.getId() === ItemIdentifiers.REINFORCED_GOGGLES), "goggles returned");
   } finally {
     completedQuests.delete("a_porcine_of_interest");
   }
-});
 
-test("finishing the quest adds the goggles' benefits to helmets already owned", () => {
-  const player = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET, ItemIdentifiers.BLACK_MASK] });
-  addGogglesToOwnedHelmets({ player, key: "a_porcine_of_interest" });
-  assert.equal(player.items[0].getMetaValue(GOGGLES_META), true);
-  assert.equal(player.items[1].getMetaValue(GOGGLES_META), undefined, "a black mask is not a helmet");
+  const withoutQuest = createPlayer({ inventory: [ItemIdentifiers.SLAYER_HELMET] });
+  disassemble({ player: withoutQuest, item: withoutQuest.items[0] });
+  assert.equal(withoutQuest.items.some((entry) => entry.getId() === ItemIdentifiers.REINFORCED_GOGGLES), false);
 });
 
 test("scroll on an already imbued mask retains the existing first-owned fallback", () => {
@@ -617,8 +606,8 @@ test("native explicit mask selection preserves an unrelated normal/imbued mask",
   PluginManager.emitServerStartup({});
   // The old prefix uses private fake APIs only; native registration replaces module API state.
   const slayerHooks = PluginManager.itemOnItemHooks.filter(h => h.pluginName === "SlayerHelmet");
-  assert.equal(slayerHooks.length, 4, "real imbue, assembly, goggles attach and recolour registrations must be loaded");
-  assert.deepEqual(slayerHooks.map(h => h.handlerName), ["imbue", "assemble", "attachGoggles", "recolour"]);
+  assert.equal(slayerHooks.length, 3, "real imbue, assembly and recolour registrations must be loaded");
+  assert.deepEqual(slayerHooks.map(h => h.handlerName), ["imbue", "assemble", "recolour"]);
   const porcine = require("../plugins/quests/QuestRuntime").questNamed("A Porcine of Interest");
   assert.ok(porcine, "real quest registered");
   const parts = [I.EARMUFFS, I.FACEMASK, I.NOSE_PEG, I.SPINY_HELMET, I.ENCHANTED_GEM];

@@ -582,14 +582,15 @@ function dialogueVariant({ npcId, definition }) {
   return STEVE_MASTER_VARIANT;
 }
 
-const EQUIPMENT_SHOP = "Slayer Equipment (shop)";
+/** "Slayer Equipment (shop)": matched by id, since the goggles copy shares its name. */
+const EQUIPMENT_SHOP_ID = 1324;
 
 /** Trade (op4): the equipment shop, for forms the shops.json binding misses (Nieve 1455). */
 function trade(event) {
   if (!masterFor(event.definition)) return false;
-  const shops = core.ShopDefinition.all().filter((shop) => shop.getName() === EQUIPMENT_SHOP);
-  if (shops.length !== 1) return false;
-  core.ShopManager.open(event.player, shops[0].getId(), true);
+  const shop = core.ShopDefinition.all().find((definition) => definition.getId() === EQUIPMENT_SHOP_ID);
+  if (!shop) return false;
+  core.ShopManager.open(event.player, shop.getId(), true);
   return true;
 }
 

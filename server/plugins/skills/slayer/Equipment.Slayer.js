@@ -15,8 +15,9 @@ let core = null;
 let api = null;
 /** The protection every Slayer helmet gives (data/slayer-gear.json). */
 const HELMET = "Slayer helmet";
-/** The goggles' own protection; a helmet only carries it once they are absorbed into it. */
+/** The goggles' own protection; a helmet carries it once A Porcine of Interest is complete. */
 const GOGGLES = "Reinforced goggles";
+const GOGGLES_QUEST = "a_porcine_of_interest";
 const byName = new Map();
 const immuneNames = new Set(GEAR.immune.names);
 const thrallImmuneNames = new Set(GEAR.thrallImmune);
@@ -46,24 +47,26 @@ function isSlayerHelmet(name) {
 }
 
 /**
- * Whether the player is protected from `monster`. A helmet counts for the goggles' protection only
- * when it carries a pair (Wiki, Slayer helmet: the goggles are a component after A Porcine of
- * Interest, and attaching them is what gives the helmet their benefits), so a helmet made before
- * the quest does not shield from sourhogs until it absorbs one.
+ * Whether the player is protected from `monster`. A helmet counts for the goggles' protection once
+ * A Porcine of Interest is done: the Wiki has every existing helmet gain the pair at completion
+ * (A Porcine of Interest: "Existing slayer helmets will have reinforced goggles added to them";
+ * Sourhog: "It requires reinforced goggles to kill, or a Slayer helmet after the quest"), and live
+ * objects carry no per-item state to record it — the cache has no goggles varbit — so quest
+ * completion is the only state there is. Before the quest a helmet gives no such protection.
  */
 function protectedFrom(player, monster) {
   const names = equippedNames(player);
-  const helmetCounts = !monster.protection.includes(GOGGLES) || wornHelmetHasGoggles(player);
+  const helmetCounts = !monster.protection.includes(GOGGLES) || gogglesGiven(player);
   const covered = monster.protection.some((prefix) => names.some((name) =>
     prefix === HELMET ? helmetCounts && isSlayerHelmet(name) : name.startsWith(prefix)));
   return covered || (helmetCounts && monster.protection.includes(HELMET) && helmetGiven(player));
 }
 
-/** "slayer:helmet-goggles": whether the worn helmet absorbed a pair of goggles (SlayerHelmet). */
-function wornHelmetHasGoggles(player) {
-  const request = { player, goggles: false };
-  api?.emitCustomEvent("slayer:helmet-goggles", request);
-  return request.goggles === true;
+/** Whether A Porcine of Interest is complete ("quest:is-complete", QuestRuntime). */
+function gogglesGiven(player) {
+  const request = { player, key: GOGGLES_QUEST, complete: false };
+  api?.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
 }
 
 /** Whether content gives the player a Slayer helmet's effects without one ("slayer:helmet", a league relic). */

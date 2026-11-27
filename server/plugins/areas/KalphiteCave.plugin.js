@@ -49,14 +49,17 @@ function refuse(player) {
 }
 
 /**
- * Buggie's corpse: the Wiki (Entomologist's diary) says the diary "can be reclaimed by searching
- * Buggie", and nothing else in the game gives it. No transcript or capture records what live says
- * when the diary comes out of the body, so both lines below are derived from that sentence rather
- * than captured. The POH bookcase follows on its own: the diary is slot 68 of the 5210 book enum,
+ * Buggie's corpse. rsprox 2922 (rev 230) records the live search: the diary comes out in an
+ * objectbox (193) beside the line below, `+slayer_cave_diary`, and varbit `slayer_found_diary`
+ * goes 0 -> 1. The Wiki (Entomologist's diary) adds that it is "reclaimed by searching Buggie",
+ * which is the only source in the game. The refusal lines are not in that capture, so those two
+ * stay derived. The POH bookcase follows on its own: the diary is slot 68 of the 5210 book enum,
  * and Bookcase.Construction records every book the player acquires.
  */
 const ENTOMOLOGIST_DIARY_GAMEVAL = "slayer_cave_diary";
-const DIARY_TAKEN = "You search the entomologist's body and find his diary.";
+const DIARY_FOUND_VARBIT_GAMEVAL = "slayer_found_diary";
+/** rsprox 2922, the objectbox line verbatim. */
+const DIARY_FOUND_TEXT = "You search the corpse and find a book.";
 const DIARY_ALREADY_HELD = "You have already taken his diary.";
 const DIARY_NO_SPACE = "You need more inventory space to take his diary.";
 
@@ -66,9 +69,16 @@ function holdsDiary(player, diaryId) {
   return (player.getBanks?.() ?? []).some((bank) => (bank?.getAmount?.(diaryId) ?? 0) > 0);
 }
 
+/** The objectbox (193) with an item beside its text, as live shows the diary (rsprox 2922). */
+function objectBox(player, itemId, text) {
+  const { DialogueChainBuilder, ItemStatementDialogue } = api.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, text)));
+}
+
 /** Search on the Entomologist: hand over the diary once, and say why when it cannot be taken. */
 function searchBuggie({ player }) {
-  const diaryId = api.core.CacheDefinitions.getObjId(ENTOMOLOGIST_DIARY_GAMEVAL);
+  const { CacheDefinitions } = api.core;
+  const diaryId = CacheDefinitions.getObjId(ENTOMOLOGIST_DIARY_GAMEVAL);
   if (diaryId == null) return;
   const inventory = player.getInventory();
   if (holdsDiary(player, diaryId)) {
@@ -80,7 +90,9 @@ function searchBuggie({ player }) {
     return;
   }
   inventory.adds(diaryId, 1);
-  player.sendMessage(DIARY_TAKEN);
+  const foundVarbit = CacheDefinitions.getVarbitId(DIARY_FOUND_VARBIT_GAMEVAL);
+  if (foundVarbit != null) player.getPacketSender().sendVarbit(foundVarbit, 1);
+  objectBox(player, diaryId, DIARY_FOUND_TEXT);
 }
 
 function createCave(pluginApi) {
@@ -123,5 +135,5 @@ module.exports = {
   register(pluginApi) {
     registerCave(pluginApi);
   },
-  _test: { createCave, refuse, onTask, wearsGhostspeak, CAVE, BUGGIE_MESSAGE, BUGGIE_VARIANTS, searchBuggie, holdsDiary, DIARY_TAKEN, DIARY_ALREADY_HELD, DIARY_NO_SPACE },
+  _test: { createCave, refuse, onTask, wearsGhostspeak, CAVE, BUGGIE_MESSAGE, BUGGIE_VARIANTS, searchBuggie, holdsDiary, DIARY_FOUND_TEXT, DIARY_ALREADY_HELD, DIARY_NO_SPACE },
 };

@@ -20,12 +20,17 @@ let core;
 let area;
 const dialogues = [];
 const npcActions = new Map();
+const boxes = [];
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   core = PluginManager.getCoreApi();
   const api = {
-    core,
+    core: {
+      ...core,
+      DialogueChainBuilder: class { constructor() { this.entries = []; } add(entry) { this.entries.push(entry); return this; } },
+      ItemStatementDialogue: class { constructor(_line, item, text) { this.item = item; this.text = text; } },
+    },
     emitCustomEvent: (name, payload) => {
       if (name === "slayer:on-task") payload.onTask = payload.player.onTask === true;
       if (name === "npc-dialogue:start") dialogues.push(payload);
@@ -174,6 +179,9 @@ function searcher({ items = [], banks = [], freeSlots = 28 } = {}) {
   });
   player.getBanks = () => banks;
   player.added = added;
+  player.varbits = [];
+  player.getPacketSender = () => ({ sendVarbit: (id, value) => player.varbits.push([id, value]) });
+  player.getDialogueManager = () => ({ startDialogues: (chain) => boxes.push(chain) });
   return player;
 }
 const bankHolding = (id, amount) => [{ getAmount: (other) => (other === id ? amount : 0) }];
@@ -187,11 +195,17 @@ test("Search on the Entomologist gives his diary, once (Wiki: Entomologist's dia
   const player = searcher();
   actions.Search({ player });
   assert.deepEqual(player.added, [[diary, 1]]);
-  assert.deepEqual(player.messages, [T.DIARY_TAKEN]);
+  assert.deepEqual(player.varbits, [[4093, 1]], "slayer_found_diary goes 0 -> 1 (rsprox 2922)");
+  assert.equal(boxes.length, 1, "the diary comes out in an objectbox (rsprox 2922)");
+  assert.equal(boxes[0].entries[0].item, diary);
+  assert.equal(boxes[0].entries[0].text, "You search the corpse and find a book.");
+  assert.deepEqual(player.messages, [], "the captured search puts nothing in the chatbox");
 
   actions.Search({ player });
   assert.deepEqual(player.added, [[diary, 1]], "a second search does not duplicate it");
-  assert.deepEqual(player.messages, [T.DIARY_TAKEN, T.DIARY_ALREADY_HELD]);
+  assert.deepEqual(player.varbits, [[4093, 1]], "and records nothing again");
+  assert.equal(boxes.length, 1, "and shows no second box");
+  assert.deepEqual(player.messages, [T.DIARY_ALREADY_HELD]);
 });
 
 test("a banked diary is not handed out again, and a full inventory keeps it in the body", () => {
@@ -202,9 +216,11 @@ test("a banked diary is not handed out again, and a full inventory keeps it in t
   actions.Search({ player: banked });
   assert.deepEqual(banked.added, [], "the bank counts as held");
   assert.deepEqual(banked.messages, [T.DIARY_ALREADY_HELD]);
+  assert.deepEqual(banked.varbits, [], "nothing recorded for a refusal");
 
   const full = searcher({ freeSlots: 0 });
   actions.Search({ player: full });
   assert.deepEqual(full.added, []);
   assert.deepEqual(full.messages, [T.DIARY_NO_SPACE]);
+  assert.deepEqual(full.varbits, [], "nothing recorded when there is no room");
 });

@@ -11,7 +11,15 @@ import { angleToFineDelta, normalizeAngle, reverseAngle, turnAngleDelta } from "
  *   top, never past the cap and a half-tile step;
  * - the speed ramps toward the target by the sails' acceleration each tick, up and down (half a
  *   tile, a tile with camphor or better sails), so a boat coasts to a stop when its sails come
- *   down; hitting rocks or land stops it dead;
+ *   down;
+ * - collision: a tick's move that would put the hull on something it can't sail over is
+ *   replaced by its north-south part alone, else its east-west part alone, at full length, so
+ *   the boat slides along a coast or jetty and keeps its speed (rsprox: ~870 deflections in
+ *   ~620 Sailing recordings, rev 235-242; the blocked part is always exactly 0, never part of
+ *   the diagonal, and the boat takes up its full move again once clear, e.g. 00983 ticks
+ *   376-381 along the Wizards' Tower bridge). Only when neither part fits does it run aground:
+ *   it loses all way (rsprox 3578); ours: it first creeps up to the obstacle in half-tile
+ *   steps, as before;
  * - turning: 128 angle units a tick, at no cost to speed, moving along the new facing.
  * The turn rate is also rsmod's (`BoatMovement.kt`, https://github.com/rsmod/rsmod, ISC license).
  * Reverse keeps the bow on the helm heading and backs up.
@@ -30,8 +38,10 @@ const MOVE_STEP = 64;
 export interface BoatStep {
     moved: boolean;
     turned: boolean;
-    /** The hull hit something it can't sail over this tick. */
+    /** The hull ran aground this tick: no part of the move fitted, and the way is lost. */
     blocked: boolean;
+    /** The full move was blocked and the boat slid along one axis instead, keeping its speed. */
+    slid: boolean;
 }
 
 /** The speed the sails drive the boat at, in fine units a tick along the bow (negative in reverse). */
@@ -41,7 +51,7 @@ export function sailVelocity(boat: Boat): number {
 }
 
 export function tickBoat(boat: Boat, isSailable: SailableTileCheck): BoatStep {
-    const step: BoatStep = { moved: false, turned: false, blocked: false };
+    const step: BoatStep = { moved: false, turned: false, blocked: false, slid: false };
     const target = sailVelocity(boat);
     boat.velocity += Math.max(-boat.acceleration, Math.min(boat.acceleration, target - boat.velocity));
 
@@ -60,6 +70,20 @@ export function tickBoat(boat: Boat, isSailable: SailableTileCheck): BoatStep {
 
     const distance = Math.abs(boat.velocity) * Math.max(1, boat.speedMultiplier);
     const travel = boat.velocity < 0 ? reverseAngle(boat.angle) : boat.angle;
+    const move = angleToFineDelta(travel, distance);
+    if (pathClear(boat, move.dx, move.dy, isSailable)) {
+        applyPosition(boat, boat.fineX + move.dx, boat.fineY + move.dy, step);
+        return step;
+    }
+    // Slide: the north-south part first, then the east-west part (live picks that order in
+    // more of the recorded slides where either would fit).
+    for (const [dx, dy] of [[0, move.dy], [move.dx, 0]]) {
+        if ((dx !== 0 || dy !== 0) && pathClear(boat, dx, dy, isSailable)) {
+            applyPosition(boat, boat.fineX + dx, boat.fineY + dy, step);
+            step.slid = true;
+            return step;
+        }
+    }
     const startX = boat.fineX;
     const startY = boat.fineY;
     for (let travelled = 0; travelled < distance; ) {
@@ -76,6 +100,21 @@ export function tickBoat(boat: Boat, isSailable: SailableTileCheck): BoatStep {
         applyPosition(boat, x, y, step);
     }
     return step;
+}
+
+/** Whether the hull can move by (dx, dy) this tick, checked in half-tile steps. */
+function pathClear(boat: Boat, dx: number, dy: number, isSailable: SailableTileCheck): boolean {
+    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / MOVE_STEP));
+    let fromX = boat.fineX;
+    let fromY = boat.fineY;
+    for (let i = 1; i <= steps; i++) {
+        const x = boat.fineX + Math.round((dx * i) / steps);
+        const y = boat.fineY + Math.round((dy * i) / steps);
+        if (!canOccupy(boat, x, y, boat.angle, isSailable, fromX, fromY)) return false;
+        fromX = x;
+        fromY = y;
+    }
+    return true;
 }
 
 /** What the sails give: full the base speed, half half of it, reverse half a tile, none when stopped. */

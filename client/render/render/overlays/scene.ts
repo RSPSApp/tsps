@@ -94,7 +94,6 @@ import { collectWidgetsAtPoint } from "../../../widgets/menu/utils";
 import {
     getCanvasCssSize,
     isIos,
-    isLowEndDevice,
     isMobileMode,
     isTouchDevice,
     isWebGL2Supported,
@@ -187,6 +186,7 @@ import {
     createProjectileProgram,
 } from "../../shaders/Shaders";
 import { KNOWN_WATER_TEXTURE_IDS } from "../../water/WaterTextureIds";
+import { getPerformancePolicy } from "../../../game/performance/PerformancePolicy";
 import type { WebGLOsrsRenderer } from "../../WebGLOsrsRenderer";
 import type { WebGLOsrsRendererHost } from "../hostInterface";
 import { RENDER_CONSTANTS } from "../constants";
@@ -371,7 +371,7 @@ export function drawSceneTileOverlays(host: WebGLOsrsRendererHost, time: number,
         args.state.overheadTexts = undefined;
         args.state.overheadPrayers = undefined;
         args.state.groundItems = undefined;
-        if (isLowEndDevice) {
+        if (getPerformancePolicy().reducedOverlayWork) {
             // Hover outline is cosmetic. Only the tile marker draws in this phase, so skip
             // updating every other overlay (the main pass updates them) and bail when idle.
             args.state.hoverEnabled = false;

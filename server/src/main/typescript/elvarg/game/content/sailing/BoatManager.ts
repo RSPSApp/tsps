@@ -274,11 +274,18 @@ export class BoatManager {
         BoatManager.applyHelmHeading(player, boat, packedHeadingToAngle(packedHeading));
     }
 
-    /** A main-world tile a hull may cover: open water with no solid object on it. */
+    /**
+     * A main-world tile a hull may cover: open water, not flagged blocked in the map, with no
+     * solid object on it. Live boats never cover a blocked-flagged water tile (rsprox: none of
+     * 102,827 sampled free moves in ~620 recordings did, and those tiles explain most of the
+     * places boats turn aside); open sea has no flag, the strip along coasts, harbours, jetties
+     * and bridge railings has it, so a boat can't sail over the Port Sarim jetty or the Wizards'
+     * Tower bridge.
+     */
     public static isSailable(x: number, y: number, level: number): boolean {
         if (level !== 0) return false;
         if (!RegionManager.isWater(new Location(x, y, 0))) return false;
-        return (RegionManager.getClipping(x, y, 0, null) & SOLID_OBJECT) === 0;
+        return (RegionManager.getClipping(x, y, 0, null) & (SOLID_OBJECT | RegionManager.BLOCKED_TILE)) === 0;
     }
 
     /**

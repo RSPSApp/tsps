@@ -77,6 +77,7 @@ set or timing.
 | Log balance (Coal Trucks) | rsprox captures 353, local 1001512, 1001582 (rev 241), 1002239 and 1002251 (rev 242): the filterable line "You walk carefully across the slippery log..." and BUSY on, then sound 2470 (2 loops) a tick later, sound 2470 again at +4, and "... and make it safely to the other side." and BUSY off at +5. The Wiki gives 20 Agility and 8.5 XP. Recording `230/00353` shows five one-tile walk steps in each direction: west from 2603,3477 to 2598,3477 on ticks 690-694, and east back to 2603,3477 on ticks 1040-1044. |
 | Log balance (Fremennik Province) | rsprox capture 359 (rev 230, both ways), local 1001623 ... 1002212 (rev 241-242, from the south), ticks from the arrival: the spam line "You attempt to walk across the slippery log.", sound 2470 (2 loops) and two tiles a tick onto the middle (2722,3594); +1 BUSY on and the roll: a success is the game message "You make it across the log without any problems.", sound 2470 again and two tiles onto the far end; +4 BUSY off and 4 XP. A failure (local 1001631, 1001653, 1001659, 1001991, 1002015, all from the south): +1 "You lose your footing and fall into the water.", the teleport to 2724,3594 with an exactmove from the middle tile (cycles 22-35, angle 1024), 2582 (`human_wobbleandfall_short_r`) and sound 2493 (10 loops); +2 the splash (spotanim 68, delay 3) on 2724,3594 with sound 1658; +3 "You're being washed down the river." and a tile a tick along 2725,3594, 2726,3595 (+4, spam "You feel like you're drowning..."), 2726,3596 (+5, spam "You finally come to shore."), 2725,3597 (+6); +7 BUSY off, 6 damage (6 in all five) and 2 XP. The appearance updates at +2 and +6 carry no render ids, so the swim render is ours, as is a failure from the north end (none recorded: the same fall, facing south). Script `fremennikLogBalance` (Fremennik.Agility.js) |
 | Grapple walls (Falador, Yanille) | rsprox 4001 (rev 237, six climbs, both Falador sides and Yanille's north): BUSY on, fire and climb in one animation (1779) with its graphic (3575) and sound 2928; 5 ticks in the screen fades out (overlay 174, script 948 `0,255,0,0,50`); 7 ticks in the teleport onto the wall, the animation reset and the fade in (`0,0,0,255,50`); 2 ticks later the overlay closes and BUSY clears (rev 230, rsprox 358, took 10 ticks, with 4455/760). Yanille's grapple lands on the far one of the wall's two tiles: from the north on 2556,3073,1 (358 and 4001), from the south on 2556,3074,1 (358, tick 4606). The barehanded climbs (not recorded) land there too |
+| Broken Raft (River Lum) | rsprox 347 (rev 230), ticks from the first shot, west to east (tick 1945) / east to west (4061). Two ticks after arriving on the bank tile (3246,3179 / 3259,3179) the side tabs close (tab switch 9); the player fires (`xbows_human_fire_and_reload` 4230, synth 2928) with them west to east, four ticks later east to west. +3: "You successfully grapple the raft and tie the rope to a tree." (spam), a step onto 3247 / 3258, the near tree becomes `*_rope_tied` (17040 yew at 3244,3179 / 17037 at 3260,3178) and `xbows_ground_rope` (17034) runs 3246-3251 / 3254-3259. +4 / +5: placed on the raft (3252,3180 / 3253,3179) and drawn swimming from the bank (the first swim east drawn to 3251,3180), 120 cycles by the west bank (4466) and 160 by the east (4467), `watersplash` (68, delay 6) and synth 2929 (delay 3); two steps across the raft follow. +10 / +9: the second shot. +13 / +12: "You successfully grapple the tree on the opposite bank." / "You successfully grapple the tree.", the far tree becomes `*_rope_grappled` (17038 / 17041) with its rope, and the swim to 3258 / 3248, then steps to 3259 / 3246. Tabs back (switch 1) at +18 / +16. Each bank's rope and tree go 14 ticks after they came. No XP. Recorded difference: live sends loc_del on the three rope tiles that hold a cache ground decoration (17030 at 3246 and 3259, 319 at 3248); ours puts the decoration back. Jump-to (48 Agility, Wiki) has no capture: ours swims the same two legs without the shots, ropes or messages |
 | Pillar (Ruins of Mokhaiotl) | a 3-tile jump (12196) in 27 cycles, sound 2461; a tick later varbit 16716 (`moki_agil_shortcut_side`) flips, so only the far pillar shows "Jump-to" (the runner's `varbit` step) |
 | Gaps (Chasm of Fire) | two gaps (event-world recordings): the west one a 6-tile jump (12196, sound 2461) from 1440,10098 to 1446,10097; the east one two hops a tick apart, onto 1453 then 1456. The exact moves are drawn a tile or two short of the server position; the entries land where the server puts the player. The way back mirrors it |
 | Zip line (Fossil Island) | one way north off the House on the Hill (rsprox captures 3156, 3157, rev 232): 2586 on arrival (delay 10); a tick later 1602 with sounds 1933 and 1934 (delay 15) and a 2-3 tile exact move north each tick to 3765,3897 (the last in 15 cycles, sound 2462); a tick later 2588 on the ground, 3765,3898,0. The first leg is drawn to 3884 while the server places the player on 3885; the entry lands where the server does |
@@ -114,9 +115,9 @@ The successful Zanaris squeeze's "You try to squeeze past." is spam too (5 of 5 
 
 ## Still unverified, with what the captures show
 
-- **Broken Raft, Crossbow Tree:** grapple, the rope added as scenery, the side panels hidden, a
-  swim along the rope (their own swimming animations) and a chance the grapple breaks. Needs its
-  own script.
+- **Crossbow Tree:** grapple, the rope added as scenery, the side panels hidden, a swim along the
+  rope and a chance the grapple breaks. Needs its own script, as the Broken Raft has
+  (`riverLumRaft`, above).
 - **Wall (Darkmeyer):** recorded climbing up (39173, `human_reachforladder`, then a teleport to
   3595,3312 a tick later), but that half is on plane 1 and the other (39172) on plane 0; where the
   player stands needs another look. Not added.
@@ -137,9 +138,12 @@ The "Broken fence (Varrock)" entry follows a revision 242 capture of a whole Ger
   (839), BUSY with it. BUSY clears 3 ticks later.
 - **No message** either way; the entry used to say "You climb over the broken fence.".
 
-The move starts on the fence line, one tile past the player, so the runner's `move` step takes a
-`from` tile. This cache's collision blocks the fence tile itself (clipType 2), which live walks
-onto, so the north crossing starts from 3308,3491 (`unverified` in the entry).
+The move starts one tile past the player, so the runner's `move` step takes a `from` tile. This
+cache's collision blocks the fence tile itself (clipType 2), which live walks onto, so the north
+crossing starts from 3308,3491 (`unverified` in the entry) and keeps live's distances from the
+player's tile: the move runs from the fence (3308,3492) to 3308,3493, where the player lands. With
+live's tiles from 3308,3491 the climb played a tile north of the fence and landed a tile further
+on (issue 6772).
 
 ## Map mismatches found on the way
 

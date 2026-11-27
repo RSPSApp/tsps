@@ -50,6 +50,10 @@ function applyFlatArmour({ attacker, target, hit, damage }) {
   if (type !== CombatType.MELEE && type !== CombatType.RANGED) return;
   const rolled = damage.getDamage();
   if (rolled > 0) damage.setDamage(Math.max(0, rolled - armour));
+  // The armour moves the whole damage range, so the max hit splat marks the adjusted top (issue
+  // 6848): a 30 max into -4 shows it on 34, into 2 on 28. A max of armour or less can't land a hit.
+  const maximum = damage.getRolledMaximum?.() ?? 0;
+  if (maximum > 0) damage.setRolledMaximum(Math.max(0, maximum - armour));
 }
 
 module.exports = {

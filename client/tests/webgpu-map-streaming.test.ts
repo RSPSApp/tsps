@@ -7,8 +7,16 @@ import { ClientState } from "../game/ClientState";
 import { MapManager } from "../game/MapManager";
 import { getMapSquareId } from "../rs/map/MapFileIndex";
 import { LOC_OVERRIDE_REMOVED } from "../rs/scene/LocOverride";
+import { ConfigManager } from "../runelite/client/config/ConfigManager";
+import { PerformanceConfig, PerformanceMode } from "../game/performance/PerformanceConfig";
+import { initPerformancePolicy } from "../game/performance/PerformancePolicy";
 
 (globalThis as any).self = globalThis;
+{
+    const config = new ConfigManager();
+    config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.HIGH);
+    initPerformancePolicy(config);
+}
 require.extensions[".glsl"] = (module, file) => { module.exports = fs.readFileSync(file, "utf8"); };
 for (const ext of [".png", ".jpg", ".webp"]) require.extensions[ext] = (module, file) => { module.exports = file; };
 const { updateWebGPUMapStreaming } = require("../render/webgpu/frameConfig");

@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-198 quests · ✅ passed: 24 · ⚠️ passed with issues: 22 · 🔄 in progress: 15 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 88
+198 quests · ✅ passed: 24 · ⚠️ passed with issues: 22 · 🔄 in progress: 16 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 87
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -69,8 +69,8 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Fairytale I - Growing Pains](fairytale-i-growing-pains/README.md) | ⚠️ passed with issues | 2026-11-16 | agent | claude-opus-5-5 |  |
 | [Fairytale II - Cure a Queen](fairytale-ii-cure-a-queen/README.md) | ⚠️ passed with issues | 2026-11-16 | agent | claude-opus-5-5 |  |
 | [Fallen From Grace](fallen-from-grace/README.md) | 🔁 needs recheck | 2026-10-30 | agent | claude-haiku-5-5 | 8 |
-| Family Crest | untested |  |  |  |  |
-| [Family Pest](family-pest/README.md) | 🔄 in progress |  | agent | claude-sonnet-5-5 | 6 |
+| [Family Crest](family-crest/README.md) | 🔄 in progress | 2026-11-26 | agent | claude-opus-5-5 | 1 |
+| [Family Pest](family-pest/README.md) | 🔄 in progress | 2026-11-26 | agent | claude-opus-5-5 |  |
 | [Fight Arena](fight-arena/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | [Fishing Contest](fishing-contest/README.md) | ✅ passed |  | agent |  |  |
 | Forgettable Tale... | untested |  |  |  |  |
@@ -137,7 +137,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Rune Mysteries](rune-mysteries/README.md) | 🔁 needs recheck | 2026-10-30 | agent | grok-4.7 | 4 |
 | [Scorpion Catcher](scorpion-catcher/README.md) | 🔁 needs recheck | 2026-10-29 | agent | grok-4.7 | 5 |
 | [Scrambled!](scrambled/README.md) | untested |  |  |  |  |
-| [Sea Slug](sea-slug/README.md) | ✅ passed | 2026-11-10 | agent | claude-opus-5-5 | 1 |
+| [Sea Slug](sea-slug/README.md) | ✅ passed | 2026-11-10 | agent | claude-opus-5-5 | 3 |
 | [Secrets of the North](secrets-of-the-north/README.md) | untested |  |  |  |  |
 | Shades of Mort'ton | untested |  |  |  |  |
 | [Shadow of the Storm](shadow-of-the-storm/README.md) | 🔄 in progress | 2026-11-24 | agent | claude-opus-5-5 |  |

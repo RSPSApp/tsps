@@ -3983,13 +3983,22 @@ export class OsrsClient {
                             // Set varbit 8119 (has_displayname_transmitter) to 1 so chat scripts know we have a name
                             this.varManager.setVarbit(8119, 1);
                         }
-                        this.localChatNameIcons = Array.isArray(chatIcons)
+                        const nextChatIcons = Array.isArray(chatIcons)
                             ? chatIcons
                                   .map((icon) => Number(icon))
                                   .filter((icon) => Number.isFinite(icon) && icon >= 0)
                                   .map((icon) => icon | 0)
                             : [];
-                        this.localChatNamePrefix = typeof chatPrefix === "string" ? chatPrefix : "";
+                        const nextChatPrefix = typeof chatPrefix === "string" ? chatPrefix : "";
+                        const chatIdentityChanged =
+                            nextChatPrefix !== this.localChatNamePrefix ||
+                            nextChatIcons.length !== this.localChatNameIcons.length ||
+                            nextChatIcons.some((icon, idx) => icon !== this.localChatNameIcons[idx]);
+                        this.localChatNameIcons = nextChatIcons;
+                        this.localChatNamePrefix = nextChatPrefix;
+                        if (chatIdentityChanged) {
+                            markChatTransmit();
+                        }
                         this.localPlayerIsAdmin =
                             typeof isAdmin === "boolean"
                                 ? isAdmin
@@ -8055,10 +8064,6 @@ export class OsrsClient {
 
     private applyDisplayDefaults(): void {
         this.renderDistance = clampRenderDistance(this.renderDistance);
-        // CS2 mobile_setfps can leave targetFps stuck at ~20; desktop must not keep that.
-        if (!isMobileMode && this.targetFps > 0 && this.targetFps < 60) {
-            this.targetFps = DEFAULT_FPS_LIMIT;
-        }
         try {
             if (this.renderer) {
                 this.renderer.fpsLimit = this.targetFps;
@@ -8078,11 +8083,7 @@ export class OsrsClient {
     }
 
     setTargetFps(limit: number): void {
-        let next = Number.isFinite(limit) ? Math.max(0, limit | 0) : 0;
-        // Ignore CS2/mobile battery caps on desktop (values like 20 pin the limiter).
-        if (!isMobileMode && next > 0 && next < 60) {
-            next = DEFAULT_FPS_LIMIT;
-        }
+        const next = Number.isFinite(limit) ? Math.max(0, limit | 0) : 0;
         this.targetFps = next;
         try {
             if (this.renderer) {

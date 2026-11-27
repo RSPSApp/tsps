@@ -10,10 +10,11 @@ The plugin lives under `areas/` so that its "Ladder" handler runs before the gen
   - Mining needs level 30 (not boostable) and gives 60 XP per pay-dirt. The roll for each pay-dirt is OpenRune's, made every pickaxe interval.
   - A vein's timer starts with its first pay-dirt. It depletes 38-45 ticks later (Wiki: 23-27 seconds), or 60-67 on the upper level (36-40 seconds). Everyone mining it stops.
   - It respawns 159-176 ticks later, or 94-101 upstairs.
-- **The ore** is rolled when the pay-dirt is mined, not when it's cleaned (Wiki). Pay-dirt from elsewhere, such as the bank, is rolled when it's deposited.
+- **The ore** is rolled when the pay-dirt is mined, not when it's cleaned (Wiki). Pay-dirt with no roll (given by a command, or banked before #6804) is rolled when it's deposited.
   - Rolls go top-down: nugget, runite (85), adamantite (70), mithril (55), gold (40), else coal.
   - The rates give a nugget 1 in 32 at every level, and coal 96.9% at level 30 down to 24.6% at 99, as the Wiki's chart shows.
   - Cleaning gives the Wiki's bonus XP: coal and gold 15, mithril 30, adamantite 45, runite 75.
+- **Banking:** pay-dirt can't be banked (Wiki, Pay-dirt: "Pay-dirt cannot be deposited in the bank"). Every bank and deposit box path refuses it through `onCanBankItem` with the repo's unbankable-item line, "A magical force prevents you from banking this item!" (ours: no capture has the refusal). A Deposit-all sends it once, for the first pay-dirt slot. Pay-dirt banked before the veto stays in the bank and can be withdrawn; it can't go back in.
 - **The machine:**
   - A hopper takes as much pay-dirt as the sack has room for. The sack holds 108, or 189 with the bigger sack, counting what's still being washed.
   - The pay-dirt floats down the channel and becomes ore in the sack 12 ticks after the deposit.

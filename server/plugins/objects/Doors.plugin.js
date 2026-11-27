@@ -559,19 +559,21 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
       silent: true,
     }),
     // Witchaven's puzzle doors keep their clipped threshold while each permitted
-    // player crosses. Explicit placements also identify a temporarily open leaf.
+    // player crosses. Explicit placements also identify a temporarily open leaf: live's open leaf is
+    // inactiveposhdoor, and famcrest_doori2h1_open for the gold room's door (Family Crest, revision 242
+    // capture local 1002252 ticks 1241, 1254, 1283, 1356).
     ...[
-      [O.DOOR_73, 2719, 9671, 1, null, 9672],
-      [O.DOOR_75, 2722, 9671, 1, null, 9672],
-      [O.DOOR_76, 2727, 9690, 2, 2728, null],
-      [O.DOOR_77, 2723, 9711, 3, null, 9711],
-    ].map(([id, x, y, face, crossX, crossY]) => {
+      [O.DOOR_73, 2719, 9671, 1, null, 9672, "inactiveposhdoor"],
+      [O.DOOR_75, 2722, 9671, 1, null, 9672, "inactiveposhdoor"],
+      [O.DOOR_76, 2727, 9690, 2, 2728, null, "famcrest_doori2h1_open"],
+      [O.DOOR_77, 2723, 9711, 3, null, 9711, "inactiveposhdoor"],
+    ].map(([id, x, y, face, crossX, crossY, leaf]) => {
       const [dx, dy] = [[-1, 0], [0, 1], [1, 0], [0, -1]][face];
       return Object.freeze({
         closed: [[id, x, y, 0, face]],
         opened: [
           [NAMELESS_DOOR_LEAF_IDS.INVISWALL, x, y, 0, face],
-          [id, x + dx, y + dy, 0, (face + 1) & 3],
+          [core.CacheDefinitions.getLocId(leaf) ?? id, x + dx, y + dy, 0, (face + 1) & 3],
         ],
         crossX, crossY,
         walkOver: true,

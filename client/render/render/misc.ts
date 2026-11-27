@@ -1,4 +1,4 @@
-import { lowEndDeviceModeEnabled } from "../../game/plugins/lowenddevice/LowEndDeviceMode";
+import { getPerformancePolicy } from "../../game/performance/PerformancePolicy";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -96,8 +96,6 @@ import {
     getCanvasCssSize,
     isIos,
     isMobileMode,
-    isTouchDevice,
-    isLowEndDevice,
     isWebGL2Supported,
 } from "../../common/utils/DeviceUtil";
 import { clamp } from "../../common/utils/MathUtil";
@@ -209,11 +207,18 @@ export function resolveEffectiveLodThresholdTiles(host: WebGLOsrsRendererHost, f
         if ((host.effectiveLodThresholdFrame | 0) === (frameId | 0)) {
             return host.effectiveLodThresholdTiles | 0;
         }
-        const profile = host.syncBrowserQualityProfile();
-        const capToProfile = !gpu?.overrideDeviceCaps &&
-            (isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled);
+        host.syncBrowserQualityProfile();
+        const policy = getPerformancePolicy();
+        if (policy.explicitDrawDistance !== null) {
+            const hdCap = host.osrsClient.clientPlugins.hdEnabled() ? 48 : renderDistance;
+            const target = Math.max(0, Math.min(renderDistance, hdCap, policy.explicitDrawDistance - 2));
+            host.effectiveLodThresholdTiles = target | 0;
+            host.effectiveLodThresholdFrame = frameId | 0;
+            return target | 0;
+        }
+        const capToProfile = gpu ? gpu.overrideDeviceCaps === false : true;
         const target = capToProfile
-            ? Math.min(base, Math.max(0, Math.min(renderDistance, profile.lodThresholdCap | 0)))
+            ? Math.min(base, Math.max(0, Math.min(renderDistance, policy.lodThresholdCap)))
             : base;
         host.effectiveLodThresholdTiles = Math.max(0, target | 0);
         host.effectiveLodThresholdFrame = frameId | 0;

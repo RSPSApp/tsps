@@ -241,6 +241,8 @@ export class PacketSender {
   private busyModalHeld = false;
   private chatboxUnclamped = false;
   private chatboxOwner: object | undefined;
+  /** Components of the open chatbox whose pause button (IF_SETEVENTS bit 0) was turned off: a held box. */
+  private readonly chatboxPauseOff = new Set<number>();
   private presentingChatboxOwner: object | undefined;
   private player: any;
   constructor(player: any) {
@@ -630,6 +632,7 @@ export class PacketSender {
     const previous = this.chatboxGroupId;
     this.chatboxOwner = this.presentingChatboxOwner;
     this.chatboxGroupId = id;
+    this.chatboxPauseOff.clear();
     if (previous >= 0 && previous !== id) this.emitInterfaceClosed(previous);
     // A (re)mounted group starts with its cache text, so resend everything written to it. The
     // client also rewrites some itself (a dialogue's "Click here to continue" becomes "Please
@@ -1015,6 +1018,11 @@ export class PacketSender {
 
   public isChatboxInterface(groupId: number): boolean {
     return groupId === this.chatboxGroupId;
+  }
+
+  /** This open chatbox component was sent with its continue turned off (a held box, "" for its text). */
+  public isChatboxPauseOff(uid: number): boolean {
+    return uid >>> 16 === this.chatboxGroupId && this.chatboxPauseOff.has(uid);
   }
 
   public hasInterruptibleInterface(): boolean {
@@ -1749,6 +1757,10 @@ export class PacketSender {
    * ops 11-32 - the bank's op 11 Examine.
    */
   sendInterfaceFlagsRange(uid: number, fromSlot: number, toSlot: number, flags: number, ops?: number): this {
+    if (this.chatboxGroupId >= 0 && uid >>> 16 === this.chatboxGroupId && fromSlot === -1) {
+      if ((flags & 1) !== 0) this.chatboxPauseOff.delete(uid);
+      else this.chatboxPauseOff.add(uid);
+    }
     this.player.getSession().sendClientPacket(ops === undefined
       ? encodeWidgetSetFlagsRange(uid, fromSlot, toSlot, flags)
       : encodeWidgetSetFlagsRangeV2(uid, fromSlot, toSlot, flags, ops));

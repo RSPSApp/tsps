@@ -3972,3 +3972,18 @@ test('admin bot deployment works without registering or calling the standalone b
   const request={actor:owner,action:'apply',operation:'behavior',mode:'manual',username:bot.getUsername()};
   hooks.get('admin:bot-controls')(request);assert.equal(request.error,undefined);assert.equal(runtime.entriesByUsername.get(bot.getUsername()).behaviorPaused,true);
 });
+
+test('expired object claims are swept without waiting for the claim map to fill', () => {
+  const { CLAIMS, claim } = require('../plugins/bots/brain/actions/InteractObject.PlayerBots');
+  CLAIMS.clear();
+  const t0 = Date.now() + 1e7; // past any sweep earlier tests scheduled on the real clock
+  const loggedOut = { isRegistered: () => false };
+  const miner = { isRegistered: () => true };
+  claim('rock:1', loggedOut, t0);
+  claim('rock:2', miner, t0);
+  claim('rock:3', miner, t0 + 29_000); // well past the first claims' lifetime
+  assert.equal(CLAIMS.has('rock:1'), false, 'the expired claim no longer holds its logged-out bot');
+  assert.equal(CLAIMS.has('rock:2'), false, 'an expired claim is swept even while its bot is online');
+  assert.equal(CLAIMS.has('rock:3'), true);
+  CLAIMS.clear();
+});

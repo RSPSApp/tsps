@@ -105,6 +105,10 @@ export class HitDamage {
         return this;
     }
 
+    public getRolledMaximum(): number {
+        return this.rolledMaximum;
+    }
+
     public isMaxHit(): boolean {
         return this.rolledMaximum > 0 && this.damage === this.rolledMaximum;
     }

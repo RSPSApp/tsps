@@ -172,7 +172,7 @@ async function main(): Promise<void> {
     camera.viewportZoom = 512;
     follow();
     assert.ok(Math.abs(camera.orthoZoom / ((2 * 512) / 20) - 1) < 0.05, "normal zoom keeps the framed scale (long draw distance)");
-    // Low-end Device mode (phones) draws only 12 tiles out: the view stays inside that too.
+    // A 12-tile draw distance (the Low preset) limits the view to that too.
     client.clientPlugins = { gpuSettings: () => ({ drawDistance: 12 }) };
     follow();
     const lowEndCorner = Math.hypot(camera.viewportWidth, camera.viewportHeight / sinPitch) / camera.orthoZoom;

@@ -319,8 +319,41 @@ test('clicking the bin again every tick never slows a running fill or take', t =
     openBin(g, 15);
     g.takeHere();
     for (let i = 0; i < 6; i++) { g.tick(); hooks.cancel({ player: g.player }); g.takeHere(); }
-    assert.equal(g.inventory.getAmount(Data.itemId('Compost')), 2);
-    assert.equal(g.bin().count, 13);
+    // A re-click scoops a tick later; one between a scoop and its bucket keeps that bucket.
+    assert.equal(g.inventory.getAmount(Data.itemId('Compost')), 3);
+    assert.equal(g.bin().count, 12);
+});
+// Issue 6815, the reporter's live video: a bucket used again during the take scoops a tick
+// later, so re-clicking every two ticks fills a bucket every two ticks (left alone: four).
+test('using a bucket again every two ticks during a take fills one every two ticks, in both bin sizes', t => {
+    for (const type of ['COMPOST', 'BIG_COMPOST']) {
+        const f = prepare(t, type);
+        f.stock('Bucket', 6);
+        openBin(f, type === 'BIG_COMPOST' ? 30 : 15);
+        f.takeHere();
+        const filled = [];
+        for (let i = 1; i <= 12; i++) {
+            f.tick();
+            filled.push(f.inventory.getAmount(Data.itemId('Compost')));
+            if (i % 2 === 0) { hooks.cancel({ player: f.player }); f.takeHere(); }
+        }
+        assert.deepEqual(filled, [0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6], type);
+        assert.equal(f.animations.length, 6, type);
+        assert.equal(f.bin().count, (type === 'BIG_COMPOST' ? 30 : 15) - 6, type);
+    }
+});
+test('a bucket used again on the tick between a scoop and its bucket keeps that bucket', t => {
+    const f = prepare(t);
+    f.stock('Bucket', 3);
+    openBin(f, 15);
+    f.takeHere();
+    f.tick();
+    assert.equal(f.animations.length, 1);
+    hooks.cancel({ player: f.player });
+    f.takeHere();
+    f.tick();
+    assert.equal(f.inventory.getAmount(Data.itemId('Compost')), 1);
+    assert.equal(f.animations.length, 1);
 });
 test('a click on the same bin after its loop ended or with another item starts afresh', t => {
     const f = prepare(t), orange = f.stock('Orange', 1), apple = f.stock('Cooking apple', 3);

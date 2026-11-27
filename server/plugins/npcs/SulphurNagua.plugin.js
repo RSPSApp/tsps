@@ -16,6 +16,8 @@
  * The drain lands even if the nagua dies on that tick, and shows as prayer-drain hitsplat 59 with
  * no health bar (237/01137.txt tick 45: special at tick 42, [hit] id=59 value=5, prayer 71 to 66,
  * the nagua's death the same tick).
+ * The raise is still an attack, so it renews the nagua's single-way hold on the player like a hit
+ * would (Wiki: PJ timer); Combat does that for every NPC attack that hits nothing (issue 6811).
  *
  * Its -4 flat armour (Wiki) is applied with every other monster's by combat/FlatArmour.plugin.js.
  */

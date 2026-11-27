@@ -120,9 +120,9 @@ function applicationOf(player) {
   return null;
 }
 
-/** Parties still recruiting (not in the theatre), in the order they were formed. */
+/** Newest parties first, including reservations for parties already in the theatre. */
 function listed() {
-  return [...parties.values()].filter((party) => !party.raid);
+  return [...parties.values()].sort((a, b) => b.createdCycle - a.createdCycle || b.id - a.id);
 }
 
 function byId(id) {

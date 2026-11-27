@@ -50,6 +50,38 @@ test('the first sip blacks out into a private copy of Dognose Island on the capt
   assert.ok(h.currentDialogue, 'the rest of the conversation plays');
 });
 
+test('issue 6670: getting up ends with the animation reset live sends, so the player can walk', () => {
+  // human_death_reverse 7330 holds its last frame for 669 ticks and blocks client movement; live
+  // sends sequence -1 the tick after it (capture ticks 5962-5963).
+  const h = setup();
+  h.loadQuest().setStage(h.player, 5);
+  h.emit('npc-dialogue:action', { npcId: MAIN_CRAB, stepId: FIRST_BLACKOUT, kind: 'message' });
+  h.tick(13);
+  assert.deepEqual(h.player.animations, [7330], 'getting up');
+  h.tick(1);
+  assert.deepEqual(h.player.animations, [7330, 65535], 'reset with the first line');
+  assert.ok(h.currentDialogue, 'the first line plays on that tick');
+});
+
+test('issue 6670: a shy crab comes out for a Sit inside the dream (instance tiles)', () => {
+  const h = setup();
+  const offset = dream(h, 47);
+  const at = (x, y) => [x + offset.dx, y + offset.dy];
+  assert.notDeepEqual(at(3047, 2655), [3047, 2655], 'the dream is an instance, away from the source tiles');
+  const [treeX, treeY] = at(3046, 2656);
+  const [sitX, sitY] = at(3047, 2655);
+  h.setLocation(sitX, sitY);
+  h.investigate(62475, treeX, treeY);
+  assert.ok((h.attrs.get('quest.crab_quest.scared') & (1 << 9)) !== 0, 'too scared');
+  h.sit(sitX, sitY);
+  assert.equal(h.messages.at(-1), 'And now, you wait...');
+  h.tick(11);
+  assert.equal(h.attrs.get('quest.crab_quest.met') & (1 << 9), 0, 'still hiding after 11 ticks');
+  h.tick(1);
+  assert.ok((h.attrs.get('quest.crab_quest.met') & (1 << 9)) !== 0, 'the crab appears 12 ticks after the Sit (capture 6369-6381)');
+  assert.ok(h.currentDialogue, 'A crab appears!');
+});
+
 test('the dream holds the crab, the floatsam, the quest locs and the shells where live puts them', () => {
   const h = setup();
   const offset = dream(h);
@@ -162,7 +194,7 @@ test('the shy crab comes out of her palm, blushes and scutters to 3055,2650 only
   const h = setup();
   const offset = dream(h, 47);
   h.investigate(62472, 3044 + offset.dx, 2653 + offset.dy); // crab_palm_update03
-  assert.ok(h.messages.includes('A crab comes out shyly.'));
+  assert.ok(h.currentDialogue, 'A crab comes out shyly. (a message box since #6819)');
   const found = h.spawned.filter((npc) => npc.getId() === 16484).at(-1);
   assert.deepEqual(sourceOf(offset, found.definition.x, found.definition.y), [3045, 2653], 'captured shy spawn tile');
   assert.equal(valueOf(h, 15865), 0, 'finding her does not publish shy progress');

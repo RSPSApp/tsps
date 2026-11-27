@@ -357,6 +357,9 @@ export function handleInboundUi(msg: any): boolean {
             if (CustomItemRegistry.revision !== itemRevision || getDefinitionArchiveKey() !== archiveKey || getCustomDefinitionKey() !== definitionsKey) {
                 markItemDefinitionsChanged();
             }
+            if (datasets?.some((dataset: any) => dataset.key === "customModIcons")) {
+                markChatTransmit();
+            }
             if (otherDatasets?.length && typeof mv?.refreshGamemodeWorldLocs === "function") {
                 mv.refreshGamemodeWorldLocs();
             }

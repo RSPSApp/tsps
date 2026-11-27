@@ -141,9 +141,9 @@
       "level": 1,
       "busy": true,
       "note": "rsprox captures local GertrudesCat (rev 242) ticks 375-382 and 694-701, 3222 ticks 10828-10833 and 11368-11370, 3225 ticks 55-57",
-      "unverified": "the south approach: live walks onto the fence tile (3308,3492), which this cache's collision (clipType 2) blocks, so the climb starts from 3308,3491",
+      "unverified": "the south approach: live walks onto the fence tile (3308,3492), which this cache's collision (clipType 2) blocks, so the climb starts from 3308,3491 and keeps live's move one tile south: from the fence to 3308,3493 (live 3308,3493 to 3308,3494 from the fence tile)",
       "between": {"ends":[[3308,3491,0],[3308,3493,0]],"cross":{
-        "forward":[{"wait":2},{"move":[3308,3494],"from":[3308,3493],"anim":"WALK_FENCE_NORTH","speed":[0,104],"ticks":3}],
+        "forward":[{"wait":2},{"move":[3308,3493],"from":[3308,3492],"anim":"WALK_FENCE_NORTH","speed":[0,104],"ticks":3}],
         "back":[{"move":[3308,3491],"from":[3308,3492],"anim":"CLIMB_OVER","speed":[0,60],"ticks":3}]
       }}
     },
@@ -2688,7 +2688,7 @@
       "object": 17068,
       "at": [3252,3179,0],
       "level": 8,
-      "unverified": "the grapple's steps and both ends (no capture; ends from the map)",
+      "note": "Wiki: Broken Raft; rsprox capture 347 (rev 230): the grapple both ways (docs/agility-shortcuts.md)",
       "requires": [
         {
           "method":"grapple",
@@ -2697,27 +2697,22 @@
             {"slot":"weapon","name":"crossbow","message":"You need a crossbow equipped to do that."},
             {"slot":"ammunition","ids":[9419],"message":"You need a mithril grapple tipped bolt with a rope to do that."}
           ]
-        },
-        {
-          "method":"barehanded",
-          "skills": {"agility":48},
-          "cross": [
-            {"move":"to","anim":"CLIMB_ROCKS","speed":[0,210],"ticks":7},
-            {"anim":-1}
-          ]
         }
       ],
-      "between": {
-        "ends": [[3246,3179,0],[3253,3179,0]],
-        "cross": [
-          {"face":"object"},
-          {"anim":"FIRE_GRAPPLE"},
-          {"gfx":"GRAPPLE_GRAPHIC"},
-          {"wait":6},
-          {"anim":-1},
-          {"tele":"to"}
-        ]
-      }
+      "keepAnimation": true,
+      "script": "riverLumRaft",
+      "params": {"grapple": true}
+    },
+    {
+      "name": "Broken Raft",
+      "object": [17069,17070],
+      "level": 48,
+      "unverified": "the whole crossing (no capture of Jump-to; the grapple's swims without the shots)",
+      "note": "Wiki: Broken Raft, 48 Agility without a mith grapple since 12 August 2026",
+      "requires": [{"method":"barehanded","skills": {"agility":48}}],
+      "keepAnimation": true,
+      "script": "riverLumRaft",
+      "params": {"grapple": false}
     },
     {
       "name": "Pipe (Brimhaven Dungeon Entrance)",

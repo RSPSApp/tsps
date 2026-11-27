@@ -4,7 +4,8 @@
 // (data/definitions/custom-definitions.json `assets`, files under data/assets/<kind>/<hash>/, added
 // in the editor's Assets tab; see server/docs/agents/cache-editor.md). Each animation's frames get
 // a frame group of their own (FIRST_FRAME_GROUP + its position by id), its seq.dat is rewritten to
-// point at them, and each graphic's spotanim.dat is pointed at its model (a model asset, which the
+// point at them, a frame map of its own (an id from Files.FIRST_CUSTOM_FRAME_MAP) travels with it,
+// and each graphic's spotanim.dat is pointed at its model (a model asset, which the
 // editor ships as a custom model) and its animation. The server then knows them by id and name
 // (CacheDefinitions.getSeq, getSeqId, getSpotanim, getCustomSpotanimId), and clients get them at login.
 
@@ -87,6 +88,8 @@ function loadCustomAnimations(core, root = ROOT) {
     ...animations.map((entry, index) => loadAnimation(entry, index, root, CacheDefinitions)),
     ...graphics.map((entry) => loadGraphic(entry, animations, models, root, CacheDefinitions)),
   ];
+  // A custom frame map ships with every animation that uses it, so they must agree on its bytes.
+  Files.checkSharedFrameMaps(rows);
   for (const row of rows) {
     // One packet per animation or graphic; a bigger one needs chunked delivery.
     if (!Files.fitsPacket(encodeContentData, row)) {

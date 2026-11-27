@@ -26,6 +26,12 @@ Object.defineProperty(globalThis, "navigator", {
 
 async function main() {
     const { ClientState } = await import("../game/ClientState");
+    const { ConfigManager } = await import("../runelite/client/config/ConfigManager");
+    const { PerformanceConfig, PerformanceMode } = await import("../game/performance/PerformanceConfig");
+    const { initPerformancePolicy } = await import("../game/performance/PerformancePolicy");
+    const performanceConfig = new ConfigManager();
+    performanceConfig.setConfigValue(PerformanceConfig, "mode", PerformanceMode.LOW);
+    initPerformancePolicy(performanceConfig);
     const { ClickMode, InputManager } = await import("../game/InputManager");
     const { ClientPacket, getPacketWriter } = await import("../network/packet");
     const { UIInputBridge } = await import("../widgets/gl/ui-input");
@@ -158,9 +164,6 @@ async function main() {
 
     // Exercise the actual frame-synchronized input owner and HUD cap, rather than
     // calling the bridge directly: a stationary press can fall between HUD redraws.
-    const { isLowEndDevice, isMobileMode } = await import("../common/utils/DeviceUtil");
-    assert.equal(isLowEndDevice, true);
-    assert.equal(isMobileMode, false);
     const { WidgetsOverlay } = await import("../ui/devoverlay/WidgetsOverlay");
     const { RenderPhase } = await import("../ui/devoverlay/Overlay");
     const { WebRtcGameSocket } = await import("../network/serverConnection/connection/WebRtcGameSocket");

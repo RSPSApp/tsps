@@ -93,3 +93,9 @@ establish a post-confirmation delay. Without a recording establishing that timin
 this change makes no claim about matching creation packet timing. Revert's feedback is not captured and
 not claimed to match live packets. Healing probability is checked deterministically
 in regression coverage; in-game melee verification checks actual charge loss.
+
+## League task
+
+Creating the amulet (accepting the shard-on-fury question, not a recharge) emits
+`blood-fury:created` { player, itemId }. Each league's "Create an Amulet of Blood Fury" task is a
+`deed` on that event in `server/plugins/modes/data/league-task-triggers.json` (#6854).

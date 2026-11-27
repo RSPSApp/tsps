@@ -356,7 +356,13 @@ export class Player extends Mobile {
      * Actions that should be done when this character is removed from the world.
      */
     public onRemove() {
-        this.onLogout();
+        try {
+            this.onLogout();
+        } finally {
+            // The NPCs and players it fought forget it, so they don't keep it in memory after it leaves,
+            // even when a logout step fails.
+            this.getCombat().forgetFights();
+        }
     }
 
     public appendDeath() {
@@ -875,6 +881,8 @@ export class Player extends Mobile {
         }
         CombatPoisonEffect.resume(this);
         ArceuusSpells.syncDeathCharge(this);
+        // 3109 also holds All Settings row 316 (bit 31), which this copy may hold stale: the Settings
+        // plugin's login restore sends the row after this, so nothing may resend 3109 from here later.
         for (const [varpId, value] of Object.entries(this.audioSettings)) {
             const id = Number(varpId);
             // The music settings share varp 19 with bits the server owns.

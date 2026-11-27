@@ -8,6 +8,7 @@ import { WorkerDescriptor } from "threads/dist/master/pool-types";
 import { ObservablePromise } from "threads/dist/observable-promise";
 
 import { canUseSharedArrayBuffer, LoadedCache } from "../Caches";
+import { getWorkerPerformancePolicy } from "../performance/PerformancePolicy";
 import { CustomItemRegistry } from "../../custom/items/CustomItemRegistry";
 import { CustomModelRegistry } from "../../custom/items/CustomModelRegistry";
 import { getDefinitionArchives } from "../../custom/archives/ArchivedDefinitionStore";
@@ -76,6 +77,10 @@ export class RenderDataWorkerPool {
         for (const cancel of this.npcPoseRequests) cancel();
         for (const reservation of this.npcPoseWorkers.values()) this.releasePoseWorker(reservation, false);
         void this.runAll(w => {
+            // Older worker modules (and test doubles) may predate the Performance policy hook.
+            if (typeof (w as any).setPerformancePolicy === "function") {
+                (w as any).setPerformancePolicy(getWorkerPerformancePolicy());
+            }
             w.initCache(cache, npcInstances, getDefinitionArchives());
             return w.setCustomContent({ gamemodeId: "custom-items", datasets: [
                 { key: "customItems", rows: Array.from(CustomItemRegistry.getAll(), item => item.definition) },

@@ -123,15 +123,20 @@ export class ItemOnGroundManager {
                 return;
         }
     }
-    /** `keepLifetime` leaves the stack's age as it is (a stack moved by {@link relocate}) instead of starting it now. */
-    public static register(item: ItemOnGround, keepLifetime = false) {
+    /**
+     * `keepLifetime` leaves the stack's age as it is (a stack moved by {@link relocate}) instead of starting it now.
+     * Returns the stack that now holds the item: a stackable merged into a stack already on the tile is that
+     * stack, not `item`, which never reaches the floor (issue 6832: a laid bird snare's merged stack outlived it).
+     */
+    public static register(item: ItemOnGround, keepLifetime = false): ItemOnGround {
         const areaDelay = item.getPrivateArea()?.groundItemDespawnDelay?.();
         if (item.despawnDelay == null && areaDelay != null) item.setDespawnDelay(areaDelay);
         // Check for merge with existing stackables.. A moved stack stays its own: a merge would restart the
         // other stack's timer and could make an owner-only stack public.
         if (!keepLifetime && item.getItem().getDefinition().isStackable()) {
-            if (this.merge(item)) {
-                return;
+            const merged = this.merge(item);
+            if (merged) {
+                return merged;
             }
         }
 
@@ -140,9 +145,11 @@ export class ItemOnGroundManager {
         if (!keepLifetime) item.restartLifetime();
         World.getItems().push(item);
         ItemOnGroundManager.perform(item, OperationType.CREATE);
+        return item;
     }
 
-    public static merge(item: ItemOnGround): boolean {
+    /** The stack on `item`'s tile that took its amount, or null when none could. */
+    public static merge(item: ItemOnGround): ItemOnGround | null {
         let iterator = World.getItems().values();
         for (let item_ of iterator) {
             if (item_ == null || item_.isPendingRemoval() || item_ === item) {
@@ -193,10 +200,10 @@ export class ItemOnGroundManager {
                 item_.setOldAmount(oldAmount);
                 item_.restartLifetime();
                 ItemOnGroundManager.perform(item_, OperationType.ALTER);
-                return true;
+                return item_;
             }
         }
-        return false;
+        return null;
     }
     public static deregister(item: ItemOnGround) {
         item.setPendingRemoval(true);
@@ -382,8 +389,7 @@ export class ItemOnGroundManager {
             -1, privateArea);
         if (options.enabledOps != null) i.setEnabledOps(options.enabledOps);
         if (options.despawnDelay != null) i.setDespawnDelay(options.despawnDelay);
-        this.register(i);
-        return i;
+        return this.register(i);
     }
 
     /**

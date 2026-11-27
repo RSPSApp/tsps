@@ -2219,6 +2219,9 @@ of LeaguePoints' `league:tasks` (id -> points); the task's points are its tier's
   - The churn's butter: `produce`.
   - A piece of Crystal armour: CrystalSinging's new `crystal-singing:sung` { itemId, amount }. It is not
     `skills:produced`, which production relics would double.
+  - An Amulet of blood fury (all three leagues): AmuletOfBloodFury's `blood-fury:created` { player, itemId }
+    when a Blood shard on an Amulet of fury is confirmed (#6854). No skill makes it, so the generator's
+    `produce` trigger never fired; a recharge is not a creation.
   - Claws of Guthix, Flames of Zamorak and Saradomin Strike: `cast`, with a new `outside { rects, z }`
     condition. Its box is the Mage Arena as `Spells.MageArena.js` bounds it (3089-3117 x 3921-3946, plane 0),
     since a player's first casts are the arena's 100 before the spells work outside it.

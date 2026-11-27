@@ -117980,7 +117980,7 @@
       ],
       "standard-dialogue-after-completing-family-pest": [
         {
-          "npc": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
+          "npc": "I received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
         },
         {
           "type": "condition",
@@ -117990,9 +117990,14 @@
               "npc": "As a token of my appreciation, I will happily forge you as many pairs of Goldsmith gauntlets as you desire."
             },
             {
+              "type": "input",
+              "text": "How many would you like to take?",
+              "id": "lEtW8v"
+            },
+            {
               "type": "message",
-              "text": "Avan hands you a pair of Goldsmith gauntlets.",
-              "id": "gqV59f"
+              "text": "Avan hands you some goldsmith gauntlets.",
+              "id": "WoB3G1"
             },
             {
               "npc": "You will find the rate you gain experience when smelting gold much improved whilst wearing these gauntlets."
@@ -194564,13 +194569,13 @@
               ]
             },
             {
-              "text": "I see you are a chef, will you cook me anything?",
+              "text": "I see you are a chef. Can you cook me anything?",
               "steps": [
                 {
-                  "player": "I see you are a chef... Could you cook me something?"
+                  "player": "I see you are a chef. Can you cook me anything?"
                 },
                 {
-                  "npc": "I would, but I am very busy. I am trying to increase my reknown as one of the worlds' leading chefs by preparing a special and unique fish salad."
+                  "npc": "I would, but I am very busy. I am trying to increase my reknown as one of the world's leading chefs by preparing a special and unique fish salad."
                 }
               ]
             }
@@ -194644,7 +194649,7 @@
               "text": "Gauntlets",
               "steps": [
                 {
-                  "npc": "I hear you have brought the completed crest to my father. I must say, that was awfully impressive work."
+                  "npc": "I heard you brought the completed crest to my father. I must say, that was awfully impressive work."
                 },
                 {
                   "player": "It was easy really."
@@ -194752,19 +194757,24 @@
       ],
       "standard-dialogue-after-completing-family-pest": [
         {
-          "npc": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
+          "npc": "I received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
         },
         {
           "type": "condition",
           "text": "If this is the first time the player has talked to Caleb after completing Family Pest:",
           "steps": [
             {
-              "npc": "As thanks, I'll provide you with as many pairs of Cooking gauntlets as you wish."
+              "npc": "As thanks, I'll provide you with as many pairs of cooking gauntlets as you wish."
+            },
+            {
+              "type": "input",
+              "text": "How many would you like to take?",
+              "id": "Dkvlsw"
             },
             {
               "type": "message",
-              "text": "Caleb hands you a pair of Cooking gauntlets.",
-              "id": "Jsoiaj"
+              "text": "Caleb hands you some cooking gauntlets.",
+              "id": "Tj45hY"
             },
             {
               "npc": "You will find the rate you burn certain foods is much reduced whilst wearing these gauntlets."
@@ -319088,68 +319098,7 @@
                   ]
                 },
                 {
-                  "text": "The gauntlets are a family heirloom?",
-                  "steps": [
-                    {
-                      "player": "I thought these gauntlets were a family heirloom. How do you have several of them?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "I'm sorry for lying to you, [player name], it was just all part of the ploy to make our family seem wealthy.",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "They're not heirlooms at all, we have crates full of the things hidden away in the basement.",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "player": "And you still think that these are an acceptable reward for what I have done for your family?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "It's all I have to give...",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "player": "Very well, I do admit, they are useful."
-                    },
-                    {
-                      "type": "choice",
-                      "options": [
-                        {
-                          "text": "Could I get some more gauntlets, please?",
-                          "steps": [
-                            {
-                              "type": "jump",
-                              "reference": "above",
-                              "id": "zokRtm"
-                            }
-                          ]
-                        },
-                        {
-                          "text": "See you another time, Dimintheis.",
-                          "steps": [
-                            {
-                              "player": "See you another time, Dimintheis."
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
+                  "text": "The gauntlets are a family heirloom?"
                 }
               ]
             }
@@ -319256,68 +319205,7 @@
                   ]
                 },
                 {
-                  "text": "The gauntlets are a family heirloom?",
-                  "steps": [
-                    {
-                      "player": "I thought these gauntlets were a family heirloom. How do you have several of them?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "I'm sorry for lying to you, [player name], it was just all part of the ploy to make our family seem wealthy.",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "They're not heirlooms at all, we have crates full of the things hidden away in the basement.",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "player": "And you still think that these are an acceptable reward for what I have done for your family?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Dimintheis",
-                      "text": "It's all I have to give...",
-                      "speaker_ids": [
-                        4984,
-                        12629
-                      ]
-                    },
-                    {
-                      "player": "Very well, I do admit, they are useful."
-                    },
-                    {
-                      "type": "choice",
-                      "options": [
-                        {
-                          "text": "Could I get some more gauntlets, please?",
-                          "steps": [
-                            {
-                              "type": "jump",
-                              "reference": "above",
-                              "id": "zokRtm"
-                            }
-                          ]
-                        },
-                        {
-                          "text": "See you another time, Dimintheis.",
-                          "steps": [
-                            {
-                              "player": "See you another time, Dimintheis."
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
+                  "text": "The gauntlets are a family heirloom?"
                 }
               ]
             }
@@ -352998,6 +352886,19 @@
                 },
                 {
                   "type": "condition",
+                  "text": "If the player has their goldsmith gauntlets:",
+                  "steps": [
+                    {
+                      "npc": "You asked Avan to convert them into goldsmithing gauntlets, didn't you? I think you must still have them somewhere."
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "6oqHtM"
+                },
+                {
+                  "type": "condition",
                   "text": "If the player has their gauntlets:",
                   "steps": [
                     {
@@ -353085,7 +352986,7 @@
               ]
             },
             {
-              "text": "The gauntlets are a family heirloom?",
+              "text": "I thought these gauntlets were a family heirloom.",
               "steps": [
                 {
                   "player": "I thought these gauntlets were a family heirloom. How do you have several of them?"
@@ -353113,7 +353014,7 @@
                       "steps": [
                         {
                           "type": "jump",
-                          "id": "zokRtm",
+                          "id": "hk0U76",
                           "steps": [
                             {
                               "type": "call",
@@ -465991,7 +465892,7 @@
                   ]
                 },
                 {
-                  "player": "I have been sent by your father. He wishes the Fitzharmon Crest be restored."
+                  "player": "I have been sent by your father. He wishes the Fitzharmon Crest to be restored."
                 },
                 {
                   "type": "line",
@@ -466142,15 +466043,15 @@
               ]
             },
             {
-              "text": "I see you are a chef, will you cook me anything?",
+              "text": "I see you are a chef. Can you cook me anything?",
               "steps": [
                 {
-                  "player": "I see you are a chef... Could you cook me something?"
+                  "player": "I see you are a chef. Can you cook me anything?"
                 },
                 {
                   "type": "line",
                   "speaker": "Caleb",
-                  "text": "I would, but I am very busy. I am trying to increase my reknown as one of the worlds' leading chefs by preparing a special and unique fish salad.",
+                  "text": "I would, but I am very busy. I am trying to increase my reknown as one of the world's leading chefs by preparing a special and unique fish salad.",
                   "speaker_ids": [
                     4317,
                     5433
@@ -466212,64 +466113,8 @@
                   "text": "Uh... what happened to the rest of it?",
                   "steps": [
                     {
-                      "player": "Uh... what happened to the rest of it?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "Well... my brothers and I had a slight disagreement about it... we all wanted to be heir to my fathers' lands, and we each ended up with a piece of the crest.",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "None of us wanted to give up our rights to our brothers, so we didn't want to give up our pieces of the crest, but none of us wanted to face our father by",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "returning to him with an incomplete crest... We each went our seperate ways many years past, none of us seeing our father or willing to give up our fragments.",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
-                    },
-                    {
-                      "player": "So do you know where I could find any of your brothers?"
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "Well, we haven't really kept in touch... what with the dispute over the crest and all... I did hear from my brother Avan a while ago though.",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "He said he was on some kind of search for treasure, or gold, or something out in the desert east of Lumbridge. You might want to ask the traders there about him.",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
-                    },
-                    {
-                      "type": "line",
-                      "speaker": "Caleb",
-                      "text": "Avan always did have expensive tastes however. You may find he is not prepared to hand over his crest piece to you as easily as I have.",
-                      "speaker_ids": [
-                        4317,
-                        5433
-                      ]
+                      "type": "call",
+                      "branch": "QoYeTQ"
                     }
                   ]
                 },
@@ -466294,6 +466139,39 @@
             }
           ],
           "id": "rCeyS0"
+        }
+      ],
+      "caleb-talking-to-caleb-after-getting-his-crest-piece": [
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "Hello again. I'm just putting the finishing touches to my masterful salad.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Uh.. what happened to the rest of the crest?",
+              "steps": [
+                {
+                  "type": "call",
+                  "branch": "QoYeTQ"
+                }
+              ]
+            },
+            {
+              "text": "Good luck with that then.",
+              "steps": [
+                {
+                  "player": "Good luck with that then."
+                }
+              ]
+            }
+          ]
         }
       ],
       "caleb-talking-to-caleb-again-after-obtaining-the-first-crest-piece": [
@@ -467090,7 +466968,7 @@
           "type": "choice",
           "options": [
             {
-              "text": "Why are you hanging around a in a scorpion pit?",
+              "text": "Why are you hanging around in a scorpion pit?",
               "steps": [
                 {
                   "player": "Why are you lurking around a scorpion pit?"
@@ -467108,7 +466986,7 @@
               ]
             },
             {
-              "text": "I'm looking for a man named Avan Fitzharmon",
+              "text": "I'm looking for a man named Avan Fitzharmon.",
               "steps": [
                 {
                   "player": "I'm looking for a man... his name is Avan Fitzharmon."
@@ -467306,19 +467184,6 @@
               "steps": [
                 {
                   "player": "Hello short person."
-                },
-                {
-                  "type": "line",
-                  "speaker": "Boot",
-                  "text": "Hello tall person.",
-                  "speaker_ids": [
-                    4985
-                  ]
-                },
-                {
-                  "type": "jump",
-                  "reference": "initial",
-                  "id": "YnSmT9"
                 }
               ]
             },
@@ -468017,7 +467882,7 @@
         {
           "type": "line",
           "speaker": "Avan",
-          "text": "I have received word from my father of your assistance to our family in this matter. You have my thanks for restoring our honour.",
+          "text": "I received word from my father of your assistance to our family. You have my thanks for restoring our honour.",
           "speaker_ids": [
             385,
             386,
@@ -468054,7 +467919,7 @@
               "text": "That sounds good, improve them for me.",
               "steps": [
                 {
-                  "player": "That sounds good, improve them for me!"
+                  "player": "That sounds good, improve them for me."
                 },
                 {
                   "type": "message",
@@ -468100,7 +467965,7 @@
         {
           "type": "line",
           "speaker": "Johnathon",
-          "text": "And right he is at that. Although my skill with Death Rune magiks was not great enough to defeat Chronozon, I am adequately skilled at Chaos Rune magiks.",
+          "text": "And right he is at that. Although my skill with Death Rune magicks was not great enough to defeat Chronozon, I am adequately skilled at Chaos Rune magicks.",
           "speaker_ids": [
             5443,
             5445
@@ -468322,6 +468187,1103 @@
         },
         {
           "type": "end"
+        }
+      ],
+      "QoYeTQ": [
+        {
+          "player": "Uh... what happened to the rest of it?"
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "Well... my brothers and I had a slight disagreement about it... we all wanted to be heir to my fathers' lands, and we each ended up with a piece of the crest.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "None of us wanted to give up our rights to our brothers, so we didn't want to give up our pieces of the crest, but none of us wanted to face our father by",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "returning to him with an incomplete crest... We each went our seperate ways many years past, none of us seeing our father or willing to give up our fragments.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "player": "So do you know where I could find any of your brothers?"
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "Well, we haven't really kept in touch... what with the dispute over the crest and all... I did hear from my brother Avan a while ago though.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "He said he was on some kind of search for treasure, or gold, or something out in the desert east of Lumbridge. You might want to ask the traders there about him.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "Avan always did have expensive tastes however. You may find he is not prepared to hand over his crest piece to you as easily as I have.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        }
+      ]
+    }
+  },
+  "Family Pest": {
+    "default": "starting-out-talking-to-dimintheis",
+    "variants": {
+      "starting-out-talking-to-dimintheis": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Have you got any quests for me?",
+              "steps": [
+                {
+                  "player": "Do you have any quests for me? I really want one. I really want to help out!"
+                },
+                {
+                  "type": "message",
+                  "text": "You murmur under your breath something about how great the rewards were last time you did a quest for Dimintheis.",
+                  "id": "ol-6ye"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "My family consider what you did for us a great service. We couldn't possibly trouble you further.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "There must be SOMETHING you need help with. I am a great adventurer after all."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "There really isn't anything, I am very content with life right now.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "I guess money does buy happiness.",
+                      "steps": [
+                        {
+                          "player": "I guess money really does buy happiness."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Dimintheis",
+                          "text": "What was that? I didn't quite catch that.",
+                          "speaker_ids": [
+                            4984,
+                            12629
+                          ]
+                        },
+                        {
+                          "player": "Nothing..."
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Oh come on, however menial, I want to help!",
+                      "steps": [
+                        {
+                          "player": "Oh come on, surely there's something I can help out with! I want to help, however menial it is."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Dimintheis",
+                          "text": "Okay okay. Fine then. Whilst I don't have anything for you, how about you try my sons, they are always wanting something done.",
+                          "speaker_ids": [
+                            4984,
+                            12629
+                          ]
+                        },
+                        {
+                          "player": "Fantastic! I'll get straight to it!"
+                        },
+                        {
+                          "type": "message",
+                          "text": "You smell the sweet smell of the great rewards that may soon come.",
+                          "id": "bWguXE"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Other"
+            }
+          ]
+        }
+      ],
+      "starting-out-talking-to-dimintheis-again": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Have you spoke to Avan, Caleb and Johnathon yet?",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Nope, not yet!"
+                }
+              ]
+            },
+            {
+              "text": "Other"
+            }
+          ]
+        }
+      ],
+      "avan-talking-to-avan": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "Hello there Avan, I've had a bit of spare time lately, and I was wondering whether you had anything I could help you out with, like a quest or something?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Avan",
+                  "text": "Honestly [player name], everything is fantastic! What you did for me and my family is amazing. My lady was very impressed with the perfect jewellery you obtained for me!",
+                  "speaker_ids": [
+                    385,
+                    386,
+                    387
+                  ]
+                },
+                {
+                  "player": "You know, I really have a LOT of spare time right now. Anything, I will help out with anything."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Avan",
+                  "text": "I couldn't bring myself to trouble you any further [player name]. Thank you for everything, but I am content.",
+                  "speaker_ids": [
+                    385,
+                    386,
+                    387
+                  ]
+                },
+                {
+                  "type": "condition",
+                  "text": "If Avan is the first brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades slightly.",
+                      "id": "vO9Msy"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "0Z2G5M"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Avan is the second brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades even more.",
+                      "id": "MKsgWG"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "-BnNZh"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Avan is the last brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "I do one quest for you all and it solves all of your problems? Amazing... I'll go and tell your father how happy you all are!"
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come has almost faded completely.",
+                      "id": "W78NPP"
+                    }
+                  ],
+                  "id": "5896B7"
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "avan-talking-to-avan-again": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "Are you absolutely sure there is nothing I can help you out with?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Avan",
+                  "text": "Look, I really just want to get on with my life, your insistence on wanting another quest is getting annoying!",
+                  "speaker_ids": [
+                    385,
+                    386,
+                    387
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "caleb-talking-to-caleb": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "Caleb! As an adventurer, I am ready to help you with whatever you need... again! What can I help you with?"
+                },
+                {
+                  "type": "message",
+                  "text": "You daydream briefly of what the rich family could offer you this time as a reward.",
+                  "id": "Ztw3Dv"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Caleb",
+                  "text": "... and that's when I found the broken lamping stick. Maybe you could help me investigate?",
+                  "speaker_ids": [
+                    4317,
+                    5433
+                  ]
+                },
+                {
+                  "player": "Sorry, I didn't quite catch that, my mind was erm... elsewhere."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Caleb",
+                  "text": "Well if you aren't going to listen to the problem, it's fine, don't worry about it. Nothing an experienced chef can't solve himself!",
+                  "speaker_ids": [
+                    4317,
+                    5433
+                  ]
+                },
+                {
+                  "player": "I'm sorry! Please let me help."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Caleb",
+                  "text": "No! Not every problem in my life needs an adventurer to come solve it for me anyway. I'm happy and there's nothing else either!",
+                  "speaker_ids": [
+                    4317,
+                    5433
+                  ]
+                },
+                {
+                  "type": "condition",
+                  "text": "If Caleb is the first brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades slightly.",
+                      "id": "8u1FT1"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "VKMk-e"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Caleb is the second brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades even more.",
+                      "id": "X77A3l"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "69zQoo"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Caleb is the last brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "I do one quest for you all and it solves all of your problems? Amazing... I'll go and tell your father how happy you all are!"
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come has almost faded completely.",
+                      "id": "du3UlA"
+                    }
+                  ],
+                  "id": "I4h7VD"
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "caleb-talking-to-caleb-again": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "Are you sure there's nothing I can do, a chef can always do with help in their kitchen right?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Caleb",
+                  "text": "I'm a very competent cook! I do not need your assistance [player name]. Please leave me be.",
+                  "speaker_ids": [
+                    4317,
+                    5433
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "johnathon-talking-to-johnathon": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "I killed demons, I cured your poison and restored your family's honour! What can I help you with next Johnathon?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "Actually, come to think of it...",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "Your eyes light up.",
+                  "id": "utXHum"
+                },
+                {
+                  "player": "Yes..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "I've been having this issue. You see the lady I seek is trapped up the top of a very large tower of a very large castle, and has been for all of her life so far.",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "There is but one problem, a fierce dragon circles the castle, breathing fire at anyone who dares go near.",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "The sweet smell of the great rewards sweeps over you with incredible speed.",
+                  "id": "4imv5i"
+                },
+                {
+                  "player": "This is sounding like a great opportunity to be heroic, shall I go get her for you?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "Ha ha! You would believe anything. That was just a children's story!",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                },
+                {
+                  "player": "Very funny Johnathon, I can't help but laugh..."
+                },
+                {
+                  "player": "So do you actually have any problems I can help you with?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "Everything is fantastic [player name]! You adventurers really do seem to love quests, but I do not have one for you today.",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                },
+                {
+                  "type": "condition",
+                  "text": "If Johnathon is the first brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades slightly.",
+                      "id": "pBJrAt"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "UBpmo9"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Johnathon is the second brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "Very well, I'll go and see if your other brothers need anything..."
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come fades even more.",
+                      "id": "qSGdup"
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "id": "lCw8u9"
+                },
+                {
+                  "type": "condition",
+                  "text": "If Johnathon is the last brother the player talks to:",
+                  "steps": [
+                    {
+                      "player": "I do one quest for you all and it solves all of your problems? Amazing... I'll go and tell your father how happy you all are!"
+                    },
+                    {
+                      "type": "message",
+                      "text": "The sweet smell of the great rewards that may come has almost faded completely.",
+                      "id": "H1XDlA"
+                    }
+                  ],
+                  "id": "tgqBpd"
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "johnathon-talking-to-johnathon-again": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "Are you sure there's nothing I can do, perhaps even teach you about Death Rune magicks, where your skills do not live up to mine."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Johnathon",
+                  "text": "I find that very insulting [player name]. You do not need to remind me of your superior skills. Leave me be.",
+                  "speaker_ids": [
+                    5443,
+                    5445
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Gauntlets"
+            }
+          ]
+        }
+      ],
+      "returning-to-dimintheis-talking-to-dimintheis": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "player": "I have been and spoken to Avan, Caleb and Johnathon and none of them need anything from me!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "That is excellent news [player name]. It's good to hear they are doing well.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "message",
+                  "text": "The sweet smell of great rewards is a distant memory.",
+                  "id": "93fYWN"
+                },
+                {
+                  "player": "Yeah... you're welcome."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Come to think of it, there is something you can help me out with!",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Yes! I accept your quest!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Slow down. I haven't told you what it is yet!",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "I need 500,000 coins. Can you help me out with that?",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "You just want coins?! Aren't you wealthy! Why do you need coins from me?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Okay, I suppose there will be no time better than this to tell you the truth.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Go on..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Our family just pretends to be rich [player name]. We gave ourselves a fancy surname, pretended the gauntlets are a family heirloom and asked adventurers to solve our family issues.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Wait, so all of this was for nothing? You just lied to me!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "No no, your work was indeed very helpful, the crest is important to us, it helps to portray that we are indeed wealthy, despite the fact we are not.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "I mean, if you were wealthy, would you live in a tiny house in the darkest corner of Varrock? Not a chance. This is your chance to do us a final favour, may I have 500,000 coins from you?",
+                  "steps": [
+                    {
+                      "type": "condition",
+                      "text": "If the player does not have enough coins:",
+                      "id": "ekpb2Q"
+                    },
+                    {
+                      "player": "I don't have enough coins on me."
+                    },
+                    {
+                      "type": "end"
+                    }
+                  ],
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "prompt": "Hand Dimintheis 500,000 coins?",
+                  "options": [
+                    {
+                      "text": "Yes",
+                      "steps": [
+                        {
+                          "type": "message",
+                          "text": "You hand over 500,000 coins to Dimintheis.",
+                          "id": "zSiAsd"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Dimintheis",
+                          "text": "Thank you very much. In appreciation, I will inform Avan, Caleb and Johnathon that you did yet another great deed for the family, and that you would find more pairs of those gauntlets useful.",
+                          "speaker_ids": [
+                            4984,
+                            12629
+                          ]
+                        },
+                        {
+                          "player": "Well this didn't feel very heroic..."
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Refuse",
+                      "steps": [
+                        {
+                          "player": "You don't need 500,000 coins from me! I don't believe you! You can keep your rewards."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Dimintheis",
+                          "text": "I will be here if you change your mind.",
+                          "speaker_ids": [
+                            4984,
+                            12629
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Other"
+            }
+          ]
+        }
+      ],
+      "returning-to-dimintheis-talking-to-dimintheis-again-before-handing-out-the-money": [
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Family Pest",
+              "steps": [
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "I need 500,000 coins. Can you help me out with that?",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "You just want coins?! Aren't you wealthy! Why do you need coins from me?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Okay, I suppose there will be no time better than this to tell you the truth.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Go on..."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "Our family just pretends to be rich [player name]. We gave ourselves a fancy surname, pretended the gauntlets are a family heirloom and asked adventurers to solve our family issues.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Wait, so all of this was for nothing? You just lied to me!"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "No no, your work was indeed very helpful, the crest is important to us, it helps to portray that we are indeed wealthy, despite the fact we are not.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "I mean, if you were wealthy, would you live in a tiny house in the darkest corner of Varrock? Not a chance. This is your chance to do us a final favour, may I have 500,000 coins from you?",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "prompt": "Hand Dimintheis 500,000 coins?",
+                  "options": [
+                    {
+                      "text": "Yes",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "reference": "above",
+                          "id": "awx8Pt"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Refuse",
+                      "steps": [
+                        {
+                          "type": "jump",
+                          "reference": "above",
+                          "id": "sUsTdM"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "Other"
+            }
+          ]
+        }
+      ],
+      "post-miniquest-dialogue-dimintheis": [
+        {
+          "player": "Hello Dimintheis."
+        },
+        {
+          "type": "line",
+          "speaker": "Dimintheis",
+          "text": "I will not forget what you did for my family [player name]. Those 500,000 coins have allowed us to put food on the table.",
+          "speaker_ids": [
+            4984,
+            12629
+          ]
+        },
+        {
+          "player": "That's no problem."
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Could I get another pair of gauntlets?",
+              "steps": [
+                {
+                  "player": "Anyway, I was wondering if I could get more of those gauntlets?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "You may, but you'll have to ask my sons for them, unless you just want a pair of the Steel gauntlets.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Yes please!",
+                      "steps": [
+                        {
+                          "player": "Yes, I do want a pair of steel gauntlets please."
+                        },
+                        {
+                          "type": "message",
+                          "text": "Dimintheis hands you a pair of Steel gauntlets.",
+                          "id": "Ra0R7_"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Dimintheis",
+                          "text": "Here you go.",
+                          "speaker_ids": [
+                            4984,
+                            12629
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "text": "No thanks!",
+                      "steps": [
+                        {
+                          "player": "No thanks Dimintheis."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "text": "The gauntlets are a family heirloom?",
+              "steps": [
+                {
+                  "player": "I thought these gauntlets were a family heirloom, how come you have several of them?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "I'm sorry for lying to you [player name], it was just all part of the ploy to make our family seem wealthy.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "They're not heirlooms at all, we have crates full of the things hidden away in the basement.",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "And you still think that these are an acceptable reward for what I have done for your family?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Dimintheis",
+                  "text": "It's all I have to give...",
+                  "speaker_ids": [
+                    4984,
+                    12629
+                  ]
+                },
+                {
+                  "player": "Very well, I do admit, they are useful."
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "post-miniquest-dialogue-avan": [
+        {
+          "type": "line",
+          "speaker": "Avan",
+          "text": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though.",
+          "speaker_ids": [
+            385,
+            386,
+            387
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Avan",
+          "text": "As a token of my appreciation, I will happily forge you as many pairs of Goldsmith gauntlets as you desire.",
+          "speaker_ids": [
+            385,
+            386,
+            387
+          ]
+        },
+        {
+          "type": "message",
+          "text": "Avan hands you a pair of Goldsmith gauntlets.",
+          "id": "iU8xSL"
+        },
+        {
+          "type": "line",
+          "speaker": "Avan",
+          "text": "You will find the rate you gain experience when smelting gold much improved whilst wearing these gauntlets.",
+          "speaker_ids": [
+            385,
+            386,
+            387
+          ]
+        },
+        {
+          "player": "Thank you."
+        }
+      ],
+      "post-miniquest-dialogue-caleb": [
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "As thanks, I'll provide you with as many pairs of Cooking gauntlets as you wish.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "type": "message",
+          "text": "Caleb hands you a pair of Cooking gauntlets.",
+          "id": "PO-GM2"
+        },
+        {
+          "type": "line",
+          "speaker": "Caleb",
+          "text": "You will find the rate you burn certain foods is much reduced whilst wearing these gauntlets.",
+          "speaker_ids": [
+            4317,
+            5433
+          ]
+        },
+        {
+          "player": "Thank you."
+        }
+      ],
+      "post-miniquest-dialogue-johnathon": [
+        {
+          "type": "line",
+          "speaker": "Johnathon",
+          "text": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though.",
+          "speaker_ids": [
+            5443,
+            5445
+          ]
+        },
+        {
+          "type": "line",
+          "speaker": "Johnathon",
+          "text": "If you want, I'll provide you with as many pairs of Chaos gauntlets as you wish to say thanks!",
+          "speaker_ids": [
+            5443,
+            5445
+          ]
+        },
+        {
+          "type": "message",
+          "text": "Johnathon hands you a pair of Chaos gauntlets.",
+          "id": "Uwmot-"
+        },
+        {
+          "type": "line",
+          "speaker": "Johnathon",
+          "text": "You will find the power of bolt spells increases substantially whilst wearing these gauntlets.",
+          "speaker_ids": [
+            5443,
+            5445
+          ]
+        },
+        {
+          "player": "Thank you."
         }
       ]
     }
@@ -663337,19 +664299,24 @@
       ],
       "standard-dialogue-after-completing-family-pest": [
         {
-          "npc": "I have received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
+          "npc": "I received word from my father that you assisted us again! I get the feeling you weren't going to stop trying until you did though."
         },
         {
           "type": "condition",
           "text": "If this is the first time the player has talked to Johnathon after completing Family Pest:",
           "steps": [
             {
-              "npc": "If you want, I'll provide you with as many pairs of Chaos gauntlets as you wish to say thanks!"
+              "npc": "If you want, I'll provide you with as many pairs of chaos gauntlets as you wish, to say thanks."
+            },
+            {
+              "type": "input",
+              "text": "How many would you like to take?",
+              "id": "9bws-b"
             },
             {
               "type": "message",
-              "text": "Johnathon hands you a pair of Chaos gauntlets.",
-              "id": "eNdtqa"
+              "text": "Johnathon hands you some chaos gauntlets.",
+              "id": "xIoYqJ"
             },
             {
               "npc": "You will find the power of bolt spells increases substantially whilst wearing these gauntlets."

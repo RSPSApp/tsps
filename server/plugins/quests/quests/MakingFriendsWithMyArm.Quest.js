@@ -569,10 +569,10 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
 
   function talkToBurntmeat(event) {
     const { player, npcId } = event;
-    if (npcId !== BURNTMEAT_NPC_ID) return;
+    if (npcId !== BURNTMEAT_NPC_ID) return false;
     const stage = quest.getStage(player);
     if (stage === 0) {
-      if (!meetsRequirements(player)) return; // My Arm's Big Adventure/Eadgar still own him
+      if (!meetsRequirements(player)) return false; // My Arm's Big Adventure/Eadgar still own him
       event.handled = true;
       startTranscript(api, player, npcId, PAGE, "starting-out-talking-to-burntmeat");
       return;
@@ -586,7 +586,9 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
       event.handled = true;
       player.getInventory().deleteNumber(WEISS_FIRE_NOTES_ITEM_ID, 1);
       startTranscript(api, player, npcId, "Burntmeat", "standard-dialogue-after-making-friends-with-my-arm-and-delivering-fire-notes");
+      return true;
     }
+    return false; // My Arm's Big Adventure loads after this plugin and answers him otherwise
   }
 
   function talkToMyArm(event) {
@@ -612,10 +614,12 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
 
   function talkToLarry(event) {
     const { player, npcId } = event;
-    if (!LARRY_NPC_IDS.has(npcId)) return;
+    // "Larry" is shared (Mahogany Homes' Falador client 10418 loads after this plugin): a bare
+    // return counts as handled and swallowed his Talk-to (issue 6834).
+    if (!LARRY_NPC_IDS.has(npcId)) return false;
     const stage = quest.getStage(player);
-    if (stage < STAGE_MY_ARM || quest.isComplete(player)) return;
-    if (npcId !== LARRY_RELLEKKA_NPC_ID) return;
+    if (stage < STAGE_MY_ARM || quest.isComplete(player)) return false;
+    if (npcId !== LARRY_RELLEKKA_NPC_ID) return false;
     let variant;
     if (stage < STAGE_LARRY) {
       variant = "starting-out-talking-to-larry";
@@ -664,7 +668,7 @@ module.exports = function registerMakingFriendsWithMyArmQuest(api) {
 
   function talkToSnowflake(event) {
     const { player, npcId } = event;
-    if (!SNOWFLAKE_NPC_IDS.has(npcId)) return;
+    if (!SNOWFLAKE_NPC_IDS.has(npcId)) return false;
     const stage = quest.getStage(player);
     if (quest.isComplete(player)) return false;
     let variant;

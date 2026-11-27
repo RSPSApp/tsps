@@ -6,6 +6,7 @@ import { mat4, vec3 } from "gl-matrix";
 
 import { isWebGPUSupported } from "../../common/utils/DeviceUtil";
 import { GameRenderer } from "../../game/GameRenderer";
+import { getPerformancePolicy, webgpuSampleCount, type PerformancePolicy } from "../../game/performance/PerformancePolicy";
 import type {
     HitsplatEventPayload,
     LocChangeOptions,
@@ -57,7 +58,6 @@ import { FxaaPass } from "./fxaa";
 import { ShaderFxPass } from "./shaderFxPass";
 import { PlayerMaskTarget } from "./playerMask";
 import { SceneMsaaTargets } from "./msaaTargets";
-import { WEBGPU_MSAA_SAMPLES } from "./multisample";
 import { EditorOverlays } from "./overlays/EditorOverlays";
 import { OverlayHost } from "./overlays/OverlayHost";
 import { WebGPUOverlays } from "./overlays/WebGPUOverlays";
@@ -128,6 +128,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
     private sceneColorHeight: number = 0;
     /** The GPU plugin's anti-aliasing: multisampled world-pass targets, or FXAA on the base path. */
     private msaaTargets?: SceneMsaaTargets;
+    /** Exact MSAA level the Performance preset asks for when the GPU plugin is off. */
+    private performanceMsaaSamples = 0;
     private fxaa?: FxaaPass;
     /** The Shader Effects plugin's pass on the base path (117 HD runs its own in the HDR chain). */
     private shaderFxPass?: ShaderFxPass;
@@ -242,8 +244,15 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         }
     }
 
+    /** Live part of the Performance preset; worker/cache changes are startup-only. */
+    public applyPerformancePolicy(policy: PerformancePolicy): void {
+        this.performanceMsaaSamples = policy.sceneMsaaSamples;
+        if (policy.fpsLimit !== null) this.fpsLimit = policy.fpsLimit;
+    }
+
     override async init(): Promise<void> {
         await super.init();
+        this.applyPerformancePolicy(getPerformancePolicy());
 
         const adapter = await WebGPURenderer.probeAdapter();
         if (!adapter) {
@@ -884,8 +893,9 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
 
         const renderDistance = resolveWebGPURenderDistance(this);
         // HD spreads haze over long views, as on WebGL (render/render/frame/render.ts).
+        const policy = getPerformancePolicy();
         const { fogEnd, fogDepth } = resolveFogRange({ renderDistance, ...fogSettings({ osrsClient: this.osrsClient, autoFogDepth: true,
-            autoFogDepthFactor: AUTO_FOG_DEPTH_FACTOR, fogDepth: 0 }), hd: this.osrsClient.clientPlugins.hdEnabled() });
+            autoFogDepthFactor: policy.autoFogDepthFactor, fogDepth: 0 }), hd: this.osrsClient.clientPlugins.hdEnabled() });
 
         const data = this.world.sceneData;
         data.set(camera.viewProjMatrix as Float32Array, 0);
@@ -902,8 +912,8 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         data[61] = fogDepth;
         data[62] = timeSec;
         data[63] = this.brightness;
-        // colorBanding: the GPU plugin's, else WebGL's default (the shader divides by it).
-        data[64] = this.osrsClient.clientPlugins.gpuSettings()?.colorBanding ?? 255.0;
+        // colorBanding: the GPU plugin's explicit value, else the Performance preset's default.
+        data[64] = this.osrsClient.clientPlugins.gpuSettings()?.colorBanding ?? getPerformancePolicy().colorBanding;
         data[65] = this.osrsClient.isNewTextureAnim ? 1.0 : 0.0;
         this.world.flushSceneUniforms();
     }
@@ -1002,7 +1012,7 @@ export class WebGPURenderer extends GameRenderer<WebGPUMapSquare> {
         // frame, before any map draw.
         const extension = world.extension;
         const gpu = this.osrsClient.clientPlugins.gpuSettings();
-        const sampleCount = gpu && gpu.msaaSamples > 0 ? WEBGPU_MSAA_SAMPLES : 1;
+        const sampleCount = webgpuSampleCount(gpu?.msaaSamples, this.performanceMsaaSamples);
         world.selectExtension(!!extension?.isActive(), sampleCount);
 
         // Same point the WebGL frame loop flushes queued client packets (render.ts login

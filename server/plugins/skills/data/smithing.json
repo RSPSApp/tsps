@@ -164,9 +164,9 @@
       "missingMessage": "You need 'perfect' gold ore to smelt this bar.",
       "barPhrase": "a 'perfect' gold bar",
       "notInMenu": true,
-      "smeltMessage": "You smelt the 'perfect' gold in the furnace.",
-      "retrieveMessage": "You smelt the 'perfect' gold ore into a bar.",
-      "$comment": "https://oldschool.runescape.wiki/w/'perfect'_gold_bar - Family Crest's quest bar; the Gold bar choice uses its ore when no normal gold ore is held."
+      "smeltMessage": "You smelt the gold in the furnace.",
+      "retrieveMessage": "",
+      "$comment": "https://oldschool.runescape.wiki/w/'perfect'_gold_bar - Family Crest's quest bar; the Gold bar choice uses its ore when no normal gold ore is held. Messages as live sends them: the gold bar's, then an empty spam line with the bar (rsprox local recordings 1002252 ticks 1526-1536, 1002185 ticks 9304-9323)."
     },
     {
       "name": "Molten glass",

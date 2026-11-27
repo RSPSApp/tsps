@@ -1,5 +1,5 @@
 import { updateGearVisuals } from "../../custom/items/GearVisualRuntime";
-import { lowEndDeviceModeEnabled } from "../../game/plugins/lowenddevice/LowEndDeviceMode";
+import { getPerformancePolicy } from "../../game/performance/PerformancePolicy";
 import Denque from "denque";
 import { mat4, vec2, vec3, vec4 } from "gl-matrix";
 import { button, folder } from "leva";
@@ -97,8 +97,6 @@ import {
     getCanvasCssSize,
     isIos,
     isMobileMode,
-    isTouchDevice,
-    isLowEndDevice,
     isWebGL2Supported,
 } from "../../common/utils/DeviceUtil";
 import { clamp } from "../../common/utils/MathUtil";
@@ -458,9 +456,15 @@ export function resolveEffectiveRenderDistanceTiles(host: WebGLOsrsRendererHost,
             return host.effectiveRenderDistanceTiles | 0;
         }
         const profile = host.syncBrowserQualityProfile();
-        const capToProfile = !gpu?.overrideDeviceCaps &&
-            (isTouchDevice || isLowEndDevice || lowEndDeviceModeEnabled);
-        const target = capToProfile ? Math.min(base, profile.renderDistanceCap | 0) : base;
+        const policy = getPerformancePolicy();
+        if (policy.explicitDrawDistance !== null) {
+            const target = clamp(policy.explicitDrawDistance, 25, host.osrsClient.clientPlugins.hdEnabled() ? 160 : 90);
+            host.effectiveRenderDistanceTiles = Math.max(0, target | 0);
+            host.effectiveRenderDistanceFrame = frameId | 0;
+            return host.effectiveRenderDistanceTiles | 0;
+        }
+        const capToProfile = gpu ? gpu.overrideDeviceCaps === false : true;
+        const target = capToProfile ? Math.min(base, policy.drawDistanceCap) : base;
         host.effectiveRenderDistanceTiles = Math.max(0, target | 0);
         host.effectiveRenderDistanceFrame = frameId | 0;
         return host.effectiveRenderDistanceTiles | 0;
@@ -485,7 +489,7 @@ export function resolveEffectiveGroundItemOverlayMaxEntries(host: WebGLOsrsRende
             return host.effectiveGroundItemOverlayMaxEntries | 0;
         }
         const profile = host.syncBrowserQualityProfile();
-        const target = isTouchDevice ? profile.groundItemOverlayMaxEntries | 0 : 40;
+        const target = profile.groundItemOverlayMaxEntries | 0;
         host.effectiveGroundItemOverlayMaxEntries = target;
         host.effectiveGroundItemOverlayFrame = frameId | 0;
         return target;
@@ -504,7 +508,7 @@ export function resolveEffectiveGroundItemOverlayRadius(host: WebGLOsrsRendererH
             return host.effectiveGroundItemOverlayRadius | 0;
         }
         const profile = host.syncBrowserQualityProfile();
-        const target = isTouchDevice ? profile.groundItemOverlayRadius | 0 : 12;
+        const target = profile.groundItemOverlayRadius | 0;
         host.effectiveGroundItemOverlayRadius = target;
         host.effectiveGroundItemOverlayRadiusFrame = frameId | 0;
         return target;
@@ -519,28 +523,24 @@ export function getFrameGroundItemOverlayRadius(host: WebGLOsrsRendererHost, ): 
 
 export function getFrameHitsplatMaxEntries(host: WebGLOsrsRendererHost, ): number {
 
-        if (!isTouchDevice) return RENDER_CONSTANTS.MAX_HIT_ENTRIES;
         return host.syncBrowserQualityProfile().hitsplatMaxEntries | 0;
     
 }
 
 export function getFrameHealthBarMaxEntries(host: WebGLOsrsRendererHost, ): number {
 
-        if (!isTouchDevice) return 256;
         return host.syncBrowserQualityProfile().healthBarMaxEntries | 0;
     
 }
 
 export function getFrameOverheadTextMaxEntries(host: WebGLOsrsRendererHost, ): number {
 
-        if (!isTouchDevice) return 256;
         return host.syncBrowserQualityProfile().overheadTextMaxEntries | 0;
     
 }
 
 export function getFrameOverheadPrayerMaxEntries(host: WebGLOsrsRendererHost, ): number {
 
-        if (!isTouchDevice) return 256;
         return host.syncBrowserQualityProfile().overheadPrayerMaxEntries | 0;
     
 }

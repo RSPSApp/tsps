@@ -36,6 +36,60 @@
       "id": 16529,
       "expectedTicks": 7,
       "ticks": 4
+    },
+    {
+      "table": "transports",
+      "from": [2683, 3271, 0],
+      "to": [2683, 3268, 1],
+      "menu": "Cross Gangplank",
+      "id": 2085,
+      "newFrom": [2683, 3266, 0],
+      "newTo": [2683, 3263, 1]
+    },
+    {
+      "table": "transports",
+      "from": [2683, 3268, 1],
+      "to": [2683, 3271, 0],
+      "menu": "Cross Gangplank",
+      "id": 2086,
+      "newFrom": [2683, 3263, 1],
+      "newTo": [2683, 3266, 0]
+    },
+    {
+      "table": "ships",
+      "from": [2683, 3271, 0],
+      "to": [2772, 3234, 0],
+      "menu": "Brimhaven Captain Barnaby",
+      "id": 9250,
+      "newFrom": [2683, 3266, 0],
+      "newTo": [2772, 3234, 0]
+    },
+    {
+      "table": "ships",
+      "from": [2683, 3271, 0],
+      "to": [2915, 3225, 0],
+      "menu": "Rimmington Captain Barnaby",
+      "id": 9250,
+      "newFrom": [2683, 3266, 0],
+      "newTo": [2915, 3225, 0]
+    },
+    {
+      "table": "ships",
+      "from": [2772, 3234, 0],
+      "to": [2683, 3271, 0],
+      "menu": "Ardougne Captain Barnaby",
+      "id": 8764,
+      "newFrom": [2772, 3234, 0],
+      "newTo": [2683, 3266, 0]
+    },
+    {
+      "table": "ships",
+      "from": [2915, 3225, 0],
+      "to": [2683, 3271, 0],
+      "menu": "Ardougne Captain Barnaby",
+      "id": 8763,
+      "newFrom": [2915, 3225, 0],
+      "newTo": [2683, 3266, 0]
     }
   ]
 }

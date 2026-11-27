@@ -651,7 +651,7 @@ test("the cache-backed Varrock broken fence crosses its clipped north-south edge
 
   const south = createPlayer(3308, 3491, 0, 1);
   assert.notEqual(operate(south, objectId, [3308, 3492, 0]), false);
-  assert.deepEqual(tileOf(south), [3308, 3494, 0], "Climb-over lands north of the clipped fence");
+  assert.deepEqual(tileOf(south), [3308, 3493, 0], "Climb-over lands north of the clipped fence");
   // Live sends no message for it (Gertrude's Cat capture, revision 242, ticks 375-382).
   assert.ok(!south.state.messages.some((message) => /climb over/i.test(message)), JSON.stringify(south.state.messages));
   assert.equal(south.getAttribute("agility.obstacle") ?? null, null);
@@ -3309,7 +3309,8 @@ test("Broken Raft checks the grapple requirements on both approaches", async (t)
     }
   }
   // Approaches come from the existing map-derived server row; no destination or crossing is asserted.
-  const west = [3246, 3179, 0], east = [3253, 3179, 0];
+  // The two banks the crossing runs between (rsprox 347); the barehanded way is the raft's Jump-to (river-lum-raft.test.cjs).
+  const west = [3246, 3179, 0], east = [3259, 3179, 0];
   await t.test("west exact grapple thresholds", () => check("raftgoodw", west, 8, 19, 37, true, true));
   await t.test("below Agility threshold", () => check("raftagilo", west, 7, 19, 37, true, false));
   await t.test("missing grapple gear", () => check("raftnogear", west, 8, 19, 37, false, false));
@@ -3319,7 +3320,8 @@ test("Broken Raft checks the grapple requirements on both approaches", async (t)
     { refusal: "You need a Ranged level of at least 37 to attempt this." }));
   await t.test("east exact grapple thresholds", () => check("raftgoode", east, 8, 19, 37, true, true));
   await t.test("barehanded below 48", () => check("raftbarelo", west, 47, 1, 1, false, false));
-  await t.test("barehanded at 48", () => check("raftbareok", east, 48, 1, 1, false, true));
+  await t.test("Grapple at 48 Agility without the gear", () => check("raftbareok", east, 48, 1, 1, false, false,
+    { refusal: "You need a Strength level of at least 19 to attempt this." }));
   await t.test("Agility boosted above base reaches the grapple requirement", () =>
     check("raftboostag", west, 8, 19, 37, true, true, { baseAgility: 7 }));
   await t.test("Strength boosted above base reaches the grapple requirement", () =>

@@ -76,11 +76,27 @@ export class DialogueManager {
             this.handleOption(childIndex as DialogueOption);
             return true;
         }
+        if (!this.isActive()) return this.closeUnownedBox(widgetId);
         if (!this.canContinue(widgetId)) return false;
         // An overhead line or a held moment leaves the previous chatbox up; held Space
         // would otherwise end the chain under its timer.
         if (current instanceof ActionDialogue && current.isSelfAdvancing()) return true;
         this.advance();
+        return true;
+    }
+
+    /**
+     * A box sent on its own (`StatementDialogue.send`, an arrival message box) has no chain to
+     * advance and no plugin answered its continue: close it, as live closes a lone message box
+     * on its continue (Sea Slug capture 20261110T112750, tick 88). Unanswered, the client sat on
+     * "Please wait..." for good.
+     */
+    private closeUnownedBox(widgetId: number): boolean {
+        const sender = this.player.getPacketSender();
+        const groupId = widgetId >>> 16;
+        // A held box (sent without its continue) waits for its scene, as live ignores the resume.
+        if (!sender.isChatboxInterface(groupId) || sender.isChatboxPauseOff(widgetId)) return false;
+        sender.closeInterface(groupId);
         return true;
     }
 

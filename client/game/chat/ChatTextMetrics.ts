@@ -3,6 +3,7 @@ import { IndexType } from "../../rs/cache/IndexType";
 import { BitmapFont } from "../../rs/font/BitmapFont";
 import { resolveTextTemplates } from "../../rs/font/textTemplates";
 import { SpriteLoader } from "../../rs/sprite/SpriteLoader";
+import { getCustomModIconWidth } from "../../common/gamemode/GamemodeContentStore";
 
 export type ChatTextMetricsDeps = {
     getCacheSystem: () => CacheSystem;
@@ -82,6 +83,8 @@ export class ChatTextMetrics {
     private getModIconWidth(iconId: number): number {
         const id = iconId | 0;
         if (id < 0) return 0;
+        const customWidth = getCustomModIconWidth(id);
+        if (customWidth !== undefined) return customWidth;
         if (!this.modIconsWidthLoaded) {
             this.ensureModIconWidthsLoaded();
         }

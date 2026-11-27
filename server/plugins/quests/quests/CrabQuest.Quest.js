@@ -19,9 +19,9 @@
  * (Ceremony.CrabQuest.js) and the player wakes on the beach when it ends.
  *
  * Gaps: logout or death inside the dream wakes the player on the beach (TSPS policy: the
- * capture shows neither). A recruit is not shown at its hiding place while it talks (the
- * capture spawns it there; only six of the eleven tiles are captured), only on the practice
- * tiles; the band's practice rhythm animations are not played. No post-quest beach-crab
+ * capture shows neither). A recruit stands by its hiding place while it talks: six tiles are
+ * captured, and the other spots add it on the player's tile (Ours). The band's practice rhythm
+ * animations are not played. No post-quest beach-crab
  * variant exists, so a completed player replays "crab-hunting-talking-to-the-crab-again".
  * The Crab dance emote is not unlocked (the dance conditions answer "not unlocked"). The
  * requirement refusal is a plain system message because the transcript has none.
@@ -142,6 +142,45 @@ module.exports = function registerCrabQuestQuest(api) {
   // Interface 216 slot 54 (cache enum 1001 -> sprite 5248) is the real Sit emote;
   // the capture's op=1 plays emote_sit_loop 10061.
   const SIT_EMOTE_SLOT = 54;
+  // The coax (capture 20261103T014803, ticks 6369-6381, the avium tree at 3046,2656): Sit next
+  // to the hiding place sends "And now, you wait..." as a game message, and twelve ticks later
+  // the "A crab appears!" box opens. The Wiki: "the crab in the magic tree will take
+  // considerably longer"; no recording has that wait. Ours: twice the captured one.
+  const SIT_WAIT_TEXT = "And now, you wait...";
+  const SIT_WAIT_TICKS = 12;
+  const MAGIC_TREE_SIT_WAIT_TICKS = 24;
+  // The recruits' narration is a message box: every one the capture has (ticks 6215-6519:
+  // the appearances, the too-scared line, the western palm's claw-clicking, the scutters) is
+  // type=mesbox, and "And now, you wait..." is the one game message among them. Ours: the
+  // lines no recording reached ("The crab pokes at your foot." ...) follow them.
+  const RECRUIT_APPEARS_TEXT = "A crab appears!";
+  const PENGUIN_APPEARS_TEXT = "A 'crab' appears!";
+  // The crab that comes out is added on its spot's tile (`crabTile`) as the box opens, and the
+  // player steps beside it when the box is continued (capture ticks 6256-6507). Ours: a spot no
+  // recording reached adds it on the player's own tile, as five of the six captured ones are.
+  const RECRUIT_NPC_KEY = "recruit";
+  // The penguin's exit (capture ticks 6266-6277): the player kicks it as "Likewise!" is
+  // continued; next tick it flies 20 tiles north into the sea; the tick after, crab_kicked_penguin
+  // is set; ten ticks after that the real crab appears.
+  const PENGUIN_KICK_STEP = "S6fPkj";
+  const PENGUIN_KICK_ANIMATION = 423; // human_unarmedkick
+  const PENGUIN_KICK_SOUND = 2565;
+  const PENGUIN_FLY_PROJECTILE = 4022; // crab_flyingpenguin
+  const PENGUIN_FLY_CYCLES = 250;
+  const PENGUIN_FLY_ANGLE = 35;
+  const PENGUIN_FLY_TILES = 20;
+  const PENGUIN_SPLASH_GRAPHIC = 68; // watersplash
+  const PENGUIN_FLY_SOUND = 12111;
+  const PENGUIN_SPLASH_SOUND = 2496;
+  const PENGUIN_SPLASH_SOUND_DELAY = 220;
+  const PENGUIN_CRAB_DELAY = 11;
+  const KICKED_PENGUIN_ATTRIBUTE = "quest.crab_quest.kicked-penguin";
+  // The shy crab's narration, also message boxes (capture ticks 6228, 6238, 6250).
+  const SHY_CRAB_OUT_STEP = "shy-crab-out";
+  const SHY_CRAB_OUT_TEXT = "A crab comes out shyly.";
+  const SHY_CRAB_BLUSH_TEXT = "The crab appears to turn bright red.";
+  const SHY_CRAB_SCUTTER_TEXT = "The crab scutters away.";
+  const RECRUIT_CHATHEADS = new Set([BAND_CRAB_NPC_ID, PENGUIN_CRAB_NPC_ID]);
   // The dream's one floatsam: its multi parent and the forms crab_floatsam_hidden picks.
   // crab_flotsam_multi (crab_floatsam_multi 16478 in the revision 241 capture); its
   // crab_floatsam_hidden varbit picks the form.
@@ -374,7 +413,9 @@ module.exports = function registerCrabQuestQuest(api) {
    * The investigation spots, with the loc live adds there once recruiting starts (capture
    * tick 6215: id, tile and rotation). `first` is the "too scared" line (missing when the crab
    * comes straight out), `variant` is the conversation, and `joinBit` marks a spot whose end
-   * message recruits a band member. The order is the saved SCARED/MET bit order: keep it.
+   * message recruits a band member. `sitTile` marks a crab that needs the Sit coax (Quest
+   * Helper's tile); any tile beside the loc counts (besideSpot). `crabTile` is where live adds
+   * the crab that comes out (see showRecruit). The order is the saved SCARED/MET bit order: keep it.
    */
   const SPOTS = [
     {
@@ -397,28 +438,32 @@ module.exports = function registerCrabQuestQuest(api) {
     },
     {
       objectId: CRAB_TREE_OBJECT_ID, x: 3036, y: 2644, rotation: 2,
-      sitTile: { x: 3037, y: 2643 }, // capture: player sits south of the 2x2 avium tree
+      sitTile: { x: 3038, y: 2644 }, // QH sitForCrabNine
       first: "crab-hunting-investigating-the-tree-north-west-of-the-magic-tree",
       variant: "crab-hunting-investigating-the-tree-north-west-of-the-magic-tree-sitting-by-the-palm",
       joinBit: 1 << 2,
     },
     {
       objectId: CRAB_PALM_2_OBJECT_ID, x: 3037, y: 2647, rotation: 2,
+      crabTile: { x: 3037, y: 2646 }, // capture tick 6507
       variant: "crab-hunting-investigating-the-western-most-palm",
       joinBit: 1 << 3,
     },
     {
       objectId: CRAB_PALM_3_OBJECT_ID, x: 3039, y: 2647, rotation: 0,
+      crabTile: { x: 3040, y: 2647 }, // capture tick 6486
       variant: "crab-hunting-investigating-the-palm-directly-east-of-the-western-most-palm",
       joinBit: 1 << 4,
     },
     {
       objectId: CRAB_PALM_OBJECT_ID, x: 3040, y: 2649, rotation: 3,
+      crabTile: { x: 3041, y: 2649 }, // capture tick 6473
       variant: "crab-hunting-investigating-the-palm-directly-north-east-of-the-western-most-palm",
       joinBit: 1 << 5,
     },
     {
       objectId: CRAB_PALM_OBJECT_ID, x: 3048, y: 2658, rotation: 3,
+      crabTile: { x: 3049, y: 2658 }, // capture ticks 6256 (the penguin) and 6277
       variant: "crab-hunting-investigating-the-northern-most-palm",
       joinBit: 1 << 6,
       chathead: PENGUIN_CRAB_NPC_ID,
@@ -431,6 +476,7 @@ module.exports = function registerCrabQuestQuest(api) {
     },
     {
       objectId: CRAB_TREE_OBJECT_ID, x: 3046, y: 2656, rotation: 2,
+      crabTile: { x: 3047, y: 2655 }, // capture tick 6381
       sitTile: { x: 3046, y: 2655 }, // QH sitForCrabTen
       first: "crab-hunting-investigating-the-north-western-most-tree",
       variant: "crab-hunting-investigating-the-north-western-most-tree-sitting-by-the-tree",
@@ -443,12 +489,15 @@ module.exports = function registerCrabQuestQuest(api) {
     },
     {
       objectId: CRAB_PLANT_OBJECT_ID, x: 3054, y: 2656, rotation: 3,
+      crabTile: { x: 3053, y: 2656 }, // capture tick 6292
       variant: "crab-hunting-investigating-the-plant",
       joinBit: 1 << 8,
     },
     {
       objectId: CRAB_BUSH_OBJECT_ID, x: 3049, y: 2635, rotation: 3,
       variant: "crab-hunting-investigating-the-western-bush",
+      // Its conversation never says "A crab appears!". Ours: the crab shows with its first box.
+      appearsOn: "The crab stares past you serenely.",
       joinBit: 1 << 9,
     },
     {
@@ -629,7 +678,7 @@ module.exports = function registerCrabQuestQuest(api) {
     );
     sender.sendVarbit(
       CRAB_KICKED_PENGUIN_VARBIT,
-      hasFlag(player, RECRUITED_ATTRIBUTE, PENGUIN_JOIN_BIT) ? 1 : 0
+      player.getAttribute(KICKED_PENGUIN_ATTRIBUTE) === true || hasFlag(player, RECRUITED_ATTRIBUTE, PENGUIN_JOIN_BIT) ? 1 : 0
     );
     // crab_put_back_in_instance and crab_net: the player is in the dream (capture 5953, 7046).
     const dreaming = Dream.active(player) || Ceremony.active(player) ? 1 : 0;
@@ -845,6 +894,10 @@ module.exports = function registerCrabQuestQuest(api) {
           Scenes.later(player, intoDream ? GET_UP_DELAY : 0, () => {
             if (intoDream) player.performAnimation(new Animation(GET_UP_ANIMATION));
             Scenes.later(player, RESUME_DELAY, () => {
+              // 7330's last frame holds for 669 ticks and blocks movement in the client: the
+              // player stood frozen with the camera while the server walked them (issue 6670).
+              // Live stops it on the first line's tick (capture 20261103T014803, ticks 5962-5963).
+              if (intoDream) player.performAnimation(Animation.DEFAULT_RESET_ANIMATION);
               player.getMovementQueue().setBlockMovement(false);
               if (rest.length) playSteps(player, MAIN_CRAB_NPC_ID, rest);
             });
@@ -1139,7 +1192,10 @@ module.exports = function registerCrabQuestQuest(api) {
       talkToMainCrab(player);
       return;
     }
-    if (npcId === SHY_CRAB_NPC_ID || npcId === SHY_CRAB_CONTENT_ID) {
+    // crab_bandcrab is also every recruit and bandmate: only the shy crab herself is the shy crab.
+    const shyCrab = npcId === SHY_CRAB_NPC_ID
+      || (npcId === SHY_CRAB_CONTENT_ID && (!event.npc || event.npc === Dream.npcFor(player, "shy-crab")));
+    if (shyCrab) {
       if (action !== "Talk-to") return;
       const progress = shyCrabProgress(player);
       if (progress === SHY_CRAB_FOUND || progress === SHY_CRAB_BLUSHING) {
@@ -1164,9 +1220,8 @@ module.exports = function registerCrabQuestQuest(api) {
     if (shyCrabProgress(player) >= SHY_CRAB_FOUND) return;
     player.setAttribute(SHY_CRAB_PROGRESS_ATTRIBUTE, SHY_CRAB_FOUND);
     syncDream(player);
-    player.sendMessage("A crab comes out shyly.");
     syncVarbits(player);
-    playSteps(player, SHY_CRAB_NPC_ID, SHY_CRAB_LINES);
+    playSteps(player, SHY_CRAB_NPC_ID, [{ type: "message", id: SHY_CRAB_OUT_STEP, text: SHY_CRAB_OUT_TEXT }, ...SHY_CRAB_LINES]);
   }
 
   /**
@@ -1381,24 +1436,47 @@ module.exports = function registerCrabQuestQuest(api) {
       }
       return;
     }
-    if (stepId === SHY_CRAB_BLUSH_STEP || stepId === SHY_CRAB_SCUTTER_STEP) {
+    if (stepId === SHY_CRAB_OUT_STEP || stepId === SHY_CRAB_BLUSH_STEP || stepId === SHY_CRAB_SCUTTER_STEP) {
       if (npcId !== SHY_CRAB_NPC_ID && npcId !== SHY_CRAB_CONTENT_ID) return;
       event.handled = true;
+      event.box = { statement: true };
+      if (stepId === SHY_CRAB_OUT_STEP) {
+        event.text = SHY_CRAB_OUT_TEXT;
+        // She comes out beside her palm; the player steps up to her as the box is continued (tick 6230).
+        const shy = Dream.npcFor(player, "shy-crab");
+        if (shy) player.setPositionToFace(shy.getLocation());
+        event.after = () => stepBeside(player, Dream.npcFor(player, "shy-crab"));
+        return;
+      }
       if (stepId === SHY_CRAB_BLUSH_STEP) {
         player.setAttribute(SHY_CRAB_PROGRESS_ATTRIBUTE, SHY_CRAB_BLUSHING);
-        player.sendMessage("The crab appears to turn bright red.");
+        event.text = SHY_CRAB_BLUSH_TEXT;
       } else {
         player.setAttribute(SHY_CRAB_PROGRESS_ATTRIBUTE, SHY_CRAB_SCUTTERED);
         syncDream(player);
-        player.sendMessage("The crab scutters away.");
+        event.text = SHY_CRAB_SCUTTER_TEXT;
       }
       syncVarbits(player);
       return;
     }
     if (!CRAB_NPC_IDS.has(npcId) || !stepId) return;
+    if (event.kind === "message" && RECRUIT_CHATHEADS.has(npcId) && event.text !== SIT_WAIT_TEXT) {
+      event.box = { statement: true };
+      const appearsOn = talkingSpot.get(player)?.appearsOn;
+      if (event.text === RECRUIT_APPEARS_TEXT || event.text === PENGUIN_APPEARS_TEXT || (appearsOn && event.text === appearsOn)) {
+        showRecruit(player, event);
+      }
+    }
+    if (stepId === PENGUIN_KICK_STEP) {
+      event.handled = true;
+      event.wait = (resume) => kickPenguin(player, resume);
+      return;
+    }
     const joinedBit = JOINED_STEP_BITS.get(stepId);
     if (joinedBit !== undefined) {
-      // Live shows the scutter as a message box (capture tick 6519).
+      // The crab scutters off (capture tick 6519): the one by its hiding place goes, and
+      // syncDream adds it at practice.
+      Dream.removeNpc(player, RECRUIT_NPC_KEY);
       if (event.kind === "message") event.box = { statement: true };
       if (!hasFlag(player, RECRUITED_ATTRIBUTE, joinedBit)) {
         setFlag(player, RECRUITED_ATTRIBUTE, joinedBit);
@@ -1488,6 +1566,7 @@ module.exports = function registerCrabQuestQuest(api) {
   }
 
   function investigateSpot(player, spot) {
+    talkingSpot.set(player, spot);
     const stage = quest.getStage(player);
     const bit = spotBit(spot);
     if (quest.isComplete(player)) {
@@ -1521,28 +1600,189 @@ module.exports = function registerCrabQuestQuest(api) {
     }
     // A later investigate is recovery for a crab already coaxed out.
     setFlag(player, MET_ATTRIBUTE, bit);
+    if (spot.joinBit === PENGUIN_JOIN_BIT && player.getAttribute(KICKED_PENGUIN_ATTRIBUTE) === true) {
+      // The penguin is gone already (a logout before the crab came out): the crab comes out.
+      playSteps(player, BAND_CRAB_NPC_ID, stepsAfter(variantSteps(spot.variant), PENGUIN_KICK_STEP) ?? []);
+      return;
+    }
     startTranscript(api, player, chatheadFor(spot), PAGE, spot.variant);
   }
 
-  /** The captured coax: after the too-scared line, Sit on the spot's tile. */
+  /**
+   * Whether a source tile touches the spot's loc (diagonals included) without being on it.
+   * Live coaxed the 2x2 avium tree at 3046,2656 from 3047,2655 (Quest Helper's tile is
+   * 3046,2655), and Quest Helper sits by the 1x1 palm at 3042,2637 from the diagonal 3041,2638.
+   * Ours: any such tile counts; no recording sits further away.
+   */
+  function besideSpot(spot, at) {
+    const definition = api.core.ObjectDefinition?.forId?.(spot.objectId);
+    const turned = spot.rotation === 1 || spot.rotation === 3;
+    const width = (turned ? definition?.getSizeY?.() : definition?.getSizeX?.()) ?? 1;
+    const length = (turned ? definition?.getSizeX?.() : definition?.getSizeY?.()) ?? 1;
+    const inside = at.x >= spot.x && at.x < spot.x + width && at.y >= spot.y && at.y < spot.y + length;
+    return at.z === 0 && !inside
+      && at.x >= spot.x - 1 && at.x <= spot.x + width && at.y >= spot.y - 1 && at.y <= spot.y + length;
+  }
+
+  // A sit waiting for its crab, per player: the spot, the source tile and a token for the timer.
+  const sitWaits = new Map();
+
+  /** The captured coax: after the too-scared line, Sit beside the hiding place and wait. */
   function handleEmote(event) {
     const { player, slot } = event;
-    if (!player || slot !== SIT_EMOTE_SLOT) return;
+    if (!player) return;
+    // Any other emote stands the player up; the crab stays hidden.
+    if (slot !== SIT_EMOTE_SLOT) {
+      sitWaits.delete(player);
+      return;
+    }
+    const spot = coaxableSpot(player);
+    if (!spot) {
+      sitWaits.delete(player);
+      return;
+    }
+    // The spots are in source coordinates; in the dream the player stands on instance tiles.
+    const here = Dream.toSource(player, player.getLocation());
+    const current = sitWaits.get(player);
+    if (current?.spot === spot && current.x === here.x && current.y === here.y) return; // still sitting here
+    const ticks = spot.objectId === CRAB_MAGIC_TREE_OBJECT_ID ? MAGIC_TREE_SIT_WAIT_TICKS : SIT_WAIT_TICKS;
+    const wait = { spot, x: here.x, y: here.y, ticks };
+    sitWaits.set(player, wait);
+    player.sendMessage(SIT_WAIT_TEXT);
+    waitForCrab(player, wait);
+  }
+
+  /** One tick of the wait: a step off the tile stands the player up and ends it. */
+  function waitForCrab(player, wait) {
+    Scenes.later(player, 1, () => {
+      if (sitWaits.get(player) !== wait) return;
+      const here = Dream.toSource(player, player.getLocation());
+      if (here.x !== wait.x || here.y !== wait.y) {
+        sitWaits.delete(player);
+        return;
+      }
+      if (--wait.ticks > 0) waitForCrab(player, wait);
+      else crabAppears(player, wait);
+    });
+  }
+
+  /** The scared, not yet coaxed recruit the player is sitting beside, if any. */
+  function coaxableSpot(player) {
+    // The hiding places are the dream's own locs; the real island has none to sit by.
+    if (!Dream.active(player)) return null;
     const stage = quest.getStage(player);
-    if (quest.isComplete(player) || stage < STAGE_RECRUITING || stage >= STAGE_ALL_LEADERS) return;
-    const here = player.getLocation();
+    if (quest.isComplete(player) || stage < STAGE_RECRUITING || stage >= STAGE_ALL_LEADERS) return null;
+    const here = Dream.toSource(player, player.getLocation());
     for (const spot of SPOTS) {
       if (!spot.sitTile || spot.joinBit === undefined) continue;
       if (hasFlag(player, RECRUITED_ATTRIBUTE, spot.joinBit)) continue;
       const bit = spotBit(spot);
       if (hasFlag(player, MET_ATTRIBUTE, bit) || !hasFlag(player, SCARED_ATTRIBUTE, bit)) continue;
-      if (here.getX() !== spot.sitTile.x || here.getY() !== spot.sitTile.y || here.getZ() !== 0) continue;
-      setFlag(player, MET_ATTRIBUTE, bit);
-      player.sendMessage("And now, you wait...");
-      startTranscript(api, player, chatheadFor(spot), PAGE, spot.variant);
-      return;
+      if (besideSpot(spot, here)) return spot;
     }
+    return null;
   }
+
+  /** The wait is over: the crab comes out if it is still waiting to be coaxed. */
+  function crabAppears(player, wait) {
+    sitWaits.delete(player);
+    if (coaxableSpot(player) !== wait.spot) return;
+    talkingSpot.set(player, wait.spot);
+    setFlag(player, MET_ATTRIBUTE, spotBit(wait.spot));
+    const steps = variantSteps(wait.spot.variant);
+    const waitIndex = steps.findIndex((step) => step?.type === "message" && step.text === SIT_WAIT_TEXT);
+    playSteps(player, chatheadFor(wait.spot), steps.slice(waitIndex + 1));
+  }
+  // The spot whose crab the player last investigated or coaxed: where an appearing crab stands.
+  const talkingSpot = new Map();
+
+  /**
+   * "A crab appears!" (or the penguin's "A 'crab' appears!"): the crab is added by its hiding
+   * place as the box opens, the player turns to it, and steps beside it once the box is continued.
+   */
+  function showRecruit(player, event) {
+    const spot = talkingSpot.get(player);
+    if (!spot || !Dream.active(player)) return;
+    const id = event.text === PENGUIN_APPEARS_TEXT ? PENGUIN_CRAB_NPC_ID : BAND_CRAB_NPC_ID;
+    const tile = spot.crabTile ?? Dream.toSource(player, player.getLocation());
+    const crab = Dream.npc(player, RECRUIT_NPC_KEY, { id, x: tile.x, y: tile.y });
+    if (!crab) return;
+    player.setPositionToFace(crab.getLocation());
+    event.after = () => stepBeside(player, crab);
+    watchRecruit(player, crab);
+  }
+
+  /**
+   * A crab that talks and then stays (the fan crab, the scientist, a failed quiz) or a
+   * conversation closed early: the crab goes back into hiding once the chat closes, as a later
+   * investigate says it is "currently wandering around". Ours: no recording has one. A crab that
+   * scutters is removed by its scutter step instead.
+   */
+  function watchRecruit(player, crab) {
+    Scenes.later(player, 1, () => {
+      if (!crab.isRegistered?.() || Dream.npcFor(player, RECRUIT_NPC_KEY) !== crab) return;
+      if (player.getDialogueManager().isActive() || penguinKicks.has(player)) return watchRecruit(player, crab);
+      Dream.removeNpc(player, RECRUIT_NPC_KEY);
+    });
+  }
+
+  /**
+   * The player steps straight beside the crab: the first free tile west, east, south or north
+   * of it that is one step away; no step when they already stand straight beside it. That is
+   * every captured case: off the crab's tile west (3047,2655, 3053,2656) or east past a palm
+   * (3041,2649, 3040,2647, 3037,2646), and from a diagonal to its south (3049,2657, 3045,2652).
+   */
+  function stepBeside(player, crab) {
+    if (!crab?.isRegistered?.()) return;
+    const at = crab.getLocation();
+    const here = player.getLocation();
+    const queue = player.getMovementQueue();
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const stepX = at.getX() + dx - here.getX();
+      const stepY = at.getY() + dy - here.getY();
+      if (Math.abs(stepX) > 1 || Math.abs(stepY) > 1) continue;
+      if (stepX === 0 && stepY === 0) break;
+      if (queue?.canWalk?.(stepX, stepY)) {
+        queue.walkStep(stepX, stepY);
+        break;
+      }
+    }
+    player.setPositionToFace(at);
+  }
+
+  /** The penguin's exit (capture ticks 6266-6277), then the conversation carries on with the crab. */
+  // Players whose conversation the kick is holding (the chatbox is closed meanwhile).
+  const penguinKicks = new Set();
+
+  function kickPenguin(player, resume) {
+    const sender = player.getPacketSender();
+    penguinKicks.add(player);
+    // The penguin this kick is for: a re-investigate on the next tick spawns a new one it must not take.
+    const penguin = Dream.npcFor(player, RECRUIT_NPC_KEY);
+    player.performAnimation(new Animation(PENGUIN_KICK_ANIMATION));
+    sender.sendSound(PENGUIN_KICK_SOUND, 1, 10);
+    Scenes.later(player, 1, () => {
+      const kicked = penguin && Dream.npcFor(player, RECRUIT_NPC_KEY) === penguin;
+      const from = kicked ? penguin.getLocation() : null;
+      if (kicked) Dream.removeNpc(player, RECRUIT_NPC_KEY);
+      if (from) {
+        const to = new Location(from.getX(), from.getY() + PENGUIN_FLY_TILES, from.getZ());
+        sender.sendProjectile(from, to, 0, PENGUIN_FLY_CYCLES, PENGUIN_FLY_PROJECTILE, 0, 0, null, 0, PENGUIN_FLY_ANGLE, 0);
+        sender.sendGraphic(Graphic.delayed(PENGUIN_SPLASH_GRAPHIC, PENGUIN_FLY_CYCLES), to);
+      }
+      sender.sendSound(PENGUIN_FLY_SOUND, 1, 0);
+      Scenes.later(player, 1, () => {
+        player.setAttribute(KICKED_PENGUIN_ATTRIBUTE, true);
+        syncVarbits(player);
+        sender.sendSound(PENGUIN_SPLASH_SOUND, 1, PENGUIN_SPLASH_SOUND_DELAY);
+      });
+    });
+    Scenes.later(player, PENGUIN_CRAB_DELAY, () => {
+      penguinKicks.delete(player);
+      resume();
+    });
+  }
+
 
   // ==========================================================================
   // Items, ground items and interactions
@@ -1664,6 +1904,9 @@ module.exports = function registerCrabQuestQuest(api) {
     // end it: stop it here, or it would build and play for an offline player.
     Ceremony.end(player, true);
     netting.delete(player);
+    sitWaits.delete(player);
+    talkingSpot.delete(player);
+    penguinKicks.delete(player);
     Scenes.cancel(player);
     Scenes.closeFade(player);
   }
@@ -1740,6 +1983,7 @@ module.exports = function registerCrabQuestQuest(api) {
   // ==========================================================================
 
   api.persistAttribute(RECRUITED_ATTRIBUTE);
+  api.persistAttribute(KICKED_PENGUIN_ATTRIBUTE, false);
   api.persistAttribute(SCARED_ATTRIBUTE);
   api.persistAttribute(MET_ATTRIBUTE);
   api.persistAttribute(SHELLS_HANDED_ATTRIBUTE);

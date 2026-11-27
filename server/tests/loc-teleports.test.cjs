@@ -236,6 +236,27 @@ test("Ynysdail's cave entrance and the cavern's exit lead to each other, onto wa
   for (const [x, y, z] of [enter.to, exit.to]) assert.equal(core.RegionManager.getClipping(x, y, z, null) & 0x1200100, 0, `${x},${y} is walkable`);
 });
 
+test("the Fremennik Slayer Dungeon's Tunnel leads back out to its Cave Entrance, and the entrance back in", () => {
+  const ways = [
+    { name: "slayer_dungeon_entrance", at: [2797, 3614, 0], from: [2796, 3615, 0], to: [2808, 10002, 0] },
+    { name: "slayer_dungeon_exit", at: [2809, 10001, 0], from: [2808, 10002, 0], to: [2796, 3615, 0] },
+  ];
+  for (const way of ways) {
+    const id = CacheDefinitions.getLocId(way.name);
+    assert.equal(CacheDefinitions.getObject(id).actions[0], "Enter");
+    const object = locAt(id, ...way.at);
+    assert.ok(object, `${way.name} is placed at ${way.at}`);
+    const visit = explorer(way.from);
+    const request = { player: visit.player, object, objectId: id, clickType: 1, handled: false };
+    hooks.object(request);
+    assert.equal(request.handled, true, `${way.name} is handled`);
+    runTicks(visit, 1);
+    const at = visit.player.getLocation();
+    assert.deepEqual([at.getX(), at.getY(), at.getZ()], way.to, `${way.name} lands on ${way.to}`);
+    assert.equal(core.RegionManager.getClipping(...way.to, null) & 0x1200100, 0, `${way.to} is walkable`);
+  }
+});
+
 test("Scrubfoot's cave (Goblin Village) is entered and left as captured, though it came with the 2020 Christmas event", () => {
   const reason = (name) => choose(captured({ name }), nothing, "Cave entrance", decisions).reason;
   assert.equal(reason("xmas20_goblin_cave_entrance"), undefined, "the cave stayed for Sled Racing (Wiki)");

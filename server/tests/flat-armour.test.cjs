@@ -279,3 +279,29 @@ test('6782: Infernal tecpatl Brand splits the raw roll, then each splat gets its
   assert.deepEqual(brandOn('elite_black_knight_1', 5), { splats: [0, 0, 0, 0], total: 0 },
     'the split minimum of 1 comes before the armour, so it does not revive a zeroed splat');
 });
+
+test('6848: the max hit splat marks the top of the range after flat armour, in both directions', t => {
+  /** Rolls of a weapon whose maximum is `maximum`, through the real constructor and impact hook. */
+  const maxHitsOn = (gameval, maximum, damages) => {
+    const { player, npc } = actors(t, gameval);
+    player.getSession().setPlayer(player);
+    npc.setHitpoints(500);
+    const original = core.CombatFactory.getHitDamage;
+    let next = 0;
+    core.CombatFactory.getHitDamage = () => new core.HitDamage(damages[next++], core.HitMask.RED).setRolledMaximum(maximum);
+    let hit;
+    try {
+      hit = new core.PendingHit(player, npc, new core.MeleeCombatMethod(), { hitAmount: damages.length, rollAccuracy: false });
+    } finally { core.CombatFactory.getHitDamage = original; }
+    npc.manipulateHit(hit);
+    return hit.getHits().map(h => {
+      h.setSource(player);
+      // What the attacker's client is sent: 43 is the max hit splat, 16 the ordinary one.
+      return [h.getDamage(), player.getSession().hitView(h, false).type];
+    });
+  };
+  assert.deepEqual(maxHitsOn('frost_nagua', 30, [30, 29]), [[34, 43], [33, 16]], '-4: a 30 max shows the max splat on 34');
+  assert.deepEqual(maxHitsOn('superior_rockslug', 30, [30, 29]), [[28, 43], [27, 16]], '2: a 30 max shows it on 28');
+  assert.deepEqual(maxHitsOn('elite_black_knight_1', 7, [7]), [[0, 12]], 'a max of the armour or less is a 0, never a max');
+  assert.deepEqual(maxHitsOn('man', 30, [30]), [[30, 43]], 'no flat armour: the max is the roll top');
+});

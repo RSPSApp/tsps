@@ -58,12 +58,23 @@ const COMBAT_TARGET_PLAYER_VARP = 1075;
 const MAX_ANIMATION_STALL_TICKS = 5;
 const MAX_CONTENT_ANIMATION_STALL_TICKS = 100;
 
+// Past this many recorded fights, those of characters gone from the world are dropped.
+const RECORDED_IN_PRUNE_AT = 64;
+
 /** Owns one character's target, attack deadline, approach route, and delayed hits. */
 export class Combat {
     private readonly hitQueue = new HitQueue(this.character);
     private damageMap: Map<Player, HitDamageCache> | null = null;
     /** The player whose damage `addDamage` recorded last. */
     private lastDamager: Player | null = null;
+    /** The other fights that recorded this player (its damage, or it as their last target), so that leaving
+     * the world takes it out of them instead of it being kept in memory by every NPC it fought. */
+    private recordedIn: Set<Combat> | null = null;
+    /** The players whose `recordedIn` holds this fight (the mirror of `recordedIn`), so that leaving the world
+     * also takes this character out of theirs: a player it fought doesn't keep it in memory either. */
+    private records: Set<Combat> | null = null;
+    /** Set when this character leaves the world (forgetFights); damage it still deals is no longer recorded. */
+    private leftWorld = false;
     private readonly lastAttack = new TickStopwatch();
     /** Damage can delay healing without renewing another fighter\'s single-way tag. */
     private readonly lastDamage = new TickStopwatch();
@@ -764,10 +775,60 @@ export class Combat {
     public addDamage(entity: Mobile, amount: number): void {
         if (amount <= 0 || entity.isNpc()) return;
         const player = entity as Player;
+        const damagerCombat = Combat.of(player);
+        // A player that left the world earns nothing more (a burn or a delayed hit landing after logout),
+        // and recording it again would keep it in memory.
+        if (damagerCombat?.leftWorld && !player.isRegistered()) return;
         this.lastDamager = player;
+        damagerCombat?.noteRecordedIn(this);
         const cached = this.damageMap?.get(player);
         if (cached) cached.incrementDamage(amount);
         else (this.damageMap ??= new Map()).set(player, new HitDamageCache(amount));
+    }
+
+    /** A character's own fight state; null for stand-ins without one. */
+    private static of(character: Mobile): Combat | null {
+        const combat = character.getCombat?.();
+        return combat instanceof Combat ? combat : null;
+    }
+
+    /** `other` now refers to this character (its damage map, last damager or last attack target). */
+    public noteRecordedIn(other: Combat): void {
+        if (other === this) return;
+        // A character that left the world is not recorded again (an attack still landing on it after logout).
+        if (this.leftWorld && !this.character.isRegistered()) {
+            this.forgetIn(other);
+            return;
+        }
+        const recordedIn = (this.recordedIn ??= new Set());
+        // A long session fights many NPCs: the ones gone from the world are dropped, and forget this character
+        // first, so another player still holding a dead NPC's fight doesn't keep this one through it.
+        if (recordedIn.size >= RECORDED_IN_PRUNE_AT && !recordedIn.has(other)) {
+            for (const gone of recordedIn) if (!gone.character.isRegistered()) this.forgetIn(gone);
+        }
+        recordedIn.add(other);
+        (other.records ??= new Set()).add(this);
+    }
+
+    /** `other` no longer refers to this character, and the two sets that link them drop each other.
+     * Every path that drops a fight from `recordedIn` goes through here. */
+    private forgetIn(other: Combat): void {
+        const character = this.character;
+        if (other.damageMap?.delete(character as Player) && other.damageMap.size === 0) other.damageMap = null;
+        if (other.lastDamager === character) other.lastDamager = null;
+        if (other.lastAttackTarget === character) other.lastAttackTarget = null;
+        this.recordedIn?.delete(other);
+        other.records?.delete(this);
+    }
+
+    /** This character leaves the world: every fight that recorded it forgets it. */
+    public forgetFights(): void {
+        for (const other of this.recordedIn ?? []) this.forgetIn(other);
+        // The players this character recorded (hit, or last attacked) let go of it too.
+        for (const fighter of this.records ?? []) fighter.forgetIn(this);
+        this.records = null;
+        this.recordedIn = null;
+        this.leftWorld = true;
     }
 
     /** The player who damaged this character most recently, while that damage still counts. */
@@ -1141,6 +1202,7 @@ export class Combat {
             }
         }
         this.lastAttackTarget = target;
+        if (target.isPlayer?.()) Combat.of(target)?.noteRecordedIn(this);
 
         // The swing's own animation is what may stall the character; specials override start() and
         // perform it themselves - many through super.start() first - so the arm stays open across
@@ -1162,6 +1224,7 @@ export class Combat {
             target.performAnimation(new Animation(target.getBlockAnim()));
         }
         for (const hit of hits) CombatFactory.addPendingHit(hit);
+        if (hits.length === 0) this.holdTargetWithoutHit(target);
 
         // Area/footprint specials strike additional targets with the same method.
         const targeting = CombatSpecial.activeTargetingFor(this.character);
@@ -1195,6 +1258,23 @@ export class Combat {
             else this.cancelIfCurrent(target, generation);
         }
         return true;
+    }
+
+    /**
+     * A monster's attack that strikes nothing itself (a Sulphur Nagua raising its weapon for the
+     * prayer drain) is still an attack: Wiki (PJ timer) has the 8-tick single-way hold refreshed
+     * by each one, so the player stays this monster's and another can't take them over while the
+     * hit-less attack plays out (issue 6811). It only renews a hold this monster has or a free
+     * target, or one an always-multi NPC holds (which never ties a player up, as the single-way
+     * check says); a bystander never engages, as with its hits.
+     */
+    private holdTargetWithoutHit(target: Mobile): void {
+        if (!this.character.isNpc() || !target.isPlayer()) return;
+        if (this.character.hasFlag?.(CombatFactory.BYSTANDER_FLAG) === true) return;
+        const holder = target.getCombat().getAttacker();
+        const holds = holder != null && holder !== this.character && !(holder.isNpc() && holder.getAsNpc().isMultiCombat());
+        if (holds) return;
+        target.getCombat().setUnderAttack(this.character);
     }
 
     private renewInteraction(target: Mobile, generation: number): void {

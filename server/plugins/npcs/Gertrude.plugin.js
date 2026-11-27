@@ -1,10 +1,13 @@
 /**
- * Gertrude's kitten colour choice (https://oldschool.runescape.wiki/w/Gertrude).
+ * Gertrude's kittens after her quest (https://oldschool.runescape.wiki/w/Gertrude).
  *
- * After Gertrude's Cat, her right-click "Kitten" option and the post-quest colour interface
- * let the player buy another kitten for 100 coins and choose its colour, but only while
- * wearing the activated Ring of Charos with no cat already following or banked. A successful
- * choice emits the ordinary success event the Varrock diary listens for.
+ * Another kitten costs 100 coins, through her talk ("Do you have any more kittens?" > "Yes please.")
+ * or her right-click "Kitten" option, the Wiki's quick buy. Its colour is random unless the player
+ * wears the activated Ring of Charos, which opens the colour choice instead. She won't sell one
+ * while the player still raises a kitten or a normal cat: following, in the backpack or in a bank
+ * ("When you have a normal cat in your inventory or in your bank, she won't give you a kitten."); a
+ * bank placeholder is not a cat, and an overgrown cat or one in the menagerie doesn't count. A
+ * colour choice emits the event the Varrock diary listens for.
  */
 const GERTRUDES_CAT_QUEST = "gertrudes_cat";
 const KITTEN_COST = 100;
@@ -17,42 +20,70 @@ const KITTEN_COLOUR_ACTIONS = new Set(["ft92fH", "xcCHN3"]);
 const KITTEN_INTERFACE_TARGET = /kitten/i;
 const COLOURS_PER_PAGE = 4;
 const KITTEN_COLOUR_CHOSEN_EVENT = "gertrude:kitten-colour-chosen";
+/** "Gertrude gives you another kitten.": "Yes please." (Gertrude and Ratcatchers pages) and the quick buy. */
+const SOLD_KITTEN_STEP_IDS = new Set(["Q44J0B", "meKySR"]);
+const SOLD_KITTEN_TEXT = "Gertrude gives you another kitten.";
+/** Transcript:Gertrude, right-click "Kitten" option. */
+const STILL_RAISING_TEXT = "Aren't you still raising that other kitten? Only once it's fully grown and it no longer needs your attention will I let you have another kitten.";
+const NO_COINS_TEXT = "I'll want 100 coins for a kitten.";
+/** Transcript:Kitten, "Kitten is bought from Gertrude": its overheads as it appears. */
+const SOLD_KITTEN_LINES = ["Meeooow!", "Miaow!"];
 
-/** Gertrude's post-quest dialogue already asks for these interface actions. */
-const CAT_NPC_IDENTIFIERS = [
-  "CAT", "CAT_2", "CAT_3", "CAT_4", "CAT_5", "CAT_6", "HELLCAT",
-  "KITTEN_2", "KITTEN_3", "KITTEN_4", "KITTEN_5", "KITTEN_6", "KITTEN_7", "HELL_KITTEN",
-  "OVERGROWN_CAT", "OVERGROWN_CAT_2", "OVERGROWN_CAT_3", "OVERGROWN_CAT_4",
-  "OVERGROWN_CAT_5", "OVERGROWN_CAT_6", "OVERGROWN_HELLCAT",
+/** The kittens and normal cats she counts as still being raised (items and followers). */
+const YOUNG_CAT_ITEMS = [
+  "PET_KITTEN", "PET_KITTEN_2", "PET_KITTEN_3", "PET_KITTEN_4", "PET_KITTEN_5", "PET_KITTEN_6",
+  "PET_CAT", "PET_CAT_2", "PET_CAT_3", "PET_CAT_4", "PET_CAT_5", "PET_CAT_6", "HELL_KITTEN", "HELL_CAT",
 ];
-let catNpcIds = null;
+const YOUNG_CAT_NPCS = [
+  "KITTEN_2", "KITTEN_3", "KITTEN_4", "KITTEN_5", "KITTEN_6", "KITTEN_7", "HELL_KITTEN",
+  "CAT", "CAT_2", "CAT_3", "CAT_4", "CAT_5", "CAT_6", "HELLCAT",
+];
+let youngCatItemIds = null;
+let youngCatNpcIds = null;
+
+const RING_CONDITION = /ring of charos\s*\(a\)/i;
+const RAISING_A_KITTEN = /already owning a kitten/i;
+
+function identifierSet(names, identifiers) {
+  return new Set(names.map((name) => identifiers[name]).filter((id) => Number.isInteger(id)));
+}
 
 function hasCharosAEquipped(player, api) {
   return player?.getEquipment?.().get(api.core.Equipment.RING_SLOT)?.getId?.() === RING_OF_CHAROS_A;
 }
 
-function holdsKittenItem(player) {
+/** A kitten or normal cat in the backpack or a bank tab; a placeholder (amount 0) is no cat. */
+function holdsYoungCatItem(player, api) {
+  youngCatItemIds ??= identifierSet(YOUNG_CAT_ITEMS, api.core.ItemIdentifiers);
   const inventory = player?.getInventory?.();
   if (!inventory) return false;
-  if (KITTEN_ITEM_IDS.some((id) => inventory.getAmount(id) > 0)) return true;
-  const banks = player.getBanks?.() ?? [];
-  for (const bank of banks) {
-    if (!bank) continue;
-    if (KITTEN_ITEM_IDS.some((id) => bank.contains?.(id))) return true;
-  }
-  return false;
+  const ids = [...youngCatItemIds];
+  if (ids.some((id) => inventory.getAmount(id) > 0)) return true;
+  return (player.getBanks?.() ?? []).some((bank) => bank && ids.some((id) => bank.getAmount?.(id) > 0));
 }
 
-function followingCat(player, api) {
-  if (!catNpcIds) {
-    catNpcIds = new Set(CAT_NPC_IDENTIFIERS
-      .map((name) => api.core.NpcIdentifiers[name])
-      .filter((id) => Number.isInteger(id)));
-  }
+function followingYoungCat(player, api) {
+  youngCatNpcIds ??= identifierSet(YOUNG_CAT_NPCS, api.core.NpcIdentifiers);
   const request = { player, pet: null };
   api.emitCustomEvent("pets:current", request);
   const id = request.pet?.getId?.();
-  return Number.isInteger(id) && catNpcIds.has(id);
+  return Number.isInteger(id) && youngCatNpcIds.has(id);
+}
+
+/** Still raising a kitten or normal cat from her: carried, banked or following. */
+function raisingKitten(player, api) {
+  return holdsYoungCatItem(player, api) || followingYoungCat(player, api);
+}
+
+/**
+ * Where the kitten would go: it follows, or with another follower out it goes into the backpack. With
+ * that full it would land on the ground, uncounted, and she could sell another: ours refuses first.
+ */
+const NO_ROOM_TEXT = "You need a free inventory slot for a kitten.";
+function roomForKitten(player, api) {
+  const request = { player, pet: null };
+  api.emitCustomEvent("pets:current", request);
+  return !request.pet || !player.getInventory().isFull();
 }
 
 function kittenQuestComplete(player, api) {
@@ -61,6 +92,7 @@ function kittenQuestComplete(player, api) {
   return request.complete === true;
 }
 
+/** The colour choice's own checks (the ring may come off, or coins go, while it is open). */
 function canChooseKitten(player, api) {
   if (!kittenQuestComplete(player, api)) {
     player.sendMessage("You need to complete Gertrude's Cat first.");
@@ -70,7 +102,7 @@ function canChooseKitten(player, api) {
     player.sendMessage("You need to wear the activated Ring of Charos to choose a colour.");
     return false;
   }
-  if (holdsKittenItem(player) || followingCat(player, api)) {
+  if (raisingKitten(player, api)) {
     player.sendMessage("You are already looking after a cat.");
     return false;
   }
@@ -78,30 +110,83 @@ function canChooseKitten(player, api) {
     player.sendMessage(`You need ${KITTEN_COST} coins for another kitten.`);
     return false;
   }
-  if (player.getInventory().isFull()) {
-    player.sendMessage("You need a free inventory slot for a kitten.");
+  if (!roomForKitten(player, api)) {
+    player.sendMessage(NO_ROOM_TEXT);
     return false;
   }
   return true;
 }
 
+/**
+ * Takes the coins and hands the kitten over as the quest's reward does: it follows the player
+ * (with its overheads), or goes into the backpack with a follower already out, or under the player
+ * when that is full (the Pets plugin's `pets:summon`).
+ */
+function sellKitten(api, player, itemId) {
+  const inventory = player.getInventory();
+  if (inventory.getAmount(api.core.ItemIdentifiers.COINS) < KITTEN_COST) return false;
+  if (!roomForKitten(player, api)) {
+    player.sendMessage(NO_ROOM_TEXT);
+    return false;
+  }
+  inventory.deleteNumber(api.core.ItemIdentifiers.COINS, KITTEN_COST);
+  const summon = { player, itemId, following: false, pet: null, summoned: false };
+  api.emitCustomEvent("pets:summon", summon);
+  if (!summon.summoned) {
+    // No pet system answered: the kitten still has to reach the player.
+    inventory.adds(itemId, 1);
+  } else if (summon.following && summon.pet) {
+    const pet = summon.pet;
+    SOLD_KITTEN_LINES.forEach((line, index) => {
+      const say = () => { if (pet.isRegistered?.() !== false) pet.forceChat?.(line); };
+      // Ours: the Wiki lists the two lines, no capture shows their ticks; one a tick, as the quest's reward.
+      api.core.TaskManager.submit(new api.core.CountdownTask(player, index + 1, say));
+    });
+  }
+  return true;
+}
+
+const randomKitten = () => KITTEN_ITEM_IDS[Math.floor(Math.random() * KITTEN_ITEM_IDS.length)];
+
 function chooseKittenColour(api, player, colour) {
   if (!Number.isInteger(colour) || colour < 0 || colour >= KITTEN_ITEM_IDS.length) return false;
   if (!canChooseKitten(player, api)) return false;
-  const inventory = player.getInventory();
-  inventory.deleteNumber(api.core.ItemIdentifiers.COINS, KITTEN_COST);
-  inventory.adds(KITTEN_ITEM_IDS[colour], 1);
+  if (!sellKitten(api, player, KITTEN_ITEM_IDS[colour])) return false;
   player.sendMessage(`Gertrude gives you a ${KITTEN_COLOURS[colour].toLowerCase()} kitten.`);
   api.emitCustomEvent(KITTEN_COLOUR_CHOSEN_EVENT, { player, colour, itemId: KITTEN_ITEM_IDS[colour] });
   return true;
 }
 
-/** Gertrude's right-click "Kitten" option is the Wiki's colour-picking shortcut. */
+/** Her line with her head: the world's Gertrude is a multinpc whose base has no name; her page's lines name 7284. */
+function gertrudeSays(api, player, text) {
+  const { DialogueChainBuilder, NpcDialogue, NpcIdentifiers } = api.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new NpcDialogue(0, NpcIdentifiers.GERTRUDE, text)));
+}
+
+/**
+ * Her right-click "Kitten" option, the Wiki's quick buy (Transcript:Gertrude): still raising one, or
+ * short of coins, she says so; with the ring worn the colour choice opens; otherwise a kitten of a
+ * random colour for 100 coins, in a message box.
+ */
 function onGertrudeKitten(api, event) {
   const { player } = event ?? {};
-  if (!player || !canChooseKitten(player, api)) return false;
+  if (!player) return false;
   event.handled = true;
-  openKittenColourMenu(api, player);
+  if (!kittenQuestComplete(player, api)) {
+    player.sendMessage("You need to complete Gertrude's Cat first.");
+    return true;
+  }
+  if (raisingKitten(player, api)) return gertrudeSays(api, player, STILL_RAISING_TEXT), true;
+  if (player.getInventory().getAmount(api.core.ItemIdentifiers.COINS) < KITTEN_COST) {
+    return gertrudeSays(api, player, NO_COINS_TEXT), true;
+  }
+  if (hasCharosAEquipped(player, api)) {
+    openKittenColourMenu(api, player);
+    return true;
+  }
+  if (!sellKitten(api, player, randomKitten())) return true;
+  const { DialogueChainBuilder, StatementDialogue } = api.core;
+  player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new StatementDialogue(0, SOLD_KITTEN_TEXT)));
   return true;
 }
 
@@ -137,9 +222,22 @@ function onInitialKittenMenu(api, request) {
   openKittenColourMenu(api, request.player, 0, request.choose, request.cancel);
 }
 
+/** "Gertrude gives you another kitten." after "Yes please.": the coins go and the kitten comes, in a message box. */
+function onSoldKitten(api, event) {
+  const { player } = event;
+  event.handled = true;
+  if (raisingKitten(player, api) || !sellKitten(api, player, randomKitten())) {
+    // The coins or the cat changed since her conditions were asked: nothing is sold.
+    event.end = true;
+    return;
+  }
+  event.box = { statement: true };
+}
+
 function onDialogueAction(api, event) {
   const { player } = event ?? {};
   if (!player || event.handled) return;
+  if (SOLD_KITTEN_STEP_IDS.has(event.stepId)) return onSoldKitten(api, event);
   if (KITTEN_COLOUR_ACTIONS.has(event.stepId)
     || (event.action === "open_interface" && KITTEN_INTERFACE_TARGET.test(String(event.target ?? "")))) {
     event.handled = true;
@@ -147,26 +245,18 @@ function onDialogueAction(api, event) {
   }
 }
 
-const RAISING_A_KITTEN = /already owning a kitten/i;
-
-/** A kitten from her is still being raised: carried, banked or following (rsprox capture of the quest, tick 883). */
-function raisingKitten(player, api) {
-  if (holdsKittenItem(player)) return true;
-  const request = { player, pet: null };
-  api.emitCustomEvent("pets:current", request);
-  return request.pet?.getDefinition?.()?.getName?.() === "Kitten";
-}
-
-/** "While already owning a kitten:" on her own page. */
+/** Her page's "While already owning a kitten:" and the [Charm] option's "With the Ring of Charos(a) equipped:". */
 function answerCondition(api, { player, npcId, text }) {
-  if (!RAISING_A_KITTEN.test(String(text ?? ""))) return null;
   if (api.core.NpcDefinition?.forId?.(npcId)?.getName?.() !== "Gertrude") return null;
-  return raisingKitten(player, api);
+  const value = String(text ?? "");
+  if (RAISING_A_KITTEN.test(value)) return raisingKitten(player, api);
+  if (RING_CONDITION.test(value)) return hasCharosAEquipped(player, api);
+  return null;
 }
 
 module.exports = {
   name: "Gertrude",
-  description: "Lets players buy another kitten from Gertrude after her quest for 100 coins and pick its colour, if wearing an activated Ring of Charos.",
+  description: "Lets players buy another kitten from Gertrude after her quest for 100 coins, of a random colour, or of their choice while wearing an activated Ring of Charos.",
   members: true,
   dependsOn: ["Quests", "Pets"],
   register(api) {
@@ -177,8 +267,9 @@ module.exports = {
   },
   _test: {
     GERTRUDES_CAT_QUEST, KITTEN_COST, RING_OF_CHAROS_A, KITTEN_ITEM_IDS, KITTEN_COLOURS,
-    KITTEN_COLOUR_CHOSEN_EVENT, hasCharosAEquipped, holdsKittenItem, followingCat,
-    kittenQuestComplete, canChooseKitten, chooseKittenColour, onGertrudeKitten,
-    openKittenColourMenu, onDialogueAction, raisingKitten, answerCondition,
+    KITTEN_COLOUR_CHOSEN_EVENT, SOLD_KITTEN_TEXT, STILL_RAISING_TEXT, NO_COINS_TEXT, NO_ROOM_TEXT,
+    hasCharosAEquipped, holdsYoungCatItem, followingYoungCat, raisingKitten,
+    kittenQuestComplete, canChooseKitten, chooseKittenColour, sellKitten, onGertrudeKitten,
+    openKittenColourMenu, onDialogueAction, answerCondition,
   },
 };

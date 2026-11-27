@@ -19,6 +19,8 @@ const WALK_TICKS = 40;
 const CLICK_RADIUS = 10;
 // Landing within this of a transport's destination counts (boats and stairs place loosely).
 const ARRIVE_REACH = 2;
+// Ticks to walk to a closed loc and open it before the transport's own click.
+const OPEN_TICKS = 15;
 // What NPC boats offer before a quest renames the option (Travel -> "Port Sarim").
 const TRAVEL_OPTIONS = ["travel", "pay-fare", "take-boat", "board", "sail"];
 const DEFAULT_BUDGET_TICKS = 100;
@@ -206,6 +208,12 @@ module.exports = function registerTravelTools(ctx, { areas }) {
         ?? (candidate.kind === "object" ? descent(transport, candidate.thing) : undefined);
       if (option) return { ...candidate, option, renamed: `${option} ${candidate.thing.name}`.toLowerCase() !== menu };
     }
+    // The live data's loc is the open one (a trapdoor's Climb-down): open the closed one first.
+    const closed = !opens(transport) && candidates.find(({ kind, thing }) => kind === "object"
+      && (thing.options ?? []).some((o) => o.toLowerCase() === "open"));
+    if (closed) {
+      return { ...closed, option: closed.thing.options.find((o) => o.toLowerCase() === "open"), opensFirst: true };
+    }
     const { thing } = candidates[0];
     return { error: `${thing.name} (id ${thing.id}) has no option for "${transport.menu}"; options: ${(thing.options ?? []).join(", ") || "none"}` };
   };
@@ -307,11 +315,37 @@ module.exports = function registerTravelTools(ctx, { areas }) {
     return { result: "arrived" };
   };
 
-  const transportLeg = async (username, leg, deadline, messages) => {
+  // Opens the closed loc a transport needs open (walking to it first), then finds the
+  // transport's own option on it. An Open that moves the player itself counts as the ride.
+  const openFirst = async (username, transport, arrive, click, deadline, messages) => {
     const p = find(username);
+    send(p, clickPacket(p, click));
+    const opened = { kind: click.kind, name: click.thing.name, id: click.thing.id, option: click.option, x: click.thing.x, y: click.thing.y };
+    for (let ticks = 1; ticks <= OPEN_TICKS; ticks++) {
+      if (World.getProcessCycle() >= deadline) return { result: "budget", ticks, clicked: opened };
+      await sleepTicks(1);
+      const now = find(username);
+      messages.push(...takeMessages(now));
+      const here = tile(now.getLocation());
+      if (here.z === arrive.z && chebyshev(here, arrive) <= ARRIVE_REACH) return { result: "arrived", ticks, clicked: opened };
+      if (waitingOn(now) === "dialogue") return { result: "dialogue", ticks, clicked: opened };
+      const next = resolveClick(now, transport);
+      if (!next.error && !next.opensFirst) return { result: "opened", click: next, opened };
+    }
+    return { result: "blocked", clicked: opened, reason: `${click.thing.name} did not open for "${transport.menu}"` };
+  };
+
+  const transportLeg = async (username, leg, deadline, messages) => {
     const { transport, arrive } = leg;
-    const click = resolveClick(p, transport);
+    let click = resolveClick(find(username), transport);
     if (click.error) return { result: "blocked", reason: click.error };
+    let opened = null;
+    if (click.opensFirst) {
+      const open = await openFirst(username, transport, arrive, click, deadline, messages);
+      if (open.result !== "opened") return open;
+      ({ click, opened } = open);
+    }
+    const p = find(username);
     const before = tile(p.getLocation());
     const scene = p.getPrivateArea?.();
     const session = p.getSession?.();
@@ -324,7 +358,7 @@ module.exports = function registerTravelTools(ctx, { areas }) {
       ...(click.renamed ? [`the live game's menu entry is "${transport.menu}"`] : []),
     ];
     const clicked = { kind: click.kind, name: click.thing.name, id: click.thing.id, option: click.option, x: click.thing.x, y: click.thing.y,
-      ...(notes.length ? { note: notes.join("; ") } : {}) };
+      ...(notes.length ? { note: notes.join("; ") } : {}), ...(opened ? { opened } : {}) };
     let outcome = await ride(username, transport, arrive, deadline, messages);
     if (outcome.result === "budget") return { ...outcome, clicked };
     // Opening changes the displayed child, not the player's floor. Continue once, only

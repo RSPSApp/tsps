@@ -40,7 +40,7 @@ async function catMenu(f,n) {
   const op=n.getCurrentDefinition(f.p).getActions().findIndex(action=>action==='Interact')+1;assert.ok(op>0);
   await packet(f,{type:'npc_option',index:n.getIndex(),clickType:op});
   for(let i=0;i<4;i++){core.TaskManager.processWalkTo(f.p.getIndex());f.p.getMovementQueue().process();core.TaskManager.process();}
-  assert.deepEqual(MultiChatboxPrompt.getPending(f.p)?.options,['Stroke','Chase vermin','Guess age','Shoo away']);
+  assert.deepEqual(MultiChatboxPrompt.getPending(f.p)?.options,['Stroke','Chase Vermin','Guess age','Shoo away']);
 }
 async function catChoice(f,option) {await packet(f,{type:'dialogue_continue',widgetId:(219<<16)|1,childIndex:option});}
 
@@ -49,7 +49,9 @@ for(const replacement of ['recall','growth'])test(`native cat Interact Shoo remo
   if(replacement==='recall'){n.setLocation(f.p.getLocation().clone().add(6,0));await call(f);}
   else{f.p.getAttribute('pets:cat').growth=119;require('../plugins/npcs/Pets.plugin').__internals.catTick(f.p);}
   const recalled=current(f);assert.notEqual(recalled,n);assert.ok(MultiChatboxPrompt.getPending(f.p));
-  await catChoice(f,4);assert.equal(current(f),null);assert.equal(f.p.getAttribute('pets:active-item'),null);assert.equal(f.p.getAttribute('pets:cat'),null);
+  await catChoice(f,4);assert.equal(MultiChatboxPrompt.getPending(f.p)?.title,'Are you sure you want to shoo away the cat?');assert.equal(current(f),recalled);
+  await catChoice(f,1);assert.equal(current(f),recalled,'"Shoo cat!" first; the cat runs a tick later');core.TaskManager.process();
+  assert.ok(f.messages.includes('The cat has run away.'));assert.equal(current(f),null);assert.equal(f.p.getAttribute('pets:active-item'),null);assert.equal(f.p.getAttribute('pets:cat'),null);
   assert.ok(core.World.getRemoveNPCQueue().includes(recalled),'the current replacement must be removed, not left following without ownership state');
   assert.equal([...core.World.getNpcs()].filter(pet=>pet?.getOwner?.()===f.p&&!core.World.getRemoveNPCQueue().includes(pet)).length,0);
 });

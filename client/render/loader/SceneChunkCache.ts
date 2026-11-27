@@ -1,7 +1,15 @@
-import { isLowEndDevice } from "../../common/utils/DeviceUtil";
 import type { SceneFragment } from "../buffer/SceneBuffer";
 
 type Chunk = { signature: string; fragment: SceneFragment };
+
+let defaultMaxSquares = 4;
+let defaultMaxBytes = 128 << 20;
+
+/** The Performance preset sets these before workers build scenery. */
+export function setSceneChunkCacheLimits(maxSquares: number, maxBytes: number): void {
+    defaultMaxSquares = Math.max(1, maxSquares | 0);
+    defaultMaxBytes = Math.max(0, maxBytes | 0);
+}
 
 /**
  * What a worker keeps of the scenery it packed for a map square, per 8x8-tile chunk. A loc-only
@@ -16,8 +24,8 @@ export class SceneChunkCache {
     private bytes = 0;
 
     constructor(
-        private readonly maxSquares = isLowEndDevice ? 1 : 4,
-        private readonly maxBytes = isLowEndDevice ? 24 << 20 : 128 << 20,
+        private readonly maxSquares = defaultMaxSquares,
+        private readonly maxBytes = defaultMaxBytes,
     ) {}
 
     /** The square's chunks as stored by the last build of it. */

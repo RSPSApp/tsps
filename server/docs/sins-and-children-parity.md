@@ -65,9 +65,25 @@ marker, so a new native stage 20/22 is never reinterpreted as old progress.
 
 - The Mort Myre trek still uses the overworld tiles rather than a separate
   instanced temple-trek region; item and object steps are implemented.
-- The mausoleum puzzle uses the real interface/sums/buttons, but the client
-  button graphics are the cache's own; the server tracks the grid in memory,
-  so relogging mid-puzzle regenerates a fresh solvable grid.
+- The mausoleum puzzle uses the real interface/sums/buttons. A click cycles a
+  tile blank -> marked (star) -> flagged -> blank, as cache clientscripts
+  3437/3438 predict, and the server answers each click with
+  `myq5_puzzle_tile_marked` (varp 2715) and `myq5_puzzle_tile_flagged` (varp
+  2716) like live (rsprox captures 102, 1637, local 1000270, 1000414, 1001302).
+  Only marked tiles count toward the sums (issue 6855: a tile clicked three
+  times used to count as marked). The server tracks the grid in memory, so
+  relogging mid-puzzle regenerates a fresh solvable grid.
+- The mausoleum cutscene follows rsprox capture 1637 (ticks 3690-3757), counting from the
+  solving click: sound 2419 and fade out at once, cutscene state, `fov_clamp` and Lament for the
+  Hallowed at +2, a 13 x 13-chunk copy of the graveyard (from 3656,3144) with the open door 38072
+  at +3, the cutscene NPCs (Safalaan 9539 at 3703,3188, Vanescula 9575 at 3705,3188), the camera
+  and the player's walk to 3704,3192 at +4 (one tile a tick), fade in at +5, Safalaan through the
+  doorway to 3703,3191 at +7 and Vanescula to 3705,3191 at +9, and "Well?" at +16 with the
+  cutscene chatheads. Stage 54 is set as "Of course." is continued (tick 3749). After "Now, both
+  of you leave" the screen fades out, the player is back on the real map at 3704,3188 two ticks
+  later, and three ticks after that the screen fades in and the empty chatbox closes.
+  Ours: a talk closed early (Esc) ends the scene the same way at stage 52, and at stage 52 the
+  open door plays the scene again (also after a logout inside it); no capture shows either.
 - Darkmeyer bank/attack restrictions and the Hallowed Sepulchre/daeyalt
   entrances are outside this quest's mandatory route.
 - Vanstrom uses the real stats, enrage, lightning, pets, darkness and orb

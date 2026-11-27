@@ -72,9 +72,9 @@ start.
 
 Zooming out eases into the point where the screen's corners would reach past the draw
 distance, less 3 tiles for the fog. The fog's square edge and unbuilt map squares therefore
-never come into view. The draw distance is the GPU plugin's (or Low-end Device's) setting when
-one is on, otherwise the game's render distance. Low-end Device mode (the default on phones)
-draws only 12 tiles out, so the view there stays closer.
+never come into view. The draw distance is the Performance preset's (or the GPU plugin's)
+setting when one is on, otherwise the game's render distance. The Low preset draws only 12
+tiles out, and Auto on phones keeps the mobile 20/18-tile cap, so those views stay closer.
 
 The scale is the game's framing and that limit added in quadrature,
 `√(framed² + limit²)`, rather than the larger of the two. Every wheel or pinch step still
@@ -94,7 +94,7 @@ Checked in game with the plugin on:
 | Fog, scenery LOD, map streaming | Centred on the player, not the camera, so a distant camera changes nothing. |
 | Interface 3D models (welcome screen, chatheads, equipment) | Drawn by their own rasterizer, unaffected. |
 | Sailing | The camera follows the player on deck; sails and helm can be clicked. |
-| Resizable and mobile layouts | Fill the viewport; mobile stays inside Low-end Device's 12-tile draw distance. |
+| Resizable and mobile layouts | Fill the viewport; mobile stays inside Auto mobile's 20/18-tile cap (Low draws 12). |
 
 ## Known limitations
 

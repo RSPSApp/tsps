@@ -3,6 +3,9 @@
 //  - "Travel to the Wizards' Tower by fairy ring": DIS lands at 3108,3149 (the cache's ring), south of the old box.
 //  - "Mine some iron ore at the Al Kharid mine": two of its nine iron rocks (cache 11364 at 3302,3285 and 3303,3284)
 //    were south of the old box.
+//  - "Craft some Lava runes at the fire altar in Al Kharid" (issue #6840): it asked for loc 4091 (Mort'ton's fire altar)
+//    inside the ruins' box outside Al Kharid, but the earth talisman is used on the Fire Altar's own altar (34764 at
+//    2584,4837), in its map behind the ruins.
 // Real engine: every plugin loaded, real Players; the dial through the fairy ring plugin's own dial and confirm, the
 // rock mined through an object_option packet on ClientConnection.dispatch.
 const assert = require("node:assert/strict");
@@ -25,6 +28,7 @@ before(async () => {
   core.RegionManager.init();
   core.RegionManager.loadMapFiles(3302, 3285);
   core.RegionManager.loadMapFiles(3108, 3149);
+  core.RegionManager.loadMapFiles(2584, 4837);
   PM.emitServerStartup({});
   FairyRings = require("../plugins/world/FairyRings.plugin");
   Progress = require("../plugins/achievements/diaries/Progress.AchievementDiaries");
@@ -70,4 +74,21 @@ test("iron mined from the Al Kharid mine's southern rock counts", async (t) => {
   for (let tick = 0; tick < 20; tick++) { core.TaskManager.processWalkTo(p.getIndex()); p.getMovementQueue().process(); core.TaskManager.process(); }
   assert.ok(p.getInventory().getAmount(core.ItemIdentifiers.IRON_ORE) >= 1, "the rock was mined");
   assert.equal(done(p, "mine-some-iron-ore-at-the-al-kharid-mine"), true);
+});
+
+test("lava runes from the earth talisman on the Fire Altar count (issue #6840)", async (t) => {
+  const I = core.ItemIdentifiers;
+  const altar = core.MapObjects.get(core.ObjectIdentifiers.ALTAR_37, new core.Location(2584, 4837, 0), null);
+  assert.ok(altar, "the cache places the Fire Altar's altar at 2584,4837");
+  const { p, c } = actor(t, 2583, 4836);
+  p.getInventory().add(new core.Item(I.PURE_ESSENCE, 2), true);
+  p.getInventory().add(new core.Item(I.EARTH_RUNE, 2), true);
+  p.getInventory().add(new core.Item(I.EARTH_TALISMAN, 1), true);
+  t.mock.method(Math, "random", () => 0);
+  await c.dispatch([{ type: "item_on_object", widgetId: 149 << 16, objectId: altar.getId(), itemId: I.EARTH_TALISMAN,
+    slot: p.getInventory().getSlotForItemId(I.EARTH_TALISMAN), x: 2584, y: 4837 }]);
+  c.processTurnPackets();
+  for (let tick = 0; tick < 10; tick++) { core.TaskManager.processWalkTo(p.getIndex()); p.getMovementQueue().process(); core.TaskManager.process(); }
+  assert.equal(p.getInventory().getAmount(I.LAVA_RUNE), 2, "the lava runes were crafted");
+  assert.equal(done(p, "craft-some-lava-runes-at-the-fire-altar-in-al-kh"), true);
 });

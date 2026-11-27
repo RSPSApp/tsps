@@ -5,6 +5,9 @@ import path from "node:path";
 import type { DrawRange } from "../render/DrawRange";
 import { VertexBuffer } from "../render/buffer/VertexBuffer";
 import { playerInterpolation } from "../render/player/PlayerInterpolation";
+import { ConfigManager } from "../runelite/client/config/ConfigManager";
+import { PerformanceConfig, PerformanceMode } from "../game/performance/PerformanceConfig";
+import { initPerformancePolicy } from "../game/performance/PerformancePolicy";
 
 async function main(): Promise<void> {
     const playerShader = fs.readFileSync(
@@ -32,6 +35,11 @@ async function main(): Promise<void> {
     assert.equal((packedVertex.getUint32(8, true) >> 6) & 0x7, 7);
 
     (globalThis as any).self = globalThis;
+    {
+        const config = new ConfigManager();
+        config.setConfigValue(PerformanceConfig, "mode", PerformanceMode.HIGH);
+        initPerformancePolicy(config);
+    }
     const { drawPlayerSlots, PlayerRenderer, shouldUseUnanimatedIdlePlayer } = await import(
         "../render/player/PlayerRenderer"
     );

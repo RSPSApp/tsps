@@ -33,13 +33,16 @@ function generator(seed) {
   };
 }
 
-/** `count` frames on frame map 0, every slot moving x, y and z (about 1 KiB each), and seq.dat. */
-function animationFolder(count, seed = 1) {
+/**
+ * `count` frames on frame map `framemap` (0, the cache's, by default), every slot moving x, y and z
+ * (about 1 KiB each), and seq.dat.
+ */
+function animationFolder(count, seed = 1, framemap = 0) {
   const next = generator(seed);
   const files = new Map();
   for (let file = 0; file < count; file++) {
     const values = Array.from({ length: SLOTS * 3 }, next);
-    files.set(`frames/7-${file}.dat`, Buffer.from([0, 0, SLOTS, ...new Array(SLOTS).fill(7), ...values]));
+    files.set(`frames/7-${file}.dat`, Buffer.from([framemap >> 8, framemap & 0xff, SLOTS, ...new Array(SLOTS).fill(7), ...values]));
   }
   const seq = Buffer.alloc(1 + 2 + count * 6 + 1);
   seq[0] = 1;
@@ -145,4 +148,30 @@ test("players get the parts in order, each packet within the limit, and the list
   const parts = rows.filter((row) => row.id === 50001).map((row) => row.part ?? 0);
   assert.deepEqual(parts, parts.map((_, k) => k), "seq row first, then parts 1, 2, ...");
   assert.deepEqual(endpoints["custom-animations"]().map((row) => `${row.kind}:${row.id}`), ["animation:50000", "animation:50001"]);
+});
+
+test("an animation on a frame map of its own is split with the frame map on its seq row only", () => {
+  // A 255-slot custom frame map (no labels), shipped with the animation: the cache doesn't have it.
+  const framemap = Files.FIRST_CUSTOM_FRAME_MAP;
+  const files = animationFolder(160, 3, framemap);
+  const map = Buffer.from([SLOTS, ...new Array(SLOTS * 2).fill(0)]);
+  files.set(`framemap-${framemap}.dat`, map);
+  const own = fs.mkdtempSync(path.join(os.tmpdir(), "custom-animation-framemap-parts-"));
+  try {
+    const { asset } = Assets.addAsset(own, {
+      kind: "animation", name: "test_long_own_map", files: Object.fromEntries([...files].map(([file, bytes]) => [file, bytes.toString("base64")])),
+    }, core);
+    assert.deepEqual(asset.framemaps, [framemap]);
+    const { rows } = CustomAnimations._test.loadCustomAnimations(core, own);
+    const [first, ...rest] = rows.filter((row) => row.id === asset.id);
+    assert.equal(first.kind, "seq");
+    assert.ok(rest.length >= 1 && first.parts === rest.length + 1, `split into ${first.parts} parts`);
+    assert.deepEqual(first.framemaps, { [framemap]: map.toString("base64") }, "the frame map is on the seq row");
+    for (const row of rest) assert.equal(row.framemaps, undefined, `part ${row.part} carries frames only`);
+    for (const row of [first, ...rest]) assert.ok(Files.fitsPacket(encodeContentData, row), `${row.kind} part ${row.part ?? 0} fits`);
+    assert.equal([first, ...rest].flatMap((row) => Object.keys(row.frames)).length, 160, "each frame once");
+    assert.doesNotThrow(() => Files.checkSharedFrameMaps(rows));
+  } finally {
+    fs.rmSync(own, { recursive: true, force: true });
+  }
 });

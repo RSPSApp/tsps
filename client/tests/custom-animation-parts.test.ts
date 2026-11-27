@@ -67,5 +67,24 @@ CustomAnimationRegistry.register({ kind: "reset" });
 refused(part(2, { id: 50003, group: GROUP + 3 }), "its seq row went with the reset");
 assert.strictEqual(CustomAnimationRegistry.seq(50003), undefined);
 
+// An animation on a frame map of its own: the frame map rides on the seq row, and it is installed
+// with the animation, after the last part, not before.
+const MAP = 30000;
+const map = [1, 0, 0];
+const framed = { ...head, id: 50006, group: GROUP + 6, framemaps: { [MAP]: base64(map) } };
+const framedPart = (n: number) => part(n, { id: 50006, group: GROUP + 6 });
+packet([{ kind: "reset" }, framed]);
+const framedRevision = CustomAnimationRegistry.revision;
+assert.strictEqual(CustomAnimationRegistry.frameMap(MAP), undefined, "no frame map before the last part");
+packet([framedPart(1)]);
+assert.strictEqual(CustomAnimationRegistry.frameMap(MAP), undefined, "nor after part 1 of 2");
+assert.strictEqual(CustomAnimationRegistry.frameGroup(GROUP + 6), undefined, "nor any frame");
+assert.strictEqual(CustomAnimationRegistry.revision, framedRevision, "nothing to invalidate yet");
+packet([framedPart(2)]);
+assert.deepStrictEqual([...CustomAnimationRegistry.frameMap(MAP)!], map, "the frame map arrives with the last part");
+assert.deepStrictEqual([...CustomAnimationRegistry.frameGroup(GROUP + 6)!.keys()].sort(), [0, 1, 2], "with every frame");
+assert.strictEqual(CustomAnimationRegistry.revision, framedRevision + 1, "one revision for the whole animation");
+assert.deepStrictEqual(Object.keys((CustomAnimationRegistry.rows()[1] as any).framemaps), [String(MAP)], "and the workers get it");
+
 CustomAnimationRegistry.clear();
 console.log("custom animation parts tests passed");

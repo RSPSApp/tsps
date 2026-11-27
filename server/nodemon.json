@@ -1,5 +1,24 @@
 {
   "env": { "TSPS_RESTARTER": "nodemon" },
+  "ignoreRoot": [
+    "**/.git/**",
+    "**/.nyc_output/**",
+    "**/.sass-cache/**",
+    "**/bower_components/**",
+    "**/coverage/**",
+    "**/node_modules/**",
+    "**/server/data/map-edits",
+    "**/server/data/map-edits/**",
+    "**/server/data/map-editor-backups/**",
+    "**/server/data/saves/**",
+    "**/server/data/regions/**",
+    "**/server/data/models/**",
+    "**/server/caches/**",
+    "**/server/plugins/imported/**",
+    "**/server/plugins/world/data/**",
+    "**/server/plugins/bots/data/**",
+    "**/server/plugins/agent/data/templates/**"
+  ],
   "ignore": [
     "plugins/imported/**",
     ".plugin-upload-*/**",

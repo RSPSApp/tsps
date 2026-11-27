@@ -103,9 +103,9 @@ import { layoutWidgets } from "../../../widgets/layout/WidgetLayout";
 import { collectWidgetsAtPoint } from "../../../widgets/menu/utils";
 import {
     getCanvasCssSize,
+    hasCoarsePointer,
     isIos,
     isMobileMode,
-    isTouchDevice,
     isWebGL2Supported,
 } from "../../../common/utils/DeviceUtil";
 import { clamp } from "../../../common/utils/MathUtil";
@@ -280,7 +280,11 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
         host.lastInteractionMenuOptionCount = 0;
         let raycastHitCount = 0;
 
-        const menuCooldown = isTouchDevice ? 50 : 10;
+        // Touch-menu rules follow the main pointer, not touch hardware: a mouse-driven PC with a
+        // touchscreen, precision touchpad or pen tablet reports maxTouchPoints > 0, and treating it
+        // as a phone dropped right-clicks for 50 frames after each menu and kept stale menus open.
+        const touchMenu = hasCoarsePointer;
+        const menuCooldown = touchMenu ? 50 : 10;
 
         if (
             menuCooldownBlocksPass({
@@ -291,7 +295,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
                 cooldownFrames: menuCooldown,
                 leftClicked,
                 picked,
-                touch: isTouchDevice,
+                touch: touchMenu,
             })
         ) {
             if (mouseX === -1 || mouseY === -1) {
@@ -304,7 +308,7 @@ export function checkInteractions(host: WebGLOsrsRendererHost, ): void {
         }
 
         // Don't auto close menu on touch devices
-        if (host.osrsClient.menuOpen && !picked && !isMouseDown && isTouchDevice) {
+        if (host.osrsClient.menuOpen && !picked && !isMouseDown && touchMenu) {
             return;
         }
 

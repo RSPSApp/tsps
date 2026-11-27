@@ -117,7 +117,7 @@ export class Boat {
     /** Where the boat was before this tick's move, and what the move did (BoatManager.tick). */
     prevFineX: number;
     prevFineY: number;
-    lastStep: { moved: boolean; turned: boolean; blocked: boolean } | undefined;
+    lastStep: { moved: boolean; turned: boolean; blocked: boolean; slid: boolean } | undefined;
 
     constructor(init: BoatInit) {
         this.entityIndex = init.entityIndex;

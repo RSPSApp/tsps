@@ -28,6 +28,7 @@ module.exports = function registerObservatoryQuest(api) {
   } = api.core;
   const { registerQuest, refreshQuestList, startTranscript, loadTranscripts } = require("../QuestRuntime");
   const Cutscene = require("../observatory/Cutscene.ObservatoryQuest")(api, { onSeen: cutsceneSeen });
+  require("../observatory/Scorpius.ObservatoryQuest")(api, { isComplete: (player) => quest.isComplete(player) });
 
   const PAGE = "Observatory Quest";
 

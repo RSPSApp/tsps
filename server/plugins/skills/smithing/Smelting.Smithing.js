@@ -161,7 +161,8 @@ function finishSmelt(player, chosen, furnaceId) {
   inventory.addItem(new Core.Item(recipe.barId, outcome.bars));
   const extraXp = (outcome.bars - 1) * smeltingXp(player, outcome.secondRecipe ?? recipe);
   player.getSkillManager().addExperiences(skill, smeltingXp(player, recipe) + extraXp);
-  if (recipe.retrieveMessage) spam(player, recipe.retrieveMessage);
+  // An empty one is sent too: live's 'perfect' gold bar comes with an empty spam line.
+  if (typeof recipe.retrieveMessage === "string") spam(player, recipe.retrieveMessage);
   Core.api.emitCustomEvent("smelting:success", { player, skill, itemId: recipe.barId, furnaceId });
   Common.produced(player, skill, recipe.barId, outcome.bars, smeltingXp(player, recipe) + extraXp, "smelt");
   return true;
@@ -253,7 +254,22 @@ function smelt({ player, objectId }) {
     statement(player, NO_ORE_MESSAGE);
     return;
   }
+  // Family Crest's 'perfect' gold ore alone: the menu has only the Gold bar, as many as there is ore
+  // (rsprox local recording 1002252 tick 1524).
+  const perfect = perfectGoldRecipe();
+  const otherOre = Data.SMELTING_RECIPES.some((recipe) => recipe !== perfect && !recipe.skill && !recipe.furnace
+    && recipe.ingredients.some(([id]) => id !== Core.ItemIdentifiers.COAL && available(player, id) > 0));
+  if (perfect && !otherOre && extras.length === 0 && hasIngredients(player, perfect)) {
+    // One ore left smelts at once: live's Smelt at 1531 smelted the second ore one tick later, no menu (1532-1536).
+    if (available(player, Core.ItemIdentifiers.PERFECT_GOLD_ORE) === 1) return void startSmelting(player, perfect, 1, objectId);
+    const gold = Data.smeltMenuRecipes().filter((recipe) => recipe.barId === Core.ItemIdentifiers.GOLD_BAR);
+    if (gold.length) return openMenu(player, recipeEntries(player, gold, objectId));
+  }
   openMenu(player, [...recipeEntries(player, Data.smeltMenuRecipes(), objectId), ...extras]);
+}
+
+function perfectGoldRecipe() {
+  return Data.SMELTING_RECIPES.find((candidate) => candidate.barId === Core.ItemIdentifiers.PERFECT_GOLD_BAR) ?? null;
 }
 
 /**
@@ -269,6 +285,13 @@ function useOnFurnace(event) {
     && recipe.ingredients.some(([id]) => id === event.itemId));
   if (recipes.length === 0) return;
   event.handled = true;
+  // 'perfect' gold ore on the furnace smelts one bar at once (recording 1002185 ticks 9304, 9318, holding no other ore;
+  // ours: the same with other ore carried).
+  const perfect = perfectGoldRecipe();
+  if (perfect && event.itemId === Core.ItemIdentifiers.PERFECT_GOLD_ORE) {
+    startSmelting(event.player, perfect, 1, furnaceIdOf(event));
+    return;
+  }
   const ready = recipes.filter((recipe) => !recipe.skill && !recipe.notInMenu && hasIngredients(event.player, recipe));
   const singleOre = Data.SMELTING_RECIPES.filter((recipe) => !recipe.skill && !recipe.furnace)
     .every((recipe) => recipe.ingredients.every(([id]) => available(event.player, id) === (id === event.itemId ? 1 : 0)));

@@ -1183,6 +1183,14 @@
         "avan-talking-to-avan-after-assembling-the-family-crest",
         "post-quest-dialogue-talking-to-avan-after-the-quest"
       ]
+    },
+    {
+      "page": "Transcript:Family Pest",
+      "variants": [
+        "avan-talking-to-avan",
+        "avan-talking-to-avan-again",
+        "post-miniquest-dialogue-avan"
+      ]
     }
   ],
   "386": [
@@ -1207,6 +1215,14 @@
         "avan-talking-to-avan-after-assembling-the-family-crest",
         "post-quest-dialogue-talking-to-avan-after-the-quest"
       ]
+    },
+    {
+      "page": "Transcript:Family Pest",
+      "variants": [
+        "avan-talking-to-avan",
+        "avan-talking-to-avan-again",
+        "post-miniquest-dialogue-avan"
+      ]
     }
   ],
   "387": [
@@ -1230,6 +1246,14 @@
         "avan-talking-to-avan-after-obtaining-all-crest-pieces",
         "avan-talking-to-avan-after-assembling-the-family-crest",
         "post-quest-dialogue-talking-to-avan-after-the-quest"
+      ]
+    },
+    {
+      "page": "Transcript:Family Pest",
+      "variants": [
+        "avan-talking-to-avan",
+        "avan-talking-to-avan-again",
+        "post-miniquest-dialogue-avan"
       ]
     }
   ],
@@ -39881,9 +39905,18 @@
       "variants": [
         "caleb",
         "caleb-talking-to-caleb-again",
+        "caleb-talking-to-caleb-after-getting-his-crest-piece",
         "caleb-talking-to-caleb-again-after-obtaining-the-first-crest-piece",
         "caleb-talking-to-caleb-after-assembling-the-family-crest",
         "post-quest-dialogue-talking-to-caleb-after-the-quest"
+      ]
+    },
+    {
+      "page": "Transcript:Family Pest",
+      "variants": [
+        "caleb-talking-to-caleb",
+        "caleb-talking-to-caleb-again",
+        "post-miniquest-dialogue-caleb"
       ]
     }
   ],
@@ -48747,6 +48780,16 @@
         "starting-off-dimintheis-talking-to-dimintheis-again-after-obtaining-a-crest-piece",
         "the-crest-reassembled-talking-to-dimintheis"
       ]
+    },
+    {
+      "page": "Transcript:Family Pest",
+      "variants": [
+        "starting-out-talking-to-dimintheis",
+        "starting-out-talking-to-dimintheis-again",
+        "returning-to-dimintheis-talking-to-dimintheis",
+        "returning-to-dimintheis-talking-to-dimintheis-again-before-handing-out-the-money",
+        "post-miniquest-dialogue-dimintheis"
+      ]
     }
   ],
   "4985": [
@@ -54251,9 +54294,18 @@
       "variants": [
         "caleb",
         "caleb-talking-to-caleb-again",
+        "caleb-talking-to-caleb-after-getting-his-crest-piece",
         "caleb-talking-to-caleb-again-after-obtaining-the-first-crest-piece",
         "caleb-talking-to-caleb-after-assembling-the-family-crest",
         "post-quest-dialogue-talking-to-caleb-after-the-quest"
+      ]
+    },
+    {
+      "page": "Transcript:Family Pest",
+      "variants": [
+        "caleb-talking-to-caleb",
+        "caleb-talking-to-caleb-again",
+        "post-miniquest-dialogue-caleb"
       ]
     }
   ],
@@ -54350,6 +54402,14 @@
         "johnathon-returning-after-defeating-chronozon",
         "post-quest-dialogue-talking-to-johnathon-after-the-quest"
       ]
+    },
+    {
+      "page": "Transcript:Family Pest",
+      "variants": [
+        "johnathon-talking-to-johnathon",
+        "johnathon-talking-to-johnathon-again",
+        "post-miniquest-dialogue-johnathon"
+      ]
     }
   ],
   "5444": [
@@ -54378,6 +54438,14 @@
         "johnathon-talking-to-johnathon-again-2",
         "johnathon-returning-after-defeating-chronozon",
         "post-quest-dialogue-talking-to-johnathon-after-the-quest"
+      ]
+    },
+    {
+      "page": "Transcript:Family Pest",
+      "variants": [
+        "johnathon-talking-to-johnathon",
+        "johnathon-talking-to-johnathon-again",
+        "post-miniquest-dialogue-johnathon"
       ]
     }
   ],
@@ -109165,6 +109233,16 @@
         "starting-off-dimintheis-talking-to-dimintheis-again",
         "starting-off-dimintheis-talking-to-dimintheis-again-after-obtaining-a-crest-piece",
         "the-crest-reassembled-talking-to-dimintheis"
+      ]
+    },
+    {
+      "page": "Transcript:Family Pest",
+      "variants": [
+        "starting-out-talking-to-dimintheis",
+        "starting-out-talking-to-dimintheis-again",
+        "returning-to-dimintheis-talking-to-dimintheis",
+        "returning-to-dimintheis-talking-to-dimintheis-again-before-handing-out-the-money",
+        "post-miniquest-dialogue-dimintheis"
       ]
     }
   ],

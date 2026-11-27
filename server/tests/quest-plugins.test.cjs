@@ -302,6 +302,7 @@ test('Family Crest brothers swap gauntlets for free or 25,000 coins, and Chronoz
   const messages = [];
   const player = {
     getAttribute: () => 0,
+    setAttribute: () => {},
     sendMessage: m => messages.push(m),
     getInventory: () => ({
       getAmount: id => items.get(id) ?? 0,
@@ -351,13 +352,12 @@ test('Family Crest brothers swap gauntlets for free or 25,000 coins, and Chronoz
     return event.preventDeath;
   };
 
+  // "Chronozon weakens..." comes with each Blast cast (magic:cast-committed; tests/family-crest-capture.test.cjs), not the hit.
   messages.length = 0;
   impact(null);
-  assert.deepEqual(messages, [], 'spell-less magic damage does not count as the selected Blast');
   impact(CombatSpells.FIRE_BLAST);
   impact(CombatSpells.WIND_BLAST);
-  assert.deepEqual(messages, ['Chronozon weakens...', 'Chronozon weakens...'],
-    'a manual Wind Blast counts while Fire Blast is autocast');
+  assert.deepEqual(messages, [], 'hits say nothing');
   impact(CombatSpells.WATER_BLAST);
   assert.equal(beforeDeath(), true, 'Chronozon returns to full health without all four blasts');
   assert.equal(npc.hp, 170);

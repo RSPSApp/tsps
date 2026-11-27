@@ -580,9 +580,13 @@ test('single-ore shortcuts preserve ordinary Smelt, mixed ores, coal bags and le
   const extras = furnaceWith([[I.IRON_ORE, 1], [I.STEEL_BAR, 1], [I.AMMO_MOULD, 1]]);
   itemOnObject({ player: extras, itemId: I.IRON_ORE, object: furnace });
   assert.ok(lastMenu(extras).getItems().includes(I.STEEL_CANNONBALL), 'other furnace products remain a choice');
-  const perfect = furnaceWith([[I.PERFECT_GOLD_ORE, 1]]);
+  // Live: 'perfect' gold ore on the furnace smelts one bar at once, two ores held (rsprox local recording 1002185 t9304).
+  const perfect = furnaceWith([[I.PERFECT_GOLD_ORE, 2]]);
   itemOnObject({ player: perfect, itemId: I.PERFECT_GOLD_ORE, object: furnace });
-  assert.deepEqual(lastMenu(perfect).getItems(), [I.PERFECT_GOLD_BAR], 'quest-specific off-menu recipes retain their path');
+  assert.equal(lastMenu(perfect), undefined, 'no menu for the quest ore');
+  ticks(6);
+  assert.equal(perfect.items.get(I.PERFECT_GOLD_BAR), 1, 'one bar');
+  assert.equal(perfect.items.get(I.PERFECT_GOLD_ORE), 1);
   const bag = furnaceWith([[I.IRON_ORE, 1]]);
   const api = require('../plugins/skills/smithing/Core.Smithing').api;
   const emit = api.emitCustomEvent;

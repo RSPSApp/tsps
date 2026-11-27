@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-198 quests · ✅ passed: 24 · ⚠️ passed with issues: 22 · 🔄 in progress: 16 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 87
+198 quests · ✅ passed: 24 · ⚠️ passed with issues: 23 · 🔄 in progress: 16 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 86
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -58,7 +58,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | [Druidic Ritual](druidic-ritual/README.md) | ✅ passed | 2026-10-22 | agent |  |  |
 | [Dwarf Cannon](dwarf-cannon/README.md) | 🔁 needs recheck | 2026-11-17 | agent | claude-opus-5-5 | 4 |
 | [Eadgar's Ruse](eadgars-ruse/README.md) | untested |  |  |  |  |
-| Eagles' Peak | untested |  |  |  |  |
+| [Eagles' Peak](eagles-peak/README.md) | ⚠️ passed with issues | 2026-11-27 | agent | claude-opus-5-5 | 1 |
 | [Elemental Workshop I](elemental-workshop-i/README.md) | ✅ passed | 2026-11-19 | agent | claude-opus-5-5 |  |
 | [Elemental Workshop II](elemental-workshop-ii/README.md) | 🔄 in progress | 2026-11-19 | agent | claude-opus-5-5 |  |
 | [Enakhra's Lament](enakhras-lament/README.md) | untested |  |  |  |  |

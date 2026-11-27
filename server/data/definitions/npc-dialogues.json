@@ -400919,7 +400919,125 @@
                   "type": "choice",
                   "options": [
                     {
-                      "text": "Well if you gave me a ferret I could take it back for you."
+                      "text": "Well if you gave me a ferret I could take it back for you.",
+                      "steps": [
+                        {
+                          "player": "Well if you gave me a ferret I could take it back for you."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "Well that's very kind of you, but I'm afraid all my equipment is down at the camp site.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "I'd go with you but currently I'm somewhat, er...",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "player": "Trapped?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "Well I think trapped is quite a negative way of looking at it.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "I will admit however that getting out of here may be a little tricky. I did have a plan, but unfortunately it didn't involve being stuck in this nest.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "type": "choice",
+                          "options": [
+                            {
+                              "text": "Could I help at all?",
+                              "steps": [
+                                {
+                                  "player": "Could I help at all?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Nickolaus",
+                                  "text": "Actually I believe you could. I need to somehow trick the eagles into thinking I'm one of them. Could you fashion some sort of disguise for me?",
+                                  "speaker_ids": [
+                                    1484,
+                                    1485,
+                                    1486
+                                  ]
+                                },
+                                {
+                                  "player": "What would that involve?"
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Nickolaus",
+                                  "text": "Well, you could go and speak to the fancy dress shop owner in Varrock.  He can make anything if you give him the right materials. In fact you should probably get a couple of disguises, one for each of us.",
+                                  "speaker_ids": [
+                                    1484,
+                                    1485,
+                                    1486
+                                  ]
+                                },
+                                {
+                                  "player": "That's a good idea. There are plenty of feathers around here. I'll see what I can do."
+                                }
+                              ]
+                            },
+                            {
+                              "text": "Well it'll give you a lot of time to study the eagles",
+                              "steps": [
+                                {
+                                  "player": "Well it'll give you a lot of time to study the eagles."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Nickolaus",
+                                  "text": "Very true, and certainly an opportunity I wouldn't want to miss.",
+                                  "speaker_ids": [
+                                    1484,
+                                    1485,
+                                    1486
+                                  ]
+                                },
+                                {
+                                  "player": "Well, I'll let you get on with your work then."
+                                },
+                                {
+                                  "type": "line",
+                                  "speaker": "Nickolaus",
+                                  "text": "It's always a pleasure to discuss my discoveries.",
+                                  "speaker_ids": [
+                                    1484,
+                                    1485,
+                                    1486
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
                     },
                     {
                       "text": "So it's not that you're trapped then?",
@@ -402803,7 +402921,131 @@
           "type": "choice",
           "options": [
             {
-              "text": "Well if you gave me a ferret I could take it back for you."
+              "text": "Well if you gave me a ferret I could take it back for you.",
+              "steps": [
+                {
+                  "player": "Well if you gave me a ferret I could take it back for you."
+                },
+                {
+                  "type": "line",
+                  "speaker": "Nickolaus",
+                  "text": "Well that's very kind of you, but I'm afraid all my equipment is down at the camp site.",
+                  "speaker_ids": [
+                    1484,
+                    1485,
+                    1486
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Nickolaus",
+                  "text": "I'd go with you but currently I'm somewhat, er...",
+                  "speaker_ids": [
+                    1484,
+                    1485,
+                    1486
+                  ]
+                },
+                {
+                  "player": "Trapped?"
+                },
+                {
+                  "type": "line",
+                  "speaker": "Nickolaus",
+                  "text": "Well I think trapped is quite a negative way of looking at it.",
+                  "speaker_ids": [
+                    1484,
+                    1485,
+                    1486
+                  ]
+                },
+                {
+                  "type": "line",
+                  "speaker": "Nickolaus",
+                  "text": "I will admit however that getting out of here may be a little tricky. I did have a plan, but unfortunately it didn't involve being stuck in this nest.",
+                  "speaker_ids": [
+                    1484,
+                    1485,
+                    1486
+                  ]
+                },
+                {
+                  "type": "choice",
+                  "options": [
+                    {
+                      "text": "Could I help at all?",
+                      "steps": [
+                        {
+                          "player": "Could I help at all?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "Actually I believe you could. I need to somehow trick the eagles into thinking I'm one of them. Could you fashion some sort of disguise for me?",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "player": "What would that involve?"
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "Well, you could go and speak to the fancy dress shop owner in Varrock.  He can make anything if you give him the right materials. In fact you should probably get a couple of disguises, one for each of us.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "player": "That's a good idea. There are plenty of feathers around here. I'll see what I can do."
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ]
+                    },
+                    {
+                      "text": "Well it'll give you a lot of time to study the eagles",
+                      "steps": [
+                        {
+                          "player": "Well it'll give you a lot of time to study the eagles."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "Very true, and certainly an opportunity I wouldn't want to miss.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "player": "Well, I'll let you get on with your work then."
+                        },
+                        {
+                          "type": "line",
+                          "speaker": "Nickolaus",
+                          "text": "It's always a pleasure to discuss my discoveries.",
+                          "speaker_ids": [
+                            1484,
+                            1485,
+                            1486
+                          ]
+                        },
+                        {
+                          "type": "end"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             },
             {
               "text": "So it's not that you're trapped then?",

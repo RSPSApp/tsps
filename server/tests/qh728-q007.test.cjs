@@ -30,6 +30,7 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
   const completedKeys = new Set(completed);
   const questStages = new Map();
   const questRequests = [];
+  let eaglesPeakOwnsAsyff = false;
   const attributes = new Map([[BIOHAZARD_STAGE, stage]]);
   const items = new Map();
   const equipment = new Map();
@@ -156,6 +157,11 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
         questRequests.push({ key: event?.key });
         event.complete = completedKeys.has(event?.key);
       }
+      // Eagles' Peak answers whether Asyff's costumes are its business (eagles-peak:asyff-costume).
+      if (name === 'eagles-peak:asyff-costume') {
+        questRequests.push({ key: 'eagles_peak', asyff: true });
+        event.owns = eaglesPeakOwnsAsyff;
+      }
       if (name === 'quest:get-stage') {
         questRequests.push({ key: event?.key, stage: true });
         event.stage = questStages.has(event?.key) ? questStages.get(event.key) : null;
@@ -268,6 +274,9 @@ function setup({ stage = 0, completed = [], freeSlots = 28 } = {}) {
     },
     setQuestStage(key, value) {
       questStages.set(key, value);
+    },
+    setEaglesPeakOwnsAsyff(value) {
+      eaglesPeakOwnsAsyff = value === true;
     },
   };
 }
@@ -1196,32 +1205,20 @@ test('Asyff is shared with Eagles\' Peak and yields while its costume is outstan
     "the Eagles' Peak costume conversation is indexed for Asyff"
   );
 
-  // Met Nikolaus (4) and disguise made (5): the eagle costume (or a spare) is
-  // still outstanding, so Eagles' Peak owns Asyff.
-  for (const stage of [4, 5]) {
+  // While Eagles' Peak's costumes are asked for and not yet handed over, that quest owns Asyff; it says so
+  // through eagles-peak:asyff-costume, so Biohazard holds no stage numbers of its.
+  {
     const run = setup({ stage: 12, completed: ['plague_city'] });
-    run.setQuestStage('eagles_peak', stage);
-    assert.equal(
-      run.invoke.variant(N.ASYFF),
-      null,
-      `Eagles' Peak stage ${stage} keeps Asyff for its own conversation`
-    );
-    assert.ok(
-      run.questRequests.some((request) => request.key === 'eagles_peak' && request.stage),
-      "Biohazard asks the shared quest registry for Eagles' Peak's stage"
-    );
+    run.setEaglesPeakOwnsAsyff(true);
+    assert.equal(run.invoke.variant(N.ASYFF), null, "Eagles' Peak keeps Asyff for its own conversation");
+    assert.ok(run.questRequests.some((request) => request.key === 'eagles_peak' && request.asyff),
+      "Biohazard asks Eagles' Peak by event");
   }
-
-  // The costume is obtained (6) or Eagles' Peak was never started: Biohazard
-  // may take Asyff for the free priest gown.
-  for (const stage of [0, 6, 7, 8]) {
+  {
     const run = setup({ stage: 12, completed: ['plague_city'] });
-    run.setQuestStage('eagles_peak', stage);
-    assert.equal(
-      run.invoke.variant(N.ASYFF),
-      'visiting-south-east-varrock-talking-to-asyff',
-      `Eagles' Peak stage ${stage} leaves Asyff to Biohazard`
-    );
+    run.setEaglesPeakOwnsAsyff(false);
+    assert.equal(run.invoke.variant(N.ASYFF), 'visiting-south-east-varrock-talking-to-asyff',
+      "with the costumes not owed, Biohazard may take Asyff for the free priest gown");
   }
 
   // Outside the gown window Biohazard does not claim Asyff at all.

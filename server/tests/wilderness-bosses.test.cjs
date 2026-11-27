@@ -720,10 +720,9 @@ test('Venenatis clears a run if its target dies after she attacks on the same ti
   assert.equal(npc.isScriptedMovement(), false);
 });
 
-test('Venenatis starts the run on the bite tick and keeps it through the combat loop', (t) => {
+function spiderOnNpcTicks(t) {
   const { npc, player, combat, tickTasks } = spiderFight(t);
   const origin = npc.getLocation();
-  const target = origin.transform(-5, 1);
   player.setLocation(origin.transform(4, 2));
   core.RegionManager.loadMapFiles(origin.getX(), origin.getY());
   npc.setNeedsPlacement(false);
@@ -731,26 +730,54 @@ test('Venenatis starts the run on the bite tick and keeps it through the combat 
   t.mock.method(npc, 'getCombatMethod', () => combat);
   chooseSpiderDestination(t, -5, 1);
   npc.getCombat().attack(player);
-  for (let cycle = 1; cycle <= 24; cycle++) {
-    tickTasks(1);
-    npc.resetUpdating();
-    npc.process();
-    if (cycle === 19) {
-      assert.equal(npc.getAnimation()?.id, 9991);
-      assert.deepEqual(npc.getLocation(), origin.transform(-2, 1), 'two steps on the attack tick');
-      assert.equal(npc.getCombat().getAttackDelay(), 4);
-      // Keep the player in range for the two remaining movement ticks and next attack.
-      player.setLocation(target.transform(-1, 0));
-    } else if (cycle === 20) {
-      assert.deepEqual(npc.getLocation(), origin.transform(-4, 1), 'the in-range target does not clear the queue');
-    } else if (cycle === 21) {
-      assert.deepEqual(npc.getLocation(), target, 'one step on the final tick of the odd-length run');
-    } else if (cycle === 23) {
-      assert.equal(npc.getAnimation()?.id, 9991, 'the next attack follows the move delay');
+  function tick(count = 1) {
+    for (let i = 0; i < count; i++) {
+      tickTasks(1);
+      npc.resetUpdating();
+      npc.process();
     }
   }
+  return { npc, player, origin, tick };
+}
+
+test('Venenatis starts the run on the bite tick and keeps it through the combat loop', (t) => {
+  const { npc, player, origin, tick } = spiderOnNpcTicks(t);
+  const destination = origin.transform(-5, 1);
+  tick(19);
+  assert.equal(npc.getAnimation()?.id, 9991);
+  assert.deepEqual(npc.getLocation(), origin.transform(-2, 1), 'two steps on the attack tick');
+  assert.equal(npc.getCombat().getAttackDelay(), 4);
+  player.setLocation(destination.transform(-1, 0));
+  tick();
+  assert.deepEqual(npc.getLocation(), origin.transform(-4, 1), 'the in-range target does not clear the queue');
+  tick();
+  assert.deepEqual(npc.getLocation(), destination, 'one step on the final tick of the odd-length run');
+  tick(2);
+  assert.equal(npc.getAnimation()?.id, 9991, 'the next attack follows the move delay');
 });
 
+test('Venenatis uses the actual distance when a started run loses its route', (t) => {
+  const { npc, origin, tick } = spiderOnNpcTicks(t);
+  tick(19);
+  assert.deepEqual(npc.getLocation(), origin.transform(-2, 1));
+  assert.equal(npc.getCombat().getAttackDelay(), 4, 'the planned five-tile run allows four ticks');
+  npc.getMovementQueue().reset();
+  tick();
+  assert.equal(npc.getCombat().getAttackDelay(), 2, 'the actual two-tile run allows three ticks from the attack');
+  tick(2);
+  assert.equal(npc.getAnimation()?.id, 9989);
+});
+
+test('Venenatis keeps a fourth attack within two steps when pursuit already ran that tick', (t) => {
+  const { npc, player, origin, tick } = spiderOnNpcTicks(t);
+  tick(18);
+  player.setLocation(origin.transform(0, 14));
+  tick();
+  assert.equal(npc.getAnimation()?.id, 9989, 'the pursuit brought her into range for the fourth attack');
+  assert.deepEqual(npc.getLocation(), origin.transform(0, 2), 'only the two pursuit steps fit on the attack tick');
+  tick();
+  assert.deepEqual(npc.getLocation(), origin.transform(-2, 1), 'the relocation takes its first two steps on the next tick');
+});
 test('Venenatis counts both ways of crossing the melee boundary in the same cycle', (t) => {
   const { npc, attack, place, projectiles, registerBrood } = spiderFight(t);
   for (let slot = 0; slot < 4; slot++) assert.equal(attack(), 9991);

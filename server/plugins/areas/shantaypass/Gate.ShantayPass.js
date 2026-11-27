@@ -1,18 +1,19 @@
 /**
  * The Shantay Pass gates, as rsprox captures show them: the main gate (loc 4031, 4x1 at
  * 3302-3305, 3116) and the two gates of the Ruins of Unkah (loc 41326, 4x2), east at
- * 3194-3195, 2841-2844 and south at 3166-3169, 2817-2818.
+ * 3194-3195, 2841-2844 and south at 3166-3169, 2817-2818. Walls close each Unkah gate's
+ * outer lanes, so players cross on its middle two.
  *
  * - Going into the desert (south through the main gate, east or south out of the ruins) takes
  *   a Shantay pass ("The guard takes your Shantay Pass as you go through the gate."). Without
  *   one, the gate's guard says so. The elite Desert Diary lets a player through without a pass
  *   (Wiki).
- * - Until it is turned off, the desert warning (565, cws_warning_10) opens first, a tick after
- *   arriving. Each showing counts up varbit 3860 to 6; from then on it offers "Don't ask me
+ * - Until it is turned off, the desert warning (565, cws_warning_10) opens first, on the
+ *   tick the gate's op runs. Each showing counts up varbit 3860 to 6; from then on it offers "Don't ask me
  *   this again", which sets 7: no more warnings. The WarningScreens plugin shows it, and the
  *   Doomsayer turns it back on.
- * - A tick after arriving (or at once on "Proceed regardless") the player steps onto the gate,
- *   a tile a tick until they are through it, and a tick later faces the way they went. Coming
+ * - On that tick (or at once on "Proceed regardless") the player steps onto the gate, a tile
+ *   a tick until they are through it, and a tick later faces the way they went. Coming
  *   back is free.
  * - The main gate guard's "Pass" does the same from wherever the player stands north of it.
  * - "Look-at" reads the gate's billboard poster.
@@ -26,9 +27,12 @@ const POSTER = [
   "Despite this warning lots of people seem to pass through the gate.",
 ];
 
-/** `desert` is the side the desert is on; `guard` names the NPC that turns players back. */
+/**
+ * `desert` is the side the desert is on, `lanes` the columns (or, for an east gate, rows)
+ * players cross on, and `guard` names the NPC that turns players back.
+ */
 const MAIN_GATE = {
-  minX: 3302, maxX: 3305, minY: 3116, maxY: 3116, desert: "south",
+  minX: 3302, maxX: 3305, minY: 3116, maxY: 3116, desert: "south", lanes: [3302, 3305],
   guard: "SHANTAY_GUARD_2",
   noPassLine: "You need a Shantay pass to get through this gate. See Shantay, he will sell you one for a very reasonable price.",
   billboard: ["You look at the huge stone gate.<br>Near the gate is a large billboard poster, it reads:", ...POSTER],
@@ -41,8 +45,8 @@ const UNKAH_GATE = {
 };
 const GATES = [
   MAIN_GATE,
-  { ...UNKAH_GATE, minX: 3194, maxX: 3195, minY: 2841, maxY: 2844, desert: "east" },
-  { ...UNKAH_GATE, minX: 3166, maxX: 3169, minY: 2817, maxY: 2818, desert: "south" },
+  { ...UNKAH_GATE, minX: 3194, maxX: 3195, minY: 2841, maxY: 2844, desert: "east", lanes: [2842, 2843] },
+  { ...UNKAH_GATE, minX: 3166, maxX: 3169, minY: 2817, maxY: 2818, desert: "south", lanes: [3167, 3168] },
 ];
 
 /** cws_warning_10: the desert warning (565). */
@@ -66,13 +70,14 @@ function line([fromX, fromY], [toX, toY]) {
 /** The crossing through `gate` from the tile `x, y` beside it, or null when not beside it. */
 function crossingThrough(gate, x, y) {
   const across = (desert, to) => ({ gate, desert, path: line([x, y], to) });
+  const [firstLane, lastLane] = gate.lanes;
   if (gate.desert === "south") {
-    if (x < gate.minX || x > gate.maxX) return null;
+    if (x < firstLane || x > lastLane) return null;
     if (y === gate.maxY + 1) return across(true, [x, gate.minY - 1]);
     if (y === gate.minY - 1) return across(false, [x, gate.maxY + 1]);
     return null;
   }
-  if (y < gate.minY || y > gate.maxY) return null;
+  if (y < firstLane || y > lastLane) return null;
   if (x === gate.minX - 1) return across(true, [gate.maxX + 1, y]);
   if (x === gate.maxX + 1) return across(false, [gate.minX - 1, y]);
   return null;
@@ -155,7 +160,7 @@ function enterDesert(player, crossing) {
   walkThrough(player, now);
 }
 
-/** A tick after arriving: the guard, the warning or straight through. */
+/** On the tick the op runs: the guard, the warning or straight through. */
 function cross(player, crossing) {
   if (crossing.desert && !mayEnterDesert(player)) {
     Common.npcLine(player, Common.getCore().NpcIdentifiers[crossing.gate.guard], crossing.gate.noPassLine);
@@ -175,7 +180,7 @@ function goThrough(event) {
   const crossing = crossingFor(sourceOf(player));
   if (!crossing) return false;
   player.getMovementQueue().reset();
-  Common.later(player, 1, () => cross(player, crossing));
+  cross(player, crossing);
   return true;
 }
 
@@ -184,7 +189,7 @@ function passGuard(event) {
   const { player } = event;
   const at = player.getLocation();
   if (at.getZ() !== 0 || at.getY() <= MAIN_GATE.maxY) return false;
-  const x = Math.min(MAIN_GATE.maxX, Math.max(MAIN_GATE.minX, at.getX()));
+  const x = Math.min(MAIN_GATE.lanes[1], Math.max(MAIN_GATE.lanes[0], at.getX()));
   const approach = [x, MAIN_GATE.maxY + 1];
   player.getMovementQueue().reset();
   walkThen(player, approach, () => cross(player, crossingFor({ x, y: approach[1], z: 0 })));

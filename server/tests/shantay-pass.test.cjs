@@ -176,17 +176,44 @@ test("the Ruins of Unkah's east gate takes a pass out into the desert, three ste
   assert.ok(!back.player.log.some((line) => line.startsWith("message")), "coming back is free");
 });
 
-test("the Ruins of Unkah's south gate leads south, from any of its four columns", () => {
-  const out = createPlayer({ at: [3169, 2819], items: { [SHANTAY_PASS]: 1 } });
+test("the Ruins of Unkah's south gate leads south on its two open columns", () => {
+  const out = createPlayer({ at: [3168, 2819], items: { [SHANTAY_PASS]: 1 } });
   out.setAttribute("warning-screens:warning-10", 7);
   hooks.gate["Go-through"]({ player: out });
   runTasks();
-  assert.deepEqual([out.getLocation().getX(), out.getLocation().getY()], [3169, 2816]);
+  assert.deepEqual([out.getLocation().getX(), out.getLocation().getY()], [3168, 2816]);
   assert.equal(out.amount(SHANTAY_PASS), 0);
 
   const back = goThroughFrom([3167, 2816]);
   assert.deepEqual(back.steps, [[3167, 2817], [3167, 2818], [3167, 2819]]);
-  assert.equal(goThroughFrom([3170, 2819]).steps.length, 0, "beside the gate, not at it");
+  // Walls close the outer columns and rows; beside the gate is not at it either.
+  for (const at of [[3166, 2819], [3169, 2819], [3169, 2816], [3170, 2819], [3193, 2841], [3193, 2844], [3196, 2844]]) {
+    assert.equal(goThroughFrom(at).steps.length, 0, `no crossing from ${at}`);
+  }
+});
+
+/** One tick's worth of the tasks due. */
+function nextTick() {
+  for (const task of tasks.splice(0)) task.execute();
+}
+
+test("a gate answers on the tick its op runs, then a step a tick", () => {
+  const warned = createPlayer({ at: [3303, 3117], items: { [SHANTAY_PASS]: 1 } });
+  hooks.gate["Go-through"]({ player: warned });
+  assert.ok(warned.log.includes(`sendInterface ${WARNING}`), "the warning on the op's tick");
+  tasks.length = 0;
+
+  const player = createPlayer({ at: [3193, 2843], items: { [SHANTAY_PASS]: 1 } });
+  player.setAttribute("warning-screens:warning-10", 7);
+  const tile = () => [player.getLocation().getX(), player.getLocation().getY()];
+  hooks.gate["Go-through"]({ player });
+  assert.deepEqual(tile(), [3194, 2843], "the first step on the op's tick");
+  assert.ok(player.log.includes("message The guard takes your Shantay Pass as you go through the gate."));
+  nextTick();
+  assert.deepEqual(tile(), [3195, 2843]);
+  nextTick();
+  assert.deepEqual(tile(), [3196, 2843]);
+  runTasks();
 });
 
 test("without a pass, the Unkah guard turns the player back in their own words", (t) => {

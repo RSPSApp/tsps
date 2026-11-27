@@ -1,5 +1,6 @@
 import { GameConstants } from './GameConstants';
 import { World } from '../game/World';
+import { PlayerAutosave } from './PlayerAutosave';
 import { TaskManager } from './task/TaskManager';
 import { ServerPerf } from '../util/ServerPerf';
 import { FreezeDiagnostics } from '../util/FreezeDiagnostics';
@@ -88,6 +89,9 @@ export class GameEngine  {
 
         try {
             await World.process();
+            // Bounds what a death without a shutdown handler loses - a nodemon restart, a
+            // taskkill, a crash (#6874). PLAYER_AUTOSAVE_SECONDS sets the window; 0 turns it off.
+            PlayerAutosave.tick(this.tickNumber, (reason) => World.savePlayers(reason));
         } catch (e) {
             console.log(e);
             World.savePlayers("tick-error");

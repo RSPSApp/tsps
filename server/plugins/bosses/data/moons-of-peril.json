@@ -55,9 +55,9 @@
     ],
     "$bounds": "The caverns (plane 0) and the antechamber (plane 1); Cam Torum is outside them",
     "fizzle": "The resources from Neypotzli fizzle to dust as they are severed from its magic.",
-    "resources": ["RAW_BREAM", "COOKED_BREAM", "RAW_MOSS_LIZARD", "COOKED_MOSS_LIZARD", "MOONLIGHT_GRUB", "MOONLIGHT_GRUB_PASTE"],
+    "resources": ["RAW_BREAM", "COOKED_BREAM", "RAW_MOSS_LIZARD", "COOKED_MOSS_LIZARD", "MOONLIGHT_GRUB", "MOONLIGHT_GRUB_PASTE", "SULPHUROUS_ESSENCE"],
     "potions": ["MOONLIGHT_POTION_4_", "MOONLIGHT_POTION_3_", "MOONLIGHT_POTION_2_", "MOONLIGHT_POTION_1_"],
-    "$fizzle": "wiki: the foods, grubs and paste go; a potion turns back into a vial of water"
+    "$fizzle": "wiki: the foods, grubs and paste go; a potion turns back into a vial of water. wiki (Sulphurous essence) and capture local 1001301 tick 2048 (rev 237): sulphurous essence goes too, with the same message"
   },
 
   "supplies": {
@@ -94,8 +94,8 @@
     "cuppa": { "anim": 829, "sound": 2401, "message": "You drink the tea and find yourself feeling energised!" },
     "sapling": 51365,
     "$sapling": "pmoon_grub_sapling, Grubby sapling: Collect-from",
-    "grub": { "delay": 2, "anim": 10792, "xpPerLevel": 0.05, "sound": 7925, "extra": [0.1, 0.6], "extraMessage": "Your hunting knowledge allows you to find an extra grub.", "fullMessage": "Your inventory is too full to hold any more grubs." },
-    "$grub": "capture 1693 tick 2062: the collecting animation, one grub 2 ticks after arriving (sometimes two, a sound each) and Hunter xp; wiki: 0.05 x Hunter level per grub; extra chance by Hunter level: estimate",
+    "grub": { "delay": 2, "anim": 13149, "xpPerLevel": 0.05, "sound": 7925, "extra": [0.1, 0.6], "extraMessage": "Your hunting knowledge allows you to find an extra grub.", "fullMessage": "Your inventory is too full to hold any more grubs." },
+    "$grub": "capture 1104 (rev 237) ticks 23548-23971: hunting_searching_bushes_norestart (13149; rec 1693, rev 226, sent 10792, a thrall walk in the rev 242 cache); capture 1693 tick 2062: one grub 2 ticks after arriving (sometimes two, a sound each) and Hunter xp; wiki: 0.05 x Hunter level per grub; extra chance by Hunter level: estimate",
     "crush": { "anim": 11095, "sound": [2608, 25], "extra": [0.1, 0.6], "extraMessage": "Your herblore knowledge allows you to crush an extra grub." },
     "potion": {
       "anim": 363,

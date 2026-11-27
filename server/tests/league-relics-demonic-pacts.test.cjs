@@ -107,6 +107,8 @@ before(async () => {
   require("../plugins/modes/Relics.LeagueMode").register(api);
   Common = require("../plugins/modes/leaguerelics/Common.LeagueRelics");
   Unlock = require("../plugins/modes/leaguerelics/Unlock.LeagueRelics");
+  // The storage containers (the Knapsack): the Tutor asks storage:owned whether a closed one is owned.
+  require("../plugins/items/StorageItems.plugin").register(api);
   require("../plugins/skills/smithing/Data.Smithing").load(core);
   custom["smithing:bar-for-ore"] = [require("../plugins/skills/smithing/Smelting.Smithing").answerBarForOre];
   custom["cooking:cooked"] = [(request) => { if (request.rawId === I.RAW_SHRIMPS) Object.assign(request, { cookedId: I.SHRIMPS, xp: 30 }); }];
@@ -182,6 +184,23 @@ test("Leagues Tutor hands out missing starter supplies and relics through either
   assert.match(clickAndContinue(), /no League items/);
   assert.equal(collect({ player: character("normal", "main"), npcId }), false);
   assert.equal(collect({ player, npcId: core.NpcIdentifiers.LEAGUES_TUTOR_2 }), false);
+});
+
+test("Leagues Tutor: a closed Knapsack is the Knapsack, so none is owed; a lost one comes back", () => {
+  const player = character("knapsack", "league", BARBARIAN_GATHERING);
+  const npcId = core.CacheDefinitions.getNpcId("league_6_tutor");
+  const open = core.CacheDefinitions.getObjId("barbarian_knapsack");
+  const closed = core.CacheDefinitions.getObjId("barbarian_knapsack_closed");
+  assert.deepEqual(Unlock.grantedItems(Common.relic(DP, 0, 2)), [open]);
+  const { owed } = require("../plugins/modes/leaguerelics/Collect.LeagueRelics");
+  const owedKnapsacks = () => owed(player, DP).filter((id) => id === open || id === closed);
+
+  assert.deepEqual(owedKnapsacks(), [open], "lost: the Tutor gives it back");
+  player.getBank(0).adds(closed, 1);
+  assert.deepEqual(owedKnapsacks(), [], "banked closed: already owned");
+  player.getBank(0).delete(closed, 1);
+  player.getInventory().adds(closed, 1);
+  assert.deepEqual(owedKnapsacks(), [], "carried closed: already owned");
 });
 
 /** The owner, a Demonic Pacts character without it, a Raging Echoes character with the same slots, a main character. */

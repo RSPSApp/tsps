@@ -168,8 +168,10 @@ Barbarian Gathering's container in the Demonic Pacts League (Wiki: Knapsack;
   (`bank:empty-containers`) and the bank panel's Empty (its param 595) bank the contents. There is no
   Empty op elsewhere.
 - **Lines:** all ours. rsprox.net's database has no recording with either Knapsack item.
-- **Not here:** getting a lost Knapsack back from the Leagues Tutor in Yama's Lair (Wiki); nothing
-  replaces lost relic items yet.
+- **A lost Knapsack:** the Leagues Tutor's Collect-items in Yama's Lair gives it back, open (Wiki;
+  `Collect.LeagueRelics.js`). Either form, carried, worn or banked, counts as owning it
+  (`storage:owned`), so a closed one isn't replaced by a second bag. The contents are kept on the
+  player, so a replacement holds them unless the bag was destroyed.
 
 ## Coffins and the Flamtaer bag
 

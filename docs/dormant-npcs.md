@@ -75,18 +75,18 @@ Zanaris spawns only the caps, as live does: placeholders that show a "Fungi" wit
 | 536 | 533 (no-op form 535) | 537, level 74 | south patch, (2412-2419, 4467-4475) |
 | 1023 | 538 (no-op form 637) | 1024, level 86 | north patch, (2412-2421, 4370-4377) |
 
-**Picking** (rsprox captures: a rev 243 recording of the north patch; the tick is the player's arrival):
-1. Tick 0: the player plays `human_fungicide_pick_zygomite` (3335), with sound `pick` (2581).
-2. Tick 1: the cap transforms into the zygomite and plays `zygomite_leap_out_npc` (12340), with sound `zygo_grow` (1963). It has the zygomite's hitpoints. Live disables all its options for that tick; here it can't be attacked until it has risen.
-3. Tick 3 (12340 lasts 56 client cycles): it has risen, steps towards the picker and attacks them.
+**Picking** (rsprox captures: a rev 243 recording of the north patch; tick 0 is the player's arrival next to the cap):
+1. Tick 1: the player plays `human_fungicide_pick_zygomite` (3335), with sound `pick` (2581).
+2. Tick 2: the cap transforms into the zygomite and plays `zygomite_leap_out_npc` (12340), with sound `zygo_grow` (1963). It has the zygomite's hitpoints. Live disables all its options for that tick; here it can't be attacked until it has risen.
+3. Tick 4 (12340 lasts 56 client cycles): it has risen, steps towards the picker and attacks them.
 
 Picking needs no Slayer level: the capture's player had under 57 Slayer and still picked it, then was refused attacking it with "You need a Slayer level of 57 to know how to wound this monster." Other Slayer monsters get the generic line (`plugins/skills/data/slayer-level-messages.json`).
 
 **While fighting**, Pick on another cap gives "You should probably concentrate on the monster you're fighting!" and nothing else. The capture shows it twice, after the arrival step, while the zygomite was attacking the player. Here, "fighting" means `CombatFactory.inCombat`.
 
 **Ours** (not captured, not on the Wiki):
-- a second player's Pick on a cap that is already rising does nothing;
-- out of combat, a zygomite rests like the other families, walks home, and turns back into its cap with no animation. The recording ends before that.
+- a second player's Pick on a cap that is already rising does nothing, and a picker who has walked off before the pick's tick doesn't pick;
+- out of combat, a zygomite rests like the other families, walks home, and turns back into its cap with no animation. The recording ends before that. One left on 0 hitpoints without fungicide (Finishers keeps it alive) does the same, healed, and its last-legs line is said again in its next fight (`dormant-npcs:slept`).
 
 **Captured but not modelled yet:** the zygomite's combat itself. In the capture it attacks with `zygomite_attack` (3326) both ways:
 - melee, with sound `unarmed_punch` (2566);

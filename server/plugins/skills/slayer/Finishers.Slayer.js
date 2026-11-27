@@ -128,10 +128,16 @@ function refill(event) {
   inventory.setItem(inventory.getSlotForItemId(spray), new core.Item(zygomite.sprays[0], 1)).refreshItems();
 }
 
+/** A zygomite turned back into its Fungi starts its next fight without the last-legs line said. */
+function slept({ npc }) {
+  if (npc?.getAttribute?.(LAST_LEGS_ATTRIBUTE) === true) npc.setAttribute(LAST_LEGS_ATTRIBUTE, false);
+}
+
 function attach(api) {
+  api.onCustomEvent("dormant-npcs:slept", slept);
   api.onNpcBeforeDeath(beforeDeath);
   api.onItemOnNpc(itemOnNpc);
   api.onItemOnItem(refill);
 }
 
-module.exports = { init, attach, beforeDeath, itemOnNpc, refill, FINISHED_ATTRIBUTE };
+module.exports = { init, attach, beforeDeath, itemOnNpc, refill, slept, FINISHED_ATTRIBUTE, LAST_LEGS_ATTRIBUTE };

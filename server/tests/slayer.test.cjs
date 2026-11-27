@@ -658,6 +658,14 @@ test("monsters with a Slayer level can't be attacked below it", () => {
   assert.equal(able.allow, null);
 });
 
+test("a zygomite turned back into its Fungi forgets its last-legs line (issue 6867)", () => {
+  const attributes = new Map([[Finishers.LAST_LEGS_ATTRIBUTE, true]]);
+  const zygomite = { getAttribute: (key) => attributes.get(key), setAttribute: (key, value) => attributes.set(key, value) };
+  assert.ok((handlers.events.get("dormant-npcs:slept") ?? []).length > 0, "Finishers listens for it");
+  handlers.events.get("dormant-npcs:slept").forEach((fn) => fn({ npc: zygomite }));
+  assert.equal(attributes.get(Finishers.LAST_LEGS_ATTRIBUTE), false);
+});
+
 test("a zygomite's refusal names its Slayer level (rsprox captures, issue 6867)", () => {
   for (const id of [537, 1024]) {
     const event = { attacker: createPlayer({ slayer: 56 }), target: npc(id), allow: null };

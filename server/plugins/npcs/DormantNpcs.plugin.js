@@ -7,8 +7,9 @@
  * - "attacked": wyrms and wyrmlings slithering on the ground rise when a player attacks them
  *   (Wiki);
  * - "picked": Zanaris' zygomites stand as Fungi until a player picks one (rsprox captures,
- *   docs/dormant-npcs.md): the player plays the pick animation, and on the next tick the cap
- *   leaps out as the zygomite, which can't be attacked until it has risen.
+ *   docs/dormant-npcs.md): the tick after arriving the player plays the pick animation, and
+ *   on the next tick the cap leaps out as the zygomite, which can't be attacked until it has
+ *   risen.
  * Woken, it rises as its awake form, with that form's hitpoints, standing still and not
  * attacking until the rise is over, then attacks whoever woke it. Out of combat for a while it
  * walks back to where it lay, sinks and is dormant again, healed.
@@ -20,6 +21,8 @@ const path = require("path");
 
 /** Rock crabs killed towards the Fremennik easy task, the one diary task that counts. */
 const ROCK_CRAB_KILLS_ATTRIBUTE = "disguised-crabs:rock-crab-kills";
+/** Emitted when an awake NPC turns back into its dormant form. */
+const SLEPT_EVENT = "dormant-npcs:slept";
 
 let api = null;
 let core = null;
@@ -32,7 +35,7 @@ const crabSquares = new Set();
 const watched = new Set();
 /** Awake NPCs -> { family, idle, hiding (ticks left), rising (ticks left), target }. */
 const awake = new Map();
-/** Picked caps, not yet risen -> { player, ticks (left until it rises) }. */
+/** Picked caps, not yet risen -> { player, at (where they picked), wait (ticks to the pick), ticks (then to the rise) }. */
 const picking = new Map();
 
 const squareKey = (location) => `${location.getX() >> 6},${location.getY() >> 6},${location.getZ()}`;
@@ -112,8 +115,9 @@ function wake(npc, player) {
 }
 
 /**
- * Pick on a dormant "picked" NPC (a zygomite's Fungi): the pick animation and sound now, and
- * the NPC rises on the next tick (rsprox captures). Not while the player is fighting something.
+ * Pick on a dormant "picked" NPC (a zygomite's Fungi), on arrival: refused while the player is
+ * fighting something; otherwise the pick animation and sound come a tick later, and the NPC
+ * rises the tick after that (rsprox captures).
  */
 function pick({ player, npc }) {
   const entry = dormantIds.get(npc.getId());
@@ -125,14 +129,26 @@ function pick({ player, npc }) {
   }
   // Ours: a cap someone has just picked is theirs until it rises; a second pick does nothing.
   if (picking.has(npc) || npc.getHitpoints() <= 0) return true;
-  player.performAnimation(new core.Animation(family.pickAnim));
-  player.getPacketSender().sendSound(family.pickSound, 1, 0);
-  picking.set(npc, { player, ticks: family.pickTicks });
+  picking.set(npc, { player, at: player.getLocation(), wait: family.pickDelay, ticks: family.pickTicks });
   return true;
 }
 
-/** A picked cap rises for its picker once the pick is done, if they are still there to fight. */
+/**
+ * The pick plays once its delay is over, then the cap rises for its picker, if they are still
+ * there to fight. Ours: a picker who has walked off by then doesn't pick.
+ */
 function pickTick(npc, state) {
+  if (state.wait > 0) {
+    if (--state.wait > 0) return;
+    const { family } = dormantIds.get(npc.getId()) ?? {};
+    if (!family || !canBeWokenBy(state.player) || !state.player.getLocation().equals(state.at)) {
+      picking.delete(npc);
+      return;
+    }
+    state.player.performAnimation(new core.Animation(family.pickAnim));
+    state.player.getPacketSender().sendSound(family.pickSound, 1, 0);
+    return;
+  }
   if (--state.ticks > 0) return;
   picking.delete(npc);
   if (!npc.isRegistered() || npc.getHitpoints() <= 0 || awake.has(npc) || !canBeWokenBy(state.player)) return;
@@ -166,17 +182,24 @@ function risen(npc, state) {
   state.target = null;
 }
 
-/** Back to scenery (its base form, as it spawned), healed. */
+/**
+ * Back to scenery (its base form, as it spawned), healed. `dormant-npcs:slept` { npc } tells
+ * whatever kept state on the awake form (a Slayer finisher's last-legs line) to forget it.
+ */
 function sleep(npc) {
   npc.setNpcTransformationId(-1);
   npc.setMaxHitpoints(-1);
   npc.setHitpoints(npc.getMaxHitpoints());
   awake.delete(npc);
+  api?.emitCustomEvent?.(SLEPT_EVENT, { npc });
 }
 
-/** Awake: resting resets in combat; after a while it walks home, sinks, and sleeps. */
+/**
+ * Awake: resting resets in combat; after a while it walks home, sinks, and sleeps. One left on
+ * 0 hitpoints without dying (a zygomite waiting for its fungicide) rests and heals the same way.
+ */
 function restTick(npc, state) {
-  if (!npc.isRegistered() || npc.getHitpoints() <= 0) {
+  if (!npc.isRegistered() || npc.isDyingFunction?.() === true) {
     awake.delete(npc);
     return;
   }

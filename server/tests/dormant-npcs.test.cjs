@@ -282,11 +282,13 @@ test("a dormant crab is not woken by an attack, and a wyrm not by walking past i
   assert.equal(wyrm.getId(), 16297);
 });
 
-test("zygomites: Pick plays the pick, the cap leaps out next tick, can't be attacked while rising, then attacks", () => {
+test("zygomites: the pick plays the tick after arrival, the cap leaps out the next, can't be attacked while rising, then attacks", () => {
   const cap = createCrab(1023, 2412, 4370);
   const player = createPlayer(2413, 4370);
   assert.equal(pick({ player, npc: cap }), true);
-  assert.deepEqual(player.log, ["anim 3335", "sound 2581 0"], "human_fungicide_pick_zygomite and pick, on arrival");
+  assert.deepEqual(player.log, [], "nothing on the arrival tick (capture: arrival t33, pick t34)");
+  runTicks();
+  assert.deepEqual(player.log, ["anim 3335", "sound 2581 0"], "human_fungicide_pick_zygomite and pick");
   assert.equal(cap.getId(), 1023, "still a cap on the pick's own tick");
   runTicks();
   assert.equal(cap.getId(), 1024);
@@ -322,15 +324,48 @@ test("zygomites: a cap rises once, for its first picker, and not if it is gone b
   const second = createPlayer(2417, 4376);
   pick({ player: first, npc: cap });
   pick({ player: second, npc: cap });
+  runTicks();
   assert.deepEqual(second.log, [], "ours: the second pick does nothing");
   runTicks(3);
   assert.deepEqual(cap.attacked, [first]);
   const gone = createCrab(1023, 2419, 4374);
   pick({ player: first, npc: gone });
+  runTicks();
   gone.setHitpoints(0);
   runTicks(3);
   assert.equal(gone.getId(), 1023);
   assert.equal(picking.size, 0);
+});
+
+test("zygomites: ours, a picker who walks off before the pick doesn't pick", () => {
+  const cap = createCrab(1023, 2420, 4377);
+  let x = 2420;
+  const player = Object.assign(createPlayer(2420, 4376), { getLocation: () => new Location(x, 4376, 0) });
+  pick({ player, npc: cap });
+  x = 2422;
+  runTicks(3);
+  assert.deepEqual(player.log, []);
+  assert.equal(cap.getId(), 1023);
+  assert.equal(picking.size, 0);
+});
+
+test("zygomites: one left on 0 hitpoints, waiting for its fungicide, still turns back into its cap, healed", () => {
+  const cap = createCrab(1023, 2421, 4370);
+  cap.isRegistered = () => true;
+  cap.isDyingFunction = () => false;
+  wake(cap, createPlayer(2421, 4371));
+  runTicks(2);
+  cap.setHitpoints(0);
+  runTicks(21);
+  assert.equal(cap.getId(), 1023);
+  assert.equal(cap.getHitpoints(), cap.getMaxHitpoints());
+  assert.deepEqual(events.filter((event) => event.name === "dormant-npcs:slept").map((event) => event.npc), [cap]);
+  const dying = createCrab(1023, 2412, 4370);
+  dying.isRegistered = () => true;
+  dying.isDyingFunction = () => true;
+  wake(dying, createPlayer(2412, 4371));
+  runTicks(3);
+  assert.equal(awake.has(dying), false, "a dying one is let go");
 });
 
 test("zygomites: Pick on another Fungi is left to other plugins", () => {

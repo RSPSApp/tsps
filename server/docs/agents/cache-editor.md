@@ -213,7 +213,9 @@ every frame its `seq.dat` names, against its frame map. That is the cache's own,
 frame map** (a skeleton for a model of your own): an id the cache doesn't have, from 30,000 to
 65,535, with its `framemap-<id>.dat` in the folder. A custom frame map travels with every animation
 that uses it, so all of them must have the same bytes under that id; an upload that differs is
-refused. A cache frame map can't be edited in place: give the edited one its own id. A graphic's
+refused. So editing a skeleton that several animations share means a new id: re-upload each
+animation under it, because replacing one under the old id is refused while the others still have
+the old bytes. A cache frame map can't be edited in place: give the edited one its own id. A graphic's
 `anim/` folder becomes an animation asset and its `model.dat` a model asset, and its row points at
 both.
 

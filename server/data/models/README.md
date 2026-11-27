@@ -290,6 +290,9 @@ Animations use the cache's skeletons (frame maps). The add-ons never change them
 refuses a `framemap-<id>.dat` that differs from the cache's. A model of your own can have a
 skeleton of its own: a frame map whose id the cache doesn't have, from 30000 to 65535, written as
 `framemap-<id>.dat` next to the frames that use it. The editor sends it with the animation.
+The Blender add-on doesn't create or renumber frame maps yet: it writes back the frame map it
+imported, under the same id. For now a custom frame map, and frames whose first two bytes name its
+id, have to come from another tool.
 
 Use them like any other id: `new Animation(50000)`, `new Graphic(50001)`, or in game
 `::anim 50000` and `::gfx 50001`.

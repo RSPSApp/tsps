@@ -19,6 +19,7 @@ const T = KalphiteCave._test;
 let core;
 let area;
 const dialogues = [];
+const npcActions = new Map();
 
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
@@ -30,6 +31,7 @@ before(async () => {
       if (name === "npc-dialogue:start") dialogues.push(payload);
     },
     registerArea: (registered) => { area = registered; },
+    onNpcInteraction: (name, actions) => npcActions.set(name, actions),
   };
   KalphiteCave.register(api);
 });
@@ -158,4 +160,51 @@ test("the crevice by the landing leads out to the entrance", () => {
   assert.equal(exit.length, 1);
   assert.deepEqual([exit[0].x, exit[0].y, exit[0].z, exit[0].option], [3306, 9497, 0, "Use"]);
   assert.deepEqual(exit[0].to, [3321, 3122, 0]);
+});
+
+/** A player with an inventory and a bank, for the corpse's Search option. */
+function searcher({ items = [], banks = [], freeSlots = 28 } = {}) {
+  const player = fakePlayer();
+  const held = new Map(items);
+  const added = [];
+  player.getInventory = () => ({
+    getAmount: (id) => held.get(id) ?? 0,
+    getFreeSlots: () => freeSlots,
+    adds: (id, amount) => { added.push([id, amount]); held.set(id, (held.get(id) ?? 0) + amount); return true; },
+  });
+  player.getBanks = () => banks;
+  player.added = added;
+  return player;
+}
+const bankHolding = (id, amount) => [{ getAmount: (other) => (other === id ? amount : 0) }];
+
+test("Search on the Entomologist gives his diary, once (Wiki: Entomologist's diary)", () => {
+  const diary = core.CacheDefinitions.getObjId("slayer_cave_diary");
+  assert.equal(diary, 11904, "the cache's slayer_cave_diary is the item the Wiki lists");
+  const actions = npcActions.get("Entomologist");
+  assert.deepEqual(Object.keys(actions), ["Search"], "Search is the corpse's only option");
+
+  const player = searcher();
+  actions.Search({ player });
+  assert.deepEqual(player.added, [[diary, 1]]);
+  assert.deepEqual(player.messages, [T.DIARY_TAKEN]);
+
+  actions.Search({ player });
+  assert.deepEqual(player.added, [[diary, 1]], "a second search does not duplicate it");
+  assert.deepEqual(player.messages, [T.DIARY_TAKEN, T.DIARY_ALREADY_HELD]);
+});
+
+test("a banked diary is not handed out again, and a full inventory keeps it in the body", () => {
+  const diary = 11904;
+  const actions = npcActions.get("Entomologist");
+
+  const banked = searcher({ banks: bankHolding(diary, 1) });
+  actions.Search({ player: banked });
+  assert.deepEqual(banked.added, [], "the bank counts as held");
+  assert.deepEqual(banked.messages, [T.DIARY_ALREADY_HELD]);
+
+  const full = searcher({ freeSlots: 0 });
+  actions.Search({ player: full });
+  assert.deepEqual(full.added, []);
+  assert.deepEqual(full.messages, [T.DIARY_NO_SPACE]);
 });

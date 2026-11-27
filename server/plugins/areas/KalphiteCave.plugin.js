@@ -48,6 +48,41 @@ function refuse(player) {
   });
 }
 
+/**
+ * Buggie's corpse: the Wiki (Entomologist's diary) says the diary "can be reclaimed by searching
+ * Buggie", and nothing else in the game gives it. No transcript or capture records what live says
+ * when the diary comes out of the body, so both lines below are derived from that sentence rather
+ * than captured. The POH bookcase follows on its own: the diary is slot 68 of the 5210 book enum,
+ * and Bookcase.Construction records every book the player acquires.
+ */
+const ENTOMOLOGIST_DIARY_GAMEVAL = "slayer_cave_diary";
+const DIARY_TAKEN = "You search the entomologist's body and find his diary.";
+const DIARY_ALREADY_HELD = "You have already taken his diary.";
+const DIARY_NO_SPACE = "You need more inventory space to take his diary.";
+
+/** Already holding a copy, in the inventory or the bank — searching again must not duplicate it. */
+function holdsDiary(player, diaryId) {
+  if (player.getInventory().getAmount(diaryId) > 0) return true;
+  return (player.getBanks?.() ?? []).some((bank) => (bank?.getAmount?.(diaryId) ?? 0) > 0);
+}
+
+/** Search on the Entomologist: hand over the diary once, and say why when it cannot be taken. */
+function searchBuggie({ player }) {
+  const diaryId = api.core.CacheDefinitions.getObjId(ENTOMOLOGIST_DIARY_GAMEVAL);
+  if (diaryId == null) return;
+  const inventory = player.getInventory();
+  if (holdsDiary(player, diaryId)) {
+    player.sendMessage(DIARY_ALREADY_HELD);
+    return;
+  }
+  if (inventory.getFreeSlots() < 1) {
+    player.sendMessage(DIARY_NO_SPACE);
+    return;
+  }
+  inventory.adds(diaryId, 1);
+  player.sendMessage(DIARY_TAKEN);
+}
+
 function createCave(pluginApi) {
   const { Area, Boundary } = pluginApi.core;
   class KalphiteCave extends Area {
@@ -77,6 +112,8 @@ function createCave(pluginApi) {
 function registerCave(pluginApi) {
   api = pluginApi;
   pluginApi.registerArea(createCave(pluginApi));
+  // Wiki (Entomologist's diary): the diary is reclaimed by searching Buggie, his only Search option.
+  pluginApi.onNpcInteraction("Entomologist", { Search: searchBuggie });
 }
 
 module.exports = {
@@ -86,5 +123,5 @@ module.exports = {
   register(pluginApi) {
     registerCave(pluginApi);
   },
-  _test: { createCave, refuse, onTask, wearsGhostspeak, CAVE, BUGGIE_MESSAGE, BUGGIE_VARIANTS },
+  _test: { createCave, refuse, onTask, wearsGhostspeak, CAVE, BUGGIE_MESSAGE, BUGGIE_VARIANTS, searchBuggie, holdsDiary, DIARY_TAKEN, DIARY_ALREADY_HELD, DIARY_NO_SPACE },
 };

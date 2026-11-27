@@ -303,3 +303,36 @@ test("crewmates carrying crates: the ledger counts theirs, says they'll help, an
   assert.equal(ledger.moreToGo(1, "collect"), " There is one more crate of this type to collect.");
   assert.equal(ledger.moreToGo(4, "deliver"), " There are four more crates of this type to deliver.");
 });
+
+// A boat lost at sea takes its hold with it (Wiki, Sailing → Death & Capsizing: courier crates,
+// bounty items, salvage and trawling fish go, supplies stay), and the task slot has to take the
+// crate back or the cargo port refuses to hand out a replacement (#6878).
+test("a sunk boat's courier crates go back to their task slot, and its supplies stay aboard", () => {
+  const Cargo = require("../plugins/skills/sailing/Cargo.Sailing");
+  const player = createPlayer();
+  player.setAttribute(common.SLOTS_ATTRIBUTE, [{ id: JEWELLERY_TASK, taken: 1, delivered: 0 }]);
+  const task = common.taskById(JEWELLERY_TASK);
+  const boat = { slot: 0, type: "raft", cargo: [{ id: task.crate, amount: 1 }, { id: Cargo.REPAIR_KIT, amount: 2 }] };
+
+  hooks.custom["sailing:boat-sunk"]({ player, boat });
+
+  assert.equal(common.slots(player)[0].taken, 0, "taken drops by the lost crate, so the ledger can re-issue");
+  assert.equal(boat.cargo[0], null, "the crate went down with the boat");
+  assert.deepEqual(boat.cargo[1], { id: Cargo.REPAIR_KIT, amount: 2 }, "repair kits are kept");
+  assert.equal(ledger.collectable(player, "the_pandemonium").length, 1,
+    "the cargo port has the crate for them again");
+});
+
+test("a write-off never undoes a delivery already credited, and a shipwright's recovery does the same", () => {
+  const player = createPlayer();
+  // Delivered equals taken: the crate that went down was already handed in; nothing to give back.
+  player.setAttribute(common.SLOTS_ATTRIBUTE, [{ id: JEWELLERY_TASK, taken: 1, delivered: 1 }]);
+  const task = common.taskById(JEWELLERY_TASK);
+  hooks.custom["sailing:boat-sunk"]({ player, boat: { slot: 0, cargo: [{ id: task.crate, amount: 1 }] } });
+  assert.equal(common.slots(player)[0].taken, 1, "taken never drops below delivered");
+
+  // The same accounting for the crates a shipwright's recovery drops (boat left at another port).
+  player.setAttribute(common.SLOTS_ATTRIBUTE, [{ id: JEWELLERY_TASK, taken: 2, delivered: 0 }]);
+  hooks.custom["sailing:cargo-lost"]({ player, boat: { slot: 0, cargo: [] }, crates: [{ id: task.crate, amount: 2 }] });
+  assert.equal(common.slots(player)[0].taken, 0);
+});

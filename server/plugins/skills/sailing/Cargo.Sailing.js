@@ -172,11 +172,17 @@ function holdsLostOnRecovery(boat) {
   return (boat?.cargo ?? []).some((slot) => slot && categories[categoryOf(slot.id)]?.lostOnRecovery);
 }
 
-/** Drops what a shipwright's recovery loses (salvage, courier crates, fish). */
+/** Drops what a shipwright's recovery loses (salvage, courier crates, fish), and says what went. */
 function dropLostOnRecovery(boat) {
   const categories = content().cargo.categories;
-  boat.cargo = boat.cargo.map((slot) =>
-    slot && categories[categoryOf(slot.id)]?.lostOnRecovery ? null : slot);
+  const dropped = [];
+  boat.cargo = boat.cargo.map((slot) => {
+    if (!slot) return null;
+    if (!categories[categoryOf(slot.id)]?.lostOnRecovery) return slot;
+    dropped.push({ id: slot.id, amount: slot.amount ?? 1 });
+    return null;
+  });
+  return dropped;
 }
 
 module.exports = {

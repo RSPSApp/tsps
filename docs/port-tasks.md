@@ -219,7 +219,6 @@ messages, jingle and counter remain as above. See
 
 ## Not done
 
-- Confiscating crates on a teleport, or when leaving port with one in hand.
 - Trim being refused while carrying cargo.
 
 ## Port coin bag safety
@@ -419,6 +418,18 @@ tick, its owning task's `taken` count decreases by one (never below `delivered`)
 can be collected again at the cargo port. A refusal or requirements probe changes nothing.
 No task is cancelled, completed or rewarded by confiscation. Other task slots and the
 boat's hold are unchanged by this handler.
+
+A boat that goes down takes its hold with it. Live loses courier crates, bounty items,
+salvage and trawling fish on the death at sea, the capsize or the teleport that sinks a
+boat, and keeps supplies (Wiki, Sailing -> Death & Capsizing). `Sailing.sink` reports the
+sink as `sailing:boat-sunk` with the boat's own record; there the sailing cargo and
+port-task plugins drop those categories from the hold and give each lost courier crate back
+to its task slot, `taken` down by one and never below `delivered`. The cargo port then hands
+out a replacement, so a required crate can no longer be lost for good (#6878). A shipwright's
+later recovery finds that hold already empty; for a boat left at another port it drops the
+same categories itself and reports them as `sailing:cargo-lost`, which takes the same
+accounting. Neither path can charge a task twice. The quest stage does not advance on a
+sink, so the leg is simply started again with the replacement crate.
 
 Outside port, the player first receives "You're leaving port with some cargo. If you do
 not return it, it will be confiscated by the shipwright wizard's autonomous tracking unit."

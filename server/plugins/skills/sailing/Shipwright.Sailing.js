@@ -190,7 +190,8 @@ function recoverNow(player, dock, slot, head) {
   const cause = boat.location.kind !== "sunk" ? "docked" : isCapsized(boat) ? "capsized" : "lost";
   Sailing.recover(player, slot, dock.id);
   // A recovery loses salvage, courier crates and fish from the hold (OSRS Wiki, Cargo hold).
-  dropLostOnRecovery(boat);
+  // Port tasks hear about the courier crates so their slots take the crate back.
+  pluginApi.emitCustomEvent("sailing:cargo-lost", { player, boat, crates: dropLostOnRecovery(boat) });
   sendBoatVarbits(player);
   castRecovery(player, dock, cause, head);
 }

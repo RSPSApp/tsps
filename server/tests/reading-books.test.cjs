@@ -307,6 +307,31 @@ test("the Crombwick deed writes all twelve handwritten lines before the scroll o
   assert.deepEqual(state.animations, []);
 });
 
+test("the Entomologist's diary reads as Buggie's Diary across three spreads (#6871)", () => {
+  const { player, state } = reader();
+  assert.deepEqual(Object.keys(itemActions.get("Entomologist's diary")), ["Read"]);
+  itemActions.get("Entomologist's diary").Read({ player });
+  assert.equal(state.open, BOOK);
+  assert.equal(state.texts.get(uid(6)), "Buggie's Diary");
+  assert.deepEqual(state.animations, [READ]);
+  assert.equal(state.texts.get(uid(9)), "1");
+  assert.equal(state.texts.get(uid(10)), "2");
+  assert.equal(state.texts.get(uid(44)), "They've laughed at me for");
+  assert.equal(state.texts.get(uid(58)), "idiots who run the zoo just", "page 1 ends mid-sentence, as live's does");
+  assert.equal(state.texts.get(uid(60)), "laughed at me! They like");
+  assert.equal(state.texts.get(uid(74)), "got really thirsty trying to");
+  press(player, 77);
+  assert.equal(state.texts.get(uid(9)), "3");
+  assert.equal(state.texts.get(uid(44)), "find their hive in the desert,");
+  press(player, 77);
+  assert.equal(state.texts.get(uid(9)), "5");
+  assert.equal(state.texts.get(uid(60)), "The dizziness is getting");
+  assert.equal(state.texts.get(uid(67)), "I've lost my dolphin.");
+  assert.equal(state.texts.get(uid(68)), "", "page 6 ends early");
+  assert.equal(state.hidden.get(uid(77)), true, "no fourth spread");
+  press(player, 7);
+});
+
 test("The Grand Tree and The Hand in the Sand documents have a Read option with the Wiki's text (#6544, #6542)", () => {
   const scrolls = {
     "Hazelmere's scroll": /^Es lemanto meso pro eis prit ta Cinqo mond\.<br>Mi lovos te lemanto Daconia arpos<br>et Daconia arpos eto meriz ta priwl!$/,

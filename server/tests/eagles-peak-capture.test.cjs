@@ -472,3 +472,20 @@ test("other plugins ask by event: box traps from the lesson on; Biohazard's Asyf
   assert.equal(ask("eagles-peak:box-traps").unlocked, true);
   assert.equal(ask("eagles-peak:asyff-costume").owns, false);
 });
+
+test("the ferret offer across the chasm answers as live (t464-479, osrsreboxed-db#151), in the meeting and in the shout", async (t) => {
+  for (const chat of [1, 2]) {
+    const f = eagles(t, { stage: 15, varbits: { CHAT: chat }, at: [1998, 4955, 3] });
+    const nickolaus = spawnOnce(f, 2023, [2006, 4959, 3]);
+    await H.talk(f, nickolaus);
+    await H.until(f, "The Ardougne zookeeper sent me to find you.");
+    await H.choose(f, "The Ardougne zookeeper sent me to find you.");
+    await H.until(f, "Well if you gave me a ferret I could take it back for you.");
+    await H.choose(f, "Well if you gave me a ferret I could take it back for you.");
+    await H.until(f, "Well that's very kind of you, but I'm afraid all my equipment is down at the camp site.");
+    await H.until(f, "Trapped?");
+    await H.until(f, "Could I help at all?");
+    assert.equal(H.shown(f).who, "menu", `chat ${chat}: back on the trapped branch's menu`);
+    f.player.getPacketSender().sendInterfaceRemoval();
+  }
+});

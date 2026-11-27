@@ -22,6 +22,8 @@ module.exports = function attachEaglesPeakNest(api, ep) {
   const { Location, ChatType, Animation, GameObject, ObjectManager, TaskManager, Task, CountdownTask, ItemDefinition,
     HitDamage, HitMask, ForceMovement, ForceMovementTask } = api.core;
   const { openBook, bookPagesFromSpreads } = require("../QuestRuntime");
+  const ObstacleRunner = require("../../skills/agility/ObstacleRunner.Agility");
+  ObstacleRunner.init(api);
 
   const LOC = Object.freeze({
     FEATHERS: 19922, DOOR_LOWER: 19843, DOOR_UPPER: 19991, DOOR_LOWER_OPEN: 19990, DOOR_UPPER_OPEN: 19992, INVISWALL: 38848,
@@ -31,7 +33,6 @@ module.exports = function attachEaglesPeakNest(api, ep) {
   const DOOR_ROWS = Object.freeze({ 4947: { open: LOC.DOOR_LOWER_OPEN, face: 3 }, 4948: { open: LOC.DOOR_UPPER_OPEN, face: 1 } });
   const DOOR_OPEN_TICKS = 2;
   const SURFACE = Object.freeze([2328, 3496, 0]);
-  const IGNORE_CLIPPING_FLAG = "movement:ignore-clipping";
 
   const SEQ = Object.freeze({ PICK_UP: 827, WAVE: 863, SIDESTEP_IN: 752, SIDESTEP_OUT: 758, SIDESTEP_IN_LEFT: 753, SIDESTEP_OUT_LEFT: 759 });
   const SOUND = Object.freeze({ LOCKED: 2402, PLACE_FEATHER: 1513, PLACE_RUMBLE: 1512, STONE_DOOR: 86, SIDESTEP: 2485,
@@ -231,78 +232,26 @@ module.exports = function attachEaglesPeakNest(api, ep) {
   }
 
   /**
-   * A crossing that walks over collision (the eagle, the door's wall): the flag the player had before is kept here and
-   * put back when the walk ends or the player logs out, so a save never holds the crossing's flag (player flags are saved).
+   * Both crossings (through the eagle, across the door's wall) are ObstacleRunner forced walks: a tile a tick over
+   * collision with no saved flag, the player held and live's busy varbit (12393, t2001-2007) on, clicks dropped, and a
+   * logout landing them on the far tile. Walk-past: four tiles through the eagle with the sidestep animations, its line
+   * and the step out on arrival (t2002-2006, t2047-2051).
    */
-  const crossings = new WeakMap();
-  const WALK_ONLY_SOURCE = "eagles-peak:sidestep";
-
-  /** busy (12393): live sets it for the crossing (t2001-2007, t2046-2052). */
-  const BUSY_VARBIT = 12393;
-
-  function beginCrossing(player) {
-    if (!crossings.has(player)) crossings.set(player, player.hasFlag?.(IGNORE_CLIPPING_FLAG) === true);
-    player.setFlag?.(IGNORE_CLIPPING_FLAG, true);
-    player.getPacketSender().sendVarbit(BUSY_VARBIT, 1);
-  }
-
-  /** Still on the crossing: same plane, within its four tiles (a teleport or a death ends it). */
-  function onCrossing(now, to) {
-    return now.getZ() === to.getZ() && Math.max(Math.abs(now.getX() - to.getX()), Math.abs(now.getY() - to.getY())) <= 4;
-  }
-
-  /** Clicks in the world are dropped while crossing, as live's busy state holds the player (t2001-2007). */
-  function holdInput(input) {
-    if (input?.player && crossings.has(input.player)) input.handled = true;
-  }
-
-  function endCrossing(player) {
-    if (!crossings.has(player)) return;
-    if (!crossings.get(player)) player.removeFlag?.(IGNORE_CLIPPING_FLAG);
-    crossings.delete(player);
-    player.setWalkOnly?.(WALK_ONLY_SOURCE, false);
-    player.getPacketSender().sendVarbit(BUSY_VARBIT, 0);
-  }
-
-  /** Four tiles through the eagle, one a tick, its line and the step out on arrival (t2002-2006, t2047-2051). */
   function sidestep(player) {
     const here = player.getLocation();
     const north = here.getY() < EAGLE_SOUTH + 2;
-    const from = new Location(EAGLE_COLUMN, north ? EAGLE_SOUTH : EAGLE_NORTH, here.getZ());
-    const to = new Location(EAGLE_COLUMN, north ? EAGLE_NORTH : EAGLE_SOUTH, here.getZ());
-    beginCrossing(player);
-    // A tile a tick whatever the run setting (t2002-2005).
-    player.setWalkOnly?.(WALK_ONLY_SOURCE, true);
-    const queue = player.getMovementQueue();
-    queue.reset();
-    if (!here.equals(from)) queue.addSteps(from);
-    queue.addSteps(to);
-    player.getPacketSender().sendSoundEffect(SOUND.SIDESTEP, 4, 0, 255);
-    ep.animate(player, north ? SEQ.SIDESTEP_IN : SEQ.SIDESTEP_IN_LEFT);
-    let limit = 12;
-    const task = new Task(1, false);
-    task.execute = () => {
-      const now = player.getLocation();
-      const arrived = now.getX() === to.getX() && now.getY() === to.getY();
-      if (!arrived && !onCrossing(now, to)) {
-        task.stop();
-        queue.reset();
-        endCrossing(player);
-        return;
-      }
-      if (!arrived && --limit > 0 && player.isRegistered?.() !== false) {
-        // The crossing holds the player (live's busy varbit, t2001-2007): a click cannot leave them in the eagle.
-        queue.reset();
-        queue.addSteps(to);
-        return;
-      }
-      task.stop();
-      endCrossing(player);
-      if (!arrived) return;
-      ep.animate(player, north ? SEQ.SIDESTEP_OUT : SEQ.SIDESTEP_OUT_LEFT);
-      player.sendMessage(TEXT.EAGLE_PASSED);
-    };
-    TaskManager.submit(task);
+    const fromY = north ? EAGLE_SOUTH : EAGLE_NORTH;
+    const toY = north ? EAGLE_NORTH : EAGLE_SOUTH;
+    const path = [];
+    if (here.getX() !== EAGLE_COLUMN || here.getY() !== fromY) path.push([EAGLE_COLUMN, fromY]);
+    for (let y = fromY + (north ? 1 : -1); north ? y <= toY : y >= toY; y += north ? 1 : -1) path.push([EAGLE_COLUMN, y]);
+    ObstacleRunner.run({ player }, [
+      { anim: north ? SEQ.SIDESTEP_IN : SEQ.SIDESTEP_IN_LEFT },
+      { sound: SOUND.SIDESTEP, loops: 4 },
+      { walk: path, arrive: true },
+      { anim: north ? SEQ.SIDESTEP_OUT : SEQ.SIDESTEP_OUT_LEFT },
+      { msg: TEXT.EAGLE_PASSED },
+    ], { busyVarbit: true, keepAnimation: true });
   }
 
   function swipe(player, eagle) {
@@ -376,26 +325,7 @@ module.exports = function attachEaglesPeakNest(api, ep) {
       }));
     }
     const here = player.getLocation();
-    const destination = new Location(here.getX() >= DOOR_X ? DOOR_X - 1 : DOOR_X, y, z);
-    beginCrossing(player);
-    const queue = player.getMovementQueue();
-    queue.reset();
-    queue.addSteps(destination);
-    let ticks = DOOR_OPEN_TICKS + 1;
-    const task = new Task(1, false);
-    task.execute = () => {
-      const now = player.getLocation();
-      if ((now.getX() === destination.getX() && now.getY() === destination.getY()) || --ticks <= 0 || player.isRegistered?.() === false
-        || !onCrossing(now, destination)) {
-        task.stop();
-        endCrossing(player);
-        return;
-      }
-      // Only the step across is walked without collision; a click in between does not take that with it.
-      queue.reset();
-      queue.addSteps(destination);
-    };
-    TaskManager.submit(task);
+    ObstacleRunner.run({ player }, [{ walk: [[here.getX() >= DOOR_X ? DOOR_X - 1 : DOOR_X, y]] }], { busyVarbit: true });
   }
 
   /** The feathers' places: gold and bronze in 3106 (1, 2), silver as 3099's last value. */
@@ -476,8 +406,6 @@ module.exports = function attachEaglesPeakNest(api, ep) {
   api.onItemOnObject("Metal feather", "Stone door", metalFeatherOnDoor);
   api.onItemOnObject("Eagle feather", "Stone door", eagleFeatherOnDoor);
   api.onItemAction("Feathered journal", { Read: readJournal });
-  api.onPlayerLogout(({ player }) => endCrossing(player));
-  api.onCustomEvent("player:world-input", holdInput);
 
   return { LOC, JOURNAL, doorUnlocked, walkPastEagle, swipe, sidestep, startMeeting, routeShout };
 };

@@ -672,15 +672,49 @@ test("a walk click during Walk-past or the door step does not leave the player i
   assert.equal(varbit(f, 12393), 0, "busy cleared");
 });
 
-test("a teleport in the middle of Walk-past ends the crossing where the player now is, with collision back", async (t) => {
+test("crossings are ObstacleRunner walks: busy while on, and an online save mid-way holds no walk-through-walls flag", async (t) => {
+  const { PlayerSave } = require("../dist/game/entity/impl/player/persistence/PlayerSave");
+  const ObstacleRunner = require("../plugins/skills/agility/ObstacleRunner.Agility");
   const f = eagles(t, { stage: 20, varbits: { TRACKING: 6, DOOR: 3, CHAT: 5 }, at: [2007, 4953, 3], worn: [ITEM.CAPE, ITEM.BEAK] });
   const eagle = spawnOnce(f, 1490, [2007, 4954, 3]);
   await f.connection.dispatch([{ type: "npc_option", index: eagle.getIndex(), clickType: 1 }]);
   H.tick(f);
   H.tick(f);
-  f.player.moveTo(new H.core.Location(3222, 3218, 0)); // a teleport
-  f.player.needsPlacement = false;
+  assert.equal(ObstacleRunner.isBusy(f.player), true, "the crossing is under way");
+  assert.equal(varbit(f, 12393), 1, "busy, as live (t2001)");
+  assert.equal(PlayerSave.fromPlayer(f.player).getFlags().includes("movement:ignore-clipping"), false, "an online save now");
   H.ticks(f, 6);
-  assert.deepEqual(H.xy(f.player.getLocation()), [3222, 3218, 0], "not walked back toward the eagle");
-  assert.equal(f.player.hasFlag?.("movement:ignore-clipping") === true, false);
+  assert.deepEqual(H.xy(f.player.getLocation()), [2007, 4957, 3]);
+  assert.equal(varbit(f, 12393), 0);
+  const g = eagles(t, { stage: 20, varbits: { TRACKING: 6, DOOR: 3 }, at: [2002, 4948, 3] });
+  await H.objectOption(g, 19991, [2003, 4948]);
+  assert.equal(PlayerSave.fromPlayer(g.player).getFlags().includes("movement:ignore-clipping"), false, "the door step too");
+  H.ticks(g, 4);
+  assert.deepEqual(H.xy(g.player.getLocation()), [2003, 4948, 3]);
+});
+
+test("a full pack at the ferret lesson: the box trap and the ferret land on the real camp, not in the copy", async (t) => {
+  const f = eagles(t, { stage: 30, at: [2318, 3501, 0], items: [[1511, 1]] });
+  for (let i = 0; i < 27; i++) f.player.getInventory().add(new H.core.Item(1511, 1), false);
+  assert.equal(f.player.getInventory().getFreeSlots(), 0);
+  const nickolaus = spawnOnce(f, 2024, [2317, 3500, 0]);
+  await H.talk(f, nickolaus);
+  await H.until(f, "Well I was originally sent to find you because of a ferret.");
+  await H.choose(f, "Well I was originally sent to find you because of a ferret.");
+  await H.until(f, "That sounds good to me.");
+  await H.choose(f, "That sounds good to me.");
+  await H.until(f, "Come with me and I'll show you.");
+  await H.continueLine(f);
+  H.ticks(f, 12);
+  await H.until(f, "Shhh, here comes something.");
+  await H.continueLine(f);
+  H.ticks(f, 14);
+  await H.until(f, "Ha ha, there you go!");
+  await H.continueLine(f);
+  H.ticks(f, 20);
+  assert.equal(QUEST().getStage(f.player), 35);
+  const ground = (H.core.ItemOnGroundManager.ownedBy?.(f.player.getUsername()) ?? []).map((item) => [item.getItem().getId(), H.xy(item.getPosition())]);
+  for (const id of [ITEM.BOX_TRAP, ITEM.FERRET]) {
+    assert.ok(ground.some(([itemId, at]) => itemId === id && at[0] === 2314 && at[1] === 3510), `${id} on the real camp: ${JSON.stringify(ground)}`);
+  }
 });

@@ -133,17 +133,34 @@ module.exports = function attachEaglesPeakFerret(api, ep) {
       if (state.stage(player) < STAGE.FERRET_CAUGHT) state.setStage(player, STAGE.FERRET_CAUGHT);
       player.sendMessage(TEXT.TRAP_DISMANTLED);
       sceneLoc(scene, null);
-      const inventory = player.getInventory();
-      inventory.forceAdd(player, new Item(ITEM.BOX_TRAP, 1));
-      inventory.forceAdd(player, new Item(ITEM.FERRET, 1));
       ep.sound(player, SOUND.DISMANTLE);
+      // In the inventory now if they fit; what does not lands on the real camp when the copy goes (below).
+      scene.owed = giveFitting(player, [ITEM.BOX_TRAP, ITEM.FERRET]);
     });
     Scenes.later(scene, 11, () => {
+      const owed = scene.owed ?? [];
       Scenes.end(player, false);
       player.moveTo(new Location(...CAMP.exit));
       Scenes.restoreTabs(player);
+      for (const itemId of owed) player.getInventory().forceAdd(player, new Item(itemId, 1));
     });
     ep.later(player, 16, () => player.getPacketSender().sendCameraReset());
+  }
+
+  /** Gives what fits now; returns what did not, for the real camp (live's full-pack case was not recorded: Ours). */
+  function giveFitting(player, itemIds) {
+    const owed = [];
+    for (const itemId of itemIds) {
+      if (player.getInventory().getFreeSlots() > 0) player.getInventory().add(new Item(itemId, 1));
+      else owed.push(itemId);
+    }
+    return owed;
+  }
+
+  /** A logout or Escape after the stage but before the copy goes still gives what was owed, on the real camp. */
+  function payOwed(player, scene) {
+    for (const itemId of scene.owed ?? []) player.getInventory().forceAdd(player, new Item(itemId, 1));
+    scene.owed = [];
   }
 
   function handleLine(request) {
@@ -173,6 +190,7 @@ module.exports = function attachEaglesPeakFerret(api, ep) {
   /** Out of the copy early (a logout, a death): the lesson is played again from its start; nothing was given yet. */
   function ended(player, scene, logout) {
     if (scene.name !== SCENE) return;
+    if (logout) payOwed(player, scene);
     if (!logout) Scenes.closeFade(player);
   }
 

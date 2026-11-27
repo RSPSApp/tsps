@@ -28,14 +28,12 @@ const USED_NOTICE_BOARD_ATTRIBUTE = "tob:used-notice-board";
 
 const uid = (group, component) => (group << 16) | component;
 /**
- * The buttons on both interfaces are pause buttons: scripts 890/2319/2327/2330 resume a child
- * of a parent component, so a click arrives as RESUME_PAUSEBUTTON (an interface action click
- * with the child in `action`), never as a button op.
- * 364: Refresh, My/Make Party and Friends/Clan (components 64, 66, 67) resume children 0-2 of
- * component 3 (enum 1938). The rows are components 18-62 (enum 1937), each with a plain op
- * "View party" (script 5220).
+ * 364: Refresh, My/Make Party and Friends/Clan resume children 0-2 of component 3 (enum 1938).
+ * Scripts 5220 and 1568 give rows 18-62 (enum 1937) their View party option and resume the
+ * original row index on component 17.
  */
 const LIST_BUTTONS_UID = uid(INTERFACE.PARTIES_OVERVIEW, 3);
+const LIST_UID = uid(INTERFACE.PARTIES_OVERVIEW, 17);
 const LIST_ROW_FIRST = 18;
 const LIST_ROW_UIDS = Array.from({ length: Shared.LIST_ROWS }, (_, row) => uid(INTERFACE.PARTIES_OVERVIEW, LIST_ROW_FIRST + row));
 const LIST_BUTTON = { REFRESH: 0, MY_PARTY: 1, FILTER: 2 };
@@ -53,10 +51,12 @@ const INFO_BUTTON = {
 const INFO_ARROW_FIRST = 63;
 const INFO_ARROW_UIDS = Array.from({ length: Shared.MAX_PARTY_SIZE * 2 },
   (_, index) => uid(INTERFACE.PARTY_INFORMATION, INFO_ARROW_FIRST + index));
+const PAUSEBUTTON = 1 << 0;
 const OP1 = 1 << 1;
 const MYSTERIOUS_STRANGER_SHOP = 1240;
 const ATTR = {
   VIEWING: "tob:viewing",
+  LISTED_PARTY_IDS: "tob:listed-party-ids",
   WARNED: "tob:death-warning",
   NO_CRYSTAL_PROMPT: "tob:no-crystal-prompt",
   MET_STRANGER: "tob:met-stranger",
@@ -78,7 +78,7 @@ function refreshHud(player) {
   sender.sendSubInterface(Shared.OVERLAY_HUD_UID, INTERFACE.PARTY_HUD, 1);
   sender.sendVarbit(VARBIT.PARTY_STATE, party ? 1 : 0);
   const lines = Array.from({ length: Shared.MAX_PARTY_SIZE }, (_, i) =>
-    (party?.members[i] ? partyDisplayName(party.members[i]) : "-"));
+    (party?.members[i] ? Shared.partyDisplayName(party.members[i]) : "-"));
   sender.sendString(lines.join("<br>"), uid(INTERFACE.PARTY_HUD, 12));
 }
 
@@ -134,7 +134,7 @@ function rowText(party, viewer) {
   const names = Array.from({ length: Shared.MAX_PARTY_SIZE }, (_, i) => {
     const member = party.members[i];
     if (!member) return "";
-    const name = Shared.displayName(member);
+    const name = Shared.partyDisplayName(member);
     return i === 0 && party.has(viewer) ? `<col=ffffff>${name}</col>` : name;
   });
   return `${names.join("|")}|${party.members.length}|${party.preferredSize}|${party.preferredCombat}|${Shared.MODES[party.mode].name}|${party.age()}`;
@@ -146,11 +146,19 @@ function openOverview(player) {
   sender.sendConfig(VARP.HAS_PARTY, Parties.partyOf(player) ? 0 : -1);
   sender.sendInterface(INTERFACE.PARTIES_OVERVIEW);
   const listed = Parties.listed();
+  const rowIds = Array(Shared.LIST_ROWS).fill(null);
   for (let index = 0; index < Shared.LIST_ROWS; index++) {
     const party = listed[index];
-    sender.sendClientScript(SCRIPT.PARTY_ROW, index, party ? rowText(party, player) : "");
+    if (!party || party.raid) {
+      sender.sendClientScript(SCRIPT.PARTY_ROW, index, "");
+      continue;
+    }
+    rowIds[index] = party.id;
+    sender.sendClientScript(SCRIPT.PARTY_ROW, index, rowText(party, player));
   }
-  for (const rowUid of LIST_ROW_UIDS) sender.sendInterfaceFlags(rowUid, OP1);
+  player.setAttribute(ATTR.LISTED_PARTY_IDS, rowIds);
+  sender.sendInterfaceFlagsRange(LIST_BUTTONS_UID, 0, 2, PAUSEBUTTON);
+  sender.sendInterfaceFlagsRange(LIST_UID, 0, Shared.LIST_ROWS - 1, PAUSEBUTTON);
 }
 
 function slotOf(event) {
@@ -182,16 +190,16 @@ function clickListButton(event) {
 }
 
 function selectRow(event) {
-  const party = Parties.listed()[(event.buttonId & 0xffff) - LIST_ROW_FIRST];
-  if (party) openInformation(event.player, party);
-  else openOverview(event.player);
+  const { player } = event;
+  if (player.getInterfaceId() !== INTERFACE.PARTIES_OVERVIEW) return;
+
+  const partyId = player.getAttribute(ATTR.LISTED_PARTY_IDS)?.[slotOf(event)];
+  const party = Parties.byId(partyId);
+  if (party && !party.raid) openInformation(player, party);
+  else openOverview(player);
 }
 
 // ---------------------------------------------------------------- 50: a party's information
-
-function partyDisplayName(player) {
-  return Shared.displayName(player).replaceAll(" ", "\u00a0");
-}
 
 /** A member's line: name, combat, attack, strength, ranged, magic, defence, hitpoints, prayer, completions. */
 function memberLine(player) {
@@ -199,7 +207,7 @@ function memberLine(player) {
   const skills = player.getSkillManager();
   const levels = [Skill.ATTACK, Skill.STRENGTH, Skill.RANGED, Skill.MAGIC, Skill.DEFENCE, Skill.HITPOINTS, Skill.PRAYER]
     .map((skill) => skills.getMaxLevel(skill));
-  return `${partyDisplayName(player)}|${skills.getCombatLevel()}|${levels.join("|")}|${Stats.completionsOf(player, "normal")}`;
+  return `${Shared.partyDisplayName(player)}|${skills.getCombatLevel()}|${levels.join("|")}|${Stats.completionsOf(player, "normal")}`;
 }
 
 function openInformation(player, party) {
@@ -337,12 +345,12 @@ function answerApplicant(player, party, index, accept, { notifyApplicant = true,
     if (Parties.partyOf(applicant)) {
       party.withdraw(applicant);
       player.getPacketSender().sendInterfaceRemoval();
-      Shared.statement(player, `${Shared.displayName(applicant)} appears to have joined another party.`);
+      Shared.statement(player, `${Shared.partyDisplayName(applicant)} appears to have joined another party.`);
       return;
     }
     if (party.accept(applicant)) {
       if (notifyApplicant) {
-        const leaderName = Shared.displayName(party.leader).replaceAll(" ", "\u00a0");
+        const leaderName = Shared.partyDisplayName(party.leader);
         applicant.sendMessage(`Your application to the party of ${leaderName} has been accepted.`);
       }
       if (deferHud) {
@@ -357,7 +365,7 @@ function answerApplicant(player, party, index, accept, { notifyApplicant = true,
     }
   } else {
     party.decline(applicant);
-    applicant.sendMessage(`Your application to the party of ${Shared.displayName(party.leader)} has been declined.`);
+    applicant.sendMessage(`Your application to the party of ${Shared.partyDisplayName(party.leader)} has been declined.`);
   }
   refreshParty(party);
   if (isViewing(applicant, party)) openInformation(applicant, party);
@@ -496,6 +504,7 @@ function clickPartyArrow(event) {
 /** A pause button on either interface: its parent and the child resumed. */
 function resumeButton(event) {
   if (event.buttonId === LIST_BUTTONS_UID) clickListButton({ player: event.player, slot: event.action });
+  else if (event.buttonId === LIST_UID) selectRow({ player: event.player, slot: event.action });
   else if (event.buttonId === INFO_UID) clickInformation({ player: event.player, slot: event.action });
   else return;
   event.handled = true;
@@ -665,7 +674,7 @@ function useEntrance(event) {
     return true;
   }
   if (!party.isLeader(player) && !party.raid) {
-    Shared.statement(player, `Your leader, ${Shared.displayName(party.leader)}, must go first.`);
+    Shared.statement(player, `Your leader, ${Shared.partyDisplayName(party.leader)}, must go first.`);
     return true;
   }
   if (!player.getAttribute(ATTR.WARNED)) {
@@ -747,13 +756,12 @@ module.exports = function registerTheatreLobby(api) {
   Shared.onObject(api, Shared.OBJECT.NOTICE_BOARD, readNoticeBoard);
   Shared.onObject(api, Shared.OBJECT.ENTRANCE, useEntrance);
   api.onInterfaceActionClick(resumeButton);
-  api.onInterfaceActionButton(LIST_ROW_UIDS, selectRow);
   api.onInterfaceActionButton(INFO_ARROW_UIDS, clickPartyArrow);
   api.onCustomEvent("interface:closed", partyHandoverClosed);
 };
 
 Object.assign(module.exports, {
-  ATTR, openOverview, openInformation, rowText, memberLine, clickListButton, selectRow, clickInformation, resumeButton,
+  ATTR, openOverview, openInformation, rowText, memberLine, clickListButton, clickInformation, resumeButton,
   LIST_ROW_UIDS, GROUPING_ACTIVITY, announceActivity,
   useEntrance, refreshHud, leaveParty,
 });

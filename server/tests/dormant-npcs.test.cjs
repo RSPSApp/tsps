@@ -58,7 +58,8 @@ function createCrab(id, x, y) {
     setHitpoints: (value) => { hitpoints = value; },
     getHitpoints: () => hitpoints,
     performAnimation: (animation) => crab.log.push(`anim ${animation.getId()}`),
-    getCombat: () => ({ attack: (target) => crab.attacked.push(target) }),
+    damageCleared: 0,
+    getCombat: () => ({ attack: (target) => crab.attacked.push(target), clearDamageMap: () => { crab.damageCleared++; } }),
     getLocation: () => location,
     getSpawnPosition: () => spawn,
     blocked: false,
@@ -360,6 +361,7 @@ test("zygomites: one left on 0 hitpoints, waiting for its fungicide, still turns
   assert.equal(cap.getId(), 1023);
   assert.equal(cap.getHitpoints(), cap.getMaxHitpoints());
   assert.deepEqual(events.filter((event) => event.name === "dormant-npcs:slept").map((event) => event.npc), [cap]);
+  assert.equal(cap.damageCleared, 1, "its next kill goes to whoever fights it next, not the one who left it");
   const dying = createCrab(1023, 2412, 4370);
   dying.isRegistered = () => true;
   dying.isDyingFunction = () => true;

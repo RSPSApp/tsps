@@ -183,13 +183,15 @@ function risen(npc, state) {
 }
 
 /**
- * Back to scenery (its base form, as it spawned), healed. `dormant-npcs:slept` { npc } tells
+ * Back to scenery (its base form, as it spawned), healed, with its last fight's damage forgotten
+ * so a later kill goes to whoever fights it next. `dormant-npcs:slept` { npc } tells
  * whatever kept state on the awake form (a Slayer finisher's last-legs line) to forget it.
  */
 function sleep(npc) {
   npc.setNpcTransformationId(-1);
   npc.setMaxHitpoints(-1);
   npc.setHitpoints(npc.getMaxHitpoints());
+  npc.getCombat?.()?.clearDamageMap?.();
   awake.delete(npc);
   api?.emitCustomEvent?.(SLEPT_EVENT, { npc });
 }

@@ -193,18 +193,21 @@ function runOnAttack(npc, target) {
   const destination = runDestination(npc, origin, queue);
   if (!destination) return;
   const distance = runDistance(origin, destination);
+  const pursued = queue.steppedThisWorldCycle();
   queue.addFirstStep(destination);
-  // Combat attacks after the NPC's normal movement pass. Process these first steps now so
-  // the attack still uses the old tile and its animation is sent with this tick's movement.
-  queue.process();
-  if (!Common.alive(npc) || !Common.alive(target) || !queue.didMoveThisCycle()) {
-    queue.reset();
-    return;
-  }
-  if (queue.isStepBlocked()) {
-    queue.reset();
-    npc.getCombat().setAttackDelay(moveDelay(runDistance(origin, npc.getLocation())));
-    return;
+  // Combat attacks after the NPC's normal movement pass. Start the run now when that pass
+  // took no steps. If pursuit already moved her, start next tick to keep its sync directions.
+  if (!pursued) {
+    queue.process();
+    if (!Common.alive(npc) || !Common.alive(target) || !queue.didMoveThisCycle()) {
+      queue.reset();
+      return;
+    }
+    if (queue.isStepBlocked()) {
+      queue.reset();
+      npc.getCombat().setAttackDelay(moveDelay(runDistance(origin, npc.getLocation())));
+      return;
+    }
   }
   npc.getCombat().setAttackDelay(moveDelay(distance));
   if (queue.size() === 0) return;
@@ -212,6 +215,7 @@ function runOnAttack(npc, target) {
   // While the remaining steps run, combat would otherwise clear or replace the queue.
   npc.setScriptedMovement(true);
   const started = core.World.getProcessCycle();
+  const finishAfter = Math.ceil(distance / RUN_STEPS) + Number(pursued);
   const run = new (class extends core.Task {
     constructor() {
       super(1);
@@ -219,14 +223,14 @@ function runOnAttack(npc, target) {
     }
 
     execute() {
-      if (!Common.alive(npc) || !Common.alive(target) || queue.size() === 0) {
+      if (!Common.alive(npc) || !Common.alive(target)) {
         endRun(npc);
         return;
       }
       const elapsed = core.World.getProcessCycle() - started;
-      if (queue.isStepBlocked() || !queue.getMobility().canMove() || elapsed >= Math.ceil(distance / RUN_STEPS)) {
+      if (!queue.size() || queue.isStepBlocked() || !queue.getMobility().canMove() || elapsed >= finishAfter) {
         const ran = runDistance(origin, npc.getLocation());
-        npc.getCombat().setAttackDelay(moveDelay(ran) - elapsed);
+        if (ran !== distance) npc.getCombat().setAttackDelay((ran ? moveDelay(ran) : SPEED) - elapsed);
         endRun(npc);
       }
     }

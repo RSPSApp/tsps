@@ -222,14 +222,18 @@ module.exports = function registerGraves(api, { state, common, guide }) {
     if (request.itemId !== ITEM.CAVERN_KEY) return;
     const stage = request.player ? state.stage(request.player) : STAGE.NOT_STARTED;
     request.allowed = request.npcId === NPC.KEY_EXPERIMENT && stage >= STAGE.PARTS && stage < STAGE.COMPLETE
-      && !held(request.player, ITEM.CAVERN_KEY);
+      && !held(request.player, ITEM.CAVERN_KEY) && !state.get(request.player, FIELD.UNLOCKED_CAVERN);
   }
 
-  /** "If the player is already carrying a key or has completed the quest, they cannot attack another" (Wiki, Cavern key). */
+  /**
+   * Spared once a key is carried, has been used on the gate, or the quest is done (Wiki, Experiment and
+   * Cavern key). Only the Attack option is refused: a combat spell still starts the fight, though no
+   * second key drops.
+   */
   function spareExperiment(event) {
     const { player, npcId } = event;
     if (npcId !== NPC.KEY_EXPERIMENT || !player) return;
-    if (!held(player, ITEM.CAVERN_KEY) && state.stage(player) < STAGE.COMPLETE) return;
+    if (!held(player, ITEM.CAVERN_KEY) && !state.get(player, FIELD.UNLOCKED_CAVERN) && state.stage(player) < STAGE.COMPLETE) return;
     player.sendMessage("You don't have the heart to kill the poor creature again.");
     event.handled = true;
   }

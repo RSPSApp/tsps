@@ -832,6 +832,10 @@ test('review: the key Experiment is spared while a key is carried or after the q
   f.p.getInventory().deleteNumber(I().CAVERN_KEY, 1);
   assert.equal(attack(), false, 'without a key, during the quest, it can be fought');
   assert.equal(drop(), true);
+  f.p.setAttribute(STATE, 1 << 21); // fenk_unlocked_cavern: the key has been used on the gate
+  assert.equal(attack(), true, 'once the key has been used on the gate (Wiki, Experiment)');
+  assert.equal(drop(), false);
+  f.p.setAttribute(STATE, 0);
   quest.setStage(f.p, 7);
   assert.equal(attack(), true, 'after the quest');
 });

@@ -23,7 +23,10 @@ a key still owned in a carried or banked ring does block duplicate replacement.
 
 ## Sources and identifiers
 
-The Wiki supplies site coordinates, order, distance bands and the dig radius.
+The Wiki supplies site coordinates, order and the dig radius. Feel's six readings and their
+distance cuts follow the recordings instead of the Wiki's eight-band table; see
+[docs/quests/the-enchanted-key](quests/the-enchanted-key/README.md), which also has the journal,
+completion and merchant facts from the user's revision 243 capture.
 The inspected decoded recording **1702**, revision **226.1**, is **24,281,417 bytes**,
 SHA-256 `523b81e49a7d8850977ce4a8245bad200d792e06ec3e812d12a92b99959f4caa`.
 Independent inventory replay supports all eleven reward multisets, the physical
@@ -34,10 +37,8 @@ Runtime assertions on the selected revision-242 cache verify varbit 1391 as
 for 440→441, 447→448 and 7936→7937. This is runtime assertion evidence, not an
 independently published cache dump.
 
-Five observed Feel sound policies are implemented with one loop and zero delay:
-cold 1198, burning 1197, warm 1202, steaming 1201 and freezing 1199.
-**Hot, very hot and very cold tones remain silent:** their category assignments
-were not established by the inspected evidence. No generated osrsreboxed data changes.
+Each of the six Feel readings has its own synth, one loop and zero delay: freezing 1199,
+cold 1198, warm 1202, very hot 1200, burning 1197 and steaming 1201.
 
 ## Verification
 

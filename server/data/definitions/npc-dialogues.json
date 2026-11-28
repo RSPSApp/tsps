@@ -1142588,6 +1142588,46 @@
       ],
       "after-making-history": [
         {
+          "npc": "Silver! Silver! Best prices for buying and selling in all Kandarin!"
+        },
+        {
+          "type": "choice",
+          "options": [
+            {
+              "text": "Yes please.",
+              "steps": [
+                {
+                  "player": "Yes please."
+                },
+                {
+                  "type": "action",
+                  "action": "open_shop",
+                  "target": "Ardougne Silver Stall.",
+                  "id": "XHvPMh"
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            },
+            {
+              "text": "Ask about the outpost.",
+              "steps": []
+            },
+            {
+              "text": "No thank you.",
+              "steps": [
+                {
+                  "player": "No thank you."
+                },
+                {
+                  "type": "end"
+                }
+              ]
+            }
+          ]
+        },
+        {
           "player": "Hello again."
         },
         {

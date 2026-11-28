@@ -476,9 +476,11 @@ test("Enchanted Key postquest causal Feel and all eleven once-only rewards throu
 
 test("Enchanted Key exact distance boundaries, comparative distance and JSON session reset", async t => {
   const f = ekActor(t);
-  const rows = [[1001,"It's freezing"],[1000,"It's very cold"],[701,"It's very cold"],[700,"It's cold"],
-    [401,"It's cold"],[400,"It's warm"],[101,"It's warm"],[100,"It's hot"],[61,"It's hot"],
-    [60,"It's very hot"],[31,"It's very hot"],[30,"Ouch! It's burning hot"],[5,"Ouch! It's burning hot"],
+  // The six readings rsprox captures local 1002311 (rev 243) and 1702 (rev 226) send; the cuts
+  // between recorded samples are ours (EnchantedKey.MakingHistory FEEDBACK).
+  const rows = [[1001,"It's freezing"],[501,"It's freezing"],[500,"It's cold"],[121,"It's cold"],
+    [120,"It's warm"],[59,"It's warm"],[58,"It's very hot"],[31,"It's very hot"],
+    [30,"Ouch! It's burning hot"],[5,"Ouch! It's burning hot"],
     [4,"The key is steaming. It must be right below your feet."]];
   let previous;
   for (const [distance, text] of rows) {
@@ -537,9 +539,9 @@ test("Enchanted Key replacement remains available after losing an earned ring an
 
 test("Enchanted Key observed Feel sound policies accompany ordinary packet responses", async t => {
   const f = ekActor(t);
-  // Five observed rsprox1702 categories only. Unobserved hot/very-hot/very-cold tones are not inferred.
-  for (const [distance, prefix, sound] of [[1001, "It's freezing", 1199], [700, "It's cold", 1198],
-    [400, "It's warm", 1202], [30, "Ouch! It's burning hot", 1197],
+  // Each of the six readings with its own history_key_* synth (rsprox captures local 1002311, 1702).
+  for (const [distance, prefix, sound] of [[1001, "It's freezing", 1199], [500, "It's cold", 1198],
+    [120, "It's warm", 1202], [58, "It's very hot", 1200], [30, "Ouch! It's burning hot", 1197],
     [4, "The key is steaming. It must be right below your feet.", 1201]]) {
     ekMove(f, 2716 + distance, 3606); const start = f.sounds.length;
     const messages = await ekFeel(f); assert.equal(messages.length, 1); assert.ok(messages[0].startsWith(prefix));

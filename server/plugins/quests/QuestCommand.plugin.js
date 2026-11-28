@@ -130,8 +130,9 @@ function completeAllQuests(api, player) {
       }
     }
     // `quest:complete-all-miniquests` { player, completed }: miniquests outside the quest registry
-    // finish themselves (rewards still routed) and push their names. After the quests, so a
-    // miniquest needing its parent quest (The Enchanted Key: Making History) sees it complete.
+    // finish themselves (rewards still routed) and push their names (Barbarian Training). After the
+    // quests, so a miniquest needing another quest sees it complete. The Enchanted Key is registered
+    // after Making History, so the loop above completes it in that order.
     const miniquests = { player, completed: [] };
     try {
       api.emitCustomEvent("quest:complete-all-miniquests", miniquests);
@@ -198,7 +199,10 @@ function questCommand({ player, parts }) {
   }
   const [quest] = matches;
   if (action === "complete") {
-    if (!quest.complete(player)) player.sendMessage(`${quest.name} is already complete.`);
+    if (!quest.complete(player)) {
+      // A quest that can't be completed yet (a miniquest whose parent quest isn't done) says so.
+      player.sendMessage(quest.isComplete(player) ? `${quest.name} is already complete.` : `${quest.name} can't be completed yet.`);
+    }
   } else if (action === "reset") {
     // A quest that hands something out (a port task's crate) clears it here, so the reset leaves
     // nothing behind that its own flow can no longer reach.

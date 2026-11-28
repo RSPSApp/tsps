@@ -99,7 +99,10 @@ test("real reward owners preserve noted bank identity and miniquest overflow", a
         varpId: 604, completionValue: 5, questPoints: 3 });
       require("../plugins/quests/makinghistory/EnchantedKey.MakingHistory")(commandApi, making);
       QuestCommand.register(commandApi);
-      for (const quest of QuestRuntime.getRegisteredQuests()) quest.setStage(player, quest.completionValue);
+      // Every quest but the miniquest under test, which ::quest all then finishes.
+      for (const quest of QuestRuntime.getRegisteredQuests()) {
+        if (quest.key !== "the_enchanted_key") quest.setStage(player, quest.completionValue);
+      }
       const capacity = core.Bank.getCapacity(player);
       player.getBank(0).setItems(Array.from({ length: capacity }, (_, slot) => new core.Item(1277, 1).setMeta({ slot })));
       inventory.setItems(Array.from({ length: 28 }, () => new core.Item(1277, 1)));
@@ -242,13 +245,15 @@ test("the admin plugin event lists named quests and reuses completion and reset 
 
 test("admin bulk quest actions preserve command completion and registered quest reset semantics", () => {
   const player = createPlayer();
-  const inventory = { add() {}, forceAdd() {}, refreshItems() {} };
+  const inventory = { add() {}, forceAdd() {}, refreshItems() {}, getAmount: () => 0, deleted() {} };
   player.getInventory = () => inventory;
   let miniquestComplete = false;
   let request;
   QuestCommand.register({
     core: { Bank: { isOpen: () => false } },
     registerCommand() {},
+    // The Enchanted Key (registered by the first test) pays its treasures: they go to the stub inventory.
+    emitCanBankItem: () => false,
     onCustomEvent(name, handler) {
       assert.equal(name, "quests:admin");
       request = action => {

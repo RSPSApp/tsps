@@ -23512,6 +23512,9 @@ test('a quest not started yet opens the overview with its start sentence', () =>
       getSkillManager: () => ({ getCombatLevel: () => 3, getMaxLevel: () => 1, getCurrentLevel: () => 1 }),
       getInventory: () => ({ contains: () => false, getAmount: () => 0 }), getEquipment: () => ({ contains: () => false }),
     };
+    // The Enchanted Key's row before Making History: live's overview text for it is not recorded,
+    // so it opens nothing (docs/quests/the-enchanted-key/README.md).
+    if (quest.key === 'the_enchanted_key') continue;
     openJournal(player, quest);
     const setup = scripts.find(([id]) => id === overviewSetup);
     if (!setup) {

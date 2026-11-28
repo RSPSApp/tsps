@@ -24,6 +24,9 @@ const WATERBIRTH_MAX_X = 2580;
 
 /** Page -> its after-quest variant, or a function of the player for pages with more than one. */
 const AFTER = new Map([
+  // Before The Fremennik Exiles (its plugin claims him while it can start or runs; rsprox 1002313 t7551).
+  ["Brundt the Chieftain", (player) => questDone(player, "the_fremennik_exiles")
+    ? "standard-dialogue-after-the-fremennik-exiles" : "standard-dialogue-before-the-fremennik-exiles"],
   ["Eldgrim", "after-the-fremennik-trials"],
   ["Bjorn", "after-the-fremennik-trials"],
   ["Thora the Barkeep", "after-the-fremennik-trials"],
@@ -49,6 +52,18 @@ const AFTER = new Map([
   ["Lalli", "after-the-fremennik-trials"],
   ["Longhall Bouncer", "after-completing-the-bard-s-trial"],
 ]);
+
+function questDone(player, key) {
+  const request = { player, key, complete: false };
+  api.emitCustomEvent("quest:is-complete", request);
+  return request.complete === true;
+}
+
+function questBegun(player, key) {
+  const request = { player, key, started: false };
+  api.emitCustomEvent("quest:is-started", request);
+  return request.started === true || questDone(player, key);
+}
 
 function onWaterbirth(player) {
   return player.getLocation().getX() < WATERBIRTH_MAX_X;
@@ -108,6 +123,55 @@ const ARMOUR_COMPONENTS = ["dagannoth hide", "rock-shell chunk", "rock-shell sha
   "skull piece", "ribcage piece", "fibula piece", "circular hide", "flattened hide", "stretched hide"];
 
 let core = null;
+let api = null;
+
+/**
+ * Brundt before The Fremennik Exiles (rsprox 1002313 t7551-t7563): only "Ask for a quest. | Ask about
+ * anything else." until Lunar Diplomacy / Mountain Daughter are started; asking for a quest while the
+ * Exiles' requirements are unmet (its plugin would have claimed him otherwise) is his "Not at the
+ * moment" answer and then the requirements message box.
+ */
+const BRUNDT_OPTIONS = new Map([
+  ["Ask about a Seal of Passage", "lunar_diplomacy"],
+  ["Ask about the mountain camp.", "mountain_daughter"],
+]);
+const ASK_FOR_QUEST = "Ask for a quest.";
+const NO_QUEST_LINE = "Do you have any quests?";
+const NOT_AT_THE_MOMENT = "Not at the moment";
+const EXILES_REQUIREMENTS = "You do not meet all of the requirements to start The Fremennik Exiles quest.";
+
+function brundtMenu(notice) {
+  ensurePages();
+  const { player, npcId } = notice;
+  if (!player || pageById.get(npcId) !== "Brundt the Chieftain" || !questComplete(player)) return;
+  const options = notice.options ?? [];
+  if (!options.some((option) => option.text === ASK_FOR_QUEST)) return;
+  notice.options = options
+    .filter((option) => !BRUNDT_OPTIONS.has(option.text) || questBegun(player, BRUNDT_OPTIONS.get(option.text)))
+    .map((option) => option.text !== ASK_FOR_QUEST ? option
+      : { ...option, steps: [...notQuestSteps(), { type: "message", text: EXILES_REQUIREMENTS }] });
+}
+
+/** His "Do you have any quests?" / "Not at the moment ..." from the same page's hello menu. */
+function notQuestSteps() {
+  const page = require("../../../data/definitions/npc-dialogues.json")["Brundt the Chieftain"];
+  let found = null;
+  (function walk(value) {
+    if (found || !value || typeof value !== "object") return;
+    if (Array.isArray(value)) return value.forEach(walk);
+    if (value.text === NO_QUEST_LINE && Array.isArray(value.steps)
+      && value.steps.some((step) => String(step.npc ?? step.text ?? "").startsWith(NOT_AT_THE_MOMENT))) {
+      found = value.steps;
+      return;
+    }
+    Object.values(value).forEach(walk);
+  })(page);
+  return found ?? [];
+}
+
+function brundtBox(action) {
+  if (action.kind === "message" && action.text === EXILES_REQUIREMENTS) action.box = { statement: true };
+}
 
 const inventory = (player) => player.getInventory();
 const freeSlots = (player) => inventory(player).getFreeSlots();
@@ -161,9 +225,12 @@ function ensurePages() {
   ({ byId: pageById, notCouncil: notCouncilById } = pagesById(require("../../../data/definitions/npc-dialogue-index.json")));
 }
 
-module.exports = function registerFremennikTrialsTownsfolk(api) {
-  core = api.core;
+module.exports = function registerFremennikTrialsTownsfolk(pluginApi) {
+  api = pluginApi;
+  core = pluginApi.core;
   api.onNpcDialogueVariant(townsfolkVariant);
   api.onNpcDialogueCondition(answerCondition);
   api.onCustomEvent("npc-dialogue:action", handleAction);
+  api.onCustomEvent("npc-dialogue:action", brundtBox);
+  api.onCustomEvent("npc-dialogue:menu", brundtMenu);
 };

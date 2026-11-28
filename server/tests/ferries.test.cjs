@@ -1021,3 +1021,27 @@ test("mid Dragon Slayer II, Jardric's Travel is the quest's until it lands the p
   tick(3);
   assert.deepEqual(at(player), [3583, 3973, 0]);
 });
+
+test("the Sailor mid-Trials and Mord and Maria between the Trials and the Isles refuse in their own words (rsprox 1002313 t3630, t7989-t8014)", () => {
+  quests.complete.delete("fremennik_trials");
+  quests.started.delete("the_fremennik_isles");
+  // The Trials started: the Sailor's "not a council member" lines from the quest page.
+  quests.started.add("fremennik_trials");
+  const sailor = createPlayer({ at: new Location(2629, 3693, 0) });
+  click(sailor, "Sailor", "Miscellania");
+  assert.deepEqual(starts.at(-1).variant, { page: "The Fremennik Trials", variant: "the-non-council-members-sailor-travelling-to-miscellania-during-the-trials" });
+  assert.equal(sailor.sent.interfaces.length, 0);
+  // The Trials done, the Isles not started: each Gunnar's own message box.
+  quests.complete.add("fremennik_trials");
+  const ferry = createPlayer({ at: new Location(2644, 3709, 0) });
+  click(ferry, "Mord Gunnars", "Jatizso");
+  assert.deepEqual(starts.at(-1).variant, { page: "Mord Gunnars", variant: "travelling-to-jatizso-before-the-fremennik-isles" });
+  click(ferry, "Maria Gunnars", "Neitiznot");
+  assert.deepEqual(starts.at(-1).variant, { page: "Maria Gunnars", variant: "travelling-to-neitiznot-before-the-fremennik-isles" });
+  assert.equal(ferry.sent.interfaces.length, 0);
+  // Before the Trials: the old refusal.
+  quests.complete.delete("fremennik_trials");
+  quests.started.delete("fremennik_trials");
+  click(ferry, "Mord Gunnars", "Jatizso");
+  assert.equal(starts.at(-1).variant, "before-the-fremennik-trials");
+});

@@ -434,3 +434,11 @@ test("form 4 has no time limit: 1002313 fought it 1409 ticks (t5138-t6547) and h
   assert.equal(npc.isRegistered(), true, "still there after ten minutes in form 4");
   assert.ok(!texts(f).includes("You have failed to impress Koschei. He has left in disgust."));
 });
+
+test("after the quest the hut ladder line says the player is one of the clan (rsprox 1002313 t7860)", async (t) => {
+  const f = actor(t, { warrior: 2 });
+  quest().setStage(f.player, 8);
+  await climb(f, HUT_LADDER, 2);
+  assert.equal(f.player.getLocation().getZ(), 0);
+  assert.equal(shown(f), "I'd really rather not go back down there again, now that I have been accepted as a member of the Fremennik clan.");
+});

@@ -408,3 +408,43 @@ test("after the quest Lalli sells a fleece for 1,000 coins and Askeladden gives 
   await playTalk(f, 8402, ["Ask for a new pet rock"]);
   assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.PET_ROCK), 1);
 });
+
+test("while the quest runs Bjorn and Agnar give their 'not a council member' talk (rsprox 1002313 t701, t2390)", async (t) => {
+  const f = actor(t, { stage: 1, trials: 0 });
+  const variant = (npcId) => PM.emitNpcDialogueVariant({ player: f.player, npcId });
+  assert.deepEqual(variant(3916), { page: "The Fremennik Trials", variant: "the-non-council-members-bjorn" });
+  assert.deepEqual(variant(3937), { page: "The Fremennik Trials", variant: "the-non-council-members-agnar" });
+  const agnar = await playTalk(f, 3937);
+  assert.deepEqual(agnar.slice(0, 4), ["Hello. Are you a council member?", "Could be. Who wants to know?", "Er... I do.",
+    "Well, yes I am. Why do you want to find a council member?"]);
+  // Before the quest: his own page.
+  const before = actor(t, { stage: 0 });
+  assert.equal(PM.emitNpcDialogueVariant({ player: before.player, npcId: 3937 }), null);
+});
+
+test("Brundt with no votes yet: no 'Remember:' line (rsprox 1002313 t692)", async (t) => {
+  const f = actor(t, { stage: 1, trials: 0 });
+  const lines = await talkToBrundt(f);
+  assert.ok(lines.includes("I don't have any votes yet."), JSON.stringify(lines));
+  assert.ok(lines.includes("Go and speak to the twelve members of the council of elders who live in this village. I am sure at least a few will be prepared to vote for you."));
+  assert.ok(!lines.some((line) => line.startsWith("Remember:")), JSON.stringify(lines));
+});
+
+test("after the quest Yrsa's 'change my shoes' opens the makeover on shoes (rsprox 1002313 t8292)", async (t) => {
+  const f = actor(t, { stage: 8, trials: ALL_PASSED });
+  await playTalk(f, 3933, ["I'd like to change my shoes"]);
+  assert.equal(f.player.getInterfaceId(), 516);
+  assert.equal(f.player.getPacketSender().getVarbit(core.CacheDefinitions.getVarbitId("makeover_interface_type")), 6);
+});
+
+test("after the quest, before the Exiles: Brundt's two options, and no quest yet (rsprox 1002313 t7551-t7563)", async (t) => {
+  const f = actor(t, { stage: 8, trials: ALL_PASSED });
+  f.player.setAttribute(NAME, PREFIXES.indexOf("Bar") * 16 + SUFFIXES.indexOf("kar") + 1);
+  PM.emitCustomEvent("npc-dialogue:start", { player: f.player, npcId: BRUNDT });
+  tick(f);
+  assert.deepEqual(shown(f).options, ["Ask for a quest.", "Ask about anything else."]);
+  const lines = await playTalk(f, BRUNDT, ["Ask for a quest."]);
+  assert.deepEqual(lines, ["Do you have any quests?",
+    "Not at the moment Barkar. Rest assured, should your services to the Fremennik be required, I will call upon you.",
+    "You do not meet all of the requirements to start The Fremennik Exiles quest."]);
+});

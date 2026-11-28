@@ -265,13 +265,17 @@ module.exports = function registerPerilousMoonsQuest(api) {
   const PRISON_LANDING = { x: 1388, y: 9575, z: 0 };
   const EARTHBOUND_LANDING = { x: 1403, y: 9717, z: 0 };
   const STREAMBOUND_LANDING = { x: 1481, y: 9669, z: 0 };
-  const CAVE_TO_ANTECHAMBER_LANDING = { x: 1522, y: 9719, z: 0 };
-  const CAVE_TO_EARTHBOUND_LANDING = { x: 1522, y: 9719, z: 0 };
-  // Captured arena-side landings (the old values were outside the arenas).
-  const BLUE_ROOM_LANDING = { x: 1441, y: 9676, z: 0 };
+  // The two ends of the Earthbound - Streambound cave, named for the side each one lands on.
+  const STREAMBOUND_CAVE_LANDING = { x: 1522, y: 9719, z: 0 };
+  const EARTHBOUND_CAVE_LANDING = { x: 1390, y: 9676, z: 0 };
+  // Captured landings in each Moon's room, outside the arena the statue leads into.
+  const BLUE_ROOM_LANDING = { x: 1440, y: 9653, z: 0 };
   const BLOOD_ROOM_LANDING = { x: 1418, y: 9632, z: 0 };
   const ECLIPSE_ROOM_LANDING = { x: 1461, y: 9632, z: 0 };
-  const CAVE_EXIT_LANDING = { x: 1440, y: 9615, z: 1 };
+  // A cavern's way out comes up beside the antechamber door that leads into that cavern.
+  const PRISON_EXIT_LANDING = { x: 1423, y: 9615, z: 1 };
+  const EARTHBOUND_EXIT_LANDING = { x: 1423, y: 9649, z: 1 };
+  const STREAMBOUND_EXIT_LANDING = { x: 1457, y: 9649, z: 1 };
 
   // The three camps and their varbits (lookup-gameval pmoon_camp_1..3); x/y is the range.
   // Rec 1693 (rev 226): the copied map has every camp built. For a camp not built yet, live sends
@@ -1596,7 +1600,7 @@ module.exports = function registerPerilousMoonsQuest(api) {
       return;
     }
     if (entrance.kind === "cavern-exit") {
-      travelTo(player, NEYPOTZLI_LANDING);
+      travelTo(player, entrance.landing);
       return;
     }
     if (entrance.kind === "cavern") {
@@ -1775,20 +1779,31 @@ module.exports = function registerPerilousMoonsQuest(api) {
     [`${ENTRANCE_DIAGONAL_OBJECT_ID}:1421:9650:1`, { kind: "cavern", landing: EARTHBOUND_LANDING }],
     [`${ENTRANCE_DIAGONAL_OBJECT_ID}:1458:9613:1`, { kind: "cavern", landing: STREAMBOUND_LANDING }],
     [`${ENTRANCE_DIAGONAL_OBJECT_ID}:1458:9650:1`, { kind: "cavern", landing: STREAMBOUND_LANDING }],
-    [`${ENTRANCE_CAVE_OBJECT_ID}:1389:9674:0`, { kind: "cavern", landing: CAVE_TO_ANTECHAMBER_LANDING }],
-    [`${ENTRANCE_CAVE_OBJECT_ID}:1521:9720:0`, { kind: "cavern", landing: CAVE_TO_EARTHBOUND_LANDING }],
-    [`${ENTRANCE_2X2_OBJECT_ID}:1388:9576:0`, { kind: "cavern-exit" }],
-    [`${ENTRANCE_2X2_OBJECT_ID}:1388:9591:0`, { kind: "cavern-exit" }],
-    [`${ENTRANCE_2X2_OBJECT_ID}:1404:9716:0`, { kind: "cavern-exit" }],
-    [`${ENTRANCE_2X2_OBJECT_ID}:1480:9667:0`, { kind: "cavern-exit" }],
+    [`${ENTRANCE_CAVE_OBJECT_ID}:1389:9674:0`, { kind: "cavern", landing: STREAMBOUND_CAVE_LANDING }],
+    [`${ENTRANCE_CAVE_OBJECT_ID}:1521:9720:0`, { kind: "cavern", landing: EARTHBOUND_CAVE_LANDING }],
+    [`${ENTRANCE_2X2_OBJECT_ID}:1388:9576:0`, { kind: "cavern-exit", landing: PRISON_EXIT_LANDING }],
+    // No capture uses the Earthbound exit: its landing is where captures stand to use that door.
+    [`${ENTRANCE_2X2_OBJECT_ID}:1404:9716:0`, { kind: "cavern-exit", landing: EARTHBOUND_EXIT_LANDING }],
+    [`${ENTRANCE_2X2_OBJECT_ID}:1480:9667:0`, { kind: "cavern-exit", landing: STREAMBOUND_EXIT_LANDING }],
     [`${ENTRANCE_3X3_OBJECT_ID}:1404:9703:0`, { kind: "boss-entrance", boss: "blue", landing: BLUE_ROOM_LANDING }],
+    // The Blood Moon's doorway is two locs stacked; either one leads in (rsprox 1693, 2278, 3276).
     [`${ENTRANCE_2X2_OBJECT_ID}:1388:9589:0`, { kind: "boss-entrance", boss: "blood", landing: BLOOD_ROOM_LANDING }],
+    [`${ENTRANCE_2X2_OBJECT_ID}:1388:9591:0`, { kind: "boss-entrance", boss: "blood", landing: BLOOD_ROOM_LANDING }],
     [`${ENTRANCE_2X2_OBJECT_ID}:1509:9673:0`, { kind: "boss-entrance", boss: "eclipse", landing: ECLIPSE_ROOM_LANDING }],
     // The 51377 tunnel gates are from capture 1693.
     [`${ENTRANCE_3X3_OBJECT_ID}:1527:9670:0`, { kind: "tunnel", landing: { x: 1513, y: 9596, z: 0 } }],
     [`${ENTRANCE_3X3_OBJECT_ID}:1512:9560:0`, { kind: "tunnel", landing: { x: 1355, y: 9538, z: 0 } }],
     // Inferred return landing from the reciprocal shrine-to-prison tunnel in capture 1693 tick 2430.
     [`${ENTRANCE_2X2_OBJECT_ID}:1356:9536:0`, { kind: "tunnel", landing: { x: 1512, y: 9563, z: 0 } }],
+    // The far end of the Streambound's long tunnel (rsprox 1104, 3276).
+    [`${ENTRANCE_3X3_OBJECT_ID}:1512:9597:0`, { kind: "tunnel", landing: { x: 1526, y: 9671, z: 0 } }],
+    // The Ancient Prison - Earthbound tunnel, both ends (rsprox 1693; 1162, 3128).
+    [`${ENTRANCE_2X2_OBJECT_ID}:1345:9590:0`, { kind: "tunnel", landing: { x: 1374, y: 9667, z: 0 } }],
+    [`${ENTRANCE_3X3_OBJECT_ID}:1373:9664:0`, { kind: "tunnel", landing: { x: 1347, y: 9590, z: 0 } }],
+    // The ways back out of the Moons' rooms (rsprox 1104, 1135, 1137, 1140, 1150).
+    [`${ENTRANCE_3X3_OBJECT_ID}:1419:9631:0`, { kind: "tunnel", landing: { x: 1387, y: 9591, z: 0 } }],
+    [`${ENTRANCE_3X3_OBJECT_ID}:1439:9650:0`, { kind: "tunnel", landing: { x: 1403, y: 9704, z: 0 } }],
+    [`${ENTRANCE_3X3_OBJECT_ID}:1458:9631:0`, { kind: "tunnel", landing: { x: 1510, y: 9675, z: 0 } }],
   ]);
 
   // ==========================================================================

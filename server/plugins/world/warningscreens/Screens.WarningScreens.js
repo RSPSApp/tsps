@@ -66,20 +66,20 @@ function open(player, entry, texts) {
 }
 
 /**
- * A pause-button screen (the Wilderness's 475), as recorded: the warning's id, the screen with its toggle hidden
- * until it has been shown enough, its message, both answers enabled, then the modal opened. Its showing is counted
+ * A pause-button screen (the Wilderness's 475), as recorded: the warning's id, the modal opened, the screen with its
+ * toggle hidden until it has been shown enough, its message, then both answers enabled. Its showing is counted
  * on Yes (cws_warning_7 3 -> 4 on sub 1, nothing on sub 0), not when it opens.
  */
 function openPause(player, entry, texts) {
   const id = entry.pauseInterfaceId;
   const sender = player.getPacketSender();
   sender.sendVarbit(WARNING_ID_VARBIT, entry.warning);
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
   sender.sendInterface(id);
   sender.sendInterfaceDisplayState((id << 16) | PAUSE_TOGGLE, Shared.state(player, entry.warning) < Shared.SHOWN_ENOUGH);
   sender.sendString(String(texts?.[PAUSE_MESSAGE] ?? entry.message ?? ""), (id << 16) | PAUSE_MESSAGE);
   sender.sendInterfaceFlagsRange((id << 16) | PAUSE_ANSWER, 0, 1, PAUSE_BUTTON_FLAG);
   sender.sendInterfaceFlagsRange((id << 16) | PAUSE_TOGGLE, 0, 0, PAUSE_BUTTON_FLAG);
-  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
 }
 
 /** "warning-screen:show": the warning, or straight on when it is off. */
@@ -126,6 +126,8 @@ function toggle(player, entry) {
 /** A pause-button screen's answer (sub 1 Yes, 0 No) or its toggle. */
 function pauseClick(event, entry, child) {
   const { player } = event;
+  // 475 also serves other content (the house obelisk's warning): only a screen this plugin opened is answered here.
+  if (pending.get(player)?.entry !== entry) return;
   if (child === PAUSE_TOGGLE) {
     event.handled = true;
     toggle(player, entry);

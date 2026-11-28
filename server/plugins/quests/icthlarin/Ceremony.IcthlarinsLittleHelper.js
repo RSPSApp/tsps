@@ -56,6 +56,12 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
     return true;
   }
 
+  /** A bucket used on the lake fills it as Collect does. */
+  function bucketOnWater(event) {
+    if (event.itemId !== common.ITEM.BUCKET) return false;
+    return collectWater(event);
+  }
+
   /** The suntrap: the transcript's pour and evaporate (or "You don't have anything suitable..."; rec 331). */
   function useSuntrap(event) {
     const { player } = event;
@@ -76,9 +82,18 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
     state.set(player, VARBIT.SALT_FROM_SUNTRAP, 1);
   }
 
+  /** Wiki (Bucket of sap): evergreen trees, and the pointy common trees ("A commonly found tree."). */
+  let examines = null;
+  function sapTree(objectId, name) {
+    if (name === EVERGREEN) return true;
+    examines ??= require("../../../data/definitions/object-examines.json");
+    return examines[String(objectId)] === "A commonly found tree.";
+  }
+
   /** Wiki (Bucket of sap): a knife on an evergreen tree with a bucket (2 ticks), the transcript's message. */
   function knifeOnTree(event) {
     const { player } = event;
+    if (!sapTree(event.objectId, event.definition?.getName?.() ?? EVERGREEN)) return false;
     if (event.itemId !== common.ITEM.KNIFE || stage(player) !== STAGE.PREPARATIONS || state.get(player, VARBIT.GOT_SAP)) return false;
     if (!common.held(player, common.ITEM.BUCKET)) return false;
     common.later(player, 2, () => {
@@ -124,13 +139,22 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
   }
 
   /** The eastern door at 19 (the cutscene) and 24 (the last flashback). */
+  const playing = new WeakSet();
+  /** A scene a logout broke can start again (Pyramid puts the stage back to 19). */
+  function sceneLeft({ player }) { playing.delete(player); }
+
   function eastDoor(request) {
     const { player } = request;
     if (pyramid.inFlashback(player)) return;
     if (request.stage === STAGE.WARN_CEREMONY) {
+      // Through the door (t3108: its opens/closes and scrape), then the scene in the room (t3111).
       request.handled = true;
-      common.sfx(player, "scrape");
-      common.later(player, 1, () => ceremonyScene(player));
+      pyramid.stepThrough(player, request.object, pyramid.EAST_DOOR);
+      common.later(player, 3, () => ceremonyScene(player));
+    } else if (request.stage === STAGE.CEREMONY || request.stage === STAGE.DEVOURER) {
+      // A second click while the scene plays does nothing; a scene a logout broke starts again.
+      request.handled = true;
+      if (!playing.has(player)) ceremonyScene(player);
     } else if (request.stage === STAGE.ICTHLARIN_NEXT) {
       request.handled = true;
       lastFlashback(player);
@@ -139,6 +163,7 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
 
   /** The cutscene (t3111-t3149): cinematic on, the camera on the room, the variant's lines at the player's pace. */
   function ceremonyScene(player) {
+    playing.add(player);
     state.setStage(player, STAGE.CEREMONY);
     state.setStage(player, STAGE.DEVOURER);
     Scenes.controls(player, true, true);
@@ -183,6 +208,7 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
 
   /** The cutscene's end (t3148-t3149): stage 22, the possessed priest, controls back. */
   function sceneEnds(player) {
+    playing.delete(player);
     if (stage(player) !== STAGE.DEVOURER) return;
     state.setStage(player, STAGE.POSSESSED);
     const scene = Scenes.get(player);
@@ -207,10 +233,23 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
     if (!player || npc.getId() !== NPC.POSSESSED) return;
     if (stage(player) !== STAGE.POSSESSED) return;
     state.setStage(player, STAGE.PRIEST_DEAD);
-    const potion = state.jar(player)?.potion;
-    if (Number.isInteger(potion)) ItemOnGroundManager.registerNonGlobals(player, new Item(potion, 1), npc.getLocation().clone());
     const cast = roles.get(player);
     if (cast) cast.victim = null;
+  }
+
+  /**
+   * The possessed priest's table lists four potions, each "Always" if its apparition was fought (Wiki, Possessed
+   * Priest): only the jar's stays (the capture's Apmeken jar: the attack potion(4), t3223).
+   */
+  const JAR_POTIONS = new Set(JARS.filter(Boolean).map((jar) => jar.potion));
+  function priestDrops({ player, npc, npcId, drops }) {
+    if (npcId !== NPC.POSSESSED || !Array.isArray(drops)) return;
+    const owner = npc?.__icthlarinOwner ?? player;
+    const keep = state.jar(owner)?.potion;
+    for (let i = drops.length - 1; i >= 0; i--) {
+      const id = drops[i]?.itemId ?? drops[i]?.id;
+      if (JAR_POTIONS.has(id) && id !== keep) drops.splice(i, 1);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -293,8 +332,8 @@ function createCeremony(api, state, common, { STAGE, VARBIT, JARS, pyramid, getQ
   }
 
   return {
-    collectWater, useSuntrap, saltwaterOnSuntrap, knifeOnTree, emptyBucket, ceremonySetup, eastDoor, sceneLine,
-    priestDied, finish, clearQuestItems, handleAction, WATER, SUNTRAP, EVERGREEN, NPC,
+    collectWater, bucketOnWater, useSuntrap, saltwaterOnSuntrap, knifeOnTree, sceneLeft, emptyBucket, ceremonySetup, eastDoor, sceneLine,
+    priestDied, priestDrops, finish, clearQuestItems, handleAction, WATER, SUNTRAP, EVERGREEN, NPC,
   };
 }
 

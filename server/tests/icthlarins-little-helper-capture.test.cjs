@@ -998,3 +998,61 @@ test('the ceremony High Priest after the symbol: only "Hello again..." (t3290)',
   assert.deepEqual(texts(lines), ["Hello again. We have a few things to finish here, but then we'll head back up into the city. Please join us there."]);
   assert.equal(stage(f), 24);
 });
+
+test('playthrough fixes: a second door click mid-scene, the player in the room, only the jar\'s potion, the embalmer met on his list', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  f.give(I().HOLY_SYMBOL_3);
+  await enterPyramid(f, 19, { [VARBIT.PRIESTS]: 1 });
+  place(f, 3306, 9200);
+  await clickIn(f, 44060, 3306, 9199);
+  assert.ok(until(f, () => stage(f) === 21) >= 0);
+  assert.ok(sourceOf(f)[1] <= 9199, 'inside the eastern room');
+  const first = f.read();
+  await clickIn(f, 44060, 3306, 9199);
+  f.step(2);
+  assert.ok(f.read(), 'the scene still plays after a second click');
+  const lines = await f.talk([], { pace: 1 });
+  assert.ok(lines.length > 5, JSON.stringify(first));
+  f.step(2);
+  assert.equal(stage(f), 22);
+  const drops = [{ itemId: 526 }, { itemId: 2432 }, { itemId: 2428 }, { itemId: 3032 }, { itemId: 3040 }];
+  const priest = [...core.World.getNpcs()].find((npc) => npc?.getId() === 4210 && npc.__icthlarinOwner === f.p);
+  PM.emitCustomEvent('npc-drops:roll', { player: f.p, npc: priest, npcId: 4210, drops, damagers: [f.p] });
+  assert.deepEqual(drops.map((d) => d.itemId), [526, 2428], 'bones and the Apmeken jar\'s attack potion (Wiki)');
+
+  const g = fixture(t, [3287, 2757, 0]);
+  setStage(g, 15);
+  g.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2 });
+  const embalmer = g.npc(4202, [3287, 2755, 0]);
+  await g.clickNpc(embalmer);
+  await g.talk();
+  assert.equal(saved(g)[399], 1, 'met on his list, with nothing handed in (t2604)');
+});
+
+test('the pyramid copy\'s NPCs all go with it: repeated visits and flashbacks leave none behind', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  f.give(4679);
+  const owned = () => [...core.World.getNpcs()].filter((npc) => npc && npc.__questSceneOwner === f.p).length;
+  for (let i = 0; i < 3; i++) {
+    await enterPyramid(f, 13);
+    assert.equal(owned(), 5, `visit ${i}: the five mummies`);
+    await clickIn(f, 6645, 3277, 9172);
+    until(f, () => !f.p.getArea()?.sourceTile, 6);
+    assert.equal(owned(), 0, 'gone with the copy');
+  }
+});
+
+test('after the quest: the carpenter\'s and embalmer\'s own pages, and no jar message once it is returned', async (t) => {
+  const f = fixture(t, [3313, 2772, 0]);
+  setStage(f, 26);
+  const carpenter = f.npc(4203, [3313, 2771, 0]);
+  await f.clickNpc(carpenter);
+  const lines = await f.talk([1]);
+  assert.ok(lines.length > 0 && !texts(lines).some((x) => /isn't available/.test(x)));
+  const g = fixture(t, [3294, 2779, 0]);
+  setStage(g, 19);
+  g.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.PRIESTS]: 1 });
+  withCat(g);
+  await g.clickLoc(6614, 3294, 2778);
+  assert.ok(!texts(await g.talk()).some((x) => x.startsWith('You notice an oddly familiar')));
+});

@@ -735,7 +735,7 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
     LOC, Scenes, build, inPyramid, inFlashback, visit, syncJarTable, enterFlashback, leaveFlashback, toTown,
     pyramidDoor, catOpensDoor, ladder, leaveFlashbackEarly, pit, westDoor, eastDoor, jarClicked, apparitionDied,
     sarcophagus, symbolOnSarcophagus, symbolOnTable, dropJar, died, logout, setPuzzle, setCeremonySetup, onlyLines,
-    restorePresent, EXIT, ENTRY, SOUTH_OF_PIT, EAST_ROOM,
+    restorePresent, stepThrough, EXIT, ENTRY, SOUTH_OF_PIT, EAST_ROOM, EAST_DOOR,
     _test: { jumpChance, resumeAt, TELEPORT_BLOCKED, MUMMIES, SCARAB_ZONE, RECOVERY_ATTRIBUTE },
   };
 }

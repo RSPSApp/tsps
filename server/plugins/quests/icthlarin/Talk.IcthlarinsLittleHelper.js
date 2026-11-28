@@ -68,7 +68,7 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
   function selectVariant({ npcId, player, page }) {
     if (page && page !== PAGE) return null;
     const s = stage(player);
-    if (complete(player)) return null;
+    if (complete(player)) return afterQuestVariant(npcId, player);
     if (WANDERER.has(npcId)) {
       if (s === STAGE.NOT_STARTED) return "starting-out-meeting-the-wanderer";
       if (s === STAGE.STARTED) {
@@ -95,6 +95,24 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
     }
     if (SIAMUN.has(npcId)) return s >= STAGE.IN_SOPHANEM && s < STAGE.JAR_RETURNED ? "city-of-the-dead-talking-to-siamun" : null;
     return null;
+  }
+
+  /** Their own pages after the quest: this page's "unavailable" placeholders would answer otherwise. */
+  function afterQuestVariant(npcId, player) {
+    const after = "standard-dialogue-after-finishing-icthlarin-s-little-helper";
+    if (CARPENTER.has(npcId)) return { page: "Carpenter", variant: after };
+    if (EMBALMER.has(npcId)) return { page: "Embalmer", variant: after };
+    if (SPHINX.has(npcId) && !tailOfTwoCatsStarted(player)) {
+      return { page: "Sphinx", variant: common.hasCat(player)
+        ? "standard-dialogue-with-a-cat-follower-or-in-the-inventory" : "standard-dialogue-without-a-cat-follower-or-in-the-inventory" };
+    }
+    return null;
+  }
+
+  function tailOfTwoCatsStarted(player) {
+    const request = { player, key: "a_tail_of_two_cats", started: false };
+    api.emitCustomEvent("quest:is-started", request);
+    return request.started === true;
   }
 
   function sphinxVariant(player, s) {
@@ -193,7 +211,9 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
       case "cOkgIB": return get(player, VARBIT.MET_SPHINX) === 1;
       case "i6RE2X": return !common.held(player, ITEM.TOKEN);
       case "Obm1lw": return common.held(player, ITEM.TOKEN);
-      case "Q7PciU": case "GpRiuU": case "uh4uT6": return !hasJar(player);
+      case "Q7PciU": return !hasJar(player);
+      // "You notice an oddly familiar decorative jar..." only while the jar is still to be returned.
+      case "GpRiuU": case "uh4uT6": return !hasJar(player) && stage(player) < STAGE.JAR_RETURNED;
       case "e97WE_": return hasJar(player);
       case "FipZzG": return common.held(player, ITEM.BUCKET_OF_SAP);
       case "vtJH1G": return hasSalt(player);
@@ -283,6 +303,7 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
     if (!taken) return;
     state.set(player, VARBIT.MET_EMBALMER, 1);
     state.set(player, varbit, 1);
+    if (common.held(player, ITEM.HOLY_SYMBOL)) beginCeremony(player);
   }
 
   function buyLinen(player) {
@@ -298,16 +319,23 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
     state.set(player, VARBIT.CARPENTER_LOGS, 1);
   }
 
-  /** The holy symbol (t2391): the ceremony begins (stage 16, the town's priests gone to it). */
+  /**
+   * The holy symbol (t2391), after the carpenter's "short wait" (Wiki): it is made from the logs whether or not the
+   * embalmer has his items. The ceremony begins (stage 16, the town's priests gone to it) once both are done, here or
+   * at the embalmer's last hand-in.
+   */
   function giveHolySymbol(player) {
     const s = stage(player);
     if (s !== STAGE.PREPARATIONS && s !== STAGE.CEREMONY_BEGUN) return;
-    if (s === STAGE.PREPARATIONS && !(embalmerDone(player) && get(player, VARBIT.CARPENTER_LOGS))) return;
+    if (s === STAGE.PREPARATIONS && !get(player, VARBIT.CARPENTER_LOGS)) return;
     if (!common.held(player, ITEM.HOLY_SYMBOL)) player.getInventory().adds(ITEM.HOLY_SYMBOL, 1);
-    if (s === STAGE.PREPARATIONS) {
-      state.set(player, VARBIT.PRIESTS, 1);
-      state.setStage(player, STAGE.CEREMONY_BEGUN);
-    }
+    beginCeremony(player);
+  }
+
+  function beginCeremony(player) {
+    if (stage(player) !== STAGE.PREPARATIONS || !embalmerDone(player) || !get(player, VARBIT.CARPENTER_LOGS)) return;
+    state.set(player, VARBIT.PRIESTS, 1);
+    state.setStage(player, STAGE.CEREMONY_BEGUN);
   }
 
   function handInHolySymbol(player) {
@@ -506,6 +534,9 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
       (p) => { if (stage(p) === STAGE.SEE_HIGH_PRIEST && get(p, VARBIT.TOKEN_GIVEN)) state.setStage(p, STAGE.RETURN_JAR); },
     "That's right. We need the carpenter to create a new holy symbol for the ceremony. He lives over to the east. The embalmer also needs help gathering some supplies. He lives just south of here.":
       (p) => { if (stage(p) === STAGE.JAR_RETURNED) state.setStage(p, STAGE.PREPARATIONS); },
+    // The embalmer's list ends (t2604): he is met (399), so Raetul sells and the repeat talk has its menu.
+    "Finally, I need some linen. That one shouldn't be too hard. The local cloth salesman should have some.":
+      (p) => { if (stage(p) === STAGE.PREPARATIONS) state.set(p, VARBIT.MET_EMBALMER, 1); },
     "Well there's actually no need for me to go anywhere. I already have some willow logs here.":
       (p) => state.set(p, VARBIT.MET_CARPENTER, 1),
     "We have a few things to finish here, but then we'll head back up into the city. Please join us there.":

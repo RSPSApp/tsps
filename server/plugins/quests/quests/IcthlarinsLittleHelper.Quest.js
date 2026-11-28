@@ -102,6 +102,7 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
     if (event.objectId === pyramid.LOC.SARCOPHAGUS && pyramid.symbolOnSarcophagus(event)) event.handled = true;
     else if (event.objectId === pyramid.LOC.TABLE && pyramid.symbolOnTable(event)) event.handled = true;
     else if (event.objectId === ceremony.SUNTRAP && ceremony.saltwaterOnSuntrap(event)) event.handled = true;
+    else if (event.objectId === ceremony.WATER && ceremony.bucketOnWater(event)) event.handled = true;
   }
 
   /** The Doors plugin claims 44059/44060 as ordinary doors; the quest owns them inside its copy. */
@@ -153,15 +154,18 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
   api.onCustomEvent("door:toggle", doorToggle);
   api.onCustomEvent("door:toggle", talk.gateToggle);
   api.onCustomEvent("icthlarins-little-helper:east-door", ceremony.eastDoor);
+  api.onCustomEvent("icthlarins-little-helper:pyramid-left", ceremony.sceneLeft);
   api.onObjectInteraction(objectClickedEvent);
   api.onItemOnObject(itemOnObject);
   api.onItemOnObject("Knife", ceremony.EVERGREEN, ceremony.knifeOnTree);
+  api.onItemOnObject("Knife", "Tree", ceremony.knifeOnTree);
   api.onItemAction("Bucket of sap", { Empty: ceremony.emptyBucket });
   api.onItemAction("Bucket of saltwater", { Empty: ceremony.emptyBucket });
   api.onItemDropPolicy(pyramid.dropJar);
   api.onInterfaceActionButton(puzzle.tileButtons, puzzle.tileClicked);
   api.onInterfaceActionButton(puzzle.resetButton, puzzle.resetClicked);
   api.onNpcDeath(npcDied);
+  api.onCustomEvent("npc-drops:roll", ceremony.priestDrops);
   api.onPlayerDeath(pyramid.died);
   api.onPlayerLogin(login);
   api.onPlayerLogout(pyramid.logout);

@@ -52,19 +52,21 @@ A landed cast:
 
 The player plays no animation on a cast: it is a magic attack, not a blocked swing.
 
-Ours: the hold. The Wiki says the spell binds "very briefly", and neither landed cast shows the player held
-(they moved again as soon as they clicked), so it is one tick, landing with the projectile, floor(endtime / 30)
-ticks after the cast. Bind's own 8 ticks don't apply.
+The hold is one tick, as the projectile lands: after the cast from the next tile (tick 262, endtime 56) the
+player's walk click on 263 didn't move them that tick but did on 264. The click was kept, so it is a step hold
+(`MovementQueue.holdStepsFor`), not a freeze: the queued route stays, a click on the held tick is walked the tick
+after, and no freeze timer or immunity is set. Bind's own 8 ticks don't apply. Ours: the hold lands floor(endtime
+/ 30) ticks after the cast; the cast from 3 tiles shows no hold either way.
 
-The drain is StandardCurses' Confuse; the druid sets its amount and line (`magic:curse-rule`). The hold is a
-`bind` freeze (`CombatFactory.freezeTicks`), so the freeze immunity that follows it applies.
+The drain is StandardCurses' Confuse; the druid sets its amount and line (`magic:curse-rule`).
 
 ## Which attack
 
-29 of the 35 recorded casts were from the next tile; the rest were from 2-3 tiles, where a punch can't
-reach.
+22 of the 35 recorded projectiles were from the next tile (endtime 56); the rest were from 2-3 tiles (66, 76),
+where a punch can't reach.
 
 Ours (no source gives these):
 - a druid casts or punches at even odds, the recorded split, wherever it stands. A cast reaches up to 10 tiles
-  (the generic NPC cast range); a picked punch walks it in first;
+  (the generic NPC cast range); a picked punch walks it in first, and one it can't walk in for (frozen, or
+  the player safespotted) becomes a cast after 3 ticks without a step;
 - out of a fight it has melee reach, so it hunts and aggros as a melee monster (3 and 8 tiles).

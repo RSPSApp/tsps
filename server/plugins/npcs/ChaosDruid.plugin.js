@@ -13,13 +13,17 @@
  * - A landed cast lowers Attack on the cast's tick, 81 -> 76 with "You feel weakened."; a later landed cast with
  *   Attack still lowered (76) drained nothing and said nothing. "The holding effect is beginning to fade." comes
  *   6 ticks after each landed cast. The player plays no animation on a cast.
- * - 29 of the 35 casts were from the next tile and the rest from 2-3 tiles, where a punch can't reach.
+ * - The hold is one tick as the projectile lands: after the cast from the next tile (262, endtime 56) the player's
+ *   walk click on 263 didn't move them that tick but did on 264. The click is kept, so it is a step hold, not a
+ *   freeze.
+ * - 22 of the 35 projectiles were from the next tile (endtime 56), the rest from 2-3 tiles (66, 76).
  *
- * Ours: the hold. The Wiki says the spell binds "very briefly" and neither landed cast shows the player held, so it
- * is one tick, landing with the projectile (floor(endtime / 30) ticks after the cast).
- * Ours: a druid casts or punches at even odds (the recorded split) wherever it stands: a cast reaches up to
- * the generic NPC cast range (10), a punch walks it in first. Out of a fight it reports melee reach, so its
- * hunt and aggression ranges stay those of a melee monster. The fade line is sent only when the hold took.
+ * Ours:
+ * - the hold lands floor(endtime / 30) ticks after the cast (the cast from 3 tiles shows no hold either way);
+ * - a druid casts or punches at even odds (the recorded split) wherever it stands: a cast reaches up to the
+ *   generic NPC cast range (10), a punch walks it in first, and a picked punch it can't walk in for becomes a cast;
+ * - out of a fight it reports melee reach, so its hunt and aggression ranges stay those of a melee monster;
+ * - the fade line is sent only when the hold took.
  */
 const CHAOS_DRUID_IDS = [520]; // chaos_druid
 const BIND_CAST = { anim: 710, graphic: 177, graphicHeight: 92, sound: 101 };
@@ -34,11 +38,10 @@ const AREA_SOUND_RADIUS = 10;
 const BIND_DISTANCE = 10;
 const WEAKENED_MESSAGE = "You feel weakened.";
 const FADE_MESSAGE = "<col=ef1020>The holding effect is beginning to fade.</col>";
-/**
- * The hold's timer: it is set in the task phase, before the player's timers count down on the landing tick, so 2
- * holds that tick's move only.
- */
-const HOLD_TICKS = 2;
+/** The hold, in world cycles from the one the projectile lands on. */
+const HOLD_TICKS = 1;
+/** A picked punch that hasn't got the druid into reach for this many cycles becomes a cast (it can't walk in). */
+const STALLED_PUNCH_TICKS = 2;
 /** Ticks from the cast to the fade line (both recorded casts). */
 const FADE_MESSAGE_TICKS = 6;
 
@@ -51,6 +54,13 @@ function isChaosDruid(mobile) {
   if (!mobile?.isNpc?.()) return false;
   const npc = mobile.getAsNpc();
   return CHAOS_DRUID_IDS.includes(npc.getId()) || CHAOS_DRUID_IDS.includes(npc.getRealId?.());
+}
+
+/** Whether the druid could punch the target from where it stands: the next tile on a side, no wall between. */
+function inMeleeReach(npc, target) {
+  const a = npc.getLocation(), b = target.getLocation();
+  if (a.getZ() !== b.getZ() || Math.abs(a.getX() - b.getX()) + Math.abs(a.getY() - b.getY()) !== 1) return false;
+  return core.RegionManager.canMove(a.getX(), a.getY(), b.getX(), b.getY(), a.getZ(), 1, 1, npc.getPrivateArea());
 }
 
 /** Ours: even odds wherever it stands (35 punches to 33 casts recorded); a picked punch walks it in first. */
@@ -111,8 +121,9 @@ function bindAndConfuse(npc, target, end) {
   core.CombatSpells.CONFUSE.spellEffect(npc, target, null);
   const state = { held: false };
   later(target, Math.max(1, Math.floor(end / 30)), () => {
-    core.CombatFactory.freezeTicks(target, HOLD_TICKS, null, npc, "bind");
-    state.held = target.getTimers().has(core.TimerKey.FREEZE);
+    // Not a freeze: live kept a walk click made on the held tick and walked it the tick after (263 -> 264).
+    target.getMovementQueue().holdStepsFor(HOLD_TICKS);
+    state.held = true;
   });
   if (target.isPlayer?.()) {
     later(target, FADE_MESSAGE_TICKS, () => {
@@ -144,9 +155,25 @@ function methodClass() {
       this.landing = 0;
     }
 
-    /** The attack the druid will make next, picked once per attack. */
+    /**
+     * The attack the druid will make next, picked once per attack. A picked punch it can't walk into reach for
+     * (frozen, or the player safespotted) becomes a cast, as the cast reaches from where it stands.
+     */
     pick(npc, target) {
-      if (this.bind === null) this.bind = picksBind();
+      if (this.bind === null) {
+        this.bind = picksBind();
+        this.stalled = 0;
+        this.stalledCycle = -1;
+      }
+      if (this.bind === false && target && !inMeleeReach(npc, target)) {
+        const cycle = core.World.getProcessCycle();
+        if (cycle !== this.stalledCycle) {
+          this.stalledCycle = cycle;
+          const queue = npc.getMovementQueue();
+          this.stalled = queue.steppedThisWorldCycle() || queue.didMovePreviousCycle() ? 0 : this.stalled + 1;
+          if (this.stalled > STALLED_PUNCH_TICKS) this.bind = true;
+        }
+      }
       return this.bind;
     }
 
@@ -216,5 +243,5 @@ module.exports = {
   description: "Chaos druids punch and cast their Bind-and-Confuse spell, holding the player for a tick and lowering their Attack, with the captured animations, projectile and sounds.",
   members: true,
   register: attach,
-  _test: { CHAOS_DRUID_IDS, HOLD_TICKS, FADE_MESSAGE, bindEndCycles, picksBind, curseRule, methodClass, methods },
+  _test: { CHAOS_DRUID_IDS, HOLD_TICKS, FADE_MESSAGE, bindEndCycles, picksBind, inMeleeReach, curseRule, methodClass, methods },
 };

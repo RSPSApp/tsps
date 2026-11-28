@@ -46,6 +46,8 @@ function fight(t, { dx = 0, dy = 1, attack } = {}) {
 
 /** One attack, its pick forced to the cast (bind = true) or the punch, and its roll forced. */
 function attack(t, npc, p, { bind = true, accurate = true } = {}) {
+  let cycle = 1000;
+  t.mock.method(core.World, "getProcessCycle", () => cycle);
   const tasks = [];
   t.mock.method(core.TaskManager, "submit", (task) => { task.setRunning(true); tasks.push(task); });
   const method = CombatFactory.getMethod(npc);
@@ -57,6 +59,7 @@ function attack(t, npc, p, { bind = true, accurate = true } = {}) {
   mock.mock.restore();
   /** Advances the game a tick: the scheduled tasks, then the player's timers. */
   const tick = () => {
+    cycle++;
     for (const task of [...tasks]) {
       if (task.isRunning() && task.tick() === false) tasks.splice(tasks.indexOf(task), 1);
     }
@@ -66,7 +69,8 @@ function attack(t, npc, p, { bind = true, accurate = true } = {}) {
 }
 
 const attackLevel = (p) => p.getSkillManager().getCurrentLevel(core.Skill.ATTACK);
-const frozen = (p) => p.getTimers().has(core.TimerKey.FREEZE);
+/** Held in place this cycle: the druid's step hold, or a freeze. */
+const frozen = (p) => p.getMovementQueue().isStepHeld() || p.getTimers().has(core.TimerKey.FREEZE);
 
 test('the punch is human_unarmedpunch, not the cast, and the druid blocks and dies as a human', () => {
   const definition = core.NpcDefinition.forId(CHAOS_DRUID);
@@ -93,9 +97,9 @@ test('a landed cast lowers Attack 81 -> 76 on its tick, holds the player as it l
   assert.equal(frozen(p), false, 'not held on the cast tick');
 
   tick();
-  assert.equal(frozen(p), true, 'held the tick the projectile lands (endtime 56; ours: one tick)');
+  assert.equal(frozen(p), true, 'held the tick the projectile lands (endtime 56: recorded 263)');
   tick();
-  assert.equal(frozen(p), false, 'and free the tick after');
+  assert.equal(frozen(p), false, 'and free the tick after (recorded 264)');
   for (let i = 0; i < 3; i++) tick();
   assert.deepEqual(p.messages, ['You feel weakened.']);
   tick();
@@ -175,7 +179,7 @@ test('the picked attack holds between lookups and is picked again after the atta
   assert.equal(first.bind, null);
 });
 
-// Review of #6940: the engine asks the method's type() with no argument; a cast must still be magic, so the
+// The engine asks the method's type() with no argument; a cast must still be magic, so the
 // player doesn't block it (live: no player animation on a cast) and it rolls magic accuracy.
 test('through the real attack, a cast is magic: no block animation from the player', (t) => {
   t.mock.method(core.TaskManager, 'submit', () => {});
@@ -190,4 +194,40 @@ test('through the real attack, a cast is magic: no block animation from the play
   mock.mock.restore();
   assert.equal(npc.getAnimation().getId(), 710);
   assert.notEqual(p.getAnimation()?.getId(), 424, 'the player does not block a cast');
+});
+
+// Live: the player's walk click on the held tick (263) didn't move them that tick, and did on 264.
+test('a walk click on the held tick is kept and walked the tick after', (t) => {
+  const { p, npc } = fight(t, { dx: 1, dy: 0 });
+  const { tick } = attack(t, npc, p);
+  tick();
+  assert.ok(p.getMovementQueue().isStepHeld(), 'held');
+  t.mock.method(core.PathFinder, 'calculateWalkRoute', (player, x, y) => {
+    player.getMovementQueue().addSteps(new core.Location(x, y, 0));
+  });
+  p.getMovementQueue().requestWalk(new core.Location(AT.x - 1, AT.y, 0));
+  assert.ok(p.getMovementQueue().getDestination(), 'the click is taken while held');
+  p.getMovementQueue().process();
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [AT.x, AT.y], 'no step on the held tick');
+  assert.equal(p.getTimers().has(core.TimerKey.FREEZE), false, 'not a freeze: no timer or immunity');
+  tick();
+  p.getMovementQueue().process();
+  assert.deepEqual([p.getLocation().getX(), p.getLocation().getY()], [AT.x - 1, AT.y], 'walked the tick after');
+});
+
+test('a picked punch the druid cannot walk in for becomes a cast', (t) => {
+  let cycle = 2000;
+  t.mock.method(core.World, 'getProcessCycle', () => cycle);
+  const { p, npc } = fight(t, { dy: 3 });
+  const method = CombatFactory.getMethod(npc);
+  method.bind = null;
+  t.mock.method(druid._test, 'picksBind', () => false);
+  t.mock.method(core.Misc, 'randomInclusive', () => 1); // the roll: a punch
+  assert.equal(method.pick(npc, p), false, 'a punch was picked');
+  for (let i = 0; i < 3; i++) {
+    cycle++;
+    method.pick(npc, p);
+  }
+  assert.equal(method.pick(npc, p), true, 'stuck three tiles away, it casts instead');
+  assert.equal(method.attackDistance(npc), 10);
 });

@@ -107,6 +107,8 @@ export class MovementQueue {
     /** True when the current cycle was spent running, so energy must not restore on it. */
     private ranThisCycle = false;
     private externalMovementUntil = 0;
+    /** The last world cycle a step hold (holdStepsFor) keeps this mobile in place; -1 for none. */
+    private stepHoldUntilCycle = -1;
     private lastMoveCycle = -2;
     private blockedByDynamicOccupancy = false;
     private routeEvaluated = false;
@@ -513,6 +515,21 @@ export class MovementQueue {
         return this.movedThisCycle;
     }
 
+    /**
+     * Keeps the mobile in place for `ticks` world cycles from this one, without the freeze's side effects: the
+     * queued route is kept, walk clicks are still taken and walked once the hold ends, and no freeze timer,
+     * immunity or message is set. For a hold briefer than a freeze (the Chaos druid's cast, docs/chaos-druids.md).
+     */
+    public holdStepsFor(ticks: number): void {
+        if (!(ticks > 0)) return;
+        this.stepHoldUntilCycle = Math.max(this.stepHoldUntilCycle, World.getProcessCycle() + Math.floor(ticks) - 1);
+    }
+
+    /** Whether a step hold keeps the mobile in place this world cycle. */
+    public isStepHeld(): boolean {
+        return World.getProcessCycle() <= this.stepHoldUntilCycle;
+    }
+
     /** Stepped during the current world cycle (unlike didMoveThisCycle, never stale before this actor's turn). */
     public steppedThisWorldCycle(): boolean {
         return this.lastMoveCycle === World.getProcessCycle();
@@ -595,6 +612,11 @@ export class MovementQueue {
 
         const forceOneStepThroughFreeze = this.forceOneStepThroughFreeze;
         this.forceOneStepThroughFreeze = false;
+        if (!heldStep && this.isStepHeld()) {
+            // The route stays queued and is walked once the hold ends.
+            this.isMoving = false;
+            return;
+        }
         if (!heldStep && !(forceOneStepThroughFreeze
             ? this.getMobilityIgnoringFreeze()
             : this.getMobility()).canMove()) {

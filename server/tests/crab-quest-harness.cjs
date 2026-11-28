@@ -8,7 +8,7 @@ const SIT_SLOT = 54;
 const SIT_LOOP = 10061; // emote_sit_loop, interface 216 child 54 (cache enum 1001 -> 5248)
 
 function setup() {
-  const hooks = { custom: new Map(), objects: [], login: [], logout: [], npcs: [], ground: [] };
+  const hooks = { custom: new Map(), objects: [], login: [], logout: [], npcs: [], ground: [], conditions: [] };
   const attrs = new Map();
   const inventory = new Map();
   const messages = [];
@@ -46,7 +46,7 @@ function setup() {
     persistAttribute(key, defaultValue) { persistentKeys.set(key, defaultValue); },
     onCustomEvent(name, fn) { const list = hooks.custom.get(name) ?? []; list.push(fn); hooks.custom.set(name, list); },
     emitCustomEvent(name, event) { event.player ??= player; for (const fn of hooks.custom.get(name) ?? []) fn(event); },
-    onNpcDialogueCondition() {},
+    onNpcDialogueCondition(fn) { hooks.conditions.push(fn); },
     onNpcInteraction(fn) { hooks.npcs.push(fn); },
     onObjectInteraction(fn) { hooks.objects.push(fn); },
     onItemOnItem() {},

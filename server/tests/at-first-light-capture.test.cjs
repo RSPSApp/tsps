@@ -490,3 +490,67 @@ test("Read on Fox's report: the Wiki's line about his report", async (t) => {
   assert.ok(shown.some((line) => line.includes("It's Fox's report. It details the creature he was tracking, his attack, and my help.")), JSON.stringify(shown));
   assert.equal(count(f, I.FOXS_REPORT), 1);
 });
+
+test("interruption: a logout during the pile's two-tick pause keeps housetrapped 1, and after a reload the pile builds again to the trimmed fur", async (t) => {
+  const f = actor(t, { tile: [1697, 3062, 0], stage: 8, items: [[I.HAMMER, 1]],
+    attributes: { "at-first-light:stage-version": 1, "at-first-light:vars": 1 << 9 } });
+  h.PM.emitCustomEvent("player:bootstrap-complete", { player: f.player });
+  assert.equal(varbit(f, VB.HOUSETRAPPED), 1);
+  await click(f, LOC.PILE);
+  for (let i = 0; i < 10 && !h.shown(f); i++) h.tick(f);
+  await h.continueLine(f); // Atza's question
+  for (let i = 0; i < 4 && h.shown(f)?.who !== "PLAYER"; i++) h.tick(f);
+  await h.continueLine(f); // the player's line: the chat closes for the build
+  assert.notEqual(h.shown(f)?.who, "PLAYER");
+  const g = reload(t, f, [1697, 3062, 0]);
+  assert.equal(varbit(g, VB.HOUSETRAPPED), 1, "the pile is still waiting");
+  assert.equal(quest().getStage(g.player), 8);
+  g.player.getInventory().add(new h.core.Item(I.HAMMER, 1), false);
+  await click(g, LOC.PILE);
+  const said = await play(g);
+  assert.ok(said.includes("PLAYER: All done!"));
+  assert.equal(quest().getStage(g.player), 9);
+  assert.equal(count(g, I.TRIMMED_FUR), 1);
+});
+
+test("a double click on the leafy bush picks one leaf", async (t) => {
+  const f = actor(t, { tile: [1618, 2980, 0], stage: 5 });
+  // The second click a tick later, while the first pick is pending.
+  await click(f, LOC.LEAFY);
+  await f.connection.dispatch([{ type: "object_option", id: LOC.LEAFY[0], x: 1618, y: 2979, clickType: 1 }]);
+  f.connection.processTurnPackets();
+  h.ticks(f, 5);
+  await play(f);
+  h.ticks(f, 3);
+  assert.equal(count(f, I.SMOOTH_LEAF), 1);
+  assert.equal(h.core.ItemOnGroundManager.ownedBy(f.player.getUsername()).filter((g) => g.getItem().getId() === I.SMOOTH_LEAF).length, 0);
+});
+
+test("gating: the bushes, the bed and the pile answer nothing outside their stages", async (t) => {
+  for (const value of [0, 4, 6, 12]) {
+    const f = actor(t, { tile: [1618, 2980, 0], stage: value });
+    await click(f, LOC.LEAFY);
+    h.ticks(f, 3);
+    assert.equal(count(f, I.SMOOTH_LEAF), 0, `no leaf at stage ${value}`);
+  }
+  for (const value of [0, 2, 11, 12]) {
+    const f = actor(t, { tile: TILE.KIKO, stage: value });
+    await click(f, LOC.BED);
+    h.ticks(f, 3);
+    assert.equal(varbit(f, VB.BEDCHECK), 0, `no bed check at stage ${value}`);
+  }
+  const f = actor(t, { tile: [1697, 3062, 0], stage: 7, items: [[I.HAMMER, 1]] });
+  await click(f, LOC.PILE);
+  h.ticks(f, 3);
+  assert.equal(f.animations.filter((a) => a.id === 3676).length, 0, "the pile before Atza asks");
+});
+
+test("requirements (Wiki): below 46 Hunter Apatura turns the player away and the quest doesn't start", async (t) => {
+  const f = actor(t);
+  f.player.getSkillManager().setMaxLevels(h.core.Skill.HUNTER, 45);
+  f.player.getSkillManager().setCurrentLevel(h.core.Skill.HUNTER, 45, false);
+  const said = await play(f, () => h.talk(f, npcAt(f, NPC.APATURA, [1554, 3033, 0])), []);
+  assert.equal(said[0], "Guildmaster Apatura: Sorry, but you need to be a better hunter before we can help you out.");
+  assert.equal(stage(f), 0);
+  assert.ok(!said.some((line) => line.startsWith("MENU")), "no start menu");
+});

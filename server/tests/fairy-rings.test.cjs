@@ -715,6 +715,41 @@ test("the ring's Favourites option without a sub-menu choice, and the favourite 
   assert.equal(rec.varbits.get(T.FAVOURITE_OPVIS_VARBIT), 0b101);
 });
 
+test("the ring's Favourites sub-menu row teleports to that slot's favourite at once", () => {
+  const rec = player();
+  rec.p.setAttribute(T.FAVOURITES_ATTRIBUTE, "BJS,,AJR");
+  const ajr = T.rings().get("AJR");
+  // Sub-menu rows are the cache's 1-based sub-ops, one per saved slot (1..10).
+  T.ringOptions().Favourites({ player: rec.p, location: RING, subOpId: 3 });
+  rec.nextTick();
+  const sent = runTicks(rec, 6).flat();
+  assert.ok(
+    sent.includes(`teleport ${ajr.destination.getX()},${ajr.destination.getY()}`),
+    sent.join(" | "),
+  );
+
+  // An empty slot, no row at all and a row outside 1..10 only give the message.
+  const empty = player();
+  empty.p.setAttribute(T.FAVOURITES_ATTRIBUTE, "BJS,,AJR");
+  for (const event of [
+    { player: empty.p, location: RING, subOpId: 2 },
+    { player: empty.p, location: RING, subOpId: 11 },
+    { player: empty.p, location: RING },
+  ]) T.ringOptions().Favourites(event);
+  assert.deepEqual(empty.ticks.flat(), Array(3).fill("You will need to select a favourite from the sub-menu."));
+});
+
+test("a Favourites row resolves the code through fairy-rings:destination like Last-destination", () => {
+  const rec = player();
+  rec.p.setAttribute(T.FAVOURITES_ATTRIBUTE, "BJR");
+  emitted.length = 0;
+  T.ringOptions().Favourites({ player: rec.p, location: RING, subOpId: 1 });
+  assert.ok(
+    emitted.some((event) => event.name === "fairy-rings:destination" && event.code === "BJR"),
+    JSON.stringify(emitted),
+  );
+});
+
 test('database table indexing skips mixed tuple values without changing decoded rows', () => {
   const { DbRowType } = require('../dist/game/cache/codec/rs/config/dbrow/DbRowType');
   // Column 0: (string type 36, int, string type 42), two tuples, then table 300.

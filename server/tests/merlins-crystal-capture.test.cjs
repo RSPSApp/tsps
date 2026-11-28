@@ -352,6 +352,13 @@ test("t854-971: the crate ride: the fade, the copy with no minimap or tabs, the 
   // The copy of 2776,9848, the minimap off and cutscene_status on.
   const inside = f.player.getLocation();
   assert.ok(inside.getX() > 6400, `in a copy: ${at(f)}`);
+  // Only the ground plane is copied: the source's upper planes hold the keep's walls, which
+  // live does not draw inside the crate (the crate view is black around the crate).
+  const crateArea = f.player.getArea();
+  assert.ok(crateArea?.chunks?.[0], "the ground chunk is copied");
+  for (let plane = 1; plane < 4; plane++) {
+    assert.equal(crateArea.chunks[plane], null, `plane ${plane} is left black`);
+  }
   assert.equal(varbit(f, MINIMAP_STATE), 2);
   assert.equal(varbit(f, CUTSCENE_STATUS), 1);
   assert.equal(h.shown(f)?.text, "You climb inside the crate and wait.", "the box is still up after the copy");

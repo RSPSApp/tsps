@@ -40,6 +40,10 @@ type ClientToServer =
               tile: { x: number; y: number };
               level?: number;
               action?: string;
+              /** The 1-based option row this click answers (a loc cache sub-op). */
+              opNum?: number;
+              /** The 1-based sub-menu row picked under that option. */
+              subOpId?: number;
           };
       }
     | { type: "emote"; payload: { index: number; loop?: boolean } }

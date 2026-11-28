@@ -11303,6 +11303,7 @@
           "wiki": "https://oldschool.runescape.wiki/w/Icthlarin%27s_Little_Helper",
           "implementedIn": [
             "server/plugins/quests/quests/IcthlarinsLittleHelper.Quest.js",
+            "server/plugins/quests/icthlarin",
             "server/plugins/quests/QuestRuntime.js"
           ],
           "devNotes": [
@@ -11313,7 +11314,8 @@
             "Main 82657e165: #1617 gives Jex his own Talk-to, Raetul his refusal, tree sap from a knife on an evergreen, Empty on the quest buckets, stage/item checks on every action and leftover cleanup. The riddle interface is still replayed as chatbox prompts.",
             "Main 3b61a15a8 (6 November 2026): #2611 Stop quests dead-ending on a full inventory or a lost item. Existing completion credit and documented limitations are retained unless explicitly updated below.",
             "Main 3e9ee2d67 (11 November 2026) changes touching recorded implementation: #4353 Icthlarin's Little Helper: answer the token hand-in and riddle steps by their current ids.",
-            "2026-11-24, main 74609edfe: The Sphinx's riddle conversation now carries on into the grave-robbing accusation and its token step (https://github.com/RSPSApp/tsps/pull/5445). Verified by server/tests/icthlarin-step-ids.test.cjs. Implement objectives and world interactions remains in-progress: the riddle interface is still replayed as chatbox prompts."
+            "2026-11-24, main 74609edfe: The Sphinx's riddle conversation now carries on into the grave-robbing accusation and its token step (https://github.com/RSPSApp/tsps/pull/5445). Verified by server/tests/icthlarin-step-ids.test.cjs. Implement objectives and world interactions remains in-progress: the riddle interface is still replayed as chatbox prompts.",
+            "2026-11-28, branch feat/quest-icthlarins-little-helper: rebuilt from the user's whole-run rsprox capture (local 1002310, rev 243) in server/plugins/quests/icthlarin/: live's stage values and ics_* varbits; Klenter's Pyramid as a private copy per visit with its mummies and scarab swarm; the three flashbacks with the jar/symbol swap, sepia and overlay 146; the tile puzzle (interface 147) with its scramble, counter and jingle; the pit jump (camera, exactmove, 20% energy, Agility chance, fall); the jars and apparitions; the ceremony cutscene, possessed priest and potion; Icthlarin's flashback; the quarantined gates; the journal as live wrote it; live's chathead and expression on every captured line. Verified by server/tests/icthlarins-little-helper-capture.test.cjs (replaces icthlarin-step-ids and qh728-q060) and docs/quests/ictlharins-little-helper/README.md. Implement objectives and world interactions remains in-progress: the pyramid's wall crushers and pit traps, the sarcophagi's loot and the possessed priest's recovery timer are not modelled (no capture or rates)."
           ],
           "taskDetails": [
             {

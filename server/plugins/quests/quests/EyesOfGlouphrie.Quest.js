@@ -31,10 +31,7 @@
  *   Retail unlocking-disc disposition and relog behaviour are not established.
  * - all four activation controls validate the complete six-disc puzzle; retail
  *   per-row button behaviour is not established.
- * - Oaknock's exchanger is worked by using a disc on it; it deterministically splits
- *   one disc into two of equal total value instead of offering random exchanges.
- * - Brimstail's "three random discs" are a fixed set (green square, blue triangle,
- *   yellow pentagon) so the fixed puzzle is always solvable; the real quest rolls them.
+ * - Exchanger offers are random valid combinations; retail weighting is not established.
  * - the six spies are spawned per player (ownerOnly) when the machine activates, at
  *   fixed tiles; the cute-creature models, the Brimstail-kills-his-creature case and
  *   the entrance re-spawn are not simulated.
@@ -109,9 +106,6 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
 
   const RED_SQUARE_ITEM_ID = ItemIdentifiers.RED_SQUARE; // 9599
   const YELLOW_TRIANGLE_ITEM_ID = ItemIdentifiers.YELLOW_TRIANGLE; // 9606
-  const YELLOW_PENTAGON_ITEM_ID = ItemIdentifiers.YELLOW_PENTAGON; // 9608
-  const GREEN_SQUARE_ITEM_ID = ItemIdentifiers.GREEN_SQUARE; // 9611
-  const BLUE_TRIANGLE_ITEM_ID = ItemIdentifiers.BLUE_TRIANGLE; // 9614
   const VIOLET_PENTAGON_ITEM_ID = ItemIdentifiers.VIOLET_PENTAGON; // 9624
 
   const MACHINE_MAP_OBJECT_ID = 17282; // Transforms to the locked/broken/fixed machine by varbit 2502.
@@ -143,12 +137,10 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
       DISC_VALUE_BY_ITEM.set(itemId, (colourIndex + 1) * SHAPE_VALUES[shapeIndex]);
     });
   });
-  /** One canonical item per value, for the exchanger's splits. */
-  const ITEM_BY_VALUE = new Map();
-  for (const [itemId, value] of DISC_VALUE_BY_ITEM) {
-    if (!ITEM_BY_VALUE.has(value)) ITEM_BY_VALUE.set(value, itemId);
-  }
-  const VALUES_DESCENDING = [...ITEM_BY_VALUE.keys()].sort((a, b) => b - a);
+  // Wiki: Brimstail gives neither circles nor red shapes. The exchanger cannot produce yellow circles.
+  const BRIMSTAIL_DISCS = COLOUR_DISCS.slice(1).flatMap((row) => row.slice(1));
+  const EXCHANGE_DISCS = [...DISC_VALUE_BY_ITEM.keys()].filter((id) => id !== ItemIdentifiers.YELLOW_CIRCLE);
+  const offersByValue = new Map();
 
   const UNLOCK_VALUE = 4; // red square
   const OPERATE_SLOTS = [1, 2, 3];
@@ -183,7 +175,6 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   const TRANSCRIPT_ALREADY_WORKING = "the-anti-illusion-machine-attempting-to-operate-the-machine-after-it-activates";
   const TRANSCRIPT_WRONG_UNLOCK = "the-anti-illusion-machine-using-the-machine-attempting-to-unlock-the-machine-without-the-correct-disc";
   const TRANSCRIPT_UNLOCKED_PANEL = "the-anti-illusion-machine-using-the-machine-unlocking-the-machine-s-front-panel";
-  const TRANSCRIPT_EXCHANGE_ACCEPTED = "the-anti-illusion-machine-using-the-machine-accepting-an-exchange";
   const TRANSCRIPT_EXCHANGER_NO_DISC = "the-anti-illusion-machine-using-the-machine-attempting-to-accept-an-exchange-without-a-disc-in-the-exchanger";
   const TRANSCRIPT_ACTIVATION = "the-anti-illusion-machine-unlocking-the-machine";
   const TRANSCRIPT_ALL_SPIES_DEAD = "assassination-killing-all-evil-creatures";
@@ -197,12 +188,15 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   let quest;
   const spiesByPlayer = new Map();
   // Cache 2757: the side layer is populated by interface_inv_init (149).
-  const LOCK_INTERFACE = 145, MACHINE_INTERFACE = 189, DISC_SIDE_INTERFACE = 185;
+  const EXCHANGER_INTERFACE = 111, LOCK_INTERFACE = 145, MACHINE_INTERFACE = 189, DISC_SIDE_INTERFACE = 185;
+  const EXCHANGE_INPUT_INVENTORY = 438, EXCHANGE_OUTPUT_INVENTORY = 439;
+  const EXCHANGE_INPUT_SCRIPT = 3797, EXCHANGE_OUTPUT_SCRIPT = 3798;
   const DISC_INVENTORY = 440, INVENTORY_INIT_SCRIPT = 149;
   const SIDE_MODAL_UID = (161 << 16) | 74;
   const DISC_SIDE_UID = DISC_SIDE_INTERFACE << 16;
   const PANEL_BUTTONS = [8, 12, 13].map((child) => (LOCK_INTERFACE << 16) | child)
-    .concat([24, 25, 26, 27, 28, 29, 38, 39, 42].map((child) => (MACHINE_INTERFACE << 16) | child), [DISC_SIDE_UID]);
+    .concat([24, 25, 26, 27, 28, 29, 38, 39, 42].map((child) => (MACHINE_INTERFACE << 16) | child),
+      [13, 14, 15, 17, 20].map((child) => (EXCHANGER_INTERFACE << 16) | child), [DISC_SIDE_UID]);
   // Preview references inventory slots; nothing is removed until successful activation.
   const puzzleProgress = new WeakMap();
 
@@ -319,19 +313,9 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
       return;
     }
     setBit(player, BIT_EXTRA_DISCS);
-    player.getInventory().adds(GREEN_SQUARE_ITEM_ID, 1);
-    player.getInventory().adds(BLUE_TRIANGLE_ITEM_ID, 1);
-    player.getInventory().adds(YELLOW_PENTAGON_ITEM_ID, 1);
-  }
-
-  /** Splits a disc value into two valid disc values, largest first. */
-  function splitDisc(value) {
-    for (const high of VALUES_DESCENDING) {
-      if (high >= value) continue;
-      const low = value - high;
-      if (ITEM_BY_VALUE.has(low)) return [ITEM_BY_VALUE.get(high), ITEM_BY_VALUE.get(low)];
+    for (let i = 0; i < 3; i++) {
+      player.getInventory().adds(BRIMSTAIL_DISCS[api.core.Misc.getRandom(BRIMSTAIL_DISCS.length - 1)], 1);
     }
-    return null;
   }
 
   // ==========================================================================
@@ -750,7 +734,11 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
 
   function useExchanger(event) {
     const { player } = event;
-    playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_EXCHANGER_NO_DISC);
+    if (quest.getStage(player) < STAGE_REPAIRED) {
+      playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_NOT_OPERATIONAL);
+      return;
+    }
+    openMachinePanel(player, EXCHANGER_INTERFACE);
   }
 
   const SINGING_BOWL_INSPECT_TEXT = "This is a beautiful and elegant looking crystal bowl. It is clearly of<br>"
@@ -822,6 +810,13 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     sender.sendInventory(DISC_INVENTORY, 28, inventory.map((item) => item?.getId?.() >= 0
       ? { id: item.getId(), amount: item.getAmount() } : null), DISC_SIDE_INTERFACE);
     sender.sendConfig(856, liveDisc(player, state.selected) ? state.selected.id : -1);
+    if (state.group === EXCHANGER_INTERFACE) {
+      sender.sendInventory(EXCHANGE_INPUT_INVENTORY, 3, state.inputs.map(({ id }) => ({ id, amount: 1 })), EXCHANGER_INTERFACE);
+      sender.sendInventory(EXCHANGE_OUTPUT_INVENTORY, 4, state.offer.map((id) => ({ id, amount: 1 })), EXCHANGER_INTERFACE);
+      sender.sendClientScript(EXCHANGE_INPUT_SCRIPT, ...[4, 5, 6].map((child) => (EXCHANGER_INTERFACE << 16) | child));
+      sender.sendClientScript(EXCHANGE_OUTPUT_SCRIPT, ...[8, 9, 10, 11].map((child) => (EXCHANGER_INTERFACE << 16) | child));
+      return;
+    }
     sender.sendVarbit(2510, UNLOCK_VALUE);
     OPERATE_VALUES.forEach((value, i) => sender.sendVarbit(2511 + i, value));
     sender.sendConfig(849, state.lock?.id ?? -1);
@@ -834,7 +829,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   }
 
   function openMachinePanel(player, group) {
-    const state = { group, selected: null, lock: null, groups: [[], [], []] };
+    const state = { group, selected: null, lock: null, groups: [[], [], []], inputs: [], offer: [] };
     puzzleProgress.set(player, state);
     const sender = player.getPacketSender();
     sender.sendInterface(group);
@@ -846,7 +841,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
   }
 
   function clearPanel({ player, interfaceId }) {
-    if (interfaceId === LOCK_INTERFACE || interfaceId === MACHINE_INTERFACE || interfaceId === DISC_SIDE_INTERFACE) {
+    if ([EXCHANGER_INTERFACE, LOCK_INTERFACE, MACHINE_INTERFACE, DISC_SIDE_INTERFACE].includes(interfaceId)) {
       puzzleProgress.delete(player);
     }
   }
@@ -856,7 +851,8 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     const state = puzzleProgress.get(player);
     if (!state || player.getInterfaceId() !== state.group || event.action !== 1) return;
     const stage = quest.getStage(player);
-    if ((state.group === LOCK_INTERFACE && (stage < STAGE_REPAIRED || stage >= STAGE_PANEL_UNLOCKED)) ||
+    if ((state.group === EXCHANGER_INTERFACE && stage < STAGE_REPAIRED) ||
+        (state.group === LOCK_INTERFACE && (stage < STAGE_REPAIRED || stage >= STAGE_PANEL_UNLOCKED)) ||
         (state.group === MACHINE_INTERFACE && stage !== STAGE_PANEL_UNLOCKED)) {
       event.handled = true;
       puzzleProgress.delete(player);
@@ -874,6 +870,10 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     }
     if (group !== state.group) return;
     event.handled = true;
+    if (group === EXCHANGER_INTERFACE) {
+      exchangerButton(player, state, child);
+      return;
+    }
     if ((group === LOCK_INTERFACE && child === 13) || (group === MACHINE_INTERFACE && child === 42)) {
       player.getPacketSender().sendInterfaceRemoval();
       puzzleProgress.delete(player);
@@ -950,24 +950,83 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_ACTIVATION);
   }
 
-  function exchangeDisc(player, itemId) {
-    if (quest.getStage(player) < STAGE_REPAIRED) {
-      playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_NOT_OPERATIONAL);
+  /** Enumerate value-conserving offers within the cache's four output slots. */
+  function exchangeOffers(inputs) {
+    const total = inputs.reduce((sum, { id }) => sum + DISC_VALUE_BY_ITEM.get(id), 0);
+    if (offersByValue.has(total)) return offersByValue.get(total);
+    const offers = [];
+    function visit(remaining, start, offer) {
+      if (remaining === 0) {
+        offers.push(offer);
+        return;
+      }
+      if (offer.length === 4) return;
+      for (let i = start; i < EXCHANGE_DISCS.length; i++) {
+        const id = EXCHANGE_DISCS[i], value = DISC_VALUE_BY_ITEM.get(id);
+        if (value <= remaining) visit(remaining - value, i, [...offer, id]);
+      }
+    }
+    visit(total, 0, []);
+    offersByValue.set(total, offers);
+    return offers;
+  }
+
+  function exchangerButton(player, state, child) {
+    if (child === 20) {
+      player.getPacketSender().sendInterfaceRemoval();
+      puzzleProgress.delete(player);
       return;
     }
-    const parts = splitDisc(DISC_VALUE_BY_ITEM.get(itemId));
-    if (!parts) {
-      player.sendMessage("The exchanger can't break that disc down any further.");
-      return;
+    if (child === 14) {
+      if (!liveDisc(player, state.selected) || state.inputs.length === 3 ||
+          state.inputs.reduce((sum, { id }) => sum + DISC_VALUE_BY_ITEM.get(id), 0) + DISC_VALUE_BY_ITEM.get(state.selected.id) > 35 ||
+          state.inputs.filter(({ slot }) => slot === state.selected.slot).length >=
+            player.getInventory().getItems()[state.selected.slot].getAmount()) return;
+      state.inputs.push(state.selected);
+      state.selected = null;
+      state.offer = [];
+    } else if (child === 15) {
+      state.inputs = [];
+      state.offer = [];
+      state.selected = null;
+    } else if (child === 13) {
+      if (!state.inputs.length) {
+        playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_EXCHANGER_NO_DISC);
+        return;
+      }
+      const offers = exchangeOffers(state.inputs);
+      state.offer = offers.length ? offers[api.core.Misc.getRandom(offers.length - 1)] : [];
+    } else if (child === 17) {
+      if (!state.offer.length || !state.inputs.length) return;
+      const reserved = new Map();
+      for (const entry of state.inputs) reserved.set(entry.slot, (reserved.get(entry.slot) ?? 0) + 1);
+      const inventory = player.getInventory();
+      if (state.inputs.some((entry) => !liveDisc(player, entry)) ||
+          [...reserved].some(([slot, count]) => inventory.getItems()[slot].getAmount() < count)) return;
+      // Plan the whole exchange off-player: a full bag or overflowing stack never loses payment.
+      const next = new api.core.Inventory(player).setItems(inventory.getCopiedItems());
+      for (const [slot, count] of reserved) {
+        const item = next.getItems()[slot];
+        if (item.getAmount() === count) next.setItem(slot, new api.core.Item(-1, 0));
+        else item.setAmount(item.getAmount() - count);
+      }
+      for (const id of state.offer) {
+        const item = new api.core.Item(id, 1);
+        if (next.getAddableAmount(item) !== 1) {
+          player.sendMessage("You need more inventory space for the exchange.");
+          return;
+        }
+        next.add(item, false);
+      }
+      inventory.setItems(next.getItems());
+      state.inputs = [];
+      state.offer = [];
+      state.selected = null;
+      inventory.refreshItems();
+      // This transcript message must not close the native interface between exchanges.
+      player.sendMessage("The discs shown in the window clunk out of the machine into your hands.");
     }
-    if (player.getInventory().getFreeSlots() < 1) {
-      player.sendMessage("You need a free inventory slot for the exchange.");
-      return;
-    }
-    player.getInventory().deleteNumber(itemId, 1);
-    player.getInventory().adds(parts[0], 1);
-    player.getInventory().adds(parts[1], 1);
-    playVariant(player, BRIMSTAIL_SPAWN_NPC_ID, TRANSCRIPT_EXCHANGE_ACCEPTED);
+    renderPanel(player, state);
   }
 
   function handleItemOnObject(event) {
@@ -983,7 +1042,7 @@ module.exports = function registerEyesOfGlouphrieQuest(api) {
     }
     if (objectId === EXCHANGER_MAP_OBJECT_ID) {
       event.handled = true;
-      exchangeDisc(player, itemId);
+      useExchanger({ player });
     }
   }
 

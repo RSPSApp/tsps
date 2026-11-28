@@ -1465,9 +1465,14 @@ test('EOG Brimstail counts a banked crystal saw or seed: no second seed to hand 
   assert.equal(condition({ player: none, npcId: brimstail, text }), true, 'none owned: Brimstail offers one');
 });
 
-test('EOG Brimstail replacement discs become available after all carried discs are dropped', () => {
+test('EOG Brimstail replacement discs are random non-red non-circles after all carried discs are dropped', (t) => {
   const h = harness('EyesOfGlouphrie');
   const p = player();
+  const draws = [7, 9, 5, 0, 1, 2, 15, 16, 17];
+  const random = t.mock.method(core.Misc, 'getRandom', (maximum) => {
+    assert.equal(maximum, 17, 'the eligible pool has six colours and three non-circle shapes');
+    return draws.shift();
+  });
   const condition = h.hooks.onNpcDialogueCondition.find((fn) => fn.name === 'answerCondition');
   const action = (player) => h.emit('npc-dialogue:action', {
     player, npcId: N.BRIMSTAIL_2, stepId: 'zghUpW', handled: false,
@@ -1490,7 +1495,8 @@ test('EOG Brimstail replacement discs become available after all carried discs a
   for (const id of discIds) p.items.delete(id); // the guide says to drop the discs before asking again
   assert.equal(eligible(), true, 'the cache dialogue condition reopens after the carried discs are dropped');
   action(p);
-  assert.deepEqual([p.items.get(9611), p.items.get(9614), p.items.get(9608)], [1, 1, 1]);
+  assert.deepEqual([I.ORANGE_TRIANGLE, I.ORANGE_SQUARE, I.ORANGE_PENTAGON].map((id) => p.items.get(id)), [1, 1, 1],
+    'the replacement roll differs from the first bundle');
 
   let freeSlots = 2;
   p.getInventory = () => ({
@@ -1504,11 +1510,16 @@ test('EOG Brimstail replacement discs become available after all carried discs a
   assert.equal(p.items.has(9611), false, 'a full bag receives no partial bundle');
   freeSlots = 3;
   action(p);
-  assert.deepEqual([p.items.get(9611), p.items.get(9614), p.items.get(9608)], [1, 1, 1],
+  assert.deepEqual([I.VIOLET_TRIANGLE, I.VIOLET_SQUARE, I.VIOLET_PENTAGON].map((id) => p.items.get(id)), [1, 1, 1],
     'the award can be retried after making three slots');
+  assert.equal(draws.length, 0, 'full inventory and holding discs never roll or give a partial bundle');
+  random.mock.restore();
 });
 
-test('EOG Brimstail can replenish discs after the stage-8 lock panel is unlocked', () => {
+test('EOG Brimstail can replenish discs after the stage-8 lock panel is unlocked', (t) => {
+  let draw = 0;
+  const random = core.Misc.getRandom;
+  t.mock.method(core.Misc, 'getRandom', (max) => max === 17 ? [7, 9, 5][draw++ % 3] : random(max));
   const h = harness('EyesOfGlouphrie');
   const p = player();
   let open = -1;
@@ -1924,4 +1935,143 @@ test('Eyes machine native widget inputs reserve stacked copies and pay each rese
   await click(189, 39);
   assert.equal(inventory.getAmount(green), 1, 'a repeated native activation cannot pay again');
   assert.ok(packets.length > 0, 'real PacketSender output was emitted');
+});
+
+test('Eyes exchanger native packets preview, reroll and commit a value-conserving exchange once', async (t) => {
+  const { Player } = require('../dist/game/entity/impl/player/Player');
+  const { PlayerSession } = require('../dist/net/PlayerSession');
+  const { ClientConnection } = require('../dist/net/NetworkBuilder');
+  const { decodeClientPackets } = require('../dist/net/protocol/ClientProtocol');
+  const api = PluginManager.createApi('EyesExchangerNative');
+  require('../plugins/quests/quests/EyesOfGlouphrie.Quest')(api);
+  const quest = runtime.getRegisteredQuests().at(-1);
+  const packets = [], channel = { kind: 'test', remoteAddress: '127.0.0.1', isOpen: () => true,
+    send: (packet) => { packets.push(packet); return true; }, close() {}, onData() {}, onError() {}, onClose() {} };
+  const p = new Player(new PlayerSession(channel));
+  p.setIndex(9002); p.setUsername('oaknockexchange'); p.setRegistered(true); p.setNeedsPlacement(false);
+  p.setLocation(new core.Location(2391, 9825, 0));
+  const connection = new ClientConnection(channel); connection.player = p;
+  const inventory = p.getInventory(), sender = p.getPacketSender(), previews = new Map();
+  const sendInventory = sender.sendInventory.bind(sender);
+  t.mock.method(sender, 'sendInventory', (id, size, items, group) => {
+    previews.set(id, Array.from({ length: size }, (_, index) => items[index]?.id ?? -1));
+    return sendInventory(id, size, items, group);
+  });
+  let draw = 0;
+  t.mock.method(core.Misc, 'getRandom', (max) => Math.min(max, draw));
+  quest.setStage(p, 8);
+  t.after(() => { p.closeInterruptibleInterfaces(); p.setRegistered(false); core.TaskManager.cancelTasks(p.getIndex()); });
+  const open = () => {
+    p.closeInterruptibleInterfaces();
+    const objectId = 17283, definition = ObjectDefinition.forPlayer(objectId, p);
+    assert.equal(PluginManager.emitObjectInteraction({ player: p, objectId, definition,
+      clickType: definition.getInteractions().indexOf('Use') + 1, option: 'use',
+      object: new core.GameObject(objectId, new core.Location(2391, 9826, 0), 10, 0), handled: false }), true);
+    assert.equal(p.getInterfaceId(), 111, 'ordinary Use opens the real cache exchanger');
+  };
+  const click = async (group, child, slot = 0xffff, itemId = 0xffff) => {
+    const frame = Buffer.alloc(9); frame[0] = 23;
+    frame.writeInt32BE((group << 16) | child, 1); frame.writeUInt16BE(slot, 5); frame.writeUInt16BE(itemId, 7);
+    const decoded = decodeClientPackets(frame); assert.equal(decoded.length, 1);
+    await connection.dispatch(decoded); connection.processTurnPackets();
+  };
+  const button = (child) => click(111, child);
+  const insert = async (slot) => { await click(185, 0, slot, inventory.getItems()[slot].getId()); await button(14); };
+  const values = new Map(Array.from({ length: 28 }, (_, i) => [9597 + i, (Math.floor(i / 4) + 1) * [1, 3, 4, 5][i % 4]]));
+  const output = () => (previews.get(439) ?? []).filter((id) => id >= 0);
+  const input = () => (previews.get(438) ?? []).filter((id) => id >= 0);
+  const total = (items) => items.reduce((sum, id) => sum + values.get(id), 0);
+  const contents = () => inventory.getItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]);
+
+  inventory.setItem(0, new core.Item(I.VIOLET_PENTAGON, 1));
+  const original = contents();
+  await click(111, 17); assert.deepEqual(contents(), original, 'forged Accept without an open session does nothing');
+  open();
+  await insert(0); assert.deepEqual(input(), [I.VIOLET_PENTAGON]);
+  assert.deepEqual(contents(), original, 'insertion is a reservation, not a payment');
+  await button(13);
+  const first = output();
+  assert.ok(first.length >= 1 && first.length <= 4); assert.equal(total(first), 35);
+  assert.ok(!first.includes(I.YELLOW_CIRCLE));
+  draw = 1; await button(13);
+  assert.notDeepEqual(output(), first, 'Exchange can reroll without consuming or reinserting the input');
+  assert.equal(total(output()), 35); assert.deepEqual(contents(), original);
+  await button(15);
+  assert.deepEqual(input(), []); assert.deepEqual(output(), []); assert.deepEqual(contents(), original);
+
+  // One stack can provide three physical tokens, but not a fourth or a fourth copy it does not own.
+  inventory.setItem(0, new core.Item(I.RED_CIRCLE, 2));
+  await insert(0); await insert(0); await insert(0);
+  assert.deepEqual(input(), [I.RED_CIRCLE, I.RED_CIRCLE]);
+  inventory.getItems()[0].setAmount(3); await insert(0); await insert(0);
+  assert.equal(input().length, 3);
+  await button(13); assert.equal(total(output()), 3);
+  inventory.getItems()[0].setAmount(2);
+  const stale = contents(); await button(17);
+  assert.deepEqual(contents(), stale, 'a reduced stack invalidates all payment atomically');
+  inventory.getItems()[0].setId(I.ORANGE_CIRCLE); await button(17);
+  assert.equal(inventory.getAmount(I.ORANGE_CIRCLE), 2, 'changing the reserved slot id cannot pay');
+  await button(15);
+
+  inventory.setItem(0, new core.Item(I.INDIGO_PENTAGON, 1));
+  inventory.setItem(1, new core.Item(I.RED_PENTAGON, 1));
+  inventory.setItem(2, new core.Item(I.RED_CIRCLE, 1));
+  await insert(0); await insert(1); await insert(2);
+  assert.equal(total(input()), 35, 'a third token above the 35-point cap is refused');
+  await button(15); assert.deepEqual(input(), []);
+
+  // Equal values retain all obtainable shapes, including the circles added to live in 2020.
+  for (const [from, to] of [[I.RED_PENTAGON, I.BLUE_CIRCLE], [I.ORANGE_TRIANGLE, I.INDIGO_CIRCLE], [I.RED_TRIANGLE, I.RED_TRIANGLE]]) {
+    inventory.setItems(Array.from({ length: 28 }, () => new core.Item(-1, 0)));
+    inventory.setItem(0, new core.Item(from, 1)); open(); await insert(0);
+    draw = Number.MAX_SAFE_INTEGER; await button(13);
+    assert.deepEqual(output(), [to], 'equivalent shapes and an unchanged offer remain available');
+    assert.ok(!output().includes(I.YELLOW_CIRCLE));
+    await button(17); assert.equal(inventory.getAmount(to), 1);
+  }
+  inventory.setItems(Array.from({ length: 28 }, () => new core.Item(-1, 0)));
+
+  inventory.setItem(0, new core.Item(I.VIOLET_PENTAGON, 1));
+  inventory.setItem(1, new core.Item(-1, 0)); inventory.setItem(2, new core.Item(-1, 0));
+  await insert(0); draw = 0; await button(13);
+  const offer = output(), expected = new Map();
+  for (const id of offer) expected.set(id, (expected.get(id) ?? 0) + 1);
+  await button(17);
+  assert.equal(inventory.getAmount(I.VIOLET_PENTAGON), expected.get(I.VIOLET_PENTAGON) ?? 0);
+  for (const [id, amount] of expected) assert.equal(inventory.getAmount(id), amount);
+  const paid = contents(); await button(17);
+  assert.deepEqual(contents(), paid, 'replayed Accept cannot give output twice');
+  assert.deepEqual(input(), []); assert.deepEqual(output(), []); assert.equal(p.getInterfaceId(), 111);
+
+  // A filled bag cannot lose input when a split needs additional distinct output stacks.
+  inventory.setItems(Array.from({ length: 28 }, (_, slot) => new core.Item(slot === 0 ? I.VIOLET_PENTAGON : I.COINS, 1)));
+  open(); await insert(0); await button(13);
+  assert.ok(new Set(output()).size > 1, 'control: this offer needs multiple stacks');
+  const full = contents(); await button(17); assert.deepEqual(contents(), full);
+  assert.ok(input().length > 0 && output().length > 0, 'the refused offer remains available after making room');
+  inventory.setItem(1, new core.Item(-1, 0)); inventory.setItem(2, new core.Item(-1, 0)); inventory.setItem(3, new core.Item(-1, 0));
+  await button(17); assert.deepEqual(input(), []);
+
+  inventory.setItems(Array.from({ length: 28 }, () => new core.Item(-1, 0)));
+  inventory.setItem(0, new core.Item(I.VIOLET_PENTAGON, 1));
+  open(); await insert(0); await button(13);
+  const overflowing = output()[0];
+  inventory.setItem(1, new core.Item(overflowing, 2147483647));
+  const overflow = contents(); await button(17);
+  assert.deepEqual(contents(), overflow, 'an overflowing output stack also refuses the entire trade');
+
+  inventory.setItems(Array.from({ length: 28 }, () => new core.Item(-1, 0)));
+  inventory.setItem(0, new core.Item(I.GREEN_SQUARE, 1));
+  open(); await insert(0); await button(13); const cancelled = contents();
+  p.closeInterruptibleInterfaces(); await button(17); assert.deepEqual(contents(), cancelled, 'closing discards reservations and offers');
+  open(); await insert(0); await button(13);
+  PluginManager.emitPlayerLogout({ player: p, username: p.getUsername() });
+  await button(17); assert.deepEqual(contents(), cancelled, 'logout clears the transient offer without taking the input');
+  const { PlayerSave } = require('../dist/game/entity/impl/player/persistence/PlayerSave');
+  const fresh = new Player(new PlayerSession(channel));
+  PlayerSave.fromPlayer(p).applyToPlayer(fresh);
+  assert.deepEqual(fresh.getInventory().getItems().map((item) => [item.getId(), item.getAmount(), item.getMeta()]), cancelled,
+    'relogging restores the unconsumed input without a transient preview');
+  assert.equal(fresh.getInterfaceId(), -1);
+  assert.ok(packets.length > 0, 'all interactions produced actual PacketSender output');
 });

@@ -225,3 +225,63 @@ test('late Dream Mentor and Mourning checkpoints stay unfinished until their exi
 test('optional external evidence export contains only native state',()=>{
     if(process.env.NATIVE_STATE_CASES_OUT) fs.writeFileSync(process.env.NATIVE_STATE_CASES_OUT,JSON.stringify(exported,null,2));
 });
+
+test('Oaknock exchanger sends the native input/output inventories and redraw scripts', t => {
+    const { Inventory } = require('../rs/inventory/Inventory');
+    const api = PluginManager.createApi('OaknockCacheUi');
+    require(path.join(server, 'plugins/quests/quests/EyesOfGlouphrie.Quest'))(api);
+    const q = Q.getRegisteredQuests().at(-1), f = fixture(t), p = f.player, sender = f.sender;
+    const wm = vm.context.widgetManager;
+    wm.rootInterface = 111; wm.getGroup(111); wm.getGroup(185);
+    vm.context.inventories = new Map();
+    const sendInventory = sender.sendInventory.bind(sender), scripts: number[] = [];
+    t.mock.method(sender, 'sendInventory', (id: number, size: number, items: any[], group: number) => {
+        const inv = new Inventory(size);
+        for (let slot = 0; slot < size; slot++) if (items[slot]) inv.setSlot(slot, items[slot].id, items[slot].amount);
+        vm.context.inventories.set(id, inv);
+        return sendInventory(id, size, items, group);
+    });
+    const sendScript = sender.sendClientScript.bind(sender);
+    t.mock.method(sender, 'sendClientScript', (id: number, ...args: any[]) => {
+        scripts.push(id);
+        vm.run(vm.context.loadScript(id), args.filter(arg => typeof arg === 'number'), args.filter(arg => typeof arg === 'string'));
+        assert.equal(vm.lastError, null, `native script ${id} executes`);
+        return sendScript(id, ...args);
+    });
+    const core = PluginManager.getCoreApi();
+    core.ObjectDefinition.init();
+    q.setStage(p, 8); p.getInventory().setItem(0, new core.Item(core.ItemIdentifiers.VIOLET_PENTAGON, 1));
+    PluginManager.emitPlayerLogin({ player: p, username: p.getUsername() });
+    const definition = core.ObjectDefinition.forPlayer(17283, p);
+    assert.equal(PluginManager.emitObjectInteraction({ player: p, objectId: 17283, definition,
+        option: 'use', clickType: definition.getInteractions().indexOf('Use') + 1,
+        object: new core.GameObject(17283, new core.Location(2391, 9826, 0), 10, 0), handled: false }), true);
+    assert.equal(p.getInterfaceId(), 111);
+    const widget = (child: number) => wm.getWidgetByUid((111 << 16) | child);
+    assert.deepEqual([13, 14, 15, 17, 20].map(child => widget(child).actions[0]),
+        ['Exchange', 'Insert coin', 'Cancel exchange', 'Accept exchange', 'Close']);
+    assert.ok([4, 5, 6, 8, 9, 10, 11].every(child => widget(child).hidden));
+    const click = (group: number, child: number, slot = 0xffff, itemId = 0xffff) =>
+        PluginManager.emitInterfaceActionClick({ player: p, buttonId: (group << 16) | child,
+            action: 1, slot, itemId, handled: false });
+    click(185, 0, 0, core.ItemIdentifiers.VIOLET_PENTAGON);
+    vm.run(vm.context.loadScript(3795), [(111 << 16) | 19], []);
+    assert.equal(vm.lastError, null);
+    assert.equal(widget(19).itemId, core.ItemIdentifiers.VIOLET_PENTAGON, 'native selected coin follows varp 856');
+    click(111, 14);
+    assert.equal(widget(4).itemId, core.ItemIdentifiers.VIOLET_PENTAGON);
+    assert.equal(widget(4).hidden, false); assert.equal(widget(5).hidden, true);
+    t.mock.method(core.Misc, 'getRandom', () => 0);
+    click(111, 13);
+    const output = vm.context.inventories.get(439);
+    const ids = Array.from({ length: 4 }, (_, slot) => output.getSlot(slot)?.itemId ?? -1);
+    for (let i = 0; i < 4; i++) {
+        assert.equal(widget(8 + i).hidden, ids[i] < 0);
+        if (ids[i] >= 0) assert.equal(widget(8 + i).itemId, ids[i]);
+    }
+    assert.ok(ids.filter(id => id >= 0).length > 1, 'the cache displays a multi-disc offer');
+    click(111, 15);
+    assert.ok([4, 5, 6, 8, 9, 10, 11].every(child => widget(child).hidden), 'Cancel clears both native previews');
+    assert.ok(scripts.includes(3797) && scripts.includes(3798) && scripts.includes(149));
+    p.closeInterruptibleInterfaces();
+});

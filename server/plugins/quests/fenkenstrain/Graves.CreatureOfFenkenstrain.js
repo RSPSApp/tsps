@@ -221,7 +221,17 @@ module.exports = function registerGraves(api, { state, common, guide }) {
   function cavernKeyDrop(request) {
     if (request.itemId !== ITEM.CAVERN_KEY) return;
     const stage = request.player ? state.stage(request.player) : STAGE.NOT_STARTED;
-    request.allowed = request.npcId === NPC.KEY_EXPERIMENT && stage >= STAGE.PARTS && stage < STAGE.COMPLETE;
+    request.allowed = request.npcId === NPC.KEY_EXPERIMENT && stage >= STAGE.PARTS && stage < STAGE.COMPLETE
+      && !held(request.player, ITEM.CAVERN_KEY);
+  }
+
+  /** "If the player is already carrying a key or has completed the quest, they cannot attack another" (Wiki, Cavern key). */
+  function spareExperiment(event) {
+    const { player, npcId } = event;
+    if (npcId !== NPC.KEY_EXPERIMENT || !player) return;
+    if (!held(player, ITEM.CAVERN_KEY) && state.stage(player) < STAGE.COMPLETE) return;
+    player.sendMessage("You don't have the heart to kill the poor creature again.");
+    event.handled = true;
   }
 
   /**
@@ -231,6 +241,12 @@ module.exports = function registerGraves(api, { state, common, guide }) {
   function mausoleumDoor(event) {
     const { player, objectId, object } = event;
     if (objectId !== LOC.MAUSOLEUM_DOOR) return false;
+    // After the quest the key is no longer needed to open it (Wiki, Cavern key).
+    if (state.stage(player) >= STAGE.COMPLETE) {
+      player.getPacketSender().sendSoundEffect(SOUND.LOCKED, 1, 0);
+      api.emitCustomEvent("door:open", { player, object, handled: false });
+      return true;
+    }
     if (!held(player, ITEM.CAVERN_KEY)) {
       // Ours: the shed's locked message (Wiki); no capture tries this door without the key.
       player.sendMessage("The door is locked.");
@@ -256,6 +272,7 @@ module.exports = function registerGraves(api, { state, common, guide }) {
       player.sendMessage("The chest is empty.");
       return true;
     }
+    if (!common.room(player)) return true;
     player.getInventory().adds(ITEM.CAVERN_KEY, 1);
     box(player, "You take a key out of the chest.", ITEM.CAVERN_KEY);
     return true;
@@ -314,6 +331,7 @@ module.exports = function registerGraves(api, { state, common, guide }) {
   api.onObjectInteraction("Memorial", { Push: pushMemorial, Search: searchMemorial });
   api.onItemOnObject(starOnMemorial, { noted: false });
   api.onCustomEvent("npc-drops:quest-item", cavernKeyDrop);
+  api.onNpcAttackOption(spareExperiment);
   api.onObjectInteraction("Entrance", { Open: mausoleumDoor });
   api.onObjectInteraction("Chest", { Search: searchChest });
   api.onGroundItemPickup(takeBrain);

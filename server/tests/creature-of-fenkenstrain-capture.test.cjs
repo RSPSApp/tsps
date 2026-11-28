@@ -794,3 +794,67 @@ test('a headless Quest Helper snapshot carries varp 399 and varp 400, which the 
   assert.equal(snapshot.varps[VARP_STATE], (1 << 4) | (5 << 5));
   assert.equal(snapshot.varbits[VARBIT_LIST], 4);
 });
+
+test('review: a save with the guide out does not hide the gardener after login; the mausoleum door is free after the quest', async (t) => {
+  const f = fixture(t, [3552, 3551, 0]);
+  setStage(f, 1);
+  // An autosave or shutdown while the guide was out kept bit 31 (fenk_gardener_directions).
+  f.p.setAttribute(STATE, (1 << 9) | (1 << 31));
+  PM.emitPlayerLogin({ player: f.p, username: f.p.getUsername() });
+  assert.equal(f.varbit(V.DIRECTIONS), 0);
+  assert.equal(f.varbit(V.SPOKEN), 1, 'the rest of varp 400 is kept');
+
+  const d = fixture(t, [3511, 9957, 0]);
+  quest.setStage(d.p, 7);
+  await d.clickLoc(locId('fenk_mausoleum_door'), 3510, 9957, 1);
+  d.step(4);
+  assert.equal(d.p.getLocation().getX(), 3510, 'through without a key (Wiki, Cavern key)');
+});
+
+test('review: the key Experiment is spared while a key is carried or after the quest, and drops no second key', (t) => {
+  const f = fixture(t, [3554, 9947, 0]);
+  setStage(f, 1);
+  f.give(I().CAVERN_KEY);
+  const experiment = f.npc(core.NpcIdentifiers.EXPERIMENT, [3554, 9948, 0]);
+  const attack = () => {
+    const event = { player: f.p, npc: experiment, npcId: core.NpcIdentifiers.EXPERIMENT, clickType: 2, handled: false };
+    PM.emitNpcAttackOption(event);
+    return event.handled;
+  };
+  const drop = () => {
+    const request = { player: f.p, npc: null, npcId: core.NpcIdentifiers.EXPERIMENT, itemId: I().CAVERN_KEY, requirement: null, allowed: undefined };
+    PM.emitCustomEvent('npc-drops:quest-item', request);
+    return request.allowed;
+  };
+  assert.equal(attack(), true);
+  assert.ok(f.messages().includes("You don't have the heart to kill the poor creature again."));
+  assert.equal(drop(), false);
+  f.p.getInventory().deleteNumber(I().CAVERN_KEY, 1);
+  assert.equal(attack(), false, 'without a key, during the quest, it can be fought');
+  assert.equal(drop(), true);
+  quest.setStage(f.p, 7);
+  assert.equal(attack(), true, 'after the quest');
+});
+
+test('review: a full pack is refused before any box: the chest, the cupboard, the ring again', async (t) => {
+  const fill = (f) => { while (f.p.getInventory().getFreeSlots() > 0) f.give(I().LOBSTER); };
+  const c = fixture(t, [3501, 9967, 0]);
+  setStage(c, 1);
+  fill(c);
+  await c.clickLoc(locId('fenk_chest_open'), 3500, 9967, 1);
+  c.step(4);
+  assert.equal(c.read(), null);
+  assert.ok(c.messages().includes("You don't have enough inventory space."));
+  assert.equal(c.amount(I().CAVERN_KEY), 0);
+
+  const g = fixture(t, [3550, 3554, 2]);
+  const tower = g.npc(TOWER_FENK(), [3551, 3554, 2]);
+  quest.setStage(g.p, 7);
+  g.p.getSkillManager().setCurrentLevels(core.Skill.THIEVING, 25, false);
+  fill(g);
+  const from = g.tick();
+  await g.clickNpc(tower, 3);
+  g.step(2);
+  assert.ok(!g.messages(from).includes('You steal the Ring of Charos from Fenkenstrain.'));
+  assert.ok(g.messages(from).includes("You don't have enough inventory space."));
+});

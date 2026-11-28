@@ -111,6 +111,13 @@ module.exports = function createCommon(api, state) {
 
   const BUSY_VARBIT = 12393;
 
+  /** Room for one more item, or the usual refusal (ours: no capture hands anything to a full pack). */
+  function room(player) {
+    if (player.getInventory().getFreeSlots() > 0) return true;
+    player.sendMessage("You don't have enough inventory space.");
+    return false;
+  }
+
   function held(player, itemId, amount = 1) {
     return player.getInventory().getAmount(itemId) >= amount;
   }
@@ -224,7 +231,7 @@ module.exports = function createCommon(api, state) {
 
   return {
     PAGE, NPC, CASTLE_NPCS, ITEM, LOC, SEQ, SOUND,
-    held, heldAny, inBank, wearingGhostspeak, ownsRing, baseId, later, box, hold, release, busy, at, questComplete,
+    room, held, heldAny, inBank, wearingGhostspeak, ownsRing, baseId, later, box, hold, release, busy, at, questComplete,
   };
 };
 

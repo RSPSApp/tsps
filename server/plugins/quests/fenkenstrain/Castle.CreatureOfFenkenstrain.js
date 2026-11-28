@@ -8,7 +8,7 @@ module.exports = function registerCastle(api, { state, common, quest }) {
   const { STAGE, FIELD } = state;
   const { PAGE, NPC, CASTLE_NPCS, ITEM, LOC, SEQ, SOUND, held, heldAny, ownsRing, baseId, box, later } = common;
   const { Skill, Animation, GameObject, Location } = api.core;
-  const { startTranscript, openBook, openLongScroll, bookPagesFromSpreads } = require("../QuestRuntime");
+  const { startTranscript, openBook, openLongScroll, bookPagesFromSpreads, giveReward } = require("../QuestRuntime");
 
   const GARDENER_PAGE = "Gardener Ghost";
   const ROLOGARTH_PAGE = "Lord Rologarth";
@@ -243,7 +243,10 @@ module.exports = function registerCastle(api, { state, common, quest }) {
         if (stageOf(player) === STAGE.CONDUCTOR_REPAIRED) quest().setStage(player, STAGE.CREATURE_LOOSE);
       };
       event.after = () => {
-        if (stageOf(player) === STAGE.CREATURE_LOOSE && !held(player, ITEM.TOWER_KEY)) player.getInventory().adds(ITEM.TOWER_KEY, 1);
+        // A full pack gets no key; his next talk hands it over (fenkenstrainVariant).
+        if (stageOf(player) === STAGE.CREATURE_LOOSE && !held(player, ITEM.TOWER_KEY) && common.room(player)) {
+          player.getInventory().adds(ITEM.TOWER_KEY, 1);
+        }
       };
       return;
     }
@@ -262,13 +265,23 @@ module.exports = function registerCastle(api, { state, common, quest }) {
     if (event.kind === "message") return presentMessage(event, player, text);
     const lower = text.toLowerCase();
     const give = (itemId) => {
-      if (!held(player, itemId)) player.getInventory().adds(itemId, 1);
       event.handled = true;
+      if (held(player, itemId)) return;
+      if (!common.room(player)) {
+        event.end = true;
+        return;
+      }
+      player.getInventory().adds(itemId, 1);
     };
     if (lower === "marble amulet") return give(ITEM.MARBLE_AMULET);
     if (lower === "obsidian amulet") return give(ITEM.OBSIDIAN_AMULET);
     if (lower === "a letter") return give(ITEM.LETTER);
-    if (lower.startsWith("a shed key")) return give(ITEM.SHED_KEY);
+    if (lower.startsWith("a shed key")) {
+      // "in their inventory or on the ground with no inventory space" (Wiki).
+      event.handled = true;
+      if (!held(player, ITEM.SHED_KEY)) giveReward(player, ITEM.SHED_KEY, 1);
+      return;
+    }
     if (lower === "the gardener ghost follows the player") {
       // The guide sets off as the gardener's last line is continued (Gardener unit).
       event.handled = true;
@@ -355,6 +368,7 @@ module.exports = function registerCastle(api, { state, common, quest }) {
         player.sendMessage(`You need level ${THIEVING_LEVEL} thieving to pick Dr Fenkenstrain's pocket.`);
         return true;
       }
+      if (stage >= STAGE.COMPLETE && !common.room(player)) return true;
       player.sendMessage(STEAL_MESSAGE);
       if (stage === STAGE.CREATURE_CONVINCED) {
         // Varp 400 is cleared and varp 399 goes to 8 on the same tick (2225); the ring is the reward.

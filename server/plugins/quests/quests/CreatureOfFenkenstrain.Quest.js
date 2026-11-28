@@ -98,6 +98,8 @@ module.exports = function registerCreatureOfFenkenstrainQuest(api) {
 
   function login({ player }) {
     state.migrate(player);
+    // The guide is per session: a save taken while he was out (autosave, shutdown) must not hide the gardener.
+    if (state.get(player, FIELD.GARDENER_DIRECTIONS)) state.set(player, FIELD.GARDENER_DIRECTIONS, 0);
     state.publish(player);
     refreshQuestList(player);
   }

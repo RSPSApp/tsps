@@ -13,7 +13,10 @@ module.exports = function registerGardener(api, { state, common, quest }) {
   /** Where the guide keeps up from: further back than this (Chebyshev) and he is put 2 tiles behind (ticks 709, 906, 922). */
   const CATCH_UP_DISTANCE = 15;
   const CATCH_UP_BEHIND = 2;
-  /** The castle grounds and the Haunted Woods, the areas he is willing to walk (Wiki). */
+  /**
+   * Ours: the castle grounds and the Haunted Woods as boxes. The Wiki gives only his lines, not the
+   * area; the one recorded off-track (tick 720, 3594,3512) is inside these boxes and is not reproduced.
+   */
   const CASTLE_GROUNDS = { minX: 3520, maxX: 3580, minY: 3523, maxY: 3585 };
   const HAUNTED_WOODS = { minX: 3540, maxX: 3660, minY: 3440, maxY: 3530 };
   /** Off the beaten track: his first words, the farewell 6 ticks later, gone 5 after that (ticks 720-731). */
@@ -204,6 +207,7 @@ module.exports = function registerGardener(api, { state, common, quest }) {
       player.sendMessage("You search the cupboard but find nothing.");
       return true;
     }
+    if (!common.room(player)) return true;
     player.getInventory().adds(ITEM.BRUSHES[0], 1);
     box(player, "You find a garden brush in the cupboard.", ITEM.BRUSHES[0]);
     return true;
@@ -274,7 +278,7 @@ module.exports = function registerGardener(api, { state, common, quest }) {
     later(player, BRUSH_STEPS, () => {
       release(player, token);
       player.sendMessage("You give the chimney a jolly good clean out.");
-      if (!at(location, ...MOULD_CHIMNEY) || held(player, ITEM.MOULD)) return;
+      if (!at(location, ...MOULD_CHIMNEY) || held(player, ITEM.MOULD) || !common.room(player)) return;
       player.getInventory().adds(ITEM.MOULD, 1);
       box(player, "A lightning conductor mould falls down out of the chimney.", ITEM.MOULD);
     });

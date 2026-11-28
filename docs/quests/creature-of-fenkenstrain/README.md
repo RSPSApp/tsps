@@ -42,7 +42,7 @@ Ticks are the capture's.
   with it the ghostspeak box (an item box, the amulet) shows once, then he answers. "Would you show me where
   the place was?" spawns the guide 2012 where he stood as the last line is continued, walking after the
   player; when he falls more than about 15 tiles behind he is put two tiles behind the player (709, 906,
-  922). Off his route he says "Oi'm afraid you've gone well off the beaten track.." (720), "Fare thee well -
+  922). Off his route (ours: the area; the Wiki gives only the lines) he says "Oi'm afraid you've gone well off the beaten track.." (720), "Fare thee well -
   oi must return to me' garden." 6 ticks later, and is gone 5 after that (731). Talking to him: "Go
   southeast, mate." (724).
 - **Digging** (927-1173): spade Dig on the tile beside each grave (3608,3490 head; 3503,3576 torso;
@@ -106,8 +106,8 @@ From the Wiki, or ours, as the code says at each place:
 ## Recorded differences
 
 - The first guided walk went off track at 3594,3512 after 110 ticks (720); the second passed 3590,3507 and
-  3588,3511 and reached the grave (934). One recording cannot tell a timer from a boundary; the Wiki's area
-  rule is used.
+  3588,3511 and reached the grave (934). One recording cannot tell a timer from a boundary; the area boxes are ours
+  (the Wiki gives only his lines), and this off-track is not reproduced.
 
 ## Findings
 

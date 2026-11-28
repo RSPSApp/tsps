@@ -34,3 +34,8 @@ export function animationRoleByName(name: string | null): CombatAnimationRole | 
     if (words.some((word) => STYLE_WORDS.has(word)) && !words.some((word) => MOTION_WORDS.has(word))) return "attack";
     return null;
 }
+
+/** Whether an attack animation's name is a spell cast (`human_castentangle`, `demon_casting`). */
+export function isCastAnimationName(name: string | null): boolean {
+    return !!name && animationWords(name).some((word) => word.startsWith("cast") || word === "spell");
+}

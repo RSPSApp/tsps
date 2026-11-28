@@ -7,7 +7,7 @@
  * Farming level (`farming:level-rules`): planting a seed or sapling, making a seedling, making and
  * placing a scarecrow; harvesting asks none here.
  * Not here: the spirit tree count, which Farming's level sets rather than gates; the Tithe Farm's
- * seeds, a minigame's; and the Tree Gnome Village quest completed on unlock.
+ * seeds, a minigame's. Tree Gnome Village completes on unlock (FairysFlight, its `completes`).
  */
 const Common = require("./Common.LeagueRelics");
 

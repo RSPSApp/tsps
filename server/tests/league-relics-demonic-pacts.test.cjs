@@ -109,6 +109,9 @@ before(async () => {
   Unlock = require("../plugins/modes/leaguerelics/Unlock.LeagueRelics");
   // The storage containers (the Knapsack): the Tutor asks storage:owned whether a closed one is owned.
   require("../plugins/items/StorageItems.plugin").register(api);
+  // The fairy mushroom opens the real fairy ring dials and spirit tree menu.
+  require("../plugins/world/FairyRings.plugin").register(api);
+  require("../plugins/world/SpiritTrees.plugin").register(api);
   require("../plugins/skills/smithing/Data.Smithing").load(core);
   custom["smithing:bar-for-ore"] = [require("../plugins/skills/smithing/Smelting.Smithing").answerBarForOre];
   custom["cooking:cooked"] = [(request) => { if (request.rawId === I.RAW_SHRIMPS) Object.assign(request, { cookedId: I.SHRIMPS, xp: 30 }); }];
@@ -141,7 +144,8 @@ function character(name, profile, picks = {}, leagueType = DP) {
     sendInterfaceFlagsRange: (uid, from, to, flags) => sent.flags.push({ uid, from, to, flags }),
   };
   const sender = new Proxy({}, {
-    get: (target, key) => (key in record ? (...args) => (record[key](...args), sender) : () => sender),
+    get: (target, key) => (key === "getVarbit" ? (id) => sent.varbits.get(id) ?? 0
+      : key in record ? (...args) => (record[key](...args), sender) : () => sender),
   });
   player.getPacketSender = () => sender;
   player.sendMessage = (text) => sent.messages.push(text);
@@ -2861,4 +2865,137 @@ test("Gauntlet carried Flask of Fervour: selected relic retains one flask, reset
   }
   emit("gauntlet:starting-kit", { player: who.relic, carried: [{ id: 995, amount: 1 }] });
   assert.equal(who.relic.getInventory().getAmount(id), count + 1, "no flask is manufactured when none was carried");
+});
+
+// ---- The relics' real menus: Bank Heist (rsprox 234/3278) and the fairy mushroom (234/3275) ----
+
+const HEIST_DATA = require("../plugins/modes/data/league-bank-heist.json");
+const pack = ({ x, y, z = 0 }) => ((z << 28) | (x << 14) | y) >>> 0;
+
+test("Bank Heist: live's menu, its 113 banks in live's order, an area not unlocked or a quest not done struck through; a pick teleports and sends the varp", () => {
+  const who = cases(BANK_HEIST);
+  const player = who.relic;
+  const catherby = (x, y) => x >= 2780 && x <= 2840 && y >= 3400 && y <= 3470;
+  withLeague({ unlocked: ["misthalin"], areaAt: (x, y) => (catherby(x, y) ? "kandarin" : "misthalin") }, () => {
+    custom["quest:is-complete"] = [(query) => { query.complete = query.name !== "Contact!"; }];
+    assert.equal(click(player, I.BANKERS_BRIEFCASE, "Teleport").handled, true);
+    const menu = menuOf(player);
+    assert.equal(menu.title, "Bank Heist teleports", "234/3278");
+    assert.equal(menu.labels.length, 113);
+    assert.deepEqual(menu.labels.map((label) => label.replace(/<\/?str>/g, "")), HEIST_DATA.destinations.map((bank) => bank.name), "live's order");
+    assert.ok(menu.labels.includes("Edgeville"));
+    assert.ok(menu.labels.includes("<str>Catherby</str>"), "an area not unlocked");
+    assert.ok(menu.labels.includes("<str>Sophanem</str>"), "a quest not done (Contact!)");
+    pick(player, "Sophanem");
+    assert.equal(player.sent.messages.at(-1), "You need to complete Contact! to teleport there.");
+    click(player, I.BANKERS_BRIEFCASE, "Teleport");
+    pick(player, "Catherby");
+    assert.match(player.sent.messages.at(-1), /haven't unlocked/);
+    click(player, I.BANKERS_BRIEFCASE, "Teleport");
+    pick(player, "Edgeville");
+    const edgeville = HEIST_DATA.destinations.find((bank) => bank.name === "Edgeville");
+    assert.equal(player.sent.configs.get(core.CacheDefinitions.getVarpId("league_bank_heist_last_destination")), pack(edgeville), "the tile, as live packs it");
+    assert.ok(ticksTo(player, edgeville) > 0, "at Edgeville's recorded landing");
+    relocate(player, new Location(3200, 3200, 0));
+    assert.equal(click(player, I.BANKERS_BRIEFCASE, "Last-destination").handled, true);
+    assert.ok(ticksTo(player, edgeville) > 0, "Last-destination goes back");
+  });
+  for (const other of others(who)) assert.equal(click(other, I.BANKERS_BRIEFCASE, "Teleport").handled, false);
+});
+
+test("Fairy mushroom: live's chat, then the real fairy ring dials (no staff asked) and spirit tree menu; the mushroom's own cast; Tree Gnome Village on unlock", () => {
+  const who = cases(NATURES_ACCORD);
+  const player = who.relic;
+  withLeague({ unlocked: ["misthalin"], areaAt: (x) => (x < 2500 ? "kandarin" : "misthalin") }, () => {
+    custom["quest:is-complete"] = [(query) => { query.complete = true; }];
+    assert.equal(click(player, I.FAIRY_MUSHROOM, "Teleport").handled, true);
+    const chat = prompts.at(-1);
+    assert.equal(chat.title, "Fairy mushroom teleports", "234/3275");
+    assert.deepEqual(chat.entries.map(([label]) => label), ["Fairy rings.", "Spirit trees.", "Tool Leprechauns."]);
+
+    // Spirit trees: the trees' own menu, as live opens it from the mushroom, then the mushroom's teleport.
+    chat.entries[1][1]();
+    const trees = menuOf(player);
+    assert.equal(trees.title, "Spirit Tree Locations");
+    assert.equal(trees.labels.at(-1), "Cancel", "the trees' own menu");
+    const ge = emit("spirit-trees:destinations", { player, list: [] }).list.find((tree) => tree.name === "Grand Exchange");
+    assert.ok(ge, "the Grand Exchange tree");
+    pick(player, "Grand Exchange");
+    core.TaskManager.process();
+    assert.equal(player.getAnimation()?.getId(), core.CacheDefinitions.getSeqId("human_fairy_vanish"), "the mushroom's own cast (234/3275)");
+    const landed = ticksTo(player, { x: ge.location.getX(), y: ge.location.getY(), z: ge.location.getZ() });
+    assert.ok(landed > 0 && landed <= 4, `at the tree, three ticks on (${landed})`);
+
+    // Fairy rings: the real dials, with no staff or quest; Confirm keeps the relic's areas.
+    relocate(player, new Location(3200, 3200, 0));
+    click(player, I.FAIRY_MUSHROOM, "Teleport");
+    prompts.at(-1).entries[0][1]();
+    assert.equal(player.sent.interfaces.at(-1), 398, "the fairy ring dials (398)");
+    const dial = (code) => code.split("").forEach((letter, index) => player.sent.varbits.set([3985, 3986, 3987][index], [["A", "D", "C", "B"], ["I", "L", "K", "J"], ["P", "S", "R", "Q"]][index].indexOf(letter)));
+    const rings = emit("fairy-rings:destinations", { list: [] }).list;
+    // Canifis (CKS), in the open area; BKP (Castle Wars, west of x 2500), in the locked one: neither has a lock of its own.
+    const open = rings.find((ring) => ring.code === "CKS");
+    const shut = rings.find((ring) => ring.code === "BKP");
+    assert.ok(open.location.getX() >= 2500 && shut.location.getX() < 2500);
+    dial(shut.code);
+    hooks.onInterfaceActionClick({ player, groupId: 398, childId: 26, handled: false });
+    assert.match(player.sent.messages.at(-1), /haven't unlocked/, `${shut.code}: an area not unlocked`);
+    click(player, I.FAIRY_MUSHROOM, "Fairy-Ring");
+    dial(open.code);
+    hooks.onInterfaceActionClick({ player, groupId: 398, childId: 26, handled: false });
+    assert.ok(ticksTo(player, { x: open.location.getX(), y: open.location.getY(), z: open.location.getZ() }) > 0, `${open.code} by the dials`);
+    assert.equal(player.getAttribute("league:last-destination:fairy-mushroom")?.label, open.code, "its Last-destination");
+
+    // Tool leprechauns: the menu interface (no recording).
+    click(player, I.FAIRY_MUSHROOM, "Tool-leprechauns");
+    assert.equal(menuOf(player).title, "Tool Leprechaun Locations");
+  });
+
+  const quests = [];
+  const saved = custom["league:complete-quests"];
+  custom["league:complete-quests"] = [(request) => quests.push(request.quests)];
+  try {
+    emit("league:relic-unlocked", { player, league: DP, relic: "nature-s-accord" });
+    emit("league:relic-unlocked", { player, league: DP, relic: "larcenist" });
+  } finally {
+    custom["league:complete-quests"] = saved;
+  }
+  assert.deepEqual(quests, [["Tree Gnome Village"]], "Wiki: unlocking it autocompletes Tree Gnome Village");
+});
+
+test("Bank Heist: a guild's levels (current, as its door counts them), the Cooks' Guild bank's diary and Alchemy Guild's Herblore strike it, as live does", () => {
+  const who = cases(BANK_HEIST);
+  const player = who.relic;
+  const skills = player.getSkillManager();
+  const set = (levels) => { for (const [skill, value] of Object.entries(levels)) skills.setCurrentLevel(Skill[skill.toUpperCase()], value, false); };
+  const struck = () => {
+    click(player, I.BANKERS_BRIEFCASE, "Teleport");
+    return new Set(menuOf(player).labels.filter((label) => label.startsWith("<str>")).map((label) => label.replace(/<\/?str>/g, "")));
+  };
+  const GUILDS = ["Farming Guild", "Fishing Guild", "Mining Guild", "Woodcutting Guild", "Crafting Guild", "Warriors' Guild", "Cook's Guild", "Alchemy Guild"];
+  withLeague({}, () => {
+    custom["quest:is-complete"] = [(query) => { query.complete = true; }];
+    const saved = custom["diary:is-complete"];
+    let hardVarrock = false;
+    custom["diary:is-complete"] = [(query) => { if (query.diary === "varrock" && query.tier === "hard") query.complete = hardVarrock; }];
+    try {
+      // One below each line (rsprox 3278: 44 Farming struck, 46 open; 3275: 68 Herblore struck, 70 open).
+      set({ farming: 44, fishing: 67, mining: 59, woodcutting: 59, crafting: 39, attack: 65, strength: 64, cooking: 98, herblore: 69 });
+      const below = struck();
+      for (const guild of GUILDS) assert.ok(below.has(guild), `${guild} struck below its line`);
+      pick(player, "Farming Guild");
+      assert.equal(player.sent.messages.at(-1), "You don't meet the requirements to teleport there.");
+      set({ farming: 45, fishing: 68, mining: 60, woodcutting: 60, crafting: 40, attack: 65, strength: 65, cooking: 99, herblore: 70 });
+      const at = struck();
+      for (const guild of GUILDS) assert.ok(!at.has(guild), `${guild} open at its line`);
+      // Warriors': 99 in either will do; the Cooks' Guild bank: the hard Varrock Diary, not the guild's 32.
+      set({ attack: 99, strength: 1, cooking: 85 });
+      assert.ok(!struck().has("Warriors' Guild"), "99 Attack");
+      assert.ok(struck().has("Cook's Guild"), "85 Cooking without the diary (3278)");
+      hardVarrock = true;
+      assert.ok(!struck().has("Cook's Guild"), "the hard Varrock Diary");
+    } finally {
+      custom["diary:is-complete"] = saved;
+    }
+  });
 });

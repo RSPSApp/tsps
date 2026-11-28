@@ -181,50 +181,56 @@ const BANK_HEIST = { 2: 2 };
 
 const at = (teleport) => [teleport.location.getX(), teleport.location.getY(), teleport.location.getZ()];
 
-test("Fairy's Flight (both leagues): fairy rings by code, spirit trees, tool leprechauns; the last destination; only unlocked areas", () => {
-  const rings = [];
-  for (const handler of custom["fairy-rings:destinations"]) handler({ list: rings });
-  const ajr = rings.find((ring) => ring.code === "AJR");
-  assert.ok(ajr, "the cache's AJR");
-  for (const [picks, league] of [[FAIRYS_FLIGHT_TR, 4], [FAIRYS_FLIGHT_RE, 5]]) {
+test("Fairy's Flight (both leagues): live's chat, then the real fairy ring dials and spirit tree menu under the relic's rules; only unlocked areas", () => {
+  const asked = [];
+  const spy = (name) => {
+    const saved = custom[name];
+    custom[name] = [(request) => asked.push([name, request]), ...(saved ?? [])];
+    return () => { custom[name] = saved; };
+  };
+  const undo = [spy("fairy-rings:configure"), spy("spirit-trees:menu")];
+  try {
+    for (const [picks, league] of [[FAIRYS_FLIGHT_TR, 4], [FAIRYS_FLIGHT_RE, 5]]) {
+      asked.length = 0;
+      const relic = character(`flight${league}`, "league", picks, league);
+      click("Fairy mushroom", "Teleport", relic);
+      assert.equal(prompts.at(-1).title, "Fairy mushroom teleports", "rsprox 234/3275");
+      assert.deepEqual(prompts.at(-1).options.map(([text]) => text), ["Fairy rings.", "Spirit trees.", "Tool Leprechauns."]);
+      choose("Fairy rings.");
+      const [, dials] = asked.find(([name]) => name === "fairy-rings:configure");
+      assert.ok(dials.relic, `league ${league}: the dials, with the relic's rules`);
+      assert.equal(dials.relic.wildernessLevel, 60, "from any Wilderness level");
+      click("Fairy mushroom", "Teleport", relic);
+      choose("Spirit trees.");
+      assert.ok(asked.some(([name, request]) => name === "spirit-trees:menu" && request.relic), "the spirit trees' own menu");
+      click("Fairy mushroom", "Spirit-tree", relic);
+      assert.equal(asked.filter(([name]) => name === "spirit-trees:menu").length, 2, "worn: straight to it");
+    }
+    const who = cases(FAIRYS_FLIGHT_TR, 4);
+    for (const player of [who.without, who.main]) {
+      const before = prompts.length;
+      click("Fairy mushroom", "Teleport", player);
+      assert.equal(prompts.length, before, `${player.getUsername()}'s mushroom does nothing`);
+    }
+
+    // An area the character has not unlocked (as league-areas would answer): the dials refuse it, and so does Last-destination.
+    const area = (query) => { query.area = "asgarnia"; };
+    const unlocked = (query) => { query.unlocked = ["misthalin"]; };
+    custom["league:area-at"] = [area, ...(custom["league:area-at"] ?? [])];
+    custom["league:areas"] = [unlocked, ...(custom["league:areas"] ?? [])];
+    asked.length = 0;
+    click("Fairy mushroom", "Fairy-Ring", who.relic);
+    assert.match(asked[0][1].relic.refuse(new Location(3000, 3300, 0)), /haven't unlocked/);
+    who.relic.setAttribute("league:last-destination:fairy-mushroom", { label: "AJR", x: 2780, y: 3613, z: 0 });
     teleports = [];
-    const relic = character(`flight${league}`, "league", picks, league);
-    click("Fairy mushroom", "Teleport", relic);
-    assert.deepEqual(prompts.at(-1).options.map(([text]) => text), ["Fairy rings", "Spirit trees", "Tool leprechauns"]);
-    choose("Fairy rings");
-    choose("A...");
-    choose("AJR");
-    assert.deepEqual(at(teleports.at(-1)), [ajr.location.getX(), ajr.location.getY(), ajr.location.getZ()], `league ${league}: AJR`);
-    click("Fairy mushroom", "Last-destination", relic);
-    assert.equal(teleports.length, 2, "and there again");
-    assert.deepEqual(at(teleports[1]), at(teleports[0]));
+    click("Fairy mushroom", "Last-destination", who.relic);
+    assert.equal(teleports.length, 0, "a locked area");
+    assert.match(who.relic.messages.at(-1), /haven't unlocked/);
+    custom["league:area-at"] = custom["league:area-at"].filter((handler) => handler !== area);
+    custom["league:areas"] = custom["league:areas"].filter((handler) => handler !== unlocked);
+  } finally {
+    for (const restore of undo) restore();
   }
-
-  const who = cases(FAIRYS_FLIGHT_TR, 4);
-  teleports = [];
-  click("Fairy mushroom", "Spirit-tree", who.relic);
-  assert.ok(prompts.at(-1).options.some(([text]) => /Grand Exchange/.test(text)), "the Grand Exchange tree");
-  choose("Grand Exchange");
-  assert.ok(teleports.length === 1);
-  click("Fairy mushroom", "Tool-leprechauns", who.relic);
-  assert.ok(prompts.at(-1).options.every(([text]) => /^Near |^More/.test(text)), "named after their fairy rings");
-  for (const player of [who.without, who.main]) {
-    const before = prompts.length;
-    click("Fairy mushroom", "Teleport", player);
-    assert.equal(prompts.length, before, `${player.getUsername()}'s mushroom does nothing`);
-  }
-
-  // An area the character has not unlocked (as league-areas would answer).
-  const area = (query) => { query.area = "asgarnia"; };
-  const unlocked = (query) => { query.unlocked = ["misthalin"]; };
-  custom["league:area-at"] = [area, ...(custom["league:area-at"] ?? [])];
-  custom["league:areas"] = [unlocked, ...(custom["league:areas"] ?? [])];
-  teleports = [];
-  click("Fairy mushroom", "Last-destination", who.relic);
-  assert.equal(teleports.length, 0, "a locked area");
-  assert.match(who.relic.messages.at(-1), /haven't unlocked/);
-  custom["league:area-at"] = custom["league:area-at"].filter((handler) => handler !== area);
-  custom["league:areas"] = custom["league:areas"].filter((handler) => handler !== unlocked);
 });
 
 test("Globetrotter: the spellbooks' teleports and the jewellery box's, no higher than level 20 Wilderness", () => {
@@ -457,56 +463,29 @@ test("Reloaded: a second relic of tiers 1 to 3, a different one from the tier's 
   assert.equal(Unlock.unlock(tr, 2, 2, { bankOpen: true }), false, "Trailblazer Reloaded's same slot is not Reloaded");
 });
 
-test("Bank Heist: every bank, bank chest and deposit box in the cache's map, named after the nearest place, grouped; only unlocked areas", () => {
+test("Bank Heist: live's banks, names and order (rsprox 234/3278), each with a tile and its source; the menu's pick teleports there", () => {
   const DATA = require("../plugins/modes/data/league-bank-heist.json");
-  assert.ok(DATA.banks.length > 100, "the generated list");
-  for (const bank of DATA.banks) assert.ok(["bank", "bank chest", "deposit box"].includes(bank.kind));
-  const tiles = new Set(DATA.banks.map((bank) => `${bank.x},${bank.y},${bank.z}`));
-  assert.equal(tiles.size, DATA.banks.length, "no bank twice");
+  assert.equal(DATA.destinations.length, 113, "live's list");
+  assert.equal(new Set(DATA.destinations.map((bank) => bank.name)).size, 113, "no bank twice");
+  for (const bank of DATA.destinations) {
+    assert.ok(Number.isInteger(bank.x) && Number.isInteger(bank.y) && Number.isInteger(bank.z), bank.name);
+    assert.ok(/^(rsprox|wiki|ours: )/.test(bank.source), `${bank.name}'s source`);
+  }
   const who = cases(BANK_HEIST, 5);
   click("Banker's briefcase", "Teleport", who.relic);
-  const runs = prompts.at(-1).options.map(([text]) => text);
-  assert.ok(runs.length >= 2, runs.join(", "));
-  const Heist = require("../plugins/modes/leaguerelics/BankHeist.LeagueRelics");
-  const list = Heist._test.banks(who.relic);
-  assert.equal(list.length, DATA.banks.length, "one destination a bank");
-  assert.ok(list.some((bank) => bank.label === "Lumbridge bank"), "Lumbridge's, by its place");
-  assert.ok(list.some((bank) => bank.label === "Edgeville bank"));
-  const edgeville = list.find((bank) => bank.label === "Edgeville bank");
-  choose(Heist._test.groups(who.relic, list).find(([, run]) => run.includes(edgeville))[0]);
-  choose("Edgeville bank");
-  const [x, y] = at(teleports.at(-1));
-  assert.ok(Math.abs(x - edgeville.location.getX()) <= 4 && Math.abs(y - edgeville.location.getY()) <= 4, "at the bank");
-
-  // With the map's clipping: a booth's own tile is solid, and the landing is the customers' side.
-  const { RegionManager } = require("../dist/game/collision/RegionManager");
-  RegionManager.init();
-  const Teleports = require("../plugins/modes/leaguerelics/Teleports.LeagueRelics");
-  const draynor = list.find((bank) => bank.label === "Draynor Village bank");
-  const landed = Teleports.landing(draynor.location);
-  assert.ok(Teleports.reach(landed, 30) >= 30, "open floor to walk from");
-  assert.ok(landed.getX() >= 3092, "not behind the counter (the bankers stand west of x 3092)");
+  // The menu interface (187): a pick is menu:lj_layer1's pause button, its index the entry.
+  const index = DATA.destinations.findIndex((bank) => bank.name === "Edgeville");
+  const buttonId = core.CacheDefinitions.getComponentId("menu:lj_layer1");
+  const event = { player: who.relic, buttonId, groupId: buttonId >>> 16, childId: buttonId & 0xffff, action: index, handled: false };
+  hooks.onInterfaceActionClick(event);
+  assert.equal(event.handled, true, "the menu's pick");
+  const edgeville = DATA.destinations[index];
+  assert.deepEqual(at(teleports.at(-1)), [edgeville.x, edgeville.y, edgeville.z], "at Edgeville's recorded landing");
   click("Banker's briefcase", "Last-destination", who.relic);
   assert.equal(teleports.length, 2);
-
-  // With the league's areas answering, the banks are grouped by area.
-  const area = (query) => {
-    if (query.y > 4500) return; // no league area: Other
-    query.area = query.x < 3000 ? "kandarin" : "misthalin";
-    query.name = query.x < 3000 ? "Kandarin" : "Misthalin";
-  };
-  custom["league:area-at"] = [area, ...(custom["league:area-at"] ?? [])];
-  click("Banker's briefcase", "Teleport", who.relic);
-  assert.deepEqual(prompts.at(-1).options.map(([text]) => text), ["Kandarin", "Misthalin", "Other"]);
-  const locked = (query) => { query.unlocked = ["misthalin"]; };
-  custom["league:areas"] = [locked, ...(custom["league:areas"] ?? [])];
-  click("Banker's briefcase", "Teleport", who.relic);
-  assert.deepEqual(prompts.at(-1).options.map(([text]) => text), ["Misthalin", "Other"], "a locked area's banks are not offered");
-  custom["league:areas"] = custom["league:areas"].filter((handler) => handler !== locked);
-  custom["league:area-at"] = custom["league:area-at"].filter((handler) => handler !== area);
   for (const player of others(who)) {
-    const before = prompts.length;
+    const before = teleports.length;
     click("Banker's briefcase", "Teleport", player);
-    assert.equal(prompts.length, before, `${player.getUsername()}'s briefcase does nothing`);
+    assert.equal(teleports.length, before, `${player.getUsername()}'s briefcase does nothing`);
   }
 });

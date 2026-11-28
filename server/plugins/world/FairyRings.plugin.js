@@ -376,9 +376,19 @@ function cancelPendingTeleport(player, pending = pendingTeleports.get(player)) {
   return true;
 }
 
+/**
+ * The dials opened by a league relic's fairy mushroom ("fairy-rings:configure" with `relic`): no staff
+ * or quest is asked, and its Confirm keeps the relic's rules: `refuse(destination)` (a message, or
+ * null to go: its league area locks), `wildernessLevel` (as far as it reaches) and `chosen(ring)`
+ * (its last destination). Live opens these same dials from the mushroom (rsprox 234/3275).
+ */
+const relicDials = new WeakMap();
+
 /** OSRS sets busy the tick after the dials open (not on a dial click). */
-function openDial({ player, location }) {
-  if (!player || !canUse(player)) return;
+function openDial({ player, location, relic = null }) {
+  if (!player || (!relic && !canUse(player))) return;
+  if (relic) relicDials.set(player, relic);
+  else relicDials.delete(player);
   configuredRing.set(player, ringTile(location));
   setDials(player, "");
   sendTravelLog(player);
@@ -608,7 +618,9 @@ function hasLightSource(player) {
 }
 
 function confirmDial(player) {
-  if (!canUse(player)) return;
+  const relic = relicDials.get(player) ?? null;
+  relicDials.delete(player);
+  if (!relic && !canUse(player)) return;
   const ring = resolveRing(player, rings.get(codeFromDials(player)), configuredRing.get(player));
   if (!ring?.destination) {
     pluginApi.emitCustomEvent("fairy-rings:invalid", { player, code: codeFromDials(player) });
@@ -635,10 +647,17 @@ function confirmDial(player) {
     if (!refuseLockedCode(player, ring, configuredRing.get(player), true, locked)) sender.sendVarbit(BUSY_VARBIT, 0);
     return;
   }
-  if (!core.TeleportHandler.checkReqs(player, ring.destination, 20)) {
+  const refused = relic?.refuse?.(ring.destination) ?? null;
+  if (refused) {
+    player.sendMessage(refused);
     sender.sendVarbit(BUSY_VARBIT, 0);
     return;
   }
+  if (!core.TeleportHandler.checkReqs(player, ring.destination, relic?.wildernessLevel ?? 20)) {
+    sender.sendVarbit(BUSY_VARBIT, 0);
+    return;
+  }
+  relic?.chosen?.(ring);
   sendLastDestination(player, ring);
   player.setAttribute(LAST_CODE_ATTRIBUTE, ring.code);
   if (ring.code === DARK_WARNING_CODE && !hasLightSource(player)) {

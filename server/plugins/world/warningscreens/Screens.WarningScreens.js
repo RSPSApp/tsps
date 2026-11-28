@@ -14,6 +14,9 @@
  * The event comes back `handled` when this plugin answered it; content that sees it unhandled
  * (this plugin off) carries on as if warned.
  *
+ * The Wilderness's own screen (warning 7, wilderness_warningscreen) is answered with a pause button and counts a
+ * showing on Yes; see openPause.
+ *
  * As captured: Shantay Pass (docs/shantay-pass.md), the Lumbridge cellar hole and the Observatory
  * stairs count their varbit up to 6; the fairy ring's warning sets its varbit on Confirm. Loc teleports
  * show theirs from an entry's `warningScreen` (the Waterbirth cave, docs/loc-teleports.md).
@@ -28,6 +31,16 @@ const QUESTION_TOGGLE = 20;
 const QUESTION_TOGGLE_LAYER = 21;
 const NOTICE_TOGGLE = 18;
 const NOTICE_TOGGLE_LAYER = 19;
+
+// The Wilderness's screen (wilderness_warningscreen 475), answered with a pause button (rsprox local 1002252 ticks
+// 2398-2403, 1002220): Yes is sub 1 and No sub 0 on its universe (475:1); its toggle is 475:13.
+const PAUSE_ANSWER = 1; // wilderness_warningscreen:universe
+const PAUSE_TOGGLE = 13; // wilderness_warningscreen:toggle
+const PAUSE_MESSAGE = 10; // wilderness_warningscreen:message
+const PAUSE_BUTTON_FLAG = 1;
+const PAUSE_YES = 1;
+/** cws_warning_id: which warning the open pause-button screen is (0 -> 7 the first time, as recorded). */
+const WARNING_ID_VARBIT = 14801;
 
 const STRONGHOLD = 4; // Stronghold of Security Ladders
 const SHANTAY_PASS = 10;
@@ -52,16 +65,38 @@ function open(player, entry, texts) {
   for (const [child, text] of Object.entries(texts ?? {})) sender.sendString(String(text), (entry.interfaceId << 16) | Number(child));
 }
 
+/**
+ * A pause-button screen (the Wilderness's 475), as recorded: the warning's id, the screen with its toggle hidden
+ * until it has been shown enough, its message, both answers enabled, then the modal opened. Its showing is counted
+ * on Yes (cws_warning_7 3 -> 4 on sub 1, nothing on sub 0), not when it opens.
+ */
+function openPause(player, entry, texts) {
+  const id = entry.pauseInterfaceId;
+  const sender = player.getPacketSender();
+  sender.sendVarbit(WARNING_ID_VARBIT, entry.warning);
+  sender.sendInterface(id);
+  sender.sendInterfaceDisplayState((id << 16) | PAUSE_TOGGLE, Shared.state(player, entry.warning) < Shared.SHOWN_ENOUGH);
+  sender.sendString(String(texts?.[PAUSE_MESSAGE] ?? entry.message ?? ""), (id << 16) | PAUSE_MESSAGE);
+  sender.sendInterfaceFlagsRange((id << 16) | PAUSE_ANSWER, 0, 1, PAUSE_BUTTON_FLAG);
+  sender.sendInterfaceFlagsRange((id << 16) | PAUSE_TOGGLE, 0, 0, PAUSE_BUTTON_FLAG);
+  sender.sendInterfaceScript(SCRIPT_MAINMODAL_OPEN, [-1, -1]);
+}
+
 /** "warning-screen:show": the warning, or straight on when it is off. */
 function show(event) {
   const { player, warning } = event;
   const entry = Shared.all().get(Number(warning));
-  if (!player || !entry || entry.interfaceId === null) return;
+  if (!player || !entry || (entry.interfaceId === null && entry.pauseInterfaceId === null)) return;
   event.handled = true;
   const proceed = typeof event.proceed === "function" ? event.proceed : () => {};
   const stayOut = typeof event.stayOut === "function" ? event.stayOut : () => {};
   if (Shared.state(player, entry.warning) >= Shared.OFF) {
     proceed();
+    return;
+  }
+  if (entry.interfaceId === null) {
+    openPause(player, entry, event.texts);
+    pending.set(player, { entry, proceed, stayOut });
     return;
   }
   open(player, entry, event.texts);
@@ -88,11 +123,39 @@ function toggle(player, entry) {
   player.sendMessage(off ? Shared.SCREEN_TOGGLED_OFF_MESSAGE : Shared.SCREEN_TOGGLED_ON_MESSAGE);
 }
 
+/** A pause-button screen's answer (sub 1 Yes, 0 No) or its toggle. */
+function pauseClick(event, entry, child) {
+  const { player } = event;
+  if (child === PAUSE_TOGGLE) {
+    event.handled = true;
+    toggle(player, entry);
+    return;
+  }
+  if (child !== PAUSE_ANSWER) return;
+  event.handled = true;
+  const open = pending.get(player);
+  pending.delete(player);
+  player.getPacketSender().sendInterfaceRemoval();
+  if (open?.entry !== entry) return;
+  if (Number(event.action) !== PAUSE_YES) {
+    open.stayOut();
+    return;
+  }
+  const shown = Shared.state(player, entry.warning);
+  if (entry.varbit !== null && shown < Shared.SHOWN_ENOUGH) Shared.setState(player, entry.warning, shown + 1);
+  open.proceed();
+}
+
 function click(event) {
   const buttonId = Number(event.buttonId ?? 0);
-  const entry = Shared.byInterface(event.groupId ?? (buttonId >>> 16));
+  const groupId = event.groupId ?? (buttonId >>> 16);
+  const entry = Shared.byInterface(groupId);
   if (!entry) return;
   const child = event.childId ?? (buttonId & 0xffff);
+  if (entry.interfaceId !== groupId) {
+    pauseClick(event, entry, child);
+    return;
+  }
   const { player } = event;
   if (child === toggleOf(entry)) {
     event.handled = true;
@@ -112,7 +175,7 @@ function click(event) {
 
 function closed({ player, interfaceId }) {
   const open = pending.get(player);
-  if (open?.entry.interfaceId !== interfaceId) return;
+  if (!open || (open.entry.interfaceId !== interfaceId && open.entry.pauseInterfaceId !== interfaceId)) return;
   pending.delete(player);
   open.stayOut();
 }

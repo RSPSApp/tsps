@@ -112,6 +112,12 @@ The gate between the zombies and the chaos druids (`membergatel` 1727 and `membe
 2. The player walks across on that tick, either way.
 3. Two ticks later the gate is shut.
 
+Going north, the Wilderness warning comes first (`WildernessGate.EdgevilleDungeon.js`, rsprox local 1002252 ticks
+2395-2404 and 1002220): warning 7's own screen, `wilderness_warningscreen` (475), with the gate shut.
+- **No** (pause button 475:1, sub 0) closes it and the gate stays shut; the next Open asks again.
+- **Yes** (sub 1) counts a showing (`cws_warning_7`, 3 to 4 recorded) and the gate opens the tick after.
+- Once shown 6 times the screen offers its toggle (475:13); toggled off, or going south, the gate opens at once.
+
 North of it, from y 9920, is the Wilderness (single-way). The chaos druids there are in
 [chaos-druids.md](chaos-druids.md).
 

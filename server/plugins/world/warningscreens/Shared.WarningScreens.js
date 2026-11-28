@@ -37,11 +37,16 @@ const SCREEN_TOGGLED_OFF_MESSAGE = "You have toggled this warning screen off. Yo
 const SCREEN_TOGGLED_ON_MESSAGE = "You have toggled this warning screen interface on. You will continue to see this warning screen until you turn it off.";
 const CANNOT_TOGGLE_MESSAGE = "You cannot toggle this warning screen on or off. You need to go to the area it is linked to enough times to have the option to do so.";
 
-/** Every warning: { warning, name, interfaceId (null: not a cws screen), varbit (null: no toggle), doomsayerRow, notice }. */
+/**
+ * Every warning: { warning, name, interfaceId (null: not a cws screen), pauseInterfaceId (a screen answered with a
+ * pause button, the Wilderness's 475), message (what that screen says), varbit (null: no toggle), doomsayerRow, notice }.
+ */
 const WARNINGS = new Map(DATA.warnings.map((entry) => [entry.warning, {
   warning: entry.warning,
   name: entry.name,
   interfaceId: entry.interface,
+  pauseInterfaceId: Number.isInteger(entry.pauseInterface) ? entry.pauseInterface : null,
+  message: typeof entry.message === "string" ? entry.message : null,
   varbit: entry.varbit,
   doomsayerRow: entry.doomsayerRow,
   notice: entry.notice === true,
@@ -51,9 +56,10 @@ function all() {
   return WARNINGS;
 }
 
-/** The warning whose screen is this interface. */
+/** The warning whose screen is this interface (its cws screen, or its pause-button screen). */
 function byInterface(interfaceId) {
   for (const entry of WARNINGS.values()) if (entry.interfaceId !== null && entry.interfaceId === interfaceId) return entry;
+  for (const entry of WARNINGS.values()) if (entry.pauseInterfaceId !== null && entry.pauseInterfaceId === interfaceId) return entry;
   return null;
 }
 

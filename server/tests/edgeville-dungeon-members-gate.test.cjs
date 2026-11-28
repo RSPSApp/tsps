@@ -30,6 +30,8 @@ const players = [];
 before(async () => {
   await CachePipeline.initialize(path.resolve(__dirname, ".."));
   require("../plugins/objects/Doors.plugin").register(PluginManager.createApi("Doors"));
+  require("../plugins/world/WarningScreens.plugin").register(PluginManager.createApi("WarningScreens"));
+  require("../plugins/areas/EdgevilleDungeon.plugin").register(PluginManager.createApi("EdgevilleDungeon"));
   core = PluginManager.getCoreApi();
   core.ObjectDefinition.init();
   core.RegionManager.init();
@@ -110,3 +112,80 @@ for (const [direction, from, to] of [["north, into the Wilderness", SOUTH, NORTH
     assert.deepEqual(at(player), to, "the opener walked across");
   });
 }
+
+// Going north the gate asks first with the Wilderness warning (rsprox local 1002252 ticks 2395-2404, 1002220):
+// interface 475, answered with a pause button on 475:1, sub 1 Yes and 0 No.
+const Shared = require("../plugins/world/warningscreens/Shared.WarningScreens");
+const WILDERNESS_SCREEN = 475;
+
+function clickGate(player, gate) {
+  const request = { player, object: gate, objectId: gate.getId(), definition: null, location: gate.getLocation(), clickType: 1, handled: false };
+  PluginManager.emitCustomEvent("door:toggle", request);
+  return request;
+}
+
+function screens(t, player) {
+  const opened = [];
+  t.mock.method(player.getPacketSender(), "sendInterface", (id) => { opened.push(id); return player.getPacketSender(); });
+  return opened;
+}
+
+const answer = (player, sub) => PluginManager.emitInterfaceActionClick({
+  player, buttonId: (WILDERNESS_SCREEN << 16) | 1, action: sub, groupId: WILDERNESS_SCREEN, childId: 1, handled: false,
+});
+
+function assertClosed() {
+  assert.ok(objectAt(GATE_L, LX, Y) && objectAt(GATE_R, RX, Y), "the gate is shut");
+  assert.equal(objectAt(INVISWALL, LX, Y), null);
+}
+
+test("going north, the Wilderness warning comes first; No leaves the gate shut", (t) => {
+  tick(12);
+  const { player } = actor(t, SOUTH);
+  const opened = screens(t, player);
+  const request = clickGate(player, objectAt(GATE_L, LX, Y));
+  assert.equal(request.handled, true);
+  assert.deepEqual(opened, [WILDERNESS_SCREEN], "wilderness_warningscreen");
+  tick(3);
+  assertClosed();
+  answer(player, 0);
+  tick(3);
+  assertClosed();
+  assert.deepEqual(at(player), SOUTH);
+  assert.equal(Shared.state(player, 7), 0, "No counts nothing");
+});
+
+test("going north, Yes counts a showing and opens the gate the tick after", (t) => {
+  tick(12);
+  const { player, sounds } = actor(t, SOUTH);
+  screens(t, player);
+  clickGate(player, objectAt(GATE_L, LX, Y));
+  answer(player, 1);
+  assert.equal(Shared.state(player, 7), 1, "the showing is counted on Yes (recorded 3 -> 4)");
+  assertClosed();
+  tick(1);
+  assert.ok(objectAt(INVISWALL, LX, Y), "open the tick after Yes (2403 -> 2404)");
+  assert.deepEqual(sounds.filter((id) => id === IRON_DOOR_OPEN), [IRON_DOOR_OPEN]);
+  tick(2);
+  assertShut();
+  assert.deepEqual(at(player), NORTH, "and the player went through");
+});
+
+test("going south, or with the warning toggled off, there is no screen", (t) => {
+  tick(12);
+  const { player } = actor(t, NORTH);
+  const opened = screens(t, player);
+  assert.equal(clickGate(player, objectAt(GATE_L, LX, Y)).handled, false, "south: the gate's own Open");
+
+  tick(12);
+  const off = actor(t, SOUTH).player;
+  off.setAttribute(Shared.stateAttribute(7), Shared.OFF);
+  const offScreens = screens(t, off);
+  assert.equal(clickGate(off, objectAt(GATE_L, LX, Y)).handled, true);
+  assert.deepEqual(offScreens, [], "no screen when it is off");
+  tick(1);
+  assert.ok(objectAt(INVISWALL, LX, Y), "the gate opens straight away");
+  tick(2);
+  assert.deepEqual(at(off), NORTH);
+  assert.deepEqual(opened, []);
+});

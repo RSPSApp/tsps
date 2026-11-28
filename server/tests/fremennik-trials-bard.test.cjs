@@ -541,3 +541,20 @@ test("the fleece used on the wheel spins two ticks after arrival (rsprox 1002313
   for (let i = 0; i < 4 && !f.anims.some((a) => a.id === 13138); i++) tick(f);
   assert.equal(f.anims.find((a) => a.id === 13138).tick - arrived, 2);
 });
+
+test("Olaf mid-trial: the long walkthrough once, then the short reminder whose menu drops the pick (rsprox 1002313 t642-673)", async (t) => {
+  const f = actor(t, { at: [2673, 3684, 0] });
+  const talk = () => { PM.emitCustomEvent("npc-dialogue:start", { player: f.player, npcId: 802 }); tick(f); };
+  talk();
+  assert.equal(shown(f)?.text, "So how would I go about writing this epic?");
+  f.player.getPacketSender().sendInterfaceRemoval();
+  f.player.getDialogueManager().reset?.();
+  tick(f);
+  talk();
+  assert.equal(shown(f)?.text, "What do I have to do to earn your vote at the council of elders again?");
+  for (let i = 0; i < 4 && shown(f)?.who !== "menu"; i++) await continueLine(f);
+  assert.deepEqual(shown(f).options, ["Remind me about crafting a lyre", "Remind me about Fossegrimen", "Remind me about playing on stage", "I don't need a reminder"]);
+  await choose(f, "Remind me about crafting a lyre");
+  for (let i = 0; i < 20 && shown(f)?.who !== "menu"; i++) await continueLine(f);
+  assert.deepEqual(shown(f).options, ["Remind me about Fossegrimen", "Remind me about playing on stage", "I don't need another reminder"]);
+});

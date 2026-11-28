@@ -838,7 +838,7 @@ varp `league_relic_effect_toggle_1` with the recorded "Relic - ..." lines (237/0
 | 4 | Transmute | done: Alchemic Divergence and Convergence (218:199, 218:200) move up to 10 of an item a tier along the cache's `transmutation` table, 10 Magic XP each, no level or runes, every 5 ticks, a stack cast on again while its slot holds it, noted stays noted, to the bank by toggle, loose items in place, 10 or fewer held with no free slot, more held only with a slot for each of the 10 (237/01102, 01106, 238/04211); the alchemy spell while toggled off; the ledger's endless nature runes and its scroll for an item used on it; not Divergence on a top tier (unrecorded), the ledger's Read (nothing says what it shows), or which skilling pauses the casts |
 | 4 | Conniving Clues | done |
 | 4 | Butler's Bell | done but for the bell's Check (its line is in no source): Ring summons the Demon butler beside its owner (not in an instance; in view, he asks to be spoken to), one job of the cache's butlers_bell_actions at its rate a minute or half that processed, rolled on the Wiki's weighted tables, reckoned from the clock (offline too), 10 XP a processed item in the row's skill; Talk-to and Collect as the Wiki transcript, the collection shown on 954. Ours, unsourced: the job menu (the cache's nouns), where he stands and when he leaves, the collection banked, and the stop at the change's collection (his work stops until a new job is assigned — nothing accrues while the player is away or re-talks, offline too; a request left half-done leaves the old job running, as live); the new-job flow itself (apology, collection, conversation ended; the player re-talks for the new job) is the live transcript's (`league-butlers-bell.json` `_ours`) |
-| 5 | Nature's Accord | partial: noted yields, undying crops, kept seeds, the Fairy mushroom, no Farming level to plant, make a seedling or a scarecrow (`farming:level-rules`); not the spirit tree count, the Tithe Farm's seeds, or Tree Gnome Village on unlock |
+| 5 | Nature's Accord | partial: noted yields, undying crops, kept seeds, the Fairy mushroom (its real fairy ring dials and spirit tree menu, as Fairy's Flight), Tree Gnome Village on unlock, no Farming level to plant, make a seedling or a scarecrow (`farming:level-rules`); not the spirit tree count or the Tithe Farm's seeds |
 | 5 | Larcenist | partial: sure pickpockets, tenfold pouches and noted loot, repeats, stalls that stay stocked and guards that never catch you (`thieving:stall-watch`); a repeating pickpocket follows the NPC as it wanders (1104-1106: the player steps with it, no clicks, an attempt every 2 ticks until a click or the pouch limit); not the Varlamore house valuables: house thieving (stealing valuables) is not on the server, a minigame of its own |
 | 5 | Soul Harvest | partial: shards from bones, ashes (our 0.8 x XP; the Wiki gives none), crops and health checks (`farming:check-health`), bound as pure essence, at the Ourania Altar and for combination runes too, and as dark essence fragments at Kourend's Blood Altar (`runecrafting:essence`), and sacrificed at the Teomat's libation bowl (550 Prayer XP a 100, no wine; the pace and lines are ours); not the minigame altars |
 | 6 | Grimoire | done (every prayer as well) |
@@ -1180,11 +1180,17 @@ areas: a destination in an area the character has not unlocked is refused (`leag
 and `league:areas`, answered by the league's area unlocks; with nobody answering, everywhere is
 open). Each item remembers its last destination. The menus' grouping and wording are ours.
 
-- **Fairy's Flight** (Trailblazer Reloaded tier 2, Raging Echoes tier 3): the fairy mushroom's
-  Teleport (or, worn, Fairy-Ring, Spirit-tree, Tool-leprechauns) goes to any fairy ring by its
-  code, any spirit tree the character could travel to by tree, and any tool leprechaun (named
-  after their nearest fairy ring: ours); from any Wilderness level except to a spirit tree (level
-  20, Wiki). Not here: the Tree Gnome Village autocompletion (the quest's own).
+- **Fairy's Flight** (Trailblazer Reloaded tier 2, Raging Echoes tier 3; Demonic Pacts' Nature's
+  Accord): the fairy mushroom's Teleport asks in the chat as live does ("Fairy mushroom teleports":
+  "Fairy rings.", "Spirit trees.", "Tool Leprechauns."; rsprox 234/3275), and worn, Fairy-Ring,
+  Spirit-tree and Tool-leprechauns go straight to one. Fairy rings opens the real dials and travel log
+  (FairyRings' `fairy-rings:configure` with a `relic`: no staff or quest asked, only unlocked areas,
+  any Wilderness level), and Confirm teleports as a ring does. Spirit trees opens the spirit trees'
+  own menu (`spirit-trees:menu`, greyed as a tree greys it), and a pick teleports as the mushroom does
+  on live (human_fairy_vanish, fairy_flower_ring, synth 1098, the move 3 ticks later; level 20
+  Wilderness, Wiki). Tool Leprechauns lists them in interface 187's menu (no recording: ours, as the
+  trees'), each named after its nearest fairy ring (ours). Last-destination repeats the last with
+  the same cast. Unlocking it completes Tree Gnome Village (Wiki), as a league pack does.
 - **Globetrotter** (Trailblazer Reloaded tier 2): the pendant's Nexus goes to the spellbooks'
   teleports (standard, ancient, lunar, Arceuus, and the house when the character owns one: not
   a Last-destination, which could not enter it), its
@@ -1202,19 +1208,20 @@ open). Each item remembers its last destination. The menus' grouping and wording
   when the spot is solid; used on Falo it is the item he asks for. The Wiki's three Varlamore
   units left out near the Twilight Temple count here. Not here: beginner clues' Current-step
   (their trails are kept apart).
-- **Bank Heist** (Raging Echoes tier 3): the Banker's briefcase goes to any bank, bank chest or
-  deposit box in an unlocked area, from any Wilderness level, onto the nearest open tile with
-  floor to walk from (the customers' side of a counter). The list is every bank booth, chest,
-  counter, table and deposit box with an option in the cache's map (a "Chest" only with a Bank
-  option; dump-loc's template copies left out), near ones (12 tiles) merged:
-  `plugins/modes/data/league-bank-heist.json`, generated by `scripts/league-bank-heist.mjs` from
-  `yarn dump:loc` (the command is in the script; regenerate rather than edit). The cache names no
-  banks: each is named after the nearest fairy ring, jewellery or spell destination within 40
-  tiles, else after a fairy ring's region within 150 with its tile, else its kind and tile; all
-  ours. The menu groups them by the league's area when the area unlocks answer (banks outside
-  every area as Other), else in alphabetical runs. Not here: the Wiki's quest gates on some banks
-  (Sophanem, Keldagrim and others): the league's areas decide; banks in raid, minigame and
-  instanced map areas are listed as the map has them.
+- **Bank Heist** (Raging Echoes tier 3, Demonic Pacts): the Banker's briefcase's Teleport opens
+  interface 187's menu, "Bank Heist teleports", with live's 113 banks in live's order (rsprox
+  234/3278); one in an area not unlocked, behind the Wiki's quest for it, or whose guild the character
+  can't enter is struck through, and picking it says why. The guilds, as live strikes them (3270, 3275,
+  3278, against the recorded levels) and the Wiki gives them, on current levels: Farming 45, Fishing
+  68, Mining 60, Woodcutting 60, Crafting 40, Warriors' 130 Attack and Strength combined (or 99 in
+  either), the Cooks' Guild bank's hard Varrock Diary or 99 Cooking, and Alchemy Guild's Children of
+  the Sun with 70 Herblore (live strikes it at 68 with the quest done; the Wiki says 60, and no
+  recording shows 69). `plugins/modes/data/league-bank-heist.json` (hand-kept) has each bank's
+  tile: a recorded landing (20), else the Wiki's pin (Bank Heist (Raging Echoes League), which
+  matches every recorded landing; 88), else the bank there for five places newer than that list
+  (its `source`). The teleport is the standard one, from any Wilderness level, onto the nearest open
+  tile with floor to walk from; as it starts the tile goes to varp league_bank_heist_last_destination
+  (plane << 28 | x << 14 | y), as live sends it. Last-destination repeats the last.
 - **Evil Eye** (Demonic Pacts tier 3): the Evil eye's Teleport (an area submenu in the cache,
   carried or worn) lists an area's bosses and raids, Last-destination repeats the last; to the
   entrance of each (Barrows' chest or its surface, each Moon of Peril), from any Wilderness level,

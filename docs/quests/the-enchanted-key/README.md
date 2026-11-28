@@ -1,7 +1,7 @@
 ---
 quest: The Enchanted Key
 key: the_enchanted_key
-status: in-progress
+status: passed
 tested: 2026-11-28
 tester: agent
 model: claude-opus-5-5
@@ -21,6 +21,7 @@ below are 1002311's unless another recording is named.
 
 ## Findings
 
+- **fixed** Making History's completion left the row unstarted (13717 = 0) until a relog; it now starts at once (playthrough, 2026-11-28).
 - **fixed** The quest list row opened nothing. It is now its own miniquest (quest row 41, list id 98): the journal opens as live sends it, and it counts as a completed miniquest. #5656
 - **fixed** Feel used the Wiki's eight-band table. Both recordings send six readings with other cuts (below). 48 of the 74 recorded Feels came out wrong; all 74 now match, each with its own synth.
 - **fixed** "It's very hot" had no synth: it is history_key_hot (1200).
@@ -72,3 +73,11 @@ below are 1002311's unless another recording is named.
 - The quest list row before Making History is complete (the overview's start text).
 
 ## Runs
+
+### 2026-11-28 · agent · claude-opus-5-5
+
+- **Start:** checkpoint. New account with Making History completed by `::quest` (its only use), and supplies given: spade, coins, runes, Magic level. Its key came from Making History.
+- **Route:** all eleven sites in that account's random order, using Feel only: Rellekka, north of Falador, Port Sarim, the GE, Gnome Stronghold, south of Falador, south-east Varrock, Lumbridge Swamp, Clock Tower, Jorral's Outpost, Al Kharid. Travel by travel_to, teleport spells and a glory. Destroy and buy-back after the third site.
+- **Result:** 1391 reached 2047 and 13717 went 1 -> 2 on the last dig. Each site's rewards matched the Wiki once. The key dissolved with its box, and digging again gave "Nothing interesting happens.". The journal was right at the start, at 2, 3 and 7 found (bit order) and at the end; screenshots checked. Every Feel fit the six bands. All of the merchant's branches matched: the first menu (stall, no thanks), the lost-key buy (enough coins, too few, full inventory, "No thanks."), key held, key banked, and after the dissolve. Relog part way and after completion kept everything.
+- **Not checked:** synths and animations in game (unit-tested), the steel key ring, the box's continue path in game (the vision logout closed it; unit-tested), Examine.
+

@@ -414,3 +414,13 @@ test("before Making History is complete the key's Feel and a dig on a site do no
   assert.equal(f.player.getAttribute(FOUND), 0);
   assert.equal(varbit(f, STATUS), 0);
 });
+
+test("finishing Making History starts the miniquest's row at once, without a relog", async (t) => {
+  const f = actor(t, { makingHistory: false });
+  assert.equal(varbit(f, STATUS), 0);
+  h.quest().setStage(f.player, h.quest().completionValue);
+  assert.equal(varbit(f, STATUS), 1);
+  assert.deepEqual((await readJournal(f)).lines, [...STORY, PROMPT]);
+  h.quest().setStage(f.player, 0);
+  assert.equal(varbit(f, STATUS), 0);
+});

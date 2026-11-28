@@ -187,6 +187,13 @@ function dig({ player }) {
   }
 }
 function resetComparison({ player }) { LAST_DISTANCE.delete(player); }
+/** Making History finished (or reset): the miniquest's row starts (or goes back) at once, not at the next login. */
+function parentStageChanged({ player, key }) {
+  if (key !== quest.key || !player) return;
+  player.getPacketSender().sendVarbit(STATUS_VARBIT, stage(player));
+  sync({ player });
+  QuestRuntime.refreshQuestList(player);
+}
 
 /**
  * ::quest complete (and ::quest all): every treasure not yet dug is given (the command routes it to
@@ -263,6 +270,7 @@ module.exports = function attach(pluginApi, makingHistory) {
   api.onItemAction("Spade", { Dig: dig });
   api.onCustomEvent("enchanted-key:is-complete", queryComplete);
   api.onCustomEvent("enchanted-key:sync", sync);
+  api.onCustomEvent("quest:stage-changed", parentStageChanged);
   api.onPlayerLogin(resetComparison);
   api.onPlayerLogout(resetComparison);
 };

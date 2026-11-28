@@ -659,6 +659,7 @@
     "11153": {"name": "Phosani's Nightmare", "anims": {"attack": -1, "block": -1, "death": -1}},
     "11154": {"name": "Phosani's Nightmare", "anims": {"attack": -1, "block": -1, "death": -1}},
     "11155": {"name": "Phosani's Nightmare", "anims": {"attack": -1, "block": -1, "death": -1}},
+    "11239": {"name": "Abyssal demon", "anims": {"attack": 1537, "block": 2309, "death": 1538}},
     "11246": {"name": "Revenant maledictus", "anims": {"attack": 9282, "block": -1, "death": 9280}, "sounds": {"death": 409}},
     "11405": {"name": "Abyssal guardian", "anims": {"attack": 9394, "block": 9395, "death": 9396}, "respawn": 0},
     "11406": {"name": "Abyssal walker", "anims": {"attack": 9390, "block": 9391, "death": 9392}, "respawn": 0},

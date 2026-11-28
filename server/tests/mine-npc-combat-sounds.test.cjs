@@ -120,6 +120,14 @@ test('a name that only says block does not overrule a captured death', () => {
   assert.deepEqual(npcs['729'].death, [[390, 0]]);
 });
 
+test("a Slayer Cave variant no capture shows fighting sounds as the ordinary monster does", () => {
+  // 415: the abyssal demon; 11239, the Wilderness Slayer Cave's, was only recorded walking past.
+  const demon = fight().map((line) => line.replace('mourning_dark_beast (4005)', 'slayer_abyssal (415)'));
+  const { status, stderr, npcs } = mine(demon);
+  assert.equal(status, 0, stderr);
+  assert.deepEqual(npcs['11239'], npcs['415']);
+});
+
 test('input in neither format is refused', () => {
   const { status, stderr } = mine(['[tick 1] something else', 'SynthSound(id=1)']);
   assert.equal(status, 1);

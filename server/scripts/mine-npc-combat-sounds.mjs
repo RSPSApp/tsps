@@ -62,6 +62,9 @@ const MIN_TICKS_OF_KIND = 12;
 const MIN_CO = 8;
 const MIN_SHARE = 0.6;
 const MIN_SPECIFIC = 0.3;
+// A variant no capture shows fighting sounds as the same monster that one does (variant -> that id): the
+// Wilderness Slayer Cave's abyssal demon (11239) and jelly (11241), only ever recorded walking past or not at all.
+const SOUNDS_AS = new Map([[11239, 415], [11241, 437]]);
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -385,6 +388,7 @@ for (const [sound, list] of candidates) {
     }
 }
 for (const npc of Object.values(npcs)) for (const list of Object.values(npc)) list.sort((a, b) => a[0] - b[0]);
+for (const [variant, id] of SOUNDS_AS) if (!npcs[variant] && npcs[id]) npcs[variant] = npcs[id];
 
 // Fixed key order, so a rerun on the same captures gives the same bytes whatever order rg read the files in.
 const ordered = (npc) => Object.fromEntries(["hit", "attack", "death"].filter((kind) => npc[kind]).map((kind) => [kind, npc[kind]]));

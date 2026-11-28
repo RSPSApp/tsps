@@ -56,7 +56,7 @@ function actor(t, { tile = TILE.APATURA, stage: value = 0, items = [], attribute
   }
   for (const [id, amount] of items) f.player.getInventory().add(new h.core.Item(id, amount ?? 1), false);
   const sender = f.player.getPacketSender();
-  for (const name of ["sendInterfaceAnimation", "sendPlayerHeadOnInterface"]) {
+  for (const name of ["sendInterfaceAnimation", "sendPlayerHeadOnInterface", "sendClientScript"]) {
     const original = sender[name].bind(sender);
     sender[name] = (...args) => { f.calls.push({ tick: f.tick, name, args }); return original(...args); };
   }
@@ -457,4 +457,36 @@ test("post-quest: Apatura's rumour milestones answer from the rumours done (none
   const veteran = actor(t, { stage: 12, attributes: { "at-first-light:stage-version": 1, "hunter.rumours": { assignments: {}, active: null, completed: 60, outfit: 0 } } });
   const asked = await play(veteran, () => h.talk(veteran, apatura), []);
   assert.match(asked[2], /^Guildmaster Apatura: I see you've been doing a lot of work for the guild of late\./);
+});
+
+test("Destroy on each quest item opens the confirmation with its Wiki note (no capture destroys them)", async (t) => {
+  const notes = {
+    [I.SMOOTH_LEAF]: "You can pick another from a bush in the Avium Savannah.",
+    [I.STICKY_LEAF]: "You can pick another from a bush near the Locus Oasis.",
+    [I.MAKESHIFT_POULTICE]: "You can craft another from a smooth leaf, a sticky leaf, and an embertailed jerboa tail.",
+    [I.FUR_SAMPLE]: "You can obtain another from Guild Hunter Fox in the Avium Savannah.",
+    [I.TRIMMED_FUR]: "You can obtain some more from Atza in Outer Fortis.",
+    [I.FOXS_REPORT]: "You can obtain another from Guild Hunter Fox in the Avium Savannah.",
+  };
+  for (const [itemId, note] of Object.entries(notes).map(([id, text]) => [Number(id), text])) {
+    const f = actor(t, { stage: 9, items: [[itemId, 1]] });
+    await f.connection.dispatch([{ type: "inventory_action", slot: slotOf(f, itemId), itemId, widgetId: 149 << 16, option: "Destroy" }]);
+    f.connection.processTurnPackets();
+    h.tick(f);
+    const shown = f.calls.filter((c) => c.name === "sendClientScript").flatMap((c) => c.args.flat(2)).map(String);
+    assert.ok(shown.some((arg) => arg.includes(note)), `${itemId}: ${note}`);
+    assert.equal(count(f, itemId), 1, "nothing is destroyed before the confirmation");
+  }
+});
+
+test("Read on Fox's report: the Wiki's line about his report", async (t) => {
+  const f = actor(t, { stage: 10, items: [[I.FOXS_REPORT, 1]] });
+  const said = await play(f, async () => {
+    await f.connection.dispatch([{ type: "inventory_action", slot: slotOf(f, I.FOXS_REPORT), itemId: I.FOXS_REPORT, widgetId: 149 << 16, option: "Read" }]);
+    f.connection.processTurnPackets();
+    h.tick(f);
+  });
+  const shown = said.length ? said : f.messages.map((m) => String(m.text));
+  assert.ok(shown.some((line) => line.includes("It's Fox's report. It details the creature he was tracking, his attack, and my help.")), JSON.stringify(shown));
+  assert.equal(count(f, I.FOXS_REPORT), 1);
 });

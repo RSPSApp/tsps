@@ -8094,7 +8094,8 @@
             "No plugin exists yet; model on server/plugins/quests/quests/RuneMysteries.Quest.js.",
             "The 'At First Light' page in npc-dialogues.json carries 51 variants ('a-missing-fox-talking-to-guildmaster-apatura'); source ids/slugs from npc-dialogues.json + npc-dialogue-index.json / osrsreboxed.",
             "Phases start with 'a-missing-fox' and end in the light/fox reveal.",
-            "2026-11-24, main 74609edfe: The quest start link follows the chatbox background (https://github.com/RSPSApp/tsps/pull/5641). Verified by server/tests/p2p-varlamore-group-2-parity.test.cjs. All tasks were already done; no status change."
+            "2026-11-24, main 74609edfe: The quest start link follows the chatbox background (https://github.com/RSPSApp/tsps/pull/5641). Verified by server/tests/p2p-varlamore-group-2-parity.test.cjs. All tasks were already done; no status change.",
+            "2026-11-28, feat/quest-at-first-light: aligned with the user's revision 243 capture of the whole quest - Fox as live's two world multinpcs (13400/13422), Apatura's first meeting (afl_mastermet), Fox's both-leaves answer and Wolf's first talk after the poultice (afl_wolf_dialogue) via RSPSApp/osrsreboxed-db capture-sources, the journal as sent, captured chathead expressions, sounds and animations, the pile's two-tick builds, Wiki destroy notes and a dropped leaf on a full inventory. Verified by server/tests/at-first-light-capture.test.cjs (real packets, multiloc base ids). All tasks were already done; no status change. docs/quests/at-first-light/README.md lists what remains uncaptured."
           ],
           "taskDetails": [
             {

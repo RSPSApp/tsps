@@ -13,7 +13,9 @@ const { test } = require('node:test');
 const script = path.resolve(__dirname, '../scripts/mine-npc-combat-sounds.mjs');
 
 function mine(lines) {
-  const run = spawnSync(process.execPath, ['--no-warnings', script], { input: lines.join('\n') + '\n', encoding: 'utf8' });
+  // The miner imports a .ts file: Node strips its types by default from 22.18, behind a flag before that.
+  const flags = process.features.typescript ? ['--no-warnings'] : ['--no-warnings', '--experimental-strip-types'];
+  const run = spawnSync(process.execPath, [...flags, script], { input: lines.join('\n') + '\n', encoding: 'utf8' });
   return { status: run.status, stderr: run.stderr, npcs: run.status === 0 ? JSON.parse(run.stdout).npcs : null };
 }
 

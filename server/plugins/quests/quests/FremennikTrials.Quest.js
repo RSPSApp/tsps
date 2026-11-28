@@ -71,6 +71,9 @@ module.exports = function registerFremennikTrialsQuest(api) {
   function selectVariant({ npcId, player }) {
     if (!ctx.quest) return null;
     const stage = ctx.quest.getStage(player);
+    // Once complete, each Rellekka NPC plays its own page's after-quest talk (Townsfolk.FremennikTrials.js,
+    // registered after the later Fremennik quests so their stage windows come first).
+    if (stage >= STAGE_COMPLETE) return null;
     for (const fn of ctx.registry.chain) {
       const variant = fn(player, stage, npcId);
       if (variant) return variant;
@@ -99,7 +102,12 @@ module.exports = function registerFremennikTrialsQuest(api) {
       return ctx.skill(player, Skill.WOODCUTTING) < 40 || ctx.skill(player, Skill.CRAFTING) < 40 ||
         ctx.skill(player, Skill.FLETCHING) < 25;
     }
+    // rsprox 1002313 t692, t782: no "Remember:" line without a vote.
+    if (value.includes("has no votes")) return votes === 0;
     if (value.includes("has not gotten only one vote")) return votes === 1;
+    // Thorvald's hut ladder after the trial (rsprox 1002313 t7860): which line follows completion.
+    if (value === "before completing the quest:") return !ctx.quest.isComplete(player);
+    if (value === "after completing the quest:") return ctx.quest.isComplete(player);
     if (value.includes("has gotten 2-6 votes")) return votes >= 2 && votes <= 6;
     if (value.includes("has gotten all 7 votes")) return votes >= VOTES_REQUIRED;
     if (value.includes("free-to-play world")) return false;
@@ -200,6 +208,7 @@ module.exports = function registerFremennikTrialsQuest(api) {
     questPoints: 3,
     xpRewards: REWARD_SKILLS.map(([s, label]) => ({ skillId: s.getIndex(), amount: XP_EACH, label })),
     scrollItemId: SCROLL_ITEM,
+    scrollItemPosition: [74, 128], // rsprox 1002313 t7531 if_setposition (zoom 400)
     rewardText: SCROLL_LINES,
     completionJingleId: COMPLETION_JINGLE,
     buildJournal: (player, handle) => ctx.buildJournal(player, handle),

@@ -348,12 +348,13 @@ test("the poison salesman sells the low-alcohol keg for 250 coins (1002236 t4461
   assert.equal(amount(f, ID.COINS), 50);
   assert.equal(amount(f, ID.LOW_KEG), 1);
   assert.deepEqual(f.messages, [], "no narration goes to chat");
-  // Talked to again: the short offer (Ours), whose Yes buys another.
+  // Talked to again: the same menu, then the short offer, whose Yes answers in the pick's tick
+  // (rsprox 1002313 t1203-1205, t1222).
   await talk(f, salesman);
+  await choose(f, "Talk about the Fremennik Trials");
   assert.equal(shown(f).text, "I understand you have some low alcohol beer for sale...?");
   await until(f, "Yes | No");
   await choose(f, "Yes");
-  ticks(f, 2);
   assert.equal(shown(f).text, "Yes please!");
   await finishChat(f);
   assert.equal(amount(f, ID.LOW_KEG), 1, "50 coins buy nothing");

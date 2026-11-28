@@ -217,9 +217,10 @@ test("talking to Swensen picks the offer, the again lines, and the done lines by
   await talk(again);
   assert.deepEqual((await readAll(again)).slice(0, 2), ["Hello!", "Man, your maze is pretty tough!"]);
 
+  // Passed: the player's "Hello!" first (rsprox 1002313 t6885).
   const done = actor(t, { navigator: 2, swensen: true });
   await talk(done);
-  assert.equal(text(done), "Greetings again outerlander! I must say, I am still impressed with the way you moved through my maze!");
+  assert.deepEqual((await readAll(done)).slice(0, 2), ["Hello!", "Greetings again outerlander! I must say, I am still impressed with the way you moved through my maze!"]);
 });
 
 test("the entrance ladder: seq 828 on arrival, the start room the next tick (1002236 t6717-6718)", async (t) => {
@@ -329,7 +330,7 @@ test("the exit ladder: up to 2649,3661, Swensen's finish starts on its own, the 
   assert.equal(shown(f), null);
   assert.deepEqual(f.messages.filter((m) => !m.includes("music track")), [], "no game message");
   await talk(f);
-  assert.equal(text(f), "Greetings again outerlander! I must say, I am still impressed with the way you moved through my maze!");
+  assert.deepEqual((await readAll(f)).slice(0, 2), ["Hello!", "Greetings again outerlander! I must say, I am still impressed with the way you moved through my maze!"]);
 });
 
 test("a player who left the finish unheard (relog, or an old save's flag) completes on a talk", async (t) => {

@@ -182,8 +182,15 @@
     { "npc": "Captain Bentley", "after": "I'll take you as far as Pirates' Cove. You'll have to find the rest of the way back yourself.", "route": "pirates-cove-bentley" }
   ],
   "gates": {
-    "fremennikTrials": { "quest": "fremennik_trials", "complete": true, "refusal": "before-the-fremennik-trials" },
-    "fremennikIsles": { "quest": "the_fremennik_isles", "started": true, "refusal": "before-the-fremennik-trials" },
+    "fremennikTrials": { "quest": "fremennik_trials", "complete": true, "refusal": "before-the-fremennik-trials",
+      "refusals": [
+        { "quest": "fremennik_trials", "state": "started", "page": "The Fremennik Trials", "variant": "the-non-council-members-sailor-travelling-to-miscellania-during-the-trials" }
+      ] },
+    "fremennikIsles": { "quest": "the_fremennik_isles", "started": true, "refusal": "before-the-fremennik-trials",
+      "refusals": [
+        { "quest": "fremennik_trials", "state": "complete", "npc": "Mord Gunnars", "page": "Mord Gunnars", "variant": "travelling-to-jatizso-before-the-fremennik-isles" },
+        { "quest": "fremennik_trials", "state": "complete", "npc": "Maria Gunnars", "page": "Maria Gunnars", "variant": "travelling-to-neitiznot-before-the-fremennik-isles" }
+      ] },
     "dragonSlayerII": { "quest": "dragon_slayer_ii", "complete": true },
     "dragonSlayerIILithkren": { "quest": "dragon_slayer_ii", "complete": true, "orAttribute": "dragon-slayer-ii:lithkren-arrived" },
     "sinsOfTheFather": { "quest": "sins_of_the_father", "complete": true },

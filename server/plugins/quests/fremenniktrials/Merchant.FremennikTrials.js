@@ -49,6 +49,8 @@ module.exports = function attachFremennikTrialsMerchant(api, ctx) {
 
   const flowerAsk = (slug) => `${SIGMUND}-finding-the-unique-flower-s-whereabouts-talking-to-${slug}`;
   const bowAsk = (slug) => `${SF}-finding-sigli-s-bowstring-talking-to-${slug}`;
+  /** Asked about Askeladden's note while only Thora wants it (rsprox 1002313 t3069-t3600). */
+  const promiseAsk = (slug) => `${SF}-finding-askeladden-s-written-promise-talking-to-${slug}`;
 
   const SIGMUND_OFFER = SIGMUND;
   const SIGMUND_AGAIN = `${SIGMUND}-talking-to-sigmund-again`;
@@ -69,38 +71,43 @@ module.exports = function attachFremennikTrialsMerchant(api, ctx) {
       line: "Oh. It's by Olaf?", step: "cJx4A6" },
     { name: "olaf", npcs: NPC.OLAF, ask: `${SF}-talking-to-olaf-the-bard`, give: `${SW}-giving-the-boots-to-olaf`,
       after: `${SW}-talking-to-olaf-again`, in: I.STURDY_BOOTS, out: I.FREMENNIK_BALLAD,
-      flower: flowerAsk("olaf"), bow: bowAsk("olaf"), line: "Oh! Superb! Those are great!", step: "e1867B" },
+      flower: flowerAsk("olaf"), bow: bowAsk("olaf"), promise: promiseAsk("olaf"), line: "Oh! Superb! Those are great!", step: "e1867B" },
     { name: "yrsa", npcs: NPC.YRSA, ask: `${SF}-talking-to-yrsa`, again: `${SF}-talking-to-yrsa-talking-to-yrsa-again`,
       give: `${SW}-giving-the-fiscal-statement-to-yrsa`, after: `${SW}-talking-to-yrsa-again`, in: I.FISCAL_STATEMENT,
-      out: I.STURDY_BOOTS, flower: flowerAsk("yrsa"), bow: bowAsk("yrsa"), line: "Certainly! Let me have a look", step: "8iL98F" },
-    { name: "brundt", npcs: NPC.BRUNDT, ask: `${SF}-talking-to-brundt`, give: `${SW}-giving-the-map-to-brundt`,
-      after: `${SW}-talking-to-brundt-again`, in: I.TRACKING_MAP, out: I.FISCAL_STATEMENT, flower: flowerAsk("brundt"),
+      out: I.STURDY_BOOTS, flower: flowerAsk("yrsa"), bow: bowAsk("yrsa"), promise: promiseAsk("yrsa"), line: "Certainly! Let me have a look", step: "8iL98F" },
+    { name: "brundt", npcs: NPC.BRUNDT, ask: `${SF}-talking-to-brundt`, again: `${SF}-talking-to-brundt-talking-to-brundt-again`,
+      give: `${SW}-giving-the-map-to-brundt`, after: `${SW}-talking-to-brundt-again`, in: I.TRACKING_MAP, out: I.FISCAL_STATEMENT,
+      flower: flowerAsk("brundt"), promise: promiseAsk("brundt"),
       line: "Excellent work outerlander! And so quickly", step: "Q1dOsa" },
-    { name: "sigli", npcs: NPC.SIGLI, ask: `${SF}-finding-sigli-s-bowstring`, give: `${SW}-giving-the-bowstring-to-sigli`,
-      after: `${SW}-talking-to-sigli-again`, in: I.CUSTOM_BOW_STRING, out: I.TRACKING_MAP, flower: flowerAsk("sigli"),
+    { name: "sigli", npcs: NPC.SIGLI, ask: `${SF}-finding-sigli-s-bowstring`, again: `${SF}-finding-sigli-s-bowstring-talking-to-sigli-again`,
+      give: `${SW}-giving-the-bowstring-to-sigli`, after: `${SW}-talking-to-sigli-again`, in: I.CUSTOM_BOW_STRING, out: I.TRACKING_MAP,
+      flower: flowerAsk("sigli"), promise: promiseAsk("sigli"),
       line: "Well met, outerlander. I see some hunting potential", step: "aiidGO" },
     { name: "skulgrimen", npcs: NPC.SKULGRIMEN, ask: bowAsk("skulgrimen"), again: bowAsk("skulgrimen-again"),
       give: `${SW}-giving-the-fish-to-skulgrimen`, after: `${SW}-talking-to-skulgrimen-again`, in: I.UNUSUAL_FISH,
-      out: I.CUSTOM_BOW_STRING, flower: flowerAsk("skulgrimen"), line: "Ohh... That's a nice fish.", step: "s_MUAW" },
+      out: I.CUSTOM_BOW_STRING, flower: flowerAsk("skulgrimen"), promise: promiseAsk("skulgrimen"), line: "Ohh... That's a nice fish.", step: "s_MUAW" },
     { name: "fisherman", npcs: NPC.FISHERMAN, ask: `${SF}-talking-to-the-fisherman`,
       again: `${SF}-talking-to-the-fisherman-talking-to-the-fisherman-again`, give: `${SW}-giving-the-fisherman-the-map`,
       after: `${SW}-talking-to-the-fisherman-again`, in: I.SEA_FISHING_MAP, out: I.UNUSUAL_FISH,
-      flower: flowerAsk("the-fisherman"), bow: bowAsk("the-fisherman"), line: "Great work outerlander!", step: "uHd7UN" },
+      flower: flowerAsk("the-fisherman"), bow: bowAsk("the-fisherman"), promise: promiseAsk("the-fisherman"), line: "Great work outerlander!", step: "uHd7UN" },
     { name: "swensen", npcs: NPC.SWENSEN, ask: SW, again: `${SW}-talking-to-swensen-again`,
       give: `${SW}-giving-swensen-the-forecast`, after: `${SW}-talking-to-swensen-again-2`, in: I.WEATHER_FORECAST,
-      out: I.SEA_FISHING_MAP, line: "Here, outerlander; you may take my map", step: "998Hmd" },
+      out: I.SEA_FISHING_MAP, promise: promiseAsk("swensen"), line: "Here, outerlander; you may take my map", step: "998Hmd" },
     { name: "peer", npcs: NPC.PEER, ask: `${SW}-peer-the-seer-s-favour`, again: `${SW}-talking-to-peer-the-seer-again`,
       give: `${SW}-giving-peer-the-seer-the-bodyguard-contract`, after: `${SW}-talking-to-peer-the-seer-again-2`,
       in: I.WARRIORS_CONTRACT, out: I.WEATHER_FORECAST, flower: flowerAsk("peer-the-seer"), bow: bowAsk("peer-the-seer"),
+      promise: promiseAsk("peer-the-seer"),
       // Live swaps on the first line after the player's (t7432), not after "You may take this forecast".
       line: "You have not only persuaded one of the Fremennik", step: "R0GVxE" },
     { name: "thorvald", npcs: NPC.THORVALD, ask: `${SW}-convincing-thorvald-to-be-a-bodyguard`,
       again: `${SW}-talking-to-thorvald-again`, give: `${SW}-giving-thorvald-his-token`,
       after: `${SW}-talking-to-thorvald-again-2`, in: I.CHAMPIONS_TOKEN, out: I.WARRIORS_CONTRACT,
-      flower: flowerAsk("thorvald"), bow: bowAsk("thorvald"), line: "Here outerlander, take this contract;", step: "TI-M0g" },
+      flower: flowerAsk("thorvald"), bow: bowAsk("thorvald"), promise: promiseAsk("thorvald"),
+      line: "Here outerlander, take this contract;", step: "TI-M0g" },
     { name: "manni", npcs: NPC.MANNI, ask: `${SW}-talking-to-manni-the-reveller`, again: `${SW}-talking-to-manni-again`,
       give: `${SW}-giving-manni-his-legendary-cocktail`, after: `${SW}-talking-to-manni-again-2`,
       in: I.LEGENDARY_COCKTAIL, out: I.CHAMPIONS_TOKEN, flower: flowerAsk("manni"), bow: bowAsk("manni"),
+      promise: promiseAsk("manni"),
       line: "Here outerlander, you may take my token.", step: "dkEO0D" },
     { name: "thora", npcs: NPC.THORA, ask: `${SW}-talking-to-thora`, again: `${SW}-talking-to-thora-again`,
       give: `${SW}-getting-thora-s-legendary-cocktail`, after: `${SW}-talking-to-thora-again-2`,
@@ -112,6 +119,7 @@ module.exports = function attachFremennikTrialsMerchant(api, ctx) {
       bow: bowAsk("askeladden") },
   ];
   const ALL_ASKED = LINKS.length;
+  const THORA = LINKS.findIndex((link) => link.name === "thora");
   /** Requests heard while only the flower is known (Sailor .. Brundt) / Sigli's bowstring is wanted. */
   const FLOWER_PHASE_END = 4;
   const BOW_PHASE = [5, 6];
@@ -169,6 +177,10 @@ module.exports = function attachFremennikTrialsMerchant(api, ctx) {
     if (index < count) {
       // While Sigli's bowstring is wanted the earlier links answer the bowstring question (Wiki).
       if (bowPhase && link.bow) return { kind: "again", variant: link.bow };
+      // Thora's request heard and nothing held: only Thora, who wants the note, reminds; the earlier
+      // links are asked where it is (rsprox 1002313 t3069-t3600, every request heard and the items
+      // dropped). Askeladden sells it again below.
+      if (count > THORA && index < THORA && link.promise) return { kind: "again", variant: link.promise };
       // A link with no reminder repeats its request. With every request heard and no chain item
       // held (one was lost), that is Askeladden selling the note again (Wiki).
       return { kind: link.again ? "again" : "ask-again", variant: link.again ?? link.ask };
@@ -300,12 +312,25 @@ module.exports = function attachFremennikTrialsMerchant(api, ctx) {
     chainValue(player);
   }
 
+  /**
+   * "Ask about becoming a Fremennik" from the chain's townsfolk who are not on the council: their own
+   * "not a council member" talk (rsprox 1002313 t2178 the Sailor, t2363 Yrsa, t2536 Skulgrimen).
+   */
+  const NOT_COUNCIL = [
+    [SAILOR_IDS, "the-non-council-members-sailor"],
+    [NPC.YRSA, "the-non-council-members-yrsa"],
+    [NPC.SKULGRIMEN, "the-non-council-members-skulgrimen"],
+    [NPC.THORA, "the-non-council-members-thora-the-barkeep"],
+    [NPC.FISHERMAN, "the-non-council-members-fisherman"],
+  ];
+
   ctx.merchant = { LINKS, asked, started, phase, chainActive, CHAIN_ATTRIBUTE, OLD_MERCHANT_ATTRIBUTE };
 
   api.persistAttribute(CHAIN_ATTRIBUTE, UNCONVERTED);
   api.persistAttribute(OLD_MERCHANT_ATTRIBUTE, 0);
   ctx.chainVariant(chainVariant);
   ctx.variant(NPC.SIGMUND, sigmundVariant);
+  for (const [ids, variant] of NOT_COUNCIL) ctx.offer(ids, () => variant);
   ctx.choice(onChoice);
   ctx.line(onLine);
   ctx.condition(answerCondition);

@@ -88,6 +88,8 @@ function createFremennikTrialsState(api) {
   let quest = null;
 
   const held = (player, itemId, amount = 1) => player.getInventory().getAmount(itemId) >= amount;
+  /** In any bank tab (tabs not used yet are null). */
+  const banked = (player, itemId) => (player.getBanks?.() ?? []).some((bank) => bank?.contains?.(itemId));
   const give = (player, itemId, amount = 1) => player.getInventory().adds(itemId, amount);
   const take = (player, itemId, amount = 1) => player.getInventory().deleteNumber(itemId, amount);
   /** A trial's one-off reward: what does not fit in the inventory goes on the floor (QuestRuntime giveReward). */
@@ -235,7 +237,7 @@ function createFremennikTrialsState(api) {
     SWENSEN_FAVOR,
     get quest() { return quest; },
     setQuest(value) { quest = value; },
-    held, give, giveReward, take, skill, freeSlots, swapInSlot, readAttribute, trialState, setTrialState, flag, setFlag,
+    held, banked, give, giveReward, take, skill, freeSlots, swapInSlot, readAttribute, trialState, setTrialState, flag, setFlag,
     votesFor, nativeProgress, completeTrial, inBox, inRellekka, carryingAnything, play, stepsById, later,
     registry,
     chainVariant(fn) { registry.chain.push(fn); },

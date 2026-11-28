@@ -27,7 +27,7 @@
  */
 module.exports = function attachFremennikTrialsReveller(api, ctx) {
   const { Animation, HitDamage, HitMask, Location, ObjectIdentifiers, Skill } = api.core;
-  const { startTranscript } = require("../QuestRuntime");
+  const { startTranscript, loadTranscripts } = require("../QuestRuntime");
   const CameraShake = require("../../interface/CameraShake.plugin");
   const { I, T, FLAG, NPC, STAGE_STARTED, STAGE_COMPLETE } = ctx;
 
@@ -44,7 +44,6 @@ module.exports = function attachFremennikTrialsReveller(api, ctx) {
     poisonAgain: "the-council-members-talking-to-the-poison-salesman-talking-to-the-poison-salesman-again",
   };
   /** Manni's own page after the quest (Wiki): "Hey! It's [Fremennik name]! Let me buy you a drink!" */
-  const MANNI_AFTER = { page: "Manni the Reveller", variant: "after-the-fremennik-trials" };
 
   /** The poison salesman finished his pitch once: he then asks "...you want to buy some?" (Ours: the key). */
   const PITCH_ATTRIBUTE = "quest.fremennik_trials.poison_pitch";
@@ -103,8 +102,6 @@ module.exports = function attachFremennikTrialsReveller(api, ctx) {
   const drinking = new WeakMap();
   /** The lit objects' fuses: player -> tokens, oldest first. */
   const fuses = new WeakMap();
-  /** The poison salesman's "again" menu is showing: player -> true. */
-  const poisonAgainMenu = new WeakMap();
   /** Manni's win menu is showing: player -> true. */
   const winMenu = new WeakMap();
 
@@ -126,7 +123,6 @@ module.exports = function attachFremennikTrialsReveller(api, ctx) {
 
   function manniVariant(player, stage) {
     if (stage < STAGE_STARTED) return null;
-    if (stage >= STAGE_COMPLETE) return MANNI_AFTER;
     return manniTrialVariant(player);
   }
 
@@ -415,11 +411,42 @@ module.exports = function attachFremennikTrialsReveller(api, ctx) {
 
   // ---- The poison salesman -------------------------------------------------------------------
 
-  /** His trial pitch while the quest runs; once heard, the short offer (Ours). His own page otherwise. */
+  /**
+   * While the quest runs every Talk-to opens on "Talk about the Murder Mystery Quest | Talk about the
+   * Fremennik Trials" (rsprox 1002313 t1193, t1203, t1217). His own page otherwise.
+   */
   function poisonVariant(player, stage) {
     if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE) return null;
-    const heard = ctx.readAttribute(player, PITCH_ATTRIBUTE) === 1 || ctx.flag(player, FLAG.LOW_ALCOHOL_BOUGHT);
-    return heard ? V.poisonAgain : V.poison;
+    return V.poison;
+  }
+
+  const pitchHeard = (player) => ctx.readAttribute(player, PITCH_ATTRIBUTE) === 1 || ctx.flag(player, FLAG.LOW_ALCOHOL_BOUGHT);
+
+  /**
+   * Once the pitch was heard, the Fremennik option is the short offer ("I understand you have some low
+   * alcohol beer for sale...?", 1002313 t1205, t1219), whose Yes/No are the pitch's own and answer in the
+   * pick's tick (t1214, t1222). The again record's "jump above" is resolved to those options here. Ours:
+   * which talks count as having heard it (the key).
+   */
+  function poisonMenu(notice) {
+    const { player, npcId } = notice;
+    if (npcId !== NPC.POISON_SALESMAN || !player || !pitchHeard(player)) return;
+    const index = (notice.options ?? []).findIndex((option) => option.text === POISON_FREMENNIK_OPTION);
+    if (index < 0) return;
+    const options = [...notice.options];
+    options[index] = { ...options[index], steps: againSteps() };
+    notice.options = options;
+  }
+  const POISON_FREMENNIK_OPTION = "Talk about the Fremennik Trials";
+
+  function againSteps() {
+    const variants = loadTranscripts(api)[ctx.PAGE].variants;
+    const pitch = variants[V.poison];
+    const offer = (variants[V.poisonAgain] ?? []).flatMap((step) => step.type === "condition" ? step.steps ?? [] : [step]);
+    return offer.map((step) => step.type !== "choice" ? step : {
+      ...step,
+      options: step.options.map((option) => ({ ...option, steps: pitchOption(pitch, option.text) })),
+    });
   }
 
   function poisonCondition({ player, npcId, value }) {
@@ -438,18 +465,6 @@ module.exports = function attachFremennikTrialsReveller(api, ctx) {
     if (!player || npcId !== NPC.POISON_SALESMAN) return;
     const text = String(event.text ?? "");
     if (text.startsWith("I'll sell you a keg of it for only 250 gold pieces!")) player.setAttribute(PITCH_ATTRIBUTE, 1);
-    else if (text.startsWith("That I do, and sales are rocketing upwards")) poisonAgainMenu.set(player, true);
-  }
-
-  /** The "again" menu's options jump to the pitch's own Yes/No ("above"), which are replayed here. */
-  function poisonChoice(event, text) {
-    const { player, npcId } = event;
-    if (npcId !== NPC.POISON_SALESMAN || !poisonAgainMenu.get(player)) return;
-    poisonAgainMenu.delete(player);
-    if (text !== "yes" && text !== "no") return;
-    event.end = true;
-    const option = text === "yes" ? "Yes" : "No";
-    ctx.later(player, 1, () => ctx.play(player, NPC.POISON_SALESMAN, V.poison, (steps) => pitchOption(steps, option)));
   }
 
   /** The pitch's closing Yes/No option (the one after "I'll sell you a keg ..."). */
@@ -495,7 +510,6 @@ module.exports = function attachFremennikTrialsReveller(api, ctx) {
   function logout({ player }) {
     drinking.delete(player);
     fuses.delete(player);
-    poisonAgainMenu.delete(player);
     winMenu.delete(player);
   }
 
@@ -509,17 +523,18 @@ module.exports = function attachFremennikTrialsReveller(api, ctx) {
   ctx.line(poisonLine);
   ctx.line(pipeLine);
   ctx.choice(manniChoice);
-  ctx.choice(poisonChoice);
   for (const id of ["-clH7k", "pImFVN", "OXJHvH", "FNLh6a", "vVyoip", "wGcoul"]) ctx.action(id, sceneStep);
   ctx.action("KrSm12", wonTrial);
   ctx.action("RSKxfK", manniBeer);
   ctx.action("Y--9Gn", sceneStep);
   ctx.action("PkDa1o", buyKeg);
-  for (const id of ["ZlVgwR", "jYmXBQ", "Hgs1hR", "4nj5Ri", "QaYRK9", "Tg1ehy"]) ctx.action(id, statementBox);
+  // The workman's winks: 8hS3hT and 5A_4Fr since osrsreboxed-db gave them their full stop (were QaYRK9, Tg1ehy).
+  for (const id of ["ZlVgwR", "jYmXBQ", "Hgs1hR", "4nj5Ri", "8hS3hT", "5A_4Fr"]) ctx.action(id, statementBox);
   api.persistAttribute(PITCH_ATTRIBUTE, 0);
   api.registerDefinitionSource("ground_items", { name: "fremennik-trials-keg", load: kegSpawn });
   api.onGroundItemPickup(takeKeg);
   api.onNpcInteraction(blockTalkWhileDrinking);
+  api.onCustomEvent("npc-dialogue:menu", poisonMenu);
   api.onItemOnNpc(workmanDrink);
   api.onItemOnItem("Tinderbox", "Strange object", lightStrangeObject);
   api.onItemOnItem("Keg of beer", "Low alcohol keg", kegOnKeg);

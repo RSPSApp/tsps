@@ -112,7 +112,7 @@ function npcOption(event) {
   event.handled = true;
   if (Common.travelling(player)) return;
   if (!Common.passes(player, entry.gate)) {
-    Common.playTranscript(player, Common.speaker(event), { variant: Common.data.gates[entry.gate].refusal, exact: true });
+    Common.playTranscript(player, Common.speaker(event), { variant: Common.refusal(player, entry.gate, entry.npc), exact: true });
     return;
   }
   if (entry.check === "entrana") {

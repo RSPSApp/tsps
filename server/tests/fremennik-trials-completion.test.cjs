@@ -278,3 +278,133 @@ test("On Sigmund's chain, Brundt's 'Ask about becoming a Fremennik' is his vote 
   ticks(f, 2);
   assert.equal(shown(f)?.text, "Greetings again outerlander! How goes your attempts to gain votes with the council of elders?");
 });
+
+test("after the quest every Rellekka townsperson plays their own page's after-quest talk (rsprox 1002313 t7650-t8337)", async (t) => {
+  const f = actor(t, { stage: 8, trials: ALL_PASSED });
+  const variant = (npcId) => PM.emitNpcDialogueVariant({ player: f.player, npcId });
+  const cases = [
+    [3917, "Eldgrim", "after-the-fremennik-trials"],
+    [3932, "Thora the Barkeep", "after-the-fremennik-trials"],
+    [8402, "Askeladden", "after-completing-the-fremennik-trials-rellekka"],
+    [3924, "Sigli the Huntsman", "after-the-fremennik-trials"],
+    [3946, "Inga", "after-the-fremennik-trials"],
+    [3935, "Skulgrimen", "after-the-fremennik-trials"],
+    [3896, "Thorvald the Warrior", "after-the-fremennik-trials"],
+    [3894, "Sigmund The Merchant", "after-the-fremennik-trials"],
+    [9270, "Haskell", "after-the-fremennik-trials-but-before-the-fremennik-exiles"],
+    [3937, "Agnar", "after-the-fremennik-trials"],
+    [3933, "Yrsa", "after-the-fremennik-trials"],
+    [3895, "Peer the Seer", "standard-dialogue-after-the-fremennik-trials-without-a-skeletal-piece"],
+    [3925, "Swensen the Navigator", "after-the-fremennik-trials"],
+    [3920, "Manni the Reveller", "after-the-fremennik-trials"],
+    [813, "Longhall Bouncer", "after-completing-the-bard-s-trial"],
+    [5937, "Jarvald", "standard-dialogue-after-the-fremennik-trials-rellekka"],
+  ];
+  for (const [npcId, page, name] of cases) assert.deepEqual(variant(npcId), { page, variant: name }, page);
+  // Before completion the trial talks still answer: Thorvald's vote line, not his after-quest page.
+  const during = actor(t, { stage: 7, trials: ALL_PASSED });
+  assert.notDeepEqual(PM.emitNpcDialogueVariant({ player: during.player, npcId: 3896 }),
+    { page: "Thorvald the Warrior", variant: "after-the-fremennik-trials" });
+});
+
+test("the running journal is live's, line for line (rsprox 1002313 t93, t1977, t7192)", async (t) => {
+  const T = { REVELLER: 0, BARD: 1, MERCHANT: 2, NAVIGATOR: 3, SEER: 4, WARRIOR: 5, HUNTER: 6 };
+  const bits = (states) => Object.entries(states).reduce((sum, [trial, state]) => sum | (state << (T[trial] * 3)), 0);
+  const plain = (lines) => lines.map((line) => line.replace(/<col=[0-9a-f]+>/g, ""));
+  const START = [
+    "<str>I spoke to Brundt the Fremennik chieftain, and he told me <str>that",
+    "<str>I could join their tribe if I could pass some trials <str>and get",
+    "<str>seven of the twelve council members votes.",
+  ];
+  // t93: no votes; the Hunter, the Reveller and the Bard started, nothing made yet.
+  const early = actor(t, { stage: 1, trials: bits({ HUNTER: 1, REVELLER: 1, BARD: 1 }) });
+  assert.deepEqual(plain(quest().buildJournal(early.player, quest())), [...START,
+    "I don't have any votes yet", "I should try and find some of the council members",
+    "", "", "", "",
+    "The Hunter will vote for me if I can pass his trial.", "I need to track and defeat a creature called the Draugen",
+    "", "",
+    "The Reveller will vote for me if I can pass his trial", "I have to defeat him in a drinking contest somehow!",
+    "The Bard will vote for me if I can pass his trial", "I must make myself a lyre and play it in the longhall",
+    "First I need to get some wood from a special musical tree", "Next I need to get some Golden Wool from a local troll",
+    "Finally I need to get the Lake Spirit to enchant my lyre", ""]);
+  // t1977: three votes.
+  const three = actor(t, { stage: 4, trials: bits({ HUNTER: 2, REVELLER: 2, BARD: 2 }) });
+  assert.deepEqual(plain(quest().buildJournal(three.player, quest())), [...START,
+    "I have three votes so far", "", "", "", "",
+    "<str>I now have the Hunter's vote at the council.", "", "",
+    "<str>I now have the Reveller's vote at the council", "<str>I now have the Bard's vote at the council."]);
+  // t7192: six votes, the Seer's trial running.
+  const six = actor(t, { stage: 7, trials: bits({ NAVIGATOR: 2, MERCHANT: 2, HUNTER: 2, SEER: 1, WARRIOR: 2, REVELLER: 2, BARD: 2 }) });
+  assert.deepEqual(plain(quest().buildJournal(six.player, quest())), [...START,
+    "I have six votes so far", "<str>I now have the Navigator's vote at the council.", "", "",
+    "<str>I now have the Merchant's vote at the council.", "<str>I now have the Hunter's vote at the council.",
+    "The Seer will vote for me if I can pass his trial", "I have to get from one side of his house to the other",
+    "<str>I now have the Warrior's vote at the council", "<str>I now have the Reveller's vote at the council",
+    "<str>I now have the Bard's vote at the council."]);
+});
+
+test("the reward's level-ups wait until Brundt's naming line is continued (rsprox 1002313 t7538 -> t7546)", async (t) => {
+  const f = actor(t, { stage: 7, trials: ALL_PASSED });
+  const skills = f.player.getSkillManager();
+  // One XP short of level 58 Fishing (live: 57 -> 58 from the reward).
+  skills.setExperience(core.Skill.FISHING, 224466 - 1);
+  skills.setCurrentLevel(core.Skill.FISHING, 57, true);
+  skills.setMaxLevel(core.Skill.FISHING, 57, true);
+  const advanced = () => f.messages.filter((message) => message.startsWith("Congratulations, you've just advanced your Fishing level"));
+  await talkToBrundt(f);
+  ticks(f, 4);
+  assert.equal(f.player.getInterfaceId(), SCROLL);
+  assert.deepEqual(advanced(), [], "nothing while the scroll is open");
+  f.player.getPacketSender().sendInterfaceRemoval();
+  ticks(f, 3);
+  assert.match(shown(f)?.text ?? "", /^From this day onward/);
+  assert.deepEqual(advanced(), [], "nothing while Brundt names the player");
+  await continueLine(f);
+  ticks(f, 2);
+  assert.equal(advanced().length, 1, "announced once the naming line is continued");
+});
+
+test("Jarvald's 'Fremennik name is also Jarvald' branch follows the saved name", async (t) => {
+  const f = actor(t, { stage: 8, trials: ALL_PASSED });
+  const ask = () => PM.emitNpcDialogueCondition({ player: f.player, npcId: 5937, text: "If the player's Fremennik name is also Jarvald:" });
+  f.player.setAttribute(NAME, PREFIXES.indexOf("Bar") * 16 + SUFFIXES.indexOf("kar") + 1);
+  assert.equal(ask(), false);
+  f.player.setAttribute(NAME, PREFIXES.indexOf("Jar") * 16 + SUFFIXES.indexOf("vald") + 1);
+  assert.equal(ask(), true);
+});
+
+/** Plays a talk to its end, picking `picks` in order at each menu; returns the lines shown. */
+async function playTalk(f, npcId, picks = []) {
+  PM.emitCustomEvent("npc-dialogue:start", { player: f.player, npcId });
+  tick(f);
+  const lines = [];
+  for (let i = 0; i < 40; i++) {
+    const now = shown(f);
+    if (!now) break;
+    if (now.who === "menu") {
+      const pick = picks.shift();
+      const index = now.options.indexOf(pick);
+      assert.ok(index >= 0, `"${pick}" in ${JSON.stringify(now.options)}`);
+      await f.connection.dispatch([{ type: "dialogue_continue", widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: index + 1 }]);
+      tick(f);
+      continue;
+    }
+    lines.push(now.text);
+    await continueLine(f);
+  }
+  return lines;
+}
+
+test("after the quest Lalli sells a fleece for 1,000 coins and Askeladden gives a new pet rock (their pages)", async (t) => {
+  const f = actor(t, { stage: 8, trials: ALL_PASSED });
+  f.player.getInventory().adds(core.ItemIdentifiers.COINS, 1500);
+  const lalli = await playTalk(f, 803, ["Pay"]);
+  assert.ok(lalli.includes("Is that all? Here you go!"), JSON.stringify(lalli));
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.COINS), 500);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.GOLDEN_FLEECE), 1);
+  const poor = await playTalk(f, 803, ["Pay"]);
+  assert.ok(poor.includes("I don't have that much cash on me..."), JSON.stringify(poor));
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.GOLDEN_FLEECE), 1);
+  await playTalk(f, 8402, ["Ask for a new pet rock"]);
+  assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.PET_ROCK), 1);
+});

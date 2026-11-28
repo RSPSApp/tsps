@@ -9,6 +9,7 @@
 // Opening a pop-up interrupts what the player is doing: it emits "level-up:popup-opened"
 // { player, skill, pause }, which holds skilling until Continue. With pop-ups off, nothing stops.
 // World owners can also disable the blocking pop-up with SkillLevelUp:interruptActions.
+const HOLD_EVENT = "skill-level-up:hold";
 const GROUP = 233;
 const TEXT1 = (GROUP << 16) | 1;
 const TEXT2 = (GROUP << 16) | 2;
@@ -309,7 +310,19 @@ function showLevelUp(event) {
  * offer menu straight after the Force box line).
  */
 function inConversation(player) {
-  return !!(player.getDialogueManager?.()?.isActive?.() || pluginApi.core.MultiChatboxPrompt?.getPending?.(player));
+  return !!(player.getDialogueManager?.()?.isActive?.() || pluginApi.core.MultiChatboxPrompt?.getPending?.(player))
+    || heldBack(player);
+}
+
+/**
+ * A plugin can hold the announcement back for a talk it is about to play: `skill-level-up:hold`
+ * ({ player, hold }). The Fremennik Trials' naming line comes after the quest scroll, and live
+ * announces the reward's level-ups once it is continued (rsprox 1002313 t7538 -> t7546).
+ */
+function heldBack(player) {
+  const request = { player, hold: false };
+  pluginApi.emitCustomEvent(HOLD_EVENT, request);
+  return request.hold === true;
 }
 
 function awaitDialogueEnd(event) {

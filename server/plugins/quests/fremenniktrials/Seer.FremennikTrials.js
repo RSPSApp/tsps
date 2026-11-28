@@ -67,8 +67,8 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
       "My whole wears rings the older I get.<br>What am I?",
     ] },
     { answer: "FIRE", pages: [
-      "My first is in fish, but not in the sea.<br>My second in birds, but not in a tree.<br>My third is in doors, but not in a hall.<br>My last is everything, but nothing at all.",
-      "My whole cannot die as long as it has food.<br>What am I?",
+      "My first is in fish, but not in the sea.<br>My second in birds, but not in a tree.<br>My third is in doors, but not in a hall.<br>My last is in everything, but not nothing at all.",
+      "My whole cannot die, as long as it has food.<br>What am I?",
     ] },
     { answer: "WIND", pages: [
       "My first is in wizard, but not in a mage.<br>My second in jail, but not in a cage.<br>My third is in anger, but not in a rage.<br>My last in a drawing, but not on a page.",
@@ -159,12 +159,14 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
     CRATE_2: O.CRATE_39, // 4186
   };
   /**
-   * The puzzle floor's boxes and crates (Wiki transcript, "the puzzle room"). Ours: which pile the
-   * Wiki's compass words mean; none is captured. Keyed by "id" or "id@x" (two piles share 4183).
+   * The puzzle floor's boxes and crates (Wiki transcript, "the puzzle room"). Captured: the magnet
+   * in 4183 at 2636,3660, the toy ship in 4186 and the thread in 4184 (rsprox 1002313 t7450-7490).
+   * Ours: 4183 at 2633,3660 holds nothing, and 4185 the small pick (Wiki). Keyed by "id" or "id@x"
+   * (two piles share 4183).
    */
   const PILE_FINDS = new Map([
-    [`${LOC.BOXES}@2633`, { item: I.MAGNET_2, text: "You find a magnet hidden inside." }],
-    [`${LOC.BOXES}@2636`, null],
+    [`${LOC.BOXES}@2633`, null],
+    [`${LOC.BOXES}@2636`, { item: I.MAGNET_2, text: "You find a magnet hidden inside." }],
     [`${LOC.CRATE_2}`, { item: I.TOY_SHIP, text: "You find a toy ship hidden inside." }],
     [`${LOC.CRATE}`, { item: I.SMALL_PICK, text: "You find a small pick hidden inside." }],
     [`${LOC.BOXES_2}`, { item: I.BLUE_THREAD, text: "You find some thread hidden inside." }],
@@ -186,7 +188,7 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
   const TEXT = {
     locked: "This door is locked tightly shut.",
     mustBank: "You must bank all your items and equipment before entering Peer's house.",
-    leaveWarning: "If you leave by this door you will fail this trial. Press continue to go through the door anyway.",
+    leaveWarning: "If you leave by this door you will fail this trial.<br>Press continue to go through the door anyway.",
     unlock: "You unlock the door with your key.",
     passed: "You have successfully completed the Seer's Trial.",
     trapdoorOpens: "The trapdoor opens...",
@@ -253,14 +255,19 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
   const units = (itemId) => BUCKET_UNITS.get(itemId) ?? JUG_UNITS.get(itemId);
   const heldAny = (player, ids) => ids.some((id) => held(player, id));
   const bucketKinds = [...BUCKET_UNITS.keys(), I.FROZEN_BUCKET];
-  const jugKinds = [...JUG_UNITS.keys(), I.FROZEN_JUG];
 
   // ---- Peer's dialogue ---------------------------------------------------------------------------
 
+  /**
+   * The three-option menu (Merchant's trial / becoming a Fremennik / depositing) only while Sigmund's
+   * trial can still be asked about; once it has passed, Talk-to opens straight on his trial offer
+   * (rsprox 1002313 t6907).
+   */
   function peerVariant(player, stage) {
     if (trialState(player, T.SEER) === 2) return V.done;
-    if (stage >= ctx.STAGE_STARTED) return trialState(player, T.SEER) === 1 ? V.again : V.menu;
-    return null;
+    if (stage < ctx.STAGE_STARTED) return null;
+    if (trialState(player, T.SEER) === 1) return V.again;
+    return trialState(player, T.MERCHANT) === 2 ? V.trial : V.menu;
   }
 
   function peerOffer(player) {
@@ -515,16 +522,15 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
   }
 
   /**
-   * Leaving by the entrance from inside (Wiki uvFMwf, no capture): the warning box; Continue loses
-   * the house items and walks out, anything else (the box closed) resumes the puzzle. Ours: the
-   * riddle has to be solved again, as the quest page says parts must be done over.
+   * Leaving by the entrance from inside (rsprox 1002313 t7180-7182; Wiki uvFMwf): the warning box;
+   * Continue loses the house items and walks out on the same tick, anything else (the box closed)
+   * resumes the puzzle. The riddle stays solved: the door opened at once on the way back in (t7195).
    */
   function leaveByEntrance(player, door) {
     const standing = at(player).clone();
     mesboxes(player, [TEXT.leaveWarning], () => {
       if (!at(player).equals(standing)) return;
       stripHouseItems(player);
-      setFlag(player, FLAG.SEER_RIDDLE, false);
       resetLocs(player);
       passDoor(player, door, false);
     });
@@ -627,19 +633,21 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
   }
 
   /**
-   * The south chest (2635,3660) holds the jug (1002236 t10091); the east one nothing (Wiki RoO9fF).
-   * Ours: which chest the Wiki means; a lost jug can be found again.
+   * Both chests hold the jug: the south one (2635,3660; 1002236 t10091) and the east one (2638,3662;
+   * 1002313 t7483, a second jug while a jug of water was held). With an empty jug held, nothing
+   * (1001646 t3280). Ours: that rule for both chests; a lost jug can be found again.
    */
-  function searchChest(player, object) {
-    const jugChest = object.getLocation().getX() === JUG_CHEST_X;
-    search(player, TEXT.searchChest, () => !jugChest || heldAny(player, jugKinds) ? null : { item: I.EMPTY_JUG, text: TEXT.jug });
+  function searchChest(player) {
+    search(player, TEXT.searchChest, () => held(player, I.EMPTY_JUG) ? null : { item: I.EMPTY_JUG, text: TEXT.jug });
   }
-  const JUG_CHEST_X = 2635;
 
-  /** Both bookcases hide the herring (1002236 at 2635,3665; 1001646 at 2634,3665). */
+  /**
+   * Both bookcases hide the herring (1002236 at 2635,3665; 1001646 at 2634,3665). Nothing while the
+   * herring, its goop or the cooked plain herring is held (1002313 t7443-7449).
+   */
   function searchBookcase(player) {
     search(player, TEXT.searchBookcase, () =>
-      heldAny(player, [I.RED_HERRING, I.STICKY_RED_GOOP]) ? null : { item: I.RED_HERRING, text: TEXT.herring });
+      heldAny(player, [I.RED_HERRING, I.STICKY_RED_GOOP, I.HERRING]) ? null : { item: I.RED_HERRING, text: TEXT.herring });
   }
 
   /** The red-herring piles (Wiki only). Swensen's boxes next door are not part of this. */
@@ -683,15 +691,37 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
     });
   }
 
-  /** Study: the line and the viking_mural interface (1001646 t3209-3210). */
+  /**
+   * Study: the line and the viking_mural interface (1001646 t3209-3210), with its pieces as live sets
+   * them (1002313 t7252, t7264): the six red coins, each black circle filled once its disk is in, and
+   * the lid's outline once both are. Ours: which circle is which disk (no capture has one disk in).
+   */
   function studyMural(player) {
     player.sendMessage(TEXT.muralStudy);
-    player.getPacketSender().sendInterface(MURAL_INTERFACE);
+    const out = player.getPacketSender();
+    const piece = (child, item, zoom) => out.sendItemOnInterfaces((MURAL_INTERFACE << 16) | child, item, zoom);
+    const bothIn = flag(player, FLAG.MURAL_OLD_DISK) && flag(player, FLAG.MURAL_RED_DISK);
+    const obj = (gameval) => api.core.CacheDefinitions.getObjId(gameval);
+    const coin = obj("viking_dummy_coin");
+    const hole = obj("viking_dummy_coin2");
+    if (bothIn) piece(MURAL_LID_CHILD, obj("viking_dummy_lid"), MURAL_LID_ZOOM);
+    for (const child of MURAL_COIN_CHILDREN) piece(child, coin, MURAL_COIN_ZOOM);
+    piece(MURAL_CIRCLE_CHILDREN[0], flag(player, FLAG.MURAL_OLD_DISK) ? coin : hole, MURAL_COIN_ZOOM);
+    piece(MURAL_CIRCLE_CHILDREN[1], flag(player, FLAG.MURAL_RED_DISK) ? coin : hole, MURAL_COIN_ZOOM);
+    out.sendInterfaceScript(TOPLEVEL_MAINMODAL_OPEN, [0, 150]);
+    out.sendInterface(MURAL_INTERFACE);
   }
+  const MURAL_LID_CHILD = 1;
+  const MURAL_COIN_CHILDREN = [8, 9, 10, 11, 12, 13];
+  const MURAL_CIRCLE_CHILDREN = [14, 15];
+  const MURAL_COIN_ZOOM = 116;
+  const MURAL_LID_ZOOM = 10;
+  const TOPLEVEL_MAINMODAL_OPEN = 2524;
 
   /**
    * A red disk fits (1002236, 1001646, either order): two lines and the disk goes; the second
-   * disk's centre falls out and the lid takes its slot. The wooden disk is too small (Wiki).
+   * disk's centre falls out and the lid goes to the first free slot (1002313 t7261, 1002236
+   * t10147). The wooden disk is too small (Wiki).
    */
   function diskOnMural(player, itemId, slot) {
     if (itemId === I.WOODEN_DISK) {
@@ -706,7 +736,8 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
     player.sendMessage(TEXT.muralFit);
     if (flag(player, FLAG.MURAL_OLD_DISK) && flag(player, FLAG.MURAL_RED_DISK)) {
       player.sendMessage(TEXT.muralDone);
-      swapInSlot(player, itemId, I.VASE_LID, slot);
+      removeAt(player, itemId, slot);
+      give(player, I.VASE_LID);
     } else {
       removeAt(player, itemId, slot);
     }
@@ -740,7 +771,10 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
     return say(player, `You fill the ${kind} from the tap.`);
   }
 
-  /** The drain: throw_bucketofwater + holy_water_pour, then the line (1002236 t10171). */
+  /**
+   * The drain: throw_bucketofwater + holy_water_pour on arrival; the next tick the vessel empties
+   * with the line (1002313 t7321-7322, 1002236 t10177-10178, 1001646 t3307-3308).
+   */
   function onDrain(player, itemId, slot) {
     if (itemId === I.VASE_2) return say(player, TEXT.vaseAlreadyEmpty);
     if (itemId === I.VASE_OF_WATER) {
@@ -749,10 +783,14 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
     }
     const kind = vessel(itemId);
     if (!kind || units(itemId) === 0) return false;
-    swapInSlot(player, itemId, kind === "bucket" ? I.EMPTY_BUCKET : I.EMPTY_JUG, slot);
     player.performAnimation(new Animation(SEQ_POUR));
     player.getPacketSender().sendSound(SYNTH_POUR, 1, 0);
-    return say(player, `You empty the ${kind} down the drain.`);
+    ctx.later(player, 1, () => {
+      if (!inHouse(player) || player.getInventory().forSlot(slot)?.getId() !== itemId) return;
+      swapInSlot(player, itemId, kind === "bucket" ? I.EMPTY_BUCKET : I.EMPTY_JUG, slot);
+      player.sendMessage(`You empty the ${kind} down the drain.`);
+    });
+    return true;
   }
 
   /** Jug into bucket or back (1002236 t10175-10195, 1001646 t3291-3354; the rest Wiki). */
@@ -860,10 +898,13 @@ module.exports = function attachFremennikTrialsSeer(api, ctx) {
       removeAt(player, I.STICKY_RED_GOOP, slotOf(I.STICKY_RED_GOOP));
       done = say(player, TEXT.coat);
     } else if (pair(I.VASE_LID, I.VASE_OF_WATER) || pair(I.VASE_LID, I.VASE_2)) {
-      // 1002236 t10223, either way round: the vase's slot is sealed, the lid goes.
+      // Either way round, the lower of the two slots is sealed and the other cleared (1002236
+      // t10223: vase in 0, lid in 1; 1002313 t7380: lid in 1, vase in 2).
       const vase = a === I.VASE_LID ? b : a;
-      swapInSlot(player, vase, vase === I.VASE_OF_WATER ? I.SEALED_VASE_3 : I.SEALED_VASE, slotOf(vase));
-      removeAt(player, I.VASE_LID, slotOf(I.VASE_LID));
+      const sealed = vase === I.VASE_OF_WATER ? I.SEALED_VASE_3 : I.SEALED_VASE;
+      const [keep, drop] = slotOf(vase) < slotOf(I.VASE_LID) ? [vase, I.VASE_LID] : [I.VASE_LID, vase];
+      swapInSlot(player, keep, sealed, slotOf(keep));
+      removeAt(player, drop, slotOf(drop));
       done = say(player, TEXT.lid);
     } else if (pair(I.VASE_LID, I.FROZEN_VASE)) {
       done = say(player, TEXT.lidIce);

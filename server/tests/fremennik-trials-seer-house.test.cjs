@@ -50,6 +50,7 @@ const LOC = {
   FROZEN_TABLE: { id: 4169, x: 2638, y: 3665 },
   MURAL: { id: 4179, x: 2634, y: 3663 },
   SW_BOXES: { id: 4183, x: 2633, y: 3660 },
+  MAGNET_BOXES: { id: 4183, x: 2636, y: 3660 },
   SWENSEN_BOXES: { id: 3685, x: 2647, y: 3662 },
 };
 const INVISWALL = 38848;
@@ -111,7 +112,7 @@ function actor(t, { at = [2631, 3664, 0], seer = 1, stage = 1, items = [], flags
   return f;
 }
 
-const RECORDED = /^(sendObject|sendObjectRemoval|sendSound|sendInterface|sendConfig)$/;
+const RECORDED = /^(sendObject|sendObjectRemoval|sendSound|sendInterface|sendConfig|sendItemOnInterfaces)$/;
 function record(f) {
   const sender = f.player.getPacketSender();
   const proto = Object.getPrototypeOf(sender);
@@ -210,11 +211,9 @@ const locFor = (f, id, loc, z = 2) => core.MapObjects.getPrivateArea(f.player, i
 test("Peer's offer: Yes starts the trial and his spell banks everything carried", async (t) => {
   const f = actor(t, { at: [2634, 3669, 0], seer: 0, items: [I.BRONZE_DAGGER, I.LOBSTER] });
   core.World.processCycle++;
+  // The Merchant's trial passed: Talk-to opens straight on his offer (rsprox 1002313 t6907).
   PM.emitCustomEvent("npc-dialogue:start", { player: f.player, npcId: PEER });
   tick(f);
-  assert.deepEqual(shown(f).options.slice(0, 2), ["Ask about the Merchant's trial", "Ask about becoming a Fremennik"]);
-  await choose(f, "Ask about becoming a Fremennik");
-  ticks(f, 2);
   const lines = [];
   for (let i = 0; i < 60; i++) {
     const now = shown(f);
@@ -304,12 +303,13 @@ test("the key opens the exit: the key and the house items go, the trial passes, 
 test("leaving by the entrance from inside: the Wiki's warning, then the house items are gone", async (t) => {
   const f = actor(t, { at: [2631, 3665, 0], items: [I.EMPTY_BUCKET, I.OLD_RED_DISK, I.HERRING], flags: (1 << FLAG_RIDDLE) | (1 << FLAG_RED_DISK) });
   await click(f, LOC.ENTRANCE, 1, 3);
-  assert.deepEqual(shown(f), { who: "StatementDialogue", text: "If you leave by this door you will fail this trial. Press continue to go through the door anyway." });
+  assert.deepEqual(shown(f), { who: "StatementDialogue", text: "If you leave by this door you will fail this trial.<br>Press continue to go through the door anyway." });
   await continueLine(f);
   tick(f);
   assert.ok(tileIs(f, 2631, 3667, 0), where(f));
   assert.deepEqual(inv(f), [I.HERRING]);
-  assert.ok(!flagSet(f, FLAG_RIDDLE) && !flagSet(f, FLAG_RED_DISK));
+  // The riddle stays solved: 1002313 walked back in at once (t7182 -> t7195).
+  assert.ok(flagSet(f, FLAG_RIDDLE) && !flagSet(f, FLAG_RED_DISK));
   assert.ok(objectsSent(f, "sendObject").some((object) => object.id === INVISWALL && object.x === 2631));
 });
 
@@ -396,9 +396,13 @@ test("Swensen's boxes next door give no puzzle items; the house's own do", async
   const swensen = actor(t, { at: [2647, 3663, 0] });
   await click(swensen, LOC.SWENSEN_BOXES, 1, 6);
   assert.ok(![I.MAGNET_2, I.BLUE_THREAD, I.TOY_SHIP, I.SMALL_PICK].some((id) => has(swensen, id)), JSON.stringify(inv(swensen)));
-  const f = actor(t, { at: [2633, 3661, 2] });
-  await click(f, LOC.SW_BOXES, 1, 6);
+  // The magnet is in the pile at 2636,3660 (rsprox 1002313 t7450); the one at 2633 has nothing.
+  const f = actor(t, { at: [2636, 3661, 2] });
+  await click(f, LOC.MAGNET_BOXES, 1, 6);
   assert.deepEqual(f.messages, ["You search the boxes...", "You find a magnet hidden inside."]);
+  const west = actor(t, { at: [2633, 3661, 2] });
+  await click(west, LOC.SW_BOXES, 1, 6);
+  assert.deepEqual(west.messages, ["You search the boxes...", "You find nothing of interest."]);
 });
 
 // ---- heads, mural, puzzle chain --------------------------------------------------------------------
@@ -518,4 +522,68 @@ test("before the quest, Peer shouts at a player trying his front door (Peer's pa
   assert.equal(shown(f)?.who, "NpcDialogue");
   assert.match(shown(f).text.replace(/<br>/g, " "), /^Hey! Outerlander! That is my house!/);
   assert.ok(f.player.getLocation().getY() >= 3667, "the door stays shut");
+});
+
+// ---- rsprox 1002313 (rev 243), t7261-t7483 -----------------------------------------------------------
+
+test("the second disk's lid goes to the first free slot, not the disk's (rsprox 1002313 t7261)", async (t) => {
+  // Live: slot 1 free (the first disk had left it), the second disk in slot 2: the lid lands in slot 1.
+  const f = actor(t, { at: [2635, 3663, 0], items: [I.HERRING, I.OLD_RED_DISK, I.RED_DISK_3] });
+  await use(f, I.OLD_RED_DISK, LOC.MURAL);
+  await use(f, I.RED_DISK_3, LOC.MURAL);
+  assert.equal(f.player.getInventory().forSlot(1)?.getId(), I.VASE_LID);
+  assert.ok(!(f.player.getInventory().forSlot(2)?.getId() > 0), "the disk's slot is empty");
+});
+
+test("the lid seals the vase of water in the lower of the two slots (rsprox 1002313 t7380)", async (t) => {
+  // Live: lid in slot 1 on the vase of water in slot 2 -> the sealed vase in slot 1, slot 2 empty.
+  const f = actor(t, { at: [2630, 3661, 2], items: [I.HERRING, I.VASE_LID, I.VASE_OF_WATER] });
+  await combine(f, I.VASE_LID, I.VASE_OF_WATER);
+  assert.equal(f.player.getInventory().forSlot(1)?.getId(), I.SEALED_VASE_3);
+  assert.ok(!(f.player.getInventory().forSlot(2)?.getId() > 0));
+});
+
+test("the drain: the anim and sound on arrival, the jug empties with the line a tick later (rsprox 1002313 t7321-7322)", async (t) => {
+  const f = actor(t, { at: [2630, 3662, 2], items: [I.FULL_JUG] });
+  await f.connection.dispatch([{ type: "item_on_object", objectId: LOC.DRAIN.id, x: LOC.DRAIN.x, y: LOC.DRAIN.y, itemId: I.FULL_JUG, slot: 0, widgetId: core.Inventory.INTERFACE_ID }]);
+  for (let i = 0; i < 6 && !f.anims.some((anim) => anim.id === 1077); i++) tick(f);
+  const poured = f.anims.find((anim) => anim.id === 1077).tick;
+  assert.ok(has(f, I.FULL_JUG), "still full on the pour tick");
+  assert.deepEqual(f.messages, []);
+  tick(f);
+  assert.equal(f.tick, poured + 1);
+  assert.deepEqual(f.messages, ["You empty the jug down the drain."]);
+  assert.ok(has(f, I.EMPTY_JUG));
+});
+
+test("the east chest holds a jug too, even with a jug of water held (rsprox 1002313 t7474-7483)", async (t) => {
+  const EAST_CHEST = { id: 4167, x: 2638, y: 3662 };
+  const EAST_CHEST_OPEN = { id: 4168, x: 2638, y: 3662 };
+  const f = actor(t, { at: [2637, 3662, 2], items: [I.FULL_JUG] });
+  await click(f, EAST_CHEST, 1, 2);
+  await click(f, EAST_CHEST_OPEN, 2, 5);
+  assert.deepEqual(f.messages, ["You search the chest...", "You find a jug with a number three painted on it."]);
+  assert.ok(has(f, I.EMPTY_JUG));
+  // With an empty jug held: nothing (1001646 t3280).
+  f.messages.length = 0;
+  await click(f, EAST_CHEST_OPEN, 2, 5);
+  assert.deepEqual(f.messages, ["You search the chest...", "You find nothing of interest."]);
+});
+
+test("a second bookcase search finds nothing while the cooked herring is held (rsprox 1002313 t7443-7449)", async (t) => {
+  const f = actor(t, { at: [2635, 3664, 2], items: [I.HERRING] });
+  await click(f, LOC.BOOKCASE, 1, 5);
+  assert.deepEqual(f.messages, ["You search the bookcase...", "You find nothing of interest."]);
+  assert.ok(!has(f, I.RED_HERRING));
+});
+
+test("the mural shows its coins, empty circles and, once both disks are in, the lid (rsprox 1002313 t7252, t7264)", async (t) => {
+  const pieces = (f) => f.calls.filter((call) => call.name === "sendItemOnInterfaces" && call.args[0] >>> 16 === 376)
+    .map((call) => [call.args[0] & 0xffff, call.args[1], call.args[2]]);
+  const before = actor(t, { at: [2635, 3663, 0] });
+  await click(before, LOC.MURAL, 1, 4);
+  assert.deepEqual(pieces(before), [8, 9, 10, 11, 12, 13].map((child) => [child, 3715, 116]).concat([[14, 3716, 116], [15, 3716, 116]]));
+  const done = actor(t, { at: [2635, 3663, 0], flags: (1 << FLAG_OLD_DISK) | (1 << FLAG_RED_DISK) });
+  await click(done, LOC.MURAL, 1, 4);
+  assert.deepEqual(pieces(done), [[1, 3717, 10], ...[8, 9, 10, 11, 12, 13, 14, 15].map((child) => [child, 3715, 116])]);
 });

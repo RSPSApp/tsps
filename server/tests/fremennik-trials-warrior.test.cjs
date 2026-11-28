@@ -147,10 +147,10 @@ async function climb(f, ladder, clickType) {
   for (let i = 0; i < 6; i++) tick(f);
 }
 
-/** Into the arena and standing still until Koschei comes. */
+/** Into the arena until Koschei comes (24-55 ticks after entering). */
 async function untilKoschei(f) {
   f.player.moveTo(new core.Location(...STAND));
-  for (let i = 0; i < 25 && !koschei(f); i++) tick(f);
+  for (let i = 0; i < 60 && !koschei(f); i++) tick(f);
   const npc = koschei(f);
   assert.ok(npc, "Koschei appears");
   return npc;
@@ -203,21 +203,24 @@ test("unarmed (food and jewellery allowed), the ladder takes the player down; no
   assert.equal(f.player.getInventory().getAmount(core.ItemIdentifiers.LOBSTER), 1);
 });
 
-test("Koschei appears next to a player who has stood a while, owner-only, with smoke, sound and hint", async (t) => {
+test("Koschei appears 24-55 ticks into the arena even while walking, owner-only, with smoke, sound and hint", async (t) => {
+  // rsprox 1002313 t4728 -> t4783: the player walked nearly every tick and he still came, 55 ticks in.
   const f = actor(t, { at: ENTRY });
-  f.player.moveTo(new core.Location(...STAND));
-  tick(f);
-  const stopped = f.tick;
+  const entered = f.tick;
   let npc;
-  for (let i = 0; i < 25 && !(npc = koschei(f)); i++) tick(f);
-  assert.ok(npc);
-  const after = f.tick - stopped;
-  assert.ok(after >= 9 && after <= 16, `came ${after} ticks after stopping`);
+  for (let i = 0; i < 60 && !(npc = koschei(f)); i++) {
+    f.player.moveTo(new core.Location(STAND[0] + (i % 2), STAND[1], STAND[2]));
+    tick(f);
+  }
+  assert.ok(npc, "Koschei came although the player never stood still");
+  const after = f.tick - entered;
+  assert.ok(after >= 24 && after <= 57, `came ${after} ticks after entering`);
+  const here = f.player.getLocation();
+  const dx = Math.abs(npc.getLocation().getX() - here.getX());
+  const dy = Math.abs(npc.getLocation().getY() - here.getY());
+  assert.ok(Math.max(dx, dy) === 1, "on a tile next to the player");
   assert.equal(npc.getId(), FORMS[0]);
   assert.equal(npc.isOwnerOnly(), true);
-  const dx = Math.abs(npc.getLocation().getX() - STAND[0]);
-  const dy = Math.abs(npc.getLocation().getY() - STAND[1]);
-  assert.ok(Math.max(dx, dy) === 1, "on a tile next to the player");
   const name = f.player.getDisplayName?.() ?? f.player.getUsername();
   const overhead = said.filter((entry) => entry.npc === npc).map((entry) => entry.text);
   assert.equal(overhead.length, 1);
@@ -256,9 +259,11 @@ test("one NPC transforms through the forms with each form's line; form 4 takes t
   const swings = [];
   const animate = npc.performAnimation.bind(npc);
   npc.performAnimation = (a) => { swings.push(f.tick); return animate(a); };
-  f.player.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 30, true);
-  tick(f);
-  assert.equal(prayer(f), 0, "kept at 0 through form 4");
+  // A restore works, then drains a tenth a tick (rsprox 1002313 t5162-5168: 36, 32, 29, 26, 23, 21).
+  f.player.getSkillManager().setCurrentLevel(core.Skill.PRAYER, 36, true);
+  const drained = [];
+  for (let i = 0; i < 5; i++) { tick(f); drained.push(prayer(f)); }
+  assert.deepEqual(drained, [32, 29, 26, 23, 21]);
   ticks(f, 10);
   assert.ok(swings.length >= 9, `form 4 swings every tick: ${swings}`);
   assert.ok(hp(f) >= 73 - 11, "for at most 1 a hit");
@@ -407,4 +412,25 @@ test("ten minutes in form 3 (Wiki, data ppj2xU): Koschei leaves and the fight st
     "You will need to improve your combat skills before challenging him again."]);
   assert.equal(trial(f), 1);
   assert.equal(f.hints.at(-1).npc, null);
+});
+
+test("a worn combat bracelet is jewellery: the hut ladder lets the player down (rsprox 1002313 t4724-4728)", async (t) => {
+  const f = actor(t, { worn: [[core.Equipment.HANDS_SLOT, core.ItemIdentifiers.COMBAT_BRACELET_2_]] });
+  await climb(f, HUT_LADDER, 2);
+  assert.ok(atTile(f, ENTRY), `at ${f.player.getLocation()}`);
+});
+
+test("form 4 has no time limit: 1002313 fought it 1409 ticks (t5138-t6547) and he stayed", async (t) => {
+  const f = actor(t, { at: ENTRY });
+  const npc = await untilKoschei(f);
+  for (let i = 0; i < 3; i++) { knockOut(f, npc); await continueLine(f); }
+  assert.equal(npc.getId(), FORMS[3]);
+  f.player.setAutoRetaliate(false);
+  f.player.getCombat().reset();
+  for (let i = 0; i < 1005; i++) {
+    f.player.getSkillManager().setCurrentLevel(core.Skill.HITPOINTS, 73, false);
+    tick(f);
+  }
+  assert.equal(npc.isRegistered(), true, "still there after ten minutes in form 4");
+  assert.ok(!texts(f).includes("You have failed to impress Koschei. He has left in disgust."));
 });

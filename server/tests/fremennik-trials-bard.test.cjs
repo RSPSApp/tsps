@@ -371,9 +371,11 @@ test("off stage the enchanted lyre is tuned and kept; walking stops the tuning",
   const f = actor(t, { at: ALTAR.stand, items: [I.ENCHANTED_LYRE] });
   await play(f, I.ENCHANTED_LYRE);
   const click = f.tick;
+  // Standing still, the withdraw is on the click tick and the scale starts a tick later (1002313 t536).
+  assert.deepEqual(f.messages, ["You withdraw your lyre."]);
   ticks(f, 17);
   assert.deepEqual(f.said.map((s) => [s.tick - click, s.text]),
-    [[2, "Doh Ray Me So."], [5, "Fah La Ti Doh."], [8, "La La La La."], [11, "De-Doo-De-Doo."]]);
+    [[1, "Doh Ray Me So."], [4, "Fah La Ti Doh."], [7, "La La La La."], [10, "De-Doo-De-Doo."]]);
   assert.deepEqual(f.messages, ["You withdraw your lyre.", "Your lyre is perfectly tuned."]);
   assert.deepEqual(callsOf(f, "sendJingle").map((call) => call.args[0]), [165, 164, 164, 164, 163]);
   assert.equal(held(f, I.ENCHANTED_LYRE), 1);
@@ -412,7 +414,7 @@ test("the performance: ballad, messages, Olaf's two lines, then the trial on the
   assert.equal(shown(f)?.text, "You have certainly earned my vote! I hope we can duet together soon!");
   await continueLine(f);
   assert.equal(shown(f), null);
-  assert.equal(f.messages.at(-1), "You feel the musical ability from the Fossegrimen leave you...");
+  assert.equal(f.messages.at(-1), "You feel the musical ability from Fossegrimen leave you...");
   assert.equal(quest().getStage(f.player), 2);
   assert.equal(held(f, I.ENCHANTED_LYRE), 0);
   assert.equal(held(f, I.LYRE), 1);
@@ -479,7 +481,8 @@ test("Askeladden after the rock: the again talk, and the form varbit comes back 
   assert.equal(held(f, I.PET_ROCK), 1);
 });
 
-test("Summon with a raw shark held offers it as the altar does", async (t) => {
+test("Summon with a raw shark held offers it as the altar does, on the pick's tick", async (t) => {
+  // rsprox 1002313 t524: the slot swap, the message and her blessing all come as "Raw shark." is picked.
   const f = actor(t, { at: ALTAR.stand, items: [I.LYRE, I.RAW_SHARK] });
   await objectOption(f, ALTAR, 1);
   for (let i = 0; i < 3 && !shown(f); i++) tick(f);
@@ -487,7 +490,6 @@ test("Summon with a raw shark held offers it as the altar does", async (t) => {
   await continueLine(f);
   await choose(f, "Present offering of a single fish.");
   await choose(f, "Raw shark.");
-  ticks(f, 2);
   assert.equal(held(f, I.ENCHANTED_LYRE), 1);
   assert.equal(held(f, I.RAW_SHARK), 0);
   assert.equal(shown(f)?.text, "Many thanks for the offering outerlander. Please accept as a gift the ability to play your lyre...");
@@ -500,4 +502,31 @@ test("without any achievement the player sings the plain ballad (Wiki)", async (
   const lines = f.said.map((s) => s.text);
   assert.equal(lines[0], `${f.player.getUsername()} is my name,`.replace(f.player.getUsername(), f.player.getDisplayName?.() ?? f.player.getUsername()));
   assert.equal(lines[3], "I'll just go ahead and play.");
+});
+
+test("golden wool strings into the lower of the two slots (rsprox 1002313 t331, 1002247 t5862)", async (t) => {
+  // Wool in slot 0 used on the lyre in slot 1: the strung lyre takes slot 0, and slot 1 empties.
+  const f = actor(t, { at: TREE.stand, items: [I.GOLDEN_WOOL, I.UNSTRUNG_LYRE], levels: { FLETCHING: 30 } });
+  await useOnItem(f, I.GOLDEN_WOOL, I.UNSTRUNG_LYRE);
+  assert.equal(f.player.getInventory().forSlot(0)?.getId(), I.LYRE);
+  assert.ok(!(f.player.getInventory().forSlot(1)?.getId() > 0));
+});
+
+test("Askeladden's lost-rock branch hands the rock over as 'Sure thing buddy!' shows (rsprox 1002313 t119)", async (t) => {
+  const f = actor(t, { at: [2660, 3660, 0] });
+  f.player.setAttribute("quest.fremennik_trials.bard", 1 << 1);
+  PM.emitCustomEvent("npc-dialogue:start", { player: f.player, npcId: 8403, variant: `${P}-talking-to-askeladden-talking-to-askeladden-again` });
+  tick(f);
+  await untilLine(f, "Can I have another rock? I lost mine...");
+  assert.equal(held(f, I.PET_ROCK), 0);
+  await continueLine(f);
+  assert.ok(shown(f)?.text.startsWith("Sure thing buddy! I'd say take better care of this one"));
+  assert.equal(held(f, I.PET_ROCK), 1);
+  await continueLine(f);
+  assert.equal(held(f, I.PET_ROCK), 1, "one rock");
+});
+
+test("after the Bard's trial Askeladden plays his own talk (rsprox 1002313 t2883)", async (t) => {
+  const f = actor(t, { at: [2660, 3660, 0], bard: 2 });
+  assert.equal(variantFor(f, 8402), "the-non-council-members-askeladden");
 });

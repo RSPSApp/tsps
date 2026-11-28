@@ -344,7 +344,7 @@ function answerCondition(event) {
 
 /** Fills the transcripts' blanks ("[amount]", "[task monster]", "[task streak amount]", Mortimer's "[X]"). */
 function fillLine(request) {
-  if (!/\[(amount|number|task monster|monster|task streak amount|X)\]/.test(request.text ?? "")) return;
+  if (!/\[(amount|number|task monster|monster|task streak amount|X|area)\]/.test(request.text ?? "")) return;
   const master = masterFor(request.definition);
   if (!master) return;
   const task = Tasks.current(request.player);
@@ -363,8 +363,15 @@ function fillLine(request) {
     .replace(/Wilderness task streak of \[task streak amount\]/g, `Wilderness task streak of ${wildernessStreak}`)
     .replace(/\[task streak amount\]/g, String(streak))
     .replace(/\[X\]/g, String(mortimerTasks(request.player)))
+    // Konar's contact line carries two [amount] blanks; the second is the tally, which is the
+    // player's points, not the task's count. Filled here, before the generic blank takes it.
+    .replace(/reward point tally is \[amount\]/g, `reward point tally is ${State.varbit(request.player, "slayer_points")}`)
     .replace(/\[(amount|number)\]/g, String(task?.count ?? 0))
-    .replace(/\[(task monster|monster)\]/g, Tasks.taskName(task?.task));
+    .replace(/\[(task monster|monster)\]/g, Tasks.taskName(task?.task))
+    // The item contact's Konar line reads "in [area]" and every area text already carries its own
+    // preposition ("in the Crypt of Tonali"), so the transcript's " in" goes with the blank. A task
+    // with no area (another master's) drops it.
+    .replace(/ in \[area\]/g, task?.area?.text ? ` ${task.area.text}` : "");
 }
 
 /**

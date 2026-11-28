@@ -378,6 +378,46 @@ test("the slayer ring's Rub submenu is its three actions, not the destinations (
   }
 });
 
+test("the slayer ring's Rub rows reach content as jewellery:action (#6923)", () => {
+  const player = createPlayer();
+  const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
+  player.inventory.setItem(0, ring);
+
+  // The cache's Contact Master row (item 11866 subops[1]); the ring's rows are actions, so the
+  // click is taken and handed to content as an event — the row is never a destination.
+  const from = customEvents.length;
+  const event = inventoryClick(player, ring, "Rub", { subOpId: 1 });
+  const actions = customEvents.slice(from).filter(([name]) => name === "jewellery:action").map(([, payload]) => payload);
+  assert.equal(event.handled, true, "the row is answered");
+  assert.equal(actions.length, 1, "one action, not one per row");
+  assert.equal(actions[0].action, "Contact Master");
+  assert.equal(actions[0].equipped, false, "the inventory's Rub row");
+  assert.equal(actions[0].item, ring);
+  assert.equal(actions[0].player, player);
+  assert.equal(prompts.length, 0, "no destination prompt");
+  assert.equal(teleports.length, 0, "no teleport");
+});
+
+test("the worn ring's Master op reaches content as jewellery:action (#6923)", () => {
+  const player = createPlayer();
+  const ring = new Item(ItemIds.SLAYER_RING_8_, 1);
+  player.equipment.setItem(Equipment.RING_SLOT, ring);
+
+  // Worn options: Check, Teleport, Master, Partner, Log (params 451-455). Master is click 4 and
+  // names no destination, so it goes the new worn branch's way: an action event, not a prompt.
+  const from = customEvents.length;
+  const event = equippedClick(player, ring, 4, "Master");
+  const actions = customEvents.slice(from).filter(([name]) => name === "jewellery:action").map(([, payload]) => payload);
+  assert.equal(event.handled, true, "the op is answered");
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].action, "Master");
+  assert.equal(actions[0].equipped, true, "the worn op");
+  assert.equal(actions[0].item, ring);
+  assert.equal(prompts.length, 0, "Master is not a destination");
+  assert.equal(teleports.length, 0);
+  assert.equal(ring.getId(), ItemIds.SLAYER_RING_8_, "no charge spent");
+});
+
 test("the slayer ring's Teleport submenu teleports to the row it names (#6870)", () => {
   const player = createPlayer();
   const ring = new Item(ItemIds.SLAYER_RING_8_, 1);

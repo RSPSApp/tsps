@@ -313,7 +313,9 @@ const JEWELLERY = [
     // are actions (Contact Master, Partner, Open Log) and Teleport's are the destinations below.
     // A bare Teleport click still offers the list, which a client without the flyout needs.
     teleportOptions: ["Teleport"],
-    actionRows: ["Contact Master", "Partner", "Open Log"],
+    // The worn ring names the first one "Master" (item param 453) where Rub's row says "Contact
+    // Master"; both are the same action.
+    actionRows: ["Contact Master", "Master", "Partner", "Open Log"],
     destinations: [
       // Wiki (Slayer ring, Teleports): Slayer Tower needs Priest in Peril, Tarn's Lair Haunted Mine, Dark Beasts
       // Mourning's End Part II, Wyrmscraig Cavern (added 29 July 2026, near Mortimer) Fallen From Grace.

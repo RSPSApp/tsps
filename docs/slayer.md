@@ -374,6 +374,17 @@ rsprox captures, rev 242 (recordings 1002084 t127, 1002067 t185-t2842, 1001683, 
   line, red but for the task and its count ("<col=ef1020>You're assigned to kill </col>bats<col=ef1020>;
   only </col>17<col=ef1020> more to go."), with a Konar area after the task name; then the streak
   line. With no task, "You need something new to hunt."
+- **Contact Master** (the ring's Rub row and worn "Master" option; no capture, so the Wiki's own
+  transcripts): the master who assigned the current task, or, with none held, the most advanced the
+  player may take tasks from (Wiki, Enchanted gem; Slayer ring) — that rung's combat and Slayer
+  levels *and* the quest it needs (Wiki, Slayer Master: Mazchna Priest in Peril, Chaeldar Lost City,
+  Duradel Shilo Village, Mortimer Fallen From Grace far enough to enter Wyrmscraig Cavern, the
+  stage the quest first puts the player there). Konar during a task plays
+  "via-an-enchanted-gem-or-a-slayer-ring-during-a-task" whole — "How am I doing so far?", "Who are
+  you?", "Where are you?", "Got any tips for me?", "Nothing really." — and every other master plays
+  "via-the-astral-contact-spell" with its assignment row taken out, since the ring cannot assign
+  tasks, spend points or sell equipment. Nieve and Spria have neither variant: their page default
+  plays, filtered the same way.
 - **Slayer helmet** (recordings 1040, 95, 1864, 4099; 76 for the lock):
   - assembling: "You combine the items into a Slayer helm." (spam, sound 2241); without the
     Malevolent masquerade, "You have not unlocked the ability to combine these items.";
@@ -479,5 +490,5 @@ Konar's lines are the Wiki's.
   Disassemble gives none back); the Tztok, Vampyric and Tzkal recolours (Ghommal, Laidee Gnonock);
   making, reverting and disassembling the Radiant helmet.
 - **Slayer helper:** the slayer ring's and helmet's Check (no rev 242 capture of them) don't open it.
-- **Equipment and monsters:** the gem's, ring's and helmet's Partner and Log, the ring's Contact
-  Master, killerwatts, fever spiders, harpie bug swarms and mogres. Zygomites don't regenerate.
+- **Equipment and monsters:** the gem's, ring's and helmet's Partner and Log, killerwatts, fever
+  spiders, harpie bug swarms and mogres. Zygomites don't regenerate.

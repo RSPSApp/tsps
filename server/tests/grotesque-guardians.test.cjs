@@ -75,6 +75,10 @@ function fakeGuardian(id, x, y, hp = 450) {
     getMaxHitpoints: () => 450,
     performAnimation: (anim) => npc.anims.push(anim.getId?.() ?? anim),
     getCombat: () => ({ reset: () => {}, setAttackDelay: () => {} }),
+    visible: true, untargetable: false, movedTo: null,
+    setVisible: (visible) => { npc.visible = visible; },
+    setUntargetable: (untargetable) => { npc.untargetable = untargetable; },
+    moveTo: (to) => { npc.movedTo = to; },
   };
   return npc;
 }
@@ -92,9 +96,12 @@ function fakePlayer(x = 1695, y = 4575) {
     sendMessage: (m) => player.messages.push(m),
     getAttribute: (key) => player.attributes[key],
     setAttribute: (key, value) => { player.attributes[key] = value; },
-    boxes: [], anims: [], sounds: [], locAnims: [], faded: [],
+    boxes: [], anims: [], sounds: [], locAnims: [], faded: [], graphics: [], tileGraphics: [], areaSounds: [],
+    performGraphic: (graphic) => player.graphics.push(graphic),
+    getBlockAnim: () => 424,
     getPacketSender: () => ({
-      sendGraphic: () => {},
+      sendGraphic: (graphic, tile) => player.tileGraphics.push({ id: graphic.getId(), delay: graphic.getDelay(), tile }),
+      sendAreaSound: (id, x, y, level, loops, delay, radius) => player.areaSounds.push({ id, x, y, delay, radius }),
       sendVarbit: (id, value) => { player.varbits[id] = value; },
       sendObjectAnimation: (object, anim) => player.locAnims.push([object, anim.getId?.() ?? anim]),
       sendSound: (id, volume, delay) => player.sounds.push([id, delay]),
@@ -160,6 +167,34 @@ test('phase 1: only Dawn can be hurt; at half health she flies up and Dusk fight
   assert.equal(dusk.getId(), Common.ids.npcs.duskPhase2);
   assert.equal(fight.vulnerable(dawn), false);
   assert.equal(fight.vulnerable(dusk), true);
+});
+
+test('at half health Dawn flies up and leaves the roof, and comes back down for phase 3 (rsprox)', () => {
+  const { fight, dusk, dawn, player } = newFight();
+  const flyUp = Common.ids.seqs.dawnFlyUp;
+  dawn.hitpoints = 225;
+  fight.tick([player]);
+  assert.equal(dawn.getId(), Common.ids.npcs.dawnFlying);
+  assert.equal(dawn.untargetable, true);
+  assert.equal(dawn.anims.includes(flyUp), false);
+  for (let i = 0; i < 2; i++) fight.tick([player]);
+  assert.equal(dawn.anims.includes(flyUp), false);
+  fight.tick([player]);
+  assert.equal(dawn.anims.at(-1), flyUp, '3 ticks after taking her flying form');
+  assert.equal(dawn.visible, true);
+  fight.tick([player]);
+  assert.equal(dawn.visible, true);
+  fight.tick([player]);
+  assert.equal(dawn.visible, false, '2 ticks after the climb');
+
+  dusk.hitpoints = 220;
+  fight.tick([player]);
+  assert.equal(fight.phase, 3);
+  assert.equal(dawn.visible, true);
+  assert.equal(dawn.untargetable, false);
+  assert.deepEqual([dawn.movedTo.getX(), dawn.movedTo.getY()], Common.data.roof.dawnPerch);
+  assert.equal(dawn.anims.at(-1), Common.ids.seqs.dawnFlyDown);
+  assert.equal(dawn.hitpoints, 225, 'the same Dawn, with the health she left with');
 });
 
 test('Echo Guardians reuse the ordinary phases with proportional health and archived forms', () => {
@@ -292,15 +327,82 @@ test('stepping onto the gap escapes the prison', () => {
   assert.equal(dusk.hitpoints, 450);
 });
 
-test('phase 2 rocks fall on the floor only; a direct hit stuns', () => {
-  const { fight, player } = newFight();
+test('phase 2 rocks: 3 near the player, the rest across the roof, each shadowed for as long as it falls', t => {
+  const sent = [];
+  t.mock.method(core.Projectile.prototype, 'sendProjectile', function () { sent.push(this); });
+  const { rockfall } = Common.data;
+  let onPlayer = 0;
+  for (let fall = 0; fall < 200; fall++) {
+    sent.length = 0;
+    const { fight, player } = newFight(fakePlayer(1695, 4575));
+    fight.dropRocks(player);
+    assert.ok(fight.rocks.length >= rockfall.rocks[0] && fight.rocks.length <= rockfall.rocks[1]);
+    assert.ok(fight.rocks.every((rock) => fakeRoof(null).contains(rock.tile)));
+    assert.ok(fight.rocks.filter((rock) => Common.chebyshev(rock.tile, player.getLocation()) <= 3).length >= 3);
+    if (fight.rocks.some((rock) => Common.chebyshev(rock.tile, player.getLocation()) === 0)) onPlayer += 1;
+    assert.equal(sent.length, fight.rocks.length);
+    assert.equal(player.areaSounds.length, fight.rocks.length);
+    fight.rocks.forEach((rock, i) => {
+      const speed = rockfall.speeds.find((s) => s.ticks === rock.lands - fight.tickCount);
+      const shot = sent[i];
+      assert.ok(speed, 'lands in 6 to 9 ticks');
+      assert.ok(shot.delay >= 90 && shot.delay <= 106);
+      assert.deepEqual([shot.speed, shot.startHeight, shot.endHeight], [speed.endCycles, 200, 2]);
+      assert.deepEqual([shot.end.getX(), shot.end.getY()], [rock.tile.getX(), rock.tile.getY()]);
+      const shadow = player.tileGraphics[i];
+      assert.deepEqual([shadow.id, shadow.delay], [Common.ids.spotanims[speed.shadow], shot.delay - 90]);
+    });
+  }
+  assert.ok(onPlayer > 0 && onPlayer < 60, `a rock on the player's own tile is chance, not aim (${onPlayer}/200)`);
+});
+
+test('a rock on the player knocks them out with stars, block and sound; one beside them only hurts', () => {
+  const { fight, player } = newFight(fakePlayer(1695, 4575));
   fight.phase = 2;
-  fight.dropRocks(player);
-  assert.ok(fight.rocks.length > 1);
-  assert.ok(fight.rocks.every((rock) => fakeRoof(null).contains(rock.tile)));
-  for (let i = 0; i < Common.data.rockfall.warnTicks; i++) fight.tick([player]);
+  fight.rocks = [{ tile: loc(1696, 4575), lands: 1 }];
+  fight.tick([player]);
+  assert.equal(player.damage.length, 1);
+  assert.equal(player.blocked, false);
+  fight.rocks = [{ tile: loc(1695, 4575), lands: 2 }];
+  fight.tick([player]);
   assert.equal(player.blocked, true);
-  assert.ok(player.damage.length >= 1);
+  const [stars] = player.graphics;
+  assert.deepEqual([stars.getId(), stars.getHeight()], [245, 124]);
+  assert.equal(player.anims.at(-1), 424);
+  assert.deepEqual(player.sounds.at(-1), [2727, 0]);
+});
+
+test('a player who never moves is never held from one rockfall into the next', t => {
+  t.mock.method(core.Projectile.prototype, 'sendProjectile', () => {});
+  const { rockfall } = Common.data;
+  const { fight, player } = newFight(fakePlayer(1695, 4575));
+  const drop = fight.dropRocks.bind(fight);
+  const falls = [];
+  // Every rockfall puts its slowest rocks right on the player.
+  fight.dropRocks = (target) => {
+    falls.push(fight.tickCount);
+    drop(target);
+    for (const rock of fight.rocks) Object.assign(rock, { tile: target.getLocation(), lands: fight.tickCount + 9 });
+  };
+  fight.dawn.hitpoints = 225;
+  let releaseAt = Infinity;
+  let knockouts = 0;
+  for (let i = 0; i < 400; i++) {
+    const free = !player.blocked;
+    const seen = player.graphics.length;
+    fight.tick([player]);
+    if (player.graphics.length > seen) {
+      if (releaseAt === Infinity) assert.equal(free, true, `free again before the knockout at tick ${fight.tickCount}`);
+      releaseAt = fight.tickCount + rockfall.stunTicks;
+      knockouts += 1;
+    }
+    if (fight.tickCount >= releaseAt) { flush(); releaseAt = Infinity; }
+  }
+  assert.ok(knockouts > 10);
+  assert.equal(falls[0], 1 + rockfall.firstAfter, 'the first fall 16 ticks after Dawn takes off');
+  const gaps = falls.slice(1).map((tick, i) => tick - falls[i]);
+  assert.ok(gaps.length > 10 && gaps.every((gap) => gap >= 15 && gap <= 30), `gaps ${gaps}`);
+  tasks = [];
 });
 
 test('Dusk only takes melee; Dawn takes ranged or a halberd, never other melee', () => {

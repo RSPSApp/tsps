@@ -51,7 +51,11 @@
       "stoneBall": "gargboss_stun_ranged_projectile",
       "explosion": "gargboss_exploding_projectile",
       "falling": "gg_falling_projectile",
-      "debris": "gargboss_debris_shadow_90",
+      "shadow180": "gargboss_debris_shadow_180",
+      "shadow210": "gargboss_debris_shadow_210",
+      "shadow240": "gargboss_debris_shadow_240",
+      "shadow270": "gargboss_debris_shadow_270",
+      "stunned": "stunned_thieving",
       "lightning": "gg_dawn_lightning_fast",
       "enragedLightning": "gg_dusk_lightning_enraged",
       "sphere": "gargboss_healing_sphere_small",
@@ -66,7 +70,14 @@
     "arrive": [1697, 4567],
     "dusk": [1689, 4573],
     "dawn": [1701, 4573],
+    "_dawnPerch": "rsprox 2205 and 2207: where Dawn takes off from at half health and comes back down.",
+    "dawnPerch": [1699, 4573],
     "outside": [3426, 3541, 2]
+  },
+  "_dawnFlight": "rsprox 1754, 1863, 2189-2228 (12 captures): Dawn takes her flying form, plays gg_dawn_fly_up 3 ticks later and is gone 2 ticks after that.",
+  "dawnFlight": {
+    "upAfter": 3,
+    "goneAfter": 5
   },
   "_travel": "rsprox: the passageway up moves the player 5 ticks after the click, the escape down 3; a fade around each.",
   "travel": {
@@ -109,12 +120,28 @@
       "warnTicks": 2
     }
   },
+  "_rockfall": "Wiki (Grotesque Guardians/Strategies): 3x3 rocks, up to 22, a direct hit knocks out for 10 ticks. The rest is rsprox 1754, 1863 and 2189-2228: the first fall 16 ticks after Dawn takes off, then every 15 to 30; 3 rocks within 3 tiles of the player (none aimed at their tile), the others anywhere on the roof; each falls from 200 to 2 as a projectile starting 90 to 106 cycles on and landing 6 to 9 ticks later, over a shadow and with sound 1021; the knockout shows stunned_thieving at 124 with the block animation and sound 2727.",
   "rockfall": {
-    "rocks": 9,
     "max": 22,
     "stunTicks": 10,
-    "warnTicks": 3,
-    "every": 6
+    "stunHeight": 124,
+    "stunSound": 2727,
+    "firstAfter": 16,
+    "every": [15, 30],
+    "rocks": [9, 11],
+    "aimed": 3,
+    "aimedRange": 3,
+    "startCycles": [90, 106],
+    "startHeight": 200,
+    "endHeight": 2,
+    "sound": 1021,
+    "soundRadius": 4,
+    "speeds": [
+      { "ticks": 6, "endCycles": 185, "shadow": "shadow180", "soundDelay": 170 },
+      { "ticks": 7, "endCycles": 215, "shadow": "shadow210", "soundDelay": 200 },
+      { "ticks": 8, "endCycles": 245, "shadow": "shadow240", "soundDelay": 230 },
+      { "ticks": 9, "endCycles": 275, "shadow": "shadow270", "soundDelay": 255 }
+    ]
   },
   "lightning": {
     "min": 5,

@@ -1,9 +1,10 @@
 /**
  * One Grotesque Guardians fight (Wiki: Grotesque Guardians/Strategies, Dusk, Dawn):
  * - phase 1: only Dawn can be hurt; Dusk, defensive, takes nothing. At half health (225) Dawn
- *   flies up;
- * - phase 2: Dusk alone, rocks falling from Dawn in the sky (3x3, up to 22, a direct hit stuns
- *   for 10 ticks); at half health Dusk turns defensive again and Dawn comes down;
+ *   flies up and off the roof;
+ * - phase 2: Dusk alone, rocks falling from Dawn in the sky every 15 to 30 ticks (3x3, up to 22,
+ *   a direct hit stuns for 10 ticks; 6 to 9 ticks to land); at half health Dusk turns defensive
+ *   again and Dawn comes down;
  * - phase 3: lightning across the roof (5-10 a vortex, one always on the player), then Dawn sends
  *   three energy spheres that heal her 90 each unless the player walks into them;
  * - phase 4, once Dawn is finished with a hammer: Dusk takes in her essence and fights alone,
@@ -24,6 +25,9 @@ class Fight {
     this.phase = 1;
     this.tickCount = 0;
     this.rocks = [];
+    /** Phase 2: the ticks Dawn took off and of the next rockfall. */
+    this.dawnLeft = 0;
+    this.nextRockfall = Infinity;
     this.vortices = [];
     this.spheres = [];
     this.prison = null;
@@ -61,8 +65,10 @@ class Fight {
     const { ids, data } = Common;
     if (this.phase === 1 && this.dawn.getHitpoints() <= this.phaseThreshold(this.dawn)) {
       this.phase = 2;
+      this.dawnLeft = this.tickCount;
+      this.nextRockfall = this.tickCount + data.rockfall.firstAfter;
       this.dawn.getCombat?.().reset?.();
-      this.dawn.performAnimation(new Common.core.Animation(ids.seqs.dawnFlyUp));
+      this.dawn.setUntargetable?.(true);
       this.changeForm(this.dawn, "dawnFlying");
       this.changeForm(this.dusk, "duskPhase2");
       return true;
@@ -72,6 +78,7 @@ class Fight {
       this.rocks = [];
       this.changeForm(this.dusk, "duskPhase3");
       this.changeForm(this.dawn, "dawnPhase3");
+      this.landDawn();
       this.dawn.performAnimation(new Common.core.Animation(ids.seqs.dawnFlyDown));
       this.lightningUntil = this.tickCount + data.lightning.ticks;
       return true;
@@ -84,6 +91,22 @@ class Fight {
   changeForm(npc, ordinary) {
     if (this.roof.form) this.roof.form(npc, ordinary);
     else npc.setNpcTransformationId(Common.ids.npcs[ordinary]);
+  }
+
+  /** Phase 2: Dawn climbs into the sky and is gone from the roof until she comes back. */
+  tickDawnFlight() {
+    if (this.phase !== 2) return;
+    const { upAfter, goneAfter } = Common.data.dawnFlight;
+    const since = this.tickCount - this.dawnLeft;
+    if (since === upAfter) this.dawn.performAnimation(new Common.core.Animation(Common.ids.seqs.dawnFlyUp));
+    if (since === goneAfter) this.dawn.setVisible?.(false);
+  }
+
+  /** Back down on the spot she took off from, in view and open to attack again. */
+  landDawn() {
+    this.dawn.moveTo?.(Common.toLocation(Common.data.roof.dawnPerch));
+    this.dawn.setVisible?.(true);
+    this.dawn.setUntargetable?.(false);
   }
 
   /** Dawn finished: Dusk takes in her essence and fights alone, opening with a prison. */
@@ -112,7 +135,11 @@ class Fight {
     // Dawn finished, whoever is credited with her death (Kills.GrotesqueGuardians.js also calls it);
     // at 0 hitpoints she waits for the rock hammer first.
     if (this.phase === 3 && this.dawn.getHitpoints() <= 0 && (this.dawn.isDyingFunction?.() || this.dawn.isRegistered?.() === false)) this.dawnDied();
-    if (this.phase === 2 && this.tickCount % Common.data.rockfall.every === 0 && players[0]) this.dropRocks(players[0]);
+    this.tickDawnFlight();
+    if (this.phase === 2 && this.tickCount >= this.nextRockfall && players[0]) {
+      this.nextRockfall = this.tickCount + Common.randomInt(...Common.data.rockfall.every);
+      this.dropRocks(players[0]);
+    }
     if (this.phase === 3) this.tickLightning(players);
     this.tickRocks(players);
     this.tickTrample(players);
@@ -124,19 +151,40 @@ class Fight {
 
   // --- Phase 2: rockfall
 
+  /** A few rocks near the player, the rest anywhere on the roof; none is aimed at their tile. */
   dropRocks(target) {
-    const { rockfall } = Common.data;
+    const { rockfall, roof } = Common.data;
     const base = target.getLocation();
-    const lands = this.tickCount + rockfall.warnTicks;
-    const tiles = [base];
-    for (let attempt = 0; tiles.length < rockfall.rocks && attempt < 40; attempt++) {
-      const tile = base.transform(Common.randomInt(-5, 5), Common.randomInt(-5, 5));
-      if (this.roof.contains(tile)) tiles.push(tile);
+    const [minX, maxX, minY, maxY] = roof.floor;
+    const tiles = new Map();
+    const fill = (count, pick) => {
+      for (let attempt = 0; tiles.size < count && attempt < 60; attempt++) {
+        const tile = pick();
+        if (this.roof.contains(tile)) tiles.set(`${tile.getX()},${tile.getY()}`, tile);
+      }
+    };
+    const near = () => Common.randomInt(-rockfall.aimedRange, rockfall.aimedRange);
+    fill(rockfall.aimed, () => base.transform(near(), near()));
+    fill(Common.randomInt(...rockfall.rocks), () => base.transform(
+      Common.randomInt(minX, maxX) - base.getX(), Common.randomInt(minY, maxY) - base.getY()));
+    for (const tile of tiles.values()) this.throwRock(tile, rockfall.speeds[Common.randomInt(0, rockfall.speeds.length - 1)]);
+  }
+
+  /** The shadow and sound on the tile, and the rock falling onto it. */
+  throwRock(tile, speed) {
+    const { rockfall } = Common.data;
+    const { ids } = Common;
+    const { Projectile } = Common.core;
+    const start = Common.randomInt(...rockfall.startCycles);
+    const players = this.roof.players();
+    Common.tileGraphic(players, tile, ids.spotanims[speed.shadow], start - rockfall.startCycles[0]);
+    for (const player of players) {
+      player.getPacketSender().sendAreaSound(rockfall.sound, tile.getX(), tile.getY(), tile.getZ(), 1, speed.soundDelay, rockfall.soundRadius);
     }
-    for (const tile of tiles) {
-      Common.tileGraphic(this.roof.players(), tile, Common.ids.spotanims.debris);
-      this.rocks.push({ tile, lands });
-    }
+    // It comes in from the tile to the south-west, as recorded.
+    new Projectile(tile.transform(-1, -1), tile, null, ids.spotanims.falling, start, speed.endCycles,
+      rockfall.startHeight, rockfall.endHeight, this.roof.area ?? null).withAngle(0).withProgress(0).sendProjectile();
+    this.rocks.push({ tile, lands: this.tickCount + speed.ticks });
   }
 
   tickRocks(players) {
@@ -144,15 +192,11 @@ class Fight {
     const { rockfall } = Common.data;
     const landing = this.rocks.filter((rock) => rock.lands <= this.tickCount);
     for (const rock of landing) {
-      Common.tileGraphic(players, rock.tile, Common.ids.spotanims.falling);
       for (const player of players) {
         const distance = Common.chebyshev(player.getLocation(), rock.tile);
         if (distance > 1) continue;
         Common.hurtPlayer(player, Common.randomInt(0, rockfall.max));
-        if (distance === 0) {
-          bind(player, rockfall.stunTicks);
-          player.sendMessage(Common.message("knockedOut"));
-        }
+        if (distance === 0) knockOut(player);
       }
     }
     this.rocks = this.rocks.filter((rock) => rock.lands > this.tickCount);
@@ -282,6 +326,18 @@ class Fight {
     if (this.dusk.__ggFight === this) this.dusk.__ggFight = null;
     if (this.dawn.__ggFight === this) this.dawn.__ggFight = null;
   }
+}
+
+/** A direct rock: stunned, with the circling stars, the block animation and the sound. */
+function knockOut(player) {
+  const { Animation, Graphic } = Common.core;
+  const { rockfall } = Common.data;
+  bind(player, rockfall.stunTicks);
+  player.performGraphic(Graphic.delayed(Common.ids.spotanims.stunned, 0, rockfall.stunHeight));
+  const block = player.getBlockAnim();
+  if (block >= 0) player.performAnimation(new Animation(block));
+  player.getPacketSender().sendSound(rockfall.stunSound, 1, 0);
+  player.sendMessage(Common.message("knockedOut"));
 }
 
 /**

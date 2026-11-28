@@ -82,8 +82,8 @@ test("something else is fighting you: 'I'm already under attack.', once, and the
   assert.deepEqual(you.messages, ["spam:I'm already under attack."]);
 });
 
-// #6922, rsprox capture (rev 243, Edgeville Dungeon chaos druids): a druid whose player another druid
-// took stopped following within 2-7 ticks; none waited the fight out.
+// #6922, rsprox capture (rev 243, Edgeville Dungeon chaos druids): after the player switched to another
+// druid (tick 192, its cast at 193), the first druid followed them until 199 and then stopped.
 test("an npc gives a taken target up instead of waiting", () => {
   const guard = mobile("npc", "Guard");
   const you = mobile("player", "You");

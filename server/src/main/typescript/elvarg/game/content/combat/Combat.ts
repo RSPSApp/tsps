@@ -1302,7 +1302,8 @@ export class Combat {
      *
      * A taken target (TARGET_IN_COMBAT) is not one, for an NPC either: it gives the target up
      * rather than waiting the other fight out (rsprox capture, rev 243 Edgeville Dungeon chaos
-     * druids: a druid whose player another druid took stopped following within 2-7 ticks, #6922).
+     * druids, #6922: after the player switched to another druid at tick 192, the first stopped
+     * following them at 199). Ours: it stops at the refusal, a few ticks earlier.
      */
     private isTransientDenial(response: CanAttackResponse): boolean {
         return response === CanAttackResponse.ALREADY_UNDER_ATTACK ||

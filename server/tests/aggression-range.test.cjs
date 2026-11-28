@@ -581,8 +581,9 @@ test("in single-combat, only one hunter engages the player", (t) => {
   assert.equal(second.getCombat().getTarget(), null, "the second hunter leaves the player to the first");
 });
 
-// #6922, rsprox capture (rev 243, Edgeville Dungeon chaos druids): while one druid fought the
-// player, the druid standing beside them stayed idle, and engaged the tick after the first died.
+// #6922: on main, three chaos druids took the player within 4 ticks of arriving and stood around them,
+// refused. Ours: the Wiki's single-way rule (one monster at a time) read as holding from when a hunter takes the
+// player, before its first hit starts the PJ timer.
 test("in single-combat, a hunter that took the player on an earlier tick still holds them", (t) => {
   const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
   const s = scene(t, { spawn: at(0, 2) });
@@ -600,6 +601,26 @@ test("in single-combat, a hunter that took the player on an earlier tick still h
   s.npc.setHitpoints(0);
   NpcAggression.process(s.player);
   assert.equal(second.getCombat().getTarget(), s.player, "once the first dies, the next one engages");
+});
+
+// Review of #6938: a hunter that never reaches the player (behind a rock) must not keep every other
+// hunter off them; the hold lasts the PJ timer's 8 ticks from when it took them.
+test("in single-combat, a hunter that cannot reach the player holds them for 8 ticks only", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 3) });
+  s.npc.getMovementQueue().setBlockMovement(true);
+  const second = secondHunter(t, MUGGER, at(2, 2));
+  s.player.getLocalNpcs = () => [s.npc, second];
+
+  NpcAggression.process(s.player);
+  assert.equal(s.npc.getCombat().getTarget(), s.player, "the stuck hunter takes the player");
+  s.ticks(7);
+  NpcAggression.process(s.player);
+  assert.equal(s.player.getCombat().getAttacker(), null, "it never reached them");
+  assert.equal(second.getCombat().getTarget(), null, "7 ticks on, it still holds them");
+  s.ticks(1);
+  NpcAggression.process(s.player);
+  assert.equal(second.getCombat().getTarget(), s.player, "8 ticks on, the next hunter takes them");
 });
 
 test("in single-combat, an always-multi hunter still engages after a single-combat one", (t) => {

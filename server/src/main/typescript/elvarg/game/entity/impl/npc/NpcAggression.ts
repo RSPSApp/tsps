@@ -7,8 +7,14 @@ import { AreaManager } from "../../../model/areas/AreaManager";
 import { PrivateArea } from "../../../model/areas/impl/PrivateArea";
 import { NPC } from "./NPC";
 import { PluginManager } from "../../../../plugins/PluginManager";
+import { World } from "../../../World";
+
+/** Wiki (PJ timer): a monster attacking the player holds them for 8 ticks in single-way combat. */
+const SINGLE_WAY_HOLD_TICKS = 8;
 
 export class NpcAggression {
+    /** The player each hunter took, and the cycle it took them on. */
+    private static readonly huntedAt = new WeakMap<NPC, { player: Player; cycle: number }>();
 
     public static process(player: Player) {
         // Wiki (PJ timer): 8 ticks of single-way protection while a monster is attacking,
@@ -19,9 +25,10 @@ export class NpcAggression {
 
         const localNpcs = player.getLocalNpcs();
         const instanceNpcs = player.getArea() instanceof PrivateArea ? (player.getArea() as PrivateArea).getNpcs() : null;
-        // A hunter that took the player on an earlier tick holds them in single-way combat from then
-        // on, though its first hit has not landed yet (rsprox capture, rev 243 Edgeville Dungeon chaos
-        // druids: the druid beside the fight stays idle until the one attacking dies, then engages).
+        // A hunter that took the player on an earlier tick holds them while it walks in, before its first hit
+        // starts the PJ timer above (#6922: on main, three chaos druids took the player within 4 ticks and stood
+        // around them refused). Ours: the Wiki's single-way rule, one monster at a time, read as holding from the
+        // moment it takes the player, for the PJ timer's 8 ticks, so one that never reaches them lets go.
         const held = NpcAggression.heldBySingleHunter(player, localNpcs)
             || (instanceNpcs != null && NpcAggression.heldBySingleHunter(player, instanceNpcs));
 
@@ -34,17 +41,19 @@ export class NpcAggression {
     }
 
     /**
-     * Whether a living, ordinary NPC already has the player as its combat target. Setting a target
-     * does not mark the player as under attack until a hit lands, so without this the next hunter
-     * would take the player on the following tick and stand beside them, refused, until the fight
-     * ends (#6922). Always-multi NPCs (summoned minions) never hold anyone.
+     * Whether a living, ordinary NPC that took the player by aggression in the last 8 ticks still has them as
+     * its target. Setting a target does not mark the player as under attack until a hit lands, so without this
+     * the next hunter would take the player on the following tick and stand beside them, refused (#6922).
+     * Always-multi NPCs (summoned minions) never hold anyone.
      */
     private static heldBySingleHunter(player: Player, npcs: NPC[]): boolean {
+        const cycle = World.getProcessCycle();
         for (const npc of npcs) {
-            if (npc != null && npc.getHitpoints() > 0 && !npc.isMultiCombat()
-                && npc.getCombat().getTarget() === player) {
-                return true;
+            if (npc == null || npc.getHitpoints() <= 0 || npc.isMultiCombat() || npc.getCombat().getTarget() !== player) {
+                continue;
             }
+            const hunted = NpcAggression.huntedAt.get(npc);
+            if (hunted?.player === player && cycle - hunted.cycle < SINGLE_WAY_HOLD_TICKS) return true;
         }
         return false;
     }
@@ -134,6 +143,7 @@ export class NpcAggression {
                         continue;
                     }
                     npc.getCombat().attack(player);
+                    NpcAggression.huntedAt.set(npc, { player, cycle: World.getProcessCycle() });
                     // Any ordinary NPC that engages counts, even under multi rules: a hunter on
                     // a single tile next to the multi area must not join it this tick.
                     if (!npc.isMultiCombat()) {

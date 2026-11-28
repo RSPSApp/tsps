@@ -581,6 +581,27 @@ test("in single-combat, only one hunter engages the player", (t) => {
   assert.equal(second.getCombat().getTarget(), null, "the second hunter leaves the player to the first");
 });
 
+// #6922, rsprox capture (rev 243, Edgeville Dungeon chaos druids): while one druid fought the
+// player, the druid standing beside them stayed idle, and engaged the tick after the first died.
+test("in single-combat, a hunter that took the player on an earlier tick still holds them", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 2) });
+  const second = secondHunter(t, MUGGER, at(2, 0));
+  s.player.getLocalNpcs = () => [s.npc, second];
+  assert.equal(AreaManager.inMulti(s.player), false, "the field is single-combat");
+
+  NpcAggression.process(s.player);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(s.player.getCombat().getAttacker(), null, "no hit has landed yet");
+
+  NpcAggression.process(s.player);
+  assert.equal(second.getCombat().getTarget(), null, "the next tick, the second hunter still leaves the player alone");
+
+  s.npc.setHitpoints(0);
+  NpcAggression.process(s.player);
+  assert.equal(second.getCombat().getTarget(), s.player, "once the first dies, the next one engages");
+});
+
 test("in single-combat, an always-multi hunter still engages after a single-combat one", (t) => {
   const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
   const s = scene(t, { spawn: at(0, 2) });

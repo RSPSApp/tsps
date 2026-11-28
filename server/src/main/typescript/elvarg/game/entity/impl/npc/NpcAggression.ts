@@ -17,15 +17,42 @@ export class NpcAggression {
             return;
         }
 
-        // Both passes share one tick, so a single-combat hunter taken in the first blocks the second's.
-        const engaged = NpcAggression.runAggression(player, player.getLocalNpcs());
+        const localNpcs = player.getLocalNpcs();
+        const instanceNpcs = player.getArea() instanceof PrivateArea ? (player.getArea() as PrivateArea).getNpcs() : null;
+        // A hunter that took the player on an earlier tick holds them in single-way combat from then
+        // on, though its first hit has not landed yet (rsprox capture, rev 243 Edgeville Dungeon chaos
+        // druids: the druid beside the fight stays idle until the one attacking dies, then engages).
+        const held = NpcAggression.heldBySingleHunter(player, localNpcs)
+            || (instanceNpcs != null && NpcAggression.heldBySingleHunter(player, instanceNpcs));
 
-        if (player.getArea() instanceof PrivateArea) {
-            NpcAggression.runAggression(player, (player.getArea() as PrivateArea).getNpcs(), engaged);
+        // Both passes share one tick, so a single-combat hunter taken in the first blocks the second's.
+        const engaged = NpcAggression.runAggression(player, localNpcs, held);
+
+        if (instanceNpcs != null) {
+            NpcAggression.runAggression(player, instanceNpcs, engaged);
         }
     }
 
-    /** Returns whether a single-combat hunter has taken the player this tick (`engaged`: by an earlier pass). */
+    /**
+     * Whether a living, ordinary NPC already has the player as its combat target. Setting a target
+     * does not mark the player as under attack until a hit lands, so without this the next hunter
+     * would take the player on the following tick and stand beside them, refused, until the fight
+     * ends (#6922). Always-multi NPCs (summoned minions) never hold anyone.
+     */
+    private static heldBySingleHunter(player: Player, npcs: NPC[]): boolean {
+        for (const npc of npcs) {
+            if (npc != null && npc.getHitpoints() > 0 && !npc.isMultiCombat()
+                && npc.getCombat().getTarget() === player) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Returns whether a single-combat hunter holds the player (`engaged`: one did before this pass,
+     * on an earlier tick or in the local pass).
+     */
     private static runAggression(player: Player, npcs: NPC[], engaged = false): boolean {
         const area = player.getArea();
         // Set once a single-combat hunter has taken the player this tick.

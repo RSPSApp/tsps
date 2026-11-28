@@ -62,6 +62,7 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
   });
   const JAR_BY_LOC = new Map(JARS.filter(Boolean).map((jar, i) => [jar.loc, { ...jar, value: i + 1 }]));
 
+  const PIT_SECRET_DOOR = 1997; // ics_pit_secret_door
   const DOOR_OPENS = 2000; // icthalarins_door_opens
   const DOOR_CLOSES = 1999; // icthalarins_door_closes
   const TELEPORT_BLOCKED = "An outside force seems to be blocking your teleport.";
@@ -360,6 +361,9 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
     const stage = state.stage(player);
     const flashback = inFlashback(player);
     if (flashback) {
+      // Flashback 1 starts by the ladder: its jump is the ordinary one (t1170-t1188).
+      if (stage === STAGE.FLASHBACK_1) return jump(player, event, north);
+      // Flashbacks 2 and 3 start north of the pit; only the way back south is asked for.
       if (north) return true;
       return jumpBackInFlashback(player, event);
     }
@@ -461,6 +465,12 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
       common.later(player, 1, () => common.fade(player, common.FADE.TO_BLACK));
       common.later(player, 2, () => common.minimap(player, true));
       common.later(player, 4, () => { Scenes.place(player, PIT_FALL_LANDING); player.getPacketSender().sendCameraReset(); });
+      // The trapdoor the player drops out of (t2201: loc_anim ics_pit_secret_door 1997 on the wall at the landing tile).
+      common.later(player, 5, () => {
+        const at = Scenes.tileFor(player, PIT_FALL_LANDING);
+        const wall = api.core.MapObjects?.getType?.(at, 0, Scenes.get(player)?.area ?? null);
+        if (wall) player.getPacketSender().sendObjectAnimation(wall, { id: PIT_SECRET_DOOR });
+      });
       common.later(player, 6, () => {
         Scenes.place(player, PIT_FALL_STEP);
         common.minimap(player, false);

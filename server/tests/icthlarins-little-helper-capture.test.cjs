@@ -192,12 +192,15 @@ test('the start: live\'s heads and animations per line, the cat picked up, "Yes.
   f.give(I().WATERSKIN_4_); f.give(I().TINDERBOX);
   const wanderer = f.npc(4194, [3315, 2850, 0]);
   await f.clickNpc(wanderer);
-  const lines = await f.talk([1], { stop: (l) => l[2] === 'Good... Now, look into my eyes...' });
+  const names = new Map();
+  const realRead = f.read;
+  const lines = await f.talk([1], { stop: (l) => { const e = f.current(); if (e?.speakerName !== undefined || e instanceof core.NpcDialogue) names.set(l[2], e.speakerName ?? null); return l[2] === 'Good... Now, look into my eyes...'; } });
   const byText = new Map(lines.map((l) => [l[2], l]));
   // Normal eyes (4193) and red eyes (6187) by line, with live's chat animations (chatneu1 588, chatshock1 571).
   assert.deepEqual(byText.get('Hello to you too, adventurer.').slice(1, 2).concat(byText.get('Hello to you too, adventurer.')[3]), [4193, 588]);
   assert.deepEqual([byText.get('Aghhh get that cat away from me. Quickly please.')[1], byText.get('Aghhh get that cat away from me. Quickly please.')[3]], [6187, 571]);
   assert.equal(byText.get('No!')[1], 6187);
+  assert.ok(names.get('No!') === 'Wanderer', `the red-eyed head keeps the Wanderer's name (${names.get('No!')})`);
   assert.equal(stage(f), 1);
   assert.equal(saved(f)[VARBIT.JAR] >= 1 && saved(f)[VARBIT.JAR] <= 3, true, 'a jar is picked');
 });
@@ -949,4 +952,24 @@ test('Gertrude\'s Cat is required (Wiki); the start refuses without it (Ours wor
   await f.talk([1]);
   assert.equal(stage(f), 0);
   assert.ok(f.log.some((e) => e[1] === 'sendMessage' && e[2] === 'You must complete Gertrude\'s Cat to start this quest.'));
+});
+
+test('flashback 1\'s pit is jumped like any other (t1170-t1188): the player lands north of it, still in the flashback', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  setStage(f, 3);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2, [VARBIT.KLENTER]: 1 });
+  f.give(4679);
+  await f.clickLoc(6614, 3294, 2778);
+  f.step(2); f.step(3 + 2 + 4);
+  await f.cont(); f.step(2);
+  f.p.setRunEnergy?.(100);
+  const real = Math.random;
+  Math.random = () => 0;
+  t.after(() => { Math.random = real; });
+  place(f, 3296, 9191);
+  await clickIn(f, 6632, 3296, 9194, 1);
+  until(f, () => sourceOf(f)[1] === 9197, 16);
+  assert.deepEqual(sourceOf(f), [3296, 9197, 0]);
+  assert.equal(stage(f), 4);
+  assert.equal(f.varbit(VARBIT.FLASHBACK), 1);
 });

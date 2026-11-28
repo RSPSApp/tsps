@@ -332,8 +332,8 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
     switch (stepId) {
       // The hypnosis: the transcript narrates it; Start plays it on "Don't blink..." continued.
       case "dahKGC": case "bLiUSH": case "V52ykg": case "exQl3V": case "0pXftE":
+        // The hypnosis starts on "Don't blink..." continued (handleLine), once.
         event.handled = true;
-        if (stepId === "dahKGC") start.hypnotise(player);
         return;
       // The flashbacks' narration: Pyramid plays them.
       case "QhMDGz": case "ZtIxUV": case "mnHg8H": case "FjmOZy": case "NzcsOL": case "U696Aj": case "w37dWs": case "TdWOLv":

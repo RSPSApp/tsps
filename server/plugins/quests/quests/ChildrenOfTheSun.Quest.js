@@ -1035,6 +1035,9 @@ module.exports = function registerChildrenOfTheSunQuest(api) {
     const { player, npcId } = event;
     const index = GUARD_MARKED_IDS.indexOf(npcId);
     if (index === -1) return false;
+    const stage = quest.getStage(player);
+    // Outside the marking there is no roster to update: a respawn here would stay in the square.
+    if (stage < STAGE_MARKING || stage >= STAGE_ROOF) return true;
     setGuardMarked(player, index, false);
     syncGuardNpc(player, index);
     if (quest.getStage(player) === STAGE_MARKED && correctGuardsMarked(player) < CORRECT_GUARD_COUNT) {

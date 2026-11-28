@@ -388,3 +388,29 @@ test("after Making History the merchant's first menu still opens his silver stal
   ]);
   assert.equal(f.player.getInventory().getAmount(KEY), 1, "the key holder is offered nothing");
 });
+
+test("logging out on the last treasure's box, before its continue, still saves the miniquest complete", async (t) => {
+  const f = actor(t, { at: [3303, 3345, 0], attributes: { [ORDER]: ROUTE, [FOUND]: 10 } });
+  moveTo(f, 3303, 3345);
+  await itemOption(f, SPADE, "Dig");
+  assert.equal(h.shown(f)?.who, "ItemStatementDialogue");
+  const loaded = reload(t, f);
+  assert.equal(miniquest().isComplete(loaded.player), true);
+  assert.equal(varbit(loaded, STATUS), 2);
+  assert.equal(loaded.player.getInventory().getAmount(KEY), 0);
+  // A second dig on the spot finds nothing (the route is done).
+  loaded.player.getInventory().add(new h.core.Item(SPADE, 1), false);
+  moveTo(loaded, 3303, 3345);
+  assert.deepEqual(await itemOption(loaded, SPADE, "Dig"), ["Nothing interesting happens."]);
+});
+
+test("before Making History is complete the key's Feel and a dig on a site do nothing of the miniquest's", async (t) => {
+  const f = actor(t, { makingHistory: false, attributes: { [ORDER]: ROUTE, [FOUND]: 0 } });
+  moveTo(f, 2716, 3606);
+  const felt = await itemOption(f, KEY, "Feel");
+  assert.ok(!felt.some((m) => /steaming|freezing|warm|cold|hot/.test(m)), JSON.stringify(felt));
+  const dug = await itemOption(f, SPADE, "Dig");
+  assert.ok(!dug.includes("You found some treasure."), JSON.stringify(dug));
+  assert.equal(f.player.getAttribute(FOUND), 0);
+  assert.equal(varbit(f, STATUS), 0);
+});

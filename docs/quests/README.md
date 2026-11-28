@@ -5,7 +5,7 @@ Every quest the server registers, with the latest result recorded in its page he
 test a quest is in [server/docs/agents/quest-testing.md](https://github.com/RSPSApp/tsps/blob/main/server/docs/agents/quest-testing.md);
 how to record the result is in [_template/README.md](_template/README.md).
 
-198 quests · ✅ passed: 24 · ⚠️ passed with issues: 23 · 🔄 in progress: 16 · ❌ failed: 0 · 🔁 needs recheck: 49 · untested: 86
+199 quests · ✅ passed: 24 · ⚠️ passed with issues: 23 · 🔄 in progress: 16 · ❌ failed: 0 · 🔁 needs recheck: 50 · untested: 86
 
 "Needs recheck" means the quest's plugin has changed since the commit its result was proven on.
 
@@ -163,6 +163,7 @@ how to record the result is in [_template/README.md](_template/README.md).
 | The Curse of Arrav | untested |  |  |  |  |
 | [The Depths of Despair](the-depths-of-despair/README.md) | ✅ passed | 2026-10-23 | agent |  |  |
 | The Dig Site | untested |  |  |  |  |
+| [The Enchanted Key](the-enchanted-key/README.md) | 🔁 needs recheck | 2026-11-28 | agent | claude-opus-5-5 |  |
 | The Eyes of Glouphrie | untested |  |  |  |  |
 | [The Feud](the-feud/README.md) | untested |  |  |  |  |
 | [The Final Dawn](the-final-dawn/README.md) | untested |  |  |  |  |

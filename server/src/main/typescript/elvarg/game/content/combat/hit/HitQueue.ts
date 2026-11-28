@@ -176,9 +176,12 @@ export class HitQueue {
         return this.lastAppliedHit;
     }
 
-    /** `source` left the world: the last hit taken stops naming it, so it is not kept in memory. */
+    /**
+     * `source` left the world: the last hit taken stops naming it, so it is not kept in memory. The hit
+     * itself stays (damage, hitmask, reflected): a death read a few ticks later still sees the killing blow.
+     */
     forgetSource(source: Mobile): void {
-        if (this.lastAppliedHit?.getSource() === source) this.lastAppliedHit = null;
+        if (this.lastAppliedHit?.getSource() === source) this.lastAppliedHit = this.lastAppliedHit.withoutSource();
     }
 
     /** Queues a hit for the cycle it comes due on; process() is what decides whether it waits. */

@@ -97,3 +97,33 @@ test("a hit dealt by an NPC is left alone", () => {
 
   assert.equal(dealerOf(player), npc);
 });
+
+test("a killing blow keeps its damage when the killer logs out before the death is read", () => {
+  const victim = fake("player", "victim", 10);
+  const killer = fake("player", "killer");
+  hit(victim, killer, 10);
+  const blow = victim.combat.getHitQueue().getLastAppliedHit();
+
+  leave(killer); // inside the victim's death ticks, before player:died reads the last hit
+
+  const kept = victim.combat.getHitQueue().getLastAppliedHit();
+  assert.equal(kept?.getDamage(), 10);
+  assert.equal(kept?.getHitmask(), blow.getHitmask());
+  assert.equal(kept?.isReflected(), false);
+  assert.equal(dealerOf(victim), null);
+  assert.equal(blow.getSource(), killer, "the delivered hit itself is not changed");
+});
+
+test("a reflected killing blow stays reflected after its dealer leaves", () => {
+  const victim = fake("player", "victim", 5);
+  const reflector = fake("player", "reflector");
+  const queue = victim.combat.getHitQueue();
+  queue.addPendingDamage([new HitDamage(5, HitMask.RED).setSource(reflector).markReflected()]);
+  queue.process(++cycle);
+
+  leave(reflector);
+
+  assert.equal(queue.getLastAppliedHit()?.isReflected(), true);
+  assert.equal(queue.getLastAppliedHit()?.getDamage(), 5);
+  assert.equal(dealerOf(victim), null);
+});

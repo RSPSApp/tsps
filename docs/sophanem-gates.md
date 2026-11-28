@@ -23,6 +23,8 @@ them. They are entries in `PASS_THROUGH_GATES` in `server/plugins/objects/Doors.
 
 ## Not covered
 
-- The OSRS Wiki says Sophanem needs partial progress in Icthlarin's Little Helper. Neither the Wiki
-  nor any capture shows a gate refusing someone. Ours: the gates open for everyone, as they did
-  before this change.
+- During Icthlarin's Little Helper's quarantine (until the High Priest lets the player come and go, stage 15)
+  the gates refuse: the gate priest's "Sorry, but Sophanem is under quarantine. No one may leave or enter."
+  (the user's capture local 1002310, rev 243, ticks 672-694; open again from tick 2254). The quest answers the
+  gates' door:toggle (server/plugins/quests/icthlarin/Talk.IcthlarinsLittleHelper.js). The small east gate was
+  not recorded during the quarantine; it refuses the same way (Wiki: partial completion needed).

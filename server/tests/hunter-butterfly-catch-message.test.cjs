@@ -23,7 +23,9 @@ function fixture(t,net=I.BUTTERFLY_NET,jar=false){
   t.mock.method(p,'sendMessage',text=>messages.push(text));
   t.mock.method(p.getPacketSender(),'sendTypedMessage',(_type,text)=>messages.push(text));
   t.mock.method(p.getSkillManager(),'addExperiences',(_skill,amount)=>xp.push(amount));
-  const walks=[];let roll=0;
+  const walks=[],sounds=[];let roll=0;
+  const misses=()=>sounds.filter(id=>id===1999).length; // flapping_1
+  t.mock.method(p.getPacketSender(),'sendSound',id=>sounds.push(id));
   t.mock.method(Math,'random',()=>roll);
   t.mock.method(p.getMovementQueue(),'walkToEntity',(target,arrive)=>walks.push({target,arrive}));
   const npc=core.NPC.create(core.NpcIdentifiers.RUBY_HARVEST,p.getLocation().clone());
@@ -31,7 +33,7 @@ function fixture(t,net=I.BUTTERFLY_NET,jar=false){
   p.setMobileInteraction(npc); // as walking up to the clicked butterfly leaves it
   t.after(()=>{core.TaskManager.cancelTasks(p.getIndex());core.TaskManager.process();p.setRegistered(false);npc.setRegistered(false);C.H.actions.clear();C.H.players.clear();C.H.hidden.clear();C.H.reserved.clear();});
   const catchNpc=()=>Catching.catchNpc({player:p,npc,npcId:npc.getId()});
-  return {p,npc,messages,xp,walks,catchNpc,miss:()=>{roll=1;},hit:()=>{roll=0;}};
+  return {p,npc,messages,xp,walks,misses,catchNpc,miss:()=>{roll=1;},hit:()=>{roll=0;}};
 }
 // Game ticks: the Hunter clock, then the engine's tasks.
 const ticks=n=>{for(let i=0;i<n;i++){C.H.tick++;core.TaskManager.process();}};
@@ -64,10 +66,10 @@ for(const [name,net] of [['a net',I.BUTTERFLY_NET],['bare hands',null]]){
   test('a miss with '+name+' follows the butterfly and tries again every 4 ticks until it is caught',t=>{
     const f=fixture(t,net);f.p.getSkillManager().setMaxLevel(core.Skill.HUNTER,25).setCurrentLevels(core.Skill.HUNTER,25);
     f.miss();f.catchNpc();
-    assert.deepEqual(f.messages,['The creature slips away.']);
+    assert.equal(f.misses(),1);assert.deepEqual(f.messages,[],'a miss says nothing');
     ticks(3);assert.equal(f.walks.length,0);
     ticks(1);assert.equal(f.walks.length,1);assert.equal(f.walks[0].target,f.npc);
-    f.walks[0].arrive();assert.equal(f.messages.length,2,'missed again on arrival');
+    f.walks[0].arrive();assert.equal(f.misses(),2,'missed again on arrival');assert.deepEqual(f.messages,[]);
     ticks(4);assert.equal(f.walks.length,2);
     f.hit();f.walks[1].arrive();assert.equal(f.xp.length,1);
     ticks(8);assert.equal(f.walks.length,2,'a catch ends the retries');
@@ -82,15 +84,15 @@ test('the retry ends with a walk, a dropped interaction, a gone butterfly or a c
   };
   for(const [name,stop] of Object.entries(stops)){
     const f=fixture(t);f.miss();f.catchNpc();stop(f);ticks(8);
-    assert.equal(f.walks.length,0,name);assert.equal(f.messages.length,1,name);
+    assert.equal(f.walks.length,0,name);assert.equal(f.misses(),1,name);
   }
 });
 test('clicking again after a net miss throws no sooner than 2 ticks later, and keeps trying',t=>{
   const f=fixture(t);f.miss();f.catchNpc();
   f.p.getMovementQueue().walkToReset();f.p.setMobileInteraction(f.npc);f.catchNpc();
-  assert.equal(f.messages.length,1,'no second throw on the same tick');
+  assert.equal(f.misses(),1,'no second throw on the same tick');
   ticks(2);assert.equal(f.walks.length,1);
-  f.walks[0].arrive();assert.equal(f.messages.length,2);
+  f.walks[0].arrive();assert.equal(f.misses(),2);
   ticks(4);assert.equal(f.walks.length,2);
 });
 // A jarred ruby harvest used on a player boosts Attack by the shared potion rule (ConsumableEffects.boostSkill):

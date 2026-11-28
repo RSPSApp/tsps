@@ -30,8 +30,10 @@ const RELEASE_SOUND = 7870;
 const RELEASE_DELAY = 45;
 const RELEASE_HEIGHT = 190;
 const RELEASED_TICKS = 1;
-// A miss on a butterfly or moth is followed by another try this many ticks later (reported for net
-// throws in rsprox capture 1001961, rev 242; ours: barehanded misses wait the same).
+// A missed net throw at a butterfly or moth plays flapping_1 on the throw tick, says nothing and is
+// followed by another try 4 ticks later (rsprox captures 1001961, 1001959, rev 242, as reported in
+// review). No capture has a barehanded miss: ours does the same.
+const MISS_SOUND = 1999;
 const RETRY_TICKS = 4;
 // Ours: clicking again throws the net no sooner than this after the last throw.
 const NET_THROW_TICKS = 2;
@@ -229,14 +231,18 @@ function catchNetted(player, npc, npcId, def, weapon) {
   const curve = improved && def.handsLow !== undefined ? { ...def, low: def.handsLow, high: def.handsHigh } : def;
   const catchBonus = improved && (def.handsLow === undefined || def.boost === "restore") ? 20 / 256 : 0;
   if (!chance(player, curve, catchBonus, def.level)) {
-    player.sendMessage("The creature slips away.");
-    tryAgain(player, npc, npcId, RETRY_TICKS);
+    miss(player, npc, npcId);
     return;
   }
   if (!exchange(player, inputs, outputs)) return;
   xp(player, def.xp, "butterfly", npcId);
   if (!jarred) freed(player, def);
   player.sendMessage(jarred ? "You catch the creature in a jar." : "You catch the creature in your net and release it.");
+}
+
+function miss(player, npc, npcId) {
+  player.getPacketSender().sendSound(MISS_SOUND, 1, 0);
+  tryAgain(player, npc, npcId, RETRY_TICKS);
 }
 
 /**
@@ -268,8 +274,7 @@ function catchBarehanded(player, npc, npcId, def, name) {
   player.performAnimation(new H.core.Animation(ANIM.IMPLING_HANDS));
   const curve = def.handsLow !== undefined ? { ...def, low: def.handsLow, high: def.handsHigh } : def;
   if (!chance(player, curve, def.handsLow === undefined ? 20 / 256 : 0, def.hands)) {
-    player.sendMessage("The creature slips away.");
-    tryAgain(player, npc, npcId, RETRY_TICKS);
+    miss(player, npc, npcId);
     return;
   }
   const graphic = H.core.CacheDefinitions.getSpotanimId(def.release);

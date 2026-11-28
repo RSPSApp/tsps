@@ -71,12 +71,14 @@ afterEach(() => {
 });
 
 // Check identity after Node has also disposed each test's own mocks. Running
-// just the two-match case is enough to exercise the nested replacements.
+// the two-match and Charge recast cases exercises the nested replacements.
 const originalNow = Date.now;
 const originalAddPendingHit = CombatFactory.addPendingHit;
+const originalEmitCustomEvent = PM.emitCustomEvent;
 after(() => {
   assert.equal(Date.now, originalNow, 'the game clock must not escape its test');
   assert.equal(CombatFactory.addPendingHit, originalAddPendingHit, 'hit observers must not escape their test');
+  assert.equal(PM.emitCustomEvent, originalEmitCustomEvent, 'Charge observers must not escape their test');
 });
 
 before(async () => {
@@ -7329,9 +7331,14 @@ async function gCharge(t,f){
   assert.deepEqual(meta,{itemId:3323,widgetId:14286919});
   const runes=[I.AIR_RUNE,I.FIRE_RUNE,I.BLOOD_RUNE],before=runes.map(id=>a.getInventory().getAmount(id)),lines=messagesOf(a),events=[],xp=[];
   const emit=PM.emitCustomEvent.bind(PM),add=a.getSkillManager().addExperience.bind(a.getSkillManager());
-  t.mock.method(PM,'emitCustomEvent',(name,e)=>{if(name==='magic:charge-cast'&&e.player===a)events.push({at:C.now(),until:e.until});return emit(name,e);});
-  t.mock.method(a.getSkillManager(),'addExperience',(...args)=>{xp.push(args);return add(...args);});
-  await gChargeButton(a,meta);
+  const eventObserver=t.mock.method(PM,'emitCustomEvent',(name,e)=>{if(name==='magic:charge-cast'&&e.player===a)events.push({at:C.now(),until:e.until});return emit(name,e);});
+  const xpObserver=t.mock.method(a.getSkillManager(),'addExperience',(...args)=>{xp.push(args);return add(...args);});
+  try {
+    await gChargeButton(a,meta);
+  } finally {
+    xpObserver.mock.restore();
+    eventObserver.mock.restore();
+  }
   assert.equal(events.length,1,'native self-cast reaches the actual Charge producer');
   assert.equal(events[0].until,events[0].at+700);
   assert.equal(a.getAttribute(core.CombatSpells.CHARGE_UNTIL),events[0].until);

@@ -68,7 +68,7 @@ collection's own options and the band's practice animations are not done.
   crabs...". "Wait for leaders to turn up." gives stage 50 and every `crab_bandmate_N` bit;
   the `crab_recruited_bandmate_N` bits stay as recruited (`crab_band` 2047).
 - **The instrument's name and the bass loc:** "A disaster." (sub=1 of "A disaster.|A bass.|I
-  don't actually know.") sets `crab_bassname` 15843 to 1 (tick 6200). `crab_bass` 15887
+  don't actually know.") sets `crab_bassname` 15843 to 1 (tick 6209). `crab_bass` 15887
   (varp 5741 bits 0-7, with `crab_main_temp` 15885 and `crab_bassname_temp` 15886) is
   `crab_main` + 64 * `crab_bassname` at every stage change: 5, 10, ... 45, then 109, 111, 114,
   119, 124, 127. It dresses `crab_bass_multi_quest` 62459 beside the practising crab (cache:

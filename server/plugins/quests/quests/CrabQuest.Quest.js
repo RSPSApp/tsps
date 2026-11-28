@@ -94,7 +94,7 @@ module.exports = function registerCrabQuestQuest(api) {
   const CRAB_RECRUITED_BANDMATE_VARBIT = 15869; // "crab_recruited_bandmate_1"..'_11'
   const CRAB_PARTIAL_COMPLETE_VARBIT = 15881;
   // crab_bassname (varp 5739 bits 6-7): the name the player gave the instrument, in the
-  // options' order (capture tick 6200: "A disaster." is sub=1 and sets 1). crab_bass (varp
+  // options' order (capture tick 6209: "A disaster." is sub=1 and sets 1). crab_bass (varp
   // 5741 bits 0-7) is crab_main + 64 * crab_bassname, as live sends it at every stage change
   // (ticks 5953-7046: 45 -> 109 with the name, then 111, 114, 119, 124, 127). Its value
   // dresses the bass loc 62459 beside the practising crab (cache: Thing 62455, Disaster
@@ -1225,15 +1225,19 @@ module.exports = function registerCrabQuestQuest(api) {
   function handleNpcInteraction(event) {
     const { player, npcId, clickType, definition } = event;
     const action = definition?.getActions?.()[clickType - 1];
-    if (MAIN_CRAB_NPC_IDS.has(npcId)) {
+    // The shy crab is told apart by the NPC itself, before the ids: she resolves (crab_shy 15865)
+    // to crab_bandcrab 16483 at first and to crab_maincrab_blushing 16472 once she blushes or has
+    // scuttered, and those ids are also every bandmate and the main crab.
+    const shyNpc = Dream.npcFor(player, "shy-crab");
+    const shyCrab = (event.npc && shyNpc && event.npc === shyNpc)
+      || npcId === SHY_CRAB_NPC_ID
+      || (npcId === SHY_CRAB_CONTENT_ID && !event.npc);
+    if (!shyCrab && MAIN_CRAB_NPC_IDS.has(npcId)) {
       if (action !== "Talk-to") return;
       event.handled = true;
       talkToMainCrab(player);
       return;
     }
-    // crab_bandcrab is also every recruit and bandmate: only the shy crab herself is the shy crab.
-    const shyCrab = npcId === SHY_CRAB_NPC_ID
-      || (npcId === SHY_CRAB_CONTENT_ID && (!event.npc || event.npc === Dream.npcFor(player, "shy-crab")));
     if (shyCrab) {
       if (action !== "Talk-to") return;
       const progress = shyCrabProgress(player);

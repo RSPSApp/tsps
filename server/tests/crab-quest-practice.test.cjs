@@ -114,10 +114,19 @@ test('issue 6916: the practice talks follow which crabs are at practice', () => 
 });
 
 test('issue 6916: the shy crab by the chest has her Wiki conversation', () => {
-  const { h } = practising(47, 0);
+  const h = setup();
   h.attrs.set('crab-quest:shy-progress', 3);
   h.attrs.set('quest.crab_quest.instrument-name', 'bass');
-  const event = { player: h.player, npcId: SHY_CRAB, clickType: 1, definition: h.core.NpcDefinition.forId(SHY_CRAB) };
+  enterDream(h, 47);
+  assert.equal(h.varValues.get(15865), 2, 'crab_shy: scuttered');
+  const shy = h.spawned.filter((npc) => npc.definition.id === SHY_CRAB && npc.isRegistered()).at(-1);
+  assert.ok(shy, 'she is by the chest');
+  // The server sends the id her crab_shy transform resolves to: 2 -> crab_maincrab_blushing 16472.
+  const { CacheDefinitions } = require('../dist/game/cache/CacheDefinitions');
+  const resolved = CacheDefinitions.getNpc(SHY_CRAB).transforms[2];
+  assert.equal(resolved, 16472);
+  started.length = 0;
+  const event = { player: h.player, npcId: resolved, clickType: 1, definition: h.core.NpcDefinition.forId(resolved), npc: shy };
   for (const fn of h.hooks.npcs) fn(event);
   assert.equal(event.handled, true);
   assert.deepEqual(started, [[SHY_CRAB,
@@ -131,8 +140,8 @@ test('issue 6916: crab_bass is crab_main + 64 * crab_bassname, as live sends it'
   const { h, quest } = practising(45, 0);
   assert.equal(valueOf(h, 15887), 45, 'capture tick 6190: 40 -> 45 with no name yet');
   h.emit('npc-dialogue:choice', { npcId: 16471, option: 'A disaster.' });
-  assert.equal(valueOf(h, 15843), 1, 'crab_bassname: "A disaster." is the first option (tick 6200)');
-  assert.equal(valueOf(h, 15887), 109, 'tick 6200: 45 -> 109');
+  assert.equal(valueOf(h, 15843), 1, 'crab_bassname: "A disaster." is the first option (tick 6209)');
+  assert.equal(valueOf(h, 15887), 109, 'tick 6209: 45 -> 109');
   h.emit('npc-dialogue:choice', { npcId: 16471, option: 'Let me show you!' });
   assert.equal(quest.getStage(h.player), 47);
   assert.equal(valueOf(h, 15887), 111, '47 + 64');

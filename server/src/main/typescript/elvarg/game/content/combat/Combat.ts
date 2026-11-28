@@ -594,7 +594,7 @@ export class Combat {
             // that arrived this cycle is answered on the next (live: the third line comes the
             // tick after arrival, rsprox 83 t18213, 1098 t4926).
             const stepped = this.character.getMovementQueue().didMoveThisCycle();
-            if (!this.walksInOnFoughtNpc(permission, target, method, stepped)) {
+            if (!this.walksInOnFoughtNpc(permission, target, method, stepped, true)) {
                 this.handleAttackDenied(permission, target, generation);
                 return;
             }
@@ -1299,12 +1299,13 @@ export class Combat {
      * a delayed hit from the previous fight is still in flight. Pursuit continues and
      * the attack resumes once it lands - cancelling here throws the click away, which
      * is what made attacking a new npc feel unresponsive after a kill.
+     *
+     * A taken target (TARGET_IN_COMBAT) is not one, for an NPC either: it walks in and gives the
+     * target up on arrival (walksInOnFoughtNpc) rather than waiting the other fight out.
      */
     private isTransientDenial(response: CanAttackResponse): boolean {
         return response === CanAttackResponse.ALREADY_UNDER_ATTACK ||
-            response === CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED ||
-            // An npc waits its turn; a player is turned away on the spot.
-            (response === CanAttackResponse.TARGET_IN_COMBAT && !this.character.isPlayer());
+            response === CanAttackResponse.COMBAT_METHOD_NOT_ALLOWED;
     }
 
     /**
@@ -1312,20 +1313,30 @@ export class Combat {
      * LostCity player_combat.rs2): the player still walks in. The refusal is said by both
      * checks of the click tick (before and after its step), and again the tick after arrival, where the
      * attack ends. Ranged and magic are refused on the spot, as before (rsprox 2745 t4982).
-     * True while the player keeps walking in.
+     * An NPC whose player target another is fighting walks in the same way, untold, and gives the target
+     * up the tick after it arrives, whatever its style: in reach at once it gives up at once (rsprox
+     * capture rev 243, Edgeville Dungeon chaos druids, #6922: the druid the player switched from at tick
+     * 192 kept walking after them, was beside them at 198 and gave up at 199). One that stops short without
+     * reaching them gives up then.
+     * True while the attacker keeps walking in.
      */
     private walksInOnFoughtNpc(
         permission: CanAttackResponse,
         target: Mobile,
         method: CombatMethod,
-        steppedThisCycle = false
+        steppedThisCycle = false,
+        afterMovement = false
     ): boolean {
-        if (permission !== CanAttackResponse.TARGET_IN_COMBAT || !this.character.isPlayer() || !target.isNpc()
-            || method.type() !== CombatType.MELEE) {
+        const npcOnPlayer = this.character.isNpc() && target.isPlayer();
+        const playerOnNpc = this.character.isPlayer() && target.isNpc() && method.type() === CombatType.MELEE;
+        if (permission !== CanAttackResponse.TARGET_IN_COMBAT || !(npcOnPlayer || playerOnNpc)) {
             return false;
         }
         // In reach without having stepped there this cycle: the refusal ends it here.
         if (!steppedThisCycle && CombatRange.canReach(this.character, method, target)) return false;
+        // An NPC that took no step this cycle and still can't reach (held back by its range from its spawn, or
+        // blocked) is not walking in: it gives the target up too.
+        if (npcOnPlayer) return !(afterMovement && !steppedThisCycle);
         const cycle = World.getProcessCycle();
         if (this.foughtNpcNoticeGeneration !== this.generation || this.foughtNpcNoticeCycle === cycle) {
             this.foughtNpcNoticeGeneration = this.generation;
@@ -1366,7 +1377,8 @@ export class Combat {
                 }
                 return;
             case CanAttackResponse.TARGET_IN_COMBAT:
-                if (!player) return;
+                // An NPC is told nothing, but gives the taken target up too (isTransientDenial).
+                if (!player) break;
                 player.sendMessage(target.isPlayer()
                     ? `Someone else is already fighting ${target.getAsPlayer().getDisplayName()}.`
                     : "Someone else is fighting that.");

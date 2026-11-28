@@ -82,12 +82,16 @@ test("something else is fighting you: 'I'm already under attack.', once, and the
   assert.deepEqual(you.messages, ["spam:I'm already under attack."]);
 });
 
-test("an npc waits for a taken target instead of giving up", () => {
+// #6922, rsprox capture (rev 243, Edgeville Dungeon chaos druids): after the player switched to another
+// druid (tick 192, its cast at 193), the first druid followed them until 199 and then stopped.
+test("an npc gives a taken target up instead of waiting", () => {
   const guard = mobile("npc", "Guard");
   const you = mobile("player", "You");
   you.getCombat().setUnderAttack(mobile("npc", "Goblin"));
   assert.equal(permission(guard, you), CanAttackResponse.TARGET_IN_COMBAT);
-  assert.equal(guard.getCombat().isTransientDenial(CanAttackResponse.TARGET_IN_COMBAT), true);
+  assert.equal(guard.getCombat().isTransientDenial(CanAttackResponse.TARGET_IN_COMBAT), false);
+  assert.equal(deny(guard, you, CanAttackResponse.TARGET_IN_COMBAT), false, "the attack stops");
+  assert.deepEqual(guard.messages, [], "an npc is told nothing");
   assert.equal(you.getCombat().isTransientDenial(CanAttackResponse.TARGET_IN_COMBAT), false);
 });
 

@@ -581,6 +581,84 @@ test("in single-combat, only one hunter engages the player", (t) => {
   assert.equal(second.getCombat().getTarget(), null, "the second hunter leaves the player to the first");
 });
 
+// #6922: on main, three chaos druids took the player within 4 ticks of arriving and stood around them,
+// refused. Ours: the Wiki's single-way rule (one monster at a time) read as holding from when a hunter takes the
+// player, before its first hit starts the PJ timer.
+test("in single-combat, a hunter that took the player on an earlier tick still holds them", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 2) });
+  const second = secondHunter(t, MUGGER, at(2, 0));
+  s.player.getLocalNpcs = () => [s.npc, second];
+  assert.equal(AreaManager.inMulti(s.player), false, "the field is single-combat");
+
+  NpcAggression.process(s.player);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  assert.equal(s.player.getCombat().getAttacker(), null, "no hit has landed yet");
+
+  NpcAggression.process(s.player);
+  assert.equal(second.getCombat().getTarget(), null, "the next tick, the second hunter still leaves the player alone");
+
+  s.npc.setHitpoints(0);
+  NpcAggression.process(s.player);
+  assert.equal(second.getCombat().getTarget(), s.player, "once the first dies, the next one engages");
+});
+
+// A hunter that never reaches the player (behind a rock) must not keep every other hunter off them; the hold
+// lasts the PJ timer's 8 ticks from when it took them.
+test("in single-combat, a hunter that cannot reach the player holds them for 8 ticks only", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 3) });
+  s.npc.getMovementQueue().setBlockMovement(true);
+  const second = secondHunter(t, MUGGER, at(2, 2));
+  s.player.getLocalNpcs = () => [s.npc, second];
+
+  NpcAggression.process(s.player);
+  assert.equal(s.npc.getCombat().getTarget(), s.player, "the stuck hunter takes the player");
+  s.ticks(7);
+  NpcAggression.process(s.player);
+  assert.equal(s.player.getCombat().getAttacker(), null, "it never reached them");
+  assert.equal(second.getCombat().getTarget(), null, "7 ticks on, it still holds them");
+  s.ticks(1);
+  NpcAggression.process(s.player);
+  assert.equal(second.getCombat().getTarget(), s.player, "8 ticks on, the next hunter takes them");
+});
+
+// #6922, rsprox capture (rev 243, Edgeville Dungeon chaos druids): the druid the player switched away from (tick
+// 192) kept walking after them, was beside them at 198 and gave them up at 199.
+test("in single-combat, a hunter whose player another takes walks in and gives up the tick after arriving", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 3) });
+  const other = secondHunter(t, MUGGER, at(5, 5));
+  s.player.getLocalNpcs = () => [s.npc];
+  NpcAggression.process(s.player);
+  assert.equal(s.npc.getCombat().getTarget(), s.player, "the hunter takes the player");
+  s.player.getCombat().setUnderAttack(other);
+
+  const adjacent = () => s.npc.getLocation().getDistance(s.player.getLocation()) <= 1;
+  let ticks = 0;
+  while (!adjacent() && ticks++ < 10) {
+    s.tick();
+    assert.equal(s.npc.getCombat().getTarget(), s.player, `still walking in (tick ${ticks})`);
+  }
+  assert.ok(adjacent(), "it walked up beside the player");
+  s.tick();
+  assert.equal(s.npc.getCombat().getTarget(), null, "and gave them up the tick after it arrived");
+  assert.equal(s.player.getHitpoints(), s.player.getSkillManager().getMaxLevel(core.Skill.HITPOINTS), "without attacking");
+});
+
+test("in single-combat, a refused hunter that stops short of the player gives them up", (t) => {
+  const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
+  const s = scene(t, { spawn: at(0, 3) });
+  const other = secondHunter(t, MUGGER, at(5, 5));
+  s.player.getLocalNpcs = () => [s.npc];
+  NpcAggression.process(s.player);
+  assert.equal(s.npc.getCombat().getTarget(), s.player);
+  s.npc.getMovementQueue().setBlockMovement(true);
+  s.player.getCombat().setUnderAttack(other);
+  s.tick();
+  assert.equal(s.npc.getCombat().getTarget(), null, "it can't step, so it gives up instead of standing there");
+});
+
 test("in single-combat, an always-multi hunter still engages after a single-combat one", (t) => {
   const at = (dx, dy) => new core.Location(FIELD.x + dx, FIELD.y + dy, 0);
   const s = scene(t, { spawn: at(0, 2) });

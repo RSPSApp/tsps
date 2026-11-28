@@ -4,7 +4,7 @@
  * The words come from the "Crab Quest" transcript page (OSRS Wiki); the places, ids, order
  * and timing from a full live run (RSProx capture 20261103T014803-ee79c12, revision 241).
  *
- * Stages (varbit 15842 "crab_main", varp 5739 bits 0-6), as live sends them and as
+ * Stages (varbit 15842 "crab_main", varp 5739 bits 0-5), as live sends them and as
  * Quest Helper's loadSteps keys on them:
  *   0 not started, 5 drank from the bottle, 10/15/20 the crab's explanation,
  *   25 gathering shells, 30 seven shells handed in, 35/37 gathering the floatsam,
@@ -93,6 +93,15 @@ module.exports = function registerCrabQuestQuest(api) {
   const CRAB_INSTANCE_VARBIT = 15868;
   const CRAB_RECRUITED_BANDMATE_VARBIT = 15869; // "crab_recruited_bandmate_1"..'_11'
   const CRAB_PARTIAL_COMPLETE_VARBIT = 15881;
+  // crab_bassname (varp 5739 bits 6-7): the name the player gave the instrument, in the
+  // options' order (capture tick 6209: "A disaster." is sub=1 and sets 1). crab_bass (varp
+  // 5741 bits 0-7) is crab_main + 64 * crab_bassname, as live sends it at every stage change
+  // (ticks 5953-7046: 45 -> 109 with the name, then 111, 114, 119, 124, 127). Its value
+  // dresses the bass loc 62459 beside the practising crab (cache: Thing 62455, Disaster
+  // 62458, Bass guitar 62456, Banjo 62457), so without it the crab has no instrument.
+  const CRAB_BASSNAME_VARBIT = 15843;
+  const CRAB_BASS_VARBIT = 15887;
+  const INSTRUMENT_NAME_VALUES = new Map([["disaster", 1], ["bass", 2], ["banjo", 3]]);
   const STAGE_NOT_STARTED = 0;
   const STAGE_START = 5;
   const STAGE_LEARN = 10;
@@ -138,7 +147,7 @@ module.exports = function registerCrabQuestQuest(api) {
     MAIN_CRAB_NPC_ID,
     MAIN_CRAB_END_NPC_ID,
   ]);
-  const CRAB_NPC_IDS = new Set([...MAIN_CRAB_NPC_IDS, PENGUIN_CRAB_NPC_ID, BAND_CRAB_NPC_ID]);
+  const CRAB_NPC_IDS = new Set([...MAIN_CRAB_NPC_IDS, PENGUIN_CRAB_NPC_ID, BAND_CRAB_NPC_ID, SHY_CRAB_NPC_ID]);
   // Interface 216 slot 54 (cache enum 1001 -> sprite 5248) is the real Sit emote;
   // the capture's op=1 plays emote_sit_loop 10061.
   const SIT_EMOTE_SLOT = 54;
@@ -297,6 +306,30 @@ module.exports = function registerCrabQuestQuest(api) {
     1 << 6, 1 << 9, 1 << 2, 1 << 7, 1 << 4,
   ];
   const PENGUIN_JOIN_BIT = 1 << 6; // northern-most palm ("'Crab'" penguin)
+  const RED_SHELL_JOIN_BIT = 1 << 5; // palm directly north-east: "the crab at the red shell", "girl"
+  const COCONUT_JOIN_BIT = 1 << 7; // north-western-most tree: "the crab playing coconut next to me"
+  const PLANT_JOIN_BIT = 1 << 8;
+
+  // Talk-to on a recruited crab at practice: the Wiki transcript's "talking to the crab at
+  // practice" line for its hiding place, by join bit. A crab at practice that the player did
+  // not recruit (the band completed by waiting) answers with the main crab's conversation and
+  // chathead instead (capture tick 6547: bandmate 8 at 3054,2637 at stage 50).
+  const PRACTICE_VARIANTS = new Map([
+    [1 << 0, "crab-hunting-investigating-the-magic-tree-talking-to-the-crab-at-practice"],
+    [1 << 1, "crab-hunting-investigating-the-palm-south-of-the-magic-tree-talking-to-the-crab-at-practice"],
+    [1 << 2, "crab-hunting-investigating-the-tree-north-west-of-the-magic-tree-talking-to-the-crab-at-practice"],
+    [1 << 3, "crab-hunting-investigating-the-western-most-palm-talking-to-the-crab-at-practise"],
+    [1 << 4, "crab-hunting-investigating-the-palm-directly-east-of-the-western-most-palm-talking-to-the-crab-at-practise"],
+    [1 << 5, "crab-hunting-investigating-the-palm-directly-north-east-of-the-western-most-palm-talking-to-the-crab-at-practise"],
+    [1 << 6, "crab-hunting-investigating-the-northern-most-palm-talking-to-the-crab-at-practice"],
+    [1 << 7, "crab-hunting-investigating-the-north-western-most-tree-talking-to-the-crab-at-practise"],
+    [1 << 8, "crab-hunting-investigating-the-plant-talking-to-the-crab-at-practise"],
+    [1 << 9, "crab-hunting-investigating-the-western-bush-talking-to-the-crab-at-practise"],
+    [1 << 10, "crab-hunting-investigating-the-eastern-bush-talking-to-the-crab-at-practise"],
+  ]);
+  // The shy crab once she has scuttered to the chest (Wiki transcript).
+  const SHY_CRAB_CHEST_VARIANT =
+    "crab-hunting-investigating-the-palm-directly-north-of-the-magic-tree-talking-to-the-crab-next-to-the-chest";
 
   const MAGIC_TREE_STEP = "5WiO-g";
   const DIPPER_STEP = "beb_BL";
@@ -386,6 +419,8 @@ module.exports = function registerCrabQuestQuest(api) {
   const MAGIC_TREE_MET_ATTRIBUTE = "quest.crab_quest.magic-tree-met";
   const DIPPER_MET_ATTRIBUTE = "quest.crab_quest.dipper-met";
   const KID_CRAB_MET_ATTRIBUTE = "quest.crab_quest.kid-crab-met";
+  // The plant crab mistaken for the red-shell crab: its "First time" practice talk is played.
+  const PLANT_PRACTICE_TALKED_ATTRIBUTE = "quest.crab_quest.plant-practice-talked";
 
   // Correct shell item -> the transcript message the crab hands it over with.
   const SHELL_MESSAGE_VARIANTS = new Map([
@@ -686,6 +721,9 @@ module.exports = function registerCrabQuestQuest(api) {
     sender.sendVarbit(CRAB_NET_VARBIT, dreaming);
     // crab_partial_complete: set as the sixth recruit leaves for practice (capture tick 6520).
     sender.sendVarbit(CRAB_PARTIAL_COMPLETE_VARBIT, leaderCount(player) >= SIX_LEADER_COUNT ? 1 : 0);
+    const bassName = INSTRUMENT_NAME_VALUES.get(instrumentName(player)) ?? 0;
+    sender.sendVarbit(CRAB_BASSNAME_VARBIT, bassName);
+    sender.sendVarbit(CRAB_BASS_VARBIT, (quest.isComplete(player) ? STAGE_COMPLETE : stage) + 64 * bassName);
   }
 
   function pandemoniumComplete(player) {
@@ -846,6 +884,7 @@ module.exports = function registerCrabQuestQuest(api) {
   /** The dream closed (woken, logged out or moved elsewhere): its varbits follow. */
   function dreamClosed(player, logout) {
     danceScenes.delete(player);
+    plantFirstTalk.delete(player);
     if (!Ceremony.active(player)) player.setAttribute(IN_INSTANCE_ATTRIBUTE, false);
     if (logout) {
       // Saved on the real beach, never on an instance tile.
@@ -1186,15 +1225,19 @@ module.exports = function registerCrabQuestQuest(api) {
   function handleNpcInteraction(event) {
     const { player, npcId, clickType, definition } = event;
     const action = definition?.getActions?.()[clickType - 1];
-    if (MAIN_CRAB_NPC_IDS.has(npcId)) {
+    // The shy crab is told apart by the NPC itself, before the ids: she resolves (crab_shy 15865)
+    // to crab_bandcrab 16483 at first and to crab_maincrab_blushing 16472 once she blushes or has
+    // scuttered, and those ids are also every bandmate and the main crab.
+    const shyNpc = Dream.npcFor(player, "shy-crab");
+    const shyCrab = (event.npc && shyNpc && event.npc === shyNpc)
+      || npcId === SHY_CRAB_NPC_ID
+      || (npcId === SHY_CRAB_CONTENT_ID && !event.npc);
+    if (!shyCrab && MAIN_CRAB_NPC_IDS.has(npcId)) {
       if (action !== "Talk-to") return;
       event.handled = true;
       talkToMainCrab(player);
       return;
     }
-    // crab_bandcrab is also every recruit and bandmate: only the shy crab herself is the shy crab.
-    const shyCrab = npcId === SHY_CRAB_NPC_ID
-      || (npcId === SHY_CRAB_CONTENT_ID && (!event.npc || event.npc === Dream.npcFor(player, "shy-crab")));
     if (shyCrab) {
       if (action !== "Talk-to") return;
       const progress = shyCrabProgress(player);
@@ -1202,8 +1245,21 @@ module.exports = function registerCrabQuestQuest(api) {
         event.handled = true;
         playSteps(player, SHY_CRAB_NPC_ID, SHY_CRAB_LINES);
       } else if (progress === SHY_CRAB_SCUTTERED) {
-        // No further captured dialogue after she scutters to the practice.
         event.handled = true;
+        startTranscript(api, player, SHY_CRAB_NPC_ID, PAGE, SHY_CRAB_CHEST_VARIANT);
+      }
+      return;
+    }
+    if (npcId === BAND_CRAB_NPC_ID && action === "Talk-to") {
+      const index = bandmateIndex(player, event.npc);
+      if (index >= 0) {
+        event.handled = true;
+        talkToBandmate(player, BANDMATE_JOIN_BITS[index]);
+      } else if (event.npc && event.npc === Dream.npcFor(player, RECRUIT_NPC_KEY) && talkingSpot.has(player)) {
+        // A crab still out by its hiding place. Ours: no recording talks to one; it answers
+        // as its hiding place does.
+        event.handled = true;
+        investigateSpot(player, talkingSpot.get(player));
       }
       return;
     }
@@ -1212,6 +1268,33 @@ module.exports = function registerCrabQuestQuest(api) {
       event.handled = true;
       netFloatsam(player, event.npc);
     }
+  }
+
+  /** Which practice bandmate (bandmate-N, 0-based) the clicked crab is, or -1. */
+  function bandmateIndex(player, npc) {
+    if (!npc) return -1;
+    return BANDMATE_JOIN_BITS.findIndex((_bit, index) => Dream.npcFor(player, `bandmate-${index + 1}`) === npc);
+  }
+
+  // The plant crab's talk being played is its first one (answers D5DXe_ / _ooOVB).
+  const plantFirstTalk = new Map();
+
+  function talkToBandmate(player, bit) {
+    if (!hasFlag(player, RECRUITED_ATTRIBUTE, bit)) {
+      talkToMainCrab(player);
+      return;
+    }
+    if (bit === PLANT_JOIN_BIT) {
+      const first = player.getAttribute(PLANT_PRACTICE_TALKED_ATTRIBUTE) !== true && atPractice(player, RED_SHELL_JOIN_BIT);
+      plantFirstTalk.set(player, first);
+      if (first) player.setAttribute(PLANT_PRACTICE_TALKED_ATTRIBUTE, true);
+    }
+    startTranscript(api, player, BAND_CRAB_NPC_ID, PAGE, PRACTICE_VARIANTS.get(bit));
+  }
+
+  /** A bandmate stands at practice: recruited, or every one once the band is complete. */
+  function atPractice(player, bit) {
+    return bandIsComplete(player) || hasFlag(player, RECRUITED_ATTRIBUTE, bit);
   }
 
   function investigateShyCrabPalm(player) {
@@ -1358,6 +1441,17 @@ module.exports = function registerCrabQuestQuest(api) {
         return true;
       case "hdDZkC":
         return quest.isComplete(player) && !hasItem(player, SHELL_COLLECTION_ITEM_ID);
+      // The practice talks: "the crab playing coconut" stands next to the red-shell crab.
+      case "GC7Wza":
+        return !atPractice(player, COCONUT_JOIN_BIT);
+      case "BHU5Nd":
+        return atPractice(player, COCONUT_JOIN_BIT);
+      case "YYDbAn":
+        return atPractice(player, RED_SHELL_JOIN_BIT);
+      case "D5DXe_":
+        return plantFirstTalk.get(player) === true;
+      case "_ooOVB":
+        return plantFirstTalk.get(player) !== true;
       default:
         return null;
     }
@@ -1372,14 +1466,17 @@ module.exports = function registerCrabQuestQuest(api) {
     }
     if (option === DISASTER_NAME) {
       player.setAttribute(INSTRUMENT_NAME_ATTRIBUTE, "disaster");
+      syncVarbits(player);
       return;
     }
     if (option === BASS_NAME) {
       player.setAttribute(INSTRUMENT_NAME_ATTRIBUTE, "bass");
+      syncVarbits(player);
       return;
     }
     if (option === BANJO_NAME && instrumentName(player) === null) {
       player.setAttribute(INSTRUMENT_NAME_ATTRIBUTE, "banjo");
+      syncVarbits(player);
       return;
     }
     if (option === WAIT_FOR_LEADERS_OPTION && quest.getStage(player) === STAGE_TUNING) {
@@ -1999,6 +2096,7 @@ module.exports = function registerCrabQuestQuest(api) {
   api.persistAttribute(MAGIC_TREE_MET_ATTRIBUTE);
   api.persistAttribute(DIPPER_MET_ATTRIBUTE);
   api.persistAttribute(KID_CRAB_MET_ATTRIBUTE);
+  api.persistAttribute(PLANT_PRACTICE_TALKED_ATTRIBUTE);
   api.persistAttribute(SHY_CRAB_ATTRIBUTE, false);
   api.persistAttribute(SHY_CRAB_PROGRESS_ATTRIBUTE, 0);
   api.persistAttribute(STAGE_VERSION_ATTRIBUTE, 0);

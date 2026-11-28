@@ -817,6 +817,7 @@ export class Combat {
         if (other.damageMap?.delete(character as Player) && other.damageMap.size === 0) other.damageMap = null;
         if (other.lastDamager === character) other.lastDamager = null;
         if (other.lastAttackTarget === character) other.lastAttackTarget = null;
+        other.hitQueue.forgetSource(character);
         this.recordedIn?.delete(other);
         other.records?.delete(this);
     }

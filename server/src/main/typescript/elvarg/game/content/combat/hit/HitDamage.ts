@@ -174,6 +174,17 @@ export class HitDamage {
         return this.source;
     }
 
+    /**
+     * A copy of this hit that no longer names its dealer: the damage, hitmask and flags stay readable
+     * after the dealer has left the world, without keeping them in memory. This hit is not changed.
+     */
+    public withoutSource(): HitDamage {
+        const copy = Object.assign(Object.create(HitDamage.prototype), this) as HitDamage;
+        copy.appliedObservers = [];
+        copy.source = null;
+        return copy;
+    }
+
     public getSplatType(mine: boolean): number | null {
         return this.splatTypes ? (mine ? this.splatTypes.mine : this.splatTypes.others) : null;
     }

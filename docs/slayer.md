@@ -378,7 +378,8 @@ rsprox captures, rev 242 (recordings 1002084 t127, 1002067 t185-t2842, 1001683, 
   transcripts): the master who assigned the current task, or, with none held, the most advanced the
   player may take tasks from (Wiki, Enchanted gem; Slayer ring) — that rung's combat and Slayer
   levels *and* the quest it needs (Wiki, Slayer Master: Mazchna Priest in Peril, Chaeldar Lost City,
-  Duradel Shilo Village, Mortimer Fallen From Grace started). Konar during a task plays
+  Duradel Shilo Village, Mortimer Fallen From Grace far enough to enter Wyrmscraig Cavern, the
+  stage the quest first puts the player there). Konar during a task plays
   "via-an-enchanted-gem-or-a-slayer-ring-during-a-task" whole — "How am I doing so far?", "Who are
   you?", "Where are you?", "Got any tips for me?", "Nothing really." — and every other master plays
   "via-the-astral-contact-spell" with its assignment row taken out, since the ring cannot assign

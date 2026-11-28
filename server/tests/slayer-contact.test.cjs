@@ -65,6 +65,7 @@ Slayer.register({
     // Tasks.meetsQuests (and Contact's ladder) read as "no plugin here has that quest: don't block".
     if (name === "quest:is-complete" && payload?.key) payload.complete = questAnswers.get(payload.key)?.complete ?? null;
     if (name === "quest:is-started" && payload?.key) payload.started = questAnswers.get(payload.key)?.started ?? null;
+    if (name === "quest:get-stage" && payload?.key) payload.stage = questAnswers.get(payload.key)?.stage ?? null;
     for (const fn of handlers.events.get(name) ?? []) fn(payload);
   },
 });
@@ -133,24 +134,27 @@ test("a rung whose quest is missing is skipped for the one below it (Wiki, Slaye
   };
   try {
     // The Wiki's table: Mazchna needs Priest in Peril, Chaeldar Lost City, Duradel Shilo Village,
-    // Mortimer partial Fallen From Grace. One gate closed at a time, the rest unanswered.
+    // Mortimer Fallen From Grace far enough to reach Wyrmscraig Cavern (stage 9). One gate closed at
+    // a time, the rest unanswered.
     set({ priest_in_peril: { complete: false } });
     assert.equal(reach(20, 1), 1, "20 combat without Priest in Peril stops at Turael");
     set({ lost_city: { complete: false } });
     assert.equal(reach(70, 1), 3, "70 combat without Lost City stops at Vannaka");
     set({ shilo_village: { complete: false } });
     assert.equal(reach(100, 50), 6, "100/50 without Shilo Village stops at Nieve");
-    set({ fallen_from_grace: { started: false } });
+    set({ fallen_from_grace: { stage: 0 } });
     assert.equal(reach(100, 70), 5, "100/70 without Fallen From Grace started stops at Duradel");
+    set({ fallen_from_grace: { stage: 3 } });
+    assert.equal(reach(100, 70), 5, "started but still below the cavern (stage 3) stops at Duradel");
 
     set({
       priest_in_peril: { complete: true }, lost_city: { complete: true },
-      shilo_village: { complete: true }, fallen_from_grace: { started: true },
+      shilo_village: { complete: true }, fallen_from_grace: { stage: 9 },
     });
     assert.equal(reach(20, 1), 2, "with Priest in Peril: Mazchna");
     assert.equal(reach(70, 1), 4, "with Lost City: Chaeldar");
     assert.equal(reach(100, 50), 5, "with Shilo Village: Duradel");
-    assert.equal(reach(100, 70), 10, "with Fallen From Grace started: Mortimer");
+    assert.equal(reach(100, 70), 10, "with the cavern reached (stage 9): Mortimer");
   } finally {
     questAnswers.clear();
   }

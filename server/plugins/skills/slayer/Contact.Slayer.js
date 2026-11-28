@@ -44,15 +44,19 @@ const LADDER = [1, 2, 3, 4, 8, 6, 5, 10];
 /**
  * The Wiki's per-master quest requirements (Slayer Master), which the ring's ladder applies too:
  * Mazchna "Requires completion of Priest in Peril", Chaeldar "Lost City", Duradel "Shilo Village",
- * Mortimer "partial completion of Fallen From Grace". The ring reaches only the masters a player is
- * "eligible to receive tasks from", so a rung whose quest is missing is skipped for the one below.
- * Asked the way Tasks.meetsQuests asks, and like it, a quest no plugin answers for doesn't block.
+ * Mortimer "partial completion of Fallen From Grace" — which the Wiki explains as being far enough
+ * to enter Wyrmscraig Cavern, where he is. That is the stage the quest first lands the player in the
+ * cavern (FallenFromGrace.Quest's STAGE_CAVERN), not merely having started it: a player still at the
+ * hat or the rockfall has not met him and cannot take his tasks.
+ * The ring reaches only the masters a player is "eligible to receive tasks from", so a rung whose
+ * quest is missing is skipped for the one below. Asked the way Tasks.meetsQuests asks, and like it,
+ * a quest no plugin answers for doesn't block.
  */
 const MASTER_QUESTS = new Map([
   [2, { key: "priest_in_peril" }],
   [4, { key: "lost_city" }],
   [5, { key: "shilo_village" }],
-  [10, { key: "fallen_from_grace", started: true }],
+  [10, { key: "fallen_from_grace", stage: 9 }], // Wyrmscraig Cavern (STAGE_CAVERN)
 ]);
 
 let api = null;
@@ -81,16 +85,21 @@ function masterNpcIds() {
 }
 
 /**
- * Whether the player has met a rung's quest requirement: asked of the quest runtime as
- * Tasks.meetsQuests asks, and unanswered (a quest this tree does not have yet) doesn't block.
+ * Whether the player has met a rung's quest requirement: completion for most, a stage for the one
+ * the Wiki states as "far enough to reach" a place. Asked of the quest runtime as Tasks.meetsQuests
+ * asks, and unanswered (a quest this tree does not have yet) doesn't block.
  */
 function meetsQuests(player, master) {
   const need = MASTER_QUESTS.get(master.id);
   if (!need) return true;
-  const field = need.started ? "started" : "complete";
-  const request = { player, key: need.key, [field]: null };
-  api.emitCustomEvent(need.started ? "quest:is-started" : "quest:is-complete", request);
-  return request[field] !== false;
+  if (need.stage != null) {
+    const request = { player, key: need.key, stage: null };
+    api.emitCustomEvent("quest:get-stage", request);
+    return request.stage == null || Number(request.stage) >= need.stage;
+  }
+  const request = { player, key: need.key, complete: null };
+  api.emitCustomEvent("quest:is-complete", request);
+  return request.complete !== false;
 }
 
 /** The most advanced master this player may receive tasks from, or null below every rung. */

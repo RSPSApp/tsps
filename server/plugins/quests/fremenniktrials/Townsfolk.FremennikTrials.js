@@ -169,8 +169,11 @@ function notQuestSteps() {
   return found ?? [];
 }
 
+/** Message boxes, not chat: Brundt's requirements line and Mord's and Maria's refusals (t7557, t7989-t8014). */
+const BOX_STEPS = new Set(["tp-Z16", "XLYr8c"]);
 function brundtBox(action) {
-  if (action.kind === "message" && action.text === EXILES_REQUIREMENTS) action.box = { statement: true };
+  if (action.kind !== "message") return;
+  if (action.text === EXILES_REQUIREMENTS || BOX_STEPS.has(action.stepId)) action.box = { statement: true };
 }
 
 const inventory = (player) => player.getInventory();
@@ -190,6 +193,9 @@ const CONDITIONS = new Map([
   ["If the player has enough coins:", (player) => inventory(player).getAmount(core.ItemIdentifiers.COINS) >= FLEECE_PRICE],
   ["If the player does not have enough coins:", (player) => inventory(player).getAmount(core.ItemIdentifiers.COINS) < FLEECE_PRICE],
   ["If the player has Fremennik armour components", (player) => ARMOUR_COMPONENTS.some((name) => holdsNamed(player, name))],
+  // Brundt's "(Charm) Can I have a new name?" ends on "[new Fremennik name] [honorific]": ours has no
+  // rename, so the option stays hidden (live showed four options, 1002313 t7563).
+  ["If the player is wearing a ring of Charos(a):", () => false],
 ]);
 const HAS_ITEM = /^If the player has (?:an? )?([a-z' -]+):$/i;
 
@@ -209,7 +215,8 @@ const ACTIONS = new Map([
   ["JdNEob", (player) => inventory(player).adds(core.ItemIdentifiers.PET_ROCK, 1)],
   ["8crW88", (player) => inventory(player).adds(core.ItemIdentifiers.PET_ROCK, 1)],
   ["-DoHQL", (player) => inventory(player).deleteNumber(core.ItemIdentifiers.COINS, FLEECE_PRICE)],
-  ["7l2lk5", (player) => inventory(player).adds(core.ItemIdentifiers.GOLDEN_FLEECE, 1)],
+  // What does not fit goes on the floor: the coins are already paid (QuestRuntime.giveReward).
+  ["7l2lk5", (player) => QuestRuntime.giveReward(player, core.ItemIdentifiers.GOLDEN_FLEECE, 1)],
 ]);
 
 function handleAction(event) {

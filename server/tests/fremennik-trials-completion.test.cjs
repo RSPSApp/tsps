@@ -448,3 +448,31 @@ test("after the quest, before the Exiles: Brundt's two options, and no quest yet
     "Not at the moment Barkar. Rest assured, should your services to the Fremennik be required, I will call upon you.",
     "You do not meet all of the requirements to start The Fremennik Exiles quest."]);
 });
+
+test("Lalli's fleece with a full inventory goes to the floor, the coins paid (item loss)", async (t) => {
+  const f = actor(t, { stage: 8, trials: ALL_PASSED });
+  const inv = f.player.getInventory();
+  inv.adds(core.ItemIdentifiers.COINS, 1500);
+  while (inv.getFreeSlots() > 0) inv.adds(core.ItemIdentifiers.BRONZE_DAGGER, 1);
+  await playTalk(f, 803, ["Pay"]);
+  assert.equal(inv.getAmount(core.ItemIdentifiers.COINS), 500);
+  assert.equal(inv.getAmount(core.ItemIdentifiers.GOLDEN_FLEECE), 0);
+  const { ItemOnGroundManager } = require("../dist/game/entity/impl/grounditem/ItemOnGroundManager");
+  assert.ok(ItemOnGroundManager.getGroundItem(f.player.getUsername(), core.ItemIdentifiers.GOLDEN_FLEECE, f.player.getLocation(), null),
+    "the fleece is on the floor");
+});
+
+test("Brundt's hello menu has no Charos rename option (rsprox 1002313 t7563); Mord's refusal is a message box (t8001)", async (t) => {
+  const f = actor(t, { stage: 8, trials: ALL_PASSED });
+  PM.emitCustomEvent("npc-dialogue:start", { player: f.player, npcId: BRUNDT });
+  tick(f);
+  await f.connection.dispatch([{ type: "dialogue_continue", widgetId: MultiChatboxPrompt.OPTIONS_WIDGET_ID, childIndex: 2 }]);
+  tick(f);
+  for (let i = 0; i < 4 && shown(f)?.who !== "menu"; i++) await continueLine(f);
+  assert.deepEqual(shown(f).options, ["I just came to say hello.", "Do you have any quests?", "Nice hat!", "Can I hear the history of your people?"]);
+  const g = actor(t, { stage: 8, trials: ALL_PASSED });
+  PM.emitCustomEvent("npc-dialogue:start", { player: g.player, npcId: core.CacheDefinitions.getNpcId("fris_r_ferryman_rellekka"),
+    variant: { page: "Mord Gunnars", variant: "travelling-to-jatizso-before-the-fremennik-isles" }, exact: true });
+  tick(g);
+  assert.deepEqual(shown(g), { who: "StatementDialogue", text: "You'll have to get to know Mord a little better before you can travel with him." });
+});

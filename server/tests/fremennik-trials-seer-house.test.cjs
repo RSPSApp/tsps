@@ -587,3 +587,14 @@ test("the mural shows its coins, empty circles and, once both disks are in, the 
   await click(done, LOC.MURAL, 1, 4);
   assert.deepEqual(pieces(done), [[1, 3717, 10], ...[8, 9, 10, 11, 12, 13, 14, 15].map((child) => [child, 3715, 116])]);
 });
+
+test("a logout on the drain's pour tick empties nothing afterwards (interruption)", async (t) => {
+  const f = actor(t, { at: [2630, 3662, 2], items: [I.FULL_JUG] });
+  await f.connection.dispatch([{ type: "item_on_object", objectId: LOC.DRAIN.id, x: LOC.DRAIN.x, y: LOC.DRAIN.y, itemId: I.FULL_JUG, slot: 0, widgetId: core.Inventory.INTERFACE_ID }]);
+  for (let i = 0; i < 6 && !f.anims.some((anim) => anim.id === 1077); i++) tick(f);
+  PM.emitPlayerLogout({ player: f.player, username: f.player.getUsername() });
+  core.World.getPlayers().remove(f.player);
+  ticks(f, 2);
+  assert.deepEqual(f.messages, []);
+  assert.ok(!has(f, I.EMPTY_JUG), "the delayed swap did not run for a logged-out player");
+});

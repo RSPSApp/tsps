@@ -70,7 +70,11 @@ quest's own stage window answers a shared NPC first:
   trip is free there), Haskell, Torfinn, Agnar, Yrsa, Peer, Swensen, Olaf, the fish monger, Manni, Lalli and the bouncer.
   The trial units stop answering at completion. The module answers those talks' conditions (inventory space, a pet rock
   kept, 1,000 coins, Jarvald's armour parts by item name) and hand-outs (Askeladden's new pet rock, Lalli's fleece for
-  1,000 coins, Wiki).
+  1,000 coins, Wiki; with a full inventory the fleece goes on the floor). Brundt's "(Charm) Can I have a new name?" stays
+  hidden: its rename ("[new Fremennik name] [honorific]") is not implemented; live showed his four options (t7563).
+- Brundt after the quest, before the Exiles: "Ask for a quest. | Ask about anything else." (the Seal of Passage and
+  mountain camp options once Lunar Diplomacy / Mountain Daughter are started); "Ask for a quest." is his "Not at the
+  moment" line and the requirements message box while the Exiles cannot start (t7551-t7563).
 - Olaf's Music cape is his page's "About the Music Cape..." (Music.plugin.js answers its conditions and the sale); the
   invented "Buy a music cape" menu is gone.
 - Yrsa's "I'd like to change my shoes" opens the makeover on shoes (1002313 t8292; Makeover.plugin.js).

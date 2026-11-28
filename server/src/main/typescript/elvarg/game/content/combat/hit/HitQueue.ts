@@ -147,7 +147,13 @@ export class HitQueue {
     /** Takes a hit off the owner's hitpoints, then runs effects that react to the result. */
     private applyDamage(hit: HitDamage): HitDamage {
         const applied = this.character.decrementHealth(hit);
-        if (applied.getDamage() > 0 || this.character.getHitpoints() > 0) this.lastAppliedHit = applied;
+        if (applied.getDamage() > 0 || this.character.getHitpoints() > 0) {
+            this.lastAppliedHit = applied;
+            // A player who dealt it is recorded like a damage-map entry, so that leaving the world clears it (a miss or a
+            // rebound is not in the damage map).
+            const source = applied.getSource();
+            if (source && source !== this.character && source.isPlayer()) source.getCombat().noteRecordedIn(this.character.getCombat());
+        }
         if (applied.getHitmask() === HitMask.GREEN && applied.getDamage() > 0) this.poisonSplats++;
         hit.notifyApplied(applied.getHealthLost());
         if (hit.isReflected() && applied.getHealthLost() > 0) {
@@ -168,6 +174,11 @@ export class HitQueue {
     /** The last hit taken; after a death it is the killing blow. */
     getLastAppliedHit(): HitDamage | null {
         return this.lastAppliedHit;
+    }
+
+    /** `source` left the world: the last hit taken stops naming it, so it is not kept in memory. */
+    forgetSource(source: Mobile): void {
+        if (this.lastAppliedHit?.getSource() === source) this.lastAppliedHit = null;
     }
 
     /** Queues a hit for the cycle it comes due on; process() is what decides whether it waits. */

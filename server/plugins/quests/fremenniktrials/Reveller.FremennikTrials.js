@@ -431,6 +431,9 @@ module.exports = function attachFremennikTrialsReveller(api, ctx) {
   function poisonMenu(notice) {
     const { player, npcId } = notice;
     if (npcId !== NPC.POISON_SALESMAN || !player || !pitchHeard(player)) return;
+    // Only while the quest runs: after it (or before) the option is his own page's.
+    const stage = ctx.quest?.getStage(player) ?? 0;
+    if (stage < STAGE_STARTED || stage >= STAGE_COMPLETE) return;
     const index = (notice.options ?? []).findIndex((option) => option.text === POISON_FREMENNIK_OPTION);
     if (index < 0) return;
     const options = [...notice.options];

@@ -479,3 +479,19 @@ test("a lit object kept 70-100 s explodes in the inventory (Wiki)", async (t) =>
   assert.equal(amount(f, ID.LIT), 0);
   assert.ok(f.chats.some((c) => c.who === "player" && c.text === "Ow!"));
 });
+
+test("after the quest the salesman's Fremennik option sells nothing (review of #6942)", async (t) => {
+  const f = actor(t, { items: [[ID.COINS, 1000]], at: [2696, 3491, 0] });
+  QuestRuntime.getRegisteredQuests().findLast((entry) => entry.key === "fremennik_trials").setStage(f.player, 8);
+  f.player.setAttribute("quest.fremennik_trials.poison_pitch", 1);
+  const salesman = spawn(f, ID.POISON, [2697, 3491, 0]);
+  await talk(f, salesman);
+  if (MultiChatboxPrompt.getPending(f.player)?.options?.includes("Talk about the Fremennik Trials")) {
+    await choose(f, "Talk about the Fremennik Trials");
+    for (let i = 0; i < 12 && shown(f); i++) {
+      if (MultiChatboxPrompt.getPending(f.player)?.options?.includes("Yes")) await choose(f, "Yes"); else await continueLine(f);
+    }
+  }
+  assert.equal(amount(f, ID.COINS), 1000);
+  assert.equal(amount(f, ID.LOW_KEG), 0);
+});

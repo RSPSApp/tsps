@@ -739,6 +739,17 @@ test("the ring's Favourites sub-menu row teleports to that slot's favourite at o
   assert.deepEqual(empty.ticks.flat(), Array(3).fill("You will need to select a favourite from the sub-menu."));
 });
 
+test("a Favourites row resolves the code through fairy-rings:destination like Last-destination", () => {
+  const rec = player();
+  rec.p.setAttribute(T.FAVOURITES_ATTRIBUTE, "BJR");
+  emitted.length = 0;
+  T.ringOptions().Favourites({ player: rec.p, location: RING, subOpId: 1 });
+  assert.ok(
+    emitted.some((event) => event.name === "fairy-rings:destination" && event.code === "BJR"),
+    JSON.stringify(emitted),
+  );
+});
+
 test('database table indexing skips mixed tuple values without changing decoded rows', () => {
   const { DbRowType } = require('../dist/game/cache/codec/rs/config/dbrow/DbRowType');
   // Column 0: (string type 36, int, string type 42), two tuples, then table 300.

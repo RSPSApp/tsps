@@ -778,7 +778,7 @@ function favouritesOption({ player, location, subOpId }) {
     player.sendMessage("You will need to select a favourite from the sub-menu.");
     return;
   }
-  const ring = rings.get(code);
+  const ring = resolveRing(player, rings.get(code), ringTile(location));
   if (!ring?.destination) return;
   const locked = codeLockRefusal(player, ring.code);
   if (locked) {

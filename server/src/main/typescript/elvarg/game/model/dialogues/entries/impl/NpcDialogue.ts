@@ -2,6 +2,7 @@ import { Dialogue } from "../Dialogue";
 import { Player } from "../../../../entity/impl/player/Player";
 import { DialogueExpression } from "../../DialogueExpression";
 import { NpcDefinition } from "../../../../definition/NpcDefinition";
+import { NpcChatheadAnimations } from "../../../../definition/NpcChatheadAnimations";
 
 export class NpcDialogue extends Dialogue {
     private static readonly GROUP_ID = 231;
@@ -32,7 +33,8 @@ export class NpcDialogue extends Dialogue {
         sender
             .sendChatboxInterface(this.groupId)
             .sendNpcHeadOnInterface(this.npcId, headUid)
-            .sendInterfaceAnimation(headUid, typeof this.expression === "number" ? this.expression : this.expression.getExpression())
+            .sendInterfaceAnimation(headUid, NpcChatheadAnimations.forLine(this.npcId,
+                typeof this.expression === "number" ? this.expression : this.expression.getExpression()))
             .sendString(
                 name,
                 (this.groupId << 16) | 4

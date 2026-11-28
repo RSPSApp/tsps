@@ -1,0 +1,14 @@
+{
+ "$comment": "Chathead animations of NPCs whose head is not on the human chathead rig, from rsprox.net captures (https://rsprox.net/database): the IfSetAnim sent for the dialogue head (231:2). Only NPCs whose head the default animation 589 moves under a tenth of (cache osrs-242) and that a capture shows speaking. `seq`: the animation; `seen`: lines recorded; `captures`: up to three of them.",
+ "npcs": {
+  "8424": {"name":"Wolfbone","seq":8166,"seen":6,"captures":[739]},
+  "8431": {"name":"Snowflake","seq":8166,"seen":5,"captures":[1694]},
+  "8438": {"name":"Don't Know What","seq":8167,"seen":12,"captures":[1633,1634]},
+  "8623": {"name":"Konar quo Maten","seq":8220,"seen":1,"captures":[2960]},
+  "9294": {"name":"Bakuna","seq":8502,"seen":2,"captures":[1768]},
+  "9295": {"name":"Typhor","seq":8502,"seen":1,"captures":[1768]},
+  "9297": {"name":"Vritra","seq":8502,"seen":1,"captures":[1768]},
+  "9580": {"name":"Werewolf","seq":6551,"seen":15,"captures":[102,1140,1637]},
+  "9743": {"name":"Werewolf","seq":6550,"seen":3,"captures":[3052]}
+ }
+}

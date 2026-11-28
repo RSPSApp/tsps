@@ -36,6 +36,9 @@ const TIMBER = Items.TIMBER_BEAM;
 const BRICK = Items.LIMESTONE_BRICK;
 const PASTE = Items.SWAMP_PASTE;
 const PLANKS = Items.PLANK;
+const SILVER = Items.SILVER_COFFIN;
+const OPEN_SILVER = Items.OPEN_SILVER_COFFIN;
+const SPADE = Items.SPADE;
 let LOAR;
 let PHRIN;
 
@@ -107,6 +110,7 @@ function createPlayer(inventoryItems = []) {
   const equipment = Array.from({ length: 14 }, () => new Item(-1, 0));
   const attributes = new Map();
   const varps = new Map();
+  let interfaceId = -1;
   const sender = {
     getVarp: (id) => varps.get(id) ?? 0,
     sendVarbit() {}, sendConfig: () => sender, sendInventory: () => sender,
@@ -122,9 +126,11 @@ function createPlayer(inventoryItems = []) {
     getBank: (tab) => banks[tab],
     getCurrentBankTab: () => 0,
     isSearchingBank: () => false,
+    getBankCustomQuantity: () => 1,
+    getBankQuantityMode: () => 0,
     getStatus: () => p.status,
-    getInterfaceId: () => -1,
-    setInterfaceId: () => {},
+    getInterfaceId: () => interfaceId,
+    setInterfaceId: (id) => { interfaceId = id; },
     getEquipment: () => ({
       getItems: () => equipment,
       get: (slot) => equipment[slot],
@@ -311,4 +317,87 @@ test("the plank refusal is the Wiki's line", () => {
   const bag = p.getInventory().getItems().find((held) => held.getId() === BAG_ID);
   option(p, bag, "Fill");
   assert.ok(p.messages.includes(FlamtaerBag.MESSAGE.PLANKS));
+});
+
+/** The bank panel's op 9 on a coffin in the pack: the bankside panel's item child, with the bank open. */
+function bankPanel(p, held, buttonNum = 9, itemId = held.getId()) {
+  p.status = PlayerStatus.BANKING;
+  p.setInterfaceId(Bank.MAIN_INTERFACE_ID);
+  return Bank.handleWidgetAction(p, {
+    groupId: Bank.SIDE_INTERFACE_ID,
+    childId: Bank.SIDE_ITEMS_CHILD,
+    slot: p.getInventory().getItems().indexOf(held),
+    itemId,
+    buttonNum,
+    option: buttonNum === 9 ? "Empty" : undefined,
+  });
+}
+
+test("the bank panel's Empty deposits every shade remain and leaves the coffin carried", () => {
+  // Wiki: Update:Deadman: Annihilation Drops This Friday! (28 January 2026): the bank's Empty
+  // option deposits all shade remains into the bank; a coffin's bank op is not Wear.
+  for (const id of [SILVER, OPEN_SILVER]) {
+    const p = createPlayer([new Item(id)]);
+    const coffin = p.getInventory().getItems().find((held) => held.getId() === id);
+    Storage.setContents(p, COFFIN, [{ id: LOAR, amount: 2 }, { id: PHRIN, amount: 2 }]);
+    assert.equal(bankPanel(p, coffin), true);
+    assert.equal(p.getBank(0).getAmount(LOAR), 2);
+    assert.equal(p.getBank(0).getAmount(PHRIN), 2);
+    assert.equal(familyTotal(p, COFFIN), 0);
+    assert.equal(p.getInventory().getItems().includes(coffin), true);
+    assert.equal(p.getEquipment().getValidItems().length, 0);
+  }
+});
+
+test("a bank that can only take one remain deposits as many as fit and keeps the rest", () => {
+  const p = createPlayer([new Item(SILVER)]);
+  const coffin = p.getInventory().getItems().find((held) => held.getId() === SILVER);
+  // The fake bank stacks by id; a real one keeps non-stackables one to a slot, so borrow a
+  // one-slot container of the same shape (it caps a plain item at its free slots).
+  const oneSlot = createContainer(1, [], false);
+  const bank = p.getBank;
+  p.getBank = (tab) => (tab === 0 ? oneSlot : bank(tab));
+  Storage.setContents(p, COFFIN, [{ id: LOAR, amount: 4 }]);
+  bankPanel(p, coffin);
+  assert.equal(oneSlot.getAmount(LOAR), 1);
+  assert.equal(Storage.amountOf(p, COFFIN, LOAR), 3);
+  assert.equal(p.getInventory().getItems().includes(coffin), true);
+});
+
+test("a full bank keeps every remain in the coffin", () => {
+  const p = createPlayer([new Item(SILVER)]);
+  const coffin = p.getInventory().getItems().find((held) => held.getId() === SILVER);
+  // Every tab full, or the deposit spills into the next tab that has room.
+  const full = createContainer(0, [], false);
+  p.getBank = () => full;
+  Storage.setContents(p, COFFIN, [{ id: LOAR, amount: 4 }]);
+  assert.equal(bankPanel(p, coffin), true);
+  assert.equal(Storage.amountOf(p, COFFIN, LOAR), 4);
+  assert.equal(p.getInventory().getItems().includes(coffin), true);
+});
+
+test("a closed bank, a stale item id and another bank op leave the remains alone", () => {
+  const closed = createPlayer([new Item(SILVER)]);
+  const held = closed.getInventory().getItems()[0];
+  Storage.setContents(closed, COFFIN, [{ id: LOAR, amount: 2 }]);
+  closed.status = PlayerStatus.NONE;
+  closed.setInterfaceId(-1);
+  Bank.handleWidgetAction(closed, {
+    groupId: Bank.SIDE_INTERFACE_ID, childId: Bank.SIDE_ITEMS_CHILD, slot: 0, itemId: SILVER, buttonNum: 9, option: "Empty",
+  });
+  assert.equal(familyTotal(closed, COFFIN), 2);
+
+  const stale = createPlayer([new Item(SILVER)]);
+  const staleHeld = stale.getInventory().getItems()[0];
+  Storage.setContents(stale, COFFIN, [{ id: LOAR, amount: 2 }]);
+  bankPanel(stale, staleHeld, 9, SPADE);
+  assert.equal(familyTotal(stale, COFFIN), 2);
+
+  const other = createPlayer([new Item(SILVER)]);
+  const otherHeld = other.getInventory().getItems()[0];
+  Storage.setContents(other, COFFIN, [{ id: LOAR, amount: 2 }]);
+  bankPanel(other, otherHeld, 10);
+  assert.equal(familyTotal(other, COFFIN), 2);
+  assert.equal(other.getEquipment().getValidItems().length, 0);
+  assert.equal(other.getInventory().getItems().includes(otherHeld), true);
 });

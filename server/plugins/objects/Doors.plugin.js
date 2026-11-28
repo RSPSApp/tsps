@@ -637,6 +637,7 @@ function defineDoorData({ ObjectIdentifiers: O, Sound }) {
       ],
       crossY: 9918,
       walkOver: true,
+      operateBeforeMovement: true,
       closeTicks: 2,
       openSoundId: 71,
     }),

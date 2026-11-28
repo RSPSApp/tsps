@@ -151,6 +151,7 @@ module.exports = function registerIcthlarinsLittleHelperQuest(api) {
   api.onCustomEvent("npc-dialogue:choice", talk.handleChoice);
   api.onCustomEvent("npc-dialogue:line", line);
   api.onCustomEvent("door:toggle", doorToggle);
+  api.onCustomEvent("door:toggle", talk.gateToggle);
   api.onCustomEvent("icthlarins-little-helper:east-door", ceremony.eastDoor);
   api.onObjectInteraction(objectClickedEvent);
   api.onItemOnObject(itemOnObject);

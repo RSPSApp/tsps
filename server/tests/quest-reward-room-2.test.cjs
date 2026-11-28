@@ -4,7 +4,6 @@
 // - Curse of Arrav: rsprox 3168 t6402-t6448 and t9133-t9136. Live goes by whether the item is held: a
 //   skeleton re-gives after a drop, and says "nothing of interest" while it is held.
 // - Dig Site: the Wiki has no certificate check at Terry Balando, so a lost certificate can't stop him.
-// - Icthlarin's symbol: refused before the jump, as a drop would land on the far side of the pit.
 // - Eagles' Peak: the step frees 3 slots and gives 4 items, inside a dialogue, so the last goes to the ground.
 // No capture shows a full bag at any of these: refusal wording is ours.
 process.env.DISABLE_PLAYER_BOTS = "1";
@@ -30,9 +29,7 @@ const { JsonPlayerPersistence } = require("../plugins/persistence/JsonPlayerPers
 
 const HOME = [3222, 3218];
 const CONTINUE_CHILD = { 231: 5, 217: 5, 193: 0, 229: 2 };
-const SYMBOL = 4683;
 const DIG = "the_dig_site";
-const ICTH = "ictlharins_little_helper";
 const CURSE = "curse_of_arrav";
 const BIT_LEVER_NORTH_PULLED = 1 << 7;
 const SKELETON_NOTHING = "You search the skeleton, but find nothing of interest.";
@@ -385,46 +382,8 @@ test("Dig Site: Terry doesn't need the certificates, and needs room for the comp
   assert.equal(full.inv.getAmount(I.CHEMICAL_COMPOUND), 1, "with room he hands it over");
 });
 
-// ------------------------------------------------------------------ Icthlarin's Little Helper
-
-test("Icthlarin: the pit refuses a full bag before the jump; with room it gives the symbol", async (t) => {
-  const control = actor(t, ICTH, 16);
-  await clickLoc(t, control, O.PIT);
-  assert.equal(control.inv.getAmount(SYMBOL), 1, "control: the symbol");
-  assert.equal(stageOf(control, ICTH), 17, "control: and the stage");
-
-  const f = actor(t, ICTH, 16);
-  fill(f);
-  await clickLoc(t, f, O.PIT);
-  assert.equal(stageOf(f, ICTH), 16, "the stage waits");
-  assert.ok(anyRoomMessage(f), JSON.stringify(f.messages));
-  assert.ok(Math.abs(f.p.getLocation().getX() - HOME[0]) <= 2, "and the player hasn't jumped");
-  freeSlot(f);
-  await clickLoc(t, f, O.PIT);
-  assert.equal(f.inv.getAmount(SYMBOL), 1, "with room it gives it");
-  assert.equal(stageOf(f, ICTH), 17);
-});
-
-test("Icthlarin: at the next stage a dropped symbol comes back at the pit, and no second one", async (t) => {
-  const lost = actor(t, ICTH, 17);
-  await clickLoc(t, lost, O.PIT);
-  assert.equal(lost.inv.getAmount(SYMBOL), 1, "a dropped symbol comes back");
-
-  const holding = actor(t, ICTH, 17);
-  put(holding, SYMBOL, 0);
-  await clickLoc(t, holding, O.PIT);
-  assert.equal(holding.inv.getAmount(SYMBOL), 1, "control: no second symbol");
-
-  const full = actor(t, ICTH, 17);
-  fill(full);
-  await clickLoc(t, full, O.PIT);
-  assert.equal(full.inv.getAmount(SYMBOL), 0, "control: no room");
-  assert.ok(anyRoomMessage(full), JSON.stringify(full.messages));
-
-  const early = actor(t, ICTH, 15);
-  await clickLoc(t, early, O.PIT);
-  assert.equal(early.inv.getAmount(SYMBOL), 0, "control: none before the ceremony");
-});
+// Icthlarin's Little Helper: the pit's symbol hand-out is tests/icthlarins-little-helper-capture.test.cjs (the flashback
+// swaps the holy symbol for the unholy one in its slot, as live does; a full bag with neither waits).
 
 // ------------------------------------------------------------------ The Curse of Arrav
 

@@ -393,6 +393,12 @@ function createPyramid(api, state, common, { STAGE, VARBIT, JARS }) {
 
   /** "As you go to make the jump, another sense of deja-vu sweeps over you..." (t1965), then the flashback. */
   function dejaVuAtPit(player, stage, at, variant) {
+    // Flashback 3 needs the unholy symbol, which takes the holy symbol's slot. Ours (not recorded): with neither
+    // the holy symbol nor a free slot it waits, with the inventory's usual refusal.
+    if (stage === STAGE.FLASHBACK_3 && !common.held(player, common.ITEM.HOLY_SYMBOL) && common.freeSlots(player) < 1) {
+      player.sendMessage("You don't have enough inventory space to do that.");
+      return true;
+    }
     common.pickUpCat(player);
     common.mesbox(player, "As you go to make the jump, another sense of deja-vu sweeps over you...");
     common.later(player, 5, () => {

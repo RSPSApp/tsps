@@ -864,3 +864,37 @@ test('the pit jump: 20% run energy (Wiki), the recorded 15% drain on landing, li
   assert.equal(f.p.getRunEnergy(), 85);
   assert.ok(f.log.some((e) => e[1] === 'sendSoundEffect' && e[2] === 1174), 'pit_land');
 });
+
+test('the gates during the quarantine: the gate priest\'s refusal until stage 15 (t672-t694), open from then (t2254)', async (t) => {
+  // Doors' pass-through routing needs the world's whole turn (tests/camelot-gate.test.cjs drives it); the gate's
+  // door:toggle, which Doors raises first, is what this quest answers.
+  const f = fixture(t, [3284, 2808, 0]);
+  setStage(f, 3);
+  f.p.setAttribute(VARS_KEY, { [VARBIT.JAR]: 2 });
+  f.npc(4208, [3283, 2810, 0]);
+  const gate = core.ObjectManager.get?.(44038, new core.Location(3284, 2809, 0)) ?? { getId: () => 44038, getLocation: () => new core.Location(3284, 2809, 0) };
+  const request = { player: f.p, object: gate, objectId: 44038, location: { x: 3284, y: 2809, z: 0 }, clickType: 1, handled: false };
+  PM.emitCustomEvent('door:toggle', request);
+  assert.equal(request.handled, true);
+  const lines = await f.talk();
+  assert.deepEqual(lines.map((l) => [l[1], l[2]]), [
+    [4208, 'Sorry, but Sophanem is under quarantine. No one may leave or enter.'],
+    ['player', "But I'm not infected with anything!"],
+    [4208, "I'm afraid my orders are clear."],
+  ]);
+  setStage(f, 15);
+  const open = { ...request, handled: false };
+  PM.emitCustomEvent('door:toggle', open);
+  assert.equal(open.handled, false, 'Doors opens it');
+});
+
+test('flashback 3 with neither the holy symbol nor a free slot waits (Ours wording)', async (t) => {
+  const f = fixture(t, [3294, 2779, 0]);
+  await enterPyramid(f, 16, { [VARBIT.PRIESTS]: 1 });
+  while (f.p.getInventory().getFreeSlots() > 0) f.give(I().COINS === undefined ? 995 : 1925);
+  place(f, 3292, 9191);
+  await clickIn(f, 6632, 3292, 9194, 1);
+  f.step(4);
+  assert.equal(stage(f), 16);
+  assert.ok(f.log.some((e) => e[1] === 'sendMessage' && e[2] === "You don't have enough inventory space to do that."));
+});

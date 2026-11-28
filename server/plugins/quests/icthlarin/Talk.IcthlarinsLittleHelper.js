@@ -54,6 +54,11 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
   const embalmerItems = (player) => get(player, VARBIT.EMBALMER_ITEMS);
   const embalmerDone = (player) => embalmerItems(player) === 7;
   const hasJar = (player) => JARS.some((jar) => jar && common.held(player, jar.item));
+  /** Sophanem inside its walls (Quest Helper's zone). */
+  function insideCity(player) {
+    const at = player.getLocation();
+    return at.getZ() === 0 && at.getX() >= 3262 && at.getX() <= 3322 && at.getY() >= 2751 && at.getY() <= 2809;
+  }
   const hasSalt = (player) => common.held(player, ITEM.PILE_OF_SALT) || common.held(player, ITEM.BAG_OF_SALT);
 
   // ---------------------------------------------------------------------------
@@ -172,6 +177,7 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
       case "lrOe_5": return !common.catFollower(player);
       case "X5AziL": case "CHEt9f": return common.wearingGhostspeak(player);
       case "A-PiH0": return !common.wearingGhostspeak(player); // Klenter's page, after the quest
+      case "Pd5RL1": return insideCity(player);
       case "CBPOsk": case "HFDnfW": return !common.wearingGhostspeak(player);
       case "49Xo0U": case "D-HbGr": case "CFMl8w": case "4fMYHu": case "pr4swa": case "ibGGn2": case "jDxKab": return common.hasCat(player);
       case "DNzgqI": case "WbhXk3": case "yO0q7C": case "Ivtofg": case "RH5k1y": case "WlWWGQ": return !common.hasCat(player);
@@ -452,6 +458,19 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
     return true;
   }
 
+  /**
+   * The city's gates during the quarantine (t672-t694: the gate priest's "Sorry, but Sophanem is under quarantine..."):
+   * shut until the High Priest lets the player come and go (stage 15, t2254 the gate opens; Wiki: partial completion).
+   */
+  const SOPHANEM_GATES = new Set([44036, 44038, 44040]); // sophanem_gate_left/right, sophanem_gate_small
+  function gateToggle(request) {
+    if (request.handled || !SOPHANEM_GATES.has(request.objectId)) return;
+    const { player } = request;
+    if (complete(player) || stage(player) >= STAGE.PREPARATIONS) return;
+    request.handled = true;
+    common.play(player, GATE_PRIEST, "city-of-the-dead-talking-to-a-priest-attempting-to-open-a-nearby-gate");
+  }
+
   /** Talk-to on the Sphinx while the riddle is asked: the variant with its seams joined. */
   function sphinxTalkTo(event) {
     const { player } = event;
@@ -515,7 +534,7 @@ function createTalk(api, state, common, { STAGE, VARBIT, JARS, start, pyramid, c
   }
 
   return {
-    selectVariant, answerCondition, handleAction, handleHook, handleChoice, handleLine, sphinxTalkTo, jexTalkTo, klenterTalkTo, OWNED, KLENTER,
+    selectVariant, answerCondition, handleAction, handleHook, handleChoice, handleLine, sphinxTalkTo, jexTalkTo, klenterTalkTo, gateToggle, OWNED, KLENTER,
     _test: { BOXES, ON_LINE, lineKey },
   };
 }

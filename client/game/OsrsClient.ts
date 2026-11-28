@@ -386,6 +386,7 @@ import { NotificationDisplay } from "./widgets/NotificationDisplay";
 import { PlayerDesignController } from "./widgets/PlayerDesignController";
 import { SpellSelectionController } from "./widgets/SpellSelectionController";
 import { applyWildernessHudLayout } from "./widgets/WildernessHud";
+import { fitAllSettingsBesideSidePanel } from "./widgets/MobileHudLayout";
 import {
     type SelectedSpellInfo,
     type SpellSelectionState,
@@ -4870,6 +4871,9 @@ export class OsrsClient {
                 }
             }
         }
+
+        // After the layout above, so the cache's width test reads the sizes now on screen.
+        fitAllSettingsBesideSidePanel(widgetManager, (id) => this.runClientScriptWithInts(id, []));
 
     }
 

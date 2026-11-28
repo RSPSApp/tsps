@@ -222,7 +222,7 @@ export async function init(host: WebGLOsrsRendererHost, ): Promise<void> {
                 host.canvas.width | 0,
                 host.canvas.height | 0,
             );
-            host.osrsClient.widgetManager.resize(metrics.layoutW, metrics.layoutH, metrics.renderScaleX);
+            host.osrsClient.widgetManager.resize(metrics.layoutW, metrics.layoutH);
         }
 
         host.hitsplatTickUnsub = subscribeTick((tick) => host.onServerTick(tick));

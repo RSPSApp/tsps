@@ -349,7 +349,7 @@ export function onResize(host: WebGLOsrsRendererHost, width: number, height: num
 
             // Sync widgetManager dimensions with the current UI layout space.
             const uiMetrics = host.computeUiRenderMetrics(width, height);
-            host.osrsClient?.widgetManager?.resize(uiMetrics.layoutW, uiMetrics.layoutH, uiMetrics.renderScaleX);
+            host.osrsClient?.widgetManager?.resize(uiMetrics.layoutW, uiMetrics.layoutH);
 
             // All in-world overlays render in buffer pixel space, so their scale must match
             // renderScaleX (uiScale × DPR) so sprites/text appear the correct physical size.

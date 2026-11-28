@@ -79,15 +79,43 @@ test("another player's hits and kills count for no NPC: their sounds go to that 
 });
 
 test('a sound the server already sends is left out, a number in a comment or string beside "sound" is not', () => {
-  // 4020: plugins/bosses/araxxor/Shared.Araxxor.js plays it as the Mirrorback's hit sound, in
-  // `HIT_SOUND = Object.freeze({ ..., mirrorback: Object.freeze([4020, 9]) })` over several lines.
+  // 4198: plugins/npcs/data/basilisk-knights.json lists it under a "sounds" key.
   // 500: only "1,500 coins" in The Writings on the Wall's dialogue (and 451 in a capture note in
   // Wilderness.Agility.js) sit near the word "sound".
-  const lines = fight().map((line) => line.replace('dark_beast_hit (391)', '4020').replace('dark_beast_attack (389)', '500')
+  const lines = fight().map((line) => line.replace('dark_beast_hit (391)', '4198').replace('dark_beast_attack (389)', '500')
     .replace('[synth_sound] id=390, delay=0', '[synth_sound] id=451'));
   const { status, stderr, npcs } = mine(lines);
   assert.equal(status, 0, stderr);
   assert.deepEqual(npcs['4005'], { attack: [[500, 0]], death: [[451, 0]] });
+});
+
+test('a sound only quest scenes play, or a boss plugin plays for one NPC, stays for the NPCs that make it', () => {
+  // 410: the Watchtower cutscene's DRAGON_HIT (plugins/quests). 4020: Araxxor's Mirrorback (13671) hit, in
+  // `HIT_SOUND = Object.freeze({ ..., mirrorback: Object.freeze([4020, 9]) })` over several lines.
+  const beast = fight().map((line) => line.replace('dark_beast_hit (391)', '4020').replace('dark_beast_attack (389)', '410'));
+  const mirrorback = beast.map((line) => line.replace('rec.txt:', 'rec2.txt:').replace('mourning_dark_beast (4005)', 'araxxor_mirrorback (13671)'));
+  const { status, stderr, npcs } = mine([...beast, ...mirrorback]);
+  assert.equal(status, 0, stderr);
+  assert.deepEqual(npcs['4005'], { hit: [[4020, 0]], attack: [[410, 0]], death: [[390, 0]] });
+  assert.deepEqual(npcs['13671'], { attack: [[410, 0]], death: [[390, 0]] });
+});
+
+test("an animation's name wins over a captured block class", () => {
+  // npc-captured-animations.json classes a dire wolf's (13812) dog_update_wolf_attack (6559) as a block.
+  const wolf = (line) => line.replace('mourning_dark_beast (4005)', 'mag_direwolf (13812)')
+    .replace('dark_beast_update_attack (2731)', 'dog_update_wolf_attack (6559)');
+  const { status, stderr, npcs } = mine(fight().map(wolf));
+  assert.equal(status, 0, stderr);
+  assert.deepEqual(npcs['13812'].attack, [[389, 0]]);
+});
+
+test('a name that only says block does not overrule a captured death', () => {
+  // The scarab swarm (729) dies with scarab_parry (1946): npc-captured-animations.json has 23 death sightings.
+  const scarab = (line) => line.replace('mourning_dark_beast (4005)', 'scarab_swarm (729)')
+    .replace('dark_beast_update_death (2733)', 'scarab_parry (1946)');
+  const { status, stderr, npcs } = mine(fight().map(scarab));
+  assert.equal(status, 0, stderr);
+  assert.deepEqual(npcs['729'].death, [[390, 0]]);
 });
 
 test('input in neither format is refused', () => {

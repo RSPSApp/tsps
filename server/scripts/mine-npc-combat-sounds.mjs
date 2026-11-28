@@ -1,8 +1,8 @@
 // Builds data/definitions/npc-combat-sounds.json from the rsprox.net captures
-// (https://rsprox.net/database).
+// (https://rsprox.net/database). It imports a .ts file, so it needs Node 22.18 or later (type stripping on by
+// default); on 22.6-22.17 run it as `node --experimental-strip-types scripts/mine-npc-combat-sounds.mjs`.
 //
-// INPUT FORMAT. Not the rsprox_transcripts/ files (their own transcriber writes `[npc_info...]`,
-// `[synth_sound] id=` and `[hit]` lines). It reads the text RSProx's own decoder, the
+// INPUT FORMATS. Either the text RSProx's own decoder, the
 // `net.rsprox.proxy.cli.BinaryToStringCommandKt` class in the RSProx launcher repository, writes for a
 // `.bin` recording: one file per recording, packet lines of the form `[tick] <- PacketName(fields)`:
 //   [176] <- SynthSound(id=2811, loops=1, delay=20)
@@ -21,7 +21,7 @@
 //       [npc_info_small_v5]
 //           [walk] npc=(index=26936, id=mourning_dark_beast (4005), coord=(3227, 12394, 0)), ...
 //               [sequence] id=dark_beast_update_attack (2731)
-//               [hit] id=17, value=4, limit=8
+//               [hit] id=16, value=4, limit=8
 // Feed it every tick header, packet header, NPC line and NPC sequence/hit line:
 //
 //   rg -N --with-filename --glob "*.txt" "^(\[[0-9]+\]$| {4}\[| {8}\[[a-z_]+\] npc=| {12}\[(sequence|hit)\] )" \
@@ -37,9 +37,10 @@
 // NPC, so a sound is tied to an NPC id by how reliably it shows up in that NPC's ticks:
 //   - a tick counts for "hit" when the NPC took a hitsplat and played no attack animation, for
 //     "attack" when it played an attack animation and took no hitsplat, for "death" when it played
-//     its death animation (animations are classed with npc-captured-animations.json, and an animation
-//     it has no class for by its gameval name, as NpcDefinitionLoader does: `dark_beast_update_attack`
-//     is an attack; the BinaryToString text names no animation, so there only the captured classes count);
+//     its death animation (animations are classed by a gameval name that says attack or death first, with
+//     NpcDefinitionLoader's rule: `dark_beast_update_attack` is an attack; then by
+//     npc-captured-animations.json. The BinaryToString text names no animation, so there only the captured
+//     classes count);
 //   - a sound is kept for an NPC when it is in at least MIN_SHARE of that NPC's ticks of the kind,
 //     at least MIN_TICKS times;
 //   - a sound is NPC-specific only if the NPCs it was kept for account for at least
@@ -49,7 +50,8 @@
 // A sound's delay is its most common delay in the captures.
 //   - a sound the server already plays somewhere else (a boss plugin, Sound.ts, another data file) is
 //     left out, so it is never sent twice; only code counts (digits in comments and strings don't), and the
-//     quest plugins don't, as their scenes play sounds for scripted actors outside combat.
+//     quest plugins don't, as their scenes play sounds for scripted actors outside combat. SCOPED_SOUNDS
+//     narrows a plugin's sound to the NPCs it plays it for.
 import fs from "node:fs";
 import readline from "node:readline";
 import path from "node:path";
@@ -140,6 +142,16 @@ function knownSounds() {
     return known;
 }
 const known = knownSounds();
+/**
+ * Sounds a plugin plays for some NPCs only: left out for those, kept for every other NPC that makes them.
+ * An empty list is a send tied to no NPC's own hit, attack or death (a projectile landing, a cloud fading).
+ */
+const SCOPED_SOUNDS = new Map([
+    [4020, [13671]], // the Araxxor Mirrorback's hit (bosses/araxxor); Nylocas and other araxytes keep it
+    [3403, [8059, 8061]], // Vorkath's ranged shot landing (bosses/vorkath); Jal-Ak keeps its attack
+    [795, []], [796, []], // Zulrah's toxic cloud fading (bosses/zulrah)
+]);
+const isKnown = (sound, npc) => known.has(sound) && (SCOPED_SOUNDS.get(sound)?.includes(npc) ?? true);
 const captured = JSON.parse(fs.readFileSync(path.join(here, "../data/definitions/npc-captured-animations.json"), "utf8")).npcs;
 const animKind = new Map();
 for (const [id, npc] of Object.entries(captured)) {
@@ -152,11 +164,15 @@ for (const [id, npc] of Object.entries(captured)) {
     animKind.set(Number(id), kinds);
 }
 
-/** "attack", "death" or null for an animation an NPC played: the captured class, else its gameval name's role. */
+/**
+ * "attack", "death" or null for an animation an NPC played. A gameval name that says attack or death comes
+ * first (`dog_update_wolf_attack` is an attack, though a dire wolf's few captured sightings class it a
+ * block), then the captured class: a name that only says block doesn't overrule it (`scarab_parry` is the
+ * scarab swarm's death, 23 captured sightings).
+ */
 function animationKind(npc, anim, name) {
-    const kind = animKind.get(npc)?.get(anim);
-    if (kind) return kind === "block" ? null : kind;
-    const role = animationRoleByName(name ?? null);
+    const named = animationRoleByName(name ?? null);
+    const role = named === "attack" || named === "death" ? named : animKind.get(npc)?.get(anim) ?? null;
     return role === "attack" || role === "death" ? role : null;
 }
 
@@ -340,7 +356,7 @@ const candidates = new Map(); // sound -> [{ kind, npc, co }]
 for (const [key, c] of co) {
     if (c < MIN_CO) continue;
     const [sound, target] = key.split("|");
-    if (target.startsWith("any-") || known.has(Number(sound))) continue;
+    if (target.startsWith("any-") || isKnown(Number(sound), Number(target.split(":")[1]))) continue;
     const ticks = kindTicks.get(target);
     if (ticks < MIN_TICKS_OF_KIND || c / ticks < MIN_SHARE) continue;
     const [kind, npc] = target.split(":");

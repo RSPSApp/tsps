@@ -272,10 +272,27 @@ function submenuRow(event, entry, equipped) {
     confirmAndTeleport(player, item, destination);
     return true;
   }
-  // Rub's rows here are actions (the cache's Contact Master, Partner, Open Log). None is built
-  // yet (docs/slayer.md); answering the row keeps it from falling through to Rub's own
-  // destination list, as the slayer helmet's Partner and Log do.
-  return piece.actionRows?.includes(event.subOption) === true;
+  // Rub's rows here are actions (the cache's Contact Master, Partner, Open Log). Content answers
+  // them ("jewellery:action"); the row is taken either way so it never falls through to Rub's
+  // own destination list, as the slayer helmet's Partner and Log do.
+  const action = actionNamed(piece, event.subOption);
+  if (!action) return false;
+  emitAction(player, item, action, equipped);
+  return true;
+}
+
+/** A slayer ring action row or worn option by name (case-insensitive), or null. */
+function actionNamed(piece, name) {
+  const wanted = normalise(name);
+  if (!wanted) return null;
+  return (piece.actionRows ?? []).find((row) => normalise(row) === wanted) ?? null;
+}
+
+/** "jewellery:action" { player, item, action, equipped, handled }: content answers a ring's row. */
+function emitAction(player, item, action, equipped) {
+  const request = { player, item, action, equipped, handled: false };
+  pluginApi.emitCustomEvent("jewellery:action", request);
+  return request.handled === true;
 }
 
 function handleJewelleryAction(event) {
@@ -293,7 +310,13 @@ function handleJewelleryAction(event) {
 
   if (equipped) {
     const destination = equippedDestination(piece, event);
-    if (!destination) return;
+    if (!destination) {
+      const worn = actionNamed(piece, wornOptionName(event.itemId, event.clickType));
+      if (!worn) return;
+      event.handled = true;
+      emitAction(player, item, worn, true);
+      return;
+    }
     event.handled = true;
     if (destination === "rub") rub(player, item);
     else confirmAndTeleport(player, item, destination);

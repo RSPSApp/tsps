@@ -344,7 +344,7 @@ function answerCondition(event) {
 
 /** Fills the transcripts' blanks ("[amount]", "[task monster]", "[task streak amount]", Mortimer's "[X]"). */
 function fillLine(request) {
-  if (!/\[(amount|number|task monster|monster|task streak amount|X)\]/.test(request.text ?? "")) return;
+  if (!/\[(amount|number|task monster|monster|task streak amount|X|area)\]/.test(request.text ?? "")) return;
   const master = masterFor(request.definition);
   if (!master) return;
   const task = Tasks.current(request.player);
@@ -364,7 +364,9 @@ function fillLine(request) {
     .replace(/\[task streak amount\]/g, String(streak))
     .replace(/\[X\]/g, String(mortimerTasks(request.player)))
     .replace(/\[(amount|number)\]/g, String(task?.count ?? 0))
-    .replace(/\[(task monster|monster)\]/g, Tasks.taskName(task?.task));
+    .replace(/\[(task monster|monster)\]/g, Tasks.taskName(task?.task))
+    // The item contact's Konar line names the area; a task with none (another master's) drops it.
+    .replace(/ in \[area\]/g, task?.area?.text ? ` in ${task.area.text}` : "");
 }
 
 /**
@@ -618,6 +620,7 @@ function attach(pluginApi) {
 module.exports = {
   init,
   attach,
+  findOption,
   assignmentLine,
   answerCondition,
   fillLine,

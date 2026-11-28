@@ -233,3 +233,34 @@ test('another genuine swing before the next task cannot postpone the first outgo
   core.TaskManager.process();
   assert.equal(wear(caster), 999, 'later outgoing activity cannot starve first-use wear');
 });
+
+test('the Civitas blacksmith repairs Barrows gear for coins, only at NPC 13332', (t) => {
+  const B = Barrows();
+  const p = stand(wp(t));
+  const helm = new core.Item(I.GUTHANS_HELM, 1);
+  B._test.setDurability(helm, 250); // 25% remaining: 750 points x 60 = 45,000 coins
+  p.getInventory().setItem(0, helm);
+  p.getInventory().adds(I.COINS, 100000);
+
+  assert.equal(B._test.blacksmithCost(p), 45000);
+  assert.equal(B._test.blacksmithCondition({ player: p, npcId: 13332, text: 'If the player has enough coins:' }), true);
+  assert.equal(B._test.blacksmithCondition({ player: p, npcId: 13332, text: 'If the player has no repairable equipment:' }), false);
+
+  const line = { player: p, npcId: 13332, text: "I'll need [x] coins to repair that." };
+  B._test.blacksmithLine(line);
+  assert.equal(line.text, "I'll need 45,000 coins to repair that.");
+
+  const notice = { player: p, npcId: 13332, options: [{ text: 'Repair that item: [x] coins.' }, { text: 'Cancel.' }] };
+  B._test.blacksmithMenu(notice);
+  assert.equal(notice.options[0].text, 'Repair that item: 45,000 coins.');
+  assert.equal(notice.options[1].text, 'Cancel.');
+
+  B._test.blacksmithChoice({ player: p, npcId: 13332, option: 'Repair that item: 45,000 coins.' });
+  assert.equal(p.getInventory().getAmount(I.COINS), 55000);
+  assert.equal(helm.getId(), I.GUTHANS_HELM);
+  assert.equal(B._test.durability(helm), 1000);
+
+  // The other blacksmiths share the cache name; the handlers answer only the Civitas one.
+  assert.equal(B._test.civitasRepair({ player: p, npcId: 13038, clickType: 3, option: 'Repair' }), false);
+  assert.equal(B._test.blacksmithCondition({ player: p, npcId: 13038, text: 'If the player has enough coins:' }), null);
+});

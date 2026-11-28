@@ -1,9 +1,15 @@
 /**
  * At First Light (members).
  *
- * Behaviour follows the complete quest in RSProx recording 1695 (revision 226, ticks
- * 5134-5763); the words come from the "At First Light" transcript page. Evidence and
- * remaining gaps: docs/p2p-varlamore-group-2-parity.md.
+ * Behaviour follows the user's revision 243 capture of the whole quest (AtFirstLight.bin)
+ * and RSProx recording 1695 (revision 226, ticks 5134-5763); the words come from the
+ * "At First Light" transcript page with that capture's wording. Evidence and remaining
+ * gaps: docs/quests/at-first-light/README.md.
+ *
+ * Fox is two world NPCs, as live spawns him: the injured afl_hunter_fox_multi (13400) by the
+ * Locus Oasis, which each player's client shows as 12932 at stages 4-10, and
+ * afl_hunter_fox_normal (13422) by the Hunter Guild, shown as 13426 from stage 11
+ * (npc-spawns.json). Neither is spawned per player.
  *
  * Stage lives in varbit 9835 "afl" (varp 4151, bits 0-4), as captured:
  *   1 started               7 Fox asked for the sample to go to Atza
@@ -14,8 +20,9 @@
  *   6 Fox has the poultice 11 Kiko's bed repaired, 12 complete
  * The sibling varbits on varp 4151 are mirrored as captured: afl_report 9836 (report handed
  * to Verity), afl_bedcheck 9837, afl_bedrepair 9838, afl_catdistract 9839, afl_housetrapped
- * 9840 (1 asked to assemble the pile, 2 assembled), afl_mastermet 9841, afl_sampletaken
- * 9842 and afl_mousetaken 9843.
+ * 9840 (1 asked to assemble the pile, 2 assembled), afl_mastermet 9841 (met Apatura: set at
+ * the first meeting, before the quest), afl_sampletaken 9842, afl_mousetaken 9843 and
+ * afl_wolf_dialogue 9995 (told Wolf about Fox).
  *
  * Saves from the old 1-12 model (bed check at 4, report delivered at 11) are mapped once.
  * Rewards per the capture: 1 Quest point, 4,500 Hunter, 800 Construction and 500 Herblore
@@ -26,7 +33,7 @@ module.exports = function registerAtFirstLightQuest(api) {
     Animation, CountdownTask, DialogueChainBuilder, Equipment, ItemStatementDialogue, ObjectDefinition,
     Skill, ItemIdentifiers, NpcIdentifiers, ObjectIdentifiers, TaskManager,
   } = api.core;
-  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts, questStartMessage } = require("../QuestRuntime");
+  const { registerQuest, refreshQuestList, startTranscript, loadTranscripts, questStartMessage, giveReward } = require("../QuestRuntime");
 
   const VARP_AT_FIRST_LIGHT = 4151;
   const STAGE_VARBIT = 9835;
@@ -57,6 +64,7 @@ module.exports = function registerAtFirstLightQuest(api) {
     masterMet: [9841, 11, 1],
     sampleTaken: [9842, 12, 1],
     mouseTaken: [9843, 13, 1],
+    wolfDialogue: [9995, 14, 1],
   };
 
   const APATURA_NPC_ID = NpcIdentifiers.GUILDMASTER_APATURA; // 13120
@@ -65,6 +73,7 @@ module.exports = function registerAtFirstLightQuest(api) {
   const KIKO_NPC_ID = NpcIdentifiers.GUILD_HUNTER_KIKO; // 12934
   const ATZA_NPC_ID = NpcIdentifiers.ATZA; // 12933
   const FOX_NPC_ID = NpcIdentifiers.GUILD_HUNTER_FOX; // 12932, the injured Fox
+  const APATURA_NPC_NAME = "Guildmaster Apatura";
   const ATZA_NPC_NAME = "Atza";
   const KIKO_NPC_NAME = "Guild Hunter Kiko";
   const VERITY_NPC_NAME = "Guild Scribe Verity";
@@ -100,15 +109,20 @@ module.exports = function registerAtFirstLightQuest(api) {
   const ROUGH_BUSH_PICK_OBJECT_ID = ObjectIdentifiers.ROUGH_LOOKING_BUSH; // 53022
   const EQUIPMENT_SETUP_OBJECT_ID = ObjectIdentifiers.PILE_OF_EQUIPMENT_2; // 50880
 
-  // Fox has no npc-spawns.json row: the injured Fox is the player's own while the quest needs him.
-  const FOX_SPAWN = { id: FOX_NPC_ID, x: 1623, y: 2982, z: 0, wanderRadius: 0 };
-
-  // Captured animations and timings.
-  const PICK_ANIMATION = 10094;
-  const PICK_SOUND = 2581;
-  const POULTICE_ANIMATION = 10097;
-  const ASSEMBLE_ANIMATION = 3676;
-  const REPAIR_ANIMATION = 10794;
+  // Captured animations, sounds and timings (revision 243 capture ticks in brackets).
+  const PICK_ANIMATION = 10094; // picking_low_short [603]
+  const PICK_SOUND = 2581; // pick, delay 15, a tick after the animation [604]
+  const PICK_SOUND_DELAY = 15;
+  const POULTICE_ANIMATION = 10097; // human_grind [712]
+  const POULTICE_SOUND = 2608; // grind, delay 25 [712]
+  const POULTICE_SOUND_DELAY = 25;
+  const ASSEMBLE_ANIMATION = 3676; // human_poh_build, delay 10 [1012, 1019, 1026]
+  const ASSEMBLE_SOUND = 938; // poh_build_wood, delay 10, with each build animation
+  const ASSEMBLE_DELAY = 10;
+  const REPAIR_ANIMATION = 10794; // human_crafting [1251]
+  const REPAIR_SOUND = 2591; // stiching [1251]
+  const PET_ANIMATION = 827; // human_pickupfloor, on every Pet [326, 343, 385, 872, 1242]
+  const ATZA_CRYING_SOUND = 3424; // tol_homonculus_crying on Atza's chores line [992]
   const REPAIR_CRAFTING_XP = 10;
   const PICK_TICKS = 2;
   const ASSEMBLE_LINE_TICKS = 2;
@@ -132,20 +146,31 @@ module.exports = function registerAtFirstLightQuest(api) {
     qTFJ7n: FOXS_REPORT_ITEM_ID,
     akPfwh: MAKESHIFT_POULTICE_ITEM_ID,
   };
-  /** Text-only message boxes. */
-  const STATEMENTS = new Set(["MdlNBh", "LNk3X1", "fZnlnI", "AFxMNH", "oSl9ut"]);
+  /** Text-only message boxes (g3koUf: the bed checked again, capture tick 871). */
+  const STATEMENTS = new Set(["MdlNBh", "LNk3X1", "fZnlnI", "AFxMNH", "oSl9ut", "g3koUf"]);
 
   const VERITY_LEAD_LINE = "If anyone did, it would've been Wolf. She's always getting Fox into some kind of trouble.";
   const WOLF_MOUSE_LINE = "He's very easy to distract. We have a little fake mouse we use sometimes.";
   const WOLF_PYRE_LINE = "He'll have stopped off for a bit of hunting first. There are some pyre foxes about halfway between here and the Locus Oasis that he was eyeing up. I bet that's where you'll find him.";
   const FOX_TRAPS_LINE = "Don't forget... your traps for the jerboa... they're boxy...";
-  const FOX_SAMPLE_LINE = "Well it's your lucky day! Take this sample to a woman called Atza in Outer Fortis. She'll have exactly what we need.";
+  const FOX_SAMPLE_LINE = "Well, it's your lucky day! Take this sample to a woman called Atza in Outer Fortis. She'll have exactly what we need.";
   const ATZA_PILE_LINE = "It's all in that pile on the floor there. You can work it out, I'm sure.";
+  const ATZA_CHORES_LINE = "Oh... Fox usually helps me with my chores when he visits.";
+  // The player's lines during the pile: once each is continued, the build animation and
+  // sound play and Atza answers two ticks later (capture ticks 1017-1028).
   const ASSEMBLE_LINES = new Set(["Well, he actually got attacked on his way over here.", "Oh he'll be alright. He was on the mend when I left him."]);
+  const PLAYER_EXPRESSIONS = {
+    [WOLF_NPC_ID]: { "...": 610, "Why not?": 554 }, // chatsad1, chatquiz1
+    [FOX_NPC_ID]: { "...": 13967 }, // chatneu_idle
+  };
+  const APATURA_MET_LINE ="Well, I'm Apatura. Let me welcome you to our small corner of Varlamore.";
+  const WOLF_FOX_FOUND_LINES = new Set([
+    "I've found Fox. He's been injured by something out in the savannah.",
+    "I've found Fox. He's been injured by something out in the savannah, but he's doing okay. He's got me doing a few things for him whilst he recuperates.",
+  ]);
   const ASSEMBLED_LINE = "All done!";
   const APATURA_DONE_LINE = "Actually... I think I'll just read the report.";
 
-  const spawnedFoxes = new WeakMap();
   const playerTasks = new WeakMap();
   let quest;
 
@@ -218,11 +243,10 @@ module.exports = function registerAtFirstLightQuest(api) {
     );
   }
 
-  /** Advances the stage (and Fox's presence) without ever regressing. */
+  /** Advances the stage without ever regressing. */
   function advance(player, stage) {
     if (stageOf(player) >= stage) return;
     quest.setStage(player, stage);
-    syncFox(player);
   }
 
   function take(player, itemId) {
@@ -285,7 +309,13 @@ module.exports = function registerAtFirstLightQuest(api) {
         ? "finishing-up-talking-to-guild-hunter-wolf-after-repairing-the-bed"
         : "finishing-up-talking-to-guild-hunter-wolf-after-turning-in-the-report";
     }
-    if (stage >= STAGE_POULTICE) return "fox-tracking-talking-to-guild-hunter-wolf-after-giving-fox-the-poultice";
+    // afl_wolf_dialogue: whether the player has told Wolf about Fox. Never having done so,
+    // the first talk after the poultice is the capture's single line (ticks 860-861).
+    if (stage >= STAGE_POULTICE) {
+      return sub(player, "wolfDialogue") === 1
+        ? "fox-tracking-talking-to-guild-hunter-wolf-after-giving-fox-the-poultice"
+        : "fox-tracking-talking-to-guild-hunter-wolf-for-the-first-time-after-giving-fox-the-poultice";
+    }
     if (stage >= STAGE_FOX_FOUND) return "fox-tracking-talking-to-guild-hunter-wolf-after-talking-to-fox";
     if (stage >= STAGE_PYRE_FOXES) return "a-missing-fox-talking-to-wolf-after-inspecting-the-cat-bed-talking-to-wolf-again";
     if (stage === STAGE_MOUSE && sub(player, "bedCheck") === 1) return "a-missing-fox-talking-to-wolf-after-inspecting-the-cat-bed";
@@ -353,6 +383,10 @@ module.exports = function registerAtFirstLightQuest(api) {
         return !held(player, STICKY_LEAF_ITEM_ID);
       case "DM1ufw": // already has a sticky leaf
         return held(player, STICKY_LEAF_ITEM_ID);
+      case "AW4lzO": // "I think I've got them both." while holding both leaves
+        return held(player, SMOOTH_LEAF_ITEM_ID) && held(player, STICKY_LEAF_ITEM_ID);
+      case "U7Wq-I": // ... without both leaves
+        return !(held(player, SMOOTH_LEAF_ITEM_ID) && held(player, STICKY_LEAF_ITEM_ID));
       case "W8dord": // still has the fur sample, or full and not yet received
         return held(player, FUR_SAMPLE_ITEM_ID) || inventoryFull(player);
       case "XRTAlW": // lost the fur sample and has a full inventory
@@ -397,10 +431,17 @@ module.exports = function registerAtFirstLightQuest(api) {
     if (typeof text !== "string") return;
     const at = (expected, action) => { if (text === expected) event.before = action; };
     const stage = stageOf(player);
+    // The player's lines the shared chathead table holds for another quest's words (capture ticks 292, 414, 698).
+    const own = PLAYER_EXPRESSIONS[npcId]?.[event.step?.player];
+    if (own !== undefined) event.expression = own;
+    // Met Apatura: set as her second line appears, at the first meeting (capture tick 123).
+    if (npcId === APATURA_NPC_ID && stage === 0) at(APATURA_MET_LINE, () => setSub(player, "masterMet", 1));
     if (npcId === VERITY_NPC_ID && stage === STAGE_STARTED) at(VERITY_LEAD_LINE, () => advance(player, STAGE_VERITY));
     if (npcId === WOLF_NPC_ID) {
       if (stage === STAGE_VERITY) at(WOLF_MOUSE_LINE, () => advance(player, STAGE_MOUSE));
       if (stage === STAGE_MOUSE) at(WOLF_PYRE_LINE, () => advance(player, STAGE_PYRE_FOXES));
+      // Told Wolf about Fox: set as the player's line appears (capture tick 860).
+      if (stage >= STAGE_FOX_FOUND && WOLF_FOX_FOUND_LINES.has(text)) event.before = () => setSub(player, "wolfDialogue", 1);
     }
     if (npcId === FOX_NPC_ID) {
       if (stage === STAGE_PYRE_FOXES) at(FOX_TRAPS_LINE, () => advance(player, STAGE_FOX_FOUND));
@@ -408,13 +449,20 @@ module.exports = function registerAtFirstLightQuest(api) {
     }
     if (npcId === ATZA_NPC_ID) {
       if (stage === STAGE_SAMPLE_GIVEN && sub(player, "housetrapped") === 0) at(ATZA_PILE_LINE, () => setSub(player, "housetrapped", 1));
-      if (ASSEMBLE_LINES.has(text)) event.before = () => later(player, 1, () => player.performAnimation(new Animation(ASSEMBLE_ANIMATION, 10)));
+      at(ATZA_CHORES_LINE, () => player.getPacketSender().sendSound(ATZA_CRYING_SOUND, 1, 0));
+      if (stage === STAGE_SAMPLE_GIVEN && sub(player, "housetrapped") === 1 && ASSEMBLE_LINES.has(text)) {
+        event.after = () => buildAnimation(player);
+        event.pauseTicks = ASSEMBLE_LINE_TICKS;
+      }
       at(ASSEMBLED_LINE, () => setSub(player, "housetrapped", 2));
     }
-    if (npcId === APATURA_NPC_ID && stage === STAGE_BED_REPAIRED && text === APATURA_DONE_LINE) event.after = () => {
-      quest.complete(player);
-      syncFox(player);
-    };
+    if (npcId === APATURA_NPC_ID && stage === STAGE_BED_REPAIRED && text === APATURA_DONE_LINE) event.after = () => quest.complete(player);
+  }
+
+  /** One round of work on Atza's pile: the build animation with its sound. */
+  function buildAnimation(player) {
+    player.performAnimation(new Animation(ASSEMBLE_ANIMATION, ASSEMBLE_DELAY));
+    player.getPacketSender().sendSound(ASSEMBLE_SOUND, 1, ASSEMBLE_DELAY);
   }
 
   function handleDialogueAction(event) {
@@ -465,13 +513,14 @@ module.exports = function registerAtFirstLightQuest(api) {
         take(player, FOXS_REPORT_ITEM_ID);
         setSub(player, "report", 1);
         return;
-      case "fZnlnI": // You carefully fix up Kiko's bed.
+      case "fZnlnI": // You carefully fix up Kiko's bed: the varbits, then the items, animation and sound (tick 1251).
+        setSub(player, "bedRepair", 1);
+        advance(player, STAGE_BED_REPAIRED);
         take(player, TRIMMED_FUR_ITEM_ID);
         take(player, JERBOA_TAIL_ITEM_ID);
         player.performAnimation(new Animation(REPAIR_ANIMATION));
+        player.getPacketSender().sendSound(REPAIR_SOUND, 1, 0);
         player.getSkillManager().addExperiences(Skill.CRAFTING, REPAIR_CRAFTING_XP);
-        setSub(player, "bedRepair", 1);
-        advance(player, STAGE_BED_REPAIRED);
         return;
       default:
         return;
@@ -517,6 +566,7 @@ module.exports = function registerAtFirstLightQuest(api) {
   function handlePetKiko(event) {
     const { player, npcId } = event;
     if (npcId !== KIKO_NPC_ID) return;
+    player.performAnimation(new Animation(PET_ANIMATION));
     const stage = stageOf(player);
     if (stage >= STAGE_MOUSE && stage < STAGE_COMPLETE) {
       startTranscript(api, player, KIKO_NPC_ID, PAGE, "a-missing-fox-petting-kiko");
@@ -524,6 +574,38 @@ module.exports = function registerAtFirstLightQuest(api) {
     }
     startTranscript(api, player, KIKO_NPC_ID, "Guild Hunter Kiko",
       understandsCats(player) ? "petting-kiko-with-a-catspeak-amulet" : "petting-kiko-without-a-catspeak-amulet");
+  }
+
+  /**
+   * Apatura before the quest. Her first meeting is the quest variant's own greeting; once met
+   * (afl_mastermet) she opens with her page's "Nilsal, hunter." / "Nilsal, Apatura." instead,
+   * and "What do you do here?" leads back to the other two options (capture ticks 120-174).
+   */
+  function handleApaturaTalk(event) {
+    const { player } = event;
+    if (event.npcId !== APATURA_NPC_ID || stageOf(player) !== 0) return false;
+    const met = sub(player, "masterMet") === 1;
+    startTranscript(api, player, APATURA_NPC_ID, PAGE, selectApaturaVariant(player), (steps) => beforeQuestTalk(steps, met));
+    return true;
+  }
+
+  function beforeQuestTalk(steps, met) {
+    const menuIndex = steps.findIndex((step) => step?.type === "choice");
+    if (menuIndex < 0) return steps;
+    const menu = steps[menuIndex];
+    const asked = menu.options.find((option) => option.text === "What do you do here?");
+    const others = menu.options.filter((option) => option !== asked);
+    const again = { ...menu, options: others };
+    const options = menu.options.map((option) => (option === asked ? { ...option, steps: [...option.steps, again] } : option));
+    const greeting = met ? subsequentGreeting() : steps.slice(steps.findIndex((step) => step?.type !== "condition"), menuIndex);
+    const conditions = steps.slice(0, menuIndex).filter((step) => step?.type === "condition");
+    return [...conditions, ...greeting, { ...menu, options }, ...steps.slice(menuIndex + 1)];
+  }
+
+  /** Her page's opening once met: its first two lines, before the rumour conditions. */
+  function subsequentGreeting() {
+    const steps = loadTranscripts(api)?.["Guildmaster Apatura"]?.variants?.["standard-dialogue-subsequent-dialogue"] ?? [];
+    return steps.slice(0, steps.findIndex((step) => step?.type === "condition"));
   }
 
   /** Hunter.plugin.js would otherwise answer with rumours; claim the quest's stages only. */
@@ -560,15 +642,12 @@ module.exports = function registerAtFirstLightQuest(api) {
         (steps) => steps.filter((step) => step.type === "condition"));
       return;
     }
-    if (inventoryFull(player)) {
-      player.sendMessage("You don't have enough inventory space.");
-      return;
-    }
     player.performAnimation(new Animation(PICK_ANIMATION));
-    player.getPacketSender().sendSound(PICK_SOUND, 1, 15);
+    later(player, 1, () => player.getPacketSender().sendSound(PICK_SOUND, 1, PICK_SOUND_DELAY));
     later(player, PICK_TICKS, () => {
-      if (held(player, itemId) || inventoryFull(player)) return;
-      player.getInventory().adds(itemId, 1);
+      if (held(player, itemId)) return;
+      // The Wiki: with a full inventory the leaf goes to the ground (giveReward drops what won't fit).
+      giveReward(player, itemId);
       player.getDialogueManager().startDialogues(new DialogueChainBuilder().add(new ItemStatementDialogue(0, itemId, message)));
     });
   }
@@ -592,7 +671,7 @@ module.exports = function registerAtFirstLightQuest(api) {
       startTranscript(api, player, ATZA_NPC_ID, PAGE, "fox-tracking-setting-up-the-pile-of-equipment-without-a-hammer");
       return;
     }
-    player.performAnimation(new Animation(ASSEMBLE_ANIMATION, 10));
+    buildAnimation(player);
     later(player, ASSEMBLE_LINE_TICKS, () => startTranscript(api, player, ATZA_NPC_ID, PAGE, "fox-tracking-setting-up-the-pile-of-equipment"));
   }
 
@@ -688,6 +767,7 @@ module.exports = function registerAtFirstLightQuest(api) {
     for (const itemId of ingredients) player.getInventory().deleteNumber(itemId, 1);
     player.getInventory().adds(MAKESHIFT_POULTICE_ITEM_ID, 1);
     player.performAnimation(new Animation(POULTICE_ANIMATION));
+    player.getPacketSender().sendSound(POULTICE_SOUND, 1, POULTICE_SOUND_DELAY);
     startTranscript(api, player, FOX_NPC_ID, PAGE, "fox-tracking-using-two-poultice-ingredients-together-while-holding-all-three");
   }
 
@@ -735,22 +815,8 @@ module.exports = function registerAtFirstLightQuest(api) {
   }
 
   // ==========================================================================
-  // Fox, saves, login/logout and journal
+  // Saves, login and journal
   // ==========================================================================
-
-  function syncFox(player) {
-    if (!player || player.isPlayerBot?.() === true) return;
-    const stage = stageOf(player);
-    const wanted = stage >= STAGE_PYRE_FOXES && stage < STAGE_COMPLETE;
-    const fox = spawnedFoxes.get(player);
-    if (wanted && !fox) {
-      const npc = api.spawnNpc({ ...FOX_SPAWN, owner: player, ownerOnly: true });
-      if (npc) spawnedFoxes.set(player, npc);
-    } else if (!wanted && fox) {
-      api.removeNpc(fox);
-      spawnedFoxes.delete(player);
-    }
-  }
 
   /** Old stages 1-12 onto the captured values (and their flags onto the varbits), once. */
   function migrate(player) {
@@ -776,81 +842,70 @@ module.exports = function registerAtFirstLightQuest(api) {
     if (!player || player.isPlayerBot?.() === true) return;
     migrate(player);
     for (const name of Object.keys(VARS)) player.getPacketSender().sendVarbit(VARS[name][0], sub(player, name));
-    syncFox(player);
   }
 
   function handleLogin({ player }) {
     refreshQuestList(player);
   }
 
-  function handleLogout({ player }) {
-    const fox = player ? spawnedFoxes.get(player) : null;
-    if (!fox) return;
-    api.removeNpc(fox);
-    spawnedFoxes.delete(player);
-  }
+  // Journal sections as live sends them (revision 243 capture, journal opened at ticks 186-1133).
+  const JOURNAL_DONE = {
+    1: ["<str>I spoke to Guildmaster Apatura in the Hunter Guild. She told", "<str>me that Guild Scribe Verity needed help with something and", "<str>asked me to speak to her in The Burrow below the Guild."],
+    2: ["<str>I spoke to Guild Scribe Verity in The Burrow. She asked to look", "<str>into the disappearance of Guild Hunter Fox. She suggested I", "<str>talk to Guild Hunter Wolf to learn more."],
+    3: ["<str>I spoke to Wolf and she explained to me that Fox was looking", "<str>into making some repairs to Guild Hunter Kiko's Cat Bed."],
+    4: ["<str>I distracted Kiko and then inspected his Bed to find some of", "<str>the fur missing. Fox presumably took a sample to help him", "<str>find the right replacement. Wolf suggested I look for him near", "<str>the Pyre Foxes on the way to the Locus Oasis."],
+    5: ["<str>I found Fox by a Chasm near the Locus Oasis, but he'd been", "<str>attacked. He asked me to make a Poultice for him."],
+    6: ["<str>I created a Poultice for Fox and gave it to him."],
+    7: ["<str>Fox explained to me that he was attacked whilst on route to", "<str>trade with Atza in Outer Fortis. He asked me to go to her on", "<str>his behalf while he recovered from his injuries. He gave me", "<str>the Fur Sample that he took from Kiko's Bed to give to her."],
+    9: ["<str>I took the Fur Sample to Atza in Outer Fortis and she gave me", "<str>the Trimmed Fur needed to fix Kiko's Bed."],
+  };
+  const JOURNAL_NOW = {
+    1: ["<col=000080>I spoke to <col=800000>Guildmaster Apatura<col=000080> in the <col=800000>Hunter Guild<col=000080>. She told", "<col=000080>me that <col=800000>Guild Scribe Verity<col=000080> needed help with something and", "<col=000080>asked me to speak to her in <col=800000>The Burrow<col=000080> below the <col=800000>Guild<col=000080>."],
+    2: ["<col=000080>I spoke to <col=800000>Guild Scribe Verity<col=000080> in <col=800000>The Burrow<col=000080> and learned that", "<col=000080>she is concerned about the disappearance of <col=800000>Guild Hunter", "<col=800000>Fox<col=000080>. She suggested I talk to <col=800000>Guild Hunter Wolf<col=000080> to learn more."],
+    3: ["<col=000080>I spoke to <col=800000>Wolf<col=000080> and she explained to me that <col=800000>Fox<col=000080> was looking", "<col=000080>into making some repairs to <col=800000>Guild Hunter Kiko's Cat Bed<col=000080>. I", "<col=000080>should have a look at the <col=800000>Bed<col=000080> and see what repairs he was", "<col=000080>trying to make."],
+    4: ["<col=000080>I distracted <col=800000>Kiko<col=000080> and then inspected his <col=800000>Bed<col=000080> to find some of", "<col=000080>the fur missing. <col=800000>Fox<col=000080> presumably took a sample to help him", "<col=000080>find the right replacement. <col=800000>Wolf<col=000080> suggested I look for him near", "<col=000080>the <col=800000>Pyre Foxes<col=000080> on the way to the <col=800000>Locus Oasis<col=000080>, as he'll have", "<col=000080>likely stopped off there."],
+    5: ["<col=000080>I found <col=800000>Fox<col=000080> by a <col=800000>Chasm<col=000080> near the <col=800000>Locus Oasis<col=000080>, but he'd been", "<col=000080>attacked. He asked me to make a <col=800000>Poultice<col=000080> for him using leaves", "<col=000080>from two nearby <col=800000>Plants<col=000080> along with an <col=800000>Embertailed Jerboa Tail<col=000080>."],
+    7: ["<col=800000>Fox<col=000080> explained to me that he was attacked whilst on route to", "<col=000080>trade with <col=800000>Atza<col=000080> in <col=800000>Outer Fortis<col=000080>. He asked me to go to her on", "<col=000080>his behalf while he recovers from his injuries. If I give her the", "<col=000080><col=800000>Fur Sample<col=000080> that <col=800000>Fox<col=000080> took from <col=800000>Kiko's Bed<col=000080>, she should be able", "<col=000080>to supply the <col=800000>Fur<col=000080> needed. I can find her home near the south", "<col=000080>western gate of <col=800000>Civitas illa Fortis<col=000080>."],
+    8: ["<col=000080>I took the <col=800000>Fur Sample<col=000080> to <col=800000>Atza<col=000080> in <col=800000>Outer Fortis<col=000080>. She asked me to", "<col=000080>assemble some <col=800000>Equipment<col=000080> on her floor while she searched for", "<col=000080>the right material."],
+    9: ["<col=000080>I took the <col=800000>Fur Sample<col=000080> to <col=800000>Atza<col=000080> in <col=800000>Outer Fortis<col=000080> and she gave me", "<col=000080>the <col=800000>Trimmed Fur<col=000080> needed to fix <col=800000>Kiko's Bed<col=000080>. I should return to", "<col=800000><col=800000>Fox<col=000080> near the <col=800000>Locus Oasis<col=000080> and let him know."],
+    10: ["<col=000080>I returned to <col=800000>Fox<col=000080> with the <col=800000>Trimmed Fur<col=000080>. He asked me to head", "<col=000080>back to the <col=800000>Hunter Guild<col=000080> and use the <col=800000>Fur<col=000080> along with an", "<col=800000><col=800000>Embertailed Jerboa Tail<col=000080> to fix <col=800000>Kiko's Bed<col=000080>. He also asked me to", "<col=000080>deliver a <col=800000>Report<col=000080> from him to <col=800000>Guild Scribe Verity<col=000080>."],
+  };
+
+
+  /** Stage -> the journal sections it shows: done ones struck through, the current one in colour. */
+  const JOURNAL_SECTION_AT = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 8, 10: 10 };
+  const strike = (lines) => lines.map((line) => `<str>${line.replace(/<col=[0-9a-f]+>/g, "")}`);
 
   function buildJournal(player, questHandle) {
     const stage = questHandle.getStage(player);
-    if (stage >= STAGE_COMPLETE) {
+    if (stage < STAGE_STARTED) {
+      // Ours: the start overview is not captured.
       return [
-        "<str>Guildmaster Apatura asked me to help Guild Scribe Verity,</str>",
-        "<str>who was worried about the missing Guild Hunter Fox.</str>",
-        "<str>I found Fox, delivered his report and repaired Kiko's bed.</str>",
+        "I can start this quest by talking to <col=800000>Guildmaster",
+        "Apatura</col> in the <col=800000>Hunter Guild</col>.",
         "",
-        "<col=ff0000>QUEST COMPLETE!</col>",
+        "I need level 46 Hunter, 30 Herblore and 27 Construction, and",
+        "the Children of the Sun and Eagles' Peak quests.",
       ];
     }
-    if (stage >= STAGE_REPORT) {
-      const lines = [];
-      lines.push(sub(player, "report") === 1 ? "I delivered Fox's report to Guild Scribe Verity." : "Fox gave me a report to take back to the guild.");
-      if (sub(player, "bedRepair") === 1) lines.push("I repaired Kiko's bed with the trimmed fur.");
-      lines.push("");
-      if (sub(player, "report") === 0) lines.push("I should deliver it to <col=800000>Guild Scribe Verity</col> in the Burrow.");
-      if (sub(player, "bedRepair") === 0) lines.push("I should use the trimmed fur along with a jerboa tail to", "repair <col=800000>Kiko's bed</col>.");
-      if (sub(player, "report") === 1 && sub(player, "bedRepair") === 1) lines.push("I should speak to <col=800000>Guildmaster Apatura</col>.");
-      return lines;
+    const current = JOURNAL_SECTION_AT[Math.min(stage, STAGE_REPORT)];
+    const lines = [];
+    for (const section of [1, 2, 3, 4, 5, 6, 7, 9]) {
+      if (section >= current || (section === 9 && current < 10)) break;
+      lines.push(...JOURNAL_DONE[section]);
     }
-    if (stage >= STAGE_TRIMMED_FUR) {
-      return ["I set up Atza's equipment and she gave me the trimmed fur.", "", "I should take it back to <col=800000>Fox</col> in the savannah."];
+    if (stage === STAGE_POULTICE) {
+      // Ours: stage 6 lasts only until Fox's next line, so it was not captured unstruck.
+      return [...lines, "<col=000080>I created a <col=800000>Poultice<col=000080> for <col=800000>Fox<col=000080> and gave it to him."];
     }
-    if (stage >= STAGE_SAMPLE_GIVEN) {
-      return ["I gave Atza the fur sample. She asked me to set up the", "<col=800000>pile of equipment</col> on her floor first."];
-    }
-    if (stage >= STAGE_SAMPLE) {
-      return held(player, FUR_SAMPLE_ITEM_ID)
-        ? ["I gave Fox the poultice and he gave me a fur sample.", "", "I should take it to <col=800000>Atza</col> near the south western", "gate of Civitas illa Fortis."]
-        : ["I gave Fox the poultice but still need his sample of the", "fur from <col=800000>Kiko's bed</col>."];
-    }
-    if (stage >= STAGE_POULTICE) {
-      return ["I gave <col=800000>Fox</col> the poultice. I should see what he needs now."];
-    }
-    if (stage >= STAGE_FOX_FOUND) {
-      return held(player, MAKESHIFT_POULTICE_ITEM_ID)
-        ? ["I found <col=800000>Fox</col> injured in the savannah.", "", "I should give him the makeshift poultice."]
-        : ["I found <col=800000>Fox</col> injured in the savannah.", "", "He needs a poultice of two kinds of leaves tied together", "with an embertailed jerboa tail."];
-    }
-    if (stage >= STAGE_PYRE_FOXES) {
-      return ["Wolf thinks Fox stopped to hunt <col=800000>pyre foxes</col> on his way", "to the Locus Oasis. I should look for him in the savannah."];
-    }
-    if (stage >= STAGE_MOUSE) {
-      return sub(player, "bedCheck") === 1
-        ? ["I distracted <col=800000>Kiko</col> and checked his bed.", "", "Some of the fur was deliberately cut off. I should tell", "<col=800000>Wolf</col> about it."]
-        : ["Wolf explained Fox was repairing <col=800000>Kiko's bed</col>.", "", "I should wind up the <col=800000>toy mouse</col> and distract Kiko", "so I can check the bed."];
-    }
-    if (stage >= STAGE_VERITY) {
-      return ["Guild Scribe Verity is worried about Guild Hunter Fox.", "", "She suggested I speak to <col=800000>Guild Hunter Wolf</col>."];
-    }
-    if (stage >= STAGE_STARTED) {
-      return ["Guildmaster Apatura asked me to help Guild Scribe Verity", "in <col=800000>The Burrow</col> below the Hunter Guild."];
-    }
-    return [
-      "I can start this quest by talking to <col=800000>Guildmaster",
-      "Apatura</col> in the <col=800000>Hunter Guild</col>.",
-      "",
-      "I need level 46 Hunter, 30 Herblore and 27 Construction, and",
-      "the Children of the Sun and Eagles' Peak quests.",
-    ];
+    if (stage < STAGE_REPORT) return [...lines, ...JOURNAL_NOW[current === 8 && stage === STAGE_TRIMMED_FUR ? 9 : current]];
+    if (stage === STAGE_REPORT) return [...lines, ...JOURNAL_NOW[10]];
+    // Ours from here: the capture opened no journal after stage 10.
+    lines.push(...strike(JOURNAL_NOW[10]));
+    if (stage >= STAGE_COMPLETE) return [...lines, "", "<col=ff0000>QUEST COMPLETE!"];
+    return [...lines, sub(player, "report") === 1
+      ? "<col=000080>I should speak to <col=800000>Guildmaster Apatura<col=000080>."
+      : "<col=000080>I should deliver <col=800000>Fox's Report<col=000080> to <col=800000>Guild Scribe Verity<col=000080>."];
   }
 
   function grantReward(player) {
@@ -880,6 +935,7 @@ module.exports = function registerAtFirstLightQuest(api) {
     scrollItemId: TRIMMED_FUR_ITEM_ID,
     otherRewards: ["Access to Master Tier Hunters' Rumours"],
     buildJournal,
+    journalAsSent: true,
     onReward: grantReward,
   });
 
@@ -888,6 +944,7 @@ module.exports = function registerAtFirstLightQuest(api) {
   api.onCustomEvent("npc-dialogue:hook", handleStartHook);
   api.onCustomEvent("npc-dialogue:line", handleLine);
   api.onCustomEvent("npc-dialogue:action", handleDialogueAction);
+  api.onNpcInteraction(APATURA_NPC_NAME, { "Talk-to": handleApaturaTalk });
   api.onNpcInteraction(ATZA_NPC_NAME, { "Talk-to": handleAtzaTalk });
   api.onNpcInteraction(KIKO_NPC_NAME, { Pet: handlePetKiko });
   api.onNpcInteraction(VERITY_NPC_NAME, { "Talk-to": talkFor(VERITY_NPC_ID, selectVerityVariant) });
@@ -901,5 +958,4 @@ module.exports = function registerAtFirstLightQuest(api) {
   api.onItemAction("Fox's report", { Read: handleReadReport });
   api.onCustomEvent("player:bootstrap-complete", syncVars);
   api.onPlayerLogin(handleLogin);
-  api.onPlayerLogout(handleLogout);
 };

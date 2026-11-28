@@ -81,6 +81,8 @@ function harness(name) {
     continueUntil(p, predicate, limit = 100) {
       while (!predicate()) {
         assert.ok(limit-- > 0, `dialogue stalled at ${p.text}`);
+        // A line's pauseTicks (Atza's pile) holds the chat on a timer: let it run, as the client can't continue it.
+        if (tasks.some(task => task.isRunning())) { h.tick(1); continue; }
         assert.ok(p.manager.getCurrent(), `dialogue ended at ${p.text}`);
         p.manager.advance();
       }
@@ -98,6 +100,7 @@ function player() {
   };
   const packet = new Proxy({
     sendVarbit(id, value) { varbits.set(id, value); return packet; }, getVarbit: id => varbits.get(id) ?? 0,
+    getChatboxGroupId: () => -1,
     sendString(text, uid) { if ([6, 3, 2].some(child => [217, 231, 229, 193].some(group => uid === (group << 16 | child)))) p.text = text; log.push(['text', uid, text]); return packet; },
     sendInterfaceRemoval() { p.manager.reset(); p.prompt = null; return packet; },
   }, { get: (t, key) => t[key] ?? ((...args) => { log.push([key, ...args]); return packet; }) });
@@ -167,7 +170,8 @@ test('AFL mandatory route runs stage 0 to 12 through the real NPC, object, item 
   talkName(h, p, 'Guild Hunter Wolf (Master)', N.GUILD_HUNTER_WOLF_MASTER_);
   h.continueUntil(p, () => p.text.startsWith('Why not?')); assert.equal(h.quest.getStage(p), 3);
   p.manager.advance(); assert.equal(h.quest.getStage(p), 4);
-  assert.ok(h.npcs.some(npc => npc.id === N.GUILD_HUNTER_FOX && !npc.removed));
+  // Fox is a world multinpc (npc-spawns.json 13400), not spawned by the quest: at-first-light-capture.test.cjs.
+  assert.equal(h.npcs.length, 0);
   h.finish(p);
 
   talkName(h, p, 'Guild Hunter Fox', N.GUILD_HUNTER_FOX);
@@ -184,7 +188,7 @@ test('AFL mandatory route runs stage 0 to 12 through the real NPC, object, item 
   h.finish(p);
   h.hooks.onItemOnNpc[0]({ player: p, itemId: I.MAKESHIFT_POULTICE, npcId: N.GUILD_HUNTER_FOX });
   h.continueUntil(p, () => /give the poultice/.test(p.text)); assert.equal(h.quest.getStage(p), 6);
-  h.continueUntil(p, () => p.text.startsWith("Well it's your lucky day! Take")); assert.equal(h.quest.getStage(p), 7);
+  h.continueUntil(p, () => p.text.startsWith("Well, it's your lucky day! Take")); assert.equal(h.quest.getStage(p), 7);
   h.continueUntil(p, () => /fur sample/.test(p.text)); assert.equal(p.items.get(I.FUR_SAMPLE), 1); assert.equal(p.varbits.get(9842), 1);
   h.finish(p);
 
@@ -220,7 +224,6 @@ test('AFL mandatory route runs stage 0 to 12 through the real NPC, object, item 
     [core.Skill.CRAFTING.getIndex(), 10], [core.Skill.HUNTER.getIndex(), 4500],
     [core.Skill.CONSTRUCTION.getIndex(), 800], [core.Skill.HERBLORE.getIndex(), 500],
   ]);
-  assert.ok(!h.npcs.some(npc => npc.id === N.GUILD_HUNTER_FOX && !npc.removed), 'the owner-only Fox is removed on completion');
 });
 
 function petKiko(h, p) {
@@ -434,7 +437,7 @@ test('AFL keeps the interrupted pile recovery across a relog', () => {
   p.getPacketSender().sendInterfaceRemoval();
 
   // Log out and back in: the stage and the packed flags have to survive.
-  h.hooks.onPlayerLogout[0]({ player: p });
+  h.hooks.onPlayerLogout?.forEach(fn => fn({ player: p }));
   h.hooks.onPlayerLogin[0]({ player: p });
   h.events['player:bootstrap-complete'][0]({ player: p });
   assert.equal(h.quest.getStage(p), 8);

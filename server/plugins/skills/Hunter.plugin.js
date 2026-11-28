@@ -103,6 +103,7 @@ module.exports = {
     api.onCustomEvent("npc-dialogue:action", Ceto.action);
     api.onCustomEvent("npc-dialogue:action", Annette.action);
     api.onNpcDialogueCondition(Matthias.condition);
+    api.onNpcDialogueCondition(Rumours.milestoneCondition);
     api.onCustomEvent("npc-dialogue:action", Matthias.action);
     api.onCustomEvent("npc-dialogue:action", Catching.dialogueLend);
     api.onCustomEvent("npc-dialogue:line", Ceto.line);

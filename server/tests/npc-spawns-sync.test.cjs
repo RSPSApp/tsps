@@ -359,11 +359,12 @@ test("an infobox's map N belongs to its id N, whatever order the data bucket lis
 test("multi-version NPCs: each place has its own version, and quest stages are left out", () => {
   const spawns = require("../data/definitions/npc-spawns.json");
   const ids = (x, y, level = 0) => spawns.filter((spawn) => spawn.x === x && spawn.y === y && (spawn.level ?? 0) === level).map((spawn) => spawn.id).sort();
-  // The Hunter Guild has Guild Hunter Fox after At First Light, not the quest's injured hunter;
-  // in live OSRS he walks within about 2 tiles.
+  // Guild Hunter Fox is At First Light's two multinpcs, as live spawns them (the user's rev 243 capture):
+  // afl_hunter_fox_normal (13422) by the Hunter Guild, shown as 13426 from stage 11 and walking within
+  // about 2 tiles; afl_hunter_fox_multi (13400) in the Avium Savannah, shown injured (12932) at 4-10.
   const fox = spawns.find((spawn) => spawn.x === 1548 && spawn.y === 3048);
-  assert.deepEqual([fox.id, fox.name, fox.wanderRadius], [13426, "Guild Hunter Fox", 2]);
-  assert.deepEqual(ids(1623, 2982), [], "the injured hunter in the Avium Savannah is a quest stage");
+  assert.deepEqual([fox.id, fox.name, fox.wanderRadius], [13422, "Guild Hunter Fox", 2]);
+  assert.deepEqual(ids(1623, 2982), [13400], "the injured hunter in the Avium Savannah is the quest's multinpc");
   assert.deepEqual(ids(1647, 3093), [14241], "Forebearer Janus at home, as a civilian");
   assert.deepEqual(ids(1435, 3124), [], "Attala moved to Cam Torum after Perilous Moons");
   assert.deepEqual(ids(1297, 9753), [], "Shas and Etz are injured only during the quest");

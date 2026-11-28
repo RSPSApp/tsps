@@ -264,4 +264,14 @@ function open({player,itemId}) {
 }
 /** `hunter:rumours-completed` { player, completed }: how many rumours the player has finished. */
 function completedCount(request){if(request?.player)request.completed=state(request.player).completed|0;}
-module.exports={ATTRIBUTE,state,VERITY_TUTORIAL,masters,interact,rumour,partPhrase,OFFERS,verity,check,success,open,assign,sackRewards,tasks,completedCount};
+/**
+ * Guildmaster Apatura's page asks "If the player has completed 50/100/150 Hunters' Rumours:" before her
+ * menu; unanswered, the first of them played for everyone. Answered from the rumours finished.
+ */
+const MILESTONE_CONDITION=/^If the player has completed (\d+) Hunters' Rumours:$/;
+function milestoneCondition({player,npcId,text}){
+  if(npcId!==H.core.NpcIdentifiers.GUILDMASTER_APATURA)return null;
+  const match=MILESTONE_CONDITION.exec(String(text??"").trim());
+  return match?(state(player).completed|0)>=Number(match[1]):null;
+}
+module.exports={ATTRIBUTE,state,VERITY_TUTORIAL,masters,interact,rumour,partPhrase,OFFERS,verity,check,success,open,assign,sackRewards,tasks,completedCount,milestoneCondition};

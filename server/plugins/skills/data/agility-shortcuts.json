@@ -964,12 +964,14 @@
       "object": 19849,
       "level": 25,
       "xp": 1,
+      "note": "rsprox capture 2821 ticks 131-140: the climb up, facing south into the mountain, human_climbing_loop over 250 client cycles with the walk on tick 7",
+      "unverified": "the climb down: it mirrors the climb up, facing the mountain, over 240 cycles (tsps PR 6889's capture)",
       "between": {
         "ends": [[2324,3497,0],[2322,3502,0]],
-        "cross": [
-          {"move":"to","anim":"CLIMB_ROCKS","speed":[0,180],"ticks":5},
-          {"anim":-1}
-        ]
+        "cross": {
+          "forward": [{"sound":2454,"loops":13,"delay":15},{"move":"to","anim":"CLIMB_LOOP","delay":15,"speed":[0,240],"dir":"south","ticks":8},{"anim":-1}],
+          "back": [{"sound":2454,"loops":13,"delay":15},{"move":"to","anim":"CLIMB_LOOP","delay":15,"speed":[0,250],"dir":"south","ticks":0},{"wait":7},{"anim":819},{"wait":2},{"tele":"to"},{"anim":-1}]
+        }
       }
     },
     {
@@ -2882,11 +2884,11 @@
       "at": [2741,3830,1],
       "level": 35,
       "xp": 1,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
+      "unverified": "the movement and both ends (no capture; ends from the map); both ways face east, up the cliff",
       "between": {
         "ends": [[2740,3830,1],[2744,3830,1]],
         "cross": [
-          {"move":"to","anim":"CLIMB_ROCKS","speed":[0,120],"ticks":4},
+          {"move":"to","anim":"CLIMB_ROCKS","speed":[0,120],"dir":"east","ticks":4},
           {"anim":-1}
         ]
       }
@@ -2897,11 +2899,11 @@
       "at": [2742,3830,1],
       "level": 35,
       "xp": 1,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
+      "unverified": "the movement and both ends (no capture; ends from the map); both ways face east, up the cliff",
       "between": {
         "ends": [[2740,3830,1],[2744,3830,1]],
         "cross": [
-          {"move":"to","anim":"CLIMB_ROCKS","speed":[0,120],"ticks":4},
+          {"move":"to","anim":"CLIMB_ROCKS","speed":[0,120],"dir":"east","ticks":4},
           {"anim":-1}
         ]
       }
@@ -2912,11 +2914,11 @@
       "at": [2743,3830,1],
       "level": 35,
       "xp": 1,
-      "unverified": "the movement and both ends (no capture; ends from the map)",
+      "unverified": "the movement and both ends (no capture; ends from the map); both ways face east, up the cliff",
       "between": {
         "ends": [[2740,3830,1],[2744,3830,1]],
         "cross": [
-          {"move":"to","anim":"CLIMB_ROCKS","speed":[0,120],"ticks":4},
+          {"move":"to","anim":"CLIMB_ROCKS","speed":[0,120],"dir":"east","ticks":4},
           {"anim":-1}
         ]
       }

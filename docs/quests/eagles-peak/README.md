@@ -24,6 +24,8 @@ levers and the silver room's footprints itself. Ticks below are that recording's
 - **fixed** No footprints after inspecting the silver room's pedestal. They are the map's multilocs on 3099, which is now sent. #6881
 - **fixed** Two eagles at the nest, and Walk-past did nothing: the plugin spawned its own eagle over the map's one. It now uses the map's one, and Walk-past walks the player through it. #6881
 - **fixed** Nickolaus's ferret-offer option answered nothing: the Wiki transcript has no lines for it. osrsreboxed-db#151 adds live's.
+- **fixed** The climbs faced away from the mountain going down; the kebbit's escape took it out of view; a gold room bird blinked out before its flight; Walk-past walked normally between the sidesteps; in the ferret lesson the player stood, did not walk to the trap, and the ferret turned round on arriving. #6943
+- **open** The kebbit's knockback distance, the desert boulder's push and the big eyrie exits' line need a recording of them. #6943
 - **open** The feathered journal's ground spawn in ground-items.json is on plane 0. Live has it on the eyrie's plane 3 (2004,4983,3). It is a legacy importer row with no export row behind it.
 
 ## Capture facts

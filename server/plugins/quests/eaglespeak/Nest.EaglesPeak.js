@@ -7,7 +7,8 @@
  * - Shout-to across the chasm: by eaglepeak_nickolaus_chat (Transcript variants); its reach is the ledge's.
  * - Giant feathers: one eagle feather a click (human_pickupfloor).
  * - The eagle (1490, 2007,4954): Walk-past with the disguise is a four-tile walk through it with the
- *   sidestep animations, its line on arrival (t2002-2006); without, the swipe (t1993, t2804).
+ *   sidestep animations (into, the sidestep walk the whole way, out), its line on arrival (t2002-2006);
+ *   without, the swipe (t1993, t2804).
  * - The stone door (19843 2003,4947 by 3099; 19991 2003,4948 by 3106): locked, its box and the locked sound;
  *   feathers go into its engraving; once the gold and bronze (3106 = 3) and silver (3099 = 6) are in, the
  *   last one sets 20. Open then swaps the leaf for its open one over an invisible wall for two ticks while the
@@ -34,7 +35,8 @@ module.exports = function attachEaglesPeakNest(api, ep) {
   const DOOR_OPEN_TICKS = 2;
   const SURFACE = Object.freeze([2328, 3496, 0]);
 
-  const SEQ = Object.freeze({ PICK_UP: 827, WAVE: 863, SIDESTEP_IN: 752, SIDESTEP_OUT: 758, SIDESTEP_IN_LEFT: 753, SIDESTEP_OUT_LEFT: 759 });
+  const SEQ = Object.freeze({ PICK_UP: 827, WAVE: 863, SIDESTEP_IN: 752, SIDESTEP_OUT: 758, SIDESTEP_IN_LEFT: 753, SIDESTEP_OUT_LEFT: 759,
+    SIDESTEP_WALK: 754, SIDESTEP_WALK_LEFT: 756 });
   const SOUND = Object.freeze({ LOCKED: 2402, PLACE_FEATHER: 1513, PLACE_RUMBLE: 1512, STONE_DOOR: 86, SIDESTEP: 2485,
     EAGLE_ATTACK: 421, FALL_LAND: 2455, BLOCK: 511, HIT: 520 });
 
@@ -243,12 +245,16 @@ module.exports = function attachEaglesPeakNest(api, ep) {
     const fromY = north ? EAGLE_SOUTH : EAGLE_NORTH;
     const toY = north ? EAGLE_NORTH : EAGLE_SOUTH;
     const path = [];
-    if (here.getX() !== EAGLE_COLUMN || here.getY() !== fromY) path.push([EAGLE_COLUMN, fromY]);
     for (let y = fromY + (north ? 1 : -1); north ? y <= toY : y >= toY; y += north ? 1 : -1) path.push([EAGLE_COLUMN, y]);
+    const onColumn = here.getX() === EAGLE_COLUMN && here.getY() === fromY;
     ObstacleRunner.run({ player }, [
+      // Getting to the eagle's column is an ordinary walk; the sidestep starts there.
+      onColumn ? null : { walk: [[EAGLE_COLUMN, fromY]], arrive: true },
       { anim: north ? SEQ.SIDESTEP_IN : SEQ.SIDESTEP_IN_LEFT },
       { sound: SOUND.SIDESTEP, loops: 4 },
+      { render: north ? SEQ.SIDESTEP_WALK : SEQ.SIDESTEP_WALK_LEFT },
       { walk: path, arrive: true },
+      { render: null },
       { anim: north ? SEQ.SIDESTEP_OUT : SEQ.SIDESTEP_OUT_LEFT },
       { msg: TEXT.EAGLE_PASSED },
     ], { busyVarbit: true, keepAnimation: true });

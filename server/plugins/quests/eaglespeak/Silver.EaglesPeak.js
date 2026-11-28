@@ -220,7 +220,10 @@ module.exports = function attachEaglesPeakSilver(api, ep) {
     });
   }
 
-  /** It scurries back to the tunnel's mouth a tile a tick, and the feather drops as it goes (t1293-1299). */
+  /**
+   * It scurries back to the tunnel's mouth a tile a tick, and the feather drops as it goes (t1293-1299). Each tile is
+   * an in-view move: the client walks it there over the tick, where a plain moveTo takes it out of view and back.
+   */
   function flee(player, scene) {
     const kebbit = liveKebbit(scene);
     if (!kebbit || scene.fleeing) return;
@@ -234,7 +237,7 @@ module.exports = function attachEaglesPeakSilver(api, ep) {
       at = new Location(at.getX() + Math.sign(mouth.getX() - at.getX()), at.getY() + Math.sign(mouth.getY() - at.getY()), at.getZ());
       steps.push(at);
     }
-    steps.forEach((step, index) => Scenes.later(scene, (index + 1) * ESCAPE_TICKS_PER_TILE, () => kebbit.moveTo(step)));
+    steps.forEach((step, index) => Scenes.later(scene, (index + 1) * ESCAPE_TICKS_PER_TILE, () => kebbit.teleportInView(step)));
     Scenes.later(scene, steps.length * ESCAPE_TICKS_PER_TILE + 1, () => {
       Scenes.removeActor(scene, kebbit);
       dropFeather(player, scene, mouth);

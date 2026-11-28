@@ -10,8 +10,9 @@
  *   matches the Wiki's lever table; which wing each lever moves is read off the captured loc changes.)
  * - Seed in a feeder calls the bird whose rail ends there: human_pickuptable, the seed and peak_fill_feeder, the
  *   feeder's birdfeeder_full a tick on, then the bird's flight two ticks on with the camera over it: its bit, the
- *   flight (mecheagle_spot_ne out, mecheagle_spot_sw_180 back), its landing spotanim, the bird gone a tick on and
- *   back at the far end when the flight lands, the camera back a tick after (t1523-1533, t1537-1547, t1662-1693).
+ *   flight (mecheagle_spot_ne out, mecheagle_spot_sw_180 back), its landing spotanim, the bird gone as the flight
+ *   leaves (two ticks on, so it never blinks out) and back at the far end when it lands, the camera back a tick after
+ *   (t1523-1533, t1537-1547, t1662-1693).
  *   A shut wing on its rail sends it up to the wing and back home (t1621-1626), and the feeder's other bird comes
  *   instead (t1627-1632). A feeder whose bird is already there has no effect (Transcript).
  * - The pedestal (19950, 1928,4907) at the corridor's end: human_pickuptable, the golden feather and pick, the
@@ -78,6 +79,9 @@ module.exports = function attachEaglesPeakGold(api, ep) {
     { bit: 256, home: [1971, 4890], far: [1967, 4890], face: 1, wing: null, cycles: 120 },
   ]);
   const BOUNCE_CYCLES = 45;
+  /** Cycles before a flight's projectile leaves; the bird's loc stays until then, so one of them always shows. */
+  const FLIGHT_DELAY_CYCLES = 60;
+  const FLIGHT_DELAY_TICKS = FLIGHT_DELAY_CYCLES / 30;
   const CAMERAS = Object.freeze({
     north: { move: [1947, 4909, 1025], look: [1940, 4914, 100] },
     west: { move: [1949, 4894, 1025], look: [1943, 4900, 125] },
@@ -267,12 +271,12 @@ module.exports = function attachEaglesPeakGold(api, ep) {
     const from = flightTile(scene, far ? bird.home : bird.far, bird.face);
     const to = flightTile(scene, far ? bird.far : bird.home, bird.face);
     const sender = player.getPacketSender();
-    sender.sendProjectile(from, to, 0, 60 + bird.cycles - 60, far ? SPOT.OUT : SPOT.BACK, 0, 0, null, 60, 0, 0);
+    sender.sendProjectile(from, to, 0, bird.cycles, far ? SPOT.OUT : SPOT.BACK, 0, 0, null, FLIGHT_DELAY_CYCLES, 0, 0);
     const land = new Graphic(SPOT.LAND[bird.face]);
     land.delay = bird.cycles;
     sender.sendGraphic(land, to);
     ep.sound(player, SOUND.BIRD_MOVE, 60, 4);
-    Scenes.later(scene, 1, () => removeLoc(scene, scene.birds[index].object));
+    Scenes.later(scene, FLIGHT_DELAY_TICKS, () => removeLoc(scene, scene.birds[index].object));
     Scenes.later(scene, Math.ceil(bird.cycles / 30), () => placeBird(scene, index, far));
   }
 
@@ -283,17 +287,18 @@ module.exports = function attachEaglesPeakGold(api, ep) {
     const home = flightTile(scene, bird.home, bird.face);
     const turn = Scenes.tileFor(scene, [bird.turn[0], bird.turn[1], 2]);
     const sender = player.getPacketSender();
-    sender.sendProjectile(home, turn, 0, 60 + BOUNCE_CYCLES, SPOT.OUT, 0, 0, null, 60, 0, 0);
-    sender.sendProjectile(turn, home, 0, 60 + BOUNCE_CYCLES * 2, SPOT.BACK, 0, 0, null, 60 + BOUNCE_CYCLES, 0, 0);
+    sender.sendProjectile(home, turn, 0, FLIGHT_DELAY_CYCLES + BOUNCE_CYCLES, SPOT.OUT, 0, 0, null, FLIGHT_DELAY_CYCLES, 0, 0);
+    sender.sendProjectile(turn, home, 0, FLIGHT_DELAY_CYCLES + BOUNCE_CYCLES * 2, SPOT.BACK, 0, 0, null,
+      FLIGHT_DELAY_CYCLES + BOUNCE_CYCLES, 0, 0);
     const start = new Graphic(SPOT.LAND[bird.face]);
     start.delay = 20;
     sender.sendGraphic(start, home);
     const back = new Graphic(SPOT.LAND[bird.face]);
-    back.delay = 60 + BOUNCE_CYCLES * 2;
+    back.delay = FLIGHT_DELAY_CYCLES + BOUNCE_CYCLES * 2;
     sender.sendGraphic(back, home);
     ep.sound(player, SOUND.BIRD_MOVE, 60, 4);
-    Scenes.later(scene, 1, () => removeLoc(scene, scene.birds[index].object));
-    Scenes.later(scene, Math.ceil((60 + BOUNCE_CYCLES * 2) / 30), () => placeBird(scene, index, false));
+    Scenes.later(scene, FLIGHT_DELAY_TICKS, () => removeLoc(scene, scene.birds[index].object));
+    Scenes.later(scene, Math.ceil((FLIGHT_DELAY_CYCLES + BOUNCE_CYCLES * 2) / 30), () => placeBird(scene, index, false));
   }
 
   // ==========================================================================

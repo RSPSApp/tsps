@@ -214,7 +214,12 @@ function catchNpc({ player, npc, npcId }) {
     }
     if (!exchange(player, inputs, outputs)) return;
     xp(player, def.xp, "butterfly", npcId);
-    if (!jarred) freed(player, def);
+    if (!jarred) {
+      freed(player, def);
+      releaseCatch(player, npc, def);
+    } else {
+      hide(npc, RELEASED_TICKS + 10, RELEASED_TICKS);
+    }
     player.sendMessage(jarred ? "You catch the creature in a jar." : "You catch the creature in your net and release it.");
   });
   return true;
@@ -226,6 +231,14 @@ function creatureName(def) {
   return name.endsWith(" moth") ? name : `${name} butterfly`;
 }
 
+/** The creature let go (or netted and released): its out-of-hands graphic and sound, gone a tick later. */
+function releaseCatch(player, npc, def) {
+  const graphic = H.core.CacheDefinitions.getSpotanimId(def.release);
+  if (graphic != null) player.performGraphic(new H.core.Graphic(graphic, RELEASE_DELAY, RELEASE_HEIGHT));
+  player.getPacketSender().sendSound(RELEASE_SOUND, 1, RELEASE_DELAY);
+  hide(npc, RELEASED_TICKS + 10, RELEASED_TICKS);
+}
+
 function catchBarehanded(player, npc, npcId, def, name) {
   if (!active(player) || player.busy()) return;
   C.cancel(player);
@@ -235,15 +248,12 @@ function catchBarehanded(player, npc, npcId, def, name) {
   if (!chance(player, curve, def.handsLow === undefined ? 20 / 256 : 0, def.hands)) {
     player.sendMessage("The creature slips away."); return;
   }
-  const graphic = H.core.CacheDefinitions.getSpotanimId(def.release);
-  if (graphic != null) player.performGraphic(new H.core.Graphic(graphic, RELEASE_DELAY, RELEASE_HEIGHT));
-  player.getPacketSender().sendSound(RELEASE_SOUND, 1, RELEASE_DELAY);
+  releaseCatch(player, npc, def);
   player.getPacketSender().sendTypedMessage(H.core.ChatType.SPAM, `You catch and release the ${name}.`);
   // `hunter:barehand-caught` { player, name }: "moonlight moth" (a league's "Catch a moonlight moth bare-handed").
   H.api.emitCustomEvent("hunter:barehand-caught", { player, name });
   xp(player, def.handsXp, "butterfly", npcId);
   freed(player, def);
-  hide(npc, RELEASED_TICKS + 10, RELEASED_TICKS);
 }
 
 /** A butterfly let go straight from the hands or net gives its boost (sunlight moths also restore run energy). */

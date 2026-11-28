@@ -10,14 +10,17 @@
  *   46 + 10 a tile, angle 16, progress 64, heights 180 -> 0. The target gets bind_impact (181) or
  *   failedspell_impact (85) in slot 2 at height 124, with sound_area bind_impact (99) or spellfail (227),
  *   both delayed to the endtime. It never shows a hitsplat.
- * - A landed cast holds the player (8 ticks: "The holding effect is beginning to fade." 6 ticks after the
- *   cast) and, on the cast's tick, lowers Attack 81 -> 76 with "You feel weakened.". A later landed cast with
- *   Attack still lowered (77) drained nothing and said nothing.
+ * - A landed cast lowers Attack on the cast's tick, 81 -> 76 with "You feel weakened."; a later landed cast with
+ *   Attack still lowered (77) drained nothing and said nothing. "The holding effect is beginning to fade." comes
+ *   6 ticks after each landed cast.
+ * - The hold is "very brief" (Wiki): from the next tile (endtime 56) the player was held the tick after the cast
+ *   and running the tick after that; from 3 tiles (endtime 76) they still walked the tick after the cast. So it
+ *   lands with the projectile, floor(endtime / 30) ticks after the cast, and holds for that one tick.
  * - 29 of the 35 casts were from the next tile and the rest from 2-3 tiles, where a punch can't reach.
  *
- * Ours: a druid in reach casts or punches at even odds (the recorded split), and one out of reach casts
- * from up to the generic NPC cast range (10). Out of a fight it reports melee reach, so its hunt and
- * aggression ranges stay those of a melee monster.
+ * Ours: a druid casts or punches at even odds (the recorded split) wherever it stands: a cast reaches up to
+ * the generic NPC cast range (10), a punch walks it in first. Out of a fight it reports melee reach, so its
+ * hunt and aggression ranges stay those of a melee monster. The fade line is sent only when the hold took.
  */
 const CHAOS_DRUID_IDS = [520]; // chaos_druid
 const BIND_CAST = { anim: 710, graphic: 177, graphicHeight: 92, sound: 101 };
@@ -31,6 +34,14 @@ const AREA_SOUND_RADIUS = 10;
 /** Ours: the generic NPC cast range; the recorded casts were from 1-3 tiles. */
 const BIND_DISTANCE = 10;
 const WEAKENED_MESSAGE = "You feel weakened.";
+const FADE_MESSAGE = "<col=ef1020>The holding effect is beginning to fade.</col>";
+/**
+ * The hold's timer: it is set in the task phase, before the player's timers count down on the landing tick, so 2
+ * holds that tick's move only.
+ */
+const HOLD_TICKS = 2;
+/** Ticks from the cast to the fade line (both recorded casts). */
+const FADE_MESSAGE_TICKS = 6;
 
 let core;
 let MethodClass = null;
@@ -43,16 +54,8 @@ function isChaosDruid(mobile) {
   return CHAOS_DRUID_IDS.includes(npc.getId()) || CHAOS_DRUID_IDS.includes(npc.getRealId?.());
 }
 
-/** Whether the druid could punch the target from where it stands: the next tile on a side, no wall between. */
-function inMeleeReach(npc, target) {
-  const a = npc.getLocation(), b = target.getLocation();
-  if (a.getZ() !== b.getZ() || Math.abs(a.getX() - b.getX()) + Math.abs(a.getY() - b.getY()) !== 1) return false;
-  return core.RegionManager.canMove(a.getX(), a.getY(), b.getX(), b.getY(), a.getZ(), 1, 1, npc.getPrivateArea());
-}
-
-/** Ours: even odds in reach (35 punches to 33 casts recorded); out of reach it casts. */
-function picksBind(npc, target) {
-  if (!target || !inMeleeReach(npc, target)) return true;
+/** Ours: even odds wherever it stands (35 punches to 33 casts recorded); a picked punch walks it in first. */
+function picksBind() {
   return core.Misc.randomInclusive(0, 1) === 0;
 }
 
@@ -91,13 +94,32 @@ function showImpact(target, accurate, end) {
   areaSound(target.getLocation(), target, impact.sound, end);
 }
 
+/** Runs `run` after `ticks` game ticks, unless the player has gone. */
+function later(target, ticks, run) {
+  const task = new core.Task(ticks, false);
+  task.execute = () => {
+    task.stop();
+    if (target.isRegistered?.() !== false) run();
+  };
+  core.TaskManager.submit(task);
+}
+
 /**
- * The spell's two halves, on the cast's tick: Bind's hold (StandardBindings, 8 ticks) and Confuse's Attack
- * drain (StandardCurses, with the druid's own amount and line from curseRule).
+ * The spell's two halves. Confuse's Attack drain (StandardCurses, with the druid's own amount and line from
+ * curseRule) comes on the cast's tick; the hold lands with the projectile and lasts one tick.
  */
-function bindAndConfuse(npc, target) {
-  core.CombatSpells.BIND.spellEffect(npc, target, null);
+function bindAndConfuse(npc, target, end) {
   core.CombatSpells.CONFUSE.spellEffect(npc, target, null);
+  const state = { held: false };
+  later(target, Math.max(1, Math.floor(end / 30)), () => {
+    core.CombatFactory.freezeTicks(target, HOLD_TICKS, null, npc, "bind");
+    state.held = target.getTimers().has(core.TimerKey.FREEZE);
+  });
+  if (target.isPlayer?.()) {
+    later(target, FADE_MESSAGE_TICKS, () => {
+      if (state.held) target.getAsPlayer().sendMessage(FADE_MESSAGE);
+    });
+  }
 }
 
 /** The druid's Confuse: floor(5%) + 1 of the current Attack (81 -> 76 recorded) and "You feel weakened.". */
@@ -123,7 +145,7 @@ function methodClass() {
 
     /** The attack the druid will make next, picked once per attack. */
     pick(npc, target) {
-      if (this.bind === null) this.bind = picksBind(npc, target);
+      if (this.bind === null) this.bind = picksBind();
       return this.bind;
     }
 
@@ -163,7 +185,7 @@ function methodClass() {
       const hit = new PendingHit(npc, target, this, 0).withoutHitsplat();
       // The roll decides the hold and the drain; the cast deals no damage, but still counts as an attack.
       showImpact(target, hit.isAccurate(), this.landing);
-      if (hit.isAccurate()) bindAndConfuse(npc, target);
+      if (hit.isAccurate()) bindAndConfuse(npc, target, this.landing);
       return [hit];
     }
 
@@ -187,8 +209,8 @@ function attach(api) {
 
 module.exports = {
   name: "ChaosDruid",
-  description: "Chaos druids punch and cast their Bind-and-Confuse spell, holding the player briefly and lowering their Attack, with the captured animations, projectile and sounds.",
+  description: "Chaos druids punch and cast their Bind-and-Confuse spell, holding the player for a tick and lowering their Attack, with the captured animations, projectile and sounds.",
   members: true,
   register: attach,
-  _test: { CHAOS_DRUID_IDS, bindEndCycles, picksBind, inMeleeReach, curseRule, methodClass, methods },
+  _test: { CHAOS_DRUID_IDS, HOLD_TICKS, FADE_MESSAGE, bindEndCycles, picksBind, curseRule, methodClass, methods },
 };

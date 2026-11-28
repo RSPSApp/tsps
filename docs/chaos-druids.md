@@ -44,14 +44,18 @@ The dragons' plugin plays its own animations, so their change does not show in g
 | On a splash | `failedspell_impact` (85) and `spellfail` (227) the same way |
 | Damage | None: no hitsplat |
 
-A landed cast, on the cast's tick:
-- holds the player for Bind's 8 ticks ("The holding effect is beginning to fade." came 6 ticks after the
-  cast);
-- lowers Attack by floor(5%) + 1 (81 to 76) with "You feel weakened.". A landed cast with Attack still
-  lowered (77) drained nothing and said nothing, as Confuse.
+A landed cast:
+- on the cast's tick, lowers Attack by floor(5%) + 1 (81 to 76) with "You feel weakened.". A landed cast with
+  Attack still lowered (77) drained nothing and said nothing, as Confuse;
+- holds the player for one tick when the projectile lands, floor(endtime / 30) ticks after the cast. Bind's own
+  8 ticks don't apply: from the next tile the player was held the tick after the cast and running the tick
+  after that; from 3 tiles they were still walking the tick after the cast. The Wiki says "binding their
+  target very briefly";
+- says "The holding effect is beginning to fade." 6 ticks after the cast (both recorded casts), here only if
+  the hold took.
 
-The hold is StandardBindings' Bind and the drain StandardCurses' Confuse; the druid only sets the drain's
-amount and line (`magic:curse-rule`).
+The drain is StandardCurses' Confuse; the druid sets its amount and line (`magic:curse-rule`). The hold is a
+`bind` freeze (`CombatFactory.freezeTicks`), so the freeze immunity that follows it applies.
 
 ## Which attack
 
@@ -59,6 +63,6 @@ amount and line (`magic:curse-rule`).
 reach.
 
 Ours (no source gives these):
-- a druid that can punch casts or punches at even odds, the recorded split;
-- one that can't reach casts, from up to 10 tiles (the generic NPC cast range);
+- a druid casts or punches at even odds, the recorded split, wherever it stands. A cast reaches up to 10 tiles
+  (the generic NPC cast range); a picked punch walks it in first;
 - out of a fight it has melee reach, so it hunts and aggros as a melee monster (3 and 8 tiles).

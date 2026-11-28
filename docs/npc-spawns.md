@@ -295,3 +295,6 @@ visits the dust devils or jellies. The Wiki lists five jelly colours there (1124
 where, so all use 11241. No capture fights 11239 or 11241: they take the ordinary monster's block animation
 (`npc-combat-defs.json`, abyssal demon) and sounds (`SOUNDS_AS` in `scripts/mine-npc-combat-sounds.mjs`).
 Check: `node --test tests/wilderness-slayer-cave-npcs.test.cjs`.
+
+Those four are task-only (Wiki): `plugins/areas/WildernessSlayerCave.plugin.js` refuses a player without a matching
+Slayer task, with Peeve's line. Peeve (11237) himself isn't spawned.

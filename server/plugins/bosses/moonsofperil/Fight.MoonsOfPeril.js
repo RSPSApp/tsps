@@ -113,6 +113,13 @@ class Fight {
     this.setHp(Math.max(1, this.hp - Math.max(0, Math.floor(amount))));
   }
 
+  /** A chunk of the Moon's health at once (Frost Storm), shown with a heal splat of 0 (capture). */
+  drain(amount) {
+    if (this.killed || amount <= 0) return;
+    this.selfDamage(amount);
+    this.arena.npc?.showHitsplat(0, { mine: HEAL_SPLAT, others: HEAL_SPLAT }, this.headBar());
+  }
+
   setHp(value) {
     const max = Common.data.hud.maxHitpoints;
     this.hp = Math.max(0, Math.min(max, Math.floor(value)));

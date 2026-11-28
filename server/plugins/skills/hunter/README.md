@@ -50,7 +50,7 @@ nets, rumours, pursuit charges) is persisted and restored on login.
   bank-for-5-numulite, 44 Hunter/47 Fishing level-gated.
 - **Crab traps** (`Crabs.Hunter.js`): red/blue/rainbow traps built with Construction, baiting,
   auto-rebait, crab meat/paste cutting.
-- **Dungeon** (`Dungeon.Hunter.js`): seven Chambers of Xeric bats and the Neypotzli moss-lizard rope trap.
+- **Dungeon** (`Dungeon.Hunter.js`): seven Chambers of Xeric bats and the Neypotzli moss-lizard rope traps (docs/moons-of-peril.md).
 - **Rumours** (`Rumours.Hunter.js`): six guild hunters, eligibility and consecutive-rumour settings,
   rare-part pity/outfit rates, four loot sacks, quetzal-whistle blueprints and guild armour.
 - **Broavs** (`Broavs.Hunter.js`): While Guthix Sleeps pit trapping, wild broav capture, hunting-expert
